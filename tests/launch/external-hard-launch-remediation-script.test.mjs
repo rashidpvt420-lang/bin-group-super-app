@@ -13,7 +13,7 @@ function mustContain(pattern, message) {
   assert.match(script, pattern, message);
 }
 
-test('external remediation enables protected main with signed commits and required CI checks', () => {
+test('external remediation enables protected main with signed commits and always-on CI checks', () => {
   mustContain(/branches\/\$Branch\/protection[^\n]*-Method PUT/, 'must update branch protection through the GitHub API');
   mustContain(/required_signatures[^\n]*-Method POST/, 'must enable signed-commit protection');
   mustContain(/required_status_checks\s*=\s*@\{/, 'must configure required status checks');
@@ -25,10 +25,10 @@ test('external remediation enables protected main with signed commits and requir
   for (const check of [
     'Install, build, and test',
     'Install, typecheck, lint, and build',
-    'audit',
   ]) {
     assert.ok(script.includes(`'${check}'`), `missing required protected check: ${check}`);
   }
+  assert.doesNotMatch(script, /\$RequiredChecks\s*=\s*@\([\s\S]*?'audit'/, 'optional five-profile audit must not be a required branch context');
 });
 
 test('external remediation creates replacement Android material outside the repo and rotates production secrets', () => {
