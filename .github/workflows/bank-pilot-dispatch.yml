@@ -353,7 +353,7 @@ jobs:
             --arg productionWorkflowRunId "$production_run_id" \
             --arg productionWorkflowRunUrl "$production_run_url" \
             --arg ownerRequestPullRequest "$REQUEST_PR" \
-            '{schemaVersion:1,commitSha:$commitSha,reviewWorkflowRunId:$reviewWorkflowRunId,privateHrWorkflowRunId:$privateHrWorkflowRunId,wrapperWorkflowRunId:$wrapper_run_id,wrapperWorkflowRunUrl:$wrapper_run_url,productionWorkflowRunId:$production_run_id,productionWorkflowRunUrl:$production_run_url,ownerRequestPullRequest:$ownerRequestPullRequest,launchMode:"bank-pilot",publicReleaseGate:false,hardLaunchClaim:false}' \
+            '{schemaVersion:1,commitSha:$commitSha,reviewWorkflowRunId:$reviewWorkflowRunId,privateHrWorkflowRunId:$privateHrWorkflowRunId,wrapperWorkflowRunId:$wrapperWorkflowRunId,wrapperWorkflowRunUrl:$wrapperWorkflowRunUrl,productionWorkflowRunId:$productionWorkflowRunId,productionWorkflowRunUrl:$productionWorkflowRunUrl,ownerRequestPullRequest:$ownerRequestPullRequest,launchMode:"bank-pilot",publicReleaseGate:false,hardLaunchClaim:false}' \
             > bank-pilot-dispatch-evidence.json
 
           echo "wrapper_run_id=$wrapper_run_id" >> "$GITHUB_OUTPUT"
