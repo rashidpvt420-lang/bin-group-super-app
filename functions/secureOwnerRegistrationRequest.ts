@@ -94,6 +94,7 @@ function canonicalProperty(value: unknown, index: number) {
     ownerType: boundedText(property.ownerType, 80),
     floors: finiteNumber(property.floors),
     units: finiteNumber(property.units),
+    beds: finiteNumber(property.beds),
     bedrooms: finiteNumber(property.bedrooms),
     bathrooms: finiteNumber(property.bathrooms),
     shops: finiteNumber(property.shops),
@@ -263,7 +264,7 @@ function assertCanonicalCommercialTerms(rawData: unknown) {
   }
 
   const totalUnits = propertyRecords.reduce((total, property) => {
-    const units = finiteNumber(property.units || property.bedrooms || 0);
+    const units = finiteNumber(property.units || property.beds || property.bedrooms || 0);
     return total + (units > 0 ? units : 0);
   }, 0);
   const selectedAddOns = stringList(serviceDetails.selectedAddOns);
