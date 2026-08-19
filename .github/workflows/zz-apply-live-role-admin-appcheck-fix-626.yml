@@ -1,0 +1,74 @@
+name: Apply Live Evidence Admin App Check Fix 626
+
+on:
+  push:
+    branches:
+      - fix/live-role-admin-appcheck-resolution-626
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apply-live-evidence-admin-appcheck-fix-626
+  cancel-in-progress: true
+
+jobs:
+  patch-test-clean:
+    if: github.ref == 'refs/heads/fix/live-role-admin-appcheck-resolution-626'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout exact repair branch
+        uses: actions/checkout@v4
+        with:
+          ref: fix/live-role-admin-appcheck-resolution-626
+          fetch-depth: 0
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies
+        run: bash scripts/npm-install-retry.sh
+
+      - name: Apply protected App Check verifier repair
+        run: python scripts/.tmp-apply-live-role-admin-appcheck-fix-626.py
+
+      - name: Validate targeted repair
+        run: |
+          node --check scripts/resolve-admin-app-check-site-key.mjs
+          node --test tests/launch/admin-app-check-evidence-resolution.test.mjs
+          npm run test:launch-honesty
+          npm run typecheck
+
+      - name: Commit repair and remove temporary machinery
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add \
+            scripts/resolve-admin-app-check-site-key.mjs \
+            .github/workflows/live-role-smoke.yml \
+            .github/workflows/admin-production-evidence.yml \
+            tests/launch/admin-app-check-evidence-resolution.test.mjs
+          git rm \
+            .github/workflows/zz-apply-live-role-admin-appcheck-fix-626.yml \
+            scripts/.tmp-apply-live-role-admin-appcheck-fix-626.py
+          changed="$(git diff --cached --name-only | sort)"
+          expected="$(printf '%s\n' \
+            .github/workflows/admin-production-evidence.yml \
+            .github/workflows/live-role-smoke.yml \
+            .github/workflows/zz-apply-live-role-admin-appcheck-fix-626.yml \
+            scripts/.tmp-apply-live-role-admin-appcheck-fix-626.py \
+            scripts/resolve-admin-app-check-site-key.mjs \
+            tests/launch/admin-app-check-evidence-resolution.test.mjs | sort)"
+          [[ "$changed" == "$expected" ]] || {
+            echo '::error::Repair touched unexpected files.'
+            printf 'Changed:\n%s\nExpected:\n%s\n' "$changed" "$expected"
+            exit 1
+          }
+          git commit -m 'fix(launch): resolve admin App Check key in live evidence'
+          git push origin HEAD:fix/live-role-admin-appcheck-resolution-626
