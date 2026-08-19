@@ -24,18 +24,20 @@ const PROTECTED_WORKFLOW_JOBS = Object.freeze([
 )
 source = replace_once(
     source,
-    """  if (clean(env.GITHUB_WORKFLOW) !== 'Firebase Production Deploy') {
-    failures.push('the exact Firebase Production Deploy workflow');
-  }
-  if (clean(env.GITHUB_JOB) !== 'deploy-firebase-production-stack') {
-    failures.push('the deploy-firebase-production-stack job');
-  }
-""",
-    """  const workflow = clean(env.GITHUB_WORKFLOW);
+    """function isApprovedProtectedContext(env) {
+  const workflow = clean(env.GITHUB_WORKFLOW);
   const job = clean(env.GITHUB_JOB);
-  if (!PROTECTED_WORKFLOW_JOBS.some((entry) => entry.workflow === workflow && entry.job === job)) {
-    failures.push('an explicitly authorized protected production workflow/job');
-  }
+  return (
+    (workflow === 'Firebase Production Deploy' && job === 'deploy-firebase-production-stack') ||
+    (workflow === 'Live Role Smoke Tests' && job === 'live-evidence')
+  );
+}
+""",
+    """function isApprovedProtectedContext(env) {
+  const workflow = clean(env.GITHUB_WORKFLOW);
+  const job = clean(env.GITHUB_JOB);
+  return PROTECTED_WORKFLOW_JOBS.some((entry) => entry.workflow === workflow && entry.job === job);
+}
 """,
     "protected context guard",
 )
