@@ -1,0 +1,141 @@
+name: One-shot governance cleanup
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.event.pull_request.head.ref == 'fix/hard-launch-governance-clean' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+      - name: Apply exact governance cleanup
+        env:
+          EXPECTED_BASE_SHA: 5f3522f64f447942b40d116f6b2bbbca9ae2e341
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          [[ "$(git rev-parse origin/main)" == "$EXPECTED_BASE_SHA" ]] || { echo "::error::main moved; refusing stale governance patch"; exit 1; }
+
+          git rm -r --ignore-unmatch .tmp android_signing_package staff-os-staging-* launch_package/privileged-account-cleanup.json
+
+          python - <<'PY'
+          from pathlib import Path
+
+          gi = Path('.gitignore')
+          text = gi.read_text()
+          text = text.replace('# Android signing secrets\n', '# Android signing secrets and locally generated signing packages\n')
+          if 'android_signing_package/\n' not in text:
+              text = text.replace('android/app/*.keystore\n', 'android/app/*.keystore\nandroid_signing_package/\n')
+          if '.tmp/\n' not in text:
+              text = text.replace('# Scratch / temp files\nscratch/\n', '# Scratch / temp files\nscratch/\n.tmp/\n')
+          if 'staff-os-staging-*/\n' not in text:
+              text = text.replace('build_log.txt\n', 'build_log.txt\n\n# Generated staff/staging deployment evidence\nstaff-os-staging-*/\n')
+          if 'launch_package/privileged-account-cleanup.json\n' not in text:
+              text = text.replace('launch_package/production-incidents.json\n', 'launch_package/production-incidents.json\nlaunch_package/privileged-account-cleanup.json\n')
+          gi.write_text(text)
+
+          hygiene = Path('scripts/repo-hygiene-guard.mjs')
+          text = hygiene.read_text()
+          if "import { execFileSync } from 'node:child_process';" not in text:
+              text = text.replace("import path from 'node:path';\n", "import path from 'node:path';\nimport { execFileSync } from 'node:child_process';\n")
+          block = """const forbiddenTrackedPathspecs = [
+            ['.tmp', 'tracked temporary diagnostics'],
+            ['android_signing_package', 'tracked Android signing package material'],
+            [':(glob)staff-os-staging-*/**', 'tracked generated staff/staging deployment evidence'],
+            ['launch_package/privileged-account-cleanup.json', 'tracked privileged-account cleanup evidence'],
+          ];
+
+          """
+          if 'const forbiddenTrackedPathspecs = [' not in text:
+              text = text.replace('const violations = [];\n', block + 'const violations = [];\n')
+          func = """function trackedFiles(pathspec) {
+            try {
+              const output = execFileSync('git', ['ls-files', '--', pathspec], {
+                cwd: root,
+                encoding: 'utf8',
+                stdio: ['ignore', 'pipe', 'pipe'],
+              }).trim();
+              return output ? output.split(/\\r?\\n/).filter(Boolean) : [];
+            } catch (error) {
+              const detail = error instanceof Error ? error.message : String(error);
+              violations.push(`Unable to verify tracked-file hygiene with git: ${detail}`);
+              return [];
+            }
+          }
+
+          """
+          if 'function trackedFiles(pathspec)' not in text:
+              text = text.replace('function shouldCheck(filePath) {\n', func + 'function shouldCheck(filePath) {\n')
+          loop = """for (const [pathspec, label] of forbiddenTrackedPathspecs) {
+            const files = trackedFiles(pathspec);
+            if (files.length) {
+              violations.push(`${label} are forbidden: ${files.join(', ')}`);
+            }
+          }
+
+          """
+          if 'for (const [pathspec, label] of forbiddenTrackedPathspecs)' not in text:
+              text = text.replace('walk(root);\n', loop + 'walk(root);\n')
+          hygiene.write_text(text)
+
+          wf = Path('.github/workflows/founder-release-orchestrator-one-shot.yml')
+          text = wf.read_text()
+          gov = """          assert_release_governance() {
+            local branch_json protected commit_json verified
+            branch_json="$(gh_get "repos/$REPOSITORY/branches/main")" \\
+              || fail "Unable to verify main branch protection."
+            protected="$(jq -r '.protected // false' <<<"$branch_json")"
+            [[ "$protected" == "true" ]] \\
+              || fail "main branch is not protected; refusing hard public release."
+
+            commit_json="$(gh_get "repos/$REPOSITORY/commits/$TARGET_SHA")" \\
+              || fail "Unable to verify target commit signature."
+            verified="$(jq -r '.commit.verification.verified // false' <<<"$commit_json")"
+            [[ "$verified" == "true" ]] \\
+              || fail "target commit $TARGET_SHA is not cryptographically verified; refusing hard public release."
+          }
+
+          """
+          if 'assert_release_governance() {' not in text:
+              text = text.replace('          assert_main() {\n', gov + '          assert_main() {\n')
+          if '          assert_release_governance\n          assert_main\n          production_artifact=' not in text:
+              text = text.replace('          assert_main\n          production_artifact=', '          assert_release_governance\n          assert_main\n          production_artifact=', 1)
+          wf.write_text(text)
+
+          test = Path('tests/launch/protected-release-orchestrator-resilience.test.mjs')
+          text = test.read_text()
+          case = r'''test('protected release requires protected main and a cryptographically verified target commit', () => {
+            assert.match(workflow, /assert_release_governance\(\) \{/);
+            assert.match(workflow, /branch_json="\$\(gh_get "repos\/\$REPOSITORY\/branches\/main"\)"/);
+            assert.match(workflow, /main branch is not protected; refusing hard public release/);
+            assert.match(workflow, /commit_json="\$\(gh_get "repos\/\$REPOSITORY\/commits\/\$TARGET_SHA"\)"/);
+            assert.match(workflow, /target commit \$TARGET_SHA is not cryptographically verified; refusing hard public release/);
+            assert.match(workflow, /assert_release_governance\s+assert_main/);
+          });
+
+          '''
+          if 'protected release requires protected main and a cryptographically verified target commit' not in text:
+              marker = "test('protected release treats dispatch POST failures as ambiguous and correlates before retrying', () => {"
+              text = text.replace(marker, case + marker)
+          test.write_text(text)
+          PY
+
+          rm -f .github/workflows/one-shot-governance-cleanup.yml
+          node scripts/repo-hygiene-guard.mjs
+          node --test tests/launch/protected-release-orchestrator-resilience.test.mjs
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'Harden hard-launch governance and repository hygiene'
+          git push origin "HEAD:$HEAD_REF"
