@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - fix/admin-app-check-final-20260819
+  pull_request:
+    branches:
+      - main
 
 permissions:
   contents: write
@@ -14,7 +17,7 @@ concurrency:
 
 jobs:
   patch-test-clean:
-    if: github.ref == 'refs/heads/fix/admin-app-check-final-20260819'
+    if: github.ref == 'refs/heads/fix/admin-app-check-final-20260819' || github.head_ref == 'fix/admin-app-check-final-20260819'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
