@@ -37,6 +37,8 @@ test('external remediation creates replacement Android material outside the repo
   mustContain(/-keyalg RSA/, 'replacement key must use RSA');
   mustContain(/-keysize 4096/, 'replacement key must use a strong RSA key size');
   mustContain(/-sigalg SHA256withRSA/, 'replacement key must use SHA-256 with RSA');
+  const jksStoreTypeUsages = script.match(/-storetype JKS/g) ?? [];
+  assert.equal(jksStoreTypeUsages.length, 3, 'generation, certificate export, and key inspection must all force JKS');
   mustContain(/gh secret set -f \$secretBackupPath --env \$Environment --repo \$Repo/, 'must rotate environment secrets through GitHub CLI');
   for (const secret of [
     'ANDROID_UPLOAD_KEYSTORE_BASE64',
