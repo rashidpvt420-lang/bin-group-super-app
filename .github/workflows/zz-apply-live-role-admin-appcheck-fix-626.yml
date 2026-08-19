@@ -3,7 +3,7 @@ name: Apply Live Evidence Admin App Check Fix 626
 on:
   push:
     branches:
-      - fix/live-role-admin-appcheck-resolution-626
+      - fix/admin-app-check-final-20260819
 
 permissions:
   contents: write
@@ -14,14 +14,14 @@ concurrency:
 
 jobs:
   patch-test-clean:
-    if: github.ref == 'refs/heads/fix/live-role-admin-appcheck-resolution-626'
+    if: github.ref == 'refs/heads/fix/admin-app-check-final-20260819'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
       - name: Checkout exact repair branch
         uses: actions/checkout@v4
         with:
-          ref: fix/live-role-admin-appcheck-resolution-626
+          ref: fix/admin-app-check-final-20260819
           fetch-depth: 0
 
       - name: Use Node.js 22
@@ -71,4 +71,4 @@ jobs:
             exit 1
           }
           git commit -m 'fix(launch): resolve admin App Check key in live evidence'
-          git push origin HEAD:fix/live-role-admin-appcheck-resolution-626
+          git push origin HEAD:fix/admin-app-check-final-20260819
