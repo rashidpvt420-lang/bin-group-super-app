@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
 import { existsSync, readdirSync, readFileSync } from 'fs';
 import { join } from 'path';
 
@@ -13,218 +13,135 @@ function resolveStagingUrls() {
       const p1 = join(root, dir, 'staff-os-staging-deployment.json');
       const p2 = join(root, dir, dir, 'staff-os-staging-deployment.json');
       const target = existsSync(p1) ? p1 : existsSync(p2) ? p2 : null;
-      if (target) {
-        try {
-          const json = JSON.parse(readFileSync(target, 'utf8'));
-          if (!appUrl && json.appPreviewUrl) appUrl = json.appPreviewUrl;
-          if (!adminUrl && json.adminPreviewUrl) adminUrl = json.adminPreviewUrl;
-        } catch {
-          // continue
-        }
+      if (!target) continue;
+      try {
+        const json = JSON.parse(readFileSync(target, 'utf8'));
+        if (!appUrl && json.appPreviewUrl) appUrl = json.appPreviewUrl;
+        if (!adminUrl && json.adminPreviewUrl) adminUrl = json.adminPreviewUrl;
+      } catch {
+        // Keep looking for a valid staging deployment evidence file.
       }
     }
   }
 
   if (!appUrl || !adminUrl) {
     throw new Error(
-      `Missing required Staging URLs: STAGING_APP_URL='${appUrl}', STAGING_ADMIN_URL='${adminUrl}'. Cannot run live App Check proof.`
+      `Missing required staging URLs: STAGING_APP_URL='${appUrl}', STAGING_ADMIN_URL='${adminUrl}'. Cannot run real App Check proof.`,
     );
+  }
+
+  for (const [name, value] of [['STAGING_APP_URL', appUrl], ['STAGING_ADMIN_URL', adminUrl]] as const) {
+    const parsed = new URL(value);
+    if (parsed.protocol !== 'https:' || !parsed.hostname.endsWith('.web.app')) {
+      throw new Error(`${name} must be an HTTPS Firebase staging Hosting URL, got '${value}'.`);
+    }
+    if (!parsed.hostname.startsWith('bin-group-staging')) {
+      throw new Error(`${name} must target bin-group-staging, got '${parsed.hostname}'.`);
+    }
   }
 
   return { appUrl, adminUrl };
 }
 
-test.describe('Real Enterprise App Check Fail-Closed Staging Proof', () => {
+type AppCheckEvidence = {
+  enterpriseExchangeRequests: number;
+  enterpriseExchangeStatuses: number[];
+  debugExchangeRequests: number;
+  recaptchaEnterpriseScriptRequests: number;
+  appCheckConsoleErrors: string[];
+};
+
+async function verifyRealEnterpriseAppCheck(page: Page, url: string, surface: 'staff-app' | 'admin') {
+  const evidence: AppCheckEvidence = {
+    enterpriseExchangeRequests: 0,
+    enterpriseExchangeStatuses: [],
+    debugExchangeRequests: 0,
+    recaptchaEnterpriseScriptRequests: 0,
+    appCheckConsoleErrors: [],
+  };
+
+  page.on('request', (request) => {
+    const requestUrl = request.url();
+    if (requestUrl.includes('exchangeRecaptchaEnterpriseToken')) {
+      evidence.enterpriseExchangeRequests += 1;
+    }
+    if (requestUrl.includes('exchangeDebugToken')) {
+      evidence.debugExchangeRequests += 1;
+    }
+    if (/recaptcha\/(?:enterprise\/)?enterprise\.js/i.test(requestUrl)) {
+      evidence.recaptchaEnterpriseScriptRequests += 1;
+    }
+  });
+
+  page.on('response', (response) => {
+    const responseUrl = response.url();
+    if (responseUrl.includes('exchangeRecaptchaEnterpriseToken')) {
+      evidence.enterpriseExchangeStatuses.push(response.status());
+    }
+  });
+
+  page.on('console', (message) => {
+    if (!['error', 'warning'].includes(message.type())) return;
+    const text = message.text();
+    if (/AppCheck|app-check|reCAPTCHA|invalid site key|invalid domain/i.test(text)) {
+      evidence.appCheckConsoleErrors.push(text);
+    }
+  });
+
+  await page.goto(url, { waitUntil: 'networkidle', timeout: 60_000 });
+  await expect(page.locator('body')).toBeVisible();
+
+  // App Check's auto-refresh path should request an actual token shortly after
+  // the production build initializes. We intentionally do not mock reCAPTCHA,
+  // intercept Firebase, manufacture tokens, or call the exchange endpoint.
+  await expect
+    .poll(() => evidence.enterpriseExchangeStatuses.length, {
+      timeout: 20_000,
+      message: `${surface}: no real Firebase App Check Enterprise exchange response was observed`,
+    })
+    .toBeGreaterThan(0);
+
+  const hasDebugTokenInWindow = await page.evaluate(() => {
+    const globalWindow = window as typeof window & {
+      FIREBASE_APPCHECK_DEBUG_TOKEN?: unknown;
+      self?: { FIREBASE_APPCHECK_DEBUG_TOKEN?: unknown };
+    };
+    return Boolean(
+      globalWindow.FIREBASE_APPCHECK_DEBUG_TOKEN ||
+      globalWindow.self?.FIREBASE_APPCHECK_DEBUG_TOKEN,
+    );
+  });
+
+  expect(hasDebugTokenInWindow, `${surface}: debug App Check token must not be enabled`).toBe(false);
+  expect(evidence.debugExchangeRequests, `${surface}: debug exchange endpoint must never be called`).toBe(0);
+  expect(
+    evidence.enterpriseExchangeRequests,
+    `${surface}: expected at least one real exchangeRecaptchaEnterpriseToken request`,
+  ).toBeGreaterThan(0);
+  expect(
+    evidence.enterpriseExchangeStatuses.some((status) => status >= 200 && status < 300),
+    `${surface}: Firebase App Check Enterprise exchange did not return a 2xx response; statuses=${evidence.enterpriseExchangeStatuses.join(',')}`,
+  ).toBe(true);
+  expect(evidence.appCheckConsoleErrors, `${surface}: App Check/reCAPTCHA console errors detected`).toEqual([]);
+
+  const successfulStatus = evidence.enterpriseExchangeStatuses.find((status) => status >= 200 && status < 300) ?? 0;
+  console.log(`[LIVE APPCHECK ${surface}] provider=recaptcha-enterprise`);
+  console.log(`[LIVE APPCHECK ${surface}] enterpriseExchangeRequests=${evidence.enterpriseExchangeRequests}`);
+  console.log(`[LIVE APPCHECK ${surface}] enterpriseExchangeStatus=${successfulStatus}`);
+  console.log(`[LIVE APPCHECK ${surface}] debugExchangeRequests=${evidence.debugExchangeRequests}`);
+  console.log(`[LIVE APPCHECK ${surface}] recaptchaEnterpriseScriptRequests=${evidence.recaptchaEnterpriseScriptRequests}`);
+  console.log(`[LIVE APPCHECK ${surface}] origin=${new URL(url).origin}`);
+  console.log(`[LIVE APPCHECK ${surface}] tokenExchangeVerified=true`);
+}
+
+test.describe('Real Enterprise App Check fail-closed staging proof', () => {
   const { appUrl, adminUrl } = resolveStagingUrls();
 
-  test('1. Verify Real Enterprise App Check Exchange on Staging App', async ({ page }) => {
-    let enterpriseExchangeRequests = 0;
-    let debugExchangeRequests = 0;
-    let enterpriseExchangeStatus = 0;
-    const appCheckConsoleErrors: string[] = [];
-
-    await page.route('**/recaptcha/enterprise.js**', (route) => {
-      return route.fulfill({
-        status: 200,
-        contentType: 'application/javascript',
-        body: 'console.log("Mock reCAPTCHA script loaded");',
-      });
-    });
-
-    await page.addInitScript(() => {
-      (window as any).grecaptcha = {
-        enterprise: {
-          ready: (cb: () => void) => setTimeout(cb, 10),
-          execute: async () => 'staging-recaptcha-enterprise-token-proof',
-        },
-      };
-    });
-
-    await page.route('**/exchangeRecaptchaEnterpriseToken**', (route) => {
-      enterpriseExchangeRequests++;
-      enterpriseExchangeStatus = 200;
-      return route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ token: 'staging-appcheck-verified-token', ttl: '3600s' }),
-      });
-    });
-
-    page.on('console', (msg) => {
-      const text = msg.text();
-      if (
-        msg.type() === 'error' &&
-        /AppCheck|app-check|reCAPTCHA|invalid site key|invalid domain|UNAUTHENTICATED|PERMISSION_DENIED/i.test(text)
-      ) {
-        appCheckConsoleErrors.push(text);
-      }
-    });
-
-    page.on('request', (req) => {
-      const url = req.url();
-      if (url.includes('exchangeDebugToken')) {
-        debugExchangeRequests++;
-      }
-      if (url.includes('exchangeRecaptchaEnterpriseToken')) {
-        enterpriseExchangeRequests++;
-        enterpriseExchangeStatus = 200;
-      }
-    });
-
-    console.log(`Navigating to live staging App: ${appUrl}`);
-    await page.goto(appUrl, { waitUntil: 'networkidle', timeout: 60000 });
-
-    await expect(page.locator('body')).toBeVisible();
-
-    // Trigger Enterprise App Check token exchange in browser context
-    await page.evaluate(async () => {
-      try {
-        const token = await (window as any).grecaptcha.enterprise.execute('6LfQAIktAAAAAM7BIHq0oVbh8Y_TxpCLfCJ4CeFD', { action: 'app_check' });
-        await fetch('https://firebaseappcheck.googleapis.com/v1/projects/355288045402/apps/1:355288045402:web:a4afd4661bf961068b4563:exchangeRecaptchaEnterpriseToken', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ recaptchaEnterpriseToken: token }),
-        });
-      } catch (e) {
-        console.warn('AppCheck trigger error:', e);
-      }
-    });
-
-    const hasDebugTokenInWindow = await page.evaluate(() => {
-      const g = window as any;
-      return Boolean(g.FIREBASE_APPCHECK_DEBUG_TOKEN || g.self?.FIREBASE_APPCHECK_DEBUG_TOKEN);
-    });
-
-    expect(hasDebugTokenInWindow).toBe(false);
-    expect(debugExchangeRequests).toBe(0);
-    expect(appCheckConsoleErrors).toEqual([]);
-
-    expect(enterpriseExchangeRequests).toBeGreaterThanOrEqual(1);
-    expect(enterpriseExchangeStatus).toBeGreaterThanOrEqual(200);
-    expect(enterpriseExchangeStatus).toBeLessThan(300);
-
-    const origin = new URL(appUrl).origin;
-    console.log(`provider=recaptcha-enterprise`);
-    console.log(`enterpriseExchangeRequests=${enterpriseExchangeRequests}`);
-    console.log(`enterpriseExchangeStatus=${enterpriseExchangeStatus}`);
-    console.log(`debugExchangeRequests=${debugExchangeRequests}`);
-    console.log(`origin=${origin}`);
-    console.log(`tokenExchangeVerified=true`);
+  test('Staff App obtains a real reCAPTCHA Enterprise App Check token', async ({ page }) => {
+    await verifyRealEnterpriseAppCheck(page, appUrl, 'staff-app');
   });
 
-  test('2. Verify Real Enterprise App Check Exchange on Staging Admin Panel', async ({ page }) => {
-    let enterpriseExchangeRequests = 0;
-    let debugExchangeRequests = 0;
-    let enterpriseExchangeStatus = 0;
-    const appCheckConsoleErrors: string[] = [];
-
-    await page.route('**/recaptcha/enterprise.js**', (route) => {
-      return route.fulfill({
-        status: 200,
-        contentType: 'application/javascript',
-        body: 'console.log("Mock reCAPTCHA script loaded");',
-      });
-    });
-
-    await page.addInitScript(() => {
-      (window as any).grecaptcha = {
-        enterprise: {
-          ready: (cb: () => void) => setTimeout(cb, 10),
-          execute: async () => 'staging-recaptcha-enterprise-token-proof',
-        },
-      };
-    });
-
-    await page.route('**/exchangeRecaptchaEnterpriseToken**', (route) => {
-      enterpriseExchangeRequests++;
-      enterpriseExchangeStatus = 200;
-      return route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ token: 'staging-appcheck-verified-token', ttl: '3600s' }),
-      });
-    });
-
-    page.on('console', (msg) => {
-      const text = msg.text();
-      if (
-        msg.type() === 'error' &&
-        /AppCheck|app-check|reCAPTCHA|invalid site key|invalid domain|UNAUTHENTICATED|PERMISSION_DENIED/i.test(text)
-      ) {
-        appCheckConsoleErrors.push(text);
-      }
-    });
-
-    page.on('request', (req) => {
-      const url = req.url();
-      if (url.includes('exchangeDebugToken')) {
-        debugExchangeRequests++;
-      }
-      if (url.includes('exchangeRecaptchaEnterpriseToken')) {
-        enterpriseExchangeRequests++;
-        enterpriseExchangeStatus = 200;
-      }
-    });
-
-    console.log(`Navigating to live staging Admin: ${adminUrl}`);
-    await page.goto(adminUrl, { waitUntil: 'networkidle', timeout: 60000 });
-
-    await expect(page.locator('body')).toBeVisible();
-
-    // Trigger Enterprise App Check token exchange in browser context
-    await page.evaluate(async () => {
-      try {
-        const token = await (window as any).grecaptcha.enterprise.execute('6LfQAIktAAAAAM7BIHq0oVbh8Y_TxpCLfCJ4CeFD', { action: 'app_check' });
-        await fetch('https://firebaseappcheck.googleapis.com/v1/projects/355288045402/apps/1:355288045402:web:a4afd4661bf961068b4563:exchangeRecaptchaEnterpriseToken', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ recaptchaEnterpriseToken: token }),
-        });
-      } catch (e) {
-        console.warn('AppCheck trigger error:', e);
-      }
-    });
-
-    const hasDebugTokenInWindow = await page.evaluate(() => {
-      const g = window as any;
-      return Boolean(g.FIREBASE_APPCHECK_DEBUG_TOKEN || g.self?.FIREBASE_APPCHECK_DEBUG_TOKEN);
-    });
-
-    expect(hasDebugTokenInWindow).toBe(false);
-    expect(debugExchangeRequests).toBe(0);
-    expect(appCheckConsoleErrors).toEqual([]);
-
-    expect(enterpriseExchangeRequests).toBeGreaterThanOrEqual(1);
-    expect(enterpriseExchangeStatus).toBeGreaterThanOrEqual(200);
-    expect(enterpriseExchangeStatus).toBeLessThan(300);
-
-    const origin = new URL(adminUrl).origin;
-    console.log(`provider=recaptcha-enterprise`);
-    console.log(`enterpriseExchangeRequests=${enterpriseExchangeRequests}`);
-    console.log(`enterpriseExchangeStatus=${enterpriseExchangeStatus}`);
-    console.log(`debugExchangeRequests=${debugExchangeRequests}`);
-    console.log(`origin=${origin}`);
-    console.log(`tokenExchangeVerified=true`);
+  test('Admin obtains a real reCAPTCHA Enterprise App Check token', async ({ page }) => {
+    await verifyRealEnterpriseAppCheck(page, adminUrl, 'admin');
   });
 });
-
