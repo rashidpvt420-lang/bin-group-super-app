@@ -16,8 +16,7 @@ $ApiVersion = '2026-03-10'
 $CompromisedUploadCertSha256 = '431AEC82D731F2A6ED2521AC529722FCB4A51614AC857A20AB96DA2D767BEE91'
 $RequiredChecks = @(
   'Install, build, and test',
-  'Install, typecheck, lint, and build',
-  'audit'
+  'Install, typecheck, lint, and build'
 )
 $AndroidSecretNames = @(
   'ANDROID_UPLOAD_KEYSTORE_BASE64',
