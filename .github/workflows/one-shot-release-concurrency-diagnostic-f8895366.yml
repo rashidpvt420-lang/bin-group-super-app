@@ -1,0 +1,43 @@
+name: One-shot Release Concurrency Diagnostic f8895366
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches: [main]
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  inspect-release-concurrency:
+    if: github.head_ref == 'ops/release-concurrency-diagnostic-f8895366'
+    runs-on: ubuntu-latest
+    steps:
+      - name: List active protected release runs without mutation
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          TARGET_SHA: f889536649dece11c9402a82a0159b37759c6743
+          TARGET_RUN_ID: '32258883470'
+        run: |
+          set -euo pipefail
+          current="$(gh api "repos/$REPOSITORY/commits/main" --jq '.sha')"
+          echo "current_main=$current"
+          [[ "$current" == "$TARGET_SHA" ]] || {
+            echo "::error::main moved from $TARGET_SHA to $current"
+            exit 1
+          }
+
+          echo 'FOUNDER_ORCHESTRATOR_ACTIVE_BEGIN'
+          gh api "repos/$REPOSITORY/actions/workflows/founder-release-orchestrator-one-shot.yml/runs?per_page=100" \
+            --jq '.workflow_runs[] | select(.status != "completed") | [.id,.status,.conclusion,.head_sha,.event,.created_at] | @tsv'
+          echo 'FOUNDER_ORCHESTRATOR_ACTIVE_END'
+
+          echo 'FIREBASE_PRODUCTION_ACTIVE_BEGIN'
+          gh api "repos/$REPOSITORY/actions/workflows/firebase-production-deploy.yml/runs?per_page=100" \
+            --jq '.workflow_runs[] | select(.status != "completed") | [.id,.status,.conclusion,.head_sha,.event,.created_at] | @tsv'
+          echo 'FIREBASE_PRODUCTION_ACTIVE_END'
+
+          target="$(gh api "repos/$REPOSITORY/actions/runs/$TARGET_RUN_ID")"
+          echo "$target" | jq -r '["target",.id,.status,.conclusion,.head_sha,.event,.created_at] | @tsv'
