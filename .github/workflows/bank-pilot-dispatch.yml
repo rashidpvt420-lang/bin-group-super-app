@@ -14,8 +14,10 @@ permissions:
   contents: read
   pull-requests: read
 
+# Serialize every owner bank-pilot request across the repository. A per-PR
+# concurrency key allowed two draft requests for the same main SHA to race.
 concurrency:
-  group: bank-pilot-dispatch-${{ github.event.pull_request.number }}
+  group: bank-pilot-dispatch
   cancel-in-progress: false
 
 env:
@@ -132,6 +134,31 @@ jobs:
             .nonPrivilegedAccountsUntouched == true and
             .hardLaunchClaim == false
           ' "$report_path" >/dev/null
+
+      - name: Refuse duplicate exact-SHA production deployment
+        env:
+          RELEASE_SHA: ${{ steps.release.outputs.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          duplicate="$(
+            gh api --paginate \
+              "repos/$REPOSITORY/actions/workflows/firebase-production-deploy.yml/runs?event=workflow_dispatch&branch=main&per_page=100" \
+              --jq '.workflow_runs[] | [.id, .head_sha, .status, (.conclusion // "")] | @tsv' |
+            awk -F '\t' -v sha="$RELEASE_SHA" '
+              $2 == sha && ($3 != "completed" || $4 == "success") {
+                print
+                exit
+              }
+            '
+          )"
+
+          if [[ -n "$duplicate" ]]; then
+            IFS=$'\t' read -r duplicate_run_id _ duplicate_status duplicate_conclusion <<<"$duplicate"
+            echo "::error::Exact-SHA production deployment already exists for $RELEASE_SHA: run $duplicate_run_id status=$duplicate_status conclusion=${duplicate_conclusion:-none}. Refusing duplicate dispatch."
+            exit 1
+          fi
 
       - name: Checkout exact current main
         uses: actions/checkout@v4
