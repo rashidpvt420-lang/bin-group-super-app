@@ -52,6 +52,7 @@ export * from "./aiDesignStudioCompat";
 // from index.ts without creating duplicate public callable names.
 export { processTitleDeedOCRV2 as processTitleDeedOCR } from "./titleDeedOcrV2";
 export { processFloorPlanAI } from "./floorPlanAnalyzer";
+export { processPropertyDescriptionAI } from "./propertyDescriptionAnalyzer";
 export { getMissionGuidanceV2 as getMissionGuidance } from "./missionGuidanceV2";
 export * from "./contractSignatureOtpMailbox";
 export * from "./ownerOnboardingLifecycleEmail";
