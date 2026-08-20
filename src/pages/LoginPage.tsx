@@ -189,6 +189,9 @@ const LoginPage: React.FC = () => {
             emailAttempted: email.replace(/(.{3}).*@/, '$1***@'),
         });
 
+        if (code === 'auth/missing-email') {
+            return notice('error', copy('Enter your email address and try again.', 'أدخل عنوان بريدك الإلكتروني وحاول مرة أخرى.'));
+        }
         if (code === 'auth/invalid-email') {
             return notice('error', copy('Please enter a valid email address.', 'يرجى إدخال عنوان بريد إلكتروني صالح.'));
         }
@@ -241,6 +244,30 @@ const LoginPage: React.FC = () => {
             return notice('error', copy(
                 'We could not reach the sign-in service. Check your connection and try again.',
                 'تعذر الوصول إلى خدمة تسجيل الدخول. تحقق من الاتصال وحاول مرة أخرى.',
+            ));
+        }
+        if (code === 'auth/operation-not-allowed') {
+            return notice('error', copy(
+                'This sign-in method is temporarily unavailable. Use another enabled sign-in method or contact BIN GROUP support.',
+                'طريقة تسجيل الدخول هذه غير متاحة مؤقتاً. استخدم طريقة أخرى متاحة أو تواصل مع دعم بن جروب.',
+            ));
+        }
+        if (code === 'auth/unauthorized-domain') {
+            return notice('error', copy(
+                'Secure sign-in is not authorized from this web address. Contact BIN GROUP support.',
+                'تسجيل الدخول الآمن غير مصرح به من عنوان الموقع هذا. تواصل مع دعم بن جروب.',
+            ));
+        }
+        if (code === 'auth/invalid-api-key' || code === 'auth/api-key-not-valid') {
+            return notice('error', copy(
+                'The secure sign-in service configuration is unavailable. Contact BIN GROUP support.',
+                'إعداد خدمة تسجيل الدخول الآمن غير متاح. تواصل مع دعم بن جروب.',
+            ));
+        }
+        if (code === 'auth/internal-error' || code === 'auth/web-storage-unsupported') {
+            return notice('error', copy(
+                'The secure sign-in service could not complete this request. Refresh the page and try again.',
+                'تعذر على خدمة تسجيل الدخول الآمن إكمال الطلب. حدّث الصفحة وحاول مرة أخرى.',
             ));
         }
         return notice('error', copy(
@@ -319,13 +346,25 @@ const LoginPage: React.FC = () => {
 
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
-        setLocalLoading(true);
         setNotice(null);
         const normalizedEmail = normalizeEmail(email);
+        if (!normalizedEmail) {
+            setNotice(getFriendlyAuthError({ code: 'auth/missing-email', message: 'Email is required.' }));
+            return;
+        }
+        if (!/^\S+@\S+\.\S+$/.test(normalizedEmail)) {
+            setNotice(getFriendlyAuthError({ code: 'auth/invalid-email', message: 'Email address is malformed.' }));
+            return;
+        }
+        if (!password) {
+            setNotice(getFriendlyAuthError({ code: 'auth/missing-password', message: 'Password is required.' }));
+            return;
+        }
         if (intendedRoleKey === 'admin' || isCanonicalAdminEmail(normalizedEmail)) {
             redirectToAdminPanel(normalizedEmail);
             return;
         }
+        setLocalLoading(true);
         try {
             await setPersistence(auth, browserLocalPersistence).catch(() => undefined);
             const userCredential = await signInWithEmailAndPassword(auth, normalizedEmail, password);
