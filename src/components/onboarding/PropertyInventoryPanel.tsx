@@ -157,7 +157,7 @@ const PropertyInventoryPanel: React.FC<Props> = ({ property, onChange, ar, isRTL
       const uid = auth.currentUser?.uid;
       if (!uid) throw new Error('AUTH_REQUIRED_FOR_FLOOR_PLAN_UPLOAD');
       const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
-      const storagePath = `temp_kyc/${uid}/floor_plans/${Date.now()}_${safeName}`;
+      const storagePath = `owners/${uid}/property_documents/floor_plans/${Date.now()}_${safeName}`;
       const fileRef = ref(storage, storagePath);
       const contentType = file.type || (file.name.toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'image/jpeg');
       await uploadBytes(fileRef, file, { contentType });
