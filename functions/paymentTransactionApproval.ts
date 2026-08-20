@@ -12,6 +12,7 @@ const ts = () => FieldValue.serverTimestamp();
 
 const roleOf = (value: unknown) => String(value || "").trim().toLowerCase();
 const upper = (value: unknown) => String(value || "").trim().toUpperCase();
+const money = (value: number) => Math.round(value * 100) / 100;
 const ADMIN_ROLES = new Set(["admin", "ceo", "super_admin", "operations_admin", "finance_admin"]);
 
 async function requireAdmin(auth: any) {
@@ -237,7 +238,7 @@ export const adminApprovePayment = onCall({ cors: true, enforceAppCheck: true },
     expectedAnnual <= 0 ||
     !Number.isFinite(expectedAmount) ||
     expectedAmount <= 0 ||
-    Math.abs(expectedAmount - Math.round(expectedAnnual * 0.15)) > 0.01
+    Math.abs(expectedAmount - money(expectedAnnual * 0.15)) > 0.01
   ) {
     throw new HttpsError("failed-precondition", "The locked 15% mobilization schedule is invalid.");
   }
@@ -360,7 +361,7 @@ export const adminApprovePayment = onCall({ cors: true, enforceAppCheck: true },
       freshExpectedAnnual <= 0 ||
       !Number.isFinite(freshExpectedAmount) ||
       freshExpectedAmount <= 0 ||
-      Math.abs(freshExpectedAmount - Math.round(freshExpectedAnnual * 0.15)) > 0.01 ||
+      Math.abs(freshExpectedAmount - money(freshExpectedAnnual * 0.15)) > 0.01 ||
       Math.abs(freshExpectedAmount - expectedAmount) > 0.01
     ) {
       throw new HttpsError("aborted", "Locked payment amount changed during approval.");
