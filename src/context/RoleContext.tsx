@@ -1,7 +1,8 @@
 import React, { createContext, useContext, useEffect, useState, useRef, type ReactNode } from "react";
+import { getToken as getAppCheckToken } from "firebase/app-check";
 
 import {
-    db, auth, doc, getDoc, setDoc, serverTimestamp,
+    db, auth, appCheck, doc, getDoc, setDoc, serverTimestamp,
     onAuthStateChanged
 } from "../lib/firebase";
 import type { User } from "../lib/firebase";
@@ -76,6 +77,8 @@ interface RoleContextType {
 
 const RoleContext = createContext<RoleContextType | undefined>(undefined);
 const AUTH_BOOT_TIMEOUT_MS = 8000;
+const PROFILE_READ_MAX_ATTEMPTS = 4;
+const PROFILE_READ_RETRY_BASE_MS = 450;
 const VALID_PORTAL_ROLES = new Set(['owner', 'tenant', 'technician', 'broker', 'admin', 'super_admin', 'ceo', 'manager', 'operations_admin', 'finance_admin', 'hr_admin', 'support_admin', 'hr_manager', 'hr_staff', 'finance_staff', 'account_manager', 'dispatcher', 'operations_manager', 'auditor']);
 
 const ADMIN_ROLES = new Set([
@@ -116,6 +119,84 @@ const claimsGrantAdmin = (claims: Record<string, unknown>): boolean => {
         claims.manager === true ||
         roleIsAdmin(claimRole)
     );
+};
+
+const profileReadErrorCode = (error: unknown): string =>
+    String((error as { code?: unknown } | null)?.code || '').toLowerCase().replace(/^firestore\//, '');
+
+const profileReadErrorMessage = (error: unknown): string =>
+    String((error as { message?: unknown } | null)?.message || '').toLowerCase();
+
+const profileReadCanRecover = (error: unknown): boolean => {
+    const code = profileReadErrorCode(error);
+    const message = profileReadErrorMessage(error);
+    return new Set([
+        'aborted',
+        'deadline-exceeded',
+        'internal',
+        'permission-denied',
+        'resource-exhausted',
+        'unauthenticated',
+        'unavailable',
+        'unknown',
+    ]).has(code) ||
+        message.includes('app check') ||
+        message.includes('failed to fetch') ||
+        message.includes('network') ||
+        message.includes('timeout') ||
+        message.includes('connection');
+};
+
+const refreshSecureSessionProof = async (currentUser: User): Promise<void> => {
+    // Refresh both Firebase Auth and App Check. A browser can retain a valid Auth
+    // session while its App Check token has expired or failed to initialize;
+    // Firestore then rejects users/{uid} even though the account itself is valid.
+    await currentUser.getIdToken(true);
+    if (appCheck) {
+        await getAppCheckToken(appCheck, true);
+    }
+};
+
+const sleep = (ms: number) => new Promise<void>((resolve) => window.setTimeout(resolve, ms));
+
+const readOwnProfileWithRecovery = async (currentUser: User, userDocRef: ReturnType<typeof doc>) => {
+    let lastError: unknown;
+
+    for (let attempt = 1; attempt <= PROFILE_READ_MAX_ATTEMPTS; attempt += 1) {
+        try {
+            return await getDoc(userDocRef);
+        } catch (error) {
+            lastError = error;
+            const code = profileReadErrorCode(error) || 'unknown';
+            const canRecover = profileReadCanRecover(error);
+            const offline = typeof navigator !== 'undefined' && navigator.onLine === false;
+
+            console.warn(
+                `[ROLE-SYNC] Own-profile read failed attempt ${attempt}/${PROFILE_READ_MAX_ATTEMPTS} (${code}).`,
+                error,
+            );
+
+            if (!canRecover || offline || attempt === PROFILE_READ_MAX_ATTEMPTS) {
+                throw error;
+            }
+
+            // The first failed server read is the important recovery boundary:
+            // replace stale Auth/App Check proof before the next Firestore read.
+            // Permission/unauthenticated responses refresh proof on every retry.
+            if (attempt === 1 || code === 'permission-denied' || code === 'unauthenticated') {
+                try {
+                    await refreshSecureSessionProof(currentUser);
+                } catch (refreshError) {
+                    lastError = refreshError;
+                    console.warn('[ROLE-SYNC] Secure-session proof refresh failed; retrying within bounded recovery.', refreshError);
+                }
+            }
+
+            await sleep(PROFILE_READ_RETRY_BASE_MS * (2 ** (attempt - 1)));
+        }
+    }
+
+    throw lastError instanceof Error ? lastError : new Error('Own-profile verification failed.');
 };
 
 const markGlobalAuthReady = () => {
@@ -167,33 +248,27 @@ export function RoleProvider({ children }: { children: ReactNode }) {
             let snap;
 
             try {
-                snap = await getDoc(userDocRef);
-            } catch (firstErr: any) {
-                console.warn("[ROLE-SYNC] Firestore read failed, retrying once:", firstErr);
-                await new Promise((resolve) => setTimeout(resolve, 600));
-                try {
-                    snap = await getDoc(userDocRef);
-                } catch (err: any) {
-                    console.error("[ROLE-SYNC] Firestore read permission/error after retry:", err);
-                    if (roleIsValid(claimRole)) {
-                        const recoveredRole = claimRole;
-                        const recoveredIsAdmin = claimIsAdmin;
-                        setRole(recoveredRole);
-                        setIsAdmin(recoveredIsAdmin);
-                        setStatus('profile_unavailable');
-                        setUser({ ...currentUser, role: recoveredRole, isAdmin: recoveredIsAdmin, status: 'profile_unavailable' } as SovereignUser);
-                        setError("PROFILE UNAVAILABLE: Account status could not be verified. Retry before entering a portal.");
-                        setLoading(false);
-                        return;
-                    }
-                    setRole(null);
-                    setIsAdmin(false);
-                    setStatus('role_required');
-                    setUser({ ...currentUser, status: 'role_required' } as SovereignUser);
-                    setError(null);
+                snap = await readOwnProfileWithRecovery(currentUser, userDocRef);
+            } catch (err: any) {
+                console.error("[ROLE-SYNC] Own-profile verification failed after bounded secure-session recovery:", err);
+                if (roleIsValid(claimRole)) {
+                    const recoveredRole = claimRole;
+                    const recoveredIsAdmin = claimIsAdmin;
+                    setRole(recoveredRole);
+                    setIsAdmin(recoveredIsAdmin);
+                    setStatus('profile_unavailable');
+                    setUser({ ...currentUser, role: recoveredRole, isAdmin: recoveredIsAdmin, status: 'profile_unavailable' } as SovereignUser);
+                    setError("PROFILE UNAVAILABLE: Secure account verification could not complete after refreshing the session. Retry before entering a portal.");
                     setLoading(false);
                     return;
                 }
+                setRole(null);
+                setIsAdmin(false);
+                setStatus('role_required');
+                setUser({ ...currentUser, status: 'role_required' } as SovereignUser);
+                setError(null);
+                setLoading(false);
+                return;
             }
 
             if (snap && snap.exists()) {
@@ -321,6 +396,20 @@ export function RoleProvider({ children }: { children: ReactNode }) {
     useEffect(() => {
         loadingRef.current = loading;
     }, [loading]);
+
+    useEffect(() => {
+        if (status !== 'profile_unavailable' || typeof window === 'undefined') return;
+
+        const recoverWhenOnline = () => {
+            if (auth.currentUser) {
+                console.info('[ROLE-SYNC] Connectivity restored; retrying secure account verification.');
+                void refreshRole();
+            }
+        };
+
+        window.addEventListener('online', recoverWhenOnline);
+        return () => window.removeEventListener('online', recoverWhenOnline);
+    }, [status]);
 
     useEffect(() => {
         let unsubscribe: () => void = () => {};
