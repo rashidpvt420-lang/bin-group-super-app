@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Alert, Box, Button, Chip, CircularProgress, Divider, Grid, Paper, Stack, TextField, Typography, alpha } from '@mui/material';
+import { Alert, Box, Button, Chip, CircularProgress, Divider, FormControl, Grid, InputLabel, MenuItem, Paper, Select, Stack, TextField, Typography, alpha } from '@mui/material';
 import { CreditCard, FileSignature, LockKeyhole, PenLine, ShieldCheck, WalletCards } from 'lucide-react';
 import { collection, db, functions, getDocs, getDownloadURL, httpsCallable, query, ref, storage, uploadBytes, where } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
@@ -7,8 +7,8 @@ import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import ContractSignatureOtpControl from '../components/ContractSignatureOtpControl';
 import { isOwnerProfileActivated } from '../activationPolicy';
+import { formatAedMoney, normalizeAedMoney } from '../../../functions/shared/aedMoney';
 
-const fmtAED = (value: number) => `AED ${Math.round(value || 0).toLocaleString()}`;
 const sha256File = async (file: File) => {
   const digest = await crypto.subtle.digest('SHA-256', await file.arrayBuffer());
   return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
@@ -34,6 +34,18 @@ type ActivationGate = {
   tone: string;
 };
 
+type OwnerActivationPaymentMethod = 'CASH' | 'CHEQUE';
+
+type OwnerPaymentConfiguration = {
+  version: string;
+  configHash: string;
+  currency: 'AED';
+  approvedMethods: string[];
+  officeLocation: string;
+};
+
+const OWNER_ACTIVATION_PAYMENT_METHODS = new Set<OwnerActivationPaymentMethod>(['CASH', 'CHEQUE']);
+
 const firstNumber = (...values: any[]) => {
   for (const value of values) {
     const num = Number(value);
@@ -42,37 +54,24 @@ const firstNumber = (...values: any[]) => {
   return 0;
 };
 
-const contractValue = (contract: any) => firstNumber(
+const firstLockedNumber = (...values: any[]) => {
+  const value = values.find((candidate) => candidate !== undefined && candidate !== null && candidate !== '');
+  return value === undefined ? Number.NaN : Number(value);
+};
+
+const contractValue = (contract: any) => firstLockedNumber(
+  contract?.quoteSnapshot?.annualContractValue,
   contract?.commercialSchedule?.annualContractValue,
   contract?.paymentSchedule?.annualContractValue,
-  contract?.annualContractValue,
-  contract?.annualValue,
-  contract?.estimatedAnnualValue,
-  contract?.totalAnnual,
-  contract?.quoteTotal,
-  contract?.contractValue,
-  contract?.serviceValue,
-  contract?.pricing?.annualContractValue,
-  contract?.pricing?.annualValue,
-  contract?.quote?.annualContractValue,
-  contract?.quote?.totalAnnual,
-  contract?.payment?.annualValue,
-  contract?.amount
+  contract?.annualContractValue
 );
 
-const contractMobilization = (contract: any, annualValue: number) => firstNumber(
+const contractMobilization = (contract: any) => firstLockedNumber(
+  contract?.quoteSnapshot?.activationDeposit,
   contract?.commercialSchedule?.mobilizationAmount,
   contract?.paymentSchedule?.mobilizationAmount,
-  contract?.mobilizationAmount,
-  contract?.depositAmount,
-  contract?.mobilizationFee,
-  contract?.upfrontAmount,
-  contract?.pricing?.mobilizationAmount,
-  contract?.pricing?.upfrontAmount,
-  contract?.quote?.mobilizationAmount,
-  contract?.payment?.amount,
-  contract?.paymentAmount,
-  annualValue > 0 ? annualValue * 0.15 : 0
+  contract?.activationDeposit,
+  contract?.mobilizationAmount
 );
 
 const hasCommercialSchedule = (contract: any) =>
@@ -139,9 +138,25 @@ function buildActivationGates(contract: any, profile: any, activated: boolean): 
 }
 
 const moneyLabel = (value: number, contract: any) => {
-  if (value > 0) return `AED ${Math.round(value).toLocaleString()}`;
-  if (hasCommercialSchedule(contract)) return "AED 0 — legacy/admin amount missing";
-  return "Pending Admin Confirmation";
+  if (Number.isFinite(value) && value > 0) {
+    try {
+      return formatAedMoney(value);
+    } catch {
+      return 'Unavailable — locked amount invalid';
+    }
+  }
+  if (hasCommercialSchedule(contract)) return 'Unavailable — locked amount invalid';
+  return 'Unavailable — locked schedule required';
+};
+
+const hasValidLockedSchedule = (annualValue: number, mobilizationAmount: number) => {
+  try {
+    return annualValue > 0 &&
+      mobilizationAmount > 0 &&
+      normalizeAedMoney(mobilizationAmount) === normalizeAedMoney(annualValue * 0.15);
+  } catch {
+    return false;
+  }
 };
 
 function uniqueById(items: any[]) {
@@ -163,6 +178,10 @@ export default function OwnerActivationPage() {
   const [otpVerificationId, setOtpVerificationId] = useState<string | null>(null);
   const [paymentReference, setPaymentReference] = useState('');
   const [paymentProof, setPaymentProof] = useState<File | null>(null);
+  const [paymentMethod, setPaymentMethod] = useState<OwnerActivationPaymentMethod | ''>('');
+  const [paymentConfiguration, setPaymentConfiguration] = useState<OwnerPaymentConfiguration | null>(null);
+  const [paymentConfigurationLoading, setPaymentConfigurationLoading] = useState(false);
+  const [paymentConfigurationError, setPaymentConfigurationError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
@@ -227,6 +246,62 @@ export default function OwnerActivationPage() {
     };
   }, [user?.displayName, user?.email, user?.uid]);
 
+  useEffect(() => {
+    if (!user?.uid) {
+      setPaymentConfiguration(null);
+      setPaymentMethod('');
+      setPaymentConfigurationError(null);
+      return;
+    }
+
+    let cancelled = false;
+    const loadPaymentConfiguration = async () => {
+      setPaymentConfigurationLoading(true);
+      setPaymentConfigurationError(null);
+      try {
+        const getPaymentConfiguration = httpsCallable(functions, 'getOwnerPaymentConfiguration');
+        const result = await getPaymentConfiguration({});
+        const value = result.data as Partial<OwnerPaymentConfiguration>;
+        const approvedMethods = Array.isArray(value?.approvedMethods)
+          ? value.approvedMethods.map((method) => String(method || '').trim().toUpperCase())
+          : [];
+        const availableMethods = approvedMethods.filter(
+          (method): method is OwnerActivationPaymentMethod => OWNER_ACTIVATION_PAYMENT_METHODS.has(method as OwnerActivationPaymentMethod),
+        );
+        if (
+          !value?.version ||
+          !/^[a-f0-9]{64}$/i.test(String(value?.configHash || '')) ||
+          value?.currency !== 'AED' ||
+          availableMethods.length === 0
+        ) {
+          throw new Error('No valid CASH or CHEQUE Owner payment policy is currently available.');
+        }
+        if (cancelled) return;
+        const configuration: OwnerPaymentConfiguration = {
+          version: value.version,
+          configHash: String(value.configHash),
+          currency: 'AED',
+          approvedMethods,
+          officeLocation: String(value.officeLocation || ''),
+        };
+        setPaymentConfiguration(configuration);
+        setPaymentMethod((current) => availableMethods.includes(current as OwnerActivationPaymentMethod) ? current : availableMethods[0]);
+      } catch (err: any) {
+        if (cancelled) return;
+        setPaymentConfiguration(null);
+        setPaymentMethod('');
+        setPaymentConfigurationError(err?.message || 'Approved payment methods could not be loaded.');
+      } finally {
+        if (!cancelled) setPaymentConfigurationLoading(false);
+      }
+    };
+
+    loadPaymentConfiguration();
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.uid]);
+
   const primaryContract = useMemo(() => {
     return contracts.find((c) => SIGNABLE_STATUSES.includes(String(c.status || '').toUpperCase()) && c.ownerSigned !== true) ||
       contracts.find((c) => READY_STATUSES.includes(String(c.status || '').toUpperCase()) || c.ownerSigned === true || c.signatureStatus === 'OWNER_SIGNED') ||
@@ -236,7 +311,7 @@ export default function OwnerActivationPage() {
 
   const status = String(primaryContract?.status || '').toUpperCase();
   const annualValue = contractValue(primaryContract);
-  const mobilization = contractMobilization(primaryContract, annualValue);
+  const mobilization = contractMobilization(primaryContract);
   const paymentPlanText = String(
     primaryContract?.commercialSchedule?.paymentPlan ||
     primaryContract?.paymentSchedule?.paymentPlan ||
@@ -248,8 +323,20 @@ export default function OwnerActivationPage() {
   const activated = isOwnerProfileActivated(profile);
   const canSign = !!primaryContract?.id && SIGNABLE_STATUSES.includes(status) && primaryContract?.ownerSigned !== true && primaryContract?.signatureStatus !== 'OWNER_SIGNED';
   const signedWaitingActivation = !!primaryContract?.id && (primaryContract?.ownerSigned || READY_STATUSES.includes(status) || primaryContract?.signatureStatus === 'OWNER_SIGNED');
-  const amountPendingAdminConfirmation = signedWaitingActivation && mobilization <= 0 && !hasCommercialSchedule(primaryContract);
-  const canSubmitPaymentRequest = !!primaryContract?.id && !activated && !canSign && signedWaitingActivation;
+  const lockedScheduleValid = hasValidLockedSchedule(annualValue, mobilization);
+  const missingLockedSchedule = signedWaitingActivation && !lockedScheduleValid;
+  const selectedMethodApproved = Boolean(
+    paymentMethod && paymentConfiguration?.approvedMethods.includes(paymentMethod),
+  );
+  const canSubmitPaymentRequest = Boolean(
+    primaryContract?.id &&
+    !activated &&
+    !canSign &&
+    signedWaitingActivation &&
+    !missingLockedSchedule &&
+    paymentConfiguration &&
+    selectedMethodApproved,
+  );
   const activationGates = buildActivationGates(primaryContract, profile, activated);
 
   const refreshAfterAction = async () => {
@@ -312,8 +399,16 @@ export default function OwnerActivationPage() {
       setError('No owner profile or contract found. Create/select a contract first.');
       return;
     }
+    if (!lockedScheduleValid) {
+      setError('Activation is blocked because the authoritative locked payment schedule is missing. Ask Admin to regenerate or migrate the quote.');
+      return;
+    }
+    if (!paymentConfiguration || !paymentMethod || !paymentConfiguration.approvedMethods.includes(paymentMethod)) {
+      setError('Reload the authoritative payment policy and select an approved CASH or CHEQUE method.');
+      return;
+    }
     if (!user?.uid || !paymentReference.trim() || !paymentProof) {
-      setError('Enter the bank reference and attach the payment receipt before requesting verification.');
+      setError('Enter the payment reference and attach the payment receipt before requesting verification.');
       return;
     }
 
@@ -338,11 +433,13 @@ export default function OwnerActivationPage() {
       const createPayment = httpsCallable(functions, 'createOwnerPaymentTransaction');
       const result = await createPayment({
         contractId: primaryContract.id,
-        method: 'BANK_TRANSFER',
+        method: paymentMethod,
         provider: 'MANUAL',
         amount: mobilization,
-        amountSource: mobilization <= 0 ? 'OWNER_CONFIRMATION_FALLBACK' : 'CONTRACT_VALUE',
+        amountSource: 'LOCKED_CONTRACT_SCHEDULE',
         currency: 'AED',
+        paymentConfigVersion: paymentConfiguration.version,
+        paymentConfigHash: paymentConfiguration.configHash,
         reference: paymentReference.trim(),
         paymentProofUrl: proofUrl,
         paymentProofPath: proofPath,
@@ -354,12 +451,11 @@ export default function OwnerActivationPage() {
         paymentReferenceId: paymentReference.trim(),
         commercialScheduleLocked: hasCommercialSchedule(primaryContract),
       });
-      const data = result.data as { paymentId?: string; amountPendingAdminConfirmation?: boolean; idempotent?: boolean };
+      const data = result.data as { paymentId?: string; idempotent?: boolean };
       const requestLabel = data?.idempotent ? 'Existing payment verification request found' : 'Payment verification request submitted';
-      setSuccess(data?.amountPendingAdminConfirmation
-        ? `${requestLabel}${data?.paymentId ? ` (${data.paymentId})` : ''}. Admin must confirm the mobilization amount and verify payment before dashboard unlock.`
-        : `${requestLabel}${data?.paymentId ? ` (${data.paymentId})` : ''}. Admin must verify payment before dashboard unlock.`);
+      setSuccess(`${requestLabel}${data?.paymentId ? ` (${data.paymentId})` : ''}. Admin must verify payment before dashboard unlock.`);
       setPaymentProof(null);
+      setPaymentReference('');
       await refreshAfterAction();
     } catch (err: any) {
       setError(err?.message || 'Activation request failed.');
@@ -378,14 +474,14 @@ export default function OwnerActivationPage() {
 
   const PaymentRequestButton = ({ fullWidth = false }: { fullWidth?: boolean }) => (
     <Button
-      disabled={activating || !canSubmitPaymentRequest || !paymentReference.trim() || !paymentProof}
+      disabled={activating || paymentConfigurationLoading || !canSubmitPaymentRequest || !paymentReference.trim() || !paymentProof}
       onClick={handleManualVerificationBridge}
       variant="contained"
       startIcon={<CreditCard size={18} />}
       fullWidth={fullWidth}
       sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, borderRadius: 3, py: 1.5, mt: fullWidth ? 1.5 : 0 }}
     >
-      {activating ? 'Submitting...' : amountPendingAdminConfirmation ? 'Submit Verification Request — Amount Pending' : 'Submit Payment Verification Request'}
+      {activating ? 'Submitting...' : 'Submit Payment Verification Request'}
     </Button>
   );
 
@@ -401,16 +497,13 @@ export default function OwnerActivationPage() {
         </Box>
 
         {error && <Alert severity="error">{error}</Alert>}
+        {paymentConfigurationError && <Alert severity="error">{paymentConfigurationError}</Alert>}
         {success && <Alert severity="success">{success}</Alert>}
         {activated && <Alert severity="success">Your owner profile already has verified payment and active contract access.</Alert>}
         {signedWaitingActivation && !activated && <Alert severity="info">Contract is signed and ready for payment/admin activation.</Alert>}
-        {amountPendingAdminConfirmation && !activated && (
-          <Alert
-            severity="warning"
-            action={canSubmitPaymentRequest ? <PaymentRequestButton /> : undefined}
-            sx={{ alignItems: 'center' }}
-          >
-            Mobilization amount is missing from this contract. Submit the verification request now; admin will confirm the amount and verify payment before dashboard unlock.
+        {missingLockedSchedule && !activated && (
+          <Alert severity="error" sx={{ alignItems: 'center' }}>
+            Activation is blocked because this contract has no authoritative locked mobilization amount. Admin must regenerate or migrate the quote/payment schedule; no fallback amount will be submitted.
           </Alert>
         )}
         {!primaryContract?.id && <Alert severity="warning">No contract was found for this owner account. Ask admin to approve and email the selected contract for owner signature.</Alert>}
@@ -485,8 +578,21 @@ export default function OwnerActivationPage() {
 
                 {canSubmitPaymentRequest && (
                   <Stack spacing={1.5}>
+                    <FormControl fullWidth required>
+                      <InputLabel id="owner-activation-payment-method-label">Approved payment method</InputLabel>
+                      <Select
+                        labelId="owner-activation-payment-method-label"
+                        label="Approved payment method"
+                        value={paymentMethod}
+                        onChange={(event) => setPaymentMethod(event.target.value as OwnerActivationPaymentMethod)}
+                      >
+                        {paymentConfiguration?.approvedMethods
+                          .filter((method): method is OwnerActivationPaymentMethod => OWNER_ACTIVATION_PAYMENT_METHODS.has(method as OwnerActivationPaymentMethod))
+                          .map((method) => <MenuItem key={method} value={method}>{method === 'CASH' ? 'Cash' : 'Cheque'}</MenuItem>)}
+                      </Select>
+                    </FormControl>
                     <TextField
-                      label="Bank transfer / cheque reference"
+                      label={paymentMethod === 'CHEQUE' ? 'Cheque reference / number' : 'Cash receipt reference'}
                       value={paymentReference}
                       onChange={(event) => setPaymentReference(event.target.value)}
                       required
@@ -505,6 +611,11 @@ export default function OwnerActivationPage() {
                         onChange={(event) => setPaymentProof(event.target.files?.[0] || null)}
                       />
                     </Button>
+                    {paymentConfiguration?.officeLocation && (
+                      <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.48)' }}>
+                        Approved office: {paymentConfiguration.officeLocation}
+                      </Typography>
+                    )}
                   </Stack>
                 )}
 

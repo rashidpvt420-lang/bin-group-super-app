@@ -69,16 +69,7 @@ const canonicalHash = (configuration: Omit<ActivePaymentConfiguration, "configHa
   .update(JSON.stringify(configuration))
   .digest("hex");
 
-export async function loadActivePaymentConfiguration(): Promise<ActivePaymentConfiguration> {
-  const snapshot = await db.collection(CONFIG_COLLECTION).doc(CONFIG_DOCUMENT).get();
-  if (!snapshot.exists) {
-    throw new HttpsError(
-      "failed-precondition",
-      "Corporate payment instructions are not configured. Manual payment methods are disabled.",
-    );
-  }
-
-  const value = snapshot.data() || {};
+export function resolveActivePaymentConfiguration(value: Record<string, any>): ActivePaymentConfiguration {
   if (normalizeUpper(value.status) !== "ACTIVE") {
     throw new HttpsError(
       "failed-precondition",
@@ -145,6 +136,17 @@ export async function loadActivePaymentConfiguration(): Promise<ActivePaymentCon
     ...configurationWithoutHash,
     configHash: canonicalHash(configurationWithoutHash),
   };
+}
+
+export async function loadActivePaymentConfiguration(): Promise<ActivePaymentConfiguration> {
+  const snapshot = await db.collection(CONFIG_COLLECTION).doc(CONFIG_DOCUMENT).get();
+  if (!snapshot.exists) {
+    throw new HttpsError(
+      "failed-precondition",
+      "Corporate payment instructions are not configured. Manual payment methods are disabled.",
+    );
+  }
+  return resolveActivePaymentConfiguration(snapshot.data() || {});
 }
 
 export const getOwnerPaymentConfiguration = onCall(
