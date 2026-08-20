@@ -49,8 +49,10 @@ test('property inventory calculations stay separate from the authoritative quote
   assert.match(panel, /if \(!\(Number\(property\.sqft\) > 0\)/);
 });
 
-test('floor-plan AI is owner-scoped, App-Check protected, advisory and fail-closed', () => {
+test('floor-plan AI is owner-scoped, App-Check protected, quota protected, advisory and fail-closed', () => {
   assert.match(floorPlanAi, /enforceAppCheck:\s*true/);
+  assert.match(floorPlanAi, /reserveAiUsageQuota/);
+  assert.match(floorPlanAi, /settleAiUsageQuota/);
   assert.match(floorPlanAi, /owners\/\$\{uid\}\/property_documents\/floor_plans\//);
   assert.match(floorPlanAi, /OWNER_CONFIRMATION_REQUIRED/);
   assert.match(floorPlanAi, /autoVerified:\s*false/);
