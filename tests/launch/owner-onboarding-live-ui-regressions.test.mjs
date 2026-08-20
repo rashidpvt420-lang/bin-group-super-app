@@ -79,3 +79,21 @@ test('login validates required credentials and maps common Firebase configuratio
   assert.match(source, /Enter your email address and try again\./);
   assert.match(source, /Secure sign-in is not authorized from this web address\./);
 });
+
+test('portal profile verification refreshes Auth and App Check before declaring account unavailable', async () => {
+  const source = await read('src/context/RoleContext.tsx');
+  assert.match(source, /PROFILE_READ_MAX_ATTEMPTS = 4/);
+  assert.match(source, /getToken as getAppCheckToken/);
+  assert.match(source, /await currentUser\.getIdToken\(true\)/);
+  assert.match(source, /await getAppCheckToken\(appCheck, true\)/);
+  assert.match(source, /readOwnProfileWithRecovery/);
+  assert.match(source, /permission-denied/);
+  assert.match(source, /unauthenticated/);
+  assert.match(source, /Connectivity restored; retrying secure account verification/);
+  assert.match(source, /setStatus\('profile_unavailable'\)/);
+  assert.doesNotMatch(
+    source,
+    /profile_unavailable[\s\S]{0,500}setStatus\('active'\)/,
+    'transport recovery must never unlock a portal without a verified server profile',
+  );
+});
