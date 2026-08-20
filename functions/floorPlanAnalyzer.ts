@@ -1,6 +1,7 @@
 import { defineSecret } from "firebase-functions/params";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
+import { reserveAiUsageQuota, settleAiUsageQuota } from "./aiUsageQuota";
 
 if (!admin.apps.length) admin.initializeApp();
 
@@ -223,11 +224,14 @@ export const processFloorPlanAI = onCall({
     };
   }
 
+  const reservation = await reserveAiUsageQuota(request.auth, "chat", ALLOWED_ROLES, 2);
+  let chargeQuota = false;
   try {
     const data = await analyseWithGemini(key, buffer, actualType, propertyType);
+    chargeQuota = true;
     await db.collection("audit_logs").add({
-      actorId: uid,
-      actorRole: role,
+      actorId: reservation.uid,
+      actorRole: reservation.role || role,
       action: "FLOOR_PLAN_AI_EXTRACTED",
       targetType: "property_floor_plan",
       targetId: storagePath,
@@ -260,5 +264,9 @@ export const processFloorPlanAI = onCall({
       autoVerified: false,
       message: "Automated floor-plan analysis did not complete. Continue with manual space entry.",
     };
+  } finally {
+    await settleAiUsageQuota(reservation, chargeQuota).catch((error) => {
+      console.error("processFloorPlanAI quota settlement failed", { uid, error });
+    });
   }
 });
