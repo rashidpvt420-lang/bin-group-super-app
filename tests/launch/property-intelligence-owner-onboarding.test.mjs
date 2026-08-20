@@ -20,10 +20,13 @@ const propertyTypes = [
   'Mixed-Use Tower', 'Skyscraper', 'Stadium', 'Sports Complex', 'Event Venue', 'Farm / Estate',
 ];
 
+const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
 test('property intelligence catalog covers every Owner Asset Profile property type', () => {
   for (const propertyType of propertyTypes) {
-    assert.match(intelligence, new RegExp(`['\"]${propertyType.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}['\"]`), `missing property intelligence catalog entry for ${propertyType}`);
-    assert.match(assetProfile, new RegExp(`['\"]${propertyType.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}['\"]`), `missing Asset Profile option for ${propertyType}`);
+    const escaped = escapeRegExp(propertyType);
+    assert.match(intelligence, new RegExp(`(?:^|\\s|['\"])${escaped}(?:\\s*:|['\"])`, 'm'), `missing property intelligence catalog entry for ${propertyType}`);
+    assert.match(assetProfile, new RegExp(`['\"]${escaped}['\"]`), `missing Asset Profile option for ${propertyType}`);
   }
   assert.equal(propertyTypes.length, 26);
 });
