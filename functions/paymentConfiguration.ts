@@ -8,7 +8,8 @@ const db = admin.firestore();
 const CONFIG_COLLECTION = "system_payment_config";
 const CONFIG_DOCUMENT = "current";
 const EXPECTED_BENEFICIARY = "BIN GROUP L.L.C - S.P.C";
-const ALLOWED_METHODS = new Set(["BANK_TRANSFER", "CHEQUE", "CASH", "STRIPE"]);
+const PHASE1_METHODS = ["CASH", "CHEQUE"] as const;
+const ALLOWED_METHODS = new Set<string>(PHASE1_METHODS);
 const PAYMENT_ACCESS_ROLES = new Set([
   "owner",
   "admin",
@@ -73,24 +74,18 @@ export function resolveActivePaymentConfiguration(value: Record<string, any>): A
   if (normalizeUpper(value.status) !== "ACTIVE") {
     throw new HttpsError(
       "failed-precondition",
-      "Corporate payment instructions are not active. Manual payment methods are disabled.",
+      "Corporate payment instructions are not active. Cash and Cheque payments are disabled.",
     );
   }
 
   const legalBeneficiary = normalizeText(value.legalBeneficiary || value.beneficiaryName);
-  const rawBankName = normalizeText(value.bankName);
-  const rawAccountNumber = normalizeText(value.accountNumber).replace(/\s+/g, "");
-  const rawIban = normalizeUpper(value.iban).replace(/\s+/g, "");
-  const rawSwiftBic = normalizeUpper(value.swiftBic || value.swift || value.bic).replace(/\s+/g, "");
   const currency = normalizeUpper(value.currency);
   const version = normalizeText(value.version);
   const effectiveAtMs = timestampToMillis(value.effectiveAt || value.updatedAt);
   const officeLocation = normalizeText(value.officeLocation || value.cashOfficeLocation);
   const approvedMethods = Array.isArray(value.approvedMethods)
-    ? Array.from(new Set(value.approvedMethods.map(normalizeUpper).filter((method: string) => ALLOWED_METHODS.has(method))))
+    ? Array.from(new Set(value.approvedMethods.map(normalizeUpper).filter((method: string) => ALLOWED_METHODS.has(method)))).sort()
     : [];
-  const bankTransferEnabled = approvedMethods.includes("BANK_TRANSFER");
-  const cashOrChequeEnabled = approvedMethods.some((method) => method === "CASH" || method === "CHEQUE");
 
   if (legalBeneficiary !== EXPECTED_BENEFICIARY) {
     throw new HttpsError("failed-precondition", "The configured legal beneficiary does not match the approved corporate identity.");
@@ -101,32 +96,30 @@ export function resolveActivePaymentConfiguration(value: Record<string, any>): A
   if (currency !== "AED") {
     throw new HttpsError("failed-precondition", "Owner onboarding payments must be configured in AED.");
   }
-  if (approvedMethods.length === 0) {
-    throw new HttpsError("failed-precondition", "No approved owner payment method is configured.");
+  if (JSON.stringify(approvedMethods) !== JSON.stringify([...PHASE1_METHODS].sort())) {
+    throw new HttpsError(
+      "failed-precondition",
+      "Phase 1 owner onboarding must enable exactly Cash and Cheque. Bank Transfer and Card payments are not available.",
+    );
   }
-  if (cashOrChequeEnabled && !officeLocation) {
+  if (value.bankTransferEnabled === true || value.stripeEnabled === true) {
+    throw new HttpsError(
+      "failed-precondition",
+      "Phase 1 requires Bank Transfer and Card/Stripe to remain disabled.",
+    );
+  }
+  if (!officeLocation) {
     throw new HttpsError("failed-precondition", "Cash and Cheque payments require an approved BIN GROUP office location.");
-  }
-  if (bankTransferEnabled) {
-    if (!rawBankName || !rawAccountNumber) {
-      throw new HttpsError("failed-precondition", "The corporate bank-transfer configuration is incomplete.");
-    }
-    if (!/^AE\d{21}$/.test(rawIban)) {
-      throw new HttpsError("failed-precondition", "The configured UAE IBAN is invalid.");
-    }
-    if (!/^[A-Z0-9]{8}([A-Z0-9]{3})?$/.test(rawSwiftBic)) {
-      throw new HttpsError("failed-precondition", "The configured SWIFT/BIC is invalid.");
-    }
   }
 
   const configurationWithoutHash: Omit<ActivePaymentConfiguration, "configHash"> = {
     version,
     effectiveAtMs,
     legalBeneficiary,
-    bankName: bankTransferEnabled ? rawBankName : "",
-    accountNumber: bankTransferEnabled ? rawAccountNumber : "",
-    iban: bankTransferEnabled ? rawIban : "",
-    swiftBic: bankTransferEnabled ? rawSwiftBic : "",
+    bankName: "",
+    accountNumber: "",
+    iban: "",
+    swiftBic: "",
     currency: "AED",
     officeLocation,
     approvedMethods,
@@ -143,7 +136,7 @@ export async function loadActivePaymentConfiguration(): Promise<ActivePaymentCon
   if (!snapshot.exists) {
     throw new HttpsError(
       "failed-precondition",
-      "Corporate payment instructions are not configured. Manual payment methods are disabled.",
+      "Corporate payment instructions are not configured. Cash and Cheque payments are disabled.",
     );
   }
   return resolveActivePaymentConfiguration(snapshot.data() || {});
