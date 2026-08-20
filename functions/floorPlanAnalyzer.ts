@@ -56,8 +56,8 @@ function storagePathFromUrl(value: unknown) {
 
 function scopedPath(data: any, uid: string) {
   const path = text(data?.storagePath, "", 1000) || storagePathFromUrl(data?.fileUrl);
-  if (!path.startsWith(`temp_kyc/${uid}/floor_plans/`) || path.includes("..") || path.includes("\\")) {
-    throw new HttpsError("permission-denied", "Floor plan is not scoped to the signed-in user.");
+  if (!path.startsWith(`owners/${uid}/property_documents/floor_plans/`) || path.includes("..") || path.includes("\\")) {
+    throw new HttpsError("permission-denied", "Floor plan is not scoped to the signed-in owner.");
   }
   return path;
 }
@@ -208,7 +208,7 @@ export const processFloorPlanAI = onCall({
       actorId: uid,
       actorRole: role,
       action: "FLOOR_PLAN_AI_MANUAL_REVIEW_REQUIRED",
-      targetType: "temp_kyc",
+      targetType: "property_floor_plan",
       targetId: storagePath,
       metadata: { reason: "GEMINI_API_KEY_NOT_CONFIGURED", propertyType },
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -229,7 +229,7 @@ export const processFloorPlanAI = onCall({
       actorId: uid,
       actorRole: role,
       action: "FLOOR_PLAN_AI_EXTRACTED",
-      targetType: "temp_kyc",
+      targetType: "property_floor_plan",
       targetId: storagePath,
       metadata: {
         provider: "gemini",
