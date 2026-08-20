@@ -4,7 +4,7 @@ import {
   Stack, TextField, Typography, alpha,
 } from '@mui/material';
 import {
-  Bot, CheckCircle2, FileSearch, FileText, Minus, Plus, Sparkles, Upload, X,
+  Bot, CheckCircle2, FileSearch, FileText, ListPlus, Minus, Plus, Sparkles, Upload, X,
 } from 'lucide-react';
 import { httpsCallable } from 'firebase/functions';
 import type { PropertyData } from '../../store/onboardingStore';
@@ -37,11 +37,14 @@ const PropertyInventoryPanel: React.FC<Props> = ({ property, onChange, ar, isRTL
     [property, inventory],
   );
   const floorPlanAnalysis = property.floorPlan?.aiAnalysis || null;
+  const descriptionAnalysis = property.descriptionAiAnalysis || null;
 
   const [customSpace, setCustomSpace] = useState('');
   const [floorPlanUploading, setFloorPlanUploading] = useState(false);
   const [floorPlanAnalyzing, setFloorPlanAnalyzing] = useState(false);
   const [floorPlanError, setFloorPlanError] = useState('');
+  const [descriptionAnalyzing, setDescriptionAnalyzing] = useState(false);
+  const [descriptionError, setDescriptionError] = useState('');
   const [aiQuestion, setAiQuestion] = useState('');
   const [aiAnswer, setAiAnswer] = useState('');
   const [aiBusy, setAiBusy] = useState(false);
@@ -105,6 +108,33 @@ const PropertyInventoryPanel: React.FC<Props> = ({ property, onChange, ar, isRTL
       }]);
     }
     setCustomSpace('');
+  };
+
+  const mergeAiTotals = (totals: any[], source: 'floor_plan_ai' | 'owner') => {
+    const nextByType = new Map<string, SpaceInventoryItem>();
+    for (const item of inventory) nextByType.set(item.type, item);
+
+    for (const raw of totals) {
+      const count = Math.max(0, Math.round(Number(raw?.count) || 0));
+      if (!count) continue;
+      const rawType = String(raw?.type || '').trim();
+      const definition = suggestions.find((item) => item.id === rawType);
+      const displayLabel = String(raw?.label || definition?.en || rawType || 'Space').trim();
+      const type = definition ? definition.id : `custom_ai_${slug(displayLabel) || Date.now()}`;
+      const existing = nextByType.get(type);
+      if (existing?.verified === true) continue;
+      nextByType.set(type, {
+        id: type,
+        type,
+        labelEn: definition?.en || displayLabel,
+        labelAr: definition?.ar || displayLabel,
+        count,
+        source,
+        confidence: Number.isFinite(Number(raw?.confidence)) ? Number(raw.confidence) : undefined,
+        verified: false,
+      });
+    }
+    return [...nextByType.values()];
   };
 
   const analyseFloorPlan = async (storagePath: string, fileUrl: string, contentType: string, floorPlanMetadata: Record<string, any>) => {
@@ -187,32 +217,7 @@ const PropertyInventoryPanel: React.FC<Props> = ({ property, onChange, ar, isRTL
   const applyFloorPlanSuggestions = () => {
     const totals = Array.isArray(floorPlanAnalysis?.totals) ? floorPlanAnalysis.totals : [];
     if (!totals.length) return;
-
-    const nextByType = new Map<string, SpaceInventoryItem>();
-    for (const item of inventory) nextByType.set(item.type, item);
-
-    for (const raw of totals) {
-      const count = Math.max(0, Math.round(Number(raw?.count) || 0));
-      if (!count) continue;
-      const rawType = String(raw?.type || '').trim();
-      const definition = suggestions.find((item) => item.id === rawType);
-      const displayLabel = String(raw?.label || definition?.en || rawType || 'Space').trim();
-      const type = definition ? definition.id : `custom_ai_${slug(displayLabel) || Date.now()}`;
-      const existing = nextByType.get(type);
-      if (existing?.verified === true) continue;
-      nextByType.set(type, {
-        id: type,
-        type,
-        labelEn: definition?.en || displayLabel,
-        labelAr: definition?.ar || displayLabel,
-        count,
-        source: 'floor_plan_ai',
-        confidence: Number.isFinite(Number(raw?.confidence)) ? Number(raw.confidence) : undefined,
-        verified: false,
-      });
-    }
-
-    const nextInventory = [...nextByType.values()];
+    const nextInventory = mergeAiTotals(totals, 'floor_plan_ai');
     const extraPatch: Partial<PropertyData> = {
       floorPlan: {
         ...property.floorPlan,
@@ -226,6 +231,56 @@ const PropertyInventoryPanel: React.FC<Props> = ({ property, onChange, ar, isRTL
     }
     if (!(Number(property.sqft) > 0) && Number(floorPlanAnalysis?.measuredAreaSqft) > 0) {
       extraPatch.sqft = Math.round(Number(floorPlanAnalysis.measuredAreaSqft));
+    }
+    updateInventory(nextInventory, extraPatch);
+  };
+
+  const analyseDescription = async () => {
+    const cleanDescription = descriptionDraft.trim();
+    if (!cleanDescription) return;
+    setDescriptionAnalyzing(true);
+    setDescriptionError('');
+    try {
+      const result: any = await httpsCallable(functions, 'processPropertyDescriptionAI')({
+        description: cleanDescription,
+        propertyType: property.propertyType,
+        propertyId: property.id,
+      });
+      const payload = result.data || {};
+      if (payload.status !== 'SUCCESS' || !payload.data) {
+        setDescriptionError(label(
+          'AI could not extract reliable room counts from that description. Nothing was applied; you can use the quick counters.',
+          'لم يتمكن الذكاء الاصطناعي من استخراج أعداد موثوقة من الوصف. لم يتم تطبيق أي بيانات؛ يمكنك استخدام العدادات السريعة.',
+        ));
+        return;
+      }
+      onChange({
+        ownerPropertyDescription: cleanDescription,
+        propertyDescriptionSource: 'owner',
+        descriptionAiAnalysis: payload.data,
+        descriptionAiStatus: 'suggested',
+      });
+    } catch (error) {
+      console.error('Property description analysis failed:', error);
+      setDescriptionError(label(
+        'Description analysis is temporarily unavailable. Your description can still be saved and the property can be completed manually.',
+        'تحليل الوصف غير متاح مؤقتاً. لا يزال بإمكانك حفظ الوصف وإكمال العقار يدوياً.',
+      ));
+    } finally {
+      setDescriptionAnalyzing(false);
+    }
+  };
+
+  const applyDescriptionSuggestions = () => {
+    const totals = Array.isArray(descriptionAnalysis?.totals) ? descriptionAnalysis.totals : [];
+    if (!totals.length) return;
+    const nextInventory = mergeAiTotals(totals, 'owner');
+    const extraPatch: Partial<PropertyData> = {
+      descriptionAiStatus: 'owner_applied',
+      descriptionAiOwnerConfirmedAt: new Date().toISOString(),
+    };
+    if (!(Number(property.floors) > 0) && Number(descriptionAnalysis?.floorsMentioned) > 0) {
+      extraPatch.floors = Math.round(Number(descriptionAnalysis.floorsMentioned));
     }
     updateInventory(nextInventory, extraPatch);
   };
@@ -364,13 +419,29 @@ const PropertyInventoryPanel: React.FC<Props> = ({ property, onChange, ar, isRTL
 
       <Typography variant="subtitle1" fontWeight={900} color="#FFF" mt={4} mb={1}>{label('4. Describe the property with BIN AI', '4. وصف العقار بمساعدة BIN AI')}</Typography>
       <TextField fullWidth multiline minRows={3} value={descriptionDraft} onChange={(event) => setDescriptionDraft(event.target.value)} placeholder={label('Example: Two-floor Government Majlis with three halls, seven guest rooms, two offices, one kitchen and five bathrooms...', 'مثال: مجلس حكومي من طابقين يضم ثلاث قاعات وسبع غرف ضيوف ومكتبين ومطبخاً وخمسة حمامات...')} />
-      <Stack direction={{ xs: 'column', sm: isRTL ? 'row-reverse' : 'row' }} spacing={1} sx={{ mt: 1.5 }}>
-        <Button variant="contained" disabled={!descriptionDraft.trim() || aiBusy} onClick={() => askAi(descriptionDraft, 'description')} startIcon={aiBusy ? <CircularProgress size={16} /> : <Sparkles size={17} />} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 900 }}>{label('Improve with AI', 'تحسين بالذكاء الاصطناعي')}</Button>
+      <Stack direction={{ xs: 'column', sm: isRTL ? 'row-reverse' : 'row' }} spacing={1} sx={{ mt: 1.5 }} flexWrap="wrap" useFlexGap>
+        <Button variant="contained" disabled={!descriptionDraft.trim() || aiBusy} onClick={() => askAi(descriptionDraft, 'description')} startIcon={aiBusy ? <CircularProgress size={16} /> : <Sparkles size={17} />} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 900 }}>{label('Improve wording with AI', 'تحسين الصياغة بالذكاء الاصطناعي')}</Button>
+        <Button variant="outlined" disabled={!descriptionDraft.trim() || descriptionAnalyzing} onClick={analyseDescription} startIcon={descriptionAnalyzing ? <CircularProgress size={16} /> : <ListPlus size={17} />}>{label('Find rooms & spaces with AI', 'استخراج الغرف والمساحات بالذكاء الاصطناعي')}</Button>
         <Button variant="outlined" onClick={() => onChange({ ownerPropertyDescription: descriptionDraft, propertyDescriptionSource: 'owner' })}>{label('Save my description', 'حفظ وصفي')}</Button>
       </Stack>
+      {descriptionError && <Alert severity="warning" sx={{ mt: 1.5 }}>{descriptionError}</Alert>}
       {improvedDescription && <Paper sx={{ mt: 2, p: 2, borderRadius: 3, bgcolor: alpha(binThemeTokens.gold, 0.06), border: `1px solid ${alpha(binThemeTokens.gold, 0.2)}` }}>
         <Typography variant="body2" color="#FFF" sx={{ whiteSpace: 'pre-wrap' }}>{improvedDescription}</Typography>
         <Button size="small" sx={{ mt: 1 }} onClick={() => { setDescriptionDraft(improvedDescription); onChange({ ownerPropertyDescription: improvedDescription, propertyDescriptionSource: 'ai_assisted_owner_confirmed' }); }}>{label('Use this description', 'استخدام هذا الوصف')}</Button>
+      </Paper>}
+
+      {descriptionAnalysis && <Paper sx={{ mt: 2, p: 2, borderRadius: 3, bgcolor: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.09)' }}>
+        <Typography variant="subtitle2" fontWeight={900} color="#FFF">{label('AI extracted these explicit facts — confirm before adding', 'استخرج الذكاء الاصطناعي هذه البيانات الصريحة — أكد قبل الإضافة')}</Typography>
+        <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} flexWrap="wrap" useFlexGap sx={{ mt: 1.5 }}>
+          {Number(descriptionAnalysis.floorsMentioned) > 0 && <Chip label={`${label('Floors mentioned', 'الطوابق المذكورة')}: ${descriptionAnalysis.floorsMentioned}`} />}
+          {(Array.isArray(descriptionAnalysis.totals) ? descriptionAnalysis.totals : []).map((item: any, index: number) => <Chip key={`description-${item?.type || 'space'}-${index}`} label={`${item?.label || item?.type || label('Space', 'مساحة')} × ${item?.count || 0}`} />)}
+        </Stack>
+        {!!(Array.isArray(descriptionAnalysis.questions) && descriptionAnalysis.questions.length) && <Box sx={{ mt: 1.5 }}>
+          <Typography variant="caption" fontWeight={900} color="text.secondary">{label('AI needs clarification:', 'يحتاج الذكاء الاصطناعي إلى توضيح:')}</Typography>
+          {descriptionAnalysis.questions.map((question: string, index: number) => <Typography key={`${question}-${index}`} variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>• {question}</Typography>)}
+        </Box>}
+        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1.5 }}>{label('Only explicit counts are extracted. Spaces mentioned without a count are asked as follow-up questions instead of being guessed.', 'يتم استخراج الأعداد المذكورة صراحة فقط. المساحات المذكورة بدون عدد تتحول إلى أسئلة توضيحية بدلاً من التخمين.')}</Typography>
+        {!!(Array.isArray(descriptionAnalysis.totals) && descriptionAnalysis.totals.length) && <Button variant="contained" sx={{ mt: 1.5, bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 900 }} onClick={applyDescriptionSuggestions} startIcon={<CheckCircle2 size={17} />}>{label('Add these spaces', 'إضافة هذه المساحات')}</Button>}
       </Paper>}
 
       <Typography variant="subtitle1" fontWeight={900} color="#FFF" mt={4} mb={1}>{label('5. Ask BIN AI anything about this step', '5. اسأل BIN AI أي شيء عن هذه الخطوة')}</Typography>
