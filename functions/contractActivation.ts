@@ -2,6 +2,15 @@ import { FieldValue } from "firebase-admin/firestore";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 import { assertStoredOwnerPaymentReceipt } from "./paymentReceiptEvidence";
+import {
+  loadActivePaymentConfiguration,
+  resolveActivePaymentConfiguration,
+} from "./paymentConfiguration";
+import {
+  OwnerActivationPaymentPolicyError,
+  resolveLockedOwnerActivationSchedule,
+  resolveOwnerActivationPaymentBinding,
+} from "./ownerActivationPaymentPolicy";
 
 if (!admin.apps.length) admin.initializeApp();
 
@@ -28,6 +37,26 @@ export const adminApproveContractActivation = onCall({ cors: true }, async (requ
 
 const SIGNED_AWAITING_PAYMENT_STATUSES = new Set(["ready_for_activation", "owner_signed", "signed"]);
 
+function enforceOwnerActivationPolicy<T>(operation: () => T): T {
+  try {
+    return operation();
+  } catch (error) {
+    if (error instanceof OwnerActivationPaymentPolicyError) {
+      const invalidArgumentReasons = new Set([
+        "INVALID_METHOD",
+        "INVALID_PROVIDER",
+        "INVALID_CURRENCY",
+        "INVALID_SUBMITTED_AMOUNT",
+      ]);
+      throw new HttpsError(
+        invalidArgumentReasons.has(error.reason) ? "invalid-argument" : "failed-precondition",
+        error.message,
+      );
+    }
+    throw error;
+  }
+}
+
 export const createOwnerPaymentTransaction = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
   if (!request.auth?.uid) throw new HttpsError("unauthenticated", "Owner authentication required.");
   if (request.auth.token?.email_verified !== true || request.auth.token?.suspended === true) {
@@ -52,30 +81,32 @@ export const createOwnerPaymentTransaction = onCall({ cors: true, enforceAppChec
     throw new HttpsError("permission-denied", "This contract belongs to another owner.");
   }
 
-  if (contract.paymentVerified === true) {
-    return { paymentId: contract.paymentId || contractId, amountPendingAdminConfirmation: false, idempotent: true };
-  }
-  if (roleOf(contract.paymentStatus) === "pending_verification" || roleOf(contract.status) === "pending_admin_payment_verification") {
-    return {
-      paymentId: contract.paymentId || contractId,
-      amountPendingAdminConfirmation: Number(contract.amountReceived || contract.mobilizationAmount || 0) <= 0,
-      idempotent: true,
-    };
-  }
-
   const signed = SIGNED_AWAITING_PAYMENT_STATUSES.has(roleOf(contract.status)) || contract.ownerSigned === true || contract.signatureState?.ownerSigned === true;
   if (!signed) throw new HttpsError("failed-precondition", "Contract must be signed before submitting a payment verification request.");
   if (!String(contract.otpVerificationId || "").trim()) {
     throw new HttpsError("failed-precondition", "Verified contract OTP evidence is required before payment submission.");
   }
 
-  const method = String(request.data?.method || "BANK_TRANSFER").trim().toUpperCase();
-  const provider = String(request.data?.provider || "MANUAL").trim().toUpperCase();
-  const currency = String(request.data?.currency || "AED").trim().toUpperCase();
-  if (!["BANK_TRANSFER", "CHEQUE", "CASH"].includes(method) || provider !== "MANUAL") {
-    throw new HttpsError("invalid-argument", "This endpoint accepts manual bank transfer, cheque, or cash evidence only.");
+  const activeConfiguration = await loadActivePaymentConfiguration();
+  const policyBinding = enforceOwnerActivationPolicy(() => resolveOwnerActivationPaymentBinding(
+    request.data || {},
+    activeConfiguration,
+  ));
+  const method = policyBinding.method;
+  const provider = "MANUAL";
+  const currency = "AED";
+  const paymentConfigVersion = activeConfiguration.version;
+  const paymentConfigHash = activeConfiguration.configHash;
+
+  const submittedAmount = request.data?.amount ?? request.data?.mobilizationAmount;
+  const { annualContractValue, mobilizationAmount } = enforceOwnerActivationPolicy(
+    () => resolveLockedOwnerActivationSchedule(contract, submittedAmount),
+  );
+
+  if (contract.paymentVerified === true) {
+    return { paymentId: contract.paymentId || contractId, amountPendingAdminConfirmation: false, idempotent: true };
   }
-  if (currency !== "AED") throw new HttpsError("invalid-argument", "Owner activation payments must use AED.");
+
   const reference = String(request.data?.reference || request.data?.paymentReferenceId || "").trim();
   const paymentReferenceId = String(request.data?.paymentReferenceId || reference).trim();
   const paymentProofUrl = String(request.data?.paymentProofUrl || "").trim();
@@ -103,7 +134,7 @@ export const createOwnerPaymentTransaction = onCall({ cors: true, enforceAppChec
     !paymentProofPath.startsWith(expectedProofPrefix) ||
     !/^[a-f0-9]{64}$/.test(paymentProofHash)
   ) {
-    throw new HttpsError("failed-precondition", "A bank reference and owner-scoped uploaded payment receipt are required.");
+    throw new HttpsError("failed-precondition", "A payment reference and owner-scoped uploaded payment receipt are required.");
   }
   const paymentProofEvidence = await assertStoredOwnerPaymentReceipt({
     ownerUid: request.auth.uid,
@@ -111,20 +142,6 @@ export const createOwnerPaymentTransaction = onCall({ cors: true, enforceAppChec
     storagePath: paymentProofPath,
     expectedHash: paymentProofHash,
   });
-  const annualContractValue = Number(contract.quoteSnapshot?.annualContractValue || contract.annualContractValue || 0);
-  const mobilizationAmount = Number(
-    contract.quoteSnapshot?.activationDeposit ||
-    contract.activationDeposit ||
-    contract.mobilizationAmount ||
-    (annualContractValue > 0 ? Math.round(annualContractValue * 0.15) : 0),
-  );
-  if (!Number.isFinite(annualContractValue) || annualContractValue <= 0 || !Number.isFinite(mobilizationAmount) || mobilizationAmount <= 0) {
-    throw new HttpsError("failed-precondition", "The contract has no locked server payment schedule.");
-  }
-  const submittedAmount = Number(request.data?.amount || request.data?.mobilizationAmount || mobilizationAmount);
-  if (!Number.isFinite(submittedAmount) || Math.abs(submittedAmount - mobilizationAmount) > 0.01) {
-    throw new HttpsError("failed-precondition", "Submitted amount does not match the locked 15% mobilization deposit.");
-  }
   const amount = mobilizationAmount;
   const paymentPlan = String(contract.paymentPlan || contract.quoteSnapshot?.paymentPlan || "").trim();
   const amountSource = "LOCKED_CONTRACT_SCHEDULE";
@@ -132,12 +149,20 @@ export const createOwnerPaymentTransaction = onCall({ cors: true, enforceAppChec
 
   const now = ts();
   const paymentRef = db.collection("payment_transactions").doc(paymentId);
+  const paymentConfigurationRef = db.collection("system_payment_config").doc("current");
   const idempotent = await db.runTransaction(async (transaction) => {
-    const [freshContractSnap, paymentSnap] = await Promise.all([
+    const [freshContractSnap, paymentSnap, paymentConfigurationSnap] = await Promise.all([
       transaction.get(ref),
       transaction.get(paymentRef),
+      transaction.get(paymentConfigurationRef),
     ]);
     if (!freshContractSnap.exists) throw new HttpsError("not-found", "Contract not found.");
+    if (!paymentConfigurationSnap.exists) {
+      throw new HttpsError(
+        "failed-precondition",
+        "Corporate payment instructions are not configured. Manual payment methods are disabled.",
+      );
+    }
     const freshContract = freshContractSnap.data() || {};
     if (
       String(freshContract.ownerId || freshContract.ownerUid || "").trim() !== request.auth?.uid ||
@@ -145,6 +170,23 @@ export const createOwnerPaymentTransaction = onCall({ cors: true, enforceAppChec
       String(freshContract.intakeId || "").trim() !== intakeId
     ) {
       throw new HttpsError("aborted", "Contract ownership or quote evidence changed during payment submission.");
+    }
+    const transactionalConfiguration = resolveActivePaymentConfiguration(paymentConfigurationSnap.data() || {});
+    const transactionalBinding = enforceOwnerActivationPolicy(() => resolveOwnerActivationPaymentBinding(
+      request.data || {},
+      transactionalConfiguration,
+    ));
+    const transactionalSchedule = enforceOwnerActivationPolicy(
+      () => resolveLockedOwnerActivationSchedule(freshContract, submittedAmount),
+    );
+    if (
+      transactionalBinding.paymentConfigVersion !== paymentConfigVersion ||
+      transactionalBinding.paymentConfigHash !== paymentConfigHash ||
+      transactionalBinding.method !== method ||
+      transactionalSchedule.annualContractValue !== annualContractValue ||
+      transactionalSchedule.mobilizationAmount !== mobilizationAmount
+    ) {
+      throw new HttpsError("aborted", "The payment policy or locked schedule changed during submission. Reload and try again.");
     }
     if (paymentSnap.exists) {
       const existingPayment = paymentSnap.data() || {};
@@ -176,6 +218,15 @@ export const createOwnerPaymentTransaction = onCall({ cors: true, enforceAppChec
           paymentProofHash: paymentProofEvidence.receiptHash,
           paymentProofGeneration: paymentProofEvidence.generation,
           paymentProofEvidence,
+          paymentConfigVersion,
+          paymentConfigHash,
+          paymentManifest: {
+            method,
+            currency,
+            amount,
+            configVersion: paymentConfigVersion,
+            configHash: paymentConfigHash,
+          },
           status: "PENDING",
           paymentStatus: "PENDING",
           verificationState: "ADMIN_VERIFICATION_REQUIRED",
@@ -193,6 +244,12 @@ export const createOwnerPaymentTransaction = onCall({ cors: true, enforceAppChec
           paymentReferenceId,
           paymentProofUrl,
           paymentProofPath,
+          paymentMethod: method,
+          paymentConfigVersion,
+          paymentConfigHash,
+          amountReceived: amount,
+          mobilizationAmount,
+          annualContractValue,
           rejectionReason: FieldValue.delete(),
           rejectedAt: FieldValue.delete(),
           rejectedBy: FieldValue.delete(),
@@ -207,10 +264,20 @@ export const createOwnerPaymentTransaction = onCall({ cors: true, enforceAppChec
           paymentId,
           amount,
           method,
+          paymentConfigVersion,
+          paymentConfigHash,
           paymentProofPath,
           updatedAt: now,
         }, { merge: true });
         return false;
+      }
+      if (
+        String(existingPayment.paymentMethod || existingPayment.method || "").trim().toUpperCase() !== method ||
+        String(existingPayment.paymentConfigVersion || "").trim() !== paymentConfigVersion ||
+        String(existingPayment.paymentConfigHash || "").trim() !== paymentConfigHash ||
+        Number(existingPayment.amount) !== amount
+      ) {
+        throw new HttpsError("already-exists", "The existing payment request is bound to different policy, method, or amount evidence.");
       }
       return true;
     }
@@ -236,6 +303,15 @@ export const createOwnerPaymentTransaction = onCall({ cors: true, enforceAppChec
       paymentProofHash: paymentProofEvidence.receiptHash,
       paymentProofGeneration: paymentProofEvidence.generation,
       paymentProofEvidence,
+      paymentConfigVersion,
+      paymentConfigHash,
+      paymentManifest: {
+        method,
+        currency,
+        amount,
+        configVersion: paymentConfigVersion,
+        configHash: paymentConfigHash,
+      },
       annualContractValue,
       quoteSnapshot: contract.quoteSnapshot,
       quoteHash: contract.quoteHash,
@@ -257,6 +333,8 @@ export const createOwnerPaymentTransaction = onCall({ cors: true, enforceAppChec
       status: "PENDING_ADMIN_PAYMENT_VERIFICATION",
       paymentMethod: method,
       provider,
+      paymentConfigVersion,
+      paymentConfigHash,
       amountReceived: amount,
       paymentReferenceId,
       paymentProofUrl,
@@ -274,6 +352,8 @@ export const createOwnerPaymentTransaction = onCall({ cors: true, enforceAppChec
       paymentId,
       amount,
       method,
+      paymentConfigVersion,
+      paymentConfigHash,
       paymentProofPath,
       createdAt: now,
     }, { merge: true });
