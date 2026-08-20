@@ -111,7 +111,7 @@ export const generateSmartQuote = (inputs: QuoteInputs): SmartQuoteAdvisory => {
     vatRate: UAE_VAT_RATE,
     vatAmount,
     totalAnnualPrice,
-    mobilizationFee: Math.round(totalAnnualPrice * 0.15),
+    mobilizationFee: Math.round(totalAnnualPrice * 0.15 * 100) / 100,
     guidanceNotes: notes,
     allowedContractTypes: allowedTypes,
     selectedPackage: selectedPkg,

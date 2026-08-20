@@ -5,6 +5,10 @@ import {
   adminRejectPayment as legacyAdminRejectPayment,
 } from "./paymentTransactionApproval";
 import { loadActivePaymentConfiguration } from "./paymentConfiguration";
+import {
+  OwnerActivationPaymentPolicyError,
+  resolveStoredOwnerActivationPaymentBinding,
+} from "./ownerActivationPaymentPolicy";
 
 if (!admin.apps.length) admin.initializeApp();
 
@@ -145,25 +149,22 @@ async function assertOwnerActivationGate(paymentId: string) {
   const method = upper(payment.paymentMethod || payment.method);
   if (MANUAL_PAYMENT_METHODS.has(method)) {
     const activeConfiguration = await loadActivePaymentConfiguration();
-    const manifest = payment.paymentManifest || {};
-    const submittedVersion = text(
-      payment.paymentConfigVersion ||
-      payment.paymentConfigurationVersion ||
-      manifest.configVersion ||
-      manifest.paymentConfigVersion,
-    );
-    const submittedHash = text(
-      payment.paymentConfigHash ||
-      payment.paymentConfigurationHash ||
-      manifest.configHash ||
-      manifest.paymentConfigHash,
-    );
-
-    if (
-      submittedVersion !== activeConfiguration.version ||
-      submittedHash !== activeConfiguration.configHash ||
-      !activeConfiguration.approvedMethods.includes(method)
-    ) {
+    try {
+      const policyBinding = resolveStoredOwnerActivationPaymentBinding(payment, activeConfiguration);
+      const submittedVersion = policyBinding.paymentConfigVersion;
+      const submittedHash = policyBinding.paymentConfigHash;
+      if (
+        submittedVersion !== activeConfiguration.version ||
+        submittedHash !== activeConfiguration.configHash ||
+        !activeConfiguration.approvedMethods.includes(method)
+      ) {
+        throw new OwnerActivationPaymentPolicyError(
+          "STALE_POLICY_BINDING",
+          "The stored Owner payment policy binding changed during approval.",
+        );
+      }
+    } catch (error) {
+      if (!(error instanceof OwnerActivationPaymentPolicyError)) throw error;
       throw new HttpsError(
         "failed-precondition",
         "The payment instructions used for this submission are missing, expired or no longer approved. Generate a new payment manifest.",
