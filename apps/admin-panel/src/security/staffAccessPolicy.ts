@@ -75,6 +75,26 @@ export const ROLE_DEFAULT_MODULES: Record<string, StaffModule[]> = {
     admin_assistant: ['dashboard', 'owners', 'tenants', 'documents'],
 };
 
+// Canonical client-side ceilings mirror the server policy. The server remains
+// authoritative: Admin may reduce access, but a client can never grant modules
+// outside these role ceilings because adminCreateUser/adminUpdateStaffAccess
+// revalidate the same role/module relationship.
+export const ROLE_ALLOWED_MODULES: Record<string, StaffModule[]> = {
+    technician: [],
+    manager: ['dashboard', 'reports', 'audit', 'owners', 'tenants', 'properties'],
+    operations_admin: ['dashboard', 'tickets', 'technicians', 'map', 'sos', 'properties', 'owners', 'tenants', 'documents'],
+    operations_manager: ['dashboard', 'tickets', 'technicians', 'map', 'sos', 'properties', 'reports'],
+    dispatcher: ['dashboard', 'tickets', 'technicians', 'map', 'sos'],
+    finance_admin: ['dashboard', 'financials', 'transactions', 'reports', 'audit'],
+    finance_staff: ['dashboard', 'financials', 'transactions', 'reports'],
+    hr_admin: ['dashboard', 'technicians', 'hr', 'reports', 'audit'],
+    hr_manager: ['dashboard', 'technicians', 'hr', 'reports', 'audit'],
+    hr_staff: ['dashboard', 'technicians', 'hr'],
+    support_admin: ['dashboard', 'tenants', 'tickets', 'sos', 'documents'],
+    account_manager: ['dashboard', 'owners', 'contracts', 'documents', 'properties'],
+    admin_assistant: ['dashboard', 'owners', 'tenants', 'tickets', 'documents', 'properties'],
+};
+
 const PATH_MODULES: Array<{ prefixes: string[]; module: StaffModule }> = [
     { prefixes: ['/technicians/map', '/live-map'], module: 'map' },
     { prefixes: ['/admin/payments', '/manual-approvals', '/payments', '/transactions'], module: 'transactions' },
