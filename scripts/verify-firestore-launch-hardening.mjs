@@ -99,10 +99,10 @@ const requiredFragments = [
   ['FCM token path is explicitly allowlisted', 'match /fcmTokens/{tokenId} {'],
   ['device readiness path is explicitly allowlisted', 'match /deviceReadiness/{readinessId} {'],
   ['unknown user subcollections are denied', 'match /{subcollection}/{document=**} {\n        allow read, write: if false;'],
-  ['ticket, Broker rate-limit, Admin-session, private-HR, live-location, invoice-registry and payroll-mirror read fallback exclusions', "allow read: if collection != 'tickets' && collection != 'maintenanceTickets' && !(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions', 'private_hr_profiles', 'technician_live_locations', 'invoice_registry', 'payroll_entries']) && hasAdminClaim();"],
+  ['ticket, evidence, Broker rate-limit, Admin-session, private-HR, live-location, invoice-registry and payroll-mirror read fallback exclusions', "allow read: if collection != 'tickets' && collection != 'maintenanceTickets' && !(collection in ['system_secrets', 'launch_evidence', 'signed_in_smoke_checks', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions', 'private_hr_profiles', 'technician_live_locations', 'invoice_registry', 'payroll_entries']) && hasAdminClaim();"],
   ['ticket create fallback rejects explicit ticket hierarchies first', "allow create: if collection != 'tickets' && collection != 'maintenanceTickets' && !("],
   ['ticket update fallback rejects explicit ticket hierarchies first', "allow update, delete: if collection != 'tickets' && collection != 'maintenanceTickets' && !("],
-  ['ticket write fallback excludes explicit ticket hierarchies, live location, canonical property geo, HR cases and private HR', "'system_secrets',\n          'technician_live_locations',\n          'properties',\n          'users',\n          'staffRequests',\n          'hrAiConversations',\n          'audit_logs',\n          'admin_security_sessions',\n          'private_hr_profiles'"],
+  ['ticket write fallback excludes explicit ticket hierarchies, launch evidence, live location, canonical property geo, HR cases and private HR', "'system_secrets',\n          'launch_evidence',\n          'signed_in_smoke_checks',\n          'technician_live_locations',\n          'properties',\n          'users',\n          'staffRequests',\n          'hrAiConversations',\n          'audit_logs',\n          'admin_security_sessions',\n          'private_hr_profiles'"],
   ['payroll mirror excluded from generic create and update/delete fallbacks', "'transactions',\n          'payroll_entries',\n          'invoices'"],
   ['private Broker KYC profile rule exists', 'match /broker_kyc_profiles/{brokerId} {'],
   ['Broker KYC rate limits are server-only', "match /broker_kyc_submission_limits/{brokerId} {\n      allow read, write: if false;"],
@@ -119,6 +119,8 @@ for (const [label, text] of requiredFragments) if (!rules.includes(text)) failur
 const legacyBlock = readMatchBlock('    match /tickets/{ticketId} {');
 const canonicalBlock = readMatchBlock('    match /maintenanceTickets/{ticketId} {');
 const payrollBlock = readMatchBlock('    match /payroll_entries/{entryId} {');
+const launchEvidenceBlock = readMatchBlock('    match /launch_evidence/{evidenceId} {');
+const smokeEvidenceBlock = readMatchBlock('    match /signed_in_smoke_checks/{checkId} {');
 if (!legacyBlock.includes('allow create, update, delete: if false;')) failures.push('Legacy /tickets must deny every browser write.');
 if (legacyBlock.includes('allow update: if safeTicketUpdateByActor();')) failures.push('Legacy /tickets still has an operational update gate.');
 if (!canonicalBlock.includes('allow create: if isAdmin();')) failures.push('Canonical /maintenanceTickets must reserve direct creates for Admin/server authority.');
@@ -128,6 +130,10 @@ if (
   !payrollBlock.includes("isTechnicianId(resource.data.get('technicianId', null))")
 ) failures.push('Payroll mirror read is not bound to the matching Technician UID.');
 if (!payrollBlock.includes('allow create, update, delete: if false;')) failures.push('Payroll mirror must deny every browser write.');
+if (!launchEvidenceBlock.includes('allow create: if validLaunchEvidenceCreate(request.resource.data);')) failures.push('Launch evidence create must use provenance validation.');
+if (!launchEvidenceBlock.includes('allow update, delete: if false;')) failures.push('Launch evidence must be append-only.');
+if (!smokeEvidenceBlock.includes('allow create: if validSignedInSmokeCreate(request.resource.data);')) failures.push('Signed-in smoke evidence create must use provenance validation.');
+if (!smokeEvidenceBlock.includes('allow update, delete: if false;')) failures.push('Signed-in smoke evidence must be append-only.');
 if (rules.split('allow update: if safeTicketUpdateByActor();').length - 1 !== 1) failures.push('Exactly one canonical ticket update gate is required.');
 if (rules.split('function safeTicketUpdateByActor() {').length - 1 !== 1) failures.push('Shared ticket update router must exist exactly once.');
 if (rules.split('match /admin_security_sessions/{sessionId}').length - 1 !== 1) failures.push('Admin security session rule must exist exactly once.');
@@ -135,6 +141,8 @@ if (rules.split('match /private_hr_profiles/{profileId}').length - 1 !== 1) fail
 if (rules.split('match /technician_live_locations/{technicianId}').length - 1 !== 1) failures.push('Canonical live-location rule must exist exactly once.');
 if (rules.split('match /payroll_entries/{entryId}').length - 1 !== 1) failures.push('Payroll mirror rule must exist exactly once.');
 if ((rules.match(/'payroll_entries'/g) || []).length !== 3) failures.push('Payroll mirror must be excluded from read, create and update/delete catch-alls exactly once each.');
+if ((rules.match(/'launch_evidence'/g) || []).length !== 3) failures.push('Launch evidence must be excluded from read, create and update/delete catch-alls exactly once each.');
+if ((rules.match(/'signed_in_smoke_checks'/g) || []).length !== 3) failures.push('Signed-in smoke evidence must be excluded from read, create and update/delete catch-alls exactly once each.');
 
 const router = readFunction('safeTicketUpdateByActor');
 if (!router) {
