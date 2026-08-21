@@ -38,6 +38,7 @@ export * from "./hrAutomation";
 export * from "./technicianPayrollCompatibility";
 export * from "./adminUserProvisioning";
 export * from "./hrLifecycle";
+export * from "./staffLeaveSelfService";
 export * from "./adminCommandCenter";
 export * from "./adminBridgeAuth";
 export * from "./adminSecurityProfile";
