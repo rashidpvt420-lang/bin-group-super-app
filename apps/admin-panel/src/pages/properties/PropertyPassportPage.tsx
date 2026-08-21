@@ -4,16 +4,28 @@ import {
     Table, TableBody, TableCell, TableContainer, TableHead,
     TableRow, Paper, Chip, Stack, CircularProgress, InputBase, Alert
 } from '@mui/material';
-import {
-    Search as SearchIcon, TrendingUp, Users, Home, AlertCircle
-} from 'lucide-react';
+import { Search as SearchIcon, TrendingUp, Users, Home, AlertCircle } from 'lucide-react';
 import { collection, onSnapshot, orderBy, query } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { useLanguage } from '@bin/shared';
 
-function safeNumber(value: unknown) {
+function finiteNumber(value: unknown): number | null {
+    if (value === null || value === undefined || value === '') return null;
     const parsed = Number(value);
-    return Number.isFinite(parsed) ? parsed : 0;
+    return Number.isFinite(parsed) ? parsed : null;
+}
+
+function sumRecorded(passports: any[], field: string): number | null {
+    const values = passports.map((passport) => finiteNumber(passport?.[field])).filter((value): value is number => value !== null);
+    return values.length ? values.reduce((sum, value) => sum + value, 0) : null;
+}
+
+function formatCount(value: number | null) {
+    return value === null ? 'N/A' : value.toLocaleString();
+}
+
+function formatMoney(value: number | null) {
+    return value === null ? 'N/A' : `AED ${value.toLocaleString()}`;
 }
 
 export default function PropertyPassportPage() {
@@ -53,10 +65,10 @@ export default function PropertyPassportPage() {
     }, [passports, searchTerm]);
 
     const stats = useMemo(() => ({
-        totalRent: passports.reduce((sum, p) => sum + safeNumber(p.rentCollectedTotal), 0),
-        outstanding: passports.reduce((sum, p) => sum + safeNumber(p.rentOutstandingTotal), 0),
-        totalUnits: passports.reduce((sum, p) => sum + safeNumber(p.totalUnits), 0),
-        activeTenants: passports.reduce((sum, p) => sum + safeNumber(p.tenantCount), 0),
+        totalRent: sumRecorded(passports, 'rentCollectedTotal'),
+        outstanding: sumRecorded(passports, 'rentOutstandingTotal'),
+        totalUnits: sumRecorded(passports, 'totalUnits'),
+        activeTenants: sumRecorded(passports, 'tenantCount'),
     }), [passports]);
 
     if (loading) {
@@ -75,7 +87,7 @@ export default function PropertyPassportPage() {
                         PROPERTY PASSPORT <Box component="span" sx={{ color: '#DAA520' }}>REGISTRY</Box>
                     </Typography>
                     <Typography variant="body1" sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 600 }}>
-                        Real-time institutional oversight from Firestore property passport records.
+                        Real-time institutional oversight from Firestore property passport records. Unrecorded metrics remain N/A.
                     </Typography>
                 </Box>
                 <Box sx={{
@@ -96,17 +108,17 @@ export default function PropertyPassportPage() {
 
             <Grid container spacing={3} sx={{ mb: 5 }}>
                 {[
-                    { label: 'Total Rent Collected', value: `AED ${stats.totalRent.toLocaleString()}`, icon: <TrendingUp color="#10b981" /> },
-                    { label: 'Total Outstanding', value: `AED ${stats.outstanding.toLocaleString()}`, icon: <AlertCircle color="#ef4444" /> },
-                    { label: 'Units Under Mgmt', value: stats.totalUnits.toLocaleString(), icon: <Home color="#DAA520" /> },
-                    { label: 'Active Tenants', value: stats.activeTenants.toLocaleString(), icon: <Users color="#6366f1" /> },
+                    { label: 'Total Rent Collected', value: formatMoney(stats.totalRent), icon: <TrendingUp color="#10b981" /> },
+                    { label: 'Total Outstanding', value: formatMoney(stats.outstanding), icon: <AlertCircle color="#ef4444" /> },
+                    { label: 'Units Under Mgmt', value: formatCount(stats.totalUnits), icon: <Home color="#DAA520" /> },
+                    { label: 'Active Tenants', value: formatCount(stats.activeTenants), icon: <Users color="#6366f1" /> },
                 ].map((stat) => (
                     <Grid item xs={12} sm={6} md={3} key={stat.label}>
                         <Card sx={{ bgcolor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 4 }}>
                             <CardContent sx={{ p: 3 }}>
                                 <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
                                     <Box sx={{ p: 1, borderRadius: 2, bgcolor: 'rgba(218,165,32,0.08)' }}>{stat.icon}</Box>
-                                    <Chip label="LIVE" size="small" sx={{ color: '#10b981', bgcolor: 'rgba(16,185,129,0.1)', fontWeight: 900, fontSize: 10 }} />
+                                    <Chip label="LIVE SOURCE" size="small" sx={{ color: '#10b981', bgcolor: 'rgba(16,185,129,0.1)', fontWeight: 900, fontSize: 10 }} />
                                 </Box>
                                 <Typography variant="h5" sx={{ color: '#fff', fontWeight: 950, mb: 0.5 }}>{stat.value}</Typography>
                                 <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 800, textTransform: 'uppercase', letterSpacing: 1 }}>{stat.label}</Typography>
@@ -136,9 +148,21 @@ export default function PropertyPassportPage() {
                             </TableRow>
                         )}
                         {filteredPassports.map((p) => {
-                            const totalUnits = safeNumber(p.totalUnits);
-                            const occupiedUnits = safeNumber(p.occupiedUnits);
-                            const vacantUnits = p.vacantUnits !== undefined ? safeNumber(p.vacantUnits) : Math.max(totalUnits - occupiedUnits, 0);
+                            const totalUnits = finiteNumber(p.totalUnits);
+                            const occupiedUnits = finiteNumber(p.occupiedUnits);
+                            const explicitVacant = finiteNumber(p.vacantUnits);
+                            const vacantUnits = explicitVacant !== null
+                                ? explicitVacant
+                                : totalUnits !== null && occupiedUnits !== null
+                                    ? Math.max(totalUnits - occupiedUnits, 0)
+                                    : null;
+                            const rentCollected = finiteNumber(p.rentCollectedTotal);
+                            const rentOutstanding = finiteNumber(p.rentOutstandingTotal);
+                            const maintenanceOpen = finiteNumber(p.maintenanceTicketsOpen);
+                            const maintenanceClosed = finiteNumber(p.maintenanceTicketsClosed);
+                            const activeLeases = finiteNumber(p.activeLeases);
+                            const expiredLeases = finiteNumber(p.expiredLeases);
+
                             return (
                                 <TableRow key={p.id} sx={{ bgcolor: 'rgba(255,255,255,0.02)' }}>
                                     <TableCell sx={{ border: 'none', py: 3 }}>
@@ -154,20 +178,22 @@ export default function PropertyPassportPage() {
                                             </Box>
                                         </Stack>
                                     </TableCell>
-                                    <TableCell sx={{ border: 'none', color: '#fff', fontWeight: 900 }}>{occupiedUnits} / {vacantUnits}</TableCell>
+                                    <TableCell sx={{ border: 'none', color: '#fff', fontWeight: 900 }}>
+                                        {occupiedUnits === null ? 'N/A' : occupiedUnits.toLocaleString()} / {vacantUnits === null ? 'N/A' : vacantUnits.toLocaleString()}
+                                    </TableCell>
                                     <TableCell sx={{ border: 'none' }}>
-                                        <Typography sx={{ color: '#10b981', fontWeight: 900 }}>AED {safeNumber(p.rentCollectedTotal).toLocaleString()} Collected</Typography>
-                                        <Typography variant="caption" sx={{ color: '#ef4444', fontWeight: 800 }}>AED {safeNumber(p.rentOutstandingTotal).toLocaleString()} Outstanding</Typography>
+                                        <Typography sx={{ color: '#10b981', fontWeight: 900 }}>{formatMoney(rentCollected)} Collected</Typography>
+                                        <Typography variant="caption" sx={{ color: '#ef4444', fontWeight: 800 }}>{formatMoney(rentOutstanding)} Outstanding</Typography>
                                     </TableCell>
                                     <TableCell sx={{ border: 'none' }}>
                                         <Stack direction="row" spacing={1}>
-                                            <Chip label={`${safeNumber(p.maintenanceTicketsOpen)} OPEN`} size="small" sx={{ bgcolor: 'rgba(239,68,68,0.1)', color: '#ef4444', fontWeight: 900 }} />
-                                            <Chip label={`${safeNumber(p.maintenanceTicketsClosed)} DONE`} size="small" sx={{ bgcolor: 'rgba(16,185,129,0.1)', color: '#10b981', fontWeight: 900 }} />
+                                            <Chip label={`${formatCount(maintenanceOpen)} OPEN`} size="small" sx={{ bgcolor: 'rgba(239,68,68,0.1)', color: '#ef4444', fontWeight: 900 }} />
+                                            <Chip label={`${formatCount(maintenanceClosed)} DONE`} size="small" sx={{ bgcolor: 'rgba(16,185,129,0.1)', color: '#10b981', fontWeight: 900 }} />
                                         </Stack>
                                     </TableCell>
                                     <TableCell sx={{ border: 'none' }}>
-                                        <Typography sx={{ color: '#fff', fontWeight: 900 }}>{safeNumber(p.activeLeases)} ACTIVE</Typography>
-                                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 800 }}>{safeNumber(p.expiredLeases)} EXPIRED</Typography>
+                                        <Typography sx={{ color: '#fff', fontWeight: 900 }}>{formatCount(activeLeases)} ACTIVE</Typography>
+                                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 800 }}>{formatCount(expiredLeases)} EXPIRED</Typography>
                                     </TableCell>
                                 </TableRow>
                             );
