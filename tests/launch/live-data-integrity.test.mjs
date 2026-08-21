@@ -100,8 +100,24 @@ test('legacy technician command center delegates to the production live implemen
 test('technician portal contains no fabricated operational metrics or mission details', () => {
   const source = readFileSync('apps/owner-app/src/pages/TechnicianPortalPage.tsx', 'utf8');
   assert.match(source, /resumeTechnicianDuty/);
+  assert.match(source, /takeTechnicianBreak/);
   assert.match(source, /acceptTechnicianTicket/);
+  assert.match(source, /where\('assignedTechnicianId',\s*'==',\s*user\.uid\)/);
+  assert.doesNotMatch(source, /pauseTechnicianWork/);
+  assert.doesNotMatch(source, /POOL_STATUSES|MISSION POOL|where\('status',\s*'in'/);
   assert.doesNotMatch(source, /142m|98%|99\.9%|12:45 PM|4\.2 KM|notif-1|notif-2/i);
+});
+
+test('technician self-service respects dispatcher assignment authority', () => {
+  const portal = readFileSync('apps/owner-app/src/pages/TechnicianPortalPage.tsx', 'utf8');
+  const backend = readFileSync('functions/index.ts', 'utf8');
+  const runtime = readFileSync('functions/runtime.ts', 'utf8');
+
+  assert.match(portal, /Dispatch must assign a mission before it can be accepted/);
+  assert.match(portal, /ACCEPT ASSIGNED MISSION/);
+  assert.match(backend, /This mission must be assigned by dispatch before it can be accepted/);
+  assert.match(runtime, /acceptTechnicianTicket/);
+  assert.match(runtime, /resumeTechnicianDuty/);
 });
 
 test('Phase 1 owner payment policy remains Cash/Cheque only', () => {
