@@ -1,4 +1,4 @@
-import { normalizeAedMoney } from "./shared/aedMoney";
+import { normalizeAedMoney, percentageOfAed } from "./shared/aedMoney";
 
 export type OwnerActivationPaymentMethod = "CASH" | "CHEQUE";
 
@@ -198,7 +198,7 @@ export function resolveLockedOwnerActivationSchedule(
     );
   }
 
-  const expectedMobilization = normalizeAedMoney(annualContractValue * 0.15);
+  const expectedMobilization = percentageOfAed(annualContractValue, 15);
   if (mobilizationAmount !== expectedMobilization) {
     throw new OwnerActivationPaymentPolicyError(
       "INVALID_LOCKED_SCHEDULE",
