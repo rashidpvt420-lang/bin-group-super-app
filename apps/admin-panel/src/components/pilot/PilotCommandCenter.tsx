@@ -13,13 +13,14 @@ function normalizeStatus(value: unknown) {
     return String(value || '').trim().toUpperCase().replace(/[\s-]+/g, '_');
 }
 
-function amount(value: unknown) {
+function finiteAmount(value: unknown): number | null {
+    if (value === null || value === undefined || value === '') return null;
     const parsed = Number(value);
-    return Number.isFinite(parsed) ? parsed : 0;
+    return Number.isFinite(parsed) ? parsed : null;
 }
 
-function annualValue(contract: any) {
-    return amount(
+function annualValue(contract: any): number | null {
+    return finiteAmount(
         contract?.quoteSnapshot?.annualContractValue ??
         contract?.paymentSchedule?.annualContractValue ??
         contract?.annualContractValue ??
@@ -77,7 +78,7 @@ export default function PilotCommandCenter() {
                 if (active) setLoading(false);
             }
         }
-        load();
+        void load();
         return () => { active = false; };
     }, []);
 
@@ -93,21 +94,26 @@ export default function PilotCommandCenter() {
         () => contracts.filter((contract) => contract.dashboardUnlocked === true || contract.ownerDashboardUnlocked === true).length,
         [contracts]
     );
-    const expectedAnnualRevenue = useMemo(
-        () => activeContracts.reduce((sum, contract) => sum + annualValue(contract), 0),
+    const activeAnnualValues = useMemo(
+        () => activeContracts.map(annualValue).filter((value): value is number => value !== null),
         [activeContracts]
     );
+    const expectedAnnualRevenue = activeContracts.length === 0
+        ? 0
+        : activeAnnualValues.length === activeContracts.length
+            ? activeAnnualValues.reduce((sum, value) => sum + value, 0)
+            : null;
 
     const pricingRows = useMemo(() => audits.slice(0, 12).map((audit) => {
         const result = audit.result || {};
         const property = auditProperty(audit);
-        const confidence = Number(result.confidenceScore ?? result.valuation?.confidenceScore);
+        const confidence = finiteAmount(result.confidenceScore ?? result.valuation?.confidenceScore);
         return {
             id: audit.id,
             unit: String(property.propertyName || property.name || audit.propertyId || 'Property not recorded'),
             region: String(property.area || property.emirate || 'Region not recorded'),
-            confidence: Number.isFinite(confidence) ? confidence : null,
-            target: amount(result?.valuation?.saleEstimate?.target || result?.valuation?.rentEstimate?.target || result?.fmQuote?.annualEstimate?.target),
+            confidence,
+            target: finiteAmount(result?.valuation?.saleEstimate?.target ?? result?.valuation?.rentEstimate?.target ?? result?.fmQuote?.annualEstimate?.target),
             missing: Array.isArray(result.missingFields) ? result.missingFields.length : 0,
             assumptions: Array.isArray(result.assumptionFlags) ? result.assumptionFlags.length : 0,
             version: String(result.decisionVersion || audit.engineVersion || audit.engineType || 'Not recorded'),
@@ -134,12 +140,15 @@ export default function PilotCommandCenter() {
                         PILOT COMMAND CENTER <Chip label="LIVE FIRESTORE" size="small" sx={{ ml: 1, bgcolor: '#0f172a', color: 'white', fontWeight: 'bold' }} />
                     </Typography>
                     <Typography variant="body2" color="text.secondary">
-                        Owner pipeline, activated contracts, and pricing evidence from persisted production records.
+                        Owner pipeline, activated contracts, and pricing evidence from persisted production records. Missing financial fields remain N/A.
                     </Typography>
                 </Box>
                 <Card sx={{ px: 3, py: 1.5, bgcolor: '#10b981', color: 'white' }}>
                     <Typography variant="caption" sx={{ opacity: 0.8 }}>ACTIVE CONTRACT ANNUAL VALUE</Typography>
-                    <Typography variant="h6" fontWeight="bold">AED {expectedAnnualRevenue.toLocaleString()}</Typography>
+                    <Typography variant="h6" fontWeight="bold">{expectedAnnualRevenue === null ? 'N/A' : `AED ${expectedAnnualRevenue.toLocaleString()}`}</Typography>
+                    {activeContracts.length > 0 && activeAnnualValues.length !== activeContracts.length && (
+                        <Typography variant="caption" sx={{ opacity: 0.85 }}>{activeAnnualValues.length}/{activeContracts.length} values recorded</Typography>
+                    )}
                 </Card>
             </Box>
 
@@ -231,7 +240,7 @@ export default function PilotCommandCenter() {
                                         <TableRow key={row.id} hover>
                                             <TableCell sx={{ fontWeight: 'bold' }}>{row.unit}</TableCell>
                                             <TableCell>{row.region}</TableCell>
-                                            <TableCell>{row.target > 0 ? `AED ${row.target.toLocaleString()}` : 'N/A'}</TableCell>
+                                            <TableCell>{row.target === null ? 'N/A' : `AED ${row.target.toLocaleString()}`}</TableCell>
                                             <TableCell>
                                                 {row.confidence === null ? 'N/A' : (
                                                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -271,16 +280,24 @@ export default function PilotCommandCenter() {
                                 <TableBody>
                                     {activeContracts.length === 0 ? (
                                         <TableRow><TableCell colSpan={6} align="center">No active contract records are available.</TableCell></TableRow>
-                                    ) : activeContracts.slice(0, 25).map((contract) => (
-                                        <TableRow key={contract.id}>
-                                            <TableCell>{contract.ownerName || contract.ownerEmail || contract.ownerId || 'Owner not recorded'}</TableCell>
-                                            <TableCell>{contractPropertyName(contract)}</TableCell>
-                                            <TableCell>{contract.planName || contract.servicePlan || contract.contractType || 'Plan not recorded'}</TableCell>
-                                            <TableCell><Chip label={normalizeStatus(contract.status || contract.activationStatus) || 'STATUS_UNKNOWN'} size="small" color="success" sx={{ fontWeight: 'bold' }} /></TableCell>
-                                            <TableCell sx={{ fontWeight: 'black' }}>{annualValue(contract) > 0 ? `AED ${annualValue(contract).toLocaleString()}` : 'N/A'}</TableCell>
-                                            <TableCell>{contract.dashboardUnlocked === true || contract.ownerDashboardUnlocked === true ? 'UNLOCKED' : 'NOT RECORDED'}</TableCell>
-                                        </TableRow>
-                                    ))}
+                                    ) : activeContracts.slice(0, 25).map((contract) => {
+                                        const value = annualValue(contract);
+                                        const dashboardState = contract.dashboardUnlocked === true || contract.ownerDashboardUnlocked === true
+                                            ? 'UNLOCKED'
+                                            : contract.dashboardUnlocked === false || contract.ownerDashboardUnlocked === false
+                                                ? 'LOCKED'
+                                                : 'NOT RECORDED';
+                                        return (
+                                            <TableRow key={contract.id}>
+                                                <TableCell>{contract.ownerName || contract.ownerEmail || contract.ownerId || 'Owner not recorded'}</TableCell>
+                                                <TableCell>{contractPropertyName(contract)}</TableCell>
+                                                <TableCell>{contract.planName || contract.servicePlan || contract.contractType || 'Plan not recorded'}</TableCell>
+                                                <TableCell><Chip label={normalizeStatus(contract.status || contract.activationStatus) || 'STATUS_UNKNOWN'} size="small" color="success" sx={{ fontWeight: 'bold' }} /></TableCell>
+                                                <TableCell sx={{ fontWeight: 'black' }}>{value === null ? 'N/A' : `AED ${value.toLocaleString()}`}</TableCell>
+                                                <TableCell>{dashboardState}</TableCell>
+                                            </TableRow>
+                                        );
+                                    })}
                                 </TableBody>
                             </Table>
                         </TableContainer>
