@@ -98,12 +98,16 @@ test('invitation delivery outcome is synchronized into staff lifecycle state', a
   assert.match(source, /invitationLastError/);
 });
 
-test('Admin Command Center consumes live HR and operational summaries instead of hard-coded pilot percentages', async () => {
+test('Admin Command Center consumes live summaries and does not request sensitive metrics for unrelated staff roles', async () => {
   const dashboard = await read('apps/admin-panel/src/pages/dashboard/AdminSimpleDashboardPage.tsx');
   const backend = await read('functions/adminCommandCenter.ts');
 
   assert.match(dashboard, /adminGetHrCommandSnapshot/);
   assert.match(dashboard, /adminGetCommandCenterSummary/);
+  assert.match(dashboard, /if \(fullAdmin\)/);
+  assert.match(dashboard, /else if \(hrReader\)/);
+  assert.match(dashboard, /canAccessAdminPath\(user, action\.route\)/);
+  assert.match(dashboard, /Founder\/Admin and HR-sensitive counters are intentionally hidden/);
   assert.match(dashboard, /Pending staff invitations/);
   assert.match(dashboard, /Open emergency tickets/);
   assert.doesNotMatch(dashboard, /Not measured/);
@@ -113,8 +117,24 @@ test('Admin Command Center consumes live HR and operational summaries instead of
   assert.match(backend, /enforceAppCheck: true/);
 });
 
-test('runtime deploy entrypoint exports the HR lifecycle and Command Center callables', async () => {
+test('technician leave self-service submits to the canonical protected leave ledger', async () => {
+  const page = await read('src/technician/pages/TechnicianLeavePage.tsx');
+  const app = await read('src/technician/TechnicianApp.tsx');
+  const reader = await read('functions/staffLeaveSelfService.ts');
+
+  assert.match(page, /submitStaffLeaveRequest/);
+  assert.match(page, /getMyStaffLeaveRequests/);
+  assert.match(page, /staffDocuments\/\$\{user\.uid\}\/leave_evidence/);
+  assert.match(page, /leaveType === 'SICK' && !evidenceFile/);
+  assert.match(app, /navigate\('\/technician\/leave'\)/);
+  assert.match(app, /<Route path="\/leave" element=\{<TechnicianLeavePage \/>\} \/>/);
+  assert.match(reader, /where\("staffId", "==", request\.auth\.uid\)/);
+  assert.match(reader, /enforceAppCheck: true/);
+});
+
+test('runtime deploy entrypoint exports HR lifecycle, leave self-service, and Command Center callables', async () => {
   const runtime = await read('functions/runtime.ts');
   assert.match(runtime, /export \* from "\.\/hrLifecycle"/);
+  assert.match(runtime, /export \* from "\.\/staffLeaveSelfService"/);
   assert.match(runtime, /export \* from "\.\/adminCommandCenter"/);
 });
