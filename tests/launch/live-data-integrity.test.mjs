@@ -175,6 +175,15 @@ test('financial dashboards fail closed when persisted amounts are incomplete', (
   assert.doesNotMatch(reconciliation, /amountReceived \|\| 0/);
 });
 
+test('pricing audit treats null quote and percentage fields as unavailable', () => {
+  const source = readFileSync('apps/admin-panel/src/components/pricing/PricingAuditViewer.tsx', 'utf8');
+  assert.match(source, /function finiteNumber/);
+  assert.match(source, /function percentage/);
+  assert.match(source, /parsed === null \? 'N\/A'/);
+  assert.match(source, /inputCompleteness === null \? 'N\/A'/);
+  assert.doesNotMatch(source, /const inputCompleteness = Number\(/);
+});
+
 test('Phase 1 owner payment policy remains Cash/Cheque only', () => {
   const source = readFileSync('functions/paymentConfiguration.ts', 'utf8');
   assert.match(source, /PHASE1_METHODS\s*=\s*\[\s*["']CASH["']\s*,\s*["']CHEQUE["']\s*\]/);
