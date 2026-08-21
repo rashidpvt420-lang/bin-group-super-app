@@ -37,7 +37,20 @@ test('Admin command cards use registered route paths only', async () => {
   assert.match(dashboard, /\.filter\(\(card\) => canAccessAdminPath\(user, card\.route\)\)/);
 
   const registeredRoutes = new Set([...actionRoutes, ...liveCardRoutes]);
-  assert.ok(registeredRoutes.size >= 12, 'Admin command center must retain broad live operational coverage in addition to the action grid');
+  const requiredOperationalRoutes = new Set([
+    '/tickets',
+    '/payments',
+    '/technicians/map',
+    '/hr',
+    '/owners',
+    '/audit-shield',
+    '/reports',
+    '/technicians',
+    '/sos',
+    '/contracts',
+    '/compliance',
+  ]);
+  assert.deepEqual(registeredRoutes, requiredOperationalRoutes, 'Admin command center must retain the canonical action and live operational route coverage');
   for (const route of registeredRoutes) {
     const escaped = route.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     assert.match(app, new RegExp(`path=["']${escaped}["']`), `Missing registered Admin route: ${route}`);
