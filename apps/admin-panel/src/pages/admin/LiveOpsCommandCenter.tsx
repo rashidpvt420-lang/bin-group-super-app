@@ -1,10 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import {
-    Activity, MapPin, Radio, ShieldAlert, Users, Zap
-} from 'lucide-react';
-import {
-    Alert, Avatar, Box, Chip, Grid, LinearProgress, Paper, Stack, Typography
-} from '@mui/material';
+import { Activity, MapPin, Radio, Users, Zap } from 'lucide-react';
+import { Alert, Avatar, Box, Chip, Grid, Paper, Stack, Typography } from '@mui/material';
 import { collection, limit, onSnapshot, orderBy, query } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 
@@ -14,18 +10,16 @@ const Icon = ({ icon: IconComponent, size = 16, color = 'currentColor' }: { icon
 
 interface TechnicianLocation {
     id: string;
-    technicianId?: string;
-    name?: string;
-    lat?: number;
-    lng?: number;
-    status?: string;
-    batteryLevel?: number;
-    speed?: number;
-    category?: string;
-    lastUpdate?: any;
-    isStale?: boolean;
-    riskFlag?: boolean;
-    jobId?: string;
+    technicianId: string;
+    name: string | null;
+    lat: number | null;
+    lng: number | null;
+    speed: number | null;
+    accuracy: number | null;
+    status: 'TRACKING' | 'STOPPED';
+    lastUpdate: any;
+    jobId: string | null;
+    expiresAt: any;
 }
 
 interface LiveEvent {
@@ -41,6 +35,7 @@ function normalizeStatus(value: unknown) {
 }
 
 function finiteNumber(value: unknown): number | null {
+    if (value === null || value === undefined || value === '') return null;
     const parsed = Number(value);
     return Number.isFinite(parsed) ? parsed : null;
 }
@@ -51,6 +46,24 @@ function eventTime(value: any) {
     return Number.isNaN(date.getTime())
         ? 'Timestamp unavailable'
         : date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+function normalizeTechnicianLocation(docSnap: any): TechnicianLocation {
+    const data = docSnap.data() || {};
+    const location = data.location && typeof data.location === 'object' ? data.location : {};
+    return {
+        id: docSnap.id,
+        technicianId: String(data.technicianUid || docSnap.id),
+        name: data.technicianName ? String(data.technicianName) : null,
+        lat: finiteNumber(location.lat ?? location.latitude),
+        lng: finiteNumber(location.lng ?? location.longitude),
+        speed: finiteNumber(location.speed),
+        accuracy: finiteNumber(location.accuracy),
+        status: data.isTracking === true ? 'TRACKING' : 'STOPPED',
+        lastUpdate: data.serverUpdatedAt || location.serverUpdatedAt || null,
+        jobId: data.activeTicketId ? String(data.activeTicketId) : null,
+        expiresAt: data.expiresAt || null,
+    };
 }
 
 export default function LiveOpsCommandCenter() {
@@ -65,17 +78,17 @@ export default function LiveOpsCommandCenter() {
     useEffect(() => {
         const timer = window.setInterval(() => setCurrentTime(new Date().toLocaleTimeString()), 1000);
 
-        const qTechs = query(collection(db, 'technicianLocations'), limit(50));
+        const qTechs = query(collection(db, 'technician_live_locations'), limit(50));
         const unsubTechs = onSnapshot(
             qTechs,
             (snapshot) => {
                 setTelemetryError(null);
-                setActiveTechs(snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() } as TechnicianLocation)));
+                setActiveTechs(snapshot.docs.map(normalizeTechnicianLocation));
             },
             (error) => {
-                console.error('[LiveOps] technician telemetry listener failed:', error);
+                console.error('[LiveOps] canonical technician telemetry listener failed:', error);
                 setActiveTechs([]);
-                setTelemetryError('Technician telemetry is currently unavailable.');
+                setTelemetryError('Technician live-location evidence is currently unavailable.');
             },
         );
 
@@ -95,12 +108,11 @@ export default function LiveOpsCommandCenter() {
                             : ['COMPLETED', 'RESOLVED', 'CLOSED'].includes(status)
                                 ? 'RESOLVED'
                                 : 'TRIAGE';
-                    const location = String(data.propertyName || data.propertyAddress || data.address || data.unitId || 'Location not recorded');
                     return {
                         id: docSnap.id,
                         type,
                         title: String(data.issueType || data.serviceType || data.title || 'Maintenance request'),
-                        location,
+                        location: String(data.propertyName || data.propertyAddress || data.address || data.unitId || 'Location not recorded'),
                         time: eventTime(data.createdAt),
                     };
                 });
@@ -126,9 +138,10 @@ export default function LiveOpsCommandCenter() {
     }, []);
 
     const queueClearance = ticketTotal > 0 ? Math.round((completedTickets / ticketTotal) * 100) : null;
+    const trackingTechs = useMemo(() => activeTechs.filter((tech) => tech.status === 'TRACKING'), [activeTechs]);
     const coordinatesAvailable = useMemo(
-        () => activeTechs.filter((tech) => finiteNumber(tech.lat) !== null && finiteNumber(tech.lng) !== null).length,
-        [activeTechs],
+        () => trackingTechs.filter((tech) => tech.lat !== null && tech.lng !== null).length,
+        [trackingTechs],
     );
 
     return (
@@ -142,7 +155,7 @@ export default function LiveOpsCommandCenter() {
                         </Typography>
                     </Stack>
                     <Typography variant="overline" sx={{ color: '#64748b', fontWeight: 900, letterSpacing: 4 }}>
-                        Production telemetry · {currentTime}
+                        Canonical production telemetry · {currentTime}
                     </Typography>
                 </Box>
 
@@ -154,8 +167,8 @@ export default function LiveOpsCommandCenter() {
                         <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 900 }}>QUEUE CLEARANCE</Typography>
                     </Box>
                     <Box sx={{ textAlign: 'right' }}>
-                        <Typography variant="h6" fontWeight={900} sx={{ color: '#3b82f6' }}>{activeTechs.length}</Typography>
-                        <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 900 }}>TELEMETRY RECORDS</Typography>
+                        <Typography variant="h6" fontWeight={900} sx={{ color: '#3b82f6' }}>{trackingTechs.length}</Typography>
+                        <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 900 }}>LIVE TRACKING SESSIONS</Typography>
                     </Box>
                 </Stack>
             </Box>
@@ -174,59 +187,50 @@ export default function LiveOpsCommandCenter() {
                             <Typography variant="h6" fontWeight={900} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                                 <Icon icon={Users} size={20} color="#3b82f6" /> FIELD TELEMETRY
                             </Typography>
-                            <Chip label={`${coordinatesAvailable}/${activeTechs.length} GPS coordinates`} size="small" sx={{ color: '#93c5fd', bgcolor: 'rgba(59,130,246,0.1)' }} />
+                            <Chip label={`${coordinatesAvailable}/${trackingTechs.length} GPS coordinates`} size="small" sx={{ color: '#93c5fd', bgcolor: 'rgba(59,130,246,0.1)' }} />
                         </Stack>
 
-                        {activeTechs.length === 0 && !telemetryError ? (
+                        {trackingTechs.length === 0 && !telemetryError ? (
                             <Box sx={{ py: 12, textAlign: 'center', color: '#64748b' }}>
                                 <Activity size={42} />
-                                <Typography sx={{ mt: 2, fontWeight: 800 }}>No live technician telemetry is being reported.</Typography>
+                                <Typography sx={{ mt: 2, fontWeight: 800 }}>No active technician GPS tracking session is being reported.</Typography>
                             </Box>
                         ) : (
                             <Grid container spacing={2}>
-                                {activeTechs.map((tech) => {
-                                    const lat = finiteNumber(tech.lat);
-                                    const lng = finiteNumber(tech.lng);
-                                    const speed = finiteNumber(tech.speed);
-                                    const battery = finiteNumber(tech.batteryLevel);
-                                    return (
-                                        <Grid item xs={12} md={6} key={tech.id}>
-                                            <Box sx={{ p: 2.5, bgcolor: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 3 }}>
-                                                <Stack direction="row" spacing={2} alignItems="center" justifyContent="space-between">
-                                                    <Stack direction="row" spacing={2} alignItems="center" sx={{ minWidth: 0 }}>
-                                                        <Avatar sx={{ bgcolor: tech.riskFlag ? '#ef4444' : '#334155', width: 38, height: 38 }}>
-                                                            {tech.riskFlag ? <Icon icon={ShieldAlert} size={17} /> : String(tech.name || 'T').charAt(0)}
-                                                        </Avatar>
-                                                        <Box sx={{ minWidth: 0 }}>
-                                                            <Typography variant="body2" fontWeight={900} noWrap>{tech.name || 'Unnamed technician'}</Typography>
-                                                            <Typography variant="caption" sx={{ color: '#64748b' }}>{tech.category || 'Category not recorded'}</Typography>
-                                                        </Box>
-                                                    </Stack>
-                                                    <Chip label={normalizeStatus(tech.status) || 'STATUS UNKNOWN'} size="small" sx={{ color: '#bfdbfe', bgcolor: 'rgba(59,130,246,0.08)', fontSize: 10 }} />
+                                {trackingTechs.map((tech) => (
+                                    <Grid item xs={12} md={6} key={tech.id}>
+                                        <Box sx={{ p: 2.5, bgcolor: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 3 }}>
+                                            <Stack direction="row" spacing={2} alignItems="center" justifyContent="space-between">
+                                                <Stack direction="row" spacing={2} alignItems="center" sx={{ minWidth: 0 }}>
+                                                    <Avatar sx={{ bgcolor: '#334155', width: 38, height: 38 }}>
+                                                        {String(tech.name || 'T').charAt(0)}
+                                                    </Avatar>
+                                                    <Box sx={{ minWidth: 0 }}>
+                                                        <Typography variant="body2" fontWeight={900} noWrap>{tech.name || `TECH-${tech.technicianId.slice(-6)}`}</Typography>
+                                                        <Typography variant="caption" sx={{ color: '#64748b' }}>{tech.jobId ? `Mission ${tech.jobId.slice(0, 8)}` : 'Mission not recorded'}</Typography>
+                                                    </Box>
                                                 </Stack>
+                                                <Chip label={tech.status} size="small" sx={{ color: '#bfdbfe', bgcolor: 'rgba(59,130,246,0.08)', fontSize: 10 }} />
+                                            </Stack>
 
-                                                <Stack spacing={1.2} sx={{ mt: 2.5 }}>
-                                                    <Typography variant="caption" sx={{ color: '#94a3b8', display: 'flex', gap: 1, alignItems: 'center' }}>
-                                                        <Icon icon={MapPin} size={13} />
-                                                        {lat === null || lng === null ? 'GPS coordinates not reported' : `${lat.toFixed(6)}, ${lng.toFixed(6)}`}
-                                                    </Typography>
-                                                    <Typography variant="caption" sx={{ color: '#94a3b8' }}>
-                                                        Speed: {speed === null ? 'N/A' : `${speed} km/h`}
-                                                    </Typography>
-                                                    <Typography variant="caption" sx={{ color: '#94a3b8' }}>
-                                                        Last update: {eventTime(tech.lastUpdate)}
-                                                    </Typography>
-                                                    {battery !== null && (
-                                                        <Box>
-                                                            <Typography variant="caption" sx={{ color: '#94a3b8' }}>Battery: {Math.max(0, Math.min(100, battery))}%</Typography>
-                                                            <LinearProgress variant="determinate" value={Math.max(0, Math.min(100, battery))} sx={{ mt: 0.6, height: 4, borderRadius: 2 }} />
-                                                        </Box>
-                                                    )}
-                                                </Stack>
-                                            </Box>
-                                        </Grid>
-                                    );
-                                })}
+                                            <Stack spacing={1.2} sx={{ mt: 2.5 }}>
+                                                <Typography variant="caption" sx={{ color: '#94a3b8', display: 'flex', gap: 1, alignItems: 'center' }}>
+                                                    <Icon icon={MapPin} size={13} />
+                                                    {tech.lat === null || tech.lng === null ? 'GPS coordinates not reported' : `${tech.lat.toFixed(6)}, ${tech.lng.toFixed(6)}`}
+                                                </Typography>
+                                                <Typography variant="caption" sx={{ color: '#94a3b8' }}>
+                                                    Speed: {tech.speed === null ? 'N/A' : `${tech.speed} m/s`}
+                                                </Typography>
+                                                <Typography variant="caption" sx={{ color: '#94a3b8' }}>
+                                                    Accuracy: {tech.accuracy === null ? 'N/A' : `${tech.accuracy} m`}
+                                                </Typography>
+                                                <Typography variant="caption" sx={{ color: '#94a3b8' }}>
+                                                    Last update: {eventTime(tech.lastUpdate)}
+                                                </Typography>
+                                            </Stack>
+                                        </Box>
+                                    </Grid>
+                                ))}
                             </Grid>
                         )}
                     </Paper>
