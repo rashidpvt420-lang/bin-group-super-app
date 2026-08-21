@@ -10,15 +10,19 @@ const hrPrivacyHardener = readFileSync('scripts/harden-hr-privacy-rules.mjs', 'u
 test('Staff Access UI is callable-only and fail-closed', () => {
   assert.match(staffPage, /httpsCallable\(functions, 'adminCreateUser'\)/);
   assert.match(staffPage, /httpsCallable\(functions, 'adminUpdateStaffAccess'\)/);
-  assert.match(staffPage, /httpsCallable\(functions, 'adminSetStaffStatus'\)/);
-  assert.doesNotMatch(staffPage, /setDoc\(/);
+  assert.match(staffPage, /httpsCallable\(functions, name\)/);
+  assert.match(staffPage, /invokeStaffAction\('adminSetStaffStatus'/);
+  assert.match(staffPage, /invokeStaffAction\('adminResendStaffInvitation'/);
+  assert.match(staffPage, /invokeStaffAction\('adminOffboardStaff'/);
+  assert.doesNotMatch(staffPage, /\b(?:setDoc|updateDoc|deleteDoc|addDoc)\s*\(/);
   assert.doesNotMatch(staffPage, /doc\(collection\(db, 'users'\)\)/);
   assert.doesNotMatch(staffPage, /Math\.random/);
   assert.doesNotMatch(staffPage, /tempPassword/);
-  assert.doesNotMatch(staffPage, /value: 'admin'/);
-  assert.match(staffPage, /failed request creates no fallback record/i);
-  assert.match(staffPage, /<InputLabel id="staff-role-label"[^>]*>Role<\/InputLabel>/);
-  assert.match(staffPage, /id="staff-role-select" labelId="staff-role-label" data-testid="staff-role-select"/);
+  assert.doesNotMatch(staffPage, /value:\s*['"]admin['"]/);
+  assert.match(staffPage, /Operation blocked:/);
+  assert.match(staffPage, /PROVISIONABLE_STAFF_ROLE_OPTIONS/);
+  assert.match(staffPage, /data-testid="staff-role-select"/);
+  assert.match(staffPage, /The server rejects any request above it/);
 });
 
 test('staff provisioning backend rejects unsafe identity conversion and binds modules', () => {
