@@ -11,7 +11,6 @@ import { useLanguage } from '../context/LanguageContext';
 import { useRole } from '../context/RoleContext';
 
 const ACTIVE_STATUSES = new Set(['ASSIGNED', 'ACCEPTED', 'EN_ROUTE', 'ARRIVED', 'IN_PROGRESS', 'WAITING_PARTS', 'ESCALATED']);
-const POOL_STATUSES = ['OPEN', 'PENDING_ASSIGNMENT', 'pending_assignment'];
 
 function normalizeStatus(value: unknown) {
     return String(value || '').trim().toUpperCase().replace(/[\s-]+/g, '_');
@@ -34,32 +33,30 @@ export default function TechnicianPortalPage() {
     const { user } = useRole();
     const navigate = useNavigate();
     const [assignedTickets, setAssignedTickets] = useState<any[]>([]);
-    const [missionPool, setMissionPool] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [updating, setUpdating] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const techUser = user as any;
     const isOnDuty = techUser?.onDuty === true;
-    const dutyStatus = normalizeStatus(techUser?.dutyStatus || (isOnDuty ? 'ON_DUTY' : 'OFF'));
+    const dutyStatus = normalizeStatus(techUser?.dutyStatus || (isOnDuty ? 'ON_DUTY' : 'OFF_DUTY'));
+    const isOnBreak = dutyStatus === 'BREAK' || dutyStatus === 'ON_BREAK';
     const technicianEmirate = String(techUser?.emirate || '').trim();
 
     useEffect(() => {
         if (!user?.uid) {
             setAssignedTickets([]);
-            setMissionPool([]);
             setLoading(false);
             return;
         }
 
         setLoading(true);
         setError(null);
-        const unsubscribers: Array<() => void> = [];
-
         const assignedQuery = query(
             collection(db, 'maintenanceTickets'),
             where('assignedTechnicianId', '==', user.uid)
         );
-        unsubscribers.push(onSnapshot(
+
+        const unsubscribe = onSnapshot(
             assignedQuery,
             (snap: any) => {
                 setAssignedTickets(snap.docs.map((d: any) => ({ id: d.id, ...d.data() })));
@@ -71,37 +68,18 @@ export default function TechnicianPortalPage() {
                 setError('Assigned missions could not be loaded from the live backend.');
                 setLoading(false);
             }
-        ));
+        );
 
-        if (technicianEmirate) {
-            const poolQuery = query(
-                collection(db, 'maintenanceTickets'),
-                where('status', 'in', POOL_STATUSES),
-                where('emirate', '==', technicianEmirate)
-            );
-            unsubscribers.push(onSnapshot(
-                poolQuery,
-                (snap: any) => setMissionPool(snap.docs.map((d: any) => ({ id: d.id, ...d.data() }))),
-                (listenerError: any) => {
-                    console.error('[TechnicianPortal] mission pool listener failed:', listenerError);
-                    setMissionPool([]);
-                    setError((current) => current || 'Available missions could not be loaded from the live backend.');
-                }
-            ));
-        } else {
-            setMissionPool([]);
-        }
-
-        return () => unsubscribers.forEach((unsubscribe) => unsubscribe());
-    }, [user?.uid, technicianEmirate]);
+        return unsubscribe;
+    }, [user?.uid]);
 
     const activeMissions = useMemo(
         () => assignedTickets.filter((ticket) => ACTIVE_STATUSES.has(normalizeStatus(ticket.status))),
         [assignedTickets]
     );
-    const availableMissions = useMemo(
-        () => missionPool.filter((ticket) => !assignedTickets.some((assigned) => assigned.id === ticket.id)),
-        [missionPool, assignedTickets]
+    const pendingAcceptance = useMemo(
+        () => activeMissions.filter((ticket) => normalizeStatus(ticket.status) === 'ASSIGNED').length,
+        [activeMissions]
     );
 
     const handleDutyAction = async (action: 'START' | 'END' | 'BREAK' | 'RESUME') => {
@@ -113,7 +91,7 @@ export default function TechnicianPortalPage() {
                 : action === 'END'
                     ? 'endTechnicianDuty'
                     : action === 'BREAK'
-                        ? 'pauseTechnicianWork'
+                        ? 'takeTechnicianBreak'
                         : 'resumeTechnicianDuty';
             await httpsCallable(functions, callableName)({});
         } catch (actionError: any) {
@@ -124,15 +102,15 @@ export default function TechnicianPortalPage() {
         }
     };
 
-    const handleAcceptJob = async (ticketId: string) => {
+    const handleAcceptAssignedJob = async (ticketId: string) => {
         setUpdating(true);
         setError(null);
         try {
             const acceptTicket = httpsCallable(functions, 'acceptTechnicianTicket');
             await acceptTicket({ ticketId });
         } catch (acceptError: any) {
-            console.error('[TechnicianPortal] mission acceptance failed:', acceptError);
-            setError(acceptError?.message || 'Mission could not be accepted.');
+            console.error('[TechnicianPortal] assigned mission acceptance failed:', acceptError);
+            setError(acceptError?.message || 'Assigned mission could not be accepted.');
         } finally {
             setUpdating(false);
         }
@@ -175,7 +153,7 @@ export default function TechnicianPortalPage() {
                             <Grid item xs={12} sm={6}>
                                 <Stack direction="row" spacing={2} alignItems="center">
                                     <Box sx={{ width: 56, height: 56, borderRadius: 3, display: 'flex', alignItems: 'center', justifyContent: 'center', bgcolor: alpha(binThemeTokens.gold, 0.08), color: binThemeTokens.gold }}>
-                                        {dutyStatus === 'BREAK' ? <Coffee size={28} /> : <Power size={28} />}
+                                        {isOnBreak ? <Coffee size={28} /> : <Power size={28} />}
                                     </Box>
                                     <Box>
                                         <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.45)', fontWeight: 900 }}>LIVE DUTY STATE</Typography>
@@ -191,7 +169,7 @@ export default function TechnicianPortalPage() {
                                         </Button>
                                     ) : (
                                         <>
-                                            {dutyStatus === 'BREAK' ? (
+                                            {isOnBreak ? (
                                                 <Button variant="contained" startIcon={<Play size={18} />} disabled={updating} onClick={() => handleDutyAction('RESUME')} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>
                                                     RESUME DUTY
                                                 </Button>
@@ -215,35 +193,40 @@ export default function TechnicianPortalPage() {
             <Container maxWidth="md" sx={{ py: 4 }}>
                 <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mb: 4 }}>
                     <Metric label="ACTIVE MISSIONS" value={activeMissions.length} />
-                    <Metric label="AVAILABLE MISSIONS" value={availableMissions.length} />
+                    <Metric label="PENDING ACCEPTANCE" value={pendingAcceptance} />
                     <Metric label="ASSIGNED RECORDS" value={assignedTickets.length} />
                 </Stack>
 
                 <Box sx={{ mb: 5 }}>
                     <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 2 }}>
                         <Zap size={18} color={binThemeTokens.gold} />
-                        <Typography variant="h6" sx={{ fontWeight: 950, color: '#FFF' }}>ACTIVE MISSIONS</Typography>
+                        <Typography variant="h6" sx={{ fontWeight: 950, color: '#FFF' }}>ASSIGNED MISSIONS</Typography>
                     </Stack>
                     {activeMissions.length === 0 ? (
-                        <EmptyState text="No active assigned mission is present in the live ticket feed." />
+                        <EmptyState text="No active assigned mission is present in the live ticket feed. Dispatch must assign a mission before it can be accepted." />
                     ) : (
-                        <Stack spacing={2}>{activeMissions.map((mission) => <MissionCard key={mission.id} mission={mission} onAction={() => navigate(`/technician/ticket/${mission.id}`)} />)}</Stack>
+                        <Stack spacing={2}>
+                            {activeMissions.map((mission) => {
+                                const assigned = normalizeStatus(mission.status) === 'ASSIGNED';
+                                return (
+                                    <MissionCard
+                                        key={mission.id}
+                                        mission={mission}
+                                        actionLabel={assigned ? 'ACCEPT ASSIGNED MISSION' : 'OPEN LIVE JOB'}
+                                        disabled={updating || (assigned && !isOnDuty)}
+                                        onAction={() => assigned
+                                            ? handleAcceptAssignedJob(mission.id)
+                                            : navigate(`/technician/ticket/${mission.id}`)}
+                                    />
+                                );
+                            })}
+                        </Stack>
                     )}
                 </Box>
 
-                <Box>
-                    <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 2 }}>
-                        <MapPin size={18} color="rgba(255,255,255,0.5)" />
-                        <Typography variant="h6" sx={{ fontWeight: 950, color: 'rgba(255,255,255,0.7)' }}>MISSION POOL</Typography>
-                    </Stack>
-                    {!technicianEmirate ? (
-                        <EmptyState text="A verified technician emirate is required before the live mission pool can be queried." />
-                    ) : availableMissions.length === 0 ? (
-                        <EmptyState text="No unassigned mission is currently available in your verified territory." />
-                    ) : (
-                        <Stack spacing={2}>{availableMissions.map((mission) => <PoolCard key={mission.id} mission={mission} onAccept={() => handleAcceptJob(mission.id)} disabled={!isOnDuty || updating} />)}</Stack>
-                    )}
-                </Box>
+                <Alert severity="info" sx={{ bgcolor: 'rgba(59,130,246,0.08)', color: 'rgba(255,255,255,0.7)' }}>
+                    New work is assigned by Dispatch. Technicians can only view and accept missions already assigned to their authenticated account.
+                </Alert>
             </Container>
         </Box>
     );
@@ -267,7 +250,7 @@ function EmptyState({ text }: { text: string }) {
     );
 }
 
-function MissionCard({ mission, onAction }: { mission: any; onAction: () => void }) {
+function MissionCard({ mission, onAction, actionLabel, disabled }: { mission: any; onAction: () => void; actionLabel: string; disabled: boolean }) {
     const scheduled = formatWhen(mission.scheduledFor || mission.scheduledAt || mission.appointmentDate);
     const distanceKm = Number(mission.distanceKm ?? mission.routing?.distanceKm);
     return (
@@ -287,19 +270,9 @@ function MissionCard({ mission, onAction }: { mission: any; onAction: () => void
                         {Number.isFinite(distanceKm) && <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.55)', display: 'flex', gap: 0.75, alignItems: 'center' }}><MapPin size={13} />{distanceKm.toFixed(1)} km</Typography>}
                     </Stack>
                 )}
-                <Button onClick={onAction} fullWidth variant="contained" sx={{ mt: 3, bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>OPEN LIVE JOB</Button>
-            </CardContent>
-        </Card>
-    );
-}
-
-function PoolCard({ mission, onAccept, disabled }: { mission: any; onAccept: () => void; disabled: boolean }) {
-    return (
-        <Card sx={{ bgcolor: 'rgba(255,255,255,0.02)', borderRadius: 5, border: '1px solid rgba(255,255,255,0.05)' }}>
-            <CardContent sx={{ p: 3 }}>
-                <Typography variant="h6" sx={{ color: '#fff', fontWeight: 950 }}>{mission.issueType || mission.complaintCategory || mission.serviceType || 'Maintenance mission'}</Typography>
-                <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.5)', mt: 0.5 }}>{mission.propertyName || mission.propertyAddress || mission.emirate || 'Location not recorded'}</Typography>
-                <Button onClick={onAccept} disabled={disabled} variant="outlined" fullWidth sx={{ mt: 3, borderColor: binThemeTokens.gold, color: binThemeTokens.gold, fontWeight: 950 }}>ACCEPT MISSION</Button>
+                <Button onClick={onAction} disabled={disabled} fullWidth variant="contained" sx={{ mt: 3, bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>
+                    {actionLabel}
+                </Button>
             </CardContent>
         </Card>
     );
