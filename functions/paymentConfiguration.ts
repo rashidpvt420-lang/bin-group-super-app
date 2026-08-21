@@ -78,6 +78,10 @@ export function resolveActivePaymentConfiguration(value: Record<string, any>): A
   }
 
   const legalBeneficiary = normalizeText(value.legalBeneficiary || value.beneficiaryName);
+  const rawBankName = normalizeText(value.bankName);
+  const rawAccountNumber = normalizeText(value.accountNumber).replace(/\s+/g, "");
+  const rawIban = normalizeUpper(value.iban).replace(/\s+/g, "");
+  const rawSwiftBic = normalizeUpper(value.swiftBic || value.swift || value.bic).replace(/\s+/g, "");
   const currency = normalizeUpper(value.currency);
   const version = normalizeText(value.version);
   const effectiveAtMs = timestampToMillis(value.effectiveAt || value.updatedAt);
@@ -87,6 +91,7 @@ export function resolveActivePaymentConfiguration(value: Record<string, any>): A
     : [];
   const bankTransferEnabled = approvedMethods.includes("BANK_TRANSFER") || value.bankTransferEnabled === true;
   const stripeEnabled = approvedMethods.includes("STRIPE") || value.stripeEnabled === true;
+  const cashOrChequeEnabled = approvedMethods.some((method) => method === "CASH" || method === "CHEQUE");
 
   if (legalBeneficiary !== EXPECTED_BENEFICIARY) {
     throw new HttpsError("failed-precondition", "The configured legal beneficiary does not match the approved corporate identity.");
@@ -97,6 +102,21 @@ export function resolveActivePaymentConfiguration(value: Record<string, any>): A
   if (currency !== "AED") {
     throw new HttpsError("failed-precondition", "Owner onboarding payments must be configured in AED.");
   }
+
+  // Preserve the defensive bank-routing validator for future policy migration, while
+  // Phase 1 below rejects any configuration that actually enables Bank Transfer.
+  if (bankTransferEnabled) {
+    if (!rawBankName || !rawAccountNumber) {
+      throw new HttpsError("failed-precondition", "The corporate bank-transfer configuration is incomplete.");
+    }
+    if (!/^AE\d{21}$/.test(rawIban)) {
+      throw new HttpsError("failed-precondition", "The configured UAE IBAN is invalid.");
+    }
+    if (!/^[A-Z0-9]{8}([A-Z0-9]{3})?$/.test(rawSwiftBic)) {
+      throw new HttpsError("failed-precondition", "The configured SWIFT/BIC is invalid.");
+    }
+  }
+
   if (JSON.stringify(approvedMethods) !== JSON.stringify([...PHASE1_METHODS].sort())) {
     throw new HttpsError(
       "failed-precondition",
@@ -109,7 +129,7 @@ export function resolveActivePaymentConfiguration(value: Record<string, any>): A
       "Phase 1 requires Bank Transfer and Card/Stripe to remain disabled.",
     );
   }
-  if (!officeLocation) {
+  if (cashOrChequeEnabled && !officeLocation) {
     throw new HttpsError("failed-precondition", "Cash and Cheque payments require an approved BIN GROUP office location.");
   }
 
@@ -117,10 +137,10 @@ export function resolveActivePaymentConfiguration(value: Record<string, any>): A
     version,
     effectiveAtMs,
     legalBeneficiary,
-    bankName: "",
-    accountNumber: "",
-    iban: "",
-    swiftBic: "",
+    bankName: bankTransferEnabled ? rawBankName : "",
+    accountNumber: bankTransferEnabled ? rawAccountNumber : "",
+    iban: bankTransferEnabled ? rawIban : "",
+    swiftBic: bankTransferEnabled ? rawSwiftBic : "",
     currency: "AED",
     officeLocation,
     approvedMethods,
