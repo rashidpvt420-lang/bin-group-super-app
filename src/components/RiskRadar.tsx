@@ -10,9 +10,10 @@ type RiskPoint = {
     fullMark: number;
 };
 
-const clampScore = (value: unknown) => {
+const clampScore = (value: unknown): number | null => {
+    if (value === null || value === undefined || value === '') return null;
     const parsed = Number(value);
-    if (!Number.isFinite(parsed)) return 0;
+    if (!Number.isFinite(parsed)) return null;
     return Math.max(0, Math.min(100, parsed));
 };
 
@@ -24,12 +25,12 @@ const normalizeRiskPoints = (data: any): RiskPoint[] => {
     if (!Array.isArray(source)) return [];
 
     return source
-        .map((item: any) => ({
-            subject: String(item?.subject || item?.system || item?.name || item?.category || '').trim(),
-            A: clampScore(item?.A ?? item?.score ?? item?.healthScore ?? item?.health ?? item?.value),
-            fullMark: 100,
-        }))
-        .filter((item: RiskPoint) => Boolean(item.subject));
+        .map((item: any) => {
+            const subject = String(item?.subject || item?.system || item?.name || item?.category || '').trim();
+            const score = clampScore(item?.A ?? item?.score ?? item?.healthScore ?? item?.health ?? item?.value);
+            return score === null || !subject ? null : { subject, A: score, fullMark: 100 };
+        })
+        .filter((item: RiskPoint | null): item is RiskPoint => item !== null);
 };
 
 const resolveRiskAlert = (data: any) => {
