@@ -27,7 +27,7 @@ const LAUNCH_EVIDENCE_HELPERS = `    function canReadLaunchEvidence() {
         data.get('testerName', '') is string && data.get('testerName', '').size() > 0 && data.get('testerName', '').size() <= 160 &&
         data.get('role', '') in ['admin', 'owner', 'tenant', 'technician', 'broker'] &&
         data.get('device', '') is string && data.get('device', '').size() > 0 && data.get('device', '').size() <= 120 &&
-        data.get('productionUrl', '') is string && data.get('productionUrl', '').matches('^https://(bin-group-57c60|bin-group-admin-panel)\\.web\\.app(/.*)?$') &&
+        data.get('productionUrl', '') is string && data.get('productionUrl', '').matches('^https:[/][/](bin-group-57c60|bin-group-admin-panel)[.]web[.]app([/].*)?$') &&
         data.get('releaseSha', '') is string && data.get('releaseSha', '').size() == 40 && data.get('releaseSha', '').matches('^[0-9a-f]+$') &&
         data.get('proofRef', '') is string && data.get('proofRef', '').size() > 0 && data.get('proofRef', '').size() <= 1200 &&
         data.get('notes', '') is string && data.get('notes', '').size() <= 5000 &&
