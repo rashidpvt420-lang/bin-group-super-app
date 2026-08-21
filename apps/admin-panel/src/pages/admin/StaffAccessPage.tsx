@@ -1,365 +1,195 @@
-// apps/admin-panel/src/pages/admin/StaffAccessPage.tsx
-// Secure staff provisioning: callable-only, fail-closed, least-privilege module access.
-
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
-    Alert, alpha, Box, Button, Checkbox, Chip, CircularProgress,
-    Dialog, DialogActions, DialogContent, DialogTitle, Divider,
-    FormControl, FormControlLabel, Grid, IconButton, InputLabel,
-    MenuItem, Paper, Select, Stack, Table, TableBody, TableCell,
-    TableContainer, TableHead, TableRow, TextField, Tooltip, Typography,
+    Alert, alpha, Box, Button, Checkbox, Chip, CircularProgress, Dialog, DialogActions,
+    DialogContent, DialogTitle, Divider, FormControl, FormControlLabel, Grid, IconButton,
+    InputLabel, MenuItem, Paper, Select, Stack, Table, TableBody, TableCell, TableContainer,
+    TableHead, TableRow, TextField, Tooltip, Typography,
 } from '@mui/material';
-import { CheckCircle2, Edit, UserPlus, XCircle } from 'lucide-react';
-import { collection, db, onSnapshot, query, where } from '../../lib/firebase';
-import { functions, httpsCallable } from '../../lib/firebase';
+import { CheckCircle2, Edit, Mail, ShieldOff, UserPlus, UserX, XCircle } from 'lucide-react';
+import { collection, db, functions, httpsCallable, onSnapshot, query, where } from '../../lib/firebase';
 import AdminPageFrame from '../../components/AdminPageFrame';
 import { binThemeTokens } from '../../theme/adminTheme';
+import {
+    MODULE_OPTIONS,
+    PROVISIONABLE_STAFF_ROLE_OPTIONS,
+    PROVISIONABLE_STAFF_ROLES,
+    ROLE_ALLOWED_MODULES,
+    ROLE_DEFAULT_MODULES,
+} from '../../security/staffAccessPolicy';
 
-const STAFF_ROLES = [
-    { value: 'technician', label: 'Technician', description: 'Physical-device field technician access' },
-    { value: 'operations_admin', label: 'Operations Admin', description: 'Tickets, technicians, map and SOS' },
-    { value: 'operations_manager', label: 'Operations Manager', description: 'Operations oversight and reporting' },
-    { value: 'finance_admin', label: 'Finance Admin', description: 'Financial operations and reporting' },
-    { value: 'finance_staff', label: 'Finance Staff', description: 'Restricted finance support' },
-    { value: 'hr_admin', label: 'HR Admin', description: 'Staff lifecycle and HR administration' },
-    { value: 'hr_manager', label: 'HR Manager', description: 'HR approvals and reporting' },
-    { value: 'hr_staff', label: 'HR Staff', description: 'Restricted HR support' },
-    { value: 'support_admin', label: 'Support Admin', description: 'Tenant support, tickets and SOS' },
-    { value: 'account_manager', label: 'Account Manager', description: 'Owners, contracts and documents' },
-    { value: 'dispatcher', label: 'Dispatcher', description: 'Ticket assignment and live dispatch' },
-    { value: 'manager', label: 'Manager', description: 'Restricted management reports' },
-    { value: 'admin_assistant', label: 'Admin Assistant', description: 'Restricted administrative support' },
-] as const;
+const EMIRATES = ['Abu Dhabi', 'Al Ain', 'Dubai', 'Sharjah', 'Ajman', 'Umm Al Quwain', 'Ras Al Khaimah', 'Fujairah'];
+const EMPLOYMENT_TYPES = ['full_time', 'part_time', 'temporary', 'contract'];
 
-const MODULE_ACCESS = [
-    { key: 'dashboard', label: 'Dashboard', icon: '📊' },
-    { key: 'owners', label: 'Owner Management', icon: '🏠' },
-    { key: 'tenants', label: 'Tenant Management', icon: '👤' },
-    { key: 'tickets', label: 'Tickets / Maintenance', icon: '🔧' },
-    { key: 'technicians', label: 'Technician Management', icon: '👷' },
-    { key: 'financials', label: 'Financials', icon: '💰' },
-    { key: 'transactions', label: 'Transactions', icon: '💳' },
-    { key: 'contracts', label: 'Contracts', icon: '📝' },
-    { key: 'documents', label: 'Document Vault', icon: '📁' },
-    { key: 'properties', label: 'Properties', icon: '🏢' },
-    { key: 'reports', label: 'Reports & Analytics', icon: '📈' },
-    { key: 'audit', label: 'Audit Log', icon: '🔍' },
-    { key: 'map', label: 'Live Map', icon: '🗺️' },
-    { key: 'sos', label: 'SOS Feed', icon: '🚨' },
-    { key: 'hr', label: 'HR Management', icon: '👥' },
-] as const;
-
-const ROLE_ALLOWED_MODULES: Record<string, string[]> = {
-    technician: [],
-    manager: ['dashboard', 'reports', 'audit', 'owners', 'tenants', 'properties'],
-    operations_admin: ['dashboard', 'tickets', 'technicians', 'map', 'sos', 'properties', 'owners', 'tenants', 'documents'],
-    hr_admin: ['dashboard', 'technicians', 'hr', 'reports', 'audit'],
-    support_admin: ['dashboard', 'tenants', 'tickets', 'sos', 'documents'],
-    hr_staff: ['dashboard', 'technicians', 'hr'],
-    hr_manager: ['dashboard', 'technicians', 'hr', 'reports', 'audit'],
-    finance_staff: ['dashboard', 'financials', 'transactions', 'reports'],
-    dispatcher: ['dashboard', 'tickets', 'technicians', 'map', 'sos'],
-    admin_assistant: ['dashboard', 'owners', 'tenants', 'tickets', 'documents', 'properties'],
-    account_manager: ['dashboard', 'owners', 'contracts', 'documents', 'properties'],
-    operations_manager: ['dashboard', 'tickets', 'technicians', 'map', 'sos', 'properties', 'reports'],
-    finance_admin: ['dashboard', 'financials', 'transactions', 'reports', 'audit'],
+type Props = { autoOpen?: boolean; showRegisterButton?: boolean; initialRole?: string; onCreated?: () => void };
+type StaffMember = { id: string; displayName: string; email: string; role: string; modules: string[]; status: string; onboardingStage: string; invitationStatus?: string; createdAt?: any; lastLogin?: any };
+type FormState = {
+    displayName: string; email: string; phoneNumber: string; employeeId: string; role: string; department: string;
+    jobTitle: string; specialization: string; joiningDate: string; employmentType: string; probationEndDate: string;
+    contractEndDate: string; emiratesId: string; passportNumber: string; visaExpiryDate: string; basicSalary: string;
+    housingAllowance: string; transportAllowance: string; foodAllowance: string; otherAllowance: string; salaryPaymentDay: string;
+    salaryGrade: string; overtimeEligible: boolean; companyAccommodationProvided: boolean; companyTransportProvided: boolean;
+    companyMedicalInsuranceProvided: boolean; emergencyContactName: string; emergencyContactRelationship: string;
+    emergencyContactPhone: string; shiftName: string; workingHours: string; primaryEmirate: string; emiratesCovered: string[];
+    maxConcurrentJobs: string; emergencyEligible: boolean; modules: string[];
 };
 
-const ROLE_DEFAULT_MODULES: Record<string, string[]> = {
-    technician: [],
-    manager: ['dashboard', 'reports'],
-    operations_admin: ['dashboard', 'tickets', 'technicians', 'map', 'sos'],
-    hr_admin: ['dashboard', 'technicians', 'hr'],
-    support_admin: ['dashboard', 'tenants', 'tickets'],
-    hr_staff: ['dashboard', 'hr'],
-    hr_manager: ['dashboard', 'technicians', 'hr', 'reports'],
-    finance_staff: ['dashboard', 'financials', 'transactions'],
-    dispatcher: ['dashboard', 'tickets', 'technicians', 'map'],
-    admin_assistant: ['dashboard', 'owners', 'tenants', 'documents'],
-    account_manager: ['dashboard', 'owners', 'contracts', 'documents', 'properties'],
-    operations_manager: ['dashboard', 'tickets', 'technicians', 'reports'],
-    finance_admin: ['dashboard', 'financials', 'transactions', 'reports'],
-};
-
-interface StaffMember {
-    id: string;
-    displayName: string;
-    email: string;
-    role: string;
-    modules: string[];
-    status: string;
-    createdAt?: any;
-    lastLogin?: any;
-}
+const initialForm = (role = 'support_admin'): FormState => ({
+    displayName: '', email: '', phoneNumber: '', employeeId: '', role,
+    department: role === 'technician' ? 'Technical' : 'Operations', jobTitle: '', specialization: '',
+    joiningDate: '', employmentType: 'full_time', probationEndDate: '', contractEndDate: '', emiratesId: '', passportNumber: '',
+    visaExpiryDate: '', basicSalary: '', housingAllowance: '', transportAllowance: '', foodAllowance: '', otherAllowance: '',
+    salaryPaymentDay: '1', salaryGrade: '', overtimeEligible: true, companyAccommodationProvided: false,
+    companyTransportProvided: false, companyMedicalInsuranceProvided: true, emergencyContactName: '',
+    emergencyContactRelationship: '', emergencyContactPhone: '', shiftName: 'Day Shift', workingHours: '9 AM - 6 PM',
+    primaryEmirate: '', emiratesCovered: [], maxConcurrentJobs: '3', emergencyEligible: false,
+    modules: [...(ROLE_DEFAULT_MODULES[role] || [])],
+});
 
 function safeErrorMessage(error: any) {
-    const message = String(error?.details || error?.message || error?.code || 'Secure staff operation failed.');
-    return message.replace(/^FirebaseError:\s*/i, '').slice(0, 280);
+    return String(error?.details || error?.message || error?.code || 'Secure staff operation failed.').replace(/^FirebaseError:\s*/i, '').slice(0, 320);
 }
 
-export default function StaffAccessPage() {
+export default function StaffAccessPage({ autoOpen = false, showRegisterButton = true, initialRole = 'support_admin', onCreated }: Props) {
+    const resolvedInitialRole = PROVISIONABLE_STAFF_ROLES.includes(initialRole as any) ? initialRole : 'support_admin';
     const [staff, setStaff] = useState<StaffMember[]>([]);
     const [loading, setLoading] = useState(true);
     const [dialogOpen, setDialogOpen] = useState(false);
     const [editMode, setEditMode] = useState(false);
     const [selectedStaff, setSelectedStaff] = useState<StaffMember | null>(null);
     const [submitting, setSubmitting] = useState(false);
-    const [snackbar, setSnackbar] = useState({ open: false, message: '', error: false });
-    const [formData, setFormData] = useState({
-        displayName: '',
-        email: '',
-        role: 'support_admin',
-        modules: ROLE_DEFAULT_MODULES.support_admin,
-    });
-
-    const allowedModules = useMemo(
-        () => new Set(ROLE_ALLOWED_MODULES[formData.role] || []),
-        [formData.role],
-    );
-    const selectableModules = useMemo(
-        () => MODULE_ACCESS.filter((module) => allowedModules.has(module.key)),
-        [allowedModules],
-    );
+    const [notice, setNotice] = useState<{ message: string; error: boolean } | null>(null);
+    const [form, setForm] = useState<FormState>(() => initialForm(resolvedInitialRole));
+    const autoOpened = useRef(false);
+    const allowedModules = useMemo(() => new Set<string>(ROLE_ALLOWED_MODULES[form.role] || []), [form.role]);
+    const selectableModules = useMemo(() => MODULE_OPTIONS.filter((module) => allowedModules.has(module.key)), [allowedModules]);
 
     useEffect(() => {
-        const staffRoleValues = STAFF_ROLES.map((role) => role.value);
-        const unsubscribe = onSnapshot(
-            query(collection(db, 'users'), where('role', 'in', staffRoleValues)),
-            (snapshot) => {
-                setStaff(snapshot.docs.map((entry) => {
-                    const data = entry.data();
-                    return {
-                        id: entry.id,
-                        displayName: data.displayName || data.fullName || 'Staff',
-                        email: data.email || '',
-                        role: data.role || 'support_admin',
-                        modules: Array.isArray(data.staffModules) ? data.staffModules : [],
-                        status: String(data.status || 'ACTIVE').toUpperCase(),
-                        createdAt: data.createdAt,
-                        lastLogin: data.lastLogin,
-                    };
-                }));
-                setLoading(false);
-            },
-            (error) => {
-                setLoading(false);
-                setSnackbar({ open: true, message: `Unable to load staff directory: ${safeErrorMessage(error)}`, error: true });
-            },
-        );
+        const unsubscribe = onSnapshot(query(collection(db, 'users'), where('role', 'in', PROVISIONABLE_STAFF_ROLES)), (snapshot) => {
+            setStaff(snapshot.docs.map((entry) => {
+                const data = entry.data();
+                return {
+                    id: entry.id, displayName: data.displayName || data.fullName || 'Staff', email: data.email || '',
+                    role: data.role || 'support_admin', modules: Array.isArray(data.staffModules) ? data.staffModules : [],
+                    status: String(data.status || 'INVITED').toUpperCase(),
+                    onboardingStage: String(data.onboardingStage || (data.onboardingComplete ? 'ACTIVE' : 'INVITED')).toUpperCase(),
+                    invitationStatus: data.invitationStatus, createdAt: data.createdAt, lastLogin: data.lastLogin,
+                };
+            }));
+            setLoading(false);
+        }, (error) => {
+            setLoading(false);
+            setNotice({ message: `Unable to load staff registry: ${safeErrorMessage(error)}`, error: true });
+        });
         return unsubscribe;
     }, []);
 
-    const handleRoleChange = (role: string) => {
-        setFormData((previous) => ({
-            ...previous,
-            role,
-            modules: [...(ROLE_DEFAULT_MODULES[role] || [])],
-        }));
-    };
+    useEffect(() => {
+        if (autoOpen && !autoOpened.current) {
+            autoOpened.current = true;
+            setEditMode(false); setSelectedStaff(null); setForm(initialForm(resolvedInitialRole)); setDialogOpen(true);
+        }
+    }, [autoOpen, resolvedInitialRole]);
 
+    const setField = (key: keyof FormState, value: any) => setForm((previous) => ({ ...previous, [key]: value }));
+    const handleRoleChange = (role: string) => setForm((previous) => ({ ...previous, role, department: role === 'technician' ? 'Technical' : previous.department, modules: [...(ROLE_DEFAULT_MODULES[role] || [])] }));
     const toggleModule = (key: string) => {
         if (!allowedModules.has(key)) return;
-        setFormData((previous) => ({
-            ...previous,
-            modules: previous.modules.includes(key)
-                ? previous.modules.filter((module) => module !== key)
-                : [...previous.modules, key],
-        }));
+        setForm((previous) => ({ ...previous, modules: previous.modules.includes(key) ? previous.modules.filter((module) => module !== key) : [...previous.modules, key] }));
     };
-
-    const openAddDialog = () => {
-        setEditMode(false);
-        setSelectedStaff(null);
-        setFormData({ displayName: '', email: '', role: 'support_admin', modules: [...ROLE_DEFAULT_MODULES.support_admin] });
-        setDialogOpen(true);
-    };
-
+    const openAddDialog = (role = resolvedInitialRole) => { setEditMode(false); setSelectedStaff(null); setForm(initialForm(role)); setDialogOpen(true); };
     const openEditDialog = (member: StaffMember) => {
-        setEditMode(true);
-        setSelectedStaff(member);
-        const allowed = new Set(ROLE_ALLOWED_MODULES[member.role] || []);
-        setFormData({
-            displayName: member.displayName,
-            email: member.email,
-            role: member.role,
-            modules: member.modules.filter((module) => allowed.has(module)),
-        });
+        setEditMode(true); setSelectedStaff(member);
+        const allowed = new Set<string>(ROLE_ALLOWED_MODULES[member.role] || []);
+        setForm({ ...initialForm(member.role), displayName: member.displayName, email: member.email, modules: member.modules.filter((module) => allowed.has(module)) });
         setDialogOpen(true);
     };
 
     const handleSubmit = async () => {
-        if (!formData.displayName.trim() || !formData.email.trim() || !formData.role) return;
-        setSubmitting(true);
+        if (!form.displayName.trim() || !form.email.trim() || !form.role) { setNotice({ message: 'Full name, work email and role are required.', error: true }); return; }
+        setSubmitting(true); setNotice(null);
         try {
             if (editMode && selectedStaff) {
-                const updateAccess = httpsCallable(functions, 'adminUpdateStaffAccess');
-                await updateAccess({ uid: selectedStaff.id, role: formData.role, modules: formData.modules });
-                setSnackbar({ open: true, message: `${formData.displayName} access updated. They must refresh their session.`, error: false });
+                await httpsCallable(functions, 'adminUpdateStaffAccess')({ uid: selectedStaff.id, role: form.role, modules: form.modules });
+                setNotice({ message: `${form.displayName} access was updated with server-enforced module ceilings.`, error: false });
             } else {
-                const createStaff = httpsCallable(functions, 'adminCreateUser');
-                await createStaff({
-                    displayName: formData.displayName.trim(),
-                    email: formData.email.trim().toLowerCase(),
-                    role: formData.role,
-                    modules: formData.modules,
+                await httpsCallable(functions, 'adminCreateUser')({
+                    ...form, email: form.email.trim().toLowerCase(), displayName: form.displayName.trim(),
+                    basicSalary: Number(form.basicSalary || 0), housingAllowance: Number(form.housingAllowance || 0),
+                    transportAllowance: Number(form.transportAllowance || 0), foodAllowance: Number(form.foodAllowance || 0),
+                    otherAllowance: Number(form.otherAllowance || 0), salaryPaymentDay: Number(form.salaryPaymentDay || 1),
+                    maxConcurrentJobs: Number(form.maxConcurrentJobs || 3),
                 });
-                setSnackbar({ open: true, message: `${formData.displayName} created. Verification and private password setup were queued.`, error: false });
+                setNotice({ message: `${form.displayName} was created in INVITED state. Verification and private password setup were queued.`, error: false });
+                onCreated?.();
             }
             setDialogOpen(false);
-        } catch (error) {
-            setSnackbar({ open: true, message: `Operation blocked: ${safeErrorMessage(error)}`, error: true });
-        } finally {
-            setSubmitting(false);
-        }
+        } catch (error) { setNotice({ message: `Operation blocked: ${safeErrorMessage(error)}`, error: true }); }
+        finally { setSubmitting(false); }
     };
 
-    const setStaffStatus = async (member: StaffMember, status: 'ACTIVE' | 'SUSPENDED') => {
-        try {
-            const updateStatus = httpsCallable(functions, 'adminSetStaffStatus');
-            await updateStatus({ uid: member.id, status });
-            setSnackbar({
-                open: true,
-                message: status === 'SUSPENDED'
-                    ? `${member.displayName} was disabled and all refresh tokens were revoked.`
-                    : `${member.displayName} was restored and must sign in again.`,
-                error: false,
-            });
-        } catch (error) {
-            setSnackbar({ open: true, message: `Status change blocked: ${safeErrorMessage(error)}`, error: true });
-        }
+    const invokeStaffAction = async (name: string, member: StaffMember, payload: Record<string, unknown>, success: string) => {
+        setNotice(null);
+        try { await httpsCallable(functions, name)({ uid: member.id, ...payload }); setNotice({ message: success, error: false }); }
+        catch (error) { setNotice({ message: `Operation blocked: ${safeErrorMessage(error)}`, error: true }); }
     };
-
-    const roleColor = (role: string) => {
-        if (role.includes('finance')) return '#10b981';
-        if (role.includes('hr')) return '#3b82f6';
-        if (role.includes('operations') || role === 'dispatcher' || role === 'technician') return '#f59e0b';
-        return 'rgba(255,255,255,0.5)';
+    const suspendOrRestore = (member: StaffMember) => invokeStaffAction('adminSetStaffStatus', member, { status: member.status === 'SUSPENDED' ? 'ACTIVE' : 'SUSPENDED' }, member.status === 'SUSPENDED' ? `${member.displayName} access restored to the prior onboarding state.` : `${member.displayName} disabled and refresh tokens revoked.`);
+    const offboard = async (member: StaffMember) => {
+        const reason = window.prompt(`Offboarding reason for ${member.displayName}:`);
+        if (!reason?.trim() || !window.confirm(`Offboard ${member.displayName}? Auth will be disabled and records archived, not deleted.`)) return;
+        await invokeStaffAction('adminOffboardStaff', member, { reason: reason.trim() }, `${member.displayName} offboarded, tokens revoked and records archived.`);
     };
+    const roleColor = (role: string) => role.includes('finance') ? '#10b981' : role.includes('hr') ? '#3b82f6' : role.includes('operations') || role === 'dispatcher' || role === 'technician' ? '#f59e0b' : 'rgba(255,255,255,0.55)';
 
     return (
-        <AdminPageFrame
-            title="Staff Access Control"
-            subtitle="FAIL-CLOSED, LEAST-PRIVILEGE PROVISIONING"
-            lastUpdated={new Date()}
-            onRefresh={() => window.location.reload()}
-        >
+        <AdminPageFrame title="Staff Access Control" subtitle="CANONICAL · CALLABLE-ONLY · LEAST PRIVILEGE" lastUpdated={new Date()} onRefresh={() => window.location.reload()}>
             <Box sx={{ pb: 8 }}>
-                <Alert severity="warning" sx={{ mb: 3, borderRadius: 3 }}>
-                    Founder, CEO and full Admin identities cannot be created or edited here. Customer identities cannot be converted into staff. Every operation uses an App Check-protected callable; a failed request creates no fallback record.
-                </Alert>
+                <Alert severity="info" sx={{ mb: 3, borderRadius: 3 }}>This is the single employee identity entry point. Founder/CEO/full Admin and customer identities cannot be created here. New staff start as INVITED and are activated only through the HR onboarding checklist.</Alert>
+                {notice && <Alert severity={notice.error ? 'error' : 'success'} onClose={() => setNotice(null)} sx={{ mb: 3 }}>{notice.message}</Alert>}
+                <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" alignItems={{ xs: 'stretch', md: 'center' }} spacing={2} sx={{ mb: 3 }}>
+                    <Box><Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.58)' }}>All 13 staff roles share one Firebase Auth → claims → staffAccess → HR profile lifecycle.</Typography><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.38)' }}>{staff.filter((m) => m.status === 'ACTIVE').length} active · {staff.filter((m) => m.onboardingStage !== 'ACTIVE' && !['SUSPENDED', 'OFFBOARDED'].includes(m.status)).length} onboarding · {staff.filter((m) => m.status === 'SUSPENDED').length} suspended</Typography></Box>
+                    {showRegisterButton && <Button data-testid="admin-register-staff" variant="contained" startIcon={<UserPlus size={18} />} onClick={() => openAddDialog()} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>REGISTER STAFF</Button>}
+                </Stack>
 
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4, gap: 2, flexWrap: 'wrap' }}>
-                    <Box>
-                        <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.55)' }}>
-                            Create individual Staff/HR and Technician accounts with server-enforced module ceilings.
-                        </Typography>
-                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.35)' }}>
-                            {staff.filter((member) => member.status !== 'SUSPENDED').length} active · {staff.filter((member) => member.status === 'SUSPENDED').length} suspended
-                        </Typography>
-                    </Box>
-                    <Button variant="contained" startIcon={<UserPlus size={18} />} onClick={openAddDialog} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 900, px: 3 }}>
-                        ADD STAFF / TECHNICIAN
-                    </Button>
-                </Box>
-
-                <Paper sx={{ bgcolor: 'rgba(15, 23, 42, 0.4)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 6, overflow: 'hidden' }}>
-                    {loading ? (
-                        <Box sx={{ p: 6, textAlign: 'center' }}><CircularProgress sx={{ color: binThemeTokens.gold }} /></Box>
-                    ) : (
-                        <TableContainer>
-                            <Table>
-                                <TableHead>
-                                    <TableRow>
-                                        {['STAFF MEMBER', 'ROLE', 'MODULE ACCESS', 'STATUS', 'LAST LOGIN', 'ACTIONS'].map((label) => (
-                                            <TableCell key={label} align={label === 'ACTIONS' ? 'right' : 'left'} sx={{ bgcolor: '#0f172a', fontWeight: 900, color: 'rgba(255,255,255,0.5)' }}>{label}</TableCell>
-                                        ))}
-                                    </TableRow>
-                                </TableHead>
-                                <TableBody>
-                                    {staff.map((member) => (
-                                        <TableRow key={member.id} hover sx={{ opacity: member.status === 'SUSPENDED' ? 0.55 : 1 }}>
-                                            <TableCell>
-                                                <Typography variant="body2" sx={{ fontWeight: 700, color: '#fff' }}>{member.displayName}</Typography>
-                                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)' }}>{member.email}</Typography>
-                                            </TableCell>
-                                            <TableCell><Chip label={member.role.replace(/_/g, ' ').toUpperCase()} size="small" sx={{ bgcolor: alpha(roleColor(member.role), 0.15), color: roleColor(member.role), fontWeight: 900, fontSize: '0.62rem' }} /></TableCell>
-                                            <TableCell>
-                                                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, maxWidth: 320 }}>
-                                                    {member.modules.slice(0, 4).map((module) => <Chip key={module} label={`${MODULE_ACCESS.find((item) => item.key === module)?.icon || '•'} ${module}`} size="small" sx={{ height: 18, fontSize: '0.56rem', bgcolor: 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.55)' }} />)}
-                                                    {member.modules.length === 0 && <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.35)' }}>Portal-specific access only</Typography>}
-                                                    {member.modules.length > 4 && <Chip label={`+${member.modules.length - 4} more`} size="small" sx={{ height: 18, fontSize: '0.56rem' }} />}
-                                                </Box>
-                                            </TableCell>
-                                            <TableCell><Chip label={member.status} size="small" sx={{ bgcolor: alpha(member.status === 'SUSPENDED' ? '#ef4444' : '#10b981', 0.12), color: member.status === 'SUSPENDED' ? '#ef4444' : '#10b981', fontWeight: 900, fontSize: '0.62rem' }} /></TableCell>
-                                            <TableCell sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.75rem' }}>{member.lastLogin?.toDate ? member.lastLogin.toDate().toLocaleString() : 'Never'}</TableCell>
-                                            <TableCell align="right">
-                                                <Stack direction="row" spacing={0.5} justifyContent="flex-end">
-                                                    <Tooltip title="Edit least-privilege access"><IconButton size="small" onClick={() => openEditDialog(member)} sx={{ color: binThemeTokens.gold }}><Edit size={14} /></IconButton></Tooltip>
-                                                    {member.status === 'SUSPENDED' ? (
-                                                        <Tooltip title="Restore and require fresh login"><IconButton size="small" onClick={() => setStaffStatus(member, 'ACTIVE')} sx={{ color: '#10b981' }}><CheckCircle2 size={14} /></IconButton></Tooltip>
-                                                    ) : (
-                                                        <Tooltip title="Disable Auth and revoke sessions"><IconButton size="small" onClick={() => setStaffStatus(member, 'SUSPENDED')} sx={{ color: '#ef4444' }}><XCircle size={14} /></IconButton></Tooltip>
-                                                    )}
-                                                </Stack>
-                                            </TableCell>
-                                        </TableRow>
-                                    ))}
-                                    {staff.length === 0 && <TableRow><TableCell colSpan={6} align="center" sx={{ py: 8, color: 'rgba(255,255,255,0.25)', fontWeight: 800 }}>NO STAFF ACCOUNTS FOUND</TableCell></TableRow>}
-                                </TableBody>
-                            </Table>
-                        </TableContainer>
-                    )}
+                <Paper sx={{ bgcolor: 'rgba(15,23,42,0.46)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 5, overflow: 'hidden' }}>
+                    {loading ? <Box sx={{ p: 6, textAlign: 'center' }}><CircularProgress sx={{ color: binThemeTokens.gold }} /></Box> : <TableContainer><Table><TableHead><TableRow>{['STAFF MEMBER', 'ROLE', 'ACCESS', 'ONBOARDING', 'STATUS', 'ACTIONS'].map((label) => <TableCell key={label} align={label === 'ACTIONS' ? 'right' : 'left'} sx={{ bgcolor: '#0f172a', fontWeight: 900, color: 'rgba(255,255,255,0.55)' }}>{label}</TableCell>)}</TableRow></TableHead><TableBody>
+                        {staff.map((member) => <TableRow key={member.id} hover sx={{ opacity: member.status === 'OFFBOARDED' ? 0.45 : 1 }}>
+                            <TableCell><Typography variant="body2" fontWeight={800} color="#fff">{member.displayName}</Typography><Typography variant="caption" color="text.secondary">{member.email}</Typography></TableCell>
+                            <TableCell><Chip label={member.role.replace(/_/g, ' ').toUpperCase()} size="small" sx={{ bgcolor: alpha(roleColor(member.role), 0.14), color: roleColor(member.role), fontWeight: 900 }} /></TableCell>
+                            <TableCell><Stack direction="row" flexWrap="wrap" gap={0.5}>{member.modules.slice(0, 3).map((module) => <Chip key={module} label={module} size="small" sx={{ height: 20, fontSize: 10 }} />)}{member.modules.length > 3 && <Chip label={`+${member.modules.length - 3}`} size="small" sx={{ height: 20 }} />}{member.modules.length === 0 && <Typography variant="caption" color="text.secondary">Portal-specific</Typography>}</Stack></TableCell>
+                            <TableCell><Chip label={member.onboardingStage.replace(/_/g, ' ')} size="small" color={member.onboardingStage === 'ACTIVE' ? 'success' : 'warning'} /></TableCell>
+                            <TableCell><Chip label={member.status} size="small" color={member.status === 'ACTIVE' ? 'success' : ['SUSPENDED', 'OFFBOARDED'].includes(member.status) ? 'error' : 'warning'} /></TableCell>
+                            <TableCell align="right"><Stack direction="row" spacing={0.5} justifyContent="flex-end"><Tooltip title="Edit role/module access"><IconButton size="small" onClick={() => openEditDialog(member)} disabled={member.status === 'OFFBOARDED'}><Edit size={16} /></IconButton></Tooltip><Tooltip title="Resend secure invitation"><IconButton size="small" onClick={() => invokeStaffAction('adminResendStaffInvitation', member, {}, `Invitation re-queued for ${member.displayName}.`)} disabled={member.status === 'OFFBOARDED'}><Mail size={16} /></IconButton></Tooltip><Tooltip title={member.status === 'SUSPENDED' ? 'Restore account' : 'Suspend account'}><IconButton size="small" onClick={() => suspendOrRestore(member)} disabled={member.status === 'OFFBOARDED'}>{member.status === 'SUSPENDED' ? <CheckCircle2 size={16} /> : <ShieldOff size={16} />}</IconButton></Tooltip><Tooltip title="Offboard and archive"><IconButton size="small" color="error" onClick={() => offboard(member)} disabled={member.status === 'OFFBOARDED'}><UserX size={16} /></IconButton></Tooltip></Stack></TableCell>
+                        </TableRow>)}
+                        {staff.length === 0 && <TableRow><TableCell colSpan={6} align="center" sx={{ py: 6, color: 'text.secondary' }}>No provisioned staff accounts found.</TableCell></TableRow>}
+                    </TableBody></Table></TableContainer>}
                 </Paper>
 
-                <Dialog open={dialogOpen} onClose={() => !submitting && setDialogOpen(false)} maxWidth="md" fullWidth PaperProps={{ sx: { bgcolor: '#0f172a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 4 } }}>
-                    <DialogTitle sx={{ color: '#fff', fontWeight: 900, borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                        {editMode ? `Edit Access: ${selectedStaff?.displayName}` : 'Create Staff / Technician Account'}
-                    </DialogTitle>
-                    <DialogContent sx={{ pt: 3 }}>
-                        <Alert severity="info" sx={{ mb: 3 }}>
-                            No temporary password is created in this browser. New users receive separate email-verification and private password-setup links.
-                        </Alert>
-                        <Grid container spacing={3}>
-                            <Grid item xs={12} md={6}><TextField fullWidth label="Full Name" value={formData.displayName} onChange={(event) => setFormData((previous) => ({ ...previous, displayName: event.target.value }))} disabled={editMode} sx={{ '& .MuiInputBase-root': { color: '#fff' }, '& label': { color: 'rgba(255,255,255,0.5)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.2)' } }} /></Grid>
-                            <Grid item xs={12} md={6}><TextField fullWidth label="Email Address" type="email" value={formData.email} onChange={(event) => setFormData((previous) => ({ ...previous, email: event.target.value }))} disabled={editMode} sx={{ '& .MuiInputBase-root': { color: '#fff' }, '& label': { color: 'rgba(255,255,255,0.5)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.2)' } }} /></Grid>
-                            <Grid item xs={12}>
-                                <FormControl fullWidth>
-                                    <InputLabel id="staff-role-label" sx={{ color: 'rgba(255,255,255,0.5)' }}>Role</InputLabel>
-                                    <Select id="staff-role-select" labelId="staff-role-label" data-testid="staff-role-select" value={formData.role} onChange={(event) => handleRoleChange(event.target.value)} label="Role" sx={{ color: '#fff', '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.2)' }, '& .MuiSvgIcon-root': { color: 'rgba(255,255,255,0.5)' } }}>
-                                        {STAFF_ROLES.map((role) => <MenuItem key={role.value} value={role.value}><Box><Typography variant="body2" fontWeight={700}>{role.label}</Typography><Typography variant="caption" sx={{ color: 'rgba(0,0,0,0.55)' }}>{role.description}</Typography></Box></MenuItem>)}
-                                    </Select>
-                                </FormControl>
-                            </Grid>
-                            <Grid item xs={12}>
-                                <Divider sx={{ borderColor: 'rgba(255,255,255,0.08)', mb: 2 }} />
-                                <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 2 }}>SERVER-ENFORCED MODULE SCOPE</Typography>
-                                {formData.role === 'technician' ? (
-                                    <Alert severity="info" sx={{ mt: 2 }}>Technicians use the Technician portal and receive no Admin-panel modules.</Alert>
-                                ) : (
-                                    <>
-                                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', display: 'block', mb: 2 }}>Only modules allowed for this role are shown. The backend rejects any out-of-scope module.</Typography>
-                                        <Grid container spacing={1}>
-                                            {selectableModules.map((module) => <Grid item xs={12} sm={6} md={4} key={module.key}><FormControlLabel control={<Checkbox checked={formData.modules.includes(module.key)} onChange={() => toggleModule(module.key)} size="small" sx={{ color: 'rgba(255,255,255,0.3)', '&.Mui-checked': { color: binThemeTokens.gold } }} />} label={<Typography variant="body2" sx={{ color: '#fff', fontWeight: 700 }}>{module.icon} {module.label}</Typography>} /></Grid>)}
-                                        </Grid>
-                                        <Box sx={{ mt: 2, p: 1.5, bgcolor: 'rgba(255,255,255,0.03)', borderRadius: 2, border: '1px solid rgba(255,255,255,0.05)' }}>
-                                            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 700 }}>Selected: {formData.modules.length} / {selectableModules.length}</Typography>
-                                            <Button size="small" sx={{ ml: 2, color: binThemeTokens.gold, fontSize: '0.65rem' }} onClick={() => setFormData((previous) => ({ ...previous, modules: selectableModules.map((module) => module.key) }))}>SELECT ROLE MAXIMUM</Button>
-                                            <Button size="small" sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.65rem' }} onClick={() => setFormData((previous) => ({ ...previous, modules: [] }))}>CLEAR</Button>
-                                        </Box>
-                                    </>
-                                )}
-                            </Grid>
+                <Dialog open={dialogOpen} onClose={() => !submitting && setDialogOpen(false)} fullWidth maxWidth="lg" PaperProps={{ sx: { bgcolor: '#08101f', color: '#fff' } }}>
+                    <DialogTitle sx={{ fontWeight: 950 }}>{editMode ? 'Edit Staff Access' : 'Register Staff'}</DialogTitle>
+                    <DialogContent><Alert severity="warning" sx={{ mt: 1, mb: 3 }}>{editMode ? 'Role/module changes are revalidated server-side and refresh tokens are revoked.' : 'Admin never enters an initial password. The employee verifies email and creates a private password from the invitation.'}</Alert>
+                        <Grid container spacing={2}>
+                            <Grid item xs={12}><Typography variant="overline" color={binThemeTokens.gold} fontWeight={900}>IDENTITY & EMPLOYMENT</Typography></Grid>
+                            <Grid item xs={12} md={4}><TextField fullWidth label="Full name" required value={form.displayName} onChange={(e) => setField('displayName', e.target.value)} disabled={editMode} /></Grid>
+                            <Grid item xs={12} md={4}><TextField fullWidth label="Work email" type="email" required value={form.email} onChange={(e) => setField('email', e.target.value)} disabled={editMode} /></Grid>
+                            <Grid item xs={12} md={4}><TextField fullWidth label="Mobile" value={form.phoneNumber} onChange={(e) => setField('phoneNumber', e.target.value)} disabled={editMode} /></Grid>
+                            <Grid item xs={12} md={4}><FormControl fullWidth><InputLabel>Role</InputLabel><Select value={form.role} label="Role" onChange={(e) => handleRoleChange(String(e.target.value))}>{PROVISIONABLE_STAFF_ROLE_OPTIONS.map((role) => <MenuItem key={role.value} value={role.value}><Box><Typography variant="body2" fontWeight={800}>{role.label}</Typography><Typography variant="caption" color="text.secondary">{role.description}</Typography></Box></MenuItem>)}</Select></FormControl></Grid>
+                            {!editMode && <>
+                                <Grid item xs={12} md={4}><TextField fullWidth label="Employee ID" value={form.employeeId} onChange={(e) => setField('employeeId', e.target.value)} /></Grid><Grid item xs={12} md={4}><TextField fullWidth label="Department" value={form.department} onChange={(e) => setField('department', e.target.value)} /></Grid><Grid item xs={12} md={4}><TextField fullWidth label="Job title" value={form.jobTitle} onChange={(e) => setField('jobTitle', e.target.value)} /></Grid><Grid item xs={12} md={4}><TextField fullWidth label="Specialization / trade" value={form.specialization} onChange={(e) => setField('specialization', e.target.value)} /></Grid>
+                                <Grid item xs={12} md={4}><TextField fullWidth type="date" label="Joining date" InputLabelProps={{ shrink: true }} value={form.joiningDate} onChange={(e) => setField('joiningDate', e.target.value)} /></Grid><Grid item xs={12} md={4}><FormControl fullWidth><InputLabel>Employment type</InputLabel><Select value={form.employmentType} label="Employment type" onChange={(e) => setField('employmentType', e.target.value)}>{EMPLOYMENT_TYPES.map((type) => <MenuItem key={type} value={type}>{type.replace(/_/g, ' ').toUpperCase()}</MenuItem>)}</Select></FormControl></Grid><Grid item xs={12} md={4}><TextField fullWidth type="date" label="Probation end" InputLabelProps={{ shrink: true }} value={form.probationEndDate} onChange={(e) => setField('probationEndDate', e.target.value)} /></Grid><Grid item xs={12} md={4}><TextField fullWidth type="date" label="Contract expiry" InputLabelProps={{ shrink: true }} value={form.contractEndDate} onChange={(e) => setField('contractEndDate', e.target.value)} /></Grid><Grid item xs={12} md={4}><TextField fullWidth label="Shift" value={form.shiftName} onChange={(e) => setField('shiftName', e.target.value)} /></Grid><Grid item xs={12} md={4}><TextField fullWidth label="Working hours" value={form.workingHours} onChange={(e) => setField('workingHours', e.target.value)} /></Grid>
+                                <Grid item xs={12}><Divider sx={{ my: 1 }} /><Typography variant="overline" color={binThemeTokens.gold} fontWeight={900}>PRIVATE HR</Typography></Grid>
+                                <Grid item xs={12} md={4}><TextField fullWidth label="Emirates ID" value={form.emiratesId} onChange={(e) => setField('emiratesId', e.target.value)} /></Grid><Grid item xs={12} md={4}><TextField fullWidth label="Passport number" value={form.passportNumber} onChange={(e) => setField('passportNumber', e.target.value)} /></Grid><Grid item xs={12} md={4}><TextField fullWidth type="date" label="Visa expiry" InputLabelProps={{ shrink: true }} value={form.visaExpiryDate} onChange={(e) => setField('visaExpiryDate', e.target.value)} /></Grid>
+                                {['basicSalary', 'housingAllowance', 'transportAllowance', 'foodAllowance', 'otherAllowance'].map((field) => <Grid item xs={12} sm={6} md={2.4} key={field}><TextField fullWidth type="number" label={field.replace(/([A-Z])/g, ' $1').replace(/^./, (c) => c.toUpperCase())} value={(form as any)[field]} onChange={(e) => setField(field as keyof FormState, e.target.value)} /></Grid>)}
+                                <Grid item xs={12} md={3}><TextField fullWidth type="number" label="Salary payment day" value={form.salaryPaymentDay} onChange={(e) => setField('salaryPaymentDay', e.target.value)} /></Grid><Grid item xs={12} md={3}><TextField fullWidth label="Salary grade" value={form.salaryGrade} onChange={(e) => setField('salaryGrade', e.target.value)} /></Grid><Grid item xs={12} md={6}><Stack direction={{ xs: 'column', sm: 'row' }}><FormControlLabel control={<Checkbox checked={form.overtimeEligible} onChange={(e) => setField('overtimeEligible', e.target.checked)} />} label="Overtime eligible" /><FormControlLabel control={<Checkbox checked={form.companyAccommodationProvided} onChange={(e) => setField('companyAccommodationProvided', e.target.checked)} />} label="Accommodation" /><FormControlLabel control={<Checkbox checked={form.companyTransportProvided} onChange={(e) => setField('companyTransportProvided', e.target.checked)} />} label="Transport" /><FormControlLabel control={<Checkbox checked={form.companyMedicalInsuranceProvided} onChange={(e) => setField('companyMedicalInsuranceProvided', e.target.checked)} />} label="Insurance" /></Stack></Grid>
+                                <Grid item xs={12} md={4}><TextField fullWidth label="Emergency contact name" value={form.emergencyContactName} onChange={(e) => setField('emergencyContactName', e.target.value)} /></Grid><Grid item xs={12} md={4}><TextField fullWidth label="Relationship" value={form.emergencyContactRelationship} onChange={(e) => setField('emergencyContactRelationship', e.target.value)} /></Grid><Grid item xs={12} md={4}><TextField fullWidth label="Emergency contact phone" value={form.emergencyContactPhone} onChange={(e) => setField('emergencyContactPhone', e.target.value)} /></Grid>
+                                {form.role === 'technician' && <><Grid item xs={12}><Divider sx={{ my: 1 }} /><Typography variant="overline" color={binThemeTokens.gold} fontWeight={900}>TECHNICIAN OPERATIONS</Typography></Grid><Grid item xs={12} md={4}><FormControl fullWidth><InputLabel>Primary emirate</InputLabel><Select value={form.primaryEmirate} label="Primary emirate" onChange={(e) => setField('primaryEmirate', e.target.value)}>{EMIRATES.map((item) => <MenuItem key={item} value={item}>{item}</MenuItem>)}</Select></FormControl></Grid><Grid item xs={12} md={5}><FormControl fullWidth><InputLabel>Emirates covered</InputLabel><Select multiple value={form.emiratesCovered} label="Emirates covered" onChange={(e) => setField('emiratesCovered', typeof e.target.value === 'string' ? e.target.value.split(',') : e.target.value)} renderValue={(selected) => selected.join(', ')}>{EMIRATES.map((item) => <MenuItem key={item} value={item}><Checkbox checked={form.emiratesCovered.includes(item)} />{item}</MenuItem>)}</Select></FormControl></Grid><Grid item xs={12} md={3}><TextField fullWidth type="number" label="Max concurrent jobs" value={form.maxConcurrentJobs} onChange={(e) => setField('maxConcurrentJobs', e.target.value)} /></Grid><Grid item xs={12}><FormControlLabel control={<Checkbox checked={form.emergencyEligible} onChange={(e) => setField('emergencyEligible', e.target.checked)} />} label="Emergency/SOS eligible after activation" /></Grid></>}
+                            </>}
+                            <Grid item xs={12}><Divider sx={{ my: 1 }} /><Typography variant="overline" color={binThemeTokens.gold} fontWeight={900}>SYSTEM ACCESS · ROLE CEILING</Typography></Grid><Grid item xs={12}><Typography variant="caption" color="text.secondary">Admin may reduce access below the selected role ceiling. The server rejects any request above it.</Typography></Grid>
+                            {selectableModules.map((module) => <Grid item xs={12} sm={6} md={4} key={module.key}><Paper sx={{ p: 1.5, bgcolor: 'rgba(255,255,255,0.025)' }}><FormControlLabel control={<Checkbox checked={form.modules.includes(module.key)} onChange={() => toggleModule(module.key)} />} label={`${module.icon} ${module.label}`} /></Paper></Grid>)}
+                            {selectableModules.length === 0 && <Grid item xs={12}><Alert severity="info">Technicians use the dedicated Technician portal; no Admin modules are granted.</Alert></Grid>}
                         </Grid>
                     </DialogContent>
-                    <DialogActions sx={{ p: 3, borderTop: '1px solid rgba(255,255,255,0.05)' }}>
-                        <Button disabled={submitting} onClick={() => setDialogOpen(false)} sx={{ color: 'rgba(255,255,255,0.5)' }}>CANCEL</Button>
-                        <Button variant="contained" onClick={handleSubmit} disabled={submitting || !formData.displayName.trim() || !formData.email.trim()} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 900 }}>
-                            {submitting ? 'PROCESSING...' : editMode ? 'UPDATE ACCESS' : 'CREATE & SEND INVITATION'}
-                        </Button>
-                    </DialogActions>
+                    <DialogActions sx={{ p: 3 }}><Button onClick={() => setDialogOpen(false)} disabled={submitting} startIcon={<XCircle size={16} />}>Cancel</Button><Button data-testid="admin-submit-staff-registration" variant="contained" onClick={handleSubmit} disabled={submitting} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, minWidth: 170 }}>{submitting ? <CircularProgress size={20} color="inherit" /> : editMode ? 'SAVE ACCESS' : 'CREATE & INVITE'}</Button></DialogActions>
                 </Dialog>
-
-                {snackbar.open && <Alert severity={snackbar.error ? 'error' : 'success'} onClose={() => setSnackbar((previous) => ({ ...previous, open: false }))} sx={{ position: 'fixed', bottom: 24, right: 24, zIndex: 9999, fontWeight: 900, borderRadius: 3, minWidth: 320, maxWidth: 520 }}>{snackbar.message}</Alert>}
             </Box>
         </AdminPageFrame>
     );
