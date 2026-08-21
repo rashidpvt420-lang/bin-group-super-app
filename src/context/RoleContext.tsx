@@ -387,9 +387,37 @@ export function RoleProvider({ children }: { children: ReactNode }) {
     };
 
     const refreshRole = async () => {
-        if (auth.currentUser) {
+        const currentUser = auth.currentUser;
+        if (!currentUser) return;
+
+        // A refresh of an already verified role must not blank the whole portal.
+        // Only first-time / unresolved identity verification is allowed to raise
+        // the global blocking loader. This prevents a stalled post-login refresh
+        // from stranding an authenticated Owner on LoadingScreen forever.
+        const shouldBlockPortal = !user || !role;
+        if (shouldBlockPortal) {
             setLoading(true);
-            await syncProfile(auth.currentUser);
+        }
+
+        const refreshTimeoutId = shouldBlockPortal
+            ? window.setTimeout(() => {
+                console.warn("[AUTH_DIAG] Role refresh timeout. Releasing blocker fail-closed.");
+                setStatus('profile_unavailable');
+                setError("PROFILE UNAVAILABLE: Secure account verification timed out. Retry before entering a portal.");
+                setUser((existingUser) => existingUser || ({
+                    ...currentUser,
+                    status: 'profile_unavailable',
+                } as SovereignUser));
+                setLoading(false);
+            }, AUTH_BOOT_TIMEOUT_MS)
+            : null;
+
+        try {
+            await syncProfile(currentUser);
+        } finally {
+            if (refreshTimeoutId !== null) {
+                window.clearTimeout(refreshTimeoutId);
+            }
         }
     };
 
