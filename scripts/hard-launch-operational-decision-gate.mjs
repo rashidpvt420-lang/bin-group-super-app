@@ -67,9 +67,9 @@ try { releaseStatus = JSON.parse(readFileSync(releaseStatusPath, 'utf8')); }
 catch (error) { fail(`public-release-status.json malformed: ${error.message}`); }
 
 const errors = validateOperationalReadinessReport(operational, commitSha);
-let requiredOperationalGates = [];
+let REQUIRED_OPERATIONAL_GATES = [];
 try {
-  requiredOperationalGates = requiredOperationalGatesForPaymentPolicy(operational.paymentPolicy);
+  REQUIRED_OPERATIONAL_GATES = requiredOperationalGatesForPaymentPolicy(operational.paymentPolicy);
 } catch (error) {
   errors.push(error instanceof Error ? error.message : String(error));
 }
@@ -97,8 +97,8 @@ if (errors.length) {
 const operationalHash = sha256File(canonicalOperationalPath);
 releaseStatus.operationalReadinessVerified = true;
 releaseStatus.operationalReadinessHash = operationalHash;
-releaseStatus.operationalGateCount = requiredOperationalGates.length;
-releaseStatus.operationalGates = [...requiredOperationalGates];
+releaseStatus.operationalGateCount = REQUIRED_OPERATIONAL_GATES.length;
+releaseStatus.operationalGates = [...REQUIRED_OPERATIONAL_GATES];
 releaseStatus.operationalPaymentPolicy = operational.paymentPolicy;
 releaseStatus.operationalPaymentConfigVersion = operational.paymentConfigVersion;
 releaseStatus.operationalPaymentConfigHash = operational.paymentConfigHash;
@@ -110,7 +110,7 @@ releaseStatus.hardLaunchClaim = false;
 writeFileSync(releaseStatusPath, `${JSON.stringify(releaseStatus, null, 2)}\n`, { mode: 0o600 });
 
 console.log(
-  `[hard-launch-operational-decision] bound ${requiredOperationalGates.length} protected gates policy=${operational.paymentPolicy} hash=${operationalHash.slice(0, 12)}…`,
+  `[hard-launch-operational-decision] bound ${REQUIRED_OPERATIONAL_GATES.length} protected gates policy=${operational.paymentPolicy} hash=${operationalHash.slice(0, 12)}…`,
 );
 const result = delegate();
 process.exit(result.status ?? 1);
