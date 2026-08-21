@@ -2,6 +2,11 @@ name: Cancel Stale Firebase Production Run 32460840262
 run-name: Cancel stale Firebase production run 32460840262
 
 on:
+  push:
+    branches:
+      - ops/cancel-stale-firebase-run-32460840262-20260821
+    paths:
+      - .github/workflows/cancel-stale-firebase-run-32460840262.yml
   pull_request:
     branches:
       - main
@@ -21,7 +26,7 @@ concurrency:
 env:
   GH_TOKEN: ${{ github.token }}
   REPOSITORY: ${{ github.repository }}
-  REQUEST_PR: ${{ github.event.pull_request.number }}
+  REQUEST_PR: '1086'
   EXPECTED_MAIN_SHA: a19b2e47c6814d4059b19b3fdb1a335553ff6f88
   STALE_RUN_ID: '32460840262'
   STALE_RUN_SHA: c05d7c57bac1ae60a8c849ca65012365dbe4f0aa
@@ -32,12 +37,16 @@ jobs:
   cancel-stale-run:
     name: Verify and cancel only the stale production run
     if: >-
-      github.event.pull_request.draft == true &&
-      github.event.pull_request.base.ref == 'main' &&
-      github.event.pull_request.head.repo.full_name == github.repository &&
-      github.event.pull_request.user.login == github.repository_owner &&
-      github.event.pull_request.head.ref == 'ops/cancel-stale-firebase-run-32460840262-20260821' &&
-      github.event.pull_request.title == 'Cancel stale Firebase production run 32460840262'
+      (github.event_name == 'push' &&
+       github.ref == 'refs/heads/ops/cancel-stale-firebase-run-32460840262-20260821' &&
+       github.actor == github.repository_owner) ||
+      (github.event_name == 'pull_request' &&
+       github.event.pull_request.draft == true &&
+       github.event.pull_request.base.ref == 'main' &&
+       github.event.pull_request.head.repo.full_name == github.repository &&
+       github.event.pull_request.user.login == github.repository_owner &&
+       github.event.pull_request.head.ref == 'ops/cancel-stale-firebase-run-32460840262-20260821' &&
+       github.event.pull_request.title == 'Cancel stale Firebase production run 32460840262')
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -46,6 +55,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          pr="$(gh api "repos/$REPOSITORY/pulls/$REQUEST_PR")"
+          [[ "$(jq -r '.state' <<<"$pr")" == 'open' ]]
+          [[ "$(jq -r '.draft' <<<"$pr")" == 'true' ]]
+          [[ "$(jq -r '.user.login' <<<"$pr")" == "${{ github.repository_owner }}" ]]
+          [[ "$(jq -r '.base.ref' <<<"$pr")" == 'main' ]]
+          [[ "$(jq -r '.head.ref' <<<"$pr")" == 'ops/cancel-stale-firebase-run-32460840262-20260821' ]]
+          [[ "$(jq -r '.title' <<<"$pr")" == 'Cancel stale Firebase production run 32460840262' ]]
           mapfile -t files < <(gh api --paginate "repos/$REPOSITORY/pulls/$REQUEST_PR/files" --jq '.[].filename')
           [[ "${#files[@]}" -eq 1 ]]
           [[ "${files[0]}" == '.github/workflows/cancel-stale-firebase-run-32460840262.yml' ]]
