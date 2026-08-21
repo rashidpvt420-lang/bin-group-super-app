@@ -1,3 +1,4 @@
+import './public-launch-evidence-security-rules.test.js';
 import { describe, it, before, after, beforeEach } from 'node:test';
 import assert from 'node:assert';
 import { initializeTestEnvironment, assertFails, assertSucceeds } from '@firebase/rules-unit-testing';

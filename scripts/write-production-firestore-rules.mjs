@@ -2,12 +2,14 @@
 
 import crypto from 'node:crypto';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { hardenPublicLaunchEvidenceRules } from './lib/public-launch-evidence-rules.mjs';
 
 const sourcePath = 'firestore.rules';
 const outputDirectory = 'launch_generated';
 const outputPath = `${outputDirectory}/firestore.rules`;
 const manifestPath = `${outputDirectory}/firestore-rules-manifest.json`;
-const source = readFileSync(sourcePath, 'utf8').replace(/\r\n?/g, '\n');
+const rawSource = readFileSync(sourcePath, 'utf8').replace(/\r\n?/g, '\n');
+const source = hardenPublicLaunchEvidenceRules(rawSource);
 const failures = [];
 
 function matchBlock(header) {
@@ -37,6 +39,15 @@ const required = [
   'match /payroll_entries/{entryId} {',
   "'invoice_registry', 'payroll_entries'",
   "'transactions',\n          'payroll_entries',\n          'invoices'",
+  'function canReadLaunchEvidence() {',
+  'function canManageLaunchEvidence() {',
+  'function validLaunchEvidenceCreate(data) {',
+  'function validSignedInSmokeCreate(data) {',
+  "hasPermission('canManageLaunchEvidence')",
+  'allow create: if validLaunchEvidenceCreate(request.resource.data);',
+  'allow create: if validSignedInSmokeCreate(request.resource.data);',
+  "data.get('releaseSha', '').matches('^[0-9a-f]{40}$')",
+  "data.get('evidenceHash', '').matches('^[0-9a-f]{64}$')",
 ];
 for (const token of required) {
   if (!source.includes(token)) failures.push(`required hardened rule fragment missing: ${token}`);
@@ -75,9 +86,34 @@ else {
   }
 }
 
+const launchEvidenceBlock = matchBlock('    match /launch_evidence/{evidenceId} {');
+const smokeEvidenceBlock = matchBlock('    match /signed_in_smoke_checks/{checkId} {');
+for (const [name, block, createToken] of [
+  ['launch_evidence', launchEvidenceBlock, 'allow create: if validLaunchEvidenceCreate(request.resource.data);'],
+  ['signed_in_smoke_checks', smokeEvidenceBlock, 'allow create: if validSignedInSmokeCreate(request.resource.data);'],
+]) {
+  if (!block) failures.push(`${name} rule block is missing or malformed`);
+  else {
+    if (!block.includes('allow read: if canReadLaunchEvidence();')) failures.push(`${name} read is not bound to launch-evidence authorization`);
+    if (!block.includes(createToken)) failures.push(`${name} create is not schema/provenance validated`);
+    if (!block.includes('allow update, delete: if false;')) failures.push(`${name} is not append-only`);
+  }
+}
+
 const payrollCatchAllOccurrences = source.match(/'payroll_entries'/g)?.length || 0;
 if (payrollCatchAllOccurrences !== 3) {
   failures.push(`payroll_entries must be excluded from read, create and update/delete catch-alls; found ${payrollCatchAllOccurrences}`);
+}
+
+const globalFallbackBlock = matchBlock('    match /{collection}/{document=**} {');
+if (!globalFallbackBlock) {
+  failures.push('global Firestore fallback block is missing or malformed');
+} else {
+  const launchEvidenceCatchAllOccurrences = globalFallbackBlock.match(/'launch_evidence'/g)?.length || 0;
+  const smokeCatchAllOccurrences = globalFallbackBlock.match(/'signed_in_smoke_checks'/g)?.length || 0;
+  if (launchEvidenceCatchAllOccurrences !== 3 || smokeCatchAllOccurrences !== 3) {
+    failures.push(`launch evidence must be excluded from global read, create and update/delete fallbacks; launch=${launchEvidenceCatchAllOccurrences}, smoke=${smokeCatchAllOccurrences}`);
+  }
 }
 
 if (failures.length) {
@@ -86,11 +122,16 @@ if (failures.length) {
   process.exit(1);
 }
 
+if (source !== rawSource) {
+  writeFileSync(sourcePath, source, { mode: 0o600 });
+  console.log('[production-firestore-rules] hardened public-launch evidence rules in firestore.rules');
+}
+
 const sha256 = crypto.createHash('sha256').update(source).digest('hex');
 mkdirSync(outputDirectory, { recursive: true });
 writeFileSync(outputPath, source, { mode: 0o600 });
 writeFileSync(manifestPath, `${JSON.stringify({
-  schemaVersion: 1,
+  schemaVersion: 2,
   sourcePath,
   outputPath,
   sha256,
@@ -100,5 +141,9 @@ writeFileSync(manifestPath, `${JSON.stringify({
   legacyTicketsMutation: 'denied',
   payrollMirrorWrites: 'admin-sdk-only',
   payrollMirrorSelfServiceRead: 'technician-uid-scoped',
+  launchEvidenceReadPolicy: 'admin-or-authorized-operator',
+  launchEvidenceWritePolicy: 'admin-or-canManageLaunchEvidence',
+  launchEvidenceMutationPolicy: 'append-only',
+  launchEvidenceProvenanceRequired: true,
 }, null, 2)}\n`, { mode: 0o600 });
 console.log(`[production-firestore-rules] wrote ${outputPath} sha256=${sha256}`);
