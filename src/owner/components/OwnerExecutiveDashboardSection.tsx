@@ -37,6 +37,7 @@ import {
   isFakeOwnerAsset,
 } from '../utils/ownerAssetTemplates';
 import { detectContractMode, canSeeMaintenance, canSeePropertyManagement } from '../utils/ownerServiceMode';
+import { formatAedMoney } from '../../../functions/shared/aedMoney';
 
 interface OwnerExecutiveDashboardSectionProps {
   properties: any[];
@@ -89,7 +90,7 @@ function toNumber(value: any, fallback = 0) {
 
 function formatCurrency(value: any) {
   const amount = toNumber(value, 0);
-  return amount > 0 ? `AED ${amount.toLocaleString()}` : 'Pending';
+  return amount > 0 ? formatAedMoney(amount) : 'Pending';
 }
 
 function readSeconds(value: any) {
@@ -351,10 +352,18 @@ export default function OwnerExecutiveDashboardSection({
   const contractMode = detectContractMode(liveContract);
   const maintenanceEnabled = canSeeMaintenance(contractMode);
   const pmEnabled = canSeePropertyManagement(contractMode);
-  const annualContractValue = toNumber(liveContract.annualContractValue || liveContract.annualValue || liveContract.totalValue, 0);
+  const annualContractValue = toNumber(
+    liveContract.quoteSnapshot?.annualContractValue ??
+    liveContract.paymentSchedule?.annualContractValue ??
+    liveContract.annualContractValue,
+    0
+  );
   const mobilization = toNumber(
-    liveContract.mobilizationAmount || liveContract.depositAmount || liveContract.paymentSchedule?.mobilizationAmount,
-    annualContractValue ? Math.round(annualContractValue * 0.15) : 0
+    liveContract.quoteSnapshot?.activationDeposit ??
+    liveContract.paymentSchedule?.mobilizationAmount ??
+    liveContract.activationDeposit ??
+    liveContract.mobilizationAmount,
+    0
   );
   const paymentStatus = normalizeStatus(
     liveContract.paymentStatus || liveContract.paymentSchedule?.paymentStatus || liveContract.activationStatus || liveContract.status,

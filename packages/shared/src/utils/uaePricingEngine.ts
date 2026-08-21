@@ -73,7 +73,7 @@ export const generateSmartQuote = (inputs: QuoteInputs): SmartQuoteAdvisory => {
         baseAnnualPrice: Math.round(basePrice),
         riskAdjustment: Math.round(totalAnnual - basePrice),
         totalAnnualPrice: totalAnnual,
-        mobilizationFee: Math.round(totalAnnual * 0.15),
+        mobilizationFee: Math.round(totalAnnual * 0.15 * 100) / 100,
         guidanceNotes: notes
     };
 };
