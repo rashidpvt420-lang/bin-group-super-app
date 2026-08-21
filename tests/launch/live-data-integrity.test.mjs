@@ -20,6 +20,10 @@ const FORBIDDEN_RUNTIME_MARKERS = [
   { re: /mocked for now/i, label: 'temporary mocked metric' },
   { re: /replace with firestore hook/i, label: 'unwired Firestore placeholder' },
   { re: /\bmockTasks\b/, label: 'mock task fixture' },
+  { re: /\bmockResult\b/, label: 'mock runtime result' },
+  { re: /simulate high-frequency computation/i, label: 'simulated quote computation' },
+  { re: /['"]AED 12,000\+['"]/, label: 'hard-coded quote amount' },
+  { re: /['"]AED 25,000\+['"]/, label: 'hard-coded quote amount' },
   { re: /\bSkyline Tower\b/i, label: 'known demo property' },
   { re: /\bPalm Villa 44\b/i, label: 'known demo property' },
   { re: /\bmarina_tower_2504\b/i, label: 'known demo property ID' },
@@ -66,6 +70,15 @@ test('production runtime source contains no known demo/mock data markers', () =>
     [],
     `Production runtime contains demo/mock data markers:\n${violations.map((item) => `- ${item}`).join('\n')}`,
   );
+});
+
+test('legacy quote entry cannot fabricate an official commercial result', () => {
+  for (const path of ['src/components/QuotingWizard.tsx', 'apps/owner-app/src/components/QuotingWizard.tsx']) {
+    const source = readFileSync(path, 'utf8');
+    assert.match(source, /window\.location\.assign\(['"]\/onboarding['"]\)/);
+    assert.match(source, /previewOwnerInspectionQuote/);
+    assert.doesNotMatch(source, /mockResult|25000|12000|setTimeout\s*\(/);
+  }
 });
 
 test('Phase 1 owner payment policy remains Cash/Cheque only', () => {
