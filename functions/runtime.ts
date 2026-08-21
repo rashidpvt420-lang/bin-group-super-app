@@ -37,6 +37,7 @@ export * from "./ticketNormalization";
 export * from "./hrAutomation";
 export * from "./technicianPayrollCompatibility";
 export * from "./adminUserProvisioning";
+export * from "./hrLifecycle";
 export * from "./adminBridgeAuth";
 export * from "./adminSecurityProfile";
 export * from "./adminMfaReadiness";
