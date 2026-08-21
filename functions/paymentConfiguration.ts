@@ -9,7 +9,6 @@ const CONFIG_COLLECTION = "system_payment_config";
 const CONFIG_DOCUMENT = "current";
 const EXPECTED_BENEFICIARY = "BIN GROUP L.L.C - S.P.C";
 const PHASE1_METHODS = ["CASH", "CHEQUE"] as const;
-const ALLOWED_METHODS = new Set<string>(PHASE1_METHODS);
 const PAYMENT_ACCESS_ROLES = new Set([
   "owner",
   "admin",
@@ -84,8 +83,10 @@ export function resolveActivePaymentConfiguration(value: Record<string, any>): A
   const effectiveAtMs = timestampToMillis(value.effectiveAt || value.updatedAt);
   const officeLocation = normalizeText(value.officeLocation || value.cashOfficeLocation);
   const approvedMethods = Array.isArray(value.approvedMethods)
-    ? Array.from(new Set(value.approvedMethods.map(normalizeUpper).filter((method: string) => ALLOWED_METHODS.has(method)))).sort()
+    ? Array.from(new Set(value.approvedMethods.map(normalizeUpper).filter(Boolean))).sort()
     : [];
+  const bankTransferEnabled = approvedMethods.includes("BANK_TRANSFER") || value.bankTransferEnabled === true;
+  const stripeEnabled = approvedMethods.includes("STRIPE") || value.stripeEnabled === true;
 
   if (legalBeneficiary !== EXPECTED_BENEFICIARY) {
     throw new HttpsError("failed-precondition", "The configured legal beneficiary does not match the approved corporate identity.");
@@ -102,7 +103,7 @@ export function resolveActivePaymentConfiguration(value: Record<string, any>): A
       "Phase 1 owner onboarding must enable exactly Cash and Cheque. Bank Transfer and Card payments are not available.",
     );
   }
-  if (value.bankTransferEnabled === true || value.stripeEnabled === true) {
+  if (bankTransferEnabled || stripeEnabled) {
     throw new HttpsError(
       "failed-precondition",
       "Phase 1 requires Bank Transfer and Card/Stripe to remain disabled.",
