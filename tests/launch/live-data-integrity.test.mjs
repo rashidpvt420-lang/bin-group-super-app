@@ -28,6 +28,12 @@ const FORBIDDEN_RUNTIME_MARKERS = [
   { re: /simplified coordinate mapping/i, label: 'synthetic GPS positioning' },
   { re: /sector:\s*downtown dubai/i, label: 'hard-coded operational map sector' },
   { re: />4h 12m</i, label: 'hard-coded technician session duration' },
+  { re: /mttr:\s*['"]142m['"]/i, label: 'hard-coded technician MTTR' },
+  { re: /sla:\s*['"]98%['"]/i, label: 'hard-coded technician SLA' },
+  { re: /uptime:\s*['"]99\.9%['"]/i, label: 'hard-coded technician uptime' },
+  { re: />12:45 PM</i, label: 'hard-coded mission time' },
+  { re: />4\.2 KM</i, label: 'hard-coded mission distance' },
+  { re: /notif-1|notif-2/i, label: 'fake technician notifications' },
   { re: /\bSkyline Tower\b/i, label: 'known demo property' },
   { re: /\bPalm Villa 44\b/i, label: 'known demo property' },
   { re: /\bmarina_tower_2504\b/i, label: 'known demo property ID' },
@@ -89,6 +95,13 @@ test('legacy technician command center delegates to the production live implemen
   const source = readFileSync('apps/admin-panel/src/components/TechnicianCommandCenter.tsx', 'utf8');
   assert.match(source, /export \{ default \} from ['"]\.\/ops\/TechnicianCommandCenter['"]/);
   assert.doesNotMatch(source, /Fake Map Grid|4h 12m|Downtown Dubai|99\.9%/i);
+});
+
+test('technician portal contains no fabricated operational metrics or mission details', () => {
+  const source = readFileSync('apps/owner-app/src/pages/TechnicianPortalPage.tsx', 'utf8');
+  assert.match(source, /resumeTechnicianDuty/);
+  assert.match(source, /acceptTechnicianTicket/);
+  assert.doesNotMatch(source, /142m|98%|99\.9%|12:45 PM|4\.2 KM|notif-1|notif-2/i);
 });
 
 test('Phase 1 owner payment policy remains Cash/Cheque only', () => {
