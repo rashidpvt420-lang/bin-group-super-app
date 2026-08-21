@@ -4,6 +4,7 @@ import * as admin from "firebase-admin";
 if (!admin.apps.length) admin.initializeApp();
 const db = admin.firestore();
 
+const CALLABLE_OPTIONS = { region: "europe-west3", cors: true, enforceAppCheck: true } as const;
 const ADMIN_ROLES = new Set(["admin", "super_admin", "ceo"]);
 const closedStates = new Set(["RESOLVED", "CLOSED", "COMPLETED", "COMPLETE", "CANCELLED", "CANCELED", "REJECTED"]);
 const clean = (value: unknown) => String(value ?? "").trim();
@@ -17,9 +18,20 @@ function isAdmin(token: Record<string, any>) {
 }
 async function requireAdmin(request: any) {
   if (!request.auth?.uid) throw new HttpsError("unauthenticated", "Admin authentication required.");
-  if (!isAdmin(request.auth.token || {})) throw new HttpsError("permission-denied", "Founder/Admin authority is required for Command Center metrics.");
   const actor = await admin.auth().getUser(request.auth.uid);
-  if (actor.disabled) throw new HttpsError("permission-denied", "Disabled Admin accounts cannot read Command Center metrics.");
+  if (actor.disabled) throw new HttpsError("permission-denied", "Disabled Admin accounts cannot read protected Admin data.");
+  const latestClaims = actor.customClaims || {};
+  if (!isAdmin(latestClaims)) throw new HttpsError("permission-denied", "Founder/Admin authority is required for protected Admin data.");
+  return actor;
+}
+function serializable(value: any): any {
+  if (value === null || value === undefined) return value ?? null;
+  if (typeof value?.toDate === "function") return value.toDate().toISOString();
+  if (Array.isArray(value)) return value.map((entry) => serializable(entry));
+  if (typeof value === "object") {
+    return Object.fromEntries(Object.entries(value).map(([key, entry]) => [key, serializable(entry)]));
+  }
+  return value;
 }
 function dateFrom(value: any): Date | null {
   if (!value) return null;
@@ -73,7 +85,39 @@ function securityRecentCritical(data: any, now: Date) {
   return severity === "CRITICAL" || severity === "HIGH" || upper(data?.type) === "BOT_DETECTION";
 }
 
-export const adminGetCommandCenterSummary = onCall({ region: "europe-west3", cors: true, enforceAppCheck: true }, async (request) => {
+export const adminGetLaunchConfigurationSummary = onCall(CALLABLE_OPTIONS, async (request) => {
+  await requireAdmin(request);
+  const [healthSnap, paymentSnap] = await Promise.all([
+    db.collection("system_health").doc("admin_summaries").get(),
+    db.collection("system_payment_config").doc("current").get(),
+  ]);
+  if (!healthSnap.exists) throw new HttpsError("failed-precondition", "Canonical system_health/admin_summaries evidence is not published.");
+  if (!paymentSnap.exists) throw new HttpsError("failed-precondition", "Canonical system_payment_config/current policy is not published.");
+
+  const health = healthSnap.data() || {};
+  const payment = paymentSnap.data() || {};
+  const operationalEvidence = health.operationalEvidence && typeof health.operationalEvidence === "object"
+    ? health.operationalEvidence
+    : {};
+  const approvedMethods = Array.isArray(payment.approvedMethods)
+    ? [...new Set(payment.approvedMethods.map((method: unknown) => upper(method)).filter(Boolean))].sort()
+    : [];
+
+  return {
+    success: true,
+    generatedAt: new Date().toISOString(),
+    sourceDocument: "system_health/admin_summaries",
+    paymentConfigSourceDocument: "system_payment_config/current",
+    paymentPolicy: clean(payment.policy).toLowerCase(),
+    paymentConfigVersion: clean(payment.version),
+    approvedPaymentMethods: approvedMethods,
+    bankTransferEnabled: payment.bankTransferEnabled === true,
+    stripeEnabled: payment.stripeEnabled === true,
+    operationalEvidence: serializable(operationalEvidence),
+  };
+});
+
+export const adminGetCommandCenterSummary = onCall(CALLABLE_OPTIONS, async (request) => {
   await requireAdmin(request);
   const now = new Date();
   const [ticketsSnap, techSnap, contractsSnap, ownersSnap, mailSnap, securitySnap] = await Promise.all([
