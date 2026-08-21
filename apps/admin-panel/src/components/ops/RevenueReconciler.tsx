@@ -15,6 +15,12 @@ function normalizeMethod(value: unknown) {
   return String(value || '').trim().toUpperCase().replace(/[\s-]+/g, '_');
 }
 
+function finiteAmount(value: unknown): number | null {
+  if (value === null || value === undefined || value === '') return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 function toDate(value: any): Date | null {
   if (!value) return null;
   const date = typeof value?.toDate === 'function' ? value.toDate() : new Date(value);
@@ -48,7 +54,7 @@ const RevenueReconciler: React.FC = () => {
         if (active) setLoading(false);
       }
     }
-    loadSettlements();
+    void loadSettlements();
     return () => { active = false; };
   }, []);
 
@@ -57,7 +63,15 @@ const RevenueReconciler: React.FC = () => {
     const approved = phase1.filter((record) => APPROVED_STATUSES.has(normalizeStatus(record.status || record.paymentStatus || record.verificationState)));
     const pending = phase1.filter((record) => PENDING_STATUSES.has(normalizeStatus(record.status || record.paymentStatus || record.verificationState)));
     const rejected = phase1.filter((record) => normalizeStatus(record.status || record.paymentStatus || record.verificationState).includes('REJECT'));
-    const verifiedVolume = approved.reduce((sum, record) => sum + Number(record.amount || record.amountReceived || 0), 0);
+
+    const approvedAmounts = approved
+      .map((record) => finiteAmount(record.amount ?? record.amountReceived))
+      .filter((value): value is number => value !== null);
+    const verifiedVolume = approved.length === 0
+      ? 0
+      : approvedAmounts.length === approved.length
+        ? approvedAmounts.reduce((sum, value) => sum + value, 0)
+        : null;
 
     const settlementMinutes = approved.map((record) => {
       const start = toDate(record.createdAt || record.submittedAt || record.paymentSubmittedAt);
@@ -76,7 +90,7 @@ const RevenueReconciler: React.FC = () => {
       rejected: rejected.filter((record) => normalizeMethod(record.paymentMethod || record.method) === method).length,
     }));
 
-    return { phase1, approved, pending, rejected, verifiedVolume, avgSettlement, byMethod };
+    return { phase1, approved, pending, rejected, verifiedVolume, approvedAmountCount: approvedAmounts.length, avgSettlement, byMethod };
   }, [records]);
 
   if (loading) return <div className="p-8 text-white">Loading live settlement records...</div>;
@@ -91,6 +105,11 @@ const RevenueReconciler: React.FC = () => {
     );
   }
 
+  const volumeLabel = live.verifiedVolume === null ? 'N/A' : `AED ${live.verifiedVolume.toLocaleString()}`;
+  const volumeCoverage = live.approved.length === 0
+    ? 'No approved records'
+    : `${live.approvedAmountCount}/${live.approved.length} amounts recorded`;
+
   return (
     <div className="p-8 bg-[#020203] min-h-screen text-white font-sans">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 gap-6">
@@ -101,12 +120,12 @@ const RevenueReconciler: React.FC = () => {
           <h1 className="text-4xl font-extrabold tracking-tighter">
             Cash &amp; Cheque <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-500">Reconciliation</span>
           </h1>
-          <p className="text-sm text-gray-500 mt-2">Calculated from persisted payment_transactions only.</p>
+          <p className="text-sm text-gray-500 mt-2">Calculated from persisted payment_transactions only. Missing monetary fields remain N/A.</p>
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-8 mb-12">
-        <ReconStat label="Verified Volume" value={`AED ${live.verifiedVolume.toLocaleString()}`} trend="Approved records" icon={RefreshCcw} color="blue" />
+        <ReconStat label="Verified Volume" value={volumeLabel} trend={volumeCoverage} icon={RefreshCcw} color="blue" />
         <ReconStat label="Pending Review" value={String(live.pending.length)} trend="Needs admin action" icon={AlertCircle} color="orange" />
         <ReconStat label="Avg Verification" value={live.avgSettlement === null ? 'N/A' : `${Math.round(live.avgSettlement)}m`} trend="From real timestamps" icon={History} color="emerald" />
         <ReconStat label="Approved Records" value={String(live.approved.length)} trend={`${live.rejected.length} rejected`} icon={CheckCircle2} color="indigo" />
