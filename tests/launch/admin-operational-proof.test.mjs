@@ -32,17 +32,30 @@ test('protected Admin evidence uses only enrolled real Firebase phone or TOTP fa
 });
 
 test('HR route retains the registry and exposes callable-only least-privilege staff provisioning', async () => {
-  const [hr, access, provisioning] = await Promise.all([
+  const [hr, access, provisioning, policy] = await Promise.all([
     read('apps/admin-panel/src/pages/admin/HRManagementPage.tsx'),
     read('apps/admin-panel/src/pages/admin/StaffAccessPage.tsx'),
     read('functions/adminUserProvisioning.ts'),
+    read('apps/admin-panel/src/security/staffAccessPolicy.ts'),
   ]);
-  assert.match(hr, /const filteredStaff = staff\.filter/);
-  assert.match(hr, /<StaffAccessPage\s*\/>/);
+  assert.match(hr, /const filteredStaff = useMemo\(\(\) => snapshot\.staff\.filter/);
+  assert.match(hr, /<StaffAccessPage\b/);
+  assert.match(hr, /PROVISIONABLE_STAFF_ROLES/);
   assert.doesNotMatch(hr, /RegisterStaffDialog/);
+
+  assert.match(access, /PROVISIONABLE_STAFF_ROLE_OPTIONS/);
+  assert.match(access, /ROLE_ALLOWED_MODULES/);
   assert.match(access, /httpsCallable\(functions, 'adminCreateUser'\)/);
   assert.match(access, /httpsCallable\(functions, 'adminUpdateStaffAccess'\)/);
-  assert.match(access, /httpsCallable\(functions, 'adminSetStaffStatus'\)/);
+  assert.match(access, /const invokeStaffAction = async/);
+  assert.match(access, /httpsCallable\(functions, name\)/);
+  for (const action of ['adminSetStaffStatus', 'adminResendStaffInvitation', 'adminOffboardStaff']) {
+    assert.match(access, new RegExp(action));
+  }
+  assert.doesNotMatch(access, /\bsetDoc\b|\bupdateDoc\b|\bdeleteDoc\b|\bserverTimestamp\b/);
+
+  assert.match(policy, /export const PROVISIONABLE_STAFF_ROLES = PROVISIONABLE_STAFF_ROLE_OPTIONS\.map/);
+  assert.match(policy, /export const ROLE_ALLOWED_MODULES/);
   assert.match(provisioning, /admin:\s*false/);
   assert.match(provisioning, /superAdmin:\s*false/);
   assert.match(provisioning, /ceo:\s*false/);

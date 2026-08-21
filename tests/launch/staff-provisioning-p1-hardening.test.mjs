@@ -2,9 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
-const [backend, ui, packageJson, firestoreHardener, storageHardener] = await Promise.all([
+const [backend, ui, policy, packageJson, firestoreHardener, storageHardener] = await Promise.all([
   readFile(new URL('../../functions/adminUserProvisioning.ts', import.meta.url), 'utf8'),
   readFile(new URL('../../apps/admin-panel/src/pages/admin/StaffAccessPage.tsx', import.meta.url), 'utf8'),
+  readFile(new URL('../../apps/admin-panel/src/security/staffAccessPolicy.ts', import.meta.url), 'utf8'),
   readFile(new URL('../../package.json', import.meta.url), 'utf8'),
   readFile(new URL('../../scripts/harden-private-hr-authority.mjs', import.meta.url), 'utf8'),
   readFile(new URL('../../scripts/harden-private-hr-storage.mjs', import.meta.url), 'utf8'),
@@ -25,13 +26,22 @@ test('Admin Staff Access UI has no ghost-account or client-password path', () =>
   assert.doesNotMatch(ui, /value:\s*['"]admin['"]/);
   assert.match(ui, /httpsCallable\(functions, 'adminCreateUser'\)/);
   assert.match(ui, /httpsCallable\(functions, 'adminUpdateStaffAccess'\)/);
-  assert.match(ui, /httpsCallable\(functions, 'adminSetStaffStatus'\)/);
+  assert.match(ui, /const invokeStaffAction = async/);
+  assert.match(ui, /httpsCallable\(functions, name\)/);
+  assert.match(ui, /invokeStaffAction\('adminSetStaffStatus'/);
+  assert.match(ui, /invokeStaffAction\('adminResendStaffInvitation'/);
+  assert.match(ui, /invokeStaffAction\('adminOffboardStaff'/);
 });
 
 test('role selection is least privilege and matches server module ceilings', () => {
+  assert.match(ui, /PROVISIONABLE_STAFF_ROLE_OPTIONS/);
   assert.match(ui, /ROLE_ALLOWED_MODULES/);
   assert.match(ui, /selectableModules/);
-  assert.match(ui, /Technicians use the Technician portal and receive no Admin-panel modules/);
+  assert.match(ui, /Technicians use the dedicated Technician portal; no Admin modules are granted/);
+  assert.doesNotMatch(ui, /const STAFF_ROLES\s*=/);
+  assert.match(policy, /export const PROVISIONABLE_STAFF_ROLES = PROVISIONABLE_STAFF_ROLE_OPTIONS\.map/);
+  assert.match(policy, /ROLE_DEFAULT_MODULES:[\s\S]*?technician:\s*\[\]/);
+  assert.match(policy, /ROLE_ALLOWED_MODULES:[\s\S]*?technician:\s*\[\]/);
   assert.match(backend, /ROLE_ALLOWED_MODULES/);
   assert.match(backend, /permissions are server-derived from the selected modules/);
   assert.match(backend, /Module \$\{moduleKey\} is not allowed for role \$\{role\}/);

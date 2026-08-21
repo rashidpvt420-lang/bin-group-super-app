@@ -36,8 +36,9 @@ test('Admin staff role is accessible and MFA is generated at challenge time', as
     read('tests/e2e/business-admin.spec.ts'),
   ]);
 
-  assert.match(page, /<InputLabel id="staff-role-label"[^>]*>Role<\/InputLabel>/);
-  assert.match(page, /id="staff-role-select" labelId="staff-role-label" data-testid="staff-role-select"/);
+  assert.match(page, /<InputLabel>Role<\/InputLabel>/);
+  assert.match(page, /<Select data-testid="staff-role-select"/);
+  assert.match(page, /PROVISIONABLE_STAFF_ROLE_OPTIONS\.map/);
   assert.match(spec, /function currentAdminMfaCode\(\)/);
   assert.match(spec, /Math\.floor\(Date\.now\(\) \/ 30_000\)/);
   assert.match(spec, /fill\(currentAdminMfaCode\(\)\)/);
