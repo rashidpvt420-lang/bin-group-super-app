@@ -139,7 +139,7 @@ function installCanonicalHelpers(source) {
     next = removeFunctionIfPresent(next, name);
   }
   if (!next.includes(HELPER_MARKER)) throw new Error('[launch-evidence-rules] canReadUserDirectory marker missing');
-  return next.replace(HELPER_MARKER, `${LAUNCH_EVIDENCE_HELPERS}${HELPER_MARKER}`);
+  return next.replace(HELPER_MARKER, () => `${LAUNCH_EVIDENCE_HELPERS}${HELPER_MARKER}`);
 }
 
 function installCanonicalEvidenceBlocks(source) {
