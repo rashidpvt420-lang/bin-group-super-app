@@ -5,10 +5,7 @@ import {
     Chip, alpha, CircularProgress, Table, TableBody,
     TableCell, TableContainer, TableHead, TableRow, LinearProgress
 } from '@mui/material';
-import {
-    ShieldCheck, ClipboardCheck, Download,
-    FileCheck, Landmark
-} from 'lucide-react';
+import { ShieldCheck, ClipboardCheck, Download, FileCheck, Landmark } from 'lucide-react';
 import { db, doc, getDoc } from '../lib/firebase';
 import { binThemeTokens } from '../theme/binGroupTheme';
 import { useLanguage } from '../context/LanguageContext';
@@ -22,7 +19,13 @@ interface AssetRegistryItem {
     serialNumber: string;
     lastService: any;
     nextService: any;
-    status: 'OPTIMAL' | 'SERVICE_REQUIRED' | 'CRITICAL';
+    status: 'OPTIMAL' | 'SERVICE_REQUIRED' | 'CRITICAL' | 'UNKNOWN';
+}
+
+function finiteScore(value: unknown): number | null {
+    if (value === null || value === undefined || value === '') return null;
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? Math.max(0, Math.min(100, parsed)) : null;
 }
 
 const GovernmentPropertyPage: React.FC = () => {
@@ -47,9 +50,11 @@ const GovernmentPropertyPage: React.FC = () => {
             setLoading(false);
             return;
         }
+        let active = true;
         const fetchProp = async () => {
             try {
                 const snap = await getDoc(doc(db, 'properties', id));
+                if (!active) return;
                 if (!snap.exists()) {
                     setError(tx('government.propertyNotFound', 'Property record was not found or is not available to this account.'));
                     setLoading(false);
@@ -57,37 +62,54 @@ const GovernmentPropertyPage: React.FC = () => {
                 }
                 const data = snap.data();
                 setProperty(data);
+
                 const assetRows = Array.isArray(data.assetRegistry) ? data.assetRegistry : Array.isArray(data.assets) ? data.assets : [];
-                setAssets(assetRows.map((asset: any, index: number) => ({
-                    id: String(asset.id || asset.assetId || index),
-                    category: String(asset.category || asset.type || 'ASSET'),
-                    name: String(asset.name || asset.assetName || 'Unnamed asset'),
-                    serialNumber: String(asset.serialNumber || asset.serial || ''),
-                    lastService: asset.lastService || asset.lastServiceAt || null,
-                    nextService: asset.nextService || asset.nextServiceAt || null,
-                    status: ['OPTIMAL', 'SERVICE_REQUIRED', 'CRITICAL'].includes(String(asset.status || '').toUpperCase())
-                        ? String(asset.status).toUpperCase()
-                        : 'SERVICE_REQUIRED',
-                })) as AssetRegistryItem[]);
+                setAssets(assetRows.map((asset: any, index: number) => {
+                    const recordedStatus = String(asset.status || '').toUpperCase();
+                    const status: AssetRegistryItem['status'] = ['OPTIMAL', 'SERVICE_REQUIRED', 'CRITICAL'].includes(recordedStatus)
+                        ? recordedStatus as AssetRegistryItem['status']
+                        : 'UNKNOWN';
+                    return {
+                        id: String(asset.id || asset.assetId || index),
+                        category: String(asset.category || asset.type || 'ASSET'),
+                        name: String(asset.name || asset.assetName || 'Unnamed asset'),
+                        serialNumber: String(asset.serialNumber || asset.serial || ''),
+                        lastService: asset.lastService || asset.lastServiceAt || null,
+                        nextService: asset.nextService || asset.nextServiceAt || null,
+                        status,
+                    };
+                }));
+
                 const coverageRows = Array.isArray(data.coverage) ? data.coverage : Array.isArray(data.warranties) ? data.warranties : [];
-                setCoverage(coverageRows.map((item: any, index: number) => ({
-                    id: String(item.id || item.policyNumber || index),
-                    system: String(item.system || item.name || 'Coverage'),
-                    provider: String(item.provider || ''),
-                    expiryDate: toDate(item.expiryDate || item.expiresAt) || new Date(0),
-                    type: String(item.type || 'WARRANTY').toUpperCase(),
-                    policyNumber: String(item.policyNumber || item.reference || ''),
-                    status: String(item.status || 'UNKNOWN').toUpperCase(),
-                })) as CoverageItem[]);
+                setCoverage(coverageRows.map((item: any, index: number) => {
+                    const recordedType = String(item.type || '').toUpperCase();
+                    const recordedStatus = String(item.status || '').toUpperCase();
+                    const type: CoverageItem['type'] = recordedType === 'WARRANTY' || recordedType === 'INSURANCE' ? recordedType : 'UNKNOWN';
+                    const status: CoverageItem['status'] = ['ACTIVE', 'EXPIRING', 'EXPIRED'].includes(recordedStatus)
+                        ? recordedStatus as CoverageItem['status']
+                        : 'UNKNOWN';
+                    const expiryDate = toDate(item.expiryDate || item.expiresAt);
+                    return {
+                        id: String(item.id || item.policyNumber || index),
+                        system: String(item.system || item.name || 'Coverage'),
+                        provider: String(item.provider || ''),
+                        expiryDate: expiryDate && Number.isFinite(expiryDate.getTime()) ? expiryDate : null,
+                        type,
+                        policyNumber: String(item.policyNumber || item.reference || ''),
+                        status,
+                    };
+                }));
                 setInspections(Array.isArray(data.inspectionHistory) ? data.inspectionHistory : []);
                 setDocuments(Array.isArray(data.complianceDocuments) ? data.complianceDocuments : []);
             } catch (err) {
                 console.error('[GovernmentProperty] load failed:', err);
-                setError(tx('government.propertyLoadFailed', 'Property evidence could not be loaded.'));
+                if (active) setError(tx('government.propertyLoadFailed', 'Property evidence could not be loaded.'));
+            } finally {
+                if (active) setLoading(false);
             }
-            setLoading(false);
         };
-        fetchProp();
+        void fetchProp();
+        return () => { active = false; };
     }, [id]);
 
     if (loading) return <Box sx={{ display: 'flex', justifyContent: 'center', py: 10 }}><CircularProgress sx={{ color: binThemeTokens.gold }} /></Box>;
@@ -100,7 +122,7 @@ const GovernmentPropertyPage: React.FC = () => {
             <Container maxWidth="xl">
                 <Box sx={{ mb: 6, p: 4, bgcolor: alpha(binThemeTokens.gold, 0.05), border: `1px solid ${binThemeTokens.gold}`, borderRadius: 4, position: 'relative', overflow: 'hidden' }}>
                     <Box sx={{ position: 'absolute', top: 0, right: 0, p: 2, bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <ShieldCheck size={16} /> SOVEREIGN PROTOCOL ACTIVE
+                        <ShieldCheck size={16} /> INSTITUTIONAL PROPERTY RECORD
                     </Box>
                     <Stack direction={{ xs: 'column', md: isRTL ? 'row-reverse' : 'row' }} spacing={3} alignItems={{ xs: 'flex-start', md: 'center' }}>
                         <Box sx={{ p: 2, bgcolor: binThemeTokens.gold, color: '#000', borderRadius: 2 }}>
@@ -108,8 +130,8 @@ const GovernmentPropertyPage: React.FC = () => {
                         </Box>
                         <Box sx={{ flexGrow: 1 }}>
                             <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 2 }}>INSTITUTIONAL ASSET COMMAND</Typography>
-                            <Typography variant="h3" fontWeight="950" sx={{ color: '#FFF' }}>{property?.propertyName || property?.area}</Typography>
-                            <Typography variant="body1" sx={{ color: 'rgba(255,255,255,0.6)' }}>{property?.address}</Typography>
+                            <Typography variant="h3" fontWeight="950" sx={{ color: '#FFF' }}>{property.propertyName || property.area || 'Property name not recorded'}</Typography>
+                            <Typography variant="body1" sx={{ color: 'rgba(255,255,255,0.6)' }}>{property.address || 'Address not recorded'}</Typography>
                         </Box>
                         <Stack spacing={2}>
                             <Button disabled variant="contained" startIcon={<Download />} title={tx('government.reportUnavailable', 'No verified report artifact is available.')} sx={{ bgcolor: '#FFF', color: '#000', fontWeight: 950 }}>{tx('government.weeklyReport', 'WEEKLY REPORT — NOT AVAILABLE')}</Button>
@@ -137,27 +159,26 @@ const GovernmentPropertyPage: React.FC = () => {
                                     <TableBody>
                                         {assets.length === 0 ? (
                                             <TableRow><TableCell colSpan={4} sx={{ color: 'rgba(255,255,255,0.6)', textAlign: 'center', py: 5 }}>{tx('government.noAssets', 'No verified asset registry entries are recorded for this property.')}</TableCell></TableRow>
-                                        ) : assets.map((asset) => (
-                                            <TableRow key={asset.id} sx={{ '&:hover': { bgcolor: 'rgba(255,255,255,0.02)' } }}>
-                                                <TableCell>
-                                                    <Typography variant="body1" fontWeight="900" color="#FFF">{asset.name}</Typography>
-                                                    <Typography variant="caption" color="textSecondary">{asset.category}</Typography>
-                                                </TableCell>
-                                                <TableCell sx={{ color: 'rgba(255,255,255,0.6)', fontFamily: 'monospace' }}>{asset.serialNumber}</TableCell>
-                                                <TableCell sx={{ color: '#FFF' }}>{displayDate(asset.lastService)}</TableCell>
-                                                <TableCell>
-                                                    <Chip
-                                                        label={asset.status}
-                                                        size="small"
-                                                        sx={{
-                                                            bgcolor: asset.status === 'OPTIMAL' ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)',
-                                                            color: asset.status === 'OPTIMAL' ? '#10b981' : '#ef4444',
-                                                            fontWeight: 900, fontSize: '0.65rem'
-                                                        }}
-                                                    />
-                                                </TableCell>
-                                            </TableRow>
-                                        ))}
+                                        ) : assets.map((asset) => {
+                                            const statusColor = asset.status === 'OPTIMAL'
+                                                ? '#10b981'
+                                                : asset.status === 'UNKNOWN'
+                                                    ? 'rgba(255,255,255,0.5)'
+                                                    : '#ef4444';
+                                            return (
+                                                <TableRow key={asset.id} sx={{ '&:hover': { bgcolor: 'rgba(255,255,255,0.02)' } }}>
+                                                    <TableCell>
+                                                        <Typography variant="body1" fontWeight="900" color="#FFF">{asset.name}</Typography>
+                                                        <Typography variant="caption" color="textSecondary">{asset.category}</Typography>
+                                                    </TableCell>
+                                                    <TableCell sx={{ color: 'rgba(255,255,255,0.6)', fontFamily: 'monospace' }}>{asset.serialNumber || 'Not recorded'}</TableCell>
+                                                    <TableCell sx={{ color: '#FFF' }}>{displayDate(asset.lastService)}</TableCell>
+                                                    <TableCell>
+                                                        <Chip label={asset.status} size="small" sx={{ bgcolor: alpha(statusColor, 0.1), color: statusColor, fontWeight: 900, fontSize: '0.65rem' }} />
+                                                    </TableCell>
+                                                </TableRow>
+                                            );
+                                        })}
                                     </TableBody>
                                 </Table>
                             </TableContainer>
@@ -173,15 +194,25 @@ const GovernmentPropertyPage: React.FC = () => {
                                 <Stack spacing={3}>
                                     {inspections.length === 0 ? (
                                         <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.55)' }}>{tx('government.noInspections', 'No verified inspection history is recorded.')}</Typography>
-                                    ) : inspections.map((log, i) => (
-                                        <Box key={i}>
-                                            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                                                <Typography variant="caption" fontWeight="900" color="#FFF">{String(log.title || log.type || 'INSPECTION')}</Typography>
-                                                <Typography variant="caption" color="textSecondary">{displayDate(log.completedAt || log.date || log.createdAt)}</Typography>
+                                    ) : inspections.map((log, i) => {
+                                        const score = finiteScore(log.score);
+                                        return (
+                                            <Box key={String(log.id || i)}>
+                                                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1, gap: 2 }}>
+                                                    <Typography variant="caption" fontWeight="900" color="#FFF">{String(log.title || log.type || 'INSPECTION')}</Typography>
+                                                    <Typography variant="caption" color="textSecondary">{displayDate(log.completedAt || log.date || log.createdAt)}</Typography>
+                                                </Box>
+                                                {score === null ? (
+                                                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.45)' }}>Score not recorded</Typography>
+                                                ) : (
+                                                    <Stack direction="row" spacing={1} alignItems="center">
+                                                        <LinearProgress variant="determinate" value={score} sx={{ flex: 1, height: 4, borderRadius: 2, bgcolor: 'rgba(255,255,255,0.05)', '& .MuiLinearProgress-bar': { bgcolor: binThemeTokens.gold } }} />
+                                                        <Typography variant="caption" color="textSecondary">{score}%</Typography>
+                                                    </Stack>
+                                                )}
                                             </Box>
-                                            <LinearProgress variant="determinate" value={Math.max(0, Math.min(100, Number(log.score || 0)))} sx={{ height: 4, borderRadius: 2, bgcolor: 'rgba(255,255,255,0.05)', '& .MuiLinearProgress-bar': { bgcolor: binThemeTokens.gold } }} />
-                                        </Box>
-                                    ))}
+                                        );
+                                    })}
                                 </Stack>
                             </Paper>
 
