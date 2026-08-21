@@ -8,6 +8,58 @@ export * from './hard-launch-gate-base.mjs';
 export const PHASE1_PAYMENT_POLICY = 'phase1-manual';
 export const PHASE2_STRIPE_PAYMENT_POLICY = 'phase2-stripe';
 
+// Keep the protected hard-launch contract explicit in this policy-aware facade.
+// This catches accidental drift in the base implementation while allowing only the
+// Stripe gate to be policy-conditional for the Cash/Cheque-only Phase 1 launch.
+const BASE_REQUIRED_OPERATIONAL_GATES_CONTRACT = Object.freeze([
+  'ownerPaymentActivation',
+  'paymentUnlockExactlyOnce',
+  'tenantNotificationDelivery',
+  'technicianPhysicalGpsEvidence',
+  'brokerCommissionLockExactlyOnce',
+  'adminStaffClaims',
+  'stripeLiveBilling',
+  'appCheckEnforcement',
+  'aiProviderHealth',
+  'privilegedAccessRotation',
+  'brandedEmailDelivery',
+  'renewalScheduler',
+]);
+
+const BASE_GATE_EVIDENCE_CONTRACT = Object.freeze({
+  technicianPhysicalGpsEvidence: new Set(['physical-device-report']),
+  brandedEmailDelivery: new Set(['provider-console-export', 'workflow-artifact']),
+});
+
+const BASE_GATE_SOURCE_CONTRACT = Object.freeze({
+  technicianPhysicalGpsEvidence: [/physical.*device.*gps/i],
+});
+
+export const APPROVED_EVIDENCE_REFERENCE_ERROR = 'evidenceReference must be an HTTPS URL on an approved evidence host';
+
+function assertBaseHardLaunchContract() {
+  const actual = [...base.REQUIRED_OPERATIONAL_GATES];
+  if (JSON.stringify(actual) !== JSON.stringify(BASE_REQUIRED_OPERATIONAL_GATES_CONTRACT)) {
+    throw new Error('Base hard-launch operational gate contract drifted unexpectedly');
+  }
+
+  for (const [gate, expected] of Object.entries(BASE_GATE_EVIDENCE_CONTRACT)) {
+    const actualTypes = base.GATE_EVIDENCE_REQUIREMENTS?.[gate];
+    if (!(actualTypes instanceof Set) || JSON.stringify([...actualTypes]) !== JSON.stringify([...expected])) {
+      throw new Error(`Base hard-launch evidence contract drifted for ${gate}`);
+    }
+  }
+
+  const technicianPatterns = base.GATE_SOURCE_SYSTEM_PATTERNS?.technicianPhysicalGpsEvidence || [];
+  for (const pattern of BASE_GATE_SOURCE_CONTRACT.technicianPhysicalGpsEvidence) {
+    if (!technicianPatterns.some((candidate) => String(candidate) === String(pattern))) {
+      throw new Error('Base hard-launch Technician GPS source contract drifted unexpectedly');
+    }
+  }
+}
+
+assertBaseHardLaunchContract();
+
 const PHASE1_REQUIRED_OPERATIONAL_GATES = Object.freeze(
   base.REQUIRED_OPERATIONAL_GATES.filter((gate) => gate !== 'stripeLiveBilling'),
 );
