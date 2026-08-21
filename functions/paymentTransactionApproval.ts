@@ -4,6 +4,12 @@ import * as admin from "firebase-admin";
 import * as crypto from "crypto";
 import { createBrokerCommissionForContract } from "./brokerCommissions";
 import { assertStoredOwnerPaymentReceipt } from "./paymentReceiptEvidence";
+import { normalizeAedMoney } from "./shared/aedMoney";
+import { resolveActivePaymentConfiguration } from "./paymentConfiguration";
+import {
+  OwnerActivationPaymentPolicyError,
+  resolveLockedOwnerActivationSchedule,
+} from "./ownerActivationPaymentPolicy";
 
 if (!admin.apps.length) admin.initializeApp();
 
@@ -12,8 +18,24 @@ const ts = () => FieldValue.serverTimestamp();
 
 const roleOf = (value: unknown) => String(value || "").trim().toLowerCase();
 const upper = (value: unknown) => String(value || "").trim().toUpperCase();
-const money = (value: number) => Math.round(value * 100) / 100;
+const money = normalizeAedMoney;
 const ADMIN_ROLES = new Set(["admin", "ceo", "super_admin", "operations_admin", "finance_admin"]);
+
+function lockedActivationSchedule(
+  source: Record<string, any>,
+  submittedAmount: unknown,
+  errorCode: "failed-precondition" | "aborted",
+  errorMessage: string,
+) {
+  try {
+    return resolveLockedOwnerActivationSchedule(source, submittedAmount);
+  } catch (error) {
+    if (error instanceof OwnerActivationPaymentPolicyError) {
+      throw new HttpsError(errorCode, errorMessage);
+    }
+    throw error;
+  }
+}
 
 async function requireAdmin(auth: any) {
   if (!auth?.uid) throw new HttpsError("unauthenticated", "Admin login required.");
@@ -231,19 +253,37 @@ export const adminApprovePayment = onCall({ cors: true, enforceAppCheck: true },
   ) {
     throw new HttpsError("failed-precondition", "A verified owner signature is required before payment approval.");
   }
-  const expectedAnnual = Number(payment.quoteSnapshot?.annualContractValue || contractData.quoteSnapshot?.annualContractValue || contractData.annualContractValue || 0);
-  const expectedAmount = Number(payment.quoteSnapshot?.activationDeposit || contractData.quoteSnapshot?.activationDeposit || payment.activationDeposit || payment.amount || 0);
+  const storedPaymentAmount = payment.amount ?? payment.activationDeposit;
+  const contractSchedule = lockedActivationSchedule(
+    contractData,
+    storedPaymentAmount,
+    "failed-precondition",
+    "The locked 15% mobilization schedule is invalid.",
+  );
+  const paymentSchedule = lockedActivationSchedule(
+    payment,
+    storedPaymentAmount,
+    "failed-precondition",
+    "The payment transaction does not match the locked 15% mobilization schedule.",
+  );
   if (
-    !Number.isFinite(expectedAnnual) ||
-    expectedAnnual <= 0 ||
-    !Number.isFinite(expectedAmount) ||
-    expectedAmount <= 0 ||
-    Math.abs(expectedAmount - money(expectedAnnual * 0.15)) > 0.01
+    paymentSchedule.annualContractValue !== contractSchedule.annualContractValue ||
+    paymentSchedule.mobilizationAmount !== contractSchedule.mobilizationAmount
   ) {
     throw new HttpsError("failed-precondition", "The locked 15% mobilization schedule is invalid.");
   }
-  if (Number.isFinite(Number(request.data?.amountReceived)) && Math.abs(Number(request.data.amountReceived) - expectedAmount) > 0.01) {
-    throw new HttpsError("failed-precondition", "Received amount does not match the locked mobilization deposit.");
+  const expectedAnnual = contractSchedule.annualContractValue;
+  const expectedAmount = contractSchedule.mobilizationAmount;
+  if (request.data?.amountReceived !== undefined && request.data?.amountReceived !== null) {
+    let submittedAmount: number;
+    try {
+      submittedAmount = money(request.data.amountReceived);
+    } catch {
+      throw new HttpsError("invalid-argument", "Received amount must be a finite AED value.");
+    }
+    if (submittedAmount <= 0 || submittedAmount !== expectedAmount) {
+      throw new HttpsError("failed-precondition", "Received amount does not match the locked mobilization deposit.");
+    }
   }
   const normalizedMethod = upper(payment.paymentMethod || payment.method || method);
   const stripeVerified = normalizedMethod === "STRIPE" &&
@@ -282,16 +322,21 @@ export const adminApprovePayment = onCall({ cors: true, enforceAppCheck: true },
   });
   const invoiceHash = crypto.createHash("sha256").update(invoiceCanonical).digest("hex");
   const propertyQuery = db.collection("properties").where("intakeId", "==", intakeId).limit(100);
+  const paymentConfigurationRef = db.collection("system_payment_config").doc("current");
   let approvalWasIdempotent = false;
   let approvalUsesStripe = false;
   await db.runTransaction(async (transaction) => {
-    const [freshPaymentSnap, freshContractSnap, propertySnap] = await Promise.all([
+    const [freshPaymentSnap, freshContractSnap, propertySnap, paymentConfigurationSnap] = await Promise.all([
       transaction.get(ref),
       transaction.get(contractRef),
       transaction.get(propertyQuery),
+      transaction.get(paymentConfigurationRef),
     ]);
     if (!freshPaymentSnap.exists || !freshContractSnap.exists) {
       throw new HttpsError("failed-precondition", "Payment or contract disappeared during approval.");
+    }
+    if (!paymentConfigurationSnap.exists) {
+      throw new HttpsError("failed-precondition", "The current payment policy is missing.");
     }
     const freshPayment = freshPaymentSnap.data() || {};
     const freshContract = freshContractSnap.data() || {};
@@ -343,31 +388,51 @@ export const adminApprovePayment = onCall({ cors: true, enforceAppCheck: true },
       throw new HttpsError("failed-precondition", "Durable signed OTP evidence changed during approval.");
     }
 
-    const freshExpectedAnnual = Number(
-      freshPayment.quoteSnapshot?.annualContractValue ||
-      freshContract.quoteSnapshot?.annualContractValue ||
-      freshContract.annualContractValue ||
-      0,
+    const freshStoredPaymentAmount = freshPayment.amount ?? freshPayment.activationDeposit;
+    const freshContractSchedule = lockedActivationSchedule(
+      freshContract,
+      freshStoredPaymentAmount,
+      "aborted",
+      "Locked payment amount changed during approval.",
     );
-    const freshExpectedAmount = Number(
-      freshPayment.quoteSnapshot?.activationDeposit ||
-      freshContract.quoteSnapshot?.activationDeposit ||
-      freshPayment.activationDeposit ||
-      freshPayment.amount ||
-      0,
+    const freshPaymentSchedule = lockedActivationSchedule(
+      freshPayment,
+      freshStoredPaymentAmount,
+      "aborted",
+      "Locked payment amount changed during approval.",
     );
     if (
-      !Number.isFinite(freshExpectedAnnual) ||
-      freshExpectedAnnual <= 0 ||
-      !Number.isFinite(freshExpectedAmount) ||
-      freshExpectedAmount <= 0 ||
-      Math.abs(freshExpectedAmount - money(freshExpectedAnnual * 0.15)) > 0.01 ||
-      Math.abs(freshExpectedAmount - expectedAmount) > 0.01
+      freshContractSchedule.annualContractValue !== expectedAnnual ||
+      freshContractSchedule.mobilizationAmount !== expectedAmount ||
+      freshPaymentSchedule.annualContractValue !== expectedAnnual ||
+      freshPaymentSchedule.mobilizationAmount !== expectedAmount
     ) {
       throw new HttpsError("aborted", "Locked payment amount changed during approval.");
     }
 
     const freshMethod = upper(freshPayment.paymentMethod || freshPayment.method || normalizedMethod);
+    const transactionalConfiguration = resolveActivePaymentConfiguration(paymentConfigurationSnap.data() || {});
+    const freshConfigVersion = String(
+      freshPayment.paymentConfigVersion ||
+      freshPayment.paymentConfigurationVersion ||
+      freshPayment.paymentManifest?.configVersion ||
+      freshPayment.paymentManifest?.paymentConfigVersion ||
+      "",
+    ).trim();
+    const freshConfigHash = String(
+      freshPayment.paymentConfigHash ||
+      freshPayment.paymentConfigurationHash ||
+      freshPayment.paymentManifest?.configHash ||
+      freshPayment.paymentManifest?.paymentConfigHash ||
+      "",
+    ).trim();
+    if (
+      freshConfigVersion !== transactionalConfiguration.version ||
+      freshConfigHash !== transactionalConfiguration.configHash ||
+      !transactionalConfiguration.approvedMethods.includes(freshMethod)
+    ) {
+      throw new HttpsError("aborted", "The payment policy binding changed during approval.");
+    }
     const freshStripeSessionId = String(freshPayment.stripeSessionId || "").trim();
     const freshStripeVerified =
       freshMethod === "STRIPE" &&

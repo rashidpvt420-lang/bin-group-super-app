@@ -4,11 +4,12 @@ import {
     Stack, Typography, alpha
 } from '@mui/material';
 import { ArrowLeft, ArrowRight, CheckCircle2, ShieldCheck, AlertTriangle } from 'lucide-react';
+import { onAuthStateChanged } from 'firebase/auth';
 import { useOnboardingStore } from '../../store/onboardingStore';
 import { useLanguage } from '@bin/shared';
 import { formatAED } from '../../utils/formatters';
 import { binThemeTokens } from '../../theme/binGroupTheme';
-import { functions, httpsCallable } from '../../lib/firebase';
+import { auth, functions, httpsCallable } from '../../lib/firebase';
 
 const badCopy = (value?: string) => {
     const text = String(value || '').trim();
@@ -46,11 +47,25 @@ const ReviewBeforeSubmitStep: React.FC<{ onNext: () => void; onBack: () => void 
     const { t, isRTL, lang } = useLanguage();
     const [quoteLoading, setQuoteLoading] = React.useState(false);
     const [quoteError, setQuoteError] = React.useState('');
+    const [quoteNeedsSignIn, setQuoteNeedsSignIn] = React.useState(false);
+    const [authReady, setAuthReady] = React.useState(false);
+    const [signedInUid, setSignedInUid] = React.useState<string | null>(auth.currentUser?.uid || null);
 
     const copy = React.useCallback((key: string, fallback: string, variables?: Record<string, any>) => {
         const value = t(key, variables);
         return badCopy(value) ? fallback : value;
     }, [t]);
+
+    const secureSessionMessage = React.useCallback(() => (
+        lang === 'ar'
+            ? 'انتهت جلسة المالك الآمنة أو لم تكتمل استعادتها. سجّل الدخول مرة أخرى للمتابعة من هذه الصفحة.'
+            : 'Your secure Owner session has expired or could not be restored. Sign in again to continue from this page.'
+    ), [lang]);
+
+    React.useEffect(() => onAuthStateChanged(auth, (user) => {
+        setSignedInUid(user?.uid || null);
+        setAuthReady(true);
+    }), []);
 
     const quoteRequestKey = React.useMemo(
         () => JSON.stringify({ properties, selectedAddOns: selectedAddOns || [] }),
@@ -62,15 +77,38 @@ const ReviewBeforeSubmitStep: React.FC<{ onNext: () => void; onBack: () => void 
         let active = true;
         const issueQuote = async () => {
             if (!ownerAccount?.uid || properties.length === 0) {
-                if (active) setQuoteError(copy(
-                    'onboarding.server_quote_account_required',
-                    'A verified Owner account and at least one property are required before Review.',
-                ));
+                if (active) {
+                    setQuoteNeedsSignIn(false);
+                    setQuoteLoading(false);
+                    setQuoteError(copy(
+                        'onboarding.server_quote_account_required',
+                        'A verified Owner account and at least one property are required before Review.',
+                    ));
+                }
+                return;
+            }
+            if (!authReady) {
+                if (active) {
+                    setQuoteError('');
+                    setQuoteNeedsSignIn(false);
+                    setQuoteLoading(true);
+                }
+                return;
+            }
+            if (!signedInUid || signedInUid !== ownerAccount.uid || !auth.currentUser) {
+                if (active) {
+                    setValuationResult({ ...(valuationResult || {}), serverQuote: null, serverQuoteRequestKey: null });
+                    setQuoteNeedsSignIn(true);
+                    setQuoteLoading(false);
+                    setQuoteError(secureSessionMessage());
+                }
                 return;
             }
             setQuoteLoading(true);
+            setQuoteNeedsSignIn(false);
             setQuoteError('');
             try {
+                await auth.currentUser.getIdToken(true);
                 const callable = httpsCallable(functions, 'previewOwnerInspectionQuote');
                 const result = await callable({ properties, selectedAddOns: selectedAddOns || [] });
                 if (!active) return;
@@ -95,18 +133,25 @@ const ReviewBeforeSubmitStep: React.FC<{ onNext: () => void; onBack: () => void 
             } catch (error: any) {
                 if (!active) return;
                 setValuationResult({ ...(valuationResult || {}), serverQuote: null, serverQuoteRequestKey: null });
-                setQuoteError(String(error?.details || error?.message || copy(
-                    'onboarding.server_quote_failed',
-                    'The protected property quotation could not be generated. Review cannot continue.',
-                )));
+                const code = String(error?.code || '').toLowerCase();
+                if (code.includes('unauthenticated') || code.includes('permission-denied')) {
+                    setQuoteNeedsSignIn(true);
+                    setQuoteError(secureSessionMessage());
+                } else {
+                    setQuoteNeedsSignIn(false);
+                    setQuoteError(String(error?.details || error?.message || copy(
+                        'onboarding.server_quote_failed',
+                        'The protected property quotation could not be generated. Review cannot continue.',
+                    )));
+                }
             } finally {
                 if (active) setQuoteLoading(false);
             }
         };
 
-        if (valuationResult?.serverQuoteRequestKey !== quoteRequestKey || !serverQuote || serverQuote.expiresAtMs <= Date.now()) void issueQuote();
+        if (!authReady || valuationResult?.serverQuoteRequestKey !== quoteRequestKey || !serverQuote || serverQuote.expiresAtMs <= Date.now()) void issueQuote();
         return () => { active = false; };
-    }, [copy, ownerAccount?.uid, properties, quoteRequestKey, selectedAddOns]);
+    }, [authReady, copy, ownerAccount?.uid, properties, quoteRequestKey, selectedAddOns, secureSessionMessage, signedInUid]);
 
     const primaryProperty = properties[0];
     const localQuote = portfolioSummary.quoteResults?.[primaryProperty?.id];
@@ -130,6 +175,11 @@ const ReviewBeforeSubmitStep: React.FC<{ onNext: () => void; onBack: () => void 
         onNext();
     };
 
+    const handleSignInAgain = () => {
+        const returnTo = `${window.location.pathname}${window.location.search}`;
+        window.location.assign(`/login?intendedRole=owner&returnTo=${encodeURIComponent(returnTo)}`);
+    };
+
     return (
         <Container maxWidth="lg" sx={{ py: 4 }} dir={isRTL ? 'rtl' : 'ltr'}>
             <Box sx={{ textAlign: 'center', mb: 5 }}>
@@ -150,8 +200,8 @@ const ReviewBeforeSubmitStep: React.FC<{ onNext: () => void; onBack: () => void 
                         : `Protected server quotation valid until ${new Date(serverQuote.expiresAtMs).toLocaleTimeString()}. No payment is collected now; the 15% mobilisation is due after the property visit.`)
                     : copy('onboarding.review_info', 'Admin will verify the documents and property location during the site-visit workflow.')}
             </Alert>
-            {quoteError && <Alert severity="error" sx={{ mb: 3 }}>{quoteError}</Alert>}
-            {quoteLoading && <Alert severity="warning" icon={<CircularProgress size={18} />} sx={{ mb: 3 }}>{copy('onboarding.server_quote_loading', 'Generating the protected server quotation…')}</Alert>}
+            {quoteError && <Alert severity="error" sx={{ mb: 3 }} action={quoteNeedsSignIn ? <Button color="inherit" size="small" onClick={handleSignInAgain}>{lang === 'ar' ? 'تسجيل الدخول' : 'Sign in again'}</Button> : undefined}>{quoteError}</Alert>}
+            {quoteLoading && <Alert severity="warning" icon={<CircularProgress size={18} />} sx={{ mb: 3 }}>{authReady ? copy('onboarding.server_quote_loading', 'Generating the protected server quotation…') : (lang === 'ar' ? 'جارٍ استعادة جلسة المالك الآمنة…' : 'Restoring your secure Owner session…')}</Alert>}
 
             <Grid container spacing={3} sx={{ flexDirection: isRTL ? 'row-reverse' : 'row' }}>
                 <Grid item xs={12} md={6}>
