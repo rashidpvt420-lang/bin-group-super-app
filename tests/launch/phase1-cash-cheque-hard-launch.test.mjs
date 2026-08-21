@@ -137,3 +137,37 @@ test('operational snapshot binds hard clearance to the authoritative payment con
   assert.match(source, /paymentConfigHash/);
   assert.match(source, /approvedPaymentMethods/);
 });
+
+test('Admin Production Configuration uses protected server evidence instead of a browser Firestore listener', () => {
+  const settings = readFileSync('apps/admin-panel/src/pages/settings/SettingsPage.tsx', 'utf8');
+  const callable = readFileSync('functions/adminLaunchConfiguration.ts', 'utf8');
+  const runtime = readFileSync('functions/runtime.ts', 'utf8');
+  const required = requiredOperationalGatesForPaymentPolicy('phase1-manual');
+
+  assert.match(settings, /adminGetLaunchConfigurationSummary/);
+  assert.match(settings, /getIdToken\(true\)/);
+  assert.doesNotMatch(settings, /onSnapshot\s*\(/);
+  assert.doesNotMatch(settings, /stripeLiveMode/);
+  for (const gate of required) assert.match(settings, new RegExp(gate));
+
+  assert.match(callable, /adminGetLaunchConfigurationSummary/);
+  assert.match(callable, /enforceAppCheck:\s*true/);
+  assert.match(callable, /actor\.customClaims/);
+  assert.match(callable, /system_health\/admin_summaries/);
+  assert.match(callable, /system_payment_config\/current/);
+  assert.match(callable, /operationalEvidence/);
+  assert.match(runtime, /export \* from "\.\/adminLaunchConfiguration"/);
+});
+
+test('Admin Technician registry reads through protected staff lifecycle instead of querying users in the browser', () => {
+  const technicians = readFileSync('apps/admin-panel/src/pages/technicians/TechniciansManagementPage.tsx', 'utf8');
+
+  assert.match(technicians, /adminGetStaffLifecycle/);
+  assert.match(technicians, /getIdToken\(true\)/);
+  assert.doesNotMatch(technicians, /collection\(db,\s*['"]users['"]\)/);
+  assert.doesNotMatch(technicians, /onSnapshot\s*\(/);
+  assert.doesNotMatch(technicians, /firebase\/firestore/);
+  assert.match(technicians, /adminCreateUser/);
+  assert.match(technicians, /adminUpdateStaffProfile/);
+  assert.match(technicians, /adminOffboardStaff/);
+});

@@ -1,14 +1,13 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   Alert, Box, Button, Chip, CircularProgress, Container, Dialog, DialogActions,
   DialogContent, DialogTitle, FormControlLabel, IconButton, MenuItem, Paper, Stack,
   Switch, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField,
   Tooltip, Typography,
 } from '@mui/material';
-import { Add as AddIcon, Build as BuildIcon, Edit as EditIcon, PersonOff as PersonOffIcon } from '@mui/icons-material';
-import { collection, onSnapshot, query, where } from 'firebase/firestore';
+import { Add as AddIcon, Build as BuildIcon, Edit as EditIcon, PersonOff as PersonOffIcon, Refresh as RefreshIcon } from '@mui/icons-material';
 import { useLanguage } from '@bin/shared';
-import { auth, db, functions, httpsCallable } from '../../lib/firebase';
+import { auth, functions, httpsCallable } from '../../lib/firebase';
 
 type Technician = {
   uid: string;
@@ -24,6 +23,8 @@ type Technician = {
   maxConcurrentJobs?: number;
   emergencyEligible?: boolean;
   onDuty?: boolean;
+  lifecycleState?: string;
+  onboardingComplete?: boolean;
 };
 
 const EMIRATES = ['Dubai', 'Abu Dhabi', 'Sharjah', 'Ajman', 'Umm Al Quwain', 'Ras Al Khaimah', 'Fujairah', 'Al Ain'];
@@ -36,6 +37,7 @@ export default function TechniciansManagementPage() {
   const { t, isRTL } = useLanguage();
   const [techs, setTechs] = useState<Technician[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [openAdd, setOpenAdd] = useState(false);
@@ -53,16 +55,27 @@ export default function TechniciansManagementPage() {
     emergencyEligible: false,
   });
 
-  useEffect(() => {
-    const unsubscribe = onSnapshot(query(collection(db, 'users'), where('role', '==', 'technician')), (snapshot) => {
-      setTechs(snapshot.docs.map((item) => ({ uid: item.id, ...item.data() })) as Technician[]);
-      setLoading(false);
-    }, (error) => {
+  const loadTechnicians = useCallback(async (quiet = false) => {
+    if (quiet) setRefreshing(true); else setLoading(true);
+    setActionError(null);
+    try {
+      const currentUser = auth.currentUser;
+      if (!currentUser) throw new Error('UNAUTHENTICATED: No active administrative session.');
+      await currentUser.getIdToken(true);
+      const getLifecycle = httpsCallable(functions, 'adminGetStaffLifecycle');
+      const response: any = await getLifecycle({});
+      const rows = Array.isArray(response.data?.staff) ? response.data.staff : [];
+      setTechs(rows.filter((member: any) => String(member?.role || '').toLowerCase() === 'technician'));
+    } catch (error) {
+      setTechs([]);
       setActionError(`Technician registry sync failed: ${safeError(error)}`);
+    } finally {
       setLoading(false);
-    });
-    return unsubscribe;
+      setRefreshing(false);
+    }
   }, []);
+
+  useEffect(() => { void loadTechnicians(); }, [loadTechnicians]);
 
   const handleAddTech = async () => {
     setSubmitting(true); setActionError(null); setActionSuccess(null);
@@ -84,6 +97,7 @@ export default function TechniciansManagementPage() {
       setActionSuccess('Technician account created securely. Verification and private-password setup were queued.');
       setOpenAdd(false);
       setNewTech({ email: '', displayName: '', phoneNumber: '', specialization: '' });
+      await loadTechnicians(true);
     } catch (error) {
       setActionError(safeError(error));
     } finally { setSubmitting(false); }
@@ -112,6 +126,7 @@ export default function TechniciansManagementPage() {
       await updateProfile({ uid: selectedTech.uid, ...editTech, role: 'technician' });
       setActionSuccess('Technician profile updated through the protected staff lifecycle.');
       setOpenEdit(false);
+      await loadTechnicians(true);
     } catch (error) {
       setActionError(safeError(error));
     } finally { setSubmitting(false); }
@@ -126,6 +141,7 @@ export default function TechniciansManagementPage() {
       setActionSuccess(`${offboardTarget.displayName} suspended. Auth disabled, refresh tokens revoked and history preserved.`);
       setOffboardTarget(null);
       setOffboardReason('');
+      await loadTechnicians(true);
     } catch (error) {
       setActionError(safeError(error));
     } finally { setSubmitting(false); }
@@ -141,22 +157,25 @@ export default function TechniciansManagementPage() {
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
           <Box>
             <Typography variant="h4" sx={{ fontWeight: 900 }}>{t('nav.technicians')} <Box component="span" sx={{ color: '#10b981' }}>CORPS</Box></Typography>
-            <Typography variant="body2" color="text.secondary">Technician identity, operational profile and offboarding are now tied to the same protected HR lifecycle.</Typography>
+            <Typography variant="body2" color="text.secondary">Technician registry is read through the App Check-protected staff lifecycle. No privileged users-collection browser query is required.</Typography>
           </Box>
-          <Button variant="contained" startIcon={<AddIcon />} onClick={() => setOpenAdd(true)} data-testid="admin-add-technician" sx={{ borderRadius: 100, bgcolor: '#10b981' }}>ADD TECHNICIAN</Button>
+          <Stack direction="row" spacing={1}>
+            <Button variant="outlined" startIcon={refreshing ? <CircularProgress size={16} /> : <RefreshIcon />} onClick={() => void loadTechnicians(true)} disabled={refreshing}>REFRESH</Button>
+            <Button variant="contained" startIcon={<AddIcon />} onClick={() => setOpenAdd(true)} data-testid="admin-add-technician" sx={{ borderRadius: 100, bgcolor: '#10b981' }}>ADD TECHNICIAN</Button>
+          </Stack>
         </Box>
         {actionError && <Alert severity="error">{actionError}</Alert>}
         {actionSuccess && <Alert severity="success">{actionSuccess}</Alert>}
         <Paper sx={{ p: 2 }}><TextField fullWidth size="small" label="Search technician" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} /></Paper>
         <TableContainer component={Paper}>
           <Table>
-            <TableHead><TableRow><TableCell>NAME</TableCell><TableCell>SPECIALIZATION</TableCell><TableCell>EMAIL</TableCell><TableCell>PRIMARY EMIRATE</TableCell><TableCell>STATUS</TableCell><TableCell align="right">ACTIONS</TableCell></TableRow></TableHead>
+            <TableHead><TableRow><TableCell>NAME</TableCell><TableCell>SPECIALIZATION</TableCell><TableCell>EMAIL</TableCell><TableCell>LIFECYCLE</TableCell><TableCell>STATUS</TableCell><TableCell align="right">ACTIONS</TableCell></TableRow></TableHead>
             <TableBody>
               {filteredTechs.map((tech) => <TableRow key={tech.uid} hover>
                 <TableCell><Stack direction="row" spacing={1} alignItems="center"><BuildIcon sx={{ fontSize: 16, color: '#10b981' }} /><b>{tech.displayName || 'N/A'}</b></Stack></TableCell>
                 <TableCell><Chip label={tech.specialization || 'General Maintenance'} size="small" variant="outlined" /></TableCell>
                 <TableCell>{tech.email}</TableCell>
-                <TableCell>{tech.primaryEmirate || 'Unassigned'}</TableCell>
+                <TableCell><Chip label={String(tech.lifecycleState || (tech.onboardingComplete ? 'ACTIVE' : 'ONBOARDING')).replace(/_/g, ' ')} size="small" variant="outlined" /></TableCell>
                 <TableCell><Chip label={String(tech.status || 'ACTIVE').toUpperCase()} size="small" color={String(tech.status).toUpperCase() === 'SUSPENDED' ? 'error' : 'success'} /></TableCell>
                 <TableCell align="right"><Tooltip title="Edit protected technician profile"><IconButton onClick={() => openEditTech(tech)}><EditIcon /></IconButton></Tooltip>{String(tech.status).toUpperCase() !== 'SUSPENDED' && <Tooltip title="Suspend and offboard safely"><IconButton color="error" onClick={() => setOffboardTarget(tech)}><PersonOffIcon /></IconButton></Tooltip>}</TableCell>
               </TableRow>)}
