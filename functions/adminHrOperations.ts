@@ -37,7 +37,7 @@ export const adminGetHrOperations = onCall({ cors: true, region: "europe-west3",
     db.collection("staffLeaveRequests").orderBy("createdAt", "desc").limit(100).get().catch(() => null),
     db.collection("staffHrDocuments").orderBy("createdAt", "desc").limit(100).get().catch(() => null),
   ]);
-  const mapDocs = (snapshot: FirebaseFirestore.QuerySnapshot | null) => snapshot ? snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })) : [];
+  const mapDocs = (snapshot: any) => snapshot ? snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() })) : [];
   return {
     success: true,
     attendance: mapDocs(attendanceSnap),
