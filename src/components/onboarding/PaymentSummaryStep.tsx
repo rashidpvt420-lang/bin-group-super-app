@@ -4,7 +4,7 @@ import {
   Typography
 } from '@mui/material';
 import {
-  ArrowLeft, Banknote, CheckCircle2, ChevronRight, Lock, ReceiptText, ShieldCheck,
+  ArrowLeft, Banknote, CheckCircle2, ChevronRight, Lock, ReceiptText,
   TrendingUp
 } from 'lucide-react';
 import { useOnboardingStore } from '../../store/onboardingStore';
@@ -13,15 +13,11 @@ import { formatAED } from '../../utils/formatters';
 import { functions, httpsCallable } from '../../lib/firebase';
 import { useLanguage } from '@bin/shared';
 
-type PaymentMethod = 'CASH' | 'CHEQUE' | 'BANK_TRANSFER' | 'STRIPE';
+type PaymentMethod = 'CASH' | 'CHEQUE';
 type PaymentConfiguration = {
   version: string;
   effectiveAtMs: number;
   legalBeneficiary: string;
-  bankName: string;
-  accountNumber: string;
-  iban: string;
-  swiftBic: string;
   currency: 'AED';
   officeLocation: string;
   approvedMethods: PaymentMethod[];
@@ -37,11 +33,10 @@ type CanonicalQuote = {
   version?: string;
 };
 
+const PHASE1_METHODS: PaymentMethod[] = ['CASH', 'CHEQUE'];
 const methodDefinitions: Array<{ method: PaymentMethod; icon: React.ReactNode; en: string; ar: string; detailEn?: string; detailAr?: string }> = [
   { method: 'CHEQUE', icon: <ReceiptText size={24} />, en: 'Cheque', ar: 'شيك', detailEn: 'Receipt required', detailAr: 'الإيصال مطلوب' },
   { method: 'CASH', icon: <Banknote size={24} />, en: 'Cash', ar: 'نقداً', detailEn: 'Approved office only', detailAr: 'في المكتب المعتمد فقط' },
-  { method: 'BANK_TRANSFER', icon: <Banknote size={24} />, en: 'Bank Transfer', ar: 'تحويل بنكي', detailEn: 'Manual verification', detailAr: 'تحقق يدوي' },
-  { method: 'STRIPE', icon: <ShieldCheck size={24} />, en: 'Secure Card Payment', ar: 'دفع آمن بالبطاقة', detailEn: 'Secure hosted checkout', detailAr: 'صفحة دفع آمنة' },
 ];
 const errorMessage = (error: unknown, fallback: string) => {
   const value = error as { message?: string; details?: string };
@@ -84,6 +79,17 @@ const PaymentSummaryStep: React.FC<{ onNext: () => void; onBack: () => void }> =
         ) {
           throw new Error('The server returned an invalid corporate payment configuration.');
         }
+
+        const normalizedMethods = [...new Set(nextConfiguration.approvedMethods)]
+          .map((method) => String(method).trim().toUpperCase())
+          .sort();
+        if (JSON.stringify(normalizedMethods) !== JSON.stringify([...PHASE1_METHODS].sort())) {
+          throw new Error(copy(
+            'Phase 1 accepts Cash and Cheque only. Refresh after the corporate payment configuration is corrected.',
+            'تقبل المرحلة الأولى الدفع النقدي والشيك فقط. حدّث الصفحة بعد تصحيح إعداد الدفع المؤسسي.',
+          ));
+        }
+
         const nextQuote = quoteResult.data as CanonicalQuote;
         if (!nextQuote?.quoteHash || !/^[a-f0-9]{64}$/i.test(nextQuote.quoteHash) || nextQuote.annualContractValue <= 0 || nextQuote.activationDeposit <= 0) {
           throw new Error(copy('The server returned an invalid portfolio quotation.', 'أرجع الخادم عرض محفظة غير صالح.'));
@@ -139,10 +145,6 @@ const PaymentSummaryStep: React.FC<{ onNext: () => void; onBack: () => void }> =
       const manifest = {
         payableTo: configuration.legalBeneficiary,
         legalBeneficiary: configuration.legalBeneficiary,
-        bankName: configuration.bankName,
-        accountNumber: configuration.accountNumber,
-        iban: configuration.iban,
-        swiftBic: configuration.swiftBic,
         officeLocation: configuration.officeLocation,
         amount: activationDeposit,
         annualContractValue: annualTotal,
@@ -164,10 +166,6 @@ const PaymentSummaryStep: React.FC<{ onNext: () => void; onBack: () => void }> =
       setPaymentManifest(manifest);
       setPaymentRequested(true);
       setPaymentVerified(false);
-      if (method === 'STRIPE') {
-        onNext();
-        return;
-      }
       setSnackbar({ open: true, message: copy('Verified portfolio payment instructions generated.', 'تم إنشاء تعليمات دفع موثقة للمحفظة.'), severity: 'success' });
     } catch (error) {
       setSnackbar({ open: true, message: errorMessage(error, copy('Unable to generate payment instructions.', 'تعذر إنشاء تعليمات الدفع.')), severity: 'error' });
@@ -188,13 +186,8 @@ const PaymentSummaryStep: React.FC<{ onNext: () => void; onBack: () => void }> =
         <Paper sx={{ mt: 2, p: 3, bgcolor: 'rgba(255,255,255,0.03)', borderRadius: 4, border: '1px solid rgba(255,255,255,0.08)' }}>
           <Stack spacing={2} divider={<Divider sx={{ borderColor: 'rgba(255,255,255,0.08)' }} />}>
             <Box><Typography variant="caption" color={binThemeTokens.textSecondary}>{copy('Legal beneficiary', 'المستفيد القانوني')}</Typography><Typography fontWeight={800} color={binThemeTokens.textPrimary}>{paymentManifest.legalBeneficiary}</Typography></Box>
-            {paymentMethod === 'BANK_TRANSFER' && <>
-              <Box><Typography variant="caption" color={binThemeTokens.textSecondary}>{copy('Bank', 'البنك')}</Typography><Typography fontWeight={800} color={binThemeTokens.textPrimary}>{paymentManifest.bankName}</Typography></Box>
-              <Box><Typography variant="caption" color={binThemeTokens.textSecondary}>{copy('Account number', 'رقم الحساب')}</Typography><Typography fontWeight={800} color={binThemeTokens.textPrimary}>{paymentManifest.accountNumber}</Typography></Box>
-              <Box><Typography variant="caption" color={binThemeTokens.textSecondary}>IBAN</Typography><Typography fontWeight={800} color={binThemeTokens.textPrimary} sx={{ wordBreak: 'break-all' }}>{paymentManifest.iban}</Typography></Box>
-              <Box><Typography variant="caption" color={binThemeTokens.textSecondary}>SWIFT / BIC</Typography><Typography fontWeight={800} color={binThemeTokens.textPrimary}>{paymentManifest.swiftBic}</Typography></Box>
-            </>}
             {paymentMethod === 'CASH' && <Box><Typography variant="caption" color={binThemeTokens.textSecondary}>{copy('Approved office', 'المكتب المعتمد')}</Typography><Typography fontWeight={800} color={binThemeTokens.textPrimary}>{paymentManifest.officeLocation || copy('Contact BIN GROUP before paying cash.', 'تواصل مع BIN GROUP قبل الدفع النقدي.')}</Typography></Box>}
+            {paymentMethod === 'CHEQUE' && <Box><Typography variant="caption" color={binThemeTokens.textSecondary}>{copy('Cheque submission', 'تسليم الشيك')}</Typography><Typography fontWeight={800} color={binThemeTokens.textPrimary}>{paymentManifest.officeLocation || copy('Submit the cheque at BIN GROUP Headquarters.', 'سلّم الشيك في المقر الرئيسي لمجموعة بن.')}</Typography></Box>}
             <Box><Typography variant="caption" color={binThemeTokens.textSecondary}>{copy('Due now', 'المستحق الآن')}</Typography><Typography variant="h5" fontWeight={950} color={binThemeTokens.goldLight}>AED {formatAED(paymentManifest.amount)}</Typography></Box>
             <Box><Typography variant="caption" color={binThemeTokens.textSecondary}>{copy('Mandatory reference', 'المرجع الإلزامي')}</Typography><Typography fontWeight={800} color={binThemeTokens.textPrimary} sx={{ wordBreak: 'break-all' }}>{paymentManifest.reference}</Typography></Box>
           </Stack>
@@ -212,7 +205,13 @@ const PaymentSummaryStep: React.FC<{ onNext: () => void; onBack: () => void }> =
       <Grid container spacing={4}>
         <Grid item xs={12} md={7}>
           <Typography variant="h4" fontWeight={950} sx={{ mb: 1, color: binThemeTokens.gold }}>{copy('Portfolio Payment Options', 'خيارات دفع المحفظة')}</Typography>
-          <Typography color={binThemeTokens.textSecondary} sx={{ mb: 4 }}>{copy(`One server-authoritative agreement for ${totalProperties} propert${totalProperties === 1 ? 'y' : 'ies'}.`, `اتفاقية واحدة معتمدة من الخادم لعدد ${totalProperties} عقار.`)}</Typography>
+          <Typography color={binThemeTokens.textSecondary} sx={{ mb: 2 }}>{copy(`One server-authoritative agreement for ${totalProperties} propert${totalProperties === 1 ? 'y' : 'ies'}.`, `اتفاقية واحدة معتمدة من الخادم لعدد ${totalProperties} عقار.`)}</Typography>
+          <Alert severity="info" sx={{ mb: 4 }}>
+            {copy(
+              'Phase 1 payment methods: Cash or Cheque at BIN GROUP Headquarters only.',
+              'طرق الدفع في المرحلة الأولى: نقداً أو شيك فقط في المقر الرئيسي لمجموعة بن.',
+            )}
+          </Alert>
           <Paper sx={{ p: 4, borderRadius: 6, bgcolor: 'rgba(22,22,24,0.6)', border: '1px solid rgba(198,167,94,0.1)', mb: 4 }}>
             <Typography variant="h6" fontWeight={950} color={binThemeTokens.gold} mb={3}>{copy('Protected Portfolio Summary', 'ملخص المحفظة المحمي')}</Typography>
             <Stack spacing={3} divider={<Divider sx={{ borderColor: 'rgba(198,167,94,0.1)' }} />}>
@@ -240,7 +239,7 @@ const PaymentSummaryStep: React.FC<{ onNext: () => void; onBack: () => void }> =
                 const allowed = approvedMethods.has(definition.method);
                 return <Button key={definition.method} variant="outlined" fullWidth onClick={() => void handleGenerateManifest(definition.method)} disabled={isGenerating || !hasValidAmount || !configuration || !allowed} sx={{ py: 2, borderRadius: 4, borderColor: 'rgba(198,167,94,0.3)', color: binThemeTokens.textPrimary, display: 'flex', justifyContent: 'space-between' }}><Box display="flex" alignItems="center" gap={2} textAlign={isRTL ? 'right' : 'left'}><Box color={binThemeTokens.gold} display="flex">{definition.icon}</Box><Box><Typography fontWeight={800}>{copy(definition.en, definition.ar)}</Typography><Typography variant="caption" color={binThemeTokens.textSecondary}>{copy(definition.detailEn || '', definition.detailAr || '')}</Typography></Box></Box><ChevronRight size={20} style={{ transform: isRTL ? 'rotate(180deg)' : undefined }} /></Button>;
               })}</Stack>
-            ) : <Box>{renderPaymentInstructions()}{paymentMethod !== 'STRIPE' && <Button fullWidth variant="contained" onClick={handleContinueAfterManualManifest} sx={{ mt: 3, background: 'linear-gradient(135deg, #C6A75E, #E6C77A)', color: '#0B0B0C', py: 2, fontWeight: 950, borderRadius: 4 }}>{copy('Continue to Evidence Submission', 'المتابعة إلى إرسال الإثبات')}</Button>}<Button fullWidth variant="text" onClick={() => { setPaymentManifest(null); setPaymentMethod(null); }} sx={{ mt: 1, color: binThemeTokens.textSecondary, fontWeight: 900 }}>{copy('Change Method', 'تغيير الطريقة')}</Button></Box> : (
+            ) : <Box>{renderPaymentInstructions()}<Button fullWidth variant="contained" onClick={handleContinueAfterManualManifest} sx={{ mt: 3, background: 'linear-gradient(135deg, #C6A75E, #E6C77A)', color: '#0B0B0C', py: 2, fontWeight: 950, borderRadius: 4 }}>{copy('Continue to Evidence Submission', 'المتابعة إلى إرسال الإثبات')}</Button><Button fullWidth variant="text" onClick={() => { setPaymentManifest(null); setPaymentMethod(null); }} sx={{ mt: 1, color: binThemeTokens.textSecondary, fontWeight: 900 }}>{copy('Change Method', 'تغيير الطريقة')}</Button></Box> : (
               <Box sx={{ p: 4, bgcolor: 'rgba(74,222,128,0.1)', borderRadius: 6, border: '1px solid rgba(74,222,128,0.3)' }}><CheckCircle2 color="#4ADE80" size={48} /><Typography variant="h5" fontWeight={950} color="#4ADE80" sx={{ mt: 2 }}>{copy('Payment Verified', 'تم التحقق من الدفع')}</Typography><Button fullWidth variant="contained" onClick={onNext} sx={{ mt: 3, bgcolor: '#4ADE80', color: '#0B0B0C', py: 2, fontWeight: 950 }}>{copy('Proceed', 'متابعة')}</Button></Box>
             )}
             {isGenerating && <CircularProgress size={22} sx={{ mt: 3 }} />}

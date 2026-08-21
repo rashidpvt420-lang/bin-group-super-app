@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import crypto from 'node:crypto';
 import admin from 'firebase-admin';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
@@ -6,7 +7,7 @@ import { initializeFirebaseAdmin, resolveFirebaseAdminProjectId } from './fireba
 import { gitSha, PRODUCTION } from './lib/launch-honesty.mjs';
 import {
   operationalReadinessPath,
-  REQUIRED_OPERATIONAL_GATES,
+  requiredOperationalGatesForPaymentPolicy,
   validateOperationalReadinessReport,
 } from './lib/hard-launch-gate.mjs';
 
@@ -17,6 +18,40 @@ function timestampToIso(value) {
   if (typeof value === 'number') return new Date(value).toISOString();
   if (typeof value._seconds === 'number') return new Date(value._seconds * 1000).toISOString();
   return '';
+}
+
+function timestampToMillis(value) {
+  if (!value) return 0;
+  if (typeof value.toMillis === 'function') return value.toMillis();
+  if (typeof value.toDate === 'function') return value.toDate().getTime();
+  if (typeof value === 'number') return value;
+  const parsed = Date.parse(String(value));
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+const text = (value) => String(value ?? '').trim();
+const upper = (value) => text(value).toUpperCase();
+const normalizeMethods = (value) => (
+  Array.isArray(value)
+    ? [...new Set(value.map(upper).filter(Boolean))].sort()
+    : []
+);
+
+function canonicalPaymentConfigHash(source) {
+  const approvedMethods = normalizeMethods(source.approvedMethods);
+  const configuration = {
+    version: text(source.version),
+    effectiveAtMs: timestampToMillis(source.effectiveAt || source.updatedAt),
+    legalBeneficiary: text(source.legalBeneficiary || source.beneficiaryName),
+    bankName: text(source.bankName),
+    accountNumber: text(source.accountNumber).replace(/\s+/g, ''),
+    iban: upper(source.iban).replace(/\s+/g, ''),
+    swiftBic: upper(source.swiftBic || source.swift || source.bic).replace(/\s+/g, ''),
+    currency: upper(source.currency),
+    officeLocation: text(source.officeLocation || source.cashOfficeLocation),
+    approvedMethods,
+  };
+  return crypto.createHash('sha256').update(JSON.stringify(configuration)).digest('hex');
 }
 
 if (process.env.GITHUB_ACTIONS !== 'true') {
@@ -46,12 +81,22 @@ const projectId = resolveFirebaseAdminProjectId();
 if (projectId !== PRODUCTION.projectId) throw new Error(`Unexpected project: ${projectId}`);
 initializeFirebaseAdmin(admin, projectId);
 
-const snap = await admin.firestore().doc('system_health/admin_summaries').get();
-if (!snap.exists) throw new Error('Canonical system_health/admin_summaries record does not exist.');
-const source = snap.data() || {};
+const [healthSnap, paymentConfigSnap] = await Promise.all([
+  admin.firestore().doc('system_health/admin_summaries').get(),
+  admin.firestore().doc('system_payment_config/current').get(),
+]);
+if (!healthSnap.exists) throw new Error('Canonical system_health/admin_summaries record does not exist.');
+if (!paymentConfigSnap.exists) throw new Error('Canonical system_payment_config/current record does not exist.');
+
+const source = healthSnap.data() || {};
 const sourceGates = source.operationalEvidence && typeof source.operationalEvidence === 'object'
   ? source.operationalEvidence
   : {};
+const paymentConfig = paymentConfigSnap.data() || {};
+const paymentPolicy = text(paymentConfig.policy).toLowerCase();
+const REQUIRED_OPERATIONAL_GATES = requiredOperationalGatesForPaymentPolicy(paymentPolicy);
+const approvedPaymentMethods = normalizeMethods(paymentConfig.approvedMethods);
+const paymentConfigHash = canonicalPaymentConfigHash(paymentConfig);
 
 const gates = {};
 for (const key of REQUIRED_OPERATIONAL_GATES) {
@@ -81,6 +126,13 @@ const report = {
   projectId,
   source: 'firestore-system-health-admin-summaries',
   sourceDocument: 'system_health/admin_summaries',
+  paymentPolicy,
+  paymentConfigSourceDocument: 'system_payment_config/current',
+  paymentConfigVersion: text(paymentConfig.version),
+  paymentConfigHash,
+  approvedPaymentMethods,
+  bankTransferEnabled: paymentConfig.bankTransferEnabled === true,
+  stripeEnabled: paymentConfig.stripeEnabled === true,
   gates,
   fetchedAt: new Date().toISOString(),
   generatedByWorkflow: true,
@@ -102,4 +154,7 @@ if (errors.length) {
 }
 
 writeFileSync(output, `${JSON.stringify(report, null, 2)}\n`);
-console.log(`[operational-readiness] PASS — wrote ${output}`);
+console.log(
+  `[operational-readiness] PASS policy=${paymentPolicy} gates=${REQUIRED_OPERATIONAL_GATES.length} paymentConfig=${report.paymentConfigVersion} hash=${paymentConfigHash.slice(0, 12)}…`,
+);
+console.log(`[operational-readiness] wrote ${output}`);
