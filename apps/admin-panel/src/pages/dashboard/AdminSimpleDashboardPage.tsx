@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert, Box, Button, Chip, CircularProgress, Grid, Paper, Stack, Typography, alpha } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -6,8 +6,11 @@ import {
   Map, RefreshCw, ShieldAlert, ShieldCheck, TicketCheck, UserCheck, UserPlus, Users, Wrench,
 } from 'lucide-react';
 import { functions, httpsCallable } from '../../lib/firebase';
+import { useAuth } from '../../context/AuthContext';
+import { canAccessAdminPath, isFullAdminUser } from '../../security/staffAccessPolicy';
 
 const gold = '#DAA520';
+const HR_READER_ROLES = new Set(['hr_admin', 'hr_manager', 'hr_staff']);
 
 const slaPolicy = [
   { key: 'EMERGENCY', label: 'Emergency', minutes: 30, route: '/sos' },
@@ -47,6 +50,7 @@ function errorText(error: any) {
 
 export default function AdminSimpleDashboardPage() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [hr, setHr] = useState<HrSummary>(emptyHr);
   const [ops, setOps] = useState<OpsCounts>(emptyOps);
   const [loading, setLoading] = useState(true);
@@ -55,38 +59,59 @@ export default function AdminSimpleDashboardPage() {
   const [generatedAt, setGeneratedAt] = useState<string | null>(null);
   const [coverageNote, setCoverageNote] = useState<string>('');
 
+  const fullAdmin = isFullAdminUser(user);
+  const normalizedRole = String(user?.role || user?.claims?.role || '').trim().toLowerCase();
+  const hrReader = fullAdmin || HR_READER_ROLES.has(normalizedRole);
+
+  const visibleActions = useMemo(
+    () => adminActions.filter((action) => canAccessAdminPath(user, action.route)),
+    [user],
+  );
+  const visibleSlaPolicy = useMemo(
+    () => slaPolicy.filter((policy) => canAccessAdminPath(user, policy.route)),
+    [user],
+  );
+
   const refresh = useCallback(async (quiet = false) => {
     quiet ? setRefreshing(true) : setLoading(true);
     try {
-      const [hrResponse, opsResponse]: any[] = await Promise.all([
-        httpsCallable(functions, 'adminGetHrCommandSnapshot')({}),
-        httpsCallable(functions, 'adminGetCommandCenterSummary')({}),
-      ]);
-      setHr({ ...emptyHr, ...(hrResponse.data?.summary || {}) });
-      setOps({ ...emptyOps, ...(opsResponse.data?.counts || {}) });
-      setGeneratedAt(opsResponse.data?.generatedAt || hrResponse.data?.generatedAt || new Date().toISOString());
-      setCoverageNote(opsResponse.data?.coverage?.note || 'Live counts loaded from canonical operational collections.');
+      if (fullAdmin) {
+        const [hrResponse, opsResponse]: any[] = await Promise.all([
+          httpsCallable(functions, 'adminGetHrCommandSnapshot')({}),
+          httpsCallable(functions, 'adminGetCommandCenterSummary')({}),
+        ]);
+        setHr({ ...emptyHr, ...(hrResponse.data?.summary || {}) });
+        setOps({ ...emptyOps, ...(opsResponse.data?.counts || {}) });
+        setGeneratedAt(opsResponse.data?.generatedAt || hrResponse.data?.generatedAt || new Date().toISOString());
+        setCoverageNote(opsResponse.data?.coverage?.note || 'Live counts loaded from canonical operational collections.');
+      } else if (hrReader) {
+        const hrResponse: any = await httpsCallable(functions, 'adminGetHrCommandSnapshot')({});
+        setHr({ ...emptyHr, ...(hrResponse.data?.summary || {}) });
+        setOps(emptyOps);
+        setGeneratedAt(hrResponse.data?.generatedAt || new Date().toISOString());
+        setCoverageNote('HR-scoped dashboard: only authorized HR lifecycle counters are displayed. Company-wide security/owner/contract metrics remain Founder/Admin-only.');
+      } else {
+        setHr(emptyHr);
+        setOps(emptyOps);
+        setGeneratedAt(new Date().toISOString());
+        setCoverageNote('Role-scoped dashboard: operational shortcuts are filtered to your server-authorized modules. Founder/Admin and HR-sensitive counters are intentionally hidden.');
+      }
       setError(null);
     } catch (err) {
       setError(errorText(err));
     } finally {
       setLoading(false); setRefreshing(false);
     }
-  }, []);
+  }, [fullAdmin, hrReader]);
 
   useEffect(() => { void refresh(); }, [refresh]);
 
-  const liveCards = [
+  const fullAdminCards = [
     { label: 'Open emergency tickets', value: ops.openEmergencyTickets, route: '/tickets', icon: <AlertTriangle size={18} />, danger: ops.openEmergencyTickets > 0 },
     { label: 'Overdue SLA', value: ops.overdueSla, route: '/tickets', icon: <Gauge size={18} />, danger: ops.overdueSla > 0 },
     { label: 'Unresolved SOS', value: ops.unresolvedSos, route: '/sos', icon: <ShieldAlert size={18} />, danger: ops.unresolvedSos > 0 },
     { label: 'Technicians on duty', value: ops.techniciansOnDuty, route: '/technicians', icon: <Wrench size={18} /> },
     { label: 'Technicians unavailable', value: ops.techniciansUnavailable, route: '/technicians', icon: <AlertTriangle size={18} />, danger: ops.techniciansUnavailable > 0 },
-    { label: 'Pending staff invitations', value: hr.pendingInvitations, route: '/hr', icon: <UserPlus size={18} />, danger: hr.pendingInvitations > 0 },
-    { label: 'HR documents expiring', value: hr.documentsExpiring, route: '/hr', icon: <FileWarning size={18} />, danger: hr.documentsExpiring > 0 },
-    { label: 'Leave approvals', value: hr.pendingLeave, route: '/hr', icon: <CalendarClock size={18} />, danger: hr.pendingLeave > 0 },
-    { label: 'Absent staff today', value: hr.absentToday, route: '/hr', icon: <Users size={18} />, danger: hr.absentToday > 0 },
-    { label: 'Payroll awaiting closure', value: hr.payrollPending, route: '/hr', icon: <CreditCard size={18} />, danger: hr.payrollPending > 0 },
     { label: 'Contracts expiring ≤45d', value: ops.contractsExpiring, route: '/contracts', icon: <FileWarning size={18} />, danger: ops.contractsExpiring > 0 },
     { label: 'Owner activations pending', value: ops.ownerActivationsPending, route: '/owners', icon: <UserCheck size={18} />, danger: ops.ownerActivationsPending > 0 },
     { label: 'Open tenant complaints', value: ops.tenantComplaints, route: '/tickets', icon: <TicketCheck size={18} />, danger: ops.tenantComplaints > 0 },
@@ -94,6 +119,17 @@ export default function AdminSimpleDashboardPage() {
     { label: 'Security alerts · 24h', value: ops.securityAlerts24h, route: '/audit-shield', icon: <ShieldAlert size={18} />, danger: ops.securityAlerts24h > 0 },
     { label: 'Compliance attention', value: ops.complianceAttention, route: '/compliance', icon: <ShieldCheck size={18} />, danger: ops.complianceAttention > 0 },
   ];
+  const hrCards = [
+    { label: 'Pending staff invitations', value: hr.pendingInvitations, route: '/hr', icon: <UserPlus size={18} />, danger: hr.pendingInvitations > 0 },
+    { label: 'HR documents expiring', value: hr.documentsExpiring, route: '/hr', icon: <FileWarning size={18} />, danger: hr.documentsExpiring > 0 },
+    { label: 'Leave approvals', value: hr.pendingLeave, route: '/hr', icon: <CalendarClock size={18} />, danger: hr.pendingLeave > 0 },
+    { label: 'Absent staff today', value: hr.absentToday, route: '/hr', icon: <Users size={18} />, danger: hr.absentToday > 0 },
+    { label: 'Payroll awaiting closure', value: hr.payrollPending, route: '/hr', icon: <CreditCard size={18} />, danger: hr.payrollPending > 0 },
+  ];
+  const liveCards = [
+    ...(fullAdmin ? fullAdminCards : []),
+    ...(hrReader ? hrCards : []),
+  ].filter((card) => canAccessAdminPath(user, card.route));
 
   if (loading) return <Box sx={{ minHeight: '75vh', display: 'grid', placeItems: 'center', bgcolor: '#020617' }}><CircularProgress sx={{ color: gold }} /></Box>;
 
@@ -102,26 +138,32 @@ export default function AdminSimpleDashboardPage() {
       <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" alignItems={{ xs: 'stretch', md: 'center' }} spacing={2} sx={{ mb: 4 }}>
         <Box>
           <Typography variant="overline" sx={{ color: gold, fontWeight: 950, letterSpacing: 3 }}>ADMIN COMMAND CENTER</Typography>
-          <Typography variant="h3" fontWeight={950}>Live Operations Pulse</Typography>
-          <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.55)', mt: 1 }}>No placeholder pilot percentages. These counters come from live canonical HR, ticket, technician, owner, contract, mail and security records.</Typography>
+          <Typography variant="h3" fontWeight={950}>{fullAdmin ? 'Live Operations Pulse' : hrReader ? 'HR Operations Pulse' : 'Role Command Center'}</Typography>
+          <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.55)', mt: 1 }}>
+            {fullAdmin
+              ? 'No placeholder pilot percentages. Counters come from live canonical HR, ticket, technician, owner, contract, mail and security records.'
+              : hrReader
+                ? 'Only HR-authorized lifecycle counters are loaded. Private HR values remain subject to the server-side HR manager boundary.'
+                : 'Only shortcuts allowed by your role and server-issued module claims are shown. Sensitive Founder/Admin and HR metrics are not requested.'}
+          </Typography>
           {generatedAt && <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.35)' }}>Snapshot: {new Date(generatedAt).toLocaleString()}</Typography>}
         </Box>
-        <Button startIcon={<RefreshCw size={17} />} variant="outlined" onClick={() => refresh(true)} disabled={refreshing} sx={{ borderColor: alpha(gold, 0.5), color: gold }}>{refreshing ? 'SYNCING' : 'REFRESH LIVE DATA'}</Button>
+        {(fullAdmin || hrReader) && <Button startIcon={<RefreshCw size={17} />} variant="outlined" onClick={() => refresh(true)} disabled={refreshing} sx={{ borderColor: alpha(gold, 0.5), color: gold }}>{refreshing ? 'SYNCING' : 'REFRESH LIVE DATA'}</Button>}
       </Stack>
 
       {error && <Alert severity="error" sx={{ mb: 3 }}>{error}</Alert>}
       <Alert severity="info" sx={{ mb: 3 }}>{coverageNote}</Alert>
 
-      <Grid container spacing={2} sx={{ mb: 5 }}>
+      {liveCards.length > 0 && <Grid container spacing={2} sx={{ mb: 5 }}>
         {liveCards.map((card) => <Grid item xs={12} sm={6} md={4} lg={3} key={card.label}><Paper onClick={() => navigate(card.route)} sx={{ p: 2.4, height: '100%', cursor: 'pointer', borderRadius: 3, bgcolor: card.danger ? alpha('#ef4444', 0.08) : 'rgba(15,23,42,0.72)', border: `1px solid ${card.danger ? alpha('#ef4444', 0.35) : 'rgba(255,255,255,0.06)'}`, '&:hover': { borderColor: alpha(gold, 0.5), transform: 'translateY(-1px)' }, transition: '0.18s ease' }}><Stack direction="row" justifyContent="space-between" alignItems="flex-start"><Box><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 800 }}>{card.label.toUpperCase()}</Typography><Typography variant="h4" fontWeight={950} sx={{ mt: 0.5, color: card.danger ? '#fca5a5' : '#fff' }}>{card.value}</Typography></Box><Box sx={{ p: 1, borderRadius: 2, bgcolor: alpha(card.danger ? '#ef4444' : gold, 0.12), color: card.danger ? '#f87171' : gold }}>{card.icon}</Box></Stack></Paper></Grid>)}
-      </Grid>
+      </Grid>}
 
       <Grid container spacing={3} sx={{ mb: 5 }}>
-        <Grid item xs={12} lg={8}><Paper sx={{ p: 3, bgcolor: 'rgba(15,23,42,0.72)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 4 }}><Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}><Box><Typography variant="h6" fontWeight={950}>Admin action grid</Typography><Typography variant="caption" color="text.secondary">Every card routes to an operational surface; HR identity and Technician operations remain separated.</Typography></Box><Chip label={`${hr.activeStaff}/${hr.totalStaff} STAFF ACTIVE`} size="small" color="success" /></Stack><Grid container spacing={2}>{adminActions.map((action) => <Grid item xs={12} sm={6} key={action.id}><Paper onClick={() => navigate(action.route)} sx={{ p: 2, cursor: 'pointer', bgcolor: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 3, '&:hover': { borderColor: alpha(gold, 0.45) } }}><Stack direction="row" spacing={2}><Box sx={{ color: gold }}>{action.icon}</Box><Box><Typography fontWeight={900}>{action.label}</Typography><Typography variant="caption" color="text.secondary">{action.desc}</Typography></Box></Stack></Paper></Grid>)}</Grid></Paper></Grid>
-        <Grid item xs={12} lg={4}><Paper sx={{ p: 3, height: '100%', bgcolor: 'rgba(15,23,42,0.72)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 4 }}><Typography variant="h6" fontWeight={950} sx={{ mb: 2 }}>SLA policy reference</Typography><Stack spacing={1.2}>{slaPolicy.map((policy) => <Stack key={policy.key} direction="row" justifyContent="space-between" alignItems="center" onClick={() => navigate(policy.route)} sx={{ p: 1.4, borderRadius: 2, bgcolor: 'rgba(255,255,255,0.025)', cursor: 'pointer' }}><Stack direction="row" spacing={1} alignItems="center"><CheckCircle2 size={15} color={gold} /><Typography variant="body2" fontWeight={800}>{policy.label}</Typography></Stack><Chip label={`${policy.minutes} MIN`} size="small" /></Stack>)}</Stack></Paper></Grid>
+        <Grid item xs={12} lg={visibleSlaPolicy.length > 0 ? 8 : 12}><Paper sx={{ p: 3, bgcolor: 'rgba(15,23,42,0.72)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 4 }}><Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}><Box><Typography variant="h6" fontWeight={950}>Authorized action grid</Typography><Typography variant="caption" color="text.secondary">Cards are filtered through the same role/module policy used by ProtectedRoute.</Typography></Box>{hrReader && <Chip label={`${hr.activeStaff}/${hr.totalStaff} STAFF ACTIVE`} size="small" color="success" />}</Stack><Grid container spacing={2}>{visibleActions.map((action) => <Grid item xs={12} sm={6} key={action.id}><Paper onClick={() => navigate(action.route)} sx={{ p: 2, cursor: 'pointer', bgcolor: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 3, '&:hover': { borderColor: alpha(gold, 0.45) } }}><Stack direction="row" spacing={2}><Box sx={{ color: gold }}>{action.icon}</Box><Box><Typography fontWeight={900}>{action.label}</Typography><Typography variant="caption" color="text.secondary">{action.desc}</Typography></Box></Stack></Paper></Grid>)}{visibleActions.length === 0 && <Grid item xs={12}><Alert severity="warning">No dashboard shortcuts are currently granted by this account's module claims. Ask an authorized Admin to review Staff Access.</Alert></Grid>}</Grid></Paper></Grid>
+        {visibleSlaPolicy.length > 0 && <Grid item xs={12} lg={4}><Paper sx={{ p: 3, height: '100%', bgcolor: 'rgba(15,23,42,0.72)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 4 }}><Typography variant="h6" fontWeight={950} sx={{ mb: 2 }}>SLA policy reference</Typography><Stack spacing={1.2}>{visibleSlaPolicy.map((policy) => <Stack key={policy.key} direction="row" justifyContent="space-between" alignItems="center" onClick={() => navigate(policy.route)} sx={{ p: 1.4, borderRadius: 2, bgcolor: 'rgba(255,255,255,0.025)', cursor: 'pointer' }}><Stack direction="row" spacing={1} alignItems="center"><CheckCircle2 size={15} color={gold} /><Typography variant="body2" fontWeight={800}>{policy.label}</Typography></Stack><Chip label={`${policy.minutes} MIN`} size="small" /></Stack>)}</Stack></Paper></Grid>}
       </Grid>
 
-      <Paper sx={{ p: 3, borderRadius: 4, bgcolor: alpha(gold, 0.06), border: `1px solid ${alpha(gold, 0.2)}` }}><Typography variant="subtitle2" fontWeight={950} color={gold}>LAUNCH EVIDENCE SEPARATION</Typography><Typography variant="body2" sx={{ mt: 0.5, color: 'rgba(255,255,255,0.65)' }}>This dashboard is operational telemetry only. It does not certify a deployment, a protected workflow, or a Hard Public Launch exact SHA. After this PR is merged, production evidence must be regenerated for that new merge SHA.</Typography></Paper>
+      {fullAdmin && <Paper sx={{ p: 3, borderRadius: 4, bgcolor: alpha(gold, 0.06), border: `1px solid ${alpha(gold, 0.2)}` }}><Typography variant="subtitle2" fontWeight={950} color={gold}>LAUNCH EVIDENCE SEPARATION</Typography><Typography variant="body2" sx={{ mt: 0.5, color: 'rgba(255,255,255,0.65)' }}>This dashboard is operational telemetry only. It does not certify a deployment, a protected workflow, or a Hard Public Launch exact SHA. After this PR is merged, production evidence must be regenerated for that new merge SHA.</Typography></Paper>}
     </Box>
   );
 }
