@@ -7,14 +7,21 @@ const source = await readFile(
   'utf8',
 );
 
+const createStart = source.indexOf('export const adminCreateUser = onCall');
+const createEnd = source.indexOf('export const adminUpdateStaffAccess = onCall', createStart);
+assert.ok(createStart >= 0 && createEnd > createStart, 'adminCreateUser implementation block is missing');
+const createBlock = source.slice(createStart, createEnd);
+
 test('staff and technician creation queues secure first-login invitations', () => {
-  assert.match(source, /generateEmailVerificationLink\s*\(/);
-  assert.match(source, /generatePasswordResetLink\s*\(/);
-  assert.match(source, /db\.collection\("mail"\)\.doc\(\)/);
-  assert.match(source, /staff-account-invitation-v2/);
-  assert.match(source, /delivery:\s*\{\s*state:\s*"QUEUED"\s*\}/);
+  assert.match(createBlock, /generateEmailVerificationLink\s*\(/);
+  assert.match(createBlock, /generatePasswordResetLink\s*\(/);
+  assert.match(createBlock, /db\.collection\("mail"\)\.doc\(\)/);
+  assert.match(createBlock, /template:\s*"staff-account-invitation-v3"/);
+  assert.match(createBlock, /delivery:\s*\{\s*state:\s*"QUEUED"\s*\}/);
   assert.match(source, /role === "technician"[^\n]*login\?role=technician/);
   assert.match(source, /bin-group-admin-panel\.web\.app/);
+  assert.match(createBlock, /onboardingStage:\s*"INVITED"/);
+  assert.match(createBlock, /onboardingComplete:\s*false/);
 });
 
 test('creation is create-only and rejects client passwords and existing identities', () => {
@@ -30,11 +37,18 @@ test('creation is create-only and rejects client passwords and existing identiti
 test('provisioning is App Check protected and never returns invitation bearer links', () => {
   const callableCount = source.match(/enforceAppCheck:\s*true/g)?.length || 0;
   assert.ok(callableCount >= 3, `expected at least three App Check-protected staff callables, got ${callableCount}`);
-  assert.match(source, /invitationQueued:\s*true/);
+  assert.match(createBlock, /invitationQueued:\s*true/);
 
-  const createReturnStart = source.indexOf('return { success: true, uid, role, modules, invitationQueued: true');
+  const createReturnStart = createBlock.lastIndexOf('return {');
   assert.ok(createReturnStart >= 0, 'create result block missing');
-  const createReturn = source.slice(createReturnStart, source.indexOf('};', createReturnStart) + 2);
+  const createReturnEnd = createBlock.indexOf('};', createReturnStart);
+  assert.ok(createReturnEnd > createReturnStart, 'create result block is not terminated');
+  const createReturn = createBlock.slice(createReturnStart, createReturnEnd + 2);
+
+  assert.match(createReturn, /success:\s*true/);
+  assert.match(createReturn, /invitationQueued:\s*true/);
+  assert.match(createReturn, /onboardingStage:\s*"INVITED"/);
+  assert.match(createReturn, /onboardingComplete:\s*false/);
   assert.doesNotMatch(createReturn, /passwordResetLink|emailVerificationLink|bootstrap|password\s*:/i);
 });
 
@@ -43,6 +57,8 @@ test('invitation audit stores hashes and provenance without identity links or pa
   assert.match(source, /emailHash:\s*hashValue\(email\)/);
   assert.match(source, /invitationMailId:\s*invitationRef\.id/);
   assert.match(source, /privateHrSeparated:\s*true/);
+  assert.match(source, /onboardingStage:\s*"INVITED"/);
+  assert.match(source, /onboardingComplete:\s*false/);
 
   const auditStart = source.indexOf('action: "ADMIN_CREATE_STAFF_USER"');
   const auditEnd = source.indexOf('createdAt: now,', auditStart);
