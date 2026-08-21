@@ -1,51 +1,25 @@
-// admin-panel/src/pages/admin/LiveOpsCommandCenter.tsx
-import React, { useState, useEffect } from 'react';
-import { 
-    Zap, 
-    Radio, 
-    Users, 
-    Activity, 
-    Filter,
-    Navigation as NavigationIcon,
-    ShieldAlert
-} from 'lucide-react';
-
-import { 
-    Box, 
-    Typography, 
-    Grid, 
-    Paper, 
-    Chip, 
-    IconButton, 
-    Avatar,
-    LinearProgress
-} from '@mui/material';
-import { motion } from 'framer-motion';
-
+import React, { useEffect, useMemo, useState } from 'react';
+import { Activity, MapPin, Radio, Users, Zap } from 'lucide-react';
+import { Alert, Avatar, Box, Chip, Grid, Paper, Stack, Typography } from '@mui/material';
+import { collection, limit, onSnapshot, orderBy, query } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
-import { collection, onSnapshot, query, limit, orderBy } from 'firebase/firestore';
 
-// Helper for type-safe icons in React 18
-const Icon = ({ icon: IconComponent, size = 16, className = "", color = "currentColor" }: { icon: any, size?: number, className?: string, color?: string }) => (
-    <IconComponent size={size} className={className} color={color} />
+const Icon = ({ icon: IconComponent, size = 16, color = 'currentColor' }: { icon: any; size?: number; color?: string }) => (
+    <IconComponent size={size} color={color} />
 );
 
-// --- Types ---
 interface TechnicianLocation {
     id: string;
     technicianId: string;
-    name: string;
-    lat: number;
-    lng: number;
-    status: string;
-    batteryLevel: number;
-    speed: number;
-    heading: number;
-    category: string;
-    lastUpdate: string;
-    isStale: boolean;
-    riskFlag: boolean;
-    jobId?: string;
+    name: string | null;
+    lat: number | null;
+    lng: number | null;
+    speed: number | null;
+    accuracy: number | null;
+    status: 'TRACKING' | 'STOPPED';
+    lastUpdate: any;
+    jobId: string | null;
+    expiresAt: any;
 }
 
 interface LiveEvent {
@@ -56,293 +30,246 @@ interface LiveEvent {
     time: string;
 }
 
+function normalizeStatus(value: unknown) {
+    return String(value || '').trim().toUpperCase().replace(/[\s-]+/g, '_');
+}
+
+function finiteNumber(value: unknown): number | null {
+    if (value === null || value === undefined || value === '') return null;
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+}
+
+function eventTime(value: any) {
+    if (!value) return 'Timestamp unavailable';
+    const date = typeof value?.toDate === 'function' ? value.toDate() : new Date(value);
+    return Number.isNaN(date.getTime())
+        ? 'Timestamp unavailable'
+        : date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+function normalizeTechnicianLocation(docSnap: any): TechnicianLocation {
+    const data = docSnap.data() || {};
+    const location = data.location && typeof data.location === 'object' ? data.location : {};
+    return {
+        id: docSnap.id,
+        technicianId: String(data.technicianUid || docSnap.id),
+        name: data.technicianName ? String(data.technicianName) : null,
+        lat: finiteNumber(location.lat ?? location.latitude),
+        lng: finiteNumber(location.lng ?? location.longitude),
+        speed: finiteNumber(location.speed),
+        accuracy: finiteNumber(location.accuracy),
+        status: data.isTracking === true ? 'TRACKING' : 'STOPPED',
+        lastUpdate: data.serverUpdatedAt || location.serverUpdatedAt || null,
+        jobId: data.activeTicketId ? String(data.activeTicketId) : null,
+        expiresAt: data.expiresAt || null,
+    };
+}
+
 export default function LiveOpsCommandCenter() {
     const [currentTime, setCurrentTime] = useState(new Date().toLocaleTimeString());
     const [activeTechs, setActiveTechs] = useState<TechnicianLocation[]>([]);
     const [liveEvents, setLiveEvents] = useState<LiveEvent[]>([]);
-    const [stats, setStats] = useState({ queueClearance: 84, activeTeams: 0 });
+    const [ticketTotal, setTicketTotal] = useState(0);
+    const [completedTickets, setCompletedTickets] = useState(0);
+    const [telemetryError, setTelemetryError] = useState<string | null>(null);
+    const [ticketError, setTicketError] = useState<string | null>(null);
 
     useEffect(() => {
-        const timer = setInterval(() => {
-            setCurrentTime(new Date().toLocaleTimeString());
-        }, 1000);
+        const timer = window.setInterval(() => setCurrentTime(new Date().toLocaleTimeString()), 1000);
 
-        // 🛰️ 1. Production Data Subscription (Locations)
-        const qTechs = query(collection(db, 'technicianLocations'), limit(20));
-        const unsubTechs = onSnapshot(qTechs, (snapshot) => {
-            const techs = snapshot.docs.map(doc => ({
-                id: doc.id,
-                ...doc.data()
-            } as TechnicianLocation));
-            setActiveTechs(techs);
-            setStats(prev => ({ ...prev, activeTeams: techs.length }));
-        });
+        const qTechs = query(collection(db, 'technician_live_locations'), limit(50));
+        const unsubTechs = onSnapshot(
+            qTechs,
+            (snapshot) => {
+                setTelemetryError(null);
+                setActiveTechs(snapshot.docs.map(normalizeTechnicianLocation));
+            },
+            (error) => {
+                console.error('[LiveOps] canonical technician telemetry listener failed:', error);
+                setActiveTechs([]);
+                setTelemetryError('Technician live-location evidence is currently unavailable.');
+            },
+        );
 
-        // 🎟️ 2. Live Events Subscription (Tickets)
-        const qTickets = query(collection(db, 'maintenanceTickets'), orderBy('createdAt', 'desc'), limit(15));
-        const unsubTickets = onSnapshot(qTickets, (snapshot) => {
-            const events: LiveEvent[] = snapshot.docs.map(doc => {
-                const data = doc.data();
-                const type = data.priority === 'High' || data.priority === 'Emergency' ? 'EMERGENCY' : 
-                             data.status === 'COMPLETED' ? 'RESOLVED' : 'TRIAGE';
-                
-                return {
-                    id: doc.id,
-                    type,
-                    title: data.issueType || 'General Request',
-                    location: `Unit ${data.unitId || 'N/A'}`,
-                    time: data.createdAt?.toDate ? data.createdAt.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Just Now'
-                };
-            });
-            setLiveEvents(events);
-            
-            // Calc queue clearance (Simple mock for demo)
-            const completed = snapshot.docs.filter(d => d.data().status === 'COMPLETED').length;
-            const total = snapshot.docs.length || 1;
-            setStats(prev => ({ ...prev, queueClearance: Math.round((completed / total) * 100) || 84 }));
-        });
+        const qTickets = query(collection(db, 'maintenanceTickets'), orderBy('createdAt', 'desc'), limit(50));
+        const unsubTickets = onSnapshot(
+            qTickets,
+            (snapshot) => {
+                setTicketError(null);
+                const docs = snapshot.docs;
+                const events: LiveEvent[] = docs.slice(0, 15).map((docSnap) => {
+                    const data = docSnap.data();
+                    const status = normalizeStatus(data.status);
+                    const priority = normalizeStatus(data.priority);
+                    const type: LiveEvent['type'] =
+                        priority === 'HIGH' || priority === 'EMERGENCY' || status === 'EMERGENCY_SUBMITTED'
+                            ? 'EMERGENCY'
+                            : ['COMPLETED', 'RESOLVED', 'CLOSED'].includes(status)
+                                ? 'RESOLVED'
+                                : 'TRIAGE';
+                    return {
+                        id: docSnap.id,
+                        type,
+                        title: String(data.issueType || data.serviceType || data.title || 'Maintenance request'),
+                        location: String(data.propertyName || data.propertyAddress || data.address || data.unitId || 'Location not recorded'),
+                        time: eventTime(data.createdAt),
+                    };
+                });
+
+                setLiveEvents(events);
+                setTicketTotal(docs.length);
+                setCompletedTickets(docs.filter((docSnap) => ['COMPLETED', 'RESOLVED', 'CLOSED'].includes(normalizeStatus(docSnap.data().status))).length);
+            },
+            (error) => {
+                console.error('[LiveOps] ticket listener failed:', error);
+                setLiveEvents([]);
+                setTicketTotal(0);
+                setCompletedTickets(0);
+                setTicketError('Live maintenance tickets are currently unavailable.');
+            },
+        );
 
         return () => {
-            clearInterval(timer);
+            window.clearInterval(timer);
             unsubTechs();
             unsubTickets();
         };
     }, []);
 
+    const queueClearance = ticketTotal > 0 ? Math.round((completedTickets / ticketTotal) * 100) : null;
+    const trackingTechs = useMemo(() => activeTechs.filter((tech) => tech.status === 'TRACKING'), [activeTechs]);
+    const coordinatesAvailable = useMemo(
+        () => trackingTechs.filter((tech) => tech.lat !== null && tech.lng !== null).length,
+        [trackingTechs],
+    );
+
     return (
-        <Box sx={{ p: 4, bgcolor: '#020617', minHeight: '100vh', color: '#f8fafc' }}>
-            {/* ── HEADER: MISSION CONTROL ── */}
-            <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <Box sx={{ p: { xs: 2, md: 4 }, bgcolor: '#020617', minHeight: '100vh', color: '#f8fafc' }}>
+            <Box sx={{ mb: 4, display: 'flex', flexWrap: 'wrap', gap: 3, justifyContent: 'space-between', alignItems: 'center' }}>
                 <Box>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
-                        <Box sx={{ bgcolor: '#3b82f6', p: 1, borderRadius: 2 }}>
-                            <Icon icon={NavigationIcon} size={24} color="white" />
-                        </Box>
+                    <Stack direction="row" alignItems="center" spacing={2} sx={{ mb: 1 }}>
+                        <Box sx={{ bgcolor: '#3b82f6', p: 1, borderRadius: 2 }}><Icon icon={Radio} size={24} color="white" /></Box>
                         <Typography variant="h4" fontWeight={900} sx={{ letterSpacing: -2, fontStyle: 'italic' }}>
                             LIVE OPS <Box component="span" sx={{ color: '#3b82f6' }}>COMMAND</Box>
                         </Typography>
-                    </Box>
-                    <Typography variant="overline" sx={{ color: '#64748b', fontWeight: 900, letterSpacing: 6 }}>
-                        Dubai Infrastructure Hub · {currentTime}
+                    </Stack>
+                    <Typography variant="overline" sx={{ color: '#64748b', fontWeight: 900, letterSpacing: 4 }}>
+                        Canonical production telemetry · {currentTime}
                     </Typography>
                 </Box>
-                
-                <Box sx={{ display: 'flex', gap: 3 }}>
+
+                <Stack direction="row" spacing={4}>
                     <Box sx={{ textAlign: 'right' }}>
-                        <Typography variant="h6" fontWeight={900} sx={{ color: '#10b981' }}>{stats.queueClearance}%</Typography>
+                        <Typography variant="h6" fontWeight={900} sx={{ color: '#10b981' }}>
+                            {queueClearance === null ? 'N/A' : `${queueClearance}%`}
+                        </Typography>
                         <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 900 }}>QUEUE CLEARANCE</Typography>
                     </Box>
-                    <Box sx={{ width: 1, height: 40, bgcolor: 'rgba(255,255,255,0.1)', w: '1px' }} />
                     <Box sx={{ textAlign: 'right' }}>
-                        <Typography variant="h6" fontWeight={900} sx={{ color: '#3b82f6' }}>{stats.activeTeams}</Typography>
-                        <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 900 }}>ACTIVE TEAMS</Typography>
+                        <Typography variant="h6" fontWeight={900} sx={{ color: '#3b82f6' }}>{trackingTechs.length}</Typography>
+                        <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 900 }}>LIVE TRACKING SESSIONS</Typography>
                     </Box>
-                </Box>
+                </Stack>
             </Box>
 
+            {(telemetryError || ticketError) && (
+                <Stack spacing={1} sx={{ mb: 3 }}>
+                    {telemetryError && <Alert severity="error">{telemetryError}</Alert>}
+                    {ticketError && <Alert severity="error">{ticketError}</Alert>}
+                </Stack>
+            )}
+
             <Grid container spacing={3}>
-                {/* ── LEFT: LIVE MAP ── */}
-                <Grid item xs={12} lg={8}>
-                    <Paper sx={{ 
-                        height: '75vh', 
-                        bgcolor: '#0f172a', 
-                        borderRadius: 6, 
-                        border: '1px solid rgba(255,255,255,0.05)',
-                        position: 'relative',
-                        overflow: 'hidden',
-                        boxShadow: '0 40px 100px rgba(0,0,0,0.5)'
-                    }}>
-                        {/* Map Grid Background */}
-                        <Box sx={{ 
-                            position: 'absolute', 
-                            inset: 0, 
-                            backgroundImage: 'radial-gradient(rgba(59, 130, 246, 0.1) 1px, transparent 0)',
-                            backgroundSize: '40px 40px',
-                            opacity: 0.3
-                        }} />
-                        
-                        {/* Markers */}
-                        {activeTechs.map((tech) => (
-                            <motion.div
-                                key={tech.id}
-                                style={{
-                                    position: 'absolute',
-                                    left: tech.lng ? `${((tech.lng - 55.2) * 500) % 100}%` : '50%',
-                                    top: tech.lat ? `${((25.3 - tech.lat) * 500) % 100}%` : '50%',
-                                    zIndex: 10
-                                }}
-                                initial={false}
-                                animate={{ x: 0, y: 0 }}
-                                transition={{ type: 'spring', stiffness: 50 }}
-                            >
-                                <Box sx={{ position: 'relative', cursor: 'pointer' }}>
-                                    <Box className={tech.status === 'EMERGENCY' ? 'animate-pulse' : ''} sx={{ 
-                                        width: 16, 
-                                        height: 16, 
-                                        bgcolor: tech.status === 'EMERGENCY' ? '#ef4444' : '#3b82f6', 
-                                        borderRadius: '50%',
-                                        border: '3px solid rgba(255,255,255,0.2)',
-                                        boxShadow: `0 0 15px ${tech.status === 'EMERGENCY' ? '#f87171' : '#60a5fa'}`
-                                    }} />
-                                    <Box sx={{ 
-                                        position: 'absolute', 
-                                        top: 20, 
-                                        left: '50%', 
-                                        transform: 'translateX(-50%)',
-                                        bgcolor: 'rgba(15, 23, 42, 0.95)',
-                                        px: 1,
-                                        py: 0.2,
-                                        borderRadius: 1,
-                                        border: '1px solid rgba(255,255,255,0.1)',
-                                        whiteSpace: 'nowrap'
-                                    }}>
-                                        <Typography variant="caption" sx={{ fontWeight: 900, color: 'white', fontSize: 9 }}>{tech.name}</Typography>
-                                    </Box>
-                                </Box>
-                            </motion.div>
-                        ))}
+                <Grid item xs={12} lg={7}>
+                    <Paper sx={{ p: 3, bgcolor: '#0f172a', color: '#fff', borderRadius: 5, border: '1px solid rgba(255,255,255,0.05)', minHeight: 520 }}>
+                        <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 3 }}>
+                            <Typography variant="h6" fontWeight={900} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                <Icon icon={Users} size={20} color="#3b82f6" /> FIELD TELEMETRY
+                            </Typography>
+                            <Chip label={`${coordinatesAvailable}/${trackingTechs.length} GPS coordinates`} size="small" sx={{ color: '#93c5fd', bgcolor: 'rgba(59,130,246,0.1)' }} />
+                        </Stack>
 
-                        {/* Informative Placeholder if no GPS */}
-                        {activeTechs.length === 0 && (
-                            <Box sx={{ display: 'flex', height: '100%', alignItems: 'center', justifyContent: 'center', opacity: 0.5, flexDirection: 'column', gap: 1 }}>
-                                <Activity size={48} className="animate-pulse" />
-                                <Typography variant="h6" fontWeight={900} letterSpacing={2}>AWAITING FIELD TELEMETRY...</Typography>
+                        {trackingTechs.length === 0 && !telemetryError ? (
+                            <Box sx={{ py: 12, textAlign: 'center', color: '#64748b' }}>
+                                <Activity size={42} />
+                                <Typography sx={{ mt: 2, fontWeight: 800 }}>No active technician GPS tracking session is being reported.</Typography>
                             </Box>
-                        )}
+                        ) : (
+                            <Grid container spacing={2}>
+                                {trackingTechs.map((tech) => (
+                                    <Grid item xs={12} md={6} key={tech.id}>
+                                        <Box sx={{ p: 2.5, bgcolor: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 3 }}>
+                                            <Stack direction="row" spacing={2} alignItems="center" justifyContent="space-between">
+                                                <Stack direction="row" spacing={2} alignItems="center" sx={{ minWidth: 0 }}>
+                                                    <Avatar sx={{ bgcolor: '#334155', width: 38, height: 38 }}>
+                                                        {String(tech.name || 'T').charAt(0)}
+                                                    </Avatar>
+                                                    <Box sx={{ minWidth: 0 }}>
+                                                        <Typography variant="body2" fontWeight={900} noWrap>{tech.name || `TECH-${tech.technicianId.slice(-6)}`}</Typography>
+                                                        <Typography variant="caption" sx={{ color: '#64748b' }}>{tech.jobId ? `Mission ${tech.jobId.slice(0, 8)}` : 'Mission not recorded'}</Typography>
+                                                    </Box>
+                                                </Stack>
+                                                <Chip label={tech.status} size="small" sx={{ color: '#bfdbfe', bgcolor: 'rgba(59,130,246,0.08)', fontSize: 10 }} />
+                                            </Stack>
 
-                        {/* Map HUD Overlay */}
-                        <Box sx={{ position: 'absolute', bottom: 32, left: 32, display: 'flex', gap: 2 }}>
-                            <Chip 
-                                icon={<Icon icon={Radio} size={14} className={activeTechs.length > 0 ? "animate-pulse" : ""} />} 
-                                label="REAL-TIME GPS" 
-                                sx={{ bgcolor: 'rgba(255,255,255,0.05)', color: '#3b82f6', fontWeight: 900, fontSize: 10 }} 
-                            />
-                            <Chip 
-                                icon={<Icon icon={Activity} size={14} />} 
-                                label="INSTITUTIONAL SYNC" 
-                                sx={{ bgcolor: 'rgba(255,255,255,0.05)', color: '#10b981', fontWeight: 900, fontSize: 10 }} 
-                            />
-                        </Box>
+                                            <Stack spacing={1.2} sx={{ mt: 2.5 }}>
+                                                <Typography variant="caption" sx={{ color: '#94a3b8', display: 'flex', gap: 1, alignItems: 'center' }}>
+                                                    <Icon icon={MapPin} size={13} />
+                                                    {tech.lat === null || tech.lng === null ? 'GPS coordinates not reported' : `${tech.lat.toFixed(6)}, ${tech.lng.toFixed(6)}`}
+                                                </Typography>
+                                                <Typography variant="caption" sx={{ color: '#94a3b8' }}>
+                                                    Speed: {tech.speed === null ? 'N/A' : `${tech.speed} m/s`}
+                                                </Typography>
+                                                <Typography variant="caption" sx={{ color: '#94a3b8' }}>
+                                                    Accuracy: {tech.accuracy === null ? 'N/A' : `${tech.accuracy} m`}
+                                                </Typography>
+                                                <Typography variant="caption" sx={{ color: '#94a3b8' }}>
+                                                    Last update: {eventTime(tech.lastUpdate)}
+                                                </Typography>
+                                            </Stack>
+                                        </Box>
+                                    </Grid>
+                                ))}
+                            </Grid>
+                        )}
                     </Paper>
                 </Grid>
 
-                {/* ── RIGHT: OPS FEED & TRIAGE ── */}
-                <Grid item xs={12} lg={4}>
-                    <Box sx={{ height: '75vh', display: 'flex', flexDirection: 'column', gap: 3 }}>
-                        
-                        {/* Live Radio / Feed */}
-                        <Paper sx={{ 
-                            flex: 1, 
-                            bgcolor: 'rgba(255,255,255,0.02)', 
-                            borderRadius: 6, 
-                            border: '1px solid rgba(255,255,255,0.05)',
-                            p: 3,
-                            display: 'flex',
-                            flexDirection: 'column'
-                        }}>
-                            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3 }}>
-                                <Typography variant="h6" fontWeight={900} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                    <Icon icon={Zap} size={20} color="#fbbf24" /> LIVE TICKETS
-                                </Typography>
-                                <IconButton size="small"><Icon icon={Filter} size={18} color="#64748b" /></IconButton>
-                            </Box>
-                            
-                            <Box sx={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 2 }}>
-                                {liveEvents.map(event => (
-                                    <Box key={event.id} sx={{ 
-                                        p: 2, 
-                                        borderRadius: 4, 
-                                        bgcolor: event.type === 'EMERGENCY' ? 'rgba(239, 68, 68, 0.1)' : 'rgba(255,255,255,0.03)',
-                                        border: '1px solid',
-                                        borderColor: event.type === 'EMERGENCY' ? 'rgba(239, 68, 68, 0.2)' : 'rgba(255,255,255,0.05)',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'space-between'
-                                    }}>
-                                        <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
-                                            <Box sx={{ 
-                                                width: 8, 
-                                                height: 8, 
-                                                borderRadius: '50%', 
-                                                bgcolor: event.type === 'EMERGENCY' ? '#ef4444' : event.type === 'TRIAGE' ? '#fbbf24' : '#10b981' 
-                                            }} />
-                                            <Box>
-                                                <Typography variant="subtitle2" fontWeight={900} sx={{ maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                                    {event.title}
-                                                </Typography>
-                                                <Typography variant="caption" sx={{ color: '#64748b' }}>{event.location}</Typography>
-                                            </Box>
-                                        </Box>
-                                        <Typography variant="caption" sx={{ fontWeight: 900, color: event.type === 'EMERGENCY' ? '#ef4444' : '#64748b' }}>{event.time}</Typography>
-                                    </Box>
-                                ))}
-                                {liveEvents.length === 0 && (
-                                    <Typography variant="caption" sx={{ color: '#64748b', fontStyle: 'italic', textAlign: 'center', py: 2 }}>
-                                        Zero pending incidents reported.
-                                    </Typography>
-                                )}
-                            </Box>
-                        </Paper>
+                <Grid item xs={12} lg={5}>
+                    <Paper sx={{ p: 3, bgcolor: 'rgba(255,255,255,0.02)', color: '#fff', borderRadius: 5, border: '1px solid rgba(255,255,255,0.05)', minHeight: 520 }}>
+                        <Typography variant="h6" fontWeight={900} sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3 }}>
+                            <Icon icon={Zap} size={20} color="#fbbf24" /> LIVE TICKETS
+                        </Typography>
 
-                        {/* Specialist Status Rack */}
-                        <Paper sx={{ 
-                            p: 3, 
-                            bgcolor: 'rgba(255,255,255,0.02)', 
-                            borderRadius: 6, 
-                            border: '1px solid rgba(255,255,255,0.05)',
-                            overflowY: 'auto',
-                            maxHeight: '30vh'
-                        }}>
-                             <Typography variant="h6" fontWeight={900} sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3 }}>
-                                <Icon icon={Users} size={20} color="#3b82f6" /> FIELD SQUAD
-                            </Typography>
-                            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                                {activeTechs.map(tech => (
-                                    <Box key={tech.id} sx={{ 
-                                        display: 'flex', 
-                                        alignItems: 'center', 
-                                        justifyContent: 'space-between',
-                                        p: 1.5,
-                                        borderRadius: 3,
-                                        bgcolor: tech.riskFlag ? 'rgba(239, 68, 68, 0.05)' : 'transparent',
-                                        border: tech.riskFlag ? '1px solid rgba(239, 68, 68, 0.1)' : '1px solid transparent'
-                                    }}>
-                                        <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
-                                            <Avatar sx={{ 
-                                                bgcolor: tech.riskFlag ? '#ef4444' : tech.status === 'EMERGENCY' ? '#ef4444' : '#334155', 
-                                                width: 32, 
-                                                height: 32, 
-                                                fontSize: 12, 
-                                                fontWeight: 900 
-                                            }}>
-                                                {tech.riskFlag ? <Icon icon={ShieldAlert} size={16} /> : (tech.name?.[0] || 'T')}
-                                            </Avatar>
-                                            <Box>
-                                                <Typography variant="body2" fontWeight={900}>{tech.name || `TECH-${tech.id.slice(-4)}`}</Typography>
-                                                <Typography variant="caption" sx={{ color: '#64748b', display: 'flex', gap: 1 }}>
-                                                    {tech.category || 'Specialist'} · {tech.speed || 0} km/h
-                                                </Typography>
-                                            </Box>
+                        <Stack spacing={2}>
+                            {liveEvents.length === 0 && !ticketError && (
+                                <Typography variant="body2" sx={{ color: '#64748b', textAlign: 'center', py: 8 }}>
+                                    No maintenance ticket records are currently available in this live window.
+                                </Typography>
+                            )}
+                            {liveEvents.map((event) => (
+                                <Box key={event.id} sx={{
+                                    p: 2,
+                                    borderRadius: 3,
+                                    bgcolor: event.type === 'EMERGENCY' ? 'rgba(239,68,68,0.1)' : 'rgba(255,255,255,0.03)',
+                                    border: '1px solid',
+                                    borderColor: event.type === 'EMERGENCY' ? 'rgba(239,68,68,0.2)' : 'rgba(255,255,255,0.05)',
+                                }}>
+                                    <Stack direction="row" justifyContent="space-between" spacing={2}>
+                                        <Box sx={{ minWidth: 0 }}>
+                                            <Typography variant="subtitle2" fontWeight={900} noWrap>{event.title}</Typography>
+                                            <Typography variant="caption" sx={{ color: '#64748b' }}>{event.location}</Typography>
                                         </Box>
-                                        <Box sx={{ textAlign: 'right' }}>
-                                            <Typography variant="caption" sx={{ 
-                                                fontWeight: 900, 
-                                                color: tech.riskFlag ? '#ef4444' : tech.status === 'EMERGENCY' ? '#ef4444' : tech.status === 'ON_TICKET' ? '#3b82f6' : '#10b981' 
-                                            }}>{tech.riskFlag ? 'RISK' : tech.status || 'READY'}</Typography>
-                                            <Box sx={{ width: 60, mt: 0.5 }}>
-                                                <LinearProgress variant="determinate" value={tech.batteryLevel || 100} sx={{ 
-                                                    height: 3, 
-                                                    borderRadius: 1, 
-                                                    bgcolor: 'rgba(255,255,255,0.05)', 
-                                                    '& .MuiLinearProgress-bar': { bgcolor: (tech.batteryLevel || 100) < 30 ? '#ef4444' : '#10b981' } 
-                                                }} />
-                                            </Box>
-                                        </Box>
-                                    </Box>
-                                ))}
-                            </Box>
-                        </Paper>
-                    </Box>
+                                        <Stack alignItems="flex-end" spacing={0.5}>
+                                            <Chip label={event.type} size="small" sx={{ fontSize: 9, color: event.type === 'EMERGENCY' ? '#fca5a5' : '#fde68a' }} />
+                                            <Typography variant="caption" sx={{ color: '#64748b', whiteSpace: 'nowrap' }}>{event.time}</Typography>
+                                        </Stack>
+                                    </Stack>
+                                </Box>
+                            ))}
+                        </Stack>
+                    </Paper>
                 </Grid>
             </Grid>
         </Box>
