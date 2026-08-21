@@ -6,7 +6,7 @@ import {
   type QuoteInput,
 } from "./pricing/calculateUaeQuote2026";
 import { UAE_PRICING_MATRIX_2026 } from "./pricing/uaePricingMatrix2026";
-import { normalizeAedMoney } from "./shared/aedMoney";
+import { normalizeAedMoney, percentageOfAed } from "./shared/aedMoney";
 
 const QUOTE_VERSION = "uae-owner-onboarding-2026-v3-server-authority";
 const QUOTE_TTL_MS = 72 * 60 * 60 * 1000;
@@ -57,7 +57,6 @@ export function resolveOwnerOnboardingPricingClass(property: PropertyInput): str
   if (explicit) return explicit;
 
   const descriptor = descriptorFor(property);
-  // Private must be checked before generic/government Majlis flags.
   if (descriptor.includes("private_majlis") || text(property.majlisType).toLowerCase() === "private") return "private_majlis";
   if (descriptor.includes("government_majlis") || text(property.majlisType).toLowerCase() === "government" || property.majlis === true) return "government_majlis";
   if (descriptor.includes("mosque") || descriptor.includes("masjid") || descriptor.includes("religious_facility") || descriptor.includes("mosque_fm")) return "mosque_fm";
@@ -210,7 +209,7 @@ export function calculateOwnerOnboardingQuote(properties: unknown, addOns: unkno
 
   const portfolioAnnualTotal = money(propertyQuotes.reduce((sum: number, quote) => sum + quote.annualTotal, 0));
   if (portfolioAnnualTotal <= 0) throw new Error("Portfolio annual total must be positive.");
-  const activationDeposit = money(portfolioAnnualTotal * 0.15);
+  const activationDeposit = percentageOfAed(portfolioAnnualTotal, 15);
   const remainingAmount = money(portfolioAnnualTotal - activationDeposit);
   if (activationDeposit <= 0) throw new Error("Server quotation mobilisation deposit must be positive.");
 
