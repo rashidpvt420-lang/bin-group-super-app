@@ -120,6 +120,61 @@ test('technician self-service respects dispatcher assignment authority', () => {
   assert.match(runtime, /resumeTechnicianDuty/);
 });
 
+test('Live Ops reads the canonical technician live-location collection and shape', () => {
+  const source = readFileSync('apps/admin-panel/src/pages/admin/LiveOpsCommandCenter.tsx', 'utf8');
+  assert.match(source, /technician_live_locations/);
+  assert.match(source, /data\.technicianUid/);
+  assert.match(source, /data\.location/);
+  assert.match(source, /data\.isTracking === true/);
+  assert.doesNotMatch(source, /collection\(db, ['"]technicianLocations['"]\)/);
+});
+
+test('risk radar drops missing measurements instead of converting them to zero', () => {
+  for (const path of ['src/components/RiskRadar.tsx', 'apps/owner-app/src/components/RiskRadar.tsx']) {
+    const source = readFileSync(path, 'utf8');
+    assert.match(source, /number \| null/);
+    assert.match(source, /score === null/);
+    assert.doesNotMatch(source, /!Number\.isFinite\(parsed\)\) return 0/);
+  }
+});
+
+test('property passport keeps unrecorded operational and financial metrics N/A', () => {
+  const source = readFileSync('apps/admin-panel/src/pages/properties/PropertyPassportPage.tsx', 'utf8');
+  assert.match(source, /sumRecorded/);
+  assert.match(source, /Unrecorded metrics remain N\/A/);
+  assert.match(source, /totalUnits !== null && occupiedUnits !== null/);
+  assert.doesNotMatch(source, /function safeNumber|Number\.isFinite\(parsed\) \? parsed : 0/);
+});
+
+test('government property evidence does not invent status, expiry, inspection score, or claim action', () => {
+  const page = readFileSync('apps/owner-app/src/pages/GovernmentPropertyPage.tsx', 'utf8');
+  const coverage = readFileSync('apps/owner-app/src/components/CoverageTracker.tsx', 'utf8');
+  assert.match(page, /: 'UNKNOWN'/);
+  assert.match(page, /Score not recorded/);
+  assert.doesNotMatch(page, /new Date\(0\)|Number\(log\.score \|\| 0\)/);
+  assert.match(coverage, /expiryDate: Date \| null/);
+  assert.match(coverage, /CLAIM UNAVAILABLE/);
+  assert.doesNotMatch(coverage, />VIEW ALL POLICIES</);
+});
+
+test('financial dashboards fail closed when persisted amounts are incomplete', () => {
+  const pilot = readFileSync('apps/admin-panel/src/components/pilot/PilotCommandCenter.tsx', 'utf8');
+  const profitability = readFileSync('apps/admin-panel/src/pages/financials/ProfitabilityDashboardPage.tsx', 'utf8');
+  const reconciliation = readFileSync('apps/admin-panel/src/components/ops/RevenueReconciler.tsx', 'utf8');
+
+  assert.match(pilot, /finiteAmount/);
+  assert.match(pilot, /values recorded/);
+  assert.doesNotMatch(pilot, /Number\.isFinite\(parsed\) \? parsed : 0/);
+
+  assert.match(profitability, /ledgerComplete/);
+  assert.match(profitability, /Missing amounts invalidate dependent aggregates/);
+  assert.doesNotMatch(profitability, /Number\.isFinite\(parsed\) \? parsed : 0/);
+
+  assert.match(reconciliation, /approvedAmountCount/);
+  assert.match(reconciliation, /Missing monetary fields remain N\/A/);
+  assert.doesNotMatch(reconciliation, /amountReceived \|\| 0/);
+});
+
 test('Phase 1 owner payment policy remains Cash/Cheque only', () => {
   const source = readFileSync('functions/paymentConfiguration.ts', 'utf8');
   assert.match(source, /PHASE1_METHODS\s*=\s*\[\s*["']CASH["']\s*,\s*["']CHEQUE["']\s*\]/);
