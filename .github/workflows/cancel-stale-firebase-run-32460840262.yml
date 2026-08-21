@@ -5,7 +5,7 @@ on:
   pull_request:
     branches:
       - main
-    types: [opened, synchronize, reopened]
+    types: [opened, synchronize, reopened, converted_to_draft]
     paths:
       - .github/workflows/cancel-stale-firebase-run-32460840262.yml
 
