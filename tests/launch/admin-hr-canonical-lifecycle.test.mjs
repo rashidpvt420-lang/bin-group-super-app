@@ -89,6 +89,39 @@ test('Staff Access imports one canonical role/module policy and supports rich HR
   assert.doesNotMatch(source, /initialPassword/);
 });
 
+test('canonical registration UI remains compatible with protected Admin business proof selectors', async () => {
+  const source = await read('apps/admin-panel/src/pages/admin/StaffAccessPage.tsx');
+  const proof = await read('tests/e2e/business-admin.spec.ts');
+
+  assert.match(source, /aria-label="ADD STAFF \/ TECHNICIAN"/);
+  assert.match(source, /'aria-label': 'Full Name'/);
+  assert.match(source, /'aria-label': 'Email Address'/);
+  assert.match(source, /data-testid="staff-role-select"/);
+  assert.match(source, /'CREATE & SEND INVITATION'/);
+  assert.match(proof, /ADD STAFF \\/ TECHNICIAN/);
+  assert.match(proof, /getByLabel\('Full Name'\)/);
+  assert.match(proof, /getByLabel\('Email Address'\)/);
+  assert.match(proof, /getByTestId\('staff-role-select'\)/);
+  assert.match(proof, /CREATE & SEND INVITATION/);
+});
+
+test('staff details are deep-linkable through the protected HR route', async () => {
+  const app = await read('apps/admin-panel/src/App.tsx');
+  const page = await read('apps/admin-panel/src/pages/admin/StaffDetailsPage.tsx');
+  const policy = await read('apps/admin-panel/src/security/staffAccessPolicy.ts');
+
+  assert.match(app, /path="\/hr\/staff\/:uid"/);
+  assert.match(app, /<StaffDetailsPage \/>/);
+  assert.match(page, /useParams/);
+  assert.match(page, /adminGetHrCommandSnapshot/);
+  assert.match(page, /adminUpdateStaffOnboarding/);
+  assert.match(page, /adminResendStaffInvitation/);
+  assert.match(page, /adminSetStaffStatus/);
+  assert.match(page, /adminOffboardStaff/);
+  assert.match(page, /privateFieldsIncluded/);
+  assert.match(policy, /prefixes: \['\/ops\/staff-directory', '\/hr'\]/);
+});
+
 test('invitation delivery outcome is synchronized into staff lifecycle state', async () => {
   const source = await read('functions/mailDelivery.ts');
 
