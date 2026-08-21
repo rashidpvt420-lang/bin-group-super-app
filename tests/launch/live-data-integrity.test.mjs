@@ -24,6 +24,10 @@ const FORBIDDEN_RUNTIME_MARKERS = [
   { re: /simulate high-frequency computation/i, label: 'simulated quote computation' },
   { re: /['"]AED 12,000\+['"]/, label: 'hard-coded quote amount' },
   { re: /['"]AED 25,000\+['"]/, label: 'hard-coded quote amount' },
+  { re: /fake map grid/i, label: 'fake operational map' },
+  { re: /simplified coordinate mapping/i, label: 'synthetic GPS positioning' },
+  { re: /sector:\s*downtown dubai/i, label: 'hard-coded operational map sector' },
+  { re: />4h 12m</i, label: 'hard-coded technician session duration' },
   { re: /\bSkyline Tower\b/i, label: 'known demo property' },
   { re: /\bPalm Villa 44\b/i, label: 'known demo property' },
   { re: /\bmarina_tower_2504\b/i, label: 'known demo property ID' },
@@ -79,6 +83,12 @@ test('legacy quote entry cannot fabricate an official commercial result', () => 
     assert.match(source, /previewOwnerInspectionQuote/);
     assert.doesNotMatch(source, /mockResult|25000|12000|setTimeout\s*\(/);
   }
+});
+
+test('legacy technician command center delegates to the production live implementation', () => {
+  const source = readFileSync('apps/admin-panel/src/components/TechnicianCommandCenter.tsx', 'utf8');
+  assert.match(source, /export \{ default \} from ['"]\.\/ops\/TechnicianCommandCenter['"]/);
+  assert.doesNotMatch(source, /Fake Map Grid|4h 12m|Downtown Dubai|99\.9%/i);
 });
 
 test('Phase 1 owner payment policy remains Cash/Cheque only', () => {
