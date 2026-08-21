@@ -67,6 +67,55 @@ function isRentCollectionPayment(payment: any) {
 }
 
 /**
+ * Captured Stripe reconciliation is a narrow legacy/historical path. It never
+ * authorizes a new Stripe checkout or weakens the Phase-1 CASH/CHEQUE policy.
+ * The record must match the server-written successful webhook shape and the
+ * authoritative activation bindings already validated by this approval flow.
+ */
+export function isCapturedStripeReconciliationPayment(
+  payment: Record<string, any>,
+  expectedAmount: number,
+  bindings: { ownerUid: string; contractId: string; intakeId: string; quoteHash: string },
+) {
+  const stripeSessionId = String(payment.stripeSessionId || "").trim();
+  const stripePaymentIntentId = String(payment.stripePaymentIntentId || "").trim();
+  const invalidatedSessionId = String(payment.invalidatedStripeSessionId || "").trim();
+  const invalidatedPaymentIntentId = String(payment.invalidatedStripePaymentIntentId || "").trim();
+  let storedAmount: number;
+  let amountReceived: number;
+  try {
+    storedAmount = money(payment.amount ?? payment.activationDeposit);
+    amountReceived = money(payment.amountReceived);
+  } catch {
+    return false;
+  }
+
+  return upper(payment.paymentMethod || payment.method) === "STRIPE" &&
+    upper(payment.gateway) === "STRIPE" &&
+    upper(payment.currency) === "AED" &&
+    upper(payment.status) === "PENDING_ADMIN_APPROVAL" &&
+    upper(payment.paymentStatus) === "PAID" &&
+    upper(payment.verificationState) === "AUTO_VERIFIED" &&
+    upper(payment.activationState) === "PAYMENT_VERIFIED_PENDING_ADMIN_APPROVAL" &&
+    payment.verified === true &&
+    payment.paymentVerified === true &&
+    payment.adminApprovalRequired === true &&
+    payment.unlocksDashboard === false &&
+    Boolean(payment.submittedAt) &&
+    Boolean(payment.verifiedAt) &&
+    Boolean(stripeSessionId) &&
+    Boolean(stripePaymentIntentId) &&
+    stripeSessionId !== invalidatedSessionId &&
+    stripePaymentIntentId !== invalidatedPaymentIntentId &&
+    storedAmount === expectedAmount &&
+    amountReceived === expectedAmount &&
+    String(payment.ownerUid || payment.ownerId || "").trim() === bindings.ownerUid &&
+    String(payment.contractId || "").trim() === bindings.contractId &&
+    String(payment.intakeId || "").trim() === bindings.intakeId &&
+    String(payment.quoteHash || "").trim() === bindings.quoteHash;
+}
+
+/**
  * Canonical onboarding and activation payments use the intake ID for the
  * payment, contract, and receipt path. Legacy records with divergent IDs must
  * be migrated before this approval path can activate an owner.
@@ -286,20 +335,22 @@ export const adminApprovePayment = onCall({ cors: true, enforceAppCheck: true },
     }
   }
   const normalizedMethod = upper(payment.paymentMethod || payment.method || method);
-  const stripeVerified = normalizedMethod === "STRIPE" &&
-    upper(payment.paymentStatus) === "PAID" &&
-    payment.verified === true &&
-    Boolean(payment.stripeSessionId);
+  const stripeVerified = isCapturedStripeReconciliationPayment(payment, expectedAmount, {
+    ownerUid,
+    contractId,
+    intakeId,
+    quoteHash: String(payment.quoteHash || "").trim(),
+  });
   const manualReference = paymentReferenceId || String(payment.paymentReferenceId || "").trim();
   const manualProofPath = String(payment.paymentProofPath || payment.receiptPath || payment.paymentManifest?.receiptPath || "").trim();
   const manualProofHash = String(payment.paymentProofHash || payment.paymentProofEvidence?.receiptHash || "").trim().toLowerCase();
   const manualVerified =
-    ["BANK_TRANSFER", "CHEQUE", "CASH"].includes(normalizedMethod) &&
+    ["CHEQUE", "CASH"].includes(normalizedMethod) &&
     Boolean(manualReference) &&
     manualProofPath.startsWith(`payment-references/owners/${ownerUid}/${paymentId}/`) &&
     /^[a-f0-9]{64}$/.test(manualProofHash);
   if (!alreadyApproved && !stripeVerified && !manualVerified) {
-    throw new HttpsError("failed-precondition", "Verified Stripe evidence or a manual payment receipt reference is required.");
+    throw new HttpsError("failed-precondition", "Verified captured Stripe evidence or an approved CASH/CHEQUE receipt is required.");
   }
   const verifiedReceiptEvidence = manualVerified
     ? await assertStoredOwnerPaymentReceipt({
@@ -411,36 +462,37 @@ export const adminApprovePayment = onCall({ cors: true, enforceAppCheck: true },
     }
 
     const freshMethod = upper(freshPayment.paymentMethod || freshPayment.method || normalizedMethod);
+    const freshStripeVerified = isCapturedStripeReconciliationPayment(freshPayment, expectedAmount, {
+      ownerUid,
+      contractId,
+      intakeId,
+      quoteHash: String(freshPayment.quoteHash || "").trim(),
+    });
     const transactionalConfiguration = resolveActivePaymentConfiguration(paymentConfigurationSnap.data() || {});
-    const freshConfigVersion = String(
-      freshPayment.paymentConfigVersion ||
-      freshPayment.paymentConfigurationVersion ||
-      freshPayment.paymentManifest?.configVersion ||
-      freshPayment.paymentManifest?.paymentConfigVersion ||
-      "",
-    ).trim();
-    const freshConfigHash = String(
-      freshPayment.paymentConfigHash ||
-      freshPayment.paymentConfigurationHash ||
-      freshPayment.paymentManifest?.configHash ||
-      freshPayment.paymentManifest?.paymentConfigHash ||
-      "",
-    ).trim();
-    if (
-      freshConfigVersion !== transactionalConfiguration.version ||
-      freshConfigHash !== transactionalConfiguration.configHash ||
-      !transactionalConfiguration.approvedMethods.includes(freshMethod)
-    ) {
-      throw new HttpsError("aborted", "The payment policy binding changed during approval.");
+    if (!freshStripeVerified) {
+      const freshConfigVersion = String(
+        freshPayment.paymentConfigVersion ||
+        freshPayment.paymentConfigurationVersion ||
+        freshPayment.paymentManifest?.configVersion ||
+        freshPayment.paymentManifest?.paymentConfigVersion ||
+        "",
+      ).trim();
+      const freshConfigHash = String(
+        freshPayment.paymentConfigHash ||
+        freshPayment.paymentConfigurationHash ||
+        freshPayment.paymentManifest?.configHash ||
+        freshPayment.paymentManifest?.paymentConfigHash ||
+        "",
+      ).trim();
+      if (
+        freshConfigVersion !== transactionalConfiguration.version ||
+        freshConfigHash !== transactionalConfiguration.configHash ||
+        !["CHEQUE", "CASH"].includes(freshMethod) ||
+        !transactionalConfiguration.approvedMethods.includes(freshMethod)
+      ) {
+        throw new HttpsError("aborted", "The payment policy binding changed during approval.");
+      }
     }
-    const freshStripeSessionId = String(freshPayment.stripeSessionId || "").trim();
-    const freshStripeVerified =
-      freshMethod === "STRIPE" &&
-      upper(freshPayment.paymentStatus) === "PAID" &&
-      freshPayment.verified === true &&
-      freshPayment.paymentVerified === true &&
-      Boolean(freshStripeSessionId) &&
-      freshStripeSessionId !== String(freshPayment.invalidatedStripeSessionId || "").trim();
     const freshManualReference = String(
       freshPayment.paymentReferenceId ||
       freshPayment.paymentReference ||
@@ -465,7 +517,7 @@ export const adminApprovePayment = onCall({ cors: true, enforceAppCheck: true },
       "",
     ).trim().toLowerCase();
     const freshManualVerified =
-      ["BANK_TRANSFER", "CHEQUE", "CASH"].includes(freshMethod) &&
+      ["CHEQUE", "CASH"].includes(freshMethod) &&
       Boolean(freshManualReference) &&
       Boolean(freshManualProofUrl) &&
       freshManualProofPath === verifiedReceiptEvidence?.storagePath &&
