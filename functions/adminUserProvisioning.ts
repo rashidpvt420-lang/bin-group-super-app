@@ -230,9 +230,10 @@ function buildInvitationMessage({ displayName, email, role, loginUrl, emailVerif
     `2. Set your private password: ${passwordResetLink}`,
     `3. Open the ${portalName}: ${loginUrl}`,
     "",
+    "Your account remains in onboarding until profile, documents, contract and device requirements are complete.",
     "Do not share your password, verification links, SMS codes, or device access.",
     "",
-    "مرحباً، تم إنشاء حسابك في BIN GROUP. يرجى تأكيد البريد الإلكتروني، تعيين كلمة مرور خاصة، ثم تسجيل الدخول من الرابط الرسمي أعلاه.",
+    "مرحباً، تم إنشاء حسابك في BIN GROUP. يرجى تأكيد البريد الإلكتروني، تعيين كلمة مرور خاصة، ثم إكمال متطلبات الانضمام قبل تفعيل الحساب بالكامل.",
   ].join("\n");
 
   const html = `
@@ -241,7 +242,8 @@ function buildInvitationMessage({ displayName, email, role, loginUrl, emailVerif
       <div style="border:1px solid #e5e7eb;border-top:0;padding:24px;border-radius:0 0 16px 16px">
         <p>Hello <strong>${safeName}</strong>,</p><p>A <strong>${safeRole}</strong> account has been created for <strong>${safeEmail}</strong>.</p>
         <ol><li style="margin-bottom:16px"><a href="${safeVerificationLink}" style="display:inline-block;background:#0f172a;color:#fff;text-decoration:none;padding:12px 18px;border-radius:8px;font-weight:700">Verify email address</a></li><li style="margin-bottom:16px"><a href="${safePasswordResetLink}" style="display:inline-block;background:#d4af37;color:#111827;text-decoration:none;padding:12px 18px;border-radius:8px;font-weight:700">Set private password</a></li><li><a href="${safeLoginUrl}" style="font-weight:700">Open the ${escapeHtml(portalName)}</a></li></ol>
-        <p style="margin-top:24px;padding:12px;background:#f8fafc;border-radius:8px"><strong>Security:</strong> Never share passwords, verification links, SMS codes, or device access.</p><hr style="border:0;border-top:1px solid #e5e7eb;margin:24px 0" /><p dir="rtl" style="text-align:right">مرحباً <strong>${safeName}</strong>، تم إنشاء حسابك في BIN GROUP. يرجى تأكيد البريد الإلكتروني، تعيين كلمة مرور خاصة، ثم تسجيل الدخول من الرابط الرسمي أعلاه.</p>
+        <p style="margin-top:24px;padding:12px;background:#f8fafc;border-radius:8px"><strong>Activation:</strong> Email verification alone does not mark onboarding complete. HR profile, required documents, contract and technician device readiness must be completed first.</p>
+        <p style="margin-top:16px;padding:12px;background:#f8fafc;border-radius:8px"><strong>Security:</strong> Never share passwords, verification links, SMS codes, or device access.</p><hr style="border:0;border-top:1px solid #e5e7eb;margin:24px 0" /><p dir="rtl" style="text-align:right">مرحباً <strong>${safeName}</strong>، تم إنشاء حسابك في BIN GROUP. يرجى تأكيد البريد الإلكتروني، تعيين كلمة مرور خاصة، ثم إكمال متطلبات الانضمام قبل تفعيل الحساب بالكامل.</p>
       </div>
     </div>
   `.trim();
@@ -315,25 +317,47 @@ export const adminCreateUser = onCall({ cors: true, region: "europe-west3", enfo
     ]);
     const invitationMessage = buildInvitationMessage({ displayName, email, role, loginUrl, emailVerificationLink, passwordResetLink });
     const invitationRef = db.collection("mail").doc();
+    const onboardingChecklist = {
+      profileComplete: false,
+      documentsComplete: false,
+      contractComplete: false,
+      deviceReady: role !== "technician",
+    };
 
     const operationalProfile = {
       uid, email, displayName, fullName: displayName, phoneNumber, phone: phoneNumber,
       role, userRole: role, primaryRole: role, department, specialization, trade: specialization,
-      status: "ACTIVE", isStaff: true, isAdmin: false, staffModules: modules, modules, permissions,
-      onboardingComplete: true, createdAt: now, updatedAt: now, createdBy: actorId,
+      status: "INVITED", isStaff: true, isAdmin: false, staffModules: modules, modules, permissions,
+      onboardingStage: "INVITED", onboardingComplete: false, onboardingChecklist,
+      invitationStatus: "QUEUED", invitationAttempts: 1, emailVerified: false,
+      createdAt: now, updatedAt: now, createdBy: actorId,
       provisionedBy: actorId, provisionedVia: "adminCreateUser",
     };
     const scheduleProfile = {
-      uid, displayName, role, employeeType: role, department, specialization, status: "ACTIVE",
+      uid, displayName, role, employeeType: role, department, specialization, status: "INVITED",
       joiningDate: cleanString(payload.joiningDate) || null, offDay: cleanString(payload.offDay, "Sunday"),
-      shiftName: cleanString(payload.shiftName, "Day Shift"), workingHours: cleanString(payload.workingHours, "9 AM - 4 PM"),
-      employmentType: cleanString(payload.employmentType, "full_time"), createdAt: now, updatedAt: now,
+      shiftName: cleanString(payload.shiftName, "Day Shift"), workingHours: cleanString(payload.workingHours, "9 AM - 6 PM"),
+      employmentType: cleanString(payload.employmentType, "full_time"),
+      probationEndDate: cleanString(payload.probationEndDate) || null,
+      contractEndDate: cleanString(payload.contractEndDate) || null,
+      jobTitle: cleanString(payload.jobTitle) || null,
+      onboardingStage: "INVITED", onboardingComplete: false,
+      createdAt: now, updatedAt: now,
     };
     const privateHrProfile = {
       uid, emailHash: hashValue(email), employeeId: cleanString(payload.employeeId) || null,
-      emiratesId: cleanString(payload.emiratesId) || null, joiningDate: cleanString(payload.joiningDate) || null,
+      emiratesId: cleanString(payload.emiratesId) || null,
+      passportNumber: cleanString(payload.passportNumber) || null,
+      visaExpiryDate: cleanString(payload.visaExpiryDate) || null,
+      joiningDate: cleanString(payload.joiningDate) || null,
+      probationEndDate: cleanString(payload.probationEndDate) || null,
       contractEndDate: cleanString(payload.contractEndDate) || null,
       employmentType: cleanString(payload.employmentType, "full_time"),
+      emergencyContact: {
+        name: cleanString(payload.emergencyContactName) || null,
+        relationship: cleanString(payload.emergencyContactRelationship) || null,
+        phone: cleanString(payload.emergencyContactPhone) || null,
+      },
       salaryPackage: {
         basicSalary: numberAtLeastZero(payload.basicSalary), housingAllowance: numberAtLeastZero(payload.housingAllowance),
         transportAllowance: numberAtLeastZero(payload.transportAllowance), foodAllowance: numberAtLeastZero(payload.foodAllowance),
@@ -348,28 +372,52 @@ export const adminCreateUser = onCall({ cors: true, region: "europe-west3", enfo
 
     await db.runTransaction(async (tx) => {
       tx.create(db.collection("users").doc(uid), operationalProfile);
-      tx.create(db.collection("staffAccess").doc(uid), { uid, role, active: true, modules, staffModules: modules, permissions, grantedAt: now, grantedBy: actorId, updatedAt: now });
+      tx.create(db.collection("staffAccess").doc(uid), {
+        uid, role, active: true, status: "INVITED", onboardingStage: "INVITED",
+        modules, staffModules: modules, permissions, grantedAt: now, grantedBy: actorId, updatedAt: now,
+      });
       tx.create(db.collection("hrProfiles").doc(uid), scheduleProfile);
       tx.create(db.collection("private_hr_profiles").doc(uid), privateHrProfile);
       if (role === "technician") {
         tx.create(db.collection("technicians").doc(uid), {
-          ...operationalProfile, available: true, onDuty: false, currentJobCount: 0,
-          maxConcurrentJobs: boundedInteger(payload.maxConcurrentJobs, 3, 1, 10), emergencyEligible: Boolean(payload.emergencyEligible),
+          ...operationalProfile,
+          approvalStatus: "PENDING",
+          available: false,
+          onDuty: false,
+          currentJobCount: 0,
+          maxConcurrentJobs: boundedInteger(payload.maxConcurrentJobs, 3, 1, 10),
+          emergencyEligible: Boolean(payload.emergencyEligible),
+          primaryEmirate: cleanString(payload.primaryEmirate) || null,
+          emirate: cleanString(payload.primaryEmirate) || null,
+          emiratesCovered: Array.isArray(payload.emiratesCovered) ? payload.emiratesCovered.map((value: unknown) => cleanString(value)).filter(Boolean).slice(0, 12) : [],
         });
       }
       tx.create(invitationRef, {
         to: [email], message: { subject: invitationMessage.subject, text: invitationMessage.text, html: invitationMessage.html, from: "BIN GROUP <ceo@bin-groups.com>", replyTo: "BIN GROUP Admin <ceo@bin-groups.com>" },
-        type: "staff_account_invitation", template: "staff-account-invitation-v2", targetUid: uid, targetRole: role,
+        type: "staff_account_invitation", template: "staff-account-invitation-v3", targetUid: uid, targetRole: role,
         status: "QUEUED", delivery: { state: "QUEUED" }, createdAt: now, updatedAt: now, createdBy: actorId,
       });
       tx.create(db.collection("audit_logs").doc(), {
         actorId, actorRole, action: "ADMIN_CREATE_STAFF_USER", targetType: "users", targetId: uid,
-        metadata: { emailHash: hashValue(email), role, modules, permissionKeys: Object.keys(permissions).sort(), invitationQueued: true, invitationMailId: invitationRef.id, privateHrSeparated: true },
+        metadata: {
+          emailHash: hashValue(email), role, modules, permissionKeys: Object.keys(permissions).sort(),
+          invitationQueued: true, invitationMailId: invitationRef.id, privateHrSeparated: true,
+          onboardingStage: "INVITED", onboardingComplete: false,
+        },
         createdAt: now,
       });
     });
 
-    return { success: true, uid, role, modules, invitationQueued: true, message: "Staff account created. Secure email verification and private password setup were queued." };
+    return {
+      success: true,
+      uid,
+      role,
+      modules,
+      invitationQueued: true,
+      onboardingStage: "INVITED",
+      onboardingComplete: false,
+      message: "Staff account created in INVITED state. Secure email verification and private password setup were queued.",
+    };
   } catch (error: any) {
     await admin.auth().deleteUser(uid).catch((rollbackError) => console.error("Failed to roll back newly created staff Auth user", { uid, rollbackError }));
     if (error instanceof HttpsError) throw error;
@@ -382,29 +430,36 @@ export const adminUpdateStaffAccess = onCall({ cors: true, region: "europe-west3
   const payload = request.data || {};
   const uid = cleanString(payload.uid);
   const role = cleanString(payload.role).toLowerCase();
-  const { authUser, currentRole } = await loadExistingStaff(uid);
+  const { authUser, userSnap, accessSnap, currentRole } = await loadExistingStaff(uid);
   if ((currentRole === "technician") !== (role === "technician")) {
     throw new HttpsError("failed-precondition", "Technician identities cannot be converted to or from Admin-portal staff roles.");
   }
   const { modules, permissions } = canonicalAccess(role, payload);
   const previousClaims = authUser.customClaims || {};
   const previousDisabled = authUser.disabled;
+  const userData = userSnap.data() || {};
+  const accessData = accessSnap.data() || {};
+  const suspended = previousDisabled || previousClaims.suspended === true || ["SUSPENDED", "OFFBOARDED"].includes(cleanString(userData.status).toUpperCase());
   const now = FieldValue.serverTimestamp();
 
   try {
-    await admin.auth().setCustomUserClaims(uid, claimsForAccess(role, modules, permissions, false));
+    await admin.auth().setCustomUserClaims(uid, claimsForAccess(role, modules, permissions, suspended));
     await db.runTransaction(async (tx) => {
       tx.update(db.collection("users").doc(uid), { role, userRole: role, primaryRole: role, staffModules: modules, modules, permissions, updatedAt: now });
-      tx.update(db.collection("staffAccess").doc(uid), { role, modules, staffModules: modules, permissions, active: true, updatedAt: now, updatedBy: actorId });
+      tx.update(db.collection("staffAccess").doc(uid), {
+        role, modules, staffModules: modules, permissions,
+        active: suspended ? false : accessData.active !== false,
+        updatedAt: now, updatedBy: actorId,
+      });
       tx.update(db.collection("hrProfiles").doc(uid), { role, employeeType: role, updatedAt: now });
       if (role === "technician") tx.update(db.collection("technicians").doc(uid), { role, userRole: role, primaryRole: role, staffModules: modules, modules, permissions, updatedAt: now });
       tx.create(db.collection("audit_logs").doc(), {
         actorId, actorRole, action: "ADMIN_UPDATE_STAFF_ACCESS", targetType: "users", targetId: uid,
-        metadata: { previousRole: currentRole, role, modules, permissionKeys: Object.keys(permissions).sort() }, createdAt: now,
+        metadata: { previousRole: currentRole, role, modules, permissionKeys: Object.keys(permissions).sort(), suspendedPreserved: suspended }, createdAt: now,
       });
     });
     await admin.auth().revokeRefreshTokens(uid);
-    return { success: true, uid, role, modules, tokenRefreshRequired: true };
+    return { success: true, uid, role, modules, tokenRefreshRequired: true, suspendedPreserved: suspended };
   } catch (error: any) {
     await Promise.all([admin.auth().setCustomUserClaims(uid, previousClaims), admin.auth().updateUser(uid, { disabled: previousDisabled })])
       .catch((rollbackError) => console.error("Failed to restore staff Auth state after access update failure", { uid, rollbackError }));
@@ -421,11 +476,17 @@ export const adminSetStaffStatus = onCall({ cors: true, region: "europe-west3", 
   if (!["ACTIVE", "SUSPENDED"].includes(requestedStatus)) throw new HttpsError("invalid-argument", "status must be ACTIVE or SUSPENDED.");
 
   const { authUser, userSnap, accessSnap, currentRole } = await loadExistingStaff(uid);
-  const modules = normalizeModules(currentRole, userSnap.data()?.staffModules || accessSnap.data()?.modules || []);
+  const userData = userSnap.data() || {};
+  if (cleanString(userData.status).toUpperCase() === "OFFBOARDED") {
+    throw new HttpsError("failed-precondition", "Offboarded staff cannot be restored through the suspend/restore control.");
+  }
+  const modules = normalizeModules(currentRole, userData.staffModules || accessSnap.data()?.modules || []);
   const permissions = permissionsForModules(modules);
   const suspended = requestedStatus === "SUSPENDED";
   const previousClaims = authUser.customClaims || {};
   const previousDisabled = authUser.disabled;
+  const restoredStatus = userData.onboardingComplete === true ? "ACTIVE" : cleanString(userData.onboardingStage, "INVITED").toUpperCase();
+  const persistedStatus = suspended ? "SUSPENDED" : restoredStatus;
   const now = FieldValue.serverTimestamp();
 
   try {
@@ -433,16 +494,29 @@ export const adminSetStaffStatus = onCall({ cors: true, region: "europe-west3", 
     await admin.auth().setCustomUserClaims(uid, claimsForAccess(currentRole, modules, permissions, suspended));
     await admin.auth().revokeRefreshTokens(uid);
     await db.runTransaction(async (tx) => {
-      tx.update(db.collection("users").doc(uid), { status: requestedStatus, suspended, updatedAt: now, ...(suspended ? { suspendedAt: now, suspendedBy: actorId } : { restoredAt: now, restoredBy: actorId }) });
-      tx.update(db.collection("staffAccess").doc(uid), { active: !suspended, status: requestedStatus, updatedAt: now, updatedBy: actorId });
-      tx.update(db.collection("hrProfiles").doc(uid), { status: requestedStatus, updatedAt: now });
-      if (currentRole === "technician") tx.update(db.collection("technicians").doc(uid), { status: requestedStatus, suspended, available: suspended ? false : true, onDuty: false, updatedAt: now });
+      tx.update(db.collection("users").doc(uid), {
+        status: persistedStatus,
+        suspended,
+        updatedAt: now,
+        ...(suspended ? { suspendedAt: now, suspendedBy: actorId } : { restoredAt: now, restoredBy: actorId }),
+      });
+      tx.update(db.collection("staffAccess").doc(uid), { active: !suspended, status: persistedStatus, updatedAt: now, updatedBy: actorId });
+      tx.update(db.collection("hrProfiles").doc(uid), { status: persistedStatus, updatedAt: now });
+      if (currentRole === "technician") tx.update(db.collection("technicians").doc(uid), {
+        status: persistedStatus,
+        suspended,
+        available: !suspended && restoredStatus === "ACTIVE",
+        onDuty: false,
+        approvalStatus: restoredStatus === "ACTIVE" ? "APPROVED" : "PENDING",
+        updatedAt: now,
+      });
       tx.create(db.collection("audit_logs").doc(), {
         actorId, actorRole, action: suspended ? "ADMIN_SUSPEND_STAFF_USER" : "ADMIN_RESTORE_STAFF_USER",
-        targetType: "users", targetId: uid, metadata: { role: currentRole, refreshTokensRevoked: true }, createdAt: now,
+        targetType: "users", targetId: uid,
+        metadata: { role: currentRole, refreshTokensRevoked: true, restoredStatus: suspended ? null : restoredStatus }, createdAt: now,
       });
     });
-    return { success: true, uid, status: requestedStatus, refreshTokensRevoked: true };
+    return { success: true, uid, status: persistedStatus, refreshTokensRevoked: true };
   } catch (error: any) {
     await Promise.all([admin.auth().updateUser(uid, { disabled: previousDisabled }), admin.auth().setCustomUserClaims(uid, previousClaims)])
       .catch((rollbackError) => console.error("Failed to restore staff Auth state after status update failure", { uid, rollbackError }));
