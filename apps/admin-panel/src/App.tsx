@@ -46,6 +46,7 @@ import OrphanWarRoomPage from './pages/admin/OrphanWarRoomPage';
 import PropertyOnboardingPage from './pages/admin/PropertyOnboardingPage';
 import DesignStudioAdminPage from './pages/admin/DesignStudioAdminPage';
 import HRManagementPage from './pages/admin/HRManagementPage';
+import StaffDetailsPage from './pages/admin/StaffDetailsPage';
 import PropertyPassportPage from './pages/properties/PropertyPassportPage';
 import ProductionControlCenter from './pages/ProductionControlCenter';
 import LiveMapPage from './pages/map/LiveMapPage';
@@ -149,6 +150,7 @@ function AppContent() {
                     <Route path="/onboard-property" element={<ProtectedRoute adminOnly><PropertyOnboardingPage /></ProtectedRoute>} />
                     <Route path="/design-studio" element={<ProtectedRoute adminOnly><DesignStudioAdminPage /></ProtectedRoute>} />
                     <Route path="/hr" element={<ProtectedRoute adminOnly extraRoles={['hr_manager', 'hr_staff']}><HRManagementPage /></ProtectedRoute>} />
+                    <Route path="/hr/staff/:uid" element={<ProtectedRoute adminOnly extraRoles={['hr_manager', 'hr_staff']}><StaffDetailsPage /></ProtectedRoute>} />
                     <Route path="/audit" element={<ProtectedRoute adminOnly><AuditLogPage /></ProtectedRoute>} />
                     <Route path="/admin/pricing-matrix" element={<ProtectedRoute adminOnly><PricingMatrixPage /></ProtectedRoute>} />
                     <Route path="/pricing-matrix" element={<ProtectedRoute adminOnly><PricingMatrixPage /></ProtectedRoute>} />
