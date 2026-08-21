@@ -1,0 +1,139 @@
+name: Cancel Stale Firebase Production Run 32460840262
+run-name: Cancel stale Firebase production run 32460840262
+
+on:
+  pull_request:
+    branches:
+      - main
+    types: [opened, synchronize, reopened]
+    paths:
+      - .github/workflows/cancel-stale-firebase-run-32460840262.yml
+
+permissions:
+  actions: write
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: cancel-stale-firebase-run-32460840262
+  cancel-in-progress: false
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  REPOSITORY: ${{ github.repository }}
+  REQUEST_PR: ${{ github.event.pull_request.number }}
+  EXPECTED_MAIN_SHA: a19b2e47c6814d4059b19b3fdb1a335553ff6f88
+  STALE_RUN_ID: '32460840262'
+  STALE_RUN_SHA: c05d7c57bac1ae60a8c849ca65012365dbe4f0aa
+  REPLACEMENT_RUN_ID: '32466441256'
+  REPLACEMENT_RUN_SHA: a19b2e47c6814d4059b19b3fdb1a335553ff6f88
+
+jobs:
+  cancel-stale-run:
+    name: Verify and cancel only the stale production run
+    if: >-
+      github.event.pull_request.draft == true &&
+      github.event.pull_request.base.ref == 'main' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.user.login == github.repository_owner &&
+      github.event.pull_request.head.ref == 'ops/cancel-stale-firebase-run-32460840262-20260821' &&
+      github.event.pull_request.title == 'Cancel stale Firebase production run 32460840262'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Validate one-file owner request
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t files < <(gh api --paginate "repos/$REPOSITORY/pulls/$REQUEST_PR/files" --jq '.[].filename')
+          [[ "${#files[@]}" -eq 1 ]]
+          [[ "${files[0]}" == '.github/workflows/cancel-stale-firebase-run-32460840262.yml' ]]
+
+      - name: Verify exact current main and replacement deployment
+        shell: bash
+        run: |
+          set -euo pipefail
+          current_main="$(gh api "repos/$REPOSITORY/commits/main" --jq '.sha')"
+          [[ "$current_main" == "$EXPECTED_MAIN_SHA" ]] || {
+            echo "::error::Current main moved to $current_main; refusing stale-run cancellation."
+            exit 1
+          }
+
+          replacement="$(gh api "repos/$REPOSITORY/actions/runs/$REPLACEMENT_RUN_ID")"
+          [[ "$(jq -r '.name' <<<"$replacement")" == 'Firebase Production Deploy' ]]
+          [[ "$(jq -r '.event' <<<"$replacement")" == 'workflow_dispatch' ]]
+          [[ "$(jq -r '.head_branch' <<<"$replacement")" == 'main' ]]
+          [[ "$(jq -r '.head_sha' <<<"$replacement")" == "$REPLACEMENT_RUN_SHA" ]]
+          replacement_status="$(jq -r '.status' <<<"$replacement")"
+          [[ "$replacement_status" =~ ^(pending|queued|in_progress|waiting|requested)$ ]] || {
+            echo "::error::Replacement run is not active/queued: status=$replacement_status"
+            exit 1
+          }
+          echo "Replacement run $REPLACEMENT_RUN_ID is bound to current main $REPLACEMENT_RUN_SHA with status=$replacement_status."
+
+      - name: Verify stale run identity and cancel it
+        id: cancel
+        shell: bash
+        run: |
+          set -euo pipefail
+          stale="$(gh api "repos/$REPOSITORY/actions/runs/$STALE_RUN_ID")"
+          [[ "$(jq -r '.name' <<<"$stale")" == 'Firebase Production Deploy' ]]
+          [[ "$(jq -r '.event' <<<"$stale")" == 'workflow_dispatch' ]]
+          [[ "$(jq -r '.head_branch' <<<"$stale")" == 'main' ]]
+          [[ "$(jq -r '.head_sha' <<<"$stale")" == "$STALE_RUN_SHA" ]]
+          [[ "$STALE_RUN_SHA" != "$EXPECTED_MAIN_SHA" ]]
+
+          stale_status="$(jq -r '.status' <<<"$stale")"
+          stale_conclusion="$(jq -r '.conclusion // empty' <<<"$stale")"
+          echo "Stale run $STALE_RUN_ID status=$stale_status conclusion=${stale_conclusion:-none}."
+
+          if [[ "$stale_status" == 'completed' ]]; then
+            echo 'The stale run already completed; no cancellation call is required.'
+            echo 'cancel_requested=false' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          [[ "$stale_status" =~ ^(pending|queued|in_progress|waiting|requested)$ ]] || {
+            echo "::error::Unexpected stale run status: $stale_status"
+            exit 1
+          }
+
+          gh api --method POST "repos/$REPOSITORY/actions/runs/$STALE_RUN_ID/cancel"
+          echo 'cancel_requested=true' >> "$GITHUB_OUTPUT"
+
+      - name: Confirm stale run stopped and replacement can proceed
+        shell: bash
+        run: |
+          set -euo pipefail
+          for _ in $(seq 1 60); do
+            stale="$(gh api "repos/$REPOSITORY/actions/runs/$STALE_RUN_ID")"
+            stale_status="$(jq -r '.status' <<<"$stale")"
+            stale_conclusion="$(jq -r '.conclusion // empty' <<<"$stale")"
+            if [[ "$stale_status" == 'completed' ]]; then
+              echo "Stale run stopped: conclusion=${stale_conclusion:-unknown}."
+              break
+            fi
+            sleep 5
+          done
+
+          final_stale_status="$(gh api "repos/$REPOSITORY/actions/runs/$STALE_RUN_ID" --jq '.status')"
+          [[ "$final_stale_status" == 'completed' ]] || {
+            echo '::error::Stale run did not stop within the bounded confirmation window.'
+            exit 1
+          }
+
+          replacement="$(gh api "repos/$REPOSITORY/actions/runs/$REPLACEMENT_RUN_ID")"
+          replacement_status="$(jq -r '.status' <<<"$replacement")"
+          replacement_sha="$(jq -r '.head_sha' <<<"$replacement")"
+          [[ "$replacement_sha" == "$REPLACEMENT_RUN_SHA" ]]
+          echo "Replacement production run $REPLACEMENT_RUN_ID status=$replacement_status on $replacement_sha."
+          {
+            echo '## Stale Firebase production run cancellation'
+            echo
+            echo "- Current main: \`$EXPECTED_MAIN_SHA\`"
+            echo "- Stale run cancelled/stopped: \`$STALE_RUN_ID\` (\`$STALE_RUN_SHA\`)"
+            echo "- Replacement run preserved: \`$REPLACEMENT_RUN_ID\` (\`$REPLACEMENT_RUN_SHA\`)"
+            echo "- Replacement status after cancellation: \`$replacement_status\`"
+            echo '- This PR must remain unmerged.'
+          } >> "$GITHUB_STEP_SUMMARY"
