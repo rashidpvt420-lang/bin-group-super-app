@@ -24,9 +24,22 @@ function formatDate(value: any) {
     return Number.isNaN(date.getTime()) ? 'Timestamp unavailable' : date.toLocaleString();
 }
 
-function money(value: unknown) {
+function finiteNumber(value: unknown): number | null {
+    if (value === null || value === undefined || value === '') return null;
     const parsed = Number(value);
-    return Number.isFinite(parsed) ? `AED ${parsed.toLocaleString()}` : 'N/A';
+    return Number.isFinite(parsed) ? parsed : null;
+}
+
+function money(value: unknown) {
+    const parsed = finiteNumber(value);
+    return parsed === null ? 'N/A' : `AED ${parsed.toLocaleString()}`;
+}
+
+function percentage(value: unknown): number | null {
+    const parsed = finiteNumber(value);
+    if (parsed === null || parsed < 0) return null;
+    const normalized = parsed <= 1 ? parsed * 100 : parsed;
+    return normalized <= 100 ? normalized : null;
 }
 
 function getAuditResult(audit: PricingAuditDocument | null) {
@@ -69,7 +82,7 @@ const PricingAuditViewer: React.FC<{ auditId?: string }> = ({ auditId }) => {
             }
         }
 
-        loadAudit();
+        void loadAudit();
         return () => { active = false; };
     }, [auditId]);
 
@@ -78,8 +91,8 @@ const PricingAuditViewer: React.FC<{ auditId?: string }> = ({ auditId }) => {
     const valuation = result?.valuation || {};
     const fmQuote = result?.fmQuote || {};
     const riskPack = result?.riskPack || {};
-    const confidenceScore = Number(result?.confidenceScore ?? valuation?.confidenceScore);
-    const inputCompleteness = Number(result?.inputCompleteness);
+    const confidenceScore = percentage(result?.confidenceScore ?? valuation?.confidenceScore);
+    const inputCompleteness = percentage(result?.inputCompleteness);
     const missingFields: string[] = Array.isArray(result?.missingFields) ? result.missingFields : [];
     const assumptionFlags: string[] = Array.isArray(result?.assumptionFlags) ? result.assumptionFlags : [];
 
@@ -97,16 +110,19 @@ const PricingAuditViewer: React.FC<{ auditId?: string }> = ({ auditId }) => {
         );
     }
 
+    const builtUpArea = finiteNumber(property.builtUpAreaSqFt);
+    const propertyAge = finiteNumber(property.propertyAgeYears);
+    const conditionScore = finiteNumber(property.conditionScore);
     const propertyFields = [
         ['Property', property.propertyName],
         ['Emirate', property.emirate],
         ['Area', property.area],
         ['Property Type', property.propertyType],
         ['Unit Subtype', property.unitSubtype],
-        ['Built-up Area', property.builtUpAreaSqFt ? `${Number(property.builtUpAreaSqFt).toLocaleString()} sq ft` : null],
-        ['Building Age', Number.isFinite(Number(property.propertyAgeYears)) ? `${property.propertyAgeYears} years` : null],
+        ['Built-up Area', builtUpArea === null ? null : `${builtUpArea.toLocaleString()} sq ft`],
+        ['Building Age', propertyAge === null ? null : `${propertyAge} years`],
         ['Building Grade', property.buildingGrade],
-        ['Condition Score', Number.isFinite(Number(property.conditionScore)) ? property.conditionScore : null],
+        ['Condition Score', conditionScore],
         ['Compliance Risk', property.complianceRiskProfile],
     ].filter(([, value]) => value !== undefined && value !== null && value !== '');
 
@@ -183,12 +199,10 @@ const PricingAuditViewer: React.FC<{ auditId?: string }> = ({ auditId }) => {
                             <Box sx={{ mt: 2 }}>
                                 <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
                                     <Typography variant="caption" sx={{ opacity: 0.8 }}>Input completeness</Typography>
-                                    <Typography variant="caption" fontWeight="bold">
-                                        {Number.isFinite(inputCompleteness) ? `${Math.round(inputCompleteness * 100)}%` : 'N/A'}
-                                    </Typography>
+                                    <Typography variant="caption" fontWeight="bold">{inputCompleteness === null ? 'N/A' : `${Math.round(inputCompleteness)}%`}</Typography>
                                 </Box>
-                                {Number.isFinite(inputCompleteness) && (
-                                    <LinearProgress variant="determinate" value={Math.max(0, Math.min(100, inputCompleteness * 100))} />
+                                {inputCompleteness !== null && (
+                                    <LinearProgress variant="determinate" value={inputCompleteness} />
                                 )}
                             </Box>
                             <Box sx={{ mt: 3 }}>
@@ -203,10 +217,8 @@ const PricingAuditViewer: React.FC<{ auditId?: string }> = ({ auditId }) => {
                         <Card sx={{ p: 3, bgcolor: '#0f172a', color: 'white' }}>
                             <Typography variant="h6" fontWeight="bold" gutterBottom>Confidence</Typography>
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                <CheckCircleIcon color={Number.isFinite(confidenceScore) ? 'primary' : 'disabled'} fontSize="small" />
-                                <Typography variant="body2">
-                                    {Number.isFinite(confidenceScore) ? `${confidenceScore}%` : 'Not persisted'}
-                                </Typography>
+                                <CheckCircleIcon color={confidenceScore !== null ? 'primary' : 'disabled'} fontSize="small" />
+                                <Typography variant="body2">{confidenceScore === null ? 'Not persisted' : `${confidenceScore.toFixed(1)}%`}</Typography>
                             </Box>
                             {missingFields.length > 0 && (
                                 <Typography variant="caption" sx={{ display: 'block', mt: 2, opacity: 0.75 }}>
