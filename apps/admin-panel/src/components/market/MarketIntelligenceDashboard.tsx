@@ -3,7 +3,7 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, AreaChart, Area
 } from 'recharts';
-import { Globe, Target, Map, Database, Search } from 'lucide-react';
+import { Globe, Target, Map as MapIcon, Database, Search } from 'lucide-react';
 import { collection, getDocs, limit, orderBy, query } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 
@@ -227,7 +227,7 @@ const MarketIntelligenceDashboard: React.FC = () => {
             {filteredZones.slice(0, 12).map((zone) => (
               <div key={zone.name} className="bg-[#141417] p-6 rounded-2xl border border-white/5">
                 <div className="flex justify-between items-start mb-6">
-                  <div className="bg-white/5 p-2 rounded-lg"><Icon icon={Map} size={20} className="text-blue-400" /></div>
+                  <div className="bg-white/5 p-2 rounded-lg"><Icon icon={MapIcon} size={20} className="text-blue-400" /></div>
                   <div className="px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest bg-blue-400/10 text-blue-400">
                     {zone.audits} AUDITS
                   </div>
