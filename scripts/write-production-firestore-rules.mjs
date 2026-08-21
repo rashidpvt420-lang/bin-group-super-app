@@ -18,9 +18,19 @@ function matchBlock(header) {
   const open = start + header.length - 1;
   if (source[open] !== '{') return '';
   let depth = 0;
+  let quote = '';
+  let escaped = false;
   for (let index = open; index < source.length; index += 1) {
-    if (source[index] === '{') depth += 1;
-    else if (source[index] === '}') {
+    const character = source[index];
+    if (escaped) { escaped = false; continue; }
+    if (quote) {
+      if (character === '\\') escaped = true;
+      else if (character === quote) quote = '';
+      continue;
+    }
+    if (character === "'" || character === '"') { quote = character; continue; }
+    if (character === '{') depth += 1;
+    else if (character === '}') {
       depth -= 1;
       if (depth === 0) return source.slice(start, index + 1);
     }
@@ -28,7 +38,7 @@ function matchBlock(header) {
   return '';
 }
 
-const required = [
+for (const token of [
   'match /technician_live_locations/{technicianId} {',
   'allow create, update, delete: if false;',
   'function safeTechnicianProfileUpdate(techId) {',
@@ -46,51 +56,32 @@ const required = [
   "hasPermission('canManageLaunchEvidence')",
   'allow create: if validLaunchEvidenceCreate(request.resource.data);',
   'allow create: if validSignedInSmokeCreate(request.resource.data);',
-  "data.get('releaseSha', '').matches('^[0-9a-f]{40}$')",
-  "data.get('evidenceHash', '').matches('^[0-9a-f]{64}$')",
-];
-for (const token of required) {
-  if (!source.includes(token)) failures.push(`required hardened rule fragment missing: ${token}`);
-}
+  "data.get('releaseSha', '').size() == 40",
+  "data.get('releaseSha', '').matches('^[0-9a-f]+$')",
+  "data.get('evidenceHash', '').size() == 64",
+  "data.get('evidenceHash', '').matches('^[0-9a-f]+$')",
+]) if (!source.includes(token)) failures.push(`required hardened rule fragment missing: ${token}`);
 
 const technicianUpdateStart = source.indexOf('    function safeTechnicianTicketUpdate() {');
 const technicianUpdateEnd = source.indexOf('\n    function ', technicianUpdateStart + 10);
 const technicianUpdate = technicianUpdateStart >= 0
   ? source.slice(technicianUpdateStart, technicianUpdateEnd > technicianUpdateStart ? technicianUpdateEnd : source.length)
   : '';
-for (const forbidden of [
-  "'arrivedLocation'",
-  "'technicianLocation'",
-  "'technicianLocationUpdatedAt'",
-  "'currentLocation'",
-  "'lastLocation'",
-  "'isTracking'",
-]) {
+for (const forbidden of ["'arrivedLocation'", "'technicianLocation'", "'technicianLocationUpdatedAt'", "'currentLocation'", "'lastLocation'", "'isTracking'"]) {
   if (technicianUpdate.includes(forbidden)) failures.push(`client-authoritative GPS field remains: ${forbidden}`);
 }
 
 const payrollBlock = matchBlock('    match /payroll_entries/{entryId} {');
 if (!payrollBlock) failures.push('payroll_entries rule block is missing or malformed');
 else {
-  if (
-    !payrollBlock.includes("resource.data.get('technicianId', null) == request.auth.uid") &&
-    !payrollBlock.includes("isTechnicianId(resource.data.get('technicianId', null))")
-  ) {
-    failures.push('payroll_entries self-service read is not bound to the matching Technician UID');
-  }
-  if (!payrollBlock.includes('allow create, update, delete: if false;')) {
-    failures.push('payroll_entries browser writes are not fully denied');
-  }
-  if (payrollBlock.includes('allow write: if isAdmin()')) {
-    failures.push('payroll_entries still permits privileged browser writes');
-  }
+  if (!payrollBlock.includes("resource.data.get('technicianId', null) == request.auth.uid") && !payrollBlock.includes("isTechnicianId(resource.data.get('technicianId', null))")) failures.push('payroll_entries self-service read is not bound to the matching Technician UID');
+  if (!payrollBlock.includes('allow create, update, delete: if false;')) failures.push('payroll_entries browser writes are not fully denied');
+  if (payrollBlock.includes('allow write: if isAdmin()')) failures.push('payroll_entries still permits privileged browser writes');
 }
 
-const launchEvidenceBlock = matchBlock('    match /launch_evidence/{evidenceId} {');
-const smokeEvidenceBlock = matchBlock('    match /signed_in_smoke_checks/{checkId} {');
 for (const [name, block, createToken] of [
-  ['launch_evidence', launchEvidenceBlock, 'allow create: if validLaunchEvidenceCreate(request.resource.data);'],
-  ['signed_in_smoke_checks', smokeEvidenceBlock, 'allow create: if validSignedInSmokeCreate(request.resource.data);'],
+  ['launch_evidence', matchBlock('    match /launch_evidence/{evidenceId} {'), 'allow create: if validLaunchEvidenceCreate(request.resource.data);'],
+  ['signed_in_smoke_checks', matchBlock('    match /signed_in_smoke_checks/{checkId} {'), 'allow create: if validSignedInSmokeCreate(request.resource.data);'],
 ]) {
   if (!block) failures.push(`${name} rule block is missing or malformed`);
   else {
@@ -101,19 +92,14 @@ for (const [name, block, createToken] of [
 }
 
 const payrollCatchAllOccurrences = source.match(/'payroll_entries'/g)?.length || 0;
-if (payrollCatchAllOccurrences !== 3) {
-  failures.push(`payroll_entries must be excluded from read, create and update/delete catch-alls; found ${payrollCatchAllOccurrences}`);
-}
+if (payrollCatchAllOccurrences !== 3) failures.push(`payroll_entries must be excluded from read, create and update/delete catch-alls; found ${payrollCatchAllOccurrences}`);
 
 const globalFallbackBlock = matchBlock('    match /{collection}/{document=**} {');
-if (!globalFallbackBlock) {
-  failures.push('global Firestore fallback block is missing or malformed');
-} else {
+if (!globalFallbackBlock) failures.push('global Firestore fallback block is missing or malformed');
+else {
   const launchEvidenceCatchAllOccurrences = globalFallbackBlock.match(/'launch_evidence'/g)?.length || 0;
   const smokeCatchAllOccurrences = globalFallbackBlock.match(/'signed_in_smoke_checks'/g)?.length || 0;
-  if (launchEvidenceCatchAllOccurrences !== 3 || smokeCatchAllOccurrences !== 3) {
-    failures.push(`launch evidence must be excluded from global read, create and update/delete fallbacks; launch=${launchEvidenceCatchAllOccurrences}, smoke=${smokeCatchAllOccurrences}`);
-  }
+  if (launchEvidenceCatchAllOccurrences !== 3 || smokeCatchAllOccurrences !== 3) failures.push(`launch evidence must be excluded from global read, create and update/delete fallbacks; launch=${launchEvidenceCatchAllOccurrences}, smoke=${smokeCatchAllOccurrences}`);
 }
 
 if (failures.length) {
