@@ -89,8 +89,8 @@ export function resolveActivePaymentConfiguration(value: Record<string, any>): A
   const approvedMethods = Array.isArray(value.approvedMethods)
     ? Array.from(new Set(value.approvedMethods.map(normalizeUpper).filter(Boolean))).sort()
     : [];
-  const bankTransferEnabled = approvedMethods.includes("BANK_TRANSFER") || value.bankTransferEnabled === true;
-  const stripeEnabled = approvedMethods.includes("STRIPE") || value.stripeEnabled === true;
+  const bankTransferEnabled = approvedMethods.includes("BANK_TRANSFER");
+  const stripeEnabled = approvedMethods.includes("STRIPE");
   const cashOrChequeEnabled = approvedMethods.some((method) => method === "CASH" || method === "CHEQUE");
 
   if (legalBeneficiary !== EXPECTED_BENEFICIARY) {
@@ -101,6 +101,12 @@ export function resolveActivePaymentConfiguration(value: Record<string, any>): A
   }
   if (currency !== "AED") {
     throw new HttpsError("failed-precondition", "Owner onboarding payments must be configured in AED.");
+  }
+  if (value.bankTransferEnabled === true || value.stripeEnabled === true) {
+    throw new HttpsError(
+      "failed-precondition",
+      "Phase 1 requires Bank Transfer and Card/Stripe to remain disabled.",
+    );
   }
 
   // Preserve the defensive bank-routing validator for future policy migration, while
