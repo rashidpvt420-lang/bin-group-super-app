@@ -36,6 +36,7 @@ const BASE_GATE_SOURCE_CONTRACT = Object.freeze({
 });
 
 export const APPROVED_EVIDENCE_REFERENCE_ERROR = 'evidenceReference must be an HTTPS URL on an approved evidence host';
+export const GITHUB_REPOSITORY_MISMATCH_ERROR = 'githubRepository mismatch';
 
 function assertBaseHardLaunchContract() {
   const actual = [...base.REQUIRED_OPERATIONAL_GATES];
