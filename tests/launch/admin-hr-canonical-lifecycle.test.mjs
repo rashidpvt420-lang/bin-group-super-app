@@ -98,7 +98,7 @@ test('canonical registration UI remains compatible with protected Admin business
   assert.match(source, /'aria-label': 'Email Address'/);
   assert.match(source, /data-testid="staff-role-select"/);
   assert.match(source, /'CREATE & SEND INVITATION'/);
-  assert.match(proof, /ADD STAFF \\/ TECHNICIAN/);
+  assert.ok(proof.includes("name: /ADD STAFF \\/ TECHNICIAN/i"));
   assert.match(proof, /getByLabel\('Full Name'\)/);
   assert.match(proof, /getByLabel\('Email Address'\)/);
   assert.match(proof, /getByTestId\('staff-role-select'\)/);
