@@ -1,15 +1,14 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   Alert, Box, Button, Checkbox, Chip, CircularProgress, Container, Dialog, DialogActions, DialogContent,
   DialogTitle, FormControl, FormControlLabel, IconButton, InputLabel, ListItemText, MenuItem, Paper,
   Select, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, Tooltip, Typography,
 } from '@mui/material';
 import { Add as AddIcon, Build as BuildIcon, Edit as EditIcon } from '@mui/icons-material';
-import { ShieldOff, UserX } from 'lucide-react';
+import { RefreshCw, ShieldOff, UserX } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { collection, onSnapshot, query, where } from 'firebase/firestore';
 import { useLanguage } from '@bin/shared';
-import { db, functions, httpsCallable } from '../../lib/firebase';
+import { auth, functions, httpsCallable } from '../../lib/firebase';
 
 interface Technician {
   uid: string;
@@ -37,6 +36,7 @@ export default function TechniciansManagementPage() {
   const navigate = useNavigate();
   const [techs, setTechs] = useState<Technician[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [openEdit, setOpenEdit] = useState(false);
@@ -48,16 +48,37 @@ export default function TechniciansManagementPage() {
     maxConcurrentJobs: 3, emergencyEligible: false,
   });
 
-  useEffect(() => {
-    const unsubscribe = onSnapshot(query(collection(db, 'users'), where('role', '==', 'technician')), (snapshot) => {
-      setTechs(snapshot.docs.map((item) => ({ uid: item.id, ...item.data() })) as Technician[]);
-      setLoading(false);
-    }, (error) => {
+  const loadTechnicians = useCallback(async (quiet = false) => {
+    if (quiet) setRefreshing(true); else setLoading(true);
+    try {
+      if (!auth.currentUser) throw new Error('Admin authentication is required.');
+      await auth.currentUser.getIdToken(true);
+      const response: any = await httpsCallable(functions, 'adminGetHrCommandSnapshot')({});
+      const staff = Array.isArray(response.data?.staff) ? response.data.staff : [];
+      const technicians = staff
+        .filter((member: any) => String(member.role || '').toLowerCase() === 'technician')
+        .map((member: any) => ({
+          ...member,
+          uid: String(member.id || member.uid || ''),
+          role: 'technician' as const,
+          email: String(member.email || ''),
+          displayName: String(member.displayName || member.fullName || ''),
+          phoneNumber: String(member.phoneNumber || member.phone || ''),
+          specialization: String(member.specialization || member.trade || 'General'),
+          emiratesCovered: Array.isArray(member.emiratesCovered) ? member.emiratesCovered : [],
+        }))
+        .filter((member: Technician) => Boolean(member.uid));
+      setTechs(technicians);
+      setActionError(null);
+    } catch (error) {
       setActionError(`Technician registry sync failed: ${errorText(error)}`);
+    } finally {
       setLoading(false);
-    });
-    return unsubscribe;
+      setRefreshing(false);
+    }
   }, []);
+
+  useEffect(() => { void loadTechnicians(); }, [loadTechnicians]);
 
   const handleEditOpen = (tech: Technician) => {
     setSelectedTech(tech);
@@ -76,6 +97,7 @@ export default function TechniciansManagementPage() {
       await httpsCallable(functions, 'adminUpdateStaffProfile')({ uid: selectedTech.uid, ...editTech });
       setActionSuccess('Technician profile updated through the protected staff lifecycle.');
       setOpenEdit(false);
+      await loadTechnicians(true);
     } catch (error) { setActionError(errorText(error)); }
     finally { setSubmitting(false); }
   };
@@ -85,6 +107,7 @@ export default function TechniciansManagementPage() {
     try {
       await httpsCallable(functions, 'adminSetStaffStatus')({ uid: tech.uid, status: suspended ? 'ACTIVE' : 'SUSPENDED' });
       setActionSuccess(suspended ? `${tech.displayName} restored to the prior onboarding state.` : `${tech.displayName} suspended; Auth disabled and refresh tokens revoked.`);
+      await loadTechnicians(true);
     } catch (error) { setActionError(errorText(error)); }
   };
 
@@ -94,6 +117,7 @@ export default function TechniciansManagementPage() {
     try {
       await httpsCallable(functions, 'adminOffboardStaff')({ uid: tech.uid, reason: reason.trim() });
       setActionSuccess(`${tech.displayName} offboarded, tokens revoked, and staff/technician records archived.`);
+      await loadTechnicians(true);
     } catch (error) { setActionError(errorText(error)); }
   };
 
@@ -104,11 +128,14 @@ export default function TechniciansManagementPage() {
   return (
     <Container maxWidth="lg" sx={{ py: 4, direction: isRTL ? 'rtl' : 'ltr' }}>
       <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" alignItems={{ xs: 'stretch', md: 'center' }} spacing={2} sx={{ mb: 4 }}>
-        <Box><Typography variant="h4" sx={{ fontWeight: 900 }}>{t('nav.technicians')} <Box component="span" sx={{ color: '#10b981' }}>{t('admin.tech.force')}</Box></Typography><Typography variant="body2" color="text.secondary">Technicians are employees in the canonical HR lifecycle. Duty state comes from server-owned shift operations, not Admin browser toggles.</Typography></Box>
-        <Button data-testid="admin-add-technician" variant="contained" startIcon={<AddIcon />} onClick={() => navigate('/hr?register=technician')} sx={{ borderRadius: 100, px: 3, bgcolor: '#10b981', '&:hover': { bgcolor: '#059669' } }}>REGISTER TECHNICIAN IN HR</Button>
+        <Box><Typography variant="h4" sx={{ fontWeight: 900 }}>{t('nav.technicians')} <Box component="span" sx={{ color: '#10b981' }}>{t('admin.tech.force')}</Box></Typography><Typography variant="body2" color="text.secondary">Technicians are employees in the canonical HR lifecycle. Registry data is loaded through the protected HR snapshot; duty state remains server-owned.</Typography></Box>
+        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
+          <Button variant="outlined" startIcon={refreshing ? <CircularProgress size={16} /> : <RefreshCw size={16} />} onClick={() => void loadTechnicians(true)} disabled={refreshing}>REFRESH</Button>
+          <Button data-testid="admin-add-technician" variant="contained" startIcon={<AddIcon />} onClick={() => navigate('/hr?register=technician')} sx={{ borderRadius: 100, px: 3, bgcolor: '#10b981', '&:hover': { bgcolor: '#059669' } }}>REGISTER TECHNICIAN IN HR</Button>
+        </Stack>
       </Stack>
 
-      <Alert severity="info" sx={{ mb: 3 }}>Create technicians only in HR Command. Edit, suspend and offboard actions below use protected callables; this page never deletes Firebase Auth or Firestore identity records directly.</Alert>
+      <Alert severity="info" sx={{ mb: 3 }}>Create technicians only in HR Command. Registry reads and edit/suspend/offboard actions use protected server callables; this page does not depend on browser access to the users collection.</Alert>
       {actionError && <Alert severity="error" onClose={() => setActionError(null)} sx={{ mb: 3 }}>{actionError}</Alert>}
       {actionSuccess && <Alert severity="success" onClose={() => setActionSuccess(null)} sx={{ mb: 3 }}>{actionSuccess}</Alert>}
 
