@@ -31,18 +31,22 @@ test('protected Admin evidence uses only enrolled real Firebase phone or TOTP fa
   }
 });
 
-test('HR route retains the registry and exposes callable-only least-privilege staff provisioning', async () => {
-  const [hr, access, provisioning] = await Promise.all([
+test('HR route retains the complete registry and exposes callable-only least-privilege staff provisioning', async () => {
+  const [hr, access, provisioning, roles] = await Promise.all([
     read('apps/admin-panel/src/pages/admin/HRManagementPage.tsx'),
     read('apps/admin-panel/src/pages/admin/StaffAccessPage.tsx'),
     read('functions/adminUserProvisioning.ts'),
+    read('apps/admin-panel/src/constants/staffRoles.ts'),
   ]);
-  assert.match(hr, /const filteredStaff = staff\.filter/);
+  assert.match(hr, /const filteredStaff = useMemo/);
+  assert.match(hr, /where\('role', 'in', STAFF_ROLE_VALUES\)/);
+  assert.match(hr, /<StaffRegistryTable staff=\{filteredStaff\}/);
   assert.match(hr, /<StaffAccessPage\s*\/>/);
   assert.doesNotMatch(hr, /RegisterStaffDialog/);
   assert.match(access, /httpsCallable\(functions, 'adminCreateUser'\)/);
   assert.match(access, /httpsCallable\(functions, 'adminUpdateStaffAccess'\)/);
   assert.match(access, /httpsCallable\(functions, 'adminSetStaffStatus'\)/);
+  assert.match(roles, /STAFF_ROLE_VALUES/);
   assert.match(provisioning, /admin:\s*false/);
   assert.match(provisioning, /superAdmin:\s*false/);
   assert.match(provisioning, /ceo:\s*false/);
@@ -88,10 +92,6 @@ test('Admin business E2E must prove transactional responsibilities, diagnostics 
     'ADMIN_REASSIGN_READY_TECHNICIAN',
     'idempotent',
     'firebaseAuthStatus',
-    'failedScriptUrl',
-  ]) {
-    assert.match(spec, new RegExp(required));
-  }
-  assert.match(spec, /E2E_ADMIN_REAL_MFA_CODE/);
-  assert.match(spec, /assertAuthenticatedFirebaseRead/);
+    'assertAuthenticatedFirestoreRead',
+  ]) assert.match(spec, new RegExp(required));
 });

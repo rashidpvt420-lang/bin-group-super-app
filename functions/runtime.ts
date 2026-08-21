@@ -8,9 +8,6 @@ export * from "./brokerReferralAttribution";
 export * from "./ownerOnboarding";
 export * from "./ownerPortfolioQuote";
 export * from "./secureOwnerRegistrationRequest";
-// Security: keep inspectionFirstOwnerOnboarding on an explicit named export list.
-// The legacy single-inspection completion export is intentionally excluded; only
-// portfolio-safe Owner acquisition callables are deployed.
 export {
   previewOwnerInspectionQuote,
   requestOwnerInspectionSignatureOtp,
@@ -37,19 +34,16 @@ export * from "./ticketNormalization";
 export * from "./hrAutomation";
 export * from "./technicianPayrollCompatibility";
 export * from "./adminUserProvisioning";
+export * from "./adminStaffLifecycle";
 export * from "./adminBridgeAuth";
 export * from "./adminSecurityProfile";
 export * from "./adminMfaReadiness";
 export * from "./secureAdminContractOperations";
 export * from "./adminMfaRecovery";
 export * from "./aiAssistant";
-// Keep the retired generateAIDesignConceptImages callable fail-closed while
-// exporting the separately reviewed Owner/Tenant and Admin replacement callables.
 export * from "./aiDesignStudioLaunchHold";
 export * from "./aiDesignStudio";
 export * from "./aiDesignStudioCompat";
-// Explicit aliases replace the legacy hard-failing implementations re-exported
-// from index.ts without creating duplicate public callable names.
 export { processTitleDeedOCRV2 as processTitleDeedOCR } from "./titleDeedOcrV2";
 export { getMissionGuidanceV2 as getMissionGuidance } from "./missionGuidanceV2";
 export * from "./contractSignatureOtpMailbox";
