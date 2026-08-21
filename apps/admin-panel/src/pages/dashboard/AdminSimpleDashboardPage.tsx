@@ -90,7 +90,7 @@ export default function AdminSimpleDashboardPage() {
     { label: 'Contracts expiring ≤45d', value: ops.contractsExpiring, route: '/contracts', icon: <FileWarning size={18} />, danger: ops.contractsExpiring > 0 },
     { label: 'Owner activations pending', value: ops.ownerActivationsPending, route: '/owners', icon: <UserCheck size={18} />, danger: ops.ownerActivationsPending > 0 },
     { label: 'Open tenant complaints', value: ops.tenantComplaints, route: '/tickets', icon: <TicketCheck size={18} />, danger: ops.tenantComplaints > 0 },
-    { label: 'Failed notifications', value: ops.failedNotifications, route: '/ops/notifications', icon: <MailWarning size={18} />, danger: ops.failedNotifications > 0 },
+    { label: 'Failed notifications', value: ops.failedNotifications, route: '/audit-shield', icon: <MailWarning size={18} />, danger: ops.failedNotifications > 0 },
     { label: 'Security alerts · 24h', value: ops.securityAlerts24h, route: '/audit-shield', icon: <ShieldAlert size={18} />, danger: ops.securityAlerts24h > 0 },
     { label: 'Compliance attention', value: ops.complianceAttention, route: '/compliance', icon: <ShieldCheck size={18} />, danger: ops.complianceAttention > 0 },
   ];
