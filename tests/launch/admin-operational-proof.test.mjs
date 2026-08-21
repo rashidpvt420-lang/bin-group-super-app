@@ -31,15 +31,25 @@ test('protected Admin evidence uses only enrolled real Firebase phone or TOTP fa
   }
 });
 
-test('HR route retains the registry and exposes callable-only least-privilege staff provisioning', async () => {
-  const [hr, access, provisioning] = await Promise.all([
+test('HR route uses protected lifecycle data and callable-only least-privilege staff provisioning', async () => {
+  const [hr, access, provisioning, lifecycle, hrOps] = await Promise.all([
     read('apps/admin-panel/src/pages/admin/HRManagementPage.tsx'),
     read('apps/admin-panel/src/pages/admin/StaffAccessPage.tsx'),
     read('functions/adminUserProvisioning.ts'),
+    read('functions/adminStaffLifecycle.ts'),
+    read('functions/adminHrOperations.ts'),
   ]);
-  assert.match(hr, /const filteredStaff = staff\.filter/);
+  assert.match(hr, /adminGetStaffLifecycle/);
+  assert.match(hr, /adminGetHrOperations/);
+  assert.match(hr, /adminRecordStaffAttendance/);
+  assert.match(hr, /adminCreateStaffLeaveRequest/);
+  assert.match(hr, /adminReviewStaffLeaveRequest/);
+  assert.match(hr, /adminRegisterHrDocumentMetadata/);
+  assert.match(hr, /adminResendStaffInvitation/);
+  assert.match(hr, /adminOffboardStaff/);
   assert.match(hr, /<StaffAccessPage\s*\/>/);
   assert.doesNotMatch(hr, /RegisterStaffDialog/);
+  assert.doesNotMatch(hr, /where\('role',\s*'in',\s*\['technician'/);
   assert.match(access, /httpsCallable\(functions, 'adminCreateUser'\)/);
   assert.match(access, /httpsCallable\(functions, 'adminUpdateStaffAccess'\)/);
   assert.match(access, /httpsCallable\(functions, 'adminSetStaffStatus'\)/);
@@ -47,6 +57,10 @@ test('HR route retains the registry and exposes callable-only least-privilege st
   assert.match(provisioning, /superAdmin:\s*false/);
   assert.match(provisioning, /ceo:\s*false/);
   assert.match(provisioning, /Module \$\{moduleKey\} is not allowed for role/);
+  assert.match(lifecycle, /revokeRefreshTokens\(uid\)/);
+  assert.match(lifecycle, /recordsPreserved:\s*true/);
+  assert.match(lifecycle, /private_hr_profiles/);
+  assert.match(hrOps, /enforceAppCheck:\s*true/g);
 });
 
 test('Founder review, payment decisions and Broker payout review require MFA-backed authority', async () => {
