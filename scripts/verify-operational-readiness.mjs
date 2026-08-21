@@ -94,12 +94,12 @@ const sourceGates = source.operationalEvidence && typeof source.operationalEvide
   : {};
 const paymentConfig = paymentConfigSnap.data() || {};
 const paymentPolicy = text(paymentConfig.policy).toLowerCase();
-const requiredOperationalGates = requiredOperationalGatesForPaymentPolicy(paymentPolicy);
+const REQUIRED_OPERATIONAL_GATES = requiredOperationalGatesForPaymentPolicy(paymentPolicy);
 const approvedPaymentMethods = normalizeMethods(paymentConfig.approvedMethods);
 const paymentConfigHash = canonicalPaymentConfigHash(paymentConfig);
 
 const gates = {};
-for (const key of requiredOperationalGates) {
+for (const key of REQUIRED_OPERATIONAL_GATES) {
   const gate = sourceGates[key] || {};
   gates[key] = {
     status: String(gate.status || ''),
@@ -155,6 +155,6 @@ if (errors.length) {
 
 writeFileSync(output, `${JSON.stringify(report, null, 2)}\n`);
 console.log(
-  `[operational-readiness] PASS policy=${paymentPolicy} gates=${requiredOperationalGates.length} paymentConfig=${report.paymentConfigVersion} hash=${paymentConfigHash.slice(0, 12)}…`,
+  `[operational-readiness] PASS policy=${paymentPolicy} gates=${REQUIRED_OPERATIONAL_GATES.length} paymentConfig=${report.paymentConfigVersion} hash=${paymentConfigHash.slice(0, 12)}…`,
 );
 console.log(`[operational-readiness] wrote ${output}`);
