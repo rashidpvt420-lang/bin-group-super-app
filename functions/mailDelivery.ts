@@ -10,21 +10,18 @@ const db = admin.firestore();
 
 const smtpUser = defineSecret("SMTP_USER");
 const smtpPass = defineSecret("SMTP_PASS");
-
 const ADMIN_ROLES = new Set(["admin", "super_admin", "ceo", "manager", "operations_admin", "finance_admin"]);
 
 function asText(value: unknown, fallback = "") {
   const out = String(value ?? "").trim();
   return out || fallback;
 }
-
 function asList(value: unknown): string[] | undefined {
   if (!value) return undefined;
   if (Array.isArray(value)) return value.map((entry) => asText(entry)).filter(Boolean);
   const text = asText(value);
   return text ? text.split(",").map((entry) => entry.trim()).filter(Boolean) : undefined;
 }
-
 function stripHtml(html: string) {
   return html.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, " ")
     .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, " ")
@@ -55,6 +52,20 @@ async function createTransporter() {
   });
 }
 
+async function syncStaffInvitationDelivery(data: any, state: "PROCESSING" | "DELIVERED" | "ERROR", details: Record<string, unknown> = {}) {
+  if (asText(data?.type) !== "staff_account_invitation") return;
+  const uid = asText(data?.targetUid);
+  if (!uid) return;
+  const now = FieldValue.serverTimestamp();
+  await db.collection("users").doc(uid).set({
+    invitationStatus: state,
+    invitationDelivery: { state, ...details, updatedAt: now },
+    ...(state === "DELIVERED" ? { invitationDeliveredAt: now, invitationLastError: FieldValue.delete() } : {}),
+    ...(state === "ERROR" ? { invitationLastError: asText(details.error, "Invitation delivery failed") } : {}),
+    updatedAt: now,
+  }, { merge: true }).catch((error) => console.error("Failed to synchronize staff invitation state", { uid, state, error }));
+}
+
 async function deliverMail(mailId: string, data: any) {
   const ref = db.collection("mail").doc(mailId);
   const message = data?.message || {};
@@ -69,86 +80,66 @@ async function deliverMail(mailId: string, data: any) {
 
   if (!to?.length) {
     await ref.set({ delivery: { state: "ERROR", error: "Missing recipient email", attemptedAt: FieldValue.serverTimestamp(), provider: "cloud_function_smtp" } }, { merge: true });
+    await syncStaffInvitationDelivery(data, "ERROR", { error: "Missing recipient email", mailId });
     return { skipped: true, reason: "missing_recipient" };
   }
 
   const current = await ref.get();
   const currentState = asText(current.data()?.delivery?.state || data?.delivery?.state).toUpperCase();
-  if (currentState === "SUCCESS") return { skipped: true, reason: "already_delivered" };
+  if (currentState === "SUCCESS") {
+    await syncStaffInvitationDelivery(data, "DELIVERED", { mailId });
+    return { skipped: true, reason: "already_delivered" };
+  }
 
   await ref.set({ delivery: { state: "PROCESSING", provider: "cloud_function_smtp", attemptedAt: FieldValue.serverTimestamp() } }, { merge: true });
+  await syncStaffInvitationDelivery(data, "PROCESSING", { mailId });
 
   try {
     const transporter = await createTransporter();
     const { value: info, attempts } = await sendSmtpWithRetry(() => transporter.sendMail({
-      from,
-      replyTo,
-      to,
-      cc,
-      bcc,
-      subject,
-      html: html || undefined,
-      text: text || undefined,
+      from, replyTo, to, cc, bcc, subject, html: html || undefined, text: text || undefined,
     }));
     const messageId = asText(info.messageId);
-    if (!messageId) {
-      throw new Error("SMTP provider did not return a message ID.");
-    }
+    if (!messageId) throw new Error("SMTP provider did not return a message ID.");
     await ref.set({
       delivery: {
-        state: "SUCCESS",
-        provider: "cloud_function_smtp",
-        messageId,
-        accepted: info.accepted || [],
-        rejected: info.rejected || [],
-        attempts,
-        from,
-        replyTo,
+        state: "SUCCESS", provider: "cloud_function_smtp", messageId,
+        accepted: info.accepted || [], rejected: info.rejected || [], attempts, from, replyTo,
         deliveredAt: FieldValue.serverTimestamp(),
       },
       updatedAt: FieldValue.serverTimestamp(),
     }, { merge: true });
+    await syncStaffInvitationDelivery(data, "DELIVERED", { mailId, provider: "cloud_function_smtp", messageId, attempts });
     return { delivered: true, messageId };
   } catch (error: any) {
+    const errorMessage = error?.message || "SMTP delivery failed";
+    const attempts = smtpAttemptCount(error);
     await ref.set({
       delivery: {
-        state: "ERROR",
-        provider: "cloud_function_smtp",
-        error: error?.message || "SMTP delivery failed",
-        attempts: smtpAttemptCount(error),
+        state: "ERROR", provider: "cloud_function_smtp", error: errorMessage, attempts,
         failedAt: FieldValue.serverTimestamp(),
       },
       updatedAt: FieldValue.serverTimestamp(),
     }, { merge: true });
-    // Eventarc should retry provider/network failures, but permanent SMTP
-    // configuration or recipient errors must settle as ERROR instead of
-    // creating an unbounded retry storm.
+    await syncStaffInvitationDelivery(data, "ERROR", { mailId, provider: "cloud_function_smtp", error: errorMessage, attempts });
     if (isTransientSmtpError(error)) throw error;
-    return { delivered: false, error: error?.message || "SMTP delivery failed" };
+    return { delivered: false, error: errorMessage };
   }
 }
 
 export const sendQueuedMailOnCreate = onDocumentCreated({
-  document: "mail/{mailId}",
-  region: "europe-west3",
-  retry: true,
-  secrets: [smtpUser, smtpPass],
+  document: "mail/{mailId}", region: "europe-west3", retry: true, secrets: [smtpUser, smtpPass],
 }, async (event) => {
   const snap = event.data;
   if (!snap) return;
   await deliverMail(event.params.mailId, snap.data() || {});
 });
 
-export const adminRetryMailDelivery = onCall({
-  cors: true,
-  secrets: [smtpUser, smtpPass],
-}, async (request) => {
+export const adminRetryMailDelivery = onCall({ cors: true, secrets: [smtpUser, smtpPass] }, async (request) => {
   await assertAdmin(request.auth);
   const user = smtpUser.value() || process.env.SMTP_USER || "";
   const pass = smtpPass.value() || process.env.SMTP_PASS || "";
-  if (!user || !pass) {
-    throw new HttpsError("failed-precondition", "SMTP email service is not configured. Configure SMTP_USER and SMTP_PASS.");
-  }
+  if (!user || !pass) throw new HttpsError("failed-precondition", "SMTP email service is not configured. Configure SMTP_USER and SMTP_PASS.");
   const mailId = asText(request.data?.mailId);
   const limit = Math.min(Number(request.data?.limit || 10), 50);
   const results: any[] = [];
@@ -171,6 +162,5 @@ export const adminRetryMailDelivery = onCall({
       results.push({ mailId: doc.id, delivered: false, error: error?.message || "SMTP delivery failed" });
     }
   }
-
   return { status: "DONE", results };
 });
