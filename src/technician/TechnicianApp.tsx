@@ -21,6 +21,7 @@ import TechnicianMapPage from './pages/TechnicianMapPage';
 import TechnicianHistoryPage from './pages/TechnicianHistoryPage';
 import TechnicianProfilePage from './pages/TechnicianProfilePage';
 import TechnicianHRPage from './pages/TechnicianHRPageV2';
+import TechnicianLeavePage from './pages/TechnicianLeavePage';
 import TechnicianOfflinePage from './pages/TechnicianOfflinePage';
 import TechnicianProofReadinessPage from './pages/TechnicianProofReadinessPage';
 import TechnicianBeforeWorkEvidence from './components/TechnicianBeforeWorkEvidence';
@@ -40,14 +41,14 @@ const HrComingSoon = () => (
 const shell = { ink: '#111827', muted: '#667085', canvas: '#FFFFFF', soft: '#F8F9FB', border: '#E5E7EB', gold: binThemeTokens.gold };
 const breadcrumbArabic: Record<string, string> = {
     dashboard: 'لوحة التحكم', jobs: 'المهام', job: 'المهمة', proof_readiness: 'جاهزية الإثبات',
-    chat: 'المحادثة', map: 'الخريطة', history: 'السجل', profile: 'الملف', hr: 'الموارد البشرية',
+    chat: 'المحادثة', map: 'الخريطة', history: 'السجل', profile: 'الملف', hr: 'الموارد البشرية', leave: 'الإجازات',
     offline: 'دون اتصال', support: 'الدعم', bin_connect: 'BIN Connect', pilot_completion: 'إكمال التجربة',
 };
 
 const TechnicianLayout = ({ children }: { children: React.ReactNode }) => {
     const navigate = useNavigate();
     const location = useLocation();
-    const { isRTL, lang, t, tx } = useLanguage();
+    const { isRTL, lang, tx } = useLanguage();
     const label = (key: string, en: string, ar: string) => lang === 'ar' ? ar : tx(key, en);
     const pathnames = location.pathname.split('/').filter(Boolean);
     const isDashboard = location.pathname === '/technician' || location.pathname === '/technician/dashboard';
@@ -65,6 +66,7 @@ const TechnicianLayout = ({ children }: { children: React.ReactNode }) => {
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 0.8, md: 1.1 }, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
                         <Button onClick={() => navigate('/technician/jobs')} sx={quickButtonSx}>{label('tech.quick.jobs', 'Jobs', 'المهام')}</Button>
                         <Button onClick={() => navigate('/technician/map')} sx={quickButtonSx}>{label('tech.quick.map', 'Live Map', 'الخريطة المباشرة')}</Button>
+                        <Button onClick={() => navigate('/technician/leave')} sx={quickButtonSx}>{label('tech.quick.leave', 'Leave', 'الإجازات')}</Button>
                         <Button onClick={() => navigate('/technician/offline')} sx={quickButtonSx}>{label('tech.quick.offline', 'Offline Queue', 'قائمة دون اتصال')}</Button>
                         <Button onClick={() => navigate('/technician/support')} sx={quickButtonSx}>{label('tech.quick.support', 'Support', 'الدعم')}</Button>
                         <NotificationBell />
@@ -111,6 +113,7 @@ export default function TechnicianApp() {
                 <Route path="/map" element={<TechnicianMapPage />} />
                 <Route path="/history" element={<TechnicianHistoryPage />} />
                 <Route path="/profile" element={<TechnicianProfilePage />} />
+                <Route path="/leave" element={<TechnicianLeavePage />} />
                 <Route path="/hr" element={ENABLE_HR_MODULE ? <TechnicianHRPage /> : <HrComingSoon />} />
                 <Route path="/hr/*" element={ENABLE_HR_MODULE ? <TechnicianHRPage /> : <HrComingSoon />} />
                 <Route path="/offline" element={<TechnicianOfflinePage />} />
