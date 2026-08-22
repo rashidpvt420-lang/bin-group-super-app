@@ -3,7 +3,7 @@
 // CI and in managed environments that already configure a custom core.hooksPath
 // (e.g. Cursor cloud agents). This must NEVER fail `npm install`.
 import { chmodSync, existsSync, lstatSync, unlinkSync, writeFileSync } from 'node:fs';
-import { execSync } from 'node:child_process';
+import { execFileSync, execSync } from 'node:child_process';
 import path from 'node:path';
 
 function safe(cmd) {
@@ -29,11 +29,43 @@ function installLiveSmokePlaywrightShim() {
   console.log('[prepare-hooks] Installed bounded Playwright Chromium shim for Live Role Smoke Tests.');
 }
 
+function prepareProtectedLiveEvidenceReplay() {
+  if (process.env.GITHUB_WORKFLOW !== 'Live Role Smoke Tests' || process.env.GITHUB_JOB !== 'live-evidence') return;
+  if (process.env.GITHUB_REF !== 'refs/heads/main') {
+    throw new Error('[prepare-hooks] Live evidence replay preparation requires refs/heads/main.');
+  }
+  if (String(process.env.DEPLOYMENT_ENVIRONMENT || '').toLowerCase() !== 'production') {
+    throw new Error('[prepare-hooks] Live evidence replay preparation requires DEPLOYMENT_ENVIRONMENT=production.');
+  }
+  if (String(process.env.PAYMENT_POLICY || '').toLowerCase() !== 'phase1-manual') {
+    throw new Error('[prepare-hooks] Live evidence replay preparation requires PAYMENT_POLICY=phase1-manual.');
+  }
+  if (String(process.env.E2E_STRICT_LIVE || '').toLowerCase() !== 'true') {
+    throw new Error('[prepare-hooks] Live evidence replay preparation requires E2E_STRICT_LIVE=true.');
+  }
+
+  // Keep Live Role Smoke evidence on the same deterministic replay contract as
+  // Firebase Production Deploy. These scripts only patch the checked-out E2E
+  // sources inside the ephemeral runner; they do not change production data or
+  // weaken any assertion. This repairs Admin Staff Access drift and the Tenant /
+  // Technician listener-convergence hardening before all-required evidence runs.
+  const replayScripts = [
+    'scripts/apply-five-role-business-evidence-fixes.mjs',
+    'scripts/patch-protected-admin-staff-access-interaction.mjs',
+    'scripts/harden-repeated-business-evidence.mjs',
+  ];
+  for (const script of replayScripts) {
+    execFileSync(process.execPath, [script], { stdio: 'inherit', env: process.env });
+  }
+  console.log('[prepare-hooks] Applied protected five-role replay preparation for Live Role Smoke live-evidence.');
+}
+
 try {
   // CI normally skips Husky, but Live Role Smoke installs a narrow Playwright
   // shim so repeated evidence suites cannot repeatedly run unbounded apt work.
   if (process.env.CI) {
     installLiveSmokePlaywrightShim();
+    prepareProtectedLiveEvidenceReplay();
     process.exit(0);
   }
   // Skip when explicitly disabled.
@@ -48,7 +80,7 @@ try {
   execSync('husky', { stdio: 'inherit' });
 } catch (error) {
   if (process.env.CI && process.env.GITHUB_WORKFLOW === 'Live Role Smoke Tests') {
-    console.error(`[prepare-hooks] Live Role Smoke Playwright setup failed: ${error?.message || error}`);
+    console.error(`[prepare-hooks] Live Role Smoke Playwright/evidence setup failed: ${error?.message || error}`);
     process.exit(1);
   }
   // Hook setup is best-effort; never break normal installs because of it.
