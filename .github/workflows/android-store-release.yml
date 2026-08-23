@@ -144,7 +144,7 @@ jobs:
       - name: Repair and verify Play Integrity App Check registration
         env:
           GCP_ACCESS_TOKEN: ${{ steps.gcp-auth.outputs.access_token }}
-        run: node scripts/verify-android-play-integrity-appcheck.mjs --repair-sha
+        run: node scripts/verify-android-play-integrity-appcheck.mjs --repair-sha --repair-config
 
       - name: Build and cryptographically verify signed AAB
         run: bash scripts/run-android-store-release.sh
