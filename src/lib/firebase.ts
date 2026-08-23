@@ -3,6 +3,7 @@
 // This file intentionally centralizes Firebase browser SDK exports used by the
 // public, owner, broker, tenant, technician, and admin source trees.
 
+import { registerPlugin } from '@capacitor/core';
 import { initializeApp, getApp, getApps, type FirebaseApp } from 'firebase/app';
 import {
   getAuth,
@@ -131,6 +132,7 @@ const isCapacitorNative = Boolean(
   ),
 );
 const isCapacitorAndroid = isCapacitorNative && capacitorPlatform === 'android';
+const nativeAppCheckBridge = registerPlugin<NativeAppCheckBridge>('FirebaseAppCheckBridge');
 
 // Firebase App Check — hosted web builds keep reCAPTCHA, while signed Capacitor
 // Android builds obtain Play Integrity-backed App Check tokens from the native
@@ -169,7 +171,7 @@ if (appCheckExplicitlyEnabled && typeof window !== 'undefined') {
     if (isCapacitorAndroid) {
       const provider = new CustomProvider({
         getToken: async () => {
-          const bridge = capacitorRuntime?.Plugins?.FirebaseAppCheckBridge;
+          const bridge = nativeAppCheckBridge;
           if (!bridge || typeof bridge.getAppCheckToken !== 'function') {
             throw new Error('Native Play Integrity App Check bridge plugin unavailable.');
           }
