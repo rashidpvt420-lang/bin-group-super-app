@@ -208,3 +208,5 @@ jobs:
             appcheck-metrics.safe.json
           if-no-files-found: warn
           retention-days: 7
+
+# Refresh metrics after physical Google Play v3 profile-read attempt on 2026-08-24.
