@@ -1,0 +1,169 @@
+name: Public Launch Evidence Backfill
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  actions: read
+  contents: read
+  id-token: write
+
+concurrency:
+  group: public-launch-evidence-backfill
+  cancel-in-progress: false
+
+jobs:
+  publish-verified-production-evidence:
+    name: Publish verified production evidence to Command Center
+    if: >-
+      github.event.issue.number == 434 &&
+      !github.event.issue.pull_request &&
+      github.event.comment.user.login == github.repository_owner &&
+      github.event.comment.author_association == 'OWNER' &&
+      startsWith(github.event.comment.body, '/bin-launch publish-command-center-evidence ')
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 30
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPOSITORY: ${{ github.repository }}
+      GCP_PROJECT_ID: bin-group-57c60
+
+    steps:
+      - name: Parse exact owner evidence command
+        id: request
+        shell: bash
+        run: |
+          set -euo pipefail
+          body='${{ github.event.comment.body }}'
+          prefix='/bin-launch publish-command-center-evidence '
+          [[ "$body" == "$prefix"* ]] || exit 1
+          args="${body#"$prefix"}"
+          read -r source_sha source_run_id extra <<<"$args"
+          [[ "$source_sha" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$source_run_id" =~ ^[0-9]+$ ]]
+          [[ -z "${extra:-}" ]]
+          [[ "$body" == "/bin-launch publish-command-center-evidence $source_sha $source_run_id" ]]
+          echo "source_sha=$source_sha" >> "$GITHUB_OUTPUT"
+          echo "source_run_id=$source_run_id" >> "$GITHUB_OUTPUT"
+
+      - name: Verify successful exact-SHA Firebase Production Deploy
+        id: source
+        env:
+          SOURCE_SHA: ${{ steps.request.outputs.source_sha }}
+          SOURCE_RUN_ID: ${{ steps.request.outputs.source_run_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          run_json="$(gh api "repos/$REPOSITORY/actions/runs/$SOURCE_RUN_ID")"
+          jq -e \
+            --arg sha "$SOURCE_SHA" \
+            '.name == "Firebase Production Deploy" and
+             .path == ".github/workflows/firebase-production-deploy.yml" and
+             .event == "workflow_dispatch" and
+             .status == "completed" and
+             .conclusion == "success" and
+             .head_branch == "main" and
+             .head_sha == $sha' \
+            <<<"$run_json" >/dev/null
+
+          artifact_name="production-deployment-${SOURCE_SHA}-${SOURCE_RUN_ID}"
+          artifacts="$(gh api "repos/$REPOSITORY/actions/runs/$SOURCE_RUN_ID/artifacts?per_page=100")"
+          artifact_count="$(jq --arg name "$artifact_name" '[.artifacts[] | select(.name == $name and (.expired | not))] | length' <<<"$artifacts")"
+          [[ "$artifact_count" == "1" ]]
+          artifact_id="$(jq -r --arg name "$artifact_name" '.artifacts[] | select(.name == $name and (.expired | not)) | .id' <<<"$artifacts")"
+          artifact_digest="$(jq -r --arg name "$artifact_name" '.artifacts[] | select(.name == $name and (.expired | not)) | .digest // empty' <<<"$artifacts" | tr '[:upper:]' '[:lower:]')"
+          [[ "$artifact_id" =~ ^[0-9]+$ ]]
+          [[ "$artifact_digest" =~ ^sha256:[0-9a-f]{64}$ ]]
+
+          echo "artifact_name=$artifact_name" >> "$GITHUB_OUTPUT"
+          echo "artifact_id=$artifact_id" >> "$GITHUB_OUTPUT"
+          echo "artifact_digest=$artifact_digest" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout current protected bridge code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          persist-credentials: false
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22'
+
+      - name: Authenticate Google Cloud
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          create_credentials_file: true
+          export_environment_variables: true
+
+      - name: Install dependencies
+        run: bash scripts/npm-install-retry.sh
+
+      - name: Download verified production deployment artifact
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: ${{ steps.source.outputs.artifact_name }}
+          path: downloaded-production-evidence
+          run-id: ${{ steps.request.outputs.source_run_id }}
+          github-token: ${{ github.token }}
+
+      - name: Restore exact-SHA evidence batch
+        shell: bash
+        run: |
+          set -euo pipefail
+          deployment_file="$(find downloaded-production-evidence -type f -name production-deployment.json -print -quit)"
+          evidence_file="$(find downloaded-production-evidence -type f -name launch-evidence-batch.json -print -quit)"
+          [[ -n "$deployment_file" && -s "$deployment_file" ]]
+          [[ -n "$evidence_file" && -s "$evidence_file" ]]
+          mkdir -p launch_package
+          cp "$deployment_file" launch_package/production-deployment.json
+          cp "$evidence_file" launch_package/launch-evidence-batch.json
+
+      - name: Build conservative trusted Command Center manifest
+        env:
+          SOURCE_EVIDENCE_MODE: production-deployment-backfill
+          SOURCE_EVIDENCE_SHA: ${{ steps.request.outputs.source_sha }}
+          SOURCE_EVIDENCE_RUN_ID: ${{ steps.request.outputs.source_run_id }}
+          SOURCE_EVIDENCE_ARTIFACT_NAME: ${{ steps.source.outputs.artifact_name }}
+          SOURCE_EVIDENCE_ARTIFACT_DIGEST: ${{ steps.source.outputs.artifact_digest }}
+          E2E_ADMIN_EMAIL: ${{ secrets.E2E_ADMIN_EMAIL }}
+          E2E_FOUNDER_EMAIL: ceo@bin-groups.com
+          E2E_OWNER_EMAIL: ${{ secrets.E2E_OWNER_EMAIL }}
+          E2E_OWNER_MAILBOX_EMAIL: ${{ vars.E2E_OWNER_MAILBOX_EMAIL || secrets.E2E_OWNER_MAILBOX_EMAIL }}
+          E2E_TENANT_EMAIL: ${{ secrets.E2E_TENANT_EMAIL }}
+          E2E_TECHNICIAN_EMAIL: ${{ secrets.E2E_TECHNICIAN_EMAIL }}
+          E2E_BROKER_EMAIL: ${{ secrets.E2E_BROKER_EMAIL }}
+          E2E_BROKER_MAILBOX_EMAIL: ${{ vars.E2E_BROKER_MAILBOX_EMAIL || secrets.E2E_BROKER_MAILBOX_EMAIL }}
+        run: node scripts/build-command-center-evidence-manifest.mjs
+
+      - name: Validate manifest without writing
+        run: node scripts/record-firestore-evidence.js --manifest launch_package/command-center-evidence-manifest.json
+
+      - name: Publish append-only evidence to Firestore
+        env:
+          SOURCE_EVIDENCE_MODE: production-deployment-backfill
+          SOURCE_EVIDENCE_SHA: ${{ steps.request.outputs.source_sha }}
+          SOURCE_EVIDENCE_RUN_ID: ${{ steps.request.outputs.source_run_id }}
+          SOURCE_EVIDENCE_WORKFLOW: Firebase Production Deploy
+          SOURCE_EVIDENCE_ARTIFACT_NAME: ${{ steps.source.outputs.artifact_name }}
+          SOURCE_EVIDENCE_ARTIFACT_DIGEST: ${{ steps.source.outputs.artifact_digest }}
+          SOURCE_EVIDENCE_VERIFIED: 'true'
+        run: node scripts/record-firestore-evidence.js --manifest launch_package/command-center-evidence-manifest.json --write
+
+      - name: Verify Firestore publication
+        env:
+          SOURCE_EVIDENCE_SHA: ${{ steps.request.outputs.source_sha }}
+          SOURCE_EVIDENCE_RUN_ID: ${{ steps.request.outputs.source_run_id }}
+        run: node scripts/verify-command-center-firestore-evidence.mjs
+
+      - name: Upload sanitized bridge manifest
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: command-center-evidence-backfill-${{ steps.request.outputs.source_sha }}-${{ steps.request.outputs.source_run_id }}
+          path: launch_package/command-center-evidence-manifest.json
+          if-no-files-found: error
+          retention-days: 90

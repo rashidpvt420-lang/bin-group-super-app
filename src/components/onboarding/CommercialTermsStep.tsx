@@ -42,15 +42,25 @@ const systemLabels: Record<string, LocalText> = {
     lifts: { en: 'Lifts', ar: 'المصاعد' },
     fireAlarm: { en: 'Fire Alarm', ar: 'إنذار الحريق' },
     firePump: { en: 'Fire Pump', ar: 'مضخة الحريق' },
+    sira: { en: 'SIRA / CCTV', ar: 'كاميرات / SIRA' },
+    emergencyLighting: { en: 'Emergency Lighting', ar: 'إضاءة الطوارئ' },
+    accessControl: { en: 'Access Control', ar: 'التحكم بالدخول' },
     bmu: { en: 'BMU / Facade Access', ar: 'وحدة الواجهات / الوصول للواجهة' },
+    wasteMan: { en: 'Waste Management Room', ar: 'غرفة إدارة النفايات' },
+    bms: { en: 'Building Mgmt System (BMS)', ar: 'نظام إدارة المبنى (BMS)' },
+    iotSensors: { en: 'IoT Sensors', ar: 'حساسات إنترنت الأشياء' },
     pool: { en: 'Swimming Pool', ar: 'المسبح' },
+    gym: { en: 'Gymnasium / Fitness', ar: 'النادي الرياضي / اللياقة' },
+    centralLPG: { en: 'Gas / LPG System', ar: 'نظام الغاز / LPG' },
     greaseTrap: { en: 'Grease Trap', ar: 'مصيدة الشحوم' },
     majlisGarden: { en: 'Majlis Garden', ar: 'حديقة المجلس' },
+    solarIntegration: { en: 'Solar Integration', ar: 'تكامل الطاقة الشمسية' },
+    evReadiness: { en: 'EV Charging Readiness', ar: 'جاهزية شحن السيارات الكهربائية' },
 };
 
 const addOnLabels: Record<string, LocalText> = {
     fire_safety: { en: 'Fire Safety AMC', ar: 'عقد سلامة الحريق' },
-    water_tank: { en: 'Water Tank Service', ar: 'خدمة خزان المياه' },
+    water_tank: { en: 'Water Tank Sterilization', ar: 'تعقيم خزان المياه' },
     elevator_amc: { en: 'Lift AMC', ar: 'عقد صيانة المصاعد' },
     hvac_pm: { en: 'HVAC Preventive Maintenance', ar: 'صيانة وقائية للتكييف' },
     cleaning: { en: 'Cleaning / Deep Cleaning', ar: 'تنظيف / تنظيف عميق' },
@@ -63,7 +73,7 @@ const addOnLabels: Record<string, LocalText> = {
 
 const ppmTextByTier: Record<string, LocalText> = {
     standard: { en: '2x annual PPM visits for selected core systems with completion log.', ar: 'زيارتان سنوياً للصيانة الوقائية للأنظمة الأساسية المختارة مع سجل إنجاز.' },
-    premium: { en: '4x annual PPM visits / quarterly inspections with stronger reporting.', ar: '4 زيارات سنوية / فحوصات ربع سنوية مع تقارير أقوى.' },
+    premium: { en: '4x annual PPM visits / quarterly inspections with stronger reporting.', ar: '4 زيارات سنوياً / فحوصات ربع سنوية مع تقارير أقوى.' },
     elite: { en: '12x annual PPM visits / monthly inspections with standby readiness checks.', ar: '12 زيارة سنوية / فحوصات شهرية مع جاهزية دعم احتياطي.' },
 };
 
@@ -218,7 +228,7 @@ const CommercialTermsStep: React.FC<{ onNext: () => void; onBack: () => void }> 
                                 <Grid item xs={12} md={6}><Paper sx={{ p: 2.5, height: '100%', borderRadius: 4, bgcolor: 'rgba(255,255,255,0.035)', border: '1px solid rgba(255,255,255,0.06)' }}><Typography variant="subtitle2" fontWeight="950" color={binThemeTokens.gold} sx={{ display: 'flex', alignItems: 'center', gap: 1, flexDirection: isRTL ? 'row-reverse' : 'row' }}><Timer size={17} /> {tx(copy.slaResponse, ar)}</Typography><Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.72)', mt: 1.2, lineHeight: 1.75, textAlign: isRTL ? 'right' : 'left' }}>{selectedResponseText}</Typography></Paper></Grid>
                                 <Grid item xs={12} md={6}><Paper sx={{ p: 2.5, height: '100%', borderRadius: 4, bgcolor: 'rgba(255,255,255,0.035)', border: '1px solid rgba(255,255,255,0.06)' }}><Typography variant="subtitle2" fontWeight="950" color="#86efac" sx={{ display: 'flex', alignItems: 'center', gap: 1, flexDirection: isRTL ? 'row-reverse' : 'row' }}><CheckCircle2 size={17} /> {tx(copy.included, ar)}</Typography><Stack spacing={1} sx={{ mt: 1.5 }}>{includedScope.map(item => <Typography key={item.en} variant="caption" sx={{ color: 'rgba(255,255,255,0.68)', lineHeight: 1.55, textAlign: isRTL ? 'right' : 'left' }}>• {tx(item, ar)}</Typography>)}</Stack></Paper></Grid>
                                 <Grid item xs={12} md={6}><Paper sx={{ p: 2.5, height: '100%', borderRadius: 4, bgcolor: 'rgba(255,255,255,0.035)', border: '1px solid rgba(255,255,255,0.06)' }}><Typography variant="subtitle2" fontWeight="950" color="#fca5a5" sx={{ display: 'flex', alignItems: 'center', gap: 1, flexDirection: isRTL ? 'row-reverse' : 'row' }}><XCircle size={17} /> {tx(copy.notIncluded, ar)}</Typography><Stack spacing={1} sx={{ mt: 1.5 }}>{excludedScope.map(item => <Typography key={item.en} variant="caption" sx={{ color: 'rgba(255,255,255,0.68)', lineHeight: 1.55, textAlign: isRTL ? 'right' : 'left' }}>• {tx(item, ar)}</Typography>)}</Stack></Paper></Grid>
-                                <Grid item xs={12}><Paper sx={{ p: 2.5, borderRadius: 4, bgcolor: alpha(binThemeTokens.gold, 0.06), border: `1px solid ${alpha(binThemeTokens.gold, 0.25)}` }}><Typography variant="subtitle2" fontWeight="950" color={binThemeTokens.gold}>{tx(copy.selectedSystems, ar)}</Typography><Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mt: 1.5 }}>{(selectedSystems.length ? selectedSystems : [tx(copy.noSystems, ar)]).map(item => <Chip key={item} size="small" label={item} sx={{ bgcolor: 'rgba(255,255,255,0.06)', color: '#FFF', fontWeight: 800 }} />)}{(selectedAddOnNames.length ? selectedAddOnNames : [tx(copy.mandatoryAddons, ar)]).map(item => <Chip key={item} size="small" label={item} sx={{ bgcolor: alpha(binThemeTokens.gold, 0.12), color: binThemeTokens.gold, fontWeight: 900 }} />)}</Stack></Paper></Grid>
+                                <Grid item xs={12}><Paper sx={{ p: 2.5, borderRadius: 4, bgcolor: alpha(binThemeTokens.gold, 0.06), border: `1px solid ${alpha(binThemeTokens.gold, 0.25)}` }}><Typography variant="subtitle2" fontWeight="950" color={binThemeTokens.gold}>{tx(copy.selectedSystems, ar)}</Typography><Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mt: 1.5 }}>{(selectedSystems.length ? selectedSystems : [tx(copy.noSystems, ar)]).map(item => <Chip key={item} size="small" label={item} sx={{ bgcolor: 'background.paper', color: 'text.primary', border: '1px solid', borderColor: 'divider', fontWeight: 800 }} />)}{(selectedAddOnNames.length ? selectedAddOnNames : [tx(copy.mandatoryAddons, ar)]).map(item => <Chip key={item} size="small" label={item} sx={{ bgcolor: alpha(binThemeTokens.gold, 0.12), color: binThemeTokens.gold, fontWeight: 900 }} />)}</Stack></Paper></Grid>
                             </Grid>
                         </Paper>
 

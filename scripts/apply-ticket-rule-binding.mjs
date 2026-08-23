@@ -8,6 +8,8 @@ let changed = false;
 // Browser applications create canonical tickets through App Check callables.
 // Direct Firestore creation remains Admin-only for controlled operations.
 const canonicalCreate = '      allow create: if isAdmin();';
+const assignedTechnicianList = '      allow list: if canListAssignedTechnicianTicket(resource.data);';
+const dispatchList = '      allow list: if isNotSuspended() && canDispatchJobs();';
 for (const legacyCreate of [
   "      allow create: if isAdmin() || canCreateTenantBoundTicket(request.resource.data);",
   "      allow create: if isAdmin() || hasPermission('canDispatchJobs') || ownerDraftCreate(request.resource.data) || tenantOwns(request.resource.data);",
@@ -62,6 +64,14 @@ function replaceMatchBlock(header, replacement, label) {
   const current = readMatchBlock(header, label);
   if (current.content === replacement) return;
   text = `${text.slice(0, current.start)}${replacement}${text.slice(current.end)}`;
+  changed = true;
+}
+
+function ensureRuleInMatchBlock(header, rule, label) {
+  const current = readMatchBlock(header, label);
+  if (current.content.includes(rule)) return;
+  const insertionPoint = current.start + header.length;
+  text = `${text.slice(0, insertionPoint)}\n${rule}${text.slice(insertionPoint)}`;
   changed = true;
 }
 
@@ -164,14 +174,19 @@ for (const forbidden of [
 
 const legacyHeader = '    match /tickets/{ticketId} {';
 const legacyReadOnlyBlock = `    match /tickets/{ticketId} {
+${assignedTechnicianList}
+${dispatchList}
       allow read: if isNotSuspended() && (participantCanRead(resource.data) || canDispatchJobs());
       allow create, update, delete: if false;
     }`;
 replaceMatchBlock(legacyHeader, legacyReadOnlyBlock, 'legacy /tickets');
 
 const maintenanceHeader = '    match /maintenanceTickets/{ticketId} {';
+ensureRuleInMatchBlock(maintenanceHeader, dispatchList, 'canonical /maintenanceTickets');
 const maintenanceBlock = readMatchBlock(maintenanceHeader, 'canonical /maintenanceTickets').content;
 for (const required of [
+  assignedTechnicianList.trim(),
+  dispatchList.trim(),
   'allow read: if isNotSuspended() && (participantCanRead(resource.data) || canDispatchJobs());',
   canonicalCreate.trim(),
   canonicalUpdate.trim(),

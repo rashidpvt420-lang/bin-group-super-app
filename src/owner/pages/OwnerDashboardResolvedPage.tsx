@@ -25,6 +25,7 @@ import { detectContractMode, canSeeMaintenance } from '../utils/ownerServiceMode
 import { resolveTenantLedger } from '../utils/ownerTenantLedgerResolver';
 import RoleJourneyStrip from '../../components/RoleJourneyStrip';
 import { isOwnerContractActivated, isOwnerProfileActivated } from '../activationPolicy';
+import { formatAedMoney } from '../../../functions/shared/aedMoney';
 
 const ACTIVE_TICKET_STATUSES = new Set(['OPEN', 'PENDING_ASSIGNMENT', 'ASSIGNED', 'ACCEPTED', 'EN_ROUTE', 'ARRIVED', 'IN_PROGRESS', 'WAITING_PARTS', 'ESCALATED']);
 
@@ -744,15 +745,15 @@ export default function OwnerDashboardResolvedPage() {
   }
 
   const contract = resolution.contract || {};
-  const annual = Number(contract.annualContractValue || contract.annualValue || contract.totalValue || 0);
-  const mobilization = Number(contract.mobilizationAmount || contract.depositAmount || contract.paymentSchedule?.mobilizationAmount || (annual ? Math.round(annual * 0.15) : 0));
+  const annual = Number(contract.quoteSnapshot?.annualContractValue ?? contract.paymentSchedule?.annualContractValue ?? contract.annualContractValue ?? 0);
+  const mobilization = Number(contract.quoteSnapshot?.activationDeposit ?? contract.paymentSchedule?.mobilizationAmount ?? contract.activationDeposit ?? contract.mobilizationAmount ?? 0);
   const executiveStats = { properties: properties.length, units: stats.units, tenants: tenantCount, tickets, rentCollected: ledgerSummary?.totalRentPaid ?? stats.rent, payoutsPending: pendingPayments, maintenanceCost: stats.maintenance };
   const missingInfo = { iban: !hasVerifiedIban, units: stats.units === 0 };
   const scrollToObject = (id: string) => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' });
 
   const KPI_CARDS = [
-    { label: tx('dash.kpi.contractValue', 'Annual Contract Value'), value: annual ? `AED ${annual.toLocaleString()}` : tx('dash.kpi.pending', 'Pending'), icon: <CreditCard size={20} />, color: binThemeTokens.gold },
-    { label: tx('dash.kpi.mobilization', '15% Mobilization'), value: mobilization ? `AED ${mobilization.toLocaleString()}` : tx('dash.kpi.pending', 'Pending'), icon: <Shield size={20} />, color: '#10b981' },
+    { label: tx('dash.kpi.contractValue', 'Annual Contract Value'), value: Number.isFinite(annual) && annual > 0 ? formatAedMoney(annual) : tx('dash.kpi.pending', 'Pending'), icon: <CreditCard size={20} />, color: binThemeTokens.gold },
+    { label: tx('dash.kpi.mobilization', '15% Mobilization'), value: Number.isFinite(mobilization) && mobilization > 0 ? formatAedMoney(mobilization) : tx('dash.kpi.pending', 'Pending'), icon: <Shield size={20} />, color: '#10b981' },
     { label: tx('dash.kpi.portfolio', 'Asset Portfolio'), value: properties.length, icon: <Building2 size={20} />, color: '#3b82f6' },
     { label: tx('dash.kpi.ops_load', 'Open Maintenance Tasks'), value: tickets, icon: <Wrench size={20} />, color: '#ef4444' },
     { label: tx('dash.kpi.pendingPayments', 'Pending Payments'), value: pendingPayments, icon: <Wallet size={20} />, color: '#f59e0b', to: '/owner/financials' },

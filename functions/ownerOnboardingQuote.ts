@@ -6,6 +6,7 @@ import {
   type QuoteInput,
 } from "./pricing/calculateUaeQuote2026";
 import { UAE_PRICING_MATRIX_2026 } from "./pricing/uaePricingMatrix2026";
+import { normalizeAedMoney } from "./shared/aedMoney";
 
 const QUOTE_VERSION = "uae-owner-onboarding-2026-v3-server-authority";
 const QUOTE_TTL_MS = 72 * 60 * 60 * 1000;
@@ -22,9 +23,7 @@ function number(value: unknown, fallback = 0) {
   return Number.isFinite(parsed) ? Math.max(parsed, 0) : fallback;
 }
 
-function money(value: number) {
-  return Math.round(value * 100) / 100;
-}
+const money = normalizeAedMoney;
 
 function text(value: unknown) {
   return String(value || "").trim();

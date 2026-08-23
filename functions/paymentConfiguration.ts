@@ -8,7 +8,7 @@ const db = admin.firestore();
 const CONFIG_COLLECTION = "system_payment_config";
 const CONFIG_DOCUMENT = "current";
 const EXPECTED_BENEFICIARY = "BIN GROUP L.L.C - S.P.C";
-const ALLOWED_METHODS = new Set(["BANK_TRANSFER", "CHEQUE", "CASH", "STRIPE"]);
+const PHASE1_METHODS = ["CASH", "CHEQUE"] as const;
 const PAYMENT_ACCESS_ROLES = new Set([
   "owner",
   "admin",
@@ -69,20 +69,11 @@ const canonicalHash = (configuration: Omit<ActivePaymentConfiguration, "configHa
   .update(JSON.stringify(configuration))
   .digest("hex");
 
-export async function loadActivePaymentConfiguration(): Promise<ActivePaymentConfiguration> {
-  const snapshot = await db.collection(CONFIG_COLLECTION).doc(CONFIG_DOCUMENT).get();
-  if (!snapshot.exists) {
-    throw new HttpsError(
-      "failed-precondition",
-      "Corporate payment instructions are not configured. Manual payment methods are disabled.",
-    );
-  }
-
-  const value = snapshot.data() || {};
+export function resolveActivePaymentConfiguration(value: Record<string, any>): ActivePaymentConfiguration {
   if (normalizeUpper(value.status) !== "ACTIVE") {
     throw new HttpsError(
       "failed-precondition",
-      "Corporate payment instructions are not active. Manual payment methods are disabled.",
+      "Corporate payment instructions are not active. Cash and Cheque payments are disabled.",
     );
   }
 
@@ -96,9 +87,10 @@ export async function loadActivePaymentConfiguration(): Promise<ActivePaymentCon
   const effectiveAtMs = timestampToMillis(value.effectiveAt || value.updatedAt);
   const officeLocation = normalizeText(value.officeLocation || value.cashOfficeLocation);
   const approvedMethods = Array.isArray(value.approvedMethods)
-    ? Array.from(new Set(value.approvedMethods.map(normalizeUpper).filter((method: string) => ALLOWED_METHODS.has(method))))
+    ? Array.from(new Set(value.approvedMethods.map(normalizeUpper).filter(Boolean))).sort()
     : [];
   const bankTransferEnabled = approvedMethods.includes("BANK_TRANSFER");
+  const stripeEnabled = approvedMethods.includes("STRIPE");
   const cashOrChequeEnabled = approvedMethods.some((method) => method === "CASH" || method === "CHEQUE");
 
   if (legalBeneficiary !== EXPECTED_BENEFICIARY) {
@@ -110,12 +102,15 @@ export async function loadActivePaymentConfiguration(): Promise<ActivePaymentCon
   if (currency !== "AED") {
     throw new HttpsError("failed-precondition", "Owner onboarding payments must be configured in AED.");
   }
-  if (approvedMethods.length === 0) {
-    throw new HttpsError("failed-precondition", "No approved owner payment method is configured.");
+  if (value.bankTransferEnabled === true || value.stripeEnabled === true) {
+    throw new HttpsError(
+      "failed-precondition",
+      "Phase 1 requires Bank Transfer and Card/Stripe to remain disabled.",
+    );
   }
-  if (cashOrChequeEnabled && !officeLocation) {
-    throw new HttpsError("failed-precondition", "Cash and Cheque payments require an approved BIN GROUP office location.");
-  }
+
+  // Preserve the defensive bank-routing validator for future policy migration, while
+  // Phase 1 below rejects any configuration that actually enables Bank Transfer.
   if (bankTransferEnabled) {
     if (!rawBankName || !rawAccountNumber) {
       throw new HttpsError("failed-precondition", "The corporate bank-transfer configuration is incomplete.");
@@ -126,6 +121,22 @@ export async function loadActivePaymentConfiguration(): Promise<ActivePaymentCon
     if (!/^[A-Z0-9]{8}([A-Z0-9]{3})?$/.test(rawSwiftBic)) {
       throw new HttpsError("failed-precondition", "The configured SWIFT/BIC is invalid.");
     }
+  }
+
+  if (JSON.stringify(approvedMethods) !== JSON.stringify([...PHASE1_METHODS].sort())) {
+    throw new HttpsError(
+      "failed-precondition",
+      "Phase 1 owner onboarding must enable exactly Cash and Cheque. Bank Transfer and Card payments are not available.",
+    );
+  }
+  if (bankTransferEnabled || stripeEnabled) {
+    throw new HttpsError(
+      "failed-precondition",
+      "Phase 1 requires Bank Transfer and Card/Stripe to remain disabled.",
+    );
+  }
+  if (cashOrChequeEnabled && !officeLocation) {
+    throw new HttpsError("failed-precondition", "Cash and Cheque payments require an approved BIN GROUP office location.");
   }
 
   const configurationWithoutHash: Omit<ActivePaymentConfiguration, "configHash"> = {
@@ -145,6 +156,17 @@ export async function loadActivePaymentConfiguration(): Promise<ActivePaymentCon
     ...configurationWithoutHash,
     configHash: canonicalHash(configurationWithoutHash),
   };
+}
+
+export async function loadActivePaymentConfiguration(): Promise<ActivePaymentConfiguration> {
+  const snapshot = await db.collection(CONFIG_COLLECTION).doc(CONFIG_DOCUMENT).get();
+  if (!snapshot.exists) {
+    throw new HttpsError(
+      "failed-precondition",
+      "Corporate payment instructions are not configured. Cash and Cheque payments are disabled.",
+    );
+  }
+  return resolveActivePaymentConfiguration(snapshot.data() || {});
 }
 
 export const getOwnerPaymentConfiguration = onCall(
