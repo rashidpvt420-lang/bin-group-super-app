@@ -123,6 +123,66 @@ jobs:
             exit 4
           fi
 
+      - name: Inspect recent App Check verification metrics
+        shell: bash
+        run: |
+          set -euo pipefail
+          TOKEN="$(gcloud auth print-access-token)"
+          END_TIME="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+          START_TIME="$(date -u -d '4 hours ago' +'%Y-%m-%dT%H:%M:%SZ')"
+          raw="$(mktemp)"
+
+          http_code="$(curl --silent --show-error -o "$raw" -w '%{http_code}' --get \
+            -H "Authorization: Bearer $TOKEN" \
+            --data-urlencode 'filter=metric.type="firebaseappcheck.googleapis.com/resources/verification_count"' \
+            --data-urlencode "interval.startTime=$START_TIME" \
+            --data-urlencode "interval.endTime=$END_TIME" \
+            --data-urlencode 'view=FULL' \
+            'https://monitoring.googleapis.com/v3/projects/bin-group-57c60/timeSeries')"
+
+          if [[ "$http_code" != "200" ]]; then
+            echo "APPCHECK_METRICS_QUERY=UNAVAILABLE_HTTP_$http_code" | tee -a diagnostic.env
+            printf '[]\n' > appcheck-metrics.safe.json
+            exit 0
+          fi
+
+          jq '[
+            .timeSeries[]? as $series |
+            {
+              app_id: ($series.metric.labels.app_id // "unknown"),
+              result: ($series.metric.labels.result // "unknown"),
+              security: ($series.metric.labels.security // "unknown"),
+              resource_type: ($series.resource.type // "unknown"),
+              count: ([$series.points[]?.value.int64Value // "0" | tonumber] | add // 0)
+            }
+          ]
+          | group_by([.app_id, .result, .security, .resource_type])
+          | map({
+              app_id: .[0].app_id,
+              result: .[0].result,
+              security: .[0].security,
+              resource_type: .[0].resource_type,
+              count: (map(.count) | add)
+            })
+          | sort_by(.app_id, .result, .security, .resource_type)' "$raw" > appcheck-metrics.safe.json
+
+          echo "APPCHECK_METRICS_QUERY=YES" | tee -a diagnostic.env
+          echo "APPCHECK_METRICS_WINDOW_START=$START_TIME" | tee -a diagnostic.env
+          echo "APPCHECK_METRICS_WINDOW_END=$END_TIME" | tee -a diagnostic.env
+          echo "APPCHECK_METRIC_SERIES=$(jq 'length' appcheck-metrics.safe.json)" | tee -a diagnostic.env
+
+          android_app='1:123413252227:android:36feeed4a78c1dcf99f3b6'
+          web_app='1:123413252227:web:285cb53bc26626d699f3b6'
+          for app in "$android_app" "$web_app"; do
+            safe_key="$(sed 's/[^A-Za-z0-9]/_/g' <<<"$app" | tr '[:lower:]' '[:upper:]')"
+            allow="$(jq --arg app "$app" '[.[] | select(.app_id == $app and .result == "ALLOW") | .count] | add // 0' appcheck-metrics.safe.json)"
+            deny="$(jq --arg app "$app" '[.[] | select(.app_id == $app and .result == "DENY") | .count] | add // 0' appcheck-metrics.safe.json)"
+            invalid="$(jq --arg app "$app" '[.[] | select(.app_id == $app and (.security == "INVALID" or .security == "MISSING_OUTDATED_CLIENT" or .security == "MISSING_UNKNOWN_ORIGIN")) | .count] | add // 0' appcheck-metrics.safe.json)"
+            echo "APPCHECK_${safe_key}_ALLOW=$allow" | tee -a diagnostic.env
+            echo "APPCHECK_${safe_key}_DENY=$deny" | tee -a diagnostic.env
+            echo "APPCHECK_${safe_key}_INVALID_OR_MISSING=$invalid" | tee -a diagnostic.env
+          done
+
       - name: Publish safe diagnostic summary
         if: always()
         shell: bash
@@ -145,5 +205,6 @@ jobs:
           path: |
             diagnostic.env
             play-integrity-config.safe.json
+            appcheck-metrics.safe.json
           if-no-files-found: warn
           retention-days: 7
