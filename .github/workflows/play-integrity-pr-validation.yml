@@ -1,0 +1,148 @@
+name: Play Integrity PR Validation
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/play-integrity-pr-validation.yml'
+      - 'android/**'
+      - 'src/lib/firebase.ts'
+      - 'src/pages/LoginPage.tsx'
+      - 'firestore.rules'
+      - 'scripts/apply-ticket-rule-binding.mjs'
+      - 'scripts/harden-technician-live-location-authority.mjs'
+      - 'scripts/prepare-production-env.mjs'
+      - 'scripts/inject-android-google-services.mjs'
+      - 'scripts/run-android-store-release.sh'
+      - 'tests/launch/**'
+      - 'test/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'capacitor.config.ts'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: play-integrity-pr-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  application-security:
+    name: Play Integrity app and security gates
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      CI: 'false'
+    steps:
+      - name: Checkout proposed commit
+        uses: actions/checkout@v4
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Use Java 21 for Firebase emulators
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Install dependencies
+        run: npm ci --include=optional --legacy-peer-deps
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Build unified web application
+        run: npm run build
+
+      - name: Run full Firestore and Storage security suite
+        run: npm run test:rules
+
+      - name: Run launch honesty suite
+        run: npm run test:launch-honesty
+
+      - name: Verify Admin Maps production guard
+        run: node --test tests/launch/admin-maps-key-build-enforcer.test.mjs
+
+      - name: Verify Admin operational feed authority
+        run: node --test tests/launch/admin-operational-feeds-security.test.mjs
+
+      - name: Verify Android Play Integrity bridge source contract
+        run: node --test tests/launch/android-play-integrity-bridge.test.mjs
+
+  android-native:
+    name: Play Integrity Android native gates
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      CI: 'false'
+    steps:
+      - name: Checkout proposed commit
+        uses: actions/checkout@v4
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Use Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Install dependencies
+        run: npm ci --include=optional --legacy-peer-deps
+
+      - name: Build web assets
+        run: npm run build
+
+      - name: Sync Capacitor Android
+        run: npx cap sync android
+
+      - name: Create ephemeral non-production CI signing configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          keytool -genkeypair \
+            -keystore android/app/pr-validation.jks \
+            -storepass pr-validation-only \
+            -keypass pr-validation-only \
+            -alias pr-validation \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 2 \
+            -dname 'CN=BIN GROUP PR Validation,O=BIN GROUP,C=AE'
+          cat > android/keystore.properties <<'EOF'
+          storeFile=app/pr-validation.jks
+          storePassword=pr-validation-only
+          keyAlias=pr-validation
+          keyPassword=pr-validation-only
+          EOF
+
+      - name: Resolve Play Integrity App Check dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd android
+          ./gradlew :app:dependencies --configuration releaseRuntimeClasspath --no-daemon | tee ../play-integrity-dependencies.txt
+          grep -q 'firebase-appcheck-playintegrity' ../play-integrity-dependencies.txt
+          grep -q 'firebase-appcheck' ../play-integrity-dependencies.txt
+
+      - name: Compile Android release Java
+        run: cd android && ./gradlew :app:compileReleaseJavaWithJavac --no-daemon --stacktrace
+
+      - name: Validate Android release task graph
+        run: cd android && ./gradlew :app:assembleRelease --dry-run --no-daemon
+
+      - name: Remove ephemeral CI signing material
+        if: always()
+        shell: bash
+        run: rm -f android/app/pr-validation.jks android/keystore.properties
