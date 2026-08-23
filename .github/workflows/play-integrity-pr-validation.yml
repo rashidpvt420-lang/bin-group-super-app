@@ -132,15 +132,15 @@ jobs:
         run: |
           set -euo pipefail
           cd android
-          ./gradlew :app:dependencies --configuration releaseRuntimeClasspath --no-daemon | tee ../play-integrity-dependencies.txt
+          bash ./gradlew :app:dependencies --configuration releaseRuntimeClasspath --no-daemon | tee ../play-integrity-dependencies.txt
           grep -q 'firebase-appcheck-playintegrity' ../play-integrity-dependencies.txt
           grep -q 'firebase-appcheck' ../play-integrity-dependencies.txt
 
       - name: Compile Android release Java
-        run: cd android && ./gradlew :app:compileReleaseJavaWithJavac --no-daemon --stacktrace
+        run: cd android && bash ./gradlew :app:compileReleaseJavaWithJavac --no-daemon --stacktrace
 
       - name: Validate Android release task graph
-        run: cd android && ./gradlew :app:assembleRelease --dry-run --no-daemon
+        run: cd android && bash ./gradlew :app:assembleRelease --dry-run --no-daemon
 
       - name: Remove ephemeral CI signing material
         if: always()
