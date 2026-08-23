@@ -121,6 +121,15 @@ jobs:
       - name: Inject and validate Firebase Android configuration
         run: node scripts/inject-android-google-services.mjs
 
+      - name: Verify Android Firebase client selected for Capacitor build
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$ANDROID_FIREBASE_CLIENT_ENV_EXPORTED" == 'true' ]]
+          [[ "$VITE_FIREBASE_APP_ID" =~ ^1:[0-9]+:android:[A-Fa-f0-9]+$ ]]
+          [[ -n "$VITE_FIREBASE_API_KEY" ]]
+          echo 'Android Firebase client identity selected for Capacitor build.'
+
       - name: Build and cryptographically verify signed AAB
         run: bash scripts/run-android-store-release.sh
 
