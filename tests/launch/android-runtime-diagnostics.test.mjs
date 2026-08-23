@@ -31,6 +31,6 @@ test('native bridge exposes a safe App Check failure code without token logging'
   assert.doesNotMatch(bridge, /Log\.[a-z]+\([^\n]*token/i);
 });
 
-test('next Google Play diagnostic build uses versionCode 3', () => {
-  assert.match(gradle, /versionCode\s+3\b/);
+test('next Google Play profile-read repair build uses versionCode 4', () => {
+  assert.match(gradle, /versionCode\s+4\b/);
 });
