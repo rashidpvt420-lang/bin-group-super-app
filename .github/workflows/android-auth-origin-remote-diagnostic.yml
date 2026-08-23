@@ -1,0 +1,115 @@
+name: Android Auth Origin Remote Diagnostic
+
+on:
+  push:
+    branches:
+      - ops/android-appcheck-remote-diagnostic-69955039
+
+permissions:
+  contents: read
+
+jobs:
+  probe-auth-origins:
+    name: Probe Firebase Auth with hosted and native WebView origins
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 10
+    env:
+      VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
+      E2E_TENANT_EMAIL: ${{ secrets.E2E_TENANT_EMAIL }}
+      E2E_TENANT_PASSWORD: ${{ secrets.E2E_TENANT_PASSWORD }}
+
+    steps:
+      - name: Validate protected inputs without printing them
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${VITE_FIREBASE_API_KEY:-}"
+          test -n "${E2E_TENANT_EMAIL:-}"
+          test -n "${E2E_TENANT_PASSWORD:-}"
+
+      - name: Probe signInWithPassword origin behavior
+        shell: bash
+        run: |
+          set -euo pipefail
+          payload="$(mktemp)"
+          jq -n \
+            --arg email "$E2E_TENANT_EMAIL" \
+            --arg password "$E2E_TENANT_PASSWORD" \
+            '{email:$email,password:$password,returnSecureToken:true}' > "$payload"
+
+          : > auth-origin-diagnostic.env
+
+          probe() {
+            local label="$1"
+            local referer="$2"
+            local origin="$3"
+            local body code status error_message
+            body="$(mktemp)"
+            if [[ -n "$referer" && -n "$origin" ]]; then
+              code="$(curl --silent --show-error -o "$body" -w '%{http_code}' \
+                -H 'Content-Type: application/json' \
+                -H "Referer: $referer" \
+                -H "Origin: $origin" \
+                --data-binary @"$payload" \
+                "https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=$VITE_FIREBASE_API_KEY")"
+            elif [[ -n "$referer" ]]; then
+              code="$(curl --silent --show-error -o "$body" -w '%{http_code}' \
+                -H 'Content-Type: application/json' \
+                -H "Referer: $referer" \
+                --data-binary @"$payload" \
+                "https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=$VITE_FIREBASE_API_KEY")"
+            else
+              code="$(curl --silent --show-error -o "$body" -w '%{http_code}' \
+                -H 'Content-Type: application/json' \
+                --data-binary @"$payload" \
+                "https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=$VITE_FIREBASE_API_KEY")"
+            fi
+
+            if [[ "$code" == "200" ]] && jq -e '.localId and .idToken' "$body" >/dev/null 2>&1; then
+              status='PASS'
+              error_message='NONE'
+            else
+              status='FAIL'
+              error_message="$(jq -r '.error.message // "UNKNOWN"' "$body" 2>/dev/null | tr -cd 'A-Za-z0-9_:/.-' | head -c 160)"
+              [[ -n "$error_message" ]] || error_message='UNKNOWN'
+            fi
+
+            printf 'AUTH_%s_HTTP=%s\n' "$label" "$code" >> auth-origin-diagnostic.env
+            printf 'AUTH_%s=%s\n' "$label" "$status" >> auth-origin-diagnostic.env
+            printf 'AUTH_%s_ERROR=%s\n' "$label" "$error_message" >> auth-origin-diagnostic.env
+            rm -f "$body"
+          }
+
+          probe HOSTED_WEB 'https://bin-group-57c60.web.app/' 'https://bin-group-57c60.web.app'
+          probe CAPACITOR_LOCALHOST 'https://localhost/' 'https://localhost'
+          probe CAPACITOR_HTTP_LOCALHOST 'http://localhost/' 'http://localhost'
+          probe NO_REFERER '' ''
+
+          rm -f "$payload"
+          cat auth-origin-diagnostic.env
+
+      - name: Publish safe summary
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo '## Android Firebase Auth origin diagnostic'
+            echo
+            if [[ -f auth-origin-diagnostic.env ]]; then
+              sed 's/^/- `/' auth-origin-diagnostic.env | sed 's/$/`/'
+            else
+              echo '- Probe did not complete.'
+            fi
+            echo
+            echo '- No password, ID token, refresh token, or API key is included in this output.'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload safe result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-auth-origin-remote-diagnostic-${{ github.sha }}
+          path: auth-origin-diagnostic.env
+          if-no-files-found: warn
+          retention-days: 7
