@@ -8,6 +8,7 @@ on:
 permissions:
   actions: write
   contents: read
+  issues: write
 
 jobs:
   dispatch:
@@ -18,6 +19,7 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       REPOSITORY: ${{ github.repository }}
       EXPECTED_MAIN_SHA: a9533f41f37c9983c8fc8c2293ca4c358fbfb0d1
+      ISSUE_NUMBER: '434'
     steps:
       - name: Require exact frozen main and versionCode 4
         shell: bash
@@ -90,6 +92,8 @@ jobs:
           set -euo pipefail
           [[ "$RUN_ID" =~ ^[0-9]+$ ]]
           run_url="https://github.com/$REPOSITORY/actions/runs/$RUN_ID"
+          body="Android v4 signed AAB release run for exact main \`$EXPECTED_MAIN_SHA\`: $run_url (run ID \`$RUN_ID\`, reused=\`$REUSED\`). This build carries the Android Firebase client identity PROFILE_READ repair; no App Check or Firestore bypass was introduced."
+          gh api --method POST "repos/$REPOSITORY/issues/$ISSUE_NUMBER/comments" -f body="$body" >/dev/null
           {
             echo '## Signed Android v4 AAB run'
             echo
