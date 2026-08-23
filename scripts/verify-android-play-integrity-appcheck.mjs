@@ -12,6 +12,7 @@ const EXPECTED_PLAY_SIGNING_SHA256 = '65:B4:76:9E:05:DE:70:6D:74:BE:CF:89:0F:39:
 const GOOGLE_SERVICES_PATH = path.resolve('android/app/google-services.json');
 const OUTPUT_PATH = path.resolve('launch_package/android-play-integrity-appcheck-proof.json');
 const repairSha = process.argv.includes('--repair-sha');
+const repairConfig = process.argv.includes('--repair-config');
 
 const text = (value) => String(value ?? '').trim();
 const normalizeSha = (value) => text(value).replace(/[^a-fA-F0-9]/g, '').toUpperCase();
@@ -105,7 +106,30 @@ const appCheckUrl = `https://firebaseappcheck.googleapis.com/v1/${appCheckName
   .split('/')
   .map((segment) => encodeURIComponent(segment))
   .join('/')}`;
-const appCheckResult = await request(appCheckUrl);
+
+const writeStrictPlayConfig = async () => request(
+  `${appCheckUrl}?updateMask=${encodeURIComponent('appIntegrity.allowUnrecognizedVersion')}`,
+  {
+    method: 'PATCH',
+    body: JSON.stringify({
+      name: appCheckName,
+      appIntegrity: { allowUnrecognizedVersion: false },
+    }),
+  },
+);
+
+let appCheckResult = await request(appCheckUrl);
+let playIntegrityConfigRepaired = false;
+
+if (appCheckResult.response.status === 404 && repairConfig) {
+  const repairResult = await writeStrictPlayConfig();
+  if (!repairResult.response.ok) {
+    fail(`Play Integrity App Check registration repair returned HTTP ${repairResult.response.status}`);
+  }
+  playIntegrityConfigRepaired = true;
+  appCheckResult = await request(appCheckUrl);
+}
+
 if (!appCheckResult.response.ok) {
   if (appCheckResult.response.status === 404) {
     fail('Firebase Android app is not registered with the Play Integrity App Check provider');
@@ -113,12 +137,27 @@ if (!appCheckResult.response.ok) {
   fail(`Play Integrity App Check configuration lookup returned HTTP ${appCheckResult.response.status}`);
 }
 
-const config = appCheckResult.body || {};
-const returnedName = text(config.name);
+let config = appCheckResult.body || {};
+let returnedName = text(config.name);
 if (returnedName !== appCheckName) fail('Play Integrity App Check configuration identity mismatch');
 
 // Production Play-installed builds must stay recognized by Google Play. Never
 // silently loosen this to allow unrecognized/off-Play versions in a repair.
+if (config?.appIntegrity?.allowUnrecognizedVersion === true && repairConfig) {
+  const repairResult = await writeStrictPlayConfig();
+  if (!repairResult.response.ok) {
+    fail(`Strict Play Integrity App Check repair returned HTTP ${repairResult.response.status}`);
+  }
+  playIntegrityConfigRepaired = true;
+  appCheckResult = await request(appCheckUrl);
+  if (!appCheckResult.response.ok) {
+    fail(`Play Integrity App Check configuration recheck returned HTTP ${appCheckResult.response.status}`);
+  }
+  config = appCheckResult.body || {};
+  returnedName = text(config.name);
+  if (returnedName !== appCheckName) fail('Play Integrity App Check configuration identity mismatch after repair');
+}
+
 if (config?.appIntegrity?.allowUnrecognizedVersion === true) {
   fail('Play Integrity App Check unexpectedly allows unrecognized versions');
 }
@@ -133,6 +172,7 @@ const proof = {
   playSigningSha256Registered: true,
   playSigningSha256Repaired: playSigningShaRepaired,
   playIntegrityAppCheckConfigPresent: true,
+  playIntegrityAppCheckConfigRepaired: playIntegrityConfigRepaired,
   playIntegrityRequiresPlayRecognizedVersion: true,
   playConsoleCloudProjectLink: 'requires-play-installed-runtime-proof',
   observedAt: new Date().toISOString(),
@@ -143,4 +183,5 @@ writeFileSync(OUTPUT_PATH, `${JSON.stringify(proof, null, 2)}\n`, { mode: 0o600 
 
 console.log('[android-appcheck] PASS Android Firebase registration and Play Integrity App Check configuration verified');
 console.log(`[android-appcheck] play_signing_sha_repaired=${playSigningShaRepaired}`);
+console.log(`[android-appcheck] play_integrity_config_repaired=${playIntegrityConfigRepaired}`);
 console.log(`[android-appcheck] wrote ${path.relative(process.cwd(), OUTPUT_PATH)}`);
