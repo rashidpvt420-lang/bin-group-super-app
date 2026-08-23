@@ -1,0 +1,195 @@
+name: Firebase WebView API Key Referrer Repair
+
+on:
+  push:
+    branches:
+      - ops/android-appcheck-remote-diagnostic-69955039
+
+permissions:
+  contents: read
+  id-token: write
+  issues: write
+
+jobs:
+  repair-webview-referrer:
+    name: Add exact Capacitor localhost referrer and verify Tenant Auth
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPOSITORY: ${{ github.repository }}
+      PROJECT_ID: bin-group-57c60
+      EXPECTED_PROJECT_NUMBER: '123413252227'
+      VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
+      E2E_TENANT_EMAIL: ${{ secrets.E2E_TENANT_EMAIL }}
+      E2E_TENANT_PASSWORD: ${{ secrets.E2E_TENANT_PASSWORD }}
+
+    steps:
+      - name: Validate protected repair inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${VITE_FIREBASE_API_KEY:-}"
+          test -n "${E2E_TENANT_EMAIL:-}"
+          test -n "${E2E_TENANT_PASSWORD:-}"
+
+      - name: Authenticate to Google Cloud by Workload Identity Federation
+        uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          create_credentials_file: true
+          export_environment_variables: true
+
+      - name: Set up Google Cloud CLI
+        uses: google-github-actions/setup-gcloud@v3
+        with:
+          project_id: bin-group-57c60
+
+      - name: Resolve exact Firebase web API key and add Capacitor referrer
+        id: repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          TOKEN="$(gcloud auth print-access-token)"
+
+          lookup="$(curl --fail --silent --show-error --get \
+            -H "Authorization: Bearer $TOKEN" \
+            --data-urlencode "keyString=$VITE_FIREBASE_API_KEY" \
+            'https://apikeys.googleapis.com/v2/keys:lookupKey')"
+
+          key_name="$(jq -r '.name // empty' <<<"$lookup")"
+          parent="$(jq -r '.parent // empty' <<<"$lookup")"
+          [[ "$key_name" =~ ^projects/([0-9]+)/locations/global/keys/[A-Za-z0-9_-]+$ ]]
+          [[ "${BASH_REMATCH[1]}" == "$EXPECTED_PROJECT_NUMBER" ]]
+          [[ "$parent" == "projects/$EXPECTED_PROJECT_NUMBER/locations/global" ]]
+
+          before="$(curl --fail --silent --show-error \
+            -H "Authorization: Bearer $TOKEN" \
+            "https://apikeys.googleapis.com/v2/$key_name")"
+
+          jq -e '.restrictions.browserKeyRestrictions.allowedReferrers | type == "array" and length > 0' <<<"$before" >/dev/null
+          jq -e '(.restrictions.serverKeyRestrictions // null) == null and (.restrictions.androidKeyRestrictions // null) == null and (.restrictions.iosKeyRestrictions // null) == null' <<<"$before" >/dev/null
+
+          jq '{
+            displayName,
+            uid,
+            browserReferrers:(.restrictions.browserKeyRestrictions.allowedReferrers // []),
+            apiTargets:(.restrictions.apiTargets // [])
+          }' <<<"$before" > api-key-before.safe.json
+
+          updated_restrictions="$(jq '
+            .restrictions
+            | .browserKeyRestrictions.allowedReferrers = (
+                ((.browserKeyRestrictions.allowedReferrers // [])
+                  + ["https://localhost", "https://localhost/*"])
+                | unique
+              )
+          ' <<<"$before")"
+
+          patch_body="$(jq -n --argjson restrictions "$updated_restrictions" '{restrictions:$restrictions}')"
+          operation="$(curl --fail --silent --show-error -X PATCH \
+            -H "Authorization: Bearer $TOKEN" \
+            -H 'Content-Type: application/json; charset=utf-8' \
+            --data-binary "$patch_body" \
+            "https://apikeys.googleapis.com/v2/$key_name?updateMask=restrictions")"
+
+          op_name="$(jq -r '.name // empty' <<<"$operation")"
+          [[ "$op_name" =~ ^operations/ ]]
+
+          for _ in $(seq 1 60); do
+            op="$(curl --fail --silent --show-error \
+              -H "Authorization: Bearer $TOKEN" \
+              "https://apikeys.googleapis.com/v2/$op_name")"
+            if [[ "$(jq -r '.done // false' <<<"$op")" == 'true' ]]; then
+              if jq -e '.error' <<<"$op" >/dev/null; then
+                jq '{error:{code:.error.code,message:.error.message}}' <<<"$op"
+                exit 1
+              fi
+              break
+            fi
+            sleep 2
+          done
+
+          after="$(curl --fail --silent --show-error \
+            -H "Authorization: Bearer $TOKEN" \
+            "https://apikeys.googleapis.com/v2/$key_name")"
+          jq -e '.restrictions.browserKeyRestrictions.allowedReferrers | index("https://localhost") != null' <<<"$after" >/dev/null
+          jq -e '.restrictions.browserKeyRestrictions.allowedReferrers | index("https://localhost/*") != null' <<<"$after" >/dev/null
+
+          jq '{
+            displayName,
+            uid,
+            browserReferrers:(.restrictions.browserKeyRestrictions.allowedReferrers // []),
+            apiTargets:(.restrictions.apiTargets // [])
+          }' <<<"$after" > api-key-after.safe.json
+
+          key_id="${key_name##*/}"
+          echo "key_id=$key_id" >> "$GITHUB_OUTPUT"
+          echo 'LOCALHOST_REFERRER_ADDED=YES' > repair-result.env
+
+      - name: Verify Firebase Auth now accepts Capacitor WebView origin
+        id: verify
+        shell: bash
+        run: |
+          set -euo pipefail
+          payload="$(mktemp)"
+          body="$(mktemp)"
+          jq -n \
+            --arg email "$E2E_TENANT_EMAIL" \
+            --arg password "$E2E_TENANT_PASSWORD" \
+            '{email:$email,password:$password,returnSecureToken:true}' > "$payload"
+
+          code='000'
+          for _ in $(seq 1 15); do
+            code="$(curl --silent --show-error -o "$body" -w '%{http_code}' \
+              -H 'Content-Type: application/json' \
+              -H 'Referer: https://localhost/' \
+              -H 'Origin: https://localhost' \
+              --data-binary @"$payload" \
+              "https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=$VITE_FIREBASE_API_KEY")"
+            if [[ "$code" == '200' ]] && jq -e '.localId and .idToken' "$body" >/dev/null 2>&1; then
+              break
+            fi
+            sleep 4
+          done
+
+          rm -f "$payload"
+          if [[ "$code" == '200' ]] && jq -e '.localId and .idToken' "$body" >/dev/null 2>&1; then
+            echo 'CAPACITOR_LOCALHOST_AUTH=PASS' | tee -a repair-result.env
+          else
+            safe_error="$(jq -r '.error.message // "UNKNOWN"' "$body" 2>/dev/null | tr -cd 'A-Za-z0-9_:/.-' | head -c 160)"
+            echo 'CAPACITOR_LOCALHOST_AUTH=FAIL' | tee -a repair-result.env
+            echo "CAPACITOR_LOCALHOST_AUTH_HTTP=$code" | tee -a repair-result.env
+            echo "CAPACITOR_LOCALHOST_AUTH_ERROR=${safe_error:-UNKNOWN}" | tee -a repair-result.env
+            rm -f "$body"
+            exit 1
+          fi
+          rm -f "$body"
+
+      - name: Publish safe repair evidence to launch register
+        if: always()
+        env:
+          KEY_ID: ${{ steps.repair.outputs.key_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          result='REPAIR_DID_NOT_COMPLETE'
+          if [[ -f repair-result.env ]]; then
+            result="$(tr '\n' ' ' < repair-result.env | sed 's/[[:space:]]\+/ /g')"
+          fi
+          body="Firebase WebView Auth referrer repair run \`$GITHUB_RUN_ID\`: $result API key resource ID \`${KEY_ID:-unknown}\`. Added only \`https://localhost\` and \`https://localhost/*\` to the existing browser-referrer allowlist while preserving existing API targets/referrers. No API key string, password, ID token, or refresh token is included."
+          gh api --method POST "repos/$REPOSITORY/issues/434/comments" -f body="$body" >/dev/null
+
+      - name: Upload safe repair evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: firebase-webview-api-key-referrer-repair-${{ github.sha }}
+          path: |
+            repair-result.env
+            api-key-before.safe.json
+            api-key-after.safe.json
+          if-no-files-found: warn
+          retention-days: 14
