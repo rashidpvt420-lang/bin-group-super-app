@@ -1,0 +1,144 @@
+name: Android App Check Remote Diagnostic
+
+on:
+  push:
+    branches:
+      - ops/android-appcheck-remote-diagnostic-69955039
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  inspect-android-appcheck:
+    name: Inspect production Android App Check configuration
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 15
+    env:
+      PROJECT_ID: bin-group-57c60
+      PACKAGE_NAME: ae.bingroups.superapp
+      GCP_WORKLOAD_IDENTITY_PROVIDER: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+      GCP_SERVICE_ACCOUNT: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+    steps:
+      - name: Checkout diagnostic branch
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud by Workload Identity Federation
+        uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          create_credentials_file: true
+          export_environment_variables: true
+
+      - name: Set up Google Cloud CLI
+        uses: google-github-actions/setup-gcloud@v3
+        with:
+          project_id: bin-group-57c60
+
+      - name: Inspect Firebase Android app and App Check configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${GCP_WORKLOAD_IDENTITY_PROVIDER:-}"
+          test -n "${GCP_SERVICE_ACCOUNT:-}"
+
+          TOKEN="$(gcloud auth print-access-token)"
+          PROJECT_NUMBER="$(gcloud projects describe "$PROJECT_ID" --format='value(projectNumber)')"
+          test -n "$PROJECT_NUMBER"
+
+          apps_json="$(curl --fail --silent --show-error \
+            -H "Authorization: Bearer $TOKEN" \
+            "https://firebase.googleapis.com/v1beta1/projects/$PROJECT_ID/androidApps")"
+
+          app_id="$(jq -r --arg pkg "$PACKAGE_NAME" '.apps[]? | select(.packageName == $pkg) | .appId' <<<"$apps_json" | head -n1)"
+          app_name="$(jq -r --arg pkg "$PACKAGE_NAME" '.apps[]? | select(.packageName == $pkg) | .name' <<<"$apps_json" | head -n1)"
+
+          if [[ -z "$app_id" || "$app_id" == "null" || -z "$app_name" || "$app_name" == "null" ]]; then
+            echo "ANDROID_FIREBASE_APP_REGISTERED=NO" | tee diagnostic.env
+            exit 1
+          fi
+
+          echo "ANDROID_FIREBASE_APP_REGISTERED=YES" | tee diagnostic.env
+          echo "ANDROID_FIREBASE_APP_ID=$app_id" | tee -a diagnostic.env
+          echo "ANDROID_PACKAGE_NAME=$PACKAGE_NAME" | tee -a diagnostic.env
+          echo "PROJECT_NUMBER=$PROJECT_NUMBER" | tee -a diagnostic.env
+
+          sha_json="$(curl --fail --silent --show-error \
+            -H "Authorization: Bearer $TOKEN" \
+            "https://firebase.googleapis.com/v1beta1/$app_name/sha")"
+
+          sha256_count="$(jq '[.certificates[]? | select(.certType == "SHA_256")] | length' <<<"$sha_json")"
+          echo "FIREBASE_ANDROID_SHA256_COUNT=$sha256_count" | tee -a diagnostic.env
+          jq -r '.certificates[]? | select(.certType == "SHA_256") | "FIREBASE_ANDROID_SHA256=" + .shaHash' <<<"$sha_json" | tee -a diagnostic.env
+
+          tmp_body="$(mktemp)"
+          appcheck_code="$(curl --silent --show-error -o "$tmp_body" -w '%{http_code}' \
+            -H "Authorization: Bearer $TOKEN" \
+            "https://firebaseappcheck.googleapis.com/v1beta/projects/$PROJECT_NUMBER/apps/$app_id/playIntegrityConfig")"
+          if [[ "$appcheck_code" == "200" ]]; then
+            echo "PLAY_INTEGRITY_APPCHECK_CONFIG=YES" | tee -a diagnostic.env
+            jq '{name, tokenTtl, appRecognitionVerdict, deviceIntegrityVerdicts}' "$tmp_body" > play-integrity-config.safe.json
+          else
+            echo "PLAY_INTEGRITY_APPCHECK_CONFIG=NO" | tee -a diagnostic.env
+            echo "PLAY_INTEGRITY_APPCHECK_HTTP=$appcheck_code" | tee -a diagnostic.env
+            printf '{}\n' > play-integrity-config.safe.json
+          fi
+
+          enabled="$(gcloud services list --enabled --project="$PROJECT_ID" --filter='config.name=playintegrity.googleapis.com' --format='value(config.name)' | head -n1)"
+          if [[ "$enabled" == "playintegrity.googleapis.com" ]]; then
+            echo "PLAY_INTEGRITY_API_ENABLED=YES" | tee -a diagnostic.env
+          else
+            echo "PLAY_INTEGRITY_API_ENABLED=NO" | tee -a diagnostic.env
+          fi
+
+          services_json="$(curl --fail --silent --show-error \
+            -H "Authorization: Bearer $TOKEN" \
+            "https://firebaseappcheck.googleapis.com/v1/projects/$PROJECT_NUMBER/services?pageSize=100")"
+
+          for service in identitytoolkit.googleapis.com firestore.googleapis.com firebasestorage.googleapis.com; do
+            mode="$(jq -r --arg suffix "/services/$service" '.services[]? | select(.name | endswith($suffix)) | .enforcementMode' <<<"$services_json" | head -n1)"
+            [[ -n "$mode" ]] || mode="OFF_OR_UNCONFIGURED"
+            safe_name="$(tr '.-' '__' <<<"$service" | tr '[:lower:]' '[:upper:]')"
+            echo "APPCHECK_${safe_name}=$mode" | tee -a diagnostic.env
+          done
+
+          if [[ "$sha256_count" -lt 1 ]]; then
+            echo "::error::Firebase Android app has no SHA-256 certificate registered."
+            exit 2
+          fi
+          if [[ "$appcheck_code" != "200" ]]; then
+            echo "::error::Firebase Android app is not registered with the Play Integrity App Check provider."
+            exit 3
+          fi
+          if [[ "$enabled" != "playintegrity.googleapis.com" ]]; then
+            echo "::error::Play Integrity API is not enabled in the Firebase project."
+            exit 4
+          fi
+
+      - name: Publish safe diagnostic summary
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo '## Android App Check remote diagnostic'
+            echo
+            if [[ -f diagnostic.env ]]; then
+              sed 's/^/- `/' diagnostic.env | sed 's/$/`/'
+            else
+              echo '- Diagnostic did not reach the configuration inspection step.'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload safe diagnostic evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-appcheck-remote-diagnostic-${{ github.sha }}
+          path: |
+            diagnostic.env
+            play-integrity-config.safe.json
+          if-no-files-found: warn
+          retention-days: 7
