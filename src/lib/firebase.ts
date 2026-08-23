@@ -74,6 +74,7 @@ import {
   type Messaging,
 } from 'firebase/messaging';
 import {
+  CustomProvider,
   initializeAppCheck,
   ReCaptchaEnterpriseProvider,
   ReCaptchaV3Provider,
@@ -102,52 +103,119 @@ const firebaseConfig = {
 
 export const app: FirebaseApp = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 
-// Firebase App Check — production keeps the established v3 provider by default.
-// The dedicated BIN GROUP staging project is explicitly Enterprise-only so its
-// root app and Admin can share one isolated staging App Check registration.
+type NativeAppCheckTokenResult = {
+  token?: string;
+  expireTimeMillis?: number;
+};
+
+type NativeAppCheckBridge = {
+  getAppCheckToken: (options: { forceRefresh: boolean }) => Promise<NativeAppCheckTokenResult>;
+};
+
+type CapacitorRuntime = {
+  isNativePlatform?: () => boolean;
+  getPlatform?: () => string;
+  Plugins?: {
+    FirebaseAppCheckBridge?: NativeAppCheckBridge;
+  };
+};
+
+const capacitorRuntime = typeof window !== 'undefined'
+  ? (window as unknown as { Capacitor?: CapacitorRuntime }).Capacitor
+  : undefined;
+const capacitorPlatform = capacitorRuntime?.getPlatform?.() || '';
+const isCapacitorNative = Boolean(
+  capacitorRuntime && (
+    capacitorRuntime.isNativePlatform?.() ??
+    (capacitorPlatform !== '' && capacitorPlatform !== 'web')
+  ),
+);
+const isCapacitorAndroid = isCapacitorNative && capacitorPlatform === 'android';
+
+// Firebase App Check — hosted web builds keep reCAPTCHA, while signed Capacitor
+// Android builds obtain Play Integrity-backed App Check tokens from the native
+// Firebase SDK and provide them to the Firebase JS SDK through CustomProvider.
 const appCheckSiteKey = readEnv('VITE_APP_CHECK_SITE_KEY');
 const requestedAppCheckProvider = readEnv('VITE_APP_CHECK_PROVIDER').toLowerCase();
-const appCheckProvider =
+const webAppCheckProvider =
   requestedAppCheckProvider === 'enterprise' || firebaseConfig.projectId === 'bin-group-staging'
     ? 'enterprise'
     : 'v3';
 const appCheckExplicitlyEnabled = readEnv('VITE_ENABLE_FIREBASE_APPCHECK') === 'true';
 const localAppCheckHost =
+  !isCapacitorNative &&
   typeof window !== 'undefined' &&
   ['localhost', '127.0.0.1'].includes(window.location.hostname);
 const appCheckRequired = import.meta.env.PROD && !localAppCheckHost;
+const webAppCheckRequired = appCheckRequired && !isCapacitorNative;
+const resolvedAppCheckProvider = isCapacitorAndroid
+  ? 'play-integrity-native'
+  : webAppCheckProvider;
 let appCheckInitialized = false;
 export let appCheck = null as ReturnType<typeof initializeAppCheck> | null;
 
-if (appCheckRequired && (!appCheckExplicitlyEnabled || !appCheckSiteKey)) {
+if (appCheckRequired && !appCheckExplicitlyEnabled) {
   throw new Error('[Firebase] App Check configuration is required for production builds.');
 }
+if (webAppCheckRequired && !appCheckSiteKey) {
+  throw new Error('[Firebase] App Check site key is required for production web builds.');
+}
+if (appCheckRequired && isCapacitorNative && !isCapacitorAndroid) {
+  throw new Error('[Firebase] Native App Check provider is not configured for this platform.');
+}
 
-if (appCheckExplicitlyEnabled && appCheckSiteKey && typeof window !== 'undefined') {
+if (appCheckExplicitlyEnabled && typeof window !== 'undefined') {
   try {
-    // Prefer an already-injected registered debug UUID (Playwright addInitScript).
-    // Only auto-enable the boolean debug flow in local DEV when no UUID is set.
-    const existingDebug = (self as unknown as Record<string, unknown>).FIREBASE_APPCHECK_DEBUG_TOKEN;
-    const hasRegisteredDebug =
-      typeof existingDebug === 'string' &&
-      existingDebug.length > 8 &&
-      existingDebug !== 'true' &&
-      existingDebug !== 'false';
-    if (!hasRegisteredDebug && import.meta.env.DEV) {
-      (self as unknown as Record<string, unknown>).FIREBASE_APPCHECK_DEBUG_TOKEN = true;
+    if (isCapacitorAndroid) {
+      const provider = new CustomProvider({
+        getToken: async () => {
+          const bridge = capacitorRuntime?.Plugins?.FirebaseAppCheckBridge;
+          if (!bridge || typeof bridge.getAppCheckToken !== 'function') {
+            throw new Error('Native Play Integrity App Check bridge plugin unavailable.');
+          }
+
+          // CustomProvider is invoked only when the Web SDK needs a fresh token,
+          // so request a fresh native token and let the Web SDK own caching/refresh.
+          const result = await bridge.getAppCheckToken({ forceRefresh: true });
+          const token = String(result?.token || '').trim();
+          const expireTimeMillis = Number(result?.expireTimeMillis || 0);
+          if (!token || !Number.isFinite(expireTimeMillis) || expireTimeMillis <= Date.now()) {
+            throw new Error('Native Play Integrity App Check token result is invalid.');
+          }
+          return { token, expireTimeMillis };
+        },
+      });
+
+      appCheck = initializeAppCheck(app, {
+        provider,
+        isTokenAutoRefreshEnabled: true,
+      });
+      appCheckInitialized = true;
+    } else if (appCheckSiteKey) {
+      // Prefer an already-injected registered debug UUID (Playwright addInitScript).
+      // Only auto-enable the boolean debug flow in local DEV when no UUID is set.
+      const existingDebug = (self as unknown as Record<string, unknown>).FIREBASE_APPCHECK_DEBUG_TOKEN;
+      const hasRegisteredDebug =
+        typeof existingDebug === 'string' &&
+        existingDebug.length > 8 &&
+        existingDebug !== 'true' &&
+        existingDebug !== 'false';
+      if (!hasRegisteredDebug && import.meta.env.DEV) {
+        (self as unknown as Record<string, unknown>).FIREBASE_APPCHECK_DEBUG_TOKEN = true;
+      }
+      if (hasRegisteredDebug) {
+        const fingerprint = `${String(existingDebug).slice(0, 8)}…${String(existingDebug).slice(-4)}`;
+        console.info(`[Firebase] App Check debug token active fingerprint=${fingerprint}`);
+      }
+      const provider = webAppCheckProvider === 'enterprise'
+        ? new ReCaptchaEnterpriseProvider(appCheckSiteKey)
+        : new ReCaptchaV3Provider(appCheckSiteKey);
+      appCheck = initializeAppCheck(app, {
+        provider,
+        isTokenAutoRefreshEnabled: true,
+      });
+      appCheckInitialized = true;
     }
-    if (hasRegisteredDebug) {
-      const fingerprint = `${String(existingDebug).slice(0, 8)}…${String(existingDebug).slice(-4)}`;
-      console.info(`[Firebase] App Check debug token active fingerprint=${fingerprint}`);
-    }
-    const provider = appCheckProvider === 'enterprise'
-      ? new ReCaptchaEnterpriseProvider(appCheckSiteKey)
-      : new ReCaptchaV3Provider(appCheckSiteKey);
-    appCheck = initializeAppCheck(app, {
-      provider,
-      isTokenAutoRefreshEnabled: true,
-    });
-    appCheckInitialized = true;
   } catch (appCheckError) {
     if (appCheckRequired) {
       throw new Error('[Firebase] App Check initialization failed in production.');
@@ -307,9 +375,11 @@ export const getFirebaseRuntimeDiagnostics = () => ({
   authDomain: firebaseConfig.authDomain,
   functionsRegion: FUNCTIONS_REGION,
   hasAppCheckSiteKey: Boolean(appCheckSiteKey),
-  appCheckProvider,
+  appCheckProvider: resolvedAppCheckProvider,
   appCheckExplicitlyEnabled,
   appCheckInitialized,
+  isCapacitorNative,
+  capacitorPlatform: capacitorPlatform || 'web',
   host: typeof window !== 'undefined' ? window.location.host : 'server',
 });
 
