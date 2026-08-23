@@ -4,6 +4,11 @@ on:
   push:
     branches:
       - ops/dispatch-android-v3-aab-071bd149
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .github/workflows/dispatch-android-v3-aab-temporary.yml
 
 permissions:
   actions: write
@@ -12,6 +17,7 @@ permissions:
 jobs:
   dispatch:
     name: Dispatch exact-main signed AAB v3
+    if: github.event_name == 'push' || github.head_ref == 'ops/dispatch-android-v3-aab-071bd149'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     env:
@@ -57,12 +63,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          before_json="$(jq -R -s 'split("\n") | map(select(length>0)|tonumber)' /tmp/before.txt)"
           for _ in $(seq 1 30); do
             runs="$(gh api "repos/$REPOSITORY/actions/workflows/android-store-release.yml/runs?event=workflow_dispatch&per_page=30")"
-            run_id="$(jq -r --arg sha "$EXPECTED_MAIN_SHA" --slurpfile before <(jq -R -s 'split("\n") | map(select(length>0)|tonumber)' /tmp/before.txt) '
+            run_id="$(jq -r --arg sha "$EXPECTED_MAIN_SHA" --argjson before "$before_json" '
               [.workflow_runs[]
                | select(.head_sha == $sha)
-               | select((.id as $id | ($before[0] | index($id))) == null)]
+               | select((.id as $id | ($before | index($id))) == null)]
               | sort_by(.created_at)
               | last
               | .id // empty
