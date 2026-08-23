@@ -15,9 +15,12 @@ test('Android release verifier binds the production project, package, app ID and
   assert.match(verifier, /allowUnrecognizedVersion === true/);
 });
 
-test('Android release gate may repair only the expected SHA certificate and never disables App Check', () => {
+test('Android release gate may repair only expected Firebase registration and never weakens App Check', () => {
   assert.match(verifier, /process\.argv\.includes\('--repair-sha'\)/);
+  assert.match(verifier, /process\.argv\.includes\('--repair-config'\)/);
   assert.match(verifier, /method: 'POST'/);
+  assert.match(verifier, /method: 'PATCH'/);
+  assert.match(verifier, /appIntegrity: \{ allowUnrecognizedVersion: false \}/);
   assert.match(verifier, /Google Play App Signing SHA-256 is not registered/);
   assert.doesNotMatch(verifier, /debugToken/i);
   assert.doesNotMatch(verifier, /enforcementMode\s*[:=]\s*['"]OFF/i);
@@ -28,7 +31,7 @@ test('signed AAB workflow authenticates with short-lived OIDC and gates before G
   assert.match(workflow, /id-token: write/);
   assert.match(workflow, /google-github-actions\/auth@v2/);
   assert.match(workflow, /token_format: access_token/);
-  assert.match(workflow, /verify-android-play-integrity-appcheck\.mjs --repair-sha/);
+  assert.match(workflow, /verify-android-play-integrity-appcheck\.mjs --repair-sha --repair-config/);
   assert.match(workflow, /android-play-integrity-appcheck-proof\.json/);
 
   const gate = workflow.indexOf('Repair and verify Play Integrity App Check registration');
