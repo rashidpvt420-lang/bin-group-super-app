@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   probe-auth-origins:
-    name: Probe Firebase Auth with hosted and native WebView origins
+    name: Probe Firebase Auth keys with native WebView origin
     runs-on: ubuntu-latest
     environment: production
     timeout-minutes: 10
@@ -19,8 +19,10 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       REPOSITORY: ${{ github.repository }}
       VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
+      ANDROID_GOOGLE_SERVICES_JSON_BASE64: ${{ secrets.ANDROID_GOOGLE_SERVICES_JSON_BASE64 }}
       E2E_TENANT_EMAIL: ${{ secrets.E2E_TENANT_EMAIL }}
       E2E_TENANT_PASSWORD: ${{ secrets.E2E_TENANT_PASSWORD }}
+      SOURCE_FALLBACK_API_KEY: 'AIzaSyCd-QdM7mjECh9UqDKk1ofBemanpTRgd4s'
 
     steps:
       - name: Validate protected inputs without printing them
@@ -28,10 +30,42 @@ jobs:
         run: |
           set -euo pipefail
           test -n "${VITE_FIREBASE_API_KEY:-}"
+          test -n "${ANDROID_GOOGLE_SERVICES_JSON_BASE64:-}"
           test -n "${E2E_TENANT_EMAIL:-}"
           test -n "${E2E_TENANT_PASSWORD:-}"
 
-      - name: Probe signInWithPassword origin behavior
+      - name: Resolve Android Firebase client API key without printing it
+        id: android_key
+        shell: bash
+        run: |
+          set -euo pipefail
+          tmp="$(mktemp)"
+          printf '%s' "$ANDROID_GOOGLE_SERVICES_JSON_BASE64" | base64 --decode > "$tmp"
+          android_key="$(jq -r '
+            .client[]?
+            | select(.client_info.android_client_info.package_name == "ae.bingroups.superapp")
+            | .api_key[0].current_key // empty
+          ' "$tmp" | head -n1)"
+          rm -f "$tmp"
+          test -n "$android_key"
+          echo "ANDROID_API_KEY=$android_key" >> "$GITHUB_ENV"
+          if [[ "$android_key" == "$VITE_FIREBASE_API_KEY" ]]; then
+            echo 'ANDROID_KEY_EQUALS_WEB_KEY=YES' >> key-comparison.env
+          else
+            echo 'ANDROID_KEY_EQUALS_WEB_KEY=NO' >> key-comparison.env
+          fi
+          if [[ "$SOURCE_FALLBACK_API_KEY" == "$VITE_FIREBASE_API_KEY" ]]; then
+            echo 'SOURCE_FALLBACK_EQUALS_WEB_KEY=YES' >> key-comparison.env
+          else
+            echo 'SOURCE_FALLBACK_EQUALS_WEB_KEY=NO' >> key-comparison.env
+          fi
+          if [[ "$SOURCE_FALLBACK_API_KEY" == "$android_key" ]]; then
+            echo 'SOURCE_FALLBACK_EQUALS_ANDROID_KEY=YES' >> key-comparison.env
+          else
+            echo 'SOURCE_FALLBACK_EQUALS_ANDROID_KEY=NO' >> key-comparison.env
+          fi
+
+      - name: Probe signInWithPassword key and origin behavior
         shell: bash
         run: |
           set -euo pipefail
@@ -44,9 +78,11 @@ jobs:
           : > auth-origin-diagnostic.env
 
           probe() {
-            local label="$1"
-            local referer="$2"
-            local origin="$3"
+            local key_label="$1"
+            local api_key="$2"
+            local origin_label="$3"
+            local referer="$4"
+            local origin="$5"
             local body code status error_message
             body="$(mktemp)"
             if [[ -n "$referer" && -n "$origin" ]]; then
@@ -55,12 +91,12 @@ jobs:
                 -H "Referer: $referer" \
                 -H "Origin: $origin" \
                 --data-binary @"$payload" \
-                "https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=$VITE_FIREBASE_API_KEY")"
+                "https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=$api_key")"
             else
               code="$(curl --silent --show-error -o "$body" -w '%{http_code}' \
                 -H 'Content-Type: application/json' \
                 --data-binary @"$payload" \
-                "https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=$VITE_FIREBASE_API_KEY")"
+                "https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=$api_key")"
             fi
 
             if [[ "$code" == "200" ]] && jq -e '.localId and .idToken' "$body" >/dev/null 2>&1; then
@@ -72,18 +108,20 @@ jobs:
               [[ -n "$error_message" ]] || error_message='UNKNOWN'
             fi
 
-            printf 'AUTH_%s_HTTP=%s\n' "$label" "$code" >> auth-origin-diagnostic.env
-            printf 'AUTH_%s=%s\n' "$label" "$status" >> auth-origin-diagnostic.env
-            printf 'AUTH_%s_ERROR=%s\n' "$label" "$error_message" >> auth-origin-diagnostic.env
+            printf 'AUTH_%s_%s_HTTP=%s\n' "$key_label" "$origin_label" "$code" >> auth-origin-diagnostic.env
+            printf 'AUTH_%s_%s=%s\n' "$key_label" "$origin_label" "$status" >> auth-origin-diagnostic.env
+            printf 'AUTH_%s_%s_ERROR=%s\n' "$key_label" "$origin_label" "$error_message" >> auth-origin-diagnostic.env
             rm -f "$body"
           }
 
-          probe HOSTED_WEB 'https://bin-group-57c60.web.app/' 'https://bin-group-57c60.web.app'
-          probe CAPACITOR_LOCALHOST 'https://localhost/' 'https://localhost'
-          probe CAPACITOR_HTTP_LOCALHOST 'http://localhost/' 'http://localhost'
-          probe NO_REFERER '' ''
+          probe WEB_KEY "$VITE_FIREBASE_API_KEY" HOSTED_WEB 'https://bin-group-57c60.web.app/' 'https://bin-group-57c60.web.app'
+          probe WEB_KEY "$VITE_FIREBASE_API_KEY" CAPACITOR_LOCALHOST 'https://localhost/' 'https://localhost'
+          probe ANDROID_KEY "$ANDROID_API_KEY" CAPACITOR_LOCALHOST 'https://localhost/' 'https://localhost'
+          probe ANDROID_KEY "$ANDROID_API_KEY" NO_REFERER '' ''
+          probe SOURCE_FALLBACK "$SOURCE_FALLBACK_API_KEY" CAPACITOR_LOCALHOST 'https://localhost/' 'https://localhost'
 
           rm -f "$payload"
+          cat key-comparison.env
           cat auth-origin-diagnostic.env
 
       - name: Publish safe result to launch register
@@ -91,11 +129,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if [[ ! -f auth-origin-diagnostic.env ]]; then
-            exit 0
-          fi
-          compact="$(tr '\n' ' ' < auth-origin-diagnostic.env | sed 's/[[:space:]]\+/ /g')"
-          body="Android Auth origin diagnostic run \`$GITHUB_RUN_ID\` completed on temporary read-only branch. $compact No password, token, or API key is included."
+          compact=''
+          [[ -f key-comparison.env ]] && compact+="$(tr '\n' ' ' < key-comparison.env | sed 's/[[:space:]]\+/ /g') "
+          [[ -f auth-origin-diagnostic.env ]] && compact+="$(tr '\n' ' ' < auth-origin-diagnostic.env | sed 's/[[:space:]]\+/ /g')"
+          body="Android Auth key/origin diagnostic run \`$GITHUB_RUN_ID\` completed. $compact No password, token, API key string, or Firebase config payload is included."
           gh api --method POST "repos/$REPOSITORY/issues/434/comments" -f body="$body" >/dev/null
 
       - name: Publish safe summary
@@ -103,15 +140,12 @@ jobs:
         shell: bash
         run: |
           {
-            echo '## Android Firebase Auth origin diagnostic'
+            echo '## Android Firebase Auth key/origin diagnostic'
             echo
-            if [[ -f auth-origin-diagnostic.env ]]; then
-              sed 's/^/- `/' auth-origin-diagnostic.env | sed 's/$/`/'
-            else
-              echo '- Probe did not complete.'
-            fi
+            [[ -f key-comparison.env ]] && sed 's/^/- `/' key-comparison.env | sed 's/$/`/'
+            [[ -f auth-origin-diagnostic.env ]] && sed 's/^/- `/' auth-origin-diagnostic.env | sed 's/$/`/'
             echo
-            echo '- No password, ID token, refresh token, or API key is included in this output.'
+            echo '- No password, ID token, refresh token, API key string, or Firebase config payload is included.'
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload safe result
@@ -119,6 +153,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: android-auth-origin-remote-diagnostic-${{ github.sha }}
-          path: auth-origin-diagnostic.env
+          path: |
+            key-comparison.env
+            auth-origin-diagnostic.env
           if-no-files-found: warn
           retention-days: 7
