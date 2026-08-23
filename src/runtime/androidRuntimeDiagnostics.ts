@@ -99,7 +99,10 @@ const inspectConsole = (args: ConsoleArgs): void => {
 };
 
 export const installAndroidRuntimeDiagnostics = (): void => {
-  if (!isNativeAndroid() || typeof console === 'undefined') return;
+  // Install the console interceptor as early as possible, even before Capacitor's
+  // native runtime object is guaranteed to be visible. Rendering still remains
+  // Android-native-only because showDiagnostic() checks the platform at event time.
+  if (typeof window === 'undefined' || typeof console === 'undefined') return;
 
   const globalKey = '__BIN_ANDROID_RUNTIME_DIAGNOSTICS_INSTALLED__';
   const marker = window as unknown as Record<string, unknown>;
