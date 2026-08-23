@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: read
+  issues: write
 
 jobs:
   probe-auth-origins:
@@ -15,6 +16,8 @@ jobs:
     environment: production
     timeout-minutes: 10
     env:
+      GH_TOKEN: ${{ github.token }}
+      REPOSITORY: ${{ github.repository }}
       VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
       E2E_TENANT_EMAIL: ${{ secrets.E2E_TENANT_EMAIL }}
       E2E_TENANT_PASSWORD: ${{ secrets.E2E_TENANT_PASSWORD }}
@@ -53,12 +56,6 @@ jobs:
                 -H "Origin: $origin" \
                 --data-binary @"$payload" \
                 "https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=$VITE_FIREBASE_API_KEY")"
-            elif [[ -n "$referer" ]]; then
-              code="$(curl --silent --show-error -o "$body" -w '%{http_code}' \
-                -H 'Content-Type: application/json' \
-                -H "Referer: $referer" \
-                --data-binary @"$payload" \
-                "https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=$VITE_FIREBASE_API_KEY")"
             else
               code="$(curl --silent --show-error -o "$body" -w '%{http_code}' \
                 -H 'Content-Type: application/json' \
@@ -88,6 +85,18 @@ jobs:
 
           rm -f "$payload"
           cat auth-origin-diagnostic.env
+
+      - name: Publish safe result to launch register
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ ! -f auth-origin-diagnostic.env ]]; then
+            exit 0
+          fi
+          compact="$(tr '\n' ' ' < auth-origin-diagnostic.env | sed 's/[[:space:]]\+/ /g')"
+          body="Android Auth origin diagnostic run \`$GITHUB_RUN_ID\` completed on temporary read-only branch. $compact No password, token, or API key is included."
+          gh api --method POST "repos/$REPOSITORY/issues/434/comments" -f body="$body" >/dev/null
 
       - name: Publish safe summary
         if: always()
