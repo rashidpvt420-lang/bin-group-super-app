@@ -25,12 +25,22 @@ test('diagnostics install before the application bootstrap', () => {
   assert.ok(diagnosticImport < appImport);
 });
 
-test('native bridge exposes a safe App Check failure code without token logging', () => {
+test('App Check failure remains the visible root cause when profile read subsequently fails', () => {
+  assert.match(diagnostics, /APP_CHECK_ROOT_CAUSE_WINDOW_MS/);
+  assert.match(diagnostics, /rememberAppCheckFailure/);
+  assert.match(diagnostics, /recentAppCheckFailure/);
+  assert.match(diagnostics, /showDiagnostic\(appCheckRootCause\.stage, appCheckRootCause\.code\)/);
+});
+
+test('native bridge exposes a safe App Check cause chain without token logging', () => {
   assert.match(bridge, /APP_CHECK_INVALID_TOKEN_RESULT/);
-  assert.match(bridge, /error\.getClass\(\)\.getSimpleName\(\)/);
+  assert.match(bridge, /String diagnosticCode\(Throwable error\)/);
+  assert.match(bridge, /getClass\(\)\.getSimpleName\(\)/);
+  assert.match(bridge, /cursor\.getCause\(\)/);
+  assert.doesNotMatch(bridge, /getMessage\(\)/);
   assert.doesNotMatch(bridge, /Log\.[a-z]+\([^\n]*token/i);
 });
 
-test('next Google Play profile-read repair build uses versionCode 4', () => {
-  assert.match(gradle, /versionCode\s+4\b/);
+test('next Google Play App Check profile-read repair build uses versionCode 5', () => {
+  assert.match(gradle, /versionCode\s+5\b/);
 });

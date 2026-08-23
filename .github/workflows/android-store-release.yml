@@ -15,6 +15,7 @@ on:
 
 permissions:
   contents: read
+  id-token: write
 
 concurrency:
   group: android-store-release
@@ -130,6 +131,21 @@ jobs:
           [[ -n "$VITE_FIREBASE_API_KEY" ]]
           echo 'Android Firebase client identity selected for Capacitor build.'
 
+      - name: Authenticate Google Cloud for Android App Check gate
+        id: gcp-auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          token_format: access_token
+          access_token_scopes: https://www.googleapis.com/auth/cloud-platform
+          create_credentials_file: false
+
+      - name: Repair and verify Play Integrity App Check registration
+        env:
+          GCP_ACCESS_TOKEN: ${{ steps.gcp-auth.outputs.access_token }}
+        run: node scripts/verify-android-play-integrity-appcheck.mjs --repair-sha --repair-config
+
       - name: Build and cryptographically verify signed AAB
         run: bash scripts/run-android-store-release.sh
 
@@ -150,6 +166,7 @@ jobs:
           path: |
             android/app/build/outputs/bundle/release/app-release.aab
             android-store-release-evidence.json
+            launch_package/android-play-integrity-appcheck-proof.json
           if-no-files-found: error
           retention-days: 30
 
@@ -160,6 +177,7 @@ jobs:
           name: android-store-release-diagnostics-${{ github.sha }}-${{ github.run_id }}
           path: |
             android-store-release-gradle.log
+            launch_package/android-play-integrity-appcheck-proof.json
             android/app/build/reports/
           if-no-files-found: warn
           retention-days: 14

@@ -10,6 +10,32 @@ import com.google.firebase.appcheck.FirebaseAppCheck;
 @CapacitorPlugin(name = "FirebaseAppCheckBridge")
 public class FirebaseAppCheckBridgePlugin extends Plugin {
 
+    private String diagnosticCode(Throwable error) {
+        StringBuilder code = new StringBuilder();
+        Throwable cursor = error;
+        int depth = 0;
+
+        // Exception class names are safe diagnostic metadata. Include a short
+        // cause chain so a wrapped Play Integrity failure is not reduced to a
+        // generic FirebaseException, while never exposing messages or tokens.
+        while (cursor != null && depth < 3) {
+            String simpleName = cursor.getClass().getSimpleName();
+            if (simpleName != null && !simpleName.isBlank()) {
+                String safeName = simpleName.replaceAll("[^A-Za-z0-9_]", "");
+                if (!safeName.isBlank()) {
+                    if (code.length() > 0) code.append("__");
+                    code.append(safeName);
+                }
+            }
+            Throwable next = cursor.getCause();
+            if (next == cursor) break;
+            cursor = next;
+            depth += 1;
+        }
+
+        return code.length() > 0 ? code.toString() : "APP_CHECK_TOKEN_FAILURE";
+    }
+
     @PluginMethod
     public void getAppCheckToken(PluginCall call) {
         Boolean requestedForceRefresh = call.getBoolean("forceRefresh", false);
@@ -31,13 +57,8 @@ public class FirebaseAppCheckBridgePlugin extends Plugin {
                 call.resolve(result);
             })
             .addOnFailureListener(error -> {
-                // Surface only the exception class as a stable diagnostic code.
-                // Never expose token material, request payloads, or credentials.
-                String diagnosticCode = error.getClass().getSimpleName();
-                if (diagnosticCode == null || diagnosticCode.isBlank()) {
-                    diagnosticCode = "APP_CHECK_TOKEN_FAILURE";
-                }
-                call.reject("Unable to obtain Firebase App Check token.", diagnosticCode, error);
+                String code = diagnosticCode(error);
+                call.reject("Unable to obtain Firebase App Check token.", code, error);
             });
     }
 }
