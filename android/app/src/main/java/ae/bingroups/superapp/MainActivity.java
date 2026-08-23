@@ -13,6 +13,10 @@ public class MainActivity extends BridgeActivity {
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
+        // Register the custom bridge before BridgeActivity creates the Capacitor bridge.
+        registerPlugin(FirebaseAppCheckBridgePlugin.class);
+
+        // Install Play Integrity App Check before the WebView can request Firebase tokens.
         FirebaseApp firebaseApp = FirebaseApp.initializeApp(this);
         if (firebaseApp == null) {
             Log.e(APP_CHECK_LOG_TAG, "Firebase Android configuration is unavailable; App Check cannot initialize.");
@@ -27,6 +31,5 @@ public class MainActivity extends BridgeActivity {
         }
 
         super.onCreate(savedInstanceState);
-        registerPlugin(FirebaseAppCheckBridgePlugin.class);
     }
 }
