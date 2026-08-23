@@ -1,0 +1,80 @@
+name: Android v3 App Check Metrics Publish
+
+on:
+  push:
+    branches:
+      - ops/android-appcheck-remote-diagnostic-69955039
+
+permissions:
+  contents: read
+  id-token: write
+  issues: write
+
+jobs:
+  metrics:
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPOSITORY: ${{ github.repository }}
+      PROJECT_ID: bin-group-57c60
+      ANDROID_APP_ID: '1:123413252227:android:36feeed4a78c1dcf99f3b6'
+    steps:
+      - uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          create_credentials_file: true
+          export_environment_variables: true
+
+      - uses: google-github-actions/setup-gcloud@v3
+        with:
+          project_id: bin-group-57c60
+
+      - name: Query recent App Check verification metrics
+        id: metrics
+        shell: bash
+        run: |
+          set -euo pipefail
+          TOKEN="$(gcloud auth print-access-token)"
+          END_TIME="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+          START_TIME="$(date -u -d '2 hours ago' +'%Y-%m-%dT%H:%M:%SZ')"
+          raw="$(mktemp)"
+          code="$(curl --silent --show-error -o "$raw" -w '%{http_code}' --get \
+            -H "Authorization: Bearer $TOKEN" \
+            --data-urlencode 'filter=metric.type="firebaseappcheck.googleapis.com/resources/verification_count"' \
+            --data-urlencode "interval.startTime=$START_TIME" \
+            --data-urlencode "interval.endTime=$END_TIME" \
+            --data-urlencode 'view=FULL' \
+            'https://monitoring.googleapis.com/v3/projects/bin-group-57c60/timeSeries')"
+          [[ "$code" == '200' ]]
+
+          jq '[.timeSeries[]? as $s | {
+            app_id: ($s.metric.labels.app_id // "unknown"),
+            result: ($s.metric.labels.result // "unknown"),
+            security: ($s.metric.labels.security // "unknown"),
+            resource_type: ($s.resource.type // "unknown"),
+            count: ([$s.points[]?.value.int64Value // "0" | tonumber] | add // 0)
+          }]' "$raw" > /tmp/series.json
+
+          allow="$(jq --arg app "$ANDROID_APP_ID" '[.[] | select(.app_id == $app and .result == "ALLOW") | .count] | add // 0' /tmp/series.json)"
+          deny="$(jq --arg app "$ANDROID_APP_ID" '[.[] | select(.app_id == $app and .result == "DENY") | .count] | add // 0' /tmp/series.json)"
+          invalid="$(jq --arg app "$ANDROID_APP_ID" '[.[] | select(.app_id == $app and (.security == "INVALID" or .security == "MISSING_OUTDATED_CLIENT" or .security == "MISSING_UNKNOWN_ORIGIN")) | .count] | add // 0' /tmp/series.json)"
+          echo "allow=$allow" >> "$GITHUB_OUTPUT"
+          echo "deny=$deny" >> "$GITHUB_OUTPUT"
+          echo "invalid=$invalid" >> "$GITHUB_OUTPUT"
+          echo "start=$START_TIME" >> "$GITHUB_OUTPUT"
+          echo "end=$END_TIME" >> "$GITHUB_OUTPUT"
+
+      - name: Publish safe result to launch register
+        env:
+          ALLOW: ${{ steps.metrics.outputs.allow }}
+          DENY: ${{ steps.metrics.outputs.deny }}
+          INVALID: ${{ steps.metrics.outputs.invalid }}
+          START: ${{ steps.metrics.outputs.start }}
+          END: ${{ steps.metrics.outputs.end }}
+        shell: bash
+        run: |
+          body="Android v3 physical App Check metrics run \`$GITHUB_RUN_ID\` window \`$START\`..\`$END\`: ANDROID_ALLOW=\`$ALLOW\`, ANDROID_DENY=\`$DENY\`, ANDROID_INVALID_OR_MISSING=\`$INVALID\`. No credentials or tokens included."
+          gh api --method POST "repos/$REPOSITORY/issues/434/comments" -f body="$body" >/dev/null
