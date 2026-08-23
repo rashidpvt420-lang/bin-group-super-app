@@ -43,6 +43,7 @@ test('HR route retains the complete registry and exposes callable-only least-pri
   assert.match(hr, /<StaffRegistryTable staff=\{filteredStaff\}/);
   assert.match(hr, /<StaffAccessPage\s*\/>/);
   assert.doesNotMatch(hr, /RegisterStaffDialog/);
+  assert.doesNotMatch(hr, /where\('role',\s*'in',\s*\['technician'/);
   assert.match(access, /httpsCallable\(functions, 'adminCreateUser'\)/);
   assert.match(access, /httpsCallable\(functions, 'adminUpdateStaffAccess'\)/);
   assert.match(access, /httpsCallable\(functions, 'adminSetStaffStatus'\)/);
@@ -51,6 +52,10 @@ test('HR route retains the complete registry and exposes callable-only least-pri
   assert.match(provisioning, /superAdmin:\s*false/);
   assert.match(provisioning, /ceo:\s*false/);
   assert.match(provisioning, /Module \$\{moduleKey\} is not allowed for role/);
+  assert.match(lifecycle, /revokeRefreshTokens\(uid\)/);
+  assert.match(lifecycle, /recordsPreserved:\s*true/);
+  assert.match(lifecycle, /private_hr_profiles/);
+  assert.match(hrOps, /enforceAppCheck:\s*true/g);
 });
 
 test('Founder review, payment decisions and Broker payout review require MFA-backed authority', async () => {

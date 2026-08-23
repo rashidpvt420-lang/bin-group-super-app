@@ -1,23 +1,17 @@
 import React from 'react';
-import { 
-    Box, Typography, Paper, Grid, Stack, Chip, 
-    Divider, alpha, Button, Tooltip 
-} from '@mui/material';
-import { 
-    ShieldCheck, Calendar, Info, AlertCircle, 
-    FileText, CheckCircle2, History 
-} from 'lucide-react';
+import { Box, Typography, Paper, Grid, Stack, Chip, alpha, Button, Tooltip } from '@mui/material';
+import { ShieldCheck, Calendar } from 'lucide-react';
 import { binThemeTokens } from '../theme/binGroupTheme';
 
 export interface CoverageItem {
     id: string;
     system: string;
     provider: string;
-    expiryDate: Date;
-    type: 'WARRANTY' | 'INSURANCE';
+    expiryDate: Date | null;
+    type: 'WARRANTY' | 'INSURANCE' | 'UNKNOWN';
     policyNumber: string;
     notes?: string;
-    status: 'ACTIVE' | 'EXPIRING' | 'EXPIRED';
+    status: 'ACTIVE' | 'EXPIRING' | 'EXPIRED' | 'UNKNOWN';
 }
 
 interface Props {
@@ -36,25 +30,31 @@ const CoverageTracker: React.FC<Props> = ({ items }) => {
 
     return (
         <Paper sx={{ p: 4, bgcolor: 'rgba(22, 22, 24, 0.6)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 6 }}>
-            <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Box sx={{ mb: 4 }}>
                 <Typography variant="h6" fontWeight="950" sx={{ color: '#FFF', display: 'flex', alignItems: 'center', gap: 2 }}>
                     <ShieldCheck color={binThemeTokens.gold} /> SYSTEM COVERAGE & WARRANTIES
                 </Typography>
-                <Button size="small" variant="text" sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>VIEW ALL POLICIES</Button>
+                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.45)' }}>
+                    Persisted coverage evidence only. Missing policy fields remain unknown.
+                </Typography>
             </Box>
 
             <Stack spacing={2}>
+                {items.length === 0 && (
+                    <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.5)', py: 2 }}>
+                        No verified warranty or insurance coverage records are available.
+                    </Typography>
+                )}
                 {items.map((item) => (
-                    <Box key={item.id} sx={{ 
-                        p: 3, bgcolor: 'rgba(255,255,255,0.02)', 
-                        border: `1px solid rgba(255,255,255,0.05)`,
+                    <Box key={item.id} sx={{
+                        p: 3, bgcolor: 'rgba(255,255,255,0.02)',
+                        border: '1px solid rgba(255,255,255,0.05)',
                         borderRadius: 3,
-                        '&:hover': { bgcolor: 'rgba(255,255,255,0.03)' }
                     }}>
                         <Grid container spacing={2} alignItems="center">
                             <Grid item xs={12} sm={4}>
                                 <Typography variant="subtitle2" fontWeight="900" color="#FFF">{item.system.toUpperCase()}</Typography>
-                                <Typography variant="caption" color="textSecondary">{item.provider}</Typography>
+                                <Typography variant="caption" color="textSecondary">{item.provider || 'Provider not recorded'}</Typography>
                             </Grid>
                             <Grid item xs={12} sm={3}>
                                 <Stack direction="row" spacing={1} alignItems="center">
@@ -62,41 +62,32 @@ const CoverageTracker: React.FC<Props> = ({ items }) => {
                                     <Box>
                                         <Typography variant="caption" color="textSecondary" display="block">EXPIRY</Typography>
                                         <Typography variant="body2" fontWeight="700" color="#FFF">
-                                            {item.expiryDate.toLocaleDateString()}
+                                            {item.expiryDate ? item.expiryDate.toLocaleDateString() : 'Not recorded'}
                                         </Typography>
                                     </Box>
                                 </Stack>
                             </Grid>
                             <Grid item xs={12} sm={3}>
-                                <Chip 
-                                    label={item.type} 
-                                    size="small" 
+                                <Chip
+                                    label={item.type}
+                                    size="small"
                                     variant="outlined"
-                                    sx={{ 
-                                        borderColor: 'rgba(255,255,255,0.1)', 
-                                        color: 'rgba(255,255,255,0.6)',
-                                        fontWeight: 900,
-                                        fontSize: '0.6rem'
-                                    }} 
+                                    sx={{ borderColor: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.6)', fontWeight: 900, fontSize: '0.6rem' }}
                                 />
-                                <Chip 
-                                    label={item.status} 
-                                    size="small" 
-                                    sx={{ 
-                                        ml: 1,
-                                        bgcolor: alpha(getStatusColor(item.status), 0.1), 
-                                        color: getStatusColor(item.status),
-                                        fontWeight: 900,
-                                        fontSize: '0.6rem'
-                                    }} 
+                                <Chip
+                                    label={item.status}
+                                    size="small"
+                                    sx={{ ml: 1, bgcolor: alpha(getStatusColor(item.status), 0.1), color: getStatusColor(item.status), fontWeight: 900, fontSize: '0.6rem' }}
                                 />
                             </Grid>
                             <Grid item xs={12} sm={2} sx={{ textAlign: 'right' }}>
                                 {item.status === 'ACTIVE' && (
-                                    <Tooltip title="Claim Opportunity: Coverage covers current wear markers.">
-                                        <Button size="small" variant="outlined" sx={{ color: '#4ADE80', borderColor: alpha('#4ADE80', 0.3), fontWeight: 900, fontSize: '0.65rem' }}>
-                                            FLAG CLAIM
-                                        </Button>
+                                    <Tooltip title="A protected coverage-claim workflow is not connected yet.">
+                                        <span>
+                                            <Button disabled size="small" variant="outlined" sx={{ fontWeight: 900, fontSize: '0.65rem' }}>
+                                                CLAIM UNAVAILABLE
+                                            </Button>
+                                        </span>
                                     </Tooltip>
                                 )}
                             </Grid>

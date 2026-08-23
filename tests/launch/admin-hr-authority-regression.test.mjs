@@ -21,7 +21,10 @@ const CANONICAL_STAFF_ROLES = [
 ];
 
 test('Super Admin and authoritative Admin claims can access HR manager controls', async () => {
-  const source = await read('apps/admin-panel/src/pages/admin/HRManagementPage.tsx');
+  const [source, lifecycle] = await Promise.all([
+    read('apps/admin-panel/src/pages/admin/HRManagementPage.tsx'),
+    read('functions/adminStaffLifecycle.ts'),
+  ]);
 
   assert.match(source, /user\?\.claims\?\.admin === true/);
   assert.match(source, /user\?\.isAdmin === true/);
