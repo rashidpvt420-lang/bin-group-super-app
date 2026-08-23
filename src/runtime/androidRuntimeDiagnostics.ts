@@ -7,7 +7,15 @@ type DiagnosticStage =
   | 'APP_CHECK_INIT'
   | 'RUNTIME';
 
+type AppCheckFailure = {
+  stage: 'APP_CHECK_REFRESH' | 'APP_CHECK_INIT';
+  code: string;
+  at: number;
+};
+
 const DIAGNOSTIC_ELEMENT_ID = 'bin-android-runtime-diagnostic';
+const APP_CHECK_ROOT_CAUSE_WINDOW_MS = 30_000;
+let lastAppCheckFailure: AppCheckFailure | null = null;
 
 const isNativeAndroid = (): boolean => {
   if (typeof window === 'undefined') return false;
@@ -34,6 +42,22 @@ const codeFromError = (value: unknown): string => {
   if (!value || typeof value !== 'object') return safeCode(value);
   const record = value as Record<string, unknown>;
   return safeCode(record.code || record.name || 'unknown');
+};
+
+const rememberAppCheckFailure = (
+  stage: AppCheckFailure['stage'],
+  code: unknown,
+): AppCheckFailure => {
+  const failure = { stage, code: safeCode(code), at: Date.now() };
+  lastAppCheckFailure = failure;
+  return failure;
+};
+
+const recentAppCheckFailure = (): AppCheckFailure | null => {
+  if (!lastAppCheckFailure) return null;
+  return Date.now() - lastAppCheckFailure.at <= APP_CHECK_ROOT_CAUSE_WINDOW_MS
+    ? lastAppCheckFailure
+    : null;
 };
 
 const showDiagnostic = (stage: DiagnosticStage, code: unknown): void => {
@@ -83,18 +107,34 @@ const inspectConsole = (args: ConsoleArgs): void => {
     return;
   }
 
-  if (label.includes('[ROLE-SYNC] Own-profile verification failed')) {
-    showDiagnostic('PROFILE_READ', codeFromError(args[args.length - 1]));
-    return;
-  }
-
   if (label.includes('[ROLE-SYNC] Secure-session proof refresh failed')) {
-    showDiagnostic('APP_CHECK_REFRESH', codeFromError(args[args.length - 1]));
+    const failure = rememberAppCheckFailure(
+      'APP_CHECK_REFRESH',
+      codeFromError(args[args.length - 1]),
+    );
+    showDiagnostic(failure.stage, failure.code);
     return;
   }
 
   if (label.includes('[Firebase] App Check initialization failed')) {
-    showDiagnostic('APP_CHECK_INIT', codeFromError(args[args.length - 1]));
+    const failure = rememberAppCheckFailure(
+      'APP_CHECK_INIT',
+      codeFromError(args[args.length - 1]),
+    );
+    showDiagnostic(failure.stage, failure.code);
+    return;
+  }
+
+  if (label.includes('[ROLE-SYNC] Own-profile verification failed')) {
+    // A final Firestore PROFILE_READ error is downstream of App Check. If the
+    // secure-session refresh just failed, preserve that deeper root cause instead
+    // of overwriting the diagnostic with a generic permission-denied profile read.
+    const appCheckRootCause = recentAppCheckFailure();
+    if (appCheckRootCause) {
+      showDiagnostic(appCheckRootCause.stage, appCheckRootCause.code);
+    } else {
+      showDiagnostic('PROFILE_READ', codeFromError(args[args.length - 1]));
+    }
   }
 };
 
