@@ -5,10 +5,16 @@ import { readFileSync } from 'node:fs';
 const ticketBinding = readFileSync('scripts/apply-ticket-rule-binding.mjs', 'utf8');
 const liveLocationHardener = readFileSync('scripts/harden-technician-live-location-authority.mjs', 'utf8');
 
-test('canonical maintenance ticket list authority explicitly includes dispatch authority', () => {
+test('canonical maintenance ticket list authority keeps technician scope and adds dispatch authority separately', () => {
   assert.match(
     ticketBinding,
-    /allow list: if isNotSuspended\(\) && \(canDispatchJobs\(\) \|\| canListAssignedTechnicianTicket\(resource\.data\)\);/,
+    /allow list: if canListAssignedTechnicianTicket\(resource\.data\);/,
+    'Technician list access must remain assignment-bound',
+  );
+  assert.match(
+    ticketBinding,
+    /allow list: if isNotSuspended\(\) && canDispatchJobs\(\);/,
+    'Admin and dispatcher list access must be explicit and suspension-aware',
   );
   assert.match(ticketBinding, /canonical \/maintenanceTickets/);
 });
