@@ -1,0 +1,64 @@
+name: Temporary Fixed Android v3 AAB Dispatcher
+
+on:
+  push:
+    branches:
+      - ops/dispatch-fixed-v3-13e31e6
+
+permissions:
+  actions: write
+  contents: read
+  issues: write
+
+jobs:
+  dispatch:
+    name: Dispatch exact-main fixed signed AAB v3
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPOSITORY: ${{ github.repository }}
+      EXPECTED_MAIN_SHA: 13e31e6dc04fb543aa2837f8c0b664ae82ff0e71
+      ISSUE_NUMBER: '434'
+    steps:
+      - name: Require exact frozen main and versionCode 3
+        shell: bash
+        run: |
+          set -euo pipefail
+          current_main="$(gh api "repos/$REPOSITORY/commits/main" --jq '.sha')"
+          [[ "$current_main" == "$EXPECTED_MAIN_SHA" ]] || { echo "::error::Main moved to $current_main"; exit 1; }
+          build_gradle="$(gh api "repos/$REPOSITORY/contents/android/app/build.gradle?ref=$EXPECTED_MAIN_SHA" --jq '.content' | tr -d '\n' | base64 --decode)"
+          grep -Eq 'versionCode[[:space:]]+3([[:space:]]|$)' <<<"$build_gradle"
+          grep -Eq 'versionName[[:space:]]+"1\.0"' <<<"$build_gradle"
+
+      - name: Snapshot prior Android release runs
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api --paginate "repos/$REPOSITORY/actions/workflows/android-store-release.yml/runs?per_page=100" --jq '.workflow_runs[].id' | sort -n > /tmp/before.txt
+
+      - name: Dispatch trusted signed AAB workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          jq -n --arg ref main --arg sha "$EXPECTED_MAIN_SHA" '{ref:$ref,inputs:{expected_commit_sha:$sha,confirmation:"BUILD_SIGNED_ANDROID_AAB_BIN_GROUP"}}' > /tmp/dispatch.json
+          gh api --method POST "repos/$REPOSITORY/actions/workflows/android-store-release.yml/dispatches" --input /tmp/dispatch.json
+
+      - name: Correlate and publish run
+        shell: bash
+        run: |
+          set -euo pipefail
+          before_json="$(jq -R -s 'split("\n") | map(select(length>0)|tonumber)' /tmp/before.txt)"
+          run_id=''
+          for _ in $(seq 1 40); do
+            runs="$(gh api "repos/$REPOSITORY/actions/workflows/android-store-release.yml/runs?event=workflow_dispatch&per_page=50")"
+            run_id="$(jq -r --arg sha "$EXPECTED_MAIN_SHA" --argjson before "$before_json" '[.workflow_runs[] | select(.head_sha == $sha) | select((.id as $id | ($before | index($id))) == null)] | sort_by(.created_at) | last | .id // empty' <<<"$runs")"
+            [[ "$run_id" =~ ^[0-9]+$ ]] && break
+            sleep 2
+          done
+          [[ "$run_id" =~ ^[0-9]+$ ]]
+          run_url="https://github.com/$REPOSITORY/actions/runs/$run_id"
+          body="Fixed Android v3 signed AAB release dispatched for exact main \`$EXPECTED_MAIN_SHA\`: $run_url (run ID \`$run_id\`). This build contains the Android Firebase client identity fix from PR #1100."
+          gh api --method POST "repos/$REPOSITORY/issues/$ISSUE_NUMBER/comments" -f body="$body" >/dev/null
+          echo "RUN_ID=$run_id" >> "$GITHUB_STEP_SUMMARY"
+          echo "RUN_URL=$run_url" >> "$GITHUB_STEP_SUMMARY"
