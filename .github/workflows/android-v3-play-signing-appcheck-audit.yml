@@ -1,0 +1,86 @@
+name: Android v3 Play Signing App Check Audit
+
+on:
+  push:
+    branches:
+      - ops/android-appcheck-remote-diagnostic-69955039
+
+permissions:
+  contents: read
+  id-token: write
+  issues: write
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPOSITORY: ${{ github.repository }}
+      PROJECT_ID: bin-group-57c60
+      PACKAGE_NAME: ae.bingroups.superapp
+      EXPECTED_PLAY_SHA256: '65:B4:76:9E:05:DE:70:6D:74:BE:CF:89:0F:39:23:95:8C:CB:7A:FB:A0:46:6D:9A:17:34:57:0D:E0:11:C8:91'
+      UPLOAD_SHA256: 'F8:64:6E:AD:BB:C0:7A:8F:CC:B3:17:08:76:B9:A0:77:7D:90:EC:25:03:EB:AD:ED:42:F6:B3:1A:DF:4A:73:06'
+    steps:
+      - uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          create_credentials_file: true
+          export_environment_variables: true
+
+      - uses: google-github-actions/setup-gcloud@v3
+        with:
+          project_id: bin-group-57c60
+
+      - name: Verify Firebase Android SHA registration and Play Integrity provider
+        id: audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          TOKEN="$(gcloud auth print-access-token)"
+          PROJECT_NUMBER="$(gcloud projects describe "$PROJECT_ID" --format='value(projectNumber)')"
+          apps="$(curl --fail --silent --show-error -H "Authorization: Bearer $TOKEN" "https://firebase.googleapis.com/v1beta1/projects/$PROJECT_ID/androidApps")"
+          app_name="$(jq -r --arg pkg "$PACKAGE_NAME" '.apps[]? | select(.packageName == $pkg) | .name' <<<"$apps" | head -n1)"
+          app_id="$(jq -r --arg pkg "$PACKAGE_NAME" '.apps[]? | select(.packageName == $pkg) | .appId' <<<"$apps" | head -n1)"
+          test -n "$app_name"
+          test -n "$app_id"
+          shas="$(curl --fail --silent --show-error -H "Authorization: Bearer $TOKEN" "https://firebase.googleapis.com/v1beta1/$app_name/sha")"
+
+          norm() { tr -cd '[:xdigit:]' <<<"$1" | tr '[:lower:]' '[:upper:]'; }
+          expected="$(norm "$EXPECTED_PLAY_SHA256")"
+          upload="$(norm "$UPLOAD_SHA256")"
+          found_play=NO
+          found_upload=NO
+          count=0
+          while IFS= read -r sha; do
+            [[ -n "$sha" ]] || continue
+            count=$((count+1))
+            normalized="$(norm "$sha")"
+            [[ "$normalized" == "$expected" ]] && found_play=YES
+            [[ "$normalized" == "$upload" ]] && found_upload=YES
+          done < <(jq -r '.certificates[]? | select(.certType == "SHA_256") | .shaHash' <<<"$shas")
+
+          tmp="$(mktemp)"
+          code="$(curl --silent --show-error -o "$tmp" -w '%{http_code}' -H "Authorization: Bearer $TOKEN" "https://firebaseappcheck.googleapis.com/v1beta/projects/$PROJECT_NUMBER/apps/$app_id/playIntegrityConfig")"
+          provider=NO
+          [[ "$code" == '200' ]] && provider=YES
+
+          echo "play_sha=$found_play" >> "$GITHUB_OUTPUT"
+          echo "upload_sha=$found_upload" >> "$GITHUB_OUTPUT"
+          echo "sha_count=$count" >> "$GITHUB_OUTPUT"
+          echo "provider=$provider" >> "$GITHUB_OUTPUT"
+          echo "provider_http=$code" >> "$GITHUB_OUTPUT"
+
+      - name: Publish safe audit result
+        env:
+          PLAY_SHA: ${{ steps.audit.outputs.play_sha }}
+          UPLOAD_SHA: ${{ steps.audit.outputs.upload_sha }}
+          SHA_COUNT: ${{ steps.audit.outputs.sha_count }}
+          PROVIDER: ${{ steps.audit.outputs.provider }}
+          PROVIDER_HTTP: ${{ steps.audit.outputs.provider_http }}
+        shell: bash
+        run: |
+          body="Android v3 Play/App Check audit run \`$GITHUB_RUN_ID\`: PLAY_APP_SIGNING_SHA256_REGISTERED=\`$PLAY_SHA\`, UPLOAD_SHA256_REGISTERED=\`$UPLOAD_SHA\`, FIREBASE_ANDROID_SHA256_COUNT=\`$SHA_COUNT\`, PLAY_INTEGRITY_APPCHECK_CONFIG=\`$PROVIDER\`, APPCHECK_CONFIG_HTTP=\`$PROVIDER_HTTP\`. No secrets or tokens included."
+          gh api --method POST "repos/$REPOSITORY/issues/434/comments" -f body="$body" >/dev/null
