@@ -1,0 +1,96 @@
+name: Temporary Android v3 AAB Dispatcher
+
+on:
+  push:
+    branches:
+      - ops/dispatch-android-v3-aab-071bd149
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  dispatch:
+    name: Dispatch exact-main signed AAB v3
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPOSITORY: ${{ github.repository }}
+      EXPECTED_MAIN_SHA: 071bd149d6bca3b5dcd1912d79edc2a056bb6254
+    steps:
+      - name: Require exact frozen main and versionCode 3
+        shell: bash
+        run: |
+          set -euo pipefail
+          current_main="$(gh api "repos/$REPOSITORY/commits/main" --jq '.sha')"
+          [[ "$current_main" == "$EXPECTED_MAIN_SHA" ]] || {
+            echo "::error::Main moved to $current_main; refusing AAB dispatch."
+            exit 1
+          }
+          build_gradle="$(gh api "repos/$REPOSITORY/contents/android/app/build.gradle?ref=$EXPECTED_MAIN_SHA" --jq '.content' | tr -d '\n' | base64 --decode)"
+          grep -Eq 'versionCode[[:space:]]+3([[:space:]]|$)' <<<"$build_gradle"
+          grep -Eq 'versionName[[:space:]]+"1\.0"' <<<"$build_gradle"
+
+      - name: Snapshot prior Android release runs
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api --paginate "repos/$REPOSITORY/actions/workflows/android-store-release.yml/runs?per_page=100" \
+            --jq '.workflow_runs[].id' | sort -n > /tmp/before.txt
+
+      - name: Dispatch trusted signed AAB workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          jq -n \
+            --arg ref main \
+            --arg sha "$EXPECTED_MAIN_SHA" \
+            '{ref:$ref,inputs:{expected_commit_sha:$sha,confirmation:"BUILD_SIGNED_ANDROID_AAB_BIN_GROUP"}}' \
+            > /tmp/dispatch.json
+          gh api --method POST \
+            "repos/$REPOSITORY/actions/workflows/android-store-release.yml/dispatches" \
+            --input /tmp/dispatch.json
+
+      - name: Correlate dispatched run
+        id: correlate
+        shell: bash
+        run: |
+          set -euo pipefail
+          for _ in $(seq 1 30); do
+            runs="$(gh api "repos/$REPOSITORY/actions/workflows/android-store-release.yml/runs?event=workflow_dispatch&per_page=30")"
+            run_id="$(jq -r --arg sha "$EXPECTED_MAIN_SHA" --slurpfile before <(jq -R -s 'split("\n") | map(select(length>0)|tonumber)' /tmp/before.txt) '
+              [.workflow_runs[]
+               | select(.head_sha == $sha)
+               | select((.id as $id | ($before[0] | index($id))) == null)]
+              | sort_by(.created_at)
+              | last
+              | .id // empty
+            ' <<<"$runs")"
+            if [[ "$run_id" =~ ^[0-9]+$ ]]; then
+              echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+              echo "run_url=https://github.com/$REPOSITORY/actions/runs/$run_id" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo '::error::Could not correlate the new Android release run.'
+          exit 1
+
+      - name: Publish dispatch summary
+        env:
+          RUN_ID: ${{ steps.correlate.outputs.run_id }}
+          RUN_URL: ${{ steps.correlate.outputs.run_url }}
+        shell: bash
+        run: |
+          {
+            echo '## Signed Android v3 AAB dispatched'
+            echo
+            echo "- Exact main SHA: \`$EXPECTED_MAIN_SHA\`"
+            echo '- versionName: `1.0`'
+            echo '- versionCode: `3`'
+            echo "- Android Store Release run ID: \`$RUN_ID\`"
+            echo "- Run: $RUN_URL"
+            echo '- No Firebase deployment performed by this dispatcher.'
+            echo '- No Google Play upload performed by this dispatcher.'
+          } >> "$GITHUB_STEP_SUMMARY"
