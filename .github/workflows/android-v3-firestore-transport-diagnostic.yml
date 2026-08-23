@@ -1,0 +1,83 @@
+name: Android v3 Firestore Transport Diagnostic
+
+on:
+  push:
+    branches:
+      - ops/android-appcheck-remote-diagnostic-69955039
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPOSITORY: ${{ github.repository }}
+      PROJECT_ID: bin-group-57c60
+      ANDROID_GOOGLE_SERVICES_JSON_BASE64: ${{ secrets.ANDROID_GOOGLE_SERVICES_JSON_BASE64 }}
+      E2E_TENANT_EMAIL: ${{ secrets.E2E_TENANT_EMAIL }}
+      E2E_TENANT_PASSWORD: ${{ secrets.E2E_TENANT_PASSWORD }}
+    steps:
+      - name: Probe Auth then Firestore transport with Android client key
+        id: probe
+        shell: bash
+        run: |
+          set -euo pipefail
+          tmp="$(mktemp)"
+          printf '%s' "$ANDROID_GOOGLE_SERVICES_JSON_BASE64" | base64 --decode > "$tmp"
+          api_key="$(jq -r '.client[]? | select(.client_info.android_client_info.package_name == "ae.bingroups.superapp") | .api_key[0].current_key // empty' "$tmp" | head -n1)"
+          rm -f "$tmp"
+          test -n "$api_key"
+
+          auth_payload="$(mktemp)"
+          auth_body="$(mktemp)"
+          jq -n --arg email "$E2E_TENANT_EMAIL" --arg password "$E2E_TENANT_PASSWORD" '{email:$email,password:$password,returnSecureToken:true}' > "$auth_payload"
+          auth_code="$(curl --silent --show-error -o "$auth_body" -w '%{http_code}' \
+            -H 'Content-Type: application/json' \
+            -H 'Referer: https://localhost/' \
+            -H 'Origin: https://localhost' \
+            --data-binary @"$auth_payload" \
+            "https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=$api_key")"
+          [[ "$auth_code" == '200' ]]
+          uid="$(jq -r '.localId // empty' "$auth_body")"
+          id_token="$(jq -r '.idToken // empty' "$auth_body")"
+          test -n "$uid"
+          test -n "$id_token"
+          rm -f "$auth_payload" "$auth_body"
+
+          fs_body="$(mktemp)"
+          fs_code="$(curl --silent --show-error -o "$fs_body" -w '%{http_code}' \
+            -H "Authorization: Bearer $id_token" \
+            -H 'Referer: https://localhost/' \
+            -H 'Origin: https://localhost' \
+            "https://firestore.googleapis.com/v1/projects/$PROJECT_ID/databases/(default)/documents/users/$uid?key=$api_key")"
+
+          if [[ "$fs_code" == '200' ]]; then
+            result='FIRESTORE_WITHOUT_APPCHECK_UNEXPECTED_PASS'
+            safe_error='NONE'
+          else
+            result='FIRESTORE_REJECTED'
+            safe_error="$(jq -r '.error.status // .error.message // "UNKNOWN"' "$fs_body" 2>/dev/null | tr '\n' ' ' | tr -cd 'A-Za-z0-9_:/., -' | head -c 180)"
+            [[ -n "$safe_error" ]] || safe_error='UNKNOWN'
+          fi
+          rm -f "$fs_body"
+
+          echo "auth_http=$auth_code" >> "$GITHUB_OUTPUT"
+          echo "firestore_http=$fs_code" >> "$GITHUB_OUTPUT"
+          echo "firestore_result=$result" >> "$GITHUB_OUTPUT"
+          echo "firestore_error=$safe_error" >> "$GITHUB_OUTPUT"
+
+      - name: Publish safe diagnostic result
+        env:
+          AUTH_HTTP: ${{ steps.probe.outputs.auth_http }}
+          FS_HTTP: ${{ steps.probe.outputs.firestore_http }}
+          FS_RESULT: ${{ steps.probe.outputs.firestore_result }}
+          FS_ERROR: ${{ steps.probe.outputs.firestore_error }}
+        shell: bash
+        run: |
+          body="Android v3 Firestore transport diagnostic run \`$GITHUB_RUN_ID\`: AUTH_HTTP=\`$AUTH_HTTP\`, FIRESTORE_HTTP=\`$FS_HTTP\`, FIRESTORE_RESULT=\`$FS_RESULT\`, FIRESTORE_ERROR=\`$FS_ERROR\`. Probe intentionally omitted App Check to distinguish API-key/service restrictions from App Check enforcement. No credential, UID, API key, ID token, or document data included."
+          gh api --method POST "repos/$REPOSITORY/issues/434/comments" -f body="$body" >/dev/null
