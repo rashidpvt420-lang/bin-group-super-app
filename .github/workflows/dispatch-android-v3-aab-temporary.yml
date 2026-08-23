@@ -4,26 +4,22 @@ on:
   push:
     branches:
       - ops/dispatch-android-v3-aab-071bd149
-  pull_request:
-    branches:
-      - main
-    paths:
-      - .github/workflows/dispatch-android-v3-aab-temporary.yml
 
 permissions:
   actions: write
   contents: read
+  issues: write
 
 jobs:
   dispatch:
-    name: Dispatch exact-main signed AAB v3
-    if: github.event_name == 'push' || github.head_ref == 'ops/dispatch-android-v3-aab-071bd149'
+    name: Dispatch or reuse exact-main signed AAB v3
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 7
     env:
       GH_TOKEN: ${{ github.token }}
       REPOSITORY: ${{ github.repository }}
       EXPECTED_MAIN_SHA: 071bd149d6bca3b5dcd1912d79edc2a056bb6254
+      ISSUE_NUMBER: '434'
     steps:
       - name: Require exact frozen main and versionCode 3
         shell: bash
@@ -38,17 +34,26 @@ jobs:
           grep -Eq 'versionCode[[:space:]]+3([[:space:]]|$)' <<<"$build_gradle"
           grep -Eq 'versionName[[:space:]]+"1\.0"' <<<"$build_gradle"
 
-      - name: Snapshot prior Android release runs
+      - name: Dispatch only when no current exact-SHA run exists
+        id: release
         shell: bash
         run: |
           set -euo pipefail
-          gh api --paginate "repos/$REPOSITORY/actions/workflows/android-store-release.yml/runs?per_page=100" \
-            --jq '.workflow_runs[].id' | sort -n > /tmp/before.txt
+          runs="$(gh api "repos/$REPOSITORY/actions/workflows/android-store-release.yml/runs?event=workflow_dispatch&per_page=50")"
+          existing="$(jq -r --arg sha "$EXPECTED_MAIN_SHA" '
+            [.workflow_runs[] | select(.head_sha == $sha and (.status == "queued" or .status == "in_progress" or .conclusion == "success"))]
+            | sort_by(.created_at)
+            | last
+            | .id // empty
+          ' <<<"$runs")"
 
-      - name: Dispatch trusted signed AAB workflow
-        shell: bash
-        run: |
-          set -euo pipefail
+          if [[ "$existing" =~ ^[0-9]+$ ]]; then
+            echo "run_id=$existing" >> "$GITHUB_OUTPUT"
+            echo 'reused=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          before="$(jq '[.workflow_runs[].id]' <<<"$runs")"
           jq -n \
             --arg ref main \
             --arg sha "$EXPECTED_MAIN_SHA" \
@@ -58,46 +63,44 @@ jobs:
             "repos/$REPOSITORY/actions/workflows/android-store-release.yml/dispatches" \
             --input /tmp/dispatch.json
 
-      - name: Correlate dispatched run
-        id: correlate
-        shell: bash
-        run: |
-          set -euo pipefail
-          before_json="$(jq -R -s 'split("\n") | map(select(length>0)|tonumber)' /tmp/before.txt)"
-          for _ in $(seq 1 30); do
-            runs="$(gh api "repos/$REPOSITORY/actions/workflows/android-store-release.yml/runs?event=workflow_dispatch&per_page=30")"
-            run_id="$(jq -r --arg sha "$EXPECTED_MAIN_SHA" --argjson before "$before_json" '
+          for _ in $(seq 1 40); do
+            fresh="$(gh api "repos/$REPOSITORY/actions/workflows/android-store-release.yml/runs?event=workflow_dispatch&per_page=50")"
+            run_id="$(jq -r --arg sha "$EXPECTED_MAIN_SHA" --argjson before "$before" '
               [.workflow_runs[]
                | select(.head_sha == $sha)
                | select((.id as $id | ($before | index($id))) == null)]
               | sort_by(.created_at)
               | last
               | .id // empty
-            ' <<<"$runs")"
+            ' <<<"$fresh")"
             if [[ "$run_id" =~ ^[0-9]+$ ]]; then
               echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
-              echo "run_url=https://github.com/$REPOSITORY/actions/runs/$run_id" >> "$GITHUB_OUTPUT"
+              echo 'reused=false' >> "$GITHUB_OUTPUT"
               exit 0
             fi
             sleep 2
           done
-          echo '::error::Could not correlate the new Android release run.'
+          echo '::error::Could not correlate the Android release run.'
           exit 1
 
-      - name: Publish dispatch summary
+      - name: Publish run id to launch register
         env:
-          RUN_ID: ${{ steps.correlate.outputs.run_id }}
-          RUN_URL: ${{ steps.correlate.outputs.run_url }}
+          RUN_ID: ${{ steps.release.outputs.run_id }}
+          REUSED: ${{ steps.release.outputs.reused }}
         shell: bash
         run: |
+          set -euo pipefail
+          [[ "$RUN_ID" =~ ^[0-9]+$ ]]
+          run_url="https://github.com/$REPOSITORY/actions/runs/$RUN_ID"
+          body="Android v3 signed AAB release run for exact main \`$EXPECTED_MAIN_SHA\`: $run_url (run ID \`$RUN_ID\`, reused=\`$REUSED\`). This is diagnostic/internal-testing evidence only; no Firebase deploy or public-release claim."
+          gh api --method POST "repos/$REPOSITORY/issues/$ISSUE_NUMBER/comments" -f body="$body" >/dev/null
           {
-            echo '## Signed Android v3 AAB dispatched'
+            echo '## Signed Android v3 AAB run'
             echo
             echo "- Exact main SHA: \`$EXPECTED_MAIN_SHA\`"
             echo '- versionName: `1.0`'
             echo '- versionCode: `3`'
             echo "- Android Store Release run ID: \`$RUN_ID\`"
-            echo "- Run: $RUN_URL"
-            echo '- No Firebase deployment performed by this dispatcher.'
-            echo '- No Google Play upload performed by this dispatcher.'
+            echo "- Run: $run_url"
+            echo "- Existing run reused: \`$REUSED\`"
           } >> "$GITHUB_STEP_SUMMARY"
