@@ -60,6 +60,10 @@ test('HR route retains the registry and exposes callable-only least-privilege st
   assert.match(provisioning, /superAdmin:\s*false/);
   assert.match(provisioning, /ceo:\s*false/);
   assert.match(provisioning, /Module \$\{moduleKey\} is not allowed for role/);
+  assert.match(lifecycle, /revokeRefreshTokens\(uid\)/);
+  assert.match(lifecycle, /recordsPreserved:\s*true/);
+  assert.match(lifecycle, /private_hr_profiles/);
+  assert.match(hrOps, /enforceAppCheck:\s*true/g);
 });
 
 test('Founder review, payment decisions and Broker payout review require MFA-backed authority', async () => {

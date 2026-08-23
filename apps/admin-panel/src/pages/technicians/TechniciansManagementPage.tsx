@@ -10,7 +10,7 @@ import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '@bin/shared';
 import { auth, functions, httpsCallable } from '../../lib/firebase';
 
-interface Technician {
+type Technician = {
   uid: string;
   email: string;
   displayName: string;
@@ -21,15 +21,19 @@ interface Technician {
   role: 'technician';
   emiratesCovered?: string[];
   primaryEmirate?: string;
-  onDuty?: boolean;
-  available?: boolean;
-  currentJobCount?: number;
   maxConcurrentJobs?: number;
   emergencyEligible?: boolean;
-}
+  onDuty?: boolean;
+  lifecycleState?: string;
+  onboardingComplete?: boolean;
+};
 
 const EMIRATES = ['Abu Dhabi', 'Al Ain', 'Dubai', 'Sharjah', 'Ajman', 'Umm Al Quwain', 'Ras Al Khaimah', 'Fujairah'];
 const errorText = (error: any) => String(error?.details || error?.message || error?.code || 'Technician operation failed.').replace(/^FirebaseError:\s*/i, '').slice(0, 320);
+
+function safeError(error: any) {
+  return String(error?.details || error?.message || error?.code || 'Technician operation failed.').replace(/^FirebaseError:\s*/i, '').slice(0, 300);
+}
 
 export default function TechniciansManagementPage() {
   const { t, isRTL } = useLanguage();
@@ -40,6 +44,8 @@ export default function TechniciansManagementPage() {
   const [submitting, setSubmitting] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [openEdit, setOpenEdit] = useState(false);
+  const [offboardTarget, setOffboardTarget] = useState<Technician | null>(null);
+  const [offboardReason, setOffboardReason] = useState('');
   const [selectedTech, setSelectedTech] = useState<Technician | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
@@ -80,7 +86,7 @@ export default function TechniciansManagementPage() {
 
   useEffect(() => { void loadTechnicians(); }, [loadTechnicians]);
 
-  const handleEditOpen = (tech: Technician) => {
+  const openEditTech = (tech: Technician) => {
     setSelectedTech(tech);
     setEditTech({
       displayName: tech.displayName || '', phoneNumber: tech.phoneNumber || '', specialization: tech.specialization || '',

@@ -9,8 +9,10 @@ import { loginAdminWithRealMfa, requireAdminMfaCredentials } from './helpers/adm
 
 const ADMIN_BASE_URL = String(process.env.E2E_ADMIN_BASE_URL || '').trim().replace(/\/+$/, '');
 const CRASH_PATTERN = /application error|unhandled runtime error|chunkloaderror|minified react error|cannot read properties of undefined|null is not an object/i;
-const ACCESS_DENIED = /permission-denied|unauthenticated|access denied|not authorized|app check|firebase.?app.?check|insufficient permissions/i;
-const APPCHECK_HTTP = /\b403\b|\b429\b|too many requests/i;
+const ACCESS_DENIED = /permission-denied|unauthenticated|access denied|not authorized|insufficient permissions/i;
+const APPCHECK_FAILURE_TEXT =
+  /(?:(?:app check|firebase.?app.?check).{0,60}(?:fail(?:ed|ure)?|error|invalid|missing|required|denied|rejected|blocked|unauthorized)|(?:fail(?:ed|ure)?|error|invalid|missing|required|denied|rejected|blocked|unauthorized).{0,60}(?:app check|firebase.?app.?check))/i;
+const APPCHECK_HTTP = /\b401\b|\b403\b|\b429\b|too many requests/i;
 
 function requireAuditCredentials() {
   if (!ADMIN_BASE_URL) {
@@ -30,7 +32,8 @@ async function assertHealthy(page: Page, context: string) {
   expect(body.trim().length, `${context}: body must render text`).toBeGreaterThan(0);
   expect(body, `${context}: no crash text`).not.toMatch(CRASH_PATTERN);
   expect(body, `${context}: no access-denied text`).not.toMatch(ACCESS_DENIED);
-  expect(body, `${context}: no App Check / 429 text`).not.toMatch(APPCHECK_HTTP);
+  expect(body, `${context}: no App Check failure text`).not.toMatch(APPCHECK_FAILURE_TEXT);
+  expect(body, `${context}: no App Check / 401 / 403 / 429 text`).not.toMatch(APPCHECK_HTTP);
 }
 
 async function consoleCollector(page: Page) {

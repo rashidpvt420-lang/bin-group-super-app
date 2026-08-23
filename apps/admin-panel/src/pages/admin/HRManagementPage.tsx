@@ -62,6 +62,48 @@ function expiryWarning(value: string | null | undefined) {
     return delta >= 0 && delta <= 45 * 86400000;
 }
 
+type StaffLifecycle = {
+    uid: string;
+    displayName: string;
+    email: string;
+    phoneNumber?: string;
+    role: string;
+    department?: string;
+    specialization?: string;
+    status: string;
+    emailVerified: boolean;
+    authDisabled: boolean;
+    modules: string[];
+    joiningDate?: string | null;
+    contractEndDate?: string | null;
+    employmentType?: string | null;
+    shiftName?: string | null;
+    workingHours?: string | null;
+    offDay?: string | null;
+    employeeIdConfigured: boolean;
+    emiratesIdConfigured: boolean;
+    salaryConfigured: boolean;
+    lifecycleState: string;
+    onboardingComplete: boolean;
+};
+
+type HrOps = { attendance: any[]; leaveRequests: any[]; documents: any[] };
+
+const ATTENDANCE_STATUSES = ['PRESENT', 'ABSENT', 'ON_LEAVE', 'SICK_LEAVE', 'REMOTE', 'OFF_DAY'];
+const LEAVE_TYPES = ['ANNUAL', 'SICK', 'EMERGENCY', 'UNPAID', 'COMPASSIONATE', 'OTHER'];
+const DOCUMENT_TYPES = ['EMPLOYMENT_CONTRACT', 'EMIRATES_ID', 'PASSPORT', 'VISA', 'CERTIFICATE', 'DRIVING_LICENCE', 'WARNING_LETTER', 'MEDICAL_INSURANCE', 'OTHER'];
+
+function errorText(error: any) {
+    return String(error?.details || error?.message || error?.code || 'HR operation failed.').replace(/^FirebaseError:\s*/i, '').slice(0, 300);
+}
+
+function lifecycleColor(state: string) {
+    if (state === 'ACTIVE') return 'success';
+    if (state === 'SUSPENDED') return 'error';
+    if (state === 'INVITED') return 'warning';
+    return 'info';
+}
+
 export default function HRManagementPage() {
     const { user } = useAuth();
     const navigate = useNavigate();
