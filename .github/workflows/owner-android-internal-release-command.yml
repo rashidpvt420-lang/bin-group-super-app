@@ -1,0 +1,191 @@
+name: Owner Android Internal Release Command
+run-name: Owner Android internal release · ${{ github.event.comment.body }}
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  actions: write
+  contents: read
+  issues: write
+
+concurrency:
+  group: owner-android-internal-release-command
+  cancel-in-progress: false
+
+jobs:
+  dispatch-signed-android-internal:
+    name: Dispatch exact-main signed Android AAB for Internal Testing
+    if: >-
+      github.event.issue.number == 434 &&
+      !github.event.issue.pull_request &&
+      github.event.comment.user.login == github.repository_owner &&
+      github.event.comment.author_association == 'OWNER' &&
+      github.event.comment.body == '/bin-launch build-android-internal'
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPOSITORY: ${{ github.repository }}
+      ISSUE_NUMBER: '434'
+      COMMAND: ${{ github.event.comment.body }}
+
+    steps:
+      - name: Validate exact owner command
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$COMMAND" == '/bin-launch build-android-internal' ]]
+
+      - name: Resolve and verify frozen protected main
+        id: release
+        shell: bash
+        run: |
+          set -euo pipefail
+          first_sha="$(gh api "repos/$REPOSITORY/commits/main" --jq '.sha')"
+          [[ "$first_sha" =~ ^[0-9a-f]{40}$ ]]
+          sleep 3
+          second_sha="$(gh api "repos/$REPOSITORY/commits/main" --jq '.sha')"
+          [[ "$first_sha" == "$second_sha" ]] || {
+            echo '::error::Main moved while authorizing the Android internal release.'
+            exit 1
+          }
+
+          protected="$(gh api "repos/$REPOSITORY/branches/main" --jq '.protected')"
+          [[ "$protected" == 'true' ]] || {
+            echo '::error::main is not protected.'
+            exit 1
+          }
+
+          verified="$(gh api "repos/$REPOSITORY/commits/$second_sha" --jq '.commit.verification.verified')"
+          [[ "$verified" == 'true' ]] || {
+            echo '::error::Current main commit is not cryptographically verified.'
+            exit 1
+          }
+
+          echo "sha=$second_sha" >> "$GITHUB_OUTPUT"
+
+      - name: Snapshot existing Android release runs
+        env:
+          RELEASE_SHA: ${{ steps.release.outputs.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api --paginate --slurp \
+            "repos/$REPOSITORY/actions/workflows/android-store-release.yml/runs?branch=main&event=workflow_dispatch&per_page=100" \
+            | jq -c '[.[].workflow_runs[].id]' > android-release-baseline.json
+          jq -e 'type == "array"' android-release-baseline.json >/dev/null
+
+      - name: Dispatch exact-main signed Android AAB
+        env:
+          RELEASE_SHA: ${{ steps.release.outputs.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          jq -n \
+            --arg ref main \
+            --arg sha "$RELEASE_SHA" \
+            '{ref:$ref,inputs:{expected_commit_sha:$sha,confirmation:"BUILD_SIGNED_ANDROID_AAB_BIN_GROUP"}}' \
+            > android-release-dispatch.json
+
+          gh api --method POST \
+            "repos/$REPOSITORY/actions/workflows/android-store-release.yml/dispatches" \
+            --input android-release-dispatch.json
+
+      - name: Correlate and wait for the exact new Android release run
+        id: android
+        env:
+          RELEASE_SHA: ${{ steps.release.outputs.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          post_comment() {
+            gh api --method POST "repos/$REPOSITORY/issues/$ISSUE_NUMBER/comments" -f body="$1" >/dev/null
+          }
+
+          run_id=''
+          run_url=''
+          for _ in $(seq 1 48); do
+            runs="$(gh api --paginate --slurp \
+              "repos/$REPOSITORY/actions/workflows/android-store-release.yml/runs?branch=main&event=workflow_dispatch&per_page=100" \
+              | jq -c '{workflow_runs:[.[].workflow_runs[]]}')"
+            run_id="$(jq -r \
+              --arg sha "$RELEASE_SHA" \
+              --slurpfile baseline android-release-baseline.json \
+              '[.workflow_runs[]
+                | select(.head_branch == "main")
+                | select(.head_sha == $sha)
+                | select(.event == "workflow_dispatch")
+                | select((.id as $id | ($baseline[0] | index($id))) == null)]
+               | sort_by(.created_at)
+               | last
+               | .id // empty' <<<"$runs")"
+            if [[ "$run_id" =~ ^[1-9][0-9]*$ ]]; then
+              run_url="$(jq -r --argjson id "$run_id" '.workflow_runs[] | select(.id == $id) | .html_url' <<<"$runs")"
+              break
+            fi
+            sleep 5
+          done
+
+          [[ "$run_id" =~ ^[1-9][0-9]*$ ]] || {
+            post_comment "Android internal release dispatch was accepted for \`$RELEASE_SHA\`, but no unique exact-SHA run could be correlated. No duplicate dispatch was attempted."
+            exit 1
+          }
+
+          post_comment "Android v5 signed-AAB/App Check gate started for exact main \`$RELEASE_SHA\`: $run_url"
+
+          for _ in $(seq 1 180); do
+            run_json="$(gh api "repos/$REPOSITORY/actions/runs/$run_id")"
+            status="$(jq -r '.status' <<<"$run_json")"
+            conclusion="$(jq -r '.conclusion // empty' <<<"$run_json")"
+            if [[ "$status" == 'completed' ]]; then
+              if [[ "$conclusion" != 'success' ]]; then
+                post_comment "Android v5 signed-AAB/App Check gate failed for \`$RELEASE_SHA\`: $run_url. No Google Play release claim was made."
+                exit 1
+              fi
+
+              artifacts="$(gh api --paginate --slurp \
+                "repos/$REPOSITORY/actions/runs/$run_id/artifacts?per_page=100" \
+                | jq -c '{artifacts:[.[].artifacts[]]}')"
+              expected="bin-group-android-release-$RELEASE_SHA"
+              artifact_id="$(jq -r --arg expected "$expected" '[.artifacts[] | select(.name == $expected and .expired == false)] | first | .id // empty' <<<"$artifacts")"
+              [[ "$artifact_id" =~ ^[1-9][0-9]*$ ]] || {
+                post_comment "Android signed workflow succeeded for \`$RELEASE_SHA\`, but expected artifact \`$expected\` is missing."
+                exit 1
+              }
+
+              post_comment "Android v5 signed-AAB/App Check gate PASSED for exact main \`$RELEASE_SHA\`: $run_url. Artifact: \`$expected\`. This is Internal Testing evidence only; physical Google Play runtime verification is still required."
+              echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+              echo "run_url=$run_url" >> "$GITHUB_OUTPUT"
+              echo "artifact_id=$artifact_id" >> "$GITHUB_OUTPUT"
+              echo "artifact_name=$expected" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            sleep 15
+          done
+
+          post_comment "Android v5 signed-AAB/App Check gate timed out for \`$RELEASE_SHA\`: $run_url. No release claim was made."
+          exit 1
+
+      - name: Publish protected internal-release summary
+        env:
+          RELEASE_SHA: ${{ steps.release.outputs.sha }}
+          RUN_ID: ${{ steps.android.outputs.run_id }}
+          RUN_URL: ${{ steps.android.outputs.run_url }}
+          ARTIFACT_NAME: ${{ steps.android.outputs.artifact_name }}
+        shell: bash
+        run: |
+          {
+            echo '## Owner Android Internal Testing build complete'
+            echo
+            echo "- Exact protected main SHA: \`$RELEASE_SHA\`"
+            echo "- Signed Android run ID: \`$RUN_ID\`"
+            echo "- Signed Android run: $RUN_URL"
+            echo "- Artifact: \`$ARTIFACT_NAME\`"
+            echo '- Firebase production deployment: not performed'
+            echo '- Google Play upload: not performed by this command'
+            echo '- Public release: not performed'
+            echo '- Physical Play-installed E2E: still required'
+          } >> "$GITHUB_STEP_SUMMARY"
