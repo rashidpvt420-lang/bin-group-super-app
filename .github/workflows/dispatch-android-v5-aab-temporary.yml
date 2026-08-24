@@ -1,0 +1,106 @@
+name: Temporary Android v5 AAB Dispatcher
+
+on:
+  push:
+    branches:
+      - ops/dispatch-android-v5-aab-67d3db7f
+
+permissions:
+  actions: write
+  contents: read
+  issues: write
+
+jobs:
+  dispatch:
+    name: Dispatch or reuse exact-main signed AAB v5
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPOSITORY: ${{ github.repository }}
+      EXPECTED_MAIN_SHA: 67d3db7fba2f26117cac42f8a0d28554d0f353c9
+      ISSUE_NUMBER: '434'
+    steps:
+      - name: Require exact frozen main and versionCode 5
+        shell: bash
+        run: |
+          set -euo pipefail
+          current_main="$(gh api "repos/$REPOSITORY/commits/main" --jq '.sha')"
+          [[ "$current_main" == "$EXPECTED_MAIN_SHA" ]] || {
+            echo "::error::Main moved to $current_main; refusing AAB dispatch."
+            exit 1
+          }
+          build_gradle="$(gh api "repos/$REPOSITORY/contents/android/app/build.gradle?ref=$EXPECTED_MAIN_SHA" --jq '.content' | tr -d '\n' | base64 --decode)"
+          grep -Eq 'versionCode[[:space:]]+5([[:space:]]|$)' <<<"$build_gradle"
+          grep -Eq 'versionName[[:space:]]+"1\.0"' <<<"$build_gradle"
+
+      - name: Dispatch only when no current exact-SHA run exists
+        id: release
+        shell: bash
+        run: |
+          set -euo pipefail
+          runs="$(gh api "repos/$REPOSITORY/actions/workflows/android-store-release.yml/runs?event=workflow_dispatch&per_page=50")"
+          existing="$(jq -r --arg sha "$EXPECTED_MAIN_SHA" '
+            [.workflow_runs[] | select(.head_sha == $sha and (.status == "queued" or .status == "in_progress" or .conclusion == "success"))]
+            | sort_by(.created_at)
+            | last
+            | .id // empty
+          ' <<<"$runs")"
+
+          if [[ "$existing" =~ ^[0-9]+$ ]]; then
+            echo "run_id=$existing" >> "$GITHUB_OUTPUT"
+            echo 'reused=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          before="$(jq '[.workflow_runs[].id]' <<<"$runs")"
+          jq -n \
+            --arg ref main \
+            --arg sha "$EXPECTED_MAIN_SHA" \
+            '{ref:$ref,inputs:{expected_commit_sha:$sha,confirmation:"BUILD_SIGNED_ANDROID_AAB_BIN_GROUP"}}' \
+            > /tmp/dispatch.json
+          gh api --method POST \
+            "repos/$REPOSITORY/actions/workflows/android-store-release.yml/dispatches" \
+            --input /tmp/dispatch.json
+
+          for _ in $(seq 1 40); do
+            fresh="$(gh api "repos/$REPOSITORY/actions/workflows/android-store-release.yml/runs?event=workflow_dispatch&per_page=50")"
+            run_id="$(jq -r --arg sha "$EXPECTED_MAIN_SHA" --argjson before "$before" '
+              [.workflow_runs[]
+               | select(.head_sha == $sha)
+               | select((.id as $id | ($before | index($id))) == null)]
+              | sort_by(.created_at)
+              | last
+              | .id // empty
+            ' <<<"$fresh")"
+            if [[ "$run_id" =~ ^[0-9]+$ ]]; then
+              echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+              echo 'reused=false' >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo '::error::Could not correlate the Android release run.'
+          exit 1
+
+      - name: Publish run id to launch register
+        env:
+          RUN_ID: ${{ steps.release.outputs.run_id }}
+          REUSED: ${{ steps.release.outputs.reused }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$RUN_ID" =~ ^[0-9]+$ ]]
+          run_url="https://github.com/$REPOSITORY/actions/runs/$RUN_ID"
+          body="Android v5 signed AAB release run for exact main \`$EXPECTED_MAIN_SHA\`: $run_url (run ID \`$RUN_ID\`, reused=\`$REUSED\`). This release executes the protected Play Integrity/App Check registration repair gate before producing the AAB; no App Check or Firestore bypass is permitted."
+          gh api --method POST "repos/$REPOSITORY/issues/$ISSUE_NUMBER/comments" -f body="$body" >/dev/null
+          {
+            echo '## Signed Android v5 AAB run'
+            echo
+            echo "- Exact main SHA: \`$EXPECTED_MAIN_SHA\`"
+            echo '- versionName: `1.0`'
+            echo '- versionCode: `5`'
+            echo "- Android Store Release run ID: \`$RUN_ID\`"
+            echo "- Run: $run_url"
+            echo "- Existing run reused: \`$REUSED\`"
+          } >> "$GITHUB_STEP_SUMMARY"
