@@ -12,16 +12,20 @@ test('Android release verifier binds the production project, package, app ID and
   assert.match(verifier, /EXPECTED_PLAY_SIGNING_SHA256/);
   assert.match(verifier, /certType: 'SHA_256'/);
   assert.match(verifier, /playIntegrityConfig/);
-  assert.match(verifier, /allowUnrecognizedVersion === true/);
 });
 
-test('Android release gate may repair only expected Firebase registration and never weakens App Check', () => {
+test('Android release gate repairs to the Firebase-recommended Google-Play-only App Check posture', () => {
   assert.match(verifier, /process\.argv\.includes\('--repair-sha'\)/);
   assert.match(verifier, /process\.argv\.includes\('--repair-config'\)/);
   assert.match(verifier, /method: 'POST'/);
   assert.match(verifier, /method: 'PATCH'/);
   assert.match(verifier, /appIntegrity: \{ allowUnrecognizedVersion: false \}/);
+  assert.match(verifier, /deviceIntegrity: \{ minDeviceRecognitionLevel: RECOMMENDED_DEVICE_LEVEL \}/);
+  assert.match(verifier, /accountDetails: \{ requireLicensed: true \}/);
+  assert.match(verifier, /RECOMMENDED_DEVICE_LEVEL = 'NO_INTEGRITY'/);
   assert.match(verifier, /Google Play App Signing SHA-256 is not registered/);
+  assert.match(verifier, /playIntegrityRequiresLicensedAccount: true/);
+  assert.match(verifier, /playIntegrityUsesFirebaseRecommendedPlayOnlyPolicy: true/);
   assert.doesNotMatch(verifier, /debugToken/i);
   assert.doesNotMatch(verifier, /enforcementMode\s*[:=]\s*['"]OFF/i);
   assert.doesNotMatch(verifier, /allowUnrecognizedVersion\s*:\s*true/);
