@@ -43,7 +43,10 @@ test('native bridge classifies App Check attestation failures without returning 
   assert.match(bridge, /EXPECTED_PLAY_SIGNING_SHA256/);
   assert.match(bridge, /call\.reject\("Unable to obtain Firebase App Check token\."/);
   assert.doesNotMatch(bridge, /result\.put\("message"/);
-  assert.doesNotMatch(bridge, /result\.put\("token".*console|Log\.[a-z]+\([^\n]*token/i);
+  // Returning the App Check token to the JS CustomProvider is required. The
+  // safeguard is that token material must never be written to logs/stdout.
+  assert.doesNotMatch(bridge, /Log\.[a-z]+\([^\n]*token/i);
+  assert.doesNotMatch(bridge, /System\.out\.print(?:ln)?\([^\n]*token/i);
 });
 
 test('next Google Play App Check attestation repair build uses versionCode 6', () => {
