@@ -102,6 +102,20 @@ public class FirebaseAppCheckBridgePlugin extends Plugin {
         }
     }
 
+    @SuppressWarnings("deprecation")
+    private String versionState() {
+        try {
+            PackageInfo info = getContext().getPackageManager()
+                .getPackageInfo(getContext().getPackageName(), 0);
+            long versionCode = Build.VERSION.SDK_INT >= Build.VERSION_CODES.P
+                ? info.getLongVersionCode()
+                : info.versionCode;
+            return "V" + versionCode;
+        } catch (Exception ignored) {
+            return "V_UNKNOWN";
+        }
+    }
+
     private String classifyMessage(Throwable error) {
         Throwable cursor = error;
         int depth = 0;
@@ -148,7 +162,7 @@ public class FirebaseAppCheckBridgePlugin extends Plugin {
     private String diagnosticCode(Throwable error) {
         String root = classifyMessage(error);
         if (root.isBlank()) root = classCode(error);
-        return root + "__" + installerState() + "__" + signingState() + "__V" + BuildConfig.VERSION_CODE;
+        return root + "__" + installerState() + "__" + signingState() + "__" + versionState();
     }
 
     @PluginMethod
