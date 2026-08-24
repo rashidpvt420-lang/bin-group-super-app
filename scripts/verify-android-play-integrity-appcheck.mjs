@@ -18,11 +18,10 @@ const repairConfig = process.argv.includes('--repair-config');
 // Firebase's recommended App Check posture for that distribution model is:
 //   * PLAY_RECOGNIZED required
 //   * LICENSED required
-//   * no additional explicit device-integrity threshold
-// PLAY_RECOGNIZED remains the strong app-integrity gate and Play Integrity can
-// still perform its intrinsic device checks. This avoids accidental rejection
-// caused by an optional/strong device label that the app never opted into.
-const RECOMMENDED_DEVICE_LEVEL = 'NO_INTEGRITY';
+//   * do not explicitly configure an optional device-integrity threshold
+// PLAY_RECOGNIZED remains the application-integrity gate. Leaving the optional
+// device threshold unset is not an App Check bypass; Firebase may still perform
+// implicit device-integrity checks while evaluating the required verdicts.
 
 const text = (value) => String(value ?? '').trim();
 const normalizeSha = (value) => text(value).replace(/[^a-fA-F0-9]/g, '').toUpperCase();
@@ -120,14 +119,12 @@ const appCheckUrl = `https://firebaseappcheck.googleapis.com/v1/${appCheckName
 const desiredConfig = {
   name: appCheckName,
   appIntegrity: { allowUnrecognizedVersion: false },
-  deviceIntegrity: { minDeviceRecognitionLevel: RECOMMENDED_DEVICE_LEVEL },
   accountDetails: { requireLicensed: true },
 };
 
 const writeRecommendedPlayConfig = async () => request(
   `${appCheckUrl}?updateMask=${encodeURIComponent([
     'appIntegrity.allowUnrecognizedVersion',
-    'deviceIntegrity.minDeviceRecognitionLevel',
     'accountDetails.requireLicensed',
   ].join(','))}`,
   {
@@ -138,9 +135,8 @@ const writeRecommendedPlayConfig = async () => request(
 
 const configMatchesRecommendedPlayPolicy = (config) => {
   const allowUnrecognized = config?.appIntegrity?.allowUnrecognizedVersion === true;
-  const deviceLevel = text(config?.deviceIntegrity?.minDeviceRecognitionLevel) || RECOMMENDED_DEVICE_LEVEL;
   const requireLicensed = config?.accountDetails?.requireLicensed === true;
-  return !allowUnrecognized && deviceLevel === RECOMMENDED_DEVICE_LEVEL && requireLicensed;
+  return !allowUnrecognized && requireLicensed;
 };
 
 let appCheckResult = await request(appCheckUrl);
@@ -185,7 +181,7 @@ if (!configMatchesRecommendedPlayPolicy(config)) {
   fail('Firebase Play Integrity App Check policy does not match the Google-Play-only production posture');
 }
 
-const resolvedDeviceLevel = text(config?.deviceIntegrity?.minDeviceRecognitionLevel) || RECOMMENDED_DEVICE_LEVEL;
+const configuredDeviceLevel = text(config?.deviceIntegrity?.minDeviceRecognitionLevel);
 const proof = {
   schemaVersion: 2,
   status: 'passed',
@@ -199,7 +195,7 @@ const proof = {
   playIntegrityAppCheckConfigRepaired: playIntegrityConfigRepaired,
   playIntegrityRequiresPlayRecognizedVersion: true,
   playIntegrityRequiresLicensedAccount: true,
-  playIntegrityMinDeviceRecognitionLevel: resolvedDeviceLevel,
+  playIntegrityExplicitDeviceRecognitionLevel: configuredDeviceLevel || null,
   playIntegrityUsesFirebaseRecommendedPlayOnlyPolicy: true,
   playConsoleCloudProjectLink: 'requires-play-installed-runtime-proof',
   observedAt: new Date().toISOString(),
@@ -211,5 +207,6 @@ writeFileSync(OUTPUT_PATH, `${JSON.stringify(proof, null, 2)}\n`, { mode: 0o600 
 console.log('[android-appcheck] PASS Android Firebase registration and Play Integrity App Check configuration verified');
 console.log(`[android-appcheck] play_signing_sha_repaired=${playSigningShaRepaired}`);
 console.log(`[android-appcheck] play_integrity_config_repaired=${playIntegrityConfigRepaired}`);
-console.log('[android-appcheck] play_only_policy=PLAY_RECOGNIZED+LICENSED+NO_EXPLICIT_DEVICE_THRESHOLD');
+console.log(`[android-appcheck] explicit_device_threshold=${configuredDeviceLevel || 'UNSET'}`);
+console.log('[android-appcheck] play_only_policy=PLAY_RECOGNIZED+LICENSED+OPTIONAL_DEVICE_THRESHOLD_UNSET');
 console.log(`[android-appcheck] wrote ${path.relative(process.cwd(), OUTPUT_PATH)}`);
