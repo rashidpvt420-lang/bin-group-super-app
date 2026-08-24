@@ -20,12 +20,19 @@ test('Android release gate repairs to the Firebase-recommended Google-Play-only 
   assert.match(verifier, /method: 'POST'/);
   assert.match(verifier, /method: 'PATCH'/);
   assert.match(verifier, /appIntegrity: \{ allowUnrecognizedVersion: false \}/);
-  assert.match(verifier, /deviceIntegrity: \{ minDeviceRecognitionLevel: RECOMMENDED_DEVICE_LEVEL \}/);
   assert.match(verifier, /accountDetails: \{ requireLicensed: true \}/);
-  assert.match(verifier, /RECOMMENDED_DEVICE_LEVEL = 'NO_INTEGRITY'/);
   assert.match(verifier, /Google Play App Signing SHA-256 is not registered/);
   assert.match(verifier, /playIntegrityRequiresLicensedAccount: true/);
   assert.match(verifier, /playIntegrityUsesFirebaseRecommendedPlayOnlyPolicy: true/);
+  assert.match(verifier, /OPTIONAL_DEVICE_THRESHOLD_UNSET/);
+
+  // For an app distributed exclusively through Google Play, Firebase recommends
+  // requiring PLAY_RECOGNIZED and LICENSED without explicitly configuring an
+  // optional device-integrity threshold. Do not convert that absence into a
+  // weakening value such as NO_INTEGRITY in the production PATCH payload.
+  assert.doesNotMatch(verifier, /RECOMMENDED_DEVICE_LEVEL/);
+  assert.doesNotMatch(verifier, /minDeviceRecognitionLevel[^\n]*NO_INTEGRITY/);
+  assert.doesNotMatch(verifier, /deviceIntegrity:\s*\{\s*minDeviceRecognitionLevel/);
   assert.doesNotMatch(verifier, /debugToken/i);
   assert.doesNotMatch(verifier, /enforcementMode\s*[:=]\s*['"]OFF/i);
   assert.doesNotMatch(verifier, /allowUnrecognizedVersion\s*:\s*true/);
