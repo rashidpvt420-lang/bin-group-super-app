@@ -89,10 +89,6 @@ const readEnv = (key: string): string => {
   return value;
 };
 
-// Firebase Web App config is public client configuration, not a service-account
-// secret. Keep environment variables preferred, but provide stable BIN GROUP
-// project fallbacks so Codespaces/local builds do not boot with empty Firebase
-// values and trigger auth/invalid-api-key.
 const firebaseConfig = {
   apiKey: readEnv('VITE_FIREBASE_API_KEY') || 'AIzaSyCd-QdM7mjECh9UqDKk1ofBemanpTRgd4s',
   authDomain: readEnv('VITE_FIREBASE_AUTH_DOMAIN') || 'bin-group-57c60.firebaseapp.com',
@@ -134,9 +130,24 @@ const isCapacitorNative = Boolean(
 const isCapacitorAndroid = isCapacitorNative && capacitorPlatform === 'android';
 const nativeAppCheckBridge = registerPlugin<NativeAppCheckBridge>('FirebaseAppCheckBridge');
 
-// Firebase App Check — hosted web builds keep reCAPTCHA, while signed Capacitor
-// Android builds obtain Play Integrity-backed App Check tokens from the native
-// Firebase SDK and provide them to the Firebase JS SDK through CustomProvider.
+const validateNativeAppCheckToken = (result: NativeAppCheckTokenResult) => {
+  const token = String(result?.token || '').trim();
+  const expireTimeMillis = Number(result?.expireTimeMillis || 0);
+  if (!token || !Number.isFinite(expireTimeMillis) || expireTimeMillis <= Date.now()) {
+    throw new Error('Native Play Integrity App Check token result is invalid.');
+  }
+  return { token, expireTimeMillis };
+};
+
+export const forceNativeAppCheckRefresh = async (): Promise<void> => {
+  if (!isCapacitorAndroid) return;
+  const bridge = nativeAppCheckBridge;
+  if (!bridge || typeof bridge.getAppCheckToken !== 'function') {
+    throw new Error('Native Play Integrity App Check bridge plugin unavailable.');
+  }
+  validateNativeAppCheckToken(await bridge.getAppCheckToken({ forceRefresh: true }));
+};
+
 const appCheckSiteKey = readEnv('VITE_APP_CHECK_SITE_KEY');
 const requestedAppCheckProvider = readEnv('VITE_APP_CHECK_PROVIDER').toLowerCase();
 const webAppCheckProvider =
@@ -176,15 +187,11 @@ if (appCheckExplicitlyEnabled && typeof window !== 'undefined') {
             throw new Error('Native Play Integrity App Check bridge plugin unavailable.');
           }
 
-          // CustomProvider is invoked only when the Web SDK needs a fresh token,
-          // so request a fresh native token and let the Web SDK own caching/refresh.
-          const result = await bridge.getAppCheckToken({ forceRefresh: true });
-          const token = String(result?.token || '').trim();
-          const expireTimeMillis = Number(result?.expireTimeMillis || 0);
-          if (!token || !Number.isFinite(expireTimeMillis) || expireTimeMillis <= Date.now()) {
-            throw new Error('Native Play Integrity App Check token result is invalid.');
-          }
-          return { token, expireTimeMillis };
+          // Normal Web SDK refreshes reuse a valid native token. Explicit recovery
+          // uses forceNativeAppCheckRefresh() before the Web SDK requests a token.
+          return validateNativeAppCheckToken(
+            await bridge.getAppCheckToken({ forceRefresh: false }),
+          );
         },
       });
 
@@ -194,8 +201,6 @@ if (appCheckExplicitlyEnabled && typeof window !== 'undefined') {
       });
       appCheckInitialized = true;
     } else if (appCheckSiteKey) {
-      // Prefer an already-injected registered debug UUID (Playwright addInitScript).
-      // Only auto-enable the boolean debug flow in local DEV when no UUID is set.
       const existingDebug = (self as unknown as Record<string, unknown>).FIREBASE_APPCHECK_DEBUG_TOKEN;
       const hasRegisteredDebug =
         typeof existingDebug === 'string' &&
@@ -236,9 +241,9 @@ if (typeof window !== 'undefined') {
 
   enableIndexedDbPersistence(db).catch((err) => {
     if (err.code === 'failed-precondition') {
-        console.warn('[Firebase] Multiple tabs open, persistence can only be enabled in one tab at a time.');
+      console.warn('[Firebase] Multiple tabs open, persistence can only be enabled in one tab at a time.');
     } else if (err.code === 'unimplemented') {
-        console.warn('[Firebase] The current browser does not support all of the features required to enable persistence.');
+      console.warn('[Firebase] The current browser does not support all of the features required to enable persistence.');
     }
   });
 }
@@ -302,20 +307,12 @@ const inferLegacyAuditTarget = (data: any) => {
 
   for (const [field, fallbackType] of legacyTargets) {
     const targetId = String(data?.[field] || '').trim();
-    if (targetId) {
-      return { targetType: explicitTargetType || fallbackType, targetId };
-    }
+    if (targetId) return { targetType: explicitTargetType || fallbackType, targetId };
   }
 
   return { targetType: explicitTargetType, targetId: explicitTargetId };
 };
 
-/**
- * Compatibility bridge for legacy screens that still call addDoc() directly on
- * audit_logs/auditLogs. Security Rules deny those client writes by design, so
- * route them through the authenticated Cloud Function instead. All other
- * collections retain the native Firestore addDoc behavior.
- */
 const addDoc: typeof firestoreAddDoc = (async (reference: any, data: any) => {
   const collectionPath = String(reference?.path || '');
   if (collectionPath !== 'audit_logs' && collectionPath !== 'auditLogs') {
@@ -354,8 +351,6 @@ const addDoc: typeof firestoreAddDoc = (async (reference: any, data: any) => {
     sourceCollection: collectionPath,
   };
 
-  // Some legacy flows wrote the same event to both audit_logs and auditLogs
-  // in one Promise.all. Deduplicate only while the first callable is pending.
   const dedupeKey = `${action}|${targetType}|${targetId}`;
   let pending = pendingAuditWrites.get(dedupeKey);
   if (!pending) {
@@ -401,7 +396,6 @@ export const getSafeMessaging = async (): Promise<Messaging | null> => {
 export const messaging: Messaging | null = null;
 
 export {
-  // Auth
   onAuthStateChanged,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
@@ -412,7 +406,6 @@ export {
   GoogleAuthProvider,
   setPersistence,
   browserLocalPersistence,
-  // Firestore
   collection,
   collectionGroup,
   doc,
@@ -440,15 +433,12 @@ export {
   documentId,
   Timestamp,
   enableIndexedDbPersistence,
-  // Storage
   ref,
   uploadBytes,
   uploadBytesResumable,
   getDownloadURL,
   deleteObject,
-  // Functions
   httpsCallable,
-  // Messaging
   getMessaging,
   getToken,
   onMessage,
