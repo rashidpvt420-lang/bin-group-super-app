@@ -18,9 +18,6 @@ import java.util.Locale;
 
 @CapacitorPlugin(name = "FirebaseAppCheckBridge")
 public class FirebaseAppCheckBridgePlugin extends Plugin {
-    // Google Play App Signing SHA-256 currently registered for the BIN GROUP
-    // production Android app. Certificate fingerprints are public identity
-    // metadata, not private signing material.
     private static final String EXPECTED_PLAY_SIGNING_SHA256 =
         "65B4769E05DE706D74BECF890F3923958CCB7AFBA0466D9A1734570DE011C891";
 
@@ -64,9 +61,7 @@ public class FirebaseAppCheckBridgePlugin extends Plugin {
                 }
                 for (Signature signature : signingHistory(signingInfo)) {
                     String fingerprint = sha256(signature);
-                    if (EXPECTED_PLAY_SIGNING_SHA256.equals(fingerprint)) {
-                        return "S_HISTORY_" + currentPrefix;
-                    }
+                    if (EXPECTED_PLAY_SIGNING_SHA256.equals(fingerprint)) return "S_HISTORY_" + currentPrefix;
                 }
                 return "S_MISMATCH_" + currentPrefix;
             }
@@ -105,11 +100,8 @@ public class FirebaseAppCheckBridgePlugin extends Plugin {
     @SuppressWarnings("deprecation")
     private String versionState() {
         try {
-            PackageInfo info = getContext().getPackageManager()
-                .getPackageInfo(getContext().getPackageName(), 0);
-            long versionCode = Build.VERSION.SDK_INT >= Build.VERSION_CODES.P
-                ? info.getLongVersionCode()
-                : info.versionCode;
+            PackageInfo info = getContext().getPackageManager().getPackageInfo(getContext().getPackageName(), 0);
+            long versionCode = Build.VERSION.SDK_INT >= Build.VERSION_CODES.P ? info.getLongVersionCode() : info.versionCode;
             return "V" + versionCode;
         } catch (Exception ignored) {
             return "V_UNKNOWN";
@@ -167,11 +159,11 @@ public class FirebaseAppCheckBridgePlugin extends Plugin {
 
     @PluginMethod
     public void getAppCheckToken(PluginCall call) {
-        // The Firebase JS CustomProvider already decides when it needs a token.
-        // Let the native Firebase SDK reuse a still-valid App Check token instead
-        // of forcing a fresh Play Integrity attestation for every JS refresh.
+        Boolean requestedForceRefresh = call.getBoolean("forceRefresh", false);
+        boolean forceRefresh = requestedForceRefresh != null && requestedForceRefresh;
+
         FirebaseAppCheck.getInstance()
-            .getAppCheckToken(false)
+            .getAppCheckToken(forceRefresh)
             .addOnSuccessListener(tokenResult -> {
                 String token = tokenResult.getToken();
                 long expireTimeMillis = tokenResult.getExpireTimeMillis();
