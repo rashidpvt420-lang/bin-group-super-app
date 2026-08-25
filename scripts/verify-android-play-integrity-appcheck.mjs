@@ -6,9 +6,10 @@ import path from 'node:path';
 const PROJECT_ID = 'bin-group-57c60';
 const PROJECT_NUMBER = '123413252227';
 const PACKAGE_NAME = 'ae.bingroups.superapp';
-// Google Play App Signing SHA-256 for the production BIN GROUP package.
-// A certificate fingerprint is public identity metadata, not key material.
-const EXPECTED_PLAY_SIGNING_SHA256 = '65:B4:76:9E:05:DE:70:6D:74:BE:CF:89:0F:39:23:95:8C:CB:7A:FB:A0:46:6D:9A:17:34:57:0D:E0:11:C8:91';
+// SHA-256 of the certificate actually observed on the Google-Play-installed
+// production package. This is the Play delivery signer identity used by the
+// native runtime diagnostic, not the upload key or another rotated key.
+const EXPECTED_PLAY_SIGNING_SHA256 = '5B:90:71:28:BD:19:51:4E:4D:3F:80:4B:1E:45:83:D1:5F:0B:65:F5:1D:61:74:6F:68:04:DA:E1:B2:DC:D2:6C';
 const GOOGLE_SERVICES_PATH = path.resolve('android/app/google-services.json');
 const OUTPUT_PATH = path.resolve('launch_package/android-play-integrity-appcheck-proof.json');
 const repairSha = process.argv.includes('--repair-sha');
@@ -107,7 +108,7 @@ if (!playSigningShaRegistered && repairSha) {
 }
 
 if (!playSigningShaRegistered) {
-  fail('Google Play App Signing SHA-256 is not registered on the Firebase Android app');
+  fail('Google Play delivery signing SHA-256 is not registered on the Firebase Android app');
 }
 
 const appCheckName = `projects/${PROJECT_NUMBER}/apps/${appId}/playIntegrityConfig`;
@@ -183,12 +184,13 @@ if (!configMatchesRecommendedPlayPolicy(config)) {
 
 const configuredDeviceLevel = text(config?.deviceIntegrity?.minDeviceRecognitionLevel);
 const proof = {
-  schemaVersion: 2,
+  schemaVersion: 3,
   status: 'passed',
   projectId: PROJECT_ID,
   projectNumber: PROJECT_NUMBER,
   packageName: PACKAGE_NAME,
   androidAppIdVerified: true,
+  expectedPlayDeliverySigningSha256: EXPECTED_PLAY_SIGNING_SHA256,
   playSigningSha256Registered: true,
   playSigningSha256Repaired: playSigningShaRepaired,
   playIntegrityAppCheckConfigPresent: true,
@@ -205,6 +207,7 @@ mkdirSync(path.dirname(OUTPUT_PATH), { recursive: true });
 writeFileSync(OUTPUT_PATH, `${JSON.stringify(proof, null, 2)}\n`, { mode: 0o600 });
 
 console.log('[android-appcheck] PASS Android Firebase registration and Play Integrity App Check configuration verified');
+console.log(`[android-appcheck] expected_play_delivery_signing_sha256=${EXPECTED_PLAY_SIGNING_SHA256}`);
 console.log(`[android-appcheck] play_signing_sha_repaired=${playSigningShaRepaired}`);
 console.log(`[android-appcheck] play_integrity_config_repaired=${playIntegrityConfigRepaired}`);
 console.log(`[android-appcheck] explicit_device_threshold=${configuredDeviceLevel || 'UNSET'}`);
