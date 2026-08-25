@@ -6,6 +6,7 @@ import OwnerApprovalCommandStrip from '../../components/OwnerApprovalCommandStri
 import { useOwnerCommandCounts } from '../hooks/useOwnerCommandCounts';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import CanonicalNextActions from '../../components/CanonicalNextActions';
+import OwnerFinancialTruthCard from '../components/OwnerFinancialTruthCard';
 
 export default function OwnerSimpleDashboardPage() {
   const navigate = useNavigate();
@@ -34,6 +35,8 @@ export default function OwnerSimpleDashboardPage() {
             </Stack>
           </Stack>
         </Paper>
+
+        <OwnerFinancialTruthCard />
 
         <OwnerApprovalCommandStrip
           isRTL={isRTL}

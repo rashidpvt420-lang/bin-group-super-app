@@ -15,6 +15,10 @@ import {
 } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
+import {
+  isRetryableTechnicianEvidenceError,
+  queueTechnicianEvidence,
+} from '../utils/offlineEvidenceQueue';
 
 const assignedTechnicianId = (data: Record<string, any>) => String(
   data.assignedTechnicianId || data.technicianId || data.assignedTechId || data.technicianUid || data.techId || '',
@@ -30,11 +34,13 @@ export default function TechnicianBeforeWorkEvidence() {
   const [ticket, setTicket] = React.useState<Record<string, any> | null>(null);
   const [uploading, setUploading] = React.useState(false);
   const [awaitingProofConvergence, setAwaitingProofConvergence] = React.useState(false);
+  const [queuedLocally, setQueuedLocally] = React.useState(false);
   const [error, setError] = React.useState('');
   const [success, setSuccess] = React.useState('');
 
   React.useEffect(() => {
     setAwaitingProofConvergence(false);
+    setQueuedLocally(false);
     setSuccess('');
     if (!ticketId || !user?.uid) {
       setTicket(null);
@@ -58,12 +64,29 @@ export default function TechnicianBeforeWorkEvidence() {
     if (!awaitingProofConvergence || !existingProof) return;
     const frame = window.requestAnimationFrame(() => {
       setAwaitingProofConvergence(false);
+      setQueuedLocally(false);
       setSuccess('Before-work site evidence verified. Work can now begin after PPE and safety confirmation.');
     });
     return () => window.cancelAnimationFrame(frame);
   }, [awaitingProofConvergence, existingProof]);
 
   if (!ticketId || !ticket || status !== 'ARRIVED') return null;
+
+  const queueForDurableSync = async (file: File, storagePath: string, safeName: string) => {
+    if (!user?.uid) throw new Error('Technician identity is unavailable.');
+    await queueTechnicianEvidence({
+      ticketId,
+      technicianId: user.uid,
+      kind: 'before_work',
+      blob: file,
+      fileName: safeName,
+      contentType: file.type,
+      storagePath,
+    });
+    setAwaitingProofConvergence(false);
+    setQueuedLocally(true);
+    setSuccess('Photo saved on this device for durable sync. Start Work remains locked until the upload and server verification both succeed.');
+  };
 
   const handleFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -78,13 +101,20 @@ export default function TechnicianBeforeWorkEvidence() {
       return;
     }
 
+    const safeName = file.name.replace(/[^A-Za-z0-9._-]+/g, '-').slice(-120) || 'before-work.jpg';
+    const storagePath = `maintenanceTickets/${ticketId}/proofPhotos/before_work_${Date.now()}_${safeName}`;
+
     setUploading(true);
     setAwaitingProofConvergence(false);
+    setQueuedLocally(false);
     setError('');
     setSuccess('');
     try {
-      const safeName = file.name.replace(/[^A-Za-z0-9._-]+/g, '-').slice(-120) || 'before-work.jpg';
-      const storagePath = `maintenanceTickets/${ticketId}/proofPhotos/before_work_${Date.now()}_${safeName}`;
+      if (!navigator.onLine) {
+        await queueForDurableSync(file, storagePath, safeName);
+        return;
+      }
+
       const objectRef = ref(storage, storagePath);
       await uploadBytes(objectRef, file, {
         contentType: file.type,
@@ -100,7 +130,16 @@ export default function TechnicianBeforeWorkEvidence() {
       setAwaitingProofConvergence(true);
     } catch (err: any) {
       setAwaitingProofConvergence(false);
-      setError(err?.message || 'Before-work evidence could not be verified. Check the connection and retry.');
+      if (isRetryableTechnicianEvidenceError(err)) {
+        try {
+          await queueForDurableSync(file, storagePath, safeName);
+        } catch (queueError: any) {
+          setQueuedLocally(false);
+          setError(queueError?.message || 'The photo upload failed and the device queue could not preserve it. Keep the photo and retry before starting work.');
+        }
+      } else {
+        setError(err?.message || 'Before-work evidence could not be verified. Check the connection and retry.');
+      }
     } finally {
       setUploading(false);
     }
@@ -109,6 +148,7 @@ export default function TechnicianBeforeWorkEvidence() {
   return (
     <Paper
       data-testid="technician-before-work-evidence"
+      data-evidence-queued={queuedLocally ? 'true' : 'false'}
       sx={{
         p: 2.5,
         mb: 3,
@@ -134,7 +174,7 @@ export default function TechnicianBeforeWorkEvidence() {
           startIcon={(uploading || awaitingProofConvergence) ? <CircularProgress size={18} color="inherit" /> : <Camera size={18} />}
           sx={{ bgcolor: existingProof ? 'transparent' : binThemeTokens.gold, color: existingProof ? '#047857' : '#111827', fontWeight: 950 }}
         >
-          {awaitingProofConvergence ? 'VERIFYING EVIDENCE' : existingProof ? 'REPLACE EVIDENCE' : 'CAPTURE BEFORE WORK'}
+          {awaitingProofConvergence ? 'VERIFYING EVIDENCE' : existingProof ? 'REPLACE EVIDENCE' : queuedLocally ? 'CAPTURE REPLACEMENT' : 'CAPTURE BEFORE WORK'}
           <input
             data-testid="technician-before-work-file"
             hidden
@@ -145,7 +185,7 @@ export default function TechnicianBeforeWorkEvidence() {
           />
         </Button>
       </Stack>
-      {success && <Alert data-testid="technician-before-work-success" severity="success" sx={{ mt: 2 }}>{success}</Alert>}
+      {success && <Alert data-testid="technician-before-work-success" severity={queuedLocally ? 'warning' : 'success'} sx={{ mt: 2 }}>{success}</Alert>}
       {error && <Alert data-testid="technician-before-work-error" severity="error" sx={{ mt: 2 }}>{error}</Alert>}
     </Paper>
   );
