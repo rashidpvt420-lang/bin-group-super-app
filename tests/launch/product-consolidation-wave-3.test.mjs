@@ -26,7 +26,7 @@ test('Owner simple home exposes one source-labelled payable equation', async () 
   ], 'Owner financial truth');
 });
 
-test('Technician photo evidence is durable across offline sessions and remains fail-closed', async () => {
+test('Technician before-work photo evidence is durable and remains behind protected server authority', async () => {
   const [queue, beforeWork, agent, statusStrip, app] = await Promise.all([
     read('src/technician/utils/offlineEvidenceQueue.ts'),
     read('src/technician/components/TechnicianBeforeWorkEvidence.tsx'),
@@ -36,18 +36,21 @@ test('Technician photo evidence is durable across offline sessions and remains f
   ]);
 
   expectAll(queue, [
+    /TechnicianEvidenceKind = 'before_work'/,
     /indexedDB\.open\(DB_NAME, DB_VERSION\)/,
     /blob: Blob/,
     /MAX_ATTEMPTS = 5/,
     /submitTechnicianBeforeWorkEvidence/,
-    /proofPhotos: arrayUnion\(downloadUrl\)/,
-    /Mission completion itself remains/,
+    /evidenceType: 'technician_before_work'/,
     /replayTechnicianEvidenceQueue/,
     /bin-technician-evidence-queue-updated/,
-  ], 'durable evidence queue');
+  ], 'durable before-work evidence queue');
+  assert.doesNotMatch(queue, /\bupdateDoc\s*\(/, 'Queued evidence must not mutate maintenance tickets directly.');
+  assert.doesNotMatch(queue, /TechnicianEvidenceKind = [^\n]*completion/, 'Completion evidence is not an implemented Wave 3 producer and must not be advertised by this queue.');
 
   expectAll(beforeWork, [
     /queueTechnicianEvidence/,
+    /kind: 'before_work'/,
     /if \(!navigator\.onLine\)/,
     /Start Work remains locked until the upload and server verification both succeed/,
     /data-evidence-queued/,
