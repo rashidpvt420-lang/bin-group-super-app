@@ -4,6 +4,7 @@ import { useLanguage } from '@bin/shared';
 import RoleQuickActionsPanel from '../../components/RoleQuickActionsPanel';
 import TechnicianProofChecklist from '../../components/TechnicianProofChecklist';
 import { binThemeTokens } from '../../theme/binGroupTheme';
+import CanonicalNextActions from '../../components/CanonicalNextActions';
 
 export default function TechnicianSimpleDashboardPage() {
   const navigate = useNavigate();
@@ -17,6 +18,12 @@ export default function TechnicianSimpleDashboardPage() {
           <Typography variant="h3" sx={{ color: '#111827', fontWeight: 950, mt: 1 }}>{tx('tech.simple.title', 'Start with jobs, map, and proof')}</Typography>
           <Typography sx={{ color: '#667085', mt: 1, maxWidth: 760 }}>{tx('tech.simple.desc', 'Field workers need fewer choices: assigned jobs, location summary, offline queue, support, and evidence readiness.')}</Typography>
         </Box>
+
+        <CanonicalNextActions actions={[
+          { id: 'jobs', label: tx('tech.next.jobs', 'Open assigned jobs'), detail: tx('tech.next.jobsDetail', 'Accept or resume the next server-assigned job.'), path: '/technician/jobs' },
+          { id: 'proof', label: tx('tech.next.proof', 'Check proof readiness'), detail: tx('tech.next.proofDetail', 'Confirm location, before photos, after photos, notes and signature requirements.'), path: '/technician/proof-readiness' },
+          { id: 'offline', label: tx('tech.next.offline', 'Review offline queue'), detail: tx('tech.next.offlineDetail', 'Make sure every queued field action is synchronized before leaving the job.'), path: '/technician/offline' },
+        ]} />
 
         <RoleQuickActionsPanel role="technician" isRTL={isRTL} title={tx('tech.simple.primaryTitle', 'Main field actions')} subtitle={tx('tech.simple.primarySubtitle', 'The fastest path for accepting, reaching, proving, and closing jobs.')} />
 

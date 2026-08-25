@@ -5,6 +5,7 @@ import RoleQuickActionsPanel from '../../components/RoleQuickActionsPanel';
 import OwnerApprovalCommandStrip from '../../components/OwnerApprovalCommandStrip';
 import { useOwnerCommandCounts } from '../hooks/useOwnerCommandCounts';
 import { binThemeTokens } from '../../theme/binGroupTheme';
+import CanonicalNextActions from '../../components/CanonicalNextActions';
 
 export default function OwnerSimpleDashboardPage() {
   const navigate = useNavigate();
@@ -42,6 +43,12 @@ export default function OwnerSimpleDashboardPage() {
           expiringDocuments={commandCounts.expiringDocuments}
           monthlyCostVariancePct={commandCounts.monthlyCostVariancePct}
         />
+
+        <CanonicalNextActions actions={[
+          { id: 'approvals', label: tx('owner.next.approvals', 'Review pending approvals'), detail: tx('owner.next.approvalsDetail', 'Cost, repair and operational decisions waiting for you.'), path: '/owner/approvals', count: commandCounts.pendingCostApprovals, urgent: commandCounts.highRiskTickets > 0 },
+          { id: 'risk', label: tx('owner.next.risk', 'Check high-risk requests'), detail: tx('owner.next.riskDetail', 'Review urgent maintenance, disputes and evidence before cost increases.'), path: '/owner/tickets', count: commandCounts.highRiskTickets },
+          { id: 'money', label: tx('owner.next.money', 'Review money and reports'), detail: tx('owner.next.moneyDetail', 'Open verified financials, costs, ROI and monthly reporting.'), path: '/owner/financials' },
+        ]} />
 
         <RoleQuickActionsPanel role="owner" isRTL={isRTL} title={tx('owner.simple.primaryTitle', 'Main owner actions')} subtitle={tx('owner.simple.primarySubtitle', 'The owner view starts with contracts, renter handling, decisions, proof, money, and property health.')} />
 
