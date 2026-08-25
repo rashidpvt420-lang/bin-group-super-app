@@ -364,7 +364,9 @@ export function RoleProvider({ children }: { children: ReactNode }) {
         if (!currentUser) return;
 
         const shouldBlockPortal = !user || !role;
-        if (shouldBlockPortal) setLoading(true);
+        if (shouldBlockPortal) {
+            setLoading(true);
+        }
 
         const refreshTimeoutId = shouldBlockPortal
             ? window.setTimeout(() => {
