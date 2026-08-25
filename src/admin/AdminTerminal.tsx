@@ -313,6 +313,18 @@ export default function AdminTerminal() {
           <Alert severity="info" icon={<ShieldCheck size={20} />} sx={{ mb: 3, bgcolor: 'rgba(59,130,246,0.10)', color: '#BFDBFE', border: '1px solid rgba(59,130,246,0.30)', '& .MuiAlert-icon': { color: '#60A5FA' } }}>
             One Admin command surface for owner activation, payments, tenant service, dispatch, broker attribution, evidence and launch control.
           </Alert>
+          {!loading && (
+            <Alert severity={(metricValue('openTickets') || 0) > 0 || (metricValue('pendingPayments') || 0) > 0 ? 'warning' : 'success'} sx={{ mb: 3, bgcolor: 'rgba(201,166,70,0.08)', color: '#F8E7A6', border: '1px solid rgba(201,166,70,0.28)' }}>
+              <Typography sx={{ fontWeight: 950 }}>Next Admin action</Typography>
+              <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.72)' }}>
+                {(metricValue('openTickets') || 0) > 0
+                  ? `${metricValue('openTickets')} open ticket(s) require operations ownership before lower-priority administration.`
+                  : (metricValue('pendingPayments') || 0) > 0
+                    ? `${metricValue('pendingPayments')} payment review(s) are waiting for evidence-based approval or rejection.`
+                    : 'No open ticket or payment-review count is currently reported. Continue with owner activation and audit review.'}
+              </Typography>
+            </Alert>
+          )}
           <Card sx={{ mb: 3, bgcolor: 'rgba(15, 23, 42, 0.96)', border: '1px solid rgba(201,166,70,0.30)', borderRadius: 4, color: '#fff' }}>
             <CardContent>
               <Typography variant="h6" sx={{ color: '#E5C86B', fontWeight: 950 }}>Main Admin Actions</Typography>
