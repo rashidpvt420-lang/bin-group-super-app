@@ -61,14 +61,14 @@ export default function TechnicianBeforeWorkEvidence() {
     || (Array.isArray(ticket?.technicianBeforePhotos) && ticket.technicianBeforePhotos.length > 0);
 
   React.useEffect(() => {
-    if (!existingProof) return;
+    if (!awaitingProofConvergence || !existingProof) return;
     const frame = window.requestAnimationFrame(() => {
       setAwaitingProofConvergence(false);
       setQueuedLocally(false);
       setSuccess('Before-work site evidence verified. Work can now begin after PPE and safety confirmation.');
     });
     return () => window.cancelAnimationFrame(frame);
-  }, [existingProof]);
+  }, [awaitingProofConvergence, existingProof]);
 
   if (!ticketId || !ticket || status !== 'ARRIVED') return null;
 
