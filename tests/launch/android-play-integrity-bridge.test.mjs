@@ -26,8 +26,10 @@ test('Android release uses Play Integrity-backed Firebase App Check', () => {
 test('native bridge returns App Check token metadata without debug fallback', () => {
   assert.match(bridge, /@CapacitorPlugin\(name = "FirebaseAppCheckBridge"\)/);
   assert.match(bridge, /@PluginMethod/);
-  assert.match(bridge, /getAppCheckToken\(forceRefresh\)/);
+  assert.match(bridge, /getAppCheckToken\(false\)/);
   assert.match(bridge, /getExpireTimeMillis\(\)/);
+  assert.doesNotMatch(bridge, /getAppCheckToken\(true\)/);
+  assert.doesNotMatch(bridge, /call\.getBoolean\("forceRefresh"/);
   assert.doesNotMatch(bridge, /DebugAppCheckProviderFactory|debug token|FIREBASE_APPCHECK_DEBUG_TOKEN/i);
   assert.doesNotMatch(bridge, /Log\.[a-z]+\([^\n]*token/i);
 });
