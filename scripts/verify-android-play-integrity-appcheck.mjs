@@ -14,6 +14,15 @@ const OUTPUT_PATH = path.resolve('launch_package/android-play-integrity-appcheck
 const repairSha = process.argv.includes('--repair-sha');
 const repairConfig = process.argv.includes('--repair-config');
 
+// BIN GROUP distributes this Android package exclusively through Google Play.
+// Firebase's recommended App Check posture for that distribution model is:
+//   * PLAY_RECOGNIZED required
+//   * LICENSED required
+//   * do not explicitly configure an optional device-integrity threshold
+// PLAY_RECOGNIZED remains the application-integrity gate. Leaving the optional
+// device threshold unset is not an App Check bypass; Firebase may still perform
+// implicit device-integrity checks while evaluating the required verdicts.
+
 const text = (value) => String(value ?? '').trim();
 const normalizeSha = (value) => text(value).replace(/[^a-fA-F0-9]/g, '').toUpperCase();
 const fail = (message) => {
@@ -107,22 +116,34 @@ const appCheckUrl = `https://firebaseappcheck.googleapis.com/v1/${appCheckName
   .map((segment) => encodeURIComponent(segment))
   .join('/')}`;
 
-const writeStrictPlayConfig = async () => request(
-  `${appCheckUrl}?updateMask=${encodeURIComponent('appIntegrity.allowUnrecognizedVersion')}`,
+const desiredConfig = {
+  name: appCheckName,
+  appIntegrity: { allowUnrecognizedVersion: false },
+  accountDetails: { requireLicensed: true },
+};
+
+const writeRecommendedPlayConfig = async () => request(
+  `${appCheckUrl}?updateMask=${encodeURIComponent([
+    'appIntegrity.allowUnrecognizedVersion',
+    'accountDetails.requireLicensed',
+  ].join(','))}`,
   {
     method: 'PATCH',
-    body: JSON.stringify({
-      name: appCheckName,
-      appIntegrity: { allowUnrecognizedVersion: false },
-    }),
+    body: JSON.stringify(desiredConfig),
   },
 );
+
+const configMatchesRecommendedPlayPolicy = (config) => {
+  const allowUnrecognized = config?.appIntegrity?.allowUnrecognizedVersion === true;
+  const requireLicensed = config?.accountDetails?.requireLicensed === true;
+  return !allowUnrecognized && requireLicensed;
+};
 
 let appCheckResult = await request(appCheckUrl);
 let playIntegrityConfigRepaired = false;
 
 if (appCheckResult.response.status === 404 && repairConfig) {
-  const repairResult = await writeStrictPlayConfig();
+  const repairResult = await writeRecommendedPlayConfig();
   if (!repairResult.response.ok) {
     fail(`Play Integrity App Check registration repair returned HTTP ${repairResult.response.status}`);
   }
@@ -141,12 +162,10 @@ let config = appCheckResult.body || {};
 let returnedName = text(config.name);
 if (returnedName !== appCheckName) fail('Play Integrity App Check configuration identity mismatch');
 
-// Production Play-installed builds must stay recognized by Google Play. Never
-// silently loosen this to allow unrecognized/off-Play versions in a repair.
-if (config?.appIntegrity?.allowUnrecognizedVersion === true && repairConfig) {
-  const repairResult = await writeStrictPlayConfig();
+if (!configMatchesRecommendedPlayPolicy(config) && repairConfig) {
+  const repairResult = await writeRecommendedPlayConfig();
   if (!repairResult.response.ok) {
-    fail(`Strict Play Integrity App Check repair returned HTTP ${repairResult.response.status}`);
+    fail(`Recommended Google Play App Check policy repair returned HTTP ${repairResult.response.status}`);
   }
   playIntegrityConfigRepaired = true;
   appCheckResult = await request(appCheckUrl);
@@ -158,12 +177,13 @@ if (config?.appIntegrity?.allowUnrecognizedVersion === true && repairConfig) {
   if (returnedName !== appCheckName) fail('Play Integrity App Check configuration identity mismatch after repair');
 }
 
-if (config?.appIntegrity?.allowUnrecognizedVersion === true) {
-  fail('Play Integrity App Check unexpectedly allows unrecognized versions');
+if (!configMatchesRecommendedPlayPolicy(config)) {
+  fail('Firebase Play Integrity App Check policy does not match the Google-Play-only production posture');
 }
 
+const configuredDeviceLevel = text(config?.deviceIntegrity?.minDeviceRecognitionLevel);
 const proof = {
-  schemaVersion: 1,
+  schemaVersion: 2,
   status: 'passed',
   projectId: PROJECT_ID,
   projectNumber: PROJECT_NUMBER,
@@ -174,6 +194,9 @@ const proof = {
   playIntegrityAppCheckConfigPresent: true,
   playIntegrityAppCheckConfigRepaired: playIntegrityConfigRepaired,
   playIntegrityRequiresPlayRecognizedVersion: true,
+  playIntegrityRequiresLicensedAccount: true,
+  playIntegrityExplicitDeviceRecognitionLevel: configuredDeviceLevel || null,
+  playIntegrityUsesFirebaseRecommendedPlayOnlyPolicy: true,
   playConsoleCloudProjectLink: 'requires-play-installed-runtime-proof',
   observedAt: new Date().toISOString(),
   hardLaunchClaim: false,
@@ -184,4 +207,6 @@ writeFileSync(OUTPUT_PATH, `${JSON.stringify(proof, null, 2)}\n`, { mode: 0o600 
 console.log('[android-appcheck] PASS Android Firebase registration and Play Integrity App Check configuration verified');
 console.log(`[android-appcheck] play_signing_sha_repaired=${playSigningShaRepaired}`);
 console.log(`[android-appcheck] play_integrity_config_repaired=${playIntegrityConfigRepaired}`);
+console.log(`[android-appcheck] explicit_device_threshold=${configuredDeviceLevel || 'UNSET'}`);
+console.log('[android-appcheck] play_only_policy=PLAY_RECOGNIZED+LICENSED+OPTIONAL_DEVICE_THRESHOLD_UNSET');
 console.log(`[android-appcheck] wrote ${path.relative(process.cwd(), OUTPUT_PATH)}`);

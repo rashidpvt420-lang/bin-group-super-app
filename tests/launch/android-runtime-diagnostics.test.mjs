@@ -32,15 +32,23 @@ test('App Check failure remains the visible root cause when profile read subsequ
   assert.match(diagnostics, /showDiagnostic\(appCheckRootCause\.stage, appCheckRootCause\.code\)/);
 });
 
-test('native bridge exposes a safe App Check cause chain without token logging', () => {
+test('native bridge classifies App Check attestation failures without returning credentials or raw error text', () => {
   assert.match(bridge, /APP_CHECK_INVALID_TOKEN_RESULT/);
   assert.match(bridge, /String diagnosticCode\(Throwable error\)/);
-  assert.match(bridge, /getClass\(\)\.getSimpleName\(\)/);
-  assert.match(bridge, /cursor\.getCause\(\)/);
-  assert.doesNotMatch(bridge, /getMessage\(\)/);
+  assert.match(bridge, /ATTEST403/);
+  assert.match(bridge, /PI_-2_PLAYSTORE/);
+  assert.match(bridge, /PI_-8_THROTTLED/);
+  assert.match(bridge, /installerState\(\)/);
+  assert.match(bridge, /signingState\(\)/);
+  assert.match(bridge, /EXPECTED_PLAY_SIGNING_SHA256/);
+  assert.match(bridge, /call\.reject\("Unable to obtain Firebase App Check token\."/);
+  assert.doesNotMatch(bridge, /result\.put\("message"/);
+  // Returning the App Check token to the JS CustomProvider is required. The
+  // safeguard is that token material must never be written to logs/stdout.
   assert.doesNotMatch(bridge, /Log\.[a-z]+\([^\n]*token/i);
+  assert.doesNotMatch(bridge, /System\.out\.print(?:ln)?\([^\n]*token/i);
 });
 
-test('next Google Play App Check profile-read repair build uses versionCode 5', () => {
-  assert.match(gradle, /versionCode\s+5\b/);
+test('next Google Play App Check attestation repair build uses versionCode 6', () => {
+  assert.match(gradle, /versionCode\s+6\b/);
 });
