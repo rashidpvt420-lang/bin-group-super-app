@@ -1,18 +1,13 @@
 import {
-  arrayUnion,
-  db,
-  doc,
   functions,
   getDownloadURL,
   httpsCallable,
   ref,
-  serverTimestamp,
   storage,
-  updateDoc,
   uploadBytes,
 } from '../../lib/firebase';
 
-export type TechnicianEvidenceKind = 'before_work' | 'completion';
+export type TechnicianEvidenceKind = 'before_work';
 export type TechnicianEvidenceQueueStatus = 'pending' | 'retrying' | 'failed';
 
 export type TechnicianEvidenceQueueItem = {
@@ -164,26 +159,11 @@ export async function queueTechnicianEvidence(params: {
 }
 
 async function confirmUploadedEvidence(item: TechnicianEvidenceQueueItem, downloadUrl: string) {
-  if (item.kind === 'before_work') {
-    const submitEvidence = httpsCallable(functions, 'submitTechnicianBeforeWorkEvidence');
-    await submitEvidence({
-      ticketId: item.ticketId,
-      storagePath: item.storagePath,
-      downloadUrl,
-    });
-    return;
-  }
-
-  // Completion photos are uploaded durably, but mission completion itself remains
-  // foreground-only. The assigned technician must return to the job and explicitly
-  // complete it after the server-backed ticket shows the synchronized evidence.
-  await updateDoc(doc(db, 'maintenanceTickets', item.ticketId), {
-    proofPhotos: arrayUnion(downloadUrl),
-    evidencePhotos: arrayUnion(downloadUrl),
-    completionPhotos: arrayUnion(downloadUrl),
-    afterPhotos: arrayUnion(downloadUrl),
-    afterPhotoUrl: downloadUrl,
-    updatedAt: serverTimestamp(),
+  const submitEvidence = httpsCallable(functions, 'submitTechnicianBeforeWorkEvidence');
+  await submitEvidence({
+    ticketId: item.ticketId,
+    storagePath: item.storagePath,
+    downloadUrl,
   });
 }
 
@@ -208,7 +188,7 @@ export async function replayTechnicianEvidenceItem(item: TechnicianEvidenceQueue
       customMetadata: {
         ticketId: retrying.ticketId,
         technicianId: retrying.technicianId,
-        evidenceType: retrying.kind === 'before_work' ? 'technician_before_work' : 'technician_completion',
+        evidenceType: 'technician_before_work',
         queueId: retrying.id,
       },
     });
