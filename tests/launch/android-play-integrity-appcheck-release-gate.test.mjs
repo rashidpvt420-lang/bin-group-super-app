@@ -5,11 +5,13 @@ import { readFileSync } from 'node:fs';
 const verifier = readFileSync('scripts/verify-android-play-integrity-appcheck.mjs', 'utf8');
 const workflow = readFileSync('.github/workflows/android-store-release.yml', 'utf8');
 
-test('Android release verifier binds the production project, package, app ID and Play signing SHA-256', () => {
+test('Android release verifier binds the production project, package, app ID and Play delivery signing SHA-256', () => {
   assert.match(verifier, /PROJECT_ID = 'bin-group-57c60'/);
   assert.match(verifier, /PROJECT_NUMBER = '123413252227'/);
   assert.match(verifier, /PACKAGE_NAME = 'ae\.bingroups\.superapp'/);
   assert.match(verifier, /EXPECTED_PLAY_SIGNING_SHA256/);
+  assert.match(verifier, /5B:90:71:28:BD:19:51:4E:4D:3F:80:4B:1E:45:83:D1:5F:0B:65:F5:1D:61:74:6F:68:04:DA:E1:B2:DC:D2:6C/);
+  assert.match(verifier, /expectedPlayDeliverySigningSha256/);
   assert.match(verifier, /certType: 'SHA_256'/);
   assert.match(verifier, /playIntegrityConfig/);
 });
@@ -21,7 +23,7 @@ test('Android release gate repairs to the Firebase-recommended Google-Play-only 
   assert.match(verifier, /method: 'PATCH'/);
   assert.match(verifier, /appIntegrity: \{ allowUnrecognizedVersion: false \}/);
   assert.match(verifier, /accountDetails: \{ requireLicensed: true \}/);
-  assert.match(verifier, /Google Play App Signing SHA-256 is not registered/);
+  assert.match(verifier, /Google Play delivery signing SHA-256 is not registered/);
   assert.match(verifier, /playIntegrityRequiresLicensedAccount: true/);
   assert.match(verifier, /playIntegrityUsesFirebaseRecommendedPlayOnlyPolicy: true/);
   assert.match(verifier, /OPTIONAL_DEVICE_THRESHOLD_UNSET/);
