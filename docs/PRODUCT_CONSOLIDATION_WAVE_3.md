@@ -15,14 +15,17 @@ This wave improves truth and resilience without changing production authority or
 
 ### Technician evidence resilience
 
-- Adds an IndexedDB-backed photo evidence queue that preserves the Blob across offline sessions/app restarts.
+- Adds an IndexedDB-backed queue for **before-work photo evidence** that preserves the Blob across offline sessions/app restarts.
 - Wires durable queuing into before-work evidence when offline or after retryable Storage/network failure.
-- The existing protected server callable remains the authority that verifies before-work evidence.
+- The existing protected `submitTechnicianBeforeWorkEvidence` server callable remains the sole authority that attaches and verifies queued before-work evidence.
 - Start Work remains disabled until that server-backed evidence appears on the ticket.
-- The queue utility includes fail-closed completion-evidence replay infrastructure for a later producer integration; this Wave does not claim completion-photo capture is fully wired.
-- The technician shell exposes unsent action and photo counts.
-- The automatic sync agent replays lifecycle actions and supported queued photo evidence when connectivity returns.
-- No offline queue path auto-completes a mission.
+- The technician shell exposes unsent action and supported photo-evidence counts.
+- The automatic sync agent replays lifecycle actions and queued before-work photo evidence when connectivity returns.
+- No offline queue path auto-completes a mission or directly mutates completion evidence on a maintenance ticket.
+
+### Explicit remaining field-evidence gap
+
+Durable **after-work/completion photo capture** is not claimed as complete in this Wave. That producer must be implemented separately behind protected backend authority before the overall Technician Storage/offline-evidence gap can be called fully resolved.
 
 ## Explicit non-goals
 
