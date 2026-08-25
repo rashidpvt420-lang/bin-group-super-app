@@ -18,8 +18,11 @@ import java.util.Locale;
 
 @CapacitorPlugin(name = "FirebaseAppCheckBridge")
 public class FirebaseAppCheckBridgePlugin extends Plugin {
+    // SHA-256 of the certificate actually observed on the Google-Play-installed
+    // production package. This must match the Play delivery signer, not the
+    // upload key or a different/rotated signing identity shown in Play Console.
     private static final String EXPECTED_PLAY_SIGNING_SHA256 =
-        "65B4769E05DE706D74BECF890F3923958CCB7AFBA0466D9A1734570DE011C891";
+        "5B907128BD19514E4D3F804B1E4583D15F0B65F51D61746F6804DAE1B2DCD26C";
 
     private String sha256(Signature signature) {
         try {
