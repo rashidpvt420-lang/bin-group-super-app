@@ -43,10 +43,6 @@ function hasTechnicianAfterWorkEvidence(data: FirebaseFirestore.DocumentData) {
   );
 }
 
-function completionEvidenceConfirmationId(ticketId: string, technicianId: string) {
-  return `${ticketId}__after_work__${technicianId}`;
-}
-
 export function technicianCredentialMillis(value: unknown): number | null {
   if (value === undefined || value === null || value === "") return null;
   if (typeof value === "number") {
@@ -200,18 +196,31 @@ async function assertLifecycleEvidence(auth: any, data: any) {
   }
 
   if (["COMPLETED", "COMPLETED_PENDING_APPROVAL"].includes(nextStatus)) {
-    const confirmationRef = db.collection("technicianEvidenceConfirmations").doc(
-      completionEvidenceConfirmationId(ticketId, auth.uid),
-    );
-    const confirmationSnap = await confirmationRef.get();
+    const confirmationId = String(ticket.technicianAfterConfirmationId || "").trim();
+    if (!confirmationId || !hasTechnicianAfterWorkEvidence(ticket)) {
+      throw new HttpsError(
+        "failed-precondition",
+        "Capture and verify an after-work completion photo through the protected evidence flow before closing this mission.",
+      );
+    }
+
+    const confirmationSnap = await db.collection("audit_logs").doc(confirmationId).get();
     const confirmation = confirmationSnap.data() || {};
+    const confirmedUrl = String(confirmation.downloadUrl || "").trim();
+    const technicianAfterPhotos = Array.isArray(ticket.technicianAfterPhotos) ? ticket.technicianAfterPhotos : [];
+    const confirmationMatchesTicket = Boolean(confirmedUrl) && (
+      String(ticket.technicianAfterPhotoUrl || "").trim() === confirmedUrl ||
+      technicianAfterPhotos.includes(confirmedUrl)
+    );
     const serverConfirmed = confirmationSnap.exists &&
+      confirmation.recordType === "TECHNICIAN_EVIDENCE_CONFIRMATION" &&
+      confirmation.action === "TECHNICIAN_AFTER_WORK_EVIDENCE_CONFIRMATION" &&
       confirmation.state === "CONFIRMED" &&
       confirmation.ticketId === ticketId &&
       confirmation.technicianId === auth.uid &&
       confirmation.evidenceType === "technician_after_work";
 
-    if (!serverConfirmed || !hasTechnicianAfterWorkEvidence(ticket)) {
+    if (!serverConfirmed || !confirmationMatchesTicket) {
       throw new HttpsError(
         "failed-precondition",
         "Capture and verify an after-work completion photo through the protected evidence flow before closing this mission.",
