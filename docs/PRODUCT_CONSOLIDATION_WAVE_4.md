@@ -12,6 +12,7 @@ This wave closes the durable Technician **after-work/completion photo** gap docu
 - Requires an authenticated, active Technician assigned to the mission.
 - Accepts after-work evidence only while the mission is `IN_PROGRESS`.
 - Verifies the uploaded Storage object exists, is an image up to 10 MB, belongs to the mission path, and carries the authenticated Technician metadata.
+- Requires the supplied download URL to use HTTPS and to resolve to the exact decoded bucket/object path that was independently verified in Storage.
 - Writes the verified photo to the ticket through the Admin SDK.
 - Creates a deterministic SHA-256-bound confirmation record inside `audit_logs`, whose existing Firestore rule denies browser create/update/delete even to Admin clients.
 - Stores that server-created confirmation ID on the ticket as `technicianAfterConfirmationId`.
