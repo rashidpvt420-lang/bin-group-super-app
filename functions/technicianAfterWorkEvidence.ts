@@ -1,4 +1,5 @@
 import * as admin from "firebase-admin";
+import { createHash } from "node:crypto";
 import { FieldValue } from "firebase-admin/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 
@@ -25,8 +26,11 @@ function assignedTechnicianId(data: FirebaseFirestore.DocumentData) {
   );
 }
 
-function confirmationId(ticketId: string, technicianId: string) {
-  return `${ticketId}__after_work__${technicianId}`;
+function confirmationId(ticketId: string, technicianId: string, storagePath: string) {
+  const digest = createHash("sha256")
+    .update(`${ticketId}\n${technicianId}\n${storagePath}`)
+    .digest("hex");
+  return `technician_after_work_${digest}`;
 }
 
 function assertStorageUrl(downloadUrl: string, bucketName: string, storagePath: string) {
@@ -107,7 +111,7 @@ export const submitTechnicianAfterWorkEvidence = onCall(
     }
 
     const ticketRef = ticketSnap.ref;
-    const confirmationRef = db.collection("technicianEvidenceConfirmations").doc(confirmationId(ticketId, technicianId));
+    const confirmationRef = db.collection("audit_logs").doc(confirmationId(ticketId, technicianId, storagePath));
     const auditRef = db.collection("audit_logs").doc();
     const now = FieldValue.serverTimestamp();
 
@@ -128,6 +132,7 @@ export const submitTechnicianAfterWorkEvidence = onCall(
         technicianAfterEvidenceAt: now,
         technicianAfterEvidenceBy: technicianId,
         technicianAfterEvidenceState: "CONFIRMED",
+        technicianAfterConfirmationId: confirmationRef.id,
         afterPhotos: FieldValue.arrayUnion(downloadUrl),
         afterPhotoUrl: currentData.afterPhotoUrl || downloadUrl,
         completionPhotos: FieldValue.arrayUnion(downloadUrl),
@@ -137,6 +142,12 @@ export const submitTechnicianAfterWorkEvidence = onCall(
       });
 
       transaction.set(confirmationRef, {
+        actorId: technicianId,
+        actorRole: "technician",
+        action: "TECHNICIAN_AFTER_WORK_EVIDENCE_CONFIRMATION",
+        recordType: "TECHNICIAN_EVIDENCE_CONFIRMATION",
+        targetType: "maintenanceTickets",
+        targetId: ticketId,
         ticketId,
         technicianId,
         evidenceType: "technician_after_work",
@@ -146,6 +157,7 @@ export const submitTechnicianAfterWorkEvidence = onCall(
         contentType,
         sizeBytes,
         confirmedAt: now,
+        createdAt: now,
       });
 
       transaction.set(auditRef, {
