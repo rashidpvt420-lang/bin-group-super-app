@@ -8,10 +8,11 @@ const expectAll = (source, patterns, label) => {
 };
 
 test('Technician after-work evidence is verified by protected backend authority before completion', async () => {
-  const [backend, secureOps, runtime] = await Promise.all([
+  const [backend, secureOps, runtime, firestoreRules] = await Promise.all([
     read('functions/technicianAfterWorkEvidence.ts'),
     read('functions/secureTechnicianOperations.ts'),
     read('functions/runtime.ts'),
+    read('firestore.rules'),
   ]);
 
   expectAll(backend, [
@@ -20,22 +21,37 @@ test('Technician after-work evidence is verified by protected backend authority 
     /status, 80\)\.toUpperCase\(\) !== "IN_PROGRESS"/,
     /maintenanceTickets\/\$\{ticketId\}\/proofPhotos\//,
     /evidenceType, 80\) !== "technician_after_work"/,
-    /technicianEvidenceConfirmations/,
+    /createHash\("sha256"\)/,
+    /db\.collection\("audit_logs"\)\.doc\(confirmationId\(ticketId, technicianId, storagePath\)\)/,
+    /technicianAfterConfirmationId: confirmationRef\.id/,
+    /recordType: "TECHNICIAN_EVIDENCE_CONFIRMATION"/,
+    /action: "TECHNICIAN_AFTER_WORK_EVIDENCE_CONFIRMATION"/,
     /technicianAfterEvidenceState: "CONFIRMED"/,
     /technicianAfterPhotos: FieldValue\.arrayUnion\(downloadUrl\)/,
     /completionPhotos: FieldValue\.arrayUnion\(downloadUrl\)/,
     /TECHNICIAN_AFTER_WORK_EVIDENCE_CONFIRMED/,
     /db\.runTransaction/,
   ], 'protected after-work backend');
+  assert.doesNotMatch(backend, /technicianEvidenceConfirmations/, 'Completion confirmation must not use an Admin-browser-writable catch-all collection.');
 
   expectAll(secureOps, [
     /hasTechnicianAfterWorkEvidence/,
-    /technicianEvidenceConfirmations/,
-    /completionEvidenceConfirmationId\(ticketId, auth\.uid\)/,
+    /ticket\.technicianAfterConfirmationId/,
+    /db\.collection\("audit_logs"\)\.doc\(confirmationId\)\.get\(\)/,
+    /confirmation\.recordType === "TECHNICIAN_EVIDENCE_CONFIRMATION"/,
+    /confirmation\.action === "TECHNICIAN_AFTER_WORK_EVIDENCE_CONFIRMATION"/,
     /confirmation\.state === "CONFIRMED"/,
     /confirmation\.evidenceType === "technician_after_work"/,
+    /confirmationMatchesTicket/,
     /Capture and verify an after-work completion photo through the protected evidence flow/,
   ], 'completion lifecycle gate');
+
+  expectAll(firestoreRules, [
+    /match \/audit_logs\/\{logId\} \{/,
+    /allow create: if false;/,
+    /allow update: if false;/,
+    /allow delete: if false;/,
+  ], 'server-only audit confirmation store');
 
   assert.match(runtime, /export \* from "\.\/technicianAfterWorkEvidence";/);
 });
