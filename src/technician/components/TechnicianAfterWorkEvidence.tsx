@@ -57,10 +57,12 @@ export default function TechnicianAfterWorkEvidence() {
   }, [ticketId, user?.uid]);
 
   const status = String(ticket?.status || '').toUpperCase();
-  const existingProof = ticket?.technicianAfterEvidenceState === 'CONFIRMED' && (
-    Boolean(ticket?.technicianAfterPhotoUrl)
-    || (Array.isArray(ticket?.technicianAfterPhotos) && ticket.technicianAfterPhotos.length > 0)
-  );
+  const existingProof = Boolean(ticket?.technicianAfterConfirmationId)
+    && ticket?.technicianAfterEvidenceState === 'CONFIRMED'
+    && (
+      Boolean(ticket?.technicianAfterPhotoUrl)
+      || (Array.isArray(ticket?.technicianAfterPhotos) && ticket.technicianAfterPhotos.length > 0)
+    );
 
   React.useEffect(() => {
     if (!awaitingProofConvergence || !existingProof) return;
