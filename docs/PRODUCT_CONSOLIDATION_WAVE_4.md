@@ -21,8 +21,16 @@ This wave closes the durable Technician **after-work/completion photo** gap docu
 - `COMPLETED` and `COMPLETED_PENDING_APPROVAL` now additionally require:
   - server-confirmed Technician after-work ticket evidence, and
   - the matching server-only `technicianEvidenceConfirmations` record.
-- Generic client-written `afterPhotoUrl`, `completionPhotos`, or local photo state cannot satisfy the protected completion gate by themselves.
+- Generic client-written `afterPhotoUrl`, `completionPhotos`, local file selection, or legacy proof arrays cannot satisfy the protected completion gate.
 - Admin lifecycle authority remains unchanged.
+
+### Canonical Technician close flow
+
+- Removes the legacy completion-photo uploader from `TechnicianJobDetailPage`.
+- Removes direct client attachment of `afterPhotoUrl`, `afterPhotos`, `completionPhotos`, `proofPhotos`, and `evidencePhotos` from the close action.
+- The job-detail readiness meter now trusts only `technicianAfterEvidenceState === CONFIRMED` plus server-attached Technician after-work evidence.
+- Resolution notes and parts/materials disposition remain ordinary non-authoritative job-detail data; they cannot grant photo-proof readiness.
+- The dedicated protected After-Work Completion Evidence panel is the only Technician after-work photo producer in this flow.
 
 ### Durable offline behavior
 
@@ -30,6 +38,7 @@ This wave closes the durable Technician **after-work/completion photo** gap docu
 - After-work images survive offline sessions and app restarts as Blob data.
 - Replay uploads the exact image with `technician_after_work` metadata and calls the protected after-work evidence callable.
 - Offline synchronization now replays **photo evidence before mission lifecycle actions**, preventing a queued `COMPLETED` action from racing ahead of its required proof.
+- A queued completion action remains fail-closed until the protected evidence has synchronized and the server has confirmed it.
 - The queue never writes mission completion state directly.
 
 ### Technician UX
@@ -37,6 +46,7 @@ This wave closes the durable Technician **after-work/completion photo** gap docu
 - Adds a dedicated After-Work Completion Evidence surface to Technician job routes while the mission is `IN_PROGRESS`.
 - Offline capture reports that completion remains locked until upload and protected server verification succeed.
 - Online capture does not report verified readiness until the protected callable succeeds and the live ticket snapshot converges to server-confirmed evidence.
+- The close screen tells the Technician to use that protected panel and does not advertise a second completion-photo control.
 
 ## Explicit non-goals
 
