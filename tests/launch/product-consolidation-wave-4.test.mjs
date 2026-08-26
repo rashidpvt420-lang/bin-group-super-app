@@ -76,6 +76,7 @@ test('Technician after-work photo survives offline sessions and replays before c
 
   expectAll(afterWork, [
     /status !== 'IN_PROGRESS'/,
+    /Boolean\(ticket\?\.technicianAfterConfirmationId\)/,
     /kind: 'after_work'/,
     /submitTechnicianAfterWorkEvidence/,
     /evidenceType: 'technician_after_work'/,
