@@ -40,12 +40,24 @@ function assertStorageUrl(downloadUrl: string, bucketName: string, storagePath: 
   } catch {
     throw new HttpsError("invalid-argument", "After-work evidence URL is invalid.");
   }
-  const encodedPath = encodeURIComponent(storagePath);
-  const allowedHost = parsed.hostname === "firebasestorage.googleapis.com" || parsed.hostname === "storage.googleapis.com";
-  const referencesBucket = parsed.pathname.includes(bucketName);
-  const referencesObject = parsed.pathname.includes(encodedPath) || parsed.pathname.includes(storagePath);
-  if (!allowedHost || !referencesBucket || !referencesObject) {
-    throw new HttpsError("invalid-argument", "After-work evidence URL does not match the verified Storage object.");
+  if (parsed.protocol !== "https:") {
+    throw new HttpsError("invalid-argument", "After-work evidence URL must use HTTPS.");
+  }
+
+  let decodedPathname: string;
+  try {
+    decodedPathname = decodeURIComponent(parsed.pathname);
+  } catch {
+    throw new HttpsError("invalid-argument", "After-work evidence URL path is invalid.");
+  }
+
+  const expectedPath = parsed.hostname === "firebasestorage.googleapis.com"
+    ? `/v0/b/${bucketName}/o/${storagePath}`
+    : parsed.hostname === "storage.googleapis.com"
+      ? `/${bucketName}/${storagePath}`
+      : "";
+  if (!expectedPath || decodedPathname !== expectedPath) {
+    throw new HttpsError("invalid-argument", "After-work evidence URL does not exactly match the verified Storage object.");
   }
 }
 
