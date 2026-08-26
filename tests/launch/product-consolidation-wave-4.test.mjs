@@ -76,3 +76,24 @@ test('Technician after-work photo survives offline sessions and replays before c
 
   assert.match(app, /<TechnicianAfterWorkEvidence \/>/);
 });
+
+test('Technician job close readiness trusts only protected server-confirmed after-work evidence', async () => {
+  const jobDetail = await read('src/technician/pages/TechnicianJobDetailPage.tsx');
+
+  expectAll(jobDetail, [
+    /const hasProtectedAfterProof = ticket\?\.technicianAfterEvidenceState === 'CONFIRMED'/,
+    /Boolean\(ticket\?\.technicianAfterPhotoUrl\)/,
+    /listLength\(ticket\?\.technicianAfterPhotos\) > 0/,
+    /Server-verified after-work photo/,
+    /ready: hasProtectedAfterProof/,
+    /Capture and verify the after-work photo in the protected evidence panel above/,
+    /Completion can be queued, but it remains blocked until the protected after-work photo is uploaded and server-confirmed/,
+  ], 'canonical completion readiness');
+
+  assert.doesNotMatch(jobDetail, /uploadCompletionPhotos/, 'Legacy completion photo uploader must not coexist with protected evidence capture.');
+  assert.doesNotMatch(jobDetail, /maintenanceTickets\/\$\{id\}\/completionPhotos\//, 'Job detail must not upload completion photos through the legacy path.');
+  assert.doesNotMatch(jobDetail, /data-testid="technician-after-work-file"/, 'Only the protected after-work evidence component may expose the after-work file input.');
+  assert.doesNotMatch(jobDetail, /\bcompletionPhotos\s*:/, 'Job detail must not directly attach completion evidence fields.');
+  assert.doesNotMatch(jobDetail, /\bafterPhotos\s*:/, 'Job detail must not directly attach generic after-work evidence fields.');
+  assert.doesNotMatch(jobDetail, /\bafterPhotoUrl\s*:/, 'Job detail must not directly attach a generic after-work URL.');
+});
