@@ -12,16 +12,21 @@ This wave closes the durable Technician **after-work/completion photo** gap docu
 - Requires an authenticated, active Technician assigned to the mission.
 - Accepts after-work evidence only while the mission is `IN_PROGRESS`.
 - Verifies the uploaded Storage object exists, is an image up to 10 MB, belongs to the mission path, and carries the authenticated Technician metadata.
-- Writes the verified photo to the ticket through the Admin SDK and records a deterministic server-only `technicianEvidenceConfirmations` document.
+- Writes the verified photo to the ticket through the Admin SDK.
+- Creates a deterministic SHA-256-bound confirmation record inside `audit_logs`, whose existing Firestore rule denies browser create/update/delete even to Admin clients.
+- Stores that server-created confirmation ID on the ticket as `technicianAfterConfirmationId`.
 - Audits every successful confirmation as `TECHNICIAN_AFTER_WORK_EVIDENCE_CONFIRMED`.
 
 ### Completion lifecycle gate
 
 - `updateTicketLifecycle` continues to require verified Technician before-work evidence before `IN_PROGRESS`.
 - `COMPLETED` and `COMPLETED_PENDING_APPROVAL` now additionally require:
-  - server-confirmed Technician after-work ticket evidence, and
-  - the matching server-only `technicianEvidenceConfirmations` record.
+  - server-confirmed Technician after-work ticket evidence,
+  - a ticket-bound `technicianAfterConfirmationId`,
+  - the matching server-only `audit_logs` confirmation record, and
+  - the exact confirmed download URL to be present in the Technician after-work evidence fields.
 - Generic client-written `afterPhotoUrl`, `completionPhotos`, local file selection, or legacy proof arrays cannot satisfy the protected completion gate.
+- A browser Admin cannot forge the confirmation record because `audit_logs` client writes are already denied.
 - Admin lifecycle authority remains unchanged.
 
 ### Canonical Technician close flow
