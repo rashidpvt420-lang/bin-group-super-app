@@ -36,17 +36,16 @@ test('Technician before-work photo evidence is durable and remains behind protec
   ]);
 
   expectAll(queue, [
-    /TechnicianEvidenceKind = 'before_work'/,
+    /TechnicianEvidenceKind = 'before_work' \| 'after_work'/,
     /indexedDB\.open\(DB_NAME, DB_VERSION\)/,
     /blob: Blob/,
     /MAX_ATTEMPTS = 5/,
     /submitTechnicianBeforeWorkEvidence/,
-    /evidenceType: 'technician_before_work'/,
+    /evidenceType: retrying\.kind === 'after_work' \? 'technician_after_work' : 'technician_before_work'/,
     /replayTechnicianEvidenceQueue/,
     /bin-technician-evidence-queue-updated/,
-  ], 'durable before-work evidence queue');
+  ], 'durable technician evidence queue');
   assert.doesNotMatch(queue, /\bupdateDoc\s*\(/, 'Queued evidence must not mutate maintenance tickets directly.');
-  assert.doesNotMatch(queue, /TechnicianEvidenceKind = [^\n]*completion/, 'Completion evidence is not an implemented Wave 3 producer and must not be advertised by this queue.');
 
   expectAll(beforeWork, [
     /queueTechnicianEvidence/,

@@ -24,6 +24,7 @@ import TechnicianHRPage from './pages/TechnicianHRPageV2';
 import TechnicianOfflinePage from './pages/TechnicianOfflinePage';
 import TechnicianProofReadinessPage from './pages/TechnicianProofReadinessPage';
 import TechnicianBeforeWorkEvidence from './components/TechnicianBeforeWorkEvidence';
+import TechnicianAfterWorkEvidence from './components/TechnicianAfterWorkEvidence';
 import TechnicianOfflineSyncAgent from './components/TechnicianOfflineSyncAgent';
 import TechnicianSyncStatusStrip from './components/TechnicianSyncStatusStrip';
 import SupportPage from '../pages/public/SupportPage';
@@ -88,6 +89,7 @@ const TechnicianLayout = ({ children }: { children: React.ReactNode }) => {
                     })}
                 </Box>}
                 <TechnicianBeforeWorkEvidence />
+                <TechnicianAfterWorkEvidence />
                 <Box sx={{ animation: 'fadeIn 0.5s ease-out', maxWidth: isDashboard ? 1280 : 980, mx: 'auto' }}>{children}</Box>
             </Container>
 

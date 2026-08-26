@@ -25,10 +25,10 @@ export default function TechnicianOfflineSyncAgent() {
     if (!navigator.onLine) return;
 
     setState('syncing');
-    const [actionResult, evidenceResult] = await Promise.all([
-      replayEligibleOfflineJobActions(),
-      replayTechnicianEvidenceQueue(),
-    ]);
+    // Evidence must converge through protected server authority before queued
+    // lifecycle transitions such as COMPLETED are allowed to replay.
+    const evidenceResult = await replayTechnicianEvidenceQueue();
+    const actionResult = await replayEligibleOfflineJobActions();
     refreshEvidenceCount();
 
     const replayedTotal = actionResult.replayed + evidenceResult.replayed;
@@ -36,11 +36,11 @@ export default function TechnicianOfflineSyncAgent() {
     const blockedTotal = actionResult.blocked;
     if (replayedTotal > 0) {
       const parts = [];
-      if (actionResult.replayed > 0) parts.push(`${actionResult.replayed} mission action${actionResult.replayed === 1 ? '' : 's'}`);
       if (evidenceResult.replayed > 0) parts.push(`${evidenceResult.replayed} photo${evidenceResult.replayed === 1 ? '' : 's'}`);
+      if (actionResult.replayed > 0) parts.push(`${actionResult.replayed} mission action${actionResult.replayed === 1 ? '' : 's'}`);
       setMessage(`${parts.join(' and ')} synchronized.`);
       setState(failedTotal > 0 || blockedTotal > 0 ? 'warning' : 'success');
-    } else if (failedTotal > 0) {
+    } else if (failedTotal > 0 || blockedTotal > 0) {
       setMessage('Technician sync needs review. Open the Offline Queue before leaving the job.');
       setState('warning');
     } else {
