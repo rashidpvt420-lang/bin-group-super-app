@@ -60,11 +60,12 @@ test('Technician after-work evidence is verified by protected backend authority 
 });
 
 test('Technician after-work photo survives offline sessions and replays before completion actions', async () => {
-  const [queue, afterWork, agent, app] = await Promise.all([
+  const [queue, afterWork, agent, app, offlineActions] = await Promise.all([
     read('src/technician/utils/offlineEvidenceQueue.ts'),
     read('src/technician/components/TechnicianAfterWorkEvidence.tsx'),
     read('src/technician/components/TechnicianOfflineSyncAgent.tsx'),
     read('src/technician/TechnicianApp.tsx'),
+    read('src/technician/utils/offlineJobActions.ts'),
   ]);
 
   expectAll(queue, [
@@ -90,9 +91,23 @@ test('Technician after-work photo survives offline sessions and replays before c
   ], 'after-work evidence capture');
   assert.doesNotMatch(afterWork, /\bupdateDoc\s*\(/, 'After-work UI must not attach completion evidence directly to Firestore.');
 
-  const evidenceIndex = agent.indexOf('const evidenceResult = await replayTechnicianEvidenceQueue();');
-  const actionIndex = agent.indexOf('const actionResult = await replayEligibleOfflineJobActions();');
-  assert.ok(evidenceIndex >= 0 && actionIndex > evidenceIndex, 'Offline replay must confirm photo evidence before replaying lifecycle actions.');
+  expectAll(agent, [
+    /let evidenceReplayUnavailable = false/,
+    /evidenceResult = await replayTechnicianEvidenceQueue\(\)/,
+    /catch \{\s*evidenceReplayUnavailable = true;/s,
+    /actionResult = await replayEligibleOfflineJobActions\(\)/,
+    /Completion remains locked until evidence sync is restored/,
+  ], 'evidence replay failure isolation');
+
+  const evidenceIndex = agent.indexOf('evidenceResult = await replayTechnicianEvidenceQueue();');
+  const actionIndex = agent.indexOf('actionResult = await replayEligibleOfflineJobActions();');
+  assert.ok(evidenceIndex >= 0 && actionIndex > evidenceIndex, 'Offline replay must attempt photo evidence before replaying safe lifecycle actions.');
+
+  expectAll(offlineActions, [
+    /return \['EN_ROUTE', 'IN_PROGRESS'\]\.includes\(status\)/,
+    /Completion needs foreground photo upload/,
+  ], 'completion fail-closed auto replay policy');
+  assert.doesNotMatch(offlineActions, /return \[[^\]]*'COMPLETED'/, 'COMPLETED must never auto-replay when evidence storage is unavailable.');
 
   assert.match(app, /<TechnicianAfterWorkEvidence \/>/);
 });
