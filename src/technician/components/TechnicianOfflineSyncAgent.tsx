@@ -1,7 +1,10 @@
 import React from 'react';
 import { Alert, Snackbar } from '@mui/material';
 import { loadOfflineQueue } from '../utils/offlineQueue';
-import { replayEligibleOfflineJobActions } from '../utils/offlineJobActions';
+import {
+  replayEligibleOfflineJobActions,
+  type OfflineReplayResult,
+} from '../utils/offlineJobActions';
 import {
   getTechnicianEvidenceQueueCount,
   replayTechnicianEvidenceQueue,
@@ -45,7 +48,7 @@ export default function TechnicianOfflineSyncAgent() {
       evidenceReplayUnavailable = true;
     }
 
-    let actionResult;
+    let actionResult: OfflineReplayResult;
     try {
       actionResult = await replayEligibleOfflineJobActions();
     } catch {
