@@ -25,10 +25,18 @@ test('Technician after-work evidence is verified by protected backend authority 
     /decodedPathname = decodeURIComponent\(parsed\.pathname\)/,
     /decodedPathname !== expectedPath/,
     /createHash\("sha256"\)/,
-    /db\.collection\("audit_logs"\)\.doc\(confirmationId\(ticketId, technicianId, storagePath\)\)/,
+    /metadata\.generation/,
+    /metadata\.md5Hash \|\| metadata\.etag/,
+    /confirmationId\(ticketId, technicianId, storagePath, objectGeneration, contentHash\)/,
     /technicianAfterConfirmationId: confirmationRef\.id/,
+    /technicianAfterStoragePath: storagePath/,
+    /technicianAfterObjectGeneration: objectGeneration/,
+    /technicianAfterContentHash: contentHash/,
     /recordType: "TECHNICIAN_EVIDENCE_CONFIRMATION"/,
     /action: "TECHNICIAN_AFTER_WORK_EVIDENCE_CONFIRMATION"/,
+    /bucketName: bucket\.name/,
+    /objectGeneration,/,
+    /contentHash,/,
     /technicianAfterEvidenceState: "CONFIRMED"/,
     /technicianAfterPhotos: FieldValue\.arrayUnion\(downloadUrl\)/,
     /completionPhotos: FieldValue\.arrayUnion\(downloadUrl\)/,
@@ -45,8 +53,12 @@ test('Technician after-work evidence is verified by protected backend authority 
     /confirmation\.action === "TECHNICIAN_AFTER_WORK_EVIDENCE_CONFIRMATION"/,
     /confirmation\.state === "CONFIRMED"/,
     /confirmation\.evidenceType === "technician_after_work"/,
-    /confirmationMatchesTicket/,
-    /Capture and verify an after-work completion photo through the protected evidence flow/,
+    /protectedIdentityMatchesTicket/,
+    /bucket\.file\(confirmedStoragePath\)\.getMetadata\(\)/,
+    /liveGeneration === confirmedGeneration/,
+    /liveContentHash === confirmedContentHash/,
+    /immutableStorageObjectMatches/,
+    /After-work evidence changed after verification/,
   ], 'completion lifecycle gate');
 
   expectAll(firestoreRules, [
@@ -86,9 +98,15 @@ test('Technician after-work photo survives offline sessions and replays before c
     /evidenceType: 'technician_after_work'/,
     /if \(!navigator\.onLine\)/,
     /Mission completion remains locked until upload and protected server verification both succeed/,
-    /if \(!awaitingProofConvergence \|\| !existingProof\) return;/,
+    /const \[pendingStoragePath, setPendingStoragePath\] = React\.useState\(''\)/,
+    /const confirmedStoragePath = String\(ticket\?\.technicianAfterStoragePath \|\| ''\)/,
+    /confirmedStoragePath === pendingStoragePath/,
+    /setPendingStoragePath\(storagePath\)/,
+    /setQueuedLocally\(false\)/,
+    /setPendingStoragePath\(''\)/,
+    /data-pending-storage-path/,
     /data-server-confirmed/,
-  ], 'after-work evidence capture');
+  ], 'after-work evidence capture and queued replay convergence');
   assert.doesNotMatch(afterWork, /\bupdateDoc\s*\(/, 'After-work UI must not attach completion evidence directly to Firestore.');
 
   expectAll(agent, [
