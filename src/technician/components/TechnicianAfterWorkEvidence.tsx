@@ -35,12 +35,14 @@ export default function TechnicianAfterWorkEvidence() {
   const [uploading, setUploading] = React.useState(false);
   const [awaitingProofConvergence, setAwaitingProofConvergence] = React.useState(false);
   const [queuedLocally, setQueuedLocally] = React.useState(false);
+  const [pendingStoragePath, setPendingStoragePath] = React.useState('');
   const [error, setError] = React.useState('');
   const [success, setSuccess] = React.useState('');
 
   React.useEffect(() => {
     setAwaitingProofConvergence(false);
     setQueuedLocally(false);
+    setPendingStoragePath('');
     setSuccess('');
     if (!ticketId || !user?.uid) {
       setTicket(null);
@@ -63,16 +65,21 @@ export default function TechnicianAfterWorkEvidence() {
       Boolean(ticket?.technicianAfterPhotoUrl)
       || (Array.isArray(ticket?.technicianAfterPhotos) && ticket.technicianAfterPhotos.length > 0)
     );
+  const confirmedStoragePath = String(ticket?.technicianAfterStoragePath || '');
+  const pendingProofConverged = Boolean(pendingStoragePath)
+    && existingProof
+    && confirmedStoragePath === pendingStoragePath;
 
   React.useEffect(() => {
-    if (!awaitingProofConvergence || !existingProof) return;
+    if (!pendingProofConverged) return;
     const frame = window.requestAnimationFrame(() => {
       setAwaitingProofConvergence(false);
       setQueuedLocally(false);
+      setPendingStoragePath('');
       setSuccess('After-work completion evidence verified. The protected completion gate can now evaluate notes and parts disposition.');
     });
     return () => window.cancelAnimationFrame(frame);
-  }, [awaitingProofConvergence, existingProof]);
+  }, [pendingProofConverged]);
 
   if (!ticketId || !ticket || status !== 'IN_PROGRESS') return null;
 
@@ -87,6 +94,7 @@ export default function TechnicianAfterWorkEvidence() {
       contentType: file.type,
       storagePath,
     });
+    setPendingStoragePath(storagePath);
     setAwaitingProofConvergence(false);
     setQueuedLocally(true);
     setSuccess('After-work photo saved on this device for durable sync. Mission completion remains locked until upload and protected server verification both succeed.');
@@ -111,6 +119,7 @@ export default function TechnicianAfterWorkEvidence() {
     setUploading(true);
     setAwaitingProofConvergence(false);
     setQueuedLocally(false);
+    setPendingStoragePath(storagePath);
     setError('');
     setSuccess('');
     try {
@@ -139,9 +148,11 @@ export default function TechnicianAfterWorkEvidence() {
           await queueForDurableSync(file, storagePath, safeName);
         } catch (queueError: any) {
           setQueuedLocally(false);
+          setPendingStoragePath('');
           setError(queueError?.message || 'The after-work upload failed and the durable device queue could not preserve it. Keep the photo and retry before completing the mission.');
         }
       } else {
+        setPendingStoragePath('');
         setError(err?.message || 'After-work evidence could not be verified. Check the mission state and retry.');
       }
     } finally {
@@ -154,6 +165,7 @@ export default function TechnicianAfterWorkEvidence() {
       data-testid="technician-after-work-evidence"
       data-evidence-queued={queuedLocally ? 'true' : 'false'}
       data-server-confirmed={existingProof ? 'true' : 'false'}
+      data-pending-storage-path={pendingStoragePath}
       sx={{
         p: 2.5,
         mb: 3,
