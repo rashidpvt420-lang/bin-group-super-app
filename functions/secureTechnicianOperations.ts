@@ -43,6 +43,10 @@ function hasTechnicianAfterWorkEvidence(data: FirebaseFirestore.DocumentData) {
   );
 }
 
+function storageContentHash(metadata: any) {
+  return String(metadata?.md5Hash || metadata?.etag || "").trim();
+}
+
 export function technicianCredentialMillis(value: unknown): number | null {
   if (value === undefined || value === null || value === "") return null;
   if (typeof value === "number") {
@@ -207,23 +211,54 @@ async function assertLifecycleEvidence(auth: any, data: any) {
     const confirmationSnap = await db.collection("audit_logs").doc(confirmationId).get();
     const confirmation = confirmationSnap.data() || {};
     const confirmedUrl = String(confirmation.downloadUrl || "").trim();
+    const confirmedStoragePath = String(confirmation.storagePath || "").trim();
+    const confirmedGeneration = String(confirmation.objectGeneration || "").trim();
+    const confirmedContentHash = String(confirmation.contentHash || "").trim();
     const technicianAfterPhotos = Array.isArray(ticket.technicianAfterPhotos) ? ticket.technicianAfterPhotos : [];
     const confirmationMatchesTicket = Boolean(confirmedUrl) && (
       String(ticket.technicianAfterPhotoUrl || "").trim() === confirmedUrl ||
       technicianAfterPhotos.includes(confirmedUrl)
     );
+    const bucket = admin.storage().bucket();
+    const protectedIdentityMatchesTicket =
+      String(ticket.technicianAfterStoragePath || "").trim() === confirmedStoragePath &&
+      String(ticket.technicianAfterObjectGeneration || "").trim() === confirmedGeneration &&
+      String(ticket.technicianAfterContentHash || "").trim() === confirmedContentHash;
     const serverConfirmed = confirmationSnap.exists &&
       confirmation.recordType === "TECHNICIAN_EVIDENCE_CONFIRMATION" &&
       confirmation.action === "TECHNICIAN_AFTER_WORK_EVIDENCE_CONFIRMATION" &&
       confirmation.state === "CONFIRMED" &&
       confirmation.ticketId === ticketId &&
       confirmation.technicianId === auth.uid &&
-      confirmation.evidenceType === "technician_after_work";
+      confirmation.evidenceType === "technician_after_work" &&
+      String(confirmation.bucketName || "").trim() === bucket.name &&
+      confirmedStoragePath.startsWith(`maintenanceTickets/${ticketId}/proofPhotos/`) &&
+      Boolean(confirmedGeneration) &&
+      Boolean(confirmedContentHash);
 
-    if (!serverConfirmed || !confirmationMatchesTicket) {
+    let immutableStorageObjectMatches = false;
+    if (serverConfirmed && confirmationMatchesTicket && protectedIdentityMatchesTicket) {
+      try {
+        const [metadata] = await bucket.file(confirmedStoragePath).getMetadata();
+        const liveGeneration = String(metadata.generation || "").trim();
+        const liveContentHash = storageContentHash(metadata);
+        const liveContentType = String(metadata.contentType || "").trim().toLowerCase();
+        const liveSizeBytes = Number(metadata.size || 0);
+        immutableStorageObjectMatches =
+          liveGeneration === confirmedGeneration &&
+          liveContentHash === confirmedContentHash &&
+          liveContentType === String(confirmation.contentType || "").trim().toLowerCase() &&
+          Number.isFinite(liveSizeBytes) &&
+          liveSizeBytes === Number(confirmation.sizeBytes || 0);
+      } catch {
+        immutableStorageObjectMatches = false;
+      }
+    }
+
+    if (!serverConfirmed || !confirmationMatchesTicket || !protectedIdentityMatchesTicket || !immutableStorageObjectMatches) {
       throw new HttpsError(
         "failed-precondition",
-        "Capture and verify an after-work completion photo through the protected evidence flow before closing this mission.",
+        "After-work evidence changed after verification. Capture and verify a new completion photo before closing this mission.",
       );
     }
   }
