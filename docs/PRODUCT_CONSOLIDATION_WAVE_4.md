@@ -13,8 +13,10 @@ This wave closes the durable Technician **after-work/completion photo** gap docu
 - Accepts after-work evidence only while the mission is `IN_PROGRESS`.
 - Verifies the uploaded Storage object exists, is an image up to 10 MB, belongs to the mission path, and carries the authenticated Technician metadata.
 - Requires the supplied download URL to use HTTPS and to resolve to the exact decoded bucket/object path that was independently verified in Storage.
-- Writes the verified photo to the ticket through the Admin SDK.
-- Creates a deterministic SHA-256-bound confirmation record inside `audit_logs`, whose existing Firestore rule denies browser create/update/delete even to Admin clients.
+- Reads and requires immutable Storage object identity: object `generation` plus `md5Hash`/`etag` content identity.
+- Binds the deterministic SHA-256 confirmation ID to ticket, Technician, Storage path, object generation, and content hash.
+- Writes the verified photo and its protected Storage identity to the ticket through the Admin SDK.
+- Creates the confirmation record inside `audit_logs`, whose existing Firestore rule denies browser create/update/delete even to Admin clients.
 - Stores that server-created confirmation ID on the ticket as `technicianAfterConfirmationId`.
 - Audits every successful confirmation as `TECHNICIAN_AFTER_WORK_EVIDENCE_CONFIRMED`.
 
@@ -24,8 +26,11 @@ This wave closes the durable Technician **after-work/completion photo** gap docu
 - `COMPLETED` and `COMPLETED_PENDING_APPROVAL` now additionally require:
   - server-confirmed Technician after-work ticket evidence,
   - a ticket-bound `technicianAfterConfirmationId`,
-  - the matching server-only `audit_logs` confirmation record, and
-  - the exact confirmed download URL to be present in the Technician after-work evidence fields.
+  - the matching server-only `audit_logs` confirmation record,
+  - exact bucket/path/generation/hash parity between ticket and confirmation,
+  - the exact confirmed download URL in the Technician after-work evidence fields, and
+  - a fresh server-side Storage metadata read proving the object generation, content hash, content type, and size still match the confirmed object.
+- Replacing or deleting the confirmed Storage object therefore invalidates Technician completion until new after-work evidence is captured and verified.
 - Generic client-written `afterPhotoUrl`, `completionPhotos`, local file selection, or legacy proof arrays cannot satisfy the protected completion gate.
 - A browser Admin cannot forge the confirmation record because `audit_logs` client writes are already denied.
 - Admin lifecycle authority remains unchanged.
@@ -34,24 +39,26 @@ This wave closes the durable Technician **after-work/completion photo** gap docu
 
 - Removes the legacy completion-photo uploader from `TechnicianJobDetailPage`.
 - Removes direct client attachment of `afterPhotoUrl`, `afterPhotos`, `completionPhotos`, `proofPhotos`, and `evidencePhotos` from the close action.
-- The job-detail readiness meter now trusts only `technicianAfterEvidenceState === CONFIRMED` plus server-attached Technician after-work evidence.
+- The job-detail readiness meter trusts server-confirmed Technician after-work evidence; the protected backend remains the final completion authority.
 - Resolution notes and parts/materials disposition remain ordinary non-authoritative job-detail data; they cannot grant photo-proof readiness.
 - The dedicated protected After-Work Completion Evidence panel is the only Technician after-work photo producer in this flow.
 
 ### Durable offline behavior
 
-- The IndexedDB evidence queue now supports both `before_work` and `after_work` image evidence.
+- The IndexedDB evidence queue supports both `before_work` and `after_work` image evidence.
 - After-work images survive offline sessions and app restarts as Blob data.
 - Replay uploads the exact image with `technician_after_work` metadata and calls the protected after-work evidence callable.
-- Offline synchronization now replays **photo evidence before mission lifecycle actions**, preventing a queued `COMPLETED` action from racing ahead of its required proof.
-- A queued completion action remains fail-closed until the protected evidence has synchronized and the server has confirmed it.
+- Offline synchronization attempts photo evidence before mission lifecycle actions, while an unavailable evidence store does not suppress safe `EN_ROUTE` / `IN_PROGRESS` replay.
+- `COMPLETED` remains non-auto-replayable and fail-closed until protected evidence has synchronized and the server has confirmed it.
 - The queue never writes mission completion state directly.
 
 ### Technician UX
 
 - Adds a dedicated After-Work Completion Evidence surface to Technician job routes while the mission is `IN_PROGRESS`.
 - Offline capture reports that completion remains locked until upload and protected server verification succeed.
-- Online capture does not report verified readiness until the protected callable succeeds and the live ticket snapshot converges to server-confirmed evidence.
+- The panel tracks the exact pending Storage path for online and durable-offline evidence.
+- When background replay confirms that exact path, the live ticket snapshot clears the queued warning and reports protected verification success.
+- An older confirmed photo cannot incorrectly clear the queued state for a newer replacement.
 - The close screen tells the Technician to use that protected panel and does not advertise a second completion-photo control.
 
 ## Explicit non-goals
