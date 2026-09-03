@@ -3,7 +3,7 @@ import { getToken as getAppCheckToken } from "firebase/app-check";
 
 import {
     db, auth, appCheck, doc, getDoc, setDoc, serverTimestamp,
-    onAuthStateChanged
+    onAuthStateChanged, forceNativeAppCheckRefresh
 } from "../lib/firebase";
 import type { User } from "../lib/firebase";
 import { registerPushNotifications } from "../services/pushNotificationService";
@@ -92,9 +92,6 @@ const ADMIN_ROLES = new Set([
     'support_admin',
 ]);
 
-// Staff-tier roles get into /admin/* (read-only) but must never be granted
-// blanket isAdmin trust — mirrors apps/admin-panel's AuthContext.tsx STAFF_ROLES
-// split so the same role carries the same trust level in both apps.
 const STAFF_ROLES = new Set([
     'hr_manager',
     'hr_staff',
@@ -148,11 +145,9 @@ const profileReadCanRecover = (error: unknown): boolean => {
 };
 
 const refreshSecureSessionProof = async (currentUser: User): Promise<void> => {
-    // Refresh both Firebase Auth and App Check. A browser can retain a valid Auth
-    // session while its App Check token has expired or failed to initialize;
-    // Firestore then rejects users/{uid} even though the account itself is valid.
     await currentUser.getIdToken(true);
     if (appCheck) {
+        await forceNativeAppCheckRefresh();
         await getAppCheckToken(appCheck, true);
     }
 };
@@ -180,9 +175,6 @@ const readOwnProfileWithRecovery = async (currentUser: User, userDocRef: ReturnT
                 throw error;
             }
 
-            // The first failed server read is the important recovery boundary:
-            // replace stale Auth/App Check proof before the next Firestore read.
-            // Permission/unauthenticated responses refresh proof on every retry.
             if (attempt === 1 || code === 'permission-denied' || code === 'unauthenticated') {
                 try {
                     await refreshSecureSessionProof(currentUser);
@@ -277,12 +269,7 @@ export function RoleProvider({ children }: { children: ReactNode }) {
                 const finalIsAdmin = claimIsAdmin;
 
                 if (!roleIsValid(finalRole)) {
-                    setUser({
-                        ...currentUser,
-                        ...data,
-                        status: 'role_required',
-                        isAdmin: false,
-                    } as SovereignUser);
+                    setUser({ ...currentUser, ...data, status: 'role_required', isAdmin: false } as SovereignUser);
                     setRole(null);
                     setStatus('role_required');
                     setIsAdmin(false);
@@ -296,21 +283,12 @@ export function RoleProvider({ children }: { children: ReactNode }) {
 
                 const resolvedOnboardingComplete = data.onboardingComplete;
                 const resolvedRole = finalRole;
-                // A claim identifies the portal, but it does not prove that the
-                // corresponding profile was approved. Missing status must stay
-                // locked until the server writes an explicit lifecycle state.
-                const resolvedStatus = data.status
-                    ? normalizeRole(data.status)
-                    : 'profile_incomplete';
+                const resolvedStatus = data.status ? normalizeRole(data.status) : 'profile_incomplete';
                 const resolvedIsAdmin = finalIsAdmin;
 
                 setUser({
                     ...currentUser,
                     ...data,
-                    // The authenticated Firebase identity is authoritative. A
-                    // stale or malformed profile document must never replace
-                    // the live Auth UID or email-verification state used by
-                    // assignment-bound Owner/Tenant/Technician workflows.
                     uid: currentUser.uid,
                     email: currentUser.email || data.email || null,
                     emailVerified: currentUser.emailVerified,
@@ -335,12 +313,7 @@ export function RoleProvider({ children }: { children: ReactNode }) {
                 const hasValidRole = roleIsValid(claimRole);
                 const resolvedRole = claimRole;
                 if (hasValidRole) {
-                    setUser({
-                        ...currentUser,
-                        role: resolvedRole,
-                        isAdmin: claimIsAdmin,
-                        status: 'profile_missing',
-                    } as SovereignUser);
+                    setUser({ ...currentUser, role: resolvedRole, isAdmin: claimIsAdmin, status: 'profile_missing' } as SovereignUser);
                     setRole(resolvedRole);
                     setIsAdmin(claimIsAdmin);
                     setStatus('profile_missing');
@@ -387,9 +360,28 @@ export function RoleProvider({ children }: { children: ReactNode }) {
     };
 
     const refreshRole = async () => {
-        if (auth.currentUser) {
+        const currentUser = auth.currentUser;
+        if (!currentUser) return;
+
+        const shouldBlockPortal = !user || !role;
+        if (shouldBlockPortal) {
             setLoading(true);
-            await syncProfile(auth.currentUser);
+        }
+
+        const refreshTimeoutId = shouldBlockPortal
+            ? window.setTimeout(() => {
+                console.warn("[AUTH_DIAG] Role refresh timeout. Releasing blocker fail-closed.");
+                setStatus('profile_unavailable');
+                setError("PROFILE UNAVAILABLE: Secure account verification timed out. Retry before entering a portal.");
+                setUser((existingUser) => existingUser || ({ ...currentUser, status: 'profile_unavailable' } as SovereignUser));
+                setLoading(false);
+            }, AUTH_BOOT_TIMEOUT_MS)
+            : null;
+
+        try {
+            await syncProfile(currentUser);
+        } finally {
+            if (refreshTimeoutId !== null) window.clearTimeout(refreshTimeoutId);
         }
     };
 
@@ -454,9 +446,7 @@ export function RoleProvider({ children }: { children: ReactNode }) {
 
         initAuth();
         return () => {
-            if (unsubscribe) {
-                unsubscribe();
-            }
+            if (unsubscribe) unsubscribe();
             window.clearTimeout(timeoutId);
         };
     }, []);

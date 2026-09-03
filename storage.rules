@@ -210,7 +210,7 @@ service firebase.storage {
 
     match /maintenanceTickets/{ticketId}/proofPhotos/{fileName} {
       allow read: if canReadTicketEvidence(ticketId);
-      allow write: if canWriteTicketEvidence(ticketId) && isImageUpload(10);
+      allow write: if resource == null && canWriteTicketEvidence(ticketId) && isImageUpload(10);
     }
 
     match /maintenanceTickets/{ticketId}/completionPhotos/{fileName} {

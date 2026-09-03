@@ -1,13 +1,14 @@
 import React from 'react';
 import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import { AppBar, Avatar, Box, Button, Container, IconButton, Paper, Stack, Toolbar, Typography, alpha } from '@mui/material';
-import { Briefcase, Building, FileUp, Home, Link2, Paintbrush, Users, Wallet } from 'lucide-react';
+import { Briefcase, Building, FileUp, Home, Paintbrush, Users, Wallet } from 'lucide-react';
 import { useLanguage } from '@bin/shared';
 import { useRole } from '../context/RoleContext';
 import { NotificationBell } from '../components/NotificationBell';
 import PortalSessionControls from '../components/PortalSessionControls';
 import BrandWatermark from '../components/BrandWatermark';
 import SafeIcon, { renderSafeIcon } from '../components/SafeIcon';
+import PortalConnectionStrip from '../components/PortalConnectionStrip';
 
 import BrokerSimpleDashboardPage from './pages/BrokerSimpleDashboardPage';
 import BrokerDashboardPage from './pages/BrokerDashboardPage';
@@ -34,10 +35,9 @@ const BrokerLayout = ({ children }: { children: React.ReactNode }) => {
   const menuItems: BrokerMenuItem[] = [
     { key: 'broker.nav.dashboard', label: label('broker.nav.dashboard', 'Dashboard', 'لوحة التحكم'), path: '/broker/dashboard', icon: Home },
     { key: 'broker.nav.leads', label: label('broker.nav.leads', 'Leads', 'العملاء المحتملون'), path: '/broker/leads', icon: Users },
-    { key: 'broker.nav.referrals', label: label('broker.nav.referrals', 'Referrals', 'الإحالات'), path: '/broker/referrals', icon: Building },
     { key: 'broker.nav.commissions', label: label('broker.nav.commissions', 'Commissions', 'العمولات'), path: '/broker/commissions', icon: Wallet },
-    { key: 'broker.nav.attribution', label: label('broker.nav.attribution', 'Attribution', 'الإسناد'), path: '/broker/attribution', icon: Link2 },
     { key: 'broker.nav.documents', label: label('broker.nav.documents', 'Documents', 'المستندات'), path: '/broker/documents', icon: FileUp },
+    { key: 'broker.nav.profile', label: label('broker.nav.profile', 'Profile', 'الملف الشخصي'), path: '/broker/profile', icon: Building },
   ];
 
   return (
@@ -67,6 +67,7 @@ const BrokerLayout = ({ children }: { children: React.ReactNode }) => {
         </Toolbar>
       </AppBar>
       <Container maxWidth="xl" sx={{ py: 5, position: 'relative', zIndex: 1 }}>
+        <PortalConnectionStrip />
         <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1.2} sx={{ display: { xs: 'none', lg: 'flex' }, mb: 4 }}>
           {menuItems.map((item) => {
             const active = location.pathname === item.path || location.pathname.startsWith(`${item.path}/`);

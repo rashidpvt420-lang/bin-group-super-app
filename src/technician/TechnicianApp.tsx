@@ -24,8 +24,11 @@ import TechnicianHRPage from './pages/TechnicianHRPageV2';
 import TechnicianOfflinePage from './pages/TechnicianOfflinePage';
 import TechnicianProofReadinessPage from './pages/TechnicianProofReadinessPage';
 import TechnicianBeforeWorkEvidence from './components/TechnicianBeforeWorkEvidence';
+import TechnicianAfterWorkEvidence from './components/TechnicianAfterWorkEvidence';
 import TechnicianOfflineSyncAgent from './components/TechnicianOfflineSyncAgent';
+import TechnicianSyncStatusStrip from './components/TechnicianSyncStatusStrip';
 import SupportPage from '../pages/public/SupportPage';
+import PortalConnectionStrip from '../components/PortalConnectionStrip';
 
 // HR is an implemented operational module and is available by default. The flag
 // is now an explicit emergency kill switch instead of a hidden launch dependency.
@@ -64,9 +67,7 @@ const TechnicianLayout = ({ children }: { children: React.ReactNode }) => {
                     </Box>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 0.8, md: 1.1 }, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
                         <Button onClick={() => navigate('/technician/jobs')} sx={quickButtonSx}>{label('tech.quick.jobs', 'Jobs', 'المهام')}</Button>
-                        <Button onClick={() => navigate('/technician/map')} sx={quickButtonSx}>{label('tech.quick.map', 'Live Map', 'الخريطة المباشرة')}</Button>
                         <Button onClick={() => navigate('/technician/offline')} sx={quickButtonSx}>{label('tech.quick.offline', 'Offline Queue', 'قائمة دون اتصال')}</Button>
-                        <Button onClick={() => navigate('/technician/support')} sx={quickButtonSx}>{label('tech.quick.support', 'Support', 'الدعم')}</Button>
                         <NotificationBell />
                         <Button aria-label={label('tech.proof', 'Proof readiness', 'جاهزية الإثبات')} onClick={() => navigate('/technician/proof-readiness')} sx={{ color: shell.gold, border: `1px solid ${shell.gold}`, borderRadius: 2, fontWeight: 900 }}>{label('tech.proof', 'Proof', 'الإثبات')}</Button>
                         <Button aria-label={label('nav.profile', 'Technician profile', 'ملف الفني')} onClick={() => navigate('/technician/profile')} startIcon={renderSafeIcon(User, { size: 18 })} sx={{ color: shell.gold, border: `1px solid ${shell.gold}`, borderRadius: 2, fontWeight: 900 }}>{label('nav.profile', 'Profile', 'الملف')}</Button>
@@ -76,6 +77,8 @@ const TechnicianLayout = ({ children }: { children: React.ReactNode }) => {
             </AppBar>
 
             <Container maxWidth="xl" sx={{ py: { xs: 3.5, md: 6 }, px: { xs: 2, sm: 3, md: 5 }, position: 'relative', zIndex: 1 }}>
+                <PortalConnectionStrip />
+                <TechnicianSyncStatusStrip />
                 {!isDashboard && <Box sx={{ mb: 4, display: 'flex', gap: 1, alignItems: 'center', color: shell.muted, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
                     <Button variant="text" onClick={() => navigate('/technician')} sx={{ color: shell.muted, fontWeight: 800 }}>{label('nav.dashboard', 'DASHBOARD', 'لوحة التحكم')}</Button>
                     {pathnames.slice(1).map((value, index) => {
@@ -86,6 +89,7 @@ const TechnicianLayout = ({ children }: { children: React.ReactNode }) => {
                     })}
                 </Box>}
                 <TechnicianBeforeWorkEvidence />
+                <TechnicianAfterWorkEvidence />
                 <Box sx={{ animation: 'fadeIn 0.5s ease-out', maxWidth: isDashboard ? 1280 : 980, mx: 'auto' }}>{children}</Box>
             </Container>
 

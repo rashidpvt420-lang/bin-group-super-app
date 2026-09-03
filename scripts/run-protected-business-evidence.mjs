@@ -44,6 +44,12 @@ if (!protectedPhase1) {
   process.exit(1);
 }
 
+// The committed Admin proof intentionally retains the historical locator so
+// launch-honesty can detect UI/test drift. Translate only that retired Staff
+// Access interaction at protected production replay time, after the environment
+// gate above has proven this is the exact-main production evidence workflow.
+run('scripts/patch-protected-admin-staff-access-interaction.mjs');
+
 // App Check debug tokens belong to individual Firebase apps. The protected
 // business suite exercises both the public and dedicated Admin web apps, so
 // verify (and only when missing, synchronize) the same stable CI UUID for both

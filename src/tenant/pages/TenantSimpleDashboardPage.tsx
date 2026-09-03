@@ -5,6 +5,7 @@ import { useLanguage } from '../../context/LanguageContext';
 import RoleQuickActionsPanel from '../../components/RoleQuickActionsPanel';
 import { CANONICAL_SLA_POLICY } from '../../config/uaeDominationBlueprint';
 import { binThemeTokens } from '../../theme/binGroupTheme';
+import CanonicalNextActions from '../../components/CanonicalNextActions';
 
 const issueShortcuts = [
   { en: 'AC not cooling', ar: 'المكيف لا يبرد', category: 'ac', icon: <Fan size={22} />, priority: 'urgent' },
@@ -73,6 +74,12 @@ export default function TenantSimpleDashboardPage() {
             {tx('tenant.simple.desc', 'Report a repair, schedule cleaning or pest control, arrange vacation access, track requests, open emergency help, or find payments and documents.')}
           </Typography>
         </Box>
+
+        <CanonicalNextActions actions={[
+          { id: 'report', label: tx('tenant.next.report', 'Report a maintenance issue'), detail: tx('tenant.next.reportDetail', 'Add the exact location and photo evidence for faster dispatch.'), path: '/tenant/request' },
+          { id: 'track', label: tx('tenant.next.track', 'Track active requests'), detail: tx('tenant.next.trackDetail', 'See status, technician progress, evidence and review options.'), path: '/tenant/tickets' },
+          { id: 'payment', label: tx('tenant.next.payment', 'Check payments and renewal'), detail: tx('tenant.next.paymentDetail', 'Review recorded payment status, documents and renewal actions.'), path: '/tenant/payments' },
+        ]} />
 
         <RoleQuickActionsPanel
           role="tenant"

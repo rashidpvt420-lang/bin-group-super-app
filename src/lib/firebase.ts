@@ -3,6 +3,7 @@
 // This file intentionally centralizes Firebase browser SDK exports used by the
 // public, owner, broker, tenant, technician, and admin source trees.
 
+import { registerPlugin } from '@capacitor/core';
 import { initializeApp, getApp, getApps, type FirebaseApp } from 'firebase/app';
 import {
   getAuth,
@@ -74,6 +75,7 @@ import {
   type Messaging,
 } from 'firebase/messaging';
 import {
+  CustomProvider,
   initializeAppCheck,
   ReCaptchaEnterpriseProvider,
   ReCaptchaV3Provider,
@@ -87,10 +89,6 @@ const readEnv = (key: string): string => {
   return value;
 };
 
-// Firebase Web App config is public client configuration, not a service-account
-// secret. Keep environment variables preferred, but provide stable BIN GROUP
-// project fallbacks so Codespaces/local builds do not boot with empty Firebase
-// values and trigger auth/invalid-api-key.
 const firebaseConfig = {
   apiKey: readEnv('VITE_FIREBASE_API_KEY') || 'AIzaSyCd-QdM7mjECh9UqDKk1ofBemanpTRgd4s',
   authDomain: readEnv('VITE_FIREBASE_AUTH_DOMAIN') || 'bin-group-57c60.firebaseapp.com',
@@ -102,52 +100,129 @@ const firebaseConfig = {
 
 export const app: FirebaseApp = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 
-// Firebase App Check — production keeps the established v3 provider by default.
-// The dedicated BIN GROUP staging project is explicitly Enterprise-only so its
-// root app and Admin can share one isolated staging App Check registration.
+type NativeAppCheckTokenResult = {
+  token?: string;
+  expireTimeMillis?: number;
+};
+
+type NativeAppCheckBridge = {
+  getAppCheckToken: (options: { forceRefresh: boolean }) => Promise<NativeAppCheckTokenResult>;
+};
+
+type CapacitorRuntime = {
+  isNativePlatform?: () => boolean;
+  getPlatform?: () => string;
+  Plugins?: {
+    FirebaseAppCheckBridge?: NativeAppCheckBridge;
+  };
+};
+
+const capacitorRuntime = typeof window !== 'undefined'
+  ? (window as unknown as { Capacitor?: CapacitorRuntime }).Capacitor
+  : undefined;
+const capacitorPlatform = capacitorRuntime?.getPlatform?.() || '';
+const isCapacitorNative = Boolean(
+  capacitorRuntime && (
+    capacitorRuntime.isNativePlatform?.() ??
+    (capacitorPlatform !== '' && capacitorPlatform !== 'web')
+  ),
+);
+const isCapacitorAndroid = isCapacitorNative && capacitorPlatform === 'android';
+const nativeAppCheckBridge = registerPlugin<NativeAppCheckBridge>('FirebaseAppCheckBridge');
+
+const validateNativeAppCheckToken = (result: NativeAppCheckTokenResult) => {
+  const token = String(result?.token || '').trim();
+  const expireTimeMillis = Number(result?.expireTimeMillis || 0);
+  if (!token || !Number.isFinite(expireTimeMillis) || expireTimeMillis <= Date.now()) {
+    throw new Error('Native Play Integrity App Check token result is invalid.');
+  }
+  return { token, expireTimeMillis };
+};
+
+export const forceNativeAppCheckRefresh = async (): Promise<void> => {
+  if (!isCapacitorAndroid) return;
+  const bridge = nativeAppCheckBridge;
+  if (!bridge || typeof bridge.getAppCheckToken !== 'function') {
+    throw new Error('Native Play Integrity App Check bridge plugin unavailable.');
+  }
+  validateNativeAppCheckToken(await bridge.getAppCheckToken({ forceRefresh: true }));
+};
+
 const appCheckSiteKey = readEnv('VITE_APP_CHECK_SITE_KEY');
 const requestedAppCheckProvider = readEnv('VITE_APP_CHECK_PROVIDER').toLowerCase();
-const appCheckProvider =
+const webAppCheckProvider =
   requestedAppCheckProvider === 'enterprise' || firebaseConfig.projectId === 'bin-group-staging'
     ? 'enterprise'
     : 'v3';
 const appCheckExplicitlyEnabled = readEnv('VITE_ENABLE_FIREBASE_APPCHECK') === 'true';
 const localAppCheckHost =
+  !isCapacitorNative &&
   typeof window !== 'undefined' &&
   ['localhost', '127.0.0.1'].includes(window.location.hostname);
 const appCheckRequired = import.meta.env.PROD && !localAppCheckHost;
+const webAppCheckRequired = appCheckRequired && !isCapacitorNative;
+const resolvedAppCheckProvider = isCapacitorAndroid
+  ? 'play-integrity-native'
+  : webAppCheckProvider;
 let appCheckInitialized = false;
 export let appCheck = null as ReturnType<typeof initializeAppCheck> | null;
 
-if (appCheckRequired && (!appCheckExplicitlyEnabled || !appCheckSiteKey)) {
+if (appCheckRequired && !appCheckExplicitlyEnabled) {
   throw new Error('[Firebase] App Check configuration is required for production builds.');
 }
+if (webAppCheckRequired && !appCheckSiteKey) {
+  throw new Error('[Firebase] App Check site key is required for production web builds.');
+}
+if (appCheckRequired && isCapacitorNative && !isCapacitorAndroid) {
+  throw new Error('[Firebase] Native App Check provider is not configured for this platform.');
+}
 
-if (appCheckExplicitlyEnabled && appCheckSiteKey && typeof window !== 'undefined') {
+if (appCheckExplicitlyEnabled && typeof window !== 'undefined') {
   try {
-    // Prefer an already-injected registered debug UUID (Playwright addInitScript).
-    // Only auto-enable the boolean debug flow in local DEV when no UUID is set.
-    const existingDebug = (self as unknown as Record<string, unknown>).FIREBASE_APPCHECK_DEBUG_TOKEN;
-    const hasRegisteredDebug =
-      typeof existingDebug === 'string' &&
-      existingDebug.length > 8 &&
-      existingDebug !== 'true' &&
-      existingDebug !== 'false';
-    if (!hasRegisteredDebug && import.meta.env.DEV) {
-      (self as unknown as Record<string, unknown>).FIREBASE_APPCHECK_DEBUG_TOKEN = true;
+    if (isCapacitorAndroid) {
+      const provider = new CustomProvider({
+        getToken: async () => {
+          const bridge = nativeAppCheckBridge;
+          if (!bridge || typeof bridge.getAppCheckToken !== 'function') {
+            throw new Error('Native Play Integrity App Check bridge plugin unavailable.');
+          }
+
+          // Normal Web SDK refreshes reuse a valid native token. Explicit recovery
+          // uses forceNativeAppCheckRefresh() before the Web SDK requests a token.
+          return validateNativeAppCheckToken(
+            await bridge.getAppCheckToken({ forceRefresh: false }),
+          );
+        },
+      });
+
+      appCheck = initializeAppCheck(app, {
+        provider,
+        isTokenAutoRefreshEnabled: true,
+      });
+      appCheckInitialized = true;
+    } else if (appCheckSiteKey) {
+      const existingDebug = (self as unknown as Record<string, unknown>).FIREBASE_APPCHECK_DEBUG_TOKEN;
+      const hasRegisteredDebug =
+        typeof existingDebug === 'string' &&
+        existingDebug.length > 8 &&
+        existingDebug !== 'true' &&
+        existingDebug !== 'false';
+      if (!hasRegisteredDebug && import.meta.env.DEV) {
+        (self as unknown as Record<string, unknown>).FIREBASE_APPCHECK_DEBUG_TOKEN = true;
+      }
+      if (hasRegisteredDebug) {
+        const fingerprint = `${String(existingDebug).slice(0, 8)}…${String(existingDebug).slice(-4)}`;
+        console.info(`[Firebase] App Check debug token active fingerprint=${fingerprint}`);
+      }
+      const provider = webAppCheckProvider === 'enterprise'
+        ? new ReCaptchaEnterpriseProvider(appCheckSiteKey)
+        : new ReCaptchaV3Provider(appCheckSiteKey);
+      appCheck = initializeAppCheck(app, {
+        provider,
+        isTokenAutoRefreshEnabled: true,
+      });
+      appCheckInitialized = true;
     }
-    if (hasRegisteredDebug) {
-      const fingerprint = `${String(existingDebug).slice(0, 8)}…${String(existingDebug).slice(-4)}`;
-      console.info(`[Firebase] App Check debug token active fingerprint=${fingerprint}`);
-    }
-    const provider = appCheckProvider === 'enterprise'
-      ? new ReCaptchaEnterpriseProvider(appCheckSiteKey)
-      : new ReCaptchaV3Provider(appCheckSiteKey);
-    appCheck = initializeAppCheck(app, {
-      provider,
-      isTokenAutoRefreshEnabled: true,
-    });
-    appCheckInitialized = true;
   } catch (appCheckError) {
     if (appCheckRequired) {
       throw new Error('[Firebase] App Check initialization failed in production.');
@@ -166,9 +241,9 @@ if (typeof window !== 'undefined') {
 
   enableIndexedDbPersistence(db).catch((err) => {
     if (err.code === 'failed-precondition') {
-        console.warn('[Firebase] Multiple tabs open, persistence can only be enabled in one tab at a time.');
+      console.warn('[Firebase] Multiple tabs open, persistence can only be enabled in one tab at a time.');
     } else if (err.code === 'unimplemented') {
-        console.warn('[Firebase] The current browser does not support all of the features required to enable persistence.');
+      console.warn('[Firebase] The current browser does not support all of the features required to enable persistence.');
     }
   });
 }
@@ -232,20 +307,12 @@ const inferLegacyAuditTarget = (data: any) => {
 
   for (const [field, fallbackType] of legacyTargets) {
     const targetId = String(data?.[field] || '').trim();
-    if (targetId) {
-      return { targetType: explicitTargetType || fallbackType, targetId };
-    }
+    if (targetId) return { targetType: explicitTargetType || fallbackType, targetId };
   }
 
   return { targetType: explicitTargetType, targetId: explicitTargetId };
 };
 
-/**
- * Compatibility bridge for legacy screens that still call addDoc() directly on
- * audit_logs/auditLogs. Security Rules deny those client writes by design, so
- * route them through the authenticated Cloud Function instead. All other
- * collections retain the native Firestore addDoc behavior.
- */
 const addDoc: typeof firestoreAddDoc = (async (reference: any, data: any) => {
   const collectionPath = String(reference?.path || '');
   if (collectionPath !== 'audit_logs' && collectionPath !== 'auditLogs') {
@@ -284,8 +351,6 @@ const addDoc: typeof firestoreAddDoc = (async (reference: any, data: any) => {
     sourceCollection: collectionPath,
   };
 
-  // Some legacy flows wrote the same event to both audit_logs and auditLogs
-  // in one Promise.all. Deduplicate only while the first callable is pending.
   const dedupeKey = `${action}|${targetType}|${targetId}`;
   let pending = pendingAuditWrites.get(dedupeKey);
   if (!pending) {
@@ -307,9 +372,11 @@ export const getFirebaseRuntimeDiagnostics = () => ({
   authDomain: firebaseConfig.authDomain,
   functionsRegion: FUNCTIONS_REGION,
   hasAppCheckSiteKey: Boolean(appCheckSiteKey),
-  appCheckProvider,
+  appCheckProvider: resolvedAppCheckProvider,
   appCheckExplicitlyEnabled,
   appCheckInitialized,
+  isCapacitorNative,
+  capacitorPlatform: capacitorPlatform || 'web',
   host: typeof window !== 'undefined' ? window.location.host : 'server',
 });
 
@@ -329,7 +396,6 @@ export const getSafeMessaging = async (): Promise<Messaging | null> => {
 export const messaging: Messaging | null = null;
 
 export {
-  // Auth
   onAuthStateChanged,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
@@ -340,7 +406,6 @@ export {
   GoogleAuthProvider,
   setPersistence,
   browserLocalPersistence,
-  // Firestore
   collection,
   collectionGroup,
   doc,
@@ -368,15 +433,12 @@ export {
   documentId,
   Timestamp,
   enableIndexedDbPersistence,
-  // Storage
   ref,
   uploadBytes,
   uploadBytesResumable,
   getDownloadURL,
   deleteObject,
-  // Functions
   httpsCallable,
-  // Messaging
   getMessaging,
   getToken,
   onMessage,
