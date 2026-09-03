@@ -7,7 +7,7 @@ import {
   uploadBytes,
 } from '../../lib/firebase';
 
-export type TechnicianEvidenceKind = 'before_work';
+export type TechnicianEvidenceKind = 'before_work' | 'after_work';
 export type TechnicianEvidenceQueueStatus = 'pending' | 'retrying' | 'failed';
 
 export type TechnicianEvidenceQueueItem = {
@@ -159,7 +159,10 @@ export async function queueTechnicianEvidence(params: {
 }
 
 async function confirmUploadedEvidence(item: TechnicianEvidenceQueueItem, downloadUrl: string) {
-  const submitEvidence = httpsCallable(functions, 'submitTechnicianBeforeWorkEvidence');
+  const callableName = item.kind === 'after_work'
+    ? 'submitTechnicianAfterWorkEvidence'
+    : 'submitTechnicianBeforeWorkEvidence';
+  const submitEvidence = httpsCallable(functions, callableName);
   await submitEvidence({
     ticketId: item.ticketId,
     storagePath: item.storagePath,
@@ -183,16 +186,28 @@ export async function replayTechnicianEvidenceItem(item: TechnicianEvidenceQueue
 
   try {
     const objectRef = ref(storage, retrying.storagePath);
-    await uploadBytes(objectRef, retrying.blob, {
-      contentType: retrying.contentType,
-      customMetadata: {
-        ticketId: retrying.ticketId,
-        technicianId: retrying.technicianId,
-        evidenceType: 'technician_before_work',
-        queueId: retrying.id,
-      },
-    });
-    const downloadUrl = await getDownloadURL(objectRef);
+    let uploadFailure: any = null;
+    try {
+      await uploadBytes(objectRef, retrying.blob, {
+        contentType: retrying.contentType,
+        customMetadata: {
+          ticketId: retrying.ticketId,
+          technicianId: retrying.technicianId,
+          evidenceType: retrying.kind === 'after_work' ? 'technician_after_work' : 'technician_before_work',
+          queueId: retrying.id,
+        },
+      });
+    } catch (error: any) {
+      uploadFailure = error;
+    }
+
+    let downloadUrl: string;
+    try {
+      downloadUrl = await getDownloadURL(objectRef);
+    } catch (readError: any) {
+      throw uploadFailure || readError;
+    }
+
     await confirmUploadedEvidence(retrying, downloadUrl);
     await deleteItem(retrying.id);
     await notifyQueueChanged();

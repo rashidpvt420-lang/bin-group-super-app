@@ -33,6 +33,7 @@ export * from "./mailDelivery";
 export * from "./notificationDelivery";
 export * from "./technicianDispatchNotifications";
 export * from "./technicianBeforeWorkEvidence";
+export * from "./technicianAfterWorkEvidence";
 export * from "./ticketNormalization";
 export * from "./hrAutomation";
 export * from "./technicianPayrollCompatibility";
