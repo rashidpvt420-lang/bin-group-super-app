@@ -8,11 +8,12 @@ const expectAll = (source, patterns, label) => {
 };
 
 test('Technician after-work evidence is verified by protected backend authority before completion', async () => {
-  const [backend, secureOps, runtime, firestoreRules] = await Promise.all([
+  const [backend, secureOps, runtime, firestoreRules, storageRules] = await Promise.all([
     read('functions/technicianAfterWorkEvidence.ts'),
     read('functions/secureTechnicianOperations.ts'),
     read('functions/runtime.ts'),
     read('firestore.rules'),
+    read('storage.rules'),
   ]);
 
   expectAll(backend, [
@@ -68,6 +69,16 @@ test('Technician after-work evidence is verified by protected backend authority 
     /allow delete: if false;/,
   ], 'server-only audit confirmation store');
 
+  const proofPhotoRule = storageRules.match(
+    /match \/maintenanceTickets\/\{ticketId\}\/proofPhotos\/\{fileName\} \{([\s\S]*?)\n    \}/,
+  );
+  assert.ok(proofPhotoRule, 'Technician proofPhotos Storage rule must exist.');
+  assert.match(
+    proofPhotoRule[1],
+    /allow write: if resource == null && canWriteTicketEvidence\(ticketId\) && isImageUpload\(10\);/,
+    'Assigned Technician proof objects must be create-only so confirmed bytes cannot be overwritten in place.',
+  );
+
   assert.match(runtime, /export \* from "\.\/technicianAfterWorkEvidence";/);
 });
 
@@ -87,7 +98,17 @@ test('Technician after-work photo survives offline sessions and replays before c
     /technician_after_work/,
     /blob: Blob/,
     /indexedDB\.open\(DB_NAME, DB_VERSION\)/,
+    /let uploadFailure: any = null/,
+    /downloadUrl = await getDownloadURL\(objectRef\)/,
+    /throw uploadFailure \|\| readError/,
   ], 'durable after-work queue');
+  const uploadAttemptIndex = queue.indexOf('await uploadBytes(objectRef, retrying.blob');
+  const existingObjectReadIndex = queue.indexOf('downloadUrl = await getDownloadURL(objectRef);');
+  const protectedConfirmationIndex = queue.indexOf('await confirmUploadedEvidence(retrying, downloadUrl);');
+  assert.ok(
+    uploadAttemptIndex >= 0 && existingObjectReadIndex > uploadAttemptIndex && protectedConfirmationIndex > existingObjectReadIndex,
+    'Replay must be able to re-read an already-created proof object and submit it to protected confirmation without overwriting it.',
+  );
   assert.doesNotMatch(queue, /\bupdateDoc\s*\(/, 'Offline evidence replay must never mutate mission completion state directly.');
 
   expectAll(afterWork, [
