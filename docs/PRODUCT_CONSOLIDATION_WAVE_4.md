@@ -4,7 +4,7 @@ Base protected main: `9a8efe59c1a55bf7407caace2715a06e8124afeb`
 
 ## Scope
 
-This wave closes the durable Technician **after-work/completion photo** gap documented by Wave 3 without weakening Auth, App Check, Firestore rules, Storage rules, or the protected lifecycle state machine.
+This wave closes the durable Technician **after-work/completion photo** gap documented by Wave 3 without weakening Auth, App Check, Firestore rules, Storage rules, or the protected lifecycle state machine. Wave 4 includes one narrowly stricter Storage rule for `maintenanceTickets/{ticketId}/proofPhotos/{fileName}`: assigned-Technician client writes are create-only so an existing proof object cannot be overwritten in place.
 
 ### Protected after-work evidence
 
@@ -18,6 +18,7 @@ This wave closes the durable Technician **after-work/completion photo** gap docu
 - Writes the verified photo and its protected Storage identity to the ticket through the Admin SDK.
 - Creates the confirmation record inside `audit_logs`, whose existing Firestore rule denies browser create/update/delete even to Admin clients.
 - Stores that server-created confirmation ID on the ticket as `technicianAfterConfirmationId`.
+- Tightens the explicit `proofPhotos` Storage rule so assigned Technician uploads require `resource == null`; replacement captures use a new path instead of mutating confirmed bytes.
 - Audits every successful confirmation as `TECHNICIAN_AFTER_WORK_EVIDENCE_CONFIRMED`.
 
 ### Completion lifecycle gate
@@ -30,7 +31,7 @@ This wave closes the durable Technician **after-work/completion photo** gap docu
   - exact bucket/path/generation/hash parity between ticket and confirmation,
   - the exact confirmed download URL in the Technician after-work evidence fields, and
   - a fresh server-side Storage metadata read proving the object generation, content hash, content type, and size still match the confirmed object.
-- Replacing or deleting the confirmed Storage object therefore invalidates Technician completion until new after-work evidence is captured and verified.
+- Replacing or deleting the confirmed Storage object therefore invalidates Technician completion until new after-work evidence is captured and verified; assigned Technician clients are additionally prevented from overwriting an existing `proofPhotos` object in place.
 - Generic client-written `afterPhotoUrl`, `completionPhotos`, local file selection, or legacy proof arrays cannot satisfy the protected completion gate.
 - A browser Admin cannot forge the confirmation record because `audit_logs` client writes are already denied.
 - Admin lifecycle authority remains unchanged.
@@ -48,6 +49,7 @@ This wave closes the durable Technician **after-work/completion photo** gap docu
 - The IndexedDB evidence queue supports both `before_work` and `after_work` image evidence.
 - After-work images survive offline sessions and app restarts as Blob data.
 - Replay uploads the exact image with `technician_after_work` metadata and calls the protected after-work evidence callable.
+- If the bytes reached Storage but callable/network confirmation failed, replay can read the already-created object URL and resubmit it to the protected verifier without overwriting that object.
 - Offline synchronization attempts photo evidence before mission lifecycle actions, while an unavailable evidence store does not suppress safe `EN_ROUTE` / `IN_PROGRESS` replay.
 - `COMPLETED` remains non-auto-replayable and fail-closed until protected evidence has synchronized and the server has confirmed it.
 - The queue never writes mission completion state directly.
@@ -66,7 +68,7 @@ This wave closes the durable Technician **after-work/completion photo** gap docu
 - No production deployment.
 - No hard-public-launch claim.
 - No Firebase/Auth/App Check weakening.
-- No Firestore or Storage rules changes.
+- No Firestore rule changes and no Storage-rule weakening; one explicit `proofPhotos` Storage rule is tightened to make assigned-Technician writes create-only.
 - No automatic mission completion from offline state.
 - No Admin/HR lifecycle changes.
 
