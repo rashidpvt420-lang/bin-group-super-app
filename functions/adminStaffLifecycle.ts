@@ -281,7 +281,7 @@ export const adminGetStaffDetails = onCall({ cors: true, region: "europe-west3",
     }));
   const payroll = includePrivate
     ? mapDocs(payrollSnap)
-      .filter((entry: any) => [entry.uid, entry.staffId, entry.employeeId, entry.techId, entry.technicianId].map(clean).includes(uid))
+      .filter((entry: any) => [entry.uid, entry.staffId, entry.employeeId, entry.techId, entry.technicianId].map((value: unknown) => clean(value)).includes(uid))
       .slice(0, 100)
       .map((entry: any) => ({
         id: entry.id,
