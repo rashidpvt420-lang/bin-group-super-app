@@ -48,6 +48,7 @@ function validEnv() {
     E2E_TECHNICIAN_B_EMAIL: '',
     E2E_TECHNICIAN_B_PASSWORD: '',
     LAUNCH_MODE: 'bank-pilot',
+    PAYMENT_POLICY: 'phase1-manual',
     RUN_PUBLIC_RELEASE_GATE: 'false',
     GITHUB_ACTIONS: 'true',
     GITHUB_EVENT_NAME: 'workflow_dispatch',
@@ -63,6 +64,7 @@ function withDispatchEvent(t, env, incidentEvidenceRefs = marker, extraInputs = 
   writeFileSync(eventPath, JSON.stringify({
     inputs: {
       launch_mode: env.LAUNCH_MODE,
+      payment_policy: env.PAYMENT_POLICY,
       run_public_release_gate: env.RUN_PUBLIC_RELEASE_GATE,
       confirmation: 'DEPLOY_PRODUCTION_BIN_GROUP_57C60',
       hard_launch_confirmation: 'AUTHORIZE_HARD_PUBLIC_LAUNCH_BIN_GROUP',
