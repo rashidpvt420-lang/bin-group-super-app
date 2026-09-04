@@ -7,7 +7,7 @@ const sourcePath = 'firestore.rules';
 const outputDirectory = 'launch_generated';
 const outputPath = `${outputDirectory}/firestore.rules`;
 const manifestPath = `${outputDirectory}/firestore-rules-manifest.json`;
-const source = readFileSync(sourcePath, 'utf8').replace(/\r\n?/g, '\n');
+let source = readFileSync(sourcePath, 'utf8').replace(/\r\n?/g, '\n');
 const failures = [];
 
 function matchBlock(header) {
@@ -26,6 +26,18 @@ function matchBlock(header) {
   return '';
 }
 
+// Finance Admins are allowed into the Admin payments module, but they must not
+// receive the broader canManageContracts authority just to read the queue.
+// Canonicalize the deployable rules so payment_transactions is readable by an
+// active finance_admin while all browser creates/updates/deletes stay denied.
+const legacyPaymentTransactionsRead = "      allow read: if participantCanRead(resource.data) || (signedIn() && resource.data.get('payerId', null) == request.auth.uid) || canManageContracts();";
+const financeAdminPaymentTransactionsRead = "      allow read: if participantCanRead(resource.data) || (signedIn() && resource.data.get('payerId', null) == request.auth.uid) || (isNotSuspended() && claimedRole() == 'finance_admin') || canManageContracts();";
+if (source.includes(legacyPaymentTransactionsRead)) {
+  source = source.replace(legacyPaymentTransactionsRead, financeAdminPaymentTransactionsRead);
+} else if (!source.includes(financeAdminPaymentTransactionsRead)) {
+  failures.push('payment_transactions Finance Admin read authority could not be canonicalized');
+}
+
 const required = [
   'match /technician_live_locations/{technicianId} {',
   'allow create, update, delete: if false;',
@@ -37,6 +49,7 @@ const required = [
   'match /payroll_entries/{entryId} {',
   "'invoice_registry', 'payroll_entries'",
   "'transactions',\n          'payroll_entries',\n          'invoices'",
+  financeAdminPaymentTransactionsRead,
 ];
 for (const token of required) {
   if (!source.includes(token)) failures.push(`required hardened rule fragment missing: ${token}`);
@@ -72,6 +85,17 @@ else {
   }
   if (payrollBlock.includes('allow write: if isAdmin()')) {
     failures.push('payroll_entries still permits privileged browser writes');
+  }
+}
+
+const paymentTransactionsBlock = matchBlock('    match /payment_transactions/{paymentId} {');
+if (!paymentTransactionsBlock) failures.push('payment_transactions rule block is missing or malformed');
+else {
+  if (!paymentTransactionsBlock.includes(financeAdminPaymentTransactionsRead.trim())) {
+    failures.push('payment_transactions does not grant the active finance_admin the read-only Admin queue authority');
+  }
+  if (!paymentTransactionsBlock.includes('allow create: if false;') || !paymentTransactionsBlock.includes('allow update, delete: if false;')) {
+    failures.push('payment_transactions browser writes must remain server-only');
   }
 }
 
@@ -111,6 +135,9 @@ if (failures.length) {
 
 const sha256 = crypto.createHash('sha256').update(source).digest('hex');
 mkdirSync(outputDirectory, { recursive: true });
+// Keep the fully hardened source and deploy artefact identical. Production,
+// emulator tests and the stability guard therefore all exercise the same rule.
+writeFileSync(sourcePath, source, { mode: 0o600 });
 writeFileSync(outputPath, source, { mode: 0o600 });
 writeFileSync(manifestPath, `${JSON.stringify({
   schemaVersion: 1,
@@ -123,5 +150,6 @@ writeFileSync(manifestPath, `${JSON.stringify({
   legacyTicketsMutation: 'denied',
   payrollMirrorWrites: 'admin-sdk-only',
   payrollMirrorSelfServiceRead: 'technician-uid-scoped',
+  financeAdminPaymentQueueRead: 'finance_admin-read-only',
 }, null, 2)}\n`, { mode: 0o600 });
 console.log(`[production-firestore-rules] wrote ${outputPath} sha256=${sha256}`);
