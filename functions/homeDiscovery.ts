@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { FieldValue } from "firebase-admin/firestore";
+import { FieldPath, FieldValue } from "firebase-admin/firestore";
 import type * as FirebaseFirestore from "firebase-admin/firestore";
 import { defineSecret } from "firebase-functions/params";
 import { onDocumentCreated, onDocumentUpdated } from "firebase-functions/v2/firestore";
@@ -23,6 +23,8 @@ const ALLOWED_PROPERTY_TYPES = new Set(["ALL", "ROOM", "STUDIO", "APARTMENT", "V
 const ALLOWED_EMIRATES = new Set(["ALL", "ABU_DHABI", "DUBAI", "SHARJAH", "AJMAN", "UMM_AL_QUWAIN", "RAS_AL_KHAIMAH", "FUJAIRAH"]);
 const ALLOWED_FURNISHING = new Set(["ALL", "FURNISHED", "UNFURNISHED", "PARTLY_FURNISHED"]);
 const ALLOWED_BEDROOMS = new Set(["ALL", "0", "1", "2", "3", "4_PLUS"]);
+const MAX_SAVED_SEARCHES_PER_TENANT = 30;
+const ALERT_SEARCH_PAGE_SIZE = 400;
 
 type SearchFilters = {
   query: string;
@@ -178,10 +180,32 @@ function assertTenantAuth(auth: any) {
 }
 
 async function verifiedListings(limit = 120) {
-  const snapshot = await db.collection("contractorProfiles").where("active", "==", true).limit(limit).get();
-  return snapshot.docs
-    .filter((docSnap) => isVerifiedPublicListing(docSnap.data()))
-    .map((docSnap) => ({ id: docSnap.id, data: docSnap.data() }));
+  const rows: Array<{ id: string; data: FirebaseFirestore.DocumentData }> = [];
+  const pageSize = Math.max(100, Math.min(400, limit * 2));
+  let cursor: FirebaseFirestore.QueryDocumentSnapshot | null = null;
+
+  while (rows.length < limit) {
+    let queryRef: FirebaseFirestore.Query = db.collection("contractorProfiles")
+      .where("active", "==", true)
+      .orderBy(FieldPath.documentId())
+      .limit(pageSize);
+    if (cursor) queryRef = queryRef.startAfter(cursor);
+
+    const snapshot = await queryRef.get();
+    if (snapshot.empty) break;
+
+    for (const docSnap of snapshot.docs) {
+      const data = docSnap.data();
+      if (!isVerifiedPublicListing(data)) continue;
+      rows.push({ id: docSnap.id, data });
+      if (rows.length >= limit) break;
+    }
+
+    cursor = snapshot.docs[snapshot.docs.length - 1] || null;
+    if (snapshot.size < pageSize) break;
+  }
+
+  return rows;
 }
 
 export const getPublicHomeDiscoveryListings = onCall({
@@ -206,6 +230,14 @@ export const saveHomeDiscoverySearch = onCall({
   enforceAppCheck: true,
 }, async (request) => {
   const uid = assertTenantAuth(request.auth);
+  const existing = await db.collection("homeDiscoverySavedSearches")
+    .where("userId", "==", uid)
+    .limit(MAX_SAVED_SEARCHES_PER_TENANT + 1)
+    .get();
+  if (existing.size >= MAX_SAVED_SEARCHES_PER_TENANT) {
+    throw new HttpsError("resource-exhausted", `You can keep up to ${MAX_SAVED_SEARCHES_PER_TENANT} saved home searches. Delete one before saving another.`);
+  }
+
   const filters = normalizeFilters(request.data?.filters);
   const searchId = randomUUID();
   const ref = db.collection("homeDiscoverySavedSearches").doc(`${uid}_${searchId}`);
@@ -231,7 +263,7 @@ export const listHomeDiscoverySavedSearches = onCall({
   const uid = assertTenantAuth(request.auth);
   const snapshot = await db.collection("homeDiscoverySavedSearches")
     .where("userId", "==", uid)
-    .limit(30)
+    .limit(MAX_SAVED_SEARCHES_PER_TENANT)
     .get();
   return {
     searches: snapshot.docs.map((docSnap) => {
@@ -415,44 +447,58 @@ export const recommendHomeDiscoveryListings = onCall({
 
 async function notifySavedSearchMatches(listingId: string, data: FirebaseFirestore.DocumentData, eventType: "NEW_MATCH" | "PRICE_DROP") {
   if (!isVerifiedPublicListing(data)) return;
-  const snapshot = await db.collection("homeDiscoverySavedSearches").where("alertsEnabled", "==", true).limit(400).get();
-  if (snapshot.empty) return;
   const rent = annualRent(data);
   const listingTitle = cleanString(data.unitTitle || data.title || data.propertyName || "BIN verified home", 100);
   const area = cleanString(data.area || data.community || data.city || data.emirate, 80);
   const eventKey = eventType === "PRICE_DROP" ? `price_${Math.round(rent)}` : "new";
-  const writes: Promise<unknown>[] = [];
-  for (const searchDoc of snapshot.docs) {
-    const search = searchDoc.data();
-    const uid = cleanString(search.userId, 128);
-    if (!uid || cleanString(search.role, 30).toLowerCase() !== "tenant") continue;
-    const filters = normalizeFilters(search.filters);
-    if (!matchesFilters(data, filters)) continue;
-    const notificationId = `${searchDoc.id}_${listingId}_${eventKey}`.slice(0, 900);
-    const title = eventType === "PRICE_DROP" ? "Price drop on a saved BIN home" : "New BIN home matches your saved search";
-    const body = eventType === "PRICE_DROP"
-      ? `${listingTitle}${area ? ` in ${area}` : ""} is now AED ${Math.round(rent).toLocaleString()}/year.`
-      : `${listingTitle}${area ? ` in ${area}` : ""} now matches your saved home search.`;
-    writes.push(db.collection("notifications").doc(notificationId).set({
-      recipientId: uid,
-      userId: uid,
-      recipientRole: "tenant",
-      role: "tenant",
-      type: eventType === "PRICE_DROP" ? "HOME_PRICE_DROP" : "HOME_NEW_MATCH",
-      title,
-      body,
-      link: "/tenant/homes",
-      metadata: {
-        listingId,
-        savedSearchId: cleanString(search.searchId, 128),
-        annualRent: rent,
-        eventType,
-      },
-      source: "home_discovery_saved_search_alert",
-      createdAt: FieldValue.serverTimestamp(),
-    }, { merge: false }));
+  let cursor: FirebaseFirestore.QueryDocumentSnapshot | null = null;
+
+  while (true) {
+    let queryRef: FirebaseFirestore.Query = db.collection("homeDiscoverySavedSearches")
+      .where("alertsEnabled", "==", true)
+      .orderBy(FieldPath.documentId())
+      .limit(ALERT_SEARCH_PAGE_SIZE);
+    if (cursor) queryRef = queryRef.startAfter(cursor);
+
+    const snapshot = await queryRef.get();
+    if (snapshot.empty) break;
+
+    const writes: Promise<unknown>[] = [];
+    for (const searchDoc of snapshot.docs) {
+      const search = searchDoc.data();
+      const uid = cleanString(search.userId, 128);
+      if (!uid || cleanString(search.role, 30).toLowerCase() !== "tenant") continue;
+      const filters = normalizeFilters(search.filters);
+      if (!matchesFilters(data, filters)) continue;
+      const notificationId = `${searchDoc.id}_${listingId}_${eventKey}`.slice(0, 900);
+      const title = eventType === "PRICE_DROP" ? "Price drop on a saved BIN home" : "New BIN home matches your saved search";
+      const body = eventType === "PRICE_DROP"
+        ? `${listingTitle}${area ? ` in ${area}` : ""} is now AED ${Math.round(rent).toLocaleString()}/year.`
+        : `${listingTitle}${area ? ` in ${area}` : ""} now matches your saved home search.`;
+      writes.push(db.collection("notifications").doc(notificationId).set({
+        recipientId: uid,
+        userId: uid,
+        recipientRole: "tenant",
+        role: "tenant",
+        type: eventType === "PRICE_DROP" ? "HOME_PRICE_DROP" : "HOME_NEW_MATCH",
+        title,
+        body,
+        link: "/tenant/homes",
+        metadata: {
+          listingId,
+          savedSearchId: cleanString(search.searchId, 128),
+          annualRent: rent,
+          eventType,
+        },
+        source: "home_discovery_saved_search_alert",
+        createdAt: FieldValue.serverTimestamp(),
+      }, { merge: false }));
+    }
+    await Promise.all(writes);
+
+    cursor = snapshot.docs[snapshot.docs.length - 1] || null;
+    if (snapshot.size < ALERT_SEARCH_PAGE_SIZE) break;
   }
-  await Promise.all(writes);
 }
 
 export const notifyHomeDiscoveryNewMatches = onDocumentCreated({
