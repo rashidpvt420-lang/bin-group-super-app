@@ -57,7 +57,7 @@ function extractTranslationKeys(source, lang) {
   const start = source.indexOf(marker);
   if (start === -1) return new Set();
   let depth = 0;
-  let bodyStart = source.indexOf('{', start);
+  const bodyStart = source.indexOf('{', start);
   let end = bodyStart;
   for (let i = bodyStart; i < source.length; i++) {
     if (source[i] === '{') depth += 1;
@@ -81,6 +81,10 @@ const firebaseJson = read('firebase.json');
 const packageJson = read('package.json');
 const deploymentChecklist = read('docs/production-env-checklist.md');
 const stripePaymentFunction = read('functions/stripePayment.ts');
+const stripePhase1Hold = read('functions/stripePaymentPhase1Hold.ts');
+const paymentConfiguration = read('functions/paymentConfiguration.ts');
+const providerLaunchTruth = read('packages/shared/src/config/providerLaunchTruth.ts');
+const productionEnvWriter = read('scripts/write-production-env.mjs');
 const mailDeliveryFunction = read('functions/mailDelivery.ts');
 const whatsappWebhookFunction = read('functions/whatsappWebhook.ts');
 const aiAssistantFunction = read('functions/aiAssistant.ts');
@@ -123,47 +127,55 @@ warn(allSource.includes('uploadBytes') || allSource.includes('uploadBytesResumab
 warn(allSource.includes('jsPDF') || allSource.includes('pdf'), 'No PDF generation/reference found in src scan.');
 warn(allSource.includes('getToken') || allSource.includes('Notification'), 'No browser push-notification/token request usage found in src scan.');
 
-// ── Provider integration contract checks ─────────────────────────────────────
-// These checks are static by design: backend provider secrets must live in
-// Firebase Secret Manager, not GitHub Actions or committed .env files.
-assert(stripePaymentFunction.includes('defineSecret("STRIPE_SECRET_KEY")'), 'Stripe function must use Firebase Secret Manager key STRIPE_SECRET_KEY.');
-assert(stripePaymentFunction.includes('defineSecret("STRIPE_WEBHOOK_SECRET")'), 'Stripe function must use Firebase Secret Manager key STRIPE_WEBHOOK_SECRET.');
-assert(stripePaymentFunction.includes('stripe.webhooks.constructEvent') || stripePaymentFunction.includes('webhooks.constructEvent'), 'Stripe webhook must verify Stripe signatures before accepting payment events.');
-assert(runtimeExports.includes('export * from "./stripePayment"'), 'Stripe payment functions must be exported from the deployed runtime entrypoint.');
+// ── Canonical Phase 1 payment/provider truth ────────────────────────────────
+assert(paymentConfiguration.includes('PHASE1_METHODS = ["CASH", "CHEQUE"]'), 'Server payment configuration must allow exactly Cash and Cheque in Phase 1.');
+assert(paymentConfiguration.includes('value.bankTransferEnabled === true || value.stripeEnabled === true'), 'Server payment configuration must fail closed if Bank Transfer or Stripe is enabled.');
+assert(providerLaunchTruth.includes("approvedMethods: Object.freeze(['CASH', 'CHEQUE']"), 'Shared provider truth must publish Cash/Cheque as the only Phase 1 methods.');
+assert(providerLaunchTruth.includes('bankTransferEnabled: false'), 'Shared provider truth must keep Bank Transfer disabled.');
+assert(providerLaunchTruth.includes('stripeEnabled: false'), 'Shared provider truth must keep Stripe disabled.');
+assert(providerLaunchTruth.includes("requiredEvidenceLayer: 'physical_device'"), 'Provider truth must define physical-device evidence for device-bound launch gates.');
+assert(providerLaunchTruth.includes("if (String(evidence.status || '').trim().toLowerCase() !== 'passed') return false"), 'Public-launch evidence must require PASSED, not waiver equivalence.');
+assert(providerLaunchTruth.includes('evidence.releaseSha || evidence.commitSha'), 'Public-launch evidence must bind to an exact release SHA.');
 
+// Retain the dormant Stripe source hardened for a future separately reviewed
+// migration, but never deploy it as the Phase 1 payment runtime.
+assert(stripePaymentFunction.includes('defineSecret("STRIPE_SECRET_KEY")'), 'Dormant Stripe source must keep its secret in Secret Manager.');
+assert(stripePaymentFunction.includes('defineSecret("STRIPE_WEBHOOK_SECRET")'), 'Dormant Stripe source must keep its webhook secret in Secret Manager.');
+assert(stripePaymentFunction.includes('stripe.webhooks.constructEvent') || stripePaymentFunction.includes('webhooks.constructEvent'), 'Dormant Stripe webhook source must retain signature verification.');
+assert(!runtimeExports.includes('export * from "./stripePayment"'), 'Phase 1 production runtime must not export the live Stripe implementation.');
+assert(runtimeExports.includes('export * from "./stripePaymentPhase1Hold"'), 'Phase 1 production runtime must export the explicit Stripe hold endpoints.');
+assert(stripePhase1Hold.includes('Phase 1 payment methods are Cash and Cheque only'), 'Stripe hold must return the canonical Cash/Cheque-only policy message.');
+assert(!stripePhase1Hold.includes('STRIPE_SECRET_KEY') && !stripePhase1Hold.includes('STRIPE_WEBHOOK_SECRET'), 'Phase 1 Stripe hold must bind no Stripe secrets.');
+
+assert(deploymentChecklist.includes('Stripe/Card remains disabled in Phase 1'), 'Production checklist must state that Stripe/Card is disabled in Phase 1.');
+assert(deploymentChecklist.includes('do not enable under PHASE1_CASH_CHEQUE_V1'), 'Production checklist must mark Stripe credentials as future-phase only.');
+assert(deploymentChecklist.includes('Bank Transfer remains disabled in Phase 1'), 'Production checklist must state that Bank Transfer is disabled in Phase 1.');
+
+// Exact release identity is build input, not a mutable browser/admin claim.
+assert(productionEnvWriter.includes("['VITE_RELEASE_COMMIT_SHA', releaseCommitSha]"), 'Root production build must embed the exact release SHA.');
+assert(productionEnvWriter.includes("['REACT_APP_RELEASE_COMMIT_SHA', releaseCommitSha]"), 'Admin production build must embed the exact release SHA.');
+assert(productionEnvWriter.includes('/^[a-f0-9]{40}$/.test(releaseCommitSha)'), 'Production environment writer must fail on a missing or malformed release SHA.');
+
+// ── Other provider integration contracts ────────────────────────────────────
 assert(mailDeliveryFunction.includes('defineSecret("SMTP_USER")'), 'Mail function must use Firebase Secret Manager key SMTP_USER.');
 assert(mailDeliveryFunction.includes('defineSecret("SMTP_PASS")'), 'Mail function must use Firebase Secret Manager key SMTP_PASS.');
 assert(mailDeliveryFunction.includes('process.env.MAIL_FROM') || mailDeliveryFunction.includes('process.env.SMTP_FROM'), 'Mail function must support branded sender configuration.');
 assert(runtimeExports.includes('export * from "./mailDelivery"'), 'Mail delivery functions must be exported from the deployed runtime entrypoint.');
-
-assert(deploymentChecklist.includes('STRIPE_SECRET_KEY'), 'Production checklist must require STRIPE_SECRET_KEY.');
-assert(deploymentChecklist.includes('STRIPE_WEBHOOK_SECRET'), 'Production checklist must require STRIPE_WEBHOOK_SECRET.');
 assert(deploymentChecklist.includes('SMTP_USER'), 'Production checklist must require SMTP_USER.');
 assert(deploymentChecklist.includes('SMTP_PASS'), 'Production checklist must require SMTP_PASS.');
-assert(
-  !deploymentChecklist.includes('functions:secrets:set SMTP_PASSWORD') && !deploymentChecklist.includes('`SMTP_PASSWORD` set in Firebase'),
-  'Production checklist must not instruct setting the obsolete SMTP_PASSWORD secret; use SMTP_PASS.'
-);
+assert(!deploymentChecklist.includes('functions:secrets:set SMTP_PASSWORD') && !deploymentChecklist.includes('`SMTP_PASSWORD` set in Firebase'), 'Production checklist must not instruct setting obsolete SMTP_PASSWORD; use SMTP_PASS.');
 
 assert(whatsappWebhookFunction.includes('defineSecret("WHATSAPP_TOKEN")'), 'WhatsApp webhook must use Firebase Secret Manager key WHATSAPP_TOKEN.');
 assert(whatsappWebhookFunction.includes('defineSecret("WHATSAPP_PHONE_NUMBER_ID")'), 'WhatsApp webhook must use Firebase Secret Manager key WHATSAPP_PHONE_NUMBER_ID.');
 assert(whatsappWebhookFunction.includes('defineSecret("WHATSAPP_VERIFY_TOKEN")'), 'WhatsApp webhook must use Firebase Secret Manager key WHATSAPP_VERIFY_TOKEN.');
-assert(
-  runtimeAllExports.includes('export * from "./whatsappWebhook"') || runtimeAllExports.includes("export * from './whatsappWebhook'"),
-  'WhatsApp webhook must be exported from the deployed runtime entrypoint.'
-);
+assert(runtimeAllExports.includes('export * from "./whatsappWebhook"') || runtimeAllExports.includes("export * from './whatsappWebhook'"), 'WhatsApp webhook source must remain exported when configured.');
 
 assert(aiAssistantFunction.includes('defineSecret("OPENAI_API_KEY")'), 'AI assistant function must use Firebase Secret Manager key OPENAI_API_KEY.');
 assert(aiAssistantFunction.includes('defineSecret("GEMINI_API_KEY")'), 'AI assistant function must use Firebase Secret Manager key GEMINI_API_KEY.');
 assert(runtimeExports.includes('export * from "./aiAssistant"'), 'AI assistant functions must be exported from the deployed runtime entrypoint.');
+assert(deploymentChecklist.includes('OPENAI_API_KEY'), 'Production checklist must document server-side AI provider configuration.');
 
-assert(deploymentChecklist.includes('WHATSAPP_TOKEN'), 'Production checklist must require WHATSAPP_TOKEN.');
-assert(deploymentChecklist.includes('OPENAI_API_KEY'), 'Production checklist must require OPENAI_API_KEY.');
-
-// ── Frontend/backend callable wiring check ────────────────────────────────────
-// Catches the exact bug class where a frontend httpsCallable() name was renamed,
-// typo'd, or never implemented on the backend - the function silently 404s at
-// call time since there's no compile-time link between the two sides.
+// ── Frontend/backend callable wiring check ──────────────────────────────────
 function extractCalledFunctionNames(source) {
   const names = new Set();
   const re = /httpsCallable(?:<[^>]*>)?\(\s*functions\s*,\s*['"]([\w.-]+)['"]/g;
@@ -190,47 +202,24 @@ const backendCallableNames = new Set();
 if (existsSync('functions')) {
   for (const entry of readdirSync('functions')) {
     if (!entry.endsWith('.ts') || entry.endsWith('.d.ts')) continue;
-    for (const name of extractExportedCallableNames(readFileSync(join('functions', entry), 'utf8'))) {
-      backendCallableNames.add(name);
-    }
+    for (const name of extractExportedCallableNames(readFileSync(join('functions', entry), 'utf8'))) backendCallableNames.add(name);
   }
 }
 
 const phantomCallables = [...calledFunctionNames].filter((name) => !backendCallableNames.has(name)).sort();
-warn(
-  phantomCallables.length === 0,
-  `Frontend calls ${phantomCallables.length} Cloud Function(s) with no matching "export const <name> = onCall(...)" anywhere under functions/: ${phantomCallables.join(', ')}. ` +
-  'Verify each call site is either dead/unrouted code or needs a real backend implementation.'
-);
+warn(phantomCallables.length === 0, `Frontend calls ${phantomCallables.length} Cloud Function(s) with no matching export const <name> = onCall(...) under functions/: ${phantomCallables.join(', ')}.`);
 
-// ── Production environment variable checks ───────────────────────────────────
-// These checks run against the current process.env — they catch missing public
-// client keys during local validation and in CI pre-deploy steps.
+// ── Production environment variable checks ─────────────────────────────────
 const envVapidKey = process.env.VITE_FIREBASE_VAPID_KEY || '';
 const envMapsKey = process.env.VITE_GOOGLE_MAPS_API_KEY || '';
 const envAppCheckKey = process.env.VITE_APP_CHECK_SITE_KEY || '';
 const envAppCheckEnabled = process.env.VITE_ENABLE_FIREBASE_APPCHECK || '';
 const VAPID_HARDCODED_DEFAULT = 'BAx9XuLU';
 
-assert(
-  envVapidKey && !envVapidKey.startsWith(VAPID_HARDCODED_DEFAULT),
-  'VITE_FIREBASE_VAPID_KEY is missing or uses the hardcoded default. Push notifications will not work in production. ' +
-  'Get from: Firebase Console → Project Settings → Cloud Messaging → Web Push certificates → Generate key pair.'
-);
-assert(
-  Boolean(envMapsKey && envMapsKey !== 'REPLACE_WITH_MAPS_KEY'),
-  'VITE_GOOGLE_MAPS_API_KEY is not set. GPS dispatch and embedded maps will not function in production. ' +
-  'Get from: console.cloud.google.com → APIs & Services → Credentials.'
-);
-warn(
-  Boolean(envAppCheckKey && envAppCheckKey !== 'REPLACE_WITH_RECAPTCHA_V3_SITE_KEY'),
-  'VITE_APP_CHECK_SITE_KEY is not set. Firebase APIs are unprotected against abuse. ' +
-  'Get from: Google reCAPTCHA Admin Console → Create reCAPTCHA v3 site.'
-);
-assert(
-  envAppCheckEnabled === 'true',
-  'VITE_ENABLE_FIREBASE_APPCHECK is not set to "true". App Check enforcement is disabled in this environment.'
-);
+assert(envVapidKey && !envVapidKey.startsWith(VAPID_HARDCODED_DEFAULT), 'VITE_FIREBASE_VAPID_KEY is missing or uses the hardcoded default. Push notifications will not work in production.');
+assert(Boolean(envMapsKey && envMapsKey !== 'REPLACE_WITH_MAPS_KEY'), 'VITE_GOOGLE_MAPS_API_KEY is not set. GPS dispatch and embedded maps will not function in production.');
+warn(Boolean(envAppCheckKey && envAppCheckKey !== 'REPLACE_WITH_RECAPTCHA_V3_SITE_KEY'), 'VITE_APP_CHECK_SITE_KEY is not set. Firebase APIs are unprotected against abuse.');
+assert(envAppCheckEnabled === 'true', 'VITE_ENABLE_FIREBASE_APPCHECK is not set to "true". App Check enforcement is disabled in this environment.');
 
 assert(packageJson.includes('test:stability'), 'package.json must expose production stability test script.');
 assert(packageJson.includes('test:e2e:business'), 'package.json must expose deep 5-profile business workflow tests.');
