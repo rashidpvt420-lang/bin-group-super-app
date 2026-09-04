@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import * as crypto from 'node:crypto';
 import vm from 'node:vm';
 import { build } from 'esbuild';
+import React from 'react';
 
 const compile = async (entry, format = 'esm', external = []) => (await build({
   entryPoints: [entry], bundle: true, write: false, platform: 'node', target: 'node22',
@@ -17,6 +18,42 @@ const handlerCode = await compile('functions/designPayments.ts', 'cjs', ['fireba
 const clone = (value) => structuredClone(value);
 const hash = 'a'.repeat(64);
 const quote = { finalTotal: 101, mobilizationAmount: 15.15, quoteHash: hash, currency: 'AED' };
+
+test('design detail state is isolated across request, account, and role changes', async () => {
+  const pageCode = (await build({ entryPoints: ['src/pages/DesignRequestDetailPage.tsx'],
+    bundle: false, write: false, platform: 'node', target: 'node22', format: 'cjs',
+    jsx: 'transform', logLevel: 'silent' })).outputFiles[0].text;
+  let identity = { id: 'd1', uid: 'owner1', role: 'owner' };
+  const module = { exports: {} };
+  vm.runInNewContext(pageCode, {
+    module, exports: module.exports, window: { location: { pathname: '/owner/design-studio/d1' } },
+    require: (name) => {
+      if (name === 'react') return { ...React, useState: (initial) => [initial, () => {}], useEffect: () => {} };
+      if (name === 'react-router-dom') return { useParams: () => ({ id: identity.id }), useNavigate: () => () => {} };
+      if (name === '../context/RoleContext') return { useRole: () => ({ user: identity.uid ? { uid: identity.uid } : null, role: identity.role }) };
+      if (name === '@bin/shared') return { useLanguage: () => ({ tx: (value) => value }) };
+      if (name === '@mui/material') return { Box: 'div', CircularProgress: 'span' };
+      if (name === '../theme/binGroupTheme') return { binThemeTokens: { gold: '#DAA520' } };
+      return {};
+    },
+  });
+  const renderBoundary = () => module.exports.default();
+  const initial = renderBoundary();
+  assert.equal(typeof initial.type, 'function', 'Use a keyed child boundary so old asynchronous responses cannot update a different design/account.');
+  assert.equal(initial.key, JSON.stringify(['d1', 'owner1', 'owner']));
+  assert.equal(renderBoundary().key, initial.key, 'Ordinary rerenders must retain state.');
+  for (const next of [
+    { id: 'd2', uid: 'owner1', role: 'owner' },
+    { id: 'd1', uid: 'owner2', role: 'owner' },
+    { id: 'd1', uid: 'owner1', role: 'admin' },
+    { id: 'd1', uid: null, role: null },
+  ]) {
+    identity = next;
+    const boundary = renderBoundary();
+    assert.equal(boundary.type, initial.type);
+    assert.notEqual(boundary.key, initial.key, 'Changed request/account authority must remount all local payment and media state.');
+  }
+});
 
 function fixture({ tenant = false } = {}) {
   const records = new Map([

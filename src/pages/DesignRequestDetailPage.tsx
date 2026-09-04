@@ -78,6 +78,14 @@ function buildExecutionScope(request: any) {
 export default function DesignRequestDetailPage() {
     const { id } = useParams();
     const { user, role } = useRole();
+    // Remount local state when its authority changes. A late payment-instruction
+    // response must never populate another design or another signed-in account.
+    return <DesignRequestDetailContent key={JSON.stringify([id ?? null, user?.uid ?? null, role ?? null])} />;
+}
+
+function DesignRequestDetailContent() {
+    const { id } = useParams();
+    const { user, role } = useRole();
     const { tx } = useLanguage();
     const navigate = useNavigate();
     const [request, setRequest] = useState<any>(null);
