@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { FieldValue } from "firebase-admin/firestore";
+import type * as FirebaseFirestore from "firebase-admin/firestore";
 import { defineSecret } from "firebase-functions/params";
 import { onDocumentCreated, onDocumentUpdated } from "firebase-functions/v2/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
@@ -404,7 +405,7 @@ export const recommendHomeDiscoveryListings = onCall({
       recommendations,
       message: provider === "openai-grounded-ranking"
         ? "AI ranked only current verified BIN inventory; all displayed facts come from the listing database."
-        : "Live provider ranking was unavailable, so BIN used deterministic matching against current verified inventory.",
+        : "Live provider ranking was unavailable; using deterministic matching against current verified inventory.",
     };
   } catch (error) {
     await settleAiUsageQuota(reservation, false).catch(() => undefined);
