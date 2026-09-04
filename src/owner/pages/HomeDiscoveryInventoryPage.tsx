@@ -169,7 +169,7 @@ export default function HomeDiscoveryInventoryPage() {
     for (let index = 0; index < photos.length; index += 1) {
       const file = photos[index];
       const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 120) || `property_${index + 1}.jpg`;
-      const storageRef = ref(storage, `owners/${user.uid}/listing-media/${requestId}/${Date.now()}_${index}_${safeName}`);
+      const storageRef = ref(storage, `home-listing-media/${user.uid}/${requestId}/${Date.now()}_${index}_${safeName}`);
       const task = uploadBytesResumable(storageRef, file, {
         contentType: file.type,
         customMetadata: {
