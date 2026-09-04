@@ -32,7 +32,7 @@ function matchBlock(header) {
 // historical read expression and must not be changed accidentally.
 const paymentTransactionsHeader = '    match /payment_transactions/{paymentId} {';
 const legacyPaymentTransactionsRead = "      allow read: if participantCanRead(resource.data) || (signedIn() && resource.data.get('payerId', null) == request.auth.uid) || canManageContracts();";
-const financeAdminPaymentTransactionsRead = "      allow read: if participantCanRead(resource.data) || (signedIn() && resource.data.get('payerId', null) == request.auth.uid) || (isNotSuspended() && claimedRole() == 'finance_admin') || canManageContracts();";
+const financeAdminPaymentTransactionsRead = "      allow read: if participantCanRead(resource.data) || (signedIn() && resource.data.get('payerId', null) == request.auth.uid) || (isNotSuspended() && claimedRole() == 'finance_admin' && 'transactions' in request.auth.token.get('modules', [])) || canManageContracts();";
 let paymentTransactionsBlock = matchBlock(paymentTransactionsHeader);
 if (!paymentTransactionsBlock) {
   failures.push('payment_transactions rule block is missing or malformed');
@@ -156,6 +156,6 @@ writeFileSync(manifestPath, `${JSON.stringify({
   legacyTicketsMutation: 'denied',
   payrollMirrorWrites: 'admin-sdk-only',
   payrollMirrorSelfServiceRead: 'technician-uid-scoped',
-  financeAdminPaymentQueueRead: 'finance_admin-read-only',
+  financeAdminPaymentQueueRead: 'finance_admin-transactions-module-read-only',
 }, null, 2)}\n`, { mode: 0o600 });
 console.log(`[production-firestore-rules] wrote ${outputPath} sha256=${sha256}`);

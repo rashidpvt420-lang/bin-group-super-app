@@ -174,6 +174,23 @@ test('all design entry points retain App Check; revoked, unauthenticated and non
   await assert.rejects(f.call('adminReviewDesignPayment', 'admin1', f.reviewData), { code: 'permission-denied' });
 });
 
+test('Finance Admin payment verification still requires a current verified role and MFA after queue access', async () => {
+  const f = fixture();
+  const claims = { role: 'finance_admin', modules: ['dashboard', 'financials', 'transactions', 'reports'] };
+  f.accounts.set('finance1', { emailVerified: true, disabled: false, customClaims: claims });
+  await f.create();
+  await assert.rejects(f.call('adminReviewDesignPayment', 'finance1', f.reviewData, { ...claims, firebase: {} }), { code: 'permission-denied' });
+  await assert.rejects(f.call('adminReviewDesignPayment', 'finance1', f.reviewData, { ...claims, email_verified: false }), { code: 'permission-denied' });
+  await assert.rejects(f.call('adminReviewDesignPayment', 'finance1', f.reviewData, { ...claims, suspended: true }), { code: 'permission-denied' });
+  f.accounts.set('finance1', { emailVerified: true, disabled: false, customClaims: { role: 'finance_staff' } });
+  await assert.rejects(f.call('adminReviewDesignPayment', 'finance1', f.reviewData, claims), { code: 'permission-denied' });
+  f.accounts.set('finance1', { emailVerified: true, disabled: false, customClaims: claims });
+  await f.call('adminReviewDesignPayment', 'finance1', f.reviewData, claims);
+  assert.equal(f.records.get('payment_transactions/design_d1').paymentVerified, true);
+  assert.equal(f.records.get('design_requests/d1').status, 'PAID');
+  assert.equal([...f.records.keys()].some((key) => key.startsWith('contracts/') || key.startsWith('users/')), false);
+});
+
 test('Cash/Cheque requests bind the displayed policy and never grant payment or execution authority', async () => {
   for (const method of ['CASH', 'CHEQUE']) {
     const f = fixture();

@@ -8,7 +8,7 @@ import './property-geo-authority-rules.test.js';
 import { describe, it, before, after, beforeEach } from 'node:test';
 import assert from 'node:assert';
 import { initializeTestEnvironment, assertFails, assertSucceeds } from '@firebase/rules-unit-testing';
-import { collection, deleteDoc, doc, getDoc, getDocs, query, setDoc, updateDoc, where } from 'firebase/firestore';
+import { collection, deleteDoc, doc, getDoc, getDocs, limit, orderBy, query, setDoc, updateDoc, where } from 'firebase/firestore';
 import fs from 'fs';
 
 let testEnv;
@@ -928,6 +928,65 @@ describe('Firestore Security Rules', () => {
       description: 'Water leak',
       status: 'OPEN',
     }));
+  });
+
+  it('provisioned Finance Admin can load both payment approval queries without contract or global Admin access', async () => {
+    const financeDb = testEnv.authenticatedContext('design_finance', {
+      role: 'finance_admin', modules: ['dashboard', 'financials', 'transactions', 'reports'],
+    }).firestore();
+    await seedServerDocument('payment_transactions/design_pending', {
+      type: 'DESIGN_DEPOSIT', ownerId: 'design_owner', status: 'PENDING_ADMIN_PAYMENT_VERIFICATION', createdAt: new Date(),
+    });
+    await seedServerDocument('payment_transactions/design_paid', {
+      type: 'DESIGN_DEPOSIT', ownerId: 'design_owner', status: 'PAID', adminApprovalRequired: true,
+    });
+    const pending = await assertSucceeds(getDocs(query(collection(financeDb, 'payment_transactions'),
+      where('status', 'in', ['pending', 'pending_admin_approval', 'submitted', 'PENDING', 'PENDING_ADMIN_APPROVAL', 'PENDING_VERIFICATION', 'PENDING_ADMIN_PAYMENT_VERIFICATION', 'ADMIN_VERIFICATION_REQUIRED', 'AWAITING_VERIFICATION']), orderBy('createdAt', 'desc'), limit(50))));
+    assert.deepEqual(pending.docs.map((row) => row.id), ['design_pending']);
+    const paid = await assertSucceeds(getDocs(query(collection(financeDb, 'payment_transactions'),
+      where('status', '==', 'PAID'), where('adminApprovalRequired', '==', true), limit(50))));
+    assert.deepEqual(paid.docs.map((row) => row.id), ['design_paid']);
+    await assertSucceeds(getDoc(doc(financeDb, 'payment_transactions/design_pending')));
+    await assertFails(setDoc(doc(financeDb, 'payment_transactions/forged'), { status: 'PAID' }));
+    await assertFails(updateDoc(doc(financeDb, 'payment_transactions/design_pending'), { status: 'PAID' }));
+    await assertFails(deleteDoc(doc(financeDb, 'payment_transactions/design_pending')));
+    // Finance review uses a protected callable; the queue grant must not expose
+    // unrelated contracts, design drafts or the receipt uniqueness registry.
+    for (const path of ['contracts/private_contract', 'design_requests/private_design', 'design_quotes/private_design', 'design_receipt_registry/private_receipt']) {
+      await seedServerDocument(path, { ownerId: 'design_owner' });
+      await assertFails(getDoc(doc(financeDb, path)));
+      await assertFails(setDoc(doc(financeDb, `${path}_forged`), { ownerId: 'design_owner', status: 'ACTIVE' }));
+    }
+  });
+
+  it('payment queue read requires a current signed Finance Admin role and transactions module, not editable profile fields', async () => {
+    await seedServerDocument('payment_transactions/private_payment', { ownerId: 'another_owner', status: 'PENDING' });
+    const deniedClaims = [
+      { role: 'finance_admin' },
+      { role: 'finance_admin', modules: [] },
+      { role: 'finance_admin', modules: ['reports'] },
+      { role: 'finance_admin', modules: ['transactions'], suspended: true },
+      { role: 'finance_staff', modules: ['transactions'] },
+      { role: 'owner', modules: ['transactions'] },
+      { role: 'owner', userRole: 'finance_admin', modules: ['transactions'] },
+      { role: 'operations_admin', modules: ['transactions'] },
+      {},
+    ];
+    for (const [index, claims] of deniedClaims.entries()) {
+      const uid = `queue_denied_${index}`;
+      await seedServerDocument(`users/${uid}`, { role: 'finance_admin', staffModules: ['transactions'] });
+      const client = testEnv.authenticatedContext(uid, claims).firestore();
+      await assertFails(getDoc(doc(client, 'payment_transactions/private_payment')));
+      await assertFails(getDocs(query(collection(client, 'payment_transactions'), where('status', '==', 'PENDING'), limit(50))));
+    }
+    const anonymous = testEnv.unauthenticatedContext().firestore();
+    await assertFails(getDocs(query(collection(anonymous, 'payment_transactions'), limit(50))));
+    const suspendedProfile = testEnv.authenticatedContext('finance_suspended_profile', {
+      role: 'finance_admin', modules: ['transactions'],
+    }).firestore();
+    await seedServerDocument('users/finance_suspended_profile', { role: 'finance_admin', status: 'SUSPENDED' });
+    await assertFails(getDoc(doc(suspendedProfile, 'payment_transactions/private_payment')));
+    await assertFails(getDocs(query(collection(suspendedProfile, 'payment_transactions'), limit(50))));
   });
 
   it('financial ledgers are server-authored even for admin browser clients', async () => {
