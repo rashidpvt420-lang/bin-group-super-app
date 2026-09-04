@@ -169,7 +169,7 @@ export default function AdminTerminal() {
     { key: 'brokers', label: 'Broker attribution', value: String(metricValue('brokers') ?? '—'), helper: 'Leads, referrals, attribution proof, commissions, documents, and profile.', source: 'users.role=broker', icon: TicketCheck, status: 'live' },
     { key: 'tickets', label: 'Open SLA load', value: String(metricValue('openTickets') ?? '—'), helper: 'Shared maintenance workload across tenant, technician, owner, and admin views.', source: 'maintenanceTickets.status', icon: Gauge, status: 'live' },
     { key: 'payments', label: 'Payment review', value: String(metricValue('pendingPayments') ?? '—'), helper: PHASE1_PAYMENT_POLICY.policyText, source: 'payment_transactions.verificationState', icon: CreditCard, status: 'live' },
-    { key: 'launch', label: 'Launch authority', value: RELEASE_SHA ? 'EXACT SHA' : 'UNBOUND', helper: 'Public readiness exists only in the protected exact-SHA Launch Command Center. This operational dashboard cannot emit PUBLIC READY.', source: RELEASE_SHA || 'VITE_RELEASE_COMMIT_SHA missing', icon: ShieldCheck, status: 'authoritative-handoff' },
+    { key: 'launch', label: 'Launch authority', value: RELEASE_SHA ? 'EXACT SHA' : 'UNBOUND', helper: 'Public readiness exists only in the protected exact-SHA Launch Command Center. This operational dashboard cannot issue a public-launch clearance.', source: RELEASE_SHA || 'VITE_RELEASE_COMMIT_SHA missing', icon: ShieldCheck, status: 'authoritative-handoff' },
     { key: 'routes', label: 'Route consolidation', value: '1 app', helper: 'Canonical role routes live in src/*. Legacy owner/admin apps are handoff-only.', source: 'scripts/verify-route-consolidation.mjs', icon: Map, status: 'software-map' },
   ];
 
