@@ -33,7 +33,7 @@ import TenantNoticesPage from './pages/TenantNoticesPage';
 import TenantKeysPage from './pages/TenantKeysPage';
 import TenantParcelsPage from './pages/TenantParcelsPage';
 import TenantVisitorParkingPage from './pages/TenantVisitorParkingPage';
-import TenantMarketplacePage from './pages/TenantMarketplacePage';
+import TenantHomeDiscoveryWave2Page from './pages/TenantHomeDiscoveryWave2Page';
 import TenantStaffDirectoryPage from './pages/TenantStaffDirectoryPage';
 import TenantMessagesPage from './pages/TenantMessagesPage';
 import TenantCommunityPage from './pages/TenantCommunityPage';
@@ -120,9 +120,9 @@ export default function TenantApp() {
                 <Route path="/keys" element={<TenantKeysPage />} />
                 <Route path="/parcels" element={<TenantParcelsPage />} />
                 <Route path="/visitor-parking" element={<TenantVisitorParkingPage />} />
-                <Route path="/homes" element={<TenantMarketplacePage />} />
-                <Route path="/find-room-rent" element={<TenantMarketplacePage />} />
-                <Route path="/marketplace" element={<TenantMarketplacePage />} />
+                <Route path="/homes" element={<TenantHomeDiscoveryWave2Page />} />
+                <Route path="/find-room-rent" element={<TenantHomeDiscoveryWave2Page />} />
+                <Route path="/marketplace" element={<TenantHomeDiscoveryWave2Page />} />
                 <Route path="/staff-directory" element={<TenantStaffDirectoryPage />} />
                 <Route path="/messages" element={<TenantMessagesPage />} />
                 <Route path="/community" element={<TenantCommunityPage />} />
