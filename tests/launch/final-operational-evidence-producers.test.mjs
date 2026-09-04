@@ -47,7 +47,7 @@ test('technician physical evidence is protected, canonical and requires real mob
   assert.doesNotMatch(`${workflow}\n${verifier}\n${publisher}`, /ticket_id:|technician_id:|founder_attested|manual pass|waiv/i);
 });
 
-test('privileged rotation evidence uses fixed provider endpoints, protected actor configuration and revoked previous credentials', async () => {
+test('privileged rotation evidence uses active Phase 1 provider credentials and revoked Admin sessions', async () => {
   const [workflow, verifier, publisher] = await Promise.all([
     read('.github/workflows/privileged-access-rotation-evidence.yml'),
     read('scripts/verify-privileged-access-rotation.mjs'),
@@ -71,9 +71,11 @@ test('privileged rotation evidence uses fixed provider endpoints, protected acto
   assert.match(verifier, /evidenceType:\s*'secret-rotation-record'/);
   assert.match(verifier, /requireAuthorizedApprover\(process\.env\.GITHUB_ACTOR\)/);
   assert.doesNotMatch(verifier, /GITHUB_ACTOR !== 'rashidpvt420-lang'/);
-  assert.match(verifier, /secrets\/STRIPE_SECRET_KEY\/versions\?pageSize=100/);
-  assert.match(verifier, /secrets\/STRIPE_WEBHOOK_SECRET\/versions\?pageSize=100/);
   assert.match(verifier, /secrets\/SMTP_PASS\/versions\?pageSize=100/);
+  assert.doesNotMatch(verifier, /secrets\/STRIPE_SECRET_KEY\/versions\?pageSize=100/);
+  assert.doesNotMatch(verifier, /secrets\/STRIPE_WEBHOOK_SECRET\/versions\?pageSize=100/);
+  assert.match(verifier, /PHASE1_CASH_CHEQUE_V1/);
+  assert.match(verifier, /disabledProvidersExcluded:\s*\['STRIPE', 'BANK_TRANSFER'\]/);
   assert.doesNotMatch(verifier, /request\(\{ url: secret\.url/);
   assert.match(verifier, /\['DISABLED', 'DESTROYED'\]/);
   assert.match(verifier, /tokensValidAfterTime/);
