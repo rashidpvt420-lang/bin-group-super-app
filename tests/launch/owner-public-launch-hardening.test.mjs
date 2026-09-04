@@ -45,7 +45,7 @@ test('Final approval re-verifies every evidence-backed inspection', () => {
   assert.match(source, /paymentProofGeneration/);
 });
 
-test('Public Phase 1 launch does not demand disabled Stripe evidence', () => {
+test('Public Phase 1 launch cannot select or demand disabled Stripe evidence', () => {
   const productionWorkflow = read('.github/workflows/firebase-production-deploy.yml');
   const generatedCandidatePath = 'launch_package/generated/firebase-production-deploy-phase1.yml';
   const generatedCandidate = existsSync(generatedCandidatePath) ? read(generatedCandidatePath) : '';
@@ -56,9 +56,11 @@ test('Public Phase 1 launch does not demand disabled Stripe evidence', () => {
     : generatedCandidate || generator;
 
   assert.match(policySource, /phase1-manual/);
-  assert.match(policySource, /phase2-stripe/);
   assert.match(policySource, /PAYMENT_POLICY_INPUT/);
   assert.match(policySource, /Phase 1 manual mode must not provide Stripe proof identifiers/);
+  assert.doesNotMatch(policySource, /phase2-stripe/);
+  assert.doesNotMatch(policySource, /Verify recent live Stripe payment and processed webhook/);
+  assert.doesNotMatch(policySource, /verify-stripe-live-proof\.mjs/);
 
   if (!/phase1-manual/.test(productionWorkflow)) {
     const protectedCommand = read('.github/workflows/owner-public-launch-hardening-command.yml');
