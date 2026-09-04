@@ -4,15 +4,18 @@ import { readFileSync } from 'node:fs';
 
 const read = (file) => readFileSync(file, 'utf8');
 
-test('production workflow supports fail-closed Phase 1 manual or Phase 2 Stripe proof', () => {
+test('production workflow keeps legacy Phase 2 dispatch fields fail-closed while Phase 1 remains the decision authority', () => {
   const workflow = read('.github/workflows/firebase-production-deploy.yml');
+  const decision = read('scripts/hard-launch-decision-gate.mjs');
   assert.ok(workflow.includes('payment_policy:'));
   assert.ok(workflow.includes('phase1-manual'));
   assert.ok(workflow.includes('phase2-stripe'));
   assert.ok(workflow.includes('Verify Phase 1 manual Cash/Cheque production policy'));
   assert.ok(workflow.includes("inputs.payment_policy == 'phase1-manual'"));
-  assert.ok(workflow.includes("inputs.payment_policy == 'phase2-stripe'"));
   assert.ok(workflow.includes('phase1-manual-payment-proof.json'));
+  assert.ok(decision.includes("const PHASE1_PAYMENT_POLICY = 'phase1-manual'"));
+  assert.ok(decision.includes('PAYMENT_POLICY must equal phase1-manual while PHASE1_CASH_CHEQUE_V1 is active'));
+  assert.ok(!decision.includes('stripeLiveProof'));
 });
 
 test('Phase 1 verifier proves exact production Cash and Cheque policy without leaking banking data', () => {
@@ -31,14 +34,15 @@ test('Phase 1 verifier proves exact production Cash and Cheque policy without le
   assert.ok(!proofBlock.includes('swiftBic'), 'proof must exclude SWIFT/BIC');
 });
 
-test('postdeploy and signed final decision bind to the selected payment policy', () => {
+test('postdeploy and signed final decision bind public clearance to Phase 1 Cash/Cheque proof', () => {
   const postdeploy = read('scripts/postdeploy-release-gate.mjs');
   const decision = read('scripts/hard-launch-decision-gate.mjs');
   assert.ok(postdeploy.includes('PAYMENT_POLICY'));
   assert.ok(postdeploy.includes('phase1-manual-payment-proof.json'));
-  assert.ok(postdeploy.includes('stripe-live-proof.json'));
   assert.ok(decision.includes('phase1ManualPaymentProof'));
   assert.ok(decision.includes('paymentProofOk'));
-  assert.ok(decision.includes("paymentPolicy: launchMode === 'public'"));
+  assert.ok(decision.includes('paymentPolicy: PHASE1_PAYMENT_POLICY'));
+  assert.ok(decision.includes("paymentPolicy !== PHASE1_PAYMENT_POLICY"));
+  assert.ok(!decision.includes('stripe-live-proof.json'));
   assert.ok(!decision.includes('postdeployCleared && stripeLiveOk'));
 });
