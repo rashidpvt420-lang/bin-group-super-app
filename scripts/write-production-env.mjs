@@ -8,6 +8,7 @@ const VALIDATION_ONLY_ENTERPRISE_SITE_KEY = 'BIN_GROUP_VALIDATION_ONLY_ENTERPRIS
 
 const clean = (value) => String(value || '').trim();
 const isMalformed = (value) => !value || /REPLACE|undefined|null/i.test(value);
+const releaseCommitSha = clean(process.env.GITHUB_SHA || process.env.RELEASE_COMMIT_SHA).toLowerCase();
 
 const isExactProductionValidationJob = () => (
   clean(process.env.GITHUB_ACTIONS) === 'true' &&
@@ -35,6 +36,10 @@ const failures = [];
 for (const key of required) {
   const value = clean(process.env[key]);
   if (isMalformed(value)) failures.push(key);
+}
+
+if (!/^[a-f0-9]{40}$/.test(releaseCommitSha)) {
+  failures.push('GITHUB_SHA/RELEASE_COMMIT_SHA');
 }
 
 if (!useValidationOnlyEnterpriseSiteKey && isMalformed(enterpriseSiteKey)) {
@@ -76,6 +81,7 @@ const rootLines = [
   ['VITE_FIREBASE_APP_ID', process.env.VITE_FIREBASE_APP_ID],
   ['VITE_FIREBASE_MESSAGING_SENDER_ID', process.env.VITE_FIREBASE_MESSAGING_SENDER_ID],
   ['VITE_FIREBASE_VAPID_KEY', process.env.VITE_FIREBASE_VAPID_KEY],
+  ['VITE_RELEASE_COMMIT_SHA', releaseCommitSha],
 ];
 
 const adminLines = [
@@ -89,6 +95,7 @@ const adminLines = [
   ['REACT_APP_FIREBASE_AUTH_DOMAIN', 'bin-group-57c60.firebaseapp.com'],
   ['REACT_APP_FIREBASE_PROJECT_ID', 'bin-group-57c60'],
   ['REACT_APP_FIREBASE_STORAGE_BUCKET', 'bin-group-57c60.firebasestorage.app'],
+  ['REACT_APP_RELEASE_COMMIT_SHA', releaseCommitSha],
 ];
 
 function serialize(entries) {
@@ -103,5 +110,5 @@ copyFileSync('apps/admin-panel/.env.production', 'apps/admin-panel/.env.local');
 console.log(
   useValidationOnlyEnterpriseSiteKey
     ? '[production-env] validation-only environment files created; no deployable Admin Enterprise App Check key was written'
-    : '[production-env] production environment files created with public App Check, Admin Enterprise App Check, HR and canonical Admin Firebase identity enabled',
+    : '[production-env] production environment files created with public App Check, Admin Enterprise App Check, HR, canonical Admin Firebase identity and exact release SHA enabled',
 );
