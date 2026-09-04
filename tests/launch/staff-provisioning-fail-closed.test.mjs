@@ -29,7 +29,10 @@ test('staff provisioning backend rejects unsafe identity conversion and binds mo
   assert.match(backend, /Customer identities cannot be converted through Staff Access/);
   assert.match(backend, /Privileged or customer identities cannot be managed from Staff Access/);
   assert.match(backend, /previousClaims/);
-  assert.match(backend, /claimsForAccess\(role, modules, permissions, false\)/);
+  assert.match(backend, /claimsForAccess\(role, modules, permissions, true\)/);
+  assert.doesNotMatch(backend, /claimsForAccess\(role, modules, permissions, false\)/);
+  assert.match(backend, /const lifecycleActive = cleanString\(userSnap\.data\(\)\?\.status\)\.toUpperCase\(\) === "ACTIVE" &&\s+userSnap\.data\(\)\?\.onboardingComplete === true && accessSnap\.data\(\)\?\.active === true/);
+  assert.match(backend, /claimsForAccess\(role, modules, permissions, !lifecycleActive\)/);
   assert.match(backend, /setCustomUserClaims\(uid, claimsForAccess/);
   assert.match(backend, /staffModules: modules/);
   assert.match(backend, /permissions/);
