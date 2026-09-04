@@ -1,4 +1,5 @@
 import * as admin from 'firebase-admin';
+import type * as FirebaseFirestore from 'firebase-admin/firestore';
 import { createHash } from 'crypto';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 import { resolveActivePaymentConfiguration } from './paymentConfiguration';
@@ -216,14 +217,15 @@ export const adminReviewDesignPayment = onCall({ ...options, memory: '512MiB' },
       verificationState: verified ? 'ADMIN_VERIFIED' : 'EVIDENCE_RETURNED',
       paymentVerified: verified, approved: verified, adminApprovalRequired: !verified,
       ...(verified ? { amountReceived: s.terms.amount, paymentReferenceId: reference, receiptPath: receipt!.storagePath, receiptHash: receipt!.receiptHash, receiptGeneration: receipt!.generation, receiptEvidence: receipt, approvedBy: user.uid, approvedAt: now() } : {}),
-      adminNotes: notes, updatedAt: now(),
+      // Approval notes stay in the Admin audit; only a return reason is payer-visible.
+      adminNotes: verified ? '' : notes, updatedAt: now(),
     });
     transaction.update(s.designRef, {
       status: verified ? 'PAID' : 'PAYMENT_PENDING', workflowStage: verified ? 'PAID' : 'PAYMENT_PENDING',
       paymentVerified: verified, paymentStatus: verified ? 'APPROVED' : 'EVIDENCE_RETURNED',
       adminHandoffStatus: verified ? 'PAYMENT_VERIFIED' : 'PAYMENT_QUEUE',
       executionStatus: verified ? 'AWAITING_ADMIN_HANDOFF' : 'AWAITING_PAYMENT_VERIFICATION',
-      engineerHandoffStatus: 'WAITING_ADMIN_HANDOFF', paymentReviewNote: notes, updatedAt: now(),
+      engineerHandoffStatus: 'WAITING_ADMIN_HANDOFF', paymentReviewNote: verified ? '' : notes, updatedAt: now(),
     });
     const auditRef = verified ? db.collection('audit_logs').doc(`design_payment_approved_${requestId}`) : db.collection('audit_logs').doc();
     transaction.create(auditRef, { action: verified ? 'DESIGN_PAYMENT_APPROVED' : 'DESIGN_PAYMENT_RETURNED', actorId: user.uid, actorRole: user.role, targetType: 'payment_transactions', targetId: s.paymentRef.id, designRequestId: requestId, amount: s.terms.amount, quoteHash: s.terms.quoteHash, receiptEvidence: receipt, notes, createdAt: now() });

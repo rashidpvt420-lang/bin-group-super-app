@@ -179,6 +179,9 @@ test('receipt-backed approval and engineer handoff are atomic and replay-safe', 
   assert.equal(f.files.size, 1);
   const payment = f.records.get('payment_transactions/design_d1');
   assert.equal(payment.paymentVerified, true);
+  assert.equal(payment.adminNotes, '');
+  assert.equal(f.records.get('design_requests/d1').paymentReviewNote, '');
+  assert.equal(f.records.get('audit_logs/design_payment_approved_d1').notes, f.reviewData.internalNotes);
   assert.ok(payment.receiptGeneration);
   assert.equal(f.records.get('design_requests/d1').status, 'PAID');
   assert.equal(f.records.has('audit_logs/design_payment_approved_d1'), true);

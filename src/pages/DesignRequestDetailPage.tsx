@@ -239,6 +239,7 @@ export default function DesignRequestDetailPage() {
                 BACK TO STUDIO
             </Button>
             {actionError && <Alert severity="error" sx={{ mb: 3 }}>{actionError}</Alert>}
+            {request.paymentStatus === 'EVIDENCE_RETURNED' && <Alert severity="warning" sx={{ mb: 3 }}>Payment evidence needs review: {text(request.paymentReviewNote, 'Contact Finance to correct the receipt evidence.')}</Alert>}
             {mediaLoading && <Alert severity="info" sx={{ mb: 3 }}>Refreshing authorised private design media…</Alert>}
 
             <Grid container spacing={6}>
