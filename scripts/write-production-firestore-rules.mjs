@@ -44,6 +44,25 @@ if (!paymentTransactionsBlock) {
   failures.push('payment_transactions Finance Admin read authority could not be canonicalized');
 }
 
+// Launch evidence is append-only for browser clients. Protected workflow
+// publishers use the Admin SDK and bypass client rules, so browser Admins may
+// retain manual/history entry but can never forge github-actions provenance or
+// mutate/delete a protected record after it is written.
+const launchEvidenceCollections = [
+  ['launch_evidence', 'evidenceId'],
+  ['signed_in_smoke_checks', 'checkId'],
+];
+for (const [collection, documentId] of launchEvidenceCollections) {
+  const header = `    match /${collection}/{${documentId}} {`;
+  const currentBlock = matchBlock(header);
+  if (!currentBlock) {
+    failures.push(`${collection} rule block is missing or malformed`);
+    continue;
+  }
+  const hardenedBlock = `${header}\n      allow read: if isAdmin();\n      allow create: if isAdmin() &&\n        request.resource.data.get('source', '') != 'github-actions' &&\n        request.resource.data.get('executionGenerated', false) != true &&\n        request.resource.data.get('hardLaunchClaim', false) != true;\n      allow update, delete: if false;\n    }`;
+  source = source.replace(currentBlock, hardenedBlock);
+}
+
 const required = [
   'match /technician_live_locations/{technicianId} {',
   'allow create, update, delete: if false;',
@@ -56,9 +75,22 @@ const required = [
   "'invoice_registry', 'payroll_entries'",
   "'transactions',\n          'payroll_entries',\n          'invoices'",
   financeAdminPaymentTransactionsRead,
+  "request.resource.data.get('source', '') != 'github-actions'",
+  "request.resource.data.get('executionGenerated', false) != true",
+  "request.resource.data.get('hardLaunchClaim', false) != true",
 ];
 for (const token of required) {
   if (!source.includes(token)) failures.push(`required hardened rule fragment missing: ${token}`);
+}
+
+for (const [collection, documentId] of launchEvidenceCollections) {
+  const block = matchBlock(`    match /${collection}/{${documentId}} {`);
+  if (!block.includes('allow read: if isAdmin();')) failures.push(`${collection} Admin read authority is missing`);
+  if (!block.includes("request.resource.data.get('source', '') != 'github-actions'")) failures.push(`${collection} browser create can forge github-actions provenance`);
+  if (!block.includes("request.resource.data.get('executionGenerated', false) != true")) failures.push(`${collection} browser create can forge execution-generated evidence`);
+  if (!block.includes("request.resource.data.get('hardLaunchClaim', false) != true")) failures.push(`${collection} browser create can claim hard-launch authority`);
+  if (!block.includes('allow update, delete: if false;')) failures.push(`${collection} is not append-only for browser clients`);
+  if (/allow\s+(?:update|delete|write)[^;]*:\s*if\s+isAdmin\(\)/.test(block)) failures.push(`${collection} still permits privileged browser mutation`);
 }
 
 const technicianUpdateStart = source.indexOf('    function safeTechnicianTicketUpdate() {');
@@ -157,5 +189,6 @@ writeFileSync(manifestPath, `${JSON.stringify({
   payrollMirrorWrites: 'admin-sdk-only',
   payrollMirrorSelfServiceRead: 'technician-uid-scoped',
   financeAdminPaymentQueueRead: 'finance_admin-transactions-module-read-only',
+  launchEvidenceBrowserAuthority: 'manual-create-only-append-only-no-github-provenance',
 }, null, 2)}\n`, { mode: 0o600 });
 console.log(`[production-firestore-rules] wrote ${outputPath} sha256=${sha256}`);
