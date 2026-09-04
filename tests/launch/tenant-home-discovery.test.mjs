@@ -17,6 +17,15 @@ test('public role-first entry splits existing tenants from home seekers', async 
   assert.match(start, ARABIC);
 });
 
+test('publicly self-assigned tenants begin as home seekers while managed tenants keep their normal portal', async () => {
+  const gateway = await read('src/pages/RoleGatewayPage.tsx');
+
+  assert.match(gateway, /tenant: '\/tenant\/homes'/);
+  assert.match(gateway, /Continue as Tenant \/ Home Seeker/);
+  assert.match(gateway, /Find a verified home first/);
+  assert.match(gateway, /navigate\(roleId === 'owner' \? '\/onboarding' : \(roleHome\[roleId\] \|\| '\/'\)\)/);
+});
+
 test('tenant portal exposes the canonical home discovery route', async () => {
   const tenantApp = await read('src/tenant/TenantApp.tsx');
 
