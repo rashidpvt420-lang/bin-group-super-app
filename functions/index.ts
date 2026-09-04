@@ -12,6 +12,7 @@ import {
     verifyStorageObjectOwnership,
 } from "./ocrSecurityGuards";
 import { enforceAiUsageQuota } from "./aiUsageQuota";
+import { sendTwilioSMS } from "./smsDelivery";
 
 // [V10] PRODUCTION GRADE FULL-STACK STABILIZATION
 setGlobalOptions({ region: "europe-west3", enforceAppCheck: true });
@@ -1070,72 +1071,53 @@ export const approveMaintenanceProposal = onCall({ cors: true }, async (request)
 
 // ─── OMNI-CHANNEL NOTIFICATION ENGINE ───────────────────────────────────────
 
-async function sendTwilioSMS(to: string, message: string) {
-    const sid = process.env.TWILIO_ACCOUNT_SID;
-    const token = process.env.TWILIO_AUTH_TOKEN;
-    const from = process.env.TWILIO_FROM_NUMBER;
-    if (!sid || !token || !from) {
-        console.info(`[SMS MOCK] To: ${to}, Message: ${message}`);
-        return;
-    }
-    try {
-        const authString = Buffer.from(`${sid}:${token}`).toString("base64");
-        const response = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${sid}/Messages.json`, {
-            method: "POST",
-            headers: {
-                "Authorization": `Basic ${authString}`,
-                "Content-Type": "application/x-www-form-urlencoded"
-            },
-            body: new URLSearchParams({
-                To: to,
-                From: from,
-                Body: message
-            })
-        });
-        if (!response.ok) {
-            const errText = await response.text();
-            console.error("[Twilio SMS Error]:", errText);
-        } else {
-            console.log(`[Twilio SMS Success] Message sent to ${to}`);
-        }
-    } catch (error) {
-        console.error("[Twilio SMS Exception]:", error);
-    }
-}
-
 async function dispatchOmniNotification(userId: string, title: string, body: string, options: any = {}) {
     try {
         const userDoc = await db.collection("users").doc(userId).get();
         if (!userDoc.exists) return;
         const userData = userDoc.data();
 
-        // 1. Push notification (FCM)
-        const fcmTokens: string[] = userData?.fcmTokens || [];
-        if (fcmTokens.length > 0) {
-            const messages = fcmTokens.map(token => ({
-                token,
-                notification: { title, body },
-                data: { ...options.extraData, url: options.url || '/' }
-            }));
-            await admin.messaging().sendEach(messages);
-        }
+        // The canonical notification trigger resolves registered tokens and
+        // records provider outcomes. Do not read the retired users.fcmTokens array.
+        const channels: Array<{ name: string; operation: Promise<unknown> }> = [{
+            name: 'push',
+            operation: db.collection('notifications').add({
+                recipientId: userId, title, body,
+                type: options.type || 'STATUS_UPDATE',
+                ticketId: options.extraData?.ticketId || null,
+                link: options.url || '/',
+                metadata: options.extraData || {},
+                read: false,
+                pushDeliveryState: 'PENDING',
+                deliverySource: 'server:dispatchOmniNotification',
+                createdAt: FieldValue.serverTimestamp(),
+            }),
+        }];
 
-        // 2. Email Notification fallback
+        // Optional channel failures must not prevent the other attempts.
         if (userData?.email && options.type === 'CRITICAL') {
-            await db.collection("mail").add({
+            channels.push({ name: 'email', operation: db.collection("mail").add({
                 to: userData.email,
                 message: {
                     subject: `[BIN GROUP] ${title}`,
-                    html: `<p>${body}</p>`
+                    text: body,
                 },
                 createdAt: FieldValue.serverTimestamp()
-            });
+            }) });
         }
 
         // 3. SMS Notification fallback
         if (userData?.phone || userData?.mobile) {
             const phone = userData.phone || userData.mobile;
-            await sendTwilioSMS(phone, `[${title}] ${body}`);
+            channels.push({ name: 'sms', operation: sendTwilioSMS(phone, `[${title}] ${body}`).then((smsAttempt) => logAudit({
+                actorId: 'SYSTEM', actorRole: 'system',
+                action: 'OMNI_SMS_ATTEMPT', targetType: 'users', targetId: userId,
+                metadata: { ...smsAttempt, sensitiveValuesExcluded: true },
+            })) });
+        }
+        const results = await Promise.allSettled(channels.map((channel) => channel.operation));
+        for (const [index, result] of results.entries()) {
+            if (result.status === 'rejected') console.warn('[Notification channel failed]', { channel: channels[index].name });
         }
     } catch (err) {
         console.error("Notification Error:", err);

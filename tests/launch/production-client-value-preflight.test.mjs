@@ -45,6 +45,7 @@ function validEnv() {
     E2E_TECHNICIAN_B_EMAIL: '',
     E2E_TECHNICIAN_B_PASSWORD: '',
     LAUNCH_MODE: 'public',
+    PAYMENT_POLICY: 'phase1-manual',
     RUN_PUBLIC_RELEASE_GATE: 'true',
   };
 }

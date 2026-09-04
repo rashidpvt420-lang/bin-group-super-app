@@ -15,9 +15,12 @@ import {
 
 const PUBLIC_SELF_ASSIGN_ROLES = new Set(['owner', 'tenant', 'technician', 'broker']);
 
+// A tenant that already belongs to a managed unit receives its tenant role via
+// the controlled tenant lifecycle. Public self-assignment therefore represents
+// a home seeker first, so the safe default for that path is Home Discovery.
 const roleHome: Record<string, string> = {
     owner: '/owner/dashboard',
-    tenant: '/tenant/dashboard',
+    tenant: '/tenant/homes',
     technician: '/technician/dashboard',
     broker: '/broker/dashboard',
 };
@@ -41,9 +44,9 @@ const RoleGatewayPage: React.FC = () => {
         },
         {
             id: 'tenant',
-            label: tx('gateway.role.tenant', 'Continue as Tenant'),
+            label: tx('gateway.role.tenant', 'Continue as Tenant / Home Seeker'),
             icon: <Users size={40} />,
-            desc: 'Seamless issue reporting and residence management.'
+            desc: 'Find a verified home first, then continue into residence management after move-in.'
         },
         {
             id: 'technician',

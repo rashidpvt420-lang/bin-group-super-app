@@ -4,10 +4,11 @@ import { readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 
 test('Functions files explicitly import the FirebaseFirestore type namespace', () => {
-  const files = execFileSync('git', ['grep', '-l', 'FirebaseFirestore\\.', '--', 'functions/*.ts'], { encoding: 'utf8' })
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean);
+  // Include new source files before commit, so local validation matches CI.
+  const files = execFileSync('git', ['ls-files', '-z', '--cached', '--others', '--exclude-standard', '--', 'functions/*.ts'], { encoding: 'utf8' })
+    .split('\0')
+    .filter(Boolean)
+    .filter((file) => /FirebaseFirestore\./.test(readFileSync(file, 'utf8')));
 
   assert.ok(files.length > 20, 'expected to find the legacy Firestore namespace call sites');
   for (const file of files) {

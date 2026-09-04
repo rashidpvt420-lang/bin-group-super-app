@@ -32,6 +32,20 @@ describe('Storage Security Rules', () => {
     await testEnv.cleanup();
   });
 
+  it('design payment receipts are server-write-only even for Admin browsers', async () => {
+    const path = 'design-payment-receipts/design_1/receipt_hash';
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await uploadString(ref(context.storage(), path), '%PDF-1.7 receipt', 'raw', { contentType: 'application/pdf' });
+    });
+    for (const [uid, claims] of [['owner_a', { role: 'owner' }], ['tenant_a', { role: 'tenant' }], ['admin_a', { role: 'admin', admin: true }]]) {
+      const storage = testEnv.authenticatedContext(uid, claims).storage();
+      await assertFails(uploadString(ref(storage, path), 'forged receipt', 'raw', { contentType: 'application/pdf' }));
+      await assertFails(uploadString(ref(storage, `${path}_new`), 'forged receipt', 'raw', { contentType: 'application/pdf' }));
+    }
+    const adminStorage = testEnv.authenticatedContext('admin_a', { role: 'admin', admin: true }).storage();
+    await assertSucceeds(getBytes(ref(adminStorage, path)));
+  });
+
   it('contract and invoice email access requires verified email claims', async () => {
     await testEnv.withSecurityRulesDisabled(async (context) => {
       const serverDb = context.firestore();

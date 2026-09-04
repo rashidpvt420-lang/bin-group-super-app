@@ -37,12 +37,11 @@ on:
           - public
         default: bank-pilot
       payment_policy:
-        description: 'Phase 1 Cash/Cheque or Phase 2 Stripe'
+        description: 'Current fixed policy: Phase 1 Cash/Cheque only'
         required: true
         type: choice
         options:
           - phase1-manual
-          - phase2-stripe
         default: phase1-manual
       run_public_release_gate:
         description: 'Required for public mode; runs the protected postdeploy public-release gate'
@@ -50,7 +49,7 @@ on:
         type: boolean
         default: false
       deployment_payload_json:
-        description: 'JSON containing incident, hard-clearance, and optional Phase 2 Stripe live-proof fields'
+        description: 'JSON containing incident and hard-clearance fields; legacy Stripe proof IDs must remain empty'
         required: false
         type: string
         default: '{"incident_attestation":"ATTEST_PRODUCTION_INCIDENT_STATE_CLEAR","incident_active_json":"[]","incident_requires_rollback":"false","incident_rollback_reason":"","incident_last_deployment_failed":"false","incident_last_deployment_failed_at":"","incident_evidence_refs":"ADMIN_MFA_BOOTSTRAP_HOSTING","hard_clearance_run_id":"","stripe_live_checkout_session_id":"","stripe_live_webhook_event_id":""}'
@@ -68,15 +67,16 @@ env:
   GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID || 'bin-group-57c60' }}
   VITE_GOOGLE_MAPS_API_KEY: ${{ secrets.VITE_GOOGLE_MAPS_API_KEY }}
   VITE_APP_CHECK_SITE_KEY: ${{ secrets.VITE_APP_CHECK_SITE_KEY }}
+  FIREBASE_APPCHECK_ENTERPRISE_SITE_KEY: ${{ secrets.FIREBASE_APPCHECK_ENTERPRISE_SITE_KEY }}
   VITE_ENABLE_FIREBASE_APPCHECK: 'true'
   VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
   VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
   VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
   VITE_FIREBASE_VAPID_KEY: ${{ secrets.VITE_FIREBASE_VAPID_KEY }}
   REACT_APP_ENABLE_FIREBASE_APPCHECK: 'true'
-  REACT_APP_APP_CHECK_SITE_KEY: ${{ secrets.VITE_APP_CHECK_SITE_KEY }}
+  REACT_APP_APP_CHECK_SITE_KEY: ${{ secrets.FIREBASE_APPCHECK_ENTERPRISE_SITE_KEY }}
   REACT_APP_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
-  REACT_APP_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
+  REACT_APP_ADMIN_FIREBASE_APP_ID: 1:123413252227:web:285cb53bc26626d699f3b6
   REACT_APP_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
   REACT_APP_FIREBASE_AUTH_DOMAIN: bin-group-57c60.firebaseapp.com
   REACT_APP_FIREBASE_PROJECT_ID: bin-group-57c60
@@ -117,6 +117,10 @@ jobs:
             || fail "expected_commit_sha must be a full lowercase 40-character SHA."
           [[ "$EXPECTED_COMMIT_SHA" == "$CURRENT_COMMIT_SHA" ]] \
             || fail "expected_commit_sha must equal the workflow commit SHA."
+          [[ "$PAYMENT_POLICY_INPUT" == "phase1-manual" ]] \
+            || fail "Current production payment_policy must be phase1-manual while PHASE1_CASH_CHEQUE_V1 is active."
+          [[ -z "$STRIPE_LIVE_SESSION_ID_INPUT" && -z "$STRIPE_LIVE_EVENT_ID_INPUT" ]] \
+            || fail "Phase 1 manual mode must not provide Stripe proof identifiers."
           if [[ -n "$AUTHORIZATION_ACTOR_INPUT" ]]; then
             [[ "$GITHUB_ACTOR" == "github-actions[bot]" ]] \
               || fail "authorization_actor may only be supplied by github-actions[bot]."
@@ -129,34 +133,23 @@ jobs:
               || fail "Public mode requires run_public_release_gate=true."
             [[ "$HARD_CLEARANCE_RUN_ID_INPUT" =~ ^[0-9]+$ ]] \
               || fail "Public mode requires a numeric hard-clearance run ID."
-            if [[ "$PAYMENT_POLICY_INPUT" == "phase2-stripe" ]]; then
-              [[ "$STRIPE_LIVE_SESSION_ID_INPUT" =~ ^cs_live_[A-Za-z0-9_]+$ ]] \
-                || fail "Phase 2 Stripe public mode requires a live Stripe checkout session ID."
-              [[ "$STRIPE_LIVE_EVENT_ID_INPUT" =~ ^evt_[A-Za-z0-9_]+$ ]] \
-                || fail "Phase 2 Stripe public mode requires a Stripe webhook event ID."
-            elif [[ "$PAYMENT_POLICY_INPUT" == "phase1-manual" ]]; then
-              [[ -z "$STRIPE_LIVE_SESSION_ID_INPUT" && -z "$STRIPE_LIVE_EVENT_ID_INPUT" ]] \
-                || fail "Phase 1 manual mode must not provide Stripe proof identifiers."
-            else
-              fail "Public payment_policy must be phase1-manual or phase2-stripe."
-            fi
           else
+            [[ "$LAUNCH_MODE_INPUT" == "bank-pilot" ]] \
+              || fail "launch_mode must be bank-pilot or public."
             [[ "$RUN_PUBLIC_RELEASE_GATE_INPUT" == "false" ]] \
               || fail "Bank-pilot mode requires run_public_release_gate=false."
-            [[ "$PAYMENT_POLICY_INPUT" == "phase1-manual" ]] \
-              || fail "Bank-pilot mode uses the Phase 1 manual payment policy."
           fi
 
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Use Node.js 22
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '22'
 
       - name: Use Java 21 for Firebase emulators
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '21'
@@ -288,6 +281,10 @@ jobs:
             || fail "expected_commit_sha must be a full lowercase 40-character SHA."
           [[ "$EXPECTED_COMMIT_SHA" == "$CURRENT_COMMIT_SHA" ]] \
             || fail "expected_commit_sha must equal the workflow commit SHA."
+          [[ "$PAYMENT_POLICY_INPUT" == "phase1-manual" ]] \
+            || fail "Current production payment_policy must be phase1-manual while PHASE1_CASH_CHEQUE_V1 is active."
+          [[ -z "$STRIPE_LIVE_SESSION_ID_INPUT" && -z "$STRIPE_LIVE_EVENT_ID_INPUT" ]] \
+            || fail "Phase 1 manual mode must not provide Stripe proof identifiers."
           if [[ -n "$AUTHORIZATION_ACTOR_INPUT" ]]; then
             [[ "$GITHUB_ACTOR" == "github-actions[bot]" ]] \
               || fail "authorization_actor may only be supplied by github-actions[bot]."
@@ -300,29 +297,18 @@ jobs:
               || fail "Public mode requires run_public_release_gate=true."
             [[ "$HARD_CLEARANCE_RUN_ID_INPUT" =~ ^[0-9]+$ ]] \
               || fail "Public mode requires a numeric hard-clearance run ID."
-            if [[ "$PAYMENT_POLICY_INPUT" == "phase2-stripe" ]]; then
-              [[ "$STRIPE_LIVE_SESSION_ID_INPUT" =~ ^cs_live_[A-Za-z0-9_]+$ ]] \
-                || fail "Phase 2 Stripe public mode requires a live Stripe checkout session ID."
-              [[ "$STRIPE_LIVE_EVENT_ID_INPUT" =~ ^evt_[A-Za-z0-9_]+$ ]] \
-                || fail "Phase 2 Stripe public mode requires a Stripe webhook event ID."
-            elif [[ "$PAYMENT_POLICY_INPUT" == "phase1-manual" ]]; then
-              [[ -z "$STRIPE_LIVE_SESSION_ID_INPUT" && -z "$STRIPE_LIVE_EVENT_ID_INPUT" ]] \
-                || fail "Phase 1 manual mode must not provide Stripe proof identifiers."
-            else
-              fail "Public payment_policy must be phase1-manual or phase2-stripe."
-            fi
           else
+            [[ "$LAUNCH_MODE_INPUT" == "bank-pilot" ]] \
+              || fail "launch_mode must be bank-pilot or public."
             [[ "$RUN_PUBLIC_RELEASE_GATE_INPUT" == "false" ]] \
               || fail "Bank-pilot mode requires run_public_release_gate=false."
-            [[ "$PAYMENT_POLICY_INPUT" == "phase1-manual" ]] \
-              || fail "Bank-pilot mode uses the Phase 1 manual payment policy."
           fi
 
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Use Node.js 22
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '22'
 
@@ -357,15 +343,36 @@ jobs:
           [[ ${#APPROVAL_HMAC_KEY} -ge 32 ]]
 
       - name: Authenticate to Google Cloud by Workload Identity Federation
-        uses: google-github-actions/auth@v2
+        id: gcp_auth
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
         with:
           workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          access_token_lifetime: '7200s'
           create_credentials_file: true
           export_environment_variables: true
 
+      # production-otp-mailbox-preflight falls back to `gcloud secrets
+      # versions access` when the Firebase CLI cannot read a protected value.
+      # Install it explicitly; relying on the hosted runner image made the
+      # fallback fail closed with an indistinguishable missing-secret error.
+      - name: Set up Google Cloud CLI for protected Secret Manager checks
+        uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3.0.1
+        with:
+          version: '>= 416.0.0'
+          project_id: bin-group-57c60
+
       - name: Install dependencies with retry
         run: bash scripts/npm-install-retry.sh
+
+      - name: Verify Firebase project billing and Cloud Functions deployment access
+        run: node scripts/verify-firebase-deployment-readiness.mjs
+
+      - name: Resolve canonical Admin Enterprise App Check config
+        run: node scripts/resolve-admin-app-check-site-key.mjs
+
+      - name: Verify canonical Founder TOTP sign-in before deploy
+        run: node scripts/verify-founder-totp-signin.mjs
 
       - name: Verify predeploy hard-clearance run provenance
         if: ${{ inputs.launch_mode == 'public' }}
@@ -443,6 +450,7 @@ jobs:
 
       - name: Validate resolved E2E role identity isolation before deploy
         env:
+          E2E_REQUIRE_FOUNDER_MFA: 'false'
           E2E_OWNER_MAILBOX_CLIENT_ID: ${{ secrets.E2E_OWNER_MAILBOX_CLIENT_ID }}
           E2E_OWNER_MAILBOX_CLIENT_SECRET: ${{ secrets.E2E_OWNER_MAILBOX_CLIENT_SECRET }}
           E2E_OWNER_MAILBOX_REFRESH_TOKEN: ${{ secrets.E2E_OWNER_MAILBOX_REFRESH_TOKEN }}
@@ -452,7 +460,7 @@ jobs:
         run: npm run test:e2e:env
 
       - name: Use Java 21 for Firestore rules emulator
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '21'
@@ -476,9 +484,8 @@ jobs:
         env:
           CI: false
           REACT_APP_ENABLE_FIREBASE_APPCHECK: 'true'
-          REACT_APP_APP_CHECK_SITE_KEY: ${{ secrets.VITE_APP_CHECK_SITE_KEY }}
           REACT_APP_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
-          REACT_APP_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
+          REACT_APP_ADMIN_FIREBASE_APP_ID: 1:123413252227:web:285cb53bc26626d699f3b6
           REACT_APP_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
           REACT_APP_FIREBASE_AUTH_DOMAIN: bin-group-57c60.firebaseapp.com
           REACT_APP_FIREBASE_PROJECT_ID: bin-group-57c60
@@ -492,6 +499,13 @@ jobs:
         run: |
           set -euo pipefail
           npm run build:functions
+          echo "ok=true" >> "$GITHUB_OUTPUT"
+
+      - name: Verify compiled Firebase Function secret contract
+        id: function_secret_contract
+        run: |
+          set -euo pipefail
+          node scripts/verify-firebase-deployed-function-secret-contract.mjs
           echo "ok=true" >> "$GITHUB_OUTPUT"
 
       - name: Measure Functions discovery load
@@ -581,6 +595,8 @@ jobs:
         env:
           DEPLOYMENT_ENVIRONMENT: production
           GCP_PROJECT_ID: ${{ env.GCP_PROJECT_ID }}
+          FIREBASE_PROJECT_ID: ${{ env.GCP_PROJECT_ID }}
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ steps.gcp_auth.outputs.credentials_file_path }}
           VALIDATED_ARTIFACT_DIGEST: ${{ steps.artifact_digest.outputs.digest }}
         run: node scripts/deploy-firebase-production.mjs
 
@@ -595,12 +611,15 @@ jobs:
         run: node scripts/verify-same-run-deployment-artifact.mjs
 
       - name: Authenticate Google Cloud for E2E fixtures
-        uses: google-github-actions/auth@v2
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
         with:
           workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
           create_credentials_file: true
           export_environment_variables: true
+
+      - name: Verify or synchronize canonical Founder evidence credential
+        run: node scripts/synchronize-founder-evidence-credential.mjs
 
       - name: Validate full live E2E secrets and App Check UUID
         env:
@@ -633,7 +652,7 @@ jobs:
 
       - name: Upload failed business evidence diagnostics
         if: ${{ failure() }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: business-evidence-diagnostics-${{ github.sha }}-${{ github.run_id }}
           path: |
@@ -653,6 +672,19 @@ jobs:
           E2E_BROKER_MAILBOX_CLIENT_SECRET: ${{ secrets.E2E_BROKER_MAILBOX_CLIENT_SECRET }}
           E2E_BROKER_MAILBOX_REFRESH_TOKEN: ${{ secrets.E2E_BROKER_MAILBOX_REFRESH_TOKEN }}
         run: npm run test:e2e:launch-audit:live
+
+      - name: Upload failed live launch audit diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: live-launch-audit-diagnostics-${{ github.sha }}-${{ github.run_id }}
+          path: |
+            launch_package/artifacts/*.json
+            launch_package/artifacts/*.stdio.log
+            test-results/**
+            playwright-report/**
+          if-no-files-found: warn
+          retention-days: 14
 
       - name: Evaluate controlled-pilot eligibility
         env:
@@ -678,7 +710,7 @@ jobs:
         run: npm run hard-launch:decision
 
       - name: Upload production deployment metadata after verification
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: production-deployment-${{ github.sha }}
           path: |
@@ -737,10 +769,10 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Use Node.js 22
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '22'
 
@@ -760,7 +792,7 @@ jobs:
         run: bash scripts/npm-install-retry.sh
 
       - name: Authenticate to Google Cloud for live postdeploy proofs
-        uses: google-github-actions/auth@v2
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
         with:
           workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
@@ -971,16 +1003,6 @@ jobs:
           VALIDATED_ARTIFACT_DIGEST: ${{ needs.deploy-firebase-production-stack.outputs.validated_artifact_digest }}
         run: node scripts/verify-phase1-manual-payment-proof.mjs
 
-      - name: Verify recent live Stripe payment and processed webhook
-        if: ${{ inputs.payment_policy == 'phase2-stripe' }}
-        env:
-          STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
-          STRIPE_LIVE_CHECKOUT_SESSION_ID: ${{ fromJSON(inputs.deployment_payload_json).stripe_live_checkout_session_id }}
-          STRIPE_LIVE_WEBHOOK_EVENT_ID: ${{ fromJSON(inputs.deployment_payload_json).stripe_live_webhook_event_id }}
-          RELEASE_ID: ${{ github.run_id }}-${{ github.run_attempt }}
-          VALIDATED_ARTIFACT_DIGEST: ${{ needs.deploy-firebase-production-stack.outputs.validated_artifact_digest }}
-        run: node scripts/verify-stripe-live-proof.mjs
-
       - name: Postdeploy release gate
         id: postdeploy_gate
         env:
@@ -1013,12 +1035,11 @@ jobs:
 
       - name: Upload public release clearance artifact
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: public-release-clearance-${{ github.sha }}
           path: |
             launch_package/public-release-status.json
-            launch_package/stripe-live-proof.json
             launch_package/phase1-manual-payment-proof.json
             launch_package/pilot-incident-report.json
             launch_package/launch-evidence-batch.json

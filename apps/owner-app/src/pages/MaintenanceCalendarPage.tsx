@@ -67,7 +67,7 @@ function normalizeTicket(docSnap: any): ScheduledTask | null {
 function uniqueTasks(tasks: ScheduledTask[]) {
     const byId = new Map<string, ScheduledTask>();
     tasks.forEach((task) => byId.set(task.id, task));
-    return [...byId.values()];
+    return Array.from(byId.values());
 }
 
 const MaintenanceCalendarPage: React.FC = () => {

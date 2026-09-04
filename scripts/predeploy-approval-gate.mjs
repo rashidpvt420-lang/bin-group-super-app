@@ -23,6 +23,8 @@ import { HARD_LAUNCH_CLAIM } from './lib/launch-honesty.mjs';
 import { runProductionOtpMailboxPreflight } from './lib/production-otp-mailbox-preflight.mjs';
 import { runSmtpProviderPreflight } from './lib/smtp-provider-preflight.mjs';
 
+const PHASE1_PAYMENT_POLICY = 'phase1-manual';
+
 export function runPredeployApprovalGate({
   root = process.cwd(),
   env = process.env,
@@ -38,6 +40,10 @@ export function runPredeployApprovalGate({
     'VALIDATED_ARTIFACT_DIGEST',
     failures,
   );
+  const environmentPaymentPolicy = String(env.PAYMENT_POLICY || '').trim().toLowerCase();
+  if (environmentPaymentPolicy !== PHASE1_PAYMENT_POLICY) {
+    failures.push('PAYMENT_POLICY must equal phase1-manual while PHASE1_CASH_CHEQUE_V1 is active.');
+  }
 
   const authorizedEmails = parseAuthorizedFounderEmails(env);
   if (!authorizedEmails || authorizedEmails.length === 0) {
@@ -49,7 +55,7 @@ export function runPredeployApprovalGate({
   const approvalPath = path.join(root, PREDEPLOY_APPROVAL_PATH);
   if (!existsSync(approvalPath)) {
     failures.push(
-      `Missing ${PREDEPLOY_APPROVAL_PATH}. Predeploy approval must bind commitSha, artifactDigest, releaseId, approvedAt, approvedBy.`,
+      `Missing ${PREDEPLOY_APPROVAL_PATH}. Predeploy approval must bind commitSha, artifactDigest, releaseId, approvedAt, approvedBy and paymentPolicy.`,
     );
   } else {
     let approval = null;
@@ -65,7 +71,7 @@ export function runPredeployApprovalGate({
     }
 
     if (approval) {
-      for (const field of ['commitSha', 'artifactDigest', 'releaseId', 'approvedAt', 'approvedBy']) {
+      for (const field of ['commitSha', 'artifactDigest', 'releaseId', 'approvedAt', 'approvedBy', 'paymentPolicy']) {
         if (!String(approval[field] || '').trim()) {
           failures.push(`predeploy-approval.json missing required field: ${field}`);
         }
@@ -108,6 +114,14 @@ export function runPredeployApprovalGate({
       if (launchMode !== 'bank-pilot' && launchMode !== 'public') {
         failures.push('launchMode must be "bank-pilot" or "public".');
       }
+
+      const approvalPaymentPolicy = String(approval.paymentPolicy || '').trim().toLowerCase();
+      if (approvalPaymentPolicy !== PHASE1_PAYMENT_POLICY) {
+        failures.push('predeploy approval paymentPolicy must equal phase1-manual while PHASE1_CASH_CHEQUE_V1 is active.');
+      }
+      if (environmentPaymentPolicy && approvalPaymentPolicy && approvalPaymentPolicy !== environmentPaymentPolicy) {
+        failures.push('predeploy approval paymentPolicy does not match PAYMENT_POLICY.');
+      }
     }
   }
 
@@ -127,8 +141,8 @@ export function runPredeployApprovalGate({
 
   const launchMode = String(env.LAUNCH_MODE || '').trim();
   if (launchMode === 'public') {
-    // Public mode's Stripe proof is generated after deployment by querying
-    // Stripe and the processed webhook registry; a static boolean is rejected.
+    // Current public mode remains Phase 1 only. Exact-artifact Cash/Cheque proof
+    // is generated after deployment and revalidated by the postdeploy gate.
   } else if (launchMode === 'bank-pilot') {
     if (String(env.LAUNCH_BANK_ONLY || '') !== '1' && String(env.LAUNCH_BANK_ONLY || '') !== 'true') {
       failures.push('bank-pilot mode requires LAUNCH_BANK_ONLY=1.');
@@ -162,7 +176,7 @@ if (isDirectRun) {
   }
   const result = runPredeployApprovalGate();
   if (result.ok) {
-    console.log('PASS — protected-environment predeploy checks succeeded.');
+    console.log('PASS — protected-environment predeploy checks succeeded for Phase 1 Cash/Cheque policy.');
     process.exit(0);
   }
   console.error('FAIL — production deployment is NOT authorized:\n');

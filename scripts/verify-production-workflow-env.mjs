@@ -10,6 +10,7 @@ const EXPECTED_MAIN_URL = 'https://bin-group-57c60.web.app';
 const EXPECTED_ADMIN_URL = 'https://bin-group-admin-panel.web.app';
 const CANONICAL_FOUNDER_EMAIL = 'ceo@bin-groups.com';
 const ADMIN_MFA_BOOTSTRAP_MARKER = 'ADMIN_MFA_BOOTSTRAP_HOSTING';
+const PHASE1_PAYMENT_POLICY = 'phase1-manual';
 const CANONICAL_INCIDENT_REFERENCE = 'https://github.com/rashidpvt420-lang/bin-group-super-app/issues/434';
 const OWNER_REQUEST_REFERENCE_RE = /^https:\/\/github\.com\/rashidpvt420-lang\/bin-group-super-app\/pull\/\d+$/;
 const FAILED_PRODUCTION_RUN_REFERENCE_RE = /^GITHUB_PRODUCTION_RUN_[1-9]\d*$/;
@@ -153,6 +154,7 @@ export function adminMfaBootstrapWorkflowState(env = process.env) {
     String(dispatch.inputs?.hard_launch_confirmation || '').trim() === 'AUTHORIZE_HARD_PUBLIC_LAUNCH_BIN_GROUP' &&
     String(dispatch.inputs?.expected_commit_sha || '').trim() === value(env, 'GITHUB_SHA') &&
     String(dispatch.inputs?.launch_mode || '').trim() === 'bank-pilot' &&
+    String(dispatch.inputs?.payment_policy || '').trim() === PHASE1_PAYMENT_POLICY &&
     String(dispatch.inputs?.run_public_release_gate || '').trim() === 'false';
 
   const requested = explicitMarkerRequested || canonicalOwnerRecoveryRequested;
@@ -165,6 +167,7 @@ export function adminMfaBootstrapWorkflowState(env = process.env) {
     value(env, 'GITHUB_REF') === 'refs/heads/main' &&
     exactMainSha &&
     value(env, 'LAUNCH_MODE') === 'bank-pilot' &&
+    value(env, 'PAYMENT_POLICY') === PHASE1_PAYMENT_POLICY &&
     value(env, 'RUN_PUBLIC_RELEASE_GATE') === 'false';
 
   return {
@@ -255,7 +258,7 @@ export function validateProductionWorkflowEnv(env = process.env) {
     failures.push(bootstrapState.dispatchError);
   }
   if (bootstrapState.requested && !bootstrapState.authorized) {
-    failures.push('Admin MFA bootstrap is allowed only for exact-main workflow_dispatch bank-pilot runs with the public-release gate disabled');
+    failures.push('Admin MFA bootstrap is allowed only for exact-main workflow_dispatch bank-pilot runs with Phase 1 payments and the public-release gate disabled');
   }
   if (!validFounderTotp && !validFounderRealMfaCode && !bootstrapState.authorized) {
     failures.push('Set a valid E2E_FOUNDER_TOTP_SECRET or six-digit E2E_FOUNDER_REAL_MFA_CODE');
@@ -325,6 +328,11 @@ export function validateProductionWorkflowEnv(env = process.env) {
     failures.push('bank-pilot launch mode requires RUN_PUBLIC_RELEASE_GATE=false');
   }
 
+  const paymentPolicy = value(env, 'PAYMENT_POLICY').toLowerCase();
+  if (paymentPolicy !== PHASE1_PAYMENT_POLICY) {
+    failures.push('PAYMENT_POLICY must equal phase1-manual while PHASE1_CASH_CHEQUE_V1 is active');
+  }
+
   return failures;
 }
 
@@ -336,6 +344,7 @@ export function productionWorkflowEnvSummary(env = process.env) {
     mainUrlMatched: value(env, 'E2E_BASE_URL').replace(/\/+$/, '') === EXPECTED_MAIN_URL,
     adminUrlMatched: value(env, 'E2E_ADMIN_BASE_URL').replace(/\/+$/, '') === EXPECTED_ADMIN_URL,
     appCheckEnabled: value(env, 'VITE_ENABLE_FIREBASE_APPCHECK') === 'true',
+    phase1PaymentPolicyMatched: value(env, 'PAYMENT_POLICY').toLowerCase() === PHASE1_PAYMENT_POLICY,
     founderMfaConfigured:
       (value(env, 'E2E_FOUNDER_TOTP_SECRET').toUpperCase().replace(/[\s=-]/g, '').length >= 16 &&
         /^[A-Z2-7]+$/.test(value(env, 'E2E_FOUNDER_TOTP_SECRET').toUpperCase().replace(/[\s=-]/g, ''))) ||
@@ -366,7 +375,7 @@ if (invokedPath && invokedPath === fileURLToPath(import.meta.url)) {
     console.log('[production-preflight] Authorized Admin MFA bootstrap marker normalized for the exact protected deploy step');
   }
   console.log(
-    '[production-preflight] PASS — deployment, five-role, App Check, HR, Maps and Web Push values are configured '
-      + `(required=${summary.requiredValueCount}, hr=${summary.hrModuleEnabledByProductionWriter}, admin_mfa_bootstrap=${summary.adminMfaBootstrapAuthorized}, secrets_excluded=${summary.sensitiveValuesExcluded})`,
+    '[production-preflight] PASS — deployment, five-role, App Check, HR, Maps, Web Push and Phase 1 Cash/Cheque policy are configured '
+      + `(required=${summary.requiredValueCount}, phase1=${summary.phase1PaymentPolicyMatched}, hr=${summary.hrModuleEnabledByProductionWriter}, admin_mfa_bootstrap=${summary.adminMfaBootstrapAuthorized}, secrets_excluded=${summary.sensitiveValuesExcluded})`,
   );
 }
