@@ -135,7 +135,12 @@ async function verifyRealEnterpriseAppCheck(page: Page, url: string, surface: 's
 }
 
 test.describe('Real Enterprise App Check fail-closed staging proof', () => {
-  const { appUrl, adminUrl } = resolveStagingUrls();
+  let appUrl = '';
+  let adminUrl = '';
+
+  test.beforeAll(() => {
+    ({ appUrl, adminUrl } = resolveStagingUrls());
+  });
 
   test('Staff App obtains a real reCAPTCHA Enterprise App Check token', async ({ page }) => {
     await verifyRealEnterpriseAppCheck(page, appUrl, 'staff-app');
