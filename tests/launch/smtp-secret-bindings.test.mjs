@@ -53,8 +53,8 @@ test('production secret preflight requires the Owner OTP pepper for every launch
     productionSecretPreflight.indexOf('requiredFirebaseBankPilotSecrets'),
   );
   assert.match(deploymentContract, /OWNER_CONTRACT_OTP_PEPPER/);
-  assert.match(productionSecretPreflight, /\.\.\.requiredFirebaseDeploymentSecrets/);
-  assert.match(productionSecretPreflight, /\.\.\.requiredFirebaseBankPilotSecrets/);
+  assert.match(productionSecretPreflight, /requiredFirebaseBankPilotSecrets = Object\.freeze\(\[\s*\.\.\.requiredFirebaseDeploymentSecrets/);
+  assert.match(productionSecretPreflight, /requiredFirebasePublicSecrets = Object\.freeze\(\[\s*\.\.\.requiredFirebaseDeploymentSecrets/);
 });
 
 test('Broker payout OTP request binds SMTP secrets and its dedicated HMAC pepper', () => {

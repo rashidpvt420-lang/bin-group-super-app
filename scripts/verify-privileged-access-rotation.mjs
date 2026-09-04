@@ -61,23 +61,17 @@ initializeFirebaseAdmin(admin, projectId);
 const db = admin.firestore();
 const now = Date.now();
 
+// Phase 1 deliberately excludes Stripe/Card. The rotation gate therefore checks
+// only an active provider credential plus the privileged Admin identity. Adding
+// Stripe credentials here would turn a disabled future provider into a current
+// launch prerequisite and contradict PHASE1_CASH_CHEQUE_V1.
 const googleAuth = new GoogleAuth({ scopes: ['https://www.googleapis.com/auth/cloud-platform'] });
 const googleClient = await googleAuth.getClient();
-const stripeKeyResponse = await googleClient.request({
-  url: 'https://secretmanager.googleapis.com/v1/projects/bin-group-57c60/secrets/STRIPE_SECRET_KEY/versions?pageSize=100',
-  method: 'GET',
-});
-const stripeWebhookResponse = await googleClient.request({
-  url: 'https://secretmanager.googleapis.com/v1/projects/bin-group-57c60/secrets/STRIPE_WEBHOOK_SECRET/versions?pageSize=100',
-  method: 'GET',
-});
 const smtpPasswordResponse = await googleClient.request({
   url: 'https://secretmanager.googleapis.com/v1/projects/bin-group-57c60/secrets/SMTP_PASS/versions?pageSize=100',
   method: 'GET',
 });
 const rotatedSecrets = [
-  verifySecretVersions('STRIPE_SECRET_KEY', stripeKeyResponse.data, now),
-  verifySecretVersions('STRIPE_WEBHOOK_SECRET', stripeWebhookResponse.data, now),
   verifySecretVersions('SMTP_PASS', smtpPasswordResponse.data, now),
 ];
 
@@ -110,16 +104,17 @@ const proof = {
   sourceRunId,
   sourceSystem: 'Google Secret Manager and Firebase Authentication',
   observedAt,
+  phase1PaymentPolicy: 'PHASE1_CASH_CHEQUE_V1',
+  disabledProvidersExcluded: ['STRIPE', 'BANK_TRANSFER'],
   previousCredentialsRevoked: true,
   rotationRecordId,
   rotatedSecrets,
   adminUidHash: hash(adminUser.uid),
   adminTokensValidAfterTime: new Date(tokensValidAfterMs).toISOString(),
   checks: [
-    { name: 'Stripe secret key rotated and previous version revoked', status: 'passed', reference: 'secretmanager://STRIPE_SECRET_KEY' },
-    { name: 'Stripe webhook secret rotated and previous version revoked', status: 'passed', reference: 'secretmanager://STRIPE_WEBHOOK_SECRET' },
-    { name: 'SMTP password rotated and previous version revoked', status: 'passed', reference: 'secretmanager://SMTP_PASS' },
+    { name: 'Active SMTP password rotated and previous version revoked', status: 'passed', reference: 'secretmanager://SMTP_PASS' },
     { name: 'Admin password rotation record verified against token revocation', status: 'passed', reference: 'firebase-auth://admin-credential-rotation' },
+    { name: 'Disabled Stripe/Card and Bank Transfer excluded from Phase 1 rotation requirements', status: 'passed', reference: 'policy://PHASE1_CASH_CHEQUE_V1' },
   ],
 };
 mkdirSync('launch_package', { recursive: true });

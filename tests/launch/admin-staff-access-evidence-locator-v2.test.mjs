@@ -32,6 +32,7 @@ test('protected Admin replay separates Phase 1 payment repair from the canonical
   assert.ok(guardIndex >= 0 && migrationIndex > guardIndex, 'Staff Access migration must run only after the protected production guard');
 
   const hrUi = read('apps/admin-panel/src/pages/admin/HRManagementPage.tsx');
-  assert.ok(hrUi.includes('<Tab label="STAFF ACCESS" disabled={!isHRManager} />'));
-  assert.ok(hrUi.includes('{tab === 4 && isHRManager && <StaffAccessPage />}'));
+  assert.ok(hrUi.includes('<Tab label="STAFF ACCESS" disabled={!isProvisioningAdmin} />'));
+  assert.ok(hrUi.includes('{tab === 4 && isProvisioningAdmin && <StaffAccessPage />}'));
+  assert.ok(hrUi.includes("provisioningAdminRoles = new Set(['super_admin', 'admin', 'ceo'])"));
 });

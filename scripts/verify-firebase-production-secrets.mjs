@@ -12,20 +12,17 @@ export const requiredFirebaseAiSecrets = Object.freeze([
   'GEMINI_API_KEY',
 ]);
 
-// These secrets are bound by deployable production Functions even when the
-// product is running in the restricted bank-pilot mode. They must be verified
-// before the quota-safe Functions rollout starts; otherwise Firebase can spend
-// an hour updating earlier batches before discovering an inaccessible secret.
 export const requiredFirebaseInfrastructureSecrets = Object.freeze([
   'IOT_GATEWAY_TOKEN',
 ]);
 
-// Firebase deploy analyzes the compiled runtime as one codebase.  A Function
-// may be feature-gated at request time, but every Secret Manager key attached
-// to any exported endpoint must still exist with an enabled version before a
-// Functions deployment can succeed.  Keep this list in lockstep with
-// functions/lib/runtimeAll.js; the compiled-runtime contract verifier and its
-// regression test fail closed when it drifts.
+/**
+ * Exact Secret Manager contract for the currently exported Phase 1 production
+ * Functions runtime. Stripe/Card is disabled by PHASE1_CASH_CHEQUE_V1 and the
+ * deployed runtime exports stripePaymentPhase1Hold, which binds no Stripe
+ * secrets. Dormant future-phase Stripe source must never make its credentials a
+ * Phase 1 deployment prerequisite.
+ */
 export const requiredFirebaseDeploymentSecrets = Object.freeze([
   'SMTP_USER',
   'SMTP_PASS',
@@ -34,22 +31,20 @@ export const requiredFirebaseDeploymentSecrets = Object.freeze([
   ...requiredFirebaseInfrastructureSecrets,
   'QR_SIGNING_SECRET',
   ...requiredFirebaseAiSecrets,
-  'STRIPE_SECRET_KEY',
-  'STRIPE_WEBHOOK_SECRET',
   'WHATSAPP_TOKEN',
   'WHATSAPP_PHONE_NUMBER_ID',
   'WHATSAPP_VERIFY_TOKEN',
   'WHATSAPP_APP_SECRET',
 ]);
 
-// Launch mode controls user-facing release gates, not the deployed Functions
-// secret contract. Both supported modes deploy the same compiled runtime.
+// `bank-pilot` is a legacy internal controlled-pilot mode identifier. It does
+// not mean Bank Transfer and it does not change the Phase 1 Cash/Cheque policy.
 export const requiredFirebaseBankPilotSecrets = Object.freeze([
   ...requiredFirebaseDeploymentSecrets,
 ]);
 
 export const requiredFirebasePublicSecrets = Object.freeze([
-  ...requiredFirebaseBankPilotSecrets,
+  ...requiredFirebaseDeploymentSecrets,
 ]);
 
 export function requiredFirebaseProductionSecretsForMode(launchMode) {
@@ -123,10 +118,10 @@ export async function assertExactCurrentMain({
       },
     },
   );
+
   if (!response?.ok) {
     const status = response?.status || 'unknown';
-    const isPrivateRepoAuthorizationFailure = Number(status) === 403;
-    if (isPrivateRepoAuthorizationFailure) {
+    if (Number(status) === 403) {
       const verifiedMainSha = resolveDeployVerifiedMainSha({ env, apiStatus: status });
       if (verifiedMainSha) {
         if (verifiedMainSha !== githubSha) {
@@ -243,10 +238,7 @@ export async function verifyFirebaseSecretMetadata({
         nonInteractive: true,
       });
       const versions = Array.isArray(result?.secrets) ? result.secrets : [];
-      const hasAvailableVersion = versions.some((version) => {
-        const state = String(version?.state || '').toUpperCase();
-        return state === 'ENABLED';
-      });
+      const hasAvailableVersion = versions.some((version) => String(version?.state || '').toUpperCase() === 'ENABLED');
       if (!hasAvailableVersion) {
         failures.push(`${secretName}: no enabled secret version is available`);
         continue;

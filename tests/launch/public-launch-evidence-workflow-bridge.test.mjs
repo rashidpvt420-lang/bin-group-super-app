@@ -7,6 +7,8 @@ const publisher = readFileSync('scripts/record-firestore-evidence.js', 'utf8');
 const backfillWorkflow = readFileSync('.github/workflows/public-launch-evidence-backfill.yml', 'utf8');
 const automaticWorkflow = readFileSync('.github/workflows/public-launch-evidence-bridge.yml', 'utf8');
 const verifier = readFileSync('scripts/verify-command-center-firestore-evidence.mjs', 'utf8');
+const providerTruth = readFileSync('packages/shared/src/config/providerLaunchTruth.ts', 'utf8');
+const launchPage = readFileSync('apps/admin-panel/src/pages/admin/PublicLaunchCommandCenterPageV2.tsx', 'utf8');
 
 test('Command Center bridge only auto-maps gates backed by exact execution evidence', () => {
   const supported = [
@@ -33,7 +35,7 @@ test('Command Center bridge only auto-maps gates backed by exact execution evide
     'technicianCompletionAudit',
     'brokerDocsPolicyFraud',
     'firebaseFunctionsLiveSmoke',
-    'paymentGatewayOrManualBank',
+    'phase1Payments',
     'arabicRtlAllCoreScreens',
     'everyButtonWritesFirestoreOrStorage',
     'logoutAllDashboards',
@@ -41,6 +43,16 @@ test('Command Center bridge only auto-maps gates backed by exact execution evide
   for (const gate of unsupported) {
     assert.doesNotMatch(builder, new RegExp(`gateId: '${gate}'`));
   }
+});
+
+test('Phase 1 payments cannot be auto-promoted from hosted/manual-bank evidence', () => {
+  assert.match(providerTruth, /id: 'phase1Payments'/);
+  assert.match(providerTruth, /requiredEvidenceLayer: 'physical_device'/);
+  assert.match(providerTruth, /bankTransferEnabled: false/);
+  assert.match(providerTruth, /stripeEnabled: false/);
+  assert.match(launchPage, /id: 'phase1Payments'/);
+  assert.match(launchPage, /Bank Transfer and Stripe\/Card remain disabled/);
+  assert.doesNotMatch(launchPage, /id: 'paymentGatewayOrManualBank'/);
 });
 
 test('publisher removes legacy fabricated proof and is append-only/idempotent', () => {

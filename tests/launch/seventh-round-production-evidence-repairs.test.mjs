@@ -15,12 +15,19 @@ test('Admin property review evidence does not block on a slow browser alert', ()
   assert.match(source, /toBe\('REJECTED'\)/);
 });
 
-test('Technician after-work proof has a stable hidden input contract', () => {
-  const pageSource = read('src/technician/pages/TechnicianJobDetailPage.tsx');
+test('Technician after-work proof has one canonical protected hidden input contract', () => {
+  const protectedEvidence = read('src/technician/components/TechnicianAfterWorkEvidence.tsx');
+  const jobDetail = read('src/technician/pages/TechnicianJobDetailPage.tsx');
   const tenantEvidence = read('tests/e2e/business-tenant.spec.ts');
-  assert.match(pageSource, /data-testid="technician-after-work-file"/);
+
+  assert.match(protectedEvidence, /data-testid="technician-after-work-file"/);
+  assert.doesNotMatch(jobDetail, /data-testid="technician-after-work-file"/);
   assert.match(tenantEvidence, /getByTestId\('technician-after-work-file'\)/);
   assert.doesNotMatch(tenantEvidence, /const completionInput = await firstVisible/);
+
+  const producerCount = (protectedEvidence.match(/data-testid="technician-after-work-file"/g) || []).length
+    + (jobDetail.match(/data-testid="technician-after-work-file"/g) || []).length;
+  assert.equal(producerCount, 1, 'Exactly one Technician after-work file input must exist across the protected job route.');
 });
 
 test('Offline replay waits for the authenticated mission UI before disconnecting', () => {

@@ -14,8 +14,8 @@ import {
     alpha
 } from '@mui/material';
 import { useNavigate, useParams } from 'react-router-dom';
-import { AlertTriangle, Camera, Check, ChevronLeft, CloudOff, MapPin, MessageSquare, Navigation, Phone, Play, ShieldCheck } from 'lucide-react';
-import { db, doc, functions, getDownloadURL, httpsCallable, onSnapshot, ref, storage, uploadBytes, updateDoc, serverTimestamp } from '../../lib/firebase';
+import { AlertTriangle, Check, ChevronLeft, CloudOff, MapPin, MessageSquare, Navigation, Phone, Play, ShieldCheck } from 'lucide-react';
+import { db, doc, functions, httpsCallable, onSnapshot, serverTimestamp, updateDoc } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
@@ -105,8 +105,6 @@ export default function TechnicianJobDetailPage() {
     const [actionLoading, setActionLoading] = useState(false);
     const [notes, setNotes] = useState('');
     const [materials, setMaterials] = useState('');
-    const [photos, setPhotos] = useState<File[]>([]);
-    const [previews, setPreviews] = useState<string[]>([]);
     const [gpsError, setGpsError] = useState<string | null>(null);
     const [isTracking, setIsTracking] = useState(false);
     const [message, setMessage] = useState<string | null>(null);
@@ -163,19 +161,12 @@ export default function TechnicianJobDetailPage() {
 
     useEffect(() => {
         return () => {
-            previews.forEach((url) => URL.revokeObjectURL(url));
             if (user?.uid) stopLiveTracking(user.uid).catch(() => undefined);
         };
     }, []);
 
     const resolved = useMemo(() => resolvePropertyLocation(ticket || {}), [ticket]);
     const status = norm(ticket?.status);
-    const hasAnyPhoto = photos.length > 0;
-    const hasExistingAfterProof = Boolean(ticket?.afterPhotoUrl)
-        || listLength(ticket?.afterPhotos) > 0
-        || listLength(ticket?.proofPhotos) > 0
-        || listLength(ticket?.evidencePhotos) > 0
-        || listLength(ticket?.completionPhotos) > 0;
     const hasTenantBeforeProof = Boolean(ticket?.beforePhotoUrl)
         || listLength(ticket?.beforePhotos) > 0
         || listLength(ticket?.tenantPhotos) > 0
@@ -183,12 +174,15 @@ export default function TechnicianJobDetailPage() {
         || listLength(ticket?.initialPhotoUrls) > 0;
     const hasTechnicianBeforeProof = Boolean(ticket?.technicianBeforePhotoUrl)
         || listLength(ticket?.technicianBeforePhotos) > 0;
-    const hasAfterProof = hasAnyPhoto || hasExistingAfterProof;
+    const hasProtectedAfterProof = ticket?.technicianAfterEvidenceState === 'CONFIRMED' && (
+        Boolean(ticket?.technicianAfterPhotoUrl)
+        || listLength(ticket?.technicianAfterPhotos) > 0
+    );
     const hasResolutionNotes = notes.trim().length >= 10 || String(ticket?.technicianNotes || ticket?.notes || '').trim().length >= 10;
     const hasPartsDisposition = materials.trim().length >= 2 || listLength(ticket?.materialsUsed) > 0 || Boolean(ticket?.partsUsed || ticket?.noPartsRequired);
     const proofChecks = [
         { label: tx('tech.job.proof.before', 'Before fault photo'), ready: hasTenantBeforeProof },
-        { label: tx('tech.job.proof.after', 'After-work photo'), ready: hasAfterProof },
+        { label: tx('tech.job.proof.after', 'Server-verified after-work photo'), ready: hasProtectedAfterProof },
         { label: tx('tech.job.proof.notes', 'Resolution notes'), ready: hasResolutionNotes },
         { label: tx('tech.job.proof.parts', 'Parts/materials disposition'), ready: hasPartsDisposition },
         { label: tx('tech.job.proof.tenant', 'Tenant approval requested after close'), ready: true },
@@ -227,24 +221,6 @@ export default function TechnicianJobDetailPage() {
         setMessage(`Saved locally in Offline Sync Queue: ${queued.label}. Redo/confirm once online.`);
     };
 
-    const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const next = Array.from(e.target.files || []).slice(0, 5);
-        previews.forEach((url) => URL.revokeObjectURL(url));
-        setPhotos(next);
-        setPreviews(next.map((file) => URL.createObjectURL(file)));
-    };
-
-    const uploadCompletionPhotos = async () => {
-        if (!id || photos.length === 0) return [] as string[];
-        const urls: string[] = [];
-        for (const file of photos) {
-            const fileRef = ref(storage, `maintenanceTickets/${id}/completionPhotos/${Date.now()}_${file.name}`);
-            await uploadBytes(fileRef, file);
-            urls.push(await getDownloadURL(fileRef));
-        }
-        return urls;
-    };
-
     const acceptJob = async () => {
         if (!id) return;
         if (!online) {
@@ -276,7 +252,7 @@ export default function TechnicianJobDetailPage() {
         }
         if (!online) {
             if (nextStatus === 'COMPLETED') {
-                alert('Completion with proof photos requires live connection. Your status action will be queued, but photos must be uploaded once online.');
+                alert('Completion can be queued, but it remains blocked until the protected after-work photo is uploaded and server-confirmed.');
             }
             queueAction(nextStatus, 'Technician was offline while updating mission lifecycle.');
             return;
@@ -315,29 +291,12 @@ export default function TechnicianJobDetailPage() {
             }
 
             if (nextStatus === 'COMPLETED') {
-                const uploaded = await uploadCompletionPhotos();
-                const mergedProof = [...(ticket?.proofPhotos || []), ...uploaded];
-                const mergedEvidence = [...(ticket?.evidencePhotos || []), ...uploaded];
-                const mergedCompletion = [...(ticket?.completionPhotos || []), ...uploaded];
-
                 await updateDoc(doc(db, 'maintenanceTickets', id), {
                     technicianNotes: notes.trim() || ticket?.technicianNotes || ticket?.notes || '',
                     notes: notes.trim() || ticket?.notes || ticket?.technicianNotes || '',
                     materialsUsed: materials.split(',').map((x) => x.trim()).filter(Boolean),
                     partsDisposition: materials.trim() || ticket?.partsDisposition || 'No parts entered',
-                    proofReadiness: {
-                        beforePhoto: hasTenantBeforeProof,
-                        afterPhoto: hasAfterProof,
-                        notes: hasResolutionNotes,
-                        partsDisposition: hasPartsDisposition,
-                        checkedAt: serverTimestamp(),
-                    },
-                    proofPhotos: mergedProof,
-                    evidencePhotos: mergedEvidence,
-                    completionPhotos: mergedCompletion,
-                    afterPhotos: mergedCompletion,
-                    afterPhotoUrl: mergedCompletion[0] || ticket?.afterPhotoUrl || null,
-                    updatedAt: serverTimestamp()
+                    updatedAt: serverTimestamp(),
                 });
             }
 
@@ -396,7 +355,7 @@ export default function TechnicianJobDetailPage() {
     return (
         <Box sx={{ direction: isRTL ? 'rtl' : 'ltr' }}>
             {message && <Alert severity="success" onClose={() => setMessage(null)} sx={{ mb: 2, borderRadius: 3 }}>{message}</Alert>}
-            {!online && <Alert icon={<CloudOff />} severity="warning" sx={{ mb: 2, borderRadius: 3 }}>Offline mode: text lifecycle actions are saved locally. Completion proof photos still require live connection.</Alert>}
+            {!online && <Alert icon={<CloudOff />} severity="warning" sx={{ mb: 2, borderRadius: 3 }}>Offline mode: lifecycle actions and evidence can be saved locally. Completion remains locked until the protected evidence upload is server-verified and synchronization succeeds.</Alert>}
             {gpsError && <Alert severity="warning" onClose={() => setGpsError(null)} sx={{ mb: 2, borderRadius: 3 }}>{gpsError}</Alert>}
 
             <Paper sx={{ p: 3, mb: 3, bgcolor: 'rgba(15,23,42,0.7)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 5 }}>
@@ -503,13 +462,11 @@ export default function TechnicianJobDetailPage() {
                                 {closeBlockers.length > 0 && <Alert severity="warning" sx={{ mb: 2 }}>{tx('tech.job.close_blockers', 'Mission cannot close until these proof items are complete:')} {closeBlockers.join(', ')}</Alert>}
                                 <TextField fullWidth multiline rows={3} label={tx('tech.job.resolution_notes', 'Resolution notes — minimum 10 characters')} value={notes} onChange={(e) => setNotes(e.target.value)} sx={{ mb: 2, '& .MuiOutlinedInput-root': { color: '#FFF' }, '& label': { color: 'rgba(255,255,255,0.5)' } }} />
                                 <TextField fullWidth label={tx('tech.job.materials_used', 'Materials used / No parts required')} value={materials} onChange={(e) => setMaterials(e.target.value)} sx={{ mb: 2, '& .MuiOutlinedInput-root': { color: '#FFF' }, '& label': { color: 'rgba(255,255,255,0.5)' } }} />
-                                <Button component="label" variant="outlined" startIcon={<Camera />} sx={{ color: '#FFF', borderColor: 'rgba(255,255,255,0.25)', mb: 2 }}>
-                                    {tx('tech.job.add_photos', 'Add after-work proof photos')}
-                                    <input data-testid="technician-after-work-file" hidden type="file" accept="image/*" multiple onChange={handlePhotoChange} />
-                                </Button>
-                                <Stack direction="row" spacing={1.5} flexWrap="wrap" sx={{ mb: 2 }}>
-                                    {previews.map((url, i) => <Box key={i} component="img" src={url} sx={{ width: 82, height: 82, borderRadius: 2, objectFit: 'cover' }} />)}
-                                </Stack>
+                                <Alert data-testid="technician-protected-after-work-guidance" severity={hasProtectedAfterProof ? 'success' : 'info'} sx={{ mb: 2 }}>
+                                    {hasProtectedAfterProof
+                                        ? 'The protected after-work evidence is server-confirmed. Completion can proceed once notes and parts disposition are ready.'
+                                        : 'Capture and verify the after-work photo in the protected evidence panel above. This close button unlocks only after server confirmation.'}
+                                </Alert>
                                 <Button fullWidth variant="contained" disabled={actionLoading || !canComplete} startIcon={actionLoading ? <CircularProgress size={18} color="inherit" /> : <Check />} onClick={() => updateLifecycle('COMPLETED')} sx={{ bgcolor: '#10b981', color: '#FFF', fontWeight: 950, py: 1.6 }}>
                                     {tx('tech.job.complete_mission', 'Complete Mission & Request Tenant Feedback')}
                                 </Button>

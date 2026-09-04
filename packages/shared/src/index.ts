@@ -23,5 +23,6 @@ export * from './components/CeoContactButtons';
 export * from './components/SovereignSupportChat';
 export * from './components/SovereignAlertHandler';
 export * from './utils/auditLogger';
+export * from './config/providerLaunchTruth';
 export * from './lib/firebase';
 console.log("⚡ [SHARED-LOAD] Evaluation Complete.");

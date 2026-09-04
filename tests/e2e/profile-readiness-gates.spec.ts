@@ -270,15 +270,18 @@ test.describe('Profile readiness gates', () => {
       }
     });
 
-    test('adminStaffProvisioning — technician registry exposes provisioning dialog', async ({ page }) => {
+    test('adminStaffProvisioning — HR Command exposes the canonical provisioning dialog', async ({ page }) => {
       await loginAdminPanel(page, requireEnv('E2E_ADMIN_EMAIL'), requireEnv('E2E_ADMIN_PASSWORD'));
-      await page.goto(adminUrl('/technicians'), { waitUntil: 'domcontentloaded' });
+      await page.goto(adminUrl('/hr'), { waitUntil: 'domcontentloaded' });
       await waitForAdminLoader(page);
-      const addBtn = page.getByTestId('admin-add-technician').or(page.getByRole('button', { name: /Add Technician|Add/i })).first();
+      const registerBtn = page.getByTestId('admin-register-staff');
+      await expect(registerBtn).toBeVisible({ timeout: 15_000 });
+      await registerBtn.click();
+      const addBtn = page.getByRole('button', { name: /ADD STAFF \/ TECHNICIAN/i }).first();
       await expect(addBtn).toBeVisible({ timeout: 15_000 });
       await addBtn.click();
       await expect(page.getByLabel(/email/i).or(page.locator('input[type="email"]')).first()).toBeVisible({ timeout: 10_000 });
-      await expect(page.locator('body')).toContainText(/technician|email|name|special/i, { timeout: 10_000 });
+      await expect(page.locator('body')).toContainText(/staff|technician|email|name|role/i, { timeout: 10_000 });
       await page.getByRole('button', { name: /Cancel|Close/i }).first().click().catch(() => undefined);
     });
 

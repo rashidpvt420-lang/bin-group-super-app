@@ -24,7 +24,10 @@ export * from "./ownerInspectionCompletion";
 export * from "./ownerFinancialOperations";
 export * from "./ownerMaintenanceOperations";
 export * from "./onboardingProofUpload";
-export * from "./stripePayment";
+// Phase 1 payment policy is Cash + Cheque only. Keep the historical Stripe
+// implementation in source for a future reviewed migration, but deploy only the
+// fail-closed compatibility endpoints so environment/secret drift cannot enable it.
+export * from "./stripePaymentPhase1Hold";
 export * from "./adminOwnerOperations";
 export * from "./adminPropertyReview";
 export * from "./securePaymentApproval";
@@ -33,6 +36,7 @@ export * from "./mailDelivery";
 export * from "./notificationDelivery";
 export * from "./technicianDispatchNotifications";
 export * from "./technicianBeforeWorkEvidence";
+export * from "./technicianAfterWorkEvidence";
 export * from "./ticketNormalization";
 export * from "./hrAutomation";
 export * from "./technicianPayrollCompatibility";

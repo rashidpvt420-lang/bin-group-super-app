@@ -1,139 +1,139 @@
 {
-  "schemaVersion": 3,
-  "statusRule": "PUBLIC_LAUNCH_ALLOWED_ONLY_WHEN_ALL_REQUIRED_GATES_ARE_PASSED_OR_FORMALLY_WAIVED",
-  "pilotRule": "FRIENDS_PRIVATE_PILOT_ALLOWED_WITH_PENDING_DEVICE_AND_LIVE_FIREBASE_GATES",
-  "publicLaunchScope": "Hosted web app and PWA first. Native Android AAB is not required unless BIN GROUP decides to publish a Play Store build.",
-  "lastAuditUpdate": "2026-06-27T16:16:48.840Z",
+  "schemaVersion": 4,
+  "statusRule": "HARD_PUBLIC_LAUNCH_REQUIRES_PASSED_EXACT_SHA_EVIDENCE_AT_OR_ABOVE_THE_REQUIRED_EVIDENCE_LAYER; WAIVED_NEVER_COUNTS_AS_A_HARD_PUBLIC_LAUNCH_PASS",
+  "pilotRule": "CONTROLLED_PILOT_MAY_RECORD_EXPLICIT_WAIVERS_BUT_WAIVERS_REMAIN_NON_PASSING_FOR_HARD_PUBLIC_LAUNCH",
+  "publicLaunchScope": "Hosted web/PWA and the published mobile release must be evaluated against the same exact release SHA. Physical-device gates remain mandatory where specified.",
+  "currentEvidenceAuthority": "launch_evidence and signed_in_smoke_checks records bound to the exact release SHA, plus protected workflow artifacts validated by the launch-honesty pipeline",
+  "legacyLedgerNote": "Pre-Wave-6 pass/waiver text below is historical only. It does not certify the current release and cannot be promoted into current evidence without exact-SHA revalidation.",
+  "lastAuditUpdate": "2026-09-04T05:34:00.000Z",
+  "phase1PaymentPolicy": {
+    "version": "PHASE1_CASH_CHEQUE_V1",
+    "currency": "AED",
+    "approvedMethods": ["CASH", "CHEQUE"],
+    "bankTransferEnabled": false,
+    "stripeEnabled": false,
+    "cardPaymentsEnabled": false
+  },
   "deploymentProof": {
     "hosting": {
       "required": true,
-      "status": "passed",
-      "proof": "Firebase deploy completed for bin-group-57c60 hosting and bin-group-admin-panel hosting on 2026-06-10."
+      "status": "pending",
+      "evidenceLayerRequired": "hosted",
+      "proofRequired": "Protected Firebase production deployment evidence for the exact current release SHA.",
+      "historicalProof": "A Firebase deploy was recorded for BIN GROUP hosting in June 2026, but that proof is not bound to the current Wave 6 release SHA."
     },
     "functionsDeploy": {
       "required": true,
-      "status": "passed",
-      "proof": "Firebase deploy updated production functions including runSovereignAI(europe-west3), payment, ticket, HR, notification, and passport functions on 2026-06-10."
+      "status": "pending",
+      "evidenceLayerRequired": "hosted",
+      "proofRequired": "Protected production Functions deployment evidence for the exact current release SHA.",
+      "historicalProof": "A Functions deployment was recorded in June 2026, but that proof is not bound to the current Wave 6 release SHA."
     }
   },
   "requiredProviderGates": {
     "firebaseAuth": {
       "required": true,
-      "status": "passed",
-      "proofRequired": "Fresh production proof for admin, owner, tenant, technician, and broker login on live Firebase Auth. Attach run date, tester, role, device, and screenshots/log references.",
-      "proof": "Tested owner, tenant, technician, broker, and admin login on live production by Rashid Bin Abdul Ghani on 2026-06-20.",
-      "testedBy": "Rashid Bin Abdul Ghani",
-      "testedAt": "2026-06-20T18:24:15.170Z",
-      "updatedAt": "2026-06-20T18:24:15.171Z"
+      "status": "pending",
+      "evidenceLayerRequired": "hosted",
+      "proofRequired": "Exact-SHA hosted production proof for admin, owner, tenant, technician, and broker login on live Firebase Auth.",
+      "historicalProof": "Five-role login was previously reported, but the record predates the current exact-SHA evidence model."
     },
     "firestoreRules": {
       "required": true,
-      "status": "passed",
-      "proof": "Re-ran security rules emulator tests. The suite completed fully (41 out of 41 tests passing) with a clean un-mounting of the functions container on 2026-06-27.",
-      "testedBy": "Antigravity Agent",
-      "testedAt": "2026-06-27T16:16:48.839Z",
-      "updatedAt": "2026-06-27T16:16:48.840Z"
+      "status": "pending",
+      "evidenceLayerRequired": "hosted",
+      "proofRequired": "Current exact-SHA security-rules proof plus hosted production authority verification.",
+      "historicalProof": "Earlier emulator security-rules runs are retained as history only."
     },
     "storageRules": {
       "required": true,
-      "status": "passed",
-      "proofRequired": "Fresh upload/download/delete permission test for tenant issue photos, technician before/after photos, contracts, invoices, and admin evidence access.",
-      "proof": "Verified upload, download, and delete permission rules for tenant ticket photos, technician before/after photos, contracts, and invoices under the security rule emulator and verified in live staging.",
-      "testedBy": "Rashid AbdulGhani",
-      "testedAt": "2026-06-22T20:46:55.691Z",
-      "updatedAt": "2026-06-22T20:46:55.691Z"
+      "status": "pending",
+      "evidenceLayerRequired": "hosted",
+      "proofRequired": "Exact-SHA hosted upload/download/delete proof for tenant photos, technician before/after proof, contracts, invoices, and Admin evidence access.",
+      "historicalProof": "Earlier Storage verification is not current-release proof."
     },
     "firebaseFunctionsLiveSmoke": {
       "required": true,
-      "status": "passed",
-      "proofRequired": "Fresh production callable/trigger test for owner payment, ticket dispatch, SLA checks, HR sync, notifications, and Sovereign AI. Deployment alone is not enough for this gate.",
-      "proof": "Verified live callable and trigger Functions on Firebase Blaze plan in production on 2026-06-24.",
-      "testedBy": "Rashid AbdulGhani",
-      "testedAt": "2026-06-24T12:00:00.000Z",
-      "updatedAt": "2026-06-24T12:00:00.000Z"
+      "status": "pending",
+      "evidenceLayerRequired": "hosted",
+      "proofRequired": "Exact-SHA production callable/trigger proof for owner payment, ticket dispatch, SLA checks, HR sync, notifications, and Sovereign AI. Deployment alone is insufficient.",
+      "historicalProof": "Earlier callable/trigger smoke evidence is not current-release proof."
     },
     "firebaseCloudMessaging": {
       "required": true,
-      "status": "passed",
-      "proofRequired": "Real Android/iOS/PWA push notification delivery test with token registration, foreground/background delivery, and disabled-permission fallback.",
-      "proof": "Tested FCM token registration and background/foreground notification receipt on Android Chrome PWA and iOS Safari PWA.",
-      "testedBy": "Rashid AbdulGhani",
-      "testedAt": "2026-06-22T20:46:55.691Z",
-      "updatedAt": "2026-06-22T20:46:55.691Z"
+      "status": "pending",
+      "evidenceLayerRequired": "physical_device",
+      "proofRequired": "Real physical-device token registration, foreground/background delivery, and disabled-permission fallback on the exact release SHA.",
+      "historicalProof": "Earlier PWA notification reports are retained as history only and cannot satisfy the current physical-device gate."
     },
     "googleMaps": {
       "required": true,
-      "status": "passed",
-      "proofRequired": "Real mobile GPS permission, map render, technician check-in, arrival tracking, and location-denied fallback test.",
-      "proof": "Verified live GPS location capture, maps render, technician check-in, tracking widgets, and location-disabled fallbacks in Dubai Silicon Oasis test.",
-      "testedBy": "Rashid AbdulGhani",
-      "testedAt": "2026-06-22T20:46:55.691Z",
-      "updatedAt": "2026-06-22T20:46:55.691Z"
+      "status": "pending",
+      "evidenceLayerRequired": "physical_device",
+      "proofRequired": "Real physical-device GPS permission, map render, technician check-in, arrival tracking, and location-denied fallback on the exact release SHA.",
+      "historicalProof": "Earlier GPS/Maps reports are retained as history only."
     },
     "aiVisionOrTriage": {
       "required": true,
-      "status": "passed",
-      "proofRequired": "Production runSovereignAI callable must be tested with a signed-in user. Confirm server-side secrets/fallback behavior and no client-exposed AI keys.",
-      "proof": "Tested the runSovereignAI callable with signed-in user queries, verifying automated classification, urgency prediction, and safe API key hiding.",
-      "testedBy": "Rashid AbdulGhani",
-      "testedAt": "2026-06-22T20:46:55.691Z",
-      "updatedAt": "2026-06-22T20:46:55.691Z"
+      "status": "pending",
+      "evidenceLayerRequired": "hosted",
+      "proofRequired": "Signed-in exact-SHA hosted Sovereign AI call with server-side secrets, verified safe fallback behavior, and no client-exposed provider keys.",
+      "historicalProof": "Earlier AI smoke evidence predates the current exact-SHA release."
+    },
+    "phase1Payments": {
+      "required": true,
+      "status": "pending",
+      "evidenceLayerRequired": "physical_device",
+      "proofRequired": "Real owner Cash/Cheque activation on a physical device, Admin approval and rejection, receipt/evidence, audit trail, and dashboard unlock on the exact release SHA. Bank Transfer and Stripe/Card must remain disabled.",
+      "retiredHistoricalEvidence": "The former manual-bank-transfer launch proof is retired because Bank Transfer is not an approved Phase 1 method."
     },
     "paymentGatewayOrManualBank": {
-      "required": true,
-      "status": "passed",
-      "proofRequired": "Live owner contract -> 15% mobilization/manual bank/admin verification -> dashboard unlock path, including rejection path.",
-      "proof": "Validated owner mobilization 15% payment workflow, manual bank transfer upload, and administrative verification/rejection paths.",
-      "testedBy": "Rashid AbdulGhani",
-      "testedAt": "2026-06-22T20:46:55.691Z",
-      "updatedAt": "2026-06-22T20:46:55.691Z"
+      "required": false,
+      "status": "retired",
+      "retiredBy": "PHASE1_CASH_CHEQUE_V1",
+      "replacementGate": "phase1Payments",
+      "reason": "Bank Transfer and Stripe/Card are disabled for Phase 1 and cannot satisfy a current launch gate."
     },
     "whatsappBusiness": {
       "required": false,
-      "status": "passed",
-      "proofRequired": "Optional: business verification, approved templates, opt-in, send logs.",
-      "proof": "Configured sandbox webhook for WhatsApp Business API and verified intake routing to Admin WhatsApp Triage Page.",
-      "testedBy": "Rashid AbdulGhani",
-      "testedAt": "2026-06-22T20:46:55.691Z",
-      "updatedAt": "2026-06-22T20:46:55.691Z"
+      "status": "pending",
+      "proofRequired": "Optional only: approved sender/templates, opt-in, verified webhook/signature flow, and hosted delivery evidence before describing WhatsApp as live.",
+      "historicalProof": "A sandbox webhook was previously reported; sandbox configuration is not production-live provider proof."
     },
     "smsVoiceFallback": {
       "required": false,
-      "status": "passed",
-      "proofRequired": "Optional: carrier approval, cost control, emergency fallback test.",
-      "proof": "Integrated Twilio SMS fallback for OTP verification codes and critical notifications when push is offline.",
-      "testedBy": "Rashid AbdulGhani",
-      "testedAt": "2026-06-22T20:46:55.691Z",
-      "updatedAt": "2026-06-22T20:46:55.691Z"
+      "status": "pending",
+      "proofRequired": "Optional only: carrier/provider approval, cost controls, delivery evidence, and emergency fallback test before describing SMS/voice as live.",
+      "historicalProof": "Earlier fallback integration reports are not current production delivery evidence."
     },
     "uaeDataResidencyPosition": {
       "required": true,
-      "status": "passed",
-      "proofRequired": "Document data categories, subprocessors, hosting region, retention policy, and owner/tenant privacy wording before public launch.",
-      "proof": "Formulated complete compliance register outlining data categories, UAE ADGM/DIFC alignment, hosting on Firebase europe-west3/me-central2, and strict retention rules.",
-      "testedBy": "Rashid AbdulGhani",
-      "testedAt": "2026-06-22T20:46:55.691Z",
-      "updatedAt": "2026-06-22T20:46:55.691Z"
+      "status": "pending",
+      "evidenceLayerRequired": "hosted",
+      "proofRequired": "Current data categories, subprocessors, hosting region, retention policy, and owner/tenant privacy wording reviewed for the exact release architecture.",
+      "historicalProof": "Earlier compliance documentation remains background material but is not current-release approval."
     },
     "firebaseBillingPlan": {
       "required": true,
-      "status": "waived",
-      "proofRequired": "Confirm in Firebase Console -> Project Settings -> Usage and billing that the production project is on the Blaze (pay-as-you-go) plan, not Spark. Spark blocks all outbound networking from Cloud Functions, which silently breaks Stripe (functions/stripePayment.ts), Twilio SMS (functions/index.ts), WhatsApp/Meta Graph API (functions/whatsappWebhook.ts), OpenAI, and Gemini calls even though deployment itself succeeds on Spark.",
-      "waiver": {
+      "status": "pending",
+      "evidenceLayerRequired": "hosted",
+      "proofRequired": "Confirm the production Firebase project billing plan supports every Phase 1 backend provider actually enabled. Stripe credentials are not a Phase 1 requirement because Stripe/Card is disabled.",
+      "historicalWaiver": {
         "waivedBy": "Antigravity Agent",
         "waivedAt": "2026-06-24T10:00:00+04:00",
-        "riskNote": "Firebase functions smoke is waived due to Spark tier restriction on staging/pilot. Outbound calls are disabled but local/emulator integration is fully verified.",
+        "riskNote": "Historical pilot waiver only; it cannot satisfy hard public launch.",
         "expiresAt": "2026-12-31T23:59:59+04:00"
       }
     },
     "appCheckEnforcement": {
       "required": true,
-      "status": "waived",
-      "proofRequired": "App Check is initialized client-side (src/lib/firebase.ts, apps/admin-panel/src/lib/firebase.ts) behind VITE_ENABLE_FIREBASE_APPCHECK, but firestore.rules and storage.rules contain no request.app checks and no callable Function checks context.app/request.app, so a valid token is never verified server-side. Before enforcing, confirm in Firebase Console -> App Check -> Apps that verified-token traffic is consistently high for every client surface (main app, owner-app, admin-panel), then enable enforcement for Firestore, Storage, and callable/HTTP Functions.",
-      "waiver": {
+      "status": "pending",
+      "evidenceLayerRequired": "hosted",
+      "proofRequired": "Exact-SHA hosted proof of verified App Check traffic and enforcement on protected Firebase/callable operations.",
+      "historicalWaiver": {
         "waivedBy": "Antigravity Agent",
         "waivedAt": "2026-06-24T10:00:00+04:00",
-        "riskNote": "App Check token validation is bypassed for now to allow local testing and pilot integrations without restricting development clients. Full enforcement deferred.",
+        "riskNote": "Historical pilot waiver only; it cannot satisfy hard public launch.",
         "expiresAt": "2026-12-31T23:59:59+04:00"
       }
     }
@@ -141,83 +141,68 @@
   "requiredDeviceGates": {
     "androidPwaSmoke": {
       "required": true,
-      "status": "passed",
-      "proofRequired": "Real Android phone PWA test across all five dashboards.",
-      "proof": "Executed smoke test on Android Chrome PWA across all five portal dashboards (Owner, Tenant, Technician, Broker, Admin), verifying no layout issues.",
-      "testedBy": "Rashid AbdulGhani",
-      "testedAt": "2026-06-22T20:46:55.691Z",
-      "updatedAt": "2026-06-22T20:46:55.691Z"
+      "status": "pending",
+      "evidenceLayerRequired": "physical_device",
+      "proofRequired": "Real Android device test across all five dashboards on the exact release SHA.",
+      "historicalProof": "Earlier Android PWA testing is not current-release proof."
     },
     "iosPwaSmoke": {
       "required": true,
-      "status": "passed",
-      "proofRequired": "Real iPhone/Safari PWA test across all five dashboards.",
-      "proof": "Completed Safari iOS PWA simulation and real-device checklist across all five user roles with clean navigation.",
-      "testedBy": "Rashid AbdulGhani",
-      "testedAt": "2026-06-22T20:46:55.691Z",
-      "updatedAt": "2026-06-22T20:46:55.691Z"
+      "status": "pending",
+      "evidenceLayerRequired": "physical_device",
+      "proofRequired": "Real iPhone/Safari test across all five dashboards on the exact release SHA.",
+      "historicalProof": "Earlier iOS testing is not current-release proof."
     },
     "technicianGpsTracking": {
       "required": true,
-      "status": "passed",
-      "proofRequired": "Real technician GPS check-in and live tracking test.",
-      "proof": "Verified live technician tracking widget on the tenant side and coordinates update trigger from technician's en-route status change.",
-      "testedBy": "Rashid AbdulGhani",
-      "testedAt": "2026-06-22T20:46:55.691Z",
-      "updatedAt": "2026-06-22T20:46:55.691Z"
+      "status": "pending",
+      "evidenceLayerRequired": "physical_device",
+      "proofRequired": "Real technician GPS check-in, tracking, denied-location fallback and mission integrity on the exact release SHA.",
+      "historicalProof": "Earlier GPS tracking evidence is not current-release proof."
     },
     "pushNotifications": {
       "required": true,
-      "status": "passed",
-      "proofRequired": "Real push notification delivery and fallback test.",
-      "proof": "Tested push notifications delivery on mock service workers and confirmed fallback to SMS/in-app alert inbox when denied.",
-      "testedBy": "Rashid AbdulGhani",
-      "testedAt": "2026-06-22T20:46:55.691Z",
-      "updatedAt": "2026-06-22T20:46:55.691Z"
+      "status": "pending",
+      "evidenceLayerRequired": "physical_device",
+      "proofRequired": "Real push delivery and denied-permission fallback on physical devices for the exact release SHA.",
+      "historicalProof": "Mock service-worker notification tests do not satisfy the current physical-device gate."
     },
     "pdfMobileDownload": {
       "required": true,
-      "status": "passed",
-      "proofRequired": "Arabic/English contract, invoice, lease, and report PDF mobile download/open test.",
-      "proof": "Tested contract, lease agreement, and payment invoice PDF generation and mobile download on iOS and Android devices, verifying font rendering.",
-      "testedBy": "Rashid AbdulGhani",
-      "testedAt": "2026-06-22T20:46:55.691Z",
-      "updatedAt": "2026-06-22T20:46:55.691Z"
+      "status": "pending",
+      "evidenceLayerRequired": "physical_device",
+      "proofRequired": "Arabic/English contract, invoice, lease, and report PDF download/open test on physical devices for the exact release SHA.",
+      "historicalProof": "Earlier PDF checks are not current-release proof."
     },
     "arabicRtlAllCoreScreens": {
       "required": true,
-      "status": "passed",
-      "proofRequired": "Arabic RTL sweep for owner, tenant, technician, broker, admin, modals, toasts, empty states, and PDFs.",
-      "proof": "Completed Arabic locale sweep using the RTL theme provider across all forms, dialogs, dashboards, and PDF templates with no overlaps.",
-      "testedBy": "Rashid AbdulGhani",
-      "testedAt": "2026-06-22T20:46:55.691Z",
-      "updatedAt": "2026-06-22T20:46:55.691Z"
+      "status": "pending",
+      "evidenceLayerRequired": "physical_device",
+      "proofRequired": "Arabic RTL sweep for all five roles, modals, toasts, empty states, uploads, and PDFs on physical devices for the exact release SHA.",
+      "historicalProof": "Earlier RTL checks are not current-release proof."
     },
     "everyButtonWritesFirestoreOrStorage": {
       "required": true,
-      "status": "passed",
-      "proofRequired": "Button-by-button audit proving each action writes, reads, navigates, or fails safely.",
-      "proof": "Conducted a full UI click-stream audit confirming every form submit and interactive action writes correctly to Firestore/Storage or fails with elegant toasts.",
-      "testedBy": "Rashid AbdulGhani",
-      "testedAt": "2026-06-22T20:46:55.691Z",
-      "updatedAt": "2026-06-22T20:46:55.691Z"
+      "status": "pending",
+      "evidenceLayerRequired": "physical_device",
+      "proofRequired": "Button-by-button exact-SHA audit proving each action writes, reads, navigates, or fails safely on the real release surfaces.",
+      "historicalProof": "Earlier click-stream claims are not current-release proof."
     },
     "logoutAllDashboards": {
       "required": true,
-      "status": "passed",
-      "proofRequired": "Logout test in owner, tenant, technician, broker, and admin shells on desktop and mobile.",
-      "proof": "Tested logout action in all 5 portal shells (Owner, Tenant, Technician, Broker, Admin), confirming token clear and redirect to /login.",
-      "testedBy": "Rashid AbdulGhani",
-      "testedAt": "2026-06-22T20:46:55.691Z",
-      "updatedAt": "2026-06-22T20:46:55.691Z"
+      "status": "pending",
+      "evidenceLayerRequired": "physical_device",
+      "proofRequired": "Owner, tenant, technician, broker, and admin logout tests on desktop/mobile release surfaces for the exact SHA.",
+      "historicalProof": "Earlier logout testing is not current-release proof."
     },
     "androidReleaseAab": {
       "required": false,
-      "status": "waived",
-      "waiver": {
+      "status": "pending",
+      "proofRequired": "If Android Play publication is in scope, bind the signed AAB and physical Google Play install/runtime evidence to the exact release SHA.",
+      "historicalWaiver": {
         "waivedBy": "Rashid AbdulGhani, Founder & CEO",
         "waivedAt": "2026-06-10T00:00:00+04:00",
-        "riskNote": "BIN GROUP public launch scope is hosted web/PWA first. Native Android Play Store AAB is outside the current launch scope.",
+        "riskNote": "Historical web/PWA-first scope decision; current release scope must be evaluated separately.",
         "expiresAt": "2026-12-31T23:59:59+04:00"
       }
     }
@@ -225,7 +210,8 @@
   "allowedWaiverFormat": {
     "waivedBy": "CEO/admin owner name",
     "waivedAt": "ISO-8601 timestamp",
-    "riskNote": "Explicit operational risk accepted for pilot only",
-    "expiresAt": "ISO-8601 timestamp"
+    "riskNote": "Explicit operational risk accepted for controlled pilot only",
+    "expiresAt": "ISO-8601 timestamp",
+    "hardPublicLaunchEffect": "NONE"
   }
 }

@@ -104,9 +104,11 @@ test('Phase 1 fails closed if Bank Transfer or Stripe is enabled', () => {
   assert.ok(errors.includes('phase1-manual stripeEnabled must equal false'));
 });
 
-test('Stripe remains mandatory for an explicit phase2-stripe policy', () => {
-  const required = requiredOperationalGatesForPaymentPolicy('phase2-stripe');
-  assert.ok(required.includes('stripeLiveBilling'));
+test('Phase 2 Stripe cannot be selected while PHASE1_CASH_CHEQUE_V1 is authoritative', () => {
+  assert.throws(
+    () => requiredOperationalGatesForPaymentPolicy('phase2-stripe'),
+    /phase2-stripe is disabled by PHASE1_CASH_CHEQUE_V1/,
+  );
 });
 
 test('unknown payment policy cannot weaken hard clearance', () => {
@@ -159,15 +161,23 @@ test('Admin Production Configuration uses protected server evidence instead of a
   assert.match(runtime, /export \* from "\.\/adminLaunchConfiguration"/);
 });
 
-test('Admin Technician registry reads through protected staff lifecycle instead of querying users in the browser', () => {
+test('Admin Technician registry is a protected operational directory with no employee-write authority', () => {
   const technicians = readFileSync('apps/admin-panel/src/pages/technicians/TechniciansManagementPage.tsx', 'utf8');
+  const lifecycle = readFileSync('functions/adminStaffLifecycle.ts', 'utf8');
 
-  assert.match(technicians, /adminGetStaffLifecycle/);
+  assert.match(technicians, /adminGetTechnicianOperationsDirectory/);
   assert.match(technicians, /getIdToken\(true\)/);
+  assert.match(technicians, /Employee identity, profile, onboarding, access and offboarding are owned by HR Command/);
+  assert.match(technicians, /\/hr\?staff=/);
   assert.doesNotMatch(technicians, /collection\(db,\s*['"]users['"]\)/);
   assert.doesNotMatch(technicians, /onSnapshot\s*\(/);
   assert.doesNotMatch(technicians, /firebase\/firestore/);
-  assert.match(technicians, /adminCreateUser/);
-  assert.match(technicians, /adminUpdateStaffProfile/);
-  assert.match(technicians, /adminOffboardStaff/);
+  assert.doesNotMatch(technicians, /adminCreateUser/);
+  assert.doesNotMatch(technicians, /adminUpdateStaffProfile/);
+  assert.doesNotMatch(technicians, /adminOffboardStaff/);
+
+  assert.match(lifecycle, /adminGetTechnicianOperationsDirectory = onCall/);
+  assert.match(lifecycle, /enforceAppCheck:\s*true/);
+  assert.match(lifecycle, /requireTechnicianDirectoryReader/);
+  assert.match(lifecycle, /TECHNICIAN_DIRECTORY_ROLES/);
 });
