@@ -60,14 +60,15 @@ test('AI Home Match is inventory-grounded and fails over to deterministic rankin
   assert.match(backend, /using deterministic matching against current verified inventory/);
 });
 
-test('Owner Wave 2 intake uses controlled Firebase photo upload and remains Admin-review gated', async () => {
-  const [page, ownerApp] = await Promise.all([
+test('Owner Wave 2 intake uses create-only image-bound Firebase media authority and remains Admin-review gated', async () => {
+  const [page, ownerApp, storageRules] = await Promise.all([
     read('src/owner/pages/HomeDiscoveryInventoryPage.tsx'),
     read('src/owner/OwnerApp.tsx'),
+    read('storage.rules'),
   ]);
 
   assert.match(page, /uploadBytesResumable/);
-  assert.match(page, /owners\/\$\{user\.uid\}\/listing-media\/\$\{requestId\}/);
+  assert.match(page, /home-listing-media\/\$\{user\.uid\}\/\$\{requestId\}/);
   assert.match(page, /MAX_PHOTOS = 12/);
   assert.match(page, /MAX_PHOTO_BYTES = 10 \* 1024 \* 1024/);
   assert.match(page, /photos\.length < 3/);
@@ -79,6 +80,13 @@ test('Owner Wave 2 intake uses controlled Firebase photo upload and remains Admi
   assert.match(page, /approved: false/);
   assert.match(page, /active: false/);
   assert.match(page, ARABIC);
+
+  assert.match(storageRules, /match \/home-listing-media\/\{ownerId\}\/\{requestId\}\/\{fileName\}/);
+  assert.match(storageRules, /allow create: if isAuth\(\) &&[\s\S]*isOwnerRole\(\)[\s\S]*request\.auth\.uid == ownerId[\s\S]*isImageUpload\(10\)/);
+  assert.match(storageRules, /request\.resource\.metadata\.ownerUid == ownerId/);
+  assert.match(storageRules, /request\.resource\.metadata\.listingRequestId == requestId/);
+  assert.match(storageRules, /request\.resource\.metadata\.evidenceType == 'home_listing_photo'/);
+  assert.match(storageRules, /allow update: if false/);
 
   assert.match(ownerApp, /HomeDiscoveryInventoryPage/);
   assert.match(ownerApp, /path=["']\/home-discovery["'] element=\{<HomeDiscoveryInventoryPage \/>\}/);
