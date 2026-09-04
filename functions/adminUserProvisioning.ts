@@ -280,6 +280,10 @@ async function loadExistingStaff(uid: string) {
   if (claims.admin === true || claims.superAdmin === true || claims.super_admin === true || claims.ceo === true) {
     throw new HttpsError("permission-denied", "Privileged identities cannot be managed from Staff Access.");
   }
+  const currentStatus = cleanString(userSnap.data()?.status).toUpperCase();
+  if (currentStatus === "OFFBOARDED" || claims.offboarded === true || userSnap.data()?.offboarded === true) {
+    throw new HttpsError("failed-precondition", "OFFBOARDED is terminal. Create a new staff identity through the approved provisioning lifecycle instead of restoring this account.");
+  }
   return { authUser, userSnap, accessSnap, currentRole };
 }
 
