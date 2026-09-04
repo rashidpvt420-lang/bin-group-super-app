@@ -49,6 +49,8 @@ type MarketplaceRecord = {
   status?: string;
   stage?: string;
   requestMode?: string;
+  listingId?: string;
+  listingTitle?: string;
   unitTitle?: string;
   title?: string;
   propertyName?: string;
@@ -342,6 +344,29 @@ export default function HomeDiscoveryInventoryPage() {
           <Stack spacing={1.2}>
             {listingRequests.slice(0, 6).map((request) => <Paper key={request.id} variant="outlined" sx={{ p: 2, borderRadius: 3 }}><Stack direction={isRTL ? 'row-reverse' : 'row'} justifyContent="space-between" spacing={2}><Box><Typography sx={{ fontWeight: 900 }}>{request.unitTitle || request.title}</Typography><Typography variant="caption" sx={{ color: binThemeTokens.textSecondary }}>{request.propertyAddress} · {money(request.annualRent)}</Typography></Box><Chip label={request.stage || request.status || 'REVIEW'} /></Stack></Paper>)}
             {liveListings.slice(0, 6).map((listing) => <Paper key={listing.id} variant="outlined" sx={{ p: 2, borderRadius: 3, borderColor: alpha('#16A34A', 0.3) }}><Stack direction={isRTL ? 'row-reverse' : 'row'} justifyContent="space-between" spacing={2}><Box><Typography sx={{ fontWeight: 900 }}>{listing.unitTitle || listing.title || listing.propertyName}</Typography><Typography variant="caption" sx={{ color: binThemeTokens.textSecondary }}>{listing.area || listing.emirate} · {money(listing.annualRent)} · {listing.imageUrls?.length || 0} photos</Typography></Box><Chip color="success" label={copy('owner.home.liveBadge', 'LIVE VERIFIED', 'منشور وموثق')} /></Stack></Paper>)}
+          </Stack>
+        </Paper>}
+
+        {applications.length > 0 && <Paper sx={{ p: 3, borderRadius: 5, bgcolor: '#fff', border: `1px solid ${binThemeTokens.border}` }}>
+          <Typography variant="h6" sx={{ fontWeight: 950, mb: 0.5 }}>{copy('owner.home.applicationDetails', 'Viewing & rental request details', 'تفاصيل طلبات المعاينة والإيجار')}</Typography>
+          <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary, mb: 2 }}>{copy('owner.home.applicationDetailsBody', 'See who requested a viewing or applied, which listing they selected, and the current workflow stage.', 'اطلع على طالب المعاينة أو الإيجار والعقار الذي اختاره ومرحلة الطلب الحالية.')}</Typography>
+          <Stack spacing={1.2}>
+            {applications.slice(0, 20).map((application) => (
+              <Paper key={application.id} variant="outlined" sx={{ p: 2, borderRadius: 3 }}>
+                <Stack direction={{ xs: 'column', md: isRTL ? 'row-reverse' : 'row' }} justifyContent="space-between" spacing={1.5}>
+                  <Box sx={{ minWidth: 0 }}>
+                    <Typography sx={{ fontWeight: 950 }}>{application.listingTitle || application.unitTitle || application.title || application.propertyName || application.listingId || copy('owner.home.unknownListing', 'Home listing', 'إعلان عقار')}</Typography>
+                    <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary, mt: 0.4 }}>{application.tenantName || application.tenantEmail || copy('owner.home.unknownApplicant', 'Tenant applicant', 'طالب الإيجار')}</Typography>
+                    {application.tenantEmail && application.tenantEmail !== application.tenantName && <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, display: 'block' }}>{application.tenantEmail}</Typography>}
+                    <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, display: 'block', mt: 0.5 }}>{application.area || application.emirate || application.propertyAddress || ''}{application.annualRent ? ` · ${money(application.annualRent)}` : ''}</Typography>
+                  </Box>
+                  <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" alignItems="flex-start">
+                    <Chip label={application.requestMode === 'VIEWING' ? copy('owner.home.viewingRequest', 'VIEWING', 'معاينة') : copy('owner.home.rentalApplication', 'APPLICATION', 'طلب إيجار')} />
+                    <Chip variant="outlined" label={application.stage || application.status || 'OPEN'} />
+                  </Stack>
+                </Stack>
+              </Paper>
+            ))}
           </Stack>
         </Paper>}
       </Stack>
