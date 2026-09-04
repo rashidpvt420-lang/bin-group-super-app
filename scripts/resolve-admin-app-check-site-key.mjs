@@ -20,6 +20,8 @@ const PROTECTED_WORKFLOW_JOBS = Object.freeze([
 
 const clean = (value) => String(value || '').trim();
 
+class ConfigLookupError extends Error {}
+
 function isApprovedProtectedContext(env) {
   const workflow = clean(env.GITHUB_WORKFLOW);
   const job = clean(env.GITHUB_JOB);
@@ -51,7 +53,7 @@ export function assertProtectedProductionContext(env = process.env) {
 
 export function validateEnterpriseSiteKey(siteKey, publicSiteKey = '') {
   const normalized = clean(siteKey);
-  if (!SITE_KEY_RE.test(normalized) || PLACEHOLDER_RE.test(normalized)) {
+  if (typeof siteKey !== 'string' || !SITE_KEY_RE.test(normalized) || PLACEHOLDER_RE.test(normalized)) {
     throw new Error('[admin-app-check-config] Firebase returned a missing or malformed Enterprise site key');
   }
   if (normalized === clean(publicSiteKey)) {
@@ -64,7 +66,7 @@ export function extractEnterpriseSiteKey(responseData, publicSiteKey = '') {
   if (!responseData || typeof responseData !== 'object' || Array.isArray(responseData)) {
     throw new Error('[admin-app-check-config] Firebase returned a malformed Enterprise config');
   }
-  if (clean(responseData.name) !== EXPECTED_CONFIG_NAME) {
+  if (responseData.name !== EXPECTED_CONFIG_NAME) {
     throw new Error('[admin-app-check-config] Firebase returned an Enterprise config for the wrong app');
   }
   return validateEnterpriseSiteKey(responseData.siteKey, publicSiteKey);
@@ -86,10 +88,7 @@ export async function resolveAdminAppCheckSiteKey({
 
   const configuredSiteKey = clean(env.FIREBASE_APPCHECK_ENTERPRISE_SITE_KEY);
   if (configuredSiteKey) {
-    const siteKey = validateEnterpriseSiteKey(configuredSiteKey, env.VITE_APP_CHECK_SITE_KEY);
-    exportSiteKey(clean(env.GITHUB_ENV), siteKey);
-    console.log('[admin-app-check-config] protected Enterprise site key validated for the canonical Admin app');
-    return { source: 'protected-environment' };
+    validateEnterpriseSiteKey(configuredSiteKey, env.VITE_APP_CHECK_SITE_KEY);
   }
 
   const fetchConfig = requestConfig || (async () => {
@@ -98,23 +97,39 @@ export async function resolveAdminAppCheckSiteKey({
     const response = await fetch(CONFIG_URL, {
       method: 'GET',
       headers: { Authorization: `Bearer ${token.access_token}` },
+      signal: AbortSignal.timeout(15_000),
     });
     if (!response.ok) {
-      throw new Error(
+      throw new ConfigLookupError(
         `[admin-app-check-config] Firebase App Check config lookup failed with HTTP ${response.status}`,
       );
     }
     return response.json();
   });
 
-  const responseData = await fetchConfig({
-    configName: EXPECTED_CONFIG_NAME,
-    url: CONFIG_URL,
-  });
+  let responseData;
+  try {
+    responseData = await fetchConfig({
+      configName: EXPECTED_CONFIG_NAME,
+      url: CONFIG_URL,
+    });
+  } catch (error) {
+    // Credential, transport and JSON errors can contain tokens or response bodies.
+    if (error instanceof ConfigLookupError) throw error;
+    throw new Error('[admin-app-check-config] Canonical Firebase config lookup failed; no Admin key was exported');
+  }
   const siteKey = extractEnterpriseSiteKey(responseData, env.VITE_APP_CHECK_SITE_KEY);
+  if (configuredSiteKey && configuredSiteKey !== siteKey) {
+    throw new Error(
+      '[admin-app-check-config] FIREBASE_APPCHECK_ENTERPRISE_SITE_KEY does not match the canonical Admin Firebase config; correct the protected environment value before deployment',
+    );
+  }
   exportSiteKey(clean(env.GITHUB_ENV), siteKey);
-  console.log('[admin-app-check-config] canonical Firebase Enterprise config resolved for the Admin app');
-  return { source: 'firebase-app-check-api' };
+  console.log('[admin-app-check-config] canonical Firebase Enterprise config verified for the Admin app');
+  return {
+    source: configuredSiteKey ? 'protected-environment' : 'firebase-app-check-api',
+    canonicalConfigVerified: true,
+  };
 }
 
 const isMain = process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url;
