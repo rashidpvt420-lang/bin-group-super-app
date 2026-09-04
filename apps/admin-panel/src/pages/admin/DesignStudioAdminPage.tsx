@@ -27,7 +27,6 @@ import {
 } from 'lucide-react';
 import { functions, httpsCallable } from '../../lib/firebase';
 import { binThemeTokens } from '../../theme/adminTheme';
-import DesignHandoffQueue from '../../components/DesignHandoffQueue';
 
 const MAX_REFERENCE_IMAGE_BYTES = 5 * 1024 * 1024;
 const ALLOWED_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
@@ -207,7 +206,6 @@ export default function DesignStudioAdminPage() {
                     </Alert>
                 )}
 
-                <DesignHandoffQueue />
                 <Grid container spacing={4}>
                     <Grid item xs={12} md={4}>
                         <Paper sx={{ p: 4, borderRadius: 6, bgcolor: 'rgba(22, 22, 24, 0.6)', border: '1px solid rgba(255,255,255,0.05)', height: '100%' }}>

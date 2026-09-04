@@ -31,9 +31,7 @@ test('new server-authoritative callables are exported and used by browser client
   }
   assert.match(tenantPayments, /httpsCallable\(functions,\s*['"]submitTenantPaymentProof['"]\)/);
   assert.match(designPayment, /httpsCallable\(functions,\s*['"]createDesignPaymentRequest['"]\)/);
-  assert.doesNotMatch(designPayment, /createStripeCheckoutSession/);
-  assert.match(designPayment, /httpsCallable\(functions,\s*['"]submitDesignOwnerDecision['"]\)/);
-  assert.match(designPayment, /httpsCallable\(functions,\s*['"]adminHandoffDesignRequest['"]\)/);
+  assert.match(designPayment, /httpsCallable\(functions,\s*['"]createStripeCheckoutSession['"]\)/);
   assert.match(payroll, /['"]adminGeneratePayrollBatch['"]/);
   assert.match(payroll, /['"]adminSettlePayrollRecord['"]/);
   assert.doesNotMatch(payroll, /collection\(db,\s*['"]transactions['"]\)/);

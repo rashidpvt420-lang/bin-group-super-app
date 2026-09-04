@@ -104,9 +104,11 @@ test('Phase 1 fails closed if Bank Transfer or Stripe is enabled', () => {
   assert.ok(errors.includes('phase1-manual stripeEnabled must equal false'));
 });
 
-test('Stripe remains mandatory for an explicit phase2-stripe policy', () => {
-  const required = requiredOperationalGatesForPaymentPolicy('phase2-stripe');
-  assert.ok(required.includes('stripeLiveBilling'));
+test('Phase 2 Stripe cannot be selected while PHASE1_CASH_CHEQUE_V1 is authoritative', () => {
+  assert.throws(
+    () => requiredOperationalGatesForPaymentPolicy('phase2-stripe'),
+    /phase2-stripe is disabled by PHASE1_CASH_CHEQUE_V1/,
+  );
 });
 
 test('unknown payment policy cannot weaken hard clearance', () => {

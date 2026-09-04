@@ -65,8 +65,11 @@ function validateLaunchRecord(record, releaseSha, workflowRunId) {
   if (status === 'waived' && !notes) fail('waived launch evidence requires a notes/reason field');
 
   return {
-    schemaVersion: 2,
+    schemaVersion: 3,
     source: 'github-actions',
+    evidenceLayer: 'hosted',
+    executionGenerated: true,
+    hardLaunchClaim: false,
     gateId: cleanString(record.gateId, 'gateId', 120),
     gateTitle: cleanString(record.gateTitle, 'gateTitle', 240),
     gateGroup,
@@ -91,8 +94,11 @@ function validateSmokeRecord(record, releaseSha, workflowRunId) {
   if (status === 'waived' && !notes) fail('waived smoke evidence requires a notes/reason field');
 
   return {
-    schemaVersion: 2,
+    schemaVersion: 3,
     source: 'github-actions',
+    evidenceLayer: 'hosted',
+    executionGenerated: true,
+    hardLaunchClaim: false,
     role,
     status,
     accountEmail: cleanString(record.accountEmail, 'accountEmail', 320).toLowerCase(),
@@ -311,6 +317,7 @@ async function main() {
       status: 'dry-run',
       releaseSha: validated.releaseSha,
       workflowRunId: validated.workflowRunId,
+      evidenceLayer: 'hosted',
       recordCount: validated.records.length,
       collections: [...new Set(validated.records.map((record) => record.collection))],
       evidenceHashes: validated.records.map((record) => record.payload.evidenceHash),

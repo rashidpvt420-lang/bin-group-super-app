@@ -24,3 +24,4 @@ export * from './utils/auditLogger';
 export * from './utils/ticketConstants';
 export * from './utils/queryUtils';
 export * from './lib/firebase';
+export * from '../packages/shared/src/config/providerLaunchTruth';

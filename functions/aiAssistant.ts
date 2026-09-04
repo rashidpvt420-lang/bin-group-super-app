@@ -254,15 +254,6 @@ export const runSovereignAI = onCall({
       "ceo",
       "operations_admin",
       "manager",
-      "finance_admin",
-      "hr_admin",
-      "support_admin",
-      "hr_manager",
-      "hr_staff",
-      "finance_staff",
-      "account_manager",
-      "dispatcher",
-      "operations_manager",
     ]),
   );
   const startedAt = Date.now();

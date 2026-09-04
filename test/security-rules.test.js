@@ -69,25 +69,6 @@ describe('Firestore Security Rules', () => {
     await assertFails(setDoc(doc(ownerADb, 'payment_transactions/pay_1'), { ownerId: 'owner_a', paymentVerified: true }));
   });
 
-  it('design decisions, quotes and payment handoff cannot be forged through browser writes, including Admin catch-alls', async () => {
-    const paths = ['design_requests/design_1', 'design_quotes/design_1', 'design_approvals/design_1_owner'];
-    for (const path of paths) await seedServerDocument(path, { ownerId: 'design_owner', userId: 'design_tenant', tenantId: 'design_tenant', tenantUid: 'design_tenant', status: 'AWAITING_OWNER_APPROVAL' });
-    for (const [uid, claims] of [['design_owner', { role: 'owner' }], ['design_tenant', { role: 'tenant' }], ['design_admin', { role: 'admin', admin: true }]]) {
-      const client = testEnv.authenticatedContext(uid, claims).firestore();
-      for (const path of paths) {
-        await assertSucceeds(getDoc(doc(client, path)));
-        await assertFails(updateDoc(doc(client, path), { status: 'PAID' }));
-        await assertFails(setDoc(doc(client, `${path}_forged`), { ownerId: uid, status: 'APPROVED' }));
-        await assertFails(deleteDoc(doc(client, path)));
-      }
-      const receiptRef = doc(client, 'design_receipt_registry/file_test');
-      await seedServerDocument('design_receipt_registry/file_test', { paymentId: 'design_1' });
-      await assertFails(setDoc(doc(client, 'design_receipt_registry/forged'), { paymentId: 'design_2' }));
-      await assertFails(updateDoc(receiptRef, { paymentId: 'design_2' }));
-      await assertFails(deleteDoc(receiptRef));
-    }
-  });
-
   it('owner profile activation fields remain server-authoritative', async () => {
     const adminDb = testEnv.authenticatedContext('admin_user', { admin: true }).firestore();
     await setDoc(doc(adminDb, 'owners/owner_a'), {

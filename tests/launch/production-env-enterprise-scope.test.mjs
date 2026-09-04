@@ -18,6 +18,7 @@ const baseEnvironment = Object.freeze({
   VITE_FIREBASE_APP_ID: '1:123413252227:web:publicapptest',
   VITE_FIREBASE_MESSAGING_SENDER_ID: '123413252227',
   VITE_FIREBASE_VAPID_KEY: 'vapid-key-for-test',
+  RELEASE_COMMIT_SHA: '0123456789abcdef0123456789abcdef01234567',
 });
 
 const runWriter = (overrides = {}) => {

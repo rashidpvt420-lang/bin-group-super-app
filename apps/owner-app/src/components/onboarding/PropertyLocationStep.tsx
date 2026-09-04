@@ -114,7 +114,7 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
                     verifiedAt: null,
                     requiresGeoReview: true,
                     dispatchReady: false,
-                },
+                } as any,
                 location: {
                     lat: geo.lat,
                     lng: geo.lng,

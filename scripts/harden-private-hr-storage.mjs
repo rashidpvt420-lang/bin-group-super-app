@@ -20,21 +20,16 @@ const previousHardenedCatchAll = `    // Unknown paths remain Founder/Admin-only
     match /{collection}/{allPaths=**} {
       allow read, write: if isAdmin() && collection != 'privateHrDocuments';
     }`;
-const priorHardenedCatchAll = `    // Unknown paths remain Founder/Admin-only, except private HR documents and
+const hardenedCatchAll = `    // Unknown paths remain Founder/Admin-only, except private HR documents and
     // generated staff reports. Those paths are written only through Admin SDK callables.
     match /{collection}/{allPaths=**} {
       allow read, write: if isAdmin() &&
         collection != 'privateHrDocuments' &&
         collection != 'staff-reports';
     }`;
-const hardenedCatchAll = priorHardenedCatchAll.replace(
-  "        collection != 'privateHrDocuments' &&",
-  "        collection != 'design-payment-receipts' &&\n        collection != 'privateHrDocuments' &&",
-);
 
 if (source.includes(legacyCatchAll)) source = source.replace(legacyCatchAll, hardenedCatchAll);
 if (source.includes(previousHardenedCatchAll)) source = source.replace(previousHardenedCatchAll, hardenedCatchAll);
-if (source.includes(priorHardenedCatchAll)) source = source.replace(priorHardenedCatchAll, hardenedCatchAll);
 if (!source.includes(hardenedCatchAll)) {
   throw new Error('[harden-private-hr-storage] global Storage fallback could not be bounded');
 }

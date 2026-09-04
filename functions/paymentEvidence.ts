@@ -187,10 +187,110 @@ export const submitTenantPaymentProof = onCall(
   },
 );
 
-export {
-  createDesignPaymentRequest,
-  getDesignPaymentInstructions,
-  submitDesignOwnerDecision,
-  adminReviewDesignPayment,
-  adminHandoffDesignRequest,
-} from './designPayments';
+export const createDesignPaymentRequest = onCall(
+  { cors: true, region: "europe-west3", enforceAppCheck: true },
+  async (request) => {
+    if (!request.auth?.uid) throw new HttpsError("unauthenticated", "Login required.");
+    const payerRole = roleOf(request.auth);
+    if (!["owner", "tenant"].includes(payerRole)) {
+      throw new HttpsError("permission-denied", "Only the approved owner or tenant payer can request design payment.");
+    }
+    const designRequestId = safeId(request.data?.designRequestId, "designRequestId");
+    const designRef = db.collection("design_requests").doc(designRequestId);
+    const paymentRef = db.collection("payment_transactions").doc(`design_${designRequestId}`);
+    const now = FieldValue.serverTimestamp();
+
+    const idempotent = await db.runTransaction(async (transaction) => {
+      const [designSnap, paymentSnap] = await Promise.all([
+        transaction.get(designRef),
+        transaction.get(paymentRef),
+      ]);
+      if (!designSnap.exists) throw new HttpsError("not-found", "Design request not found.");
+      const design = designSnap.data() || {};
+      const participants = new Set([
+        text(design.userId, 160),
+        text(design.payerId, 160),
+        text(design.ownerId, 160),
+        text(design.tenantId, 160),
+      ].filter(Boolean));
+      if (!participants.has(request.auth!.uid)) {
+        throw new HttpsError("permission-denied", "This design request belongs to another account.");
+      }
+      const designStatus = text(design.status, 80).toUpperCase();
+      if (![
+        "OWNER_APPROVED_TENANT_TO_PAY",
+        "OWNER_APPROVED_OWNER_TO_PAY",
+        "DEPOSIT_PENDING",
+        "AI_CONCEPT_READY",
+        "PAYMENT_PENDING",
+      ].includes(designStatus)) {
+        throw new HttpsError("failed-precondition", "The design request is not approved for payment.");
+      }
+      const finalTotal = positiveMoney(
+        design.quote?.finalTotal ||
+        design.quotedAmount ||
+        design.totalAmount,
+        "Approved design quote",
+      );
+      const amount = Math.round(finalTotal * 0.15 * 100) / 100;
+      if (paymentSnap.exists) {
+        const payment = paymentSnap.data() || {};
+        if (payment.payerId !== request.auth!.uid || Number(payment.amount || 0) !== amount) {
+          throw new HttpsError("already-exists", "Design payment request is bound to different evidence.");
+        }
+        return true;
+      }
+
+      transaction.create(paymentRef, {
+        paymentId: paymentRef.id,
+        type: "DESIGN_STUDIO_EXECUTION",
+        source: "AI_DESIGN_STUDIO",
+        designRequestId,
+        propertyId: design.propertyId || null,
+        propertyName: design.propertyName || null,
+        ownerId: design.ownerId || null,
+        tenantId: design.tenantId || null,
+        payerId: request.auth!.uid,
+        payerRole,
+        userId: request.auth!.uid,
+        amount,
+        amountReceived: 0,
+        currency: "AED",
+        status: "PAYMENT_REQUESTED",
+        paymentStatus: "PAYMENT_REQUESTED",
+        verificationState: "AWAITING_STRIPE_CHECKOUT",
+        paymentVerified: false,
+        approved: false,
+        adminApprovalRequired: false,
+        quoteTotal: finalTotal,
+        quoteDepositRate: 0.15,
+        createdAt: now,
+        updatedAt: now,
+      });
+      transaction.set(designRef, {
+        status: "PAYMENT_PENDING",
+        workflowStage: "PAYMENT_PENDING",
+        paymentId: paymentRef.id,
+        paymentStatus: "PENDING_ADMIN_PAYMENT_VERIFICATION",
+        executionStatus: "AWAITING_PAYMENT_VERIFICATION",
+        adminHandoffStatus: "PAYMENT_QUEUE",
+        engineerHandoffStatus: "WAITING_PAYMENT",
+        paymentRequestedAt: now,
+        updatedAt: now,
+      }, { merge: true });
+      transaction.create(db.collection("auditLogs").doc(`design_payment_${designRequestId}`), {
+        action: "DESIGN_PAYMENT_REQUEST_CREATED",
+        actorId: request.auth!.uid,
+        actorRole: payerRole,
+        designRequestId,
+        paymentId: paymentRef.id,
+        amount,
+        currency: "AED",
+        createdAt: now,
+      });
+      return false;
+    });
+
+    return { ok: true, paymentId: paymentRef.id, idempotent };
+  },
+);

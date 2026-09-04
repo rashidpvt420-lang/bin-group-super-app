@@ -21,6 +21,7 @@ import {
   validatePilotIncidentReport,
 } from './lib/hard-launch-gate.mjs';
 
+const PHASE1_PAYMENT_POLICY = 'phase1-manual';
 const failures = [];
 
 function requiredContext(name) {
@@ -50,7 +51,6 @@ const paths = {
   evidence: path.resolve('launch_package/launch-evidence-batch.json'),
   launchStatus: path.resolve('launch_package/launch-status.json'),
   publicReleaseStatus: path.resolve('launch_package/public-release-status.json'),
-  stripeLiveProof: path.resolve('launch_package/stripe-live-proof.json'),
   phase1ManualPaymentProof: path.resolve('launch_package/phase1-manual-payment-proof.json'),
   pilotIncidentReport: path.resolve('launch_package/pilot-incident-report.json'),
   decision: path.resolve('launch_package/hard-launch-decision.json'),
@@ -123,12 +123,18 @@ if (launchMode !== 'bank-pilot' && launchMode !== 'public') {
   failures.push('LAUNCH_MODE must be bank-pilot or public');
 }
 
-let publicReleaseStatus = null;
-let stripeLiveProof = null;
-let phase1ManualPaymentProof = null;
+// `bank-pilot` is a legacy internal controlled-pilot identifier; it does not
+// enable Bank Transfer. The current product/release policy is always Phase 1
+// Cash + Cheque. Phase 2 Stripe requires a separately reviewed source change,
+// never a workflow-dispatch input.
 const paymentPolicy = String(process.env.PAYMENT_POLICY || '').trim().toLowerCase();
+if (paymentPolicy !== PHASE1_PAYMENT_POLICY) {
+  failures.push('PAYMENT_POLICY must equal phase1-manual while PHASE1_CASH_CHEQUE_V1 is active');
+}
+
+let publicReleaseStatus = null;
+let phase1ManualPaymentProof = null;
 if (launchMode === 'public') {
-  if (!['phase1-manual', 'phase2-stripe'].includes(paymentPolicy)) failures.push('PAYMENT_POLICY must be phase1-manual or phase2-stripe for public launch');
   try {
     publicReleaseStatus = readJsonStrict(paths.publicReleaseStatus, 'public-release-status.json');
     if (
@@ -136,53 +142,33 @@ if (launchMode === 'public') {
       publicReleaseStatus.hardLaunchClaim === true || publicReleaseStatus.commitSha !== context.commitSha ||
       String(publicReleaseStatus.releaseId || '') !== `${context.runId}-${process.env.GITHUB_RUN_ATTEMPT}` ||
       publicReleaseStatus.validatedArtifactDigest !== deployment?.validatedArtifactDigest ||
-      publicReleaseStatus.paymentPolicy !== paymentPolicy ||
+      publicReleaseStatus.paymentPolicy !== PHASE1_PAYMENT_POLICY ||
       !Array.isArray(publicReleaseStatus.failures) || publicReleaseStatus.failures.length !== 0
-    ) failures.push('public-release-status.json is not a clear, same-run, exact-artifact payment-policy-bound result');
+    ) failures.push('public-release-status.json is not a clear, same-run, exact-artifact Phase 1 result');
   } catch (error) { failures.push(error.message); }
 
-  if (paymentPolicy === 'phase2-stripe') {
-    try {
-      stripeLiveProof = readJsonStrict(paths.stripeLiveProof, 'stripe-live-proof.json');
-      const proofAgeMs = Date.now() - Date.parse(stripeLiveProof.observedAt || '');
-      if (
-        stripeLiveProof.status !== 'passed' || stripeLiveProof.source !== 'stripe-api-live-verifier' ||
-        stripeLiveProof.liveMode !== true || stripeLiveProof.webhookProcessed !== true ||
-        stripeLiveProof.currency !== 'AED' || Number(stripeLiveProof.amountMinor || 0) <= 0 ||
-        stripeLiveProof.commitSha !== context.commitSha || stripeLiveProof.repository !== context.repository ||
-        String(stripeLiveProof.workflowRunId || '') !== context.runId ||
-        stripeLiveProof.releaseId !== `${context.runId}-${process.env.GITHUB_RUN_ATTEMPT}` ||
-        stripeLiveProof.validatedArtifactDigest !== deployment?.validatedArtifactDigest ||
-        !Number.isFinite(proofAgeMs) || proofAgeMs < 0 || proofAgeMs > 72 * 60 * 60 * 1000 ||
-        stripeLiveProof.hardLaunchClaim === true
-      ) failures.push('stripe-live-proof.json is stale, non-live, unprocessed, or not bound to this run and artifact');
-    } catch (error) { failures.push(error.message); }
-  }
-
-  if (paymentPolicy === 'phase1-manual') {
-    try {
-      phase1ManualPaymentProof = readJsonStrict(paths.phase1ManualPaymentProof, 'phase1-manual-payment-proof.json');
-      const proofAgeMs = Date.now() - Date.parse(phase1ManualPaymentProof.observedAt || '');
-      if (
-        phase1ManualPaymentProof.status !== 'passed' ||
-        phase1ManualPaymentProof.source !== 'firebase-production-manual-payment-policy-verifier' ||
-        phase1ManualPaymentProof.paymentPolicy !== 'phase1-manual' ||
-        phase1ManualPaymentProof.projectId !== PRODUCTION.projectId ||
-        phase1ManualPaymentProof.currency !== 'AED' ||
-        JSON.stringify(phase1ManualPaymentProof.approvedMethods) !== JSON.stringify(['CASH', 'CHEQUE']) ||
-        phase1ManualPaymentProof.bankTransferEnabled !== false || phase1ManualPaymentProof.stripeEnabled !== false ||
-        phase1ManualPaymentProof.sensitiveValuesExcluded !== true ||
-        !/^[0-9a-f]{64}$/.test(String(phase1ManualPaymentProof.configHash || '')) ||
-        !String(phase1ManualPaymentProof.configVersion || '').trim() ||
-        phase1ManualPaymentProof.commitSha !== context.commitSha || phase1ManualPaymentProof.repository !== context.repository ||
-        String(phase1ManualPaymentProof.workflowRunId || '') !== context.runId ||
-        phase1ManualPaymentProof.releaseId !== `${context.runId}-${process.env.GITHUB_RUN_ATTEMPT}` ||
-        phase1ManualPaymentProof.validatedArtifactDigest !== deployment?.validatedArtifactDigest ||
-        !Number.isFinite(proofAgeMs) || proofAgeMs < 0 || proofAgeMs > 72 * 60 * 60 * 1000 ||
-        phase1ManualPaymentProof.hardLaunchClaim === true
-      ) failures.push('phase1-manual-payment-proof.json is invalid, stale, or not bound to this run and artifact');
-    } catch (error) { failures.push(error.message); }
-  }
+  try {
+    phase1ManualPaymentProof = readJsonStrict(paths.phase1ManualPaymentProof, 'phase1-manual-payment-proof.json');
+    const proofAgeMs = Date.now() - Date.parse(phase1ManualPaymentProof.observedAt || '');
+    if (
+      phase1ManualPaymentProof.status !== 'passed' ||
+      phase1ManualPaymentProof.source !== 'firebase-production-manual-payment-policy-verifier' ||
+      phase1ManualPaymentProof.paymentPolicy !== PHASE1_PAYMENT_POLICY ||
+      phase1ManualPaymentProof.projectId !== PRODUCTION.projectId ||
+      phase1ManualPaymentProof.currency !== 'AED' ||
+      JSON.stringify(phase1ManualPaymentProof.approvedMethods) !== JSON.stringify(['CASH', 'CHEQUE']) ||
+      phase1ManualPaymentProof.bankTransferEnabled !== false || phase1ManualPaymentProof.stripeEnabled !== false ||
+      phase1ManualPaymentProof.sensitiveValuesExcluded !== true ||
+      !/^[0-9a-f]{64}$/.test(String(phase1ManualPaymentProof.configHash || '')) ||
+      !String(phase1ManualPaymentProof.configVersion || '').trim() ||
+      phase1ManualPaymentProof.commitSha !== context.commitSha || phase1ManualPaymentProof.repository !== context.repository ||
+      String(phase1ManualPaymentProof.workflowRunId || '') !== context.runId ||
+      phase1ManualPaymentProof.releaseId !== `${context.runId}-${process.env.GITHUB_RUN_ATTEMPT}` ||
+      phase1ManualPaymentProof.validatedArtifactDigest !== deployment?.validatedArtifactDigest ||
+      !Number.isFinite(proofAgeMs) || proofAgeMs < 0 || proofAgeMs > 72 * 60 * 60 * 1000 ||
+      phase1ManualPaymentProof.hardLaunchClaim === true
+    ) failures.push('phase1-manual-payment-proof.json is invalid, stale, or not bound to this run and artifact');
+  } catch (error) { failures.push(error.message); }
 
   try {
     const pilotIncidentReport = readJsonStrict(paths.pilotIncidentReport, 'pilot-incident-report.json');
@@ -191,9 +177,7 @@ if (launchMode === 'public') {
 }
 
 const postdeployCleared = publicReleaseStatus?.publicReleaseCleared === true;
-const paymentProofOk = paymentPolicy === 'phase1-manual'
-  ? phase1ManualPaymentProof?.status === 'passed'
-  : paymentPolicy === 'phase2-stripe' && stripeLiveProof?.status === 'passed';
+const paymentProofOk = paymentPolicy === PHASE1_PAYMENT_POLICY && phase1ManualPaymentProof?.status === 'passed';
 
 if (failures.length) {
   console.error('\n[hard-launch-decision] FAIL — hard public launch is not approved');
@@ -208,8 +192,7 @@ const evidenceHashes = {
   liveEvidence: sha256File(paths.evidence),
   ...(launchMode === 'public' ? {
     publicReleaseStatus: sha256File(paths.publicReleaseStatus),
-    ...(paymentPolicy === 'phase1-manual' ? { phase1ManualPaymentProof: sha256File(paths.phase1ManualPaymentProof) } : {}),
-    ...(paymentPolicy === 'phase2-stripe' ? { stripeLiveProof: sha256File(paths.stripeLiveProof) } : {}),
+    phase1ManualPaymentProof: sha256File(paths.phase1ManualPaymentProof),
     pilotIncidentReport: sha256File(paths.pilotIncidentReport),
   } : {}),
 };
@@ -222,17 +205,17 @@ let decisionRule =
 if (launchMode === 'bank-pilot') {
   status = 'bank-pilot-no-public-claim';
   hardLaunchClaim = false;
-  decisionRule = 'bank-pilot mode records a signed decision without claiming hard public launch';
+  decisionRule = 'controlled pilot mode records a signed decision without claiming hard public launch; payment policy remains Phase 1 Cash/Cheque';
 } else if (launchMode === 'public' && (!postdeployCleared || !paymentProofOk)) {
   status = 'public-awaiting-postdeploy-clearance';
   hardLaunchClaim = false;
   decisionRule =
-    'public mode requires postdeploy release clearance and payment-policy-bound production proof before hardLaunchClaim may become true';
+    'public mode requires postdeploy release clearance and exact-artifact Phase 1 Cash/Cheque production proof before hardLaunchClaim may become true';
 } else if (launchMode === 'public' && postdeployCleared && paymentProofOk) {
   status = 'approved';
   hardLaunchClaim = true;
   decisionRule =
-    `same-main-commit deployment + live evidence + App Check + clear incidents + signed founder authorization + postdeploy clearance + ${'${paymentPolicy}'} production payment proof`;
+    'same-main-commit deployment + live evidence + App Check + clear incidents + signed founder authorization + postdeploy clearance + phase1-manual Cash/Cheque production proof';
 }
 
 const payload = {
@@ -241,7 +224,7 @@ const payload = {
   status,
   hardLaunchClaim,
   launchMode,
-  paymentPolicy: launchMode === 'public' ? paymentPolicy : null,
+  paymentPolicy: PHASE1_PAYMENT_POLICY,
   commitSha: context.commitSha,
   ref: context.ref,
   repository: context.repository,

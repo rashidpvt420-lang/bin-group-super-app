@@ -180,12 +180,6 @@ export function generateSovereignAIResponse(request: SovereignAIRequest): string
     return `${base}${describeTruthLedger(snapshot)}`;
   }
 
-  // Product questions are not requests to score a particular property. Handle
-  // the public shortcut before the broad "truth"/"working" ledger keywords.
-  if (/platform overview|(?:tell me about|what is|explain) bin group|property truth infrastructure/.test(text)) {
-    return 'BIN GROUP connects Owners, Tenants, Technicians, Brokers, and Admin through property onboarding, maintenance requests, approvals, and evidence records. Owners can review their property records; Tenants can report issues; Technicians can manage assigned work; Brokers can track referrals; Admin manages protected operations. The Property Truth Ledger brings recorded maintenance history together. This is local product guidance, not a live account assessment or a launch-readiness certification. Sign in to your role portal to view your own records and request authenticated AI assistance.';
-  }
-
   if (snapshot.insufficientData && (text.includes('score') || text.includes('truth') || text.includes('ledger') || text.includes('working'))) {
     return `I cannot certify this property as verified yet because the live context has insufficient operational evidence. ${describeTruthLedger(snapshot)}`;
   }
