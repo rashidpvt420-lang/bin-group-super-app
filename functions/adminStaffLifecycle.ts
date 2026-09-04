@@ -281,7 +281,7 @@ export const adminGetStaffDetails = onCall({ cors: true, region: "europe-west3",
     }));
   const payroll = includePrivate
     ? mapDocs(payrollSnap)
-      .filter((entry: any) => [entry.uid, entry.staffId, entry.employeeId].map(clean).includes(uid))
+      .filter((entry: any) => [entry.uid, entry.staffId, entry.employeeId, entry.techId, entry.technicianId].map(clean).includes(uid))
       .slice(0, 100)
       .map((entry: any) => ({
         id: entry.id,
@@ -482,6 +482,8 @@ export const adminUpdateStaffOnboarding = onCall({ cors: true, region: "europe-w
   const state = onboardingState(staff.role, staff.authUser.emailVerified, staff.data.onboardingChecklist || {}, request.data || {});
   const now = FieldValue.serverTimestamp();
   const status = state.active ? "ACTIVE" : state.stage;
+  const previousClaims = staff.authUser.customClaims || {};
+  const nextClaims = { ...previousClaims, suspended: !state.active };
   const batch = db.batch();
   batch.set(db.collection("users").doc(uid), {
     onboardingChecklist: state.checklist,
@@ -489,6 +491,7 @@ export const adminUpdateStaffOnboarding = onCall({ cors: true, region: "europe-w
     onboardingComplete: state.active,
     emailVerified: staff.authUser.emailVerified,
     status,
+    suspended: !state.active,
     updatedAt: now,
     updatedBy: actorId,
   }, { merge: true });
@@ -496,12 +499,14 @@ export const adminUpdateStaffOnboarding = onCall({ cors: true, region: "europe-w
     onboardingStage: state.stage,
     onboardingComplete: state.active,
     status,
+    suspended: !state.active,
     updatedAt: now,
   }, { merge: true });
   batch.set(db.collection("staffAccess").doc(uid), {
     onboardingStage: state.stage,
     status,
-    active: true,
+    active: state.active,
+    suspended: !state.active,
     updatedAt: now,
     updatedBy: actorId,
   }, { merge: true });
@@ -510,6 +515,7 @@ export const adminUpdateStaffOnboarding = onCall({ cors: true, region: "europe-w
       onboardingStage: state.stage,
       onboardingComplete: state.active,
       status,
+      suspended: !state.active,
       approvalStatus: state.active ? "APPROVED" : "PENDING",
       available: state.active ? Boolean(staff.technician.available ?? true) : false,
       onDuty: state.active ? Boolean(staff.technician.onDuty) : false,
@@ -522,11 +528,36 @@ export const adminUpdateStaffOnboarding = onCall({ cors: true, region: "europe-w
     action: "ADMIN_UPDATE_STAFF_ONBOARDING",
     targetType: "users",
     targetId: uid,
-    metadata: { role: staff.role, stage: state.stage, checklist: state.checklist, emailVerified: staff.authUser.emailVerified },
+    metadata: {
+      role: staff.role,
+      stage: state.stage,
+      checklist: state.checklist,
+      emailVerified: staff.authUser.emailVerified,
+      portalAccessActive: state.active,
+      refreshTokensRevoked: true,
+    },
     createdAt: now,
   });
-  await batch.commit();
-  return { success: true, uid, stage: state.stage, active: state.active, emailVerified: staff.authUser.emailVerified, checklist: state.checklist };
+
+  if (state.active) {
+    await batch.commit();
+    await admin.auth().setCustomUserClaims(uid, nextClaims);
+    await admin.auth().revokeRefreshTokens(uid);
+  } else {
+    await admin.auth().setCustomUserClaims(uid, nextClaims);
+    await admin.auth().revokeRefreshTokens(uid);
+    await batch.commit();
+  }
+
+  return {
+    success: true,
+    uid,
+    stage: state.stage,
+    active: state.active,
+    emailVerified: staff.authUser.emailVerified,
+    checklist: state.checklist,
+    refreshTokensRevoked: true,
+  };
 });
 
 export const adminOffboardStaff = onCall({ cors: true, region: "europe-west3", enforceAppCheck: true }, async (request) => {
