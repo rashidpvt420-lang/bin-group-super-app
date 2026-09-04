@@ -1,11 +1,13 @@
 # BIN GROUP — Production Environment Checklist
 
 > [!IMPORTANT]
-> Public launch requires both **GitHub Actions Secrets** for client build-time values and **Firebase Secret Manager** entries for backend providers that are actually enabled in the launch phase.
+> Public launch uses both **GitHub Actions Secrets** for client build-time values and **Firebase Secret Manager** entries for backend Functions.
 > Navigate to: **GitHub → Repository → Settings → Secrets and variables → Actions → New repository secret** for `VITE_*` values.
-> Use `firebase functions:secrets:set` for backend provider secrets.
+> Use `firebase functions:secrets:set` for backend Function secrets.
 >
-> **Phase 1 payment policy is authoritative:** Cash ✅ and Cheque ✅ only. Bank Transfer ❌ and Card/Stripe ❌ are disabled. The presence of dormant future-provider code does not make that provider a production requirement or a live capability.
+> Firebase deploy analyzes the compiled Functions codebase as one deployment unit. Therefore a Secret Manager key bound to an exported Function can be **deployment-required even when that provider is disabled by Phase 1 product policy**. Secret presence proves only that the deployment contract can be satisfied; it does **not** activate the provider and is never live-provider evidence.
+>
+> **Phase 1 payment policy is authoritative:** Cash ✅ and Cheque ✅ only. Bank Transfer ❌ and Card/Stripe ❌ are disabled. Dormant future-provider code and deployment-bound secret resources do not make those providers user-facing Phase 1 capabilities.
 
 ---
 
@@ -104,9 +106,9 @@ The protected production deploy entrypoint runs `scripts/verify-firebase-phone-a
 ## 5. Backend Function Secrets — Firebase Secret Manager Only
 
 > [!WARNING]
-> Do **not** add backend provider secrets to GitHub Secrets or `.env` files. Use Firebase Secret Manager exclusively. A secret being present means **configured**, not **verified live**.
+> Do **not** add backend provider secrets to GitHub Secrets or `.env` files. Use Firebase Secret Manager exclusively. A secret being present means the deployment/runtime can resolve its binding; it does **not** mean the provider is enabled, verified, or approved for public launch.
 
-### Phase 1 required providers
+### Phase 1 operational providers
 
 ```bash
 # Branded email delivery provider
@@ -115,28 +117,29 @@ firebase functions:secrets:set SMTP_PASS
 
 # AI providers used by Sovereign AI
 firebase functions:secrets:set OPENAI_API_KEY
+firebase functions:secrets:set IMAGE_GENERATION_API_KEY
 firebase functions:secrets:set GEMINI_API_KEY
 ```
 
-### Optional providers — not Phase 1 launch blockers unless explicitly enabled
+The protected deployment preflight also verifies non-provider Function secrets and peppers such as `OWNER_CONTRACT_OTP_PEPPER`, `BROKER_PAYOUT_OTP_PEPPER`, `IOT_GATEWAY_TOKEN`, and `QR_SIGNING_SECRET`. The authoritative deployment contract is `requiredFirebaseDeploymentSecrets` in `scripts/verify-firebase-production-secrets.mjs` and must remain synchronized with the exported compiled Functions runtime.
+
+### Deployment-bound dormant providers — disabled as Phase 1 capabilities
+
+The current Functions codebase still exports endpoints that bind WhatsApp and Stripe Secret Manager keys. Firebase analyzes those bindings during deployment, so the corresponding **Secret Manager resources with enabled versions must exist for the protected Functions deployment to succeed**, even though the providers are not Phase 1 launch capabilities.
 
 ```bash
-# WhatsApp Business Cloud API (Meta)
+# Deployment-bound WhatsApp resources. Presence does not enable or verify WhatsApp.
 firebase functions:secrets:set WHATSAPP_TOKEN
 firebase functions:secrets:set WHATSAPP_PHONE_NUMBER_ID
 firebase functions:secrets:set WHATSAPP_VERIFY_TOKEN
 firebase functions:secrets:set WHATSAPP_APP_SECRET
-```
 
-### Future payment provider — disabled in Phase 1
-
-The repository may retain a hardened Stripe integration for a future payment-policy migration. Do **not** set or require Stripe production credentials for the Phase 1 Cash/Cheque launch, and do not describe Stripe/Card as active.
-
-```bash
-# FUTURE PHASE ONLY — do not enable under PHASE1_CASH_CHEQUE_V1
+# Deployment-bound future Stripe resources. Phase 1 runtime/policy remains fail-closed.
 firebase functions:secrets:set STRIPE_SECRET_KEY
 firebase functions:secrets:set STRIPE_WEBHOOK_SECRET
 ```
+
+**Do not interpret those resources as provider activation.** Under `PHASE1_CASH_CHEQUE_V1`, Stripe/Card remains disabled and cannot satisfy the Phase 1 payment gate. WhatsApp remains optional and must not be described as live without separate provider approval and hosted delivery evidence. A future source change that removes the dormant secret bindings may also remove these keys from the deployment-required list, but the preflight and documentation must change together.
 
 > [!NOTE]
 > The production mail function reads `SMTP_USER` and `SMTP_PASS`. Do not use the old `SMTP_PASSWORD` name; it will not satisfy the deployed function.
@@ -195,11 +198,12 @@ Ensure these domains are in Firebase Console → **Authentication** → **Settin
 - [ ] Firebase Authorized Domains includes custom domain
 - [ ] Phase 1 server payment policy resolves **exactly** `CASH` + `CHEQUE`
 - [ ] Bank Transfer remains disabled in Phase 1
-- [ ] Stripe/Card remains disabled in Phase 1; Stripe credentials and live checkout are **not** Phase 1 launch requirements
+- [ ] Stripe/Card remains disabled in Phase 1; any deployment-bound Stripe Secret Manager resources are treated only as dormant Function bindings, not provider activation or launch evidence
 - [ ] `SMTP_USER` and `SMTP_PASS` set in Firebase Secret Manager
+- [ ] All keys currently listed by `requiredFirebaseDeploymentSecrets` exist with an enabled Secret Manager version before Functions deployment
 - [ ] Branded email sender test creates `mail/{id}` and reaches `delivery.state=SUCCESS`
 - [ ] `OPENAI_API_KEY` and/or approved AI provider configuration exists server-side; a signed-in hosted Sovereign AI proof is recorded without exposing keys
-- [ ] Optional WhatsApp is described as live only if sender/template/provider approval and hosted delivery evidence exist
+- [ ] Optional WhatsApp is described as live only if sender/template/provider approval and hosted delivery evidence exist; deployment-bound WhatsApp secret resources alone do not count
 - [ ] Admin password rotated and `E2E_ADMIN_PASSWORD` GitHub secret updated
 - [ ] Manual Live Role Smoke Tests workflow passes for admin, owner, tenant, technician, and broker
 - [ ] `npm run test:rules` passes all test cases
