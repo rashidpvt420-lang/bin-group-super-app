@@ -345,9 +345,11 @@ async function openAiRanking(apiKey: string, queryText: string, candidates: Arra
   });
   const raw = cleanString((response as any).output_text, 4000).replace(/^```(?:json)?/i, "").replace(/```$/i, "").trim();
   const parsed = JSON.parse(raw);
-  const ids = Array.isArray(parsed?.ids) ? parsed.ids.map((value: unknown) => cleanString(value, 160)) : [];
+  const ids: string[] = Array.isArray(parsed?.ids)
+    ? parsed.ids.map((value: unknown) => cleanString(value, 160))
+    : [];
   const allowed = new Set(candidates.map((item) => item.id));
-  return [...new Set(ids.filter((id: string) => allowed.has(id)))].slice(0, 5);
+  return [...new Set(ids.filter((id) => allowed.has(id)))].slice(0, 5);
 }
 
 export const recommendHomeDiscoveryListings = onCall({
@@ -447,10 +449,7 @@ async function notifySavedSearchMatches(listingId: string, data: FirebaseFiresto
       },
       source: "home_discovery_saved_search_alert",
       createdAt: FieldValue.serverTimestamp(),
-    }, { merge: false }).catch((error: any) => {
-      if (String(error?.code || "").includes("already-exists")) return undefined;
-      throw error;
-    }));
+    }, { merge: false }));
   }
   await Promise.all(writes);
 }
