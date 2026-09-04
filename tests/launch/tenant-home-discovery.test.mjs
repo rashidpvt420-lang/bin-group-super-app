@@ -53,6 +53,46 @@ test('home discovery supports verified inventory, photos, filters, favorites, vi
   assert.match(page, ARABIC);
 });
 
+test('owner vacancy intake collects the facts needed for a full home listing', async () => {
+  const owner = await read('src/owner/pages/ContractorMarketplacePage.tsx');
+
+  assert.match(owner, /HOME_RENT_LISTING_REQUEST/);
+  assert.match(owner, /owner_home_discovery_v1/);
+  assert.match(owner, /propertyType/);
+  assert.match(owner, /propertyAddress/);
+  assert.match(owner, /areaSqFt/);
+  assert.match(owner, /bathrooms/);
+  assert.match(owner, /furnishing/);
+  assert.match(owner, /availableFrom/);
+  assert.match(owner, /numberOfCheques/);
+  assert.match(owner, /securityDeposit/);
+  assert.match(owner, /imageUrls/);
+  assert.match(owner, /amenities/);
+  assert.match(owner, /BIN_LISTING_REVIEW_REQUIRED/);
+  assert.match(owner, /submitting this form does not make a listing live immediately/);
+  assert.match(owner, ARABIC);
+});
+
+test('Admin review publishes enriched verified inventory without breaking the legacy queue transport', async () => {
+  const admin = await read('apps/admin-panel/src/pages/ops/MarketplaceApprovalsPage.tsx');
+
+  assert.match(admin, /recordType: 'ROOM_RENT_LISTING'/);
+  assert.match(admin, /listingType: 'HOME_RENT_LISTING'/);
+  assert.match(admin, /listingVersion: 'HOME_DISCOVERY_V1'/);
+  assert.match(admin, /approved: true/);
+  assert.match(admin, /hasBinContract: true/);
+  assert.match(admin, /notRented: true/);
+  assert.match(admin, /verifiedByAdmin: true/);
+  assert.match(admin, /coverImageUrl/);
+  assert.match(admin, /propertyType/);
+  assert.match(admin, /areaSqFt/);
+  assert.match(admin, /permitNumber/);
+  assert.match(admin, /permitVerified/);
+  assert.match(admin, /permitVerificationUrl/);
+  assert.match(admin, /HOME_LISTING_PUBLISHED/);
+  assert.match(admin, /VIEWING_COORDINATION_STARTED/);
+});
+
 test('home discovery remains BIN-contract and availability gated', async () => {
   const page = await read('src/tenant/pages/TenantMarketplacePage.tsx');
 
