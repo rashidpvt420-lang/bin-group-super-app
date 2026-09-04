@@ -114,10 +114,11 @@ test('Tenant Wave 2 UI exposes grounded AI, server alerts and preserves the veri
   assert.match(tenantApp, /path=["']\/marketplace["'] element=\{<TenantHomeDiscoveryWave2Page \/>\}/);
 });
 
-test('Wave 2 exposes a privacy-safe pre-login homes route with secure tenant conversion CTA', async () => {
-  const [app, page] = await Promise.all([
+test('Wave 2 exposes a privacy-safe pre-login homes route and the landing page sends home seekers there', async () => {
+  const [app, page, landing] = await Promise.all([
     read('src/App.tsx'),
     read('src/pages/public/PublicHomeDiscoveryPage.tsx'),
+    read('src/pages/public/SimpleStartPage.tsx'),
   ]);
 
   assert.match(app, /PublicHomeDiscoveryPage/);
@@ -127,4 +128,8 @@ test('Wave 2 exposes a privacy-safe pre-login homes route with secure tenant con
   assert.match(page, /returnTo=\$\{encodeURIComponent\(["']\/tenant\/homes["']\)\}/);
   assert.match(page, /BIN VERIFIED/);
   assert.match(page, ARABIC);
+
+  assert.match(landing, /I’m Looking for a Home/);
+  assert.match(landing, /secondaryPath: ["']\/homes["']/);
+  assert.match(landing, /I Already Rent With BIN/);
 });
