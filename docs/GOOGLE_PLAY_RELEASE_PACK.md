@@ -1,6 +1,6 @@
 # BIN GROUP Google Play Release Checklist
 
-Last updated: 2026-07-21
+Last updated: 2026-08-22
 
 This checklist keeps the Google Play submission aligned with the exact production build. It is operator guidance, not launch evidence. Static “passing” statements in this document must never be treated as proof.
 
@@ -19,7 +19,7 @@ Required evidence must come from protected workflows and real devices:
 - App Check, SMTP, Firestore, Storage, Functions, and route evidence are current and same-SHA;
 - the signed Android App Bundle is generated from that exact commit.
 
-For unrestricted public release, the protected hard-clearance chain, verified 24-hour pilot, public postdeploy gate, real Stripe live proof, and final signed `hardLaunchClaim=true` decision must also pass.
+For unrestricted public release, the protected hard-clearance chain, verified 24-hour pilot, public postdeploy gate, payment-policy-bound production proof, and final signed `hardLaunchClaim=true` decision must also pass. Under the current Phase 1 BIN GROUP policy, the approved production methods are `CASH` and `CHEQUE`; Bank Transfer and Stripe must remain disabled. Stripe live proof applies only if BIN GROUP deliberately moves to the separate `phase2-stripe` policy in the future.
 
 ## 1. Production deployment entrypoint
 
@@ -146,11 +146,23 @@ Review the production implementation and completed Data Safety form together. Po
 
 Do not copy assumptions from this document into Play Console. Verify every declaration against the exact release build and configured services.
 
+Google Play requires the Data Safety form for apps published on closed, open, or production tracks. An app that is exclusively on internal testing is exempt from the Data Safety section, but the form and privacy policy must be ready before moving beyond internal-only testing.
+
 ## 8. Reviewer notes
 
 Use a concise note such as:
 
 > BIN GROUP is a UAE property maintenance and property management platform with role-based access for Admin, Owner, Tenant, Technician, and Broker workflows. Some functionality requires a prepared reviewer account, role assignment, and linked test data. Please use the role-specific credentials and instructions entered in the App access section. The app uses Firebase Authentication, Firestore, Storage, Hosting, and Cloud Functions.
+
+## 9. Google Play closed-testing requirement
+
+Do not treat a 14-day closed test as a universal requirement for every developer account.
+
+Google's current published rule specifically requires **personal developer accounts created after 13 November 2023** to run a closed test with at least **12 testers opted in continuously for 14 days** before they can apply for production access.
+
+For BIN GROUP, the Play Console account type and Dashboard are authoritative. If the Console shows the production-access testing requirement, satisfy the 12-testers/14-days rule exactly. If the account is not subject to that rule and Production is already available, the team may proceed according to the Console while still completing internal/real-device QA.
+
+Official reference: https://support.google.com/googleplay/android-developer/answer/14151465
 
 ## Final submission gate
 
@@ -167,5 +179,6 @@ Submit only when all applicable items are true:
 - Privacy Policy, Terms, support, and account-access instructions open correctly.
 - Dedicated least-privilege reviewer credentials are entered in Play Console App access.
 - Store listing and Data Safety declarations match the exact production build.
+- If Play Console requires new-personal-account production access testing, at least 12 testers have remained opted in continuously for the preceding 14 days before the production-access application.
 - No unresolved P0/P1 release blocker remains.
 - For unrestricted public launch, the final protected signed decision has `hardLaunchClaim=true`.
