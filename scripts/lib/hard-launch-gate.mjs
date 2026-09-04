@@ -6,11 +6,10 @@ import * as base from './hard-launch-gate-base.mjs';
 export * from './hard-launch-gate-base.mjs';
 
 export const PHASE1_PAYMENT_POLICY = 'phase1-manual';
+// Retained only as a recognizable future-migration identifier. It is disabled
+// by the current product policy and cannot be activated with a workflow input.
 export const PHASE2_STRIPE_PAYMENT_POLICY = 'phase2-stripe';
 
-// Keep the protected hard-launch contract explicit in this policy-aware facade.
-// This catches accidental drift in the base implementation while allowing only the
-// Stripe gate to be policy-conditional for the Cash/Cheque-only Phase 1 launch.
 const BASE_REQUIRED_OPERATIONAL_GATES_CONTRACT = Object.freeze([
   'ownerPaymentActivation',
   'paymentUnlockExactlyOnce',
@@ -68,12 +67,14 @@ const PHASE1_REQUIRED_OPERATIONAL_GATES = Object.freeze(
 export function requiredOperationalGatesForPaymentPolicy(paymentPolicy) {
   const policy = String(paymentPolicy || '').trim().toLowerCase();
   if (policy === PHASE1_PAYMENT_POLICY) return PHASE1_REQUIRED_OPERATIONAL_GATES;
-  if (policy === PHASE2_STRIPE_PAYMENT_POLICY) return base.REQUIRED_OPERATIONAL_GATES;
+  if (policy === PHASE2_STRIPE_PAYMENT_POLICY) {
+    throw new Error('phase2-stripe is disabled by PHASE1_CASH_CHEQUE_V1 and requires a separately reviewed source migration');
+  }
   throw new Error(`Unsupported payment policy for hard-launch operations: ${policy || '(missing)'}`);
 }
 
-// Backward compatibility for legacy callers/tests. Runtime payment-policy-aware callers
-// must use requiredOperationalGatesForPaymentPolicy().
+// Backward compatibility for base schema consumers only. Policy-aware runtime
+// callers must use requiredOperationalGatesForPaymentPolicy().
 export const REQUIRED_OPERATIONAL_GATES = base.REQUIRED_OPERATIONAL_GATES;
 
 function unique(values) {
@@ -122,10 +123,7 @@ function validatePaymentPolicyBinding(doc) {
   }
 
   if (policy === PHASE2_STRIPE_PAYMENT_POLICY) {
-    if (doc?.stripeEnabled !== true) errors.push('phase2-stripe stripeEnabled must equal true');
-    if (!normalizePaymentMethods(doc?.approvedPaymentMethods).includes('STRIPE')) {
-      errors.push('phase2-stripe approvedPaymentMethods must include STRIPE');
-    }
+    errors.push('phase2-stripe is disabled by PHASE1_CASH_CHEQUE_V1; enable it only through a separately reviewed source migration');
     return errors;
   }
 
@@ -137,8 +135,8 @@ export function validateOperationalReadinessReport(doc, commitSha, options = {})
   const policy = String(doc?.paymentPolicy || '').trim().toLowerCase();
   const baseErrors = base.validateOperationalReadinessReport(doc, commitSha, options);
 
-  // Legacy reports without an explicit policy remain under the old stricter rule,
-  // which includes Stripe. This prevents a missing policy from becoming a bypass.
+  // Missing policy stays under the stricter base schema and cannot become a
+  // bypass. Current runtime evidence must state phase1-manual explicitly.
   if (!policy) return baseErrors;
 
   const policyErrors = validatePaymentPolicyBinding(doc);
@@ -180,7 +178,7 @@ export function evaluateHardLaunchEligibility(args = {}) {
 
   return {
     ...baseResult,
-    hardLaunchEligible: baseResult.pilotEligible && errors.length === 0,
+    hardLaunchEligible: baseResult.pilotEligible && policy === PHASE1_PAYMENT_POLICY && errors.length === 0,
     hardLaunchClaim: false,
     errors,
   };
