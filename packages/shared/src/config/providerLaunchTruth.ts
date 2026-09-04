@@ -16,6 +16,9 @@ export type LaunchEvidenceRecord = {
   evidenceLayer?: LaunchEvidenceLayer | string | null;
   commitSha?: string | null;
   releaseSha?: string | null;
+  source?: string | null;
+  executionGenerated?: boolean | null;
+  hardLaunchClaim?: boolean | null;
 };
 
 export const PHASE1_PAYMENT_POLICY = Object.freeze({
@@ -30,12 +33,36 @@ export const PHASE1_PAYMENT_POLICY = Object.freeze({
 
 export const PROVIDER_LAUNCH_REQUIREMENTS: readonly ProviderLaunchRequirement[] = Object.freeze([
   {
+    id: 'productionHosting',
+    label: 'Production hosting deployment',
+    required: true,
+    requiredEvidenceLayer: 'hosted',
+    configurationAuthority: 'firebase',
+    liveProof: 'Protected exact-SHA Firebase Hosting deployment evidence for the public and Admin surfaces.',
+  },
+  {
+    id: 'productionFunctionsDeploy',
+    label: 'Production Functions deployment',
+    required: true,
+    requiredEvidenceLayer: 'hosted',
+    configurationAuthority: 'firebase',
+    liveProof: 'Protected exact-SHA Firebase Functions deployment evidence for the deployed runtime.',
+  },
+  {
     id: 'firebaseAuth',
     label: 'Firebase Auth',
     required: true,
     requiredEvidenceLayer: 'hosted',
     configurationAuthority: 'firebase',
     liveProof: 'Fresh hosted production login proof for all five roles.',
+  },
+  {
+    id: 'firestoreRules',
+    label: 'Firestore security authority',
+    required: true,
+    requiredEvidenceLayer: 'hosted',
+    configurationAuthority: 'firebase',
+    liveProof: 'Current exact-SHA rules proof plus hosted production authorization verification.',
   },
   {
     id: 'storageRules',
@@ -52,6 +79,14 @@ export const PROVIDER_LAUNCH_REQUIREMENTS: readonly ProviderLaunchRequirement[] 
     requiredEvidenceLayer: 'hosted',
     configurationAuthority: 'firebase',
     liveProof: 'Fresh production callable/trigger proof. Deployment alone is not sufficient.',
+  },
+  {
+    id: 'firebaseBillingPlan',
+    label: 'Firebase production billing capability',
+    required: true,
+    requiredEvidenceLayer: 'hosted',
+    configurationAuthority: 'firebase',
+    liveProof: 'Protected production proof that the Firebase billing plan supports every provider enabled for Phase 1.',
   },
   {
     id: 'firebaseCloudMessaging',
@@ -117,6 +152,12 @@ export function evidenceLayerSatisfies(actual: unknown, required: LaunchEvidence
   return normalized !== null && EVIDENCE_LAYER_RANK[normalized] >= EVIDENCE_LAYER_RANK[required];
 }
 
+/**
+ * Qualifies an evidence record for exact-SHA release coverage. This helper does
+ * not issue the final hard-launch decision. Only protected execution-generated
+ * GitHub evidence can qualify; manually entered Admin evidence remains useful
+ * for review/history but cannot self-certify a release.
+ */
 export function evidenceCountsForPublicLaunch(
   evidence: LaunchEvidenceRecord | null | undefined,
   expectedCommitSha: unknown,
@@ -124,6 +165,9 @@ export function evidenceCountsForPublicLaunch(
 ): boolean {
   if (!evidence) return false;
   if (String(evidence.status || '').trim().toLowerCase() !== 'passed') return false;
+  if (String(evidence.source || '').trim().toLowerCase() !== 'github-actions') return false;
+  if (evidence.executionGenerated !== true) return false;
+  if (evidence.hardLaunchClaim !== false) return false;
   const expected = normalizeCommitSha(expectedCommitSha);
   const observed = normalizeCommitSha(evidence.releaseSha || evidence.commitSha);
   if (!expected || !observed || expected !== observed) return false;
