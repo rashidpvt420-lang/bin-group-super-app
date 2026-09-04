@@ -21,6 +21,9 @@ test('Wave 2 backend is deployed through runtime and public browsing is sanitize
   assert.match(backend, /SANITIZED_VERIFIED_LISTINGS_ONLY/);
   assert.match(backend, /exactAddressExposed: false/);
   assert.match(backend, /ownerIdentityExposed: false/);
+  assert.match(backend, /while \(rows\.length < limit\)/);
+  assert.match(backend, /orderBy\(FieldPath\.documentId\(\)\)/);
+  assert.match(backend, /queryRef = queryRef\.startAfter\(cursor\)/);
 
   const publicProjection = backend.slice(backend.indexOf('function publicListing'), backend.indexOf('function normalizeFilters'));
   assert.doesNotMatch(publicProjection, /ownerEmail|ownerId|propertyAddress|latitude|longitude|\blat\b|\blng\b/);
@@ -35,6 +38,11 @@ test('Wave 2 provides tenant-owned server saved searches and event-driven new-ma
   assert.match(backend, /assertTenantAuth\(request\.auth\)/);
   assert.match(backend, /homeDiscoverySavedSearches/);
   assert.match(backend, /alertsEnabled/);
+  assert.match(backend, /MAX_SAVED_SEARCHES_PER_TENANT = 30/);
+  assert.match(backend, /existing\.size >= MAX_SAVED_SEARCHES_PER_TENANT/);
+  assert.match(backend, /ALERT_SEARCH_PAGE_SIZE = 400/);
+  assert.match(backend, /while \(true\)/);
+  assert.match(backend, /snapshot\.size < ALERT_SEARCH_PAGE_SIZE/);
   assert.match(backend, /export const notifyHomeDiscoveryNewMatches = onDocumentCreated/);
   assert.match(backend, /export const notifyHomeDiscoveryPriceDrops = onDocumentUpdated/);
   assert.match(backend, /HOME_NEW_MATCH/);
@@ -79,6 +87,11 @@ test('Owner Wave 2 intake uses create-only image-bound Firebase media authority 
   assert.match(page, /verifiedByAdmin: false/);
   assert.match(page, /approved: false/);
   assert.match(page, /active: false/);
+  assert.match(page, /applications\.slice\(0, 20\)\.map/);
+  assert.match(page, /application\.listingTitle/);
+  assert.match(page, /application\.tenantName/);
+  assert.match(page, /application\.tenantEmail/);
+  assert.match(page, /application\.requestMode/);
   assert.match(page, ARABIC);
 
   assert.match(storageRules, /match \/home-listing-media\/\{ownerId\}\/\{requestId\}\/\{fileName\}/);
