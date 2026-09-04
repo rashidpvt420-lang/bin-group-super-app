@@ -122,3 +122,37 @@ test('Wave 5 preserves Property Contacts as a separate non-employee directory', 
   assert.doesNotMatch(contacts, /adminCreateUser/);
   assert.doesNotMatch(contacts, /adminUpdateStaffProfile/);
 });
+
+test('Wave 5 keeps onboarding access fail-closed, offboarding terminal and technician payroll linked', async () => {
+  const [lifecycle, provisioning] = await Promise.all([
+    read('functions/adminStaffLifecycle.ts'),
+    read('functions/adminUserProvisioning.ts'),
+  ]);
+
+  expectAll(lifecycle, [
+    /entry\.techId/,
+    /entry\.technicianId/,
+    /active: state\.active/,
+    /suspended: !state\.active/,
+    /const nextClaims = \{ \.\.\.previousClaims, suspended: !state\.active \}/,
+    /setCustomUserClaims\(uid, nextClaims\)/,
+    /portalAccessActive: state\.active/,
+    /refreshTokensRevoked: true/,
+  ], 'canonical onboarding and payroll integrity');
+
+  expectAll(provisioning, [
+    /status: "INVITED"/,
+    /onboardingStage: "INVITED"/,
+    /onboardingComplete: false/,
+    /claimsForAccess\(role, modules, permissions, true\)/,
+    /active: false, suspended: true, status: "INVITED"/,
+    /portalAccessActive: false/,
+    /const lifecycleActive =/,
+    /claimsForAccess\(role, modules, permissions, !lifecycleActive\)/,
+    /requestedStatus === "ACTIVE" && userSnap\.data\(\)\?\.onboardingComplete !== true/,
+    /Complete canonical HR onboarding before activating staff access/,
+    /currentStatus === "OFFBOARDED"/,
+    /claims\.offboarded === true/,
+    /OFFBOARDED is terminal/,
+  ], 'canonical provisioning and terminal lifecycle guards');
+});
