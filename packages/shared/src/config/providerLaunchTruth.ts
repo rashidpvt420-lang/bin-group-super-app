@@ -77,8 +77,8 @@ export const PROVIDER_LAUNCH_REQUIREMENTS: readonly ProviderLaunchRequirement[] 
     liveProof: 'Signed-in production callable proof with secrets server-side and safe fallback behavior.',
   },
   {
-    id: 'phase1Payments',
-    label: 'Phase 1 payments',
+    id: 'paymentGatewayOrManualBank',
+    label: 'Phase 1 Cash/Cheque payments',
     required: true,
     requiredEvidenceLayer: 'physical_device',
     configurationAuthority: 'server_policy',
