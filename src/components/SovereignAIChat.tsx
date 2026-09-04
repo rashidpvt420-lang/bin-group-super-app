@@ -115,17 +115,6 @@ const roleData: Record<SovereignRole, { greeting: string; prompts: Prompt[] }> =
   },
 };
 
-function reviveMessages(value: string | null): Message[] {
-  if (!value) return [];
-  try {
-    const parsed = JSON.parse(value);
-    if (!Array.isArray(parsed)) return [];
-    return parsed.map((message) => ({ ...message, timestamp: new Date(message.timestamp || Date.now()) }));
-  } catch {
-    return [];
-  }
-}
-
 function explainCallableError(error: any) {
   const code = String(error?.code || '').toLowerCase();
   const message = String(error?.message || '').trim();
@@ -195,20 +184,6 @@ export const SovereignAIChat: React.FC<SovereignAIChatProps> = ({
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
-
-  useEffect(() => {
-    try {
-      setMessages(reviveMessages(sessionStorage.getItem(`bin_chat_history_${role}`)));
-    } catch {
-      setMessages([]);
-    }
-  }, [role]);
-
-  useEffect(() => {
-    if (messages.length > 0) {
-      try { sessionStorage.setItem(`bin_chat_history_${role}`, JSON.stringify(messages)); } catch { /* restricted storage */ }
-    }
-  }, [messages, role]);
 
   useEffect(() => {
     if (messages.length === 0 && open) {
