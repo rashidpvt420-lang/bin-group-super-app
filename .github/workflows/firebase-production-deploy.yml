@@ -37,12 +37,11 @@ on:
           - public
         default: bank-pilot
       payment_policy:
-        description: 'Phase 1 Cash/Cheque or Phase 2 Stripe'
+        description: 'Current fixed policy: Phase 1 Cash/Cheque only'
         required: true
         type: choice
         options:
           - phase1-manual
-          - phase2-stripe
         default: phase1-manual
       run_public_release_gate:
         description: 'Required for public mode; runs the protected postdeploy public-release gate'
@@ -50,7 +49,7 @@ on:
         type: boolean
         default: false
       deployment_payload_json:
-        description: 'JSON containing incident, hard-clearance, and optional Phase 2 Stripe live-proof fields'
+        description: 'JSON containing incident and hard-clearance fields; legacy Stripe proof IDs must remain empty'
         required: false
         type: string
         default: '{"incident_attestation":"ATTEST_PRODUCTION_INCIDENT_STATE_CLEAR","incident_active_json":"[]","incident_requires_rollback":"false","incident_rollback_reason":"","incident_last_deployment_failed":"false","incident_last_deployment_failed_at":"","incident_evidence_refs":"ADMIN_MFA_BOOTSTRAP_HOSTING","hard_clearance_run_id":"","stripe_live_checkout_session_id":"","stripe_live_webhook_event_id":""}'
@@ -118,6 +117,10 @@ jobs:
             || fail "expected_commit_sha must be a full lowercase 40-character SHA."
           [[ "$EXPECTED_COMMIT_SHA" == "$CURRENT_COMMIT_SHA" ]] \
             || fail "expected_commit_sha must equal the workflow commit SHA."
+          [[ "$PAYMENT_POLICY_INPUT" == "phase1-manual" ]] \
+            || fail "Current production payment_policy must be phase1-manual while PHASE1_CASH_CHEQUE_V1 is active."
+          [[ -z "$STRIPE_LIVE_SESSION_ID_INPUT" && -z "$STRIPE_LIVE_EVENT_ID_INPUT" ]] \
+            || fail "Phase 1 manual mode must not provide Stripe proof identifiers."
           if [[ -n "$AUTHORIZATION_ACTOR_INPUT" ]]; then
             [[ "$GITHUB_ACTOR" == "github-actions[bot]" ]] \
               || fail "authorization_actor may only be supplied by github-actions[bot]."
@@ -130,22 +133,11 @@ jobs:
               || fail "Public mode requires run_public_release_gate=true."
             [[ "$HARD_CLEARANCE_RUN_ID_INPUT" =~ ^[0-9]+$ ]] \
               || fail "Public mode requires a numeric hard-clearance run ID."
-            if [[ "$PAYMENT_POLICY_INPUT" == "phase2-stripe" ]]; then
-              [[ "$STRIPE_LIVE_SESSION_ID_INPUT" =~ ^cs_live_[A-Za-z0-9_]+$ ]] \
-                || fail "Phase 2 Stripe public mode requires a live Stripe checkout session ID."
-              [[ "$STRIPE_LIVE_EVENT_ID_INPUT" =~ ^evt_[A-Za-z0-9_]+$ ]] \
-                || fail "Phase 2 Stripe public mode requires a Stripe webhook event ID."
-            elif [[ "$PAYMENT_POLICY_INPUT" == "phase1-manual" ]]; then
-              [[ -z "$STRIPE_LIVE_SESSION_ID_INPUT" && -z "$STRIPE_LIVE_EVENT_ID_INPUT" ]] \
-                || fail "Phase 1 manual mode must not provide Stripe proof identifiers."
-            else
-              fail "Public payment_policy must be phase1-manual or phase2-stripe."
-            fi
           else
+            [[ "$LAUNCH_MODE_INPUT" == "bank-pilot" ]] \
+              || fail "launch_mode must be bank-pilot or public."
             [[ "$RUN_PUBLIC_RELEASE_GATE_INPUT" == "false" ]] \
               || fail "Bank-pilot mode requires run_public_release_gate=false."
-            [[ "$PAYMENT_POLICY_INPUT" == "phase1-manual" ]] \
-              || fail "Bank-pilot mode uses the Phase 1 manual payment policy."
           fi
 
       - name: Checkout repository
@@ -289,6 +281,10 @@ jobs:
             || fail "expected_commit_sha must be a full lowercase 40-character SHA."
           [[ "$EXPECTED_COMMIT_SHA" == "$CURRENT_COMMIT_SHA" ]] \
             || fail "expected_commit_sha must equal the workflow commit SHA."
+          [[ "$PAYMENT_POLICY_INPUT" == "phase1-manual" ]] \
+            || fail "Current production payment_policy must be phase1-manual while PHASE1_CASH_CHEQUE_V1 is active."
+          [[ -z "$STRIPE_LIVE_SESSION_ID_INPUT" && -z "$STRIPE_LIVE_EVENT_ID_INPUT" ]] \
+            || fail "Phase 1 manual mode must not provide Stripe proof identifiers."
           if [[ -n "$AUTHORIZATION_ACTOR_INPUT" ]]; then
             [[ "$GITHUB_ACTOR" == "github-actions[bot]" ]] \
               || fail "authorization_actor may only be supplied by github-actions[bot]."
@@ -301,22 +297,11 @@ jobs:
               || fail "Public mode requires run_public_release_gate=true."
             [[ "$HARD_CLEARANCE_RUN_ID_INPUT" =~ ^[0-9]+$ ]] \
               || fail "Public mode requires a numeric hard-clearance run ID."
-            if [[ "$PAYMENT_POLICY_INPUT" == "phase2-stripe" ]]; then
-              [[ "$STRIPE_LIVE_SESSION_ID_INPUT" =~ ^cs_live_[A-Za-z0-9_]+$ ]] \
-                || fail "Phase 2 Stripe public mode requires a live Stripe checkout session ID."
-              [[ "$STRIPE_LIVE_EVENT_ID_INPUT" =~ ^evt_[A-Za-z0-9_]+$ ]] \
-                || fail "Phase 2 Stripe public mode requires a Stripe webhook event ID."
-            elif [[ "$PAYMENT_POLICY_INPUT" == "phase1-manual" ]]; then
-              [[ -z "$STRIPE_LIVE_SESSION_ID_INPUT" && -z "$STRIPE_LIVE_EVENT_ID_INPUT" ]] \
-                || fail "Phase 1 manual mode must not provide Stripe proof identifiers."
-            else
-              fail "Public payment_policy must be phase1-manual or phase2-stripe."
-            fi
           else
+            [[ "$LAUNCH_MODE_INPUT" == "bank-pilot" ]] \
+              || fail "launch_mode must be bank-pilot or public."
             [[ "$RUN_PUBLIC_RELEASE_GATE_INPUT" == "false" ]] \
               || fail "Bank-pilot mode requires run_public_release_gate=false."
-            [[ "$PAYMENT_POLICY_INPUT" == "phase1-manual" ]] \
-              || fail "Bank-pilot mode uses the Phase 1 manual payment policy."
           fi
 
       - name: Checkout repository
@@ -1018,16 +1003,6 @@ jobs:
           VALIDATED_ARTIFACT_DIGEST: ${{ needs.deploy-firebase-production-stack.outputs.validated_artifact_digest }}
         run: node scripts/verify-phase1-manual-payment-proof.mjs
 
-      - name: Verify recent live Stripe payment and processed webhook
-        if: ${{ inputs.payment_policy == 'phase2-stripe' }}
-        env:
-          STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
-          STRIPE_LIVE_CHECKOUT_SESSION_ID: ${{ fromJSON(inputs.deployment_payload_json).stripe_live_checkout_session_id }}
-          STRIPE_LIVE_WEBHOOK_EVENT_ID: ${{ fromJSON(inputs.deployment_payload_json).stripe_live_webhook_event_id }}
-          RELEASE_ID: ${{ github.run_id }}-${{ github.run_attempt }}
-          VALIDATED_ARTIFACT_DIGEST: ${{ needs.deploy-firebase-production-stack.outputs.validated_artifact_digest }}
-        run: node scripts/verify-stripe-live-proof.mjs
-
       - name: Postdeploy release gate
         id: postdeploy_gate
         env:
@@ -1065,7 +1040,6 @@ jobs:
           name: public-release-clearance-${{ github.sha }}
           path: |
             launch_package/public-release-status.json
-            launch_package/stripe-live-proof.json
             launch_package/phase1-manual-payment-proof.json
             launch_package/pilot-incident-report.json
             launch_package/launch-evidence-batch.json
