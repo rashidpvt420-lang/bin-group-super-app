@@ -42,13 +42,38 @@ function retryableHttpStatus(status) {
 
 function sanitizedTransportCause(error) {
   const cause = error?.cause && typeof error.cause === 'object' ? error.cause : null;
-  const name = text(error?.name) || 'Error';
-  const code = text(error?.code || cause?.code);
-  const message = text(error?.message || cause?.message)
-    .replace(/[\r\n\t]+/g, ' ')
-    .replace(/\s+/g, ' ')
-    .slice(0, 180);
-  return [name, code, message].filter(Boolean).join('/');
+  const name = ['Error', 'TypeError', 'AbortError', 'TimeoutError'].includes(error?.name) ? error.name : 'Error';
+  const candidate = error?.code || cause?.code;
+  const code = ['ECONNRESET', 'ECONNREFUSED', 'ENOTFOUND', 'EAI_AGAIN', 'ETIMEDOUT',
+    'UND_ERR_CONNECT_TIMEOUT', 'UND_ERR_SOCKET', 'CERT_HAS_EXPIRED', 'UNABLE_TO_VERIFY_LEAF_SIGNATURE',
+  ].includes(candidate) ? candidate : '';
+  // A transport exception can contain the request body or headers. Never echo
+  // its free-form message, stack, or raw cause into protected workflow logs.
+  return [name, code].filter(Boolean).join('/');
+}
+
+const GMAIL_TOKEN_URL = 'https://oauth2.googleapis.com/token';
+const OAUTH_RECOVERY = new Map([
+  ['invalid_grant', 'Google rejected the refresh grant. Verify the OAuth client/account binding, then have the mailbox owner reauthorize and securely replace the refresh token.'],
+  ['invalid_client', 'Verify that the client ID and client secret belong to the same active Google OAuth client.'],
+  ['deleted_client', 'Have the Google Cloud owner review the deleted OAuth client and securely provision an active client/grant.'],
+  ['unauthorized_client', 'Have the Google Cloud owner check whether this OAuth client is authorized for the refresh-token flow.'],
+  ['invalid_scope', 'Have the mailbox owner authorize the required Gmail read scope using the configured OAuth client.'],
+  ['admin_policy_enforced', 'Ask the Google Workspace administrator to review the OAuth access policy; do not bypass it.'],
+  ['access_denied', 'The mailbox owner or administrator must review and authorize Gmail access.'],
+  ['invalid_request', 'Check the protected OAuth credential configuration and refresh-token request parameters.'],
+  ['unsupported_grant_type', 'Check the OAuth integration refresh-token grant configuration.'],
+]);
+
+function oauthFailure(body) {
+  const code = typeof body?.error === 'string' && OAUTH_RECOVERY.has(body.error) ? body.error : 'unclassified_oauth_error';
+  const reauthenticationRequired = code === 'invalid_grant' && body?.error_subtype === 'invalid_rapt';
+  return {
+    code,
+    detail: reauthenticationRequired
+      ? 'Google OAuth invalid_grant (invalid_rapt). Interactive reauthentication is required by Google session policy; the mailbox owner must authorize again.'
+      : `Google OAuth ${code}. ${OAUTH_RECOVERY.get(code) || 'The provider error was not recognized. Review the protected OAuth configuration; no response payload was logged.'}`,
+  };
 }
 
 function normalizeBase64Url(value) {
@@ -133,15 +158,11 @@ async function fetchWithTimeout(fetchImpl, url, options, label, timeoutMs) {
   } catch (error) {
     if (externalSignal?.aborted) throw abortError(label);
     if (timedOut) {
-      const timeoutError = new Error(`${label} request timed out after ${timeoutMs}ms.`);
-      timeoutError.cause = error;
-      throw timeoutError;
+      throw new Error(`${label} request timed out after ${timeoutMs}ms.`);
     }
-    const transportError = new Error(
+    throw new Error(
       `${label} failed before an HTTP response (${sanitizedTransportCause(error)}).`,
     );
-    transportError.cause = error;
-    throw transportError;
   } finally {
     clearTimeout(timer);
     externalSignal?.removeEventListener('abort', onExternalAbort);
@@ -160,8 +181,7 @@ async function gmailJson(fetchImpl, url, options, label, transportOptions = {}) 
       if (error?.name === 'AbortError' || options?.signal?.aborted) throw error;
       if (attempt >= transport.maxAttempts) {
         throw new Error(
-          `${label} exhausted ${transport.maxAttempts} transport attempts. Last failure: ${sanitizedTransportCause(error)}.`,
-          { cause: error },
+          `${label} exhausted ${transport.maxAttempts} transport attempts. Last failure: ${error.message}`,
         );
       }
       await sleep(transport.baseDelayMs * (2 ** (attempt - 1)), options?.signal, label);
@@ -178,7 +198,11 @@ async function gmailJson(fetchImpl, url, options, label, transportOptions = {}) 
 
     const status = Number(response.status || 0);
     if (!retryableHttpStatus(status) || attempt >= transport.maxAttempts) {
-      throw new Error(`${label} failed with HTTP ${status || 'unknown'}.`);
+      const oauth = url === GMAIL_TOKEN_URL ? oauthFailure(body) : null;
+      const error = new Error(`${label} failed with HTTP ${status || 'unknown'}.${oauth ? ` ${oauth.detail}` : ''}`);
+      error.httpStatus = status;
+      if (oauth) error.oauthErrorCode = oauth.code;
+      throw error;
     }
     await sleep(transport.baseDelayMs * (2 ** (attempt - 1)), options?.signal, label);
   }
@@ -247,7 +271,7 @@ export async function exchangeGmailAccessToken({
   if (!credentials.clientId || !credentials.clientSecret || !credentials.refreshToken) {
     throw new Error(`${label} OAuth credentials are incomplete.`);
   }
-  const result = await gmailJson(fetchImpl, 'https://oauth2.googleapis.com/token', {
+  const result = await gmailJson(fetchImpl, GMAIL_TOKEN_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
@@ -258,7 +282,7 @@ export async function exchangeGmailAccessToken({
     }).toString(),
     signal,
   }, `${label} OAuth exchange`, transportOptions);
-  const accessToken = text(result.access_token);
+  const accessToken = text(result?.access_token);
   if (!accessToken) throw new Error(`${label} OAuth exchange returned no access token.`);
   return accessToken;
 }
