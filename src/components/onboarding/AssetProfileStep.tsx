@@ -14,6 +14,7 @@ import { ASSET_PROFILE_PROPERTY_TYPES } from '../../utils/calculateUaeQuote2026'
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { auth, functions, getDownloadURL, ref, storage, uploadBytes } from '../../lib/firebase';
+import PropertyInventoryPanel from './PropertyInventoryPanel';
 
 const UAE_EMIRATES = ['Abu Dhabi', 'Dubai', 'Sharjah', 'Ajman', 'Umm Al Quwain', 'Ras Al Khaimah', 'Fujairah'];
 const ASSET_TYPE_IDS = new Set<string>(ASSET_PROFILE_PROPERTY_TYPES);
@@ -258,6 +259,8 @@ const AssetProfileStep: React.FC<{ onNext: () => void; onBack?: () => void }> = 
             </Paper>
           </Grid>
         </Grid>
+
+        <PropertyInventoryPanel property={active} onChange={setProperty} ar={ar} isRTL={isRTL} />
 
         {isMosque && <Paper sx={{ p: { xs: 3, md: 4 }, mt: 4, borderRadius: 6, bgcolor: alpha(binThemeTokens.gold, 0.06), border: `1px solid ${alpha(binThemeTokens.gold, 0.3)}` }}>
           <Typography variant="h5" fontWeight={950} color="#FFF">{label('Mandatory Mosque Operations Profile', 'ملف تشغيل المسجد الإلزامي')}</Typography>
