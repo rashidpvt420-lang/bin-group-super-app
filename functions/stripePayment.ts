@@ -3,6 +3,7 @@ import { defineSecret } from "firebase-functions/params";
 import { onCall, HttpsError, onRequest } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 import * as crypto from "crypto";
+import { loadActivePaymentConfiguration } from "./paymentConfiguration";
 
 const stripeSecretKey = defineSecret("STRIPE_SECRET_KEY");
 const stripeWebhookSecret = defineSecret("STRIPE_WEBHOOK_SECRET");
@@ -84,6 +85,10 @@ export const createStripeCheckoutSession = onCall({
   const requestedAmount = Number(data.amount);
 
   assertAuthenticatedPayer(request, ownerUid);
+  const paymentConfiguration = await loadActivePaymentConfiguration();
+  if (!paymentConfiguration.approvedMethods.includes("STRIPE")) {
+    throw new HttpsError("failed-precondition", "Card payments are disabled by the current payment policy. Use the approved Cash or Cheque workflow.");
+  }
   const tokenEmail = String(request.auth?.token?.email || "").trim().toLowerCase();
   if (tokenEmail && tokenEmail !== ownerEmail) {
     throw new HttpsError("permission-denied", "Checkout email does not match the authenticated account.");
@@ -178,7 +183,7 @@ export const createStripeCheckoutSession = onCall({
   if (!key) {
     throw new HttpsError(
       "failed-precondition",
-      "Online card payment is not configured. Use bank transfer/manual verification until the payment provider is activated."
+      "Online card payment is not configured. Follow the currently approved Cash or Cheque instructions."
     );
   }
 

@@ -342,10 +342,16 @@ service firebase.storage {
       allow read, write: if false;
     }
 
+    match /design-payment-receipts/{requestId}/{allPaths=**} {
+      allow read: if isAdmin() || isAuditor();
+      allow write: if false;
+    }
+
     // Unknown paths remain Founder/Admin-only, except private HR documents and
     // generated staff reports. Those paths are written only through Admin SDK callables.
     match /{collection}/{allPaths=**} {
       allow read, write: if isAdmin() &&
+        collection != 'design-payment-receipts' &&
         collection != 'privateHrDocuments' &&
         collection != 'staff-reports';
     }
