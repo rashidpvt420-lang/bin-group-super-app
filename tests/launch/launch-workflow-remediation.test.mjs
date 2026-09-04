@@ -118,7 +118,16 @@ function fixture({ tenant = false } = {}) {
   const api = module.exports;
   const call = (name, uid, data = {}, tokenPatch = {}) => {
     const role = uid?.startsWith('owner') ? 'owner' : uid?.startsWith('tenant') ? 'tenant' : 'admin';
-    return api[name]({ data, auth: uid ? { uid, token: { role, email_verified: true, firebase: { sign_in_second_factor: 'totp' }, ...tokenPatch } } : null });
+    const request = { data, auth: uid ? { uid, token: { role, email_verified: true, firebase: { sign_in_second_factor: 'totp' }, ...tokenPatch } } : null };
+    // Keep fixture dispatch explicit so arbitrary or inherited methods cannot run.
+    switch (name) {
+      case 'getDesignPaymentInstructions': return api.getDesignPaymentInstructions(request);
+      case 'createDesignPaymentRequest': return api.createDesignPaymentRequest(request);
+      case 'submitDesignOwnerDecision': return api.submitDesignOwnerDecision(request);
+      case 'adminReviewDesignPayment': return api.adminReviewDesignPayment(request);
+      case 'adminHandoffDesignRequest': return api.adminHandoffDesignRequest(request);
+      default: throw new Error('Unsupported design callable in test fixture.');
+    }
   };
   const create = async (uid = 'owner1', method = 'CASH', designRequestId = 'd1') => {
     const instructions = await call('getDesignPaymentInstructions', uid, { designRequestId });
@@ -127,6 +136,23 @@ function fixture({ tenant = false } = {}) {
   const reviewData = { designRequestId: 'd1', decision: 'APPROVE', method: 'CASH', amountReceived: 15.15, paymentReferenceId: 'RECEIPT-1', contentType: 'application/pdf', encodedDocument: Buffer.from('%PDF-1.7 TEST RECEIPT').toString('base64'), internalNotes: 'Fixture review only.' };
   return { records, files, accounts, api, call, create, reviewData };
 }
+
+test('design fixture dispatch rejects unknown, inherited and non-string method names without side effects', () => {
+  const f = fixture();
+  const initialRecords = clone(f.records);
+  let unexpectedCalls = 0;
+  f.api.unexpectedCallable = () => { unexpectedCalls += 1; };
+  const methodNames = ['unexpectedCallable', 'constructor', '__proto__', 'toString', 'hasOwnProperty', '', null, undefined,
+    { toString: () => 'adminReviewDesignPayment' }];
+  for (const methodName of methodNames) {
+    assert.throws(() => f.call(methodName, 'admin1', f.reviewData), {
+      message: 'Unsupported design callable in test fixture.',
+    });
+  }
+  assert.equal(unexpectedCalls, 0);
+  assert.deepEqual(f.records, initialRecords);
+  assert.equal(f.files.size, 0);
+});
 
 test('public overview is product guidance, not an invented property score', () => {
   const result = guidance.generateSovereignAIResponse({ role: 'unknown', text: 'Tell me about BIN GROUP Property Truth Infrastructure.' });
