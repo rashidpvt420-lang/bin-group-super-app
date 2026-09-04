@@ -7,6 +7,7 @@ import { RoleProvider, useRole } from '../context/RoleContext';
 import { AIProvider } from '../context/AIContext';
 import { SovereignAIChat } from './SovereignAIChat';
 import { SovereignAlertHandler } from './SovereignAlertHandler';
+import type { SovereignRole } from '../utils/propertyTruthIntelligence';
 
 declare global {
   interface Window {
@@ -54,6 +55,12 @@ const AI_ENABLED_ROLES = [
 
 const ROLE_PORTAL_PREFIXES = ['/owner', '/tenant', '/technician', '/broker', '/admin'];
 
+function sovereignRoleForPortal(role: string): SovereignRole {
+  if (ADMIN_STAFF_ROLES.includes(role)) return 'admin';
+  if (role === 'owner' || role === 'tenant' || role === 'technician' || role === 'broker') return role;
+  return 'unknown';
+}
+
 function PushNotificationBootstrap() {
   const { user, role } = useRole();
 
@@ -100,9 +107,15 @@ function AuthenticatedShellContent({ children, showChrome = true, publicAuth = f
   const isTenantRoute = location.pathname === '/tenant' || location.pathname.startsWith('/tenant/');
   const isRolePortalRoute = ROLE_PORTAL_PREFIXES.some((prefix) => location.pathname === prefix || location.pathname.startsWith(`${prefix}/`));
   const normalizedRole = (role || '').toLowerCase();
+  const aiRole = sovereignRoleForPortal(normalizedRole);
+  const currentUserId = user?.uid || null;
   const shouldRenderGlobalHeader = showChrome;
   const shouldRenderFloatingNavigation = showChrome && !isAdminRoute && !isTenantRoute;
-  const shouldRenderSovereignAI = showChrome && isRolePortalRoute && Boolean(user?.uid) && AI_ENABLED_ROLES.includes(normalizedRole);
+
+  const shouldRenderSovereignAI = showChrome
+    && isRolePortalRoute
+    && Boolean(currentUserId)
+    && AI_ENABLED_ROLES.includes(normalizedRole);
 
   if (roleLoading && !publicAuth) {
     return <>{loadingFallback}</>;
@@ -136,7 +149,8 @@ function AuthenticatedShellContent({ children, showChrome = true, publicAuth = f
       {children}
       {shouldRenderSovereignAI && (
         <SovereignAIChat
-          role={normalizedRole as any}
+          key={`${aiRole}:${currentUserId}`}
+          role={aiRole}
           onNavigate={navigate}
           allowLiveProvider
           isAuthenticated={Boolean(user?.uid)}
