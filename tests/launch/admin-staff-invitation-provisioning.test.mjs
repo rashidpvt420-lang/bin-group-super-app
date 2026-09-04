@@ -32,9 +32,14 @@ test('provisioning is App Check protected and never returns invitation bearer li
   assert.ok(callableCount >= 3, `expected at least three App Check-protected staff callables, got ${callableCount}`);
   assert.match(source, /invitationQueued:\s*true/);
 
-  const createReturnStart = source.indexOf('return { success: true, uid, role, modules, invitationQueued: true');
-  assert.ok(createReturnStart >= 0, 'create result block missing');
-  const createReturn = source.slice(createReturnStart, source.indexOf('};', createReturnStart) + 2);
+  const createFunctionStart = source.indexOf('export const adminCreateUser = onCall');
+  const createFunctionEnd = source.indexOf('export const adminUpdateStaffAccess = onCall', createFunctionStart);
+  assert.ok(createFunctionStart >= 0 && createFunctionEnd > createFunctionStart, 'create callable block missing');
+  const createFunction = source.slice(createFunctionStart, createFunctionEnd);
+  const createReturn = createFunction.match(
+    /return\s*\{\s*success:\s*true,[\s\S]*?invitationQueued:\s*true,[\s\S]*?portalAccessActive:\s*false,[\s\S]*?message:\s*"Staff identity created[\s\S]*?\n\s*\};/,
+  )?.[0] || '';
+  assert.ok(createReturn, 'safe create result block missing');
   assert.doesNotMatch(createReturn, /passwordResetLink|emailVerificationLink|bootstrap|password\s*:/i);
 });
 
