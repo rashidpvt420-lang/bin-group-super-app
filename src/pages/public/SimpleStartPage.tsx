@@ -1,6 +1,6 @@
 import React from 'react';
 import { Box, Button, Chip, Container, Grid, Paper, Stack, Typography, alpha } from '@mui/material';
-import { ArrowRight, Building2, CheckCircle2, Globe, Home, LogIn, Mail, MapPin, MessageSquare, Phone, ShieldCheck, Sparkles, UserRound, Users, Wrench, Zap, Award, Briefcase, Camera, Workflow, WalletCards, Bot } from 'lucide-react';
+import { ArrowRight, Award, Briefcase, Building2, CheckCircle2, Globe, Home, Mail, MapPin, MessageSquare, Phone, Search, ShieldCheck, Sparkles, UserRound, Wrench, Zap } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
@@ -8,7 +8,6 @@ import SafeIcon from '../../components/SafeIcon';
 
 const CONTACT = { whatsapp: '+971 55 2423233', phone: '+971 55 7474560', email: 'ceo@bin-groups.com' };
 const gold = binThemeTokens.gold;
-const goldLight = binThemeTokens.goldLight;
 const ink = '#111827';
 const line = '#E8E3D7';
 const muted = '#667085';
@@ -110,20 +109,25 @@ type StartCard = {
   secondaryCtaEn?: string;
   secondaryCtaAr?: string;
   secondaryPath?: string;
+  secondaryIcon?: React.ElementType;
 };
 
 const cards: StartCard[] = [
   {
-    titleEn: 'I am a Tenant',
-    titleAr: 'أنا مستأجر',
-    subtitleEn: 'Report an issue, check payments, documents, emergency help, and move-in/move-out evidence.',
-    subtitleAr: 'أبلغ عن مشكلة، راجع المدفوعات والمستندات والطوارئ وتسليم الوحدة.',
-    pointsEn: ['Report maintenance', 'Emergency help', 'Payments & documents', 'Move-in / move-out'],
-    pointsAr: ['بلاغ صيانة', 'مساعدة طارئة', 'مدفوعات ومستندات', 'تسليم الوحدة'],
+    titleEn: 'Tenant & Home Search',
+    titleAr: 'المستأجر والبحث عن منزل',
+    subtitleEn: 'Already renting with BIN? Open your home portal. Looking for somewhere new? Search verified rooms, apartments, villas and homes.',
+    subtitleAr: 'تستأجر حالياً مع BIN؟ افتح بوابة منزلك. تبحث عن منزل جديد؟ تصفح الغرف والشقق والفلل والعقارات الموثقة.',
+    pointsEn: ['Existing tenant portal', 'Find rooms & homes', 'Viewings & applications', 'Contracts & move-in'],
+    pointsAr: ['بوابة المستأجر الحالي', 'غرف وعقارات للإيجار', 'معاينات وطلبات', 'عقود واستلام'],
     path: '/login?intendedRole=tenant',
     icon: UserRound,
-    ctaEn: 'Open Tenant Portal',
-    ctaAr: 'فتح بوابة المستأجر',
+    ctaEn: 'I Already Rent With BIN',
+    ctaAr: 'أنا مستأجر حالي لدى BIN',
+    secondaryCtaEn: 'I’m Looking for a Home',
+    secondaryCtaAr: 'أبحث عن منزل',
+    secondaryPath: '/login?intendedRole=tenant&returnTo=/tenant/homes',
+    secondaryIcon: Search,
   },
   {
     titleEn: 'I am a Landlord / Owner',
@@ -138,7 +142,7 @@ const cards: StartCard[] = [
     ctaAr: 'فتح بوابة المالك',
     secondaryCtaEn: 'Add New Property & Start Contract',
     secondaryCtaAr: 'إضافة عقار جديد وبدء العقد',
-    secondaryPath: '/onboarding'
+    secondaryPath: '/onboarding',
   },
   {
     titleEn: 'I am a Real Estate Broker',
@@ -222,12 +226,9 @@ export default function SimpleStartPage() {
 
   return (
     <Box sx={{ minHeight: '100vh', bgcolor: '#FFFFFF', color: '#111827', direction: isRTL ? 'rtl' : 'ltr' }}>
-      
-      {/* 1. Header & Role Selection */}
       <Box sx={{ py: { xs: 4, md: 7 }, borderBottom: `1px solid ${line}` }}>
         <Container maxWidth="lg">
           <Stack spacing={4}>
-            {/* Top Banner */}
             <Paper sx={{ p: { xs: 3, md: 5 }, borderRadius: 6, border: `1px solid ${alpha(binThemeTokens.gold, 0.18)}`, background: `linear-gradient(135deg, ${alpha(binThemeTokens.gold, 0.11)}, #FFFFFF)`, boxShadow: '0 22px 56px rgba(17,24,39,0.08)' }}>
               <Stack spacing={2} alignItems="flex-start">
                 <Button
@@ -266,7 +267,6 @@ export default function SimpleStartPage() {
               </Stack>
             </Paper>
 
-            {/* Role Cards */}
             <Grid container spacing={2.5}>
               {cards.map((card) => (
                 <Grid item xs={12} md={6} key={card.titleEn}>
@@ -287,12 +287,12 @@ export default function SimpleStartPage() {
                     </Stack>
                     <Stack spacing={1.5} sx={{ mt: 3 }}>
                       {card.secondaryCtaEn && card.secondaryPath && (
-                        <Button fullWidth variant="contained" endIcon={<ArrowRight size={16} />} onClick={() => navigate(card.secondaryPath!)} sx={{ bgcolor: '#111827', color: gold, fontWeight: 950, borderRadius: 3, py: 1.25 }}>
+                        <Button fullWidth variant="contained" startIcon={card.secondaryIcon ? <SafeIcon icon={card.secondaryIcon} size={16} /> : undefined} endIcon={<ArrowRight size={16} />} onClick={() => navigate(card.secondaryPath!)} sx={{ bgcolor: '#111827', color: gold, fontWeight: 950, borderRadius: 3, py: 1.25 }}>
                           {ar ? card.secondaryCtaAr : card.secondaryCtaEn}
                         </Button>
                       )}
-                      <Button fullWidth variant={card.secondaryCtaEn ? "outlined" : "contained"} endIcon={<ArrowRight size={16} />} onClick={() => navigate(card.path)} sx={
-                        card.secondaryCtaEn 
+                      <Button fullWidth variant={card.secondaryCtaEn ? 'outlined' : 'contained'} endIcon={<ArrowRight size={16} />} onClick={() => navigate(card.path)} sx={
+                        card.secondaryCtaEn
                         ? { borderColor: alpha(gold, 0.5), color: gold, fontWeight: 950, borderRadius: 3, py: 1.25, '&:hover': { bgcolor: alpha(gold, 0.05) } }
                         : { bgcolor: binThemeTokens.gold, color: '#111827', fontWeight: 950, borderRadius: 3, py: 1.25 }
                       }>
@@ -306,8 +306,6 @@ export default function SimpleStartPage() {
           </Stack>
         </Container>
       </Box>
-
-      {/* 2. Company Profile Sections */}
 
       <Box sx={{ background: 'linear-gradient(160deg, #0B0B0C 0%, #1a1a2e 55%, #111827 100%)', py: { xs: 6, md: 8 }, textAlign: 'center', position: 'relative', overflow: 'hidden' }}>
         <Container maxWidth="lg">
@@ -390,7 +388,7 @@ export default function SimpleStartPage() {
                 [<Phone size={22} />, 'Phone', CONTACT.phone, `tel:${CONTACT.phone}`],
                 [<MessageSquare size={22} />, 'WhatsApp', CONTACT.whatsapp, `https://wa.me/${whatsappDigits}`],
                 [<Mail size={22} />, 'Email', CONTACT.email, `mailto:${CONTACT.email}`],
-                [<MapPin size={22} />, 'Location', c.location, '']
+                [<MapPin size={22} />, 'Location', c.location, ''],
               ].map(([icon, label, value, href]: any) => (
                 <Grid item xs={12} sm={6} key={label}>
                   <Paper component={href ? 'a' : 'div'} href={href || undefined} target={href?.startsWith('http') ? '_blank' : undefined} sx={{ p: 3, bgcolor: 'rgba(255,255,255,.05)', border: `1px solid ${alpha(gold, .22)}`, borderRadius: 3, display: 'block', textDecoration: 'none' }}>
@@ -410,19 +408,16 @@ export default function SimpleStartPage() {
               <Button variant="outlined" onClick={() => window.open(`https://wa.me/${whatsappDigits}`, '_blank')} sx={{ borderColor: alpha(gold, .45), color: gold, fontWeight: 950 }}>{c.ctaWhatsApp}</Button>
               <Button variant="outlined" onClick={() => window.open(`mailto:${CONTACT.email}`, '_blank')} sx={{ color: '#fff', borderColor: 'rgba(255,255,255,.22)', fontWeight: 950 }}>{c.ctaEmail}</Button>
             </Stack>
-            
-            {/* Minimal Footer Links */}
+
             <Stack direction="row" spacing={2} flexWrap="wrap" justifyContent="center" sx={{ mt: 6 }}>
               <Button onClick={() => navigate('/support')} sx={{ color: alpha(gold, 0.7), fontWeight: 800, textTransform: 'none' }}>{ar ? 'الدعم' : 'Support'}</Button>
               <Button onClick={() => navigate('/privacy')} sx={{ color: alpha(gold, 0.7), fontWeight: 800, textTransform: 'none' }}>{ar ? 'الخصوصية' : 'Privacy'}</Button>
               <Button onClick={() => navigate('/terms')} sx={{ color: alpha(gold, 0.7), fontWeight: 800, textTransform: 'none' }}>{ar ? 'الشروط' : 'Terms'}</Button>
               <Button onClick={() => navigate('/login?intendedRole=admin')} sx={{ color: alpha(gold, 0.7), fontWeight: 800, textTransform: 'none' }}>{ar ? 'دخول الإدارة' : 'Admin Login'}</Button>
             </Stack>
-
           </Stack>
         </Container>
       </Box>
-
     </Box>
   );
 }
