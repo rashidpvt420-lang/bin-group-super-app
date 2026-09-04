@@ -1,5 +1,7 @@
 # BIN GROUP Play Store Closed Testing Checklist
 
+Last updated: 2026-08-22
+
 Status: preparation document for Android closed testing and production readiness.
 
 ## 1. Android build readiness
@@ -27,7 +29,7 @@ Before Play Store production:
 - Publish privacy policy URL.
 - Publish terms URL.
 - Add account deletion instructions.
-- Complete Google Play Data Safety form.
+- Complete Google Play Data Safety form before publishing beyond internal-only testing.
 - Explain location use for live technician dispatch and job tracking.
 - Explain notification use for job, HR, ticket, payment, and design alerts.
 
@@ -41,7 +43,16 @@ Recommended test group:
 - 3 Technician users.
 - 1 Broker user.
 
-Minimum test duration: 14 days continuous closed testing before production promotion.
+This 12-person group also satisfies the current minimum tester count **when** Google Play's new-personal-account production-access rule applies.
+
+Do not treat 14 days as a universal requirement for every Play developer account. Google's current published requirement is specifically for **personal developer accounts created after 13 November 2023**: at least **12 testers must remain opted in continuously for 14 days** before the developer can apply for production access.
+
+For BIN GROUP, check the Play Console Dashboard/account type before launch:
+
+- If Play Console requires the production-access closed test, keep at least 12 testers opted in continuously for the full 14 days, then apply for production access.
+- If Production is already available and the account is not subject to that rule, the 14-day production-access wait is not a mandatory Google requirement; continue internal/closed real-device QA according to release risk.
+
+Official reference: https://support.google.com/googleplay/android-developer/answer/14151465
 
 ## 4. Device coverage
 
@@ -123,9 +134,10 @@ Do not launch to full public until these are green:
 - PDF generation tested on real Android device.
 - Arabic RTL tested on all main screens.
 - Account deletion/privacy links working.
+- Any Play Console production-access testing requirement shown for the account is satisfied.
 
 ## 7. Current launch recommendation
 
-- Web controlled pilot: allowed.
-- Android closed testing: prepare and start after APK/AAB verification.
-- Full Play Store public launch: after closed testing and device QA.
+- Web controlled pilot: allowed only when protected web/backend release gates permit it.
+- Android internal/closed testing: start after exact-SHA signed APK/AAB verification and real-device installation.
+- Full Play Store public launch: after device QA, Play Console policy/setup completion, and any account-specific production-access testing requirement.
