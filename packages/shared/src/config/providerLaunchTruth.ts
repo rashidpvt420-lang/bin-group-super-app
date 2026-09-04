@@ -78,7 +78,7 @@ export const PROVIDER_LAUNCH_REQUIREMENTS: readonly ProviderLaunchRequirement[] 
     liveProof: 'Signed-in production callable proof with secrets server-side and safe fallback behavior.',
   },
   {
-    id: 'paymentGatewayOrManualBank',
+    id: 'phase1Payments',
     label: 'Phase 1 Cash/Cheque payments',
     required: true,
     requiredEvidenceLayer: 'physical_device',
@@ -125,7 +125,7 @@ export function evidenceCountsForPublicLaunch(
   if (!evidence) return false;
   if (String(evidence.status || '').trim().toLowerCase() !== 'passed') return false;
   const expected = normalizeCommitSha(expectedCommitSha);
-  const observed = normalizeCommitSha(evidence.commitSha || evidence.releaseSha);
+  const observed = normalizeCommitSha(evidence.releaseSha || evidence.commitSha);
   if (!expected || !observed || expected !== observed) return false;
   return evidenceLayerSatisfies(evidence.evidenceLayer, requiredLayer);
 }
@@ -147,7 +147,8 @@ export function providerRuntimeState({
 }
 
 export function requiredEvidenceLayerForGate(gateId: string, gateGroup?: string): LaunchEvidenceLayer {
-  const providerRequirement = PROVIDER_LAUNCH_REQUIREMENTS.find((item) => item.id === gateId);
+  const canonicalGateId = gateId === 'paymentGatewayOrManualBank' ? 'phase1Payments' : gateId;
+  const providerRequirement = PROVIDER_LAUNCH_REQUIREMENTS.find((item) => item.id === canonicalGateId);
   if (providerRequirement) return providerRequirement.requiredEvidenceLayer;
 
   if (
