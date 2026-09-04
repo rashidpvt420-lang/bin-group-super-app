@@ -28,13 +28,19 @@ function matchBlock(header) {
 
 // Finance Admins are allowed into the Admin payments module, but they must not
 // receive the broader canManageContracts authority just to read the queue.
-// Canonicalize the deployable rules so payment_transactions is readable by an
-// active finance_admin while all browser creates/updates/deletes stay denied.
+// Canonicalize only the payment_transactions block; /payments has the same
+// historical read expression and must not be changed accidentally.
+const paymentTransactionsHeader = '    match /payment_transactions/{paymentId} {';
 const legacyPaymentTransactionsRead = "      allow read: if participantCanRead(resource.data) || (signedIn() && resource.data.get('payerId', null) == request.auth.uid) || canManageContracts();";
 const financeAdminPaymentTransactionsRead = "      allow read: if participantCanRead(resource.data) || (signedIn() && resource.data.get('payerId', null) == request.auth.uid) || (isNotSuspended() && claimedRole() == 'finance_admin') || canManageContracts();";
-if (source.includes(legacyPaymentTransactionsRead)) {
-  source = source.replace(legacyPaymentTransactionsRead, financeAdminPaymentTransactionsRead);
-} else if (!source.includes(financeAdminPaymentTransactionsRead)) {
+let paymentTransactionsBlock = matchBlock(paymentTransactionsHeader);
+if (!paymentTransactionsBlock) {
+  failures.push('payment_transactions rule block is missing or malformed');
+} else if (paymentTransactionsBlock.includes(legacyPaymentTransactionsRead)) {
+  const hardenedBlock = paymentTransactionsBlock.replace(legacyPaymentTransactionsRead, financeAdminPaymentTransactionsRead);
+  source = source.replace(paymentTransactionsBlock, hardenedBlock);
+  paymentTransactionsBlock = hardenedBlock;
+} else if (!paymentTransactionsBlock.includes(financeAdminPaymentTransactionsRead)) {
   failures.push('payment_transactions Finance Admin read authority could not be canonicalized');
 }
 
@@ -88,7 +94,7 @@ else {
   }
 }
 
-const paymentTransactionsBlock = matchBlock('    match /payment_transactions/{paymentId} {');
+paymentTransactionsBlock = matchBlock(paymentTransactionsHeader);
 if (!paymentTransactionsBlock) failures.push('payment_transactions rule block is missing or malformed');
 else {
   if (!paymentTransactionsBlock.includes(financeAdminPaymentTransactionsRead.trim())) {
