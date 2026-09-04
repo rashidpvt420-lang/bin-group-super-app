@@ -29,15 +29,22 @@ async function readMailboxProfile({ accessToken, label, fetchImpl = globalThis.f
   return mailboxEmail;
 }
 
-async function resolveMailbox({ role, prefix, env = process.env }) {
+async function resolveMailbox({ role, prefix, env = process.env, fetchImpl = globalThis.fetch }) {
   const label = `${role} Gmail mailbox`;
-  const accessToken = await exchangeGmailAccessToken({
-    clientId: env[`${prefix}_MAILBOX_CLIENT_ID`],
-    clientSecret: env[`${prefix}_MAILBOX_CLIENT_SECRET`],
-    refreshToken: env[`${prefix}_MAILBOX_REFRESH_TOKEN`],
-    label,
-  });
-  const mailboxEmail = await readMailboxProfile({ accessToken, label });
+  let accessToken;
+  try {
+    accessToken = await exchangeGmailAccessToken({
+      clientId: env[`${prefix}_MAILBOX_CLIENT_ID`],
+      clientSecret: env[`${prefix}_MAILBOX_CLIENT_SECRET`],
+      refreshToken: env[`${prefix}_MAILBOX_REFRESH_TOKEN`],
+      label,
+      fetchImpl,
+    });
+  } catch (error) {
+    // exchangeGmailAccessToken only returns allowlisted provider diagnostics.
+    throw new Error(`${error.message} Check protected ${prefix}_MAILBOX_CLIENT_ID, ${prefix}_MAILBOX_CLIENT_SECRET and ${prefix}_MAILBOX_REFRESH_TOKEN as one matching credential set. See docs/PRODUCTION_GMAIL_RECOVERY.md. Never paste credential values into logs or chat.`);
+  }
+  const mailboxEmail = await readMailboxProfile({ accessToken, label, fetchImpl });
   const configuredEmail = lower(env[`${prefix}_MAILBOX_EMAIL_CONFIGURED`]);
   if (configuredEmail && configuredEmail !== mailboxEmail) {
     throw new Error(`${label} OAuth identity does not match the configured mailbox.`);
@@ -45,13 +52,13 @@ async function resolveMailbox({ role, prefix, env = process.env }) {
   return mailboxEmail;
 }
 
-export async function resolveProductionMailboxIdentities(env = process.env) {
+export async function resolveProductionMailboxIdentities(env = process.env, { fetchImpl = globalThis.fetch } = {}) {
   const githubEnv = text(env.GITHUB_ENV);
   if (!githubEnv) throw new Error('GITHUB_ENV is required to publish resolved mailbox identities.');
 
   const [ownerEmail, brokerEmail] = await Promise.all([
-    resolveMailbox({ role: 'Owner', prefix: 'E2E_OWNER', env }),
-    resolveMailbox({ role: 'Broker', prefix: 'E2E_BROKER', env }),
+    resolveMailbox({ role: 'Owner', prefix: 'E2E_OWNER', env, fetchImpl }),
+    resolveMailbox({ role: 'Broker', prefix: 'E2E_BROKER', env, fetchImpl }),
   ]);
 
   const roleEmails = [

@@ -41,6 +41,24 @@ test('Stripe is a fail-closed compatibility surface, not a deployed live provide
   assert.match(stripeHistorical, /webhooks\.constructEvent/);
 });
 
+test('Wave 6 retains the protected Cash/Cheque design implementation and its executable regressions', () => {
+  // Prevent provider consolidation from silently deleting the replacement flow
+  // while leaving the intentionally disabled Stripe compatibility endpoint.
+  assert.match(runtime, /export \* from ["']\.\/paymentEvidence["']/);
+  const exports = read('functions/paymentEvidence.ts');
+  const handlers = read('functions/designPayments.ts');
+  for (const name of ['getDesignPaymentInstructions', 'createDesignPaymentRequest', 'submitDesignOwnerDecision', 'adminReviewDesignPayment', 'adminHandoffDesignRequest']) {
+    assert.ok(exports.includes(name), `${name} must remain reachable from runtime`);
+    assert.ok(handlers.includes(`export const ${name} = onCall`));
+  }
+  assert.match(handlers, /enforceAppCheck: true/);
+  assert.match(handlers, /design_receipt_registry/);
+  assert.match(read('functions/designPaymentPolicy.ts'), /DESIGN_CASH_CHEQUE_V1/);
+  assert.doesNotMatch(read('src/pages/DesignRequestDetailPage.tsx'), /createStripeCheckoutSession|writeBatch|updateDoc/);
+  assert.match(read('apps/admin-panel/src/pages/admin/DesignStudioAdminPage.tsx'), /<DesignHandoffQueue/);
+  assert.match(read('tests/launch/launch-workflow-remediation.test.mjs'), /receipt-backed approval and engineer handoff/);
+});
+
 test('public readiness is exact-SHA, PASSED-only and evidence-layer qualified', () => {
   assert.match(providerTruth, /status \|\| ''\)\.trim\(\)\.toLowerCase\(\) !== 'passed'/);
   assert.match(providerTruth, /evidence\.releaseSha \|\| evidence\.commitSha/);

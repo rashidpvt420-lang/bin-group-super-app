@@ -154,7 +154,7 @@ function calculateServerQuote(scope: DesignScope) {
   const contingency = Math.round(subtotal * 0.08);
   const binMargin = Math.round(subtotal * 0.12);
   const finalTotal = subtotal + contingency + binMargin;
-  const mobilizationAmount = Math.round(finalTotal * 0.15);
+  const mobilizationAmount = Math.round(finalTotal * 0.15 * 100) / 100;
   const unsigned = {
     currency: "AED",
     materialsEstimate,

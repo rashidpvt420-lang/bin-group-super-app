@@ -106,9 +106,23 @@ export interface PropertyData {
         verifiedAt?: string;
         updatedAt?: string;
     };
+    submittedGeo?: Omit<NonNullable<PropertyData['geo']>, 'source' | 'verified' | 'verifiedAt' | 'dispatchReady' | 'requiresGeoReview' | 'placeId'> & {
+        placeId?: string | null;
+        source: 'owner_submission';
+        verified: false;
+        verifiedBy: null;
+        verifiedAt: null;
+        dispatchReady: false;
+        requiresGeoReview: true;
+    };
     location?: {
         lat: number;
         lng: number;
+        quality?: 'OWNER_SUBMITTED_REVIEW_REQUIRED';
+        source?: 'owner_submission';
+        verified?: false;
+        dispatchReady?: false;
+        requiresGeoReview?: true;
     };
     ownerEmail?: string;
     exposure?: string;

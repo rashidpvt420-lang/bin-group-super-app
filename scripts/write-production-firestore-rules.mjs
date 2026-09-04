@@ -80,6 +80,29 @@ if (payrollCatchAllOccurrences !== 3) {
   failures.push(`payroll_entries must be excluded from read, create and update/delete catch-alls; found ${payrollCatchAllOccurrences}`);
 }
 
+// Payment approval, payer binding and receipt uniqueness must survive every
+// normalizer/hardener before producing the actual Firebase deployment artifact.
+for (const [collection, key] of [
+  ['design_requests', 'requestId'], ['design_quotes', 'quoteId'],
+  ['design_approvals', 'approvalId'], ['design_receipt_registry', 'evidenceId'],
+]) {
+  const marker = `    match /${collection}/{${key}} {`;
+  const block = matchBlock(marker);
+  const writes = [...block.matchAll(/allow\s+([^:;]+):\s*([^;]+);/g)]
+    .filter(([, operations]) => /\b(create|update|delete|write)\b/.test(operations));
+  if (!block || source.split(marker).length !== 2 || writes.length === 0 ||
+      writes.some(([, , condition]) => condition.trim() !== 'if false')) {
+    failures.push(`${collection} must have one explicit server-only write rule`);
+  }
+  const fallback = matchBlock('    match /{collection}/{document=**} {');
+  const fallbackWrites = [...fallback.matchAll(/allow\s+([^:;]+):\s*([^;]+);/g)]
+    .filter(([, operations]) => /\b(create|update|delete|write)\b/.test(operations));
+  if (fallbackWrites.length !== 2 || fallbackWrites.some(([, , condition]) =>
+    !condition.includes(`'${collection}'`))) {
+    failures.push(`${collection} must be excluded from both generic browser write fallbacks`);
+  }
+}
+
 if (failures.length) {
   console.error('[production-firestore-rules] REFUSED');
   failures.forEach((failure) => console.error(`- ${failure}`));

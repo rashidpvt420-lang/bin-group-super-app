@@ -1250,11 +1250,13 @@ service cloud.firestore {
 
     match /tickets/{ticketId} {
       allow list: if canListAssignedTechnicianTicket(resource.data);
+      allow list: if isNotSuspended() && canDispatchJobs();
       allow read: if isNotSuspended() && (participantCanRead(resource.data) || canDispatchJobs());
       allow create, update, delete: if false;
     }
 
     match /maintenanceTickets/{ticketId} {
+      allow list: if isNotSuspended() && canDispatchJobs();
       allow list: if canListAssignedTechnicianTicket(resource.data);
       allow get: if canGetAssignedTechnicianTicket(resource.data);
       allow read: if isNotSuspended() && (participantCanRead(resource.data) || canDispatchJobs());
@@ -1769,18 +1771,14 @@ service cloud.firestore {
     match /design_requests/{requestId} {
       allow read: if isAdmin() || (signedIn() && (resource.data.get('userId', null) == request.auth.uid || resource.data.get('ownerId', null) == request.auth.uid || resource.data.get('tenantId', null) == request.auth.uid));
       allow create: if false;
-      allow update: if isAdmin() || (signedIn() && (
-        (resource.data.get('ownerId', null) == request.auth.uid && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'approvalStatus', 'quoteStatus', 'workflowStage', 'payerRole', 'payerEmail', 'updatedAt'])) ||
-        ((resource.data.get('userId', null) == request.auth.uid || resource.data.get('payerId', null) == request.auth.uid) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'workflowStage', 'payerRole', 'payerEmail', 'updatedAt']))
-      ));
-      allow delete: if isAdmin();
+      // Decisions, payer binding, payment verification and handoff are callable-only.
+      allow update, delete: if false;
     }
 
     match /design_quotes/{quoteId} {
       allow read: if isAdmin() || (signedIn() && (resource.data.get('userId', null) == request.auth.uid || resource.data.get('ownerId', null) == request.auth.uid || resource.data.get('tenantId', null) == request.auth.uid));
       allow create: if false;
-      allow update: if isAdmin();
-      allow delete: if isAdmin();
+      allow update, delete: if false;
     }
 
     match /design_concepts/{conceptId} {
@@ -1793,14 +1791,12 @@ service cloud.firestore {
     match /design_approvals/{approvalId} {
       allow read: if isAdmin() || (signedIn() && (resource.data.get('tenantUid', null) == request.auth.uid || resource.data.get('ownerId', null) == request.auth.uid));
       allow create: if false;
-      allow update: if isAdmin() || (
-        signedIn() &&
-        (resource.data.get('ownerId', null) == request.auth.uid || resource.data.get('tenantUid', null) == request.auth.uid) &&
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'decision', 'decisionNote', 'decidedAt', 'updatedAt']) &&
-        request.resource.data.get('status', null) in ['PENDING', 'APPROVED', 'REJECTED', 'CHANGES_REQUESTED'] &&
-        request.resource.data.get('decision', null) in ['APPROVED', 'REJECTED', 'CHANGES_REQUESTED']
-      );
-      allow delete: if isAdmin();
+      allow update, delete: if false;
+    }
+
+    match /design_receipt_registry/{evidenceId} {
+      allow read: if isAdmin();
+      allow create, update, delete: if false;
     }
 
     match /pilotFeedback/{feedbackId} {
@@ -2122,6 +2118,10 @@ service cloud.firestore {
           'security_audit_logs',
           'telemetry_logs',
           'payment_transactions',
+          'design_requests',
+          'design_quotes',
+          'design_approvals',
+          'design_receipt_registry',
           'payments',
           'transactions',
           'payroll_entries',
@@ -2157,6 +2157,10 @@ service cloud.firestore {
           'security_audit_logs',
           'telemetry_logs',
           'payment_transactions',
+          'design_requests',
+          'design_quotes',
+          'design_approvals',
+          'design_receipt_registry',
           'payments',
           'transactions',
           'payroll_entries',
