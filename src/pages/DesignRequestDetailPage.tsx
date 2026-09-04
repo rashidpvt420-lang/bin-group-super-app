@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
     Container, Typography, Box, Paper, Grid, Stack, Button,
-    Divider, alpha, CircularProgress, Chip, Alert
+    Divider, alpha, CircularProgress, Chip, Alert, TextField, MenuItem
 } from '@mui/material';
 import {
     ArrowLeft, ShieldCheck, CreditCard,
@@ -11,13 +11,6 @@ import {
     db,
     doc,
     onSnapshot,
-    updateDoc,
-    serverTimestamp,
-    collection,
-    query,
-    where,
-    getDocs,
-    writeBatch,
     functions,
     httpsCallable,
 } from '../lib/firebase';
@@ -26,8 +19,6 @@ import { useLanguage } from '@bin/shared';
 import { binThemeTokens } from '../theme/binGroupTheme';
 import { useParams, useNavigate } from 'react-router-dom';
 import { formatAED } from '../utils/formatters';
-import { NotificationEvents } from '@bin/shared';
-import { logAuditAction } from '../utils/auditLogger';
 
 const terminalStatuses = ['PAYMENT_SUBMITTED', 'PAID', 'ENGINEER_REVIEW', 'ADMIN_REVIEW', 'WORK_ORDER_READY', 'OWNER_REJECTED', 'REJECTED'];
 const PRIVATE_MEDIA_REFRESH_MS = 10 * 60 * 1000;
@@ -36,6 +27,16 @@ type ProtectedMedia = {
     referenceImages: string[];
     generatedImages: string[];
     expiresAtMs: number;
+};
+
+type PaymentInstructions = {
+    amount: number;
+    currency: string;
+    legalBeneficiary: string;
+    officeLocation: string;
+    approvedMethods: string[];
+    paymentConfigVersion: string;
+    paymentConfigHash: string;
 };
 
 function text(value: unknown, fallback = '—') {
@@ -85,21 +86,29 @@ export default function DesignRequestDetailPage() {
     const [mediaLoading, setMediaLoading] = useState(false);
     const [processing, setProcessing] = useState(false);
     const [actionError, setActionError] = useState('');
+    const [paymentInstructions, setPaymentInstructions] = useState<PaymentInstructions | null>(null);
+    const [paymentMethod, setPaymentMethod] = useState('');
 
     const currentPath = window.location.pathname;
     const basePrefix = currentPath.includes('/design-studio') ? currentPath.split('/design-studio')[0] : '';
 
     useEffect(() => {
         if (!id) return;
+        setRequest(null);
+        setLoading(true);
+        setPaymentInstructions(null);
+        setPaymentMethod('');
+        setActionError('');
         const unsub = onSnapshot(
             doc(db, 'design_requests', id),
             (snap) => {
                 if (snap.exists()) {
                     setRequest({ id: snap.id, ...snap.data() });
-                }
+                } else setRequest(null);
                 setLoading(false);
             },
             (error) => {
+                setRequest(null);
                 setActionError(error.message || 'Design request could not be loaded.');
                 setLoading(false);
             },
@@ -108,8 +117,8 @@ export default function DesignRequestDetailPage() {
     }, [id]);
 
     useEffect(() => {
+        setProtectedMedia({ referenceImages: [], generatedImages: [], expiresAtMs: 0 });
         if (!id || !user?.uid) {
-            setProtectedMedia({ referenceImages: [], generatedImages: [], expiresAtMs: 0 });
             return undefined;
         }
         let cancelled = false;
@@ -146,72 +155,13 @@ export default function DesignRequestDetailPage() {
         };
     }, [id, user?.uid]);
 
-    const syncApprovalDocs = async (batch: ReturnType<typeof writeBatch>, action: 'APPROVE' | 'REJECT' | 'TAKEOVER', status: string, approvalStatus: string, payerRole: string, payerId: string | null) => {
-        if (!id || !user?.uid) return;
-        const approvalSnap = await getDocs(query(collection(db, 'design_approvals'), where('requestId', '==', id)));
-        const approvalPayload = {
-            decision: action === 'REJECT' ? 'rejected' : 'approved',
-            status: approvalStatus,
-            approvalStatus,
-            payerRole,
-            payerId,
-            ownerAction: action,
-            decidedBy: user.uid,
-            decidedByEmail: user.email || null,
-            updatedAt: serverTimestamp(),
-            ...(action === 'REJECT' ? { rejectedAt: serverTimestamp() } : { approvedAt: serverTimestamp() }),
-        };
-
-        if (approvalSnap.empty) return;
-        approvalSnap.docs.forEach((approvalDoc) => {
-            batch.update(doc(db, 'design_approvals', approvalDoc.id), approvalPayload);
-        });
-    };
-
     const handleOwnerAction = async (action: 'APPROVE' | 'REJECT' | 'TAKEOVER') => {
         if (!id || !request || !user?.uid) return;
         setProcessing(true);
         setActionError('');
         try {
-            const status = action === 'REJECT' ? 'OWNER_REJECTED' : action === 'TAKEOVER' ? 'OWNER_APPROVED_OWNER_TO_PAY' : 'OWNER_APPROVED_TENANT_TO_PAY';
-            const approvalStatus = action === 'REJECT' ? 'OWNER_REJECTED' : 'OWNER_APPROVED';
-            const quoteStatus = action === 'REJECT' ? 'REJECTED' : 'DEPOSIT_PENDING';
-            const payerRole = action === 'TAKEOVER' ? 'owner' : request.role === 'tenant' ? 'tenant' : 'owner';
-            const payerId = payerRole === 'owner' ? user.uid : request.userId || request.tenantUid || null;
-            const batch = writeBatch(db);
-
-            batch.update(doc(db, 'design_requests', id), {
-                status,
-                approvalStatus,
-                quoteStatus,
-                workflowStage: status,
-                payerRole,
-                payerId,
-                ownerId: user.uid,
-                ownerUid: user.uid,
-                ownerAction: action,
-                updatedAt: serverTimestamp(),
-                ownerActionAt: serverTimestamp(),
-            });
-
-            await syncApprovalDocs(batch, action, status, approvalStatus, payerRole, payerId);
-            await batch.commit();
-
-            await logAuditAction({
-                actorId: user.uid,
-                actorRole: role || 'owner',
-                action: `DESIGN_OWNER_${action}`,
-                targetType: 'design_requests',
-                targetId: id,
-                metadata: { payerRole, payerId, quoteTotal: request.quote?.finalTotal || 0, syncedApprovalDocs: true },
-            });
-
-            if (action !== 'REJECT' && request.userId && request.role === 'tenant') {
-                await NotificationEvents.TENANT.DESIGN_APPROVED(
-                    request.userId,
-                    request.scope?.zoneType || 'requested area'
-                );
-            }
+            const decide = httpsCallable(functions, 'submitDesignOwnerDecision');
+            await decide({ designRequestId: id, action });
         } catch (err: any) {
             console.error('Design owner action failed:', err);
             setActionError(err?.message || 'The owner decision could not be saved.');
@@ -220,27 +170,33 @@ export default function DesignRequestDetailPage() {
         }
     };
 
+    const handleLoadPaymentInstructions = async () => {
+        if (!id || !user?.uid) return;
+        setProcessing(true);
+        setActionError('');
+        setPaymentInstructions(null);
+        try {
+            const load = httpsCallable<{ designRequestId: string }, PaymentInstructions>(functions, 'getDesignPaymentInstructions');
+            const result = await load({ designRequestId: id });
+            setPaymentInstructions(result.data);
+            setPaymentMethod(request?.paymentMethod || '');
+        } catch (error: any) {
+            setActionError(error?.message || 'Approved payment instructions are unavailable. Do not make a payment.');
+        } finally { setProcessing(false); }
+    };
+
     const handleCreatePaymentRequest = async () => {
-        if (!id || !request || !user?.uid) return;
+        if (!id || !request || !user?.uid || !paymentInstructions || !paymentMethod) return;
         setProcessing(true);
         setActionError('');
         try {
             const createPaymentRequest = httpsCallable(functions, 'createDesignPaymentRequest');
-            await createPaymentRequest({ designRequestId: id });
-            const createCheckout = httpsCallable(functions, 'createStripeCheckoutSession');
-            const checkout: any = await createCheckout({
-                designRequestId: id,
-                ownerUid: user.uid,
-                ownerEmail: user.email,
-            });
-            const checkoutUrl = String(checkout?.data?.url || '');
-            if (!checkoutUrl.startsWith('https://')) {
-                throw new Error('The payment provider did not return a secure checkout URL.');
-            }
-            window.location.assign(checkoutUrl);
+            await createPaymentRequest({ designRequestId: id, method: paymentMethod,
+                paymentConfigVersion: paymentInstructions.paymentConfigVersion,
+                paymentConfigHash: paymentInstructions.paymentConfigHash });
         } catch (err: any) {
             console.error('Design payment request failed:', err);
-            setActionError(err?.message || 'Design payment checkout could not be started.');
+            setActionError(err?.message || 'The Cash/Cheque payment request could not be recorded.');
         } finally {
             setProcessing(false);
         }
@@ -251,24 +207,8 @@ export default function DesignRequestDetailPage() {
         setProcessing(true);
         setActionError('');
         try {
-            const executionScope = request.executionScope || buildExecutionScope(request);
-            await updateDoc(doc(db, 'design_requests', id), {
-                status: 'ENGINEER_REVIEW',
-                adminHandoffStatus: 'ENGINEER_REVIEW',
-                engineerHandoffStatus: 'READY_FOR_SCOPE_REVIEW',
-                executionScope,
-                updatedAt: serverTimestamp(),
-                engineerHandoffAt: serverTimestamp(),
-            });
-
-            await logAuditAction({
-                actorId: user.uid,
-                actorRole: role || 'admin',
-                action: 'DESIGN_ENGINEER_HANDOFF_READY',
-                targetType: 'design_requests',
-                targetId: id,
-                metadata: executionScope,
-            });
+            const handoff = httpsCallable(functions, 'adminHandoffDesignRequest');
+            await handoff({ designRequestId: id });
         } catch (err: any) {
             console.error('Engineer handoff failed:', err);
             setActionError(err?.message || 'The engineer handoff could not be saved.');
@@ -278,16 +218,16 @@ export default function DesignRequestDetailPage() {
     };
 
     if (loading) return <Box sx={{ height: '80vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><CircularProgress sx={{ color: binThemeTokens.gold }} /></Box>;
-    if (!request) return <Container sx={{ py: 10 }}><Typography>Request not found in Sovereign Registry.</Typography></Container>;
+    if (!request) return <Container sx={{ py: 10 }}>{actionError ? <Alert severity="error">{actionError}</Alert> : <Typography>Design request not found.</Typography>}</Container>;
 
     const { scope = {}, quote = {} } = request;
-    const isOwner = role === 'owner' || role === 'ceo';
+    const isOwner = role === 'owner' && request.ownerId === user?.uid;
     const isAdmin = ['admin', 'ceo'].includes(String(role || '').toLowerCase());
     const isTenantRequest = request.role === 'tenant';
-    const isPayer = request.payerId ? request.payerId === user?.uid : request.userId === user?.uid || request.ownerId === user?.uid;
+    const isPayer = request.payerId ? request.payerId === user?.uid : request.role === 'owner' && request.ownerId === user?.uid;
     const canApprove = isOwner && ['PENDING_OWNER_NOC', 'AWAITING_OWNER_APPROVAL'].includes(String(request.status || ''));
     const canCreatePayment = isPayer && !terminalStatuses.includes(String(request.status || '')) && ['OWNER_APPROVED_TENANT_TO_PAY', 'OWNER_APPROVED_OWNER_TO_PAY', 'DEPOSIT_PENDING', 'AI_CONCEPT_READY', 'PAYMENT_PENDING'].includes(String(request.status || ''));
-    const canAdminHandoff = isAdmin && ['PAYMENT_PENDING', 'PAYMENT_SUBMITTED', 'PAID', 'APPROVED_FOR_EXECUTION', 'READY_FOR_EXECUTION'].includes(String(request.status || ''));
+    const canAdminHandoff = isAdmin && request.paymentVerified === true && request.status === 'PAID';
     const referenceImages = protectedMedia.referenceImages;
     const generatedImages = protectedMedia.generatedImages;
     const primaryVisual = generatedImages[0] || referenceImages[0] || '';
@@ -384,7 +324,7 @@ export default function DesignRequestDetailPage() {
                                     <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950 }}>EXECUTION QUOTE</Typography>
                                     <Typography variant="h4" fontWeight="950" sx={{ color: '#FFF' }}>{formatAED(quote.finalTotal || 0)}</Typography>
                                     <Typography variant="caption" sx={{ color: '#10b981', fontWeight: 900, display: 'block', mt: 0.5 }}>
-                                        15% Upfront Deposit Required: {formatAED(Number(quote.mobilizationAmount || Math.round(Number(quote.finalTotal || 0) * 0.15)))}
+                                        15% Upfront Deposit Required: {formatAED(Number(quote.mobilizationAmount ?? Math.round(Number(quote.finalTotal || 0) * 0.15 * 100) / 100))}
                                     </Typography>
                                 </Box>
                                 <Chip label={String(request.status || 'DRAFT').replace(/_/g, ' ')} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, maxWidth: 220 }} />
@@ -418,23 +358,28 @@ export default function DesignRequestDetailPage() {
                                 </Stack>
                             )}
 
-                            {canCreatePayment && request.status !== 'PAYMENT_PENDING' && (
-                                <Button variant="contained" fullWidth size="large" onClick={handleCreatePaymentRequest} disabled={processing} sx={{ py: 2, bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, borderRadius: 2 }}>
-                                    PAY 15% DEPOSIT ({formatAED(Number(quote.mobilizationAmount || Math.round(Number(quote.finalTotal || 0) * 0.15)))})
-                                </Button>
+                            {canCreatePayment && (
+                                <Stack spacing={2}>
+                                    <Button variant="outlined" fullWidth onClick={handleLoadPaymentInstructions} disabled={processing}>
+                                        {paymentInstructions ? 'REFRESH' : 'VIEW'} CASH / CHEQUE INSTRUCTIONS
+                                    </Button>
+                                    {paymentInstructions && <>
+                                        <Alert severity="info">Pay {formatAED(paymentInstructions.amount)} to {paymentInstructions.legalBeneficiary} at {paymentInstructions.officeLocation}. Cash or Cheque only. A request does not confirm receipt of funds.</Alert>
+                                        <TextField select label="Payment method" value={paymentMethod} onChange={(event) => setPaymentMethod(event.target.value)} disabled={processing || request.status === 'PAYMENT_PENDING'} fullWidth>
+                                            {paymentInstructions.approvedMethods.filter((method) => ['CASH', 'CHEQUE'].includes(method)).map((method) => <MenuItem key={method} value={method}>{method === 'CASH' ? 'Cash' : 'Cheque'}</MenuItem>)}
+                                        </TextField>
+                                        {request.status !== 'PAYMENT_PENDING' && <Button variant="contained" fullWidth onClick={handleCreatePaymentRequest} disabled={processing || !paymentMethod} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>REQUEST 15% DEPOSIT VERIFICATION</Button>}
+                                    </>}
+                                </Stack>
                             )}
 
                             {request.status === 'PAYMENT_PENDING' && (
                                 <Box sx={{ textAlign: 'center', py: 2 }}>
                                     <CreditCard size={48} color={binThemeTokens.gold} style={{ margin: '0 auto 16px' }} />
-                                    <Typography variant="h6" fontWeight="950" sx={{ mb: 1 }}>PAYMENT CHECKOUT PENDING</Typography>
+                                    <Typography variant="h6" fontWeight="950" sx={{ mb: 1 }}>ADMIN PAYMENT VERIFICATION PENDING</Typography>
                                     <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>Payment ID: {text(request.paymentId)}</Typography>
-                                    <Alert severity="warning" sx={{ mb: 2, bgcolor: 'rgba(245,158,11,0.1)', color: '#fbbf24' }}>Only the Stripe webhook can verify payment. If checkout was interrupted, resume it below.</Alert>
-                                    {canCreatePayment && (
-                                        <Button variant="outlined" fullWidth onClick={handleCreatePaymentRequest} disabled={processing} sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.gold, fontWeight: 950 }}>
-                                            RESUME SECURE CHECKOUT
-                                        </Button>
-                                    )}
+                                    <Alert severity="warning" sx={{ mb: 2 }}>Admin must verify the official Cash/Cheque receipt and exact deposit before engineer handoff. Card and bank-transfer payments are disabled.</Alert>
+                                    {request.paymentReviewNote && <Alert severity="info">{request.paymentReviewNote}</Alert>}
                                 </Box>
                             )}
                         </Paper>
