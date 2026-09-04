@@ -15,6 +15,7 @@ export type LaunchEvidenceRecord = {
   status?: PublicGateStatus | string | null;
   evidenceLayer?: LaunchEvidenceLayer | string | null;
   commitSha?: string | null;
+  releaseSha?: string | null;
 };
 
 export const PHASE1_PAYMENT_POLICY = Object.freeze({
@@ -124,7 +125,7 @@ export function evidenceCountsForPublicLaunch(
   if (!evidence) return false;
   if (String(evidence.status || '').trim().toLowerCase() !== 'passed') return false;
   const expected = normalizeCommitSha(expectedCommitSha);
-  const observed = normalizeCommitSha(evidence.commitSha);
+  const observed = normalizeCommitSha(evidence.commitSha || evidence.releaseSha);
   if (!expected || !observed || expected !== observed) return false;
   return evidenceLayerSatisfies(evidence.evidenceLayer, requiredLayer);
 }
