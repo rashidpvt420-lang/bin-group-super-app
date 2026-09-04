@@ -41,7 +41,7 @@ import OwnerTicketDetailPage from './pages/OwnerTicketDetailPage';
 import OwnerAIIntelligencePage from './pages/OwnerAIIntelligencePage';
 import OwnerDamageEstimatePage from './pages/OwnerDamageEstimatePage';
 import OwnerPLReportPage from './pages/OwnerPLReportPage';
-import ContractorMarketplacePage from './pages/ContractorMarketplacePage';
+import HomeDiscoveryInventoryPage from './pages/HomeDiscoveryInventoryPage';
 import OwnerApprovalCenterPage from './pages/OwnerApprovalCenterPage';
 import PortfolioRenewalsPage from './pages/PortfolioRenewalsPage';
 
@@ -115,8 +115,9 @@ export default function OwnerApp() {
                 <Route path="/ai-intelligence" element={<OwnerAIIntelligencePage />} />
                 <Route path="/damage-estimate" element={<OwnerDamageEstimatePage />} />
                 <Route path="/p-l-report" element={<OwnerPLReportPage />} />
-                <Route path="/find-room-rent" element={<ContractorMarketplacePage />} />
-                <Route path="/contractor-marketplace" element={<ContractorMarketplacePage />} />
+                <Route path="/find-room-rent" element={<HomeDiscoveryInventoryPage />} />
+                <Route path="/contractor-marketplace" element={<HomeDiscoveryInventoryPage />} />
+                <Route path="/home-discovery" element={<HomeDiscoveryInventoryPage />} />
                 <Route path="/approvals" element={<OwnerApprovalCenterPage />} />
                 <Route path="/bin-connect" element={<BinConnectInboxPage role="owner" />} />
                 <Route path="/pilot-completion" element={<PilotCompletionPage role="owner" />} />
