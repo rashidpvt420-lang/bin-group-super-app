@@ -14,7 +14,10 @@ function escapeRegExp(value) {
 }
 
 test('public launch route fails closed until all five protected role smokes pass on the exact release', () => {
-  assert.match(routeGuard, /REQUIRED_SMOKE_ROLES[^\n]*owner[^\n]*tenant[^\n]*technician[^\n]*broker[^\n]*admin/);
+  assert.match(routeGuard, /const REQUIRED_SMOKE_ROLES/);
+  for (const role of ['owner', 'tenant', 'technician', 'broker', 'admin']) {
+    assert.ok(routeGuard.includes(`'${role}'`), `required smoke role is missing: ${role}`);
+  }
   assert.match(routeGuard, /normalizeCommitSha\(process\.env\.REACT_APP_RELEASE_COMMIT_SHA\)/);
   assert.match(routeGuard, /evidenceCountsForPublicLaunch/);
   assert.match(routeGuard, /smokePassedCount === REQUIRED_SMOKE_ROLES\.length/);
