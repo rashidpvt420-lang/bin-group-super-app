@@ -42,8 +42,6 @@ test('Stripe is a fail-closed compatibility surface, not a deployed live provide
 });
 
 test('Wave 6 retains the protected Cash/Cheque design implementation and its executable regressions', () => {
-  // Prevent provider consolidation from silently deleting the replacement flow
-  // while leaving the intentionally disabled Stripe compatibility endpoint.
   assert.match(runtime, /export \* from ["']\.\/paymentEvidence["']/);
   const exports = read('functions/paymentEvidence.ts');
   const handlers = read('functions/designPayments.ts');
@@ -59,14 +57,19 @@ test('Wave 6 retains the protected Cash/Cheque design implementation and its exe
   assert.match(read('tests/launch/launch-workflow-remediation.test.mjs'), /receipt-backed approval and engineer handoff/);
 });
 
-test('public readiness is exact-SHA, PASSED-only and evidence-layer qualified', () => {
+test('evidence coverage is exact-SHA, PASSED-only and evidence-layer qualified without authorizing launch', () => {
   assert.match(providerTruth, /status \|\| ''\)\.trim\(\)\.toLowerCase\(\) !== 'passed'/);
   assert.match(providerTruth, /evidence\.releaseSha \|\| evidence\.commitSha/);
   assert.match(providerTruth, /evidenceLayerSatisfies/);
   assert.match(adminLaunch, /RELEASE_SHA = normalizeCommitSha\(process\.env\.REACT_APP_RELEASE_COMMIT_SHA\)/);
   assert.match(adminLaunch, /evidenceCountsForPublicLaunch/);
   assert.match(adminLaunch, /waived \(non-passing\)/);
-  assert.match(adminLaunch, /Waivers never satisfy hard public launch/);
+  assert.match(adminLaunch, /EVIDENCE COVERAGE COMPLETE/);
+  assert.match(adminLaunch, /This page measures exact-SHA evidence coverage only\. It never authorizes hard public launch/);
+  assert.match(adminLaunch, /protected signed hard-launch decision/);
+  assert.match(adminLaunch, /source: 'admin-manual-evidence'/);
+  assert.match(adminLaunch, /hardLaunchClaim: false/);
+  assert.doesNotMatch(adminLaunch, /PUBLIC READY/);
   assert.doesNotMatch(adminLaunch, /\['passed', 'waived'\]\.includes/);
 });
 

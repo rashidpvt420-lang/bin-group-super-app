@@ -15,6 +15,7 @@ import { patchOwnerEvidenceWorkflow } from './apply-owner-inspection-first-evide
 const root = process.cwd();
 const workflowPath = path.join(root, '.github/workflows/firebase-production-deploy.yml');
 const decisionPath = path.join(root, 'scripts/hard-launch-decision-gate.mjs');
+const postdeployPath = path.join(root, 'scripts/postdeploy-release-gate.mjs');
 const generatedPath = path.join(
   root,
   'launch_package/generated/firebase-production-deploy-phase1.yml',
@@ -23,11 +24,11 @@ const generatedPath = path.join(
 const workflow = readFileSync(workflowPath, 'utf8');
 const generatedWorkflow = patchOwnerEvidenceWorkflow(workflow, workflowPath);
 const decision = readFileSync(decisionPath, 'utf8');
+const postdeploy = readFileSync(postdeployPath, 'utf8');
 
 const requiredWorkflowBindings = [
   'payment_policy:',
   'phase1-manual',
-  'phase2-stripe',
   'Verify Phase 1 manual Cash/Cheque production policy',
   'phase1-manual-payment-proof.json',
   'E2E_FOUNDER_EMAIL: ${{ secrets.E2E_FOUNDER_EMAIL }}',
@@ -42,6 +43,17 @@ for (const binding of requiredWorkflowBindings) {
   }
 }
 
+for (const forbidden of [
+  'phase2-stripe',
+  'Verify recent live Stripe payment and processed webhook',
+  'verify-stripe-live-proof.mjs',
+  'launch_package/stripe-live-proof.json',
+]) {
+  if (generatedWorkflow.includes(forbidden)) {
+    throw new Error(`Phase 1 production workflow exposes disabled Stripe authority: ${forbidden}`);
+  }
+}
+
 for (const binding of [
   'E2E_FOUNDER_EMAIL: ${{ secrets.E2E_FOUNDER_EMAIL }}',
   'E2E_FOUNDER_PASSWORD: ${{ secrets.E2E_FOUNDER_PASSWORD }}',
@@ -53,8 +65,9 @@ for (const binding of [
 }
 
 const requiredDecisionBindings = [
-  "const paymentProofOk = paymentPolicy === 'phase1-manual'",
-  "paymentPolicy === 'phase2-stripe' && stripeLiveProof?.status === 'passed'",
+  "const PHASE1_PAYMENT_POLICY = 'phase1-manual'",
+  'PAYMENT_POLICY must equal phase1-manual while PHASE1_CASH_CHEQUE_V1 is active',
+  'const paymentProofOk = paymentPolicy === PHASE1_PAYMENT_POLICY',
   "launchMode === 'public' && postdeployCleared && paymentProofOk",
 ];
 
@@ -64,7 +77,14 @@ for (const binding of requiredDecisionBindings) {
   }
 }
 
+if (/stripe-live-proof\.json|stripeLiveProof|phase2-stripe/.test(decision)) {
+  throw new Error('Current signed hard-launch decision must not contain Stripe/Phase 2 authority.');
+}
+if (/stripe-live-proof\.json|stripe-api-live-verifier|phase2-stripe/.test(postdeploy)) {
+  throw new Error('Current postdeploy release gate must not contain Stripe/Phase 2 authority.');
+}
+
 mkdirSync(path.dirname(generatedPath), { recursive: true });
 writeFileSync(generatedPath, generatedWorkflow.endsWith('\n') ? generatedWorkflow : `${generatedWorkflow}\n`, 'utf8');
 
-console.log('Phase 1 Cash/Cheque policy and inspection-first Founder MFA workflow are generated and verified.');
+console.log('Phase 1 Cash/Cheque production workflow and signed decision authority are generated and verified.');

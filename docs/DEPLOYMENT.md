@@ -7,7 +7,13 @@ This is the current production deployment guide for the BIN GROUP Super App. It 
 - Firebase project: `bin-group-57c60`
 - Source branch: `main`
 - Deployment authority: `.github/workflows/firebase-production-deploy.yml`
+- Current payment policy: `PHASE1_CASH_CHEQUE_V1` / `phase1-manual`
+- Approved payment methods: AED Cash and Cheque only
+- Bank Transfer: disabled
+- Stripe/Card: disabled
 - Public release state: not asserted by this document
+
+`bank-pilot` is a legacy internal deployment-mode identifier. It does not mean Bank Transfer is enabled and it never overrides the current Cash/Cheque-only payment policy.
 
 ## Pre-deployment requirements
 
@@ -15,6 +21,7 @@ A production run must bind all of the following to one exact current `main` SHA:
 
 - founder authorization and authorized GitHub actor/email;
 - protected production-environment approval;
+- `PAYMENT_POLICY=phase1-manual`;
 - clear or hold-aware incident attestation;
 - deterministic root, Admin, and Functions builds;
 - Firestore and Storage rules tests;
@@ -22,7 +29,7 @@ A production run must bind all of the following to one exact current `main` SHA:
 - complete deployment metadata and artifact digests;
 - rollback, monitoring, and evidence references.
 
-For public mode, the workflow must also bind a successful same-SHA hard-clearance run and real live payment/webhook evidence.
+For public mode, the workflow must also bind a successful same-SHA hard-clearance run and the execution-generated Phase 1 Cash/Cheque production proof. Disabled Stripe/Card or Bank Transfer evidence cannot satisfy the current release.
 
 ## Local validation only
 
@@ -54,12 +61,14 @@ The real arm64 Xcode build must be executed on an M-series Mac and must not be i
 
 1. Confirm the exact current `main` SHA immediately before dispatch.
 2. Use the START HERE production workflow with the required exact confirmation values.
-3. Select `bank-pilot` unless all public-mode evidence already exists.
-4. Allow the protected workflow to perform credentials preflight, authorization, builds, rules validation, full-stack deployment, and post-deployment verification.
-5. Preserve the successful workflow run ID, exact SHA, deployment metadata, and artifact digests.
-6. Run same-SHA live role smoke and hosted App Check verification.
-7. Complete the controlled pilot for at least 24 hours with zero open P0/P1 incidents.
-8. Produce protected hard-clearance evidence before any public-mode run.
+3. Use `payment_policy=phase1-manual`; no other production payment policy is currently selectable.
+4. Select `bank-pilot` unless the protected public-mode prerequisites already exist.
+5. Allow the protected workflow to perform credentials preflight, authorization, builds, rules validation, full-stack deployment, and post-deployment verification.
+6. Preserve the successful workflow run ID, exact SHA, deployment metadata, and artifact digests.
+7. Run same-SHA live role smoke and hosted App Check verification.
+8. Complete the controlled pilot for at least 24 hours with zero open P0/P1 incidents where the current protected policy requires that pilot evidence.
+9. Produce protected hard-clearance and required physical-device evidence before any public-mode decision.
+10. In public mode, verify the same-run Phase 1 manual payment artifact before the signed final decision may claim hard launch.
 
 ## Admin provisioning and recovery
 
@@ -71,6 +80,14 @@ Local scripts must not create Auth users, set passwords, set custom claims, acti
 
 AI secret setup may create Secret Manager versions only after an explicit exact-main preflight. The helper scripts must not deploy Functions or Hosting. After secret configuration and validation, deployment still occurs only through the protected production workflow.
 
+AI configuration is not AI live proof. Current launch evidence requires signed-in hosted execution with server-side secrets and safe fallback behavior.
+
+## Payment provider migration
+
+The dormant Stripe implementation may remain hardened in source for a separately reviewed future migration. It is not exported as the live Phase 1 payment runtime, its secrets are not current Phase 1 deployment prerequisites, and the protected production workflow does not expose a Phase 2 Stripe selector.
+
+Any future Stripe/Card or Bank Transfer enablement requires a separate policy migration, source review, regression update, deployment-secret review, operational proof design and protected release validation. It must not be enabled by editing a workflow input alone.
+
 ## Rollback
 
 Rollback is a protected production workflow decision. Do not check out an old commit and deploy it locally. Record the rollback reason, target SHA, incident reference, and monitoring evidence, then use the repository's protected rollback/deployment controls.
@@ -81,9 +98,12 @@ Rollback is a protected production workflow decision. Do not check out an old co
 - No selected-Functions production deployment from a workstation.
 - No direct Firestore or Storage rules deployment.
 - No local Admin claim/password escalation.
-- No fabricated Stripe, SMTP, App Check, pilot, or five-profile evidence.
+- No fabricated provider, payment, SMTP, App Check, pilot, physical-device, or five-profile evidence.
+- No manual Admin evidence record treated as final launch authorization.
+- No waiver treated as a hard-public-launch pass.
 - No deployment of a superseded SHA.
+- No Bank Transfer or Stripe/Card enablement under `PHASE1_CASH_CHEQUE_V1`.
 
 ## Release decision
 
-Source builds and green CI establish code readiness only. Hard public launch remains `NO-GO` until the protected operational evidence chain passes for the exact deployed SHA.
+Source builds and green CI establish code readiness only. Evidence coverage in the Admin panel establishes coverage only. Hard public launch remains `NO-GO` until the protected operational evidence chain and signed final decision pass for the exact deployed SHA.

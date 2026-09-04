@@ -84,6 +84,7 @@ jobs:
           E2E_FOUNDER_TOTP_SECRET: ${{ secrets.E2E_FOUNDER_TOTP_SECRET }}
           E2E_FOUNDER_REAL_MFA_CODE: ${{ secrets.E2E_FOUNDER_REAL_MFA_CODE }}
           LAUNCH_MODE: 'public'
+          PAYMENT_POLICY: 'phase1-manual'
           RUN_PUBLIC_RELEASE_GATE: 'true'
         run: |
           node scripts/verify-production-workflow-env.mjs
