@@ -3,6 +3,7 @@ import { Box, Paper, Stack, Typography, alpha } from '@mui/material';
 import { ArrowLeft, ArrowRight, Briefcase, Camera, AlertTriangle, Activity, CheckCircle2, Building2, Wrench, CreditCard, ShieldCheck, MapPin, Users } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
 import { binThemeTokens } from '../theme/binGroupTheme';
+import RoleIntelligencePanel from './RoleIntelligencePanel';
 
 type RoleKey = 'owner' | 'tenant' | 'technician' | 'broker';
 
@@ -45,53 +46,40 @@ export default function RoleJourneyStrip({ role, dark = false }: { role: RoleKey
   const labelColor = dark ? 'rgba(255,255,255,0.85)' : binThemeTokens.textPrimary;
 
   return (
-    <Paper
-      elevation={0}
-      sx={{
-        p: { xs: 2, md: 2.25 },
-        mb: 3,
-        borderRadius: 3,
-        border: `1px solid ${alpha(binThemeTokens.gold, dark ? 0.22 : 0.25)}`,
-        bgcolor: dark ? 'rgba(15,23,42,0.72)' : alpha(binThemeTokens.gold, 0.045),
-        direction: isRTL ? 'rtl' : 'ltr',
-      }}
-    >
-      <Typography
-        variant="overline"
-        sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 2.5, display: 'block', mb: 1.5 }}
+    <>
+      <Paper
+        elevation={0}
+        sx={{
+          p: { xs: 2, md: 2.25 },
+          mb: 3,
+          borderRadius: 3,
+          border: `1px solid ${alpha(binThemeTokens.gold, dark ? 0.22 : 0.25)}`,
+          bgcolor: dark ? 'rgba(15,23,42,0.72)' : alpha(binThemeTokens.gold, 0.045),
+          direction: isRTL ? 'rtl' : 'ltr',
+        }}
       >
-        {tx('journey.title', 'How This Works For You')}
-      </Typography>
-      <Stack direction="row" flexWrap="wrap" alignItems="center" sx={{ gap: { xs: 1.5, md: 0.5 } }}>
-        {steps.map((step, idx) => (
-          <React.Fragment key={step.labelKey}>
-            <Stack direction="row" spacing={1} alignItems="center" sx={{ minWidth: 0 }}>
-              <Box
-                sx={{
-                  width: 28,
-                  height: 28,
-                  borderRadius: '50%',
-                  display: 'grid',
-                  placeItems: 'center',
-                  flexShrink: 0,
-                  bgcolor: binThemeTokens.gold,
-                  color: '#111827',
-                }}
-              >
-                {step.icon}
-              </Box>
-              <Typography sx={{ fontWeight: 800, fontSize: '0.85rem', color: labelColor, whiteSpace: 'nowrap' }}>
-                {tx(step.labelKey, step.labelFallback)}
-              </Typography>
-            </Stack>
-            {idx < steps.length - 1 && (
-              <Box sx={{ color: alpha(binThemeTokens.gold, 0.6), display: { xs: 'none', md: 'flex' }, px: { md: 1.5 } }}>
-                <ArrowIcon size={15} />
-              </Box>
-            )}
-          </React.Fragment>
-        ))}
-      </Stack>
-    </Paper>
+        <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 2.5, display: 'block', mb: 1.5 }}>
+          {tx('journey.title', 'How This Works For You')}
+        </Typography>
+        <Stack direction="row" flexWrap="wrap" alignItems="center" sx={{ gap: { xs: 1.5, md: 0.5 } }}>
+          {steps.map((step, idx) => (
+            <React.Fragment key={step.labelKey}>
+              <Stack direction="row" spacing={1} alignItems="center" sx={{ minWidth: 0 }}>
+                <Box sx={{ width: 28, height: 28, borderRadius: '50%', display: 'grid', placeItems: 'center', flexShrink: 0, bgcolor: binThemeTokens.gold, color: '#111827' }}>
+                  {step.icon}
+                </Box>
+                <Typography sx={{ fontWeight: 800, fontSize: '0.85rem', color: labelColor, whiteSpace: 'nowrap' }}>
+                  {tx(step.labelKey, step.labelFallback)}
+                </Typography>
+              </Stack>
+              {idx < steps.length - 1 && (
+                <Box sx={{ color: alpha(binThemeTokens.gold, 0.6), display: { xs: 'none', md: 'flex' }, px: { md: 1.5 } }}><ArrowIcon size={15} /></Box>
+              )}
+            </React.Fragment>
+          ))}
+        </Stack>
+      </Paper>
+      <RoleIntelligencePanel role={role} />
+    </>
   );
 }
