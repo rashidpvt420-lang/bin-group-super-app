@@ -53,6 +53,8 @@ type LaunchEvidence = {
   productionUrl?: string;
   proofRef?: string;
   notes?: string;
+  source?: string;
+  hardLaunchClaim?: boolean;
   recordedByEmail?: string | null;
   createdAt?: any;
 };
@@ -76,6 +78,8 @@ type SignedInSmokeRecord = {
   route?: string;
   proofRef?: string;
   notes?: string;
+  source?: string;
+  hardLaunchClaim?: boolean;
   recordedByEmail?: string | null;
   createdAt?: any;
 };
@@ -294,7 +298,7 @@ export default function PublicLaunchCommandCenterPageV2() {
   const passedCount = requiredGates.filter(gatePassed).length;
   const blockedCount = requiredGates.filter((gate) => currentEvidenceByGate.get(gate.id)?.status === 'blocked').length;
   const pendingRequired = requiredGates.length - passedCount - blockedCount;
-  const readiness = Math.round((passedCount / Math.max(requiredGates.length, 1)) * 100);
+  const evidenceCoverage = Math.round((passedCount / Math.max(requiredGates.length, 1)) * 100);
   const selected = LAUNCH_GATES.find((gate) => gate.id === selectedGate) || LAUNCH_GATES[0];
   const selectedEvidence = currentEvidenceByGate.get(selectedGate);
   const selectedRequiredLayer = requiredEvidenceLayerForGate(selected.id, selected.group);
@@ -304,16 +308,16 @@ export default function PublicLaunchCommandCenterPageV2() {
     'hosted',
   )).length;
 
-  const decision = !RELEASE_SHA
+  const coverageState = !RELEASE_SHA
     ? 'RELEASE SHA UNAVAILABLE'
     : evidenceLoading
       ? 'LOADING EVIDENCE'
       : !evidenceAuthoritative
         ? 'EVIDENCE UNAVAILABLE'
         : blockedCount > 0
-          ? 'PUBLIC LAUNCH BLOCKED'
+          ? 'EVIDENCE COVERAGE BLOCKED'
           : passedCount === requiredGates.length
-            ? 'PUBLIC READY'
+            ? 'EVIDENCE COVERAGE COMPLETE'
             : 'EVIDENCE REQUIRED';
 
   const groupSummary = React.useMemo(() => {
@@ -367,6 +371,9 @@ export default function PublicLaunchCommandCenterPageV2() {
       setNotice('');
       await addDoc(collection(db, 'launch_evidence'), {
         schemaVersion: 3,
+        source: 'admin-manual-evidence',
+        executionGenerated: false,
+        hardLaunchClaim: false,
         gateId: selected.id,
         gateTitle: selected.title,
         gateGroup: selected.group,
@@ -386,7 +393,7 @@ export default function PublicLaunchCommandCenterPageV2() {
       });
       setNotice(status === 'waived'
         ? 'Waiver recorded for pilot/history. It does not count as a hard-public-launch pass.'
-        : 'Exact-SHA launch proof saved. Readiness recalculates only from evidence that meets the required layer.');
+        : 'Exact-SHA evidence saved. Coverage recalculates only from evidence that meets the required layer; this record does not authorize launch.');
       setProofRef('');
       setNotes('');
     } catch (error: any) {
@@ -411,6 +418,9 @@ export default function PublicLaunchCommandCenterPageV2() {
       setNotice('');
       await addDoc(collection(db, 'signed_in_smoke_checks'), {
         schemaVersion: 3,
+        source: 'admin-manual-evidence',
+        executionGenerated: false,
+        hardLaunchClaim: false,
         role: selectedSmokeRole,
         status: smokeStatus,
         evidenceLayer: 'hosted',
@@ -427,8 +437,8 @@ export default function PublicLaunchCommandCenterPageV2() {
         createdAt: serverTimestamp(),
       });
       setNotice(smokeStatus === 'waived'
-        ? 'Smoke waiver recorded for history. It does not count as a public-launch pass.'
-        : 'Exact-SHA signed-in smoke proof saved.');
+        ? 'Smoke waiver recorded for history. It does not count as a launch pass.'
+        : 'Exact-SHA signed-in smoke evidence saved. It contributes to coverage only and cannot authorize launch.');
       setSmokeProofRef('');
       setSmokeNotes('');
     } catch (error: any) {
@@ -438,9 +448,9 @@ export default function PublicLaunchCommandCenterPageV2() {
     }
   };
 
-  const decisionColor = decision === 'PUBLIC READY'
+  const coverageColor = coverageState === 'EVIDENCE COVERAGE COMPLETE'
     ? '#22c55e'
-    : decision === 'EVIDENCE UNAVAILABLE' || decision === 'RELEASE SHA UNAVAILABLE' || decision.includes('BLOCKED')
+    : coverageState === 'EVIDENCE UNAVAILABLE' || coverageState === 'RELEASE SHA UNAVAILABLE' || coverageState.includes('BLOCKED')
       ? '#ef4444'
       : '#f59e0b';
 
@@ -448,29 +458,29 @@ export default function PublicLaunchCommandCenterPageV2() {
     <Box sx={{ p: { xs: 2, md: 4 }, color: '#fff' }}>
       <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" spacing={2} sx={{ mb: 3 }}>
         <Box>
-          <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 3 }}>PUBLIC LAUNCH COMMAND CENTER</Typography>
-          <Typography variant="h3" sx={{ fontWeight: 950, letterSpacing: -1 }}>Exact-SHA Release Evidence Control</Typography>
+          <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 3 }}>PUBLIC LAUNCH EVIDENCE CENTER</Typography>
+          <Typography variant="h3" sx={{ fontWeight: 950, letterSpacing: -1 }}>Exact-SHA Evidence Coverage</Typography>
           <Typography sx={{ color: 'rgba(255,255,255,.64)', maxWidth: 980, mt: 1 }}>
-            Capability, configuration and live proof are separate. Public readiness counts only PASSED evidence bound to this exact release SHA and meeting the required hosted or physical-device layer.
+            This page measures exact-SHA evidence coverage only. It never authorizes hard public launch. Final GO/NO-GO authority belongs to the protected signed hard-launch decision after all required hosted, physical-device, incident, payment-policy and release controls pass.
           </Typography>
         </Box>
-        <Chip icon={<Rocket size={16} />} label={decision} sx={{ bgcolor: alpha(decisionColor, .16), color: decisionColor, fontWeight: 950, alignSelf: { xs: 'flex-start', md: 'center' } }} />
+        <Chip icon={<Rocket size={16} />} label={coverageState} sx={{ bgcolor: alpha(coverageColor, .16), color: coverageColor, fontWeight: 950, alignSelf: { xs: 'flex-start', md: 'center' } }} />
       </Stack>
 
       <Alert severity={RELEASE_SHA ? 'info' : 'error'} sx={{ mb: 2, borderRadius: 3 }}>
         Release SHA: <strong>{RELEASE_SHA || 'UNAVAILABLE'}</strong>. {RELEASE_SHA
-          ? 'Evidence from other SHAs is visible in Firestore history but cannot contribute to this release decision.'
-          : 'This build is not bound to a 40-character release SHA, so public readiness is fail-closed.'}
+          ? 'Evidence from other SHAs is visible in Firestore history but cannot contribute to this release evidence coverage.'
+          : 'This build is not bound to a 40-character release SHA, so evidence coverage is fail-closed.'}
       </Alert>
 
       <Alert severity="info" sx={{ mb: 2, borderRadius: 3 }}>
-        <strong>{PHASE1_PAYMENT_POLICY.policyText}</strong> Payment proof for public launch requires a real physical-device Cash/Cheque activation journey. Historical Bank Transfer or Stripe/Card evidence is not accepted.
+        <strong>{PHASE1_PAYMENT_POLICY.policyText}</strong> Current payment evidence requires a real physical-device Cash/Cheque activation journey. Historical Bank Transfer or Stripe/Card evidence is not accepted.
       </Alert>
 
       {!evidenceAuthoritative && !evidenceLoading ? (
         <Alert severity="error" sx={{ mb: 2, borderRadius: 3 }}>
           <Stack spacing={1}>
-            <Typography fontWeight={900}>Launch evidence is unavailable. The release decision is paused.</Typography>
+            <Typography fontWeight={900}>Launch evidence is unavailable. Coverage cannot be calculated.</Typography>
             <Typography variant="body2">{evidenceError || (!RELEASE_SHA ? 'Exact release SHA missing from this production build.' : 'Firestore evidence could not be read.')}</Typography>
             <Typography variant="caption">Signed in as {user?.email || 'unknown'} · claim role: {authorization.role || 'none'}.</Typography>
             <Button onClick={retryEvidenceAccess} disabled={retryBusy || !RELEASE_SHA} variant="outlined" startIcon={<RefreshCw size={16} />} sx={{ alignSelf: 'flex-start' }}>
@@ -479,12 +489,12 @@ export default function PublicLaunchCommandCenterPageV2() {
           </Stack>
         </Alert>
       ) : (
-        <Alert severity={decision === 'PUBLIC READY' ? 'success' : blockedCount > 0 ? 'error' : 'warning'} sx={{ mb: 2, borderRadius: 3 }}>
+        <Alert severity={coverageState === 'EVIDENCE COVERAGE COMPLETE' ? 'success' : blockedCount > 0 ? 'error' : 'warning'} sx={{ mb: 2, borderRadius: 3 }}>
           {evidenceLoading
-            ? 'Loading authoritative exact-SHA launch evidence from Firestore.'
-            : decision === 'PUBLIC READY'
-              ? 'Every required gate has exact-SHA PASSED evidence at or above its required evidence layer.'
-              : 'Hard public launch remains blocked until every required gate has exact-SHA PASSED evidence. Waivers are pilot/history only.'}
+            ? 'Loading exact-SHA evidence coverage from Firestore.'
+            : coverageState === 'EVIDENCE COVERAGE COMPLETE'
+              ? 'Evidence coverage is complete for this SHA. This is not launch authorization; the protected signed hard-launch decision is still required.'
+              : 'Evidence coverage is incomplete or blocked. No hard-public-launch authorization is inferred from this screen.'}
         </Alert>
       )}
 
@@ -495,10 +505,10 @@ export default function PublicLaunchCommandCenterPageV2() {
           <Paper sx={{ p: 3, borderRadius: 4, bgcolor: 'rgba(255,255,255,.045)', border: `1px solid ${alpha(binThemeTokens.gold, .18)}` }}>
             <Stack spacing={1.2}>
               <ShieldCheck color={binThemeTokens.gold} />
-              <Typography variant="h5" fontWeight={950}>Launch readiness</Typography>
-              <Typography variant="h3" fontWeight={950} color={evidenceAuthoritative && readiness === 100 ? '#22c55e' : binThemeTokens.gold}>{evidenceAuthoritative ? `${readiness}%` : '—'}</Typography>
-              {evidenceLoading ? <LinearProgress sx={{ height: 10, borderRadius: 10 }} /> : <LinearProgress variant="determinate" value={evidenceAuthoritative ? readiness : 0} sx={{ height: 10, borderRadius: 10 }} />}
-              <Typography sx={{ color: 'rgba(255,255,255,.62)' }}>{evidenceAuthoritative ? `${passedCount} of ${requiredGates.length} required gates have exact-SHA PASSED evidence.` : 'Unavailable until release SHA and Firestore evidence are authoritative.'}</Typography>
+              <Typography variant="h5" fontWeight={950}>Evidence coverage</Typography>
+              <Typography variant="h3" fontWeight={950} color={evidenceAuthoritative && evidenceCoverage === 100 ? '#22c55e' : binThemeTokens.gold}>{evidenceAuthoritative ? `${evidenceCoverage}%` : '—'}</Typography>
+              {evidenceLoading ? <LinearProgress sx={{ height: 10, borderRadius: 10 }} /> : <LinearProgress variant="determinate" value={evidenceAuthoritative ? evidenceCoverage : 0} sx={{ height: 10, borderRadius: 10 }} />}
+              <Typography sx={{ color: 'rgba(255,255,255,.62)' }}>{evidenceAuthoritative ? `${passedCount} of ${requiredGates.length} required gates have exact-SHA PASSED evidence.` : 'Unavailable until release SHA and Firestore evidence are readable.'}</Typography>
             </Stack>
           </Paper>
         </Grid>
@@ -506,7 +516,7 @@ export default function PublicLaunchCommandCenterPageV2() {
           <Paper sx={{ p: 3, borderRadius: 4, bgcolor: 'rgba(255,255,255,.045)', border: `1px solid ${alpha(binThemeTokens.gold, .18)}` }}>
             <Stack spacing={1.2}>
               <ShieldAlert color={evidenceAuthoritative && blockedCount > 0 ? '#ef4444' : '#f59e0b'} />
-              <Typography variant="h5" fontWeight={950}>Required gates pending</Typography>
+              <Typography variant="h5" fontWeight={950}>Required evidence pending</Typography>
               <Typography variant="h3" fontWeight={950} color={evidenceAuthoritative && blockedCount > 0 ? '#ef4444' : '#f59e0b'}>{evidenceAuthoritative ? pendingRequired : '—'}</Typography>
               <Typography sx={{ color: 'rgba(255,255,255,.62)' }}>{evidenceAuthoritative ? `${blockedCount} blocked gate(s). Waived or stale-SHA evidence remains non-passing.` : 'Not calculated from unavailable evidence.'}</Typography>
             </Stack>
@@ -518,7 +528,7 @@ export default function PublicLaunchCommandCenterPageV2() {
               <FileCheck2 color="#22c55e" />
               <Typography variant="h5" fontWeight={950}>Evidence history</Typography>
               <Typography variant="h3" fontWeight={950} color="#22c55e">{evidenceLoading ? '...' : evidence.length}</Typography>
-              <Typography sx={{ color: 'rgba(255,255,255,.62)' }}>Historical records remain visible, but only exact-SHA evidence can drive this decision.</Typography>
+              <Typography sx={{ color: 'rgba(255,255,255,.62)' }}>Historical records remain visible, but only exact-SHA evidence can contribute to this coverage view.</Typography>
             </Stack>
           </Paper>
         </Grid>
@@ -541,7 +551,7 @@ export default function PublicLaunchCommandCenterPageV2() {
           <Box>
             <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 2 }}>SIGNED-IN FIVE-ROLE SMOKE</Typography>
             <Typography variant="h5" fontWeight={950}>Owner, Tenant, Technician, Broker, Admin</Typography>
-            <Typography sx={{ color: 'rgba(255,255,255,.58)', maxWidth: 880 }}>Only exact-SHA PASSED hosted evidence counts. Waived or stale smoke records do not.</Typography>
+            <Typography sx={{ color: 'rgba(255,255,255,.58)', maxWidth: 880 }}>Only exact-SHA PASSED hosted evidence counts toward coverage. Waived or stale smoke records do not, and this section cannot issue launch authorization.</Typography>
           </Box>
           <Chip label={smokeLoading ? 'loading...' : smokeAuthoritative ? `${smokePassedCount}/${SIGNED_IN_SMOKE_CHECKS.length} passed` : 'evidence unavailable'} sx={{ alignSelf: { xs: 'flex-start', md: 'center' }, bgcolor: alpha(smokeAuthoritative && smokePassedCount === SIGNED_IN_SMOKE_CHECKS.length ? '#22c55e' : smokeAuthoritative ? '#f59e0b' : '#ef4444', .15), color: smokeAuthoritative && smokePassedCount === SIGNED_IN_SMOKE_CHECKS.length ? '#22c55e' : smokeAuthoritative ? '#f59e0b' : '#ef4444', fontWeight: 950 }} />
         </Stack>
@@ -580,7 +590,7 @@ export default function PublicLaunchCommandCenterPageV2() {
       <Grid container spacing={3}>
         <Grid item xs={12} md={7}>
           <Paper sx={{ p: 3, borderRadius: 4, bgcolor: 'rgba(255,255,255,.045)', border: `1px solid ${alpha(binThemeTokens.gold, .18)}` }}>
-            <Stack direction="row" spacing={1.4} alignItems="center" sx={{ mb: 2 }}><ClipboardCheck color={binThemeTokens.gold} /><Typography variant="h5" fontWeight={950}>Required launch gates</Typography></Stack>
+            <Stack direction="row" spacing={1.4} alignItems="center" sx={{ mb: 2 }}><ClipboardCheck color={binThemeTokens.gold} /><Typography variant="h5" fontWeight={950}>Required launch evidence</Typography></Stack>
             <Grid container spacing={1.4}>
               {LAUNCH_GATES.map((gate) => {
                 const latest = currentEvidenceByGate.get(gate.id);
@@ -608,12 +618,12 @@ export default function PublicLaunchCommandCenterPageV2() {
         <Grid item xs={12} md={5}>
           <Paper sx={{ p: 3, borderRadius: 4, bgcolor: 'rgba(255,255,255,.045)', border: `1px solid ${alpha(binThemeTokens.gold, .18)}` }}>
             <Stack spacing={2}>
-              <Typography variant="h5" fontWeight={950}>Record exact-SHA proof</Typography>
+              <Typography variant="h5" fontWeight={950}>Record exact-SHA evidence</Typography>
               {selectedEvidence && evidenceAuthoritative && <Alert severity={gatePassed(selected) ? 'success' : selectedEvidence.status === 'blocked' ? 'error' : 'warning'}>Latest current-SHA evidence: {selectedEvidence.status} · layer {selectedEvidence.evidenceLayer || 'missing'} · required {selectedRequiredLayer} · {selectedEvidence.proofRef || 'no proof reference'}.</Alert>}
-              {!evidenceAuthoritative && <Alert severity="error">Proof recording is disabled until the exact release SHA and authoritative Firestore access are available.</Alert>}
+              {!evidenceAuthoritative && <Alert severity="error">Evidence recording is disabled until the exact release SHA and Firestore access are available.</Alert>}
               {notice && <Alert severity={notice.includes('saved') || notice.includes('refreshed') || notice.includes('recorded') ? 'success' : 'warning'}>{notice}</Alert>}
-              <TextField select label="Launch gate" value={selectedGate} onChange={(event) => selectGate(event.target.value)}>{LAUNCH_GATES.map((gate) => <MenuItem key={gate.id} value={gate.id}>{gate.title}</MenuItem>)}</TextField>
-              <TextField select label="Status" value={status} onChange={(event) => setStatus(event.target.value as GateStatus)} disabled={!evidenceAuthoritative}>{statuses.map((value) => <MenuItem key={value} value={value}><Chip size="small" label={value} sx={{ bgcolor: alpha(statusColor[value], .15), color: statusColor[value], fontWeight: 850 }} /></MenuItem>)}</TextField>
+              <TextField select label="Launch evidence gate" value={selectedGate} onChange={(event) => selectGate(event.target.value)}>{LAUNCH_GATES.map((gate) => <MenuItem key={gate.id} value={gate.id}>{gate.title}</MenuItem>)}</TextField>
+              <TextField select label="Evidence status" value={status} onChange={(event) => setStatus(event.target.value as GateStatus)} disabled={!evidenceAuthoritative}>{statuses.map((value) => <MenuItem key={value} value={value}><Chip size="small" label={value} sx={{ bgcolor: alpha(statusColor[value], .15), color: statusColor[value], fontWeight: 850 }} /></MenuItem>)}</TextField>
               <TextField select label={`Evidence layer (required: ${selectedRequiredLayer})`} value={evidenceLayer} onChange={(event) => setEvidenceLayer(event.target.value as LaunchEvidenceLayer)} disabled={!evidenceAuthoritative}>{EVIDENCE_LAYERS.map((value) => <MenuItem key={value} value={value}>{value}</MenuItem>)}</TextField>
               <TextField label="Release SHA" value={RELEASE_SHA || 'UNAVAILABLE'} disabled />
               <TextField label="Tester name" value={testerName} onChange={(event) => setTesterName(event.target.value)} disabled={!evidenceAuthoritative} />
@@ -622,9 +632,9 @@ export default function PublicLaunchCommandCenterPageV2() {
               <TextField label="Production URL" value={productionUrl} onChange={(event) => setProductionUrl(event.target.value)} disabled={!evidenceAuthoritative} />
               <TextField label="Screenshot / log / evidence reference" value={proofRef} onChange={(event) => setProofRef(event.target.value)} disabled={!evidenceAuthoritative} placeholder="GitHub run ID, screenshot file, Firebase log or protected artifact reference" />
               <TextField label="Notes" multiline minRows={4} value={notes} onChange={(event) => setNotes(event.target.value)} disabled={!evidenceAuthoritative} placeholder="What passed, what failed, exact action tested, device and fallback behavior." />
-              <Button onClick={saveProof} disabled={busy || !evidenceAuthoritative} variant="contained" startIcon={<CheckCircle2 size={16} />} sx={{ bgcolor: binThemeTokens.gold, color: '#020617', fontWeight: 950 }}>{busy ? 'Saving...' : 'Save exact-SHA proof'}</Button>
+              <Button onClick={saveProof} disabled={busy || !evidenceAuthoritative} variant="contained" startIcon={<CheckCircle2 size={16} />} sx={{ bgcolor: binThemeTokens.gold, color: '#020617', fontWeight: 950 }}>{busy ? 'Saving...' : 'Save exact-SHA evidence'}</Button>
               <Divider sx={{ borderColor: 'rgba(255,255,255,.08)' }} />
-              <Typography variant="caption" sx={{ color: 'rgba(255,255,255,.55)', fontWeight: 850 }}>Launch honesty rule: PASSED + exact SHA + sufficient evidence layer. Waivers never satisfy hard public launch. Old-SHA evidence remains historical only.</Typography>
+              <Typography variant="caption" sx={{ color: 'rgba(255,255,255,.55)', fontWeight: 850 }}>Evidence rule: PASSED + exact SHA + sufficient evidence layer. Waivers never satisfy hard-public-launch evidence requirements. Manual Admin records always carry hardLaunchClaim=false; final launch authorization is issued only by the protected signed decision chain.</Typography>
             </Stack>
           </Paper>
         </Grid>
