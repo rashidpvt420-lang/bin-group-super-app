@@ -47,16 +47,17 @@ test('browser, Cloud Functions and shared pricing sources cannot drift', () => {
   for (const path of matrixPaths.slice(1)) assert.equal(readFileSync(path, 'utf8'), rootMatrix, `${path} drifted from root pricing matrix`);
 });
 
-test('all 26 selectable Asset Profile types have an explicit configured pricing class', () => {
+test('all 27 selectable Asset Profile types have an explicit configured pricing class', () => {
   const { ASSET_PROFILE_PROPERTY_TYPES, resolveAssetClassIdForPropertyType } = moduleUnderTest;
-  assert.equal(ASSET_PROFILE_PROPERTY_TYPES.length, 26);
+  assert.equal(ASSET_PROFILE_PROPERTY_TYPES.length, 27);
   const typeSet = new Set(ASSET_PROFILE_PROPERTY_TYPES);
-  assert.equal(typeSet.size, 26, 'Asset Profile type list must not contain duplicates');
+  assert.equal(typeSet.size, 27, 'Asset Profile type list must not contain duplicates');
   for (const type of ASSET_PROFILE_PROPERTY_TYPES) {
     assert.match(assetProfile, new RegExp(`['\"]${type.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}['\"]`), `${type} is missing from Asset Profile UI`);
     const classId = resolveAssetClassIdForPropertyType(type, 'Standard');
     assert.ok(classId, `${type} did not resolve to a pricing class`);
   }
+  assert.equal(resolveAssetClassIdForPropertyType('Gym / Fitness Centre'), 'gym-fitness-centre');
   assert.equal(resolveAssetClassIdForPropertyType('Definitely Unknown Asset'), null, 'Unknown assets must fail closed instead of becoming apartments');
 });
 
@@ -87,6 +88,7 @@ test('every Asset Profile type produces a finite non-zero FM estimate with its c
       slaTier: 'standard',
       paymentPlan: 'annual',
       hasWaterTank: false,
+      gymComplexity: type === 'Gym / Fitness Centre' ? 'STANDARD_DRY' : undefined,
     });
     assert.ok(Number.isFinite(quote.annualTotal), `${type} returned a non-finite quote`);
     assert.ok(quote.annualTotal > 0, `${type} returned zero despite complete FM pricing inputs: ${quote.riskFlags.join(', ')}`);
@@ -120,18 +122,23 @@ test('Majlis and estate facility pricing cannot be multiplied by generic capacit
   }
 });
 
-test('hotel is area-priced, labour/staff accommodation are bed-priced, and warehouse is not a labour camp alias', () => {
+test('hotel is area-priced, labour/staff accommodation are bed-priced, warehouse is not a labour camp alias, and Gym is sqft-priced', () => {
   const { resolveAssetClassIdForPropertyType, calculateUaeQuote2026 } = moduleUnderTest;
   assert.equal(resolveAssetClassIdForPropertyType('Hotel', 'Standard'), 'mid_scale_hotel');
   assert.equal(resolveAssetClassIdForPropertyType('Warehouse', 'Standard'), 'warehouse');
   assert.equal(resolveAssetClassIdForPropertyType('Labour Camp', 'Standard'), 'lab-camp');
   assert.equal(resolveAssetClassIdForPropertyType('Staff Accommodation', 'Standard'), 'staff-accom');
+  assert.equal(resolveAssetClassIdForPropertyType('Gym / Fitness Centre', 'Standard'), 'gym-fitness-centre');
 
   const hotel = calculateUaeQuote2026({ assetClassId: 'mid_scale_hotel', emirate: 'Dubai', zone: 'B', contractType: 'FM_ONLY', sqft: 50000, units: 300, propertyAge: 5, floors: 10, slaTier: 'standard', paymentPlan: 'annual' });
   assert.ok(hotel.annualTotal < 2_000_000, `Hotel quote still looks room-multiplied: ${hotel.annualTotal}`);
 
   const camp = calculateUaeQuote2026({ assetClassId: 'lab-camp', emirate: 'Dubai', zone: 'B', contractType: 'FM_ONLY', beds: 100, units: 9999, propertyAge: 5, floors: 3, slaTier: 'standard', paymentPlan: 'annual' });
   assert.ok(camp.annualTotal >= 70_000 && camp.annualTotal < 200_000, `Labour camp annual per-bed quote is outside regression bounds: ${camp.annualTotal}`);
+
+  const gym = calculateUaeQuote2026({ assetClassId: 'gym-fitness-centre', emirate: 'Dubai', zone: 'B', contractType: 'FM_ONLY', sqft: 10000, units: 999999, propertyAge: 2, floors: 1, slaTier: 'standard', paymentPlan: 'annual', gymComplexity: 'STANDARD_DRY' });
+  const gymMoreCapacity = calculateUaeQuote2026({ assetClassId: 'gym-fitness-centre', emirate: 'Dubai', zone: 'B', contractType: 'FM_ONLY', sqft: 10000, units: 9999999, propertyAge: 2, floors: 1, slaTier: 'standard', paymentPlan: 'annual', gymComplexity: 'STANDARD_DRY' });
+  assert.equal(gymMoreCapacity.annualTotal, gym.annualTotal, 'Gym capacity must remain informational rather than a price multiplier');
 });
 
 test('missing pricing drivers fail closed instead of receiving invented quote inputs', () => {
@@ -139,6 +146,9 @@ test('missing pricing drivers fail closed instead of receiving invented quote in
   const areaPriced = calculateUaeQuote2026({ assetClassId: 'warehouse', emirate: 'Dubai', zone: 'B', contractType: 'FM_ONLY', sqft: 0, units: 0, beds: 0, propertyAge: 0, floors: 0, slaTier: 'standard', paymentPlan: 'annual' });
   assert.equal(areaPriced.annualTotal, 0);
   assert.ok(areaPriced.riskFlags.length > 0, 'Missing area must be flagged for review');
+
+  const gymMissingArea = calculateUaeQuote2026({ assetClassId: 'gym-fitness-centre', emirate: 'Dubai', zone: 'B', contractType: 'FM_ONLY', sqft: 0, units: 1000, propertyAge: 0, floors: 1, slaTier: 'standard', paymentPlan: 'annual', gymComplexity: 'WET_RECOVERY' });
+  assert.equal(gymMissingArea.annualTotal, 0, 'Gym capacity must not rescue a missing measured service area');
 
   const bedPriced = calculateUaeQuote2026({ assetClassId: 'lab-camp', emirate: 'Dubai', zone: 'B', contractType: 'FM_ONLY', sqft: 0, units: 0, beds: 0, propertyAge: 0, floors: 0, slaTier: 'standard', paymentPlan: 'annual' });
   assert.equal(bedPriced.annualTotal, 0);
@@ -150,12 +160,16 @@ test('Asset Profile, portfolio store and OCR never seed missing property facts w
   assert.doesNotMatch(rootEngine, /return\s+['\"]apt-std['\"]\s*;\s*\/\/\s*unknown/i);
   assert.match(onboardingStore, /resolveAssetClassIdForPropertyType\(property\.propertyType, property\.assetGrade\)/);
   assert.match(onboardingStore, /beds,/);
+  assert.match(onboardingStore, /gymProfile/);
   assert.doesNotMatch(onboardingStore, /sqft:\s*1200/);
   assert.doesNotMatch(onboardingStore, /age:\s*5/);
   assert.doesNotMatch(onboardingStore, /floors:\s*1,\s*units:\s*1/);
   assert.match(onboardingStore, /const properties = get\(\)\.properties;/);
   assert.match(onboardingStore, /if \(properties\.length === 0\)/);
   assert.match(assetProfile, /ASSET_TYPE_IDS\.has\(property\.propertyType\)/);
+  assert.match(assetProfile, /Gym \/ Fitness Centre Operations Profile/);
+  assert.match(assetProfile, /Member capacity and active membership do not multiply the property price/);
+  assert.match(assetProfile, /BIN GROUP verified service area \(after visit\)/);
   assert.match(assetProfile, /Annual rent \/ managed revenue/);
   assert.match(assetProfile, /addProperty\(blankAssetCard\(\)\)/);
   assert.doesNotMatch(assetProfile, /addProperty\(\{\s*emirate:\s*active\?\.emirate\s*\|\|\s*['\"]Dubai['\"]/);
