@@ -384,7 +384,7 @@ export async function readGmailOtp({
     throwIfAborted(signal, label);
     const list = await gmailJson(
       fetchImpl,
-      `https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=20&q=${encodeURIComponent(query)}`,
+      `https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=20&includeSpamTrash=true&q=${encodeURIComponent(query)}`,
       { headers: { Authorization: `Bearer ${token}` }, signal },
       `${label} message search`,
       transportOptions,
