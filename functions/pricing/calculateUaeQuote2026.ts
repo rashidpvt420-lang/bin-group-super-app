@@ -29,6 +29,9 @@ export interface QuoteInput {
   hvacCount?: number;
   offices?: number;
   shops?: number;
+  gymComplexity?: 'STANDARD_DRY' | 'ENHANCED' | 'WET_RECOVERY';
+  gymOpeningSchedule?: 'STANDARD_HOURS' | 'EXTENDED_HOURS' | '24_7';
+  gymEquipmentCount?: number;
 }
 
 export interface QuoteOutput {
@@ -49,7 +52,7 @@ export interface QuoteOutput {
 }
 
 export const ASSET_PROFILE_PROPERTY_TYPES = [
-  'Villa', 'Apartment', 'Residential Building', 'Commercial Building', 'Office', 'Retail Center', 'Mall',
+  'Villa', 'Apartment', 'Residential Building', 'Commercial Building', 'Office', 'Gym / Fitness Centre', 'Retail Center', 'Mall',
   'Hotel', 'Resort', 'Hospital', 'Clinic', 'School', 'Warehouse', 'Industrial Property', 'Labour Camp',
   'Staff Accommodation', 'Government Property', 'Government Majlis', 'Private Majlis', 'Mosque / Masjid',
   'Mixed-Use Tower', 'Skyscraper', 'Stadium', 'Sports Complex', 'Event Venue', 'Farm / Estate',
@@ -69,6 +72,7 @@ export function resolveAssetClassIdForPropertyType(propertyType: string, assetGr
     case 'Residential Building': return 'res-bldg';
     case 'Commercial Building': return 'com-twr';
     case 'Office': return 'off-sml';
+    case 'Gym / Fitness Centre': return 'gym-fitness-centre';
     case 'Retail Center': return 'retail-ctr';
     case 'Mall': return 'rtl-mall';
     case 'Hotel': return 'mid_scale_hotel';
@@ -137,12 +141,17 @@ export const ADD_ON_PRICING: Record<string, { label: string; base: number; perUn
   deep_cleaning: { label: 'Deep Cleaning', base: 4500 },
   cctv_security: { label: 'CCTV / Security Systems', base: 8500 },
   inspection_move: { label: 'Move-in / Move-out Inspection', base: 1200 },
+  gym_equipment_pm: { label: 'Fitness Equipment Preventive Maintenance — separate scope', base: 0 },
+  gym_wet_area_care: { label: 'Gym Wet / Recovery Area Specialist Care — separate scope', base: 0 },
+  gym_pool_operations: { label: 'Gym Pool Operations / Specialist Scope — separate scope', base: 0 },
 };
 
 const VALID_ZONES = new Set(['A', 'B', 'C']);
 const VALID_CONTRACT_TYPES = new Set(['FM_ONLY', 'PM_ONLY', 'BOTH']);
 const VALID_SLA_TIERS = new Set(['standard', 'premium', 'elite']);
 const VALID_PAYMENT_PLANS = new Set(['annual', 'quarterly', 'monthly']);
+const VALID_GYM_COMPLEXITY = new Set(['STANDARD_DRY', 'ENHANCED', 'WET_RECOVERY']);
+const VALID_GYM_OPENING_SCHEDULES = new Set(['STANDARD_HOURS', 'EXTENDED_HOURS', '24_7']);
 const QUARTERLY_BILLING_SURCHARGE = 0.03;
 const MONTHLY_BILLING_SURCHARGE = 0.06;
 
@@ -151,6 +160,8 @@ const ASSET_CLASS_ALIASES: Record<string, string> = {
   villa: 'villa-std', standard_villa: 'villa-std', luxury_estate_villa: 'villa-lux', luxury_villa: 'villa-lux',
   building: 'res-bldg', residential_building: 'res-bldg', commercial: 'off-sml', commercial_building: 'com-twr',
   commercial_tower: 'com-twr', office: 'off-sml', office_building: 'off-sml', small_office: 'off-sml',
+  gym: 'gym-fitness-centre', gym_fitness_centre: 'gym-fitness-centre', gym_fitness_center: 'gym-fitness-centre',
+  fitness_centre: 'gym-fitness-centre', fitness_center: 'gym-fitness-centre', health_club: 'gym-fitness-centre',
   retail_center: 'retail-ctr', retail_centre: 'retail-ctr', retail_mall: 'rtl-mall', mall: 'rtl-mall',
   hotel: 'mid_scale_hotel', mid_scale_hotel: 'mid_scale_hotel', resort: 'resort',
   hospital: 'hosp', large_hospital: 'hosp', clinic: 'clinic', primary_clinic: 'clinic',
@@ -204,6 +215,14 @@ function safePaymentPlan(value: unknown): 'annual' | 'quarterly' | 'monthly' {
   const plan = String(value || '').trim().toLowerCase();
   return VALID_PAYMENT_PLANS.has(plan) ? (plan as 'annual' | 'quarterly' | 'monthly') : 'annual';
 }
+function safeGymComplexity(value: unknown): 'STANDARD_DRY' | 'ENHANCED' | 'WET_RECOVERY' {
+  const band = String(value || '').trim().toUpperCase();
+  return VALID_GYM_COMPLEXITY.has(band) ? (band as 'STANDARD_DRY' | 'ENHANCED' | 'WET_RECOVERY') : 'STANDARD_DRY';
+}
+function safeGymOpeningSchedule(value: unknown): 'STANDARD_HOURS' | 'EXTENDED_HOURS' | '24_7' {
+  const schedule = String(value || '').trim().toUpperCase();
+  return VALID_GYM_OPENING_SCHEDULES.has(schedule) ? (schedule as 'STANDARD_HOURS' | 'EXTENDED_HOURS' | '24_7') : 'STANDARD_HOURS';
+}
 
 function sanitizeQuoteInput(input: Partial<QuoteInput> | null | undefined): QuoteInput {
   const raw = input || {};
@@ -222,6 +241,9 @@ function sanitizeQuoteInput(input: Partial<QuoteInput> | null | undefined): Quot
     addOns: Array.isArray(raw.addOns) ? raw.addOns.filter(Boolean) : [],
     slaTier: safeSlaTier(raw.slaTier), paymentPlan: safePaymentPlan(raw.paymentPlan), hasWaterTank: raw.hasWaterTank === true,
     hvacCount: positiveNumber(raw.hvacCount), offices: positiveNumber(raw.offices), shops: positiveNumber(raw.shops),
+    gymComplexity: safeGymComplexity(raw.gymComplexity),
+    gymOpeningSchedule: safeGymOpeningSchedule(raw.gymOpeningSchedule),
+    gymEquipmentCount: positiveNumber(raw.gymEquipmentCount),
   };
 }
 
@@ -353,6 +375,15 @@ export function calculateUaeQuote2026(input: Partial<QuoteInput> | null | undefi
   }
 
   let baseRate = positiveNumber(assetClass.maintenanceRange.min);
+  if (assetId === 'gym-fitness-centre') {
+    if (safeInput.gymComplexity === 'WET_RECOVERY') baseRate = positiveNumber(assetClass.maintenanceRange.max, baseRate);
+    else if (safeInput.gymComplexity === 'ENHANCED') baseRate = positiveNumber(assetClass.maintenanceRange.target, baseRate);
+    pricingExplanation.push(`Gym ${safeInput.gymComplexity} BIN-configured service-rate band selected; this is not a statutory UAE tariff.`);
+    pricingExplanation.push('Gym member count, licensed capacity and equipment count are scope information only and do not multiply the property price.');
+    if (safeInput.gymOpeningSchedule === '24_7') pricingExplanation.push('24/7 operation is recorded for visit/SLA verification; no occupancy multiplier is applied automatically.');
+    if ((safeInput.gymEquipmentCount || 0) > 0) pricingExplanation.push('Fitness equipment count is recorded for a separate equipment-PM scope and does not multiply the property rate.');
+  }
+
   let baseQuote = 0;
   if (assetClass.pricingUnit === 'facility') {
     baseQuote = baseRate;
