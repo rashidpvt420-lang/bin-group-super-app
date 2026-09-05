@@ -84,9 +84,6 @@ function requireLaunchCredentials() {
   }
 }
 
-// Keep the TOTP derivation in this protected proof as well as the shared
-// launch-audit helper. This makes the production evidence self-describing and
-// always derives the code immediately before it is submitted.
 function currentAdminMfaCode() {
   if (!FOUNDER_TOTP_SECRET) return REAL_MFA_CODE;
   const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
@@ -114,7 +111,6 @@ function parseServiceAccount() {
       if (parsed?.private_key) parsed.private_key = String(parsed.private_key).replace(/\\n/g, '\n');
       if (parsed?.client_email && parsed?.private_key) return parsed;
     } catch {
-      // Try the next supported encoding.
     }
   }
   throw new Error('FIREBASE_SERVICE_ACCOUNT_JSON must contain service-account JSON or its base64 encoding.');
@@ -313,10 +309,6 @@ async function seedOperationalFixtures() {
   const future = admin.firestore.Timestamp.fromMillis(Date.now() + 365 * 24 * 60 * 60 * 1000);
   const freshGps = admin.firestore.Timestamp.now();
 
-  // Protected Phase 1 Admin evidence must use the live Cash/Cheque policy, not
-  // the retired Stripe activation fixture. Seed one real immutable CASH receipt
-  // and bind it to the exact active payment-configuration hash. The Admin UI
-  // still performs the approval itself under the canonical Founder MFA session.
   const phase1PaymentConfigurationSnap = await db.collection('system_payment_config').doc('current').get();
   if (!phase1PaymentConfigurationSnap.exists) throw new Error('Protected Phase 1 payment configuration is missing.');
   const phase1PaymentConfigurationRaw = phase1PaymentConfigurationSnap.data() || {};
@@ -380,163 +372,34 @@ async function seedOperationalFixtures() {
   const phase1ReceiptUrl = 'https://firebasestorage.googleapis.com/v0/b/' + phase1Bucket.name + '/o/' + encodeURIComponent(phase1ReceiptPath) + '?alt=media&token=' + phase1ReceiptToken;
 
   await Promise.all([
-    db.collection('owners').doc(OWNER_REVIEW_UID).set({
-      name: `E2E Review Owner ${RUN_ID}`,
-      displayName: `E2E Review Owner ${RUN_ID}`,
-      email: `${PREFIX}-review-owner@bin-groups.com`,
-      status: 'ACTIVE',
-      e2eRunId: RUN_ID,
-      createdAt: serverTimestamp(),
-    }),
+    db.collection('owners').doc(OWNER_REVIEW_UID).set({ name: `E2E Review Owner ${RUN_ID}`, displayName: `E2E Review Owner ${RUN_ID}`, email: `${PREFIX}-review-owner@bin-groups.com`, status: 'ACTIVE', e2eRunId: RUN_ID, createdAt: serverTimestamp() }),
     db.collection('properties').doc(APPROVE_PROPERTY_ID).set({
-      name: APPROVE_PROPERTY_NAME,
-      propertyName: APPROVE_PROPERTY_NAME,
-      ownerId: OWNER_REVIEW_UID,
-      ownerUid: OWNER_REVIEW_UID,
-      emirate: 'Dubai',
-      city: 'Dubai',
-      area: 'Dubai Marina',
-      serviceZone: 'Dubai Marina',
-      address: 'Protected E2E approval fixture',
-      submittedGeo: {
-        lat: 25.2048,
-        lng: 55.2708,
-        latitude: 25.2048,
-        longitude: 55.2708,
-        address: 'Protected E2E approval fixture',
-        emirate: 'Dubai',
-        city: 'Dubai',
-        area: 'Dubai Marina',
-        source: 'protected_e2e_fixture',
-        submittedSource: 'protected_e2e_fixture',
-        accuracyMeters: 15,
-        capturedAt: freshGps,
-      },
-      status: 'pending_review',
-      e2eRunId: RUN_ID,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
+      name: APPROVE_PROPERTY_NAME, propertyName: APPROVE_PROPERTY_NAME, ownerId: OWNER_REVIEW_UID, ownerUid: OWNER_REVIEW_UID,
+      emirate: 'Dubai', city: 'Dubai', area: 'Dubai Marina', serviceZone: 'Dubai Marina', address: 'Protected E2E approval fixture',
+      submittedGeo: { lat: 25.2048, lng: 55.2708, latitude: 25.2048, longitude: 55.2708, address: 'Protected E2E approval fixture', emirate: 'Dubai', city: 'Dubai', area: 'Dubai Marina', source: 'protected_e2e_fixture', submittedSource: 'protected_e2e_fixture', accuracyMeters: 15, capturedAt: freshGps },
+      status: 'pending_review', e2eRunId: RUN_ID, createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
     }),
-    db.collection('properties').doc(REJECT_PROPERTY_ID).set({
-      name: REJECT_PROPERTY_NAME,
-      propertyName: REJECT_PROPERTY_NAME,
-      ownerId: OWNER_REVIEW_UID,
-      ownerUid: OWNER_REVIEW_UID,
-      emirate: 'Abu Dhabi',
-      serviceZone: 'Al Ain',
-      address: 'Protected E2E rejection fixture',
-      status: 'pending_review',
-      e2eRunId: RUN_ID,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    }),
+    db.collection('properties').doc(REJECT_PROPERTY_ID).set({ name: REJECT_PROPERTY_NAME, propertyName: REJECT_PROPERTY_NAME, ownerId: OWNER_REVIEW_UID, ownerUid: OWNER_REVIEW_UID, emirate: 'Abu Dhabi', serviceZone: 'Al Ain', address: 'Protected E2E rejection fixture', status: 'pending_review', e2eRunId: RUN_ID, createdAt: serverTimestamp(), updatedAt: serverTimestamp() }),
   ]);
 
   await Promise.all([
     db.collection('users').doc(PAYMENT_OWNER_UID).set({ role: 'owner', email: `${PREFIX}-payment-owner@bin-groups.com`, status: 'pending', e2eRunId: RUN_ID, createdAt: serverTimestamp() }),
     db.collection('owners').doc(PAYMENT_OWNER_UID).set({ role: 'owner', email: `${PREFIX}-payment-owner@bin-groups.com`, status: 'PENDING', e2eRunId: RUN_ID, createdAt: serverTimestamp() }),
     db.collection('intake_submissions').doc(PAYMENT_ID).set({ ownerUid: PAYMENT_OWNER_UID, status: 'PENDING_APPROVAL', quoteHash: PAYMENT_QUOTE_HASH, e2eRunId: RUN_ID, createdAt: serverTimestamp() }),
-    db.collection('contracts').doc(PAYMENT_ID).set({
-      contractId: PAYMENT_ID,
-      intakeId: PAYMENT_ID,
-      ownerUid: PAYMENT_OWNER_UID,
-      ownerId: PAYMENT_OWNER_UID,
-      propertyId: PAYMENT_PROPERTY_ID,
-      status: 'pending_approval',
-      quoteHash: PAYMENT_QUOTE_HASH,
-      annualContractValue: PAYMENT_ANNUAL_VALUE,
-      quoteSnapshot: { annualContractValue: PAYMENT_ANNUAL_VALUE, activationDeposit: PAYMENT_DEPOSIT },
-      ownerSigned: true,
-      otpVerificationId: PAYMENT_OTP_ID,
-      signatureState: { ownerSignatureName: PAYMENT_SIGNATURE },
-      e2eRunId: RUN_ID,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    }),
-    db.collection('contract_signature_otps').doc(PAYMENT_OTP_ID).set({
-      status: 'VERIFIED',
-      uid: PAYMENT_OWNER_UID,
-      contractId: PAYMENT_ID,
-      contractHash: PAYMENT_QUOTE_HASH,
-      consumedFor: PAYMENT_ID,
-      signature: PAYMENT_SIGNATURE,
-      verifiedAt: serverTimestamp(),
-      consumedAt: serverTimestamp(),
-      e2eRunId: RUN_ID,
-    }),
-    db.collection('properties').doc(PAYMENT_PROPERTY_ID).set({
-      name: `E2E Activation Property ${RUN_ID}`,
-      ownerUid: PAYMENT_OWNER_UID,
-      ownerId: PAYMENT_OWNER_UID,
-      intakeId: PAYMENT_ID,
-      quoteHash: PAYMENT_QUOTE_HASH,
-      status: 'pending_approval',
-      geo: { verified: true, dispatchReady: true, requiresGeoReview: false, lat: 25.2048, lng: 55.2708 },
-      e2eRunId: RUN_ID,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    }),
+    db.collection('contracts').doc(PAYMENT_ID).set({ contractId: PAYMENT_ID, intakeId: PAYMENT_ID, ownerUid: PAYMENT_OWNER_UID, ownerId: PAYMENT_OWNER_UID, propertyId: PAYMENT_PROPERTY_ID, status: 'pending_approval', quoteHash: PAYMENT_QUOTE_HASH, annualContractValue: PAYMENT_ANNUAL_VALUE, quoteSnapshot: { annualContractValue: PAYMENT_ANNUAL_VALUE, activationDeposit: PAYMENT_DEPOSIT }, ownerSigned: true, otpVerificationId: PAYMENT_OTP_ID, signatureState: { ownerSignatureName: PAYMENT_SIGNATURE }, e2eRunId: RUN_ID, createdAt: serverTimestamp(), updatedAt: serverTimestamp() }),
+    db.collection('contract_signature_otps').doc(PAYMENT_OTP_ID).set({ status: 'VERIFIED', uid: PAYMENT_OWNER_UID, contractId: PAYMENT_ID, contractHash: PAYMENT_QUOTE_HASH, consumedFor: PAYMENT_ID, signature: PAYMENT_SIGNATURE, verifiedAt: serverTimestamp(), consumedAt: serverTimestamp(), e2eRunId: RUN_ID }),
+    db.collection('properties').doc(PAYMENT_PROPERTY_ID).set({ name: `E2E Activation Property ${RUN_ID}`, ownerUid: PAYMENT_OWNER_UID, ownerId: PAYMENT_OWNER_UID, intakeId: PAYMENT_ID, quoteHash: PAYMENT_QUOTE_HASH, status: 'pending_approval', geo: { verified: true, dispatchReady: true, requiresGeoReview: false, lat: 25.2048, lng: 55.2708 }, e2eRunId: RUN_ID, createdAt: serverTimestamp(), updatedAt: serverTimestamp() }),
     db.collection('payment_transactions').doc(PAYMENT_ID).set({
-      paymentId: PAYMENT_ID,
-      contractId: PAYMENT_ID,
-      intakeId: PAYMENT_ID,
-      ownerUid: PAYMENT_OWNER_UID,
-      ownerId: PAYMENT_OWNER_UID,
-      ownerName: PAYMENT_SIGNATURE,
-      ownerEmail: `${PREFIX}-payment-owner@bin-groups.com`,
-      propertyId: PAYMENT_PROPERTY_ID,
-      amount: PAYMENT_DEPOSIT,
-      activationDeposit: PAYMENT_DEPOSIT,
-      currency: 'AED',
-      paymentMethod: 'CASH',
-      method: 'CASH',
-      paymentReferenceId: phase1PaymentReferenceId,
-      paymentReference: phase1PaymentReferenceId,
-      verified: false,
-      paymentVerified: false,
-      paymentConfigVersion: phase1PaymentConfiguration.version,
-      paymentConfigurationVersion: phase1PaymentConfiguration.version,
-      paymentConfigHash: phase1PaymentConfigHash,
-      paymentConfigurationHash: phase1PaymentConfigHash,
-      paymentManifest: {
-        configVersion: phase1PaymentConfiguration.version,
-        configHash: phase1PaymentConfigHash,
-        legalBeneficiary: phase1PaymentConfiguration.legalBeneficiary,
-        currency: phase1PaymentConfiguration.currency,
-        officeLocation: phase1PaymentConfiguration.officeLocation,
-        approvedMethods: phase1PaymentConfiguration.approvedMethods,
-        selectedMethod: 'CASH',
-        capturedAt: new Date().toISOString(),
-      },
-      paymentProofUrl: phase1ReceiptUrl,
-      paymentProofPath: phase1ReceiptPath,
-      paymentProofHash: phase1ReceiptHash,
-      paymentProofGeneration: phase1ReceiptGeneration,
-      paymentProofEvidence: {
-        receiptUrl: phase1ReceiptUrl,
-        storagePath: phase1ReceiptPath,
-        receiptHash: phase1ReceiptHash,
-        generation: phase1ReceiptGeneration,
-        recordedBy: 'protected-e2e-seed',
-      },
-      receiptUrl: phase1ReceiptUrl,
-      receiptPath: phase1ReceiptPath,
-      receiptHash: phase1ReceiptHash,
-      receiptGeneration: phase1ReceiptGeneration,
-      status: 'PENDING',
-      paymentStatus: 'PENDING_ADMIN_APPROVAL',
-      verificationState: 'PENDING_ADMIN',
-      adminApprovalRequired: true,
-      unlocksDashboard: false,
-      quoteHash: PAYMENT_QUOTE_HASH,
-      quoteSnapshot: { annualContractValue: PAYMENT_ANNUAL_VALUE, activationDeposit: PAYMENT_DEPOSIT },
-      otpVerificationId: PAYMENT_OTP_ID,
-      signatureName: PAYMENT_SIGNATURE,
-      workflowVersion: 5,
-      inspectionVerified: true,
-      e2eRunId: RUN_ID,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
+      paymentId: PAYMENT_ID, contractId: PAYMENT_ID, intakeId: PAYMENT_ID, ownerUid: PAYMENT_OWNER_UID, ownerId: PAYMENT_OWNER_UID, ownerName: PAYMENT_SIGNATURE, ownerEmail: `${PREFIX}-payment-owner@bin-groups.com`, propertyId: PAYMENT_PROPERTY_ID,
+      amount: PAYMENT_DEPOSIT, activationDeposit: PAYMENT_DEPOSIT, currency: 'AED', paymentMethod: 'CASH', method: 'CASH', paymentReferenceId: phase1PaymentReferenceId, paymentReference: phase1PaymentReferenceId,
+      verified: false, paymentVerified: false, paymentConfigVersion: phase1PaymentConfiguration.version, paymentConfigurationVersion: phase1PaymentConfiguration.version, paymentConfigHash: phase1PaymentConfigHash, paymentConfigurationHash: phase1PaymentConfigHash,
+      paymentManifest: { configVersion: phase1PaymentConfiguration.version, configHash: phase1PaymentConfigHash, legalBeneficiary: phase1PaymentConfiguration.legalBeneficiary, currency: phase1PaymentConfiguration.currency, officeLocation: phase1PaymentConfiguration.officeLocation, approvedMethods: phase1PaymentConfiguration.approvedMethods, selectedMethod: 'CASH', capturedAt: new Date().toISOString() },
+      paymentProofUrl: phase1ReceiptUrl, paymentProofPath: phase1ReceiptPath, paymentProofHash: phase1ReceiptHash, paymentProofGeneration: phase1ReceiptGeneration,
+      paymentProofEvidence: { receiptUrl: phase1ReceiptUrl, storagePath: phase1ReceiptPath, receiptHash: phase1ReceiptHash, generation: phase1ReceiptGeneration, recordedBy: 'protected-e2e-seed' },
+      receiptUrl: phase1ReceiptUrl, receiptPath: phase1ReceiptPath, receiptHash: phase1ReceiptHash, receiptGeneration: phase1ReceiptGeneration,
+      status: 'PENDING', paymentStatus: 'PENDING_ADMIN_APPROVAL', verificationState: 'PENDING_ADMIN', adminApprovalRequired: true, unlocksDashboard: false, quoteHash: PAYMENT_QUOTE_HASH,
+      quoteSnapshot: { annualContractValue: PAYMENT_ANNUAL_VALUE, activationDeposit: PAYMENT_DEPOSIT }, otpVerificationId: PAYMENT_OTP_ID, signatureName: PAYMENT_SIGNATURE, workflowVersion: 5, inspectionVerified: true,
+      e2eRunId: RUN_ID, createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
     }),
   ]);
 
@@ -544,77 +407,14 @@ async function seedOperationalFixtures() {
     db.collection('users').doc(REJECT_PAYMENT_OWNER_UID).set({ role: 'owner', status: 'pending', e2eRunId: RUN_ID, createdAt: serverTimestamp() }),
     db.collection('owners').doc(REJECT_PAYMENT_OWNER_UID).set({ role: 'owner', status: 'PENDING', e2eRunId: RUN_ID, createdAt: serverTimestamp() }),
     db.collection('contracts').doc(REJECT_PAYMENT_ID).set({ ownerUid: REJECT_PAYMENT_OWNER_UID, status: 'pending_approval', e2eRunId: RUN_ID, createdAt: serverTimestamp() }),
-    db.collection('payment_transactions').doc(REJECT_PAYMENT_ID).set({
-      paymentId: REJECT_PAYMENT_ID,
-      contractId: REJECT_PAYMENT_ID,
-      intakeId: REJECT_PAYMENT_ID,
-      ownerUid: REJECT_PAYMENT_OWNER_UID,
-      ownerName: `E2E Reject Payment Owner ${RUN_ID}`,
-      amount: 2_000,
-      currency: 'AED',
-      paymentMethod: 'BANK_TRANSFER',
-      status: 'PENDING',
-      paymentStatus: 'PENDING',
-      verificationState: 'PENDING_ADMIN',
-      adminApprovalRequired: true,
-      e2eRunId: RUN_ID,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    }),
+    db.collection('payment_transactions').doc(REJECT_PAYMENT_ID).set({ paymentId: REJECT_PAYMENT_ID, contractId: REJECT_PAYMENT_ID, intakeId: REJECT_PAYMENT_ID, ownerUid: REJECT_PAYMENT_OWNER_UID, ownerName: `E2E Reject Payment Owner ${RUN_ID}`, amount: 2_000, currency: 'AED', paymentMethod: 'BANK_TRANSFER', status: 'PENDING', paymentStatus: 'PENDING', verificationState: 'PENDING_ADMIN', adminApprovalRequired: true, e2eRunId: RUN_ID, createdAt: serverTimestamp(), updatedAt: serverTimestamp() }),
   ]);
 
   await Promise.all([
-    db.collection('users').doc(BROKER_APPROVE_ID).set({
-      role: 'broker',
-      displayName: BROKER_APPROVE_NAME,
-      email: `${PREFIX}-broker-approve@bin-groups.com`,
-      status: 'PENDING',
-      approvalStatus: 'PENDING',
-      brokerKycStatus: 'PENDING_REVIEW',
-      kycStatus: 'PENDING_REVIEW',
-      reraLicense: BROKER_RERA,
-      emiratesIdNumber: '784-1990-1234567-1',
-      bankName: 'E2E UAE Bank',
-      bankAccountHolder: BROKER_APPROVE_NAME,
-      bankIban: BROKER_IBAN,
-      commissionAgreementAccepted: true,
-      profileCompletionScore: 100,
-      brokerProfileCompletion: 100,
-      e2eRunId: RUN_ID,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    }),
-    db.collection('broker_kyc_profiles').doc(BROKER_APPROVE_ID).set({
-      submissionHash: BROKER_SUBMISSION_HASH,
-      profileCompletionScore: 100,
-      reraLicense: BROKER_RERA,
-      emiratesIdNumber: '784-1990-1234567-1',
-      bankName: 'E2E UAE Bank',
-      bankAccountHolder: BROKER_APPROVE_NAME,
-      bankIban: BROKER_IBAN,
-      commissionAgreementAccepted: true,
-      brokerKycStatus: 'PENDING_REVIEW',
-      e2eRunId: RUN_ID,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    }),
-    db.collection('users').doc(BROKER_REJECT_ID).set({
-      role: 'broker',
-      displayName: BROKER_REJECT_NAME,
-      email: `${PREFIX}-broker-reject@bin-groups.com`,
-      status: 'PENDING',
-      brokerKycStatus: 'PENDING_REVIEW',
-      e2eRunId: RUN_ID,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    }),
-    db.collection('broker_kyc_profiles').doc(BROKER_REJECT_ID).set({
-      submissionHash: BROKER_REJECT_HASH,
-      brokerKycStatus: 'PENDING_REVIEW',
-      e2eRunId: RUN_ID,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    }),
+    db.collection('users').doc(BROKER_APPROVE_ID).set({ role: 'broker', displayName: BROKER_APPROVE_NAME, email: `${PREFIX}-broker-approve@bin-groups.com`, status: 'PENDING', approvalStatus: 'PENDING', brokerKycStatus: 'PENDING_REVIEW', kycStatus: 'PENDING_REVIEW', reraLicense: BROKER_RERA, emiratesIdNumber: '784-1990-1234567-1', bankName: 'E2E UAE Bank', bankAccountHolder: BROKER_APPROVE_NAME, bankIban: BROKER_IBAN, commissionAgreementAccepted: true, profileCompletionScore: 100, brokerProfileCompletion: 100, e2eRunId: RUN_ID, createdAt: serverTimestamp(), updatedAt: serverTimestamp() }),
+    db.collection('broker_kyc_profiles').doc(BROKER_APPROVE_ID).set({ submissionHash: BROKER_SUBMISSION_HASH, profileCompletionScore: 100, reraLicense: BROKER_RERA, emiratesIdNumber: '784-1990-1234567-1', bankName: 'E2E UAE Bank', bankAccountHolder: BROKER_APPROVE_NAME, bankIban: BROKER_IBAN, commissionAgreementAccepted: true, brokerKycStatus: 'PENDING_REVIEW', e2eRunId: RUN_ID, createdAt: serverTimestamp(), updatedAt: serverTimestamp() }),
+    db.collection('users').doc(BROKER_REJECT_ID).set({ role: 'broker', displayName: BROKER_REJECT_NAME, email: `${PREFIX}-broker-reject@bin-groups.com`, status: 'PENDING', brokerKycStatus: 'PENDING_REVIEW', e2eRunId: RUN_ID, createdAt: serverTimestamp(), updatedAt: serverTimestamp() }),
+    db.collection('broker_kyc_profiles').doc(BROKER_REJECT_ID).set({ submissionHash: BROKER_REJECT_HASH, brokerKycStatus: 'PENDING_REVIEW', e2eRunId: RUN_ID, createdAt: serverTimestamp(), updatedAt: serverTimestamp() }),
   ]);
   await seedBrokerDocuments();
 
@@ -626,75 +426,37 @@ async function seedOperationalFixtures() {
   ]);
 
   const readiness = {
-    role: 'technician',
-    displayName: SECOND_TECH_NAME,
-    status: 'ACTIVE',
-    approvalStatus: 'APPROVED',
-    medicalCardStatus: 'VALID',
-    medicalCardExpiry: future,
-    drivingLicenseStatus: 'VALID',
-    drivingLicenseExpiry: future,
-    certificationsStatus: 'VERIFIED',
-    currentShiftId: `${PREFIX}-shift-two`,
-    shiftStatus: 'ACTIVE',
-    deviceRegistered: true,
-    lastGpsAt: freshGps,
-    onDuty: true,
-    dutyStatus: 'ON_DUTY',
-    isAvailable: true,
-    currentJobCount: 0,
-    maxConcurrentJobs: 3,
-    e2eRunId: RUN_ID,
-    updatedAt: serverTimestamp(),
+    role: 'technician', displayName: SECOND_TECH_NAME, status: 'ACTIVE', approvalStatus: 'APPROVED', medicalCardStatus: 'VALID', medicalCardExpiry: future,
+    drivingLicenseStatus: 'VALID', drivingLicenseExpiry: future, certificationsStatus: 'VERIFIED', currentShiftId: `${PREFIX}-shift-two`, shiftStatus: 'ACTIVE', deviceRegistered: true,
+    lastGpsAt: freshGps, onDuty: true, dutyStatus: 'ON_DUTY', isAvailable: true, currentJobCount: 0, maxConcurrentJobs: 3, e2eRunId: RUN_ID, updatedAt: serverTimestamp(),
   };
   await Promise.all([
     db.collection('users').doc(SECOND_TECH_ID).set(readiness),
     db.collection('technicians').doc(SECOND_TECH_ID).set(readiness),
     db.collection('properties').doc(TICKET_PROPERTY_ID).set({ name: `E2E Dispatch Property ${RUN_ID}`, status: 'ACTIVE', e2eRunId: RUN_ID, createdAt: serverTimestamp() }),
-    db.collection('maintenanceTickets').doc(TICKET_ID).set({
-      tenantId: `${PREFIX}-tenant`,
-      propertyId: TICKET_PROPERTY_ID,
-      propertyName: `E2E Dispatch Property ${RUN_ID}`,
-      unitId: `${PREFIX}-unit-101`,
-      unitNumber: '101',
-      floorNumber: '1',
-      category: 'HVAC / AC systems',
-      description: `E2E dispatch and re-dispatch ${RUN_ID}`,
-      status: 'OPEN',
-      priority: 'HIGH',
-      e2eRunId: RUN_ID,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    }),
+    db.collection('maintenanceTickets').doc(TICKET_ID).set({ tenantId: `${PREFIX}-tenant`, propertyId: TICKET_PROPERTY_ID, propertyName: `E2E Dispatch Property ${RUN_ID}`, unitId: `${PREFIX}-unit-101`, unitNumber: '101', floorNumber: '1', category: 'HVAC / AC systems', description: `E2E dispatch and re-dispatch ${RUN_ID}`, status: 'OPEN', priority: 'HIGH', e2eRunId: RUN_ID, createdAt: serverTimestamp(), updatedAt: serverTimestamp() }),
   ]);
 }
 
 async function cleanupOperationalFixtures() {
   const db = admin.firestore();
   await Promise.all([deleteAuthUserByEmail(SUPPORT_EMAIL), deleteAuthUserByEmail(TECHNICIAN_EMAIL)]);
-
   const directDeletes: Array<[string, string]> = [
     ['owners', OWNER_REVIEW_UID], ['properties', APPROVE_PROPERTY_ID], ['properties', REJECT_PROPERTY_ID],
-    ['users', PAYMENT_OWNER_UID], ['owners', PAYMENT_OWNER_UID], ['intake_submissions', PAYMENT_ID], ['contracts', PAYMENT_ID],
-    ['contract_signature_otps', PAYMENT_OTP_ID], ['properties', PAYMENT_PROPERTY_ID], ['payment_transactions', PAYMENT_ID],
-    ['invoices', PAYMENT_INVOICE_ID], ['propertyPassports', PAYMENT_PROPERTY_ID],
+    ['users', PAYMENT_OWNER_UID], ['owners', PAYMENT_OWNER_UID], ['intake_submissions', PAYMENT_ID], ['contracts', PAYMENT_ID], ['contract_signature_otps', PAYMENT_OTP_ID], ['properties', PAYMENT_PROPERTY_ID], ['payment_transactions', PAYMENT_ID], ['invoices', PAYMENT_INVOICE_ID], ['propertyPassports', PAYMENT_PROPERTY_ID],
     ['users', REJECT_PAYMENT_OWNER_UID], ['owners', REJECT_PAYMENT_OWNER_UID], ['contracts', REJECT_PAYMENT_ID], ['payment_transactions', REJECT_PAYMENT_ID], ['intake_submissions', REJECT_PAYMENT_ID],
-    ['users', BROKER_APPROVE_ID], ['broker_kyc_profiles', BROKER_APPROVE_ID], ['users', BROKER_REJECT_ID], ['broker_kyc_profiles', BROKER_REJECT_ID],
-    ['broker_commissions', COMMISSION_APPROVE_ID], ['broker_commissions', COMMISSION_REJECT_ID], ['broker_payout_requests', PAYOUT_APPROVE_ID], ['broker_payout_requests', PAYOUT_REJECT_ID],
+    ['users', BROKER_APPROVE_ID], ['broker_kyc_profiles', BROKER_APPROVE_ID], ['users', BROKER_REJECT_ID], ['broker_kyc_profiles', BROKER_REJECT_ID], ['broker_commissions', COMMISSION_APPROVE_ID], ['broker_commissions', COMMISSION_REJECT_ID], ['broker_payout_requests', PAYOUT_APPROVE_ID], ['broker_payout_requests', PAYOUT_REJECT_ID],
     ['users', SECOND_TECH_ID], ['technicians', SECOND_TECH_ID], ['properties', TICKET_PROPERTY_ID], ['maintenanceTickets', TICKET_ID],
   ];
   if (createdSupportUid) directDeletes.push(['users', createdSupportUid], ['staffAccess', createdSupportUid], ['staff', createdSupportUid], ['hrProfiles', createdSupportUid]);
   if (createdTechnicianUid) directDeletes.push(['users', createdTechnicianUid], ['staffAccess', createdTechnicianUid], ['staff', createdTechnicianUid], ['hrProfiles', createdTechnicianUid], ['technicians', createdTechnicianUid]);
   await Promise.all(directDeletes.map(([collectionName, id]) => db.collection(collectionName).doc(id).delete().catch(() => undefined)));
-
   await Promise.all(BROKER_DOCUMENT_TYPES.map((type) => db.collection('brokerDocuments').doc(`${PREFIX}-${type}`).delete().catch(() => undefined)));
   await Promise.all(BROKER_STORAGE_PATHS.map((storagePath) => admin.storage().bucket().file(storagePath).delete({ ignoreNotFound: true }).catch(() => undefined)));
   await admin.storage().bucket().file('payment-references/owners/' + PAYMENT_OWNER_UID + '/' + PAYMENT_ID + '/' + PREFIX + '-cash-receipt.pdf').delete({ ignoreNotFound: true }).catch(() => undefined);
   await deleteQuery('invoice_registry', 'entityId', PAYMENT_INVOICE_ID).catch(() => undefined);
-
   for (const [field, value] of [
-    ['paymentId', PAYMENT_ID], ['paymentId', REJECT_PAYMENT_ID], ['targetId', APPROVE_PROPERTY_ID], ['targetId', REJECT_PROPERTY_ID],
-    ['targetId', BROKER_APPROVE_ID], ['targetId', BROKER_REJECT_ID], ['targetId', PAYOUT_APPROVE_ID], ['targetId', PAYOUT_REJECT_ID], ['ticketId', TICKET_ID],
+    ['paymentId', PAYMENT_ID], ['paymentId', REJECT_PAYMENT_ID], ['targetId', APPROVE_PROPERTY_ID], ['targetId', REJECT_PROPERTY_ID], ['targetId', BROKER_APPROVE_ID], ['targetId', BROKER_REJECT_ID], ['targetId', PAYOUT_APPROVE_ID], ['targetId', PAYOUT_REJECT_ID], ['ticketId', TICKET_ID],
   ] as Array<[string, string]>) await deleteQuery('audit_logs', field, value).catch(() => undefined);
   await deleteQuery('notifications', 'userId', OWNER_REVIEW_UID).catch(() => undefined);
   await deleteQuery('mail', 'metadata.ownerUid', PAYMENT_OWNER_UID).catch(() => undefined);
@@ -720,6 +482,9 @@ async function createStaffThroughUi(page: Page, name: string, email: string, rol
 async function patchTechnicianReadiness(uid: string) {
   const readiness = {
     status: 'ACTIVE',
+    suspended: false,
+    onboardingComplete: true,
+    onboardingStage: 'ACTIVE',
     approvalStatus: 'APPROVED',
     medicalCardStatus: 'VALID',
     medicalCardExpiry: admin.firestore.Timestamp.fromMillis(Date.now() + 365 * 24 * 60 * 60 * 1000),
@@ -738,16 +503,17 @@ async function patchTechnicianReadiness(uid: string) {
     e2eRunId: RUN_ID,
     updatedAt: serverTimestamp(),
   };
+  const authUser = await admin.auth().getUser(uid);
+  await admin.auth().setCustomUserClaims(uid, { ...(authUser.customClaims || {}), suspended: false });
   await Promise.all([
     admin.firestore().collection('users').doc(uid).set(readiness, { merge: true }),
     admin.firestore().collection('technicians').doc(uid).set({ role: 'technician', displayName: TECHNICIAN_NAME, ...readiness }, { merge: true }),
+    admin.firestore().collection('staffAccess').doc(uid).set({ active: true, suspended: false, status: 'ACTIVE', onboardingStage: 'ACTIVE', updatedAt: serverTimestamp() }, { merge: true }),
   ]);
 }
 
 function payoutCard(page: Page, brokerName: string) {
-  return page.getByText(brokerName, { exact: true }).last().locator(
-    'xpath=ancestor::div[contains(@class,"MuiBox-root") and .//button][1]',
-  );
+  return page.getByText(brokerName, { exact: true }).last().locator('xpath=ancestor::div[contains(@class,"MuiBox-root") and .//button][1]');
 }
 
 test.describe('Admin protected operational business workflow', () => {
@@ -757,7 +523,6 @@ test.describe('Admin protected operational business workflow', () => {
     await cleanupOperationalFixtures().catch(() => undefined);
     await seedOperationalFixtures();
   });
-
   test.afterAll(async () => {
     if (!admin.apps.length) return;
     await cleanupOperationalFixtures();
@@ -771,7 +536,6 @@ test.describe('Admin protected operational business workflow', () => {
     await loginWithRealMfa(page, diagnostics);
     const db = admin.firestore();
 
-    // Staff and Technician creation through adminCreateUser, with least privilege.
     await page.goto(adminUrl('/hr'), { waitUntil: 'domcontentloaded' });
     await waitForLoader(page);
     await page.getByTestId('admin-open-secure-staff-access').click();
@@ -796,10 +560,7 @@ test.describe('Admin protected operational business workflow', () => {
     expect(technicianUser.customClaims?.modules).toEqual([]);
 
     const [supportProfile, supportAccess, technicianProfile, technicianAccess] = await Promise.all([
-      db.collection('users').doc(createdSupportUid).get(),
-      db.collection('staffAccess').doc(createdSupportUid).get(),
-      db.collection('users').doc(createdTechnicianUid).get(),
-      db.collection('staffAccess').doc(createdTechnicianUid).get(),
+      db.collection('users').doc(createdSupportUid).get(), db.collection('staffAccess').doc(createdSupportUid).get(), db.collection('users').doc(createdTechnicianUid).get(), db.collection('staffAccess').doc(createdTechnicianUid).get(),
     ]);
     expect(supportProfile.data()?.role).toBe('support_admin');
     expect(supportAccess.data()?.modules).toEqual(['dashboard', 'tenants', 'tickets']);
@@ -807,39 +568,20 @@ test.describe('Admin protected operational business workflow', () => {
     expect(technicianAccess.data()?.modules).toEqual([]);
     await patchTechnicianReadiness(createdTechnicianUid);
 
-    // Founder-only adminReviewOwnerProperty approval and rejection.
     await page.goto(adminUrl('/owners'), { waitUntil: 'domcontentloaded' });
     await waitForLoader(page);
     const approvePropertyRow = page.getByRole('row').filter({ hasText: APPROVE_PROPERTY_NAME }).first();
     await expect(approvePropertyRow).toBeVisible({ timeout: 30_000 });
     let propertyApprovalDialogMessage = '';
-    const propertyApprovalDialogHandler = async (dialog: import('@playwright/test').Dialog) => {
-      propertyApprovalDialogMessage = dialog.message();
-      await dialog.accept();
-    };
+    const propertyApprovalDialogHandler = async (dialog: import('@playwright/test').Dialog) => { propertyApprovalDialogMessage = dialog.message(); await dialog.accept(); };
     page.on('dialog', propertyApprovalDialogHandler);
     await approvePropertyRow.getByRole('button', { name: 'Approve', exact: true }).click();
     await expect.poll(async () => (await db.collection('properties').doc(APPROVE_PROPERTY_ID).get()).data()?.status, { timeout: 60_000 }).toBe('APPROVED');
     page.off('dialog', propertyApprovalDialogHandler);
-    if (propertyApprovalDialogMessage) {
-      expect(propertyApprovalDialogMessage).toMatch(/approved successfully/i);
-      expect(propertyApprovalDialogMessage).not.toMatch(/error|failed/i);
-    }
+    if (propertyApprovalDialogMessage) { expect(propertyApprovalDialogMessage).toMatch(/approved successfully/i); expect(propertyApprovalDialogMessage).not.toMatch(/error|failed/i); }
     const approvedProperty = (await db.collection('properties').doc(APPROVE_PROPERTY_ID).get()).data() || {};
-    expect(approvedProperty.geo).toMatchObject({
-      lat: 25.2048,
-      lng: 55.2708,
-      verified: true,
-      dispatchReady: true,
-      requiresGeoReview: false,
-      source: 'admin_manual',
-      verificationVersion: 1,
-    });
-    expect(approvedProperty.geoVerification).toMatchObject({
-      state: 'VERIFIED',
-      source: 'FOUNDER_MFA_REVIEW',
-      verificationVersion: 1,
-    });
+    expect(approvedProperty.geo).toMatchObject({ lat: 25.2048, lng: 55.2708, verified: true, dispatchReady: true, requiresGeoReview: false, source: 'admin_manual', verificationVersion: 1 });
+    expect(approvedProperty.geoVerification).toMatchObject({ state: 'VERIFIED', source: 'FOUNDER_MFA_REVIEW', verificationVersion: 1 });
 
     const rejectPropertyRow = page.getByRole('row').filter({ hasText: REJECT_PROPERTY_NAME }).first();
     await expect(rejectPropertyRow).toBeVisible({ timeout: 30_000 });
@@ -847,25 +589,17 @@ test.describe('Admin protected operational business workflow', () => {
     const propertyRejectDialog = page.getByRole('dialog', { name: 'Reject Property Submission' });
     await propertyRejectDialog.getByLabel('Rejection Reason').fill('Protected E2E property evidence requires correction.');
     let propertyRejectionDialogMessage = '';
-    const propertyRejectionDialogHandler = async (dialog: import('@playwright/test').Dialog) => {
-      propertyRejectionDialogMessage = dialog.message();
-      await dialog.accept();
-    };
+    const propertyRejectionDialogHandler = async (dialog: import('@playwright/test').Dialog) => { propertyRejectionDialogMessage = dialog.message(); await dialog.accept(); };
     page.on('dialog', propertyRejectionDialogHandler);
     await propertyRejectDialog.getByRole('button', { name: 'Reject Property' }).click();
     await expect.poll(async () => (await db.collection('properties').doc(REJECT_PROPERTY_ID).get()).data()?.status, { timeout: 60_000 }).toBe('REJECTED');
     page.off('dialog', propertyRejectionDialogHandler);
-    if (propertyRejectionDialogMessage) {
-      expect(propertyRejectionDialogMessage).toMatch(/rejected/i);
-      expect(propertyRejectionDialogMessage).not.toMatch(/error|failed/i);
-    }
-
+    if (propertyRejectionDialogMessage) { expect(propertyRejectionDialogMessage).toMatch(/rejected/i); expect(propertyRejectionDialogMessage).not.toMatch(/error|failed/i); }
     const propertyApprovalAudits = await db.collection('audit_logs').where('targetId', '==', APPROVE_PROPERTY_ID).get();
     const propertyRejectionAudits = await db.collection('audit_logs').where('targetId', '==', REJECT_PROPERTY_ID).get();
     expect(propertyApprovalAudits.docs.filter((doc) => doc.data().action === 'APPROVE_PROPERTY')).toHaveLength(1);
     expect(propertyRejectionAudits.docs.filter((doc) => doc.data().action === 'REJECT_PROPERTY')).toHaveLength(1);
 
-    // Payment approval, rejection and exactly-once activation.
     await page.goto(adminUrl('/payments'), { waitUntil: 'domcontentloaded' });
     await waitForLoader(page);
     const activationRow = page.getByRole('row').filter({ hasText: PAYMENT_ID }).first();
@@ -877,38 +611,17 @@ test.describe('Admin protected operational business workflow', () => {
     await expect(confirmApproval).toBeVisible({ timeout: 20_000 });
     await expect(approvalDialog.getByLabel(/Official payment \/ receipt reference/i)).not.toHaveValue('', { timeout: 15_000 });
     await expect(confirmApproval).toBeEnabled({ timeout: 20_000 });
-    const approveResponsePromise = page.waitForResponse(
-      (response) => response.request().method() === 'POST' && response.url().includes('adminApprovePayment'),
-      { timeout: 45_000 },
-    );
+    const approveResponsePromise = page.waitForResponse((response) => response.request().method() === 'POST' && response.url().includes('adminApprovePayment'), { timeout: 45_000 });
     await confirmApproval.click();
     const approveResponse = await approveResponsePromise;
     const approveResponseText = await approveResponse.text().catch(() => '');
-    if (!approveResponse.ok() || /\"error\"\s*:/i.test(approveResponseText)) {
-      throw new Error(
-        `Admin payment approval callable failed HTTP ${approveResponse.status()}: ${approveResponseText.slice(0, 1_500)}`,
-      );
-    }
-
+    if (!approveResponse.ok() || /\"error\"\s*:/i.test(approveResponseText)) throw new Error(`Admin payment approval callable failed HTTP ${approveResponse.status()}: ${approveResponseText.slice(0, 1_500)}`);
     await expect.poll(async () => {
-      const [payment, contract, intake, owner, property] = await Promise.all([
-        db.collection('payment_transactions').doc(PAYMENT_ID).get(),
-        db.collection('contracts').doc(PAYMENT_ID).get(),
-        db.collection('intake_submissions').doc(PAYMENT_ID).get(),
-        db.collection('users').doc(PAYMENT_OWNER_UID).get(),
-        db.collection('properties').doc(PAYMENT_PROPERTY_ID).get(),
-      ]);
+      const [payment, contract, intake, owner, property] = await Promise.all([db.collection('payment_transactions').doc(PAYMENT_ID).get(), db.collection('contracts').doc(PAYMENT_ID).get(), db.collection('intake_submissions').doc(PAYMENT_ID).get(), db.collection('users').doc(PAYMENT_OWNER_UID).get(), db.collection('properties').doc(PAYMENT_PROPERTY_ID).get()]);
       return [payment.data()?.status, contract.data()?.status, intake.data()?.status, owner.data()?.dashboardUnlocked, property.data()?.status].join('|');
     }, { timeout: 60_000 }).toBe('APPROVED|ACTIVE|ACTIVE|true|ACTIVE');
-
-    const [invoice, registry, approvalAudits] = await Promise.all([
-      db.collection('invoices').doc(PAYMENT_INVOICE_ID).get(),
-      db.collection('invoice_registry').where('entityId', '==', PAYMENT_INVOICE_ID).get(),
-      db.collection('audit_logs').where('paymentId', '==', PAYMENT_ID).get(),
-    ]);
-    expect(invoice.exists).toBe(true);
-    expect(invoice.data()?.status).toBe('PAID');
-    expect(registry.size).toBe(1);
+    const [invoice, registry, approvalAudits] = await Promise.all([db.collection('invoices').doc(PAYMENT_INVOICE_ID).get(), db.collection('invoice_registry').where('entityId', '==', PAYMENT_INVOICE_ID).get(), db.collection('audit_logs').where('paymentId', '==', PAYMENT_ID).get()]);
+    expect(invoice.exists).toBe(true); expect(invoice.data()?.status).toBe('PAID'); expect(registry.size).toBe(1);
     expect(approvalAudits.docs.filter((doc) => doc.data().action === 'ADMIN_APPROVE_PAYMENT'), 'idempotent double invocation must create one activation audit').toHaveLength(1);
 
     await page.goto(adminUrl('/payments'), { waitUntil: 'domcontentloaded' });
@@ -921,7 +634,6 @@ test.describe('Admin protected operational business workflow', () => {
     await rejectPaymentDialog.getByRole('button', { name: /Return \/ Reject/i }).click();
     await expect.poll(async () => (await db.collection('payment_transactions').doc(REJECT_PAYMENT_ID).get()).data()?.status, { timeout: 45_000 }).toBe('REJECTED');
 
-    // adminReviewBrokerKyc and adminReviewBrokerPayoutRequest settlement chain.
     await page.goto(adminUrl('/broker'), { waitUntil: 'domcontentloaded' });
     await waitForLoader(page);
     const approveBrokerRow = page.getByRole('row').filter({ hasText: BROKER_APPROVE_NAME }).first();
@@ -931,13 +643,9 @@ test.describe('Admin protected operational business workflow', () => {
     await approveKycDialog.getByLabel('Review note').fill('Protected E2E KYC dossier verified against immutable Storage metadata.');
     await approveKycDialog.getByRole('button', { name: 'Approve', exact: true }).click();
     await expect.poll(async () => {
-      const [publicProfile, privateProfile] = await Promise.all([
-        db.collection('users').doc(BROKER_APPROVE_ID).get(),
-        db.collection('broker_kyc_profiles').doc(BROKER_APPROVE_ID).get(),
-      ]);
+      const [publicProfile, privateProfile] = await Promise.all([db.collection('users').doc(BROKER_APPROVE_ID).get(), db.collection('broker_kyc_profiles').doc(BROKER_APPROVE_ID).get()]);
       return `${publicProfile.data()?.brokerKycStatus}|${privateProfile.data()?.brokerKycStatus}`;
     }, { timeout: 60_000 }).toBe('VERIFIED|VERIFIED');
-
     const rejectBrokerRow = page.getByRole('row').filter({ hasText: BROKER_REJECT_NAME }).first();
     await expect(rejectBrokerRow).toBeVisible({ timeout: 35_000 });
     await rejectBrokerRow.locator('button').nth(2).click();
@@ -945,39 +653,30 @@ test.describe('Admin protected operational business workflow', () => {
     await rejectKycDialog.getByLabel('Rejection reason').fill('Protected E2E Broker identity evidence is incomplete.');
     await rejectKycDialog.getByRole('button', { name: 'Reject', exact: true }).click();
     await expect.poll(async () => (await db.collection('users').doc(BROKER_REJECT_ID).get()).data()?.brokerKycStatus, { timeout: 45_000 }).toBe('REJECTED');
-
     let approvePayoutCard = payoutCard(page, BROKER_APPROVE_NAME);
     await expect(approvePayoutCard.getByRole('button', { name: 'Approve', exact: true })).toBeVisible({ timeout: 35_000 });
     await approvePayoutCard.getByRole('button', { name: 'Approve', exact: true }).click();
     await expect.poll(async () => (await db.collection('broker_payout_requests').doc(PAYOUT_APPROVE_ID).get()).data()?.status, { timeout: 45_000 }).toBe('APPROVED');
-
-    await page.reload({ waitUntil: 'domcontentloaded' });
-    await waitForLoader(page);
-    approvePayoutCard = payoutCard(page, BROKER_APPROVE_NAME);
+    await page.reload({ waitUntil: 'domcontentloaded' }); await waitForLoader(page); approvePayoutCard = payoutCard(page, BROKER_APPROVE_NAME);
     page.once('dialog', async (dialog) => dialog.accept(`E2E-PAYOUT-${RUN_ID}`));
     await approvePayoutCard.getByRole('button', { name: /Mark paid/i }).click();
     await expect.poll(async () => (await db.collection('broker_payout_requests').doc(PAYOUT_APPROVE_ID).get()).data()?.status, { timeout: 45_000 }).toBe('PAID');
     expect((await db.collection('broker_commissions').doc(COMMISSION_APPROVE_ID).get()).data()?.status).toBe('PAID');
-
     const rejectPayoutCard = payoutCard(page, `E2E Payout Reject ${RUN_ID}`);
     page.once('dialog', async (dialog) => dialog.accept('Protected E2E payout bank evidence requires correction.'));
     await rejectPayoutCard.getByRole('button', { name: 'Reject', exact: true }).click();
     await expect.poll(async () => (await db.collection('broker_payout_requests').doc(PAYOUT_REJECT_ID).get()).data()?.status, { timeout: 45_000 }).toBe('REJECTED');
     expect((await db.collection('broker_commissions').doc(COMMISSION_REJECT_ID).get()).data()?.payoutStatus).toBe('AVAILABLE');
 
-    // adminAssignTechnician assignment and active-ticket re-dispatch.
-    await page.goto(adminUrl('/tickets'), { waitUntil: 'domcontentloaded' });
-    await waitForLoader(page);
+    await page.goto(adminUrl('/tickets'), { waitUntil: 'domcontentloaded' }); await waitForLoader(page);
     let ticketRow = page.getByRole('row').filter({ hasText: `E2E Dispatch Property ${RUN_ID}` }).first();
     await expect(ticketRow).toBeVisible({ timeout: 35_000 });
     await ticketRow.getByRole('button', { name: 'ASSIGN', exact: true }).click();
     const assignmentDialog = page.getByRole('dialog', { name: /MANUAL SPECIALIST ASSIGNMENT/i });
     await assignmentDialog.getByText(TECHNICIAN_NAME, { exact: true }).click();
     await expect.poll(async () => (await db.collection('maintenanceTickets').doc(TICKET_ID).get()).data()?.assignedTechnicianId, { timeout: 50_000 }).toBe(createdTechnicianUid);
-
     await db.collection('maintenanceTickets').doc(TICKET_ID).set({ status: 'EN_ROUTE', updatedAt: serverTimestamp() }, { merge: true });
-    await page.reload({ waitUntil: 'domcontentloaded' });
-    await waitForLoader(page);
+    await page.reload({ waitUntil: 'domcontentloaded' }); await waitForLoader(page);
     ticketRow = page.getByRole('row').filter({ hasText: `E2E Dispatch Property ${RUN_ID}` }).first();
     await ticketRow.getByRole('button', { name: 'REASSIGN', exact: true }).click();
     const reassignDialog = page.getByRole('dialog', { name: /MANUAL SPECIALIST ASSIGNMENT/i });
@@ -986,13 +685,11 @@ test.describe('Admin protected operational business workflow', () => {
       const ticket = (await db.collection('maintenanceTickets').doc(TICKET_ID).get()).data() || {};
       return `${ticket.assignedTechnicianId}|${ticket.status}|${ticket.reassignmentReasonSource}`;
     }, { timeout: 50_000 }).toBe(`${SECOND_TECH_ID}|ASSIGNED|ADMIN_PORTAL_DEFAULT`);
-
     const reassignAudits = await db.collection('audit_logs').where('ticketId', '==', TICKET_ID).get();
     const reassignAudit = reassignAudits.docs.find((doc) => doc.data().action === 'ADMIN_REASSIGN_READY_TECHNICIAN');
     expect(reassignAudit).toBeTruthy();
     expect(reassignAudit?.data()?.previousTechnicianId).toBe(createdTechnicianUid);
     expect(reassignAudit?.data()?.technicianId).toBe(SECOND_TECH_ID);
-
     monitor.assertClean(test.info().title);
     monitor.assertAuthenticatedFirebaseRead(test.info().title);
   });

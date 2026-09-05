@@ -39,11 +39,32 @@ const safeId = String(brokerUid).toLowerCase().replace(/[^a-z0-9_-]+/g, '-').rep
 const commissionId = `e2e-live-broker-commission-${safeId}`;
 const submissionHash = crypto.createHash('sha256').update(`broker-e2e-private-kyc:${projectId}:${brokerUid}`).digest('hex');
 const now = admin.firestore.FieldValue.serverTimestamp();
+const productionEvidenceType = 'broker-contract-to-payout-production-proof';
 
-const challengeSnapshot = await db.collection('broker_payout_otps')
-  .where('uid', '==', brokerUid)
-  .limit(100)
-  .get();
+const [challengeSnapshot, brokerCommissionSnapshot, brokerPayoutSnapshot] = await Promise.all([
+  db.collection('broker_payout_otps')
+    .where('uid', '==', brokerUid)
+    .limit(100)
+    .get(),
+  db.collection('broker_commissions')
+    .where('brokerId', '==', brokerUid)
+    .limit(100)
+    .get(),
+  db.collection('broker_payout_requests')
+    .where('brokerId', '==', brokerUid)
+    .limit(100)
+    .get(),
+]);
+
+const staleProductionEvidenceCommissions = brokerCommissionSnapshot.docs.filter((document) => {
+  if (document.id === commissionId) return false;
+  const data = document.data() || {};
+  return data.e2eEvidenceType === productionEvidenceType;
+});
+const staleProductionEvidencePayouts = brokerPayoutSnapshot.docs.filter((document) => {
+  const data = document.data() || {};
+  return data.e2eEvidenceType === productionEvidenceType;
+});
 
 const batch = db.batch();
 batch.set(profileRef, {
@@ -111,6 +132,13 @@ for (const challenge of challengeSnapshot.docs) {
   const status = String(challenge.data().status || '').toUpperCase();
   if (['PENDING', 'VERIFIED', 'EXPIRED'].includes(status)) batch.delete(challenge.ref);
 }
+for (const commission of staleProductionEvidenceCommissions) batch.delete(commission.ref);
+for (const payout of staleProductionEvidencePayouts) batch.delete(payout.ref);
 
 await batch.commit();
-console.log(`Prepared Broker payout OTP E2E fixture for ${brokerEmail}; private KYC ready; cleared ${challengeSnapshot.size} challenge candidate(s).`);
+console.log(
+  `Prepared Broker payout OTP E2E fixture for ${brokerEmail}; private KYC ready; ` +
+  `cleared ${challengeSnapshot.size} challenge candidate(s), ` +
+  `${staleProductionEvidenceCommissions.length} stale production-evidence commission(s), and ` +
+  `${staleProductionEvidencePayouts.length} stale production-evidence payout request(s).`,
+);

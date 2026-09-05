@@ -21,6 +21,11 @@ test('Broker payout OTP fixture is restricted to the verified dedicated E2E Brok
   assert.match(fixture, /payoutStatus: 'NOT_REQUESTED'/);
   assert.match(fixture, /broker_payout_otp_rate_limits/);
   assert.match(fixture, /\['PENDING', 'VERIFIED', 'EXPIRED'\]/);
+  assert.match(fixture, /productionEvidenceType = 'broker-contract-to-payout-production-proof'/);
+  assert.match(fixture, /broker_commissions'\)\s*\.where\('brokerId', '==', brokerUid\)/);
+  assert.match(fixture, /data\.e2eEvidenceType === productionEvidenceType/);
+  assert.match(fixture, /staleProductionEvidenceCommissions/);
+  assert.match(fixture, /staleProductionEvidencePayouts/);
   assert.doesNotMatch(fixture, /otpHash|timingSafeEqual|verifyBrokerPayoutOtp|submitBrokerPayoutRequest/);
 });
 
