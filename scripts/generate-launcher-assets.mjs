@@ -1,4 +1,4 @@
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { deflateSync } from 'node:zlib';
 
@@ -168,7 +168,9 @@ function drawLauncher(size, { maskable = false, round = false, monochrome = fals
 
 function writeAsset(path, size, options) {
   mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, drawLauncher(size, options));
+  const tempPath = `${path}.${process.pid}.${Date.now()}.tmp`;
+  writeFileSync(tempPath, drawLauncher(size, options));
+  renameSync(tempPath, path);
   console.log(`Generated ${path} (${size}x${size})`);
 }
 

@@ -14,6 +14,7 @@ import { ASSET_PROFILE_PROPERTY_TYPES } from '../../utils/calculateUaeQuote2026'
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { auth, functions, getDownloadURL, ref, storage, uploadBytes } from '../../lib/firebase';
+import PropertyInventoryPanel from './PropertyInventoryPanel';
 
 const UAE_EMIRATES = ['Abu Dhabi', 'Dubai', 'Sharjah', 'Ajman', 'Umm Al Quwain', 'Ras Al Khaimah', 'Fujairah'];
 const ASSET_TYPE_IDS = new Set<string>(ASSET_PROFILE_PROPERTY_TYPES);
@@ -323,84 +324,7 @@ const AssetProfileStep: React.FC<{ onNext: () => void; onBack?: () => void }> = 
           </Grid>
         </Grid>
 
-        {isGym && <Paper sx={{ p: { xs: 3, md: 4 }, mt: 4, borderRadius: 6, bgcolor: alpha(binThemeTokens.gold, 0.06), border: `1px solid ${alpha(binThemeTokens.gold, 0.3)}` }}>
-          <Stack direction={{ xs: 'column', md: isRTL ? 'row-reverse' : 'row' }} justifyContent="space-between" alignItems={{ xs: 'flex-start', md: 'center' }} gap={2} mb={3}>
-            <Box>
-              <Typography variant="h5" fontWeight={950} color="#FFF">{label('Gym / Fitness Centre Operations Profile', 'ملف تشغيل النادي الرياضي / مركز اللياقة')}</Typography>
-              <Typography variant="body2" color="text.secondary">{label('Sports & Wellness · Commercial asset · area-priced after BIN GROUP verification', 'رياضة وعافية · أصل تجاري · التسعير حسب المساحة بعد تحقق BIN GROUP')}</Typography>
-            </Box>
-            <Chip label={label(`Suggested: ${String(gym.suggestedComplexity || 'STANDARD_DRY').replace(/_/g, ' ')}`, `التصنيف المقترح: ${String(gym.suggestedComplexity || 'STANDARD_DRY').replace(/_/g, ' ')}`)} variant="outlined" sx={{ color: binThemeTokens.gold, borderColor: binThemeTokens.gold, fontWeight: 900 }} />
-          </Stack>
-
-          <Alert severity="info" sx={{ mb: 3 }}>
-            <strong>{label('How Gym pricing works: ', 'طريقة تسعير النادي: ')}</strong>
-            {label('Gym / Fitness Centre pricing is based primarily on the verified measured service area. Member capacity and active membership do not multiply the property price. Facility complexity may affect the applicable service rate. BIN GROUP verifies the property during the visit before the final payable amount is issued.', 'يعتمد تسعير النادي الرياضي / مركز اللياقة أساساً على مساحة الخدمة المقاسة التي تتحقق منها BIN GROUP. لا تضاعف سعة الأعضاء أو العضويات النشطة سعر العقار. قد يؤثر تعقيد المنشأة على معدل الخدمة المطبق. تتحقق BIN GROUP من العقار أثناء الزيارة قبل إصدار المبلغ النهائي المستحق.')}
-          </Alert>
-
-          <Grid container spacing={2}>
-            <Grid item xs={12} md={4}><TextField fullWidth select required label={label('Gym format', 'نوع النادي الرياضي')} value={gym.format || ''} onChange={(event) => updateGym({ format: event.target.value })}>
-              <MenuItem value="">{label('Select format', 'اختر النوع')}</MenuItem>
-              <MenuItem value="standalone">{label('Standalone gym', 'نادي رياضي مستقل')}</MenuItem>
-              <MenuItem value="health_club">{label('Fitness centre / health club', 'مركز لياقة / نادي صحي')}</MenuItem>
-              <MenuItem value="boutique">{label('Boutique fitness studio', 'استوديو لياقة متخصص')}</MenuItem>
-              <MenuItem value="functional_strength">{label('Functional / strength gym', 'نادي وظيفي / قوة')}</MenuItem>
-              <MenuItem value="yoga_pilates">{label('Yoga / Pilates studio', 'استوديو يوغا / بيلاتس')}</MenuItem>
-              <MenuItem value="other">{label('Other', 'أخرى')}</MenuItem>
-            </TextField></Grid>
-            <Grid item xs={12} md={4}><TextField fullWidth select required label={label('Gym asset scope', 'نطاق أصل النادي')} value={gym.scopeMode || 'GYM_STANDALONE'} onChange={(event) => updateGym({ scopeMode: event.target.value, separateBinScope: event.target.value === 'GYM_WITHIN_PARENT_ASSET' ? gym.separateBinScope : true })}>
-              <MenuItem value="GYM_STANDALONE">{label('Standalone property', 'عقار مستقل')}</MenuItem>
-              <MenuItem value="GYM_TENANTED_COMMERCIAL_UNIT">{label('Tenanted commercial unit', 'وحدة تجارية مؤجرة')}</MenuItem>
-              <MenuItem value="GYM_WITHIN_PARENT_ASSET">{label('Inside hotel / tower / residential / other parent asset', 'داخل فندق / برج / عقار سكني / أصل رئيسي آخر')}</MenuItem>
-            </TextField></Grid>
-            {gym.scopeMode === 'GYM_WITHIN_PARENT_ASSET' && <Grid item xs={12} md={4}><TextField fullWidth select label={label('Separate BIN GROUP gym scope?', 'هل للنادي نطاق مستقل لدى BIN GROUP؟')} value={gym.separateBinScope ? 'yes' : 'no'} onChange={(event) => updateGym({ separateBinScope: event.target.value === 'yes' })}>
-              <MenuItem value="yes">{label('Yes — price separately', 'نعم — تسعير مستقل')}</MenuItem>
-              <MenuItem value="no">{label('No — keep as parent amenity', 'لا — يبقى كمرفق تابع للأصل الرئيسي')}</MenuItem>
-            </TextField></Grid>}
-
-            <Grid item xs={12} md={4}><TextField fullWidth select label={label('Opening schedule', 'ساعات التشغيل')} value={gym.openingSchedule || 'STANDARD_HOURS'} onChange={(event) => updateGym({ openingSchedule: event.target.value })}>
-              <MenuItem value="STANDARD_HOURS">{label('Standard hours', 'ساعات قياسية')}</MenuItem>
-              <MenuItem value="EXTENDED_HOURS">{label('Extended hours', 'ساعات ممتدة')}</MenuItem>
-              <MenuItem value="24_7">{label('24-hour / 24×7', '24 ساعة / طوال الأسبوع')}</MenuItem>
-            </TextField></Grid>
-            <Grid item xs={12} md={4}><TextField fullWidth type="number" label={label('Typical active members', 'الأعضاء النشطون عادةً')} helperText={label('Optional · not used as a property price multiplier', 'اختياري · لا يستخدم كمضاعف لسعر العقار')} value={gym.typicalActiveMembers || 0} onChange={(event) => updateGym({ typicalActiveMembers: Math.max(0, Number(event.target.value)) })} /></Grid>
-            <Grid item xs={12} md={4}><TextField fullWidth type="number" label={label('Fitness equipment count', 'عدد أجهزة اللياقة')} helperText={label('Scope / equipment-PM information only', 'للنطاق / صيانة المعدات فقط')} value={gym.equipmentCount || 0} onChange={(event) => updateGym({ equipmentCount: Math.max(0, Number(event.target.value)) })} /></Grid>
-
-            <Grid item xs={6} md={3}><TextField fullWidth type="number" label={label('Changing rooms', 'غرف تبديل الملابس')} value={gym.changingRooms || 0} onChange={(event) => updateGym({ changingRooms: Math.max(0, Number(event.target.value)) })} /></Grid>
-            <Grid item xs={6} md={3}><TextField fullWidth type="number" label={label('Showers', 'الاستحمام')} value={gym.showers || 0} onChange={(event) => updateGym({ showers: Math.max(0, Number(event.target.value)) })} /></Grid>
-            <Grid item xs={6} md={3}><TextField fullWidth type="number" label={label('Group exercise studios', 'استوديوهات التمارين الجماعية')} value={gym.groupStudios || 0} onChange={(event) => updateGym({ groupStudios: Math.max(0, Number(event.target.value)) })} /></Grid>
-            <Grid item xs={6} md={3}><TextField fullWidth select label={label('Dedicated treatment / recovery area', 'منطقة علاج / تعافٍ مخصصة')} value={gym.treatmentRecoveryArea ? 'yes' : 'no'} onChange={(event) => updateGym({ treatmentRecoveryArea: event.target.value === 'yes' })}><MenuItem value="no">{label('No', 'لا')}</MenuItem><MenuItem value="yes">{label('Yes', 'نعم')}</MenuItem></TextField></Grid>
-
-            <Grid item xs={12} md={6}><TextField fullWidth select SelectProps={{ multiple: true }} label={label('Wet / recovery facilities', 'مرافق مائية / تعافٍ')} value={Array.isArray(gym.wetFacilities) ? gym.wetFacilities : []} onChange={(event) => { const value = event.target.value; updateGym({ wetFacilities: Array.isArray(value) ? value : [String(value)] }); }}>
-              <MenuItem value="sauna">{label('Sauna', 'ساونا')}</MenuItem>
-              <MenuItem value="steam">{label('Steam room', 'غرفة بخار')}</MenuItem>
-              <MenuItem value="jacuzzi">{label('Jacuzzi / hot tub', 'جاكوزي / حوض ساخن')}</MenuItem>
-              <MenuItem value="cold_plunge">{label('Cold plunge / ice bath', 'غطس بارد / حمام ثلجي')}</MenuItem>
-              <MenuItem value="recovery_room">{label('Recovery room', 'غرفة تعافٍ')}</MenuItem>
-              <MenuItem value="other">{label('Other', 'أخرى')}</MenuItem>
-            </TextField></Grid>
-            <Grid item xs={12} md={3}><TextField fullWidth select label={label('Swimming pool', 'مسبح')} value={gym.swimmingPool ? 'yes' : 'no'} onChange={(event) => updateGym({ swimmingPool: event.target.value === 'yes', poolScope: event.target.value === 'yes' ? (gym.poolScope === 'none' ? 'within_gym' : gym.poolScope) : 'none' })}><MenuItem value="no">{label('No', 'لا')}</MenuItem><MenuItem value="yes">{label('Yes', 'نعم')}</MenuItem></TextField></Grid>
-            {gym.swimmingPool && <Grid item xs={12} md={3}><TextField fullWidth select label={label('Pool scope', 'نطاق المسبح')} value={gym.poolScope || 'within_gym'} onChange={(event) => updateGym({ poolScope: event.target.value })}><MenuItem value="within_gym">{label('Within gym scope', 'ضمن نطاق النادي')}</MenuItem><MenuItem value="separate_scope">{label('Separate specialist scope', 'نطاق متخصص منفصل')}</MenuItem></TextField></Grid>}
-
-            <Grid item xs={12} md={4}><TextField fullWidth select label={label('PM pricing basis', 'أساس تسعير إدارة العقار')} value={gym.pmPricingBasis || 'annual_rent'} onChange={(event) => updateGym({ pmPricingBasis: event.target.value })}>
-              <MenuItem value="annual_rent">{label('Annual contracted rent', 'الإيجار التعاقدي السنوي')}</MenuItem>
-              <MenuItem value="managed_operating_revenue">{label('Managed operating revenue', 'الإيراد التشغيلي المُدار')}</MenuItem>
-              <MenuItem value="flat_custom">{label('Flat / custom contract', 'عقد ثابت / مخصص')}</MenuItem>
-            </TextField></Grid>
-            {gym.pmPricingBasis === 'annual_rent' && <Grid item xs={12} md={4}><TextField fullWidth type="number" label={label('Annual contracted rent (AED/year) — PM only', 'الإيجار التعاقدي السنوي (درهم/سنة) — للإدارة فقط')} value={active.annualRent ?? ''} onChange={(event) => setProperty({ annualRent: event.target.value === '' ? undefined : Math.max(0, Number(event.target.value)), annualRevenue: undefined })} /></Grid>}
-            {gym.pmPricingBasis === 'managed_operating_revenue' && <Grid item xs={12} md={4}><TextField fullWidth type="number" label={label('Annual managed operating revenue (AED/year)', 'الإيراد التشغيلي السنوي المُدار (درهم/سنة)')} helperText={label('Use only when BIN GROUP manages operating revenue', 'يستخدم فقط عندما تدير BIN GROUP الإيراد التشغيلي')} value={active.annualRevenue ?? ''} onChange={(event) => setProperty({ annualRevenue: event.target.value === '' ? undefined : Math.max(0, Number(event.target.value)), annualRent: undefined })} /></Grid>}
-            {gym.pmPricingBasis === 'flat_custom' && <Grid item xs={12} md={8}><Alert severity="info">{label('Flat/custom Gym PM is not auto-priced. BIN GROUP will issue the management fee after scope review.', 'لا يتم تسعير إدارة النادي بالعقد الثابت/المخصص تلقائياً. تصدر BIN GROUP الرسوم بعد مراجعة النطاق.')}</Alert></Grid>}
-
-            <Grid item xs={12} md={4}><TextField fullWidth select label={label('Sports establishment / fitness centre approval', 'موافقة المنشأة الرياضية / مركز اللياقة')} value={gym.sportsEstablishmentApprovalStatus || 'not_available'} onChange={(event) => updateGym({ sportsEstablishmentApprovalStatus: event.target.value })}><MenuItem value="available">{label('Available / will upload', 'متوفرة / سيتم الرفع')}</MenuItem><MenuItem value="pending">{label('Pending', 'قيد الإجراء')}</MenuItem><MenuItem value="not_available">{label('Not available', 'غير متوفرة')}</MenuItem></TextField></Grid>
-            <Grid item xs={12} md={4}><TextField fullWidth select label={label('Insurance', 'التأمين')} value={gym.insuranceStatus || 'not_available'} onChange={(event) => updateGym({ insuranceStatus: event.target.value })}><MenuItem value="available">{label('Available / will upload', 'متوفر / سيتم الرفع')}</MenuItem><MenuItem value="pending">{label('Pending', 'قيد الإجراء')}</MenuItem><MenuItem value="not_available">{label('Not available', 'غير متوفر')}</MenuItem></TextField></Grid>
-            <Grid item xs={12} md={4}><TextField fullWidth select label={label('Floor plan', 'المخطط')} value={gym.floorPlanStatus || 'not_available'} onChange={(event) => updateGym({ floorPlanStatus: event.target.value })}><MenuItem value="available">{label('Available / will upload', 'متوفر / سيتم الرفع')}</MenuItem><MenuItem value="pending">{label('Pending', 'قيد الإجراء')}</MenuItem><MenuItem value="not_available">{label('Not available', 'غير متوفر')}</MenuItem></TextField></Grid>
-
-            <Grid item xs={12} md={6}><TextField fullWidth label={label('Owner-declared service area (sq ft)', 'مساحة الخدمة المصرح بها من المالك (قدم²)')} value={Number(gym.declaredServiceAreaSqft || active.sqft || 0)} InputProps={{ readOnly: true }} helperText={label('Synced from Measured service area above', 'متزامنة مع مساحة الخدمة المقاسة أعلاه')} /></Grid>
-            <Grid item xs={12} md={6}><TextField fullWidth label={label('BIN GROUP verified service area (after visit)', 'مساحة الخدمة التي تحققت منها BIN GROUP (بعد الزيارة)')} value={Number(gym.verifiedServiceAreaSqft || 0) > 0 ? Number(gym.verifiedServiceAreaSqft) : label('Pending BIN GROUP visit', 'بانتظار زيارة BIN GROUP')} InputProps={{ readOnly: true }} /></Grid>
-          </Grid>
-
-          {gym.scopeMode === 'GYM_WITHIN_PARENT_ASSET' && gym.separateBinScope !== true && <Alert severity="warning" sx={{ mt: 3 }}>{label('Do not create a second Gym price for a parent-property amenity. Remove this Gym card or confirm that BIN GROUP has a separate contracted Gym scope.', 'لا تنشئ سعراً ثانياً للنادي إذا كان مرفقاً تابعاً للعقار الرئيسي. احذف بطاقة النادي أو أكد وجود نطاق تعاقدي مستقل لدى BIN GROUP.')}</Alert>}
-          <Typography variant="caption" sx={{ display: 'block', mt: 2, color: 'rgba(255,255,255,0.55)' }}>{label('Equipment preventive maintenance, specialist wet/recovery care and pool operations are separate scopes. Counts help BIN GROUP survey the workload but never multiply the base property price.', 'الصيانة الوقائية لأجهزة اللياقة والعناية المتخصصة بالمرافق المائية/التعافي وتشغيل المسبح نطاقات منفصلة. تساعد الأعداد BIN GROUP في تقدير عبء العمل لكنها لا تضاعف سعر العقار الأساسي.')}</Typography>
-        </Paper>}
+        <PropertyInventoryPanel property={active} onChange={setProperty} ar={ar} isRTL={isRTL} />
 
         {isMosque && <Paper sx={{ p: { xs: 3, md: 4 }, mt: 4, borderRadius: 6, bgcolor: alpha(binThemeTokens.gold, 0.06), border: `1px solid ${alpha(binThemeTokens.gold, 0.3)}` }}>
           <Typography variant="h5" fontWeight={950} color="#FFF">{label('Mandatory Mosque Operations Profile', 'ملف تشغيل المسجد الإلزامي')}</Typography>
