@@ -11,10 +11,11 @@
  * role: 'owner' | 'broker'
  *
  * Options:
- *   timeoutMs   – max wall-time to wait for the email   (default 60 000)
- *   pollMs      – interval between Gmail polls           (default 4 000)
- *   afterMs     – only consider emails sent AFTER this   (default: now - 5 min)
- *   subjectHint – additional subject keyword to filter   (default undefined)
+ *   timeoutMs     – max wall-time to wait for the email   (default 60 000)
+ *   pollMs        – interval between Gmail polls           (default 4 000)
+ *   afterMs       – only consider emails sent AFTER this   (default: now - 5 min)
+ *   subjectHint   – additional subject keyword to filter   (default undefined)
+ *   correlationId – require this server-issued reference in the message
  */
 
 const OAUTH_TOKEN_URL = 'https://oauth2.googleapis.com/token';
@@ -22,7 +23,7 @@ const GMAIL_BASE_URL = 'https://gmail.googleapis.com/gmail/v1/users/me';
 
 interface GmailMessagePart {
   mimeType?: string;
-  body?: { data?: string };
+  body?: { data?: string; attachmentId?: string };
   parts?: GmailMessagePart[];
 }
 
@@ -93,21 +94,53 @@ function decodeBase64Url(data: string): string {
   }
 }
 
-function collectMessageBody(part: GmailMessagePart | undefined): string {
+async function getAttachmentText(
+  accessToken: string,
+  messageId: string,
+  attachmentId: string,
+): Promise<string> {
+  const url = `${GMAIL_BASE_URL}/messages/${encodeURIComponent(messageId)}/attachments/${encodeURIComponent(attachmentId)}`;
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+
+  if (!res.ok) {
+    throw new Error(`[gmail-otp-reader] attachment read failed: ${res.status} ${res.statusText}`);
+  }
+
+  const json: { data?: string } = await res.json();
+  return json.data ? decodeBase64Url(json.data) : '';
+}
+
+async function collectMessageBody(
+  part: GmailMessagePart | undefined,
+  accessToken: string,
+  messageId: string,
+): Promise<string> {
   if (!part) return '';
   const chunks: string[] = [];
   const mimeType = String(part.mimeType ?? '').toLowerCase();
+  const isTextPart = !mimeType || mimeType.startsWith('text/');
   const bodyData = String(part.body?.data ?? '');
+  const attachmentId = String(part.body?.attachmentId ?? '');
 
   // OTP mail is currently plain text, but parsing both text/plain and text/html
   // keeps the evidence reader resilient if the transactional template changes.
-  if (bodyData && (!mimeType || mimeType.startsWith('text/'))) {
+  if (bodyData && isTextPart) {
     const decoded = decodeBase64Url(bodyData);
     if (decoded) chunks.push(decoded);
   }
 
+  // Gmail may move even a text MIME body behind body.attachmentId. Fetching the
+  // attachment-backed text prevents format=full from becoming snippet-only in
+  // practice for larger or provider-transformed transactional messages.
+  if (attachmentId && isTextPart) {
+    const decodedAttachment = await getAttachmentText(accessToken, messageId, attachmentId);
+    if (decodedAttachment) chunks.push(decodedAttachment);
+  }
+
   for (const child of part.parts ?? []) {
-    const decodedChild = collectMessageBody(child);
+    const decodedChild = await collectMessageBody(child, accessToken, messageId);
     if (decodedChild) chunks.push(decodedChild);
   }
 
@@ -120,7 +153,7 @@ async function getMessageContent(
 ): Promise<{ content: string; internalDate: string }> {
   // Fetch the full MIME payload. Gmail snippets are intentionally abbreviated
   // and are not a reliable source of a security code for production evidence.
-  const url = `${GMAIL_BASE_URL}/messages/${messageId}?format=full`;
+  const url = `${GMAIL_BASE_URL}/messages/${encodeURIComponent(messageId)}?format=full`;
   const res = await fetch(url, {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
@@ -131,7 +164,7 @@ async function getMessageContent(
 
   const json: GmailMessagePayload = await res.json();
   const snippet = String(json.snippet ?? '');
-  const body = collectMessageBody(json.payload);
+  const body = await collectMessageBody(json.payload, accessToken, messageId);
   return {
     content: [snippet, body].filter(Boolean).join('\n'),
     internalDate: String(json.internalDate ?? '0'),
@@ -160,6 +193,8 @@ export interface GmailOtpOptions {
   afterMs?: number;
   /** Optional extra keyword to narrow the Gmail search query. */
   subjectHint?: string;
+  /** Optional server-issued reference that must occur in the matching email. */
+  correlationId?: string;
 }
 
 /**
@@ -169,6 +204,8 @@ export interface GmailOtpOptions {
  * Freshness is enforced by Gmail internalDate instead of read/unread state.
  * A mail client, mobile notification, or inbox rule may mark a legitimate OTP
  * as read before CI polls it; read state must therefore never be a launch gate.
+ * When a correlationId is supplied, a candidate must also contain the exact
+ * server-issued reference so a prior fresh OTP can never satisfy a later challenge.
  *
  * @param role - 'owner' | 'broker'
  * @throws if credentials are missing or no OTP is found before timeout
@@ -194,6 +231,7 @@ export async function getLatestOtp(
   const timeoutMs = options.timeoutMs ?? 60_000;
   const pollMs = options.pollMs ?? 4_000;
   const afterMs = options.afterMs ?? (Date.now() - 5 * 60 * 1_000);
+  const correlationId = String(options.correlationId ?? '').trim();
 
   // Do not filter on is:unread. Freshness is already fail-closed below and a
   // real OTP can become read before CI observes it.
@@ -210,6 +248,7 @@ export async function getLatestOtp(
       const accessToken = await exchangeRefreshToken(clientId, clientSecret, refreshToken);
       const messages = await listMessages(accessToken, gmailQuery);
       let freshMessageCount = 0;
+      let correlatedMessageCount = 0;
 
       for (const msg of messages) {
         const { content, internalDate } = await getMessageContent(accessToken, msg.id);
@@ -222,6 +261,9 @@ export async function getLatestOtp(
         }
 
         freshMessageCount += 1;
+        if (correlationId && !content.includes(correlationId)) continue;
+        correlatedMessageCount += 1;
+
         const code = extractOtpCode(content);
         if (code) {
           console.log(`[gmail-otp-reader] OTP retrieved for ${PREFIX} (message ${msg.id})`);
@@ -229,7 +271,7 @@ export async function getLatestOtp(
         }
       }
 
-      lastError = `No OTP found in ${freshMessageCount} fresh message(s) out of ${messages.length} matching message(s) — will retry`;
+      lastError = `No OTP found in ${correlatedMessageCount} correlated fresh message(s) out of ${freshMessageCount} fresh / ${messages.length} matching message(s) — will retry`;
     } catch (err) {
       lastError = err instanceof Error ? err.message : String(err);
     }
