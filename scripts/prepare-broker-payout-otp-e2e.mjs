@@ -40,10 +40,34 @@ const commissionId = `e2e-live-broker-commission-${safeId}`;
 const submissionHash = crypto.createHash('sha256').update(`broker-e2e-private-kyc:${projectId}:${brokerUid}`).digest('hex');
 const now = admin.firestore.FieldValue.serverTimestamp();
 
-const challengeSnapshot = await db.collection('broker_payout_otps')
-  .where('uid', '==', brokerUid)
-  .limit(100)
-  .get();
+const [challengeSnapshot, commissionSnapshot] = await Promise.all([
+  db.collection('broker_payout_otps')
+    .where('uid', '==', brokerUid)
+    .limit(100)
+    .get(),
+  db.collection('broker_commissions')
+    .where('brokerId', '==', brokerUid)
+    .limit(100)
+    .get(),
+]);
+
+if (commissionSnapshot.size === 100) {
+  throw new Error('Refusing Broker payout fixture reset because E2E commission cleanup would be incomplete.');
+}
+
+// A previous protected evidence run can be interrupted after creating its
+// deterministic commission but before its own cleanup executes. Remove only
+// records that are provably owned by this dedicated E2E Broker/evidence chain;
+// never delete an ordinary Broker commission.
+const staleEvidenceCommissions = commissionSnapshot.docs.filter((document) => {
+  if (document.id === commissionId) return false;
+  const value = document.data() || {};
+  const evidenceType = String(value.e2eEvidenceType || '');
+  return value.e2eLaunchSeed === true ||
+    evidenceType === 'broker-contract-to-payout-production-proof' ||
+    document.id.startsWith('commission_e2e_broker_contract_') ||
+    document.id.startsWith('e2e-live-broker-commission-');
+});
 
 const batch = db.batch();
 batch.set(profileRef, {
@@ -106,6 +130,7 @@ batch.set(db.collection('broker_commissions').doc(commissionId), {
   createdAt: now,
 }, { merge: true });
 
+for (const document of staleEvidenceCommissions) batch.delete(document.ref);
 batch.delete(db.collection('broker_payout_otp_rate_limits').doc(brokerUid));
 for (const challenge of challengeSnapshot.docs) {
   const status = String(challenge.data().status || '').toUpperCase();
@@ -113,4 +138,7 @@ for (const challenge of challengeSnapshot.docs) {
 }
 
 await batch.commit();
-console.log(`Prepared Broker payout OTP E2E fixture for ${brokerEmail}; private KYC ready; cleared ${challengeSnapshot.size} challenge candidate(s).`);
+console.log(
+  `Prepared Broker payout OTP E2E fixture for ${brokerEmail}; private KYC ready; ` +
+  `cleared ${staleEvidenceCommissions.length} stale E2E commission(s) and ${challengeSnapshot.size} challenge candidate(s).`,
+);
