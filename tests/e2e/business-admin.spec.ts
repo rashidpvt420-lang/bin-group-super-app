@@ -743,8 +743,19 @@ async function createStaffThroughUi(page: Page, name: string, email: string, rol
 }
 
 async function patchTechnicianReadiness(uid: string) {
+  const onboardingChecklist = {
+    profileComplete: true,
+    documentsComplete: true,
+    contractComplete: true,
+    deviceReady: true,
+    activationApproved: true,
+  };
   const readiness = {
     status: 'ACTIVE',
+    suspended: false,
+    onboardingStage: 'ACTIVE',
+    onboardingComplete: true,
+    onboardingChecklist,
     approvalStatus: 'APPROVED',
     medicalCardStatus: 'VALID',
     medicalCardExpiry: admin.firestore.Timestamp.fromMillis(Date.now() + 365 * 24 * 60 * 60 * 1000),
@@ -763,9 +774,26 @@ async function patchTechnicianReadiness(uid: string) {
     e2eRunId: RUN_ID,
     updatedAt: serverTimestamp(),
   };
+  const authUser = await admin.auth().getUser(uid);
   await Promise.all([
+    admin.auth().updateUser(uid, { disabled: false }),
+    admin.auth().setCustomUserClaims(uid, { ...(authUser.customClaims || {}), suspended: false }),
     admin.firestore().collection('users').doc(uid).set(readiness, { merge: true }),
     admin.firestore().collection('technicians').doc(uid).set({ role: 'technician', displayName: TECHNICIAN_NAME, ...readiness }, { merge: true }),
+    admin.firestore().collection('staffAccess').doc(uid).set({
+      active: true,
+      suspended: false,
+      status: 'ACTIVE',
+      onboardingStage: 'ACTIVE',
+      updatedAt: serverTimestamp(),
+    }, { merge: true }),
+    admin.firestore().collection('hrProfiles').doc(uid).set({
+      status: 'ACTIVE',
+      suspended: false,
+      onboardingStage: 'ACTIVE',
+      onboardingComplete: true,
+      updatedAt: serverTimestamp(),
+    }, { merge: true }),
   ]);
 }
 
