@@ -155,17 +155,42 @@ const firstPresent = (...values: unknown[]) => values.find(
   (value) => value !== undefined && value !== null && value !== "",
 );
 
+function authoritativeScheduleSource(contract: Record<string, any>) {
+  const finalSnapshot = contract.finalVerifiedQuoteSnapshot;
+  const finalHash = text(contract.finalVerifiedQuoteHash);
+  const signedPreInspectionHash = text(contract.signedPreInspectionQuoteHash);
+  const repriced = contract.quoteRepricedAfterInspection === true;
+  if (!repriced) return null;
+  if (
+    !finalSnapshot ||
+    typeof finalSnapshot !== "object" ||
+    !/^[a-f0-9]{64}$/i.test(finalHash) ||
+    !/^[a-f0-9]{64}$/i.test(signedPreInspectionHash) ||
+    upper(contract.quoteVerificationState) !== "FINAL_VERIFIED_AFTER_ALL_SITE_VISITS" ||
+    text(finalSnapshot.quoteHash) !== finalHash
+  ) {
+    throw new OwnerActivationPaymentPolicyError(
+      "INVALID_LOCKED_SCHEDULE",
+      "The post-inspection final verified quote evidence is incomplete or invalid.",
+    );
+  }
+  return finalSnapshot as Record<string, any>;
+}
+
 export function resolveLockedOwnerActivationSchedule(
   contract: Record<string, any>,
   submittedAmount: unknown,
 ): LockedOwnerActivationSchedule {
+  const finalSchedule = authoritativeScheduleSource(contract);
   const annualValue = firstPresent(
+    finalSchedule?.annualContractValue,
     contract.quoteSnapshot?.annualContractValue,
     contract.commercialSchedule?.annualContractValue,
     contract.paymentSchedule?.annualContractValue,
     contract.annualContractValue,
   );
   const lockedDeposit = firstPresent(
+    finalSchedule?.activationDeposit,
     contract.quoteSnapshot?.activationDeposit,
     contract.commercialSchedule?.mobilizationAmount,
     contract.paymentSchedule?.mobilizationAmount,
