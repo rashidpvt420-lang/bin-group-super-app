@@ -11,6 +11,15 @@ test('production OTP reader is freshness-bound and independent of Gmail read sta
   assert.match(readerSource, /freshMessageCount/);
 });
 
+test('production OTP reader searches Gmail Spam and Trash without weakening freshness', () => {
+  assert.match(readerSource, /includeSpamTrash=true/);
+  assert.match(readerSource, /freshSpamMessageCount/);
+  assert.match(readerSource, /freshTrashMessageCount/);
+  assert.match(readerSource, /mailboxLocation\(labelIds\)/);
+  assert.match(readerSource, /correlationId && !content\.includes\(correlationId\)/);
+  assert.doesNotMatch(readerSource, /return\s+.*stale/i);
+});
+
 test('production OTP reader inspects full inline and attachment-backed Gmail MIME text', () => {
   assert.match(readerSource, /format=full/);
   assert.match(readerSource, /collectMessageBody\(json\.payload, accessToken, messageId\)/);
