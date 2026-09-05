@@ -75,6 +75,7 @@ export interface PropertyData {
   paymentPlan?: 'annual' | 'quarterly' | 'monthly';
   titleDeedStatus?: 'uploaded' | 'queued' | 'scanning' | 'extracted' | 'verification_pending' | 'verified' | 'mismatch' | 'manual_review_required' | 'rejected';
   mosqueProfile?: Record<string, any>;
+  gymProfile?: Record<string, any>;
   geo?: {
     point?: { latitude: number; longitude: number };
     lat: number;
@@ -178,9 +179,32 @@ const isMosqueAsset = (property: PropertyData) => {
 
 const BED_PRICED_TYPES = new Set(['Labour Camp', 'Staff Accommodation']);
 
+const zeroClientQuote = (reason: string): QuoteOutput => ({
+  baseQuote: 0,
+  zoneAdjustedQuote: 0,
+  emirateAdjustedQuote: 0,
+  complexityPremium: 0,
+  compliancePremium: 0,
+  addOnTotal: 0,
+  discount: 0,
+  annualTotal: 0,
+  quarterlyPayment: 0,
+  monthlyPayment: 0,
+  mobilizationFee: 0,
+  recommendedTier: 'standard',
+  pricingExplanation: [reason],
+  riskFlags: [reason],
+});
+
 const calculatePropertyAnnualValue = (property: PropertyData, selectedAddOns: string[]): QuoteOutput => {
   const mosqueProfile = property.mosqueProfile || {};
+  const gymProfile = property.gymProfile || {};
   const isMosque = isMosqueAsset(property);
+  const isGym = property.propertyType === 'Gym / Fitness Centre';
+  if (isGym && String(gymProfile.scopeMode || '').toUpperCase() === 'GYM_WITHIN_PARENT_ASSET' && gymProfile.separateBinScope !== true) {
+    return zeroClientQuote('Gym is included in its parent asset and has no separate BIN GROUP pricing scope.');
+  }
+
   const assetClassId = isMosque ? 'mosque_fm' : (resolveAssetClassIdForPropertyType(property.propertyType, property.assetGrade) || '');
   const emirateMap: Record<string, string> = {
     Dubai: 'dubai', 'Abu Dhabi': 'abuDhabi', Sharjah: 'sharjah', Ajman: 'ajman',
@@ -189,22 +213,35 @@ const calculatePropertyAnnualValue = (property: PropertyData, selectedAddOns: st
   };
   const units = isMosque ? Number(mosqueProfile.maxWorshipperCapacity) || property.units : property.units;
   const beds = BED_PRICED_TYPES.has(property.propertyType) ? Number(property.beds || property.units || property.rooms || 0) : Number(property.beds || 0);
+  const gymArea = Number(gymProfile.verifiedServiceAreaSqft || gymProfile.declaredServiceAreaSqft || property.sqft || 0);
+
+  let annualRent = property.annualRent;
+  let annualRevenue = property.annualRevenue;
+  if (isGym) {
+    if (gymProfile.pmPricingBasis === 'managed_operating_revenue') annualRent = undefined;
+    if (gymProfile.pmPricingBasis === 'annual_rent') annualRevenue = undefined;
+    if (gymProfile.pmPricingBasis === 'flat_custom') {
+      annualRent = undefined;
+      annualRevenue = undefined;
+    }
+  }
+
   return calculateUaeQuote2026({
     assetClassId,
     emirate: emirateMap[property.emirate] || property.emirate || '',
     zone: property.zone || 'B',
     contractType: property.strategy === 'pm_only' || property.strategy === 'rent' ? 'PM_ONLY'
       : property.strategy === 'fm_only' || property.strategy === 'fm' ? 'FM_ONLY' : 'BOTH',
-    sqft: isMosque ? Number(mosqueProfile.grossFloorAreaSqft) || property.sqft : property.sqft,
+    sqft: isMosque ? Number(mosqueProfile.grossFloorAreaSqft) || property.sqft : isGym ? gymArea : property.sqft,
     units,
     beds,
-    annualRent: property.annualRent,
-    annualRevenue: property.annualRevenue,
+    annualRent,
+    annualRevenue,
     propertyAge: isMosque ? Number(mosqueProfile.propertyAgeYears) || property.age : property.age,
     floors: property.floors,
     lifts: property.lifts,
-    hasPool: property.pool,
-    hasGym: property.gym,
+    hasPool: isGym ? Boolean(gymProfile.swimmingPool || property.pool) : property.pool,
+    hasGym: isGym || property.gym,
     hasCentralHVAC: isMosque ? true : property.hvac,
     hasDistrictCooling: property.districtCooling,
     hasCivilDefenseSystem: property.fireAlarm || property.firePump,
@@ -218,6 +255,9 @@ const calculatePropertyAnnualValue = (property: PropertyData, selectedAddOns: st
     hvacCount: isMosque ? Number(mosqueProfile.hvacUnitsCount || property.hvacCount || 0) : property.hvacCount,
     offices: property.offices,
     shops: property.shops,
+    gymComplexity: isGym ? (gymProfile.verifiedComplexity || gymProfile.suggestedComplexity || 'STANDARD_DRY') : undefined,
+    gymOpeningSchedule: isGym ? (gymProfile.openingSchedule || 'STANDARD_HOURS') : undefined,
+    gymEquipmentCount: isGym ? Number(gymProfile.equipmentCount || 0) : 0,
   });
 };
 
