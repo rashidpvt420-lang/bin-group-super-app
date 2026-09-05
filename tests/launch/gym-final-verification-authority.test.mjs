@@ -9,6 +9,7 @@ const inspectionDialog = read('apps/admin-panel/src/components/admin/OwnerInspec
 const proofUpload = read('src/components/onboarding/ProofUploadStep.tsx');
 const finalSubmission = read('src/components/onboarding/InspectionSubmissionStep.tsx');
 const serverQuote = read('functions/ownerOnboardingQuote.ts');
+const paymentPolicy = read('functions/ownerActivationPaymentPolicy.ts');
 
 test('Gym inspections are bound to the Owner-declared Gym profile before the visit', () => {
   assert.match(inspectionLink, /propertyType/);
@@ -51,6 +52,25 @@ test('signed pre-visit quote evidence is preserved instead of silently replacing
   assert.doesNotMatch(inspectionCompletion, /batch\.set\(contractRef,[\s\S]{0,2000}quoteHash:\s*finalQuote\.quoteHash/);
   assert.doesNotMatch(inspectionCompletion, /batch\.set\(paymentRef,[\s\S]{0,2000}quoteHash:\s*finalQuote\.quoteHash/);
   assert.match(serverQuote, /quoteHash/);
+});
+
+test('Owner payment approval resolves the trusted final verified schedule after inspection', () => {
+  assert.match(paymentPolicy, /function authoritativeScheduleSource/);
+  assert.match(paymentPolicy, /contract\.quoteRepricedAfterInspection === true/);
+  assert.match(paymentPolicy, /contract\.finalVerifiedQuoteSnapshot/);
+  assert.match(paymentPolicy, /contract\.finalVerifiedQuoteHash/);
+  assert.match(paymentPolicy, /contract\.signedPreInspectionQuoteHash/);
+  assert.match(paymentPolicy, /FINAL_VERIFIED_AFTER_ALL_SITE_VISITS/);
+  assert.match(paymentPolicy, /text\(finalSnapshot\.quoteHash\) !== finalHash/);
+  assert.ok(
+    paymentPolicy.indexOf('finalSchedule?.annualContractValue') < paymentPolicy.indexOf('contract.quoteSnapshot?.annualContractValue'),
+    'final verified annual schedule must outrank the original pre-visit quote snapshot after trusted repricing',
+  );
+  assert.ok(
+    paymentPolicy.indexOf('finalSchedule?.activationDeposit') < paymentPolicy.indexOf('contract.quoteSnapshot?.activationDeposit'),
+    'final verified 15% schedule must outrank the original pre-visit quote snapshot after trusted repricing',
+  );
+  assert.match(paymentPolicy, /expectedMobilization = normalizeAedMoney\(annualContractValue \* 0\.15\)/);
 });
 
 test('verified Gym facts persist into canonical property and contract snapshots', () => {
