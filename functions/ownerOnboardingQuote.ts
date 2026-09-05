@@ -8,7 +8,7 @@ import {
 import { UAE_PRICING_MATRIX_2026 } from "./pricing/uaePricingMatrix2026";
 import { normalizeAedMoney } from "./shared/aedMoney";
 
-const QUOTE_VERSION = "uae-owner-onboarding-2026-v3-server-authority";
+const QUOTE_VERSION = "uae-owner-onboarding-2026-v4-gym-server-authority";
 const QUOTE_TTL_MS = 72 * 60 * 60 * 1000;
 const VALID_CONTRACT_MODES = new Set(["FM_ONLY", "PM_ONLY", "BOTH"]);
 const BED_PRICED_ASSET_IDS = new Set(["lab-camp", "staff-accom"]);
@@ -112,6 +112,18 @@ function safePaymentPlan(value: unknown): QuoteInput["paymentPlan"] {
   return "annual";
 }
 
+function safeGymComplexity(value: unknown): QuoteInput["gymComplexity"] {
+  const band = text(value).toUpperCase();
+  if (band === "ENHANCED" || band === "WET_RECOVERY") return band;
+  return "STANDARD_DRY";
+}
+
+function safeGymOpeningSchedule(value: unknown): QuoteInput["gymOpeningSchedule"] {
+  const schedule = text(value).toUpperCase();
+  if (schedule === "EXTENDED_HOURS" || schedule === "24_7") return schedule;
+  return "STANDARD_HOURS";
+}
+
 function quoteInputForProperty(
   property: PropertyInput,
   selectedAddOns: string[],
@@ -121,8 +133,20 @@ function quoteInputForProperty(
   const mosqueProfile = property.mosqueProfile && typeof property.mosqueProfile === "object"
     ? property.mosqueProfile as PropertyInput
     : {};
+  const gymProfile = property.gymProfile && typeof property.gymProfile === "object"
+    ? property.gymProfile as PropertyInput
+    : {};
   const isMosque = assetClassId === "mosque_fm";
+  const isGym = assetClassId === "gym-fitness-centre";
   const isBedPriced = BED_PRICED_ASSET_IDS.has(assetClassId);
+
+  if (isGym) {
+    const scopeMode = text(gymProfile.scopeMode || "GYM_STANDALONE").toUpperCase();
+    if (scopeMode === "GYM_WITHIN_PARENT_ASSET" && gymProfile.separateBinScope !== true) {
+      throw new Error("Gym within a parent asset is not separately priced unless a separate BIN GROUP gym scope is confirmed.");
+    }
+  }
+
   const matrixClass = UAE_PRICING_MATRIX_2026.assetClasses.find((asset) => asset.id === assetClassId);
   const pricingDriver = isMosque ? "sqft+capacity" : text(matrixClass?.pricingUnit);
   if (!pricingDriver) throw new Error(`Pricing class '${assetClassId}' has no configured pricing driver.`);
@@ -134,6 +158,26 @@ function quoteInputForProperty(
     ? number(property.beds || property.bedrooms || property.units || property.rooms)
     : number(property.beds);
 
+  let annualRent = number(property.annualRent);
+  let annualRevenue = number(property.annualRevenue);
+  if (isGym && (mode === "PM_ONLY" || mode === "BOTH")) {
+    const pmBasis = text(gymProfile.pmPricingBasis).toLowerCase();
+    if (pmBasis === "flat_custom") {
+      throw new Error("Gym flat/custom Property Management pricing requires a BIN GROUP manual contract quote.");
+    }
+    if (pmBasis === "managed_operating_revenue") {
+      annualRent = 0;
+    } else if (pmBasis === "annual_rent") {
+      annualRevenue = 0;
+    } else if (annualRent > 0 && annualRevenue > 0) {
+      throw new Error("Gym PM pricing basis must explicitly select annual contracted rent or managed operating revenue.");
+    }
+  }
+
+  const gymArea = isGym
+    ? number(gymProfile.verifiedServiceAreaSqft || gymProfile.declaredServiceAreaSqft || property.sqft)
+    : number(property.sqft);
+
   return {
     assetClassId,
     pricingDriver,
@@ -142,16 +186,16 @@ function quoteInputForProperty(
       emirate: text(property.emirate),
       zone: safeZone(property.zone),
       contractType: mode,
-      sqft: isMosque ? number(mosqueProfile.grossFloorAreaSqft || property.sqft) : number(property.sqft),
+      sqft: isMosque ? number(mosqueProfile.grossFloorAreaSqft || property.sqft) : gymArea,
       units,
       beds,
-      annualRent: number(property.annualRent),
-      annualRevenue: number(property.annualRevenue),
+      annualRent,
+      annualRevenue,
       propertyAge: isMosque ? number(mosqueProfile.propertyAgeYears || property.age) : number(property.age),
       floors: number(property.floors),
       lifts: number(property.lifts),
-      hasPool: property.pool === true,
-      hasGym: property.gym === true,
+      hasPool: isGym ? gymProfile.swimmingPool === true || property.pool === true : property.pool === true,
+      hasGym: isGym || property.gym === true,
       hasCentralHVAC: isMosque ? true : property.hvac === true,
       hasDistrictCooling: property.districtCooling === true,
       hasCivilDefenseSystem: property.fireAlarm === true || property.firePump === true,
@@ -167,6 +211,9 @@ function quoteInputForProperty(
       hvacCount: isMosque ? number(mosqueProfile.hvacUnitsCount || property.hvacCount) : number(property.hvacCount),
       offices: number(property.offices),
       shops: number(property.shops),
+      gymComplexity: isGym ? safeGymComplexity(gymProfile.verifiedComplexity || gymProfile.suggestedComplexity) : undefined,
+      gymOpeningSchedule: isGym ? safeGymOpeningSchedule(gymProfile.openingSchedule) : undefined,
+      gymEquipmentCount: isGym ? number(gymProfile.equipmentCount) : 0,
     },
   };
 }

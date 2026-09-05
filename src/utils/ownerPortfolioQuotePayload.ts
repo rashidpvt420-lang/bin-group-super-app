@@ -20,6 +20,8 @@ const isMosqueAsset = (property: PropertyData) => {
   return descriptor.includes('mosque') || descriptor.includes('masjid') || descriptor.includes('religious_facility') || descriptor.includes('mosque_fm');
 };
 
+const isGymAsset = (property: PropertyData) => property.propertyType === 'Gym / Fitness Centre';
+
 const assetClassFor = (property: PropertyData, isMosque: boolean) => {
   if (isMosque) return 'mosque_fm';
   const assetClassId = resolveAssetClassIdForPropertyType(property.propertyType, property.assetGrade);
@@ -29,16 +31,45 @@ const assetClassFor = (property: PropertyData, isMosque: boolean) => {
   return assetClassId;
 };
 
+const gymComplexity = (value: unknown): QuoteInput['gymComplexity'] => {
+  const band = String(value || '').trim().toUpperCase();
+  return band === 'ENHANCED' || band === 'WET_RECOVERY' ? band : 'STANDARD_DRY';
+};
+
+const gymSchedule = (value: unknown): QuoteInput['gymOpeningSchedule'] => {
+  const schedule = String(value || '').trim().toUpperCase();
+  return schedule === 'EXTENDED_HOURS' || schedule === '24_7' ? schedule : 'STANDARD_HOURS';
+};
+
 export const ownerPortfolioQuoteInputForProperty = (
   property: PropertyData,
   selectedAddOns: string[],
 ): QuoteInput => {
   const mosqueProfile = property.mosqueProfile || {};
+  const gymProfile = property.gymProfile || {};
   const isMosque = isMosqueAsset(property);
+  const isGym = isGymAsset(property);
   const assetClassId = assetClassFor(property, isMosque);
   const beds = BED_PRICED_TYPES.has(property.propertyType)
     ? Number(property.beds || property.units || property.rooms || property.bedrooms || 0)
     : Number(property.beds || 0);
+
+  if (isGym && String(gymProfile.scopeMode || '').toUpperCase() === 'GYM_WITHIN_PARENT_ASSET' && gymProfile.separateBinScope !== true) {
+    throw new Error('Gym within a parent asset is not separately priced unless a separate BIN GROUP gym scope is confirmed.');
+  }
+
+  let annualRent = property.annualRent;
+  let annualRevenue = property.annualRevenue;
+  if (isGym) {
+    if (gymProfile.pmPricingBasis === 'managed_operating_revenue') annualRent = undefined;
+    if (gymProfile.pmPricingBasis === 'annual_rent') annualRevenue = undefined;
+    if (gymProfile.pmPricingBasis === 'flat_custom') {
+      annualRent = undefined;
+      annualRevenue = undefined;
+    }
+  }
+
+  const gymArea = Number(gymProfile.verifiedServiceAreaSqft || gymProfile.declaredServiceAreaSqft || property.sqft || 0);
 
   return {
     assetClassId,
@@ -49,16 +80,16 @@ export const ownerPortfolioQuoteInputForProperty = (
       : property.strategy === 'fm_only' || property.strategy === 'fm'
         ? 'FM_ONLY'
         : 'BOTH',
-    sqft: isMosque ? Number(mosqueProfile.grossFloorAreaSqft) || property.sqft : property.sqft,
+    sqft: isMosque ? Number(mosqueProfile.grossFloorAreaSqft) || property.sqft : isGym ? gymArea : property.sqft,
     units: isMosque ? Number(mosqueProfile.maxWorshipperCapacity) || property.rooms || property.units : property.units,
     beds,
-    annualRent: property.annualRent,
-    annualRevenue: property.annualRevenue,
+    annualRent,
+    annualRevenue,
     propertyAge: isMosque ? Number(mosqueProfile.propertyAgeYears) || property.age : property.age,
     floors: property.floors,
     lifts: property.lifts,
-    hasPool: property.pool,
-    hasGym: property.gym,
+    hasPool: isGym ? Boolean(gymProfile.swimmingPool || property.pool) : property.pool,
+    hasGym: isGym || property.gym,
     hasCentralHVAC: isMosque ? true : property.hvac,
     hasDistrictCooling: property.districtCooling,
     hasCivilDefenseSystem: property.fireAlarm || property.firePump,
@@ -72,6 +103,9 @@ export const ownerPortfolioQuoteInputForProperty = (
     hvacCount: isMosque ? Number(mosqueProfile.hvacUnitsCount || property.hvacCount || 0) : property.hvacCount,
     offices: property.offices,
     shops: property.shops,
+    gymComplexity: isGym ? gymComplexity(gymProfile.verifiedComplexity || gymProfile.suggestedComplexity) : undefined,
+    gymOpeningSchedule: isGym ? gymSchedule(gymProfile.openingSchedule) : undefined,
+    gymEquipmentCount: isGym ? Number(gymProfile.equipmentCount || 0) : 0,
   };
 };
 

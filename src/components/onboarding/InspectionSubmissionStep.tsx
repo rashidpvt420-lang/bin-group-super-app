@@ -3,7 +3,7 @@ import {
   Alert, Box, Button, CircularProgress, Container, Dialog, DialogActions, DialogContent,
   DialogTitle, Paper, Stack, TextField, Typography,
 } from '@mui/material';
-import { Building2, CheckCircle, ClipboardCheck, MapPinned, ShieldCheck, WalletCards } from 'lucide-react';
+import { Building2, CheckCircle, ClipboardCheck, Dumbbell, MapPinned, ShieldCheck, WalletCards } from 'lucide-react';
 import { onAuthStateChanged, signInWithEmailAndPassword, type User as FirebaseUser } from 'firebase/auth';
 import { auth, functions, httpsCallable } from '../../lib/firebase';
 import { useOnboardingStore } from '../../store/onboardingStore';
@@ -12,7 +12,8 @@ import { binThemeTokens } from '../../theme/binGroupTheme';
 import { clearStagedFiles, getStagedFile } from '../../lib/onboardingDb';
 import { formatAED } from '../../utils/formatters';
 
-type ProofKey = 'propertyProof' | 'emiratesId' | 'passport' | 'tradeLicense' | 'tenancySupport';
+type ProofKey = 'propertyProof' | 'emiratesId' | 'passport' | 'tradeLicense' | 'tenancySupport' | 'gymSportsApproval' | 'gymInsurance' | 'gymFloorPlan';
+type ProofMeta = { name: string; size: number; type: string } | null;
 type UploadedDocument = { downloadUrl?: string; storagePath?: string };
 type SubmissionResult = {
   intakeId: string;
@@ -23,12 +24,15 @@ type SubmissionResult = {
   idempotent?: boolean;
 };
 
-const documents: Array<{ key: ProofKey; en: string; ar: string }> = [
+const documents: Array<{ key: ProofKey; en: string; ar: string; gymOnly?: boolean }> = [
   { key: 'propertyProof', en: 'Property Proof', ar: 'إثبات العقار' },
   { key: 'emiratesId', en: 'Emirates ID', ar: 'الهوية الإماراتية' },
   { key: 'passport', en: 'Passport', ar: 'جواز السفر' },
   { key: 'tradeLicense', en: 'Trade Licence', ar: 'الرخصة التجارية' },
   { key: 'tenancySupport', en: 'Tenancy Support', ar: 'مستندات إيجارية داعمة' },
+  { key: 'gymSportsApproval', en: 'Gym Sports Establishment / Fitness Centre Approval', ar: 'موافقة المنشأة الرياضية / مركز اللياقة', gymOnly: true },
+  { key: 'gymInsurance', en: 'Gym Insurance Evidence', ar: 'إثبات تأمين النادي', gymOnly: true },
+  { key: 'gymFloorPlan', en: 'Gym Floor Plan', ar: 'مخطط النادي الرياضي', gymOnly: true },
 ];
 
 const fileToBase64 = (file: File): Promise<string> => new Promise((resolve, reject) => {
@@ -61,7 +65,16 @@ export default function InspectionSubmissionStep({ onBack }: { onBack: () => voi
   const activationDeposit = Number(serverQuote?.activationDeposit || serverQuote?.mobilisationDeposit || Math.round(annualValue * 0.15));
   const effectiveIntakeId = intakeId || onboardingSessionId || ownerAccount?.uid || '';
   const ownerEmail = ownerAccount?.email || companyProfile.email || '';
-  const readyDocuments = useMemo(() => documents.filter((item) => Boolean(proofDocuments[item.key])), [proofDocuments]);
+  const proofMap = proofDocuments as unknown as Record<ProofKey, ProofMeta>;
+  const gymProperties = useMemo(() => properties.filter((property) => property.propertyType === 'Gym / Fitness Centre'), [properties]);
+  const hasGym = gymProperties.length > 0;
+  const visibleDocuments = useMemo(() => documents.filter((item) => !item.gymOnly || hasGym), [hasGym]);
+  const readyDocuments = useMemo(() => visibleDocuments.filter((item) => Boolean(proofMap[item.key])), [proofMap, visibleDocuments]);
+  const gymRequired = {
+    gymSportsApproval: gymProperties.some((property) => property.gymProfile?.sportsEstablishmentApprovalStatus === 'available'),
+    gymInsurance: gymProperties.some((property) => property.gymProfile?.insuranceStatus === 'available'),
+    gymFloorPlan: gymProperties.some((property) => property.gymProfile?.floorPlanStatus === 'available'),
+  };
 
   const waitForCurrentUser = (timeoutMs = 8000): Promise<FirebaseUser | null> => new Promise((resolve) => {
     if (auth.currentUser) { resolve(auth.currentUser); return; }
@@ -89,6 +102,9 @@ export default function InspectionSubmissionStep({ onBack }: { onBack: () => voi
     if (!serverQuote?.quoteHash || !serverQuote?.quotedAtMs || annualValue <= 0 || activationDeposit <= 0) throw new Error(copy('The signed server quotation is missing. Return to the Contract page and refresh it.', 'عرض الخادم الموقع غير موجود. ارجع إلى صفحة العقد وحدّثه.'));
     const hasIndividualIdentity = Boolean(proofDocuments.emiratesId && proofDocuments.passport);
     if (!proofDocuments.propertyProof || (!hasIndividualIdentity && !proofDocuments.tradeLicense)) throw new Error(copy('Property proof and Owner identity documents are required.', 'يلزم إثبات العقار ومستندات هوية المالك.'));
+    if (gymRequired.gymSportsApproval && !proofMap.gymSportsApproval) throw new Error(copy('Upload the Gym sports-establishment / fitness-centre approval marked as available.', 'ارفع موافقة المنشأة الرياضية / مركز اللياقة التي تم تحديدها كمتوفرة.'));
+    if (gymRequired.gymInsurance && !proofMap.gymInsurance) throw new Error(copy('Upload the Gym insurance evidence marked as available.', 'ارفع إثبات تأمين النادي الذي تم تحديده كمتوفر.'));
+    if (gymRequired.gymFloorPlan && !proofMap.gymFloorPlan) throw new Error(copy('Upload the Gym floor plan marked as available.', 'ارفع مخطط النادي الذي تم تحديده كمتوفر.'));
   };
 
   const uploadDocuments = async (user: FirebaseUser) => {
@@ -180,13 +196,13 @@ export default function InspectionSubmissionStep({ onBack }: { onBack: () => voi
           <CheckCircle size={62} color="#4ADE80" />
           <Typography variant="h4" fontWeight={950} color="#FFF" sx={{ mt: 2 }}>{copy('Five-page application submitted', 'تم إرسال الطلب المكون من خمس صفحات')}</Typography>
           <Typography sx={{ mt: 2, color: 'rgba(255,255,255,0.72)', lineHeight: 1.8 }}>
-            {copy('BIN GROUP Admin will review the documents and property details, arrange the property visit, and only after the visit request the exact 15% mobilisation payment. Final Admin approval unlocks the Owner dashboard.', 'سيقوم مسؤول BIN GROUP بمراجعة المستندات وبيانات العقار وترتيب زيارة العقار، وبعد الزيارة فقط سيطلب دفعة التعبئة 15٪ كاملة. تفتح الموافقة الإدارية النهائية لوحة المالك.')}
+            {copy('BIN GROUP Admin will review the documents and property details, complete the property visit, verify measured facts, and generate the final server quote. Only then is the exact 15% mobilisation payment due. Final Admin payment approval unlocks the Owner dashboard.', 'سيقوم مسؤول BIN GROUP بمراجعة المستندات وبيانات العقار وإتمام زيارة العقار والتحقق من القياسات الفعلية ثم إصدار عرض السعر النهائي من الخادم. تستحق دفعة 15٪ بعد الزيارة والتحقق النهائي فقط. تفتح الموافقة النهائية على الدفع لوحة المالك.')}
           </Typography>
           <Stack spacing={1.2} sx={{ mt: 4, textAlign: isRTL ? 'right' : 'left', p: 3, bgcolor: 'rgba(255,255,255,0.04)', borderRadius: 3 }}>
             <Typography color="#FFF"><b>{copy('Application reference', 'مرجع الطلب')}:</b> {success.intakeId}</Typography>
-            <Typography color="#FFF"><b>{copy('Annual value', 'القيمة السنوية')}:</b> AED {formatAED(success.annualContractValue)}</Typography>
-            <Typography color="#FFF"><b>{copy('15% after visit', '15٪ بعد الزيارة')}:</b> AED {formatAED(success.activationDeposit)}</Typography>
-            <Typography color="#4ADE80" fontWeight={900}>{copy('Current status: Awaiting Admin review and property visit', 'الحالة الحالية: بانتظار مراجعة المسؤول وزيارة العقار')}</Typography>
+            <Typography color="#FFF"><b>{copy('Pre-visit annual estimate', 'التقدير السنوي قبل الزيارة')}:</b> AED {formatAED(success.annualContractValue)}</Typography>
+            <Typography color="#FFF"><b>{copy('Pre-visit 15% estimate', 'تقدير 15٪ قبل الزيارة')}:</b> AED {formatAED(success.activationDeposit)}</Typography>
+            <Typography color="#4ADE80" fontWeight={900}>{copy('Current status: Awaiting Admin review, property visit and final verified quote', 'الحالة الحالية: بانتظار مراجعة المسؤول وزيارة العقار وعرض السعر النهائي الموثق')}</Typography>
           </Stack>
           <Button variant="contained" sx={{ mt: 4, bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }} onClick={() => { window.location.href = '/login'; }}>{copy('Go to Owner Login', 'الانتقال إلى دخول المالك')}</Button>
         </Paper>
@@ -203,13 +219,14 @@ export default function InspectionSubmissionStep({ onBack }: { onBack: () => voi
       {error && <Alert severity="error" sx={{ mb: 3 }}>{error}</Alert>}
       <Paper sx={{ p: { xs: 2.5, md: 5 }, borderRadius: 6, bgcolor: 'rgba(22,22,24,0.72)', border: '1px solid rgba(255,255,255,0.07)' }}>
         <Alert severity="info" icon={<ShieldCheck size={20} />} sx={{ mb: 4 }}>
-          {copy('Payment order: application submitted → Admin document review → property visit → exact 15% mobilisation payment received → final Admin approval → dashboard unlocked.', 'ترتيب الدفع: إرسال الطلب ← مراجعة المستندات إدارياً ← زيارة العقار ← استلام دفعة التعبئة 15٪ كاملة ← الموافقة النهائية ← فتح لوحة التحكم.')}
+          {copy('Payment order: application submitted → Admin document review → property visit and measured verification → final server re-quote → exact 15% received → final Admin approval → dashboard unlocked.', 'ترتيب الدفع: إرسال الطلب ← مراجعة المستندات إدارياً ← زيارة العقار والتحقق من القياسات ← إعادة التسعير النهائي من الخادم ← استلام دفعة 15٪ الدقيقة ← الموافقة النهائية ← فتح لوحة التحكم.')}
         </Alert>
         <Stack spacing={2.2}>
           <Stack direction="row" spacing={2} alignItems="center"><ClipboardCheck color={binThemeTokens.gold} /><Box><Typography color="#FFF" fontWeight={900}>{copy('Application and signed agreement ready', 'الطلب والاتفاقية الموقعة جاهزان')}</Typography><Typography variant="caption" color="rgba(255,255,255,0.55)">{effectiveIntakeId}</Typography></Box></Stack>
           <Stack direction="row" spacing={2} alignItems="center"><Building2 color={binThemeTokens.gold} /><Typography color="#FFF" fontWeight={900}>{properties.length} {copy('property records', 'سجلات عقارية')}</Typography></Stack>
-          <Stack direction="row" spacing={2} alignItems="center"><MapPinned color={binThemeTokens.gold} /><Typography color="#FFF" fontWeight={900}>{copy('GPS will be verified during the Admin site visit', 'سيتم التحقق من GPS خلال زيارة الموقع الإدارية')}</Typography></Stack>
-          <Stack direction="row" spacing={2} alignItems="center"><WalletCards color={binThemeTokens.gold} /><Typography color="#FFF" fontWeight={900}>{copy(`AED ${formatAED(activationDeposit)} is not due until the visit is completed`, `مبلغ ${formatAED(activationDeposit)} درهم غير مستحق حتى اكتمال الزيارة`)}</Typography></Stack>
+          <Stack direction="row" spacing={2} alignItems="center"><MapPinned color={binThemeTokens.gold} /><Typography color="#FFF" fontWeight={900}>{copy('GPS and measured property facts will be verified during the Admin site visit', 'سيتم التحقق من GPS وقياسات العقار الفعلية خلال زيارة الموقع الإدارية')}</Typography></Stack>
+          {hasGym && <Stack direction="row" spacing={2} alignItems="center"><Dumbbell color={binThemeTokens.gold} /><Typography color="#FFF" fontWeight={900}>{copy('Gym area and complexity will be verified on site before the final payable quote is issued', 'سيتم التحقق من مساحة النادي وتعقيده في الموقع قبل إصدار عرض السعر النهائي المستحق')}</Typography></Stack>}
+          <Stack direction="row" spacing={2} alignItems="center"><WalletCards color={binThemeTokens.gold} /><Typography color="#FFF" fontWeight={900}>{copy(`AED ${formatAED(activationDeposit)} is a pre-visit 15% estimate; the payable amount is locked only after final verification`, `مبلغ ${formatAED(activationDeposit)} درهم هو تقدير 15٪ قبل الزيارة؛ يتم تثبيت المبلغ المستحق فقط بعد التحقق النهائي`)}</Typography></Stack>
           {readyDocuments.map((document) => <Typography key={document.key} variant="caption" color={uploadProgress[document.key] === 100 ? '#4ADE80' : 'rgba(255,255,255,0.58)'}>{uploadProgress[document.key] === 100 ? '✓' : '•'} {copy(document.en, document.ar)} {uploadProgress[document.key] ? `· ${uploadProgress[document.key]}%` : ''}</Typography>)}
         </Stack>
         <Stack direction={{ xs: 'column', sm: isRTL ? 'row-reverse' : 'row' }} spacing={2} sx={{ mt: 5 }}>
