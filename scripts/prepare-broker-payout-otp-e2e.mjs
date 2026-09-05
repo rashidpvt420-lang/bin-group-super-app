@@ -39,11 +39,21 @@ const safeId = String(brokerUid).toLowerCase().replace(/[^a-z0-9_-]+/g, '-').rep
 const commissionId = `e2e-live-broker-commission-${safeId}`;
 const submissionHash = crypto.createHash('sha256').update(`broker-e2e-private-kyc:${projectId}:${brokerUid}`).digest('hex');
 const now = admin.firestore.FieldValue.serverTimestamp();
+const BROKER_LIFECYCLE_EVIDENCE_TYPE = 'broker-contract-to-payout-production-proof';
 
-const challengeSnapshot = await db.collection('broker_payout_otps')
-  .where('uid', '==', brokerUid)
-  .limit(100)
-  .get();
+const [challengeSnapshot, priorContractSnapshot] = await Promise.all([
+  db.collection('broker_payout_otps')
+    .where('uid', '==', brokerUid)
+    .limit(100)
+    .get(),
+  db.collection('contracts')
+    .where('brokerId', '==', brokerUid)
+    .limit(500)
+    .get(),
+]);
+const priorLifecycleContracts = priorContractSnapshot.docs.filter(
+  (document) => document.data()?.e2eEvidenceType === BROKER_LIFECYCLE_EVIDENCE_TYPE,
+);
 
 const batch = db.batch();
 batch.set(profileRef, {
@@ -84,6 +94,11 @@ batch.set(privateKycRef, {
   createdAt: profile.createdAt || now,
 }, { merge: true });
 
+for (const contract of priorLifecycleContracts) {
+  batch.delete(db.collection('broker_commissions').doc(`commission_${contract.id}`));
+  batch.delete(contract.ref);
+}
+
 batch.set(db.collection('broker_commissions').doc(commissionId), {
   id: commissionId,
   brokerId: brokerUid,
@@ -113,4 +128,4 @@ for (const challenge of challengeSnapshot.docs) {
 }
 
 await batch.commit();
-console.log(`Prepared Broker payout OTP E2E fixture for ${brokerEmail}; private KYC ready; cleared ${challengeSnapshot.size} challenge candidate(s).`);
+console.log(`Prepared Broker payout OTP E2E fixture for ${brokerEmail}; private KYC ready; removed ${priorLifecycleContracts.length} stale lifecycle contract(s); cleared ${challengeSnapshot.size} challenge candidate(s).`);
