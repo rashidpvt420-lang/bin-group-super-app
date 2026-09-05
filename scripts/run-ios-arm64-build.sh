@@ -82,17 +82,29 @@ fi
     fi
 
     transient_pattern='HTTP (408|429|5[0-9][0-9])|The requested URL returned error: (408|429|5[0-9][0-9])|timed out|Timeout was reached|Could not resolve host|Connection reset|Recv failure|Failed to connect|network connection was lost'
-    if ! grep -Eiq "$transient_pattern" "$attempt_log"; then
+    source_bootstrap_pattern='Unable to add a source with url .*cdn\.cocoapods\.org/.*named .*trunk|Cloning spec repo .*trunk.*cdn\.cocoapods\.org'
+
+    recoverable_failure='false'
+    if grep -Eiq "$source_bootstrap_pattern" "$attempt_log"; then
+      recoverable_failure='true'
+      echo "Recoverable CocoaPods CDN source-bootstrap failure detected. Removing incomplete trunk state before retry."
+      rm -rf "$HOME/.cocoapods/repos/trunk" 2>/dev/null || true
+      rm -f "$HOME/.cocoapods/repos/.lock" "$HOME/.cocoapods/repos/trunk.lock" 2>/dev/null || true
+    elif grep -Eiq "$transient_pattern" "$attempt_log"; then
+      recoverable_failure='true'
+      echo "Transient CocoaPods network failure detected. Cleaning incomplete caches before retry."
+    fi
+
+    if [[ "$recoverable_failure" != 'true' ]]; then
       echo "CocoaPods failed with a non-transient error; refusing blind retries." >&2
       exit "$pod_status"
     fi
 
     if [[ "$attempt" -ge "$COCOAPODS_INSTALL_ATTEMPTS" ]]; then
-      echo "CocoaPods still failed after $COCOAPODS_INSTALL_ATTEMPTS transient-network attempts." >&2
+      echo "CocoaPods still failed after $COCOAPODS_INSTALL_ATTEMPTS recoverable dependency-source attempts." >&2
       exit "$pod_status"
     fi
 
-    echo "Transient CocoaPods network failure detected. Cleaning incomplete caches before retry."
     pod cache clean IONGeolocationLib --all >/dev/null 2>&1 || true
     find "$HOME/Library/Caches/CocoaPods" -type f \( -name '*.tmp' -o -name '*.download' \) -delete 2>/dev/null || true
     sleep_seconds=$((attempt * 15))

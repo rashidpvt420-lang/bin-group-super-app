@@ -252,6 +252,24 @@ service firebase.storage {
       allow write: if isAuth() && (request.auth.uid == ownerId || isAdmin()) && isDocumentUpload(15);
     }
 
+    // Home Discovery property media has a dedicated non-overlapping path so
+    // Owner uploads are create-only, image-only, size-bounded and metadata-bound.
+    // Admin SDK publishing may later copy/transform the asset without relying on
+    // browser write authority.
+    match /home-listing-media/{ownerId}/{requestId}/{fileName} {
+      allow read: if isAuth() && (request.auth.uid == ownerId || isAdmin() || isAuditor());
+      allow create: if isAuth() &&
+        isOwnerRole() &&
+        request.auth.uid == ownerId &&
+        resource == null &&
+        isImageUpload(10) &&
+        request.resource.metadata.ownerUid == ownerId &&
+        request.resource.metadata.listingRequestId == requestId &&
+        request.resource.metadata.evidenceType == 'home_listing_photo';
+      allow update: if false;
+      allow delete: if isAdmin();
+    }
+
     match /tenants/{tenantId}/{allPaths=**} {
       allow read: if isAuth() && (request.auth.uid == tenantId || isAdmin() || isAuditor());
       allow write: if isAuth() && (request.auth.uid == tenantId || isAdmin()) && isDocumentUpload(15);

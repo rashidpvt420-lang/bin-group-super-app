@@ -11,7 +11,8 @@ test('public role-first entry splits existing tenants from home seekers', async 
   assert.match(start, /Tenant & Home Search/);
   assert.match(start, /I Already Rent With BIN/);
   assert.match(start, /I’m Looking for a Home/);
-  assert.match(start, /returnTo=\/tenant\/homes/);
+  assert.match(start, /path: '\/login\?intendedRole=tenant'/);
+  assert.match(start, /secondaryPath: '\/homes'/);
   assert.match(start, /Find rooms & homes/);
   assert.match(start, /Viewings & applications/);
   assert.match(start, ARABIC);
@@ -26,13 +27,17 @@ test('publicly self-assigned tenants begin as home seekers while managed tenants
   assert.match(gateway, /navigate\(roleId === 'owner' \? '\/onboarding' : \(roleHome\[roleId\] \|\| '\/'\)\)/);
 });
 
-test('tenant portal exposes the canonical home discovery route', async () => {
-  const tenantApp = await read('src/tenant/TenantApp.tsx');
+test('tenant portal exposes the canonical Wave 2 home discovery route while preserving the Wave 1 catalog', async () => {
+  const [tenantApp, wave2] = await Promise.all([
+    read('src/tenant/TenantApp.tsx'),
+    read('src/tenant/pages/TenantHomeDiscoveryWave2Page.tsx'),
+  ]);
 
   assert.match(tenantApp, /navigate\('\/tenant\/homes'\)/);
   assert.match(tenantApp, /Find a Home/);
-  assert.match(tenantApp, /path="\/homes" element=\{<TenantMarketplacePage \/>\}/);
-  assert.match(tenantApp, /path="\/marketplace" element=\{<TenantMarketplacePage \/>\}/);
+  assert.match(tenantApp, /path="\/homes" element=\{<TenantHomeDiscoveryWave2Page \/>\}/);
+  assert.match(tenantApp, /path="\/marketplace" element=\{<TenantHomeDiscoveryWave2Page \/>\}/);
+  assert.match(wave2, /TenantMarketplacePage/);
 });
 
 test('home discovery supports verified inventory, photos, filters, favorites, viewings and applications', async () => {

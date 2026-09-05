@@ -62,6 +62,7 @@ const QrPassVerificationPage = lazyWithRetry(() => import('./pages/public/QrPass
 const InvoiceDetailsPage = lazyWithRetry(() => import('./pages/InvoiceDetailsPage'));
 const TenantInvitePage = lazyWithRetry(() => import('./pages/TenantInvitePage'));
 const AccountPrivacyRequestPage = lazyWithRetry(() => import('./pages/AccountPrivacyRequestPage'));
+const PublicHomeDiscoveryPage = lazyWithRetry(() => import('./pages/public/PublicHomeDiscoveryPage'));
 
 const AuthenticatedShell = lazyWithRetry(() => import('./components/AuthenticatedShell'));
 const ProtectedRoute = lazyWithRetry(() => import('./components/ProtectedRoute'));
@@ -254,6 +255,7 @@ function AppContent() {
         <Route path="/v1" element={publicOrPilot(withAuth(<LandingPage />, { publicAuth: true, showChrome: false }))} />
         <Route path="/gateway" element={publicOrPilot(withAuth(<RoleGatewayPage />, { publicAuth: true, showChrome: false }))} />
         <Route path="/login" element={withAuth(<LoginPage />, { publicAuth: true, showChrome: false })} />
+        <Route path="/homes" element={publicOrPilot(withAuth(<PublicHomeDiscoveryPage />, { publicAuth: true, showChrome: false }))} />
         <Route path="/terms-of-service" element={<TermsPage />} />
         <Route path="/privacy-policy" element={<PrivacyPage />} />
         <Route path="/terms" element={<TermsPage />} />
