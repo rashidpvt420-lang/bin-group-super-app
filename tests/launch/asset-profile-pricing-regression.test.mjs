@@ -13,7 +13,7 @@ execSync('npx esbuild src/utils/calculateUaeQuote2026.ts --bundle --platform=nod
 const { calculateUaeQuote2026 } = await import('../../.tmp/pricing-engine.js');
 
 const selectableTypes = [
-  'Villa', 'Apartment', 'Residential Building', 'Commercial Building', 'Office', 'Retail Center', 'Mall',
+  'Villa', 'Apartment', 'Residential Building', 'Commercial Building', 'Office', 'Gym / Fitness Centre', 'Retail Center', 'Mall',
   'Hotel', 'Resort', 'Hospital', 'Clinic', 'School', 'Warehouse', 'Industrial Property', 'Labour Camp',
   'Staff Accommodation', 'Government Property', 'Government Majlis', 'Private Majlis', 'Mosque / Masjid',
   'Mixed-Use Tower', 'Skyscraper', 'Stadium', 'Sports Complex', 'Event Venue', 'Farm / Estate'
@@ -113,8 +113,41 @@ test('every selectable property type uses its correct pricing driver (units, bed
     }
 
     // All remaining non-mosque types have exactly one quantity driver.
-    // Government Property is intentionally sqft-priced and therefore belongs here.
+    // Government Property and Gym / Fitness Centre are intentionally sqft-priced and belong here.
     const totalDrivers = (sqftChanged ? 1 : 0) + (unitsChanged ? 1 : 0) + (bedsChanged ? 1 : 0);
     assert.equal(totalDrivers, 1, `Property type ${type} must have exactly one active pricing driver (resolved: sqft=${sqftChanged}, units=${unitsChanged}, beds=${bedsChanged})`);
   }
+});
+
+test('Gym pricing uses measured area and complexity but never members, capacity, equipment count, or opening hours as multipliers', () => {
+  const common = {
+    assetClassId: 'Gym / Fitness Centre',
+    emirate: 'Dubai',
+    zone: 'B',
+    contractType: 'FM_ONLY',
+    propertyAge: 2,
+    floors: 1,
+    sqft: 10000,
+    units: 500,
+    gymEquipmentCount: 40,
+    gymOpeningSchedule: 'STANDARD_HOURS',
+    gymComplexity: 'STANDARD_DRY',
+    slaTier: 'standard',
+    paymentPlan: 'annual',
+  };
+
+  const standard = calculateUaeQuote2026(common);
+  const hugeCapacity = calculateUaeQuote2026({ ...common, units: 50000 });
+  const hugeEquipmentRegister = calculateUaeQuote2026({ ...common, gymEquipmentCount: 5000 });
+  const twentyFourSeven = calculateUaeQuote2026({ ...common, gymOpeningSchedule: '24_7' });
+  const largerArea = calculateUaeQuote2026({ ...common, sqft: 20000 });
+  const enhanced = calculateUaeQuote2026({ ...common, gymComplexity: 'ENHANCED' });
+  const wetRecovery = calculateUaeQuote2026({ ...common, gymComplexity: 'WET_RECOVERY' });
+
+  assert.equal(hugeCapacity.annualTotal, standard.annualTotal, 'Gym capacity must never multiply the property price');
+  assert.equal(hugeEquipmentRegister.annualTotal, standard.annualTotal, 'Gym equipment count must never multiply the property price');
+  assert.equal(twentyFourSeven.annualTotal, standard.annualTotal, '24/7 hours must remain a scope/SLA input, not an automatic occupancy multiplier');
+  assert.ok(largerArea.annualTotal > standard.annualTotal, 'Gym quote must increase when measured service area increases');
+  assert.ok(enhanced.annualTotal > standard.annualTotal, 'Enhanced Gym complexity must use the configured enhanced area rate');
+  assert.ok(wetRecovery.annualTotal > enhanced.annualTotal, 'Wet/Recovery Gym complexity must use the configured wet/recovery area rate');
 });
