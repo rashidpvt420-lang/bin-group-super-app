@@ -769,6 +769,7 @@ async function patchTechnicianReadiness(uid: string) {
     onDuty: true,
     dutyStatus: 'ON_DUTY',
     isAvailable: true,
+    available: true,
     currentJobCount: 0,
     maxConcurrentJobs: 3,
     e2eRunId: RUN_ID,
