@@ -2,12 +2,16 @@ import { FieldValue } from "firebase-admin/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 import * as crypto from "crypto";
+import { calculateOwnerOnboardingQuote } from "./ownerOnboardingQuote";
 
 if (!admin.apps.length) admin.initializeApp();
 const db = admin.firestore();
 const ADMIN_ROLES = new Set(["admin", "super_admin", "ceo", "manager", "operations_admin", "finance_admin"]);
 const WORKFLOW_VERSION = "OWNER_FIVE_PAGE_INSPECTION_FIRST_V1";
 const MAX_VISIT_RADIUS_METRES = 750;
+const GYM_COMPLEXITIES = new Set(["STANDARD_DRY", "ENHANCED", "WET_RECOVERY"]);
+const GYM_OPENING_SCHEDULES = new Set(["STANDARD_HOURS", "EXTENDED_HOURS", "24_7"]);
+const GYM_DOCUMENT_STATUSES = new Set(["verified", "pending", "not_available", "not_applicable"]);
 const text = (value: unknown) => String(value || "").trim();
 const upper = (value: unknown) => text(value).toUpperCase();
 const roleOf = (token: any) => text(token?.role || token?.userRole || token?.primaryRole).toLowerCase();
@@ -47,6 +51,51 @@ function requiredChecklist(value: any) {
     throw new HttpsError("failed-precondition", "Complete every required property-visit checklist item.");
   }
   return checklist;
+}
+
+function isGymProperty(property: any, inspection?: any) {
+  return text(property?.propertyType || inspection?.propertyType) === "Gym / Fitness Centre";
+}
+
+function boundedCount(value: unknown, label: string, max = 100000) {
+  const parsed = finite(value, 0);
+  if (!Number.isFinite(parsed) || parsed < 0 || parsed > max) throw new HttpsError("invalid-argument", `${label} is outside the accepted verification range.`);
+  return Math.round(parsed);
+}
+
+function gymDocumentStatus(value: unknown, label: string) {
+  const status = text(value || "pending").toLowerCase();
+  if (!GYM_DOCUMENT_STATUSES.has(status)) throw new HttpsError("invalid-argument", `${label} verification status is invalid.`);
+  return status;
+}
+
+function verifiedGymPayload(value: any) {
+  const verifiedServiceAreaSqft = finite(value?.verifiedServiceAreaSqft);
+  if (!Number.isFinite(verifiedServiceAreaSqft) || verifiedServiceAreaSqft <= 0 || verifiedServiceAreaSqft > 50_000_000) {
+    throw new HttpsError("invalid-argument", "Gym verification requires a positive measured service area in square feet.");
+  }
+  const verifiedComplexity = upper(value?.verifiedComplexity);
+  if (!GYM_COMPLEXITIES.has(verifiedComplexity)) throw new HttpsError("invalid-argument", "Select a verified Gym complexity band.");
+  const openingSchedule = upper(value?.openingSchedule || "STANDARD_HOURS");
+  if (!GYM_OPENING_SCHEDULES.has(openingSchedule)) throw new HttpsError("invalid-argument", "Select a valid verified Gym opening schedule.");
+  const wetFacilities = Array.isArray(value?.wetFacilities)
+    ? Array.from(new Set(value.wetFacilities.map((entry: unknown) => text(entry).toLowerCase()).filter(Boolean))).slice(0, 20)
+    : [];
+  return {
+    verifiedServiceAreaSqft: Math.round(verifiedServiceAreaSqft * 100) / 100,
+    verifiedComplexity,
+    openingSchedule,
+    equipmentCount: boundedCount(value?.equipmentCount, "Gym equipment count"),
+    changingRooms: boundedCount(value?.changingRooms, "Changing-room count", 1000),
+    showers: boundedCount(value?.showers, "Shower count", 10000),
+    groupStudios: boundedCount(value?.groupStudios, "Group-studio count", 1000),
+    wetFacilities,
+    swimmingPool: value?.swimmingPool === true,
+    treatmentRecoveryArea: value?.treatmentRecoveryArea === true,
+    sportsEstablishmentApprovalStatus: gymDocumentStatus(value?.sportsEstablishmentApprovalStatus, "Sports establishment approval"),
+    insuranceStatus: gymDocumentStatus(value?.insuranceStatus, "Insurance"),
+    floorPlanStatus: gymDocumentStatus(value?.floorPlanStatus, "Floor plan"),
+  };
 }
 
 export const adminRecordOwnerPropertyInspectionEvidence = onCall({ cors: true, enforceAppCheck: true, memory: "512MiB" }, async (request) => {
@@ -97,6 +146,7 @@ export const adminRecordOwnerPropertyInspectionEvidence = onCall({ cors: true, e
     throw new HttpsError("failed-precondition", `Arrival GPS is ${distance} metres from the submitted property. Capture evidence within ${MAX_VISIT_RADIUS_METRES} metres.`);
   }
 
+  const gymVerification = isGymProperty(property, inspection) ? verifiedGymPayload(request.data?.gymVerification || {}) : null;
   const evidenceHash = crypto.createHash("sha256").update(buffer).digest("hex");
   const ownerUid = text(intake.ownerUid || intake.ownerId);
   const storagePath = `inspection-evidence/owners/${safeId(ownerUid, "owner")}/${intakeId}/${inspectionId}/${Date.now()}_${filename}`;
@@ -129,6 +179,16 @@ export const adminRecordOwnerPropertyInspectionEvidence = onCall({ cors: true, e
     findings,
     checklist,
     checklistVerified: true,
+    ...(gymVerification ? {
+      gymVerification: {
+        ...gymVerification,
+        source: "ADMIN_SITE_VISIT",
+        verifiedBy: actor.uid,
+        verifiedByEmail: actor.email,
+        verifiedAt: now,
+      },
+      gymVerificationStatus: "VERIFIED",
+    } : {}),
     arrivalLocation: { lat: arrivalLat, lng: arrivalLng, expectedLat, expectedLng, distanceMetres: distance, withinRadius: true, capturedAtMs: completedAtMs },
     visitStartedAt: admin.firestore.Timestamp.fromMillis(startedAtMs),
     visitCompletedAt: admin.firestore.Timestamp.fromMillis(completedAtMs),
@@ -145,11 +205,31 @@ export const adminRecordOwnerPropertyInspectionEvidence = onCall({ cors: true, e
     action: "RECORD_OWNER_PROPERTY_INSPECTION_EVIDENCE",
     targetType: "property_inspections",
     targetId: inspectionId,
-    metadata: { intakeId, propertyId, distanceMetres: distance, evidenceHash, generation, checklistVerified: true },
+    metadata: {
+      intakeId,
+      propertyId,
+      propertyType: text(property.propertyType),
+      distanceMetres: distance,
+      evidenceHash,
+      generation,
+      checklistVerified: true,
+      gymVerificationRequired: isGymProperty(property, inspection),
+      gymVerifiedServiceAreaSqft: gymVerification?.verifiedServiceAreaSqft || null,
+      gymVerifiedComplexity: gymVerification?.verifiedComplexity || null,
+    },
     createdAt: now,
   });
   await batch.commit();
-  return { status: "VERIFIED", intakeId, inspectionId, propertyId, distanceMetres: distance, evidenceHash, generation };
+  return {
+    status: "VERIFIED",
+    intakeId,
+    inspectionId,
+    propertyId,
+    distanceMetres: distance,
+    evidenceHash,
+    generation,
+    gymVerification,
+  };
 });
 
 export const adminCompleteOwnerPortfolioInspections = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
@@ -170,37 +250,223 @@ export const adminCompleteOwnerPortfolioInspections = onCall({ cors: true, enfor
   if (!properties.length || inspectionIds.length !== properties.length) throw new HttpsError("failed-precondition", `Every property requires a linked site inspection. Expected ${properties.length}, found ${inspectionIds.length}.`);
   const inspectionRefs = inspectionIds.map((inspectionId) => db.collection("property_inspections").doc(inspectionId));
   const inspectionSnaps = await Promise.all(inspectionRefs.map((ref) => ref.get()));
-  const propertyIds = new Set<string>();
+  const inspectionByPropertyId = new Map<string, any>();
   inspectionSnaps.forEach((snapshot, index) => {
     if (!snapshot.exists) throw new HttpsError("failed-precondition", `Inspection ${inspectionIds[index]} is missing.`);
     const value = snapshot.data() || {};
     const propertyId = text(value.propertyId);
-    propertyIds.add(propertyId);
+    if (!propertyId || inspectionByPropertyId.has(propertyId)) throw new HttpsError("failed-precondition", "Every property must have one unique evidence-backed inspection.");
     if (text(value.intakeId) !== intakeId || upper(value.status) === "CANCELLED") throw new HttpsError("failed-precondition", "A linked inspection is invalid or cancelled.");
     if (upper(value.evidenceStatus) !== "VERIFIED" || !/^[a-f0-9]{64}$/i.test(text(value.evidenceHash)) || !text(value.evidenceGeneration) || value.arrivalLocation?.withinRadius !== true || value.checklistVerified !== true || !value.visitStartedAt || !value.visitCompletedAt) {
       throw new HttpsError("failed-precondition", `Inspection ${index + 1} requires verified GPS, checklist, photo evidence and timestamps before completion.`);
     }
+    inspectionByPropertyId.set(propertyId, value);
   });
-  if (propertyIds.size !== properties.length || propertyIds.has("")) throw new HttpsError("failed-precondition", "Every property must have one unique evidence-backed inspection.");
+  if (inspectionByPropertyId.size !== properties.length) throw new HttpsError("failed-precondition", "Every property must have one unique evidence-backed inspection.");
+
+  const verifiedProperties = properties.map((property: any) => {
+    const propertyId = text(property?.propertyId || property?.id);
+    const inspection = inspectionByPropertyId.get(propertyId);
+    if (!inspection) throw new HttpsError("failed-precondition", `No verified inspection is linked to property ${propertyId || "unknown"}.`);
+    if (!isGymProperty(property, inspection)) return property;
+    if (upper(inspection.gymVerificationStatus) !== "VERIFIED" || !inspection.gymVerification) {
+      throw new HttpsError("failed-precondition", `Gym / Fitness Centre ${propertyId} requires verified service area and complexity before the final quote can be issued.`);
+    }
+    const verified = verifiedGymPayload(inspection.gymVerification);
+    const existingProfile = property.gymProfile && typeof property.gymProfile === "object" ? property.gymProfile : {};
+    return {
+      ...property,
+      verifiedServiceAreaSqft: verified.verifiedServiceAreaSqft,
+      gymProfile: {
+        ...existingProfile,
+        ownerDeclaredServiceAreaSqft: Number(existingProfile.declaredServiceAreaSqft || property.sqft || 0),
+        ownerDeclaredOpeningSchedule: existingProfile.openingSchedule || null,
+        ownerDeclaredEquipmentCount: Number(existingProfile.equipmentCount || 0),
+        verifiedServiceAreaSqft: verified.verifiedServiceAreaSqft,
+        verifiedComplexity: verified.verifiedComplexity,
+        openingSchedule: verified.openingSchedule,
+        verifiedOpeningSchedule: verified.openingSchedule,
+        equipmentCount: verified.equipmentCount,
+        verifiedEquipmentCount: verified.equipmentCount,
+        changingRooms: verified.changingRooms,
+        showers: verified.showers,
+        groupStudios: verified.groupStudios,
+        wetFacilities: verified.wetFacilities,
+        swimmingPool: verified.swimmingPool,
+        treatmentRecoveryArea: verified.treatmentRecoveryArea,
+        sportsEstablishmentApprovalStatus: verified.sportsEstablishmentApprovalStatus,
+        insuranceStatus: verified.insuranceStatus,
+        floorPlanStatus: verified.floorPlanStatus,
+        verificationSource: "ADMIN_SITE_VISIT",
+        verificationInspectionId: text(inspection.id),
+        verificationEvidenceHash: text(inspection.evidenceHash),
+      },
+    };
+  });
+
+  const finalQuotedAtMs = Date.now();
+  let finalQuote: ReturnType<typeof calculateOwnerOnboardingQuote>;
+  try {
+    finalQuote = calculateOwnerOnboardingQuote(verifiedProperties, Array.isArray(intake.selectedAddOns) ? intake.selectedAddOns : [], finalQuotedAtMs);
+  } catch (error: any) {
+    throw new HttpsError("failed-precondition", `Final verified portfolio quote failed: ${error?.message || String(error)}`);
+  }
   const ownerUid = text(intake.ownerUid || intake.ownerId);
-  const amount = money(paymentSnap.data()?.activationDeposit || paymentSnap.data()?.amount);
-  if (!ownerUid || amount <= 0) throw new HttpsError("failed-precondition", "Owner binding or 15% mobilisation amount is missing.");
+  const amount = money(finalQuote.activationDeposit);
+  const annualContractValue = money(finalQuote.annualContractValue);
+  const signedQuoteHash = text(intake.quoteHash || contractSnap.data()?.quoteHash || paymentSnap.data()?.quoteHash).toLowerCase();
+  if (!ownerUid || amount <= 0 || annualContractValue <= 0 || !/^[a-f0-9]{64}$/.test(signedQuoteHash) || !/^[a-f0-9]{64}$/.test(text(finalQuote.quoteHash))) {
+    throw new HttpsError("failed-precondition", "Owner binding, signed quote evidence, or final verified commercial schedule is invalid.");
+  }
+
   const propertyQuery = await db.collection("properties").where("intakeId", "==", intakeId).limit(100).get();
   if (propertyQuery.size !== properties.length) throw new HttpsError("failed-precondition", "Canonical property records do not match the submitted portfolio.");
+  const verifiedPropertyById = new Map(verifiedProperties.map((property: any) => [text(property.propertyId || property.id), property]));
   const now = FieldValue.serverTimestamp();
+  const finalCommercial = {
+    signedPreInspectionQuoteHash: signedQuoteHash,
+    finalVerifiedQuoteHash: finalQuote.quoteHash,
+    finalVerifiedQuoteSnapshot: finalQuote,
+    finalVerifiedQuotedAtMs: finalQuote.quotedAtMs,
+    finalVerifiedExpiresAtMs: finalQuote.expiresAtMs,
+    finalAnnualContractValue: annualContractValue,
+    finalActivationDeposit: amount,
+    quoteRepricedAfterInspection: true,
+    quoteVerificationState: "FINAL_VERIFIED_AFTER_ALL_SITE_VISITS",
+  };
   const batch = db.batch();
-  inspectionRefs.forEach((inspectionRef, index) => batch.set(inspectionRef, { status: "COMPLETED", inspectionStatus: "COMPLETED", portfolioInspectionIndex: index, portfolioNotes: notes, completedBy: actor.uid, completedByEmail: actor.email, completedAt: now, updatedAt: now }, { merge: true }));
-  batch.set(intakeRef, { inspectionId: inspectionIds[0], inspectionIds, inspectionStatus: "COMPLETED", inspectionCompletedCount: inspectionIds.length, inspectionEvidenceVerifiedCount: inspectionIds.length, adminReviewState: "ALL_INSPECTIONS_COMPLETE_AWAITING_15_PERCENT_PAYMENT", activationState: "LOCKED_PENDING_15_PERCENT_PAYMENT", paymentStatus: "PENDING_ADMIN_PAYMENT_VERIFICATION", paymentCollectionStage: "15_PERCENT_DUE_AFTER_COMPLETED_VISITS", inspectionNotes: notes, inspectionCompletedAt: now, inspectionCompletedBy: actor.uid, updatedAt: now }, { merge: true });
-  batch.set(paymentRef, { status: "PENDING_ADMIN_PAYMENT_VERIFICATION", paymentStatus: "PENDING_ADMIN_PAYMENT_VERIFICATION", verificationState: "ADMIN_PAYMENT_EVIDENCE_REQUIRED", adminApprovalRequired: true, unlocksDashboard: false, inspectionId: inspectionIds[0], inspectionIds, inspectionVerified: true, inspectionEvidenceVerified: true, paymentDueAfterInspection: true, updatedAt: now }, { merge: true });
-  batch.set(contractRef, { status: "SIGNED_AWAITING_15_PERCENT_PAYMENT", contractStatus: "signed_awaiting_payment", activationStatus: "LOCKED_PENDING_15_PERCENT_PAYMENT", inspectionId: inspectionIds[0], inspectionIds, inspectionVerified: true, inspectionEvidenceVerified: true, paymentStatus: "PENDING_ADMIN_PAYMENT_VERIFICATION", updatedAt: now }, { merge: true });
+  inspectionRefs.forEach((inspectionRef, index) => batch.set(inspectionRef, {
+    status: "COMPLETED",
+    inspectionStatus: "COMPLETED",
+    portfolioInspectionIndex: index,
+    portfolioNotes: notes,
+    finalVerifiedQuoteHash: finalQuote.quoteHash,
+    completedBy: actor.uid,
+    completedByEmail: actor.email,
+    completedAt: now,
+    updatedAt: now,
+  }, { merge: true }));
+  batch.set(intakeRef, {
+    inspectionId: inspectionIds[0],
+    inspectionIds,
+    inspectionStatus: "COMPLETED",
+    inspectionCompletedCount: inspectionIds.length,
+    inspectionEvidenceVerifiedCount: inspectionIds.length,
+    adminReviewState: "ALL_INSPECTIONS_COMPLETE_FINAL_QUOTE_VERIFIED_AWAITING_15_PERCENT_PAYMENT",
+    activationState: "LOCKED_PENDING_15_PERCENT_PAYMENT",
+    paymentStatus: "PENDING_ADMIN_PAYMENT_VERIFICATION",
+    paymentCollectionStage: "15_PERCENT_DUE_AFTER_COMPLETED_VISITS_AND_FINAL_REQUOTE",
+    inspectionNotes: notes,
+    inspectionCompletedAt: now,
+    inspectionCompletedBy: actor.uid,
+    properties: verifiedProperties,
+    annualContractValue,
+    mobilizationAmount: amount,
+    portfolioSummary: {
+      ...(intake.portfolioSummary || {}),
+      estimatedACV: annualContractValue,
+      finalVerifiedACV: annualContractValue,
+    },
+    ...finalCommercial,
+    updatedAt: now,
+  }, { merge: true });
+  batch.set(paymentRef, {
+    status: "PENDING_ADMIN_PAYMENT_VERIFICATION",
+    paymentStatus: "PENDING_ADMIN_PAYMENT_VERIFICATION",
+    verificationState: "ADMIN_PAYMENT_EVIDENCE_REQUIRED_AFTER_FINAL_VERIFIED_QUOTE",
+    adminApprovalRequired: true,
+    unlocksDashboard: false,
+    inspectionId: inspectionIds[0],
+    inspectionIds,
+    inspectionVerified: true,
+    inspectionEvidenceVerified: true,
+    paymentDueAfterInspection: true,
+    annualContractValue,
+    activationDeposit: amount,
+    amount,
+    ...finalCommercial,
+    updatedAt: now,
+  }, { merge: true });
+  batch.set(contractRef, {
+    status: "SIGNED_AWAITING_15_PERCENT_PAYMENT",
+    contractStatus: "signed_awaiting_payment",
+    activationStatus: "LOCKED_PENDING_15_PERCENT_PAYMENT",
+    inspectionId: inspectionIds[0],
+    inspectionIds,
+    inspectionVerified: true,
+    inspectionEvidenceVerified: true,
+    paymentStatus: "PENDING_ADMIN_PAYMENT_VERIFICATION",
+    annualContractValue,
+    activationDeposit: amount,
+    depositAmount: amount,
+    mobilizationAmount: amount,
+    properties: verifiedProperties,
+    ...finalCommercial,
+    updatedAt: now,
+  }, { merge: true });
   propertyQuery.docs.forEach((document) => {
     const property = document.data() || {};
-    batch.set(document.ref, { status: "AWAITING_15_PERCENT_PAYMENT", activationStatus: "LOCKED_PENDING_15_PERCENT_PAYMENT", inspectionStatus: "COMPLETED", adminSiteVisitVerified: true, locationVerified: true, geo: { ...(property.geo || {}), verified: true, requiresGeoReview: false, dispatchReady: true, verifiedBy: actor.uid, verifiedAt: now }, updatedAt: now }, { merge: true });
+    const verifiedProperty = verifiedPropertyById.get(document.id) || verifiedPropertyById.get(text(property.propertyId));
+    if (!verifiedProperty) throw new HttpsError("failed-precondition", `No final verified property snapshot exists for ${document.id}.`);
+    batch.set(document.ref, {
+      ...verifiedProperty,
+      status: "AWAITING_15_PERCENT_PAYMENT",
+      activationStatus: "LOCKED_PENDING_15_PERCENT_PAYMENT",
+      inspectionStatus: "COMPLETED",
+      adminSiteVisitVerified: true,
+      locationVerified: true,
+      finalVerifiedQuoteHash: finalQuote.quoteHash,
+      geo: {
+        ...(property.geo || verifiedProperty.geo || {}),
+        verified: true,
+        requiresGeoReview: false,
+        dispatchReady: true,
+        verifiedBy: actor.uid,
+        verifiedAt: now,
+      },
+      updatedAt: now,
+    }, { merge: true });
   });
-  batch.set(db.collection("users").doc(ownerUid), { status: "awaiting_activation_payment", onboardingStatus: "ALL_INSPECTIONS_COMPLETE_AWAITING_15_PERCENT_PAYMENT", dashboardLocked: true, dashboardUnlocked: false, updatedAt: now }, { merge: true });
-  batch.set(db.collection("owners").doc(ownerUid), { status: "AWAITING_ACTIVATION_PAYMENT", onboardingStatus: "ALL_INSPECTIONS_COMPLETE_AWAITING_15_PERCENT_PAYMENT", updatedAt: now }, { merge: true });
-  batch.set(db.collection("notifications").doc(), { userId: ownerUid, toRole: "owner", type: "OWNER_INSPECTIONS_COMPLETE_PAYMENT_DUE", title: "Property visits completed", body: `All evidence-backed property visits are complete. The 15% mobilisation payment of AED ${amount.toLocaleString("en-AE")} is now due for Admin verification.`, read: false, createdAt: now });
-  batch.set(db.collection("audit_logs").doc(), { actorId: actor.uid, actorEmail: actor.email, actorRole: "admin", action: "COMPLETE_EVIDENCE_BACKED_OWNER_PORTFOLIO_INSPECTIONS", targetType: "intake_submissions", targetId: intakeId, metadata: { inspectionIds, inspectionCount: inspectionIds.length, paymentId: intakeId, amount }, createdAt: now });
+  batch.set(db.collection("users").doc(ownerUid), { status: "awaiting_activation_payment", onboardingStatus: "FINAL_QUOTE_VERIFIED_AWAITING_15_PERCENT_PAYMENT", dashboardLocked: true, dashboardUnlocked: false, updatedAt: now }, { merge: true });
+  batch.set(db.collection("owners").doc(ownerUid), { status: "AWAITING_ACTIVATION_PAYMENT", onboardingStatus: "FINAL_QUOTE_VERIFIED_AWAITING_15_PERCENT_PAYMENT", updatedAt: now }, { merge: true });
+  batch.set(db.collection("notifications").doc(), {
+    userId: ownerUid,
+    toRole: "owner",
+    type: "OWNER_INSPECTIONS_COMPLETE_FINAL_QUOTE_PAYMENT_DUE",
+    title: "Property visits completed and final quote verified",
+    body: `All evidence-backed property visits are complete. The final verified annual value is AED ${annualContractValue.toLocaleString("en-AE")} and the exact 15% mobilisation payment of AED ${amount.toLocaleString("en-AE")} is now due for Admin verification.`,
+    read: false,
+    createdAt: now,
+  });
+  batch.set(db.collection("audit_logs").doc(), {
+    actorId: actor.uid,
+    actorEmail: actor.email,
+    actorRole: "admin",
+    action: "COMPLETE_EVIDENCE_BACKED_OWNER_PORTFOLIO_INSPECTIONS_AND_FINAL_REQUOTE",
+    targetType: "intake_submissions",
+    targetId: intakeId,
+    metadata: {
+      inspectionIds,
+      inspectionCount: inspectionIds.length,
+      paymentId: intakeId,
+      signedPreInspectionQuoteHash: signedQuoteHash,
+      finalVerifiedQuoteHash: finalQuote.quoteHash,
+      annualContractValue,
+      amount,
+      gymPropertyCount: verifiedProperties.filter((property: any) => isGymProperty(property)).length,
+    },
+    createdAt: now,
+  });
   await batch.commit();
-  return { status: "COMPLETED", intakeId, inspectionIds, paymentId: intakeId, activationDeposit: amount, nextState: "AWAITING_15_PERCENT_PAYMENT" };
+  return {
+    status: "COMPLETED",
+    intakeId,
+    inspectionIds,
+    paymentId: intakeId,
+    annualContractValue,
+    activationDeposit: amount,
+    signedPreInspectionQuoteHash: signedQuoteHash,
+    finalVerifiedQuoteHash: finalQuote.quoteHash,
+    nextState: "AWAITING_15_PERCENT_PAYMENT",
+  };
 });
