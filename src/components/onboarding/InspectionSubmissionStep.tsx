@@ -196,7 +196,7 @@ export default function InspectionSubmissionStep({ onBack }: { onBack: () => voi
           <CheckCircle size={62} color="#4ADE80" />
           <Typography variant="h4" fontWeight={950} color="#FFF" sx={{ mt: 2 }}>{copy('Five-page application submitted', 'تم إرسال الطلب المكون من خمس صفحات')}</Typography>
           <Typography sx={{ mt: 2, color: 'rgba(255,255,255,0.72)', lineHeight: 1.8 }}>
-            {copy('BIN GROUP Admin will review the documents and property details, complete the property visit, verify measured facts, and generate the final server quote. Only then is the exact 15% mobilisation payment due. Final Admin payment approval unlocks the Owner dashboard.', 'سيقوم مسؤول BIN GROUP بمراجعة المستندات وبيانات العقار وإتمام زيارة العقار والتحقق من القياسات الفعلية ثم إصدار عرض السعر النهائي من الخادم. بعد ذلك فقط تستحق دفعة التعبئة الدقيقة بنسبة 15٪. تفتح الموافقة النهائية على الدفع لوحة المالك.')}
+            {copy('BIN GROUP Admin will review the documents and property details, complete the property visit, verify measured facts, and generate the final server quote. Only then is the exact 15% mobilisation payment due. Final Admin payment approval unlocks the Owner dashboard.', 'سيقوم مسؤول BIN GROUP بمراجعة المستندات وبيانات العقار وإتمام زيارة العقار والتحقق من القياسات الفعلية ثم إصدار عرض السعر النهائي من الخادم. تستحق دفعة 15٪ بعد الزيارة والتحقق النهائي فقط. تفتح الموافقة النهائية على الدفع لوحة المالك.')}
           </Typography>
           <Stack spacing={1.2} sx={{ mt: 4, textAlign: isRTL ? 'right' : 'left', p: 3, bgcolor: 'rgba(255,255,255,0.04)', borderRadius: 3 }}>
             <Typography color="#FFF"><b>{copy('Application reference', 'مرجع الطلب')}:</b> {success.intakeId}</Typography>
