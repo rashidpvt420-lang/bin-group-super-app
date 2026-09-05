@@ -8,6 +8,8 @@ import admin from 'firebase-admin';
 import { config as loadDotenv } from 'dotenv';
 import { initializeFirebaseAdmin, resolveFirebaseAdminProjectId } from './firebase-admin-bootstrap.mjs';
 import { exchangeGmailAccessToken, readGmailOtp } from './lib/gmail-otp-reader.mjs';
+import { createBusinessEvidenceRunScope } from './lib/business-evidence-run-scope.mjs';
+import { BROKER_EVIDENCE_TYPE as EVIDENCE_TYPE } from './lib/broker-e2e-fixture-isolation.mjs';
 
 const PROJECT_ID = 'bin-group-57c60';
 const API_KEY = 'AIzaSyCd-QdM7mjECh9UqDKk1ofBemanpTRgd4s';
@@ -15,7 +17,6 @@ const APP_ID = '1:123413252227:web:285cb53bc26626d699f3b6';
 const FUNCTIONS_BASE = `https://europe-west3-${PROJECT_ID}.cloudfunctions.net`;
 const WEB_REFERER = 'https://bin-group-57c60.web.app/';
 const OUTPUT_PATH = path.resolve('launch_package/artifacts/broker-production-evidence.json');
-const EVIDENCE_TYPE = 'broker-contract-to-payout-production-proof';
 const OTP_HASH_VERSION = 'HMAC_SHA256_V1';
 
 for (const envPath of [
@@ -293,7 +294,7 @@ async function waitForUiLead(brokerUid, expectedLeadName, timeoutMs = 30_000) {
 
 async function main() {
   const startedAt = new Date().toISOString();
-  const runId = safeId(process.env.GITHUB_RUN_ID || Date.now(), 'local');
+  const runId = safeId(createBusinessEvidenceRunScope(process.env), 'local');
   const brokerRecord = await auth.getUserByEmail(brokerMailboxEmail);
   assert(brokerRecord.emailVerified, 'The protected Broker email must be verified.');
 
