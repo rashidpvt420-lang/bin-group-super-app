@@ -24,6 +24,18 @@ test('Broker payout OTP fixture is restricted to the verified dedicated E2E Brok
   assert.doesNotMatch(fixture, /otpHash|timingSafeEqual|verifyBrokerPayoutOtp|submitBrokerPayoutRequest/);
 });
 
+test('Broker payout OTP fixture removes only stale E2E commissions before reseeding exactly one payable commission', () => {
+  assert.match(fixture, /broker_commissions/);
+  assert.match(fixture, /staleEvidenceCommissions/);
+  assert.match(fixture, /value\.e2eLaunchSeed === true/);
+  assert.match(fixture, /evidenceType === 'broker-contract-to-payout-production-proof'/);
+  assert.match(fixture, /document\.id\.startsWith\('commission_e2e_broker_contract_'\)/);
+  assert.match(fixture, /document\.id === commissionId/);
+  assert.match(fixture, /for \(const document of staleEvidenceCommissions\) batch\.delete\(document\.ref\)/);
+  assert.match(fixture, /never delete an ordinary Broker commission/);
+  assert.match(fixture, /Refusing Broker payout fixture reset because E2E commission cleanup would be incomplete/);
+});
+
 test('critical evidence prepares the Broker payout fixture before browser execution', () => {
   const fixtureMap = runner.indexOf('const SUITE_FIXTURES = Object.freeze');
   const brokerEntry = runner.indexOf('businessBroker:', fixtureMap);
