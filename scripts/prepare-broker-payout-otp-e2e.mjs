@@ -4,6 +4,10 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { config as loadDotenv } from 'dotenv';
 import { initializeFirebaseAdmin, resolveFirebaseAdminProjectId } from './firebase-admin-bootstrap.mjs';
+import {
+  BROKER_COMMISSION_SCAN_LIMIT,
+  isStaleSyntheticBrokerCommission,
+} from './lib/broker-e2e-fixture-isolation.mjs';
 
 for (const envPath of [
   path.resolve(process.cwd(), '.env.e2e'),
@@ -40,10 +44,36 @@ const commissionId = `e2e-live-broker-commission-${safeId}`;
 const submissionHash = crypto.createHash('sha256').update(`broker-e2e-private-kyc:${projectId}:${brokerUid}`).digest('hex');
 const now = admin.firestore.FieldValue.serverTimestamp();
 
-const challengeSnapshot = await db.collection('broker_payout_otps')
-  .where('uid', '==', brokerUid)
-  .limit(100)
-  .get();
+const [challengeSnapshot, commissionSnapshot] = await Promise.all([
+  db.collection('broker_payout_otps')
+    .where('uid', '==', brokerUid)
+    .limit(100)
+    .get(),
+  db.collection('broker_commissions')
+    .where('brokerId', '==', brokerUid)
+    .limit(BROKER_COMMISSION_SCAN_LIMIT)
+    .get(),
+]);
+
+if (commissionSnapshot.size >= BROKER_COMMISSION_SCAN_LIMIT) {
+  throw new Error(
+    `Refusing Broker payout fixture reset because the bounded commission scan reached ${BROKER_COMMISSION_SCAN_LIMIT} records.`,
+  );
+}
+
+const staleSyntheticCommissions = commissionSnapshot.docs.filter((document) =>
+  isStaleSyntheticBrokerCommission({
+    documentId: document.id,
+    data: document.data(),
+    brokerUid,
+    canonicalCommissionId: commissionId,
+  }));
+
+if (staleSyntheticCommissions.length) {
+  const cleanupBatch = db.batch();
+  staleSyntheticCommissions.forEach((document) => cleanupBatch.delete(document.ref));
+  await cleanupBatch.commit();
+}
 
 const batch = db.batch();
 batch.set(profileRef, {
@@ -113,4 +143,7 @@ for (const challenge of challengeSnapshot.docs) {
 }
 
 await batch.commit();
-console.log(`Prepared Broker payout OTP E2E fixture for ${brokerEmail}; private KYC ready; cleared ${challengeSnapshot.size} challenge candidate(s).`);
+console.log(
+  `Prepared Broker payout OTP E2E fixture for ${brokerEmail}; private KYC ready; `
+  + `cleared ${challengeSnapshot.size} challenge candidate(s) and ${staleSyntheticCommissions.length} stale synthetic commission(s).`,
+);

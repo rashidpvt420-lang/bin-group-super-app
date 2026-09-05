@@ -7,6 +7,7 @@ import { verifyFirebaseProductionSecrets } from './verify-firebase-production-se
 import { verifyFirebasePhoneAuthProduction } from './verify-firebase-phone-auth-production.mjs';
 import { verifyAdminMfaProduction } from './verify-admin-mfa-production.mjs';
 import { classifyPermanentFirebaseDeploymentFailure } from './lib/firebase-deployment-failure-classifier.mjs';
+import { NONFUNCTIONS_TARGET } from './firebase-nonfunctions-production-cli.mjs';
 
 const expectedProjectId = 'bin-group-57c60';
 const deploymentEnvironment = String(process.env.DEPLOYMENT_ENVIRONMENT || '').trim();
@@ -149,7 +150,13 @@ function run(command, args, options = {}) {
 }
 
 function runFirebaseDeploy(args, options = {}) {
-  const result = spawnSync('npx', args, {
+  const useRulesRecovery = args[0] === 'firebase' && args[1] === 'deploy' &&
+    args[2] === '--only' && args[3] === NONFUNCTIONS_TARGET;
+  const command = useRulesRecovery ? process.execPath : 'npx';
+  const commandArgs = useRulesRecovery
+    ? ['scripts/firebase-nonfunctions-production-cli.mjs', ...args.slice(1)]
+    : args;
+  const result = spawnSync(command, commandArgs, {
     cwd: process.cwd(),
     env: process.env,
     encoding: 'utf8',
@@ -457,6 +464,7 @@ try {
 }
 
 const functionDeploymentEvidence = deployFunctionsQuotaSafe();
+process.env.PRODUCTION_FUNCTION_BATCHES_COMPLETED_SHA = githubSha;
 retryFirebase(
   'hosting,firestore:rules,firestore:indexes,storage',
   'non-Functions Firebase production stack',

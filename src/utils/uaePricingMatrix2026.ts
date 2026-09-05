@@ -65,6 +65,9 @@ export const SERVICE_ADDONS = [
   { id: 'emergency_priority', label: 'Emergency Priority', price: 1000, unit: 'annual' },
   { id: 'fitout_quote', label: 'Fit-out Quotation', price: 0, unit: 'free' },
   { id: 'inspection_move', label: 'Move-in/Move-out Inspection', price: 500, unit: 'per unit' },
+  { id: 'gym_equipment_pm', label: 'Fitness Equipment Preventive Maintenance', price: 0, unit: 'separate scope after asset register' },
+  { id: 'gym_wet_area_care', label: 'Gym Wet / Recovery Area Specialist Care', price: 0, unit: 'separate scope after visit' },
+  { id: 'gym_pool_operations', label: 'Gym Pool Operations / Specialist Scope', price: 0, unit: 'separate scope after visit' },
 ];
 
 export interface PricingMatrix {
@@ -81,8 +84,8 @@ export interface PricingMatrix {
  * PM percentages are applied to verified annual rent/revenue by the quote engine and are never multiplied by area or unit counts.
  */
 export const UAE_PRICING_MATRIX_2026: PricingMatrix = {
-  version: '3.2.0',
-  lastUpdated: '2026-08-18',
+  version: '3.3.0',
+  lastUpdated: '2026-09-05',
   zones: {
     A: { label: 'Premium', description: 'Luxury, waterfront, branded and higher-response assets', multiplier: 1.30 },
     B: { label: 'Standard', description: 'Standard urban operating conditions', multiplier: 1.00 },
@@ -129,6 +132,13 @@ export const UAE_PRICING_MATRIX_2026: PricingMatrix = {
       id: 'off-sml', category: 'Commercial', label: 'Office', minimumAnnualContract: 5000,
       pmRate: '7-10% annual rent', ifm: 'FM + PM', pricingUnit: 'sqft', riskLevel: 'Low',
       maintenanceRange: { min: 8, max: 15, target: 10 }, managementRange: { min: 7, max: 10, target: 8 }, combinedRange: { min: 0, max: 0, target: 0 },
+    },
+    // BIN GROUP commercial configuration, not a statutory UAE tariff.
+    // min / target / max map to STANDARD_DRY / ENHANCED / WET_RECOVERY gym complexity bands.
+    {
+      id: 'gym-fitness-centre', category: 'Commercial', label: 'Gym / Fitness Centre', minimumAnnualContract: 15000,
+      pmRate: '7-10% annual rent / managed revenue when in scope', ifm: 'FM + PM / Sports & Wellness', pricingUnit: 'sqft', riskLevel: 'High',
+      maintenanceRange: { min: 10, max: 18, target: 14 }, managementRange: { min: 7, max: 10, target: 8 }, combinedRange: { min: 0, max: 0, target: 0 },
     },
     {
       id: 'com-twr', category: 'Commercial', label: 'Commercial Building / Tower', minimumAnnualContract: 50000,

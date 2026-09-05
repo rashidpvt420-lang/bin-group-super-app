@@ -9,6 +9,7 @@ import { test, expect, type Page, type Response } from '@playwright/test';
 import admin from 'firebase-admin';
 import { createHash, createHmac, randomBytes } from 'node:crypto';
 import { attachAuthenticatedAppCheckMonitor } from './helpers/appCheckDebug';
+import { createBusinessEvidenceRunScope } from '../../scripts/lib/business-evidence-run-scope.mjs';
 
 const EMAIL = String(process.env.E2E_ADMIN_EMAIL || '').trim().toLowerCase();
 const PASSWORD = String(process.env.E2E_ADMIN_PASSWORD || '').trim();
@@ -17,7 +18,10 @@ const FOUNDER_TOTP_SECRET = String(process.env.E2E_FOUNDER_TOTP_SECRET || '').to
 const ADMIN_BASE_URL = String(process.env.E2E_ADMIN_BASE_URL || 'https://bin-group-admin-panel.web.app').trim().replace(/\/+$/, '');
 const PROJECT_ID = process.env.GCP_PROJECT_ID || process.env.GCLOUD_PROJECT || process.env.GOOGLE_CLOUD_PROJECT || 'bin-group-57c60';
 const STORAGE_BUCKET = process.env.FIREBASE_STORAGE_BUCKET || 'bin-group-57c60.firebasestorage.app';
-const RUN_ID = String(process.env.GITHUB_RUN_ID || `${Date.now()}-${randomBytes(3).toString('hex')}`).replace(/[^a-zA-Z0-9-]/g, '').slice(-42);
+const RUN_ID = createBusinessEvidenceRunScope(process.env, {
+  fallback: `${Date.now()}-${randomBytes(3).toString('hex')}`,
+  maxLength: 42,
+});
 const PREFIX = `e2e-admin-${RUN_ID}`;
 
 const SUPPORT_EMAIL = `${PREFIX}-support@bin-groups.com`;
@@ -169,6 +173,27 @@ async function collectDiagnostics(page: Page) {
 async function waitForLoader(page: Page) {
   await page.locator('.MuiCircularProgress-root').waitFor({ state: 'detached', timeout: 30_000 }).catch(() => undefined);
   await page.waitForTimeout(600);
+}
+
+async function chooseTechnicianAndRequireCallableSuccess(
+  page: Page,
+  technicianName: string,
+  actionLabel: string,
+) {
+  const responsePromise = page.waitForResponse(
+    (response) => response.request().method() === 'POST' && response.url().includes('adminAssignTechnician'),
+    { timeout: 45_000 },
+  );
+  await page.getByRole('dialog', { name: /MANUAL SPECIALIST ASSIGNMENT/i })
+    .getByText(technicianName, { exact: true })
+    .click();
+  const response = await responsePromise;
+  const responseText = await response.text().catch(() => '');
+  if (!response.ok() || /\"error\"\s*:/i.test(responseText)) {
+    throw new Error(
+      `${actionLabel} callable failed HTTP ${response.status()}: ${responseText.slice(0, 1_500)}`,
+    );
+  }
 }
 
 async function waitForFreshTotpWindow(page: Page) {
@@ -718,8 +743,19 @@ async function createStaffThroughUi(page: Page, name: string, email: string, rol
 }
 
 async function patchTechnicianReadiness(uid: string) {
+  const onboardingChecklist = {
+    profileComplete: true,
+    documentsComplete: true,
+    contractComplete: true,
+    deviceReady: true,
+    activationApproved: true,
+  };
   const readiness = {
     status: 'ACTIVE',
+    suspended: false,
+    onboardingStage: 'ACTIVE',
+    onboardingComplete: true,
+    onboardingChecklist,
     approvalStatus: 'APPROVED',
     medicalCardStatus: 'VALID',
     medicalCardExpiry: admin.firestore.Timestamp.fromMillis(Date.now() + 365 * 24 * 60 * 60 * 1000),
@@ -733,14 +769,32 @@ async function patchTechnicianReadiness(uid: string) {
     onDuty: true,
     dutyStatus: 'ON_DUTY',
     isAvailable: true,
+    available: true,
     currentJobCount: 0,
     maxConcurrentJobs: 3,
     e2eRunId: RUN_ID,
     updatedAt: serverTimestamp(),
   };
+  const authUser = await admin.auth().getUser(uid);
   await Promise.all([
+    admin.auth().updateUser(uid, { disabled: false }),
+    admin.auth().setCustomUserClaims(uid, { ...(authUser.customClaims || {}), suspended: false }),
     admin.firestore().collection('users').doc(uid).set(readiness, { merge: true }),
     admin.firestore().collection('technicians').doc(uid).set({ role: 'technician', displayName: TECHNICIAN_NAME, ...readiness }, { merge: true }),
+    admin.firestore().collection('staffAccess').doc(uid).set({
+      active: true,
+      suspended: false,
+      status: 'ACTIVE',
+      onboardingStage: 'ACTIVE',
+      updatedAt: serverTimestamp(),
+    }, { merge: true }),
+    admin.firestore().collection('hrProfiles').doc(uid).set({
+      status: 'ACTIVE',
+      suspended: false,
+      onboardingStage: 'ACTIVE',
+      onboardingComplete: true,
+      updatedAt: serverTimestamp(),
+    }, { merge: true }),
   ]);
 }
 
@@ -971,8 +1025,7 @@ test.describe('Admin protected operational business workflow', () => {
     let ticketRow = page.getByRole('row').filter({ hasText: `E2E Dispatch Property ${RUN_ID}` }).first();
     await expect(ticketRow).toBeVisible({ timeout: 35_000 });
     await ticketRow.getByRole('button', { name: 'ASSIGN', exact: true }).click();
-    const assignmentDialog = page.getByRole('dialog', { name: /MANUAL SPECIALIST ASSIGNMENT/i });
-    await assignmentDialog.getByText(TECHNICIAN_NAME, { exact: true }).click();
+    await chooseTechnicianAndRequireCallableSuccess(page, TECHNICIAN_NAME, 'Initial Admin technician assignment');
     await expect.poll(async () => (await db.collection('maintenanceTickets').doc(TICKET_ID).get()).data()?.assignedTechnicianId, { timeout: 50_000 }).toBe(createdTechnicianUid);
 
     await db.collection('maintenanceTickets').doc(TICKET_ID).set({ status: 'EN_ROUTE', updatedAt: serverTimestamp() }, { merge: true });
@@ -980,8 +1033,7 @@ test.describe('Admin protected operational business workflow', () => {
     await waitForLoader(page);
     ticketRow = page.getByRole('row').filter({ hasText: `E2E Dispatch Property ${RUN_ID}` }).first();
     await ticketRow.getByRole('button', { name: 'REASSIGN', exact: true }).click();
-    const reassignDialog = page.getByRole('dialog', { name: /MANUAL SPECIALIST ASSIGNMENT/i });
-    await reassignDialog.getByText(SECOND_TECH_NAME, { exact: true }).click();
+    await chooseTechnicianAndRequireCallableSuccess(page, SECOND_TECH_NAME, 'Admin technician re-assignment');
     await expect.poll(async () => {
       const ticket = (await db.collection('maintenanceTickets').doc(TICKET_ID).get()).data() || {};
       return `${ticket.assignedTechnicianId}|${ticket.status}|${ticket.reassignmentReasonSource}`;

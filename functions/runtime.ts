@@ -50,6 +50,7 @@ export * from "./adminMfaReadiness";
 export * from "./secureAdminContractOperations";
 export * from "./adminMfaRecovery";
 export * from "./aiAssistant";
+export * from "./homeDiscovery";
 // Keep the retired generateAIDesignConceptImages callable fail-closed while
 // exporting the separately reviewed Owner/Tenant and Admin replacement callables.
 export * from "./aiDesignStudioLaunchHold";

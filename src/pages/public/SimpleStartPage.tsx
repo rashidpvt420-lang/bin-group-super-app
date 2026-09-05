@@ -126,7 +126,7 @@ const cards: StartCard[] = [
     ctaAr: 'أنا مستأجر حالي لدى BIN',
     secondaryCtaEn: 'I’m Looking for a Home',
     secondaryCtaAr: 'أبحث عن منزل',
-    secondaryPath: '/login?intendedRole=tenant&returnTo=/tenant/homes',
+    secondaryPath: '/homes',
     secondaryIcon: Search,
   },
   {

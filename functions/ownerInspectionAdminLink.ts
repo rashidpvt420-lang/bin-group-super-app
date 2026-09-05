@@ -13,6 +13,21 @@ const safeId = (value: unknown, fallback: string) => text(value)
   .replace(/_+/g, "_")
   .slice(0, 160) || fallback;
 
+function plain(value: any): any {
+  if (value === undefined || typeof value === "function") return null;
+  if (value === null) return null;
+  if (value instanceof admin.firestore.GeoPoint || value instanceof admin.firestore.Timestamp) return value;
+  if (Array.isArray(value)) return value.map(plain);
+  if (typeof value === "object") {
+    const out: Record<string, any> = {};
+    Object.entries(value).forEach(([key, entry]) => {
+      if (entry !== undefined && typeof entry !== "function") out[key] = plain(entry);
+    });
+    return out;
+  }
+  return value;
+}
+
 async function requireAdmin(request: any) {
   if (!request.auth?.uid) throw new HttpsError("unauthenticated", "Admin authentication required.");
   const token = request.auth.token || {};
@@ -56,6 +71,10 @@ export const adminCreateOwnerPortfolioPropertyInspection = onCall({ cors: true, 
   const ticketRef = db.collection("maintenanceTickets").doc(`owner_inspection_ticket_${deterministicKey}`);
   const dispatchRef = db.collection("technician_dispatch_jobs").doc(`owner_inspection_dispatch_${deterministicKey}`);
   const point = new admin.firestore.GeoPoint(lat, lng);
+  const propertyType = text(property.propertyType || property.type);
+  const isGym = propertyType === "Gym / Fitness Centre";
+  const gymProfile = isGym && property.gymProfile && typeof property.gymProfile === "object" ? plain(property.gymProfile) : null;
+  const declaredGymArea = isGym ? Number(gymProfile?.declaredServiceAreaSqft || property.sqft || 0) : 0;
   const location = {
     lat,
     lng,
@@ -92,6 +111,18 @@ export const adminCreateOwnerPortfolioPropertyInspection = onCall({ cors: true, 
       propertyIndex,
       propertyId,
       propertyName: location.address || `Property ${propertyIndex + 1}`,
+      propertyType,
+      assetClass: text(property.assetClass),
+      ownerDeclaredPropertySnapshot: plain({
+        propertyType,
+        sqft: property.sqft,
+        floors: property.floors,
+        units: property.units,
+        gymProfile,
+      }),
+      gymProfileSnapshot: gymProfile,
+      gymVerificationRequired: isGym,
+      ownerDeclaredGymServiceAreaSqft: declaredGymArea > 0 ? declaredGymArea : null,
       location,
       status: "READY_FOR_SITE_VISIT",
       inspectionStatus: "READY_FOR_SITE_VISIT",
@@ -114,7 +145,8 @@ export const adminCreateOwnerPortfolioPropertyInspection = onCall({ cors: true, 
       ownerUid,
       propertyId,
       propertyIndex,
-      title: "Owner onboarding property verification visit",
+      propertyType,
+      title: isGym ? "Owner onboarding Gym / Fitness Centre verification visit" : "Owner onboarding property verification visit",
       category: "ONBOARDING_INSPECTION",
       status: "OPEN",
       priority: "HIGH",
@@ -134,6 +166,7 @@ export const adminCreateOwnerPortfolioPropertyInspection = onCall({ cors: true, 
       ownerUid,
       propertyId,
       propertyIndex,
+      propertyType,
       jobType: "OWNER_ONBOARDING_SITE_INSPECTION",
       status: "PENDING_ASSIGNMENT",
       assignmentState: "UNASSIGNED_NEAREST_TECH_REQUIRED",
@@ -150,7 +183,16 @@ export const adminCreateOwnerPortfolioPropertyInspection = onCall({ cors: true, 
       action: "CREATE_OWNER_PORTFOLIO_PROPERTY_INSPECTION",
       targetType: "property_inspections",
       targetId: inspectionRef.id,
-      metadata: { intakeId, propertyId, propertyIndex, ticketId: ticketRef.id, dispatchJobId: dispatchRef.id, paymentCollectionRequired: false },
+      metadata: {
+        intakeId,
+        propertyId,
+        propertyIndex,
+        propertyType,
+        gymVerificationRequired: isGym,
+        ticketId: ticketRef.id,
+        dispatchJobId: dispatchRef.id,
+        paymentCollectionRequired: false,
+      },
       createdAt: now,
     });
     return { idempotent: false, inspectionId: inspectionRef.id, ticketId: ticketRef.id, dispatchJobId: dispatchRef.id };

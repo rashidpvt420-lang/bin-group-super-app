@@ -12,6 +12,7 @@ const EXPECTED = {
   'Residential Building': ['res-bldg', 'sqft'],
   'Commercial Building': ['com-twr', 'sqft'],
   'Office': ['off-sml', 'sqft'],
+  'Gym / Fitness Centre': ['gym-fitness-centre', 'sqft'],
   'Retail Center': ['retail-ctr', 'sqft'],
   'Mall': ['rtl-mall', 'sqft'],
   'Hotel': ['mid_scale_hotel', 'sqft'],
@@ -92,11 +93,24 @@ function propertyFor(type, driver) {
       cctvCameraCount: 8,
     };
   }
+  if (type === 'Gym / Fitness Centre') {
+    property.gymProfile = {
+      format: 'standalone',
+      scopeMode: 'GYM_STANDALONE',
+      separateBinScope: true,
+      declaredServiceAreaSqft: 10000,
+      maxLicensedCapacity: 500,
+      equipmentCount: 40,
+      openingSchedule: 'STANDARD_HOURS',
+      suggestedComplexity: 'STANDARD_DRY',
+      pmPricingBasis: 'annual_rent',
+    };
+  }
   return property;
 }
 
-test('server authority has exactly one explicit pricing class and driver for all 26 Asset Profile types', () => {
-  assert.equal(Object.keys(EXPECTED).length, 26);
+test('server authority has exactly one explicit pricing class and driver for all 27 Asset Profile types', () => {
+  assert.equal(Object.keys(EXPECTED).length, 27);
   for (const [type, [expectedClass, expectedDriver]] of Object.entries(EXPECTED)) {
     const property = propertyFor(type, expectedDriver);
     const quote = server.calculateOwnerOnboardingQuote([property], [], 1_800_000_000_000);
@@ -115,6 +129,7 @@ test('server authority fails closed when the required driver is missing or the p
     ['Apartment', { sqft: 50000 }],
     ['Warehouse', { units: 100 }],
     ['Labour Camp', { sqft: 50000 }],
+    ['Gym / Fitness Centre', { gymProfile: { format: 'standalone', scopeMode: 'GYM_STANDALONE', separateBinScope: true, declaredServiceAreaSqft: 0 }, sqft: 0 }],
   ];
   for (const [type, patch] of wrongInputs) {
     assert.throws(
@@ -139,6 +154,78 @@ test('facility classes do not require or multiply generic capacity/area fields',
     }], [], 1_800_000_000_000).propertyQuotes[0];
     assert.equal(giant.annualTotal, minimal.annualTotal, `${type} was multiplied by a generic field`);
   }
+});
+
+test('Gym server pricing uses verified/declared area and complexity, never capacity or equipment count', () => {
+  const base = propertyFor('Gym / Fitness Centre', 'sqft');
+  const normal = server.calculateOwnerOnboardingQuote([base], [], 1_800_000_000_000).propertyQuotes[0];
+  const hugeCapacityAndEquipment = server.calculateOwnerOnboardingQuote([{
+    ...base,
+    units: 500000,
+    gymProfile: { ...base.gymProfile, maxLicensedCapacity: 500000, equipmentCount: 50000 },
+  }], [], 1_800_000_000_000).propertyQuotes[0];
+  const largerArea = server.calculateOwnerOnboardingQuote([{
+    ...base,
+    sqft: 20000,
+    gymProfile: { ...base.gymProfile, declaredServiceAreaSqft: 20000 },
+  }], [], 1_800_000_000_000).propertyQuotes[0];
+  const enhanced = server.calculateOwnerOnboardingQuote([{
+    ...base,
+    gymProfile: { ...base.gymProfile, suggestedComplexity: 'ENHANCED' },
+  }], [], 1_800_000_000_000).propertyQuotes[0];
+  const wetRecovery = server.calculateOwnerOnboardingQuote([{
+    ...base,
+    gymProfile: { ...base.gymProfile, suggestedComplexity: 'WET_RECOVERY' },
+  }], [], 1_800_000_000_000).propertyQuotes[0];
+
+  assert.equal(hugeCapacityAndEquipment.annualTotal, normal.annualTotal, 'Gym capacity/equipment changed the server property price');
+  assert.ok(largerArea.annualTotal > normal.annualTotal, 'Gym server quote did not increase with measured area');
+  assert.ok(enhanced.annualTotal > normal.annualTotal, 'Gym ENHANCED rate band was not applied by the server');
+  assert.ok(wetRecovery.annualTotal > enhanced.annualTotal, 'Gym WET_RECOVERY rate band was not applied by the server');
+});
+
+test('Gym inside a parent asset is never double-priced without a separate BIN GROUP scope', () => {
+  const gym = propertyFor('Gym / Fitness Centre', 'sqft');
+  assert.throws(
+    () => server.calculateOwnerOnboardingQuote([{
+      ...gym,
+      gymProfile: { ...gym.gymProfile, scopeMode: 'GYM_WITHIN_PARENT_ASSET', separateBinScope: false },
+    }], [], 1_800_000_000_000),
+    /not separately priced/i,
+  );
+
+  const separate = server.calculateOwnerOnboardingQuote([{
+    ...gym,
+    gymProfile: { ...gym.gymProfile, scopeMode: 'GYM_WITHIN_PARENT_ASSET', separateBinScope: true },
+  }], [], 1_800_000_000_000).propertyQuotes[0];
+  assert.ok(separate.annualTotal > 0);
+});
+
+test('Gym PM pricing basis keeps contracted rent separate from managed operating revenue', () => {
+  const gym = {
+    ...propertyFor('Gym / Fitness Centre', 'sqft'),
+    strategy: 'pm_only',
+    annualRent: 100000,
+    annualRevenue: 900000,
+  };
+  const rentBased = server.calculateOwnerOnboardingQuote([{
+    ...gym,
+    gymProfile: { ...gym.gymProfile, pmPricingBasis: 'annual_rent' },
+  }], [], 1_800_000_000_000).propertyQuotes[0];
+  const revenueBased = server.calculateOwnerOnboardingQuote([{
+    ...gym,
+    gymProfile: { ...gym.gymProfile, pmPricingBasis: 'managed_operating_revenue' },
+  }], [], 1_800_000_000_000).propertyQuotes[0];
+
+  assert.equal(rentBased.annualTotal, 7000);
+  assert.equal(revenueBased.annualTotal, 63000);
+  assert.throws(
+    () => server.calculateOwnerOnboardingQuote([{
+      ...gym,
+      gymProfile: { ...gym.gymProfile, pmPricingBasis: 'flat_custom' },
+    }], [], 1_800_000_000_000),
+    /manual contract quote/i,
+  );
 });
 
 test('Private Majlis wins over the legacy majlis boolean and Warehouse never becomes Labour Camp', () => {
@@ -172,7 +259,8 @@ test('all quote adapters are wired to canonical classification with no apartment
 
   assert.match(payloadSource, /resolveAssetClassIdForPropertyType\(property\.propertyType, property\.assetGrade\)/);
   assert.match(payloadSource, /\bbeds,\s*\n/);
-  assert.match(payloadSource, /annualRevenue:\s*property\.annualRevenue/);
+  assert.match(payloadSource, /annualRevenue,\s*\n/);
+  assert.match(payloadSource, /gymComplexity:/);
   assert.doesNotMatch(payloadSource, /\|\|\s*['"]dubai['"]/, 'missing emirate must not silently receive Dubai premium pricing');
   assert.doesNotMatch(payloadSource, /return\s+['"]apt-std['"]/, 'portfolio quote payload must not fall back to Apartment');
 });

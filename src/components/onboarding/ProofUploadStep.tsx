@@ -1,25 +1,26 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
     Alert, Box, Button, CircularProgress, Dialog, DialogActions, DialogContent,
     DialogTitle, Paper, Stack, Typography, alpha
 } from '@mui/material';
-import { AlertCircle, CheckCircle, FileText, Trash2, Upload } from 'lucide-react';
+import { AlertCircle, CheckCircle, Dumbbell, FileText, Trash2, Upload } from 'lucide-react';
 import { useOnboardingStore } from '../../store/onboardingStore';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { removeStagedFile, stageFile } from '../../lib/onboardingDb';
 
 interface ProofUploadStepProps { onNext: () => void; onBack: () => void }
-type ProofKey = 'propertyProof' | 'emiratesId' | 'passport' | 'tradeLicense' | 'tenancySupport';
+type ProofKey = 'propertyProof' | 'emiratesId' | 'passport' | 'tradeLicense' | 'tenancySupport' | 'gymSportsApproval' | 'gymInsurance' | 'gymFloorPlan';
 type LocalText = { en: string; ar: string };
 const tx = (text: LocalText, ar: boolean) => ar ? text.ar : text.en;
 const MAX_DOCUMENT_SIZE = 8 * 1024 * 1024;
 
 const copy = {
     title: { en: 'Protected Documents', ar: 'المستندات المحمية' },
-    desc: { en: 'Upload property proof and the correct legal-identity evidence for the contracting Owner.', ar: 'ارفع إثبات العقار ومستندات الهوية القانونية الصحيحة للمالك المتعاقد.' },
-    secure: { en: 'Documents are staged only in this browser session, then uploaded to protected storage during page 5 submission.', ar: 'تُجهز المستندات داخل جلسة المتصفح فقط، ثم تُرفع إلى التخزين المحمي أثناء إرسال الصفحة الخامسة.' },
+    desc: { en: 'Upload property proof, legal identity evidence, and asset-specific supporting documents.', ar: 'ارفع إثبات العقار ومستندات الهوية القانونية والمستندات الداعمة الخاصة بنوع العقار.' },
+    secure: { en: 'Documents are encrypted and staged only in this browser session, then uploaded to protected storage during page 5 submission.', ar: 'تُشفّر المستندات وتُجهز داخل جلسة المتصفح فقط، ثم تُرفع إلى التخزين المحمي أثناء إرسال الصفحة الخامسة.' },
     identityRule: { en: 'Identity rule: Emirates ID + passport for an individual Owner, or a trade licence for a company/government entity.', ar: 'قاعدة الهوية: الهوية الإماراتية مع جواز السفر للمالك الفرد، أو الرخصة التجارية للشركة/الجهة الحكومية.' },
+    gymRule: { en: 'Gym / Fitness Centre: upload the sports-establishment approval, insurance and floor plan whenever you marked them “Available / will upload”. Multiple-gym portfolios may use combined portfolio documents.', ar: 'النادي الرياضي / مركز اللياقة: ارفع موافقة المنشأة الرياضية والتأمين والمخطط عندما تم تحديدها كـ «متوفرة / سيتم الرفع». يمكن لمحفظة تضم عدة أندية استخدام مستندات مجمعة.' },
     drop: { en: 'Drop file here or click to browse', ar: 'اسحب الملف هنا أو اضغط للاختيار' },
     max: { en: 'PDF, JPG or PNG · max 8 MB', ar: 'PDF أو JPG أو PNG · بحد أقصى 8 ميجابايت' },
     ready: { en: 'Ready for protected submission', ar: 'جاهز للإرسال المحمي' },
@@ -27,6 +28,7 @@ const copy = {
     summary: { en: 'Document readiness', ar: 'جاهزية المستندات' },
     propertyRequired: { en: 'Property proof is required.', ar: 'إثبات العقار مطلوب.' },
     identityRequired: { en: 'Add Emirates ID plus passport, or add a trade licence.', ar: 'أضف الهوية الإماراتية مع جواز السفر، أو أضف الرخصة التجارية.' },
+    gymRequired: { en: 'Every Gym document marked available must be attached before submission.', ar: 'يجب إرفاق كل مستند للنادي تم تحديده على أنه متوفر قبل الإرسال.' },
     back: { en: 'Back', ar: 'رجوع' },
     continue: { en: 'Continue to Review', ar: 'المتابعة إلى المراجعة' },
     removeTitle: { en: 'Remove document?', ar: 'إزالة المستند؟' },
@@ -38,22 +40,42 @@ const copy = {
     removeFailed: { en: 'Failed to remove file', ar: 'فشل إزالة الملف' },
 };
 
-const documentTypes: Array<{ key: ProofKey; label: LocalText; requirement: LocalText; accept: string }> = [
+const documentTypes: Array<{ key: ProofKey; label: LocalText; requirement: LocalText; accept: string; gymOnly?: boolean }> = [
     { key: 'propertyProof', label: { en: 'Property Proof', ar: 'إثبات العقار' }, requirement: { en: 'Title deed or authorised tenancy/management contract', ar: 'سند ملكية أو عقد إيجار/إدارة معتمد' }, accept: '.pdf,.jpg,.jpeg,.png' },
     { key: 'emiratesId', label: { en: "Owner's Emirates ID", ar: 'الهوية الإماراتية للمالك' }, requirement: { en: 'Individual Owner identity part 1', ar: 'الجزء الأول من هوية المالك الفرد' }, accept: '.pdf,.jpg,.jpeg,.png' },
     { key: 'passport', label: { en: "Owner's Passport", ar: 'جواز سفر المالك' }, requirement: { en: 'Individual Owner identity part 2', ar: 'الجزء الثاني من هوية المالك الفرد' }, accept: '.pdf,.jpg,.jpeg,.png' },
     { key: 'tradeLicense', label: { en: 'Trade Licence', ar: 'الرخصة التجارية' }, requirement: { en: 'Company or government contracting identity', ar: 'هوية الشركة أو الجهة الحكومية المتعاقدة' }, accept: '.pdf,.jpg,.jpeg,.png' },
     { key: 'tenancySupport', label: { en: 'Additional Tenancy Support', ar: 'مستندات إيجارية داعمة' }, requirement: { en: 'Optional supporting evidence', ar: 'إثبات داعم اختياري' }, accept: '.pdf,.jpg,.jpeg,.png' },
+    { key: 'gymSportsApproval', gymOnly: true, label: { en: 'Gym Sports Establishment / Fitness Centre Approval', ar: 'موافقة المنشأة الرياضية / مركز اللياقة' }, requirement: { en: 'Approval evidence when marked available in the Gym profile', ar: 'إثبات الموافقة عندما تم تحديدها كمتوفرة في ملف النادي' }, accept: '.pdf,.jpg,.jpeg,.png' },
+    { key: 'gymInsurance', gymOnly: true, label: { en: 'Gym Insurance Evidence', ar: 'إثبات تأمين النادي' }, requirement: { en: 'Current policy / certificate when marked available', ar: 'وثيقة / شهادة سارية عندما تم تحديدها كمتوفرة' }, accept: '.pdf,.jpg,.jpeg,.png' },
+    { key: 'gymFloorPlan', gymOnly: true, label: { en: 'Gym Floor Plan', ar: 'مخطط النادي الرياضي' }, requirement: { en: 'Floor plan supporting the declared measured area', ar: 'المخطط الداعم لمساحة الخدمة المصرح بها' }, accept: '.pdf,.jpg,.jpeg,.png' },
 ];
 
 export default function ProofUploadStep({ onNext, onBack }: ProofUploadStepProps) {
-    const { setProofDocument, proofDocuments } = useOnboardingStore();
+    const { setProofDocument, proofDocuments, properties } = useOnboardingStore();
     const { isRTL, lang } = useLanguage();
     const ar = lang === 'ar';
     const [uploading, setUploading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [dragOverKey, setDragOverKey] = useState<string | null>(null);
     const [confirmDelete, setConfirmDelete] = useState<ProofKey | null>(null);
+    const proofMap = proofDocuments as unknown as Record<ProofKey, { name: string; size: number; type: string } | null>;
+    const gymProperties = useMemo(() => properties.filter((property) => property.propertyType === 'Gym / Fitness Centre'), [properties]);
+    const hasGym = gymProperties.length > 0;
+    const visibleDocumentTypes = useMemo(() => documentTypes.filter((item) => !item.gymOnly || hasGym), [hasGym]);
+    const gymRequired = {
+        gymSportsApproval: gymProperties.some((property) => property.gymProfile?.sportsEstablishmentApprovalStatus === 'available'),
+        gymInsurance: gymProperties.some((property) => property.gymProfile?.insuranceStatus === 'available'),
+        gymFloorPlan: gymProperties.some((property) => property.gymProfile?.floorPlanStatus === 'available'),
+    };
+
+    const isDocumentRequired = (key: ProofKey) => {
+        if (key === 'propertyProof') return true;
+        if (key === 'gymSportsApproval') return gymRequired.gymSportsApproval;
+        if (key === 'gymInsurance') return gymRequired.gymInsurance;
+        if (key === 'gymFloorPlan') return gymRequired.gymFloorPlan;
+        return false;
+    };
 
     const handleFileSelect = async (key: ProofKey, file: File | null) => {
         setError(null);
@@ -64,7 +86,7 @@ export default function ProofUploadStep({ onNext, onBack }: ProofUploadStepProps
         try {
             setUploading(true);
             await stageFile(key, file);
-            setProofDocument(key, { name: file.name, size: file.size, type: file.type });
+            setProofDocument(key as any, { name: file.name, size: file.size, type: file.type });
         } catch (stageError: any) {
             setError(`${tx(copy.stageFailed, ar)}: ${stageError?.message || stageError}`);
         } finally { setUploading(false); }
@@ -73,7 +95,7 @@ export default function ProofUploadStep({ onNext, onBack }: ProofUploadStepProps
     const handleRemoveFile = async (key: ProofKey) => {
         try {
             await removeStagedFile(key);
-            setProofDocument(key, null);
+            setProofDocument(key as any, null);
             setConfirmDelete(null);
         } catch (removeError: any) {
             setError(`${tx(copy.removeFailed, ar)}: ${removeError?.message || removeError}`);
@@ -83,8 +105,11 @@ export default function ProofUploadStep({ onNext, onBack }: ProofUploadStepProps
     const hasPropertyProof = Boolean(proofDocuments.propertyProof);
     const hasIndividualIdentity = Boolean(proofDocuments.emiratesId && proofDocuments.passport);
     const hasEntityIdentity = Boolean(proofDocuments.tradeLicense);
-    const canProceed = hasPropertyProof && (hasIndividualIdentity || hasEntityIdentity);
-    const uploadedCount = documentTypes.filter((item) => proofDocuments[item.key]).length;
+    const gymAvailableDocsReady = (!gymRequired.gymSportsApproval || Boolean(proofMap.gymSportsApproval))
+        && (!gymRequired.gymInsurance || Boolean(proofMap.gymInsurance))
+        && (!gymRequired.gymFloorPlan || Boolean(proofMap.gymFloorPlan));
+    const canProceed = hasPropertyProof && (hasIndividualIdentity || hasEntityIdentity) && gymAvailableDocsReady;
+    const uploadedCount = visibleDocumentTypes.filter((item) => proofMap[item.key]).length;
 
     return (
         <Box dir={isRTL ? 'rtl' : 'ltr'} sx={{ maxWidth: 840, mx: 'auto', width: '100%', py: { xs: 1, md: 4 }, pb: { xs: 12, md: 4 } }}>
@@ -95,15 +120,17 @@ export default function ProofUploadStep({ onNext, onBack }: ProofUploadStepProps
             <Paper sx={{ p: { xs: 2.5, md: 5 }, borderRadius: 6, bgcolor: 'rgba(22,22,24,0.72)', border: '1px solid rgba(255,255,255,0.07)' }}>
                 {error && <Alert severity="error" sx={{ mb: 3 }}>{error}</Alert>}
                 <Alert icon={<AlertCircle size={22} />} sx={{ mb: 2, bgcolor: alpha(binThemeTokens.gold, 0.06), color: binThemeTokens.gold, border: `1px solid ${alpha(binThemeTokens.gold, 0.24)}` }}>{tx(copy.secure, ar)}</Alert>
-                <Alert severity="info" sx={{ mb: 3 }}>{tx(copy.identityRule, ar)}</Alert>
+                <Alert severity="info" sx={{ mb: hasGym ? 2 : 3 }}>{tx(copy.identityRule, ar)}</Alert>
+                {hasGym && <Alert severity="info" icon={<Dumbbell size={20} />} sx={{ mb: 3 }}>{tx(copy.gymRule, ar)}</Alert>}
 
                 <Stack spacing={2.5}>
-                    {documentTypes.map(({ key, label, requirement, accept }) => {
-                        const meta = proofDocuments[key];
+                    {visibleDocumentTypes.map(({ key, label, requirement, accept, gymOnly }) => {
+                        const meta = proofMap[key];
                         const hasFile = Boolean(meta);
-                        const required = key === 'propertyProof' || key === 'emiratesId' || key === 'passport' || key === 'tradeLicense';
+                        const required = isDocumentRequired(key);
                         return (
                             <Box key={key}>
+                                {gymOnly && key === 'gymSportsApproval' && <Typography variant="overline" color={binThemeTokens.gold} fontWeight={950}>GYM / FITNESS CENTRE SUPPORTING DOCUMENTS</Typography>}
                                 <Stack direction={isRTL ? 'row-reverse' : 'row'} justifyContent="space-between" alignItems="center" mb={1}>
                                     <Box sx={{ textAlign: isRTL ? 'right' : 'left' }}>
                                         <Typography color="#FFF" fontWeight={900}>{required && <span style={{ color: '#ef4444' }}>* </span>}{tx(label, ar)}</Typography>
@@ -134,9 +161,10 @@ export default function ProofUploadStep({ onNext, onBack }: ProofUploadStepProps
                 </Stack>
 
                 <Box sx={{ mt: 4, p: 2.5, borderRadius: 3, bgcolor: alpha(binThemeTokens.gold, 0.06), border: `1px solid ${alpha(binThemeTokens.gold, 0.22)}` }}>
-                    <Typography color={binThemeTokens.gold} fontWeight={900}>{tx(copy.summary, ar)} · {uploadedCount}/{documentTypes.length}</Typography>
+                    <Typography color={binThemeTokens.gold} fontWeight={900}>{tx(copy.summary, ar)} · {uploadedCount}/{visibleDocumentTypes.length}</Typography>
                     <Typography variant="body2" color={hasPropertyProof ? '#4ADE80' : '#FCA5A5'} mt={1}>{hasPropertyProof ? '✓' : '•'} {tx(copy.propertyRequired, ar)}</Typography>
                     <Typography variant="body2" color={hasIndividualIdentity || hasEntityIdentity ? '#4ADE80' : '#FCA5A5'}>{hasIndividualIdentity || hasEntityIdentity ? '✓' : '•'} {tx(copy.identityRequired, ar)}</Typography>
+                    {hasGym && <Typography variant="body2" color={gymAvailableDocsReady ? '#4ADE80' : '#FCA5A5'}>{gymAvailableDocsReady ? '✓' : '•'} {tx(copy.gymRequired, ar)}</Typography>}
                 </Box>
 
                 <Stack direction={{ xs: 'column', sm: isRTL ? 'row-reverse' : 'row' }} spacing={2} sx={{ pt: 4 }}>

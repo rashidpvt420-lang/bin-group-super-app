@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -77,6 +77,7 @@ test('authenticated Firebase config resolution exports both downstream names wit
     });
 
     assert.equal(result.source, 'firebase-app-check-api');
+    assert.equal(result.canonicalConfigVerified, true);
     assert.equal(request.configName, CONFIG_NAME);
     assert.equal(
       request.url,
@@ -92,7 +93,7 @@ test('authenticated Firebase config resolution exports both downstream names wit
   }
 });
 
-test('configured protected value bypasses the API and remains validated', async () => {
+test('configured protected value must match the canonical Firebase app before export', async () => {
   const directory = mkdtempSync(path.join(tmpdir(), 'admin-app-check-secret-'));
   const githubEnvironmentPath = path.join(directory, 'github-env');
   let requested = false;
@@ -103,11 +104,111 @@ test('configured protected value bypasses the API and remains validated', async 
       }),
       requestConfig: async () => {
         requested = true;
-        throw new Error('must not request');
+        return { name: CONFIG_NAME, siteKey: ENTERPRISE_SITE_KEY };
       },
     });
     assert.equal(result.source, 'protected-environment');
-    assert.equal(requested, false);
+    assert.equal(result.canonicalConfigVerified, true);
+    assert.equal(requested, true);
+    assert.match(readFileSync(githubEnvironmentPath, 'utf8'), /REACT_APP_APP_CHECK_SITE_KEY=/);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test('configured key mismatch fails closed without exporting either key or exposing values', async () => {
+  const directory = mkdtempSync(path.join(tmpdir(), 'admin-app-check-mismatch-'));
+  const githubEnvironmentPath = path.join(directory, 'github-env');
+  const otherKey = 'different_admin_site_key_123456789012345';
+  const original = 'EXISTING_ENVIRONMENT_VALUE=unchanged\n';
+  writeFileSync(githubEnvironmentPath, original);
+  try {
+    await assert.rejects(resolveAdminAppCheckSiteKey({
+      env: productionEnvironment(githubEnvironmentPath, {
+        FIREBASE_APPCHECK_ENTERPRISE_SITE_KEY: otherKey,
+      }),
+      requestConfig: async () => ({ name: CONFIG_NAME, siteKey: ENTERPRISE_SITE_KEY }),
+    }), (error) => {
+      assert.match(error.message, /FIREBASE_APPCHECK_ENTERPRISE_SITE_KEY does not match/);
+      assert.equal(error.message.includes(ENTERPRISE_SITE_KEY), false);
+      assert.equal(error.message.includes(otherKey), false);
+      return true;
+    });
+    assert.equal(readFileSync(githubEnvironmentPath, 'utf8'), original);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test('invalid Firebase responses and lookup failures never export a configured key', async () => {
+  const directory = mkdtempSync(path.join(tmpdir(), 'admin-app-check-invalid-'));
+  const githubEnvironmentPath = path.join(directory, 'github-env');
+  try {
+    for (const response of [
+      null,
+      [],
+      {},
+      { name: `${CONFIG_NAME}-other`, siteKey: ENTERPRISE_SITE_KEY },
+      { name: [CONFIG_NAME], siteKey: ENTERPRISE_SITE_KEY },
+      { name: CONFIG_NAME, siteKey: '' },
+      { name: CONFIG_NAME, siteKey: [ENTERPRISE_SITE_KEY] },
+      { name: CONFIG_NAME, siteKey: PUBLIC_SITE_KEY },
+      { name: CONFIG_NAME, siteKey: 'REPLACE_WITH_ENTERPRISE_SITE_KEY_12345' },
+    ]) {
+      await assert.rejects(resolveAdminAppCheckSiteKey({
+        env: productionEnvironment(githubEnvironmentPath, {
+          FIREBASE_APPCHECK_ENTERPRISE_SITE_KEY: ENTERPRISE_SITE_KEY,
+        }),
+        requestConfig: async () => response,
+      }));
+      assert.equal(existsSync(githubEnvironmentPath), false);
+    }
+
+    for (const sensitiveError of [
+      new Error(`Credential failure with bearer token ${ENTERPRISE_SITE_KEY}`),
+      new SyntaxError(`Response body contains ${ENTERPRISE_SITE_KEY}`),
+      new DOMException('Timed out', 'TimeoutError'),
+    ]) {
+      await assert.rejects(resolveAdminAppCheckSiteKey({
+        env: productionEnvironment(githubEnvironmentPath, {
+          FIREBASE_APPCHECK_ENTERPRISE_SITE_KEY: ENTERPRISE_SITE_KEY,
+        }),
+        requestConfig: async () => { throw sensitiveError; },
+      }), (error) => {
+        assert.match(error.message, /Canonical Firebase config lookup failed/);
+        assert.equal(error.message.includes(ENTERPRISE_SITE_KEY), false);
+        assert.equal(error.cause, undefined);
+        return true;
+      });
+      assert.equal(existsSync(githubEnvironmentPath), false);
+    }
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test('unprotected contexts and invalid configured keys are rejected before any API call', async () => {
+  const directory = mkdtempSync(path.join(tmpdir(), 'admin-app-check-no-api-'));
+  const githubEnvironmentPath = path.join(directory, 'github-env');
+  let requests = 0;
+  try {
+    for (const overrides of [
+      { GITHUB_ACTIONS: 'false' },
+      { GITHUB_WORKFLOW: 'Unprotected' },
+      { GITHUB_SHA: '' },
+      { FIREBASE_APPCHECK_ENTERPRISE_SITE_KEY: PUBLIC_SITE_KEY },
+      { FIREBASE_APPCHECK_ENTERPRISE_SITE_KEY: 'invalid' },
+    ]) {
+      await assert.rejects(resolveAdminAppCheckSiteKey({
+        env: productionEnvironment(githubEnvironmentPath, overrides),
+        requestConfig: async () => {
+          requests += 1;
+          return { name: CONFIG_NAME, siteKey: ENTERPRISE_SITE_KEY };
+        },
+      }));
+      assert.equal(requests, 0);
+      assert.equal(existsSync(githubEnvironmentPath), false);
+    }
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
