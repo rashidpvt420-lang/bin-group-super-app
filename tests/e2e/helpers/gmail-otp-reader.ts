@@ -30,6 +30,7 @@ interface GmailMessagePart {
 interface GmailMessagePayload {
   snippet?: string;
   internalDate?: string;
+  labelIds?: string[];
   payload?: GmailMessagePart;
 }
 
@@ -71,7 +72,11 @@ async function listMessages(
   accessToken: string,
   query: string,
 ): Promise<Array<{ id: string; threadId: string }>> {
-  const url = `${GMAIL_BASE_URL}/messages?q=${encodeURIComponent(query)}&maxResults=10`;
+  // Gmail excludes Spam and Trash from messages.list unless includeSpamTrash is
+  // explicitly enabled. Production delivery evidence must observe a fresh OTP
+  // regardless of mailbox classification; freshness/correlation below remain
+  // fail-closed, so widening folder visibility cannot make a stale code valid.
+  const url = `${GMAIL_BASE_URL}/messages?q=${encodeURIComponent(query)}&maxResults=10&includeSpamTrash=true`;
   const res = await fetch(url, {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
@@ -150,7 +155,7 @@ async function collectMessageBody(
 async function getMessageContent(
   accessToken: string,
   messageId: string,
-): Promise<{ content: string; internalDate: string }> {
+): Promise<{ content: string; internalDate: string; labelIds: string[] }> {
   // Fetch the full MIME payload. Gmail snippets are intentionally abbreviated
   // and are not a reliable source of a security code for production evidence.
   const url = `${GMAIL_BASE_URL}/messages/${encodeURIComponent(messageId)}?format=full`;
@@ -168,7 +173,15 @@ async function getMessageContent(
   return {
     content: [snippet, body].filter(Boolean).join('\n'),
     internalDate: String(json.internalDate ?? '0'),
+    labelIds: Array.isArray(json.labelIds) ? json.labelIds.map((label) => String(label).toUpperCase()) : [],
   };
+}
+
+function mailboxLocation(labelIds: string[]): 'spam' | 'trash' | 'inbox' | 'other' {
+  if (labelIds.includes('SPAM')) return 'spam';
+  if (labelIds.includes('TRASH')) return 'trash';
+  if (labelIds.includes('INBOX')) return 'inbox';
+  return 'other';
 }
 
 /** Extract the first 6-digit numeric code found in text. */
@@ -206,6 +219,8 @@ export interface GmailOtpOptions {
  * as read before CI polls it; read state must therefore never be a launch gate.
  * When a correlationId is supplied, a candidate must also contain the exact
  * server-issued reference so a prior fresh OTP can never satisfy a later challenge.
+ * Spam and Trash are searched too, but those folders never bypass freshness or
+ * correlation; their counts are emitted only as sanitized delivery diagnostics.
  *
  * @param role - 'owner' | 'broker'
  * @throws if credentials are missing or no OTP is found before timeout
@@ -249,9 +264,13 @@ export async function getLatestOtp(
       const messages = await listMessages(accessToken, gmailQuery);
       let freshMessageCount = 0;
       let correlatedMessageCount = 0;
+      let freshInboxMessageCount = 0;
+      let freshSpamMessageCount = 0;
+      let freshTrashMessageCount = 0;
+      let freshOtherMessageCount = 0;
 
       for (const msg of messages) {
-        const { content, internalDate } = await getMessageContent(accessToken, msg.id);
+        const { content, internalDate, labelIds } = await getMessageContent(accessToken, msg.id);
 
         if (Number(internalDate) < afterMs) {
           // Email is older than the exact test window — skip it even if the
@@ -261,17 +280,24 @@ export async function getLatestOtp(
         }
 
         freshMessageCount += 1;
+        const location = mailboxLocation(labelIds);
+        if (location === 'inbox') freshInboxMessageCount += 1;
+        else if (location === 'spam') freshSpamMessageCount += 1;
+        else if (location === 'trash') freshTrashMessageCount += 1;
+        else freshOtherMessageCount += 1;
+
         if (correlationId && !content.includes(correlationId)) continue;
         correlatedMessageCount += 1;
 
         const code = extractOtpCode(content);
         if (code) {
-          console.log(`[gmail-otp-reader] OTP retrieved for ${PREFIX} (message ${msg.id})`);
+          console.log(`[gmail-otp-reader] OTP retrieved for ${PREFIX} (message ${msg.id}, mailbox=${location})`);
           return code;
         }
       }
 
-      lastError = `No OTP found in ${correlatedMessageCount} correlated fresh message(s) out of ${freshMessageCount} fresh / ${messages.length} matching message(s) — will retry`;
+      const mailboxSummary = `inbox=${freshInboxMessageCount}, spam=${freshSpamMessageCount}, trash=${freshTrashMessageCount}, other=${freshOtherMessageCount}`;
+      lastError = `No OTP found in ${correlatedMessageCount} correlated fresh message(s) out of ${freshMessageCount} fresh / ${messages.length} matching message(s); fresh mailbox locations: ${mailboxSummary} — will retry`;
     } catch (err) {
       lastError = err instanceof Error ? err.message : String(err);
     }
