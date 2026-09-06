@@ -67,7 +67,10 @@ mapfile -t failed_job_ids < <(jq -r '.jobs[] | select(.conclusion == "failure") 
 for job_id in "${failed_job_ids[@]}"; do
   [[ "$job_id" =~ ^[0-9]+$ ]]
   printf '\n===== FAILED JOB %s =====\n' "$job_id" >> "$raw_log"
-  gh api "repos/$REPOSITORY/actions/jobs/$job_id/logs" >> "$raw_log"
+  # GitHub Actions job logs contain terminal control sequences. gh refuses to
+  # emit them unless explicitly allowed; they remain runner-local and are
+  # sanitized below before any artifact or issue comment is produced.
+  gh api --allow-escape-sequences "repos/$REPOSITORY/actions/jobs/$job_id/logs" >> "$raw_log"
 done
 
 test -s "$raw_log"
