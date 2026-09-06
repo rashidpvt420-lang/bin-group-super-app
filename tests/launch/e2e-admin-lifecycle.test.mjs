@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import {
+  shouldManageEphemeralE2eAdmin,
   validateEphemeralE2eAdminIdentity,
 } from '../../scripts/e2e-admin-lifecycle.mjs';
 
@@ -117,6 +118,23 @@ test('live launch audit recreates the Admin for evidence and retires it in final
   assert.ok(auditIndex > seedIndex);
   assert.ok(finallyIndex > auditIndex);
   assert.ok(cleanupIndex > finallyIndex);
+});
+
+test('Live Launch Audit is an approved protected E2E Admin retirement workflow', () => {
+  const env = {
+    GITHUB_ACTIONS: 'true',
+    GITHUB_WORKFLOW: 'Live Launch Audit',
+    DEPLOYMENT_ENVIRONMENT: 'production',
+    E2E_ADMIN_EMAIL: 'e2e-admin@example.test',
+  };
+  assert.equal(shouldManageEphemeralE2eAdmin(env), true);
+  assert.match(
+    lifecycleSource,
+    /\[LIVE_LAUNCH_AUDIT_WORKFLOW_NAME, new Set\(\['post-launch-audit'\]\)\]/,
+  );
+  assert.match(lifecycleSource, /GITHUB_EVENT_NAME === 'push'/);
+  assert.match(lifecycleSource, /GITHUB_EVENT_NAME === 'workflow_dispatch'/);
+  assert.match(lifecycleSource, /refs\/heads\/main/);
 });
 
 test('E2E seeding refuses Founder and cross-role email collisions', () => {
