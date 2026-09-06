@@ -15,10 +15,12 @@ const EXPECTED_PROJECT_ID = 'bin-group-57c60';
 const EXPECTED_REPOSITORY = 'rashidpvt420-lang/bin-group-super-app';
 const DEPLOY_WORKFLOW_NAME = 'Firebase Production Deploy';
 const LIVE_ROLE_WORKFLOW_NAME = 'Live Role Smoke Tests';
+const LIVE_LAUNCH_AUDIT_WORKFLOW_NAME = 'Live Launch Audit';
 const DIAGNOSTIC_WORKFLOW_NAME = 'Live Business Failure Diagnostics';
 const ALLOWED_PHASES_BY_WORKFLOW = new Map([
   [DEPLOY_WORKFLOW_NAME, new Set(['predeploy', 'post-business-evidence', 'post-launch-audit'])],
   [LIVE_ROLE_WORKFLOW_NAME, new Set(['post-business-evidence'])],
+  [LIVE_LAUNCH_AUDIT_WORKFLOW_NAME, new Set(['post-launch-audit'])],
   [DIAGNOSTIC_WORKFLOW_NAME, new Set(['post-business-diagnostic'])],
 ]);
 const DIRECT_PROFILE_COLLECTIONS = [
@@ -78,6 +80,12 @@ function requireProtectedContext({ projectId, phase, env }) {
   if (workflow === DEPLOY_WORKFLOW_NAME || workflow === LIVE_ROLE_WORKFLOW_NAME) {
     if (env.GITHUB_REF !== 'refs/heads/main' || env.GITHUB_EVENT_NAME !== 'workflow_dispatch') {
       throw new Error(`${workflow} lifecycle changes require a protected workflow_dispatch from refs/heads/main.`);
+    }
+    evidenceSha = text(env.GITHUB_SHA);
+  } else if (workflow === LIVE_LAUNCH_AUDIT_WORKFLOW_NAME) {
+    const allowedEvent = env.GITHUB_EVENT_NAME === 'push' || env.GITHUB_EVENT_NAME === 'workflow_dispatch';
+    if (env.GITHUB_REF !== 'refs/heads/main' || !allowedEvent) {
+      throw new Error('Live Launch Audit lifecycle changes require push or workflow_dispatch from refs/heads/main.');
     }
     evidenceSha = text(env.GITHUB_SHA);
   } else if (workflow === DIAGNOSTIC_WORKFLOW_NAME) {
