@@ -290,7 +290,7 @@ export async function getLatestOtp(
         const code = extractOtpCode(content);
         if (code) {
           console.log(
-            `[gmail-otp-reader] OTP ${code.slice(0, 2)}**** retrieved for ${PREFIX} in ${location} ` +
+            `[gmail-otp-reader] OTP retrieved for ${PREFIX} in ${location} ` +
             `(fresh=${freshMessageCount}, spam=${freshSpamMessageCount}, trash=${freshTrashMessageCount}, ` +
             `message ${msg.id}, date=${new Date(msgDate).toISOString()})`,
           );
