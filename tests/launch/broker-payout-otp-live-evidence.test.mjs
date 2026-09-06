@@ -79,6 +79,8 @@ test('Broker live evidence fetches a real OTP from Gmail and submits it — canc
   // Cancel path must NOT be used — that was the false-pass escape hatch
   assert.doesNotMatch(brokerSpec, /broker-payout-otp-cancel/);
 
+  assert.match(brokerSpec, /timeoutMs:\s*120_?000/, 'Broker live evidence must allow at least 120_000ms for SMTP OTP retrieval');
+
   // Server-authoritative callable names must not appear in the client spec
   assert.doesNotMatch(brokerSpec, /verifyBrokerPayoutOtp|submitBrokerPayoutRequest/);
 });

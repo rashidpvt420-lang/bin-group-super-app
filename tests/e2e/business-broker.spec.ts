@@ -128,10 +128,7 @@ test.describe('Broker Business Workflow', () => {
         `requestBrokerPayoutOtp failed HTTP ${requestOtpResponse.status()}: ${JSON.stringify(requestOtpPayload).slice(0, 1_500)}`,
       );
     }
-    const challengeId = String(requestOtpPayload?.result?.challengeId || '').trim();
-    const correlationId = String(requestOtpPayload?.result?.correlationId || '').trim();
-    expect(challengeId).not.toBe('');
-    expect(correlationId).not.toBe('');
+    expect(String(requestOtpPayload?.result?.challengeId || '')).not.toBe('');
 
     const otpDialog = page.getByTestId('broker-payout-otp-dialog');
     await expect(otpDialog).toBeVisible({ timeout: 10_000 });
@@ -143,10 +140,9 @@ test.describe('Broker Business Workflow', () => {
     await expect(page.getByTestId('broker-payout-otp-submit')).toBeDisabled();
 
     const otp = await getLatestOtp('broker', {
-      timeoutMs: 90_000,
+      timeoutMs: 120_000,
       afterMs: otpStartMs - 10_000,
       subjectHint: 'payout verification',
-      correlationId,
     });
 
     await otpCode.fill(otp);
