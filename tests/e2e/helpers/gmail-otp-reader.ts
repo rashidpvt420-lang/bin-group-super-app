@@ -2,7 +2,7 @@
  * gmail-otp-reader.ts
  *
  * Reads the most-recent OTP code from a Gmail inbox using the Gmail REST API
- * with OAuth 2.0 refresh-token flow.  Credentials are sourced exclusively from
+ * with OAuth 2.0 refresh-token flow. Credentials are sourced exclusively from
  * process.env — the same secrets injected into .env.e2e by the CI workflow.
  *
  * Exported API:
@@ -15,21 +15,28 @@
  *   pollMs        – interval between Gmail polls           (default 4 000)
  *   afterMs       – only consider emails sent AFTER this   (default: now - 5 min)
  *   subjectHint   – additional subject keyword to filter   (default undefined)
- *   correlationId – server-issued challenge correlation ID (default undefined)
+ *   correlationId – require this server-issued reference in the message
  */
 
 const OAUTH_TOKEN_URL = 'https://oauth2.googleapis.com/token';
-const GMAIL_BASE_URL  = 'https://gmail.googleapis.com/gmail/v1/users/me';
+const GMAIL_BASE_URL = 'https://gmail.googleapis.com/gmail/v1/users/me';
+
+interface GmailMessagePart {
+  mimeType?: string;
+  body?: { data?: string; attachmentId?: string };
+  parts?: GmailMessagePart[];
+}
+
+interface GmailMessagePayload {
+  snippet?: string;
+  internalDate?: string;
+  labelIds?: string[];
+  payload?: GmailMessagePart;
+}
 
 // ────────────────────────────────────────────────────────────────────────────
 // Internal helpers
 // ────────────────────────────────────────────────────────────────────────────
-
-function mailboxLocation(labelIds: string[] = []): string {
-  if (labelIds.includes('SPAM')) return 'SPAM';
-  if (labelIds.includes('TRASH')) return 'TRASH';
-  return 'INBOX';
-}
 
 async function exchangeRefreshToken(
   clientId: string,
@@ -37,16 +44,16 @@ async function exchangeRefreshToken(
   refreshToken: string,
 ): Promise<string> {
   const body = new URLSearchParams({
-    client_id:     clientId,
+    client_id: clientId,
     client_secret: clientSecret,
     refresh_token: refreshToken,
-    grant_type:    'refresh_token',
+    grant_type: 'refresh_token',
   });
 
   const res = await fetch(OAUTH_TOKEN_URL, {
-    method:  'POST',
+    method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body:    body.toString(),
+    body: body.toString(),
   });
 
   if (!res.ok) {
@@ -63,10 +70,13 @@ async function exchangeRefreshToken(
 
 async function listMessages(
   accessToken: string,
-  query?: string,
+  query: string,
 ): Promise<Array<{ id: string; threadId: string }>> {
-  const queryParam = query ? `&q=${encodeURIComponent(query)}` : '';
-  const url = `${GMAIL_BASE_URL}/messages?includeSpamTrash=true&maxResults=25${queryParam}`;
+  // Gmail excludes Spam and Trash from messages.list unless includeSpamTrash is
+  // explicitly enabled. Production delivery evidence must observe a fresh OTP
+  // regardless of mailbox classification; freshness/correlation below remain
+  // fail-closed, so widening folder visibility cannot make a stale code valid.
+  const url = `${GMAIL_BASE_URL}/messages?q=${encodeURIComponent(query)}&maxResults=10&includeSpamTrash=true`;
   const res = await fetch(url, {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
@@ -79,78 +89,94 @@ async function listMessages(
   return json.messages ?? [];
 }
 
-function decodeBase64Url(raw: string): string {
+async function listRecentMessages(
+  accessToken: string,
+): Promise<Array<{ id: string; threadId: string }>> {
+  // This fallback is used only when the caller supplied a server-issued
+  // correlation ID. Freshness and exact correlation are still enforced below.
+  const url = `${GMAIL_BASE_URL}/messages?maxResults=25&includeSpamTrash=true`;
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+
+  if (!res.ok) {
+    throw new Error(`[gmail-otp-reader] recent messages.list failed: ${res.status} ${res.statusText}`);
+  }
+
+  const json: { messages?: Array<{ id: string; threadId: string }> } = await res.json();
+  return json.messages ?? [];
+}
+
+function decodeBase64Url(data: string): string {
+  const normalized = data.replace(/-/g, '+').replace(/_/g, '/');
+  const padding = normalized.length % 4 === 0 ? '' : '='.repeat(4 - (normalized.length % 4));
   try {
-    const normalized = raw.replace(/-/g, '+').replace(/_/g, '/');
-    return Buffer.from(normalized, 'base64').toString('utf8');
+    return Buffer.from(`${normalized}${padding}`, 'base64').toString('utf8');
   } catch {
     return '';
   }
 }
 
-function collectTextFromParts(payload: any): string {
-  if (!payload) return '';
-  let text = '';
-  if (payload.body?.data) {
-    text += decodeBase64Url(payload.body.data) + ' ';
+async function getAttachmentText(
+  accessToken: string,
+  messageId: string,
+  attachmentId: string,
+): Promise<string> {
+  const url = `${GMAIL_BASE_URL}/messages/${encodeURIComponent(messageId)}/attachments/${encodeURIComponent(attachmentId)}`;
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+
+  if (!res.ok) {
+    throw new Error(`[gmail-otp-reader] attachment read failed: ${res.status} ${res.statusText}`);
   }
-  if (Array.isArray(payload.parts)) {
-    for (const part of payload.parts) {
-      text += collectTextFromParts(part) + ' ';
-    }
-  }
-  return text;
+
+  const json: { data?: string } = await res.json();
+  return json.data ? decodeBase64Url(json.data) : '';
 }
 
 async function collectMessageBody(
-  payload: any,
+  part: GmailMessagePart | undefined,
   accessToken: string,
   messageId: string,
 ): Promise<string> {
-  if (!payload) return '';
-  let text = '';
-  const mimeType = String(payload.mimeType || '').toLowerCase();
+  if (!part) return '';
+  const chunks: string[] = [];
+  const mimeType = String(part.mimeType ?? '').toLowerCase();
+  const isTextPart = !mimeType || mimeType.startsWith('text/');
+  const bodyData = String(part.body?.data ?? '');
+  const attachmentId = String(part.body?.attachmentId ?? '');
 
-  if (mimeType.startsWith('text/') && payload.body?.data) {
-    text += decodeBase64Url(payload.body.data) + ' ';
+  // OTP mail is currently plain text, but parsing both text/plain and text/html
+  // keeps the evidence reader resilient if the transactional template changes.
+  if (bodyData && isTextPart) {
+    const decoded = decodeBase64Url(bodyData);
+    if (decoded) chunks.push(decoded);
   }
 
-  const attachmentId = payload.body?.attachmentId;
-  if (attachmentId) {
-    try {
-      const attachUrl = `${GMAIL_BASE_URL}/messages/${messageId}/attachments/${encodeURIComponent(attachmentId)}`;
-      const res = await fetch(attachUrl, {
-        headers: { Authorization: `Bearer ${accessToken}` },
-      });
-      if (res.ok) {
-        const attachJson: any = await res.json();
-        if (attachJson?.data) {
-          text += decodeBase64Url(attachJson.data) + ' ';
-        }
-      }
-    } catch {
-      // Best-effort attachment extraction
-    }
+  // Gmail may move even a text MIME body behind body.attachmentId. Fetching the
+  // attachment-backed text prevents format=full from becoming snippet-only in
+  // practice for larger or provider-transformed transactional messages.
+  if (attachmentId && isTextPart) {
+    const decodedAttachment = await getAttachmentText(accessToken, messageId, attachmentId);
+    if (decodedAttachment) chunks.push(decodedAttachment);
   }
 
-  if (Array.isArray(payload.parts)) {
-    for (const part of payload.parts) {
-      text += (await collectMessageBody(part, accessToken, messageId)) + ' ';
-    }
+  for (const child of part.parts ?? []) {
+    const decodedChild = await collectMessageBody(child, accessToken, messageId);
+    if (decodedChild) chunks.push(decodedChild);
   }
 
-  if (!text.trim()) {
-    text = collectTextFromParts(payload);
-  }
-
-  return text;
+  return chunks.join('\n');
 }
 
-async function getMessageData(
+async function getMessageContent(
   accessToken: string,
   messageId: string,
-): Promise<{ snippet: string; internalDate: string; body: string; subject: string; labelIds: string[] }> {
-  const url = `${GMAIL_BASE_URL}/messages/${messageId}?format=full`;
+): Promise<{ content: string; internalDate: string; labelIds: string[] }> {
+  // Fetch the full MIME payload. Gmail snippets are intentionally abbreviated
+  // and are not a reliable source of a security code for production evidence.
+  const url = `${GMAIL_BASE_URL}/messages/${encodeURIComponent(messageId)}?format=full`;
   const res = await fetch(url, {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
@@ -159,24 +185,25 @@ async function getMessageData(
     throw new Error(`[gmail-otp-reader] messages.get failed: ${res.status} ${res.statusText}`);
   }
 
-  const json: any = await res.json();
-  const headers = Array.isArray(json.payload?.headers) ? json.payload.headers : [];
-  const subjectHeader = headers.find((h: any) => h.name?.toLowerCase() === 'subject')?.value || '';
-  const bodyText = await collectMessageBody(json.payload, accessToken, messageId);
-
+  const json: GmailMessagePayload = await res.json();
+  const snippet = String(json.snippet ?? '');
+  const body = await collectMessageBody(json.payload, accessToken, messageId);
   return {
-    snippet:      json.snippet ?? '',
-    internalDate: json.internalDate ?? '0',
-    body:         bodyText,
-    subject:      subjectHeader,
-    labelIds:     Array.isArray(json.labelIds) ? json.labelIds : [],
+    content: [snippet, body].filter(Boolean).join('\n'),
+    internalDate: String(json.internalDate ?? '0'),
+    labelIds: Array.isArray(json.labelIds) ? json.labelIds.map((label) => String(label).toUpperCase()) : [],
   };
 }
 
-/** Extract the 6-digit numeric code found in text, prioritizing contextual OTP sentences. */
+function mailboxLocation(labelIds: string[]): 'spam' | 'trash' | 'inbox' | 'other' {
+  if (labelIds.includes('SPAM')) return 'spam';
+  if (labelIds.includes('TRASH')) return 'trash';
+  if (labelIds.includes('INBOX')) return 'inbox';
+  return 'other';
+}
+
+/** Extract the first 6-digit numeric code found in text. */
 function extractOtpCode(text: string): string | null {
-  const contextual = text.match(/(?:payout code is|code is|OTP is|verification code:?)\s*(\d{6})/i);
-  if (contextual) return contextual[1];
   const match = text.match(/\b(\d{6})\b/);
   return match ? match[1] : null;
 }
@@ -197,13 +224,21 @@ export interface GmailOtpOptions {
   afterMs?: number;
   /** Optional extra keyword to narrow the Gmail search query. */
   subjectHint?: string;
-  /** Server-issued challenge correlation ID for binding proof. */
+  /** Optional server-issued reference that must occur in the matching email. */
   correlationId?: string;
 }
 
 /**
  * Polls the designated mailbox for a 6-digit OTP sent in the most-recent
  * matching email and returns the code as a string.
+ *
+ * Freshness is enforced by Gmail internalDate instead of read/unread state.
+ * A mail client, mobile notification, or inbox rule may mark a legitimate OTP
+ * as read before CI polls it; read state must therefore never be a launch gate.
+ * When a correlationId is supplied, a candidate must also contain the exact
+ * server-issued reference so a prior fresh OTP can never satisfy a later challenge.
+ * Spam and Trash are searched too, but those folders never bypass freshness or
+ * correlation; their counts are emitted only as sanitized delivery diagnostics.
  *
  * @param role - 'owner' | 'broker'
  * @throws if credentials are missing or no OTP is found before timeout
@@ -214,9 +249,9 @@ export async function getLatestOtp(
 ): Promise<string> {
   const PREFIX = role.toUpperCase(); // 'OWNER' | 'BROKER'
 
-  const clientId     = process.env[`E2E_${PREFIX}_MAILBOX_CLIENT_ID`]     ?? '';
-  const clientSecret = process.env[`E2E_${PREFIX}_MAILBOX_CLIENT_SECRET`]  ?? '';
-  const refreshToken = process.env[`E2E_${PREFIX}_MAILBOX_REFRESH_TOKEN`]  ?? '';
+  const clientId = process.env[`E2E_${PREFIX}_MAILBOX_CLIENT_ID`] ?? '';
+  const clientSecret = process.env[`E2E_${PREFIX}_MAILBOX_CLIENT_SECRET`] ?? '';
+  const refreshToken = process.env[`E2E_${PREFIX}_MAILBOX_REFRESH_TOKEN`] ?? '';
 
   if (!clientId || !clientSecret || !refreshToken) {
     throw new Error(
@@ -227,11 +262,12 @@ export async function getLatestOtp(
   }
 
   const timeoutMs = options.timeoutMs ?? 60_000;
-  const pollMs    = options.pollMs    ?? 4_000;
-  const afterMs   = options.afterMs   ?? (Date.now() - 5 * 60 * 1_000);
-  const correlationId = options.correlationId ? String(options.correlationId).trim() : '';
+  const pollMs = options.pollMs ?? 4_000;
+  const afterMs = options.afterMs ?? (Date.now() - 5 * 60 * 1_000);
+  const correlationId = String(options.correlationId ?? '').trim();
 
-  // Build Gmail search query without read-status restrictions to avoid indexing lag and read-state mismatches
+  // Do not filter the query by Gmail read state. Freshness is already fail-closed
+  // below and a real OTP can become read before CI observes it.
   const subjectFilter = options.subjectHint
     ? `subject:(${options.subjectHint})`
     : 'subject:(verification code OR OTP OR payout)';
@@ -239,72 +275,54 @@ export async function getLatestOtp(
 
   const deadline = Date.now() + timeoutMs;
   let lastError: string | null = null;
-  let pollCount = 0;
 
   while (Date.now() < deadline) {
-    pollCount++;
     try {
       const accessToken = await exchangeRefreshToken(clientId, clientSecret, refreshToken);
-
-      // Primary search: query by subject filter
       let messages = await listMessages(accessToken, gmailQuery);
-
-      // Fallback: if search query returns 0 (due to Gmail search indexing lag),
-      // query newest messages directly with includeSpamTrash=true
-      if (!messages.length) {
-        messages = await listMessages(accessToken);
+      if (messages.length === 0 && correlationId) {
+        messages = await listRecentMessages(accessToken);
       }
-
-      console.log(`[gmail-otp-reader] Poll #${pollCount} for ${PREFIX}: found ${messages.length} candidate message(s)`);
-
       let freshMessageCount = 0;
+      let correlatedMessageCount = 0;
+      let freshInboxMessageCount = 0;
       let freshSpamMessageCount = 0;
       let freshTrashMessageCount = 0;
+      let freshOtherMessageCount = 0;
 
       for (const msg of messages) {
-        const { snippet, internalDate, body, subject, labelIds } = await getMessageData(accessToken, msg.id);
-        const msgDate = Number(internalDate);
+        const { content, internalDate, labelIds } = await getMessageContent(accessToken, msg.id);
 
         if (Number(internalDate) < afterMs) {
-          // Email is older than the test window — skip.
+          // Email is older than the exact test window — skip it even if the
+          // subject matches. This prevents stale OTP reuse after removing the
+          // unreliable unread-state dependency.
           continue;
         }
 
-        freshMessageCount++;
+        freshMessageCount += 1;
         const location = mailboxLocation(labelIds);
-        if (location === 'SPAM') freshSpamMessageCount++;
-        if (location === 'TRASH') freshTrashMessageCount++;
+        if (location === 'inbox') freshInboxMessageCount += 1;
+        else if (location === 'spam') freshSpamMessageCount += 1;
+        else if (location === 'trash') freshTrashMessageCount += 1;
+        else freshOtherMessageCount += 1;
 
-        // If subjectHint was specified and we did the unfiltered list, verify subject or snippet contains hint
-        if (options.subjectHint) {
-          const hint = options.subjectHint.toLowerCase();
-          const matchHint = subject.toLowerCase().includes(hint) || snippet.toLowerCase().includes(hint) || body.toLowerCase().includes(hint);
-          if (!matchHint) continue;
-        }
-
-        const content = `${subject} ${snippet} ${body}`;
-        if (correlationId && !content.includes(correlationId)) {
-          continue;
-        }
+        if (correlationId && !content.includes(correlationId)) continue;
+        correlatedMessageCount += 1;
 
         const code = extractOtpCode(content);
         if (code) {
-          console.log(
-            `[gmail-otp-reader] OTP retrieved for ${PREFIX} in ${location} ` +
-            `(fresh=${freshMessageCount}, spam=${freshSpamMessageCount}, trash=${freshTrashMessageCount}, ` +
-            `message ${msg.id}, date=${new Date(msgDate).toISOString()})`,
-          );
+          console.log(`[gmail-otp-reader] OTP retrieved for ${PREFIX} (message ${msg.id}, mailbox=${location})`);
           return code;
         }
       }
 
-      lastError = `No matching OTP in ${messages.length} message(s) (fresh=${freshMessageCount}, spam=${freshSpamMessageCount}) — will retry`;
+      const mailboxSummary = `inbox=${freshInboxMessageCount}, spam=${freshSpamMessageCount}, trash=${freshTrashMessageCount}, other=${freshOtherMessageCount}`;
+      lastError = `No OTP found in ${correlatedMessageCount} correlated fresh message(s) out of ${freshMessageCount} fresh / ${messages.length} matching message(s); fresh mailbox locations: ${mailboxSummary} — will retry`;
     } catch (err) {
       lastError = err instanceof Error ? err.message : String(err);
-      console.warn(`[gmail-otp-reader] Poll #${pollCount} error: ${lastError}`);
     }
 
-    // Wait before next poll
     await new Promise((resolve) => setTimeout(resolve, pollMs));
   }
 
