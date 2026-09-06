@@ -6,6 +6,7 @@ on:
     branches: [main]
     paths:
       - 'scripts/run-live-launch-audit.mjs'
+      - 'scripts/e2e-admin-lifecycle.mjs'
       - 'playwright.config.ts'
       - 'tests/e2e/launch-audit-*.spec.ts'
       - 'tests/e2e/hard-launch-routes.spec.ts'
