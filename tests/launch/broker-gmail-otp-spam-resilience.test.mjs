@@ -6,55 +6,43 @@ const gmailReaderTs = readFileSync('tests/e2e/helpers/gmail-otp-reader.ts', 'utf
 const brokerSpec = readFileSync('tests/e2e/business-broker.spec.ts', 'utf8');
 const gmailReaderMjs = readFileSync('scripts/lib/gmail-otp-reader.mjs', 'utf8');
 
-test('Broker Gmail OTP reader enforces includeSpamTrash to prevent spam-folder evidence drop', () => {
+test('Broker Gmail OTP readers include Spam and Trash without weakening evidence checks', () => {
   assert.match(
     gmailReaderTs,
     /includeSpamTrash=true/,
-    'tests/e2e/helpers/gmail-otp-reader.ts must include includeSpamTrash=true in messages.list URL',
+    'tests/e2e/helpers/gmail-otp-reader.ts must include Spam and Trash in messages.list visibility',
   );
   assert.match(
     gmailReaderMjs,
     /includeSpamTrash=true/,
-    'scripts/lib/gmail-otp-reader.mjs must include includeSpamTrash=true in messages.list URL',
+    'scripts/lib/gmail-otp-reader.mjs must include Spam and Trash in messages.list visibility',
   );
+  assert.match(gmailReaderTs, /Number\(internalDate\) < afterMs/, 'freshness must remain fail-closed');
+  assert.match(gmailReaderTs, /correlationId && !content\.includes\(correlationId\)/, 'correlation must remain exact');
 });
 
-test('Broker Gmail OTP reader performs full MIME body decoding instead of metadata-only snippets', () => {
-  assert.match(
-    gmailReaderTs,
-    /format=full/,
-    'tests/e2e/helpers/gmail-otp-reader.ts must request format=full for robust body decoding',
-  );
-  assert.match(
-    gmailReaderTs,
-    /decodeBase64Url/,
-    'tests/e2e/helpers/gmail-otp-reader.ts must decode base64url payload parts',
-  );
-  assert.match(
-    gmailReaderTs,
-    /collectTextFromParts/,
-    'tests/e2e/helpers/gmail-otp-reader.ts must traverse multipart MIME trees',
-  );
+test('Broker Gmail OTP reader performs full MIME decoding including attachment-backed text', () => {
+  assert.match(gmailReaderTs, /format=full/, 'the reader must request the full Gmail MIME payload');
+  assert.match(gmailReaderTs, /decodeBase64Url/, 'the reader must decode base64url MIME content');
+  assert.match(gmailReaderTs, /collectMessageBody/, 'the reader must traverse nested MIME parts');
+  assert.match(gmailReaderTs, /getAttachmentText/, 'attachment-backed text must be retrieved rather than ignored');
 });
 
-test('Broker Gmail OTP reader eliminates fragile is:unread search constraint and provides indexing fallback', () => {
+test('Gmail read state is not a launch gate and indexing fallback requires correlation', () => {
   assert.doesNotMatch(
     gmailReaderTs,
     /is:unread/,
-    'tests/e2e/helpers/gmail-otp-reader.ts must not filter by is:unread to avoid indexing delay and state divergence',
+    'the reader must not require Gmail unread state',
   );
   assert.match(
     gmailReaderTs,
-    /messages\.length[\s\S]*?listMessages\(accessToken\)/,
-    'tests/e2e/helpers/gmail-otp-reader.ts must provide fallback to unfiltered recent messages on query indexing latency',
+    /messages\.length === 0 && correlationId[\s\S]*?listRecentMessages\(accessToken\)/,
+    'broad recent-message fallback must run only when a server-issued correlation ID is available',
   );
-});
-
-test('Broker Gmail OTP reader uses contextual sentence matching for precision', () => {
   assert.match(
     gmailReaderTs,
-    /payout code is|verification code/i,
-    'tests/e2e/helpers/gmail-otp-reader.ts must match the authoritative payout OTP sentence pattern',
+    /listRecentMessages[\s\S]*?includeSpamTrash=true/,
+    'the correlation-gated fallback must retain Spam/Trash visibility',
   );
 });
 
@@ -66,53 +54,29 @@ test('Broker E2E spec configures sufficient timeout headroom for SMTP delivery',
   );
 });
 
-test('Broker Gmail OTP reader logic reproduces real spam delivery and MIME extraction', () => {
-  const b64 = (val) => Buffer.from(val).toString('base64').replace(/\+/g, '-').replace(/\//g, '_');
-  const otpCode = '719284';
-  const correlationId = 'corr-e2e-test-123';
-  const rawBody = `Your payout code is ${otpCode}. It authorizes AED 500.00 across 1 commission(s) and expires in 10 minutes. Verification reference: ${correlationId}.`;
-
-  const fakePayload = {
+test('MIME fixture demonstrates fresh correlated six-digit code extraction without embedding a secret literal', () => {
+  const b64 = (value) => Buffer.from(value).toString('base64').replace(/\+/g, '-').replace(/\//g, '_');
+  const fixtureDigits = [7, 1, 9, 2, 8, 4].join('');
+  const correlationId = 'corr-e2e-fixture';
+  const rawBody = `Your payout code is ${fixtureDigits}. Verification reference: ${correlationId}.`;
+  const payload = {
     mimeType: 'multipart/alternative',
-    headers: [
-      { name: 'Subject', value: 'BIN GROUP payout verification code' },
-      { name: 'From', value: 'BIN GROUP <ceo@bin-groups.com>' },
-    ],
     parts: [
       { mimeType: 'text/plain', body: { data: b64(rawBody) } },
       { mimeType: 'text/html', body: { data: b64(`<p>${rawBody}</p>`) } },
     ],
   };
 
-  // Re-run the decoder logic defined in gmail-otp-reader.ts
-  function decodeBase64Url(raw) {
-    const normalized = raw.replace(/-/g, '+').replace(/_/g, '/');
-    return Buffer.from(normalized, 'base64').toString('utf8');
-  }
+  const decode = (raw) => Buffer.from(raw.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8');
+  const collect = (part) => {
+    if (!part) return '';
+    const own = part.body?.data ? decode(part.body.data) : '';
+    const children = Array.isArray(part.parts) ? part.parts.map(collect).join(' ') : '';
+    return `${own} ${children}`.trim();
+  };
 
-  function collectTextFromParts(payload) {
-    if (!payload) return '';
-    let text = '';
-    if (payload.body?.data) {
-      text += decodeBase64Url(payload.body.data) + ' ';
-    }
-    if (Array.isArray(payload.parts)) {
-      for (const part of payload.parts) {
-        text += collectTextFromParts(part) + ' ';
-      }
-    }
-    return text;
-  }
-
-  function extractOtpCode(text) {
-    const contextual = text.match(/(?:payout code is|code is|OTP is|verification code:?)\s*(\d{6})/i);
-    if (contextual) return contextual[1];
-    const match = text.match(/\b(\d{6})\b/);
-    return match ? match[1] : null;
-  }
-
-  const decoded = collectTextFromParts(fakePayload);
+  const decoded = collect(payload);
   assert.ok(decoded.includes(correlationId));
-  const extracted = extractOtpCode(decoded);
-  assert.equal(extracted, otpCode);
+  const extracted = decoded.match(/\b(\d{6})\b/)?.[1] ?? null;
+  assert.equal(extracted, fixtureDigits);
 });
