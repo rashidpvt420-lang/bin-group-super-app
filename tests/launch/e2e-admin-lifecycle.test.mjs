@@ -22,6 +22,10 @@ const liveAuditSource = await readFile(
   new URL('../../scripts/run-live-launch-audit.mjs', import.meta.url),
   'utf8',
 );
+const liveAuditWorkflowSource = await readFile(
+  new URL('../../.github/workflows/live-launch-audit.yml', import.meta.url),
+  'utf8',
+);
 const seedSource = await readFile(
   new URL('../../scripts/seed-e2e-auth.mjs', import.meta.url),
   'utf8',
@@ -135,6 +139,14 @@ test('Live Launch Audit is an approved protected E2E Admin retirement workflow',
   assert.match(lifecycleSource, /GITHUB_EVENT_NAME === 'push'/);
   assert.match(lifecycleSource, /GITHUB_EVENT_NAME === 'workflow_dispatch'/);
   assert.match(lifecycleSource, /refs\/heads\/main/);
+});
+
+test('Live Launch Audit automatically reruns when its lifecycle dependency changes', () => {
+  assert.match(
+    liveAuditWorkflowSource,
+    /- 'scripts\/e2e-admin-lifecycle\.mjs'/,
+    'live-launch-audit push paths must include the lifecycle script it invokes during cleanup',
+  );
 });
 
 test('E2E seeding refuses Founder and cross-role email collisions', () => {
