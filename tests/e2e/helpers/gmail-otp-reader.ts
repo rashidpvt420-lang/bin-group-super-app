@@ -89,6 +89,24 @@ async function listMessages(
   return json.messages ?? [];
 }
 
+async function listRecentMessages(
+  accessToken: string,
+): Promise<Array<{ id: string; threadId: string }>> {
+  // This fallback is used only when the caller supplied a server-issued
+  // correlation ID. Freshness and exact correlation are still enforced below.
+  const url = `${GMAIL_BASE_URL}/messages?maxResults=25&includeSpamTrash=true`;
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+
+  if (!res.ok) {
+    throw new Error(`[gmail-otp-reader] recent messages.list failed: ${res.status} ${res.statusText}`);
+  }
+
+  const json: { messages?: Array<{ id: string; threadId: string }> } = await res.json();
+  return json.messages ?? [];
+}
+
 function decodeBase64Url(data: string): string {
   const normalized = data.replace(/-/g, '+').replace(/_/g, '/');
   const padding = normalized.length % 4 === 0 ? '' : '='.repeat(4 - (normalized.length % 4));
@@ -248,8 +266,8 @@ export async function getLatestOtp(
   const afterMs = options.afterMs ?? (Date.now() - 5 * 60 * 1_000);
   const correlationId = String(options.correlationId ?? '').trim();
 
-  // Do not filter on is:unread. Freshness is already fail-closed below and a
-  // real OTP can become read before CI observes it.
+  // Do not filter the query by Gmail read state. Freshness is already fail-closed
+  // below and a real OTP can become read before CI observes it.
   const subjectFilter = options.subjectHint
     ? `subject:(${options.subjectHint})`
     : 'subject:(verification code OR OTP OR payout)';
@@ -261,7 +279,10 @@ export async function getLatestOtp(
   while (Date.now() < deadline) {
     try {
       const accessToken = await exchangeRefreshToken(clientId, clientSecret, refreshToken);
-      const messages = await listMessages(accessToken, gmailQuery);
+      let messages = await listMessages(accessToken, gmailQuery);
+      if (messages.length === 0 && correlationId) {
+        messages = await listRecentMessages(accessToken);
+      }
       let freshMessageCount = 0;
       let correlatedMessageCount = 0;
       let freshInboxMessageCount = 0;

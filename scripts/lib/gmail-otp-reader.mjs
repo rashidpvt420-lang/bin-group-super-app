@@ -311,7 +311,7 @@ export async function verifyGmailMailboxAccess({
   }
   const list = await gmailJson(
     fetchImpl,
-    'https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=1',
+    'https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=1&includeSpamTrash=true',
     { headers, signal },
     `${label} messages.list sentinel`,
     transportOptions,
