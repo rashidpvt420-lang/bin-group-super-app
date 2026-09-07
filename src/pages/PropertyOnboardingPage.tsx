@@ -7,6 +7,7 @@ import { useOnboardingStore } from '../store/onboardingStore';
 import CompanyProfileStep from '../components/onboarding/CompanyProfileStep';
 import AccountCreationStep from '../components/onboarding/AccountCreationStep';
 import AssetProfileStep from '../components/onboarding/AssetProfileStep';
+import PropertyPortfolioIntelligenceStep from '../components/onboarding/PropertyPortfolioIntelligenceStep';
 import PropertyLocationStep from '../components/onboarding/PropertyLocationStep';
 import SystemsDataStep from '../components/onboarding/SystemsDataStep';
 import CommercialTermsStep from '../components/onboarding/CommercialTermsStep';
@@ -41,7 +42,7 @@ export default function PropertyOnboardingPage() {
     ];
     const sectionLabels: Record<number, string[]> = {
         1: [label('Owner or company details', 'بيانات المالك أو الشركة'), label('Secure account verification', 'التحقق من الحساب الآمن')],
-        2: [label('Property profile', 'ملف العقار'), label('Property location and GPS', 'موقع العقار وGPS'), label('Systems and facilities', 'الأنظمة والمرافق')],
+        2: [label('Property profile', 'ملف العقار'), label('Rooms, floor plan & property AI', 'الغرف والمخطط وذكاء العقار'), label('Property location and GPS', 'موقع العقار وGPS'), label('Systems and facilities', 'الأنظمة والمرافق')],
         3: [label('Service plan and commercial terms', 'خطة الخدمة والشروط التجارية'), label('Protected documents', 'المستندات المحمية')],
         4: [label('Review all details', 'مراجعة جميع البيانات'), label('Sign the property application', 'توقيع طلب العقار')],
         5: [label('Final five-page submission', 'الإرسال النهائي للصفحات الخمس')],
@@ -53,7 +54,6 @@ export default function PropertyOnboardingPage() {
         setGuardError('');
         window.scrollTo({ top: 0, behavior: 'smooth' });
     }, [safePage, setStep, step]);
-
 
     const advancePage = () => {
         setGuardError('');
@@ -113,7 +113,8 @@ export default function PropertyOnboardingPage() {
         }
         if (safePage === 2) {
             if (section === 0) return <AssetProfileStep onNext={guardedAssetNext} onBack={backSectionOrPage} />;
-            if (section === 1) return <PropertyLocationStep onNext={advanceSection} onBack={backSectionOrPage} />;
+            if (section === 1) return <PropertyPortfolioIntelligenceStep onNext={advanceSection} onBack={backSectionOrPage} />;
+            if (section === 2) return <PropertyLocationStep onNext={advanceSection} onBack={backSectionOrPage} />;
             return <SystemsDataStep onNext={advancePage} onBack={backSectionOrPage} />;
         }
         if (safePage === 3) {
