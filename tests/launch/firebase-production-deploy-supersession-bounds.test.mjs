@@ -20,13 +20,21 @@ test('production Firebase deploy stays non-cancellable but exits cooperatively w
 
 test('production Firebase deploy step has a hard total budget and each Firebase command is capped by what remains', () => {
   assert.match(deploy, /FIREBASE_DEPLOY_TOTAL_BUDGET_SECONDS/);
-  assert.match(deploy, /7200,\s*\n\s*1800,\s*\n\s*10800/);
+  assert.match(deploy, /9000,\s*\n\s*1800,\s*\n\s*10800/);
   assert.match(deploy, /deploymentDeadlineMs = deploymentStartedAtMs \+ deploymentBudgetSeconds \* 1000/);
   assert.match(deploy, /function remainingDeploymentBudgetMs\(stage\)/);
   assert.match(deploy, /total Firebase deployment budget/);
   assert.match(deploy, /effectiveCommandTimeoutMs = Math\.min\(commandTimeoutSeconds \* 1000, remainingBudgetMs\)/);
   assert.match(deploy, /timeout: effectiveCommandTimeoutMs/);
   assert.match(deploy, /killSignal: 'SIGTERM'/);
+});
+
+test('functions plan reserves bounded runtime before quota-safe mutations begin', () => {
+  assert.match(deploy, /assertFunctionsDeploymentPlanFeasible\(batches\.length, cooldownSeconds\)/);
+  assert.match(deploy, /FIREBASE_FUNCTION_DEPLOY_MIN_BATCH_EXECUTION_SECONDS/);
+  assert.match(deploy, /FIREBASE_DEPLOY_POST_FUNCTIONS_RESERVE_SECONDS/);
+  assert.match(deploy, /remainingBudgetSeconds < minimumPlanSeconds/);
+  assert.match(deploy, /Refusing quota-safe Functions deployment plan/);
 });
 
 test('retry and quota cooldown paths cannot silently run past the deployment budget', () => {

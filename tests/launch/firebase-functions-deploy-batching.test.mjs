@@ -33,8 +33,8 @@ const validEvidence = () => ({
   strategy: FUNCTIONS_DEPLOYMENT_STRATEGY,
   functionCount: 7,
   batchCount: 2,
-  batchSize: 4,
-  cooldownSeconds: 75,
+  batchSize: 6,
+  cooldownSeconds: 60,
   deployedFunctions: [
     'adminCreateUser',
     'dailyHrComplianceSweep',
@@ -85,11 +85,11 @@ test('production deployment and verification scripts parse under the repository 
 test('production deployment never updates the entire Functions estate in one Firebase mutation burst', () => {
   assert.doesNotMatch(
     deploySource,
-    /['"]functions,hosting,firestore:rules,firestore:indexes,storage['"]/, 
+    /['"]functions,hosting,firestore:rules,firestore:indexes,storage['"]/,
   );
   assert.doesNotMatch(
     deploySource,
-    /retryFirebase\(\s*['"]functions['"]/, 
+    /retryFirebase\(\s*['"]functions['"]/,
   );
   assert.match(deploySource, /function deployFunctionsQuotaSafe\(\)/);
   assert.match(deploySource, /functions:\$\{name\}/);
@@ -103,18 +103,34 @@ test('quota-safe deployment discovers only compiled Firebase endpoints and trigg
   assert.match(deploySource, /Invalid or duplicate Firebase Function export names/);
 });
 
-test('function batches are small, sequential and separated by at least one quota window', () => {
+test('function batches use the largest approved mutation window and retain the regional quota cooldown', () => {
   assert.match(
     deploySource,
-    /FIREBASE_FUNCTION_DEPLOY_BATCH_SIZE['"],\s*4,\s*1,\s*6/,
+    /FIREBASE_FUNCTION_DEPLOY_BATCH_SIZE['"],\s*6,\s*1,\s*6/,
   );
   assert.match(
     deploySource,
-    /FIREBASE_FUNCTION_DEPLOY_COOLDOWN_SECONDS['"],\s*75,\s*60,\s*300/,
+    /FIREBASE_FUNCTION_DEPLOY_COOLDOWN_SECONDS['"],\s*60,\s*60,\s*300/,
   );
   assert.match(deploySource, /batches\.forEach\(\(batch, index\) =>/);
   assert.match(deploySource, /sleepSeconds\(cooldownSeconds,/);
   assert.match(deploySource, /regional Cloud Functions mutation quota/);
+});
+
+test('functions deployment plan fails early when the remaining bounded budget cannot fit batches and post-deploy reserve', () => {
+  assert.match(deploySource, /function assertFunctionsDeploymentPlanFeasible\(batchCount, cooldownSeconds\)/);
+  assert.match(
+    deploySource,
+    /FIREBASE_FUNCTION_DEPLOY_MIN_BATCH_EXECUTION_SECONDS['"],\s*\n\s*90,\s*\n\s*60,\s*\n\s*300/,
+  );
+  assert.match(
+    deploySource,
+    /FIREBASE_DEPLOY_POST_FUNCTIONS_RESERVE_SECONDS['"],\s*\n\s*600,\s*\n\s*300,\s*\n\s*1800/,
+  );
+  assert.match(deploySource, /minimumPlanSeconds/);
+  assert.match(deploySource, /assertDeploymentContinuable\('before Functions deployment plan'\)/);
+  assert.match(deploySource, /Refusing quota-safe Functions deployment plan/);
+  assert.match(deploySource, /post-Functions reserve/);
 });
 
 test('deployment metadata records the batching strategy used for the exact SHA', () => {
