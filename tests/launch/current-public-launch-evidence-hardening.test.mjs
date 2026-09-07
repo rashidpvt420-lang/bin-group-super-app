@@ -9,10 +9,6 @@ const detailedCommandCenter = read('apps/admin-panel/src/pages/admin/PublicLaunc
 const productionRulesWriter = read('scripts/write-production-firestore-rules.mjs');
 const firebaseConfig = JSON.parse(read('firebase.json'));
 
-function escapeRegExp(value) {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
 test('public launch route fails closed until all five protected role smokes pass on the exact release', () => {
   assert.match(routeGuard, /const REQUIRED_SMOKE_ROLES/);
   for (const role of ['owner', 'tenant', 'technician', 'broker', 'admin']) {
@@ -36,10 +32,14 @@ test('detailed command center remains exact-SHA and protected-execution evidence
 });
 
 test('production Firestore artifact makes launch evidence append-only and prevents browser provenance forgery', () => {
-  for (const collection of ['launch_evidence', 'signed_in_smoke_checks']) {
-    const escapedCollection = escapeRegExp(collection);
-    assert.match(productionRulesWriter, new RegExp(`match \/${escapedCollection}\/\\{`));
-  }
+  assert.ok(
+    productionRulesWriter.includes("['launch_evidence', 'evidenceId']"),
+    'launch_evidence must be included in the hardened evidence collection source list',
+  );
+  assert.ok(
+    productionRulesWriter.includes("['signed_in_smoke_checks', 'checkId']"),
+    'signed_in_smoke_checks must be included in the hardened evidence collection source list',
+  );
   assert.match(productionRulesWriter, /request\.resource\.data\.get\('source', ''\) != 'github-actions'/);
   assert.match(productionRulesWriter, /request\.resource\.data\.get\('executionGenerated', false\) != true/);
   assert.match(productionRulesWriter, /request\.resource\.data\.get\('hardLaunchClaim', false\) != true/);
