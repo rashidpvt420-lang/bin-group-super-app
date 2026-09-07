@@ -55,7 +55,10 @@ test('Admin MFA bootstrap publishes Admin Hosting before bounded remediation cal
 test('every Firebase CLI deployment has a bounded timeout and deterministic termination signal', () => {
   assert.match(source, /FIREBASE_DEPLOY_COMMAND_TIMEOUT_SECONDS/);
   assert.match(source, /options\.commandTimeoutSeconds \|\| 900/);
-  assert.match(source, /timeout: commandTimeoutSeconds \* 1000/);
+  assert.match(source, /FIREBASE_DEPLOY_TOTAL_BUDGET_SECONDS/);
+  assert.match(source, /const effectiveCommandTimeoutMs = Math\.min\(commandTimeoutSeconds \* 1000, remainingBudgetMs\)/);
+  assert.match(source, /timeout: effectiveCommandTimeoutMs/);
+  assert.match(source, /effectiveCommandTimeoutMs < 30_000/);
   assert.match(source, /killSignal: 'SIGTERM'/);
   assert.match(source, /Admin MFA bootstrap hosting'[\s\S]*commandTimeoutSeconds: 600/);
   assert.match(source, /Admin MFA bootstrap remediation callables'[\s\S]*commandTimeoutSeconds: 900/);
