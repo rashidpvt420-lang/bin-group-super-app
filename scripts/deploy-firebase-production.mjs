@@ -43,6 +43,14 @@ const validatedArtifactDigest = requireArtifactDigest(
   'VALIDATED_ARTIFACT_DIGEST',
   digestFailures,
 );
+const deploymentStartedAtMs = Date.now();
+const deploymentBudgetSeconds = boundedInteger(
+  'FIREBASE_DEPLOY_TOTAL_BUDGET_SECONDS',
+  7200,
+  1800,
+  10800,
+);
+const deploymentDeadlineMs = deploymentStartedAtMs + deploymentBudgetSeconds * 1000;
 
 function readWorkflowDispatchInputs() {
   const eventPath = String(process.env.GITHUB_EVENT_PATH || '').trim();
@@ -99,24 +107,7 @@ if (projectId !== expectedProjectId) {
   process.exit(1);
 }
 
-const remoteMain = spawnSync(
-  'git',
-  ['ls-remote', '--exit-code', 'origin', 'refs/heads/main'],
-  { cwd: process.cwd(), encoding: 'utf8', shell: false },
-);
-const remoteMainSha = String(remoteMain.stdout || '').trim().split(/\s+/)[0] || '';
-if ((remoteMain.status ?? 1) !== 0 || !remoteMainSha) {
-  console.error('[production-deploy] Refusing stale deployment: could not resolve current origin/main');
-  process.exit(1);
-}
-if (remoteMainSha !== githubSha) {
-  console.error(
-    `[production-deploy] Refusing stale deployment: current origin/main ${remoteMainSha} must exactly match GITHUB_SHA ${githubSha}`,
-  );
-  process.exit(1);
-}
-process.env.PRODUCTION_EXACT_MAIN_VERIFIED_SHA = remoteMainSha;
-console.log(`[production-deploy] exact current origin/main verified before secret preflight: ${remoteMainSha}`);
+assertDeploymentContinuable('before secret preflight');
 
 const functionSecretContractStatus = run(process.execPath, [
   'scripts/verify-firebase-deployed-function-secret-contract.mjs',
@@ -187,6 +178,48 @@ function boundedInteger(name, fallback, minimum, maximum) {
   return Math.min(maximum, Math.max(minimum, value));
 }
 
+function remainingDeploymentBudgetMs(stage) {
+  const remainingMs = deploymentDeadlineMs - Date.now();
+  if (remainingMs <= 0) {
+    console.error(
+      `[production-deploy] Refusing to continue at ${stage}: total Firebase deployment budget of ${deploymentBudgetSeconds}s has expired`,
+    );
+    process.exit(1);
+  }
+  return remainingMs;
+}
+
+function assertRemoteMainStillExpected(stage) {
+  const remoteMain = spawnSync(
+    'git',
+    ['ls-remote', '--exit-code', 'origin', 'refs/heads/main'],
+    { cwd: process.cwd(), encoding: 'utf8', shell: false },
+  );
+  const remoteMainSha = String(remoteMain.stdout || '').trim().split(/\s+/)[0] || '';
+  if ((remoteMain.status ?? 1) !== 0 || !remoteMainSha) {
+    console.error(`[production-deploy] Refusing stale deployment at ${stage}: could not resolve current origin/main`);
+    process.exit(1);
+  }
+  if (remoteMainSha !== githubSha) {
+    console.error(
+      `[production-deploy] Refusing stale deployment at ${stage}: current origin/main ${remoteMainSha} must exactly match GITHUB_SHA ${githubSha}`,
+    );
+    process.exit(1);
+  }
+  process.env.PRODUCTION_EXACT_MAIN_VERIFIED_SHA = remoteMainSha;
+  console.log(`[production-deploy] exact current origin/main verified at ${stage}: ${remoteMainSha}`);
+  return remoteMainSha;
+}
+
+function assertDeploymentContinuable(stage) {
+  assertRemoteMainStillExpected(stage);
+  const remainingBudgetMs = remainingDeploymentBudgetMs(stage);
+  console.log(
+    `[production-deploy] deployment continuation approved at ${stage}; remaining total budget=${Math.ceil(remainingBudgetMs / 1000)}s`,
+  );
+  return remainingBudgetMs;
+}
+
 function sleepSeconds(seconds, reason) {
   const duration = Math.max(0, Number(seconds) || 0);
   if (!duration) return;
@@ -209,8 +242,14 @@ function retryFirebase(target, label, options = {}) {
     1800,
   );
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    const remainingBudgetMs = assertDeploymentContinuable(`${label} before attempt ${attempt}`);
+    const effectiveCommandTimeoutMs = Math.min(commandTimeoutSeconds * 1000, remainingBudgetMs);
+    if (effectiveCommandTimeoutMs < 30_000) {
+      console.error(`[production-deploy] Refusing ${label}: less than 30s remains in the total deployment budget`);
+      process.exit(1);
+    }
     console.log(
-      `[production-deploy] ${label} attempt ${attempt}/${attempts} (timeout=${commandTimeoutSeconds}s)`,
+      `[production-deploy] ${label} attempt ${attempt}/${attempts} (timeout=${Math.ceil(effectiveCommandTimeoutMs / 1000)}s)`,
     );
     const deployEnv = { ...process.env };
     try {
@@ -233,10 +272,13 @@ function retryFirebase(target, label, options = {}) {
       '--force',
     ], {
       env: deployEnv,
-      timeout: commandTimeoutSeconds * 1000,
+      timeout: effectiveCommandTimeoutMs,
       killSignal: 'SIGTERM',
     });
-    if (result.status === 0) return;
+    if (result.status === 0) {
+      assertDeploymentContinuable(`${label} after attempt ${attempt}`);
+      return;
+    }
     const permanentFailure = classifyPermanentFirebaseDeploymentFailure(result.output);
     if (permanentFailure) {
       console.error(
@@ -245,7 +287,13 @@ function retryFirebase(target, label, options = {}) {
       process.exit(1);
     }
     if (attempt < attempts) {
-      sleepSeconds(retryDelaySeconds * attempt, `before retrying ${label}`);
+      const remainingBeforeRetryMs = assertDeploymentContinuable(`${label} before retry cooldown ${attempt}`);
+      const retrySleepSeconds = retryDelaySeconds * attempt;
+      if (remainingBeforeRetryMs <= (retrySleepSeconds + 30) * 1000) {
+        console.error(`[production-deploy] Refusing ${label} retry: total deployment budget cannot cover the cooldown plus a safe retry window`);
+        process.exit(1);
+      }
+      sleepSeconds(retrySleepSeconds, `before retrying ${label}`);
     }
   }
   console.error(`[production-deploy] ${label} failed after ${attempts} attempts`);
@@ -323,6 +371,11 @@ function deployFunctionsQuotaSafe() {
       { retryDelaySeconds: 120 },
     );
     if (index < batches.length - 1) {
+      const remainingBeforeCooldownMs = assertDeploymentContinuable(`Functions batch ${index + 1}/${batches.length} before quota cooldown`);
+      if (remainingBeforeCooldownMs <= (cooldownSeconds + 30) * 1000) {
+        console.error('[production-deploy] Refusing further Functions batches: total deployment budget cannot cover the quota cooldown safely');
+        process.exit(1);
+      }
       sleepSeconds(cooldownSeconds, 'to respect the regional Cloud Functions mutation quota');
     }
   });
@@ -431,6 +484,7 @@ if (adminBootstrapRequested) {
     'Admin MFA bootstrap remediation callables',
     { attempts: 2, retryDelaySeconds: 90, commandTimeoutSeconds: 900 },
   );
+  assertDeploymentContinuable('before Admin MFA bootstrap metadata');
   writeFileSync(adminBootstrapMetadataPath, `${JSON.stringify({
     schemaVersion: 2,
     status: 'deployed',
@@ -471,6 +525,7 @@ retryFirebase(
   { retryDelaySeconds: 90 },
 );
 
+assertDeploymentContinuable('before writing production deployment metadata');
 const metadataStatus = run(process.execPath, [
   'scripts/write-production-deployment-metadata.mjs',
   '--components',
@@ -491,10 +546,12 @@ try {
   process.exit(1);
 }
 
+assertDeploymentContinuable('before final production verification');
 const verifyStatus = run(process.execPath, [
   'scripts/verify-production-deployment.mjs',
   '--write-evidence',
 ]);
 if (verifyStatus !== 0) process.exit(verifyStatus);
+assertDeploymentContinuable('after final production verification');
 
 console.log('[production-deploy] production deployment and identity verification passed');
