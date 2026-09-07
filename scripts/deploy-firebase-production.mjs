@@ -46,7 +46,7 @@ const validatedArtifactDigest = requireArtifactDigest(
 const deploymentStartedAtMs = Date.now();
 const deploymentBudgetSeconds = boundedInteger(
   'FIREBASE_DEPLOY_TOTAL_BUDGET_SECONDS',
-  7200,
+  9000,
   1800,
   10800,
 );
@@ -353,11 +353,49 @@ function chunk(values, size) {
   return chunks;
 }
 
+function assertFunctionsDeploymentPlanFeasible(batchCount, cooldownSeconds) {
+  const minimumBatchExecutionSeconds = boundedInteger(
+    'FIREBASE_FUNCTION_DEPLOY_MIN_BATCH_EXECUTION_SECONDS',
+    90,
+    60,
+    300,
+  );
+  const postFunctionsReserveSeconds = boundedInteger(
+    'FIREBASE_DEPLOY_POST_FUNCTIONS_RESERVE_SECONDS',
+    600,
+    300,
+    1800,
+  );
+  const cooldownCount = Math.max(0, batchCount - 1);
+  const minimumPlanSeconds =
+    batchCount * minimumBatchExecutionSeconds +
+    cooldownCount * cooldownSeconds +
+    postFunctionsReserveSeconds;
+  const remainingBudgetMs = assertDeploymentContinuable('before Functions deployment plan');
+  const remainingBudgetSeconds = Math.floor(remainingBudgetMs / 1000);
+
+  if (remainingBudgetSeconds < minimumPlanSeconds) {
+    console.error(
+      `[production-deploy] Refusing quota-safe Functions deployment plan: ${batchCount} batches require at least ${minimumPlanSeconds}s ` +
+      `(${minimumBatchExecutionSeconds}s minimum execution per batch + ${cooldownSeconds}s cooldowns + ${postFunctionsReserveSeconds}s post-Functions reserve), ` +
+      `but only ${remainingBudgetSeconds}s remains`,
+    );
+    process.exit(1);
+  }
+
+  console.log(
+    `[production-deploy] Functions deployment plan feasible: batches=${batchCount}, minimumPlan=${minimumPlanSeconds}s, ` +
+    `remaining=${remainingBudgetSeconds}s, postFunctionsReserve=${postFunctionsReserveSeconds}s`,
+  );
+}
+
 function deployFunctionsQuotaSafe() {
   const functionNames = discoverDeployableFunctionNames();
-  const batchSize = boundedInteger('FIREBASE_FUNCTION_DEPLOY_BATCH_SIZE', 4, 1, 6);
-  const cooldownSeconds = boundedInteger('FIREBASE_FUNCTION_DEPLOY_COOLDOWN_SECONDS', 75, 60, 300);
+  const batchSize = boundedInteger('FIREBASE_FUNCTION_DEPLOY_BATCH_SIZE', 6, 1, 6);
+  const cooldownSeconds = boundedInteger('FIREBASE_FUNCTION_DEPLOY_COOLDOWN_SECONDS', 60, 60, 300);
   const batches = chunk(functionNames, batchSize);
+
+  assertFunctionsDeploymentPlanFeasible(batches.length, cooldownSeconds);
 
   console.log(
     `[production-deploy] quota-safe Functions deployment: ${functionNames.length} exports in ${batches.length} sequential batches (size<=${batchSize}, cooldown=${cooldownSeconds}s)`,
