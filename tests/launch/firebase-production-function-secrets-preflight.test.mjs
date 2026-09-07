@@ -91,18 +91,30 @@ test('compiled exported Function metadata is the authoritative secret binding co
 
 test('protected production deploy imports mode-aware secret preflight before Firebase deployment', () => {
   const contextIndex = deploy.indexOf("process.env.GITHUB_ACTIONS !== 'true'");
-  const mainIndex = deploy.indexOf("['ls-remote', '--exit-code', 'origin', 'refs/heads/main']");
+  const continuationIndex = deploy.indexOf("assertDeploymentContinuable('before secret preflight');");
   const contractIndex = deploy.indexOf('scripts/verify-firebase-deployed-function-secret-contract.mjs');
   const secretIndex = deploy.indexOf('await verifyFirebaseProductionSecrets({ projectId, launchMode });');
   const deployIndex = deploy.indexOf("'firebase',\n      'deploy'");
+  const exactMainHelperStart = deploy.indexOf('function assertRemoteMainStillExpected(stage)');
+  const exactMainHelperEnd = deploy.indexOf('function assertDeploymentContinuable(stage)', exactMainHelperStart);
+  const exactMainHelper = deploy.slice(exactMainHelperStart, exactMainHelperEnd);
+  const continuationHelperStart = exactMainHelperEnd;
+  const continuationHelperEnd = deploy.indexOf('function sleepSeconds', continuationHelperStart);
+  const continuationHelper = deploy.slice(continuationHelperStart, continuationHelperEnd);
+
   assert.match(deploy, /import \{ verifyFirebaseProductionSecrets \} from ['"]\.\/verify-firebase-production-secrets\.mjs['"]/);
   assert.match(deploy, /const launchMode = String\(process\.env\.LAUNCH_MODE \|\| ['"]['"]\)\.trim\(\)/);
   assert.ok(contextIndex >= 0, 'protected GitHub Actions context gate is required');
-  assert.ok(mainIndex > contextIndex, 'origin/main binding must be checked after protected context');
-  assert.ok(contractIndex > mainIndex, 'compiled Function secret contract must be checked after exact-main verification');
+  assert.ok(continuationIndex > contextIndex, 'cooperative exact-main guard must run after protected context');
+  assert.ok(contractIndex > continuationIndex, 'compiled Function secret contract must be checked after the exact-main continuation guard');
   assert.ok(secretIndex > contractIndex, 'secret metadata preflight must follow the compiled Function secret contract');
-  assert.ok(secretIndex > mainIndex, 'secret preflight must run after exact-main verification');
+  assert.ok(secretIndex > continuationIndex, 'secret preflight must run after the exact-main continuation guard');
   assert.ok(deployIndex > secretIndex, 'secret preflight must run before the first Firebase deploy');
+  assert.ok(exactMainHelperStart >= 0 && exactMainHelperEnd > exactMainHelperStart, 'exact-main helper must be defined');
+  assert.match(exactMainHelper, /\['ls-remote', '--exit-code', 'origin', 'refs\/heads\/main'\]/);
+  assert.match(exactMainHelper, /remoteMainSha !== githubSha/);
+  assert.match(exactMainHelper, /must exactly match GITHUB_SHA/);
+  assert.match(continuationHelper, /assertRemoteMainStillExpected\(stage\)/);
   assert.doesNotMatch(deploy, /secretPreflightStatus|run\(process\.execPath,\s*\[\s*['"]scripts\/verify-firebase-production-secrets\.mjs/);
   assert.match(deploy, /Required Firebase production function secret preflight failed/);
   assert.match(workflow, /run:\s*node scripts\/deploy-firebase-production\.mjs/);
@@ -115,9 +127,22 @@ test('production deploy rejects any non-exact origin/main SHA before Firebase mu
   assert.doesNotMatch(deploy, /FETCH_HEAD/, 'deploy must not fetch and tolerate advanced main');
   assert.doesNotMatch(deploy, /is a verified ancestor/, 'ancestor success log must not exist');
   assert.doesNotMatch(deploy, /proceeding with deployment/, 'advanced-main deployments must not proceed');
-  const lsRemoteIndex = deploy.indexOf("['ls-remote', '--exit-code', 'origin', 'refs/heads/main']");
-  const refusalIndex = deploy.indexOf('remoteMainSha !== githubSha');
+
+  const continuationIndex = deploy.indexOf("assertDeploymentContinuable('before secret preflight');");
   const secretIndex = deploy.indexOf('await verifyFirebaseProductionSecrets({ projectId, launchMode });');
-  assert.ok(refusalIndex > lsRemoteIndex, 'exact-SHA refusal must follow ls-remote probe');
-  assert.ok(secretIndex > refusalIndex, 'exact-SHA refusal must happen before secret preflight and deployment');
+  const deployIndex = deploy.indexOf("'firebase',\n      'deploy'");
+  const exactMainHelperStart = deploy.indexOf('function assertRemoteMainStillExpected(stage)');
+  const exactMainHelperEnd = deploy.indexOf('function assertDeploymentContinuable(stage)', exactMainHelperStart);
+  const exactMainHelper = deploy.slice(exactMainHelperStart, exactMainHelperEnd);
+  const continuationHelperStart = exactMainHelperEnd;
+  const continuationHelperEnd = deploy.indexOf('function sleepSeconds', continuationHelperStart);
+  const continuationHelper = deploy.slice(continuationHelperStart, continuationHelperEnd);
+
+  assert.ok(continuationIndex >= 0, 'exact-main continuation guard must run before secret preflight');
+  assert.ok(secretIndex > continuationIndex, 'exact-main continuation guard must happen before secret preflight');
+  assert.ok(deployIndex > secretIndex, 'no Firebase mutation may happen before exact-main and secret preflights');
+  assert.match(exactMainHelper, /\['ls-remote', '--exit-code', 'origin', 'refs\/heads\/main'\]/);
+  assert.match(exactMainHelper, /remoteMainSha !== githubSha/);
+  assert.match(exactMainHelper, /process\.exit\(1\)/);
+  assert.match(continuationHelper, /assertRemoteMainStillExpected\(stage\)/);
 });
