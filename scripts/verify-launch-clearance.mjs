@@ -160,6 +160,15 @@ function validateGate(groupName, name, gate) {
     return;
   }
 
+  // A pending static ledger entry must not veto fresh protected exact-SHA
+  // execution evidence during the controlled pilot. This exception is
+  // deliberately pilot-only: malformed/unknown states still fail closed and
+  // public-launch clearance keeps its stricter manual/provider requirements.
+  if (isPilotMode && superseded && status === 'pending') {
+    warn(`${label} remains pending in the static ledger, but protected current-commit execution evidence supersedes it for the controlled pilot only.`);
+    return;
+  }
+
   if (status === 'passed') {
     if (superseded) return;
     const manualErrors = validateManualArtifact(groupName, name, gate);
