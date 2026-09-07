@@ -53,6 +53,7 @@ function prepareProtectedLiveEvidenceReplay() {
     'scripts/apply-five-role-business-evidence-fixes.mjs',
     'scripts/patch-protected-admin-staff-access-interaction.mjs',
     'scripts/harden-repeated-business-evidence.mjs',
+    'scripts/harden-tenant-before-work-convergence.mjs',
   ];
   for (const script of replayScripts) {
     execFileSync(process.execPath, [script], { stdio: 'inherit', env: process.env });
