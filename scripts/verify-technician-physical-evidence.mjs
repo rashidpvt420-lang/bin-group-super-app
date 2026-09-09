@@ -7,6 +7,7 @@ import { initializeFirebaseAdmin, resolveFirebaseAdminProjectId } from './fireba
 import { requireAuthorizedApprover } from './lib/authorized-approvers.mjs';
 
 const PROJECT_ID = 'bin-group-57c60';
+const EXPECTED_STORAGE_BUCKET = 'bin-group-57c60.firebasestorage.app';
 const REPOSITORY = 'rashidpvt420-lang/bin-group-super-app';
 const OUTPUT_PATH = 'launch_package/operational-proof.json';
 const SHA256_RE = /^[0-9a-f]{64}$/i;
@@ -63,9 +64,11 @@ if (!/^[0-9a-f]{40}$/.test(commitSha) || !/^\d+$/.test(sourceRunId)) fail('exact
 
 const projectId = resolveFirebaseAdminProjectId();
 if (projectId !== PROJECT_ID) fail(`unexpected Firebase project: ${projectId}`);
+const storageBucket = text(process.env.VITE_FIREBASE_STORAGE_BUCKET) || EXPECTED_STORAGE_BUCKET;
+if (storageBucket !== EXPECTED_STORAGE_BUCKET) fail(`unexpected Firebase Storage bucket: ${storageBucket}`);
 initializeFirebaseAdmin(admin, projectId);
 const db = admin.firestore();
-const bucket = admin.storage().bucket();
+const bucket = admin.storage().bucket(storageBucket);
 
 const candidateSnapshots = await Promise.all(
   COMPLETE_STATUSES.map((status) => db.collection('maintenanceTickets').where('status', '==', status).limit(100).get()),
