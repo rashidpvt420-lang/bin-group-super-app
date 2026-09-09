@@ -1,0 +1,108 @@
+name: One-shot Android Dispatch After Live Evidence
+
+on:
+  pull_request:
+    branches:
+      - main
+    types: [opened, synchronize, reopened]
+    paths:
+      - .github/workflows/zz-dispatch-android-after-live-once.yml
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  dispatch:
+    if: >-
+      github.event.pull_request.base.ref == 'main' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.head.ref == 'ops/dispatch-android-after-live-85e54c02'
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - name: Wait for exact-SHA live evidence and dispatch Android once
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          TARGET_SHA: 85e54c021c8d30a3817c9fcf0c73af8fc7133e6a
+          LIVE_RUN_ID: '34355038730'
+          EXPECTED_LIVE_ARTIFACT: live-launch-evidence-85e54c021c8d30a3817c9fcf0c73af8fc7133e6a
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          current_main="$(gh api "repos/$REPOSITORY/commits/main" --jq '.sha')"
+          [[ "$current_main" == "$TARGET_SHA" ]] || {
+            echo "::error::main moved; refusing stale Android release."
+            exit 1
+          }
+
+          for _ in $(seq 1 90); do
+            live="$(gh api "repos/$REPOSITORY/actions/runs/$LIVE_RUN_ID")"
+            [[ "$(jq -r '.name' <<<"$live")" == 'Live Role Smoke Tests' ]]
+            [[ "$(jq -r '.event' <<<"$live")" == 'workflow_dispatch' ]]
+            [[ "$(jq -r '.head_branch' <<<"$live")" == 'main' ]]
+            [[ "$(jq -r '.head_sha' <<<"$live")" == "$TARGET_SHA" ]]
+
+            status="$(jq -r '.status' <<<"$live")"
+            conclusion="$(jq -r '.conclusion // ""' <<<"$live")"
+            if [[ "$status" == 'completed' ]]; then
+              [[ "$conclusion" == 'success' ]] || {
+                echo "::error::Exact-SHA Live Role Smoke completed with conclusion=$conclusion; refusing Android dispatch."
+                exit 1
+              }
+              break
+            fi
+            sleep 20
+          done
+
+          live="$(gh api "repos/$REPOSITORY/actions/runs/$LIVE_RUN_ID")"
+          [[ "$(jq -r '.status' <<<"$live")" == 'completed' && "$(jq -r '.conclusion' <<<"$live")" == 'success' ]] || {
+            echo "::error::Live Role Smoke did not become successful within the bounded wait."
+            exit 1
+          }
+
+          current_main="$(gh api "repos/$REPOSITORY/commits/main" --jq '.sha')"
+          [[ "$current_main" == "$TARGET_SHA" ]] || {
+            echo "::error::main moved after live evidence; refusing Android release."
+            exit 1
+          }
+
+          artifacts="$(gh api "repos/$REPOSITORY/actions/runs/$LIVE_RUN_ID/artifacts?per_page=100")"
+          artifact_count="$(jq -r --arg name "$EXPECTED_LIVE_ARTIFACT" '[.artifacts[] | select(.name == $name and .expired == false)] | length' <<<"$artifacts")"
+          [[ "$artifact_count" == '1' ]] || {
+            echo "::error::Expected exactly one non-expired exact-SHA live evidence artifact; found $artifact_count."
+            exit 1
+          }
+
+          runs_url="repos/$REPOSITORY/actions/workflows/android-store-release.yml/runs?event=workflow_dispatch&branch=main&per_page=100"
+          existing="$(gh api "$runs_url")"
+          if jq -e --arg sha "$TARGET_SHA" '[.workflow_runs[] | select(.head_sha == $sha)] | length > 0' <<<"$existing" >/dev/null; then
+            echo "::error::An Android Store Release workflow_dispatch already exists for this exact SHA; refusing duplicate dispatch."
+            exit 1
+          fi
+
+          jq -n \
+            --arg ref main \
+            --arg sha "$TARGET_SHA" \
+            '{ref:$ref,inputs:{expected_commit_sha:$sha,confirmation:"BUILD_SIGNED_ANDROID_AAB_BIN_GROUP"}}' \
+            > dispatch.json
+
+          gh api --method POST \
+            "repos/$REPOSITORY/actions/workflows/android-store-release.yml/dispatches" \
+            --input dispatch.json
+
+          for _ in $(seq 1 30); do
+            sleep 2
+            runs="$(gh api "$runs_url")"
+            selected="$(jq -c --arg sha "$TARGET_SHA" '[.workflow_runs[] | select(.head_sha == $sha)] | sort_by(.created_at) | last // empty' <<<"$runs")"
+            if [[ -n "$selected" ]]; then
+              echo "ANDROID_RUN_ID=$(jq -r '.id' <<<"$selected")"
+              echo "ANDROID_RUN_URL=$(jq -r '.html_url' <<<"$selected")"
+              exit 0
+            fi
+          done
+
+          echo "::error::Android dispatch was accepted but the exact-SHA run was not observable within 60 seconds."
+          exit 1
