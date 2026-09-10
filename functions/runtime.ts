@@ -73,6 +73,7 @@ export * from "./clientTelemetry";
 export * from "./tenantTicketReview";
 export * from "./qrSecurity";
 export * from "./technicianOfflineSync";
+export { registerTechnicianDevice } from "./technicianInstallationBinding";
 export * from "./scheduledServices";
 export * from "./scheduledServiceAvailability";
 export * from "./ticketDispatchOperations";

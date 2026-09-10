@@ -13,6 +13,7 @@ import {
 } from "./ocrSecurityGuards";
 import { enforceAiUsageQuota } from "./aiUsageQuota";
 import { sendTwilioSMS } from "./smsDelivery";
+import { resolveTechnicianArrivalBinding } from "./technicianInstallationBinding";
 
 // [V10] PRODUCTION GRADE FULL-STACK STABILIZATION
 setGlobalOptions({ region: "europe-west3", enforceAppCheck: true });
@@ -403,6 +404,28 @@ export const updateTicketLifecycle = onCall({ cors: true }, async (request) => {
             if (!propertyGeo || distanceKm({ lat, lng }, propertyGeo) > 0.25) {
                 throw new HttpsError("failed-precondition", "Arrival location is outside the 250 metre property geofence.");
             }
+            const queuedTechnicianId = String(request.data?.queuedTechnicianId || "").trim();
+            const capturedAtMs = Number(arrivalLocation.capturedAtMs || 0);
+            if (queuedTechnicianId) {
+                const serverNowMs = Date.now();
+                if (
+                    !Number.isFinite(capturedAtMs) ||
+                    capturedAtMs <= 0 ||
+                    capturedAtMs > serverNowMs + 60_000 ||
+                    serverNowMs - capturedAtMs > 15 * 60_000
+                ) {
+                    throw new HttpsError(
+                        "failed-precondition",
+                        "Queued arrival GPS is stale or has no trustworthy capture time. Capture arrival again.",
+                    );
+                }
+            }
+            const arrivalBinding = await resolveTechnicianArrivalBinding({
+                transaction,
+                request,
+                assignedTechnicianId: assignedId,
+                isAdminActor,
+            });
             const cleanArrivalLocation = {
                 lat,
                 lng,
@@ -411,6 +434,7 @@ export const updateTicketLifecycle = onCall({ cors: true }, async (request) => {
                 accuracy,
                 heading: arrivalLocation.heading ?? null,
                 speed: arrivalLocation.speed ?? null,
+                ...(capturedAtMs > 0 ? { capturedAtMs } : {}),
             };
             updateData.arrivedAt = now;
             updateData.trackingStatus = 'ARRIVED';
@@ -421,6 +445,19 @@ export const updateTicketLifecycle = onCall({ cors: true }, async (request) => {
             updateData.gpsVerified = true;
             updateData.gpsVerifiedAt = now;
             updateData.onSiteVerification = 'GPS_VERIFIED';
+            updateData.physicalDeviceBound = arrivalBinding.physicalDeviceBound;
+            updateData.arrivalEvidenceMode = arrivalBinding.arrivalEvidenceMode;
+            if (
+                arrivalBinding.physicalDeviceBound &&
+                arrivalBinding.arrivalInstallationHash &&
+                arrivalBinding.arrivalDevicePlatform
+            ) {
+                updateData.arrivalInstallationHash = arrivalBinding.arrivalInstallationHash;
+                updateData.arrivalDevicePlatform = arrivalBinding.arrivalDevicePlatform;
+            } else {
+                updateData.arrivalInstallationHash = FieldValue.delete();
+                updateData.arrivalDevicePlatform = FieldValue.delete();
+            }
         }
         if (requestedStatus === 'IN_PROGRESS') {
             updateData.startedAt = now;

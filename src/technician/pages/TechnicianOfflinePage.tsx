@@ -38,7 +38,9 @@ function replayReason(item: OfflineQueueItem) {
   if (!action) return 'This legacy queue item has no valid mission payload and needs manual review.';
   if (action.functionName === 'updateTicketLifecycle') {
     const status = String(action.payload.status || '').toUpperCase();
-    if (status === 'ARRIVED') return 'Arrival requires fresh foreground GPS and must be confirmed from the live job screen.';
+    if (status === 'ARRIVED' && !isQueuedTechnicianActionAutoReplayable(action)) {
+      return 'Arrival is missing protected Android installation, Technician identity, GPS accuracy, or capture-time evidence.';
+    }
     if (status.includes('COMPLETED')) return 'Completion requires foreground evidence upload and must be confirmed from the live job screen.';
   }
   if (!isQueuedTechnicianActionAutoReplayable(action)) return 'This action is not safe for automatic replay.';
@@ -127,7 +129,7 @@ export default function TechnicianOfflinePage() {
       <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 3 }}>FIELD RESILIENCE · SYNC QUEUE</Typography>
       <Typography variant="h3" fontWeight="950" color="#111827" sx={{ mb: 1 }}>Offline Sync Queue</Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 4, maxWidth: 760 }}>
-        Safe accept, on-the-way, and start-work actions replay automatically through protected Firebase callables when connectivity returns. Arrival stays foreground-only because it requires fresh GPS. Completion stays foreground-only because it requires live evidence upload.
+        Safe accept, on-the-way, start-work, and fully bound Android arrival actions replay through protected Firebase callables when connectivity returns. The server re-reads the Technician registration and rechecks identity, GPS accuracy, capture age, and geofence. Completion stays foreground-only because it requires live evidence upload.
       </Typography>
 
       <Paper sx={{ p: 3, mb: 3, borderRadius: 4, bgcolor: online ? alpha('#10b981', 0.08) : alpha('#ef4444', 0.08), border: `1px solid ${online ? '#10b981' : '#ef4444'}` }}>

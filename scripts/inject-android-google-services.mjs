@@ -5,6 +5,7 @@ import path from 'node:path';
 
 const EXPECTED_PROJECT_ID = 'bin-group-57c60';
 const EXPECTED_PACKAGE = 'ae.bingroups.superapp';
+const EXPECTED_ANDROID_APP_ID = '1:123413252227:android:36feeed4a78c1dcf99f3b6';
 const encoded = String(process.env.ANDROID_GOOGLE_SERVICES_JSON_BASE64 || '').trim();
 
 if (!encoded) {
@@ -43,6 +44,10 @@ if (!androidAppId) {
 }
 if (!/^1:\d+:android:[a-f0-9]+$/i.test(androidAppId)) {
   console.error('[android-google-services] Firebase Android app ID has an unexpected format');
+  process.exit(1);
+}
+if (androidAppId !== EXPECTED_ANDROID_APP_ID) {
+  console.error('[android-google-services] Firebase Android app ID does not match the production Technician App Check allowlist');
   process.exit(1);
 }
 

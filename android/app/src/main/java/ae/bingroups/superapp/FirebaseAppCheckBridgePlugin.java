@@ -12,6 +12,7 @@ import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 import com.google.firebase.appcheck.FirebaseAppCheck;
+import com.google.firebase.installations.FirebaseInstallations;
 
 import java.security.MessageDigest;
 import java.util.Locale;
@@ -30,6 +31,19 @@ public class FirebaseAppCheckBridgePlugin extends Plugin {
             byte[] value = digest.digest(signature.toByteArray());
             StringBuilder hex = new StringBuilder(value.length * 2);
             for (byte b : value) hex.append(String.format(Locale.US, "%02X", b));
+            return hex.toString();
+        } catch (Exception ignored) {
+            return "";
+        }
+    }
+
+    private String sha256(String value) {
+        if (value == null || value.isBlank()) return "";
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] bytes = digest.digest(value.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            StringBuilder hex = new StringBuilder(bytes.length * 2);
+            for (byte b : bytes) hex.append(String.format(Locale.US, "%02x", b));
             return hex.toString();
         } catch (Exception ignored) {
             return "";
@@ -184,5 +198,38 @@ public class FirebaseAppCheckBridgePlugin extends Plugin {
                 String code = diagnosticCode(error);
                 call.reject("Unable to obtain Firebase App Check token.", code, error);
             });
+    }
+
+    @PluginMethod
+    public void getInstallationBindingProof(PluginCall call) {
+        String installer = installerState();
+        String signer = signingState();
+        if (!"I_OK".equals(installer)) {
+            call.reject("Google Play installation is required for device binding.", "INSTALLER_NOT_GOOGLE_PLAY");
+            return;
+        }
+        if (!"S_OK".equals(signer)) {
+            call.reject("Google Play delivery signature validation failed.", "PLAY_SIGNING_IDENTITY_MISMATCH");
+            return;
+        }
+
+        FirebaseInstallations.getInstance()
+            .getId()
+            .addOnSuccessListener(firebaseInstallationId -> {
+                String installationHash = sha256(firebaseInstallationId);
+                if (!installationHash.matches("^[a-f0-9]{64}$")) {
+                    call.reject("Unable to derive a secure installation identity.", "INSTALLATION_HASH_FAILURE");
+                    return;
+                }
+
+                // The raw Firebase Installation ID remains inside native memory.
+                // Only its one-way SHA-256 digest crosses the Capacitor bridge.
+                JSObject result = new JSObject();
+                result.put("installationHash", installationHash);
+                call.resolve(result);
+            })
+            .addOnFailureListener(error ->
+                call.reject("Unable to derive a secure installation identity.", "INSTALLATION_ID_UNAVAILABLE")
+            );
     }
 }

@@ -34,6 +34,8 @@ export type OfflineReplayResult = {
   remaining: number;
 };
 
+const INSTALLATION_HASH_RE = /^[a-f0-9]{64}$/;
+
 const normalizedErrorCode = (err: any) => String(err?.code || '').toLowerCase().replace(/^functions\//, '');
 
 export const shouldQueueOffline = (err: any) => {
@@ -112,7 +114,22 @@ export function isQueuedTechnicianActionAutoReplayable(action: QueuedTechnicianJ
   if (!action) return false;
   if (action.functionName === 'acceptTechnicianTicket') return true;
   const status = String(action.payload.status || '').toUpperCase();
-  // Arrival needs fresh foreground GPS. Completion needs foreground photo upload.
+  if (status === 'ARRIVED') {
+    const installationHash = String(action.payload.installationHash || '').trim().toLowerCase();
+    const queuedTechnicianId = String(action.payload.queuedTechnicianId || action.technicianId || '').trim();
+    const location = action.payload.arrivalLocation || {};
+    const lat = Number(location.lat ?? location.latitude);
+    const lng = Number(location.lng ?? location.longitude);
+    const accuracy = Number(location.accuracy);
+    const capturedAtMs = Number(location.capturedAtMs);
+    return INSTALLATION_HASH_RE.test(installationHash) &&
+      Boolean(queuedTechnicianId) &&
+      Number.isFinite(lat) && lat >= -90 && lat <= 90 &&
+      Number.isFinite(lng) && lng >= -180 && lng <= 180 &&
+      Number.isFinite(accuracy) && accuracy > 0 && accuracy <= 100 &&
+      Number.isFinite(capturedAtMs) && capturedAtMs > 0;
+  }
+  // Completion needs foreground photo upload and confirmation.
   return ['EN_ROUTE', 'IN_PROGRESS'].includes(status);
 }
 
@@ -142,7 +159,10 @@ export async function replayOfflineJobAction(item: OfflineQueueItem, callableFac
   markOfflineQueueItemRetrying(item.id);
   try {
     const callable = callableFactory(functions, action!.functionName);
-    await callable(action!.payload);
+    await callable({
+      ...action!.payload,
+      queuedTechnicianId: action!.technicianId || action!.payload.queuedTechnicianId,
+    });
     removeOfflineQueueItem(item.id);
     return { replayed: true, blocked: false } as const;
   } catch (err: any) {
@@ -217,10 +237,26 @@ export async function acceptJobWithOfflineQueue(ticketId: string, technicianId?:
   });
 }
 
-export async function updateJobLifecycleWithOfflineQueue(params: { ticketId: string; technicianId?: string; status: string; notes?: string; materials?: string; localPhotoCount?: number }) {
+export async function updateJobLifecycleWithOfflineQueue(params: {
+  ticketId: string;
+  technicianId?: string;
+  status: string;
+  notes?: string;
+  materials?: string;
+  localPhotoCount?: number;
+  installationHash?: string;
+  arrivalLocation?: Record<string, unknown>;
+}) {
   return callJobActionWithOfflineQueue({
     functionName: 'updateTicketLifecycle',
-    payload: { ticketId: params.ticketId, status: params.status, notes: params.notes || '' },
+    payload: {
+      ticketId: params.ticketId,
+      status: params.status,
+      notes: params.notes || '',
+      queuedTechnicianId: params.technicianId,
+      ...(params.installationHash ? { installationHash: params.installationHash } : {}),
+      ...(params.arrivalLocation ? { arrivalLocation: params.arrivalLocation } : {}),
+    },
     meta: { ticketId: params.ticketId, technicianId: params.technicianId, label: `Mission ${String(params.status).replace(/_/g, ' ')}` },
   });
 }

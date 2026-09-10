@@ -27,6 +27,7 @@ import TechnicianBeforeWorkEvidence from './components/TechnicianBeforeWorkEvide
 import TechnicianAfterWorkEvidence from './components/TechnicianAfterWorkEvidence';
 import TechnicianOfflineSyncAgent from './components/TechnicianOfflineSyncAgent';
 import TechnicianSyncStatusStrip from './components/TechnicianSyncStatusStrip';
+import TechnicianInstallationRegistration from './components/TechnicianInstallationRegistration';
 import SupportPage from '../pages/public/SupportPage';
 import PortalConnectionStrip from '../components/PortalConnectionStrip';
 
@@ -78,6 +79,7 @@ const TechnicianLayout = ({ children }: { children: React.ReactNode }) => {
 
             <Container maxWidth="xl" sx={{ py: { xs: 3.5, md: 6 }, px: { xs: 2, sm: 3, md: 5 }, position: 'relative', zIndex: 1 }}>
                 <PortalConnectionStrip />
+                <TechnicianInstallationRegistration />
                 <TechnicianSyncStatusStrip />
                 {!isDashboard && <Box sx={{ mb: 4, display: 'flex', gap: 1, alignItems: 'center', color: shell.muted, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
                     <Button variant="text" onClick={() => navigate('/technician')} sx={{ color: shell.muted, fontWeight: 800 }}>{label('nav.dashboard', 'DASHBOARD', 'لوحة التحكم')}</Button>
