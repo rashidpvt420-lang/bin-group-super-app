@@ -16,6 +16,7 @@ import {
 import { useNavigate, useParams } from 'react-router-dom';
 import { AlertTriangle, Check, ChevronLeft, CloudOff, MapPin, MessageSquare, Navigation, Phone, Play, ShieldCheck } from 'lucide-react';
 import { db, doc, functions, httpsCallable, onSnapshot, serverTimestamp, updateDoc } from '../../lib/firebase';
+import { getCachedAndroidInstallationIdentity, syncTechnicianDeviceRegistration } from '../../lib/installationIdentity';
 import { useRole } from '../../context/RoleContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
@@ -199,6 +200,7 @@ export default function TechnicianJobDetailPage() {
 
     const queueAction = (nextStatus: Step | 'ACCEPTED', reason: string) => {
         if (!id || !user?.uid) return;
+        const cachedIdentity = nextStatus === 'ARRIVED' ? getCachedAndroidInstallationIdentity() : null;
         const queued = queueOfflineJobAction({
             type: nextStatus === 'ARRIVED' ? 'checkin_checkout' : 'job_action',
             label: `Mission ${nextStatus.replace(/_/g, ' ')}`,
@@ -209,6 +211,8 @@ export default function TechnicianJobDetailPage() {
                 status: nextStatus,
                 notes: notes.trim(),
                 materials,
+                arrivalInstallationHash: cachedIdentity?.installationHash || '',
+                arrivalDevicePlatform: cachedIdentity?.platform || '',
                 ticketSnapshot: {
                     propertyId: ticket?.propertyId || '',
                     propertyName: ticket?.propertyName || '',
@@ -263,6 +267,10 @@ export default function TechnicianJobDetailPage() {
             const lifecyclePayload: Record<string, any> = { ticketId: id, status: nextStatus, notes: notes.trim() };
 
             if (nextStatus === 'ARRIVED') {
+                const installationIdentity = await syncTechnicianDeviceRegistration();
+                if (!installationIdentity) {
+                    throw new Error('Physical arrival requires the Google Play-installed BIN GROUP Android app.');
+                }
                 const position = await getVerifiedArrivalPosition();
                 const arrivalLocation = {
                     lat: position.coords.latitude,
@@ -274,6 +282,8 @@ export default function TechnicianJobDetailPage() {
                     speed: position.coords.speed,
                 };
                 lifecyclePayload.arrivalLocation = arrivalLocation;
+                lifecyclePayload.arrivalInstallationHash = installationIdentity.installationHash;
+                lifecyclePayload.arrivalDevicePlatform = installationIdentity.platform;
                 if (isTracking) {
                     await stopLiveTracking(user.uid, id, 'ARRIVED');
                     setIsTracking(false);
