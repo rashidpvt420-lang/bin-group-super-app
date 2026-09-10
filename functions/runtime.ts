@@ -91,9 +91,12 @@ export * from "./staffPdfReporting";
 export {
   resumeTechnicianDuty,
   acceptTechnicianTicket,
-  updateTicketLifecycle,
   getTechnicianOperationalReadiness,
 } from "./secureTechnicianOperations";
+export {
+  registerTechnicianDevice,
+  updateTicketLifecycle,
+} from "./technicianInstallationBinding";
 export {
   updateTechnicianProfilePreferences,
   submitTechnicianCredentialRenewal,
