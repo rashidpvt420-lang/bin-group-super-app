@@ -48,14 +48,22 @@ test('Admin security sessions are ephemeral and never stored in localStorage', a
   assert.match(app, /sessionStorage\.removeItem\('bin-admin-security-session'\)/);
 });
 
-test('unauthenticated Admin callables expire the stale browser session', async () => {
+test('unauthenticated Admin callables revalidate Firebase Auth before expiring the browser session', async () => {
   const firebase = await read('apps/admin-panel/src/lib/firebase.ts');
   assert.match(firebase, /httpsCallable as firebaseHttpsCallable/);
   assert.match(firebase, /functions\/unauthenticated/);
+  assert.match(firebase, /const currentUser = auth\.currentUser/);
+  assert.match(firebase, /await currentUser\.getIdToken\(true\)/);
+  assert.match(firebase, /auth\/user-token-expired/);
+  assert.match(firebase, /auth\/invalid-user-token/);
+  assert.match(firebase, /auth\/user-disabled/);
+  assert.match(firebase, /isTerminalAdminAuthError\(refreshError\)/);
+  assert.match(firebase, /return await callable\(data\)/);
   assert.match(firebase, /sessionStorage\.removeItem\('bin-admin-security-session'\)/);
   assert.match(firebase, /signOut\(auth\)/);
   assert.match(firebase, /window\.location\.replace\('\/login\?session=expired'\)/);
   assert.match(firebase, /sessionExpiryRedirectStarted/);
+  assert.doesNotMatch(firebase, /if \(isUnauthenticatedCallableError\(error\)\) expireStaleAdminSession\(\);/);
 });
 
 test('Admin security profile refreshes Firebase Auth before protected callables', async () => {
