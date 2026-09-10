@@ -16,12 +16,15 @@ import {
 import { useNavigate, useParams } from 'react-router-dom';
 import { AlertTriangle, Check, ChevronLeft, CloudOff, MapPin, MessageSquare, Navigation, Phone, Play, ShieldCheck } from 'lucide-react';
 import { db, doc, functions, httpsCallable, onSnapshot, serverTimestamp, updateDoc } from '../../lib/firebase';
-import { getCachedAndroidInstallationIdentity, syncTechnicianDeviceRegistration } from '../../lib/installationIdentity';
 import { useRole } from '../../context/RoleContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { resolvePropertyLocation } from '../../utils/propertyLocationResolver';
 import { startLiveTracking, stopLiveTracking } from '../../utils/liveTracking';
+import {
+    ensureTechnicianInstallationRegistered,
+    readNativeTechnicianInstallationHash,
+} from '../utils/technicianInstallationBinding';
 
 type Step = 'ACCEPTED' | 'EN_ROUTE' | 'ARRIVED' | 'IN_PROGRESS' | 'COMPLETED';
 type TechnicianTicketRecord = Record<string, any> & { id: string };
@@ -198,21 +201,34 @@ export default function TechnicianJobDetailPage() {
         return !navigator.onLine || /network-request-failed|unavailable|deadline-exceeded|timeout|failed to fetch|network error/i.test(detail);
     };
 
-    const queueAction = (nextStatus: Step | 'ACCEPTED', reason: string) => {
+    const queueAction = (
+        nextStatus: Step | 'ACCEPTED',
+        reason: string,
+        lifecycleEvidence: Record<string, any> = {},
+    ) => {
         if (!id || !user?.uid) return;
-        const cachedIdentity = nextStatus === 'ARRIVED' ? getCachedAndroidInstallationIdentity() : null;
+        const functionName = nextStatus === 'ACCEPTED'
+            ? 'acceptTechnicianTicket'
+            : 'updateTicketLifecycle';
+        const payload = {
+            ticketId: id,
+            ...(nextStatus === 'ACCEPTED' ? {} : { status: nextStatus }),
+            notes: notes.trim(),
+            materials,
+            queuedTechnicianId: user.uid,
+            ...lifecycleEvidence,
+        };
         const queued = queueOfflineJobAction({
             type: nextStatus === 'ARRIVED' ? 'checkin_checkout' : 'job_action',
             label: `Mission ${nextStatus.replace(/_/g, ' ')}`,
             detail: reason,
             payload: JSON.stringify({
+                schemaVersion: 1,
+                functionName,
+                payload,
                 ticketId: id,
                 technicianId: user.uid,
-                status: nextStatus,
-                notes: notes.trim(),
-                materials,
-                arrivalInstallationHash: cachedIdentity?.installationHash || '',
-                arrivalDevicePlatform: cachedIdentity?.platform || '',
+                queuedAt: new Date().toISOString(),
                 ticketSnapshot: {
                     propertyId: ticket?.propertyId || '',
                     propertyName: ticket?.propertyName || '',
@@ -222,7 +238,7 @@ export default function TechnicianJobDetailPage() {
                 },
             }),
         });
-        setMessage(`Saved locally in Offline Sync Queue: ${queued.label}. Redo/confirm once online.`);
+        setMessage(`Saved locally in Offline Sync Queue: ${queued.label}. Production will revalidate it when connectivity returns.`);
     };
 
     const acceptJob = async () => {
@@ -254,7 +270,7 @@ export default function TechnicianJobDetailPage() {
             alert(`${tx('tech.job.close_blocked', 'Cannot close mission. Missing proof:')} ${closeBlockers.join(', ')}`);
             return;
         }
-        if (!online) {
+        if (!online && nextStatus !== 'ARRIVED') {
             if (nextStatus === 'COMPLETED') {
                 alert('Completion can be queued, but it remains blocked until the protected after-work photo is uploaded and server-confirmed.');
             }
@@ -267,11 +283,8 @@ export default function TechnicianJobDetailPage() {
             const lifecyclePayload: Record<string, any> = { ticketId: id, status: nextStatus, notes: notes.trim() };
 
             if (nextStatus === 'ARRIVED') {
-                const installationIdentity = await syncTechnicianDeviceRegistration();
-                if (!installationIdentity) {
-                    throw new Error('Physical arrival requires the Google Play-installed BIN GROUP Android app.');
-                }
                 const position = await getVerifiedArrivalPosition();
+                const installationHash = await readNativeTechnicianInstallationHash();
                 const arrivalLocation = {
                     lat: position.coords.latitude,
                     lng: position.coords.longitude,
@@ -280,10 +293,30 @@ export default function TechnicianJobDetailPage() {
                     accuracy: position.coords.accuracy,
                     heading: position.coords.heading,
                     speed: position.coords.speed,
+                    capturedAtMs: position.timestamp || Date.now(),
                 };
                 lifecyclePayload.arrivalLocation = arrivalLocation;
-                lifecyclePayload.arrivalInstallationHash = installationIdentity.installationHash;
-                lifecyclePayload.arrivalDevicePlatform = installationIdentity.platform;
+                if (installationHash) {
+                    lifecyclePayload.installationHash = installationHash;
+                    if (online) {
+                        await ensureTechnicianInstallationRegistered(installationHash);
+                    }
+                }
+                if (!online) {
+                    if (!installationHash) {
+                        throw new Error('Offline arrival can only be queued from the verified Google Play Android installation.');
+                    }
+                    queueAction(
+                        nextStatus,
+                        'Arrival was captured offline and will be revalidated against the current server registration.',
+                        { arrivalLocation, installationHash },
+                    );
+                    if (isTracking) {
+                        await stopLiveTracking(user.uid, id, 'ARRIVED');
+                    }
+                    setIsTracking(false);
+                    return;
+                }
                 if (isTracking) {
                     await stopLiveTracking(user.uid, id, 'ARRIVED');
                     setIsTracking(false);

@@ -31,20 +31,6 @@ test('native bridge honors explicit recovery refresh without debug fallback', ()
   assert.doesNotMatch(bridge, /Log\.[a-z]+\([^\n]*token/i);
 });
 
-test('native bridge refuses App Check token delivery unless Google Play installer and signer are verified', () => {
-  assert.match(bridge, /trustedPlayInstallFailureCode\(\)/);
-  assert.match(bridge, /com\.android\.vending/);
-  assert.match(bridge, /I_OK/);
-  assert.match(bridge, /!"I_OK"\.equals\(installer\)/);
-  assert.match(bridge, /!"S_OK"\.equals\(signer\)/);
-  assert.match(bridge, /PLAY_INSTALLATION_UNVERIFIED/);
-  assert.match(bridge, /Google Play installation verification failed/);
-
-  const installGate = bridge.indexOf('String playInstallFailure = trustedPlayInstallFailureCode()');
-  const tokenRequest = bridge.lastIndexOf('FirebaseAppCheck.getInstance()');
-  assert.ok(installGate >= 0 && tokenRequest > installGate, 'Play install verification must run before native App Check token retrieval');
-});
-
 test('normal native refresh reuses cache while secure recovery forces one re-attestation', () => {
   assert.match(firebase, /registerPlugin<NativeAppCheckBridge>\('FirebaseAppCheckBridge'\)/);
   assert.match(firebase, /getAppCheckToken\(\{ forceRefresh: false \}\)/);

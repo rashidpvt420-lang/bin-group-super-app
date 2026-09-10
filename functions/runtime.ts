@@ -73,6 +73,7 @@ export * from "./clientTelemetry";
 export * from "./tenantTicketReview";
 export * from "./qrSecurity";
 export * from "./technicianOfflineSync";
+export { registerTechnicianDevice } from "./technicianInstallationBinding";
 export * from "./scheduledServices";
 export * from "./scheduledServiceAvailability";
 export * from "./ticketDispatchOperations";
@@ -91,12 +92,9 @@ export * from "./staffPdfReporting";
 export {
   resumeTechnicianDuty,
   acceptTechnicianTicket,
+  updateTicketLifecycle,
   getTechnicianOperationalReadiness,
 } from "./secureTechnicianOperations";
-export {
-  registerTechnicianDevice,
-  updateTicketLifecycle,
-} from "./technicianInstallationBinding";
 export {
   updateTechnicianProfilePreferences,
   submitTechnicianCredentialRenewal,

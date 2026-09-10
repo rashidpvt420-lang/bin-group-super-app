@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
-import { Alert, Box, Container, AppBar, Toolbar, Typography, Button } from '@mui/material';
+import { Box, Container, AppBar, Toolbar, Typography, Button } from '@mui/material';
 import { ArrowLeft, Wrench, ChevronRight, User } from 'lucide-react';
 import { useLanguage } from '@bin/shared';
 import { binThemeTokens } from '../theme/binGroupTheme';
@@ -11,8 +11,6 @@ import SafeIcon, { renderSafeIcon } from '../components/SafeIcon';
 import BinConnectChatBox from '../components/BinConnectChatBox';
 import PilotCompletionPage from '../components/PilotCompletionPage';
 import BinConnectInboxPage from '../components/BinConnectInboxPage';
-import { useRole } from '../context/RoleContext';
-import { syncTechnicianDeviceRegistration } from '../lib/installationIdentity';
 
 import TechnicianSimpleDashboardPage from './pages/TechnicianSimpleDashboardPage';
 import TechnicianDashboardPage from './pages/TechnicianDashboardPage';
@@ -29,6 +27,7 @@ import TechnicianBeforeWorkEvidence from './components/TechnicianBeforeWorkEvide
 import TechnicianAfterWorkEvidence from './components/TechnicianAfterWorkEvidence';
 import TechnicianOfflineSyncAgent from './components/TechnicianOfflineSyncAgent';
 import TechnicianSyncStatusStrip from './components/TechnicianSyncStatusStrip';
+import TechnicianInstallationRegistration from './components/TechnicianInstallationRegistration';
 import SupportPage from '../pages/public/SupportPage';
 import PortalConnectionStrip from '../components/PortalConnectionStrip';
 
@@ -52,24 +51,11 @@ const breadcrumbArabic: Record<string, string> = {
 const TechnicianLayout = ({ children }: { children: React.ReactNode }) => {
     const navigate = useNavigate();
     const location = useLocation();
-    const { user } = useRole();
     const { isRTL, lang, t, tx } = useLanguage();
-    const [deviceBindingError, setDeviceBindingError] = useState('');
     const label = (key: string, en: string, ar: string) => lang === 'ar' ? ar : tx(key, en);
     const pathnames = location.pathname.split('/').filter(Boolean);
     const isDashboard = location.pathname === '/technician' || location.pathname === '/technician/dashboard';
     const quickButtonSx = { color: shell.gold, border: `1px solid ${shell.gold}`, borderRadius: 2, fontWeight: 900, display: { xs: 'none', md: 'inline-flex' }, whiteSpace: 'nowrap', textTransform: 'none' } as const;
-
-    useEffect(() => {
-        if (!user?.uid) return;
-        let cancelled = false;
-        setDeviceBindingError('');
-        void syncTechnicianDeviceRegistration().catch((error: any) => {
-            if (cancelled) return;
-            setDeviceBindingError(error?.message || 'Protected Android installation registration failed.');
-        });
-        return () => { cancelled = true; };
-    }, [user?.uid]);
 
     return (
         <Box className="technician-shell" sx={{ minHeight: '100vh', bgcolor: shell.canvas, color: shell.ink, direction: isRTL ? 'rtl' : 'ltr', position: 'relative', isolation: 'isolate' }}>
@@ -93,7 +79,7 @@ const TechnicianLayout = ({ children }: { children: React.ReactNode }) => {
 
             <Container maxWidth="xl" sx={{ py: { xs: 3.5, md: 6 }, px: { xs: 2, sm: 3, md: 5 }, position: 'relative', zIndex: 1 }}>
                 <PortalConnectionStrip />
-                {deviceBindingError && <Alert severity="error" sx={{ mb: 2.5 }}>Protected Android installation binding is not ready: {deviceBindingError}</Alert>}
+                <TechnicianInstallationRegistration />
                 <TechnicianSyncStatusStrip />
                 {!isDashboard && <Box sx={{ mb: 4, display: 'flex', gap: 1, alignItems: 'center', color: shell.muted, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
                     <Button variant="text" onClick={() => navigate('/technician')} sx={{ color: shell.muted, fontWeight: 800 }}>{label('nav.dashboard', 'DASHBOARD', 'لوحة التحكم')}</Button>

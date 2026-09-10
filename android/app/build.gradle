@@ -66,6 +66,7 @@ dependencies {
     implementation project(':capacitor-android')
     implementation platform("com.google.firebase:firebase-bom:34.17.0")
     implementation "com.google.firebase:firebase-appcheck-playintegrity"
+    implementation "com.google.firebase:firebase-installations"
     testImplementation "junit:junit:$junitVersion"
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
     androidTestImplementation "androidx.test.espresso:espresso-core:$espressoCoreVersion"

@@ -105,8 +105,13 @@ type NativeAppCheckTokenResult = {
   expireTimeMillis?: number;
 };
 
+type NativeInstallationBindingResult = {
+  installationHash?: string;
+};
+
 type NativeAppCheckBridge = {
   getAppCheckToken: (options: { forceRefresh: boolean }) => Promise<NativeAppCheckTokenResult>;
+  getInstallationBindingProof: () => Promise<NativeInstallationBindingResult>;
 };
 
 type CapacitorRuntime = {
@@ -146,6 +151,20 @@ export const forceNativeAppCheckRefresh = async (): Promise<void> => {
     throw new Error('Native Play Integrity App Check bridge plugin unavailable.');
   }
   validateNativeAppCheckToken(await bridge.getAppCheckToken({ forceRefresh: true }));
+};
+
+export const getNativeAndroidInstallationHash = async (): Promise<string | null> => {
+  if (!isCapacitorAndroid) return null;
+  const bridge = nativeAppCheckBridge;
+  if (!bridge || typeof bridge.getInstallationBindingProof !== 'function') {
+    throw new Error('Native Android installation-binding bridge plugin unavailable.');
+  }
+  const result = await bridge.getInstallationBindingProof();
+  const installationHash = String(result?.installationHash || '').trim().toLowerCase();
+  if (!/^[a-f0-9]{64}$/.test(installationHash)) {
+    throw new Error('Native Android installation identity is invalid.');
+  }
+  return installationHash;
 };
 
 const appCheckSiteKey = readEnv('VITE_APP_CHECK_SITE_KEY');

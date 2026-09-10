@@ -103,7 +103,7 @@ test('before-work evidence is technician-owned, Storage-verified and required be
   assert.match(runtime, /export \* from "\.\/technicianBeforeWorkEvidence";/);
 });
 
-test('offline lifecycle actions replay automatically but arrival and completion stay foreground-only', async () => {
+test('offline lifecycle replay requires bound arrival evidence while completion stays foreground-only', async () => {
   const [actions, agent, app, offlinePage] = await Promise.all([
     read('src/technician/utils/offlineJobActions.ts'),
     read('src/technician/components/TechnicianOfflineSyncAgent.tsx'),
@@ -114,6 +114,10 @@ test('offline lifecycle actions replay automatically but arrival and completion 
   expectAll(actions, [
     /replayEligibleOfflineJobActions/,
     /parseQueuedTechnicianJobAction/,
+    /status === 'ARRIVED'/,
+    /INSTALLATION_HASH_RE\.test\(installationHash\)/,
+    /queuedTechnicianId/,
+    /capturedAtMs/,
     /\['EN_ROUTE', 'IN_PROGRESS'\]\.includes\(status\)/,
     /attempts >= 3/,
     /markOfflineQueueItemFailed/,
@@ -128,7 +132,7 @@ test('offline lifecycle actions replay automatically but arrival and completion 
   expectAll(offlinePage, [
     /replayOfflineJobAction/,
     /replayEligibleOfflineJobActions/,
-    /Arrival requires fresh foreground GPS/,
+    /Arrival is missing protected Android installation/,
     /Completion requires foreground evidence upload/,
   ], 'manual queue UI');
   assert.match(app, /<TechnicianOfflineSyncAgent \/>/);

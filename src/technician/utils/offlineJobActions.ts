@@ -1,4 +1,4 @@
-import { auth, httpsCallable, functions } from '../../lib/firebase';
+import { httpsCallable, functions } from '../../lib/firebase';
 import {
   enqueueOfflineQueueItem,
   loadOfflineQueue,
@@ -33,6 +33,8 @@ export type OfflineReplayResult = {
   blocked: number;
   remaining: number;
 };
+
+const INSTALLATION_HASH_RE = /^[a-f0-9]{64}$/;
 
 const normalizedErrorCode = (err: any) => String(err?.code || '').toLowerCase().replace(/^functions\//, '');
 
@@ -99,8 +101,6 @@ export function parseQueuedTechnicianJobAction(item: OfflineQueueItem): QueuedTe
         ticketId,
         status,
         notes: String(parsed.notes || ''),
-        ...(parsed.arrivalInstallationHash ? { arrivalInstallationHash: String(parsed.arrivalInstallationHash) } : {}),
-        ...(parsed.arrivalDevicePlatform ? { arrivalDevicePlatform: String(parsed.arrivalDevicePlatform) } : {}),
       },
       ticketId,
       technicianId: parsed.technicianId ? String(parsed.technicianId) : undefined,
@@ -114,8 +114,22 @@ export function isQueuedTechnicianActionAutoReplayable(action: QueuedTechnicianJ
   if (!action) return false;
   if (action.functionName === 'acceptTechnicianTicket') return true;
   const status = String(action.payload.status || '').toUpperCase();
-  // ARRIVED always requires fresh foreground GPS plus a current protected
-  // installation binding. Completion requires foreground proof confirmation.
+  if (status === 'ARRIVED') {
+    const installationHash = String(action.payload.installationHash || '').trim().toLowerCase();
+    const queuedTechnicianId = String(action.payload.queuedTechnicianId || action.technicianId || '').trim();
+    const location = action.payload.arrivalLocation || {};
+    const lat = Number(location.lat ?? location.latitude);
+    const lng = Number(location.lng ?? location.longitude);
+    const accuracy = Number(location.accuracy);
+    const capturedAtMs = Number(location.capturedAtMs);
+    return INSTALLATION_HASH_RE.test(installationHash) &&
+      Boolean(queuedTechnicianId) &&
+      Number.isFinite(lat) && lat >= -90 && lat <= 90 &&
+      Number.isFinite(lng) && lng >= -180 && lng <= 180 &&
+      Number.isFinite(accuracy) && accuracy > 0 && accuracy <= 100 &&
+      Number.isFinite(capturedAtMs) && capturedAtMs > 0;
+  }
+  // Completion needs foreground photo upload and confirmation.
   return ['EN_ROUTE', 'IN_PROGRESS'].includes(status);
 }
 
@@ -138,14 +152,6 @@ export async function replayOfflineJobAction(item: OfflineQueueItem, callableFac
   if (!isQueuedTechnicianActionAutoReplayable(action)) {
     return { replayed: false, blocked: true } as const;
   }
-
-  // A queued Technician action is bound to the authenticated account that
-  // created it. Never replay one user's offline queue under a different login.
-  const currentUid = auth.currentUser?.uid;
-  if (action?.technicianId && (!currentUid || action.technicianId !== currentUid)) {
-    markOfflineQueueItemFailed(item.id);
-    return { replayed: false, blocked: true, reason: 'technician-mismatch' } as const;
-  }
   if (typeof navigator !== 'undefined' && !navigator.onLine) {
     return { replayed: false, blocked: false, offline: true } as const;
   }
@@ -153,7 +159,10 @@ export async function replayOfflineJobAction(item: OfflineQueueItem, callableFac
   markOfflineQueueItemRetrying(item.id);
   try {
     const callable = callableFactory(functions, action!.functionName);
-    await callable(action!.payload);
+    await callable({
+      ...action!.payload,
+      queuedTechnicianId: action!.technicianId || action!.payload.queuedTechnicianId,
+    });
     removeOfflineQueueItem(item.id);
     return { replayed: true, blocked: false } as const;
   } catch (err: any) {
@@ -183,8 +192,7 @@ export function replayEligibleOfflineJobActions(callableFactory: CallableFactory
       attempted += 1;
       const result = await replayOfflineJobAction(item, callableFactory);
       if (result.replayed) replayed += 1;
-      else if (result.blocked) blocked += 1;
-      else if ('error' in result) failed += 1;
+      else if (!result.blocked && 'error' in result) failed += 1;
     }
 
     return { attempted, replayed, failed, blocked, remaining: loadOfflineQueue().length };
@@ -236,8 +244,8 @@ export async function updateJobLifecycleWithOfflineQueue(params: {
   notes?: string;
   materials?: string;
   localPhotoCount?: number;
-  arrivalInstallationHash?: string;
-  arrivalDevicePlatform?: string;
+  installationHash?: string;
+  arrivalLocation?: Record<string, unknown>;
 }) {
   return callJobActionWithOfflineQueue({
     functionName: 'updateTicketLifecycle',
@@ -245,8 +253,9 @@ export async function updateJobLifecycleWithOfflineQueue(params: {
       ticketId: params.ticketId,
       status: params.status,
       notes: params.notes || '',
-      ...(params.arrivalInstallationHash ? { arrivalInstallationHash: params.arrivalInstallationHash } : {}),
-      ...(params.arrivalDevicePlatform ? { arrivalDevicePlatform: params.arrivalDevicePlatform } : {}),
+      queuedTechnicianId: params.technicianId,
+      ...(params.installationHash ? { installationHash: params.installationHash } : {}),
+      ...(params.arrivalLocation ? { arrivalLocation: params.arrivalLocation } : {}),
     },
     meta: { ticketId: params.ticketId, technicianId: params.technicianId, label: `Mission ${String(params.status).replace(/_/g, ' ')}` },
   });

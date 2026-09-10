@@ -20,7 +20,7 @@ test('server technician guard validates live Auth and credential expiry', async 
   assert.match(source, /\{ action, failures: readiness\.failures \}/);
 });
 
-test('all technician operational entry points retain the unified server readiness guard', async () => {
+test('all technician operational entry points use the unified server readiness guard', async () => {
   const source = await read('functions/secureTechnicianOperations.ts');
   assert.match(source, /resumeTechnicianDuty = onCall/);
   assert.match(source, /acceptTechnicianTicket = onCall/);
@@ -30,19 +30,7 @@ test('all technician operational entry points retain the unified server readines
   assert.match(source, /enforceAppCheck: true/);
 });
 
-test('runtime routes arrival lifecycle through installation binding while preserving secure readiness authority', async () => {
+test('runtime explicitly overrides legacy technician callable exports', async () => {
   const runtime = await read('functions/runtime.ts');
-  const binding = await read('functions/technicianInstallationBinding.ts');
-
-  assert.match(runtime, /resumeTechnicianDuty/);
-  assert.match(runtime, /acceptTechnicianTicket/);
-  assert.match(runtime, /getTechnicianOperationalReadiness/);
-  assert.match(runtime, /from "\.\/secureTechnicianOperations"/);
-  assert.match(runtime, /registerTechnicianDevice/);
-  assert.match(runtime, /updateTicketLifecycle/);
-  assert.match(runtime, /from "\.\/technicianInstallationBinding"/);
-  assert.match(binding, /updateTicketLifecycle as securedUpdateTicketLifecycle/);
-  assert.match(binding, /securedUpdateTicketLifecycle as any/);
-  assert.match(binding, /securedHandler\(\{ \.\.\.request, data: incoming \}\)/);
-  assert.match(binding, /enforceAppCheck: true/);
+  assert.match(runtime, /resumeTechnicianDuty,[\s\S]*acceptTechnicianTicket,[\s\S]*updateTicketLifecycle,[\s\S]*from "\.\/secureTechnicianOperations"/);
 });
