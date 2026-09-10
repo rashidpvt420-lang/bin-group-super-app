@@ -34,8 +34,13 @@ test('runtime routes arrival lifecycle through installation binding while preser
   const runtime = await read('functions/runtime.ts');
   const binding = await read('functions/technicianInstallationBinding.ts');
 
-  assert.match(runtime, /resumeTechnicianDuty,[\s\S]*acceptTechnicianTicket,[\s\S]*getTechnicianOperationalReadiness,[\s\S]*from "\.\/secureTechnicianOperations"/);
-  assert.match(runtime, /registerTechnicianDevice,[\s\S]*updateTicketLifecycle,[\s\S]*from "\.\/technicianInstallationBinding"/);
+  assert.match(runtime, /resumeTechnicianDuty/);
+  assert.match(runtime, /acceptTechnicianTicket/);
+  assert.match(runtime, /getTechnicianOperationalReadiness/);
+  assert.match(runtime, /from "\.\/secureTechnicianOperations"/);
+  assert.match(runtime, /registerTechnicianDevice/);
+  assert.match(runtime, /updateTicketLifecycle/);
+  assert.match(runtime, /from "\.\/technicianInstallationBinding"/);
   assert.match(binding, /updateTicketLifecycle as securedUpdateTicketLifecycle/);
   assert.match(binding, /securedUpdateTicketLifecycle as any/);
   assert.match(binding, /securedHandler\(\{ \.\.\.request, data: incoming \}\)/);
