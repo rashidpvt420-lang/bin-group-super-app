@@ -158,6 +158,7 @@ const httpsCallable: typeof firebaseHttpsCallable = ((functionsInstance: any, na
                 expireStaleAdminSession();
                 throw error;
             }
+            const originalUid = currentUser.uid;
 
             // A callable may return unauthenticated because its Auth/App Check
             // token arrived during rotation. Force a real Auth refresh first.
@@ -170,6 +171,14 @@ const httpsCallable: typeof firebaseHttpsCallable = ((functionsInstance: any, na
                     expireStaleAdminSession();
                 }
                 throw refreshError;
+            }
+
+            // Never replay a privileged Admin action under a different account
+            // if authentication changed while the forced token refresh was in
+            // flight. There is intentionally no await between this identity
+            // check and the retry, so an auth-state callback cannot interleave.
+            if (auth.currentUser?.uid !== originalUid) {
+                throw new Error('ADMIN_AUTH_IDENTITY_CHANGED_DURING_CALLABLE_RETRY');
             }
 
             // If the retry is still unauthenticated, surface that callable/App
