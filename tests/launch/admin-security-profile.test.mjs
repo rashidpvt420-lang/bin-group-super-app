@@ -53,11 +53,14 @@ test('unauthenticated Admin callables revalidate Firebase Auth before expiring t
   assert.match(firebase, /httpsCallable as firebaseHttpsCallable/);
   assert.match(firebase, /functions\/unauthenticated/);
   assert.match(firebase, /const currentUser = auth\.currentUser/);
+  assert.match(firebase, /const originalUid = currentUser\.uid/);
   assert.match(firebase, /await currentUser\.getIdToken\(true\)/);
   assert.match(firebase, /auth\/user-token-expired/);
   assert.match(firebase, /auth\/invalid-user-token/);
   assert.match(firebase, /auth\/user-disabled/);
   assert.match(firebase, /isTerminalAdminAuthError\(refreshError\)/);
+  assert.match(firebase, /auth\.currentUser\?\.uid !== originalUid/);
+  assert.match(firebase, /ADMIN_AUTH_IDENTITY_CHANGED_DURING_CALLABLE_RETRY/);
   assert.match(firebase, /return await callable\(data\)/);
   assert.match(firebase, /sessionStorage\.removeItem\('bin-admin-security-session'\)/);
   assert.match(firebase, /signOut\(auth\)/);
