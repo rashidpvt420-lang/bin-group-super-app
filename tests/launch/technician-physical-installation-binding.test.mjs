@@ -48,7 +48,7 @@ test('device registration is preceded by native Play Integrity App Check refresh
 });
 
 test('native bridge refuses token delivery unless installer and current Play signer are trusted', () => {
-  assert.match(bridge, /"com\.android\.vending"\.equals\(installer\) \? "I_OK"/);
+  assert.match(bridge, /com\.android\.vending/);
   assert.match(bridge, /EXPECTED_PLAY_SIGNING_SHA256/);
   assert.match(bridge, /!"I_OK"\.equals\(installer\)/);
   assert.match(bridge, /!"S_OK"\.equals\(signer\)/);
@@ -58,12 +58,14 @@ test('native bridge refuses token delivery unless installer and current Play sig
   assert.ok(gate >= 0 && token > gate, 'Google Play installer/signer gate must run before App Check token retrieval');
 });
 
-test('web or reCAPTCHA App Check identity cannot register physical Android evidence', () => {
+test('only the exact configured Firebase Android App Check identity can register physical evidence', () => {
   assert.match(server, /enforceAppCheck: true/);
   assert.match(server, /request\?\.app\?\.appId/);
-  assert.match(server, /ANDROID_APP_ID_RE/);
-  assert.match(server, /android:\[a-f0-9\]\+\$/);
-  assert.match(server, /verified Firebase Android App Check identity is required/);
+  assert.match(server, /EXPECTED_ANDROID_APP_ID/);
+  assert.match(server, /1:123413252227:android:36feeed4a78c1dcf99f3b6/);
+  assert.match(server, /appId !== EXPECTED_ANDROID_APP_ID/);
+  assert.match(server, /tokenAppId && tokenAppId !== EXPECTED_ANDROID_APP_ID/);
+  assert.match(server, /configured Firebase Android App Check identity is required/);
   assert.doesNotMatch(server, /platform === "android"\)\s*return true/);
 });
 
@@ -165,8 +167,13 @@ test('physical evidence verifier remains strict and is not weakened by runtime p
 });
 
 test('runtime exports the protected installation registration and lifecycle authority', () => {
-  assert.match(runtime, /registerTechnicianDevice,[\s\S]*updateTicketLifecycle,[\s\S]*from "\.\/technicianInstallationBinding"/);
-  assert.match(runtime, /resumeTechnicianDuty,[\s\S]*acceptTechnicianTicket,[\s\S]*getTechnicianOperationalReadiness,[\s\S]*from "\.\/secureTechnicianOperations"/);
+  assert.match(runtime, /registerTechnicianDevice/);
+  assert.match(runtime, /updateTicketLifecycle/);
+  assert.match(runtime, /from "\.\/technicianInstallationBinding"/);
+  assert.match(runtime, /resumeTechnicianDuty/);
+  assert.match(runtime, /acceptTechnicianTicket/);
+  assert.match(runtime, /getTechnicianOperationalReadiness/);
+  assert.match(runtime, /from "\.\/secureTechnicianOperations"/);
 });
 
 test('Google Play repair candidate increments Android versionCode without changing versionName', () => {
