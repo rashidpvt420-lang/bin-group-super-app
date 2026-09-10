@@ -5,8 +5,10 @@ import { updateTicketLifecycle as securedUpdateTicketLifecycle } from "./secureT
 if (!admin.apps.length) admin.initializeApp();
 const db = admin.firestore();
 
-const PROJECT_NUMBER = "123413252227";
-const ANDROID_APP_ID_RE = new RegExp(`^1:${PROJECT_NUMBER}:android:[a-f0-9]+$`, "i");
+// Exact Firebase Android application ID extracted from the validated Google Play
+// release configuration for ae.bingroups.superapp. A different Android app in
+// the same Firebase project must not be able to satisfy physical-device proof.
+const EXPECTED_ANDROID_APP_ID = "1:123413252227:android:36feeed4a78c1dcf99f3b6";
 const SHA256_RE = /^[0-9a-f]{64}$/;
 const MAX_GPS_ACCURACY_METERS = 100;
 const MAX_PROPERTY_DISTANCE_METERS = 250;
@@ -37,15 +39,15 @@ function isTechnicianRole(auth: any, user: Record<string, any>, technician: Reco
 
 function requireAndroidAppCheck(request: any) {
   const appId = text(request?.app?.appId);
-  if (!appId || !ANDROID_APP_ID_RE.test(appId)) {
+  if (appId !== EXPECTED_ANDROID_APP_ID) {
     throw new HttpsError(
       "permission-denied",
-      "A verified Firebase Android App Check identity is required for physical device binding.",
+      "The configured Firebase Android App Check identity is required for physical device binding.",
     );
   }
 
   const tokenAppId = text(request?.app?.token?.app_id || request?.app?.token?.sub);
-  if (tokenAppId && tokenAppId !== appId) {
+  if (tokenAppId && tokenAppId !== EXPECTED_ANDROID_APP_ID) {
     throw new HttpsError("permission-denied", "App Check application identity mismatch.");
   }
   return appId;
