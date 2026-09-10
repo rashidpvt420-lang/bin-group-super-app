@@ -1,4 +1,4 @@
-import { httpsCallable, functions } from '../../lib/firebase';
+import { auth, httpsCallable, functions } from '../../lib/firebase';
 import {
   enqueueOfflineQueueItem,
   loadOfflineQueue,
@@ -99,6 +99,8 @@ export function parseQueuedTechnicianJobAction(item: OfflineQueueItem): QueuedTe
         ticketId,
         status,
         notes: String(parsed.notes || ''),
+        ...(parsed.arrivalInstallationHash ? { arrivalInstallationHash: String(parsed.arrivalInstallationHash) } : {}),
+        ...(parsed.arrivalDevicePlatform ? { arrivalDevicePlatform: String(parsed.arrivalDevicePlatform) } : {}),
       },
       ticketId,
       technicianId: parsed.technicianId ? String(parsed.technicianId) : undefined,
@@ -112,7 +114,8 @@ export function isQueuedTechnicianActionAutoReplayable(action: QueuedTechnicianJ
   if (!action) return false;
   if (action.functionName === 'acceptTechnicianTicket') return true;
   const status = String(action.payload.status || '').toUpperCase();
-  // Arrival needs fresh foreground GPS. Completion needs foreground photo upload.
+  // ARRIVED always requires fresh foreground GPS plus a current protected
+  // installation binding. Completion requires foreground proof confirmation.
   return ['EN_ROUTE', 'IN_PROGRESS'].includes(status);
 }
 
@@ -134,6 +137,14 @@ export async function replayOfflineJobAction(item: OfflineQueueItem, callableFac
   const action = parseQueuedTechnicianJobAction(item);
   if (!isQueuedTechnicianActionAutoReplayable(action)) {
     return { replayed: false, blocked: true } as const;
+  }
+
+  // A queued Technician action is bound to the authenticated account that
+  // created it. Never replay one user's offline queue under a different login.
+  const currentUid = auth.currentUser?.uid;
+  if (action?.technicianId && (!currentUid || action.technicianId !== currentUid)) {
+    markOfflineQueueItemFailed(item.id);
+    return { replayed: false, blocked: true, reason: 'technician-mismatch' } as const;
   }
   if (typeof navigator !== 'undefined' && !navigator.onLine) {
     return { replayed: false, blocked: false, offline: true } as const;
@@ -172,7 +183,8 @@ export function replayEligibleOfflineJobActions(callableFactory: CallableFactory
       attempted += 1;
       const result = await replayOfflineJobAction(item, callableFactory);
       if (result.replayed) replayed += 1;
-      else if (!result.blocked && 'error' in result) failed += 1;
+      else if (result.blocked) blocked += 1;
+      else if ('error' in result) failed += 1;
     }
 
     return { attempted, replayed, failed, blocked, remaining: loadOfflineQueue().length };
@@ -217,10 +229,25 @@ export async function acceptJobWithOfflineQueue(ticketId: string, technicianId?:
   });
 }
 
-export async function updateJobLifecycleWithOfflineQueue(params: { ticketId: string; technicianId?: string; status: string; notes?: string; materials?: string; localPhotoCount?: number }) {
+export async function updateJobLifecycleWithOfflineQueue(params: {
+  ticketId: string;
+  technicianId?: string;
+  status: string;
+  notes?: string;
+  materials?: string;
+  localPhotoCount?: number;
+  arrivalInstallationHash?: string;
+  arrivalDevicePlatform?: string;
+}) {
   return callJobActionWithOfflineQueue({
     functionName: 'updateTicketLifecycle',
-    payload: { ticketId: params.ticketId, status: params.status, notes: params.notes || '' },
+    payload: {
+      ticketId: params.ticketId,
+      status: params.status,
+      notes: params.notes || '',
+      ...(params.arrivalInstallationHash ? { arrivalInstallationHash: params.arrivalInstallationHash } : {}),
+      ...(params.arrivalDevicePlatform ? { arrivalDevicePlatform: params.arrivalDevicePlatform } : {}),
+    },
     meta: { ticketId: params.ticketId, technicianId: params.technicianId, label: `Mission ${String(params.status).replace(/_/g, ' ')}` },
   });
 }
