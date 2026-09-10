@@ -109,13 +109,28 @@ const functions = getFunctions(app, 'europe-west3');
 
 let sessionExpiryRedirectStarted = false;
 
+const readErrorCode = (error: unknown) => {
+    if (typeof error !== 'object' || error === null || !('code' in error)) return '';
+    return String((error as { code?: unknown }).code || '').trim().toLowerCase();
+};
+
 const isUnauthenticatedCallableError = (error: unknown) => {
-    const code = typeof error === 'object' && error !== null && 'code' in error
-        ? String((error as { code?: unknown }).code || '').toLowerCase()
-        : '';
+    const code = readErrorCode(error);
     const message = error instanceof Error ? error.message.trim().toLowerCase() : '';
     return code === 'functions/unauthenticated' || code === 'unauthenticated' || message === 'unauthenticated';
 };
+
+// These Firebase Auth failures prove that the browser session itself can no
+// longer be trusted. Network/App Check/callable failures are deliberately not
+// included: they must never destroy an otherwise valid Admin login session.
+const TERMINAL_ADMIN_AUTH_CODES = new Set([
+    'auth/user-token-expired',
+    'auth/invalid-user-token',
+    'auth/user-disabled',
+    'auth/user-not-found',
+]);
+
+const isTerminalAdminAuthError = (error: unknown) => TERMINAL_ADMIN_AUTH_CODES.has(readErrorCode(error));
 
 const expireStaleAdminSession = () => {
     if (typeof window === 'undefined' || sessionExpiryRedirectStarted) return;
@@ -136,8 +151,39 @@ const httpsCallable: typeof firebaseHttpsCallable = ((functionsInstance: any, na
         try {
             return await callable(data);
         } catch (error) {
-            if (isUnauthenticatedCallableError(error)) expireStaleAdminSession();
-            throw error;
+            if (!isUnauthenticatedCallableError(error)) throw error;
+
+            const currentUser = auth.currentUser;
+            if (!currentUser) {
+                expireStaleAdminSession();
+                throw error;
+            }
+            const originalUid = currentUser.uid;
+
+            // A callable may return unauthenticated because its Auth/App Check
+            // token arrived during rotation. Force a real Auth refresh first.
+            // A successful refresh proves that the Firebase browser session is
+            // still alive, so retry exactly once without globally signing out.
+            try {
+                await currentUser.getIdToken(true);
+            } catch (refreshError) {
+                if (isTerminalAdminAuthError(refreshError)) {
+                    expireStaleAdminSession();
+                }
+                throw refreshError;
+            }
+
+            // Never replay a privileged Admin action under a different account
+            // if authentication changed while the forced token refresh was in
+            // flight. There is intentionally no await between this identity
+            // check and the retry, so an auth-state callback cannot interleave.
+            if (auth.currentUser?.uid !== originalUid) {
+                throw new Error('ADMIN_AUTH_IDENTITY_CHANGED_DURING_CALLABLE_RETRY');
+            }
+
+            // If the retry is still unauthenticated, surface that callable/App
+            // Check error to the screen. Do not erase a valid Firebase session.
+            return await callable(data);
         }
     };
     if (typeof callable.stream === 'function') {
