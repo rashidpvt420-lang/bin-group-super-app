@@ -111,6 +111,15 @@ public class FirebaseAppCheckBridgePlugin extends Plugin {
         }
     }
 
+    private String trustedPlayInstallFailureCode() {
+        String installer = installerState();
+        String signer = signingState();
+        if (!"I_OK".equals(installer) || !"S_OK".equals(signer)) {
+            return "PLAY_INSTALLATION_UNVERIFIED__" + installer + "__" + signer + "__" + versionState();
+        }
+        return "";
+    }
+
     private String classifyMessage(Throwable error) {
         Throwable cursor = error;
         int depth = 0;
@@ -162,6 +171,12 @@ public class FirebaseAppCheckBridgePlugin extends Plugin {
 
     @PluginMethod
     public void getAppCheckToken(PluginCall call) {
+        String playInstallFailure = trustedPlayInstallFailureCode();
+        if (!playInstallFailure.isBlank()) {
+            call.reject("Google Play installation verification failed.", playInstallFailure);
+            return;
+        }
+
         Boolean requestedForceRefresh = call.getBoolean("forceRefresh", false);
         boolean forceRefresh = requestedForceRefresh != null && requestedForceRefresh;
 
