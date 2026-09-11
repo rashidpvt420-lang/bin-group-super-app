@@ -3,7 +3,7 @@
  * Strict fail-closed production deployment verification.
  * Status must be exactly "passed" — pending/missing/unknown/skipped/waived/failed all NO-GO.
  */
-import { writeFileSync, mkdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import path from 'node:path';
 import {
   HARD_LAUNCH_CLAIM,
@@ -22,6 +22,10 @@ import {
   summarizeHostedClientBundle,
   validateHostedClientConfigEvidence,
 } from './verify-hosted-client-config.mjs';
+import {
+  sha256Text,
+  validateHardClearanceProductionState,
+} from './lib/hard-clearance-production-state.mjs';
 
 const writeEvidence = process.argv.includes('--write-evidence');
 const commitSha = gitSha();
@@ -243,12 +247,82 @@ async function verifySite(label, url, site) {
   return { httpOk: true, bundleVerified, config, runtimeSummary };
 }
 
-const existing = readJsonSafe(deploymentEvidencePath(), null);
+const existingPath = deploymentEvidencePath();
+const existing = readJsonSafe(existingPath, null);
+const hardClearanceStatePath = String(
+  process.env.HARD_CLEARANCE_PRODUCTION_STATE_PATH || '',
+).trim();
+let hardClearanceState = null;
+let hardClearanceStateValid = false;
 
-// Existing metadata must already claim passed + matching SHA before we accept write.
-// Live HTTP/bundle checks always run.
-const main = await verifySite('main', PRODUCTION.mainUrl, 'main');
-const admin = await verifySite('admin', PRODUCTION.adminUrl, 'admin');
+if (hardClearanceStatePath) {
+  if (
+    process.env.GITHUB_ACTIONS !== 'true' ||
+    process.env.GITHUB_EVENT_NAME !== 'workflow_dispatch' ||
+    process.env.GITHUB_WORKFLOW !== 'Live Role Smoke Tests' ||
+    process.env.GITHUB_JOB !== 'hard-public-launch-clearance' ||
+    process.env.GITHUB_REF !== 'refs/heads/main'
+  ) {
+    fail('Fresh production state may only be consumed by the protected hard-clearance job.');
+  } else if (writeEvidence) {
+    fail('Fresh hard-clearance state is read-only and cannot rewrite deployment provenance.');
+  } else if (!existing) {
+    fail('Fresh hard-clearance state requires the original production deployment artifact.');
+  } else {
+    try {
+      const deploymentRaw = readFileSync(existingPath, 'utf8');
+      hardClearanceState = JSON.parse(
+        readFileSync(path.resolve(hardClearanceStatePath), 'utf8'),
+      );
+      const stateFailures = validateHardClearanceProductionState(hardClearanceState, {
+        expectedReleaseSha: commitSha,
+        repository: String(process.env.GITHUB_REPOSITORY || ''),
+        ref: String(process.env.GITHUB_REF || ''),
+        workflowName: String(process.env.GITHUB_WORKFLOW || ''),
+        workflowRunId: String(process.env.GITHUB_RUN_ID || ''),
+        workflowRunAttempt: Number(process.env.GITHUB_RUN_ATTEMPT || 0) || null,
+        deploymentDoc: existing,
+        originalDeploymentDigest: sha256Text(deploymentRaw),
+        now: Date.now(),
+      });
+      for (const stateFailure of stateFailures) fail(stateFailure);
+      hardClearanceStateValid = stateFailures.length === 0;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      fail(`Fresh hard-clearance production state could not be read (${message}).`);
+    }
+  }
+}
+
+// Normal deployment/live-evidence verification scans both hosted bundles
+// directly. Hard clearance consumes the same-run, production-environment
+// snapshot created minutes earlier so secrets never need to be duplicated into
+// the hard-public-launch environment.
+let main;
+let admin;
+let clientRuntimeConfig;
+if (hardClearanceStatePath) {
+  main = {
+    httpOk: hardClearanceStateValid,
+    bundleVerified: hardClearanceStateValid,
+    runtimeSummary: hardClearanceState?.hostedClientConfig?.main || { assetCount: 0 },
+  };
+  admin = {
+    httpOk: hardClearanceStateValid,
+    bundleVerified: hardClearanceStateValid,
+    runtimeSummary: hardClearanceState?.hostedClientConfig?.admin || { assetCount: 0 },
+  };
+  clientRuntimeConfig = hardClearanceState?.hostedClientConfig ||
+    buildHostedClientConfigEvidence({ main: main.runtimeSummary, admin: admin.runtimeSummary });
+  if (hardClearanceStateValid) {
+    console.log(
+      '[deploy-verify] using fresh same-run production-state evidence from the protected production environment',
+    );
+  }
+} else {
+  main = await verifySite('main', PRODUCTION.mainUrl, 'main');
+  admin = await verifySite('admin', PRODUCTION.adminUrl, 'admin');
+}
 
 const httpChecksOk = main.httpOk === true && admin.httpOk === true;
 const bundleVerified = main.bundleVerified === true && admin.bundleVerified === true;
@@ -266,14 +340,16 @@ const clientEvidenceEnv = liveEvidenceVerification && existing
       GITHUB_RUN_ATTEMPT: String(existing.workflowRunAttempt || ''),
     }
   : process.env;
-const clientRuntimeConfig = buildHostedClientConfigEvidence({
-  main: main.runtimeSummary,
-  admin: admin.runtimeSummary,
-}, { env: clientEvidenceEnv, now: new Date() });
-if (liveEvidenceVerification) {
-  clientRuntimeConfig.verificationWorkflowName = process.env.GITHUB_WORKFLOW;
-  clientRuntimeConfig.verificationWorkflowRunId = String(process.env.GITHUB_RUN_ID || '');
-  clientRuntimeConfig.verificationWorkflowRunAttempt = Number(process.env.GITHUB_RUN_ATTEMPT || 0) || null;
+if (!hardClearanceStatePath) {
+  clientRuntimeConfig = buildHostedClientConfigEvidence({
+    main: main.runtimeSummary,
+    admin: admin.runtimeSummary,
+  }, { env: clientEvidenceEnv, now: new Date() });
+  if (liveEvidenceVerification) {
+    clientRuntimeConfig.verificationWorkflowName = process.env.GITHUB_WORKFLOW;
+    clientRuntimeConfig.verificationWorkflowRunId = String(process.env.GITHUB_RUN_ID || '');
+    clientRuntimeConfig.verificationWorkflowRunAttempt = Number(process.env.GITHUB_RUN_ATTEMPT || 0) || null;
+  }
 }
 
 if (!httpChecksOk) fail('HTTP checks failed for main and/or admin hosting');
@@ -309,7 +385,10 @@ if (!existing) {
     fail(deploymentFailure);
   }
 
-  for (const phoneAuthFailure of validateFirebasePhoneAuthEvidence(existing.firebasePhoneAuth, {
+  const firebasePhoneAuthEvidence = hardClearanceStatePath
+    ? hardClearanceState?.firebasePhoneAuth
+    : existing.firebasePhoneAuth;
+  for (const phoneAuthFailure of validateFirebasePhoneAuthEvidence(firebasePhoneAuthEvidence, {
     commitSha,
     repository: existing.repository,
     ref: existing.workflowRef,
@@ -318,7 +397,10 @@ if (!existing) {
     now: Date.now(),
   })) fail(phoneAuthFailure);
 
-  for (const adminMfaFailure of validateAdminMfaEvidence(existing.adminMfa, {
+  const adminMfaEvidence = hardClearanceStatePath
+    ? hardClearanceState?.adminMfa
+    : existing.adminMfa;
+  for (const adminMfaFailure of validateAdminMfaEvidence(adminMfaEvidence, {
     commitSha,
     repository: existing.repository,
     ref: existing.workflowRef,
