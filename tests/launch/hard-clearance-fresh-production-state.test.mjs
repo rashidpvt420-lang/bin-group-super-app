@@ -250,9 +250,13 @@ test('fresh state requires both protected mailboxes and never accepts credential
   assert.match(failures, /mailbox count mismatch/);
   assert.match(failures, /must not contain sensitive field .*refreshToken/);
 
-  const serialized = JSON.stringify(state);
+  const serialized = JSON.stringify(state).toLowerCase();
   for (const forbidden of ['accessToken', 'clientSecret', 'refreshToken', 'password']) {
-    assert.doesNotMatch(serialized, new RegExp(`"${forbidden}"`, 'i'));
+    assert.equal(
+      serialized.includes(`"${forbidden.toLowerCase()}"`),
+      false,
+      `fresh state must not contain sensitive field ${forbidden}`,
+    );
   }
 });
 
