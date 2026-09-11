@@ -27,6 +27,9 @@ const statusPath = path.join(outDir, 'launch-status.json');
 const pilotLockPath = path.join(outDir, 'pilot-start.lock.json');
 const hardMode = process.argv.includes('--hard') || process.env.LAUNCH_SCOPE === 'hard';
 const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+const hardClearanceProductionStatePath = String(
+  process.env.HARD_CLEARANCE_PRODUCTION_STATE_PATH || '',
+).trim();
 
 function run(cmd, args) {
   const result = spawnSync(cmd, args, {
@@ -56,10 +59,22 @@ if (functionsBuild.exitCode !== 0) {
   console.error(functionsBuild.stderr || functionsBuild.stdout || 'functionsBuild failed');
 }
 
+const protectedEnvironmentChecks = hardClearanceProductionStatePath
+  ? [
+      {
+        name: 'freshHardClearanceProductionState',
+        cmd: 'node',
+        args: ['scripts/verify-hard-clearance-production-state.mjs'],
+      },
+    ]
+  : [
+      { name: 'e2eEnv', cmd: 'node', args: ['scripts/verify-e2e-env.mjs'] },
+      { name: 'appCheckEnsure', cmd: 'node', args: ['scripts/ensure-appcheck.mjs'] },
+    ];
+
 const required = [
   { name: 'functionsLoad', cmd: 'node', args: ['scripts/measure-functions-load.mjs'] },
-  { name: 'e2eEnv', cmd: 'node', args: ['scripts/verify-e2e-env.mjs'] },
-  { name: 'appCheckEnsure', cmd: 'node', args: ['scripts/ensure-appcheck.mjs'] },
+  ...protectedEnvironmentChecks,
   { name: 'adminFirebase', cmd: 'node', args: ['scripts/verify-admin-firebase-build.mjs'] },
   { name: 'productionDeployment', cmd: 'node', args: ['scripts/verify-production-deployment.mjs'] },
   { name: 'pilotClearance', cmd: 'node', args: ['scripts/verify-launch-clearance.mjs', '--pilot'] },

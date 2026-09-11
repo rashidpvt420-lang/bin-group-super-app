@@ -264,9 +264,115 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 
+  hard-clearance-production-state:
+    name: Refresh mutable production state for hard clearance
+    if: github.event_name == 'workflow_dispatch' && inputs.mode == 'hard-clearance'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    environment: production
+    permissions:
+      contents: read
+      actions: read
+      id-token: write
+
+    steps:
+      - name: Enforce exact release inputs for fresh production state
+        env:
+          TARGET_SHA: ${{ inputs.expected_commit_sha }}
+          LIVE_RUN_ID: ${{ inputs.live_evidence_run_id }}
+          CURRENT_SHA: ${{ github.sha }}
+          CURRENT_REF: ${{ github.ref }}
+        run: |
+          set -euo pipefail
+          if [[ "$CURRENT_REF" != "refs/heads/main" ]]; then
+            echo "::error::Fresh hard-clearance state may only run from refs/heads/main."
+            exit 1
+          fi
+          if [[ ! "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]] || [[ "$TARGET_SHA" != "$CURRENT_SHA" ]]; then
+            echo "::error::expected_commit_sha must be the full current main SHA."
+            exit 1
+          fi
+          if [[ ! "$LIVE_RUN_ID" =~ ^[0-9]+$ ]]; then
+            echo "::error::live_evidence_run_id must be numeric."
+            exit 1
+          fi
+
+      - name: Checkout exact production commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.expected_commit_sha }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Authenticate Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          create_credentials_file: true
+          export_environment_variables: true
+
+      - name: Install dependencies
+        run: bash scripts/npm-install-retry.sh
+
+      - name: Download exact live launch evidence for immutable deployment provenance
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: live-launch-evidence-${{ inputs.expected_commit_sha }}
+          path: downloaded-live-evidence
+          run-id: ${{ inputs.live_evidence_run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Restore original deployment provenance
+        run: |
+          set -euo pipefail
+          deployment_file="$(find downloaded-live-evidence -type f -name production-deployment.json -print -quit)"
+          if [[ -z "$deployment_file" ]]; then
+            echo "::error::production-deployment.json was not found in the exact live-evidence artifact."
+            exit 1
+          fi
+          mkdir -p launch_package
+          cp "$deployment_file" launch_package/production-deployment.json
+          test -s launch_package/production-deployment.json
+
+      - name: Resolve protected Gmail mailbox identities
+        env:
+          E2E_OWNER_MAILBOX_EMAIL_CONFIGURED: ${{ vars.E2E_OWNER_MAILBOX_EMAIL || secrets.E2E_OWNER_MAILBOX_EMAIL }}
+          E2E_OWNER_MAILBOX_CLIENT_ID: ${{ secrets.E2E_OWNER_MAILBOX_CLIENT_ID }}
+          E2E_OWNER_MAILBOX_CLIENT_SECRET: ${{ secrets.E2E_OWNER_MAILBOX_CLIENT_SECRET }}
+          E2E_OWNER_MAILBOX_REFRESH_TOKEN: ${{ secrets.E2E_OWNER_MAILBOX_REFRESH_TOKEN }}
+          E2E_BROKER_MAILBOX_EMAIL_CONFIGURED: ${{ vars.E2E_BROKER_MAILBOX_EMAIL || secrets.E2E_BROKER_MAILBOX_EMAIL }}
+          E2E_BROKER_MAILBOX_CLIENT_ID: ${{ secrets.E2E_BROKER_MAILBOX_CLIENT_ID }}
+          E2E_BROKER_MAILBOX_CLIENT_SECRET: ${{ secrets.E2E_BROKER_MAILBOX_CLIENT_SECRET }}
+          E2E_BROKER_MAILBOX_REFRESH_TOKEN: ${{ secrets.E2E_BROKER_MAILBOX_REFRESH_TOKEN }}
+        run: node scripts/resolve-production-mailbox-identities.mjs
+
+      - name: Freshly verify mutable production state
+        env:
+          HARD_LAUNCH_EXPECTED_SHA: ${{ inputs.expected_commit_sha }}
+          E2E_OWNER_MAILBOX_CLIENT_ID: ${{ secrets.E2E_OWNER_MAILBOX_CLIENT_ID }}
+          E2E_OWNER_MAILBOX_CLIENT_SECRET: ${{ secrets.E2E_OWNER_MAILBOX_CLIENT_SECRET }}
+          E2E_OWNER_MAILBOX_REFRESH_TOKEN: ${{ secrets.E2E_OWNER_MAILBOX_REFRESH_TOKEN }}
+          E2E_BROKER_MAILBOX_CLIENT_ID: ${{ secrets.E2E_BROKER_MAILBOX_CLIENT_ID }}
+          E2E_BROKER_MAILBOX_CLIENT_SECRET: ${{ secrets.E2E_BROKER_MAILBOX_CLIENT_SECRET }}
+          E2E_BROKER_MAILBOX_REFRESH_TOKEN: ${{ secrets.E2E_BROKER_MAILBOX_REFRESH_TOKEN }}
+        run: node scripts/generate-hard-clearance-production-state.mjs
+
+      - name: Upload fresh hard-clearance production state
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: hard-clearance-production-state-${{ inputs.expected_commit_sha }}-${{ github.run_id }}
+          path: launch_package/hard-clearance-production-state.json
+          if-no-files-found: error
+          retention-days: 14
+
   hard-public-launch-clearance:
     name: Verify and authorize hard public launch
     if: github.event_name == 'workflow_dispatch' && inputs.mode == 'hard-clearance'
+    needs: hard-clearance-production-state
     runs-on: ubuntu-latest
     timeout-minutes: 60
     environment: hard-public-launch
@@ -382,7 +488,28 @@ jobs:
           rm -rf launch_package/artifacts
           cp -R "$artifact_dir" launch_package/artifacts
 
+      - name: Download same-run fresh production state
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: hard-clearance-production-state-${{ inputs.expected_commit_sha }}-${{ github.run_id }}
+          path: downloaded-hard-clearance-state
+
+      - name: Restore and verify fresh production state
+        env:
+          HARD_LAUNCH_EXPECTED_SHA: ${{ inputs.expected_commit_sha }}
+        run: |
+          set -euo pipefail
+          state_file="$(find downloaded-hard-clearance-state -type f -name hard-clearance-production-state.json -print -quit)"
+          if [[ -z "$state_file" ]]; then
+            echo "::error::The same-run hard-clearance production-state artifact is missing."
+            exit 1
+          fi
+          cp "$state_file" launch_package/hard-clearance-production-state.json
+          node scripts/verify-hard-clearance-production-state.mjs
+
       - name: Revalidate same-commit pilot evidence
+        env:
+          HARD_CLEARANCE_PRODUCTION_STATE_PATH: launch_package/hard-clearance-production-state.json
         run: node scripts/launch-status.mjs
 
       - name: Snapshot canonical operational readiness
@@ -410,6 +537,8 @@ jobs:
         run: node scripts/write-hard-launch-approval.mjs
 
       - name: Verify final hard launch status
+        env:
+          HARD_CLEARANCE_PRODUCTION_STATE_PATH: launch_package/hard-clearance-production-state.json
         run: |
           node scripts/launch-status.mjs --hard
           npm run launch:hard-gate
@@ -424,6 +553,7 @@ jobs:
             launch_package/launch-evidence-batch.json
             launch_package/artifacts
             launch_package/live-evidence-provenance.json
+            launch_package/hard-clearance-production-state.json
             launch_package/operational-readiness.json
             launch_package/pilot-incident-report.json
             launch_package/hard-launch-approval.json
