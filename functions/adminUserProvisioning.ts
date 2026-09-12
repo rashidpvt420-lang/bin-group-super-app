@@ -11,6 +11,7 @@ if (!admin.apps.length) {
 const db = admin.firestore();
 
 const PRIVILEGED_ADMIN_ROLES = new Set(["admin", "super_admin", "ceo"]);
+const TECHNICIAN_PROFILE_REPAIR_CONFIRMATION = "REPAIR_INCOMPLETE_TECHNICIAN_PROFILE_BIN_GROUP";
 const STAFF_ROLES = new Set([
   "technician",
   "manager",
@@ -288,6 +289,358 @@ async function loadExistingStaff(uid: string) {
   }
   return { authUser, userSnap, accessSnap, currentRole };
 }
+
+function hasPrivilegedTargetClaims(claims: any) {
+  const role = cleanString(claims?.role || claims?.userRole || claims?.primaryRole).toLowerCase();
+  return PRIVILEGED_ADMIN_ROLES.has(role) || claims?.admin === true || claims?.isAdmin === true ||
+    claims?.superAdmin === true || claims?.super_admin === true || claims?.ceo === true;
+}
+
+function assertTechnicianOnlyRoles(label: string, values: unknown[]) {
+  const roles = values.map((value) => cleanString(value).toLowerCase()).filter(Boolean);
+  if (roles.some((role) => role !== "technician")) {
+    throw new HttpsError("failed-precondition", `${label} contains a non-Technician role and cannot be repaired here.`);
+  }
+  return roles;
+}
+
+function hasGrantedPermissions(value: unknown) {
+  return Boolean(value && typeof value === "object" && Object.values(value as Record<string, unknown>).some((entry) => entry === true));
+}
+
+function technicianRepairAssessment(authUser: admin.auth.UserRecord, snapshots: {
+  userSnap: any;
+  accessSnap: any;
+  hrSnap: any;
+  privateSnap: any;
+  technicianSnap: any;
+  duplicateSnap: any;
+}) {
+  const { userSnap, accessSnap, hrSnap, privateSnap, technicianSnap, duplicateSnap } = snapshots;
+  if (!userSnap.exists) throw new HttpsError("not-found", "The existing Technician user profile was not found.");
+
+  const user = userSnap.data() || {};
+  const access = accessSnap.data() || {};
+  const hr = hrSnap.data() || {};
+  const privateHr = privateSnap.data() || {};
+  const technician = technicianSnap.data() || {};
+  const claims = authUser.customClaims || {};
+  const uid = authUser.uid;
+  const email = normalizeEmail(authUser.email);
+
+  if (!email) throw new HttpsError("failed-precondition", "The existing Technician Auth identity has no email address.");
+  if (authUser.disabled) throw new HttpsError("failed-precondition", "Disabled Auth identities require a separate controlled recovery.");
+  if (authUser.emailVerified) throw new HttpsError("failed-precondition", "Verified Technician identities must use the normal HR lifecycle, not invitation repair.");
+  if (hasPrivilegedTargetClaims(claims) || user.isAdmin === true || technician.isAdmin === true) {
+    throw new HttpsError("permission-denied", "Privileged identities can never enter the Technician profile-repair path.");
+  }
+
+  const claimRoles = assertTechnicianOnlyRoles("Firebase Auth claims", [claims.role, claims.userRole, claims.primaryRole]);
+  if (claimRoles.length === 0 || claims.technician !== true || (claims.staff !== true && claims.isStaff !== true)) {
+    throw new HttpsError("failed-precondition", "The existing Auth claims do not prove a canonical Technician identity.");
+  }
+  if (claims.suspended !== true) {
+    throw new HttpsError("failed-precondition", "The invited Technician Auth claims are not safely suspended.");
+  }
+
+  const profileRoles = assertTechnicianOnlyRoles("Firestore profiles", [
+    user.role, user.userRole, user.primaryRole,
+    access.role,
+    hr.role, hr.employeeType,
+    technician.role, technician.userRole, technician.primaryRole,
+  ]);
+  if (cleanString(user.role).toLowerCase() !== "technician" || profileRoles.length === 0) {
+    throw new HttpsError("failed-precondition", "The canonical user profile is not a Technician.");
+  }
+
+  const profileEmails = [user.email, technician.email].map(normalizeEmail).filter(Boolean);
+  if (profileEmails.some((candidate) => candidate !== email)) {
+    throw new HttpsError("failed-precondition", "The Technician profile email conflicts with the preserved Auth identity.");
+  }
+  const duplicateIds = duplicateSnap.docs.map((doc: any) => doc.id).filter((id: string) => id !== uid);
+  if (duplicateIds.length > 0) {
+    throw new HttpsError("failed-precondition", "A duplicate Firestore profile already uses the Technician Auth email.");
+  }
+
+  const status = cleanString(user.status).toUpperCase();
+  if (status !== "INVITED") {
+    throw new HttpsError("failed-precondition", "Only an unverified INVITED Technician can use this repair.");
+  }
+  if (user.onboardingComplete === true || access.active === true || technician.available === true || technician.onDuty === true) {
+    throw new HttpsError("failed-precondition", "An active or operational Technician cannot use invitation-profile repair.");
+  }
+  const checklist = user.onboardingChecklist || {};
+  if (checklist.profileComplete === true || checklist.documentsComplete === true || checklist.contractComplete === true ||
+      checklist.deviceReady === true || checklist.activationApproved === true) {
+    throw new HttpsError("failed-precondition", "A progressed onboarding checklist cannot be reset by invitation-profile repair.");
+  }
+
+  const moduleSets = [user.modules, user.staffModules, access.modules, access.staffModules, technician.modules, technician.staffModules];
+  if (moduleSets.some((value) => Array.isArray(value) && value.length > 0) ||
+      [user.permissions, access.permissions, technician.permissions].some(hasGrantedPermissions)) {
+    throw new HttpsError("failed-precondition", "The Technician has unexpected Admin modules or permissions.");
+  }
+
+  const emailHash = hashValue(email);
+  if (privateSnap.exists && privateHr.emailHash && privateHr.emailHash !== emailHash) {
+    throw new HttpsError("failed-precondition", "The private HR profile belongs to a different email hash.");
+  }
+
+  const missingComponents: string[] = [];
+  if (user.uid !== uid) missingComponents.push("users.uid");
+  if (normalizeEmail(user.email) !== email) missingComponents.push("users.email");
+  if (user.isStaff !== true) missingComponents.push("users.isStaff");
+  if (user.isAdmin !== false) missingComponents.push("users.isAdmin");
+  if (user.suspended !== true) missingComponents.push("users.suspended");
+  if (cleanString(user.onboardingStage).toUpperCase() !== "INVITED") missingComponents.push("users.onboardingStage");
+  if (user.onboardingComplete !== false) missingComponents.push("users.onboardingComplete");
+  if (!accessSnap.exists) missingComponents.push("staffAccess");
+  if (!hrSnap.exists) missingComponents.push("hrProfiles");
+  if (!privateSnap.exists) missingComponents.push("private_hr_profiles");
+  if (!technicianSnap.exists) missingComponents.push("technicians");
+  if (accessSnap.exists && (access.uid !== uid || access.active !== false || access.suspended !== true || cleanString(access.status).toUpperCase() !== "INVITED")) {
+    missingComponents.push("staffAccess.lifecycle");
+  }
+  if (hrSnap.exists && (hr.uid !== uid || cleanString(hr.status).toUpperCase() !== "INVITED" || hr.onboardingComplete !== false)) {
+    missingComponents.push("hrProfiles.lifecycle");
+  }
+  if (privateSnap.exists && (privateHr.uid !== uid || privateHr.emailHash !== emailHash || privateHr.accessClassification !== "PRIVATE_HR_SERVER_ONLY")) {
+    missingComponents.push("private_hr_profiles.contract");
+  }
+  if (technicianSnap.exists && (technician.uid !== uid || technician.isStaff !== true || technician.suspended !== true || cleanString(technician.status).toUpperCase() !== "INVITED")) {
+    missingComponents.push("technicians.lifecycle");
+  }
+
+  return {
+    uid,
+    email,
+    emailHash,
+    displayName: cleanString(user.displayName || user.fullName || authUser.displayName, "Technician"),
+    phoneNumber: cleanString(user.phoneNumber || user.phone || technician.phoneNumber || technician.phone),
+    department: cleanString(user.department || hr.department || technician.department, "Technical"),
+    specialization: cleanString(user.specialization || user.trade || hr.specialization || technician.specialization || technician.trade, "General Maintenance"),
+    invitationStatus: cleanString(user.invitationStatus, "QUEUED").toUpperCase(),
+    missingComponents: [...new Set(missingComponents)].sort(),
+    repairRequired: missingComponents.length > 0,
+    user,
+    access,
+    hr,
+    privateHr,
+    technician,
+  };
+}
+
+export const adminRepairIncompleteTechnicianProfile = onCall({ cors: true, region: "europe-west3", enforceAppCheck: true }, async (request) => {
+  const { actorId, actorRole } = await requireProvisioningAdmin(request);
+  const payload = request.data || {};
+  const uid = cleanString(payload.uid);
+  const execute = payload.execute === true;
+  const confirmation = cleanString(payload.confirmation);
+
+  if (!uid) throw new HttpsError("invalid-argument", "Technician UID is required.");
+  if (payload.email !== undefined || payload.role !== undefined || payload.claims !== undefined || payload.password !== undefined) {
+    throw new HttpsError("invalid-argument", "Technician identity, role and claims are server-derived and cannot be supplied by the client.");
+  }
+  if (execute && confirmation !== TECHNICIAN_PROFILE_REPAIR_CONFIRMATION) {
+    throw new HttpsError("failed-precondition", "The exact protected Technician profile-repair confirmation is required.");
+  }
+
+  const authUser = await admin.auth().getUser(uid);
+  const userRef = db.collection("users").doc(uid);
+  const accessRef = db.collection("staffAccess").doc(uid);
+  const hrRef = db.collection("hrProfiles").doc(uid);
+  const privateRef = db.collection("private_hr_profiles").doc(uid);
+  const technicianRef = db.collection("technicians").doc(uid);
+  const duplicateQuery = db.collection("users").where("email", "==", normalizeEmail(authUser.email)).limit(2);
+
+  if (!execute) {
+    const [userSnap, accessSnap, hrSnap, privateSnap, technicianSnap, duplicateSnap] = await Promise.all([
+      userRef.get(), accessRef.get(), hrRef.get(), privateRef.get(), technicianRef.get(), duplicateQuery.get(),
+    ]);
+    const assessment = technicianRepairAssessment(authUser, { userSnap, accessSnap, hrSnap, privateSnap, technicianSnap, duplicateSnap });
+    return {
+      success: true,
+      execute: false,
+      uid,
+      role: "technician",
+      repairRequired: assessment.repairRequired,
+      missingComponents: assessment.missingComponents,
+      authUidPreserved: true,
+      authClaimsPreserved: true,
+      invitationQueued: false,
+    };
+  }
+
+  const outcome = await db.runTransaction(async (tx) => {
+    const [userSnap, accessSnap, hrSnap, privateSnap, technicianSnap, duplicateSnap] = await Promise.all([
+      tx.get(userRef), tx.get(accessRef), tx.get(hrRef), tx.get(privateRef), tx.get(technicianRef), tx.get(duplicateQuery),
+    ]);
+    const assessment = technicianRepairAssessment(authUser, { userSnap, accessSnap, hrSnap, privateSnap, technicianSnap, duplicateSnap });
+    if (!assessment.repairRequired) {
+      return { repaired: false, missingComponents: [] as string[] };
+    }
+
+    const now = FieldValue.serverTimestamp();
+    const onboardingChecklist = {
+      profileComplete: false,
+      documentsComplete: false,
+      contractComplete: false,
+      deviceReady: false,
+      activationApproved: false,
+    };
+    const salaryPackage = assessment.privateHr.salaryPackage || {
+      basicSalary: 0,
+      housingAllowance: 0,
+      transportAllowance: 0,
+      foodAllowance: 0,
+      otherAllowance: 0,
+      salaryPaymentDay: 1,
+      salaryGrade: null,
+      overtimeEligible: true,
+      companyAccommodationProvided: false,
+      companyTransportProvided: false,
+      companyMedicalInsuranceProvided: true,
+    };
+
+    tx.set(userRef, {
+      uid,
+      email: assessment.email,
+      displayName: assessment.displayName,
+      fullName: assessment.displayName,
+      phoneNumber: assessment.phoneNumber,
+      phone: assessment.phoneNumber,
+      role: "technician",
+      userRole: "technician",
+      primaryRole: "technician",
+      department: assessment.department,
+      specialization: assessment.specialization,
+      trade: assessment.specialization,
+      status: "INVITED",
+      suspended: true,
+      isStaff: true,
+      isAdmin: false,
+      staffModules: [],
+      modules: [],
+      permissions: {},
+      onboardingStage: "INVITED",
+      onboardingChecklist,
+      onboardingComplete: false,
+      invitationStatus: assessment.invitationStatus,
+      profileRepairVersion: "technician-invitation-v1",
+      profileRepairedAt: now,
+      profileRepairedBy: actorId,
+      updatedAt: now,
+    }, { merge: true });
+    tx.set(accessRef, {
+      uid,
+      role: "technician",
+      active: false,
+      suspended: true,
+      status: "INVITED",
+      onboardingStage: "INVITED",
+      modules: [],
+      staffModules: [],
+      permissions: {},
+      updatedAt: now,
+      updatedBy: actorId,
+      ...(!accessSnap.exists ? { grantedAt: now, grantedBy: actorId } : {}),
+    }, { merge: true });
+    tx.set(hrRef, {
+      uid,
+      displayName: assessment.displayName,
+      role: "technician",
+      employeeType: "technician",
+      department: assessment.department,
+      specialization: assessment.specialization,
+      status: "INVITED",
+      suspended: true,
+      onboardingStage: "INVITED",
+      onboardingComplete: false,
+      employmentType: assessment.hr.employmentType || "full_time",
+      shiftName: assessment.hr.shiftName || "Day Shift",
+      workingHours: assessment.hr.workingHours || "9 AM - 4 PM",
+      offDay: assessment.hr.offDay || "Sunday",
+      updatedAt: now,
+      ...(!hrSnap.exists ? { createdAt: now } : {}),
+    }, { merge: true });
+    tx.set(privateRef, {
+      uid,
+      emailHash: assessment.emailHash,
+      employeeId: assessment.privateHr.employeeId || null,
+      emiratesId: assessment.privateHr.emiratesId || null,
+      joiningDate: assessment.privateHr.joiningDate || assessment.hr.joiningDate || null,
+      contractEndDate: assessment.privateHr.contractEndDate || null,
+      employmentType: assessment.privateHr.employmentType || assessment.hr.employmentType || "full_time",
+      salaryPackage,
+      accessClassification: "PRIVATE_HR_SERVER_ONLY",
+      updatedAt: now,
+      ...(!privateSnap.exists ? { createdAt: now, createdBy: actorId } : {}),
+    }, { merge: true });
+    tx.set(technicianRef, {
+      uid,
+      email: assessment.email,
+      displayName: assessment.displayName,
+      fullName: assessment.displayName,
+      phoneNumber: assessment.phoneNumber,
+      phone: assessment.phoneNumber,
+      role: "technician",
+      userRole: "technician",
+      primaryRole: "technician",
+      department: assessment.department,
+      specialization: assessment.specialization,
+      trade: assessment.specialization,
+      status: "INVITED",
+      suspended: true,
+      isStaff: true,
+      isAdmin: false,
+      staffModules: [],
+      modules: [],
+      permissions: {},
+      onboardingStage: "INVITED",
+      onboardingChecklist,
+      onboardingComplete: false,
+      available: false,
+      onDuty: false,
+      currentJobCount: Number.isFinite(Number(assessment.technician.currentJobCount)) ? Number(assessment.technician.currentJobCount) : 0,
+      approvalStatus: assessment.technician.approvalStatus || "PENDING",
+      maxConcurrentJobs: boundedInteger(assessment.technician.maxConcurrentJobs, 3, 1, 10),
+      emergencyEligible: assessment.technician.emergencyEligible === true,
+      updatedAt: now,
+      ...(!technicianSnap.exists ? { createdAt: now, createdBy: actorId } : {}),
+    }, { merge: true });
+    tx.create(db.collection("audit_logs").doc(), {
+      actorId,
+      actorRole,
+      action: "ADMIN_REPAIR_INCOMPLETE_TECHNICIAN_PROFILE",
+      targetType: "users",
+      targetId: uid,
+      metadata: {
+        role: "technician",
+        emailHash: assessment.emailHash,
+        repairedComponents: assessment.missingComponents,
+        authUidPreserved: true,
+        authClaimsPreserved: true,
+        invitationQueued: false,
+        repairVersion: "technician-invitation-v1",
+      },
+      createdAt: now,
+    });
+    return { repaired: true, missingComponents: assessment.missingComponents };
+  });
+
+  return {
+    success: true,
+    execute: true,
+    uid,
+    role: "technician",
+    repaired: outcome.repaired,
+    repairRequired: false,
+    missingComponents: outcome.missingComponents,
+    authUidPreserved: true,
+    authClaimsPreserved: true,
+    invitationQueued: false,
+  };
+});
 
 export const adminCreateUser = onCall({ cors: true, region: "europe-west3", enforceAppCheck: true }, async (request) => {
   const { actorId, actorRole } = await requireProvisioningAdmin(request);

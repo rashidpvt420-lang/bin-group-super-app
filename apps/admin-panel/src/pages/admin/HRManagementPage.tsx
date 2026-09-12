@@ -124,6 +124,12 @@ export default function HRManagementPage() {
     useEffect(() => { void loadProtectedHr(); }, [loadProtectedHr]);
 
     useEffect(() => {
+        const refreshLifecycle = () => { void loadProtectedHr(); };
+        window.addEventListener('bin-group:staff-lifecycle-changed', refreshLifecycle);
+        return () => window.removeEventListener('bin-group:staff-lifecycle-changed', refreshLifecycle);
+    }, [loadProtectedHr]);
+
+    useEffect(() => {
         if (!attendanceForm.uid && staff[0]?.uid) setAttendanceForm((value) => ({ ...value, uid: staff[0].uid }));
         if (!leaveForm.uid && staff[0]?.uid) setLeaveForm((value) => ({ ...value, uid: staff[0].uid }));
         if (!documentForm.uid && staff[0]?.uid) setDocumentForm((value) => ({ ...value, uid: staff[0].uid, storagePath: `privateHrDocuments/${staff[0].uid}/` }));
