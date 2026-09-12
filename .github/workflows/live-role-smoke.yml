@@ -284,7 +284,7 @@ jobs:
           git -C control-plane merge-base --is-ancestor "$TARGET_SHA" "$CURRENT_SHA" || { echo "::error::Release SHA is not an ancestor of the clearance control plane."; exit 1; }
           changed="$(git -C control-plane diff --name-only "$TARGET_SHA" "$CURRENT_SHA")"
           [[ -n "$changed" ]] || { echo "::error::No reviewed clearance-control repair exists above the release SHA."; exit 1; }
-          allowed='^(\.github/workflows/live-role-smoke\.yml|\.github/workflows/firebase-production-deploy\.yml|scripts/launch-status\.mjs|scripts/hard-clearance-production-revalidation\.mjs|scripts/resolve-admin-app-check-site-key\.mjs|scripts/verify-hard-launch-approval\.mjs|tests/launch/hard-clearance-revalidation\.test\.mjs)$'
+          allowed='^(\.github/workflows/firebase-production-deploy\.yml|\.github/workflows/live-role-smoke\.yml|\.github/workflows/operational-application-evidence\.yml|\.github/workflows/operational-provider-evidence\.yml|\.github/workflows/privileged-access-rotation-evidence\.yml|\.github/workflows/technician-physical-evidence\.yml|scripts/finalize-operational-provider-evidence\.mjs|scripts/hard-clearance-production-revalidation\.mjs|scripts/launch-status\.mjs|scripts/publish-direct-operational-proof\.mjs|scripts/publish-operational-application-evidence\.mjs|scripts/publish-operational-provider-evidence\.mjs|scripts/resolve-admin-app-check-site-key\.mjs|scripts/run-frozen-release-evidence\.mjs|scripts/verify-hard-launch-approval\.mjs|scripts/verify-operational-readiness\.mjs|tests/launch/ai-operational-contract\.test\.mjs|tests/launch/external-gate-production-provenance\.test\.mjs|tests/launch/final-operational-evidence-producers\.test\.mjs|tests/launch/hard-clearance-revalidation\.test\.mjs|tests/launch/operational-application-evidence-audit\.test\.mjs)$'
           while IFS= read -r file; do
             [[ -z "$file" || "$file" =~ $allowed ]] || { echo "::error::Non-control-plane file changed since pilot release: $file"; exit 1; }
           done <<< "$changed"
@@ -305,6 +305,7 @@ jobs:
           cp control-plane/scripts/hard-clearance-production-revalidation.mjs release/scripts/hard-clearance-production-revalidation.mjs
           cp control-plane/scripts/resolve-admin-app-check-site-key.mjs release/scripts/resolve-admin-app-check-site-key.mjs
           cp control-plane/scripts/verify-hard-launch-approval.mjs release/scripts/verify-hard-launch-approval.mjs
+          cp control-plane/scripts/verify-operational-readiness.mjs release/scripts/verify-operational-readiness.mjs
 
       - uses: actions/setup-node@v4
         with:
@@ -516,6 +517,7 @@ jobs:
         working-directory: release
         env:
           HARD_LAUNCH_EXPECTED_SHA: ${{ inputs.expected_commit_sha }}
+          CONTROL_PLANE_COMMIT_SHA: ${{ github.sha }}
         run: node scripts/verify-operational-readiness.mjs
 
       - name: Write workflow-bound pilot incident report

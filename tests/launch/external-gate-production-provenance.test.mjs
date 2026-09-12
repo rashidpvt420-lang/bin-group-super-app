@@ -17,7 +17,7 @@ test('operational application evidence is bound to the exact production deployme
   const workflow = read('.github/workflows/operational-application-evidence.yml');
   assert.match(workflow, /production_deploy_run_id:/);
   assert.match(workflow, /actions:\s*read/);
-  assert.match(workflow, /production-deployment-\$\{\{ inputs\.expected_commit_sha \}\}/);
+  assert.match(workflow, /production-deployment-\$\{\{ inputs\.frozen_release_sha \}\}/);
   assert.match(workflow, /run-id:\s*\$\{\{ inputs\.production_deploy_run_id \}\}/);
   assert.match(workflow, /doc\.deployedCommitSha !== expectedSha/);
   assert.match(workflow, /doc\.workflowRunId \|\| ''\) !== deployRunId/);

@@ -226,16 +226,18 @@ try { requireAuthorizedApprover(process.env.GITHUB_ACTOR); } catch (error) { fai
 const gate = text(process.env.OPERATIONAL_GATE);
 const manifest = manifests[gate];
 if (!manifest) fail(`unsupported operational gate: ${gate || '(missing)'}`);
-const commitSha = text(process.env.GITHUB_SHA);
+const controlPlaneCommitSha = text(process.env.GITHUB_SHA);
+const releaseCommitSha = text(process.env.PRODUCTION_RELEASE_SHA);
 const runId = text(process.env.GITHUB_RUN_ID);
-if (!/^[0-9a-f]{40}$/.test(commitSha) || !/^\d+$/.test(runId)) fail('exact commit SHA and numeric workflow run ID are required');
+if (!/^[0-9a-f]{40}$/.test(controlPlaneCommitSha) || !/^[0-9a-f]{40}$/.test(releaseCommitSha) || !/^\d+$/.test(runId)) fail('exact control-plane/release SHAs and numeric workflow run ID are required');
+if (process.env.CONTROL_PLANE_COMMIT_SHA !== controlPlaneCommitSha || process.env.CONTROL_PLANE_SCOPE_VERIFIED !== 'true') fail('reviewed control-plane binding is required');
 
 const proofPath = path.resolve(manifest.path);
 let proof;
 try { proof = JSON.parse(readFileSync(proofPath, 'utf8')); }
 catch (error) { fail(`${manifest.path} missing or malformed: ${error.message}`); }
 
-const context = { commitSha, runId };
+const context = { commitSha: releaseCommitSha, runId };
 const errors = manifest.validate(proof, context);
 if (errors.length) {
   for (const error of errors) console.error(`- ${error}`);
@@ -252,7 +254,9 @@ initializeFirebaseAdmin(admin, projectId);
 
 const record = {
   status: 'passed',
-  commitSha,
+  commitSha: releaseCommitSha,
+  releaseCommitSha,
+  controlPlaneCommitSha,
   projectId,
   evidenceType: manifest.evidenceType,
   evidenceReference: manifest.reference(proof),
@@ -275,7 +279,8 @@ await admin.firestore().runTransaction(async (transaction) => {
       ...(current.operationalEvidence && typeof current.operationalEvidence === 'object' ? current.operationalEvidence : {}),
       [gate]: record,
     },
-    operationalEvidenceCommitSha: commitSha,
+    operationalEvidenceCommitSha: releaseCommitSha,
+    operationalEvidenceControlPlaneCommitSha: controlPlaneCommitSha,
     operationalEvidenceProjectId: projectId,
     operationalEvidenceLastWorkflowRunId: runId,
     operationalEvidenceUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),

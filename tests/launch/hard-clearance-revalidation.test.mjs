@@ -7,6 +7,7 @@ import {
   validateHostedReleaseBinding,
 } from '../../scripts/hard-clearance-production-revalidation.mjs';
 import { assertProtectedProductionContext } from '../../scripts/resolve-admin-app-check-site-key.mjs';
+import { validateFrozenReleaseEvidenceContext } from '../../scripts/run-frozen-release-evidence.mjs';
 
 const read = (file) => readFile(file, 'utf8');
 
@@ -22,13 +23,27 @@ test('hard clearance freshly revalidates production state without moving the fro
   assert.match(workflow, /Non-control-plane file changed since pilot release/);
 
   const expectedAllowlist = [
-    '.github/workflows/live-role-smoke.yml',
     '.github/workflows/firebase-production-deploy.yml',
+    '.github/workflows/live-role-smoke.yml',
+    '.github/workflows/operational-application-evidence.yml',
+    '.github/workflows/operational-provider-evidence.yml',
+    '.github/workflows/privileged-access-rotation-evidence.yml',
+    '.github/workflows/technician-physical-evidence.yml',
+    'scripts/finalize-operational-provider-evidence.mjs',
     'scripts/launch-status.mjs',
     'scripts/hard-clearance-production-revalidation.mjs',
+    'scripts/publish-direct-operational-proof.mjs',
+    'scripts/publish-operational-application-evidence.mjs',
+    'scripts/publish-operational-provider-evidence.mjs',
     'scripts/resolve-admin-app-check-site-key.mjs',
+    'scripts/run-frozen-release-evidence.mjs',
     'scripts/verify-hard-launch-approval.mjs',
+    'scripts/verify-operational-readiness.mjs',
+    'tests/launch/ai-operational-contract.test.mjs',
+    'tests/launch/external-gate-production-provenance.test.mjs',
+    'tests/launch/final-operational-evidence-producers.test.mjs',
     'tests/launch/hard-clearance-revalidation.test.mjs',
+    'tests/launch/operational-application-evidence-audit.test.mjs',
   ];
   const allowlistBody = workflow.match(/allowed='\^\(([^'\n]+)\)\$'/)?.[1];
   assert.ok(allowlistBody, 'control-plane allowlist declaration is missing');
@@ -51,6 +66,8 @@ test('hard clearance freshly revalidates production state without moving the fro
     workflow.indexOf('  hard-public-launch-clearance:'),
   );
   assert.match(revalidationJob, /cp control-plane\/scripts\/resolve-admin-app-check-site-key\.mjs release\/scripts\/resolve-admin-app-check-site-key\.mjs/);
+  assert.match(workflow, /cp control-plane\/scripts\/verify-operational-readiness\.mjs release\/scripts\/verify-operational-readiness\.mjs/);
+  assert.match(workflow, /CONTROL_PLANE_COMMIT_SHA: \$\{\{ github\.sha \}\}[\s\S]*?run: node scripts\/verify-operational-readiness\.mjs/);
   const authIndex = revalidationJob.indexOf('Authenticate Google Cloud');
   const installIndex = revalidationJob.indexOf('Install frozen-release dependencies');
   const resolveIndex = revalidationJob.indexOf('Resolve canonical Admin Enterprise App Check config');
@@ -73,6 +90,109 @@ test('hard clearance freshly revalidates production state without moving the fro
   // equal the newer, narrowly reviewed clearance-control commit.
   const hardJob = workflow.slice(workflow.indexOf('  hard-public-launch-clearance:'));
   assert.doesNotMatch(hardJob, /TARGET_SHA[^\n]*CURRENT_SHA|TARGET_SHA\" != \"\$CURRENT_SHA/);
+});
+
+test('operational evidence keeps current main as control plane while binding proof to the frozen deployment', async () => {
+  const workflowFiles = [
+    '.github/workflows/operational-application-evidence.yml',
+    '.github/workflows/operational-provider-evidence.yml',
+    '.github/workflows/privileged-access-rotation-evidence.yml',
+    '.github/workflows/technician-physical-evidence.yml',
+  ];
+  const expectedAllowlist = [
+    '.github/workflows/firebase-production-deploy.yml',
+    '.github/workflows/live-role-smoke.yml',
+    ...workflowFiles,
+    'scripts/finalize-operational-provider-evidence.mjs',
+    'scripts/launch-status.mjs',
+    'scripts/hard-clearance-production-revalidation.mjs',
+    'scripts/publish-direct-operational-proof.mjs',
+    'scripts/publish-operational-application-evidence.mjs',
+    'scripts/publish-operational-provider-evidence.mjs',
+    'scripts/resolve-admin-app-check-site-key.mjs',
+    'scripts/run-frozen-release-evidence.mjs',
+    'scripts/verify-hard-launch-approval.mjs',
+    'scripts/verify-operational-readiness.mjs',
+    'tests/launch/ai-operational-contract.test.mjs',
+    'tests/launch/external-gate-production-provenance.test.mjs',
+    'tests/launch/final-operational-evidence-producers.test.mjs',
+    'tests/launch/hard-clearance-revalidation.test.mjs',
+    'tests/launch/operational-application-evidence-audit.test.mjs',
+  ].sort();
+
+  for (const workflowFile of workflowFiles) {
+    const workflow = await read(workflowFile);
+    assert.match(workflow, /expected_commit_sha:[\s\S]*?current control-plane main SHA/);
+    assert.match(workflow, /frozen_release_sha:[\s\S]*?frozen production release SHA/);
+    assert.match(workflow, /TARGET_SHA: \$\{\{ inputs\.expected_commit_sha \}\}/);
+    assert.match(workflow, /\[\[ "\$TARGET_SHA" != "\$GITHUB_SHA" \]\]/);
+    assert.match(workflow, /ref: \$\{\{ github\.sha \}\}[\s\S]*?path: control-plane[\s\S]*?fetch-depth: 0/);
+    assert.match(workflow, /git -C control-plane merge-base --is-ancestor "\$RELEASE_SHA" "\$CONTROL_PLANE_SHA"/);
+    assert.match(workflow, /ref: \$\{\{ inputs\.frozen_release_sha \}\}[\s\S]*?path: release/);
+    assert.match(workflow, /name: production-deployment-\$\{\{ inputs\.frozen_release_sha \}\}/);
+    assert.match(workflow, /node \.\.\/control-plane\/scripts\/run-frozen-release-evidence\.mjs scripts\//);
+    assert.doesNotMatch(workflow, /GITHUB_SHA="\$PRODUCTION_RELEASE_SHA"/);
+    assert.match(workflow, /Overlay reviewed dual-SHA publisher/);
+
+    const allowlistBody = workflow.match(/allowed='\^\(([^'\n]+)\)\$'/)?.[1];
+    assert.ok(allowlistBody, `${workflowFile} control-plane allowlist is missing`);
+    const actualAllowlist = allowlistBody.split('|').map((value) => value.replaceAll('\\.', '.')).sort();
+    assert.deepEqual(actualAllowlist, expectedAllowlist);
+  }
+
+  const providerWorkflow = await read('.github/workflows/operational-provider-evidence.yml');
+  assert.match(providerWorkflow, /production_deploy_run_id:[\s\S]*?required: true/);
+  assert.match(providerWorkflow, /all-baseline must not receive Stripe-only inputs/);
+  assert.doesNotMatch(providerWorkflow, /all-baseline must not receive deployment/);
+
+  const publishers = await Promise.all([
+    read('scripts/publish-operational-application-evidence.mjs'),
+    read('scripts/publish-operational-provider-evidence.mjs'),
+    read('scripts/publish-direct-operational-proof.mjs'),
+    read('scripts/finalize-operational-provider-evidence.mjs'),
+  ]);
+  for (const publisher of publishers) {
+    assert.match(publisher, /PRODUCTION_RELEASE_SHA/);
+    assert.match(publisher, /CONTROL_PLANE_COMMIT_SHA/);
+    assert.match(publisher, /CONTROL_PLANE_SCOPE_VERIFIED/);
+    assert.match(publisher, /releaseCommitSha/);
+    assert.match(publisher, /controlPlaneCommitSha/);
+  }
+
+  const readiness = await read('scripts/verify-operational-readiness.mjs');
+  assert.match(readiness, /gate\.releaseCommitSha !== commitSha/);
+  assert.match(readiness, /gate\.controlPlaneCommitSha !== controlPlaneCommitSha/);
+});
+
+test('frozen-release evidence runner refuses forged control-plane context and arbitrary entrypoints', async () => {
+  const env = {
+    GITHUB_ACTIONS: 'true',
+    GITHUB_REPOSITORY: 'rashidpvt420-lang/bin-group-super-app',
+    GITHUB_REF: 'refs/heads/main',
+    GITHUB_WORKFLOW: 'Operational Application Evidence',
+    GITHUB_JOB: 'verify-and-publish',
+    GITHUB_SHA: 'a'.repeat(40),
+    CONTROL_PLANE_COMMIT_SHA: 'b'.repeat(40),
+    PRODUCTION_RELEASE_SHA: 'c'.repeat(40),
+    PRODUCTION_DEPLOY_RUN_ID: '34500748478',
+    CONTROL_PLANE_SCOPE_VERIFIED: 'true',
+  };
+  assert.throws(
+    () => validateFrozenReleaseEvidenceContext(env, process.cwd(), 'scripts/publish-operational-application-evidence.mjs'),
+    /control-plane SHA must equal the protected workflow GITHUB_SHA/,
+  );
+  assert.throws(
+    () => validateFrozenReleaseEvidenceContext(
+      { ...env, CONTROL_PLANE_COMMIT_SHA: env.GITHUB_SHA },
+      process.cwd(),
+      'scripts/arbitrary.mjs',
+    ),
+    /entrypoint is not authorized/,
+  );
+  const runner = await read('scripts/run-frozen-release-evidence.mjs');
+  assert.match(runner, /entrypoint is not authorized for this protected job/);
+  assert.match(runner, /production deployment is older than seven days/);
+  assert.match(runner, /GITHUB_SHA: releaseSha/);
 });
 
 test('production deploy consumes frozen clearance under a separate current-main control-plane SHA', async () => {
