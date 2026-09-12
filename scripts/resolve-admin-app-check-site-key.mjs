@@ -15,6 +15,7 @@ const PLACEHOLDER_RE = /(?:REPLACE|undefined|null|VALIDATION_ONLY)/i;
 const PROTECTED_WORKFLOW_JOBS = Object.freeze([
   Object.freeze({ workflow: 'Firebase Production Deploy', job: 'deploy-firebase-production-stack' }),
   Object.freeze({ workflow: 'Live Role Smoke Tests', job: 'live-evidence' }),
+  Object.freeze({ workflow: 'Live Role Smoke Tests', job: 'hard-clearance-production-revalidation' }),
   Object.freeze({ workflow: 'Admin Production Evidence', job: 'admin-operational-evidence' }),
 ]);
 

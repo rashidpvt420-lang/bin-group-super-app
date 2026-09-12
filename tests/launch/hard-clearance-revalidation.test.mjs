@@ -6,6 +6,7 @@ import {
   protectedHostedAssetUrl,
   validateHostedReleaseBinding,
 } from '../../scripts/hard-clearance-production-revalidation.mjs';
+import { assertProtectedProductionContext } from '../../scripts/resolve-admin-app-check-site-key.mjs';
 
 const read = (file) => readFile(file, 'utf8');
 
@@ -25,6 +26,7 @@ test('hard clearance freshly revalidates production state without moving the fro
     '.github/workflows/firebase-production-deploy.yml',
     'scripts/launch-status.mjs',
     'scripts/hard-clearance-production-revalidation.mjs',
+    'scripts/resolve-admin-app-check-site-key.mjs',
     'scripts/verify-hard-launch-approval.mjs',
     'tests/launch/hard-clearance-revalidation.test.mjs',
   ];
@@ -43,6 +45,29 @@ test('hard clearance freshly revalidates production state without moving the fro
   assert.match(workflow, /node scripts\/resolve-live-pilot-window\.mjs/);
   assert.match(workflow, /hard-clearance-production-revalidation-\$\{\{ inputs\.expected_commit_sha \}\}/);
   assert.match(workflow, /HARD_CLEARANCE_REVALIDATION_MODE: consume/);
+
+  const revalidationJob = workflow.slice(
+    workflow.indexOf('  hard-clearance-production-revalidation:'),
+    workflow.indexOf('  hard-public-launch-clearance:'),
+  );
+  assert.match(revalidationJob, /cp control-plane\/scripts\/resolve-admin-app-check-site-key\.mjs release\/scripts\/resolve-admin-app-check-site-key\.mjs/);
+  const authIndex = revalidationJob.indexOf('Authenticate Google Cloud');
+  const installIndex = revalidationJob.indexOf('Install frozen-release dependencies');
+  const resolveIndex = revalidationJob.indexOf('Resolve canonical Admin Enterprise App Check config');
+  const generateIndex = revalidationJob.indexOf('Generate fresh production hard-clearance revalidation');
+  assert.ok(authIndex >= 0 && installIndex > authIndex);
+  assert.ok(resolveIndex > installIndex && generateIndex > resolveIndex);
+
+  assert.doesNotThrow(() => assertProtectedProductionContext({
+    GITHUB_ACTIONS: 'true',
+    GITHUB_WORKFLOW: 'Live Role Smoke Tests',
+    GITHUB_JOB: 'hard-clearance-production-revalidation',
+    DEPLOYMENT_ENVIRONMENT: 'production',
+    GITHUB_REF: 'refs/heads/main',
+    GITHUB_SHA: 'a'.repeat(40),
+    GCP_PROJECT_ID: 'bin-group-57c60',
+    GITHUB_ENV: '/tmp/github-env',
+  }));
 
   // The authorization job must no longer demand that the frozen release SHA
   // equal the newer, narrowly reviewed clearance-control commit.

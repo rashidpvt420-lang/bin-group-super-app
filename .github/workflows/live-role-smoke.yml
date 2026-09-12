@@ -284,7 +284,7 @@ jobs:
           git -C control-plane merge-base --is-ancestor "$TARGET_SHA" "$CURRENT_SHA" || { echo "::error::Release SHA is not an ancestor of the clearance control plane."; exit 1; }
           changed="$(git -C control-plane diff --name-only "$TARGET_SHA" "$CURRENT_SHA")"
           [[ -n "$changed" ]] || { echo "::error::No reviewed clearance-control repair exists above the release SHA."; exit 1; }
-          allowed='^(\.github/workflows/live-role-smoke\.yml|\.github/workflows/firebase-production-deploy\.yml|scripts/launch-status\.mjs|scripts/hard-clearance-production-revalidation\.mjs|scripts/verify-hard-launch-approval\.mjs|tests/launch/hard-clearance-revalidation\.test\.mjs)$'
+          allowed='^(\.github/workflows/live-role-smoke\.yml|\.github/workflows/firebase-production-deploy\.yml|scripts/launch-status\.mjs|scripts/hard-clearance-production-revalidation\.mjs|scripts/resolve-admin-app-check-site-key\.mjs|scripts/verify-hard-launch-approval\.mjs|tests/launch/hard-clearance-revalidation\.test\.mjs)$'
           while IFS= read -r file; do
             [[ -z "$file" || "$file" =~ $allowed ]] || { echo "::error::Non-control-plane file changed since pilot release: $file"; exit 1; }
           done <<< "$changed"
@@ -303,6 +303,7 @@ jobs:
           set -euo pipefail
           cp control-plane/scripts/launch-status.mjs release/scripts/launch-status.mjs
           cp control-plane/scripts/hard-clearance-production-revalidation.mjs release/scripts/hard-clearance-production-revalidation.mjs
+          cp control-plane/scripts/resolve-admin-app-check-site-key.mjs release/scripts/resolve-admin-app-check-site-key.mjs
           cp control-plane/scripts/verify-hard-launch-approval.mjs release/scripts/verify-hard-launch-approval.mjs
 
       - uses: actions/setup-node@v4
@@ -322,6 +323,10 @@ jobs:
       - name: Install frozen-release dependencies
         working-directory: release
         run: bash scripts/npm-install-retry.sh
+
+      - name: Resolve canonical Admin Enterprise App Check config
+        working-directory: release
+        run: node scripts/resolve-admin-app-check-site-key.mjs
 
       - name: Download exact successful live evidence
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
