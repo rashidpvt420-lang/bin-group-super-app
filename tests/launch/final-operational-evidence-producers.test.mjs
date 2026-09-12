@@ -22,7 +22,7 @@ test('technician physical evidence is protected, canonical and requires real mob
   assert.match(workflow, /verify-technician-physical-evidence\.mjs/);
   assert.match(workflow, /Publish canonical technician operational evidence/);
   assert.match(workflow, /publish-direct-operational-proof\.mjs/);
-  assert.match(workflow, /path:\s*launch_package\/operational-proof\.json/);
+  assert.match(workflow, /path:\s*release\/launch_package\/operational-proof\.json/);
 
   assert.match(verifier, /gateKey:\s*'technicianPhysicalGpsEvidence'/);
   assert.match(verifier, /evidenceType:\s*'physical-device-report'/);
@@ -79,7 +79,7 @@ test('privileged rotation evidence uses active Phase 1 provider credentials and 
   assert.match(workflow, /verify-privileged-access-rotation\.mjs/);
   assert.match(workflow, /Publish canonical privileged-rotation evidence/);
   assert.match(workflow, /publish-direct-operational-proof\.mjs/);
-  assert.match(workflow, /path:\s*launch_package\/operational-proof\.json/);
+  assert.match(workflow, /path:\s*release\/launch_package\/operational-proof\.json/);
 
   assert.match(verifier, /gateKey:\s*'privilegedAccessRotation'/);
   assert.match(verifier, /evidenceType:\s*'secret-rotation-record'/);

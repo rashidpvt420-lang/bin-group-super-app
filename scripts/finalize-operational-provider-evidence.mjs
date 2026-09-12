@@ -27,10 +27,12 @@ try { requireAuthorizedApprover(process.env.GITHUB_ACTOR); } catch (error) { fai
 const gate = String(process.env.OPERATIONAL_GATE || '').trim();
 const evidenceType = EVIDENCE_TYPES[gate];
 if (!evidenceType) fail(`Unsupported provider gate: ${gate || '(missing)'}.`);
-const commitSha = String(process.env.GITHUB_SHA || '').trim();
+const controlPlaneCommitSha = String(process.env.GITHUB_SHA || '').trim();
+const releaseCommitSha = String(process.env.PRODUCTION_RELEASE_SHA || '').trim();
 const runId = String(process.env.GITHUB_RUN_ID || '').trim();
-if (!/^[0-9a-f]{40}$/.test(commitSha)) fail('Full lowercase commit SHA required.');
+if (!/^[0-9a-f]{40}$/.test(controlPlaneCommitSha) || !/^[0-9a-f]{40}$/.test(releaseCommitSha)) fail('Full lowercase control-plane and release SHAs required.');
 if (!/^\d+$/.test(runId)) fail('Numeric workflow run ID required.');
+if (process.env.CONTROL_PLANE_COMMIT_SHA !== controlPlaneCommitSha || process.env.CONTROL_PLANE_SCOPE_VERIFIED !== 'true') fail('Reviewed control-plane binding required.');
 
 const projectId = resolveFirebaseAdminProjectId();
 if (projectId !== PRODUCTION.projectId) fail(`Unexpected Firebase project: ${projectId}.`);
@@ -47,7 +49,7 @@ await db.runTransaction(async (transaction) => {
     : {};
   const record = operationalEvidence[gate];
   if (!record || typeof record !== 'object') fail(`Provider publisher did not create ${gate}.`);
-  if (record.status !== 'passed' || record.commitSha !== commitSha || record.projectId !== projectId) fail('Provider record identity mismatch.');
+  if (record.status !== 'passed' || record.commitSha !== releaseCommitSha || record.releaseCommitSha !== releaseCommitSha || record.controlPlaneCommitSha !== controlPlaneCommitSha || record.projectId !== projectId) fail('Provider record identity mismatch.');
   if (String(record.sourceWorkflowRunId || '') !== runId || String(record.workflowRunId || '') !== runId) fail('Provider record workflow binding mismatch.');
   if (!/^[0-9a-f]{64}$/i.test(String(record.artifactHash || ''))) fail('Provider artifact hash is invalid.');
   if (!/^[0-9a-f]{64}$/i.test(String(record.sourceProofHash || ''))) fail('Provider source proof hash is invalid.');
@@ -66,7 +68,8 @@ await db.runTransaction(async (transaction) => {
       ...operationalEvidence,
       [gate]: finalized,
     },
-    operationalEvidenceCommitSha: commitSha,
+    operationalEvidenceCommitSha: releaseCommitSha,
+    operationalEvidenceControlPlaneCommitSha: controlPlaneCommitSha,
     operationalEvidenceProjectId: projectId,
     operationalEvidenceLastWorkflowRunId: runId,
     operationalEvidenceUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -77,6 +80,8 @@ const saved = await ref.get();
 const finalized = saved.get(`operationalEvidence.${gate}`) || {};
 if (
   finalized.evidenceType !== evidenceType ||
+  finalized.releaseCommitSha !== releaseCommitSha ||
+  finalized.controlPlaneCommitSha !== controlPlaneCommitSha ||
   finalized.evidenceReference !== `https://github.com/${EXPECTED_REPOSITORY}/actions/runs/${runId}#${gate}` ||
   finalized.githubRepository !== EXPECTED_REPOSITORY
 ) {
