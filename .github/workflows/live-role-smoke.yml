@@ -12,7 +12,7 @@ on:
           - live-evidence
           - hard-clearance
       expected_commit_sha:
-        description: 'Full lowercase 40-character production main SHA'
+        description: 'Full lowercase 40-character production release SHA'
         required: true
         type: string
       production_deploy_run_id:
@@ -20,7 +20,7 @@ on:
         required: false
         type: string
       live_evidence_run_id:
-        description: 'For hard-clearance: successful live-evidence run ID for the same SHA'
+        description: 'For hard-clearance: successful live-evidence run ID for the same release SHA'
         required: false
         type: string
       clearance_payload_json:
@@ -88,7 +88,6 @@ jobs:
     if: github.event_name == 'schedule'
     runs-on: ubuntu-latest
     timeout-minutes: 30
-
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -124,7 +123,6 @@ jobs:
       contents: read
       actions: read
       id-token: write
-
     steps:
       - name: Enforce same-commit deployment inputs
         env:
@@ -134,18 +132,9 @@ jobs:
           DEPLOY_RUN_ID: ${{ inputs.production_deploy_run_id }}
         run: |
           set -euo pipefail
-          if [[ "$CURRENT_REF" != "refs/heads/main" ]]; then
-            echo "::error::Live launch evidence may only run from refs/heads/main."
-            exit 1
-          fi
-          if [[ ! "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]] || [[ "$TARGET_SHA" != "$CURRENT_SHA" ]]; then
-            echo "::error::expected_commit_sha must be the full current main SHA."
-            exit 1
-          fi
-          if [[ ! "$DEPLOY_RUN_ID" =~ ^[0-9]+$ ]]; then
-            echo "::error::production_deploy_run_id must be numeric."
-            exit 1
-          fi
+          [[ "$CURRENT_REF" == "refs/heads/main" ]] || { echo "::error::Live launch evidence may only run from refs/heads/main."; exit 1; }
+          [[ "$TARGET_SHA" =~ ^[0-9a-f]{40}$ && "$TARGET_SHA" == "$CURRENT_SHA" ]] || { echo "::error::expected_commit_sha must be the full current main SHA."; exit 1; }
+          [[ "$DEPLOY_RUN_ID" =~ ^[0-9]+$ ]] || { echo "::error::production_deploy_run_id must be numeric."; exit 1; }
 
       - name: Checkout exact production commit
         uses: actions/checkout@v4
@@ -180,10 +169,7 @@ jobs:
         run: |
           set -euo pipefail
           source_file="$(find downloaded-production -type f -name production-deployment.json -print -quit)"
-          if [[ -z "$source_file" ]]; then
-            echo "::error::production-deployment.json was not found."
-            exit 1
-          fi
+          [[ -n "$source_file" ]] || { echo "::error::production-deployment.json was not found."; exit 1; }
           mkdir -p launch_package
           cp "$source_file" launch_package/production-deployment.json
           test -s launch_package/production-deployment.json
@@ -264,80 +250,66 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 
-  hard-public-launch-clearance:
-    name: Verify and authorize hard public launch
+  hard-clearance-production-revalidation:
+    name: Freshly revalidate protected production state
     if: github.event_name == 'workflow_dispatch' && inputs.mode == 'hard-clearance'
     runs-on: ubuntu-latest
+    environment: production
     timeout-minutes: 60
-    environment: hard-public-launch
     permissions:
       contents: read
       actions: read
       id-token: write
-
+    outputs:
+      control_plane_scope_verified: ${{ steps.control_plane_scope.outputs.verified }}
     steps:
-      - name: Enforce protected release inputs
+      - name: Checkout clearance control plane
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: control-plane
+          fetch-depth: 0
+
+      - name: Verify control-plane-only repair scope
+        id: control_plane_scope
         env:
           TARGET_SHA: ${{ inputs.expected_commit_sha }}
-          LIVE_RUN_ID: ${{ inputs.live_evidence_run_id }}
-          RELEASE_CONFIRMATION: ${{ fromJSON(inputs.clearance_payload_json).confirmation }}
-          INCIDENT_CONFIRMATION_INPUT: ${{ fromJSON(inputs.clearance_payload_json).incident_confirmation }}
-          ROLLBACK_CONFIRMATION_INPUT: ${{ fromJSON(inputs.clearance_payload_json).rollback_confirmation }}
-          OPEN_P0_INPUT: ${{ fromJSON(inputs.clearance_payload_json).open_p0 }}
-          OPEN_P1_INPUT: ${{ fromJSON(inputs.clearance_payload_json).open_p1 }}
           CURRENT_SHA: ${{ github.sha }}
           CURRENT_REF: ${{ github.ref }}
-          CURRENT_ACTOR: ${{ github.actor }}
         run: |
           set -euo pipefail
-          if [[ "$CURRENT_REF" != "refs/heads/main" ]]; then
-            echo "::error::Hard clearance may only run from refs/heads/main."
-            exit 1
-          fi
-          authorized_actor=false
-          IFS=',' read -ra allowed_actors <<< "${AUTHORIZED_FOUNDER_ACTORS:-}"
-          for allowed_actor in "${allowed_actors[@]}"; do
-            allowed_actor="$(printf '%s' "$allowed_actor" | xargs)"
-            if [[ -n "$allowed_actor" && "$CURRENT_ACTOR" == "$allowed_actor" ]]; then authorized_actor=true; fi
-          done
-          if [[ "$authorized_actor" != "true" ]]; then
-            echo "::error::The current actor is not in AUTHORIZED_FOUNDER_ACTORS."
-            exit 1
-          fi
-          if [[ ! "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]] || [[ "$TARGET_SHA" != "$CURRENT_SHA" ]]; then
-            echo "::error::expected_commit_sha must be the full current main SHA."
-            exit 1
-          fi
-          if [[ ! "$LIVE_RUN_ID" =~ ^[0-9]+$ ]]; then
-            echo "::error::live_evidence_run_id must be numeric."
-            exit 1
-          fi
-          if [[ "$RELEASE_CONFIRMATION" != "AUTHORIZE_HARD_PUBLIC_LAUNCH_BIN_GROUP" ]]; then
-            echo "::error::Hard launch confirmation phrase mismatch."
-            exit 1
-          fi
-          if [[ "$INCIDENT_CONFIRMATION_INPUT" != "NO_OPEN_P0_P1" ]]; then
-            echo "::error::Incident confirmation phrase mismatch."
-            exit 1
-          fi
-          if [[ "$ROLLBACK_CONFIRMATION_INPUT" != "ROLLBACK_PLAN_VERIFIED" ]]; then
-            echo "::error::Rollback confirmation phrase mismatch."
-            exit 1
-          fi
-          if [[ "$OPEN_P0_INPUT" != "0" ]] || [[ "$OPEN_P1_INPUT" != "0" ]]; then
-            echo "::error::Hard launch requires zero open P0 and P1 incidents."
-            exit 1
-          fi
+          [[ "$CURRENT_REF" == "refs/heads/main" ]] || { echo "::error::Hard clearance may only run from refs/heads/main."; exit 1; }
+          [[ "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::expected_commit_sha must be a full lowercase SHA."; exit 1; }
+          git -C control-plane cat-file -e "$TARGET_SHA^{commit}" || git -C control-plane fetch origin "$TARGET_SHA"
+          git -C control-plane merge-base --is-ancestor "$TARGET_SHA" "$CURRENT_SHA" || { echo "::error::Release SHA is not an ancestor of the clearance control plane."; exit 1; }
+          changed="$(git -C control-plane diff --name-only "$TARGET_SHA" "$CURRENT_SHA")"
+          [[ -n "$changed" ]] || { echo "::error::No reviewed clearance-control repair exists above the release SHA."; exit 1; }
+          allowed='^(\.github/workflows/live-role-smoke\.yml|\.github/workflows/firebase-production-deploy\.yml|scripts/launch-status\.mjs|scripts/hard-clearance-production-revalidation\.mjs|scripts/verify-hard-launch-approval\.mjs|tests/launch/hard-clearance-revalidation\.test\.mjs)$'
+          while IFS= read -r file; do
+            [[ -z "$file" || "$file" =~ $allowed ]] || { echo "::error::Non-control-plane file changed since pilot release: $file"; exit 1; }
+          done <<< "$changed"
+          echo "Verified control-plane-only diff from $TARGET_SHA to $CURRENT_SHA:"
+          printf '%s\n' "$changed"
+          echo "verified=true" >> "$GITHUB_OUTPUT"
 
-      - name: Checkout exact production commit
+      - name: Checkout frozen pilot release
         uses: actions/checkout@v4
         with:
           ref: ${{ inputs.expected_commit_sha }}
+          path: release
+
+      - name: Overlay reviewed clearance controls only
+        run: |
+          set -euo pipefail
+          cp control-plane/scripts/launch-status.mjs release/scripts/launch-status.mjs
+          cp control-plane/scripts/hard-clearance-production-revalidation.mjs release/scripts/hard-clearance-production-revalidation.mjs
+          cp control-plane/scripts/verify-hard-launch-approval.mjs release/scripts/verify-hard-launch-approval.mjs
 
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
           cache: npm
+          cache-dependency-path: release/package-lock.json
 
       - name: Authenticate Google Cloud
         uses: google-github-actions/auth@v2
@@ -347,50 +319,202 @@ jobs:
           create_credentials_file: true
           export_environment_variables: true
 
-      - name: Install dependencies
+      - name: Install frozen-release dependencies
+        working-directory: release
         run: bash scripts/npm-install-retry.sh
 
-      - name: Verify live-evidence run provenance and enforce a real 24-hour pilot
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-          LIVE_EVIDENCE_RUN_ID: ${{ inputs.live_evidence_run_id }}
-          HARD_LAUNCH_EXPECTED_SHA: ${{ inputs.expected_commit_sha }}
-        run: node scripts/resolve-live-pilot-window.mjs
-
-      - name: Download exact live launch evidence
+      - name: Download exact successful live evidence
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: live-launch-evidence-${{ inputs.expected_commit_sha }}
-          path: downloaded-live-evidence
+          path: release/downloaded-live-evidence
           run-id: ${{ inputs.live_evidence_run_id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Restore and validate evidence bundle
+      - name: Restore frozen release evidence
+        working-directory: release
         run: |
           set -euo pipefail
           deployment_file="$(find downloaded-live-evidence -type f -name production-deployment.json -print -quit)"
           evidence_file="$(find downloaded-live-evidence -type f -name launch-evidence-batch.json -print -quit)"
           artifact_dir="$(find downloaded-live-evidence -type d -path '*/launch_package/artifacts' -print -quit)"
           if [[ -z "$artifact_dir" ]]; then artifact_dir="$(find downloaded-live-evidence -type d -name artifacts -print -quit)"; fi
-          if [[ -z "$deployment_file" ]] || [[ -z "$evidence_file" ]] || [[ -z "$artifact_dir" ]]; then
-            echo "::error::Selected live evidence artifact is incomplete."
-            exit 1
-          fi
+          [[ -n "$deployment_file" && -n "$evidence_file" && -n "$artifact_dir" ]] || { echo "::error::Selected live evidence artifact is incomplete."; exit 1; }
           mkdir -p launch_package
           cp "$deployment_file" launch_package/production-deployment.json
           cp "$evidence_file" launch_package/launch-evidence-batch.json
           rm -rf launch_package/artifacts
           cp -R "$artifact_dir" launch_package/artifacts
 
-      - name: Revalidate same-commit pilot evidence
+      - name: Resolve protected Gmail mailbox identities
+        working-directory: release
+        env:
+          E2E_OWNER_MAILBOX_EMAIL_CONFIGURED: ${{ vars.E2E_OWNER_MAILBOX_EMAIL || secrets.E2E_OWNER_MAILBOX_EMAIL }}
+          E2E_OWNER_MAILBOX_CLIENT_ID: ${{ secrets.E2E_OWNER_MAILBOX_CLIENT_ID }}
+          E2E_OWNER_MAILBOX_CLIENT_SECRET: ${{ secrets.E2E_OWNER_MAILBOX_CLIENT_SECRET }}
+          E2E_OWNER_MAILBOX_REFRESH_TOKEN: ${{ secrets.E2E_OWNER_MAILBOX_REFRESH_TOKEN }}
+          E2E_BROKER_MAILBOX_EMAIL_CONFIGURED: ${{ vars.E2E_BROKER_MAILBOX_EMAIL || secrets.E2E_BROKER_MAILBOX_EMAIL }}
+          E2E_BROKER_MAILBOX_CLIENT_ID: ${{ secrets.E2E_BROKER_MAILBOX_CLIENT_ID }}
+          E2E_BROKER_MAILBOX_CLIENT_SECRET: ${{ secrets.E2E_BROKER_MAILBOX_CLIENT_SECRET }}
+          E2E_BROKER_MAILBOX_REFRESH_TOKEN: ${{ secrets.E2E_BROKER_MAILBOX_REFRESH_TOKEN }}
+        run: node scripts/resolve-production-mailbox-identities.mjs
+
+      - name: Generate fresh production hard-clearance revalidation
+        working-directory: release
+        env:
+          HARD_LAUNCH_EXPECTED_SHA: ${{ inputs.expected_commit_sha }}
+          CLEARANCE_CONTROL_PLANE_SHA: ${{ github.sha }}
+          CONTROL_PLANE_SCOPE_VERIFIED: 'true'
+          LIVE_EVIDENCE_RUN_ID: ${{ inputs.live_evidence_run_id }}
+          E2E_STRICT_ROLES: 'true'
+          E2E_REQUIRE_FOUNDER_MFA: 'true'
+          E2E_OWNER_MAILBOX_CLIENT_ID: ${{ secrets.E2E_OWNER_MAILBOX_CLIENT_ID }}
+          E2E_OWNER_MAILBOX_CLIENT_SECRET: ${{ secrets.E2E_OWNER_MAILBOX_CLIENT_SECRET }}
+          E2E_OWNER_MAILBOX_REFRESH_TOKEN: ${{ secrets.E2E_OWNER_MAILBOX_REFRESH_TOKEN }}
+          E2E_BROKER_MAILBOX_CLIENT_ID: ${{ secrets.E2E_BROKER_MAILBOX_CLIENT_ID }}
+          E2E_BROKER_MAILBOX_CLIENT_SECRET: ${{ secrets.E2E_BROKER_MAILBOX_CLIENT_SECRET }}
+          E2E_BROKER_MAILBOX_REFRESH_TOKEN: ${{ secrets.E2E_BROKER_MAILBOX_REFRESH_TOKEN }}
+        run: node scripts/hard-clearance-production-revalidation.mjs --generate
+
+      - name: Upload same-run production revalidation
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: hard-clearance-production-revalidation-${{ inputs.expected_commit_sha }}
+          path: |
+            release/launch_package/production-deployment.json
+            release/launch_package/launch-evidence-batch.json
+            release/launch_package/artifacts
+            release/launch_package/hard-clearance-production-revalidation.json
+          if-no-files-found: error
+          retention-days: 30
+
+  hard-public-launch-clearance:
+    name: Verify and authorize hard public launch
+    if: github.event_name == 'workflow_dispatch' && inputs.mode == 'hard-clearance'
+    needs: hard-clearance-production-revalidation
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    environment: hard-public-launch
+    permissions:
+      contents: read
+      actions: read
+      id-token: write
+    steps:
+      - name: Enforce protected release inputs
+        env:
+          TARGET_SHA: ${{ inputs.expected_commit_sha }}
+          LIVE_RUN_ID: ${{ inputs.live_evidence_run_id }}
+          CONTROL_PLANE_SCOPE_VERIFIED: ${{ needs.hard-clearance-production-revalidation.outputs.control_plane_scope_verified }}
+          RELEASE_CONFIRMATION: ${{ fromJSON(inputs.clearance_payload_json).confirmation }}
+          INCIDENT_CONFIRMATION_INPUT: ${{ fromJSON(inputs.clearance_payload_json).incident_confirmation }}
+          ROLLBACK_CONFIRMATION_INPUT: ${{ fromJSON(inputs.clearance_payload_json).rollback_confirmation }}
+          OPEN_P0_INPUT: ${{ fromJSON(inputs.clearance_payload_json).open_p0 }}
+          OPEN_P1_INPUT: ${{ fromJSON(inputs.clearance_payload_json).open_p1 }}
+          CURRENT_REF: ${{ github.ref }}
+          CURRENT_ACTOR: ${{ github.actor }}
+        run: |
+          set -euo pipefail
+          [[ "$CURRENT_REF" == "refs/heads/main" ]] || { echo "::error::Hard clearance may only run from refs/heads/main."; exit 1; }
+          [[ "$CONTROL_PLANE_SCOPE_VERIFIED" == "true" ]] || { echo "::error::Clearance control-plane scope was not verified."; exit 1; }
+          authorized_actor=false
+          IFS=',' read -ra allowed_actors <<< "${AUTHORIZED_FOUNDER_ACTORS:-}"
+          for allowed_actor in "${allowed_actors[@]}"; do
+            allowed_actor="$(printf '%s' "$allowed_actor" | xargs)"
+            if [[ -n "$allowed_actor" && "$CURRENT_ACTOR" == "$allowed_actor" ]]; then authorized_actor=true; fi
+          done
+          [[ "$authorized_actor" == "true" ]] || { echo "::error::The current actor is not in AUTHORIZED_FOUNDER_ACTORS."; exit 1; }
+          [[ "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::expected_commit_sha must be a full lowercase 40-character release SHA."; exit 1; }
+          [[ "$LIVE_RUN_ID" =~ ^[0-9]+$ ]] || { echo "::error::live_evidence_run_id must be numeric."; exit 1; }
+          [[ "$RELEASE_CONFIRMATION" == "AUTHORIZE_HARD_PUBLIC_LAUNCH_BIN_GROUP" ]] || { echo "::error::Hard launch confirmation phrase mismatch."; exit 1; }
+          [[ "$INCIDENT_CONFIRMATION_INPUT" == "NO_OPEN_P0_P1" ]] || { echo "::error::Incident confirmation phrase mismatch."; exit 1; }
+          [[ "$ROLLBACK_CONFIRMATION_INPUT" == "ROLLBACK_PLAN_VERIFIED" ]] || { echo "::error::Rollback confirmation phrase mismatch."; exit 1; }
+          [[ "$OPEN_P0_INPUT" == "0" && "$OPEN_P1_INPUT" == "0" ]] || { echo "::error::Hard launch requires zero open P0 and P1 incidents."; exit 1; }
+
+      - name: Checkout clearance control plane
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: control-plane
+
+      - name: Checkout frozen pilot release
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.expected_commit_sha }}
+          path: release
+
+      - name: Overlay reviewed clearance controls only
+        run: |
+          set -euo pipefail
+          cp control-plane/scripts/launch-status.mjs release/scripts/launch-status.mjs
+          cp control-plane/scripts/hard-clearance-production-revalidation.mjs release/scripts/hard-clearance-production-revalidation.mjs
+          cp control-plane/scripts/verify-hard-launch-approval.mjs release/scripts/verify-hard-launch-approval.mjs
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: release/package-lock.json
+
+      - name: Authenticate Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          create_credentials_file: true
+          export_environment_variables: true
+
+      - name: Install frozen-release dependencies
+        working-directory: release
+        run: bash scripts/npm-install-retry.sh
+
+      - name: Verify live-evidence run provenance and enforce a real 24-hour pilot
+        working-directory: release
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          LIVE_EVIDENCE_RUN_ID: ${{ inputs.live_evidence_run_id }}
+          HARD_LAUNCH_EXPECTED_SHA: ${{ inputs.expected_commit_sha }}
+        run: node scripts/resolve-live-pilot-window.mjs
+
+      - name: Download same-run fresh production revalidation
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: hard-clearance-production-revalidation-${{ inputs.expected_commit_sha }}
+          path: release/downloaded-hard-clearance-revalidation
+
+      - name: Restore frozen evidence and fresh revalidation
+        working-directory: release
+        run: |
+          set -euo pipefail
+          deployment_file="$(find downloaded-hard-clearance-revalidation -type f -name production-deployment.json -print -quit)"
+          evidence_file="$(find downloaded-hard-clearance-revalidation -type f -name launch-evidence-batch.json -print -quit)"
+          revalidation_file="$(find downloaded-hard-clearance-revalidation -type f -name hard-clearance-production-revalidation.json -print -quit)"
+          artifact_dir="$(find downloaded-hard-clearance-revalidation -type d -path '*/launch_package/artifacts' -print -quit)"
+          if [[ -z "$artifact_dir" ]]; then artifact_dir="$(find downloaded-hard-clearance-revalidation -type d -name artifacts -print -quit)"; fi
+          [[ -n "$deployment_file" && -n "$evidence_file" && -n "$revalidation_file" && -n "$artifact_dir" ]] || { echo "::error::Same-run production revalidation artifact is incomplete."; exit 1; }
+          mkdir -p launch_package
+          cp "$deployment_file" launch_package/production-deployment.json
+          cp "$evidence_file" launch_package/launch-evidence-batch.json
+          cp "$revalidation_file" launch_package/hard-clearance-production-revalidation.json
+          rm -rf launch_package/artifacts
+          cp -R "$artifact_dir" launch_package/artifacts
+
+      - name: Revalidate same-commit pilot evidence with fresh production proof
+        working-directory: release
+        env:
+          HARD_CLEARANCE_REVALIDATION_MODE: consume
+          HARD_LAUNCH_EXPECTED_SHA: ${{ inputs.expected_commit_sha }}
+          CLEARANCE_CONTROL_PLANE_SHA: ${{ github.sha }}
+          LIVE_EVIDENCE_RUN_ID: ${{ inputs.live_evidence_run_id }}
         run: node scripts/launch-status.mjs
 
       - name: Snapshot canonical operational readiness
+        working-directory: release
         env:
           HARD_LAUNCH_EXPECTED_SHA: ${{ inputs.expected_commit_sha }}
         run: node scripts/verify-operational-readiness.mjs
 
       - name: Write workflow-bound pilot incident report
+        working-directory: release
         env:
           HARD_LAUNCH_EXPECTED_SHA: ${{ inputs.expected_commit_sha }}
           HARD_LAUNCH_CONFIRMATION: ${{ fromJSON(inputs.clearance_payload_json).confirmation }}
@@ -404,12 +528,19 @@ jobs:
         run: node scripts/write-pilot-incident-report.mjs
 
       - name: Write founder-authorized hard launch approval
+        working-directory: release
         env:
           HARD_LAUNCH_EXPECTED_SHA: ${{ inputs.expected_commit_sha }}
           HARD_LAUNCH_CONFIRMATION: ${{ fromJSON(inputs.clearance_payload_json).confirmation }}
         run: node scripts/write-hard-launch-approval.mjs
 
       - name: Verify final hard launch status
+        working-directory: release
+        env:
+          HARD_CLEARANCE_REVALIDATION_MODE: consume
+          HARD_LAUNCH_EXPECTED_SHA: ${{ inputs.expected_commit_sha }}
+          CLEARANCE_CONTROL_PLANE_SHA: ${{ github.sha }}
+          LIVE_EVIDENCE_RUN_ID: ${{ inputs.live_evidence_run_id }}
         run: |
           node scripts/launch-status.mjs --hard
           npm run launch:hard-gate
@@ -420,14 +551,15 @@ jobs:
         with:
           name: hard-public-launch-clearance-${{ inputs.expected_commit_sha }}
           path: |
-            launch_package/production-deployment.json
-            launch_package/launch-evidence-batch.json
-            launch_package/artifacts
-            launch_package/live-evidence-provenance.json
-            launch_package/operational-readiness.json
-            launch_package/pilot-incident-report.json
-            launch_package/hard-launch-approval.json
-            launch_package/hard-launch-status.json
-            launch_package/launch-status.json
+            release/launch_package/production-deployment.json
+            release/launch_package/launch-evidence-batch.json
+            release/launch_package/artifacts
+            release/launch_package/live-evidence-provenance.json
+            release/launch_package/hard-clearance-production-revalidation.json
+            release/launch_package/operational-readiness.json
+            release/launch_package/pilot-incident-report.json
+            release/launch_package/hard-launch-approval.json
+            release/launch_package/hard-launch-status.json
+            release/launch_package/launch-status.json
           if-no-files-found: error
           retention-days: 365
