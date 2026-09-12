@@ -12,6 +12,22 @@ const smtpUser = defineSecret("SMTP_USER");
 const smtpPass = defineSecret("SMTP_PASS");
 
 const ADMIN_ROLES = new Set(["admin", "super_admin", "ceo", "manager", "operations_admin", "finance_admin"]);
+const DIRECT_SECURITY_LINK_MAIL_TYPES = new Set([
+  "staff_account_invitation",
+  "staff_account_invitation_resend",
+]);
+const SENDGRID_DIRECT_LINK_HEADERS = {
+  "X-SMTPAPI": JSON.stringify({
+    filters: {
+      clicktrack: {
+        settings: {
+          enable: 0,
+          enable_text: false,
+        },
+      },
+    },
+  }),
+};
 
 function asText(value: unknown, fallback = "") {
   const out = String(value ?? "").trim();
@@ -31,6 +47,13 @@ function stripHtml(html: string) {
     .replace(/<[^>]+>/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function directSecurityLinkHeaders(data: any) {
+  const mailType = asText(data?.type || data?.metadata?.type).toLowerCase();
+  return DIRECT_SECURITY_LINK_MAIL_TYPES.has(mailType)
+    ? SENDGRID_DIRECT_LINK_HEADERS
+    : undefined;
 }
 
 async function assertAdmin(auth: any) {
@@ -66,6 +89,7 @@ async function deliverMail(mailId: string, data: any) {
   const text = asText(message.text || data?.text || stripHtml(html));
   const from = asText(message.from || data?.from || process.env.MAIL_FROM || process.env.SMTP_FROM, "BIN GROUP <ceo@bin-groups.com>");
   const replyTo = asText(message.replyTo || message.reply_to || data?.replyTo || data?.reply_to || process.env.MAIL_REPLY_TO || process.env.SMTP_REPLY_TO, "BIN GROUP Admin <ceo@bin-groups.com>");
+  const headers = directSecurityLinkHeaders(data);
 
   if (!to?.length) {
     await ref.set({ delivery: { state: "ERROR", error: "Missing recipient email", attemptedAt: FieldValue.serverTimestamp(), provider: "cloud_function_smtp" } }, { merge: true });
@@ -89,6 +113,7 @@ async function deliverMail(mailId: string, data: any) {
       subject,
       html: html || undefined,
       text: text || undefined,
+      headers,
     }));
     const messageId = asText(info.messageId);
     if (!messageId) {
@@ -104,6 +129,7 @@ async function deliverMail(mailId: string, data: any) {
         attempts,
         from,
         replyTo,
+        linkTracking: headers ? "DISABLED_FOR_SECURITY_LINKS" : "PROVIDER_DEFAULT",
         deliveredAt: FieldValue.serverTimestamp(),
       },
       updatedAt: FieldValue.serverTimestamp(),
