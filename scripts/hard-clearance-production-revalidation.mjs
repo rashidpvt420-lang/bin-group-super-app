@@ -12,6 +12,7 @@ import { spawnSync } from 'node:child_process';
 import { request as httpsRequest } from 'node:https';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { applicationDefault } from 'firebase-admin/app';
 import {
   PRODUCTION,
   deploymentEvidencePath,
@@ -35,6 +36,7 @@ import {
   summarizeHostedClientBundle,
   validateHostedClientConfigEvidence,
 } from './verify-hosted-client-config.mjs';
+import { extractEnterpriseSiteKey } from './resolve-admin-app-check-site-key.mjs';
 import { runProductionOtpMailboxPreflight } from './lib/production-otp-mailbox-preflight.mjs';
 
 export const REVALIDATION_RELATIVE = 'launch_package/hard-clearance-production-revalidation.json';
@@ -48,8 +50,12 @@ const MAX_CLOCK_SKEW_MS = 5 * 60 * 1000;
 const MAX_HOSTING_FILES = 1500;
 const MAX_HOSTING_FILE_BYTES = 25 * 1024 * 1024;
 const MAX_HOSTING_BYTES = 256 * 1024 * 1024;
+const MAX_APPCHECK_CONFIG_BYTES = 256 * 1024;
 const FETCH_TIMEOUT_MS = 30_000;
 const HOSTED_BINDING_ALGORITHM = 'sha256-path-null-content-v1';
+const ADMIN_APPCHECK_HOSTNAME = 'firebaseappcheck.googleapis.com';
+const ADMIN_APPCHECK_CONFIG_NAME =
+  'projects/123413252227/apps/1:123413252227:web:285cb53bc26626d699f3b6/recaptchaEnterpriseConfig';
 const HOSTED_SITES = Object.freeze({
   main: Object.freeze({ baseUrl: PRODUCTION.mainUrl, buildDirectory: 'dist' }),
   admin: Object.freeze({ baseUrl: PRODUCTION.adminUrl, buildDirectory: 'apps/admin-panel/build' }),
@@ -122,9 +128,99 @@ function expectedLiveEvidenceRunId() {
   return value;
 }
 
-function freshHostedClientEvidence(releaseSha, runAttempt, hostedBundles) {
+function requestCanonicalAdminAppCheckConfig(accessToken) {
+  const pathName = `/v1/${ADMIN_APPCHECK_CONFIG_NAME}`;
+  return new Promise((resolve, reject) => {
+    const request = httpsRequest({
+      protocol: 'https:',
+      hostname: ADMIN_APPCHECK_HOSTNAME,
+      port: 443,
+      method: 'GET',
+      path: pathName,
+      headers: {
+        Accept: 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+      },
+    }, (response) => {
+      const status = Number(response.statusCode || 0);
+      if (status < 200 || status >= 300) {
+        response.resume();
+        reject(new Error(`[hard-clearance-revalidation] canonical Admin App Check lookup failed with HTTP ${status}`));
+        return;
+      }
+
+      const chunks = [];
+      let received = 0;
+      response.on('data', (chunk) => {
+        received += chunk.length;
+        if (received > MAX_APPCHECK_CONFIG_BYTES) {
+          request.destroy(new Error('[hard-clearance-revalidation] canonical Admin App Check response exceeded safety limit'));
+          return;
+        }
+        chunks.push(chunk);
+      });
+      response.on('end', () => {
+        try {
+          resolve(JSON.parse(Buffer.concat(chunks, received).toString('utf8')));
+        } catch {
+          reject(new Error('[hard-clearance-revalidation] canonical Admin App Check response was malformed'));
+        }
+      });
+      response.on('error', reject);
+    });
+    request.setTimeout(FETCH_TIMEOUT_MS, () => {
+      request.destroy(new Error('[hard-clearance-revalidation] canonical Admin App Check lookup timed out'));
+    });
+    request.on('error', reject);
+    request.end();
+  });
+}
+
+export async function resolveCanonicalAdminEnterpriseSiteKey({
+  env = process.env,
+  getAccessToken,
+  requestConfig,
+} = {}) {
+  const accessTokenProvider = getAccessToken || (async () => {
+    try {
+      const credential = applicationDefault();
+      const token = await credential.getAccessToken();
+      return text(token?.access_token);
+    } catch {
+      throw new Error('[hard-clearance-revalidation] canonical Admin App Check credential acquisition failed');
+    }
+  });
+
+  const accessToken = text(await accessTokenProvider());
+  if (!accessToken) {
+    throw new Error('[hard-clearance-revalidation] canonical Admin App Check access token was missing');
+  }
+
+  let config;
+  try {
+    config = requestConfig
+      ? await requestConfig({
+        hostname: ADMIN_APPCHECK_HOSTNAME,
+        path: `/v1/${ADMIN_APPCHECK_CONFIG_NAME}`,
+        accessToken,
+      })
+      : await requestCanonicalAdminAppCheckConfig(accessToken);
+  } catch (error) {
+    if (error instanceof Error && error.message.startsWith('[hard-clearance-revalidation]')) throw error;
+    throw new Error('[hard-clearance-revalidation] canonical Admin App Check lookup failed');
+  }
+
+  const siteKey = extractEnterpriseSiteKey(config, env.VITE_APP_CHECK_SITE_KEY);
+  const configuredSiteKey = text(env.FIREBASE_APPCHECK_ENTERPRISE_SITE_KEY);
+  if (configuredSiteKey && configuredSiteKey !== siteKey) {
+    throw new Error('[hard-clearance-revalidation] protected Admin App Check override does not match canonical Firebase config');
+  }
+  return siteKey;
+}
+
+function freshHostedClientEvidence(releaseSha, runAttempt, hostedBundles, env = process.env) {
   const evidenceEnv = {
-    ...process.env,
+    ...env,
     GITHUB_SHA: releaseSha,
     GITHUB_REPOSITORY: EXPECTED_REPOSITORY,
     GITHUB_REF: EXPECTED_REF,
@@ -336,9 +432,9 @@ async function verifyHostedDirectoryBytes({ root, site, releaseSha }) {
   };
 }
 
-function prepareFrozenReleaseBuild(root, releaseSha) {
+function prepareFrozenReleaseBuild(root, releaseSha, env = process.env) {
   const buildEnv = {
-    ...process.env,
+    ...env,
     GITHUB_SHA: releaseSha,
     RELEASE_COMMIT_SHA: releaseSha,
   };
@@ -378,10 +474,10 @@ function recordedArtifactDigest(deploymentDoc) {
   return artifact;
 }
 
-async function verifyHostedReleaseBinding({ root, releaseSha, deploymentDoc }) {
+async function verifyHostedReleaseBinding({ root, releaseSha, deploymentDoc, env = process.env }) {
   const expectedArtifactDigest = recordedArtifactDigest(deploymentDoc);
 
-  prepareFrozenReleaseBuild(root, releaseSha);
+  prepareFrozenReleaseBuild(root, releaseSha, env);
   const rebuiltArtifactDigest = computeValidatedArtifactDigest(root);
   if (rebuiltArtifactDigest !== expectedArtifactDigest) {
     throw new Error('rebuilt frozen release digest does not match original protected deployment artifact digest');
@@ -591,26 +687,38 @@ export async function generateHardClearanceProductionRevalidation({ root = proce
   const functionsErrors = validateFunctionsDeploymentEvidence(deploymentDoc.functionsDeployment);
   if (functionsErrors.length) throw new Error(`original Functions deployment evidence is invalid: ${functionsErrors.join('; ')}`);
 
-  const e2eCheck = runNode(['scripts/verify-e2e-env.mjs']);
+  const enterpriseSiteKey = await resolveCanonicalAdminEnterpriseSiteKey();
+  const revalidationEnv = {
+    ...process.env,
+    FIREBASE_APPCHECK_ENTERPRISE_SITE_KEY: enterpriseSiteKey,
+    REACT_APP_APP_CHECK_SITE_KEY: enterpriseSiteKey,
+  };
+
+  const e2eCheck = runNode(['scripts/verify-e2e-env.mjs'], revalidationEnv, root);
   if (!e2eCheck.ok) throw new Error(`fresh E2E environment verification failed: ${e2eCheck.stderr || e2eCheck.stdout}`);
-  const appCheck = runNode(['scripts/ensure-appcheck.mjs']);
+  const appCheck = runNode(['scripts/ensure-appcheck.mjs'], revalidationEnv, root);
   if (!appCheck.ok) throw new Error(`fresh App Check configuration verification failed: ${appCheck.stderr || appCheck.stdout}`);
 
   const runAttempt = Number(process.env.GITHUB_RUN_ATTEMPT || 1);
   const evidenceEnv = {
-    ...process.env,
+    ...revalidationEnv,
     GITHUB_SHA: releaseSha,
     GITHUB_REPOSITORY: EXPECTED_REPOSITORY,
     GITHUB_REF: EXPECTED_REF,
     GITHUB_RUN_ID: text(process.env.GITHUB_RUN_ID),
     GITHUB_RUN_ATTEMPT: String(runAttempt),
   };
-  const hosted = await verifyHostedReleaseBinding({ root, releaseSha, deploymentDoc });
+  const hosted = await verifyHostedReleaseBinding({
+    root,
+    releaseSha,
+    deploymentDoc,
+    env: revalidationEnv,
+  });
   const [otpMailbox, firebasePhoneAuth, adminMfa, hostedClientConfig] = await Promise.all([
-    runProductionOtpMailboxPreflight({ env: process.env }),
+    runProductionOtpMailboxPreflight({ env: revalidationEnv }),
     verifyFirebasePhoneAuthProduction({ env: evidenceEnv }),
     verifyAdminMfaProduction({ env: evidenceEnv }),
-    freshHostedClientEvidence(releaseSha, runAttempt, hosted.hostedBundles),
+    freshHostedClientEvidence(releaseSha, runAttempt, hosted.hostedBundles, revalidationEnv),
   ]);
 
   const proof = {

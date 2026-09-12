@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import {
   protectedHostedAssetUrl,
+  resolveCanonicalAdminEnterpriseSiteKey,
   validateHostedReleaseBinding,
 } from '../../scripts/hard-clearance-production-revalidation.mjs';
 
@@ -116,6 +117,38 @@ test('fresh revalidation keeps mutable production checks strict instead of exten
   assert.match(phone, /EVIDENCE_MAX_AGE_MS = 1000 \* 60 \* 60 \* 24/);
   assert.match(admin, /EVIDENCE_MAX_AGE_MS = 1000 \* 60 \* 60 \* 24/);
   assert.match(hosted, /EVIDENCE_MAX_AGE_MS = 1000 \* 60 \* 60 \* 24/);
+});
+
+test('hard clearance resolves canonical Admin Enterprise App Check before rebuilding frozen release', async () => {
+  const configName =
+    'projects/123413252227/apps/1:123413252227:web:285cb53bc26626d699f3b6/recaptchaEnterpriseConfig';
+  const publicSiteKey = 'public_site_key_123456789012345678901';
+  const enterpriseSiteKey = 'enterprise_admin_site_key_12345678901234567890';
+  let requestObserved = false;
+
+  const resolved = await resolveCanonicalAdminEnterpriseSiteKey({
+    env: {
+      VITE_APP_CHECK_SITE_KEY: publicSiteKey,
+      FIREBASE_APPCHECK_ENTERPRISE_SITE_KEY: '',
+    },
+    getAccessToken: async () => 'unit-test-access-token',
+    requestConfig: async ({ hostname, path, accessToken }) => {
+      requestObserved = true;
+      assert.equal(hostname, 'firebaseappcheck.googleapis.com');
+      assert.equal(path, `/v1/${configName}`);
+      assert.equal(accessToken, 'unit-test-access-token');
+      return { name: configName, siteKey: enterpriseSiteKey };
+    },
+  });
+
+  assert.equal(requestObserved, true);
+  assert.equal(resolved, enterpriseSiteKey);
+
+  const revalidation = await read('scripts/hard-clearance-production-revalidation.mjs');
+  assert.match(revalidation, /FIREBASE_APPCHECK_ENTERPRISE_SITE_KEY: enterpriseSiteKey/);
+  assert.match(revalidation, /REACT_APP_APP_CHECK_SITE_KEY: enterpriseSiteKey/);
+  assert.match(revalidation, /verifyHostedReleaseBinding\(\{[\s\S]*?env: revalidationEnv/);
+  assert.match(revalidation, /runNode\(\['scripts\/write-production-env\.mjs'\], buildEnv, root\)/);
 });
 
 test('hosted byte verifier can only address fixed production origins', () => {
