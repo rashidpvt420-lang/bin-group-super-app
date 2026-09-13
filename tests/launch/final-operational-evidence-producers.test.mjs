@@ -61,7 +61,7 @@ test('technician physical evidence is protected, canonical and requires real mob
   assert.doesNotMatch(`${workflow}\n${verifier}\n${publisher}`, /ticket_id:|technician_id:|founder_attested|manual pass|waiv/i);
 });
 
-test('privileged rotation evidence uses active Phase 1 provider credentials and revoked Admin sessions', async () => {
+test('privileged rotation evidence performs a real run-scoped E2E Admin rotation and preserves Phase 1 provider truth', async () => {
   const [workflow, verifier, publisher] = await Promise.all([
     read('.github/workflows/privileged-access-rotation-evidence.yml'),
     read('scripts/verify-privileged-access-rotation.mjs'),
@@ -80,6 +80,30 @@ test('privileged rotation evidence uses active Phase 1 provider credentials and 
   assert.match(workflow, /Publish canonical privileged-rotation evidence/);
   assert.match(workflow, /publish-direct-operational-proof\.mjs/);
   assert.match(workflow, /path:\s*release\/launch_package\/operational-proof\.json/);
+
+  assert.match(workflow, /E2E_ADMIN_BOOTSTRAP_PASSWORD:\s*\$\{\{ secrets\.E2E_ADMIN_PASSWORD \}\}/);
+  assert.doesNotMatch(workflow, /^\s+E2E_ADMIN_PASSWORD:\s*\$\{\{ secrets\.E2E_ADMIN_PASSWORD \}\}/m);
+  assert.doesNotMatch(workflow, /E2E_ADMIN_EMAIL:\s*\$\{\{ secrets\.E2E_FOUNDER_EMAIL \}\}/);
+  assert.match(workflow, /Provision and rotate the ephemeral Admin for this evidence run/);
+  assert.match(workflow, /Canonical Founder protection refused privileged rotation provisioning/);
+  assert.match(workflow, /refusing to rotate an existing account without exact E2E Admin Auth and Firestore markers/);
+  assert.match(workflow, /randomBytes\(36\)/);
+  assert.match(workflow, /disabled:\s*true/);
+  assert.match(workflow, /rotationEvidenceRunId:\s*runId/);
+  assert.match(workflow, /auth\.setCustomUserClaims\(user\.uid, evidenceClaims\)/);
+  assert.match(workflow, /auth\.updateUser\(user\.uid,[\s\S]{0,180}password:\s*rotatedPassword/);
+  assert.match(workflow, /auth\.revokeRefreshTokens\(user\.uid\)/);
+  assert.match(workflow, /security_rotation_records/);
+  assert.match(workflow, /passwordRotated:\s*true/);
+  assert.match(workflow, /refreshTokensRevoked:\s*true/);
+  assert.match(workflow, /adminUidHash:\s*hash\(user\.uid\)/);
+  assert.match(workflow, /::add-mask::\$\{rotatedPassword\}/);
+  assert.match(workflow, /E2E_ADMIN_PASSWORD=\$\{rotatedPassword\}/);
+  assert.match(workflow, /Retire only this run's ephemeral Admin/);
+  assert.match(workflow, /if:\s*always\(\)/);
+  assert.match(workflow, /cleanup refused to delete an Admin not owned by this exact evidence run/);
+  assert.match(workflow, /auth\.deleteUser\(user\.uid\)/);
+  assert.match(workflow, /PRIVILEGED_ROTATION_E2E_ADMIN_RETIRED/);
 
   assert.match(verifier, /gateKey:\s*'privilegedAccessRotation'/);
   assert.match(verifier, /evidenceType:\s*'secret-rotation-record'/);

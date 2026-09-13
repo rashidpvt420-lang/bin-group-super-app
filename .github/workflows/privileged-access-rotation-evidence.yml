@@ -37,7 +37,7 @@ jobs:
     env:
       GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID || 'bin-group-57c60' }}
       E2E_ADMIN_EMAIL: ${{ secrets.E2E_ADMIN_EMAIL }}
-      E2E_ADMIN_PASSWORD: ${{ secrets.E2E_ADMIN_PASSWORD }}
+      E2E_ADMIN_BOOTSTRAP_PASSWORD: ${{ secrets.E2E_ADMIN_PASSWORD }}
       VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
       AUTHORIZED_FOUNDER_ACTORS: ${{ secrets.AUTHORIZED_FOUNDER_ACTORS }}
       PRODUCTION_DEPLOY_RUN_ID: ${{ inputs.production_deploy_run_id }}
@@ -158,6 +158,122 @@ jobs:
           if (!/^sha256:[a-f0-9]{64}$/.test(String(doc.validatedArtifactDigest || '').toLowerCase())) throw new Error('validated production artifact digest is invalid');
           NODE
 
+      - name: Provision and rotate the ephemeral Admin for this evidence run
+        working-directory: release
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import crypto from 'node:crypto';
+          import { appendFileSync } from 'node:fs';
+          import admin from 'firebase-admin';
+
+          const PROJECT_ID = 'bin-group-57c60';
+          const FOUNDER_EMAIL = 'ceo@bin-groups.com';
+          const email = String(process.env.E2E_ADMIN_EMAIL || '').trim().toLowerCase();
+          const bootstrapPassword = String(process.env.E2E_ADMIN_BOOTSTRAP_PASSWORD || '');
+          const runId = String(process.env.GITHUB_RUN_ID || '').trim();
+          const commitSha = String(process.env.GITHUB_SHA || '').trim();
+          const hash = (value) => crypto.createHash('sha256').update(String(value)).digest('hex');
+          const randomPassword = () => `${crypto.randomBytes(36).toString('base64url')}!aA7`;
+
+          if (!/^\S+@\S+\.\S+$/.test(email)) throw new Error('E2E_ADMIN_EMAIL must be a valid protected test-admin email');
+          if (email === FOUNDER_EMAIL) throw new Error('Canonical Founder protection refused privileged rotation provisioning');
+          if (bootstrapPassword.length < 12) throw new Error('E2E_ADMIN_PASSWORD bootstrap secret is missing or too short');
+          if (!/^\d+$/.test(runId) || !/^[0-9a-f]{40}$/.test(commitSha)) throw new Error('exact workflow run and commit binding are required');
+
+          if (!admin.apps.length) admin.initializeApp({ projectId: PROJECT_ID });
+          const auth = admin.auth();
+          const db = admin.firestore();
+          let user;
+          let created = false;
+
+          try {
+            user = await auth.getUserByEmail(email);
+          } catch (error) {
+            if (error?.code !== 'auth/user-not-found') throw error;
+            user = await auth.createUser({
+              email,
+              password: bootstrapPassword,
+              emailVerified: true,
+              displayName: 'E2E Admin Rotation Evidence',
+              disabled: true,
+            });
+            created = true;
+          }
+
+          if (!created) {
+            const claims = user.customClaims || {};
+            const profileSnap = await db.collection('users').doc(user.uid).get();
+            const profile = profileSnap.data() || {};
+            const exactTestAdmin = claims.testAccount === true
+              && claims.admin === true
+              && String(claims.role || '').toLowerCase() === 'admin'
+              && profileSnap.exists
+              && profile.testAccount === true
+              && String(profile.role || '').toLowerCase() === 'admin'
+              && String(profile.uid || '') === user.uid
+              && String(profile.email || '').trim().toLowerCase() === email;
+            if (!exactTestAdmin) throw new Error('refusing to rotate an existing account without exact E2E Admin Auth and Firestore markers');
+            await auth.updateUser(user.uid, {
+              password: bootstrapPassword,
+              disabled: true,
+              emailVerified: true,
+              displayName: 'E2E Admin Rotation Evidence',
+            });
+          }
+
+          const evidenceClaims = {
+            admin: true,
+            role: 'admin',
+            testAccount: true,
+            rotationEvidenceRunId: runId,
+          };
+          await auth.setCustomUserClaims(user.uid, evidenceClaims);
+          await db.collection('users').doc(user.uid).set({
+            uid: user.uid,
+            email,
+            role: 'admin',
+            status: 'active',
+            testAccount: true,
+            rotationEvidenceRunId: runId,
+            displayName: 'E2E Admin Rotation Evidence',
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          }, { merge: true });
+
+          const rotatedPassword = randomPassword();
+          console.log(`::add-mask::${rotatedPassword}`);
+          const passwordRotatedAt = new Date().toISOString();
+          await auth.updateUser(user.uid, {
+            password: rotatedPassword,
+            disabled: false,
+            emailVerified: true,
+          });
+          await auth.revokeRefreshTokens(user.uid);
+          const refreshed = await auth.getUser(user.uid);
+          const tokensValidAfterMs = Date.parse(String(refreshed.tokensValidAfterTime || ''));
+          if (!Number.isFinite(tokensValidAfterMs)) throw new Error('Firebase did not expose a token revocation timestamp');
+          const tokensRevokedAt = new Date(tokensValidAfterMs).toISOString();
+
+          await db.collection('security_rotation_records').doc('admin-credential-latest').set({
+            status: 'COMPLETED',
+            passwordRotated: true,
+            refreshTokensRevoked: true,
+            adminUidHash: hash(user.uid),
+            passwordRotatedAt,
+            tokensRevokedAt,
+            sourceWorkflow: 'Privileged Access Rotation Evidence',
+            sourceRunId: runId,
+            commitSha,
+            ephemeralTestAdmin: true,
+            canonicalFounderProtected: true,
+            sensitiveValuesExcluded: true,
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+
+          appendFileSync(process.env.GITHUB_ENV, `E2E_ADMIN_PASSWORD=${rotatedPassword}\n`);
+          console.log(`[privileged-rotation-bootstrap] PASS adminUidHash=${hash(user.uid).slice(0, 12)}… created=${created}`);
+          NODE
+
       - name: Prove rotated Admin credential is accepted by Firebase Auth
         working-directory: release
         run: node ../control-plane/scripts/run-frozen-release-evidence.mjs scripts/verify-admin-credential-login.mjs
@@ -189,3 +305,65 @@ jobs:
           path: release/launch_package/admin-credential-login-proof.json
           if-no-files-found: error
           retention-days: 365
+
+      - name: Retire only this run's ephemeral Admin
+        if: always()
+        working-directory: release
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import crypto from 'node:crypto';
+          import admin from 'firebase-admin';
+
+          const PROJECT_ID = 'bin-group-57c60';
+          const FOUNDER_EMAIL = 'ceo@bin-groups.com';
+          const email = String(process.env.E2E_ADMIN_EMAIL || '').trim().toLowerCase();
+          const runId = String(process.env.GITHUB_RUN_ID || '').trim();
+          const hash = (value) => crypto.createHash('sha256').update(String(value)).digest('hex');
+          if (!email || email === FOUNDER_EMAIL) throw new Error('cleanup refused an invalid or Founder E2E Admin binding');
+          if (!admin.apps.length) admin.initializeApp({ projectId: PROJECT_ID });
+          const auth = admin.auth();
+          const db = admin.firestore();
+
+          let user;
+          try {
+            user = await auth.getUserByEmail(email);
+          } catch (error) {
+            if (error?.code === 'auth/user-not-found') {
+              console.log('[privileged-rotation-cleanup] temporary Admin already absent');
+              process.exit(0);
+            }
+            throw error;
+          }
+
+          const claims = user.customClaims || {};
+          const profileSnap = await db.collection('users').doc(user.uid).get();
+          const profile = profileSnap.data() || {};
+          const ownedByThisRun = claims.testAccount === true
+            && claims.admin === true
+            && String(claims.role || '').toLowerCase() === 'admin'
+            && String(claims.rotationEvidenceRunId || '') === runId
+            && profileSnap.exists
+            && profile.testAccount === true
+            && String(profile.role || '').toLowerCase() === 'admin'
+            && String(profile.rotationEvidenceRunId || '') === runId
+            && String(profile.uid || '') === user.uid
+            && String(profile.email || '').trim().toLowerCase() === email;
+          if (!ownedByThisRun) throw new Error('cleanup refused to delete an Admin not owned by this exact evidence run');
+
+          await auth.updateUser(user.uid, { disabled: true });
+          await auth.revokeRefreshTokens(user.uid);
+          await db.collection('users').doc(user.uid).delete();
+          await db.collection('audit_logs').add({
+            action: 'PRIVILEGED_ROTATION_E2E_ADMIN_RETIRED',
+            actorId: String(process.env.GITHUB_ACTOR || 'protected-workflow'),
+            actorRole: 'protected-workflow',
+            targetIdentityHash: hash(`${user.uid}|${email}`),
+            sourceRunId: runId,
+            canonicalFounderProtected: true,
+            sensitiveValuesExcluded: true,
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+          await auth.deleteUser(user.uid);
+          console.log(`[privileged-rotation-cleanup] PASS targetHash=${hash(`${user.uid}|${email}`).slice(0, 12)}…`);
+          NODE
