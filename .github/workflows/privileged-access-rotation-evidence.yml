@@ -36,8 +36,8 @@ jobs:
     environment: hard-launch-operations
     env:
       GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID || 'bin-group-57c60' }}
-      E2E_ADMIN_EMAIL: ${{ secrets.E2E_ADMIN_EMAIL }}
-      E2E_ADMIN_PASSWORD: ${{ secrets.E2E_ADMIN_PASSWORD }}
+      E2E_ADMIN_EMAIL: ${{ secrets.E2E_FOUNDER_EMAIL }}
+      E2E_ADMIN_PASSWORD: ${{ secrets.E2E_FOUNDER_PASSWORD }}
       VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
       AUTHORIZED_FOUNDER_ACTORS: ${{ secrets.AUTHORIZED_FOUNDER_ACTORS }}
       PRODUCTION_DEPLOY_RUN_ID: ${{ inputs.production_deploy_run_id }}
