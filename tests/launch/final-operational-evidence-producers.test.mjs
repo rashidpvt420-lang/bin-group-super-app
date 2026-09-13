@@ -119,3 +119,190 @@ test('direct operational publisher validates semantics and writes the complete c
   assert.match(publisher, /canonical Firestore read-back verification failed/);
   assert.doesNotMatch(publisher, /Operational Proof Intake|founder_attested|waiv|manual pass/i);
 });
+
+// Exercise the actual credential-only workflow program with local dependencies.
+// No credentials, Firebase requests or GitHub writes are used by these tests.
+const credentialProgram = async () => {
+  const workflow = await read('.github/workflows/operational-application-evidence.yml');
+  const match = workflow.match(/node --input-type=module <<'FOUNDER_TOTP_REPAIR'\n([\s\S]*?)\n\s+FOUNDER_TOTP_REPAIR/m);
+  assert.ok(match, 'the reviewed inline credential program must exist');
+  const source = match[1].replace(/^ {10}/gm, '');
+  const library = source.split('// BEGIN PROTECTED EXECUTION')[0];
+  return { workflow, source, api: await import(`data:text/javascript;base64,${Buffer.from(library).toString('base64')}`) };
+};
+
+function credentialFixture(mode = 'verify') {
+  const now = Date.UTC(2026, 8, 13, 12);
+  const env = {
+    GITHUB_ACTIONS: 'true', GITHUB_SERVER_URL: 'https://github.com', GITHUB_REPOSITORY_ID: '1173943093',
+    GITHUB_REPOSITORY: 'rashidpvt420-lang/bin-group-super-app',
+    FOUNDER_REPAIR_REPOSITORY: 'rashidpvt420-lang/bin-group-super-app',
+    GITHUB_REF: 'refs/heads/main', GITHUB_EVENT_NAME: 'workflow_dispatch',
+    GITHUB_WORKFLOW: 'Operational Application Evidence', GITHUB_JOB: 'verify-and-sync-founder-totp',
+    REPAIR_SOURCE_ENVIRONMENT: 'production', REPAIR_TARGET_ENVIRONMENT: 'hard-public-launch',
+    GCP_PROJECT_ID: 'bin-group-57c60',
+    PRODUCTION_RELEASE_SHA: '15b09519222e749808c2a18b5d1ab1c3126fcb42', PRODUCTION_DEPLOY_RUN_ID: '34500748478',
+    GITHUB_SHA: 'a'.repeat(40), TARGET_SHA: 'a'.repeat(40),
+    AUTHORIZED_FOUNDER_ACTORS: ' fixture-owner, fixture-reviewer ', GITHUB_ACTOR: 'fixture-owner', GITHUB_TRIGGERING_ACTOR: 'fixture-owner',
+    FOUNDER_TOTP_OPERATION: mode,
+    CONFIRMATION: mode === 'sync' ? 'SYNC_PRODUCTION_FOUNDER_TOTP_AND_VERIFY_PAYMENT' : 'VERIFY_PRODUCTION_FOUNDER_TOTP',
+    E2E_FOUNDER_EMAIL: 'ceo@bin-groups.com', E2E_FOUNDER_PASSWORD: 'local-only-fixture-password',
+    E2E_FOUNDER_TOTP_SECRET: 'JBSWY3DPEHPK3PXP', VITE_FIREBASE_API_KEY: 'local-only-api-key',
+    FOUNDER_TOTP_SYNC_TOKEN: 'local-only-permission-token', RUNNER_TEMP: '/tmp/local-only', PATH: '/usr/bin',
+  };
+  const deployment = {
+    status: 'passed', projectId: env.GCP_PROJECT_ID, repository: env.GITHUB_REPOSITORY,
+    workflowRef: 'refs/heads/main', deployedCommitSha: env.PRODUCTION_RELEASE_SHA,
+    workflowRunId: env.PRODUCTION_DEPLOY_RUN_ID, validatedArtifactDigest: `sha256:${'b'.repeat(64)}`,
+    deployedAt: new Date(now - 86400000).toISOString(),
+  };
+  const session = { uid: 'local-only-uid', secondFactorType: 'totp', secondFactorIdentifier: 'local-only-factor' };
+  return { env, deployment, now, session };
+}
+
+test('[founder-credential] refuses context, actor, replay, debug and confirmation drift before any sign-in or write', async () => {
+  const { api } = await credentialProgram();
+  const f = credentialFixture();
+  for (const override of [
+    { GITHUB_ACTIONS: 'false' }, { GITHUB_SERVER_URL: 'https://other.invalid' }, { GITHUB_REPOSITORY_ID: '999' },
+    { GITHUB_REPOSITORY: 'another/repository' }, { GITHUB_REF: 'refs/heads/pr' }, { GITHUB_EVENT_NAME: 'pull_request' },
+    { GITHUB_WORKFLOW: 'Other Workflow' }, { GITHUB_JOB: 'verify-and-publish' }, { GITHUB_SHA: 'b'.repeat(40) },
+    { REPAIR_SOURCE_ENVIRONMENT: 'staging' }, { REPAIR_TARGET_ENVIRONMENT: 'production' }, { GCP_PROJECT_ID: 'other' },
+    { PRODUCTION_RELEASE_SHA: 'c'.repeat(40) }, { PRODUCTION_DEPLOY_RUN_ID: '987' },
+    { GITHUB_ACTOR: 'outsider' }, { GITHUB_TRIGGERING_ACTOR: 'outsider' }, { AUTHORIZED_FOUNDER_ACTORS: '' },
+    { CONFIRMATION: 'PUBLISH_OPERATIONAL_APPLICATION_EVIDENCE' }, { FOUNDER_TOTP_OPERATION: 'none' },
+    { FOUNDER_TOTP_OPERATION: '__proto__' }, { RUNNER_DEBUG: '1' }, { ACTIONS_STEP_DEBUG: 'true' },
+  ]) {
+    let calls = 0;
+    await assert.rejects(api.repairFounderTotp({ ...f, env: { ...f.env, ...override },
+      signIn: async () => { calls++; return f.session; }, writeSecret: async () => { calls++; } }));
+    assert.equal(calls, 0);
+  }
+});
+
+test('[founder-credential] format validation rejects URLs, assignments, OTPs and passwords without leaking values', async () => {
+  const { api } = await credentialProgram();
+  assert.equal(api.normalizeFounderSeed('jbsw y3dp-ehpk3pxp='), 'JBSWY3DPEHPK3PXP');
+  for (const value of ['', '234567', 'not_a_seed!', 'otpauth://totp/BIN?secret=JBSWY3DPEHPK3PXP',
+    'E2E_FOUNDER_TOTP_SECRET=JBSWY3DPEHPK3PXP', '"JBSWY3DPEHPK3PXP"', 'JBSWY3DP\u200bEHPK3PXP', 'A'.repeat(257)]) {
+    assert.throws(() => api.normalizeFounderSeed(value), (error) => {
+      assert.match(error.message, /not valid Base32/);
+      if (value) assert.ok(!error.message.includes(value));
+      return true;
+    });
+  }
+});
+
+test('[founder-credential] frozen deployment identity, digest and seven-day freshness are mandatory', async () => {
+  const { api } = await credentialProgram();
+  const f = credentialFixture();
+  for (const override of [
+    { status: 'failed' }, { projectId: 'other' }, { repository: 'other/repo' }, { workflowRef: 'refs/heads/pr' },
+    { deployedCommitSha: 'f'.repeat(40) }, { workflowRunId: '123' }, { validatedArtifactDigest: 'invalid' },
+    { deployedAt: 'invalid' }, { deployedAt: new Date(f.now - 8 * 86400000).toISOString() },
+    { deployedAt: new Date(f.now + 3600000).toISOString() },
+  ]) assert.throws(() => api.checkRepairDeployment({ ...f.deployment, ...override }, f.env, f.now));
+  assert.doesNotThrow(() => api.checkRepairDeployment(f.deployment, f.env, f.now));
+});
+
+test('[founder-credential] verify-only signs in but never invokes the writer or returns credentials', async () => {
+  const { api } = await credentialProgram();
+  const f = credentialFixture();
+  delete f.env.FOUNDER_TOTP_SYNC_TOKEN;
+  let signIns = 0;
+  const report = await api.repairFounderTotp({ ...f,
+    signIn: async (bindings) => {
+      signIns++;
+      assert.equal(bindings.email, 'ceo@bin-groups.com');
+      assert.equal(bindings.referer, 'https://bin-group-admin-panel.web.app/');
+      assert.equal(bindings.totpSecret, f.env.E2E_FOUNDER_TOTP_SECRET);
+      return f.session;
+    }, writeSecret: async () => assert.fail('verify-only must not write'),
+  });
+  assert.equal(signIns, 1);
+  assert.deepEqual(report, { sourceVerified: true, targetUpdated: false });
+});
+
+test('[founder-credential] sync requires permission first, then a verified TOTP factor before exactly one write', async () => {
+  const { api } = await credentialProgram();
+  const f = credentialFixture('sync');
+  const order = [];
+  const signIn = async () => { order.push('signin'); return f.session; };
+  const writeSecret = async (seed) => { assert.equal(seed, f.env.E2E_FOUNDER_TOTP_SECRET); order.push('write'); };
+  await assert.rejects(api.repairFounderTotp({ ...f, env: { ...f.env, FOUNDER_TOTP_SYNC_TOKEN: '' }, signIn, writeSecret }), /Environments write/);
+  assert.deepEqual(order, []);
+  const report = await api.repairFounderTotp({ ...f, signIn, writeSecret });
+  assert.deepEqual(order, ['signin', 'write']);
+  assert.deepEqual(report, { sourceVerified: true, targetUpdated: true });
+});
+
+test('[founder-credential] failed source sign-in, wrong factor or missing identity never changes the target', async () => {
+  const { api } = await credentialProgram();
+  const f = credentialFixture('sync');
+  for (const session of [null, {}, { ...f.session, uid: '' }, { ...f.session, secondFactorType: 'phone' }, { ...f.session, secondFactorIdentifier: '' }]) {
+    await assert.rejects(api.repairFounderTotp({ ...f, signIn: async () => session,
+      writeSecret: async () => assert.fail('unverified source must not be copied') }), /did not verify/);
+  }
+  await assert.rejects(api.repairFounderTotp({ ...f,
+    signIn: async () => { throw new Error(f.env.E2E_FOUNDER_TOTP_SECRET); },
+    writeSecret: async () => assert.fail('failed source must not be copied'),
+  }), (error) => error.message.includes('sign-in failed') && !error.message.includes(f.env.E2E_FOUNDER_TOTP_SECRET));
+});
+
+test('[founder-credential] missing credentials and ambiguous write failures stop without retries or leaked payloads', async () => {
+  const { api } = await credentialProgram();
+  const f = credentialFixture('sync');
+  for (const key of ['E2E_FOUNDER_EMAIL', 'E2E_FOUNDER_PASSWORD', 'VITE_FIREBASE_API_KEY', 'E2E_FOUNDER_TOTP_SECRET']) {
+    await assert.rejects(api.repairFounderTotp({ ...f, env: { ...f.env, [key]: '' },
+      signIn: async () => assert.fail('incomplete bindings must stop before sign-in'),
+      writeSecret: async () => assert.fail('incomplete bindings must not write'),
+    }));
+  }
+  let writes = 0;
+  await assert.rejects(api.repairFounderTotp({ ...f, signIn: async () => f.session,
+    writeSecret: async () => { writes++; throw new Error(f.env.FOUNDER_TOTP_SYNC_TOKEN); },
+  }), (error) => error.message.includes('not confirmed') && !error.message.includes(f.env.FOUNDER_TOTP_SYNC_TOKEN));
+  assert.equal(writes, 1);
+});
+
+test('[founder-credential] the writer pins repo, environment and secret and uses stdin with a minimal child environment', async () => {
+  const { api } = await credentialProgram();
+  const f = credentialFixture('sync');
+  let executions = 0;
+  api.writeFounderSecret(f.env.E2E_FOUNDER_TOTP_SECRET, f.env, (command, args, options) => {
+    executions++;
+    assert.equal(command, 'gh');
+    assert.deepEqual(args, ['secret', 'set', 'E2E_FOUNDER_TOTP_SECRET', '--repo', f.env.GITHUB_REPOSITORY,
+      '--env', 'hard-public-launch', '--app', 'actions']);
+    assert.equal(options.input, f.env.E2E_FOUNDER_TOTP_SECRET);
+    assert.ok(!args.join(' ').includes(options.input));
+    assert.deepEqual(options.stdio, ['pipe', 'pipe', 'pipe']);
+    assert.equal(options.env.GH_HOST, 'github.com');
+    assert.equal(options.env.GH_TOKEN, f.env.FOUNDER_TOTP_SYNC_TOKEN);
+    assert.ok(!Object.hasOwn(options.env, 'E2E_FOUNDER_PASSWORD'));
+    assert.ok(!Object.hasOwn(options.env, 'E2E_FOUNDER_TOTP_SECRET'));
+    assert.ok(!Object.hasOwn(options.env, 'GOOGLE_APPLICATION_CREDENTIALS'));
+    assert.equal(options.timeout, 30000);
+  });
+  assert.equal(executions, 1);
+});
+
+test('[founder-credential] both environments authorize and only successful explicit sync enables payment replay', async () => {
+  const { workflow, source } = await credentialProgram();
+  assert.match(workflow, /founder_totp_operation:[\s\S]*?default: none/);
+  const target = workflow.slice(workflow.indexOf('  authorize-founder-totp-repair:'), workflow.indexOf('  verify-and-sync-founder-totp:'));
+  const production = workflow.slice(workflow.indexOf('  verify-and-sync-founder-totp:'));
+  assert.match(target, /environment: hard-public-launch/);
+  assert.match(target, /GITHUB_TRIGGERING_ACTOR/);
+  assert.match(target, /SELECTED_GATE.*paymentUnlockExactlyOnce/);
+  assert.match(production, /needs: authorize-founder-totp-repair/);
+  assert.match(production, /environment: production/);
+  assert.match(production, /group: founder-totp-credential-sync/);
+  assert.match(production, /FOUNDER_TOTP_SYNC_TOKEN: \$\{\{ inputs\.founder_totp_operation == 'sync'/);
+  assert.match(workflow, /needs: \[authorize-founder-totp-repair, verify-and-sync-founder-totp\]/);
+  assert.match(workflow, /!cancelled\(\).*inputs\.founder_totp_operation == 'sync' && needs\.verify-and-sync-founder-totp\.result == 'success'/);
+  assert.match(source, /await import\('\.\/scripts\/lib\/firebase-mfa-sign-in\.mjs'\)/);
+  assert.doesNotMatch(source, /verify-founder-totp-signin\.mjs|updateUser\(|deleteUser\(|unenroll\(|setCustomUserClaims\(|revokeRefreshTokens\(/);
+  assert.doesNotMatch(production, /upload-artifact|GITHUB_OUTPUT|GITHUB_STEP_SUMMARY|firebase deploy|deploy-firebase-production\.mjs/);
+  assert.doesNotMatch(workflow, /GITHUB_ACTOR.*rashidpvt420-lang/s);
+});
