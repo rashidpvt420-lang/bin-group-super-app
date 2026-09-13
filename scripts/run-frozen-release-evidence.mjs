@@ -1,7 +1,10 @@
 #!/usr/bin/env node
 
 import { spawnSync, execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, lstatSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { createRequire } from 'node:module';
+import { runInNewContext } from 'node:vm';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
@@ -36,6 +39,106 @@ const ALLOWED_ENTRYPOINTS = Object.freeze({
 const fail = (message) => {
   throw new Error(`[frozen-release-evidence] ${message}`);
 };
+
+// Use the deployed pure policy, including its final inspected quote selection.
+// These exact Git blobs belong to frozen release 15b0951. A different policy
+// requires another reviewed control-plane repair, not an implicit fallback.
+const PAYMENT_POLICY_BLOBS = Object.freeze({
+  'functions/shared/aedMoney.ts': '4526fb637327beb59bb11feb849f58fecc38ff0d',
+  'functions/ownerActivationPaymentPolicy.ts': '06f056113367bda1fca22bcdba95ab975e594f54',
+});
+const APPLICATION_VERIFIER = 'scripts/verify-operational-application-evidence.mjs';
+const LEGACY_ACTIVATION_CHECK = [
+  '  const annual = Number(payment.data.quoteSnapshot?.annualContractValue || contract.quoteSnapshot?.annualContractValue || contract.annualContractValue || 0);',
+  '  const amount = Number(payment.data.amountReceived || payment.data.quoteSnapshot?.activationDeposit || payment.data.amount || 0);',
+  "  if (!Number.isFinite(annual) || annual <= 0 || !Number.isFinite(amount) || Math.abs(amount - Math.round(annual * 0.15)) > 0.01) fail('activation amount is not the locked 15% deposit');",
+].join('\n');
+
+export function assertApplicationEvidenceCredentials(gate, env = process.env) {
+  if (!['all', 'paymentUnlockExactlyOnce', 'brokerCommissionLockExactlyOnce'].includes(gate)) return;
+  const required = ['E2E_FOUNDER_EMAIL', 'E2E_FOUNDER_PASSWORD', 'E2E_FOUNDER_TOTP_SECRET', 'VITE_FIREBASE_API_KEY'];
+  const missing = required.filter((name) => !String(env[name] ?? '').trim());
+  if (missing.length) fail(`missing protected application evidence bindings: ${missing.join(', ')}`);
+  if (String(env.E2E_FOUNDER_EMAIL).trim().toLowerCase() !== 'ceo@bin-groups.com') {
+    fail('application replay requires the canonical Founder identity');
+  }
+}
+
+function pinnedPolicySource(releaseRoot, relativePath) {
+  const file = path.join(releaseRoot, relativePath);
+  if (!lstatSync(file).isFile()) fail(`payment policy source is not a regular file: ${relativePath}`);
+  const source = readFileSync(file);
+  const blob = createHash('sha1').update(`blob ${source.length}\0`).update(source).digest('hex');
+  if (blob !== PAYMENT_POLICY_BLOBS[relativePath]) fail(`unreviewed frozen payment policy: ${relativePath}`);
+  return source.toString('utf8');
+}
+
+export function verifyFrozenActivationPayment(payment, contract, releaseRoot = process.cwd()) {
+  // A quoted deposit is not a receipt. Explicit zero/null/blank receipt values
+  // must fail instead of falling back to a quote or another receipt field.
+  const received = payment?.amountReceived !== undefined ? payment.amountReceived : payment?.amount;
+  if (!['number', 'string'].includes(typeof received) || String(received).trim() === '') {
+    fail('activation payment has no valid recorded received amount');
+  }
+  if (payment?.currency != null && String(payment.currency).trim().toUpperCase() !== 'AED') {
+    fail('activation payment currency is not AED');
+  }
+  const moneySource = pinnedPolicySource(releaseRoot, 'functions/shared/aedMoney.ts');
+  const policySource = pinnedPolicySource(releaseRoot, 'functions/ownerActivationPaymentPolicy.ts');
+  const ts = createRequire(path.join(releaseRoot, 'package.json'))('typescript');
+  const evaluate = (source, fileName, dependencies = {}) => {
+    const compiled = ts.transpileModule(source, {
+      fileName,
+      compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+      reportDiagnostics: true,
+    });
+    if (compiled.diagnostics?.some((item) => item.category === ts.DiagnosticCategory.Error)) {
+      fail(`could not load the frozen payment policy: ${fileName}`);
+    }
+    const exports = {};
+    runInNewContext(compiled.outputText, {
+      exports,
+      require: (name) => {
+        if (!Object.hasOwn(dependencies, name)) fail('unexpected frozen payment policy dependency');
+        return dependencies[name];
+      },
+    }, { filename: fileName, timeout: 1000 });
+    return exports;
+  };
+  const money = evaluate(moneySource, 'aedMoney.ts');
+  const policy = evaluate(policySource, 'ownerActivationPaymentPolicy.ts', { './shared/aedMoney': money });
+  const schedule = policy.resolveLockedOwnerActivationSchedule(contract, received);
+  const amount = money.normalizeAedMoney(received);
+  const amountMinor = Math.round(amount * 100);
+  if (!Number.isSafeInteger(amountMinor) || !Number.isSafeInteger(Math.round(schedule.annualContractValue * 100))) {
+    fail('activation payment exceeds the safe AED-cent range');
+  }
+  return { amount, amountMinor };
+}
+
+export function transformFrozenActivationVerifier(source, adapterUrl = import.meta.url) {
+  if (source.split(LEGACY_ACTIVATION_CHECK).length !== 2) {
+    fail('frozen activation verifier source drift; exact legacy check is required');
+  }
+  return source.replace(LEGACY_ACTIVATION_CHECK, [
+    `  const { verifyFrozenActivationPayment } = await import(${JSON.stringify(adapterUrl)});`,
+    '  const { amount } = verifyFrozenActivationPayment(payment.data, contract);',
+  ].join('\n'));
+}
+
+function installReviewedActivationAdapter(releaseRoot) {
+  const file = path.join(releaseRoot, APPLICATION_VERIFIER);
+  if (!lstatSync(file).isFile()) fail('frozen application verifier is not a regular file');
+  const original = readFileSync(file, 'utf8');
+  const committed = execFileSync('git', ['show', `HEAD:${APPLICATION_VERIFIER}`], { cwd: releaseRoot, encoding: 'utf8' });
+  if (original !== committed) fail('frozen application verifier has unreviewed working-tree changes');
+  const adapted = transformFrozenActivationVerifier(original);
+  writeFileSync(file, adapted);
+  console.log(`[frozen-release-evidence] reviewed activation-policy adapter sha256=${createHash('sha256').update(adapted).digest('hex')}`);
+  // Adapt only the disposable evidence checkout. No deployment, production
+  // record mutation, or change to any other verification condition is allowed.
+  return () => writeFileSync(file, original);
+}
 
 export function validateFrozenReleaseEvidenceContext(env, releaseRoot, entrypoint) {
   if (env.GITHUB_ACTIONS !== 'true') fail('GitHub Actions is required');
@@ -81,18 +184,28 @@ export function validateFrozenReleaseEvidenceContext(env, releaseRoot, entrypoin
 
 export function runFrozenReleaseEvidence(entrypoint, env = process.env, releaseRoot = process.cwd()) {
   const { controlPlaneSha, releaseSha } = validateFrozenReleaseEvidenceContext(env, releaseRoot, entrypoint);
-  const result = spawnSync(process.execPath, [path.resolve(releaseRoot, entrypoint)], {
-    cwd: releaseRoot,
-    env: {
-      ...env,
-      GITHUB_SHA: releaseSha,
-      CLEARANCE_CONTROL_PLANE_SHA: controlPlaneSha,
-    },
-    stdio: 'inherit',
-  });
-  if (result.error) fail(`could not start ${entrypoint}: ${result.error.message}`);
-  if (result.signal) fail(`${entrypoint} terminated by signal ${result.signal}`);
-  return Number.isInteger(result.status) ? result.status : 1;
+  const applicationVerification = env.GITHUB_WORKFLOW === 'Operational Application Evidence'
+    && entrypoint === 'scripts/verify-operational-application-evidence-mfa.mjs';
+  if (applicationVerification) assertApplicationEvidenceCredentials(env.OPERATIONAL_GATE, env);
+  const restore = applicationVerification && env.OPERATIONAL_GATE === 'ownerPaymentActivation'
+    ? installReviewedActivationAdapter(releaseRoot)
+    : () => {};
+  try {
+    const result = spawnSync(process.execPath, [path.resolve(releaseRoot, entrypoint)], {
+      cwd: releaseRoot,
+      env: {
+        ...env,
+        GITHUB_SHA: releaseSha,
+        CLEARANCE_CONTROL_PLANE_SHA: controlPlaneSha,
+      },
+      stdio: 'inherit',
+    });
+    if (result.error) fail(`could not start ${entrypoint}: ${result.error.message}`);
+    if (result.signal) fail(`${entrypoint} terminated by signal ${result.signal}`);
+    return Number.isInteger(result.status) ? result.status : 1;
+  } finally {
+    restore();
+  }
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
