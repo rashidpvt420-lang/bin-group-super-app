@@ -47,8 +47,12 @@ const patchOwnerActivationCentPrecision = (releaseRoot) => {
     "if (!Number.isFinite(annual) || annual <= 0 || !Number.isFinite(amount) || observedActivationMinor !== expectedActivationMinor) fail('activation amount is not the locked 15% deposit');",
   ].join('\n');
   const source = readFileSync(verifierPath, 'utf8');
-  const matches = source.split(legacy).length - 1;
-  if (matches !== 1) fail(`owner activation cent-precision patch anchor mismatch (${matches})`);
+  const legacyMatches = source.split(legacy).length - 1;
+  const patchedMatches = source.split('const expectedActivationMinor = Math.round(annual * 0.15 * 100);').length - 1;
+  if (legacyMatches === 0 && patchedMatches === 1) return;
+  if (legacyMatches !== 1 || patchedMatches !== 0) {
+    fail(`owner activation cent-precision patch anchor mismatch (legacy=${legacyMatches}, patched=${patchedMatches})`);
+  }
   writeFileSync(verifierPath, source.replace(legacy, replacement), 'utf8');
 };
 
