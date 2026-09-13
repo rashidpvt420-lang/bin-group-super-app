@@ -1,6 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import {
+  assertAiEvidenceIdentitySeparation,
+  transformFrozenAiVerifier,
+} from '../../scripts/run-frozen-release-evidence.mjs';
 
 const read = (file) => readFileSync(file, 'utf8');
 
@@ -101,6 +105,30 @@ test('AI provider evidence is exact-SHA, deployment-bound, protected, and hard-l
   assert.match(publisher, /measured token\/cost evidence invalid/);
   assert.match(finalizer, /aiProviderHealth: 'workflow-artifact'/);
   assert.match(gate, /'aiProviderHealth'/);
+});
+
+test('frozen AI evidence uses the canonical Founder without aliasing the ephemeral E2E Admin', () => {
+  const wrapper = read('scripts/run-frozen-release-evidence.mjs');
+  const workflow = read('.github/workflows/operational-provider-evidence.yml');
+  const originalBinding = 'const adminEmail = text(process.env.E2E_ADMIN_EMAIL).toLowerCase();';
+  const adapted = transformFrozenAiVerifier(originalBinding);
+
+  assert.equal(adapted, "const adminEmail = 'ceo@bin-groups.com';");
+  assert.throws(
+    () => transformFrozenAiVerifier('const adminEmail = text(process.env.OTHER_EMAIL).toLowerCase();'),
+    /source drift/,
+  );
+  assert.doesNotThrow(() => assertAiEvidenceIdentitySeparation({ E2E_ADMIN_EMAIL: 'e2e-admin@example.test' }));
+  assert.throws(
+    () => assertAiEvidenceIdentitySeparation({ E2E_ADMIN_EMAIL: 'ceo@bin-groups.com' }),
+    /refuses to alias E2E_ADMIN_EMAIL to the canonical Founder/,
+  );
+  assert.match(wrapper, /FROZEN_AI_VERIFIER_BLOB = '6964c56352d6b50450c01bbc6e0d066c889c05e3'/);
+  assert.match(wrapper, /installReviewedAiFounderAdapter/);
+  assert.match(wrapper, /unreviewed frozen AI verifier/);
+  assert.match(wrapper, /restores\.reverse\(\)/);
+  assert.match(workflow, /E2E_ADMIN_EMAIL:\s*\$\{\{ secrets\.E2E_ADMIN_EMAIL \}\}/);
+  assert.doesNotMatch(workflow, /E2E_ADMIN_EMAIL:\s*\$\{\{ secrets\.E2E_FOUNDER_EMAIL \}\}/);
 });
 
 test('AI observability records non-PII aggregate SLO, token and cost-envelope metrics', () => {
