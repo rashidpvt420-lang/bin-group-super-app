@@ -143,6 +143,20 @@ jobs:
           cache: npm
           cache-dependency-path: release/package-lock.json
 
+      - name: Check protected application bindings before production access
+        working-directory: control-plane
+        env:
+          SELECTED_GATE: ${{ inputs.gate }}
+          E2E_FOUNDER_EMAIL: ${{ secrets.E2E_FOUNDER_EMAIL }}
+          E2E_FOUNDER_PASSWORD: ${{ secrets.E2E_FOUNDER_PASSWORD }}
+          E2E_FOUNDER_TOTP_SECRET: ${{ secrets.E2E_FOUNDER_TOTP_SECRET }}
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import { assertApplicationEvidenceCredentials } from './scripts/run-frozen-release-evidence.mjs';
+          assertApplicationEvidenceCredentials(process.env.SELECTED_GATE, process.env);
+          NODE
+
       - name: Authenticate Google Cloud
         uses: google-github-actions/auth@v2
         with:
