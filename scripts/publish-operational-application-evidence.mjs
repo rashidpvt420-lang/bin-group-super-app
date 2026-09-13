@@ -131,16 +131,18 @@ try { requireAuthorizedApprover(process.env.GITHUB_ACTOR); } catch (error) { fai
 const gate = text(process.env.OPERATIONAL_GATE);
 const manifest = manifests[gate];
 if (!manifest) fail(`unsupported application gate: ${gate || '(missing)'}`);
-const commitSha = text(process.env.GITHUB_SHA);
+const controlPlaneCommitSha = text(process.env.GITHUB_SHA);
+const releaseCommitSha = text(process.env.PRODUCTION_RELEASE_SHA);
 const runId = text(process.env.GITHUB_RUN_ID);
-if (!/^[0-9a-f]{40}$/.test(commitSha) || !/^\d+$/.test(runId)) fail('exact SHA and numeric workflow run ID are required');
+if (!/^[0-9a-f]{40}$/.test(controlPlaneCommitSha) || !/^[0-9a-f]{40}$/.test(releaseCommitSha) || !/^\d+$/.test(runId)) fail('exact control-plane/release SHAs and numeric workflow run ID are required');
+if (process.env.CONTROL_PLANE_COMMIT_SHA !== controlPlaneCommitSha || process.env.CONTROL_PLANE_SCOPE_VERIFIED !== 'true') fail('reviewed control-plane binding is required');
 
 let proof;
 try { proof = JSON.parse(readFileSync('launch_package/application-proof.json', 'utf8')); }
 catch (error) { fail(`proof file missing or malformed: ${error.message}`); }
 const errors = [];
 if (proof.schemaVersion !== 1 || proof.status !== 'passed' || proof.source !== 'operational-application-production-verifier') errors.push('proof envelope is invalid');
-if (proof.gate !== gate || proof.commitSha !== commitSha || proof.projectId !== PRODUCTION.projectId || proof.repository !== EXPECTED_REPOSITORY || text(proof.workflowRunId) !== runId) errors.push('proof workflow/commit binding mismatch');
+if (proof.gate !== gate || proof.commitSha !== releaseCommitSha || proof.projectId !== PRODUCTION.projectId || proof.repository !== EXPECTED_REPOSITORY || text(proof.workflowRunId) !== runId) errors.push('proof workflow/release binding mismatch');
 if (!proof.evidence || typeof proof.evidence !== 'object') errors.push('proof evidence is missing');
 else manifest.validate(proof.evidence, errors);
 const observedAt = validTime(proof.observedAt);
@@ -157,7 +159,9 @@ if (projectId !== PRODUCTION.projectId) fail(`unexpected Firebase project: ${pro
 initializeFirebaseAdmin(admin, projectId);
 const record = {
   status: 'passed',
-  commitSha,
+  commitSha: releaseCommitSha,
+  releaseCommitSha,
+  controlPlaneCommitSha,
   projectId,
   evidenceType: manifest.evidenceType,
   evidenceReference: `https://github.com/${EXPECTED_REPOSITORY}/actions/runs/${runId}#${gate}` ,
@@ -180,10 +184,23 @@ await admin.firestore().runTransaction(async (transaction) => {
       ...(current.operationalEvidence && typeof current.operationalEvidence === 'object' ? current.operationalEvidence : {}),
       [gate]: record,
     },
-    operationalEvidenceCommitSha: commitSha,
+    operationalEvidenceCommitSha: releaseCommitSha,
+    operationalEvidenceControlPlaneCommitSha: controlPlaneCommitSha,
     operationalEvidenceProjectId: projectId,
     operationalEvidenceLastWorkflowRunId: runId,
     operationalEvidenceUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
   }, { merge: true });
 });
+const saved = await ref.get();
+const savedRecord = saved.get(`operationalEvidence.${gate}`) || {};
+if (
+  savedRecord.status !== 'passed' ||
+  savedRecord.commitSha !== releaseCommitSha ||
+  savedRecord.releaseCommitSha !== releaseCommitSha ||
+  savedRecord.controlPlaneCommitSha !== controlPlaneCommitSha ||
+  savedRecord.projectId !== projectId ||
+  savedRecord.artifactHash !== artifactHash ||
+  savedRecord.sourceProofHash !== sourceProofHash ||
+  String(savedRecord.workflowRunId || '') !== runId
+) fail(`canonical Firestore read-back verification failed for ${gate}`);
 console.log(`[publish-operational-application-evidence] PASS gate=${gate} artifact=${artifactHash.slice(0, 12)}…`);

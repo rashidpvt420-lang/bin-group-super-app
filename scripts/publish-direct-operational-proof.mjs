@@ -39,10 +39,12 @@ const workflow = text(process.env.GITHUB_WORKFLOW);
 const context = CONTEXTS[workflow];
 if (!context || process.env.GITHUB_JOB !== context.job) fail('unexpected protected operational-evidence workflow context');
 
-const commitSha = text(process.env.GITHUB_SHA);
+const controlPlaneCommitSha = text(process.env.GITHUB_SHA);
+const releaseCommitSha = text(process.env.PRODUCTION_RELEASE_SHA);
 const runId = text(process.env.GITHUB_RUN_ID);
-if (!/^[0-9a-f]{40}$/.test(commitSha)) fail('full lowercase commit SHA is required');
+if (!/^[0-9a-f]{40}$/.test(controlPlaneCommitSha) || !/^[0-9a-f]{40}$/.test(releaseCommitSha)) fail('full lowercase control-plane and release SHAs are required');
 if (!/^\d+$/.test(runId)) fail('numeric workflow run ID is required');
+if (process.env.CONTROL_PLANE_COMMIT_SHA !== controlPlaneCommitSha || process.env.CONTROL_PLANE_SCOPE_VERIFIED !== 'true') fail('reviewed control-plane binding is required');
 if (!existsSync(PROOF_PATH)) fail(`${PROOF_PATH} is missing`);
 
 let proof;
@@ -55,7 +57,7 @@ try {
 const proofErrors = validateOperationalProofDocument(proof, {
   gateKey: context.gateKey,
   evidenceType: context.evidenceType,
-  commitSha,
+  commitSha: releaseCommitSha,
   sourceRunId: runId,
 });
 if (proofErrors.length) {
@@ -77,7 +79,9 @@ const evidenceReference = `https://github.com/${EXPECTED_REPOSITORY}/actions/run
 
 const record = {
   status: 'passed',
-  commitSha,
+  commitSha: releaseCommitSha,
+  releaseCommitSha,
+  controlPlaneCommitSha,
   projectId,
   evidenceType: context.evidenceType,
   evidenceReference,
@@ -102,7 +106,8 @@ await db.runTransaction(async (transaction) => {
         : {}),
       [context.gateKey]: record,
     },
-    operationalEvidenceCommitSha: commitSha,
+    operationalEvidenceCommitSha: releaseCommitSha,
+    operationalEvidenceControlPlaneCommitSha: controlPlaneCommitSha,
     operationalEvidenceProjectId: projectId,
     operationalEvidenceLastWorkflowRunId: runId,
     operationalEvidenceUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -113,7 +118,9 @@ const saved = await ref.get();
 const savedRecord = saved.get(`operationalEvidence.${context.gateKey}`) || {};
 if (
   savedRecord.status !== 'passed' ||
-  savedRecord.commitSha !== commitSha ||
+  savedRecord.commitSha !== releaseCommitSha ||
+  savedRecord.releaseCommitSha !== releaseCommitSha ||
+  savedRecord.controlPlaneCommitSha !== controlPlaneCommitSha ||
   savedRecord.projectId !== projectId ||
   savedRecord.evidenceType !== context.evidenceType ||
   savedRecord.evidenceReference !== evidenceReference ||

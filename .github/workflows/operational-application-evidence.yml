@@ -16,7 +16,11 @@ on:
           - adminStaffClaims
           - renewalScheduler
       expected_commit_sha:
-        description: 'Full lowercase current production main SHA'
+        description: 'Full lowercase current control-plane main SHA'
+        required: true
+        type: string
+      frozen_release_sha:
+        description: 'Full lowercase frozen production release SHA'
         required: true
         type: string
       production_deploy_run_id:
@@ -34,7 +38,7 @@ permissions:
   id-token: write
 
 concurrency:
-  group: operational-application-evidence-${{ inputs.gate }}-${{ inputs.expected_commit_sha }}
+  group: operational-application-evidence-${{ inputs.gate }}-${{ inputs.frozen_release_sha }}-${{ inputs.expected_commit_sha }}
   cancel-in-progress: false
 
 jobs:
@@ -50,11 +54,14 @@ jobs:
       VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
       VITE_FIREBASE_APPCHECK_DEBUG_TOKEN: ${{ secrets.VITE_FIREBASE_APPCHECK_DEBUG_TOKEN }}
       PRODUCTION_DEPLOY_RUN_ID: ${{ inputs.production_deploy_run_id }}
+      PRODUCTION_RELEASE_SHA: ${{ inputs.frozen_release_sha }}
+      CONTROL_PLANE_COMMIT_SHA: ${{ github.sha }}
 
     steps:
       - name: Enforce protected application evidence inputs
         env:
           TARGET_SHA: ${{ inputs.expected_commit_sha }}
+          RELEASE_SHA: ${{ inputs.frozen_release_sha }}
           SELECTED_GATE: ${{ inputs.gate }}
           CONFIRMATION: ${{ inputs.confirmation }}
           DEPLOY_RUN_ID: ${{ inputs.production_deploy_run_id }}
@@ -75,7 +82,11 @@ jobs:
             exit 1
           fi
           if [[ ! "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]] || [[ "$TARGET_SHA" != "$GITHUB_SHA" ]]; then
-            echo "::error::expected_commit_sha must equal the current full main SHA."
+            echo "::error::expected_commit_sha must equal the current full control-plane main SHA."
+            exit 1
+          fi
+          if [[ ! "$RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::frozen_release_sha must be a full lowercase release SHA."
             exit 1
           fi
           if [[ ! "$DEPLOY_RUN_ID" =~ ^[0-9]+$ ]]; then
@@ -94,16 +105,43 @@ jobs:
               ;;
           esac
 
-      - name: Checkout exact production commit
+      - name: Checkout clearance control plane
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.expected_commit_sha }}
+          ref: ${{ github.sha }}
+          path: control-plane
+          fetch-depth: 0
+
+      - name: Verify frozen-release control-plane scope
+        env:
+          RELEASE_SHA: ${{ inputs.frozen_release_sha }}
+          CONTROL_PLANE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          git -C control-plane merge-base --is-ancestor "$RELEASE_SHA" "$CONTROL_PLANE_SHA" || { echo "::error::Frozen release is not an ancestor of the current control plane."; exit 1; }
+          changed="$(git -C control-plane diff --name-only "$RELEASE_SHA" "$CONTROL_PLANE_SHA")"
+          [[ -n "$changed" ]] || { echo "::error::No reviewed control-plane repair exists above the frozen release."; exit 1; }
+          allowed='^(\.github/workflows/firebase-production-deploy\.yml|\.github/workflows/live-role-smoke\.yml|\.github/workflows/operational-application-evidence\.yml|\.github/workflows/operational-provider-evidence\.yml|\.github/workflows/privileged-access-rotation-evidence\.yml|\.github/workflows/technician-physical-evidence\.yml|scripts/finalize-operational-provider-evidence\.mjs|scripts/hard-clearance-production-revalidation\.mjs|scripts/launch-status\.mjs|scripts/publish-direct-operational-proof\.mjs|scripts/publish-operational-application-evidence\.mjs|scripts/publish-operational-provider-evidence\.mjs|scripts/resolve-admin-app-check-site-key\.mjs|scripts/run-frozen-release-evidence\.mjs|scripts/verify-hard-launch-approval\.mjs|scripts/verify-operational-readiness\.mjs|tests/launch/ai-operational-contract\.test\.mjs|tests/launch/external-gate-production-provenance\.test\.mjs|tests/launch/final-operational-evidence-producers\.test\.mjs|tests/launch/hard-clearance-revalidation\.test\.mjs|tests/launch/operational-application-evidence-audit\.test\.mjs)$'
+          while IFS= read -r file; do
+            [[ -z "$file" || "$file" =~ $allowed ]] || { echo "::error::Non-control-plane file changed since frozen release: $file"; exit 1; }
+          done <<< "$changed"
+          echo "CONTROL_PLANE_SCOPE_VERIFIED=true" >> "$GITHUB_ENV"
+
+      - name: Checkout frozen production release
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.frozen_release_sha }}
+          path: release
+
+      - name: Overlay reviewed dual-SHA publisher only
+        run: cp control-plane/scripts/publish-operational-application-evidence.mjs release/scripts/publish-operational-application-evidence.mjs
 
       - name: Use Node.js 22
         uses: actions/setup-node@v4
         with:
           node-version: '22'
           cache: npm
+          cache-dependency-path: release/package-lock.json
 
       - name: Authenticate Google Cloud
         uses: google-github-actions/auth@v2
@@ -114,19 +152,21 @@ jobs:
           export_environment_variables: true
 
       - name: Install dependencies
+        working-directory: release
         run: bash scripts/npm-install-retry.sh
 
       - name: Download exact production deployment metadata
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
-          name: production-deployment-${{ inputs.expected_commit_sha }}
-          path: downloaded-production
+          name: production-deployment-${{ inputs.frozen_release_sha }}
+          path: release/downloaded-production
           run-id: ${{ inputs.production_deploy_run_id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Restore and validate production deployment binding
+        working-directory: release
         env:
-          TARGET_SHA: ${{ inputs.expected_commit_sha }}
+          TARGET_SHA: ${{ inputs.frozen_release_sha }}
           DEPLOY_RUN_ID: ${{ inputs.production_deploy_run_id }}
         run: |
           set -euo pipefail
@@ -159,6 +199,7 @@ jobs:
           NODE
 
       - name: Auto-discover, verify, and publish application evidence
+        working-directory: release
         env:
           SELECTED_GATE: ${{ inputs.gate }}
           E2E_FOUNDER_EMAIL: ${{ secrets.E2E_FOUNDER_EMAIL }}
@@ -182,9 +223,9 @@ jobs:
           mkdir -p launch_package/application-proofs launch_package/application-provenance
           for gate in "${gates[@]}"; do
             echo "::group::Verify and publish ${gate}"
-            OPERATIONAL_GATE="$gate" node scripts/verify-operational-application-provenance.mjs
-            OPERATIONAL_GATE="$gate" node scripts/verify-operational-application-evidence-mfa.mjs
-            OPERATIONAL_GATE="$gate" node scripts/bind-operational-application-provenance.mjs
+            OPERATIONAL_GATE="$gate" node ../control-plane/scripts/run-frozen-release-evidence.mjs scripts/verify-operational-application-provenance.mjs
+            OPERATIONAL_GATE="$gate" node ../control-plane/scripts/run-frozen-release-evidence.mjs scripts/verify-operational-application-evidence-mfa.mjs
+            OPERATIONAL_GATE="$gate" node ../control-plane/scripts/run-frozen-release-evidence.mjs scripts/bind-operational-application-provenance.mjs
             OPERATIONAL_GATE="$gate" node scripts/publish-operational-application-evidence.mjs
             cp launch_package/application-proof.json "launch_package/application-proofs/${gate}.json"
             cp launch_package/application-provenance.json "launch_package/application-provenance/${gate}.json"
@@ -195,12 +236,12 @@ jobs:
         if: success()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: operational-application-${{ inputs.gate }}-${{ inputs.expected_commit_sha }}
+          name: operational-application-${{ inputs.gate }}-${{ inputs.frozen_release_sha }}
           path: |
-            launch_package/production-deployment.json
-            launch_package/application-proof.json
-            launch_package/application-provenance.json
-            launch_package/application-proofs
-            launch_package/application-provenance
+            release/launch_package/production-deployment.json
+            release/launch_package/application-proof.json
+            release/launch_package/application-provenance.json
+            release/launch_package/application-proofs
+            release/launch_package/application-provenance
           if-no-files-found: error
           retention-days: 365

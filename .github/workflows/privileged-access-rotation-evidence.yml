@@ -4,7 +4,15 @@ on:
   workflow_dispatch:
     inputs:
       expected_commit_sha:
-        description: 'Full lowercase current production main SHA'
+        description: 'Full lowercase current control-plane main SHA'
+        required: true
+        type: string
+      frozen_release_sha:
+        description: 'Full lowercase frozen production release SHA'
+        required: true
+        type: string
+      production_deploy_run_id:
+        description: 'Successful production deploy run ID for the frozen release SHA'
         required: true
         type: string
       confirmation:
@@ -14,10 +22,11 @@ on:
 
 permissions:
   contents: read
+  actions: read
   id-token: write
 
 concurrency:
-  group: privileged-access-rotation-${{ inputs.expected_commit_sha }}
+  group: privileged-access-rotation-${{ inputs.frozen_release_sha }}-${{ inputs.expected_commit_sha }}
   cancel-in-progress: false
 
 jobs:
@@ -31,11 +40,16 @@ jobs:
       E2E_ADMIN_PASSWORD: ${{ secrets.E2E_ADMIN_PASSWORD }}
       VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
       AUTHORIZED_FOUNDER_ACTORS: ${{ secrets.AUTHORIZED_FOUNDER_ACTORS }}
+      PRODUCTION_DEPLOY_RUN_ID: ${{ inputs.production_deploy_run_id }}
+      PRODUCTION_RELEASE_SHA: ${{ inputs.frozen_release_sha }}
+      CONTROL_PLANE_COMMIT_SHA: ${{ github.sha }}
 
     steps:
       - name: Enforce protected rotation inputs
         env:
           TARGET_SHA: ${{ inputs.expected_commit_sha }}
+          RELEASE_SHA: ${{ inputs.frozen_release_sha }}
+          DEPLOY_RUN_ID: ${{ inputs.production_deploy_run_id }}
           CONFIRMATION: ${{ inputs.confirmation }}
         run: |
           set -euo pipefail
@@ -54,7 +68,11 @@ jobs:
             exit 1
           fi
           if [[ ! "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]] || [[ "$TARGET_SHA" != "$GITHUB_SHA" ]]; then
-            echo "::error::expected_commit_sha must equal the current full main SHA."
+            echo "::error::expected_commit_sha must equal the current full control-plane main SHA."
+            exit 1
+          fi
+          if [[ ! "$RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]] || [[ ! "$DEPLOY_RUN_ID" =~ ^[0-9]+$ ]]; then
+            echo "::error::Frozen release SHA and numeric production deploy run ID are required."
             exit 1
           fi
           if [[ "$CONFIRMATION" != "VERIFY_PRIVILEGED_ACCESS_ROTATION" ]]; then
@@ -62,16 +80,43 @@ jobs:
             exit 1
           fi
 
-      - name: Checkout exact production commit
+      - name: Checkout clearance control plane
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.expected_commit_sha }}
+          ref: ${{ github.sha }}
+          path: control-plane
+          fetch-depth: 0
+
+      - name: Verify frozen-release control-plane scope
+        env:
+          RELEASE_SHA: ${{ inputs.frozen_release_sha }}
+          CONTROL_PLANE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          git -C control-plane merge-base --is-ancestor "$RELEASE_SHA" "$CONTROL_PLANE_SHA" || { echo "::error::Frozen release is not an ancestor of the current control plane."; exit 1; }
+          changed="$(git -C control-plane diff --name-only "$RELEASE_SHA" "$CONTROL_PLANE_SHA")"
+          [[ -n "$changed" ]] || { echo "::error::No reviewed control-plane repair exists above the frozen release."; exit 1; }
+          allowed='^(\.github/workflows/firebase-production-deploy\.yml|\.github/workflows/live-role-smoke\.yml|\.github/workflows/operational-application-evidence\.yml|\.github/workflows/operational-provider-evidence\.yml|\.github/workflows/privileged-access-rotation-evidence\.yml|\.github/workflows/technician-physical-evidence\.yml|scripts/finalize-operational-provider-evidence\.mjs|scripts/hard-clearance-production-revalidation\.mjs|scripts/launch-status\.mjs|scripts/publish-direct-operational-proof\.mjs|scripts/publish-operational-application-evidence\.mjs|scripts/publish-operational-provider-evidence\.mjs|scripts/resolve-admin-app-check-site-key\.mjs|scripts/run-frozen-release-evidence\.mjs|scripts/verify-hard-launch-approval\.mjs|scripts/verify-operational-readiness\.mjs|tests/launch/ai-operational-contract\.test\.mjs|tests/launch/external-gate-production-provenance\.test\.mjs|tests/launch/final-operational-evidence-producers\.test\.mjs|tests/launch/hard-clearance-revalidation\.test\.mjs|tests/launch/operational-application-evidence-audit\.test\.mjs)$'
+          while IFS= read -r file; do
+            [[ -z "$file" || "$file" =~ $allowed ]] || { echo "::error::Non-control-plane file changed since frozen release: $file"; exit 1; }
+          done <<< "$changed"
+          echo "CONTROL_PLANE_SCOPE_VERIFIED=true" >> "$GITHUB_ENV"
+
+      - name: Checkout frozen production release
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.frozen_release_sha }}
+          path: release
+
+      - name: Overlay reviewed dual-SHA publisher only
+        run: cp control-plane/scripts/publish-direct-operational-proof.mjs release/scripts/publish-direct-operational-proof.mjs
 
       - name: Use Node.js 22
         uses: actions/setup-node@v4
         with:
           node-version: '22'
           cache: npm
+          cache-dependency-path: release/package-lock.json
 
       - name: Authenticate Google Cloud
         uses: google-github-actions/auth@v2
@@ -82,32 +127,65 @@ jobs:
           export_environment_variables: true
 
       - name: Install dependencies
+        working-directory: release
         run: bash scripts/npm-install-retry.sh
 
+      - name: Download exact production deployment metadata
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: production-deployment-${{ inputs.frozen_release_sha }}
+          path: release/downloaded-production
+          run-id: ${{ inputs.production_deploy_run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify exact production deployment binding
+        working-directory: release
+        env:
+          RELEASE_SHA: ${{ inputs.frozen_release_sha }}
+          DEPLOY_RUN_ID: ${{ inputs.production_deploy_run_id }}
+        run: |
+          set -euo pipefail
+          source_file="$(find downloaded-production -type f -name production-deployment.json -print -quit)"
+          [[ -n "$source_file" ]] || { echo "::error::production-deployment.json was not found."; exit 1; }
+          mkdir -p launch_package
+          cp "$source_file" launch_package/production-deployment.json
+          node --input-type=module - "$source_file" <<'NODE'
+          import { readFileSync } from 'node:fs';
+          const doc = JSON.parse(readFileSync(process.argv[2], 'utf8'));
+          if (doc.status !== 'passed' || doc.projectId !== 'bin-group-57c60') throw new Error('production deployment status/project mismatch');
+          if (doc.deployedCommitSha !== process.env.RELEASE_SHA || String(doc.workflowRunId || '') !== process.env.DEPLOY_RUN_ID) throw new Error('production deployment SHA/run mismatch');
+          if (doc.workflowRef !== 'refs/heads/main' || doc.repository !== process.env.GITHUB_REPOSITORY) throw new Error('production deployment repository/ref mismatch');
+          if (!/^sha256:[a-f0-9]{64}$/.test(String(doc.validatedArtifactDigest || '').toLowerCase())) throw new Error('validated production artifact digest is invalid');
+          NODE
+
       - name: Prove rotated Admin credential is accepted by Firebase Auth
-        run: node scripts/verify-admin-credential-login.mjs
+        working-directory: release
+        run: node ../control-plane/scripts/run-frozen-release-evidence.mjs scripts/verify-admin-credential-login.mjs
 
       - name: Verify provider-backed credential rotation
-        run: node scripts/verify-privileged-access-rotation.mjs
+        working-directory: release
+        run: node ../control-plane/scripts/run-frozen-release-evidence.mjs scripts/verify-privileged-access-rotation.mjs
 
       - name: Bind Admin login proof to the rotation record
-        run: node scripts/bind-admin-credential-rotation-proof.mjs
+        working-directory: release
+        run: node ../control-plane/scripts/run-frozen-release-evidence.mjs scripts/bind-admin-credential-rotation-proof.mjs
 
       - name: Publish canonical privileged-rotation evidence
+        working-directory: release
         run: node scripts/publish-direct-operational-proof.mjs
 
       - name: Upload secret-rotation proof
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: privileged-access-rotation-${{ inputs.expected_commit_sha }}
-          path: launch_package/operational-proof.json
+          name: privileged-access-rotation-${{ inputs.frozen_release_sha }}
+          path: release/launch_package/operational-proof.json
           if-no-files-found: error
           retention-days: 365
 
       - name: Upload Admin credential login proof
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: admin-credential-login-${{ inputs.expected_commit_sha }}
-          path: launch_package/admin-credential-login-proof.json
+          name: admin-credential-login-${{ inputs.frozen_release_sha }}
+          path: release/launch_package/admin-credential-login-proof.json
           if-no-files-found: error
           retention-days: 365

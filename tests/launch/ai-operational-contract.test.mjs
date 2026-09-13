@@ -87,7 +87,7 @@ test('AI provider evidence is exact-SHA, deployment-bound, protected, and hard-l
   const gate = read('scripts/lib/hard-launch-gate.mjs');
 
   assert.match(workflow, /aiProviderHealth/);
-  assert.match(workflow, /production-deployment-\$\{\{ inputs\.expected_commit_sha \}\}/);
+  assert.match(workflow, /production-deployment-\$\{\{ inputs\.frozen_release_sha \}\}/);
   assert.match(workflow, /verify-ai-live-evidence\.mjs/);
   assert.match(workflow, /environment: hard-public-launch/);
   assert.match(verifier, /provider: 'gemini'/);

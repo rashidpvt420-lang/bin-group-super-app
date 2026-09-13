@@ -76,6 +76,10 @@ const expectedSha = String(process.env.HARD_LAUNCH_EXPECTED_SHA || '').trim();
 if (!/^[0-9a-f]{40}$/.test(expectedSha) || expectedSha !== commitSha) {
   throw new Error('HARD_LAUNCH_EXPECTED_SHA must equal the checked-out full main SHA.');
 }
+const controlPlaneCommitSha = String(process.env.CONTROL_PLANE_COMMIT_SHA || '').trim();
+if (!/^[0-9a-f]{40}$/.test(controlPlaneCommitSha) || controlPlaneCommitSha !== process.env.GITHUB_SHA) {
+  throw new Error('CONTROL_PLANE_COMMIT_SHA must equal the protected workflow GITHUB_SHA.');
+}
 
 const projectId = resolveFirebaseAdminProjectId();
 if (projectId !== PRODUCTION.projectId) throw new Error(`Unexpected project: ${projectId}`);
@@ -104,6 +108,8 @@ for (const key of REQUIRED_OPERATIONAL_GATES) {
   gates[key] = {
     status: String(gate.status || ''),
     commitSha: String(gate.commitSha || ''),
+    releaseCommitSha: String(gate.releaseCommitSha || ''),
+    controlPlaneCommitSha: String(gate.controlPlaneCommitSha || ''),
     projectId: String(gate.projectId || ''),
     evidenceType: String(gate.evidenceType || ''),
     evidenceReference: String(gate.evidenceReference || ''),
@@ -123,6 +129,8 @@ const report = {
   schemaVersion: 1,
   status: 'passed',
   commitSha,
+  releaseCommitSha: commitSha,
+  controlPlaneCommitSha,
   projectId,
   source: 'firestore-system-health-admin-summaries',
   sourceDocument: 'system_health/admin_summaries',
@@ -142,7 +150,14 @@ const report = {
   githubRunAttempt: String(process.env.GITHUB_RUN_ATTEMPT || '1'),
 };
 
-const errors = validateOperationalReadinessReport(report, commitSha);
+const bindingErrors = REQUIRED_OPERATIONAL_GATES.flatMap((key) => {
+  const gate = gates[key];
+  const errors = [];
+  if (gate.releaseCommitSha !== commitSha) errors.push(`${key}.releaseCommitSha must equal the frozen release SHA`);
+  if (gate.controlPlaneCommitSha !== controlPlaneCommitSha) errors.push(`${key}.controlPlaneCommitSha must equal the current control-plane SHA`);
+  return errors;
+});
+const errors = [...bindingErrors, ...validateOperationalReadinessReport(report, commitSha)];
 const output = operationalReadinessPath(root);
 mkdirSync(path.dirname(output), { recursive: true });
 if (errors.length) {
