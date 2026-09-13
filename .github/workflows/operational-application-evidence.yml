@@ -15,6 +15,15 @@ on:
           - brokerCommissionLockExactlyOnce
           - adminStaffClaims
           - renewalScheduler
+      founder_totp_operation:
+        description: 'none = normal evidence; verify = source sign-in only; sync = verified production TOTP copy then payment evidence'
+        required: false
+        default: none
+        type: choice
+        options:
+          - none
+          - verify
+          - sync
       expected_commit_sha:
         description: 'Full lowercase current control-plane main SHA'
         required: true
@@ -28,9 +37,12 @@ on:
         required: true
         type: string
       confirmation:
-        description: 'Enter PUBLISH_OPERATIONAL_APPLICATION_EVIDENCE'
+        description: 'Normal: PUBLISH_OPERATIONAL_APPLICATION_EVIDENCE; verify: VERIFY_PRODUCTION_FOUNDER_TOTP; sync: SYNC_PRODUCTION_FOUNDER_TOTP_AND_VERIFY_PAYMENT'
         required: true
         type: string
+
+env:
+  FOUNDER_REPAIR_REPOSITORY: rashidpvt420-lang/bin-group-super-app
 
 permissions:
   contents: read
@@ -43,6 +55,8 @@ concurrency:
 
 jobs:
   verify-and-publish:
+    needs: [authorize-founder-totp-repair, verify-and-sync-founder-totp]
+    if: ${{ !cancelled() && ((!inputs.founder_totp_operation || inputs.founder_totp_operation == 'none') || (inputs.founder_totp_operation == 'sync' && needs.verify-and-sync-founder-totp.result == 'success')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
     environment: hard-public-launch
@@ -63,7 +77,7 @@ jobs:
           TARGET_SHA: ${{ inputs.expected_commit_sha }}
           RELEASE_SHA: ${{ inputs.frozen_release_sha }}
           SELECTED_GATE: ${{ inputs.gate }}
-          CONFIRMATION: ${{ inputs.confirmation }}
+          CONFIRMATION: ${{ inputs.founder_totp_operation == 'sync' && 'PUBLISH_OPERATIONAL_APPLICATION_EVIDENCE' || inputs.confirmation }}
           DEPLOY_RUN_ID: ${{ inputs.production_deploy_run_id }}
         run: |
           set -euo pipefail
@@ -259,3 +273,310 @@ jobs:
             release/launch_package/application-provenance
           if-no-files-found: error
           retention-days: 365
+
+  authorize-founder-totp-repair:
+    if: ${{ inputs.founder_totp_operation == 'verify' || inputs.founder_totp_operation == 'sync' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: hard-public-launch
+    permissions:
+      contents: read
+    env:
+      TARGET_SHA: ${{ inputs.expected_commit_sha }}
+      RELEASE_SHA: ${{ inputs.frozen_release_sha }}
+      DEPLOY_RUN_ID: ${{ inputs.production_deploy_run_id }}
+      SELECTED_GATE: ${{ inputs.gate }}
+      OPERATION: ${{ inputs.founder_totp_operation }}
+      CONFIRMATION: ${{ inputs.confirmation }}
+      AUTHORIZED_FOUNDER_ACTORS: ${{ secrets.AUTHORIZED_FOUNDER_ACTORS }}
+    steps:
+      - name: Authorize the destination before reading the source credential
+        run: |
+          set -euo pipefail
+          [[ "$GITHUB_REPOSITORY" == "$FOUNDER_REPAIR_REPOSITORY" ]]
+          [[ "$GITHUB_REPOSITORY_ID" == "1173943093" ]]
+          [[ "$GITHUB_REF" == "refs/heads/main" && "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]
+          [[ "$TARGET_SHA" =~ ^[0-9a-f]{40}$ && "$TARGET_SHA" == "$GITHUB_SHA" ]]
+          [[ "$RELEASE_SHA" == "15b09519222e749808c2a18b5d1ab1c3126fcb42" ]]
+          [[ "$DEPLOY_RUN_ID" == "34500748478" && "$SELECTED_GATE" == "paymentUnlockExactlyOnce" ]]
+          case "$OPERATION/$CONFIRMATION" in
+            verify/VERIFY_PRODUCTION_FOUNDER_TOTP|sync/SYNC_PRODUCTION_FOUNDER_TOTP_AND_VERIFY_PAYMENT) ;;
+            *) echo "::error::Credential repair confirmation mismatch."; exit 1 ;;
+          esac
+          IFS=',' read -ra allowed_actors <<< "${AUTHORIZED_FOUNDER_ACTORS:-}"
+          for actor in "$GITHUB_ACTOR" "$GITHUB_TRIGGERING_ACTOR"; do
+            authorized=false
+            for allowed_actor in "${allowed_actors[@]}"; do
+              allowed_actor="$(printf '%s' "$allowed_actor" | xargs)"
+              [[ -n "$allowed_actor" && "$actor" == "$allowed_actor" ]] && authorized=true
+            done
+            [[ "$authorized" == "true" ]] || { echo "::error::Credential repair actor is not authorized in hard-public-launch."; exit 1; }
+          done
+          echo "Destination environment authorized. No credentials read or changed."
+
+  verify-and-sync-founder-totp:
+    needs: authorize-founder-totp-repair
+    if: ${{ inputs.founder_totp_operation == 'verify' || inputs.founder_totp_operation == 'sync' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: production
+    concurrency:
+      group: founder-totp-credential-sync
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      actions: read
+      id-token: write
+    env:
+      GCP_PROJECT_ID: bin-group-57c60
+      TARGET_SHA: ${{ inputs.expected_commit_sha }}
+      PRODUCTION_RELEASE_SHA: ${{ inputs.frozen_release_sha }}
+      PRODUCTION_DEPLOY_RUN_ID: ${{ inputs.production_deploy_run_id }}
+      FOUNDER_TOTP_OPERATION: ${{ inputs.founder_totp_operation }}
+      CONFIRMATION: ${{ inputs.confirmation }}
+      REPAIR_SOURCE_ENVIRONMENT: production
+      REPAIR_TARGET_ENVIRONMENT: hard-public-launch
+      AUTHORIZED_FOUNDER_ACTORS: ${{ secrets.AUTHORIZED_FOUNDER_ACTORS }}
+    steps:
+      - name: Require production actor authorization
+        run: |
+          set -euo pipefail
+          IFS=',' read -ra allowed_actors <<< "${AUTHORIZED_FOUNDER_ACTORS:-}"
+          for actor in "$GITHUB_ACTOR" "$GITHUB_TRIGGERING_ACTOR"; do
+            authorized=false
+            for allowed_actor in "${allowed_actors[@]}"; do
+              allowed_actor="$(printf '%s' "$allowed_actor" | xargs)"
+              [[ -n "$allowed_actor" && "$actor" == "$allowed_actor" ]] && authorized=true
+            done
+            [[ "$authorized" == "true" ]] || { echo "::error::Credential repair actor is not authorized in production."; exit 1; }
+          done
+          [[ "${RUNNER_DEBUG:-0}" != "1" ]] || { echo "::error::Disable debug logging for credential repair."; exit 1; }
+          command -v gh >/dev/null
+
+      - name: Checkout clearance control plane
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.sha }}
+          path: control-plane
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Verify frozen-release control-plane scope
+        env:
+          RELEASE_SHA: ${{ inputs.frozen_release_sha }}
+          CONTROL_PLANE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          git -C control-plane merge-base --is-ancestor "$RELEASE_SHA" "$CONTROL_PLANE_SHA" || { echo "::error::Frozen release is not an ancestor of the current control plane."; exit 1; }
+          changed="$(git -C control-plane diff --name-only "$RELEASE_SHA" "$CONTROL_PLANE_SHA")"
+          [[ -n "$changed" ]] || { echo "::error::No reviewed control-plane repair exists above the frozen release."; exit 1; }
+          allowed='^(\.github/workflows/firebase-production-deploy\.yml|\.github/workflows/live-role-smoke\.yml|\.github/workflows/operational-application-evidence\.yml|\.github/workflows/operational-provider-evidence\.yml|\.github/workflows/privileged-access-rotation-evidence\.yml|\.github/workflows/technician-physical-evidence\.yml|scripts/finalize-operational-provider-evidence\.mjs|scripts/hard-clearance-production-revalidation\.mjs|scripts/launch-status\.mjs|scripts/publish-direct-operational-proof\.mjs|scripts/publish-operational-application-evidence\.mjs|scripts/publish-operational-provider-evidence\.mjs|scripts/resolve-admin-app-check-site-key\.mjs|scripts/run-frozen-release-evidence\.mjs|scripts/verify-hard-launch-approval\.mjs|scripts/verify-operational-readiness\.mjs|tests/launch/ai-operational-contract\.test\.mjs|tests/launch/external-gate-production-provenance\.test\.mjs|tests/launch/final-operational-evidence-producers\.test\.mjs|tests/launch/hard-clearance-revalidation\.test\.mjs|tests/launch/operational-application-evidence-audit\.test\.mjs)$'
+          while IFS= read -r file; do
+            [[ -z "$file" || "$file" =~ $allowed ]] || { echo "::error::Non-control-plane file changed since frozen release: $file"; exit 1; }
+          done <<< "$changed"
+          echo "CONTROL_PLANE_SCOPE_VERIFIED=true" >> "$GITHUB_ENV"
+
+      - name: Checkout unchanged production credential verifier
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ inputs.frozen_release_sha }}
+          path: release
+          persist-credentials: false
+
+      - name: Use Node.js 22 for credential repair
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+
+      - name: Install frozen verifier dependencies without lifecycle scripts
+        working-directory: release
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Authenticate only for signed-token and revocation verification
+        uses: google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed # v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          create_credentials_file: true
+          export_environment_variables: true
+
+      - name: Download existing deployment metadata only
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: production-deployment-${{ inputs.frozen_release_sha }}
+          path: release/downloaded-production
+          run-id: ${{ inputs.production_deploy_run_id }}
+          github-token: ${{ github.token }}
+
+      - name: Restore existing deployment metadata without changing production
+        working-directory: release
+        run: |
+          set -euo pipefail
+          mapfile -t metadata_files < <(find downloaded-production -type f -name production-deployment.json)
+          [[ "${#metadata_files[@]}" == "1" ]] || { echo "::error::Expected exactly one deployment metadata document."; exit 1; }
+          mkdir -p launch_package
+          cp "${metadata_files[0]}" launch_package/production-deployment.json
+
+      - name: Verify source TOTP before syncing the single destination secret
+        working-directory: release
+        env:
+          E2E_FOUNDER_EMAIL: ${{ secrets.E2E_FOUNDER_EMAIL }}
+          E2E_FOUNDER_PASSWORD: ${{ secrets.E2E_FOUNDER_PASSWORD }}
+          E2E_FOUNDER_TOTP_SECRET: ${{ secrets.E2E_FOUNDER_TOTP_SECRET }}
+          VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
+          FOUNDER_TOTP_SYNC_TOKEN: ${{ inputs.founder_totp_operation == 'sync' && secrets.FOUNDER_TOTP_SYNC_TOKEN || '' }}
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'FOUNDER_TOTP_REPAIR'
+          import { execFileSync } from 'node:child_process';
+          import { readFileSync } from 'node:fs';
+          import path from 'node:path';
+
+          export function checkRepairContext(env) {
+            const required = {
+              GITHUB_ACTIONS: 'true',
+              GITHUB_SERVER_URL: 'https://github.com',
+              GITHUB_REPOSITORY_ID: '1173943093',
+              GITHUB_REF: 'refs/heads/main',
+              GITHUB_EVENT_NAME: 'workflow_dispatch',
+              GITHUB_WORKFLOW: 'Operational Application Evidence',
+              GITHUB_JOB: 'verify-and-sync-founder-totp',
+              REPAIR_SOURCE_ENVIRONMENT: 'production',
+              REPAIR_TARGET_ENVIRONMENT: 'hard-public-launch',
+              GCP_PROJECT_ID: 'bin-group-57c60',
+              PRODUCTION_RELEASE_SHA: '15b09519222e749808c2a18b5d1ab1c3126fcb42',
+              PRODUCTION_DEPLOY_RUN_ID: '34500748478',
+            };
+            for (const [name, value] of Object.entries(required)) {
+              if (env[name] !== value) throw new Error(`Credential repair context mismatch: ${name}.`);
+            }
+            if (env.GITHUB_REPOSITORY !== env.FOUNDER_REPAIR_REPOSITORY || !env.FOUNDER_REPAIR_REPOSITORY) {
+              throw new Error('Credential repair repository mismatch.');
+            }
+            if (!/^[0-9a-f]{40}$/.test(env.GITHUB_SHA || '') || env.TARGET_SHA !== env.GITHUB_SHA) {
+              throw new Error('Credential repair requires the exact reviewed control-plane SHA.');
+            }
+            const actors = String(env.AUTHORIZED_FOUNDER_ACTORS || '').split(',').map((s) => s.trim()).filter(Boolean);
+            if (!actors.includes(env.GITHUB_ACTOR) || !actors.includes(env.GITHUB_TRIGGERING_ACTOR)) {
+              throw new Error('Both original and triggering actors must be authorized in production.');
+            }
+            const confirmations = {
+              verify: 'VERIFY_PRODUCTION_FOUNDER_TOTP',
+              sync: 'SYNC_PRODUCTION_FOUNDER_TOTP_AND_VERIFY_PAYMENT',
+            };
+            if (!Object.hasOwn(confirmations, env.FOUNDER_TOTP_OPERATION || '')
+                || env.CONFIRMATION !== confirmations[env.FOUNDER_TOTP_OPERATION]) {
+              throw new Error('Credential repair operation or confirmation is invalid.');
+            }
+            if (env.ACTIONS_STEP_DEBUG === 'true' || env.ACTIONS_RUNNER_DEBUG === 'true' || env.RUNNER_DEBUG === '1') {
+              throw new Error('Disable debug logging before handling the Founder credential.');
+            }
+          }
+
+          export function normalizeFounderSeed(value) {
+            const seed = String(value || '').toUpperCase().replace(/[\s=-]/g, '');
+            if (!/^[A-Z2-7]{16,256}$/.test(seed)) {
+              throw new Error('The production Founder TOTP setup key is not valid Base32; destination unchanged.');
+            }
+            return seed;
+          }
+
+          export function checkRepairDeployment(doc, env, now) {
+            if (doc?.status !== 'passed' || doc.projectId !== 'bin-group-57c60'
+                || doc.repository !== env.FOUNDER_REPAIR_REPOSITORY || doc.workflowRef !== 'refs/heads/main'
+                || doc.deployedCommitSha !== env.PRODUCTION_RELEASE_SHA
+                || String(doc.workflowRunId) !== env.PRODUCTION_DEPLOY_RUN_ID
+                || !/^sha256:[a-f0-9]{64}$/.test(String(doc.validatedArtifactDigest || ''))) {
+              throw new Error('Credential repair deployment binding is invalid.');
+            }
+            const deployedAt = Date.parse(doc.deployedAt);
+            if (!Number.isFinite(now) || !Number.isFinite(deployedAt)
+                || deployedAt > now + 300000 || now - deployedAt > 7 * 86400000) {
+              throw new Error('Credential repair requires valid deployment metadata no older than seven days.');
+            }
+          }
+
+          export async function repairFounderTotp({ env, deployment, signIn, writeSecret, now = Date.now() }) {
+            checkRepairContext(env);
+            checkRepairDeployment(deployment, env, now);
+            const seed = normalizeFounderSeed(env.E2E_FOUNDER_TOTP_SECRET);
+            const email = String(env.E2E_FOUNDER_EMAIL || '').trim().toLowerCase();
+            if (email !== 'ceo@bin-groups.com' || !String(env.E2E_FOUNDER_PASSWORD || '').trim()
+                || !String(env.VITE_FIREBASE_API_KEY || '').trim()) {
+              throw new Error('Production canonical Founder sign-in bindings are incomplete.');
+            }
+            if (env.FOUNDER_TOTP_OPERATION === 'sync' && !String(env.FOUNDER_TOTP_SYNC_TOKEN || '').trim()) {
+              throw new Error('Sync requires a short-lived FOUNDER_TOTP_SYNC_TOKEN with Environments write on this repository.');
+            }
+            let session;
+            try {
+              session = await signIn({
+                apiKey: env.VITE_FIREBASE_API_KEY,
+                email,
+                password: env.E2E_FOUNDER_PASSWORD,
+                totpSecret: seed,
+                referer: 'https://bin-group-admin-panel.web.app/',
+              });
+            } catch {
+              // Do not echo provider payloads, codes, passwords, tokens or setup keys.
+              throw new Error('Production Founder TOTP sign-in failed; destination unchanged.');
+            }
+            if (!session?.uid || session.secondFactorType !== 'totp' || !session.secondFactorIdentifier) {
+              throw new Error('Production sign-in did not verify the Founder TOTP factor; destination unchanged.');
+            }
+            if (env.FOUNDER_TOTP_OPERATION === 'verify') return { sourceVerified: true, targetUpdated: false };
+            try {
+              await writeSecret(seed);
+            } catch {
+              throw new Error('Destination update not confirmed. Inspect metadata before retrying; do not reset MFA.');
+            }
+            return { sourceVerified: true, targetUpdated: true };
+          }
+
+          export function writeFounderSecret(seed, env, exec = execFileSync) {
+            // GitHub CLI performs LibSodium encryption. Plaintext enters stdin only;
+            // it is never a command argument, artifact, job output or temporary file.
+            exec('gh', ['secret', 'set', 'E2E_FOUNDER_TOTP_SECRET', '--repo', env.FOUNDER_REPAIR_REPOSITORY,
+              '--env', 'hard-public-launch', '--app', 'actions'], {
+              input: seed,
+              encoding: 'utf8',
+              timeout: 30000,
+              maxBuffer: 65536,
+              stdio: ['pipe', 'pipe', 'pipe'],
+              env: {
+                PATH: env.PATH,
+                HOME: env.RUNNER_TEMP,
+                GH_CONFIG_DIR: path.join(env.RUNNER_TEMP, 'founder-totp-sync-gh'),
+                GH_HOST: 'github.com',
+                GH_TOKEN: env.FOUNDER_TOTP_SYNC_TOKEN,
+                GH_PROMPT_DISABLED: '1',
+              },
+            });
+          }
+
+          // BEGIN PROTECTED EXECUTION
+          try {
+            checkRepairContext(process.env);
+            const head = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
+            if (head !== process.env.PRODUCTION_RELEASE_SHA) throw new Error('Frozen checkout does not match.');
+            const deployment = JSON.parse(readFileSync('launch_package/production-deployment.json', 'utf8'));
+            const { signInWithRequiredTotpMfa } = await import('./scripts/lib/firebase-mfa-sign-in.mjs');
+            // This helper validates the signed ID token and revocation state. Unlike the
+            // deployment recovery script, it never synchronizes passwords or changes MFA.
+            const report = await repairFounderTotp({
+              env: process.env,
+              deployment,
+              signIn: signInWithRequiredTotpMfa,
+              writeSecret: (seed) => writeFounderSecret(seed, process.env),
+            });
+            console.log(report.targetUpdated
+              ? 'PASS: production Founder TOTP verified; target secret update accepted. Payment evidence still needs verification.'
+              : 'PASS: production Founder TOTP verified; destination secret unchanged.');
+            console.log('No Auth account, password, factor, deployment, pilot or launch evidence was changed.');
+          } catch (error) {
+            const known = /^(Credential repair|Both original|Disable debug|The production|Production canonical|Sync requires|Production Founder|Production sign-in|Destination update)/;
+            const message = error instanceof Error && known.test(error.message) ? error.message : 'Credential operation failed; no success is claimed.';
+            console.error(`::error::${message}`);
+            process.exitCode = 1;
+          }
+          FOUNDER_TOTP_REPAIR
