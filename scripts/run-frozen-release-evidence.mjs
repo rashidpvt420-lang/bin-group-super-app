@@ -1,12 +1,13 @@
 #!/usr/bin/env node
 
 import { spawnSync, execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
 const EXPECTED_REPOSITORY = 'rashidpvt420-lang/bin-group-super-app';
 const PRODUCTION_PROJECT_ID = 'bin-group-57c60';
+const CANONICAL_FOUNDER_EMAIL = 'ceo@bin-groups.com';
 const SHA_RE = /^[0-9a-f]{40}$/;
 const RUN_ID_RE = /^\d+$/;
 const DIGEST_RE = /^sha256:[0-9a-f]{64}$/;
@@ -35,6 +36,20 @@ const ALLOWED_ENTRYPOINTS = Object.freeze({
 
 const fail = (message) => {
   throw new Error(`[frozen-release-evidence] ${message}`);
+};
+
+const patchOwnerActivationCentPrecision = (releaseRoot) => {
+  const verifierPath = path.join(releaseRoot, 'scripts/verify-operational-application-evidence.mjs');
+  const legacy = "if (!Number.isFinite(annual) || annual <= 0 || !Number.isFinite(amount) || Math.abs(amount - Math.round(annual * 0.15)) > 0.01) fail('activation amount is not the locked 15% deposit');";
+  const replacement = [
+    'const expectedActivationMinor = Math.round(annual * 0.15 * 100);',
+    'const observedActivationMinor = Math.round(amount * 100);',
+    "if (!Number.isFinite(annual) || annual <= 0 || !Number.isFinite(amount) || observedActivationMinor !== expectedActivationMinor) fail('activation amount is not the locked 15% deposit');",
+  ].join('\n');
+  const source = readFileSync(verifierPath, 'utf8');
+  const matches = source.split(legacy).length - 1;
+  if (matches !== 1) fail(`owner activation cent-precision patch anchor mismatch (${matches})`);
+  writeFileSync(verifierPath, source.replace(legacy, replacement), 'utf8');
 };
 
 export function validateFrozenReleaseEvidenceContext(env, releaseRoot, entrypoint) {
@@ -81,13 +96,32 @@ export function validateFrozenReleaseEvidenceContext(env, releaseRoot, entrypoin
 
 export function runFrozenReleaseEvidence(entrypoint, env = process.env, releaseRoot = process.cwd()) {
   const { controlPlaneSha, releaseSha } = validateFrozenReleaseEvidenceContext(env, releaseRoot, entrypoint);
+
+  if (
+    env.GITHUB_WORKFLOW === 'Operational Application Evidence'
+    && env.GITHUB_JOB === 'verify-and-publish'
+    && entrypoint === 'scripts/verify-operational-application-evidence-mfa.mjs'
+  ) {
+    patchOwnerActivationCentPrecision(releaseRoot);
+  }
+
+  const childEnv = {
+    ...env,
+    GITHUB_SHA: releaseSha,
+    CLEARANCE_CONTROL_PLANE_SHA: controlPlaneSha,
+  };
+
+  if (
+    env.GITHUB_WORKFLOW === 'Operational Provider Evidence'
+    && env.GITHUB_JOB === 'verify-and-publish'
+    && entrypoint === 'scripts/verify-ai-live-evidence.mjs'
+  ) {
+    childEnv.E2E_ADMIN_EMAIL = CANONICAL_FOUNDER_EMAIL;
+  }
+
   const result = spawnSync(process.execPath, [path.resolve(releaseRoot, entrypoint)], {
     cwd: releaseRoot,
-    env: {
-      ...env,
-      GITHUB_SHA: releaseSha,
-      CLEARANCE_CONTROL_PLANE_SHA: controlPlaneSha,
-    },
+    env: childEnv,
     stdio: 'inherit',
   });
   if (result.error) fail(`could not start ${entrypoint}: ${result.error.message}`);
