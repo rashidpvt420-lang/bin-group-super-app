@@ -481,6 +481,22 @@ jobs:
             return seed;
           }
 
+          export function classifyFounderSignInFailure(error) {
+            const message = error instanceof Error ? String(error.message || '') : '';
+            const categories = [
+              [/Firebase first-factor sign-in failed:\s*(?:INVALID_LOGIN_CREDENTIALS|INVALID_PASSWORD)\b/i, 'FIRST_FACTOR_CREDENTIAL_REJECTED'],
+              [/Firebase first-factor sign-in failed:\s*(?:EMAIL_NOT_FOUND|USER_DISABLED|INVALID_EMAIL)\b/i, 'FOUNDER_ACCOUNT_REJECTED'],
+              [/(?:API_KEY_(?:INVALID|HTTP_REFERRER_BLOCKED)|PROJECT_NOT_FOUND|CONFIGURATION_NOT_FOUND)/i, 'API_KEY_OR_PROJECT_REJECTED'],
+              [/(?:TOO_MANY_ATTEMPTS_TRY_LATER|QUOTA_EXCEEDED|RESOURCE_EXHAUSTED)/i, 'PROVIDER_THROTTLED'],
+              [/Firebase did not return an enrolled TOTP challenge/i, 'TOTP_CHALLENGE_MISSING'],
+              [/Firebase TOTP sign-in failed(?: after two consecutive TOTP windows)?:\s*(?:INVALID_VERIFICATION_CODE|INVALID_CODE|CODE_EXPIRED|INCORRECT|EXPIRED)\b/i, 'TOTP_CODE_REJECTED'],
+              [/Firebase TOTP sign-in failed/i, 'TOTP_FINALIZE_REJECTED'],
+              [/Firebase Admin SDK rejected the Founder MFA ID token/i, 'SIGNED_TOKEN_REJECTED'],
+              [/Firebase (?:MFA ID token|sign-in|TOTP session)/i, 'VERIFIED_SESSION_REJECTED'],
+            ];
+            return categories.find(([pattern]) => pattern.test(message))?.[1] || 'UNKNOWN_REDACTED_FAILURE';
+          }
+
           export function checkRepairDeployment(doc, env, now) {
             if (doc?.status !== 'passed' || doc.projectId !== 'bin-group-57c60'
                 || doc.repository !== env.FOUNDER_REPAIR_REPOSITORY || doc.workflowRef !== 'refs/heads/main'
@@ -517,9 +533,11 @@ jobs:
                 totpSecret: seed,
                 referer: 'https://admin.bin-groups.com/',
               });
-            } catch {
-              // Do not echo provider payloads, codes, passwords, tokens or setup keys.
-              throw new Error('Production Founder TOTP sign-in failed; destination unchanged.');
+            } catch (error) {
+              // Emit only a fixed allowlisted category. Never echo provider payloads,
+              // codes, passwords, tokens, setup keys or arbitrary exception text.
+              const category = classifyFounderSignInFailure(error);
+              throw new Error(`Production Founder TOTP sign-in failed (${category}); destination unchanged.`);
             }
             if (!session?.uid || session.secondFactorType !== 'totp' || !session.secondFactorIdentifier) {
               throw new Error('Production sign-in did not verify the Founder TOTP factor; destination unchanged.');
