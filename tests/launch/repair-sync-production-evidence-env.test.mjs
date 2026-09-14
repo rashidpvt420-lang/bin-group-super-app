@@ -8,6 +8,6 @@ test('repair-and-sync payment evidence continues in production after verified cr
   const workflow = await readFile(workflowUrl, 'utf8');
   assert.match(
     workflow,
-    /environment:\s*\$\{\{ \(inputs\.founder_totp_operation == 'verify' \|\| inputs\.founder_totp_operation == 'repair-and-sync'\) && 'production' \|\| 'hard-public-launch' \}\}/,
+    /^\s{4}environment:\s*\$\{\{ \(inputs\.founder_totp_operation == 'verify' \|\| inputs\.founder_totp_operation == 'repair-and-sync'\) && 'production' \|\| 'hard-public-launch' \}\}$/m,
   );
 });
