@@ -14,7 +14,7 @@ test('application evidence workflow is protected and auto-discovers fixed produc
 
   assert.match(workflow, /^name:\s*Operational Application Evidence/m);
   assert.match(workflow, /^\s{2}verify-and-publish:/m);
-  assert.match(workflow, /environment:\s*\$\{\{ inputs\.founder_totp_operation == 'verify' && 'production' \|\| 'hard-public-launch' \}\}/);
+  assert.match(workflow, /environment:\s*\$\{\{ \(inputs\.founder_totp_operation == 'verify' \|\| inputs\.founder_totp_operation == 'repair-and-sync'\) && 'production' \|\| 'hard-public-launch' \}\}/);
   assert.match(workflow, /AUTHORIZED_FOUNDER_ACTORS:\s*\$\{\{ secrets\.AUTHORIZED_FOUNDER_ACTORS \}\}/);
   assert.match(workflow, /allowed_actors/);
   assert.match(workflow, /GITHUB_ACTOR.*allowed_actor/s);
@@ -351,6 +351,6 @@ test('[frozen-workflow] complete-batch binding preflight runs before production 
   assert.ok(preflight > 0);
   assert.ok(preflight < workflow.indexOf('- name: Authenticate Google Cloud'));
   assert.ok(preflight < workflow.indexOf('for gate in "${gates[@]}"'));
-  assert.match(workflow, /environment: \$\{\{ inputs\.founder_totp_operation == 'verify' && 'production' \|\| 'hard-public-launch' \}\}/);
+  assert.match(workflow, /environment: \$\{\{ \(inputs\.founder_totp_operation == 'verify' \|\| inputs\.founder_totp_operation == 'repair-and-sync'\) && 'production' \|\| 'hard-public-launch' \}\}/);
   assert.match(workflow, /E2E_FOUNDER_TOTP_SECRET: \$\{\{ secrets\.E2E_FOUNDER_TOTP_SECRET \}\}/);
 });
