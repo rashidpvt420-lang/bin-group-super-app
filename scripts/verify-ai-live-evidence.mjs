@@ -185,67 +185,220 @@ function assertExactSourceControls() {
   };
 }
 
+function firebaseAuthErrorCode(error) {
+  return text(error?.code || error?.errorInfo?.code).toLowerCase();
+}
+
+async function assertAuthUidAvailable(authAdmin, uid) {
+  try {
+    await authAdmin.getUser(uid);
+    fail('run-scoped AI evidence Auth identity already exists');
+  } catch (error) {
+    if (firebaseAuthErrorCode(error) !== 'auth/user-not-found') throw error;
+  }
+}
+
+function assertEvidenceAuthUser(user, { uid, displayName }) {
+  const claims = user.customClaims || {};
+  if (
+    user.uid !== uid
+    || user.displayName !== displayName
+    || text(user.email)
+    || text(user.phoneNumber)
+    || user.providerData.length !== 0
+    || Object.keys(claims).length !== 0
+  ) {
+    fail('run-scoped AI evidence Auth identity ownership check failed');
+  }
+}
+
+function assertEvidenceDocument(data, expected, label) {
+  if (
+    !data
+    || data.uid !== expected.uid
+    || text(data.evidenceRunId) !== expected.workflowRunId
+    || text(data.evidenceRunAttempt) !== expected.workflowRunAttempt
+    || data.aiEvidenceOnly !== true
+  ) {
+    fail(`${label} ownership check failed`);
+  }
+}
+
+async function provisionEvidenceFirestore(db, profileRef, usageRef, identity) {
+  await db.runTransaction(async (transaction) => {
+    const [profileSnap, usageSnap] = await Promise.all([
+      transaction.get(profileRef),
+      transaction.get(usageRef),
+    ]);
+    if (profileSnap.exists || usageSnap.exists) {
+      fail('run-scoped AI evidence Firestore identity already exists');
+    }
+    transaction.create(profileRef, {
+      uid: identity.uid,
+      role: 'ai_evidence_probe',
+      status: 'active',
+      aiEvidenceOnly: true,
+      evidenceRunId: identity.workflowRunId,
+      evidenceRunAttempt: identity.workflowRunAttempt,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    transaction.create(usageRef, {
+      uid: identity.uid,
+      day: identity.day,
+      counts: {},
+      totalUnits: 0,
+      reservations: {},
+      aiEvidenceOnly: true,
+      evidenceRunId: identity.workflowRunId,
+      evidenceRunAttempt: identity.workflowRunAttempt,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+  });
+}
+
+async function setIsolatedQuotaBoundary(db, usageRef, identity) {
+  await db.runTransaction(async (transaction) => {
+    const snap = await transaction.get(usageRef);
+    if (!snap.exists) fail('run-scoped AI evidence quota disappeared before boundary setup');
+    const data = snap.data() || {};
+    assertEvidenceDocument(data, identity, 'run-scoped AI evidence quota');
+    if (
+      data.day !== identity.day
+      || Number(data.counts?.chat || 0) !== 2
+      || Number(data.totalUnits || 0) !== 2
+      || Object.keys(data.reservations || {}).length !== 0
+    ) {
+      fail('provider probes did not leave the isolated quota in the expected state');
+    }
+    transaction.update(usageRef, {
+      counts: { chat: 49 },
+      totalUnits: 49,
+      reservations: {},
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+  });
+}
+
+async function disableAndRevokeEvidenceAuth(authAdmin, identity) {
+  const user = await authAdmin.getUser(identity.uid);
+  assertEvidenceAuthUser(user, identity);
+  if (!user.disabled) await authAdmin.updateUser(identity.uid, { disabled: true });
+  await authAdmin.revokeRefreshTokens(identity.uid);
+}
+
+async function removeEvidenceFirestore(db, profileRef, usageRef, identity) {
+  await db.runTransaction(async (transaction) => {
+    const [profileSnap, usageSnap] = await Promise.all([
+      transaction.get(profileRef),
+      transaction.get(usageRef),
+    ]);
+    if (!profileSnap.exists || !usageSnap.exists) {
+      fail('run-scoped AI evidence Firestore cleanup target is missing');
+    }
+    const profile = profileSnap.data() || {};
+    const usage = usageSnap.data() || {};
+    assertEvidenceDocument(profile, identity, 'run-scoped AI evidence profile');
+    assertEvidenceDocument(usage, identity, 'run-scoped AI evidence quota');
+    if (profile.role !== 'ai_evidence_probe' || profile.status !== 'active' || usage.day !== identity.day) {
+      fail('run-scoped AI evidence Firestore cleanup contract changed');
+    }
+    transaction.delete(usageRef);
+    transaction.delete(profileRef);
+  });
+}
+
+async function deleteEvidenceAuth(authAdmin, identity) {
+  const user = await authAdmin.getUser(identity.uid);
+  assertEvidenceAuthUser(user, identity);
+  if (!user.disabled) fail('run-scoped AI evidence Auth identity was not disabled before deletion');
+  await authAdmin.deleteUser(identity.uid);
+}
+
 const commitSha = text(process.env.GITHUB_SHA);
 const workflowRunId = text(process.env.GITHUB_RUN_ID);
+const workflowRunAttempt = text(process.env.GITHUB_RUN_ATTEMPT);
 const productionDeployRunId = text(process.env.PRODUCTION_DEPLOY_RUN_ID);
 const validatedArtifactDigest = text(process.env.VALIDATED_ARTIFACT_DIGEST).toLowerCase();
 const apiKey = text(process.env.VITE_FIREBASE_API_KEY);
 const appId = text(process.env.VITE_FIREBASE_APP_ID);
 const debugToken = text(process.env.VITE_FIREBASE_APPCHECK_DEBUG_TOKEN);
-const adminEmail = text(process.env.E2E_ADMIN_EMAIL).toLowerCase();
 
 if (process.env.GITHUB_ACTIONS !== 'true' || process.env.GITHUB_REF !== 'refs/heads/main') {
   fail('AI evidence may only run in the protected main workflow');
 }
-if (!/^[0-9a-f]{40}$/.test(commitSha) || !/^\d+$/.test(workflowRunId)) fail('exact commit SHA and numeric workflow run ID are required');
+if (!/^[0-9a-f]{40}$/.test(commitSha) || !/^\d+$/.test(workflowRunId) || !/^\d+$/.test(workflowRunAttempt)) {
+  fail('exact commit SHA and numeric workflow run identity are required');
+}
 if (!/^\d+$/.test(productionDeployRunId) || !/^sha256:[a-f0-9]{64}$/.test(validatedArtifactDigest)) {
   fail('same-SHA production deployment binding is required');
 }
-if (!apiKey || !appId || !adminEmail) fail('protected Firebase app and Admin evidence identity bindings are required');
+if (!apiKey || !appId) fail('protected Firebase app bindings are required');
 if (!debugToken || debugToken === 'true' || debugToken === 'false') fail('a registered App Check debug UUID is required');
 
 const projectId = resolveFirebaseAdminProjectId();
 if (projectId !== PROJECT_ID) fail(`unexpected Firebase project: ${projectId}`);
 initializeFirebaseAdmin(admin, projectId);
 const db = admin.firestore();
-const adminUser = await admin.auth().getUserByEmail(adminEmail);
-if (adminUser.disabled) fail('protected Admin evidence identity is disabled');
-const customToken = await admin.auth().createCustomToken(adminUser.uid);
-const auth = await exchangeCustomToken(apiKey, customToken);
-if (auth.uid !== adminUser.uid) fail('custom-token exchange returned the wrong UID');
+const authAdmin = admin.auth();
 const appCheckToken = await exchangeAppCheckToken(apiKey, appId, debugToken);
-
-const invalidAppCheck = await callSovereignAi({
-  idToken: auth.idToken,
-  appCheckToken: `invalid-${crypto.randomUUID()}`,
-  data: { text: 'App Check rejection probe.' },
-});
-const invalidStatus = text(invalidAppCheck.payload?.error?.status).toUpperCase();
-const invalidAppCheckRejected = [401, 403].includes(invalidAppCheck.response.status)
-  || ['UNAUTHENTICATED', 'PERMISSION_DENIED'].includes(invalidStatus);
-if (!invalidAppCheckRejected) {
-  fail(`invalid App Check token was not rejected; HTTP ${invalidAppCheck.response.status}`);
-}
-
 const day = new Date().toISOString().slice(0, 10);
-const usageRef = db.collection('ai_usage').doc(`${adminUser.uid}_${day}`);
-const originalUsage = await usageRef.get();
-const originalExists = originalUsage.exists;
-const originalData = originalUsage.data();
+const evidenceUid = `ai-evidence-${workflowRunId}-${workflowRunAttempt}`;
+const evidenceDisplayName = `AI Evidence Probe ${workflowRunId}/${workflowRunAttempt}`;
+const identity = Object.freeze({
+  uid: evidenceUid,
+  displayName: evidenceDisplayName,
+  day,
+  workflowRunId,
+  workflowRunAttempt,
+});
+const profileRef = db.collection('users').doc(evidenceUid);
+const usageRef = db.collection('ai_usage').doc(`${evidenceUid}_${day}`);
 let proofDraft;
 let executionError;
-let restored = false;
+let authCreated = false;
+let firestoreCreated = false;
+let identityDisabledAndRevoked = false;
+let firestoreRemoved = false;
+let authRemoved = false;
 
 try {
-  await usageRef.set({
-    uid: adminUser.uid,
-    day,
-    counts: {},
-    totalUnits: 0,
-    reservations: {},
-    evidenceRunId: workflowRunId,
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  await assertAuthUidAvailable(authAdmin, evidenceUid);
+  const createdUser = await authAdmin.createUser({
+    uid: evidenceUid,
+    displayName: evidenceDisplayName,
+    disabled: false,
   });
+  authCreated = true;
+  assertEvidenceAuthUser(createdUser, identity);
+  await provisionEvidenceFirestore(db, profileRef, usageRef, identity);
+  firestoreCreated = true;
+
+  // Forced provider selection is restricted to an admin-class callable token
+  // in the frozen release. These developer claims exist only in this in-memory
+  // custom-token exchange; they are never persisted on the Auth user.
+  const customToken = await authAdmin.createCustomToken(evidenceUid, {
+    role: 'admin',
+    admin: true,
+    aiEvidenceOnly: true,
+    evidenceRunId: workflowRunId,
+    evidenceRunAttempt: workflowRunAttempt,
+  });
+  const auth = await exchangeCustomToken(apiKey, customToken);
+  if (auth.uid !== evidenceUid) fail('custom-token exchange returned the wrong run-scoped UID');
+
+  const invalidAppCheck = await callSovereignAi({
+    idToken: auth.idToken,
+    appCheckToken: `invalid-${crypto.randomUUID()}`,
+    data: { text: 'App Check rejection probe.' },
+  });
+  const invalidStatus = text(invalidAppCheck.payload?.error?.status).toUpperCase();
+  const invalidAppCheckRejected = [401, 403].includes(invalidAppCheck.response.status)
+    || ['UNAUTHENTICATED', 'PERMISSION_DENIED'].includes(invalidStatus);
+  if (!invalidAppCheckRejected) {
+    fail(`invalid App Check token was not rejected; HTTP ${invalidAppCheck.response.status}`);
+  }
 
   const sensitiveProbe = {
     text: 'Explain the advisory boundary. Email proof.person@example.com, phone +971501234567, IBAN AE070331234567890123456 and Emirates ID 784-1990-1234567-1 must be removed.',
@@ -276,15 +429,7 @@ try {
   }
   if (Object.keys(afterProviderProbes.reservations || {}).length !== 0) fail('successful calls left quota reservations behind');
 
-  await usageRef.set({
-    uid: adminUser.uid,
-    day,
-    counts: { chat: 49 },
-    totalUnits: 49,
-    reservations: {},
-    evidenceRunId: workflowRunId,
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-  });
+  await setIsolatedQuotaBoundary(db, usageRef, identity);
 
   const boundarySuccessResult = await callSovereignAi({
     idToken: auth.idToken,
@@ -336,11 +481,21 @@ try {
     commitSha,
     projectId,
     workflowRunId,
+    workflowRunAttempt,
     productionDeployRunId,
     validatedArtifactDigest,
     functionName: FUNCTION_NAME,
     functionRegion: 'europe-west3',
-    authenticatedUidHash: sha256(adminUser.uid),
+    authenticatedUidHash: sha256(evidenceUid),
+    evidenceIdentity: {
+      lifecycle: 'ephemeral-run-scoped',
+      persistentEmail: false,
+      persistentPasswordProvider: false,
+      persistentCustomClaims: false,
+      canonicalFounderUsed: false,
+      profileRemoved: false,
+      authUserRemoved: false,
+    },
     appCheck: {
       invalidTokenStatus: invalidAppCheck.response.status,
       invalidTokenRejected: true,
@@ -364,7 +519,7 @@ try {
       boundaryRejected: true,
       rejectedAttemptUncharged: true,
       reservationsCleared: true,
-      originalUsageRestored: false,
+      isolatedUsageRemoved: false,
     },
     slo: {
       thresholds: {
@@ -400,18 +555,44 @@ try {
 } catch (error) {
   executionError = error;
 } finally {
-  try {
-    if (originalExists) await usageRef.set(originalData);
-    else await usageRef.delete();
-    restored = true;
-  } catch (restoreError) {
-    executionError = executionError || restoreError;
+  const cleanupErrors = [];
+  if (authCreated) {
+    try {
+      await disableAndRevokeEvidenceAuth(authAdmin, identity);
+      identityDisabledAndRevoked = true;
+    } catch (error) {
+      cleanupErrors.push(error);
+    }
+  }
+  if (firestoreCreated) {
+    try {
+      await removeEvidenceFirestore(db, profileRef, usageRef, identity);
+      firestoreRemoved = true;
+    } catch (error) {
+      cleanupErrors.push(error);
+    }
+  }
+  if (authCreated && identityDisabledAndRevoked) {
+    try {
+      await deleteEvidenceAuth(authAdmin, identity);
+      authRemoved = true;
+    } catch (error) {
+      cleanupErrors.push(error);
+    }
+  }
+  if (cleanupErrors.length) {
+    const cleanupError = new AggregateError(cleanupErrors, 'run-scoped AI evidence cleanup failed');
+    executionError = executionError
+      ? new AggregateError([executionError, cleanupError], 'AI evidence execution and cleanup failed')
+      : cleanupError;
   }
 }
 
 if (executionError) throw executionError;
-if (!proofDraft || !restored) fail('AI proof did not complete or restore the original quota record');
-proofDraft.quota.originalUsageRestored = true;
+if (!proofDraft || !firestoreRemoved || !authRemoved) fail('AI proof did not complete run-scoped identity cleanup');
+proofDraft.quota.isolatedUsageRemoved = true;
+proofDraft.evidenceIdentity.profileRemoved = true;
+proofDraft.evidenceIdentity.authUserRemoved = true;
 const outputPath = path.resolve('launch_package/ai-provider-health-proof.json');
 mkdirSync(path.dirname(outputPath), { recursive: true });
 writeFileSync(outputPath, `${JSON.stringify(proofDraft, null, 2)}\n`, { mode: 0o600 });

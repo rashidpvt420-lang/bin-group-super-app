@@ -154,7 +154,7 @@ jobs:
           git -C control-plane merge-base --is-ancestor "$RELEASE_SHA" "$CONTROL_PLANE_SHA" || { echo "::error::Frozen release is not an ancestor of the current control plane."; exit 1; }
           changed="$(git -C control-plane diff --name-only "$RELEASE_SHA" "$CONTROL_PLANE_SHA")"
           [[ -n "$changed" ]] || { echo "::error::No reviewed control-plane repair exists above the frozen release."; exit 1; }
-          allowed='^(\.github/workflows/firebase-production-deploy\.yml|\.github/workflows/live-role-smoke\.yml|\.github/workflows/operational-application-evidence\.yml|\.github/workflows/operational-provider-evidence\.yml|\.github/workflows/privileged-access-rotation-evidence\.yml|\.github/workflows/technician-physical-evidence\.yml|scripts/finalize-operational-provider-evidence\.mjs|scripts/hard-clearance-production-revalidation\.mjs|scripts/launch-status\.mjs|scripts/publish-direct-operational-proof\.mjs|scripts/publish-operational-application-evidence\.mjs|scripts/publish-operational-provider-evidence\.mjs|scripts/resolve-admin-app-check-site-key\.mjs|scripts/run-frozen-release-evidence\.mjs|scripts/verify-hard-launch-approval\.mjs|scripts/verify-operational-readiness\.mjs|tests/launch/ai-operational-contract\.test\.mjs|tests/launch/external-gate-production-provenance\.test\.mjs|tests/launch/final-operational-evidence-producers\.test\.mjs|tests/launch/hard-clearance-revalidation\.test\.mjs|tests/launch/operational-application-evidence-audit\.test\.mjs)$'
+          allowed='^(\.github/workflows/firebase-production-deploy\.yml|\.github/workflows/live-role-smoke\.yml|\.github/workflows/operational-application-evidence\.yml|\.github/workflows/operational-provider-evidence\.yml|\.github/workflows/privileged-access-rotation-evidence\.yml|\.github/workflows/technician-physical-evidence\.yml|scripts/finalize-operational-provider-evidence\.mjs|scripts/hard-clearance-production-revalidation\.mjs|scripts/launch-status\.mjs|scripts/publish-direct-operational-proof\.mjs|scripts/publish-operational-application-evidence\.mjs|scripts/publish-operational-provider-evidence\.mjs|scripts/resolve-admin-app-check-site-key\.mjs|scripts/run-frozen-release-evidence\.mjs|scripts/verify-ai-live-evidence\.mjs|scripts/verify-hard-launch-approval\.mjs|scripts/verify-operational-readiness\.mjs|tests/launch/ai-operational-contract\.test\.mjs|tests/launch/external-gate-production-provenance\.test\.mjs|tests/launch/final-operational-evidence-producers\.test\.mjs|tests/launch/hard-clearance-revalidation\.test\.mjs|tests/launch/operational-application-evidence-audit\.test\.mjs)$'
           while IFS= read -r file; do
             [[ -z "$file" || "$file" =~ $allowed ]] || { echo "::error::Non-control-plane file changed since frozen release: $file"; exit 1; }
           done <<< "$changed"
@@ -166,10 +166,11 @@ jobs:
           ref: ${{ inputs.frozen_release_sha }}
           path: release
 
-      - name: Overlay reviewed dual-SHA publishers only
+      - name: Overlay reviewed dual-SHA publishers and isolated AI verifier only
         run: |
           cp control-plane/scripts/publish-operational-provider-evidence.mjs release/scripts/publish-operational-provider-evidence.mjs
           cp control-plane/scripts/finalize-operational-provider-evidence.mjs release/scripts/finalize-operational-provider-evidence.mjs
+          cp control-plane/scripts/verify-ai-live-evidence.mjs release/scripts/verify-ai-live-evidence.mjs
 
       - name: Use Node.js 22
         uses: actions/setup-node@v4
@@ -224,69 +225,6 @@ jobs:
           appendFileSync(process.env.GITHUB_ENV, `VALIDATED_ARTIFACT_DIGEST=${digest}\n`);
           NODE
 
-      - name: Provision run-scoped AI evidence Admin
-        if: inputs.gate == 'aiProviderHealth'
-        working-directory: release
-        run: |
-          set -euo pipefail
-          node --input-type=module <<'NODE'
-          import { appendFileSync } from 'node:fs';
-          import admin from 'firebase-admin';
-          import { initializeFirebaseAdmin, resolveFirebaseAdminProjectId } from './scripts/firebase-admin-bootstrap.mjs';
-
-          const founder = 'ceo@bin-groups.com';
-          const configuredAdmin = String(process.env.E2E_ADMIN_EMAIL || '').trim().toLowerCase();
-          const base = 'ai-evidence@bin-groups.com';
-          const runId = String(process.env.GITHUB_RUN_ID || '').trim();
-          const runAttempt = String(process.env.GITHUB_RUN_ATTEMPT || '').trim();
-          if (!/^\S+@\S+\.\S+$/.test(configuredAdmin) || configuredAdmin === founder || !/^\d+$/.test(runId) || !/^\d+$/.test(runAttempt)) {
-            throw new Error('invalid protected AI evidence identity/run binding');
-          }
-          const at = base.lastIndexOf('@');
-          const email = `${base.slice(0, at)}+ai-evidence-${runId}-${runAttempt}@${base.slice(at + 1)}`;
-          if (email === founder || email === configuredAdmin) throw new Error('AI evidence identity must be isolated from Founder and configured E2E Admin');
-
-          const projectId = resolveFirebaseAdminProjectId();
-          if (projectId !== 'bin-group-57c60') throw new Error(`unexpected Firebase project: ${projectId}`);
-          initializeFirebaseAdmin(admin, projectId);
-          const auth = admin.auth();
-          const db = admin.firestore();
-
-          try {
-            await auth.getUserByEmail(email);
-            throw new Error('run-scoped AI evidence identity already exists; refusing to reuse it');
-          } catch (error) {
-            if (error?.code !== 'auth/user-not-found') throw error;
-          }
-
-          const user = await auth.createUser({
-            email,
-            emailVerified: true,
-            disabled: false,
-            displayName: 'BIN GROUP AI Evidence Admin',
-          });
-          await auth.setCustomUserClaims(user.uid, {
-            admin: true,
-            role: 'admin',
-            testAccount: true,
-            aiEvidenceRunId: runId,
-            aiEvidenceRunAttempt: runAttempt,
-          });
-          await db.collection('users').doc(user.uid).set({
-            email,
-            role: 'admin',
-            admin: true,
-            active: true,
-            testAccount: true,
-            aiEvidenceRunId: runId,
-            aiEvidenceRunAttempt: runAttempt,
-            evidenceOnly: true,
-            createdAt: admin.firestore.FieldValue.serverTimestamp(),
-          });
-          appendFileSync(process.env.GITHUB_ENV, `E2E_ADMIN_EMAIL=${base}\nAI_EVIDENCE_ADMIN_EMAIL=${email}\n`);
-          console.log('[ai-evidence] provisioned isolated run-scoped Admin principal');
-          NODE
-
       - name: Verify BIN GROUP branded SMTP delivery
         if: inputs.gate == 'brandedEmailDelivery' || inputs.gate == 'all-baseline'
         working-directory: release
@@ -304,7 +242,7 @@ jobs:
           PRODUCTION_DEPLOY_RUN_ID: ${{ inputs.production_deploy_run_id }}
         run: node ../control-plane/scripts/run-frozen-release-evidence.mjs scripts/verify-ai-live-evidence.mjs
 
-      - name: Retire only the run-scoped AI evidence Admin
+      - name: Enforce run-scoped AI evidence fallback cleanup
         if: always() && inputs.gate == 'aiProviderHealth'
         working-directory: release
         run: |
@@ -313,17 +251,11 @@ jobs:
           import admin from 'firebase-admin';
           import { initializeFirebaseAdmin, resolveFirebaseAdminProjectId } from './scripts/firebase-admin-bootstrap.mjs';
 
-          const founder = 'ceo@bin-groups.com';
-          const email = String(process.env.AI_EVIDENCE_ADMIN_EMAIL || '').trim().toLowerCase();
           const runId = String(process.env.GITHUB_RUN_ID || '').trim();
           const runAttempt = String(process.env.GITHUB_RUN_ATTEMPT || '').trim();
-          if (!email) {
-            console.log('[ai-evidence] no run-scoped Admin was provisioned; nothing to retire');
-            process.exit(0);
-          }
-          if (!/^\S+@\S+\.\S+$/.test(email) || email === founder || !/^\d+$/.test(runId) || !/^\d+$/.test(runAttempt)) {
-            throw new Error('invalid protected AI evidence cleanup binding');
-          }
+          if (!/^\d+$/.test(runId) || !/^\d+$/.test(runAttempt)) throw new Error('invalid AI evidence cleanup run binding');
+          const uid = `ai-evidence-${runId}-${runAttempt}`;
+          const displayName = `AI Evidence Probe ${runId}/${runAttempt}`;
 
           const projectId = resolveFirebaseAdminProjectId();
           if (projectId !== 'bin-group-57c60') throw new Error(`unexpected Firebase project: ${projectId}`);
@@ -331,42 +263,76 @@ jobs:
           const auth = admin.auth();
           const db = admin.firestore();
 
-          let user;
+          let user = null;
           try {
-            user = await auth.getUserByEmail(email);
+            user = await auth.getUser(uid);
           } catch (error) {
-            if (error?.code === 'auth/user-not-found') {
-              console.log('[ai-evidence] no run-scoped Admin remains to retire');
-              process.exit(0);
-            }
-            throw error;
+            if (error?.code !== 'auth/user-not-found') throw error;
           }
 
-          const claims = user.customClaims || {};
-          const profileRef = db.collection('users').doc(user.uid);
-          const profile = await profileRef.get();
-          const data = profile.data() || {};
-          const owned = claims.admin === true
-            && claims.role === 'admin'
-            && claims.testAccount === true
-            && String(claims.aiEvidenceRunId || '') === runId
-            && String(claims.aiEvidenceRunAttempt || '') === runAttempt
-            && profile.exists
-            && data.admin === true
-            && data.role === 'admin'
-            && data.testAccount === true
-            && data.evidenceOnly === true
-            && String(data.aiEvidenceRunId || '') === runId
-            && String(data.aiEvidenceRunAttempt || '') === runAttempt
-            && String(data.email || '').toLowerCase() === email;
-          if (!owned) throw new Error('refusing to retire an AI evidence identity not owned by this exact run');
+          const authOwned = user === null || (
+            user.uid === uid
+            && user.displayName === displayName
+            && !user.email
+            && !user.phoneNumber
+            && user.providerData.length === 0
+            && Object.keys(user.customClaims || {}).length === 0
+          );
+          if (!authOwned) throw new Error('refusing to clean an Auth identity not owned by this exact AI evidence run');
+          if (user) {
+            if (!user.disabled) await auth.updateUser(uid, { disabled: true });
+            await auth.revokeRefreshTokens(uid);
+          }
 
-          await auth.revokeRefreshTokens(user.uid);
-          const day = new Date().toISOString().slice(0, 10);
-          await db.collection('ai_usage').doc(`${user.uid}_${day}`).delete();
-          await profileRef.delete();
-          await auth.deleteUser(user.uid);
-          console.log('[ai-evidence] retired isolated run-scoped Admin principal');
+          const profileRef = db.collection('users').doc(uid);
+          const usageQuery = db.collection('ai_usage').where('uid', '==', uid);
+          let deletedProfile = false;
+          let deletedUsage = 0;
+          await db.runTransaction(async (transaction) => {
+            const [profile, usage] = await Promise.all([
+              transaction.get(profileRef),
+              transaction.get(usageQuery),
+            ]);
+            if (profile.exists) {
+              const data = profile.data() || {};
+              const profileOwned = data.uid === uid
+                && data.role === 'ai_evidence_probe'
+                && data.status === 'active'
+                && data.aiEvidenceOnly === true
+                && String(data.evidenceRunId || '') === runId
+                && String(data.evidenceRunAttempt || '') === runAttempt;
+              if (!profileOwned) throw new Error('refusing to clean a profile not owned by this exact AI evidence run');
+              transaction.delete(profileRef);
+              deletedProfile = true;
+            }
+            for (const doc of usage.docs) {
+              const data = doc.data() || {};
+              const day = String(data.day || '');
+              const markerOwned = data.aiEvidenceOnly === undefined || (
+                data.aiEvidenceOnly === true
+                && String(data.evidenceRunId || '') === runId
+                && String(data.evidenceRunAttempt || '') === runAttempt
+              );
+              if (data.uid !== uid || !/^\d{4}-\d{2}-\d{2}$/.test(day) || doc.id !== `${uid}_${day}` || !markerOwned) {
+                throw new Error('refusing to clean quota data not owned by this exact AI evidence run');
+              }
+              transaction.delete(doc.ref);
+              deletedUsage += 1;
+            }
+          });
+
+          if (user) {
+            const disabledUser = await auth.getUser(uid);
+            const safeToDelete = disabledUser.disabled
+              && disabledUser.displayName === displayName
+              && !disabledUser.email
+              && !disabledUser.phoneNumber
+              && disabledUser.providerData.length === 0
+              && Object.keys(disabledUser.customClaims || {}).length === 0;
+            if (!safeToDelete) throw new Error('AI evidence Auth identity changed during fallback cleanup');
+            await auth.deleteUser(uid);
+          }
+          console.log(`[ai-evidence] fallback cleanup verified auth=${Boolean(user)} profile=${deletedProfile} usage=${deletedUsage}`);
           NODE
 
       - name: Verify live Stripe payment and exactly-once webhook replay
