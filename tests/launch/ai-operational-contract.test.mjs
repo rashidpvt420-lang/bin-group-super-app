@@ -118,7 +118,7 @@ test('AI evidence uses an exact reviewed run-scoped identity without touching a 
     () => assertReviewedAiVerifierSource(verifier.replace("role: 'ai_evidence_probe'", "role: 'admin'")),
     /unreviewed isolated AI verifier/,
   );
-  assert.match(wrapper, /REVIEWED_AI_VERIFIER_BLOB = 'c49747b3f27d4216e085fceb97b8999dad874f15'/);
+  assert.match(wrapper, /REVIEWED_AI_VERIFIER_BLOB = '481b466417f3c5c97ceeae45c0fb395e8824f04a'/);
   assert.match(wrapper, /assertReviewedAiVerifier\(releaseRoot\)/);
   assert.match(workflow, /cp control-plane\/scripts\/verify-ai-live-evidence\.mjs release\/scripts\/verify-ai-live-evidence\.mjs/);
   assert.match(workflow, /Enforce run-scoped AI evidence fallback cleanup/);
@@ -130,6 +130,8 @@ test('AI evidence uses an exact reviewed run-scoped identity without touching a 
 
   assert.match(verifier, /const evidenceUid = `ai-evidence-\$\{workflowRunId\}-\$\{workflowRunAttempt\}`/);
   assert.match(verifier, /authAdmin\.createUser\(\{/);
+  assert.match(verifier, /authAdmin\.verifyIdToken\(idToken, true\)/);
+  assert.doesNotMatch(verifier, /payload\?\.localId/);
   assert.match(verifier, /role: 'ai_evidence_probe'/);
   assert.match(verifier, /transaction\.create\(profileRef/);
   assert.match(verifier, /transaction\.create\(usageRef/);
