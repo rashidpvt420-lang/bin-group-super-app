@@ -169,7 +169,9 @@ function credentialFixture(mode = 'verify') {
     GITHUB_SHA: 'a'.repeat(40), TARGET_SHA: 'a'.repeat(40),
     AUTHORIZED_FOUNDER_ACTORS: ' fixture-owner, fixture-reviewer ', GITHUB_ACTOR: 'fixture-owner', GITHUB_TRIGGERING_ACTOR: 'fixture-owner',
     FOUNDER_TOTP_OPERATION: mode,
-    CONFIRMATION: mode === 'sync' ? 'SYNC_PRODUCTION_FOUNDER_TOTP_AND_VERIFY_PAYMENT' : 'VERIFY_PRODUCTION_FOUNDER_TOTP',
+    CONFIRMATION: mode === 'sync' ? 'SYNC_PRODUCTION_FOUNDER_TOTP_AND_VERIFY_PAYMENT'
+      : mode === 'repair-and-sync' ? 'REPAIR_PRODUCTION_FOUNDER_PASSWORD_VERIFY_TOTP_AND_SYNC_DESTINATION'
+        : 'VERIFY_PRODUCTION_FOUNDER_TOTP',
     E2E_FOUNDER_EMAIL: 'ceo@bin-groups.com', E2E_FOUNDER_PASSWORD: 'local-only-fixture-password',
     E2E_FOUNDER_TOTP_SECRET: 'JBSWY3DPEHPK3PXP', VITE_FIREBASE_API_KEY: 'local-only-api-key',
     FOUNDER_TOTP_SYNC_TOKEN: 'local-only-permission-token', RUNNER_TEMP: '/tmp/local-only', PATH: '/usr/bin',
@@ -244,7 +246,7 @@ test('[founder-credential] verify-only signs in but never invokes the writer or 
     }, writeSecret: async () => assert.fail('verify-only must not write'),
   });
   assert.equal(signIns, 1);
-  assert.deepEqual(report, { sourceVerified: true, targetUpdated: false });
+  assert.deepEqual(report, { sourceVerified: true, targetUpdated: false, passwordSynchronized: false });
 });
 
 test('[founder-credential] sync requires permission first, then a verified TOTP factor before exactly one write', async () => {
@@ -257,7 +259,86 @@ test('[founder-credential] sync requires permission first, then a verified TOTP 
   assert.deepEqual(order, []);
   const report = await api.repairFounderTotp({ ...f, signIn, writeSecret });
   assert.deepEqual(order, ['signin', 'write']);
-  assert.deepEqual(report, { sourceVerified: true, targetUpdated: true });
+  assert.deepEqual(report, { sourceVerified: true, targetUpdated: true, passwordSynchronized: false });
+});
+
+test('[founder-credential] explicit repair synchronizes only the eligible canonical Founder, then requires existing TOTP before one destination write', async () => {
+  const { api } = await credentialProgram();
+  const f = credentialFixture('repair-and-sync');
+  const founder = {
+    uid: 'canonical-founder-uid', email: 'ceo@bin-groups.com', disabled: false, emailVerified: true,
+    customClaims: { role: 'ceo', admin: true },
+    multiFactor: { enrolledFactors: [{ factorId: 'totp', uid: 'canonical-totp-factor' }] },
+  };
+  const order = [];
+  let attempts = 0;
+  const report = await api.repairFounderTotp({ ...f,
+    signIn: async () => {
+      order.push('signin');
+      if (attempts++ === 0) throw new Error('Firebase first-factor sign-in failed: INVALID_LOGIN_CREDENTIALS');
+      return f.session;
+    },
+    loadFounder: async (email) => { assert.equal(email, founder.email); order.push('load'); return founder; },
+    updatePassword: async (uid, password) => {
+      assert.equal(uid, founder.uid); assert.equal(password, f.env.E2E_FOUNDER_PASSWORD); order.push('password');
+    },
+    claimsGrantAdminPortal: (claims) => claims.admin === true,
+    recoveryApproverRole: (claims) => claims.role,
+    writeSecret: async (seed) => { assert.equal(seed, f.env.E2E_FOUNDER_TOTP_SECRET); order.push('write'); },
+  });
+  assert.deepEqual(order, ['signin', 'load', 'password', 'signin', 'write']);
+  assert.deepEqual(report, { sourceVerified: true, targetUpdated: true, passwordSynchronized: true });
+});
+
+test('[founder-credential] repair refuses account, claims and TOTP drift before a password or destination write', async () => {
+  const { api } = await credentialProgram();
+  const f = credentialFixture('repair-and-sync');
+  const valid = {
+    uid: 'canonical-founder-uid', email: 'ceo@bin-groups.com', disabled: false, emailVerified: true,
+    customClaims: { role: 'ceo', admin: true },
+    multiFactor: { enrolledFactors: [{ factorId: 'totp', uid: 'canonical-totp-factor' }] },
+  };
+  const variants = [
+    { uid: '' }, { email: 'other@example.com' }, { disabled: true }, { emailVerified: false },
+    { customClaims: { role: 'member', admin: false } }, { multiFactor: { enrolledFactors: [] } },
+    { multiFactor: { enrolledFactors: [{ factorId: 'phone', uid: 'phone-factor' }] } },
+    { multiFactor: { enrolledFactors: [{ factorId: 'totp', uid: 'one' }, { factorId: 'totp', uid: 'two' }] } },
+  ];
+  for (const override of variants) {
+    let writes = 0;
+    await assert.rejects(api.repairFounderTotp({ ...f,
+      signIn: async () => { throw new Error('Firebase first-factor sign-in failed: INVALID_LOGIN_CREDENTIALS'); },
+      loadFounder: async () => ({ ...valid, ...override }),
+      updatePassword: async () => { writes++; }, writeSecret: async () => { writes++; },
+      claimsGrantAdminPortal: (claims) => claims.admin === true,
+      recoveryApproverRole: (claims) => claims.role,
+    }), /not eligible/);
+    assert.equal(writes, 0);
+  }
+});
+
+test('[founder-credential] repair never mutates for non-password failures and never copies after a failed post-repair TOTP check', async () => {
+  const { api } = await credentialProgram();
+  const f = credentialFixture('repair-and-sync');
+  let updates = 0;
+  await assert.rejects(api.repairFounderTotp({ ...f,
+    signIn: async () => { throw new Error('Firebase TOTP sign-in failed: INVALID_VERIFICATION_CODE'); },
+    loadFounder: async () => assert.fail('account must not be loaded'), updatePassword: async () => { updates++; },
+    writeSecret: async () => { updates++; },
+  }), /TOTP_CODE_REJECTED/);
+  assert.equal(updates, 0);
+
+  const founder = { uid: 'canonical-founder-uid', email: 'ceo@bin-groups.com', disabled: false, emailVerified: true,
+    customClaims: { role: 'super_admin', admin: true },
+    multiFactor: { enrolledFactors: [{ factorId: 'totp', uid: 'canonical-totp-factor' }] } };
+  await assert.rejects(api.repairFounderTotp({ ...f,
+    signIn: async () => { throw new Error(updates++ === 0
+      ? 'Firebase first-factor sign-in failed: INVALID_LOGIN_CREDENTIALS'
+      : 'Firebase TOTP sign-in failed: INVALID_VERIFICATION_CODE'); },
+    loadFounder: async () => founder, updatePassword: async () => { updates++; },
+    claimsGrantAdminPortal: () => true, recoveryApproverRole: () => 'super_admin',
+    writeSecret: async () => assert.fail('failed TOTP must not reach destination'),
+  }), /password synchronized but TOTP sign-in failed \(TOTP_CODE_REJECTED\)/);
 });
 
 test('[founder-credential] failed source sign-in, wrong factor or missing identity never changes the target', async () => {
@@ -352,11 +433,16 @@ test('[founder-credential] both environments authorize and only successful expli
   assert.match(production, /needs: authorize-founder-totp-repair/);
   assert.match(production, /environment: production/);
   assert.match(production, /group: founder-totp-credential-sync/);
-  assert.match(production, /FOUNDER_TOTP_SYNC_TOKEN: \$\{\{ inputs\.founder_totp_operation == 'sync'/);
+  assert.match(production, /FOUNDER_TOTP_SYNC_TOKEN: \$\{\{ \(inputs\.founder_totp_operation == 'sync' \|\| inputs\.founder_totp_operation == 'repair-and-sync'\)/);
   assert.match(workflow, /needs: \[authorize-founder-totp-repair, verify-and-sync-founder-totp\]/);
-  assert.match(workflow, /!cancelled\(\).*inputs\.founder_totp_operation == 'sync' && needs\.verify-and-sync-founder-totp\.result == 'success'/);
+  assert.match(workflow, /!cancelled\(\).*inputs\.founder_totp_operation == 'repair-and-sync'.*needs\.verify-and-sync-founder-totp\.result == 'success'/);
   assert.match(source, /await import\('\.\/scripts\/lib\/firebase-mfa-sign-in\.mjs'\)/);
-  assert.doesNotMatch(source, /verify-founder-totp-signin\.mjs|updateUser\(|deleteUser\(|unenroll\(|setCustomUserClaims\(|revokeRefreshTokens\(/);
+  assert.match(source, /await import\('\.\/scripts\/verify-admin-mfa-production\.mjs'\)/);
+  assert.match(source, /initializeFirebaseAdmin\(admin, process\.env\.GCP_PROJECT_ID\)/);
+  assert.match(source, /auth\.updateUser\(uid, \{ password \}\)/);
+  assert.match(source, /category !== 'FIRST_FACTOR_CREDENTIAL_REJECTED'/);
+  assert.match(source, /totpFactors\.length !== 1/);
+  assert.doesNotMatch(source, /verify-founder-totp-signin\.mjs|deleteUser\(|unenroll\(|setCustomUserClaims\(|revokeRefreshTokens\(/);
   assert.doesNotMatch(production, /upload-artifact|GITHUB_OUTPUT|GITHUB_STEP_SUMMARY|firebase deploy|deploy-firebase-production\.mjs/);
   assert.doesNotMatch(workflow, /GITHUB_ACTOR.*rashidpvt420-lang/s);
 });
