@@ -515,7 +515,7 @@ jobs:
                 email,
                 password: env.E2E_FOUNDER_PASSWORD,
                 totpSecret: seed,
-                referer: 'https://bin-group-admin-panel.web.app/',
+                referer: 'https://admin.bin-groups.com/',
               });
             } catch {
               // Do not echo provider payloads, codes, passwords, tokens or setup keys.
