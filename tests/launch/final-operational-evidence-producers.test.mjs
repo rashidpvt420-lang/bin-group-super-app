@@ -238,7 +238,7 @@ test('[founder-credential] verify-only signs in but never invokes the writer or 
     signIn: async (bindings) => {
       signIns++;
       assert.equal(bindings.email, 'ceo@bin-groups.com');
-      assert.equal(bindings.referer, 'https://bin-group-admin-panel.web.app/');
+      assert.equal(bindings.referer, 'https://admin.bin-groups.com/');
       assert.equal(bindings.totpSecret, f.env.E2E_FOUNDER_TOTP_SECRET);
       return f.session;
     }, writeSecret: async () => assert.fail('verify-only must not write'),
