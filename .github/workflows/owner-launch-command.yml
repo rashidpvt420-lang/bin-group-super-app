@@ -281,3 +281,54 @@ jobs:
             echo '- Raw job log uploaded: false'
             echo '- Hard-launch claim: false'
           } >> "$GITHUB_STEP_SUMMARY"
+
+  dispatch-founder-totp-payment-evidence:
+    name: Dispatch protected Founder TOTP payment evidence
+    if: >-
+      github.event.issue.number == 434 &&
+      !github.event.issue.pull_request &&
+      github.event.comment.user.login == github.repository_owner &&
+      github.event.comment.author_association == 'OWNER' &&
+      github.event.comment.body == '/bin-launch sync-founder-totp-payment'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPOSITORY: ${{ github.repository }}
+      ISSUE_NUMBER: '434'
+
+    steps:
+      - name: Resolve and lock exact current main
+        id: release
+        shell: bash
+        run: |
+          set -euo pipefail
+          first_sha="$(gh api "repos/$REPOSITORY/commits/main" --jq '.sha')"
+          [[ "$first_sha" == '9c9732a2e63916b3793889761a9c760e0f0ebe83' ]] || {
+            echo '::error::Current main no longer matches the reviewed hard-launch control-plane SHA.'
+            exit 1
+          }
+          sleep 3
+          second_sha="$(gh api "repos/$REPOSITORY/commits/main" --jq '.sha')"
+          [[ "$first_sha" == "$second_sha" ]] || {
+            echo '::error::Main moved during launch authorization.'
+            exit 1
+          }
+          echo "sha=$second_sha" >> "$GITHUB_OUTPUT"
+
+      - name: Dispatch exactly one protected evidence run
+        env:
+          TARGET_SHA: ${{ steps.release.outputs.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          jq -n \
+            --arg ref main \
+            --arg sha "$TARGET_SHA" \
+            '{ref:$ref,inputs:{gate:"paymentUnlockExactlyOnce",founder_totp_operation:"sync",expected_commit_sha:$sha,frozen_release_sha:"15b09519222e749808c2a18b5d1ab1c3126fcb42",production_deploy_run_id:"34500748478",confirmation:"SYNC_PRODUCTION_FOUNDER_TOTP_AND_VERIFY_PAYMENT"}}' \
+            > dispatch.json
+          gh api --method POST \
+            "repos/$REPOSITORY/actions/workflows/operational-application-evidence.yml/dispatches" \
+            --input dispatch.json
+          gh api --method POST "repos/$REPOSITORY/issues/$ISSUE_NUMBER/comments" \
+            -f body="Founder TOTP payment evidence dispatch accepted for exact main \`$TARGET_SHA\`. No repository settings, secrets, environments, MFA factors, branches, or application files were modified by this owner command." >/dev/null
