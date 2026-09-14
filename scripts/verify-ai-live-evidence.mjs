@@ -28,7 +28,7 @@ async function parseResponse(response) {
   catch { return { raw: bodyText.slice(0, 500) }; }
 }
 
-async function exchangeCustomToken(apiKey, customToken) {
+async function exchangeCustomToken(apiKey, customToken, authAdmin) {
   const endpoint = new URL('https://identitytoolkit.googleapis.com/v1/accounts:signInWithCustomToken');
   endpoint.searchParams.set('key', apiKey);
   const response = await fetch(endpoint, {
@@ -40,10 +40,14 @@ async function exchangeCustomToken(apiKey, customToken) {
     body: JSON.stringify({ token: customToken, returnSecureToken: true }),
   });
   const payload = await parseResponse(response);
-  if (!response.ok || !text(payload?.idToken) || !text(payload?.localId)) {
+  const idToken = text(payload?.idToken);
+  if (!response.ok || !idToken) {
     fail(`protected Firebase custom-token exchange failed with HTTP ${response.status}`);
   }
-  return { idToken: text(payload.idToken), uid: text(payload.localId) };
+  const decodedToken = await authAdmin.verifyIdToken(idToken, true);
+  const uid = text(decodedToken?.uid || decodedToken?.sub);
+  if (!uid) fail('protected Firebase custom-token exchange returned no verified UID');
+  return { idToken, uid };
 }
 
 async function exchangeAppCheckToken(apiKey, appId, debugToken) {
@@ -385,7 +389,7 @@ try {
     evidenceRunId: workflowRunId,
     evidenceRunAttempt: workflowRunAttempt,
   });
-  const auth = await exchangeCustomToken(apiKey, customToken);
+  const auth = await exchangeCustomToken(apiKey, customToken, authAdmin);
   if (auth.uid !== evidenceUid) fail('custom-token exchange returned the wrong run-scoped UID');
 
   const invalidAppCheck = await callSovereignAi({

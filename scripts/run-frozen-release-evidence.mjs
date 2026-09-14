@@ -59,7 +59,7 @@ const LEGACY_ACTIVATION_CHECK = [
 // deployed runtime. Pin the exact verifier blob so the dual-SHA overlay cannot
 // silently expand beyond the reviewed run-scoped quota isolation contract.
 const AI_VERIFIER = 'scripts/verify-ai-live-evidence.mjs';
-const REVIEWED_AI_VERIFIER_BLOB = 'c49747b3f27d4216e085fceb97b8999dad874f15';
+const REVIEWED_AI_VERIFIER_BLOB = '481b466417f3c5c97ceeae45c0fb395e8824f04a';
 
 export function assertApplicationEvidenceCredentials(gate, env = process.env) {
   if (!['all', 'paymentUnlockExactlyOnce', 'brokerCommissionLockExactlyOnce'].includes(gate)) return;
