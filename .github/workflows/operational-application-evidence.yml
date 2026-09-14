@@ -16,7 +16,7 @@ on:
           - adminStaffClaims
           - renewalScheduler
       founder_totp_operation:
-        description: 'none = normal evidence; verify = source sign-in only; sync = verified production TOTP copy then payment evidence'
+        description: 'none = normal hard-public-launch evidence; verify = verify the production Founder TOTP then run the selected finance evidence from production; sync = verified production TOTP copy then evidence'
         required: false
         default: none
         type: choice
@@ -56,10 +56,10 @@ concurrency:
 jobs:
   verify-and-publish:
     needs: [authorize-founder-totp-repair, verify-and-sync-founder-totp]
-    if: ${{ !cancelled() && ((!inputs.founder_totp_operation || inputs.founder_totp_operation == 'none') || (inputs.founder_totp_operation == 'sync' && needs.verify-and-sync-founder-totp.result == 'success')) }}
+    if: ${{ !cancelled() && ((!inputs.founder_totp_operation || inputs.founder_totp_operation == 'none') || (inputs.founder_totp_operation == 'verify' && needs.verify-and-sync-founder-totp.result == 'success') || (inputs.founder_totp_operation == 'sync' && needs.verify-and-sync-founder-totp.result == 'success')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
-    environment: hard-public-launch
+    environment: ${{ inputs.founder_totp_operation == 'verify' && 'production' || 'hard-public-launch' }}
     env:
       GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID || 'bin-group-57c60' }}
       AUTHORIZED_FOUNDER_ACTORS: ${{ secrets.AUTHORIZED_FOUNDER_ACTORS }}
@@ -77,7 +77,7 @@ jobs:
           TARGET_SHA: ${{ inputs.expected_commit_sha }}
           RELEASE_SHA: ${{ inputs.frozen_release_sha }}
           SELECTED_GATE: ${{ inputs.gate }}
-          CONFIRMATION: ${{ inputs.founder_totp_operation == 'sync' && 'PUBLISH_OPERATIONAL_APPLICATION_EVIDENCE' || inputs.confirmation }}
+          CONFIRMATION: ${{ (inputs.founder_totp_operation == 'verify' || inputs.founder_totp_operation == 'sync') && 'PUBLISH_OPERATIONAL_APPLICATION_EVIDENCE' || inputs.confirmation }}
           DEPLOY_RUN_ID: ${{ inputs.production_deploy_run_id }}
         run: |
           set -euo pipefail
@@ -298,7 +298,8 @@ jobs:
           [[ "$GITHUB_REF" == "refs/heads/main" && "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]
           [[ "$TARGET_SHA" =~ ^[0-9a-f]{40}$ && "$TARGET_SHA" == "$GITHUB_SHA" ]]
           [[ "$RELEASE_SHA" == "15b09519222e749808c2a18b5d1ab1c3126fcb42" ]]
-          [[ "$DEPLOY_RUN_ID" == "34500748478" && "$SELECTED_GATE" == "paymentUnlockExactlyOnce" ]]
+          [[ "$DEPLOY_RUN_ID" == "34500748478" ]]
+          [[ "$SELECTED_GATE" == "paymentUnlockExactlyOnce" ]] || { echo "::error::Credential repair is restricted to paymentUnlockExactlyOnce."; exit 1; }
           case "$OPERATION/$CONFIRMATION" in
             verify/VERIFY_PRODUCTION_FOUNDER_TOTP|sync/SYNC_PRODUCTION_FOUNDER_TOTP_AND_VERIFY_PAYMENT) ;;
             *) echo "::error::Credential repair confirmation mismatch."; exit 1 ;;
