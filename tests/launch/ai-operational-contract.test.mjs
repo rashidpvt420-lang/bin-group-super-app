@@ -107,28 +107,56 @@ test('AI provider evidence is exact-SHA, deployment-bound, protected, and hard-l
   assert.match(gate, /'aiProviderHealth'/);
 });
 
-test('frozen AI evidence uses the canonical Founder without aliasing the ephemeral E2E Admin', () => {
+test('frozen AI evidence uses an exact-run disposable Admin and never the Founder quota identity', () => {
   const wrapper = read('scripts/run-frozen-release-evidence.mjs');
   const workflow = read('.github/workflows/operational-provider-evidence.yml');
   const originalBinding = 'const adminEmail = text(process.env.E2E_ADMIN_EMAIL).toLowerCase();';
   const adapted = transformFrozenAiVerifier(originalBinding);
 
-  assert.equal(adapted, "const adminEmail = 'ceo@bin-groups.com';");
+  assert.equal(adapted, 'const adminEmail = text(process.env.AI_EVIDENCE_ADMIN_EMAIL).toLowerCase();');
   assert.throws(
     () => transformFrozenAiVerifier('const adminEmail = text(process.env.OTHER_EMAIL).toLowerCase();'),
     /source drift/,
   );
-  assert.doesNotThrow(() => assertAiEvidenceIdentitySeparation({ E2E_ADMIN_EMAIL: 'e2e-admin@example.test' }));
+  assert.doesNotThrow(() => assertAiEvidenceIdentitySeparation({
+    E2E_ADMIN_EMAIL: 'e2e-admin@example.test',
+    AI_EVIDENCE_ADMIN_EMAIL: 'e2e-admin+ai-evidence-123-1@example.test',
+    GITHUB_RUN_ID: '123',
+    GITHUB_RUN_ATTEMPT: '1',
+  }));
   assert.throws(
-    () => assertAiEvidenceIdentitySeparation({ E2E_ADMIN_EMAIL: 'ceo@bin-groups.com' }),
+    () => assertAiEvidenceIdentitySeparation({
+      E2E_ADMIN_EMAIL: 'ceo@bin-groups.com',
+      AI_EVIDENCE_ADMIN_EMAIL: 'ceo+ai-evidence-123-1@bin-groups.com',
+      GITHUB_RUN_ID: '123',
+      GITHUB_RUN_ATTEMPT: '1',
+    }),
     /refuses to alias E2E_ADMIN_EMAIL to the canonical Founder/,
   );
+  assert.throws(
+    () => assertAiEvidenceIdentitySeparation({
+      E2E_ADMIN_EMAIL: 'e2e-admin@example.test',
+      AI_EVIDENCE_ADMIN_EMAIL: 'e2e-admin+ai-evidence-999-1@example.test',
+      GITHUB_RUN_ID: '123',
+      GITHUB_RUN_ATTEMPT: '1',
+    }),
+    /not bound to this exact workflow run and attempt/,
+  );
   assert.match(wrapper, /FROZEN_AI_VERIFIER_BLOB = '6964c56352d6b50450c01bbc6e0d066c889c05e3'/);
-  assert.match(wrapper, /installReviewedAiFounderAdapter/);
+  assert.match(wrapper, /installReviewedAiIsolatedPrincipalAdapter/);
+  assert.match(wrapper, /AI_EVIDENCE_ADMIN_EMAIL/);
   assert.match(wrapper, /unreviewed frozen AI verifier/);
   assert.match(wrapper, /restores\.reverse\(\)/);
+  assert.doesNotMatch(wrapper, /FROZEN_AI_FOUNDER_BINDING/);
   assert.match(workflow, /E2E_ADMIN_EMAIL:\s*\$\{\{ secrets\.E2E_ADMIN_EMAIL \}\}/);
   assert.doesNotMatch(workflow, /E2E_ADMIN_EMAIL:\s*\$\{\{ secrets\.E2E_FOUNDER_EMAIL \}\}/);
+  assert.match(workflow, /Provision run-scoped AI evidence Admin/);
+  assert.match(workflow, /aiEvidenceRunId: runId/);
+  assert.match(workflow, /aiEvidenceRunAttempt: runAttempt/);
+  assert.match(workflow, /Retire only the run-scoped AI evidence Admin/);
+  assert.match(workflow, /if: always\(\) && inputs\.gate == 'aiProviderHealth'/);
+  assert.match(workflow, /refusing to retire an AI evidence identity not owned by this exact run/);
+  assert.match(workflow, /collection\('ai_usage'\)\.doc\(`\$\{user\.uid\}_\$\{day\}`\)\.delete\(\)/);
 });
 
 test('AI observability records non-PII aggregate SLO, token and cost-envelope metrics', () => {
