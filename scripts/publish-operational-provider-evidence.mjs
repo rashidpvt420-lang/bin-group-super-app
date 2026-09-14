@@ -124,11 +124,13 @@ const manifests = {
     reference: (proof) => `firebase-ai://projects/${proof.projectId}/locations/${proof.functionRegion}/functions/${proof.functionName}#gemini-openai`,
     sourceProof: (proof) => ({
       source: proof.source,
+      workflowRunAttempt: proof.workflowRunAttempt,
       productionDeployRunId: proof.productionDeployRunId,
       validatedArtifactDigest: proof.validatedArtifactDigest,
       functionName: proof.functionName,
       functionRegion: proof.functionRegion,
       authenticatedUidHash: proof.authenticatedUidHash,
+      evidenceIdentity: proof.evidenceIdentity,
       appCheck: proof.appCheck,
       providers: proof.providers,
       privacy: proof.privacy,
@@ -144,10 +146,21 @@ const manifests = {
       if (proof.source !== 'sovereign-ai-live-verifier') errors.push('AI proof source mismatch');
       if (proof.commitSha !== context.commitSha || proof.projectId !== PRODUCTION.projectId) errors.push('AI proof commit/project mismatch');
       if (text(proof.workflowRunId) !== context.runId) errors.push('AI proof workflow run mismatch');
+      if (text(proof.workflowRunAttempt) !== context.runAttempt) errors.push('AI proof workflow run attempt mismatch');
       if (!/^\d+$/.test(text(proof.productionDeployRunId))) errors.push('AI proof production deployment run ID invalid');
       if (!/^sha256:[a-f0-9]{64}$/.test(text(proof.validatedArtifactDigest).toLowerCase())) errors.push('AI proof deployment digest invalid');
       if (proof.functionName !== 'runSovereignAI' || proof.functionRegion !== 'europe-west3') errors.push('AI function identity mismatch');
       if (!/^[a-f0-9]{64}$/.test(text(proof.authenticatedUidHash))) errors.push('AI authenticated UID hash invalid');
+      if (proof.authenticatedUidHash !== sha256(`ai-evidence-${context.runId}-${context.runAttempt}`)) errors.push('AI authenticated UID is not bound to this run attempt');
+      if (
+        proof.evidenceIdentity?.lifecycle !== 'ephemeral-run-scoped'
+        || proof.evidenceIdentity?.persistentEmail !== false
+        || proof.evidenceIdentity?.persistentPasswordProvider !== false
+        || proof.evidenceIdentity?.persistentCustomClaims !== false
+        || proof.evidenceIdentity?.canonicalFounderUsed !== false
+        || proof.evidenceIdentity?.profileRemoved !== true
+        || proof.evidenceIdentity?.authUserRemoved !== true
+      ) errors.push('AI run-scoped evidence identity lifecycle invalid');
       if (proof.appCheck?.invalidTokenRejected !== true || proof.appCheck?.validTokenAccepted !== true) errors.push('AI App Check acceptance/rejection proof invalid');
       for (const provider of ['gemini', 'openai']) {
         const sample = proof.providers?.[provider] || {};
@@ -172,7 +185,7 @@ const manifests = {
       if (proof.privacy?.comprehensiveFreeTextRedactionVerified !== true || proof.privacy?.nestedInnocentKeyRedactionVerified !== true || proof.privacy?.protectedValuesNotEchoed !== true) errors.push('AI privacy proof invalid');
       if (!finite(proof.privacy?.minimumRedactionsObserved) || Number(proof.privacy.minimumRedactionsObserved) < 4) errors.push('AI privacy proof did not observe enough redactions');
       if (proof.authorityBoundary?.advisoryOnly !== true || proof.authorityBoundary?.clientContextAuthoritative !== false || proof.authorityBoundary?.operationalApprovalsDelegatedToAi !== false) errors.push('AI authority boundary proof invalid');
-      if (proof.quota?.providerSuccessChargesVerified !== true || proof.quota?.boundaryRejected !== true || proof.quota?.rejectedAttemptUncharged !== true || proof.quota?.reservationsCleared !== true || proof.quota?.originalUsageRestored !== true) errors.push('AI quota proof invalid');
+      if (proof.quota?.providerSuccessChargesVerified !== true || proof.quota?.boundaryRejected !== true || proof.quota?.rejectedAttemptUncharged !== true || proof.quota?.reservationsCleared !== true || proof.quota?.isolatedUsageRemoved !== true) errors.push('AI quota proof invalid');
       if (Number(proof.quota?.exactBoundary) !== 50) errors.push('AI quota boundary mismatch');
       const observed = proof.slo?.observed || {};
       const thresholds = proof.slo?.thresholds || {};
@@ -229,7 +242,8 @@ if (!manifest) fail(`unsupported operational gate: ${gate || '(missing)'}`);
 const controlPlaneCommitSha = text(process.env.GITHUB_SHA);
 const releaseCommitSha = text(process.env.PRODUCTION_RELEASE_SHA);
 const runId = text(process.env.GITHUB_RUN_ID);
-if (!/^[0-9a-f]{40}$/.test(controlPlaneCommitSha) || !/^[0-9a-f]{40}$/.test(releaseCommitSha) || !/^\d+$/.test(runId)) fail('exact control-plane/release SHAs and numeric workflow run ID are required');
+const runAttempt = text(process.env.GITHUB_RUN_ATTEMPT);
+if (!/^[0-9a-f]{40}$/.test(controlPlaneCommitSha) || !/^[0-9a-f]{40}$/.test(releaseCommitSha) || !/^\d+$/.test(runId) || !/^\d+$/.test(runAttempt)) fail('exact control-plane/release SHAs and numeric workflow run identity are required');
 if (process.env.CONTROL_PLANE_COMMIT_SHA !== controlPlaneCommitSha || process.env.CONTROL_PLANE_SCOPE_VERIFIED !== 'true') fail('reviewed control-plane binding is required');
 
 const proofPath = path.resolve(manifest.path);
@@ -237,7 +251,7 @@ let proof;
 try { proof = JSON.parse(readFileSync(proofPath, 'utf8')); }
 catch (error) { fail(`${manifest.path} missing or malformed: ${error.message}`); }
 
-const context = { commitSha: releaseCommitSha, runId };
+const context = { commitSha: releaseCommitSha, runId, runAttempt };
 const errors = manifest.validate(proof, context);
 if (errors.length) {
   for (const error of errors) console.error(`- ${error}`);

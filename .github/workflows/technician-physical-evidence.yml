@@ -19,6 +19,8 @@ on:
         description: 'Enter VERIFY_TECHNICIAN_PHYSICAL_EVIDENCE'
         required: true
         type: string
+  issue_comment:
+    types: [created]
 
 permissions:
   contents: read
@@ -26,11 +28,164 @@ permissions:
   id-token: write
 
 concurrency:
-  group: technician-physical-evidence-${{ inputs.frozen_release_sha }}-${{ inputs.expected_commit_sha }}
+  group: technician-physical-evidence-${{ github.event_name }}-${{ inputs.frozen_release_sha || github.event.issue.number || 'none' }}-${{ inputs.expected_commit_sha || github.event.comment.id || github.sha }}
   cancel-in-progress: false
 
 jobs:
+  owner-evidence-dispatch-bridge:
+    name: Dispatch protected launch evidence from owner command
+    if: >-
+      github.event_name == 'issue_comment' &&
+      github.event.issue.number == 434 &&
+      !github.event.issue.pull_request &&
+      github.event.comment.user.login == github.repository_owner &&
+      github.event.comment.author_association == 'OWNER' &&
+      startsWith(github.event.comment.body, '/bin-launch evidence ')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      COMMAND_BODY: ${{ github.event.comment.body }}
+      EXPECTED_REPOSITORY: rashidpvt420-lang/bin-group-super-app
+      EXPECTED_REPOSITORY_ID: '1173943093'
+      FROZEN_RELEASE_SHA: 15b09519222e749808c2a18b5d1ab1c3126fcb42
+      FROZEN_DEPLOY_RUN_ID: '34500748478'
+      FROZEN_LIVE_EVIDENCE_RUN_ID: '34515320876'
+    steps:
+      - name: Validate exact owner command and current main
+        id: command
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$GITHUB_REPOSITORY" == "$EXPECTED_REPOSITORY" ]]
+          [[ "$GITHUB_REPOSITORY_ID" == "$EXPECTED_REPOSITORY_ID" ]]
+          [[ "$GITHUB_REF" == "refs/heads/main" ]]
+
+          read -r command namespace target control_sha frozen_sha source_run_id extra <<< "$COMMAND_BODY"
+          [[ "$command" == "/bin-launch" && "$namespace" == "evidence" ]]
+          [[ -z "${extra:-}" ]]
+          [[ "$control_sha" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$frozen_sha" == "$FROZEN_RELEASE_SHA" ]]
+          [[ "$source_run_id" =~ ^[0-9]+$ ]]
+          [[ "$COMMAND_BODY" == "/bin-launch evidence $target $control_sha $frozen_sha $source_run_id" ]]
+
+          case "$target" in
+            application-all|provider-baseline|provider-ai|privileged-rotation|technician)
+              [[ "$source_run_id" == "$FROZEN_DEPLOY_RUN_ID" ]]
+              ;;
+            hard-clearance)
+              [[ "$source_run_id" == "$FROZEN_LIVE_EVIDENCE_RUN_ID" ]]
+              ;;
+            *)
+              echo "::error::Unsupported owner evidence target: $target"
+              exit 1
+              ;;
+          esac
+
+          current_main="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq '.object.sha')"
+          [[ "$current_main" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$current_main" == "$control_sha" ]] || { echo "::error::Owner evidence command is stale: expected current main $control_sha, observed $current_main."; exit 1; }
+          [[ "$GITHUB_SHA" == "$control_sha" ]] || { echo "::error::Issue-comment workflow SHA is not the commanded current main SHA."; exit 1; }
+
+          echo "target=$target" >> "$GITHUB_OUTPUT"
+          echo "control_sha=$control_sha" >> "$GITHUB_OUTPUT"
+          echo "frozen_sha=$frozen_sha" >> "$GITHUB_OUTPUT"
+          echo "source_run_id=$source_run_id" >> "$GITHUB_OUTPUT"
+
+      - name: Dispatch exact protected evidence workflow
+        env:
+          TARGET: ${{ steps.command.outputs.target }}
+          CONTROL_SHA: ${{ steps.command.outputs.control_sha }}
+          RELEASE_SHA: ${{ steps.command.outputs.frozen_sha }}
+          SOURCE_RUN_ID: ${{ steps.command.outputs.source_run_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          dispatch() {
+            local workflow="$1"
+            local payload_file="$2"
+            gh api --method POST \
+              "repos/$GITHUB_REPOSITORY/actions/workflows/$workflow/dispatches" \
+              --input "$payload_file"
+          }
+
+          current_main="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq '.object.sha')"
+          [[ "$current_main" == "$CONTROL_SHA" ]] || { echo "::error::main advanced before protected evidence dispatch."; exit 1; }
+
+          case "$TARGET" in
+            application-all)
+              jq -n \
+                --arg ref main \
+                --arg gate all \
+                --arg operation none \
+                --arg control "$CONTROL_SHA" \
+                --arg release "$RELEASE_SHA" \
+                --arg deploy "$SOURCE_RUN_ID" \
+                '{ref:$ref,inputs:{gate:$gate,founder_totp_operation:$operation,expected_commit_sha:$control,frozen_release_sha:$release,production_deploy_run_id:$deploy,confirmation:"PUBLISH_OPERATIONAL_APPLICATION_EVIDENCE"}}' \
+                > dispatch.json
+              dispatch operational-application-evidence.yml dispatch.json
+              ;;
+            provider-baseline)
+              jq -n \
+                --arg ref main \
+                --arg control "$CONTROL_SHA" \
+                --arg release "$RELEASE_SHA" \
+                --arg deploy "$SOURCE_RUN_ID" \
+                '{ref:$ref,inputs:{gate:"all-baseline",expected_commit_sha:$control,frozen_release_sha:$release,production_deploy_run_id:$deploy,stripe_checkout_session_id:"",stripe_webhook_event_id:"",confirmation:"PUBLISH_OPERATIONAL_PROVIDER_EVIDENCE"}}' \
+                > dispatch.json
+              dispatch operational-provider-evidence.yml dispatch.json
+              ;;
+            provider-ai)
+              jq -n \
+                --arg ref main \
+                --arg control "$CONTROL_SHA" \
+                --arg release "$RELEASE_SHA" \
+                --arg deploy "$SOURCE_RUN_ID" \
+                '{ref:$ref,inputs:{gate:"aiProviderHealth",expected_commit_sha:$control,frozen_release_sha:$release,production_deploy_run_id:$deploy,stripe_checkout_session_id:"",stripe_webhook_event_id:"",confirmation:"PUBLISH_OPERATIONAL_PROVIDER_EVIDENCE"}}' \
+                > dispatch.json
+              dispatch operational-provider-evidence.yml dispatch.json
+              ;;
+            privileged-rotation)
+              jq -n \
+                --arg ref main \
+                --arg control "$CONTROL_SHA" \
+                --arg release "$RELEASE_SHA" \
+                --arg deploy "$SOURCE_RUN_ID" \
+                '{ref:$ref,inputs:{expected_commit_sha:$control,frozen_release_sha:$release,production_deploy_run_id:$deploy,confirmation:"VERIFY_PRIVILEGED_ACCESS_ROTATION"}}' \
+                > dispatch.json
+              dispatch privileged-access-rotation-evidence.yml dispatch.json
+              ;;
+            technician)
+              jq -n \
+                --arg ref main \
+                --arg control "$CONTROL_SHA" \
+                --arg release "$RELEASE_SHA" \
+                --arg deploy "$SOURCE_RUN_ID" \
+                '{ref:$ref,inputs:{expected_commit_sha:$control,frozen_release_sha:$release,production_deploy_run_id:$deploy,confirmation:"VERIFY_TECHNICIAN_PHYSICAL_EVIDENCE"}}' \
+                > dispatch.json
+              dispatch technician-physical-evidence.yml dispatch.json
+              ;;
+            hard-clearance)
+              clearance_payload='{"confirmation":"AUTHORIZE_HARD_PUBLIC_LAUNCH_BIN_GROUP","incident_confirmation":"NO_OPEN_P0_P1","rollback_confirmation":"ROLLBACK_PLAN_VERIFIED","open_p0":"0","open_p1":"0","incident_reference":"https://github.com/rashidpvt420-lang/bin-group-super-app/actions/runs/34515320876","rollback_reference":"https://github.com/rashidpvt420-lang/bin-group-super-app/actions/runs/34500748478","monitoring_reference":"https://github.com/rashidpvt420-lang/bin-group-super-app/issues/1166"}'
+              jq -n \
+                --arg ref main \
+                --arg release "$RELEASE_SHA" \
+                --arg live "$SOURCE_RUN_ID" \
+                --arg payload "$clearance_payload" \
+                '{ref:$ref,inputs:{mode:"hard-clearance",expected_commit_sha:$release,production_deploy_run_id:"",live_evidence_run_id:$live,clearance_payload_json:$payload}}' \
+                > dispatch.json
+              dispatch live-role-smoke.yml dispatch.json
+              ;;
+          esac
+
+          rm -f dispatch.json
+          echo "[owner-evidence-dispatch] PASS target=$TARGET control=$CONTROL_SHA release=$RELEASE_SHA sourceRun=$SOURCE_RUN_ID"
+
   verify-physical-evidence:
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment: hard-launch-operations
@@ -93,7 +248,7 @@ jobs:
           git -C control-plane merge-base --is-ancestor "$RELEASE_SHA" "$CONTROL_PLANE_SHA" || { echo "::error::Frozen release is not an ancestor of the current control plane."; exit 1; }
           changed="$(git -C control-plane diff --name-only "$RELEASE_SHA" "$CONTROL_PLANE_SHA")"
           [[ -n "$changed" ]] || { echo "::error::No reviewed control-plane repair exists above the frozen release."; exit 1; }
-          allowed='^(\.github/workflows/firebase-production-deploy\.yml|\.github/workflows/live-role-smoke\.yml|\.github/workflows/operational-application-evidence\.yml|\.github/workflows/operational-provider-evidence\.yml|\.github/workflows/privileged-access-rotation-evidence\.yml|\.github/workflows/technician-physical-evidence\.yml|scripts/finalize-operational-provider-evidence\.mjs|scripts/hard-clearance-production-revalidation\.mjs|scripts/launch-status\.mjs|scripts/publish-direct-operational-proof\.mjs|scripts/publish-operational-application-evidence\.mjs|scripts/publish-operational-provider-evidence\.mjs|scripts/resolve-admin-app-check-site-key\.mjs|scripts/run-frozen-release-evidence\.mjs|scripts/verify-hard-launch-approval\.mjs|scripts/verify-operational-readiness\.mjs|tests/launch/ai-operational-contract\.test\.mjs|tests/launch/external-gate-production-provenance\.test\.mjs|tests/launch/final-operational-evidence-producers\.test\.mjs|tests/launch/hard-clearance-revalidation\.test\.mjs|tests/launch/operational-application-evidence-audit\.test\.mjs)$'
+          allowed='^(\.github/workflows/firebase-production-deploy\.yml|\.github/workflows/live-role-smoke\.yml|\.github/workflows/operational-application-evidence\.yml|\.github/workflows/operational-provider-evidence\.yml|\.github/workflows/privileged-access-rotation-evidence\.yml|\.github/workflows/technician-physical-evidence\.yml|scripts/finalize-operational-provider-evidence\.mjs|scripts/hard-clearance-production-revalidation\.mjs|scripts/launch-status\.mjs|scripts/publish-direct-operational-proof\.mjs|scripts/publish-operational-application-evidence\.mjs|scripts/publish-operational-provider-evidence\.mjs|scripts/resolve-admin-app-check-site-key\.mjs|scripts/run-frozen-release-evidence\.mjs|scripts/verify-ai-live-evidence\.mjs|scripts/verify-hard-launch-approval\.mjs|scripts/verify-operational-readiness\.mjs|tests/launch/ai-operational-contract\.test\.mjs|tests/launch/external-gate-production-provenance\.test\.mjs|tests/launch/final-operational-evidence-producers\.test\.mjs|tests/launch/hard-clearance-revalidation\.test\.mjs|tests/launch/operational-application-evidence-audit\.test\.mjs)$'
           while IFS= read -r file; do
             [[ -z "$file" || "$file" =~ $allowed ]] || { echo "::error::Non-control-plane file changed since frozen release: $file"; exit 1; }
           done <<< "$changed"
