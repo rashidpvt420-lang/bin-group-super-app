@@ -243,7 +243,13 @@ jobs:
           }
           const at = base.lastIndexOf('@');
           if (at <= 0 || at === base.length - 1) throw new Error('configured E2E Admin email is invalid');
-          const email = `${base.slice(0, at)}+ai-evidence-${runId}-${runAttempt}@${base.slice(at + 1)}`;
+          const sourceLocal = base.slice(0, at);
+          const domain = base.slice(at + 1);
+          const suffix = `+ai-evidence-${runId}-${runAttempt}`;
+          const localBudget = 64 - suffix.length;
+          if (localBudget < 1) throw new Error('AI evidence run identifiers exceed the Firebase email local-part budget');
+          const email = `${sourceLocal.slice(0, localBudget)}${suffix}@${domain}`;
+          if (email.length > 254 || !/^\S+@\S+\.\S+$/.test(email)) throw new Error('derived AI evidence email is invalid');
           if (email === founder || email === base) throw new Error('AI evidence identity must be isolated from Founder and base E2E Admin');
 
           const projectId = resolveFirebaseAdminProjectId();
@@ -322,7 +328,13 @@ jobs:
           }
           const at = base.lastIndexOf('@');
           if (at <= 0 || at === base.length - 1) throw new Error('configured E2E Admin email is invalid');
-          const email = `${base.slice(0, at)}+ai-evidence-${runId}-${runAttempt}@${base.slice(at + 1)}`;
+          const sourceLocal = base.slice(0, at);
+          const domain = base.slice(at + 1);
+          const suffix = `+ai-evidence-${runId}-${runAttempt}`;
+          const localBudget = 64 - suffix.length;
+          if (localBudget < 1) throw new Error('AI evidence run identifiers exceed the Firebase email local-part budget');
+          const email = `${sourceLocal.slice(0, localBudget)}${suffix}@${domain}`;
+          if (email.length > 254 || !/^\S+@\S+\.\S+$/.test(email)) throw new Error('derived AI evidence cleanup email is invalid');
           if (email === founder || email === base) throw new Error('refusing unsafe AI evidence cleanup target');
 
           const projectId = resolveFirebaseAdminProjectId();
