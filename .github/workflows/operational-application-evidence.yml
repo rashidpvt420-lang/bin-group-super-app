@@ -60,7 +60,7 @@ jobs:
     if: ${{ !cancelled() && ((!inputs.founder_totp_operation || inputs.founder_totp_operation == 'none') || ((inputs.founder_totp_operation == 'verify' || inputs.founder_totp_operation == 'sync' || inputs.founder_totp_operation == 'repair-and-sync') && needs.verify-and-sync-founder-totp.result == 'success')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
-    environment: ${{ inputs.founder_totp_operation == 'verify' && 'production' || 'hard-public-launch' }}
+    environment: ${{ (inputs.founder_totp_operation == 'verify' || inputs.founder_totp_operation == 'repair-and-sync') && 'production' || 'hard-public-launch' }}
     env:
       GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID || 'bin-group-57c60' }}
       AUTHORIZED_FOUNDER_ACTORS: ${{ secrets.AUTHORIZED_FOUNDER_ACTORS }}
