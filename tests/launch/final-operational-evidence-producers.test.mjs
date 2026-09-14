@@ -429,7 +429,9 @@ test('[founder-credential] both environments authorize and only successful expli
   const production = workflow.slice(workflow.indexOf('  verify-and-sync-founder-totp:'));
   assert.match(target, /environment: hard-public-launch/);
   assert.match(target, /GITHUB_TRIGGERING_ACTOR/);
-  assert.match(target, /SELECTED_GATE.*paymentUnlockExactlyOnce/);
+  assert.match(target, /verify\/all\|verify\/paymentUnlockExactlyOnce\|verify\/brokerCommissionLockExactlyOnce/);
+  assert.match(target, /sync\/paymentUnlockExactlyOnce\|repair-and-sync\/paymentUnlockExactlyOnce/);
+  assert.match(workflow, /environment: \$\{\{ \(inputs\.founder_totp_operation == 'verify' \|\| inputs\.founder_totp_operation == 'repair-and-sync'\) && 'production' \|\| 'hard-public-launch' \}\}/);
   assert.match(production, /needs: authorize-founder-totp-repair/);
   assert.match(production, /environment: production/);
   assert.match(production, /group: founder-totp-credential-sync/);
