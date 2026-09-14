@@ -55,16 +55,16 @@ const LEGACY_ACTIVATION_CHECK = [
   "  if (!Number.isFinite(annual) || annual <= 0 || !Number.isFinite(amount) || Math.abs(amount - Math.round(annual * 0.15)) > 0.01) fail('activation amount is not the locked 15% deposit');",
 ].join('\n');
 
-// The frozen AI verifier was written while the E2E Admin existed, but that
-// account is intentionally retired after protected business evidence. The AI
-// callable permits forced provider probes only for an admin-class role, and
-// the canonical Founder is an approved admin-class production role. Adapt the
-// disposable verifier checkout to that canonical principal without ever
-// changing E2E_ADMIN_EMAIL or the E2E Admin lifecycle contract.
+// The frozen AI verifier mutates its evidence principal's daily quota record
+// while proving quota boundaries. Running it as the canonical Founder risks
+// clobbering legitimate concurrent Founder usage when the frozen verifier
+// restores its snapshot. Bind only the disposable verifier checkout to a
+// run-scoped admin-class evidence identity provisioned and retired by the
+// protected provider workflow.
 const AI_VERIFIER = 'scripts/verify-ai-live-evidence.mjs';
 const FROZEN_AI_VERIFIER_BLOB = '6964c56352d6b50450c01bbc6e0d066c889c05e3';
 const FROZEN_AI_ADMIN_BINDING = 'const adminEmail = text(process.env.E2E_ADMIN_EMAIL).toLowerCase();';
-const FROZEN_AI_FOUNDER_BINDING = `const adminEmail = '${CANONICAL_FOUNDER_EMAIL}';`;
+const FROZEN_AI_ISOLATED_BINDING = 'const adminEmail = text(process.env.AI_EVIDENCE_ADMIN_EMAIL).toLowerCase();';
 
 export function assertApplicationEvidenceCredentials(gate, env = process.env) {
   if (!['all', 'paymentUnlockExactlyOnce', 'brokerCommissionLockExactlyOnce'].includes(gate)) return;
@@ -78,9 +78,25 @@ export function assertApplicationEvidenceCredentials(gate, env = process.env) {
 
 export function assertAiEvidenceIdentitySeparation(env = process.env) {
   const configuredE2eAdmin = String(env.E2E_ADMIN_EMAIL || '').trim().toLowerCase();
+  const isolatedAdmin = String(env.AI_EVIDENCE_ADMIN_EMAIL || '').trim().toLowerCase();
+  const runId = String(env.GITHUB_RUN_ID || '').trim();
+  const runAttempt = String(env.GITHUB_RUN_ATTEMPT || '').trim();
+  if (!configuredE2eAdmin || !isolatedAdmin) {
+    fail('AI evidence requires both the base E2E Admin and isolated run-scoped identity bindings');
+  }
   if (configuredE2eAdmin === CANONICAL_FOUNDER_EMAIL) {
     fail('AI evidence refuses to alias E2E_ADMIN_EMAIL to the canonical Founder');
   }
+  if (isolatedAdmin === CANONICAL_FOUNDER_EMAIL || isolatedAdmin === configuredE2eAdmin) {
+    fail('AI evidence requires an isolated non-Founder principal distinct from E2E_ADMIN_EMAIL');
+  }
+  if (!RUN_ID_RE.test(runId) || !RUN_ID_RE.test(runAttempt)) {
+    fail('AI evidence requires numeric workflow run and attempt identifiers');
+  }
+  const at = configuredE2eAdmin.lastIndexOf('@');
+  if (at <= 0 || at === configuredE2eAdmin.length - 1) fail('configured E2E Admin email is invalid');
+  const expected = `${configuredE2eAdmin.slice(0, at)}+ai-evidence-${runId}-${runAttempt}@${configuredE2eAdmin.slice(at + 1)}`;
+  if (isolatedAdmin !== expected) fail('AI evidence identity is not bound to this exact workflow run and attempt');
 }
 
 function gitBlobSha(source) {
@@ -98,8 +114,6 @@ function pinnedPolicySource(releaseRoot, relativePath) {
 }
 
 export function verifyFrozenActivationPayment(payment, contract, releaseRoot = process.cwd()) {
-  // A quoted deposit is not a receipt. Explicit zero/null/blank receipt values
-  // must fail instead of falling back to a quote or another receipt field.
   const received = payment?.amountReceived !== undefined ? payment.amountReceived : payment?.amount;
   if (!['number', 'string'].includes(typeof received) || String(received).trim() === '') {
     fail('activation payment has no valid recorded received amount');
@@ -154,7 +168,7 @@ export function transformFrozenAiVerifier(source) {
   if (source.split(FROZEN_AI_ADMIN_BINDING).length !== 2) {
     fail('frozen AI verifier source drift; exact E2E Admin binding is required');
   }
-  return source.replace(FROZEN_AI_ADMIN_BINDING, FROZEN_AI_FOUNDER_BINDING);
+  return source.replace(FROZEN_AI_ADMIN_BINDING, FROZEN_AI_ISOLATED_BINDING);
 }
 
 function installReviewedActivationAdapter(releaseRoot) {
@@ -166,12 +180,10 @@ function installReviewedActivationAdapter(releaseRoot) {
   const adapted = transformFrozenActivationVerifier(original);
   writeFileSync(file, adapted);
   console.log(`[frozen-release-evidence] reviewed activation-policy adapter sha256=${createHash('sha256').update(adapted).digest('hex')}`);
-  // Adapt only the disposable evidence checkout. No deployment, production
-  // record mutation, or change to any other verification condition is allowed.
   return () => writeFileSync(file, original);
 }
 
-function installReviewedAiFounderAdapter(releaseRoot) {
+function installReviewedAiIsolatedPrincipalAdapter(releaseRoot) {
   const file = path.join(releaseRoot, AI_VERIFIER);
   if (!lstatSync(file).isFile()) fail('frozen AI verifier is not a regular file');
   const original = readFileSync(file, 'utf8');
@@ -180,7 +192,7 @@ function installReviewedAiFounderAdapter(releaseRoot) {
   if (gitBlobSha(original) !== FROZEN_AI_VERIFIER_BLOB) fail('unreviewed frozen AI verifier');
   const adapted = transformFrozenAiVerifier(original);
   writeFileSync(file, adapted);
-  console.log(`[frozen-release-evidence] reviewed AI Founder-principal adapter sha256=${createHash('sha256').update(adapted).digest('hex')}`);
+  console.log(`[frozen-release-evidence] reviewed AI isolated-principal adapter sha256=${createHash('sha256').update(adapted).digest('hex')}`);
   return () => writeFileSync(file, original);
 }
 
@@ -242,7 +254,7 @@ export function runFrozenReleaseEvidence(entrypoint, env = process.env, releaseR
   if (applicationVerification && env.OPERATIONAL_GATE === 'ownerPaymentActivation') {
     restores.push(installReviewedActivationAdapter(releaseRoot));
   }
-  if (aiVerification) restores.push(installReviewedAiFounderAdapter(releaseRoot));
+  if (aiVerification) restores.push(installReviewedAiIsolatedPrincipalAdapter(releaseRoot));
 
   try {
     const result = spawnSync(process.execPath, [path.resolve(releaseRoot, entrypoint)], {

@@ -224,6 +224,69 @@ jobs:
           appendFileSync(process.env.GITHUB_ENV, `VALIDATED_ARTIFACT_DIGEST=${digest}\n`);
           NODE
 
+      - name: Provision run-scoped AI evidence Admin
+        if: inputs.gate == 'aiProviderHealth'
+        working-directory: release
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import { appendFileSync } from 'node:fs';
+          import admin from 'firebase-admin';
+          import { initializeFirebaseAdmin, resolveFirebaseAdminProjectId } from './scripts/firebase-admin-bootstrap.mjs';
+
+          const founder = 'ceo@bin-groups.com';
+          const base = String(process.env.E2E_ADMIN_EMAIL || '').trim().toLowerCase();
+          const runId = String(process.env.GITHUB_RUN_ID || '').trim();
+          const runAttempt = String(process.env.GITHUB_RUN_ATTEMPT || '').trim();
+          if (!base || base === founder || !/^\d+$/.test(runId) || !/^\d+$/.test(runAttempt)) {
+            throw new Error('invalid protected AI evidence identity/run binding');
+          }
+          const at = base.lastIndexOf('@');
+          if (at <= 0 || at === base.length - 1) throw new Error('configured E2E Admin email is invalid');
+          const email = `${base.slice(0, at)}+ai-evidence-${runId}-${runAttempt}@${base.slice(at + 1)}`;
+          if (email === founder || email === base) throw new Error('AI evidence identity must be isolated from Founder and base E2E Admin');
+
+          const projectId = resolveFirebaseAdminProjectId();
+          if (projectId !== 'bin-group-57c60') throw new Error(`unexpected Firebase project: ${projectId}`);
+          initializeFirebaseAdmin(admin, projectId);
+          const auth = admin.auth();
+          const db = admin.firestore();
+
+          try {
+            await auth.getUserByEmail(email);
+            throw new Error('run-scoped AI evidence identity already exists; refusing to reuse it');
+          } catch (error) {
+            if (error?.code !== 'auth/user-not-found') throw error;
+          }
+
+          const user = await auth.createUser({
+            email,
+            emailVerified: true,
+            disabled: false,
+            displayName: 'BIN GROUP AI Evidence Admin',
+          });
+          await auth.setCustomUserClaims(user.uid, {
+            admin: true,
+            role: 'admin',
+            testAccount: true,
+            aiEvidenceRunId: runId,
+            aiEvidenceRunAttempt: runAttempt,
+          });
+          await db.collection('users').doc(user.uid).set({
+            email,
+            role: 'admin',
+            admin: true,
+            active: true,
+            testAccount: true,
+            aiEvidenceRunId: runId,
+            aiEvidenceRunAttempt: runAttempt,
+            evidenceOnly: true,
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+          appendFileSync(process.env.GITHUB_ENV, `AI_EVIDENCE_ADMIN_EMAIL=${email}\n`);
+          console.log('[ai-evidence] provisioned isolated run-scoped Admin principal');
+          NODE
+
       - name: Verify BIN GROUP branded SMTP delivery
         if: inputs.gate == 'brandedEmailDelivery' || inputs.gate == 'all-baseline'
         working-directory: release
@@ -240,6 +303,71 @@ jobs:
         env:
           PRODUCTION_DEPLOY_RUN_ID: ${{ inputs.production_deploy_run_id }}
         run: node ../control-plane/scripts/run-frozen-release-evidence.mjs scripts/verify-ai-live-evidence.mjs
+
+      - name: Retire only the run-scoped AI evidence Admin
+        if: always() && inputs.gate == 'aiProviderHealth'
+        working-directory: release
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import admin from 'firebase-admin';
+          import { initializeFirebaseAdmin, resolveFirebaseAdminProjectId } from './scripts/firebase-admin-bootstrap.mjs';
+
+          const founder = 'ceo@bin-groups.com';
+          const base = String(process.env.E2E_ADMIN_EMAIL || '').trim().toLowerCase();
+          const runId = String(process.env.GITHUB_RUN_ID || '').trim();
+          const runAttempt = String(process.env.GITHUB_RUN_ATTEMPT || '').trim();
+          if (!base || base === founder || !/^\d+$/.test(runId) || !/^\d+$/.test(runAttempt)) {
+            throw new Error('invalid protected AI evidence cleanup binding');
+          }
+          const at = base.lastIndexOf('@');
+          if (at <= 0 || at === base.length - 1) throw new Error('configured E2E Admin email is invalid');
+          const email = `${base.slice(0, at)}+ai-evidence-${runId}-${runAttempt}@${base.slice(at + 1)}`;
+          if (email === founder || email === base) throw new Error('refusing unsafe AI evidence cleanup target');
+
+          const projectId = resolveFirebaseAdminProjectId();
+          if (projectId !== 'bin-group-57c60') throw new Error(`unexpected Firebase project: ${projectId}`);
+          initializeFirebaseAdmin(admin, projectId);
+          const auth = admin.auth();
+          const db = admin.firestore();
+
+          let user;
+          try {
+            user = await auth.getUserByEmail(email);
+          } catch (error) {
+            if (error?.code === 'auth/user-not-found') {
+              console.log('[ai-evidence] no run-scoped Admin remains to retire');
+              process.exit(0);
+            }
+            throw error;
+          }
+
+          const claims = user.customClaims || {};
+          const profileRef = db.collection('users').doc(user.uid);
+          const profile = await profileRef.get();
+          const data = profile.data() || {};
+          const owned = claims.admin === true
+            && claims.role === 'admin'
+            && claims.testAccount === true
+            && String(claims.aiEvidenceRunId || '') === runId
+            && String(claims.aiEvidenceRunAttempt || '') === runAttempt
+            && profile.exists
+            && data.admin === true
+            && data.role === 'admin'
+            && data.testAccount === true
+            && data.evidenceOnly === true
+            && String(data.aiEvidenceRunId || '') === runId
+            && String(data.aiEvidenceRunAttempt || '') === runAttempt
+            && String(data.email || '').toLowerCase() === email;
+          if (!owned) throw new Error('refusing to retire an AI evidence identity not owned by this exact run');
+
+          await auth.revokeRefreshTokens(user.uid);
+          const day = new Date().toISOString().slice(0, 10);
+          await db.collection('ai_usage').doc(`${user.uid}_${day}`).delete();
+          await profileRef.delete();
+          await auth.deleteUser(user.uid);
+          console.log('[ai-evidence] retired isolated run-scoped Admin principal');
+          NODE
 
       - name: Verify live Stripe payment and exactly-once webhook replay
         if: inputs.gate == 'stripeLiveBilling'
