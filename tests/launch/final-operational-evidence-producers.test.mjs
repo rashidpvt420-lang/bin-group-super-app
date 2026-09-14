@@ -273,6 +273,36 @@ test('[founder-credential] failed source sign-in, wrong factor or missing identi
   }), (error) => error.message.includes('sign-in failed') && !error.message.includes(f.env.E2E_FOUNDER_TOTP_SECRET));
 });
 
+test('[founder-credential] reports only allowlisted redacted sign-in failure categories', async () => {
+  const { api } = await credentialProgram();
+  const f = credentialFixture('sync');
+  const cases = [
+    ['Firebase first-factor sign-in failed: INVALID_LOGIN_CREDENTIALS', 'FIRST_FACTOR_CREDENTIAL_REJECTED'],
+    ['Firebase first-factor sign-in failed: USER_DISABLED', 'FOUNDER_ACCOUNT_REJECTED'],
+    ['Firebase first-factor sign-in failed: API_KEY_HTTP_REFERRER_BLOCKED', 'API_KEY_OR_PROJECT_REJECTED'],
+    ['Firebase first-factor sign-in failed: TOO_MANY_ATTEMPTS_TRY_LATER', 'PROVIDER_THROTTLED'],
+    ['Firebase did not return an enrolled TOTP challenge for the Founder account.', 'TOTP_CHALLENGE_MISSING'],
+    ['Firebase TOTP sign-in failed after two consecutive TOTP windows: INVALID_VERIFICATION_CODE', 'TOTP_CODE_REJECTED'],
+    ['Firebase TOTP sign-in failed: INTERNAL_ERROR', 'TOTP_FINALIZE_REJECTED'],
+    ['Firebase Admin SDK rejected the Founder MFA ID token.', 'SIGNED_TOKEN_REJECTED'],
+    ['Firebase MFA ID token has no authenticated user identifier.', 'VERIFIED_SESSION_REJECTED'],
+    [`unexpected ${f.env.E2E_FOUNDER_PASSWORD} ${f.env.E2E_FOUNDER_TOTP_SECRET}`, 'UNKNOWN_REDACTED_FAILURE'],
+  ];
+  for (const [providerMessage, category] of cases) {
+    assert.equal(api.classifyFounderSignInFailure(new Error(providerMessage)), category);
+    await assert.rejects(api.repairFounderTotp({ ...f,
+      signIn: async () => { throw new Error(providerMessage); },
+      writeSecret: async () => assert.fail('failed source must never be copied'),
+    }), (error) => {
+      assert.equal(error.message, `Production Founder TOTP sign-in failed (${category}); destination unchanged.`);
+      assert.ok(!error.message.includes(f.env.E2E_FOUNDER_PASSWORD));
+      assert.ok(!error.message.includes(f.env.E2E_FOUNDER_TOTP_SECRET));
+      assert.ok(!error.message.includes(providerMessage));
+      return true;
+    });
+  }
+});
+
 test('[founder-credential] missing credentials and ambiguous write failures stop without retries or leaked payloads', async () => {
   const { api } = await credentialProgram();
   const f = credentialFixture('sync');
