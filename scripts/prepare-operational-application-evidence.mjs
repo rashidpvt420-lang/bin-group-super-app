@@ -133,16 +133,16 @@ async function matchingTestTicket(db, tenantUid, { required = true, createdAfter
 
 async function createTicketThroughDeployedTenantUi(page, startedAt) {
   await page.goto(`${PRODUCTION_URL}/tenant/request?category=plumbing&refresh=${Date.now()}`, { waitUntil: 'domcontentloaded' });
-  const locationInput = page.locator('[data-testid="tenant-request-location"]');
+  const locationField = page.getByTestId('tenant-request-location');
   try {
-    await locationInput.waitFor({ state: 'visible', timeout: 20_000 });
+    await locationField.waitFor({ state: 'visible', timeout: 20_000 });
   } catch {
     const fallbackVisible = await page.locator('[data-testid="tenant-residence-loading"]').isVisible().catch(() => false);
     fail(`deployed Tenant request form is unavailable for the protected test Tenant${fallbackVisible ? ' (residence still loading)' : ''}`);
   }
 
-  await locationInput.fill('Kitchen sink - protected launch evidence');
-  await page.locator('[data-testid="tenant-request-description"]').fill('Protected production maintenance request used to verify the real Tenant ticket and notification delivery path.');
+  await locationField.locator('input, textarea').first().fill('Kitchen sink - protected launch evidence');
+  await page.getByTestId('tenant-request-description').locator('input, textarea').first().fill('Protected production maintenance request used to verify the real Tenant ticket and notification delivery path.');
   await page.locator('input[type="file"]').first().setInputFiles({
     name: `operational-evidence-${process.env.GITHUB_RUN_ID}.png`,
     mimeType: 'image/png',
