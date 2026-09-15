@@ -1,0 +1,69 @@
+name: AI Runtime Scoped Self Fix
+
+on:
+  push:
+    branches:
+      - fix/ai-provider-runtime-hardening-20260916
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    if: github.actor == github.repository_owner
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/ai-provider-runtime-hardening-20260916
+          fetch-depth: 0
+      - name: Apply exact AI runtime repair and remove helper
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+
+          const path = 'functions/aiAssistant.ts';
+          let source = fs.readFileSync(path, 'utf8');
+
+          const fallbackOld = '  "gemini-2.5-flash",';
+          const fallbackNew = '  "gemini-3.5-flash",';
+          if ((source.match(new RegExp(fallbackOld.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g')) || []).length !== 1) {
+            throw new Error('Expected exactly one default Gemini 2.5 fallback candidate.');
+          }
+          source = source.replace(fallbackOld, fallbackNew);
+
+          const tryOld = '  try {\n    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;';
+          const tryNew = '  try {\n    const thinkingConfig = model.startsWith("gemini-2.5-")\n      ? { thinkingBudget: 0 }\n      : { thinkingLevel: "low" };\n    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;';
+          if (!source.includes(tryOld)) throw new Error('Gemini request insertion anchor not found.');
+          source = source.replace(tryOld, tryNew);
+
+          const configOld = '        // The 3.x Gemini API deprecates legacy sampling parameters. Keep the\n        // production request portable across 3.6 Flash and 2.5 Flash.\n        generationConfig: { maxOutputTokens: 700 },';
+          const configNew = '        // Thinking tokens count toward maxOutputTokens. Keep reasoning bounded so\n        // the provider can return visible answer text inside the production envelope.\n        // Explicit 2.5 overrides retain compatibility with its thinkingBudget API.\n        generationConfig: { maxOutputTokens: 700, thinkingConfig },';
+          if (!source.includes(configOld)) throw new Error('Gemini generation config anchor not found.');
+          source = source.replace(configOld, configNew);
+
+          if (!source.includes('"gemini-3.6-flash",') || !source.includes('"gemini-3.5-flash",')) {
+            throw new Error('Expected stable Gemini 3.x candidates after repair.');
+          }
+          if (!source.includes('? { thinkingBudget: 0 }') || !source.includes(': { thinkingLevel: "low" }')) {
+            throw new Error('Model-aware thinking configuration missing after repair.');
+          }
+          if (!source.includes('maxRetries: 0')) {
+            throw new Error('OpenAI retry policy changed unexpectedly.');
+          }
+          fs.writeFileSync(path, source);
+
+          const testPath = 'tests/launch/ai-provider-runtime-config.test.mjs';
+          fs.writeFileSync(testPath, `import assert from 'node:assert/strict';\nimport fs from 'node:fs';\nimport test from 'node:test';\n\nconst source = fs.readFileSync(new URL('../../functions/aiAssistant.ts', import.meta.url), 'utf8');\n\ntest('Gemini defaults use current stable 3.x candidates and bounded thinking', () => {\n  assert.match(source, /\"gemini-3\\.6-flash\"/);\n  assert.match(source, /\"gemini-3\\.5-flash\"/);\n  assert.doesNotMatch(source, /\n\s*\"gemini-2\\.5-flash\",/);\n  assert.match(source, /model\\.startsWith\\(\"gemini-2\\.5-\"\\)[\\s\\S]*thinkingBudget: 0[\\s\\S]*thinkingLevel: \"low\"/);\n  assert.match(source, /generationConfig: \\{ maxOutputTokens: 700, thinkingConfig \\}/);\n});\n\ntest('OpenAI 429 handling is not weakened by the Gemini repair', () => {\n  assert.match(source, /new OpenAI\\(\\{ apiKey, timeout: timeoutMs, maxRetries: 0 \\}\\)/);\n  assert.match(source, /status === 429 \\|\\| code\\.includes\\(\"rate_limit\"\\)\\) return \"rate-limited\"/);\n});\n`);
+          NODE
+
+          git rm .github/workflows/ai-runtime-self-fix.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add functions/aiAssistant.ts tests/launch/ai-provider-runtime-config.test.mjs
+          git diff --cached --check
+          git commit -m "Fix Gemini thinking budget and stable fallback"
+          git push origin HEAD:fix/ai-provider-runtime-hardening-20260916
