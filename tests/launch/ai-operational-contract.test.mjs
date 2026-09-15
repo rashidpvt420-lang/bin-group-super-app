@@ -93,6 +93,13 @@ test('AI provider evidence is exact-SHA, deployment-bound, protected, and hard-l
   assert.match(workflow, /production-deployment-\$\{\{ inputs\.frozen_release_sha \}\}/);
   assert.match(workflow, /verify-ai-live-evidence\.mjs/);
   assert.match(workflow, /environment: hard-public-launch/);
+  assert.match(workflow, /Record live AI probe window/);
+  assert.match(workflow, /Report redacted live-provider failure category/);
+  assert.match(workflow, /logging\.googleapis\.com\/v2\/entries:list/);
+  assert.match(workflow, /allowedCodes = new Set/);
+  assert.match(workflow, /attempt < 4/);
+  assert.match(workflow, /Redacted Sovereign AI failure category/);
+  assert.doesNotMatch(workflow, /console\.(?:log|error)\((?:entry|entries|response|response\.data)/);
   assert.match(verifier, /provider: 'gemini'/);
   assert.match(verifier, /provider: 'openai'/);
   assert.match(verifier, /invalid App Check token/);

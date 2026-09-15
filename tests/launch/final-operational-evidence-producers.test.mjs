@@ -23,6 +23,8 @@ test('technician physical evidence is protected, canonical and requires real mob
   assert.match(workflow, /Publish canonical technician operational evidence/);
   assert.match(workflow, /publish-direct-operational-proof\.mjs/);
   assert.match(workflow, /path:\s*release\/launch_package\/operational-proof\.json/);
+  assert.match(workflow, /--arg operation verify/);
+  assert.match(workflow, /confirmation:"VERIFY_PRODUCTION_FOUNDER_TOTP"/);
 
   assert.match(verifier, /gateKey:\s*'technicianPhysicalGpsEvidence'/);
   assert.match(verifier, /evidenceType:\s*'physical-device-report'/);
@@ -81,13 +83,16 @@ test('privileged rotation evidence performs a real run-scoped E2E Admin rotation
   assert.match(workflow, /publish-direct-operational-proof\.mjs/);
   assert.match(workflow, /path:\s*release\/launch_package\/operational-proof\.json/);
 
-  assert.match(workflow, /E2E_ADMIN_BOOTSTRAP_PASSWORD:\s*\$\{\{ secrets\.E2E_ADMIN_PASSWORD \}\}/);
+  assert.doesNotMatch(workflow, /E2E_ADMIN_BOOTSTRAP_PASSWORD|secrets\.E2E_ADMIN_PASSWORD/);
   assert.doesNotMatch(workflow, /^\s+E2E_ADMIN_PASSWORD:\s*\$\{\{ secrets\.E2E_ADMIN_PASSWORD \}\}/m);
   assert.doesNotMatch(workflow, /E2E_ADMIN_EMAIL:\s*\$\{\{ secrets\.E2E_FOUNDER_EMAIL \}\}/);
   assert.match(workflow, /Provision and rotate the ephemeral Admin for this evidence run/);
   assert.match(workflow, /Canonical Founder protection refused privileged rotation provisioning/);
   assert.match(workflow, /refusing to rotate an existing account without exact E2E Admin Auth and Firestore markers/);
   assert.match(workflow, /randomBytes\(36\)/);
+  assert.match(workflow, /const provisionalPassword = randomPassword\(\)/);
+  assert.match(workflow, /password:\s*provisionalPassword/);
+  assert.match(workflow, /::add-mask::\$\{provisionalPassword\}/);
   assert.match(workflow, /disabled:\s*true/);
   assert.match(workflow, /rotationEvidenceRunId:\s*runId/);
   assert.match(workflow, /auth\.setCustomUserClaims\(user\.uid, evidenceClaims\)/);
@@ -429,7 +434,8 @@ test('[founder-credential] both environments authorize and only successful expli
   const production = workflow.slice(workflow.indexOf('  verify-and-sync-founder-totp:'));
   assert.match(target, /environment: hard-public-launch/);
   assert.match(target, /GITHUB_TRIGGERING_ACTOR/);
-  assert.match(target, /SELECTED_GATE.*paymentUnlockExactlyOnce/);
+  assert.match(target, /verify\/all\|verify\/paymentUnlockExactlyOnce\|verify\/brokerCommissionLockExactlyOnce/);
+  assert.match(target, /sync\/paymentUnlockExactlyOnce\|repair-and-sync\/paymentUnlockExactlyOnce/);
   assert.match(production, /needs: authorize-founder-totp-repair/);
   assert.match(production, /environment: production/);
   assert.match(production, /group: founder-totp-credential-sync/);
