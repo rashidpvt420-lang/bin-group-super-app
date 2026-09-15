@@ -14,6 +14,12 @@ test('owner rent payment UI exposes only Cash and Cheque', () => {
   assert.ok(!source.includes('<MenuItem value="OTHER">'));
 });
 
+test('owner dashboard rent fallback is Cash, never Bank Transfer', () => {
+  const source = read('src/owner/pages/OwnerDashboardResolvedPage.tsx');
+  assert.ok(source.includes("paymentMethod: String(rentData.paymentMethod || 'CASH')"));
+  assert.ok(!source.includes("paymentMethod: String(rentData.paymentMethod || 'BANK_TRANSFER')"));
+});
+
 test('owner rent money display preserves fils precision', () => {
   const source = read('src/owner/components/OwnerMoneySnapshotSection.tsx');
   assert.ok(source.includes('minimumFractionDigits: 2'));
