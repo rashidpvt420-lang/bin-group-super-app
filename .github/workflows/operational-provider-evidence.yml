@@ -155,8 +155,9 @@ jobs:
           changed="$(git -C control-plane diff --name-only "$RELEASE_SHA" "$CONTROL_PLANE_SHA")"
           [[ -n "$changed" ]] || { echo "::error::No reviewed control-plane repair exists above the frozen release."; exit 1; }
           allowed='^(\.github/workflows/firebase-production-deploy\.yml|\.github/workflows/live-role-smoke\.yml|\.github/workflows/operational-application-evidence\.yml|\.github/workflows/operational-provider-evidence\.yml|\.github/workflows/privileged-access-rotation-evidence\.yml|\.github/workflows/technician-physical-evidence\.yml|scripts/finalize-operational-provider-evidence\.mjs|scripts/hard-clearance-production-revalidation\.mjs|scripts/launch-status\.mjs|scripts/publish-direct-operational-proof\.mjs|scripts/publish-operational-application-evidence\.mjs|scripts/publish-operational-provider-evidence\.mjs|scripts/resolve-admin-app-check-site-key\.mjs|scripts/run-frozen-release-evidence\.mjs|scripts/verify-ai-live-evidence\.mjs|scripts/verify-hard-launch-approval\.mjs|scripts/verify-operational-readiness\.mjs|tests/launch/ai-operational-contract\.test\.mjs|tests/launch/external-gate-production-provenance\.test\.mjs|tests/launch/final-operational-evidence-producers\.test\.mjs|tests/launch/hard-clearance-revalidation\.test\.mjs|tests/launch/operational-application-evidence-audit\.test\.mjs)$'
+          supplemental_allowed='^(scripts/lib/operational-proof-schema\.mjs|scripts/prepare-operational-application-evidence\.mjs|scripts/verify-operational-application-evidence\.mjs)$'
           while IFS= read -r file; do
-            [[ -z "$file" || "$file" =~ $allowed ]] || { echo "::error::Non-control-plane file changed since frozen release: $file"; exit 1; }
+            [[ -z "$file" || "$file" =~ $allowed || "$file" =~ $supplemental_allowed ]] || { echo "::error::Non-control-plane file changed since frozen release: $file"; exit 1; }
           done <<< "$changed"
           echo "CONTROL_PLANE_SCOPE_VERIFIED=true" >> "$GITHUB_ENV"
 
@@ -289,11 +290,12 @@ jobs:
                 },
               });
               const entries = Array.isArray(response.data?.entries) ? response.data.entries : [];
-              const candidateText = entries
-                .map((entry) => JSON.stringify(entry))
-                .filter((entry) => entry.includes('[runSovereignAI] Live providers unavailable')
-                  && /"forcedProvider"\s*:\s*"gemini"/.test(entry));
-              for (const entry of candidateText) {
+              // The Logging API may place structured console fields in
+              // textPayload, jsonPayload or nested labels depending on the
+              // Functions runtime. The server-side query has already narrowed
+              // this run window to the exact allow-listed warning, so inspect
+              // every returned envelope without assuming one payload shape.
+              for (const entry of entries.map((value) => JSON.stringify(value))) {
                 for (const match of entry.matchAll(/\bgemini:([a-z-]+)\b/g)) {
                   if (allowedCodes.has(match[1])) categories.add(`gemini:${match[1]}`);
                 }

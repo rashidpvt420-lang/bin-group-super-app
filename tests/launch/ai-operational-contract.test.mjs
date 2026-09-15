@@ -98,6 +98,10 @@ test('AI provider evidence is exact-SHA, deployment-bound, protected, and hard-l
   assert.match(workflow, /logging\.googleapis\.com\/v2\/entries:list/);
   assert.match(workflow, /allowedCodes = new Set/);
   assert.match(workflow, /attempt < 4/);
+  assert.match(workflow, /entries\.map\(\(value\) => JSON\.stringify\(value\)\)/);
+  assert.match(workflow, /entry\.matchAll\(\/\\bgemini:\(\[a-z-\]\+\)\\b\/g\)/);
+  assert.doesNotMatch(workflow, /entry\.includes\('\[runSovereignAI\] Live providers unavailable'\)/);
+  assert.doesNotMatch(workflow, /forcedProvider.*gemini/);
   assert.match(workflow, /Redacted Sovereign AI failure category/);
   assert.doesNotMatch(workflow, /console\.(?:log|error)\((?:entry|entries|response|response\.data)/);
   assert.match(verifier, /provider: 'gemini'/);
