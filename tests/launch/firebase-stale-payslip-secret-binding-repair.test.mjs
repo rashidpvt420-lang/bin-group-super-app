@@ -33,6 +33,14 @@ function serviceWithSecretBindings(names) {
   };
 }
 
+function functionWithSecretBindings(names) {
+  return {
+    serviceConfig: {
+      secretEnvironmentVariables: names.map((key) => ({ key, secret: key, version: '1' })),
+    },
+  };
+}
+
 test('stale payslip repair is enabled only in the exact protected production deploy job', () => {
   const canonical = {
     GITHUB_ACTIONS: 'true',
@@ -78,6 +86,7 @@ test('payslip repair removes only obsolete SMTP secret bindings and verifies the
 
   assert.equal(result.status, 'passed');
   assert.equal(result.action, 'removed-obsolete-bindings');
+  assert.equal(result.reconciliationPath, 'cloud-run');
   assert.deepEqual(result.removedBindingNames, ['SMTP_HOST', 'SMTP_PASS', 'SMTP_USER']);
   assert.equal(result.secretValuesExcluded, true);
   assert.equal(calls.length, 3);
@@ -89,6 +98,47 @@ test('payslip repair removes only obsolete SMTP secret bindings and verifies the
   assert.ok(calls[1].args.includes(canonicalProjectId));
   assert.ok(calls[1].args.includes('--remove-secrets=SMTP_HOST,SMTP_PASS,SMTP_USER'));
   assert.equal(calls[1].args.some((arg) => String(arg).includes('UNRELATED_SECRET')), false);
+});
+
+test('payslip repair falls back to Cloud Functions v2 when managed Cloud Run update is denied', () => {
+  const calls = [];
+  const spawnSyncImpl = (command, args) => {
+    calls.push({ command, args });
+    if (command === 'gcloud' && args[0] === 'run' && args[2] === 'describe' && calls.filter((call) => call.command === 'gcloud' && call.args[0] === 'run' && call.args[2] === 'describe').length === 1) {
+      return { status: 0, stdout: JSON.stringify(serviceWithSecretBindings(['SMTP_HOST', 'SMTP_PASS', 'SMTP_USER'])) };
+    }
+    if (command === 'gcloud' && args[0] === 'run' && args[2] === 'update') {
+      return { status: 1, stdout: '', stderr: 'PERMISSION_DENIED: run.services.update' };
+    }
+    if (command === 'gcloud' && args[0] === 'functions' && args[1] === 'describe') {
+      const describeCount = calls.filter((call) => call.command === 'gcloud' && call.args[0] === 'functions' && call.args[1] === 'describe').length;
+      return {
+        status: 0,
+        stdout: JSON.stringify(functionWithSecretBindings(describeCount === 1 ? ['SMTP_HOST', 'SMTP_PASS', 'SMTP_USER'] : [])),
+      };
+    }
+    if (command === process.execPath && args[0] === '-e') {
+      assert.match(args[1], /cloudfunctions\.googleapis\.com\/v2/);
+      assert.match(args[1], /updateMask=serviceConfig\.secretEnvironmentVariables/);
+      assert.match(args[1], /secretEnvironmentVariables: \[\]/);
+      return { status: 0, stdout: 'cloud-functions-secret-reconciliation=passed', stderr: '' };
+    }
+    if (command === 'gcloud' && args[0] === 'run' && args[2] === 'describe') {
+      return { status: 0, stdout: JSON.stringify(serviceWithSecretBindings([])) };
+    }
+    throw new Error(`Unexpected command: ${command} ${args.join(' ')}`);
+  };
+
+  const result = reconcileRetiredPayslipSecretBindings({
+    projectId: canonicalProjectId,
+    spawnSyncImpl,
+    discoverEndpointSecretNames: () => [],
+  });
+
+  assert.equal(result.status, 'passed');
+  assert.equal(result.reconciliationPath, 'cloud-functions-v2');
+  assert.deepEqual(result.removedBindingNames, ['SMTP_HOST', 'SMTP_PASS', 'SMTP_USER']);
+  assert.equal(result.secretValuesExcluded, true);
 });
 
 test('payslip repair is a no-op when no retired binding exists', () => {
@@ -145,6 +195,8 @@ test('payslip repair refuses every non-canonical project, region, service, or en
 test('repair never re-enables or accesses retired secret versions and runs before Firebase deploy', () => {
   assert.match(verifier, /gcloud['"], \[\s*['"]run['"], ['"]services['"], ['"]update['"]/s);
   assert.match(verifier, /--remove-secrets=/);
+  assert.match(verifier, /cloudfunctions\.googleapis\.com\/v2/);
+  assert.match(verifier, /updateMask=serviceConfig\.secretEnvironmentVariables/);
   assert.doesNotMatch(verifier, /versions\s+(?:enable|access)|secrets\s+versions\s+(?:enable|access)|--update-secrets=.*SMTP_PASS|--set-secrets=.*SMTP_PASS/);
 
   const gcloudSetup = workflow.indexOf('Set up Google Cloud CLI for protected Secret Manager checks');
