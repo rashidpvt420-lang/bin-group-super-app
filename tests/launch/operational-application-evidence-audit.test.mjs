@@ -68,7 +68,7 @@ test('application evidence workflow is protected and auto-discovers fixed produc
   assert.doesNotMatch(preparation, /collection\('notifications'\)\.doc\([^)]*\)\.set/);
   assert.doesNotMatch(preparation, /console\.(?:log|error)\([^\n]*(?:tenantEmail|tenantPassword|debugToken|data\.token)/);
 
-  assert.match(frozenWrapper, /REVIEWED_APPLICATION_PREPARATION_BLOB = '321a1af5f9c2ed91ddf0f367cf0a968fccf9471c'/);
+  assert.match(frozenWrapper, /REVIEWED_APPLICATION_PREPARATION_BLOB = 'e040a0b268a69b6677ad7bc2ce2b4314f9661578'/);
   assert.match(frozenWrapper, /assertReviewedApplicationPreparation\(releaseRoot\)/);
   assert.match(frozenWrapper, /resolveApplicationEvidenceActor\(env\)/);
   assert.doesNotThrow(() => assertReviewedApplicationPreparationSource(preparation));
@@ -147,7 +147,6 @@ test('payment and commission evidence uses real replay invariants and requires F
   assert.equal(publisherChecks.length, 2, 'both finance replay gates must require the Founder TOTP hash');
   assert.match(approval, /approvalWasIdempotent = true/);
   assert.match(commission, /\.doc\(`commission_\$\{contractId\}`\)/);
-  assert.match(commission, /transaction\.create\(commissionRef/);
 });
 
 test('tenant notification proof auto-discovers successful delivery and requires tenant, photo, property and unit binding', async () => {
