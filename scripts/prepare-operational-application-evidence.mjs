@@ -14,6 +14,8 @@ const PRODUCTION_URL = 'https://bin-group-57c60.web.app';
 const CREATE_NOTIFICATION_URL = 'https://europe-west3-bin-group-57c60.cloudfunctions.net/createNotification';
 const TERMINAL_DELIVERY_STATES = new Set(['SUCCESS', 'PARTIAL', 'FAILED', 'NO_REGISTERED_TOKEN']);
 const PARTICIPANT_FIELDS = ['tenantId', 'tenantUid', 'userId', 'createdBy', 'requesterId'];
+const PUSH_REGISTRATION_ATTEMPTS = 3;
+const PUSH_REGISTRATION_WAIT_MS = 30_000;
 const EVIDENCE_PNG_BASE64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl8fP8AAAAASUVORK5CYII=';
 const text = (value) => String(value ?? '').trim();
 const lower = (value) => text(value).toLowerCase();
@@ -48,6 +50,43 @@ const photoEvidence = (ticket) => [
   ...(Array.isArray(ticket.images) ? ticket.images : []),
   ...(Array.isArray(ticket.attachments) ? ticket.attachments.map((item) => item?.url || item?.path) : []),
 ].map(text).find((value) => /^(https:\/\/|gs:\/\/|tickets\/|maintenance-requests\/|tenant-tickets\/)/i.test(value)) || '';
+
+function classifyPushDiagnostic(value) {
+  const message = lower(value);
+  if (!message) return 'unknown';
+  if (message.includes('vapid')) return 'vapid';
+  if (message.includes('app check') || message.includes('appcheck')) return 'app-check';
+  if (message.includes('permission') || message.includes('denied')) return 'permission';
+  if (message.includes('service worker') || message.includes('service-worker')) return 'service-worker';
+  if (message.includes('messaging') || message.includes('fcm')) return 'messaging';
+  if (message.includes('unauthenticated') || message.includes('auth/')) return 'auth';
+  if (message.includes('network') || message.includes('fetch') || message.includes('timeout')) return 'network';
+  if (message.includes('registration') || message.includes('push service')) return 'registration';
+  return 'other';
+}
+
+async function pushClientState(page) {
+  return page.evaluate(async () => {
+    const supportsNotifications = 'Notification' in window;
+    const supportsServiceWorker = 'serviceWorker' in navigator;
+    let messagingWorkerActive = false;
+    let registrationCount = 0;
+    if (supportsServiceWorker) {
+      const registrations = await navigator.serviceWorker.getRegistrations().catch(() => []);
+      registrationCount = registrations.length;
+      messagingWorkerActive = registrations.some((registration) =>
+        Boolean(registration.active?.scriptURL?.endsWith('/firebase-messaging-sw.js')),
+      );
+    }
+    return {
+      permission: supportsNotifications ? Notification.permission : 'unsupported',
+      supportsNotifications,
+      supportsServiceWorker,
+      registrationCount,
+      messagingWorkerActive,
+    };
+  });
+}
 
 function assertProtectedContext() {
   if (process.env.GITHUB_ACTIONS !== 'true') fail('GitHub Actions is required');
@@ -127,8 +166,8 @@ async function createTicketThroughDeployedTenantUi(page, startedAt) {
   fail('deployed Tenant request completed navigation but no fresh photo-backed production ticket became observable');
 }
 
-async function waitForFreshPushRegistration(db, tenantUid, startedAt) {
-  const deadline = Date.now() + 90_000;
+async function waitForFreshPushRegistration(db, tenantUid, startedAt, timeoutMs = PUSH_REGISTRATION_WAIT_MS) {
+  const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     const snapshot = await db.collection('users').doc(tenantUid).collection('fcmTokens').get();
     const fresh = snapshot.docs.some((document) => {
@@ -140,10 +179,35 @@ async function waitForFreshPushRegistration(db, tenantUid, startedAt) {
         && lower(data.permission || 'granted') === 'granted'
         && millis(data.lastRegisteredAt || data.updatedAt || data.createdAt) >= startedAt - 5_000;
     });
-    if (fresh) return;
+    if (fresh) return true;
     await sleep(1_000);
   }
-  fail('deployed Tenant client did not register a fresh production FCM token');
+  return false;
+}
+
+async function ensureFreshPushRegistration({ db, tenantUid, startedAt, page, diagnostics }) {
+  for (let attempt = 1; attempt <= PUSH_REGISTRATION_ATTEMPTS; attempt += 1) {
+    if (await waitForFreshPushRegistration(db, tenantUid, startedAt)) return;
+    if (attempt < PUSH_REGISTRATION_ATTEMPTS) {
+      await page.reload({ waitUntil: 'domcontentloaded' });
+      await page.waitForURL('**/tenant/dashboard', { timeout: 30_000 });
+      await sleep(1_500);
+    }
+  }
+
+  const state = await pushClientState(page).catch(() => ({
+    permission: 'unknown',
+    supportsNotifications: false,
+    supportsServiceWorker: false,
+    registrationCount: 0,
+    messagingWorkerActive: false,
+  }));
+  const diagnosticText = [...diagnostics].sort().join('|') || 'none';
+  fail(
+    `deployed Tenant client did not register a fresh production FCM token `
+      + `(permission=${state.permission};notifications=${state.supportsNotifications};serviceWorker=${state.supportsServiceWorker};`
+      + `messagingWorkerActive=${state.messagingWorkerActive};registrationCount=${state.registrationCount};diagnostics=${diagnosticText})`,
+  );
 }
 
 async function signInAndExchangeAppCheck({ apiKey, appId, debugToken, email, password, tenantUid }) {
@@ -265,6 +329,17 @@ async function main() {
     const context = await browser.newContext();
     await context.grantPermissions(['notifications'], { origin: PRODUCTION_URL });
     const page = await context.newPage();
+    const pushDiagnostics = new Set();
+    page.on('console', (message) => {
+      const raw = message.text();
+      if (raw.includes('[Push]')) pushDiagnostics.add(classifyPushDiagnostic(raw));
+    });
+    page.on('pageerror', (error) => {
+      const raw = text(error?.message);
+      if (/push|messaging|firebase|service.?worker|app.?check/i.test(raw)) {
+        pushDiagnostics.add(classifyPushDiagnostic(raw));
+      }
+    });
     await page.addInitScript((token) => {
       window.FIREBASE_APPCHECK_DEBUG_TOKEN = token;
     }, debugToken);
@@ -283,7 +358,13 @@ async function main() {
     await page.locator('input[type="password"]').first().fill(tenantPassword);
     await page.locator('form button[type="submit"]').first().click();
     await page.waitForURL('**/tenant/dashboard', { timeout: 30_000 });
-    await waitForFreshPushRegistration(db, tenant.uid, startedAt);
+    await ensureFreshPushRegistration({
+      db,
+      tenantUid: tenant.uid,
+      startedAt,
+      page,
+      diagnostics: pushDiagnostics,
+    });
 
     let ticket = await matchingTestTicket(db, tenant.uid, { required: false });
     if (!ticket) {
