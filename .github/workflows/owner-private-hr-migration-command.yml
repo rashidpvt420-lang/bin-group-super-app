@@ -1,0 +1,238 @@
+name: Owner Private HR Migration Command
+run-name: Owner Private HR migration · ${{ github.event.comment.body }}
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  actions: write
+  contents: read
+  issues: write
+
+concurrency:
+  group: owner-private-hr-migration-command
+  cancel-in-progress: false
+
+jobs:
+  migrate-and-verify:
+    name: Review, migrate if required, and prove clean Private HR state
+    if: >-
+      github.event.issue.number == 434 &&
+      !github.event.issue.pull_request &&
+      github.event.comment.user.login == github.repository_owner &&
+      github.event.comment.author_association == 'OWNER' &&
+      github.event.comment.body == '/bin-launch migrate-private-hr'
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPOSITORY: ${{ github.repository }}
+      ISSUE_NUMBER: '434'
+
+    steps:
+      - name: Resolve stable exact current main
+        id: release
+        shell: bash
+        run: |
+          set -euo pipefail
+          first_sha="$(gh api "repos/$REPOSITORY/commits/main" --jq '.sha')"
+          [[ "$first_sha" =~ ^[0-9a-f]{40}$ ]]
+          sleep 3
+          second_sha="$(gh api "repos/$REPOSITORY/commits/main" --jq '.sha')"
+          [[ "$first_sha" == "$second_sha" ]] || {
+            echo '::error::Main moved while authorizing the Private HR migration.'
+            exit 1
+          }
+          echo "sha=$second_sha" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout exact current main
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ steps.release.outputs.sha }}
+          persist-credentials: false
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+
+      - name: Protected dry-run, conditional execute, and clean-state verification
+        id: migration
+        env:
+          RELEASE_SHA: ${{ steps.release.outputs.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          source scripts/owner-launch-run-correlation.sh
+
+          post_comment() {
+            gh api --method POST "repos/$REPOSITORY/issues/$ISSUE_NUMBER/comments" -f body="$1" >/dev/null
+          }
+
+          wait_for_success() {
+            local run_id="$1"
+            for _ in $(seq 1 160); do
+              local run_json status conclusion
+              run_json="$(gh api "repos/$REPOSITORY/actions/runs/$run_id")"
+              status="$(jq -r '.status' <<<"$run_json")"
+              conclusion="$(jq -r '.conclusion // empty' <<<"$run_json")"
+              if [[ "$status" == 'completed' ]]; then
+                [[ "$conclusion" == 'success' ]]
+                return
+              fi
+              sleep 15
+            done
+            return 1
+          }
+
+          dispatch_current_main() {
+            local mode="$1"
+            local confirmation="$2"
+            local baseline="$3"
+            owner_snapshot_workflow_run_ids \
+              private-hr-migration-dispatch-current-main.yml \
+              "$baseline"
+            jq -n --arg ref main --arg mode "$mode" --arg confirmation "$confirmation" \
+              '{ref:$ref,inputs:{mode:$mode,confirmation:$confirmation}}' > private-hr-dispatch.json
+            gh api --method POST \
+              "repos/$REPOSITORY/actions/workflows/private-hr-migration-dispatch-current-main.yml/dispatches" \
+              --input private-hr-dispatch.json
+            owner_locate_new_exact_sha_workflow_run \
+              private-hr-migration-dispatch-current-main.yml \
+              "$RELEASE_SHA" \
+              "$baseline" \
+              60 \
+              5
+          }
+
+          download_report() {
+            local run_id="$1"
+            local mode="$2"
+            local destination="$3"
+            local artifacts artifact_id expected
+            artifacts="$(gh api --paginate --slurp "repos/$REPOSITORY/actions/runs/$run_id/artifacts?per_page=100" | jq -ce '{artifacts:[.[].artifacts[]]}')"
+            expected="private-hr-migration-$mode-$RELEASE_SHA"
+            artifact_id="$(jq -r --arg expected "$expected" '[.artifacts[] | select(.name == $expected and .expired == false)] | first | .id // empty' <<<"$artifacts")"
+            [[ "$artifact_id" =~ ^[0-9]+$ ]]
+            rm -rf "$destination" "$destination.zip"
+            gh api "repos/$REPOSITORY/actions/artifacts/$artifact_id/zip" > "$destination.zip"
+            mkdir -p "$destination"
+            unzip -q "$destination.zip" -d "$destination"
+            local report_path
+            report_path="$(find "$destination" -type f -name private-hr-migration.json -print -quit)"
+            [[ -n "$report_path" && -s "$report_path" ]]
+            printf '%s\n' "$report_path"
+          }
+
+          dry_record="$(dispatch_current_main dry-run REVIEW_PRIVATE_HR_MIGRATION_BIN_GROUP private-hr-initial-baseline.json)"
+          dry_run_id="$(jq -r '.runId' <<<"$dry_record")"
+          dry_run_url="$(jq -r '.runUrl' <<<"$dry_record")"
+          wait_for_success "$dry_run_id"
+          dry_report="$(download_report "$dry_run_id" dry-run private-hr-initial)"
+
+          jq -e --arg sha "$RELEASE_SHA" --arg run "$dry_run_id" '
+            .schemaVersion == 2 and
+            .commitSha == $sha and
+            .workflowRunId == $run and
+            .mode == "DRY_RUN" and
+            .failureCount == 0 and
+            .sensitiveValuesLogged == false and
+            .rawIdentifiersLogged == false and
+            .hardLaunchClaim == false
+          ' "$dry_report" >/dev/null
+
+          execution_required="$(jq -r '.executionRequired' "$dry_report")"
+          required_count="$(jq -r '.recordsRequiringMigration' "$dry_report")"
+          [[ "$required_count" =~ ^[0-9]+$ ]]
+
+          execute_run_id=''
+          execute_run_url=''
+          if [[ "$execution_required" == 'true' ]]; then
+            [[ "$required_count" -gt 0 ]]
+            jq -e '.recommendedNextAction == "REVIEW_REPORT_THEN_EXECUTE"' "$dry_report" >/dev/null
+
+            execute_record="$(dispatch_current_main execute MIGRATE_PRIVATE_HR_BIN_GROUP_57C60 private-hr-execute-baseline.json)"
+            execute_run_id="$(jq -r '.runId' <<<"$execute_record")"
+            execute_run_url="$(jq -r '.runUrl' <<<"$execute_record")"
+            wait_for_success "$execute_run_id"
+            execute_report="$(download_report "$execute_run_id" execute private-hr-execute)"
+
+            jq -e --arg sha "$RELEASE_SHA" --arg run "$execute_run_id" --argjson expected "$required_count" '
+              .schemaVersion == 2 and
+              .commitSha == $sha and
+              .workflowRunId == $run and
+              .mode == "EXECUTE" and
+              .recordsRequiringMigration == $expected and
+              .executionRequired == true and
+              .recommendedNextAction == "MIGRATION_EXECUTED_VERIFY_REPORT" and
+              .migrated == $expected and
+              .verified == $expected and
+              .failureCount == 0 and
+              .sensitiveValuesLogged == false and
+              .rawIdentifiersLogged == false and
+              .hardLaunchClaim == false
+            ' "$execute_report" >/dev/null
+          else
+            [[ "$required_count" -eq 0 ]]
+            jq -e '.recommendedNextAction == "SKIP_EXECUTE_PROCEED_TO_BANK_PILOT"' "$dry_report" >/dev/null
+          fi
+
+          final_record="$(dispatch_current_main dry-run REVIEW_PRIVATE_HR_MIGRATION_BIN_GROUP private-hr-final-baseline.json)"
+          final_run_id="$(jq -r '.runId' <<<"$final_record")"
+          final_run_url="$(jq -r '.runUrl' <<<"$final_record")"
+          wait_for_success "$final_run_id"
+          final_report="$(download_report "$final_run_id" dry-run private-hr-final)"
+
+          jq -e --arg sha "$RELEASE_SHA" --arg run "$final_run_id" '
+            .schemaVersion == 2 and
+            .commitSha == $sha and
+            .workflowRunId == $run and
+            .mode == "DRY_RUN" and
+            .recordsRequiringMigration == 0 and
+            .executionRequired == false and
+            .recommendedNextAction == "SKIP_EXECUTE_PROCEED_TO_BANK_PILOT" and
+            .migrated == 0 and
+            .verified == 0 and
+            .failureCount == 0 and
+            .sensitiveValuesLogged == false and
+            .rawIdentifiersLogged == false and
+            .hardLaunchClaim == false
+          ' "$final_report" >/dev/null
+
+          latest_main="$(gh api "repos/$REPOSITORY/commits/main" --jq '.sha')"
+          [[ "$latest_main" == "$RELEASE_SHA" ]] || {
+            post_comment "Private-HR verification completed for \`$RELEASE_SHA\`, but main moved to \`$latest_main\`; do not use this result for launch evidence."
+            exit 1
+          }
+
+          if [[ -n "$execute_run_id" ]]; then
+            post_comment "Private-HR migration completed and verified for exact main \`$RELEASE_SHA\`. Initial dry-run: $dry_run_url. Execute run: $execute_run_url. Final clean dry-run: $final_run_url. Records requiring migration after verification: \`0\`. Hard-launch claim: \`false\`."
+          else
+            post_comment "Private-HR was already clean for exact main \`$RELEASE_SHA\`. Initial dry-run: $dry_run_url. Final clean dry-run: $final_run_url. Records requiring migration: \`0\`. Hard-launch claim: \`false\`."
+          fi
+
+          echo "initial_run_id=$dry_run_id" >> "$GITHUB_OUTPUT"
+          echo "execute_run_id=$execute_run_id" >> "$GITHUB_OUTPUT"
+          echo "final_run_id=$final_run_id" >> "$GITHUB_OUTPUT"
+
+      - name: Publish safe summary
+        env:
+          RELEASE_SHA: ${{ steps.release.outputs.sha }}
+          INITIAL_RUN_ID: ${{ steps.migration.outputs.initial_run_id }}
+          EXECUTE_RUN_ID: ${{ steps.migration.outputs.execute_run_id }}
+          FINAL_RUN_ID: ${{ steps.migration.outputs.final_run_id }}
+        shell: bash
+        run: |
+          {
+            echo '## Protected Private HR migration verification'
+            echo
+            echo "- Exact main SHA: \`$RELEASE_SHA\`"
+            echo "- Initial dry-run: \`$INITIAL_RUN_ID\`"
+            echo "- Execute run: \`${EXECUTE_RUN_ID:-not-required}\`"
+            echo "- Final clean dry-run: \`$FINAL_RUN_ID\`"
+            echo '- Final records requiring migration: `0`'
+            echo '- Sensitive values logged: `false`'
+            echo '- Raw identifiers logged: `false`'
+            echo '- Hard-launch claim: `false`'
+          } >> "$GITHUB_STEP_SUMMARY"
