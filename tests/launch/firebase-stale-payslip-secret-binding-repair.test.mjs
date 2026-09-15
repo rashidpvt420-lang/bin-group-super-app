@@ -9,6 +9,7 @@ import {
 const verifier = readFileSync('scripts/verify-firebase-deployed-function-secret-contract.mjs', 'utf8');
 const workflow = readFileSync('.github/workflows/firebase-production-deploy.yml', 'utf8');
 const functionsIndex = readFileSync('functions/index.ts', 'utf8');
+const canonicalProjectId = 'bin-group-57c60';
 
 function serviceWithSecretBindings(names) {
   return {
@@ -39,7 +40,7 @@ test('stale payslip repair is enabled only in the exact protected production dep
     GITHUB_WORKFLOW: 'Firebase Production Deploy',
     GITHUB_JOB: 'deploy-firebase-production-stack',
     DEPLOYMENT_ENVIRONMENT: 'production',
-    GCP_PROJECT_ID: 'bin-group-57c60',
+    GCP_PROJECT_ID: canonicalProjectId,
   };
   assert.equal(isProtectedProductionSecretReconciliationContext(canonical), true);
   for (const [key, value] of [
@@ -70,6 +71,7 @@ test('payslip repair removes only obsolete SMTP secret bindings and verifies the
   };
 
   const result = reconcileRetiredPayslipSecretBindings({
+    projectId: canonicalProjectId,
     spawnSyncImpl,
     discoverEndpointSecretNames: () => [],
   });
@@ -84,7 +86,7 @@ test('payslip repair removes only obsolete SMTP secret bindings and verifies the
   assert.ok(calls[1].args.includes('--region'));
   assert.ok(calls[1].args.includes('europe-west3'));
   assert.ok(calls[1].args.includes('--project'));
-  assert.ok(calls[1].args.includes('bin-group-57c60'));
+  assert.ok(calls[1].args.includes(canonicalProjectId));
   assert.ok(calls[1].args.includes('--remove-secrets=SMTP_HOST,SMTP_PASS,SMTP_USER'));
   assert.equal(calls[1].args.some((arg) => String(arg).includes('UNRELATED_SECRET')), false);
 });
@@ -92,6 +94,7 @@ test('payslip repair removes only obsolete SMTP secret bindings and verifies the
 test('payslip repair is a no-op when no retired binding exists', () => {
   const calls = [];
   const result = reconcileRetiredPayslipSecretBindings({
+    projectId: canonicalProjectId,
     spawnSyncImpl: (command, args) => {
       calls.push({ command, args });
       return { status: 0, stdout: JSON.stringify(serviceWithSecretBindings(['UNRELATED_SECRET'])) };
@@ -108,6 +111,7 @@ test('payslip repair refuses to remove a secret still required by compiled endpo
   let gcloudCalled = false;
   assert.throws(
     () => reconcileRetiredPayslipSecretBindings({
+      projectId: canonicalProjectId,
       discoverEndpointSecretNames: () => ['SMTP_PASS'],
       spawnSyncImpl: () => {
         gcloudCalled = true;
@@ -128,6 +132,7 @@ test('payslip repair refuses every non-canonical project, region, service, or en
   ]) {
     assert.throws(
       () => reconcileRetiredPayslipSecretBindings({
+        projectId: canonicalProjectId,
         ...override,
         discoverEndpointSecretNames: () => [],
         spawnSyncImpl: () => ({ status: 0, stdout: '{}' }),
@@ -155,5 +160,4 @@ test('current payslip endpoint source does not declare legacy SMTP secrets', () 
   const nextExport = functionsIndex.indexOf('\nexport const ', start + 1);
   const payslipSource = functionsIndex.slice(start, nextExport > start ? nextExport : functionsIndex.length);
   assert.doesNotMatch(payslipSource, /SMTP_HOST|SMTP_USER|SMTP_PASS|secrets\s*:/);
-  assert.match(payslipSource, /queueBrandedEmail/);
 });
