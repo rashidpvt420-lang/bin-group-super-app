@@ -1,0 +1,68 @@
+name: AI Provider Diagnostic Owner Bridge
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  dispatch-ai-provider-diagnostic:
+    name: Dispatch protected AI provider diagnostic from owner command
+    if: >-
+      github.event.issue.number == 434 &&
+      !github.event.issue.pull_request &&
+      github.event.comment.user.login == github.repository_owner &&
+      github.event.comment.author_association == 'OWNER' &&
+      startsWith(github.event.comment.body, '/bin-launch ai-diagnostic ')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ github.token }}
+      COMMAND_BODY: ${{ github.event.comment.body }}
+      EXPECTED_REPOSITORY: rashidpvt420-lang/bin-group-super-app
+      EXPECTED_REPOSITORY_ID: '1173943093'
+    steps:
+      - name: Validate exact owner command and current main
+        id: command
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$GITHUB_REPOSITORY" == "$EXPECTED_REPOSITORY" ]]
+          [[ "$GITHUB_REPOSITORY_ID" == "$EXPECTED_REPOSITORY_ID" ]]
+          [[ "$GITHUB_REF" == "refs/heads/main" ]]
+
+          read -r command target control_sha extra <<< "$COMMAND_BODY"
+          [[ "$command" == "/bin-launch" ]]
+          [[ "$target" == "ai-diagnostic" ]]
+          [[ -z "${extra:-}" ]]
+          [[ "$control_sha" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$COMMAND_BODY" == "/bin-launch ai-diagnostic $control_sha" ]]
+
+          current_main="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq '.object.sha')"
+          [[ "$current_main" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$current_main" == "$control_sha" ]] || { echo "::error::AI diagnostic command is stale: expected current main $control_sha, observed $current_main."; exit 1; }
+          [[ "$GITHUB_SHA" == "$control_sha" ]] || { echo "::error::Issue-comment workflow SHA is not the commanded current main SHA."; exit 1; }
+
+          echo "control_sha=$control_sha" >> "$GITHUB_OUTPUT"
+
+      - name: Dispatch exact protected AI provider diagnostic
+        env:
+          CONTROL_SHA: ${{ steps.command.outputs.control_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          current_main="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq '.object.sha')"
+          [[ "$current_main" == "$CONTROL_SHA" ]] || { echo "::error::main advanced before protected AI diagnostic dispatch."; exit 1; }
+
+          jq -n \
+            --arg ref main \
+            --arg control "$CONTROL_SHA" \
+            '{ref:$ref,inputs:{expected_commit_sha:$control,confirmation:"DIAGNOSE_AI_PROVIDER_REDACTED"}}' \
+            > dispatch.json
+
+          gh api --method POST \
+            "repos/$GITHUB_REPOSITORY/actions/workflows/ai-provider-redacted-diagnostic.yml/dispatches" \
+            --input dispatch.json
