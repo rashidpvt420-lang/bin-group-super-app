@@ -283,7 +283,10 @@ jobs:
           git -C control-plane cat-file -e "$TARGET_SHA^{commit}" || git -C control-plane fetch origin "$TARGET_SHA"
           git -C control-plane merge-base --is-ancestor "$TARGET_SHA" "$CURRENT_SHA" || { echo "::error::Release SHA is not an ancestor of the clearance control plane."; exit 1; }
           changed="$(git -C control-plane diff --name-only "$TARGET_SHA" "$CURRENT_SHA")"
-          [[ -n "$changed" ]] || { echo "::error::No reviewed clearance-control repair exists above the release SHA."; exit 1; }
+          if [[ -z "$changed" ]]; then
+            [[ "$TARGET_SHA" == "$CURRENT_SHA" ]] || { echo "::error::Empty clearance-control diff is only valid when release equals current control plane."; exit 1; }
+            echo "::notice::Exact-release mode: release equals current control plane; no clearance-control delta to validate."
+          fi
           allowed='^(\.github/workflows/firebase-production-deploy\.yml|\.github/workflows/live-role-smoke\.yml|\.github/workflows/operational-application-evidence\.yml|\.github/workflows/operational-provider-evidence\.yml|\.github/workflows/privileged-access-rotation-evidence\.yml|\.github/workflows/technician-physical-evidence\.yml|scripts/finalize-operational-provider-evidence\.mjs|scripts/hard-clearance-production-revalidation\.mjs|scripts/launch-status\.mjs|scripts/publish-direct-operational-proof\.mjs|scripts/publish-operational-application-evidence\.mjs|scripts/publish-operational-provider-evidence\.mjs|scripts/resolve-admin-app-check-site-key\.mjs|scripts/run-frozen-release-evidence\.mjs|scripts/verify-ai-live-evidence\.mjs|scripts/verify-hard-launch-approval\.mjs|scripts/verify-operational-readiness\.mjs|tests/launch/ai-operational-contract\.test\.mjs|tests/launch/external-gate-production-provenance\.test\.mjs|tests/launch/final-operational-evidence-producers\.test\.mjs|tests/launch/hard-clearance-revalidation\.test\.mjs|tests/launch/operational-application-evidence-audit\.test\.mjs)$'
           supplemental_allowed='^(scripts/lib/operational-proof-schema\.mjs|scripts/prepare-operational-application-evidence\.mjs|scripts/verify-operational-application-evidence\.mjs)$'
           while IFS= read -r file; do
