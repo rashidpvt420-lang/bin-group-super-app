@@ -11,6 +11,37 @@ import { validateFrozenReleaseEvidenceContext } from '../../scripts/run-frozen-r
 
 const read = (file) => readFile(file, 'utf8');
 
+const phase1DecisionControlFiles = [
+  'scripts/hard-launch-status.mjs',
+  'scripts/lib/hard-launch-control.mjs',
+  'scripts/print-hard-launch-blockers.mjs',
+  'tests/launch/hard-launch-blocker-plan.test.mjs',
+  'tests/launch/phase1-manual-public-launch-policy.test.mjs',
+];
+
+test('every dual-SHA evidence scope accepts the reviewed Phase 1 final-decision controls', async () => {
+  const workflowFiles = [
+    '.github/workflows/live-role-smoke.yml',
+    '.github/workflows/operational-application-evidence.yml',
+    '.github/workflows/operational-provider-evidence.yml',
+    '.github/workflows/privileged-access-rotation-evidence.yml',
+    '.github/workflows/technician-physical-evidence.yml',
+  ];
+
+  for (const workflowFile of workflowFiles) {
+    const workflow = await read(workflowFile);
+    const declarations = [...workflow.matchAll(/supplemental_allowed='\^\(([^'\n]+)\)\$'/g)];
+    assert.ok(declarations.length > 0, `${workflowFile} must declare its supplemental control-plane allowlist`);
+
+    for (const [, body] of declarations) {
+      const allowed = body.split('|').map((value) => value.replaceAll('\\.', '.'));
+      for (const required of phase1DecisionControlFiles) {
+        assert.ok(allowed.includes(required), `${workflowFile} must allow ${required}`);
+      }
+    }
+  }
+});
+
 test('hard clearance freshly revalidates production state without moving the frozen pilot release', async () => {
   const workflow = await read('.github/workflows/live-role-smoke.yml');
 
