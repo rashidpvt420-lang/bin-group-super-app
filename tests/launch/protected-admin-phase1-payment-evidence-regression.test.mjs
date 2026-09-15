@@ -56,7 +56,8 @@ test('protected Admin evidence repair does not relax the production Cash/Cheque 
 
   assert.ok(ownerOnboarding.includes('if (!["CASH", "CHEQUE"].includes(method))'));
   assert.ok(phase1Config.includes("const EXPECTED_METHODS = ['CASH', 'CHEQUE']"));
-  assert.ok(paymentApproval.includes('MANUAL_PAYMENT_METHODS = new Set(["BANK_TRANSFER", "CHEQUE", "CASH"])'));
+  assert.ok(paymentApproval.includes('PHASE1_RENT_PAYMENT_METHODS = new Set(["CASH", "CHEQUE"])'));
+  assert.ok(paymentApproval.includes('if (!activeConfiguration.approvedMethods.includes(method))'));
   assert.ok(paymentApproval.includes('submittedVersion !== activeConfiguration.version'));
   assert.ok(paymentApproval.includes('submittedHash !== activeConfiguration.configHash'));
 });

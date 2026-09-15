@@ -7,6 +7,7 @@ if (!admin.apps.length) admin.initializeApp();
 
 const db = admin.firestore();
 const text = (value: unknown, max = 300) => String(value ?? "").trim().slice(0, max);
+const PHASE1_RENT_PAYMENT_METHODS = new Set(["CASH", "CHEQUE"]);
 const money = (value: unknown, label: string) => {
   const amount = Number(value);
   if (!Number.isFinite(amount) || amount < 0) throw new HttpsError("invalid-argument", `${label} must be a valid non-negative amount.`);
@@ -14,7 +15,7 @@ const money = (value: unknown, label: string) => {
 };
 
 export const ownerRecordRentPayment = onCall(
-  { cors: true, region: "europe-west3" },
+  { cors: true, region: "europe-west3", enforceAppCheck: true },
   async (request) => {
     if (!request.auth?.uid) throw new HttpsError("unauthenticated", "Owner authentication required.");
     const role = text(request.auth.token?.role || request.auth.token?.userRole || request.auth.token?.primaryRole, 40).toLowerCase();
@@ -35,7 +36,7 @@ export const ownerRecordRentPayment = onCall(
     const unitNumber = text(request.data?.unitNumber, 80);
     const rentDue = money(request.data?.rentDue, "Rent due");
     const rentPaid = money(request.data?.rentPaid, "Rent paid");
-    const paymentMethod = text(request.data?.paymentMethod || "BANK_TRANSFER", 60).toUpperCase();
+    const paymentMethod = text(request.data?.paymentMethod || "CASH", 60).toUpperCase();
     const paymentReference = text(request.data?.paymentReference, 180);
     const referenceFileUrl = text(request.data?.referenceFileUrl, 2000);
     const referenceFilePath = text(request.data?.referenceFilePath, 500);
@@ -50,8 +51,8 @@ export const ownerRecordRentPayment = onCall(
         "Property, tenant name, a positive paid amount, and a stable submission ID are required.",
       );
     }
-    if (!["BANK_TRANSFER", "CARD", "CHEQUE", "CASH_MANUAL", "OTHER"].includes(paymentMethod)) {
-      throw new HttpsError("invalid-argument", "Unsupported rent payment method.");
+    if (!PHASE1_RENT_PAYMENT_METHODS.has(paymentMethod)) {
+      throw new HttpsError("failed-precondition", "Phase 1 rent payment records support Cash and Cheque only.");
     }
     if (!referenceFilePath || !/^[a-f0-9]{64}$/.test(referenceFileHash)) {
       throw new HttpsError("failed-precondition", "An immutable uploaded rent receipt is required.");
@@ -95,6 +96,7 @@ export const ownerRecordRentPayment = onCall(
           text(existing.ownerUid || existing.ownerId, 160) !== ownerUid ||
           text(existing.propertyId, 160) !== propertyId ||
           money(existing.rentPaid ?? existing.amountPaid ?? existing.amount, "Existing rent paid") !== rentPaid ||
+          text(existing.paymentMethod, 60).toUpperCase() !== paymentMethod ||
           text(existing.paymentReference, 180) !== paymentReference ||
           text(existing.referenceFileHash, 80).toLowerCase() !== referenceFileHash
         ) {
