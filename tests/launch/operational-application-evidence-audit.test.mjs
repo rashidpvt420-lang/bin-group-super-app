@@ -56,7 +56,10 @@ test('application evidence workflow is protected and auto-discovers fixed produc
   assert.match(preparation, /GITHUB_ACTOR !== CANONICAL_FOUNDER_LOGIN/);
   assert.match(preparation, /tenant\.customClaims\?\.testAccount !== true/);
   assert.match(preparation, /profile\.testAccount !== true/);
-  assert.match(preparation, /chromium\.launch\(\{ headless: true \}\)/);
+  assert.match(preparation, /chromium\.launchPersistentContext\(profileDir, \{ headless: true, channel: 'chromium' \}\)/);
+  assert.match(preparation, /mkdtemp\(path\.join\(os\.tmpdir\(\), 'bin-application-fcm-'\)\)/);
+  assert.match(preparation, /await context\.close\(\)/);
+  assert.match(preparation, /await rm\(profileDir, \{ recursive: true, force: true \}\)/);
   assert.match(preparation, /grantPermissions\(\['notifications'\]/);
   assert.match(preparation, /waitForFreshPushRegistration/);
   assert.match(preparation, /sha256\(token\) === document\.id/);
@@ -68,7 +71,7 @@ test('application evidence workflow is protected and auto-discovers fixed produc
   assert.doesNotMatch(preparation, /collection\('notifications'\)\.doc\([^)]*\)\.set/);
   assert.doesNotMatch(preparation, /console\.(?:log|error)\([^\n]*(?:tenantEmail|tenantPassword|debugToken|data\.token)/);
 
-  assert.match(frozenWrapper, /REVIEWED_APPLICATION_PREPARATION_BLOB = 'e040a0b268a69b6677ad7bc2ce2b4314f9661578'/);
+  assert.match(frozenWrapper, /REVIEWED_APPLICATION_PREPARATION_BLOB = 'bc551ca66b906f06959f719ee86fc43fccba54e3'/);
   assert.match(frozenWrapper, /assertReviewedApplicationPreparation\(releaseRoot\)/);
   assert.match(frozenWrapper, /resolveApplicationEvidenceActor\(env\)/);
   assert.doesNotThrow(() => assertReviewedApplicationPreparationSource(preparation));
