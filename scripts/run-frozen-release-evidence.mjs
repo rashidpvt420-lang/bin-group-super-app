@@ -152,12 +152,15 @@ function verifyRecentOwnerApplicationCommand(env) {
     `https://api.github.com/repos/${EXPECTED_REPOSITORY}/issues/${OWNER_COMMAND_ISSUE}/comments?per_page=100&since=${encodeURIComponent(since)}`,
   );
   if (!Array.isArray(comments)) fail('owner-command provenance comments response is invalid');
-  const expectedBody = `/bin-launch evidence application-all ${controlSha} ${releaseSha} ${deployRunId}`;
+  const expectedBodies = new Set([
+    `/bin-launch evidence application-all ${controlSha} ${releaseSha} ${deployRunId}`,
+    `/bin-launch evidence application-current ${controlSha} ${releaseSha} ${deployRunId}`,
+  ]);
   const matching = comments.filter((comment) => {
     const createdMs = Date.parse(String(comment?.created_at || ''));
     return comment?.user?.login === CANONICAL_FOUNDER_LOGIN
       && comment?.author_association === 'OWNER'
-      && String(comment?.body || '').trim() === expectedBody
+      && expectedBodies.has(String(comment?.body || '').trim())
       && Number.isFinite(createdMs)
       && createdMs >= runCreatedMs - 10 * 60 * 1000
       && createdMs <= runCreatedMs + 2 * 60 * 1000;
