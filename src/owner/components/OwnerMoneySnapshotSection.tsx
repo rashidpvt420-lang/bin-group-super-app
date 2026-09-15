@@ -1,5 +1,27 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle, Grid, MenuItem, Paper, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, Typography, alpha } from '@mui/material';
+import {
+  Alert,
+  Box,
+  Button,
+  Chip,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  Grid,
+  MenuItem,
+  Paper,
+  Stack,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  TextField,
+  Typography,
+  alpha,
+} from '@mui/material';
 import { AlertTriangle, CreditCard, Download, Percent, Plus, ReceiptText } from 'lucide-react';
 import { getDownloadURL, ref, storage, uploadBytes } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
@@ -7,23 +29,88 @@ import { NotificationEvents } from '../../services/notificationService';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import type { TenantLedgerSummary } from '../utils/ownerTenantLedgerResolver';
 
-type RentRecordPayload = { tenantName: string; propertyId: string; propertyName: string; unitNumber: string; rentDue: number; rentPaid: number; paymentMethod: string; paymentReference: string; notes: string; paymentTransactionId?: string; tenantLedgerId?: string; referenceFileUrl?: string; referenceFilePath?: string; referenceFileName?: string; referenceFileType?: string; referenceFileSize?: number; referenceFileHash?: string };
-type Props = { ledgerSummary: TenantLedgerSummary | null; pendingPayments: number; properties: any[]; onRecordRentPayment: (payload: RentRecordPayload) => Promise<void>; isExternalOpen?: boolean; onCloseExternal?: () => void };
+type RentRecordPayload = {
+  tenantName: string;
+  propertyId: string;
+  propertyName: string;
+  unitNumber: string;
+  rentDue: number;
+  rentPaid: number;
+  paymentMethod: string;
+  paymentReference: string;
+  notes: string;
+  paymentTransactionId?: string;
+  tenantLedgerId?: string;
+  referenceFileUrl?: string;
+  referenceFilePath?: string;
+  referenceFileName?: string;
+  referenceFileType?: string;
+  referenceFileSize?: number;
+  referenceFileHash?: string;
+};
 
-const money = (value: number) => `AED ${Number(value || 0).toLocaleString('en-AE', { maximumFractionDigits: 0 })}`;
+type Props = {
+  ledgerSummary: TenantLedgerSummary | null;
+  pendingPayments: number;
+  properties: any[];
+  onRecordRentPayment: (payload: RentRecordPayload) => Promise<void>;
+  isExternalOpen?: boolean;
+  onCloseExternal?: () => void;
+};
+
+const money = (value: number) => `AED ${Number(value || 0).toLocaleString('en-AE', {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+})}`;
 const propertyIdOf = (property: any) => String(property?.id || property?.propertyId || '');
-const propertyNameOf = (property: any) => String(property?.propertyName || property?.name || propertyIdOf(property) || 'Property');
-const emptyRentForm = (properties: any[]): RentRecordPayload => { const property = properties[0]; return { tenantName: '', propertyId: propertyIdOf(property), propertyName: propertyNameOf(property), unitNumber: '', rentDue: 0, rentPaid: 0, paymentMethod: 'CASH', paymentReference: '', notes: '' }; };
-function statusTone(status: string, balance: number, overdueDays: number) { if (overdueDays > 0) return '#ef4444'; if (balance > 0) return '#f59e0b'; if (String(status || '').includes('ACTIVE') || String(status || '').includes('PAID')) return '#10b981'; return binThemeTokens.gold; }
-function display(value: any) { return value === undefined || value === null || value === '' ? 'Not recorded' : String(value); }
-function safeFileName(value: string) { return value.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 120) || 'reference-file'; }
-function openExternalUrl(url?: string | null) { if (url && typeof window !== 'undefined') window.open(url, '_blank', 'noopener,noreferrer'); }
+const propertyNameOf = (property: any) => String(
+  property?.propertyName || property?.name || propertyIdOf(property) || 'Property',
+);
+const emptyRentForm = (properties: any[]): RentRecordPayload => {
+  const property = properties[0];
+  return {
+    tenantName: '',
+    propertyId: propertyIdOf(property),
+    propertyName: propertyNameOf(property),
+    unitNumber: '',
+    rentDue: 0,
+    rentPaid: 0,
+    paymentMethod: 'CASH',
+    paymentReference: '',
+    notes: '',
+  };
+};
+function statusTone(status: string, balance: number, overdueDays: number) {
+  if (overdueDays > 0) return '#ef4444';
+  if (balance > 0) return '#f59e0b';
+  if (String(status || '').includes('ACTIVE') || String(status || '').includes('PAID')) return '#10b981';
+  return binThemeTokens.gold;
+}
+function display(value: any) {
+  return value === undefined || value === null || value === '' ? 'Not recorded' : String(value);
+}
+function safeFileName(value: string) {
+  return value.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 120) || 'reference-file';
+}
+function openExternalUrl(url?: string | null) {
+  if (url && typeof window !== 'undefined') window.open(url, '_blank', 'noopener,noreferrer');
+}
 async function sha256File(file: File) {
   const digest = await crypto.subtle.digest('SHA-256', await file.arrayBuffer());
-  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
+  return Array.from(
+    new Uint8Array(digest),
+    (byte) => byte.toString(16).padStart(2, '0'),
+  ).join('');
 }
 
-export default function OwnerMoneySnapshotSection({ ledgerSummary, pendingPayments, properties, onRecordRentPayment, isExternalOpen, onCloseExternal }: Props) {
+export default function OwnerMoneySnapshotSection({
+  ledgerSummary,
+  pendingPayments,
+  properties,
+  onRecordRentPayment,
+  isExternalOpen,
+  onCloseExternal,
+}: Props) {
   const { user } = useRole();
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -33,16 +120,39 @@ export default function OwnerMoneySnapshotSection({ ledgerSummary, pendingPaymen
   const [submitError, setSubmitError] = useState('');
   const submissionIdRef = useRef('');
 
-  useEffect(() => { if (!properties.length) return; setForm((current) => current.propertyId ? current : { ...current, ...emptyRentForm(properties) }); }, [properties]);
+  useEffect(() => {
+    if (!properties.length) return;
+    setForm((current) => (
+      current.propertyId ? current : { ...current, ...emptyRentForm(properties) }
+    ));
+  }, [properties]);
 
   const rows = ledgerSummary?.ledgerRows || [];
-  const overdueTenants = useMemo(() => rows.filter((row) => row.overdueDays > 0).length, [rows]);
-  const ledgerPendingPayments = useMemo(() => rows.filter((row) => String(row.status || '').toUpperCase().includes('PENDING')).length, [rows]);
+  const overdueTenants = useMemo(
+    () => rows.filter((row) => row.overdueDays > 0).length,
+    [rows],
+  );
+  const ledgerPendingPayments = useMemo(
+    () => rows.filter((row) => String(row.status || '').toUpperCase().includes('PENDING')).length,
+    [rows],
+  );
   const effectivePendingPayments = Math.max(pendingPayments, ledgerPendingPayments);
-  const isRentRecordValid = form.tenantName.trim().length > 0 && !!form.propertyId && Number(form.rentPaid || 0) > 0 && Boolean(referenceFile);
+  const isRentRecordValid = form.tenantName.trim().length > 0
+    && !!form.propertyId
+    && Number(form.rentPaid || 0) > 0
+    && Boolean(referenceFile);
 
-  const updateForm = (key: keyof RentRecordPayload, value: string | number) => setForm((current) => ({ ...current, [key]: value }));
-  const selectProperty = (propertyId: string) => { const property = properties.find((item) => propertyIdOf(item) === propertyId); setForm((current) => ({ ...current, propertyId, propertyName: propertyNameOf(property) || current.propertyName || 'Property' })); };
+  const updateForm = (key: keyof RentRecordPayload, value: string | number) => {
+    setForm((current) => ({ ...current, [key]: value }));
+  };
+  const selectProperty = (propertyId: string) => {
+    const property = properties.find((item) => propertyIdOf(item) === propertyId);
+    setForm((current) => ({
+      ...current,
+      propertyId,
+      propertyName: propertyNameOf(property) || current.propertyName || 'Property',
+    }));
+  };
 
   const submit = async () => {
     if (!user?.uid || !isRentRecordValid) return;
@@ -51,7 +161,7 @@ export default function OwnerMoneySnapshotSection({ ledgerSummary, pendingPaymen
     try {
       const rentDue = Number(form.rentDue || 0);
       const rentPaid = Number(form.rentPaid || 0);
-      const balance = Math.max(0, rentDue - rentPaid);
+      const balance = Math.max(0, Math.round((rentDue - rentPaid) * 100) / 100);
       const propertyName = String(form.propertyName || 'Property');
       const recordId = submissionIdRef.current || `owner_rent_${user.uid}_${Date.now()}`;
       submissionIdRef.current = recordId;
@@ -62,15 +172,30 @@ export default function OwnerMoneySnapshotSection({ ledgerSummary, pendingPaymen
       let referenceFileSize = 0;
       let referenceFileHash = '';
       if (referenceFile) {
-        const allowedTypes = new Set(['application/pdf', 'image/jpeg', 'image/png', 'image/webp', 'image/heic']);
-        if (!allowedTypes.has(referenceFile.type) || referenceFile.size <= 0 || referenceFile.size > 15 * 1024 * 1024) {
+        const allowedTypes = new Set([
+          'application/pdf',
+          'image/jpeg',
+          'image/png',
+          'image/webp',
+          'image/heic',
+        ]);
+        if (
+          !allowedTypes.has(referenceFile.type)
+          || referenceFile.size <= 0
+          || referenceFile.size > 15 * 1024 * 1024
+        ) {
           throw new Error('Receipt must be a PDF, JPEG, PNG, WEBP, or HEIC file up to 15 MB.');
         }
         referenceFileName = referenceFile.name;
         referenceFileType = referenceFile.type;
         referenceFileSize = referenceFile.size;
         referenceFileHash = await sha256File(referenceFile);
-        referenceFilePath = `payment-references/owners/${user.uid}/${recordId}/${safeFileName(referenceFile.name)}`;
+        referenceFilePath = [
+          'payment-references/owners',
+          user.uid,
+          recordId,
+          safeFileName(referenceFile.name),
+        ].join('/');
         try {
           const storageRef = ref(storage, referenceFilePath);
           await uploadBytes(storageRef, referenceFile, {
@@ -87,35 +212,404 @@ export default function OwnerMoneySnapshotSection({ ledgerSummary, pendingPaymen
           throw new Error(error?.message || 'Reference file upload failed.');
         }
       }
-      const linkedPayload = { ...form, paymentTransactionId: recordId, tenantLedgerId: recordId, referenceFileUrl, referenceFilePath, referenceFileName, referenceFileType, referenceFileSize, referenceFileHash };
+      const linkedPayload = {
+        ...form,
+        rentDue,
+        rentPaid,
+        paymentTransactionId: recordId,
+        tenantLedgerId: recordId,
+        referenceFileUrl,
+        referenceFilePath,
+        referenceFileName,
+        referenceFileType,
+        referenceFileSize,
+        referenceFileHash,
+      };
       await onRecordRentPayment(linkedPayload);
-      await NotificationEvents.OWNER.RENT_PAYMENT_SUBMITTED(user.uid, rentPaid, propertyName, recordId);
+      await NotificationEvents.OWNER.RENT_PAYMENT_SUBMITTED(
+        user.uid,
+        rentPaid,
+        propertyName,
+        recordId,
+      );
       setOpen(false);
       if (onCloseExternal) onCloseExternal();
       setReferenceFile(null);
       setForm(emptyRentForm(properties));
       submissionIdRef.current = '';
+      void balance;
     } catch (error: any) {
       setSubmitError(error?.message || 'Rent payment evidence could not be recorded.');
-    } finally { setSaving(false); }
+    } finally {
+      setSaving(false);
+    }
   };
 
   const cards = [
-    { label: 'Rent Due', value: money(ledgerSummary?.totalRentDue || 0), icon: <ReceiptText size={20} />, tone: binThemeTokens.gold },
-    { label: 'Rent Collected', value: money(ledgerSummary?.totalRentPaid || 0), icon: <CreditCard size={20} />, tone: '#10b981' },
-    { label: 'Balance', value: money(ledgerSummary?.totalRentBalance || 0), icon: <AlertTriangle size={20} />, tone: (ledgerSummary?.totalRentBalance || 0) > 0 ? '#ef4444' : '#10b981' },
-    { label: 'Collection Rate', value: `${ledgerSummary?.collectionRate || 0}%`, icon: <Percent size={20} />, tone: (ledgerSummary?.collectionRate || 0) >= 90 ? '#10b981' : '#f59e0b' },
-    { label: 'Pending Verification', value: effectivePendingPayments, icon: <ReceiptText size={20} />, tone: effectivePendingPayments > 0 ? '#f59e0b' : '#10b981' },
-    { label: 'Overdue Tenants', value: overdueTenants, icon: <AlertTriangle size={20} />, tone: overdueTenants > 0 ? '#ef4444' : '#10b981' },
+    {
+      label: 'Rent Due',
+      value: money(ledgerSummary?.totalRentDue || 0),
+      icon: <ReceiptText size={20} />,
+      tone: binThemeTokens.gold,
+    },
+    {
+      label: 'Rent Collected',
+      value: money(ledgerSummary?.totalRentPaid || 0),
+      icon: <CreditCard size={20} />,
+      tone: '#10b981',
+    },
+    {
+      label: 'Balance',
+      value: money(ledgerSummary?.totalRentBalance || 0),
+      icon: <AlertTriangle size={20} />,
+      tone: (ledgerSummary?.totalRentBalance || 0) > 0 ? '#ef4444' : '#10b981',
+    },
+    {
+      label: 'Collection Rate',
+      value: `${ledgerSummary?.collectionRate || 0}%`,
+      icon: <Percent size={20} />,
+      tone: (ledgerSummary?.collectionRate || 0) >= 90 ? '#10b981' : '#f59e0b',
+    },
+    {
+      label: 'Pending Verification',
+      value: effectivePendingPayments,
+      icon: <ReceiptText size={20} />,
+      tone: effectivePendingPayments > 0 ? '#f59e0b' : '#10b981',
+    },
+    {
+      label: 'Overdue Tenants',
+      value: overdueTenants,
+      icon: <AlertTriangle size={20} />,
+      tone: overdueTenants > 0 ? '#ef4444' : '#10b981',
+    },
   ];
 
-  return <Paper sx={{ p: { xs: 2.25, md: 4 }, bgcolor: 'rgba(15,23,42,.58)', border: `1px solid ${alpha(binThemeTokens.gold, .18)}`, borderRadius: 5 }}>
-    <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" alignItems={{ xs: 'flex-start', md: 'center' }} spacing={2} sx={{ mb: 3 }}><Box><Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 3 }}>OWNER MONEY SNAPSHOT</Typography><Typography variant="h5" fontWeight={950} sx={{ color: '#fff' }}>Rent collection, reference and tenant balance control</Typography><Typography variant="body2" sx={{ color: 'rgba(255,255,255,.58)', mt: .75 }}>Uses the resolved tenant ledger. Rent submissions now update the verification queue with trace IDs.</Typography></Box><Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap><Button startIcon={<Plus size={16} />} variant="contained" onClick={() => setOpen(true)} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>Record Rent Payment</Button><Button startIcon={<Download size={16} />} variant="outlined" onClick={() => window.print()} sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.gold, fontWeight: 950 }}>Print Statement</Button></Stack></Stack>
-    <Grid container spacing={2} sx={{ mb: 3 }}>{cards.map((card) => <Grid item xs={12} sm={6} md={4} key={card.label}><Paper sx={{ p: 2.25, bgcolor: 'rgba(255,255,255,.035)', border: `1px solid ${alpha(card.tone, .25)}`, borderRadius: 4 }}><Box sx={{ color: card.tone, mb: 1 }}>{card.icon}</Box><Typography variant="h6" fontWeight={950} sx={{ color: '#fff' }}>{card.value}</Typography><Typography variant="caption" sx={{ color: 'rgba(255,255,255,.48)', fontWeight: 900, letterSpacing: 1 }}>{card.label.toUpperCase()}</Typography></Paper></Grid>)}</Grid>
-    <TableContainer sx={{ border: '1px solid rgba(255,255,255,.08)', borderRadius: 3 }}><Table size="small"><TableHead><TableRow><TableCell>Tenant</TableCell><TableCell>Property</TableCell><TableCell>Unit</TableCell><TableCell align="right">Due</TableCell><TableCell align="right">Paid</TableCell><TableCell align="right">Balance</TableCell><TableCell>Status</TableCell><TableCell>Last Payment</TableCell><TableCell align="right">Details</TableCell></TableRow></TableHead><TableBody>{rows.map((row) => { const tone = statusTone(row.status, row.balance, row.overdueDays); return <TableRow key={row.id} hover><TableCell sx={{ color: '#fff', fontWeight: 900 }}>{row.name}</TableCell><TableCell sx={{ color: 'rgba(255,255,255,.72)' }}>{row.property}</TableCell><TableCell sx={{ color: 'rgba(255,255,255,.72)' }}>{row.unit}</TableCell><TableCell align="right" sx={{ color: '#fff' }}>{money(row.due)}</TableCell><TableCell align="right" sx={{ color: '#10b981', fontWeight: 900 }}>{money(row.paid)}</TableCell><TableCell align="right" sx={{ color: row.balance > 0 ? '#ef4444' : '#10b981', fontWeight: 900 }}>{money(row.balance)}</TableCell><TableCell><Chip size="small" label={row.overdueDays > 0 ? `${row.overdueDays}D OVERDUE` : String(row.status || '').replace(/_/g, ' ')} sx={{ bgcolor: alpha(tone, .12), color: tone, fontWeight: 900 }} /></TableCell><TableCell sx={{ color: 'rgba(255,255,255,.72)' }}>{row.lastPaymentDate || 'Not recorded'}</TableCell><TableCell align="right"><Button size="small" variant="outlined" onClick={() => setSelectedRow(row)} sx={{ borderColor: alpha(binThemeTokens.gold, .45), color: binThemeTokens.gold, fontWeight: 900 }}>View</Button></TableCell></TableRow>; })}{rows.length === 0 && <TableRow><TableCell colSpan={9} align="center" sx={{ py: 5, color: 'rgba(255,255,255,.42)', fontWeight: 800 }}>No tenant ledger rows found yet. Add tenants, leases, occupancies or rent payment records to populate this table.</TableCell></TableRow>}</TableBody></Table></TableContainer>
-    <Dialog open={open || Boolean(isExternalOpen)} onClose={() => { setOpen(false); if (onCloseExternal) onCloseExternal(); }} maxWidth="sm" fullWidth><DialogTitle>Record owner rent payment</DialogTitle><DialogContent><Stack spacing={2.25} sx={{ pt: 1 }}>{submitError && <Alert severity="error">{submitError}</Alert>}<TextField label="Tenant name" value={form.tenantName} onChange={(event) => updateForm('tenantName', event.target.value)} fullWidth required /><TextField select label="Property" value={form.propertyId} onChange={(event) => selectProperty(event.target.value)} fullWidth required>{properties.map((property) => { const id = propertyIdOf(property); return <MenuItem key={id} value={id}>{propertyNameOf(property)}</MenuItem>; })}</TextField><TextField label="Unit" value={form.unitNumber} onChange={(event) => updateForm('unitNumber', event.target.value)} fullWidth /><Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}><TextField type="number" label="Rent due" value={form.rentDue} onChange={(event) => updateForm('rentDue', Number(event.target.value))} fullWidth /><TextField type="number" label="Rent paid" value={form.rentPaid} onChange={(event) => updateForm('rentPaid', Number(event.target.value))} fullWidth required /></Stack><TextField select label="Payment method" value={form.paymentMethod} onChange={(event) => updateForm('paymentMethod', event.target.value)} fullWidth><MenuItem value="CASH">Cash</MenuItem><MenuItem value="CHEQUE">Cheque</MenuItem></TextField><TextField label="Payment reference / receipt" value={form.paymentReference} onChange={(event) => updateForm('paymentReference', event.target.value)} fullWidth /><Button variant="outlined" component="label" sx={{ borderColor: alpha(binThemeTokens.gold, .45), color: binThemeTokens.gold, fontWeight: 900 }}>Attach reference file<input hidden type="file" accept="image/*,application/pdf" onChange={(event) => setReferenceFile(event.target.files?.[0] || null)} /></Button>{referenceFile && <Typography variant="caption" sx={{ color: 'rgba(255,255,255,.64)' }}>Selected: {referenceFile.name}</Typography>}<TextField label="Notes" value={form.notes} onChange={(event) => updateForm('notes', event.target.value)} fullWidth multiline minRows={3} /></Stack></DialogContent><DialogActions><Button onClick={() => { setOpen(false); if (onCloseExternal) onCloseExternal(); }}>Cancel</Button><Button disabled={saving || !isRentRecordValid} onClick={submit} variant="contained" sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>{saving ? 'Saving...' : 'Save rent record'}</Button></DialogActions></Dialog>
-    <Dialog open={Boolean(selectedRow)} onClose={() => setSelectedRow(null)} maxWidth="sm" fullWidth><DialogTitle>Ledger details</DialogTitle><DialogContent><Stack spacing={1.5} sx={{ pt: 1 }}><Info label="Tenant" value={selectedRow?.name} /><Info label="Property" value={selectedRow?.property} /><Info label="Unit" value={selectedRow?.unit} /><Info label="Status" value={String(selectedRow?.status || '').replace(/_/g, ' ')} /><Info label="Method" value={selectedRow?.method} /><Info label="Reference" value={selectedRow?.referenceId} /><Info label="Reference file" value={selectedRow?.referenceFileName || selectedRow?.referenceFilePath} />{selectedRow?.referenceFileUrl && <Button variant="outlined" onClick={() => openExternalUrl(selectedRow.referenceFileUrl)} sx={{ borderColor: alpha(binThemeTokens.gold, .45), color: binThemeTokens.gold, fontWeight: 900 }}>Open reference file</Button>}<Info label="Transaction ID" value={selectedRow?.paymentTransactionId} /><Info label="Ledger ID" value={selectedRow?.tenantLedgerId || selectedRow?.id} /><Info label="Review note" value={selectedRow?.reviewNote} /><Info label="Return reason" value={selectedRow?.returnReason} /><Info label="Last payment" value={selectedRow?.lastPaymentDate} /><Info label="Paid" value={money(selectedRow?.paid || 0)} /><Info label="Balance" value={money(selectedRow?.balance || 0)} /></Stack></DialogContent><DialogActions><Button onClick={() => setSelectedRow(null)}>Close</Button></DialogActions></Dialog>
-  </Paper>;
+  const closeRecordDialog = () => {
+    setOpen(false);
+    if (onCloseExternal) onCloseExternal();
+  };
+
+  return (
+    <Paper
+      sx={{
+        p: { xs: 2.25, md: 4 },
+        bgcolor: 'rgba(15,23,42,.58)',
+        border: `1px solid ${alpha(binThemeTokens.gold, .18)}`,
+        borderRadius: 5,
+      }}
+    >
+      <Stack
+        direction={{ xs: 'column', md: 'row' }}
+        justifyContent="space-between"
+        alignItems={{ xs: 'flex-start', md: 'center' }}
+        spacing={2}
+        sx={{ mb: 3 }}
+      >
+        <Box>
+          <Typography
+            variant="overline"
+            sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 3 }}
+          >
+            OWNER MONEY SNAPSHOT
+          </Typography>
+          <Typography variant="h5" fontWeight={950} sx={{ color: '#fff' }}>
+            Rent collection, reference and tenant balance control
+          </Typography>
+          <Typography variant="body2" sx={{ color: 'rgba(255,255,255,.58)', mt: .75 }}>
+            Uses the resolved tenant ledger. Rent submissions now update the verification queue with trace IDs.
+          </Typography>
+        </Box>
+        <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+          <Button
+            startIcon={<Plus size={16} />}
+            variant="contained"
+            onClick={() => setOpen(true)}
+            sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}
+          >
+            Record Rent Payment
+          </Button>
+          <Button
+            startIcon={<Download size={16} />}
+            variant="outlined"
+            onClick={() => window.print()}
+            sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.gold, fontWeight: 950 }}
+          >
+            Print Statement
+          </Button>
+        </Stack>
+      </Stack>
+
+      <Grid container spacing={2} sx={{ mb: 3 }}>
+        {cards.map((card) => (
+          <Grid item xs={12} sm={6} md={4} key={card.label}>
+            <Paper
+              sx={{
+                p: 2.25,
+                bgcolor: 'rgba(255,255,255,.035)',
+                border: `1px solid ${alpha(card.tone, .25)}`,
+                borderRadius: 4,
+              }}
+            >
+              <Box sx={{ color: card.tone, mb: 1 }}>{card.icon}</Box>
+              <Typography variant="h6" fontWeight={950} sx={{ color: '#fff' }}>
+                {card.value}
+              </Typography>
+              <Typography
+                variant="caption"
+                sx={{ color: 'rgba(255,255,255,.48)', fontWeight: 900, letterSpacing: 1 }}
+              >
+                {card.label.toUpperCase()}
+              </Typography>
+            </Paper>
+          </Grid>
+        ))}
+      </Grid>
+
+      <TableContainer sx={{ border: '1px solid rgba(255,255,255,.08)', borderRadius: 3 }}>
+        <Table size="small">
+          <TableHead>
+            <TableRow>
+              <TableCell>Tenant</TableCell>
+              <TableCell>Property</TableCell>
+              <TableCell>Unit</TableCell>
+              <TableCell align="right">Due</TableCell>
+              <TableCell align="right">Paid</TableCell>
+              <TableCell align="right">Balance</TableCell>
+              <TableCell>Status</TableCell>
+              <TableCell>Last Payment</TableCell>
+              <TableCell align="right">Details</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {rows.map((row) => {
+              const tone = statusTone(row.status, row.balance, row.overdueDays);
+              return (
+                <TableRow key={row.id} hover>
+                  <TableCell sx={{ color: '#fff', fontWeight: 900 }}>{row.name}</TableCell>
+                  <TableCell sx={{ color: 'rgba(255,255,255,.72)' }}>{row.property}</TableCell>
+                  <TableCell sx={{ color: 'rgba(255,255,255,.72)' }}>{row.unit}</TableCell>
+                  <TableCell align="right" sx={{ color: '#fff' }}>{money(row.due)}</TableCell>
+                  <TableCell align="right" sx={{ color: '#10b981', fontWeight: 900 }}>
+                    {money(row.paid)}
+                  </TableCell>
+                  <TableCell
+                    align="right"
+                    sx={{ color: row.balance > 0 ? '#ef4444' : '#10b981', fontWeight: 900 }}
+                  >
+                    {money(row.balance)}
+                  </TableCell>
+                  <TableCell>
+                    <Chip
+                      size="small"
+                      label={row.overdueDays > 0
+                        ? `${row.overdueDays}D OVERDUE`
+                        : String(row.status || '').replace(/_/g, ' ')}
+                      sx={{ bgcolor: alpha(tone, .12), color: tone, fontWeight: 900 }}
+                    />
+                  </TableCell>
+                  <TableCell sx={{ color: 'rgba(255,255,255,.72)' }}>
+                    {row.lastPaymentDate || 'Not recorded'}
+                  </TableCell>
+                  <TableCell align="right">
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      onClick={() => setSelectedRow(row)}
+                      sx={{
+                        borderColor: alpha(binThemeTokens.gold, .45),
+                        color: binThemeTokens.gold,
+                        fontWeight: 900,
+                      }}
+                    >
+                      View
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+            {rows.length === 0 && (
+              <TableRow>
+                <TableCell
+                  colSpan={9}
+                  align="center"
+                  sx={{ py: 5, color: 'rgba(255,255,255,.42)', fontWeight: 800 }}
+                >
+                  No tenant ledger rows found yet. Add tenants, leases, occupancies or rent payment records to
+                  populate this table.
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </TableContainer>
+
+      <Dialog
+        open={open || Boolean(isExternalOpen)}
+        onClose={closeRecordDialog}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Record owner rent payment</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2.25} sx={{ pt: 1 }}>
+            {submitError && <Alert severity="error">{submitError}</Alert>}
+            <TextField
+              label="Tenant name"
+              value={form.tenantName}
+              onChange={(event) => updateForm('tenantName', event.target.value)}
+              fullWidth
+              required
+            />
+            <TextField
+              select
+              label="Property"
+              value={form.propertyId}
+              onChange={(event) => selectProperty(event.target.value)}
+              fullWidth
+              required
+            >
+              {properties.map((property) => {
+                const id = propertyIdOf(property);
+                return <MenuItem key={id} value={id}>{propertyNameOf(property)}</MenuItem>;
+              })}
+            </TextField>
+            <TextField
+              label="Unit"
+              value={form.unitNumber}
+              onChange={(event) => updateForm('unitNumber', event.target.value)}
+              fullWidth
+            />
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+              <TextField
+                type="number"
+                label="Rent due"
+                value={form.rentDue}
+                onChange={(event) => updateForm('rentDue', Number(event.target.value))}
+                fullWidth
+              />
+              <TextField
+                type="number"
+                label="Rent paid"
+                value={form.rentPaid}
+                onChange={(event) => updateForm('rentPaid', Number(event.target.value))}
+                fullWidth
+                required
+              />
+            </Stack>
+            <TextField
+              select
+              label="Payment method"
+              value={form.paymentMethod}
+              onChange={(event) => updateForm('paymentMethod', event.target.value)}
+              fullWidth
+            >
+              <MenuItem value="CASH">Cash</MenuItem>
+              <MenuItem value="CHEQUE">Cheque</MenuItem>
+            </TextField>
+            <TextField
+              label="Payment reference / receipt"
+              value={form.paymentReference}
+              onChange={(event) => updateForm('paymentReference', event.target.value)}
+              fullWidth
+            />
+            <Button
+              variant="outlined"
+              component="label"
+              sx={{ borderColor: alpha(binThemeTokens.gold, .45), color: binThemeTokens.gold, fontWeight: 900 }}
+            >
+              Attach reference file
+              <input
+                hidden
+                type="file"
+                accept="image/*,application/pdf"
+                onChange={(event) => setReferenceFile(event.target.files?.[0] || null)}
+              />
+            </Button>
+            {referenceFile && (
+              <Typography variant="caption" sx={{ color: 'rgba(255,255,255,.64)' }}>
+                Selected: {referenceFile.name}
+              </Typography>
+            )}
+            <TextField
+              label="Notes"
+              value={form.notes}
+              onChange={(event) => updateForm('notes', event.target.value)}
+              fullWidth
+              multiline
+              minRows={3}
+            />
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={closeRecordDialog}>Cancel</Button>
+          <Button
+            disabled={saving || !isRentRecordValid}
+            onClick={submit}
+            variant="contained"
+            sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}
+          >
+            {saving ? 'Saving...' : 'Save rent record'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={Boolean(selectedRow)} onClose={() => setSelectedRow(null)} maxWidth="sm" fullWidth>
+        <DialogTitle>Ledger details</DialogTitle>
+        <DialogContent>
+          <Stack spacing={1.5} sx={{ pt: 1 }}>
+            <Info label="Tenant" value={selectedRow?.name} />
+            <Info label="Property" value={selectedRow?.property} />
+            <Info label="Unit" value={selectedRow?.unit} />
+            <Info label="Status" value={String(selectedRow?.status || '').replace(/_/g, ' ')} />
+            <Info label="Method" value={selectedRow?.method} />
+            <Info label="Reference" value={selectedRow?.referenceId} />
+            <Info
+              label="Reference file"
+              value={selectedRow?.referenceFileName || selectedRow?.referenceFilePath}
+            />
+            {selectedRow?.referenceFileUrl && (
+              <Button
+                variant="outlined"
+                onClick={() => openExternalUrl(selectedRow.referenceFileUrl)}
+                sx={{
+                  borderColor: alpha(binThemeTokens.gold, .45),
+                  color: binThemeTokens.gold,
+                  fontWeight: 900,
+                }}
+              >
+                Open reference file
+              </Button>
+            )}
+            <Info label="Transaction ID" value={selectedRow?.paymentTransactionId} />
+            <Info label="Ledger ID" value={selectedRow?.tenantLedgerId || selectedRow?.id} />
+            <Info label="Review note" value={selectedRow?.reviewNote} />
+            <Info label="Return reason" value={selectedRow?.returnReason} />
+            <Info label="Last payment" value={selectedRow?.lastPaymentDate} />
+            <Info label="Paid" value={money(selectedRow?.paid || 0)} />
+            <Info label="Balance" value={money(selectedRow?.balance || 0)} />
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setSelectedRow(null)}>Close</Button>
+        </DialogActions>
+      </Dialog>
+    </Paper>
+  );
 }
 
-function Info({ label, value }: { label: string; value: any }) { return <Paper sx={{ p: 1.5, bgcolor: 'rgba(15,23,42,.72)', border: '1px solid rgba(255,255,255,.08)' }}><Typography variant="caption" sx={{ color: '#DAA520', fontWeight: 900 }}>{label.toUpperCase()}</Typography><Typography sx={{ color: '#fff', overflowWrap: 'anywhere' }}>{display(value)}</Typography></Paper>; }
+function Info({ label, value }: { label: string; value: any }) {
+  return (
+    <Paper
+      sx={{
+        p: 1.5,
+        bgcolor: 'rgba(15,23,42,.72)',
+        border: '1px solid rgba(255,255,255,.08)',
+      }}
+    >
+      <Typography variant="caption" sx={{ color: '#DAA520', fontWeight: 900 }}>
+        {label.toUpperCase()}
+      </Typography>
+      <Typography sx={{ color: '#fff', overflowWrap: 'anywhere' }}>{display(value)}</Typography>
+    </Paper>
+  );
+}
