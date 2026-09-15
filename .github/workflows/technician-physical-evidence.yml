@@ -120,11 +120,11 @@ jobs:
               jq -n \
                 --arg ref main \
                 --arg gate all \
-                --arg operation none \
+                --arg operation verify \
                 --arg control "$CONTROL_SHA" \
                 --arg release "$RELEASE_SHA" \
                 --arg deploy "$SOURCE_RUN_ID" \
-                '{ref:$ref,inputs:{gate:$gate,founder_totp_operation:$operation,expected_commit_sha:$control,frozen_release_sha:$release,production_deploy_run_id:$deploy,confirmation:"PUBLISH_OPERATIONAL_APPLICATION_EVIDENCE"}}' \
+                '{ref:$ref,inputs:{gate:$gate,founder_totp_operation:$operation,expected_commit_sha:$control,frozen_release_sha:$release,production_deploy_run_id:$deploy,confirmation:"VERIFY_PRODUCTION_FOUNDER_TOTP"}}' \
                 > dispatch.json
               dispatch operational-application-evidence.yml dispatch.json
               ;;

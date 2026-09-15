@@ -300,7 +300,11 @@ jobs:
           [[ "$TARGET_SHA" =~ ^[0-9a-f]{40}$ && "$TARGET_SHA" == "$GITHUB_SHA" ]]
           [[ "$RELEASE_SHA" == "15b09519222e749808c2a18b5d1ab1c3126fcb42" ]]
           [[ "$DEPLOY_RUN_ID" == "34500748478" ]]
-          [[ "$SELECTED_GATE" == "paymentUnlockExactlyOnce" ]] || { echo "::error::Credential repair is restricted to paymentUnlockExactlyOnce."; exit 1; }
+          case "$OPERATION/$SELECTED_GATE" in
+            verify/all|verify/paymentUnlockExactlyOnce|verify/brokerCommissionLockExactlyOnce) ;;
+            sync/paymentUnlockExactlyOnce|repair-and-sync/paymentUnlockExactlyOnce) ;;
+            *) echo "::error::Credential mutation is restricted to paymentUnlockExactlyOnce; read-only production verification permits the complete application batch or either MFA replay gate."; exit 1 ;;
+          esac
           case "$OPERATION/$CONFIRMATION" in
             verify/VERIFY_PRODUCTION_FOUNDER_TOTP|sync/SYNC_PRODUCTION_FOUNDER_TOTP_AND_VERIFY_PAYMENT|repair-and-sync/REPAIR_PRODUCTION_FOUNDER_PASSWORD_VERIFY_TOTP_AND_SYNC_DESTINATION) ;;
             *) echo "::error::Credential repair confirmation mismatch."; exit 1 ;;

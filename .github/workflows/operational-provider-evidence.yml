@@ -235,12 +235,79 @@ jobs:
         working-directory: release
         run: node ../control-plane/scripts/run-frozen-release-evidence.mjs scripts/verify-appcheck-enforcement.mjs
 
+      - name: Record live AI probe window
+        if: inputs.gate == 'aiProviderHealth'
+        run: echo "AI_EVIDENCE_PROBE_STARTED_AT=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> "$GITHUB_ENV"
+
       - name: Verify live Sovereign AI providers, privacy, quota and SLO
         if: inputs.gate == 'aiProviderHealth'
         working-directory: release
         env:
           PRODUCTION_DEPLOY_RUN_ID: ${{ inputs.production_deploy_run_id }}
         run: node ../control-plane/scripts/run-frozen-release-evidence.mjs scripts/verify-ai-live-evidence.mjs
+
+      - name: Report redacted live-provider failure category
+        if: failure() && inputs.gate == 'aiProviderHealth'
+        working-directory: release
+        run: |
+          node --input-type=module <<'NODE'
+          import { GoogleAuth } from 'google-auth-library';
+
+          const allowedCodes = new Set([
+            'timeout',
+            'rate-limited',
+            'provider-auth-failed',
+            'provider-server-error',
+            'provider-http-error',
+            'usage-metadata-invalid',
+            'usage-envelope-exceeded',
+            'empty-response',
+            'budget-exhausted',
+            'provider-failed',
+          ]);
+          const startedAt = String(process.env.AI_EVIDENCE_PROBE_STARTED_AT || '').trim();
+          const validStart = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/.test(startedAt);
+          if (!validStart) {
+            console.log('::warning::Redacted AI provider diagnostic unavailable: invalid probe timestamp.');
+            process.exit(0);
+          }
+
+          try {
+            const auth = new GoogleAuth({ scopes: ['https://www.googleapis.com/auth/cloud-platform'] });
+            const client = await auth.getClient();
+            const categories = new Set();
+            for (let attempt = 0; attempt < 4 && categories.size === 0; attempt += 1) {
+              if (attempt > 0) await new Promise((resolve) => setTimeout(resolve, 3000));
+              const response = await client.request({
+                url: 'https://logging.googleapis.com/v2/entries:list',
+                method: 'POST',
+                data: {
+                  resourceNames: ['projects/bin-group-57c60'],
+                  filter: `timestamp >= "${startedAt}" AND SEARCH("Live providers unavailable")`,
+                  orderBy: 'timestamp desc',
+                  pageSize: 100,
+                },
+              });
+              const entries = Array.isArray(response.data?.entries) ? response.data.entries : [];
+              const candidateText = entries
+                .map((entry) => JSON.stringify(entry))
+                .filter((entry) => entry.includes('[runSovereignAI] Live providers unavailable')
+                  && /"forcedProvider"\s*:\s*"gemini"/.test(entry));
+              for (const entry of candidateText) {
+                for (const match of entry.matchAll(/\bgemini:([a-z-]+)\b/g)) {
+                  if (allowedCodes.has(match[1])) categories.add(`gemini:${match[1]}`);
+                }
+              }
+            }
+            if (categories.size === 1) {
+              console.log(`::error::Redacted Sovereign AI failure category: ${[...categories][0]}`);
+            } else {
+              console.log('::warning::Redacted AI provider diagnostic unavailable or ambiguous; inspect protected Cloud Logging.');
+            }
+          } catch {
+            console.log('::warning::Redacted AI provider diagnostic could not read protected Cloud Logging.');
+          }
+          NODE
 
       - name: Enforce run-scoped AI evidence fallback cleanup
         if: always() && inputs.gate == 'aiProviderHealth'
