@@ -43,7 +43,7 @@ jobs:
           [[ "$authorized" == "true" ]] || { echo "::error::Actor is not authorized for hard-public-launch diagnostics."; exit 1; }
 
       - name: Authenticate Google Cloud
-        uses: google-github-actions/auth@v2
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
         with:
           workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
