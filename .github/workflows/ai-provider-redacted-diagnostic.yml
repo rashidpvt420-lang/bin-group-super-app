@@ -104,8 +104,9 @@ jobs:
           http_status="$(curl --silent --show-error --connect-timeout 10 --max-time 25 \
             --output "$body" --write-out '%{http_code}' \
             -H 'Content-Type: application/json' \
+            -H "x-goog-api-key: $key" \
             -X POST \
-            "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=$key" \
+            'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent' \
             --data '{"contents":[{"parts":[{"text":"Reply with OK."}]}],"generationConfig":{"maxOutputTokens":8}}')"
           curl_status=$?
           set -e
