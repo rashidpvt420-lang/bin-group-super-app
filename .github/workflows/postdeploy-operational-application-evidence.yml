@@ -30,7 +30,7 @@ jobs:
     name: Verify and publish application evidence
     runs-on: ubuntu-latest
     timeout-minutes: 75
-    environment: hard-public-launch
+    environment: production
     permissions:
       contents: read
       actions: read
