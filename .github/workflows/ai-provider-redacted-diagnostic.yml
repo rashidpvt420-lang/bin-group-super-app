@@ -89,3 +89,76 @@ jobs:
             console.log(`::notice::Redacted Sovereign AI provider failure category: ${category}`);
           }
           NODE
+
+      - name: Probe Gemini with redacted status only
+        run: |
+          set -euo pipefail
+          key="$(gcloud secrets versions access latest --secret=GEMINI_API_KEY --project="$GCP_PROJECT_ID" 2>/dev/null || true)"
+          if [[ -z "$key" ]]; then
+            echo "::error::Redacted Gemini diagnostic: provider credential is unavailable."
+            exit 0
+          fi
+          echo "::add-mask::$key"
+          body="$RUNNER_TEMP/gemini-redacted-probe.json"
+          set +e
+          http_status="$(curl --silent --show-error --connect-timeout 10 --max-time 25 \
+            --output "$body" --write-out '%{http_code}' \
+            -H 'Content-Type: application/json' \
+            -X POST \
+            "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=$key" \
+            --data '{"contents":[{"parts":[{"text":"Reply with OK."}]}],"generationConfig":{"maxOutputTokens":8}}')"
+          curl_status=$?
+          set -e
+          if [[ "$curl_status" -ne 0 || ! "$http_status" =~ ^[0-9]{3}$ ]]; then http_status=000; fi
+          api_status="$(GEMINI_BODY="$body" node --input-type=module <<'NODE'
+          import { readFileSync } from 'node:fs';
+          try {
+            const doc = JSON.parse(readFileSync(process.env.GEMINI_BODY, 'utf8'));
+            const raw = String(doc?.error?.status || (Array.isArray(doc?.candidates) ? 'OK' : 'UNKNOWN')).trim().toUpperCase();
+            console.log(/^[A-Z_]{2,40}$/.test(raw) ? raw : 'UNKNOWN');
+          } catch {
+            console.log('UNKNOWN');
+          }
+          NODE
+          )"
+          rm -f "$body"
+          echo "::notice::Redacted Gemini probe HTTP status: $http_status"
+          echo "::notice::Redacted Gemini probe API status: $api_status"
+          echo "::notice::Redacted Gemini probe model: gemini-3.6-flash"
+
+      - name: Probe OpenAI with redacted status only
+        run: |
+          set -euo pipefail
+          key="$(gcloud secrets versions access latest --secret=OPENAI_API_KEY --project="$GCP_PROJECT_ID" 2>/dev/null || true)"
+          if [[ -z "$key" ]]; then
+            echo "::error::Redacted OpenAI diagnostic: provider credential is unavailable."
+            exit 0
+          fi
+          echo "::add-mask::$key"
+          body="$RUNNER_TEMP/openai-redacted-probe.json"
+          set +e
+          http_status="$(curl --silent --show-error --connect-timeout 10 --max-time 25 \
+            --output "$body" --write-out '%{http_code}' \
+            -H 'Content-Type: application/json' \
+            -H "Authorization: Bearer $key" \
+            -X POST 'https://api.openai.com/v1/chat/completions' \
+            --data '{"model":"gpt-4.1-mini","messages":[{"role":"user","content":"Reply with OK."}],"max_tokens":8}')"
+          curl_status=$?
+          set -e
+          if [[ "$curl_status" -ne 0 || ! "$http_status" =~ ^[0-9]{3}$ ]]; then http_status=000; fi
+          category="$(HTTP_STATUS="$http_status" node --input-type=module <<'NODE'
+          const status = Number(process.env.HTTP_STATUS || 0);
+          let category = 'other-http';
+          if (status >= 200 && status < 300) category = 'ok';
+          else if (status === 401 || status === 403) category = 'auth';
+          else if (status === 429) category = 'rate-limited';
+          else if (status === 400 || status === 404 || status === 422) category = 'invalid-request';
+          else if (status >= 500) category = 'server-error';
+          else if (status === 0) category = 'network-error';
+          console.log(category);
+          NODE
+          )"
+          rm -f "$body"
+          echo "::notice::Redacted OpenAI probe HTTP status: $http_status"
+          echo "::notice::Redacted OpenAI probe category: $category"
+          echo "::notice::Redacted OpenAI probe model: gpt-4.1-mini"
