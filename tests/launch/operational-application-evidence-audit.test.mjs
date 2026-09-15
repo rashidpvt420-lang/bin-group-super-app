@@ -56,7 +56,7 @@ test('application evidence workflow is protected and auto-discovers fixed produc
   assert.match(preparation, /GITHUB_ACTOR !== CANONICAL_FOUNDER_LOGIN/);
   assert.match(preparation, /tenant\.customClaims\?\.testAccount !== true/);
   assert.match(preparation, /profile\.testAccount !== true/);
-  assert.match(preparation, /chromium\.launchPersistentContext\(profileDir, \{ headless: true, channel: 'chromium' \}\)/);
+  assert.match(preparation, /chromium\.launchPersistentContext\(profileDir, \{[\s\S]*headless: true,[\s\S]*channel: 'chromium'[\s\S]*\}\)/);
   assert.match(preparation, /mkdtemp\(path\.join\(os\.tmpdir\(\), 'bin-application-fcm-'\)\)/);
   assert.match(preparation, /await context\.close\(\)/);
   assert.match(preparation, /await rm\(profileDir, \{ recursive: true, force: true \}\)/);
