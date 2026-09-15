@@ -14,6 +14,13 @@ test('owner rent payment UI exposes only Cash and Cheque', () => {
   assert.ok(!source.includes('<MenuItem value="OTHER">'));
 });
 
+test('owner rent money display preserves fils precision', () => {
+  const source = read('src/owner/components/OwnerMoneySnapshotSection.tsx');
+  assert.ok(source.includes('minimumFractionDigits: 2'));
+  assert.ok(source.includes('maximumFractionDigits: 2'));
+  assert.ok(source.includes('Math.round((rentDue - rentPaid) * 100) / 100'));
+});
+
 test('owner rent payment callable enforces Phase 1 methods and App Check', () => {
   const source = read('functions/ownerFinancialOperations.ts');
   assert.ok(source.includes('const PHASE1_RENT_PAYMENT_METHODS = new Set(["CASH", "CHEQUE"]);'));
