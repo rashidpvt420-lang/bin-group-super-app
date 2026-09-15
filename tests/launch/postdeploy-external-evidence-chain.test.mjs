@@ -133,11 +133,12 @@ test('provider child retains protected environment and scopes operational author
   assert.match(workflow, /postdeploy-operational-provider-\$\{\{ inputs\.expected_commit_sha \}\}/);
 });
 
-test('application child uses the validated canonical verifier and scopes Founder secrets to one step', async () => {
+test('application child uses canonical production Founder credentials and scopes Founder secrets to one step', async () => {
   const workflow = await read(paths.application);
   assert.match(workflow, /^name:\s*Operational Application Evidence/m);
   assert.match(workflow, /name:\s*Verify and publish application evidence/);
-  assert.match(workflow, /environment:\s*hard-public-launch/);
+  assert.match(workflow, /environment:\s*production/);
+  assert.doesNotMatch(workflow, /environment:\s*hard-public-launch/);
   requireJobScopedOidc(workflow);
   const steps = workflow.indexOf('\n    steps:');
   const evidence = workflow.indexOf('- name: Auto-discover, verify, and publish all application evidence');
