@@ -67,6 +67,10 @@ test('application evidence workflow is protected and auto-discovers fixed produc
   assert.match(preparation, /classifyPushDiagnostic/);
   assert.match(preparation, /messagingWorkerActive/);
   assert.match(preparation, /sha256\(token\) === document\.id/);
+  assert.match(preparation, /getByTestId\('tenant-request-location'\)/);
+  assert.match(preparation, /locationField\.locator\('input, textarea'\)\.first\(\)\.fill/);
+  assert.match(preparation, /getByTestId\('tenant-request-description'\)\.locator\('input, textarea'\)\.first\(\)\.fill/);
+  assert.doesNotMatch(preparation, /page\.locator\('\[data-testid="tenant-request-location"\]'\)\.fill/);
   assert.match(preparation, /cloudfunctions\.net\/createNotification/);
   assert.match(preparation, /'X-Firebase-AppCheck': auth\.appCheckToken/);
   assert.match(preparation, /lastState === 'SUCCESS'/);
@@ -75,7 +79,7 @@ test('application evidence workflow is protected and auto-discovers fixed produc
   assert.doesNotMatch(preparation, /collection\('notifications'\)\.doc\([^)]*\)\.set/);
   assert.doesNotMatch(preparation, /console\.(?:log|error)\([^\n]*(?:tenantEmail|tenantPassword|debugToken|data\.token)/);
 
-  assert.match(frozenWrapper, /REVIEWED_APPLICATION_PREPARATION_BLOB = 'a5735e71f8bb23e4744f021140d2f35ba8555cd9'/);
+  assert.match(frozenWrapper, /REVIEWED_APPLICATION_PREPARATION_BLOB = '9afcbd054f54729b647d8b1fae122b5dc0ffb155'/);
   assert.match(frozenWrapper, /assertReviewedApplicationPreparation\(releaseRoot\)/);
   assert.match(frozenWrapper, /resolveApplicationEvidenceActor\(env\)/);
   assert.doesNotThrow(() => assertReviewedApplicationPreparationSource(preparation));
