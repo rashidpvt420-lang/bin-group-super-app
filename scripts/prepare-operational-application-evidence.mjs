@@ -1,6 +1,9 @@
 #!/usr/bin/env node
 
 import crypto from 'node:crypto';
+import os from 'node:os';
+import path from 'node:path';
+import { mkdtemp, rm } from 'node:fs/promises';
 import admin from 'firebase-admin';
 import { chromium } from '@playwright/test';
 import { initializeFirebaseAdmin, resolveFirebaseAdminProjectId } from './firebase-admin-bootstrap.mjs';
@@ -324,9 +327,12 @@ async function main() {
   }
 
   const startedAt = Date.now();
-  const browser = await chromium.launch({ headless: true });
+  const profileDir = await mkdtemp(path.join(os.tmpdir(), 'bin-application-fcm-'));
+  const context = await chromium.launchPersistentContext(profileDir, {
+    headless: true,
+    channel: 'chromium',
+  });
   try {
-    const context = await browser.newContext();
     await context.grantPermissions(['notifications'], { origin: PRODUCTION_URL });
     const page = await context.newPage();
     const pushDiagnostics = new Set();
@@ -385,7 +391,8 @@ async function main() {
       `[prepare-application-evidence] PASS gate=tenantNotificationDelivery notificationHash=${sha256(notificationId).slice(0, 12)}… ticketHash=${sha256(ticket.id).slice(0, 12)}…`,
     );
   } finally {
-    await browser.close();
+    await context.close();
+    await rm(profileDir, { recursive: true, force: true });
   }
 }
 
