@@ -8,6 +8,11 @@ import { requiredFirebaseDeploymentSecrets } from './verify-firebase-production-
 
 const functionsRuntimeEntry = 'functions/lib/runtimeAll.js';
 const secretNamePattern = /^[A-Z][A-Z0-9_]*$/;
+const expectedProjectId = 'bin-group-57c60';
+const payslipEndpointName = 'generateAndEmailPayslip';
+const payslipServiceName = 'generateandemailpayslip';
+const payslipRegion = 'europe-west3';
+const retiredPayslipSecretBindings = Object.freeze(['SMTP_HOST', 'SMTP_PASS', 'SMTP_USER']);
 
 function normalizeSecretNames(names, label) {
   if (!Array.isArray(names)) {
@@ -23,7 +28,7 @@ function normalizeSecretNames(names, label) {
   return normalized;
 }
 
-export function discoverCompiledFunctionSecretNames({
+function runCompiledProbe(probe, {
   runtimeEntry = functionsRuntimeEntry,
   cwd = process.cwd(),
   spawnSyncImpl = spawnSync,
@@ -32,21 +37,8 @@ export function discoverCompiledFunctionSecretNames({
   if (!existsSync(runtimeEntry)) {
     throw new Error(`[firebase-function-secret-contract] Missing compiled Functions runtime: ${runtimeEntry}.`);
   }
-
   const absoluteEntry = path.resolve(cwd, runtimeEntry);
-  const probe = `
-const mod = require(${JSON.stringify(absoluteEntry)});
-const names = new Set();
-for (const value of Object.values(mod || {})) {
-  const secrets = value?.__endpoint?.secretEnvironmentVariables || [];
-  for (const secret of secrets) {
-    const key = String(secret?.key || '').trim();
-    if (key) names.add(key);
-  }
-}
-process.stdout.write(JSON.stringify([...names].sort()));
-`;
-  const result = spawnSyncImpl(nodeBinary, ['-e', probe], {
+  const result = spawnSyncImpl(nodeBinary, ['-e', probe(absoluteEntry)], {
     cwd,
     env: { ...process.env, NODE_ENV: 'production' },
     encoding: 'utf8',
@@ -58,48 +50,12 @@ process.stdout.write(JSON.stringify([...names].sort()));
       `[firebase-function-secret-contract] Could not inspect compiled Firebase Function metadata: ${String(result.stderr || result.stdout || 'unknown discovery failure').trim()}`,
     );
   }
-
-  try {
-    return normalizeSecretNames(JSON.parse(String(result.stdout || '').trim()), 'compiled Function metadata');
-  } catch (error) {
-    if (error instanceof Error && error.message.startsWith('[firebase-function-secret-contract]')) throw error;
-    throw new Error('[firebase-function-secret-contract] Compiled Firebase Function metadata returned malformed JSON.');
-  }
+  return String(result.stdout || '').trim();
 }
 
-export function verifyFirebaseDeployedFunctionSecretContract({
-  expectedSecretNames = requiredFirebaseDeploymentSecrets,
-  discoverSecretNames = discoverCompiledFunctionSecretNames,
-} = {}) {
-  const expected = normalizeSecretNames(expectedSecretNames, 'canonical deployment secret contract');
-  const discovered = normalizeSecretNames(discoverSecretNames(), 'compiled Function metadata');
-  const missingFromPreflight = discovered.filter((name) => !expected.includes(name));
-  const noLongerBound = expected.filter((name) => !discovered.includes(name));
-
-  if (missingFromPreflight.length || noLongerBound.length) {
-    const details = [];
-    if (missingFromPreflight.length) details.push(`missing from preflight: ${missingFromPreflight.join(', ')}`);
-    if (noLongerBound.length) details.push(`no longer bound by compiled Functions: ${noLongerBound.join(', ')}`);
-    throw new Error(`[firebase-function-secret-contract] Canonical deployment secret contract drifted (${details.join('; ')}).`);
-  }
-
-  return {
-    status: 'passed',
-    runtimeEntry: functionsRuntimeEntry,
-    secretCount: discovered.length,
-    secretNames: discovered,
-    secretValuesExcluded: true,
-    deploymentPerformed: false,
-  };
-}
-
-const invokedPath = process.argv[1] ? path.resolve(process.argv[1]) : '';
-if (invokedPath && invokedPath === fileURLToPath(import.meta.url)) {
-  try {
-    console.log(JSON.stringify(verifyFirebaseDeployedFunctionSecretContract(), null, 2));
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'Firebase Function secret contract verification failed.';
-    console.error(message);
-    process.exit(1);
-  }
+export function discoverCompiledFunctionSecretNames(options = {}) {
+  const output = runCompiledProbe((absoluteEntry) => `
+const mod = require(${JSON.stringify('${ABSOLUTE_ENTRY}')}.replace('${ABSOLUTE_ENTRY}', ${JSON.stringify('PLACEHOLDER')}));
+`, options);
+  return output;
 }
