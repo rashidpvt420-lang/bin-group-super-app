@@ -1,0 +1,91 @@
+name: AI Provider Redacted Diagnostic
+
+on:
+  workflow_dispatch:
+    inputs:
+      expected_commit_sha:
+        description: 'Full lowercase current main SHA'
+        required: true
+        type: string
+      confirmation:
+        description: 'Enter DIAGNOSE_AI_PROVIDER_REDACTED'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: hard-public-launch
+    env:
+      GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID || 'bin-group-57c60' }}
+      AUTHORIZED_FOUNDER_ACTORS: ${{ secrets.AUTHORIZED_FOUNDER_ACTORS }}
+    steps:
+      - name: Enforce protected diagnostic inputs
+        env:
+          TARGET_SHA: ${{ inputs.expected_commit_sha }}
+          CONFIRMATION: ${{ inputs.confirmation }}
+        run: |
+          set -euo pipefail
+          [[ "$GITHUB_REF" == "refs/heads/main" ]] || { echo "::error::Diagnostic may only run from main."; exit 1; }
+          [[ "$GITHUB_SHA" == "$TARGET_SHA" ]] || { echo "::error::Expected main SHA does not match this run."; exit 1; }
+          [[ "$CONFIRMATION" == "DIAGNOSE_AI_PROVIDER_REDACTED" ]] || { echo "::error::Confirmation phrase mismatch."; exit 1; }
+          authorized=false
+          IFS=',' read -ra allowed <<< "${AUTHORIZED_FOUNDER_ACTORS:-}"
+          for actor in "${allowed[@]}"; do
+            actor="$(printf '%s' "$actor" | xargs)"
+            if [[ -n "$actor" && "$GITHUB_ACTOR" == "$actor" ]]; then authorized=true; fi
+          done
+          [[ "$authorized" == "true" ]] || { echo "::error::Actor is not authorized for hard-public-launch diagnostics."; exit 1; }
+
+      - name: Authenticate Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          create_credentials_file: true
+          export_environment_variables: true
+
+      - name: Read redacted Sovereign AI provider failure categories
+        run: |
+          set -euo pipefail
+          gcloud logging read \
+            'timestamp >= "2026-09-15T00:00:00Z" AND SEARCH("Live providers unavailable")' \
+            --project="$GCP_PROJECT_ID" \
+            --limit=100 \
+            --order=desc \
+            --format=json > "$RUNNER_TEMP/ai-provider-log.json"
+          node --input-type=module <<'NODE'
+          import { readFileSync } from 'node:fs';
+          const allowed = new Set([
+            'timeout',
+            'rate-limited',
+            'provider-auth-failed',
+            'provider-server-error',
+            'provider-http-error',
+            'usage-metadata-invalid',
+            'usage-envelope-exceeded',
+            'empty-response',
+            'budget-exhausted',
+            'provider-failed',
+          ]);
+          const entries = JSON.parse(readFileSync(process.env.RUNNER_TEMP + '/ai-provider-log.json', 'utf8'));
+          const categories = new Set();
+          for (const entry of entries) {
+            const raw = JSON.stringify(entry);
+            for (const match of raw.matchAll(/\b(gemini|openai):([a-z-]+)\b/g)) {
+              if (allowed.has(match[2])) categories.add(`${match[1]}:${match[2]}`);
+            }
+          }
+          if (!categories.size) {
+            console.log('::warning::No redacted Sovereign AI provider failure categories were found in the protected log window.');
+            process.exit(0);
+          }
+          for (const category of [...categories].sort()) {
+            console.log(`::notice::Redacted Sovereign AI provider failure category: ${category}`);
+          }
+          NODE
