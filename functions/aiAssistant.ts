@@ -57,10 +57,13 @@ function uniqueModels(values: Array<string | undefined>) {
   return [...new Set(values.map((value) => String(value || "").trim()).filter(Boolean))];
 }
 
+// Keep only currently supported stable Gemini models in the automatic fallback
+// chain. gemini-2.0-flash was shut down on 2026-06-01 and must never mask a
+// failure from a live model with a terminal 404/provider-http-error.
 const GEMINI_MODEL_CANDIDATES = uniqueModels([
   process.env.GEMINI_MODEL,
+  "gemini-3.6-flash",
   "gemini-2.5-flash",
-  "gemini-2.0-flash",
 ]);
 
 const OPENAI_MODEL_CANDIDATES = uniqueModels([
@@ -157,7 +160,9 @@ async function askGeminiModel(apiKey: string, model: string, prompt: string, tim
       body: JSON.stringify({
         systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
         contents: [{ role: "user", parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.2, maxOutputTokens: 700 },
+        // The 3.x Gemini API deprecates legacy sampling parameters. Keep the
+        // production request portable across 3.6 Flash and 2.5 Flash.
+        generationConfig: { maxOutputTokens: 700 },
       }),
     });
     const json: any = await response.json().catch(() => ({}));
