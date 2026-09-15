@@ -68,16 +68,48 @@ jobs:
           [[ "$command" == "/bin-launch" && "$namespace" == "evidence" ]]
           [[ -z "${extra:-}" ]]
           [[ "$control_sha" =~ ^[0-9a-f]{40}$ ]]
-          [[ "$frozen_sha" == "$FROZEN_RELEASE_SHA" ]]
+          [[ "$frozen_sha" =~ ^[0-9a-f]{40}$ ]]
           [[ "$source_run_id" =~ ^[0-9]+$ ]]
           [[ "$COMMAND_BODY" == "/bin-launch evidence $target $control_sha $frozen_sha $source_run_id" ]]
 
+          validate_production_run() {
+            local run_json
+            run_json="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$source_run_id")"
+            [[ "$(jq -r '.name' <<<"$run_json")" == "Firebase Production Deploy" ]]
+            [[ "$(jq -r '.status' <<<"$run_json")" == "completed" ]]
+            [[ "$(jq -r '.conclusion' <<<"$run_json")" == "success" ]]
+            [[ "$(jq -r '.head_branch' <<<"$run_json")" == "main" ]]
+            [[ "$(jq -r '.head_sha' <<<"$run_json")" == "$frozen_sha" ]]
+            [[ "$(jq -r '.event' <<<"$run_json")" == "workflow_dispatch" ]]
+          }
+
+          validate_live_evidence_run() {
+            local run_json artifacts expected_artifact
+            run_json="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$source_run_id")"
+            [[ "$(jq -r '.name' <<<"$run_json")" == "Live Role Smoke Tests" ]]
+            [[ "$(jq -r '.status' <<<"$run_json")" == "completed" ]]
+            [[ "$(jq -r '.conclusion' <<<"$run_json")" == "success" ]]
+            [[ "$(jq -r '.head_branch' <<<"$run_json")" == "main" ]]
+            [[ "$(jq -r '.event' <<<"$run_json")" == "workflow_dispatch" ]]
+            expected_artifact="live-launch-evidence-$frozen_sha"
+            artifacts="$(gh api --paginate --slurp "repos/$GITHUB_REPOSITORY/actions/runs/$source_run_id/artifacts?per_page=100" | jq -ce '{artifacts:[.[].artifacts[]]}')"
+            jq -e --arg expected "$expected_artifact" '[.artifacts[] | select(.name == $expected and .expired == false)] | length == 1' <<<"$artifacts" >/dev/null
+          }
+
           case "$target" in
             application-all|provider-baseline|provider-ai|privileged-rotation|technician)
+              [[ "$frozen_sha" == "$FROZEN_RELEASE_SHA" ]]
               [[ "$source_run_id" == "$FROZEN_DEPLOY_RUN_ID" ]]
               ;;
             hard-clearance)
+              [[ "$frozen_sha" == "$FROZEN_RELEASE_SHA" ]]
               [[ "$source_run_id" == "$FROZEN_LIVE_EVIDENCE_RUN_ID" ]]
+              ;;
+            application-current|provider-baseline-current|provider-ai-current|privileged-rotation-current|technician-current)
+              validate_production_run
+              ;;
+            hard-clearance-current)
+              validate_live_evidence_run
               ;;
             *)
               echo "::error::Unsupported owner evidence target: $target"
@@ -128,7 +160,19 @@ jobs:
                 > dispatch.json
               dispatch operational-application-evidence.yml dispatch.json
               ;;
-            provider-baseline)
+            application-current)
+              jq -n \
+                --arg ref main \
+                --arg gate all \
+                --arg operation none \
+                --arg control "$CONTROL_SHA" \
+                --arg release "$RELEASE_SHA" \
+                --arg deploy "$SOURCE_RUN_ID" \
+                '{ref:$ref,inputs:{gate:$gate,founder_totp_operation:$operation,expected_commit_sha:$control,frozen_release_sha:$release,production_deploy_run_id:$deploy,confirmation:"PUBLISH_OPERATIONAL_APPLICATION_EVIDENCE"}}' \
+                > dispatch.json
+              dispatch operational-application-evidence.yml dispatch.json
+              ;;
+            provider-baseline|provider-baseline-current)
               jq -n \
                 --arg ref main \
                 --arg control "$CONTROL_SHA" \
@@ -138,7 +182,7 @@ jobs:
                 > dispatch.json
               dispatch operational-provider-evidence.yml dispatch.json
               ;;
-            provider-ai)
+            provider-ai|provider-ai-current)
               jq -n \
                 --arg ref main \
                 --arg control "$CONTROL_SHA" \
@@ -148,7 +192,7 @@ jobs:
                 > dispatch.json
               dispatch operational-provider-evidence.yml dispatch.json
               ;;
-            privileged-rotation)
+            privileged-rotation|privileged-rotation-current)
               jq -n \
                 --arg ref main \
                 --arg control "$CONTROL_SHA" \
@@ -158,7 +202,7 @@ jobs:
                 > dispatch.json
               dispatch privileged-access-rotation-evidence.yml dispatch.json
               ;;
-            technician)
+            technician|technician-current)
               jq -n \
                 --arg ref main \
                 --arg control "$CONTROL_SHA" \
@@ -178,6 +222,38 @@ jobs:
                 '{ref:$ref,inputs:{mode:"hard-clearance",expected_commit_sha:$release,production_deploy_run_id:"",live_evidence_run_id:$live,clearance_payload_json:$payload}}' \
                 > dispatch.json
               dispatch live-role-smoke.yml dispatch.json
+              ;;
+            hard-clearance-current)
+              expected_artifact="live-launch-evidence-$RELEASE_SHA"
+              artifacts="$(gh api --paginate --slurp "repos/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN_ID/artifacts?per_page=100" | jq -ce '{artifacts:[.[].artifacts[]]}')"
+              artifact_id="$(jq -r --arg expected "$expected_artifact" '[.artifacts[] | select(.name == $expected and .expired == false)] | if length == 1 then .[0].id else empty end' <<<"$artifacts")"
+              [[ "$artifact_id" =~ ^[0-9]+$ ]] || { echo "::error::Expected exactly one non-expired $expected_artifact artifact."; exit 1; }
+              rm -rf current-live-evidence current-live-evidence.zip
+              gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$artifact_id/zip" > current-live-evidence.zip
+              mkdir -p current-live-evidence
+              unzip -q current-live-evidence.zip -d current-live-evidence
+              mapfile -t deployment_files < <(find current-live-evidence -type f -name production-deployment.json)
+              [[ "${#deployment_files[@]}" == "1" ]] || { echo "::error::Expected exactly one production-deployment.json in live evidence."; exit 1; }
+              deploy_run_id="$(jq -er --arg sha "$RELEASE_SHA" --arg repo "$GITHUB_REPOSITORY" '
+                select(.status == "passed") |
+                select(.deployedCommitSha == $sha) |
+                select(.workflowRef == "refs/heads/main") |
+                select(.repository == $repo) |
+                .workflowRunId | tostring | select(test("^[0-9]+$"))
+              ' "${deployment_files[0]}")"
+              clearance_payload="$(jq -cn \
+                --arg incident "https://github.com/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN_ID" \
+                --arg rollback "https://github.com/$GITHUB_REPOSITORY/actions/runs/$deploy_run_id" \
+                '{confirmation:"AUTHORIZE_HARD_PUBLIC_LAUNCH_BIN_GROUP",incident_confirmation:"NO_OPEN_P0_P1",rollback_confirmation:"ROLLBACK_PLAN_VERIFIED",open_p0:"0",open_p1:"0",incident_reference:$incident,rollback_reference:$rollback,monitoring_reference:"https://github.com/rashidpvt420-lang/bin-group-super-app/issues/1166"}')"
+              jq -n \
+                --arg ref main \
+                --arg release "$RELEASE_SHA" \
+                --arg live "$SOURCE_RUN_ID" \
+                --arg payload "$clearance_payload" \
+                '{ref:$ref,inputs:{mode:"hard-clearance",expected_commit_sha:$release,production_deploy_run_id:"",live_evidence_run_id:$live,clearance_payload_json:$payload}}' \
+                > dispatch.json
+              dispatch live-role-smoke.yml dispatch.json
+              rm -rf current-live-evidence current-live-evidence.zip
               ;;
           esac
 
