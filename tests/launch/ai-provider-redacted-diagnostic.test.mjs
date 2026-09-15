@@ -30,11 +30,14 @@ test('AI provider diagnostic remains protected, exact-SHA bound and redacted', a
   assert.doesNotMatch(workflow, /error\?\.message|error\.message|response\.body|response\.text/);
 });
 
-test('AI provider direct probes use bounded network timeouts and discard response bodies', async () => {
+test('AI provider direct probes keep credentials out of URLs and discard response bodies', async () => {
   const workflow = await readWorkflow();
 
   assert.equal((workflow.match(/--connect-timeout 10 --max-time 25/g) || []).length, 2);
-  assert.match(workflow, /generativelanguage\.googleapis\.com\/v1beta\/models\/gemini-3\.6-flash:generateContent/);
+  assert.match(workflow, /-H "x-goog-api-key: \$key"/);
+  assert.match(workflow, /generativelanguage\.googleapis\.com\/v1beta\/models\/gemini-3\.6-flash:generateContent'/);
+  assert.doesNotMatch(workflow, /generativelanguage\.googleapis\.com[^\n]*\?(?:key|api_key)=/i);
+  assert.doesNotMatch(workflow, /https?:\/\/[^\s'"\\]*\$key/);
   assert.match(workflow, /api\.openai\.com\/v1\/chat\/completions/);
   assert.equal((workflow.match(/rm -f "\$body"/g) || []).length, 2);
 
