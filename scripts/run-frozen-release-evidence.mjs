@@ -11,6 +11,9 @@ import path from 'node:path';
 const EXPECTED_REPOSITORY = 'rashidpvt420-lang/bin-group-super-app';
 const PRODUCTION_PROJECT_ID = 'bin-group-57c60';
 const CANONICAL_FOUNDER_EMAIL = 'ceo@bin-groups.com';
+const CANONICAL_FOUNDER_LOGIN = 'rashidpvt420-lang';
+const OWNER_COMMAND_ISSUE = 434;
+const GITHUB_ACTIONS_BOT = 'github-actions[bot]';
 const SHA_RE = /^[0-9a-f]{40}$/;
 const RUN_ID_RE = /^\d+$/;
 const DIGEST_RE = /^sha256:[0-9a-f]{64}$/;
@@ -69,6 +72,71 @@ export function assertApplicationEvidenceCredentials(gate, env = process.env) {
   if (String(env.E2E_FOUNDER_EMAIL).trim().toLowerCase() !== CANONICAL_FOUNDER_EMAIL) {
     fail('application replay requires the canonical Founder identity');
   }
+}
+
+function fetchPublicGithubJson(url) {
+  let raw;
+  try {
+    raw = execFileSync('curl', [
+      '--fail', '--silent', '--show-error', '--location',
+      '--header', 'Accept: application/vnd.github+json',
+      '--header', 'X-GitHub-Api-Version: 2022-11-28',
+      '--header', 'User-Agent: BIN-GROUP-hard-launch-evidence',
+      url,
+    ], { encoding: 'utf8', timeout: 15000, maxBuffer: 2 * 1024 * 1024 });
+  } catch (error) {
+    fail(`could not verify protected owner-command provenance: ${error.message}`);
+  }
+  try {
+    return JSON.parse(raw);
+  } catch {
+    fail('protected owner-command provenance response was not valid JSON');
+  }
+}
+
+function verifyRecentOwnerApplicationCommand(env) {
+  const controlSha = String(env.CONTROL_PLANE_COMMIT_SHA || '').trim();
+  const releaseSha = String(env.PRODUCTION_RELEASE_SHA || '').trim();
+  const deployRunId = String(env.PRODUCTION_DEPLOY_RUN_ID || '').trim();
+  const runId = String(env.GITHUB_RUN_ID || '').trim();
+  if (!SHA_RE.test(controlSha) || !SHA_RE.test(releaseSha) || !RUN_ID_RE.test(deployRunId) || !RUN_ID_RE.test(runId)) {
+    fail('owner-command application provenance requires exact control/release SHA and numeric run bindings');
+  }
+  if (env.GITHUB_EVENT_NAME !== 'workflow_dispatch') fail('owner-command application provenance requires workflow_dispatch');
+
+  const run = fetchPublicGithubJson(`https://api.github.com/repos/${EXPECTED_REPOSITORY}/actions/runs/${runId}`);
+  if (String(run?.id || '') !== runId || run?.event !== 'workflow_dispatch' || run?.head_sha !== controlSha) {
+    fail('owner-command application provenance does not match this workflow run');
+  }
+  const runCreatedMs = Date.parse(String(run.created_at || ''));
+  if (!Number.isFinite(runCreatedMs)) fail('owner-command application workflow timestamp is invalid');
+
+  const since = new Date(runCreatedMs - 10 * 60 * 1000).toISOString();
+  const comments = fetchPublicGithubJson(
+    `https://api.github.com/repos/${EXPECTED_REPOSITORY}/issues/${OWNER_COMMAND_ISSUE}/comments?per_page=100&since=${encodeURIComponent(since)}`,
+  );
+  if (!Array.isArray(comments)) fail('owner-command provenance comments response is invalid');
+  const expectedBody = `/bin-launch evidence application-all ${controlSha} ${releaseSha} ${deployRunId}`;
+  const matching = comments.filter((comment) => {
+    const createdMs = Date.parse(String(comment?.created_at || ''));
+    return comment?.user?.login === CANONICAL_FOUNDER_LOGIN
+      && comment?.author_association === 'OWNER'
+      && String(comment?.body || '').trim() === expectedBody
+      && Number.isFinite(createdMs)
+      && createdMs >= runCreatedMs - 10 * 60 * 1000
+      && createdMs <= runCreatedMs + 2 * 60 * 1000;
+  });
+  if (matching.length < 1) fail('no exact recent repository-owner application evidence command authorizes this bot-dispatched run');
+  return CANONICAL_FOUNDER_LOGIN;
+}
+
+export function resolveApplicationEvidenceActor(env = process.env) {
+  const actor = String(env.GITHUB_ACTOR || '').trim();
+  if (actor === CANONICAL_FOUNDER_LOGIN) return actor;
+  if (actor !== GITHUB_ACTIONS_BOT) return actor;
+  const allowed = String(env.AUTHORIZED_FOUNDER_ACTORS || '').split(',').map((value) => value.trim()).filter(Boolean);
+  if (!allowed.includes(GITHUB_ACTIONS_BOT)) fail('GitHub Actions bot is not authorized for protected evidence dispatch');
+  return verifyRecentOwnerApplicationCommand(env);
 }
 
 function gitBlobSha(source) {
@@ -220,6 +288,7 @@ export function runFrozenReleaseEvidence(entrypoint, env = process.env, releaseR
   if (applicationVerification && env.OPERATIONAL_GATE === 'ownerPaymentActivation') {
     restores.push(installReviewedActivationAdapter(releaseRoot));
   }
+  const childActor = applicationVerification ? resolveApplicationEvidenceActor(env) : String(env.GITHUB_ACTOR || '');
   try {
     const result = spawnSync(process.execPath, [path.resolve(releaseRoot, entrypoint)], {
       cwd: releaseRoot,
@@ -227,6 +296,7 @@ export function runFrozenReleaseEvidence(entrypoint, env = process.env, releaseR
         ...env,
         GITHUB_SHA: releaseSha,
         CLEARANCE_CONTROL_PLANE_SHA: controlPlaneSha,
+        ...(applicationVerification && childActor ? { GITHUB_ACTOR: childActor } : {}),
       },
       stdio: 'inherit',
     });
