@@ -127,6 +127,8 @@ const makeInviteCode = () => `BIN-${Math.random().toString(36).slice(2, 6).toUpp
 
 const sortByRecent = (a: any, b: any) => getSeconds(b.updatedAt || b.createdAt) - getSeconds(a.updatedAt || a.createdAt);
 
+// Tracks collections skipped due to permission-denied errors during a single load() pass,
+// so the UI can surface a visible warning instead of failing silently to console only.
 let permissionDeniedCollections: Set<string> = new Set();
 
 async function safeGetDocument(collectionName: string, id: string) {
@@ -211,6 +213,11 @@ async function resolveOwner(user: any): Promise<OwnerResolution> {
     for (const c of await getCollectionDocs('contracts', 'ownerUid', authUid)) contracts.set(c.id, c);
   }
 
+  // UID-backed contract fields are the authoritative owner relationship and
+  // are explicitly queryable by the Firestore policy.  Email is retained only
+  // as a legacy fallback when older contracts have no owner UID.  Do not query
+  // nested delivery recipients here: that field is not an ownership grant and
+  // would turn a harmless fallback into a permission-denied Firebase request.
   if (contracts.size === 0) {
     for (const email of trustedEmails) {
       for (const c of await getCollectionDocs('contracts', 'ownerEmail', email)) contracts.set(c.id, c);
@@ -326,6 +333,7 @@ export default function OwnerDashboardResolvedPage() {
   const [hasVerifiedIban, setHasVerifiedIban] = useState(false);
   const [permissionWarning, setPermissionWarning] = useState('');
   const [rentDialogOpen, setRentDialogOpen] = useState(false);
+  // Ref to hold real-time unsubscribe callbacks
   const liveUnsubs = useRef<Array<() => void>>([]);
 
   useEffect(() => {
@@ -487,6 +495,7 @@ export default function OwnerDashboardResolvedPage() {
       setPermissionWarning((current) => current || `Live ${label} updates are unavailable due to a permissions issue. Figures may be out of date. Please contact support if this persists.`);
     };
 
+    // Live open-ticket count
     try {
       const ticketQuery = query(
         collection(db, 'maintenanceTickets'),
@@ -527,6 +536,10 @@ export default function OwnerDashboardResolvedPage() {
       console.warn('[OwnerDashboard] Could not attach live payment listener:', e);
     }
 
+    // Live pending owner-approval count.
+    // Mirrors OwnerApprovalCenterPage (the actual /owner/approvals consumer), which queries
+    // by ownerId only and shows every request. "Pending" here means no decision has been
+    // recorded yet (decision is only ever set by submitOwnerApprovalDecision).
     try {
       const approvalQuery = query(
         collection(db, 'owner_approval_requests'),
@@ -651,7 +664,7 @@ export default function OwnerDashboardResolvedPage() {
       verificationState: 'PENDING_ADMIN_PAYMENT_VERIFICATION',
       adminVerificationRequired: true,
       paymentVerified: false,
-      paymentMethod: String(rentData.paymentMethod || 'CASH'),
+      paymentMethod: String(rentData.paymentMethod || 'BANK_TRANSFER'),
       paymentReference: String(rentData.paymentReference || ''),
       referenceFileUrl: String(rentData.referenceFileUrl || ''),
       referenceFilePath: String(rentData.referenceFilePath || ''),
