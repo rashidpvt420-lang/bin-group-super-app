@@ -158,6 +158,23 @@ function cloudRunSecretEnvNames(service) {
   return [...names].sort();
 }
 
+function parseCloudFunction(stdout) {
+  try {
+    const parsed = JSON.parse(String(stdout || '').trim());
+    if (!parsed || typeof parsed !== 'object') throw new Error('not an object');
+    return parsed;
+  } catch {
+    throw new Error('[firebase-function-secret-contract] Cloud Functions metadata was malformed.');
+  }
+}
+
+function cloudFunctionSecretEnvNames(fn) {
+  const vars = Array.isArray(fn?.serviceConfig?.secretEnvironmentVariables)
+    ? fn.serviceConfig.secretEnvironmentVariables
+    : [];
+  return [...new Set(vars.map((entry) => String(entry?.key || '').trim()).filter(Boolean))].sort();
+}
+
 function describeCloudRunService({ projectId, region, serviceName, spawnSyncImpl }) {
   const result = spawnSyncImpl('gcloud', [
     'run', 'services', 'describe', serviceName,
@@ -175,6 +192,95 @@ function describeCloudRunService({ projectId, region, serviceName, spawnSyncImpl
     throw new Error('[firebase-function-secret-contract] Could not inspect the protected Cloud Run payslip service.');
   }
   return parseCloudRunService(result.stdout);
+}
+
+function describeCloudFunction({ projectId, region, endpointName, spawnSyncImpl }) {
+  const result = spawnSyncImpl('gcloud', [
+    'functions', 'describe', endpointName,
+    '--gen2',
+    '--region', region,
+    '--project', projectId,
+    '--format=json',
+  ], {
+    cwd: process.cwd(),
+    env: process.env,
+    encoding: 'utf8',
+    shell: false,
+    maxBuffer: 16 * 1024 * 1024,
+  });
+  if ((result.status ?? 1) !== 0) {
+    throw new Error('[firebase-function-secret-contract] Could not inspect the protected Cloud Functions payslip endpoint.');
+  }
+  return parseCloudFunction(result.stdout);
+}
+
+function reconcileViaCloudFunctionsV2({ projectId, region, endpointName, spawnSyncImpl }) {
+  const before = describeCloudFunction({ projectId, region, endpointName, spawnSyncImpl });
+  const configured = cloudFunctionSecretEnvNames(before);
+  const unexpected = configured.filter((name) => !retiredPayslipSecretBindings.includes(name));
+  if (unexpected.length) {
+    throw new Error(
+      `[firebase-function-secret-contract] Refusing Cloud Functions fallback because unexpected payslip secrets are configured: ${unexpected.join(', ')}.`,
+    );
+  }
+
+  const functionResource = `projects/${projectId}/locations/${region}/functions/${endpointName}`;
+  const patchSource = `
+const { execFileSync } = require('node:child_process');
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+(async () => {
+  const token = execFileSync('gcloud', ['auth', 'print-access-token'], { encoding: 'utf8' }).trim();
+  if (!token) throw new Error('access token unavailable');
+  const resource = ${JSON.stringify(functionResource)};
+  const base = 'https://cloudfunctions.googleapis.com/v2/';
+  const response = await fetch(base + resource + '?updateMask=serviceConfig.secretEnvironmentVariables', {
+    method: 'PATCH',
+    headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: resource, serviceConfig: { secretEnvironmentVariables: [] } }),
+  });
+  const responseText = await response.text();
+  if (!response.ok) throw new Error('Cloud Functions PATCH failed with HTTP ' + response.status + ': ' + responseText.slice(0, 1200));
+  const operation = JSON.parse(responseText);
+  if (!operation.name) throw new Error('Cloud Functions PATCH did not return an operation name');
+  for (let attempt = 0; attempt < 180; attempt += 1) {
+    const poll = await fetch(base + operation.name, { headers: { Authorization: 'Bearer ' + token } });
+    const pollText = await poll.text();
+    if (!poll.ok) throw new Error('Cloud Functions operation poll failed with HTTP ' + poll.status + ': ' + pollText.slice(0, 1200));
+    const current = JSON.parse(pollText);
+    if (current.done) {
+      if (current.error) throw new Error('Cloud Functions PATCH operation failed: ' + JSON.stringify(current.error).slice(0, 1200));
+      process.stdout.write('cloud-functions-secret-reconciliation=passed');
+      return;
+    }
+    await sleep(2000);
+  }
+  throw new Error('Cloud Functions PATCH operation timed out');
+})().catch((error) => {
+  console.error(String(error?.message || error));
+  process.exit(1);
+});
+`;
+  const patch = spawnSyncImpl(process.execPath, ['-e', patchSource], {
+    cwd: process.cwd(),
+    env: process.env,
+    encoding: 'utf8',
+    shell: false,
+    maxBuffer: 16 * 1024 * 1024,
+    timeout: 390000,
+  });
+  if ((patch.status ?? 1) !== 0) {
+    const detail = String(patch.stderr || patch.stdout || 'unknown Cloud Functions API failure')
+      .replace(/Bearer\s+[A-Za-z0-9._~+\/-]+/gi, 'Bearer [REDACTED]')
+      .trim()
+      .slice(0, 1600);
+    throw new Error(`[firebase-function-secret-contract] Cloud Functions fallback failed: ${detail}`);
+  }
+
+  const after = describeCloudFunction({ projectId, region, endpointName, spawnSyncImpl });
+  const remaining = cloudFunctionSecretEnvNames(after);
+  if (remaining.length) {
+    throw new Error(`[firebase-function-secret-contract] Payslip secret bindings remain in Cloud Functions config after fallback: ${remaining.join(', ')}.`);
+  }
 }
 
 export function isProtectedProductionSecretReconciliationContext(env = process.env) {
@@ -236,8 +342,11 @@ export function reconcileRetiredPayslipSecretBindings({
     shell: false,
     maxBuffer: 16 * 1024 * 1024,
   });
+
+  let reconciliationPath = 'cloud-run';
   if ((update.status ?? 1) !== 0) {
-    throw new Error('[firebase-function-secret-contract] Failed to remove obsolete payslip Cloud Run secret bindings.');
+    reconcileViaCloudFunctionsV2({ projectId, region, endpointName, spawnSyncImpl });
+    reconciliationPath = 'cloud-functions-v2';
   }
 
   const after = describeCloudRunService({ projectId, region, serviceName, spawnSyncImpl });
@@ -250,6 +359,7 @@ export function reconcileRetiredPayslipSecretBindings({
   return {
     status: 'passed',
     action: 'removed-obsolete-bindings',
+    reconciliationPath,
     serviceName,
     endpointName,
     removedBindingNames: staleNames,
