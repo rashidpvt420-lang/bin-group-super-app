@@ -54,7 +54,7 @@ const PAYMENT_POLICY_BLOBS = Object.freeze({
 });
 const APPLICATION_VERIFIER = 'scripts/verify-operational-application-evidence.mjs';
 const APPLICATION_PREPARATION = 'scripts/prepare-operational-application-evidence.mjs';
-const REVIEWED_APPLICATION_PREPARATION_BLOB = '5570dafc769305da15d880c36e1e4dcc9502c79c';
+const REVIEWED_APPLICATION_PREPARATION_BLOB = 'd93985cec3e04855a5ca9643fe76fb3acd9e9e85';
 const LEGACY_ACTIVATION_CHECK = [
   '  const annual = Number(payment.data.quoteSnapshot?.annualContractValue || contract.quoteSnapshot?.annualContractValue || contract.annualContractValue || 0);',
   '  const amount = Number(payment.data.amountReceived || payment.data.quoteSnapshot?.activationDeposit || payment.data.amount || 0);',

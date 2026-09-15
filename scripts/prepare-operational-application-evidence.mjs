@@ -324,7 +324,11 @@ async function main() {
   }
 
   const startedAt = Date.now();
-  const browser = await chromium.launch({ headless: true });
+  // Playwright's default Chromium headless shell reports notification
+  // permission as denied even after grantPermissions(). The supported
+  // Chromium channel uses the current headless implementation and preserves
+  // the real Push/Notification permission path required for FCM registration.
+  const browser = await chromium.launch({ headless: true, channel: 'chromium' });
   try {
     const context = await browser.newContext();
     await context.grantPermissions(['notifications'], { origin: PRODUCTION_URL });
