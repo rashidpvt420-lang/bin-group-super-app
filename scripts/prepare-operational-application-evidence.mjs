@@ -14,6 +14,7 @@ const PRODUCTION_URL = 'https://bin-group-57c60.web.app';
 const CREATE_NOTIFICATION_URL = 'https://europe-west3-bin-group-57c60.cloudfunctions.net/createNotification';
 const TERMINAL_DELIVERY_STATES = new Set(['SUCCESS', 'PARTIAL', 'FAILED', 'NO_REGISTERED_TOKEN']);
 const PARTICIPANT_FIELDS = ['tenantId', 'tenantUid', 'userId', 'createdBy', 'requesterId'];
+const EVIDENCE_PNG_BASE64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl8fP8AAAAASUVORK5CYII=';
 const text = (value) => String(value ?? '').trim();
 const lower = (value) => text(value).toLowerCase();
 const sha256 = (value) => crypto.createHash('sha256').update(String(value)).digest('hex');
@@ -60,7 +61,7 @@ function assertProtectedContext() {
   if (text(process.env.E2E_BASE_URL).replace(/\/+$/, '') !== PRODUCTION_URL) fail('E2E_BASE_URL must be the canonical production site');
 }
 
-async function matchingTestTicket(db, tenantUid) {
+async function matchingTestTicket(db, tenantUid, { required = true, createdAfter = 0 } = {}) {
   const documents = new Map();
   for (const collection of ['maintenanceTickets', 'tickets']) {
     for (const field of PARTICIPANT_FIELDS) {
@@ -80,11 +81,50 @@ async function matchingTestTicket(db, tenantUid) {
       && PARTICIPANT_FIELDS.map((field) => text(data[field])).includes(tenantUid)
       && Boolean(text(data.propertyId))
       && Boolean(text(data.unitId || data.unitNumber || data.unit))
-      && Boolean(photoEvidence(data)))
-    .sort((left, right) => Math.max(millis(right.data.updatedAt), millis(right.data.createdAt))
-      - Math.max(millis(left.data.updatedAt), millis(left.data.createdAt)));
-  if (!candidates.length) fail('protected E2E Tenant has no existing production ticket with photo, property, and unit evidence');
-  return candidates[0];
+      && Boolean(photoEvidence(data))
+      && (createdAfter <= 0 || Math.max(millis(data.updatedAt), millis(data.createdAt), millis(data.evidenceUploadedAt)) >= createdAfter - 5_000))
+    .sort((left, right) => Math.max(millis(right.data.updatedAt), millis(right.data.createdAt), millis(right.data.evidenceUploadedAt))
+      - Math.max(millis(left.data.updatedAt), millis(left.data.createdAt), millis(left.data.evidenceUploadedAt)));
+  if (!candidates.length && required) fail('protected E2E Tenant has no production ticket with photo, property, and unit evidence');
+  return candidates[0] || null;
+}
+
+async function createTicketThroughDeployedTenantUi(page, startedAt) {
+  await page.goto(`${PRODUCTION_URL}/tenant/request?category=plumbing&refresh=${Date.now()}`, { waitUntil: 'domcontentloaded' });
+  const locationInput = page.locator('[data-testid="tenant-request-location"]');
+  try {
+    await locationInput.waitFor({ state: 'visible', timeout: 20_000 });
+  } catch {
+    const fallbackVisible = await page.locator('[data-testid="tenant-residence-loading"]').isVisible().catch(() => false);
+    fail(`deployed Tenant request form is unavailable for the protected test Tenant${fallbackVisible ? ' (residence still loading)' : ''}`);
+  }
+
+  await locationInput.fill('Kitchen sink - protected launch evidence');
+  await page.locator('[data-testid="tenant-request-description"]').fill('Protected production maintenance request used to verify the real Tenant ticket and notification delivery path.');
+  await page.locator('input[type="file"]').first().setInputFiles({
+    name: `operational-evidence-${process.env.GITHUB_RUN_ID}.png`,
+    mimeType: 'image/png',
+    buffer: Buffer.from(EVIDENCE_PNG_BASE64, 'base64'),
+  });
+
+  const submit = page.locator('[data-testid="tenant-request-submit"]');
+  await submit.waitFor({ state: 'visible', timeout: 10_000 });
+  if (await submit.isDisabled()) {
+    fail('deployed Tenant request form rejected dispatch prerequisites (unit/property/GPS/photo/category)');
+  }
+  await submit.click();
+  await page.waitForURL('**/tenant/tickets', { timeout: 60_000 });
+
+  const deadline = Date.now() + 45_000;
+  while (Date.now() < deadline) {
+    const projectId = resolveFirebaseAdminProjectId();
+    initializeFirebaseAdmin(admin, projectId);
+    const tenant = await admin.auth().getUserByEmail(lower(process.env.E2E_TENANT_EMAIL));
+    const ticket = await matchingTestTicket(admin.firestore(), tenant.uid, { required: false, createdAfter: startedAt });
+    if (ticket) return ticket;
+    await sleep(1_000);
+  }
+  fail('deployed Tenant request completed navigation but no fresh photo-backed production ticket became observable');
 }
 
 async function waitForFreshPushRegistration(db, tenantUid, startedAt) {
@@ -218,7 +258,6 @@ async function main() {
   if (tenant.disabled || !tenant.emailVerified || tenant.customClaims?.testAccount !== true || profile.testAccount !== true || role !== 'tenant') {
     fail('protected Tenant identity is not an active, verified, test-only Tenant');
   }
-  const ticket = await matchingTestTicket(db, tenant.uid);
 
   const startedAt = Date.now();
   const browser = await chromium.launch({ headless: true });
@@ -245,6 +284,12 @@ async function main() {
     await page.locator('form button[type="submit"]').first().click();
     await page.waitForURL('**/tenant/dashboard', { timeout: 30_000 });
     await waitForFreshPushRegistration(db, tenant.uid, startedAt);
+
+    let ticket = await matchingTestTicket(db, tenant.uid, { required: false });
+    if (!ticket) {
+      ticket = await createTicketThroughDeployedTenantUi(page, startedAt);
+      console.log(`[prepare-application-evidence] created fresh deployed Tenant request ticketHash=${sha256(ticket.id).slice(0, 12)}…`);
+    }
 
     const auth = await signInAndExchangeAppCheck({
       apiKey,
