@@ -95,6 +95,14 @@ test('AI provider evidence is exact-SHA, deployment-bound, protected, and hard-l
   assert.match(workflow, /environment: hard-public-launch/);
   assert.match(workflow, /Record live AI probe window/);
   assert.match(workflow, /Report redacted live-provider failure category/);
+  assert.match(workflow, /Probe Gemini endpoint with redacted status only/);
+  assert.match(workflow, /gcloud secrets versions access latest --secret=GEMINI_API_KEY/);
+  assert.match(workflow, /::add-mask::\$gemini_key/);
+  assert.match(workflow, /gemini-3\.6-flash/);
+  assert.match(workflow, /gemini-2\.5-flash/);
+  assert.match(workflow, /\[gemini-redacted-diagnostic\] model=\$\{model\} http=\$\{httpStatus\} apiStatus=\$\{apiStatus\}/);
+  assert.doesNotMatch(workflow, /payload\?\.error\?\.message/);
+  assert.doesNotMatch(workflow, /console\.log\([^\n]*(?:apiKey|gemini_key|GEMINI_DIAGNOSTIC_KEY)/);
   assert.match(workflow, /logging\.googleapis\.com\/v2\/entries:list/);
   assert.match(workflow, /allowedCodes = new Set/);
   assert.match(workflow, /attempt < 4/);
