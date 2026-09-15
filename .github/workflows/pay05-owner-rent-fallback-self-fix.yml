@@ -1,0 +1,42 @@
+name: PAY-05 Owner Rent Fallback Self-Fix
+
+on:
+  push:
+    branches:
+      - fix/phase1-rent-payment-method-hardening-20260915
+
+permissions:
+  contents: write
+
+jobs:
+  fix-pay05:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: fix/phase1-rent-payment-method-hardening-20260915
+          fetch-depth: 0
+
+      - name: Apply exact PAY-05 repair and remove helper
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('src/owner/pages/OwnerDashboardResolvedPage.tsx')
+          source = path.read_text()
+          old = "paymentMethod: String(rentData.paymentMethod || 'BANK_TRANSFER'),"
+          new = "paymentMethod: String(rentData.paymentMethod || 'CASH'),"
+          count = source.count(old)
+          if count != 1:
+              raise SystemExit(f'Expected exactly one PAY-05 fallback, found {count}')
+          path.write_text(source.replace(old, new, 1))
+          PY
+          git rm .github/workflows/pay05-owner-rent-fallback-self-fix.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/owner/pages/OwnerDashboardResolvedPage.tsx
+          git commit -m 'fix: default owner rent fallback to cash'
+          git push origin HEAD:fix/phase1-rent-payment-method-hardening-20260915
