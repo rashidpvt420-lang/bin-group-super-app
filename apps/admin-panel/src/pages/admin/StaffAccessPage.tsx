@@ -9,7 +9,7 @@ import {
     MenuItem, Paper, Select, Stack, Table, TableBody, TableCell,
     TableContainer, TableHead, TableRow, TextField, Tooltip, Typography,
 } from '@mui/material';
-import { CheckCircle2, Edit, UserPlus, XCircle } from 'lucide-react';
+import { CheckCircle2, Edit, ShieldCheck, UserPlus, XCircle } from 'lucide-react';
 import { collection, db, onSnapshot, query, where } from '../../lib/firebase';
 import { functions, httpsCallable } from '../../lib/firebase';
 import AdminPageFrame from '../../components/AdminPageFrame';
@@ -92,6 +92,20 @@ interface StaffMember {
     lastLogin?: any;
 }
 
+interface TechnicianProfileRepairResult {
+    success: boolean;
+    execute: boolean;
+    repairRequired: boolean;
+    repaired?: boolean;
+    missingComponents: string[];
+    authUidPreserved: boolean;
+    authClaimsPreserved: boolean;
+    invitationQueued: boolean;
+}
+
+const TECHNICIAN_PROFILE_REPAIR_CONFIRMATION = 'REPAIR_INCOMPLETE_TECHNICIAN_PROFILE_BIN_GROUP';
+const STAFF_LIFECYCLE_CHANGED_EVENT = 'bin-group:staff-lifecycle-changed';
+
 function safeErrorMessage(error: any) {
     const message = String(error?.details || error?.message || error?.code || 'Secure staff operation failed.');
     return message.replace(/^FirebaseError:\s*/i, '').slice(0, 280);
@@ -104,6 +118,7 @@ export default function StaffAccessPage() {
     const [editMode, setEditMode] = useState(false);
     const [selectedStaff, setSelectedStaff] = useState<StaffMember | null>(null);
     const [submitting, setSubmitting] = useState(false);
+    const [repairingUid, setRepairingUid] = useState<string | null>(null);
     const [snackbar, setSnackbar] = useState({ open: false, message: '', error: false });
     const [formData, setFormData] = useState({
         displayName: '',
@@ -229,6 +244,51 @@ export default function StaffAccessPage() {
         }
     };
 
+    const repairTechnicianProfile = async (member: StaffMember) => {
+        setRepairingUid(member.id);
+        try {
+            const repairProfile = httpsCallable<
+                { uid: string; execute: boolean; confirmation?: string },
+                TechnicianProfileRepairResult
+            >(functions, 'adminRepairIncompleteTechnicianProfile');
+            const review = await repairProfile({ uid: member.id, execute: false });
+            if (!review.data.repairRequired) {
+                setSnackbar({ open: true, message: `${member.displayName} already has a canonical Technician lifecycle profile.`, error: false });
+                window.dispatchEvent(new Event(STAFF_LIFECYCLE_CHANGED_EVENT));
+                return;
+            }
+
+            const missing = review.data.missingComponents.join(', ');
+            const confirmed = window.confirm(
+                `Repair the protected Technician lifecycle profile for ${member.displayName}?\n\n` +
+                `Required repairs: ${missing}\n\n` +
+                'Firebase Auth UID and custom claims will be preserved. No invitation is sent by this repair.',
+            );
+            if (!confirmed) return;
+
+            const result = await repairProfile({
+                uid: member.id,
+                execute: true,
+                confirmation: TECHNICIAN_PROFILE_REPAIR_CONFIRMATION,
+            });
+            if (!result.data.success || result.data.authUidPreserved !== true || result.data.authClaimsPreserved !== true) {
+                throw new Error('Protected Technician profile repair did not return the preservation contract.');
+            }
+            setSnackbar({
+                open: true,
+                message: result.data.repaired
+                    ? `${member.displayName} lifecycle profile repaired and audited. Auth UID and claims were preserved.`
+                    : `${member.displayName} lifecycle profile was already canonical.`,
+                error: false,
+            });
+            window.dispatchEvent(new Event(STAFF_LIFECYCLE_CHANGED_EVENT));
+        } catch (error) {
+            setSnackbar({ open: true, message: `Profile repair blocked: ${safeErrorMessage(error)}`, error: true });
+        } finally {
+            setRepairingUid(null);
+        }
+    };
+
     const roleColor = (role: string) => {
         if (role.includes('finance')) return '#10b981';
         if (role.includes('hr')) return '#3b82f6';
@@ -294,11 +354,20 @@ export default function StaffAccessPage() {
                                             <TableCell sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.75rem' }}>{member.lastLogin?.toDate ? member.lastLogin.toDate().toLocaleString() : 'Never'}</TableCell>
                                             <TableCell align="right">
                                                 <Stack direction="row" spacing={0.5} justifyContent="flex-end">
-                                                    <Tooltip title="Edit least-privilege access"><IconButton size="small" onClick={() => openEditDialog(member)} sx={{ color: binThemeTokens.gold }}><Edit size={14} /></IconButton></Tooltip>
+                                                    {member.role === 'technician' && (
+                                                        <Tooltip title="Check and repair canonical lifecycle profile">
+                                                            <span>
+                                                                <IconButton size="small" disabled={repairingUid === member.id} onClick={() => void repairTechnicianProfile(member)} sx={{ color: '#38bdf8' }}>
+                                                                    {repairingUid === member.id ? <CircularProgress size={14} /> : <ShieldCheck size={14} />}
+                                                                </IconButton>
+                                                            </span>
+                                                        </Tooltip>
+                                                    )}
+                                                    <Tooltip title="Edit least-privilege access"><IconButton size="small" disabled={repairingUid === member.id} onClick={() => openEditDialog(member)} sx={{ color: binThemeTokens.gold }}><Edit size={14} /></IconButton></Tooltip>
                                                     {member.status === 'SUSPENDED' ? (
-                                                        <Tooltip title="Restore and require fresh login"><IconButton size="small" onClick={() => setStaffStatus(member, 'ACTIVE')} sx={{ color: '#10b981' }}><CheckCircle2 size={14} /></IconButton></Tooltip>
+                                                        <Tooltip title="Restore and require fresh login"><IconButton size="small" disabled={repairingUid === member.id} onClick={() => setStaffStatus(member, 'ACTIVE')} sx={{ color: '#10b981' }}><CheckCircle2 size={14} /></IconButton></Tooltip>
                                                     ) : (
-                                                        <Tooltip title="Disable Auth and revoke sessions"><IconButton size="small" onClick={() => setStaffStatus(member, 'SUSPENDED')} sx={{ color: '#ef4444' }}><XCircle size={14} /></IconButton></Tooltip>
+                                                        <Tooltip title="Disable Auth and revoke sessions"><IconButton size="small" disabled={repairingUid === member.id} onClick={() => setStaffStatus(member, 'SUSPENDED')} sx={{ color: '#ef4444' }}><XCircle size={14} /></IconButton></Tooltip>
                                                     )}
                                                 </Stack>
                                             </TableCell>
