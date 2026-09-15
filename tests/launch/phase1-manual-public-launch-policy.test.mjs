@@ -1,6 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import {
+  DECISION_KIND,
+  HARD_LAUNCH_CONTROL_SCHEMA,
+  signDocument,
+  validateHardLaunchDecisionDocument,
+} from '../../scripts/lib/hard-launch-control.mjs';
 
 const read = (file) => readFileSync(file, 'utf8');
 
@@ -58,4 +64,52 @@ test('predeploy, postdeploy and signed final decision all bind to Phase 1 Cash/C
   assert.ok(decision.includes("paymentPolicy !== PHASE1_PAYMENT_POLICY"));
   assert.ok(!decision.includes('stripe-live-proof.json'));
   assert.ok(!decision.includes('postdeployCleared && stripeLiveOk'));
+});
+
+test('final decision validation requires the signed Phase 1 proof instead of retired Stripe evidence', () => {
+  const now = Date.parse('2026-09-15T12:00:00.000Z');
+  const hmacKey = 'phase1-final-decision-test-key-1234567890';
+  const hash = 'a'.repeat(64);
+  const payload = {
+    schemaVersion: HARD_LAUNCH_CONTROL_SCHEMA,
+    kind: DECISION_KIND,
+    status: 'approved',
+    hardLaunchClaim: true,
+    launchMode: 'public',
+    paymentPolicy: 'phase1-manual',
+    commitSha: 'b'.repeat(40),
+    repository: 'rashidpvt420-lang/bin-group-super-app',
+    approvedAt: new Date(now).toISOString(),
+    evidenceHashes: {
+      authorization: hash,
+      incidents: hash,
+      deployment: hash,
+      liveEvidence: hash,
+      publicReleaseStatus: hash,
+      phase1ManualPaymentProof: hash,
+      pilotIncidentReport: hash,
+    },
+  };
+  const decision = signDocument(payload, hmacKey);
+
+  assert.deepEqual(validateHardLaunchDecisionDocument(decision, {
+    now,
+    commitSha: payload.commitSha,
+    repository: payload.repository,
+    hmacKey,
+    expectedHashes: payload.evidenceHashes,
+  }), []);
+
+  const retiredStripeDecision = signDocument({
+    ...payload,
+    evidenceHashes: {
+      ...payload.evidenceHashes,
+      phase1ManualPaymentProof: undefined,
+      stripeLiveProof: hash,
+    },
+  }, hmacKey);
+  assert.ok(
+    validateHardLaunchDecisionDocument(retiredStripeDecision, { now, hmacKey })
+      .includes('decision evidence hash is missing or invalid: phase1ManualPaymentProof'),
+  );
 });

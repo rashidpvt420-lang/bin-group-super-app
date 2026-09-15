@@ -15,12 +15,13 @@ test('hard launch blocker printer documents the exact-main protected workflow ch
     'mode: live-evidence',
     'mode: hard-clearance',
     'launch_mode: public',
+    'payment_policy: phase1-manual',
     'run_public_release_gate: true',
-    'stripe_live_checkout_session_id: cs_live_',
-    'stripe_live_webhook_event_id: evt_',
+    'legacy Stripe proof identifiers: leave empty',
   ]) {
     assert.ok(source.includes(required), `missing launch plan marker: ${required}`);
   }
+  assert.doesNotMatch(source, /stripe_live_checkout_session_id: cs_live_|stripe_live_webhook_event_id: evt_/);
   assert.equal(
     (source.match(/Workflow: START HERE - Firebase Production Deploy/g) || []).length,
     2,
@@ -64,7 +65,7 @@ test('hard launch blocker printer reports every final-decision artifact binding'
     'launch_package/operational-readiness.json',
     'launch_package/pilot-incident-report.json',
     'launch_package/public-release-status.json',
-    'launch_package/stripe-live-proof.json',
+    'launch_package/phase1-manual-payment-proof.json',
     'launch_package/hard-launch-decision.json',
   ]) {
     assert.ok(source.includes(file), `missing artifact matrix file: ${file}`);
