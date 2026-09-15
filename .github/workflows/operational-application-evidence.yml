@@ -137,8 +137,9 @@ jobs:
           changed="$(git -C control-plane diff --name-only "$RELEASE_SHA" "$CONTROL_PLANE_SHA")"
           [[ -n "$changed" ]] || { echo "::error::No reviewed control-plane repair exists above the frozen release."; exit 1; }
           allowed='^(\.github/workflows/firebase-production-deploy\.yml|\.github/workflows/live-role-smoke\.yml|\.github/workflows/operational-application-evidence\.yml|\.github/workflows/operational-provider-evidence\.yml|\.github/workflows/privileged-access-rotation-evidence\.yml|\.github/workflows/technician-physical-evidence\.yml|scripts/finalize-operational-provider-evidence\.mjs|scripts/hard-clearance-production-revalidation\.mjs|scripts/launch-status\.mjs|scripts/publish-direct-operational-proof\.mjs|scripts/publish-operational-application-evidence\.mjs|scripts/publish-operational-provider-evidence\.mjs|scripts/resolve-admin-app-check-site-key\.mjs|scripts/run-frozen-release-evidence\.mjs|scripts/verify-ai-live-evidence\.mjs|scripts/verify-hard-launch-approval\.mjs|scripts/verify-operational-readiness\.mjs|tests/launch/ai-operational-contract\.test\.mjs|tests/launch/external-gate-production-provenance\.test\.mjs|tests/launch/final-operational-evidence-producers\.test\.mjs|tests/launch/hard-clearance-revalidation\.test\.mjs|tests/launch/operational-application-evidence-audit\.test\.mjs)$'
+          supplemental_allowed='^(scripts/lib/operational-proof-schema\.mjs|scripts/prepare-operational-application-evidence\.mjs|scripts/verify-operational-application-evidence\.mjs)$'
           while IFS= read -r file; do
-            [[ -z "$file" || "$file" =~ $allowed ]] || { echo "::error::Non-control-plane file changed since frozen release: $file"; exit 1; }
+            [[ -z "$file" || "$file" =~ $allowed || "$file" =~ $supplemental_allowed ]] || { echo "::error::Non-control-plane file changed since frozen release: $file"; exit 1; }
           done <<< "$changed"
           echo "CONTROL_PLANE_SCOPE_VERIFIED=true" >> "$GITHUB_ENV"
 
@@ -148,8 +149,10 @@ jobs:
           ref: ${{ inputs.frozen_release_sha }}
           path: release
 
-      - name: Overlay reviewed dual-SHA publisher only
-        run: cp control-plane/scripts/publish-operational-application-evidence.mjs release/scripts/publish-operational-application-evidence.mjs
+      - name: Overlay reviewed dual-SHA publisher and Tenant delivery preparation
+        run: |
+          cp control-plane/scripts/publish-operational-application-evidence.mjs release/scripts/publish-operational-application-evidence.mjs
+          cp control-plane/scripts/prepare-operational-application-evidence.mjs release/scripts/prepare-operational-application-evidence.mjs
 
       - name: Use Node.js 22
         uses: actions/setup-node@v4
@@ -165,11 +168,20 @@ jobs:
           E2E_FOUNDER_EMAIL: ${{ secrets.E2E_FOUNDER_EMAIL }}
           E2E_FOUNDER_PASSWORD: ${{ secrets.E2E_FOUNDER_PASSWORD }}
           E2E_FOUNDER_TOTP_SECRET: ${{ secrets.E2E_FOUNDER_TOTP_SECRET }}
+          E2E_TENANT_EMAIL: ${{ secrets.E2E_TENANT_EMAIL }}
+          E2E_TENANT_PASSWORD: ${{ secrets.E2E_TENANT_PASSWORD }}
+          E2E_BASE_URL: https://bin-group-57c60.web.app
         run: |
           set -euo pipefail
           node --input-type=module <<'NODE'
-          import { assertApplicationEvidenceCredentials } from './scripts/run-frozen-release-evidence.mjs';
+          import {
+            assertApplicationEvidenceCredentials,
+            assertApplicationPreparationCredentials,
+          } from './scripts/run-frozen-release-evidence.mjs';
           assertApplicationEvidenceCredentials(process.env.SELECTED_GATE, process.env);
+          if (['all', 'tenantNotificationDelivery'].includes(process.env.SELECTED_GATE)) {
+            assertApplicationPreparationCredentials(process.env.SELECTED_GATE, process.env);
+          }
           NODE
 
       - name: Authenticate Google Cloud
@@ -183,6 +195,11 @@ jobs:
       - name: Install dependencies
         working-directory: release
         run: bash scripts/npm-install-retry.sh
+
+      - name: Install Chromium for protected Tenant FCM registration
+        if: inputs.gate == 'all' || inputs.gate == 'tenantNotificationDelivery'
+        working-directory: release
+        run: npx playwright install --with-deps chromium
 
       - name: Download exact production deployment metadata
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
@@ -226,6 +243,15 @@ jobs:
             process.exit(1);
           }
           NODE
+
+      - name: Create a fresh provider-backed Tenant notification receipt
+        if: inputs.gate == 'all' || inputs.gate == 'tenantNotificationDelivery'
+        working-directory: release
+        env:
+          E2E_BASE_URL: https://bin-group-57c60.web.app
+          E2E_TENANT_EMAIL: ${{ secrets.E2E_TENANT_EMAIL }}
+          E2E_TENANT_PASSWORD: ${{ secrets.E2E_TENANT_PASSWORD }}
+        run: node ../control-plane/scripts/run-frozen-release-evidence.mjs scripts/prepare-operational-application-evidence.mjs
 
       - name: Auto-discover, verify, and publish application evidence
         working-directory: release
@@ -377,8 +403,9 @@ jobs:
           changed="$(git -C control-plane diff --name-only "$RELEASE_SHA" "$CONTROL_PLANE_SHA")"
           [[ -n "$changed" ]] || { echo "::error::No reviewed control-plane repair exists above the frozen release."; exit 1; }
           allowed='^(\.github/workflows/firebase-production-deploy\.yml|\.github/workflows/live-role-smoke\.yml|\.github/workflows/operational-application-evidence\.yml|\.github/workflows/operational-provider-evidence\.yml|\.github/workflows/privileged-access-rotation-evidence\.yml|\.github/workflows/technician-physical-evidence\.yml|scripts/finalize-operational-provider-evidence\.mjs|scripts/hard-clearance-production-revalidation\.mjs|scripts/launch-status\.mjs|scripts/publish-direct-operational-proof\.mjs|scripts/publish-operational-application-evidence\.mjs|scripts/publish-operational-provider-evidence\.mjs|scripts/resolve-admin-app-check-site-key\.mjs|scripts/run-frozen-release-evidence\.mjs|scripts/verify-ai-live-evidence\.mjs|scripts/verify-hard-launch-approval\.mjs|scripts/verify-operational-readiness\.mjs|tests/launch/ai-operational-contract\.test\.mjs|tests/launch/external-gate-production-provenance\.test\.mjs|tests/launch/final-operational-evidence-producers\.test\.mjs|tests/launch/hard-clearance-revalidation\.test\.mjs|tests/launch/operational-application-evidence-audit\.test\.mjs)$'
+          supplemental_allowed='^(scripts/lib/operational-proof-schema\.mjs|scripts/prepare-operational-application-evidence\.mjs|scripts/verify-operational-application-evidence\.mjs)$'
           while IFS= read -r file; do
-            [[ -z "$file" || "$file" =~ $allowed ]] || { echo "::error::Non-control-plane file changed since frozen release: $file"; exit 1; }
+            [[ -z "$file" || "$file" =~ $allowed || "$file" =~ $supplemental_allowed ]] || { echo "::error::Non-control-plane file changed since frozen release: $file"; exit 1; }
           done <<< "$changed"
           echo "CONTROL_PLANE_SCOPE_VERIFIED=true" >> "$GITHUB_ENV"
 

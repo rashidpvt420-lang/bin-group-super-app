@@ -20,6 +20,7 @@ const DIGEST_RE = /^sha256:[0-9a-f]{64}$/;
 
 const ALLOWED_ENTRYPOINTS = Object.freeze({
   'Operational Application Evidence/verify-and-publish': new Set([
+    'scripts/prepare-operational-application-evidence.mjs',
     'scripts/verify-operational-application-provenance.mjs',
     'scripts/verify-operational-application-evidence-mfa.mjs',
     'scripts/bind-operational-application-provenance.mjs',
@@ -52,10 +53,27 @@ const PAYMENT_POLICY_BLOBS = Object.freeze({
   'functions/ownerActivationPaymentPolicy.ts': '06f056113367bda1fca22bcdba95ab975e594f54',
 });
 const APPLICATION_VERIFIER = 'scripts/verify-operational-application-evidence.mjs';
+const APPLICATION_PREPARATION = 'scripts/prepare-operational-application-evidence.mjs';
+const REVIEWED_APPLICATION_PREPARATION_BLOB = '321a1af5f9c2ed91ddf0f367cf0a968fccf9471c';
 const LEGACY_ACTIVATION_CHECK = [
   '  const annual = Number(payment.data.quoteSnapshot?.annualContractValue || contract.quoteSnapshot?.annualContractValue || contract.annualContractValue || 0);',
   '  const amount = Number(payment.data.amountReceived || payment.data.quoteSnapshot?.activationDeposit || payment.data.amount || 0);',
   "  if (!Number.isFinite(annual) || annual <= 0 || !Number.isFinite(amount) || Math.abs(amount - Math.round(annual * 0.15)) > 0.01) fail('activation amount is not the locked 15% deposit');",
+].join('\n');
+const LEGACY_TENANT_PHOTO_SELECTION = [
+  '    ticket.requestPhotoUrl,',
+  '    ...(Array.isArray(ticket.photoUrls) ? ticket.photoUrls : []),',
+  '    ...(Array.isArray(ticket.images) ? ticket.images : []),',
+].join('\n');
+const REVIEWED_TENANT_PHOTO_SELECTION = [
+  '    ticket.requestPhotoUrl,',
+  '    ticket.primaryPhotoUrl,',
+  '    ...(Array.isArray(ticket.photoUrls) ? ticket.photoUrls : []),',
+  '    ...(Array.isArray(ticket.photos) ? ticket.photos : []),',
+  '    ...(Array.isArray(ticket.beforePhotos) ? ticket.beforePhotos : []),',
+  '    ...(Array.isArray(ticket.tenantPhotos) ? ticket.tenantPhotos : []),',
+  '    ...(Array.isArray(ticket.initialPhotoUrls) ? ticket.initialPhotoUrls : []),',
+  '    ...(Array.isArray(ticket.images) ? ticket.images : []),',
 ].join('\n');
 
 // AI live evidence uses a reviewed control-plane verifier over the frozen
@@ -71,6 +89,24 @@ export function assertApplicationEvidenceCredentials(gate, env = process.env) {
   if (missing.length) fail(`missing protected application evidence bindings: ${missing.join(', ')}`);
   if (String(env.E2E_FOUNDER_EMAIL).trim().toLowerCase() !== CANONICAL_FOUNDER_EMAIL) {
     fail('application replay requires the canonical Founder identity');
+  }
+}
+
+export function assertApplicationPreparationCredentials(gate, env = process.env) {
+  if (!['all', 'tenantNotificationDelivery'].includes(gate)) {
+    fail('tenant notification preparation requires the all or tenantNotificationDelivery gate');
+  }
+  const required = [
+    'E2E_TENANT_EMAIL',
+    'E2E_TENANT_PASSWORD',
+    'VITE_FIREBASE_API_KEY',
+    'VITE_FIREBASE_APP_ID',
+    'VITE_FIREBASE_APPCHECK_DEBUG_TOKEN',
+  ];
+  const missing = required.filter((name) => !String(env[name] ?? '').trim());
+  if (missing.length) fail(`missing protected Tenant notification bindings: ${missing.join(', ')}`);
+  if (String(env.E2E_BASE_URL || '').replace(/\/+$/, '') !== 'https://bin-group-57c60.web.app') {
+    fail('tenant notification preparation requires the canonical production site');
   }
 }
 
@@ -204,9 +240,22 @@ export function transformFrozenActivationVerifier(source, adapterUrl = import.me
   ].join('\n'));
 }
 
+export function transformFrozenTenantPhotoVerifier(source) {
+  if (source.split(LEGACY_TENANT_PHOTO_SELECTION).length !== 2) {
+    fail('frozen Tenant photo verifier source drift; exact legacy selection is required');
+  }
+  return source.replace(LEGACY_TENANT_PHOTO_SELECTION, REVIEWED_TENANT_PHOTO_SELECTION);
+}
+
 export function assertReviewedAiVerifierSource(source) {
   if (gitBlobSha(source) !== REVIEWED_AI_VERIFIER_BLOB) {
     fail('unreviewed isolated AI verifier');
+  }
+}
+
+export function assertReviewedApplicationPreparationSource(source) {
+  if (gitBlobSha(source) !== REVIEWED_APPLICATION_PREPARATION_BLOB) {
+    fail('unreviewed Tenant notification preparation');
   }
 }
 
@@ -222,12 +271,32 @@ function installReviewedActivationAdapter(releaseRoot) {
   return () => writeFileSync(file, original);
 }
 
+function installReviewedTenantPhotoAdapter(releaseRoot) {
+  const file = path.join(releaseRoot, APPLICATION_VERIFIER);
+  if (!lstatSync(file).isFile()) fail('frozen application verifier is not a regular file');
+  const original = readFileSync(file, 'utf8');
+  const committed = execFileSync('git', ['show', `HEAD:${APPLICATION_VERIFIER}`], { cwd: releaseRoot, encoding: 'utf8' });
+  if (original !== committed) fail('frozen application verifier has unreviewed working-tree changes');
+  const adapted = transformFrozenTenantPhotoVerifier(original);
+  writeFileSync(file, adapted);
+  console.log(`[frozen-release-evidence] reviewed Tenant photo adapter sha256=${createHash('sha256').update(adapted).digest('hex')}`);
+  return () => writeFileSync(file, original);
+}
+
 function assertReviewedAiVerifier(releaseRoot) {
   const file = path.join(releaseRoot, AI_VERIFIER);
   if (!lstatSync(file).isFile()) fail('reviewed AI verifier is not a regular file');
   const source = readFileSync(file);
   assertReviewedAiVerifierSource(source);
   console.log(`[frozen-release-evidence] reviewed isolated AI verifier sha256=${createHash('sha256').update(source).digest('hex')}`);
+}
+
+function assertReviewedApplicationPreparation(releaseRoot) {
+  const file = path.join(releaseRoot, APPLICATION_PREPARATION);
+  if (!lstatSync(file).isFile()) fail('reviewed Tenant notification preparation is not a regular file');
+  const source = readFileSync(file);
+  assertReviewedApplicationPreparationSource(source);
+  console.log(`[frozen-release-evidence] reviewed Tenant notification preparation sha256=${createHash('sha256').update(source).digest('hex')}`);
 }
 
 export function validateFrozenReleaseEvidenceContext(env, releaseRoot, entrypoint) {
@@ -277,18 +346,30 @@ export function runFrozenReleaseEvidence(entrypoint, env = process.env, releaseR
   const applicationVerification = env.GITHUB_WORKFLOW === 'Operational Application Evidence'
     && env.GITHUB_JOB === 'verify-and-publish'
     && entrypoint === 'scripts/verify-operational-application-evidence-mfa.mjs';
+  const applicationPreparation = env.GITHUB_WORKFLOW === 'Operational Application Evidence'
+    && env.GITHUB_JOB === 'verify-and-publish'
+    && entrypoint === APPLICATION_PREPARATION;
   const aiVerification = env.GITHUB_WORKFLOW === 'Operational Provider Evidence'
     && env.GITHUB_JOB === 'verify-and-publish'
     && entrypoint === AI_VERIFIER;
 
   if (applicationVerification) assertApplicationEvidenceCredentials(env.OPERATIONAL_GATE, env);
+  if (applicationPreparation) {
+    assertApplicationPreparationCredentials(env.OPERATIONAL_GATE, env);
+    assertReviewedApplicationPreparation(releaseRoot);
+  }
   if (aiVerification) assertReviewedAiVerifier(releaseRoot);
 
   const restores = [];
   if (applicationVerification && env.OPERATIONAL_GATE === 'ownerPaymentActivation') {
     restores.push(installReviewedActivationAdapter(releaseRoot));
   }
-  const childActor = applicationVerification ? resolveApplicationEvidenceActor(env) : String(env.GITHUB_ACTOR || '');
+  if (applicationVerification && env.OPERATIONAL_GATE === 'tenantNotificationDelivery') {
+    restores.push(installReviewedTenantPhotoAdapter(releaseRoot));
+  }
+  const childActor = applicationVerification || applicationPreparation
+    ? resolveApplicationEvidenceActor(env)
+    : String(env.GITHUB_ACTOR || '');
   try {
     const result = spawnSync(process.execPath, [path.resolve(releaseRoot, entrypoint)], {
       cwd: releaseRoot,
@@ -296,7 +377,7 @@ export function runFrozenReleaseEvidence(entrypoint, env = process.env, releaseR
         ...env,
         GITHUB_SHA: releaseSha,
         CLEARANCE_CONTROL_PLANE_SHA: controlPlaneSha,
-        ...(applicationVerification && childActor ? { GITHUB_ACTOR: childActor } : {}),
+        ...((applicationVerification || applicationPreparation) && childActor ? { GITHUB_ACTOR: childActor } : {}),
       },
       stdio: 'inherit',
     });

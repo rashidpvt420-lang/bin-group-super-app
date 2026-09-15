@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
+import { validateOperationalProofDocument } from '../../scripts/lib/operational-proof-schema.mjs';
 
 const read = (path) => readFile(new URL(`../../${path}`, import.meta.url), 'utf8');
 
@@ -81,6 +82,7 @@ test('privileged rotation evidence performs a real run-scoped E2E Admin rotation
   assert.match(workflow, /verify-privileged-access-rotation\.mjs/);
   assert.match(workflow, /Publish canonical privileged-rotation evidence/);
   assert.match(workflow, /publish-direct-operational-proof\.mjs/);
+  assert.match(workflow, /cp control-plane\/scripts\/lib\/operational-proof-schema\.mjs release\/scripts\/lib\/operational-proof-schema\.mjs/);
   assert.match(workflow, /path:\s*release\/launch_package\/operational-proof\.json/);
 
   assert.doesNotMatch(workflow, /E2E_ADMIN_BOOTSTRAP_PASSWORD|secrets\.E2E_ADMIN_PASSWORD/);
@@ -130,6 +132,61 @@ test('privileged rotation evidence performs a real run-scoped E2E Admin rotation
   assert.match(publisher, /gateKey:\s*'privilegedAccessRotation'/);
   assert.match(publisher, /evidenceType:\s*'secret-rotation-record'/);
   assert.doesNotMatch(`${workflow}\n${verifier}\n${publisher}`, /secret_name:|admin_uid:|founder_attested|manual pass|waiv/i);
+});
+
+test('privileged rotation schema models Phase 1 SMTP plus an independently verified Admin credential', () => {
+  const now = Date.UTC(2026, 8, 15, 4, 0, 0);
+  const commitSha = 'a'.repeat(40);
+  const adminUidHash = 'b'.repeat(64);
+  const observedAt = new Date(now - 60_000).toISOString();
+  const proof = {
+    schemaVersion: 1,
+    status: 'passed',
+    generatedByWorkflow: true,
+    gateKey: 'privilegedAccessRotation',
+    evidenceType: 'secret-rotation-record',
+    commitSha,
+    projectId: 'bin-group-57c60',
+    sourceRunId: '123456',
+    sourceSystem: 'Google Secret Manager and Firebase Authentication',
+    observedAt,
+    phase1PaymentPolicy: 'PHASE1_CASH_CHEQUE_V1',
+    disabledProvidersExcluded: ['STRIPE', 'BANK_TRANSFER'],
+    previousCredentialsRevoked: true,
+    rotationRecordId: 'rotation-record-123',
+    rotatedSecrets: [{
+      name: 'SMTP_PASS',
+      latestVersionId: '8',
+      rotatedAt: new Date(now - 120_000).toISOString(),
+      previousRevokedCount: 2,
+    }],
+    adminUidHash,
+    adminTokensValidAfterTime: new Date(now - 90_000).toISOString(),
+    adminCredentialLogin: {
+      status: 'passed',
+      adminUidHash,
+      adminEmailHash: 'c'.repeat(64),
+      role: 'admin',
+      authOutcome: 'password-accepted-authenticated',
+      directAuthentication: true,
+      mfaChallengeIssued: false,
+      enrolledMfaFactorCount: 0,
+      observedAt,
+    },
+    checks: [{ name: 'Phase 1 credentials rotated', status: 'passed', reference: 'secretmanager://SMTP_PASS' }],
+  };
+  const validate = (candidate) => validateOperationalProofDocument(candidate, {
+    gateKey: 'privilegedAccessRotation',
+    evidenceType: 'secret-rotation-record',
+    commitSha,
+    sourceRunId: '123456',
+    now,
+  });
+
+  assert.deepEqual(validate(proof), []);
+  assert.match(validate({ ...proof, rotatedSecrets: [...proof.rotatedSecrets, { name: 'STRIPE_SECRET_KEY' }] }).join('\n'), /exactly the active SMTP_PASS/);
+  assert.match(validate({ ...proof, adminCredentialLogin: undefined }).join('\n'), /passed live Firebase Auth result/);
+  assert.match(validate({ ...proof, adminCredentialLogin: { ...proof.adminCredentialLogin, adminUidHash: 'd'.repeat(64) } }).join('\n'), /must match the rotated Admin/);
 });
 
 test('direct operational publisher validates semantics and writes the complete canonical readiness record', async () => {
