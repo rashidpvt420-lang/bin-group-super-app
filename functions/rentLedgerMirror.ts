@@ -6,6 +6,7 @@ if (!admin.apps.length) admin.initializeApp();
 
 const db = admin.firestore();
 const upper = (value: unknown) => String(value || "").trim().toUpperCase();
+const PHASE1_RENT_PAYMENT_METHODS = new Set(["CASH", "CHEQUE"]);
 
 function isRentPayment(payment: any) {
   return upper(payment?.recordType) === "OWNER_RENT_PAYMENT" ||
@@ -30,6 +31,12 @@ export const mirrorRentPaymentToTenantLedger = onDocumentWritten("payment_transa
 
   const paymentId = String(event.params.paymentId || payment.paymentId || payment.paymentTransactionId || "").trim();
   if (!paymentId) return;
+
+  const paymentMethod = upper(payment.paymentMethod || payment.method);
+  if (!PHASE1_RENT_PAYMENT_METHODS.has(paymentMethod)) {
+    console.error("[rentLedgerMirror] Refusing non-Phase-1 rent payment method", { paymentId, paymentMethod: paymentMethod || "MISSING" });
+    return;
+  }
 
   const rentDue = Number(payment.rentDue || payment.amountDue || 0);
   const rentPaid = Number(payment.rentPaid || payment.amountPaid || payment.amount || payment.amountReceived || 0);
@@ -62,7 +69,7 @@ export const mirrorRentPaymentToTenantLedger = onDocumentWritten("payment_transa
     status: ledgerStatus(payment),
     paymentStatus: payment.paymentStatus || payment.status || "PENDING_ADMIN_PAYMENT_VERIFICATION",
     paymentVerified: payment.paymentVerified === true,
-    paymentMethod: payment.paymentMethod || "BANK_TRANSFER",
+    paymentMethod,
     paymentReference: payment.paymentReference || payment.paymentReferenceId || payment.referenceId || "",
     notes: payment.notes || "",
     adminNotes: payment.adminNotes || "",

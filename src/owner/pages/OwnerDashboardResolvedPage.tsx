@@ -664,7 +664,7 @@ export default function OwnerDashboardResolvedPage() {
       verificationState: 'PENDING_ADMIN_PAYMENT_VERIFICATION',
       adminVerificationRequired: true,
       paymentVerified: false,
-      paymentMethod: String(rentData.paymentMethod || 'BANK_TRANSFER'),
+      paymentMethod: String(rentData.paymentMethod || 'CASH'),
       paymentReference: String(rentData.paymentReference || ''),
       referenceFileUrl: String(rentData.referenceFileUrl || ''),
       referenceFilePath: String(rentData.referenceFilePath || ''),
