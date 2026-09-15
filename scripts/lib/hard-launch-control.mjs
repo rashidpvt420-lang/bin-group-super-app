@@ -249,13 +249,16 @@ export function validateHardLaunchDecisionDocument(document, context = {}) {
   if (document.status !== 'approved') failures.push('decision status must equal approved');
   if (document.hardLaunchClaim !== true) failures.push('decision hardLaunchClaim must equal true');
   if (document.launchMode !== 'public') failures.push('decision launchMode must equal public');
+  if (document.paymentPolicy !== 'phase1-manual') {
+    failures.push('decision paymentPolicy must equal phase1-manual while PHASE1_CASH_CHEQUE_V1 is active');
+  }
   for (const key of [
     'authorization',
     'incidents',
     'deployment',
     'liveEvidence',
     'publicReleaseStatus',
-    'stripeLiveProof',
+    'phase1ManualPaymentProof',
     'pilotIncidentReport',
   ]) {
     if (!/^[a-f0-9]{64}$/.test(String(document.evidenceHashes?.[key] || ''))) {
