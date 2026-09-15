@@ -1,0 +1,58 @@
+name: Sovereign AI Gemini Thinking Self-Fix
+
+on:
+  push:
+    branches:
+      - fix/sovereign-ai-gemini-thinking-budget-20260916
+
+permissions:
+  contents: write
+
+jobs:
+  patch-runtime:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repair branch
+        uses: actions/checkout@v4
+        with:
+          ref: fix/sovereign-ai-gemini-thinking-budget-20260916
+          fetch-depth: 0
+
+      - name: Apply Gemini thinking budget repair and remove helper
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          assistant_path = Path('functions/aiAssistant.ts')
+          assistant = assistant_path.read_text()
+          old = '''        // The 3.x Gemini API deprecates legacy sampling parameters. Keep the
+        // production request portable across 3.6 Flash and 2.5 Flash.
+        generationConfig: { maxOutputTokens: 700 },'''
+          new = '''        // Keep reasoning inside the fixed 700-token production envelope so a
+        // thinking-capable model cannot consume the entire answer budget.
+        generationConfig: model.startsWith("gemini-3.")
+          ? { maxOutputTokens: 700, thinkingConfig: { thinkingLevel: "minimal" } }
+          : model.startsWith("gemini-2.5-flash")
+            ? { maxOutputTokens: 700, thinkingConfig: { thinkingBudget: 0 } }
+            : { maxOutputTokens: 700 },'''
+          if assistant.count(old) != 1:
+              raise SystemExit('Expected exactly one Gemini generationConfig block')
+          assistant_path.write_text(assistant.replace(old, new, 1))
+
+          test_path = Path('tests/launch/ai-operational-contract.test.mjs')
+          tests = test_path.read_text()
+          anchor = '''  assert.match(assistant, /usageMetadata\\?\\.totalTokenCount/);\n  assert.match(assistant, /usage\\?\\.total_tokens/);'''
+          replacement = '''  assert.match(assistant, /usageMetadata\\?\\.totalTokenCount/);\n  assert.match(assistant, /thinkingLevel: "minimal"/);\n  assert.match(assistant, /thinkingBudget: 0/);\n  assert.match(assistant, /model\\.startsWith\\("gemini-3\\."\\)/);\n  assert.match(assistant, /model\\.startsWith\\("gemini-2\\.5-flash"\\)/);\n  assert.match(assistant, /usage\\?\\.total_tokens/);'''
+          if tests.count(anchor) != 1:
+              raise SystemExit('Expected exactly one AI observability assertion anchor')
+          test_path.write_text(tests.replace(anchor, replacement, 1))
+          PY
+          git rm .github/workflows/sovereign-ai-gemini-thinking-self-fix.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add functions/aiAssistant.ts tests/launch/ai-operational-contract.test.mjs
+          git commit -m 'fix: bound Gemini thinking within AI response budget'
+          git push origin HEAD:fix/sovereign-ai-gemini-thinking-budget-20260916
