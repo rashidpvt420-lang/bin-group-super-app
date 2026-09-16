@@ -25,10 +25,13 @@ test('AI provider diagnostic remains protected, exact-SHA bound and redacted', a
   assert.match(workflow, /Redacted Gemini probe model/);
   assert.match(workflow, /Redacted OpenAI probe HTTP status/);
   assert.match(workflow, /Redacted OpenAI probe category/);
+  assert.match(workflow, /Redacted OpenAI probe error code/);
+  assert.match(workflow, /Redacted OpenAI probe error type/);
   assert.match(workflow, /Redacted OpenAI probe model/);
 
   assert.doesNotMatch(workflow, /console\.log\(payload\)|console\.log\(JSON\.stringify\(payload/);
-  assert.doesNotMatch(workflow, /error\?\.message|error\.message|response\.text\(|response\.body[^?]/);
+  assert.doesNotMatch(workflow, /error\?\.message|error\.message|response\.text\(/);
+  assert.doesNotMatch(workflow, /payload\?\.error\?\.message/);
 });
 
 test('AI provider probes keep credentials out of URLs and command arguments', async () => {
@@ -52,9 +55,22 @@ test('AI provider probes remain bounded and emit classifications only', async ()
   assert.equal((workflow.match(/setTimeout\(\(\) => controller\.abort\(\), 10_000\)/g) || []).length, 2);
   assert.equal((workflow.match(/clearTimeout\(timeout\)/g) || []).length, 2);
   assert.match(workflow, /const allowedStatuses = new Set/);
-  assert.match(workflow, /await response\.body\?\.cancel\(\)\.catch/);
+  assert.match(workflow, /const allowedErrorCodes = new Set/);
+  assert.match(workflow, /const allowedErrorTypes = new Set/);
 
   for (const category of ['ok', 'auth', 'rate-limited', 'invalid-request', 'server-error', 'network-error', 'other-http']) {
     assert.match(workflow, new RegExp(category));
   }
+  for (const code of [
+    'credit_balance_exhausted',
+    'organization_usage_limit_exceeded',
+    'organization_spend_limit_exceeded',
+    'project_spend_limit_exceeded',
+    'rate_limit_exceeded',
+  ]) {
+    assert.match(workflow, new RegExp(code));
+  }
+  assert.match(workflow, /insufficient_quota/);
+  assert.match(workflow, /rate_limit_error/);
+  assert.match(workflow, /return allowed\.has\(normalized\) \? normalized : 'other'/);
 });
