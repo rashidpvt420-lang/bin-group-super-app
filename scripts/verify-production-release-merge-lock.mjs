@@ -7,8 +7,32 @@ export const RELEASE_WORKFLOW_PATHS = Object.freeze([
   'founder-release-orchestrator-one-shot.yml',
 ]);
 
+// GitHub Actions can retain an internally orphaned workflow run whose REST status
+// remains `queued` even though GitHub's own UI/API refuses cancellation because
+// the run is not actually in progress. Keep this quarantine immutable and narrow:
+// it applies only while the exact historical run is still reported as `queued`
+// on the exact workflow and SHA. If GitHub ever reports the run in_progress (or
+// any other non-completed state), the normal fail-closed merge lock applies.
+export const KNOWN_ORPHANED_QUEUED_RELEASE_RUNS = Object.freeze([
+  Object.freeze({
+    workflowPath: 'firebase-production-dispatch-current-main.yml',
+    id: '31122180844',
+    headSha: 'a1029b15f9ca33d7f3659390958d6030fcafda34',
+  }),
+]);
+
 const OWNER_DISPATCH_TITLE = 'Dispatch protected bank pilot workflow';
 const OWNER_DISPATCH_HEAD_PREFIX = 'ops/dispatch-bank-pilot-workflow-';
+
+export function isKnownOrphanedQueuedReleaseRun(workflowPath, run) {
+  if (!run || run.status !== 'queued') return false;
+
+  const id = String(run.id ?? '');
+  const headSha = String(run.head_sha ?? '');
+  return KNOWN_ORPHANED_QUEUED_RELEASE_RUNS.some(
+    (known) => known.workflowPath === workflowPath && known.id === id && known.headSha === headSha,
+  );
+}
 
 export function selectActiveReleaseRuns(workflowPath, workflowRuns) {
   if (!Array.isArray(workflowRuns)) {
@@ -17,6 +41,7 @@ export function selectActiveReleaseRuns(workflowPath, workflowRuns) {
 
   return workflowRuns
     .filter((run) => run && run.status !== 'completed')
+    .filter((run) => !isKnownOrphanedQueuedReleaseRun(workflowPath, run))
     .map((run) => ({
       workflowPath,
       id: String(run.id ?? ''),
