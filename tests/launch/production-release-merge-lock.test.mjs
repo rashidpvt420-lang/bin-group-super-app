@@ -3,8 +3,10 @@ import test from 'node:test';
 
 import {
   RELEASE_WORKFLOW_PATHS,
+  isCanonicalOwnerDispatchPr,
   selectActiveReleaseRuns,
   verifyProductionReleaseMergeLock,
+  verifyReleaseStartHasNoOpenWorkPr,
 } from '../../scripts/verify-production-release-merge-lock.mjs';
 
 const repository = 'rashidpvt420-lang/bin-group-super-app';
@@ -25,6 +27,24 @@ function workflowNameFromUrl(url) {
   const start = url.indexOf(marker);
   const encoded = url.slice(start + marker.length, url.indexOf('/runs?', start));
   return decodeURIComponent(encoded);
+}
+
+function ownerDispatchPr(overrides = {}) {
+  return {
+    number: 1234,
+    draft: true,
+    title: 'Dispatch protected bank pilot workflow',
+    user: { login: 'rashidpvt420-lang' },
+    base: {
+      ref: 'main',
+      repo: { full_name: repository },
+    },
+    head: {
+      ref: 'ops/dispatch-bank-pilot-workflow-20260916-example',
+      repo: { full_name: repository },
+    },
+    ...overrides,
+  };
 }
 
 test('release merge lock covers every workflow that can own the production release window', () => {
@@ -97,7 +117,7 @@ test('GitHub API lookup failures fail closed', async () => {
 
   await assert.rejects(
     verifyProductionReleaseMergeLock({ repository, token, fetchImpl }),
-    /GitHub Actions lookup failed with HTTP 503/,
+    /GitHub lookup failed with HTTP 503/,
   );
 });
 
@@ -117,10 +137,63 @@ test('active-run selector ignores completed records and retains safe diagnostics
   );
 });
 
+test('only the canonical draft Owner bank-pilot request is exempt from the release-start PR freeze', () => {
+  assert.equal(isCanonicalOwnerDispatchPr(ownerDispatchPr(), 'rashidpvt420-lang'), true);
+  assert.equal(isCanonicalOwnerDispatchPr(ownerDispatchPr({ draft: false }), 'rashidpvt420-lang'), false);
+  assert.equal(isCanonicalOwnerDispatchPr(ownerDispatchPr({ title: 'Ordinary product repair' }), 'rashidpvt420-lang'), false);
+  assert.equal(
+    isCanonicalOwnerDispatchPr(ownerDispatchPr({ head: { ref: 'feature/ordinary', repo: { full_name: repository } } }), 'rashidpvt420-lang'),
+    false,
+  );
+});
+
+test('production release start accepts only canonical Owner dispatch PRs', async () => {
+  const fetchImpl = async () => response([ownerDispatchPr()]);
+  const result = await verifyReleaseStartHasNoOpenWorkPr({ repository, token, fetchImpl });
+  assert.deepEqual(result, { clear: true, allowedOwnerDispatchPulls: 1 });
+});
+
+test('production release start refuses any ordinary open PR to main', async () => {
+  const fetchImpl = async () => response([
+    ownerDispatchPr(),
+    ownerDispatchPr({
+      number: 1237,
+      draft: false,
+      title: 'Harden diagnostics',
+      head: { ref: 'fix/diagnostics', repo: { full_name: repository } },
+    }),
+  ]);
+
+  await assert.rejects(
+    verifyReleaseStartHasNoOpenWorkPr({ repository, token, fetchImpl }),
+    /ordinary pull requests to main are open \(#1237:fix\/diagnostics\)/,
+  );
+});
+
+test('malformed open-PR lookup fails closed', async () => {
+  const fetchImpl = async () => response({ not: 'an array' });
+  await assert.rejects(
+    verifyReleaseStartHasNoOpenWorkPr({ repository, token, fetchImpl }),
+    /invalid open-pull-request payload/,
+  );
+});
+
 test(
   'required PR validation fails closed while the production release control plane is active',
   { skip: process.env.GITHUB_EVENT_NAME !== 'pull_request' },
   async () => {
     await verifyProductionReleaseMergeLock({ repository: process.env.GITHUB_REPOSITORY });
+  },
+);
+
+test(
+  'Firebase Production Deploy validation refuses to start with ordinary main PRs open',
+  {
+    skip:
+      process.env.GITHUB_EVENT_NAME !== 'workflow_dispatch'
+      || process.env.GITHUB_WORKFLOW !== 'Firebase Production Deploy',
+  },
+  async () => {
+    await verifyReleaseStartHasNoOpenWorkPr({ repository: process.env.GITHUB_REPOSITORY });
   },
 );
