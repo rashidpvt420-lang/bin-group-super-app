@@ -19,7 +19,11 @@ test('bank-pilot dispatcher refuses an active or successful exact-SHA production
   assert.ok(guardIndex >= 0, 'duplicate exact-SHA guard is missing');
   assert.ok(dispatchIndex > guardIndex, 'duplicate guard must execute before the production wrapper dispatch');
   assert.match(workflow, /firebase-production-deploy\.yml\/runs\?event=workflow_dispatch&branch=main&per_page=100/);
-  assert.match(workflow, /\$2 == sha && \(\$3 != "completed" \|\| \$4 == "success"\)/);
+  assert.match(workflow, /gh api --paginate --slurp/);
+  assert.match(workflow, /select\(\.head_sha == \$sha\)/);
+  assert.match(workflow, /select\(\.status != "completed" or \.conclusion == "success"\)/);
+  assert.match(workflow, /\] \| first \/\/ empty/);
+  assert.doesNotMatch(workflow, /awk[\s\S]{0,400}\bexit\b/);
   assert.match(workflow, /Exact-SHA production deployment already exists for \$RELEASE_SHA/);
   assert.match(workflow, /Refusing duplicate dispatch/);
 });
