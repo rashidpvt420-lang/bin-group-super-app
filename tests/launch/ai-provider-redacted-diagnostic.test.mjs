@@ -60,9 +60,9 @@ test('AI provider probes remain bounded and emit coarse 429 classifications only
   for (const category of ['ok', 'auth', 'rate-limited', 'invalid-request', 'server-error', 'network-error', 'other-http']) {
     assert.match(workflow, new RegExp(category));
   }
-  for (const cause of ['quota-or-spend-exhausted', 'request-rate-limit', 'other-429']) {
-    assert.match(workflow, new RegExp(cause));
-  }
+  assert.match(workflow, /quota-or-spend-exhausted/);
+  assert.match(workflow, /request-rate-limit/);
+  assert.match(workflow, /other-429/);
 
   assert.doesNotMatch(workflow, /console\.log\([^\n]*(?:code|type)[^\n]*\)/i);
 });
