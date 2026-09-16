@@ -15,7 +15,7 @@ The audited P0/P1 source defects are repaired on `main`, subject to the validati
 - tenant service and physical-access flows moved to validated callables;
 - technician dispatch and lifecycle authority made transactional;
 - suspension enforced across Auth, rules and callables;
-- Stripe mismatch reconciliation and idempotency hardened;
+- Phase-1 payment policy fail-closed to Cash/Cheque only, with Bank Transfer, Card and Stripe disabled;
 - protected deployment, artifact and public-decision chain made fail-closed;
 - stale rule, workflow and launch-test contracts aligned.
 
@@ -25,7 +25,7 @@ No production readiness claim follows from source-code disposition alone.
 
 | ID | Severity | Required evidence |
 |---|---|---|
-| OPS-STRIPE | P0 | Live AED session, matching Stripe event and processed Firestore webhook bound to the deployed SHA |
+| OPS-PAYMENT-POLICY | P0 | Exact-SHA production proof that Cash and Cheque are the only approved payment methods and Bank Transfer, Card and Stripe remain disabled |
 | OPS-SMTP | P0 | Secret-bound production delivery with provider message ID |
 | OPS-APPCHECK | P0 | Main and Admin hosted App Check verification plus strict credentialed E2E |
 | OPS-E2E5 | P0 | Exact-SHA Owner, Tenant, Technician, Broker and Admin walkthrough artifacts |
@@ -41,7 +41,7 @@ Public mode requires all of the following to bind to the same repository, `main`
 3. exact-SHA hard-clearance provenance;
 4. complete Firebase deployment metadata;
 5. postdeploy public-release status;
-6. live Stripe proof;
+6. exact-SHA Phase-1 payment-policy proof that Cash/Cheque are enabled and Bank Transfer/Card/Stripe are disabled;
 7. pilot incident report;
 8. signed final hard-launch decision.
 
