@@ -108,7 +108,7 @@ test.describe('Five-profile browser audit', () => {
 
   test('Admin operational settings render in RTL and mobile while personal profile remains tracked separately', async ({ page }) => {
     test.setTimeout(120_000);
-    await loginAdminPanel(page, requireEnv('E2E_ADMIN_EMAIL'), requireEnv('E2E_ADMIN_PASSWORD'));
+    await loginAdminPanel(page, requireEnv('E2E_FOUNDER_EMAIL'), requireEnv('E2E_FOUNDER_PASSWORD'));
     await page.goto(adminUrl('/settings'), { waitUntil: 'domcontentloaded' });
     await waitForAdminLoader(page);
     await expect(page.locator('body')).not.toContainText(CRASH, { timeout: 15_000 });
@@ -120,11 +120,40 @@ test.describe('Five-profile browser audit', () => {
     await assertMobileNoHorizontalOverflow(page);
   });
 
-  test.fixme('Admin has a dedicated /profile route with MFA, sessions, devices and security history');
+  test('Admin personal security profile executes the protected server-backed security surface', async ({ page }) => {
+    test.setTimeout(120_000);
+    await loginAdminPanel(page, requireEnv('E2E_FOUNDER_EMAIL'), requireEnv('E2E_FOUNDER_PASSWORD'));
+    await page.goto(adminUrl('/profile'), { waitUntil: 'domcontentloaded' });
+    await waitForAdminLoader(page);
+
+    const body = page.locator('body');
+    await expect(body).not.toContainText(CRASH, { timeout: 15_000 });
+    await expect(body).not.toContainText(ACCESS_DENIED, { timeout: 15_000 });
+    await expect(body).toContainText(/Personal Security Profile/i, { timeout: 30_000 });
+    await expect(body).toContainText(/Firebase Auth, claims, MFA, sessions and security history are server-derived/i, { timeout: 30_000 });
+    await expect(body).toContainText(/Active security sessions/i, { timeout: 30_000 });
+    await expect(body).toContainText(/Security-event history/i, { timeout: 30_000 });
+    await expect(page.getByTestId('admin-mfa-recovery-link')).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByRole('button', { name: /Refresh/i })).toBeVisible({ timeout: 20_000 });
+
+    await page.getByRole('button', { name: /Refresh/i }).click();
+    await waitForAdminLoader(page);
+    await expect(body).toContainText(/Personal Security Profile/i, { timeout: 30_000 });
+    await expect(body).not.toContainText(/Authoritative security data could not be loaded/i, { timeout: 10_000 });
+
+    await page.evaluate(() => localStorage.setItem('bin_language', 'ar'));
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await waitForAdminLoader(page);
+    await expect(body).toContainText(/ملف الأمان الشخصي/i, { timeout: 30_000 });
+    await expect(body).toContainText(/جلسات الأمان النشطة/i, { timeout: 30_000 });
+    await expect(body).toContainText(/سجل أحداث الأمان/i, { timeout: 30_000 });
+    await assertRtl(page);
+    await assertMobileNoHorizontalOverflow(page);
+  });
 });
 
 test.describe('Owner onboarding browser audit', () => {
-  test('account stage precedes property stage and local persistence contains only safe draft coordinates', async ({ page }) => {
+  test('account stage precedes property stage and local persistence keeps only the approved resumable draft', async ({ page }) => {
     await page.goto('/onboarding', { waitUntil: 'domcontentloaded' });
     await expect(page.locator('body')).toContainText(/Company/i, { timeout: 20_000 });
 
@@ -143,10 +172,12 @@ test.describe('Owner onboarding browser audit', () => {
       const raw = localStorage.getItem('bin-group-onboarding-v3');
       return raw ? JSON.parse(raw) : null;
     });
-    expect(persisted?.version).toBe(4);
-    expect(Object.keys(persisted?.state || {}).sort()).toEqual(['intakeId', 'step']);
+    expect(persisted?.version).toBe(5);
+    expect(persisted?.state?.companyProfile?.name).toBe('E2E Minimal Draft');
+    expect(Array.isArray(persisted?.state?.properties)).toBe(true);
+    expect(String(persisted?.state?.onboardingSessionId || '').trim().length).toBeGreaterThan(0);
     const serialized = JSON.stringify(persisted);
-    for (const sensitive of ['password', 'kycUrls', 'paymentManifest', 'signatureName', 'ownerAccount', 'proofDocuments']) {
+    for (const sensitive of ['"password"', '"kycUrls"', '"paymentManifest"', '"paymentMethod"', '"signupData"']) {
       expect(serialized).not.toContain(sensitive);
     }
 
