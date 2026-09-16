@@ -25,10 +25,14 @@ test('AI provider diagnostic remains protected, exact-SHA bound and redacted', a
   assert.match(workflow, /Redacted Gemini probe model/);
   assert.match(workflow, /Redacted OpenAI probe HTTP status/);
   assert.match(workflow, /Redacted OpenAI probe category/);
+  assert.match(workflow, /Redacted OpenAI 429 cause/);
   assert.match(workflow, /Redacted OpenAI probe model/);
 
   assert.doesNotMatch(workflow, /console\.log\(payload\)|console\.log\(JSON\.stringify\(payload/);
-  assert.doesNotMatch(workflow, /error\?\.message|error\.message|response\.text\(|response\.body[^?]/);
+  assert.doesNotMatch(workflow, /console\.log\([^\n]*(providerCode|providerType)/);
+  assert.doesNotMatch(workflow, /Redacted OpenAI probe error (code|type)/);
+  assert.doesNotMatch(workflow, /error\?\.message|error\.message|response\.text\(/);
+  assert.doesNotMatch(workflow, /payload\?\.error\?\.message/);
 });
 
 test('AI provider probes keep credentials out of URLs and command arguments', async () => {
@@ -46,15 +50,35 @@ test('AI provider probes keep credentials out of URLs and command arguments', as
   assert.doesNotMatch(workflow, /-H\s+["'][^"']*(?:gemini_key|openai_key|\$key)/);
 });
 
-test('AI provider probes remain bounded and emit classifications only', async () => {
+test('AI provider probes remain bounded and emit fixed classifications only', async () => {
   const workflow = await readWorkflow();
 
   assert.equal((workflow.match(/setTimeout\(\(\) => controller\.abort\(\), 10_000\)/g) || []).length, 2);
   assert.equal((workflow.match(/clearTimeout\(timeout\)/g) || []).length, 2);
   assert.match(workflow, /const allowedStatuses = new Set/);
-  assert.match(workflow, /await response\.body\?\.cancel\(\)\.catch/);
 
   for (const category of ['ok', 'auth', 'rate-limited', 'invalid-request', 'server-error', 'network-error', 'other-http']) {
     assert.match(workflow, new RegExp(category));
   }
+
+  for (const fixedCause of ['quota-or-billing', 'request-rate-limit', 'unclassified-429', 'not-applicable']) {
+    assert.match(workflow, new RegExp(fixedCause));
+  }
+
+  for (const providerCode of [
+    'credit_balance_exhausted',
+    'organization_usage_limit_exceeded',
+    'organization_spend_limit_exceeded',
+    'project_spend_limit_exceeded',
+    'rate_limit_exceeded',
+    'insufficient_quota',
+    'rate_limit_error',
+  ]) {
+    assert.match(workflow, new RegExp(providerCode));
+  }
+
+  assert.match(workflow, /limitCause = 'quota-or-billing'/);
+  assert.match(workflow, /limitCause = 'request-rate-limit'/);
+  assert.match(workflow, /limitCause = 'unclassified-429'/);
+  assert.doesNotMatch(workflow, /\$\{providerCode\}|\$\{providerType\}/);
 });
