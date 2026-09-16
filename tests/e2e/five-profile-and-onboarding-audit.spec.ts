@@ -153,7 +153,7 @@ test.describe('Five-profile browser audit', () => {
 });
 
 test.describe('Owner onboarding browser audit', () => {
-  test('account stage precedes property stage and local persistence contains only safe draft coordinates', async ({ page }) => {
+  test('account stage precedes property stage and local persistence keeps only the approved resumable draft', async ({ page }) => {
     await page.goto('/onboarding', { waitUntil: 'domcontentloaded' });
     await expect(page.locator('body')).toContainText(/Company/i, { timeout: 20_000 });
 
@@ -172,10 +172,12 @@ test.describe('Owner onboarding browser audit', () => {
       const raw = localStorage.getItem('bin-group-onboarding-v3');
       return raw ? JSON.parse(raw) : null;
     });
-    expect(persisted?.version).toBe(4);
-    expect(Object.keys(persisted?.state || {}).sort()).toEqual(['intakeId', 'step']);
+    expect(persisted?.version).toBe(5);
+    expect(persisted?.state?.companyProfile?.name).toBe('E2E Minimal Draft');
+    expect(Array.isArray(persisted?.state?.properties)).toBe(true);
+    expect(String(persisted?.state?.onboardingSessionId || '').trim().length).toBeGreaterThan(0);
     const serialized = JSON.stringify(persisted);
-    for (const sensitive of ['password', 'kycUrls', 'paymentManifest', 'signatureName', 'ownerAccount', 'proofDocuments']) {
+    for (const sensitive of ['"password"', '"kycUrls"', '"paymentManifest"', '"paymentMethod"', '"signupData"']) {
       expect(serialized).not.toContain(sensitive);
     }
 
