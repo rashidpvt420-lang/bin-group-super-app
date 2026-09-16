@@ -1,4 +1,5 @@
 import { expect, Page } from '@playwright/test';
+import { loginAdminWithRealMfa } from './adminMfa';
 
 export const SEED_IDS = {
   sosTicket: 'e2e-live-sos-ticket',
@@ -40,12 +41,18 @@ export async function loginMainRole(page: Page, role: 'owner' | 'tenant' | 'tech
 }
 
 export async function loginAdminPanel(page: Page, email: string, password: string) {
-  await page.goto(adminUrl('/login'), { waitUntil: 'domcontentloaded' });
-  await page.locator('input[type="email"], input[name*="email" i]').first().fill(email);
-  await page.locator('input[type="password"]').first().fill(password);
-  await page.locator('form button[type="submit"]').first().click();
-  await page.waitForURL(`${adminBaseUrl()}/dashboard`, { timeout: 25_000 });
-  await expect(page.locator('body')).not.toContainText(/permission-denied|missing or insufficient permissions|auth\/invalid-credential/i, { timeout: 15_000 });
+  const totpSecret = String(process.env.E2E_FOUNDER_TOTP_SECRET || '').trim();
+  const realPhoneCode = String(process.env.E2E_FOUNDER_REAL_MFA_CODE || process.env.E2E_ADMIN_REAL_MFA_CODE || '').trim();
+  if (!totpSecret && !/^\d{6}$/.test(realPhoneCode)) {
+    throw new Error('E2E_FOUNDER_TOTP_SECRET or a current real Admin MFA code is required. Admin profile readiness cannot bypass MFA.');
+  }
+  await loginAdminWithRealMfa(page, adminBaseUrl(), {
+    email: String(email || '').trim().toLowerCase(),
+    password: String(password || '').trim(),
+    totpSecret,
+    realPhoneCode,
+    label: 'Admin profile readiness',
+  });
 }
 
 export async function waitForAdminLoader(page: Page) {
