@@ -170,6 +170,7 @@ jobs:
             return 'other-http';
           };
           let httpStatus = 0;
+          let limitCause = 'not-applicable';
           const controller = new AbortController();
           const timeout = setTimeout(() => controller.abort(), 10_000);
           try {
@@ -187,13 +188,34 @@ jobs:
               }),
             });
             httpStatus = response.status;
-            await response.body?.cancel().catch(() => {});
+            if (httpStatus === 429) {
+              const payload = await response.json().catch(() => ({}));
+              const providerCode = typeof payload?.error?.code === 'string' ? payload.error.code.trim().toLowerCase() : '';
+              const providerType = typeof payload?.error?.type === 'string' ? payload.error.type.trim().toLowerCase() : '';
+              if (
+                providerCode === 'credit_balance_exhausted' ||
+                providerCode === 'organization_usage_limit_exceeded' ||
+                providerCode === 'organization_spend_limit_exceeded' ||
+                providerCode === 'project_spend_limit_exceeded' ||
+                providerType === 'insufficient_quota'
+              ) {
+                limitCause = 'quota-or-billing';
+              } else if (providerCode === 'rate_limit_exceeded' || providerType === 'rate_limit_error') {
+                limitCause = 'request-rate-limit';
+              } else {
+                limitCause = 'unclassified-429';
+              }
+            } else {
+              await response.body?.cancel().catch(() => {});
+            }
           } catch {
             httpStatus = 0;
+            limitCause = 'not-applicable';
           } finally {
             clearTimeout(timeout);
           }
           console.log(`::notice::Redacted OpenAI probe HTTP status: ${httpStatus}`);
           console.log(`::notice::Redacted OpenAI probe category: ${classify(httpStatus)}`);
+          console.log(`::notice::Redacted OpenAI 429 cause: ${limitCause}`);
           console.log(`::notice::Redacted OpenAI probe model: ${model}`);
           NODE
