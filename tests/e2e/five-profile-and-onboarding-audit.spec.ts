@@ -120,7 +120,36 @@ test.describe('Five-profile browser audit', () => {
     await assertMobileNoHorizontalOverflow(page);
   });
 
-  test.fixme('Admin has a dedicated /profile route with MFA, sessions, devices and security history');
+  test('Admin personal security profile executes the protected server-backed security surface', async ({ page }) => {
+    test.setTimeout(120_000);
+    await loginAdminPanel(page, requireEnv('E2E_ADMIN_EMAIL'), requireEnv('E2E_ADMIN_PASSWORD'));
+    await page.goto(adminUrl('/profile'), { waitUntil: 'domcontentloaded' });
+    await waitForAdminLoader(page);
+
+    const body = page.locator('body');
+    await expect(body).not.toContainText(CRASH, { timeout: 15_000 });
+    await expect(body).not.toContainText(ACCESS_DENIED, { timeout: 15_000 });
+    await expect(body).toContainText(/Personal Security Profile/i, { timeout: 30_000 });
+    await expect(body).toContainText(/Firebase Auth, claims, MFA, sessions and security history are server-derived/i, { timeout: 30_000 });
+    await expect(body).toContainText(/Active security sessions/i, { timeout: 30_000 });
+    await expect(body).toContainText(/Security-event history/i, { timeout: 30_000 });
+    await expect(page.getByTestId('admin-mfa-recovery-link')).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByRole('button', { name: /Refresh/i })).toBeVisible({ timeout: 20_000 });
+
+    await page.getByRole('button', { name: /Refresh/i }).click();
+    await waitForAdminLoader(page);
+    await expect(body).toContainText(/Personal Security Profile/i, { timeout: 30_000 });
+    await expect(body).not.toContainText(/Authoritative security data could not be loaded/i, { timeout: 10_000 });
+
+    await page.evaluate(() => localStorage.setItem('bin_language', 'ar'));
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await waitForAdminLoader(page);
+    await expect(body).toContainText(/ملف الأمان الشخصي/i, { timeout: 30_000 });
+    await expect(body).toContainText(/جلسات الأمان النشطة/i, { timeout: 30_000 });
+    await expect(body).toContainText(/سجل أحداث الأمان/i, { timeout: 30_000 });
+    await assertRtl(page);
+    await assertMobileNoHorizontalOverflow(page);
+  });
 });
 
 test.describe('Owner onboarding browser audit', () => {
