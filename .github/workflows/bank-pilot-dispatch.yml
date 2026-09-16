@@ -142,16 +142,19 @@ jobs:
         run: |
           set -euo pipefail
 
+          runs_json="$(
+            gh api --paginate --slurp \
+              "repos/$REPOSITORY/actions/workflows/firebase-production-deploy.yml/runs?event=workflow_dispatch&branch=main&per_page=100"
+          )"
           duplicate="$(
-            gh api --paginate \
-              "repos/$REPOSITORY/actions/workflows/firebase-production-deploy.yml/runs?event=workflow_dispatch&branch=main&per_page=100" \
-              --jq '.workflow_runs[] | [.id, .head_sha, .status, (.conclusion // "")] | @tsv' |
-            awk -F '\t' -v sha="$RELEASE_SHA" '
-              $2 == sha && ($3 != "completed" || $4 == "success") {
-                print
-                exit
-              }
-            '
+            jq -r --arg sha "$RELEASE_SHA" '
+              [.[].workflow_runs[]
+                | select(.head_sha == $sha)
+                | select(.status != "completed" or .conclusion == "success")
+                | [.id, .head_sha, .status, (.conclusion // "")]
+                | @tsv
+              ] | first // empty
+            ' <<<"$runs_json"
           )"
 
           if [[ -n "$duplicate" ]]; then
@@ -353,7 +356,7 @@ jobs:
             --arg productionWorkflowRunId "$production_run_id" \
             --arg productionWorkflowRunUrl "$production_run_url" \
             --arg ownerRequestPullRequest "$REQUEST_PR" \
-            '{schemaVersion:1,commitSha:$commitSha,reviewWorkflowRunId:$reviewWorkflowRunId,privateHrWorkflowRunId:$privateHrWorkflowRunId,wrapperWorkflowRunId:$wrapperWorkflowRunId,wrapperWorkflowRunUrl:$wrapperWorkflowRunUrl,productionWorkflowRunId:$productionWorkflowRunId,productionWorkflowRunUrl:$productionWorkflowRunUrl,ownerRequestPullRequest:$ownerRequestPullRequest,launchMode:"bank-pilot",publicReleaseGate:false,hardLaunchClaim:false}' \
+            '{schemaVersion:1,commitSha:$commitSha,reviewWorkflowRunId:$reviewWorkflowRunId,privateHrWorkflowRunId:$privateHrWorkflowRunId,wrapperWorkflowRunId:$wrapperWorkflowRunId,wrapperWorkflowRunUrl:$wrapper_run_url,productionWorkflowRunId:$productionWorkflowRunId,productionWorkflowRunUrl:$productionWorkflowRunUrl,ownerRequestPullRequest:$ownerRequestPullRequest,launchMode:"bank-pilot",publicReleaseGate:false,hardLaunchClaim:false}' \
             > bank-pilot-dispatch-evidence.json
 
           echo "wrapper_run_id=$wrapper_run_id" >> "$GITHUB_OUTPUT"
