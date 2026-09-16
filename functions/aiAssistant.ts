@@ -63,7 +63,7 @@ function uniqueModels(values: Array<string | undefined>) {
 const GEMINI_MODEL_CANDIDATES = uniqueModels([
   process.env.GEMINI_MODEL,
   "gemini-3.6-flash",
-  "gemini-2.5-flash",
+  "gemini-3.5-flash",
 ]);
 
 const OPENAI_MODEL_CANDIDATES = uniqueModels([
@@ -149,6 +149,9 @@ async function askGeminiModel(apiKey: string, model: string, prompt: string, tim
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
+    const thinkingConfig = model.startsWith("gemini-2.5-")
+      ? { thinkingBudget: 0 }
+      : { thinkingLevel: "low" };
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
     const response = await fetch(url, {
       method: "POST",
@@ -160,9 +163,10 @@ async function askGeminiModel(apiKey: string, model: string, prompt: string, tim
       body: JSON.stringify({
         systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
         contents: [{ role: "user", parts: [{ text: prompt }] }],
-        // The 3.x Gemini API deprecates legacy sampling parameters. Keep the
-        // production request portable across 3.6 Flash and 2.5 Flash.
-        generationConfig: { maxOutputTokens: 700 },
+        // Thinking tokens count toward maxOutputTokens. Keep reasoning bounded so
+        // the provider can return visible answer text inside the production envelope.
+        // Explicit 2.5 overrides retain compatibility with its thinkingBudget API.
+        generationConfig: { maxOutputTokens: 700, thinkingConfig },
       }),
     });
     const json: any = await response.json().catch(() => ({}));
