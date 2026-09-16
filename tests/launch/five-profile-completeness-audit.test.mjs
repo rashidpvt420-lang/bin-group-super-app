@@ -28,7 +28,7 @@ test('all live profile pages retain bilingual, RTL, mobile and account-recovery 
     assert.match(source, /isRTL/, `${contract.role} profile does not consume RTL state`);
     assert.match(source, /lang\s*===\s*['"]ar['"]/, `${contract.role} profile has no Arabic branch`);
     assert.match(source, ARABIC, `${contract.role} profile contains no Arabic copy`);
-    assert.match(source, /<Avatar\b/, `${contract.role} profile has no identity/avatar surface`);
+    assert.match(source, /<Avatar\b/, `${contract.role} profile has no identity\/avatar surface`);
     if (contract.role === 'Tenant') {
       assert.match(source, /TenantCorrectionPanel/, 'Tenant profile has no reviewed correction workflow');
       assert.doesNotMatch(source, /\bsetDoc\s*\(/, 'Tenant profile must not directly persist reviewed identity fields');
@@ -55,6 +55,18 @@ test('Admin personal security profile, MFA recovery and readable permissions are
   assert.match(profile, ARABIC);
   assert.match(recovery, /PENDING_SECOND_APPROVAL/);
   assert.match(recovery, /revokeRefreshTokens/);
+});
+
+test('five-profile browser audit must execute the Admin security profile instead of skipping it', async () => {
+  const browserAudit = await read('tests/e2e/five-profile-and-onboarding-audit.spec.ts');
+  assert.doesNotMatch(browserAudit, /test\.fixme\([^\n]*Admin has a dedicated \/profile route/i);
+  assert.match(browserAudit, /page\.goto\(adminUrl\('\/profile'\)/);
+  assert.match(browserAudit, /Personal Security Profile/i);
+  assert.match(browserAudit, /Active security sessions/i);
+  assert.match(browserAudit, /Security-event history/i);
+  assert.match(browserAudit, /admin-mfa-recovery-link/);
+  assert.match(browserAudit, /assertRtl\(page\)/);
+  assert.match(browserAudit, /assertMobileNoHorizontalOverflow\(page\)/);
 });
 
 test('Owner and Tenant profiles expose readiness instead of silent blockers', async () => {
