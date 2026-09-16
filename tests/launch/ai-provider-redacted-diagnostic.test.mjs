@@ -25,10 +25,13 @@ test('AI provider diagnostic remains protected, exact-SHA bound and redacted', a
   assert.match(workflow, /Redacted Gemini probe model/);
   assert.match(workflow, /Redacted OpenAI probe HTTP status/);
   assert.match(workflow, /Redacted OpenAI probe category/);
+  assert.match(workflow, /Redacted OpenAI 429 cause/);
   assert.match(workflow, /Redacted OpenAI probe model/);
 
   assert.doesNotMatch(workflow, /console\.log\(payload\)|console\.log\(JSON\.stringify\(payload/);
-  assert.doesNotMatch(workflow, /error\?\.message|error\.message|response\.text\(|response\.body[^?]/);
+  assert.doesNotMatch(workflow, /error\?\.message|error\.message|response\.text\(/);
+  assert.doesNotMatch(workflow, /payload\?\.error\?\.message/);
+  assert.doesNotMatch(workflow, /Redacted OpenAI probe error (?:code|type)/);
 });
 
 test('AI provider probes keep credentials out of URLs and command arguments', async () => {
@@ -46,15 +49,20 @@ test('AI provider probes keep credentials out of URLs and command arguments', as
   assert.doesNotMatch(workflow, /-H\s+["'][^"']*(?:gemini_key|openai_key|\$key)/);
 });
 
-test('AI provider probes remain bounded and emit classifications only', async () => {
+test('AI provider probes remain bounded and emit coarse 429 classifications only', async () => {
   const workflow = await readWorkflow();
 
   assert.equal((workflow.match(/setTimeout\(\(\) => controller\.abort\(\), 10_000\)/g) || []).length, 2);
   assert.equal((workflow.match(/clearTimeout\(timeout\)/g) || []).length, 2);
   assert.match(workflow, /const allowedStatuses = new Set/);
-  assert.match(workflow, /await response\.body\?\.cancel\(\)\.catch/);
+  assert.match(workflow, /const quotaCodes = new Set/);
 
   for (const category of ['ok', 'auth', 'rate-limited', 'invalid-request', 'server-error', 'network-error', 'other-http']) {
     assert.match(workflow, new RegExp(category));
   }
+  assert.match(workflow, /quota-or-spend-exhausted/);
+  assert.match(workflow, /request-rate-limit/);
+  assert.match(workflow, /other-429/);
+
+  assert.doesNotMatch(workflow, /console\.log\([^\n]*(?:code|type)[^\n]*\)/i);
 });
