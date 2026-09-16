@@ -116,3 +116,11 @@ test('active-run selector ignores completed records and retains safe diagnostics
     }],
   );
 });
+
+test(
+  'required PR validation fails closed while the production release control plane is active',
+  { skip: process.env.GITHUB_EVENT_NAME !== 'pull_request' },
+  async () => {
+    await verifyProductionReleaseMergeLock({ repository: process.env.GITHUB_REPOSITORY });
+  },
+);
