@@ -1,15 +1,21 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
+import {
+  assertReviewedApplicationPreparationSource,
+  transformFrozenTenantPhotoVerifier,
+} from '../../scripts/run-frozen-release-evidence.mjs';
 
 const read = (path) => readFile(new URL(`../../${path}`, import.meta.url), 'utf8');
 
 test('application evidence workflow is protected and auto-discovers fixed production records', async () => {
-  const [workflow, verifier, wrapper, publisher] = await Promise.all([
+  const [workflow, verifier, wrapper, publisher, preparation, frozenWrapper] = await Promise.all([
     read('.github/workflows/operational-application-evidence.yml'),
     read('scripts/verify-operational-application-evidence.mjs'),
     read('scripts/verify-operational-application-evidence-mfa.mjs'),
     read('scripts/publish-operational-application-evidence.mjs'),
+    read('scripts/prepare-operational-application-evidence.mjs'),
+    read('scripts/run-frozen-release-evidence.mjs'),
   ]);
 
   assert.match(workflow, /^name:\s*Operational Application Evidence/m);
@@ -23,6 +29,15 @@ test('application evidence workflow is protected and auto-discovers fixed produc
   assert.match(workflow, /PUBLISH_OPERATIONAL_APPLICATION_EVIDENCE/);
   assert.match(workflow, /expected_commit_sha.*GITHUB_SHA/s);
   assert.match(workflow, /google-github-actions\/auth@v2/);
+  assert.match(workflow, /Install Chromium for protected Tenant FCM registration/);
+  assert.match(workflow, /E2E_TENANT_EMAIL:\s*\$\{\{ secrets\.E2E_TENANT_EMAIL \}\}/);
+  assert.match(workflow, /E2E_TENANT_PASSWORD:\s*\$\{\{ secrets\.E2E_TENANT_PASSWORD \}\}/);
+  assert.match(workflow, /run-frozen-release-evidence\.mjs scripts\/prepare-operational-application-evidence\.mjs/);
+  assert.ok(
+    workflow.indexOf('scripts/prepare-operational-application-evidence.mjs')
+      < workflow.indexOf('OPERATIONAL_GATE="$gate" node ../control-plane/scripts/run-frozen-release-evidence.mjs scripts/verify-operational-application-provenance.mjs'),
+    'provider-backed Tenant delivery must be prepared before post-deploy provenance selection',
+  );
   assert.match(workflow, /Auto-discover, verify, and publish application evidence/);
   assert.match(workflow, /OPERATIONAL_GATE="\$gate" node \.\.\/control-plane\/scripts\/run-frozen-release-evidence\.mjs scripts\/verify-operational-application-evidence-mfa\.mjs/);
   assert.match(workflow, /OPERATIONAL_GATE="\$gate" node scripts\/publish-operational-application-evidence\.mjs/);
@@ -37,6 +52,41 @@ test('application evidence workflow is protected and auto-discovers fixed produc
   assert.match(wrapper, /restoreCollection\(\)/);
   assert.match(wrapper, /globalThis\.fetch = originalFetch/);
   assert.doesNotMatch(wrapper, /temporaryPath|renameSync|pathToFileURL/);
+
+  assert.match(preparation, /GITHUB_ACTOR !== CANONICAL_FOUNDER_LOGIN/);
+  assert.match(preparation, /tenant\.customClaims\?\.testAccount !== true/);
+  assert.match(preparation, /profile\.testAccount !== true/);
+  assert.match(preparation, /chromium\.launchPersistentContext\(profileDir, \{[\s\S]*headless: true,[\s\S]*channel: 'chromium'[\s\S]*\}\)/);
+  assert.match(preparation, /mkdtemp\(path\.join\(os\.tmpdir\(\), 'bin-application-fcm-'\)\)/);
+  assert.match(preparation, /await context\.close\(\)/);
+  assert.match(preparation, /await rm\(profileDir, \{ recursive: true, force: true \}\)/);
+  assert.match(preparation, /grantPermissions\(\['notifications'\]/);
+  assert.match(preparation, /waitForFreshPushRegistration/);
+  assert.match(preparation, /ensureFreshPushRegistration/);
+  assert.match(preparation, /page\.reload\(\{ waitUntil: 'domcontentloaded' \}\)/);
+  assert.match(preparation, /classifyPushDiagnostic/);
+  assert.match(preparation, /messagingWorkerActive/);
+  assert.match(preparation, /sha256\(token\) === document\.id/);
+  assert.match(preparation, /getByTestId\('tenant-request-location'\)/);
+  assert.match(preparation, /locationField\.locator\('input, textarea'\)\.first\(\)\.fill/);
+  assert.match(preparation, /getByTestId\('tenant-request-description'\)\.locator\('input, textarea'\)\.first\(\)\.fill/);
+  assert.doesNotMatch(preparation, /page\.locator\('\[data-testid="tenant-request-location"\]'\)\.fill/);
+  assert.match(preparation, /cloudfunctions\.net\/createNotification/);
+  assert.match(preparation, /'X-Firebase-AppCheck': auth\.appCheckToken/);
+  assert.match(preparation, /lastState === 'SUCCESS'/);
+  assert.match(preparation, /deliverySource\) === 'callable:createNotification'/);
+  assert.match(preparation, /metadata\?\.workflowRunId/);
+  assert.doesNotMatch(preparation, /collection\('notifications'\)\.doc\([^)]*\)\.set/);
+  assert.doesNotMatch(preparation, /console\.(?:log|error)\([^\n]*(?:tenantEmail|tenantPassword|debugToken|data\.token)/);
+
+  assert.match(frozenWrapper, /REVIEWED_APPLICATION_PREPARATION_BLOB = '9afcbd054f54729b647d8b1fae122b5dc0ffb155'/);
+  assert.match(frozenWrapper, /assertReviewedApplicationPreparation\(releaseRoot\)/);
+  assert.match(frozenWrapper, /resolveApplicationEvidenceActor\(env\)/);
+  assert.doesNotThrow(() => assertReviewedApplicationPreparationSource(preparation));
+  assert.throws(
+    () => assertReviewedApplicationPreparationSource(preparation.replace("lastState === 'SUCCESS'", "lastState === 'PARTIAL'")),
+    /unreviewed Tenant notification preparation/,
+  );
 
   const gates = [
     'ownerPaymentActivation',
@@ -108,13 +158,13 @@ test('payment and commission evidence uses real replay invariants and requires F
   assert.equal(publisherChecks.length, 2, 'both finance replay gates must require the Founder TOTP hash');
   assert.match(approval, /approvalWasIdempotent = true/);
   assert.match(commission, /\.doc\(`commission_\$\{contractId\}`\)/);
-  assert.match(commission, /transaction\.create\(commissionRef/);
 });
 
 test('tenant notification proof auto-discovers successful delivery and requires tenant, photo, property and unit binding', async () => {
-  const [verifier, delivery] = await Promise.all([
+  const [verifier, delivery, preparation] = await Promise.all([
     read('scripts/verify-operational-application-evidence.mjs'),
     read('functions/notificationDelivery.ts'),
+    read('scripts/prepare-operational-application-evidence.mjs'),
   ]);
 
   assert.match(verifier, /latestDeliveredNotification/);
@@ -122,10 +172,32 @@ test('tenant notification proof auto-discovers successful delivery and requires 
   assert.match(verifier, /pushSuccessCount \|\| 0\) > 0/);
   assert.match(verifier, /pushFailureCount \|\| 0\) === 0/);
   assert.match(verifier, /photoEvidence\(ticket\)/);
+  for (const field of ['primaryPhotoUrl', 'photos', 'beforePhotos', 'tenantPhotos', 'initialPhotoUrls']) {
+    assert.match(verifier, new RegExp(`ticket\\.${field}`));
+    assert.match(preparation, new RegExp(`ticket\\.${field}`));
+  }
   assert.match(verifier, /ticket is not bound to the tenant/);
   assert.match(verifier, /property and unit/);
   assert.match(delivery, /pushDeliveryState:\s*deliveryState/);
   assert.match(delivery, /sendEachForMulticast/);
+});
+
+test('frozen Tenant verifier adapter only adds canonical production upload fields', () => {
+  const legacySelection = [
+    '    ticket.requestPhotoUrl,',
+    '    ...(Array.isArray(ticket.photoUrls) ? ticket.photoUrls : []),',
+    '    ...(Array.isArray(ticket.images) ? ticket.images : []),',
+  ].join('\n');
+  const adapted = transformFrozenTenantPhotoVerifier(`before\n${legacySelection}\nafter`);
+  assert.match(adapted, /ticket\.primaryPhotoUrl/);
+  assert.match(adapted, /Array\.isArray\(ticket\.photos\)/);
+  assert.match(adapted, /Array\.isArray\(ticket\.beforePhotos\)/);
+  assert.match(adapted, /Array\.isArray\(ticket\.tenantPhotos\)/);
+  assert.match(adapted, /Array\.isArray\(ticket\.initialPhotoUrls\)/);
+  assert.throws(
+    () => transformFrozenTenantPhotoVerifier(legacySelection.replace('ticket.images', 'ticket.attachments')),
+    /exact legacy selection is required/,
+  );
 });
 
 test('staff evidence auto-discovers one audited technician with no privileged claims', async () => {

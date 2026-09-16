@@ -2,8 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
-  assertAiEvidenceIdentitySeparation,
-  transformFrozenAiVerifier,
+  assertReviewedAiVerifierSource,
 } from '../../scripts/run-frozen-release-evidence.mjs';
 
 const read = (file) => readFileSync(file, 'utf8');
@@ -94,10 +93,30 @@ test('AI provider evidence is exact-SHA, deployment-bound, protected, and hard-l
   assert.match(workflow, /production-deployment-\$\{\{ inputs\.frozen_release_sha \}\}/);
   assert.match(workflow, /verify-ai-live-evidence\.mjs/);
   assert.match(workflow, /environment: hard-public-launch/);
+  assert.match(workflow, /Record live AI probe window/);
+  assert.match(workflow, /Report redacted live-provider failure category/);
+  assert.match(workflow, /Probe Gemini endpoint with redacted status only/);
+  assert.match(workflow, /gcloud secrets versions access latest --secret=GEMINI_API_KEY/);
+  assert.match(workflow, /::add-mask::\$gemini_key/);
+  assert.match(workflow, /gemini-3\.6-flash/);
+  assert.match(workflow, /gemini-2\.5-flash/);
+  assert.match(workflow, /\[gemini-redacted-diagnostic\] model=\$\{model\} http=\$\{httpStatus\} apiStatus=\$\{apiStatus\}/);
+  assert.doesNotMatch(workflow, /payload\?\.error\?\.message/);
+  assert.doesNotMatch(workflow, /console\.log\([^\n]*(?:apiKey|gemini_key|GEMINI_DIAGNOSTIC_KEY)/);
+  assert.match(workflow, /logging\.googleapis\.com\/v2\/entries:list/);
+  assert.match(workflow, /allowedCodes = new Set/);
+  assert.match(workflow, /attempt < 4/);
+  assert.match(workflow, /entries\.map\(\(value\) => JSON\.stringify\(value\)\)/);
+  assert.match(workflow, /entry\.matchAll\(\/\\bgemini:\(\[a-z-\]\+\)\\b\/g\)/);
+  assert.doesNotMatch(workflow, /entry\.includes\('\[runSovereignAI\] Live providers unavailable'\)/);
+  assert.doesNotMatch(workflow, /forcedProvider.*gemini/);
+  assert.match(workflow, /Redacted Sovereign AI failure category/);
+  assert.doesNotMatch(workflow, /console\.(?:log|error)\((?:entry|entries|response|response\.data)/);
   assert.match(verifier, /provider: 'gemini'/);
   assert.match(verifier, /provider: 'openai'/);
   assert.match(verifier, /invalid App Check token/);
   assert.match(verifier, /rejectedAttemptUncharged/);
+  assert.match(verifier, /isolatedUsageRemoved/);
   assert.match(verifier, /providerSuccessRate/);
   assert.match(verifier, /measuredProviderUsageRequired/);
   assert.match(verifier, /maxBudgetEnvelopeAedMicrosPerChatRequest/);
@@ -107,28 +126,47 @@ test('AI provider evidence is exact-SHA, deployment-bound, protected, and hard-l
   assert.match(gate, /'aiProviderHealth'/);
 });
 
-test('frozen AI evidence uses the canonical Founder without aliasing the ephemeral E2E Admin', () => {
+test('AI evidence uses an exact reviewed run-scoped identity without touching a live user quota', () => {
   const wrapper = read('scripts/run-frozen-release-evidence.mjs');
   const workflow = read('.github/workflows/operational-provider-evidence.yml');
-  const originalBinding = 'const adminEmail = text(process.env.E2E_ADMIN_EMAIL).toLowerCase();';
-  const adapted = transformFrozenAiVerifier(originalBinding);
+  const verifier = read('scripts/verify-ai-live-evidence.mjs');
+  const publisher = read('scripts/publish-operational-provider-evidence.mjs');
 
-  assert.equal(adapted, "const adminEmail = 'ceo@bin-groups.com';");
+  assert.doesNotThrow(() => assertReviewedAiVerifierSource(verifier));
   assert.throws(
-    () => transformFrozenAiVerifier('const adminEmail = text(process.env.OTHER_EMAIL).toLowerCase();'),
-    /source drift/,
+    () => assertReviewedAiVerifierSource(verifier.replace("role: 'ai_evidence_probe'", "role: 'admin'")),
+    /unreviewed isolated AI verifier/,
   );
-  assert.doesNotThrow(() => assertAiEvidenceIdentitySeparation({ E2E_ADMIN_EMAIL: 'e2e-admin@example.test' }));
-  assert.throws(
-    () => assertAiEvidenceIdentitySeparation({ E2E_ADMIN_EMAIL: 'ceo@bin-groups.com' }),
-    /refuses to alias E2E_ADMIN_EMAIL to the canonical Founder/,
-  );
-  assert.match(wrapper, /FROZEN_AI_VERIFIER_BLOB = '6964c56352d6b50450c01bbc6e0d066c889c05e3'/);
-  assert.match(wrapper, /installReviewedAiFounderAdapter/);
-  assert.match(wrapper, /unreviewed frozen AI verifier/);
-  assert.match(wrapper, /restores\.reverse\(\)/);
-  assert.match(workflow, /E2E_ADMIN_EMAIL:\s*\$\{\{ secrets\.E2E_ADMIN_EMAIL \}\}/);
-  assert.doesNotMatch(workflow, /E2E_ADMIN_EMAIL:\s*\$\{\{ secrets\.E2E_FOUNDER_EMAIL \}\}/);
+  assert.match(wrapper, /REVIEWED_AI_VERIFIER_BLOB = '481b466417f3c5c97ceeae45c0fb395e8824f04a'/);
+  assert.match(wrapper, /assertReviewedAiVerifier\(releaseRoot\)/);
+  assert.match(workflow, /cp control-plane\/scripts\/verify-ai-live-evidence\.mjs release\/scripts\/verify-ai-live-evidence\.mjs/);
+  assert.match(workflow, /Enforce run-scoped AI evidence fallback cleanup/);
+  assert.match(workflow, /if: always\(\) && inputs\.gate == 'aiProviderHealth'/);
+  assert.match(workflow, /refusing to clean an Auth identity not owned by this exact AI evidence run/);
+  assert.match(workflow, /transaction\.get\(usageQuery\)/);
+  assert.match(workflow, /Object\.keys\(disabledUser\.customClaims \|\| \{\}\)\.length === 0/);
+  assert.doesNotMatch(workflow, /Provision run-scoped AI evidence Admin|AI_EVIDENCE_ADMIN_EMAIL|setCustomUserClaims/);
+
+  assert.match(verifier, /const evidenceUid = `ai-evidence-\$\{workflowRunId\}-\$\{workflowRunAttempt\}`/);
+  assert.match(verifier, /authAdmin\.createUser\(\{/);
+  assert.match(verifier, /authAdmin\.verifyIdToken\(idToken, true\)/);
+  assert.doesNotMatch(verifier, /payload\?\.localId/);
+  assert.match(verifier, /role: 'ai_evidence_probe'/);
+  assert.match(verifier, /transaction\.create\(profileRef/);
+  assert.match(verifier, /transaction\.create\(usageRef/);
+  assert.match(verifier, /setIsolatedQuotaBoundary/);
+  assert.match(verifier, /disableAndRevokeEvidenceAuth/);
+  assert.match(verifier, /removeEvidenceFirestore/);
+  assert.match(verifier, /deleteEvidenceAuth/);
+  assert.match(verifier, /persistentCustomClaims: false/);
+  assert.match(verifier, /canonicalFounderUsed: false/);
+  assert.doesNotMatch(verifier, /getUserByEmail|adminEmail|originalUsage|originalData|usageRef\.set/);
+  assert.doesNotMatch(verifier, /createUser\(\{[\s\S]{0,200}email:/);
+  assert.doesNotMatch(verifier, /setCustomUserClaims/);
+  assert.match(publisher, /proof\.quota\?\.isolatedUsageRemoved !== true/);
+  assert.match(publisher, /AI authenticated UID is not bound to this run attempt/);
+  assert.match(publisher, /AI run-scoped evidence identity lifecycle invalid/);
+  assert.doesNotMatch(publisher, /originalUsageRestored/);
 });
 
 test('AI observability records non-PII aggregate SLO, token and cost-envelope metrics', () => {

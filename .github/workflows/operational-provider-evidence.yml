@@ -173,10 +173,11 @@ jobs:
           ref: ${{ inputs.frozen_release_sha }}
           path: release
 
-      - name: Overlay reviewed dual-SHA publishers only
+      - name: Overlay reviewed dual-SHA publishers and isolated AI verifier only
         run: |
           cp control-plane/scripts/publish-operational-provider-evidence.mjs release/scripts/publish-operational-provider-evidence.mjs
           cp control-plane/scripts/finalize-operational-provider-evidence.mjs release/scripts/finalize-operational-provider-evidence.mjs
+          cp control-plane/scripts/verify-ai-live-evidence.mjs release/scripts/verify-ai-live-evidence.mjs
 
       - name: Use Node.js 22
         uses: actions/setup-node@v4
@@ -241,12 +242,233 @@ jobs:
         working-directory: release
         run: node ../control-plane/scripts/run-frozen-release-evidence.mjs scripts/verify-appcheck-enforcement.mjs
 
+      - name: Record live AI probe window
+        if: inputs.gate == 'aiProviderHealth'
+        run: echo "AI_EVIDENCE_PROBE_STARTED_AT=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> "$GITHUB_ENV"
+
       - name: Verify live Sovereign AI providers, privacy, quota and SLO
         if: inputs.gate == 'aiProviderHealth'
         working-directory: release
         env:
           PRODUCTION_DEPLOY_RUN_ID: ${{ inputs.production_deploy_run_id }}
         run: node ../control-plane/scripts/run-frozen-release-evidence.mjs scripts/verify-ai-live-evidence.mjs
+
+      - name: Report redacted live-provider failure category
+        if: failure() && inputs.gate == 'aiProviderHealth'
+        working-directory: release
+        run: |
+          node --input-type=module <<'NODE'
+          import { GoogleAuth } from 'google-auth-library';
+
+          const allowedCodes = new Set([
+            'timeout',
+            'rate-limited',
+            'provider-auth-failed',
+            'provider-server-error',
+            'provider-http-error',
+            'usage-metadata-invalid',
+            'usage-envelope-exceeded',
+            'empty-response',
+            'budget-exhausted',
+            'provider-failed',
+          ]);
+          const startedAt = String(process.env.AI_EVIDENCE_PROBE_STARTED_AT || '').trim();
+          const validStart = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/.test(startedAt);
+          if (!validStart) {
+            console.log('::warning::Redacted AI provider diagnostic unavailable: invalid probe timestamp.');
+            process.exit(0);
+          }
+
+          try {
+            const auth = new GoogleAuth({ scopes: ['https://www.googleapis.com/auth/cloud-platform'] });
+            const client = await auth.getClient();
+            const categories = new Set();
+            for (let attempt = 0; attempt < 4 && categories.size === 0; attempt += 1) {
+              if (attempt > 0) await new Promise((resolve) => setTimeout(resolve, 3000));
+              const response = await client.request({
+                url: 'https://logging.googleapis.com/v2/entries:list',
+                method: 'POST',
+                data: {
+                  resourceNames: ['projects/bin-group-57c60'],
+                  filter: `timestamp >= "${startedAt}" AND SEARCH("Live providers unavailable")`,
+                  orderBy: 'timestamp desc',
+                  pageSize: 100,
+                },
+              });
+              const entries = Array.isArray(response.data?.entries) ? response.data.entries : [];
+              for (const entry of entries.map((value) => JSON.stringify(value))) {
+                for (const match of entry.matchAll(/\bgemini:([a-z-]+)\b/g)) {
+                  if (allowedCodes.has(match[1])) categories.add(`gemini:${match[1]}`);
+                }
+              }
+            }
+            if (categories.size === 1) {
+              console.log(`::error::Redacted Sovereign AI failure category: ${[...categories][0]}`);
+            } else {
+              console.log('::warning::Redacted AI provider diagnostic unavailable or ambiguous; inspect protected Cloud Logging.');
+            }
+          } catch {
+            console.log('::warning::Redacted AI provider diagnostic could not read protected Cloud Logging.');
+          }
+          NODE
+
+      - name: Probe Gemini endpoint with redacted status only
+        if: failure() && inputs.gate == 'aiProviderHealth'
+        working-directory: release
+        run: |
+          set -euo pipefail
+          gemini_key="$(gcloud secrets versions access latest --secret=GEMINI_API_KEY --project="$GCP_PROJECT_ID")"
+          if [[ -z "$gemini_key" ]]; then
+            echo "::error::Redacted Gemini endpoint diagnostic: GEMINI_API_KEY is empty."
+            exit 0
+          fi
+          echo "::add-mask::$gemini_key"
+          GEMINI_DIAGNOSTIC_KEY="$gemini_key" node --input-type=module <<'NODE'
+          const models = ['gemini-3.6-flash', 'gemini-2.5-flash'];
+          const allowedStatuses = new Set([
+            'INVALID_ARGUMENT',
+            'PERMISSION_DENIED',
+            'UNAUTHENTICATED',
+            'NOT_FOUND',
+            'RESOURCE_EXHAUSTED',
+            'FAILED_PRECONDITION',
+            'UNAVAILABLE',
+            'DEADLINE_EXCEEDED',
+            'UNKNOWN',
+          ]);
+          const apiKey = String(process.env.GEMINI_DIAGNOSTIC_KEY || '');
+          for (const model of models) {
+            let httpStatus = 0;
+            let apiStatus = 'UNKNOWN';
+            let hasText = false;
+            let usagePresent = false;
+            try {
+              const controller = new AbortController();
+              const timeout = setTimeout(() => controller.abort(), 10_000);
+              const response = await fetch(
+                `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
+                {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    'x-goog-api-key': apiKey,
+                  },
+                  signal: controller.signal,
+                  body: JSON.stringify({
+                    systemInstruction: { parts: [{ text: 'Return a short operational health acknowledgement.' }] },
+                    contents: [{ role: 'user', parts: [{ text: 'health check' }] }],
+                    generationConfig: { maxOutputTokens: 32 },
+                  }),
+                },
+              );
+              clearTimeout(timeout);
+              httpStatus = response.status;
+              const payload = await response.json().catch(() => ({}));
+              const candidateStatus = String(payload?.error?.status || 'UNKNOWN').toUpperCase();
+              apiStatus = allowedStatuses.has(candidateStatus) ? candidateStatus : 'UNKNOWN';
+              hasText = Boolean(payload?.candidates?.[0]?.content?.parts?.some((part) => String(part?.text || '').trim()));
+              usagePresent = Number.isFinite(Number(payload?.usageMetadata?.totalTokenCount));
+            } catch (error) {
+              apiStatus = error?.name === 'AbortError' ? 'DEADLINE_EXCEEDED' : 'UNKNOWN';
+            }
+            console.log(
+              `[gemini-redacted-diagnostic] model=${model} http=${httpStatus} apiStatus=${apiStatus} hasText=${hasText} usagePresent=${usagePresent}`,
+            );
+          }
+          NODE
+
+      - name: Enforce run-scoped AI evidence fallback cleanup
+        if: always() && inputs.gate == 'aiProviderHealth'
+        working-directory: release
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import admin from 'firebase-admin';
+          import { initializeFirebaseAdmin, resolveFirebaseAdminProjectId } from './scripts/firebase-admin-bootstrap.mjs';
+
+          const runId = String(process.env.GITHUB_RUN_ID || '').trim();
+          const runAttempt = String(process.env.GITHUB_RUN_ATTEMPT || '').trim();
+          if (!/^\d+$/.test(runId) || !/^\d+$/.test(runAttempt)) throw new Error('invalid AI evidence cleanup run binding');
+          const uid = `ai-evidence-${runId}-${runAttempt}`;
+          const displayName = `AI Evidence Probe ${runId}/${runAttempt}`;
+
+          const projectId = resolveFirebaseAdminProjectId();
+          if (projectId !== 'bin-group-57c60') throw new Error(`unexpected Firebase project: ${projectId}`);
+          initializeFirebaseAdmin(admin, projectId);
+          const auth = admin.auth();
+          const db = admin.firestore();
+
+          let user = null;
+          try {
+            user = await auth.getUser(uid);
+          } catch (error) {
+            if (error?.code !== 'auth/user-not-found') throw error;
+          }
+
+          const authOwned = user === null || (
+            user.uid === uid
+            && user.displayName === displayName
+            && !user.email
+            && !user.phoneNumber
+            && user.providerData.length === 0
+            && Object.keys(user.customClaims || {}).length === 0
+          );
+          if (!authOwned) throw new Error('refusing to clean an Auth identity not owned by this exact AI evidence run');
+          if (user) {
+            if (!user.disabled) await auth.updateUser(uid, { disabled: true });
+            await auth.revokeRefreshTokens(uid);
+          }
+
+          const profileRef = db.collection('users').doc(uid);
+          const usageQuery = db.collection('ai_usage').where('uid', '==', uid);
+          let deletedProfile = false;
+          let deletedUsage = 0;
+          await db.runTransaction(async (transaction) => {
+            const [profile, usage] = await Promise.all([
+              transaction.get(profileRef),
+              transaction.get(usageQuery),
+            ]);
+            if (profile.exists) {
+              const data = profile.data() || {};
+              const profileOwned = data.uid === uid
+                && data.role === 'ai_evidence_probe'
+                && data.status === 'active'
+                && data.aiEvidenceOnly === true
+                && String(data.evidenceRunId || '') === runId
+                && String(data.evidenceRunAttempt || '') === runAttempt;
+              if (!profileOwned) throw new Error('refusing to clean a profile not owned by this exact AI evidence run');
+              transaction.delete(profileRef);
+              deletedProfile = true;
+            }
+            for (const doc of usage.docs) {
+              const data = doc.data() || {};
+              const day = String(data.day || '');
+              const markerOwned = data.aiEvidenceOnly === undefined || (
+                data.aiEvidenceOnly === true
+                && String(data.evidenceRunId || '') === runId
+                && String(data.evidenceRunAttempt || '') === runAttempt
+              );
+              if (data.uid !== uid || !/^\d{4}-\d{2}-\d{2}$/.test(day) || doc.id !== `${uid}_${day}` || !markerOwned) {
+                throw new Error('refusing to clean quota data not owned by this exact AI evidence run');
+              }
+              transaction.delete(doc.ref);
+              deletedUsage += 1;
+            }
+          });
+
+          if (user) {
+            const disabledUser = await auth.getUser(uid);
+            const safeToDelete = disabledUser.disabled
+              && disabledUser.displayName === displayName
+              && !disabledUser.email
+              && !disabledUser.phoneNumber
+              && disabledUser.providerData.length === 0
+              && Object.keys(disabledUser.customClaims || {}).length === 0;
+            if (!safeToDelete) throw new Error('AI evidence Auth identity changed during fallback cleanup');
+            await auth.deleteUser(uid);
+          }
+          console.log(`[ai-evidence] fallback cleanup verified auth=${Boolean(user)} profile=${deletedProfile} usage=${deletedUsage}`);
+          NODE
 
       - name: Verify live Stripe payment and exactly-once webhook replay
         if: inputs.gate == 'stripeLiveBilling'

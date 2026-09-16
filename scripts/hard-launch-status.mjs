@@ -19,7 +19,7 @@ const files = {
   deployment: path.join(launchPackage, 'production-deployment.json'),
   liveEvidence: path.join(launchPackage, 'launch-evidence-batch.json'),
   publicReleaseStatus: path.join(launchPackage, 'public-release-status.json'),
-  stripeLiveProof: path.join(launchPackage, 'stripe-live-proof.json'),
+  phase1ManualPaymentProof: path.join(launchPackage, 'phase1-manual-payment-proof.json'),
   pilotIncidentReport: path.join(launchPackage, 'pilot-incident-report.json'),
   pilotStatus: path.join(launchPackage, 'launch-status.json'),
   hardStatus: path.join(launchPackage, 'hard-launch-status.json'),
@@ -53,7 +53,7 @@ for (const key of [
   'deployment',
   'liveEvidence',
   'publicReleaseStatus',
-  'stripeLiveProof',
+  'phase1ManualPaymentProof',
   'pilotIncidentReport',
 ]) {
   const filePath = files[key];

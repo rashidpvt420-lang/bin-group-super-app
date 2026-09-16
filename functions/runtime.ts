@@ -8,6 +8,10 @@ export * from "./brokerReferralAttribution";
 export * from "./ownerOnboarding";
 export * from "./ownerPortfolioQuote";
 export * from "./secureOwnerRegistrationRequest";
+// Phase 1 keeps the retired callable name fail-closed so stale clients cannot
+// reactivate the pre-inspection payment path. This explicit export overrides the
+// historical wildcard implementation above without removing quote/onboarding helpers.
+export { submitOwnerOnboardingPaymentPackage } from "./ownerOnboardingPaymentPhase1Hold";
 // Security: keep inspectionFirstOwnerOnboarding on an explicit named export list.
 // The legacy single-inspection completion export is intentionally excluded; only
 // portfolio-safe Owner acquisition callables are deployed.

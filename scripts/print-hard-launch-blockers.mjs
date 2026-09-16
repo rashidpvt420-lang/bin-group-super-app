@@ -66,7 +66,7 @@ function printArtifactMatrix(sha) {
     'launch_package/pilot-incident-report.json',
     'launch_package/hard-launch-approval.json',
     'launch_package/public-release-status.json',
-    'launch_package/stripe-live-proof.json',
+    'launch_package/phase1-manual-payment-proof.json',
     'launch_package/hard-launch-decision.json',
   ];
   console.log('\nWorkflow artifact state in this checkout:');
@@ -115,21 +115,21 @@ function printWorkflowSequence(sha) {
   console.log('   monitoring_reference: https://github.com/rashidpvt420-lang/bin-group-super-app/issues/<CONTROLLED_PILOT_REPORT_ISSUE_NUMBER>');
   console.log('   Use a real pilot-report or monitoring URL that exists before dispatch; do not use the hard-clearance run URL before the run is created.');
 
-  console.log('\n4) Start a new public dispatch with real live Stripe proof.');
+  console.log('\n4) Start a new public dispatch with protected Phase 1 Cash/Cheque proof.');
   console.log('   Workflow: START HERE - Firebase Production Deploy');
   console.log('   confirmation: DEPLOY_PRODUCTION_BIN_GROUP_57C60');
   console.log('   hard_launch_confirmation: AUTHORIZE_HARD_PUBLIC_LAUNCH_BIN_GROUP');
   console.log('   founder_name: <AUTHORIZED_FOUNDER_NAME>');
   console.log('   founder_email: <AUTHORIZED_FOUNDER_EMAIL>');
   console.log('   launch_mode: public');
+  console.log('   payment_policy: phase1-manual');
   console.log('   run_public_release_gate: true');
   console.log('   incident_active_json: []');
   console.log('   incident_requires_rollback: false');
   console.log('   incident_rollback_reason: leave blank');
   console.log('   incident_evidence_refs: https://github.com/rashidpvt420-lang/bin-group-super-app/actions/runs/<HARD_CLEARANCE_RUN_ID>');
   console.log('   hard_clearance_run_id: <HARD_CLEARANCE_RUN_ID>');
-  console.log('   stripe_live_checkout_session_id: cs_live_...');
-  console.log('   stripe_live_webhook_event_id: evt_...');
+  console.log('   legacy Stripe proof identifiers: leave empty');
   console.log('   The launcher again derives incident_attestation and failed-deployment recovery automatically.');
 }
 
@@ -147,7 +147,7 @@ function evaluateSignedFinalDecision(sha) {
     deployment: path.resolve('launch_package', 'production-deployment.json'),
     liveEvidence: path.resolve('launch_package', 'launch-evidence-batch.json'),
     publicReleaseStatus: path.resolve('launch_package', 'public-release-status.json'),
-    stripeLiveProof: path.resolve('launch_package', 'stripe-live-proof.json'),
+    phase1ManualPaymentProof: path.resolve('launch_package', 'phase1-manual-payment-proof.json'),
     pilotIncidentReport: path.resolve('launch_package', 'pilot-incident-report.json'),
   };
 
@@ -275,8 +275,8 @@ console.log('\nWhat changes hardLaunchClaim to true:');
 console.log('- The final START HERE - Firebase Production Deploy run must use launch_mode=public.');
 console.log('- resolve-live-pilot-window.mjs must verify the exact successful live-evidence workflow run and derive a real 24-hour pilot window.');
 console.log('- The postdeploy gate must write public-release-status.json with publicReleaseCleared=true.');
-console.log('- verify-stripe-live-proof.mjs must write stripe-live-proof.json from a real cs_live_ session and evt_ webhook.');
-console.log('- hard-launch-operational-decision-gate.mjs must validate operational readiness, pilot incident, Stripe proof, and same-run artifact binding.');
+console.log('- verify-phase1-manual-payment-proof.mjs must prove the exact production Cash/Cheque configuration with Bank Transfer and Stripe disabled.');
+console.log('- hard-launch-operational-decision-gate.mjs must validate operational readiness, pilot incident, Phase 1 payment proof, and same-run artifact binding.');
 console.log('- Only scripts/hard-launch-decision-gate.mjs may write hardLaunchClaim=true. Editing JSON or source files does not clear launch.');
 console.log('- This command verifies the final HMAC signature and evidence hashes; HARD_LAUNCH_APPROVAL_HMAC_KEY is required for a GO result.');
 

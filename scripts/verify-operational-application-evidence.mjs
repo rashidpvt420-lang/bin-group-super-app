@@ -215,7 +215,12 @@ function photoEvidence(ticket) {
     ticket.evidenceUrl,
     ticket.beforePhotoUrl,
     ticket.requestPhotoUrl,
+    ticket.primaryPhotoUrl,
     ...(Array.isArray(ticket.photoUrls) ? ticket.photoUrls : []),
+    ...(Array.isArray(ticket.photos) ? ticket.photos : []),
+    ...(Array.isArray(ticket.beforePhotos) ? ticket.beforePhotos : []),
+    ...(Array.isArray(ticket.tenantPhotos) ? ticket.tenantPhotos : []),
+    ...(Array.isArray(ticket.initialPhotoUrls) ? ticket.initialPhotoUrls : []),
     ...(Array.isArray(ticket.images) ? ticket.images : []),
     ...(Array.isArray(ticket.attachments) ? ticket.attachments.map((item) => item?.url || item?.path) : []),
   ].map(text).filter(Boolean);

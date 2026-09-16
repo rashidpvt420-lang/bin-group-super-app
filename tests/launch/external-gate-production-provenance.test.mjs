@@ -24,6 +24,7 @@ test('operational application evidence is bound to the exact production deployme
   assert.match(workflow, /validatedArtifactDigest/);
 
   ordered(workflow, [
+    'run-frozen-release-evidence.mjs scripts/prepare-operational-application-evidence.mjs',
     'verify-operational-application-provenance.mjs',
     'verify-operational-application-evidence-mfa.mjs',
     'bind-operational-application-provenance.mjs',
@@ -56,10 +57,13 @@ test('application proof publisher receives deployment-bound semantic evidence', 
 
 test('privileged rotation proof requires a live Firebase Admin credential outcome', () => {
   const workflow = read('.github/workflows/privileged-access-rotation-evidence.yml');
-  assert.match(workflow, /E2E_ADMIN_BOOTSTRAP_PASSWORD:\s*\$\{\{ secrets\.E2E_ADMIN_PASSWORD \}\}/);
+  assert.doesNotMatch(workflow, /E2E_ADMIN_BOOTSTRAP_PASSWORD|secrets\.E2E_ADMIN_PASSWORD/);
+  assert.match(workflow, /const provisionalPassword = randomPassword\(\)/);
+  assert.match(workflow, /password:\s*provisionalPassword/);
   assert.match(workflow, /E2E_ADMIN_PASSWORD=\$\{rotatedPassword\}/);
   assert.doesNotMatch(workflow, /^\s+E2E_ADMIN_PASSWORD:\s*\$\{\{ secrets\.E2E_ADMIN_PASSWORD \}\}/m);
   assert.match(workflow, /VITE_FIREBASE_API_KEY:/);
+  assert.match(workflow, /cp control-plane\/scripts\/lib\/operational-proof-schema\.mjs release\/scripts\/lib\/operational-proof-schema\.mjs/);
   ordered(workflow, [
     'verify-admin-credential-login.mjs',
     'verify-privileged-access-rotation.mjs',

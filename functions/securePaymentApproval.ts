@@ -13,7 +13,7 @@ import {
 if (!admin.apps.length) admin.initializeApp();
 
 const db = admin.firestore();
-const MANUAL_PAYMENT_METHODS = new Set(["BANK_TRANSFER", "CHEQUE", "CASH"]);
+const PHASE1_RENT_PAYMENT_METHODS = new Set(["CASH", "CHEQUE"]);
 const FINANCE_ADMIN_ROLES = new Set(["admin", "super_admin", "ceo", "finance_admin"]);
 
 const text = (value: unknown) => String(value || "").trim();
@@ -75,7 +75,13 @@ async function assertOwnerActivationGate(paymentId: string) {
   if (!paymentSnap.exists) throw new HttpsError("not-found", "Payment transaction not found.");
 
   const payment = paymentSnap.data() || {};
-  if (isRentCollectionPayment(payment)) return;
+  const method = upper(payment.paymentMethod || payment.method);
+  if (isRentCollectionPayment(payment)) {
+    if (!PHASE1_RENT_PAYMENT_METHODS.has(method)) {
+      throw new HttpsError("failed-precondition", "Phase 1 rent payments may be approved only when recorded as Cash or Cheque.");
+    }
+    return;
+  }
 
   const intakeId = text(payment.intakeId);
   const ownerUid = text(payment.ownerUid || payment.ownerId);
@@ -146,30 +152,32 @@ async function assertOwnerActivationGate(paymentId: string) {
     );
   }
 
-  const method = upper(payment.paymentMethod || payment.method);
-  if (MANUAL_PAYMENT_METHODS.has(method)) {
-    const activeConfiguration = await loadActivePaymentConfiguration();
-    try {
-      const policyBinding = resolveStoredOwnerActivationPaymentBinding(payment, activeConfiguration);
-      const submittedVersion = policyBinding.paymentConfigVersion;
-      const submittedHash = policyBinding.paymentConfigHash;
-      if (
-        submittedVersion !== activeConfiguration.version ||
-        submittedHash !== activeConfiguration.configHash ||
-        !activeConfiguration.approvedMethods.includes(method)
-      ) {
-        throw new OwnerActivationPaymentPolicyError(
-          "STALE_POLICY_BINDING",
-          "The stored Owner payment policy binding changed during approval.",
-        );
-      }
-    } catch (error) {
-      if (!(error instanceof OwnerActivationPaymentPolicyError)) throw error;
-      throw new HttpsError(
-        "failed-precondition",
-        "The payment instructions used for this submission are missing, expired or no longer approved. Generate a new payment manifest.",
+  const activeConfiguration = await loadActivePaymentConfiguration();
+  if (!activeConfiguration.approvedMethods.includes(method)) {
+    throw new HttpsError(
+      "failed-precondition",
+      "This Owner activation payment method is not approved by the active Phase 1 corporate payment policy.",
+    );
+  }
+  try {
+    const policyBinding = resolveStoredOwnerActivationPaymentBinding(payment, activeConfiguration);
+    const submittedVersion = policyBinding.paymentConfigVersion;
+    const submittedHash = policyBinding.paymentConfigHash;
+    if (
+      submittedVersion !== activeConfiguration.version ||
+      submittedHash !== activeConfiguration.configHash
+    ) {
+      throw new OwnerActivationPaymentPolicyError(
+        "STALE_POLICY_BINDING",
+        "The stored Owner payment policy binding changed during approval.",
       );
     }
+  } catch (error) {
+    if (!(error instanceof OwnerActivationPaymentPolicyError)) throw error;
+    throw new HttpsError(
+      "failed-precondition",
+      "The payment instructions used for this submission are missing, expired or no longer approved. Generate a new payment manifest.",
+    );
   }
 }
 

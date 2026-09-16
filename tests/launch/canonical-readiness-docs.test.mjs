@@ -47,6 +47,21 @@ test('canonical readiness documents remain honest about production evidence', as
   assert.doesNotMatch(operations, /^\s*firebase\s+deploy\b/im);
 });
 
+test('release blockers stay aligned with the authoritative Phase-1 Cash/Cheque policy', async () => {
+  const [release, paymentConfiguration] = await Promise.all([
+    read('docs/RELEASE_BLOCKERS.md'),
+    read('functions/paymentConfiguration.ts'),
+  ]);
+
+  assert.match(paymentConfiguration, /const PHASE1_METHODS = \["CASH", "CHEQUE"\] as const;/);
+  assert.match(paymentConfiguration, /Phase 1 requires Bank Transfer and Card\/Stripe to remain disabled\./);
+
+  assert.match(release, /OPS-PAYMENT-POLICY[\s\S]*Cash and Cheque[\s\S]*Bank Transfer, Card and Stripe remain disabled/i);
+  assert.match(release, /Phase-1 payment policy fail-closed to Cash\/Cheque only/i);
+  assert.doesNotMatch(release, /OPS-STRIPE/i);
+  assert.doesNotMatch(release, /live Stripe proof/i);
+});
+
 test('operator guidance enforces canonical single-founder authority', async () => {
   const [operations, bootstrap] = await Promise.all([
     read('OPERATIONS_ONLY_CHECKLIST.md'),

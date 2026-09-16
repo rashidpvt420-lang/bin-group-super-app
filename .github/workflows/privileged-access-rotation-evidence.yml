@@ -36,8 +36,7 @@ jobs:
     environment: hard-launch-operations
     env:
       GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID || 'bin-group-57c60' }}
-      E2E_ADMIN_EMAIL: ${{ secrets.E2E_ADMIN_EMAIL }}
-      E2E_ADMIN_BOOTSTRAP_PASSWORD: ${{ secrets.E2E_ADMIN_PASSWORD }}
+      E2E_ADMIN_BOOTSTRAP_EMAIL: ${{ secrets.E2E_ADMIN_EMAIL }}
       VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
       AUTHORIZED_FOUNDER_ACTORS: ${{ secrets.AUTHORIZED_FOUNDER_ACTORS }}
       PRODUCTION_DEPLOY_RUN_ID: ${{ inputs.production_deploy_run_id }}
@@ -115,8 +114,10 @@ jobs:
           ref: ${{ inputs.frozen_release_sha }}
           path: release
 
-      - name: Overlay reviewed dual-SHA publisher only
-        run: cp control-plane/scripts/publish-direct-operational-proof.mjs release/scripts/publish-direct-operational-proof.mjs
+      - name: Overlay reviewed dual-SHA publisher and Phase 1 proof schema
+        run: |
+          cp control-plane/scripts/publish-direct-operational-proof.mjs release/scripts/publish-direct-operational-proof.mjs
+          cp control-plane/scripts/lib/operational-proof-schema.mjs release/scripts/lib/operational-proof-schema.mjs
 
       - name: Use Node.js 22
         uses: actions/setup-node@v4
@@ -176,17 +177,24 @@ jobs:
 
           const PROJECT_ID = 'bin-group-57c60';
           const FOUNDER_EMAIL = 'ceo@bin-groups.com';
-          const email = String(process.env.E2E_ADMIN_EMAIL || '').trim().toLowerCase();
-          const bootstrapPassword = String(process.env.E2E_ADMIN_BOOTSTRAP_PASSWORD || '');
+          const bootstrapEmail = String(process.env.E2E_ADMIN_BOOTSTRAP_EMAIL || '').trim().toLowerCase();
           const runId = String(process.env.GITHUB_RUN_ID || '').trim();
+          const runAttempt = String(process.env.GITHUB_RUN_ATTEMPT || '').trim();
           const commitSha = String(process.env.GITHUB_SHA || '').trim();
           const hash = (value) => crypto.createHash('sha256').update(String(value)).digest('hex');
           const randomPassword = () => `${crypto.randomBytes(36).toString('base64url')}!aA7`;
 
-          if (!/^\S+@\S+\.\S+$/.test(email)) throw new Error('E2E_ADMIN_EMAIL must be a valid protected test-admin email');
+          const at = bootstrapEmail.lastIndexOf('@');
+          if (at <= 0 || at === bootstrapEmail.length - 1) throw new Error('E2E_ADMIN_EMAIL bootstrap secret must be a valid email');
+          if (!/^\d+$/.test(runId) || !/^\d+$/.test(runAttempt) || !/^[0-9a-f]{40}$/.test(commitSha)) throw new Error('exact workflow run, attempt and commit binding are required');
+          const domain = bootstrapEmail.slice(at + 1);
+          const local = `rotation-evidence-${runId}-${runAttempt}`;
+          if (local.length > 64) throw new Error('privileged rotation run identity exceeds the email local-part limit');
+          const email = `${local}@${domain}`;
+          if (email.length > 254 || !/^\S+@\S+\.\S+$/.test(email)) throw new Error('derived privileged rotation email is invalid');
           if (email === FOUNDER_EMAIL) throw new Error('Canonical Founder protection refused privileged rotation provisioning');
-          if (bootstrapPassword.length < 12) throw new Error('E2E_ADMIN_PASSWORD bootstrap secret is missing or too short');
-          if (!/^\d+$/.test(runId) || !/^[0-9a-f]{40}$/.test(commitSha)) throw new Error('exact workflow run and commit binding are required');
+          const provisionalPassword = randomPassword();
+          console.log(`::add-mask::${provisionalPassword}`);
 
           if (!admin.apps.length) admin.initializeApp({ projectId: PROJECT_ID });
           const auth = admin.auth();
@@ -200,7 +208,7 @@ jobs:
             if (error?.code !== 'auth/user-not-found') throw error;
             user = await auth.createUser({
               email,
-              password: bootstrapPassword,
+              password: provisionalPassword,
               emailVerified: true,
               displayName: 'E2E Admin Rotation Evidence',
               disabled: true,
@@ -215,14 +223,18 @@ jobs:
             const exactTestAdmin = claims.testAccount === true
               && claims.admin === true
               && String(claims.role || '').toLowerCase() === 'admin'
+              && String(claims.rotationEvidenceRunId || '') === runId
+              && String(claims.rotationEvidenceRunAttempt || '') === runAttempt
               && profileSnap.exists
               && profile.testAccount === true
               && String(profile.role || '').toLowerCase() === 'admin'
+              && String(profile.rotationEvidenceRunId || '') === runId
+              && String(profile.rotationEvidenceRunAttempt || '') === runAttempt
               && String(profile.uid || '') === user.uid
               && String(profile.email || '').trim().toLowerCase() === email;
             if (!exactTestAdmin) throw new Error('refusing to rotate an existing account without exact E2E Admin Auth and Firestore markers');
             await auth.updateUser(user.uid, {
-              password: bootstrapPassword,
+              password: provisionalPassword,
               disabled: true,
               emailVerified: true,
               displayName: 'E2E Admin Rotation Evidence',
@@ -234,6 +246,7 @@ jobs:
             role: 'admin',
             testAccount: true,
             rotationEvidenceRunId: runId,
+            rotationEvidenceRunAttempt: runAttempt,
           };
           await auth.setCustomUserClaims(user.uid, evidenceClaims);
           await db.collection('users').doc(user.uid).set({
@@ -243,6 +256,7 @@ jobs:
             status: 'active',
             testAccount: true,
             rotationEvidenceRunId: runId,
+            rotationEvidenceRunAttempt: runAttempt,
             displayName: 'E2E Admin Rotation Evidence',
             updatedAt: admin.firestore.FieldValue.serverTimestamp(),
           }, { merge: true });
@@ -270,6 +284,7 @@ jobs:
             tokensRevokedAt,
             sourceWorkflow: 'Privileged Access Rotation Evidence',
             sourceRunId: runId,
+            sourceRunAttempt: runAttempt,
             commitSha,
             ephemeralTestAdmin: true,
             canonicalFounderProtected: true,
@@ -277,6 +292,7 @@ jobs:
             updatedAt: admin.firestore.FieldValue.serverTimestamp(),
           });
 
+          appendFileSync(process.env.GITHUB_ENV, `E2E_ADMIN_EMAIL=${email}\n`);
           appendFileSync(process.env.GITHUB_ENV, `E2E_ADMIN_PASSWORD=${rotatedPassword}\n`);
           console.log(`[privileged-rotation-bootstrap] PASS adminUidHash=${hash(user.uid).slice(0, 12)}… created=${created}`);
           NODE
@@ -324,10 +340,19 @@ jobs:
 
           const PROJECT_ID = 'bin-group-57c60';
           const FOUNDER_EMAIL = 'ceo@bin-groups.com';
-          const email = String(process.env.E2E_ADMIN_EMAIL || '').trim().toLowerCase();
+          const bootstrapEmail = String(process.env.E2E_ADMIN_BOOTSTRAP_EMAIL || '').trim().toLowerCase();
           const runId = String(process.env.GITHUB_RUN_ID || '').trim();
+          const runAttempt = String(process.env.GITHUB_RUN_ATTEMPT || '').trim();
           const hash = (value) => crypto.createHash('sha256').update(String(value)).digest('hex');
-          if (!email || email === FOUNDER_EMAIL) throw new Error('cleanup refused an invalid or Founder E2E Admin binding');
+          const at = bootstrapEmail.lastIndexOf('@');
+          if (at <= 0 || at === bootstrapEmail.length - 1) throw new Error('cleanup refused an invalid E2E Admin bootstrap binding');
+          if (!/^\d+$/.test(runId) || !/^\d+$/.test(runAttempt)) throw new Error('cleanup requires exact run and attempt binding');
+          const domain = bootstrapEmail.slice(at + 1);
+          const local = `rotation-evidence-${runId}-${runAttempt}`;
+          const email = `${local}@${domain}`;
+          if (email.length > 254 || !/^\S+@\S+\.\S+$/.test(email) || email === FOUNDER_EMAIL) {
+            throw new Error('cleanup refused an invalid or Founder E2E Admin binding');
+          }
           if (!admin.apps.length) admin.initializeApp({ projectId: PROJECT_ID });
           const auth = admin.auth();
           const db = admin.firestore();
@@ -350,10 +375,12 @@ jobs:
             && claims.admin === true
             && String(claims.role || '').toLowerCase() === 'admin'
             && String(claims.rotationEvidenceRunId || '') === runId
+            && String(claims.rotationEvidenceRunAttempt || '') === runAttempt
             && profileSnap.exists
             && profile.testAccount === true
             && String(profile.role || '').toLowerCase() === 'admin'
             && String(profile.rotationEvidenceRunId || '') === runId
+            && String(profile.rotationEvidenceRunAttempt || '') === runAttempt
             && String(profile.uid || '') === user.uid
             && String(profile.email || '').trim().toLowerCase() === email;
           if (!ownedByThisRun) throw new Error('cleanup refused to delete an Admin not owned by this exact evidence run');
@@ -367,6 +394,7 @@ jobs:
             actorRole: 'protected-workflow',
             targetIdentityHash: hash(`${user.uid}|${email}`),
             sourceRunId: runId,
+            sourceRunAttempt: runAttempt,
             canonicalFounderProtected: true,
             sensitiveValuesExcluded: true,
             createdAt: admin.firestore.FieldValue.serverTimestamp(),

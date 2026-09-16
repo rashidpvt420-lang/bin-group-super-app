@@ -11,12 +11,16 @@ import path from 'node:path';
 const EXPECTED_REPOSITORY = 'rashidpvt420-lang/bin-group-super-app';
 const PRODUCTION_PROJECT_ID = 'bin-group-57c60';
 const CANONICAL_FOUNDER_EMAIL = 'ceo@bin-groups.com';
+const CANONICAL_FOUNDER_LOGIN = 'rashidpvt420-lang';
+const OWNER_COMMAND_ISSUE = 434;
+const GITHUB_ACTIONS_BOT = 'github-actions[bot]';
 const SHA_RE = /^[0-9a-f]{40}$/;
 const RUN_ID_RE = /^\d+$/;
 const DIGEST_RE = /^sha256:[0-9a-f]{64}$/;
 
 const ALLOWED_ENTRYPOINTS = Object.freeze({
   'Operational Application Evidence/verify-and-publish': new Set([
+    'scripts/prepare-operational-application-evidence.mjs',
     'scripts/verify-operational-application-provenance.mjs',
     'scripts/verify-operational-application-evidence-mfa.mjs',
     'scripts/bind-operational-application-provenance.mjs',
@@ -49,22 +53,34 @@ const PAYMENT_POLICY_BLOBS = Object.freeze({
   'functions/ownerActivationPaymentPolicy.ts': '06f056113367bda1fca22bcdba95ab975e594f54',
 });
 const APPLICATION_VERIFIER = 'scripts/verify-operational-application-evidence.mjs';
+const APPLICATION_PREPARATION = 'scripts/prepare-operational-application-evidence.mjs';
+const REVIEWED_APPLICATION_PREPARATION_BLOB = '9afcbd054f54729b647d8b1fae122b5dc0ffb155';
 const LEGACY_ACTIVATION_CHECK = [
   '  const annual = Number(payment.data.quoteSnapshot?.annualContractValue || contract.quoteSnapshot?.annualContractValue || contract.annualContractValue || 0);',
   '  const amount = Number(payment.data.amountReceived || payment.data.quoteSnapshot?.activationDeposit || payment.data.amount || 0);',
   "  if (!Number.isFinite(annual) || annual <= 0 || !Number.isFinite(amount) || Math.abs(amount - Math.round(annual * 0.15)) > 0.01) fail('activation amount is not the locked 15% deposit');",
 ].join('\n');
+const LEGACY_TENANT_PHOTO_SELECTION = [
+  '    ticket.requestPhotoUrl,',
+  '    ...(Array.isArray(ticket.photoUrls) ? ticket.photoUrls : []),',
+  '    ...(Array.isArray(ticket.images) ? ticket.images : []),',
+].join('\n');
+const REVIEWED_TENANT_PHOTO_SELECTION = [
+  '    ticket.requestPhotoUrl,',
+  '    ticket.primaryPhotoUrl,',
+  '    ...(Array.isArray(ticket.photoUrls) ? ticket.photoUrls : []),',
+  '    ...(Array.isArray(ticket.photos) ? ticket.photos : []),',
+  '    ...(Array.isArray(ticket.beforePhotos) ? ticket.beforePhotos : []),',
+  '    ...(Array.isArray(ticket.tenantPhotos) ? ticket.tenantPhotos : []),',
+  '    ...(Array.isArray(ticket.initialPhotoUrls) ? ticket.initialPhotoUrls : []),',
+  '    ...(Array.isArray(ticket.images) ? ticket.images : []),',
+].join('\n');
 
-// The frozen AI verifier was written while the E2E Admin existed, but that
-// account is intentionally retired after protected business evidence. The AI
-// callable permits forced provider probes only for an admin-class role, and
-// the canonical Founder is an approved admin-class production role. Adapt the
-// disposable verifier checkout to that canonical principal without ever
-// changing E2E_ADMIN_EMAIL or the E2E Admin lifecycle contract.
+// AI live evidence uses a reviewed control-plane verifier over the frozen
+// deployed runtime. Pin the exact verifier blob so the dual-SHA overlay cannot
+// silently expand beyond the reviewed run-scoped quota isolation contract.
 const AI_VERIFIER = 'scripts/verify-ai-live-evidence.mjs';
-const FROZEN_AI_VERIFIER_BLOB = '6964c56352d6b50450c01bbc6e0d066c889c05e3';
-const FROZEN_AI_ADMIN_BINDING = 'const adminEmail = text(process.env.E2E_ADMIN_EMAIL).toLowerCase();';
-const FROZEN_AI_FOUNDER_BINDING = `const adminEmail = '${CANONICAL_FOUNDER_EMAIL}';`;
+const REVIEWED_AI_VERIFIER_BLOB = '481b466417f3c5c97ceeae45c0fb395e8824f04a';
 
 export function assertApplicationEvidenceCredentials(gate, env = process.env) {
   if (!['all', 'paymentUnlockExactlyOnce', 'brokerCommissionLockExactlyOnce'].includes(gate)) return;
@@ -76,11 +92,90 @@ export function assertApplicationEvidenceCredentials(gate, env = process.env) {
   }
 }
 
-export function assertAiEvidenceIdentitySeparation(env = process.env) {
-  const configuredE2eAdmin = String(env.E2E_ADMIN_EMAIL || '').trim().toLowerCase();
-  if (configuredE2eAdmin === CANONICAL_FOUNDER_EMAIL) {
-    fail('AI evidence refuses to alias E2E_ADMIN_EMAIL to the canonical Founder');
+export function assertApplicationPreparationCredentials(gate, env = process.env) {
+  if (!['all', 'tenantNotificationDelivery'].includes(gate)) {
+    fail('tenant notification preparation requires the all or tenantNotificationDelivery gate');
   }
+  const required = [
+    'E2E_TENANT_EMAIL',
+    'E2E_TENANT_PASSWORD',
+    'VITE_FIREBASE_API_KEY',
+    'VITE_FIREBASE_APP_ID',
+    'VITE_FIREBASE_APPCHECK_DEBUG_TOKEN',
+  ];
+  const missing = required.filter((name) => !String(env[name] ?? '').trim());
+  if (missing.length) fail(`missing protected Tenant notification bindings: ${missing.join(', ')}`);
+  if (String(env.E2E_BASE_URL || '').replace(/\/+$/, '') !== 'https://bin-group-57c60.web.app') {
+    fail('tenant notification preparation requires the canonical production site');
+  }
+}
+
+function fetchPublicGithubJson(url) {
+  let raw;
+  try {
+    raw = execFileSync('curl', [
+      '--fail', '--silent', '--show-error', '--location',
+      '--header', 'Accept: application/vnd.github+json',
+      '--header', 'X-GitHub-Api-Version: 2022-11-28',
+      '--header', 'User-Agent: BIN-GROUP-hard-launch-evidence',
+      url,
+    ], { encoding: 'utf8', timeout: 15000, maxBuffer: 2 * 1024 * 1024 });
+  } catch (error) {
+    fail(`could not verify protected owner-command provenance: ${error.message}`);
+  }
+  try {
+    return JSON.parse(raw);
+  } catch {
+    fail('protected owner-command provenance response was not valid JSON');
+  }
+}
+
+function verifyRecentOwnerApplicationCommand(env) {
+  const controlSha = String(env.CONTROL_PLANE_COMMIT_SHA || '').trim();
+  const releaseSha = String(env.PRODUCTION_RELEASE_SHA || '').trim();
+  const deployRunId = String(env.PRODUCTION_DEPLOY_RUN_ID || '').trim();
+  const runId = String(env.GITHUB_RUN_ID || '').trim();
+  if (!SHA_RE.test(controlSha) || !SHA_RE.test(releaseSha) || !RUN_ID_RE.test(deployRunId) || !RUN_ID_RE.test(runId)) {
+    fail('owner-command application provenance requires exact control/release SHA and numeric run bindings');
+  }
+  if (env.GITHUB_EVENT_NAME !== 'workflow_dispatch') fail('owner-command application provenance requires workflow_dispatch');
+
+  const run = fetchPublicGithubJson(`https://api.github.com/repos/${EXPECTED_REPOSITORY}/actions/runs/${runId}`);
+  if (String(run?.id || '') !== runId || run?.event !== 'workflow_dispatch' || run?.head_sha !== controlSha) {
+    fail('owner-command application provenance does not match this workflow run');
+  }
+  const runCreatedMs = Date.parse(String(run.created_at || ''));
+  if (!Number.isFinite(runCreatedMs)) fail('owner-command application workflow timestamp is invalid');
+
+  const since = new Date(runCreatedMs - 10 * 60 * 1000).toISOString();
+  const comments = fetchPublicGithubJson(
+    `https://api.github.com/repos/${EXPECTED_REPOSITORY}/issues/${OWNER_COMMAND_ISSUE}/comments?per_page=100&since=${encodeURIComponent(since)}`,
+  );
+  if (!Array.isArray(comments)) fail('owner-command provenance comments response is invalid');
+  const expectedBodies = new Set([
+    `/bin-launch evidence application-all ${controlSha} ${releaseSha} ${deployRunId}`,
+    `/bin-launch evidence application-current ${controlSha} ${releaseSha} ${deployRunId}`,
+  ]);
+  const matching = comments.filter((comment) => {
+    const createdMs = Date.parse(String(comment?.created_at || ''));
+    return comment?.user?.login === CANONICAL_FOUNDER_LOGIN
+      && comment?.author_association === 'OWNER'
+      && expectedBodies.has(String(comment?.body || '').trim())
+      && Number.isFinite(createdMs)
+      && createdMs >= runCreatedMs - 10 * 60 * 1000
+      && createdMs <= runCreatedMs + 2 * 60 * 1000;
+  });
+  if (matching.length < 1) fail('no exact recent repository-owner application evidence command authorizes this bot-dispatched run');
+  return CANONICAL_FOUNDER_LOGIN;
+}
+
+export function resolveApplicationEvidenceActor(env = process.env) {
+  const actor = String(env.GITHUB_ACTOR || '').trim();
+  if (actor === CANONICAL_FOUNDER_LOGIN) return actor;
+  if (actor !== GITHUB_ACTIONS_BOT) return actor;
+  const allowed = String(env.AUTHORIZED_FOUNDER_ACTORS || '').split(',').map((value) => value.trim()).filter(Boolean);
+  if (!allowed.includes(GITHUB_ACTIONS_BOT)) fail('GitHub Actions bot is not authorized for protected evidence dispatch');
+  return verifyRecentOwnerApplicationCommand(env);
 }
 
 function gitBlobSha(source) {
@@ -98,8 +193,6 @@ function pinnedPolicySource(releaseRoot, relativePath) {
 }
 
 export function verifyFrozenActivationPayment(payment, contract, releaseRoot = process.cwd()) {
-  // A quoted deposit is not a receipt. Explicit zero/null/blank receipt values
-  // must fail instead of falling back to a quote or another receipt field.
   const received = payment?.amountReceived !== undefined ? payment.amountReceived : payment?.amount;
   if (!['number', 'string'].includes(typeof received) || String(received).trim() === '') {
     fail('activation payment has no valid recorded received amount');
@@ -150,11 +243,23 @@ export function transformFrozenActivationVerifier(source, adapterUrl = import.me
   ].join('\n'));
 }
 
-export function transformFrozenAiVerifier(source) {
-  if (source.split(FROZEN_AI_ADMIN_BINDING).length !== 2) {
-    fail('frozen AI verifier source drift; exact E2E Admin binding is required');
+export function transformFrozenTenantPhotoVerifier(source) {
+  if (source.split(LEGACY_TENANT_PHOTO_SELECTION).length !== 2) {
+    fail('frozen Tenant photo verifier source drift; exact legacy selection is required');
   }
-  return source.replace(FROZEN_AI_ADMIN_BINDING, FROZEN_AI_FOUNDER_BINDING);
+  return source.replace(LEGACY_TENANT_PHOTO_SELECTION, REVIEWED_TENANT_PHOTO_SELECTION);
+}
+
+export function assertReviewedAiVerifierSource(source) {
+  if (gitBlobSha(source) !== REVIEWED_AI_VERIFIER_BLOB) {
+    fail('unreviewed isolated AI verifier');
+  }
+}
+
+export function assertReviewedApplicationPreparationSource(source) {
+  if (gitBlobSha(source) !== REVIEWED_APPLICATION_PREPARATION_BLOB) {
+    fail('unreviewed Tenant notification preparation');
+  }
 }
 
 function installReviewedActivationAdapter(releaseRoot) {
@@ -166,22 +271,35 @@ function installReviewedActivationAdapter(releaseRoot) {
   const adapted = transformFrozenActivationVerifier(original);
   writeFileSync(file, adapted);
   console.log(`[frozen-release-evidence] reviewed activation-policy adapter sha256=${createHash('sha256').update(adapted).digest('hex')}`);
-  // Adapt only the disposable evidence checkout. No deployment, production
-  // record mutation, or change to any other verification condition is allowed.
   return () => writeFileSync(file, original);
 }
 
-function installReviewedAiFounderAdapter(releaseRoot) {
-  const file = path.join(releaseRoot, AI_VERIFIER);
-  if (!lstatSync(file).isFile()) fail('frozen AI verifier is not a regular file');
+function installReviewedTenantPhotoAdapter(releaseRoot) {
+  const file = path.join(releaseRoot, APPLICATION_VERIFIER);
+  if (!lstatSync(file).isFile()) fail('frozen application verifier is not a regular file');
   const original = readFileSync(file, 'utf8');
-  const committed = execFileSync('git', ['show', `HEAD:${AI_VERIFIER}`], { cwd: releaseRoot, encoding: 'utf8' });
-  if (original !== committed) fail('frozen AI verifier has unreviewed working-tree changes');
-  if (gitBlobSha(original) !== FROZEN_AI_VERIFIER_BLOB) fail('unreviewed frozen AI verifier');
-  const adapted = transformFrozenAiVerifier(original);
+  const committed = execFileSync('git', ['show', `HEAD:${APPLICATION_VERIFIER}`], { cwd: releaseRoot, encoding: 'utf8' });
+  if (original !== committed) fail('frozen application verifier has unreviewed working-tree changes');
+  const adapted = transformFrozenTenantPhotoVerifier(original);
   writeFileSync(file, adapted);
-  console.log(`[frozen-release-evidence] reviewed AI Founder-principal adapter sha256=${createHash('sha256').update(adapted).digest('hex')}`);
+  console.log(`[frozen-release-evidence] reviewed Tenant photo adapter sha256=${createHash('sha256').update(adapted).digest('hex')}`);
   return () => writeFileSync(file, original);
+}
+
+function assertReviewedAiVerifier(releaseRoot) {
+  const file = path.join(releaseRoot, AI_VERIFIER);
+  if (!lstatSync(file).isFile()) fail('reviewed AI verifier is not a regular file');
+  const source = readFileSync(file);
+  assertReviewedAiVerifierSource(source);
+  console.log(`[frozen-release-evidence] reviewed isolated AI verifier sha256=${createHash('sha256').update(source).digest('hex')}`);
+}
+
+function assertReviewedApplicationPreparation(releaseRoot) {
+  const file = path.join(releaseRoot, APPLICATION_PREPARATION);
+  if (!lstatSync(file).isFile()) fail('reviewed Tenant notification preparation is not a regular file');
+  const source = readFileSync(file);
+  assertReviewedApplicationPreparationSource(source);
+  console.log(`[frozen-release-evidence] reviewed Tenant notification preparation sha256=${createHash('sha256').update(source).digest('hex')}`);
 }
 
 export function validateFrozenReleaseEvidenceContext(env, releaseRoot, entrypoint) {
@@ -231,19 +349,30 @@ export function runFrozenReleaseEvidence(entrypoint, env = process.env, releaseR
   const applicationVerification = env.GITHUB_WORKFLOW === 'Operational Application Evidence'
     && env.GITHUB_JOB === 'verify-and-publish'
     && entrypoint === 'scripts/verify-operational-application-evidence-mfa.mjs';
+  const applicationPreparation = env.GITHUB_WORKFLOW === 'Operational Application Evidence'
+    && env.GITHUB_JOB === 'verify-and-publish'
+    && entrypoint === APPLICATION_PREPARATION;
   const aiVerification = env.GITHUB_WORKFLOW === 'Operational Provider Evidence'
     && env.GITHUB_JOB === 'verify-and-publish'
     && entrypoint === AI_VERIFIER;
 
   if (applicationVerification) assertApplicationEvidenceCredentials(env.OPERATIONAL_GATE, env);
-  if (aiVerification) assertAiEvidenceIdentitySeparation(env);
+  if (applicationPreparation) {
+    assertApplicationPreparationCredentials(env.OPERATIONAL_GATE, env);
+    assertReviewedApplicationPreparation(releaseRoot);
+  }
+  if (aiVerification) assertReviewedAiVerifier(releaseRoot);
 
   const restores = [];
   if (applicationVerification && env.OPERATIONAL_GATE === 'ownerPaymentActivation') {
     restores.push(installReviewedActivationAdapter(releaseRoot));
   }
-  if (aiVerification) restores.push(installReviewedAiFounderAdapter(releaseRoot));
-
+  if (applicationVerification && env.OPERATIONAL_GATE === 'tenantNotificationDelivery') {
+    restores.push(installReviewedTenantPhotoAdapter(releaseRoot));
+  }
+  const childActor = applicationVerification || applicationPreparation
+    ? resolveApplicationEvidenceActor(env)
+    : String(env.GITHUB_ACTOR || '');
   try {
     const result = spawnSync(process.execPath, [path.resolve(releaseRoot, entrypoint)], {
       cwd: releaseRoot,
@@ -251,6 +380,7 @@ export function runFrozenReleaseEvidence(entrypoint, env = process.env, releaseR
         ...env,
         GITHUB_SHA: releaseSha,
         CLEARANCE_CONTROL_PLANE_SHA: controlPlaneSha,
+        ...((applicationVerification || applicationPreparation) && childActor ? { GITHUB_ACTOR: childActor } : {}),
       },
       stdio: 'inherit',
     });

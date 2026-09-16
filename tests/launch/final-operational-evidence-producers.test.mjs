@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
+import { validateOperationalProofDocument } from '../../scripts/lib/operational-proof-schema.mjs';
 
 const read = (path) => readFile(new URL(`../../${path}`, import.meta.url), 'utf8');
 
@@ -23,6 +24,8 @@ test('technician physical evidence is protected, canonical and requires real mob
   assert.match(workflow, /Publish canonical technician operational evidence/);
   assert.match(workflow, /publish-direct-operational-proof\.mjs/);
   assert.match(workflow, /path:\s*release\/launch_package\/operational-proof\.json/);
+  assert.match(workflow, /--arg operation verify/);
+  assert.match(workflow, /confirmation:"VERIFY_PRODUCTION_FOUNDER_TOTP"/);
 
   assert.match(verifier, /gateKey:\s*'technicianPhysicalGpsEvidence'/);
   assert.match(verifier, /evidenceType:\s*'physical-device-report'/);
@@ -79,15 +82,19 @@ test('privileged rotation evidence performs a real run-scoped E2E Admin rotation
   assert.match(workflow, /verify-privileged-access-rotation\.mjs/);
   assert.match(workflow, /Publish canonical privileged-rotation evidence/);
   assert.match(workflow, /publish-direct-operational-proof\.mjs/);
+  assert.match(workflow, /cp control-plane\/scripts\/lib\/operational-proof-schema\.mjs release\/scripts\/lib\/operational-proof-schema\.mjs/);
   assert.match(workflow, /path:\s*release\/launch_package\/operational-proof\.json/);
 
-  assert.match(workflow, /E2E_ADMIN_BOOTSTRAP_PASSWORD:\s*\$\{\{ secrets\.E2E_ADMIN_PASSWORD \}\}/);
+  assert.doesNotMatch(workflow, /E2E_ADMIN_BOOTSTRAP_PASSWORD|secrets\.E2E_ADMIN_PASSWORD/);
   assert.doesNotMatch(workflow, /^\s+E2E_ADMIN_PASSWORD:\s*\$\{\{ secrets\.E2E_ADMIN_PASSWORD \}\}/m);
   assert.doesNotMatch(workflow, /E2E_ADMIN_EMAIL:\s*\$\{\{ secrets\.E2E_FOUNDER_EMAIL \}\}/);
   assert.match(workflow, /Provision and rotate the ephemeral Admin for this evidence run/);
   assert.match(workflow, /Canonical Founder protection refused privileged rotation provisioning/);
   assert.match(workflow, /refusing to rotate an existing account without exact E2E Admin Auth and Firestore markers/);
   assert.match(workflow, /randomBytes\(36\)/);
+  assert.match(workflow, /const provisionalPassword = randomPassword\(\)/);
+  assert.match(workflow, /password:\s*provisionalPassword/);
+  assert.match(workflow, /::add-mask::\$\{provisionalPassword\}/);
   assert.match(workflow, /disabled:\s*true/);
   assert.match(workflow, /rotationEvidenceRunId:\s*runId/);
   assert.match(workflow, /auth\.setCustomUserClaims\(user\.uid, evidenceClaims\)/);
@@ -125,6 +132,61 @@ test('privileged rotation evidence performs a real run-scoped E2E Admin rotation
   assert.match(publisher, /gateKey:\s*'privilegedAccessRotation'/);
   assert.match(publisher, /evidenceType:\s*'secret-rotation-record'/);
   assert.doesNotMatch(`${workflow}\n${verifier}\n${publisher}`, /secret_name:|admin_uid:|founder_attested|manual pass|waiv/i);
+});
+
+test('privileged rotation schema models Phase 1 SMTP plus an independently verified Admin credential', () => {
+  const now = Date.UTC(2026, 8, 15, 4, 0, 0);
+  const commitSha = 'a'.repeat(40);
+  const adminUidHash = 'b'.repeat(64);
+  const observedAt = new Date(now - 60_000).toISOString();
+  const proof = {
+    schemaVersion: 1,
+    status: 'passed',
+    generatedByWorkflow: true,
+    gateKey: 'privilegedAccessRotation',
+    evidenceType: 'secret-rotation-record',
+    commitSha,
+    projectId: 'bin-group-57c60',
+    sourceRunId: '123456',
+    sourceSystem: 'Google Secret Manager and Firebase Authentication',
+    observedAt,
+    phase1PaymentPolicy: 'PHASE1_CASH_CHEQUE_V1',
+    disabledProvidersExcluded: ['STRIPE', 'BANK_TRANSFER'],
+    previousCredentialsRevoked: true,
+    rotationRecordId: 'rotation-record-123',
+    rotatedSecrets: [{
+      name: 'SMTP_PASS',
+      latestVersionId: '8',
+      rotatedAt: new Date(now - 120_000).toISOString(),
+      previousRevokedCount: 2,
+    }],
+    adminUidHash,
+    adminTokensValidAfterTime: new Date(now - 90_000).toISOString(),
+    adminCredentialLogin: {
+      status: 'passed',
+      adminUidHash,
+      adminEmailHash: 'c'.repeat(64),
+      role: 'admin',
+      authOutcome: 'password-accepted-authenticated',
+      directAuthentication: true,
+      mfaChallengeIssued: false,
+      enrolledMfaFactorCount: 0,
+      observedAt,
+    },
+    checks: [{ name: 'Phase 1 credentials rotated', status: 'passed', reference: 'secretmanager://SMTP_PASS' }],
+  };
+  const validate = (candidate) => validateOperationalProofDocument(candidate, {
+    gateKey: 'privilegedAccessRotation',
+    evidenceType: 'secret-rotation-record',
+    commitSha,
+    sourceRunId: '123456',
+    now,
+  });
+
+  assert.deepEqual(validate(proof), []);
+  assert.match(validate({ ...proof, rotatedSecrets: [...proof.rotatedSecrets, { name: 'STRIPE_SECRET_KEY' }] }).join('\n'), /exactly the active SMTP_PASS/);
+  assert.match(validate({ ...proof, adminCredentialLogin: undefined }).join('\n'), /passed live Firebase Auth result/);
+  assert.match(validate({ ...proof, adminCredentialLogin: { ...proof.adminCredentialLogin, adminUidHash: 'd'.repeat(64) } }).join('\n'), /must match the rotated Admin/);
 });
 
 test('direct operational publisher validates semantics and writes the complete canonical readiness record', async () => {
@@ -429,7 +491,8 @@ test('[founder-credential] both environments authorize and only successful expli
   const production = workflow.slice(workflow.indexOf('  verify-and-sync-founder-totp:'));
   assert.match(target, /environment: hard-public-launch/);
   assert.match(target, /GITHUB_TRIGGERING_ACTOR/);
-  assert.match(target, /SELECTED_GATE.*paymentUnlockExactlyOnce/);
+  assert.match(target, /verify\/all\|verify\/paymentUnlockExactlyOnce\|verify\/brokerCommissionLockExactlyOnce/);
+  assert.match(target, /sync\/paymentUnlockExactlyOnce\|repair-and-sync\/paymentUnlockExactlyOnce/);
   assert.match(production, /needs: authorize-founder-totp-repair/);
   assert.match(production, /environment: production/);
   assert.match(production, /group: founder-totp-credential-sync/);

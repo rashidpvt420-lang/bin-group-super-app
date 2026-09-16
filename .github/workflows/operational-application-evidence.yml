@@ -155,8 +155,10 @@ jobs:
           ref: ${{ inputs.frozen_release_sha }}
           path: release
 
-      - name: Overlay reviewed dual-SHA publisher only
-        run: cp control-plane/scripts/publish-operational-application-evidence.mjs release/scripts/publish-operational-application-evidence.mjs
+      - name: Overlay reviewed dual-SHA publisher and Tenant delivery preparation
+        run: |
+          cp control-plane/scripts/publish-operational-application-evidence.mjs release/scripts/publish-operational-application-evidence.mjs
+          cp control-plane/scripts/prepare-operational-application-evidence.mjs release/scripts/prepare-operational-application-evidence.mjs
 
       - name: Use Node.js 22
         uses: actions/setup-node@v4
@@ -172,11 +174,20 @@ jobs:
           E2E_FOUNDER_EMAIL: ${{ secrets.E2E_FOUNDER_EMAIL }}
           E2E_FOUNDER_PASSWORD: ${{ secrets.E2E_FOUNDER_PASSWORD }}
           E2E_FOUNDER_TOTP_SECRET: ${{ secrets.E2E_FOUNDER_TOTP_SECRET }}
+          E2E_TENANT_EMAIL: ${{ secrets.E2E_TENANT_EMAIL }}
+          E2E_TENANT_PASSWORD: ${{ secrets.E2E_TENANT_PASSWORD }}
+          E2E_BASE_URL: https://bin-group-57c60.web.app
         run: |
           set -euo pipefail
           node --input-type=module <<'NODE'
-          import { assertApplicationEvidenceCredentials } from './scripts/run-frozen-release-evidence.mjs';
+          import {
+            assertApplicationEvidenceCredentials,
+            assertApplicationPreparationCredentials,
+          } from './scripts/run-frozen-release-evidence.mjs';
           assertApplicationEvidenceCredentials(process.env.SELECTED_GATE, process.env);
+          if (['all', 'tenantNotificationDelivery'].includes(process.env.SELECTED_GATE)) {
+            assertApplicationPreparationCredentials(process.env.SELECTED_GATE, process.env);
+          }
           NODE
 
       - name: Authenticate Google Cloud
@@ -190,6 +201,11 @@ jobs:
       - name: Install dependencies
         working-directory: release
         run: bash scripts/npm-install-retry.sh
+
+      - name: Install Chromium for protected Tenant FCM registration
+        if: inputs.gate == 'all' || inputs.gate == 'tenantNotificationDelivery'
+        working-directory: release
+        run: npx playwright install --with-deps chromium
 
       - name: Download exact production deployment metadata
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
@@ -233,6 +249,15 @@ jobs:
             process.exit(1);
           }
           NODE
+
+      - name: Create a fresh provider-backed Tenant notification receipt
+        if: inputs.gate == 'all' || inputs.gate == 'tenantNotificationDelivery'
+        working-directory: release
+        env:
+          E2E_BASE_URL: https://bin-group-57c60.web.app
+          E2E_TENANT_EMAIL: ${{ secrets.E2E_TENANT_EMAIL }}
+          E2E_TENANT_PASSWORD: ${{ secrets.E2E_TENANT_PASSWORD }}
+        run: node ../control-plane/scripts/run-frozen-release-evidence.mjs scripts/prepare-operational-application-evidence.mjs
 
       - name: Auto-discover, verify, and publish application evidence
         working-directory: release
@@ -307,7 +332,11 @@ jobs:
           [[ "$TARGET_SHA" =~ ^[0-9a-f]{40}$ && "$TARGET_SHA" == "$GITHUB_SHA" ]]
           [[ "$RELEASE_SHA" == "15b09519222e749808c2a18b5d1ab1c3126fcb42" ]]
           [[ "$DEPLOY_RUN_ID" == "34500748478" ]]
-          [[ "$SELECTED_GATE" == "paymentUnlockExactlyOnce" ]] || { echo "::error::Credential repair is restricted to paymentUnlockExactlyOnce."; exit 1; }
+          case "$OPERATION/$SELECTED_GATE" in
+            verify/all|verify/paymentUnlockExactlyOnce|verify/brokerCommissionLockExactlyOnce) ;;
+            sync/paymentUnlockExactlyOnce|repair-and-sync/paymentUnlockExactlyOnce) ;;
+            *) echo "::error::Credential mutation is restricted to paymentUnlockExactlyOnce; read-only production verification permits the complete application batch or either MFA replay gate."; exit 1 ;;
+          esac
           case "$OPERATION/$CONFIRMATION" in
             verify/VERIFY_PRODUCTION_FOUNDER_TOTP|sync/SYNC_PRODUCTION_FOUNDER_TOTP_AND_VERIFY_PAYMENT|repair-and-sync/REPAIR_PRODUCTION_FOUNDER_PASSWORD_VERIFY_TOTP_AND_SYNC_DESTINATION) ;;
             *) echo "::error::Credential repair confirmation mismatch."; exit 1 ;;
