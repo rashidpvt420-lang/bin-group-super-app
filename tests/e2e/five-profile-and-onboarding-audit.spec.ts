@@ -108,7 +108,7 @@ test.describe('Five-profile browser audit', () => {
 
   test('Admin operational settings render in RTL and mobile while personal profile remains tracked separately', async ({ page }) => {
     test.setTimeout(120_000);
-    await loginAdminPanel(page, requireEnv('E2E_ADMIN_EMAIL'), requireEnv('E2E_ADMIN_PASSWORD'));
+    await loginAdminPanel(page, requireEnv('E2E_FOUNDER_EMAIL'), requireEnv('E2E_FOUNDER_PASSWORD'));
     await page.goto(adminUrl('/settings'), { waitUntil: 'domcontentloaded' });
     await waitForAdminLoader(page);
     await expect(page.locator('body')).not.toContainText(CRASH, { timeout: 15_000 });
@@ -122,7 +122,7 @@ test.describe('Five-profile browser audit', () => {
 
   test('Admin personal security profile executes the protected server-backed security surface', async ({ page }) => {
     test.setTimeout(120_000);
-    await loginAdminPanel(page, requireEnv('E2E_ADMIN_EMAIL'), requireEnv('E2E_ADMIN_PASSWORD'));
+    await loginAdminPanel(page, requireEnv('E2E_FOUNDER_EMAIL'), requireEnv('E2E_FOUNDER_PASSWORD'));
     await page.goto(adminUrl('/profile'), { waitUntil: 'domcontentloaded' });
     await waitForAdminLoader(page);
 
