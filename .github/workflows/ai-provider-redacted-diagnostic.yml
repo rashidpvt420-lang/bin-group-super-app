@@ -169,7 +169,25 @@ jobs:
             if (status === 0) return 'network-error';
             return 'other-http';
           };
+          const allowedErrorCodes = new Set([
+            'credit_balance_exhausted',
+            'organization_usage_limit_exceeded',
+            'organization_spend_limit_exceeded',
+            'project_spend_limit_exceeded',
+            'rate_limit_exceeded',
+          ]);
+          const allowedErrorTypes = new Set([
+            'insufficient_quota',
+            'rate_limit_error',
+          ]);
+          const safeToken = (value, allowed) => {
+            const normalized = String(value || '').trim().toLowerCase();
+            if (!normalized) return 'none';
+            return allowed.has(normalized) ? normalized : 'other';
+          };
           let httpStatus = 0;
+          let errorCode = 'none';
+          let errorType = 'none';
           const controller = new AbortController();
           const timeout = setTimeout(() => controller.abort(), 10_000);
           try {
@@ -187,7 +205,9 @@ jobs:
               }),
             });
             httpStatus = response.status;
-            await response.body?.cancel().catch(() => {});
+            const payload = await response.json().catch(() => ({}));
+            errorCode = safeToken(payload?.error?.code, allowedErrorCodes);
+            errorType = safeToken(payload?.error?.type, allowedErrorTypes);
           } catch {
             httpStatus = 0;
           } finally {
@@ -195,5 +215,7 @@ jobs:
           }
           console.log(`::notice::Redacted OpenAI probe HTTP status: ${httpStatus}`);
           console.log(`::notice::Redacted OpenAI probe category: ${classify(httpStatus)}`);
+          console.log(`::notice::Redacted OpenAI probe error code: ${errorCode}`);
+          console.log(`::notice::Redacted OpenAI probe error type: ${errorType}`);
           console.log(`::notice::Redacted OpenAI probe model: ${model}`);
           NODE
