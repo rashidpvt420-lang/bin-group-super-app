@@ -169,25 +169,14 @@ jobs:
             if (status === 0) return 'network-error';
             return 'other-http';
           };
-          const allowedErrorCodes = new Set([
+          const quotaCodes = new Set([
             'credit_balance_exhausted',
             'organization_usage_limit_exceeded',
             'organization_spend_limit_exceeded',
             'project_spend_limit_exceeded',
-            'rate_limit_exceeded',
           ]);
-          const allowedErrorTypes = new Set([
-            'insufficient_quota',
-            'rate_limit_error',
-          ]);
-          const safeToken = (value, allowed) => {
-            const normalized = String(value || '').trim().toLowerCase();
-            if (!normalized) return 'none';
-            return allowed.has(normalized) ? normalized : 'other';
-          };
           let httpStatus = 0;
-          let errorCode = 'none';
-          let errorType = 'none';
+          let causeCode = 0;
           const controller = new AbortController();
           const timeout = setTimeout(() => controller.abort(), 10_000);
           try {
@@ -205,9 +194,20 @@ jobs:
               }),
             });
             httpStatus = response.status;
-            const payload = await response.json().catch(() => ({}));
-            errorCode = safeToken(payload?.error?.code, allowedErrorCodes);
-            errorType = safeToken(payload?.error?.type, allowedErrorTypes);
+            if (httpStatus === 429) {
+              const payload = await response.json().catch(() => ({}));
+              const code = String(payload?.error?.code || '').trim().toLowerCase();
+              const type = String(payload?.error?.type || '').trim().toLowerCase();
+              if (type === 'insufficient_quota' || quotaCodes.has(code)) {
+                causeCode = 1;
+              } else if (type === 'rate_limit_error' || code === 'rate_limit_exceeded') {
+                causeCode = 2;
+              } else {
+                causeCode = 3;
+              }
+            } else {
+              await response.body?.cancel().catch(() => {});
+            }
           } catch {
             httpStatus = 0;
           } finally {
@@ -215,7 +215,8 @@ jobs:
           }
           console.log(`::notice::Redacted OpenAI probe HTTP status: ${httpStatus}`);
           console.log(`::notice::Redacted OpenAI probe category: ${classify(httpStatus)}`);
-          console.log(`::notice::Redacted OpenAI probe error code: ${errorCode}`);
-          console.log(`::notice::Redacted OpenAI probe error type: ${errorType}`);
+          if (causeCode === 1) console.log('::notice::Redacted OpenAI 429 cause: quota-or-spend-exhausted');
+          if (causeCode === 2) console.log('::notice::Redacted OpenAI 429 cause: request-rate-limit');
+          if (causeCode === 3) console.log('::notice::Redacted OpenAI 429 cause: other-429');
           console.log(`::notice::Redacted OpenAI probe model: ${model}`);
           NODE
