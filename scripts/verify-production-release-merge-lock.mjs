@@ -24,14 +24,13 @@ export function selectActiveReleaseRuns(workflowPath, workflowRuns) {
 }
 
 async function githubJson(url, token, fetchImpl) {
-  const response = await fetchImpl(url, {
-    headers: {
-      Accept: 'application/vnd.github+json',
-      Authorization: `Bearer ${token}`,
-      'X-GitHub-Api-Version': '2022-11-28',
-    },
-  });
+  const headers = {
+    Accept: 'application/vnd.github+json',
+    'X-GitHub-Api-Version': '2022-11-28',
+  };
+  if (token) headers.Authorization = `Bearer ${token}`;
 
+  const response = await fetchImpl(url, { headers });
   if (!response.ok) {
     throw new Error(`GitHub Actions lookup failed with HTTP ${response.status}.`);
   }
@@ -41,15 +40,12 @@ async function githubJson(url, token, fetchImpl) {
 
 export async function verifyProductionReleaseMergeLock({
   repository = process.env.GITHUB_REPOSITORY,
-  token = process.env.GITHUB_TOKEN || process.env.GH_TOKEN,
+  token = process.env.GITHUB_TOKEN || process.env.GH_TOKEN || '',
   apiUrl = process.env.GITHUB_API_URL || 'https://api.github.com',
   fetchImpl = fetch,
 } = {}) {
   if (!repository || !/^[^/]+\/[^/]+$/.test(repository)) {
     throw new Error('GITHUB_REPOSITORY must be set to owner/repository.');
-  }
-  if (!token) {
-    throw new Error('GITHUB_TOKEN is required to verify the production release merge lock.');
   }
 
   const active = [];
