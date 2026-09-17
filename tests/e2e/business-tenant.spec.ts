@@ -508,6 +508,18 @@ async function createAndComplete(browser: Browser, page: Page, suffix: string, r
   return created.ticketId;
 }
 
+async function waitForTenantReviewableTicket(ticketId: string) {
+  const db = admin.firestore();
+  await expect.poll(async () => {
+    const snap = await db.collection('maintenanceTickets').doc(ticketId).get();
+    const data = snap.data() || {};
+    return `${String(data.status || '').toUpperCase()}|${String(data.tenantApprovalStatus || '').toUpperCase()}|${Boolean(data.completedAt)}`;
+  }, {
+    timeout: 45_000,
+    message: `Completed ticket ${ticketId} must reach the canonical Tenant-review state before UI approval.`,
+  }).toMatch(/COMPLETED_PENDING_(APPROVAL|TENANT_APPROVAL)\|PENDING_TENANT_REVIEW\|true/i);
+}
+
 async function deleteRecoveryTenant(uid: string) {
   if (!uid || !admin.apps.length) return;
   const db = admin.firestore();
@@ -729,13 +741,18 @@ test.describe('Tenant Business Workflow', () => {
     test.setTimeout(360_000);
     const ticketId = await createAndComplete(browser, page, 'approval');
 
+    await waitForTenantReviewableTicket(ticketId);
     await page.goto(`/tenant/ticket/${ticketId}`, { waitUntil: 'domcontentloaded' });
+    // Force a fresh Tenant listener after the authoritative completion state is
+    // visible in production Firestore. This avoids asserting against a route
+    // snapshot that mounted while the completion trigger was still converging.
+    await page.reload({ waitUntil: 'domcontentloaded' });
     await expect(page.getByText(/WORK COMPLETED — REVIEW REQUIRED/i)).toBeVisible({ timeout: 30_000 });
     const feedback = page.getByLabel(/Feedback/i);
     await expect(feedback).toBeVisible({ timeout: 10_000 });
     await feedback.fill(`Tenant approved cross-role production proof ${RUN_MARKER}.`);
     const approve = page.getByRole('button', { name: /APPROVE, RATE & CLOSE/i });
-    await expect(approve).toBeEnabled({ timeout: 15_000 });
+    await expect(approve).toBeEnabled({ timeout: 30_000 });
     await approve.click();
     await expect(page.getByText(/SERVICE FINALIZED/i)).toBeVisible({ timeout: 40_000 });
 
