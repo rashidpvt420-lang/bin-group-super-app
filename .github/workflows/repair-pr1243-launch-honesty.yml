@@ -1,0 +1,126 @@
+name: Repair PR 1243 launch honesty contracts
+
+on:
+  push:
+    branches:
+      - fix/postdeploy-evidence-recovery-20260916
+    paths:
+      - .github/workflows/repair-pr1243-launch-honesty.yml
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout exact PR branch
+        uses: actions/checkout@v4
+        with:
+          ref: fix/postdeploy-evidence-recovery-20260916
+          fetch-depth: 0
+
+      - name: Apply exact current contract repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          workflow_files = [
+              Path('.github/workflows/live-role-smoke.yml'),
+              Path('.github/workflows/operational-application-evidence.yml'),
+              Path('.github/workflows/operational-provider-evidence.yml'),
+              Path('.github/workflows/privileged-access-rotation-evidence.yml'),
+              Path('.github/workflows/technician-physical-evidence.yml'),
+          ]
+
+          old_allow = r'scripts/run-frozen-release-evidence\.mjs|scripts/verify-hard-launch-approval\.mjs'
+          new_allow = r'scripts/run-frozen-release-evidence\.mjs|scripts/verify-ai-live-evidence\.mjs|scripts/verify-hard-launch-approval\.mjs'
+          allow_replacements = 0
+          for path in workflow_files:
+              text = path.read_text(encoding='utf-8')
+              count = text.count(old_allow)
+              print(f'{path}: missing-verify-ai occurrences={count}')
+              allow_replacements += count
+              path.write_text(text.replace(old_allow, new_allow), encoding='utf-8')
+
+          if allow_replacements != 6:
+              raise SystemExit(f'expected exactly 6 primary-allowlist repairs, found {allow_replacements}')
+
+          repaired_allow_count = sum(path.read_text(encoding='utf-8').count(new_allow) for path in workflow_files)
+          supplemental_loop = '[[ -z "$file" || "$file" =~ $allowed || "$file" =~ $supplemental_allowed ]] ||'
+          supplemental_loop_count = sum(path.read_text(encoding='utf-8').count(supplemental_loop) for path in workflow_files)
+          if repaired_allow_count != 6:
+              raise SystemExit(f'expected 6 verify-ai primary allowlists after repair, found {repaired_allow_count}')
+          if supplemental_loop_count != 6:
+              raise SystemExit(f'expected 6 supplemental-consuming loops to remain, found {supplemental_loop_count}')
+
+          test_path = Path('tests/launch/final-operational-evidence-producers.test.mjs')
+          test_text = test_path.read_text(encoding='utf-8')
+          old_assert = '  assert.match(workflow, /if:\\s*always\\(\\)/);'
+          new_assert = "  assert.match(workflow, /if:\\s*\\$\\{\\{\\s*always\\(\\)\\s*&&\\s*hashFiles\\('release\\/package\\.json'\\)\\s*!=\\s*''\\s*\\}\\}/);"
+          assert_count = test_text.count(old_assert)
+          if assert_count != 1:
+              raise SystemExit(f'expected exactly one stale cleanup assertion, found {assert_count}')
+          test_path.write_text(test_text.replace(old_assert, new_assert), encoding='utf-8')
+
+          privileged = Path('.github/workflows/privileged-access-rotation-evidence.yml').read_text(encoding='utf-8')
+          if "if: ${{ always() && hashFiles('release/package.json') != '' }}" not in privileged:
+              raise SystemExit('privileged cleanup guard was not preserved')
+
+          same_sha_count = sum(path.read_text(encoding='utf-8').count('Empty control-plane delta is only valid for an exact same-SHA pair.') for path in workflow_files)
+          if same_sha_count != 6:
+              raise SystemExit(f'expected 6 same-SHA fail-closed guards, found {same_sha_count}')
+
+          print('primary allowlist repairs=6')
+          print('supplemental-consuming loops preserved=6')
+          print('same-SHA guards preserved=6')
+          print('privileged cleanup guard preserved=true')
+          print('stale producer assertion repaired=1')
+          PY
+
+          git diff --check
+
+      - name: Run focused launch-honesty regression suites
+        run: |
+          set -euo pipefail
+          node --test tests/launch/final-operational-evidence-producers.test.mjs
+          node --test tests/launch/hard-clearance-revalidation.test.mjs
+
+      - name: Commit only the verified repair and remove bootstrap
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+
+          git add \
+            .github/workflows/live-role-smoke.yml \
+            .github/workflows/operational-application-evidence.yml \
+            .github/workflows/operational-provider-evidence.yml \
+            .github/workflows/privileged-access-rotation-evidence.yml \
+            .github/workflows/technician-physical-evidence.yml \
+            tests/launch/final-operational-evidence-producers.test.mjs
+          git rm .github/workflows/repair-pr1243-launch-honesty.yml
+
+          actual="$(git diff --cached --name-only | sort)"
+          expected="$(printf '%s\n' \
+            .github/workflows/live-role-smoke.yml \
+            .github/workflows/operational-application-evidence.yml \
+            .github/workflows/operational-provider-evidence.yml \
+            .github/workflows/privileged-access-rotation-evidence.yml \
+            .github/workflows/technician-physical-evidence.yml \
+            .github/workflows/repair-pr1243-launch-honesty.yml \
+            tests/launch/final-operational-evidence-producers.test.mjs | sort)"
+          [[ "$actual" == "$expected" ]] || {
+            echo '::error::Unexpected staged file set'
+            printf 'ACTUAL:\n%s\nEXPECTED:\n%s\n' "$actual" "$expected"
+            exit 1
+          }
+
+          git diff --cached --check
+          git commit -m 'Restore launch evidence control-plane contract'
+          git push origin HEAD:fix/postdeploy-evidence-recovery-20260916
