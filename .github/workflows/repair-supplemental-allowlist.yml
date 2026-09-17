@@ -1,0 +1,84 @@
+name: Repair supplemental allowlist consumption
+
+on:
+  push:
+    branches:
+      - fix/postdeploy-evidence-recovery-20260916
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repair branch
+        uses: actions/checkout@v4
+        with:
+          ref: fix/postdeploy-evidence-recovery-20260916
+          fetch-depth: 0
+
+      - name: Apply the six fail-closed loop repairs
+        shell: bash
+        run: |
+          set -euo pipefail
+          files=(
+            .github/workflows/live-role-smoke.yml
+            .github/workflows/operational-application-evidence.yml
+            .github/workflows/operational-provider-evidence.yml
+            .github/workflows/privileged-access-rotation-evidence.yml
+            .github/workflows/technician-physical-evidence.yml
+          )
+
+          before="$(grep -hF '[[ -z "$file" || "$file" =~ $allowed ]] ||' "${files[@]}" | wc -l | tr -d ' ')"
+          [[ "$before" == "6" ]] || {
+            echo "::error::Expected exactly 6 unconsumed supplemental allowlist loops; found $before."
+            exit 1
+          }
+
+          python3 - <<'PY'
+          from pathlib import Path
+
+          files = [
+              Path('.github/workflows/live-role-smoke.yml'),
+              Path('.github/workflows/operational-application-evidence.yml'),
+              Path('.github/workflows/operational-provider-evidence.yml'),
+              Path('.github/workflows/privileged-access-rotation-evidence.yml'),
+              Path('.github/workflows/technician-physical-evidence.yml'),
+          ]
+          old = '[[ -z "$file" || "$file" =~ $allowed ]] ||'
+          new = '[[ -z "$file" || "$file" =~ $allowed || "$file" =~ $supplemental_allowed ]] ||'
+          total = 0
+          for path in files:
+              text = path.read_text()
+              count = text.count(old)
+              total += count
+              path.write_text(text.replace(old, new))
+          if total != 6:
+              raise SystemExit(f'expected 6 replacements, made {total}')
+          PY
+
+          after="$(grep -hF '[[ -z "$file" || "$file" =~ $allowed ]] ||' "${files[@]}" | wc -l | tr -d ' ')"
+          consumed="$(grep -hF '[[ -z "$file" || "$file" =~ $allowed || "$file" =~ $supplemental_allowed ]] ||' "${files[@]}" | wc -l | tr -d ' ')"
+          [[ "$after" == "0" ]] || { echo "::error::$after unconsumed loops remain."; exit 1; }
+          [[ "$consumed" == "6" ]] || { echo "::error::Expected 6 repaired loops; found $consumed."; exit 1; }
+
+          git diff --check
+          git diff -- "${files[@]}"
+
+      - name: Commit and push repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add \
+            .github/workflows/live-role-smoke.yml \
+            .github/workflows/operational-application-evidence.yml \
+            .github/workflows/operational-provider-evidence.yml \
+            .github/workflows/privileged-access-rotation-evidence.yml \
+            .github/workflows/technician-physical-evidence.yml
+          git diff --cached --quiet && { echo '::error::No repair diff produced.'; exit 1; }
+          git commit -m 'Fix supplemental control-plane allowlist consumption'
+          git push origin HEAD:fix/postdeploy-evidence-recovery-20260916
