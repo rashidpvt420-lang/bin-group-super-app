@@ -386,3 +386,125 @@ test('hard launch status binds eligibility to the checked-out frozen release SHA
   assert.match(approval, /expectedSha !== commitSha/);
   assert.doesNotMatch(approval, /const commitSha = String\(process\.env\.GITHUB_SHA/);
 });
+
+test('control-plane scope verifier supports exact same-SHA pairs, approved control-plane diffs, and fails closed on runtime changes', async () => {
+  const workflow = await read('.github/workflows/operational-application-evidence.yml');
+  const allowlistPattern = workflow.match(/allowed='([^'\n]+)'/)?.[1];
+  assert.ok(allowlistPattern, 'control-plane allowlist pattern is missing');
+  const allowedRegex = new RegExp(allowlistPattern);
+
+  function verifyControlPlaneScope({ releaseSha, controlPlaneSha, changedFiles }) {
+    if (changedFiles.length === 0) {
+      if (releaseSha !== controlPlaneSha) {
+        throw new Error('Empty control-plane delta is only valid for an exact same-SHA pair.');
+      }
+      return 'Exact same-SHA release/control-plane pair verified.';
+    }
+
+    for (const file of changedFiles) {
+      if (!file || !allowedRegex.test(file)) {
+        throw new Error(`Non-control-plane file changed since frozen release: ${file}`);
+      }
+    }
+    return 'CONTROL_PLANE_SCOPE_VERIFIED=true';
+  }
+
+  const shaA = '9849d9d6027f6bdf0f9d3e7e5a0b8b5e4d9d3c69';
+  const shaB = '1111111111111111111111111111111111111111';
+
+  // Case 1: same SHA succeeds with empty diff
+  assert.equal(
+    verifyControlPlaneScope({ releaseSha: shaA, controlPlaneSha: shaA, changedFiles: [] }),
+    'Exact same-SHA release/control-plane pair verified.',
+  );
+
+  // Failure mode for empty diff: different SHA with empty diff fails closed
+  assert.throws(
+    () => verifyControlPlaneScope({ releaseSha: shaA, controlPlaneSha: shaB, changedFiles: [] }),
+    /Empty control-plane delta is only valid for an exact same-SHA pair\./,
+  );
+
+  // Case 2: different SHA with only approved control-plane files succeeds
+  assert.equal(
+    verifyControlPlaneScope({
+      releaseSha: shaA,
+      controlPlaneSha: shaB,
+      changedFiles: [
+        '.github/workflows/operational-application-evidence.yml',
+        '.github/workflows/operational-provider-evidence.yml',
+        '.github/workflows/privileged-access-rotation-evidence.yml',
+        '.github/workflows/technician-physical-evidence.yml',
+        '.github/workflows/live-role-smoke.yml',
+        'scripts/publish-operational-application-evidence.mjs',
+        'scripts/hard-clearance-production-revalidation.mjs',
+        'tests/launch/hard-clearance-revalidation.test.mjs',
+      ],
+    }),
+    'CONTROL_PLANE_SCOPE_VERIFIED=true',
+  );
+
+  // Case 3: different SHA containing any application/runtime file fails closed
+  assert.throws(
+    () => verifyControlPlaneScope({
+      releaseSha: shaA,
+      controlPlaneSha: shaB,
+      changedFiles: [
+        '.github/workflows/operational-application-evidence.yml',
+        'src/App.tsx',
+      ],
+    }),
+    /Non-control-plane file changed since frozen release: src\/App\.tsx/,
+  );
+
+  assert.throws(
+    () => verifyControlPlaneScope({
+      releaseSha: shaA,
+      controlPlaneSha: shaB,
+      changedFiles: ['functions/index.ts'],
+    }),
+    /Non-control-plane file changed since frozen release: functions\/index\.ts/,
+  );
+
+  assert.throws(
+    () => verifyControlPlaneScope({
+      releaseSha: shaA,
+      controlPlaneSha: shaB,
+      changedFiles: ['package.json'],
+    }),
+    /Non-control-plane file changed since frozen release: package\.json/,
+  );
+
+  assert.throws(
+    () => verifyControlPlaneScope({
+      releaseSha: shaA,
+      controlPlaneSha: shaB,
+      changedFiles: ['dist/bundle.js'],
+    }),
+    /Non-control-plane file changed since frozen release: dist\/bundle\.js/,
+  );
+});
+
+test('all operational workflows enforce same-SHA allowance and privileged rotation cleanup guards', async () => {
+  const operationalWorkflows = [
+    '.github/workflows/operational-application-evidence.yml',
+    '.github/workflows/operational-provider-evidence.yml',
+    '.github/workflows/privileged-access-rotation-evidence.yml',
+    '.github/workflows/technician-physical-evidence.yml',
+    '.github/workflows/live-role-smoke.yml',
+  ];
+
+  for (const file of operationalWorkflows) {
+    const content = await read(file);
+    // Must NOT require non-empty diff
+    assert.doesNotMatch(content, /No reviewed control-plane repair exists/);
+    assert.doesNotMatch(content, /No reviewed clearance-control repair exists/);
+    // Must contain exact same-SHA check
+    assert.match(content, /Empty control-plane delta is only valid for an exact same-SHA pair\./);
+    assert.match(content, /Exact same-SHA release\/control-plane pair verified\./);
+  }
+
+  // Privileged rotation cleanup must be guarded so it doesn't fail when release checkout is absent
+  const privContent = await read('.github/workflows/privileged-access-rotation-evidence.yml');
+  assert.match(privContent, /if:\s*\$\{\{\s*always\(\)\s*&&\s*hashFiles\('release\/package\.json'\)\s*!=\s*''\s*\}\}/);
+});
+

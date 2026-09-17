@@ -1,14 +1,20 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { execSync } from 'node:child_process';
 import { existsSync, mkdirSync } from 'node:fs';
+import { buildSync } from 'esbuild';
 
 // Dynamically bundle the TypeScript pricing engine to a temporary ESM JavaScript file
 // so that Node can import it without needing custom TS loaders.
 if (!existsSync('.tmp')) {
   mkdirSync('.tmp');
 }
-execSync('npx esbuild src/utils/calculateUaeQuote2026.ts --bundle --platform=node --format=esm --outfile=.tmp/pricing-engine.js', { stdio: 'ignore' });
+buildSync({
+  entryPoints: ['src/utils/calculateUaeQuote2026.ts'],
+  bundle: true,
+  platform: 'node',
+  format: 'esm',
+  outfile: '.tmp/pricing-engine.js',
+});
 
 const { calculateUaeQuote2026 } = await import('../../.tmp/pricing-engine.js');
 
