@@ -1,17 +1,17 @@
-name: Admin MFA Enrollment (Retired)
+name: RECOVERY - Admin MFA Enrollment (Retired)
 
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   retired:
+    name: Refuse parallel production deployment
     runs-on: ubuntu-latest
     steps:
-      - name: Refuse parallel production deployment
-        env:
-          ADMIN_MFA_BOOTSTRAP_HOSTING: retired
+      - name: Use canonical protected Admin MFA bootstrap
         run: |
-          echo "::error::Admin MFA recovery is no longer a deploy path. Use the protected production deployment workflow for normal releases."
-          echo "Emergency recovery must use a reviewed replacement workflow with the standard production build contract."
-          echo "ADMIN_MFA_BOOTSTRAP_HOSTING is retained only as a fail-closed retirement marker."
+          echo "::error::This parallel Admin MFA recovery deployment is retired. Dispatch Firebase Production Deploy in bank-pilot mode with incident_evidence_refs exactly ADMIN_MFA_BOOTSTRAP_HOSTING."
           exit 1
