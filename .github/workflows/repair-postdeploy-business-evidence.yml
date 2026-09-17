@@ -1,0 +1,150 @@
+name: Repair Postdeploy Business Evidence
+
+on:
+  push:
+    branches:
+      - fix/postdeploy-business-evidence-20260917
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/postdeploy-business-evidence-20260917
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Apply deterministic postdeploy evidence repairs
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          tenant = Path('tests/e2e/business-tenant.spec.ts')
+          text = tenant.read_text()
+          old = '''    await page.goto(`/tenant/ticket/${ticketId}`, { waitUntil: 'domcontentloaded' });
+    await expect(page.getByText(/WORK COMPLETED — REVIEW REQUIRED/i)).toBeVisible({ timeout: 30_000 });
+    const feedback = page.getByLabel(/Feedback/i);
+    await expect(feedback).toBeVisible({ timeout: 10_000 });
+    await feedback.fill(`Tenant approved cross-role production proof ${RUN_MARKER}.`);
+    const approve = page.getByRole('button', { name: /APPROVE, RATE & CLOSE/i });
+    await expect(approve).toBeEnabled({ timeout: 15_000 });
+'''
+          new = '''    const db = admin.firestore();
+    await expect.poll(async () => {
+      const snap = await db.collection('maintenanceTickets').doc(ticketId).get();
+      const data = snap.data() || {};
+      return {
+        status: String(data.status || '').toUpperCase(),
+        approval: String(data.tenantApprovalStatus || '').toUpperCase(),
+        technicianCompleted: Boolean(data.technicianCompletedAt),
+      };
+    }, {
+      timeout: 45_000,
+      message: 'Completed ticket must be reviewable before Tenant approval.',
+    }).toMatchObject({
+      status: expect.stringMatching(/COMPLETED_PENDING_(APPROVAL|TENANT_APPROVAL)/),
+      approval: 'PENDING_TENANT_REVIEW',
+      technicianCompleted: true,
+    });
+
+    await page.goto(`/tenant/ticket/${ticketId}`, { waitUntil: 'domcontentloaded' });
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await expect(page.getByText(/WORK COMPLETED — REVIEW REQUIRED/i)).toBeVisible({ timeout: 30_000 });
+    const feedback = page.getByLabel(/Feedback/i);
+    await expect(feedback).toBeVisible({ timeout: 15_000 });
+    await feedback.fill(`Tenant approved cross-role production proof ${RUN_MARKER}.`);
+    const approve = page.getByRole('button', { name: /APPROVE, RATE & CLOSE/i });
+    await expect(approve).toBeEnabled({ timeout: 30_000 });
+'''
+          if old not in text:
+              raise SystemExit('Tenant target block not found; refusing non-deterministic patch')
+          text = text.replace(old, new, 1)
+          # The replacement introduces db before the existing closure-state poll.
+          text = text.replace("\n    const db = admin.firestore();\n    await expect.poll(async () => {\n      const snap = await db.collection('maintenanceTickets').doc(ticketId).get();\n      const data = snap.data() || {};\n      return `${String(data.status || '').toUpperCase()}|${data.tenantApproved}|${data.tenantApprovalStatus}|${data.finalApproval}`;\n", "\n    await expect.poll(async () => {\n      const snap = await db.collection('maintenanceTickets').doc(ticketId).get();\n      const data = snap.data() || {};\n      return `${String(data.status || '').toUpperCase()}|${data.tenantApproved}|${data.tenantApprovalStatus}|${data.finalApproval}`;\n", 1)
+          tenant.write_text(text)
+
+          broker = Path('tests/e2e/business-broker.spec.ts')
+          text = broker.read_text()
+          old = '''    await page.goto('/broker/commissions', { waitUntil: 'domcontentloaded' });
+    await expect(page.locator('body')).not.toContainText(/permission-denied|missing or insufficient permissions/i, { timeout: 10_000 });
+    await expect(page.getByText(/Finance & Payouts/i)).toBeVisible({ timeout: 15_000 });
+    await expect(page.locator('body')).toContainText(/PENDING SETTLEMENT|APPROVED FOR PAYOUT|LIFETIME EARNED/i, { timeout: 15_000 });
+
+    const requestOtp = page.getByTestId('broker-payout-request-otp');
+    await expect(requestOtp).toBeVisible({ timeout: 15_000 });
+'''
+          new = '''    await page.goto('/broker/commissions', { waitUntil: 'domcontentloaded' });
+    await expect(page.locator('body')).not.toContainText(/permission-denied|missing or insufficient permissions/i, { timeout: 10_000 });
+    await expect.poll(async () => {
+      return page.getByText(/Finance & Payouts/i).isVisible().catch(() => false);
+    }, {
+      timeout: 30_000,
+      message: 'Broker commissions dashboard must finish identity/profile resolution.',
+    }).toBe(true);
+    await expect(page.locator('body')).toContainText(/PENDING SETTLEMENT|APPROVED FOR PAYOUT|LIFETIME EARNED/i, { timeout: 30_000 });
+
+    const requestOtp = page.getByTestId('broker-payout-request-otp');
+    await expect(requestOtp).toBeVisible({ timeout: 30_000 });
+'''
+          if old not in text:
+              raise SystemExit('Broker target block not found; refusing non-deterministic patch')
+          broker.write_text(text.replace(old, new, 1))
+
+          owner = Path('tests/e2e/business-owner.spec.ts')
+          text = owner.read_text()
+          old = '''function runOwnerSuiteCommand(mode: 'lifecycle' | 'restore-shared-fixtures') {
+  execFileSync(process.execPath, ['scripts/run-owner-business-suite-evidence.mjs', mode], {
+    cwd: repositoryRoot,
+    env: process.env,
+    stdio: 'inherit',
+    timeout: 18 * 60 * 1000,
+  });
+}
+'''
+          new = '''function runOwnerSuiteCommand(mode: 'lifecycle' | 'restore-shared-fixtures') {
+  try {
+    execFileSync(process.execPath, ['scripts/run-owner-business-suite-evidence.mjs', mode], {
+      cwd: repositoryRoot,
+      env: process.env,
+      stdio: 'inherit',
+      timeout: 18 * 60 * 1000,
+    });
+  } catch (error: any) {
+    const diagnostics = [
+      evidencePath,
+      path.resolve(repositoryRoot, 'launch_package/artifacts'),
+    ];
+    console.error(`Owner evidence command failed in mode=${mode}`);
+    console.error(`exitCode=${error?.status ?? 'unknown'}`);
+    console.error(`signal=${error?.signal ?? 'none'}`);
+    console.error(`diagnostics=${diagnostics.join(', ')}`);
+    throw error;
+  }
+}
+'''
+          if old not in text:
+              raise SystemExit('Owner target block not found; refusing non-deterministic patch')
+          owner.write_text(text.replace(old, new, 1))
+
+          Path('.github/workflows/repair-postdeploy-business-evidence.yml').unlink()
+          PY
+      - name: Validate repaired files
+        run: |
+          npm ci
+          npm run typecheck
+          npm run test:launch-honesty
+      - name: Commit deterministic repair
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add tests/e2e/business-tenant.spec.ts tests/e2e/business-broker.spec.ts tests/e2e/business-owner.spec.ts .github/workflows/repair-postdeploy-business-evidence.yml
+          git commit -m 'Fix postdeploy business evidence convergence'
+          git push origin HEAD:fix/postdeploy-business-evidence-20260917
