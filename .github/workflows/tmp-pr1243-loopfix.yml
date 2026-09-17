@@ -1,0 +1,138 @@
+name: Temporary PR 1243 supplemental allowlist repair
+
+on:
+  push:
+    branches:
+      - tmp/pr1243-loopfix-build-20260917
+
+permissions:
+  contents: write
+
+concurrency:
+  group: tmp-pr1243-loopfix
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout helper branch
+        uses: actions/checkout@v4
+        with:
+          ref: tmp/pr1243-loopfix-build-20260917
+          fetch-depth: 0
+
+      - name: Verify exact staging ancestry
+        shell: bash
+        run: |
+          set -euo pipefail
+          parent="$(git rev-parse HEAD^)"
+          [[ "$parent" == "1bb234044f045688a52032dfaebb9da4dd5bf70e" ]] || {
+            echo "::error::Helper branch did not start from the expected PR #1243 head."
+            exit 1
+          }
+
+      - name: Apply exactly six supplemental allowlist loop repairs
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require('fs');
+          const expected = new Map([
+            ['.github/workflows/live-role-smoke.yml', 1],
+            ['.github/workflows/operational-application-evidence.yml', 2],
+            ['.github/workflows/operational-provider-evidence.yml', 1],
+            ['.github/workflows/privileged-access-rotation-evidence.yml', 1],
+            ['.github/workflows/technician-physical-evidence.yml', 1],
+          ]);
+          const oldText = '[[ -z "$file" || "$file" =~ $allowed ]]';
+          const newText = '[[ -z "$file" || "$file" =~ $allowed || "$file" =~ $supplemental_allowed ]]';
+          let beforeTotal = 0;
+          for (const [file, expectedCount] of expected) {
+            const source = fs.readFileSync(file, 'utf8');
+            const count = source.split(oldText).length - 1;
+            if (count !== expectedCount) throw new Error(`${file}: expected ${expectedCount} old conditions, found ${count}`);
+            beforeTotal += count;
+          }
+          if (beforeTotal !== 6) throw new Error(`Expected exactly 6 old conditions, found ${beforeTotal}`);
+          for (const [file] of expected) {
+            const source = fs.readFileSync(file, 'utf8');
+            fs.writeFileSync(file, source.split(oldText).join(newText), 'utf8');
+          }
+          let repaired = 0;
+          let stale = 0;
+          for (const [file, expectedCount] of expected) {
+            const source = fs.readFileSync(file, 'utf8');
+            const newCount = source.split(newText).length - 1;
+            const oldCount = source.split(oldText).length - 1;
+            if (newCount !== expectedCount) throw new Error(`${file}: expected ${expectedCount} repaired conditions, found ${newCount}`);
+            if (oldCount !== 0) throw new Error(`${file}: stale conditions remain: ${oldCount}`);
+            repaired += newCount;
+            stale += oldCount;
+          }
+          if (repaired !== 6 || stale !== 0) throw new Error(`Repair verification failed: repaired=${repaired}, stale=${stale}`);
+          console.log('LOOPS_UPDATED=6/6');
+          NODE
+
+      - name: Verify exact repair scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check
+          expected="$(printf '%s\n' \
+            .github/workflows/live-role-smoke.yml \
+            .github/workflows/operational-application-evidence.yml \
+            .github/workflows/operational-provider-evidence.yml \
+            .github/workflows/privileged-access-rotation-evidence.yml \
+            .github/workflows/technician-physical-evidence.yml | sort)"
+          actual="$(git diff --name-only | sort)"
+          [[ "$actual" == "$expected" ]] || {
+            echo '::error::Repair changed files outside the exact five-workflow scope.'
+            printf 'Expected:\n%s\nActual:\n%s\n' "$expected" "$actual"
+            exit 1
+          }
+          git diff -- \
+            .github/workflows/live-role-smoke.yml \
+            .github/workflows/operational-application-evidence.yml \
+            .github/workflows/operational-provider-evidence.yml \
+            .github/workflows/privileged-access-rotation-evidence.yml \
+            .github/workflows/technician-physical-evidence.yml
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies
+        run: bash scripts/npm-install-retry.sh
+
+      - name: Hard-clearance revalidation regression
+        run: node --test tests/launch/hard-clearance-revalidation.test.mjs
+
+      - name: Provider evidence audit regression
+        run: node --test tests/launch/operational-provider-evidence-audit.test.mjs
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Commit validated net repair to helper branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm .github/workflows/tmp-pr1243-loopfix.yml
+          git add \
+            .github/workflows/live-role-smoke.yml \
+            .github/workflows/operational-application-evidence.yml \
+            .github/workflows/operational-provider-evidence.yml \
+            .github/workflows/privileged-access-rotation-evidence.yml \
+            .github/workflows/technician-physical-evidence.yml \
+            .github/workflows/tmp-pr1243-loopfix.yml
+          git diff --cached --check
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'Use supplemental control-plane allowlist'
+          git push origin HEAD:tmp/pr1243-loopfix-build-20260917
