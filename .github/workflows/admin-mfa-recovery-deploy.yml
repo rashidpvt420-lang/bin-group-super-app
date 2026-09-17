@@ -1,9 +1,8 @@
 name: TEMP - Repair supplemental control-plane scope
 
 on:
-  push:
-    branches:
-      - fix/postdeploy-evidence-recovery-20260916
+  pull_request:
+    types: [synchronize]
   workflow_dispatch:
 
 permissions:
@@ -11,7 +10,7 @@ permissions:
 
 jobs:
   repair:
-    if: github.ref == 'refs/heads/fix/postdeploy-evidence-recovery-20260916'
+    if: github.event_name == 'pull_request' && github.head_ref == 'fix/postdeploy-evidence-recovery-20260916'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -24,7 +23,6 @@ jobs:
           set -euo pipefail
           python - <<'PY'
           from pathlib import Path
-
           paths = [
               Path('.github/workflows/live-role-smoke.yml'),
               Path('.github/workflows/operational-application-evidence.yml'),
