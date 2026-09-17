@@ -19,24 +19,10 @@ jobs:
           ref: fix/postdeploy-evidence-recovery-20260916
           fetch-depth: 0
 
-      - name: Apply the six fail-closed loop repairs
+      - name: Apply fail-closed loop repairs
         shell: bash
         run: |
           set -euo pipefail
-          files=(
-            .github/workflows/live-role-smoke.yml
-            .github/workflows/operational-application-evidence.yml
-            .github/workflows/operational-provider-evidence.yml
-            .github/workflows/privileged-access-rotation-evidence.yml
-            .github/workflows/technician-physical-evidence.yml
-          )
-
-          before="$(grep -hF '[[ -z "$file" || "$file" =~ $allowed ]] ||' "${files[@]}" | wc -l | tr -d ' ')"
-          [[ "$before" == "6" ]] || {
-            echo "::error::Expected exactly 6 unconsumed supplemental allowlist loops; found $before."
-            exit 1
-          }
-
           python3 - <<'PY'
           from pathlib import Path
 
@@ -53,19 +39,25 @@ jobs:
           for path in files:
               text = path.read_text()
               count = text.count(old)
+              print(f'{path}: unconsumed={count}')
               total += count
               path.write_text(text.replace(old, new))
+          print(f'total replacements={total}')
           if total != 6:
-              raise SystemExit(f'expected 6 replacements, made {total}')
+              raise SystemExit(f'expected exactly 6 replacements, made {total}')
+          remaining = sum(path.read_text().count(old) for path in files)
+          repaired = sum(path.read_text().count(new) for path in files)
+          print(f'remaining={remaining} repaired={repaired}')
+          if remaining != 0 or repaired < 6:
+              raise SystemExit('supplemental allowlist consumption verification failed')
           PY
-
-          after="$(grep -hF '[[ -z "$file" || "$file" =~ $allowed ]] ||' "${files[@]}" | wc -l | tr -d ' ')"
-          consumed="$(grep -hF '[[ -z "$file" || "$file" =~ $allowed || "$file" =~ $supplemental_allowed ]] ||' "${files[@]}" | wc -l | tr -d ' ')"
-          [[ "$after" == "0" ]] || { echo "::error::$after unconsumed loops remain."; exit 1; }
-          [[ "$consumed" == "6" ]] || { echo "::error::Expected 6 repaired loops; found $consumed."; exit 1; }
-
           git diff --check
-          git diff -- "${files[@]}"
+          git diff -- \
+            .github/workflows/live-role-smoke.yml \
+            .github/workflows/operational-application-evidence.yml \
+            .github/workflows/operational-provider-evidence.yml \
+            .github/workflows/privileged-access-rotation-evidence.yml \
+            .github/workflows/technician-physical-evidence.yml
 
       - name: Commit and push repair
         shell: bash
