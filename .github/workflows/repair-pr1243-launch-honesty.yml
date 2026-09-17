@@ -37,8 +37,8 @@ jobs:
               Path('.github/workflows/technician-physical-evidence.yml'),
           ]
 
-          old_allow = r'scripts/run-frozen-release-evidence\.mjs|scripts/verify-hard-launch-approval\.mjs'
-          new_allow = r'scripts/run-frozen-release-evidence\.mjs|scripts/verify-ai-live-evidence\.mjs|scripts/verify-hard-launch-approval\.mjs'
+          old_allow = r'scripts/run-frozen-release-evidence\\.mjs|scripts/verify-hard-launch-approval\\.mjs'
+          new_allow = r'scripts/run-frozen-release-evidence\\.mjs|scripts/verify-ai-live-evidence\\.mjs|scripts/verify-hard-launch-approval\\.mjs'
           allow_replacements = 0
           for path in workflow_files:
               text = path.read_text(encoding='utf-8')
@@ -124,3 +124,5 @@ jobs:
           git diff --cached --check
           git commit -m 'Restore launch evidence control-plane contract'
           git push origin HEAD:fix/postdeploy-evidence-recovery-20260916
+
+# Triggered after CI diagnostics identified the exact three launch-honesty contract failures.
