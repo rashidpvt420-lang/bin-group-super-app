@@ -1,91 +1,14 @@
-name: TEMP - Repair supplemental control-plane scope
+name: Retired - Admin MFA Recovery Deploy
 
 on:
-  pull_request:
-    types: [synchronize]
   workflow_dispatch:
 
-permissions:
-  contents: write
-
 jobs:
-  repair:
-    if: github.event_name == 'pull_request' && github.head_ref == 'fix/postdeploy-evidence-recovery-20260916'
+  retired:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: fix/postdeploy-evidence-recovery-20260916
-          fetch-depth: 0
-      - name: Patch all six protected scope loops
-        shell: bash
+      - name: Retired workflow
         run: |
-          set -euo pipefail
-          python - <<'PY'
-          from pathlib import Path
-          paths = [
-              Path('.github/workflows/live-role-smoke.yml'),
-              Path('.github/workflows/operational-application-evidence.yml'),
-              Path('.github/workflows/operational-provider-evidence.yml'),
-              Path('.github/workflows/privileged-access-rotation-evidence.yml'),
-              Path('.github/workflows/technician-physical-evidence.yml'),
-          ]
-          old = '[[ -z "$file" || "$file" =~ $allowed ]] || {'
-          new = '[[ -z "$file" || "$file" =~ $allowed || "$file" =~ $supplemental_allowed ]] || {'
-          expected = {
-              '.github/workflows/live-role-smoke.yml': 1,
-              '.github/workflows/operational-application-evidence.yml': 2,
-              '.github/workflows/operational-provider-evidence.yml': 1,
-              '.github/workflows/privileged-access-rotation-evidence.yml': 1,
-              '.github/workflows/technician-physical-evidence.yml': 1,
-          }
-          total = 0
-          for path in paths:
-              text = path.read_text()
-              count = text.count(old)
-              want = expected[str(path)]
-              if count != want:
-                  raise SystemExit(f'{path}: expected {want} unpatched loop(s), found {count}')
-              path.write_text(text.replace(old, new))
-              total += count
-          if total != 6:
-              raise SystemExit(f'expected exactly 6 replacements, got {total}')
-          print(f'Patched {total} protected scope loops.')
-          PY
-      - name: Restore retired recovery workflow and verify patch
-        shell: bash
-        run: |
-          set -euo pipefail
-          git show origin/main:.github/workflows/admin-mfa-recovery-deploy.yml > .github/workflows/admin-mfa-recovery-deploy.yml
-          matches="$(grep -R -F '[[ -z "$file" || "$file" =~ $allowed || "$file" =~ $supplemental_allowed ]] || {' \
-            .github/workflows/live-role-smoke.yml \
-            .github/workflows/operational-application-evidence.yml \
-            .github/workflows/operational-provider-evidence.yml \
-            .github/workflows/privileged-access-rotation-evidence.yml \
-            .github/workflows/technician-physical-evidence.yml | wc -l)"
-          [[ "$matches" -eq 6 ]] || { echo "::error::Expected exactly six repaired loops, found $matches"; exit 1; }
-          if grep -R -F '[[ -z "$file" || "$file" =~ $allowed ]] || {' \
-            .github/workflows/live-role-smoke.yml \
-            .github/workflows/operational-application-evidence.yml \
-            .github/workflows/operational-provider-evidence.yml \
-            .github/workflows/privileged-access-rotation-evidence.yml \
-            .github/workflows/technician-physical-evidence.yml; then
-            echo "::error::An unpatched protected scope loop remains."
-            exit 1
-          fi
-      - name: Commit and push narrow repair
-        shell: bash
-        run: |
-          set -euo pipefail
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add .github/workflows/live-role-smoke.yml \
-                  .github/workflows/operational-application-evidence.yml \
-                  .github/workflows/operational-provider-evidence.yml \
-                  .github/workflows/privileged-access-rotation-evidence.yml \
-                  .github/workflows/technician-physical-evidence.yml \
-                  .github/workflows/admin-mfa-recovery-deploy.yml
-          git diff --cached --check
-          git diff --cached --quiet && { echo '::error::No repair diff produced.'; exit 1; }
-          git commit -m 'Fix supplemental control-plane scope validation'
-          git push origin HEAD:fix/postdeploy-evidence-recovery-20260916
+          echo "::error::Admin MFA recovery is no longer a deploy path. Use the protected production deployment workflow for normal releases."
+          echo "Emergency recovery must use a reviewed replacement workflow with the standard production build contract."
+          exit 1
