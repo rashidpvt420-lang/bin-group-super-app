@@ -7,86 +7,13 @@ on:
     branches: [main]
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: bin-group-ci-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  repair-supplemental-scope:
-    name: Repair supplemental control-plane scope
-    if: github.event_name == 'pull_request' && github.head_ref == 'fix/postdeploy-evidence-recovery-20260916'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repair branch
-        uses: actions/checkout@v4
-        with:
-          ref: fix/postdeploy-evidence-recovery-20260916
-          fetch-depth: 0
-      - name: Apply exact six-loop repair
-        shell: bash
-        run: |
-          set -euo pipefail
-          python - <<'PY'
-          from pathlib import Path
-          expected = {
-              '.github/workflows/live-role-smoke.yml': 1,
-              '.github/workflows/operational-application-evidence.yml': 2,
-              '.github/workflows/operational-provider-evidence.yml': 1,
-              '.github/workflows/privileged-access-rotation-evidence.yml': 1,
-              '.github/workflows/technician-physical-evidence.yml': 1,
-          }
-          old = '[[ -z "$file" || "$file" =~ $allowed ]] || {'
-          new = '[[ -z "$file" || "$file" =~ $allowed || "$file" =~ $supplemental_allowed ]] || {'
-          total = 0
-          for name, want in expected.items():
-              path = Path(name)
-              text = path.read_text()
-              count = text.count(old)
-              if count != want:
-                  raise SystemExit(f'{name}: expected {want} unpatched loop(s), found {count}')
-              path.write_text(text.replace(old, new))
-              total += count
-          if total != 6:
-              raise SystemExit(f'expected exactly six replacements, got {total}')
-          print(f'Patched exactly {total} protected scope loops.')
-          PY
-          git show origin/main:.github/workflows/ci.yml > .github/workflows/ci.yml
-          git show origin/main:.github/workflows/admin-mfa-recovery-deploy.yml > .github/workflows/admin-mfa-recovery-deploy.yml
-          matches="$(grep -R -F '[[ -z "$file" || "$file" =~ $allowed || "$file" =~ $supplemental_allowed ]] || {' \
-            .github/workflows/live-role-smoke.yml \
-            .github/workflows/operational-application-evidence.yml \
-            .github/workflows/operational-provider-evidence.yml \
-            .github/workflows/privileged-access-rotation-evidence.yml \
-            .github/workflows/technician-physical-evidence.yml | wc -l)"
-          [[ "$matches" -eq 6 ]] || { echo "::error::Expected six repaired loops, found $matches"; exit 1; }
-          if grep -R -F '[[ -z "$file" || "$file" =~ $allowed ]] || {' \
-            .github/workflows/live-role-smoke.yml \
-            .github/workflows/operational-application-evidence.yml \
-            .github/workflows/operational-provider-evidence.yml \
-            .github/workflows/privileged-access-rotation-evidence.yml \
-            .github/workflows/technician-physical-evidence.yml; then
-            echo '::error::An unpatched protected scope loop remains.'
-            exit 1
-          fi
-      - name: Commit and push repair
-        shell: bash
-        run: |
-          set -euo pipefail
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add .github/workflows/ci.yml \
-                  .github/workflows/admin-mfa-recovery-deploy.yml \
-                  .github/workflows/live-role-smoke.yml \
-                  .github/workflows/operational-application-evidence.yml \
-                  .github/workflows/operational-provider-evidence.yml \
-                  .github/workflows/privileged-access-rotation-evidence.yml \
-                  .github/workflows/technician-physical-evidence.yml
-          git diff --cached --check
-          git commit -m 'Fix supplemental control-plane scope validation'
-          git push origin HEAD:fix/postdeploy-evidence-recovery-20260916
-
   build-and-test:
     name: Install, build, and test
     runs-on: ubuntu-latest
