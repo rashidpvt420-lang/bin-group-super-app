@@ -1,4 +1,4 @@
-name: Retired - Admin MFA Recovery Deploy
+name: Admin MFA Enrollment (Retired)
 
 on:
   workflow_dispatch:
@@ -7,8 +7,11 @@ jobs:
   retired:
     runs-on: ubuntu-latest
     steps:
-      - name: Retired workflow
+      - name: Refuse parallel production deployment
+        env:
+          ADMIN_MFA_BOOTSTRAP_HOSTING: retired
         run: |
           echo "::error::Admin MFA recovery is no longer a deploy path. Use the protected production deployment workflow for normal releases."
           echo "Emergency recovery must use a reviewed replacement workflow with the standard production build contract."
+          echo "ADMIN_MFA_BOOTSTRAP_HOSTING is retained only as a fail-closed retirement marker."
           exit 1
