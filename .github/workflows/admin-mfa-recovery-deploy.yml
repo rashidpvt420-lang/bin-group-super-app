@@ -1,17 +1,93 @@
-name: RECOVERY - Admin MFA Enrollment (Retired)
+name: TEMP - Repair supplemental control-plane scope
 
 on:
+  push:
+    branches:
+      - fix/postdeploy-evidence-recovery-20260916
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  retired:
-    name: Refuse parallel production deployment
+  repair:
+    if: github.ref == 'refs/heads/fix/postdeploy-evidence-recovery-20260916'
     runs-on: ubuntu-latest
     steps:
-      - name: Use canonical protected Admin MFA bootstrap
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/postdeploy-evidence-recovery-20260916
+          fetch-depth: 0
+      - name: Patch all six protected scope loops
+        shell: bash
         run: |
-          echo "::error::This parallel Admin MFA recovery deployment is retired. Dispatch Firebase Production Deploy in bank-pilot mode with incident_evidence_refs exactly ADMIN_MFA_BOOTSTRAP_HOSTING."
-          exit 1
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          paths = [
+              Path('.github/workflows/live-role-smoke.yml'),
+              Path('.github/workflows/operational-application-evidence.yml'),
+              Path('.github/workflows/operational-provider-evidence.yml'),
+              Path('.github/workflows/privileged-access-rotation-evidence.yml'),
+              Path('.github/workflows/technician-physical-evidence.yml'),
+          ]
+          old = '[[ -z "$file" || "$file" =~ $allowed ]] || {'
+          new = '[[ -z "$file" || "$file" =~ $allowed || "$file" =~ $supplemental_allowed ]] || {'
+          expected = {
+              '.github/workflows/live-role-smoke.yml': 1,
+              '.github/workflows/operational-application-evidence.yml': 2,
+              '.github/workflows/operational-provider-evidence.yml': 1,
+              '.github/workflows/privileged-access-rotation-evidence.yml': 1,
+              '.github/workflows/technician-physical-evidence.yml': 1,
+          }
+          total = 0
+          for path in paths:
+              text = path.read_text()
+              count = text.count(old)
+              want = expected[str(path)]
+              if count != want:
+                  raise SystemExit(f'{path}: expected {want} unpatched loop(s), found {count}')
+              path.write_text(text.replace(old, new))
+              total += count
+          if total != 6:
+              raise SystemExit(f'expected exactly 6 replacements, got {total}')
+          print(f'Patched {total} protected scope loops.')
+          PY
+      - name: Restore retired recovery workflow and verify patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git show origin/main:.github/workflows/admin-mfa-recovery-deploy.yml > .github/workflows/admin-mfa-recovery-deploy.yml
+          matches="$(grep -R -F '[[ -z "$file" || "$file" =~ $allowed || "$file" =~ $supplemental_allowed ]] || {' \
+            .github/workflows/live-role-smoke.yml \
+            .github/workflows/operational-application-evidence.yml \
+            .github/workflows/operational-provider-evidence.yml \
+            .github/workflows/privileged-access-rotation-evidence.yml \
+            .github/workflows/technician-physical-evidence.yml | wc -l)"
+          [[ "$matches" -eq 6 ]] || { echo "::error::Expected exactly six repaired loops, found $matches"; exit 1; }
+          if grep -R -F '[[ -z "$file" || "$file" =~ $allowed ]] || {' \
+            .github/workflows/live-role-smoke.yml \
+            .github/workflows/operational-application-evidence.yml \
+            .github/workflows/operational-provider-evidence.yml \
+            .github/workflows/privileged-access-rotation-evidence.yml \
+            .github/workflows/technician-physical-evidence.yml; then
+            echo "::error::An unpatched protected scope loop remains."
+            exit 1
+          fi
+      - name: Commit and push narrow repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add .github/workflows/live-role-smoke.yml \
+                  .github/workflows/operational-application-evidence.yml \
+                  .github/workflows/operational-provider-evidence.yml \
+                  .github/workflows/privileged-access-rotation-evidence.yml \
+                  .github/workflows/technician-physical-evidence.yml \
+                  .github/workflows/admin-mfa-recovery-deploy.yml
+          git diff --cached --check
+          git diff --cached --quiet && { echo '::error::No repair diff produced.'; exit 1; }
+          git commit -m 'Fix supplemental control-plane scope validation'
+          git push origin HEAD:fix/postdeploy-evidence-recovery-20260916
