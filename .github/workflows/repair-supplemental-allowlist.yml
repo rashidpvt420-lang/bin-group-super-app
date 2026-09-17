@@ -25,7 +25,6 @@ jobs:
           set -euo pipefail
           python3 - <<'PY'
           from pathlib import Path
-
           files = [
               Path('.github/workflows/live-role-smoke.yml'),
               Path('.github/workflows/operational-application-evidence.yml'),
@@ -52,14 +51,8 @@ jobs:
               raise SystemExit('supplemental allowlist consumption verification failed')
           PY
           git diff --check
-          git diff -- \
-            .github/workflows/live-role-smoke.yml \
-            .github/workflows/operational-application-evidence.yml \
-            .github/workflows/operational-provider-evidence.yml \
-            .github/workflows/privileged-access-rotation-evidence.yml \
-            .github/workflows/technician-physical-evidence.yml
 
-      - name: Commit and push repair
+      - name: Build repair commit and publish object
         shell: bash
         run: |
           set -euo pipefail
@@ -73,4 +66,6 @@ jobs:
             .github/workflows/technician-physical-evidence.yml
           git diff --cached --quiet && { echo '::error::No repair diff produced.'; exit 1; }
           git commit -m 'Fix supplemental control-plane allowlist consumption'
-          git push origin HEAD:fix/postdeploy-evidence-recovery-20260916
+          echo "REPAIR_COMMIT_SHA=$(git rev-parse HEAD)"
+          git push origin HEAD:refs/heads/tmp/pr1243-loopfix-object || true
+          echo "REPAIR_COMMIT_SHA_AFTER_PUSH=$(git rev-parse HEAD)"
