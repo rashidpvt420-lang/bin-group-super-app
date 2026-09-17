@@ -107,7 +107,7 @@ test('privileged rotation evidence performs a real run-scoped E2E Admin rotation
   assert.match(workflow, /::add-mask::\$\{rotatedPassword\}/);
   assert.match(workflow, /E2E_ADMIN_PASSWORD=\$\{rotatedPassword\}/);
   assert.match(workflow, /Retire only this run's ephemeral Admin/);
-  assert.match(workflow, /if:\s*always\(\)/);
+  assert.match(workflow, /if:\s*\$\{\{\s*always\(\)\s*&&\s*hashFiles\('release\/package\.json'\)\s*!=\s*''\s*\}\}/);
   assert.match(workflow, /cleanup refused to delete an Admin not owned by this exact evidence run/);
   assert.match(workflow, /auth\.deleteUser\(user\.uid\)/);
   assert.match(workflow, /PRIVILEGED_ROTATION_E2E_ADMIN_RETIRED/);
@@ -210,9 +210,9 @@ test('direct operational publisher validates semantics and writes the complete c
 // No credentials, Firebase requests or GitHub writes are used by these tests.
 const credentialProgram = async () => {
   const workflow = await read('.github/workflows/operational-application-evidence.yml');
-  const match = workflow.match(/node --input-type=module <<'FOUNDER_TOTP_REPAIR'\n([\s\S]*?)\n\s+FOUNDER_TOTP_REPAIR/m);
+  const match = workflow.match(/node --input-type=module <<'FOUNDER_TOTP_REPAIR'\r?\n([\s\S]*?)\r?\n\s+FOUNDER_TOTP_REPAIR/m);
   assert.ok(match, 'the reviewed inline credential program must exist');
-  const source = match[1].replace(/^ {10}/gm, '');
+  const source = match[1].replace(/^ {10}/gm, '').replace(/\r\n/g, '\n');
   const library = source.split('// BEGIN PROTECTED EXECUTION')[0];
   return { workflow, source, api: await import(`data:text/javascript;base64,${Buffer.from(library).toString('base64')}`) };
 };

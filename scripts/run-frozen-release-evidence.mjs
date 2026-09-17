@@ -179,7 +179,8 @@ export function resolveApplicationEvidenceActor(env = process.env) {
 }
 
 function gitBlobSha(source) {
-  const buffer = Buffer.isBuffer(source) ? source : Buffer.from(source);
+  const text = (typeof source === 'string' ? source : Buffer.isBuffer(source) ? source.toString('utf8') : String(source)).replace(/\r\n/g, '\n');
+  const buffer = Buffer.from(text, 'utf8');
   return createHash('sha1').update(`blob ${buffer.length}\0`).update(buffer).digest('hex');
 }
 
