@@ -184,17 +184,26 @@ async function seed() {
         }
       }
 
-      // Set Custom Claims
-      await auth.setCustomUserClaims(authUser.uid, user.claims);
-      console.log(`Claims set for ${email}: ${JSON.stringify(user.claims)}`);
+      const authoritativeClaims = {
+        ...(user.claims || {}),
+        role: user.role,
+        userRole: user.role,
+        primaryRole: user.role,
+        active: true,
+      };
+      await auth.setCustomUserClaims(authUser.uid, authoritativeClaims);
+      console.log(`Claims set for ${email}: ${JSON.stringify(authoritativeClaims)}`);
 
-      // Write to Firestore users collection
       const profileRef = db.collection('users').doc(authUser.uid);
       await profileRef.set({
         uid: authUser.uid,
         email,
         role: user.role,
+        userRole: user.role,
+        primaryRole: user.role,
         status: 'active',
+        approvalStatus: 'approved',
+        suspended: false,
         testAccount: true,
         displayName: user.displayName,
         onboardingComplete: true,
@@ -204,6 +213,27 @@ async function seed() {
       }, { merge: true });
       console.log(`Firestore profile synced for ${email} in users/${authUser.uid}`);
 
+      // Fail before Playwright if the account used by the browser is not actually
+      // launch-ready in both Firebase Auth and the authoritative users profile.
+      const refreshed = await auth.getUser(authUser.uid);
+      const profileSnap = await profileRef.get();
+      const profile = profileSnap.data() || {};
+      if (
+        refreshed.disabled === true
+        || refreshed.customClaims?.role !== user.role
+        || refreshed.customClaims?.userRole !== user.role
+        || refreshed.customClaims?.primaryRole !== user.role
+        || refreshed.customClaims?.active !== true
+        || profile.role !== user.role
+        || profile.userRole !== user.role
+        || profile.primaryRole !== user.role
+        || profile.status !== 'active'
+        || profile.approvalStatus !== 'approved'
+        || profile.suspended === true
+      ) {
+        throw new Error(`E2E ${user.role} fixture is not launch-ready: ${authUser.uid}`);
+      }
+      console.log(`✅ Launch-ready ${user.role} fixture verified for ${email}.`);
     } catch (err) {
       console.error(`❌ Error seeding ${email}:`, err);
       throw err;
