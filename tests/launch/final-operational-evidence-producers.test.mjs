@@ -527,3 +527,18 @@ test('[founder-credential] both environments authorize and only successful expli
   assert.doesNotMatch(production, /upload-artifact|GITHUB_OUTPUT|GITHUB_STEP_SUMMARY|firebase deploy|deploy-firebase-production\.mjs/);
   assert.doesNotMatch(workflow, /GITHUB_ACTOR.*rashidpvt420-lang/s);
 });
+
+test('[founder-credential] repair uses frozen verifier ancestry without treating unrelated post-frozen runtime changes as deploy evidence', async () => {
+  const workflow = await read('.github/workflows/operational-application-evidence.yml');
+  const repairStart = workflow.indexOf('  verify-and-sync-founder-totp:');
+  const repairEnd = workflow.indexOf('\n  verify-and-publish:', repairStart);
+  assert.ok(repairStart >= 0 && repairEnd > repairStart);
+  const repairJob = workflow.slice(repairStart, repairEnd);
+  assert.match(repairJob, /Verify frozen release ancestry for credential repair/);
+  assert.match(repairJob, /merge-base --is-ancestor/);
+  assert.match(repairJob, /Post-frozen application\/runtime changes remain ineligible for operational publication until separately deployed/);
+  assert.doesNotMatch(repairJob, /Non-control-plane file changed since frozen release/);
+  const publishJob = workflow.slice(repairEnd);
+  assert.match(publishJob, /Verify frozen-release control-plane scope/);
+  assert.match(publishJob, /Non-control-plane file changed since frozen release/);
+});
