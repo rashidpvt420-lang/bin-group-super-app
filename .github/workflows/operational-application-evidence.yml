@@ -331,8 +331,8 @@ jobs:
           [[ "$GITHUB_REPOSITORY_ID" == "1173943093" ]]
           [[ "$GITHUB_REF" == "refs/heads/main" && "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]
           [[ "$TARGET_SHA" =~ ^[0-9a-f]{40}$ && "$TARGET_SHA" == "$GITHUB_SHA" ]]
-          [[ "$RELEASE_SHA" == "15b09519222e749808c2a18b5d1ab1c3126fcb42" ]]
-          [[ "$DEPLOY_RUN_ID" == "34500748478" ]]
+          [[ "$RELEASE_SHA" == "26b3609457fa80a70db56767db7c85be01d7b015" ]]
+          [[ "$DEPLOY_RUN_ID" == "35236281371" ]]
           case "$OPERATION/$SELECTED_GATE" in
             verify/all|verify/paymentUnlockExactlyOnce|verify/brokerCommissionLockExactlyOnce) ;;
             sync/paymentUnlockExactlyOnce|repair-and-sync/paymentUnlockExactlyOnce) ;;
@@ -491,8 +491,8 @@ jobs:
               REPAIR_SOURCE_ENVIRONMENT: 'production',
               REPAIR_TARGET_ENVIRONMENT: 'hard-public-launch',
               GCP_PROJECT_ID: 'bin-group-57c60',
-              PRODUCTION_RELEASE_SHA: '15b09519222e749808c2a18b5d1ab1c3126fcb42',
-              PRODUCTION_DEPLOY_RUN_ID: '34500748478',
+              PRODUCTION_RELEASE_SHA: '26b3609457fa80a70db56767db7c85be01d7b015',
+              PRODUCTION_DEPLOY_RUN_ID: '35236281371',
             };
             for (const [name, value] of Object.entries(required)) {
               if (env[name] !== value) throw new Error(`Credential repair context mismatch: ${name}.`);
@@ -569,7 +569,7 @@ jobs:
             const totpFactors = factors.filter((factor) => factor?.factorId === 'totp' && factor?.uid);
             if (!user?.uid || email !== 'ceo@bin-groups.com' || user.disabled === true
                 || user.emailVerified !== true || !claimsGrantAdminPortal(claims)
-                || !['ceo', 'super_admin'].includes(recoveryApproverRole(claims))
+                || !['ceo', 'super_admin'].includes(recoveryApproverRole(claims)
                 || totpFactors.length !== 1) {
               throw new Error('Production canonical Founder account is not eligible for password repair; destination unchanged.');
             }
