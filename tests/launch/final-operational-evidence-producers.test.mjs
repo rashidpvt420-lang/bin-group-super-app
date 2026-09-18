@@ -62,6 +62,8 @@ test('technician physical evidence is protected, canonical and requires real mob
   assert.match(publisher, /gateKey:\s*'technicianPhysicalGpsEvidence'/);
   assert.match(publisher, /evidenceType:\s*'physical-device-report'/);
   assert.doesNotMatch(`${workflow}\n${verifier}\n${publisher}`, /ticket_id:|technician_id:|founder_attested|manual pass|waiv/i);
+  assert.match(verifier, /ticket\.technicianBeforePhotoUrl/);
+  assert.match(verifier, /ticket\.technicianBeforePhotos/);
 });
 
 test('privileged rotation evidence performs a real run-scoped E2E Admin rotation and preserves Phase 1 provider truth', async () => {
