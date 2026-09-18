@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
   assertReviewedAiVerifierSource,
+  transformReviewedAiVerifierQuotaBoundary,
 } from '../../scripts/run-frozen-release-evidence.mjs';
 
 const read = (file) => readFileSync(file, 'utf8');
@@ -172,6 +173,20 @@ test('AI evidence uses an exact reviewed run-scoped identity without touching a 
   assert.match(publisher, /AI authenticated UID is not bound to this run attempt/);
   assert.match(publisher, /AI run-scoped evidence identity lifecycle invalid/);
   assert.doesNotMatch(publisher, /originalUsageRestored/);
+});
+
+test('reviewed AI quota boundary adapter preserves the >=4 privacy assertion on the final allowed request', () => {
+  const verifier = read('scripts/verify-ai-live-evidence.mjs');
+  const adapted = transformReviewedAiVerifierQuotaBoundary(verifier);
+  const privacyBearingGeminiCalls = adapted.match(/data: \{ \.\.\.sensitiveProbe, provider: 'gemini' \}/g) || [];
+
+  assert.equal(privacyBearingGeminiCalls.length, 2);
+  assert.doesNotMatch(adapted, /Return a brief advisory-only boundary statement\./);
+  assert.match(adapted, /const boundarySuccess = assertLiveProbe\(boundarySuccessResult, 'gemini'\)/);
+  assert.throws(
+    () => transformReviewedAiVerifierQuotaBoundary(verifier.replace('Return a brief advisory-only boundary statement.', 'changed boundary probe')),
+    /unreviewed isolated AI verifier/,
+  );
 });
 
 test('AI observability records non-PII aggregate SLO, token and cost-envelope metrics', () => {
