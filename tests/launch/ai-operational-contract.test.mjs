@@ -189,6 +189,32 @@ test('reviewed AI quota boundary adapter preserves the >=4 privacy assertion on 
   );
 });
 
+test('reviewed AI adapter preserves the runtime non-authoritative boundary in provider samples', () => {
+  const verifier = read('scripts/verify-ai-live-evidence.mjs');
+  const publisher = read('scripts/publish-operational-provider-evidence.mjs');
+  const adapted = transformReviewedAiVerifierQuotaBoundary(verifier);
+
+  assert.match(adapted, /clientContextAuthoritative: false,/);
+  assert.doesNotMatch(adapted, /clientContextAuthoritative: data\.clientContextAuthoritative === false,/);
+  assert.match(adapted, /data\.clientContextAuthoritative !== false/);
+  assert.match(adapted, /data: \{ \.\.\.sensitiveProbe, provider: 'gemini' \}/);
+  assert.match(publisher, /sample\.clientContextAuthoritative !== false/);
+});
+
+test('reviewed AI adapter rejects provider-authority source drift before adapting', () => {
+  const verifier = read('scripts/verify-ai-live-evidence.mjs');
+
+  assert.throws(
+    () => transformReviewedAiVerifierQuotaBoundary(
+      verifier.replace(
+        'clientContextAuthoritative: data.clientContextAuthoritative === false,',
+        'clientContextAuthoritative: true,',
+      ),
+    ),
+    /unreviewed isolated AI verifier/,
+  );
+});
+
 test('AI observability records non-PII aggregate SLO, token and cost-envelope metrics', () => {
   const observability = read('functions/aiObservability.ts');
   const assistant = read('functions/aiAssistant.ts');
