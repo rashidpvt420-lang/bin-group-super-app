@@ -19,6 +19,8 @@ jobs:
     env:
       GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID || 'bin-group-57c60' }}
       FROZEN_RELEASE_SHA: 26b3609457fa80a70db56767db7c85be01d7b015
+      PRODUCTION_DEPLOY_RUN_ID: '35236281371'
+      VALIDATED_ARTIFACT_DIGEST: sha256:cef55129929f462a5f991da86afd40158313c60b7a25a4e58c5939e34d872106
     steps:
       - name: Checkout current control plane
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
