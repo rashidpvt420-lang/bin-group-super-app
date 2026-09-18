@@ -1,0 +1,181 @@
+name: Repair Frozen Sovereign AI Runtime
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: repair-frozen-sovereign-ai-runtime
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    name: Repair frozen runSovereignAI serving revision
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: production
+    env:
+      GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID || 'bin-group-57c60' }}
+      FROZEN_RELEASE_SHA: 26b3609457fa80a70db56767db7c85be01d7b015
+      FUNCTION_NAME: runSovereignAI
+      FUNCTION_REGION: europe-west3
+      KNOWN_GOOD_REPAIR_PROBE_COMMIT: a46877d4d61f2dfc242c69bbdfcbe0918ff80667
+      KNOWN_GOOD_REPAIR_PROBE_BLOB: 64bdfc16795b371a17ce0767a21ed54db135d864
+    steps:
+      - name: Checkout current control plane
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+
+      - name: Require exact current main
+        run: |
+          set -euo pipefail
+          remote_sha="$(git ls-remote --exit-code origin refs/heads/main | awk '{print $1}')"
+          test "$remote_sha" = "$GITHUB_SHA"
+          test "$GITHUB_REF" = "refs/heads/main"
+          test "$GITHUB_EVENT_NAME" = "workflow_dispatch"
+
+      - name: Recover and pin the reviewed repair-only privacy probe
+        run: |
+          set -euo pipefail
+          git cat-file -e "${KNOWN_GOOD_REPAIR_PROBE_COMMIT}^{commit}"
+          git show "${KNOWN_GOOD_REPAIR_PROBE_COMMIT}:scripts/verify-ai-live-privacy-repair.mjs" > /tmp/verify-ai-live-privacy-repair.mjs
+          probe_blob="$(git hash-object /tmp/verify-ai-live-privacy-repair.mjs)"
+          if [[ "$probe_blob" != "$KNOWN_GOOD_REPAIR_PROBE_BLOB" ]]; then
+            echo "::error::Pinned repair-only privacy probe blob mismatch."
+            exit 1
+          fi
+
+      - name: Checkout frozen release
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ env.FROZEN_RELEASE_SHA }}
+          fetch-depth: 1
+
+      - name: Verify frozen release and install ephemeral probe
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$FROZEN_RELEASE_SHA"
+          cp /tmp/verify-ai-live-privacy-repair.mjs scripts/verify-ai-live-privacy-repair.mjs
+          test "$(git hash-object scripts/verify-ai-live-privacy-repair.mjs)" = "$KNOWN_GOOD_REPAIR_PROBE_BLOB"
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: '22'
+
+      - name: Install dependencies
+        run: bash scripts/npm-install-retry.sh
+
+      - name: Build frozen Functions
+        run: npm run build:functions
+
+      - name: Prove compiled redaction machinery
+        run: |
+          node <<'NODE'
+          const safety = require('./functions/lib/aiSafety.js');
+          const free = safety.redactSensitiveText('Email proof.person@example.com phone +971501234567 IBAN AE070331234567890123456 Emirates ID 784-1990-1234567-1');
+          const nested = safety.safeExternalAiJson({nestedEvidence:{a:'nested.person@example.com',b:'+971509876543',c:'B7654321',d:'9876543210'}});
+          const total = Number(free.redactions || 0) + Number(nested.redactions || 0);
+          if (!Number.isFinite(total) || total < 4) throw new Error('Compiled frozen runtime redaction proof failed');
+          const runtime = require('./functions/lib/runtimeAll.js');
+          if (!runtime.runSovereignAI || !(runtime.runSovereignAI.__endpoint || runtime.runSovereignAI.__trigger)) throw new Error('runSovereignAI export missing');
+          console.log('[repair] compiled redactions=', total);
+          NODE
+
+      - name: Deployment secrets preflight
+        env:
+          WIF_PROVIDER: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          SERVICE_ACCOUNT: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
+          FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
+          APPCHECK_DEBUG_TOKEN: ${{ secrets.VITE_FIREBASE_APPCHECK_DEBUG_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "$WIF_PROVIDER"
+          test -n "$SERVICE_ACCOUNT"
+          test -n "$FIREBASE_API_KEY"
+          test -n "$FIREBASE_APP_ID"
+          test -n "$APPCHECK_DEBUG_TOKEN"
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          create_credentials_file: true
+          export_environment_variables: true
+
+      - name: Redeploy only frozen runSovereignAI
+        run: |
+          set -euo pipefail
+          test "$GCP_PROJECT_ID" = "bin-group-57c60"
+          npx firebase deploy --only functions:runSovereignAI --project "$GCP_PROJECT_ID" --non-interactive --force
+
+      - name: Force Gen2 serving traffic onto the latest deployed revision
+        run: |
+          set -euo pipefail
+          test "$GCP_PROJECT_ID" = "bin-group-57c60"
+          function_json=""
+          for attempt in $(seq 1 12); do
+            function_json="$(gcloud functions describe "$FUNCTION_NAME" --gen2 --region="$FUNCTION_REGION" --project="$GCP_PROJECT_ID" --format=json)"
+            state="$(jq -r '.state // empty' <<< "$function_json")"
+            if [[ "$state" == "ACTIVE" ]]; then
+              break
+            fi
+            echo "Waiting for ${FUNCTION_NAME} to become ACTIVE (attempt ${attempt}/12, state=${state:-unknown})"
+            sleep 5
+          done
+          state="$(jq -r '.state // empty' <<< "$function_json")"
+          [[ "$state" == "ACTIVE" ]] || { echo "::error::${FUNCTION_NAME} is not ACTIVE after redeploy."; exit 1; }
+
+          latest="$(jq -r '.serviceConfig.allTrafficOnLatestRevision // false' <<< "$function_json")"
+          service_resource="$(jq -r '.serviceConfig.service // empty' <<< "$function_json")"
+          service_name="${service_resource##*/}"
+          if [[ "$latest" != "true" ]]; then
+            if [[ -z "$service_resource" || -z "$service_name" || "$service_name" == "$service_resource" ]]; then
+              echo "::error::Cloud Functions reports split/stale traffic but did not expose a Cloud Run service binding."
+              exit 1
+            fi
+            echo "Repairing ${FUNCTION_NAME} traffic to the latest Cloud Run revision."
+            gcloud run services update-traffic "$service_name" \
+              --to-latest \
+              --region="$FUNCTION_REGION" \
+              --project="$GCP_PROJECT_ID" \
+              --quiet
+          fi
+
+          verify_json="$(gcloud functions describe "$FUNCTION_NAME" --gen2 --region="$FUNCTION_REGION" --project="$GCP_PROJECT_ID" --format=json)"
+          verify_state="$(jq -r '.state // empty' <<< "$verify_json")"
+          verify_latest="$(jq -r '.serviceConfig.allTrafficOnLatestRevision // false' <<< "$verify_json")"
+          [[ "$verify_state" == "ACTIVE" ]] || { echo "::error::${FUNCTION_NAME} is not ACTIVE after traffic repair."; exit 1; }
+          [[ "$verify_latest" == "true" ]] || { echo "::error::${FUNCTION_NAME} is not serving 100% latest revision traffic."; exit 1; }
+          echo "[repair] ${FUNCTION_NAME} ACTIVE and allTrafficOnLatestRevision=true"
+
+      - name: Prove both live providers enforce the redaction boundary
+        env:
+          VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
+          VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
+          VITE_FIREBASE_APPCHECK_DEBUG_TOKEN: ${{ secrets.VITE_FIREBASE_APPCHECK_DEBUG_TOKEN }}
+        run: |
+          set -euo pipefail
+          repair_output="$(node scripts/verify-ai-live-privacy-repair.mjs 2>&1)"
+          printf '%s\n' "$repair_output"
+          if ! grep -Fq '[ai-live-privacy-repair] PASS providers=gemini,openai ' <<< "$repair_output"; then
+            echo "::error::Repair probe did not prove both Gemini and OpenAI live privacy paths."
+            exit 1
+          fi
+          if ! grep -Eq 'minimumRedactionsObserved=([4-9]|[1-9][0-9]+)' <<< "$repair_output"; then
+            echo "::error::Repair probe did not prove the >=4 live redaction threshold."
+            exit 1
+          fi
+
+      - name: Reconfirm latest revision after live proof
+        run: |
+          set -euo pipefail
+          verify_json="$(gcloud functions describe "$FUNCTION_NAME" --gen2 --region="$FUNCTION_REGION" --project="$GCP_PROJECT_ID" --format=json)"
+          [[ "$(jq -r '.state // empty' <<< "$verify_json")" == "ACTIVE" ]] || { echo "::error::${FUNCTION_NAME} left ACTIVE state after live proof."; exit 1; }
+          [[ "$(jq -r '.serviceConfig.allTrafficOnLatestRevision // false' <<< "$verify_json")" == "true" ]] || { echo "::error::${FUNCTION_NAME} traffic drifted during live proof."; exit 1; }
