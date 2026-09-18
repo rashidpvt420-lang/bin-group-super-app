@@ -576,7 +576,7 @@ jobs:
             return user.uid;
           }
 
-          export async function repairFounderTotp({ env, deployment, signIn, writeSecret, loadFounder,
+          export async function repairFounderTotp({ env, deployment, signIn, writeSecrets, loadFounder,
             updatePassword, claimsGrantAdminPortal, recoveryApproverRole, now = Date.now() }) {
             checkRepairContext(env);
             checkRepairDeployment(deployment, env, now);
@@ -638,19 +638,20 @@ jobs:
               return { sourceVerified: true, targetUpdated: false, passwordSynchronized: false };
             }
             try {
-              await writeSecret(seed);
+              await writeSecrets({
+                totpSecret: seed,
+                password: String(env.E2E_FOUNDER_PASSWORD || ''),
+              });
             } catch {
               throw new Error('Destination update not confirmed. Inspect metadata before retrying; do not reset MFA.');
             }
             return { sourceVerified: true, targetUpdated: true, passwordSynchronized };
           }
 
-          export function writeFounderSecret(seed, env, exec = execFileSync) {
+          export function writeFounderEvidenceSecrets({ totpSecret, password }, env, exec = execFileSync) {
             // GitHub CLI performs LibSodium encryption. Plaintext enters stdin only;
             // it is never a command argument, artifact, job output or temporary file.
-            exec('gh', ['secret', 'set', 'E2E_FOUNDER_TOTP_SECRET', '--repo', env.FOUNDER_REPAIR_REPOSITORY,
-              '--env', 'hard-public-launch', '--app', 'actions'], {
-              input: seed,
+            const commonOptions = {
               encoding: 'utf8',
               timeout: 30000,
               maxBuffer: 65536,
@@ -658,12 +659,23 @@ jobs:
               env: {
                 PATH: env.PATH,
                 HOME: env.RUNNER_TEMP,
-                GH_CONFIG_DIR: path.join(env.RUNNER_TEMP, 'founder-totp-sync-gh'),
+                GH_CONFIG_DIR: path.join(env.RUNNER_TEMP, 'founder-evidence-sync-gh'),
                 GH_HOST: 'github.com',
                 GH_TOKEN: env.FOUNDER_TOTP_SYNC_TOKEN,
                 GH_PROMPT_DISABLED: '1',
               },
-            });
+            };
+            for (const [name, value] of [
+              ['E2E_FOUNDER_PASSWORD', password],
+              ['E2E_FOUNDER_TOTP_SECRET', totpSecret],
+            ]) {
+              if (!String(value || '').trim()) throw new Error('Destination evidence credential is incomplete.');
+              exec('gh', ['secret', 'set', name, '--repo', env.FOUNDER_REPAIR_REPOSITORY,
+                '--env', 'hard-public-launch', '--app', 'actions'], {
+                ...commonOptions,
+                input: value,
+              });
+            }
           }
 
           // BEGIN PROTECTED EXECUTION
@@ -682,7 +694,7 @@ jobs:
               env: process.env,
               deployment,
               signIn: signInWithRequiredTotpMfa,
-              writeSecret: (seed) => writeFounderSecret(seed, process.env),
+              writeSecrets: (credentials) => writeFounderEvidenceSecrets(credentials, process.env),
               loadFounder: (email) => auth.getUserByEmail(email),
               updatePassword: (uid, password) => auth.updateUser(uid, { password }),
               claimsGrantAdminPortal,

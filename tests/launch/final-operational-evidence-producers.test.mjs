@@ -263,7 +263,7 @@ test('[founder-credential] refuses context, actor, replay, debug and confirmatio
   ]) {
     let calls = 0;
     await assert.rejects(api.repairFounderTotp({ ...f, env: { ...f.env, ...override },
-      signIn: async () => { calls++; return f.session; }, writeSecret: async () => { calls++; } }));
+      signIn: async () => { calls++; return f.session; }, writeSecrets: async () => { calls++; } }));
     assert.equal(calls, 0);
   }
 });
@@ -305,7 +305,7 @@ test('[founder-credential] verify-only signs in but never invokes the writer or 
       assert.equal(bindings.referer, 'https://admin.bin-groups.com/');
       assert.equal(bindings.totpSecret, f.env.E2E_FOUNDER_TOTP_SECRET);
       return f.session;
-    }, writeSecret: async () => assert.fail('verify-only must not write'),
+    }, writeSecrets: async () => assert.fail('verify-only must not write'),
   });
   assert.equal(signIns, 1);
   assert.deepEqual(report, { sourceVerified: true, targetUpdated: false, passwordSynchronized: false });
@@ -316,10 +316,14 @@ test('[founder-credential] sync requires permission first, then a verified TOTP 
   const f = credentialFixture('sync');
   const order = [];
   const signIn = async () => { order.push('signin'); return f.session; };
-  const writeSecret = async (seed) => { assert.equal(seed, f.env.E2E_FOUNDER_TOTP_SECRET); order.push('write'); };
-  await assert.rejects(api.repairFounderTotp({ ...f, env: { ...f.env, FOUNDER_TOTP_SYNC_TOKEN: '' }, signIn, writeSecret }), /Environments write/);
+  const writeSecrets = async ({ totpSecret, password }) => {
+    assert.equal(totpSecret, f.env.E2E_FOUNDER_TOTP_SECRET);
+    assert.equal(password, f.env.E2E_FOUNDER_PASSWORD);
+    order.push('write');
+  };
+  await assert.rejects(api.repairFounderTotp({ ...f, env: { ...f.env, FOUNDER_TOTP_SYNC_TOKEN: '' }, signIn, writeSecrets }), /Environments write/);
   assert.deepEqual(order, []);
-  const report = await api.repairFounderTotp({ ...f, signIn, writeSecret });
+  const report = await api.repairFounderTotp({ ...f, signIn, writeSecrets });
   assert.deepEqual(order, ['signin', 'write']);
   assert.deepEqual(report, { sourceVerified: true, targetUpdated: true, passwordSynchronized: false });
 });
@@ -346,7 +350,11 @@ test('[founder-credential] explicit repair synchronizes only the eligible canoni
     },
     claimsGrantAdminPortal: (claims) => claims.admin === true,
     recoveryApproverRole: (claims) => claims.role,
-    writeSecret: async (seed) => { assert.equal(seed, f.env.E2E_FOUNDER_TOTP_SECRET); order.push('write'); },
+    writeSecrets: async ({ totpSecret, password }) => {
+      assert.equal(totpSecret, f.env.E2E_FOUNDER_TOTP_SECRET);
+      assert.equal(password, f.env.E2E_FOUNDER_PASSWORD);
+      order.push('write');
+    },
   });
   assert.deepEqual(order, ['signin', 'load', 'password', 'signin', 'write']);
   assert.deepEqual(report, { sourceVerified: true, targetUpdated: true, passwordSynchronized: true });
@@ -371,7 +379,7 @@ test('[founder-credential] repair refuses account, claims and TOTP drift before 
     await assert.rejects(api.repairFounderTotp({ ...f,
       signIn: async () => { throw new Error('Firebase first-factor sign-in failed: INVALID_LOGIN_CREDENTIALS'); },
       loadFounder: async () => ({ ...valid, ...override }),
-      updatePassword: async () => { writes++; }, writeSecret: async () => { writes++; },
+      updatePassword: async () => { writes++; }, writeSecrets: async () => { writes++; },
       claimsGrantAdminPortal: (claims) => claims.admin === true,
       recoveryApproverRole: (claims) => claims.role,
     }), /not eligible/);
@@ -386,7 +394,7 @@ test('[founder-credential] repair never mutates for non-password failures and ne
   await assert.rejects(api.repairFounderTotp({ ...f,
     signIn: async () => { throw new Error('Firebase TOTP sign-in failed: INVALID_VERIFICATION_CODE'); },
     loadFounder: async () => assert.fail('account must not be loaded'), updatePassword: async () => { updates++; },
-    writeSecret: async () => { updates++; },
+    writeSecrets: async () => { updates++; },
   }), /TOTP_CODE_REJECTED/);
   assert.equal(updates, 0);
 
@@ -399,7 +407,7 @@ test('[founder-credential] repair never mutates for non-password failures and ne
       : 'Firebase TOTP sign-in failed: INVALID_VERIFICATION_CODE'); },
     loadFounder: async () => founder, updatePassword: async () => { updates++; },
     claimsGrantAdminPortal: () => true, recoveryApproverRole: () => 'super_admin',
-    writeSecret: async () => assert.fail('failed TOTP must not reach destination'),
+    writeSecrets: async () => assert.fail('failed TOTP must not reach destination'),
   }), /password synchronized but TOTP sign-in failed \(TOTP_CODE_REJECTED\)/);
 });
 
@@ -408,11 +416,11 @@ test('[founder-credential] failed source sign-in, wrong factor or missing identi
   const f = credentialFixture('sync');
   for (const session of [null, {}, { ...f.session, uid: '' }, { ...f.session, secondFactorType: 'phone' }, { ...f.session, secondFactorIdentifier: '' }]) {
     await assert.rejects(api.repairFounderTotp({ ...f, signIn: async () => session,
-      writeSecret: async () => assert.fail('unverified source must not be copied') }), /did not verify/);
+      writeSecrets: async () => assert.fail('unverified source must not be copied') }), /did not verify/);
   }
   await assert.rejects(api.repairFounderTotp({ ...f,
     signIn: async () => { throw new Error(f.env.E2E_FOUNDER_TOTP_SECRET); },
-    writeSecret: async () => assert.fail('failed source must not be copied'),
+    writeSecrets: async () => assert.fail('failed source must not be copied'),
   }), (error) => error.message.includes('sign-in failed') && !error.message.includes(f.env.E2E_FOUNDER_TOTP_SECRET));
 });
 
@@ -435,7 +443,7 @@ test('[founder-credential] reports only allowlisted redacted sign-in failure cat
     assert.equal(api.classifyFounderSignInFailure(new Error(providerMessage)), category);
     await assert.rejects(api.repairFounderTotp({ ...f,
       signIn: async () => { throw new Error(providerMessage); },
-      writeSecret: async () => assert.fail('failed source must never be copied'),
+      writeSecrets: async () => assert.fail('failed source must never be copied'),
     }), (error) => {
       assert.equal(error.message, `Production Founder TOTP sign-in failed (${category}); destination unchanged.`);
       assert.ok(!error.message.includes(f.env.E2E_FOUNDER_PASSWORD));
@@ -452,26 +460,29 @@ test('[founder-credential] missing credentials and ambiguous write failures stop
   for (const key of ['E2E_FOUNDER_EMAIL', 'E2E_FOUNDER_PASSWORD', 'VITE_FIREBASE_API_KEY', 'E2E_FOUNDER_TOTP_SECRET']) {
     await assert.rejects(api.repairFounderTotp({ ...f, env: { ...f.env, [key]: '' },
       signIn: async () => assert.fail('incomplete bindings must stop before sign-in'),
-      writeSecret: async () => assert.fail('incomplete bindings must not write'),
+      writeSecrets: async () => assert.fail('incomplete bindings must not write'),
     }));
   }
   let writes = 0;
   await assert.rejects(api.repairFounderTotp({ ...f, signIn: async () => f.session,
-    writeSecret: async () => { writes++; throw new Error(f.env.FOUNDER_TOTP_SYNC_TOKEN); },
+    writeSecrets: async () => { writes++; throw new Error(f.env.FOUNDER_TOTP_SYNC_TOKEN); },
   }), (error) => error.message.includes('not confirmed') && !error.message.includes(f.env.FOUNDER_TOTP_SYNC_TOKEN));
   assert.equal(writes, 1);
 });
 
-test('[founder-credential] the writer pins repo, environment and secret and uses stdin with a minimal child environment', async () => {
+test('[founder-credential] the writer pins repo/environment, writes password and TOTP by stdin, and keeps child env minimal', async () => {
   const { api } = await credentialProgram();
   const f = credentialFixture('sync');
-  let executions = 0;
-  api.writeFounderSecret(f.env.E2E_FOUNDER_TOTP_SECRET, f.env, (command, args, options) => {
-    executions++;
+  const writes = [];
+  api.writeFounderEvidenceSecrets({
+    password: f.env.E2E_FOUNDER_PASSWORD,
+    totpSecret: f.env.E2E_FOUNDER_TOTP_SECRET,
+  }, f.env, (command, args, options) => {
     assert.equal(command, 'gh');
-    assert.deepEqual(args, ['secret', 'set', 'E2E_FOUNDER_TOTP_SECRET', '--repo', f.env.GITHUB_REPOSITORY,
-      '--env', 'hard-public-launch', '--app', 'actions']);
-    assert.equal(options.input, f.env.E2E_FOUNDER_TOTP_SECRET);
+    const name = args[2];
+    writes.push({ name, value: options.input });
+    assert.deepEqual(args.slice(0, 2), ['secret', 'set']);
+    assert.deepEqual(args.slice(3), ['--repo', f.env.GITHUB_REPOSITORY, '--env', 'hard-public-launch', '--app', 'actions']);
     assert.ok(!args.join(' ').includes(options.input));
     assert.deepEqual(options.stdio, ['pipe', 'pipe', 'pipe']);
     assert.equal(options.env.GH_HOST, 'github.com');
@@ -481,7 +492,10 @@ test('[founder-credential] the writer pins repo, environment and secret and uses
     assert.ok(!Object.hasOwn(options.env, 'GOOGLE_APPLICATION_CREDENTIALS'));
     assert.equal(options.timeout, 30000);
   });
-  assert.equal(executions, 1);
+  assert.deepEqual(writes, [
+    { name: 'E2E_FOUNDER_PASSWORD', value: f.env.E2E_FOUNDER_PASSWORD },
+    { name: 'E2E_FOUNDER_TOTP_SECRET', value: f.env.E2E_FOUNDER_TOTP_SECRET },
+  ]);
 });
 
 test('[founder-credential] both environments authorize and only successful explicit sync enables payment replay', async () => {
@@ -503,6 +517,10 @@ test('[founder-credential] both environments authorize and only successful expli
   assert.match(source, /await import\('\.\/scripts\/verify-admin-mfa-production\.mjs'\)/);
   assert.match(source, /initializeFirebaseAdmin\(admin, process\.env\.GCP_PROJECT_ID\)/);
   assert.match(source, /auth\.updateUser\(uid, \{ password \}\)/);
+  assert.match(source, /writeFounderEvidenceSecrets/);
+  assert.match(source, /\['E2E_FOUNDER_PASSWORD', password\]/);
+  assert.match(source, /\['E2E_FOUNDER_TOTP_SECRET', totpSecret\]/);
+  assert.match(source, /input: value/);
   assert.match(source, /category !== 'FIRST_FACTOR_CREDENTIAL_REJECTED'/);
   assert.match(source, /totpFactors\.length !== 1/);
   assert.doesNotMatch(source, /verify-founder-totp-signin\.mjs|deleteUser\(|unenroll\(|setCustomUserClaims\(|revokeRefreshTokens\(/);
