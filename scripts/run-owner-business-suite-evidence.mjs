@@ -30,7 +30,7 @@ function diagnosticFiles() {
   }
 }
 
-function run(script, label) {
+function run(script, label = path.basename(script)) {
   try {
     execFileSync(process.execPath, [script], {
       cwd: repositoryRoot,
@@ -51,16 +51,16 @@ function run(script, label) {
 
 const mode = String(process.argv[2] || 'lifecycle').trim().toLowerCase();
 if (mode === 'lifecycle') {
-  run('scripts/run-owner-inspection-first-production-evidence.mjs', 'Owner lifecycle evidence');
+  run('scripts/run-owner-inspection-first-production-evidence.mjs');
 } else if (mode === 'restore-shared-fixtures') {
   // The Owner proof intentionally replaces the dedicated Owner Auth account.
   // Restore the shared live-role fixtures only after the Owner UI has inspected
   // the activation-generated portfolio, contract and financial records. Then
   // reapply the exact Phase 1 policy and Founder-MFA Tenant dispatch geography,
   // because the shared seeder is authoritative for the next role suites.
-  run('scripts/seed-live-role-test-data.mjs', 'shared live-role fixture restore');
-  run('scripts/ensure-phase1-manual-payment-config.mjs', 'Phase 1 payment policy restore');
-  run('scripts/prepare-protected-business-fixtures.mjs', 'protected business fixture restore');
+  run('scripts/seed-live-role-test-data.mjs');
+  run('scripts/ensure-phase1-manual-payment-config.mjs');
+  run('scripts/prepare-protected-business-fixtures.mjs');
 } else {
   throw new Error(`Unsupported Owner business evidence mode: ${mode}`);
 }
