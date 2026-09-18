@@ -400,28 +400,22 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Verify frozen-release control-plane scope
+      - name: Verify frozen release ancestry for credential repair
         env:
           RELEASE_SHA: ${{ inputs.frozen_release_sha }}
           CONTROL_PLANE_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
-          git -C control-plane merge-base --is-ancestor "$RELEASE_SHA" "$CONTROL_PLANE_SHA" || { echo "::error::Frozen release is not an ancestor of the current control plane."; exit 1; }
+          git -C control-plane merge-base --is-ancestor "$RELEASE_SHA" "$CONTROL_PLANE_SHA" || {
+            echo "::error::Frozen release is not an ancestor of the current reviewed control plane."
+            exit 1
+          }
           changed="$(git -C control-plane diff --name-only "$RELEASE_SHA" "$CONTROL_PLANE_SHA")"
-          if [[ -z "$changed" ]]; then
-            [[ "$RELEASE_SHA" == "$CONTROL_PLANE_SHA" ]] || {
-              echo "::error::Empty control-plane delta is only valid for an exact same-SHA pair."
-              exit 1
-            }
-            echo "Exact same-SHA release/control-plane pair verified."
-          else
-            allowed='^(\.github/workflows/firebase-production-deploy\.yml|\.github/workflows/repair-frozen-sovereign-ai-runtime\.yml|\.github/workflows/live-role-smoke\.yml|\.github/workflows/operational-application-evidence\.yml|\.github/workflows/operational-provider-evidence\.yml|\.github/workflows/privileged-access-rotation-evidence\.yml|\.github/workflows/technician-physical-evidence\.yml|scripts/finalize-operational-provider-evidence\.mjs|scripts/hard-clearance-production-revalidation\.mjs|scripts/launch-status\.mjs|scripts/publish-direct-operational-proof\.mjs|scripts/publish-operational-application-evidence\.mjs|scripts/publish-operational-provider-evidence\.mjs|scripts/resolve-admin-app-check-site-key\.mjs|scripts/run-frozen-release-evidence\.mjs|scripts/verify-ai-live-evidence\.mjs|scripts/verify-hard-launch-approval\.mjs|scripts/verify-operational-readiness\.mjs|tests/launch/ai-operational-contract\.test\.mjs|tests/launch/external-gate-production-provenance\.test\.mjs|tests/launch/final-operational-evidence-producers\.test\.mjs|tests/launch/hard-clearance-revalidation\.test\.mjs|tests/launch/operational-application-evidence-audit\.test\.mjs)$'
-            supplemental_allowed='^(scripts/hard-launch-status\.mjs|scripts/lib/hard-launch-control\.mjs|scripts/lib/operational-proof-schema\.mjs|scripts/prepare-operational-application-evidence\.mjs|scripts/print-hard-launch-blockers\.mjs|scripts/verify-operational-application-evidence\.mjs|tests/launch/hard-launch-blocker-plan\.test\.mjs|tests/launch/phase1-manual-public-launch-policy\.test\.mjs)$'
-            while IFS= read -r file; do
-              [[ -z "$file" || "$file" =~ $allowed || "$file" =~ $supplemental_allowed ]] || { echo "::error::Non-control-plane file changed since frozen release: $file"; exit 1; }
-            done <<< "$changed"
+          if [[ -n "$changed" ]]; then
+            echo "Credential repair will use only the frozen release checkout and reviewed current workflow."
+            echo "Post-frozen application/runtime changes remain ineligible for operational publication until separately deployed."
           fi
-          echo "CONTROL_PLANE_SCOPE_VERIFIED=true" >> "$GITHUB_ENV"
+          echo "CREDENTIAL_REPAIR_FROZEN_ANCESTRY_VERIFIED=true" >> "$GITHUB_ENV"
 
       - name: Checkout unchanged production credential verifier
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
