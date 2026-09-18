@@ -167,7 +167,7 @@ function verifyRecentOwnerApplicationCommand(env) {
   const comments = fetchPublicGithubJson(
     `https://api.github.com/repos/${EXPECTED_REPOSITORY}/issues/${OWNER_COMMAND_ISSUE}/comments?per_page=100&since=${encodeURIComponent(since)}`,
   );
-  if (!Array.isArray(comments)) fail('protected owner-command provenance response was not valid JSON');
+  if (!Array.isArray(comments)) fail('owner-command provenance comments response is invalid');
   const expectedBodies = new Set([
     `/bin-launch evidence application-all ${controlSha} ${releaseSha} ${deployRunId}`,
     `/bin-launch evidence application-current ${controlSha} ${releaseSha} ${deployRunId}`,
