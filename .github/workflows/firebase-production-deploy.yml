@@ -2,8 +2,7 @@ name: Firebase Production Deploy
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
     paths:
       - '.github/workflows/firebase-production-deploy.yml'
   workflow_dispatch:
@@ -92,7 +91,7 @@ env:
 
 jobs:
   repair-frozen-sovereign-ai-runtime:
-    if: ${{ github.event_name == 'push' && github.event.head_commit.message == 'repair: redeploy frozen Sovereign AI runtime' }}
+    if: ${{ (github.event_name == 'workflow_dispatch' || github.event_name == 'push') && github.event_name == 'push' && github.event.head_commit.message == 'repair: redeploy frozen Sovereign AI runtime' }}
     name: Repair frozen Sovereign AI runtime
     runs-on: ubuntu-latest
     environment: production
@@ -170,6 +169,21 @@ jobs:
           }
           console.log('[frozen-ai-repair] compiled redactions=', total);
           NODE
+
+      - name: Deployment secrets preflight
+        env:
+          WIF_PROVIDER: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          SERVICE_ACCOUNT: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
+          FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
+          APPCHECK_DEBUG_TOKEN: ${{ secrets.VITE_FIREBASE_APPCHECK_DEBUG_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "$WIF_PROVIDER"
+          test -n "$SERVICE_ACCOUNT"
+          test -n "$FIREBASE_API_KEY"
+          test -n "$FIREBASE_APP_ID"
+          test -n "$APPCHECK_DEBUG_TOKEN"
 
       - name: Authenticate to Google Cloud by Workload Identity Federation
         id: gcp_auth
