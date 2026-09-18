@@ -569,7 +569,7 @@ jobs:
             const totpFactors = factors.filter((factor) => factor?.factorId === 'totp' && factor?.uid);
             if (!user?.uid || email !== 'ceo@bin-groups.com' || user.disabled === true
                 || user.emailVerified !== true || !claimsGrantAdminPortal(claims)
-                || !['ceo', 'super_admin'].includes(recoveryApproverRole(claims)
+                || !['ceo', 'super_admin'].includes(recoveryApproverRole(claims))
                 || totpFactors.length !== 1) {
               throw new Error('Production canonical Founder account is not eligible for password repair; destination unchanged.');
             }
