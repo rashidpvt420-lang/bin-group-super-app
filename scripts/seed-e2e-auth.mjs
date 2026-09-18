@@ -17,7 +17,7 @@ const possibleConfigPaths = [
 ];
 for (const p of possibleConfigPaths) {
   if (existsSync(p)) {
-    loadDotenv({ path: p });
+    loadDotenv({ path: p, override: false });
     console.log(`Loaded E2E environment from: ${p}`);
     break;
   }
@@ -154,6 +154,46 @@ if (techBEmail && techBPassword) {
   process.exit(1);
 }
 
+function expectedRoleClaims(role, extraClaims = {}) {
+  return {
+    ...extraClaims,
+    role,
+    userRole: role,
+    primaryRole: role,
+    active: true,
+    testAccount: true,
+  };
+}
+
+async function assertLaunchReadyRoleIdentity(uid, email, role) {
+  const [authUser, profileSnap] = await Promise.all([
+    auth.getUser(uid),
+    db.collection('users').doc(uid).get(),
+  ]);
+  const profile = profileSnap.data() || {};
+  const claims = authUser.customClaims || {};
+  const failures = [];
+
+  if (String(authUser.email || '').trim().toLowerCase() !== email) failures.push('Auth email mismatch');
+  if (authUser.disabled) failures.push('Auth user disabled');
+  if (claims.role !== role) failures.push(`claims.role=${String(claims.role)}`);
+  if (claims.userRole !== role) failures.push(`claims.userRole=${String(claims.userRole)}`);
+  if (claims.primaryRole !== role) failures.push(`claims.primaryRole=${String(claims.primaryRole)}`);
+  if (claims.active !== true) failures.push(`claims.active=${String(claims.active)}`);
+  if (!profileSnap.exists) failures.push('users profile missing');
+  if (profile.role !== role) failures.push(`profile.role=${String(profile.role)}`);
+  if (profile.userRole !== role) failures.push(`profile.userRole=${String(profile.userRole)}`);
+  if (profile.primaryRole !== role) failures.push(`profile.primaryRole=${String(profile.primaryRole)}`);
+  if (String(profile.status || '').toLowerCase() !== 'active') failures.push(`profile.status=${String(profile.status)}`);
+  if (String(profile.approvalStatus || '').toLowerCase() !== 'approved') failures.push(`profile.approvalStatus=${String(profile.approvalStatus)}`);
+  if (profile.suspended === true) failures.push('profile.suspended=true');
+
+  if (failures.length) {
+    throw new Error(`E2E ${role} fixture is not launch-ready for ${email} (${uid}): ${failures.join('; ')}`);
+  }
+  console.log(`✅ Verified launch-ready ${role} identity ${email} (${uid})`);
+}
+
 async function seed() {
   console.log('🚀 Seeding/Updating E2E Auth accounts in production...');
   for (const user of usersToSeed) {
@@ -184,17 +224,25 @@ async function seed() {
         }
       }
 
-      // Set Custom Claims
-      await auth.setCustomUserClaims(authUser.uid, user.claims);
-      console.log(`Claims set for ${email}: ${JSON.stringify(user.claims)}`);
+      // Rebuild from the declared fixture role, as the original seeder did.
+      // Carrying old claims could retain stale Admin authority on another role.
+      const canonicalClaims = expectedRoleClaims(user.role, user.claims || {});
+      await auth.setCustomUserClaims(authUser.uid, canonicalClaims);
+      console.log(`Claims set for ${email}: ${JSON.stringify(canonicalClaims)}`);
 
-      // Write to Firestore users collection
+      // Write the exact same role identity into users/{uid}. The production app
+      // reads both Auth claims and the Firestore profile before resolving routes.
       const profileRef = db.collection('users').doc(authUser.uid);
       await profileRef.set({
         uid: authUser.uid,
         email,
         role: user.role,
+        userRole: user.role,
+        primaryRole: user.role,
         status: 'active',
+        approvalStatus: 'approved',
+        suspended: false,
+        active: true,
         testAccount: true,
         displayName: user.displayName,
         onboardingComplete: true,
@@ -204,6 +252,9 @@ async function seed() {
       }, { merge: true });
       console.log(`Firestore profile synced for ${email} in users/${authUser.uid}`);
 
+      // Fail before Playwright if the account used by the E2E suite still cannot
+      // resolve to its canonical production role.
+      await assertLaunchReadyRoleIdentity(authUser.uid, email, user.role);
     } catch (err) {
       console.error(`❌ Error seeding ${email}:`, err);
       throw err;

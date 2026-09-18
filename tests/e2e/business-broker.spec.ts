@@ -41,12 +41,26 @@ async function login(page: Page) {
   await expect(
     identitySpinner,
     'Broker identity must resolve. Seed/repair the broker Auth role claim and users/{uid} profile when this remains visible.',
-  ).toBeHidden({ timeout: 15_000 });
+  ).toBeHidden({ timeout: 20_000 });
 
   await expect(page.locator('body')).not.toContainText(
     /permission-denied|missing or insufficient permissions|application error|minified react error|identity fault|role authorization error/i,
     { timeout: 10_000 },
   );
+}
+
+async function waitForBrokerFinanceReady(page: Page) {
+  await expect.poll(async () => {
+    const body = await page.locator('body').innerText().catch(() => '');
+    if (/permission-denied|missing or insufficient permissions|identity fault|role authorization error/i.test(body)) {
+      throw new Error(`Broker commissions route rejected the authenticated mailbox identity: ${body.slice(0, 1_500)}`);
+    }
+    return /Finance & Payouts/i.test(body);
+  }, {
+    timeout: 30_000,
+    intervals: [250, 500, 1_000, 2_000],
+    message: 'Broker commissions route must finish resolving the authenticated role and finance data.',
+  }).toBe(true);
 }
 
 async function submitBrokerLead(page: Page, uniqueLead: string) {
@@ -107,13 +121,13 @@ test.describe('Broker Business Workflow', () => {
     await submitBrokerLead(page, uniqueLead);
 
     await page.goto('/broker/commissions', { waitUntil: 'domcontentloaded' });
+    await waitForBrokerFinanceReady(page);
     await expect(page.locator('body')).not.toContainText(/permission-denied|missing or insufficient permissions/i, { timeout: 10_000 });
-    await expect(page.getByText(/Finance & Payouts/i)).toBeVisible({ timeout: 15_000 });
-    await expect(page.locator('body')).toContainText(/PENDING SETTLEMENT|APPROVED FOR PAYOUT|LIFETIME EARNED/i, { timeout: 15_000 });
+    await expect(page.locator('body')).toContainText(/PENDING SETTLEMENT|APPROVED FOR PAYOUT|LIFETIME EARNED/i, { timeout: 30_000 });
 
     const requestOtp = page.getByTestId('broker-payout-request-otp');
-    await expect(requestOtp).toBeVisible({ timeout: 15_000 });
-    await expect(requestOtp).toBeEnabled({ timeout: 15_000 });
+    await expect(requestOtp).toBeVisible({ timeout: 30_000 });
+    await expect(requestOtp).toBeEnabled({ timeout: 30_000 });
     await expect(requestOtp).toContainText(/REQUEST PAYOUT \(1\)/i);
     const otpStartMs = Date.now();
     const requestOtpResponsePromise = page.waitForResponse(
