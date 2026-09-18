@@ -224,12 +224,9 @@ async function seed() {
         }
       }
 
-      // Preserve unrelated fixture claims while forcing the canonical role aliases
-      // consumed by the production role resolver and route guards.
-      const canonicalClaims = expectedRoleClaims(user.role, {
-        ...(authUser.customClaims || {}),
-        ...(user.claims || {}),
-      });
+      // Rebuild from the declared fixture role, as the original seeder did.
+      // Carrying old claims could retain stale Admin authority on another role.
+      const canonicalClaims = expectedRoleClaims(user.role, user.claims || {});
       await auth.setCustomUserClaims(authUser.uid, canonicalClaims);
       console.log(`Claims set for ${email}: ${JSON.stringify(canonicalClaims)}`);
 

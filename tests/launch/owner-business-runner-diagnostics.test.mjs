@@ -60,3 +60,14 @@ test('child failure remains fatal and identifies the failed script without echoi
   assert.match(result.diagnostics.join('\n'), /exitCode=7/);
   assert.doesNotMatch(result.diagnostics.join('\n'), /private child payload/);
 });
+
+test('role fixture synchronization does not carry stale privileged claims into another role', () => {
+  const seeder = readFileSync(new URL('../../scripts/seed-e2e-auth.mjs', import.meta.url), 'utf8');
+  const body = seeder.match(/function expectedRoleClaims\(role, extraClaims = \{\}\) \{([\s\S]*?)\n\}/)[1];
+  const canonicalClaims = new Function('role', 'extraClaims', body);
+  assert.deepEqual(canonicalClaims('broker', { role: 'broker', testAccount: true }), {
+    role: 'broker', userRole: 'broker', primaryRole: 'broker', active: true, testAccount: true,
+  });
+  assert.doesNotMatch(seeder, /\.\.\.\s*\(?authUser\.customClaims/);
+  assert.match(seeder, /expectedRoleClaims\(user\.role, user\.claims \|\| \{\}\)/);
+});
