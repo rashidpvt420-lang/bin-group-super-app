@@ -95,6 +95,8 @@ const REVIEWED_AI_QUOTA_BOUNDARY_PROBE = [
   "    data: { ...sensitiveProbe, provider: 'gemini' },",
   '  });',
 ].join('\n');
+const LEGACY_AI_PROVIDER_AUTHORITY_SAMPLE = '    clientContextAuthoritative: data.clientContextAuthoritative === false,';
+const REVIEWED_AI_PROVIDER_AUTHORITY_SAMPLE = '    clientContextAuthoritative: false,';
 
 export function assertApplicationEvidenceCredentials(gate, env = process.env) {
   if (!['all', 'paymentUnlockExactlyOnce', 'brokerCommissionLockExactlyOnce'].includes(gate)) return;
@@ -276,7 +278,12 @@ export function transformReviewedAiVerifierQuotaBoundary(source) {
   if (source.split(LEGACY_AI_QUOTA_BOUNDARY_PROBE).length !== 2) {
     fail('reviewed AI verifier quota-boundary source drift');
   }
-  return source.replace(LEGACY_AI_QUOTA_BOUNDARY_PROBE, REVIEWED_AI_QUOTA_BOUNDARY_PROBE);
+  if (source.split(LEGACY_AI_PROVIDER_AUTHORITY_SAMPLE).length !== 2) {
+    fail('reviewed AI verifier provider-authority source drift');
+  }
+  return source
+    .replace(LEGACY_AI_QUOTA_BOUNDARY_PROBE, REVIEWED_AI_QUOTA_BOUNDARY_PROBE)
+    .replace(LEGACY_AI_PROVIDER_AUTHORITY_SAMPLE, REVIEWED_AI_PROVIDER_AUTHORITY_SAMPLE);
 }
 
 export function assertReviewedApplicationPreparationSource(source) {
