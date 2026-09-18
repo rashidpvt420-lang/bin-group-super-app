@@ -503,6 +503,10 @@ test('[founder-credential] both environments authorize and only successful expli
   assert.match(source, /await import\('\.\/scripts\/verify-admin-mfa-production\.mjs'\)/);
   assert.match(source, /initializeFirebaseAdmin\(admin, process\.env\.GCP_PROJECT_ID\)/);
   assert.match(source, /auth\.updateUser\(uid, \{ password \}\)/);
+  assert.match(source, /writeFounderEvidenceSecrets/);
+  assert.match(source, /\['E2E_FOUNDER_PASSWORD', password\]/);
+  assert.match(source, /\['E2E_FOUNDER_TOTP_SECRET', totpSecret\]/);
+  assert.match(source, /input: value/);
   assert.match(source, /category !== 'FIRST_FACTOR_CREDENTIAL_REJECTED'/);
   assert.match(source, /totpFactors\.length !== 1/);
   assert.doesNotMatch(source, /verify-founder-totp-signin\.mjs|deleteUser\(|unenroll\(|setCustomUserClaims\(|revokeRefreshTokens\(/);
