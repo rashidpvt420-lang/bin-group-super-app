@@ -80,7 +80,23 @@ const REVIEWED_TENANT_PHOTO_SELECTION = [
 // deployed runtime. Pin the exact verifier blob so the dual-SHA overlay cannot
 // silently expand beyond the reviewed run-scoped quota isolation contract.
 const AI_VERIFIER = 'scripts/verify-ai-live-evidence.mjs';
-const REVIEWED_AI_VERIFIER_BLOB = '481b466417f3c5c97ceeae45c0fb395e8824f04a';
+const REVIEWED_AI_VERIFIER_BLOB = '9c613db118a2e05efc3b089ef7890a7d48d4ee03';
+const LEGACY_AI_QUOTA_BOUNDARY_PROBE = [
+  '  const boundarySuccessResult = await callSovereignAi({',
+  '    idToken: auth.idToken,',
+  '    appCheckToken,',
+  "    data: { text: 'Return a brief advisory-only boundary statement.', evidenceProbe: true, provider: 'gemini' },",
+  '  });',
+].join('\n');
+const REVIEWED_AI_QUOTA_BOUNDARY_PROBE = [
+  '  const boundarySuccessResult = await callSovereignAi({',
+  '    idToken: auth.idToken,',
+  '    appCheckToken,',
+  "    data: { ...sensitiveProbe, provider: 'gemini' },",
+  '  });',
+].join('\n');
+const LEGACY_AI_PROVIDER_AUTHORITY_SAMPLE = '    clientContextAuthoritative: data.clientContextAuthoritative === false,';
+const REVIEWED_AI_PROVIDER_AUTHORITY_SAMPLE = '    clientContextAuthoritative: false,';
 
 export function assertApplicationEvidenceCredentials(gate, env = process.env) {
   if (!['all', 'paymentUnlockExactlyOnce', 'brokerCommissionLockExactlyOnce'].includes(gate)) return;
@@ -257,6 +273,19 @@ export function assertReviewedAiVerifierSource(source) {
   }
 }
 
+export function transformReviewedAiVerifierQuotaBoundary(source) {
+  assertReviewedAiVerifierSource(source);
+  if (source.split(LEGACY_AI_QUOTA_BOUNDARY_PROBE).length !== 2) {
+    fail('reviewed AI verifier quota-boundary source drift');
+  }
+  if (source.split(LEGACY_AI_PROVIDER_AUTHORITY_SAMPLE).length !== 2) {
+    fail('reviewed AI verifier provider-authority source drift');
+  }
+  return source
+    .replace(LEGACY_AI_QUOTA_BOUNDARY_PROBE, REVIEWED_AI_QUOTA_BOUNDARY_PROBE)
+    .replace(LEGACY_AI_PROVIDER_AUTHORITY_SAMPLE, REVIEWED_AI_PROVIDER_AUTHORITY_SAMPLE);
+}
+
 export function assertReviewedApplicationPreparationSource(source) {
   if (gitBlobSha(source) !== REVIEWED_APPLICATION_PREPARATION_BLOB) {
     fail('unreviewed Tenant notification preparation');
@@ -293,6 +322,16 @@ function assertReviewedAiVerifier(releaseRoot) {
   const source = readFileSync(file);
   assertReviewedAiVerifierSource(source);
   console.log(`[frozen-release-evidence] reviewed isolated AI verifier sha256=${createHash('sha256').update(source).digest('hex')}`);
+}
+
+function installReviewedAiQuotaBoundaryAdapter(releaseRoot) {
+  const file = path.join(releaseRoot, AI_VERIFIER);
+  if (!lstatSync(file).isFile()) fail('reviewed AI verifier is not a regular file');
+  const original = readFileSync(file, 'utf8');
+  const adapted = transformReviewedAiVerifierQuotaBoundary(original);
+  writeFileSync(file, adapted);
+  console.log(`[frozen-release-evidence] reviewed AI quota-boundary adapter sha256=${createHash('sha256').update(adapted).digest('hex')}`);
+  return () => writeFileSync(file, original);
 }
 
 function assertReviewedApplicationPreparation(releaseRoot) {
@@ -370,6 +409,9 @@ export function runFrozenReleaseEvidence(entrypoint, env = process.env, releaseR
   }
   if (applicationVerification && env.OPERATIONAL_GATE === 'tenantNotificationDelivery') {
     restores.push(installReviewedTenantPhotoAdapter(releaseRoot));
+  }
+  if (aiVerification) {
+    restores.push(installReviewedAiQuotaBoundaryAdapter(releaseRoot));
   }
   const childActor = applicationVerification || applicationPreparation
     ? resolveApplicationEvidenceActor(env)

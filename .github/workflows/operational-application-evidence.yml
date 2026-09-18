@@ -142,7 +142,7 @@ jobs:
             }
             echo "Exact same-SHA release/control-plane pair verified."
           else
-            allowed='^(\.github/workflows/firebase-production-deploy\.yml|\.github/workflows/live-role-smoke\.yml|\.github/workflows/operational-application-evidence\.yml|\.github/workflows/operational-provider-evidence\.yml|\.github/workflows/privileged-access-rotation-evidence\.yml|\.github/workflows/technician-physical-evidence\.yml|scripts/finalize-operational-provider-evidence\.mjs|scripts/hard-clearance-production-revalidation\.mjs|scripts/launch-status\.mjs|scripts/publish-direct-operational-proof\.mjs|scripts/publish-operational-application-evidence\.mjs|scripts/publish-operational-provider-evidence\.mjs|scripts/resolve-admin-app-check-site-key\.mjs|scripts/run-frozen-release-evidence\.mjs|scripts/verify-ai-live-evidence\.mjs|scripts/verify-hard-launch-approval\.mjs|scripts/verify-operational-readiness\.mjs|tests/launch/ai-operational-contract\.test\.mjs|tests/launch/external-gate-production-provenance\.test\.mjs|tests/launch/final-operational-evidence-producers\.test\.mjs|tests/launch/hard-clearance-revalidation\.test\.mjs|tests/launch/operational-application-evidence-audit\.test\.mjs)$'
+            allowed='^(\.github/workflows/firebase-production-deploy\.yml|\.github/workflows/repair-frozen-sovereign-ai-runtime\.yml|\.github/workflows/live-role-smoke\.yml|\.github/workflows/operational-application-evidence\.yml|\.github/workflows/operational-provider-evidence\.yml|\.github/workflows/privileged-access-rotation-evidence\.yml|\.github/workflows/technician-physical-evidence\.yml|scripts/finalize-operational-provider-evidence\.mjs|scripts/hard-clearance-production-revalidation\.mjs|scripts/launch-status\.mjs|scripts/publish-direct-operational-proof\.mjs|scripts/publish-operational-application-evidence\.mjs|scripts/publish-operational-provider-evidence\.mjs|scripts/resolve-admin-app-check-site-key\.mjs|scripts/run-frozen-release-evidence\.mjs|scripts/verify-ai-live-evidence\.mjs|scripts/verify-hard-launch-approval\.mjs|scripts/verify-operational-readiness\.mjs|tests/launch/ai-operational-contract\.test\.mjs|tests/launch/external-gate-production-provenance\.test\.mjs|tests/launch/final-operational-evidence-producers\.test\.mjs|tests/launch/hard-clearance-revalidation\.test\.mjs|tests/launch/operational-application-evidence-audit\.test\.mjs)$'
             supplemental_allowed='^(scripts/hard-launch-status\.mjs|scripts/lib/hard-launch-control\.mjs|scripts/lib/operational-proof-schema\.mjs|scripts/prepare-operational-application-evidence\.mjs|scripts/print-hard-launch-blockers\.mjs|scripts/verify-operational-application-evidence\.mjs|tests/launch/hard-launch-blocker-plan\.test\.mjs|tests/launch/phase1-manual-public-launch-policy\.test\.mjs)$'
             while IFS= read -r file; do
               [[ -z "$file" || "$file" =~ $allowed || "$file" =~ $supplemental_allowed ]] || { echo "::error::Non-control-plane file changed since frozen release: $file"; exit 1; }
@@ -331,8 +331,8 @@ jobs:
           [[ "$GITHUB_REPOSITORY_ID" == "1173943093" ]]
           [[ "$GITHUB_REF" == "refs/heads/main" && "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]
           [[ "$TARGET_SHA" =~ ^[0-9a-f]{40}$ && "$TARGET_SHA" == "$GITHUB_SHA" ]]
-          [[ "$RELEASE_SHA" == "15b09519222e749808c2a18b5d1ab1c3126fcb42" ]]
-          [[ "$DEPLOY_RUN_ID" == "34500748478" ]]
+          [[ "$RELEASE_SHA" == "26b3609457fa80a70db56767db7c85be01d7b015" ]]
+          [[ "$DEPLOY_RUN_ID" == "35236281371" ]]
           case "$OPERATION/$SELECTED_GATE" in
             verify/all|verify/paymentUnlockExactlyOnce|verify/brokerCommissionLockExactlyOnce) ;;
             sync/paymentUnlockExactlyOnce|repair-and-sync/paymentUnlockExactlyOnce) ;;
@@ -415,7 +415,7 @@ jobs:
             }
             echo "Exact same-SHA release/control-plane pair verified."
           else
-            allowed='^(\.github/workflows/firebase-production-deploy\.yml|\.github/workflows/live-role-smoke\.yml|\.github/workflows/operational-application-evidence\.yml|\.github/workflows/operational-provider-evidence\.yml|\.github/workflows/privileged-access-rotation-evidence\.yml|\.github/workflows/technician-physical-evidence\.yml|scripts/finalize-operational-provider-evidence\.mjs|scripts/hard-clearance-production-revalidation\.mjs|scripts/launch-status\.mjs|scripts/publish-direct-operational-proof\.mjs|scripts/publish-operational-application-evidence\.mjs|scripts/publish-operational-provider-evidence\.mjs|scripts/resolve-admin-app-check-site-key\.mjs|scripts/run-frozen-release-evidence\.mjs|scripts/verify-ai-live-evidence\.mjs|scripts/verify-hard-launch-approval\.mjs|scripts/verify-operational-readiness\.mjs|tests/launch/ai-operational-contract\.test\.mjs|tests/launch/external-gate-production-provenance\.test\.mjs|tests/launch/final-operational-evidence-producers\.test\.mjs|tests/launch/hard-clearance-revalidation\.test\.mjs|tests/launch/operational-application-evidence-audit\.test\.mjs)$'
+            allowed='^(\.github/workflows/firebase-production-deploy\.yml|\.github/workflows/repair-frozen-sovereign-ai-runtime\.yml|\.github/workflows/live-role-smoke\.yml|\.github/workflows/operational-application-evidence\.yml|\.github/workflows/operational-provider-evidence\.yml|\.github/workflows/privileged-access-rotation-evidence\.yml|\.github/workflows/technician-physical-evidence\.yml|scripts/finalize-operational-provider-evidence\.mjs|scripts/hard-clearance-production-revalidation\.mjs|scripts/launch-status\.mjs|scripts/publish-direct-operational-proof\.mjs|scripts/publish-operational-application-evidence\.mjs|scripts/publish-operational-provider-evidence\.mjs|scripts/resolve-admin-app-check-site-key\.mjs|scripts/run-frozen-release-evidence\.mjs|scripts/verify-ai-live-evidence\.mjs|scripts/verify-hard-launch-approval\.mjs|scripts/verify-operational-readiness\.mjs|tests/launch/ai-operational-contract\.test\.mjs|tests/launch/external-gate-production-provenance\.test\.mjs|tests/launch/final-operational-evidence-producers\.test\.mjs|tests/launch/hard-clearance-revalidation\.test\.mjs|tests/launch/operational-application-evidence-audit\.test\.mjs)$'
             supplemental_allowed='^(scripts/hard-launch-status\.mjs|scripts/lib/hard-launch-control\.mjs|scripts/lib/operational-proof-schema\.mjs|scripts/prepare-operational-application-evidence\.mjs|scripts/print-hard-launch-blockers\.mjs|scripts/verify-operational-application-evidence\.mjs|tests/launch/hard-launch-blocker-plan\.test\.mjs|tests/launch/phase1-manual-public-launch-policy\.test\.mjs)$'
             while IFS= read -r file; do
               [[ -z "$file" || "$file" =~ $allowed || "$file" =~ $supplemental_allowed ]] || { echo "::error::Non-control-plane file changed since frozen release: $file"; exit 1; }
@@ -491,8 +491,8 @@ jobs:
               REPAIR_SOURCE_ENVIRONMENT: 'production',
               REPAIR_TARGET_ENVIRONMENT: 'hard-public-launch',
               GCP_PROJECT_ID: 'bin-group-57c60',
-              PRODUCTION_RELEASE_SHA: '15b09519222e749808c2a18b5d1ab1c3126fcb42',
-              PRODUCTION_DEPLOY_RUN_ID: '34500748478',
+              PRODUCTION_RELEASE_SHA: '26b3609457fa80a70db56767db7c85be01d7b015',
+              PRODUCTION_DEPLOY_RUN_ID: '35236281371',
             };
             for (const [name, value] of Object.entries(required)) {
               if (env[name] !== value) throw new Error(`Credential repair context mismatch: ${name}.`);

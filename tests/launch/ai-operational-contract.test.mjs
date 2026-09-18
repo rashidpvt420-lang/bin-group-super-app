@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
   assertReviewedAiVerifierSource,
+  transformReviewedAiVerifierQuotaBoundary,
 } from '../../scripts/run-frozen-release-evidence.mjs';
 
 const read = (file) => readFileSync(file, 'utf8');
@@ -120,6 +121,11 @@ test('AI provider evidence is exact-SHA, deployment-bound, protected, and hard-l
   assert.match(verifier, /providerSuccessRate/);
   assert.match(verifier, /measuredProviderUsageRequired/);
   assert.match(verifier, /maxBudgetEnvelopeAedMicrosPerChatRequest/);
+  assert.match(verifier, /nested\.person@example\.com/);
+  assert.match(verifier, /\+971509876543/);
+  assert.match(verifier, /Passport B7654321/);
+  assert.match(verifier, /Account 9876543210/);
+  assert.match(verifier, /redactionsApplied\) \? redactionsApplied : 'invalid'/);
   assert.match(publisher, /AI SLO .*missing or non-numeric/);
   assert.match(publisher, /measured token\/cost evidence invalid/);
   assert.match(finalizer, /aiProviderHealth: 'workflow-artifact'/);
@@ -137,7 +143,7 @@ test('AI evidence uses an exact reviewed run-scoped identity without touching a 
     () => assertReviewedAiVerifierSource(verifier.replace("role: 'ai_evidence_probe'", "role: 'admin'")),
     /unreviewed isolated AI verifier/,
   );
-  assert.match(wrapper, /REVIEWED_AI_VERIFIER_BLOB = '481b466417f3c5c97ceeae45c0fb395e8824f04a'/);
+  assert.match(wrapper, /REVIEWED_AI_VERIFIER_BLOB = '9c613db118a2e05efc3b089ef7890a7d48d4ee03'/);
   assert.match(wrapper, /assertReviewedAiVerifier\(releaseRoot\)/);
   assert.match(workflow, /cp control-plane\/scripts\/verify-ai-live-evidence\.mjs release\/scripts\/verify-ai-live-evidence\.mjs/);
   assert.match(workflow, /Enforce run-scoped AI evidence fallback cleanup/);
@@ -167,6 +173,46 @@ test('AI evidence uses an exact reviewed run-scoped identity without touching a 
   assert.match(publisher, /AI authenticated UID is not bound to this run attempt/);
   assert.match(publisher, /AI run-scoped evidence identity lifecycle invalid/);
   assert.doesNotMatch(publisher, /originalUsageRestored/);
+});
+
+test('reviewed AI quota boundary adapter preserves the >=4 privacy assertion on the final allowed request', () => {
+  const verifier = read('scripts/verify-ai-live-evidence.mjs');
+  const adapted = transformReviewedAiVerifierQuotaBoundary(verifier);
+  const privacyBearingGeminiCalls = adapted.match(/data: \{ \.\.\.sensitiveProbe, provider: 'gemini' \}/g) || [];
+
+  assert.equal(privacyBearingGeminiCalls.length, 2);
+  assert.doesNotMatch(adapted, /Return a brief advisory-only boundary statement\./);
+  assert.match(adapted, /const boundarySuccess = assertLiveProbe\(boundarySuccessResult, 'gemini'\)/);
+  assert.throws(
+    () => transformReviewedAiVerifierQuotaBoundary(verifier.replace('Return a brief advisory-only boundary statement.', 'changed boundary probe')),
+    /unreviewed isolated AI verifier/,
+  );
+});
+
+test('reviewed AI adapter preserves the runtime non-authoritative boundary in provider samples', () => {
+  const verifier = read('scripts/verify-ai-live-evidence.mjs');
+  const publisher = read('scripts/publish-operational-provider-evidence.mjs');
+  const adapted = transformReviewedAiVerifierQuotaBoundary(verifier);
+
+  assert.match(adapted, /clientContextAuthoritative: false,/);
+  assert.doesNotMatch(adapted, /clientContextAuthoritative: data\.clientContextAuthoritative === false,/);
+  assert.match(adapted, /data\.clientContextAuthoritative !== false/);
+  assert.match(adapted, /data: \{ \.\.\.sensitiveProbe, provider: 'gemini' \}/);
+  assert.match(publisher, /sample\.clientContextAuthoritative !== false/);
+});
+
+test('reviewed AI adapter rejects provider-authority source drift before adapting', () => {
+  const verifier = read('scripts/verify-ai-live-evidence.mjs');
+
+  assert.throws(
+    () => transformReviewedAiVerifierQuotaBoundary(
+      verifier.replace(
+        'clientContextAuthoritative: data.clientContextAuthoritative === false,',
+        'clientContextAuthoritative: true,',
+      ),
+    ),
+    /unreviewed isolated AI verifier/,
+  );
 });
 
 test('AI observability records non-PII aggregate SLO, token and cost-envelope metrics', () => {

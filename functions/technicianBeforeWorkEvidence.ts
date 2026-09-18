@@ -120,6 +120,10 @@ export const submitTechnicianBeforeWorkEvidence = onCall(
         technicianBeforePhotoUrl: currentData.technicianBeforePhotoUrl || downloadUrl,
         technicianBeforeEvidenceAt: now,
         technicianBeforeEvidenceBy: technicianId,
+        // Publish the verified site photo to the canonical fields consumed by
+        // completion and physical evidence, preserving any original fault photo.
+        beforePhotos: FieldValue.arrayUnion(downloadUrl),
+        beforePhotoUrl: currentData.beforePhotoUrl || downloadUrl,
         updatedAt: now,
       });
       transaction.set(auditRef, {
