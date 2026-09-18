@@ -80,7 +80,7 @@ const REVIEWED_TENANT_PHOTO_SELECTION = [
 // deployed runtime. Pin the exact verifier blob so the dual-SHA overlay cannot
 // silently expand beyond the reviewed run-scoped quota isolation contract.
 const AI_VERIFIER = 'scripts/verify-ai-live-evidence.mjs';
-const REVIEWED_AI_VERIFIER_BLOB = '481b466417f3c5c97ceeae45c0fb395e8824f04a';
+const REVIEWED_AI_VERIFIER_BLOB = '9c613db118a2e05efc3b089ef7890a7d48d4ee03';
 
 export function assertApplicationEvidenceCredentials(gate, env = process.env) {
   if (!['all', 'paymentUnlockExactlyOnce', 'brokerCommissionLockExactlyOnce'].includes(gate)) return;

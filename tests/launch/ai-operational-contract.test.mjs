@@ -120,6 +120,11 @@ test('AI provider evidence is exact-SHA, deployment-bound, protected, and hard-l
   assert.match(verifier, /providerSuccessRate/);
   assert.match(verifier, /measuredProviderUsageRequired/);
   assert.match(verifier, /maxBudgetEnvelopeAedMicrosPerChatRequest/);
+  assert.match(verifier, /nested\.person@example\.com/);
+  assert.match(verifier, /\+971509876543/);
+  assert.match(verifier, /Passport B7654321/);
+  assert.match(verifier, /Account 9876543210/);
+  assert.match(verifier, /redactionsApplied\) \? redactionsApplied : 'invalid'/);
   assert.match(publisher, /AI SLO .*missing or non-numeric/);
   assert.match(publisher, /measured token\/cost evidence invalid/);
   assert.match(finalizer, /aiProviderHealth: 'workflow-artifact'/);
@@ -137,7 +142,7 @@ test('AI evidence uses an exact reviewed run-scoped identity without touching a 
     () => assertReviewedAiVerifierSource(verifier.replace("role: 'ai_evidence_probe'", "role: 'admin'")),
     /unreviewed isolated AI verifier/,
   );
-  assert.match(wrapper, /REVIEWED_AI_VERIFIER_BLOB = '481b466417f3c5c97ceeae45c0fb395e8824f04a'/);
+  assert.match(wrapper, /REVIEWED_AI_VERIFIER_BLOB = '9c613db118a2e05efc3b089ef7890a7d48d4ee03'/);
   assert.match(wrapper, /assertReviewedAiVerifier\(releaseRoot\)/);
   assert.match(workflow, /cp control-plane\/scripts\/verify-ai-live-evidence\.mjs release\/scripts\/verify-ai-live-evidence\.mjs/);
   assert.match(workflow, /Enforce run-scoped AI evidence fallback cleanup/);
