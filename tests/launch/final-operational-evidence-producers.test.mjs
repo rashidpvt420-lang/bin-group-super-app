@@ -227,7 +227,7 @@ function credentialFixture(mode = 'verify') {
     GITHUB_WORKFLOW: 'Operational Application Evidence', GITHUB_JOB: 'verify-and-sync-founder-totp',
     REPAIR_SOURCE_ENVIRONMENT: 'production', REPAIR_TARGET_ENVIRONMENT: 'hard-public-launch',
     GCP_PROJECT_ID: 'bin-group-57c60',
-    PRODUCTION_RELEASE_SHA: '15b09519222e749808c2a18b5d1ab1c3126fcb42', PRODUCTION_DEPLOY_RUN_ID: '34500748478',
+    PRODUCTION_RELEASE_SHA: '26b3609457fa80a70db56767db7c85be01d7b015', PRODUCTION_DEPLOY_RUN_ID: '35236281371',
     GITHUB_SHA: 'a'.repeat(40), TARGET_SHA: 'a'.repeat(40),
     AUTHORIZED_FOUNDER_ACTORS: ' fixture-owner, fixture-reviewer ', GITHUB_ACTOR: 'fixture-owner', GITHUB_TRIGGERING_ACTOR: 'fixture-owner',
     FOUNDER_TOTP_OPERATION: mode,
