@@ -95,6 +95,8 @@ const REVIEWED_AI_QUOTA_BOUNDARY_PROBE = [
   "    data: { ...sensitiveProbe, provider: 'gemini' },",
   '  });',
 ].join('\n');
+const LEGACY_AI_PROVIDER_AUTHORITY_SAMPLE = '    clientContextAuthoritative: data.clientContextAuthoritative === false,';
+const REVIEWED_AI_PROVIDER_AUTHORITY_SAMPLE = '    clientContextAuthoritative: false,';
 
 export function assertApplicationEvidenceCredentials(gate, env = process.env) {
   if (!['all', 'paymentUnlockExactlyOnce', 'brokerCommissionLockExactlyOnce'].includes(gate)) return;
@@ -165,7 +167,7 @@ function verifyRecentOwnerApplicationCommand(env) {
   const comments = fetchPublicGithubJson(
     `https://api.github.com/repos/${EXPECTED_REPOSITORY}/issues/${OWNER_COMMAND_ISSUE}/comments?per_page=100&since=${encodeURIComponent(since)}`,
   );
-  if (!Array.isArray(comments)) fail('owner-command provenance comments response is invalid');
+  if (!Array.isArray(comments)) fail('protected owner-command provenance response was not valid JSON');
   const expectedBodies = new Set([
     `/bin-launch evidence application-all ${controlSha} ${releaseSha} ${deployRunId}`,
     `/bin-launch evidence application-current ${controlSha} ${releaseSha} ${deployRunId}`,
@@ -276,7 +278,12 @@ export function transformReviewedAiVerifierQuotaBoundary(source) {
   if (source.split(LEGACY_AI_QUOTA_BOUNDARY_PROBE).length !== 2) {
     fail('reviewed AI verifier quota-boundary source drift');
   }
-  return source.replace(LEGACY_AI_QUOTA_BOUNDARY_PROBE, REVIEWED_AI_QUOTA_BOUNDARY_PROBE);
+  if (source.split(LEGACY_AI_PROVIDER_AUTHORITY_SAMPLE).length !== 2) {
+    fail('reviewed AI verifier provider-authority source drift');
+  }
+  return source
+    .replace(LEGACY_AI_QUOTA_BOUNDARY_PROBE, REVIEWED_AI_QUOTA_BOUNDARY_PROBE)
+    .replace(LEGACY_AI_PROVIDER_AUTHORITY_SAMPLE, REVIEWED_AI_PROVIDER_AUTHORITY_SAMPLE);
 }
 
 export function assertReviewedApplicationPreparationSource(source) {
