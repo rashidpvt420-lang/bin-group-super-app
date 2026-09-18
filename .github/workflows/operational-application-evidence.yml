@@ -576,7 +576,7 @@ jobs:
             return user.uid;
           }
 
-          export async function repairFounderTotp({ env, deployment, signIn, writeSecret, loadFounder,
+          export async function repairFounderTotp({ env, deployment, signIn, writeSecrets, loadFounder,
             updatePassword, claimsGrantAdminPortal, recoveryApproverRole, now = Date.now() }) {
             checkRepairContext(env);
             checkRepairDeployment(deployment, env, now);
@@ -694,10 +694,7 @@ jobs:
               env: process.env,
               deployment,
               signIn: signInWithRequiredTotpMfa,
-              writeSecret: (seed) => writeFounderEvidenceSecrets({
-                totpSecret: seed,
-                password: process.env.E2E_FOUNDER_PASSWORD,
-              }, process.env),
+              writeSecrets: (credentials) => writeFounderEvidenceSecrets(credentials, process.env),
               loadFounder: (email) => auth.getUserByEmail(email),
               updatePassword: (uid, password) => auth.updateUser(uid, { password }),
               claimsGrantAdminPortal,
