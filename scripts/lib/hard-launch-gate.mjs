@@ -60,8 +60,14 @@ function assertBaseHardLaunchContract() {
 
 assertBaseHardLaunchContract();
 
+export const POST_LAUNCH_FIELD_VALIDATION_GATES = Object.freeze([
+  'technicianPhysicalGpsEvidence',
+]);
+
 const PHASE1_REQUIRED_OPERATIONAL_GATES = Object.freeze(
-  base.REQUIRED_OPERATIONAL_GATES.filter((gate) => gate !== 'stripeLiveBilling'),
+  base.REQUIRED_OPERATIONAL_GATES.filter((gate) => (
+    gate !== 'stripeLiveBilling' && !POST_LAUNCH_FIELD_VALIDATION_GATES.includes(gate)
+  )),
 );
 
 export function requiredOperationalGatesForPaymentPolicy(paymentPolicy) {
@@ -81,9 +87,11 @@ function unique(values) {
   return [...new Set(values)];
 }
 
-function isStripeOperationalError(error) {
+function isPhase1DeferredOperationalError(error) {
   return error === 'operational gate missing: stripeLiveBilling'
-    || String(error || '').startsWith('stripeLiveBilling.');
+    || String(error || '').startsWith('stripeLiveBilling.')
+    || error === 'operational gate missing: technicianPhysicalGpsEvidence'
+    || String(error || '').startsWith('technicianPhysicalGpsEvidence.');
 }
 
 function normalizePaymentMethods(value) {
@@ -145,7 +153,7 @@ export function validateOperationalReadinessReport(doc, commitSha, options = {})
   }
 
   return unique([
-    ...baseErrors.filter((error) => !isStripeOperationalError(error)),
+    ...baseErrors.filter((error) => !isPhase1DeferredOperationalError(error)),
     ...policyErrors,
   ]);
 }
@@ -171,7 +179,7 @@ export function evaluateHardLaunchEligibility(args = {}) {
 
   const errors = unique([
     ...baseResult.errors.filter((error) => (
-      policy === PHASE1_PAYMENT_POLICY ? !isStripeOperationalError(error) : true
+      policy === PHASE1_PAYMENT_POLICY ? !isPhase1DeferredOperationalError(error) : true
     )),
     ...policyErrors,
   ]);
