@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { PRODUCTION } from '../../scripts/lib/launch-honesty.mjs';
 import {
+  POST_LAUNCH_FIELD_VALIDATION_GATES,
   requiredOperationalGatesForPaymentPolicy,
   validateOperationalReadinessReport,
 } from '../../scripts/lib/hard-launch-gate.mjs';
@@ -85,11 +86,13 @@ function phase1OperationalReport() {
   };
 }
 
-test('Phase 1 Cash/Cheque hard clearance does not require Stripe', () => {
+test('Phase 1 Cash/Cheque hard clearance excludes unavailable pre-launch field validation and disabled Stripe', () => {
   const required = requiredOperationalGatesForPaymentPolicy('phase1-manual');
   assert.ok(required.includes('ownerPaymentActivation'));
   assert.ok(required.includes('paymentUnlockExactlyOnce'));
   assert.ok(!required.includes('stripeLiveBilling'));
+  assert.ok(!required.includes('technicianPhysicalGpsEvidence'));
+  assert.deepEqual(POST_LAUNCH_FIELD_VALIDATION_GATES, ['technicianPhysicalGpsEvidence']);
 
   const report = phase1OperationalReport();
   assert.deepEqual(validateOperationalReadinessReport(report, commitSha, { now }), []);
