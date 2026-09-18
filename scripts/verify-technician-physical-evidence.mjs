@@ -132,6 +132,8 @@ if (!Number.isFinite(propertyDistanceMeters) || propertyDistanceMeters > MAX_PRO
 }
 
 const beforeRefs = [
+  ticket.technicianBeforePhotoUrl,
+  ...list(ticket.technicianBeforePhotos),
   ticket.beforePhotoUrl,
   ...list(ticket.beforePhotos),
   ...list(ticket.tenantPhotos),
