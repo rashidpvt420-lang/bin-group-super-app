@@ -339,18 +339,18 @@ export function assertReviewedApplicationPreparationSource(source) {
   }
 }
 
-function installReviewedActivationAdapter(releaseRoot) {
+function applicationVerifierState(releaseRoot) {
   const file = path.join(releaseRoot, APPLICATION_VERIFIER);
   if (!lstatSync(file).isFile()) fail('frozen application verifier is not a regular file');
-  const original = readFileSync(file, 'utf8');
+  const source = readFileSync(file, 'utf8');
   const committed = execFileSync('git', ['show', `HEAD:${APPLICATION_VERIFIER}`], { cwd: releaseRoot, encoding: 'utf8' });
   if (original !== committed && gitBlobSha(original) !== REVIEWED_APPLICATION_VERIFIER_BLOB) {
     fail('frozen application verifier has unreviewed working-tree changes');
   }
   const adapted = transformFrozenActivationVerifier(original);
   writeFileSync(file, adapted);
-  console.log(`[frozen-release-evidence] reviewed activation-policy adapter sha256=${createHash('sha256').update(adapted).digest('hex')}`);
-  return () => writeFileSync(file, original);
+  console.log(`[frozen-release-evidence] reviewed activation-policy adapter state=${state} sha256=${createHash('sha256').update(adapted).digest('hex')}`);
+  return () => writeFileSync(file, source);
 }
 
 function installReviewedTenantPhotoAdapter(releaseRoot) {
@@ -364,7 +364,7 @@ function installReviewedTenantPhotoAdapter(releaseRoot) {
   const adapted = transformFrozenTenantPhotoVerifier(original);
   writeFileSync(file, adapted);
   console.log(`[frozen-release-evidence] reviewed Tenant photo adapter sha256=${createHash('sha256').update(adapted).digest('hex')}`);
-  return () => writeFileSync(file, original);
+  return () => writeFileSync(file, source);
 }
 
 function installReviewedBrokerPaymentAdapter(releaseRoot) {
@@ -377,8 +377,8 @@ function installReviewedBrokerPaymentAdapter(releaseRoot) {
   }
   const adapted = transformFrozenBrokerPaymentVerifier(original);
   writeFileSync(file, adapted);
-  console.log(`[frozen-release-evidence] reviewed broker payment adapter sha256=${createHash('sha256').update(adapted).digest('hex')}`);
-  return () => writeFileSync(file, original);
+  console.log(`[frozen-release-evidence] reviewed broker payment adapter state=${state} sha256=${createHash('sha256').update(adapted).digest('hex')}`);
+  return () => writeFileSync(file, source);
 }
 
 function assertReviewedAiVerifier(releaseRoot) {

@@ -144,13 +144,14 @@ test('payment and commission evidence uses real replay invariants and requires F
   ]);
 
   assert.match(verifier, /latestApprovedPayment/);
-  assert.match(verifier, /latestBrokerCommission/);
+  assert.match(verifier, /latestBrokerCommissionWithApprovedPayment/);
+  assert.match(verifier, /no production broker commission lock has an approved payment binding/);
+  assert.match(verifier, /candidate\.id === directPaymentId/);
+  assert.match(verifier, /text\(data\.contractId \|\| data\.intakeId \|\| id\) === contractId/);
   assert.match(verifier, /directPaymentId/);
   assert.match(verifier, /collection\('payment_transactions'\)\.where\('status', '==', 'APPROVED'\)/);
   assert.match(verifier, /data\.paymentVerified === true/);
   assert.match(verifier, /data\.unlocksDashboard === true/);
-  assert.match(verifier, /text\(data\.contractId \|\| data\.intakeId\) === contractId/);
-  assert.match(verifier, /no approved production payment is bound to the broker commission contract/);
   assert.match(verifier, /convertedBrokerLeadForCommission/);
   assert.match(verifier, /collection\('brokerLeads'\)\.where\('commissionId', '==', commissionId\)/);
   assert.match(verifier, /lower\(data\.status\) === 'converted'/);
@@ -228,6 +229,49 @@ test('frozen Tenant verifier adapter upgrades legacy selection, accepts exact re
     () => transformFrozenTenantPhotoVerifier(`${reviewedSelection}\n${reviewedSelection}`),
     /exact legacy or reviewed selection is required/,
   );
+});
+
+test('application evidence publish step passes GitHub token for protected owner-command provenance', async () => {
+  const workflow = await read('.github/workflows/operational-application-evidence.yml');
+  const start = workflow.indexOf('      - name: Auto-discover, verify, and publish application evidence');
+  assert.ok(start >= 0);
+  const end = workflow.indexOf('\n      - name:', start + 1);
+  const step = workflow.slice(start, end > start ? end : workflow.length);
+  assert.match(step, /GITHUB_TOKEN: \$\{\{ secrets\.GITHUB_TOKEN \}\}/);
+  assert.match(step, /node \.\.\/control-plane\/scripts\/run-frozen-release-evidence\.mjs scripts\/verify-operational-application-evidence-mfa\.mjs/);
+});
+
+test('reviewed application verifier still receives the cent-precision activation adapter', async () => {
+  const wrapper = await read('scripts/run-frozen-release-evidence.mjs');
+  const start = wrapper.indexOf('function installReviewedActivationAdapter');
+  assert.ok(start >= 0);
+  const end = wrapper.indexOf('\nfunction ', start + 1);
+  const installer = wrapper.slice(start, end > start ? end : wrapper.length);
+  assert.match(installer, /transformFrozenActivationVerifier\(source\)/);
+  assert.doesNotMatch(installer, /state === 'reviewed'[\s\S]*return \(\) => \{\}/);
+  assert.match(wrapper, /resolveLockedOwnerActivationSchedule/);
+  assert.match(wrapper, /normalizeAedMoney/);
+});
+
+test('reviewed application verifier still receives the broker payment adapter', async () => {
+  const wrapper = await read('scripts/run-frozen-release-evidence.mjs');
+  const start = wrapper.indexOf('function installReviewedBrokerPaymentAdapter');
+  assert.ok(start >= 0);
+  const end = wrapper.indexOf('\nfunction ', start + 1);
+  const installer = wrapper.slice(start, end > start ? end : wrapper.length);
+  assert.match(installer, /transformFrozenBrokerPaymentVerifier\(source\)/);
+  assert.doesNotMatch(installer, /state === 'reviewed'[\s\S]*return \(\) => \{\}/);
+  assert.match(installer, /state=\$\{state\}/);
+});
+
+test('application verifier overlay accepts only frozen source or the exact reviewed verifier blob', async () => {
+  const wrapper = await read('scripts/run-frozen-release-evidence.mjs');
+  const workflow = await read('.github/workflows/operational-application-evidence.yml');
+  assert.match(wrapper, /REVIEWED_APPLICATION_VERIFIER_BLOB = 'f8e37913ea7740b37a53c1a17590d60cb7102f5b'/);
+  assert.match(wrapper, /gitBlobSha\(source\) === REVIEWED_APPLICATION_VERIFIER_BLOB/);
+  assert.match(wrapper, /application verifier has unreviewed working-tree changes/);
+  assert.match(wrapper, /state === 'reviewed'/);
+  assert.match(workflow, /cp control-plane\/scripts\/verify-operational-application-evidence\.mjs release\/scripts\/verify-operational-application-evidence\.mjs/);
 });
 
 test('frozen broker payment adapter upgrades only the reviewed payment binding and refuses drift', () => {

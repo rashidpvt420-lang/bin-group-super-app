@@ -267,6 +267,7 @@ jobs:
       - name: Auto-discover, verify, and publish application evidence
         working-directory: release
         env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SELECTED_GATE: ${{ inputs.gate }}
           E2E_FOUNDER_EMAIL: ${{ secrets.E2E_FOUNDER_EMAIL }}
           E2E_FOUNDER_PASSWORD: ${{ secrets.E2E_FOUNDER_PASSWORD }}
