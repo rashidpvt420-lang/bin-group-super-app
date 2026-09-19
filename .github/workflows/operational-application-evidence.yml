@@ -316,6 +316,15 @@ jobs:
           APPLICATION_PREPARATION_MODE: cleanup-staff
         run: node ../control-plane/scripts/run-frozen-release-evidence.mjs scripts/prepare-operational-application-evidence.mjs
 
+      - name: Clean up run-scoped renewal evidence
+        if: always() && (inputs.gate == 'all' || inputs.gate == 'renewalScheduler')
+        working-directory: release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          E2E_BASE_URL: https://bin-group-57c60.web.app
+          APPLICATION_PREPARATION_MODE: cleanup-renewal
+        run: node ../control-plane/scripts/run-frozen-release-evidence.mjs scripts/prepare-operational-application-evidence.mjs
+
       - name: Upload application proof batch
         if: success()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
