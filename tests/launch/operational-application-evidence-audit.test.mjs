@@ -33,6 +33,11 @@ test('application evidence workflow is protected and auto-discovers fixed produc
   assert.match(workflow, /E2E_TENANT_EMAIL:\s*\$\{\{ secrets\.E2E_TENANT_EMAIL \}\}/);
   assert.match(workflow, /E2E_TENANT_PASSWORD:\s*\$\{\{ secrets\.E2E_TENANT_PASSWORD \}\}/);
   assert.match(workflow, /run-frozen-release-evidence\.mjs scripts\/prepare-operational-application-evidence\.mjs/);
+  assert.match(workflow, /cp control-plane\/scripts\/verify-operational-application-evidence\.mjs release\/scripts\/verify-operational-application-evidence\.mjs/);
+  assert.match(workflow, /issues: read/);
+  assert.match(workflow, /GITHUB_TOKEN: \$\{\{ secrets\.GITHUB_TOKEN \}\}/);
+  assert.match(frozenWrapper, /GITHUB_TOKEN is required for protected owner-command provenance/);
+  assert.match(frozenWrapper, /Authorization: Bearer \$\{token\}/);
   assert.ok(
     workflow.indexOf('scripts/prepare-operational-application-evidence.mjs')
       < workflow.indexOf('OPERATIONAL_GATE="$gate" node ../control-plane/scripts/run-frozen-release-evidence.mjs scripts/verify-operational-application-provenance.mjs'),
@@ -137,6 +142,12 @@ test('payment and commission evidence uses real replay invariants and requires F
 
   assert.match(verifier, /latestApprovedPayment/);
   assert.match(verifier, /latestBrokerCommission/);
+  assert.match(verifier, /directPaymentId/);
+  assert.match(verifier, /collection\('payment_transactions'\)\.where\('status', '==', 'APPROVED'\)/);
+  assert.match(verifier, /data\.paymentVerified === true/);
+  assert.match(verifier, /data\.unlocksDashboard === true/);
+  assert.match(verifier, /text\(data\.contractId \|\| data\.intakeId\) === contractId/);
+  assert.match(verifier, /no approved production payment is bound to the broker commission contract/);
   assert.match(verifier, /convertedBrokerLeadForCommission/);
   assert.match(verifier, /collection\('brokerLeads'\)\.where\('commissionId', '==', commissionId\)/);
   assert.match(verifier, /lower\(data\.status\) === 'converted'/);
@@ -182,7 +193,7 @@ test('tenant notification proof auto-discovers successful delivery and requires 
   assert.match(delivery, /sendEachForMulticast/);
 });
 
-test('frozen Tenant verifier adapter only adds canonical production upload fields', () => {
+test('frozen Tenant verifier adapter upgrades legacy selection, accepts exact reviewed selection, and refuses drift', () => {
   const legacySelection = [
     '    ticket.requestPhotoUrl,',
     '    ...(Array.isArray(ticket.photoUrls) ? ticket.photoUrls : []),',

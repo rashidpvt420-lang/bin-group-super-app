@@ -48,6 +48,7 @@ env:
 permissions:
   contents: read
   actions: read
+  issues: read
   id-token: write
 
 concurrency:
@@ -156,8 +157,9 @@ jobs:
           ref: ${{ inputs.frozen_release_sha }}
           path: release
 
-      - name: Overlay reviewed dual-SHA publisher and Tenant delivery preparation
+      - name: Overlay reviewed dual-SHA publisher, application verifier, and Tenant delivery preparation
         run: |
+          cp control-plane/scripts/verify-operational-application-evidence.mjs release/scripts/verify-operational-application-evidence.mjs
           cp control-plane/scripts/publish-operational-application-evidence.mjs release/scripts/publish-operational-application-evidence.mjs
           cp control-plane/scripts/prepare-operational-application-evidence.mjs release/scripts/prepare-operational-application-evidence.mjs
 
@@ -171,6 +173,7 @@ jobs:
       - name: Check protected application bindings before production access
         working-directory: control-plane
         env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SELECTED_GATE: ${{ inputs.gate }}
           E2E_FOUNDER_EMAIL: ${{ secrets.E2E_FOUNDER_EMAIL }}
           E2E_FOUNDER_PASSWORD: ${{ secrets.E2E_FOUNDER_PASSWORD }}
@@ -255,6 +258,7 @@ jobs:
         if: inputs.gate == 'all' || inputs.gate == 'tenantNotificationDelivery'
         working-directory: release
         env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           E2E_BASE_URL: https://bin-group-57c60.web.app
           E2E_TENANT_EMAIL: ${{ secrets.E2E_TENANT_EMAIL }}
           E2E_TENANT_PASSWORD: ${{ secrets.E2E_TENANT_PASSWORD }}
