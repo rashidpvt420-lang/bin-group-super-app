@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises';
 import {
   assertReviewedApplicationPreparationSource,
   transformFrozenTenantPhotoVerifier,
+  transformFrozenBrokerPaymentVerifier,
 } from '../../scripts/run-frozen-release-evidence.mjs';
 
 const read = (path) => readFile(new URL(`../../${path}`, import.meta.url), 'utf8');
@@ -223,6 +224,26 @@ test('frozen Tenant verifier adapter upgrades legacy selection, accepts exact re
   );
   assert.throws(
     () => transformFrozenTenantPhotoVerifier(`${reviewedSelection}\n${reviewedSelection}`),
+    /exact legacy or reviewed selection is required/,
+  );
+});
+
+test('frozen broker payment adapter upgrades only the reviewed payment binding and refuses drift', () => {
+  const legacy = [
+    '  const paymentId = canonicalId(',
+    '    contractBefore.data.approvedPaymentId || contractBefore.data.activationPaymentId || contractBefore.data.paymentId,',
+    "    'payment_id',",
+    '  );',
+    "  const payment = await requireSnapshot(db.collection('payment_transactions').doc(paymentId), `payment_transactions/${paymentId}`);",
+  ].join('\n');
+  const adapted = transformFrozenBrokerPaymentVerifier(`before\n${legacy}\nafter`);
+  assert.match(adapted, /where\('status', '==', 'APPROVED'\)/);
+  assert.match(adapted, /paymentVerified === true/);
+  assert.match(adapted, /unlocksDashboard === true/);
+  assert.match(adapted, /text\(data\.contractId \|\| data\.intakeId\) === contractId/);
+  assert.match(adapted, /const paymentId = canonicalId\(payment\.id, 'payment_id'\)/);
+  assert.throws(
+    () => transformFrozenBrokerPaymentVerifier(legacy.replace("paymentId),", "paymentId || 'fallback'),")),
     /exact legacy or reviewed selection is required/,
   );
 });

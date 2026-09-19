@@ -75,6 +75,35 @@ const REVIEWED_TENANT_PHOTO_SELECTION = [
   '    ...(Array.isArray(ticket.initialPhotoUrls) ? ticket.initialPhotoUrls : []),',
   '    ...(Array.isArray(ticket.images) ? ticket.images : []),',
 ].join('\n');
+const LEGACY_BROKER_PAYMENT_SELECTION = [
+  '  const paymentId = canonicalId(',
+  '    contractBefore.data.approvedPaymentId || contractBefore.data.activationPaymentId || contractBefore.data.paymentId,',
+  "    'payment_id',",
+  '  );',
+  "  const payment = await requireSnapshot(db.collection('payment_transactions').doc(paymentId), `payment_transactions/${paymentId}`);",
+].join('\n');
+const REVIEWED_BROKER_PAYMENT_SELECTION = [
+  '  const directPaymentId = text(',
+  '    contractBefore.data.approvedPaymentId || contractBefore.data.activationPaymentId || contractBefore.data.paymentId,',
+  '  );',
+  '  let payment;',
+  "  if (/^[A-Za-z0-9_-]{3,180}$/.test(directPaymentId)) {",
+  '    payment = await requireSnapshot(',
+  "      db.collection('payment_transactions').doc(directPaymentId),",
+  '      `payment_transactions/${directPaymentId}`,',
+  '    );',
+  '  } else {',
+  "    const paymentsSnapshot = await db.collection('payment_transactions').where('status', '==', 'APPROVED').limit(100).get();",
+  "    const paymentCandidates = sortedResults(paymentsSnapshot, ['approvedAt', 'updatedAt', 'createdAt']);",
+  '    payment = paymentCandidates.find(({ data }) =>',
+  '      data.paymentVerified === true &&',
+  '      data.unlocksDashboard === true &&',
+  '      text(data.contractId || data.intakeId) === contractId',
+  '    );',
+  "    if (!payment) fail('no approved production payment is bound to the broker commission contract');",
+  '  }',
+  "  const paymentId = canonicalId(payment.id, 'payment_id');",
+].join('\n');
 
 // AI live evidence uses a reviewed control-plane verifier over the frozen
 // deployed runtime. Pin the exact verifier blob so the dual-SHA overlay cannot
@@ -276,6 +305,14 @@ export function transformFrozenTenantPhotoVerifier(source) {
   fail('frozen Tenant photo verifier source drift; exact legacy or reviewed selection is required');
 }
 
+export function transformFrozenBrokerPaymentVerifier(source) {
+  const legacyMatches = source.split(LEGACY_BROKER_PAYMENT_SELECTION).length - 1;
+  const reviewedMatches = source.split(REVIEWED_BROKER_PAYMENT_SELECTION).length - 1;
+  if (legacyMatches === 1 && reviewedMatches === 0) return source.replace(LEGACY_BROKER_PAYMENT_SELECTION, REVIEWED_BROKER_PAYMENT_SELECTION);
+  if (legacyMatches === 0 && reviewedMatches === 1) return source;
+  fail('frozen broker payment verifier source drift; exact legacy or reviewed selection is required');
+}
+
 export function assertReviewedAiVerifierSource(source) {
   if (gitBlobSha(source) !== REVIEWED_AI_VERIFIER_BLOB) {
     fail('unreviewed isolated AI verifier');
@@ -322,6 +359,18 @@ function installReviewedTenantPhotoAdapter(releaseRoot) {
   const adapted = transformFrozenTenantPhotoVerifier(original);
   writeFileSync(file, adapted);
   console.log(`[frozen-release-evidence] reviewed Tenant photo adapter sha256=${createHash('sha256').update(adapted).digest('hex')}`);
+  return () => writeFileSync(file, original);
+}
+
+function installReviewedBrokerPaymentAdapter(releaseRoot) {
+  const file = path.join(releaseRoot, APPLICATION_VERIFIER);
+  if (!lstatSync(file).isFile()) fail('frozen application verifier is not a regular file');
+  const original = readFileSync(file, 'utf8');
+  const committed = execFileSync('git', ['show', `HEAD:${APPLICATION_VERIFIER}`], { cwd: releaseRoot, encoding: 'utf8' });
+  if (original !== committed) fail('frozen application verifier has unreviewed working-tree changes');
+  const adapted = transformFrozenBrokerPaymentVerifier(original);
+  writeFileSync(file, adapted);
+  console.log(`[frozen-release-evidence] reviewed broker payment adapter sha256=${createHash('sha256').update(adapted).digest('hex')}`);
   return () => writeFileSync(file, original);
 }
 
