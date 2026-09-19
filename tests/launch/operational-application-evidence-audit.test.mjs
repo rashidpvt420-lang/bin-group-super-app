@@ -238,6 +238,18 @@ test('application evidence publish step passes GitHub token for protected owner-
   assert.match(step, /node \.\.\/control-plane\/scripts\/run-frozen-release-evidence\.mjs scripts\/verify-operational-application-evidence-mfa\.mjs/);
 });
 
+test('reviewed application verifier still receives the cent-precision activation adapter', async () => {
+  const wrapper = await read('scripts/run-frozen-release-evidence.mjs');
+  const start = wrapper.indexOf('function installReviewedActivationAdapter');
+  assert.ok(start >= 0);
+  const end = wrapper.indexOf('\nfunction ', start + 1);
+  const installer = wrapper.slice(start, end > start ? end : wrapper.length);
+  assert.match(installer, /transformFrozenActivationVerifier\(source\)/);
+  assert.doesNotMatch(installer, /state === 'reviewed'[\s\S]*return \(\) => \{\}/);
+  assert.match(wrapper, /resolveLockedOwnerActivationSchedule/);
+  assert.match(wrapper, /normalizeAedMoney/);
+});
+
 test('application verifier overlay accepts only frozen source or the exact reviewed verifier blob', async () => {
   const wrapper = await read('scripts/run-frozen-release-evidence.mjs');
   const workflow = await read('.github/workflows/operational-application-evidence.yml');
