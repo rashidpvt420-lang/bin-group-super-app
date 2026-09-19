@@ -358,9 +358,9 @@ test('staff evidence auto-discovers one audited technician with no privileged cl
   assert.match(verifier, /no audited production technician with consistent staff registries was found/);
   assert.match(verifier, /error\?\.code === 'auth\/user-not-found'/);
   assert.match(verifier, /if \(!authRecord\) continue/);
-  assert.match(verifier, /if \(!userSnapshot\.exists\) continue/);
-  assert.match(verifier, /lower\(user\.role \|\| user\.userRole\) !== 'technician'/);
-  assert.match(verifier, /\{ audit: creationAudit, authRecord \} = await latestStaffCreationAudit\(\)/);
+  assert.match(verifier, /!userSnapshot\.exists \|\| !accessSnapshot\.exists \|\| !hrSnapshot\.exists \|\| !technicianSnapshot\.exists/);
+  assert.match(verifier, /const role = lower\(userDoc\.data\.role \|\| userDoc\.data\.userRole\)/);
+  assert.match(verifier, /audit: creationAudit,[\s\S]*authRecord,[\s\S]*userDoc,[\s\S]*accessDoc,[\s\S]*hrDoc,[\s\S]*technicianDoc,[\s\S]*auditSnapshot,[\s\S]*\} = await latestStaffCreationAudit\(\)/);
   assert.doesNotMatch(verifier, /const authRecord = await admin\.auth\(\)\.getUser\(staffUid\);/);
   assert.match(verifier, /role !== 'technician'/);
   assert.match(verifier, /claims\.admin === true/);
