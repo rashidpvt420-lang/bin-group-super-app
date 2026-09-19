@@ -403,18 +403,37 @@ export const submitOwnerInspectionFirstOnboarding = onCall({ cors: true, enforce
   const contractRef = db.collection("contracts").doc(contractId);
   const intakeRef = db.collection("intake_submissions").doc(intakeId);
   const otpRef = db.collection("contract_signature_otps").doc(verificationId);
+  const brokerAttributionRef = db.collection("broker_attributions").doc(owner.uid);
   const existingIntake = await intakeRef.get();
   if (existingIntake.exists && upper(existingIntake.data()?.status) === "SUBMITTED_FOR_PROPERTY_INSPECTION") {
     return { success: true, idempotent: true, intakeId, contractId, paymentId: intakeId, nextState: "ADMIN_PROPERTY_REVIEW" };
   }
 
   await db.runTransaction(async (transaction) => {
-    const [otpSnap, freshIntake] = await Promise.all([transaction.get(otpRef), transaction.get(intakeRef)]);
+    const [otpSnap, freshIntake, brokerAttributionSnap] = await Promise.all([
+      transaction.get(otpRef),
+      transaction.get(intakeRef),
+      transaction.get(brokerAttributionRef),
+    ]);
     if (freshIntake.exists && upper(freshIntake.data()?.status) === "SUBMITTED_FOR_PROPERTY_INSPECTION") return;
     if (!otpSnap.exists) throw new HttpsError("failed-precondition", "Signature OTP verification was not found.");
     const otpData = otpSnap.data() || {};
     assertVerifiedOtp(otpData, { uid: owner.uid, contractId, contractHash: quote.quoteHash, signature: signatureName });
     transaction.set(otpRef, { consumedFor: contractId, consumedAt: otpData.consumedAt || now, updatedAt: now }, { merge: true });
+
+    const brokerAttribution = brokerAttributionSnap.data() || {};
+    const brokerUid = text(brokerAttribution.brokerUid || brokerAttribution.brokerId);
+    const brokerLeadId = text(brokerAttribution.sourceLeadId || brokerAttribution.attributionId);
+    const brokerBinding = brokerUid ? {
+      brokerId: brokerUid,
+      brokerUid,
+      brokerEmail: text(brokerAttribution.brokerEmail).toLowerCase(),
+      brokerName: text(brokerAttribution.brokerName),
+      brokerCode: text(brokerAttribution.referralCode),
+      brokerReferralCode: text(brokerAttribution.referralCode),
+      brokerAttributionId: text(brokerAttribution.attributionId || brokerLeadId),
+      brokerAttributionStatus: text(brokerAttribution.attributionStatus || "LOCKED"),
+    } : {};
 
     const normalizedProperties: PlainRecord[] = properties.map((property: PlainRecord, index: number) => {
       const clientDraftId = safeId(property.id || property.propertyId, `draft_property_${index + 1}`);
@@ -457,6 +476,7 @@ export const submitOwnerInspectionFirstOnboarding = onCall({ cors: true, enforce
       ownerName: fullName,
       ownerEmail,
       ownerMobile: mobile,
+      ...brokerBinding,
       companyProfile,
       contactInfo: { name: fullName, email: ownerEmail, phone: mobile, licenseNumber: text(companyProfile.licenseNumber) },
       properties: normalizedProperties,
@@ -506,6 +526,7 @@ export const submitOwnerInspectionFirstOnboarding = onCall({ cors: true, enforce
       ownerId: owner.uid,
       ownerEmail,
       ownerName: fullName,
+      ...brokerBinding,
       propertyIds: normalizedProperties.map((property: PlainRecord) => property.propertyId),
       properties: normalizedProperties,
       status: "SIGNED_PENDING_PROPERTY_INSPECTION",
@@ -542,6 +563,7 @@ export const submitOwnerInspectionFirstOnboarding = onCall({ cors: true, enforce
       ownerId: owner.uid,
       ownerEmail,
       ownerName: fullName,
+      ...brokerBinding,
       quoteHash: quote.quoteHash,
       quoteSnapshot: cleanPlain(quote),
       annualContractValue: money(quote.annualContractValue),
@@ -563,6 +585,23 @@ export const submitOwnerInspectionFirstOnboarding = onCall({ cors: true, enforce
     normalizedProperties.forEach((property: PlainRecord) => {
       transaction.set(db.collection("properties").doc(property.propertyId), { ...property, createdAt: now }, { merge: true });
     });
+
+    if (brokerUid && /^[A-Za-z0-9_-]{6,180}$/.test(brokerLeadId)) {
+      transaction.set(db.collection("brokerLeads").doc(brokerLeadId), {
+        brokerId: brokerUid,
+        brokerUid,
+        ownerId: owner.uid,
+        ownerUid: owner.uid,
+        ownerEmail,
+        intakeId,
+        contractId,
+        status: "negotiation",
+        lifecycleStatus: "OWNER_APPLICATION_SUBMITTED",
+        requiresAdminAttribution: true,
+        commissionStatus: "PENDING_CONTRACT_ACTIVATION",
+        updatedAt: now,
+      }, { merge: true });
+    }
 
     const ownerPatch = {
       role: "owner",
@@ -593,7 +632,14 @@ export const submitOwnerInspectionFirstOnboarding = onCall({ cors: true, enforce
       action: "SUBMIT_OWNER_FIVE_PAGE_INSPECTION_FIRST_APPLICATION",
       targetType: "intake_submissions",
       targetId: intakeId,
-      metadata: { contractId, paymentId: intakeId, propertyCount: normalizedProperties.length, quoteHash: quote.quoteHash },
+      metadata: {
+        contractId,
+        paymentId: intakeId,
+        propertyCount: normalizedProperties.length,
+        quoteHash: quote.quoteHash,
+        brokerUid: brokerUid || null,
+        brokerLeadId: brokerLeadId || null,
+      },
       createdAt: now,
     });
   });
