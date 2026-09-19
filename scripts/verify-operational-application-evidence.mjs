@@ -177,28 +177,49 @@ async function convertedBrokerLeadForCommission(commissionId, contractId, broker
   return matches[0];
 }
 
-async function latestStaffCreationAudit() {
+async function latestAuditedActiveTechnician() {
   const snapshot = await db.collection('audit_logs').where('action', '==', 'ADMIN_CREATE_STAFF_USER').limit(100).get();
   const candidates = sortedResults(snapshot, ['createdAt', 'timestamp'])
-    .filter(({ data }) => /^[A-Za-z0-9_-]{3,180}$/.test(text(data.targetId)));
+    .filter(({ data }) => text(data.targetId));
 
-  for (const audit of candidates) {
-    const staffUid = text(audit.data.targetId);
-    const authRecord = await admin.auth().getUser(staffUid).catch((error) => {
-      if (error?.code === 'auth/user-not-found') return null;
+  for (const creationAudit of candidates) {
+    const staffUid = text(creationAudit.data.targetId);
+    if (!/^[A-Za-z0-9_-]{3,180}$/.test(staffUid)) continue;
+
+    const [userSnapshot, accessSnapshot, hrSnapshot, technicianSnapshot, auditSnapshot] = await Promise.all([
+      db.collection('users').doc(staffUid).get(),
+      db.collection('staffAccess').doc(staffUid).get(),
+      db.collection('hrProfiles').doc(staffUid).get(),
+      db.collection('technicians').doc(staffUid).get(),
+      db.collection('audit_logs').where('targetId', '==', staffUid).limit(100).get(),
+    ]);
+    if (!userSnapshot.exists || !accessSnapshot.exists || !hrSnapshot.exists || !technicianSnapshot.exists) continue;
+
+    let authRecord;
+    try {
+      authRecord = await admin.auth().getUser(staffUid);
+    } catch (error) {
+      if (error?.code === 'auth/user-not-found') continue;
       throw error;
-    });
-    if (!authRecord) continue;
-    const userSnapshot = await db.collection('users').doc(staffUid).get();
-    if (!userSnapshot.exists) continue;
-    const user = userSnapshot.data() || {};
-    if (lower(user.role || user.userRole) !== 'technician') continue;
-    return { audit, authRecord };
+    }
+    if (authRecord.disabled) continue;
+
+    const userDoc = docResult(userSnapshot);
+    const accessDoc = docResult(accessSnapshot);
+    const hrDoc = docResult(hrSnapshot);
+    const technicianDoc = docResult(technicianSnapshot);
+    const role = lower(userDoc.data.role || userDoc.data.userRole);
+    const claims = authRecord.customClaims || {};
+    if (role !== 'technician') continue;
+    if (lower(claims.role || claims.userRole) !== role || claims.staff !== true || claims.technician !== true) continue;
+    if (lower(accessDoc.data.role) !== role || accessDoc.data.active !== true) continue;
+    if (lower(hrDoc.data.role || hrDoc.data.employeeType) !== role || lower(technicianDoc.data.role) !== role) continue;
+
+    return { creationAudit, staffUid, authRecord, userDoc, accessDoc, hrDoc, technicianDoc, auditSnapshot };
   }
 
-  fail('no audited production technician with a live Firebase Auth identity was found');
+  fail('no active audited production technician provisioning record was found');
 }
-
 async function latestRenewalWatch() {
   const snapshot = await db.collection('contract_renewal_watch').limit(100).get();
   const candidates = sortedResults(snapshot, ['generatedAt', 'updatedAt', 'createdAt']);
@@ -516,15 +537,18 @@ async function tenantNotificationProof() {
 }
 
 async function adminStaffClaimsProof() {
-  const { audit: creationAudit, authRecord } = await latestStaffCreationAudit();
-  const staffUid = canonicalId(creationAudit.data.targetId, 'staff_uid');
-  const [userDoc, accessDoc, hrDoc, technicianDoc, auditSnapshot] = await Promise.all([
-    requireSnapshot(db.collection('users').doc(staffUid), `users/${staffUid}`),
-    requireSnapshot(db.collection('staffAccess').doc(staffUid), `staffAccess/${staffUid}`),
-    requireSnapshot(db.collection('hrProfiles').doc(staffUid), `hrProfiles/${staffUid}`),
-    requireSnapshot(db.collection('technicians').doc(staffUid), `technicians/${staffUid}`),
-    db.collection('audit_logs').where('targetId', '==', staffUid).limit(100).get(),
-  ]);
+  const selected = await latestAuditedActiveTechnician();
+  const {
+    creationAudit,
+    staffUid,
+    authRecord,
+    userDoc,
+    accessDoc,
+    hrDoc,
+    technicianDoc,
+    auditSnapshot,
+  } = selected;
+  canonicalId(staffUid, 'staff_uid');
   const role = lower(userDoc.data.role || userDoc.data.userRole);
   const claims = authRecord.customClaims || {};
   if (role !== 'technician') fail('latest audited staff account is not a technician');
