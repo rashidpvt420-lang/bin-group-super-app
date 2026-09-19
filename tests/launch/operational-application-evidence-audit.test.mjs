@@ -9,6 +9,70 @@ import {
 
 const read = (path) => readFile(new URL(`../../${path}`, import.meta.url), 'utf8');
 
+test('renewal preparation requires the deployed response to identify its single fresh watch', async () => {
+  const source = await read('scripts/prepare-operational-application-evidence.mjs');
+  const start = source.indexOf('async function prepareRenewalSchedulerEvidence(');
+  const end = source.indexOf('\nasync function prepareBrokerCommissionEvidence(', start);
+  assert.ok(start >= 0 && end > start);
+  const callableSource = source.slice(start, end);
+
+  async function run({ responseResults, duplicateWatch = false, completed = true, pdfUrl = 'gs://test-bucket/renewal.pdf' } = {}) {
+    const contractId = 'run_scoped_contract';
+    const watchId = `contracts_${contractId}_7d`;
+    let now = 1_800_000_000_000;
+    let cleanupCount = 0;
+    let writtenContract;
+    const watch = { id: watchId, data: () => ({
+      sourceCollection: 'contracts', sourceId: contractId, contractId, tenantId: 'tenant',
+      pdfUrl, completed, generatedAt: 1_800_000_000_000,
+    }) };
+    const audit = { data: () => ({ action: 'CONTRACT_RENEWAL_MILESTONE_PROCESSED', actorId: 'CONTRACT_RENEWAL_PDF_SYSTEM' }) };
+    const db = { collection(name) {
+      if (name === 'contracts') return { doc: (id) => {
+        assert.equal(id, contractId);
+        return { set: async (data) => { writtenContract = data; } };
+      } };
+      return { where(field, operator, id) {
+        assert.equal(id, contractId);
+        assert.equal(operator, '==');
+        assert.equal(field, name === 'contract_renewal_watch' ? 'sourceId' : 'targetId');
+        return { limit: () => ({ get: async () => ({ docs: name === 'contract_renewal_watch'
+          ? (duplicateWatch ? [watch, { ...watch, id: `${watchId}_duplicate` }] : [watch]) : [audit] }) }) };
+      } };
+    } };
+    const deps = {
+      cleanupRenewalSchedulerEvidence: async () => { cleanupCount += 1; },
+      founderCallableSession: async () => ({ uid: 'founder', idToken: 'test-token', appCheckToken: 'test-app-check' }),
+      lower: (v) => String(v || '').toLowerCase(), text: (v) => String(v || '').trim(),
+      process: { env: { E2E_TENANT_EMAIL: 'tenant@example.test', GITHUB_RUN_ID: '123' } },
+      fail: (message) => { throw new Error(message); }, renewalEvidenceContractId: () => contractId,
+      admin: { firestore: { Timestamp: { fromMillis: (value) => value }, FieldValue: { serverTimestamp: () => now } } },
+      Date: { now: () => now }, RENEWAL_EVIDENCE_TYPE: 'TEST', REBUILD_CONTRACT_RENEWAL_WATCH_URL: 'https://example.test/callable',
+      fetch: async () => ({ ok: true, status: 200 }),
+      responseJson: async () => ({ result: { status: 'SUCCESS', scanned: 1, results: responseResults === undefined ? [{ id: watchId }] : responseResults } }),
+      millis: (value) => Number(value || 0), sleep: async (ms) => { now += ms; },
+      sha256: (value) => value, console: { log() {} },
+    };
+    const prepare = new Function('deps', `const { ${Object.keys(deps).join(', ')} } = deps; return (${callableSource});`)(deps);
+    try {
+      await prepare({ db, auth: { getUserByEmail: async () => ({ uid: 'tenant', emailVerified: true, customClaims: { testAccount: true } }) } });
+      assert.equal(writtenContract.ownerUid, 'founder');
+      assert.equal(cleanupCount, 1);
+    } catch (error) {
+      assert.equal(cleanupCount, 2, 'failed preparation cleans its own run-scoped fixture');
+      throw error;
+    }
+  }
+
+  await run(); // The callable returned a valid 7-day milestone, not the assumed 30-day ID.
+  for (const responseResults of [[], null, [{ id: 'unrelated_watch' }], [{ id: 'contracts_run_scoped_contract_7d', skipped: true }]]) {
+    await assert.rejects(run({ responseResults }), /response did not include the fresh run-scoped watch record/);
+  }
+  await assert.rejects(run({ duplicateWatch: true }), /multiple fresh watch records/);
+  await assert.rejects(run({ completed: false }), /did not produce a fresh PDF-backed watch record/);
+  await assert.rejects(run({ pdfUrl: '' }), /did not produce a fresh PDF-backed watch record/);
+});
+
 test('application evidence workflow is protected and auto-discovers fixed production records', async () => {
   const [workflow, verifier, wrapper, publisher, preparation, frozenWrapper] = await Promise.all([
     read('.github/workflows/operational-application-evidence.yml'),
@@ -124,7 +188,7 @@ test('application evidence workflow is protected and auto-discovers fixed produc
   assert.doesNotMatch(preparation, /collection\('broker_commissions'\)\.doc\([^)]*\)\.set/);
   assert.doesNotMatch(preparation, /collection\('auditLogs'\)\.doc\([^)]*\)\.set/);
 
-  assert.match(frozenWrapper, /REVIEWED_APPLICATION_PREPARATION_BLOB = 'f57863e4268882b5b78fa9afd561b85eb24875f5'/);
+  assert.match(frozenWrapper, /REVIEWED_APPLICATION_PREPARATION_BLOB = '97c4abee2c869a4cb4a05fdaf18b09705d705219'/);
   assert.match(frozenWrapper, /assertReviewedApplicationPreparation\(releaseRoot\)/);
   assert.match(frozenWrapper, /resolveApplicationEvidenceActor\(env\)/);
   assert.doesNotThrow(() => assertReviewedApplicationPreparationSource(preparation));

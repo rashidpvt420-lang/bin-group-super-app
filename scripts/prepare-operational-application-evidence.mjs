@@ -629,7 +629,7 @@ async function prepareRenewalSchedulerEvidence({ db, auth, apiKey, appId, debugT
       await sleep(1_000);
     }
     if (!snapshot) fail('deployed renewal scheduler did not produce a fresh PDF-backed watch record');
-    if (responseIds.length && !responseIds.includes(snapshot.id)) {
+    if (!responseIds.includes(snapshot.id)) {
       fail('deployed renewal scheduler response did not include the fresh run-scoped watch record');
     }
 
