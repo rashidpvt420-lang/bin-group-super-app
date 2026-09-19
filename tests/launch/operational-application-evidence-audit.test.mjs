@@ -368,7 +368,8 @@ test('staff evidence auto-discovers one audited technician with no privileged cl
 
   assert.match(verifier, /latestAuditedActiveTechnician/);
   assert.match(verifier, /error\?\.code === 'auth\/user-not-found'/);
-  assert.match(verifier, /if \(!authRecord\) continue/);
+  assert.match(verifier, /error\?\.code === 'auth\/user-not-found'/);
+  assert.match(verifier, /if \(authRecord\.disabled\) continue/);
   assert.match(verifier, /if \(!userSnapshot\.exists\) continue/);
   assert.match(verifier, /lower\(user\.role \|\| user\.userRole\) !== 'technician'/);
   assert.match(verifier, /\{ audit: creationAudit, authRecord \} = await latestStaffCreationAudit\(\)/);
