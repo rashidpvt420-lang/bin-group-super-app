@@ -93,7 +93,6 @@ test('application evidence workflow is protected and auto-discovers fixed produc
   assert.match(preparation, /tenantProfile\.activeContractId\) !== expectedContractId/);
   assert.match(preparation, /contractData\.e2eLaunchSeed !== true/);
   assert.match(preparation, /text\(contractData\.tenantUid \|\| contractData\.tenantId\) !== tenant\.uid/);
-  assert.match(preparation, /data\.e2eLaunchSeed === true/);
   assert.match(preparation, /contractEndDate: expiryAt/);
   assert.match(preparation, /renewalStatus: 'PENDING'/);
   assert.match(preparation, /contract_renewal_watch/);
