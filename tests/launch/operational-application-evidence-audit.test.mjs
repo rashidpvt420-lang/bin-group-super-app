@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
+import vm from 'node:vm';
 import {
   assertReviewedApplicationPreparationSource,
   transformFrozenTenantPhotoVerifier,
@@ -53,7 +54,7 @@ test('renewal preparation requires the deployed response to identify its single 
       millis: (value) => Number(value || 0), sleep: async (ms) => { now += ms; },
       sha256: (value) => value, console: { log() {} },
     };
-    const prepare = new Function('deps', `const { ${Object.keys(deps).join(', ')} } = deps; return (${callableSource});`)(deps);
+    const prepare = vm.runInNewContext(`(${callableSource})`, deps, { timeout: 1000 });
     try {
       await prepare({ db, auth: { getUserByEmail: async () => ({ uid: 'tenant', emailVerified: true, customClaims: { testAccount: true } }) } });
       assert.equal(writtenContract.ownerUid, 'founder');
