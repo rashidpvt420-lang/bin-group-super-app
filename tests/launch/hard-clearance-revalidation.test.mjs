@@ -510,3 +510,34 @@ test('all operational workflows enforce same-SHA allowance and privileged rotati
   assert.match(privContent, /if:\s*\$\{\{\s*always\(\)\s*&&\s*hashFiles\('release\/package\.json'\)\s*!=\s*''\s*\}\}/);
 });
 
+test('frozen runtime repair pins renewal PDF storage hotfix and proves it live', async () => {
+  const workflow = await read('.github/workflows/repair-frozen-sovereign-ai-runtime.yml');
+
+  assert.match(workflow, /issue_comment:/);
+  assert.match(workflow, /github\.event\.issue\.number == 434/);
+  assert.match(workflow, /\/bin-launch repair renewal-pdf/);
+  assert.match(workflow, /FROZEN_RENEWAL_RELEASE_SHA: 2ecfad30cc48f3004fc78f2db86a655e94215a15/);
+  assert.match(workflow, /FROZEN_PDF_ENGINE_BLOB: 3ae03a4add3ad44def8f5c1adb34627815e80431/);
+  assert.match(workflow, /REPAIRED_PDF_ENGINE_BLOB: 62e5c8cf5fbfb25f371ee377e59c1f6ae06ec74d/);
+  assert.match(workflow, /PRODUCTION_STORAGE_BUCKET: bin-group-57c60\.firebasestorage\.app/);
+  assert.match(workflow, /storage\.bucket\('bin-group-57c60\.firebasestorage\.app'\)/);
+  assert.match(workflow, /git hash-object functions\/pdfEngine\.ts/);
+  assert.match(workflow, /functions:rebuildContractRenewalWatch/);
+  assert.match(workflow, /functions:runContractRenewalWatch/);
+  assert.match(workflow, /functions:ownerSignContractAndQueuePdf/);
+  assert.match(workflow, /functions:submitOwnerOnboardingPaymentPackage/);
+  assert.match(workflow, /functions:submitPendingOwnerRegistration/);
+  assert.match(workflow, /functions:generateInstitutionalContract/);
+  assert.match(workflow, /signInWithRequiredTotpMfa/);
+  assert.match(workflow, /X-Firebase-AppCheck/);
+  assert.match(workflow, /generateInstitutionalContract/);
+  assert.match(workflow, /renewal-pdf-repair\] PASS/);
+  assert.match(workflow, /deleteFiles\(\{ prefix:/);
+  assert.doesNotMatch(workflow, /FROZEN_RENEWAL_RELEASE_SHA: 287d1fc0/);
+
+  const aiJobStart = workflow.indexOf('  repair:');
+  const renewalJobStart = workflow.indexOf('  renewal-pdf-repair:');
+  const aiJob = workflow.slice(aiJobStart, renewalJobStart);
+  assert.match(aiJob, /if: github\.event_name == 'workflow_dispatch'/);
+});
+
