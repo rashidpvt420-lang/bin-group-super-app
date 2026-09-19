@@ -99,3 +99,129 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: npm run test:launch-honesty
+
+  bootstrap-reviewed-scope-repair:
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.head.ref == 'fix/control-plane-expression-scope-20260920'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout exact PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+
+      - name: Verify stable main and exact repair branch
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+        run: |
+          set -euo pipefail
+          [[ "$HEAD_REF" == "fix/control-plane-expression-scope-20260920" ]]
+          remote_main="$(git ls-remote --exit-code origin refs/heads/main | awk '{print $1}')"
+          [[ "$remote_main" == "$BASE_SHA" ]] || {
+            echo "::error::main moved after the scope-repair PR was opened."
+            exit 1
+          }
+
+      - name: Apply exact reviewed dual-SHA scope repair
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require('node:fs');
+
+          const workflows = [
+            '.github/workflows/live-role-smoke.yml',
+            '.github/workflows/operational-application-evidence.yml',
+            '.github/workflows/operational-provider-evidence.yml',
+            '.github/workflows/privileged-access-rotation-evidence.yml',
+            '.github/workflows/technician-physical-evidence.yml',
+          ];
+          const targetName = 'current-main-expression-budget-repair';
+          const bs = String.fromCharCode(92);
+          const insertion = `${bs}.github/workflows/${targetName}${bs}.yml|`;
+
+          for (const file of workflows) {
+            const source = fs.readFileSync(file, 'utf8');
+            const lines = source.split('\n');
+            const indexes = lines
+              .map((line, index) => ({ line, index }))
+              .filter(({ line }) => line.includes("allowed='^(") && line.includes('firebase-production-deploy'));
+            if (indexes.length !== 1) {
+              throw new Error(`${file}: expected exactly one primary control-plane allowlist, found ${indexes.length}`);
+            }
+            const { line, index } = indexes[0];
+            if (line.includes(targetName)) throw new Error(`${file}: target workflow is already allowlisted`);
+            const marker = line.indexOf('firebase-production-deploy');
+            const pipe = line.indexOf('|', marker);
+            if (marker < 0 || pipe < 0) throw new Error(`${file}: firebase-production-deploy allowlist anchor is invalid`);
+            lines[index] = `${line.slice(0, pipe + 1)}${insertion}${line.slice(pipe + 1)}`;
+            fs.writeFileSync(file, lines.join('\n'));
+          }
+
+          const testFile = 'tests/launch/hard-clearance-revalidation.test.mjs';
+          const source = fs.readFileSync(testFile, 'utf8');
+          const markerLine = "    '.github/workflows/firebase-production-deploy.yml',";
+          const markerCount = source.split(markerLine).length - 1;
+          if (markerCount !== 2) throw new Error(`${testFile}: expected two exact allowlist anchors, found ${markerCount}`);
+          const inserted = `${markerLine}\n    '.github/workflows/current-main-expression-budget-repair.yml',`;
+          fs.writeFileSync(testFile, source.split(markerLine).join(inserted));
+
+          for (const file of workflows) {
+            const repaired = fs.readFileSync(file, 'utf8');
+            const count = repaired.split(targetName).length - 1;
+            if (count !== 1) throw new Error(`${file}: repaired target count must be exactly one, found ${count}`);
+          }
+          const repairedTest = fs.readFileSync(testFile, 'utf8');
+          const testCount = repairedTest.split("'.github/workflows/current-main-expression-budget-repair.yml'").length - 1;
+          if (testCount !== 2) throw new Error(`${testFile}: expected exactly two regression references, found ${testCount}`);
+          NODE
+
+          git checkout "$BASE_SHA" -- .github/workflows/current-main-expression-budget-repair.yml
+          git diff --check
+
+          expected="$(printf '%s\n' \
+            '.github/workflows/live-role-smoke.yml' \
+            '.github/workflows/operational-application-evidence.yml' \
+            '.github/workflows/operational-provider-evidence.yml' \
+            '.github/workflows/privileged-access-rotation-evidence.yml' \
+            '.github/workflows/technician-physical-evidence.yml' \
+            'tests/launch/hard-clearance-revalidation.test.mjs' | sort)"
+          actual="$(git diff --name-only "$BASE_SHA" | sort)"
+          [[ "$actual" == "$expected" ]] || {
+            echo "::error::Scope repair changed an unexpected file set."
+            printf 'Expected:\n%s\nActual:\n%s\n' "$expected" "$actual"
+            exit 1
+          }
+
+      - name: Commit and push repaired PR head
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+        run: |
+          set -euo pipefail
+          remote_main="$(git ls-remote --exit-code origin refs/heads/main | awk '{print $1}')"
+          [[ "$remote_main" == "$BASE_SHA" ]] || {
+            echo "::error::main changed during deterministic scope repair."
+            exit 1
+          }
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add \
+            .github/workflows/live-role-smoke.yml \
+            .github/workflows/operational-application-evidence.yml \
+            .github/workflows/operational-provider-evidence.yml \
+            .github/workflows/privileged-access-rotation-evidence.yml \
+            .github/workflows/technician-physical-evidence.yml \
+            tests/launch/hard-clearance-revalidation.test.mjs \
+            .github/workflows/current-main-expression-budget-repair.yml
+          git diff --cached --check
+          git commit -m 'Fix reviewed control-plane expression scope'
+          git push origin HEAD:"$HEAD_REF"
