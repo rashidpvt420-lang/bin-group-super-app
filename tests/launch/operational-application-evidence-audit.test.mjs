@@ -269,11 +269,29 @@ test('reviewed application verifier still receives the broker payment adapter', 
 test('application verifier overlay accepts only frozen source or the exact reviewed verifier blob', async () => {
   const wrapper = await read('scripts/run-frozen-release-evidence.mjs');
   const workflow = await read('.github/workflows/operational-application-evidence.yml');
-  assert.match(wrapper, /REVIEWED_APPLICATION_VERIFIER_BLOB = '921b176ea2b8164241b0b650168bcd27fbfb4587'/);
+  assert.match(wrapper, /REVIEWED_APPLICATION_VERIFIER_BLOB = '8cc6b47690b8e45308b2db683a966adc1ace2f45'/);
   assert.match(wrapper, /gitBlobSha\(source\) === REVIEWED_APPLICATION_VERIFIER_BLOB/);
   assert.match(wrapper, /application verifier has unreviewed working-tree changes/);
   assert.match(wrapper, /state === 'reviewed'/);
   assert.match(workflow, /cp control-plane\/scripts\/verify-operational-application-evidence\.mjs release\/scripts\/verify-operational-application-evidence\.mjs/);
+});
+
+test('broker commission verifier resolves only a paid mobilization invoice to a verified approved payment', async () => {
+  const verifier = await read('scripts/verify-operational-application-evidence.mjs');
+  const start = verifier.indexOf('async function latestBrokerCommissionWithApprovedPayment()');
+  assert.ok(start >= 0);
+  const end = verifier.indexOf('\nasync function convertedBrokerLeadForCommission', start);
+  const selection = verifier.slice(start, end > start ? end : verifier.length);
+  assert.match(selection, /collection\('invoices'\)\.where\('contractId', '==', contractId\)/);
+  assert.match(selection, /statusIn\(data\.status, \['PAID'\]\)/);
+  assert.match(selection, /upper\(data\.feeType\) === 'MOBILIZATION_DEPOSIT'/);
+  assert.match(selection, /canonicalId\(paidMobilizationInvoice\.data\.paymentId, 'invoice_payment_id'\)/);
+  assert.match(selection, /collection\('payment_transactions'\)\.doc\(invoicePaymentId\)/);
+  assert.match(selection, /statusIn\(invoicePayment\.data\.status, \['APPROVED'\]\)/);
+  assert.match(selection, /invoicePayment\.data\.paymentVerified !== true/);
+  assert.match(selection, /invoicePayment\.data\.unlocksDashboard !== true/);
+  assert.match(selection, /text\(paidMobilizationInvoice\.data\.contractId\) !== contractId/);
+  assert.match(selection, /invoicePaymentContractId && invoicePaymentContractId !== contractId/);
 });
 
 test('frozen broker payment adapter upgrades only the reviewed payment binding and refuses drift', () => {
