@@ -182,10 +182,20 @@ test('tenant notification proof auto-discovers successful delivery and requires 
   assert.match(delivery, /sendEachForMulticast/);
 });
 
-test('frozen Tenant verifier adapter only adds canonical production upload fields', () => {
+test('frozen Tenant verifier adapter upgrades legacy selection, accepts exact reviewed selection, and refuses drift', () => {
   const legacySelection = [
     '    ticket.requestPhotoUrl,',
     '    ...(Array.isArray(ticket.photoUrls) ? ticket.photoUrls : []),',
+    '    ...(Array.isArray(ticket.images) ? ticket.images : []),',
+  ].join('\n');
+  const reviewedSelection = [
+    '    ticket.requestPhotoUrl,',
+    '    ticket.primaryPhotoUrl,',
+    '    ...(Array.isArray(ticket.photoUrls) ? ticket.photoUrls : []),',
+    '    ...(Array.isArray(ticket.photos) ? ticket.photos : []),',
+    '    ...(Array.isArray(ticket.beforePhotos) ? ticket.beforePhotos : []),',
+    '    ...(Array.isArray(ticket.tenantPhotos) ? ticket.tenantPhotos : []),',
+    '    ...(Array.isArray(ticket.initialPhotoUrls) ? ticket.initialPhotoUrls : []),',
     '    ...(Array.isArray(ticket.images) ? ticket.images : []),',
   ].join('\n');
   const adapted = transformFrozenTenantPhotoVerifier(`before\n${legacySelection}\nafter`);
@@ -194,9 +204,15 @@ test('frozen Tenant verifier adapter only adds canonical production upload field
   assert.match(adapted, /Array\.isArray\(ticket\.beforePhotos\)/);
   assert.match(adapted, /Array\.isArray\(ticket\.tenantPhotos\)/);
   assert.match(adapted, /Array\.isArray\(ticket\.initialPhotoUrls\)/);
+  const alreadyReviewed = `before\n${reviewedSelection}\nafter`;
+  assert.equal(transformFrozenTenantPhotoVerifier(alreadyReviewed), alreadyReviewed);
   assert.throws(
     () => transformFrozenTenantPhotoVerifier(legacySelection.replace('ticket.images', 'ticket.attachments')),
-    /exact legacy selection is required/,
+    /exact legacy or reviewed selection is required/,
+  );
+  assert.throws(
+    () => transformFrozenTenantPhotoVerifier(`${reviewedSelection}\n${reviewedSelection}`),
+    /exact legacy or reviewed selection is required/,
   );
 });
 
