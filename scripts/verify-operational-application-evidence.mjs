@@ -120,6 +120,30 @@ async function latestBrokerCommissionWithApprovedPayment() {
       : payments.find(({ id, data }) => text(data.contractId || data.intakeId || id) === contractId);
 
     if (!payment) {
+      const invoiceSnapshot = await db.collection('invoices').where('contractId', '==', contractId).limit(20).get();
+      const paidMobilizationInvoice = sortedResults(invoiceSnapshot, ['paidAt', 'updatedAt', 'issuedAt', 'createdAt'])
+        .find(({ data }) =>
+          statusIn(data.status, ['PAID']) &&
+          upper(data.feeType) === 'MOBILIZATION_DEPOSIT'
+        );
+      if (paidMobilizationInvoice) {
+        if (text(paidMobilizationInvoice.data.contractId) !== contractId) continue;
+        const invoicePaymentId = canonicalId(paidMobilizationInvoice.data.paymentId, 'invoice_payment_id');
+        const invoicePaymentSnapshot = await db.collection('payment_transactions').doc(invoicePaymentId).get();
+        if (!invoicePaymentSnapshot.exists) continue;
+        const invoicePayment = docResult(invoicePaymentSnapshot);
+        if (
+          !statusIn(invoicePayment.data.status, ['APPROVED']) ||
+          invoicePayment.data.paymentVerified !== true ||
+          invoicePayment.data.unlocksDashboard !== true
+        ) continue;
+        const invoicePaymentContractId = text(invoicePayment.data.contractId);
+        if (invoicePaymentContractId && invoicePaymentContractId !== contractId) continue;
+        payment = invoicePayment;
+      }
+    }
+
+    if (!payment) {
       const approvalAuditSnapshot = await db.collection('audit_logs').where('contractId', '==', contractId).limit(100).get();
       const approvalAudit = sortedResults(approvalAuditSnapshot, ['createdAt', 'timestamp'])
         .find(({ data }) =>
@@ -139,7 +163,6 @@ async function latestBrokerCommissionWithApprovedPayment() {
 
   fail('no production broker commission lock has an approved payment binding');
 }
-
 async function convertedBrokerLeadForCommission(commissionId, contractId, brokerUid) {
   const snapshot = await db.collection('brokerLeads').where('commissionId', '==', commissionId).get();
   const matches = snapshot.docs
