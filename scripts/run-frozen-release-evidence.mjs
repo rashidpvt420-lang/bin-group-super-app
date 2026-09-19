@@ -475,7 +475,9 @@ export function runFrozenReleaseEvidence(entrypoint, env = process.env, releaseR
 
   if (applicationVerification) assertApplicationEvidenceCredentials(env.OPERATIONAL_GATE, env);
   if (applicationPreparation) {
-    assertApplicationPreparationCredentials(env.OPERATIONAL_GATE, env);
+    if (env.APPLICATION_PREPARATION_MODE !== 'cleanup-staff') {
+      assertApplicationPreparationCredentials(env.OPERATIONAL_GATE, env);
+    }
     assertReviewedApplicationPreparation(releaseRoot);
   }
   if (aiVerification) assertReviewedAiVerifier(releaseRoot);
