@@ -23,6 +23,7 @@ const REBUILD_CONTRACT_RENEWAL_WATCH_URL = 'https://europe-west3-bin-group-57c60
 const BROKER_EVIDENCE_TYPE = 'OPERATIONAL_APPLICATION_BROKER_PAYMENT_BINDING';
 const STAFF_EVIDENCE_TYPE = 'OPERATIONAL_APPLICATION_STAFF_CLAIMS';
 const RENEWAL_EVIDENCE_TYPE = 'OPERATIONAL_APPLICATION_RENEWAL_SCHEDULER';
+const EXPECTED_STORAGE_BUCKET = 'bin-group-57c60.firebasestorage.app';
 const TERMINAL_DELIVERY_STATES = new Set(['SUCCESS', 'PARTIAL', 'FAILED', 'NO_REGISTERED_TOKEN']);
 const PARTICIPANT_FIELDS = ['tenantId', 'tenantUid', 'userId', 'createdBy', 'requesterId'];
 const PUSH_REGISTRATION_ATTEMPTS = 3;
@@ -348,7 +349,7 @@ async function founderCallableSession({ apiKey, appId, debugToken }) {
   if (!exchangeResponse.ok || !text(exchangePayload?.token)) {
     fail(`Founder App Check exchange failed with HTTP ${exchangeResponse.status}`);
   }
-  return { idToken: founder.idToken, appCheckToken: text(exchangePayload.token) };
+  return { uid: founder.uid, idToken: founder.idToken, appCheckToken: text(exchangePayload.token) };
 }
 
 async function invokeProtectedCallable(url, session, data, label) {
@@ -528,7 +529,7 @@ async function cleanupRenewalSchedulerEvidence({ db }) {
     deleteMatchingDocuments(auditSnapshot),
     db.collection('document_generation_requests').doc(`renewal_contracts_${contractId}`).delete().catch(() => undefined),
     contractRef.delete().catch(() => undefined),
-    admin.storage().bucket().deleteFiles({ prefix: `contracts/${contractId}/` }).catch(() => undefined),
+    admin.storage().bucket(EXPECTED_STORAGE_BUCKET).deleteFiles({ prefix: `contracts/${contractId}/` }).catch(() => undefined),
   ]);
 
   console.log(`[prepare-application-evidence] CLEANUP gate=renewalScheduler contractHash=${sha256(contractId).slice(0, 12)}…`);
@@ -569,7 +570,6 @@ async function prepareRenewalSchedulerEvidence({ db, auth, apiKey, appId, debugT
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     });
 
-    const watchId = `contracts_${contractId}_30d`;
     const startedAt = Date.now();
 
     const response = await fetch(REBUILD_CONTRACT_RENEWAL_WATCH_URL, {
@@ -589,35 +589,51 @@ async function prepareRenewalSchedulerEvidence({ db, auth, apiKey, appId, debugT
       fail('deployed rebuildContractRenewalWatch failed with HTTP ' + response.status);
     }
 
+    const responseIds = Array.isArray(result?.results)
+      ? result.results
+          .filter((item) => item && item.skipped !== true)
+          .map((item) => text(item.id))
+          .filter(Boolean)
+      : [];
+
     const deadline = Date.now() + 90_000;
     let snapshot = null;
     while (Date.now() < deadline) {
-      const current = await db.collection('contract_renewal_watch').doc(watchId).get();
-      if (current.exists) {
-        const data = current.data() || {};
+      const currentSnapshot = await db.collection('contract_renewal_watch')
+        .where('sourceId', '==', contractId)
+        .limit(20)
+        .get();
+      const freshMatches = currentSnapshot.docs.filter((document) => {
+        const data = document.data() || {};
         const observedMs = Math.max(
           millis(data.generatedAt),
           millis(data.updatedAt),
           millis(data.createdAt),
           millis(data.processedAt),
         );
-        if (
-          text(data.sourceCollection) === 'contracts'
+        return text(data.sourceCollection) === 'contracts'
           && text(data.sourceId) === contractId
           && text(data.contractId) === contractId
           && text(data.tenantId) === tenant.uid
           && /^(https:\/\/|gs:\/\/)/i.test(text(data.pdfUrl))
           && data.completed === true
-          && observedMs >= startedAt - 5_000
-        ) {
-          snapshot = current;
-          break;
-        }
+          && observedMs >= startedAt - 5_000;
+      });
+      if (freshMatches.length === 1) {
+        snapshot = freshMatches[0];
+        break;
+      }
+      if (freshMatches.length > 1) {
+        fail('deployed renewal scheduler produced multiple fresh watch records for the run-scoped contract');
       }
       await sleep(1_000);
     }
     if (!snapshot) fail('deployed renewal scheduler did not produce a fresh PDF-backed watch record');
+    if (responseIds.length && !responseIds.includes(snapshot.id)) {
+      fail('deployed renewal scheduler response did not include the fresh run-scoped watch record');
+    }
 
+    const watchId = snapshot.id;
     const auditSnapshot = await db.collection('audit_logs').where('targetId', '==', contractId).limit(100).get();
     const matchingAudit = auditSnapshot.docs.filter((document) => {
       const data = document.data() || {};

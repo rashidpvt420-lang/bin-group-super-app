@@ -94,7 +94,12 @@ test('application evidence workflow is protected and auto-discovers fixed produc
   assert.match(preparation, /cleanupRenewalSchedulerEvidence/);
   assert.match(preparation, /refusing to clean a non-evidence renewal source/);
   assert.match(preparation, /CONTRACT_RENEWAL_MILESTONE_PROCESSED/);
-  assert.match(preparation, /admin\.storage\(\)\.bucket\(\)\.deleteFiles/);
+  assert.match(preparation, /EXPECTED_STORAGE_BUCKET = 'bin-group-57c60\.firebasestorage\.app'/);
+  assert.match(preparation, /admin\.storage\(\)\.bucket\(EXPECTED_STORAGE_BUCKET\)\.deleteFiles/);
+  assert.doesNotMatch(preparation, /admin\.storage\(\)\.bucket\(\s*\)\.deleteFiles/);
+  assert.match(preparation, /return \{ uid: founder\.uid, idToken: founder\.idToken/);
+  assert.match(preparation, /where\('sourceId', '==', contractId\)/);
+  assert.match(preparation, /deployed renewal scheduler response did not include the fresh run-scoped watch record/);
   assert.match(preparation, /contractEndDate: expiryAt/);
   assert.match(preparation, /renewalStatus: 'PENDING'/);
   assert.match(preparation, /contract_renewal_watch/);
@@ -119,7 +124,7 @@ test('application evidence workflow is protected and auto-discovers fixed produc
   assert.doesNotMatch(preparation, /collection\('broker_commissions'\)\.doc\([^)]*\)\.set/);
   assert.doesNotMatch(preparation, /collection\('auditLogs'\)\.doc\([^)]*\)\.set/);
 
-  assert.match(frozenWrapper, /REVIEWED_APPLICATION_PREPARATION_BLOB = 'a2634cbec954a22e51c8785fe68e8189c1eb8ebc'/);
+  assert.match(frozenWrapper, /REVIEWED_APPLICATION_PREPARATION_BLOB = 'f57863e4268882b5b78fa9afd561b85eb24875f5'/);
   assert.match(frozenWrapper, /assertReviewedApplicationPreparation\(releaseRoot\)/);
   assert.match(frozenWrapper, /resolveApplicationEvidenceActor\(env\)/);
   assert.doesNotThrow(() => assertReviewedApplicationPreparationSource(preparation));
