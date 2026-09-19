@@ -367,7 +367,7 @@ test('staff evidence auto-discovers one audited technician with no privileged cl
     read('functions/adminUserProvisioning.ts'),
   ]);
 
-  assert.match(verifier, /latestStaffCreationAudit/);
+  assert.match(verifier, /latestAuditedActiveTechnician/);
   assert.match(verifier, /role !== 'technician'/);
   assert.match(verifier, /claims\.admin === true/);
   assert.match(verifier, /canManageSecurity/);
