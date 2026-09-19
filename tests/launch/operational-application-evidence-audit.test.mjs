@@ -33,6 +33,7 @@ test('application evidence workflow is protected and auto-discovers fixed produc
   assert.match(workflow, /E2E_TENANT_EMAIL:\s*\$\{\{ secrets\.E2E_TENANT_EMAIL \}\}/);
   assert.match(workflow, /E2E_TENANT_PASSWORD:\s*\$\{\{ secrets\.E2E_TENANT_PASSWORD \}\}/);
   assert.match(workflow, /run-frozen-release-evidence\.mjs scripts\/prepare-operational-application-evidence\.mjs/);
+  assert.match(workflow, /cp control-plane\/scripts\/verify-operational-application-evidence\.mjs release\/scripts\/verify-operational-application-evidence\.mjs/);
   assert.ok(
     workflow.indexOf('scripts/prepare-operational-application-evidence.mjs')
       < workflow.indexOf('OPERATIONAL_GATE="$gate" node ../control-plane/scripts/run-frozen-release-evidence.mjs scripts/verify-operational-application-provenance.mjs'),
