@@ -261,10 +261,15 @@ export function transformFrozenActivationVerifier(source, adapterUrl = import.me
 }
 
 export function transformFrozenTenantPhotoVerifier(source) {
-  if (source.split(LEGACY_TENANT_PHOTO_SELECTION).length !== 2) {
-    fail('frozen Tenant photo verifier source drift; exact legacy selection is required');
+  const legacyCount = source.split(LEGACY_TENANT_PHOTO_SELECTION).length - 1;
+  const reviewedCount = source.split(REVIEWED_TENANT_PHOTO_SELECTION).length - 1;
+  if (legacyCount === 1 && reviewedCount === 0) {
+    return source.replace(LEGACY_TENANT_PHOTO_SELECTION, REVIEWED_TENANT_PHOTO_SELECTION);
   }
-  return source.replace(LEGACY_TENANT_PHOTO_SELECTION, REVIEWED_TENANT_PHOTO_SELECTION);
+  if (legacyCount === 0 && reviewedCount === 1) {
+    return source;
+  }
+  fail('frozen Tenant photo verifier source drift; exact legacy or reviewed selection is required');
 }
 
 export function assertReviewedAiVerifierSource(source) {
