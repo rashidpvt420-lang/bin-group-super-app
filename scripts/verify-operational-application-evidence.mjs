@@ -179,10 +179,24 @@ async function convertedBrokerLeadForCommission(commissionId, contractId, broker
 
 async function latestStaffCreationAudit() {
   const snapshot = await db.collection('audit_logs').where('action', '==', 'ADMIN_CREATE_STAFF_USER').limit(100).get();
-  const candidates = sortedResults(snapshot, ['createdAt', 'timestamp']);
-  const audit = candidates.find(({ data }) => text(data.targetId));
-  if (!audit) fail('no audited production staff provisioning record was found');
-  return audit;
+  const candidates = sortedResults(snapshot, ['createdAt', 'timestamp'])
+    .filter(({ data }) => /^[A-Za-z0-9_-]{3,180}$/.test(text(data.targetId)));
+
+  for (const audit of candidates) {
+    const staffUid = text(audit.data.targetId);
+    const authRecord = await admin.auth().getUser(staffUid).catch((error) => {
+      if (error?.code === 'auth/user-not-found') return null;
+      throw error;
+    });
+    if (!authRecord) continue;
+    const userSnapshot = await db.collection('users').doc(staffUid).get();
+    if (!userSnapshot.exists) continue;
+    const user = userSnapshot.data() || {};
+    if (lower(user.role || user.userRole) !== 'technician') continue;
+    return { audit, authRecord };
+  }
+
+  fail('no audited production technician with a live Firebase Auth identity was found');
 }
 
 async function latestRenewalWatch() {
@@ -502,9 +516,8 @@ async function tenantNotificationProof() {
 }
 
 async function adminStaffClaimsProof() {
-  const creationAudit = await latestStaffCreationAudit();
+  const { audit: creationAudit, authRecord } = await latestStaffCreationAudit();
   const staffUid = canonicalId(creationAudit.data.targetId, 'staff_uid');
-  const authRecord = await admin.auth().getUser(staffUid);
   const [userDoc, accessDoc, hrDoc, technicianDoc, auditSnapshot] = await Promise.all([
     requireSnapshot(db.collection('users').doc(staffUid), `users/${staffUid}`),
     requireSnapshot(db.collection('staffAccess').doc(staffUid), `staffAccess/${staffUid}`),
