@@ -616,11 +616,6 @@ async function prepareBrokerCommissionEvidence({ db, auth, apiKey, appId, debugT
 async function main() {
   assertProtectedContext();
   const selectedGate = text(process.env.OPERATIONAL_GATE);
-  const apiKey = text(process.env.VITE_FIREBASE_API_KEY);
-  const appId = text(process.env.VITE_FIREBASE_APP_ID);
-  const debugToken = text(process.env.VITE_FIREBASE_APPCHECK_DEBUG_TOKEN);
-  if (!apiKey || !appId || !/^[0-9a-f-]{36}$/i.test(debugToken)) fail('protected Firebase API key, App Check app ID, and debug token are incomplete');
-
   const projectId = resolveFirebaseAdminProjectId();
   if (projectId !== PROJECT_ID) fail(`unexpected Firebase project: ${projectId}`);
   initializeFirebaseAdmin(admin, projectId);
@@ -632,6 +627,11 @@ async function main() {
     await cleanupStaffClaimsEvidence({ db, auth });
     return;
   }
+
+  const apiKey = text(process.env.VITE_FIREBASE_API_KEY);
+  const appId = text(process.env.VITE_FIREBASE_APP_ID);
+  const debugToken = text(process.env.VITE_FIREBASE_APPCHECK_DEBUG_TOKEN);
+  if (!apiKey || !appId || !/^[0-9a-f-]{36}$/i.test(debugToken)) fail('protected Firebase API key, App Check app ID, and debug token are incomplete');
 
   if (['all', 'adminStaffClaims'].includes(selectedGate)) {
     await prepareStaffClaimsEvidence({ db, auth, apiKey, appId, debugToken });
