@@ -406,7 +406,8 @@ async function cleanupStaffClaimsEvidence({ db, auth }) {
 
 async function prepareStaffClaimsEvidence({ db, auth, apiKey, appId, debugToken }) {
   await cleanupStaffClaimsEvidence({ db, auth });
-  const session = await founderCallableSession({ apiKey, appId, debugToken });
+  try {
+    const session = await founderCallableSession({ apiKey, appId, debugToken });
   const email = staffEvidenceEmail();
   const displayName = `Operational Application Technician ${text(process.env.GITHUB_RUN_ID)}`;
 
@@ -485,7 +486,11 @@ async function prepareStaffClaimsEvidence({ db, auth, apiKey, appId, debugToken 
     fail('prepared staff evidence does not match the deployed Technician provisioning contract');
   }
 
-  console.log(`[prepare-application-evidence] PASS gate=adminStaffClaims staffHash=${sha256(uid).slice(0, 12)}…`);
+    console.log(`[prepare-application-evidence] PASS gate=adminStaffClaims staffHash=${sha256(uid).slice(0, 12)}…`);
+  } catch (error) {
+    await cleanupStaffClaimsEvidence({ db, auth }).catch(() => undefined);
+    throw error;
+  }
 }
 
 async function prepareBrokerCommissionEvidence({ db, auth, apiKey, appId, debugToken }) {
