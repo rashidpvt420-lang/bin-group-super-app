@@ -189,7 +189,7 @@ jobs:
             assertApplicationPreparationCredentials,
           } from './scripts/run-frozen-release-evidence.mjs';
           assertApplicationEvidenceCredentials(process.env.SELECTED_GATE, process.env);
-          if (['all', 'tenantNotificationDelivery'].includes(process.env.SELECTED_GATE)) {
+          if (['all', 'tenantNotificationDelivery', 'brokerCommissionLockExactlyOnce'].includes(process.env.SELECTED_GATE)) {
             assertApplicationPreparationCredentials(process.env.SELECTED_GATE, process.env);
           }
           NODE
@@ -254,14 +254,17 @@ jobs:
           }
           NODE
 
-      - name: Create a fresh provider-backed Tenant notification receipt
-        if: inputs.gate == 'all' || inputs.gate == 'tenantNotificationDelivery'
+      - name: Prepare protected application evidence
+        if: inputs.gate == 'all' || inputs.gate == 'tenantNotificationDelivery' || inputs.gate == 'brokerCommissionLockExactlyOnce'
         working-directory: release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           E2E_BASE_URL: https://bin-group-57c60.web.app
           E2E_TENANT_EMAIL: ${{ secrets.E2E_TENANT_EMAIL }}
           E2E_TENANT_PASSWORD: ${{ secrets.E2E_TENANT_PASSWORD }}
+          E2E_FOUNDER_EMAIL: ${{ secrets.E2E_FOUNDER_EMAIL }}
+          E2E_FOUNDER_PASSWORD: ${{ secrets.E2E_FOUNDER_PASSWORD }}
+          E2E_FOUNDER_TOTP_SECRET: ${{ secrets.E2E_FOUNDER_TOTP_SECRET }}
         run: node ../control-plane/scripts/run-frozen-release-evidence.mjs scripts/prepare-operational-application-evidence.mjs
 
       - name: Auto-discover, verify, and publish application evidence

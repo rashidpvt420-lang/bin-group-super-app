@@ -84,8 +84,19 @@ test('application evidence workflow is protected and auto-discovers fixed produc
   assert.match(preparation, /metadata\?\.workflowRunId/);
   assert.doesNotMatch(preparation, /collection\('notifications'\)\.doc\([^)]*\)\.set/);
   assert.doesNotMatch(preparation, /console\.(?:log|error)\([^\n]*(?:tenantEmail|tenantPassword|debugToken|data\.token)/);
+  assert.match(preparation, /cloudfunctions\.net\/adminMatchBrokerAttribution/);
+  assert.match(preparation, /signInWithRequiredTotpMfa/);
+  assert.match(preparation, /ownerProfile\.testAccount === true \|\| ownerProfile\.e2eLaunchSeed === true/);
+  assert.match(preparation, /where\('status', '==', 'APPROVED'\)/);
+  assert.match(preparation, /paymentVerified === true && data\.unlocksDashboard === true/);
+  assert.match(preparation, /upper\(data\.feeType\) === 'MOBILIZATION_DEPOSIT'/);
+  assert.match(preparation, /commissionQuery\.size !== 1/);
+  assert.match(preparation, /commissionCreationStatus\) !== 'COMMISSION_CREATED_SERVER_SIDE'/);
+  assert.match(preparation, /ADMIN_MATCH_BROKER_ATTRIBUTION/);
+  assert.doesNotMatch(preparation, /collection\('broker_commissions'\)\.doc\([^)]*\)\.set/);
+  assert.doesNotMatch(preparation, /collection\('auditLogs'\)\.doc\([^)]*\)\.set/);
 
-  assert.match(frozenWrapper, /REVIEWED_APPLICATION_PREPARATION_BLOB = '9afcbd054f54729b647d8b1fae122b5dc0ffb155'/);
+  assert.match(frozenWrapper, /REVIEWED_APPLICATION_PREPARATION_BLOB = '284ef62c0a8dad4889eb58b89ac06edc2c15e17c'/);
   assert.match(frozenWrapper, /assertReviewedApplicationPreparation\(releaseRoot\)/);
   assert.match(frozenWrapper, /resolveApplicationEvidenceActor\(env\)/);
   assert.doesNotThrow(() => assertReviewedApplicationPreparationSource(preparation));
@@ -241,6 +252,20 @@ test('application evidence publish step passes GitHub token for protected owner-
   const step = workflow.slice(start, end > start ? end : workflow.length);
   assert.match(step, /GITHUB_TOKEN: \$\{\{ secrets\.GITHUB_TOKEN \}\}/);
   assert.match(step, /node \.\.\/control-plane\/scripts\/run-frozen-release-evidence\.mjs scripts\/verify-operational-application-evidence-mfa\.mjs/);
+});
+
+test('application preparation preflight is gate-aware and requires Founder MFA for broker evidence', async () => {
+  const wrapper = await read('scripts/run-frozen-release-evidence.mjs');
+  const start = wrapper.indexOf('export function assertApplicationPreparationCredentials');
+  assert.ok(start >= 0);
+  const end = wrapper.indexOf('\nfunction fetchPublicGithubJson', start);
+  const selection = wrapper.slice(start, end > start ? end : wrapper.length);
+  assert.match(selection, /brokerCommissionLockExactlyOnce/);
+  assert.match(selection, /E2E_FOUNDER_EMAIL/);
+  assert.match(selection, /E2E_FOUNDER_PASSWORD/);
+  assert.match(selection, /E2E_FOUNDER_TOTP_SECRET/);
+  assert.match(selection, /CANONICAL_FOUNDER_EMAIL/);
+  assert.match(selection, /VITE_FIREBASE_APPCHECK_DEBUG_TOKEN/);
 });
 
 test('reviewed application verifier still receives the cent-precision activation adapter', async () => {
