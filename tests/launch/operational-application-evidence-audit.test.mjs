@@ -85,6 +85,12 @@ test('application evidence workflow is protected and auto-discovers fixed produc
   assert.doesNotMatch(preparation, /collection\('notifications'\)\.doc\([^)]*\)\.set/);
   assert.doesNotMatch(preparation, /console\.(?:log|error)\([^\n]*(?:tenantEmail|tenantPassword|debugToken|data\.token)/);
   assert.match(preparation, /cloudfunctions\.net\/adminMatchBrokerAttribution/);
+  assert.match(preparation, /cloudfunctions\.net\/adminCreateUser/);
+  assert.match(preparation, /cloudfunctions\.net\/adminUpdateStaffOnboarding/);
+  assert.match(preparation, /OPERATIONAL_APPLICATION_STAFF_CLAIMS/);
+  assert.match(preparation, /operational-application-staff-\$\{text\(process\.env\.GITHUB_RUN_ID\)\}@example\.invalid/);
+  assert.match(preparation, /APPLICATION_PREPARATION_MODE/);
+  assert.match(preparation, /cleanupStaffClaimsEvidence/);
   assert.match(preparation, /signInWithRequiredTotpMfa/);
   assert.match(preparation, /auth\.getUserByEmail\(brokerMailboxEmail\)/);
   assert.match(preparation, /brokerProfile\.e2eLaunchSeed !== true/);
@@ -100,7 +106,7 @@ test('application evidence workflow is protected and auto-discovers fixed produc
   assert.doesNotMatch(preparation, /collection\('broker_commissions'\)\.doc\([^)]*\)\.set/);
   assert.doesNotMatch(preparation, /collection\('auditLogs'\)\.doc\([^)]*\)\.set/);
 
-  assert.match(frozenWrapper, /REVIEWED_APPLICATION_PREPARATION_BLOB = 'aded2722e0b7e9457c86d06a35cbba7a345ffdc0'/);
+  assert.match(frozenWrapper, /REVIEWED_APPLICATION_PREPARATION_BLOB = 'bbdc73c0db9a3f77f12b807193b393c9b5c486c8'/);
   assert.match(frozenWrapper, /assertReviewedApplicationPreparation\(releaseRoot\)/);
   assert.match(frozenWrapper, /resolveApplicationEvidenceActor\(env\)/);
   assert.doesNotThrow(() => assertReviewedApplicationPreparationSource(preparation));
@@ -132,6 +138,9 @@ test('application evidence workflow is protected and auto-discovers fixed produc
   assert.doesNotMatch(verifier, /process\.env\.(?:PAYMENT_ID|CONTRACT_ID|NOTIFICATION_ID|TICKET_ID|TENANT_UID|STAFF_UID|RENEWAL_WATCH_ID)/);
   assert.doesNotMatch(`${workflow}\n${verifier}\n${publisher}`, /GATE_STATUS|founder_attested|waiv|static green/i);
   assert.doesNotMatch(workflow, /technicianPhysicalGpsEvidence/);
+  assert.match(workflow, /inputs\.gate == 'adminStaffClaims'/);
+  assert.match(workflow, /APPLICATION_PREPARATION_MODE: cleanup-staff/);
+  assert.match(workflow, /if: always\(\) && \(inputs\.gate == 'all' \|\| inputs\.gate == 'adminStaffClaims'\)/);
 });
 
 test('pagination proxy expands bounded discovery and exact-count queries and restores Firestore', async () => {
@@ -265,6 +274,7 @@ test('application preparation preflight is gate-aware and requires Founder MFA f
   const end = wrapper.indexOf('\nfunction fetchPublicGithubJson', start);
   const selection = wrapper.slice(start, end > start ? end : wrapper.length);
   assert.match(selection, /brokerCommissionLockExactlyOnce/);
+  assert.match(selection, /adminStaffClaims/);
   assert.match(selection, /E2E_FOUNDER_EMAIL/);
   assert.match(selection, /E2E_FOUNDER_PASSWORD/);
   assert.match(selection, /E2E_FOUNDER_TOTP_SECRET/);

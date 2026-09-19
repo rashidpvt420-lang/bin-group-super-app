@@ -17,7 +17,10 @@ const CANONICAL_FOUNDER_LOGIN = 'rashidpvt420-lang';
 const PRODUCTION_URL = 'https://bin-group-57c60.web.app';
 const CREATE_NOTIFICATION_URL = 'https://europe-west3-bin-group-57c60.cloudfunctions.net/createNotification';
 const ADMIN_MATCH_BROKER_ATTRIBUTION_URL = 'https://europe-west3-bin-group-57c60.cloudfunctions.net/adminMatchBrokerAttribution';
+const ADMIN_CREATE_USER_URL = 'https://europe-west3-bin-group-57c60.cloudfunctions.net/adminCreateUser';
+const ADMIN_UPDATE_STAFF_ONBOARDING_URL = 'https://europe-west3-bin-group-57c60.cloudfunctions.net/adminUpdateStaffOnboarding';
 const BROKER_EVIDENCE_TYPE = 'OPERATIONAL_APPLICATION_BROKER_PAYMENT_BINDING';
+const STAFF_EVIDENCE_TYPE = 'OPERATIONAL_APPLICATION_STAFF_CLAIMS';
 const TERMINAL_DELIVERY_STATES = new Set(['SUCCESS', 'PARTIAL', 'FAILED', 'NO_REGISTERED_TOKEN']);
 const PARTICIPANT_FIELDS = ['tenantId', 'tenantUid', 'userId', 'createdBy', 'requesterId'];
 const PUSH_REGISTRATION_ATTEMPTS = 3;
@@ -100,7 +103,7 @@ function assertProtectedContext() {
   if (process.env.GITHUB_REPOSITORY !== REPOSITORY || process.env.GITHUB_REF !== 'refs/heads/main') fail('protected main is required');
   if (process.env.GITHUB_WORKFLOW !== WORKFLOW || process.env.GITHUB_JOB !== JOB) fail('unexpected protected workflow context');
   if (process.env.GITHUB_ACTOR !== CANONICAL_FOUNDER_LOGIN) fail('exact repository-owner command provenance is required');
-  if (!['all', 'tenantNotificationDelivery', 'brokerCommissionLockExactlyOnce'].includes(text(process.env.OPERATIONAL_GATE))) fail('application evidence preparation was not selected');
+  if (!['all', 'tenantNotificationDelivery', 'brokerCommissionLockExactlyOnce', 'adminStaffClaims'].includes(text(process.env.OPERATIONAL_GATE))) fail('application evidence preparation was not selected');
   if (!/^[0-9a-f]{40}$/.test(text(process.env.GITHUB_SHA))) fail('frozen release SHA is invalid');
   if (!/^[0-9a-f]{40}$/.test(text(process.env.CLEARANCE_CONTROL_PLANE_SHA))) fail('control-plane SHA is invalid');
   if (!/^\d+$/.test(text(process.env.GITHUB_RUN_ID))) fail('workflow run ID is invalid');
@@ -308,6 +311,188 @@ async function createAndVerifyNotification({ db, auth, tenantUid, ticket }) {
   fail(`production FCM receipt did not succeed (state=${lastState})`);
 }
 
+function staffEvidenceEmail() {
+  return `operational-application-staff-${text(process.env.GITHUB_RUN_ID)}@example.invalid`;
+}
+
+async function founderCallableSession({ apiKey, appId, debugToken }) {
+  const founderEmail = lower(process.env.E2E_FOUNDER_EMAIL);
+  const founderPassword = text(process.env.E2E_FOUNDER_PASSWORD);
+  const founderTotpSecret = text(process.env.E2E_FOUNDER_TOTP_SECRET);
+  if (founderEmail !== 'ceo@bin-groups.com' || !founderPassword || !founderTotpSecret) {
+    fail('canonical Founder MFA bindings are incomplete for staff evidence preparation');
+  }
+  const founder = await signInWithRequiredTotpMfa({
+    apiKey,
+    email: founderEmail,
+    password: founderPassword,
+    totpSecret: founderTotpSecret,
+    referer: 'https://admin.bin-groups.com/',
+  });
+  if (!founder?.idToken || !founder?.uid || founder.secondFactorType !== 'totp' || !founder.secondFactorIdentifier) {
+    fail('Founder TOTP verification did not return a protected second-factor session');
+  }
+
+  const exchangeEndpoint = new URL(
+    `https://content-firebaseappcheck.googleapis.com/v1/projects/${PROJECT_ID}/apps/${encodeURIComponent(appId)}:exchangeDebugToken`,
+  );
+  exchangeEndpoint.searchParams.set('key', apiKey);
+  const exchangeResponse = await fetch(exchangeEndpoint, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', Referer: 'https://admin.bin-groups.com/' },
+    body: JSON.stringify({ debugToken }),
+  });
+  const exchangePayload = await responseJson(exchangeResponse);
+  if (!exchangeResponse.ok || !text(exchangePayload?.token)) {
+    fail(`Founder App Check exchange failed with HTTP ${exchangeResponse.status}`);
+  }
+  return { idToken: founder.idToken, appCheckToken: text(exchangePayload.token) };
+}
+
+async function invokeProtectedCallable(url, session, data, label) {
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${session.idToken}`,
+      'X-Firebase-AppCheck': session.appCheckToken,
+      'content-type': 'application/json',
+      Origin: 'https://admin.bin-groups.com',
+      Referer: 'https://admin.bin-groups.com/',
+    },
+    body: JSON.stringify({ data }),
+  });
+  const payload = await responseJson(response);
+  const result = payload?.result || payload?.data || payload;
+  if (!response.ok || !result?.success) fail(`${label} failed with HTTP ${response.status}`);
+  return result;
+}
+
+async function deleteMatchingDocuments(snapshot) {
+  await Promise.all(snapshot.docs.map((document) => document.ref.delete()));
+}
+
+async function cleanupStaffClaimsEvidence({ db, auth }) {
+  const email = staffEvidenceEmail();
+  const record = await auth.getUserByEmail(email).catch((error) => {
+    if (error?.code === 'auth/user-not-found') return null;
+    throw error;
+  });
+  if (!record) return;
+
+  const uid = record.uid;
+  const userSnapshot = await db.collection('users').doc(uid).get();
+  const marker = userSnapshot.data() || {};
+  if (text(marker.e2eEvidenceType) !== STAFF_EVIDENCE_TYPE || text(marker.e2eRunId) !== text(process.env.GITHUB_RUN_ID)) {
+    fail('refusing to clean a non-evidence staff identity');
+  }
+
+  const [auditSnapshot, mailSnapshot] = await Promise.all([
+    db.collection('audit_logs').where('targetId', '==', uid).limit(100).get(),
+    db.collection('mail').where('targetUid', '==', uid).limit(100).get(),
+  ]);
+  await Promise.all([
+    deleteMatchingDocuments(auditSnapshot),
+    deleteMatchingDocuments(mailSnapshot),
+    db.collection('users').doc(uid).delete(),
+    db.collection('staffAccess').doc(uid).delete(),
+    db.collection('hrProfiles').doc(uid).delete(),
+    db.collection('private_hr_profiles').doc(uid).delete(),
+    db.collection('technicians').doc(uid).delete(),
+    db.collection('staff').doc(uid).delete().catch(() => undefined),
+  ]);
+  await auth.deleteUser(uid);
+  console.log(`[prepare-application-evidence] CLEANUP gate=adminStaffClaims staffHash=${sha256(uid).slice(0, 12)}…`);
+}
+
+async function prepareStaffClaimsEvidence({ db, auth, apiKey, appId, debugToken }) {
+  await cleanupStaffClaimsEvidence({ db, auth });
+  try {
+    const session = await founderCallableSession({ apiKey, appId, debugToken });
+  const email = staffEvidenceEmail();
+  const displayName = `Operational Application Technician ${text(process.env.GITHUB_RUN_ID)}`;
+
+  const created = await invokeProtectedCallable(
+    ADMIN_CREATE_USER_URL,
+    session,
+    { email, displayName, role: 'technician', modules: [] },
+    'deployed adminCreateUser',
+  );
+  const uid = text(created.uid);
+  if (!/^[A-Za-z0-9_-]{3,180}$/.test(uid) || lower(created.role) !== 'technician') {
+    fail('deployed adminCreateUser returned an invalid Technician identity');
+  }
+
+  await auth.updateUser(uid, { emailVerified: true, disabled: false });
+  const marker = {
+    e2eLaunchSeed: true,
+    e2eEvidenceType: STAFF_EVIDENCE_TYPE,
+    e2eRunId: text(process.env.GITHUB_RUN_ID),
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  };
+  await Promise.all([
+    db.collection('users').doc(uid).set(marker, { merge: true }),
+    db.collection('staffAccess').doc(uid).set(marker, { merge: true }),
+    db.collection('hrProfiles').doc(uid).set(marker, { merge: true }),
+    db.collection('technicians').doc(uid).set(marker, { merge: true }),
+  ]);
+
+  const invitations = await db.collection('mail').where('targetUid', '==', uid).limit(20).get();
+  await deleteMatchingDocuments(invitations);
+
+  const activated = await invokeProtectedCallable(
+    ADMIN_UPDATE_STAFF_ONBOARDING_URL,
+    session,
+    {
+      uid,
+      profileComplete: true,
+      documentsComplete: true,
+      contractComplete: true,
+      deviceReady: true,
+      activationApproved: true,
+    },
+    'deployed adminUpdateStaffOnboarding',
+  );
+  if (activated.active !== true || text(activated.stage).toUpperCase() !== 'ACTIVE') {
+    fail('deployed staff onboarding did not activate the evidence Technician');
+  }
+
+  const [authRecord, userSnapshot, accessSnapshot, hrSnapshot, technicianSnapshot, auditSnapshot] = await Promise.all([
+    auth.getUser(uid),
+    db.collection('users').doc(uid).get(),
+    db.collection('staffAccess').doc(uid).get(),
+    db.collection('hrProfiles').doc(uid).get(),
+    db.collection('technicians').doc(uid).get(),
+    db.collection('audit_logs').where('targetId', '==', uid).limit(100).get(),
+  ]);
+  const user = userSnapshot.data() || {};
+  const access = accessSnapshot.data() || {};
+  const hr = hrSnapshot.data() || {};
+  const technician = technicianSnapshot.data() || {};
+  const claims = authRecord.customClaims || {};
+  const createAudits = auditSnapshot.docs.filter((document) => (document.data() || {}).action === 'ADMIN_CREATE_STAFF_USER');
+  if (
+    authRecord.disabled ||
+    authRecord.emailVerified !== true ||
+    lower(claims.role || claims.userRole) !== 'technician' ||
+    claims.staff !== true ||
+    claims.technician !== true ||
+    lower(user.role || user.userRole) !== 'technician' ||
+    lower(access.role) !== 'technician' ||
+    access.active !== true ||
+    lower(hr.role || hr.employeeType) !== 'technician' ||
+    lower(technician.role || technician.userRole) !== 'technician' ||
+    createAudits.length !== 1
+  ) {
+    fail('prepared staff evidence does not match the deployed Technician provisioning contract');
+  }
+
+    console.log(`[prepare-application-evidence] PASS gate=adminStaffClaims staffHash=${sha256(uid).slice(0, 12)}…`);
+  } catch (error) {
+    await cleanupStaffClaimsEvidence({ db, auth }).catch(() => undefined);
+    throw error;
+  }
+}
+
 async function prepareBrokerCommissionEvidence({ db, auth, apiKey, appId, debugToken }) {
   const brokerMailboxEmail = lower(process.env.E2E_BROKER_MAILBOX_EMAIL);
   if (!/^\S+@\S+\.\S+$/.test(brokerMailboxEmail)) fail('canonical protected Broker mailbox email is missing or invalid');
@@ -431,17 +616,30 @@ async function prepareBrokerCommissionEvidence({ db, auth, apiKey, appId, debugT
 async function main() {
   assertProtectedContext();
   const selectedGate = text(process.env.OPERATIONAL_GATE);
+  const projectId = resolveFirebaseAdminProjectId();
+  if (projectId !== PROJECT_ID) fail(`unexpected Firebase project: ${projectId}`);
+  initializeFirebaseAdmin(admin, projectId);
+  const db = admin.firestore();
+  const auth = admin.auth();
+
+  if (text(process.env.APPLICATION_PREPARATION_MODE) === 'cleanup-staff') {
+    if (!['all', 'adminStaffClaims'].includes(selectedGate)) fail('staff evidence cleanup is not selected for this gate');
+    await cleanupStaffClaimsEvidence({ db, auth });
+    return;
+  }
+
   const apiKey = text(process.env.VITE_FIREBASE_API_KEY);
   const appId = text(process.env.VITE_FIREBASE_APP_ID);
   const debugToken = text(process.env.VITE_FIREBASE_APPCHECK_DEBUG_TOKEN);
   if (!apiKey || !appId || !/^[0-9a-f-]{36}$/i.test(debugToken)) fail('protected Firebase API key, App Check app ID, and debug token are incomplete');
 
-  const projectId = resolveFirebaseAdminProjectId();
-  if (projectId !== PROJECT_ID) fail(`unexpected Firebase project: ${projectId}`);
-  initializeFirebaseAdmin(admin, projectId);
-  const db = admin.firestore();
+  if (['all', 'adminStaffClaims'].includes(selectedGate)) {
+    await prepareStaffClaimsEvidence({ db, auth, apiKey, appId, debugToken });
+    if (selectedGate === 'adminStaffClaims') return;
+  }
+
   if (['all', 'brokerCommissionLockExactlyOnce'].includes(selectedGate)) {
-    await prepareBrokerCommissionEvidence({ db, auth: admin.auth(), apiKey, appId, debugToken });
+    await prepareBrokerCommissionEvidence({ db, auth, apiKey, appId, debugToken });
     if (selectedGate === 'brokerCommissionLockExactlyOnce') return;
   }
 
