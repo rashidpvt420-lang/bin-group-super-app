@@ -183,334 +183,334 @@ jobs:
           verify_json="$(gcloud functions describe "$FUNCTION_NAME" --gen2 --region="$FUNCTION_REGION" --project="$GCP_PROJECT_ID" --format=json)"
           [[ "$(jq -r '.state // empty' <<< "$verify_json")" == "ACTIVE" ]] || { echo "::error::${FUNCTION_NAME} left ACTIVE state after live proof."; exit 1; }
           [[ "$(jq -r '.serviceConfig.allTrafficOnLatestRevision // false' <<< "$verify_json")" == "true" ]] || { echo "::error::${FUNCTION_NAME} traffic drifted during live proof."; exit 1; }
-renewal-pdf-repair:
-    if: >-
-      github.event_name == 'issue_comment' &&
-      github.event.issue.number == 434 &&
-      startsWith(github.event.comment.body, '/bin-launch repair renewal-pdf ')
-    name: Repair frozen renewal PDF runtime
-    runs-on: ubuntu-latest
-    timeout-minutes: 35
-    environment: hard-public-launch
-    env:
-      GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID || 'bin-group-57c60' }}
-      AUTHORIZED_FOUNDER_ACTORS: ${{ secrets.AUTHORIZED_FOUNDER_ACTORS }}
-      FROZEN_RENEWAL_RELEASE_SHA: 2ecfad30cc48f3004fc78f2db86a655e94215a15
-      FROZEN_PDF_ENGINE_BLOB: 3ae03a4add3ad44def8f5c1adb34627815e80431
-      REPAIRED_PDF_ENGINE_BLOB: 62e5c8cf5fbfb25f371ee377e59c1f6ae06ec74d
-      PRODUCTION_STORAGE_BUCKET: bin-group-57c60.firebasestorage.app
-      FUNCTION_REGION: europe-west3
-      RENEWAL_FUNCTIONS: rebuildContractRenewalWatch runContractRenewalWatch
-      PDF_FUNCTIONS: ownerSignContractAndQueuePdf submitOwnerOnboardingPaymentPackage submitPendingOwnerRegistration generateInstitutionalContract
-    steps:
-      - name: Checkout current control plane
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          fetch-depth: 0
+  renewal-pdf-repair:
+      if: >-
+        github.event_name == 'issue_comment' &&
+        github.event.issue.number == 434 &&
+        startsWith(github.event.comment.body, '/bin-launch repair renewal-pdf ')
+      name: Repair frozen renewal PDF runtime
+      runs-on: ubuntu-latest
+      timeout-minutes: 35
+      environment: hard-public-launch
+      env:
+        GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID || 'bin-group-57c60' }}
+        AUTHORIZED_FOUNDER_ACTORS: ${{ secrets.AUTHORIZED_FOUNDER_ACTORS }}
+        FROZEN_RENEWAL_RELEASE_SHA: 2ecfad30cc48f3004fc78f2db86a655e94215a15
+        FROZEN_PDF_ENGINE_BLOB: 3ae03a4add3ad44def8f5c1adb34627815e80431
+        REPAIRED_PDF_ENGINE_BLOB: 62e5c8cf5fbfb25f371ee377e59c1f6ae06ec74d
+        PRODUCTION_STORAGE_BUCKET: bin-group-57c60.firebasestorage.app
+        FUNCTION_REGION: europe-west3
+        RENEWAL_FUNCTIONS: rebuildContractRenewalWatch runContractRenewalWatch
+        PDF_FUNCTIONS: ownerSignContractAndQueuePdf submitOwnerOnboardingPaymentPackage submitPendingOwnerRegistration generateInstitutionalContract
+      steps:
+        - name: Checkout current control plane
+          uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+          with:
+            fetch-depth: 0
 
-      - name: Authorize exact renewal runtime repair command
-        id: command
-        env:
-          COMMAND_BODY: ${{ github.event.comment.body }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -euo pipefail
-          [[ "$GITHUB_REPOSITORY" == "rashidpvt420-lang/bin-group-super-app" ]]
-          [[ "$GITHUB_REPOSITORY_ID" == "1173943093" ]]
-          [[ "$GITHUB_REF" == "refs/heads/main" ]]
-          remote_sha="$(git ls-remote --exit-code origin refs/heads/main | awk '{print $1}')"
-          [[ "$remote_sha" == "$GITHUB_SHA" ]]
+        - name: Authorize exact renewal runtime repair command
+          id: command
+          env:
+            COMMAND_BODY: ${{ github.event.comment.body }}
+            GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          run: |
+            set -euo pipefail
+            [[ "$GITHUB_REPOSITORY" == "rashidpvt420-lang/bin-group-super-app" ]]
+            [[ "$GITHUB_REPOSITORY_ID" == "1173943093" ]]
+            [[ "$GITHUB_REF" == "refs/heads/main" ]]
+            remote_sha="$(git ls-remote --exit-code origin refs/heads/main | awk '{print $1}')"
+            [[ "$remote_sha" == "$GITHUB_SHA" ]]
 
-          actor_allowed=false
-          IFS=',' read -ra allowed_actors <<< "${AUTHORIZED_FOUNDER_ACTORS:-}"
-          for raw_actor in "${allowed_actors[@]}"; do
-            actor="$(xargs <<< "$raw_actor")"
-            if [[ -n "$actor" && "$actor" == "$GITHUB_ACTOR" ]]; then
-              actor_allowed=true
-              break
-            fi
-          done
-          [[ "$actor_allowed" == "true" ]] || { echo "::error::Current actor is not authorized for frozen runtime repair."; exit 1; }
-
-          read -r prefix action target control_sha frozen_sha failed_run_id extra <<< "$COMMAND_BODY"
-          [[ "$prefix" == "/bin-launch" ]]
-          [[ "$action" == "repair" ]]
-          [[ "$target" == "renewal-pdf" ]]
-          [[ -z "${extra:-}" ]]
-          [[ "$control_sha" =~ ^[0-9a-f]{40}$ && "$control_sha" == "$GITHUB_SHA" ]]
-          [[ "$frozen_sha" == "$FROZEN_RENEWAL_RELEASE_SHA" ]]
-          [[ "$failed_run_id" =~ ^[0-9]+$ ]]
-          [[ "$COMMAND_BODY" == "/bin-launch repair renewal-pdf $control_sha $frozen_sha $failed_run_id" ]]
-
-          run_json="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$failed_run_id")"
-          jq -e '
-            .name == "Operational Application Evidence" and
-            .event == "workflow_dispatch" and
-            .status == "completed" and
-            .conclusion == "failure" and
-            (.head_sha | test("^[0-9a-f]{40}$"))
-          ' <<< "$run_json" >/dev/null
-
-          source_sha="$(jq -r '.head_sha' <<< "$run_json")"
-          parent_sha="$(git rev-parse "$control_sha^")"
-          [[ "$parent_sha" == "$source_sha" ]] || {
-            echo "::error::Renewal repair must immediately follow the exact failed Application Evidence control SHA."
-            exit 1
-          }
-
-          expected_changed="$(printf '%s\n'             '.github/workflows/repair-frozen-sovereign-ai-runtime.yml'             'tests/launch/hard-clearance-revalidation.test.mjs' | sort)"
-          actual_changed="$(git diff --name-only "$source_sha" "$control_sha" | sort)"
-          [[ "$actual_changed" == "$expected_changed" ]] || {
-            echo "::error::Unexpected files changed between the failed evidence SHA and the renewal repair control SHA."
-            printf 'Expected:\n%s\nActual:\n%s\n' "$expected_changed" "$actual_changed"
-            exit 1
-          }
-
-          echo "control_sha=$control_sha" >> "$GITHUB_OUTPUT"
-          echo "source_sha=$source_sha" >> "$GITHUB_OUTPUT"
-          echo "failed_run_id=$failed_run_id" >> "$GITHUB_OUTPUT"
-
-      - name: Checkout frozen renewal release
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          ref: ${{ env.FROZEN_RENEWAL_RELEASE_SHA }}
-          fetch-depth: 1
-
-      - name: Apply exact reviewed PDF storage repair
-        run: |
-          set -euo pipefail
-          [[ "$(git rev-parse HEAD)" == "$FROZEN_RENEWAL_RELEASE_SHA" ]]
-          [[ "$(git hash-object functions/pdfEngine.ts)" == "$FROZEN_PDF_ENGINE_BLOB" ]]
-          node <<'NODE'
-          const fs = require('node:fs');
-          const file = 'functions/pdfEngine.ts';
-          const source = fs.readFileSync(file, 'utf8');
-          const before = '    const bucket = storage.bucket();';
-          const after = "    const bucket = storage.bucket('bin-group-57c60.firebasestorage.app');";
-          const count = source.split(before).length - 1;
-          if (count !== 1) throw new Error(`Expected exactly one frozen implicit Storage bucket, found ${count}`);
-          fs.writeFileSync(file, source.replace(before, after));
-          NODE
-          [[ "$(git hash-object functions/pdfEngine.ts)" == "$REPAIRED_PDF_ENGINE_BLOB" ]]
-          changed="$(git diff --name-only)"
-          [[ "$changed" == "functions/pdfEngine.ts" ]]
-          git diff --check
-
-      - name: Use Node.js 22
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
-        with:
-          node-version: '22'
-
-      - name: Install dependencies
-        run: bash scripts/npm-install-retry.sh
-
-      - name: Build repaired frozen Functions
-        run: npm run build:functions
-
-      - name: Prove compiled repair and affected exports
-        run: |
-          set -euo pipefail
-          grep -Fq "bucket('bin-group-57c60.firebasestorage.app')" functions/lib/pdfEngine.js
-          if grep -Fq 'const bucket = storage.bucket();' functions/lib/pdfEngine.js; then
-            echo "::error::Compiled PDF engine still contains the implicit bucket."
-            exit 1
-          fi
-          node <<'NODE'
-          const runtime = require('./functions/lib/runtimeAll.js');
-          const required = [
-            'rebuildContractRenewalWatch',
-            'runContractRenewalWatch',
-            'ownerSignContractAndQueuePdf',
-            'submitOwnerOnboardingPaymentPackage',
-            'submitPendingOwnerRegistration',
-            'generateInstitutionalContract',
-          ];
-          for (const name of required) {
-            if (!runtime[name] || !(runtime[name].__endpoint || runtime[name].__trigger)) {
-              throw new Error(`Missing repaired runtime export: ${name}`);
-            }
-          }
-          console.log('[renewal-pdf-repair] compiled exports verified=', required.length);
-          NODE
-
-      - name: Deployment secrets preflight
-        env:
-          WIF_PROVIDER: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
-          SERVICE_ACCOUNT: ${{ secrets.GCP_SERVICE_ACCOUNT }}
-          FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
-          FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
-          APPCHECK_DEBUG_TOKEN: ${{ secrets.VITE_FIREBASE_APPCHECK_DEBUG_TOKEN }}
-          FOUNDER_EMAIL: ${{ secrets.E2E_FOUNDER_EMAIL }}
-          FOUNDER_PASSWORD: ${{ secrets.E2E_FOUNDER_PASSWORD }}
-          FOUNDER_TOTP_SECRET: ${{ secrets.E2E_FOUNDER_TOTP_SECRET }}
-        run: |
-          set -euo pipefail
-          [[ "$GCP_PROJECT_ID" == "bin-group-57c60" ]]
-          test -n "$WIF_PROVIDER"
-          test -n "$SERVICE_ACCOUNT"
-          test -n "$FIREBASE_API_KEY"
-          test -n "$FIREBASE_APP_ID"
-          test -n "$APPCHECK_DEBUG_TOKEN"
-          test -n "$FOUNDER_EMAIL"
-          test -n "$FOUNDER_PASSWORD"
-          test -n "$FOUNDER_TOTP_SECRET"
-
-      - name: Authenticate to Google Cloud
-        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093
-        with:
-          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
-          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
-          create_credentials_file: true
-          export_environment_variables: true
-
-      - name: Redeploy only frozen PDF-dependent functions
-        run: |
-          set -euo pipefail
-          [[ "$GCP_PROJECT_ID" == "bin-group-57c60" ]]
-          npx firebase deploy --only             functions:rebuildContractRenewalWatch,functions:runContractRenewalWatch,functions:ownerSignContractAndQueuePdf,functions:submitOwnerOnboardingPaymentPackage,functions:submitPendingOwnerRegistration,functions:generateInstitutionalContract             --project "$GCP_PROJECT_ID" --non-interactive --force
-
-      - name: Force repaired functions onto latest Gen2 revisions
-        run: |
-          set -euo pipefail
-          for function_name in $RENEWAL_FUNCTIONS $PDF_FUNCTIONS; do
-            function_json=""
-            for attempt in $(seq 1 18); do
-              function_json="$(gcloud functions describe "$function_name" --gen2 --region="$FUNCTION_REGION" --project="$GCP_PROJECT_ID" --format=json)"
-              state="$(jq -r '.state // empty' <<< "$function_json")"
-              if [[ "$state" == "ACTIVE" ]]; then
+            actor_allowed=false
+            IFS=',' read -ra allowed_actors <<< "${AUTHORIZED_FOUNDER_ACTORS:-}"
+            for raw_actor in "${allowed_actors[@]}"; do
+              actor="$(xargs <<< "$raw_actor")"
+              if [[ -n "$actor" && "$actor" == "$GITHUB_ACTOR" ]]; then
+                actor_allowed=true
                 break
               fi
-              echo "Waiting for ${function_name} to become ACTIVE (attempt ${attempt}/18, state=${state:-unknown})"
-              sleep 5
             done
-            [[ "$(jq -r '.state // empty' <<< "$function_json")" == "ACTIVE" ]] || { echo "::error::${function_name} is not ACTIVE after repair."; exit 1; }
+            [[ "$actor_allowed" == "true" ]] || { echo "::error::Current actor is not authorized for frozen runtime repair."; exit 1; }
 
-            latest="$(jq -r '.serviceConfig.allTrafficOnLatestRevision // false' <<< "$function_json")"
-            service_resource="$(jq -r '.serviceConfig.service // empty' <<< "$function_json")"
-            service_name="${service_resource##*/}"
-            if [[ "$latest" != "true" ]]; then
-              [[ -n "$service_resource" && -n "$service_name" && "$service_name" != "$service_resource" ]] || {
-                echo "::error::${function_name} reports stale traffic without a Cloud Run service binding."
-                exit 1
-              }
-              gcloud run services update-traffic "$service_name"                 --to-latest                 --region="$FUNCTION_REGION"                 --project="$GCP_PROJECT_ID"                 --quiet
+            read -r prefix action target control_sha frozen_sha failed_run_id extra <<< "$COMMAND_BODY"
+            [[ "$prefix" == "/bin-launch" ]]
+            [[ "$action" == "repair" ]]
+            [[ "$target" == "renewal-pdf" ]]
+            [[ -z "${extra:-}" ]]
+            [[ "$control_sha" =~ ^[0-9a-f]{40}$ && "$control_sha" == "$GITHUB_SHA" ]]
+            [[ "$frozen_sha" == "$FROZEN_RENEWAL_RELEASE_SHA" ]]
+            [[ "$failed_run_id" =~ ^[0-9]+$ ]]
+            [[ "$COMMAND_BODY" == "/bin-launch repair renewal-pdf $control_sha $frozen_sha $failed_run_id" ]]
+
+            run_json="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$failed_run_id")"
+            jq -e '
+              .name == "Operational Application Evidence" and
+              .event == "workflow_dispatch" and
+              .status == "completed" and
+              .conclusion == "failure" and
+              (.head_sha | test("^[0-9a-f]{40}$"))
+            ' <<< "$run_json" >/dev/null
+
+            source_sha="$(jq -r '.head_sha' <<< "$run_json")"
+            parent_sha="$(git rev-parse "$control_sha^")"
+            [[ "$parent_sha" == "$source_sha" ]] || {
+              echo "::error::Renewal repair must immediately follow the exact failed Application Evidence control SHA."
+              exit 1
+            }
+
+            expected_changed="$(printf '%s\n'             '.github/workflows/repair-frozen-sovereign-ai-runtime.yml'             'tests/launch/hard-clearance-revalidation.test.mjs' | sort)"
+            actual_changed="$(git diff --name-only "$source_sha" "$control_sha" | sort)"
+            [[ "$actual_changed" == "$expected_changed" ]] || {
+              echo "::error::Unexpected files changed between the failed evidence SHA and the renewal repair control SHA."
+              printf 'Expected:\n%s\nActual:\n%s\n' "$expected_changed" "$actual_changed"
+              exit 1
+            }
+
+            echo "control_sha=$control_sha" >> "$GITHUB_OUTPUT"
+            echo "source_sha=$source_sha" >> "$GITHUB_OUTPUT"
+            echo "failed_run_id=$failed_run_id" >> "$GITHUB_OUTPUT"
+
+        - name: Checkout frozen renewal release
+          uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+          with:
+            ref: ${{ env.FROZEN_RENEWAL_RELEASE_SHA }}
+            fetch-depth: 1
+
+        - name: Apply exact reviewed PDF storage repair
+          run: |
+            set -euo pipefail
+            [[ "$(git rev-parse HEAD)" == "$FROZEN_RENEWAL_RELEASE_SHA" ]]
+            [[ "$(git hash-object functions/pdfEngine.ts)" == "$FROZEN_PDF_ENGINE_BLOB" ]]
+            node <<'NODE'
+            const fs = require('node:fs');
+            const file = 'functions/pdfEngine.ts';
+            const source = fs.readFileSync(file, 'utf8');
+            const before = '    const bucket = storage.bucket();';
+            const after = "    const bucket = storage.bucket('bin-group-57c60.firebasestorage.app');";
+            const count = source.split(before).length - 1;
+            if (count !== 1) throw new Error(`Expected exactly one frozen implicit Storage bucket, found ${count}`);
+            fs.writeFileSync(file, source.replace(before, after));
+            NODE
+            [[ "$(git hash-object functions/pdfEngine.ts)" == "$REPAIRED_PDF_ENGINE_BLOB" ]]
+            changed="$(git diff --name-only)"
+            [[ "$changed" == "functions/pdfEngine.ts" ]]
+            git diff --check
+
+        - name: Use Node.js 22
+          uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+          with:
+            node-version: '22'
+
+        - name: Install dependencies
+          run: bash scripts/npm-install-retry.sh
+
+        - name: Build repaired frozen Functions
+          run: npm run build:functions
+
+        - name: Prove compiled repair and affected exports
+          run: |
+            set -euo pipefail
+            grep -Fq "bucket('bin-group-57c60.firebasestorage.app')" functions/lib/pdfEngine.js
+            if grep -Fq 'const bucket = storage.bucket();' functions/lib/pdfEngine.js; then
+              echo "::error::Compiled PDF engine still contains the implicit bucket."
+              exit 1
             fi
+            node <<'NODE'
+            const runtime = require('./functions/lib/runtimeAll.js');
+            const required = [
+              'rebuildContractRenewalWatch',
+              'runContractRenewalWatch',
+              'ownerSignContractAndQueuePdf',
+              'submitOwnerOnboardingPaymentPackage',
+              'submitPendingOwnerRegistration',
+              'generateInstitutionalContract',
+            ];
+            for (const name of required) {
+              if (!runtime[name] || !(runtime[name].__endpoint || runtime[name].__trigger)) {
+                throw new Error(`Missing repaired runtime export: ${name}`);
+              }
+            }
+            console.log('[renewal-pdf-repair] compiled exports verified=', required.length);
+            NODE
 
-            verify_json="$(gcloud functions describe "$function_name" --gen2 --region="$FUNCTION_REGION" --project="$GCP_PROJECT_ID" --format=json)"
-            [[ "$(jq -r '.state // empty' <<< "$verify_json")" == "ACTIVE" ]] || { echo "::error::${function_name} left ACTIVE state."; exit 1; }
-            [[ "$(jq -r '.serviceConfig.allTrafficOnLatestRevision // false' <<< "$verify_json")" == "true" ]] || { echo "::error::${function_name} is not serving 100% latest revision traffic."; exit 1; }
-          done
+        - name: Deployment secrets preflight
+          env:
+            WIF_PROVIDER: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+            SERVICE_ACCOUNT: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+            FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
+            FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
+            APPCHECK_DEBUG_TOKEN: ${{ secrets.VITE_FIREBASE_APPCHECK_DEBUG_TOKEN }}
+            FOUNDER_EMAIL: ${{ secrets.E2E_FOUNDER_EMAIL }}
+            FOUNDER_PASSWORD: ${{ secrets.E2E_FOUNDER_PASSWORD }}
+            FOUNDER_TOTP_SECRET: ${{ secrets.E2E_FOUNDER_TOTP_SECRET }}
+          run: |
+            set -euo pipefail
+            [[ "$GCP_PROJECT_ID" == "bin-group-57c60" ]]
+            test -n "$WIF_PROVIDER"
+            test -n "$SERVICE_ACCOUNT"
+            test -n "$FIREBASE_API_KEY"
+            test -n "$FIREBASE_APP_ID"
+            test -n "$APPCHECK_DEBUG_TOKEN"
+            test -n "$FOUNDER_EMAIL"
+            test -n "$FOUNDER_PASSWORD"
+            test -n "$FOUNDER_TOTP_SECRET"
 
-      - name: Prove live signed contract PDF through repaired runtime
-        env:
-          VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
-          VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
-          VITE_FIREBASE_APPCHECK_DEBUG_TOKEN: ${{ secrets.VITE_FIREBASE_APPCHECK_DEBUG_TOKEN }}
-          E2E_FOUNDER_EMAIL: ${{ secrets.E2E_FOUNDER_EMAIL }}
-          E2E_FOUNDER_PASSWORD: ${{ secrets.E2E_FOUNDER_PASSWORD }}
-          E2E_FOUNDER_TOTP_SECRET: ${{ secrets.E2E_FOUNDER_TOTP_SECRET }}
-        run: |
-          set -euo pipefail
-          export RENEWAL_PDF_REPAIR_PROBE_ID="renewal_pdf_repair_${GITHUB_RUN_ID}"
-          echo "RENEWAL_PDF_REPAIR_PROBE_ID=$RENEWAL_PDF_REPAIR_PROBE_ID" >> "$GITHUB_ENV"
-          node --input-type=module <<'NODE'
-          import { createHash } from 'node:crypto';
-          import { signInWithRequiredTotpMfa } from './scripts/lib/firebase-mfa-sign-in.mjs';
+        - name: Authenticate to Google Cloud
+          uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093
+          with:
+            workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+            service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+            create_credentials_file: true
+            export_environment_variables: true
 
-          const text = (value) => String(value ?? '').trim();
-          const apiKey = text(process.env.VITE_FIREBASE_API_KEY);
-          const appId = text(process.env.VITE_FIREBASE_APP_ID);
-          const debugToken = text(process.env.VITE_FIREBASE_APPCHECK_DEBUG_TOKEN);
-          const founder = await signInWithRequiredTotpMfa({
-            apiKey,
-            email: text(process.env.E2E_FOUNDER_EMAIL).toLowerCase(),
-            password: text(process.env.E2E_FOUNDER_PASSWORD),
-            totpSecret: text(process.env.E2E_FOUNDER_TOTP_SECRET),
-            referer: 'https://admin.bin-groups.com/',
-          });
-          if (!founder?.idToken || founder.secondFactorType !== 'totp') {
-            throw new Error('Founder TOTP session was not established for the PDF repair probe.');
-          }
+        - name: Redeploy only frozen PDF-dependent functions
+          run: |
+            set -euo pipefail
+            [[ "$GCP_PROJECT_ID" == "bin-group-57c60" ]]
+            npx firebase deploy --only             functions:rebuildContractRenewalWatch,functions:runContractRenewalWatch,functions:ownerSignContractAndQueuePdf,functions:submitOwnerOnboardingPaymentPackage,functions:submitPendingOwnerRegistration,functions:generateInstitutionalContract             --project "$GCP_PROJECT_ID" --non-interactive --force
 
-          const exchangeUrl = new URL(`https://content-firebaseappcheck.googleapis.com/v1/projects/bin-group-57c60/apps/${encodeURIComponent(appId)}:exchangeDebugToken`);
-          exchangeUrl.searchParams.set('key', apiKey);
-          const exchangeResponse = await fetch(exchangeUrl, {
-            method: 'POST',
-            headers: { 'content-type': 'application/json', Referer: 'https://admin.bin-groups.com/' },
-            body: JSON.stringify({ debugToken }),
-          });
-          const exchangePayload = await exchangeResponse.json();
-          if (!exchangeResponse.ok || !text(exchangePayload?.token)) {
-            throw new Error(`App Check exchange failed with HTTP ${exchangeResponse.status}`);
-          }
+        - name: Force repaired functions onto latest Gen2 revisions
+          run: |
+            set -euo pipefail
+            for function_name in $RENEWAL_FUNCTIONS $PDF_FUNCTIONS; do
+              function_json=""
+              for attempt in $(seq 1 18); do
+                function_json="$(gcloud functions describe "$function_name" --gen2 --region="$FUNCTION_REGION" --project="$GCP_PROJECT_ID" --format=json)"
+                state="$(jq -r '.state // empty' <<< "$function_json")"
+                if [[ "$state" == "ACTIVE" ]]; then
+                  break
+                fi
+                echo "Waiting for ${function_name} to become ACTIVE (attempt ${attempt}/18, state=${state:-unknown})"
+                sleep 5
+              done
+              [[ "$(jq -r '.state // empty' <<< "$function_json")" == "ACTIVE" ]] || { echo "::error::${function_name} is not ACTIVE after repair."; exit 1; }
 
-          const contractId = text(process.env.RENEWAL_PDF_REPAIR_PROBE_ID);
-          const response = await fetch('https://europe-west3-bin-group-57c60.cloudfunctions.net/generateInstitutionalContract', {
-            method: 'POST',
-            headers: {
-              Authorization: `Bearer ${founder.idToken}`,
-              'X-Firebase-AppCheck': text(exchangePayload.token),
-              'content-type': 'application/json',
-              Origin: 'https://admin.bin-groups.com',
-              Referer: 'https://admin.bin-groups.com/',
-            },
-            body: JSON.stringify({
-              data: {
-                contractData: {
-                  contractId,
-                  propertyId: `${contractId}_property`,
-                  propertyName: 'Protected renewal PDF repair probe',
-                  ownerId: founder.uid,
-                },
+              latest="$(jq -r '.serviceConfig.allTrafficOnLatestRevision // false' <<< "$function_json")"
+              service_resource="$(jq -r '.serviceConfig.service // empty' <<< "$function_json")"
+              service_name="${service_resource##*/}"
+              if [[ "$latest" != "true" ]]; then
+                [[ -n "$service_resource" && -n "$service_name" && "$service_name" != "$service_resource" ]] || {
+                  echo "::error::${function_name} reports stale traffic without a Cloud Run service binding."
+                  exit 1
+                }
+                gcloud run services update-traffic "$service_name"                 --to-latest                 --region="$FUNCTION_REGION"                 --project="$GCP_PROJECT_ID"                 --quiet
+              fi
+
+              verify_json="$(gcloud functions describe "$function_name" --gen2 --region="$FUNCTION_REGION" --project="$GCP_PROJECT_ID" --format=json)"
+              [[ "$(jq -r '.state // empty' <<< "$verify_json")" == "ACTIVE" ]] || { echo "::error::${function_name} left ACTIVE state."; exit 1; }
+              [[ "$(jq -r '.serviceConfig.allTrafficOnLatestRevision // false' <<< "$verify_json")" == "true" ]] || { echo "::error::${function_name} is not serving 100% latest revision traffic."; exit 1; }
+            done
+
+        - name: Prove live signed contract PDF through repaired runtime
+          env:
+            VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
+            VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
+            VITE_FIREBASE_APPCHECK_DEBUG_TOKEN: ${{ secrets.VITE_FIREBASE_APPCHECK_DEBUG_TOKEN }}
+            E2E_FOUNDER_EMAIL: ${{ secrets.E2E_FOUNDER_EMAIL }}
+            E2E_FOUNDER_PASSWORD: ${{ secrets.E2E_FOUNDER_PASSWORD }}
+            E2E_FOUNDER_TOTP_SECRET: ${{ secrets.E2E_FOUNDER_TOTP_SECRET }}
+          run: |
+            set -euo pipefail
+            export RENEWAL_PDF_REPAIR_PROBE_ID="renewal_pdf_repair_${GITHUB_RUN_ID}"
+            echo "RENEWAL_PDF_REPAIR_PROBE_ID=$RENEWAL_PDF_REPAIR_PROBE_ID" >> "$GITHUB_ENV"
+            node --input-type=module <<'NODE'
+            import { createHash } from 'node:crypto';
+            import { signInWithRequiredTotpMfa } from './scripts/lib/firebase-mfa-sign-in.mjs';
+
+            const text = (value) => String(value ?? '').trim();
+            const apiKey = text(process.env.VITE_FIREBASE_API_KEY);
+            const appId = text(process.env.VITE_FIREBASE_APP_ID);
+            const debugToken = text(process.env.VITE_FIREBASE_APPCHECK_DEBUG_TOKEN);
+            const founder = await signInWithRequiredTotpMfa({
+              apiKey,
+              email: text(process.env.E2E_FOUNDER_EMAIL).toLowerCase(),
+              password: text(process.env.E2E_FOUNDER_PASSWORD),
+              totpSecret: text(process.env.E2E_FOUNDER_TOTP_SECRET),
+              referer: 'https://admin.bin-groups.com/',
+            });
+            if (!founder?.idToken || founder.secondFactorType !== 'totp') {
+              throw new Error('Founder TOTP session was not established for the PDF repair probe.');
+            }
+
+            const exchangeUrl = new URL(`https://content-firebaseappcheck.googleapis.com/v1/projects/bin-group-57c60/apps/${encodeURIComponent(appId)}:exchangeDebugToken`);
+            exchangeUrl.searchParams.set('key', apiKey);
+            const exchangeResponse = await fetch(exchangeUrl, {
+              method: 'POST',
+              headers: { 'content-type': 'application/json', Referer: 'https://admin.bin-groups.com/' },
+              body: JSON.stringify({ debugToken }),
+            });
+            const exchangePayload = await exchangeResponse.json();
+            if (!exchangeResponse.ok || !text(exchangePayload?.token)) {
+              throw new Error(`App Check exchange failed with HTTP ${exchangeResponse.status}`);
+            }
+
+            const contractId = text(process.env.RENEWAL_PDF_REPAIR_PROBE_ID);
+            const response = await fetch('https://europe-west3-bin-group-57c60.cloudfunctions.net/generateInstitutionalContract', {
+              method: 'POST',
+              headers: {
+                Authorization: `Bearer ${founder.idToken}`,
+                'X-Firebase-AppCheck': text(exchangePayload.token),
+                'content-type': 'application/json',
+                Origin: 'https://admin.bin-groups.com',
+                Referer: 'https://admin.bin-groups.com/',
               },
-            }),
-          });
-          const raw = await response.text();
-          let payload = null;
-          try { payload = raw ? JSON.parse(raw) : null; } catch {}
-          const result = payload?.result || payload?.data || payload;
-          const pdfUrl = text(result?.pdfUrl);
-          if (!response.ok || result?.status !== 'SUCCESS' || !/^https:\/\//i.test(pdfUrl)) {
-            throw new Error(`Repaired live PDF probe failed with HTTP ${response.status}`);
-          }
-          const url = new URL(pdfUrl);
-          if (!['storage.googleapis.com', 'bin-group-57c60.firebasestorage.app'].includes(url.hostname)) {
-            throw new Error('Repaired live PDF probe returned an unexpected Storage host.');
-          }
-          console.log(
-            '[renewal-pdf-repair] PASS probeHash=' +
-            createHash('sha256').update(contractId).digest('hex').slice(0, 12) + '…'
-          );
-          NODE
+              body: JSON.stringify({
+                data: {
+                  contractData: {
+                    contractId,
+                    propertyId: `${contractId}_property`,
+                    propertyName: 'Protected renewal PDF repair probe',
+                    ownerId: founder.uid,
+                  },
+                },
+              }),
+            });
+            const raw = await response.text();
+            let payload = null;
+            try { payload = raw ? JSON.parse(raw) : null; } catch {}
+            const result = payload?.result || payload?.data || payload;
+            const pdfUrl = text(result?.pdfUrl);
+            if (!response.ok || result?.status !== 'SUCCESS' || !/^https:\/\//i.test(pdfUrl)) {
+              throw new Error(`Repaired live PDF probe failed with HTTP ${response.status}`);
+            }
+            const url = new URL(pdfUrl);
+            if (!['storage.googleapis.com', 'bin-group-57c60.firebasestorage.app'].includes(url.hostname)) {
+              throw new Error('Repaired live PDF probe returned an unexpected Storage host.');
+            }
+            console.log(
+              '[renewal-pdf-repair] PASS probeHash=' +
+              createHash('sha256').update(contractId).digest('hex').slice(0, 12) + '…'
+            );
+            NODE
 
-      - name: Clean up live PDF repair probe
-        if: always()
-        run: |
-          set -euo pipefail
-          node --input-type=module <<'NODE'
-          import admin from 'firebase-admin';
+        - name: Clean up live PDF repair probe
+          if: always()
+          run: |
+            set -euo pipefail
+            node --input-type=module <<'NODE'
+            import admin from 'firebase-admin';
 
-          const projectId = 'bin-group-57c60';
-          const bucketName = 'bin-group-57c60.firebasestorage.app';
-          const contractId = String(process.env.RENEWAL_PDF_REPAIR_PROBE_ID || `renewal_pdf_repair_${process.env.GITHUB_RUN_ID || ''}`).trim();
-          if (!/^renewal_pdf_repair_[0-9]+$/.test(contractId)) {
-            throw new Error('Refusing cleanup for an unexpected PDF repair probe id.');
-          }
-          if (!admin.apps.length) admin.initializeApp({ projectId, storageBucket: bucketName });
-          const db = admin.firestore();
-          const audits = await db.collection('audit_logs').where('targetId', '==', contractId).limit(50).get();
-          await Promise.all(audits.docs.map((document) => document.ref.delete()));
-          await admin.storage().bucket(bucketName).deleteFiles({ prefix: `contracts/${contractId}/` });
-          console.log('[renewal-pdf-repair] cleanup complete');
-          NODE
+            const projectId = 'bin-group-57c60';
+            const bucketName = 'bin-group-57c60.firebasestorage.app';
+            const contractId = String(process.env.RENEWAL_PDF_REPAIR_PROBE_ID || `renewal_pdf_repair_${process.env.GITHUB_RUN_ID || ''}`).trim();
+            if (!/^renewal_pdf_repair_[0-9]+$/.test(contractId)) {
+              throw new Error('Refusing cleanup for an unexpected PDF repair probe id.');
+            }
+            if (!admin.apps.length) admin.initializeApp({ projectId, storageBucket: bucketName });
+            const db = admin.firestore();
+            const audits = await db.collection('audit_logs').where('targetId', '==', contractId).limit(50).get();
+            await Promise.all(audits.docs.map((document) => document.ref.delete()));
+            await admin.storage().bucket(bucketName).deleteFiles({ prefix: `contracts/${contractId}/` });
+            console.log('[renewal-pdf-repair] cleanup complete');
+            NODE
 
-      - name: Reconfirm repaired functions after live proof
-        run: |
-          set -euo pipefail
-          for function_name in $RENEWAL_FUNCTIONS $PDF_FUNCTIONS; do
-            verify_json="$(gcloud functions describe "$function_name" --gen2 --region="$FUNCTION_REGION" --project="$GCP_PROJECT_ID" --format=json)"
-            [[ "$(jq -r '.state // empty' <<< "$verify_json")" == "ACTIVE" ]] || { echo "::error::${function_name} is not ACTIVE after live proof."; exit 1; }
-            [[ "$(jq -r '.serviceConfig.allTrafficOnLatestRevision // false' <<< "$verify_json")" == "true" ]] || { echo "::error::${function_name} traffic drifted after live proof."; exit 1; }
-          done
-          echo "[renewal-pdf-repair] PASS frozenRelease=$FROZEN_RENEWAL_RELEASE_SHA repairedBlob=$REPAIRED_PDF_ENGINE_BLOB sourceRun=${{ steps.command.outputs.failed_run_id }}"
+        - name: Reconfirm repaired functions after live proof
+          run: |
+            set -euo pipefail
+            for function_name in $RENEWAL_FUNCTIONS $PDF_FUNCTIONS; do
+              verify_json="$(gcloud functions describe "$function_name" --gen2 --region="$FUNCTION_REGION" --project="$GCP_PROJECT_ID" --format=json)"
+              [[ "$(jq -r '.state // empty' <<< "$verify_json")" == "ACTIVE" ]] || { echo "::error::${function_name} is not ACTIVE after live proof."; exit 1; }
+              [[ "$(jq -r '.serviceConfig.allTrafficOnLatestRevision // false' <<< "$verify_json")" == "true" ]] || { echo "::error::${function_name} traffic drifted after live proof."; exit 1; }
+            done
+            echo "[renewal-pdf-repair] PASS frozenRelease=$FROZEN_RENEWAL_RELEASE_SHA repairedBlob=$REPAIRED_PDF_ENGINE_BLOB sourceRun=${{ steps.command.outputs.failed_run_id }}"
 
