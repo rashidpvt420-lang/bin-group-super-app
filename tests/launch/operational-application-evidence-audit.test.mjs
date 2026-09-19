@@ -86,6 +86,8 @@ test('application evidence workflow is protected and auto-discovers fixed produc
   assert.doesNotMatch(preparation, /console\.(?:log|error)\([^\n]*(?:tenantEmail|tenantPassword|debugToken|data\.token)/);
 
   assert.match(frozenWrapper, /REVIEWED_APPLICATION_PREPARATION_BLOB = '9afcbd054f54729b647d8b1fae122b5dc0ffb155'/);
+  assert.match(frozenWrapper, /REVIEWED_APPLICATION_VERIFIER_BLOB = '0e7b1a7e2f7d85a32f19062dfff7da0c0c8d0e8d'/);
+  assert.equal((frozenWrapper.match(/gitBlobSha\(original\) !== REVIEWED_APPLICATION_VERIFIER_BLOB/g) || []).length, 3);
   assert.match(frozenWrapper, /assertReviewedApplicationPreparation\(releaseRoot\)/);
   assert.match(frozenWrapper, /resolveApplicationEvidenceActor\(env\)/);
   assert.doesNotThrow(() => assertReviewedApplicationPreparationSource(preparation));
