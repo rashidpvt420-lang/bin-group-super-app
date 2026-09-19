@@ -299,7 +299,7 @@ test('reviewed application verifier still receives the broker payment adapter', 
 test('application verifier overlay accepts only frozen source or the exact reviewed verifier blob', async () => {
   const wrapper = await read('scripts/run-frozen-release-evidence.mjs');
   const workflow = await read('.github/workflows/operational-application-evidence.yml');
-  assert.match(wrapper, /REVIEWED_APPLICATION_VERIFIER_BLOB = '8cc6b47690b8e45308b2db683a966adc1ace2f45'/);
+  assert.match(wrapper, /REVIEWED_APPLICATION_VERIFIER_BLOB = '0bb144fc6157ebc67807eaceb38911bcad6f5dca'/);
   assert.match(wrapper, /gitBlobSha\(source\) === REVIEWED_APPLICATION_VERIFIER_BLOB/);
   assert.match(wrapper, /application verifier has unreviewed working-tree changes/);
   assert.match(wrapper, /state === 'reviewed'/);
@@ -342,6 +342,23 @@ test('frozen broker payment adapter upgrades only the reviewed payment binding a
     () => transformFrozenBrokerPaymentVerifier(legacy.replace("paymentId),", "paymentId || 'fallback'),")),
     /exact legacy or reviewed selection is required/,
   );
+});
+
+test('staff evidence skips deleted or inactive audited users and requires a live Technician identity', async () => {
+  const verifier = await read('scripts/verify-operational-application-evidence.mjs');
+  const start = verifier.indexOf('async function latestAuditedActiveTechnician');
+  assert.ok(start >= 0);
+  const end = verifier.indexOf('\nasync function latestRenewalWatch', start);
+  const selector = verifier.slice(start, end > start ? end : verifier.length);
+  assert.match(selector, /admin\.auth\(\)\.getUser\(staffUid\)/);
+  assert.match(selector, /error\?\.code === 'auth\/user-not-found'/);
+  assert.match(selector, /if \(authRecord\.disabled\) continue/);
+  assert.match(selector, /role !== 'technician'/);
+  assert.match(selector, /claims\.staff !== true \|\| claims\.technician !== true/);
+  assert.match(selector, /staffAccess/);
+  assert.match(selector, /hrProfiles/);
+  assert.match(selector, /technicians/);
+  assert.match(selector, /no active audited production technician provisioning record was found/);
 });
 
 test('staff evidence auto-discovers one audited technician with no privileged claims', async () => {
