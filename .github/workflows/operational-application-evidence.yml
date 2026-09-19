@@ -190,7 +190,7 @@ jobs:
             assertApplicationPreparationCredentials,
           } from './scripts/run-frozen-release-evidence.mjs';
           assertApplicationEvidenceCredentials(process.env.SELECTED_GATE, process.env);
-          if (['all', 'tenantNotificationDelivery', 'brokerCommissionLockExactlyOnce', 'adminStaffClaims'].includes(process.env.SELECTED_GATE)) {
+          if (['all', 'tenantNotificationDelivery', 'brokerCommissionLockExactlyOnce', 'adminStaffClaims', 'renewalScheduler'].includes(process.env.SELECTED_GATE)) {
             assertApplicationPreparationCredentials(process.env.SELECTED_GATE, process.env);
           }
           NODE
@@ -256,7 +256,7 @@ jobs:
           NODE
 
       - name: Prepare protected application evidence
-        if: inputs.gate == 'all' || inputs.gate == 'tenantNotificationDelivery' || inputs.gate == 'brokerCommissionLockExactlyOnce' || inputs.gate == 'adminStaffClaims'
+        if: inputs.gate == 'all' || inputs.gate == 'tenantNotificationDelivery' || inputs.gate == 'brokerCommissionLockExactlyOnce' || inputs.gate == 'adminStaffClaims' || inputs.gate == 'renewalScheduler'
         working-directory: release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -19,6 +19,7 @@ const CREATE_NOTIFICATION_URL = 'https://europe-west3-bin-group-57c60.cloudfunct
 const ADMIN_MATCH_BROKER_ATTRIBUTION_URL = 'https://europe-west3-bin-group-57c60.cloudfunctions.net/adminMatchBrokerAttribution';
 const ADMIN_CREATE_USER_URL = 'https://europe-west3-bin-group-57c60.cloudfunctions.net/adminCreateUser';
 const ADMIN_UPDATE_STAFF_ONBOARDING_URL = 'https://europe-west3-bin-group-57c60.cloudfunctions.net/adminUpdateStaffOnboarding';
+const REBUILD_CONTRACT_RENEWAL_WATCH_URL = 'https://europe-west3-bin-group-57c60.cloudfunctions.net/rebuildContractRenewalWatch';
 const BROKER_EVIDENCE_TYPE = 'OPERATIONAL_APPLICATION_BROKER_PAYMENT_BINDING';
 const STAFF_EVIDENCE_TYPE = 'OPERATIONAL_APPLICATION_STAFF_CLAIMS';
 const TERMINAL_DELIVERY_STATES = new Set(['SUCCESS', 'PARTIAL', 'FAILED', 'NO_REGISTERED_TOKEN']);
@@ -103,7 +104,7 @@ function assertProtectedContext() {
   if (process.env.GITHUB_REPOSITORY !== REPOSITORY || process.env.GITHUB_REF !== 'refs/heads/main') fail('protected main is required');
   if (process.env.GITHUB_WORKFLOW !== WORKFLOW || process.env.GITHUB_JOB !== JOB) fail('unexpected protected workflow context');
   if (process.env.GITHUB_ACTOR !== CANONICAL_FOUNDER_LOGIN) fail('exact repository-owner command provenance is required');
-  if (!['all', 'tenantNotificationDelivery', 'brokerCommissionLockExactlyOnce', 'adminStaffClaims'].includes(text(process.env.OPERATIONAL_GATE))) fail('application evidence preparation was not selected');
+  if (!['all', 'tenantNotificationDelivery', 'brokerCommissionLockExactlyOnce', 'adminStaffClaims', 'renewalScheduler'].includes(text(process.env.OPERATIONAL_GATE))) fail('application evidence preparation was not selected');
   if (!/^[0-9a-f]{40}$/.test(text(process.env.GITHUB_SHA))) fail('frozen release SHA is invalid');
   if (!/^[0-9a-f]{40}$/.test(text(process.env.CLEARANCE_CONTROL_PLANE_SHA))) fail('control-plane SHA is invalid');
   if (!/^\d+$/.test(text(process.env.GITHUB_RUN_ID))) fail('workflow run ID is invalid');
@@ -493,6 +494,81 @@ async function prepareStaffClaimsEvidence({ db, auth, apiKey, appId, debugToken 
   }
 }
 
+async function prepareRenewalSchedulerEvidence({ db, auth, apiKey, appId, debugToken }) {
+  const session = await founderCallableSession({ apiKey, appId, debugToken });
+  const tenantEmail = lower(process.env.E2E_TENANT_EMAIL);
+  if (!/^\S+@\S+\.\S+$/.test(tenantEmail)) fail('canonical protected Tenant email is required for renewal scheduler evidence');
+  const tenant = await auth.getUserByEmail(tenantEmail);
+  if (tenant.disabled || tenant.emailVerified !== true || tenant.customClaims?.testAccount !== true) {
+    fail('protected Tenant identity is not an active verified test account for renewal scheduler evidence');
+  }
+  const contracts = await db.collection('contracts').where('tenantUid', '==', tenant.uid).limit(100).get();
+  const candidates = contracts.docs
+    .map((document) => ({ id: document.id, data: document.data() || {} }))
+    .filter(({ data }) =>
+      data.e2eLaunchSeed === true
+      && text(data.ownerUid || data.ownerId)
+      && text(data.propertyId)
+      && !['RENEWED', 'CANCELLED', 'TERMINATED', 'EXPIRED_CLOSED', 'ARCHIVED'].includes(upper(data.renewalStatus || data.status || data.contractStatus))
+    );
+  if (candidates.length !== 1) fail('expected exactly one canonical test-only production contract for renewal scheduler evidence');
+
+  const contract = candidates[0];
+  const expiryAt = admin.firestore.Timestamp.fromMillis(Date.now() + (30 * 24 * 60 * 60 * 1000));
+  await db.collection('contracts').doc(contract.id).set({
+    contractEndDate: expiryAt,
+    renewalStatus: 'PENDING',
+    e2eEvidenceType: 'OPERATIONAL_APPLICATION_RENEWAL_SCHEDULER',
+    e2eRunId: text(process.env.GITHUB_RUN_ID),
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  }, { merge: true });
+
+  const watchId = 'contracts_' + contract.id + '_30d';
+  await db.collection('contract_renewal_watch').doc(watchId).delete().catch(() => undefined);
+  const startedAt = Date.now();
+
+  const response = await fetch(REBUILD_CONTRACT_RENEWAL_WATCH_URL, {
+    method: 'POST',
+    headers: {
+      Authorization: 'Bearer ' + session.idToken,
+      'X-Firebase-AppCheck': session.appCheckToken,
+      'content-type': 'application/json',
+      Origin: 'https://admin.bin-groups.com',
+      Referer: 'https://admin.bin-groups.com/',
+    },
+    body: JSON.stringify({ data: {} }),
+  });
+  const payload = await responseJson(response);
+  const result = payload?.result || payload?.data || payload;
+  if (!response.ok || result?.status !== 'SUCCESS' || Number(result?.scanned || 0) < 1) {
+    fail('deployed rebuildContractRenewalWatch failed with HTTP ' + response.status);
+  }
+
+  const deadline = Date.now() + 90_000;
+  let snapshot = null;
+  while (Date.now() < deadline) {
+    const current = await db.collection('contract_renewal_watch').doc(watchId).get();
+    if (current.exists) {
+      const data = current.data() || {};
+      const observedMs = Math.max(millis(data.generatedAt), millis(data.updatedAt), millis(data.createdAt), millis(data.processedAt));
+      if (
+        text(data.sourceCollection) === 'contracts'
+        && text(data.sourceId) === contract.id
+        && /^(https:\/\/|gs:\/\/)/i.test(text(data.pdfUrl))
+        && data.completed === true
+        && observedMs >= startedAt - 5_000
+      ) {
+        snapshot = current;
+        break;
+      }
+    }
+    await sleep(1_000);
+  }
+  if (!snapshot) fail('deployed renewal scheduler did not produce a fresh PDF-backed watch record');
+
+  console.log('[prepare-application-evidence] PASS gate=renewalScheduler watchHash=' + sha256(watchId).slice(0, 12) + '… contractHash=' + sha256(contract.id).slice(0, 12) + '…');
+}
+
 async function prepareBrokerCommissionEvidence({ db, auth, apiKey, appId, debugToken }) {
   const brokerMailboxEmail = lower(process.env.E2E_BROKER_MAILBOX_EMAIL);
   if (!/^\S+@\S+\.\S+$/.test(brokerMailboxEmail)) fail('canonical protected Broker mailbox email is missing or invalid');
@@ -636,6 +712,11 @@ async function main() {
   if (['all', 'adminStaffClaims'].includes(selectedGate)) {
     await prepareStaffClaimsEvidence({ db, auth, apiKey, appId, debugToken });
     if (selectedGate === 'adminStaffClaims') return;
+  }
+
+  if (['all', 'renewalScheduler'].includes(selectedGate)) {
+    await prepareRenewalSchedulerEvidence({ db, auth, apiKey, appId, debugToken });
+    if (selectedGate === 'renewalScheduler') return;
   }
 
   if (['all', 'brokerCommissionLockExactlyOnce'].includes(selectedGate)) {

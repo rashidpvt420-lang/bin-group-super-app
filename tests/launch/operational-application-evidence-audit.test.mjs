@@ -87,6 +87,15 @@ test('application evidence workflow is protected and auto-discovers fixed produc
   assert.match(preparation, /cloudfunctions\.net\/adminMatchBrokerAttribution/);
   assert.match(preparation, /cloudfunctions\.net\/adminCreateUser/);
   assert.match(preparation, /cloudfunctions\.net\/adminUpdateStaffOnboarding/);
+  assert.match(preparation, /cloudfunctions\.net\/rebuildContractRenewalWatch/);
+  assert.match(preparation, /prepareRenewalSchedulerEvidence/);
+  assert.match(preparation, /where\('tenantUid', '==', tenant\.uid\)/);
+  assert.match(preparation, /data\.e2eLaunchSeed === true/);
+  assert.match(preparation, /contractEndDate: expiryAt/);
+  assert.match(preparation, /renewalStatus: 'PENDING'/);
+  assert.match(preparation, /contract_renewal_watch/);
+  assert.match(preparation, /data\.completed === true/);
+  assert.match(preparation, /deployed renewal scheduler did not produce a fresh PDF-backed watch record/);
   assert.match(preparation, /OPERATIONAL_APPLICATION_STAFF_CLAIMS/);
   assert.match(preparation, /operational-application-staff-\$\{text\(process\.env\.GITHUB_RUN_ID\)\}@example\.invalid/);
   assert.match(preparation, /APPLICATION_PREPARATION_MODE/);
@@ -106,7 +115,7 @@ test('application evidence workflow is protected and auto-discovers fixed produc
   assert.doesNotMatch(preparation, /collection\('broker_commissions'\)\.doc\([^)]*\)\.set/);
   assert.doesNotMatch(preparation, /collection\('auditLogs'\)\.doc\([^)]*\)\.set/);
 
-  assert.match(frozenWrapper, /REVIEWED_APPLICATION_PREPARATION_BLOB = 'bbdc73c0db9a3f77f12b807193b393c9b5c486c8'/);
+  assert.match(frozenWrapper, /REVIEWED_APPLICATION_PREPARATION_BLOB = '32277fa276220402f4a49681cd3d2a9c561139f5'/);
   assert.match(frozenWrapper, /assertReviewedApplicationPreparation\(releaseRoot\)/);
   assert.match(frozenWrapper, /resolveApplicationEvidenceActor\(env\)/);
   assert.doesNotThrow(() => assertReviewedApplicationPreparationSource(preparation));
