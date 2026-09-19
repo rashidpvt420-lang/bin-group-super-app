@@ -299,7 +299,7 @@ test('reviewed application verifier still receives the broker payment adapter', 
 test('application verifier overlay accepts only frozen source or the exact reviewed verifier blob', async () => {
   const wrapper = await read('scripts/run-frozen-release-evidence.mjs');
   const workflow = await read('.github/workflows/operational-application-evidence.yml');
-  assert.match(wrapper, /REVIEWED_APPLICATION_VERIFIER_BLOB = '07927ae81eb4aad3994d912b413ac4aef51e3b34'/);
+  assert.match(wrapper, /REVIEWED_APPLICATION_VERIFIER_BLOB = 'ea19a31f93038150368b4354190dc9d00fa7b7aa'/);
   assert.match(wrapper, /gitBlobSha\(source\) === REVIEWED_APPLICATION_VERIFIER_BLOB/);
   assert.match(wrapper, /application verifier has unreviewed working-tree changes/);
   assert.match(wrapper, /state === 'reviewed'/);
@@ -344,13 +344,29 @@ test('frozen broker payment adapter upgrades only the reviewed payment binding a
   );
 });
 
+test('staff evidence selects only an active audited Technician whose Auth and registries agree', async () => {
+  const verifier = await read('scripts/verify-operational-application-evidence.mjs');
+  const start = verifier.indexOf('async function latestAuditedActiveTechnician');
+  assert.ok(start >= 0);
+  const end = verifier.indexOf('\nasync function latestRenewalWatch', start);
+  const selector = verifier.slice(start, end > start ? end : verifier.length);
+  assert.match(selector, /admin\.auth\(\)\.getUser\(staffUid\)/);
+  assert.match(selector, /error\?\.code === 'auth\/user-not-found'/);
+  assert.match(selector, /if \(authRecord\.disabled\) continue/);
+  assert.match(selector, /claims\.staff !== true \|\| claims\.technician !== true/);
+  assert.match(selector, /accessDoc\.data\.active !== true/);
+  assert.match(selector, /hrDoc\.data\.role \|\| hrDoc\.data\.employeeType/);
+  assert.match(selector, /technicianDoc\.data\.role/);
+  assert.match(selector, /no active audited production technician provisioning record was found/);
+});
+
 test('staff evidence auto-discovers one audited technician with no privileged claims', async () => {
   const [verifier, provisioning] = await Promise.all([
     read('scripts/verify-operational-application-evidence.mjs'),
     read('functions/adminUserProvisioning.ts'),
   ]);
 
-  assert.match(verifier, /latestStaffCreationAudit/);
+  assert.match(verifier, /latestAuditedActiveTechnician/);
   assert.match(verifier, /error\?\.code === 'auth\/user-not-found'/);
   assert.match(verifier, /if \(!authRecord\) continue/);
   assert.match(verifier, /if \(!userSnapshot\.exists\) continue/);
