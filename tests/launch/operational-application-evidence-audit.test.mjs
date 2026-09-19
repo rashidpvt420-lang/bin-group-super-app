@@ -228,6 +228,16 @@ test('frozen Tenant verifier adapter upgrades legacy selection, accepts exact re
   );
 });
 
+test('application evidence publish step passes GitHub token for protected owner-command provenance', async () => {
+  const workflow = await read('.github/workflows/operational-application-evidence.yml');
+  const start = workflow.indexOf('      - name: Auto-discover, verify, and publish application evidence');
+  assert.ok(start >= 0);
+  const end = workflow.indexOf('\n      - name:', start + 1);
+  const step = workflow.slice(start, end > start ? end : workflow.length);
+  assert.match(step, /GITHUB_TOKEN: \$\{\{ secrets\.GITHUB_TOKEN \}\}/);
+  assert.match(step, /node \.\.\/control-plane\/scripts\/run-frozen-release-evidence\.mjs scripts\/verify-operational-application-evidence-mfa\.mjs/);
+});
+
 test('application verifier overlay accepts only frozen source or the exact reviewed verifier blob', async () => {
   const wrapper = await read('scripts/run-frozen-release-evidence.mjs');
   const workflow = await read('.github/workflows/operational-application-evidence.yml');
