@@ -188,15 +188,29 @@ test('frozen Tenant verifier adapter only adds canonical production upload field
     '    ...(Array.isArray(ticket.photoUrls) ? ticket.photoUrls : []),',
     '    ...(Array.isArray(ticket.images) ? ticket.images : []),',
   ].join('\n');
+  const reviewedSelection = [
+    '    ticket.requestPhotoUrl,',
+    '    ticket.primaryPhotoUrl,',
+    '    ...(Array.isArray(ticket.photoUrls) ? ticket.photoUrls : []),',
+    '    ...(Array.isArray(ticket.photos) ? ticket.photos : []),',
+    '    ...(Array.isArray(ticket.beforePhotos) ? ticket.beforePhotos : []),',
+    '    ...(Array.isArray(ticket.tenantPhotos) ? ticket.tenantPhotos : []),',
+    '    ...(Array.isArray(ticket.initialPhotoUrls) ? ticket.initialPhotoUrls : []),',
+    '    ...(Array.isArray(ticket.images) ? ticket.images : []),',
+  ].join('\n');
   const adapted = transformFrozenTenantPhotoVerifier(`before\n${legacySelection}\nafter`);
   assert.match(adapted, /ticket\.primaryPhotoUrl/);
   assert.match(adapted, /Array\.isArray\(ticket\.photos\)/);
   assert.match(adapted, /Array\.isArray\(ticket\.beforePhotos\)/);
   assert.match(adapted, /Array\.isArray\(ticket\.tenantPhotos\)/);
   assert.match(adapted, /Array\.isArray\(ticket\.initialPhotoUrls\)/);
+  assert.equal(
+    transformFrozenTenantPhotoVerifier(`before\n${reviewedSelection}\nafter`),
+    `before\n${reviewedSelection}\nafter`,
+  );
   assert.throws(
     () => transformFrozenTenantPhotoVerifier(legacySelection.replace('ticket.images', 'ticket.attachments')),
-    /exact legacy selection is required/,
+    /exact legacy or reviewed selection is required/,
   );
 });
 
