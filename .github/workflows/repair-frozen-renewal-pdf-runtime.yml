@@ -1,0 +1,159 @@
+name: Repair Frozen Renewal PDF Runtime
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: repair-frozen-renewal-pdf-runtime
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    name: Repair frozen renewal PDF functions
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: production
+    env:
+      GCP_PROJECT_ID: bin-group-57c60
+      FROZEN_RELEASE_SHA: 2ecfad30cc48f3004fc78f2db86a655e94215a15
+      FUNCTION_REGION: europe-west3
+      ORIGINAL_PDF_ENGINE_SHA256: d9e8b545f1876e6ebc41f95894b8fff8c93b58267cb89f6ebb8a6994c6c432f0
+      REPAIRED_PDF_ENGINE_SHA256: d4734a99e18783e1883766de79384219e3c400eddf1b761be06b9bce15e6f429
+    steps:
+      - name: Checkout current control plane
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+
+      - name: Require exact owner-dispatched current main
+        run: |
+          set -euo pipefail
+          remote_sha="$(git ls-remote --exit-code origin refs/heads/main | awk '{print $1}')"
+          test "$remote_sha" = "$GITHUB_SHA"
+          test "$GITHUB_REF" = "refs/heads/main"
+          test "$GITHUB_EVENT_NAME" = "workflow_dispatch"
+          test "$GITHUB_ACTOR" = "rashidpvt420-lang"
+
+      - name: Checkout frozen production release
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ env.FROZEN_RELEASE_SHA }}
+          path: release
+          fetch-depth: 1
+
+      - name: Apply the pinned storage-bucket repair
+        working-directory: release
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$FROZEN_RELEASE_SHA"
+          test "$(sha256sum functions/pdfEngine.ts | awk '{print $1}')" = "$ORIGINAL_PDF_ENGINE_SHA256"
+          node <<'NODE'
+          const fs = require('node:fs');
+          const path = 'functions/pdfEngine.ts';
+          const source = fs.readFileSync(path, 'utf8');
+          const before = 'const bucket = storage.bucket();';
+          const after = "const bucket = storage.bucket('bin-group-57c60.firebasestorage.app');";
+          if (source.split(before).length !== 2 || source.includes(after)) {
+            throw new Error('Frozen PDF engine no longer matches the single reviewed repair target.');
+          }
+          fs.writeFileSync(path, source.replace(before, after));
+          NODE
+          test "$(sha256sum functions/pdfEngine.ts | awk '{print $1}')" = "$REPAIRED_PDF_ENGINE_SHA256"
+          test "$(git diff --name-only)" = "functions/pdfEngine.ts"
+          git diff --check
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: "22"
+
+      - name: Install frozen release dependencies
+        working-directory: release
+        run: bash scripts/npm-install-retry.sh
+
+      - name: Build and prove repaired frozen Functions
+        working-directory: release
+        run: |
+          set -euo pipefail
+          npm run build:functions
+          node <<'NODE'
+          const fs = require('node:fs');
+          const pdfEngine = fs.readFileSync('functions/lib/pdfEngine.js', 'utf8');
+          if (!pdfEngine.includes("storage.bucket('bin-group-57c60.firebasestorage.app')")) {
+            throw new Error('Compiled PDF engine does not bind the production Storage bucket.');
+          }
+          const runtime = require('./functions/lib/runtimeAll.js');
+          for (const name of ['runContractRenewalWatch', 'rebuildContractRenewalWatch']) {
+            if (!runtime[name] || !(runtime[name].__endpoint || runtime[name].__trigger)) {
+              throw new Error(`${name} export is missing from the repaired frozen runtime.`);
+            }
+          }
+          NODE
+
+      - name: Deployment credentials preflight
+        env:
+          WIF_PROVIDER: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          SERVICE_ACCOUNT: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+        run: |
+          set -euo pipefail
+          test -n "$WIF_PROVIDER"
+          test -n "$SERVICE_ACCOUNT"
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          create_credentials_file: true
+          export_environment_variables: true
+
+      - name: Redeploy only the two frozen renewal functions
+        working-directory: release
+        run: |
+          set -euo pipefail
+          test "$GCP_PROJECT_ID" = "bin-group-57c60"
+          npx firebase deploy \
+            --only functions:runContractRenewalWatch,functions:rebuildContractRenewalWatch \
+            --project "$GCP_PROJECT_ID" \
+            --non-interactive \
+            --force
+
+      - name: Verify active latest serving revisions
+        run: |
+          set -euo pipefail
+          for function_name in runContractRenewalWatch rebuildContractRenewalWatch; do
+            function_json=""
+            for attempt in $(seq 1 12); do
+              function_json="$(gcloud functions describe "$function_name" --gen2 --region="$FUNCTION_REGION" --project="$GCP_PROJECT_ID" --format=json)"
+              state="$(jq -r '.state // empty' <<< "$function_json")"
+              latest="$(jq -r '.serviceConfig.allTrafficOnLatestRevision // false' <<< "$function_json")"
+              if [[ "$state" == "ACTIVE" && "$latest" == "true" ]]; then
+                break
+              fi
+              echo "Waiting for ${function_name} latest revision (attempt ${attempt}/12, state=${state:-unknown}, latest=${latest})"
+              sleep 5
+            done
+            [[ "$(jq -r '.state // empty' <<< "$function_json")" == "ACTIVE" ]] || {
+              echo "::error::${function_name} is not ACTIVE after repair."
+              exit 1
+            }
+            [[ "$(jq -r '.serviceConfig.allTrafficOnLatestRevision // false' <<< "$function_json")" == "true" ]] || {
+              echo "::error::${function_name} is not serving 100% latest revision traffic."
+              exit 1
+            }
+          done
+
+      - name: Reconfirm repair-only source mutation
+        working-directory: release
+        run: |
+          set -euo pipefail
+          test "$(sha256sum functions/pdfEngine.ts | awk '{print $1}')" = "$REPAIRED_PDF_ENGINE_SHA256"
+          test "$(git diff --name-only)" = "functions/pdfEngine.ts"
+          if git diff -- firebase.json .firebaserc | grep -q .; then
+            echo "::error::Firebase target configuration changed during the repair."
+            exit 1
+          fi
