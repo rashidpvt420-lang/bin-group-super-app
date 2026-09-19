@@ -156,8 +156,9 @@ jobs:
           ref: ${{ inputs.frozen_release_sha }}
           path: release
 
-      - name: Overlay reviewed dual-SHA publisher and Tenant delivery preparation
+      - name: Overlay reviewed dual-SHA publisher, application verifier, and Tenant delivery preparation
         run: |
+          cp control-plane/scripts/verify-operational-application-evidence.mjs release/scripts/verify-operational-application-evidence.mjs
           cp control-plane/scripts/publish-operational-application-evidence.mjs release/scripts/publish-operational-application-evidence.mjs
           cp control-plane/scripts/prepare-operational-application-evidence.mjs release/scripts/prepare-operational-application-evidence.mjs
 
