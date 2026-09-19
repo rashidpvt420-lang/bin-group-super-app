@@ -97,12 +97,33 @@ async function latestDeliveredNotification() {
   return notification;
 }
 
-async function latestBrokerCommission() {
-  const snapshot = await db.collection('broker_commissions').limit(100).get();
-  const candidates = sortedResults(snapshot, ['createdAt', 'updatedAt']);
-  const commission = candidates.find(({ data }) => text(data.contractId) && text(data.brokerId || data.brokerUid));
-  if (!commission) fail('no production broker commission lock was found');
-  return commission;
+async function latestBrokerCommissionWithApprovedPayment() {
+  const [commissionSnapshot, paymentSnapshot] = await Promise.all([
+    db.collection('broker_commissions').limit(100).get(),
+    db.collection('payment_transactions').where('status', '==', 'APPROVED').limit(100).get(),
+  ]);
+  const commissions = sortedResults(commissionSnapshot, ['createdAt', 'updatedAt'])
+    .filter(({ data }) => text(data.contractId) && text(data.brokerId || data.brokerUid));
+  const payments = sortedResults(paymentSnapshot, ['approvedAt', 'updatedAt', 'createdAt'])
+    .filter(({ data }) => data.paymentVerified === true && data.unlocksDashboard === true);
+
+  for (const commission of commissions) {
+    const contractId = text(commission.data.contractId);
+    const contractSnapshot = await db.collection('contracts').doc(contractId).get();
+    if (!contractSnapshot.exists) continue;
+    const contract = docResult(contractSnapshot);
+    const directPaymentId = text(
+      contract.data.approvedPaymentId || contract.data.activationPaymentId || contract.data.paymentId,
+    );
+    const payment = /^[A-Za-z0-9_-]{3,180}$/.test(directPaymentId)
+      ? payments.find((candidate) => candidate.id === directPaymentId)
+      : payments.find(({ id, data }) => text(data.contractId || data.intakeId || id) === contractId);
+    if (!payment) continue;
+    if (text(payment.data.contractId || payment.data.intakeId || payment.id) !== contractId) continue;
+    return { commission, contract, payment };
+  }
+
+  fail('no production broker commission lock has an approved payment binding');
 }
 
 async function convertedBrokerLeadForCommission(commissionId, contractId, brokerUid) {
@@ -331,28 +352,11 @@ async function paymentUnlockExactlyOnceProof() {
 }
 
 async function brokerCommissionProof() {
-  const commissionBefore = await latestBrokerCommission();
+  const selected = await latestBrokerCommissionWithApprovedPayment();
+  const commissionBefore = selected.commission;
+  const contractBefore = selected.contract;
+  const payment = selected.payment;
   const contractId = canonicalId(commissionBefore.data.contractId, 'contract_id');
-  const contractBefore = await requireSnapshot(db.collection('contracts').doc(contractId), `contracts/${contractId}`);
-  const directPaymentId = text(
-    contractBefore.data.approvedPaymentId || contractBefore.data.activationPaymentId || contractBefore.data.paymentId,
-  );
-  let payment;
-  if (/^[A-Za-z0-9_-]{3,180}$/.test(directPaymentId)) {
-    payment = await requireSnapshot(
-      db.collection('payment_transactions').doc(directPaymentId),
-      `payment_transactions/${directPaymentId}`,
-    );
-  } else {
-    const paymentsSnapshot = await db.collection('payment_transactions').where('status', '==', 'APPROVED').limit(100).get();
-    const paymentCandidates = sortedResults(paymentsSnapshot, ['approvedAt', 'updatedAt', 'createdAt']);
-    payment = paymentCandidates.find(({ data }) =>
-      data.paymentVerified === true &&
-      data.unlocksDashboard === true &&
-      text(data.contractId || data.intakeId) === contractId
-    );
-    if (!payment) fail('no approved production payment is bound to the broker commission contract');
-  }
   const paymentId = canonicalId(payment.id, 'payment_id');
   if (text(payment.data.contractId || payment.data.intakeId || paymentId) !== contractId) fail('payment and commission contract are not bound');
   const commissionId = `commission_${contractId}`;

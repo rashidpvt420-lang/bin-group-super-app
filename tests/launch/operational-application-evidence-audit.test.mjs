@@ -142,13 +142,14 @@ test('payment and commission evidence uses real replay invariants and requires F
   ]);
 
   assert.match(verifier, /latestApprovedPayment/);
-  assert.match(verifier, /latestBrokerCommission/);
+  assert.match(verifier, /latestBrokerCommissionWithApprovedPayment/);
+  assert.match(verifier, /no production broker commission lock has an approved payment binding/);
+  assert.match(verifier, /candidate\.id === directPaymentId/);
+  assert.match(verifier, /text\(data\.contractId \|\| data\.intakeId \|\| id\) === contractId/);
   assert.match(verifier, /directPaymentId/);
   assert.match(verifier, /collection\('payment_transactions'\)\.where\('status', '==', 'APPROVED'\)/);
   assert.match(verifier, /data\.paymentVerified === true/);
   assert.match(verifier, /data\.unlocksDashboard === true/);
-  assert.match(verifier, /text\(data\.contractId \|\| data\.intakeId\) === contractId/);
-  assert.match(verifier, /no approved production payment is bound to the broker commission contract/);
   assert.match(verifier, /convertedBrokerLeadForCommission/);
   assert.match(verifier, /collection\('brokerLeads'\)\.where\('commissionId', '==', commissionId\)/);
   assert.match(verifier, /lower\(data\.status\) === 'converted'/);
@@ -264,7 +265,7 @@ test('reviewed application verifier still receives the broker payment adapter', 
 test('application verifier overlay accepts only frozen source or the exact reviewed verifier blob', async () => {
   const wrapper = await read('scripts/run-frozen-release-evidence.mjs');
   const workflow = await read('.github/workflows/operational-application-evidence.yml');
-  assert.match(wrapper, /REVIEWED_APPLICATION_VERIFIER_BLOB = '0e7b1a7e2f7d85a32f19062dfff7da0c0c8d0e8d'/);
+  assert.match(wrapper, /REVIEWED_APPLICATION_VERIFIER_BLOB = 'f8e37913ea7740b37a53c1a17590d60cb7102f5b'/);
   assert.match(wrapper, /gitBlobSha\(source\) === REVIEWED_APPLICATION_VERIFIER_BLOB/);
   assert.match(wrapper, /application verifier has unreviewed working-tree changes/);
   assert.match(wrapper, /state === 'reviewed'/);
