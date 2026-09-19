@@ -94,7 +94,7 @@ test('application evidence workflow is protected and auto-discovers fixed produc
   assert.match(preparation, /cleanupRenewalSchedulerEvidence/);
   assert.match(preparation, /refusing to clean a non-evidence renewal source/);
   assert.match(preparation, /CONTRACT_RENEWAL_MILESTONE_PROCESSED/);
-  assert.match(preparation, /EXPECTED_STORAGE_BUCKET = 'bin-group-57c60\\.firebasestorage\\.app'/);
+  assert.match(preparation, /EXPECTED_STORAGE_BUCKET = 'bin-group-57c60\.firebasestorage\.app'/);
   assert.match(preparation, /admin\.storage\(\)\.bucket\(EXPECTED_STORAGE_BUCKET\)\.deleteFiles/);
   assert.doesNotMatch(preparation, /admin\.storage\(\)\.bucket\(\s*\)\.deleteFiles/);
   assert.match(preparation, /return \{ uid: founder\.uid, idToken: founder\.idToken/);
