@@ -53,6 +53,7 @@ const PAYMENT_POLICY_BLOBS = Object.freeze({
   'functions/ownerActivationPaymentPolicy.ts': '06f056113367bda1fca22bcdba95ab975e594f54',
 });
 const APPLICATION_VERIFIER = 'scripts/verify-operational-application-evidence.mjs';
+const REVIEWED_APPLICATION_VERIFIER_BLOB = '0e7b1a7e2f7d85a32f19062dfff7da0c0c8d0e8d';
 const APPLICATION_PREPARATION = 'scripts/prepare-operational-application-evidence.mjs';
 const REVIEWED_APPLICATION_PREPARATION_BLOB = '9afcbd054f54729b647d8b1fae122b5dc0ffb155';
 const LEGACY_ACTIVATION_CHECK = [
@@ -343,7 +344,9 @@ function installReviewedActivationAdapter(releaseRoot) {
   if (!lstatSync(file).isFile()) fail('frozen application verifier is not a regular file');
   const original = readFileSync(file, 'utf8');
   const committed = execFileSync('git', ['show', `HEAD:${APPLICATION_VERIFIER}`], { cwd: releaseRoot, encoding: 'utf8' });
-  if (original !== committed) fail('frozen application verifier has unreviewed working-tree changes');
+  if (original !== committed && gitBlobSha(original) !== REVIEWED_APPLICATION_VERIFIER_BLOB) {
+    fail('frozen application verifier has unreviewed working-tree changes');
+  }
   const adapted = transformFrozenActivationVerifier(original);
   writeFileSync(file, adapted);
   console.log(`[frozen-release-evidence] reviewed activation-policy adapter sha256=${createHash('sha256').update(adapted).digest('hex')}`);
@@ -355,7 +358,9 @@ function installReviewedTenantPhotoAdapter(releaseRoot) {
   if (!lstatSync(file).isFile()) fail('frozen application verifier is not a regular file');
   const original = readFileSync(file, 'utf8');
   const committed = execFileSync('git', ['show', `HEAD:${APPLICATION_VERIFIER}`], { cwd: releaseRoot, encoding: 'utf8' });
-  if (original !== committed) fail('frozen application verifier has unreviewed working-tree changes');
+  if (original !== committed && gitBlobSha(original) !== REVIEWED_APPLICATION_VERIFIER_BLOB) {
+    fail('frozen application verifier has unreviewed working-tree changes');
+  }
   const adapted = transformFrozenTenantPhotoVerifier(original);
   writeFileSync(file, adapted);
   console.log(`[frozen-release-evidence] reviewed Tenant photo adapter sha256=${createHash('sha256').update(adapted).digest('hex')}`);
@@ -367,7 +372,9 @@ function installReviewedBrokerPaymentAdapter(releaseRoot) {
   if (!lstatSync(file).isFile()) fail('frozen application verifier is not a regular file');
   const original = readFileSync(file, 'utf8');
   const committed = execFileSync('git', ['show', `HEAD:${APPLICATION_VERIFIER}`], { cwd: releaseRoot, encoding: 'utf8' });
-  if (original !== committed) fail('frozen application verifier has unreviewed working-tree changes');
+  if (original !== committed && gitBlobSha(original) !== REVIEWED_APPLICATION_VERIFIER_BLOB) {
+    fail('frozen application verifier has unreviewed working-tree changes');
+  }
   const adapted = transformFrozenBrokerPaymentVerifier(original);
   writeFileSync(file, adapted);
   console.log(`[frozen-release-evidence] reviewed broker payment adapter sha256=${createHash('sha256').update(adapted).digest('hex')}`);
