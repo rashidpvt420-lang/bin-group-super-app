@@ -55,7 +55,7 @@ const PAYMENT_POLICY_BLOBS = Object.freeze({
 const APPLICATION_VERIFIER = 'scripts/verify-operational-application-evidence.mjs';
 const REVIEWED_APPLICATION_VERIFIER_BLOB = '3e48a8d109603b86506cb2d7cc733118abc0b7f1';
 const APPLICATION_PREPARATION = 'scripts/prepare-operational-application-evidence.mjs';
-const REVIEWED_APPLICATION_PREPARATION_BLOB = 'aded2722e0b7e9457c86d06a35cbba7a345ffdc0';
+const REVIEWED_APPLICATION_PREPARATION_BLOB = 'c7bfc39ef8a2a4bff21a8f92363ecd4fd1437590';
 const LEGACY_ACTIVATION_CHECK = [
   '  const annual = Number(payment.data.quoteSnapshot?.annualContractValue || contract.quoteSnapshot?.annualContractValue || contract.annualContractValue || 0);',
   '  const amount = Number(payment.data.amountReceived || payment.data.quoteSnapshot?.activationDeposit || payment.data.amount || 0);',
@@ -139,8 +139,8 @@ export function assertApplicationEvidenceCredentials(gate, env = process.env) {
 }
 
 export function assertApplicationPreparationCredentials(gate, env = process.env) {
-  if (!['all', 'tenantNotificationDelivery', 'brokerCommissionLockExactlyOnce'].includes(gate)) {
-    fail('application preparation requires all, tenantNotificationDelivery, or brokerCommissionLockExactlyOnce');
+  if (!['all', 'tenantNotificationDelivery', 'brokerCommissionLockExactlyOnce', 'adminStaffClaims'].includes(gate)) {
+    fail('application preparation requires all, tenantNotificationDelivery, brokerCommissionLockExactlyOnce, or adminStaffClaims');
   }
   const required = [
     'VITE_FIREBASE_API_KEY',
@@ -150,8 +150,11 @@ export function assertApplicationPreparationCredentials(gate, env = process.env)
   if (['all', 'tenantNotificationDelivery'].includes(gate)) {
     required.push('E2E_TENANT_EMAIL', 'E2E_TENANT_PASSWORD');
   }
+  if (['all', 'brokerCommissionLockExactlyOnce', 'adminStaffClaims'].includes(gate)) {
+    required.push('E2E_FOUNDER_EMAIL', 'E2E_FOUNDER_PASSWORD', 'E2E_FOUNDER_TOTP_SECRET');
+  }
   if (['all', 'brokerCommissionLockExactlyOnce'].includes(gate)) {
-    required.push('E2E_FOUNDER_EMAIL', 'E2E_FOUNDER_PASSWORD', 'E2E_FOUNDER_TOTP_SECRET', 'E2E_BROKER_MAILBOX_EMAIL');
+    required.push('E2E_BROKER_MAILBOX_EMAIL');
   }
   const missing = required.filter((name) => !String(env[name] ?? '').trim());
   if (missing.length) fail(`missing protected application preparation bindings: ${missing.join(', ')}`);
@@ -162,10 +165,10 @@ export function assertApplicationPreparationCredentials(gate, env = process.env)
     fail('tenant notification preparation requires the canonical production site');
   }
   if (
-    ['all', 'brokerCommissionLockExactlyOnce'].includes(gate)
+    ['all', 'brokerCommissionLockExactlyOnce', 'adminStaffClaims'].includes(gate)
     && String(env.E2E_FOUNDER_EMAIL || '').trim().toLowerCase() !== CANONICAL_FOUNDER_EMAIL
   ) {
-    fail('Broker commission preparation requires the canonical Founder identity');
+    fail('protected application preparation requires the canonical Founder identity');
   }
 }
 
