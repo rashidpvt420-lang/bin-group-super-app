@@ -53,7 +53,7 @@ const PAYMENT_POLICY_BLOBS = Object.freeze({
   'functions/ownerActivationPaymentPolicy.ts': '06f056113367bda1fca22bcdba95ab975e594f54',
 });
 const APPLICATION_VERIFIER = 'scripts/verify-operational-application-evidence.mjs';
-const REVIEWED_APPLICATION_VERIFIER_BLOB = 'f8e37913ea7740b37a53c1a17590d60cb7102f5b';
+const REVIEWED_APPLICATION_VERIFIER_BLOB = '921b176ea2b8164241b0b650168bcd27fbfb4587';
 const APPLICATION_PREPARATION = 'scripts/prepare-operational-application-evidence.mjs';
 const REVIEWED_APPLICATION_PREPARATION_BLOB = '9afcbd054f54729b647d8b1fae122b5dc0ffb155';
 const LEGACY_ACTIVATION_CHECK = [

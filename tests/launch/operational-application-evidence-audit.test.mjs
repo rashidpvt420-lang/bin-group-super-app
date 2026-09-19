@@ -143,6 +143,10 @@ test('payment and commission evidence uses real replay invariants and requires F
 
   assert.match(verifier, /latestApprovedPayment/);
   assert.match(verifier, /latestBrokerCommissionWithApprovedPayment/);
+  assert.match(verifier, /collection\('audit_logs'\)\.where\('contractId', '==', contractId\)/);
+  assert.match(verifier, /data\.action === 'ADMIN_APPROVE_PAYMENT'/);
+  assert.match(verifier, /candidate\.id === text\(approvalAudit\.data\.paymentId\)/);
+  assert.match(verifier, /const paymentContractId = text\(payment\.data\.contractId \|\| payment\.data\.intakeId\)/);
   assert.match(verifier, /no production broker commission lock has an approved payment binding/);
   assert.match(verifier, /candidate\.id === directPaymentId/);
   assert.match(verifier, /text\(data\.contractId \|\| data\.intakeId \|\| id\) === contractId/);
@@ -265,7 +269,7 @@ test('reviewed application verifier still receives the broker payment adapter', 
 test('application verifier overlay accepts only frozen source or the exact reviewed verifier blob', async () => {
   const wrapper = await read('scripts/run-frozen-release-evidence.mjs');
   const workflow = await read('.github/workflows/operational-application-evidence.yml');
-  assert.match(wrapper, /REVIEWED_APPLICATION_VERIFIER_BLOB = 'f8e37913ea7740b37a53c1a17590d60cb7102f5b'/);
+  assert.match(wrapper, /REVIEWED_APPLICATION_VERIFIER_BLOB = '921b176ea2b8164241b0b650168bcd27fbfb4587'/);
   assert.match(wrapper, /gitBlobSha\(source\) === REVIEWED_APPLICATION_VERIFIER_BLOB/);
   assert.match(wrapper, /application verifier has unreviewed working-tree changes/);
   assert.match(wrapper, /state === 'reviewed'/);
