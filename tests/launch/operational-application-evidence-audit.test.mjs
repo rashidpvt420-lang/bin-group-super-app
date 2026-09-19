@@ -89,8 +89,11 @@ test('application evidence workflow is protected and auto-discovers fixed produc
   assert.match(preparation, /cloudfunctions\.net\/adminUpdateStaffOnboarding/);
   assert.match(preparation, /cloudfunctions\.net\/rebuildContractRenewalWatch/);
   assert.match(preparation, /prepareRenewalSchedulerEvidence/);
-  assert.match(preparation, /where\('tenantUid', '==', tenant\.uid\)/);
-  assert.match(preparation, /data\.e2eLaunchSeed === true/);
+  assert.match(preparation, /canonicalContractId = 'e2e-contract-tenant-001'/);
+  assert.match(preparation, /contract\.data\.launchFixture !== true/);
+  assert.match(preparation, /text\(contract\.data\.tenantUid \|\| contract\.data\.tenantId\) !== tenant\.uid/);
+  assert.match(preparation, /text\(contract\.data\.propertyId\) !== 'e2e-property-alain-001'/);
+  assert.match(preparation, /text\(contract\.data\.unitId\) !== 'e2e-unit-tenant-001'/);
   assert.match(preparation, /contractEndDate: expiryAt/);
   assert.match(preparation, /renewalStatus: 'PENDING'/);
   assert.match(preparation, /contract_renewal_watch/);
@@ -115,7 +118,7 @@ test('application evidence workflow is protected and auto-discovers fixed produc
   assert.doesNotMatch(preparation, /collection\('broker_commissions'\)\.doc\([^)]*\)\.set/);
   assert.doesNotMatch(preparation, /collection\('auditLogs'\)\.doc\([^)]*\)\.set/);
 
-  assert.match(frozenWrapper, /REVIEWED_APPLICATION_PREPARATION_BLOB = '32277fa276220402f4a49681cd3d2a9c561139f5'/);
+  assert.match(frozenWrapper, /REVIEWED_APPLICATION_PREPARATION_BLOB = '191b3bc00a5a1b9f93fc1050684c1b45bafa221e'/);
   assert.match(frozenWrapper, /assertReviewedApplicationPreparation\(releaseRoot\)/);
   assert.match(frozenWrapper, /resolveApplicationEvidenceActor\(env\)/);
   assert.doesNotThrow(() => assertReviewedApplicationPreparationSource(preparation));

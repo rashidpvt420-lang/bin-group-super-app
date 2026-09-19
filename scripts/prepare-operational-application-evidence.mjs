@@ -502,18 +502,19 @@ async function prepareRenewalSchedulerEvidence({ db, auth, apiKey, appId, debugT
   if (tenant.disabled || tenant.emailVerified !== true || tenant.customClaims?.testAccount !== true) {
     fail('protected Tenant identity is not an active verified test account for renewal scheduler evidence');
   }
-  const contracts = await db.collection('contracts').where('tenantUid', '==', tenant.uid).limit(100).get();
-  const candidates = contracts.docs
-    .map((document) => ({ id: document.id, data: document.data() || {} }))
-    .filter(({ data }) =>
-      data.e2eLaunchSeed === true
-      && text(data.ownerUid || data.ownerId)
-      && text(data.propertyId)
-      && !['RENEWED', 'CANCELLED', 'TERMINATED', 'EXPIRED_CLOSED', 'ARCHIVED'].includes(upper(data.renewalStatus || data.status || data.contractStatus))
-    );
-  if (candidates.length !== 1) fail('expected exactly one canonical test-only production contract for renewal scheduler evidence');
-
-  const contract = candidates[0];
+  const canonicalContractId = 'e2e-contract-tenant-001';
+  const contractSnapshot = await db.collection('contracts').doc(canonicalContractId).get();
+  if (!contractSnapshot.exists) fail('canonical test-only production contract is missing for renewal scheduler evidence');
+  const contract = { id: contractSnapshot.id, data: contractSnapshot.data() || {} };
+  if (
+    contract.data.launchFixture !== true
+    || text(contract.data.tenantUid || contract.data.tenantId) !== tenant.uid
+    || text(contract.data.propertyId) !== 'e2e-property-alain-001'
+    || text(contract.data.unitId) !== 'e2e-unit-tenant-001'
+    || ['RENEWED', 'CANCELLED', 'TERMINATED', 'EXPIRED_CLOSED', 'ARCHIVED'].includes(upper(contract.data.renewalStatus || contract.data.status || contract.data.contractStatus))
+  ) {
+    fail('canonical test-only production contract binding is invalid for renewal scheduler evidence');
+  }
   const expiryAt = admin.firestore.Timestamp.fromMillis(Date.now() + (30 * 24 * 60 * 60 * 1000));
   await db.collection('contracts').doc(contract.id).set({
     contractEndDate: expiryAt,
