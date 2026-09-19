@@ -94,7 +94,9 @@ test('application evidence workflow is protected and auto-discovers fixed produc
   assert.match(preparation, /cleanupRenewalSchedulerEvidence/);
   assert.match(preparation, /refusing to clean a non-evidence renewal source/);
   assert.match(preparation, /CONTRACT_RENEWAL_MILESTONE_PROCESSED/);
-  assert.match(preparation, /admin\.storage\(\)\.bucket\(\)\.deleteFiles/);
+  assert.match(preparation, /PRODUCTION_STORAGE_BUCKET = 'bin-group-57c60\.firebasestorage\.app'/);
+  assert.match(preparation, /admin\.storage\(\)\.bucket\(PRODUCTION_STORAGE_BUCKET\)\.deleteFiles/);
+  assert.doesNotMatch(preparation, /admin\.storage\(\)\.bucket\(\)\.deleteFiles/);
   assert.match(preparation, /contractEndDate: expiryAt/);
   assert.match(preparation, /renewalStatus: 'PENDING'/);
   assert.match(preparation, /contract_renewal_watch/);
@@ -119,7 +121,7 @@ test('application evidence workflow is protected and auto-discovers fixed produc
   assert.doesNotMatch(preparation, /collection\('broker_commissions'\)\.doc\([^)]*\)\.set/);
   assert.doesNotMatch(preparation, /collection\('auditLogs'\)\.doc\([^)]*\)\.set/);
 
-  assert.match(frozenWrapper, /REVIEWED_APPLICATION_PREPARATION_BLOB = 'a2634cbec954a22e51c8785fe68e8189c1eb8ebc'/);
+  assert.match(frozenWrapper, /REVIEWED_APPLICATION_PREPARATION_BLOB = '11da681c33a96ae899fcc06eb6f43f2234b92917'/);
   assert.match(frozenWrapper, /assertReviewedApplicationPreparation\(releaseRoot\)/);
   assert.match(frozenWrapper, /resolveApplicationEvidenceActor\(env\)/);
   assert.doesNotThrow(() => assertReviewedApplicationPreparationSource(preparation));

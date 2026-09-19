@@ -10,6 +10,7 @@ import { initializeFirebaseAdmin, resolveFirebaseAdminProjectId } from './fireba
 import { signInWithRequiredTotpMfa } from './lib/firebase-mfa-sign-in.mjs';
 
 const PROJECT_ID = 'bin-group-57c60';
+const PRODUCTION_STORAGE_BUCKET = 'bin-group-57c60.firebasestorage.app';
 const REPOSITORY = 'rashidpvt420-lang/bin-group-super-app';
 const WORKFLOW = 'Operational Application Evidence';
 const JOB = 'verify-and-publish';
@@ -528,7 +529,7 @@ async function cleanupRenewalSchedulerEvidence({ db }) {
     deleteMatchingDocuments(auditSnapshot),
     db.collection('document_generation_requests').doc(`renewal_contracts_${contractId}`).delete().catch(() => undefined),
     contractRef.delete().catch(() => undefined),
-    admin.storage().bucket().deleteFiles({ prefix: `contracts/${contractId}/` }).catch(() => undefined),
+    admin.storage().bucket(PRODUCTION_STORAGE_BUCKET).deleteFiles({ prefix: `contracts/${contractId}/` }).catch(() => undefined),
   ]);
 
   console.log(`[prepare-application-evidence] CLEANUP gate=renewalScheduler contractHash=${sha256(contractId).slice(0, 12)}…`);
