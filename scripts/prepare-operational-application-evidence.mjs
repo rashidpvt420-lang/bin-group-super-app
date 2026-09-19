@@ -19,8 +19,10 @@ const CREATE_NOTIFICATION_URL = 'https://europe-west3-bin-group-57c60.cloudfunct
 const ADMIN_MATCH_BROKER_ATTRIBUTION_URL = 'https://europe-west3-bin-group-57c60.cloudfunctions.net/adminMatchBrokerAttribution';
 const ADMIN_CREATE_USER_URL = 'https://europe-west3-bin-group-57c60.cloudfunctions.net/adminCreateUser';
 const ADMIN_UPDATE_STAFF_ONBOARDING_URL = 'https://europe-west3-bin-group-57c60.cloudfunctions.net/adminUpdateStaffOnboarding';
+const REBUILD_CONTRACT_RENEWAL_WATCH_URL = 'https://europe-west3-bin-group-57c60.cloudfunctions.net/rebuildContractRenewalWatch';
 const BROKER_EVIDENCE_TYPE = 'OPERATIONAL_APPLICATION_BROKER_PAYMENT_BINDING';
 const STAFF_EVIDENCE_TYPE = 'OPERATIONAL_APPLICATION_STAFF_CLAIMS';
+const RENEWAL_EVIDENCE_TYPE = 'OPERATIONAL_APPLICATION_RENEWAL_SCHEDULER';
 const TERMINAL_DELIVERY_STATES = new Set(['SUCCESS', 'PARTIAL', 'FAILED', 'NO_REGISTERED_TOKEN']);
 const PARTICIPANT_FIELDS = ['tenantId', 'tenantUid', 'userId', 'createdBy', 'requesterId'];
 const PUSH_REGISTRATION_ATTEMPTS = 3;
@@ -103,7 +105,7 @@ function assertProtectedContext() {
   if (process.env.GITHUB_REPOSITORY !== REPOSITORY || process.env.GITHUB_REF !== 'refs/heads/main') fail('protected main is required');
   if (process.env.GITHUB_WORKFLOW !== WORKFLOW || process.env.GITHUB_JOB !== JOB) fail('unexpected protected workflow context');
   if (process.env.GITHUB_ACTOR !== CANONICAL_FOUNDER_LOGIN) fail('exact repository-owner command provenance is required');
-  if (!['all', 'tenantNotificationDelivery', 'brokerCommissionLockExactlyOnce', 'adminStaffClaims'].includes(text(process.env.OPERATIONAL_GATE))) fail('application evidence preparation was not selected');
+  if (!['all', 'tenantNotificationDelivery', 'brokerCommissionLockExactlyOnce', 'adminStaffClaims', 'renewalScheduler'].includes(text(process.env.OPERATIONAL_GATE))) fail('application evidence preparation was not selected');
   if (!/^[0-9a-f]{40}$/.test(text(process.env.GITHUB_SHA))) fail('frozen release SHA is invalid');
   if (!/^[0-9a-f]{40}$/.test(text(process.env.CLEARANCE_CONTROL_PLANE_SHA))) fail('control-plane SHA is invalid');
   if (!/^\d+$/.test(text(process.env.GITHUB_RUN_ID))) fail('workflow run ID is invalid');
@@ -363,7 +365,7 @@ async function invokeProtectedCallable(url, session, data, label) {
   });
   const payload = await responseJson(response);
   const result = payload?.result || payload?.data || payload;
-  if (!response.ok || !result?.success) fail(`${label} failed with HTTP ${response.status}`);
+  if (!response.ok || !(result?.success === true || upper(result?.status) === 'SUCCESS')) fail(`${label} failed with HTTP ${response.status}`);
   return result;
 }
 
@@ -489,6 +491,116 @@ async function prepareStaffClaimsEvidence({ db, auth, apiKey, appId, debugToken 
     console.log(`[prepare-application-evidence] PASS gate=adminStaffClaims staffHash=${sha256(uid).slice(0, 12)}…`);
   } catch (error) {
     await cleanupStaffClaimsEvidence({ db, auth }).catch(() => undefined);
+    throw error;
+  }
+}
+
+function renewalEvidenceContractId() {
+  return `operational_application_renewal_${text(process.env.GITHUB_RUN_ID)}`;
+}
+
+async function cleanupRenewalSchedulerEvidence({ db }) {
+  const contractId = renewalEvidenceContractId();
+  const contractRef = db.collection('contracts').doc(contractId);
+  const contractSnapshot = await contractRef.get();
+  if (contractSnapshot.exists) {
+    const marker = contractSnapshot.data() || {};
+    if (
+      text(marker.e2eEvidenceType) !== RENEWAL_EVIDENCE_TYPE
+      || text(marker.e2eRunId) !== text(process.env.GITHUB_RUN_ID)
+    ) {
+      fail('refusing to clean a non-evidence renewal source');
+    }
+  }
+
+  const [watchSnapshot, notificationSnapshot, mailSnapshot, auditSnapshot] = await Promise.all([
+    db.collection('contract_renewal_watch').where('sourceId', '==', contractId).limit(100).get(),
+    db.collection('notifications').where('sourceId', '==', contractId).limit(250).get(),
+    db.collection('mail').where('contractId', '==', contractId).limit(100).get(),
+    db.collection('audit_logs').where('targetId', '==', contractId).limit(100).get(),
+  ]);
+
+  await Promise.all([
+    deleteMatchingDocuments(watchSnapshot),
+    deleteMatchingDocuments(notificationSnapshot),
+    deleteMatchingDocuments(mailSnapshot),
+    deleteMatchingDocuments(auditSnapshot),
+    db.collection('document_generation_requests').doc(`renewal_contracts_${contractId}`).delete().catch(() => undefined),
+    contractRef.delete().catch(() => undefined),
+    admin.storage().bucket().deleteFiles({ prefix: `contracts/${contractId}/` }).catch(() => undefined),
+  ]);
+  console.log(`[prepare-application-evidence] CLEANUP gate=renewalScheduler contractHash=${sha256(contractId).slice(0, 12)}…`);
+}
+
+async function prepareRenewalSchedulerEvidence({ db, apiKey, appId, debugToken }) {
+  await cleanupRenewalSchedulerEvidence({ db });
+  try {
+    const contractId = renewalEvidenceContractId();
+    const now = new Date();
+    const expiryAt = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+    const sourceMarker = {
+      e2eLaunchSeed: true,
+      e2eEvidenceType: RENEWAL_EVIDENCE_TYPE,
+      e2eRunId: text(process.env.GITHUB_RUN_ID),
+      status: 'ACTIVE',
+      contractStatus: 'ACTIVE',
+      contractEndDate: admin.firestore.Timestamp.fromDate(expiryAt),
+      propertyId: `${contractId}_property`,
+      propertyName: 'Protected Renewal Evidence Property',
+      unitId: `${contractId}_unit`,
+      unitNumber: 'E2E-1',
+      ownerId: `${contractId}_owner`,
+      tenantId: `${contractId}_tenant`,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    };
+    await db.collection('contracts').doc(contractId).set(sourceMarker);
+
+    const session = await founderCallableSession({ apiKey, appId, debugToken });
+    const startedAt = Date.now();
+    const rebuilt = await invokeProtectedCallable(
+      REBUILD_CONTRACT_RENEWAL_WATCH_URL,
+      session,
+      {},
+      'deployed rebuildContractRenewalWatch',
+    );
+    const resultIds = Array.isArray(rebuilt.results)
+      ? rebuilt.results.map((item) => text(item?.id)).filter(Boolean)
+      : [];
+
+    const watchSnapshot = await db.collection('contract_renewal_watch').where('sourceId', '==', contractId).limit(20).get();
+    const candidates = watchSnapshot.docs
+      .map((document) => ({ id: document.id, data: document.data() || {} }))
+      .filter(({ data }) =>
+        text(data.sourceCollection) === 'contracts'
+        && text(data.sourceId) === contractId
+        && data.completed === true
+        && /^(https:\/\/|gs:\/\/)/i.test(text(data.pdfUrl))
+        && millis(data.updatedAt || data.processedAt) >= startedAt - 5_000
+      );
+    if (candidates.length !== 1) {
+      fail('deployed renewal rebuild did not create exactly one fresh PDF-backed watch for the run-scoped contract');
+    }
+
+    const watch = candidates[0];
+    if (resultIds.length && !resultIds.includes(watch.id)) {
+      fail('deployed renewal rebuild response did not include the run-scoped renewal watch');
+    }
+    const auditSnapshot = await db.collection('audit_logs').where('targetId', '==', contractId).limit(100).get();
+    const auditMatches = auditSnapshot.docs.filter((document) => {
+      const data = document.data() || {};
+      return data.action === 'CONTRACT_RENEWAL_MILESTONE_PROCESSED'
+        && text(data.actorId) === 'CONTRACT_RENEWAL_PDF_SYSTEM';
+    });
+    if (auditMatches.length !== 1) {
+      fail('deployed renewal rebuild did not write exactly one scheduler audit for the run-scoped contract');
+    }
+
+    console.log(
+      `[prepare-application-evidence] PASS gate=renewalScheduler contractHash=${sha256(contractId).slice(0, 12)}… watchHash=${sha256(watch.id).slice(0, 12)}…`,
+    );
+  } catch (error) {
+    await cleanupRenewalSchedulerEvidence({ db }).catch(() => undefined);
     throw error;
   }
 }
@@ -628,6 +740,12 @@ async function main() {
     return;
   }
 
+  if (text(process.env.APPLICATION_PREPARATION_MODE) === 'cleanup-renewal') {
+    if (!['all', 'renewalScheduler'].includes(selectedGate)) fail('renewal evidence cleanup is not selected for this gate');
+    await cleanupRenewalSchedulerEvidence({ db });
+    return;
+  }
+
   const apiKey = text(process.env.VITE_FIREBASE_API_KEY);
   const appId = text(process.env.VITE_FIREBASE_APP_ID);
   const debugToken = text(process.env.VITE_FIREBASE_APPCHECK_DEBUG_TOKEN);
@@ -641,6 +759,11 @@ async function main() {
   if (['all', 'brokerCommissionLockExactlyOnce'].includes(selectedGate)) {
     await prepareBrokerCommissionEvidence({ db, auth, apiKey, appId, debugToken });
     if (selectedGate === 'brokerCommissionLockExactlyOnce') return;
+  }
+
+  if (['all', 'renewalScheduler'].includes(selectedGate)) {
+    await prepareRenewalSchedulerEvidence({ db, apiKey, appId, debugToken });
+    if (selectedGate === 'renewalScheduler') return;
   }
 
   const tenantEmail = lower(process.env.E2E_TENANT_EMAIL);
