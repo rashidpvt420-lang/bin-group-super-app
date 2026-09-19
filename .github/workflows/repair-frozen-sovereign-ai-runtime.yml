@@ -258,7 +258,7 @@ jobs:
               exit 1
             }
 
-            expected_changed="$(printf '%s\n'             '.github/workflows/repair-frozen-sovereign-ai-runtime.yml'             'tests/launch/hard-clearance-revalidation.test.mjs' | sort)"
+            expected_changed="$(printf '%s\n'             '.github/workflows/current-main-expression-budget-repair.yml'             '.github/workflows/repair-frozen-sovereign-ai-runtime.yml'             'tests/launch/hard-clearance-revalidation.test.mjs' | sort)"
             actual_changed="$(git diff --name-only "$source_sha" "$control_sha" | sort)"
             [[ "$actual_changed" == "$expected_changed" ]] || {
               echo "::error::Unexpected files changed between the failed evidence SHA and the renewal repair control SHA."
