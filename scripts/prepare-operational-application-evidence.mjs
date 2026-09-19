@@ -502,18 +502,36 @@ async function prepareRenewalSchedulerEvidence({ db, auth, apiKey, appId, debugT
   if (tenant.disabled || tenant.emailVerified !== true || tenant.customClaims?.testAccount !== true) {
     fail('protected Tenant identity is not an active verified test account for renewal scheduler evidence');
   }
-  const contracts = await db.collection('contracts').where('tenantUid', '==', tenant.uid).limit(100).get();
-  const candidates = contracts.docs
-    .map((document) => ({ id: document.id, data: document.data() || {} }))
-    .filter(({ data }) =>
-      data.e2eLaunchSeed === true
-      && text(data.ownerUid || data.ownerId)
-      && text(data.propertyId)
-      && !['RENEWED', 'CANCELLED', 'TERMINATED', 'EXPIRED_CLOSED', 'ARCHIVED'].includes(upper(data.renewalStatus || data.status || data.contractStatus))
-    );
-  if (candidates.length !== 1) fail('expected exactly one canonical test-only production contract for renewal scheduler evidence');
+  const safeTenantId = String(tenant.uid || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 80);
+  const expectedContractId = `e2e-live-role-contract-${safeTenantId}`;
+  const [tenantProfileSnapshot, contractSnapshot] = await Promise.all([
+    db.collection('users').doc(tenant.uid).get(),
+    db.collection('contracts').doc(expectedContractId).get(),
+  ]);
+  if (!tenantProfileSnapshot.exists || !contractSnapshot.exists) {
+    fail('canonical live-role Tenant profile or contract is missing for renewal scheduler evidence');
+  }
+  const tenantProfile = tenantProfileSnapshot.data() || {};
+  const contractData = contractSnapshot.data() || {};
+  if (
+    tenantProfile.e2eLaunchSeed !== true
+    || text(tenantProfile.activeContractId) !== expectedContractId
+    || contractData.e2eLaunchSeed !== true
+    || text(contractData.tenantUid || contractData.tenantId) !== tenant.uid
+    || !text(contractData.ownerUid || contractData.ownerId)
+    || !text(contractData.propertyId)
+    || ['RENEWED', 'CANCELLED', 'TERMINATED', 'EXPIRED_CLOSED', 'ARCHIVED'].includes(
+      upper(contractData.renewalStatus || contractData.status || contractData.contractStatus),
+    )
+  ) {
+    fail('canonical live-role Tenant contract does not match the protected renewal evidence identity');
+  }
 
-  const contract = candidates[0];
+  const contract = { id: expectedContractId, data: contractData };
   const expiryAt = admin.firestore.Timestamp.fromMillis(Date.now() + (30 * 24 * 60 * 60 * 1000));
   await db.collection('contracts').doc(contract.id).set({
     contractEndDate: expiryAt,
