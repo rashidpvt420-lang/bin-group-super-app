@@ -371,13 +371,9 @@ function installReviewedTenantPhotoAdapter(releaseRoot) {
 
 function installReviewedBrokerPaymentAdapter(releaseRoot) {
   const { file, source, state } = applicationVerifierState(releaseRoot);
-  if (state === 'reviewed') {
-    console.log(`[frozen-release-evidence] reviewed application verifier already present sha256=${createHash('sha256').update(source).digest('hex')}`);
-    return () => {};
-  }
   const adapted = transformFrozenBrokerPaymentVerifier(source);
   writeFileSync(file, adapted);
-  console.log(`[frozen-release-evidence] reviewed broker payment adapter sha256=${createHash('sha256').update(adapted).digest('hex')}`);
+  console.log(`[frozen-release-evidence] reviewed broker payment adapter state=${state} sha256=${createHash('sha256').update(adapted).digest('hex')}`);
   return () => writeFileSync(file, source);
 }
 

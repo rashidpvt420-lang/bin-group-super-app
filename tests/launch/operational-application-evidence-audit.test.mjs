@@ -253,6 +253,17 @@ test('reviewed application verifier still receives the cent-precision activation
   assert.match(wrapper, /normalizeAedMoney/);
 });
 
+test('reviewed application verifier still receives the broker payment adapter', async () => {
+  const wrapper = await read('scripts/run-frozen-release-evidence.mjs');
+  const start = wrapper.indexOf('function installReviewedBrokerPaymentAdapter');
+  assert.ok(start >= 0);
+  const end = wrapper.indexOf('\nfunction ', start + 1);
+  const installer = wrapper.slice(start, end > start ? end : wrapper.length);
+  assert.match(installer, /transformFrozenBrokerPaymentVerifier\(source\)/);
+  assert.doesNotMatch(installer, /state === 'reviewed'[\s\S]*return \(\) => \{\}/);
+  assert.match(installer, /state=\$\{state\}/);
+});
+
 test('application verifier overlay accepts only frozen source or the exact reviewed verifier blob', async () => {
   const wrapper = await read('scripts/run-frozen-release-evidence.mjs');
   const workflow = await read('.github/workflows/operational-application-evidence.yml');
