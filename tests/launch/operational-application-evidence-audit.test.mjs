@@ -34,6 +34,10 @@ test('application evidence workflow is protected and auto-discovers fixed produc
   assert.match(workflow, /E2E_TENANT_PASSWORD:\s*\$\{\{ secrets\.E2E_TENANT_PASSWORD \}\}/);
   assert.match(workflow, /run-frozen-release-evidence\.mjs scripts\/prepare-operational-application-evidence\.mjs/);
   assert.match(workflow, /cp control-plane\/scripts\/verify-operational-application-evidence\.mjs release\/scripts\/verify-operational-application-evidence\.mjs/);
+  assert.match(workflow, /issues: read/);
+  assert.match(workflow, /GITHUB_TOKEN: \$\{\{ secrets\.GITHUB_TOKEN \}\}/);
+  assert.match(frozenWrapper, /GITHUB_TOKEN is required for protected owner-command provenance/);
+  assert.match(frozenWrapper, /Authorization: Bearer \$\{token\}/);
   assert.ok(
     workflow.indexOf('scripts/prepare-operational-application-evidence.mjs')
       < workflow.indexOf('OPERATIONAL_GATE="$gate" node ../control-plane/scripts/run-frozen-release-evidence.mjs scripts/verify-operational-application-provenance.mjs'),
