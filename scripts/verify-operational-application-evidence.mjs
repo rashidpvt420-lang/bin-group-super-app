@@ -115,11 +115,25 @@ async function latestBrokerCommissionWithApprovedPayment() {
     const directPaymentId = text(
       contract.data.approvedPaymentId || contract.data.activationPaymentId || contract.data.paymentId,
     );
-    const payment = /^[A-Za-z0-9_-]{3,180}$/.test(directPaymentId)
+    let payment = /^[A-Za-z0-9_-]{3,180}$/.test(directPaymentId)
       ? payments.find((candidate) => candidate.id === directPaymentId)
       : payments.find(({ id, data }) => text(data.contractId || data.intakeId || id) === contractId);
+
+    if (!payment) {
+      const approvalAuditSnapshot = await db.collection('audit_logs').where('contractId', '==', contractId).limit(100).get();
+      const approvalAudit = sortedResults(approvalAuditSnapshot, ['createdAt', 'timestamp'])
+        .find(({ data }) =>
+          data.action === 'ADMIN_APPROVE_PAYMENT' &&
+          /^[A-Za-z0-9_-]{3,180}$/.test(text(data.paymentId))
+        );
+      if (approvalAudit) {
+        payment = payments.find((candidate) => candidate.id === text(approvalAudit.data.paymentId));
+      }
+    }
+
     if (!payment) continue;
-    if (text(payment.data.contractId || payment.data.intakeId || payment.id) !== contractId) continue;
+    const paymentContractId = text(payment.data.contractId || payment.data.intakeId);
+    if (paymentContractId && paymentContractId !== contractId) continue;
     return { commission, contract, payment };
   }
 
