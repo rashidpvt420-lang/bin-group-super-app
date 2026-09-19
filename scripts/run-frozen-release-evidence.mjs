@@ -126,7 +126,9 @@ export function assertApplicationPreparationCredentials(gate, env = process.env)
   }
 }
 
-function fetchPublicGithubJson(url) {
+function fetchPublicGithubJson(url, env = process.env) {
+  const token = String(env.GITHUB_TOKEN || '').trim();
+  if (!token) fail('GITHUB_TOKEN is required for protected owner-command provenance');
   let raw;
   try {
     raw = execFileSync('curl', [
@@ -134,6 +136,7 @@ function fetchPublicGithubJson(url) {
       '--header', 'Accept: application/vnd.github+json',
       '--header', 'X-GitHub-Api-Version: 2022-11-28',
       '--header', 'User-Agent: BIN-GROUP-hard-launch-evidence',
+      '--header', `Authorization: Bearer ${token}`,
       url,
     ], { encoding: 'utf8', timeout: 15000, maxBuffer: 2 * 1024 * 1024 });
   } catch (error) {
@@ -156,7 +159,7 @@ function verifyRecentOwnerApplicationCommand(env) {
   }
   if (env.GITHUB_EVENT_NAME !== 'workflow_dispatch') fail('owner-command application provenance requires workflow_dispatch');
 
-  const run = fetchPublicGithubJson(`https://api.github.com/repos/${EXPECTED_REPOSITORY}/actions/runs/${runId}`);
+  const run = fetchPublicGithubJson(`https://api.github.com/repos/${EXPECTED_REPOSITORY}/actions/runs/${runId}`, env);
   if (String(run?.id || '') !== runId || run?.event !== 'workflow_dispatch' || run?.head_sha !== controlSha) {
     fail('owner-command application provenance does not match this workflow run');
   }
@@ -166,6 +169,7 @@ function verifyRecentOwnerApplicationCommand(env) {
   const since = new Date(runCreatedMs - 10 * 60 * 1000).toISOString();
   const comments = fetchPublicGithubJson(
     `https://api.github.com/repos/${EXPECTED_REPOSITORY}/issues/${OWNER_COMMAND_ISSUE}/comments?per_page=100&since=${encodeURIComponent(since)}`,
+    env,
   );
   if (!Array.isArray(comments)) fail('owner-command provenance comments response is invalid');
   const expectedBodies = new Set([
