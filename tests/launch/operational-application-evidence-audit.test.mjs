@@ -137,6 +137,12 @@ test('payment and commission evidence uses real replay invariants and requires F
 
   assert.match(verifier, /latestApprovedPayment/);
   assert.match(verifier, /latestBrokerCommission/);
+  assert.match(verifier, /directPaymentId/);
+  assert.match(verifier, /collection\('payment_transactions'\)\.where\('status', '==', 'APPROVED'\)/);
+  assert.match(verifier, /data\.paymentVerified === true/);
+  assert.match(verifier, /data\.unlocksDashboard === true/);
+  assert.match(verifier, /text\(data\.contractId \|\| data\.intakeId\) === contractId/);
+  assert.match(verifier, /no approved production payment is bound to the broker commission contract/);
   assert.match(verifier, /convertedBrokerLeadForCommission/);
   assert.match(verifier, /collection\('brokerLeads'\)\.where\('commissionId', '==', commissionId\)/);
   assert.match(verifier, /lower\(data\.status\) === 'converted'/);
