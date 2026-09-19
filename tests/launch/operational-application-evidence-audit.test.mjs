@@ -87,6 +87,11 @@ test('application evidence workflow is protected and auto-discovers fixed produc
   assert.match(preparation, /cloudfunctions\.net\/adminMatchBrokerAttribution/);
   assert.match(preparation, /cloudfunctions\.net\/adminCreateUser/);
   assert.match(preparation, /cloudfunctions\.net\/adminUpdateStaffOnboarding/);
+  assert.match(preparation, /cloudfunctions\.net\/rebuildContractRenewalWatch/);
+  assert.match(preparation, /OPERATIONAL_APPLICATION_RENEWAL_SCHEDULER/);
+  assert.match(preparation, /operational_application_renewal_\$\{text\(process\.env\.GITHUB_RUN_ID\)\}/);
+  assert.match(preparation, /CONTRACT_RENEWAL_MILESTONE_PROCESSED/);
+  assert.match(preparation, /cleanupRenewalSchedulerEvidence/);
   assert.match(preparation, /OPERATIONAL_APPLICATION_STAFF_CLAIMS/);
   assert.match(preparation, /operational-application-staff-\$\{text\(process\.env\.GITHUB_RUN_ID\)\}@example\.invalid/);
   assert.match(preparation, /APPLICATION_PREPARATION_MODE/);
@@ -106,7 +111,7 @@ test('application evidence workflow is protected and auto-discovers fixed produc
   assert.doesNotMatch(preparation, /collection\('broker_commissions'\)\.doc\([^)]*\)\.set/);
   assert.doesNotMatch(preparation, /collection\('auditLogs'\)\.doc\([^)]*\)\.set/);
 
-  assert.match(frozenWrapper, /REVIEWED_APPLICATION_PREPARATION_BLOB = 'bbdc73c0db9a3f77f12b807193b393c9b5c486c8'/);
+  assert.match(frozenWrapper, /REVIEWED_APPLICATION_PREPARATION_BLOB = '04478bd9bfed56c4bdbfa5600ed06b9f04bb0a2c'/);
   assert.match(frozenWrapper, /assertReviewedApplicationPreparation\(releaseRoot\)/);
   assert.match(frozenWrapper, /resolveApplicationEvidenceActor\(env\)/);
   assert.doesNotThrow(() => assertReviewedApplicationPreparationSource(preparation));
@@ -140,6 +145,8 @@ test('application evidence workflow is protected and auto-discovers fixed produc
   assert.doesNotMatch(workflow, /technicianPhysicalGpsEvidence/);
   assert.match(workflow, /inputs\.gate == 'adminStaffClaims'/);
   assert.match(workflow, /APPLICATION_PREPARATION_MODE: cleanup-staff/);
+  assert.match(workflow, /APPLICATION_PREPARATION_MODE: cleanup-renewal/);
+  assert.match(workflow, /if: always\(\) && \(inputs\.gate == 'all' \|\| inputs\.gate == 'renewalScheduler'\)/);
   assert.match(workflow, /if: always\(\) && \(inputs\.gate == 'all' \|\| inputs\.gate == 'adminStaffClaims'\)/);
 });
 
@@ -275,6 +282,7 @@ test('application preparation preflight is gate-aware and requires Founder MFA f
   const selection = wrapper.slice(start, end > start ? end : wrapper.length);
   assert.match(selection, /brokerCommissionLockExactlyOnce/);
   assert.match(selection, /adminStaffClaims/);
+  assert.match(selection, /renewalScheduler/);
   assert.match(selection, /E2E_FOUNDER_EMAIL/);
   assert.match(selection, /E2E_FOUNDER_PASSWORD/);
   assert.match(selection, /E2E_FOUNDER_TOTP_SECRET/);
@@ -380,6 +388,21 @@ test('staff evidence auto-discovers one audited technician with no privileged cl
   assert.match(provisioning, /staffAccess/);
   assert.match(provisioning, /hrProfiles/);
   assert.match(provisioning, /technicians/);
+});
+
+test('renewal preparation forces fresh post-deployment evidence through deployed scheduler path', async () => {
+  const [preparation, workflow] = await Promise.all([
+    read('scripts/prepare-operational-application-evidence.mjs'),
+    read('.github/workflows/operational-application-evidence.yml'),
+  ]);
+  assert.match(preparation, /REBUILD_CONTRACT_RENEWAL_WATCH_URL/);
+  assert.match(preparation, /prepareRenewalSchedulerEvidence/);
+  assert.match(preparation, /rebuildContractRenewalWatch/);
+  assert.match(preparation, /contract_renewal_watch/);
+  assert.match(preparation, /document_generation_requests/);
+  assert.match(preparation, /admin\.storage\(\)\.bucket\(\)\.deleteFiles/);
+  assert.match(preparation, /updatedAt \|\| data\.processedAt/);
+  assert.match(workflow, /inputs\.gate == 'renewalScheduler'/);
 });
 
 test('renewal proof auto-discovers a linked source, correct timeline, PDF and scheduler provenance', async () => {
