@@ -243,15 +243,31 @@ renewal-pdf-repair:
           [[ "$COMMAND_BODY" == "/bin-launch repair renewal-pdf $control_sha $frozen_sha $failed_run_id" ]]
 
           run_json="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$failed_run_id")"
-          jq -e --arg sha "$control_sha" '
+          jq -e '
             .name == "Operational Application Evidence" and
             .event == "workflow_dispatch" and
             .status == "completed" and
             .conclusion == "failure" and
-            .head_sha == $sha
+            (.head_sha | test("^[0-9a-f]{40}$"))
           ' <<< "$run_json" >/dev/null
 
+          source_sha="$(jq -r '.head_sha' <<< "$run_json")"
+          parent_sha="$(git rev-parse "$control_sha^")"
+          [[ "$parent_sha" == "$source_sha" ]] || {
+            echo "::error::Renewal repair must immediately follow the exact failed Application Evidence control SHA."
+            exit 1
+          }
+
+          expected_changed="$(printf '%s\n'             '.github/workflows/repair-frozen-sovereign-ai-runtime.yml'             'tests/launch/hard-clearance-revalidation.test.mjs' | sort)"
+          actual_changed="$(git diff --name-only "$source_sha" "$control_sha" | sort)"
+          [[ "$actual_changed" == "$expected_changed" ]] || {
+            echo "::error::Unexpected files changed between the failed evidence SHA and the renewal repair control SHA."
+            printf 'Expected:\n%s\nActual:\n%s\n' "$expected_changed" "$actual_changed"
+            exit 1
+          }
+
           echo "control_sha=$control_sha" >> "$GITHUB_OUTPUT"
+          echo "source_sha=$source_sha" >> "$GITHUB_OUTPUT"
           echo "failed_run_id=$failed_run_id" >> "$GITHUB_OUTPUT"
 
       - name: Checkout frozen renewal release
