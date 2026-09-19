@@ -228,6 +228,16 @@ test('frozen Tenant verifier adapter upgrades legacy selection, accepts exact re
   );
 });
 
+test('application verifier overlay accepts only frozen source or the exact reviewed verifier blob', async () => {
+  const wrapper = await read('scripts/run-frozen-release-evidence.mjs');
+  const workflow = await read('.github/workflows/operational-application-evidence.yml');
+  assert.match(wrapper, /REVIEWED_APPLICATION_VERIFIER_BLOB = '0e7b1a7e2f7d85a32f19062dfff7da0c0c8d0e8d'/);
+  assert.match(wrapper, /gitBlobSha\(source\) === REVIEWED_APPLICATION_VERIFIER_BLOB/);
+  assert.match(wrapper, /application verifier has unreviewed working-tree changes/);
+  assert.match(wrapper, /state === 'reviewed'/);
+  assert.match(workflow, /cp control-plane\/scripts\/verify-operational-application-evidence\.mjs release\/scripts\/verify-operational-application-evidence\.mjs/);
+});
+
 test('frozen broker payment adapter upgrades only the reviewed payment binding and refuses drift', () => {
   const legacy = [
     '  const paymentId = canonicalId(',
