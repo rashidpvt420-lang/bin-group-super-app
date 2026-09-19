@@ -299,7 +299,7 @@ test('reviewed application verifier still receives the broker payment adapter', 
 test('application verifier overlay accepts only frozen source or the exact reviewed verifier blob', async () => {
   const wrapper = await read('scripts/run-frozen-release-evidence.mjs');
   const workflow = await read('.github/workflows/operational-application-evidence.yml');
-  assert.match(wrapper, /REVIEWED_APPLICATION_VERIFIER_BLOB = '07927ae81eb4aad3994d912b413ac4aef51e3b34'/);
+  assert.match(wrapper, /REVIEWED_APPLICATION_VERIFIER_BLOB = '3e48a8d109603b86506cb2d7cc733118abc0b7f1'/);
   assert.match(wrapper, /gitBlobSha\(source\) === REVIEWED_APPLICATION_VERIFIER_BLOB/);
   assert.match(wrapper, /application verifier has unreviewed working-tree changes/);
   assert.match(wrapper, /state === 'reviewed'/);
@@ -351,6 +351,11 @@ test('staff evidence auto-discovers one audited technician with no privileged cl
   ]);
 
   assert.match(verifier, /latestStaffCreationAudit/);
+  assert.match(verifier, /collection\('staffAccess'\)\.doc\(staffUid\)/);
+  assert.match(verifier, /collection\('hrProfiles'\)\.doc\(staffUid\)/);
+  assert.match(verifier, /collection\('technicians'\)\.doc\(staffUid\)/);
+  assert.match(verifier, /accessDoc\.data\.active !== true/);
+  assert.match(verifier, /no audited production technician with consistent staff registries was found/);
   assert.match(verifier, /error\?\.code === 'auth\/user-not-found'/);
   assert.match(verifier, /if \(!authRecord\) continue/);
   assert.match(verifier, /if \(!userSnapshot\.exists\) continue/);
