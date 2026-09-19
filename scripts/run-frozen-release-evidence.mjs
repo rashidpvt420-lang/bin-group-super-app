@@ -55,7 +55,7 @@ const PAYMENT_POLICY_BLOBS = Object.freeze({
 const APPLICATION_VERIFIER = 'scripts/verify-operational-application-evidence.mjs';
 const REVIEWED_APPLICATION_VERIFIER_BLOB = '8cc6b47690b8e45308b2db683a966adc1ace2f45';
 const APPLICATION_PREPARATION = 'scripts/prepare-operational-application-evidence.mjs';
-const REVIEWED_APPLICATION_PREPARATION_BLOB = '9afcbd054f54729b647d8b1fae122b5dc0ffb155';
+const REVIEWED_APPLICATION_PREPARATION_BLOB = '284ef62c0a8dad4889eb58b89ac06edc2c15e17c';
 const LEGACY_ACTIVATION_CHECK = [
   '  const annual = Number(payment.data.quoteSnapshot?.annualContractValue || contract.quoteSnapshot?.annualContractValue || contract.annualContractValue || 0);',
   '  const amount = Number(payment.data.amountReceived || payment.data.quoteSnapshot?.activationDeposit || payment.data.amount || 0);',
@@ -139,20 +139,33 @@ export function assertApplicationEvidenceCredentials(gate, env = process.env) {
 }
 
 export function assertApplicationPreparationCredentials(gate, env = process.env) {
-  if (!['all', 'tenantNotificationDelivery'].includes(gate)) {
-    fail('tenant notification preparation requires the all or tenantNotificationDelivery gate');
+  if (!['all', 'tenantNotificationDelivery', 'brokerCommissionLockExactlyOnce'].includes(gate)) {
+    fail('application preparation requires all, tenantNotificationDelivery, or brokerCommissionLockExactlyOnce');
   }
   const required = [
-    'E2E_TENANT_EMAIL',
-    'E2E_TENANT_PASSWORD',
     'VITE_FIREBASE_API_KEY',
     'VITE_FIREBASE_APP_ID',
     'VITE_FIREBASE_APPCHECK_DEBUG_TOKEN',
   ];
+  if (['all', 'tenantNotificationDelivery'].includes(gate)) {
+    required.push('E2E_TENANT_EMAIL', 'E2E_TENANT_PASSWORD');
+  }
+  if (['all', 'brokerCommissionLockExactlyOnce'].includes(gate)) {
+    required.push('E2E_FOUNDER_EMAIL', 'E2E_FOUNDER_PASSWORD', 'E2E_FOUNDER_TOTP_SECRET');
+  }
   const missing = required.filter((name) => !String(env[name] ?? '').trim());
-  if (missing.length) fail(`missing protected Tenant notification bindings: ${missing.join(', ')}`);
-  if (String(env.E2E_BASE_URL || '').replace(/\/+$/, '') !== 'https://bin-group-57c60.web.app') {
+  if (missing.length) fail(`missing protected application preparation bindings: ${missing.join(', ')}`);
+  if (
+    ['all', 'tenantNotificationDelivery'].includes(gate)
+    && String(env.E2E_BASE_URL || '').replace(/\/+$/, '') !== 'https://bin-group-57c60.web.app'
+  ) {
     fail('tenant notification preparation requires the canonical production site');
+  }
+  if (
+    ['all', 'brokerCommissionLockExactlyOnce'].includes(gate)
+    && String(env.E2E_FOUNDER_EMAIL || '').trim().toLowerCase() !== CANONICAL_FOUNDER_EMAIL
+  ) {
+    fail('Broker commission preparation requires the canonical Founder identity');
   }
 }
 
