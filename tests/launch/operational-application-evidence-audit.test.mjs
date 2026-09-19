@@ -86,6 +86,10 @@ test('application evidence workflow is protected and auto-discovers fixed produc
   assert.doesNotMatch(preparation, /console\.(?:log|error)\([^\n]*(?:tenantEmail|tenantPassword|debugToken|data\.token)/);
   assert.match(preparation, /cloudfunctions\.net\/adminMatchBrokerAttribution/);
   assert.match(preparation, /signInWithRequiredTotpMfa/);
+  assert.match(preparation, /auth\.getUserByEmail\(brokerMailboxEmail\)/);
+  assert.match(preparation, /brokerProfile\.e2eLaunchSeed !== true/);
+  assert.match(preparation, /lower\(brokerProfile\.role \|\| brokerProfile\.userRole \|\| brokerProfile\.primaryRole\) !== 'broker'/);
+  assert.doesNotMatch(preparation, /where\('e2eLaunchSeed', '==', true\)/);
   assert.match(preparation, /ownerProfile\.testAccount === true \|\| ownerProfile\.e2eLaunchSeed === true/);
   assert.match(preparation, /where\('status', '==', 'APPROVED'\)/);
   assert.match(preparation, /paymentVerified === true && data\.unlocksDashboard === true/);
@@ -96,7 +100,7 @@ test('application evidence workflow is protected and auto-discovers fixed produc
   assert.doesNotMatch(preparation, /collection\('broker_commissions'\)\.doc\([^)]*\)\.set/);
   assert.doesNotMatch(preparation, /collection\('auditLogs'\)\.doc\([^)]*\)\.set/);
 
-  assert.match(frozenWrapper, /REVIEWED_APPLICATION_PREPARATION_BLOB = '284ef62c0a8dad4889eb58b89ac06edc2c15e17c'/);
+  assert.match(frozenWrapper, /REVIEWED_APPLICATION_PREPARATION_BLOB = 'aded2722e0b7e9457c86d06a35cbba7a345ffdc0'/);
   assert.match(frozenWrapper, /assertReviewedApplicationPreparation\(releaseRoot\)/);
   assert.match(frozenWrapper, /resolveApplicationEvidenceActor\(env\)/);
   assert.doesNotThrow(() => assertReviewedApplicationPreparationSource(preparation));
@@ -264,6 +268,7 @@ test('application preparation preflight is gate-aware and requires Founder MFA f
   assert.match(selection, /E2E_FOUNDER_EMAIL/);
   assert.match(selection, /E2E_FOUNDER_PASSWORD/);
   assert.match(selection, /E2E_FOUNDER_TOTP_SECRET/);
+  assert.match(selection, /E2E_BROKER_MAILBOX_EMAIL/);
   assert.match(selection, /CANONICAL_FOUNDER_EMAIL/);
   assert.match(selection, /VITE_FIREBASE_APPCHECK_DEBUG_TOKEN/);
 });

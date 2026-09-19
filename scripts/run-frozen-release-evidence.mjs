@@ -55,7 +55,7 @@ const PAYMENT_POLICY_BLOBS = Object.freeze({
 const APPLICATION_VERIFIER = 'scripts/verify-operational-application-evidence.mjs';
 const REVIEWED_APPLICATION_VERIFIER_BLOB = '8cc6b47690b8e45308b2db683a966adc1ace2f45';
 const APPLICATION_PREPARATION = 'scripts/prepare-operational-application-evidence.mjs';
-const REVIEWED_APPLICATION_PREPARATION_BLOB = '284ef62c0a8dad4889eb58b89ac06edc2c15e17c';
+const REVIEWED_APPLICATION_PREPARATION_BLOB = 'aded2722e0b7e9457c86d06a35cbba7a345ffdc0';
 const LEGACY_ACTIVATION_CHECK = [
   '  const annual = Number(payment.data.quoteSnapshot?.annualContractValue || contract.quoteSnapshot?.annualContractValue || contract.annualContractValue || 0);',
   '  const amount = Number(payment.data.amountReceived || payment.data.quoteSnapshot?.activationDeposit || payment.data.amount || 0);',
@@ -151,7 +151,7 @@ export function assertApplicationPreparationCredentials(gate, env = process.env)
     required.push('E2E_TENANT_EMAIL', 'E2E_TENANT_PASSWORD');
   }
   if (['all', 'brokerCommissionLockExactlyOnce'].includes(gate)) {
-    required.push('E2E_FOUNDER_EMAIL', 'E2E_FOUNDER_PASSWORD', 'E2E_FOUNDER_TOTP_SECRET');
+    required.push('E2E_FOUNDER_EMAIL', 'E2E_FOUNDER_PASSWORD', 'E2E_FOUNDER_TOTP_SECRET', 'E2E_BROKER_MAILBOX_EMAIL');
   }
   const missing = required.filter((name) => !String(env[name] ?? '').trim());
   if (missing.length) fail(`missing protected application preparation bindings: ${missing.join(', ')}`);

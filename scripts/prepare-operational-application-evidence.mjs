@@ -309,12 +309,22 @@ async function createAndVerifyNotification({ db, auth, tenantUid, ticket }) {
 }
 
 async function prepareBrokerCommissionEvidence({ db, auth, apiKey, appId, debugToken }) {
-  const brokerSnapshot = await db.collection('users').where('e2eLaunchSeed', '==', true).limit(100).get();
-  const brokers = brokerSnapshot.docs
-    .map((document) => ({ id: document.id, data: document.data() || {} }))
-    .filter(({ data }) => lower(data.role || data.userRole || data.primaryRole) === 'broker' && data.suspended !== true);
-  if (brokers.length !== 1) fail(`expected exactly one protected E2E Broker profile; found ${brokers.length}`);
-  const broker = brokers[0];
+  const brokerMailboxEmail = lower(process.env.E2E_BROKER_MAILBOX_EMAIL);
+  if (!/^\S+@\S+\.\S+$/.test(brokerMailboxEmail)) fail('canonical protected Broker mailbox email is missing or invalid');
+  const brokerRecord = await auth.getUserByEmail(brokerMailboxEmail).catch(() => null);
+  if (!brokerRecord?.uid || brokerRecord.disabled === true || brokerRecord.emailVerified !== true) {
+    fail('canonical protected Broker Auth account is missing, disabled, or unverified');
+  }
+  const brokerProfileSnapshot = await db.collection('users').doc(brokerRecord.uid).get();
+  if (!brokerProfileSnapshot.exists) fail('canonical protected Broker profile is missing');
+  const brokerProfile = brokerProfileSnapshot.data() || {};
+  if (
+    brokerProfile.e2eLaunchSeed !== true
+    || lower(brokerProfile.role || brokerProfile.userRole || brokerProfile.primaryRole) !== 'broker'
+    || lower(brokerProfile.email) !== brokerMailboxEmail
+    || brokerProfile.suspended === true
+  ) fail('canonical protected Broker profile does not match the production evidence identity');
+  const broker = { id: brokerRecord.uid, data: brokerProfile };
 
   const paymentSnapshot = await db.collection('payment_transactions').where('status', '==', 'APPROVED').limit(250).get();
   const payments = paymentSnapshot.docs

@@ -180,6 +180,7 @@ jobs:
           E2E_FOUNDER_TOTP_SECRET: ${{ secrets.E2E_FOUNDER_TOTP_SECRET }}
           E2E_TENANT_EMAIL: ${{ secrets.E2E_TENANT_EMAIL }}
           E2E_TENANT_PASSWORD: ${{ secrets.E2E_TENANT_PASSWORD }}
+          E2E_BROKER_MAILBOX_EMAIL: ${{ vars.E2E_BROKER_MAILBOX_EMAIL || secrets.E2E_BROKER_MAILBOX_EMAIL }}
           E2E_BASE_URL: https://bin-group-57c60.web.app
         run: |
           set -euo pipefail
@@ -262,6 +263,7 @@ jobs:
           E2E_BASE_URL: https://bin-group-57c60.web.app
           E2E_TENANT_EMAIL: ${{ secrets.E2E_TENANT_EMAIL }}
           E2E_TENANT_PASSWORD: ${{ secrets.E2E_TENANT_PASSWORD }}
+          E2E_BROKER_MAILBOX_EMAIL: ${{ vars.E2E_BROKER_MAILBOX_EMAIL || secrets.E2E_BROKER_MAILBOX_EMAIL }}
           E2E_FOUNDER_EMAIL: ${{ secrets.E2E_FOUNDER_EMAIL }}
           E2E_FOUNDER_PASSWORD: ${{ secrets.E2E_FOUNDER_PASSWORD }}
           E2E_FOUNDER_TOTP_SECRET: ${{ secrets.E2E_FOUNDER_TOTP_SECRET }}
