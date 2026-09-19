@@ -190,7 +190,7 @@ jobs:
             assertApplicationPreparationCredentials,
           } from './scripts/run-frozen-release-evidence.mjs';
           assertApplicationEvidenceCredentials(process.env.SELECTED_GATE, process.env);
-          if (['all', 'tenantNotificationDelivery', 'brokerCommissionLockExactlyOnce'].includes(process.env.SELECTED_GATE)) {
+          if (['all', 'tenantNotificationDelivery', 'brokerCommissionLockExactlyOnce', 'adminStaffClaims'].includes(process.env.SELECTED_GATE)) {
             assertApplicationPreparationCredentials(process.env.SELECTED_GATE, process.env);
           }
           NODE
@@ -256,7 +256,7 @@ jobs:
           NODE
 
       - name: Prepare protected application evidence
-        if: inputs.gate == 'all' || inputs.gate == 'tenantNotificationDelivery' || inputs.gate == 'brokerCommissionLockExactlyOnce'
+        if: inputs.gate == 'all' || inputs.gate == 'tenantNotificationDelivery' || inputs.gate == 'brokerCommissionLockExactlyOnce' || inputs.gate == 'adminStaffClaims'
         working-directory: release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -303,6 +303,18 @@ jobs:
             cp launch_package/application-provenance.json "launch_package/application-provenance/${gate}.json"
             echo "::endgroup::"
           done
+
+      - name: Clean up run-scoped staff evidence identity
+        if: always() && (inputs.gate == 'all' || inputs.gate == 'adminStaffClaims')
+        working-directory: release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          E2E_BASE_URL: https://bin-group-57c60.web.app
+          E2E_FOUNDER_EMAIL: ${{ secrets.E2E_FOUNDER_EMAIL }}
+          E2E_FOUNDER_PASSWORD: ${{ secrets.E2E_FOUNDER_PASSWORD }}
+          E2E_FOUNDER_TOTP_SECRET: ${{ secrets.E2E_FOUNDER_TOTP_SECRET }}
+          APPLICATION_PREPARATION_MODE: cleanup-staff
+        run: node ../control-plane/scripts/run-frozen-release-evidence.mjs scripts/prepare-operational-application-evidence.mjs
 
       - name: Upload application proof batch
         if: success()
