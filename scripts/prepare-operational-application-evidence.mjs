@@ -22,6 +22,7 @@ const ADMIN_UPDATE_STAFF_ONBOARDING_URL = 'https://europe-west3-bin-group-57c60.
 const REBUILD_CONTRACT_RENEWAL_WATCH_URL = 'https://europe-west3-bin-group-57c60.cloudfunctions.net/rebuildContractRenewalWatch';
 const BROKER_EVIDENCE_TYPE = 'OPERATIONAL_APPLICATION_BROKER_PAYMENT_BINDING';
 const STAFF_EVIDENCE_TYPE = 'OPERATIONAL_APPLICATION_STAFF_CLAIMS';
+const RENEWAL_EVIDENCE_TYPE = 'OPERATIONAL_APPLICATION_RENEWAL_SCHEDULER';
 const TERMINAL_DELIVERY_STATES = new Set(['SUCCESS', 'PARTIAL', 'FAILED', 'NO_REGISTERED_TOKEN']);
 const PARTICIPANT_FIELDS = ['tenantId', 'tenantUid', 'userId', 'createdBy', 'requesterId'];
 const PUSH_REGISTRATION_ATTEMPTS = 3;
@@ -494,97 +495,146 @@ async function prepareStaffClaimsEvidence({ db, auth, apiKey, appId, debugToken 
   }
 }
 
-async function prepareRenewalSchedulerEvidence({ db, auth, apiKey, appId, debugToken }) {
-  const session = await founderCallableSession({ apiKey, appId, debugToken });
-  const tenantEmail = lower(process.env.E2E_TENANT_EMAIL);
-  if (!/^\S+@\S+\.\S+$/.test(tenantEmail)) fail('canonical protected Tenant email is required for renewal scheduler evidence');
-  const tenant = await auth.getUserByEmail(tenantEmail);
-  if (tenant.disabled || tenant.emailVerified !== true || tenant.customClaims?.testAccount !== true) {
-    fail('protected Tenant identity is not an active verified test account for renewal scheduler evidence');
-  }
-  const safeTenantId = String(tenant.uid || '')
-    .toLowerCase()
-    .replace(/[^a-z0-9_-]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 80);
-  const expectedContractId = `e2e-live-role-contract-${safeTenantId}`;
-  const [tenantProfileSnapshot, contractSnapshot] = await Promise.all([
-    db.collection('users').doc(tenant.uid).get(),
-    db.collection('contracts').doc(expectedContractId).get(),
-  ]);
-  if (!tenantProfileSnapshot.exists || !contractSnapshot.exists) {
-    fail('canonical live-role Tenant profile or contract is missing for renewal scheduler evidence');
-  }
-  const tenantProfile = tenantProfileSnapshot.data() || {};
-  const contractData = contractSnapshot.data() || {};
-  if (
-    tenantProfile.e2eLaunchSeed !== true
-    || text(tenantProfile.activeContractId) !== expectedContractId
-    || contractData.e2eLaunchSeed !== true
-    || text(contractData.tenantUid || contractData.tenantId) !== tenant.uid
-    || !text(contractData.ownerUid || contractData.ownerId)
-    || !text(contractData.propertyId)
-    || ['RENEWED', 'CANCELLED', 'TERMINATED', 'EXPIRED_CLOSED', 'ARCHIVED'].includes(
-      upper(contractData.renewalStatus || contractData.status || contractData.contractStatus),
-    )
-  ) {
-    fail('canonical live-role Tenant contract does not match the protected renewal evidence identity');
-  }
+function renewalEvidenceContractId() {
+  return `operational_application_renewal_${text(process.env.GITHUB_RUN_ID)}`;
+}
 
-  const contract = { id: expectedContractId, data: contractData };
-  const expiryAt = admin.firestore.Timestamp.fromMillis(Date.now() + (30 * 24 * 60 * 60 * 1000));
-  await db.collection('contracts').doc(contract.id).set({
-    contractEndDate: expiryAt,
-    renewalStatus: 'PENDING',
-    e2eEvidenceType: 'OPERATIONAL_APPLICATION_RENEWAL_SCHEDULER',
-    e2eRunId: text(process.env.GITHUB_RUN_ID),
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-  }, { merge: true });
-
-  const watchId = 'contracts_' + contract.id + '_30d';
-  await db.collection('contract_renewal_watch').doc(watchId).delete().catch(() => undefined);
-  const startedAt = Date.now();
-
-  const response = await fetch(REBUILD_CONTRACT_RENEWAL_WATCH_URL, {
-    method: 'POST',
-    headers: {
-      Authorization: 'Bearer ' + session.idToken,
-      'X-Firebase-AppCheck': session.appCheckToken,
-      'content-type': 'application/json',
-      Origin: 'https://admin.bin-groups.com',
-      Referer: 'https://admin.bin-groups.com/',
-    },
-    body: JSON.stringify({ data: {} }),
-  });
-  const payload = await responseJson(response);
-  const result = payload?.result || payload?.data || payload;
-  if (!response.ok || result?.status !== 'SUCCESS' || Number(result?.scanned || 0) < 1) {
-    fail('deployed rebuildContractRenewalWatch failed with HTTP ' + response.status);
-  }
-
-  const deadline = Date.now() + 90_000;
-  let snapshot = null;
-  while (Date.now() < deadline) {
-    const current = await db.collection('contract_renewal_watch').doc(watchId).get();
-    if (current.exists) {
-      const data = current.data() || {};
-      const observedMs = Math.max(millis(data.generatedAt), millis(data.updatedAt), millis(data.createdAt), millis(data.processedAt));
-      if (
-        text(data.sourceCollection) === 'contracts'
-        && text(data.sourceId) === contract.id
-        && /^(https:\/\/|gs:\/\/)/i.test(text(data.pdfUrl))
-        && data.completed === true
-        && observedMs >= startedAt - 5_000
-      ) {
-        snapshot = current;
-        break;
-      }
+async function cleanupRenewalSchedulerEvidence({ db }) {
+  const contractId = renewalEvidenceContractId();
+  const contractRef = db.collection('contracts').doc(contractId);
+  const contractSnapshot = await contractRef.get();
+  if (contractSnapshot.exists) {
+    const marker = contractSnapshot.data() || {};
+    if (
+      marker.e2eLaunchSeed !== true
+      || text(marker.e2eEvidenceType) !== RENEWAL_EVIDENCE_TYPE
+      || text(marker.e2eRunId) !== text(process.env.GITHUB_RUN_ID)
+    ) {
+      fail('refusing to clean a non-evidence renewal source');
     }
-    await sleep(1_000);
   }
-  if (!snapshot) fail('deployed renewal scheduler did not produce a fresh PDF-backed watch record');
 
-  console.log('[prepare-application-evidence] PASS gate=renewalScheduler watchHash=' + sha256(watchId).slice(0, 12) + '… contractHash=' + sha256(contract.id).slice(0, 12) + '…');
+  const [watchSnapshot, notificationSnapshot, mailSnapshot, auditSnapshot] = await Promise.all([
+    db.collection('contract_renewal_watch').where('sourceId', '==', contractId).limit(100).get(),
+    db.collection('notifications').where('sourceId', '==', contractId).limit(250).get(),
+    db.collection('mail').where('contractId', '==', contractId).limit(100).get(),
+    db.collection('audit_logs').where('targetId', '==', contractId).limit(100).get(),
+  ]);
+
+  await Promise.all([
+    deleteMatchingDocuments(watchSnapshot),
+    deleteMatchingDocuments(notificationSnapshot),
+    deleteMatchingDocuments(mailSnapshot),
+    deleteMatchingDocuments(auditSnapshot),
+    db.collection('document_generation_requests').doc(`renewal_contracts_${contractId}`).delete().catch(() => undefined),
+    contractRef.delete().catch(() => undefined),
+    admin.storage().bucket().deleteFiles({ prefix: `contracts/${contractId}/` }).catch(() => undefined),
+  ]);
+
+  console.log(`[prepare-application-evidence] CLEANUP gate=renewalScheduler contractHash=${sha256(contractId).slice(0, 12)}…`);
+}
+
+async function prepareRenewalSchedulerEvidence({ db, auth, apiKey, appId, debugToken }) {
+  await cleanupRenewalSchedulerEvidence({ db });
+  try {
+    const session = await founderCallableSession({ apiKey, appId, debugToken });
+    const tenantEmail = lower(process.env.E2E_TENANT_EMAIL);
+    if (!/^\S+@\S+\.\S+$/.test(tenantEmail)) fail('canonical protected Tenant email is required for renewal scheduler evidence');
+    const tenant = await auth.getUserByEmail(tenantEmail);
+    if (tenant.disabled || tenant.emailVerified !== true || tenant.customClaims?.testAccount !== true) {
+      fail('protected Tenant identity is not an active verified test account for renewal scheduler evidence');
+    }
+
+    const contractId = renewalEvidenceContractId();
+    const expiryAt = admin.firestore.Timestamp.fromMillis(Date.now() + (30 * 24 * 60 * 60 * 1000));
+    await db.collection('contracts').doc(contractId).set({
+      id: contractId,
+      contractId,
+      propertyId: `${contractId}_property`,
+      propertyName: 'Protected Renewal Evidence Property',
+      unitId: `${contractId}_unit`,
+      unitNumber: 'E2E-RENEWAL',
+      ownerId: session.uid,
+      ownerUid: session.uid,
+      tenantId: tenant.uid,
+      tenantUid: tenant.uid,
+      status: 'ACTIVE',
+      contractStatus: 'ACTIVE',
+      renewalStatus: 'PENDING',
+      contractEndDate: expiryAt,
+      e2eLaunchSeed: true,
+      e2eEvidenceType: RENEWAL_EVIDENCE_TYPE,
+      e2eRunId: text(process.env.GITHUB_RUN_ID),
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    const watchId = `contracts_${contractId}_30d`;
+    const startedAt = Date.now();
+
+    const response = await fetch(REBUILD_CONTRACT_RENEWAL_WATCH_URL, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${session.idToken}`,
+        'X-Firebase-AppCheck': session.appCheckToken,
+        'content-type': 'application/json',
+        Origin: 'https://admin.bin-groups.com',
+        Referer: 'https://admin.bin-groups.com/',
+      },
+      body: JSON.stringify({ data: {} }),
+    });
+    const payload = await responseJson(response);
+    const result = payload?.result || payload?.data || payload;
+    if (!response.ok || result?.status !== 'SUCCESS' || Number(result?.scanned || 0) < 1) {
+      fail('deployed rebuildContractRenewalWatch failed with HTTP ' + response.status);
+    }
+
+    const deadline = Date.now() + 90_000;
+    let snapshot = null;
+    while (Date.now() < deadline) {
+      const current = await db.collection('contract_renewal_watch').doc(watchId).get();
+      if (current.exists) {
+        const data = current.data() || {};
+        const observedMs = Math.max(
+          millis(data.generatedAt),
+          millis(data.updatedAt),
+          millis(data.createdAt),
+          millis(data.processedAt),
+        );
+        if (
+          text(data.sourceCollection) === 'contracts'
+          && text(data.sourceId) === contractId
+          && text(data.contractId) === contractId
+          && text(data.tenantId) === tenant.uid
+          && /^(https:\/\/|gs:\/\/)/i.test(text(data.pdfUrl))
+          && data.completed === true
+          && observedMs >= startedAt - 5_000
+        ) {
+          snapshot = current;
+          break;
+        }
+      }
+      await sleep(1_000);
+    }
+    if (!snapshot) fail('deployed renewal scheduler did not produce a fresh PDF-backed watch record');
+
+    const auditSnapshot = await db.collection('audit_logs').where('targetId', '==', contractId).limit(100).get();
+    const matchingAudit = auditSnapshot.docs.filter((document) => {
+      const data = document.data() || {};
+      return data.action === 'CONTRACT_RENEWAL_MILESTONE_PROCESSED'
+        && text(data.actorId) === 'CONTRACT_RENEWAL_PDF_SYSTEM';
+    });
+    if (matchingAudit.length !== 1) {
+      fail('deployed renewal scheduler did not write exactly one matching audit record');
+    }
+
+    console.log(
+      `[prepare-application-evidence] PASS gate=renewalScheduler watchHash=${sha256(watchId).slice(0, 12)}… contractHash=${sha256(contractId).slice(0, 12)}…`,
+    );
+  } catch (error) {
+    await cleanupRenewalSchedulerEvidence({ db }).catch(() => undefined);
+    throw error;
+  }
 }
 
 async function prepareBrokerCommissionEvidence({ db, auth, apiKey, appId, debugToken }) {
@@ -719,6 +769,12 @@ async function main() {
   if (text(process.env.APPLICATION_PREPARATION_MODE) === 'cleanup-staff') {
     if (!['all', 'adminStaffClaims'].includes(selectedGate)) fail('staff evidence cleanup is not selected for this gate');
     await cleanupStaffClaimsEvidence({ db, auth });
+    return;
+  }
+
+  if (text(process.env.APPLICATION_PREPARATION_MODE) === 'cleanup-renewal') {
+    if (!['all', 'renewalScheduler'].includes(selectedGate)) fail('renewal evidence cleanup is not selected for this gate');
+    await cleanupRenewalSchedulerEvidence({ db });
     return;
   }
 

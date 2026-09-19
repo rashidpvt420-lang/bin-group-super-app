@@ -55,7 +55,7 @@ const PAYMENT_POLICY_BLOBS = Object.freeze({
 const APPLICATION_VERIFIER = 'scripts/verify-operational-application-evidence.mjs';
 const REVIEWED_APPLICATION_VERIFIER_BLOB = '3e48a8d109603b86506cb2d7cc733118abc0b7f1';
 const APPLICATION_PREPARATION = 'scripts/prepare-operational-application-evidence.mjs';
-const REVIEWED_APPLICATION_PREPARATION_BLOB = '88070891714a3b01e480411c53b0eddde9190c73';
+const REVIEWED_APPLICATION_PREPARATION_BLOB = 'a2634cbec954a22e51c8785fe68e8189c1eb8ebc';
 const LEGACY_ACTIVATION_CHECK = [
   '  const annual = Number(payment.data.quoteSnapshot?.annualContractValue || contract.quoteSnapshot?.annualContractValue || contract.annualContractValue || 0);',
   '  const amount = Number(payment.data.amountReceived || payment.data.quoteSnapshot?.activationDeposit || payment.data.amount || 0);',
@@ -478,7 +478,7 @@ export function runFrozenReleaseEvidence(entrypoint, env = process.env, releaseR
 
   if (applicationVerification) assertApplicationEvidenceCredentials(env.OPERATIONAL_GATE, env);
   if (applicationPreparation) {
-    if (env.APPLICATION_PREPARATION_MODE !== 'cleanup-staff') {
+    if (!['cleanup-staff', 'cleanup-renewal'].includes(env.APPLICATION_PREPARATION_MODE)) {
       assertApplicationPreparationCredentials(env.OPERATIONAL_GATE, env);
     }
     assertReviewedApplicationPreparation(releaseRoot);

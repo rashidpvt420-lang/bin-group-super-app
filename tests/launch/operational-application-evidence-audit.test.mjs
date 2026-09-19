@@ -89,10 +89,12 @@ test('application evidence workflow is protected and auto-discovers fixed produc
   assert.match(preparation, /cloudfunctions\.net\/adminUpdateStaffOnboarding/);
   assert.match(preparation, /cloudfunctions\.net\/rebuildContractRenewalWatch/);
   assert.match(preparation, /prepareRenewalSchedulerEvidence/);
-  assert.match(preparation, /e2e-live-role-contract-\$\{safeTenantId\}/);
-  assert.match(preparation, /tenantProfile\.activeContractId\) !== expectedContractId/);
-  assert.match(preparation, /contractData\.e2eLaunchSeed !== true/);
-  assert.match(preparation, /text\(contractData\.tenantUid \|\| contractData\.tenantId\) !== tenant\.uid/);
+  assert.match(preparation, /operational_application_renewal_\$\{text\(process\.env\.GITHUB_RUN_ID\)\}/);
+  assert.match(preparation, /OPERATIONAL_APPLICATION_RENEWAL_SCHEDULER/);
+  assert.match(preparation, /cleanupRenewalSchedulerEvidence/);
+  assert.match(preparation, /refusing to clean a non-evidence renewal source/);
+  assert.match(preparation, /CONTRACT_RENEWAL_MILESTONE_PROCESSED/);
+  assert.match(preparation, /admin\.storage\(\)\.bucket\(\)\.deleteFiles/);
   assert.match(preparation, /contractEndDate: expiryAt/);
   assert.match(preparation, /renewalStatus: 'PENDING'/);
   assert.match(preparation, /contract_renewal_watch/);
@@ -117,7 +119,7 @@ test('application evidence workflow is protected and auto-discovers fixed produc
   assert.doesNotMatch(preparation, /collection\('broker_commissions'\)\.doc\([^)]*\)\.set/);
   assert.doesNotMatch(preparation, /collection\('auditLogs'\)\.doc\([^)]*\)\.set/);
 
-  assert.match(frozenWrapper, /REVIEWED_APPLICATION_PREPARATION_BLOB = '88070891714a3b01e480411c53b0eddde9190c73'/);
+  assert.match(frozenWrapper, /REVIEWED_APPLICATION_PREPARATION_BLOB = 'a2634cbec954a22e51c8785fe68e8189c1eb8ebc'/);
   assert.match(frozenWrapper, /assertReviewedApplicationPreparation\(releaseRoot\)/);
   assert.match(frozenWrapper, /resolveApplicationEvidenceActor\(env\)/);
   assert.doesNotThrow(() => assertReviewedApplicationPreparationSource(preparation));
@@ -151,6 +153,8 @@ test('application evidence workflow is protected and auto-discovers fixed produc
   assert.doesNotMatch(workflow, /technicianPhysicalGpsEvidence/);
   assert.match(workflow, /inputs\.gate == 'adminStaffClaims'/);
   assert.match(workflow, /APPLICATION_PREPARATION_MODE: cleanup-staff/);
+  assert.match(workflow, /APPLICATION_PREPARATION_MODE: cleanup-renewal/);
+  assert.match(workflow, /if: always\(\) && \(inputs\.gate == 'all' \|\| inputs\.gate == 'renewalScheduler'\)/);
   assert.match(workflow, /if: always\(\) && \(inputs\.gate == 'all' \|\| inputs\.gate == 'adminStaffClaims'\)/);
 });
 
