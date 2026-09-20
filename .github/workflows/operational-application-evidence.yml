@@ -332,7 +332,8 @@ jobs:
         if: always()
         env:
           OPERATIONAL_FOUNDER_MFA_SESSION_PATH: ${{ runner.temp }}/operational-founder-mfa-${{ github.run_id }}.json
-        run: node --input-type=module -e "import { rmSync } from 'node:fs'; rmSync(process.env.OPERATIONAL_FOUNDER_MFA_SESSION_PATH, { force: true });"
+        run: |
+          node --input-type=module -e "import { rmSync } from 'node:fs'; rmSync(process.env.OPERATIONAL_FOUNDER_MFA_SESSION_PATH, { force: true });"
 
       - name: Upload application proof batch
         if: success()
