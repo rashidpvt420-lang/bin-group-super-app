@@ -1,0 +1,51 @@
+name: Renewal PDF Diagnostic Owner Bridge
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  actions: write
+  contents: read
+  issues: read
+
+jobs:
+  dispatch:
+    if: >-
+      github.event.issue.number == 434 &&
+      !github.event.issue.pull_request &&
+      github.event.comment.user.login == github.repository_owner &&
+      github.event.comment.author_association == 'OWNER' &&
+      startsWith(github.event.comment.body, '/bin-launch renewal-pdf-diagnostic ')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Validate exact owner command
+        id: command
+        env:
+          GH_TOKEN: ${{ github.token }}
+          COMMAND_BODY: ${{ github.event.comment.body }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          read -r prefix command control_sha extra <<< "$COMMAND_BODY"
+          [[ "$prefix" == "/bin-launch" ]]
+          [[ "$command" == "renewal-pdf-diagnostic" ]]
+          [[ -z "${extra:-}" ]]
+          [[ "$control_sha" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$COMMAND_BODY" == "/bin-launch renewal-pdf-diagnostic $control_sha" ]]
+          current_main="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq '.object.sha')"
+          [[ "$current_main" == "$control_sha" ]] || {
+            echo "::error::Owner diagnostic command SHA does not match current main."
+            exit 1
+          }
+          echo "control_sha=$control_sha" >> "$GITHUB_OUTPUT"
+
+      - name: Dispatch protected renewal PDF runtime diagnostic
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CONTROL_SHA: ${{ steps.command.outputs.control_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api --method POST             "repos/$GITHUB_REPOSITORY/actions/workflows/renewal-pdf-runtime-diagnostic.yml/dispatches"             -f ref='main'             -f "inputs[expected_commit_sha]=$CONTROL_SHA"             -f "inputs[confirmation]=DIAGNOSE_RENEWAL_PDF_RUNTIME"
