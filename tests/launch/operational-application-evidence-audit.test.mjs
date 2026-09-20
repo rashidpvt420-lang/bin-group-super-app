@@ -401,7 +401,7 @@ test('application verifier overlay accepts only frozen source or the exact revie
   const verifier = await read('scripts/verify-operational-application-evidence.mjs');
   const pin = wrapper.match(/REVIEWED_APPLICATION_VERIFIER_BLOB = '([0-9a-f]{40})'/)?.[1];
   assert.ok(pin, 'reviewed application verifier blob pin must be present');
-  const header = `blob ${Buffer.byteLength(verifier)}\\0`;
+  const header = `blob ${Buffer.byteLength(verifier)}\0`;
   const verifierBlob = crypto.createHash('sha1').update(header).update(verifier).digest('hex');
   assert.equal(pin, verifierBlob, 'reviewed application verifier blob pin must match the checked-in verifier');
   assert.match(wrapper, /gitBlobSha\(source\) === REVIEWED_APPLICATION_VERIFIER_BLOB/);
