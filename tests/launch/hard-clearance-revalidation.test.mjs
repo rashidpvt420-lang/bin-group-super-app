@@ -55,6 +55,10 @@ test('hard clearance freshly revalidates production state without moving the fro
 
   const expectedAllowlist = [
     '.github/workflows/firebase-production-deploy.yml',
+    '.github/workflows/current-main-expression-budget-repair.yml',
+    '.github/workflows/pr-validation.yml',
+    '.github/workflows/renewal-pdf-diagnostic-owner-bridge.yml',
+    '.github/workflows/renewal-pdf-runtime-diagnostic.yml',
     '.github/workflows/repair-frozen-sovereign-ai-runtime.yml',
     '.github/workflows/live-role-smoke.yml',
     '.github/workflows/operational-application-evidence.yml',
@@ -134,6 +138,10 @@ test('operational evidence keeps current main as control plane while binding pro
   ];
   const expectedAllowlist = [
     '.github/workflows/firebase-production-deploy.yml',
+    '.github/workflows/current-main-expression-budget-repair.yml',
+    '.github/workflows/pr-validation.yml',
+    '.github/workflows/renewal-pdf-diagnostic-owner-bridge.yml',
+    '.github/workflows/renewal-pdf-runtime-diagnostic.yml',
     '.github/workflows/repair-frozen-sovereign-ai-runtime.yml',
     '.github/workflows/live-role-smoke.yml',
     ...workflowFiles,
@@ -549,6 +557,12 @@ test('frozen runtime repair pins renewal PDF storage hotfix and proves it live',
   assert.match(workflow, /tests\/launch\/hard-clearance-revalidation\.test\.mjs/);
   assert.match(workflow, /git diff --name-only "\$source_sha" "\$control_sha"/);
   assert.match(workflow, /\.github\/workflows\/current-main-expression-budget-repair\.yml/);
+  assert.match(workflow, /\.github\/workflows\/live-role-smoke\.yml/);
+  assert.match(workflow, /\.github\/workflows\/operational-application-evidence\.yml/);
+  assert.match(workflow, /\.github\/workflows\/operational-provider-evidence\.yml/);
+  assert.match(workflow, /\.github\/workflows\/privileged-access-rotation-evidence\.yml/);
+  assert.match(workflow, /\.github\/workflows\/technician-physical-evidence\.yml/);
+  assert.match(workflow, /tests\/launch\/operational-application-evidence-audit\.test\.mjs/);
   assert.match(workflow, /\.github\/workflows\/pr-validation\.yml/);
   assert.match(workflow, /\.github\/workflows\/renewal-pdf-diagnostic-owner-bridge\.yml/);
   assert.match(workflow, /\.github\/workflows\/renewal-pdf-runtime-diagnostic\.yml/);
