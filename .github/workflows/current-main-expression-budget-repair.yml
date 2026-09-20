@@ -7,7 +7,6 @@ on:
     types: [opened, synchronize, reopened]
 
 permissions:
-  actions: read
   contents: read
 
 concurrency:
@@ -96,6 +95,4 @@ jobs:
         run: npm run test:stability
 
       - name: Run launch-honesty suite
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
         run: npm run test:launch-honesty
