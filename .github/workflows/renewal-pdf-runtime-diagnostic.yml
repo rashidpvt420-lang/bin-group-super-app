@@ -67,6 +67,68 @@ jobs:
           create_credentials_file: true
           export_environment_variables: true
 
+      - name: Inspect deployed PDF runtime identity and permissions
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          function_json="$(gcloud functions describe generateInstitutionalContract             --gen2             --region=europe-west3             --project="$GCP_PROJECT_ID"             --format=json)"
+
+          runtime_sa="$(jq -r '.serviceConfig.serviceAccountEmail // empty' <<< "$function_json")"
+          [[ "$runtime_sa" == *@*.iam.gserviceaccount.com ]] || {
+            echo "::error::Unable to resolve production runtime service account."
+            exit 1
+          }
+
+          echo "::notice::Production PDF runtime service account: $runtime_sa"
+
+          project_roles="$(gcloud projects get-iam-policy "$GCP_PROJECT_ID"             --flatten='bindings[].members'             --filter="bindings.members:serviceAccount:$runtime_sa"             --format='value(bindings.role)' | sort -u || true)"
+
+          if [[ -n "$project_roles" ]]; then
+            while IFS= read -r role; do
+              [[ -n "$role" ]] && echo "::notice::Runtime project IAM role: $role"
+            done <<< "$project_roles"
+          else
+            echo "::warning::No project-level IAM role was visible for the runtime service account."
+          fi
+
+          self_policy="$(gcloud iam service-accounts get-iam-policy "$runtime_sa"             --project="$GCP_PROJECT_ID"             --format=json 2>/dev/null || printf '{}')"
+
+          self_can_sign=false
+          if jq -e --arg member "serviceAccount:$runtime_sa" '
+            any(.bindings[]?;
+              .role == "roles/iam.serviceAccountTokenCreator" and
+              any(.members[]?; . == $member)
+            )
+          ' <<< "$self_policy" >/dev/null; then
+            self_can_sign=true
+          fi
+
+          project_can_sign=false
+          if grep -Fxq 'roles/iam.serviceAccountTokenCreator' <<< "$project_roles"; then
+            project_can_sign=true
+          fi
+
+          if [[ "$self_can_sign" == "true" || "$project_can_sign" == "true" ]]; then
+            echo "::notice::Runtime signing permission binding is present."
+          else
+            echo "::warning::No Service Account Token Creator binding is visible for the production runtime service account; getSignedUrl may fail at IAM signBlob."
+          fi
+
+          bucket_policy="$(gcloud storage buckets get-iam-policy "gs://bin-group-57c60.firebasestorage.app"             --project="$GCP_PROJECT_ID"             --format=json 2>/dev/null || printf '{}')"
+
+          bucket_roles="$(jq -r --arg member "serviceAccount:$runtime_sa" '
+            .bindings[]? | select(any(.members[]?; . == $member)) | .role
+          ' <<< "$bucket_policy" | sort -u)"
+
+          if [[ -n "$bucket_roles" ]]; then
+            while IFS= read -r role; do
+              [[ -n "$role" ]] && echo "::notice::Runtime bucket IAM role: $role"
+            done <<< "$bucket_roles"
+          else
+            echo "::warning::No bucket-level IAM role was visible for the production runtime service account."
+          fi
+
       - name: Apply exact reviewed storage binding for direct diagnostic
         run: |
           set -euo pipefail
