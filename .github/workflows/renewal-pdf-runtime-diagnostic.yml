@@ -78,7 +78,7 @@ jobs:
           service_resource="$(jq -r '.serviceConfig.service // empty' <<< "$function_json")"
           service_name="${service_resource##*/}"
 
-          if [[ "$runtime_sa" != *@*.iam.gserviceaccount.com ]]; then
+          if [[ "$runtime_sa" != *@*.iam.gserviceaccount.com && "$runtime_sa" != *-compute@developer.gserviceaccount.com ]]; then
             [[ -n "$service_name" && "$service_name" != "$service_resource" ]] || {
               echo "::error::Unable to resolve Cloud Run service backing generateInstitutionalContract."
               exit 1
@@ -96,7 +96,7 @@ jobs:
             echo "::notice::No explicit runtime identity is configured; using the default Compute Engine service account."
           fi
 
-          [[ "$runtime_sa" == *@*.iam.gserviceaccount.com ]] || {
+          [[ "$runtime_sa" == *@*.iam.gserviceaccount.com || "$runtime_sa" == *-compute@developer.gserviceaccount.com ]] || {
             echo "::error::Unable to resolve production runtime service account."
             exit 1
           }
