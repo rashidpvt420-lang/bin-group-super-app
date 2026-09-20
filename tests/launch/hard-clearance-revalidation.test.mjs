@@ -528,6 +528,10 @@ test('frozen runtime repair pins renewal PDF storage hotfix and proves it live',
   assert.match(workflow, /functions:submitOwnerOnboardingPaymentPackage/);
   assert.match(workflow, /functions:submitPendingOwnerRegistration/);
   assert.match(workflow, /functions:generateInstitutionalContract/);
+  assert.match(workflow, /roles\/iam\.serviceAccountTokenCreator/);
+  assert.match(workflow, /serviceAccount:\$runtime_sa/);
+  assert.match(workflow, /gcloud iam service-accounts add-iam-policy-binding "\$runtime_sa"/);
+  assert.match(workflow, /Production PDF runtime has self-scoped Service Account Token Creator for signed URLs/);
   assert.match(workflow, /signInWithRequiredTotpMfa/);
   assert.match(workflow, /X-Firebase-AppCheck/);
   assert.match(workflow, /generateInstitutionalContract/);

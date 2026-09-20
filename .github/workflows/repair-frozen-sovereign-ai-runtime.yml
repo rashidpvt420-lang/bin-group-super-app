@@ -363,6 +363,30 @@ jobs:
             create_credentials_file: true
             export_environment_variables: true
 
+        - name: Grant production PDF runtime self-signing only
+          run: |
+            set -euo pipefail
+            project_number="$(gcloud projects describe "$GCP_PROJECT_ID" --format='value(projectNumber)')"
+            [[ "$project_number" =~ ^[0-9]+$ ]] || {
+              echo "::error::Unable to resolve project number for production PDF runtime identity."
+              exit 1
+            }
+            runtime_sa="${project_number}-compute@developer.gserviceaccount.com"
+
+            gcloud iam service-accounts add-iam-policy-binding "$runtime_sa"               --member="serviceAccount:$runtime_sa"               --role="roles/iam.serviceAccountTokenCreator"               --project="$GCP_PROJECT_ID"               --quiet >/dev/null
+
+            policy="$(gcloud iam service-accounts get-iam-policy "$runtime_sa"               --project="$GCP_PROJECT_ID"               --format=json)"
+            jq -e --arg member "serviceAccount:$runtime_sa" '
+              any(.bindings[]?;
+                .role == "roles/iam.serviceAccountTokenCreator" and
+                any(.members[]?; . == $member)
+              )
+            ' <<< "$policy" >/dev/null || {
+              echo "::error::Production PDF runtime self-signing binding was not confirmed."
+              exit 1
+            }
+            echo "::notice::Production PDF runtime has self-scoped Service Account Token Creator for signed URLs."
+
         - name: Redeploy only frozen PDF-dependent functions
           run: |
             set -euo pipefail
