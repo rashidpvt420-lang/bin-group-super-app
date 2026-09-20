@@ -257,7 +257,7 @@ jobs:
             }
 
 
-            expected_changed="$(printf '%s\n'             '.github/workflows/current-main-expression-budget-repair.yml'             '.github/workflows/pr-validation.yml'             '.github/workflows/renewal-pdf-diagnostic-owner-bridge.yml'             '.github/workflows/renewal-pdf-runtime-diagnostic.yml'             '.github/workflows/repair-frozen-sovereign-ai-runtime.yml'             'tests/launch/hard-clearance-revalidation.test.mjs' | sort)"
+            expected_changed="$(printf '%s\n'             '.github/workflows/current-main-expression-budget-repair.yml'             '.github/workflows/live-role-smoke.yml'             '.github/workflows/operational-application-evidence.yml'             '.github/workflows/operational-provider-evidence.yml'             '.github/workflows/pr-validation.yml'             '.github/workflows/privileged-access-rotation-evidence.yml'             '.github/workflows/renewal-pdf-diagnostic-owner-bridge.yml'             '.github/workflows/renewal-pdf-runtime-diagnostic.yml'             '.github/workflows/repair-frozen-sovereign-ai-runtime.yml'             '.github/workflows/technician-physical-evidence.yml'             'tests/launch/hard-clearance-revalidation.test.mjs'             'tests/launch/operational-application-evidence-audit.test.mjs' | sort)"
             actual_changed="$(git diff --name-only "$source_sha" "$control_sha" | sort)"
             [[ "$actual_changed" == "$expected_changed" ]] || {
               echo "::error::Unexpected files changed between the failed evidence SHA and the renewal repair control SHA."
@@ -293,7 +293,7 @@ jobs:
               '    });',
               "    const url = await file.getSignedUrl({ action: 'read', expires: '03-09-2491' });",
               '    return url[0];',
-            ].join('\\n');
+            ].join(String.fromCharCode(10));
             const tokenUrlAfter = [
               '    const downloadToken = crypto.randomUUID();',
               '    await file.save(buffer, {',
@@ -301,7 +301,7 @@ jobs:
               '        metadata: { metadata: { ...metadata, firebaseStorageDownloadTokens: downloadToken } }',
               '    });',
               '    return `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(path)}?alt=media&token=${downloadToken}`;',
-            ].join('\\n');
+            ].join(String.fromCharCode(10));
 
             const bucketCount = source.split(bucketBefore).length - 1;
             const signedUrlCount = source.split(signedUrlBefore).length - 1;
