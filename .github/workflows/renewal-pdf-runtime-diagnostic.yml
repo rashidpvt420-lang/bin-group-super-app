@@ -53,6 +53,80 @@ jobs:
           create_credentials_file: true
           export_environment_variables: true
 
+      - name: Checkout frozen renewal release
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: 2ecfad30cc48f3004fc78f2db86a655e94215a15
+          fetch-depth: 1
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: '22'
+
+      - name: Install dependencies
+        run: bash scripts/npm-install-retry.sh
+
+      - name: Apply exact reviewed storage binding for direct diagnostic
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require('node:fs');
+          const file = 'functions/pdfEngine.ts';
+          const source = fs.readFileSync(file, 'utf8');
+          const before = '    const bucket = storage.bucket();';
+          const after = "    const bucket = storage.bucket('bin-group-57c60.firebasestorage.app');";
+          const count = source.split(before).length - 1;
+          if (count !== 1) throw new Error(`Expected exactly one implicit bucket, found ${count}`);
+          fs.writeFileSync(file, source.replace(before, after));
+          NODE
+          [[ "$(git hash-object functions/pdfEngine.ts)" == "62e5c8cf5fbfb25f371ee377e59c1f6ae06ec74d" ]]
+
+      - name: Build repaired frozen Functions
+        run: npm run build:functions
+
+      - name: Run direct repaired PDF engine probe
+        env:
+          GOOGLE_CLOUD_PROJECT: bin-group-57c60
+        run: |
+          set -euo pipefail
+          export DIRECT_PDF_PROBE_ID="renewal_pdf_direct_${GITHUB_RUN_ID}"
+          echo "DIRECT_PDF_PROBE_ID=$DIRECT_PDF_PROBE_ID" >> "$GITHUB_ENV"
+          node --input-type=module <<'NODE'
+          import { generateContractPDF } from './functions/lib/pdfEngine.js';
+          const id = process.env.DIRECT_PDF_PROBE_ID;
+          try {
+            const url = await generateContractPDF({
+              contractId: id,
+              propertyId: id + '_property',
+              propertyName: 'Protected direct renewal PDF diagnostic',
+              ownerId: 'protected-diagnostic',
+            });
+            if (!/^https:\/\//i.test(String(url || ''))) throw new Error('Direct PDF engine returned a non-HTTPS URL.');
+            console.log('::notice::Direct repaired PDF engine probe succeeded.');
+          } catch (error) {
+            const message = String(error?.stack || error?.message || error || '')
+              .replace(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g, '[redacted-email]')
+              .replace(/Bearer\s+[A-Za-z0-9._~-]+/gi, 'Bearer [redacted]')
+              .replace(/AIza[0-9A-Za-z_-]{20,}/g, '[redacted-api-key]');
+            console.error('::error::Direct repaired PDF engine probe failed: ' + message.slice(0, 1800));
+            process.exit(1);
+          }
+          NODE
+
+      - name: Clean up direct PDF probe
+        if: always()
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import admin from 'firebase-admin';
+          const id = String(process.env.DIRECT_PDF_PROBE_ID || '').trim();
+          if (!/^renewal_pdf_direct_[0-9]+$/.test(id)) process.exit(0);
+          if (!admin.apps.length) admin.initializeApp({ projectId: 'bin-group-57c60', storageBucket: 'bin-group-57c60.firebasestorage.app' });
+          await admin.storage().bucket('bin-group-57c60.firebasestorage.app').deleteFiles({ prefix: `contracts/${id}/` });
+          console.log('::notice::Direct PDF diagnostic cleanup complete.');
+          NODE
+
       - name: Read exact renewal PDF runtime window
         run: |
           set -euo pipefail
