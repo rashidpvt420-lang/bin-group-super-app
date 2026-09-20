@@ -224,8 +224,8 @@ test('application evidence workflow is protected and auto-discovers fixed produc
   assert.match(workflow, /inputs\.gate == 'adminStaffClaims'/);
   assert.match(workflow, /APPLICATION_PREPARATION_MODE: cleanup-staff/);
   assert.match(workflow, /APPLICATION_PREPARATION_MODE: cleanup-renewal/);
-  assert.match(workflow, /if: always\(\) && \(inputs\.gate == 'all' \|\| inputs\.gate == 'renewalScheduler'\)/);
-  assert.match(workflow, /if: always\(\) && \(inputs\.gate == 'all' \|\| inputs\.gate == 'adminStaffClaims'\)/);
+  assert.match(workflow, /if: always\(\) && hashFiles\('release\/package\.json'\) != '' && \(inputs\.gate == 'all' \|\| inputs\.gate == 'renewalScheduler'\)/);
+  assert.match(workflow, /if: always\(\) && hashFiles\('release\/package\.json'\) != '' && \(inputs\.gate == 'all' \|\| inputs\.gate == 'adminStaffClaims'\)/);
 });
 
 test('pagination proxy expands bounded discovery and exact-count queries and restores Firestore', async () => {
