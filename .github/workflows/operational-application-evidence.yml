@@ -144,7 +144,7 @@ jobs:
             echo "Exact same-SHA release/control-plane pair verified."
           else
             allowed='^(\.github/workflows/firebase-production-deploy\.yml|\.github/workflows/current-main-expression-budget-repair\.yml|\.github/workflows/pr-validation\.yml|\.github/workflows/renewal-pdf-diagnostic-owner-bridge\.yml|\.github/workflows/renewal-pdf-runtime-diagnostic\.yml|\.github/workflows/repair-frozen-sovereign-ai-runtime\.yml|\.github/workflows/live-role-smoke\.yml|\.github/workflows/operational-application-evidence\.yml|\.github/workflows/operational-provider-evidence\.yml|\.github/workflows/privileged-access-rotation-evidence\.yml|\.github/workflows/technician-physical-evidence\.yml|scripts/finalize-operational-provider-evidence\.mjs|scripts/hard-clearance-production-revalidation\.mjs|scripts/launch-status\.mjs|scripts/publish-direct-operational-proof\.mjs|scripts/publish-operational-application-evidence\.mjs|scripts/publish-operational-provider-evidence\.mjs|scripts/resolve-admin-app-check-site-key\.mjs|scripts/run-frozen-release-evidence\.mjs|scripts/verify-ai-live-evidence\.mjs|scripts/verify-hard-launch-approval\.mjs|scripts/verify-operational-readiness\.mjs|tests/launch/ai-operational-contract\.test\.mjs|tests/launch/external-gate-production-provenance\.test\.mjs|tests/launch/final-operational-evidence-producers\.test\.mjs|tests/launch/hard-clearance-revalidation\.test\.mjs|tests/launch/operational-application-evidence-audit\.test\.mjs)$'
-            supplemental_allowed='^(scripts/hard-launch-status\.mjs|scripts/lib/hard-launch-control\.mjs|scripts/lib/operational-proof-schema\.mjs|scripts/prepare-operational-application-evidence\.mjs|scripts/print-hard-launch-blockers\.mjs|scripts/verify-operational-application-evidence\.mjs|tests/launch/hard-launch-blocker-plan\.test\.mjs|tests/launch/phase1-manual-public-launch-policy\.test\.mjs)$'
+            supplemental_allowed='^(scripts/hard-launch-status\.mjs|scripts/lib/firebase-mfa-sign-in\.mjs|scripts/lib/hard-launch-control\.mjs|scripts/lib/operational-proof-schema\.mjs|scripts/prepare-operational-application-evidence\.mjs|scripts/print-hard-launch-blockers\.mjs|scripts/verify-operational-application-evidence\.mjs|tests/launch/hard-launch-blocker-plan\.test\.mjs|tests/launch/operational-founder-mfa-evidence\.test\.mjs|tests/launch/phase1-manual-public-launch-policy\.test\.mjs)$'
             while IFS= read -r file; do
               [[ -z "$file" || "$file" =~ $allowed || "$file" =~ $supplemental_allowed ]] || { echo "::error::Non-control-plane file changed since frozen release: $file"; exit 1; }
             done <<< "$changed"
@@ -162,6 +162,7 @@ jobs:
           cp control-plane/scripts/verify-operational-application-evidence.mjs release/scripts/verify-operational-application-evidence.mjs
           cp control-plane/scripts/publish-operational-application-evidence.mjs release/scripts/publish-operational-application-evidence.mjs
           cp control-plane/scripts/prepare-operational-application-evidence.mjs release/scripts/prepare-operational-application-evidence.mjs
+          cp control-plane/scripts/lib/firebase-mfa-sign-in.mjs release/scripts/lib/firebase-mfa-sign-in.mjs
 
       - name: Use Node.js 22
         uses: actions/setup-node@v4
@@ -267,6 +268,7 @@ jobs:
           E2E_FOUNDER_EMAIL: ${{ secrets.E2E_FOUNDER_EMAIL }}
           E2E_FOUNDER_PASSWORD: ${{ secrets.E2E_FOUNDER_PASSWORD }}
           E2E_FOUNDER_TOTP_SECRET: ${{ secrets.E2E_FOUNDER_TOTP_SECRET }}
+          OPERATIONAL_FOUNDER_MFA_SESSION_PATH: ${{ runner.temp }}/operational-founder-mfa-${{ github.run_id }}.json
         run: node ../control-plane/scripts/run-frozen-release-evidence.mjs scripts/prepare-operational-application-evidence.mjs
 
       - name: Auto-discover, verify, and publish application evidence
@@ -277,6 +279,7 @@ jobs:
           E2E_FOUNDER_EMAIL: ${{ secrets.E2E_FOUNDER_EMAIL }}
           E2E_FOUNDER_PASSWORD: ${{ secrets.E2E_FOUNDER_PASSWORD }}
           E2E_FOUNDER_TOTP_SECRET: ${{ secrets.E2E_FOUNDER_TOTP_SECRET }}
+          OPERATIONAL_FOUNDER_MFA_SESSION_PATH: ${{ runner.temp }}/operational-founder-mfa-${{ github.run_id }}.json
         run: |
           set -euo pipefail
           if [[ "$SELECTED_GATE" == "all" ]]; then
@@ -324,6 +327,12 @@ jobs:
           E2E_BASE_URL: https://bin-group-57c60.web.app
           APPLICATION_PREPARATION_MODE: cleanup-renewal
         run: node ../control-plane/scripts/run-frozen-release-evidence.mjs scripts/prepare-operational-application-evidence.mjs
+
+      - name: Clean up transient Founder MFA session
+        if: always()
+        env:
+          OPERATIONAL_FOUNDER_MFA_SESSION_PATH: ${{ runner.temp }}/operational-founder-mfa-${{ github.run_id }}.json
+        run: node --input-type=module -e "import { rmSync } from 'node:fs'; rmSync(process.env.OPERATIONAL_FOUNDER_MFA_SESSION_PATH, { force: true });"
 
       - name: Upload application proof batch
         if: success()

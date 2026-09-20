@@ -574,8 +574,9 @@ test('[frozen-cent] source transform is narrow, single-use and refuses drift', (
 function makeFrozenFixture(t) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'frozen-cent-test-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
-  for (const dir of ['scripts', 'functions/shared', 'launch_package', 'node_modules']) fs.mkdirSync(path.join(root, dir), { recursive: true });
+  for (const dir of ['scripts/lib', 'functions/shared', 'launch_package', 'node_modules']) fs.mkdirSync(path.join(root, dir), { recursive: true });
   for (const file of ['functions/shared/aedMoney.ts', 'functions/ownerActivationPaymentPolicy.ts']) fs.copyFileSync(path.join(repoRoot, file), path.join(root, file));
+  fs.copyFileSync(path.join(repoRoot, 'scripts/lib/firebase-mfa-sign-in.mjs'), path.join(root, 'scripts/lib/firebase-mfa-sign-in.mjs'));
   fs.writeFileSync(path.join(root, 'package.json'), '{"type":"module"}\n');
   const require = createRequire(import.meta.url);
   fs.symlinkSync(path.dirname(require.resolve('typescript/package.json')), path.join(root, 'node_modules/typescript'), 'junction');
