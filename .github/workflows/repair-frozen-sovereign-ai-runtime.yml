@@ -517,6 +517,10 @@ jobs:
           if: always()
           run: |
             set -euo pipefail
+            if [[ -z "${RENEWAL_PDF_REPAIR_PROBE_ID:-}" ]]; then
+              echo "[renewal-pdf-repair] cleanup skipped because live probe did not start"
+              exit 0
+            fi
             node --input-type=module <<'NODE'
             import admin from 'firebase-admin';
 
