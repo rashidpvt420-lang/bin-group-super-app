@@ -293,7 +293,7 @@ jobs:
               '    });',
               "    const url = await file.getSignedUrl({ action: 'read', expires: '03-09-2491' });",
               '    return url[0];',
-            ].join('\\n');
+            ].join(String.fromCharCode(10));
             const tokenUrlAfter = [
               '    const downloadToken = crypto.randomUUID();',
               '    await file.save(buffer, {',
@@ -301,7 +301,7 @@ jobs:
               '        metadata: { metadata: { ...metadata, firebaseStorageDownloadTokens: downloadToken } }',
               '    });',
               '    return `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(path)}?alt=media&token=${downloadToken}`;',
-            ].join('\\n');
+            ].join(String.fromCharCode(10));
 
             const bucketCount = source.split(bucketBefore).length - 1;
             const signedUrlCount = source.split(signedUrlBefore).length - 1;
