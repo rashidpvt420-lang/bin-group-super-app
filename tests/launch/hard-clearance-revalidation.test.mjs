@@ -518,7 +518,6 @@ test('frozen runtime repair pins renewal PDF storage hotfix and proves it live',
   assert.match(workflow, /\/bin-launch repair renewal-pdf/);
   assert.match(workflow, /FROZEN_RENEWAL_RELEASE_SHA: 2ecfad30cc48f3004fc78f2db86a655e94215a15/);
   assert.match(workflow, /FROZEN_PDF_ENGINE_BLOB: 3ae03a4add3ad44def8f5c1adb34627815e80431/);
-  assert.match(workflow, /REPAIRED_PDF_ENGINE_BLOB: 62e5c8cf5fbfb25f371ee377e59c1f6ae06ec74d/);
   assert.match(workflow, /PRODUCTION_STORAGE_BUCKET: bin-group-57c60\.firebasestorage\.app/);
   assert.match(workflow, /storage\.bucket\('bin-group-57c60\.firebasestorage\.app'\)/);
   assert.match(workflow, /git hash-object functions\/pdfEngine\.ts/);
@@ -528,10 +527,13 @@ test('frozen runtime repair pins renewal PDF storage hotfix and proves it live',
   assert.match(workflow, /functions:submitOwnerOnboardingPaymentPackage/);
   assert.match(workflow, /functions:submitPendingOwnerRegistration/);
   assert.match(workflow, /functions:generateInstitutionalContract/);
-  assert.match(workflow, /roles\/iam\.serviceAccountTokenCreator/);
-  assert.match(workflow, /serviceAccount:\$runtime_sa/);
-  assert.match(workflow, /gcloud iam service-accounts add-iam-policy-binding "\$runtime_sa"/);
-  assert.match(workflow, /Production PDF runtime has self-scoped Service Account Token Creator for signed URLs/);
+  assert.match(workflow, /firebaseStorageDownloadTokens/);
+  assert.match(workflow, /firebasestorage\.googleapis\.com\/v0\/b/);
+  assert.match(workflow, /download token/);
+  assert.doesNotMatch(workflow, /gcloud iam service-accounts add-iam-policy-binding/);
+  assert.doesNotMatch(workflow, /roles\/iam\.serviceAccountTokenCreator/);
+  assert.match(workflow, /getSignedUrl/);
+  assert.match(workflow, /still depends on IAM signBlob via getSignedUrl/);
   assert.match(workflow, /signInWithRequiredTotpMfa/);
   assert.match(workflow, /X-Firebase-AppCheck/);
   assert.match(workflow, /generateInstitutionalContract/);

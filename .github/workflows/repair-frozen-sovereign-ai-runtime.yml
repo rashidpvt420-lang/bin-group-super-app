@@ -197,7 +197,6 @@ jobs:
         AUTHORIZED_FOUNDER_ACTORS: ${{ secrets.AUTHORIZED_FOUNDER_ACTORS }}
         FROZEN_RENEWAL_RELEASE_SHA: 2ecfad30cc48f3004fc78f2db86a655e94215a15
         FROZEN_PDF_ENGINE_BLOB: 3ae03a4add3ad44def8f5c1adb34627815e80431
-        REPAIRED_PDF_ENGINE_BLOB: 62e5c8cf5fbfb25f371ee377e59c1f6ae06ec74d
         PRODUCTION_STORAGE_BUCKET: bin-group-57c60.firebasestorage.app
         FUNCTION_REGION: europe-west3
         RENEWAL_FUNCTIONS: rebuildContractRenewalWatch runContractRenewalWatch
@@ -285,13 +284,31 @@ jobs:
             const fs = require('node:fs');
             const file = 'functions/pdfEngine.ts';
             const source = fs.readFileSync(file, 'utf8');
-            const before = '    const bucket = storage.bucket();';
-            const after = "    const bucket = storage.bucket('bin-group-57c60.firebasestorage.app');";
-            const count = source.split(before).length - 1;
-            if (count !== 1) throw new Error(`Expected exactly one frozen implicit Storage bucket, found ${count}`);
-            fs.writeFileSync(file, source.replace(before, after));
+            const bucketBefore = '    const bucket = storage.bucket();';
+            const bucketAfter = "    const bucket = storage.bucket('bin-group-57c60.firebasestorage.app');";
+            const signedUrlBefore = `    await file.save(buffer, {
+        contentType: 'application/pdf',
+        metadata: { metadata }
+    });
+    const url = await file.getSignedUrl({ action: 'read', expires: '03-09-2491' });
+    return url[0];`;
+            const tokenUrlAfter = `    const downloadToken = crypto.randomUUID();
+    await file.save(buffer, {
+        contentType: 'application/pdf',
+        metadata: { metadata: { ...metadata, firebaseStorageDownloadTokens: downloadToken } }
+    });
+    return \`https://firebasestorage.googleapis.com/v0/b/\${bucket.name}/o/\${encodeURIComponent(path)}?alt=media&token=\${downloadToken}\`;`;
+
+            const bucketCount = source.split(bucketBefore).length - 1;
+            const signedUrlCount = source.split(signedUrlBefore).length - 1;
+            if (bucketCount !== 1) throw new Error(`Expected exactly one frozen implicit Storage bucket, found ${bucketCount}`);
+            if (signedUrlCount !== 1) throw new Error(`Expected exactly one frozen signed-URL block, found ${signedUrlCount}`);
+
+            fs.writeFileSync(
+              file,
+              source.replace(bucketBefore, bucketAfter).replace(signedUrlBefore, tokenUrlAfter),
+            );
             NODE
-            [[ "$(git hash-object functions/pdfEngine.ts)" == "$REPAIRED_PDF_ENGINE_BLOB" ]]
             changed="$(git diff --name-only)"
             [[ "$changed" == "functions/pdfEngine.ts" ]]
             git diff --check
@@ -311,8 +328,14 @@ jobs:
           run: |
             set -euo pipefail
             grep -Fq "bucket('bin-group-57c60.firebasestorage.app')" functions/lib/pdfEngine.js
+            grep -Fq 'firebaseStorageDownloadTokens' functions/lib/pdfEngine.js
+            grep -Fq 'https://firebasestorage.googleapis.com/v0/b/' functions/lib/pdfEngine.js
             if grep -Fq 'const bucket = storage.bucket();' functions/lib/pdfEngine.js; then
               echo "::error::Compiled PDF engine still contains the implicit bucket."
+              exit 1
+            fi
+            if grep -Fq 'getSignedUrl' functions/lib/pdfEngine.js; then
+              echo "::error::Compiled PDF engine still depends on IAM signBlob via getSignedUrl."
               exit 1
             fi
             node <<'NODE'
@@ -363,30 +386,6 @@ jobs:
             create_credentials_file: true
             export_environment_variables: true
 
-        - name: Grant production PDF runtime self-signing only
-          run: |
-            set -euo pipefail
-            project_number="$(gcloud projects describe "$GCP_PROJECT_ID" --format='value(projectNumber)')"
-            [[ "$project_number" =~ ^[0-9]+$ ]] || {
-              echo "::error::Unable to resolve project number for production PDF runtime identity."
-              exit 1
-            }
-            runtime_sa="${project_number}-compute@developer.gserviceaccount.com"
-
-            gcloud iam service-accounts add-iam-policy-binding "$runtime_sa"               --member="serviceAccount:$runtime_sa"               --role="roles/iam.serviceAccountTokenCreator"               --project="$GCP_PROJECT_ID"               --quiet >/dev/null
-
-            policy="$(gcloud iam service-accounts get-iam-policy "$runtime_sa"               --project="$GCP_PROJECT_ID"               --format=json)"
-            jq -e --arg member "serviceAccount:$runtime_sa" '
-              any(.bindings[]?;
-                .role == "roles/iam.serviceAccountTokenCreator" and
-                any(.members[]?; . == $member)
-              )
-            ' <<< "$policy" >/dev/null || {
-              echo "::error::Production PDF runtime self-signing binding was not confirmed."
-              exit 1
-            }
-            echo "::notice::Production PDF runtime has self-scoped Service Account Token Creator for signed URLs."
-
         - name: Redeploy only frozen PDF-dependent functions
           run: |
             set -euo pipefail
@@ -425,7 +424,7 @@ jobs:
               [[ "$(jq -r '.serviceConfig.allTrafficOnLatestRevision // false' <<< "$verify_json")" == "true" ]] || { echo "::error::${function_name} is not serving 100% latest revision traffic."; exit 1; }
             done
 
-        - name: Prove live signed contract PDF through repaired runtime
+        - name: Prove live contract PDF through repaired runtime
           env:
             VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
             VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
@@ -498,8 +497,11 @@ jobs:
               throw new Error(`Repaired live PDF probe failed with HTTP ${response.status}`);
             }
             const url = new URL(pdfUrl);
-            if (!['storage.googleapis.com', 'bin-group-57c60.firebasestorage.app'].includes(url.hostname)) {
+            if (url.hostname !== 'firebasestorage.googleapis.com') {
               throw new Error('Repaired live PDF probe returned an unexpected Storage host.');
+            }
+            if (url.searchParams.get('alt') !== 'media' || !text(url.searchParams.get('token'))) {
+              throw new Error('Repaired live PDF probe returned a Storage URL without a download token.');
             }
             console.log(
               '[renewal-pdf-repair] PASS probeHash=' +
