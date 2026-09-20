@@ -253,6 +253,9 @@ test('payment and commission evidence uses real replay invariants and requires F
   assert.match(verifier, /latestApprovedPayment/);
   assert.match(verifier, /latestBrokerCommissionWithApprovedPayment/);
   assert.match(verifier, /collection\('audit_logs'\)\.where\('contractId', '==', contractId\)/);
+  assert.match(verifier, /collection\('audit_logs'\)\.where\('targetId', '==', sourceId\)/);
+  assert.match(verifier, /CONTRACT_RENEWAL_MILESTONE_PROCESSED/);
+  assert.match(verifier, /CONTRACT_RENEWAL_PDF_SYSTEM/);
   assert.match(verifier, /data\.action === 'ADMIN_APPROVE_PAYMENT'/);
   assert.match(verifier, /candidate\.id === text\(approvalAudit\.data\.paymentId\)/);
   assert.match(verifier, /const paymentContractId = text\(payment\.data\.contractId \|\| payment\.data\.intakeId\)/);
