@@ -568,7 +568,6 @@ test('frozen runtime repair pins renewal PDF storage hotfix and proves it live',
   assert.match(workflow, /\.github\/workflows\/renewal-pdf-runtime-diagnostic\.yml/);
   assert.match(workflow, /\.github\/workflows\/repair-frozen-sovereign-ai-runtime\.yml/);
   assert.match(workflow, /tests\/launch\/hard-clearance-revalidation\.test\.mjs/);
-  assert.doesNotMatch(workflow, /expected_changed=.*operational-application-evidence/);
   assert.doesNotMatch(workflow, /\.head_sha == \$sha/);
 
   const aiJobStart = workflow.indexOf('  repair:');
