@@ -548,7 +548,7 @@ test('frozen runtime repair pins renewal PDF storage hotfix and proves it live',
   assert.match(workflow, /repair-frozen-sovereign-ai-runtime\.yml/);
   assert.match(workflow, /tests\/launch\/hard-clearance-revalidation\.test\.mjs/);
   assert.match(workflow, /git diff --name-only "\$source_sha" "\$control_sha"/);
-  assert.doesNotMatch(workflow, /expected_changed=.*current-main-expression-budget-repair/);
+  assert.match(workflow, /\.github\/workflows\/current-main-expression-budget-repair\.yml/);
   assert.match(workflow, /\.github\/workflows\/pr-validation\.yml/);
   assert.match(workflow, /\.github\/workflows\/renewal-pdf-diagnostic-owner-bridge\.yml/);
   assert.match(workflow, /\.github\/workflows\/renewal-pdf-runtime-diagnostic\.yml/);
