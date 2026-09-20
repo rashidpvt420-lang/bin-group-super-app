@@ -86,8 +86,18 @@ jobs:
             runtime_sa="$(gcloud run services describe "$service_name"               --region=europe-west3               --project="$GCP_PROJECT_ID"               --format='value(spec.template.spec.serviceAccountName)')"
           fi
 
+          if [[ "$runtime_sa" != *@*.iam.gserviceaccount.com ]]; then
+            project_number="$(gcloud projects describe "$GCP_PROJECT_ID" --format='value(projectNumber)')"
+            [[ "$project_number" =~ ^[0-9]+$ ]] || {
+              echo "::error::Unable to resolve Google Cloud project number for default runtime identity."
+              exit 1
+            }
+            runtime_sa="${project_number}-compute@developer.gserviceaccount.com"
+            echo "::notice::No explicit runtime identity is configured; using the default Compute Engine service account."
+          fi
+
           [[ "$runtime_sa" == *@*.iam.gserviceaccount.com ]] || {
-            echo "::error::Unable to resolve production runtime service account from Functions or Cloud Run."
+            echo "::error::Unable to resolve production runtime service account."
             exit 1
           }
 
