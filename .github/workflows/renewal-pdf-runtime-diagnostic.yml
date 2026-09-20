@@ -45,14 +45,6 @@ jobs:
           done
           [[ "$authorized" == "true" ]]
 
-      - name: Authenticate Google Cloud
-        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093
-        with:
-          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
-          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
-          create_credentials_file: true
-          export_environment_variables: true
-
       - name: Checkout frozen renewal release
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -66,6 +58,14 @@ jobs:
 
       - name: Install dependencies
         run: bash scripts/npm-install-retry.sh
+
+      - name: Authenticate Google Cloud
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          create_credentials_file: true
+          export_environment_variables: true
 
       - name: Apply exact reviewed storage binding for direct diagnostic
         run: |
@@ -93,7 +93,14 @@ jobs:
           export DIRECT_PDF_PROBE_ID="renewal_pdf_direct_${GITHUB_RUN_ID}"
           echo "DIRECT_PDF_PROBE_ID=$DIRECT_PDF_PROBE_ID" >> "$GITHUB_ENV"
           node --input-type=module <<'NODE'
+          import admin from 'firebase-admin';
           import { generateContractPDF } from './functions/lib/pdfEngine.js';
+          if (!admin.apps.length) {
+            admin.initializeApp({
+              projectId: 'bin-group-57c60',
+              storageBucket: 'bin-group-57c60.firebasestorage.app',
+            });
+          }
           const id = process.env.DIRECT_PDF_PROBE_ID;
           try {
             const url = await generateContractPDF({
