@@ -1,4 +1,6 @@
 import admin from 'firebase-admin';
+import { existsSync, lstatSync, readFileSync, writeFileSync } from 'node:fs';
+import path from 'node:path';
 import { initializeFirebaseAdmin, resolveFirebaseAdminProjectId } from '../firebase-admin-bootstrap.mjs';
 import { generateTotp } from './totp.mjs';
 
@@ -10,6 +12,24 @@ const MIN_TOTP_LIFETIME_MS = 10_000;
 
 const text = (value) => String(value ?? '').trim();
 const lower = (value) => text(value).toLowerCase();
+
+function sessionCachePath(env = process.env) {
+  const file = text(env.OPERATIONAL_FOUNDER_MFA_SESSION_PATH);
+  if (!file) return '';
+  if (
+    env.GITHUB_ACTIONS !== 'true'
+    || env.GITHUB_REPOSITORY !== 'rashidpvt420-lang/bin-group-super-app'
+    || env.GITHUB_WORKFLOW !== 'Operational Application Evidence'
+    || env.GITHUB_JOB !== 'verify-and-publish'
+    || !/^\d+$/.test(text(env.GITHUB_RUN_ID))
+    || !path.isAbsolute(file)
+    || path.dirname(file) !== text(env.RUNNER_TEMP)
+    || path.basename(file) !== `operational-founder-mfa-${text(env.GITHUB_RUN_ID)}.json`
+  ) {
+    throw new Error('Operational Founder MFA session cache is not bound to this protected workflow run.');
+  }
+  return file;
+}
 
 async function parseJson(response) {
   try {
@@ -102,6 +122,32 @@ async function requireVerifiedTotpMfaToken(token, verifyIdTokenImpl) {
   };
 }
 
+async function readVerifiedSessionCache(cachePath, verifyIdTokenImpl) {
+  if (!cachePath || !existsSync(cachePath)) return null;
+  const metadata = lstatSync(cachePath);
+  if (!metadata.isFile() || metadata.isSymbolicLink() || (metadata.mode & 0o077) !== 0) {
+    throw new Error('Operational Founder MFA session cache permissions are invalid.');
+  }
+  let payload;
+  try {
+    payload = JSON.parse(readFileSync(cachePath, 'utf8'));
+  } catch {
+    throw new Error('Operational Founder MFA session cache is malformed.');
+  }
+  const idToken = text(payload?.idToken);
+  const verified = await requireVerifiedTotpMfaToken(idToken, verifyIdTokenImpl);
+  return { idToken, ...verified };
+}
+
+function writeSessionCache(cachePath, idToken) {
+  if (!cachePath) return;
+  writeFileSync(cachePath, `${JSON.stringify({ idToken })}\n`, {
+    encoding: 'utf8',
+    mode: 0o600,
+    flag: 'wx',
+  });
+}
+
 export async function signInWithRequiredTotpMfa({
   apiKey,
   email,
@@ -112,6 +158,7 @@ export async function signInWithRequiredTotpMfa({
   verifyIdTokenImpl = defaultVerifyIdToken,
   nowImpl = () => Date.now(),
   waitImpl = defaultWait,
+  env = process.env,
 }) {
   const normalizedApiKey = text(apiKey);
   const normalizedEmail = text(email).toLowerCase();
@@ -127,6 +174,10 @@ export async function signInWithRequiredTotpMfa({
   if (!normalizedTotpSecret) {
     throw new Error('E2E_FOUNDER_TOTP_SECRET is required for automated MFA payment evidence.');
   }
+
+  const cachePath = sessionCachePath(env);
+  const cached = await readVerifiedSessionCache(cachePath, verifyIdTokenImpl);
+  if (cached) return cached;
 
   const signInEndpoint = new URL('https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword');
   signInEndpoint.searchParams.set('key', normalizedApiKey);
@@ -149,6 +200,7 @@ export async function signInWithRequiredTotpMfa({
   const directToken = text(signInPayload?.idToken);
   if (directToken) {
     const verified = await requireVerifiedTotpMfaToken(directToken, verifyIdTokenImpl);
+    writeSessionCache(cachePath, directToken);
     return { idToken: directToken, ...verified };
   }
 
@@ -207,5 +259,6 @@ export async function signInWithRequiredTotpMfa({
   if (verified.secondFactorIdentifier !== enrollmentId) {
     throw new Error('Firebase TOTP token factor identifier does not match the completed challenge.');
   }
+  writeSessionCache(cachePath, idToken);
   return { idToken, ...verified };
 }

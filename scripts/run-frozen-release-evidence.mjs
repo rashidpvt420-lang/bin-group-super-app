@@ -56,6 +56,8 @@ const APPLICATION_VERIFIER = 'scripts/verify-operational-application-evidence.mj
 const REVIEWED_APPLICATION_VERIFIER_BLOB = '9d8b42f81606ac9ce6d0c68994c074ed98426c61';
 const APPLICATION_PREPARATION = 'scripts/prepare-operational-application-evidence.mjs';
 const REVIEWED_APPLICATION_PREPARATION_BLOB = '97c4abee2c869a4cb4a05fdaf18b09705d705219';
+const FOUNDER_MFA_HELPER = 'scripts/lib/firebase-mfa-sign-in.mjs';
+const REVIEWED_FOUNDER_MFA_HELPER_BLOB = '19deed423265cb81567ba163751c5017ba5117f7';
 const LEGACY_ACTIVATION_CHECK = [
   '  const annual = Number(payment.data.quoteSnapshot?.annualContractValue || contract.quoteSnapshot?.annualContractValue || contract.annualContractValue || 0);',
   '  const amount = Number(payment.data.amountReceived || payment.data.quoteSnapshot?.activationDeposit || payment.data.amount || 0);',
@@ -422,6 +424,14 @@ function assertReviewedApplicationPreparation(releaseRoot) {
   console.log(`[frozen-release-evidence] reviewed Tenant notification preparation sha256=${createHash('sha256').update(source).digest('hex')}`);
 }
 
+function assertReviewedFounderMfaHelper(releaseRoot) {
+  const file = path.join(releaseRoot, FOUNDER_MFA_HELPER);
+  if (!lstatSync(file).isFile()) fail('reviewed Founder MFA helper is not a regular file');
+  if (gitBlobSha(readFileSync(file)) !== REVIEWED_FOUNDER_MFA_HELPER_BLOB) {
+    fail('unreviewed Founder MFA helper');
+  }
+}
+
 export function validateFrozenReleaseEvidenceContext(env, releaseRoot, entrypoint) {
   if (env.GITHUB_ACTIONS !== 'true') fail('GitHub Actions is required');
   if (env.GITHUB_REPOSITORY !== EXPECTED_REPOSITORY) fail('repository mismatch');
@@ -477,6 +487,7 @@ export function runFrozenReleaseEvidence(entrypoint, env = process.env, releaseR
     && entrypoint === AI_VERIFIER;
 
   if (applicationVerification) assertApplicationEvidenceCredentials(env.OPERATIONAL_GATE, env);
+  if (applicationVerification || applicationPreparation) assertReviewedFounderMfaHelper(releaseRoot);
   if (applicationPreparation) {
     if (!['cleanup-staff', 'cleanup-renewal'].includes(env.APPLICATION_PREPARATION_MODE)) {
       assertApplicationPreparationCredentials(env.OPERATIONAL_GATE, env);

@@ -2,7 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { signInWithRequiredTotpMfa } from '../../scripts/lib/firebase-mfa-sign-in.mjs';
 
 const workflow = readFileSync('.github/workflows/operational-application-evidence.yml', 'utf8');
@@ -128,6 +130,47 @@ test('Founder TOTP retries a boundary rejection once in a fresh window', async (
   assert.equal(result.secondFactorIdentifier, fixture.factorId);
 });
 
+test('protected application evidence reuses one verified Founder TOTP session per workflow run', async (t) => {
+  const fixture = fixtures();
+  const runnerTemp = mkdtempSync(path.join(os.tmpdir(), 'application-founder-mfa-'));
+  t.after(() => rmSync(runnerTemp, { recursive: true, force: true }));
+  const runId = '35508647850';
+  const cachePath = path.join(runnerTemp, `operational-founder-mfa-${runId}.json`);
+  const env = {
+    GITHUB_ACTIONS: 'true',
+    GITHUB_REPOSITORY: 'rashidpvt420-lang/bin-group-super-app',
+    GITHUB_WORKFLOW: 'Operational Application Evidence',
+    GITHUB_JOB: 'verify-and-publish',
+    GITHUB_RUN_ID: runId,
+    RUNNER_TEMP: runnerTemp,
+    OPERATIONAL_FOUNDER_MFA_SESSION_PATH: cachePath,
+  };
+  let calls = 0;
+  const signIn = () => signInWithRequiredTotpMfa({
+    apiKey: fixture.apiKey,
+    email: 'ceo@bin-groups.com',
+    password: fixture.password,
+    totpSecret: fixture.totpSecret,
+    env,
+    fetchImpl: async () => {
+      calls += 1;
+      return calls === 1
+        ? response({
+          mfaPendingCredential: fixture.pendingCredential,
+          mfaInfo: [{ mfaEnrollmentId: fixture.factorId, totpInfo: {} }],
+        })
+        : response({ idToken: jwt({ sub: fixture.uid }) });
+    },
+    verifyIdTokenImpl: async () => verifiedClaims(fixture),
+  });
+
+  const first = await signIn();
+  const second = await signIn();
+  assert.equal(calls, 2, 'the second consumer must not call Firebase Auth again');
+  assert.equal(second.idToken, first.idToken);
+  assert.equal(statSync(cachePath).mode & 0o777, 0o600);
+});
+
 test('Founder TOTP rejects unverified, non-Founder and mismatched-factor tokens', async () => {
   const cases = [
     [{ email_verified: false }, /canonical Founder email/],
@@ -162,6 +205,13 @@ test('server verification and unique-factor hashing are mandatory', () => {
   assert.doesNotMatch(helper, /response\.text\(\)|raw:\s*raw/);
   assert.match(wrapper, /replaySecondFactorHash = sha256\(verifiedMfa\.secondFactorIdentifier\)/);
   assert.doesNotMatch(wrapper, /sha256\(verifiedMfa\.secondFactorType\)/);
+  assert.match(helper, /OPERATIONAL_FOUNDER_MFA_SESSION_PATH/);
+  assert.match(helper, /requireVerifiedTotpMfaToken\(idToken, verifyIdTokenImpl\)/);
+  assert.match(helper, /mode: 0o600/);
+  assert.match(helper, /flag: 'wx'/);
+  assert.match(workflow, /cp control-plane\/scripts\/lib\/firebase-mfa-sign-in\.mjs release\/scripts\/lib\/firebase-mfa-sign-in\.mjs/);
+  assert.match(workflow, /Clean up transient Founder MFA session/);
+  assert.match(workflow, /rmSync\(process\.env\.OPERATIONAL_FOUNDER_MFA_SESSION_PATH, \{ force: true \}\)/);
 });
 
 test('all bounded operational queries are expanded through a scoped pagination proxy', () => {
