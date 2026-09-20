@@ -75,8 +75,19 @@ jobs:
           function_json="$(gcloud functions describe generateInstitutionalContract             --gen2             --region=europe-west3             --project="$GCP_PROJECT_ID"             --format=json)"
 
           runtime_sa="$(jq -r '.serviceConfig.serviceAccountEmail // empty' <<< "$function_json")"
+          service_resource="$(jq -r '.serviceConfig.service // empty' <<< "$function_json")"
+          service_name="${service_resource##*/}"
+
+          if [[ "$runtime_sa" != *@*.iam.gserviceaccount.com ]]; then
+            [[ -n "$service_name" && "$service_name" != "$service_resource" ]] || {
+              echo "::error::Unable to resolve Cloud Run service backing generateInstitutionalContract."
+              exit 1
+            }
+            runtime_sa="$(gcloud run services describe "$service_name"               --region=europe-west3               --project="$GCP_PROJECT_ID"               --format='value(spec.template.spec.serviceAccountName)')"
+          fi
+
           [[ "$runtime_sa" == *@*.iam.gserviceaccount.com ]] || {
-            echo "::error::Unable to resolve production runtime service account."
+            echo "::error::Unable to resolve production runtime service account from Functions or Cloud Run."
             exit 1
           }
 
