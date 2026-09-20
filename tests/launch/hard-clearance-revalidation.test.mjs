@@ -55,6 +55,9 @@ test('hard clearance freshly revalidates production state without moving the fro
 
   const expectedAllowlist = [
     '.github/workflows/firebase-production-deploy.yml',
+    '.github/workflows/pr-validation.yml',
+    '.github/workflows/renewal-pdf-diagnostic-owner-bridge.yml',
+    '.github/workflows/renewal-pdf-runtime-diagnostic.yml',
     '.github/workflows/repair-frozen-sovereign-ai-runtime.yml',
     '.github/workflows/live-role-smoke.yml',
     '.github/workflows/operational-application-evidence.yml',
@@ -134,6 +137,9 @@ test('operational evidence keeps current main as control plane while binding pro
   ];
   const expectedAllowlist = [
     '.github/workflows/firebase-production-deploy.yml',
+    '.github/workflows/pr-validation.yml',
+    '.github/workflows/renewal-pdf-diagnostic-owner-bridge.yml',
+    '.github/workflows/renewal-pdf-runtime-diagnostic.yml',
     '.github/workflows/repair-frozen-sovereign-ai-runtime.yml',
     '.github/workflows/live-role-smoke.yml',
     ...workflowFiles,
