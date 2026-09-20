@@ -211,6 +211,7 @@ test('server verification and unique-factor hashing are mandatory', () => {
   assert.match(helper, /flag: 'wx'/);
   assert.match(workflow, /cp control-plane\/scripts\/lib\/firebase-mfa-sign-in\.mjs release\/scripts\/lib\/firebase-mfa-sign-in\.mjs/);
   assert.match(workflow, /Clean up transient Founder MFA session/);
+  assert.match(workflow, /Clean up transient Founder MFA session[\s\S]*?run: \|\n\s+node --input-type=module/);
   assert.match(workflow, /rmSync\(process\.env\.OPERATIONAL_FOUNDER_MFA_SESSION_PATH, \{ force: true \}\)/);
 });
 
