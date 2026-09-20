@@ -592,9 +592,22 @@ async function renewalSchedulerProof() {
   if (!/^(https:\/\/|gs:\/\/)/i.test(pdfUrl)) fail('renewal watch PDF evidence is missing');
   const computedDays = Math.ceil((expiryAt.getTime() - generatedAt.getTime()) / 86_400_000);
   if (Math.abs(computedDays - daysRemaining) > 2) fail('renewal daysRemaining does not match expiry timeline');
-  const provenance = lower(data.generatedBy || data.source || data.scheduler || data.watchSource || data.createdBySystem);
+  const inlineProvenance = lower(data.generatedBy || data.source || data.scheduler || data.watchSource || data.createdBySystem);
   const schedulerRunId = text(data.schedulerRunId || data.workflowRunId || data.runId);
-  if (!provenance.includes('renewal') && !schedulerRunId) fail('renewal watch lacks scheduler provenance');
+  const auditSnapshot = await db.collection('audit_logs').where('targetId', '==', sourceId).limit(100).get();
+  const schedulerAudits = auditSnapshot.docs
+    .map(docResult)
+    .filter(({ data: auditData }) =>
+      text(auditData.action) === 'CONTRACT_RENEWAL_MILESTONE_PROCESSED'
+      && text(auditData.actorId) === 'CONTRACT_RENEWAL_PDF_SYSTEM'
+    );
+  if (!inlineProvenance.includes('renewal') && !schedulerRunId && schedulerAudits.length < 1) {
+    fail('renewal watch lacks scheduler provenance');
+  }
+  const auditProvenance = schedulerAudits.length
+    ? 'CONTRACT_RENEWAL_PDF_SYSTEM:CONTRACT_RENEWAL_MILESTONE_PROCESSED'
+    : '';
+  const provenance = inlineProvenance || auditProvenance;
 
   return {
     watchId,
