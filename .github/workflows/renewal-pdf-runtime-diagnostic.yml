@@ -1,0 +1,85 @@
+name: Renewal PDF Runtime Diagnostic
+
+on:
+  workflow_dispatch:
+    inputs:
+      expected_commit_sha:
+        description: Full lowercase current main SHA
+        required: true
+        type: string
+      confirmation:
+        description: Enter DIAGNOSE_RENEWAL_PDF_RUNTIME
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: hard-public-launch
+    env:
+      GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID || 'bin-group-57c60' }}
+      AUTHORIZED_FOUNDER_ACTORS: ${{ secrets.AUTHORIZED_FOUNDER_ACTORS }}
+      TARGET_REVISION: generateinstitutionalcontract-00247-fox
+      WINDOW_START: '2026-09-20T04:46:12Z'
+      WINDOW_END: '2026-09-20T04:46:16Z'
+    steps:
+      - name: Enforce protected diagnostic inputs
+        env:
+          TARGET_SHA: ${{ inputs.expected_commit_sha }}
+          CONFIRMATION: ${{ inputs.confirmation }}
+        run: |
+          set -euo pipefail
+          [[ "$GITHUB_REF" == "refs/heads/main" ]]
+          [[ "$GITHUB_SHA" == "$TARGET_SHA" ]]
+          [[ "$CONFIRMATION" == "DIAGNOSE_RENEWAL_PDF_RUNTIME" ]]
+          authorized=false
+          IFS=',' read -ra allowed <<< "${AUTHORIZED_FOUNDER_ACTORS:-}"
+          for actor in "${allowed[@]}"; do
+            actor="$(printf '%s' "$actor" | xargs)"
+            if [[ -n "$actor" && "$GITHUB_ACTOR" == "$actor" ]]; then authorized=true; fi
+          done
+          [[ "$authorized" == "true" ]]
+
+      - name: Authenticate Google Cloud
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          create_credentials_file: true
+          export_environment_variables: true
+
+      - name: Read exact renewal PDF runtime window
+        run: |
+          set -euo pipefail
+          gcloud logging read             "resource.type=\"cloud_run_revision\" AND resource.labels.revision_name=\"$TARGET_REVISION\" AND timestamp>=\"$WINDOW_START\" AND timestamp<=\"$WINDOW_END\""             --project="$GCP_PROJECT_ID"             --limit=100             --order=asc             --format=json > "$RUNNER_TEMP/renewal-pdf-runtime.json"
+
+          node --input-type=module <<'NODE'
+          import { readFileSync } from 'node:fs';
+          const entries = JSON.parse(readFileSync(process.env.RUNNER_TEMP + '/renewal-pdf-runtime.json', 'utf8'));
+          const redact = (value) => String(value ?? '')
+            .replace(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g, '[redacted-email]')
+            .replace(/Bearer\s+[A-Za-z0-9._~-]+/gi, 'Bearer [redacted]')
+            .replace(/AIza[0-9A-Za-z_-]{20,}/g, '[redacted-api-key]')
+            .replace(/[A-Za-z0-9_=-]{32,}/g, '[redacted-token]');
+          const signals = [];
+          for (const entry of entries) {
+            const candidate = entry.textPayload ?? entry.jsonPayload?.message ?? entry.jsonPayload?.error ?? '';
+            if (!candidate) continue;
+            const text = redact(typeof candidate === 'string' ? candidate : JSON.stringify(candidate));
+            if (/error|exception|failed|permission|denied|signblob|storage|bucket|pdf|font|audit|contract synthesis/i.test(text)) {
+              signals.push(text.slice(0, 1200));
+            }
+          }
+          if (!signals.length) {
+            console.log('::warning::No application exception text was emitted in the exact failing revision window.');
+            process.exit(0);
+          }
+          for (const signal of [...new Set(signals)].slice(0, 30)) {
+            console.log('::notice::Renewal PDF runtime signal: ' + signal);
+          }
+          NODE
