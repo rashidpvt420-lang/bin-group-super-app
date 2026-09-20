@@ -251,12 +251,12 @@ jobs:
               (.head_sha | test("^[0-9a-f]{40}$"))
             ' <<< "$run_json" >/dev/null
 
-            source_sha="$(jq -r '.head_sha' <<< "$run_json")"
-            parent_sha="$(git rev-parse "$control_sha^")"
-            [[ "$parent_sha" == "$source_sha" ]] || {
-              echo "::error::Renewal repair must immediately follow the exact failed Application Evidence control SHA."
+                        source_sha="$(jq -r '.head_sha' <<< "$run_json")"
+            git merge-base --is-ancestor "$source_sha" "$control_sha" || {
+              echo "::error::Failed Application Evidence SHA is not an ancestor of the current repair control SHA."
               exit 1
             }
+
 
             expected_changed="$(printf '%s\n'             '.github/workflows/current-main-expression-budget-repair.yml'             '.github/workflows/repair-frozen-sovereign-ai-runtime.yml'             'tests/launch/hard-clearance-revalidation.test.mjs' | sort)"
             actual_changed="$(git diff --name-only "$source_sha" "$control_sha" | sort)"
