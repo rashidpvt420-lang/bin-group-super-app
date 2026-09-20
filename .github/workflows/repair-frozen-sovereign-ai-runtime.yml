@@ -546,5 +546,5 @@ jobs:
               [[ "$(jq -r '.state // empty' <<< "$verify_json")" == "ACTIVE" ]] || { echo "::error::${function_name} is not ACTIVE after live proof."; exit 1; }
               [[ "$(jq -r '.serviceConfig.allTrafficOnLatestRevision // false' <<< "$verify_json")" == "true" ]] || { echo "::error::${function_name} traffic drifted after live proof."; exit 1; }
             done
-            echo "[renewal-pdf-repair] PASS frozenRelease=$FROZEN_RENEWAL_RELEASE_SHA repairedBlob=$REPAIRED_PDF_ENGINE_BLOB sourceRun=${{ steps.command.outputs.failed_run_id }}"
+            echo "[renewal-pdf-repair] PASS frozenRelease=$FROZEN_RENEWAL_RELEASE_SHA sourceBlob=$FROZEN_PDF_ENGINE_BLOB sourceRun=${{ steps.command.outputs.failed_run_id }}"
 
