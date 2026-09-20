@@ -1,4 +1,5 @@
 import test from 'node:test';
+import crypto from 'node:crypto';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import vm from 'node:vm';
@@ -397,7 +398,12 @@ test('reviewed application verifier still receives the broker payment adapter', 
 test('application verifier overlay accepts only frozen source or the exact reviewed verifier blob', async () => {
   const wrapper = await read('scripts/run-frozen-release-evidence.mjs');
   const workflow = await read('.github/workflows/operational-application-evidence.yml');
-  assert.match(wrapper, /REVIEWED_APPLICATION_VERIFIER_BLOB = '3e48a8d109603b86506cb2d7cc733118abc0b7f1'/);
+  const verifier = await read('scripts/verify-operational-application-evidence.mjs');
+  const pin = wrapper.match(/REVIEWED_APPLICATION_VERIFIER_BLOB = '([0-9a-f]{40})'/)?.[1];
+  assert.ok(pin, 'reviewed application verifier blob pin must be present');
+  const header = `blob ${Buffer.byteLength(verifier)}\0`;
+  const verifierBlob = crypto.createHash('sha1').update(header).update(verifier).digest('hex');
+  assert.equal(pin, verifierBlob, 'reviewed application verifier blob pin must match the checked-in verifier');
   assert.match(wrapper, /gitBlobSha\(source\) === REVIEWED_APPLICATION_VERIFIER_BLOB/);
   assert.match(wrapper, /application verifier has unreviewed working-tree changes/);
   assert.match(wrapper, /state === 'reviewed'/);
