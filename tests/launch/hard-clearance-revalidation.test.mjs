@@ -578,7 +578,7 @@ test('frozen runtime repair pins renewal PDF storage hotfix and proves it live',
 
 
 
-test('hard clearance reconciles only protected hosted evidence and keeps pending physical-device gates fail-closed', async () => {
+test('hard clearance keeps physical-device gates fail-closed unless exact reviewed device evidence exists', async () => {
   const workflow = await read('.github/workflows/live-role-smoke.yml');
   const clearance = await read('scripts/verify-launch-clearance.mjs');
   const reconciler = await read('scripts/reconcile-hard-public-evidence.mjs');
@@ -602,7 +602,7 @@ test('hard clearance reconciles only protected hosted evidence and keeps pending
   assert.match(clearance, /controlPlaneCommitSha must be a full lowercase SHA/);
   assert.match(clearance, /protected proof workflow provenance mismatch/);
 
-  // Reconciler is explicit about hosted gates and never enumerates device gates.
+  // Hosted/deployment reconciliation remains protected and exact-SHA.
   for (const gate of [
     'deploymentProof.hosting',
     'deploymentProof.functionsDeploy',
@@ -613,16 +613,23 @@ test('hard clearance reconciles only protected hosted evidence and keeps pending
     'requiredProviderGates.aiVisionOrTriage',
     'requiredProviderGates.firebaseBillingPlan',
     'requiredProviderGates.appCheckEnforcement',
+    'requiredProviderGates.uaeDataResidencyPosition',
   ]) {
     assert.match(reconciler, new RegExp(gate.replace('.', '\\.')));
   }
   assert.match(reconciler, /refusing to reconcile non-hosted gate/);
-  assert.match(reconciler, /physicalDeviceGatesModified: false/);
-  assert.match(reconciler, /policyReviewGatesModified: false/);
-  assert.doesNotMatch(reconciler, /requiredDeviceGates\./);
-  for (const gate of ['firebaseCloudMessaging', 'googleMaps', 'phase1Payments']) {
-    assert.doesNotMatch(reconciler, new RegExp(`requiredProviderGates\\.${gate}`));
-  }
+
+  // Physical reconciliation is conditional, exact-gate and fail-closed.
+  assert.match(reconciler, /const physicalGateSources = \[/);
+  assert.match(reconciler, /validPhysicalRecord\(candidate, mapping\.sourceGateId, mapping\.devicePattern\)/);
+  assert.match(reconciler, /text\(record\.releaseSha\)\.toLowerCase\(\) !== releaseSha/);
+  assert.match(reconciler, /text\(record\.commitSha\)\.toLowerCase\(\) !== releaseSha/);
+  assert.match(reconciler, /text\(record\.evidenceLayer\)\.toLowerCase\(\) !== 'physical_device'/);
+  assert.match(reconciler, /if \(missingPhysicalGates\.length\)/);
+  assert.match(reconciler, /physical-device evidence is still incomplete/);
+  assert.match(reconciler, /requiredDeviceGates\.technicianGpsTracking/);
+  assert.match(reconciler, /real protected technician GPS mission proof is missing/);
+  assert.match(reconciler, /physicalDeviceGatesModified: reconciledPhysicalGates\.length > 0/);
 
   assert.match(status, /name: 'firebaseDeploymentReadiness'/);
   assert.match(status, /verify-firebase-deployment-readiness\.mjs/);
@@ -632,7 +639,6 @@ test('hard clearance reconciles only protected hosted evidence and keeps pending
   assert.doesNotMatch(reconciler, /pilot-start\.lock\.json/);
   assert.doesNotMatch(workflow, /restart.*24-hour|reset.*pilot/i);
 });
-
 
 test('all operational evidence workflows allow the reviewed hard-clearance reconciliation controls', async () => {
   for (const file of [
@@ -645,4 +651,56 @@ test('all operational evidence workflows allow the reviewed hard-clearance recon
     assert.match(workflow, /scripts\/verify-launch-clearance\\\.mjs/);
     assert.match(workflow, /scripts\/reconcile-hard-public-evidence\\\.mjs/);
   }
+});
+
+
+test('hard clearance promotes only exact-SHA reviewed physical evidence and requires real technician GPS proof', async () => {
+  const reconciler = await read('scripts/reconcile-hard-public-evidence.mjs');
+
+  assert.match(reconciler, /source\)\.toLowerCase\(\) !== 'admin-manual-evidence'/);
+  assert.match(reconciler, /evidenceLayer\)\.toLowerCase\(\) !== 'physical_device'/);
+  assert.match(reconciler, /text\(record\.releaseSha\)\.toLowerCase\(\) !== releaseSha/);
+  assert.match(reconciler, /text\(record\.commitSha\)\.toLowerCase\(\) !== releaseSha/);
+  assert.match(reconciler, /record\.executionGenerated !== false/);
+  assert.match(reconciler, /record\.hardLaunchClaim !== false/);
+  assert.match(reconciler, /requiredDeviceGates\.technicianGpsTracking/);
+  assert.match(reconciler, /technicianGpsAndDeniedFallback/);
+  assert.match(reconciler, /real protected technician GPS mission proof is missing/);
+  assert.match(reconciler, /evidenceType\) === 'physical-device-report'/);
+  assert.match(reconciler, /verifiedBy\) === 'workflow'/);
+
+  for (const pair of [
+    ['requiredProviderGates.firebaseCloudMessaging', 'firebaseCloudMessaging'],
+    ['requiredProviderGates.googleMaps', 'googleMaps'],
+    ['requiredProviderGates.phase1Payments', 'phase1Payments'],
+    ['requiredDeviceGates.androidPwaSmoke', 'androidPwaSmoke'],
+    ['requiredDeviceGates.iosPwaSmoke', 'iosPwaSmoke'],
+    ['requiredDeviceGates.pdfMobileDownload', 'pdfMobileDownload'],
+    ['requiredDeviceGates.arabicRtlAllCoreScreens', 'arabicRtlAllCoreScreens'],
+    ['requiredDeviceGates.everyButtonWritesFirestoreOrStorage', 'everyButtonWritesFirestoreOrStorage'],
+    ['requiredDeviceGates.logoutAllDashboards', 'logoutAllDashboards'],
+  ]) {
+    assert.ok(reconciler.includes(pair[0]), `missing physical gate mapping: ${pair[0]}`);
+    assert.ok(
+      reconciler.includes(`sourceGateId: '${pair[1]}'`),
+      `missing physical source gate mapping: ${pair[1]}`,
+    );
+  }
+
+  assert.match(reconciler, /evidenceType = 'manual-artifact'|evidenceType: 'manual-artifact'/);
+  assert.match(reconciler, /artifactHash = `sha256:/);
+  assert.match(reconciler, /artifactBytes = stat\.size/);
+});
+
+test('UAE data position records actual regions and never claims UAE-onshore hosting', async () => {
+  const reconciler = await read('scripts/reconcile-hard-public-evidence.mjs');
+  assert.match(reconciler, /setGlobalOptions\\\(\\\{\\s\*region/);
+  assert.match(reconciler, /firestore\.googleapis\.com\/v1\/projects/);
+  assert.match(reconciler, /uaeOnshoreHostingClaim: false/);
+  assert.match(reconciler, /does not claim UAE-onshore hosting/);
+  assert.match(reconciler, /Firebase \(Google\):/);
+  assert.match(reconciler, /Google Maps:/);
+  assert.match(reconciler, /OpenAI:/);
+  assert.match(reconciler, /Data Retention/);
+  assert.match(reconciler, /Request deletion of your data/);
 });
