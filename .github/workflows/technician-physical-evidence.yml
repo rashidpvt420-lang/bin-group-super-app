@@ -105,7 +105,7 @@ jobs:
               [[ "$frozen_sha" == "$FROZEN_RELEASE_SHA" ]]
               [[ "$source_run_id" == "$FROZEN_LIVE_EVIDENCE_RUN_ID" ]]
               ;;
-            application-current|provider-baseline-current|provider-ai-current|privileged-rotation-current|technician-current)
+            application-current|application-repair-current|provider-baseline-current|provider-ai-current|privileged-rotation-current|technician-current)
               validate_production_run
               ;;
             hard-clearance-current)
@@ -169,6 +169,18 @@ jobs:
                 --arg release "$RELEASE_SHA" \
                 --arg deploy "$SOURCE_RUN_ID" \
                 '{ref:$ref,inputs:{gate:$gate,founder_totp_operation:$operation,expected_commit_sha:$control,frozen_release_sha:$release,production_deploy_run_id:$deploy,confirmation:"PUBLISH_OPERATIONAL_APPLICATION_EVIDENCE"}}' \
+                > dispatch.json
+              dispatch operational-application-evidence.yml dispatch.json
+              ;;
+            application-repair-current)
+              jq -n \
+                --arg ref main \
+                --arg gate paymentUnlockExactlyOnce \
+                --arg operation repair-and-sync \
+                --arg control "$CONTROL_SHA" \
+                --arg release "$RELEASE_SHA" \
+                --arg deploy "$SOURCE_RUN_ID" \
+                '{ref:$ref,inputs:{gate:$gate,founder_totp_operation:$operation,expected_commit_sha:$control,frozen_release_sha:$release,production_deploy_run_id:$deploy,confirmation:"REPAIR_PRODUCTION_FOUNDER_PASSWORD_VERIFY_TOTP_AND_SYNC_DESTINATION"}}' \
                 > dispatch.json
               dispatch operational-application-evidence.yml dispatch.json
               ;;
@@ -395,6 +407,12 @@ jobs:
             const snap = await db.collection('maintenanceTickets').where('status', '==', status).limit(100).get();
             for (const doc of snap.docs) docs.push(doc.data() || {});
           }
+          const registeredSnap = await db.collection('technicians').where('deviceRegistered', '==', true).limit(100).get();
+          const registeredNative = registeredSnap.docs.filter((doc) => {
+            const data = doc.data() || {};
+            return sha256.test(text(data.registeredInstallationHash || data.registeredDeviceIdHash))
+              && text(data.registeredDevicePlatform).toLowerCase() === 'android';
+          }).length;
           let physicalBound = 0;
           let gpsVerified = 0;
           let orderedLifecycle = 0;
@@ -419,7 +437,7 @@ jobs:
             const completed = toMs(data.completedAt);
             if (arrived > 0 && started >= arrived && completed >= started) orderedLifecycle += 1;
           }
-          console.log(`[technician-candidate-diagnostic] completed=${docs.length} physicalBound=${physicalBound} gpsVerified=${gpsVerified} orderedLifecycle=${orderedLifecycle}`);
+          console.log(`[technician-candidate-diagnostic] registeredNative=${registeredNative} completed=${docs.length} physicalBound=${physicalBound} gpsVerified=${gpsVerified} orderedLifecycle=${orderedLifecycle}`);
           NODE
 
       - name: Download exact production deployment metadata

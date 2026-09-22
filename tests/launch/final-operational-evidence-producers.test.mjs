@@ -18,6 +18,10 @@ test('technician physical evidence is protected, canonical and requires real mob
   assert.match(workflow, /AUTHORIZED_FOUNDER_ACTORS:\s*\$\{\{ secrets\.AUTHORIZED_FOUNDER_ACTORS \}\}/);
   assert.match(workflow, /allowed_actors/);
   assert.match(workflow, /VERIFY_TECHNICIAN_PHYSICAL_EVIDENCE/);
+  assert.match(workflow, /application-repair-current/);
+  assert.match(workflow, /repair-and-sync/);
+  assert.match(workflow, /REPAIR_PRODUCTION_FOUNDER_PASSWORD_VERIFY_TOTP_AND_SYNC_DESTINATION/);
+  assert.match(workflow, /registeredNative=/);
   assert.match(workflow, /expected_commit_sha.*GITHUB_SHA/s);
   assert.match(workflow, /google-github-actions\/auth@v2/);
   assert.match(workflow, /Diagnose physical technician candidate coverage/);
@@ -232,7 +236,7 @@ function credentialFixture(mode = 'verify') {
     GITHUB_WORKFLOW: 'Operational Application Evidence', GITHUB_JOB: 'verify-and-sync-founder-totp',
     REPAIR_SOURCE_ENVIRONMENT: 'production', REPAIR_TARGET_ENVIRONMENT: 'hard-public-launch',
     GCP_PROJECT_ID: 'bin-group-57c60',
-    PRODUCTION_RELEASE_SHA: '26b3609457fa80a70db56767db7c85be01d7b015', PRODUCTION_DEPLOY_RUN_ID: '35236281371',
+    PRODUCTION_RELEASE_SHA: '7667ff54f9c43e07f78b3710578cd132b1bc7963', PRODUCTION_DEPLOY_RUN_ID: '35520810688',
     GITHUB_SHA: 'a'.repeat(40), TARGET_SHA: 'a'.repeat(40),
     AUTHORIZED_FOUNDER_ACTORS: ' fixture-owner, fixture-reviewer ', GITHUB_ACTOR: 'fixture-owner', GITHUB_TRIGGERING_ACTOR: 'fixture-owner',
     FOUNDER_TOTP_OPERATION: mode,
