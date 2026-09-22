@@ -208,6 +208,39 @@ jobs:
         working-directory: release
         run: bash scripts/npm-install-retry.sh
 
+      - name: Synchronize protected E2E Tenant credential
+        if: inputs.gate == 'all' || inputs.gate == 'tenantNotificationDelivery'
+        working-directory: release
+        env:
+          E2E_TENANT_EMAIL: ${{ secrets.E2E_TENANT_EMAIL }}
+          E2E_TENANT_PASSWORD: ${{ secrets.E2E_TENANT_PASSWORD }}
+        run: |
+          node --input-type=module <<'NODE'
+          import admin from 'firebase-admin';
+          const email = String(process.env.E2E_TENANT_EMAIL || '').trim().toLowerCase();
+          const password = String(process.env.E2E_TENANT_PASSWORD || '');
+          if (!/^\S+@\S+\.\S+$/.test(email) || password.length < 6) throw new Error('protected Tenant credential binding is incomplete');
+          if (email === 'ceo@bin-groups.com') throw new Error('canonical Founder account may never be used as the E2E Tenant');
+          if (!admin.apps.length) admin.initializeApp({ projectId: process.env.GCP_PROJECT_ID || 'bin-group-57c60' });
+          const auth = admin.auth();
+          const db = admin.firestore();
+          const user = await auth.getUserByEmail(email);
+          const profileSnap = await db.collection('users').doc(user.uid).get();
+          const profile = profileSnap.data() || {};
+          const claims = user.customClaims || {};
+          const role = String(claims.role || claims.userRole || claims.primaryRole || profile.role || profile.userRole || profile.primaryRole || '').trim().toLowerCase();
+          const profileEmail = String(profile.email || email).trim().toLowerCase();
+          if (!profileSnap.exists || claims.testAccount !== true || profile.testAccount !== true || role !== 'tenant' || profileEmail !== email) {
+            throw new Error('refusing to synchronize password for a non-canonical E2E Tenant identity');
+          }
+          await auth.updateUser(user.uid, { password, disabled: false, emailVerified: true });
+          const verified = await auth.getUser(user.uid);
+          if (verified.disabled || verified.emailVerified !== true || verified.customClaims?.testAccount !== true) {
+            throw new Error('protected E2E Tenant credential synchronization did not preserve the test-only identity');
+          }
+          console.log('[operational-application-evidence] protected E2E Tenant credential synchronized');
+          NODE
+
       - name: Install Chromium for protected Tenant FCM registration
         if: inputs.gate == 'all' || inputs.gate == 'tenantNotificationDelivery'
         working-directory: release
