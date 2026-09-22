@@ -195,7 +195,7 @@ test('application evidence workflow is protected and auto-discovers fixed produc
   assert.doesNotMatch(preparation, /collection\('broker_commissions'\)\.doc\([^)]*\)\.set/);
   assert.doesNotMatch(preparation, /collection\('auditLogs'\)\.doc\([^)]*\)\.set/);
 
-  assert.match(frozenWrapper, /REVIEWED_APPLICATION_PREPARATION_BLOB = '97c4abee2c869a4cb4a05fdaf18b09705d705219'/);
+  assert.match(frozenWrapper, /REVIEWED_APPLICATION_PREPARATION_BLOB = 'a56a66faf8501fa6e0790215fa60e139aeb89136'/);
   assert.match(frozenWrapper, /assertReviewedApplicationPreparation\(releaseRoot\)/);
   assert.match(frozenWrapper, /resolveApplicationEvidenceActor\(env\)/);
   assert.doesNotThrow(() => assertReviewedApplicationPreparationSource(preparation));
