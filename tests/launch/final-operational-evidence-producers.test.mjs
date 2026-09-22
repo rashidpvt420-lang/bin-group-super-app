@@ -20,6 +20,11 @@ test('technician physical evidence is protected, canonical and requires real mob
   assert.match(workflow, /VERIFY_TECHNICIAN_PHYSICAL_EVIDENCE/);
   assert.match(workflow, /expected_commit_sha.*GITHUB_SHA/s);
   assert.match(workflow, /google-github-actions\/auth@v2/);
+  assert.match(workflow, /Diagnose physical technician candidate coverage/);
+  assert.match(workflow, /technician-candidate-diagnostic/);
+  assert.match(workflow, /physicalBound=/);
+  assert.match(workflow, /gpsVerified=/);
+  assert.match(workflow, /orderedLifecycle=/);
   assert.match(workflow, /verify-technician-physical-evidence\.mjs/);
   assert.match(workflow, /Publish canonical technician operational evidence/);
   assert.match(workflow, /publish-direct-operational-proof\.mjs/);
