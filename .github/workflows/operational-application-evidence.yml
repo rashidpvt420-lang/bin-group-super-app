@@ -361,6 +361,16 @@ jobs:
           APPLICATION_PREPARATION_MODE: cleanup-renewal
         run: node ../control-plane/scripts/run-frozen-release-evidence.mjs scripts/prepare-operational-application-evidence.mjs
 
+      - name: Clean up run-scoped Broker activation evidence
+        if: always() && hashFiles('release/package.json') != '' && (inputs.gate == 'all' || inputs.gate == 'brokerCommissionLockExactlyOnce')
+        working-directory: release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          E2E_BASE_URL: https://bin-group-57c60.web.app
+          APPLICATION_PREPARATION_MODE: cleanup-broker
+        run: node ../control-plane/scripts/run-frozen-release-evidence.mjs scripts/prepare-operational-application-evidence.mjs
+
+
       - name: Clean up transient Founder MFA session
         if: always()
         env:
