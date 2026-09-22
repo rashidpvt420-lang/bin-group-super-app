@@ -1,6 +1,6 @@
 import React from 'react';
 import { Alert, Box, CircularProgress, Stack, Typography } from '@mui/material';
-import { evidenceCountsForPublicLaunch, normalizeCommitSha } from '@bin/shared';
+import { evidenceCountsForPublicLaunch, isProtectedLaunchEvidenceRecord, normalizeCommitSha } from '@bin/shared';
 import { collection, db, limit, onSnapshot, orderBy, query } from '../../lib/firebase';
 import { useAuth } from '../../context/AuthContext';
 import PublicLaunchCommandCenterPageV2, { LAUNCH_GATES } from './PublicLaunchCommandCenterPageV2';
@@ -80,6 +80,9 @@ export default function PublicLaunchCommandCenterPage() {
       if (!record.role || !REQUIRED_SMOKE_ROLES.includes(record.role)) continue;
       const observedSha = normalizeCommitSha(record.releaseSha || record.commitSha);
       if (observedSha !== RELEASE_SHA || result.has(record.role)) continue;
+      // Manual browser records are history only and must never shadow the
+      // protected execution-generated smoke proof used by this fail-closed gate.
+      if (!isProtectedLaunchEvidenceRecord(record, RELEASE_SHA)) continue;
       result.set(record.role, record);
     }
     return result;
@@ -113,7 +116,7 @@ export default function PublicLaunchCommandCenterPage() {
             <Alert severity={readError ? 'error' : 'warning'} sx={{ borderRadius: 3 }}>
               Release SHA: <strong>{RELEASE_SHA || 'UNAVAILABLE'}</strong><br />
               Protected role smoke: <strong>{smokePassedCount}/{REQUIRED_SMOKE_ROLES.length}</strong><br />
-              {readError || 'All five roles must pass on this exact release before the command center can evaluate PUBLIC READY.'}
+              {readError || 'All five roles must have protected exact-SHA smoke evidence before the command center can open the detailed evidence workspace.'}
             </Alert>
           )}
           <Typography variant="body2" sx={{ color: 'rgba(255,255,255,.68)', maxWidth: 900 }}>
