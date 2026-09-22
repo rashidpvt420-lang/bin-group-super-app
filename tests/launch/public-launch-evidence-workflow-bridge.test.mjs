@@ -64,6 +64,13 @@ test('Phase 1 payments cannot be auto-promoted from hosted/manual-bank evidence'
   assert.doesNotMatch(launchPage, /id: 'paymentGatewayOrManualBank'/);
 });
 
+test('publisher binds verified backfill writes to the canonical exact-SHA deployment artifact', () => {
+  assert.ok(publisher.includes('production-deployment-${validated.releaseSha}'));
+  assert.ok(!publisher.includes('production-deployment-${validated.releaseSha}-${validated.workflowRunId}'));
+  assert.ok(publisher.includes('sourceRunId !== validated.workflowRunId'));
+  assert.ok(publisher.includes('DIGEST_PATTERN.test(artifactDigest)'));
+});
+
 test('publisher removes legacy fabricated proof and is append-only/idempotent', () => {
   assert.doesNotMatch(publisher, /firebase_auth_passed_20260620\.png/);
   assert.doesNotMatch(publisher, /tenant-test|technician-test/);

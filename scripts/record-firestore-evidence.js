@@ -216,8 +216,8 @@ function enforceIssueCommentBackfillContext(validated) {
   if (sourceSha !== validated.releaseSha || sourceRunId !== validated.workflowRunId) {
     fail('verified production source must match manifest SHA and workflow run ID');
   }
-  if (artifactName !== `production-deployment-${validated.releaseSha}-${validated.workflowRunId}`) {
-    fail('verified production artifact name does not match exact SHA/run binding');
+  if (artifactName !== `production-deployment-${validated.releaseSha}`) {
+    fail('verified production artifact name does not match canonical exact-SHA binding');
   }
   if (!DIGEST_PATTERN.test(artifactDigest)) fail('verified production artifact digest is missing or malformed');
   if (sourceVerified !== 'true') fail('SOURCE_EVIDENCE_VERIFIED must be true');
