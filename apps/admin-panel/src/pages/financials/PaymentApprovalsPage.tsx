@@ -307,7 +307,7 @@ export default function PaymentApprovalsPage() {
 
             <Paper sx={{ bgcolor: 'rgba(15,23,42,0.92)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 4, overflow: 'hidden' }}>
                 {loading ? <Box sx={{ p: 8, display: 'flex', justifyContent: 'center' }}><CircularProgress sx={{ color: '#DAA520' }} /></Box> : rows.length === 0 ? (
-                    <Box sx={{ p: 8, textAlign: 'center' }}><CheckCircle size={32} color="#4ADE80" /><Typography variant="h6" sx={{ color: '#fff', fontWeight: 900, mt: 1 }}>Payment review queue is clear</Typography><Typography sx={{ color: 'rgba(255,255,255,0.55)', mt: 1 }}>No Owner activation, design deposit, or rent payment currently requires Admin review. Owner 15% activation payments appear here after the required site visits and receipt submission.</Typography></Box>
+                    <Box sx={{ p: 8, textAlign: 'center' }}><Typography variant="h6" sx={{ color: '#fff', fontWeight: 900 }}>No pending payment submissions</Typography><Typography sx={{ color: 'rgba(255,255,255,0.55)', mt: 1 }}>Owner 15% payments appear here only after Admin completes the site visits.</Typography></Box>
                 ) : (
                     <TableContainer>
                         <Table>

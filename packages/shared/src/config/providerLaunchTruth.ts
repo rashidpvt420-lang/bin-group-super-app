@@ -158,27 +158,20 @@ export function evidenceLayerSatisfies(actual: unknown, required: LaunchEvidence
  * GitHub evidence can qualify; manually entered Admin evidence remains useful
  * for review/history but cannot self-certify a release.
  */
-export function isProtectedLaunchEvidenceRecord(
-  evidence: LaunchEvidenceRecord | null | undefined,
-  expectedCommitSha: unknown,
-): boolean {
-  if (!evidence) return false;
-  if (String(evidence.source || '').trim().toLowerCase() !== 'github-actions') return false;
-  if (evidence.executionGenerated !== true) return false;
-  if (evidence.hardLaunchClaim !== false) return false;
-  const expected = normalizeCommitSha(expectedCommitSha);
-  const observed = normalizeCommitSha(evidence.releaseSha || evidence.commitSha);
-  return Boolean(expected && observed && expected === observed);
-}
-
 export function evidenceCountsForPublicLaunch(
   evidence: LaunchEvidenceRecord | null | undefined,
   expectedCommitSha: unknown,
   requiredLayer: LaunchEvidenceLayer,
 ): boolean {
-  if (!isProtectedLaunchEvidenceRecord(evidence, expectedCommitSha)) return false;
-  if (String(evidence?.status || '').trim().toLowerCase() !== 'passed') return false;
-  return evidenceLayerSatisfies(evidence?.evidenceLayer, requiredLayer);
+  if (!evidence) return false;
+  if (String(evidence.status || '').trim().toLowerCase() !== 'passed') return false;
+  if (String(evidence.source || '').trim().toLowerCase() !== 'github-actions') return false;
+  if (evidence.executionGenerated !== true) return false;
+  if (evidence.hardLaunchClaim !== false) return false;
+  const expected = normalizeCommitSha(expectedCommitSha);
+  const observed = normalizeCommitSha(evidence.releaseSha || evidence.commitSha);
+  if (!expected || !observed || expected !== observed) return false;
+  return evidenceLayerSatisfies(evidence.evidenceLayer, requiredLayer);
 }
 
 export function providerRuntimeState({
