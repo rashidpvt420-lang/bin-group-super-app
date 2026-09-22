@@ -65,10 +65,10 @@ test('Phase 1 payments cannot be auto-promoted from hosted/manual-bank evidence'
 });
 
 test('publisher binds verified backfill writes to the canonical exact-SHA deployment artifact', () => {
-  assert.match(publisher, /production-deployment-\\$\\{validated\\.releaseSha\\}/);
-  assert.doesNotMatch(publisher, /production-deployment-\\$\\{validated\\.releaseSha\\}-\\$\\{validated\\.workflowRunId\\}/);
-  assert.match(publisher, /sourceRunId !== validated\\.workflowRunId/);
-  assert.match(publisher, /DIGEST_PATTERN\\.test\\(artifactDigest\\)/);
+  assert.ok(publisher.includes('production-deployment-${validated.releaseSha}'));
+  assert.ok(!publisher.includes('production-deployment-${validated.releaseSha}-${validated.workflowRunId}'));
+  assert.ok(publisher.includes('sourceRunId !== validated.workflowRunId'));
+  assert.ok(publisher.includes('DIGEST_PATTERN.test(artifactDigest)'));
 });
 
 test('publisher removes legacy fabricated proof and is append-only/idempotent', () => {
