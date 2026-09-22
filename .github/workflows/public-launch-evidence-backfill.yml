@@ -68,7 +68,7 @@ jobs:
              .head_sha == $sha' \
             <<<"$run_json" >/dev/null
 
-          artifact_name="production-deployment-${SOURCE_SHA}"
+          artifact_name="production-deployment-${SOURCE_SHA}-${SOURCE_RUN_ID}"
           artifacts="$(gh api "repos/$REPOSITORY/actions/runs/$SOURCE_RUN_ID/artifacts?per_page=100")"
           artifact_count="$(jq --arg name "$artifact_name" '[.artifacts[] | select(.name == $name and (.expired | not))] | length' <<<"$artifacts")"
           [[ "$artifact_count" == "1" ]]

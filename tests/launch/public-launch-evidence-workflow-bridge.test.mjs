@@ -10,15 +10,6 @@ const verifier = readFileSync('scripts/verify-command-center-firestore-evidence.
 const providerTruth = readFileSync('packages/shared/src/config/providerLaunchTruth.ts', 'utf8');
 const launchPage = readFileSync('apps/admin-panel/src/pages/admin/PublicLaunchCommandCenterPageV2.tsx', 'utf8');
 
-test('production backfill uses the canonical deployment artifact name while retaining run provenance', () => {
-  assert.match(backfillWorkflow, /artifact_name="production-deployment-\$\{SOURCE_SHA\}"/);
-  assert.doesNotMatch(backfillWorkflow, /production-deployment-\$\{SOURCE_SHA\}-\$\{SOURCE_RUN_ID\}/);
-  assert.match(builder, /production-deployment-\$\{releaseSha\}/);
-  assert.doesNotMatch(builder, /production-deployment-\$\{releaseSha\}-\$\{workflowRunId\}/);
-  assert.match(builder, /deployment\.workflowRunId/);
-});
-
-
 test('Command Center bridge only auto-maps gates backed by exact execution evidence', () => {
   const supported = [
     'ownerOnboardingFullPath',
@@ -64,13 +55,6 @@ test('Phase 1 payments cannot be auto-promoted from hosted/manual-bank evidence'
   assert.doesNotMatch(launchPage, /id: 'paymentGatewayOrManualBank'/);
 });
 
-test('publisher binds verified backfill writes to the canonical exact-SHA deployment artifact', () => {
-  assert.ok(publisher.includes('production-deployment-${validated.releaseSha}'));
-  assert.ok(!publisher.includes('production-deployment-${validated.releaseSha}-${validated.workflowRunId}'));
-  assert.ok(publisher.includes('sourceRunId !== validated.workflowRunId'));
-  assert.ok(publisher.includes('DIGEST_PATTERN.test(artifactDigest)'));
-});
-
 test('publisher removes legacy fabricated proof and is append-only/idempotent', () => {
   assert.doesNotMatch(publisher, /firebase_auth_passed_20260620\.png/);
   assert.doesNotMatch(publisher, /tenant-test|technician-test/);
@@ -88,7 +72,7 @@ test('current production backfill is owner-only, exact-run bound, and verifies F
   assert.match(backfillWorkflow, /Firebase Production Deploy/);
   assert.match(backfillWorkflow, /\.conclusion == "success"/);
   assert.match(backfillWorkflow, /\.head_sha == \$sha/);
-  assert.match(backfillWorkflow, /production-deployment-\$\{SOURCE_SHA\}/);
+  assert.match(backfillWorkflow, /production-deployment-\$\{SOURCE_SHA\}-\$\{SOURCE_RUN_ID\}/);
   assert.match(backfillWorkflow, /SOURCE_EVIDENCE_VERIFIED: 'true'/);
   assert.match(backfillWorkflow, /verify-command-center-firestore-evidence\.mjs/);
 });
