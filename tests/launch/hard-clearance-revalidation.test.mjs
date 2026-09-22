@@ -578,7 +578,7 @@ test('frozen runtime repair pins renewal PDF storage hotfix and proves it live',
 
 
 
-test('hard clearance reconciles only protected hosted evidence and keeps pending physical-device gates fail-closed', async () => {
+test('hard clearance keeps physical-device gates fail-closed unless exact reviewed device evidence exists', async () => {
   const workflow = await read('.github/workflows/live-role-smoke.yml');
   const clearance = await read('scripts/verify-launch-clearance.mjs');
   const reconciler = await read('scripts/reconcile-hard-public-evidence.mjs');
@@ -602,7 +602,7 @@ test('hard clearance reconciles only protected hosted evidence and keeps pending
   assert.match(clearance, /controlPlaneCommitSha must be a full lowercase SHA/);
   assert.match(clearance, /protected proof workflow provenance mismatch/);
 
-  // Reconciler is explicit about hosted gates and never enumerates device gates.
+  // Hosted/deployment reconciliation remains protected and exact-SHA.
   for (const gate of [
     'deploymentProof.hosting',
     'deploymentProof.functionsDeploy',
@@ -613,16 +613,23 @@ test('hard clearance reconciles only protected hosted evidence and keeps pending
     'requiredProviderGates.aiVisionOrTriage',
     'requiredProviderGates.firebaseBillingPlan',
     'requiredProviderGates.appCheckEnforcement',
+    'requiredProviderGates.uaeDataResidencyPosition',
   ]) {
-    assert.match(reconciler, new RegExp(gate.replace('.', '\\.')));
+    assert.match(reconciler, new RegExp(gate.replace('.', '\\\\.')));
   }
   assert.match(reconciler, /refusing to reconcile non-hosted gate/);
-  assert.match(reconciler, /physicalDeviceGatesModified: false/);
-  assert.match(reconciler, /policyReviewGatesModified: false/);
-  assert.doesNotMatch(reconciler, /requiredDeviceGates\./);
-  for (const gate of ['firebaseCloudMessaging', 'googleMaps', 'phase1Payments']) {
-    assert.doesNotMatch(reconciler, new RegExp(`requiredProviderGates\\.${gate}`));
-  }
+
+  // Physical reconciliation is conditional, exact-gate and fail-closed.
+  assert.match(reconciler, /const physicalGateSources = \[/);
+  assert.match(reconciler, /validPhysicalRecord\(candidate, mapping\.sourceGateId, mapping\.devicePattern\)/);
+  assert.match(reconciler, /text\(record\.releaseSha\)\.toLowerCase\(\) !== releaseSha/);
+  assert.match(reconciler, /text\(record\.commitSha\)\.toLowerCase\(\) !== releaseSha/);
+  assert.match(reconciler, /text\(record\.evidenceLayer\)\.toLowerCase\(\) !== 'physical_device'/);
+  assert.match(reconciler, /if \(missingPhysicalGates\.length\)/);
+  assert.match(reconciler, /physical-device evidence is still incomplete/);
+  assert.match(reconciler, /requiredDeviceGates\.technicianGpsTracking/);
+  assert.match(reconciler, /real protected technician GPS mission proof is missing/);
+  assert.match(reconciler, /physicalDeviceGatesModified: reconciledPhysicalGates\.length > 0/);
 
   assert.match(status, /name: 'firebaseDeploymentReadiness'/);
   assert.match(status, /verify-firebase-deployment-readiness\.mjs/);
@@ -632,7 +639,6 @@ test('hard clearance reconciles only protected hosted evidence and keeps pending
   assert.doesNotMatch(reconciler, /pilot-start\.lock\.json/);
   assert.doesNotMatch(workflow, /restart.*24-hour|reset.*pilot/i);
 });
-
 
 test('all operational evidence workflows allow the reviewed hard-clearance reconciliation controls', async () => {
   for (const file of [
