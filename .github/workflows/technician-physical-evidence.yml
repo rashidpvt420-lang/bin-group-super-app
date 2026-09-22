@@ -366,6 +366,62 @@ jobs:
         working-directory: release
         run: bash scripts/npm-install-retry.sh
 
+      - name: Diagnose physical technician candidate coverage
+        working-directory: release
+        run: |
+          node --input-type=module <<'NODE'
+          import admin from 'firebase-admin';
+          import crypto from 'node:crypto';
+          if (!admin.apps.length) admin.initializeApp({ projectId: process.env.GCP_PROJECT_ID || 'bin-group-57c60' });
+          const db = admin.firestore();
+          const statuses = ['COMPLETED_PENDING_APPROVAL', 'COMPLETED', 'CLOSED'];
+          const sha256 = /^[0-9a-f]{64}$/i;
+          const text = (v) => String(v ?? '').trim();
+          const toMs = (v) => {
+            if (!v) return 0;
+            if (typeof v?.toDate === 'function') return v.toDate().getTime();
+            if (Number.isFinite(Number(v?._seconds))) return Number(v._seconds) * 1000;
+            const parsed = Date.parse(String(v));
+            return Number.isFinite(parsed) ? parsed : 0;
+          };
+          const coords = (v) => {
+            if (!v || typeof v !== 'object') return false;
+            const lat = Number(v.lat ?? v._latitude ?? v.latitude?._latitude ?? v.latitude);
+            const lng = Number(v.lng ?? v._longitude ?? v.longitude?._longitude ?? v.longitude);
+            return Number.isFinite(lat) && Number.isFinite(lng) && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180;
+          };
+          const docs = [];
+          for (const status of statuses) {
+            const snap = await db.collection('maintenanceTickets').where('status', '==', status).limit(100).get();
+            for (const doc of snap.docs) docs.push(doc.data() || {});
+          }
+          let physicalBound = 0;
+          let gpsVerified = 0;
+          let orderedLifecycle = 0;
+          for (const data of docs) {
+            if (data.physicalDeviceBound !== true) continue;
+            physicalBound += 1;
+            const location = data.arrivedLocation || data.technicianLocation || {};
+            const accuracy = Number(location.accuracy);
+            const gpsOk =
+              data.gpsVerified === true &&
+              text(data.onSiteVerification).toUpperCase() === 'GPS_VERIFIED' &&
+              sha256.test(text(data.arrivalInstallationHash)) &&
+              ['android', 'ios'].includes(text(data.arrivalDevicePlatform).toLowerCase()) &&
+              coords(location) &&
+              Number.isFinite(accuracy) &&
+              accuracy > 0 &&
+              accuracy <= 100;
+            if (!gpsOk) continue;
+            gpsVerified += 1;
+            const arrived = toMs(data.arrivedAt);
+            const started = toMs(data.startedAt);
+            const completed = toMs(data.completedAt);
+            if (arrived > 0 && started >= arrived && completed >= started) orderedLifecycle += 1;
+          }
+          console.log(`[technician-candidate-diagnostic] completed=${docs.length} physicalBound=${physicalBound} gpsVerified=${gpsVerified} orderedLifecycle=${orderedLifecycle}`);
+          NODE
+
       - name: Download exact production deployment metadata
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
