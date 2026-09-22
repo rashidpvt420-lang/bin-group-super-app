@@ -680,8 +680,11 @@ test('hard clearance promotes only exact-SHA reviewed physical evidence and requ
     ['requiredDeviceGates.everyButtonWritesFirestoreOrStorage', 'everyButtonWritesFirestoreOrStorage'],
     ['requiredDeviceGates.logoutAllDashboards', 'logoutAllDashboards'],
   ]) {
-    assert.match(reconciler, new RegExp(pair[0].replace('.', '\\.')));
-    assert.match(reconciler, new RegExp(`sourceGateId: '${pair[1]}'`));
+    assert.ok(reconciler.includes(pair[0]), `missing physical gate mapping: ${pair[0]}`);
+    assert.ok(
+      reconciler.includes(`sourceGateId: '${pair[1]}'`),
+      `missing physical source gate mapping: ${pair[1]}`,
+    );
   }
 
   assert.match(reconciler, /evidenceType = 'manual-artifact'|evidenceType: 'manual-artifact'/);
