@@ -195,7 +195,7 @@ test('application evidence workflow is protected and auto-discovers fixed produc
   assert.doesNotMatch(preparation, /collection\('broker_commissions'\)\.doc\([^)]*\)\.set/);
   assert.doesNotMatch(preparation, /collection\('auditLogs'\)\.doc\([^)]*\)\.set/);
 
-  assert.match(frozenWrapper, /REVIEWED_APPLICATION_PREPARATION_BLOB = '97c4abee2c869a4cb4a05fdaf18b09705d705219'/);
+  assert.match(frozenWrapper, /REVIEWED_APPLICATION_PREPARATION_BLOB = 'a56a66faf8501fa6e0790215fa60e139aeb89136'/);
   assert.match(frozenWrapper, /assertReviewedApplicationPreparation\(releaseRoot\)/);
   assert.match(frozenWrapper, /resolveApplicationEvidenceActor\(env\)/);
   assert.doesNotThrow(() => assertReviewedApplicationPreparationSource(preparation));
@@ -359,6 +359,32 @@ test('application evidence publish step passes GitHub token for protected owner-
   const step = workflow.slice(start, end > start ? end : workflow.length);
   assert.match(step, /GITHUB_TOKEN: \$\{\{ secrets\.GITHUB_TOKEN \}\}/);
   assert.match(step, /node \.\.\/control-plane\/scripts\/run-frozen-release-evidence\.mjs scripts\/verify-operational-application-evidence-mfa\.mjs/);
+});
+
+test('Broker activation preparation is run-scoped and must pass deployed payment approval', async () => {
+  const preparation = await read('scripts/prepare-operational-application-evidence.mjs');
+  const workflow = await read('.github/workflows/operational-application-evidence.yml');
+  const wrapper = await read('scripts/run-frozen-release-evidence.mjs');
+
+  assert.match(preparation, /ADMIN_APPROVE_PAYMENT_URL/);
+  assert.match(preparation, /BROKER_ACTIVATION_EVIDENCE_TYPE/);
+  assert.match(preparation, /status: 'PENDING'/);
+  assert.match(preparation, /paymentVerified: false/);
+  assert.match(preparation, /unlocksDashboard: false/);
+  assert.match(preparation, /contentType: 'application\/pdf'/);
+  assert.match(preparation, /evidenceType: 'owner_payment_receipt'/);
+  assert.match(preparation, /active Phase 1 payment configuration is not the locked Cash\/Cheque policy/);
+  assert.match(preparation, /invokeProtectedStatusCallable\(ADMIN_APPROVE_PAYMENT_URL/);
+  assert.match(preparation, /deployed adminApprovePayment did not produce the required test-only approved activation/);
+  assert.match(preparation, /refusing to clean a non-evidence Broker activation payment/);
+  assert.match(workflow, /Clean up run-scoped Broker activation evidence/);
+  assert.match(workflow, /APPLICATION_PREPARATION_MODE: cleanup-broker/);
+
+  const pin = wrapper.match(/REVIEWED_APPLICATION_PREPARATION_BLOB = '([0-9a-f]{40})'/)?.[1];
+  assert.ok(pin, 'reviewed application preparation blob pin must be present');
+  const header = `blob ${Buffer.byteLength(preparation)}\0`;
+  const preparationBlob = crypto.createHash('sha1').update(header).update(preparation).digest('hex');
+  assert.equal(pin, preparationBlob, 'reviewed application preparation blob pin must match the checked-in preparation');
 });
 
 test('application preparation preflight is gate-aware and requires Founder MFA for broker evidence', async () => {

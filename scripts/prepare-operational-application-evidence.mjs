@@ -17,10 +17,12 @@ const CANONICAL_FOUNDER_LOGIN = 'rashidpvt420-lang';
 const PRODUCTION_URL = 'https://bin-group-57c60.web.app';
 const CREATE_NOTIFICATION_URL = 'https://europe-west3-bin-group-57c60.cloudfunctions.net/createNotification';
 const ADMIN_MATCH_BROKER_ATTRIBUTION_URL = 'https://europe-west3-bin-group-57c60.cloudfunctions.net/adminMatchBrokerAttribution';
+const ADMIN_APPROVE_PAYMENT_URL = 'https://europe-west3-bin-group-57c60.cloudfunctions.net/adminApprovePayment';
 const ADMIN_CREATE_USER_URL = 'https://europe-west3-bin-group-57c60.cloudfunctions.net/adminCreateUser';
 const ADMIN_UPDATE_STAFF_ONBOARDING_URL = 'https://europe-west3-bin-group-57c60.cloudfunctions.net/adminUpdateStaffOnboarding';
 const REBUILD_CONTRACT_RENEWAL_WATCH_URL = 'https://europe-west3-bin-group-57c60.cloudfunctions.net/rebuildContractRenewalWatch';
 const BROKER_EVIDENCE_TYPE = 'OPERATIONAL_APPLICATION_BROKER_PAYMENT_BINDING';
+const BROKER_ACTIVATION_EVIDENCE_TYPE = 'OPERATIONAL_APPLICATION_BROKER_ACTIVATION_FIXTURE';
 const STAFF_EVIDENCE_TYPE = 'OPERATIONAL_APPLICATION_STAFF_CLAIMS';
 const RENEWAL_EVIDENCE_TYPE = 'OPERATIONAL_APPLICATION_RENEWAL_SCHEDULER';
 const EXPECTED_STORAGE_BUCKET = 'bin-group-57c60.firebasestorage.app';
@@ -706,7 +708,9 @@ async function prepareBrokerCommissionEvidence({ db, auth, apiKey, appId, debugT
     target = { payment, contractId, contract, ownerUid, intakeId: text(payment.data.intakeId || contract.intakeId), propertyId: text(contract.propertyId), invoice };
     break;
   }
-  if (!target) fail('no test-only approved owner activation is eligible for Broker attribution evidence');
+  if (!target) {
+    target = await createApprovedBrokerActivationFixture({ db, apiKey, appId, debugToken });
+  }
 
   const leadId = `operational_application_broker_${sha256(target.contractId).slice(0, 24)}`;
   const leadRef = db.collection('brokerLeads').doc(leadId);
@@ -773,6 +777,151 @@ async function prepareBrokerCommissionEvidence({ db, auth, apiKey, appId, debugT
   console.log(`[prepare-application-evidence] PASS gate=brokerCommissionLockExactlyOnce contractHash=${sha256(target.contractId).slice(0, 12)}… commissionHash=${sha256(expectedCommissionId).slice(0, 12)}… leadHash=${sha256(leadId).slice(0, 12)}…`);
 }
 
+function brokerActivationFixtureIds() {
+  const runId = text(process.env.GITHUB_RUN_ID);
+  if (!/^\d+$/.test(runId)) fail('workflow run ID is required for Broker activation fixture');
+  const paymentId = 'operational_application_activation_' + runId;
+  const ownerUid = 'operational_application_owner_' + runId;
+  return {
+    runId, paymentId, contractId: paymentId, intakeId: paymentId, ownerUid,
+    propertyId: 'operational_application_property_' + runId,
+    otpId: 'operational_application_otp_' + runId,
+    receiptPath: 'payment-references/owners/' + ownerUid + '/' + paymentId + '/cash-receipt.pdf',
+  };
+}
+
+async function invokeProtectedStatusCallable(url, session, data, label) {
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      Authorization: 'Bearer ' + session.idToken,
+      'X-Firebase-AppCheck': session.appCheckToken,
+      'content-type': 'application/json',
+      Origin: 'https://admin.bin-groups.com',
+      Referer: 'https://admin.bin-groups.com/',
+    },
+    body: JSON.stringify({ data }),
+  });
+  const payload = await responseJson(response);
+  const result = payload?.result || payload?.data || payload;
+  if (!response.ok || upper(result?.status) !== 'SUCCESS') fail(label + ' failed with HTTP ' + response.status);
+  return result;
+}
+
+async function cleanupBrokerActivationEvidence({ db }) {
+  const ids = brokerActivationFixtureIds();
+  const paymentSnap = await db.collection('payment_transactions').doc(ids.paymentId).get();
+  if (paymentSnap.exists) {
+    const payment = paymentSnap.data() || {};
+    if (text(payment.e2eEvidenceType) !== BROKER_ACTIVATION_EVIDENCE_TYPE || text(payment.e2eRunId) !== ids.runId) {
+      fail('refusing to clean a non-evidence Broker activation payment');
+    }
+  }
+  const leadId = 'operational_application_broker_' + sha256(ids.contractId).slice(0, 24);
+  const commissionId = 'commission_' + ids.contractId;
+  const invoiceId = 'MOB-' + sha256(ids.paymentId).slice(0, 20).toUpperCase();
+  const quoteHash = sha256('operational-application-broker-quote:' + ids.runId);
+  const invoiceHash = sha256(JSON.stringify({
+    invoiceId, paymentId: ids.paymentId, contractId: ids.contractId, intakeId: ids.intakeId,
+    amount: 6000, currency: 'AED', feeType: 'MOBILIZATION_DEPOSIT', quoteHash,
+  }));
+  const directRefs = [
+    ['brokerLeads', leadId], ['broker_commissions', commissionId],
+    ['payment_transactions', ids.paymentId], ['contracts', ids.contractId],
+    ['intake_submissions', ids.intakeId], ['contract_signature_otps', ids.otpId],
+    ['properties', ids.propertyId], ['propertyPassports', ids.propertyId],
+    ['users', ids.ownerUid], ['owners', ids.ownerUid], ['invoices', invoiceId],
+    ['invoice_registry', invoiceHash], ['mail', 'owner_payment_approved_' + ids.paymentId],
+  ];
+  await Promise.all(directRefs.map(([collection, id]) => db.collection(collection).doc(id).delete().catch(() => undefined)));
+  await admin.storage().bucket(EXPECTED_STORAGE_BUCKET).file(ids.receiptPath).delete({ ignoreNotFound: true }).catch(() => undefined);
+  console.log('[prepare-application-evidence] CLEANUP gate=brokerCommissionLockExactlyOnce activationHash=' + sha256(ids.paymentId).slice(0, 12) + '…');
+}
+
+async function createApprovedBrokerActivationFixture({ db, apiKey, appId, debugToken }) {
+  const ids = brokerActivationFixtureIds();
+  await cleanupBrokerActivationEvidence({ db });
+  const configSnap = await db.collection('system_payment_config').doc('current').get();
+  if (!configSnap.exists) fail('active Phase 1 payment configuration is missing');
+  const raw = configSnap.data() || {};
+  const approvedMethods = Array.isArray(raw.approvedMethods) ? Array.from(new Set(raw.approvedMethods.map(upper).filter(Boolean))).sort() : [];
+  const effectiveAt = raw.effectiveAt || raw.updatedAt;
+  const effectiveAtMs = typeof effectiveAt?.toMillis === 'function' ? Number(effectiveAt.toMillis()) : Date.parse(text(effectiveAt));
+  const legalBeneficiary = text(raw.legalBeneficiary || raw.beneficiaryName);
+  const officeLocation = text(raw.officeLocation || raw.cashOfficeLocation);
+  if (upper(raw.status) !== 'ACTIVE' || legalBeneficiary !== 'BIN GROUP L.L.C - S.P.C' || !text(raw.version)
+    || !Number.isFinite(effectiveAtMs) || upper(raw.currency) !== 'AED'
+    || JSON.stringify(approvedMethods) !== JSON.stringify(['CASH', 'CHEQUE']) || !officeLocation
+    || raw.bankTransferEnabled === true || raw.stripeEnabled === true) {
+    fail('active Phase 1 payment configuration is not the locked Cash/Cheque policy');
+  }
+  const configuration = {
+    version: text(raw.version), effectiveAtMs, legalBeneficiary, bankName: '', accountNumber: '', iban: '', swiftBic: '',
+    currency: 'AED', officeLocation, approvedMethods,
+  };
+  const configHash = sha256(JSON.stringify(configuration));
+  const annualContractValue = 40000;
+  const activationDeposit = 6000;
+  const quoteHash = sha256('operational-application-broker-quote:' + ids.runId);
+  const signature = 'Operational Broker Owner ' + ids.runId;
+  const paymentReferenceId = 'CASH-OPERATIONAL-' + ids.runId;
+  const receiptPayload = Buffer.from('%PDF-1.4\n% BIN GROUP operational Broker CASH activation receipt\n%%EOF\n');
+  const receiptHash = crypto.createHash('sha256').update(receiptPayload).digest('hex');
+  const bucket = admin.storage().bucket(EXPECTED_STORAGE_BUCKET);
+  await bucket.file(ids.receiptPath).save(receiptPayload, {
+    resumable: false, contentType: 'application/pdf',
+    metadata: { metadata: {
+      ownerUid: ids.ownerUid, paymentId: ids.paymentId, intakeId: ids.intakeId,
+      evidenceType: 'owner_payment_receipt', receiptHash, uploadedByAdmin: 'operational-application-evidence',
+      uploadedAt: new Date().toISOString(),
+    } },
+  });
+  const [receiptMetadata] = await bucket.file(ids.receiptPath).getMetadata();
+  const receiptGeneration = text(receiptMetadata.generation);
+  if (!receiptGeneration) fail('run-scoped Broker activation receipt has no immutable Storage generation');
+  const receiptUrl = 'gs://' + bucket.name + '/' + ids.receiptPath;
+  const now = admin.firestore.FieldValue.serverTimestamp();
+  const marker = { testAccount: true, e2eLaunchSeed: true, e2eEvidenceType: BROKER_ACTIVATION_EVIDENCE_TYPE, e2eRunId: ids.runId };
+  await Promise.all([
+    db.collection('users').doc(ids.ownerUid).set({ ...marker, role: 'owner', status: 'pending', email: 'operational-broker-owner-' + ids.runId + '@example.invalid', createdAt: now, updatedAt: now }),
+    db.collection('owners').doc(ids.ownerUid).set({ ...marker, role: 'owner', status: 'PENDING', email: 'operational-broker-owner-' + ids.runId + '@example.invalid', createdAt: now, updatedAt: now }),
+    db.collection('intake_submissions').doc(ids.intakeId).set({ ...marker, ownerUid: ids.ownerUid, status: 'PENDING_APPROVAL', quoteHash, createdAt: now, updatedAt: now }),
+    db.collection('contracts').doc(ids.contractId).set({ ...marker, contractId: ids.contractId, intakeId: ids.intakeId, ownerUid: ids.ownerUid, ownerId: ids.ownerUid, propertyId: ids.propertyId, status: 'pending_approval', quoteHash, annualContractValue, quoteSnapshot: { annualContractValue, activationDeposit }, ownerSigned: true, otpVerificationId: ids.otpId, signatureState: { ownerSignatureName: signature }, createdAt: now, updatedAt: now }),
+    db.collection('contract_signature_otps').doc(ids.otpId).set({ ...marker, status: 'VERIFIED', uid: ids.ownerUid, contractId: ids.contractId, contractHash: quoteHash, consumedFor: ids.contractId, signature, verifiedAt: now, consumedAt: now }),
+    db.collection('properties').doc(ids.propertyId).set({ ...marker, name: 'Operational Broker Activation ' + ids.runId, ownerUid: ids.ownerUid, ownerId: ids.ownerUid, intakeId: ids.intakeId, quoteHash, status: 'pending_approval', geo: { verified: true, dispatchReady: true, requiresGeoReview: false, lat: 24.4539, lng: 54.3773 }, createdAt: now, updatedAt: now }),
+    db.collection('payment_transactions').doc(ids.paymentId).set({
+      ...marker, paymentId: ids.paymentId, contractId: ids.contractId, intakeId: ids.intakeId, ownerUid: ids.ownerUid, ownerId: ids.ownerUid,
+      ownerName: signature, ownerEmail: 'operational-broker-owner-' + ids.runId + '@example.invalid', propertyId: ids.propertyId,
+      amount: activationDeposit, activationDeposit, currency: 'AED', paymentMethod: 'CASH', method: 'CASH',
+      paymentReferenceId, paymentReference: paymentReferenceId, verified: false, paymentVerified: false, unlocksDashboard: false,
+      status: 'PENDING', paymentStatus: 'PENDING_ADMIN_APPROVAL', verificationState: 'PENDING_ADMIN', adminApprovalRequired: true,
+      paymentConfigVersion: configuration.version, paymentConfigurationVersion: configuration.version,
+      paymentConfigHash: configHash, paymentConfigurationHash: configHash,
+      paymentManifest: { configVersion: configuration.version, configHash, legalBeneficiary, currency: 'AED', officeLocation, approvedMethods, selectedMethod: 'CASH', capturedAt: new Date().toISOString() },
+      paymentProofUrl: receiptUrl, paymentProofPath: ids.receiptPath, paymentProofHash: receiptHash, paymentProofGeneration: receiptGeneration,
+      paymentProofEvidence: { receiptUrl, storagePath: ids.receiptPath, receiptHash, generation: receiptGeneration, recordedBy: 'operational-application-evidence' },
+      receiptUrl, receiptPath: ids.receiptPath, receiptHash, receiptGeneration, quoteHash, quoteSnapshot: { annualContractValue, activationDeposit },
+      otpVerificationId: ids.otpId, signatureName: signature, workflowVersion: 5, inspectionVerified: true, createdAt: now, updatedAt: now,
+    }),
+  ]);
+  const session = await founderCallableSession({ apiKey, appId, debugToken });
+  await invokeProtectedStatusCallable(ADMIN_APPROVE_PAYMENT_URL, session, { paymentId: ids.paymentId, paymentReferenceId, amountReceived: activationDeposit, method: 'CASH', notes: 'Protected run-scoped Broker attribution activation evidence.' }, 'deployed adminApprovePayment');
+  const invoiceId = 'MOB-' + sha256(ids.paymentId).slice(0, 20).toUpperCase();
+  const [paymentSnap, contractSnap, invoiceSnap] = await Promise.all([
+    db.collection('payment_transactions').doc(ids.paymentId).get(), db.collection('contracts').doc(ids.contractId).get(), db.collection('invoices').doc(invoiceId).get(),
+  ]);
+  const payment = paymentSnap.data() || {};
+  const contract = contractSnap.data() || {};
+  const invoice = invoiceSnap.data() || {};
+  if (upper(payment.status) !== 'APPROVED' || payment.paymentVerified !== true || payment.unlocksDashboard !== true
+    || upper(contract.status) !== 'ACTIVE' || upper(invoice.status) !== 'PAID' || upper(invoice.feeType) !== 'MOBILIZATION_DEPOSIT'
+    || text(invoice.paymentId) !== ids.paymentId || text(invoice.contractId) !== ids.contractId) {
+    fail('deployed adminApprovePayment did not produce the required test-only approved activation');
+  }
+  console.log('[prepare-application-evidence] created approved test-only Broker activation paymentHash=' + sha256(ids.paymentId).slice(0, 12) + '…');
+  return { payment: { id: ids.paymentId, data: payment }, contractId: ids.contractId, contract, ownerUid: ids.ownerUid, intakeId: ids.intakeId, propertyId: ids.propertyId, invoice: { id: invoiceId, data: invoice } };
+}
+
 async function main() {
   assertProtectedContext();
   const selectedGate = text(process.env.OPERATIONAL_GATE);
@@ -791,6 +940,12 @@ async function main() {
   if (text(process.env.APPLICATION_PREPARATION_MODE) === 'cleanup-renewal') {
     if (!['all', 'renewalScheduler'].includes(selectedGate)) fail('renewal evidence cleanup is not selected for this gate');
     await cleanupRenewalSchedulerEvidence({ db });
+    return;
+  }
+
+  if (text(process.env.APPLICATION_PREPARATION_MODE) === 'cleanup-broker') {
+    if (!['all', 'brokerCommissionLockExactlyOnce'].includes(selectedGate)) fail('Broker evidence cleanup is not selected for this gate');
+    await cleanupBrokerActivationEvidence({ db });
     return;
   }
 
