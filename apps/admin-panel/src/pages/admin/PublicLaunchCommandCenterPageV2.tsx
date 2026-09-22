@@ -19,7 +19,6 @@ import {
   PHASE1_PAYMENT_POLICY,
   evidenceCountsForPublicLaunch,
   evidenceLayerSatisfies,
-  isProtectedLaunchEvidenceRecord,
   normalizeCommitSha,
   requiredEvidenceLayerForGate,
   type LaunchEvidenceLayer,
@@ -55,7 +54,6 @@ type LaunchEvidence = {
   proofRef?: string;
   notes?: string;
   source?: string;
-  executionGenerated?: boolean | null;
   hardLaunchClaim?: boolean;
   recordedByEmail?: string | null;
   createdAt?: any;
@@ -81,7 +79,6 @@ type SignedInSmokeRecord = {
   proofRef?: string;
   notes?: string;
   source?: string;
-  executionGenerated?: boolean | null;
   hardLaunchClaim?: boolean;
   recordedByEmail?: string | null;
   createdAt?: any;
@@ -275,12 +272,7 @@ export default function PublicLaunchCommandCenterPageV2() {
     if (!RELEASE_SHA) return map;
     for (const item of evidence) {
       if (evidenceSha(item) !== RELEASE_SHA) continue;
-      const existing = map.get(item.gateId);
-      const itemProtected = isProtectedLaunchEvidenceRecord(item, RELEASE_SHA);
-      const existingProtected = isProtectedLaunchEvidenceRecord(existing, RELEASE_SHA);
-      // Protected GitHub evidence is authoritative. A newer manual Admin note
-      // must never shadow a valid execution-generated record for the same gate.
-      if (!existing || (itemProtected && !existingProtected)) map.set(item.gateId, item);
+      if (!map.has(item.gateId)) map.set(item.gateId, item);
     }
     return map;
   }, [evidence]);
@@ -290,10 +282,7 @@ export default function PublicLaunchCommandCenterPageV2() {
     if (!RELEASE_SHA) return map;
     for (const item of smokeRecords) {
       if (evidenceSha(item) !== RELEASE_SHA) continue;
-      const existing = map.get(item.role);
-      const itemProtected = isProtectedLaunchEvidenceRecord(item, RELEASE_SHA);
-      const existingProtected = isProtectedLaunchEvidenceRecord(existing, RELEASE_SHA);
-      if (!existing || (itemProtected && !existingProtected)) map.set(item.role, item);
+      if (!map.has(item.role)) map.set(item.role, item);
     }
     return map;
   }, [smokeRecords]);
@@ -307,10 +296,7 @@ export default function PublicLaunchCommandCenterPageV2() {
     requiredEvidenceLayerForGate(gate.id, gate.group),
   );
   const passedCount = requiredGates.filter(gatePassed).length;
-  const blockedCount = requiredGates.filter((gate) => {
-    const record = currentEvidenceByGate.get(gate.id);
-    return isProtectedLaunchEvidenceRecord(record, RELEASE_SHA) && record?.status === 'blocked';
-  }).length;
+  const blockedCount = requiredGates.filter((gate) => currentEvidenceByGate.get(gate.id)?.status === 'blocked').length;
   const pendingRequired = requiredGates.length - passedCount - blockedCount;
   const evidenceCoverage = Math.round((passedCount / Math.max(requiredGates.length, 1)) * 100);
   const selected = LAUNCH_GATES.find((gate) => gate.id === selectedGate) || LAUNCH_GATES[0];
@@ -339,10 +325,7 @@ export default function PublicLaunchCommandCenterPageV2() {
     return groups.map((group) => {
       const gates = LAUNCH_GATES.filter((gate) => gate.group === group && gate.required);
       const passed = gates.filter(gatePassed).length;
-      const blocked = gates.filter((gate) => {
-        const record = currentEvidenceByGate.get(gate.id);
-        return isProtectedLaunchEvidenceRecord(record, RELEASE_SHA) && record?.status === 'blocked';
-      }).length;
+      const blocked = gates.filter((gate) => currentEvidenceByGate.get(gate.id)?.status === 'blocked').length;
       const pending = gates.length - passed - blocked;
       return { group, total: gates.length, passed, blocked, pending, score: Math.round((passed / Math.max(gates.length, 1)) * 100) };
     });
@@ -636,7 +619,7 @@ export default function PublicLaunchCommandCenterPageV2() {
           <Paper sx={{ p: 3, borderRadius: 4, bgcolor: 'rgba(255,255,255,.045)', border: `1px solid ${alpha(binThemeTokens.gold, .18)}` }}>
             <Stack spacing={2}>
               <Typography variant="h5" fontWeight={950}>Record exact-SHA evidence</Typography>
-              {selectedEvidence && evidenceAuthoritative && <Alert severity={gatePassed(selected) ? 'success' : isProtectedLaunchEvidenceRecord(selectedEvidence, RELEASE_SHA) && selectedEvidence.status === 'blocked' ? 'error' : 'warning'}>Authoritative current-SHA evidence: {selectedEvidence.status} · layer {selectedEvidence.evidenceLayer || 'missing'} · required {selectedRequiredLayer} · source {selectedEvidence.source || 'unknown'} · {selectedEvidence.proofRef || 'no proof reference'}.</Alert>}
+              {selectedEvidence && evidenceAuthoritative && <Alert severity={gatePassed(selected) ? 'success' : selectedEvidence.status === 'blocked' ? 'error' : 'warning'}>Latest current-SHA evidence: {selectedEvidence.status} · layer {selectedEvidence.evidenceLayer || 'missing'} · required {selectedRequiredLayer} · {selectedEvidence.proofRef || 'no proof reference'}.</Alert>}
               {!evidenceAuthoritative && <Alert severity="error">Evidence recording is disabled until the exact release SHA and Firestore access are available.</Alert>}
               {notice && <Alert severity={notice.includes('saved') || notice.includes('refreshed') || notice.includes('recorded') ? 'success' : 'warning'}>{notice}</Alert>}
               <TextField select label="Launch evidence gate" value={selectedGate} onChange={(event) => selectGate(event.target.value)}>{LAUNCH_GATES.map((gate) => <MenuItem key={gate.id} value={gate.id}>{gate.title}</MenuItem>)}</TextField>
