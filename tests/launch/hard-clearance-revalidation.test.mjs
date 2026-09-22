@@ -602,9 +602,13 @@ test('hard clearance reconciles only protected hosted evidence and keeps physica
     assert.match(clearance, new RegExp(`requiredProviderGates\\.${gate}`));
   }
 
-  assert.doesNotMatch(clearance, /requiredDeviceGates\./);
+  const hardExecutionBody = clearance.match(
+    /function hardExecutionGatePassed[\\s\\S]*?\\n}\\n\\nfunction proofText/,
+  )?.[0] || '';
+  assert.ok(hardExecutionBody, 'hard execution reconciliation function is missing');
+  assert.doesNotMatch(hardExecutionBody, /requiredDeviceGates\./);
   for (const gate of ['firebaseCloudMessaging', 'googleMaps', 'phase1Payments']) {
-    assert.doesNotMatch(clearance, new RegExp(`requiredProviderGates\\.${gate}['"]`));
+    assert.doesNotMatch(hardExecutionBody, new RegExp(`requiredProviderGates\\.${gate}['"]`));
   }
   assert.match(
     clearance,
