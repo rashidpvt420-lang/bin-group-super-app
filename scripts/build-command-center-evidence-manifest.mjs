@@ -41,7 +41,7 @@ if (!DIGEST_PATTERN.test(sourceArtifactDigest)) fail('SOURCE_EVIDENCE_ARTIFACT_D
 
 const expectedArtifactName = mode === 'live-role-smoke'
   ? `live-launch-evidence-${releaseSha}`
-  : `production-deployment-${releaseSha}`;
+  : `production-deployment-${releaseSha}-${workflowRunId}`;
 if (sourceArtifactName !== expectedArtifactName) {
   fail(`source artifact name mismatch (have=${sourceArtifactName} want=${expectedArtifactName})`);
 }
