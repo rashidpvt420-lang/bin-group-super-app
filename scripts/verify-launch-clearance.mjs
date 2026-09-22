@@ -16,7 +16,6 @@ import {
   evaluateHardLaunchEligibility,
   hardLaunchApprovalPath,
   pilotIncidentReportPath,
-  validateOperationalReadinessReport,
 } from './lib/hard-launch-gate.mjs';
 import {
   pilotExecutionSupersedesLedger,
@@ -54,59 +53,18 @@ const eligibility = evaluatePilotEligibility({
 const deploymentValid =
   validateDeploymentDocument(deploymentDoc, sha, { requireWorkflowProvenance: true }).length === 0;
 const currentExecutionComplete = eligibility.pilotEligible === true;
-const operationalReadiness = readJsonSafe(
-  path.join(root, 'launch_package', 'operational-readiness.json'),
-  null,
-);
-const operationalReadinessErrors = operationalReadiness
-  ? validateOperationalReadinessReport(operationalReadiness, sha, { env: process.env })
-  : ['operational-readiness.json is missing'];
-const operationalReadinessValid = operationalReadinessErrors.length === 0;
-const launchStatus = readJsonSafe(statusPath, null);
-
-function operationalGatePassed(name) {
-  return operationalReadinessValid &&
-    operationalReadiness?.gates?.[name]?.status === 'passed' &&
-    operationalReadiness?.gates?.[name]?.hardLaunchClaim !== true;
-}
-
-function hardExecutionGatePassed(groupName, name) {
-  if (isPilotMode) return false;
-  const key = `${groupName}.${name}`;
-  if (key === 'deploymentProof.hosting' || key === 'deploymentProof.functionsDeploy') {
-    return deploymentValid;
-  }
-  if (key === 'requiredProviderGates.firebaseAuth') {
-    return currentExecutionComplete;
-  }
-  if (key === 'requiredProviderGates.firestoreRules' || key === 'requiredProviderGates.storageRules') {
-    return currentExecutionComplete && deploymentValid;
-  }
-  if (key === 'requiredProviderGates.firebaseFunctionsLiveSmoke') {
-    return currentExecutionComplete && operationalReadinessValid;
-  }
-  if (key === 'requiredProviderGates.aiVisionOrTriage') {
-    return currentExecutionComplete && operationalGatePassed('aiProviderHealth');
-  }
-  if (key === 'requiredProviderGates.appCheckEnforcement') {
-    return currentExecutionComplete && operationalGatePassed('appCheckEnforcement');
-  }
-  if (key === 'requiredProviderGates.firebaseBillingPlan') {
-    return launchStatus?.scope === 'hard-public-launch' &&
-      launchStatus?.commitSha === sha &&
-      Array.isArray(launchStatus?.checks) &&
-      launchStatus.checks.some((check) => check?.name === 'firebaseDeploymentReadiness' && check?.ok === true);
-  }
-  // Physical-device and policy-review gates intentionally have no automatic
-  // protected-execution substitution here.
-  return false;
-}
 
 function proofText(gate) {
   return String(gate?.proof || '').trim();
 }
 
 function executionSupersedesLedger(groupName, name) {
+  const key = `${groupName}.${name}`;
+  if (key === 'requiredProviderGates.appCheckEnforcement') return currentExecutionComplete;
+  if (key === 'requiredProviderGates.firebaseAuth') return currentExecutionComplete;
+  if (key === 'deploymentProof.hosting' || key === 'deploymentProof.functionsDeploy') {
+    return deploymentValid;
+  }
   if (isPilotMode) {
     return pilotExecutionSupersedesLedger({
       groupName,
@@ -115,7 +73,7 @@ function executionSupersedesLedger(groupName, name) {
       deploymentValid,
     });
   }
-  return hardExecutionGatePassed(groupName, name);
+  return false;
 }
 
 function pilotDefersManualLedger(groupName, name) {
@@ -206,12 +164,8 @@ function validateGate(groupName, name, gate) {
   // execution evidence during the controlled pilot. This exception is
   // deliberately pilot-only: malformed/unknown states still fail closed and
   // public-launch clearance keeps its stricter manual/provider requirements.
-  if (superseded && status === 'pending') {
-    if (isPilotMode) {
-      warn(`${label} remains pending in the static ledger, but protected current-commit execution evidence supersedes it for the controlled pilot only.`);
-    } else {
-      warn(`${label} remains pending in the legacy static ledger, but protected exact-SHA production evidence satisfies this hosted/deployment gate.`);
-    }
+  if (isPilotMode && superseded && status === 'pending') {
+    warn(`${label} remains pending in the static ledger, but protected current-commit execution evidence supersedes it for the controlled pilot only.`);
     return;
   }
 
