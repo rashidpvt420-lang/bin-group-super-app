@@ -615,7 +615,7 @@ test('hard clearance keeps physical-device gates fail-closed unless exact review
     'requiredProviderGates.appCheckEnforcement',
     'requiredProviderGates.uaeDataResidencyPosition',
   ]) {
-    assert.match(reconciler, new RegExp(gate.replace('.', '\\\\.')));
+    assert.match(reconciler, new RegExp(gate.replace('.', '\\.')));
   }
   assert.match(reconciler, /refusing to reconcile non-hosted gate/);
 
