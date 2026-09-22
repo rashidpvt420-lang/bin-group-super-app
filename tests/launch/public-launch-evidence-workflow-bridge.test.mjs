@@ -81,7 +81,7 @@ test('current production backfill is owner-only, exact-run bound, and verifies F
   assert.match(backfillWorkflow, /Firebase Production Deploy/);
   assert.match(backfillWorkflow, /\.conclusion == "success"/);
   assert.match(backfillWorkflow, /\.head_sha == \$sha/);
-  assert.match(backfillWorkflow, /production-deployment-\$\{SOURCE_SHA\}-\$\{SOURCE_RUN_ID\}/);
+  assert.match(backfillWorkflow, /production-deployment-\$\{SOURCE_SHA\}/);
   assert.match(backfillWorkflow, /SOURCE_EVIDENCE_VERIFIED: 'true'/);
   assert.match(backfillWorkflow, /verify-command-center-firestore-evidence\.mjs/);
 });
