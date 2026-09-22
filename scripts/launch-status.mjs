@@ -77,6 +77,13 @@ const required = [
   ...(consumeHardClearanceRevalidation
     ? []
     : [{ name: 'productionDeployment', cmd: 'node', args: ['scripts/verify-production-deployment.mjs'] }]),
+  ...(hardMode
+    ? [{
+        name: 'firebaseDeploymentReadiness',
+        cmd: 'node',
+        args: ['scripts/verify-firebase-deployment-readiness.mjs'],
+      }]
+    : []),
   { name: 'pilotClearance', cmd: 'node', args: ['scripts/verify-launch-clearance.mjs', '--pilot'] },
 ];
 
