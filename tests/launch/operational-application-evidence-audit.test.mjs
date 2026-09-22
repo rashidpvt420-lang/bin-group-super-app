@@ -97,6 +97,11 @@ test('application evidence workflow is protected and auto-discovers fixed produc
   assert.match(workflow, /expected_commit_sha.*GITHUB_SHA/s);
   assert.match(workflow, /google-github-actions\/auth@v2/);
   assert.match(workflow, /Install Chromium for protected Tenant FCM registration/);
+  assert.match(workflow, /Synchronize protected E2E Tenant credential/);
+  assert.match(workflow, /claims\.testAccount !== true \|\| profile\.testAccount !== true \|\| role !== 'tenant'/);
+  assert.match(workflow, /refusing to synchronize password for a non-canonical E2E Tenant identity/);
+  assert.match(workflow, /auth\.updateUser\(user\.uid, \{ password, disabled: false, emailVerified: true \}\)/);
+  assert.match(workflow, /canonical Founder account may never be used as the E2E Tenant/);
   assert.match(workflow, /E2E_TENANT_EMAIL:\s*\$\{\{ secrets\.E2E_TENANT_EMAIL \}\}/);
   assert.match(workflow, /E2E_TENANT_PASSWORD:\s*\$\{\{ secrets\.E2E_TENANT_PASSWORD \}\}/);
   assert.match(workflow, /run-frozen-release-evidence\.mjs scripts\/prepare-operational-application-evidence\.mjs/);
