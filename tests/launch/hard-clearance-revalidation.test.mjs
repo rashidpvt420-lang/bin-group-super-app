@@ -632,3 +632,17 @@ test('hard clearance reconciles only protected hosted evidence and keeps pending
   assert.doesNotMatch(reconciler, /pilot-start\.lock\.json/);
   assert.doesNotMatch(workflow, /restart.*24-hour|reset.*pilot/i);
 });
+
+
+test('all operational evidence workflows allow the reviewed hard-clearance reconciliation controls', async () => {
+  for (const file of [
+    '.github/workflows/operational-application-evidence.yml',
+    '.github/workflows/operational-provider-evidence.yml',
+    '.github/workflows/privileged-access-rotation-evidence.yml',
+    '.github/workflows/technician-physical-evidence.yml',
+  ]) {
+    const workflow = await read(file);
+    assert.match(workflow, /scripts\/verify-launch-clearance\\\.mjs/);
+    assert.match(workflow, /scripts\/reconcile-hard-public-evidence\\\.mjs/);
+  }
+});
