@@ -576,3 +576,46 @@ test('frozen runtime repair pins renewal PDF storage hotfix and proves it live',
   assert.match(aiJob, /if: github\.event_name == 'workflow_dispatch'/);
 });
 
+
+
+test('hard clearance reconciles only protected hosted evidence and keeps physical-device gates fail-closed', async () => {
+  const workflow = await read('.github/workflows/live-role-smoke.yml');
+  const clearance = await read('scripts/verify-launch-clearance.mjs');
+  const status = await read('scripts/launch-status.mjs');
+
+  assert.match(
+    workflow,
+    /cp control-plane\/scripts\/verify-launch-clearance\.mjs release\/scripts\/verify-launch-clearance\.mjs/,
+  );
+  assert.match(workflow, /scripts\/verify-launch-clearance\\\.mjs/);
+
+  assert.match(clearance, /function hardExecutionGatePassed/);
+  for (const gate of [
+    'firebaseAuth',
+    'firestoreRules',
+    'storageRules',
+    'firebaseFunctionsLiveSmoke',
+    'aiVisionOrTriage',
+    'appCheckEnforcement',
+    'firebaseBillingPlan',
+  ]) {
+    assert.match(clearance, new RegExp(`requiredProviderGates\\.${gate}`));
+  }
+
+  assert.doesNotMatch(clearance, /requiredDeviceGates\./);
+  for (const gate of ['firebaseCloudMessaging', 'googleMaps', 'phase1Payments']) {
+    assert.doesNotMatch(clearance, new RegExp(`requiredProviderGates\\.${gate}['"]`));
+  }
+  assert.match(
+    clearance,
+    /Physical-device and policy-review gates intentionally have no automatic/,
+  );
+
+  assert.match(status, /name: 'firebaseDeploymentReadiness'/);
+  assert.match(status, /verify-firebase-deployment-readiness\.mjs/);
+  assert.match(status, /\.\.\.\(hardMode/);
+
+  // The completed pilot is consumed, not rewritten or restarted by this repair.
+  assert.doesNotMatch(clearance, /pilot-start\.lock\.json[^\n]*writeFileSync/);
+  assert.doesNotMatch(workflow, /restart.*24-hour|reset.*pilot/i);
+});
