@@ -51,9 +51,9 @@ jobs:
       COMMAND_BODY: ${{ github.event.comment.body }}
       EXPECTED_REPOSITORY: rashidpvt420-lang/bin-group-super-app
       EXPECTED_REPOSITORY_ID: '1173943093'
-      FROZEN_RELEASE_SHA: 15b09519222e749808c2a18b5d1ab1c3126fcb42
-      FROZEN_DEPLOY_RUN_ID: '34500748478'
-      FROZEN_LIVE_EVIDENCE_RUN_ID: '34515320876'
+      FROZEN_RELEASE_SHA: 7667ff54f9c43e07f78b3710578cd132b1bc7963
+      FROZEN_DEPLOY_RUN_ID: '35520810688'
+      FROZEN_LIVE_EVIDENCE_RUN_ID: '35529478370'
     steps:
       - name: Validate exact owner command and current main
         id: command
@@ -225,7 +225,7 @@ jobs:
               dispatch technician-physical-evidence.yml dispatch.json
               ;;
             hard-clearance)
-              clearance_payload='{"confirmation":"AUTHORIZE_HARD_PUBLIC_LAUNCH_BIN_GROUP","incident_confirmation":"NO_OPEN_P0_P1","rollback_confirmation":"ROLLBACK_PLAN_VERIFIED","open_p0":"0","open_p1":"0","incident_reference":"https://github.com/rashidpvt420-lang/bin-group-super-app/actions/runs/34515320876","rollback_reference":"https://github.com/rashidpvt420-lang/bin-group-super-app/actions/runs/34500748478","monitoring_reference":"https://github.com/rashidpvt420-lang/bin-group-super-app/issues/1166"}'
+              clearance_payload='{"confirmation":"AUTHORIZE_HARD_PUBLIC_LAUNCH_BIN_GROUP","incident_confirmation":"NO_OPEN_P0_P1","rollback_confirmation":"ROLLBACK_PLAN_VERIFIED","open_p0":"0","open_p1":"0","incident_reference":"https://github.com/rashidpvt420-lang/bin-group-super-app/actions/runs/35529478370","rollback_reference":"https://github.com/rashidpvt420-lang/bin-group-super-app/actions/runs/35520810688","monitoring_reference":"https://github.com/rashidpvt420-lang/bin-group-super-app/issues/1166"}'
               jq -n \
                 --arg ref main \
                 --arg release "$RELEASE_SHA" \
