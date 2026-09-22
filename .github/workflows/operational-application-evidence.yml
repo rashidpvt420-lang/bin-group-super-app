@@ -405,8 +405,8 @@ jobs:
           [[ "$GITHUB_REPOSITORY_ID" == "1173943093" ]]
           [[ "$GITHUB_REF" == "refs/heads/main" && "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]
           [[ "$TARGET_SHA" =~ ^[0-9a-f]{40}$ && "$TARGET_SHA" == "$GITHUB_SHA" ]]
-          [[ "$RELEASE_SHA" == "26b3609457fa80a70db56767db7c85be01d7b015" ]]
-          [[ "$DEPLOY_RUN_ID" == "35236281371" ]]
+          [[ "$RELEASE_SHA" == "7667ff54f9c43e07f78b3710578cd132b1bc7963" ]]
+          [[ "$DEPLOY_RUN_ID" == "35520810688" ]]
           case "$OPERATION/$SELECTED_GATE" in
             verify/all|verify/paymentUnlockExactlyOnce|verify/brokerCommissionLockExactlyOnce) ;;
             sync/paymentUnlockExactlyOnce|repair-and-sync/paymentUnlockExactlyOnce) ;;
@@ -559,8 +559,8 @@ jobs:
               REPAIR_SOURCE_ENVIRONMENT: 'production',
               REPAIR_TARGET_ENVIRONMENT: 'hard-public-launch',
               GCP_PROJECT_ID: 'bin-group-57c60',
-              PRODUCTION_RELEASE_SHA: '26b3609457fa80a70db56767db7c85be01d7b015',
-              PRODUCTION_DEPLOY_RUN_ID: '35236281371',
+              PRODUCTION_RELEASE_SHA: '7667ff54f9c43e07f78b3710578cd132b1bc7963',
+              PRODUCTION_DEPLOY_RUN_ID: '35520810688',
             };
             for (const [name, value] of Object.entries(required)) {
               if (env[name] !== value) throw new Error(`Credential repair context mismatch: ${name}.`);
