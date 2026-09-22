@@ -578,48 +578,57 @@ test('frozen runtime repair pins renewal PDF storage hotfix and proves it live',
 
 
 
-test('hard clearance reconciles only protected hosted evidence and keeps physical-device gates fail-closed', async () => {
+test('hard clearance reconciles only protected hosted evidence and keeps pending physical-device gates fail-closed', async () => {
   const workflow = await read('.github/workflows/live-role-smoke.yml');
   const clearance = await read('scripts/verify-launch-clearance.mjs');
+  const reconciler = await read('scripts/reconcile-hard-public-evidence.mjs');
   const status = await read('scripts/launch-status.mjs');
 
   assert.match(
     workflow,
-    /cp control-plane\/scripts\/verify-launch-clearance\.mjs release\/scripts\/verify-launch-clearance\.mjs/,
+    /cp control-plane\/scripts\/reconcile-hard-public-evidence\.mjs release\/scripts\/reconcile-hard-public-evidence\.mjs/,
   );
-  assert.match(workflow, /scripts\/verify-launch-clearance\\\.mjs/);
-
-  assert.match(clearance, /function hardExecutionGatePassed/);
-  for (const gate of [
-    'firebaseAuth',
-    'firestoreRules',
-    'storageRules',
-    'firebaseFunctionsLiveSmoke',
-    'aiVisionOrTriage',
-    'appCheckEnforcement',
-    'firebaseBillingPlan',
-  ]) {
-    assert.match(clearance, new RegExp(`requiredProviderGates\\.${gate}`));
-  }
-
-  const hardExecutionBody = clearance.match(
-    /function hardExecutionGatePassed[\\s\\S]*?\\n}\\n\\nfunction proofText/,
-  )?.[0] || '';
-  assert.ok(hardExecutionBody, 'hard execution reconciliation function is missing');
-  assert.doesNotMatch(hardExecutionBody, /requiredDeviceGates\./);
-  for (const gate of ['firebaseCloudMessaging', 'googleMaps', 'phase1Payments']) {
-    assert.doesNotMatch(hardExecutionBody, new RegExp(`requiredProviderGates\\.${gate}['"]`));
-  }
   assert.match(
-    clearance,
-    /Physical-device and policy-review gates intentionally have no automatic/,
+    workflow,
+    /node scripts\/launch-status\.mjs --hard[\s\S]*?node scripts\/reconcile-hard-public-evidence\.mjs[\s\S]*?npm run launch:hard-gate/,
   );
+
+  // Public clearance still permits pending-ledger supersession only in pilot mode.
+  assert.match(clearance, /if \(isPilotMode && superseded && status === 'pending'\)/);
+  assert.doesNotMatch(clearance, /if \(superseded && status === 'pending'\)/);
+  assert.match(clearance, /validateProtectedExecutionArtifact/);
+  assert.match(clearance, /gate\.evidenceType === 'protected-execution'/);
+  assert.match(clearance, /protected execution reconciliation is allowed only for hosted gates/);
+  assert.match(clearance, /controlPlaneCommitSha must be a full lowercase SHA/);
+  assert.match(clearance, /protected proof workflow provenance mismatch/);
+
+  // Reconciler is explicit about hosted gates and never enumerates device gates.
+  for (const gate of [
+    'deploymentProof.hosting',
+    'deploymentProof.functionsDeploy',
+    'requiredProviderGates.firebaseAuth',
+    'requiredProviderGates.firestoreRules',
+    'requiredProviderGates.storageRules',
+    'requiredProviderGates.firebaseFunctionsLiveSmoke',
+    'requiredProviderGates.aiVisionOrTriage',
+    'requiredProviderGates.firebaseBillingPlan',
+    'requiredProviderGates.appCheckEnforcement',
+  ]) {
+    assert.match(reconciler, new RegExp(gate.replace('.', '\\.')));
+  }
+  assert.match(reconciler, /refusing to reconcile non-hosted gate/);
+  assert.match(reconciler, /physicalDeviceGatesModified: false/);
+  assert.match(reconciler, /policyReviewGatesModified: false/);
+  assert.doesNotMatch(reconciler, /requiredDeviceGates\./);
+  for (const gate of ['firebaseCloudMessaging', 'googleMaps', 'phase1Payments']) {
+    assert.doesNotMatch(reconciler, new RegExp(`requiredProviderGates\\.${gate}`));
+  }
 
   assert.match(status, /name: 'firebaseDeploymentReadiness'/);
   assert.match(status, /verify-firebase-deployment-readiness\.mjs/);
   assert.match(status, /\.\.\.\(hardMode/);
 
-  // The completed pilot is consumed, not rewritten or restarted by this repair.
-  assert.doesNotMatch(clearance, /pilot-start\.lock\.json[^\n]*writeFileSync/);
+  // This repair consumes the existing pilot and never rewrites/restarts it.
+  assert.doesNotMatch(reconciler, /pilot-start\.lock\.json/);
   assert.doesNotMatch(workflow, /restart.*24-hour|reset.*pilot/i);
 });
