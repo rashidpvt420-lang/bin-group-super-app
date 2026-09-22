@@ -139,6 +139,34 @@ function validateManualArtifact(groupName, name, gate) {
   return errors;
 }
 
+
+function validateProtectedExecutionArtifact(groupName, name, gate) {
+  const label = `${groupName}.${name}`;
+  const errors = [];
+  if (gate.evidenceType !== 'protected-execution') errors.push(`${label} evidenceType must be protected-execution.`);
+  if (gate.executionGenerated !== true) errors.push(`${label} executionGenerated must equal true.`);
+  if (gate.hardLaunchClaim !== false) errors.push(`${label} hardLaunchClaim must remain false.`);
+  if (String(gate.commitSha || '').toLowerCase() !== sha) errors.push(`${label} protected proof belongs to a different commit SHA.`);
+  if (String(gate.releaseSha || '').toLowerCase() !== sha) errors.push(`${label} protected proof releaseSha mismatch.`);
+  const controlPlaneSha = String(gate.controlPlaneCommitSha || '').toLowerCase();
+  if (!/^[0-9a-f]{40}$/.test(controlPlaneSha)) errors.push(`${label} controlPlaneCommitSha must be a full lowercase SHA.`);
+  if (String(gate.reconciledByWorkflow || '') !== 'Live Role Smoke Tests') {
+    errors.push(`${label} protected proof workflow provenance mismatch.`);
+  }
+  const reconciledAt = Date.parse(String(gate.reconciledAt || ''));
+  if (!Number.isFinite(reconciledAt)) {
+    errors.push(`${label} reconciledAt must be a valid ISO timestamp.`);
+  } else {
+    if (reconciledAt > Date.now() + MAX_CLOCK_SKEW_MS) errors.push(`${label} reconciledAt is in the future.`);
+    if (Date.now() - reconciledAt > MANUAL_EVIDENCE_MAX_AGE_MS) errors.push(`${label} protected proof is older than 30 days.`);
+  }
+  if (String(gate.evidenceLayerRequired || '') !== 'hosted') {
+    errors.push(`${label} protected execution reconciliation is allowed only for hosted gates.`);
+  }
+  if (!proofText(gate)) errors.push(`${label} protected execution proof text is required.`);
+  return errors;
+}
+
 function validateGate(groupName, name, gate) {
   if (!gate || typeof gate !== 'object') {
     fail(`${groupName}.${name} is malformed or missing.`);
@@ -171,6 +199,10 @@ function validateGate(groupName, name, gate) {
 
   if (status === 'passed') {
     if (superseded) return;
+    if (gate.evidenceType === 'protected-execution') {
+      for (const error of validateProtectedExecutionArtifact(groupName, name, gate)) fail(error);
+      return;
+    }
     const manualErrors = validateManualArtifact(groupName, name, gate);
     if (deferredForPilot) {
       if (manualErrors.length) {
