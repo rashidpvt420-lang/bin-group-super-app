@@ -97,6 +97,16 @@ test('hard clearance freshly revalidates production state without moving the fro
   assert.match(workflow, /node scripts\/resolve-live-pilot-window\.mjs/);
   assert.match(workflow, /hard-clearance-production-revalidation-\$\{\{ inputs\.expected_commit_sha \}\}/);
   assert.match(workflow, /HARD_CLEARANCE_REVALIDATION_MODE: consume/);
+  assert.match(workflow, /Resolve exact successful live evidence run/);
+  assert.match(workflow, /REQUESTED_RUN_ID: \$\{\{ inputs\.live_evidence_run_id \}\}/);
+  assert.match(workflow, /\.head_sha == \$sha/);
+  assert.match(workflow, /\.path == "\.github\/workflows\/live-role-smoke\.yml"/);
+  assert.match(workflow, /\.conclusion == "success"/);
+  assert.match(workflow, /\.expired == false/);
+  assert.match(workflow, /Expected exactly one successful live-evidence run with the exact frozen-release artifact/);
+  assert.match(workflow, /live_evidence_run_id: \$\{\{ steps\.resolve_live_evidence\.outputs\.run_id \}\}/);
+  assert.match(workflow, /run-id: \$\{\{ steps\.resolve_live_evidence\.outputs\.run_id \}\}/);
+  assert.match(workflow, /LIVE_RUN_ID: \$\{\{ needs\.hard-clearance-production-revalidation\.outputs\.live_evidence_run_id \}\}/);
 
   const revalidationJob = workflow.slice(
     workflow.indexOf('  hard-clearance-production-revalidation:'),
