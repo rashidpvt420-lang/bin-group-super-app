@@ -367,6 +367,15 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           E2E_BASE_URL: https://bin-group-57c60.web.app
+          VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
+          VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
+          VITE_FIREBASE_APPCHECK_DEBUG_TOKEN: ${{ secrets.VITE_FIREBASE_APPCHECK_DEBUG_TOKEN }}
+          E2E_TENANT_EMAIL: ${{ secrets.E2E_TENANT_EMAIL }}
+          E2E_TENANT_PASSWORD: ${{ secrets.E2E_TENANT_PASSWORD }}
+          E2E_BROKER_MAILBOX_EMAIL: ${{ vars.E2E_BROKER_MAILBOX_EMAIL || secrets.E2E_BROKER_MAILBOX_EMAIL }}
+          E2E_FOUNDER_EMAIL: ${{ secrets.E2E_FOUNDER_EMAIL }}
+          E2E_FOUNDER_PASSWORD: ${{ secrets.E2E_FOUNDER_PASSWORD }}
+          E2E_FOUNDER_TOTP_SECRET: ${{ secrets.E2E_FOUNDER_TOTP_SECRET }}
           APPLICATION_PREPARATION_MODE: cleanup-broker
         run: node ../control-plane/scripts/run-frozen-release-evidence.mjs scripts/prepare-operational-application-evidence.mjs
 
