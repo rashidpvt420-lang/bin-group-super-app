@@ -655,6 +655,128 @@ async function prepareRenewalSchedulerEvidence({ db, auth, apiKey, appId, debugT
   }
 }
 
+async function prepareBrokerCommissionEvidence({ db, auth, apiKey, appId, debugToken }) {
+  const brokerMailboxEmail = lower(process.env.E2E_BROKER_MAILBOX_EMAIL);
+  if (!/^\S+@\S+\.\S+$/.test(brokerMailboxEmail)) fail('canonical protected Broker mailbox email is missing or invalid');
+  const brokerRecord = await auth.getUserByEmail(brokerMailboxEmail).catch(() => null);
+  if (!brokerRecord?.uid || brokerRecord.disabled === true || brokerRecord.emailVerified !== true) {
+    fail('canonical protected Broker Auth account is missing, disabled, or unverified');
+  }
+  const brokerProfileSnapshot = await db.collection('users').doc(brokerRecord.uid).get();
+  if (!brokerProfileSnapshot.exists) fail('canonical protected Broker profile is missing');
+  const brokerProfile = brokerProfileSnapshot.data() || {};
+  if (
+    brokerProfile.e2eLaunchSeed !== true
+    || lower(brokerProfile.role || brokerProfile.userRole || brokerProfile.primaryRole) !== 'broker'
+    || lower(brokerProfile.email) !== brokerMailboxEmail
+    || brokerProfile.suspended === true
+  ) fail('canonical protected Broker profile does not match the production evidence identity');
+  const broker = { id: brokerRecord.uid, data: brokerProfile };
+
+  const paymentSnapshot = await db.collection('payment_transactions').where('status', '==', 'APPROVED').limit(250).get();
+  const payments = paymentSnapshot.docs
+    .map((document) => ({ id: document.id, data: document.data() || {} }))
+    .filter(({ data }) => data.paymentVerified === true && data.unlocksDashboard === true)
+    .sort((left, right) => Math.max(millis(right.data.approvedAt), millis(right.data.updatedAt), millis(right.data.createdAt))
+      - Math.max(millis(left.data.approvedAt), millis(left.data.updatedAt), millis(left.data.createdAt)));
+
+  let target = null;
+  for (const payment of payments) {
+    const contractId = text(payment.data.contractId || payment.data.intakeId || payment.id);
+    const ownerUid = text(payment.data.ownerUid || payment.data.ownerId);
+    if (!/^[A-Za-z0-9_-]{3,180}$/.test(contractId) || !/^[A-Za-z0-9_-]{3,180}$/.test(ownerUid)) continue;
+    const [contractSnapshot, ownerProfileSnapshot, invoiceSnapshot] = await Promise.all([
+      db.collection('contracts').doc(contractId).get(),
+      db.collection('users').doc(ownerUid).get(),
+      db.collection('invoices').where('contractId', '==', contractId).limit(20).get(),
+    ]);
+    if (!contractSnapshot.exists || !ownerProfileSnapshot.exists) continue;
+    const contract = contractSnapshot.data() || {};
+    const ownerProfile = ownerProfileSnapshot.data() || {};
+    const ownerRecord = await auth.getUser(ownerUid).catch(() => null);
+    if (!(ownerProfile.testAccount === true || ownerProfile.e2eLaunchSeed === true || ownerRecord?.customClaims?.testAccount === true)) continue;
+    if (ownerRecord?.disabled === true || upper(contract.status || contract.contractStatus) !== 'ACTIVE') continue;
+    const existingBrokerUid = text(contract.brokerUid || contract.brokerId);
+    if (existingBrokerUid && existingBrokerUid !== broker.id) continue;
+    const invoice = invoiceSnapshot.docs.map((document) => ({ id: document.id, data: document.data() || {} })).find(({ data }) =>
+      upper(data.status) === 'PAID'
+      && upper(data.feeType) === 'MOBILIZATION_DEPOSIT'
+      && text(data.contractId) === contractId
+      && text(data.paymentId) === payment.id
+    );
+    if (!invoice) continue;
+    target = { payment, contractId, contract, ownerUid, intakeId: text(payment.data.intakeId || contract.intakeId), propertyId: text(contract.propertyId), invoice };
+    break;
+  }
+  if (!target) {
+    target = await createApprovedBrokerActivationFixture({ db, apiKey, appId, debugToken });
+  }
+
+  const leadId = `operational_application_broker_${sha256(target.contractId).slice(0, 24)}`;
+  const leadRef = db.collection('brokerLeads').doc(leadId);
+  const existingLeadSnapshot = await leadRef.get();
+  const existingLead = existingLeadSnapshot.data() || {};
+  if (text(existingLead.brokerId || existingLead.brokerUid) && text(existingLead.brokerId || existingLead.brokerUid) !== broker.id) {
+    fail('deterministic Broker evidence lead is bound to another Broker');
+  }
+  if (lower(existingLead.status) === 'converted' && text(existingLead.matchedContractId) && text(existingLead.matchedContractId) !== target.contractId) {
+    fail('deterministic Broker evidence lead is already converted to another contract');
+  }
+  if (lower(existingLead.status) !== 'converted') {
+    const now = admin.firestore.FieldValue.serverTimestamp();
+    await leadRef.set({
+      brokerId: broker.id, brokerUid: broker.id, brokerName: text(broker.data.displayName || broker.data.name || 'E2E Broker'),
+      brokerEmail: lower(broker.data.email), brokerCode: text(broker.data.brokerCode || broker.data.affiliateCode),
+      leadName: 'Protected operational application evidence', ownerId: target.ownerUid, ownerUid: target.ownerUid,
+      intakeId: target.intakeId || null, contractId: target.contractId, propertyId: target.propertyId || null, status: 'negotiation',
+      lifecycleStatus: 'OWNER_ACTIVATION_APPROVED', attributionId: `operational_application_${sha256(`${broker.id}:${target.contractId}`).slice(0, 32)}`,
+      e2eEvidenceType: BROKER_EVIDENCE_TYPE, e2eLaunchSeed: true, createdAt: existingLead.createdAt || now, updatedAt: now,
+    }, { merge: true });
+  }
+
+  const founderEmail = lower(process.env.E2E_FOUNDER_EMAIL);
+  const founderPassword = text(process.env.E2E_FOUNDER_PASSWORD);
+  const founderTotpSecret = text(process.env.E2E_FOUNDER_TOTP_SECRET);
+  if (founderEmail !== 'ceo@bin-groups.com' || !founderPassword || !founderTotpSecret) fail('canonical Founder MFA bindings are incomplete for Broker commission preparation');
+  const founder = await signInWithRequiredTotpMfa({ apiKey, email: founderEmail, password: founderPassword, totpSecret: founderTotpSecret, referer: 'https://admin.bin-groups.com/' });
+  if (!founder?.idToken || !founder?.uid || founder.secondFactorType !== 'totp' || !founder.secondFactorIdentifier) fail('Founder TOTP verification did not return a protected second-factor session');
+
+  const exchangeEndpoint = new URL(`https://content-firebaseappcheck.googleapis.com/v1/projects/${PROJECT_ID}/apps/${encodeURIComponent(appId)}:exchangeDebugToken`);
+  exchangeEndpoint.searchParams.set('key', apiKey);
+  const exchangeResponse = await fetch(exchangeEndpoint, {
+    method: 'POST', headers: { 'content-type': 'application/json', Referer: 'https://admin.bin-groups.com/' }, body: JSON.stringify({ debugToken }),
+  });
+  const exchangePayload = await responseJson(exchangeResponse);
+  if (!exchangeResponse.ok || !text(exchangePayload?.token)) fail(`Founder App Check exchange failed with HTTP ${exchangeResponse.status}`);
+
+  const response = await fetch(ADMIN_MATCH_BROKER_ATTRIBUTION_URL, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${founder.idToken}`, 'X-Firebase-AppCheck': text(exchangePayload.token), 'content-type': 'application/json', Origin: 'https://admin.bin-groups.com', Referer: 'https://admin.bin-groups.com/' },
+    body: JSON.stringify({ data: { leadId, contractId: target.contractId, intakeId: target.intakeId || '', ownerId: target.ownerUid, propertyId: target.propertyId || '' } }),
+  });
+  const payload = await responseJson(response);
+  const result = payload?.result || payload?.data || payload;
+  const expectedCommissionId = `commission_${target.contractId}`;
+  if (!response.ok || result?.status !== 'SUCCESS' || text(result?.commissionId) !== expectedCommissionId || text(result?.brokerId) !== broker.id) {
+    fail(`deployed adminMatchBrokerAttribution did not create the exact payment-bound commission (HTTP ${response.status})`);
+  }
+
+  const [commissionSnapshot, convertedLeadSnapshot, contractAfterSnapshot, attributionAuditSnapshot, commissionQuery] = await Promise.all([
+    db.collection('broker_commissions').doc(expectedCommissionId).get(), leadRef.get(), db.collection('contracts').doc(target.contractId).get(),
+    db.collection('auditLogs').doc(`broker_attribution_${leadId}_${target.contractId}`).get(), db.collection('broker_commissions').where('contractId', '==', target.contractId).limit(20).get(),
+  ]);
+  const commission = commissionSnapshot.data() || {};
+  const convertedLead = convertedLeadSnapshot.data() || {};
+  const contractAfter = contractAfterSnapshot.data() || {};
+  const attributionAudit = attributionAuditSnapshot.data() || {};
+  if (!commissionSnapshot.exists || commissionQuery.size !== 1 || commissionQuery.docs[0].id !== expectedCommissionId || text(commission.contractId) !== target.contractId || text(commission.brokerId || commission.brokerUid) !== broker.id) fail('production Broker commission was not deterministically locked exactly once');
+  if (lower(convertedLead.status) !== 'converted' || text(convertedLead.matchedContractId) !== target.contractId || text(convertedLead.commissionId) !== expectedCommissionId || text(convertedLead.commissionCreationStatus) !== 'COMMISSION_CREATED_SERVER_SIDE') fail('production Broker lead was not converted through the deployed attribution path');
+  if (!attributionAuditSnapshot.exists || attributionAudit.action !== 'ADMIN_MATCH_BROKER_ATTRIBUTION' || text(attributionAudit.commissionId) !== expectedCommissionId || text(attributionAudit.brokerId) !== broker.id) fail('production Broker attribution audit is missing or mismatched');
+  if (contractAfter.commissionGenerated !== true || text(contractAfter.commissionId) !== expectedCommissionId || text(contractAfter.brokerId || contractAfter.brokerUid) !== broker.id) fail('production contract did not retain the deterministic Broker commission binding');
+  if (upper(target.payment.data.status) !== 'APPROVED' || target.payment.data.paymentVerified !== true || target.payment.data.unlocksDashboard !== true || upper(target.invoice.data.status) !== 'PAID' || upper(target.invoice.data.feeType) !== 'MOBILIZATION_DEPOSIT' || text(target.invoice.data.paymentId) !== target.payment.id || text(target.invoice.data.contractId) !== target.contractId) fail('Broker preparation lost the approved payment or paid mobilization invoice binding');
+  console.log(`[prepare-application-evidence] PASS gate=brokerCommissionLockExactlyOnce contractHash=${sha256(target.contractId).slice(0, 12)}… commissionHash=${sha256(expectedCommissionId).slice(0, 12)}… leadHash=${sha256(leadId).slice(0, 12)}…`);
+}
+
 function brokerActivationFixtureIds() {
   const runId = text(process.env.GITHUB_RUN_ID);
   if (!/^\d+$/.test(runId)) fail('workflow run ID is required for Broker activation fixture');
@@ -798,127 +920,6 @@ async function createApprovedBrokerActivationFixture({ db, apiKey, appId, debugT
   }
   console.log('[prepare-application-evidence] created approved test-only Broker activation paymentHash=' + sha256(ids.paymentId).slice(0, 12) + '…');
   return { payment: { id: ids.paymentId, data: payment }, contractId: ids.contractId, contract, ownerUid: ids.ownerUid, intakeId: ids.intakeId, propertyId: ids.propertyId, invoice: { id: invoiceId, data: invoice } };
-}
-async function prepareBrokerCommissionEvidence({ db, auth, apiKey, appId, debugToken }) {
-  const brokerMailboxEmail = lower(process.env.E2E_BROKER_MAILBOX_EMAIL);
-  if (!/^\S+@\S+\.\S+$/.test(brokerMailboxEmail)) fail('canonical protected Broker mailbox email is missing or invalid');
-  const brokerRecord = await auth.getUserByEmail(brokerMailboxEmail).catch(() => null);
-  if (!brokerRecord?.uid || brokerRecord.disabled === true || brokerRecord.emailVerified !== true) {
-    fail('canonical protected Broker Auth account is missing, disabled, or unverified');
-  }
-  const brokerProfileSnapshot = await db.collection('users').doc(brokerRecord.uid).get();
-  if (!brokerProfileSnapshot.exists) fail('canonical protected Broker profile is missing');
-  const brokerProfile = brokerProfileSnapshot.data() || {};
-  if (
-    brokerProfile.e2eLaunchSeed !== true
-    || lower(brokerProfile.role || brokerProfile.userRole || brokerProfile.primaryRole) !== 'broker'
-    || lower(brokerProfile.email) !== brokerMailboxEmail
-    || brokerProfile.suspended === true
-  ) fail('canonical protected Broker profile does not match the production evidence identity');
-  const broker = { id: brokerRecord.uid, data: brokerProfile };
-
-  const paymentSnapshot = await db.collection('payment_transactions').where('status', '==', 'APPROVED').limit(250).get();
-  const payments = paymentSnapshot.docs
-    .map((document) => ({ id: document.id, data: document.data() || {} }))
-    .filter(({ data }) => data.paymentVerified === true && data.unlocksDashboard === true)
-    .sort((left, right) => Math.max(millis(right.data.approvedAt), millis(right.data.updatedAt), millis(right.data.createdAt))
-      - Math.max(millis(left.data.approvedAt), millis(left.data.updatedAt), millis(left.data.createdAt)));
-
-  let target = null;
-  for (const payment of payments) {
-    const contractId = text(payment.data.contractId || payment.data.intakeId || payment.id);
-    const ownerUid = text(payment.data.ownerUid || payment.data.ownerId);
-    if (!/^[A-Za-z0-9_-]{3,180}$/.test(contractId) || !/^[A-Za-z0-9_-]{3,180}$/.test(ownerUid)) continue;
-    const [contractSnapshot, ownerProfileSnapshot, invoiceSnapshot] = await Promise.all([
-      db.collection('contracts').doc(contractId).get(),
-      db.collection('users').doc(ownerUid).get(),
-      db.collection('invoices').where('contractId', '==', contractId).limit(20).get(),
-    ]);
-    if (!contractSnapshot.exists || !ownerProfileSnapshot.exists) continue;
-    const contract = contractSnapshot.data() || {};
-    const ownerProfile = ownerProfileSnapshot.data() || {};
-    const ownerRecord = await auth.getUser(ownerUid).catch(() => null);
-    if (!(ownerProfile.testAccount === true || ownerProfile.e2eLaunchSeed === true || ownerRecord?.customClaims?.testAccount === true)) continue;
-    if (ownerRecord?.disabled === true || upper(contract.status || contract.contractStatus) !== 'ACTIVE') continue;
-    const existingBrokerUid = text(contract.brokerUid || contract.brokerId);
-    if (existingBrokerUid && existingBrokerUid !== broker.id) continue;
-    const invoice = invoiceSnapshot.docs.map((document) => ({ id: document.id, data: document.data() || {} })).find(({ data }) =>
-      upper(data.status) === 'PAID'
-      && upper(data.feeType) === 'MOBILIZATION_DEPOSIT'
-      && text(data.contractId) === contractId
-      && text(data.paymentId) === payment.id
-    );
-    if (!invoice) continue;
-    target = { payment, contractId, contract, ownerUid, intakeId: text(payment.data.intakeId || contract.intakeId), propertyId: text(contract.propertyId), invoice };
-    break;
-  }
-  if (!target) {
-    target = await createApprovedBrokerActivationFixture({ db, apiKey, appId, debugToken });
-  }
-
-  const leadId = `operational_application_broker_${sha256(target.contractId).slice(0, 24)}`;
-  const leadRef = db.collection('brokerLeads').doc(leadId);
-  const existingLeadSnapshot = await leadRef.get();
-  const existingLead = existingLeadSnapshot.data() || {};
-  if (text(existingLead.brokerId || existingLead.brokerUid) && text(existingLead.brokerId || existingLead.brokerUid) !== broker.id) {
-    fail('deterministic Broker evidence lead is bound to another Broker');
-  }
-  if (lower(existingLead.status) === 'converted' && text(existingLead.matchedContractId) && text(existingLead.matchedContractId) !== target.contractId) {
-    fail('deterministic Broker evidence lead is already converted to another contract');
-  }
-  if (lower(existingLead.status) !== 'converted') {
-    const now = admin.firestore.FieldValue.serverTimestamp();
-    await leadRef.set({
-      brokerId: broker.id, brokerUid: broker.id, brokerName: text(broker.data.displayName || broker.data.name || 'E2E Broker'),
-      brokerEmail: lower(broker.data.email), brokerCode: text(broker.data.brokerCode || broker.data.affiliateCode),
-      leadName: 'Protected operational application evidence', ownerId: target.ownerUid, ownerUid: target.ownerUid,
-      intakeId: target.intakeId || null, contractId: target.contractId, propertyId: target.propertyId || null, status: 'negotiation',
-      lifecycleStatus: 'OWNER_ACTIVATION_APPROVED', attributionId: `operational_application_${sha256(`${broker.id}:${target.contractId}`).slice(0, 32)}`,
-      e2eEvidenceType: BROKER_EVIDENCE_TYPE, e2eLaunchSeed: true, createdAt: existingLead.createdAt || now, updatedAt: now,
-    }, { merge: true });
-  }
-
-  const founderEmail = lower(process.env.E2E_FOUNDER_EMAIL);
-  const founderPassword = text(process.env.E2E_FOUNDER_PASSWORD);
-  const founderTotpSecret = text(process.env.E2E_FOUNDER_TOTP_SECRET);
-  if (founderEmail !== 'ceo@bin-groups.com' || !founderPassword || !founderTotpSecret) fail('canonical Founder MFA bindings are incomplete for Broker commission preparation');
-  const founder = await signInWithRequiredTotpMfa({ apiKey, email: founderEmail, password: founderPassword, totpSecret: founderTotpSecret, referer: 'https://admin.bin-groups.com/' });
-  if (!founder?.idToken || !founder?.uid || founder.secondFactorType !== 'totp' || !founder.secondFactorIdentifier) fail('Founder TOTP verification did not return a protected second-factor session');
-
-  const exchangeEndpoint = new URL(`https://content-firebaseappcheck.googleapis.com/v1/projects/${PROJECT_ID}/apps/${encodeURIComponent(appId)}:exchangeDebugToken`);
-  exchangeEndpoint.searchParams.set('key', apiKey);
-  const exchangeResponse = await fetch(exchangeEndpoint, {
-    method: 'POST', headers: { 'content-type': 'application/json', Referer: 'https://admin.bin-groups.com/' }, body: JSON.stringify({ debugToken }),
-  });
-  const exchangePayload = await responseJson(exchangeResponse);
-  if (!exchangeResponse.ok || !text(exchangePayload?.token)) fail(`Founder App Check exchange failed with HTTP ${exchangeResponse.status}`);
-
-  const response = await fetch(ADMIN_MATCH_BROKER_ATTRIBUTION_URL, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${founder.idToken}`, 'X-Firebase-AppCheck': text(exchangePayload.token), 'content-type': 'application/json', Origin: 'https://admin.bin-groups.com', Referer: 'https://admin.bin-groups.com/' },
-    body: JSON.stringify({ data: { leadId, contractId: target.contractId, intakeId: target.intakeId || '', ownerId: target.ownerUid, propertyId: target.propertyId || '' } }),
-  });
-  const payload = await responseJson(response);
-  const result = payload?.result || payload?.data || payload;
-  const expectedCommissionId = `commission_${target.contractId}`;
-  if (!response.ok || result?.status !== 'SUCCESS' || text(result?.commissionId) !== expectedCommissionId || text(result?.brokerId) !== broker.id) {
-    fail(`deployed adminMatchBrokerAttribution did not create the exact payment-bound commission (HTTP ${response.status})`);
-  }
-
-  const [commissionSnapshot, convertedLeadSnapshot, contractAfterSnapshot, attributionAuditSnapshot, commissionQuery] = await Promise.all([
-    db.collection('broker_commissions').doc(expectedCommissionId).get(), leadRef.get(), db.collection('contracts').doc(target.contractId).get(),
-    db.collection('auditLogs').doc(`broker_attribution_${leadId}_${target.contractId}`).get(), db.collection('broker_commissions').where('contractId', '==', target.contractId).limit(20).get(),
-  ]);
-  const commission = commissionSnapshot.data() || {};
-  const convertedLead = convertedLeadSnapshot.data() || {};
-  const contractAfter = contractAfterSnapshot.data() || {};
-  const attributionAudit = attributionAuditSnapshot.data() || {};
-  if (!commissionSnapshot.exists || commissionQuery.size !== 1 || commissionQuery.docs[0].id !== expectedCommissionId || text(commission.contractId) !== target.contractId || text(commission.brokerId || commission.brokerUid) !== broker.id) fail('production Broker commission was not deterministically locked exactly once');
-  if (lower(convertedLead.status) !== 'converted' || text(convertedLead.matchedContractId) !== target.contractId || text(convertedLead.commissionId) !== expectedCommissionId || text(convertedLead.commissionCreationStatus) !== 'COMMISSION_CREATED_SERVER_SIDE') fail('production Broker lead was not converted through the deployed attribution path');
-  if (!attributionAuditSnapshot.exists || attributionAudit.action !== 'ADMIN_MATCH_BROKER_ATTRIBUTION' || text(attributionAudit.commissionId) !== expectedCommissionId || text(attributionAudit.brokerId) !== broker.id) fail('production Broker attribution audit is missing or mismatched');
-  if (contractAfter.commissionGenerated !== true || text(contractAfter.commissionId) !== expectedCommissionId || text(contractAfter.brokerId || contractAfter.brokerUid) !== broker.id) fail('production contract did not retain the deterministic Broker commission binding');
-  if (upper(target.payment.data.status) !== 'APPROVED' || target.payment.data.paymentVerified !== true || target.payment.data.unlocksDashboard !== true || upper(target.invoice.data.status) !== 'PAID' || upper(target.invoice.data.feeType) !== 'MOBILIZATION_DEPOSIT' || text(target.invoice.data.paymentId) !== target.payment.id || text(target.invoice.data.contractId) !== target.contractId) fail('Broker preparation lost the approved payment or paid mobilization invoice binding');
-  console.log(`[prepare-application-evidence] PASS gate=brokerCommissionLockExactlyOnce contractHash=${sha256(target.contractId).slice(0, 12)}… commissionHash=${sha256(expectedCommissionId).slice(0, 12)}… leadHash=${sha256(leadId).slice(0, 12)}…`);
 }
 
 async function main() {
