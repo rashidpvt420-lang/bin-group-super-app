@@ -18,6 +18,9 @@ test('technician physical evidence is protected, canonical and requires real mob
   assert.match(workflow, /AUTHORIZED_FOUNDER_ACTORS:\s*\$\{\{ secrets\.AUTHORIZED_FOUNDER_ACTORS \}\}/);
   assert.match(workflow, /allowed_actors/);
   assert.match(workflow, /VERIFY_TECHNICIAN_PHYSICAL_EVIDENCE/);
+  assert.match(workflow, /7667ff54f9c43e07f78b3710578cd132b1bc7963/);
+  assert.match(workflow, /35520810688/);
+  assert.match(workflow, /35529478370/);
   assert.match(workflow, /application-repair-current/);
   assert.match(workflow, /repair-and-sync/);
   assert.match(workflow, /REPAIR_PRODUCTION_FOUNDER_PASSWORD_VERIFY_TOTP_AND_SYNC_DESTINATION/);
