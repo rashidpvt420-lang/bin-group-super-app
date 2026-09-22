@@ -262,6 +262,7 @@ jobs:
       id-token: write
     outputs:
       control_plane_scope_verified: ${{ steps.control_plane_scope.outputs.verified }}
+      live_evidence_run_id: ${{ steps.resolve_live_evidence.outputs.run_id }}
     steps:
       - name: Checkout clearance control plane
         uses: actions/checkout@v4
@@ -300,6 +301,57 @@ jobs:
           fi
           echo "verified=true" >> "$GITHUB_OUTPUT"
 
+      - name: Resolve exact successful live evidence run
+        id: resolve_live_evidence
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          TARGET_SHA: ${{ inputs.expected_commit_sha }}
+          REQUESTED_RUN_ID: ${{ inputs.live_evidence_run_id }}
+          ARTIFACT_NAME: live-launch-evidence-${{ inputs.expected_commit_sha }}
+        run: |
+          set -euo pipefail
+          api="https://api.github.com/repos/$REPOSITORY"
+          auth_header="Authorization: Bearer $GITHUB_TOKEN"
+          accept_header="Accept: application/vnd.github+json"
+          version_header="X-GitHub-Api-Version: 2022-11-28"
+
+          validate_run() {
+            local run_id="$1"
+            local run_json artifacts_json
+            run_json="$(curl --fail --silent --show-error -H "$auth_header" -H "$accept_header" -H "$version_header" "$api/actions/runs/$run_id")"
+            jq -e --arg sha "$TARGET_SHA" '
+              .name == "Live Role Smoke Tests" and
+              .path == ".github/workflows/live-role-smoke.yml" and
+              .head_branch == "main" and
+              .head_sha == $sha and
+              .event == "workflow_dispatch" and
+              .status == "completed" and
+              .conclusion == "success"
+            ' <<<"$run_json" >/dev/null || return 1
+
+            artifacts_json="$(curl --fail --silent --show-error -H "$auth_header" -H "$accept_header" -H "$version_header" "$api/actions/runs/$run_id/artifacts?per_page=100")"
+            jq -e --arg name "$ARTIFACT_NAME" '[.artifacts[] | select(.name == $name and .expired == false)] | length == 1' <<<"$artifacts_json" >/dev/null
+          }
+
+          requested="$(printf '%s' "$REQUESTED_RUN_ID" | xargs)"
+          if [[ -n "$requested" ]]; then
+            [[ "$requested" =~ ^[0-9]+$ ]] || { echo "::error::live_evidence_run_id must be numeric when provided."; exit 1; }
+            validate_run "$requested" || { echo "::error::Requested live-evidence run is not the exact successful main workflow_dispatch run with the frozen-release artifact."; exit 1; }
+            resolved="$requested"
+          else
+            runs_json="$(curl --fail --silent --show-error -H "$auth_header" -H "$accept_header" -H "$version_header" "$api/actions/workflows/live-role-smoke.yml/runs?event=workflow_dispatch&branch=main&status=success&per_page=100")"
+            mapfile -t candidates < <(jq -r --arg sha "$TARGET_SHA" '.workflow_runs[] | select(.name == "Live Role Smoke Tests" and .path == ".github/workflows/live-role-smoke.yml" and .head_branch == "main" and .head_sha == $sha and .event == "workflow_dispatch" and .status == "completed" and .conclusion == "success") | .id' <<<"$runs_json")
+            valid=()
+            for run_id in "${candidates[@]}"; do
+              if validate_run "$run_id"; then valid+=("$run_id"); fi
+            done
+            [[ ${#valid[@]} -eq 1 ]] || { echo "::error::Expected exactly one successful live-evidence run with the exact frozen-release artifact; found ${#valid[@]}. Provide live_evidence_run_id explicitly if multiple valid runs exist."; exit 1; }
+            resolved="${valid[0]}"
+          fi
+
+          echo "run_id=$resolved" >> "$GITHUB_OUTPUT"
+          echo "Resolved exact successful live-evidence run: $resolved"
       - name: Checkout frozen pilot release
         uses: actions/checkout@v4
         with:
@@ -344,7 +396,7 @@ jobs:
         with:
           name: live-launch-evidence-${{ inputs.expected_commit_sha }}
           path: release/downloaded-live-evidence
-          run-id: ${{ inputs.live_evidence_run_id }}
+          run-id: ${{ steps.resolve_live_evidence.outputs.run_id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Restore frozen release evidence
@@ -381,7 +433,7 @@ jobs:
           HARD_LAUNCH_EXPECTED_SHA: ${{ inputs.expected_commit_sha }}
           CLEARANCE_CONTROL_PLANE_SHA: ${{ github.sha }}
           CONTROL_PLANE_SCOPE_VERIFIED: 'true'
-          LIVE_EVIDENCE_RUN_ID: ${{ inputs.live_evidence_run_id }}
+          LIVE_EVIDENCE_RUN_ID: ${{ steps.resolve_live_evidence.outputs.run_id }}
           E2E_STRICT_ROLES: 'true'
           E2E_REQUIRE_FOUNDER_MFA: 'true'
           E2E_OWNER_MAILBOX_CLIENT_ID: ${{ secrets.E2E_OWNER_MAILBOX_CLIENT_ID }}
@@ -419,7 +471,7 @@ jobs:
       - name: Enforce protected release inputs
         env:
           TARGET_SHA: ${{ inputs.expected_commit_sha }}
-          LIVE_RUN_ID: ${{ inputs.live_evidence_run_id }}
+          LIVE_RUN_ID: ${{ needs.hard-clearance-production-revalidation.outputs.live_evidence_run_id }}
           CONTROL_PLANE_SCOPE_VERIFIED: ${{ needs.hard-clearance-production-revalidation.outputs.control_plane_scope_verified }}
           RELEASE_CONFIRMATION: ${{ fromJSON(inputs.clearance_payload_json).confirmation }}
           INCIDENT_CONFIRMATION_INPUT: ${{ fromJSON(inputs.clearance_payload_json).incident_confirmation }}
@@ -489,7 +541,7 @@ jobs:
         working-directory: release
         env:
           GITHUB_TOKEN: ${{ github.token }}
-          LIVE_EVIDENCE_RUN_ID: ${{ inputs.live_evidence_run_id }}
+          LIVE_EVIDENCE_RUN_ID: ${{ needs.hard-clearance-production-revalidation.outputs.live_evidence_run_id }}
           HARD_LAUNCH_EXPECTED_SHA: ${{ inputs.expected_commit_sha }}
         run: node scripts/resolve-live-pilot-window.mjs
 
@@ -522,7 +574,7 @@ jobs:
           HARD_CLEARANCE_REVALIDATION_MODE: consume
           HARD_LAUNCH_EXPECTED_SHA: ${{ inputs.expected_commit_sha }}
           CLEARANCE_CONTROL_PLANE_SHA: ${{ github.sha }}
-          LIVE_EVIDENCE_RUN_ID: ${{ inputs.live_evidence_run_id }}
+          LIVE_EVIDENCE_RUN_ID: ${{ needs.hard-clearance-production-revalidation.outputs.live_evidence_run_id }}
         run: node scripts/launch-status.mjs
 
       - name: Snapshot canonical operational readiness
@@ -559,7 +611,7 @@ jobs:
           HARD_CLEARANCE_REVALIDATION_MODE: consume
           HARD_LAUNCH_EXPECTED_SHA: ${{ inputs.expected_commit_sha }}
           CLEARANCE_CONTROL_PLANE_SHA: ${{ github.sha }}
-          LIVE_EVIDENCE_RUN_ID: ${{ inputs.live_evidence_run_id }}
+          LIVE_EVIDENCE_RUN_ID: ${{ needs.hard-clearance-production-revalidation.outputs.live_evidence_run_id }}
         run: |
           node scripts/launch-status.mjs --hard
           node scripts/reconcile-hard-public-evidence.mjs
