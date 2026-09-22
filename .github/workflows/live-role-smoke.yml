@@ -518,6 +518,7 @@ jobs:
           cp control-plane/scripts/verify-hard-launch-approval.mjs release/scripts/verify-hard-launch-approval.mjs
           cp control-plane/scripts/verify-launch-clearance.mjs release/scripts/verify-launch-clearance.mjs
           cp control-plane/scripts/reconcile-hard-public-evidence.mjs release/scripts/reconcile-hard-public-evidence.mjs
+          cp control-plane/scripts/verify-operational-readiness.mjs release/scripts/verify-operational-readiness.mjs
 
       - uses: actions/setup-node@v4
         with:
