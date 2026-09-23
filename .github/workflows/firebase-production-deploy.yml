@@ -173,6 +173,8 @@ jobs:
         run: npm run test:stability
 
       - name: Launch honesty and hard-launch control regressions
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: npm run test:launch-honesty
 
       - name: TypeScript check
@@ -197,7 +199,6 @@ jobs:
 
       - name: Build Firebase Functions
         run: npm run build:functions
-
       - name: Measure Functions discovery load
         run: npm run measure:functions-load
 
