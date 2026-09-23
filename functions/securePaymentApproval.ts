@@ -9,12 +9,10 @@ import {
   OwnerActivationPaymentPolicyError,
   resolveStoredOwnerActivationPaymentBinding,
 } from "./ownerActivationPaymentPolicy";
-import { hasDispatchReadyPropertyGeo } from "./propertyGeoAuthority";
 
 if (!admin.apps.length) admin.initializeApp();
 
 const db = admin.firestore();
-const OWNER_WORKFLOW_VERSION = "OWNER_FIVE_PAGE_INSPECTION_FIRST_V1";
 const PHASE1_RENT_PAYMENT_METHODS = new Set(["CASH", "CHEQUE"]);
 const FINANCE_ADMIN_ROLES = new Set(["admin", "super_admin", "ceo", "finance_admin"]);
 
@@ -91,8 +89,7 @@ async function assertOwnerActivationGate(paymentId: string) {
     throw new HttpsError("failed-precondition", "Payment is not bound to an owner onboarding intake.");
   }
 
-  const inspectionFirst = upper(payment.workflowVersion) === OWNER_WORKFLOW_VERSION;
-  if (inspectionFirst) {
+  if (upper(payment.workflowVersion) === "OWNER_FIVE_PAGE_INSPECTION_FIRST_V1") {
     if (payment.inspectionVerified !== true) {
       throw new HttpsError("failed-precondition", "Every property visit must be verified before final payment approval.");
     }
@@ -135,10 +132,7 @@ async function assertOwnerActivationGate(paymentId: string) {
   const invalidProperties = propertySnap.docs.filter((propertyDoc) => {
     const property = propertyDoc.data() || {};
     const boundOwner = text(property.ownerUid || property.ownerId);
-    const locationReady = inspectionFirst
-      ? hasDispatchReadyPropertyGeo(property)
-      : isPropertyLocationActivationReady(property);
-    return boundOwner !== ownerUid || !locationReady;
+    return boundOwner !== ownerUid || !isPropertyLocationActivationReady(property);
   });
 
   if (invalidProperties.length > 0) {
@@ -149,14 +143,12 @@ async function assertOwnerActivationGate(paymentId: string) {
       intakeId,
       ownerUid,
       invalidPropertyIds: invalidProperties.map((propertyDoc) => propertyDoc.id),
-      reason: inspectionFirst
-        ? "Inspection-first properties require canonical server geoVerification bound to Founder-MFA or immutable physical inspection evidence."
-        : "Property geo must be present, verified, dispatch-ready, review-cleared and contain finite coordinates.",
+      reason: "Property geo must be present, verified, dispatch-ready, review-cleared and contain finite coordinates.",
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
     });
     throw new HttpsError(
       "failed-precondition",
-      "Owner activation is blocked until every property location is canonically verified and dispatch-ready.",
+      "Owner activation is blocked until every property location is verified and dispatch-ready.",
     );
   }
 

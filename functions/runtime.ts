@@ -13,22 +13,18 @@ export * from "./secureOwnerRegistrationRequest";
 // historical wildcard implementation above without removing quote/onboarding helpers.
 export { submitOwnerOnboardingPaymentPackage } from "./ownerOnboardingPaymentPhase1Hold";
 // Security: keep inspectionFirstOwnerOnboarding on an explicit named export list.
-// Canonical property submission is wrapped separately so identity claims are
-// reserved before the proven inspection-first implementation writes property state.
+// The legacy single-inspection completion export is intentionally excluded; only
+// portfolio-safe Owner acquisition callables are deployed.
 export {
   previewOwnerInspectionQuote,
   requestOwnerInspectionSignatureOtp,
   verifyOwnerInspectionSignatureOtp,
   uploadOwnerInspectionProofDocument,
+  submitOwnerInspectionFirstOnboarding,
   adminRecordOwnerMobilizationPaymentEvidence,
 } from "./inspectionFirstOwnerOnboarding";
-export { submitOwnerInspectionFirstOnboarding } from "./canonicalOwnerSubmission";
 export * from "./ownerInspectionAdminLink";
-// Preserve the proven immutable evidence recorder, but route portfolio completion
-// through the canonical wrapper that promotes physical arrival GPS and evidence
-// into server-authoritative dispatch geography.
-export { adminRecordOwnerPropertyInspectionEvidence } from "./ownerInspectionCompletion";
-export { adminCompleteOwnerPortfolioInspections } from "./canonicalOwnerInspectionCompletion";
+export * from "./ownerInspectionCompletion";
 export * from "./ownerFinancialOperations";
 export * from "./ownerMaintenanceOperations";
 export * from "./onboardingProofUpload";
@@ -37,9 +33,7 @@ export * from "./onboardingProofUpload";
 // fail-closed compatibility endpoints so environment/secret drift cannot enable it.
 export * from "./stripePaymentPhase1Hold";
 export * from "./adminOwnerOperations";
-// The legacy property-review implementation remains a compatibility dependency,
-// but only the canonical fail-closed wrapper is publicly exported.
-export { adminReviewOwnerProperty } from "./canonicalAdminPropertyReview";
+export * from "./adminPropertyReview";
 export * from "./securePaymentApproval";
 export * from "./paymentConfiguration";
 export * from "./mailDelivery";
