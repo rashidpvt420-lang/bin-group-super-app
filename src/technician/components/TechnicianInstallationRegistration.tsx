@@ -5,6 +5,19 @@ import { ensureTechnicianInstallationRegistered } from '../utils/technicianInsta
 
 type RegistrationState = 'not-native' | 'checking' | 'registered' | 'blocked';
 
+const safeDiagnosticCode = (error: any): string => {
+  const candidates = [
+    error?.code,
+    error?.details?.code,
+    error?.cause?.code,
+  ];
+  for (const value of candidates) {
+    const code = String(value || '').trim().toUpperCase();
+    if (/^[A-Z0-9_-]{2,80}(?:__[A-Z0-9_-]{2,80}){0,4}$/.test(code)) return code;
+  }
+  return '';
+};
+
 export default function TechnicianInstallationRegistration() {
   const { user } = useRole();
   const [state, setState] = React.useState<RegistrationState>('checking');
@@ -20,10 +33,11 @@ export default function TechnicianInstallationRegistration() {
     } catch (error: any) {
       setState('blocked');
       const code = String(error?.code || '').toLowerCase();
+      const diagnostic = safeDiagnosticCode(error);
       setMessage(
         code.includes('failed-precondition')
           ? 'This Technician account is bound to another installation. Ask an authorised administrator to use the controlled device re-registration process.'
-          : 'This Android installation could not be verified through Google Play Integrity. Physical arrival evidence is blocked.',
+          : `This Android installation could not be verified through Google Play Integrity. Physical arrival evidence is blocked.${diagnostic ? ` Diagnostic: ${diagnostic}` : ''}`,
       );
     }
   }, [user?.uid]);
