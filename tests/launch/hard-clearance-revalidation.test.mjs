@@ -535,14 +535,12 @@ test('frozen runtime repair pins renewal PDF storage hotfix and proves it live',
   assert.match(workflow, /deleteFiles\(\{ prefix:/);
   assert.doesNotMatch(workflow, /FROZEN_RENEWAL_RELEASE_SHA: 287d1fc0/);
   assert.match(workflow, /source_sha="\$\(jq -r '\.head_sha'/);
-  assert.match(workflow, /parent_sha="\$\(git rev-parse "\$control_sha\^"\)"/);
-  assert.match(workflow, /Renewal repair must immediately follow the exact failed Application Evidence control SHA/);
+  assert.match(workflow, /git merge-base --is-ancestor "\$source_sha" "\$control_sha"/);
+  assert.match(workflow, /Renewal repair must follow the failed Application Evidence control SHA lineage/);
   assert.match(workflow, /repair-frozen-sovereign-ai-runtime\.yml/);
   assert.match(workflow, /tests\/launch\/hard-clearance-revalidation\.test\.mjs/);
   assert.match(workflow, /git diff --name-only "\$source_sha" "\$control_sha"/);
-  assert.match(workflow, /\.github\/workflows\/current-main-expression-budget-repair\.yml/);
-  assert.match(workflow, /\.github\/workflows\/repair-frozen-sovereign-ai-runtime\.yml/);
-  assert.match(workflow, /tests\/launch\/hard-clearance-revalidation\.test\.mjs/);
+  assert.doesNotMatch(workflow, /\.github\/workflows\/current-main-expression-budget-repair\.yml/);
   assert.doesNotMatch(workflow, /expected_changed=.*operational-application-evidence/);
   assert.doesNotMatch(workflow, /\.head_sha == \$sha/);
 

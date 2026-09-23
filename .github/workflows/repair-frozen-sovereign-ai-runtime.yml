@@ -252,13 +252,14 @@ jobs:
             ' <<< "$run_json" >/dev/null
 
             source_sha="$(jq -r '.head_sha' <<< "$run_json")"
-            parent_sha="$(git rev-parse "$control_sha^")"
-            [[ "$parent_sha" == "$source_sha" ]] || {
-              echo "::error::Renewal repair must immediately follow the exact failed Application Evidence control SHA."
+            git merge-base --is-ancestor "$source_sha" "$control_sha" || {
+              echo "::error::Renewal repair must follow the failed Application Evidence control SHA lineage."
               exit 1
             }
 
-            expected_changed="$(printf '%s\n'             '.github/workflows/current-main-expression-budget-repair.yml'             '.github/workflows/repair-frozen-sovereign-ai-runtime.yml'             'tests/launch/hard-clearance-revalidation.test.mjs' | sort)"
+            expected_changed="$(printf '%s\n' \
+              '.github/workflows/repair-frozen-sovereign-ai-runtime.yml' \
+              'tests/launch/hard-clearance-revalidation.test.mjs' | sort)"
             actual_changed="$(git diff --name-only "$source_sha" "$control_sha" | sort)"
             [[ "$actual_changed" == "$expected_changed" ]] || {
               echo "::error::Unexpected files changed between the failed evidence SHA and the renewal repair control SHA."
@@ -484,7 +485,7 @@ jobs:
             NODE
 
         - name: Clean up live PDF repair probe
-          if: always()
+          if: always() && steps.command.outcome == 'success'
           run: |
             set -euo pipefail
             node --input-type=module <<'NODE'
