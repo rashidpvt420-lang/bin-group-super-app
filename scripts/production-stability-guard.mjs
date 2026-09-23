@@ -175,12 +175,12 @@ assert(storageRules.includes('onboarding-proof'), 'Storage rules must cover onbo
 assert(storageRules.includes('function hasVerifiedEmail()'), 'Storage email ACLs must require a verified email claim.');
 assert(storageRules.includes('hasTenantReceiptMetadata(tenantId)'), 'Tenant receipt uploads must bind immutable hash metadata.');
 assert(paymentEvidence.includes('assertStoredTenantReceipt'), 'Tenant payment proof must verify stored receipt metadata server-side.');
-assert(runtime.includes('submitOwnerInspectionFirstOnboarding'), 'Runtime must explicitly export five-page Owner submission.');
+assert(runtime.includes('export { submitOwnerInspectionFirstOnboarding } from "./canonicalOwnerSubmission";'), 'Runtime must route five-page Owner submission through canonical property identity authority.');
 assert(runtime.includes('adminRecordOwnerMobilizationPaymentEvidence'), 'Runtime must explicitly export immutable Owner payment evidence recording.');
 assert(runtime.includes('from "./inspectionFirstOwnerOnboarding"'), 'Runtime must source the explicit five-page Owner callables.');
 assert(!/^export \* from "\.\/inspectionFirstOwnerOnboarding";/m.test(runtime), 'Runtime must not deploy the unsafe legacy single-property completion export.');
 assert(runtime.includes('export * from "./ownerInspectionAdminLink";'), 'Runtime must export portfolio inspection creation/linking.');
-assert(runtime.includes('export * from "./ownerInspectionCompletion";'), 'Runtime must export portfolio inspection completion.');
+assert(runtime.includes('export { adminCompleteOwnerPortfolioInspections } from "./canonicalOwnerInspectionCompletion";'), 'Runtime must route portfolio completion through canonical physical-inspection geo authority.');
 assert(runtime.includes('export * from "./paymentEvidence";'), 'Runtime must export tenant and design payment callables.');
 assert(runtime.includes('export * from "./ticketDispatchOperations";'), 'Runtime must export dispatch and dispute callables.');
 assert(payrollPage.includes("'adminGeneratePayrollBatch'"), 'Admin payroll UI must use the server-side generation callable.');
