@@ -1,4 +1,5 @@
 import * as admin from "firebase-admin";
+import type * as FirebaseFirestore from "firebase-admin/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { submitOwnerInspectionFirstOnboarding as legacySubmitOwnerInspectionFirstOnboarding } from "./inspectionFirstOwnerOnboarding";
 import {
