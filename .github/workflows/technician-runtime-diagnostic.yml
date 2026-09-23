@@ -1,0 +1,107 @@
+name: Technician Runtime Diagnostic
+
+on:
+  workflow_dispatch:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  diagnose:
+    name: Diagnose Technician native registration
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (
+        github.event_name == 'issue_comment' &&
+        github.event.issue.number == 434 &&
+        !github.event.issue.pull_request &&
+        github.event.comment.user.login == github.repository_owner &&
+        github.event.comment.author_association == 'OWNER' &&
+        github.event.comment.body == '/bin-tech diagnostic'
+      )
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: hard-launch-operations
+    env:
+      GCP_PROJECT_ID: bin-group-57c60
+
+    steps:
+      - name: Authenticate Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          create_credentials_file: true
+          export_environment_variables: true
+
+      - name: Set up Google Cloud CLI
+        uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3.0.1
+        with:
+          version: '>= 416.0.0'
+          project_id: bin-group-57c60
+
+      - name: Read recent registerTechnicianDevice production failures
+        shell: bash
+        run: |
+          set -euo pipefail
+          service_url="$(gcloud functions describe registerTechnicianDevice \
+            --gen2 \
+            --region=europe-west3 \
+            --project="$GCP_PROJECT_ID" \
+            --format='value(serviceConfig.service)')"
+          service_name="${service_url##*/}"
+          if [[ -z "$service_name" ]]; then
+            echo "::error::Unable to resolve the deployed registerTechnicianDevice Cloud Run service."
+            exit 1
+          fi
+
+          since="$(date -u -d '6 hours ago' +'%Y-%m-%dT%H:%M:%SZ')"
+          echo "[technician-runtime-diagnostic] service=$service_name since=$since"
+
+          gcloud logging read \
+            "resource.type=\"cloud_run_revision\" AND resource.labels.service_name=\"$service_name\" AND timestamp>=\"$since\"" \
+            --project="$GCP_PROJECT_ID" \
+            --limit=300 \
+            --order=desc \
+            --format=json > technician-runtime-logs.json
+
+          total="$(jq 'length' technician-runtime-logs.json)"
+          echo "[technician-runtime-diagnostic] total_entries=$total"
+
+          jq -r '
+            .[] |
+            [
+              (.timestamp // ""),
+              (.severity // ""),
+              ((.httpRequest.status // "") | tostring),
+              (
+                .textPayload //
+                .jsonPayload.message //
+                .jsonPayload.error //
+                .protoPayload.status.message //
+                ""
+              )
+            ] |
+            @tsv
+          ' technician-runtime-logs.json \
+            | grep -Ei 'app.?check|integrity|token|permission|unauth|technician|reject|fail|error|403|401|400|500' \
+            | sed -E \
+                -e 's/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/[redacted-email]/g' \
+                -e 's/[A-Za-z0-9_-]{28,}/[redacted-id]/g' \
+            | head -n 120 \
+            | tee technician-runtime-diagnostic.txt || true
+
+          if [[ ! -s technician-runtime-diagnostic.txt ]]; then
+            echo "[technician-runtime-diagnostic] No matching failure messages found in the recent service logs."
+          fi
+
+      - name: Upload sanitized diagnostic
+        uses: actions/upload-artifact@v4
+        with:
+          name: technician-runtime-diagnostic-${{ github.run_id }}
+          path: technician-runtime-diagnostic.txt
+          if-no-files-found: warn
+          retention-days: 7
