@@ -6,10 +6,14 @@ import path from 'node:path';
 const PROJECT_ID = 'bin-group-57c60';
 const PROJECT_NUMBER = '123413252227';
 const PACKAGE_NAME = 'ae.bingroups.superapp';
-// SHA-256 of the certificate actually observed on the Google-Play-installed
-// production package. This is the Play delivery signer identity used by the
-// native runtime diagnostic, not the upload key or another rotated key.
-const EXPECTED_PLAY_SIGNING_SHA256 = '5B:90:71:28:BD:19:51:4E:4D:3F:80:4B:1E:45:83:D1:5F:0B:65:F5:1D:61:74:6F:68:04:DA:E1:B2:DC:D2:6C';
+// Google Play upgraded the app-signing key. Both values below are Play delivery
+// signing identities from Play Console. The upload key is deliberately excluded.
+const CURRENT_PLAY_SIGNING_SHA256 = 'C5:00:13:AF:E7:69:A5:2A:2C:E0:7A:3F:4E:E2:CD:FA:D1:A0:A4:48:88:46:30:F8:19:BB:CC:4C:93:2B:7A:85';
+const PREVIOUS_PLAY_SIGNING_SHA256 = '5B:90:71:28:BD:19:51:4E:4D:3F:80:4B:1E:45:83:D1:5F:0B:65:F5:1D:61:74:6F:68:04:DA:E1:B2:DC:D2:6C';
+const ACCEPTED_PLAY_SIGNING_SHA256 = [
+  CURRENT_PLAY_SIGNING_SHA256,
+  PREVIOUS_PLAY_SIGNING_SHA256,
+];
 const GOOGLE_SERVICES_PATH = path.resolve('android/app/google-services.json');
 const OUTPUT_PATH = path.resolve('launch_package/android-play-integrity-appcheck-proof.json');
 const repairSha = process.argv.includes('--repair-sha');
@@ -73,42 +77,55 @@ const request = async (url, options = {}) => {
 
 const encodedAppId = encodeURIComponent(appId);
 const shaUrl = `https://firebase.googleapis.com/v1beta1/projects/-/androidApps/${encodedAppId}/sha`;
-const expectedPlaySha = normalizeSha(EXPECTED_PLAY_SIGNING_SHA256);
+const acceptedPlayShas = ACCEPTED_PLAY_SIGNING_SHA256.map(normalizeSha);
 
 let shaResult = await request(shaUrl);
 if (!shaResult.response.ok) {
   fail(`Firebase Android SHA certificate lookup returned HTTP ${shaResult.response.status}`);
 }
 
-const hasExpectedPlaySigningSha = () => (shaResult.body?.certificates || []).some((cert) =>
-  text(cert?.certType) === 'SHA_256' && normalizeSha(cert?.shaHash) === expectedPlaySha,
+const registeredPlaySigningShas = () => new Set(
+  (shaResult.body?.certificates || [])
+    .filter((cert) => text(cert?.certType) === 'SHA_256')
+    .map((cert) => normalizeSha(cert?.shaHash)),
 );
+const missingPlaySigningShas = () => {
+  const registered = registeredPlaySigningShas();
+  return ACCEPTED_PLAY_SIGNING_SHA256.filter(
+    (shaHash) => !registered.has(normalizeSha(shaHash)),
+  );
+};
 
-let playSigningShaRegistered = hasExpectedPlaySigningSha();
-let playSigningShaRepaired = false;
+const missingBeforeRepair = missingPlaySigningShas();
+let playSigningSha256RepairedValues = [];
 
-if (!playSigningShaRegistered && repairSha) {
-  const createResult = await request(shaUrl, {
-    method: 'POST',
-    body: JSON.stringify({
-      shaHash: EXPECTED_PLAY_SIGNING_SHA256,
-      certType: 'SHA_256',
-    }),
-  });
-  if (!createResult.response.ok && createResult.response.status !== 409) {
-    fail(`Firebase Play signing SHA-256 registration returned HTTP ${createResult.response.status}`);
+if (missingBeforeRepair.length && repairSha) {
+  for (const shaHash of missingBeforeRepair) {
+    const createResult = await request(shaUrl, {
+      method: 'POST',
+      body: JSON.stringify({
+        shaHash,
+        certType: 'SHA_256',
+      }),
+    });
+    if (!createResult.response.ok && createResult.response.status !== 409) {
+      fail(`Firebase Play signing SHA-256 registration returned HTTP ${createResult.response.status}`);
+    }
   }
 
   shaResult = await request(shaUrl);
   if (!shaResult.response.ok) {
     fail(`Firebase Android SHA certificate recheck returned HTTP ${shaResult.response.status}`);
   }
-  playSigningShaRegistered = hasExpectedPlaySigningSha();
-  playSigningShaRepaired = playSigningShaRegistered;
+  const registered = registeredPlaySigningShas();
+  playSigningSha256RepairedValues = missingBeforeRepair.filter(
+    (shaHash) => registered.has(normalizeSha(shaHash)),
+  );
 }
 
-if (!playSigningShaRegistered) {
-  fail('Google Play delivery signing SHA-256 is not registered on the Firebase Android app');
+const missingAfterRepair = missingPlaySigningShas();
+if (missingAfterRepair.length) {
+  fail(`Google Play delivery signing SHA-256 is not registered on the Firebase Android app: ${missingAfterRepair.join(', ')}`);
 }
 
 const appCheckName = `projects/${PROJECT_NUMBER}/apps/${appId}/playIntegrityConfig`;
@@ -184,15 +201,18 @@ if (!configMatchesRecommendedPlayPolicy(config)) {
 
 const configuredDeviceLevel = text(config?.deviceIntegrity?.minDeviceRecognitionLevel);
 const proof = {
-  schemaVersion: 3,
+  schemaVersion: 4,
   status: 'passed',
   projectId: PROJECT_ID,
   projectNumber: PROJECT_NUMBER,
   packageName: PACKAGE_NAME,
   androidAppIdVerified: true,
-  expectedPlayDeliverySigningSha256: EXPECTED_PLAY_SIGNING_SHA256,
+  expectedPlayDeliverySigningSha256: CURRENT_PLAY_SIGNING_SHA256,
+  acceptedPlayDeliverySigningSha256: ACCEPTED_PLAY_SIGNING_SHA256,
+  previousPlayDeliverySigningSha256: PREVIOUS_PLAY_SIGNING_SHA256,
   playSigningSha256Registered: true,
-  playSigningSha256Repaired: playSigningShaRepaired,
+  playSigningSha256Repaired: playSigningSha256RepairedValues.length > 0,
+  playSigningSha256RepairedValues,
   playIntegrityAppCheckConfigPresent: true,
   playIntegrityAppCheckConfigRepaired: playIntegrityConfigRepaired,
   playIntegrityRequiresPlayRecognizedVersion: true,
@@ -207,8 +227,9 @@ mkdirSync(path.dirname(OUTPUT_PATH), { recursive: true });
 writeFileSync(OUTPUT_PATH, `${JSON.stringify(proof, null, 2)}\n`, { mode: 0o600 });
 
 console.log('[android-appcheck] PASS Android Firebase registration and Play Integrity App Check configuration verified');
-console.log(`[android-appcheck] expected_play_delivery_signing_sha256=${EXPECTED_PLAY_SIGNING_SHA256}`);
-console.log(`[android-appcheck] play_signing_sha_repaired=${playSigningShaRepaired}`);
+console.log(`[android-appcheck] expected_play_delivery_signing_sha256=${CURRENT_PLAY_SIGNING_SHA256}`);
+console.log(`[android-appcheck] accepted_play_delivery_signing_sha256=${ACCEPTED_PLAY_SIGNING_SHA256.join(',')}`);
+console.log(`[android-appcheck] play_signing_sha_repaired=${playSigningSha256RepairedValues.length > 0}`);
 console.log(`[android-appcheck] play_integrity_config_repaired=${playIntegrityConfigRepaired}`);
 console.log(`[android-appcheck] explicit_device_threshold=${configuredDeviceLevel || 'UNSET'}`);
 console.log('[android-appcheck] play_only_policy=PLAY_RECOGNIZED+LICENSED+OPTIONAL_DEVICE_THRESHOLD_UNSET');

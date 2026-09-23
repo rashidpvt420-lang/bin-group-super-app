@@ -40,8 +40,11 @@ test('native bridge classifies App Check attestation failures without returning 
   assert.match(bridge, /PI_-8_THROTTLED/);
   assert.match(bridge, /installerState\(\)/);
   assert.match(bridge, /signingState\(\)/);
-  assert.match(bridge, /EXPECTED_PLAY_SIGNING_SHA256/);
+  assert.match(bridge, /CURRENT_PLAY_SIGNING_SHA256/);
+  assert.match(bridge, /C50013AFE769A52A2CE07A3F4EE2CDFAD1A0A448884630F819BBCC4C932B7A85/);
+  assert.match(bridge, /PREVIOUS_PLAY_SIGNING_SHA256/);
   assert.match(bridge, /5B907128BD19514E4D3F804B1E4583D15F0B65F51D61746F6804DAE1B2DCD26C/);
+  assert.match(bridge, /isTrustedPlayDeliverySigner/);
   assert.match(bridge, /call\.reject\("Unable to obtain Firebase App Check token\."/);
   assert.doesNotMatch(bridge, /result\.put\("message"/);
   // Returning the App Check token to the JS CustomProvider is required. The
@@ -50,6 +53,6 @@ test('native bridge classifies App Check attestation failures without returning 
   assert.doesNotMatch(bridge, /System\.out\.print(?:ln)?\([^\n]*token/i);
 });
 
-test('next Google Play exact-SHA release build uses versionCode 9', () => {
-  assert.match(gradle, /versionCode\s+9\b/);
+test('next Google Play exact-SHA release build uses versionCode 10', () => {
+  assert.match(gradle, /versionCode\s+10\b/);
 });

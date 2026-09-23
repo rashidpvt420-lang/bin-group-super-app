@@ -9,8 +9,11 @@ test('Android release verifier binds the production project, package, app ID and
   assert.match(verifier, /PROJECT_ID = 'bin-group-57c60'/);
   assert.match(verifier, /PROJECT_NUMBER = '123413252227'/);
   assert.match(verifier, /PACKAGE_NAME = 'ae\.bingroups\.superapp'/);
-  assert.match(verifier, /EXPECTED_PLAY_SIGNING_SHA256/);
+  assert.match(verifier, /CURRENT_PLAY_SIGNING_SHA256/);
+  assert.match(verifier, /C5:00:13:AF:E7:69:A5:2A:2C:E0:7A:3F:4E:E2:CD:FA:D1:A0:A4:48:88:46:30:F8:19:BB:CC:4C:93:2B:7A:85/);
+  assert.match(verifier, /PREVIOUS_PLAY_SIGNING_SHA256/);
   assert.match(verifier, /5B:90:71:28:BD:19:51:4E:4D:3F:80:4B:1E:45:83:D1:5F:0B:65:F5:1D:61:74:6F:68:04:DA:E1:B2:DC:D2:6C/);
+  assert.match(verifier, /ACCEPTED_PLAY_SIGNING_SHA256/);
   assert.match(verifier, /expectedPlayDeliverySigningSha256/);
   assert.match(verifier, /certType: 'SHA_256'/);
   assert.match(verifier, /playIntegrityConfig/);
