@@ -1,17 +1,19 @@
-import { createHash } from "crypto";
 import * as admin from "firebase-admin";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { submitOwnerInspectionFirstOnboarding as legacySubmitOwnerInspectionFirstOnboarding } from "./inspectionFirstOwnerOnboarding";
+import {
+  buildPropertyIdentities,
+  PROPERTY_IDENTITY_VERSION,
+  type PropertyIdentity,
+} from "./propertyIdentity";
 
 if (!admin.apps.length) admin.initializeApp();
 const db = admin.firestore();
 
 const OWNER_WORKFLOW_VERSION = "OWNER_FIVE_PAGE_INSPECTION_FIRST_V1";
-const PROPERTY_IDENTITY_VERSION = "PROPERTY_IDENTITY_V1";
 const MAX_PROPERTIES = 100;
 
 type PlainRecord = Record<string, any>;
-type Identity = { raw: string; hash: string; kind: string };
 
 const text = (value: unknown, max = 500) => String(value ?? "").trim().slice(0, max);
 const lower = (value: unknown, max = 500) => text(value, max).toLowerCase();
@@ -25,80 +27,20 @@ const safeId = (value: unknown, fallback: string) => text(value, 240)
   .replace(/_+/g, "_")
   .slice(0, 160) || fallback;
 
-function normalizedIdentityText(value: unknown, max = 500) {
-  return text(value, max)
-    .normalize("NFKC")
-    .toLowerCase()
-    .replace(/[\u200B-\u200D\uFEFF]/g, "")
-    .replace(/[^\p{L}\p{N}]+/gu, " ")
-    .trim()
-    .replace(/\s+/g, " ");
-}
-
 function finiteCoordinate(value: unknown, minimum: number, maximum: number): number | null {
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed >= minimum && parsed <= maximum ? parsed : null;
 }
 
-function identityHash(raw: string) {
-  return createHash("sha256").update(`${PROPERTY_IDENTITY_VERSION}\n${raw}`).digest("hex");
-}
-
-function propertyIdentities(property: PlainRecord): Identity[] {
-  const geo = record(property.submittedGeo || property.geo || property.location);
-  const point = record(geo.point);
-  const lat = finiteCoordinate(geo.lat ?? geo.latitude ?? point.latitude ?? property.lat ?? property.latitude, -90, 90);
-  const lng = finiteCoordinate(geo.lng ?? geo.longitude ?? point.longitude ?? property.lng ?? property.longitude, -180, 180);
-  const deed = normalizedIdentityText(
-    property.titleDeedNumber ||
-    property.titleDeedId ||
-    property.titleDeedReference ||
-    property.propertyDocumentNumber ||
-    property.propertyReference,
-    180,
-  );
-  const unit = normalizedIdentityText(
-    property.unitNumber || property.unitNo || property.unit || property.unitId,
-    120,
-  );
-  const placeId = normalizedIdentityText(geo.placeId || property.googlePlaceId, 220);
-  const address = normalizedIdentityText(geo.address || property.address || property.propertyAddress, 500);
-  const emirate = normalizedIdentityText(geo.emirate || property.emirate, 120);
-  const area = normalizedIdentityText(geo.area || property.area || property.community, 180);
-  const propertyType = normalizedIdentityText(property.propertyType || property.type || property.subType, 120);
-  const unitToken = unit || "whole-property";
-  const identities: Array<{ raw: string; kind: string }> = [];
-
-  if (deed) identities.push({ raw: `deed|${deed}`, kind: "TITLE_DEED" });
-  if (placeId) identities.push({ raw: `place|${placeId}|unit|${unitToken}`, kind: "PLACE_UNIT" });
-  if (address) {
-    identities.push({
-      raw: `address|${emirate}|${area}|${address}|unit|${unitToken}`,
-      kind: "ADDRESS_UNIT",
-    });
-  }
-  if (lat !== null && lng !== null) {
-    identities.push({
-      raw: `geo|${lat.toFixed(5)}|${lng.toFixed(5)}|unit|${unitToken}|type|${unit ? "" : propertyType}`,
-      kind: "GEO_UNIT",
-    });
-  }
-
-  const deduplicated = new Map<string, Identity>();
-  for (const identity of identities) {
-    if (!identity.raw.replace(/[|\s]/g, "")) continue;
-    deduplicated.set(identity.raw, {
-      ...identity,
-      hash: identityHash(identity.raw),
-    });
-  }
-  if (!deduplicated.size) {
+function requiredPropertyIdentities(property: PlainRecord) {
+  const identities = buildPropertyIdentities(property);
+  if (!identities.length) {
     throw new HttpsError(
       "failed-precondition",
       "Every property requires a stable address, map location, place identifier, unit reference, or title-deed reference.",
     );
   }
-  return [...deduplicated.values()];
+  return identities;
 }
 
 async function requireVerifiedOwner(request: any) {
@@ -118,7 +60,7 @@ async function requireVerifiedOwner(request: any) {
 async function assertNoExistingCanonicalProperty(
   property: PlainRecord,
   propertyId: string,
-  identities: Identity[],
+  identities: PropertyIdentity[],
 ) {
   const geo = record(property.submittedGeo || property.geo || property.location);
   const point = record(geo.point);
@@ -142,7 +84,7 @@ async function assertNoExistingCanonicalProperty(
     for (const document of snapshot.docs) {
       if (document.id === propertyId || seen.has(document.id)) continue;
       seen.add(document.id);
-      const existingKeys = propertyIdentities(document.data()).map((identity) => identity.raw);
+      const existingKeys = buildPropertyIdentities(document.data()).map((identity) => identity.raw);
       if (existingKeys.some((key) => requestedKeys.has(key))) {
         throw new HttpsError(
           "already-exists",
@@ -160,7 +102,7 @@ async function claimPropertyIdentities(args: {
 }) {
   const claims = args.properties.map((property, index) => {
     const propertyId = safeId(`${args.intakeId}_property_${index + 1}`, `owner_${args.ownerUid}_property_${index + 1}`);
-    return { propertyId, identities: propertyIdentities(property), property };
+    return { propertyId, identities: requiredPropertyIdentities(property), property };
   });
 
   const payloadKeys = new Map<string, string>();
