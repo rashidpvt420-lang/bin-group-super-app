@@ -6,9 +6,7 @@ export type VerifiedPropertyPin = {
   verifiedBy: string;
   verifiedAtMs: number;
   source: 'admin_manual' | 'physical_inspection';
-  verificationSource: 'FOUNDER_MFA_REVIEW' | 'PHYSICAL_INSPECTION_EVIDENCE';
   verificationVersion: 1 | 2;
-  inspectionId: string | null;
 };
 
 export const timestampMillis = (value: any): number | null => {
@@ -102,9 +100,7 @@ export const resolveVerifiedPropertyPin = (property: any): VerifiedPropertyPin |
     verifiedBy,
     verifiedAtMs,
     source: geo.source,
-    verificationSource: verification.source,
     verificationVersion: geoVersion as 1 | 2,
-    inspectionId: physicalVerified ? inspectionId : null,
   };
 };
 
