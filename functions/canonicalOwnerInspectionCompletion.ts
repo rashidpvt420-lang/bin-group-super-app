@@ -54,7 +54,7 @@ export const adminCompleteOwnerPortfolioInspections = onCall(
       if (!snapshot.exists) {
         throw new HttpsError("failed-precondition", `Inspection ${inspectionIds[index]} disappeared after completion.`);
       }
-      const value = { id: snapshot.id, ...(snapshot.data() || {}) };
+      const value: Record<string, any> = { id: snapshot.id, ...(snapshot.data() || {}) };
       const propertyId = text(value.propertyId, 240);
       if (!propertyId || inspectionByPropertyId.has(propertyId)) {
         throw new HttpsError("failed-precondition", "Every property must have exactly one evidence-backed inspection.");
