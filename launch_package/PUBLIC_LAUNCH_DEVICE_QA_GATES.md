@@ -2,6 +2,8 @@
 
 This checklist is the required pass/fail gate before public UAE launch or Google Play release.
 
+**Evidence status (2026-09-23):** None of the unchecked physical-device items is passed by a build, repository document, hosted runner or completed 24-hour pilot alone. Bind device/run ID, exact released SHA, account, timestamp, artifact and result in `docs/HARD_PUBLIC_LAUNCH_AUDIT.md`. The current hard-clearance gate is NO-GO for missing native Technician physical GPS lifecycle evidence; preserve the completed pilot pending protected release-control validation. Older tracking field names below require read-only compatibility mapping to the deployed canonical technician workflow before an item can be claimed complete.
+
 ## Current build gates
 
 - [ ] GitHub CI passes on latest commit.

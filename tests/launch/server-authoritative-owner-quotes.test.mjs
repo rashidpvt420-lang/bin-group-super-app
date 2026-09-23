@@ -46,7 +46,9 @@ test('five-page Review issues a fresh authenticated quote and blocks progression
   assert.match(source, /serverQuote\.expiresAtMs <= Date\.now\(\)/);
   assert.match(source, /portfolioAnnualTotal:\s*nextQuote\.annualContractValue/);
   assert.match(source, /mobilisationDeposit:\s*nextQuote\.activationDeposit/);
-  assert.match(source, /disabled=\{quoteLoading \|\| quoteExpired \|\| Boolean\(quoteError\)\}/);
+  // The runtime gate also rejects a persisted quote until this visit receives a fresh response.
+  assert.match(source, /disabled=\{!canContinue\}/);
+  assert.match(source, /canContinueOwnerReview\(/);
   assert.match(source, /setValuationResult/);
 });
 

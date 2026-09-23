@@ -3,6 +3,8 @@
 **Status:** Pre-public-launch control document  
 **Purpose:** Separate implemented app capability from external provider activation, billing, credentials, and live operational verification.
 
+**2026-09-23 audit binding:** See `docs/HARD_PUBLIC_LAUNCH_AUDIT.md` for candidate SHA, run IDs and pass/fail limits. The checks in this document are requirements, not completed production evidence. The authoritative Phase 1 policy in `docs/LAUNCH_GATE_SINGLE_TRUTH.md` permits AED Cash/Cheque only; the gateway checklist below applies to a separately reviewed future card-payment release and must not block Phase 1 solely because Stripe is disabled. No gateway or WhatsApp claim may be marketed as live without provider evidence.
+
 ---
 
 ## 1. Core rule
@@ -33,7 +35,7 @@ Do not describe an integration as **live**, **approved**, **production-ready**, 
 | Firebase Cloud Messaging | Implemented guarded notification bootstrap | Yes | In progress | Push token registration and foreground/background delivery must pass on Android and PWA |
 | Google Maps Platform | Required for exact property GPS, technician map, and dispatch | Yes | Not launch-cleared | API key restrictions, billing, and map load tests required |
 | OpenAI/Gemini Vision | Required for photo categorization and maintenance triage | Yes | Not launch-cleared | API key, billing, model selection, fallback, and manual-review flow required |
-| Stripe / Network International | Required for live card/payment gateway | Yes | Not launch-cleared | Merchant approval, webhook verification, refund/error tests required |
+| Stripe / Network International | Future card/payment gateway, **disabled in Phase 1** | Yes for future card release | Not launch-cleared / not marketed as live | Merchant approval, webhook verification, refund/error tests required before enabling cards |
 | WhatsApp Business API | Required for WhatsApp notifications and templated reminders | Yes | Not launch-cleared | Business verification, template approval, token security, opt-in policy required |
 | SMS/Voice fallback | Optional emergency fallback | Yes | Not launch-cleared | Carrier/provider approval and cost controls required |
 | UAE data residency / hosting position | Required for institutional/government confidence | Yes | Not launch-cleared | Final hosting architecture and data-processing position must be documented |
@@ -67,6 +69,8 @@ Do not describe an integration as **live**, **approved**, **production-ready**, 
 - [ ] Confirm manual override by admin/dispatcher.
 
 ### 3.3 Payments
+
+**Phase 1 only:** Cash/Cheque evidence, exact final post-inspection quote, Admin approval and idempotent dashboard unlock are required. Bank Transfer and card/Stripe checkout are disabled. The following gateway items are a future release scope and are not evidence of current production payment processing.
 
 - [ ] Confirm gateway: Stripe, Network International, manual bank transfer, or phased combination.
 - [ ] Verify merchant account.

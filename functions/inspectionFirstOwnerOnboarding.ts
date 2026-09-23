@@ -121,14 +121,21 @@ function normalizeGeo(value: PlainRecord) {
     throw new HttpsError("failed-precondition", "A valid property GPS location is required before submission.");
   }
   return {
-    ...(cleanPlain(value?.geo || {})),
+    // Owner coordinates and map references are submission evidence, never trusted verification.
+    address: text(value?.geo?.address || value?.address).slice(0, 500),
+    emirate: text(value?.geo?.emirate || value?.emirate).slice(0, 120),
+    city: text(value?.geo?.city || value?.city).slice(0, 120),
+    area: text(value?.geo?.area || value?.area).slice(0, 160),
+    placeId: text(value?.geo?.placeId).slice(0, 240),
+    geohash: text(value?.geo?.geohash).slice(0, 120),
+    submittedSource: text(value?.geo?.source).slice(0, 80),
     point: new admin.firestore.GeoPoint(lat, lng),
     lat,
     lng,
     verified: false,
     dispatchReady: false,
     requiresGeoReview: true,
-    source: text(value?.geo?.source || "owner_five_page_submission"),
+    source: "owner_submission",
   };
 }
 
@@ -419,8 +426,18 @@ export const submitOwnerInspectionFirstOnboarding = onCall({ cors: true, enforce
     const normalizedProperties: PlainRecord[] = properties.map((property: PlainRecord, index: number) => {
       const clientDraftId = safeId(property.id || property.propertyId, `draft_property_${index + 1}`);
       const propertyId = safeId(`${intakeId}_property_${index + 1}`, `owner_${owner.uid}_property_${index + 1}`);
+      const ownerFields = { ...property };
+      // Never forward arbitrary browser-supplied privilege flags into canonical records.
+      for (const field of ["geo", "submittedGeo", "geoAnchor", "verifiedGeo", "geoVerification", "verified", "verifiedBy", "verifiedAt",
+        "dispatchReady", "requiresGeoReview", "geoReviewStatus", "geoVerifiedAt", "geoVerifiedBy", "status",
+        "approvalStatus", "activationStatus", "paymentStatus", "paymentVerified", "adminApproved", "approved",
+        "contractActivated", "dashboardUnlocked", "dashboardUnlockApproved", "unlocksDashboard", "inspectionVerified",
+        "adminSiteVisitVerified", "locationVerified", "inspectionStatus", "ownerId", "ownerUid", "ownerEmail", "intakeId",
+        "contractId", "quoteHash", "quoteSnapshot", "quoteVersion", "workflowVersion", "id", "propertyId"]) {
+        delete ownerFields[field];
+      }
       return {
-        ...property,
+        ...ownerFields,
         clientDraftId,
         id: propertyId,
         propertyId,
@@ -428,12 +445,19 @@ export const submitOwnerInspectionFirstOnboarding = onCall({ cors: true, enforce
         ownerId: owner.uid,
         ownerEmail,
         intakeId,
+        workflowVersion: OWNER_WORKFLOW_VERSION,
         contractId,
         quoteHash: quote.quoteHash,
         geo: normalizeGeo(property),
+        submittedGeo: normalizeGeo(property),
         status: "PENDING_PROPERTY_INSPECTION",
         activationStatus: "LOCKED_PENDING_INSPECTION_AND_PAYMENT",
         inspectionStatus: "PENDING_ADMIN_SITE_VISIT",
+        verified: false,
+        dispatchReady: false,
+        requiresGeoReview: true,
+        approved: false,
+        inspectionVerified: false,
         locationVerified: false,
         paymentVerified: false,
         adminApproved: false,

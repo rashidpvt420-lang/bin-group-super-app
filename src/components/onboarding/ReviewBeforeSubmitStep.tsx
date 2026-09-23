@@ -9,6 +9,7 @@ import { useOnboardingStore } from '../../store/onboardingStore';
 import { useLanguage } from '@bin/shared';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { auth, functions, httpsCallable } from '../../lib/firebase';
+import { canContinueOwnerReview } from './reviewQuoteGate';
 
 const badCopy = (value?: string) => {
     const text = String(value || '').trim();
@@ -221,6 +222,12 @@ const ReviewBeforeSubmitStep: React.FC<{
     const verifiedQuote = authReady && !quoteLoading && !quoteExpired && !quoteError && signedInUid === ownerAccount?.uid
         && valuationResult?.serverQuoteRequestKey === quoteRequestKey
         && verifiedQuoteKey === `${quoteRequestKey}:${serverQuote?.quoteHash}` ? serverQuote : null;
+    const canContinue = canContinueOwnerReview({
+        authReady, quoteLoading, quoteError, signedInUid, ownerUid: ownerAccount?.uid,
+        quote: serverQuote, quoteRequestKey,
+        persistedQuoteRequestKey: valuationResult?.serverQuoteRequestKey,
+        verifiedQuoteKey, allPropertyPinsSaved, nowMs: Date.now(),
+    });
     const preliminaryAnnual = Object.values(portfolioSummary.quoteResults || {}).reduce(
         (total, quote) => total + Number(quote?.annualTotal || 0), 0,
     ) || Number(portfolioSummary.estimatedACV || 0);
@@ -229,7 +236,7 @@ const ReviewBeforeSubmitStep: React.FC<{
     const displayedDeposit = verifiedQuote?.activationDeposit ?? preliminaryDeposit;
 
     const handleNext = () => {
-        if (!verifiedQuote) {
+        if (!canContinue || !verifiedQuote) {
             setQuoteError(copy('onboarding.server_quote_expired', 'The server quotation expired. Generate a new quotation before continuing.'));
             return;
         }
@@ -353,7 +360,7 @@ const ReviewBeforeSubmitStep: React.FC<{
 
             <Box sx={{ mt: 4, display: 'flex', justifyContent: 'space-between', gap: 2, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
                 <Button variant="outlined" size="large" onClick={onBack} startIcon={!isRTL ? <ArrowLeft /> : null} endIcon={isRTL ? <ArrowLeft style={{ transform: 'rotate(180deg)' }} /> : null} sx={{ borderRadius: 100, px: 4, color: '#FFF', borderColor: 'rgba(255,255,255,0.16)' }}>{copy('onboarding.back', 'Back')}</Button>
-                <Button variant="contained" size="large" onClick={handleNext} disabled={quoteLoading || !verifiedQuote || !allPropertyPinsSaved} endIcon={isRTL ? <ArrowRight style={{ transform: 'rotate(180deg)' }} /> : <ArrowRight />} sx={{ borderRadius: 100, px: 6, bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>{lang === 'ar' ? 'المتابعة إلى التوقيع' : 'Continue to Signature'}</Button>
+                <Button variant="contained" size="large" onClick={handleNext} disabled={!canContinue} endIcon={isRTL ? <ArrowRight style={{ transform: 'rotate(180deg)' }} /> : <ArrowRight />} sx={{ borderRadius: 100, px: 6, bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>{lang === 'ar' ? 'المتابعة إلى التوقيع' : 'Continue to Signature'}</Button>
             </Box>
         </Container>
     );

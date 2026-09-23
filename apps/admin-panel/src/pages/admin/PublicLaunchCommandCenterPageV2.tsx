@@ -290,11 +290,11 @@ export default function PublicLaunchCommandCenterPageV2() {
   const evidenceAuthoritative = Boolean(RELEASE_SHA) && authorization.authorized && !evidenceLoading && !evidenceError;
   const smokeAuthoritative = Boolean(RELEASE_SHA) && authorization.authorized && !smokeLoading && !smokeError;
   const requiredGates = LAUNCH_GATES.filter((gate) => gate.required);
-  const gatePassed = (gate: LaunchGate) => evidenceCountsForPublicLaunch(
+  const gatePassed = React.useCallback((gate: LaunchGate) => evidenceCountsForPublicLaunch(
     currentEvidenceByGate.get(gate.id),
     RELEASE_SHA,
     requiredEvidenceLayerForGate(gate.id, gate.group),
-  );
+  ), [currentEvidenceByGate]);
   const passedCount = requiredGates.filter(gatePassed).length;
   const blockedCount = requiredGates.filter((gate) => currentEvidenceByGate.get(gate.id)?.status === 'blocked').length;
   const pendingRequired = requiredGates.length - passedCount - blockedCount;
@@ -329,7 +329,7 @@ export default function PublicLaunchCommandCenterPageV2() {
       const pending = gates.length - passed - blocked;
       return { group, total: gates.length, passed, blocked, pending, score: Math.round((passed / Math.max(gates.length, 1)) * 100) };
     });
-  }, [currentEvidenceByGate]);
+  }, [currentEvidenceByGate, gatePassed]);
 
   const retryEvidenceAccess = async () => {
     try {

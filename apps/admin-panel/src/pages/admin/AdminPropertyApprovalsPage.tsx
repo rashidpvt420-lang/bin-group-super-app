@@ -2,7 +2,7 @@ import React from 'react';
 import { Alert, Box, Button, Chip, Paper, Stack, Table, TableBody, TableCell, TableHead, TableRow, TextField, Typography } from '@mui/material';
 import { collection, db, functions, httpsCallable, onSnapshot } from '../../lib/firebase';
 
-const pendingStates = ['PENDING', 'PENDING REVIEW', 'ADMIN REVIEW', 'SUBMITTED', 'DRAFT', 'UNKNOWN'];
+const pendingStates = ['PENDING', 'PENDING REVIEW', 'ADMIN REVIEW', 'SUBMITTED'];
 const normalize = (value: unknown) => String(value || 'UNKNOWN').replace(/_/g, ' ').toUpperCase();
 const toMillis = (value: any) => {
   if (!value) return 0;
@@ -66,7 +66,7 @@ export default function AdminPropertyApprovalsPage() {
       <Stack spacing={3}>
         <Box>
           <Typography variant="h4" fontWeight="950">Property Review Command</Typography>
-          <Typography color="rgba(255,255,255,0.6)">Founder-MFA review promotes Owner-submitted coordinates into canonical dispatch geography.</Typography>
+          <Typography color="rgba(255,255,255,0.6)">Founder-MFA document review records approval. Inspection-first properties require separate verified field evidence before dispatch geography or activation.</Typography>
         </Box>
         {message && <Alert severity={message.includes('failed') || message.includes('Could not') || message.includes('required') ? 'error' : 'success'}>{message}</Alert>}
         <Paper sx={{ p: 2, bgcolor: '#0f172a', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 3 }}>
@@ -86,7 +86,7 @@ export default function AdminPropertyApprovalsPage() {
                   <TableCell>{row.submittedGeo?.address || row.address || row.city || row.emirate || 'Not recorded'}</TableCell>
                   <TableCell><Chip size="small" label={normalize(row.approvalStatus || row.status || row.onboardingStatus)} /></TableCell>
                   <TableCell align="right"><Stack direction="row" justifyContent="flex-end" spacing={1}>
-                    <Button size="small" variant="contained" disabled={busyId === row.id} onClick={() => decide(row, 'APPROVE')}>Approve & verify geo</Button>
+                    <Button size="small" variant="contained" disabled={busyId === row.id} onClick={() => decide(row, 'APPROVE')}>{row.workflowVersion === 'OWNER_FIVE_PAGE_INSPECTION_FIRST_V1' ? 'Approve documents' : 'Approve & verify geo'}</Button>
                     <Button size="small" color="error" variant="outlined" disabled={busyId === row.id} onClick={() => decide(row, 'REJECT')}>Reject</Button>
                   </Stack></TableCell>
                 </TableRow>

@@ -6,6 +6,7 @@ import {
   hasDispatchReadyPropertyGeo,
   PropertyGeoAuthorityError,
 } from "./propertyGeoAuthority";
+import { INSPECTION_FIRST_WORKFLOW, reviewableInspectionFirstProperty } from "./inspectionFirstPropertyReviewPolicy";
 
 if (!admin.apps.length) admin.initializeApp();
 
@@ -20,7 +21,6 @@ const REVIEWABLE_STATUSES = new Set([
   "pending_admin_review",
   "onboarding",
   "submitted",
-  "draft",
   "admin_review",
 ]);
 const APPROVED_STATUSES = new Set(["approved", "active"]);
@@ -88,8 +88,18 @@ export const adminReviewOwnerProperty = onCall(
       const propertySnap = await transaction.get(propertyRef);
       if (!propertySnap.exists) throw new HttpsError("not-found", "Property not found.");
       const property = propertySnap.data() || {};
+      const inspectionFirst = property.workflowVersion === INSPECTION_FIRST_WORKFLOW;
+      if (inspectionFirst) {
+        const intakeId = text(property.intakeId, 240);
+        if (!intakeId) throw new HttpsError("failed-precondition", "A linked submitted Owner application is required for review.");
+        const intakeSnap = await transaction.get(db.collection("intake_submissions").doc(intakeId));
+        if (!reviewableInspectionFirstProperty(property, intakeSnap.exists ? intakeSnap.data() || {} : null,
+          text(property.ownerUid || property.ownerId, 240), propertyId)) {
+          throw new HttpsError("failed-precondition", "Only a submitted, linked inspection-first property awaiting document review is eligible.");
+        }
+      }
       const status = normalizedStatus(property.status || property.approvalStatus || property.onboardingStatus);
-      const pendingReview = REVIEWABLE_STATUSES.has(status);
+      const pendingReview = inspectionFirst || REVIEWABLE_STATUSES.has(status);
       const approvedLegacy = APPROVED_STATUSES.has(status);
       const alreadyVerified = hasDispatchReadyPropertyGeo(property);
       const geoOnlyReview = decision === "APPROVE" && approvedLegacy && !alreadyVerified;
@@ -104,7 +114,7 @@ export const adminReviewOwnerProperty = onCall(
       const propertyName = text(property.name || property.propertyName || property.address, 240) || "Property";
       const recipientId = text(property.ownerId || property.ownerUid, 240);
       const nextStatus = decision === "APPROVE"
-        ? approvedLegacy ? text(property.status, 80) || "APPROVED" : "APPROVED"
+        ? inspectionFirst ? "PENDING_PROPERTY_INSPECTION" : approvedLegacy ? text(property.status, 80) || "APPROVED" : "APPROVED"
         : "REJECTED";
       const update: Record<string, unknown> = {
         status: nextStatus,
@@ -117,7 +127,7 @@ export const adminReviewOwnerProperty = onCall(
       let geoDispatchReady = false;
       let auditAction = decision === "APPROVE" ? "APPROVE_PROPERTY" : "REJECT_PROPERTY";
 
-      if (decision === "APPROVE") {
+      if (decision === "APPROVE" && !inspectionFirst) {
         try {
           const canonical = buildFounderVerifiedPropertyGeo(property, actor.uid, now);
           update.geo = canonical.geo;
@@ -140,6 +150,11 @@ export const adminReviewOwnerProperty = onCall(
         update.approvedBy = approvedLegacy ? property.approvedBy || actor.uid : actor.uid;
         update.rejectionReason = FieldValue.delete();
         if (geoOnlyReview) auditAction = "VERIFY_PROPERTY_GEO";
+      } else if (decision === "APPROVE") {
+        // Document review never creates field evidence or trusted dispatch geography.
+        update.approvedAt = now;
+        update.approvedBy = actor.uid;
+        update.rejectionReason = FieldValue.delete();
       } else {
         update.rejectedAt = now;
         update.rejectedBy = actor.uid;
