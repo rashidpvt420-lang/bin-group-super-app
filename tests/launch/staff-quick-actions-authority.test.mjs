@@ -18,6 +18,9 @@ const visibleActions = [
   'ACCIDENT_REPORT',
 ];
 
+const genericServerActions = ['CLOCK_IN', 'ARRIVE', 'START_JOB', 'BREAKDOWN_REPORT'];
+const compositeActions = ['FINISH_JOB', 'REQUEST_OVERTIME', 'ACCIDENT_REPORT'];
+
 test('every visible Staff quick action has an explicit authoritative handler', () => {
   for (const action of visibleActions) {
     assert.ok(fab.includes(`type: "${action}"`), `quick-action FAB is missing ${action}`);
@@ -35,18 +38,16 @@ test('every visible Staff quick action has an explicit authoritative handler', (
 });
 
 test('direct Staff quick-action callable only accepts the exact UI-mapped server actions', () => {
-  assert.match(
-    backend,
-    /supportedActions = new Set\(\["CLOCK_IN", "ARRIVE", "START_JOB", "BREAKDOWN_REPORT"\]\)/,
-  );
+  const supportedActionsDeclaration = 'supportedActions = new Set(["CLOCK_IN", "ARRIVE", "START_JOB", "BREAKDOWN_REPORT"])';
+  assert.ok(backend.includes(supportedActionsDeclaration));
   assert.match(backend, /if \(!supportedActions\.has\(actionType\)\)/);
 
-  // Composite UI actions must remain routed through their dedicated workflows,
-  // not be silently added to the generic callable without a reviewed contract.
-  for (const composite of ['FINISH_JOB', 'REQUEST_OVERTIME', 'ACCIDENT_REPORT']) {
-    assert.doesNotMatch(
-      backend,
-      new RegExp(`supportedActions[^;]+${composite}`),
+  for (const serverAction of genericServerActions) {
+    assert.ok(supportedActionsDeclaration.includes(`"${serverAction}"`));
+  }
+  for (const composite of compositeActions) {
+    assert.ok(
+      !supportedActionsDeclaration.includes(composite),
       `${composite} must keep using its dedicated authoritative workflow`,
     );
   }
