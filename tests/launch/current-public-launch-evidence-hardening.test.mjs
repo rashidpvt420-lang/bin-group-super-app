@@ -16,6 +16,8 @@ test('public launch route fails closed until all five protected role smokes pass
   }
   assert.match(routeGuard, /normalizeCommitSha\(process\.env\.REACT_APP_RELEASE_COMMIT_SHA\)/);
   assert.match(routeGuard, /evidenceCountsForPublicLaunch/);
+  assert.match(routeGuard, /isProtectedLaunchEvidenceRecord/);
+  assert.match(routeGuard, /if \(!isProtectedLaunchEvidenceRecord\(record, RELEASE_SHA\)\) continue/);
   assert.match(routeGuard, /smokePassedCount === REQUIRED_SMOKE_ROLES\.length/);
   assert.match(routeGuard, /if \(!fiveRoleSmokeReady\)/);
   assert.match(routeGuard, /PUBLIC LAUNCH BLOCKED/);
@@ -26,6 +28,8 @@ test('public launch route fails closed until all five protected role smokes pass
 
 test('detailed command center remains exact-SHA and protected-execution evidence aware', () => {
   assert.match(detailedCommandCenter, /evidenceCountsForPublicLaunch/);
+  assert.match(detailedCommandCenter, /isProtectedLaunchEvidenceRecord/);
+  assert.match(detailedCommandCenter, /itemProtected && !existingProtected/);
   assert.match(detailedCommandCenter, /RELEASE_SHA = normalizeCommitSha\(process\.env\.REACT_APP_RELEASE_COMMIT_SHA\)/);
   assert.match(detailedCommandCenter, /executionGenerated: false/);
   assert.match(detailedCommandCenter, /hardLaunchClaim: false/);
@@ -46,4 +50,11 @@ test('production Firestore artifact makes launch evidence append-only and preven
   assert.match(productionRulesWriter, /allow update, delete: if false;/);
   assert.match(productionRulesWriter, /launchEvidenceBrowserAuthority: 'manual-create-only-append-only-no-github-provenance'/);
   assert.equal(firebaseConfig.firestore.rules, 'launch_generated/firestore.rules');
+});
+
+
+test('manual evidence cannot shadow protected current-SHA evidence in the Admin launch UI', () => {
+  assert.match(routeGuard, /Manual browser records are history only and must never shadow/);
+  assert.match(detailedCommandCenter, /Protected GitHub evidence is authoritative/);
+  assert.match(detailedCommandCenter, /source \{selectedEvidence\.source \|\| 'unknown'\}/);
 });
