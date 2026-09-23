@@ -21,9 +21,8 @@ const deferredStaffFlags = [
 
 test('incomplete Staff OS modules remain explicitly disabled for production', () => {
   for (const flag of deferredStaffFlags) {
-    assert.match(
-      staffFlags,
-      new RegExp(`${flag}:\\s*false\\b`),
+    assert.ok(
+      staffFlags.includes(`${flag}: false`),
       `${flag} must remain disabled until the module is implemented and tested`,
     );
   }
