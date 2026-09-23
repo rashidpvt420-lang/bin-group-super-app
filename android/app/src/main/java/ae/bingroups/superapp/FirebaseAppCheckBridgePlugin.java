@@ -19,11 +19,18 @@ import java.util.Locale;
 
 @CapacitorPlugin(name = "FirebaseAppCheckBridge")
 public class FirebaseAppCheckBridgePlugin extends Plugin {
-    // SHA-256 of the certificate actually observed on the Google-Play-installed
-    // production package. This must match the Play delivery signer, not the
-    // upload key or a different/rotated signing identity shown in Play Console.
-    private static final String EXPECTED_PLAY_SIGNING_SHA256 =
+    // Google Play upgraded the app-signing key. Trust only the two Play delivery
+    // signing identities shown in Play Console: the current key and its previous
+    // legitimate signing key. The upload key is intentionally not trusted here.
+    private static final String CURRENT_PLAY_SIGNING_SHA256 =
+        "C50013AFE769A52A2CE07A3F4EE2CDFAD1A0A448884630F819BBCC4C932B7A85";
+    private static final String PREVIOUS_PLAY_SIGNING_SHA256 =
         "5B907128BD19514E4D3F804B1E4583D15F0B65F51D61746F6804DAE1B2DCD26C";
+
+    private boolean isTrustedPlayDeliverySigner(String fingerprint) {
+        return CURRENT_PLAY_SIGNING_SHA256.equals(fingerprint)
+            || PREVIOUS_PLAY_SIGNING_SHA256.equals(fingerprint);
+    }
 
     private String sha256(Signature signature) {
         try {
@@ -74,11 +81,11 @@ public class FirebaseAppCheckBridgePlugin extends Plugin {
                 for (Signature signature : currentSigners(signingInfo)) {
                     String fingerprint = sha256(signature);
                     if (!fingerprint.isBlank()) currentPrefix = fingerprint.substring(0, Math.min(12, fingerprint.length()));
-                    if (EXPECTED_PLAY_SIGNING_SHA256.equals(fingerprint)) return "S_OK";
+                    if (isTrustedPlayDeliverySigner(fingerprint)) return "S_OK";
                 }
                 for (Signature signature : signingHistory(signingInfo)) {
                     String fingerprint = sha256(signature);
-                    if (EXPECTED_PLAY_SIGNING_SHA256.equals(fingerprint)) return "S_HISTORY_" + currentPrefix;
+                    if (isTrustedPlayDeliverySigner(fingerprint)) return "S_HISTORY_" + currentPrefix;
                 }
                 return "S_MISMATCH_" + currentPrefix;
             }
@@ -89,7 +96,7 @@ public class FirebaseAppCheckBridgePlugin extends Plugin {
             for (Signature signature : signatures) {
                 String fingerprint = sha256(signature);
                 if (!fingerprint.isBlank()) prefix = fingerprint.substring(0, Math.min(12, fingerprint.length()));
-                if (EXPECTED_PLAY_SIGNING_SHA256.equals(fingerprint)) return "S_OK";
+                if (isTrustedPlayDeliverySigner(fingerprint)) return "S_OK";
             }
             return "S_MISMATCH_" + prefix;
         } catch (Exception ignored) {
