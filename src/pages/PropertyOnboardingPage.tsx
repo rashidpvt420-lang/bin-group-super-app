@@ -30,6 +30,7 @@ export default function PropertyOnboardingPage() {
     const validBrokerUid = /^[A-Za-z0-9_-]{6,128}$/.test(brokerUid);
     const [guardError, setGuardError] = React.useState('');
     const [section, setSection] = React.useState(0);
+    const reviewEditTarget = React.useRef<{ page: number; section: number } | null>(null);
 
     const safePage = clampPage(step);
     const pageProgress = safePage * 20;
@@ -50,7 +51,12 @@ export default function PropertyOnboardingPage() {
 
     React.useEffect(() => {
         if (step !== safePage) setStep(safePage);
-        setSection(0);
+        if (reviewEditTarget.current?.page === safePage) {
+            setSection(reviewEditTarget.current.section);
+            reviewEditTarget.current = null;
+        } else {
+            setSection(0);
+        }
         setGuardError('');
         window.scrollTo({ top: 0, behavior: 'smooth' });
     }, [safePage, setStep, step]);
@@ -82,6 +88,13 @@ export default function PropertyOnboardingPage() {
             return;
         }
         goBackPage();
+    };
+
+    const editReviewSection = (page: number, targetSection: number) => {
+        setGuardError('');
+        reviewEditTarget.current = { page, section: targetSection };
+        setStep(page);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
     const guardedAssetNext = () => {
@@ -124,7 +137,10 @@ export default function PropertyOnboardingPage() {
         }
         if (safePage === 4) {
             return section === 0
-                ? <ReviewBeforeSubmitStep onNext={advanceSection} onBack={backSectionOrPage} />
+                ? <ReviewBeforeSubmitStep onNext={advanceSection} onBack={backSectionOrPage}
+                    onEditLocation={() => editReviewSection(2, 2)}
+                    onEditProperty={() => editReviewSection(2, 0)}
+                    onEditTerms={() => editReviewSection(3, 0)} />
                 : <ContractSignatureStep onNext={advancePage} onBack={backSectionOrPage} />;
         }
         return <InspectionSubmissionStep onBack={goBackPage} />;

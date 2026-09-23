@@ -250,7 +250,8 @@ export function RoleProvider({ children }: { children: ReactNode }) {
                     setIsAdmin(recoveredIsAdmin);
                     setStatus('profile_unavailable');
                     setUser({ ...currentUser, role: recoveredRole, isAdmin: recoveredIsAdmin, status: 'profile_unavailable' } as SovereignUser);
-                    setError("PROFILE UNAVAILABLE: Secure account verification could not complete after refreshing the session. Retry before entering a portal.");
+                    const failureCode = profileReadErrorCode(err).replace(/[^a-z0-9-]/g, '').slice(0, 40) || 'unknown';
+                    setError(`PROFILE UNAVAILABLE: Secure account verification failed (${failureCode}). Retry before entering a portal.`);
                     setLoading(false);
                     return;
                 }
@@ -393,14 +394,21 @@ export function RoleProvider({ children }: { children: ReactNode }) {
         if (status !== 'profile_unavailable' || typeof window === 'undefined') return;
 
         const recoverWhenOnline = () => {
-            if (auth.currentUser) {
+            if (auth.currentUser && navigator.onLine !== false) {
                 console.info('[ROLE-SYNC] Connectivity restored; retrying secure account verification.');
                 void refreshRole();
             }
         };
 
         window.addEventListener('online', recoverWhenOnline);
-        return () => window.removeEventListener('online', recoverWhenOnline);
+        const recoverWhenVisible = () => {
+            if (document.visibilityState === 'visible') recoverWhenOnline();
+        };
+        document.addEventListener('visibilitychange', recoverWhenVisible);
+        return () => {
+            window.removeEventListener('online', recoverWhenOnline);
+            document.removeEventListener('visibilitychange', recoverWhenVisible);
+        };
     }, [status]);
 
     useEffect(() => {

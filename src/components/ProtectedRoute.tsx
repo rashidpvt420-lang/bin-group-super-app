@@ -41,7 +41,7 @@ const ROLE_HOME_PATHS: Record<string, string> = {
 const resolveRoleHomePath = (normalizedRole: string) => ROLE_HOME_PATHS[normalizedRole] || '/gateway';
 
 const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles, requiredPermission }) => {
-    const { user, role, status, isAdmin, loading, hasPermission, refreshRole } = useRole();
+    const { user, role, status, error, isAdmin, loading, hasPermission, refreshRole } = useRole();
     const { t, lang } = useLanguage();
     const location = useLocation();
     const isRTL = lang === 'ar';
@@ -108,6 +108,11 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles,
                             ? 'تم إيقاف الوصول لحماية بياناتك. أعد المحاولة بعد استعادة الاتصال أو تواصل مع الدعم إذا استمرت المشكلة.'
                             : 'Portal access is paused because the server profile could not be verified. Retry after restoring connectivity or contact support if this continues.'}
                     </Typography>
+                    {currentStatus === 'profile_unavailable' && error && (
+                        <Typography variant="caption" color={binThemeTokens.textSecondary}>
+                            {lang === 'ar' ? 'رمز التحقق' : 'Verification code'}: {error.match(/\(([a-z0-9-]+)\)/)?.[1] || 'unknown'}
+                        </Typography>
+                    )}
                     <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
                         <Button variant="contained" onClick={() => void refreshRole()}>
                             {lang === 'ar' ? 'إعادة المحاولة' : 'RETRY VERIFICATION'}
@@ -115,6 +120,11 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles,
                         <Button variant="outlined" startIcon={<LogOut size={18} />} onClick={() => auth.signOut()}>
                             {lang === 'ar' ? 'تسجيل الخروج' : 'SIGN OUT'}
                         </Button>
+                        {normalizedRole === 'owner' && currentStatus === 'profile_unavailable' && (
+                            <Button variant="outlined" onClick={() => window.location.assign('/onboarding')}>
+                                {lang === 'ar' ? 'العودة إلى طلب العقار' : 'RETURN TO APPLICATION'}
+                            </Button>
+                        )}
                     </Stack>
                 </Stack>
             </Box>
