@@ -190,11 +190,11 @@ test('19 queued arrival carries only hashed binding and is revalidated for ident
   assert.doesNotMatch(job, /firebaseInstallationId|rawInstallationId/);
 });
 
-test('20 release contract documents reinstall fail-closed behavior and uses Android versionCode 9', () => {
+test('20 release contract documents reinstall fail-closed behavior and uses Android versionCode 10', () => {
   assert.match(docs, /Reinstalling the app or clearing app data can produce a new Firebase/);
   assert.match(docs, /never silently replaces an existing secure digest/);
   assert.match(docs, /separate, controlled administrative/);
-  assert.match(gradle, /versionCode\s+9\b/);
+  assert.match(gradle, /versionCode\s+10\b/);
   assert.match(gradle, /versionName\s+"1\.0"/);
   assert.match(gradle, /firebase-installations/);
   assert.match(runtime, /registerTechnicianDevice/);
