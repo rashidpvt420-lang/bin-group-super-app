@@ -514,7 +514,18 @@ const LoginPage: React.FC = () => {
                                     inputProps={{ 'data-testid': 'login-password' }}
                                     InputProps={{
                                         startAdornment: <InputAdornment position="start"><SafeIcon icon={Key} size={20} color={palette.gold} /></InputAdornment>,
-                                        endAdornment: <InputAdornment position="end"><IconButton onClick={() => setShowPassword(!showPassword)} edge="end" sx={{ color: palette.ink }}><SafeIcon icon={showPassword ? EyeOff : Eye} size={20} /></IconButton></InputAdornment>,
+                                        endAdornment: <InputAdornment position="end"><IconButton
+                                            type="button"
+                                            data-testid="login-password-visibility"
+                                            aria-label={showPassword
+                                                ? tx('login.hide_password', 'Hide password')
+                                                : tx('login.show_password', 'Show password')}
+                                            onClick={() => setShowPassword(!showPassword)}
+                                            edge="end"
+                                            sx={{ color: palette.ink }}
+                                        >
+                                            <SafeIcon icon={showPassword ? EyeOff : Eye} size={20} />
+                                        </IconButton></InputAdornment>,
                                     }}
                                     sx={{
                                         '& .MuiInputBase-root': { bgcolor: '#FFFFFF', minHeight: 58, borderRadius: 2 },
