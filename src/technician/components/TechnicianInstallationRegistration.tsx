@@ -12,8 +12,13 @@ const safeDiagnosticCode = (error: any): string => {
     error?.cause?.code,
   ];
   for (const value of candidates) {
-    const code = String(value || '').trim().toUpperCase();
-    if (/^[A-Z0-9_-]{2,80}(?:__[A-Z0-9_-]{2,80}){0,4}$/.test(code)) return code;
+    const code = String(value || '')
+      .trim()
+      .toUpperCase()
+      .replace(/[^A-Z0-9_-]+/g, '_')
+      .replace(/^_+|_+$/g, '')
+      .slice(0, 80);
+    if (/^[A-Z0-9_-]{2,80}$/.test(code)) return code;
   }
   return '';
 };

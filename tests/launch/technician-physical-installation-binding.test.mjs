@@ -68,6 +68,17 @@ test('04 client platform detection cannot create proof without the protected nat
   assert.doesNotMatch(client, /platform:\s*['"]android['"]/);
 });
 
+test('04b Technician registration refreshes Auth, native App Check, and Web App Check before callable dispatch', () => {
+  const authRefresh = client.indexOf('currentUser.getIdToken(true)');
+  const nativeRefresh = client.indexOf('forceNativeAppCheckRefresh()');
+  const webRefresh = client.indexOf('getAppCheckToken(appCheck, true)');
+  const callable = client.indexOf("httpsCallable(functions, 'registerTechnicianDevice')");
+  assert.ok(authRefresh >= 0);
+  assert.ok(nativeRefresh > authRefresh);
+  assert.ok(webRefresh > nativeRefresh);
+  assert.ok(callable > webRefresh);
+});
+
 test('05 registration requires authenticated App Check-protected callable execution', () => {
   assert.match(backend, /registerTechnicianDevice = onCall/);
   assert.match(backend, /enforceAppCheck: true/);
@@ -190,11 +201,11 @@ test('19 queued arrival carries only hashed binding and is revalidated for ident
   assert.doesNotMatch(job, /firebaseInstallationId|rawInstallationId/);
 });
 
-test('20 release contract documents reinstall fail-closed behavior and uses Android versionCode 11', () => {
+test('20 release contract documents reinstall fail-closed behavior and uses Android versionCode 12', () => {
   assert.match(docs, /Reinstalling the app or clearing app data can produce a new Firebase/);
   assert.match(docs, /never silently replaces an existing secure digest/);
   assert.match(docs, /separate, controlled administrative/);
-  assert.match(gradle, /versionCode\s+11\b/);
+  assert.match(gradle, /versionCode\s+12\b/);
   assert.match(gradle, /versionName\s+"1\.0"/);
   assert.match(gradle, /firebase-installations/);
   assert.match(runtime, /registerTechnicianDevice/);
