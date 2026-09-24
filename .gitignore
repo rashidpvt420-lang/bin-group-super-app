@@ -172,3 +172,6 @@ launch_package/production-deployment-verify.log
 launch_package/production-incidents.json
 launch_package/privileged-account-cleanup.json
 launch_package/artifacts/
+
+# Generated Phase 2 route/screen audit artifacts
+.phase2-route-inventory/
