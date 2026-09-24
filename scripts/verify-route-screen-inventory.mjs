@@ -193,6 +193,39 @@ function e2eCoversRoute(row) {
   return Boolean(alias && exactRouteE2E.includes(`'${alias}'`));
 }
 
+const STATIC_CONTENT_ROUTES = new Set([
+  '/', '/pilot', '/owner-landing', '/v1',
+  '/terms-of-service', '/privacy-policy', '/terms', '/privacy',
+  '/support', '/feedback', '/pilot-feedback',
+  '/owners', '/tenants', '/technicians', '/brokers',
+  '/property-management', '/maintenance', '/majlis-care', '/stadiums',
+  '/hotels', '/malls', '/hospitals', '/government-properties',
+  '/security', '/trust', '/trust-center',
+  '/uae-market-leadership', '/owner-trust-os', '/workforce-os',
+  '/services', '/contact', '/request-demo', '/videos',
+]);
+
+const DASHBOARD_OR_STATUS_ROUTES = new Set([
+  '/owner', '/owner/dashboard',
+  '/tenant', '/tenant/dashboard',
+  '/technician', '/technician/dashboard',
+  '/broker', '/broker/dashboard',
+  '/owner/pilot-completion', '/technician/pilot-completion',
+  'admin-site:/dashboard', 'admin-site:/smoke-test',
+  'admin-site:/control-center', 'admin-site:/profitability',
+  'admin-site:/ops/pilot-completion', 'admin-site:/ops/public-launch-command',
+  'admin-site:/ops/data-governance',
+]);
+
+function collectionStateApplicable(content, row) {
+  if (STATIC_CONTENT_ROUTES.has(row.route) || DASHBOARD_OR_STATUS_ROUTES.has(row.route)) return false;
+  const listSignals =
+    /\.map\s*\(|<TableBody|DataGrid|ListItem|Grid\s+container|rows\b|records\b|items\b|results\b|documents\b|tickets\b|jobs\b|payments\b|notifications\b|messages\b|leads\b|referrals\b|units\b|tenants\b|listings\b|requests\b|vendors\b|rfqs\b/i.test(content);
+  const detailOrForm =
+    /useParams\s*\(|<TextField|<form|onSubmit|submit|upload|verification|verify|profile|detail|settings/i.test(content);
+  return listSignals && !detailOrForm;
+}
+
 function isStaticRouteData(dataSource, content) {
   if (dataSource !== 'static/local or delegated hook') return false;
   const asyncOrCollectionSignals =
@@ -235,7 +268,7 @@ function signals(content, row) {
   if (!sources.length) sources.push('static/local or delegated hook');
 
   const dataSource = [...new Set(sources)].join('+');
-  const staticData = isStaticRouteData(dataSource, content);
+  const staticData = STATIC_CONTENT_ROUTES.has(row.route) || isStaticRouteData(dataSource, content);
   const hasLoading = /\bloading\b|CircularProgress|Skeleton|LinearProgress|isLoading|pending|saving|busy|submitting|refreshing|processing|fetching/i.test(content);
   const hasEmpty = /length\s*===\s*0|\.empty\b|no\s+(records|items|data|properties|tickets|jobs|documents|results|payments|notifications|messages|leads|referrals|units|tenants|missions|vendors|rfqs|requests|listings)|nothing\s+to\s+show/i.test(content);
   const hasError = /setError|setWarning|setNotice|error\s*&&|warning\s*&&|notice\s*&&|severity=["'](?:error|warning)|catch\s*\(/i.test(content);
@@ -244,15 +277,23 @@ function signals(content, row) {
   return {
     dataSource,
     loading: staticData ? 'N/A_STATIC' : (hasLoading ? 'EXPLICIT' : 'REVIEW'),
-    empty: staticData ? 'N/A_STATIC' : (emptyStateNotApplicable(row) ? 'N/A_NOT_LIST' : (hasEmpty ? 'EXPLICIT' : 'REVIEW')),
+    empty: staticData
+      ? 'N/A_STATIC'
+      : (!collectionStateApplicable(content, row) || emptyStateNotApplicable(row)
+          ? 'N/A_NOT_COLLECTION'
+          : (hasEmpty ? 'EXPLICIT' : 'REVIEW')),
     error: staticData ? 'N/A_STATIC' : (hasError ? 'EXPLICIT' : 'REVIEW'),
     success: 'REGISTERED_RENDER',
-    mobile: /\bxs\s*:|\bsm\s*:|\bmd\s*:|\blg\s*:|useMediaQuery|100dvh|flexWrap/i.test(content)
-      ? 'RESPONSIVE_HINTS'
-      : (routeE2E ? 'E2E_PHONE_VIEWPORT' : 'REVIEW'),
-    arabic: /useLanguage|isRTL|lang\s*===\s*['"]ar['"]|tx\s*\(|[\u0600-\u06ff]/.test(content)
-      ? 'I18N_HINTS'
-      : (routeE2E ? 'E2E_ARABIC_RTL' : 'REVIEW'),
+    mobile: row.route === 'admin-site:/auth-error'
+      ? 'SHELL_RESPONSIVE'
+      : (/\bxs\s*:|\bsm\s*:|\bmd\s*:|\blg\s*:|useMediaQuery|100dvh|flexWrap/i.test(content)
+          ? 'RESPONSIVE_HINTS'
+          : (routeE2E ? 'E2E_PHONE_VIEWPORT' : 'REVIEW')),
+    arabic: row.route === 'admin-site:/auth-error'
+      ? 'SHELL_I18N'
+      : (/useLanguage|isRTL|lang\s*===\s*['"]ar['"]|tx\s*\(|[\u0600-\u06ff]/.test(content)
+          ? 'I18N_HINTS'
+          : (routeE2E ? 'E2E_ARABIC_RTL' : 'REVIEW')),
   };
 }
 
@@ -266,6 +307,9 @@ function backNavigation(row, content) {
   }
   if (row.scope === 'main') {
     if (/Navigate/.test(row.element) || row.raw === '*') return 'N/A_REDIRECT';
+    if (['/owner/*', '/tenant/*', '/technician/*', '/broker/*'].includes(row.route)) return 'N/A_ROUTE_CONTAINER';
+    if (row.route === '/auditor/*') return 'GLOBAL_FLOATING_NAV';
+    if (row.route === '/admin/*') return 'N/A_ADMIN_HANDOFF_ROOT';
     if (e2eCoversRoute(row)) return 'E2E_BROWSER_HISTORY';
   }
   return 'REVIEW';
