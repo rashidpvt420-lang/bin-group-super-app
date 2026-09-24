@@ -27,6 +27,7 @@ import TenantsPage from './pages/tenants/TenantsManagementPage';
 import TicketsPage from './pages/tickets/TicketsManagementPage';
 import TechniciansPage from './pages/technicians/TechniciansManagementPage';
 import SettingsPage from './pages/settings/SettingsPage';
+import SmokeTestPage from './pages/smoke-test/SmokeTestPage';
 import AdminSecurityProfilePage from './pages/settings/AdminSecurityProfilePage';
 import AdminMfaRecoveryPage from './pages/settings/AdminMfaRecoveryPage';
 import AdminContractControlPage from './pages/admin/AdminContractControlPage';
@@ -128,6 +129,7 @@ function AppContent() {
                     <Route path="/audit-shield" element={<ProtectedRoute adminOnly><AuditShieldPage /></ProtectedRoute>} />
                     <Route path="/reports" element={<ProtectedRoute adminOnly><ReportsPage /></ProtectedRoute>} />
                     <Route path="/settings" element={<ProtectedRoute adminOnly><SettingsPage /></ProtectedRoute>} />
+                    <Route path="/smoke-test" element={<ProtectedRoute adminOnly><SmokeTestPage /></ProtectedRoute>} />
                     <Route path="/manual-approvals" element={<Navigate to="/payments" replace />} />
                     <Route path="/admin/payments" element={<Navigate to="/payments" replace />} />
                     <Route path="/payments" element={<ProtectedRoute adminOnly><PaymentApprovalsPage /></ProtectedRoute>} />
