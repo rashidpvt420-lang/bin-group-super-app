@@ -266,7 +266,9 @@ function e2eCoversRoute(row) {
     '/technician': '/technician/dashboard',
     '/broker': '/broker/dashboard',
   };
-  const aliasedCandidate = portalRootAliases[candidate] || candidate;
+  const aliasedCandidate = ['owner', 'tenant', 'technician', 'broker'].includes(row.scope)
+    ? (portalRootAliases[candidate] || candidate)
+    : candidate;
 
   if (row.scope === 'main') {
     if (row.route === '/auditor/*' || row.route === '/admin/*') return false;
@@ -494,7 +496,12 @@ const liveAuditWorkflow = read('.github/workflows/live-launch-audit.yml');
 const launchHonestySource = read('scripts/lib/launch-honesty.mjs');
 if (!mainSpaRewrite) failures.push('Firebase app hosting does not rewrite deep links to /index.html.');
 if (!adminSpaRewrite) failures.push('Firebase Admin hosting does not rewrite deep links to /index.html.');
-if (!liveAuditWorkflow.includes("branches: [main]") || !liveAuditWorkflow.includes("GITHUB_REF\" != 'refs/heads/main'")) {
+if (
+  !liveAuditWorkflow.includes('branches: [main]') ||
+  !/GITHUB_REF[^\n]*refs\/heads\/main/.test(liveAuditWorkflow) ||
+  !liveAuditWorkflow.includes('Verify exact checked-out main SHA') ||
+  !liveAuditWorkflow.includes('git fetch origin main --depth=1')
+) {
   failures.push('Protected live launch audit must remain exact-main only.');
 }
 if (!launchHonestySource.includes("'tests/e2e/hard-launch-routes.spec.ts'")) {
