@@ -25,11 +25,7 @@ const block = `
 
     match /binConnectThreads/{threadId} {
       allow get: if isAdmin() || isBinConnectParticipant(resource.data);
-      allow list: if isAdmin() || (
-        signedIn() &&
-        resource.data.participantIds is list &&
-        request.auth.uid in resource.data.participantIds
-      );
+      allow list: if isAdmin();
       allow create: if safeBinConnectThreadCreate(request.resource.data);
       allow update: if isAdmin() || (isBinConnectParticipant(resource.data) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastMessage', 'lastMessageAt', 'updatedAt', 'status']));
       allow delete: if isAdmin();
@@ -47,14 +43,18 @@ const block = `
 
 if (rules.includes(marker)) {
   const legacyRead = '      allow read: if isAdmin() || isBinConnectParticipant(resource.data);';
+  const serverOnlyList = `      allow get: if isAdmin() || isBinConnectParticipant(resource.data);
+      // Non-admin enumeration is server-authoritative via listMyBinConnectThreads.
+      allow list: if isAdmin();`;
+  if (rules.includes("      allow get: if isAdmin() || isBinConnectParticipant(resource.data);\n      // List access is deliberately narrower and query-compatible: a non-admin\n      // browser must constrain participantIds with array-contains(request.auth.uid).\n      allow list: if isAdmin() || (\n        signedIn() &&\n        resource.data.get('participantIds', []) is list &&\n        request.auth.uid in resource.data.get('participantIds', [])\n      );")) {
+    rules = rules.replace("      allow get: if isAdmin() || isBinConnectParticipant(resource.data);\n      // List access is deliberately narrower and query-compatible: a non-admin\n      // browser must constrain participantIds with array-contains(request.auth.uid).\n      allow list: if isAdmin() || (\n        signedIn() &&\n        resource.data.get('participantIds', []) is list &&\n        request.auth.uid in resource.data.get('participantIds', [])\n      );", serverOnlyList);
+    writeFileSync(path, rules);
+    console.log('BIN Connect rules upgraded from participant browser list to server-only enumeration.');
+    process.exit(0);
+  }
   const querySafeRead = `      allow get: if isAdmin() || isBinConnectParticipant(resource.data);
-      // List access is deliberately narrower and query-compatible: a non-admin
-      // browser must constrain participantIds with array-contains(request.auth.uid).
-      allow list: if isAdmin() || (
-        signedIn() &&
-        resource.data.get('participantIds', []) is list &&
-        request.auth.uid in resource.data.get('participantIds', [])
-      );`;
+      // Non-admin enumeration is server-authoritative via listMyBinConnectThreads.
+      allow list: if isAdmin();`;
   if (rules.includes(legacyRead)) {
     rules = rules.replace(legacyRead, querySafeRead);
     writeFileSync(path, rules);
