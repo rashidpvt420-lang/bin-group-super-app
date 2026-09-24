@@ -18,6 +18,7 @@ export const SovereignSupportChat: React.FC<SovereignSupportChatProps> = ({ role
     const [messages, setMessages] = useState<any[]>([]);
     const [input, setInput] = useState('');
     const [loading, setLoading] = useState(false);
+    const [sendMessage, setSendMessage] = useState('');
     const scrollRef = useRef<HTMLDivElement>(null);
 
     const currentUser = auth.currentUser;
@@ -45,11 +46,11 @@ export const SovereignSupportChat: React.FC<SovereignSupportChatProps> = ({ role
     }, [messages]);
 
     const handleSend = async () => {
-        if (!input.trim() || !targetUserId || !currentUser) return;
+        if (loading || !input.trim() || !targetUserId || !currentUser) return;
 
-        const text = input;
-        setInput('');
-
+        const text = input.trim();
+        setLoading(true);
+        setSendMessage('');
         try {
             await addDoc(collection(db, 'support_chats'), {
                 chatId: targetUserId,
@@ -59,8 +60,13 @@ export const SovereignSupportChat: React.FC<SovereignSupportChatProps> = ({ role
                 createdAt: serverTimestamp(),
                 read: false
             });
+            setInput('');
+            setSendMessage('Message sent.');
         } catch (err) {
             console.error("Chat failure:", err);
+            setSendMessage('Message could not be sent. Check your connection and try again.');
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -80,7 +86,7 @@ export const SovereignSupportChat: React.FC<SovereignSupportChatProps> = ({ role
                         </Typography>
                     </Box>
                 </Stack>
-                <IconButton onClick={() => setOpen(false)} sx={{ color: 'rgba(255,255,255,0.4)' }}>
+                <IconButton aria-label="Close support chat" onClick={() => setOpen(false)} sx={{ color: 'rgba(255,255,255,0.4)' }}>
                     <X size={20} />
                 </IconButton>
             </Box>
@@ -105,6 +111,11 @@ export const SovereignSupportChat: React.FC<SovereignSupportChatProps> = ({ role
             </Box>
 
             <Box sx={{ p: 2, borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+                {sendMessage && (
+                    <Typography variant="caption" sx={{ display: 'block', mb: 1, color: sendMessage === 'Message sent.' ? '#4ade80' : '#f87171' }}>
+                        {sendMessage}
+                    </Typography>
+                )}
                 <TextField
                     fullWidth
                     placeholder="Type your message..."
@@ -113,7 +124,7 @@ export const SovereignSupportChat: React.FC<SovereignSupportChatProps> = ({ role
                     onKeyPress={(e) => e.key === 'Enter' && handleSend()}
                     InputProps={{
                         endAdornment: (
-                            <IconButton onClick={handleSend} sx={{ color: binThemeTokens.gold }}>
+                            <IconButton aria-label="Send support message" disabled={loading || !input.trim()} onClick={handleSend} sx={{ color: binThemeTokens.gold }}>
                                 <Send size={18} />
                             </IconButton>
                         )
@@ -132,6 +143,7 @@ export const SovereignSupportChat: React.FC<SovereignSupportChatProps> = ({ role
     return (
         <>
             <Fab 
+                aria-label="Open support chat"
                 onClick={() => setOpen(true)}
                 sx={{ 
                     position: 'fixed', bottom: 30, right: role === 'admin' ? 30 : 100, 
