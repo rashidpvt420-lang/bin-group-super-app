@@ -25,8 +25,23 @@ function lineOf(source, index) {
 }
 
 function textContent(openTag, after) {
-  const close = after.match(/^([\s\S]{0,500}?)<\//);
-  return close ? close[1].replace(/<[^>]+>/g, ' ').replace(/\{[^}]*\}/g, ' ').replace(/\s+/g, ' ').trim() : '';
+  const close = after.match(/^([\s\S]{0,700}?)<\//);
+  if (!close) return '';
+  const raw = close[1];
+  const literal = raw
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\{[^}]*\}/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (literal) return literal;
+
+  // JSX frequently supplies the accessible text dynamically, for example:
+  // {isRTL ? 'إلغاء' : 'Cancel'} or {submitting ? <Spinner/> : 'Save'}.
+  // Treat text-producing expressions as dynamic labels while leaving pure
+  // icon/render expressions to the runtime Playwright accessibility audit.
+  const expressionProducesText =
+    /\{[^{}]*(?:['"`][^'"`\n]{2,}['"`]|\b(?:label|tx|copy|t)\s*\()[^{}]*\}/.test(raw);
+  return expressionProducesText ? '<dynamic>' : '';
 }
 
 function attr(tag, name) {
