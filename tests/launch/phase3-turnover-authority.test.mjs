@@ -30,6 +30,9 @@ test('turnover quote decisions are server-authoritative, owner-bound and idempot
   const block = rules.slice(start, start + 650);
   assert.match(block, /allow update: if false/);
   assert.doesNotMatch(block, /request\.resource\.data\.get\('status'/);
+  const fallbackStart = rules.indexOf('match /{collection}/{document=**}');
+  const fallback = rules.slice(fallbackStart, fallbackStart + 5000);
+  assert.match(fallback, /'turnover-quotes'/);
 });
 
 for (const pagePath of [
