@@ -17,6 +17,13 @@ const retiredPaths = [
   'translate.js',
   'verify_mosque.cjs',
   'scripts/apply-five-role-business-evidence-fixes-legacy.mjs',
+  '.github/workflows/persist-owner-app-payment-session.yml',
+  'scripts/harden-owner-app-payment-session.mjs',
+  '.github/workflows/persist-admin-payment-approval.yml',
+  'scripts/harden-admin-payment-approval.mjs',
+  '.github/workflows/persist-firestore-rules.yml',
+  '.github/workflows/sync-five-profile-hardening.yml',
+  '.github/workflows/revert-red-launch-suite-728.yml',
 ];
 
 test('Phase 1 retired local authorities cannot re-enter the repository', () => {
