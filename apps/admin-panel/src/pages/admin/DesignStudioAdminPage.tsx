@@ -261,8 +261,8 @@ export default function DesignStudioAdminPage() {
                                             <Box sx={{ position: 'absolute', top: 0, bottom: 0, left: `${sliderPos}%`, width: 4, bgcolor: binThemeTokens.gold, transform: 'translateX(-50%)', boxShadow: '0 0 10px rgba(0,0,0,0.5)' }} />
                                             <Slider value={sliderPos} onChange={(_, value) => setSliderPos(value as number)} min={0} max={100} sx={{ position: 'absolute', top: '50%', left: 0, right: 0, transform: 'translateY(-50%)', opacity: 0, '& .MuiSlider-thumb': { width: 40, height: 40 } }} />
                                             <Box sx={{ position: 'absolute', top: 16, right: 16, display: 'flex', gap: 1 }}>
-                                                <IconButton onClick={handleGenerate} sx={{ bgcolor: 'rgba(0,0,0,0.7)', color: '#FFF', '&:hover': { bgcolor: binThemeTokens.gold, color: '#000' } }}><RefreshCw size={20} /></IconButton>
-                                                <IconButton onClick={downloadGeneratedImage} sx={{ bgcolor: 'rgba(0,0,0,0.7)', color: '#FFF', '&:hover': { bgcolor: binThemeTokens.gold, color: '#000' } }}><Download size={20} /></IconButton>
+                                                <IconButton aria-label="Generate design" onClick={handleGenerate} sx={{ bgcolor: 'rgba(0,0,0,0.7)', color: '#FFF', '&:hover': { bgcolor: binThemeTokens.gold, color: '#000' } }}><RefreshCw size={20} /></IconButton>
+                                                <IconButton aria-label="Download generated design" onClick={downloadGeneratedImage} sx={{ bgcolor: 'rgba(0,0,0,0.7)', color: '#FFF', '&:hover': { bgcolor: binThemeTokens.gold, color: '#000' } }}><Download size={20} /></IconButton>
                                             </Box>
                                         </>
                                     )}
