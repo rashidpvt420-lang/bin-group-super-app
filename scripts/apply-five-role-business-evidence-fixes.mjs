@@ -4,10 +4,10 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
 import {
-  patchAdminBusinessEvidence as legacyPatchAdminBusinessEvidence,
-  patchTenantBusinessEvidence as legacyPatchTenantBusinessEvidence,
-  patchTechnicianBusinessEvidence as legacyPatchTechnicianBusinessEvidence,
-} from './apply-five-role-business-evidence-fixes-legacy.mjs';
+  patchAdminBusinessEvidence as basePatchAdminBusinessEvidence,
+  patchTenantBusinessEvidence as basePatchTenantBusinessEvidence,
+  patchTechnicianBusinessEvidence as basePatchTechnicianBusinessEvidence,
+} from './protected-five-role-business-evidence-base.mjs';
 import {
   patchAdminProtectedInteractions,
   patchTenantProtectedInteractions,
@@ -199,19 +199,19 @@ export function patchAdminBusinessEvidence(source, label = ADMIN_FILE) {
   if (!(source.includes("getByTestId('admin-payment-approve')") &&
       source.includes("getByTestId('admin-payment-approval-dialog')") &&
       source.includes("getByTestId('admin-payment-confirm-approval')"))) {
-    patched = legacyPatchAdminBusinessEvidence(source, label);
+    patched = basePatchAdminBusinessEvidence(source, label);
   }
   patched = patchAdminPhase1PaymentFixture(patched, label);
   return patchAdminProtectedInteractions(patched, label);
 }
 
 export function patchTenantBusinessEvidence(source, label = TENANT_FILE) {
-  const patched = legacyPatchTenantBusinessEvidence(source, label);
+  const patched = basePatchTenantBusinessEvidence(source, label);
   return patchTenantProtectedInteractions(patched, label);
 }
 
 export function patchTechnicianBusinessEvidence(source, label = TECHNICIAN_FILE) {
-  return legacyPatchTechnicianBusinessEvidence(source, label);
+  return basePatchTechnicianBusinessEvidence(source, label);
 }
 
 export function patchBusinessEvidenceFiles() {
