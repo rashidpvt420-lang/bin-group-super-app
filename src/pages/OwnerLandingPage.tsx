@@ -141,7 +141,13 @@ const OwnerLandingPage: React.FC = () => {
                             </Typography>
                         </Box>
                         <Stack direction="row" spacing={2} alignItems="center">
-                            <IconButton onClick={() => setLang(lang === 'en' ? 'ar' : 'en')} sx={{ color: binThemeTokens.gold }}>
+                            <IconButton
+                                type="button"
+                                data-testid="owner-landing-language-toggle"
+                                aria-label={lang === 'ar' ? 'التبديل إلى الإنجليزية' : 'Switch language to Arabic'}
+                                onClick={() => setLang(lang === 'en' ? 'ar' : 'en')}
+                                sx={{ color: binThemeTokens.gold }}
+                            >
                                 <Languages size={20} />
                             </IconButton>
                             <Button 
@@ -347,7 +353,16 @@ const OwnerLandingPage: React.FC = () => {
                                     onChange={(e) => setPassword(e.target.value)}
                                     required
                                     InputProps={{
-                                        endAdornment: (<InputAdornment position="end"><IconButton onClick={() => setShowPassword(!showPassword)} edge="end" sx={{ color: 'rgba(255,255,255,0.3)' }}>{showPassword ? <EyeOff /> : <Eye />}</IconButton></InputAdornment>),
+                                        endAdornment: (<InputAdornment position="end"><IconButton
+                                            type="button"
+                                            data-testid="owner-landing-password-visibility"
+                                            aria-label={lang === 'ar'
+                                                ? (showPassword ? 'إخفاء كلمة المرور' : 'إظهار كلمة المرور')
+                                                : (showPassword ? 'Hide password' : 'Show password')}
+                                            onClick={() => setShowPassword(!showPassword)}
+                                            edge="end"
+                                            sx={{ color: 'rgba(255,255,255,0.3)' }}
+                                        >{showPassword ? <EyeOff /> : <Eye />}</IconButton></InputAdornment>),
                                         sx: { bgcolor: 'rgba(255,255,255,0.02)', borderRadius: 3, height: 65, fontSize: '1.1rem' }
                                     }}
                                     sx={{ '& .MuiInputBase-input': { color: '#FFFFFF' }, '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' } }}
