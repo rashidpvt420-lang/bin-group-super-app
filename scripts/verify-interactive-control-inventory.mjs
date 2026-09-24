@@ -95,6 +95,23 @@ function childLabel(node, sourceFile) {
   return { text: normalize(textParts.join(' ')), dynamic };
 }
 
+function enclosingTooltipLabel(node, sourceFile) {
+  let parent = node.parent;
+  while (parent && !ts.isSourceFile(parent)) {
+    if (ts.isJsxElement(parent) && jsxTagName(parent.openingElement, sourceFile) === 'Tooltip') {
+      const attrs = attrsFor(parent.openingElement, sourceFile);
+      const title = normalize(attrs.get('title')?.text);
+      if (title) return title;
+    }
+    if (ts.isJsxElement(parent) || ts.isJsxFragment(parent)) {
+      parent = parent.parent;
+      continue;
+    }
+    break;
+  }
+  return '';
+}
+
 function collectFunctions(sourceFile) {
   const functions = new Map();
   function visit(node) {
@@ -164,7 +181,12 @@ function hasErrorHandling(context) {
 }
 
 function hasSuccessHandling(context) {
-  return /setSuccess\s*\(|setMessage\s*\(|enqueueSnackbar\s*\(|toast\.|navigate\s*\(|setOpen\s*\(false\)|onSuccess\b|setAlert\s*\(|setDialogOpen\s*\(false\)/i.test(context);
+  if (/setSuccess\s*\(|setMessage\s*\(|enqueueSnackbar\s*\(|toast\.|navigate\s*\(|setOpen\s*\(false\)|onSuccess\b|setAlert\s*\(|setDialogOpen\s*\(false\)/i.test(context)) return true;
+  const mutationIndex = context.search(serverMutationPattern);
+  if (mutationIndex < 0) return false;
+  const afterMutation = context.slice(mutationIndex);
+  if (/await\s+(?:fetch|load|reload|refresh|sync|refetch|hydrate|query|list)\w*\s*\(/i.test(afterMutation)) return true;
+  return /\bset(?!Busy\b|Loading\b|Submitting\b|Saving\b|Processing\b|Pending\b|Error\b|Message\b|Alert\b)[A-Z][A-Za-z0-9_]*\s*\(/.test(afterMutation);
 }
 
 function escapeRegExp(value) {
@@ -205,7 +227,8 @@ for (const fileAbs of sourceRoots.flatMap((dir) => walk(path.join(root, dir)))) 
         const name = normalize(attrs.get('name')?.text);
         const testId = normalize(attrs.get('data-testid')?.text);
         const value = normalize(attrs.get('value')?.text);
-        const label = aria || labelProp || children.text || title || placeholder || name || value || (children.dynamic ? '(dynamic)' : '');
+        const tooltip = enclosingTooltipLabel(node, sourceFile);
+        const label = aria || labelProp || children.text || title || tooltip || placeholder || name || value || (children.dynamic ? '(dynamic)' : '');
 
         const eventName = hasClick ? 'onClick' : hasSubmit ? 'onSubmit' : hasChange ? 'onChange' : '';
         const handlerAttr = attrs.get(eventName);
@@ -233,7 +256,7 @@ for (const fileAbs of sourceRoots.flatMap((dir) => walk(path.join(root, dir)))) 
         const e2eCovered = !mutation || anchors.some((anchor) => new RegExp(escapeRegExp(anchor), 'i').test(e2eText));
 
         const issues = [];
-        if (iconOnlyControls.has(tag) && !aria && !title && !children.text && !children.dynamic) issues.push('icon-control-missing-accessible-label');
+        if (iconOnlyControls.has(tag) && !aria && !title && !tooltip && !children.text && !children.dynamic) issues.push('icon-control-missing-accessible-label');
         if ((tag === 'button' || tag === 'Button' || tag === 'ButtonBase') && !label) issues.push('button-missing-accessible-label');
         if (mutation && !busyGuard) issues.push('mutation-missing-busy-guard');
         if (mutation && !errorHandling) issues.push('mutation-missing-error-path');
