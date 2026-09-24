@@ -387,7 +387,7 @@ export default function TenantRequestPage() {
     return (
         <Box sx={{ maxWidth: 800, mx: 'auto', pb: 10, direction: isRTL ? 'rtl' : 'ltr' }}>
             <Stack direction={isRTL ? 'row-reverse' : 'row'} alignItems="center" spacing={2} sx={{ mb: 4 }}>
-                <IconButton onClick={() => navigate(-1)} sx={{ color: 'rgba(255,255,255,.5)', transform: isRTL ? 'rotate(180deg)' : 'none' }}>
+                <IconButton aria-label="Back to tenant dashboard" onClick={() => navigate(-1)} sx={{ color: 'rgba(255,255,255,.5)', transform: isRTL ? 'rotate(180deg)' : 'none' }}>
                     <ChevronLeft />
                 </IconButton>
                 <Box sx={{ textAlign: isRTL ? 'right' : 'left', width: '100%' }}>
@@ -495,7 +495,7 @@ export default function TenantRequestPage() {
                                     <Grid item xs={4} md={3} key={source}>
                                         <Box sx={{ position: 'relative', borderRadius: 3, overflow: 'hidden', pt: '100%' }}>
                                             <img src={source} alt="issue evidence" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
-                                            <IconButton size="small" onClick={() => removePhoto(index)} sx={{ position: 'absolute', top: 5, right: 5, bgcolor: 'rgba(0,0,0,.6)', color: '#fff' }}>
+                                            <IconButton aria-label="Remove request photo" size="small" onClick={() => removePhoto(index)} sx={{ position: 'absolute', top: 5, right: 5, bgcolor: 'rgba(0,0,0,.6)', color: '#fff' }}>
                                                 <X size={14} />
                                             </IconButton>
                                         </Box>
