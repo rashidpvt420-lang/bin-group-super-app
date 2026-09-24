@@ -55,6 +55,17 @@ jobs:
       - name: Phase 2 route and every-screen inventory guard
         run: npm run test:route-consolidation
 
+      - name: Upload Phase 2 route-screen matrix
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: phase-2-route-screen-inventory-${{ github.sha }}
+          path: |
+            audit/phase-2-route-screen-inventory.csv
+            audit/PHASE_2_ROUTE_SCREEN_INVENTORY.md
+          if-no-files-found: warn
+          retention-days: 14
+
       - name: Production stability guard
         id: production_stability
         shell: bash
