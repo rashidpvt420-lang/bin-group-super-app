@@ -98,27 +98,27 @@ export const NavigationControl: React.FC = () => {
             >
                 {showScrollTop && (
                     <Tooltip title="Scroll to Top" placement="left">
-                        <IconButton size="small" onClick={scrollToTop}>
+                        <IconButton size="small" aria-label="Scroll to top" onClick={scrollToTop}>
                             <ArrowUp size={18} />
                         </IconButton>
                     </Tooltip>
                 )}
                 
                 <Tooltip title="Go Back" placement="left">
-                    <IconButton size="small" onClick={handleBack}>
+                    <IconButton size="small" aria-label="Go back" onClick={handleBack}>
                         <ArrowLeft size={18} />
                     </IconButton>
                 </Tooltip>
 
                 <Tooltip title="Dashboard" placement="left">
-                    <IconButton size="small" onClick={() => navigate(getDashboardRoute())}>
+                    <IconButton size="small" aria-label="Go to dashboard" onClick={() => navigate(getDashboardRoute())}>
                         <LayoutDashboard size={18} />
                     </IconButton>
                 </Tooltip>
 
                 {window.history.length > 2 && (
                     <Tooltip title="Go Forward" placement="left">
-                        <IconButton size="small" onClick={handleForward}>
+                        <IconButton size="small" aria-label="Go forward" onClick={handleForward}>
                             <ArrowRight size={18} />
                         </IconButton>
                     </Tooltip>
@@ -126,7 +126,7 @@ export const NavigationControl: React.FC = () => {
 
                 {showScrollBottom && (
                     <Tooltip title="Scroll to Bottom" placement="left">
-                        <IconButton size="small" onClick={scrollToBottom}>
+                        <IconButton size="small" aria-label="Scroll to bottom" onClick={scrollToBottom}>
                             <ArrowDown size={18} />
                         </IconButton>
                     </Tooltip>
