@@ -89,8 +89,8 @@ export default function AdminBrokerAttributionQueuePage() {
             <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <Typography variant="h5" color="#FFF" fontWeight="950">Broker Attributions</Typography>
                 <Stack direction="row" spacing={2}>
-                    <Button variant="outlined" startIcon={<Filter size={18} />} sx={{ color: '#FFF', borderColor: 'rgba(255,255,255,0.2)' }}>Filter</Button>
-                    <Button variant="outlined" startIcon={<Search size={18} />} sx={{ color: '#FFF', borderColor: 'rgba(255,255,255,0.2)' }}>Search</Button>
+                    <Button disabled title="Unavailable until this workflow is connected" aria-label="Filter" variant="outlined" startIcon={<Filter size={18} />} sx={{ color: '#FFF', borderColor: 'rgba(255,255,255,0.2)' }}>Filter</Button>
+                    <Button disabled title="Unavailable until this workflow is connected" aria-label="Search" variant="outlined" startIcon={<Search size={18} />} sx={{ color: '#FFF', borderColor: 'rgba(255,255,255,0.2)' }}>Search</Button>
                 </Stack>
             </Box>
             {notice && <Paper sx={{ p: 2, mb: 3, bgcolor: alpha(binThemeTokens.gold, 0.08), border: `1px solid ${alpha(binThemeTokens.gold, 0.18)}`, color: '#FFF' }}>{notice}</Paper>}
