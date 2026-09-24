@@ -184,7 +184,7 @@ export const StaffVoicePaperworkDialog: React.FC<StaffVoicePaperworkDialogProps>
     >
       <DialogTitle sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <Typography variant="h6" sx={{ fontWeight: 800 }}>Voice / Text Work Report</Typography>
-        <IconButton onClick={closeAndReset} sx={{ color: "#94a3b8" }}><CloseIcon /></IconButton>
+        <IconButton aria-label="Close staff request dialog" onClick={closeAndReset} sx={{ color: "#94a3b8" }}><CloseIcon /></IconButton>
       </DialogTitle>
 
       <DialogContent>
