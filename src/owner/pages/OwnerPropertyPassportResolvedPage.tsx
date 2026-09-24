@@ -256,7 +256,7 @@ export default function OwnerPropertyPassportResolvedPage() {
                     <Divider sx={{ my: 3, borderColor: 'rgba(255,255,255,0.05)' }} />
 
                     <Box sx={{ display: 'flex', gap: 2 }}>
-                      <Button fullWidth variant="outlined" startIcon={<Download size={16} />} sx={{ borderColor: 'rgba(255,255,255,0.1)', color: '#FFF', fontWeight: 900, borderRadius: 3, py: 1.5 }}>PDF</Button>
+                      <Button disabled title="Unavailable until this workflow is connected" aria-label="PDF" fullWidth variant="outlined" startIcon={<Download size={16} />} sx={{ borderColor: 'rgba(255,255,255,0.1)', color: '#FFF', fontWeight: 900, borderRadius: 3, py: 1.5 }}>PDF</Button>
                       <Button fullWidth variant="contained" endIcon={<ArrowRight size={16} />} onClick={() => navigate(`/owner/property-passport/${p.id}`)} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, borderRadius: 3, py: 1.5 }}>VIEW DETAILS</Button>
                     </Box>
                   </Box>
