@@ -24,6 +24,9 @@ const retiredPaths = [
   '.github/workflows/persist-firestore-rules.yml',
   '.github/workflows/sync-five-profile-hardening.yml',
   '.github/workflows/revert-red-launch-suite-728.yml',
+  'src/owner/pages/OwnerUnitsPage.tsx',
+  'src/lib/offlineSync.ts',
+  'apps/owner-app/src/lib/offlineSync.ts',
 ];
 
 test('Phase 1 retired local authorities cannot re-enter the repository', () => {
@@ -53,4 +56,19 @@ test('root Firebase Messaging worker uses generated build-time configuration', (
   assert.match(generator, /VITE_FIREBASE_API_KEY/);
   assert.match(generator, /VITE_FIREBASE_APP_ID/);
   assert.match(pkg.scripts.prebuild, /write-root-firebase-messaging-config\.mjs/);
+});
+
+
+test('canonical Owner unit registry is the sole runtime units authority', () => {
+  const ownerApp = read('src/owner/OwnerApp.tsx');
+  assert.match(ownerApp, /<Route path="\/units" element={<OwnerUnitRegistryPage \/>} \/>/);
+  assert.match(ownerApp, /<Route path="\/legacy-units" element={<Navigate to="\/owner\/units" replace \/>} \/>/);
+  assert.doesNotMatch(ownerApp, /OwnerUnitsPage/);
+});
+
+test('QR verification enrichment failures are observable instead of silently swallowed', () => {
+  const qr = read('functions/qrSecurity.ts');
+  assert.doesNotMatch(qr, /catch\s*\([^)]*\)\s*\{\s*\}/);
+  assert.match(qr, /Property enrichment lookup failed/);
+  assert.match(qr, /Unit enrichment lookup failed/);
 });
