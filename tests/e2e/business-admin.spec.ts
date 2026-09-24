@@ -404,6 +404,43 @@ async function seedOperationalFixtures() {
   if (!phase1ReceiptGeneration) throw new Error('Protected Phase 1 CASH receipt has no immutable Storage generation.');
   const phase1ReceiptUrl = 'https://firebasestorage.googleapis.com/v0/b/' + phase1Bucket.name + '/o/' + encodeURIComponent(phase1ReceiptPath) + '?alt=media&token=' + phase1ReceiptToken;
 
+  // The payment decision fixture is intentionally a legacy activation record, but
+  // it must still satisfy the same canonical dispatch-ready geography contract as
+  // production. Seed the full Founder-MFA v1 verification pair instead of the old
+  // boolean-only geo shortcut so the protected payment gate remains fail-closed.
+  const canonicalFounder = await admin.auth().getUserByEmail(EMAIL);
+  const paymentGeoVerifiedAt = admin.firestore.Timestamp.now();
+  const paymentGeo = {
+    lat: 25.2048,
+    lng: 55.2708,
+    latitude: 25.2048,
+    longitude: 55.2708,
+    address: 'Protected E2E activation fixture',
+    emirate: 'Dubai',
+    city: 'Dubai',
+    area: 'Dubai Marina',
+    placeId: null,
+    geohash: '',
+    source: 'admin_manual',
+    submittedSource: 'protected_e2e_fixture',
+    verified: true,
+    verifiedBy: canonicalFounder.uid,
+    verifiedAt: paymentGeoVerifiedAt,
+    dispatchReady: true,
+    requiresGeoReview: false,
+    accuracyMeters: 15,
+    capturedAt: paymentGeoVerifiedAt,
+    verificationVersion: 1,
+  };
+  const paymentGeoVerification = {
+    state: 'VERIFIED',
+    source: 'FOUNDER_MFA_REVIEW',
+    verifiedBy: canonicalFounder.uid,
+    verifiedAt: paymentGeoVerifiedAt,
+    submittedSource: 'protected_e2e_fixture',
+    verificationVersion: 1,
+  };
+
   await Promise.all([
     db.collection('owners').doc(OWNER_REVIEW_UID).set({
       name: `E2E Review Owner ${RUN_ID}`,
@@ -496,7 +533,12 @@ async function seedOperationalFixtures() {
       intakeId: PAYMENT_ID,
       quoteHash: PAYMENT_QUOTE_HASH,
       status: 'pending_approval',
-      geo: { verified: true, dispatchReady: true, requiresGeoReview: false, lat: 25.2048, lng: 55.2708 },
+      address: paymentGeo.address,
+      emirate: paymentGeo.emirate,
+      city: paymentGeo.city,
+      area: paymentGeo.area,
+      geo: paymentGeo,
+      geoVerification: paymentGeoVerification,
       e2eRunId: RUN_ID,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
