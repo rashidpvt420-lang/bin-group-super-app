@@ -24,8 +24,10 @@ const InstitutionalReportsPanel: React.FC = () => {
     totalSavingsAED: 0,
     healthScore: 0,
     slaCompliance: 0,
+    ticketCount: 0,
     monthlyTrends: [],
-    assetDistribution: []
+    assetDistribution: [],
+    riskRows: []
   });
 
   useEffect(() => {
@@ -56,16 +58,51 @@ const InstitutionalReportsPanel: React.FC = () => {
 
     // 💰 2. Savings & Compliance (Derived from Contracts/Tickets)
     const unsubTickets = onSnapshot(collection(db, 'maintenanceTickets'), (snapshot) => {
-        const rows = snapshot.docs.map((d) => d.data() as any);
+        const rows = snapshot.docs.map((d) => ({ id: d.id, ...(d.data() as any) }));
         const completed = rows.filter((row) => ['COMPLETED', 'CLOSED', 'completed', 'closed'].includes(String(row.status || ''))).length;
         const compliance = snapshot.size ? Math.round((completed / snapshot.size) * 100) : 0;
         const totalSavingsAED = rows.reduce((sum, row) => sum + Number(row.costSavedAED || row.savingsAED || 0), 0);
 
+        const monthMap = new Map<string, number>();
+        const toDate = (value: any): Date | null => {
+          if (typeof value?.toDate === 'function') return value.toDate();
+          if (typeof value?.seconds === 'number') return new Date(value.seconds * 1000);
+          const parsed = value ? new Date(value) : null;
+          return parsed && !Number.isNaN(parsed.getTime()) ? parsed : null;
+        };
+        rows.forEach((row) => {
+          const date = toDate(row.completedAt || row.updatedAt || row.createdAt);
+          if (!date) return;
+          const month = date.toLocaleString('en-AE', { month: 'short', year: '2-digit' });
+          monthMap.set(month, (monthMap.get(month) || 0) + Number(row.costSavedAED || row.savingsAED || 0));
+        });
+        const monthlyTrends = [...monthMap.entries()].map(([month, savings]) => ({ month, savings }));
+
+        const riskRows = rows
+          .filter((row) => {
+            const status = String(row.status || '').toUpperCase();
+            const priority = String(row.priority || row.slaPriority || '').toUpperCase();
+            return !['COMPLETED', 'CLOSED', 'CANCELLED'].includes(status) &&
+              ['EMERGENCY', 'CRITICAL', 'HIGH', 'URGENT'].includes(priority);
+          })
+          .slice(0, 10)
+          .map((row) => ({
+            id: row.id,
+            asset: row.propertyName || row.unitNumber || row.title || row.id,
+            risk: String(row.priority || row.slaPriority || 'HIGH').toUpperCase(),
+            action: row.status || row.trackingStatus || 'OPEN',
+            savings: Number(row.costSavedAED || row.savingsAED || 0),
+          }));
+
         setPortfolioData((prev: any) => ({
             ...prev,
             slaCompliance: compliance,
-            totalSavingsAED
+            totalSavingsAED,
+            ticketCount: snapshot.size,
+            monthlyTrends,
+            riskRows
         }));
+        setLoadError('');
     }, (error: any) => {
         console.error('[InstitutionalReports] tickets listener failed:', error);
         setLoadError(error?.message || 'Unable to load maintenance reporting data.');
@@ -83,6 +120,17 @@ const InstitutionalReportsPanel: React.FC = () => {
     </div>
   );
   if (loadError) return <div className="p-8 bg-[#0a0a0b] text-red-300 min-h-screen">{loadError}</div>;
+  if (portfolioData.unitsActive === 0 && portfolioData.ticketCount === 0) {
+    return (
+      <div className="p-8 bg-[#0a0a0b] text-white min-h-screen flex items-center justify-center">
+        <div className="max-w-xl text-center">
+          <Building2 size={42} className="mx-auto mb-4 text-gray-500" />
+          <h2 className="text-xl font-black mb-2">No portfolio records available</h2>
+          <p className="text-gray-500">Live properties and maintenance records will populate this institutional report when records exist.</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-8 bg-[#0a0a0b] text-white min-h-screen font-sans">
@@ -105,27 +153,27 @@ const InstitutionalReportsPanel: React.FC = () => {
           icon={<BadgePercent className="text-emerald-400" />} 
           label="Total Savings (AED)" 
           value={portfolioData.totalSavingsAED.toLocaleString()} 
-          trend="+14% Growth"
+          trend="LIVE LEDGER"
         />
         <KPIBox 
           icon={<Activity className="text-blue-400" />} 
           label="Portfolio Health" 
           value={`${portfolioData.healthScore}%`} 
-          trend="OPTIMIZED"
+          trend={portfolioData.healthScore > 0 ? "LIVE SCORE" : "NO SCORE"}
           color="blue"
         />
         <KPIBox 
           icon={<ShieldCheck className="text-purple-400" />} 
           label="SLA Compliance" 
           value={`${portfolioData.slaCompliance}%`} 
-          trend="STABLE"
+          trend={`${portfolioData.ticketCount} TICKETS`}
           color="purple"
         />
         <KPIBox 
           icon={<Building2 className="text-orange-400" />} 
           label="Managed Units" 
           value={portfolioData.unitsActive} 
-          trend="LIVE SYNC"
+          trend="LIVE RECORDS"
           color="orange"
         />
       </div>
@@ -199,9 +247,21 @@ const InstitutionalReportsPanel: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/5">
-                <RiskRow asset="Main Chiller Cluster - A" risk="CRITICAL" action="Immediate Thermal Service" savings="14,200" />
-                <RiskRow asset="HVAC Control Board (Unit 402)" risk="MODERATE" action="Replace Sensor Array" savings="2,100" />
-                <RiskRow asset="Pumping Station West" risk="LOW" action="Predictive Maintenance" savings="4,500" />
+                {portfolioData.riskRows.length === 0 ? (
+                  <tr>
+                    <td colSpan={4} className="py-10 text-center text-gray-500 font-medium">
+                      No open high-priority maintenance risks are currently recorded.
+                    </td>
+                  </tr>
+                ) : portfolioData.riskRows.map((row: any) => (
+                  <RiskRow
+                    key={row.id}
+                    asset={row.asset}
+                    risk={row.risk}
+                    action={row.action}
+                    savings={Number(row.savings || 0).toLocaleString('en-AE')}
+                  />
+                ))}
               </tbody>
             </table>
         </div>
@@ -230,8 +290,8 @@ const RiskRow = ({ asset, risk, action, savings }: any) => (
     </td>
     <td className="py-6">
       <span className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest ${
-        risk === 'CRITICAL' ? 'bg-red-500/20 text-red-500' : 
-        risk === 'MODERATE' ? 'bg-orange-500/20 text-orange-400' : 'bg-blue-500/20 text-blue-400'
+        ['CRITICAL', 'EMERGENCY'].includes(risk) ? 'bg-red-500/20 text-red-500' :
+        ['HIGH', 'URGENT', 'MODERATE'].includes(risk) ? 'bg-orange-500/20 text-orange-400' : 'bg-blue-500/20 text-blue-400'
       }`}>
         {risk}
       </span>
