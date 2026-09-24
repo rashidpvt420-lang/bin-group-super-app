@@ -51,7 +51,7 @@ function run(script, label = path.basename(script)) {
 
 const mode = String(process.argv[2] || 'lifecycle').trim().toLowerCase();
 if (mode === 'lifecycle') {
-  run('scripts/run-owner-inspection-first-production-evidence.mjs');
+  run('scripts/run-owner-inspection-first-production-evidence-unique.mjs');
 } else if (mode === 'restore-shared-fixtures') {
   // The Owner proof intentionally replaces the dedicated Owner Auth account.
   // Restore the shared live-role fixtures only after the Owner UI has inspected

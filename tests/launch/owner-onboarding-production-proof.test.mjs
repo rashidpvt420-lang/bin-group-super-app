@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 const lifecycle = fs.readFileSync(new URL('../../scripts/run-owner-inspection-first-production-evidence.mjs', import.meta.url), 'utf8');
 const gmailReader = fs.readFileSync(new URL('../../scripts/lib/gmail-otp-reader.mjs', import.meta.url), 'utf8');
 const wrapper = fs.readFileSync(new URL('../../scripts/run-owner-business-suite-evidence.mjs', import.meta.url), 'utf8');
+const identityWrapper = fs.readFileSync(new URL('../../scripts/run-owner-inspection-first-production-evidence-unique.mjs', import.meta.url), 'utf8');
 const ownerSpec = fs.readFileSync(new URL('../e2e/business-owner.spec.ts', import.meta.url), 'utf8');
 const financials = fs.readFileSync(new URL('../../src/owner/pages/OwnerFinancialsPage.tsx', import.meta.url), 'utf8');
 const onboarding = fs.readFileSync(new URL('../../functions/inspectionFirstOwnerOnboarding.ts', import.meta.url), 'utf8');
@@ -79,7 +80,8 @@ for (const token of [
 }
 
 assert.ok(wrapper.includes("mode === 'lifecycle'"), 'Owner suite wrapper must expose lifecycle mode');
-assert.ok(wrapper.includes("run('scripts/run-owner-inspection-first-production-evidence.mjs')"), 'Owner suite wrapper must execute the inspection-first acquisition evidence runner');
+assert.ok(wrapper.includes("run('scripts/run-owner-inspection-first-production-evidence-unique.mjs')"), 'Owner suite wrapper must execute the isolated inspection-first acquisition evidence runner');
+assert.ok(identityWrapper.includes('run-owner-inspection-first-production-evidence.mjs'), 'Identity isolation wrapper must delegate to the canonical inspection-first production evidence runner');
 assert.ok(!wrapper.includes('run-owner-onboarding-production-evidence-secure.mjs'), 'Owner suite wrapper must not execute the legacy payment-first runner');
 assert.ok(wrapper.includes("mode === 'restore-shared-fixtures'"), 'Owner suite wrapper must expose fixture restoration mode');
 assert.ok(wrapper.includes("run('scripts/seed-live-role-test-data.mjs')"), 'Owner suite wrapper must restore shared live-role fixtures');
