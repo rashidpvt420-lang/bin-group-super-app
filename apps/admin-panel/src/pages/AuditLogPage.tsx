@@ -75,7 +75,7 @@ export default function AuditLogPage() {
                             )
                         }}
                     />
-                    <IconButton><FilterListIcon /></IconButton>
+                    <IconButton disabled title="Unavailable until this workflow is connected" aria-label="Unavailable audit-log action"><FilterListIcon /></IconButton>
                 </Box>
             </Box>
 
