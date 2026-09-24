@@ -321,7 +321,7 @@ export default function TenantAIConciergePage() {
                 sx={{ bgcolor: alpha(priorityColor, 0.12), color: priorityColor, fontWeight: 950, fontSize: '0.65rem' }}
               />
             )}
-            <IconButton size="small" onClick={handleRestart} sx={{ color: 'rgba(255,255,255,0.4)', '&:hover': { color: '#fff' } }}>
+            <IconButton aria-label="Restart AI concierge" size="small" onClick={handleRestart} sx={{ color: 'rgba(255,255,255,0.4)', '&:hover': { color: '#fff' } }}>
               <X size={16} />
             </IconButton>
           </Stack>
@@ -460,7 +460,7 @@ export default function TenantAIConciergePage() {
                   '& .MuiInputBase-input::placeholder': { color: 'rgba(255,255,255,0.3)' },
                 }}
               />
-              <IconButton
+              <IconButton aria-label="Send AI concierge message"
                 onClick={handleSend}
                 disabled={!inputValue.trim()}
                 sx={{
