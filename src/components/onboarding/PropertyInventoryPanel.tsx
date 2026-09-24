@@ -383,9 +383,9 @@ const PropertyInventoryPanel: React.FC<Props> = ({ property, onChange, ar, isRTL
                 <Stack direction={isRTL ? 'row-reverse' : 'row'} alignItems="center" justifyContent="space-between" spacing={1}>
                   <Typography variant="body2" fontWeight={800} color="#FFF">{ar ? space.ar : space.en}</Typography>
                   <Stack direction="row" alignItems="center" spacing={0.5}>
-                    <IconButton size="small" onClick={() => setCount(space.id, count - 1)} disabled={!count}><Minus size={16} /></IconButton>
+                    <IconButton aria-label="Decrease unit count" size="small" onClick={() => setCount(space.id, count - 1)} disabled={!count}><Minus size={16} /></IconButton>
                     <TextField value={count} type="number" onChange={(event) => setCount(space.id, Number(event.target.value))} inputProps={{ min: 0, style: { textAlign: 'center', width: 36, padding: 6 } }} size="small" sx={{ width: 68 }} />
-                    <IconButton size="small" onClick={() => setCount(space.id, count + 1)}><Plus size={16} /></IconButton>
+                    <IconButton aria-label="Increase unit count" size="small" onClick={() => setCount(space.id, count + 1)}><Plus size={16} /></IconButton>
                   </Stack>
                 </Stack>
               </Paper>
