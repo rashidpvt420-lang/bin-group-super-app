@@ -40,7 +40,9 @@ test('protected runner prepares exact policy and Founder geography before five-r
 
 test('Owner restoration preserves inspection-first lifecycle and re-applies downstream authority', () => {
   const ownerRunner = read('scripts/run-owner-business-suite-evidence.mjs');
-  assert.ok(ownerRunner.includes("run('scripts/run-owner-inspection-first-production-evidence.mjs')"));
+  assert.ok(ownerRunner.includes("run('scripts/run-owner-inspection-first-production-evidence-unique.mjs')"));
+  const identityWrapper = read('scripts/run-owner-inspection-first-production-evidence-unique.mjs');
+  assert.ok(identityWrapper.includes('run-owner-inspection-first-production-evidence.mjs'));
   assert.ok(!ownerRunner.includes('run-owner-onboarding-production-evidence-secure.mjs'));
   const seedIndex = ownerRunner.indexOf("run('scripts/seed-live-role-test-data.mjs')");
   const paymentIndex = ownerRunner.indexOf("run('scripts/ensure-phase1-manual-payment-config.mjs')");
