@@ -179,7 +179,7 @@ export default function OwnerComplaintPage() {
     return (
         <Box sx={{ maxWidth: 800, mx: 'auto', pb: 10 }}>
             <Stack direction="row" alignItems="center" spacing={2} sx={{ mb: 4 }}>
-                <IconButton onClick={() => navigate(-1)} sx={{ color: 'rgba(255,255,255,0.5)' }}>
+                <IconButton aria-label="Back to owner dashboard" onClick={() => navigate(-1)} sx={{ color: 'rgba(255,255,255,0.5)' }}>
                     <ChevronLeft />
                 </IconButton>
                 <Box>
@@ -326,7 +326,7 @@ export default function OwnerComplaintPage() {
                                 {previews.map((src, i) => (
                                     <Box key={i} sx={{ position: 'relative', width: 100, height: 100, borderRadius: 2, overflow: 'hidden' }}>
                                         <img src={src} alt={`photo-${i}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                                        <IconButton
+                                        <IconButton aria-label="Remove complaint photo"
                                             size="small"
                                             onClick={() => removePhoto(i)}
                                             sx={{ position: 'absolute', top: 2, right: 2, bgcolor: 'rgba(0,0,0,0.6)', color: '#FFF', '&:hover': { bgcolor: '#ef4444' }, p: 0.3 }}
