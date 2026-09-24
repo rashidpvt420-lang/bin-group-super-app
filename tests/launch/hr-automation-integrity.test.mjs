@@ -4,19 +4,17 @@ import test from 'node:test';
 
 const read = (relativePath) => readFile(new URL(`../../${relativePath}`, import.meta.url), 'utf8');
 
-test('HR automation mirrors audit events atomically under one document id', async () => {
+test('HR automation writes audit events atomically to the canonical collection', async () => {
   const source = await read('functions/hrAutomation.ts');
 
   assert.match(source, /function hrAuditPayload/);
   assert.match(source, /const auditRef = db\.collection\(["']audit_logs["']\)\.doc\(\);/);
   assert.match(source, /batch\.set\(auditRef, payload\);/);
-  assert.match(source, /batch\.set\(db\.collection\(["']auditLogs["']\)\.doc\(auditRef\.id\), payload\);/);
+  assert.doesNotMatch(source, /db\.collection\(["']auditLogs["']\)/);
   assert.match(source, /await batch\.commit\(\);/);
-  assert.doesNotMatch(source, /Promise\.allSettled\(\[\s*db\.collection\(["']auditLogs["']\)\.add/);
-
   assert.match(source, /const auditId = `payroll_settlement_\$\{payrollId\}`;/);
-  assert.match(source, /const auditCompatRef = db\.collection\(["']audit_logs["']\)\.doc\(auditId\);/);
-  assert.match(source, /transaction\.set\(auditRef, auditPayload\);\s*transaction\.set\(auditCompatRef, auditPayload\);/s);
+  assert.match(source, /const auditRef = db\.collection\(["']audit_logs["']\)\.doc\(auditId\);/);
+  assert.match(source, /transaction\.set\(auditRef, auditPayload\);/);
 });
 
 test('HR payroll writes the technician-readable payroll_entries projection', async () => {
