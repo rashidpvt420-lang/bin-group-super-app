@@ -63,6 +63,33 @@ for (const [collection, documentId] of launchEvidenceCollections) {
   source = source.replace(currentBlock, hardenedBlock);
 }
 
+// Canonical property identity claims are server-authoritative. Browser/Admin
+// clients must never enumerate or mutate the identity registry; Admin SDK
+// callables claim/release identities transactionally.
+const propertyIdentityHeader = '    match /property_identity_registry/{identityHash} {';
+if (!matchBlock(propertyIdentityHeader)) {
+  const catchAllMarker = '    match /{collection}/{document=**} {';
+  const catchAllIndex = source.indexOf(catchAllMarker);
+  if (catchAllIndex < 0) failures.push('global Firestore fallback is missing before property identity hardening');
+  else {
+    const block = `    match /property_identity_registry/{identityHash} {
+      allow read, create, update, delete: if false;
+    }
+
+`;
+    source = `${source.slice(0, catchAllIndex)}${block}${source.slice(catchAllIndex)}`;
+  }
+}
+
+source = source.replace(
+  "'invoice_registry', 'payroll_entries'] && hasAdminClaim();",
+  "'invoice_registry', 'payroll_entries', 'property_identity_registry'] && hasAdminClaim();",
+);
+source = source.replaceAll(
+  "'transactions',\n          'payroll_entries',\n          'invoices',",
+  "'transactions',\n          'payroll_entries',\n          'property_identity_registry',\n          'invoices',",
+);
+
 const required = [
   'match /technician_live_locations/{technicianId} {',
   'allow create, update, delete: if false;',
@@ -72,8 +99,8 @@ const required = [
   'allow create: if isAdmin();',
   'match /tickets/{ticketId} {',
   'match /payroll_entries/{entryId} {',
-  "'invoice_registry', 'payroll_entries'",
-  "'transactions',\n          'payroll_entries',\n          'invoices'",
+  "'invoice_registry', 'payroll_entries', 'property_identity_registry'",
+  "'transactions',\n          'payroll_entries',\n          'property_identity_registry',\n          'invoices'",
   financeAdminPaymentTransactionsRead,
   "request.resource.data.get('source', '') != 'github-actions'",
   "request.resource.data.get('executionGenerated', false) != true",
@@ -141,6 +168,15 @@ const payrollCatchAllOccurrences = source.match(/'payroll_entries'/g)?.length ||
 if (payrollCatchAllOccurrences !== 3) {
   failures.push(`payroll_entries must be excluded from read, create and update/delete catch-alls; found ${payrollCatchAllOccurrences}`);
 }
+const propertyIdentityBlock = matchBlock(propertyIdentityHeader);
+if (!propertyIdentityBlock || !propertyIdentityBlock.includes('allow read, create, update, delete: if false;')) {
+  failures.push('property_identity_registry must be explicitly browser-denied');
+}
+const propertyIdentityCatchAllOccurrences = source.match(/'property_identity_registry'/g)?.length || 0;
+if (propertyIdentityCatchAllOccurrences !== 3) {
+  failures.push(`property_identity_registry must be excluded from read, create and update/delete catch-alls; found ${propertyIdentityCatchAllOccurrences}`);
+}
+
 
 // Payment approval, payer binding and receipt uniqueness must survive every
 // normalizer/hardener before producing the actual Firebase deployment artifact.
