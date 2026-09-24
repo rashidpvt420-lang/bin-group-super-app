@@ -1,5 +1,5 @@
 import React from 'react';
-import { Alert, Box, Button, Card, CardContent, Chip, Grid, MenuItem, Stack, TextField, Typography } from '@mui/material';
+import { Alert, Box, Button, Card, CardContent, Chip, CircularProgress, Grid, MenuItem, Stack, TextField, Typography } from '@mui/material';
 import { addDoc, collection, db, limit, onSnapshot, orderBy, query, serverTimestamp } from '../../lib/firebase';
 
 type GovernanceEvent = { id: string; dataCategory?: string; lawfulBasis?: string; retentionClass?: string; roleAccessPolicy?: string[]; subjectRef?: string; ticketId?: string; createdAt?: any };
@@ -8,11 +8,18 @@ const retentionClasses = ['maintenance_evidence_standard', 'chat_history_180_day
 export default function DataGovernanceAuditPage() {
   const [events, setEvents] = React.useState<GovernanceEvent[]>([]);
   const [notice, setNotice] = React.useState('');
+  const [loading, setLoading] = React.useState(true);
   const [form, setForm] = React.useState({ dataCategory: 'property_maintenance_evidence', lawfulBasis: 'contract_operations', retentionClass: 'maintenance_evidence_standard', subjectRef: '', ticketId: '', roleAccessPolicy: 'admin,owner,assigned_technician' });
 
   React.useEffect(() => {
     const q = query(collection(db, 'data_governance_events'), orderBy('createdAt', 'desc'), limit(100));
-    return onSnapshot(q, (snap) => setEvents(snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<GovernanceEvent, 'id'>) }))));
+    return onSnapshot(q, (snap) => {
+      setEvents(snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<GovernanceEvent, 'id'>) })));
+      setLoading(false);
+    }, (error) => {
+      setNotice(error?.message || 'Could not load governance events.');
+      setLoading(false);
+    });
   }, []);
 
   const recordEvent = async () => {
@@ -31,6 +38,7 @@ export default function DataGovernanceAuditPage() {
       <Typography variant="overline" sx={{ color: '#DAA520', fontWeight: 900, letterSpacing: 3 }}>UAE DATA TRUST</Typography>
       <Typography variant="h4" sx={{ fontWeight: 950, mb: 1 }}>PDPL Governance Audit</Typography>
       <Typography sx={{ color: 'rgba(255,255,255,0.65)', mb: 3 }}>Record lawful basis, retention class, role-access policy, export trace, and deletion eligibility for WhatsApp, location, evidence, voice notes, PDFs, and maintenance records.</Typography>
+      {loading && <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}><CircularProgress sx={{ color: '#DAA520' }} /></Box>}
       {notice && <Alert sx={{ mb: 3 }} severity={notice.includes('required') ? 'warning' : 'success'}>{notice}</Alert>}
       <Card sx={{ bgcolor: '#0f172a', color: '#fff', border: '1px solid rgba(218,165,32,0.22)', mb: 3 }}><CardContent><Grid container spacing={2}>
         <Grid item xs={12} md={3}><TextField fullWidth size="small" label="Data category" value={form.dataCategory} onChange={(e) => setForm({ ...form, dataCategory: e.target.value })} /></Grid>
@@ -41,6 +49,7 @@ export default function DataGovernanceAuditPage() {
         <Grid item xs={12} md={3}><TextField fullWidth size="small" label="Ticket ID optional" value={form.ticketId} onChange={(e) => setForm({ ...form, ticketId: e.target.value })} /></Grid>
         <Grid item xs={12}><Button variant="contained" onClick={recordEvent} sx={{ bgcolor: '#DAA520', color: '#020617', fontWeight: 950 }}>Record Governance Event</Button></Grid>
       </Grid></CardContent></Card>
+      {!loading && events.length === 0 && <Alert severity="info" sx={{ mb: 2 }}>No governance events have been recorded yet.</Alert>}
       <Grid container spacing={2}>{events.map((event) => <Grid item xs={12} md={6} key={event.id}><Card sx={{ bgcolor: '#0f172a', color: '#fff', border: '1px solid rgba(255,255,255,0.08)' }}><CardContent>
         <Stack direction="row" justifyContent="space-between" spacing={2}><Box><Typography variant="h6" sx={{ fontWeight: 950 }}>{event.dataCategory}</Typography><Typography sx={{ color: 'rgba(255,255,255,0.6)' }}>{event.lawfulBasis} · {event.subjectRef || event.ticketId || event.id}</Typography></Box><Chip label={event.retentionClass || 'retention'} /></Stack>
         <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ mt: 2 }}>{(event.roleAccessPolicy || []).map((role) => <Chip key={role} label={role} variant="outlined" sx={{ color: '#fff', borderColor: 'rgba(255,255,255,0.2)' }} />)}</Stack>
