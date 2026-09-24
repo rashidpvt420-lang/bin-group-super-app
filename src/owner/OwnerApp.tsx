@@ -1,5 +1,5 @@
 import React from 'react';
-import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
+import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { Box, AppBar, Toolbar, Typography, Container, IconButton, alpha, Stack, Button } from '@mui/material';
 import { ArrowLeft, LayoutDashboard, UserCircle } from 'lucide-react';
 import { useLanguage } from '@bin/shared';
@@ -24,7 +24,6 @@ import OwnerPaymentProofPage from './pages/OwnerPaymentProofPage';
 import OwnerIbanPage from './pages/OwnerIbanPage';
 import OwnerProfilePage from './pages/OwnerProfilePage';
 import OwnerRoiPage from './pages/OwnerRoiPage';
-import OwnerUnitsPage from './pages/OwnerUnitsPage';
 import OwnerUnitRegistryPage from './pages/OwnerUnitRegistryPage';
 import OwnerTenantsPage from './pages/OwnerTenantsPage';
 import OwnerPropertyPassportPage from './pages/OwnerPropertyPassportResolvedPage';
@@ -99,7 +98,7 @@ export default function OwnerApp() {
                 <Route path="/profile" element={<OwnerProfileWithReadiness />} />
                 <Route path="/roi" element={<OwnerRoiPage />} />
                 <Route path="/units" element={<OwnerUnitRegistryPage />} />
-                <Route path="/legacy-units" element={<OwnerUnitsPage />} />
+                <Route path="/legacy-units" element={<Navigate to="/owner/units" replace />} />
                 <Route path="/tenants" element={<OwnerTenantsPage />} />
                 <Route path="/property-passport" element={<OwnerPropertyPassportPage />} />
                 <Route path="/property-passport/:passportId" element={<OwnerPropertyPassportDetailPage />} />
