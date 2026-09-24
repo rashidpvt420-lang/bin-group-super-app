@@ -180,7 +180,10 @@ assert(runtime.includes('adminRecordOwnerMobilizationPaymentEvidence'), 'Runtime
 assert(runtime.includes('from "./inspectionFirstOwnerOnboarding"'), 'Runtime must source the explicit five-page Owner callables.');
 assert(!/^export \* from "\.\/inspectionFirstOwnerOnboarding";/m.test(runtime), 'Runtime must not deploy the unsafe legacy single-property completion export.');
 assert(runtime.includes('export * from "./ownerInspectionAdminLink";'), 'Runtime must export portfolio inspection creation/linking.');
-assert(runtime.includes('export * from "./ownerInspectionCompletion";'), 'Runtime must export portfolio inspection completion.');
+assert(
+  runtime.includes('adminCompleteOwnerPortfolioInspections } from "./canonicalOwnerInspectionCompletion";'),
+  'Runtime must export canonical portfolio inspection completion.',
+);
 assert(runtime.includes('export * from "./paymentEvidence";'), 'Runtime must export tenant and design payment callables.');
 assert(runtime.includes('export * from "./ticketDispatchOperations";'), 'Runtime must export dispatch and dispute callables.');
 assert(payrollPage.includes("'adminGeneratePayrollBatch'"), 'Admin payroll UI must use the server-side generation callable.');
