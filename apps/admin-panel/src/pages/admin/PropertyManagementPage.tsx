@@ -268,10 +268,10 @@ export default function PropertyManagementPage() {
                                     </Box>
                                 </TableCell>
                                 <TableCell align="right">
-                                    <IconButton onClick={() => handleEditOpen(prop)} sx={{ color: binThemeTokens.gold }}>
+                                    <IconButton aria-label="Edit property" onClick={() => handleEditOpen(prop)} sx={{ color: binThemeTokens.gold }}>
                                         <EditIcon size={18} />
                                     </IconButton>
-                                    <IconButton onClick={() => handleDeleteProperty(prop.id)} sx={{ color: binThemeTokens.danger }}>
+                                    <IconButton aria-label="Delete property" onClick={() => handleDeleteProperty(prop.id)} sx={{ color: binThemeTokens.danger }}>
                                         <DeleteIcon size={18} />
                                     </IconButton>
                                 </TableCell>
