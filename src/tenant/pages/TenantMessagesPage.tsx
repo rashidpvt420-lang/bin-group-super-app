@@ -149,7 +149,7 @@ export default function TenantMessagesPage() {
                         <Paper sx={{ p: 3, bgcolor: 'rgba(15,23,42,0.7)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 4, height: '100%', display: 'flex', flexDirection: 'column' }}>
                             <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 3 }}>
                                 <Typography variant="h6" color="#FFF" fontWeight="950">INBOX</Typography>
-                                <IconButton onClick={() => setOpenAdd(true)} sx={{ color: binThemeTokens.gold, border: '1px solid rgba(255,255,255,0.05)' }}>
+                                <IconButton aria-label="Start new conversation" onClick={() => setOpenAdd(true)} sx={{ color: binThemeTokens.gold, border: '1px solid rgba(255,255,255,0.05)' }}>
                                     <SafeIcon icon={Plus} size={18} />
                                 </IconButton>
                             </Stack>
@@ -191,7 +191,7 @@ export default function TenantMessagesPage() {
                         <Paper sx={{ p: 3, bgcolor: 'rgba(22, 22, 24, 0.7)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 6, height: '100%', display: 'flex', flexDirection: 'column' }}>
                             <Stack direction="row" alignItems="center" spacing={2} sx={{ mb: 2 }}>
                                 {isMobileView() && (
-                                    <IconButton onClick={() => setSelectedConv(null)} sx={{ color: '#FFF' }}>
+                                    <IconButton aria-label="Close conversation" onClick={() => setSelectedConv(null)} sx={{ color: '#FFF' }}>
                                         <SafeIcon icon={ArrowLeft} size={20} />
                                     </IconButton>
                                 )}
