@@ -99,10 +99,10 @@ export default function AuditShieldPage() {
                         <Typography variant="caption" sx={{ color: '#64748b' }}>Real-time cryptographic verification of forensic evidence chains.</Typography>
                     </Box>
                     <Box sx={{ display: 'flex', gap: 2 }}>
-                        <Button variant="outlined" sx={{ borderRadius: 2, borderColor: '#3b82f6', color: '#3b82f6', fontWeight: 900 }}>
+                        <Button disabled title="Unavailable until this workflow is connected" aria-label="Verify Hashes" variant="outlined" sx={{ borderRadius: 2, borderColor: '#3b82f6', color: '#3b82f6', fontWeight: 900 }}>
                              Verify Hashes
                         </Button>
-                        <Button variant="contained" sx={{ borderRadius: 2, bgcolor: '#10b981', '&:hover': { bgcolor: '#059669' }, fontWeight: 900 }}>
+                        <Button disabled title="Unavailable until this workflow is connected" aria-label="Export Bundle" variant="contained" sx={{ borderRadius: 2, bgcolor: '#10b981', '&:hover': { bgcolor: '#059669' }, fontWeight: 900 }}>
                             Export Bundle
                         </Button>
                     </Box>
