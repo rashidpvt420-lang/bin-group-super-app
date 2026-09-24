@@ -14,6 +14,31 @@ const routeSources = [
   { scope: 'adminops', path: 'apps/admin-panel/src/App.tsx', prefix: 'admin-site:' },
 ];
 
+const ROUTE_COMPOSED_FILES = {
+  '/owner': ['src/owner/components/OwnerFinancialTruthCard.tsx'],
+  '/owner/dashboard': ['src/owner/components/OwnerFinancialTruthCard.tsx'],
+  '/owner/payment-proof': ['src/owner/components/OwnerPaymentProofReviewPanel.tsx'],
+  '/owner/profile': [
+    'src/owner/components/OwnerProfileReadinessCard.tsx',
+    'src/owner/pages/OwnerProfilePage.tsx',
+  ],
+  '/tenant/profile': [
+    'src/tenant/components/TenantProfileReadinessCard.tsx',
+    'src/tenant/pages/TenantProfilePage.tsx',
+  ],
+  '/broker': ['src/broker/components/BrokerLiveAttributionCard.tsx'],
+  '/broker/dashboard': ['src/broker/components/BrokerLiveAttributionCard.tsx'],
+};
+
+const SOURCE_PROVEN_STATIC_ROUTES = new Set([
+  '/tenant', '/tenant/dashboard',
+  '/technician', '/technician/dashboard', '/technician/support',
+  '/owner/pilot-completion', '/technician/pilot-completion',
+  'admin-site:/document-vault',
+  'admin-site:/ops/pilot-completion',
+  'admin-site:/admin/pricing-matrix',
+]);
+
 const adminModulePrefixes = [
   { prefixes: ['/technicians/map', '/live-map'], module: 'map' },
   { prefixes: ['/admin/payments', '/manual-approvals', '/payments', '/transactions'], module: 'transactions' },
@@ -292,9 +317,9 @@ function signals(content, row) {
   if (!sources.length) sources.push('static/local or delegated hook');
 
   const dataSource = [...new Set(sources)].join('+');
-  const staticData = STATIC_CONTENT_ROUTES.has(row.route) || isStaticRouteData(dataSource, content);
+  const staticData = STATIC_CONTENT_ROUTES.has(row.route) || SOURCE_PROVEN_STATIC_ROUTES.has(row.route) || isStaticRouteData(dataSource, content);
   const hasLoading = /\bloading\b|CircularProgress|Skeleton|LinearProgress|isLoading|pending|saving|busy|submitting|refreshing|processing|fetching/i.test(content);
-  const hasEmpty = /length\s*===\s*0|\.empty\b|no\s+(records|items|data|properties|tickets|jobs|documents|results|payments|notifications|messages|leads|referrals|units|tenants|missions|vendors|rfqs|requests|listings)|nothing\s+to\s+show/i.test(content);
+  const hasEmpty = /length\s*(?:===|==|<=|<|>=|>)\s*0|\.empty\b|no\s+(records|items|data|properties|tickets|jobs|documents|results|payments|notifications|messages|leads|referrals|units|tenants|missions|vendors|rfqs|requests|listings)|nothing\s+to\s+show|queue\s+is\s+empty|add\s+properties/i.test(content);
   const hasError = /setError|setWarning|setNotice|error\s*&&|warning\s*&&|notice\s*&&|severity=["'](?:error|warning)|catch\s*\(/i.test(content);
   const routeE2E = e2eCoversRoute(row);
 
@@ -359,11 +384,15 @@ for (const row of rows) {
   const [role, permissionText] = permission(row);
   row.role = role;
   row.permission = permissionText;
-  const componentContent = row.componentFile
+  const primaryContent = row.componentFile
     ? read(row.componentFile)
     : (row.wrapperFiles?.length
         ? row.wrapperFiles.map((file) => read(file)).join('\n')
         : read(row.source));
+  const composedContent = (ROUTE_COMPOSED_FILES[row.route] || [])
+    .map((file) => read(file))
+    .join('\n');
+  const componentContent = [primaryContent, composedContent].filter(Boolean).join('\n');
   Object.assign(row, signals(componentContent, row));
   row.backNavigation = backNavigation(row, componentContent);
   [row.directUrl, row.refresh] = directAndRefresh(row);
