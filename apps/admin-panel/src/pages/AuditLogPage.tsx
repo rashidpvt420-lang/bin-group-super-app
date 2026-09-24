@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { 
     Container, Typography, Paper, Table, TableBody, TableCell, 
     TableContainer, TableHead, TableRow, Chip, Box, TextField, 
-    InputAdornment, IconButton, Grid
+    InputAdornment, IconButton, Grid, Alert, CircularProgress
 } from '@mui/material';
 import { collection, query, orderBy, limit, onSnapshot } from 'firebase/firestore';
 import { db } from '../lib/firebase';
@@ -15,6 +15,8 @@ export default function AuditLogPage() {
     const { t, lang, isRTL } = useLanguage();
     const [logs, setLogs] = useState<any[]>([]);
     const [search, setSearch] = useState('');
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
 
     useEffect(() => {
         const q = query(collection(db, 'audit_logs'), orderBy('createdAt', 'desc'), limit(100));
@@ -32,6 +34,11 @@ export default function AuditLogPage() {
                 };
             });
             setLogs(data);
+            setError('');
+            setLoading(false);
+        }, (err) => {
+            setError(err?.message || 'Could not load audit events.');
+            setLoading(false);
         });
         return () => unsubscribe();
     }, []);
@@ -45,6 +52,9 @@ export default function AuditLogPage() {
             default: return 'default';
         }
     };
+
+    if (loading) return <Box sx={{ display: 'flex', justifyContent: 'center', py: 10 }}><CircularProgress /></Box>;
+    if (error) return <Alert severity="error" sx={{ m: 4 }}>{error}</Alert>;
 
     return (
         <Container maxWidth="xl" sx={{ py: 6, direction: isRTL ? 'rtl' : 'ltr' }}>
