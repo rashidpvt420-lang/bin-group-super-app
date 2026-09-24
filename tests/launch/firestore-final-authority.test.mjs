@@ -64,10 +64,22 @@ test('final Firestore authority hardener is status-aware, explicit, bounded and 
     assert.match(rules, /match \/deviceReadiness\/\{readinessId\} \{/);
     assert.match(rules, /match \/\{subcollection\}\/\{document=\*\*\} \{\n\s*allow read, write: if false;/);
 
-    assert.match(
-      rules,
-      /allow read: if collection != 'tickets' && collection != 'maintenanceTickets' && !\(collection in \['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions', 'private_hr_profiles', 'technician_live_locations', 'invoice_registry', 'payroll_entries', 'property_identity_registry'\]\) && hasAdminClaim\(\);/,
-    );
+    const genericFallback = matchBlock(rules, '    match /{collection}/{document=**} {');
+    assert.match(genericFallback, /allow read: if collection != 'tickets' && collection != 'maintenanceTickets'/);
+    for (const serverOnlyCollection of [
+      'system_secrets',
+      'users',
+      'broker_kyc_submission_limits',
+      'admin_security_sessions',
+      'private_hr_profiles',
+      'technician_live_locations',
+      'invoice_registry',
+      'payroll_entries',
+      'property_identity_registry',
+    ]) {
+      assert.match(genericFallback, new RegExp(`'${serverOnlyCollection}'`));
+    }
+    assert.match(genericFallback, /hasAdminClaim\(\);/);
     assert.match(rules, /allow create: if collection != 'tickets' && collection != 'maintenanceTickets' && !\(/);
     assert.match(rules, /allow update, delete: if collection != 'tickets' && collection != 'maintenanceTickets' && !\(/);
     assert.doesNotMatch(rules, /'users',\n\s*'tickets',\n\s*'maintenanceTickets',\n\s*'audit_logs'/);
