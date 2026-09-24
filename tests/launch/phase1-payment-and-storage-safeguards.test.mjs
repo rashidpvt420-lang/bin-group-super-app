@@ -89,16 +89,19 @@ test('legacy payment instructions remain server-authoritative while five-page ac
 
 test('owner activation geo gate fails closed', async () => {
   const wrapper = await read('functions/securePaymentApproval.ts');
+  const authority = await read('functions/propertyGeoAuthority.ts');
   const runtime = await read('functions/runtime.ts');
 
-  assert.match(wrapper, /geo\.verified === true/);
-  assert.match(wrapper, /geo\.dispatchReady === true/);
-  assert.match(wrapper, /geo\.requiresGeoReview !== true/);
-  assert.match(wrapper, /isFiniteCoordinate\(geo\.lat, -90, 90\)/);
-  assert.match(wrapper, /isFiniteCoordinate\(geo\.lng, -180, 180\)/);
   assert.match(wrapper, /hasDispatchReadyPropertyGeo\(property\)/);
   assert.match(wrapper, /inspectionFirst/);
   assert.match(wrapper, /OWNER_ACTIVATION_GEO_GATE_BLOCKED/);
+  assert.match(authority, /geo\.verified === true/);
+  assert.match(authority, /geo\.dispatchReady === true/);
+  assert.match(authority, /geo\.requiresGeoReview !== true/);
+  assert.match(authority, /validCoordinate\(lat, lng\)/);
+  assert.match(authority, /const founderVerified/);
+  assert.match(authority, /const physicalVerified/);
+  assert.match(authority, /if \(!founderVerified && !physicalVerified\)/);
   assert.match(runtime, /export \* from "\.\/securePaymentApproval"/);
   assert.doesNotMatch(runtime, /export \* from "\.\/paymentTransactionApproval"/);
 });
