@@ -73,6 +73,15 @@ function importMap(content) {
   for (const match of content.matchAll(/import\s+([A-Za-z_$][\w$]*)\s+from\s+['"]([^'"]+)['"]/g)) {
     map[match[1]] = match[2];
   }
+  for (const match of content.matchAll(/import\s*{([^}]+)}\s*from\s*['"]([^'"]+)['"]/g)) {
+    for (const token of match[1].split(',')) {
+      const clean = token.trim().replace(/^type\s+/, '');
+      if (!clean) continue;
+      const parts = clean.split(/\s+as\s+/);
+      const localName = (parts[1] || parts[0]).trim();
+      if (/^[A-Za-z_$][\w$]*$/.test(localName)) map[localName] = match[2];
+    }
+  }
   for (const match of content.matchAll(/const\s+([A-Za-z_$][\w$]*)\s*=\s*lazyWithRetry\(\(\)\s*=>\s*import\(['"]([^'"]+)['"]\)\)/g)) {
     map[match[1]] = match[2];
   }
@@ -80,6 +89,19 @@ function importMap(content) {
     map[match[1]] = match[2];
   }
   return map;
+}
+
+function localWrapperFiles(sourcePath, sourceContent, component, imports) {
+  if (!component || imports[component]) return [];
+  const declaration = new RegExp(
+    `(?:const|function)\\s+${component}[^=\\n]*(?:=|\\{)([\\s\\S]{0,800})`,
+  ).exec(sourceContent);
+  if (!declaration) return [];
+  const fragment = declaration[0];
+  const childNames = [...fragment.matchAll(/<([A-Z][A-Za-z0-9_$]*)\b/g)].map((match) => match[1]);
+  return [...new Set(childNames)]
+    .map((name) => resolveImport(sourcePath, imports[name]))
+    .filter(Boolean);
 }
 
 function fullRoute(source, raw) {
@@ -104,6 +126,7 @@ function parseRoutes(source, content) {
       (name) => element.includes(`<${name}`) && !['Navigate', 'ProtectedRoute', 'Layout', 'Alert'].includes(name),
     );
     const component = componentNames.at(-1) || '';
+    const componentFile = component ? resolveImport(source.path, imports[component]) : null;
     rows.push({
       scope: source.scope,
       route: fullRoute(source, raw),
@@ -111,7 +134,8 @@ function parseRoutes(source, content) {
       source: source.path,
       element,
       component,
-      componentFile: component ? resolveImport(source.path, imports[component]) : null,
+      componentFile,
+      wrapperFiles: componentFile ? [] : localWrapperFiles(source.path, content, component, imports),
     });
   }
   return rows;
@@ -335,7 +359,11 @@ for (const row of rows) {
   const [role, permissionText] = permission(row);
   row.role = role;
   row.permission = permissionText;
-  const componentContent = row.componentFile ? read(row.componentFile) : read(row.source);
+  const componentContent = row.componentFile
+    ? read(row.componentFile)
+    : (row.wrapperFiles?.length
+        ? row.wrapperFiles.map((file) => read(file)).join('\n')
+        : read(row.source));
   Object.assign(row, signals(componentContent, row));
   row.backNavigation = backNavigation(row, componentContent);
   [row.directUrl, row.refresh] = directAndRefresh(row);
