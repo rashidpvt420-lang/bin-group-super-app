@@ -359,9 +359,19 @@ const reviews = {
   back: rows.filter((row) => row.backNavigation.startsWith('REVIEW')).length,
 };
 
-for (const [dimension, count] of Object.entries(reviews)) {
-  if (count > 0) {
-    failures.push(`Phase 2 unresolved ${dimension} coverage: ${count} route row(s) remain REVIEW.`);
+const unresolvedRows = {
+  loading: rows.filter((row) => row.loading === 'REVIEW'),
+  empty: rows.filter((row) => row.empty === 'REVIEW'),
+  error: rows.filter((row) => row.error === 'REVIEW'),
+  mobile: rows.filter((row) => row.mobile === 'REVIEW'),
+  arabic: rows.filter((row) => row.arabic === 'REVIEW'),
+  back: rows.filter((row) => row.backNavigation.startsWith('REVIEW')),
+};
+
+for (const [dimension, unresolved] of Object.entries(unresolvedRows)) {
+  if (unresolved.length > 0) {
+    const routes = unresolved.map((row) => row.route).join(', ');
+    failures.push(`Phase 2 unresolved ${dimension} coverage: ${unresolved.length} route row(s) remain REVIEW: ${routes}`);
   }
 }
 
