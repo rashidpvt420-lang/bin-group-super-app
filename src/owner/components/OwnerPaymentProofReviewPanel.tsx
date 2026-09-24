@@ -122,7 +122,7 @@ export default function OwnerPaymentProofReviewPanel() {
       </TableContainer>}
 
       <Dialog open={Boolean(selected)} onClose={() => setSelected(null)} fullWidth maxWidth="sm" PaperProps={{ sx: { bgcolor: '#0f172a', color: '#fff', border: `1px solid ${alpha(binThemeTokens.gold, 0.22)}`, borderRadius: 4 } }}>
-        <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontWeight: 950 }}>Payment Proof Detail<IconButton onClick={() => setSelected(null)} sx={{ color: '#fff' }}><X size={18} /></IconButton></DialogTitle>
+        <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontWeight: 950 }}>Payment Proof Detail<IconButton aria-label="Close payment proof review" onClick={() => setSelected(null)} sx={{ color: '#fff' }}><X size={18} /></IconButton></DialogTitle>
         <DialogContent dividers sx={{ borderColor: 'rgba(255,255,255,0.08)' }}>
           {selected && <Stack spacing={2.2}>
             <Box><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900 }}>STATUS</Typography><Chip label={String(selected.status || (selected.paymentVerified ? 'VERIFIED' : 'PENDING')).replace(/_/g, ' ').toUpperCase()} sx={{ ml: 1, bgcolor: alpha(statusTone(selected.status || (selected.paymentVerified ? 'VERIFIED' : 'PENDING')), 0.12), color: statusTone(selected.status || (selected.paymentVerified ? 'VERIFIED' : 'PENDING')), fontWeight: 950 }} /></Box>
