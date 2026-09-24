@@ -37,9 +37,14 @@ test('Phase 1 callable requires bank routing only when Bank Transfer is enabled'
 test('unified production app activates the Firebase Messaging worker and retries the real-token registration path', () => {
   assert.equal(existsSync('public/firebase-messaging-sw.js'), true);
   const worker = read('public/firebase-messaging-sw.js');
+  const generator = read('scripts/write-root-firebase-messaging-config.mjs');
   const service = read('src/services/pushNotificationService.ts');
-  assert.ok(worker.includes("projectId: 'bin-group-57c60'"));
-  assert.ok(worker.includes("appId: '1:123413252227:web:285cb53bc26626d699f3b6'"));
+  assert.ok(worker.includes("importScripts('/firebase-messaging-config.js')"));
+  assert.ok(worker.includes('firebase.initializeApp(self.__BIN_GROUP_FIREBASE_CONFIG)'));
+  assert.ok(generator.includes('__BIN_GROUP_FIREBASE_CONFIG'));
+  assert.ok(generator.includes('VITE_FIREBASE_PROJECT_ID'));
+  assert.ok(!worker.includes('apiKey:'));
+  assert.ok(!worker.includes('appId:'));
   assert.ok(service.includes("navigator.serviceWorker.register('/firebase-messaging-sw.js', { scope: '/' })"));
   assert.ok(service.includes('PUSH_REGISTRATION_ATTEMPTS = 4'));
   assert.ok(service.includes('getToken(messaging'));
