@@ -113,6 +113,33 @@ describe('Firestore Security Rules', () => {
     await assertFails(deleteDoc(doc(adminDb, 'property_identity_registry/identity_hash_1')));
   });
 
+  it('turnover quote decisions are server-authoritative and cannot be forged by browser clients', async () => {
+    await seedServerDocument('turnover-quotes/quote_owner_a', {
+      ownerId: 'owner_a',
+      status: 'PENDING',
+      totalQuote: 1400,
+    });
+
+    const ownerDb = testEnv.authenticatedContext('owner_a', {
+      role: 'owner',
+      email_verified: true,
+    }).firestore();
+    const otherOwnerDb = testEnv.authenticatedContext('owner_b', {
+      role: 'owner',
+      email_verified: true,
+    }).firestore();
+    const adminDb = testEnv.authenticatedContext('admin_turnover', {
+      role: 'admin',
+      admin: true,
+    }).firestore();
+
+    await assertSucceeds(getDoc(doc(ownerDb, 'turnover-quotes/quote_owner_a')));
+    await assertFails(getDoc(doc(otherOwnerDb, 'turnover-quotes/quote_owner_a')));
+    await assertFails(updateDoc(doc(ownerDb, 'turnover-quotes/quote_owner_a'), { status: 'APPROVED' }));
+    await assertFails(updateDoc(doc(ownerDb, 'turnover-quotes/quote_owner_a'), { status: 'REJECTED' }));
+    await assertFails(updateDoc(doc(adminDb, 'turnover-quotes/quote_owner_a'), { status: 'APPROVED' }));
+  });
+
   it('owner profile activation fields remain server-authoritative', async () => {
     const adminDb = testEnv.authenticatedContext('admin_user', { admin: true }).firestore();
     await setDoc(doc(adminDb, 'owners/owner_a'), {
