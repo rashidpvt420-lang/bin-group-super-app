@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { 
     Box, Typography, Grid, Paper, CircularProgress, 
     Stack, LinearProgress, alpha, Button, Divider,
-    Tooltip, IconButton
+    Tooltip, IconButton, Alert
 } from '@mui/material';
 import { 
     TrendingUp, DollarSign, Percent, BarChart2, 
@@ -17,15 +17,24 @@ export default function OwnerRoiPage() {
     const { user } = useRole();
     const [loading, setLoading] = useState(true);
     const [passports, setPassports] = useState<any[]>([]);
+    const [error, setError] = useState('');
 
     useEffect(() => {
-        if (!user?.email) return;
+        if (!user?.email) {
+            setError('Owner email is unavailable.');
+            setLoading(false);
+            return;
+        }
         
         const email = user.email.toLowerCase();
         const passportQ = query(collection(db, 'propertyPassports'), where('ownerEmail', '==', email));
         
         const unsubscribe = onSnapshot(passportQ, (snap) => {
+            setError('');
             setPassports(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+            setLoading(false);
+        }, (err) => {
+            setError(err?.message || 'Could not load ROI data.');
             setLoading(false);
         });
 
@@ -38,6 +47,8 @@ export default function OwnerRoiPage() {
             <Typography variant="overline" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900 }}>Calculating Yields...</Typography>
         </Box>
     );
+
+    if (error) return <Alert severity="error" sx={{ my: 4 }}>{error}</Alert>;
 
     const totalCollected = passports.reduce((s, p) => s + (p.rentCollectedTotal || 0), 0);
     const totalOutstanding = passports.reduce((s, p) => s + (p.rentOutstandingTotal || 0), 0);
