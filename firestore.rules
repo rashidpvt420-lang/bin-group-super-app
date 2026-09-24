@@ -2031,7 +2031,8 @@ service cloud.firestore {
       allow read: if isAdmin() || isOwnerId(resource.data.get('chatId', null));
       allow create: if isAdmin() || (signedIn() &&
         request.resource.data.get('chatId', null) == request.auth.uid &&
-        request.resource.data.get('senderId', null) == request.auth.uid);
+        request.resource.data.get('senderId', null) == request.auth.uid &&
+        request.resource.data.get('senderRole', '') == request.auth.token.get('role', ''));
       allow update, delete: if isAdmin();
     }
 
