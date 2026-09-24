@@ -344,7 +344,7 @@ export default function UnitStatusPage() {
                                             )}
                                         </TableCell>
                                         <TableCell align="right">
-                                            <IconButton onClick={() => handleEditOpen(unit)} sx={{ color: binThemeTokens.gold }}>
+                                            <IconButton aria-label="Edit unit status" onClick={() => handleEditOpen(unit)} sx={{ color: binThemeTokens.gold }}>
                                                 <MoreVertical size={20} />
                                             </IconButton>
                                         </TableCell>
@@ -371,7 +371,7 @@ export default function UnitStatusPage() {
                             Update lifecycle state and maintenance block status.
                         </Typography>
                     </Box>
-                    <IconButton onClick={() => setOpenEdit(false)} sx={{ color: binThemeTokens.textSecondary }}><X size={20} /></IconButton>
+                    <IconButton aria-label="Close unit status dialog" onClick={() => setOpenEdit(false)} sx={{ color: binThemeTokens.textSecondary }}><X size={20} /></IconButton>
                 </DialogTitle>
                 <DialogContent dividers sx={{ borderColor: alpha(binThemeTokens.gold, 0.1) }}>
                     <Stack spacing={3} sx={{ mt: 1 }}>
