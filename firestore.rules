@@ -1693,7 +1693,9 @@ service cloud.firestore {
     match /turnover-quotes/{quoteId} {
       allow read: if isAdmin() || (signedIn() && resource.data.get('ownerId', null) == request.auth.uid);
       allow create: if isAdmin();
-      allow update: if isAdmin() || (signedIn() && resource.data.get('ownerId', null) == request.auth.uid && request.resource.data.get('status', null) in ['APPROVED', 'REJECTED'] && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt']));
+      // Owner approve/reject decisions are server-authoritative through
+      // ownerDecideTurnoverQuote. Browser clients cannot forge status transitions.
+      allow update: if false;
       allow delete: if isAdmin();
     }
 
