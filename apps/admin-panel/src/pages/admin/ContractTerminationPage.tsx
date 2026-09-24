@@ -82,10 +82,7 @@ export default function ContractTerminationPage() {
         closedAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
-      await Promise.all([
-        addDoc(collection(db, 'audit_logs'), auditPayload),
-        addDoc(collection(db, 'auditLogs'), auditPayload),
-      ]);
+      await addDoc(collection(db, 'audit_logs'), auditPayload);
       setNote('');
       setMessage('Contract closed and audit logged.');
     } catch (error: any) {
