@@ -30,7 +30,8 @@ import {
   Avatar,
   Stack,
   Divider,
-  Alert
+  Alert,
+  CircularProgress
 } from '@mui/material';
 import { db, functions } from '../../lib/firebase';
 import { collection, query, orderBy, limit, where, getDocs, updateDoc, doc, serverTimestamp } from 'firebase/firestore';
@@ -73,6 +74,8 @@ interface Technician {
 export default function TicketsManagementPage() {
   const { t, isRTL } = useLanguage();
   const [tickets, setTickets] = useState<Ticket[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
   const [filterPriority, setFilterPriority] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
@@ -110,12 +113,19 @@ export default function TicketsManagementPage() {
 
   useEffect(() => {
     const fetchInitial = async () => {
+      try {
+        setLoading(true);
+        setLoadError('');
         const q = query(collection(db, 'maintenanceTickets'), orderBy('createdAt', 'desc'), limit(PAGE_SIZE));
         const snap = await getDocs(q);
         setTickets(snap.docs.map(mapTicket));
-        setTickets(snap.docs.map(mapTicket));
+      } catch (err: any) {
+        setLoadError(err?.message || 'Could not load maintenance tickets.');
+      } finally {
+        setLoading(false);
+      }
     };
-    fetchInitial();
+    void fetchInitial();
   }, []);
 
 
@@ -230,6 +240,9 @@ export default function TicketsManagementPage() {
     const hours = Math.floor((completed.getTime() - created.getTime()) / (1000 * 60 * 60));
     return `${hours}h`;
   };
+
+  if (loading) return <Box sx={{ display: 'flex', justifyContent: 'center', py: 10 }}><CircularProgress /></Box>;
+  if (loadError) return <Container maxWidth="xl" sx={{ py: 4 }}><Alert severity="error">{loadError}</Alert></Container>;
 
   return (
     <Container maxWidth="lg" sx={{ py: 4, direction: isRTL ? 'rtl' : 'ltr' }}>
