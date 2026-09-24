@@ -24,6 +24,7 @@ export default function TenantVisitorParkingPage() {
   const [unitId, setUnitId] = useState('');
   const [propertyId, setPropertyId] = useState('');
   const [snackbar, setSnackbar] = useState<{open: boolean, message: string, severity: 'success' | 'error' | 'warning' | 'info'}>({ open: false, message: '', severity: 'info' });
+  const [cancelingId, setCancelingId] = useState<string | null>(null);
 
   const label = (key: string, en: string, ar: string) => lang === 'ar' ? ar : tx(key, en);
 
@@ -127,13 +128,18 @@ export default function TenantVisitorParkingPage() {
   };
 
   const handleCancelRequest = async (requestId: string) => {
+    if (cancelingId) return;
     if (!window.confirm('Are you sure you want to cancel this parking request?')) return;
+    setCancelingId(requestId);
     try {
       const cancelSignedQrPass = httpsCallable(functions, 'cancelSignedQrPass');
       await cancelSignedQrPass({ passId: requestId, collectionName: 'visitorParkingRequests' });
+      setSnackbar({ open: true, message: 'Parking request cancelled.', severity: 'success' });
     } catch (err) {
       console.error('Failed to cancel request:', err);
       setSnackbar({ open: true, message: 'Failed to cancel request.', severity: 'error' });
+    } finally {
+      setCancelingId(null);
     }
   };
 
@@ -239,7 +245,7 @@ export default function TenantVisitorParkingPage() {
                             variant="outlined"
                             color="error"
                             size="small"
-                            onClick={() => handleCancelRequest(r.id)}
+                            disabled={cancelingId === r.id} onClick={() => handleCancelRequest(r.id)}
                             sx={{ fontWeight: 900, borderRadius: 2 }}
                           >
                             CANCEL
