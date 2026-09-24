@@ -234,6 +234,9 @@ for (const fileAbs of sourceRoots.flatMap((dir) => walk(path.join(root, dir)))) 
         const handlerAttr = attrs.get(eventName);
         const handler = handlerName(handlerAttr, sourceFile);
         const context = handlerContext(handlerAttr, sourceFile, functions);
+        const disabledAttr = normalize(attrs.get('disabled')?.text);
+        const explicitlyDisabled = disabledAttr === 'true';
+        const nativeSubmit = tag === 'button' && normalize(attrs.get('type')?.text).toLowerCase() === 'submit';
         const buttonLike = !fieldControls.has(tag);
         const networkMutation = serverMutationPattern.test(context);
         const mutation = buttonLike && networkMutation && (mutatingWords.test(label + ' ' + handler) || /httpsCallable|callFunction|addDoc|setDoc|updateDoc|deleteDoc|writeBatch|runTransaction/i.test(context));
@@ -256,6 +259,8 @@ for (const fileAbs of sourceRoots.flatMap((dir) => walk(path.join(root, dir)))) 
         const e2eCovered = !mutation || anchors.some((anchor) => new RegExp(escapeRegExp(anchor), 'i').test(e2eText));
 
         const issues = [];
+        const actionLike = ['Button', 'IconButton', 'Fab', 'ButtonBase', 'SpeedDialAction', 'button', 'a'].includes(tag);
+        if (actionLike && !hasClick && !hasHref && !nativeSubmit && !explicitlyDisabled) issues.push('enabled-control-missing-action');
         if (iconOnlyControls.has(tag) && !aria && !title && !tooltip && !children.text && !children.dynamic) issues.push('icon-control-missing-accessible-label');
         if ((tag === 'button' || tag === 'Button' || tag === 'ButtonBase') && !label) issues.push('button-missing-accessible-label');
         if (mutation && !busyGuard) issues.push('mutation-missing-busy-guard');
