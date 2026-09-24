@@ -213,7 +213,7 @@ export default function TurnoverEnginePage() {
                                           </Stack>
                                       </Grid>
                                       <Grid item xs={12} sm={3} sx={{ textAlign: 'right' }}>
-                                          <Button variant="outlined" fullWidth sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.gold, fontWeight: 900 }}>VIEW AUDIT</Button>
+                                          <Button variant="outlined" fullWidth disabled title="A live turnover audit is not linked to this readiness record yet." aria-label="View audit unavailable until a live turnover audit is linked" sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.gold, fontWeight: 900 }}>VIEW AUDIT — NOT AVAILABLE</Button>
                                       </Grid>
                                   </Grid>
                               </Paper>
@@ -235,7 +235,7 @@ export default function TurnoverEnginePage() {
                                   <Box><Typography variant="subtitle2" fontWeight="900" color="#FFF">DECOR AUDIT</Typography><Typography variant="caption" color="textSecondary">Jotun Premium Finish as standard.</Typography></Box>
                               </Box>
                           </Stack>
-                          <Button fullWidth variant="contained" sx={{ mt: 6, bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, py: 2 }}>INITIATE NEW MOVE-OUT</Button>
+                          <Button fullWidth variant="contained" disabled title="Move-out initiation is not connected to a server-authoritative workflow yet." aria-label="Initiate new move-out unavailable until the protected workflow is connected" sx={{ mt: 6, bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, py: 2 }}>INITIATE NEW MOVE-OUT — NOT AVAILABLE</Button>
                       </Paper>
                   </Grid>
               </Grid>
