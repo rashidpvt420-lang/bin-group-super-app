@@ -34,6 +34,49 @@ type RoleCase = {
   baseUrl?: string;
 };
 
+const publicRoutes = [
+  '/',
+  '/pilot',
+  '/owner-landing',
+  '/v1',
+  '/gateway',
+  '/login',
+  '/homes',
+  '/terms-of-service',
+  '/privacy-policy',
+  '/terms',
+  '/privacy',
+  '/support',
+  '/feedback',
+  '/pilot-feedback',
+  '/owners',
+  '/tenants',
+  '/technicians',
+  '/brokers',
+  '/property-management',
+  '/maintenance',
+  '/majlis-care',
+  '/stadiums',
+  '/hotels',
+  '/malls',
+  '/hospitals',
+  '/government-properties',
+  '/security',
+  '/trust',
+  '/trust-center',
+  '/uae-market-leadership',
+  '/owner-trust-os',
+  '/workforce-os',
+  '/services',
+  '/contact',
+  '/request-demo',
+  '/videos',
+  '/onboarding',
+  '/verify',
+  '/verify-cert',
+  '/tenant-invite',
+] as const;
+
 const roleCases: RoleCase[] = [
   {
     name: 'Owner',
@@ -321,6 +364,45 @@ async function assertMobileArabicRoute(page: Page, role: RoleCase, route: string
     message: `${role.name} ${route} must preserve route + Arabic RTL after refresh`,
   }).toEqual({ path: route, dir: 'rtl', lang: 'ar' });
 }
+
+test('Public Phase 2 routes survive direct URL, refresh, mobile and Arabic RTL', async ({ page }) => {
+  test.setTimeout(600_000);
+
+  for (const route of publicRoutes) {
+    const response = await page.goto(route, { waitUntil: 'domcontentloaded' });
+    expect(response?.status() ?? 200, `Public ${route} must not return a server error`).toBeLessThan(500);
+    await expect.poll(() => new URL(page.url()).pathname, {
+      message: `Public ${route} must remain on its registered route`,
+    }).toBe(route);
+    let body = await page.locator('body').innerText({ timeout: 20_000 });
+    expect(body.trim().length, `Public ${route} must render visible content`).toBeGreaterThan(0);
+    expect(body, `Public ${route} must not crash`).not.toMatch(CRASH_PATTERN);
+
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await expect.poll(() => new URL(page.url()).pathname).toBe(route);
+
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.evaluate(() => localStorage.setItem('bin_language', 'ar'));
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await expect.poll(async () => page.evaluate(() => ({
+      path: location.pathname,
+      dir: document.documentElement.dir,
+      lang: document.documentElement.lang,
+    }))).toEqual({ path: route, dir: 'rtl', lang: 'ar' });
+
+    body = await page.locator('body').innerText({ timeout: 20_000 });
+    expect(body.trim().length, `Public ${route} must render on mobile Arabic`).toBeGreaterThan(0);
+    expect(body, `Public ${route} must not crash on mobile Arabic`).not.toMatch(CRASH_PATTERN);
+    const overflow = await page.evaluate(() => ({
+      width: window.innerWidth,
+      scrollWidth: document.documentElement.scrollWidth,
+    }));
+    expect(overflow.scrollWidth, `Public ${route} must avoid page-level horizontal overflow`).toBeLessThanOrEqual(overflow.width + 8);
+
+    await page.evaluate(() => localStorage.setItem('bin_language', 'en'));
+    await page.setViewportSize({ width: 1280, height: 720 });
+  }
+});
 
 for (const role of roleCases) {
   test(`${role.name} hard-launch routes remain exact and authenticated`, async ({ page }) => {
