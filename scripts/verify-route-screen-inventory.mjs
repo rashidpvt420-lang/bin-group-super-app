@@ -319,8 +319,8 @@ function signals(content, row) {
   const dataSource = [...new Set(sources)].join('+');
   const staticData = STATIC_CONTENT_ROUTES.has(row.route) || SOURCE_PROVEN_STATIC_ROUTES.has(row.route) || isStaticRouteData(dataSource, content);
   const hasLoading = /\bloading\b|CircularProgress|Skeleton|LinearProgress|isLoading|pending|saving|busy|submitting|refreshing|processing|fetching/i.test(content);
-  const hasEmpty = /length\s*(?:===|==|<=|<|>=|>)\s*0|\.empty\b|no\s+(records|items|data|properties|tickets|jobs|documents|results|payments|notifications|messages|leads|referrals|units|tenants|missions|vendors|rfqs|requests|listings)|nothing\s+to\s+show|queue\s+is\s+empty|add\s+properties/i.test(content);
-  const hasError = /setError|setWarning|setNotice|error\s*&&|warning\s*&&|notice\s*&&|severity=["'](?:error|warning)|catch\s*\(/i.test(content);
+  const hasEmpty = /!?[A-Za-z_$][\w$]*\.length\b|length\s*(?:===|==|<=|<|>=|>)\s*0|\.empty\b|no\s+(active\s+)?(records|items|data|properties|tickets|jobs|documents|results|payments|notifications|messages|leads|referrals|units|tenants|missions|vendors|rfqs|requests|listings|renewal)|nothing\s+to\s+show|queue\s+is\s+empty|add\s+properties/i.test(content);
+  const hasError = /set[A-Za-z0-9_$]*Error|setWarning|setNotice|(?:load)?error\s*&&|warning\s*&&|notice\s*&&|severity=["'](?:error|warning)|catch\s*\(/i.test(content);
   const routeE2E = e2eCoversRoute(row);
 
   return {
