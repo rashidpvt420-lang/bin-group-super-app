@@ -118,7 +118,7 @@ export default function MessagesPage() {
                         <Paper sx={{ p: 3, bgcolor: 'rgba(22, 22, 24, 0.7)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 6, height: '100%', display: 'flex', flexDirection: 'column' }}>
                             <Stack direction="row" alignItems="center" spacing={2} sx={{ mb: 2 }}>
                                 {isMobileView() && (
-                                    <IconButton onClick={() => setSelectedConv(null)} sx={{ color: '#FFF' }}>
+                                    <IconButton aria-label="Back to conversations" onClick={() => setSelectedConv(null)} sx={{ color: '#FFF' }}>
                                         <SafeIcon icon={ArrowLeft} size={20} />
                                     </IconButton>
                                 )}
@@ -159,7 +159,7 @@ export default function MessagesPage() {
                                         onChange={(e) => setNewMessage(e.target.value)}
                                         sx={{ px: 2, '& .MuiInput-root': { color: '#FFF' }, '& .MuiInput-root:before, & .MuiInput-root:after': { display: 'none' } }}
                                     />
-                                    <IconButton type="submit" disabled={!newMessage.trim()} sx={{ bgcolor: binThemeTokens.gold, color: '#000', '&:hover': { bgcolor: '#b4954e' }, '&.Mui-disabled': { bgcolor: 'rgba(255,255,255,0.1)' } }}>
+                                    <IconButton aria-label="Send admin message" type="submit" disabled={!newMessage.trim()} sx={{ bgcolor: binThemeTokens.gold, color: '#000', '&:hover': { bgcolor: '#b4954e' }, '&.Mui-disabled': { bgcolor: 'rgba(255,255,255,0.1)' } }}>
                                         <SafeIcon icon={Send} size={20} />
                                     </IconButton>
                                 </Paper>
