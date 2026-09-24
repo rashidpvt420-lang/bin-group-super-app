@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import {
     Box, Typography, Container, Paper, Table, TableBody, TableCell, 
     TableContainer, TableHead, TableRow, Chip, IconButton, Stack, 
-    alpha, CircularProgress, Tooltip
+    alpha, CircularProgress, Tooltip, Alert
 } from '@mui/material';
 import { 
     Clock, MapPin, 
@@ -15,12 +15,17 @@ import { binThemeTokens } from '../../theme/adminTheme';
 export default function TechnicianDutyMonitorPage() {
     const [technicians, setTechnicians] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
 
     useEffect(() => {
         // Monitor all users with role 'technician'
         const q = query(collection(db, 'users'), where('role', '==', 'technician'));
         const unsubscribe = onSnapshot(q, (snap) => {
+            setError('');
             setTechnicians(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+            setLoading(false);
+        }, (err) => {
+            setError(err?.message || 'Could not load technician duty status.');
             setLoading(false);
         });
         return () => unsubscribe();
@@ -37,6 +42,7 @@ export default function TechnicianDutyMonitorPage() {
     };
 
     if (loading) return <Box sx={{ display: 'flex', justifyContent: 'center', p: 10 }}><CircularProgress sx={{ color: binThemeTokens.gold }}/></Box>;
+    if (error) return <Alert severity="error" sx={{ m: 4 }}>{error}</Alert>;
 
     return (
         <Container maxWidth="xl" sx={{ py: 6 }}>
