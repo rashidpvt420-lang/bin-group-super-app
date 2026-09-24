@@ -80,7 +80,7 @@ const PATH_MODULES: Array<{ prefixes: string[]; module: StaffModule }> = [
     { prefixes: ['/admin/payments', '/manual-approvals', '/payments', '/transactions'], module: 'transactions' },
     { prefixes: ['/financials', '/profitability'], module: 'financials' },
     { prefixes: ['/broker-attributions', '/broker-commissions', '/broker'], module: 'broker' },
-    { prefixes: ['/ops/public-launch-command', '/ops/pilot-completion', '/ops/data-governance', '/ops/public', '/pilot', '/compliance'], module: 'compliance' },
+    { prefixes: ['/ops/public-launch-command', '/ops/pilot-completion', '/ops/data-governance', '/ops/public', '/pilot', '/compliance', '/smoke-test'], module: 'compliance' },
     { prefixes: ['/ops/document-library', '/ops/rfq', '/ops/vendors', '/document-vault', '/vault'], module: 'documents' },
     { prefixes: ['/admin/unit-status', '/admin/units', '/properties/passport', '/onboard-property', '/bulk-import', '/units'], module: 'properties' },
     { prefixes: ['/ops/whatsapp-triage', '/ops/bin-connect', '/tickets'], module: 'tickets' },
