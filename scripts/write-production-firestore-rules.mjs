@@ -81,14 +81,6 @@ if (!matchBlock(propertyIdentityHeader)) {
   }
 }
 
-source = source.replace(
-  "'invoice_registry', 'payroll_entries'] && hasAdminClaim();",
-  "'invoice_registry', 'payroll_entries', 'property_identity_registry'] && hasAdminClaim();",
-);
-source = source.replaceAll(
-  "'transactions',\n          'payroll_entries',\n          'invoices',",
-  "'transactions',\n          'payroll_entries',\n          'property_identity_registry',\n          'invoices',",
-);
 
 const required = [
   'match /technician_live_locations/{technicianId} {',
@@ -100,7 +92,7 @@ const required = [
   'match /tickets/{ticketId} {',
   'match /payroll_entries/{entryId} {',
   "'invoice_registry', 'payroll_entries', 'property_identity_registry'",
-  "'transactions',\n          'payroll_entries',\n          'property_identity_registry',\n          'invoices'",
+  "'technician_live_locations',\n          'properties',\n          'property_identity_registry',\n          'users'",
   financeAdminPaymentTransactionsRead,
   "request.resource.data.get('source', '') != 'github-actions'",
   "request.resource.data.get('executionGenerated', false) != true",
@@ -172,9 +164,17 @@ const propertyIdentityBlock = matchBlock(propertyIdentityHeader);
 if (!propertyIdentityBlock || !propertyIdentityBlock.includes('allow read, create, update, delete: if false;')) {
   failures.push('property_identity_registry must be explicitly browser-denied');
 }
-const propertyIdentityCatchAllOccurrences = source.match(/'property_identity_registry'/g)?.length || 0;
-if (propertyIdentityCatchAllOccurrences !== 3) {
-  failures.push(`property_identity_registry must be excluded from read, create and update/delete catch-alls; found ${propertyIdentityCatchAllOccurrences}`);
+const propertyIdentityFallback = matchBlock('    match /{collection}/{document=**} {');
+if (!propertyIdentityFallback.includes("'property_identity_registry'] && hasAdminClaim();")) {
+  failures.push('property_identity_registry is not excluded from the global Admin read fallback');
+}
+const propertyIdentityFallbackWrites = [...propertyIdentityFallback.matchAll(/allow\s+([^:;]+):\s*([^;]+);/g)]
+  .filter(([, operations]) => /\b(create|update|delete|write)\b/.test(operations));
+if (
+  propertyIdentityFallbackWrites.length !== 2 ||
+  propertyIdentityFallbackWrites.some(([, , condition]) => !condition.includes("'property_identity_registry'"))
+) {
+  failures.push('property_identity_registry must be excluded from both generic browser write fallbacks');
 }
 
 
