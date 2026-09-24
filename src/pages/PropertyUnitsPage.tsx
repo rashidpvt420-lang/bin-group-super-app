@@ -226,7 +226,7 @@ export default function PropertyUnitsPage() {
                             <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.6)', mt: 2, mb: 3 }}>
                                 This asset is currently compliant with DCD, SIRA, and Municipality standards.
                             </Typography>
-                            <Button fullWidth variant="outlined" sx={{ color: binThemeTokens.gold, borderColor: binThemeTokens.gold, fontWeight: 900 }}>
+                            <Button disabled title="Unavailable until this workflow is connected" aria-label="VIEW CERTIFICATES" fullWidth variant="outlined" sx={{ color: binThemeTokens.gold, borderColor: binThemeTokens.gold, fontWeight: 900 }}>
                                 VIEW CERTIFICATES
                             </Button>
                         </Paper>
