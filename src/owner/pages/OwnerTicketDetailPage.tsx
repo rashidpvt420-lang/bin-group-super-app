@@ -172,7 +172,7 @@ export default function OwnerTicketDetailPage() {
         <Box sx={{ maxWidth: 1100, mx: 'auto', pb: 10, direction: isRTL ? 'rtl' : 'ltr' }}>
             {/* Header */}
             <Stack direction="row" alignItems="center" spacing={2} sx={{ mb: 4 }}>
-                <IconButton onClick={() => navigate('/owner/tickets')} sx={{ color: 'rgba(255,255,255,0.5)' }}>
+                <IconButton aria-label="Back to owner tickets" onClick={() => navigate('/owner/tickets')} sx={{ color: 'rgba(255,255,255,0.5)' }}>
                     <ChevronLeft />
                 </IconButton>
                 <Box>
