@@ -173,7 +173,7 @@ export default function BinConnectInboxPage({ role, dark = false }: { role: Port
                 const active = thread.id === selectedId;
                 return <Box key={thread.id} onClick={() => setSelectedId(thread.id)} sx={{ p: 2, cursor: 'pointer', borderBottom: `1px solid ${dark ? 'rgba(255,255,255,.08)' : binThemeTokens.border}`, bgcolor: active ? alpha(binThemeTokens.gold, .14) : 'transparent' }}>
                   <Stack direction="row" justifyContent="space-between" gap={1}><Typography fontWeight={950}>{thread.title || 'BIN Connect'}</Typography><Chip size="small" label={thread.status || 'open'} /></Stack>
-                  <Typography variant="caption" sx={{ color: dark ? 'rgba(255,255,255,.55)' : binThemeTokens.textSecondary }}>{CHANNEL_LABELS[thread.channel || ''] || thread.channel || 'chat'} · {ts(thread.updatedAt || thread.createdAt)}</Typography>
+                  <Typography variant="caption" sx={{ color: dark ? 'rgba(255,255,255,.55)' : binThemeTokens.textSecondary }}>{CHANNEL_LABELS[thread.channel || ''] || thread.channel || 'chat'} · {ts(thread.updatedAtMs || thread.createdAtMs)}</Typography>
                   <Typography variant="body2" sx={{ mt: 1, color: dark ? 'rgba(255,255,255,.72)' : binThemeTokens.textSecondary }}>{thread.lastMessage || 'Open conversation'}</Typography>
                 </Box>;
               })}
