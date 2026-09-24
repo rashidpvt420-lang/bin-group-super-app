@@ -93,8 +93,8 @@ export default function OwnerDetailsPage() {
                         <Typography variant="h6" gutterBottom sx={{ textAlign: isRTL ? 'right' : 'left' }}>{t('admin.legal_compliance')}</Typography>
                         <Divider sx={{ mb: 2 }} />
                         <Box sx={{ display: 'flex', gap: 2, mt: 2, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
-                            <Button startIcon={<FilePresentIcon />} variant="outlined">{t('admin.mgt_agreement')}</Button>
-                            <Button startIcon={<GavelIcon />} variant="outlined">{t('admin.uaedds_auth')}</Button>
+                            <Button disabled title="Unavailable until this workflow is connected" aria-label="Unavailable owner action" startIcon={<FilePresentIcon />} variant="outlined">{t('admin.mgt_agreement')}</Button>
+                            <Button disabled title="Unavailable until this workflow is connected" aria-label="Unavailable owner action" startIcon={<GavelIcon />} variant="outlined">{t('admin.uaedds_auth')}</Button>
                         </Box>
                     </Paper>
                 </Grid>
