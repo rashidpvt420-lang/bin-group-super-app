@@ -111,7 +111,7 @@ const PaymentStatusCard: React.FC<{ statusData: PaymentStatus }> = ({ statusData
                 )}
 
                 <Stack direction="row" spacing={2}>
-                    <Button 
+                    <Button disabled title="Unavailable until this workflow is connected" aria-label="VIEW MANIFEST" 
                         fullWidth 
                         variant="outlined" 
                         startIcon={<FileText size={16} />}
@@ -119,7 +119,7 @@ const PaymentStatusCard: React.FC<{ statusData: PaymentStatus }> = ({ statusData
                     >
                         VIEW MANIFEST
                     </Button>
-                    <Button 
+                    <Button disabled title="Unavailable until this workflow is connected" aria-label="CONTACT SUPPORT" 
                         fullWidth 
                         variant="contained" 
                         sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}
