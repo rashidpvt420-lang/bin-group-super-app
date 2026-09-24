@@ -36,6 +36,35 @@ test('Owner property approval and rejection are server-authoritative', async () 
   assert.match(runtime, /export \* from "\.\/adminPropertyReview"/);
 });
 
+test('legacy Admin property review cannot approve DRAFT or inspection-first properties', async () => {
+  const [page, backend, runtime, submission, identity] = await Promise.all([
+    read('apps/admin-panel/src/pages/admin/AdminPropertyApprovalsPage.tsx'),
+    read('functions/adminPropertyReview.ts'),
+    read('functions/runtime.ts'),
+    read('functions/canonicalOwnerSubmission.ts'),
+    read('functions/propertyIdentity.ts'),
+  ]);
+
+  assert.doesNotMatch(backend, /"draft",/);
+  assert.match(backend, /status === "draft"/);
+  assert.match(backend, /OWNER_FIVE_PAGE_INSPECTION_FIRST_V1/);
+  assert.match(backend, /Inspection-first properties cannot be approved or made dispatch-ready/);
+  assert.match(page, /const pendingStates = \['PENDING', 'PENDING REVIEW', 'ADMIN REVIEW', 'SUBMITTED'\]/);
+  assert.match(page, /!inspectionFirst\(row\)/);
+  assert.match(page, /!== 'DRAFT'/);
+  assert.match(page, /Use Intake Vault/);
+
+  assert.match(runtime, /submitOwnerInspectionFirstOnboarding \} from "\.\/canonicalOwnerSubmission"/);
+  assert.match(submission, /collection\("property_identity_registry"\)/);
+  assert.match(submission, /db\.runTransaction/);
+  assert.match(submission, /assertNoExistingCanonicalProperty/);
+  assert.match(identity, /PROPERTY_IDENTITY_V1/);
+  assert.match(identity, /TITLE_DEED/);
+  assert.match(identity, /PLACE_UNIT/);
+  assert.match(identity, /ADDRESS_UNIT/);
+  assert.match(identity, /GEO_UNIT/);
+});
+
 test('Owner management page remains syntactically valid and has one property subscription', async () => {
   const source = await read('apps/admin-panel/src/pages/owners/OwnerManagementPage.tsx');
   const transpiled = ts.transpileModule(source, {
