@@ -205,7 +205,10 @@ function backNavigation(row, content) {
   if (/navigate\s*\(\s*-1\s*\)|history\.back|window\.history\.back|nav\.back|ArrowLeft|ArrowRight/.test(content)) return 'EXPLICIT/HINT';
   if (['owner', 'technician', 'broker'].includes(row.scope)) return 'GLOBAL_FLOATING_NAV';
   if (row.scope === 'adminops') return 'ADMIN_SIDEBAR/SHELL';
-  if (row.scope === 'tenant') return 'REVIEW (tenant shell hides floating back)';
+  if (row.scope === 'tenant') {
+    if (row.route === '/tenant' || row.route === '/tenant/dashboard') return 'N/A_PORTAL_HOME';
+    return 'TENANT_NATIVE_LAYOUT_BACK';
+  }
   return 'REVIEW';
 }
 
