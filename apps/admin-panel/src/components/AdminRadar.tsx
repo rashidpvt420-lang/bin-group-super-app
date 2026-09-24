@@ -126,7 +126,7 @@ export default function AdminRadar() {
                                 <span className="text-white/30 text-[11px] font-mono">
                                     {alert.createdAt ? timeSince(alert.createdAt) : 'Just now'}
                                 </span>
-                                <button
+                                <button disabled title="Unavailable until this workflow is connected" aria-label="Dispatch Tech"
                                     title="Dispatch Maintenance Technician"
                                     className="bg-[#64FFDA]/10 text-[#64FFDA] border border-[#64FFDA]/30 rounded-lg px-3 py-1.5 text-[11px] cursor-pointer font-bold uppercase tracking-wider hover:bg-[#64FFDA]/20 transition-colors"
                                 >
