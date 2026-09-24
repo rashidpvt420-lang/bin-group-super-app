@@ -404,7 +404,7 @@ export default function TechnicianJobDetailPage() {
             <Paper sx={{ p: 3, mb: 3, bgcolor: 'rgba(15,23,42,0.7)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 5 }}>
                 <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={2}>
                     <Stack direction="row" spacing={2} alignItems="center">
-                        <IconButton onClick={() => navigate('/technician/jobs')} sx={{ color: '#FFF' }}><ChevronLeft /></IconButton>
+                        <IconButton aria-label="Back to technician jobs" onClick={() => navigate('/technician/jobs')} sx={{ color: '#FFF' }}><ChevronLeft /></IconButton>
                         <Box>
                             <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 950 }}>{tx('tech.job.mission_ref', 'MISSION REF')} {ticket.id.substring(0, 8).toUpperCase()}</Typography>
                             <Typography variant="h5" fontWeight="950" color="#FFF">{ticket.category || ticket.complaintCategory || 'Maintenance Mission'}</Typography>
