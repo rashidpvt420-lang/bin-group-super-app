@@ -122,14 +122,14 @@ function AppContent() {
                     <Route path="/tickets" element={<ProtectedRoute><TicketsPage /></ProtectedRoute>} />
                     <Route path="/technicians" element={<ProtectedRoute><TechniciansPage /></ProtectedRoute>} />
                     <Route path="/technicians/map" element={<ProtectedRoute><LiveMapPage /></ProtectedRoute>} />
-                    <Route path="/live-map" element={<ProtectedRoute><LiveMapPage /></ProtectedRoute>} />
+                    <Route path="/live-map" element={<Navigate to="/technicians/map" replace />} />
                     <Route path="/sos" element={<ProtectedRoute><SOSFeedPage /></ProtectedRoute>} />
                     <Route path="/document-vault" element={<ProtectedRoute adminOnly><InstitutionalDocumentVaultPage /></ProtectedRoute>} />
                     <Route path="/audit-shield" element={<ProtectedRoute adminOnly><AuditShieldPage /></ProtectedRoute>} />
                     <Route path="/reports" element={<ProtectedRoute adminOnly><ReportsPage /></ProtectedRoute>} />
                     <Route path="/settings" element={<ProtectedRoute adminOnly><SettingsPage /></ProtectedRoute>} />
                     <Route path="/manual-approvals" element={<Navigate to="/payments" replace />} />
-                    <Route path="/admin/payments" element={<ProtectedRoute adminOnly><PaymentApprovalsPage /></ProtectedRoute>} />
+                    <Route path="/admin/payments" element={<Navigate to="/payments" replace />} />
                     <Route path="/payments" element={<ProtectedRoute adminOnly><PaymentApprovalsPage /></ProtectedRoute>} />
                     <Route path="/profitability" element={<ProtectedRoute adminOnly><ProfitabilityPage /></ProtectedRoute>} />
                     <Route path="/compliance" element={<ProtectedRoute adminOnly><CompliancePage /></ProtectedRoute>} />
@@ -151,12 +151,12 @@ function AppContent() {
                     <Route path="/hr" element={<ProtectedRoute adminOnly extraRoles={['hr_manager', 'hr_staff']}><HRManagementPage /></ProtectedRoute>} />
                     <Route path="/audit" element={<ProtectedRoute adminOnly><AuditLogPage /></ProtectedRoute>} />
                     <Route path="/admin/pricing-matrix" element={<ProtectedRoute adminOnly><PricingMatrixPage /></ProtectedRoute>} />
-                    <Route path="/pricing-matrix" element={<ProtectedRoute adminOnly><PricingMatrixPage /></ProtectedRoute>} />
+                    <Route path="/pricing-matrix" element={<Navigate to="/admin/pricing-matrix" replace />} />
                     <Route path="/admin/units" element={<ProtectedRoute adminOnly><UnitStatusPage /></ProtectedRoute>} />
-                    <Route path="/admin/unit-status" element={<ProtectedRoute adminOnly><UnitStatusPage /></ProtectedRoute>} />
-                    <Route path="/units" element={<ProtectedRoute adminOnly><UnitStatusPage /></ProtectedRoute>} />
+                    <Route path="/admin/unit-status" element={<Navigate to="/admin/units" replace />} />
+                    <Route path="/units" element={<Navigate to="/admin/units" replace />} />
                     <Route path="/admin/bin-gpt-engineer" element={<ProtectedRoute adminOnly><BinGptEngineerPage /></ProtectedRoute>} />
-                    <Route path="/bin-gpt-engineer" element={<ProtectedRoute adminOnly><BinGptEngineerPage /></ProtectedRoute>} />
+                    <Route path="/bin-gpt-engineer" element={<Navigate to="/admin/bin-gpt-engineer" replace />} />
 
                     <Route path="/ops/amenity-control" element={<ProtectedRoute adminOnly><AmenityControlPage /></ProtectedRoute>} />
                     <Route path="/ops/announcements" element={<ProtectedRoute adminOnly><AnnouncementsPage /></ProtectedRoute>} />
