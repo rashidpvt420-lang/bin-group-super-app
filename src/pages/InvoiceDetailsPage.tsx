@@ -113,14 +113,14 @@ export default function InvoiceDetailsPage() {
                     <Typography variant="h3" fontWeight="900" sx={{ color: binThemeTokens.textPrimary, mt: 1 }}>{invoice.id}</Typography>
                 </Box>
                 <Stack direction="row" spacing={2}>
-                    <Button 
+                    <Button disabled title="Unavailable until this workflow is connected" aria-label="PRINT" 
                         startIcon={<Printer size={18} />} 
                         variant="outlined"
                         sx={{ color: binThemeTokens.textSecondary, borderColor: 'rgba(255,255,255,0.1)', px: 3 }}
                     >
                         PRINT
                     </Button>
-                    <Button 
+                    <Button disabled title="Unavailable until this workflow is connected" aria-label="EXPORT PDF" 
                         startIcon={<Download size={18} />} 
                         variant="contained" 
                         sx={{ 
@@ -268,8 +268,8 @@ export default function InvoiceDetailsPage() {
             </Paper>
             
             <Box sx={{ mt: 6, display: 'flex', gap: 4, justifyContent: 'center' }}>
-                <Button startIcon={<Share2 size={18} />} sx={{ color: binThemeTokens.textSecondary, fontWeight: 900 }}>SHARE LEDGER</Button>
-                <Button startIcon={<FileText size={18} />} sx={{ color: binThemeTokens.textSecondary, fontWeight: 900 }}>VIEW TRANSACTION LOG</Button>
+                <Button disabled title="Unavailable until this workflow is connected" aria-label="SHARE LEDGER" startIcon={<Share2 size={18} />} sx={{ color: binThemeTokens.textSecondary, fontWeight: 900 }}>SHARE LEDGER</Button>
+                <Button disabled title="Unavailable until this workflow is connected" aria-label="VIEW TRANSACTION LOG" startIcon={<FileText size={18} />} sx={{ color: binThemeTokens.textSecondary, fontWeight: 900 }}>VIEW TRANSACTION LOG</Button>
             </Box>
         </Container>
     );
