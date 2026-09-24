@@ -168,7 +168,7 @@ export default function BrokerCommissionsPage() {
               <TableCell>AED {Number(commission.amount || 0).toLocaleString()}</TableCell>
               <TableCell><Chip size="small" label={String(commission.status || '').toUpperCase()} sx={{ color: statusColor(commission.status), bgcolor: alpha(statusColor(commission.status), 0.1) }} /></TableCell>
               <TableCell>{commission.payoutStatus ? String(commission.payoutStatus).replaceAll('_', ' ').toUpperCase() : 'NOT REQUESTED'}</TableCell>
-              <TableCell align="right"><Tooltip title="Commission record"><IconButton><ExternalLink size={18} /></IconButton></Tooltip></TableCell>
+              <TableCell align="right"><Tooltip title="Commission record"><IconButton disabled title="Unavailable until this workflow is connected" aria-label="Commission record"><ExternalLink size={18} /></IconButton></Tooltip></TableCell>
             </TableRow>)}
           </TableBody>
         </Table>
