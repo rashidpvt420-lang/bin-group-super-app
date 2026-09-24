@@ -88,6 +88,31 @@ describe('Firestore Security Rules', () => {
     }
   });
 
+  it('property identity registry is server-only even for Admin browser clients', async () => {
+    await seedServerDocument('property_identity_registry/identity_hash_1', {
+      identityVersion: 'PROPERTY_IDENTITY_V1',
+      identityKind: 'TITLE_DEED',
+      identityHash: 'identity_hash_1',
+      ownerUid: 'owner_a',
+      intakeId: 'intake_a',
+      propertyId: 'property_a',
+      state: 'CLAIMED',
+    });
+
+    const ownerDb = testEnv.authenticatedContext('owner_a', { role: 'owner' }).firestore();
+    const adminDb = testEnv.authenticatedContext('admin_identity', { role: 'admin', admin: true }).firestore();
+
+    await assertFails(getDoc(doc(ownerDb, 'property_identity_registry/identity_hash_1')));
+    await assertFails(getDoc(doc(adminDb, 'property_identity_registry/identity_hash_1')));
+    await assertFails(setDoc(doc(adminDb, 'property_identity_registry/forged'), {
+      identityVersion: 'PROPERTY_IDENTITY_V1',
+      identityKind: 'TITLE_DEED',
+      identityHash: 'forged',
+    }));
+    await assertFails(updateDoc(doc(adminDb, 'property_identity_registry/identity_hash_1'), { state: 'RELEASED' }));
+    await assertFails(deleteDoc(doc(adminDb, 'property_identity_registry/identity_hash_1')));
+  });
+
   it('owner profile activation fields remain server-authoritative', async () => {
     const adminDb = testEnv.authenticatedContext('admin_user', { admin: true }).firestore();
     await setDoc(doc(adminDb, 'owners/owner_a'), {
