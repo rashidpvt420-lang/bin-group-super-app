@@ -238,7 +238,7 @@ export default function TenantTicketDetailPage() {
             {error && <Alert severity="warning" sx={{ mb: 2 }} onClose={() => setError('')}>{error}</Alert>}
             {notice && <Alert severity="success" sx={{ mb: 2 }} onClose={() => setNotice('')}>{notice}</Alert>}
             <Stack direction="row" alignItems="center" spacing={2} sx={{ mb: 4 }}>
-                <IconButton onClick={() => navigate('/tenant/tickets')} sx={{ color: 'rgba(255,255,255,0.5)' }}><ChevronLeft /></IconButton>
+                <IconButton aria-label="Back to tenant tickets" onClick={() => navigate('/tenant/tickets')} sx={{ color: 'rgba(255,255,255,0.5)' }}><ChevronLeft /></IconButton>
                 <Box>
                     <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 4 }}>{isScheduledService ? 'SCHEDULED SERVICE RECORD' : 'TICKET RECORD'}</Typography>
                     <Typography variant="h4" fontWeight="950" sx={{ color: '#FFF' }}>#{ticket.id.substring(0, 8)}</Typography>
