@@ -52,6 +52,9 @@ jobs:
       - name: Verify Functions compiler configuration
         run: node --test test/functions-tsconfig.test.mjs
 
+      - name: Phase 2 route and every-screen inventory guard
+        run: npm run test:route-consolidation
+
       - name: Production stability guard
         id: production_stability
         shell: bash
