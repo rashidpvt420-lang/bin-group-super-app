@@ -215,7 +215,9 @@ for (const fileAbs of sourceRoots.flatMap((dir) => walk(path.join(root, dir)))) 
       const hasChange = attrs.has('onChange');
       const hasSubmit = attrs.has('onSubmit');
       const hasHref = attrs.has('href') || attrs.has('to');
-      const interactive = canonicalControls.has(tag) || hasClick || hasHref;
+      const hasPointerAction = attrs.has('onPointerDown') || attrs.has('onPointerUp') || attrs.has('onKeyDown');
+      const componentMode = normalize(attrs.get('component')?.text).toLowerCase();
+      const interactive = canonicalControls.has(tag) || hasClick || hasHref || hasPointerAction;
 
       if (interactive) {
         const line = sourceFile.getLineAndCharacterOfPosition(opening.getStart(sourceFile)).line + 1;
@@ -236,7 +238,10 @@ for (const fileAbs of sourceRoots.flatMap((dir) => walk(path.join(root, dir)))) 
         const context = handlerContext(handlerAttr, sourceFile, functions);
         const disabledAttr = normalize(attrs.get('disabled')?.text);
         const explicitlyDisabled = disabledAttr === 'true';
-        const nativeSubmit = tag === 'button' && normalize(attrs.get('type')?.text).toLowerCase() === 'submit';
+        const submitType = normalize(attrs.get('type')?.text).toLowerCase() === 'submit';
+        const nativeSubmit = (tag === 'button' || tag === 'Button' || tag === 'ButtonBase') && submitType;
+        const labelControl = componentMode === 'label' || componentMode === 'span';
+        const pointerDriven = hasPointerAction;
         const buttonLike = !fieldControls.has(tag);
         const networkMutation = serverMutationPattern.test(context);
         const mutation = buttonLike && networkMutation && (mutatingWords.test(label + ' ' + handler) || /httpsCallable|callFunction|addDoc|setDoc|updateDoc|deleteDoc|writeBatch|runTransaction/i.test(context));
@@ -260,7 +265,7 @@ for (const fileAbs of sourceRoots.flatMap((dir) => walk(path.join(root, dir)))) 
 
         const issues = [];
         const actionLike = ['Button', 'IconButton', 'Fab', 'ButtonBase', 'SpeedDialAction', 'button', 'a'].includes(tag);
-        if (actionLike && !hasClick && !hasHref && !nativeSubmit && !explicitlyDisabled) issues.push('enabled-control-missing-action');
+        if (actionLike && !hasClick && !hasHref && !nativeSubmit && !labelControl && !pointerDriven && !explicitlyDisabled) issues.push('enabled-control-missing-action');
         if (iconOnlyControls.has(tag) && !aria && !title && !tooltip && !children.text && !children.dynamic) issues.push('icon-control-missing-accessible-label');
         if ((tag === 'button' || tag === 'Button' || tag === 'ButtonBase') && !label) issues.push('button-missing-accessible-label');
         if (mutation && !busyGuard) issues.push('mutation-missing-busy-guard');
