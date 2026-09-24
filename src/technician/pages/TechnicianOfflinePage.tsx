@@ -100,6 +100,9 @@ export default function TechnicianOfflinePage() {
       const result = await replayOfflineJobAction(item);
       if (result.replayed) setSyncResult(`Synced and removed from queue: ${item.label}`);
       else setSyncResult('Replay failed. The action remains queued for another attempt or manual review.');
+    } catch (error: any) {
+      console.error('[TechnicianOffline] replay failed:', error);
+      setSyncResult(error?.message || 'Replay failed. The action remains queued for another attempt or manual review.');
     } finally {
       setSyncing(false);
       refreshQueue();
@@ -115,6 +118,9 @@ export default function TechnicianOfflinePage() {
       setSyncResult(
         `Replay finished. Synced ${result.replayed}; failed ${result.failed}; foreground-only ${result.blocked}; remaining ${result.remaining}.`,
       );
+    } catch (error: any) {
+      console.error('[TechnicianOffline] bulk replay failed:', error);
+      setSyncResult(error?.message || 'Replay failed. Queued actions remain available for retry.');
     } finally {
       setSyncing(false);
       refreshQueue();
