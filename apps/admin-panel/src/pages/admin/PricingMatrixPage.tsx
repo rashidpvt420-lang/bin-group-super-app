@@ -33,10 +33,10 @@ export default function PricingMatrixPage() {
                     </Typography>
                 </Box>
                 <Stack direction="row" spacing={2}>
-                    <Button variant="outlined" startIcon={<Download size={18} />} sx={{ borderColor: 'rgba(255,255,255,0.1)', color: '#FFF' }}>
+                    <Button disabled title="Unavailable until this workflow is connected" aria-label="EXPORT CSV" variant="outlined" startIcon={<Download size={18} />} sx={{ borderColor: 'rgba(255,255,255,0.1)', color: '#FFF' }}>
                         EXPORT CSV
                     </Button>
-                    <Button variant="contained" startIcon={<FileText size={18} />} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 900 }}>
+                    <Button disabled title="Unavailable until this workflow is connected" aria-label="GENERATE REPORT" variant="contained" startIcon={<FileText size={18} />} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 900 }}>
                         GENERATE REPORT
                     </Button>
                 </Stack>
