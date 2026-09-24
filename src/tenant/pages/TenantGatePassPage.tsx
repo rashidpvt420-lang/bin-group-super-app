@@ -19,6 +19,8 @@ export default function TenantGatePassPage() {
     const [loading, setLoading] = useState(true);
     const [openAdd, setOpenAdd] = useState(false);
     const [submitting, setSubmitting] = useState(false);
+    const [revokingId, setRevokingId] = useState<string | null>(null);
+    const [actionMessage, setActionMessage] = useState('');
     const [visitorName, setVisitorName] = useState('');
     const [visitorPhone, setVisitorPhone] = useState('');
     const [visitorType, setVisitorType] = useState('visitor');
@@ -108,13 +110,19 @@ export default function TenantGatePassPage() {
     };
 
     const handleRevokePass = async (passId: string) => {
+        if (revokingId) return;
         if (!window.confirm("Are you sure you want to revoke this gate pass?")) return;
+        setRevokingId(passId);
+        setActionMessage('');
         try {
             const cancelSignedQrPass = httpsCallable(functions, 'cancelSignedQrPass');
             await cancelSignedQrPass({ passId, collectionName: 'gatePasses' });
+            setActionMessage('Gate pass revoked successfully.');
         } catch (err) {
             console.error("Failed to revoke pass", err);
-            alert("Failed to revoke pass.");
+            setActionMessage('Failed to revoke gate pass. Please try again.');
+        } finally {
+            setRevokingId(null);
         }
     };
 
@@ -134,6 +142,7 @@ export default function TenantGatePassPage() {
                 </Button>
             </Box>
 
+            {actionMessage && <Paper sx={{ mb: 3, p: 2, border: '1px solid rgba(255,255,255,0.08)' }}><Typography color={actionMessage.startsWith('Failed') ? 'error' : 'success.main'}>{actionMessage}</Typography></Paper>}
             {loading ? (
                 <Box sx={{ display: 'flex', justifyContent: 'center', py: 10 }}><CircularProgress sx={{ color: binThemeTokens.gold }} /></Box>
             ) : passes.length === 0 ? (
@@ -163,7 +172,7 @@ export default function TenantGatePassPage() {
                                         <Typography variant="body2" color="textSecondary" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}><Phone size={14} /> {pass.visitorPhone || 'No Phone Registered'}</Typography>
                                         <Typography variant="body2" color="textSecondary" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}><Clock size={14} /> {pass.duration} Hours Validity</Typography>
                                         <Typography variant="caption" color="textSecondary" sx={{ display: 'flex', alignItems: 'center', gap: 1, fontFamily: 'monospace' }}><Calendar size={13} /> {pass.createdAt?.toDate ? pass.createdAt.toDate().toLocaleString() : 'Just now'}</Typography>
-                                        <Box sx={{ pt: 1, display: 'flex', justifyContent: 'flex-end' }}><Button variant="outlined" color="error" size="small" onClick={() => handleRevokePass(pass.id)} startIcon={<Trash2 size={14} />} sx={{ fontWeight: 900, borderRadius: 2 }}>REVOKE</Button></Box>
+                                        <Box sx={{ pt: 1, display: 'flex', justifyContent: 'flex-end' }}><Button variant="outlined" color="error" size="small" disabled={revokingId === pass.id} onClick={() => handleRevokePass(pass.id)} startIcon={<Trash2 size={14} />} sx={{ fontWeight: 900, borderRadius: 2 }}>REVOKE</Button></Box>
                                     </Stack>
                                 </CardContent>
                             </Card>
