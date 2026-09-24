@@ -321,7 +321,14 @@ export default function TenantAIConciergePage() {
                 sx={{ bgcolor: alpha(priorityColor, 0.12), color: priorityColor, fontWeight: 950, fontSize: '0.65rem' }}
               />
             )}
-            <IconButton size="small" onClick={handleRestart} sx={{ color: 'rgba(255,255,255,0.4)', '&:hover': { color: '#fff' } }}>
+            <IconButton
+              type="button"
+              data-testid="tenant-ai-restart"
+              aria-label={tx('tenant.ai.restart', 'Start over')}
+              size="small"
+              onClick={handleRestart}
+              sx={{ color: 'rgba(255,255,255,0.4)', '&:hover': { color: '#fff' } }}
+            >
               <X size={16} />
             </IconButton>
           </Stack>
@@ -461,6 +468,9 @@ export default function TenantAIConciergePage() {
                 }}
               />
               <IconButton
+                type="button"
+                data-testid="tenant-ai-send"
+                aria-label={tx('tenant.ai.send', 'Send message')}
                 onClick={handleSend}
                 disabled={!inputValue.trim()}
                 sx={{
