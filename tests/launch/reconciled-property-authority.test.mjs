@@ -45,7 +45,7 @@ test('property identity is multi-signal and resistant to cosmetic renames', asyn
 });
 
 test('canonical submission claims identities transactionally and runtime uses it', async () => {
-  const [submission, runtime, rules, hardener] = await Promise.all([
+  const [submission, runtime, hardener, packageJson] = await Promise.all([
     read('functions/canonicalOwnerSubmission.ts'),
     read('functions/runtime.ts'),
     read('scripts/harden-property-identity-registry-rules.mjs'),
