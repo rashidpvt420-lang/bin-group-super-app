@@ -872,6 +872,39 @@ describe('Firestore Security Rules', () => {
     await assertFails(getDoc(doc(tenantBDb, 'conversations/conv_1')));
   });
 
+  it('BIN Connect list access is query-safe for participants and denies broad or cross-user scans', async () => {
+    await seedServerDocument('binConnectThreads/thread_tech', {
+      createdBy: 'owner_a',
+      participantIds: ['owner_a', 'tech_a'],
+      status: 'open',
+      channel: 'owner_to_technician',
+      createdAt: new Date(),
+    });
+    await seedServerDocument('binConnectThreads/thread_other', {
+      createdBy: 'owner_b',
+      participantIds: ['owner_b', 'tech_b'],
+      status: 'open',
+      channel: 'owner_to_technician',
+      createdAt: new Date(),
+    });
+
+    const techDb = testEnv.authenticatedContext('tech_a', { role: 'technician' }).firestore();
+    const ownQuery = query(
+      collection(techDb, 'binConnectThreads'),
+      where('participantIds', 'array-contains', 'tech_a'),
+      limit(100),
+    );
+    const ownRows = await assertSucceeds(getDocs(ownQuery));
+    assert.deepEqual(ownRows.docs.map((row) => row.id), ['thread_tech']);
+
+    await assertFails(getDocs(query(collection(techDb, 'binConnectThreads'), limit(100))));
+    await assertFails(getDocs(query(
+      collection(techDb, 'binConnectThreads'),
+      where('participantIds', 'array-contains', 'tech_b'),
+      limit(100),
+    )));
+  });
+
   it('inspections: tenant can create own inspection and read it back', async () => {
     const tenantDb = testEnv.authenticatedContext('tenant_a').firestore();
     const adminDb = testEnv.authenticatedContext('admin_user', { admin: true }).firestore();
