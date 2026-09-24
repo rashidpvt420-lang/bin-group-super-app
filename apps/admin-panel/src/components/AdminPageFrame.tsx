@@ -104,7 +104,7 @@ export default function AdminPageFrame({
             {/* Header & Navigation */}
             <Box sx={{ mb: 4 }}>
                 <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 2 }}>
-                    <IconButton 
+                    <IconButton aria-label="Back" 
                         onClick={handleBack}
                         sx={{ 
                             bgcolor: 'rgba(255,255,255,0.05)', 
