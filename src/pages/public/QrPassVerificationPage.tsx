@@ -4,10 +4,12 @@ import { Box, Typography, Container, Paper, CircularProgress, Stack, Chip, Butto
 import { ShieldCheck, XCircle, Clock, MapPin, User, Building } from 'lucide-react';
 import { functions, httpsCallable } from '../../lib/firebase';
 import { binThemeTokens } from '../../theme/binGroupTheme';
+import { useLanguage } from '../../context/LanguageContext';
 
 export default function QrPassVerificationPage() {
     const { token } = useParams<{ token: string }>();
     const navigate = useNavigate();
+    const { lang, isRTL } = useLanguage();
     const [loading, setLoading] = useState(true);
     const [result, setResult] = useState<any>(null);
     const [error, setError] = useState<string | null>(null);
@@ -35,8 +37,17 @@ export default function QrPassVerificationPage() {
 
     if (loading) {
         return (
-            <Box sx={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', bgcolor: '#020617' }}>
-                <CircularProgress sx={{ color: binThemeTokens.gold }} />
+            <Box
+                role="status"
+                aria-live="polite"
+                sx={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', bgcolor: '#020617', direction: isRTL ? 'rtl' : 'ltr', px: 2 }}
+            >
+                <Stack spacing={2} alignItems="center">
+                    <CircularProgress sx={{ color: binThemeTokens.gold }} />
+                    <Typography color="#FFF" fontWeight={800} textAlign="center">
+                        {lang === 'ar' ? 'جارٍ التحقق من صلاحية التصريح…' : 'Verifying pass…'}
+                    </Typography>
+                </Stack>
             </Box>
         );
     }
