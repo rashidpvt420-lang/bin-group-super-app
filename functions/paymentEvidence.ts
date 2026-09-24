@@ -119,7 +119,7 @@ export const submitTenantPaymentProof = onCall(
 
     const paymentId = `tenant_${tenantId}_${submissionId}`;
     const paymentRef = db.collection("payment_transactions").doc(paymentId);
-    const auditRef = db.collection("auditLogs").doc(`tenant_payment_${tenantId}_${submissionId}`);
+    const auditRef = db.collection("audit_logs").doc(`tenant_payment_${tenantId}_${submissionId}`);
     const now = FieldValue.serverTimestamp();
     const idempotent = await db.runTransaction(async (transaction) => {
       const existingSnap = await transaction.get(paymentRef);
