@@ -1,7 +1,7 @@
 import React from 'react';
 import { Alert, Box, Button, Chip, Divider, Grid, MenuItem, Paper, Stack, TextField, Typography, alpha } from '@mui/material';
 import { CheckCircle2, MessageSquare, Send } from 'lucide-react';
-import { addDoc, auth, collection, db, doc, limit, onSnapshot, orderBy, query, serverTimestamp, updateDoc, where } from '../lib/firebase';
+import { addDoc, auth, collection, db, doc, functions, httpsCallable, limit, onSnapshot, orderBy, query, serverTimestamp, updateDoc } from '../lib/firebase';
 import { binThemeTokens } from '../theme/binGroupTheme';
 
 type PortalRole = 'owner' | 'tenant' | 'technician' | 'broker' | 'staff';
@@ -21,8 +21,8 @@ type Thread = {
   unitId?: string;
   ticketId?: string;
   lastMessage?: string;
-  createdAt?: any;
-  updatedAt?: any;
+  createdAtMs?: number | null;
+  updatedAtMs?: number | null;
 };
 
 type Message = {
@@ -46,7 +46,10 @@ const CHANNEL_LABELS: Record<string, string> = {
   dashboard_issue: 'Dashboard Issue',
 };
 
-const ts = (value: any) => value?.toDate?.()?.toLocaleString?.() || 'Pending timestamp';
+const ts = (value: any) => {
+  if (typeof value === 'number' && Number.isFinite(value)) return new Date(value).toLocaleString();
+  return value?.toDate?.()?.toLocaleString?.() || 'Pending timestamp';
+};
 
 export default function BinConnectInboxPage({ role, dark = false }: { role: PortalRole; dark?: boolean }) {
   const [threads, setThreads] = React.useState<Thread[]>([]);
@@ -62,15 +65,30 @@ export default function BinConnectInboxPage({ role, dark = false }: { role: Port
   const displayName = auth.currentUser?.displayName || email || role;
 
   React.useEffect(() => {
-    if (!uid) return undefined;
-    const q = query(collection(db, 'binConnectThreads'), where('participantIds', 'array-contains', uid), limit(100));
-    return onSnapshot(q, (snap) => {
-      const rows = snap.docs.map((item) => ({ id: item.id, ...(item.data() as any) }));
-      rows.sort((a, b) => (b.updatedAt?.toMillis?.() || b.createdAt?.toMillis?.() || 0) - (a.updatedAt?.toMillis?.() || a.createdAt?.toMillis?.() || 0));
-      setThreads(rows);
-      if (!selectedId && rows[0]) setSelectedId(rows[0].id);
-    }, (error) => setNotice(error.message || 'Could not load BIN Connect conversations.'));
-  }, [uid, selectedId]);
+    if (!uid) {
+      setThreads([]);
+      return undefined;
+    }
+    let cancelled = false;
+    const loadMyThreads = async () => {
+      try {
+        const call = httpsCallable<{ limit: number }, { threads?: Thread[] }>(functions, 'listMyBinConnectThreads');
+        const result = await call({ limit: 100 });
+        if (cancelled) return;
+        const rows = Array.isArray(result.data?.threads) ? result.data.threads : [];
+        setThreads(rows);
+        setSelectedId((current) => current || rows[0]?.id || '');
+        setNotice('');
+      } catch (error: any) {
+        if (!cancelled) {
+          setThreads([]);
+          setNotice(error?.message || 'Could not load BIN Connect conversations.');
+        }
+      }
+    };
+    void loadMyThreads();
+    return () => { cancelled = true; };
+  }, [uid]);
 
   const selected = React.useMemo(() => threads.find((thread) => thread.id === selectedId), [threads, selectedId]);
 
