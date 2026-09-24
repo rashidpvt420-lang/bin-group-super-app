@@ -68,7 +68,7 @@ const InstitutionalDocumentVaultPage: React.FC = () => {
                                                     <Chip label={doc.status} size="small" sx={{ bgcolor: 'rgba(16,185,129,0.1)', color: '#10b981', fontWeight: 900, fontSize: '0.65rem' }} />
                                                 </TableCell>
                                                 <TableCell align="right">
-                                                    <Button size="small" sx={{ color: '#DAA520' }}><Download size={16} /></Button>
+                                                    <Button disabled title="Unavailable until this workflow is connected" aria-label="Unavailable document action" size="small" sx={{ color: '#DAA520' }}><Download size={16} /></Button>
                                                 </TableCell>
                                             </TableRow>
                                         ))}
@@ -84,7 +84,7 @@ const InstitutionalDocumentVaultPage: React.FC = () => {
                                 <Landmark color="#DAA520" /> GOVT COMPLIANCE
                             </Typography>
                             <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.6)', mb: 3 }}>Institutional ready for all UAE Federal and Municipal portals.</Typography>
-                            <Button variant="outlined" sx={{ color: '#FFF', borderColor: 'rgba(255,255,255,0.2)' }}>
+                            <Button disabled title="Unavailable until this workflow is connected" aria-label="VIEW CERTIFICATIONS" variant="outlined" sx={{ color: '#FFF', borderColor: 'rgba(255,255,255,0.2)' }}>
                                 VIEW CERTIFICATIONS
                             </Button>
                         </Paper>
