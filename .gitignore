@@ -158,6 +158,7 @@ apps/admin-panel/.env.local
 apps/admin-panel/.env.*.local
 !apps/admin-panel/.env.example
 apps/admin-panel/public/firebase-messaging-config.js
+public/firebase-messaging-config.js
 
 # Generated launch honesty artifacts (never commit secrets or forged evidence)
 launch_package/launch-status.json
