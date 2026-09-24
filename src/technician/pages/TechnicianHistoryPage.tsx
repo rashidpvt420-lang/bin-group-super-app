@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
     Box, Typography, Paper, Stack, Chip, 
-    CircularProgress, Grid, alpha, Divider,
+    CircularProgress, Grid, alpha, Divider, Alert,
     Avatar, Tooltip
 } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
@@ -22,6 +22,7 @@ export default function TechnicianHistoryPage() {
     const navigate = useNavigate();
     const [history, setHistory] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
     const [stats, setStats] = useState({
         total: 0,
         success: 0,
@@ -30,7 +31,11 @@ export default function TechnicianHistoryPage() {
     });
 
     useEffect(() => {
-        if (!user?.uid) return;
+        if (!user?.uid) {
+            setError('Technician identity is unavailable.');
+            setLoading(false);
+            return;
+        }
 
         const q = query(
             collection(db, 'maintenanceTickets'),
@@ -70,6 +75,10 @@ export default function TechnicianHistoryPage() {
                 slaCompliance
             }));
 
+            setError('');
+            setLoading(false);
+        }, (err) => {
+            setError(err?.message || 'Could not load work history.');
             setLoading(false);
         });
 
@@ -77,6 +86,7 @@ export default function TechnicianHistoryPage() {
     }, [user]);
 
     if (loading) return <Box sx={{ display: 'flex', justifyContent: 'center', py: 10 }}><CircularProgress sx={{ color: binThemeTokens.gold }} /></Box>;
+    if (error) return <Alert severity="error" sx={{ my: 4 }}>{error}</Alert>;
 
     return (
         <Box>
