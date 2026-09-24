@@ -40,11 +40,11 @@ function ruleFunction(rules, name) {
 }
 
 test('canonical property geo stays server-authoritative and inspection-first promotion uses physical evidence', async () => {
-  const [rules, authority, completionWrapper, reviewWrapper, paymentGate, rootLocation, ownerLocation, adminPage, pinResolver, hardener] = await Promise.all([
+  const [rules, authority, completionWrapper, reviewBackend, paymentGate, rootLocation, ownerLocation, adminPage, pinResolver, hardener] = await Promise.all([
     Promise.resolve(preparedPropertyRules()),
     read('functions/propertyGeoAuthority.ts'),
     read('functions/canonicalOwnerInspectionCompletion.ts'),
-    read('functions/canonicalAdminPropertyReview.ts'),
+    read('functions/adminPropertyReview.ts'),
     read('functions/securePaymentApproval.ts'),
     read('src/components/onboarding/PropertyLocationStep.tsx'),
     read('apps/owner-app/src/components/onboarding/PropertyLocationStep.tsx'),
@@ -85,7 +85,8 @@ test('canonical property geo stays server-authoritative and inspection-first pro
   assert.match(paymentGate, /hasDispatchReadyPropertyGeo\(property\)/);
   assert.match(paymentGate, /inspectionFirst/);
 
-  assert.match(reviewWrapper, /Inspection-first properties cannot be approved or made dispatch-ready/);
+  assert.match(reviewBackend, /Inspection-first properties cannot be approved or made dispatch-ready/);
+  assert.match(reviewBackend, /status === "draft"/);
   assert.match(adminPage, /Inspection-first Owner properties are verified by evidence-backed physical site visits/);
   assert.doesNotMatch(adminPage, />Approve & verify geo</);
   assert.doesNotMatch(adminPage, /updateDoc\s*\(/);
