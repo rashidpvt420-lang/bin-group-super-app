@@ -101,7 +101,7 @@ export default function TechnicianProofReadinessPage() {
                   })}
                 </Stack>
                 {!proof.ready && <Typography variant="caption" sx={{ display: 'block', color: ui.red, mt: 1.5, fontWeight: 800 }}>Missing: {proof.missing.join(', ')}</Typography>}
-                <Button endIcon={<ArrowRight size={14} />} sx={{ mt: 1.5, color: ui.gold, fontWeight: 950 }}>Open job</Button>
+                <Button disabled title="Unavailable until this workflow is connected" aria-label="Open job" endIcon={<ArrowRight size={14} />} sx={{ mt: 1.5, color: ui.gold, fontWeight: 950 }}>Open job</Button>
               </Paper>
             </Grid>
           ))}
