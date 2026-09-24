@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import {
-  Box, Grid, Paper, Stack, Typography, CircularProgress,
+  Alert, Box, Grid, Paper, Stack, Typography, CircularProgress,
   alpha, Chip, LinearProgress, Button, Divider,
 } from '@mui/material';
 import {
@@ -154,6 +154,7 @@ export default function OwnerAIIntelligencePage() {
   const { setPageContext } = useAI();
 
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const [refreshing, setRefreshing] = useState(false);
   const [properties, setProperties] = useState<any[]>([]);
   const [passports, setPassports] = useState<any[]>([]);
@@ -165,12 +166,26 @@ export default function OwnerAIIntelligencePage() {
 
     const unsubProps = onSnapshot(
       query(collection(db, 'properties'), where('ownerEmail', '==', email)),
-      (snap) => setProperties(snap.docs.map(d => ({ id: d.id, ...d.data() })))
+      (snap) => {
+        setProperties(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+        setLoadError('');
+      },
+      (error: any) => {
+        console.error('[OwnerAI] property listener failed:', error);
+        setLoadError(error?.message || 'Property intelligence source could not be loaded.');
+        setLoading(false);
+      }
     );
     const unsubPassports = onSnapshot(
       query(collection(db, 'propertyPassports'), where('ownerEmail', '==', email)),
       (snap) => {
         setPassports(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+        setLoadError('');
+        setLoading(false);
+      },
+      (error: any) => {
+        console.error('[OwnerAI] passport listener failed:', error);
+        setLoadError(error?.message || 'Property passport intelligence could not be loaded.');
         setLoading(false);
       }
     );
@@ -197,8 +212,9 @@ export default function OwnerAIIntelligencePage() {
         },
       });
       setPredictive(result);
-    } catch {
-      // silently degrade
+    } catch (error: any) {
+      console.error('[OwnerAI] predictive intelligence failed:', error);
+      setLoadError(error?.message || 'Predictive intelligence could not be generated.');
     } finally {
       setRefreshing(false);
     }
@@ -242,6 +258,8 @@ export default function OwnerAIIntelligencePage() {
       </Box>
     );
   }
+
+  if (loadError) return <Alert severity="error">{loadError}</Alert>;
 
   const autopilotColor = AUTOPILOT_COLORS[ledger.autopilotMode] || gold;
 
