@@ -1,279 +1,282 @@
-
-// apps/owner-app/src/pages/public/AuditorPortalPage.tsx
-import React, { useState } from 'react';
+import React from 'react';
 import {
-    Container, Paper, Typography, Box, Grid, Card,
-    Button, Divider, Alert, Chip, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, LinearProgress, CircularProgress, Stack, Snackbar
+    Alert,
+    Box,
+    Button,
+    CircularProgress,
+    Container,
+    Paper,
+    Stack,
+    Table,
+    TableBody,
+    TableCell,
+    TableContainer,
+    TableHead,
+    TableRow,
+    Typography,
 } from '@mui/material';
-import { ShieldCheck, Lock, Download, Bell, Activity, Database, Key } from 'lucide-react';
+import { RefreshCcw, ShieldCheck } from 'lucide-react';
 import { useRole } from '../../context/RoleContext';
-import { useNavigate } from 'react-router-dom';
+import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { db, collection, getDocs, query, limit } from '../../lib/firebase';
 
+type AuditRecord = {
+    id: string;
+    action?: string;
+    actorRole?: string;
+    actorUid?: string;
+    targetType?: string;
+    targetId?: string;
+    createdAt?: any;
+};
+
+const formatTimestamp = (raw: any, isRTL: boolean) => {
+    try {
+        const date =
+            typeof raw?.toDate === 'function'
+                ? raw.toDate()
+                : raw instanceof Date
+                    ? raw
+                    : typeof raw === 'string' || typeof raw === 'number'
+                        ? new Date(raw)
+                        : null;
+        if (!date || Number.isNaN(date.getTime())) return isRTL ? 'غير مسجل' : 'Not recorded';
+        return date.toLocaleString(isRTL ? 'ar-AE' : 'en-AE');
+    } catch {
+        return isRTL ? 'غير مسجل' : 'Not recorded';
+    }
+};
+
 export default function AuditorPortalPage() {
-    const { role, loading, user } = useRole();
-    const navigate = useNavigate();
-    const [generating, setGenerating] = useState(false);
-    const [snackbarOpen, setSnackbarOpen] = useState(false);
+    const { loading: roleLoading } = useRole();
+    const { isRTL, tx } = useLanguage();
+    const [records, setRecords] = React.useState<AuditRecord[]>([]);
+    const [loading, setLoading] = React.useState(true);
+    const [error, setError] = React.useState('');
 
-    const [isReady, setIsReady] = useState(false);
-    const [auditData, setAuditData] = useState<any[]>([]);
-
-    React.useEffect(() => {
-        const normalizedRole = String(role || '').toLowerCase();
-        if (!loading && (!user || !role || !['auditor', 'admin', 'super_admin', 'ceo'].includes(normalizedRole))) {
-            navigate('/dashboard');
-            return;
-        }
-
-        async function checkAuditIntegrity() {
-            if (!user) return;
-            try {
-                const snap = await getDocs(query(collection(db, 'audit_logs'), limit(50)));
-                if (!snap.empty) {
-                    setAuditData(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-                    setIsReady(true);
-                } else {
-                    setIsReady(false);
-                }
-            } catch (err) {
-                console.error("Audit integrity check failure:", err);
-                setIsReady(false);
-            }
-        }
-        if (user) checkAuditIntegrity();
-    }, [loading, user, role, navigate]);
-
-    if (loading) return (
-        <Box sx={{ display: 'flex', height: '100vh', alignItems: 'center', justifyContent: 'center', bgcolor: '#0B0B0C' }}>
-            <CircularProgress sx={{ color: binThemeTokens.gold }} />
-        </Box>
+    const copy = React.useCallback(
+        (key: string, en: string, ar: string) => tx(key, isRTL ? ar : en),
+        [isRTL, tx],
     );
 
-    const normalizedRole = String(role || '').toLowerCase();
-    if (!user || !role || !['auditor', 'admin', 'super_admin', 'ceo'].includes(normalizedRole)) return null;
+    const loadRecords = React.useCallback(async () => {
+        setLoading(true);
+        setError('');
+        try {
+            const snap = await getDocs(query(collection(db, 'audit_logs'), limit(50)));
+            const rows = snap.docs.map((docSnap) => ({
+                id: docSnap.id,
+                ...(docSnap.data() as Omit<AuditRecord, 'id'>),
+            }));
+            rows.sort((a, b) => {
+                const toMillis = (value: any) => {
+                    if (typeof value?.toMillis === 'function') return value.toMillis();
+                    if (typeof value?.toDate === 'function') return value.toDate().getTime();
+                    const parsed = new Date(value || 0).getTime();
+                    return Number.isNaN(parsed) ? 0 : parsed;
+                };
+                return toMillis(b.createdAt) - toMillis(a.createdAt);
+            });
+            setRecords(rows);
+        } catch (err: any) {
+            console.error('[AUDITOR] Failed to read audit logs:', err);
+            setRecords([]);
+            setError(
+                copy(
+                    'auditor.load_error',
+                    'Audit records could not be loaded. Access remains read-only and no fallback data is shown.',
+                    'تعذر تحميل سجلات التدقيق. يظل الوصول للقراءة فقط ولا يتم عرض أي بيانات بديلة.',
+                ),
+            );
+        } finally {
+            setLoading(false);
+        }
+    }, [copy]);
 
-    if (!isReady) {
+    React.useEffect(() => {
+        if (!roleLoading) void loadRecords();
+    }, [loadRecords, roleLoading]);
+
+    if (roleLoading) {
         return (
-            <Container sx={{ py: 20, textAlign: 'center' }}>
-                <Box sx={{ mb: 4, display: 'flex', justifyContent: 'center' }}>
-                    <ShieldCheck size={80} color={binThemeTokens.gold} />
-                </Box>
-                <Typography variant="h3" fontWeight="900" sx={{ color: binThemeTokens.textPrimary, mb: 2 }}>
-                    AUDIT FEDERATION HUB OFFLINE
-                </Typography>
-                <Typography variant="h6" sx={{ color: binThemeTokens.textSecondary, maxWidth: 600, mx: 'auto' }}>
-                    The read-only transparency protocol is currently synchronizing with the National Regulatory Registry.
-                    Institutional audit logs will populate upon the next block validation cycle.
-                </Typography>
-                <Button
-                    variant="outlined"
-                    onClick={() => navigate('/dashboard')}
-                    sx={{ mt: 6, borderColor: binThemeTokens.gold, color: binThemeTokens.gold }}
-                >
-                    RETURN TO SECURE DASHBOARD
-                </Button>
-            </Container>
+            <Box
+                role="status"
+                aria-live="polite"
+                sx={{
+                    minHeight: '100dvh',
+                    display: 'grid',
+                    placeItems: 'center',
+                    bgcolor: binThemeTokens.canvas,
+                    direction: isRTL ? 'rtl' : 'ltr',
+                }}
+            >
+                <Stack spacing={2} alignItems="center">
+                    <CircularProgress sx={{ color: binThemeTokens.gold }} />
+                    <Typography color={binThemeTokens.textSecondary}>
+                        {copy('auditor.role_loading', 'Verifying auditor access…', 'جارٍ التحقق من صلاحية المدقق…')}
+                    </Typography>
+                </Stack>
+            </Box>
         );
     }
 
-    const handleAuditRequest = () => {
-        setGenerating(true);
-        setTimeout(() => {
-            setGenerating(false);
-            setSnackbarOpen(true);
-        }, 1500);
-    };
-
     return (
-        <Container maxWidth="xl" sx={{ py: 10 }}>
-            <Box sx={{ mb: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Box>
-                    <Stack direction="row" spacing={2} alignItems="center">
-                        <ShieldCheck size={48} color={binThemeTokens.gold} />
-                        <Box>
-                            <Typography variant="h3" fontWeight="900" sx={{ color: binThemeTokens.textPrimary, letterSpacing: -1 }}>Auditor Federation Hub</Typography>
-                            <Typography variant="h6" sx={{ color: binThemeTokens.textSecondary }}>Read-only transparency protocol for National Regulatory Entities.</Typography>
-                        </Box>
-                    </Stack>
-                </Box>
-                <Card sx={{ bgcolor: binThemeTokens.gold, px: 4, py: 1.5, borderRadius: 3, boxShadow: '0 0 30px rgba(198,167,94,0.3)' }}>
-                    <Typography variant="overline" sx={{ color: '#0B0B0C', fontWeight: 900, letterSpacing: 1.5, display: 'block' }}>AUDIT TRUST SCORE</Typography>
-                    <Typography variant="h4" fontWeight="900" sx={{ color: '#0B0B0C' }}>98 / 100</Typography>
-                </Card>
-            </Box>
-
-            <Grid container spacing={6}>
-                {/* Early Warning Engine */}
-                <Grid item xs={12} md={8}>
-                    <Paper sx={{
-                        p: 5,
-                        borderRadius: 6,
-                        mb: 6,
-                        bgcolor: '#161618',
-                        border: '1px solid rgba(198, 167, 94, 0.2)',
-                        boxShadow: '0 30px 60px rgba(0,0,0,0.5)'
-                    }}>
-                        <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 4 }}>
-                            <Bell color={binThemeTokens.goldLight} size={24} />
-                            <Typography variant="h6" fontWeight="900" sx={{ color: binThemeTokens.goldLight, letterSpacing: 1 }}>COMPLIANCE EARLY-WARNING ENGINE</Typography>
-                        </Stack>
-                        <Alert
-                            severity="warning"
-                            icon={<Activity color={binThemeTokens.gold} />}
-                            sx={{
-                                mb: 4,
-                                borderRadius: 4,
-                                bgcolor: 'rgba(198, 167, 94, 0.05)',
-                                color: binThemeTokens.textPrimary,
-                                border: '1px solid rgba(198, 167, 94, 0.15)',
-                                '& .MuiAlert-message': { width: '100%' }
-                            }}
-                        >
-                            <Typography variant="subtitle2" fontWeight="900" sx={{ color: binThemeTokens.gold }}>PREDICTIVE VIOLATION DETECTED: CLUSTER SOUTH-C</Typography>
-                            <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary, mt: 0.5, lineHeight: 1.6 }}>
-                                Fire Safety Certification ID: **CERT-DXB-921** is 15 days from expiration.
-                                **Regulatory Prediction:** Transition renewal lag (5d) puts entity risk at 84% on April 10.
-                            </Typography>
-                        </Alert>
-                        <Button
-                            variant="outlined"
-                            fullWidth
-                            sx={{
-                                py: 2.5,
-                                borderRadius: 3,
-                                borderColor: binThemeTokens.gold,
-                                color: binThemeTokens.gold,
-                                fontWeight: 900,
-                                '&:hover': { bgcolor: 'rgba(198, 167, 94, 0.05)', borderColor: binThemeTokens.goldLight }
-                            }}
-                        >
-                            INITIATE AUTOMATED RENEWAL LIFECYCLE →
-                        </Button>
-                    </Paper>
-
-                    <TableContainer component={Paper} sx={{
-                        borderRadius: 6,
-                        bgcolor: 'rgba(22, 22, 24, 0.6)',
-                        border: '1px solid rgba(255,255,255,0.05)',
-                        boxShadow: '0 30px 60px rgba(0,0,0,0.4)'
-                    }}>
-                        <Table>
-                            <TableHead sx={{ bgcolor: 'rgba(255,255,255,0.03)' }}>
-                                <TableRow>
-                                    <TableCell sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 1.5 }}>ENTITY NODE</TableCell>
-                                    <TableCell sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 1.5 }}>REGIONAL ZONE</TableCell>
-                                    <TableCell sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 1.5 }}>INTEGRITY</TableCell>
-                                    <TableCell sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 1.5 }}>AUDIT HASH (SHA256)</TableCell>
-                                </TableRow>
-                            </TableHead>
-                            <TableBody>
-                                {auditData.map((row, i) => (
-                                    <TableRow key={i} sx={{ '&:hover': { bgcolor: 'rgba(255,255,255,0.02)' } }}>
-                                        <TableCell sx={{ color: binThemeTokens.textPrimary, fontWeight: 900 }}>{row.entity || row.name || 'Unknown'}</TableCell>
-                                        <TableCell sx={{ color: binThemeTokens.textSecondary, fontWeight: 700 }}>{row.zone || 'UAE'}</TableCell>
-                                        <TableCell>
-                                            <Stack direction="row" spacing={2} alignItems="center">
-                                                <Typography variant="body2" sx={{ color: binThemeTokens.textPrimary, fontWeight: 900, minWidth: 35 }}>{row.integrity || 100}%</Typography>
-                                                <LinearProgress
-                                                    variant="determinate"
-                                                    value={row.integrity || 100}
-                                                    sx={{
-                                                        width: 80, height: 6, borderRadius: 3,
-                                                        bgcolor: 'rgba(255,255,255,0.05)',
-                                                        '& .MuiLinearProgress-bar': { bgcolor: binThemeTokens.gold }
-                                                    }}
-                                                />
-                                            </Stack>
-                                        </TableCell>
-                                        <TableCell sx={{ fontFamily: 'monospace', color: binThemeTokens.goldLight, fontSize: '0.8rem', letterSpacing: 0.5 }}>{row.hash || row.id}</TableCell>
-                                    </TableRow>
-                                ))}
-                            </TableBody>
-                        </Table>
-                    </TableContainer>
-                </Grid>
-
-                {/* Audit Bundle & API Hub */}
-                <Grid item xs={12} md={4}>
-                    <Paper sx={{
-                        p: 5,
-                        borderRadius: 6,
-                        bgcolor: '#161618',
-                        border: '1px solid rgba(255,255,255,0.05)',
-                        mb: 6,
-                        background: 'linear-gradient(135deg, #161618 0%, #0B0B0C 100%)',
-                        boxShadow: '0 30px 60px rgba(0,0,0,0.5)'
-                    }}>
-                        <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 3 }}>
-                            <Download color={binThemeTokens.gold} size={24} />
-                            <Typography variant="h6" fontWeight="900" sx={{ color: binThemeTokens.textPrimary }}>ADM / DLD GATEWAY</Typography>
-                        </Stack>
-                        <Divider sx={{ mb: 4, borderColor: 'rgba(198, 167, 94, 0.1)' }} />
-                        <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary, mb: 4, lineHeight: 1.8 }}>
-                            Generate an encrypted, municipality-grade **Audit Bundle (ZIP)** containing all notarized evidence and certification history for the current fiscal cycle.
-                        </Typography>
-                        <Button
-                            fullWidth
-                            variant="contained"
-                            size="large"
-                            onClick={handleAuditRequest}
-                            sx={{
-                                background: 'linear-gradient(135deg, #C6A75E, #E6C77A)',
-                                color: '#0B0B0C',
-                                fontWeight: 900,
-                                py: 3,
-                                borderRadius: 4,
-                                boxShadow: '0 20px 40px rgba(198, 167, 94, 0.3)',
-                                '&:hover': { transform: 'scale(1.02)' }
-                            }}
-                            disabled={generating}
-                        >
-                            {generating ? 'ENCRYPTING BUNDLE...' : 'DOWNLOAD AUDIT BUNDLE’26'}
-                        </Button>
-                    </Paper>
-
-                    <Paper sx={{
-                        p: 5,
-                        borderRadius: 6,
-                        bgcolor: 'rgba(22, 22, 24, 0.4)',
-                        border: '1px solid rgba(255,255,255,0.03)',
-                        boxShadow: '0 30px 60px rgba(0,0,0,0.3)'
-                    }}>
-                        <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 4 }}>
-                            <Key color={binThemeTokens.gold} size={20} />
-                            <Typography variant="subtitle2" fontWeight="900" sx={{ color: binThemeTokens.gold, letterSpacing: 1 }}>LIVE COMPLIANCE WEBHOOKS</Typography>
-                        </Stack>
-                        <Stack spacing={3}>
-                            <Box sx={{ p: 3, bgcolor: '#0B0B0C', borderRadius: 4, border: '1px solid rgba(198, 167, 94, 0.15)' }}>
-                                <Typography variant="overline" sx={{ color: binThemeTokens.textSecondary, display: 'block', fontWeight: 900 }}>ADM_INGESTION_REALTIME</Typography>
-                                <Typography variant="body2" sx={{ color: binThemeTokens.goldLight, fontFamily: 'monospace', mt: 1, fontWeight: 900 }}>POST /api/v1/fed-audit/adm</Typography>
-                            </Box>
-                            <Box sx={{ p: 3, bgcolor: '#0B0B0C', borderRadius: 4, border: '1px solid rgba(198, 167, 94, 0.15)' }}>
-                                <Typography variant="overline" sx={{ color: binThemeTokens.textSecondary, display: 'block', fontWeight: 900 }}>DLD_RISK_SYNC_PORT</Typography>
-                                <Typography variant="body2" sx={{ color: binThemeTokens.goldLight, fontFamily: 'monospace', mt: 1, fontWeight: 900 }}>GET /api/v1/risk-profile/live</Typography>
-                            </Box>
-                        </Stack>
-                    </Paper>
-                </Grid>
-            </Grid>
-
-            <Box sx={{ mt: 10, textAlign: 'center' }}>
-                <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, letterSpacing: 2, fontWeight: 900, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1.5 }}>
-                    <Lock size={14} /> SECURE AUDIT SESSION • END-TO-END ENCRYPTED (AES-256) • BIN-OS V1.19
-                </Typography>
-            </Box>
-            <Snackbar
-                open={snackbarOpen}
-                autoHideDuration={6000}
-                onClose={() => setSnackbarOpen(false)}
-                anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+        <Container
+            maxWidth="xl"
+            sx={{
+                py: { xs: 4, md: 8 },
+                direction: isRTL ? 'rtl' : 'ltr',
+            }}
+        >
+            <Stack
+                direction={{ xs: 'column', md: isRTL ? 'row-reverse' : 'row' }}
+                justifyContent="space-between"
+                alignItems={{ xs: 'stretch', md: 'center' }}
+                spacing={2}
+                sx={{ mb: 3 }}
             >
-                <Alert onClose={() => setSnackbarOpen(false)} severity="error" sx={{ width: '100%', borderRadius: 3, fontWeight: 700 }}>
-                    Audit Bundle Generation restricted. Contact Federation HQ for secure key transfer.
+                <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={2} alignItems="center">
+                    <Box
+                        sx={{
+                            width: 52,
+                            height: 52,
+                            display: 'grid',
+                            placeItems: 'center',
+                            borderRadius: 3,
+                            bgcolor: 'rgba(201,166,70,0.12)',
+                            border: '1px solid rgba(201,166,70,0.3)',
+                        }}
+                    >
+                        <ShieldCheck size={28} color={binThemeTokens.gold} />
+                    </Box>
+                    <Box sx={{ textAlign: isRTL ? 'right' : 'left' }}>
+                        <Typography variant="h4" fontWeight={950} color={binThemeTokens.textPrimary}>
+                            {copy('auditor.title', 'Auditor Portal', 'بوابة المدقق')}
+                        </Typography>
+                        <Typography color={binThemeTokens.textSecondary}>
+                            {copy(
+                                'auditor.subtitle',
+                                'Read-only view of audit records available to this authenticated auditor.',
+                                'عرض للقراءة فقط لسجلات التدقيق المتاحة لهذا المدقق المصادق عليه.',
+                            )}
+                        </Typography>
+                    </Box>
+                </Stack>
+                <Button
+                    variant="outlined"
+                    startIcon={<RefreshCcw size={18} />}
+                    onClick={() => void loadRecords()}
+                    disabled={loading}
+                    sx={{ alignSelf: { xs: 'stretch', md: 'auto' } }}
+                >
+                    {copy('auditor.refresh', 'Refresh records', 'تحديث السجلات')}
+                </Button>
+            </Stack>
+
+            <Alert severity="info" sx={{ mb: 3 }}>
+                {copy(
+                    'auditor.read_only_notice',
+                    'This screen reports stored audit records only. It does not calculate trust scores, predict regulatory outcomes, or claim external-government integration.',
+                    'تعرض هذه الشاشة سجلات التدقيق المخزنة فقط. ولا تحسب درجات ثقة أو تتنبأ بنتائج تنظيمية أو تدّعي وجود تكامل مع جهات حكومية خارجية.',
+                )}
+            </Alert>
+
+            {loading && (
+                <Paper
+                    sx={{
+                        minHeight: 260,
+                        display: 'grid',
+                        placeItems: 'center',
+                        bgcolor: binThemeTokens.surface,
+                        border: `1px solid ${binThemeTokens.border}`,
+                    }}
+                >
+                    <Stack spacing={2} alignItems="center">
+                        <CircularProgress sx={{ color: binThemeTokens.gold }} />
+                        <Typography color={binThemeTokens.textSecondary}>
+                            {copy('auditor.records_loading', 'Loading audit records…', 'جارٍ تحميل سجلات التدقيق…')}
+                        </Typography>
+                    </Stack>
+                </Paper>
+            )}
+
+            {!loading && error && (
+                <Alert
+                    severity="error"
+                    action={
+                        <Button color="inherit" size="small" onClick={() => void loadRecords()}>
+                            {copy('auditor.retry', 'Retry', 'إعادة المحاولة')}
+                        </Button>
+                    }
+                >
+                    {error}
                 </Alert>
-            </Snackbar>
+            )}
+
+            {!loading && !error && records.length === 0 && (
+                <Paper
+                    sx={{
+                        p: { xs: 3, md: 5 },
+                        textAlign: 'center',
+                        bgcolor: binThemeTokens.surface,
+                        border: `1px solid ${binThemeTokens.border}`,
+                    }}
+                >
+                    <Typography variant="h6" fontWeight={900} color={binThemeTokens.textPrimary}>
+                        {copy('auditor.empty_title', 'No audit records available', 'لا توجد سجلات تدقيق متاحة')}
+                    </Typography>
+                    <Typography sx={{ mt: 1 }} color={binThemeTokens.textSecondary}>
+                        {copy(
+                            'auditor.empty_body',
+                            'No records were returned for this account. Nothing has been inferred or synthesized.',
+                            'لم يتم إرجاع أي سجلات لهذا الحساب. لم يتم استنتاج أو إنشاء أي بيانات بديلة.',
+                        )}
+                    </Typography>
+                </Paper>
+            )}
+
+            {!loading && !error && records.length > 0 && (
+                <TableContainer
+                    component={Paper}
+                    sx={{
+                        bgcolor: binThemeTokens.surface,
+                        border: `1px solid ${binThemeTokens.border}`,
+                        overflowX: 'auto',
+                    }}
+                >
+                    <Table sx={{ minWidth: 760 }} aria-label={copy('auditor.table_label', 'Audit records', 'سجلات التدقيق')}>
+                        <TableHead>
+                            <TableRow>
+                                <TableCell>{copy('auditor.event', 'Event', 'الحدث')}</TableCell>
+                                <TableCell>{copy('auditor.actor', 'Actor', 'المنفذ')}</TableCell>
+                                <TableCell>{copy('auditor.target', 'Target', 'الهدف')}</TableCell>
+                                <TableCell>{copy('auditor.record_id', 'Record ID', 'معرّف السجل')}</TableCell>
+                                <TableCell>{copy('auditor.time', 'Time', 'الوقت')}</TableCell>
+                            </TableRow>
+                        </TableHead>
+                        <TableBody>
+                            {records.map((record) => (
+                                <TableRow key={record.id} hover>
+                                    <TableCell sx={{ fontWeight: 800 }}>
+                                        {record.action || copy('auditor.unspecified_event', 'Audit event', 'حدث تدقيق')}
+                                    </TableCell>
+                                    <TableCell>
+                                        {record.actorRole || copy('auditor.unknown_role', 'Unknown role', 'دور غير معروف')}
+                                        {record.actorUid ? ` · ${record.actorUid}` : ''}
+                                    </TableCell>
+                                    <TableCell>
+                                        {record.targetType || copy('auditor.unspecified_target', 'Unspecified', 'غير محدد')}
+                                        {record.targetId ? ` · ${record.targetId}` : ''}
+                                    </TableCell>
+                                    <TableCell sx={{ fontFamily: 'monospace', wordBreak: 'break-all' }}>{record.id}</TableCell>
+                                    <TableCell>{formatTimestamp(record.createdAt, isRTL)}</TableCell>
+                                </TableRow>
+                            ))}
+                        </TableBody>
+                    </Table>
+                </TableContainer>
+            )}
         </Container>
     );
 }
