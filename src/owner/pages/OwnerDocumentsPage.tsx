@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { 
-    Box, Typography, Grid, Paper, CircularProgress, 
+    Box, Typography, Grid, Paper, CircularProgress, Alert, 
     Stack, alpha, Button, IconButton, Tooltip, Chip, Divider
 } from '@mui/material';
 import { 
@@ -16,6 +16,7 @@ import DocumentCenterCard from '../../components/DocumentCenterCard';
 export default function OwnerDocumentsPage() {
     const { user } = useRole();
     const [loading, setLoading] = useState(true);
+    const [loadError, setLoadError] = useState('');
     const [documents, setDocuments] = useState<any[]>([]);
 
     useEffect(() => {
@@ -29,10 +30,12 @@ export default function OwnerDocumentsPage() {
         
         const unsubscribe = onSnapshot(docQ, (snap) => {
             setDocuments(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+            setLoadError('');
             setLoading(false);
         }, (error) => {
             console.error('[OwnerDocuments] vault listener failed:', error);
             setDocuments([]);
+            setLoadError((error as any)?.message || 'Unable to load document vault.');
             setLoading(false);
         });
 
@@ -48,6 +51,7 @@ export default function OwnerDocumentsPage() {
 
     return (
         <Box sx={{ pb: 6 }}>
+            {loadError && <Alert severity="error" sx={{ mb: 3 }}>{loadError}</Alert>}
             <Box sx={{ mb: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
                 <Box>
                     <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 4 }}>INSTITUTIONAL ASSET VAULT</Typography>
