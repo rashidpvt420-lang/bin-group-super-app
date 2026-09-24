@@ -108,7 +108,7 @@ export default function OwnerMoneyControlPage() {
             <Paper sx={{ p: 4, borderRadius: 6, bgcolor: 'rgba(22, 22, 24, 0.6)', border: '1px solid rgba(255,255,255,0.05)' }}>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
                     <Typography variant="h6" fontWeight="950" color="#FFF">Systemic Ledger</Typography>
-                    <Button variant="outlined" startIcon={<Download size={16}/>} sx={{ color: binThemeTokens.gold, borderColor: binThemeTokens.gold }}>
+                    <Button disabled title="Unavailable until this workflow is connected" aria-label="DOWNLOAD STATEMENT" variant="outlined" startIcon={<Download size={16}/>} sx={{ color: binThemeTokens.gold, borderColor: binThemeTokens.gold }}>
                         DOWNLOAD STATEMENT
                     </Button>
                 </Box>
