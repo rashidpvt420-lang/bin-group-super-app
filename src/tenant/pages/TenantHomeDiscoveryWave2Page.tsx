@@ -64,6 +64,7 @@ export default function TenantHomeDiscoveryWave2Page() {
   const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
   const [savedSearches, setSavedSearches] = useState<SavedSearch[]>([]);
   const [savingAlert, setSavingAlert] = useState(false);
+  const [deletingAlertId, setDeletingAlertId] = useState<string | null>(null);
   const [loadingAlerts, setLoadingAlerts] = useState(true);
   const [notice, setNotice] = useState<{ severity: 'success' | 'error' | 'info' | 'warning'; text: string } | null>(null);
   const [alertForm, setAlertForm] = useState({
@@ -134,12 +135,19 @@ export default function TenantHomeDiscoveryWave2Page() {
   };
 
   const deleteAlert = async (searchId: string) => {
+    if (deletingAlertId) return;
+    setDeletingAlertId(searchId);
+    setNotice(null);
     try {
       const call = httpsCallable(functions, 'deleteHomeDiscoverySavedSearch');
       await call({ searchId });
       await loadSavedSearches();
+      setNotice({ severity: 'success', text: copy('tenant.home.alertDeleted', 'Saved search deleted.', 'تم حذف البحث المحفوظ.') });
     } catch (error) {
       console.error('[TenantHomeDiscoveryWave2] delete alert failed', error);
+      setNotice({ severity: 'error', text: copy('tenant.home.alertDeleteFailed', 'Could not delete this saved search.', 'تعذر حذف هذا البحث المحفوظ.') });
+    } finally {
+      setDeletingAlertId(null);
     }
   };
 
@@ -193,7 +201,7 @@ export default function TenantHomeDiscoveryWave2Page() {
               <Grid item xs={6} md={3}><FormControl fullWidth><InputLabel>{copy('tenant.home.furnishing', 'Furnishing', 'التأثيث')}</InputLabel><Select value={alertForm.furnishing} label={copy('tenant.home.furnishing', 'Furnishing', 'التأثيث')} onChange={(e) => setAlertForm((current) => ({ ...current, furnishing: String(e.target.value) }))}>{['ALL','FURNISHED','UNFURNISHED','PARTLY_FURNISHED'].map((value) => <MenuItem key={value} value={value}>{value.replace(/_/g, ' ')}</MenuItem>)}</Select></FormControl></Grid>
               <Grid item xs={12} md={3}><Button fullWidth variant="outlined" disabled={savingAlert} onClick={saveAlert} startIcon={savingAlert ? <CircularProgress size={18} /> : <SafeIcon icon={BellRing} size={18} />} sx={{ height: '100%', minHeight: 56, borderColor: gold, color: binThemeTokens.goldHover, fontWeight: 950 }}>{copy('tenant.home.saveAlert', 'Save Alert', 'حفظ التنبيه')}</Button></Grid>
             </Grid>
-            {loadingAlerts ? <CircularProgress size={22} sx={{ color: gold }} /> : savedSearches.length > 0 && <Stack spacing={1}>{savedSearches.map((search) => <Paper key={search.searchId} variant="outlined" sx={{ p: 1.5, borderRadius: 3 }}><Stack direction={isRTL ? 'row-reverse' : 'row'} justifyContent="space-between" alignItems="center" spacing={2}><Box><Typography sx={{ fontWeight: 900 }}>{search.label}</Typography><Typography variant="caption" sx={{ color: binThemeTokens.textSecondary }}>{[search.filters.query, search.filters.propertyType !== 'ALL' ? search.filters.propertyType : '', search.filters.emirate !== 'ALL' ? search.filters.emirate.replace(/_/g, ' ') : '', search.filters.maxRent > 0 ? `≤ AED ${Math.round(search.filters.maxRent).toLocaleString()}` : ''].filter(Boolean).join(' · ')}</Typography></Box><Button size="small" color="error" onClick={() => void deleteAlert(search.searchId)} startIcon={<SafeIcon icon={Trash2} size={15} />}>{copy('tenant.home.delete', 'Delete', 'حذف')}</Button></Stack></Paper>)}</Stack>}
+            {loadingAlerts ? <CircularProgress size={22} sx={{ color: gold }} /> : savedSearches.length > 0 && <Stack spacing={1}>{savedSearches.map((search) => <Paper key={search.searchId} variant="outlined" sx={{ p: 1.5, borderRadius: 3 }}><Stack direction={isRTL ? 'row-reverse' : 'row'} justifyContent="space-between" alignItems="center" spacing={2}><Box><Typography sx={{ fontWeight: 900 }}>{search.label}</Typography><Typography variant="caption" sx={{ color: binThemeTokens.textSecondary }}>{[search.filters.query, search.filters.propertyType !== 'ALL' ? search.filters.propertyType : '', search.filters.emirate !== 'ALL' ? search.filters.emirate.replace(/_/g, ' ') : '', search.filters.maxRent > 0 ? `≤ AED ${Math.round(search.filters.maxRent).toLocaleString()}` : ''].filter(Boolean).join(' · ')}</Typography></Box><Button size="small" color="error" disabled={deletingAlertId === search.searchId} onClick={() => void deleteAlert(search.searchId)} startIcon={<SafeIcon icon={Trash2} size={15} />}>{copy('tenant.home.delete', 'Delete', 'حذف')}</Button></Stack></Paper>)}</Stack>}
           </Stack>
         </Paper>
 
