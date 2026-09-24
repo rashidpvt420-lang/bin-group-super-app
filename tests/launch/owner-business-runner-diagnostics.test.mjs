@@ -35,7 +35,7 @@ test('Owner lifecycle preserves inherited bindings and non-overriding dotenv con
   const result = run('lifecycle');
   assert.ifError(result.error);
   assert.equal(result.dotenvCalls[0].override, false);
-  assert.deepEqual(result.calls[0].args, ['scripts/run-owner-inspection-first-production-evidence.mjs']);
+  assert.deepEqual(result.calls[0].args, ['scripts/run-owner-inspection-first-production-evidence-unique.mjs']);
   assert.deepEqual(result.calls[0].options.env, { EXISTING_BINDING: 'preserved', DEPLOYMENT_ENVIRONMENT: 'production' });
   assert.equal(result.calls[0].options.cwd, path.resolve(fileURLToPath(new URL('..', runnerUrl))));
   assert.equal(result.calls[0].options.timeout, 18 * 60 * 1000);
