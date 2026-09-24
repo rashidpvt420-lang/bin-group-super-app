@@ -103,7 +103,7 @@ const requiredFragments = [
   ['ticket create fallback rejects explicit ticket hierarchies first', "allow create: if collection != 'tickets' && collection != 'maintenanceTickets' && !("],
   ['ticket update fallback rejects explicit ticket hierarchies first', "allow update, delete: if collection != 'tickets' && collection != 'maintenanceTickets' && !("],
   ['ticket write fallback excludes explicit ticket hierarchies, live location, canonical property geo, property identity, HR cases and private HR', "'system_secrets',\n          'technician_live_locations',\n          'properties',\n          'property_identity_registry',\n          'users',\n          'staffRequests',\n          'hrAiConversations',\n          'audit_logs',\n          'admin_security_sessions',\n          'private_hr_profiles'"],
-  ['property identity registry excluded from generic create and update/delete fallbacks', "'technician_live_locations',\n          'properties',\n          'property_identity_registry',\n          'users'"],
+  ['property identity and turnover quote authority excluded from generic create and update/delete fallbacks', "'technician_live_locations',\n          'properties',\n          'property_identity_registry',\n          'turnover-quotes',\n          'users'"],
   ['private Broker KYC profile rule exists', 'match /broker_kyc_profiles/{brokerId} {'],
   ['Broker KYC rate limits are server-only', "match /broker_kyc_submission_limits/{brokerId} {\n      allow read, write: if false;"],
   ['Admin security sessions are server-only', "match /admin_security_sessions/{sessionId} {\n      allow read, write: if false;"],
@@ -137,6 +137,7 @@ if (rules.split('match /technician_live_locations/{technicianId}').length - 1 !=
 if (rules.split('match /payroll_entries/{entryId}').length - 1 !== 1) failures.push('Payroll mirror rule must exist exactly once.');
 if ((rules.match(/'payroll_entries'/g) || []).length !== 3) failures.push('Payroll mirror must be excluded from read, create and update/delete catch-alls exactly once each.');
 if ((rules.match(/'property_identity_registry'/g) || []).length !== 3) failures.push('Property identity registry must be excluded from read, create and update/delete catch-alls exactly once each.');
+if ((rules.match(/'turnover-quotes'/g) || []).length < 2) failures.push('Turnover quotes must be excluded from generic create and update/delete catch-alls.');
 
 const router = readFunction('safeTicketUpdateByActor');
 if (!router) {
