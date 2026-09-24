@@ -239,7 +239,7 @@ const PropertyIntakeStep: React.FC<{ onNext: () => void }> = ({ onNext }) => {
                                             <TableCell><Chip label={prop.propertyType} size="small" variant="outlined" /></TableCell>
                                             <TableCell><Typography variant="body2" fontWeight="700">{prop.units}</Typography></TableCell>
                                             <TableCell align="right">
-                                                <IconButton size="small" color="error" onClick={(e) => { e.stopPropagation(); removeProperty(index); if (editingIndex === index) setEditingIndex(null); }}><Trash2 size={16} /></IconButton>
+                                                <IconButton aria-label="Remove property entry" size="small" color="error" onClick={(e) => { e.stopPropagation(); removeProperty(index); if (editingIndex === index) setEditingIndex(null); }}><Trash2 size={16} /></IconButton>
                                             </TableCell>
                                         </TableRow>
                                     ))}
