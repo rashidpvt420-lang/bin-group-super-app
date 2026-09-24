@@ -65,6 +65,8 @@ export default function TechnicianDutyMonitorPage() {
                 </Stack>
             </Stack>
 
+            {technicians.length === 0 && <Alert severity="info" sx={{ mb: 3 }}>No technician profiles are currently available.</Alert>}
+
             <TableContainer component={Paper} sx={{ bgcolor: 'rgba(22, 22, 24, 0.7)', borderRadius: 6, border: '1px solid rgba(255,255,255,0.05)', backdropFilter: 'blur(20px)' }}>
                 <Table>
                     <TableHead>
