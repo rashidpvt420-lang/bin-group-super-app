@@ -1,0 +1,59 @@
+name: Founder Android Store Release Dispatch Bridge
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  dispatch:
+    name: Dispatch protected Android Store Release
+    if: >-
+      github.event.issue.number == 434 &&
+      !github.event.issue.pull_request &&
+      github.event.comment.user.login == github.repository_owner &&
+      startsWith(github.event.comment.body, '/bin-launch android-store-release ')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Parse and validate founder command
+        id: parse
+        shell: bash
+        env:
+          COMMAND_BODY: ${{ github.event.comment.body }}
+        run: |
+          set -euo pipefail
+          expected_sha="${COMMAND_BODY#'/bin-launch android-store-release '}"
+          [[ "$expected_sha" =~ ^[0-9a-f]{40}$ ]] || {
+            echo "::error::Expected a 40-character lowercase commit SHA."
+            exit 1
+          }
+
+          current_main="$(git ls-remote https://github.com/${GITHUB_REPOSITORY}.git refs/heads/main | awk '{print $1}')"
+          [[ "$expected_sha" == "$current_main" ]] || {
+            echo "::error::Refusing dispatch because expected SHA $expected_sha does not equal current main $current_main."
+            exit 1
+          }
+
+          echo "expected_sha=$expected_sha" >> "$GITHUB_OUTPUT"
+
+      - name: Dispatch protected Android Store Release workflow
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_SHA: ${{ steps.parse.outputs.expected_sha }}
+        run: |
+          set -euo pipefail
+          gh api \
+            --method POST \
+            -H "Accept: application/vnd.github+json" \
+            "/repos/${GITHUB_REPOSITORY}/actions/workflows/android-store-release.yml/dispatches" \
+            -f ref=main \
+            -F "inputs[expected_commit_sha]=$EXPECTED_SHA" \
+            -F "inputs[confirmation]=BUILD_SIGNED_ANDROID_AAB_BIN_GROUP"
+
+          echo "Dispatched Android Store Release AAB for $EXPECTED_SHA"
