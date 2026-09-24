@@ -152,7 +152,7 @@ export const ownerAttachMaintenanceEvidence = onCall(
         ownerEvidencePaths: FieldValue.arrayUnion(...paths),
         updatedAt: FieldValue.serverTimestamp(),
       }, { merge: true });
-      transaction.set(db.collection("auditLogs").doc(`owner_ticket_evidence_${ticketId}`), {
+      transaction.set(db.collection("audit_logs").doc(`owner_ticket_evidence_${ticketId}`), {
         action: "OWNER_MAINTENANCE_EVIDENCE_ATTACHED",
         actorId: ownerUid,
         actorRole: "owner",
@@ -246,7 +246,7 @@ export const ownerCreatePropertyReporter = onCall(
         createdAt: now,
         updatedAt: now,
       });
-      transaction.create(db.collection("auditLogs").doc(`owner_reporter_${reporterId}`), {
+      transaction.create(db.collection("audit_logs").doc(`owner_reporter_${reporterId}`), {
         action: "OWNER_PROPERTY_REPORTER_INVITED",
         actorId: ownerUid,
         actorRole: "owner",
@@ -287,7 +287,7 @@ export const ownerSuspendPropertyReporter = onCall(
         suspendedAt: now,
         updatedAt: now,
       }, { merge: true });
-      transaction.create(db.collection("auditLogs").doc(`owner_reporter_suspend_${reporterId}`), {
+      transaction.create(db.collection("audit_logs").doc(`owner_reporter_suspend_${reporterId}`), {
         action: "OWNER_PROPERTY_REPORTER_SUSPENDED",
         actorId: ownerUid,
         actorRole: "owner",
