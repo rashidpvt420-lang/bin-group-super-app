@@ -53,10 +53,6 @@ async function requireMfaFinanceAdmin(auth: any) {
   }
 }
 
-const isFiniteCoordinate = (value: unknown, minimum: number, maximum: number) => {
-  const coordinate = Number(value);
-  return Number.isFinite(coordinate) && coordinate >= minimum && coordinate <= maximum;
-};
 
 export const isPropertyLocationActivationReady = (property: any) =>
   hasDispatchReadyPropertyGeo(property);
