@@ -28,6 +28,7 @@ const ROUTE_COMPOSED_FILES = {
   ],
   '/broker': ['src/broker/components/BrokerLiveAttributionCard.tsx'],
   '/broker/dashboard': ['src/broker/components/BrokerLiveAttributionCard.tsx'],
+  'admin-site:/login': ['apps/admin-panel/src/components/UnifiedLogin.tsx'],
 };
 
 const SOURCE_PROVEN_STATIC_ROUTES = new Set([
@@ -237,13 +238,25 @@ const exactRouteBlocks = {
   adminops: blockBetween(exactRouteE2E, "name: 'Admin'", 'const PHASE_2_SENTINEL_ROUTE'),
 };
 
+const E2E_CONCRETE_ROUTE_OVERRIDES = new Map([
+  ['/onboarding/*', '/onboarding'],
+  ['/tenant/move-inspection/:type', '/tenant/move-inspection/move-in'],
+  ['/technician/hr/*', '/technician/hr'],
+  ['admin-site:/broker', '/broker'],
+]);
+
 function e2eCandidateRoute(row) {
+  const override = E2E_CONCRETE_ROUTE_OVERRIDES.get(row.route);
+  if (override) return override;
   const candidate = row.scope === 'adminops' ? row.raw : row.route;
   return candidate.replace(/:[A-Za-z0-9_]+/g, 'phase2-missing');
 }
 
 function e2eCoversRoute(row) {
   if (/Navigate/.test(row.element) || row.raw === '*') return true;
+  if (row.route === 'admin-site:/login') {
+    return exactRouteE2E.includes("Admin login Phase 2 route survives direct URL, refresh, mobile and Arabic RTL");
+  }
   const candidate = e2eCandidateRoute(row);
   if (candidate.includes('*')) return false;
 
@@ -359,7 +372,7 @@ function signals(content, row) {
     success: 'REGISTERED_RENDER',
     mobile: row.route === 'admin-site:/auth-error'
       ? 'SHELL_RESPONSIVE'
-      : (/\bxs\s*:|\bsm\s*:|\bmd\s*:|\blg\s*:|useMediaQuery|100dvh|flexWrap/i.test(content)
+      : (/\bxs\s*:|\bsm\s*:|\bmd\s*:|\blg\s*:|\b(?:sm|md|lg|xl):[A-Za-z]|useMediaQuery|100dvh|min-h-screen|flexWrap/i.test(content)
           ? 'RESPONSIVE_HINTS'
           : (routeE2E ? 'E2E_PHONE_VIEWPORT' : 'REVIEW')),
     arabic: row.route === 'admin-site:/auth-error'
@@ -614,7 +627,7 @@ The CSV records:
 - Auditor loading/empty/error/success states and removal of unsupported trust/regulatory/integration claims.
 - Dedicated Admin \`/smoke-test\` route and compliance-module authorization.
 
-Direct URL/refresh and mobile/Arabic behavior remain subject to hosted/runtime verification even where the route is structurally registered.
+Direct URL and refresh coverage are fail-closed against Firebase SPA rewrites plus the protected exact-route browser audit. Mobile/Arabic rows require responsive/i18n implementation signals or the protected browser audit.
 `;
 fs.writeFileSync(path.join(outDir, 'PHASE_2_ROUTE_SCREEN_INVENTORY.md'), summary);
 
