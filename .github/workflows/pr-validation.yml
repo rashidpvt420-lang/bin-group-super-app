@@ -71,6 +71,20 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
+      - name: Phase 3 every-control source inventory guard
+        run: npm run test:phase3:controls
+
+      - name: Upload Phase 3 interactive-control matrix
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: phase-3-interactive-control-inventory-${{ github.sha }}
+          path: |
+            audit/phase-3-interactive-control-inventory.csv
+            audit/PHASE_3_INTERACTIVE_CONTROL_INVENTORY.md
+          if-no-files-found: error
+          retention-days: 14
+
       - name: Production stability guard
         id: stability
         shell: bash
@@ -135,6 +149,14 @@ jobs:
 
       - name: Build unified Vite app
         run: npm run build
+
+      - name: Install Phase 3 desktop, Android and iOS browser engines
+        run: npx playwright install --with-deps chromium webkit
+
+      - name: Phase 3 desktop, Android and iOS control-shell E2E
+        env:
+          CI: true
+        run: npm run test:e2e:phase3:platforms
 
       - name: Build dedicated admin panel
         id: build_admin
