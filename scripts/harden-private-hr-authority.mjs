@@ -52,6 +52,17 @@ const propertyIdentityHrServerAuthorityWritePrefix = `          'system_secrets'
           'audit_logs',
           'admin_security_sessions',
           'private_hr_profiles',`;
+const turnoverAuthorityWritePrefix = `          'system_secrets',
+          'technician_live_locations',
+          'properties',
+          'property_identity_registry',
+          'turnover-quotes',
+          'users',
+          'staffRequests',
+          'hrAiConversations',
+          'audit_logs',
+          'admin_security_sessions',
+          'private_hr_profiles',`;
 const staleHrServerAuthorityWritePrefix = `          'system_secrets',
           'technician_live_locations',
           'properties',
@@ -101,6 +112,8 @@ if (source.includes(duplicatedHrServerAuthorityWritePrefix)) {
 } else if (source.includes(staleHrServerAuthorityWritePrefix)) {
   source = source.replaceAll(staleHrServerAuthorityWritePrefix, hrServerAuthorityWritePrefix);
   canonicalWritePrefix = hrServerAuthorityWritePrefix;
+} else if (source.includes(turnoverAuthorityWritePrefix)) {
+  canonicalWritePrefix = turnoverAuthorityWritePrefix;
 } else if (source.includes(propertyIdentityHrServerAuthorityWritePrefix)) {
   canonicalWritePrefix = propertyIdentityHrServerAuthorityWritePrefix;
 } else if (source.includes(hrServerAuthorityWritePrefix)) {
