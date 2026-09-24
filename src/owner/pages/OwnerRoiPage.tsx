@@ -105,8 +105,8 @@ export default function OwnerRoiPage() {
                     <Typography variant="h4" fontWeight="950" sx={{ color: '#FFF', mt: 1 }}>ROI Analytics</Typography>
                 </Box>
                 <Stack direction="row" spacing={2}>
-                    <Button variant="outlined" startIcon={<Calendar size={16} />} sx={{ borderColor: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.7)', fontWeight: 900, borderRadius: 3 }}>Last 12 Months</Button>
-                    <Button variant="contained" sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 900, px: 3, borderRadius: 3 }}>Export Audit</Button>
+                    <Button disabled title="Unavailable until this workflow is connected" aria-label="Last 12 Months" variant="outlined" startIcon={<Calendar size={16} />} sx={{ borderColor: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.7)', fontWeight: 900, borderRadius: 3 }}>Last 12 Months</Button>
+                    <Button disabled title="Unavailable until this workflow is connected" aria-label="Export Audit" variant="contained" sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 900, px: 3, borderRadius: 3 }}>Export Audit</Button>
                 </Stack>
             </Box>
 
@@ -214,7 +214,7 @@ export default function OwnerRoiPage() {
                         </Typography>
                     </Grid>
                     <Grid item xs={12} md={3} sx={{ textAlign: 'right' }}>
-                        <Button variant="contained" sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, px: 3, borderRadius: 3 }}>
+                        <Button disabled title="Unavailable until this workflow is connected" aria-label="Request Review" variant="contained" sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, px: 3, borderRadius: 3 }}>
                             Request Review
                         </Button>
                     </Grid>
