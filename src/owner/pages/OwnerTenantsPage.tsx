@@ -150,7 +150,7 @@ export default function OwnerTenantsPage() {
                                                 />
                                             </Box>
                                         </Stack>
-                                        <IconButton size="small" sx={{ color: 'rgba(255,255,255,0.2)' }}><Activity size={18} /></IconButton>
+                                        <IconButton disabled title="Unavailable until this workflow is connected" aria-label="Unavailable tenant action" size="small" sx={{ color: 'rgba(255,255,255,0.2)' }}><Activity size={18} /></IconButton>
                                     </Box>
 
                                     <Divider sx={{ borderColor: 'rgba(255,255,255,0.05)' }} />
@@ -181,7 +181,7 @@ export default function OwnerTenantsPage() {
                                         >
                                             EMAIL
                                         </Button>
-                                        <Button 
+                                        <Button disabled title="Unavailable until this workflow is connected" aria-label="CHAT" 
                                             fullWidth 
                                             variant="outlined" 
                                             size="small"
@@ -211,7 +211,7 @@ export default function OwnerTenantsPage() {
                         </Typography>
                     </Grid>
                     <Grid item xs={12} md={4} sx={{ textAlign: 'right' }}>
-                        <Button variant="outlined" sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.gold, fontWeight: 900, px: 3, borderRadius: 3 }} startIcon={<CheckCircle2 size={16} />}>
+                        <Button disabled title="Unavailable until this workflow is connected" aria-label="RERA Compliant" variant="outlined" sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.gold, fontWeight: 900, px: 3, borderRadius: 3 }} startIcon={<CheckCircle2 size={16} />}>
                             RERA Compliant
                         </Button>
                     </Grid>
