@@ -102,7 +102,7 @@ export default function ROIReportModal({ propertyId, propertyName }: Props) {
                                 <PrintIcon />
                             </IconButton>
                         )}
-                        <IconButton onClick={() => setOpen(false)} size="small">
+                        <IconButton aria-label="Close ROI report" onClick={() => setOpen(false)} size="small">
                             <CloseIcon />
                         </IconButton>
                     </Box>
