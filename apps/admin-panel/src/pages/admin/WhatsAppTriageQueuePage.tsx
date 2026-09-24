@@ -6,6 +6,7 @@ import {
   Card,
   CardContent,
   Chip,
+  CircularProgress,
   Divider,
   Grid,
   MenuItem,
@@ -67,12 +68,14 @@ export default function WhatsAppTriageQueuePage() {
   const [forms, setForms] = React.useState<Record<string, TriageForm>>({});
   const [busyId, setBusyId] = React.useState<string | null>(null);
   const [notice, setNotice] = React.useState<string>('');
+  const [loading, setLoading] = React.useState(true);
 
   React.useEffect(() => {
     const q = query(collection(db, 'communication_intake'), orderBy('createdAt', 'desc'), limit(50));
     return onSnapshot(q, (snapshot) => {
       const rows = snapshot.docs.map((entry) => ({ id: entry.id, ...(entry.data() as Omit<IntakeRecord, 'id'>) }));
       setItems(rows);
+      setLoading(false);
       setForms((current) => {
         const next = { ...current };
         rows.forEach((row) => {
@@ -80,6 +83,9 @@ export default function WhatsAppTriageQueuePage() {
         });
         return next;
       });
+    }, (error) => {
+      setNotice(error?.message || 'Failed to load WhatsApp intake queue.');
+      setLoading(false);
     });
   }, []);
 
@@ -136,9 +142,12 @@ export default function WhatsAppTriageQueuePage() {
         </Typography>
       </Stack>
 
+      {loading && <Box sx={{ display: 'flex', justifyContent: 'center', py: 5 }}><CircularProgress sx={{ color: '#DAA520' }} /></Box>}
+
       {notice && <Alert severity={notice.includes('Failed') || notice.includes('required') ? 'warning' : 'success'} sx={{ mb: 3 }}>{notice}</Alert>}
 
       <Grid container spacing={2}>
+        {!loading && items.length === 0 && <Grid item xs={12}><Alert severity="info">No WhatsApp intake records are waiting for triage.</Alert></Grid>}
         {items.map((intake) => {
           const form = forms[intake.id] || defaultForm(intake);
           return (
