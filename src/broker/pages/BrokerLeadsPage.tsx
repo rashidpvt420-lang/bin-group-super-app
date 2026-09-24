@@ -250,6 +250,7 @@ export default function BrokerLeadsPage({ openFormByDefault = false }: BrokerLea
             title="Leads Pipeline"
             subtitle="Capture owner, tenant, property, and corporate opportunities with immutable broker attribution."
             loading={loading}
+            showBack={openFormByDefault}
             actions={(
                 <Button
                     data-testid="broker-submit-lead"
