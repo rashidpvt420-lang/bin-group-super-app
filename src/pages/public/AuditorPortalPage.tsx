@@ -188,7 +188,7 @@ export default function AuditorPortalPage() {
                         minHeight: 260,
                         display: 'grid',
                         placeItems: 'center',
-                        bgcolor: binThemeTokens.surface,
+                        bgcolor: binThemeTokens.card,
                         border: `1px solid ${binThemeTokens.border}`,
                     }}
                 >
@@ -219,7 +219,7 @@ export default function AuditorPortalPage() {
                     sx={{
                         p: { xs: 3, md: 5 },
                         textAlign: 'center',
-                        bgcolor: binThemeTokens.surface,
+                        bgcolor: binThemeTokens.card,
                         border: `1px solid ${binThemeTokens.border}`,
                     }}
                 >
@@ -240,7 +240,7 @@ export default function AuditorPortalPage() {
                 <TableContainer
                     component={Paper}
                     sx={{
-                        bgcolor: binThemeTokens.surface,
+                        bgcolor: binThemeTokens.card,
                         border: `1px solid ${binThemeTokens.border}`,
                         overflowX: 'auto',
                     }}
