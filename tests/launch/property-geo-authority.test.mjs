@@ -39,11 +39,13 @@ function ruleFunction(rules, name) {
   return '';
 }
 
-test('canonical property geo is server-authoritative and Owner submissions remain unverified', async () => {
-  const [rules, backend, authority, rootLocation, ownerLocation, adminPage, pinResolver, hardener] = await Promise.all([
+test('canonical property geo stays server-authoritative and inspection-first promotion uses physical evidence', async () => {
+  const [rules, authority, completionWrapper, reviewWrapper, paymentGate, rootLocation, ownerLocation, adminPage, pinResolver, hardener] = await Promise.all([
     Promise.resolve(preparedPropertyRules()),
-    read('functions/adminPropertyReview.ts'),
     read('functions/propertyGeoAuthority.ts'),
+    read('functions/canonicalOwnerInspectionCompletion.ts'),
+    read('functions/canonicalAdminPropertyReview.ts'),
+    read('functions/securePaymentApproval.ts'),
     read('src/components/onboarding/PropertyLocationStep.tsx'),
     read('apps/owner-app/src/components/onboarding/PropertyLocationStep.tsx'),
     read('apps/admin-panel/src/pages/admin/AdminPropertyApprovalsPage.tsx'),
@@ -58,8 +60,6 @@ test('canonical property geo is server-authoritative and Owner submissions remai
   assert.match(rules, /function safeOwnerPropertyCreate[\s\S]*ownerDraftCreate\(data\)[\s\S]*propertyCreateHasNoCanonicalGeo\(data\)/);
   assert.match(rules, /'geoVerification'/);
   assert.match(rules, /canManageProperties\(\) && safeManagedPropertyUpdate\(\)/);
-  assert.doesNotMatch(rules, /function ownerCannotSupplyCanonicalPropertyGeo/);
-  assert.doesNotMatch(rules, /function ownerSubmittedPropertyGeoIsUnverified/);
   assert.match(hardener, /Browser property writes are evidence-only/);
 
   for (const component of [rootLocation, ownerLocation]) {
@@ -71,21 +71,31 @@ test('canonical property geo is server-authoritative and Owner submissions remai
     assert.doesNotMatch(component, /geo: geo as any/);
   }
 
-  assert.match(authority, /export function buildFounderVerifiedPropertyGeo/);
-  assert.match(authority, /source: "admin_manual"/);
-  assert.match(authority, /verified: true/);
-  assert.match(authority, /dispatchReady: true/);
-  assert.match(authority, /requiresGeoReview: false/);
-  assert.match(authority, /verificationVersion: 1/);
-  assert.match(backend, /buildFounderVerifiedPropertyGeo\(property, actor\.uid, now\)/);
-  assert.match(backend, /update\.geo = canonical\.geo/);
-  assert.match(backend, /update\.geoVerification = canonical\.geoVerification/);
-  assert.match(backend, /geoDispatchReady/);
+  assert.match(authority, /export function buildInspectionVerifiedPropertyGeo/);
+  assert.match(authority, /source: "physical_inspection"/);
+  assert.match(authority, /source: "PHYSICAL_INSPECTION_EVIDENCE"/);
+  assert.match(authority, /verificationVersion: 2/);
+  assert.match(authority, /evidenceHash/);
+  assert.match(authority, /evidenceGeneration/);
+  assert.match(authority, /arrival\?\.withinRadius !== true/);
+  assert.match(completionWrapper, /buildInspectionVerifiedPropertyGeo/);
+  assert.match(completionWrapper, /geo: canonical\.geo/);
+  assert.match(completionWrapper, /geoVerification: canonical\.geoVerification/);
+  assert.match(completionWrapper, /PHYSICAL_INSPECTION_EVIDENCE_V2/);
+  assert.match(paymentGate, /hasDispatchReadyPropertyGeo\(property\)/);
+  assert.match(paymentGate, /inspectionFirst/);
 
-  assert.match(adminPage, /httpsCallable\(functions, 'adminReviewOwnerProperty'\)/);
+  assert.match(reviewWrapper, /Inspection-first properties cannot be approved or made dispatch-ready/);
+  assert.match(adminPage, /Inspection-first Owner properties are verified by evidence-backed physical site visits/);
+  assert.doesNotMatch(adminPage, />Approve & verify geo</);
   assert.doesNotMatch(adminPage, /updateDoc\s*\(/);
   assert.doesNotMatch(adminPage, /addDoc\s*\(/);
   assert.doesNotMatch(pinResolver, /owner_submission/);
+
+  // Founder-MFA v1 remains compatibility-only for previously reviewed records.
+  assert.match(authority, /export function buildFounderVerifiedPropertyGeo/);
+  assert.match(authority, /source: "FOUNDER_MFA_REVIEW"/);
+  assert.match(authority, /verificationVersion: 1/);
 });
 
 test('verified properties keep ordinary Owner updates while canonical geo stays immutable', async () => {
