@@ -8,6 +8,8 @@ const adminSecurityReadCatchAll = "      allow read: if collection != 'tickets' 
 const privateHrReadCatchAll = "      allow read: if collection != 'tickets' && collection != 'maintenanceTickets' && !(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions', 'private_hr_profiles']) && hasAdminClaim();";
 const liveLocationReadCatchAll = "      allow read: if collection != 'tickets' && collection != 'maintenanceTickets' && !(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions', 'private_hr_profiles', 'technician_live_locations']) && hasAdminClaim();";
 const invoiceRegistryReadCatchAll = "      allow read: if collection != 'tickets' && collection != 'maintenanceTickets' && !(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions', 'private_hr_profiles', 'technician_live_locations', 'invoice_registry']) && hasAdminClaim();";
+const payrollReadCatchAll = "      allow read: if collection != 'tickets' && collection != 'maintenanceTickets' && !(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions', 'private_hr_profiles', 'technician_live_locations', 'invoice_registry', 'payroll_entries']) && hasAdminClaim();";
+const propertyIdentityReadCatchAll = "      allow read: if collection != 'tickets' && collection != 'maintenanceTickets' && !(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions', 'private_hr_profiles', 'technician_live_locations', 'invoice_registry', 'payroll_entries', 'property_identity_registry']) && hasAdminClaim();";
 const readCatchAllCandidates = [legacyReadCatchAll, brokerReadCatchAll, boundedReadCatchAll, adminSecurityReadCatchAll, privateHrReadCatchAll, invoiceRegistryReadCatchAll, liveLocationReadCatchAll];
 const legacyWriteList = `          'system_secrets',
           'users',
@@ -42,6 +44,16 @@ const liveLocationWriteList = `          'system_secrets',
 const hrServerAuthorityWriteList = `          'system_secrets',
           'technician_live_locations',
           'properties',
+          'users',
+          'staffRequests',
+          'hrAiConversations',
+          'audit_logs',
+          'admin_security_sessions',
+          'private_hr_profiles',`;
+const propertyIdentityHrServerAuthorityWriteList = `          'system_secrets',
+          'technician_live_locations',
+          'properties',
+          'property_identity_registry',
           'users',
           'staffRequests',
           'hrAiConversations',
@@ -249,14 +261,23 @@ text = text.replace(
 for (const candidate of readCatchAllCandidates) {
   if (text.includes(candidate)) text = text.replace(candidate, invoiceRegistryReadCatchAll);
 }
-if (!text.includes(invoiceRegistryReadCatchAll)) {
-  throw new Error('[final-firestore-authority] global read catch-all could not be bounded with ticket, Broker KYC, Admin security, private HR, live-location and invoice-registry exclusions');
+const canonicalReadCatchAll = text.includes(propertyIdentityReadCatchAll)
+  ? propertyIdentityReadCatchAll
+  : text.includes(payrollReadCatchAll)
+    ? payrollReadCatchAll
+    : text.includes(invoiceRegistryReadCatchAll)
+      ? invoiceRegistryReadCatchAll
+      : '';
+if (!canonicalReadCatchAll) {
+  throw new Error('[final-firestore-authority] global read catch-all could not be bounded with canonical server-only exclusions');
 }
 
 if (text.includes(duplicatedHrServerAuthorityWriteList)) {
   text = text.replaceAll(duplicatedHrServerAuthorityWriteList, hrServerAuthorityWriteList);
 } else if (text.includes(staleHrServerAuthorityWriteList)) {
   text = text.replaceAll(staleHrServerAuthorityWriteList, hrServerAuthorityWriteList);
+} else if (text.includes(propertyIdentityHrServerAuthorityWriteList)) {
+  // Already canonical and stronger: property identity claims are server-only.
 } else if (text.includes(hrServerAuthorityWriteList)) {
   // Already canonical.
 } else if (text.includes(liveLocationWriteList)) {
@@ -274,8 +295,11 @@ if (text.includes(duplicatedHrServerAuthorityWriteList)) {
 } else {
   throw new Error('[final-firestore-authority] global write fallback list could not be identified');
 }
-if (text.split(hrServerAuthorityWriteList).length - 1 !== 2) {
-  throw new Error('[final-firestore-authority] live-location/private-HR write fallback list must exist exactly twice');
+const canonicalWriteList = text.includes(propertyIdentityHrServerAuthorityWriteList)
+  ? propertyIdentityHrServerAuthorityWriteList
+  : hrServerAuthorityWriteList;
+if (text.split(canonicalWriteList).length - 1 !== 2) {
+  throw new Error('[final-firestore-authority] canonical server-only write fallback list must exist exactly twice');
 }
 
 if (text.includes(legacyCreateCatchAll) && !text.includes(boundedCreateCatchAll)) {
@@ -318,10 +342,10 @@ const required = [
   'allow read, write: if false;',
   ...Object.keys(reviewedRoleFields).map(reviewedRoleMarker),
   invoiceRegistryBlock.trim(),
-  invoiceRegistryReadCatchAll.trim(),
+  canonicalReadCatchAll.trim(),
   boundedCreateCatchAll.trim(),
   boundedUpdateCatchAll.trim(),
-  hrServerAuthorityWriteList.trim(),
+  canonicalWriteList.trim(),
   confidentialRequestFunction.trim(),
   hrServerReservedFieldsFunction.trim(),
   hrClientClassificationGuardFunction.trim(),

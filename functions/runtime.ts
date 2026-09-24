@@ -20,11 +20,12 @@ export {
   requestOwnerInspectionSignatureOtp,
   verifyOwnerInspectionSignatureOtp,
   uploadOwnerInspectionProofDocument,
-  submitOwnerInspectionFirstOnboarding,
   adminRecordOwnerMobilizationPaymentEvidence,
 } from "./inspectionFirstOwnerOnboarding";
+export { submitOwnerInspectionFirstOnboarding } from "./canonicalOwnerSubmission";
 export * from "./ownerInspectionAdminLink";
-export * from "./ownerInspectionCompletion";
+export { adminRecordOwnerPropertyInspectionEvidence } from "./ownerInspectionCompletion";
+export { adminCompleteOwnerPortfolioInspections } from "./canonicalOwnerInspectionCompletion";
 export * from "./ownerFinancialOperations";
 export * from "./ownerMaintenanceOperations";
 export * from "./onboardingProofUpload";

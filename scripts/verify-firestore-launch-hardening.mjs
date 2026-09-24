@@ -58,7 +58,7 @@ const forbiddenFragments = [
   ['private HR omitted from global read fallback exclusions', "allow read: if collection != 'tickets' && collection != 'maintenanceTickets' && !(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions']) && hasAdminClaim();"],
   ['canonical live location omitted from global read fallback exclusions', "allow read: if collection != 'tickets' && collection != 'maintenanceTickets' && !(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions', 'private_hr_profiles']) && hasAdminClaim();"],
   ['invoice registry omitted from global read fallback exclusions', "allow read: if collection != 'tickets' && collection != 'maintenanceTickets' && !(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions', 'private_hr_profiles', 'technician_live_locations']) && hasAdminClaim();"],
-  ['payroll mirror omitted from global read fallback exclusions', "allow read: if collection != 'tickets' && collection != 'maintenanceTickets' && !(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions', 'private_hr_profiles', 'technician_live_locations', 'invoice_registry']) && hasAdminClaim();"],
+  ['property identity registry omitted from global read fallback exclusions', "allow read: if collection != 'tickets' && collection != 'maintenanceTickets' && !(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions', 'private_hr_profiles', 'technician_live_locations', 'invoice_registry', 'payroll_entries']) && hasAdminClaim();"],
   ['unbounded ticket write fallback list', "'users',\n          'tickets',\n          'maintenanceTickets',\n          'audit_logs'"],
   ['canonical property geo omitted from global write fallback exclusions', "'system_secrets',\n          'technician_live_locations',\n          'users',\n          'audit_logs',\n          'admin_security_sessions',\n          'private_hr_profiles'"],
   ['legacy Owner-only property geo create helper', 'function ownerCannotSupplyCanonicalPropertyGeo(data) {'],
@@ -99,17 +99,18 @@ const requiredFragments = [
   ['FCM token path is explicitly allowlisted', 'match /fcmTokens/{tokenId} {'],
   ['device readiness path is explicitly allowlisted', 'match /deviceReadiness/{readinessId} {'],
   ['unknown user subcollections are denied', 'match /{subcollection}/{document=**} {\n        allow read, write: if false;'],
-  ['ticket, Broker rate-limit, Admin-session, private-HR, live-location, invoice-registry and payroll-mirror read fallback exclusions', "allow read: if collection != 'tickets' && collection != 'maintenanceTickets' && !(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions', 'private_hr_profiles', 'technician_live_locations', 'invoice_registry', 'payroll_entries']) && hasAdminClaim();"],
+  ['ticket, Broker rate-limit, Admin-session, private-HR, live-location, invoice-registry, payroll-mirror and property-identity read fallback exclusions', "allow read: if collection != 'tickets' && collection != 'maintenanceTickets' && !(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions', 'private_hr_profiles', 'technician_live_locations', 'invoice_registry', 'payroll_entries', 'property_identity_registry']) && hasAdminClaim();"],
   ['ticket create fallback rejects explicit ticket hierarchies first', "allow create: if collection != 'tickets' && collection != 'maintenanceTickets' && !("],
   ['ticket update fallback rejects explicit ticket hierarchies first', "allow update, delete: if collection != 'tickets' && collection != 'maintenanceTickets' && !("],
-  ['ticket write fallback excludes explicit ticket hierarchies, live location, canonical property geo, HR cases and private HR', "'system_secrets',\n          'technician_live_locations',\n          'properties',\n          'users',\n          'staffRequests',\n          'hrAiConversations',\n          'audit_logs',\n          'admin_security_sessions',\n          'private_hr_profiles'"],
-  ['payroll mirror excluded from generic create and update/delete fallbacks', "'transactions',\n          'payroll_entries',\n          'invoices'"],
+  ['ticket write fallback excludes explicit ticket hierarchies, live location, canonical property geo, property identity, HR cases and private HR', "'system_secrets',\n          'technician_live_locations',\n          'properties',\n          'property_identity_registry',\n          'users',\n          'staffRequests',\n          'hrAiConversations',\n          'audit_logs',\n          'admin_security_sessions',\n          'private_hr_profiles'"],
+  ['property identity registry excluded from generic create and update/delete fallbacks', "'technician_live_locations',\n          'properties',\n          'property_identity_registry',\n          'users'"],
   ['private Broker KYC profile rule exists', 'match /broker_kyc_profiles/{brokerId} {'],
   ['Broker KYC rate limits are server-only', "match /broker_kyc_submission_limits/{brokerId} {\n      allow read, write: if false;"],
   ['Admin security sessions are server-only', "match /admin_security_sessions/{sessionId} {\n      allow read, write: if false;"],
   ['private HR profiles are server-only', "match /private_hr_profiles/{profileId} {\n      allow read, write: if false;"],
   ['canonical live locations are suspension-aware dispatch-readable only', "match /technician_live_locations/{technicianId} {\n      allow read: if canDispatchJobs();\n      allow create, update, delete: if false;"],
   ['payroll mirror is Technician-scoped read-only', "match /payroll_entries/{entryId} {\n      allow read: if isAdmin() || isTechnicianId(resource.data.get('technicianId', null));\n      allow create, update, delete: if false;\n    }"],
+  ['property identity registry is server-only', "match /property_identity_registry/{identityHash} {\n      allow read, create, update, delete: if false;\n    }"],
 ];
 
 const failures = [];
@@ -135,6 +136,7 @@ if (rules.split('match /private_hr_profiles/{profileId}').length - 1 !== 1) fail
 if (rules.split('match /technician_live_locations/{technicianId}').length - 1 !== 1) failures.push('Canonical live-location rule must exist exactly once.');
 if (rules.split('match /payroll_entries/{entryId}').length - 1 !== 1) failures.push('Payroll mirror rule must exist exactly once.');
 if ((rules.match(/'payroll_entries'/g) || []).length !== 3) failures.push('Payroll mirror must be excluded from read, create and update/delete catch-alls exactly once each.');
+if ((rules.match(/'property_identity_registry'/g) || []).length !== 3) failures.push('Property identity registry must be excluded from read, create and update/delete catch-alls exactly once each.');
 
 const router = readFunction('safeTicketUpdateByActor');
 if (!router) {

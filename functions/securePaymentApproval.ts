@@ -9,6 +9,7 @@ import {
   OwnerActivationPaymentPolicyError,
   resolveStoredOwnerActivationPaymentBinding,
 } from "./ownerActivationPaymentPolicy";
+import { hasDispatchReadyPropertyGeo } from "./propertyGeoAuthority";
 
 if (!admin.apps.length) admin.initializeApp();
 
@@ -52,22 +53,9 @@ async function requireMfaFinanceAdmin(auth: any) {
   }
 }
 
-const isFiniteCoordinate = (value: unknown, minimum: number, maximum: number) => {
-  const coordinate = Number(value);
-  return Number.isFinite(coordinate) && coordinate >= minimum && coordinate <= maximum;
-};
 
-export const isPropertyLocationActivationReady = (property: any) => {
-  const geo = property?.geo;
-  return Boolean(
-    geo &&
-    geo.verified === true &&
-    geo.dispatchReady === true &&
-    geo.requiresGeoReview !== true &&
-    isFiniteCoordinate(geo.lat, -90, 90) &&
-    isFiniteCoordinate(geo.lng, -180, 180),
-  );
-};
+export const isPropertyLocationActivationReady = (property: any) =>
+  hasDispatchReadyPropertyGeo(property);
 
 async function assertOwnerActivationGate(paymentId: string) {
   const paymentRef = db.collection("payment_transactions").doc(paymentId);

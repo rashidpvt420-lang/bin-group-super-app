@@ -128,7 +128,8 @@ const readCandidates = [
   "!(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions'])",
 ];
 const strongestReadReplacement = "!(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions', 'private_hr_profiles', 'technician_live_locations', 'invoice_registry', 'payroll_entries'])";
-if (!rules.includes(strongestReadReplacement)) {
+const propertyIdentityReadReplacement = "!(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions', 'private_hr_profiles', 'technician_live_locations', 'invoice_registry', 'payroll_entries', 'property_identity_registry'])";
+if (!rules.includes(propertyIdentityReadReplacement) && !rules.includes(strongestReadReplacement)) {
   const candidate = readCandidates.find((value) => rules.includes(value));
   if (!candidate) {
     throw new Error('Generic Admin read fallback is not in a reviewed form; refusing to weaken or guess the rule.');

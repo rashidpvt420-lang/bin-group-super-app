@@ -79,7 +79,10 @@ const workflowWithoutOptionalFunctionsTolerance = workflow.replace(
 assert(firebaseJson.includes('"public": "dist"'), 'Firebase Hosting must deploy dist.');
 assert(firebaseJson.includes('"rules": "launch_generated/firestore.rules"'), 'Firebase must deploy the generated hardened Firestore rules artefact.');
 assert(packageJson.includes('"write:production-rules": "node scripts/write-production-firestore-rules.mjs"'), 'Package scripts must expose the production rules artefact writer.');
-assert(packageJson.includes('npm run harden:live-location-authority && npm run write:production-rules'), 'The generated rules artefact must be written only after the final GPS authority hardener.');
+assert(
+  packageJson.includes('npm run harden:live-location-authority && npm run harden:property-identity-registry && npm run write:production-rules'),
+  'The generated rules artefact must be written only after the final GPS and property-identity authority hardeners.',
+);
 assert(firestoreRulesWriter.includes("const outputPath = `${outputDirectory}/firestore.rules`"), 'Rules writer must target launch_generated/firestore.rules.');
 assert(firestoreRulesWriter.includes("createHash('sha256')"), 'Rules writer must record a SHA-256 digest.');
 assert(generatedFirestoreRules === firestoreRules, 'Generated Firestore deploy artefact must exactly equal the fully hardened source produced in this run.');
@@ -180,7 +183,10 @@ assert(runtime.includes('adminRecordOwnerMobilizationPaymentEvidence'), 'Runtime
 assert(runtime.includes('from "./inspectionFirstOwnerOnboarding"'), 'Runtime must source the explicit five-page Owner callables.');
 assert(!/^export \* from "\.\/inspectionFirstOwnerOnboarding";/m.test(runtime), 'Runtime must not deploy the unsafe legacy single-property completion export.');
 assert(runtime.includes('export * from "./ownerInspectionAdminLink";'), 'Runtime must export portfolio inspection creation/linking.');
-assert(runtime.includes('export * from "./ownerInspectionCompletion";'), 'Runtime must export portfolio inspection completion.');
+assert(
+  /export\s*\{\s*adminCompleteOwnerPortfolioInspections\s*\}\s*from\s*["']\.\/canonicalOwnerInspectionCompletion["'];/.test(runtime),
+  'Runtime must export canonical portfolio inspection completion.',
+);
 assert(runtime.includes('export * from "./paymentEvidence";'), 'Runtime must export tenant and design payment callables.');
 assert(runtime.includes('export * from "./ticketDispatchOperations";'), 'Runtime must export dispatch and dispute callables.');
 assert(payrollPage.includes("'adminGeneratePayrollBatch'"), 'Admin payroll UI must use the server-side generation callable.');

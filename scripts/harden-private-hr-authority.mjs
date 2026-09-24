@@ -8,6 +8,8 @@ const legacyRead = "      allow read: if collection != 'tickets' && collection !
 const hardenedRead = "      allow read: if collection != 'tickets' && collection != 'maintenanceTickets' && !(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions', 'private_hr_profiles']) && hasAdminClaim();";
 const liveLocationRead = "      allow read: if collection != 'tickets' && collection != 'maintenanceTickets' && !(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions', 'private_hr_profiles', 'technician_live_locations']) && hasAdminClaim();";
 const invoiceRegistryRead = "      allow read: if collection != 'tickets' && collection != 'maintenanceTickets' && !(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions', 'private_hr_profiles', 'technician_live_locations', 'invoice_registry']) && hasAdminClaim();";
+const payrollRead = "      allow read: if collection != 'tickets' && collection != 'maintenanceTickets' && !(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions', 'private_hr_profiles', 'technician_live_locations', 'invoice_registry', 'payroll_entries']) && hasAdminClaim();";
+const propertyIdentityRead = "      allow read: if collection != 'tickets' && collection != 'maintenanceTickets' && !(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions', 'private_hr_profiles', 'technician_live_locations', 'invoice_registry', 'payroll_entries', 'property_identity_registry']) && hasAdminClaim();";
 
 const legacyWritePrefix = `          'system_secrets',
           'users',
@@ -34,6 +36,16 @@ const propertyGeoWritePrefix = `          'system_secrets',
 const hrServerAuthorityWritePrefix = `          'system_secrets',
           'technician_live_locations',
           'properties',
+          'users',
+          'staffRequests',
+          'hrAiConversations',
+          'audit_logs',
+          'admin_security_sessions',
+          'private_hr_profiles',`;
+const propertyIdentityHrServerAuthorityWritePrefix = `          'system_secrets',
+          'technician_live_locations',
+          'properties',
+          'property_identity_registry',
           'users',
           'staffRequests',
           'hrAiConversations',
@@ -69,7 +81,13 @@ const privateBlock = `    // Sensitive employment, Emirates ID and salary data. 
 `;
 
 if (source.includes(legacyRead)) source = source.replace(legacyRead, hardenedRead);
-if (!source.includes(hardenedRead) && !source.includes(liveLocationRead) && !source.includes(invoiceRegistryRead)) {
+if (
+  !source.includes(hardenedRead) &&
+  !source.includes(liveLocationRead) &&
+  !source.includes(invoiceRegistryRead) &&
+  !source.includes(payrollRead) &&
+  !source.includes(propertyIdentityRead)
+) {
   throw new Error('[harden-private-hr-authority] global read fallback was not found or could not be hardened');
 }
 
@@ -83,6 +101,8 @@ if (source.includes(duplicatedHrServerAuthorityWritePrefix)) {
 } else if (source.includes(staleHrServerAuthorityWritePrefix)) {
   source = source.replaceAll(staleHrServerAuthorityWritePrefix, hrServerAuthorityWritePrefix);
   canonicalWritePrefix = hrServerAuthorityWritePrefix;
+} else if (source.includes(propertyIdentityHrServerAuthorityWritePrefix)) {
+  canonicalWritePrefix = propertyIdentityHrServerAuthorityWritePrefix;
 } else if (source.includes(hrServerAuthorityWritePrefix)) {
   canonicalWritePrefix = hrServerAuthorityWritePrefix;
 } else if (source.includes(propertyGeoWritePrefix)) {
