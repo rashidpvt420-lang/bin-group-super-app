@@ -1308,16 +1308,20 @@ service cloud.firestore {
 
     match /launch_evidence/{evidenceId} {
       allow read: if isAdmin();
-      allow create: if isAdmin();
-      allow update: if isAdmin();
-      allow delete: if isAdmin();
+      allow create: if isAdmin() &&
+        request.resource.data.get('source', '') != 'github-actions' &&
+        request.resource.data.get('executionGenerated', false) != true &&
+        request.resource.data.get('hardLaunchClaim', false) != true;
+      allow update, delete: if false;
     }
 
     match /signed_in_smoke_checks/{checkId} {
       allow read: if isAdmin();
-      allow create: if isAdmin();
-      allow update: if isAdmin();
-      allow delete: if isAdmin();
+      allow create: if isAdmin() &&
+        request.resource.data.get('source', '') != 'github-actions' &&
+        request.resource.data.get('executionGenerated', false) != true &&
+        request.resource.data.get('hardLaunchClaim', false) != true;
+      allow update, delete: if false;
     }
 
     match /staffRequests/{requestId} {
@@ -2103,13 +2107,21 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
 
+
+    // Canonical property identity claims are server-only. Cloud Functions use
+    // Admin SDK transactions; browsers never read or mutate duplicate claims.
+    match /property_identity_registry/{identityHash} {
+      allow read, create, update, delete: if false;
+    }
+
     match /{collection}/{document=**} {
-      allow read: if collection != 'tickets' && collection != 'maintenanceTickets' && !(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions', 'private_hr_profiles', 'technician_live_locations', 'invoice_registry', 'payroll_entries']) && hasAdminClaim();
+      allow read: if collection != 'tickets' && collection != 'maintenanceTickets' && !(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions', 'private_hr_profiles', 'technician_live_locations', 'invoice_registry', 'payroll_entries', 'property_identity_registry']) && hasAdminClaim();
       allow create: if collection != 'tickets' && collection != 'maintenanceTickets' && !(
         collection in [
           'system_secrets',
           'technician_live_locations',
           'properties',
+          'property_identity_registry',
           'users',
           'staffRequests',
           'hrAiConversations',
@@ -2149,6 +2161,7 @@ service cloud.firestore {
           'system_secrets',
           'technician_live_locations',
           'properties',
+          'property_identity_registry',
           'users',
           'staffRequests',
           'hrAiConversations',
