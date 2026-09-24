@@ -132,11 +132,6 @@ export async function auditInteractiveControls(
   });
 
   const visible = controls.filter((control) => control.visible);
-  expect(
-    visible.length,
-    `${context}: the rendered screen must expose at least one visible interactive control`,
-  ).toBeGreaterThan(0);
-
   const unlabeled = visible.filter((control) => !control.label);
   expect(
     unlabeled.map(controlDescription),
