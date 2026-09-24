@@ -1,5 +1,5 @@
 import React from 'react';
-import { Alert, Box, Button, Chip, Divider, Grid, MenuItem, Paper, Stack, TextField, Typography, alpha } from '@mui/material';
+import { Alert, Box, Button, Chip, CircularProgress, Divider, Grid, MenuItem, Paper, Stack, TextField, Typography, alpha } from '@mui/material';
 import { CheckCircle2, MessageSquare, Send } from 'lucide-react';
 import { addDoc, auth, collection, db, doc, limit, onSnapshot, orderBy, query, serverTimestamp, updateDoc, where } from '../lib/firebase';
 import { binThemeTokens } from '../theme/binGroupTheme';
@@ -56,6 +56,7 @@ export default function BinConnectInboxPage({ role, dark = false }: { role: Port
   const [channelFilter, setChannelFilter] = React.useState('all');
   const [notice, setNotice] = React.useState('');
   const [busy, setBusy] = React.useState(false);
+  const [loadingThreads, setLoadingThreads] = React.useState(true);
 
   const uid = auth.currentUser?.uid || '';
   const email = auth.currentUser?.email || '';
@@ -68,8 +69,12 @@ export default function BinConnectInboxPage({ role, dark = false }: { role: Port
       const rows = snap.docs.map((item) => ({ id: item.id, ...(item.data() as any) }));
       rows.sort((a, b) => (b.updatedAt?.toMillis?.() || b.createdAt?.toMillis?.() || 0) - (a.updatedAt?.toMillis?.() || a.createdAt?.toMillis?.() || 0));
       setThreads(rows);
+      setLoadingThreads(false);
       if (!selectedId && rows[0]) setSelectedId(rows[0].id);
-    }, (error) => setNotice(error.message || 'Could not load BIN Connect conversations.'));
+    }, (error) => {
+      setNotice(error.message || 'Could not load BIN Connect conversations.');
+      setLoadingThreads(false);
+    });
   }, [uid, selectedId]);
 
   const selected = React.useMemo(() => threads.find((thread) => thread.id === selectedId), [threads, selectedId]);
@@ -137,6 +142,8 @@ export default function BinConnectInboxPage({ role, dark = false }: { role: Port
         </Box>
         <Chip label={`${threads.length} conversations`} sx={{ alignSelf: { xs: 'flex-start', md: 'center' }, bgcolor: alpha(binThemeTokens.gold, .12), color: binThemeTokens.goldHover, fontWeight: 950 }} />
       </Stack>
+
+      {loadingThreads && <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}><CircularProgress size={28} /></Box>}
 
       {notice && <Alert severity={notice.includes('sent') || notice.includes('resolved') ? 'success' : 'warning'} sx={{ mb: 3 }}>{notice}</Alert>}
 
