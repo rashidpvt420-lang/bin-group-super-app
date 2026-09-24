@@ -10,7 +10,7 @@ This checklist defines the critical surveillance parameters for the first live r
 ## 🏢 2. Property Onboarding Surveillance
 - [ ] **15% Payment Gating**: Verify that no property is activated without a confirmed mobilization deposit.
 - [ ] **Asset Provisioning**: Check that `units` are correctly generated with appropriate prefixes (Villa/Office/etc.).
-- [ ] **Relational Integrity**: Run `scripts/migration-repair.js` daily to detect any orphaned records.
+- [ ] **Relational Integrity**: Use protected operational evidence and server-authoritative integrity checks. The historical local `scripts/migration-repair.js` entrypoint is retired and fail-closed.
 
 ## 🛠️ 3. Mission Operations (Technician & Tenant)
 - [ ] **SLA Clocking**: Verify that the 4-hour emergency response timer starts immediately upon "OPEN" status.

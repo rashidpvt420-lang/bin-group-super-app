@@ -301,8 +301,7 @@ export const adminSettlePayrollRecord = onCall(
 
         const transactionRef = db.collection("transactions").doc(`payroll_${payrollId}`);
         const auditId = `payroll_settlement_${payrollId}`;
-        const auditRef = db.collection("auditLogs").doc(auditId);
-        const auditCompatRef = db.collection("audit_logs").doc(auditId);
+        const auditRef = db.collection("audit_logs").doc(auditId);
         const mailRef = db.collection("mail").doc(`payroll_payslip_${payrollId}`);
         const now = serverTimestamp();
         let idempotent = false;
@@ -368,7 +367,6 @@ export const adminSettlePayrollRecord = onCall(
                 createdAt: now,
             };
             transaction.set(auditRef, auditPayload);
-            transaction.set(auditCompatRef, auditPayload);
 
             const email = safeText(freshPayroll.email).toLowerCase();
             if (email) {
@@ -428,7 +426,6 @@ async function writeHrAudit(action: string, targetId: string, details: Record<st
     const payload = hrAuditPayload(action, targetId, details);
     const batch = db.batch();
     batch.set(auditRef, payload);
-    batch.set(db.collection("auditLogs").doc(auditRef.id), payload);
     await batch.commit();
 }
 
@@ -446,7 +443,6 @@ export const createStaffHrCase = onCall(
         const requestRef = db.collection("staffRequests").doc(caseId);
         const conversationRef = db.collection("hrAiConversations").doc(requestRef.id);
         const auditRef = db.collection("audit_logs").doc();
-        const auditCompatRef = db.collection("auditLogs").doc(auditRef.id);
         const escalationRef = db.collection("hrEscalations").doc(requestRef.id);
         const now = serverTimestamp();
         const actorEmail = safeText(token.email || request.data?.email, "");
@@ -517,7 +513,6 @@ export const createStaffHrCase = onCall(
                 answer: result.answer,
             });
             tx.create(auditRef, auditPayload);
-            tx.create(auditCompatRef, auditPayload);
             if (isHighRiskHrCase(result)) {
                 tx.create(escalationRef, {
                     requestId: requestRef.id,
@@ -554,7 +549,6 @@ function attachHrAuditToBatch(batch: FirebaseFirestore.WriteBatch, action: strin
     const auditRef = db.collection("audit_logs").doc();
     const payload = hrAuditPayload(action, targetId, details);
     batch.set(auditRef, payload);
-    batch.set(db.collection("auditLogs").doc(auditRef.id), payload);
 }
 
 function dateFromAny(value: unknown): Date | null {

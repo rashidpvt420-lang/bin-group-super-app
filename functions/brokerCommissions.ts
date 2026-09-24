@@ -134,7 +134,7 @@ export async function createBrokerCommissionForContract(
       commissionId: commissionRef.id,
       updatedAt: now,
     }, { merge: true });
-    transaction.create(db.collection("auditLogs").doc(`broker_commission_${contractId}`), {
+    transaction.create(db.collection("audit_logs").doc(`broker_commission_${contractId}`), {
       action: "BROKER_COMMISSION_CREATED",
       commissionId: commissionRef.id,
       brokerId,
@@ -218,7 +218,7 @@ export const setBrokerReraVerification = onCall({ cors: true, region: "europe-we
     }
   }
 
-  await db.collection("auditLogs").add({
+  await db.collection("audit_logs").add({
     action: verified ? "ADMIN_VERIFY_BROKER_RERA" : "ADMIN_REJECT_BROKER_RERA",
     actorId: request.auth?.uid || "admin",
     brokerId,
@@ -246,7 +246,7 @@ export const adminReviewBrokerCommission = onCall(
     }
 
     const commissionRef = db.collection("broker_commissions").doc(commissionId);
-    const auditRef = db.collection("auditLogs").doc(`commission_review_${commissionId}_${action}`);
+    const auditRef = db.collection("audit_logs").doc(`commission_review_${commissionId}_${action}`);
     const now = ts();
     let idempotent = false;
     await db.runTransaction(async (transaction) => {
@@ -410,7 +410,7 @@ export const adminMatchBrokerAttribution = onCall(
       brokerAttributionId: attributionId,
       updatedAt: now,
     }, { merge: true });
-    batch.set(db.collection("auditLogs").doc(`broker_attribution_${leadId}_${contractId}`), {
+    batch.set(db.collection("audit_logs").doc(`broker_attribution_${leadId}_${contractId}`), {
       action: "ADMIN_MATCH_BROKER_ATTRIBUTION",
       actorId: request.auth!.uid,
       brokerId,

@@ -1,6 +1,6 @@
 /**
  * CompliancePage — Admin Panel
- * Displays the _auditLogs collection and provides a PDF-style compliance export button.
+ * Displays the canonical audit_logs collection and provides a PDF-style compliance export button.
  * ISO 27001 / UAE PDPL compliant audit trail.
  */
 import React, { useState, useEffect } from 'react';
@@ -47,9 +47,27 @@ export default function CompliancePage() {
     const [summary, setSummary] = useState<any>(null);
 
     useEffect(() => {
-        const q = query(collection(db, '_auditLogs'), orderBy('timestamp', 'desc'), limit(200));
+        const q = query(collection(db, 'audit_logs'), orderBy('createdAt', 'desc'), limit(200));
         return onSnapshot(q, snap => {
-            setLogs(snap.docs.map(d => ({ id: d.id, ...d.data() } as AuditLog)));
+            setLogs(snap.docs.map(d => {
+                const data = d.data() as any;
+                const date = data.createdAt?.toDate?.() || data.timestamp?.toDate?.();
+                const rawSeverity = String(data.severity || '').toUpperCase();
+                const severity: AuditLog['severity'] =
+                    rawSeverity === 'CRITICAL' ? 'CRITICAL' :
+                    rawSeverity === 'WARN' || rawSeverity === 'WARNING' ? 'WARN' : 'INFO';
+                return {
+                    id: d.id,
+                    uid: data.uid || data.actorId || '',
+                    email: data.email || data.actorEmail || '',
+                    action: data.action || data.eventType || 'SYSTEM',
+                    resourceType: data.resourceType || data.targetType || data.module || 'system',
+                    resourceId: data.resourceId || data.targetId || '',
+                    severity,
+                    timestamp: date?.toISOString?.() || '',
+                    propertyId: data.propertyId || data.details?.propertyId || '',
+                };
+            }));
             setLoading(false);
         });
     }, []);
