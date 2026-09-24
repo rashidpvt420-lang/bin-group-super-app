@@ -254,6 +254,10 @@ for (const router of ROUTERS) {
   const routerSource = read(router.file);
   const imports = parseImports(router.file, routerSource);
   const routeLines = routerSource.split(/\r?\n/).map((line) => line.trim()).filter((line) => line.includes('<Route') && line.includes('path='));
+  const declaredPathRoutes = (routerSource.match(/<Route\b[^>]*\bpath\s*=/g) || []).length;
+  if (routeLines.length !== declaredPathRoutes) {
+    failures.push(router.file + ': route parser coverage mismatch; declared=' + declaredPathRoutes + ', parsed=' + routeLines.length);
+  }
 
   for (const line of routeLines) {
     const pathMatch = line.match(/path=["']([^"']+)["']/);
