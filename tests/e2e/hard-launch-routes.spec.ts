@@ -326,6 +326,68 @@ async function login(page: Page, role: RoleCase) {
   await page.waitForURL((url) => !url.pathname.endsWith('/login'), { timeout: 30_000 });
 }
 
+async function assertInteractiveControls(page: Page, scope: string) {
+  const controls = page.locator([
+    'button',
+    '[role="button"]',
+    'a[href]',
+    'input',
+    'select',
+    'textarea',
+    '[role="checkbox"]',
+    '[role="radio"]',
+    '[role="switch"]',
+    '[role="tab"]',
+    '[role="menuitem"]',
+  ].join(','));
+
+  const count = await controls.count();
+  for (let index = 0; index < count; index += 1) {
+    const control = controls.nth(index);
+    if (!(await control.isVisible().catch(() => false))) continue;
+
+    const meta = await control.evaluate((element) => {
+      const node = element as HTMLElement;
+      const input = element as HTMLInputElement;
+      const text = String(node.innerText || node.textContent || '').replace(/\s+/g, ' ').trim();
+      const label = String(
+        node.getAttribute('aria-label') ||
+        node.getAttribute('title') ||
+        input.value ||
+        input.placeholder ||
+        input.name ||
+        node.getAttribute('data-testid') ||
+        text ||
+        ''
+      ).trim();
+      return {
+        tag: node.tagName.toLowerCase(),
+        role: node.getAttribute('role') || '',
+        label,
+        disabled:
+          node.hasAttribute('disabled') ||
+          node.getAttribute('aria-disabled') === 'true' ||
+          input.disabled === true,
+        href: node.getAttribute('href') || '',
+      };
+    });
+
+    expect(
+      meta.label.length,
+      scope + ' visible interactive control #' + index + ' (' + meta.tag + ') must expose a meaningful label',
+    ).toBeGreaterThan(0);
+
+    if (meta.tag === 'a') {
+      expect(meta.href.trim().length, scope + ' visible link "' + meta.label + '" must expose href').toBeGreaterThan(0);
+    }
+
+    if (meta.disabled) {
+      await expect(control, scope + ' disabled control "' + meta.label + '" must be non-interactable').toBeDisabled();
+    } else {
+      await expect(control, scope + ' enabled control "' + meta.label + '" must be interactable').toBeEnabled();
+    }
+  }
+}
 async function assertExactRoute(page: Page, role: RoleCase, route: string) {
   const destination = role.baseUrl ? `${role.baseUrl}${route}` : route;
   const response = await page.goto(destination, { waitUntil: 'domcontentloaded' });
@@ -340,6 +402,7 @@ async function assertExactRoute(page: Page, role: RoleCase, route: string) {
   if (!PHASE_2_SENTINEL_ROUTE.test(route)) {
     expect(body, `${role.name} ${route} must not render an access denial`).not.toMatch(ACCESS_DENIED);
   }
+  await assertInteractiveControls(page, `${role.name} ${route} desktop`);
 
   await page.reload({ waitUntil: 'domcontentloaded' });
   await page.waitForTimeout(route.includes('/map') ? 2_000 : 500);
@@ -388,6 +451,7 @@ async function assertMobileArabicRoute(page: Page, role: RoleCase, route: string
     overflow.scrollWidth,
     `${role.name} ${route} must not create page-level horizontal overflow on a 390px viewport`,
   ).toBeLessThanOrEqual(overflow.width + 8);
+  await assertInteractiveControls(page, `${role.name} ${route} mobile Arabic`);
 
   const isPortalHome =
     route === `/${role.roleKey}` ||
@@ -441,6 +505,7 @@ test('Public Phase 2 routes survive direct URL, refresh, mobile and Arabic RTL',
       scrollWidth: document.documentElement.scrollWidth,
     }));
     expect(overflow.scrollWidth, `Public ${route} must avoid page-level horizontal overflow`).toBeLessThanOrEqual(overflow.width + 8);
+    await assertInteractiveControls(page, `Public ${route} mobile Arabic`);
 
     await page.evaluate(() => localStorage.setItem('bin_language', 'en'));
     await page.setViewportSize({ width: 1280, height: 720 });
@@ -474,6 +539,7 @@ test('Admin login Phase 2 route survives direct URL, refresh, mobile and Arabic 
     scrollWidth: document.documentElement.scrollWidth,
   }));
   expect(overflow.scrollWidth, 'Admin /login must avoid page-level horizontal overflow').toBeLessThanOrEqual(overflow.width + 8);
+  await assertInteractiveControls(page, 'Admin /login mobile Arabic');
 });
 
 for (const role of roleCases) {
