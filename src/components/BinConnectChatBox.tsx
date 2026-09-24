@@ -2,7 +2,7 @@ import React from 'react';
 import { Alert, Badge, Box, Button, Chip, Divider, Fab, MenuItem, Paper, Stack, TextField, Typography, alpha } from '@mui/material';
 import { MessageSquare, Send, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { addDoc, auth, collection, db, limit, onSnapshot, query, serverTimestamp, where } from '../lib/firebase';
+import { addDoc, auth, collection, db, functions, httpsCallable, serverTimestamp } from '../lib/firebase';
 import { binThemeTokens } from '../theme/binGroupTheme';
 
 type PortalRole = 'owner' | 'tenant' | 'technician' | 'broker' | 'admin' | 'staff';
@@ -12,7 +12,8 @@ type Conversation = {
   channel?: string;
   title?: string;
   status?: string;
-  createdAt?: any;
+  createdAtMs?: number | null;
+  updatedAtMs?: number | null;
   lastMessage?: string;
 };
 
@@ -64,13 +65,22 @@ export default function BinConnectChatBox({ role, dark = false }: { role: Portal
   const displayName = auth.currentUser?.displayName || email || role;
 
   React.useEffect(() => {
-    if (!uid) return undefined;
-    const q = query(collection(db, 'binConnectThreads'), where('participantIds', 'array-contains', uid), limit(12));
-    return onSnapshot(q, (snap) => {
-      const rows = snap.docs.map((docSnap) => ({ id: docSnap.id, ...(docSnap.data() as any) }));
-      rows.sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0));
-      setThreads(rows);
-    }, () => setThreads([]));
+    if (!uid) {
+      setThreads([]);
+      return undefined;
+    }
+    let cancelled = false;
+    const loadMyThreads = async () => {
+      try {
+        const call = httpsCallable<{ limit: number }, { threads?: Conversation[] }>(functions, 'listMyBinConnectThreads');
+        const result = await call({ limit: 12 });
+        if (!cancelled) setThreads(Array.isArray(result.data?.threads) ? result.data.threads : []);
+      } catch {
+        if (!cancelled) setThreads([]);
+      }
+    };
+    void loadMyThreads();
+    return () => { cancelled = true; };
   }, [uid]);
 
   const openInbox = () => {
