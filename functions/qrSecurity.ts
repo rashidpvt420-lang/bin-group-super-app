@@ -256,7 +256,9 @@ export const verifyQrPass = onCall({ cors: true, secrets: [QR_SIGNING_SECRET] },
         if (propSnap.exists) {
           propertyName = propSnap.data()?.name || propSnap.data()?.title || "Property";
         }
-      } catch(e) {}
+      } catch {
+        console.warn('[QR] Property enrichment lookup failed.');
+      }
     }
 
     if (payload.unitId && payload.unitId !== "default_unit") {
@@ -266,7 +268,9 @@ export const verifyQrPass = onCall({ cors: true, secrets: [QR_SIGNING_SECRET] },
           const uData = unitSnap.data();
           unitName = uData?.unitNumber || uData?.name || "***";
         }
-      } catch(e) {}
+      } catch {
+        console.warn('[QR] Unit enrichment lookup failed.');
+      }
     }
 
     return { 
