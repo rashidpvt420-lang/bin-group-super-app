@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { 
     Box, Typography, Paper, Stack, Chip, CircularProgress, 
     Grid, Avatar, IconButton, TextField, InputAdornment, alpha,
-    Button, Divider
+    Button, Divider, Alert
 } from '@mui/material';
 import { 
     Users, Search, Mail, Phone, MessageSquare, 
@@ -18,13 +18,19 @@ export default function OwnerTenantsPage() {
     const [loading, setLoading] = useState(true);
     const [tenants, setTenants] = useState<any[]>([]);
     const [search, setSearch] = useState('');
+    const [error, setError] = useState('');
 
     useEffect(() => {
-        if (!user?.email) return;
+        if (!user?.email) {
+            setError('Owner email is unavailable.');
+            setLoading(false);
+            return;
+        }
         
         // 1. Get properties linked to owner email
         const propQ = query(collection(db, 'properties'), where('ownerEmail', '==', user.email.toLowerCase()));
         
+        let tenantUnsubscribe: undefined | (() => void);
         const unsubscribe = onSnapshot(propQ, async (propSnap) => {
             const propIds = propSnap.docs.map(d => d.id);
             if (propIds.length === 0) { 
@@ -35,7 +41,8 @@ export default function OwnerTenantsPage() {
 
             // 2. Get tenants linked to these properties
             const tenantQ = query(collection(db, 'users'), where('role', '==', 'tenant'), where('ownerId', '==', user.uid));
-            onSnapshot(tenantQ, (tenantSnap) => {
+            tenantUnsubscribe?.();
+            tenantUnsubscribe = onSnapshot(tenantQ, (tenantSnap) => {
                 const allTenants = tenantSnap.docs.map(d => {
                     const data = d.data();
                     const prop = propSnap.docs.find(p => p.id === data.propertyId)?.data();
@@ -45,12 +52,22 @@ export default function OwnerTenantsPage() {
                         propertyName: prop?.name || prop?.propertyName || 'Sovereign Asset'
                     };
                 });
+                setError('');
                 setTenants(allTenants);
                 setLoading(false);
+            }, (err) => {
+                setError(err?.message || 'Could not load tenant records.');
+                setLoading(false);
             });
+        }, (err) => {
+            setError(err?.message || 'Could not load owner properties.');
+            setLoading(false);
         });
 
-        return () => unsubscribe();
+        return () => {
+            unsubscribe();
+            tenantUnsubscribe?.();
+        };
     }, [user?.email]);
 
     const filtered = tenants.filter(t => 
@@ -65,6 +82,8 @@ export default function OwnerTenantsPage() {
             <Typography variant="overline" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900 }}>Mapping Population...</Typography>
         </Box>
     );
+
+    if (error) return <Alert severity="error" sx={{ my: 4 }}>{error}</Alert>;
 
     return (
         <Box>
