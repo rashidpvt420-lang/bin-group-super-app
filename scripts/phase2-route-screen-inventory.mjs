@@ -14,32 +14,34 @@ const ROUTERS = [
   { file: 'apps/admin-panel/src/App.tsx', surface: 'admin', prefix: '', inheritedRole: null, layout: 'admin-shell' },
 ];
 
-const ADMIN_MODULE_PREFIXES = [
-  [['/technicians/map', '/live-map'], 'map'],
-  [['/admin/payments', '/manual-approvals', '/payments', '/transactions'], 'transactions'],
-  [['/financials', '/profitability'], 'financials'],
-  [['/broker-attributions', '/broker-commissions', '/broker'], 'broker'],
-  [['/ops/public-launch-command', '/ops/pilot-completion', '/ops/data-governance', '/ops/public', '/pilot', '/compliance'], 'compliance'],
-  [['/ops/document-library', '/ops/rfq', '/ops/vendors', '/document-vault', '/vault'], 'documents'],
-  [['/admin/unit-status', '/admin/units', '/properties/passport', '/onboard-property', '/bulk-import', '/units'], 'properties'],
-  [['/ops/whatsapp-triage', '/ops/bin-connect', '/tickets'], 'tickets'],
-  [['/ops/technicians', '/technicians'], 'technicians'],
-  [['/ops/amenity-control', '/ops/announcements', '/ops/key-register', '/ops/parcel-desk', '/ops/visitor-parking', '/ops/marketplace-approvals', '/ops/messages', '/ops/community-moderation', '/tenant-services', '/unit-links', '/tenants'], 'tenants'],
-  [['/control-center', '/design-studio', '/admin/bin-gpt-engineer', '/bin-gpt-engineer', '/settings'], 'settings'],
-  [['/ops/staff-directory', '/hr'], 'hr'],
-  [['/admin/pricing-matrix', '/pricing-matrix'], 'pricing'],
-  [['/audit-shield', '/orphans', '/audit'], 'audit'],
-  [['/reports'], 'reports'],
-  [['/contracts'], 'contracts'],
-  [['/owners'], 'owners'],
-  [['/sos'], 'sos'],
-  [['/dashboard'], 'dashboard'],
-];
+const ADMIN_MODULE_PREFIXES = parseAdminPathModules();
 
-const FULL_ADMIN_ROLES = ['admin','super_admin','ceo'];
+const FULL_ADMIN_ROLES = parseFullAdminRoles();
 
 function read(rel) {
   return fs.readFileSync(path.join(root, rel), 'utf8');
+}
+
+function parseAdminPathModules() {
+  const source = read('apps/admin-panel/src/security/staffAccessPolicy.ts');
+  const block = source.match(/const\s+PATH_MODULES[^=]*=\s*\[([\s\S]*?)\n\];/);
+  if (!block) throw new Error('Unable to parse canonical Admin PATH_MODULES policy.');
+  const entries = [];
+  for (const match of block[1].matchAll(/\{\s*prefixes:\s*\[([^\]]+)\],\s*module:\s*['"]([^'"]+)['"]\s*\}/g)) {
+    const prefixes = [...match[1].matchAll(/['"]([^'"]+)['"]/g)].map((item) => item[1]);
+    if (prefixes.length) entries.push([prefixes, match[2]]);
+  }
+  if (!entries.length) throw new Error('Canonical Admin PATH_MODULES policy parsed with zero entries.');
+  return entries;
+}
+
+function parseFullAdminRoles() {
+  const source = read('apps/admin-panel/src/security/staffAccessPolicy.ts');
+  const match = source.match(/FULL_ADMIN_ROLES\s*=\s*new Set\(\[([^\]]+)\]\)/);
+  if (!match) throw new Error('Unable to parse canonical FULL_ADMIN_ROLES policy.');
+  const roles = [...match[1].matchAll(/['"]([^'"]+)['"]/g)].map((item) => item[1]);
+  if (!roles.length) throw new Error('Canonical FULL_ADMIN_ROLES policy parsed with zero roles.');
+  return roles;
 }
 
 function exists(rel) {
