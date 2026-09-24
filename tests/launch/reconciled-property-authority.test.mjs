@@ -48,16 +48,16 @@ test('canonical submission claims identities transactionally and runtime uses it
   const [submission, runtime, rules, hardener] = await Promise.all([
     read('functions/canonicalOwnerSubmission.ts'),
     read('functions/runtime.ts'),
-    read('firestore.rules'),
     read('scripts/harden-property-identity-registry-rules.mjs'),
+    read('package.json'),
   ]);
   assert.match(submission, /property_identity_registry/);
   assert.match(submission, /db\.runTransaction/);
   assert.match(submission, /releaseNewClaims/);
   assert.match(runtime, /submitOwnerInspectionFirstOnboarding \} from "\.\/canonicalOwnerSubmission"/);
-  assert.match(rules, /match \/property_identity_registry\/\{identityHash\}/);
-  assert.match(rules, /allow read, create, update, delete: if false/);
-  assert.match(hardener, /property_identity_registry/);
+  assert.match(hardener, /match \/property_identity_registry\/\{identityHash\}/);
+  assert.match(hardener, /allow read, create, update, delete: if false/);
+  assert.match(packageJson, /harden:property-identity-registry/);
 });
 
 test('legacy property review cannot approve drafts or inspection-first submissions', async () => {
