@@ -24,7 +24,12 @@ const block = `
     }
 
     match /binConnectThreads/{threadId} {
-      allow read: if isAdmin() || isBinConnectParticipant(resource.data);
+      allow get: if isAdmin() || isBinConnectParticipant(resource.data);
+      allow list: if isAdmin() || (
+        signedIn() &&
+        resource.data.participantIds is list &&
+        request.auth.uid in resource.data.participantIds
+      );
       allow create: if safeBinConnectThreadCreate(request.resource.data);
       allow update: if isAdmin() || (isBinConnectParticipant(resource.data) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastMessage', 'lastMessageAt', 'updatedAt', 'status']));
       allow delete: if isAdmin();
@@ -41,7 +46,22 @@ const block = `
 `;
 
 if (rules.includes(marker)) {
-  console.log('BIN Connect rules already present.');
+  const legacyRead = '      allow read: if isAdmin() || isBinConnectParticipant(resource.data);';
+  const querySafeRead = `      allow get: if isAdmin() || isBinConnectParticipant(resource.data);
+      // List access is deliberately narrower and query-compatible: a non-admin
+      // browser must constrain participantIds with array-contains(request.auth.uid).
+      allow list: if isAdmin() || (
+        signedIn() &&
+        resource.data.get('participantIds', []) is list &&
+        request.auth.uid in resource.data.get('participantIds', [])
+      );`;
+  if (rules.includes(legacyRead)) {
+    rules = rules.replace(legacyRead, querySafeRead);
+    writeFileSync(path, rules);
+    console.log('BIN Connect rules upgraded to query-safe participant list access.');
+  } else {
+    console.log('BIN Connect rules already present and query-safe.');
+  }
 } else {
   // The top-level catch-all is the LAST `match /{document=**} {` in the file
   // (4-space indent, immediately inside `match /databases/{database}/documents {`).
