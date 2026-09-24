@@ -27,7 +27,7 @@ function walk(dir) {
 }
 
 function rel(file) {
-  return path.relative(root, file).replaceAll('\\\\', '/');
+  return path.relative(root, file).replaceAll('\\', '/');
 }
 
 function roleFor(file) {
@@ -44,9 +44,9 @@ function roleFor(file) {
 
 function prop(attrs, name) {
   const patterns = [
-    new RegExp('\\\\b' + name + '\\s*=\\s*"([^"]*)"'),
-    new RegExp("\\\\b" + name + "\\s*=\\s*'([^']*)'"),
-    new RegExp('\\\\b' + name + '\\s*=\\s*\\{([^}]*)\\}'),
+    new RegExp('\\b' + name + '\s*=\s*"([^"]*)"'),
+    new RegExp("\\b" + name + "\s*=\s*'([^']*)'"),
+    new RegExp('\\b' + name + '\s*=\s*\{([^}]*)\}'),
   ];
   for (const pattern of patterns) {
     const match = pattern.exec(attrs);
@@ -57,19 +57,19 @@ function prop(attrs, name) {
 
 function stripJsx(value) {
   return String(value || '')
-    .replace(/\\{[^}]*\\}/g, ' ')
+    .replace(/\{[^}]*\}/g, ' ')
     .replace(/<[^>]+>/g, ' ')
     .replace(/&nbsp;|&amp;|&quot;|&#39;/g, ' ')
-    .replace(/\\s+/g, ' ')
+    .replace(/\s+/g, ' ')
     .trim();
 }
 
 function handlerContext(source, handler) {
-  if (!handler || !/^[A-Za-z_$][\\w$]*$/.test(handler)) return '';
+  if (!handler || !/^[A-Za-z_$][\w$]*$/.test(handler)) return '';
   const names = [
-    '(?:const|let)\\s+' + handler + '\\s*=\\s*(?:async\\s*)?\\([^)]*\\)\\s*=>\\s*\\{',
-    '(?:const|let)\\s+' + handler + '\\s*=\\s*(?:async\\s*)?[^=]*=>\\s*\\{',
-    '(?:async\\s+)?function\\s+' + handler + '\\s*\\([^)]*\\)\\s*\\{',
+    '(?:const|let)\s+' + handler + '\s*=\s*(?:async\s*)?\([^)]*\)\s*=>\s*\{',
+    '(?:const|let)\s+' + handler + '\s*=\s*(?:async\s*)?[^=]*=>\s*\{',
+    '(?:async\s+)?function\s+' + handler + '\s*\([^)]*\)\s*\{',
   ];
   for (const item of names) {
     const match = new RegExp(item).exec(source);
@@ -81,74 +81,74 @@ function handlerContext(source, handler) {
 function extractHandler(attrs, propName) {
   const value = prop(attrs, propName);
   if (!value) return '';
-  const direct = value.match(/^([A-Za-z_$][\\w$]*)$/);
+  const direct = value.match(/^([A-Za-z_$][\w$]*)$/);
   return direct ? direct[1] : value.slice(0, 240);
 }
 
 function hasServerMutation(text) {
-  return /httpsCallable\\s*\\(|(?:addDoc|setDoc|updateDoc|deleteDoc|writeBatch|runTransaction)\\s*\\(|\\.set\\s*\\(|\\.update\\s*\\(|\\.delete\\s*\\(/i.test(text);
+  return /httpsCallable\s*\(|(?:addDoc|setDoc|updateDoc|deleteDoc|writeBatch|runTransaction)\s*\(|\.set\s*\(|\.update\s*\(|\.delete\s*\(/i.test(text);
 }
 
 function mutationToken(text) {
-  const callable = text.match(/httpsCallable\\s*\\([^,]+,\\s*['"]([^'"]+)['"]/);
+  const callable = text.match(/httpsCallable\s*\([^,]+,\s*['"]([^'"]+)['"]/);
   if (callable) return callable[1];
-  const method = text.match(/\\b(addDoc|setDoc|updateDoc|deleteDoc|writeBatch|runTransaction)\\b/);
+  const method = text.match(/\b(addDoc|setDoc|updateDoc|deleteDoc|writeBatch|runTransaction)\b/);
   return method ? method[1] : '';
 }
 
 function isLikelyMutation(label, handler, context) {
   const joined = label + ' ' + handler + ' ' + context.slice(0, 1800);
-  return hasServerMutation(context) || /\\b(save|submit|approve|reject|delete|remove|create|invite|upload|verify|unlock|complete|close|send|assign|dispatch|claim|accept|start|stop|update|pay|refund|publish|archive|restore|resubmit|confirm)\\b/i.test(joined);
+  return hasServerMutation(context) || /\b(save|submit|approve|reject|delete|remove|create|invite|upload|verify|unlock|complete|close|send|assign|dispatch|claim|accept|start|stop|update|pay|refund|publish|archive|restore|resubmit|confirm)\b/i.test(joined);
 }
 
 function hasBusyGuard(attrs, context) {
-  if (/\\bdisabled\\s*=/.test(attrs)) return true;
-  return /if\\s*\\([^)]*(?:busy|loading|submitting|saving|processing|pending|isPending)[^)]*\\)\\s*return|(?:setBusy|setLoading|setSubmitting|setSaving|setProcessing)\\s*\\(true\\)/i.test(context);
+  if (/\bdisabled\s*=/.test(attrs)) return true;
+  return /if\s*\([^)]*(?:busy|loading|submitting|saving|processing|pending|isPending)[^)]*\)\s*return|(?:setBusy|setLoading|setSubmitting|setSaving|setProcessing)\s*\(true\)/i.test(context);
 }
 
 function hasErrorHandling(context) {
-  return /\\bcatch\\s*\\(|setError\\s*\\(|setMessage\\s*\\(|enqueueSnackbar\\s*\\(|toast\\.|showToast\\s*\\(/i.test(context);
+  return /\bcatch\s*\(|setError\s*\(|setMessage\s*\(|enqueueSnackbar\s*\(|toast\.|showToast\s*\(/i.test(context);
 }
 
 function hasSuccessHandling(context) {
-  return /setSuccess\\s*\\(|setMessage\\s*\\(|enqueueSnackbar\\s*\\(|toast\\.|navigate\\s*\\(|setOpen\\s*\\(false\\)|onSuccess\\b/i.test(context);
+  return /setSuccess\s*\(|setMessage\s*\(|enqueueSnackbar\s*\(|toast\.|navigate\s*\(|setOpen\s*\(false\)|onSuccess\b/i.test(context);
 }
 
 function directPrivilegeRisk(file, label, context) {
-  const privileged = roleFor(file) === 'admin' || /\\b(approve|reject|role|staff|permission|dispatch|payment|payout|unlock|verify|delete|admin|privilege|claim)\\b/i.test(label);
+  const privileged = roleFor(file) === 'admin' || /\b(approve|reject|role|staff|permission|dispatch|payment|payout|unlock|verify|delete|admin|privilege|claim)\b/i.test(label);
   if (!privileged) return false;
-  return /\\b(addDoc|setDoc|updateDoc|deleteDoc|writeBatch|runTransaction)\\s*\\(/.test(context) && !/httpsCallable\\s*\\(/.test(context);
+  return /\b(addDoc|setDoc|updateDoc|deleteDoc|writeBatch|runTransaction)\s*\(/.test(context) && !/httpsCallable\s*\(/.test(context);
 }
 
 function escapeRegExp(value) {
-  return String(value).replace(/[.*+?^$()|[\\]\\\\]/g, '\\\\$&');
+  return String(value).replace(/[.*+?^$()|[\]\\]/g, '\\$&');
 }
 
 const e2eText = testRoots
   .filter((dir) => fs.existsSync(path.join(root, dir)))
   .flatMap((dir) => walk(path.join(root, dir)))
   .map((file) => fs.readFileSync(file, 'utf8'))
-  .join('\\n');
+  .join('\n');
 
 const rows = [];
 for (const fileAbs of sourceRoots.flatMap((dir) => walk(path.join(root, dir)))) {
   const file = rel(fileAbs);
   const source = fs.readFileSync(fileAbs, 'utf8');
-  const re = /<([A-Za-z][A-Za-z0-9_.]*)\\b([\\s\\S]*?)(?:\\/>|>)/g;
+  const re = /<([A-Za-z][A-Za-z0-9_.]*)\b([\s\S]*?)(?:\/>|>)/g;
   let match;
   while ((match = re.exec(source))) {
     const tag = match[1].split('.').at(-1);
     const attrs = match[2] || '';
-    const hasClick = /\\bonClick\\s*=/.test(attrs);
-    const hasChange = /\\bonChange\\s*=/.test(attrs);
-    const hasSubmit = /\\bonSubmit\\s*=/.test(attrs);
-    const hasHref = /\\bhref\\s*=/.test(attrs);
+    const hasClick = /\bonClick\s*=/.test(attrs);
+    const hasChange = /\bonChange\s*=/.test(attrs);
+    const hasSubmit = /\bonSubmit\s*=/.test(attrs);
+    const hasHref = /\bhref\s*=/.test(attrs);
     const inputType = prop(attrs, 'type').replace(/['"]/g, '').toLowerCase();
     const nativeInputInteractive = tag === 'input' && ['button', 'submit', 'checkbox', 'radio', 'file'].includes(inputType);
     if (!controlTags.has(tag) && !hasClick && !hasChange && !hasSubmit && !hasHref) continue;
     if (tag === 'input' && !nativeInputInteractive && !hasChange) continue;
 
-    const line = source.slice(0, match.index).split('\\n').length;
+    const line = source.slice(0, match.index).split('\n').length;
     const aria = stripJsx(prop(attrs, 'aria-label'));
     const title = stripJsx(prop(attrs, 'title'));
     const testId = stripJsx(prop(attrs, 'data-testid'));
@@ -156,7 +156,7 @@ for (const fileAbs of sourceRoots.flatMap((dir) => walk(path.join(root, dir)))) 
     const placeholder = stripJsx(prop(attrs, 'placeholder'));
     const value = stripJsx(prop(attrs, 'value'));
     const after = source.slice(re.lastIndex, Math.min(source.length, re.lastIndex + 700));
-    const closeRe = new RegExp('^([\\s\\S]*?)<\\/' + tag + '>');
+    const closeRe = new RegExp('^([\s\S]*?)<\/' + tag + '>');
     const inlineText = stripJsx((after.match(closeRe) || [])[1] || '');
     const label = aria || inlineText || title || value || placeholder || name || testId;
 
@@ -210,7 +210,7 @@ for (const r of unique) {
     r.busyGuard,r.successHandling,r.errorHandling,r.e2eCovered,r.issues.join('|')
   ].map(csvEscape).join(','));
 }
-fs.writeFileSync(path.join(auditDir, 'phase-3-interactive-control-inventory.csv'), csvLines.join('\\n') + '\\n');
+fs.writeFileSync(path.join(auditDir, 'phase-3-interactive-control-inventory.csv'), csvLines.join('\n') + '\n');
 
 const byRole = new Map();
 for (const row of unique) byRole.set(row.role, (byRole.get(row.role) || 0) + 1);
@@ -241,7 +241,7 @@ const md = [
   '',
   ...(issueRows.length ? issueRows.map((r) => '- ' + r.file + ':' + r.line + ' — ' + r.tag + ' **' + r.label + '** — ' + r.issues.join(', ')) : ['No findings.']),
   ''
-].join('\\n');
+].join('\n');
 fs.writeFileSync(path.join(auditDir, 'PHASE_3_INTERACTIVE_CONTROL_INVENTORY.md'), md);
 
 console.log('Phase 3 interactive controls inventoried: ' + unique.length);
@@ -249,7 +249,7 @@ console.log('Mutation-like controls: ' + mutations.length);
 console.log('Controls with findings: ' + issueRows.length);
 
 if (issueRows.length) {
-  console.error('\\nPHASE 3 INTERACTIVE CONTROL AUDIT FAILED');
+  console.error('\nPHASE 3 INTERACTIVE CONTROL AUDIT FAILED');
   for (const row of issueRows.slice(0, 250)) {
     console.error('- ' + row.file + ':' + row.line + ' ' + row.tag + ' "' + row.label + '" -> ' + row.issues.join(', '));
   }
