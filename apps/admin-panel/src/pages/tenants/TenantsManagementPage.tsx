@@ -705,7 +705,7 @@ export default function TenantsManagementPage() {
                         <Stack spacing={2}>
                             <Box sx={{ display: 'flex', gap: 1 }}>
                                 <TextField label="Search Email" fullWidth size="small" value={existingTenantSearch} onChange={(e) => setExistingTenantSearch(e.target.value)} />
-                                <IconButton onClick={handleSearchExisting} disabled={searchLoading} color="primary"><SearchIcon /></IconButton>
+                                <IconButton aria-label="Search existing tenants" onClick={handleSearchExisting} disabled={searchLoading} color="primary"><SearchIcon /></IconButton>
                             </Box>
                             <FormControl fullWidth>
                                 <InputLabel>Select Linked Tenant</InputLabel>
