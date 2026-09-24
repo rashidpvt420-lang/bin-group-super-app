@@ -67,9 +67,8 @@ test('HR automation audit and new-hire role authority are fail-closed', () => {
   assert.match(functions, /const auditRef = db\.collection\("audit_logs"\)\.doc\(\)/);
   assert.match(functions, /const batch = db\.batch\(\)/);
   assert.match(functions, /batch\.set\(auditRef, payload\)/);
-  assert.match(functions, /batch\.set\(db\.collection\("auditLogs"\)\.doc\(auditRef\.id\), payload\)/);
+  assert.doesNotMatch(functions, /db\.collection\("auditLogs"\)/);
   assert.match(functions, /await batch\.commit\(\)/);
-  assert.doesNotMatch(functions, /Promise\.allSettled\(\[\s*db\.collection\("auditLogs"\)\.add\(payload\)/);
 });
 
 test('unknown HR classifications default to confidential human review', () => {
