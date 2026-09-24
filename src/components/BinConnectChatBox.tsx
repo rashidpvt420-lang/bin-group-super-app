@@ -154,7 +154,7 @@ export default function BinConnectChatBox({ role, dark = false }: { role: Portal
                 <Typography fontWeight={950}>BIN Connect</Typography>
                 <Typography variant="caption" sx={{ color: dark ? 'rgba(255,255,255,.55)' : binThemeTokens.textSecondary, fontWeight: 800 }}>In-app chat, feedback, CEO/admin support, Majlis staff channel</Typography>
               </Box>
-              <Button size="small" onClick={() => setOpen(false)} sx={{ minWidth: 0, color: binThemeTokens.goldHover }}><X size={18} /></Button>
+              <Button aria-label="Close BIN Connect" size="small" onClick={() => setOpen(false)} sx={{ minWidth: 0, color: binThemeTokens.goldHover }}><X size={18} /></Button>
             </Stack>
             {notice && <Alert severity={notice.includes('sent') ? 'success' : 'warning'}>{notice}</Alert>}
             <Button onClick={openInbox} variant="outlined" sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.goldHover, fontWeight: 950 }}>Open full inbox / replies</Button>
