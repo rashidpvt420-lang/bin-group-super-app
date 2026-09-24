@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import ts from 'typescript';
 
 const root = process.cwd();
 const auditDir = path.join(root, 'audit');
@@ -8,25 +9,30 @@ fs.mkdirSync(auditDir, { recursive: true });
 const sourceRoots = ['src', 'apps/admin-panel/src', 'apps/owner-app/src'];
 const ignoredParts = new Set(['__tests__', '__mocks__', 'node_modules', 'dist', 'build']);
 const testRoots = ['tests/e2e', 'apps/admin-panel/src/__tests__'];
-const controlTags = new Set([
+const canonicalControls = new Set([
   'Button', 'IconButton', 'Fab', 'ButtonBase', 'Tab', 'MenuItem', 'Switch', 'Checkbox',
   'Radio', 'Select', 'TextField', 'Autocomplete', 'SpeedDialAction', 'button', 'a', 'input',
   'select', 'textarea',
 ]);
+const fieldControls = new Set(['Switch', 'Checkbox', 'Radio', 'Select', 'TextField', 'Autocomplete', 'input', 'select', 'textarea']);
+const iconOnlyControls = new Set(['IconButton', 'Fab', 'SpeedDialAction']);
+const mutatingWords = /\b(save|submit|approve|reject|delete|remove|create|invite|upload|verify|unlock|complete|close|send|assign|dispatch|claim|accept|update|pay|refund|publish|archive|restore|resubmit|confirm|revoke|rotate)\b/i;
+const serverMutationPattern = /httpsCallable\s*\(|(?:addDoc|setDoc|updateDoc|deleteDoc|writeBatch|runTransaction)\s*\(|\.(?:set|update|delete)\s*\(/i;
+const directClientWritePattern = /\b(addDoc|setDoc|updateDoc|deleteDoc|writeBatch|runTransaction)\s*\(/;
 
-function walk(dir) {
+function walk(dir, extensions = new Set(['.tsx', '.jsx'])) {
   if (!fs.existsSync(dir)) return [];
   const out = [];
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     if (ignoredParts.has(entry.name)) continue;
     const full = path.join(dir, entry.name);
-    if (entry.isDirectory()) out.push(...walk(full));
-    else if (['.tsx', '.jsx'].includes(path.extname(entry.name))) out.push(full);
+    if (entry.isDirectory()) out.push(...walk(full, extensions));
+    else if (extensions.has(path.extname(entry.name))) out.push(full);
   }
   return out;
 }
 
-function rel(file) {
+function relative(file) {
   return path.relative(root, file).replaceAll('\\', '/');
 }
 
@@ -42,166 +48,229 @@ function roleFor(file) {
   return 'shared';
 }
 
-function prop(attrs, name) {
-  const patterns = [
-    new RegExp('\\b' + name + '\s*=\s*"([^"]*)"'),
-    new RegExp("\\b" + name + "\s*=\s*'([^']*)'"),
-    new RegExp('\\b' + name + '\s*=\s*\{([^}]*)\}'),
-  ];
-  for (const pattern of patterns) {
-    const match = pattern.exec(attrs);
-    if (match) return match[1].trim();
+function normalize(value) {
+  return String(value || '').replace(/\s+/g, ' ').trim();
+}
+
+function jsxTagName(node, sourceFile) {
+  const tag = node.tagName?.getText(sourceFile) || '';
+  return tag.split('.').at(-1) || tag;
+}
+
+function attrsFor(node, sourceFile) {
+  const map = new Map();
+  for (const property of node.attributes?.properties || []) {
+    if (!ts.isJsxAttribute(property)) continue;
+    const name = property.name.getText(sourceFile);
+    const init = property.initializer;
+    if (!init) {
+      map.set(name, { text: 'true', node: property });
+    } else if (ts.isStringLiteral(init)) {
+      map.set(name, { text: init.text, node: property });
+    } else if (ts.isJsxExpression(init)) {
+      map.set(name, { text: init.expression?.getText(sourceFile) || '', node: property, expression: init.expression });
+    } else {
+      map.set(name, { text: init.getText(sourceFile), node: property });
+    }
   }
-  return '';
+  return map;
 }
 
-function stripJsx(value) {
-  return String(value || '')
-    .replace(/\{[^}]*\}/g, ' ')
-    .replace(/<[^>]+>/g, ' ')
-    .replace(/&nbsp;|&amp;|&quot;|&#39;/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
-function handlerContext(source, handler) {
-  if (!handler || !/^[A-Za-z_$][\w$]*$/.test(handler)) return '';
-  const names = [
-    '(?:const|let)\s+' + handler + '\s*=\s*(?:async\s*)?\([^)]*\)\s*=>\s*\{',
-    '(?:const|let)\s+' + handler + '\s*=\s*(?:async\s*)?[^=]*=>\s*\{',
-    '(?:async\s+)?function\s+' + handler + '\s*\([^)]*\)\s*\{',
-  ];
-  for (const item of names) {
-    const match = new RegExp(item).exec(source);
-    if (match) return source.slice(match.index, Math.min(source.length, match.index + 7000));
+function childLabel(node, sourceFile) {
+  if (!ts.isJsxElement(node)) return { text: '', dynamic: false };
+  const textParts = [];
+  let dynamic = false;
+  for (const child of node.children) {
+    if (ts.isJsxText(child)) {
+      const value = normalize(child.getText(sourceFile));
+      if (value) textParts.push(value);
+    } else if (ts.isJsxExpression(child) && child.expression) {
+      dynamic = true;
+    } else if (ts.isJsxElement(child)) {
+      const nested = childLabel(child, sourceFile);
+      if (nested.text) textParts.push(nested.text);
+      dynamic ||= nested.dynamic;
+    }
   }
-  return '';
+  return { text: normalize(textParts.join(' ')), dynamic };
 }
 
-function extractHandler(attrs, propName) {
-  const value = prop(attrs, propName);
-  if (!value) return '';
-  const direct = value.match(/^([A-Za-z_$][\w$]*)$/);
-  return direct ? direct[1] : value.slice(0, 240);
+function collectFunctions(sourceFile) {
+  const functions = new Map();
+  function visit(node) {
+    if (ts.isFunctionDeclaration(node) && node.name) functions.set(node.name.text, node);
+    if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.initializer &&
+      (ts.isArrowFunction(node.initializer) || ts.isFunctionExpression(node.initializer))) {
+      functions.set(node.name.text, node.initializer);
+    }
+    ts.forEachChild(node, visit);
+  }
+  visit(sourceFile);
+  return functions;
 }
 
-function hasServerMutation(text) {
-  return /httpsCallable\s*\(|(?:addDoc|setDoc|updateDoc|deleteDoc|writeBatch|runTransaction)\s*\(|\.set\s*\(|\.update\s*\(|\.delete\s*\(/i.test(text);
+function referencedHandlers(expression) {
+  const names = new Set();
+  function visit(node) {
+    if (ts.isCallExpression(node)) {
+      if (ts.isIdentifier(node.expression)) names.add(node.expression.text);
+      if (ts.isPropertyAccessExpression(node.expression) && ts.isIdentifier(node.expression.expression)) names.add(node.expression.expression.text);
+    }
+    ts.forEachChild(node, visit);
+  }
+  if (expression) visit(expression);
+  return [...names];
 }
 
-function mutationToken(text) {
-  const callable = text.match(/httpsCallable\s*\([^,]+,\s*['"]([^'"]+)['"]/);
+function handlerContext(attr, sourceFile, functions) {
+  if (!attr?.expression) return '';
+  const expression = attr.expression;
+  if (ts.isIdentifier(expression)) {
+    const target = functions.get(expression.text);
+    return target ? target.getText(sourceFile) : expression.getText(sourceFile);
+  }
+  let context = expression.getText(sourceFile);
+  for (const name of referencedHandlers(expression)) {
+    const target = functions.get(name);
+    if (target) context += '\n' + target.getText(sourceFile);
+  }
+  return context;
+}
+
+function handlerName(attr, sourceFile) {
+  if (!attr?.expression) return '';
+  if (ts.isIdentifier(attr.expression)) return attr.expression.text;
+  const calls = referencedHandlers(attr.expression);
+  return calls[0] || normalize(attr.expression.getText(sourceFile)).slice(0, 120);
+}
+
+function serverAction(context) {
+  const callable = context.match(/httpsCallable\s*\([^,]+,\s*['"]([^'"]+)['"]/);
   if (callable) return callable[1];
-  const method = text.match(/\b(addDoc|setDoc|updateDoc|deleteDoc|writeBatch|runTransaction)\b/);
-  return method ? method[1] : '';
-}
-
-function isLikelyMutation(label, handler, context) {
-  const joined = label + ' ' + handler + ' ' + context.slice(0, 1800);
-  return hasServerMutation(context) || /\b(save|submit|approve|reject|delete|remove|create|invite|upload|verify|unlock|complete|close|send|assign|dispatch|claim|accept|start|stop|update|pay|refund|publish|archive|restore|resubmit|confirm)\b/i.test(joined);
+  const direct = context.match(/\b(addDoc|setDoc|updateDoc|deleteDoc|writeBatch|runTransaction)\b/);
+  return direct?.[1] || '';
 }
 
 function hasBusyGuard(attrs, context) {
-  if (/\bdisabled\s*=/.test(attrs)) return true;
-  return /if\s*\([^)]*(?:busy|loading|submitting|saving|processing|pending|isPending)[^)]*\)\s*return|(?:setBusy|setLoading|setSubmitting|setSaving|setProcessing)\s*\(true\)/i.test(context);
+  const disabled = attrs.get('disabled')?.text || '';
+  if (disabled && disabled !== 'false') return true;
+  return /\b(busy|loading|submitting|saving|processing|pending|isPending|inFlight|requesting)\b/i.test(disabled) ||
+    /if\s*\([^)]*(?:busy|loading|submitting|saving|processing|pending|isPending|inFlight)[^)]*\)\s*return/i.test(context) ||
+    /(?:setBusy|setLoading|setSubmitting|setSaving|setProcessing|setPending)\s*\(true\)/i.test(context);
 }
 
 function hasErrorHandling(context) {
-  return /\bcatch\s*\(|setError\s*\(|setMessage\s*\(|enqueueSnackbar\s*\(|toast\.|showToast\s*\(/i.test(context);
+  return /\bcatch\s*\(|setError\s*\(|setMessage\s*\(|enqueueSnackbar\s*\(|toast\.|showToast\s*\(|throw new Error|setAlert\s*\(/i.test(context);
 }
 
 function hasSuccessHandling(context) {
-  return /setSuccess\s*\(|setMessage\s*\(|enqueueSnackbar\s*\(|toast\.|navigate\s*\(|setOpen\s*\(false\)|onSuccess\b/i.test(context);
-}
-
-function directPrivilegeRisk(file, label, context) {
-  const privileged = roleFor(file) === 'admin' || /\b(approve|reject|role|staff|permission|dispatch|payment|payout|unlock|verify|delete|admin|privilege|claim)\b/i.test(label);
-  if (!privileged) return false;
-  return /\b(addDoc|setDoc|updateDoc|deleteDoc|writeBatch|runTransaction)\s*\(/.test(context) && !/httpsCallable\s*\(/.test(context);
+  return /setSuccess\s*\(|setMessage\s*\(|enqueueSnackbar\s*\(|toast\.|navigate\s*\(|setOpen\s*\(false\)|onSuccess\b|setAlert\s*\(|setDialogOpen\s*\(false\)/i.test(context);
 }
 
 function escapeRegExp(value) {
-  return String(value).replace(/[.*+?^$()|[\]\\]/g, '\\$&');
+  return String(value).replace(/[.*+?^$()|[\]\\{}]/g, '\\$&');
 }
 
 const e2eText = testRoots
   .filter((dir) => fs.existsSync(path.join(root, dir)))
-  .flatMap((dir) => walk(path.join(root, dir)))
+  .flatMap((dir) => walk(path.join(root, dir), new Set(['.ts', '.tsx', '.js', '.jsx'])))
   .map((file) => fs.readFileSync(file, 'utf8'))
   .join('\n');
 
 const rows = [];
 for (const fileAbs of sourceRoots.flatMap((dir) => walk(path.join(root, dir)))) {
-  const file = rel(fileAbs);
+  const file = relative(fileAbs);
   const source = fs.readFileSync(fileAbs, 'utf8');
-  const re = /<([A-Za-z][A-Za-z0-9_.]*)\b([\s\S]*?)(?:\/>|>)/g;
-  let match;
-  while ((match = re.exec(source))) {
-    const tag = match[1].split('.').at(-1);
-    const attrs = match[2] || '';
-    const hasClick = /\bonClick\s*=/.test(attrs);
-    const hasChange = /\bonChange\s*=/.test(attrs);
-    const hasSubmit = /\bonSubmit\s*=/.test(attrs);
-    const hasHref = /\bhref\s*=/.test(attrs);
-    const inputType = prop(attrs, 'type').replace(/['"]/g, '').toLowerCase();
-    const nativeInputInteractive = tag === 'input' && ['button', 'submit', 'checkbox', 'radio', 'file'].includes(inputType);
-    if (!controlTags.has(tag) && !hasClick && !hasChange && !hasSubmit && !hasHref) continue;
-    if (tag === 'input' && !nativeInputInteractive && !hasChange) continue;
+  const sourceFile = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  const functions = collectFunctions(sourceFile);
 
-    const line = source.slice(0, match.index).split('\n').length;
-    const aria = stripJsx(prop(attrs, 'aria-label'));
-    const title = stripJsx(prop(attrs, 'title'));
-    const testId = stripJsx(prop(attrs, 'data-testid'));
-    const name = stripJsx(prop(attrs, 'name'));
-    const placeholder = stripJsx(prop(attrs, 'placeholder'));
-    const value = stripJsx(prop(attrs, 'value'));
-    const after = source.slice(re.lastIndex, Math.min(source.length, re.lastIndex + 700));
-    const closeRe = new RegExp('^([\s\S]*?)<\/' + tag + '>');
-    const inlineText = stripJsx((after.match(closeRe) || [])[1] || '');
-    const label = aria || inlineText || title || value || placeholder || name || testId;
+  function visit(node) {
+    if (ts.isJsxElement(node) || ts.isJsxSelfClosingElement(node)) {
+      const opening = ts.isJsxElement(node) ? node.openingElement : node;
+      const tag = jsxTagName(opening, sourceFile);
+      const attrs = attrsFor(opening, sourceFile);
+      const hasClick = attrs.has('onClick');
+      const hasChange = attrs.has('onChange');
+      const hasSubmit = attrs.has('onSubmit');
+      const hasHref = attrs.has('href') || attrs.has('to');
+      const interactive = canonicalControls.has(tag) || hasClick || hasChange || hasSubmit || hasHref;
 
-    const handlerProp = hasClick ? 'onClick' : hasChange ? 'onChange' : hasSubmit ? 'onSubmit' : '';
-    const handler = extractHandler(attrs, handlerProp);
-    const context = handlerContext(source, handler) || attrs;
-    const mutation = isLikelyMutation(label, handler, context);
-    const serverAction = mutationToken(context);
-    const busyGuard = hasBusyGuard(attrs, context);
-    const errorHandling = hasErrorHandling(context);
-    const successHandling = hasSuccessHandling(context);
-    const privilegeRisk = directPrivilegeRisk(file, label, context);
-    const anchors = [testId, aria, serverAction, label].filter((token) => token && token.length >= 3);
-    const e2eCovered = anchors.some((anchor) => new RegExp(escapeRegExp(anchor), 'i').test(e2eText));
+      if (interactive) {
+        const line = sourceFile.getLineAndCharacterOfPosition(opening.getStart(sourceFile)).line + 1;
+        const children = childLabel(node, sourceFile);
+        const aria = normalize(attrs.get('aria-label')?.text);
+        const labelProp = normalize(attrs.get('label')?.text);
+        const title = normalize(attrs.get('title')?.text);
+        const placeholder = normalize(attrs.get('placeholder')?.text);
+        const name = normalize(attrs.get('name')?.text);
+        const testId = normalize(attrs.get('data-testid')?.text);
+        const value = normalize(attrs.get('value')?.text);
+        const label = aria || labelProp || children.text || title || placeholder || name || value || (children.dynamic ? '(dynamic)' : '');
 
-    const issues = [];
-    if (['Button', 'IconButton', 'Fab', 'ButtonBase', 'Tab', 'button', 'a'].includes(tag) && !label) issues.push('missing-accessible-label');
-    if (!hasClick && !hasChange && !hasSubmit && !hasHref && !(tag === 'button' && inputType === 'submit')) issues.push('missing-interaction');
-    if (mutation && !busyGuard) issues.push('mutation-missing-busy-guard');
-    if (mutation && !errorHandling) issues.push('mutation-missing-error-path');
-    if (mutation && !successHandling) issues.push('mutation-missing-success-path');
-    if (mutation && !e2eCovered) issues.push('mutation-missing-e2e-anchor');
-    if (privilegeRisk) issues.push('privileged-direct-client-write');
+        const eventName = hasClick ? 'onClick' : hasSubmit ? 'onSubmit' : hasChange ? 'onChange' : '';
+        const handlerAttr = attrs.get(eventName);
+        const handler = handlerName(handlerAttr, sourceFile);
+        const context = handlerContext(handlerAttr, sourceFile, functions);
+        const buttonLike = !fieldControls.has(tag);
+        const mutation = buttonLike && (serverMutationPattern.test(context) || mutatingWords.test(label + ' ' + handler));
+        const action = mutation ? serverAction(context) : '';
+        const busyGuard = mutation ? hasBusyGuard(attrs, context) : true;
+        const errorHandling = mutation ? hasErrorHandling(context) : true;
+        const successHandling = mutation ? hasSuccessHandling(context) : true;
 
-    rows.push({
-      file, line, role: roleFor(file), tag, label: label || '(dynamic/unresolved)',
-      testId, handler: handler || '(inline/native)', mutation: mutation ? 'yes' : 'no',
-      serverAction: serverAction || '', busyGuard: busyGuard ? 'yes' : 'no',
-      successHandling: successHandling ? 'yes' : 'no', errorHandling: errorHandling ? 'yes' : 'no',
-      e2eCovered: e2eCovered ? 'yes' : 'no', issues,
-    });
+        const privilegedSurface = roleFor(file) === 'admin' || /\b(approve|reject|role|staff|permission|dispatch|payment|payout|unlock|verify|delete|admin|privilege|claim)\b/i.test(label + ' ' + handler);
+        const privilegeRisk = privilegedSurface && directClientWritePattern.test(context) && !/httpsCallable\s*\(/.test(context);
+
+        const anchors = [testId, aria, action, handler, children.text]
+          .filter((token) => token && token !== '(dynamic)' && token.length >= 3);
+        const e2eCovered = !mutation || anchors.some((anchor) => new RegExp(escapeRegExp(anchor), 'i').test(e2eText));
+
+        const issues = [];
+        if (iconOnlyControls.has(tag) && !aria && !title && !children.text) issues.push('icon-control-missing-accessible-label');
+        if ((tag === 'button' || tag === 'Button' || tag === 'ButtonBase') && !label) issues.push('button-missing-accessible-label');
+        if (mutation && !busyGuard) issues.push('mutation-missing-busy-guard');
+        if (mutation && !errorHandling) issues.push('mutation-missing-error-path');
+        if (mutation && !successHandling) issues.push('mutation-missing-success-path');
+        if (mutation && !e2eCovered) issues.push('mutation-missing-e2e-anchor');
+        if (privilegeRisk) issues.push('privileged-direct-client-write');
+
+        rows.push({
+          file,
+          line,
+          role: roleFor(file),
+          tag,
+          label: label || '(unresolved)',
+          testId,
+          handler: handler || '(native/inherited)',
+          mutation: mutation ? 'yes' : 'no',
+          serverAction: action,
+          busyGuard: busyGuard ? 'yes' : 'no',
+          successHandling: successHandling ? 'yes' : 'no',
+          errorHandling: errorHandling ? 'yes' : 'no',
+          e2eCovered: e2eCovered ? 'yes' : 'no',
+          issues,
+        });
+      }
+    }
+    ts.forEachChild(node, visit);
   }
+  visit(sourceFile);
 }
 
 const unique = [];
 const seen = new Set();
 for (const row of rows) {
-  const key = [row.file,row.line,row.tag,row.handler,row.label].join(':');
+  const key = [row.file, row.line, row.tag, row.handler, row.label].join(':');
   if (seen.has(key)) continue;
   seen.add(key);
   unique.push(row);
 }
 
 const issueRows = unique.filter((row) => row.issues.length);
-const csvHeaders = ['file','line','role','tag','label','test_id','handler','mutation','server_action','busy_guard','success_handling','error_handling','e2e_covered','issues'];
+const csvHeaders = [
+  'file','line','role','tag','label','test_id','handler','mutation','server_action',
+  'busy_guard','success_handling','error_handling','e2e_covered','issues'
+];
 const csvEscape = (value) => '"' + String(value ?? '').replaceAll('"', '""') + '"';
 const csvLines = [csvHeaders.join(',')];
 for (const r of unique) {
@@ -214,11 +283,11 @@ fs.writeFileSync(path.join(auditDir, 'phase-3-interactive-control-inventory.csv'
 
 const byRole = new Map();
 for (const row of unique) byRole.set(row.role, (byRole.get(row.role) || 0) + 1);
-const mutations = unique.filter((r) => r.mutation === 'yes');
+const mutations = unique.filter((row) => row.mutation === 'yes');
 const md = [
   '# Phase 3 Interactive Control Inventory',
   '',
-  'Executable source inventory for every discoverable button and interactive control in canonical app sources.',
+  'TypeScript-AST inventory of discoverable interactive controls in canonical app sources.',
   '',
   '- Total controls: **' + unique.length + '**',
   '- Mutation-like controls: **' + mutations.length + '**',
@@ -228,19 +297,19 @@ const md = [
   '',
   '| Role/surface | Controls |',
   '| --- | ---: |',
-  ...[...byRole.entries()].sort().map(([role,count]) => '| ' + role + ' | ' + count + ' |'),
+  ...[...byRole.entries()].sort().map(([role, count]) => '| ' + role + ' | ' + count + ' |'),
   '',
   '## Required executable contract',
   '',
-  '- Visible controls require an accessible label or stable test id.',
-  '- Mutation controls require a busy/double-submit guard, success path, error path, and an E2E evidence anchor.',
-  '- Privileged surfaces may not perform direct client-side Firestore mutations.',
-  '- Runtime Playwright coverage validates desktop/mobile/RTL/interactability and role boundaries.',
+  '- Icon-only controls require an accessible label.',
+  '- Mutation controls require duplicate-submit/busy protection, a success path, an error path, and an E2E evidence anchor.',
+  '- Privileged surfaces may not perform direct client-side Firestore writes.',
+  '- Runtime route E2E checks every visible control for accessible naming and actual enabled/disabled state on desktop and mobile Arabic.',
   '',
   '## Findings',
   '',
-  ...(issueRows.length ? issueRows.map((r) => '- ' + r.file + ':' + r.line + ' — ' + r.tag + ' **' + r.label + '** — ' + r.issues.join(', ')) : ['No findings.']),
-  ''
+  ...(issueRows.length ? issueRows.map((row) => '- ' + row.file + ':' + row.line + ' — ' + row.tag + ' **' + row.label + '** — ' + row.issues.join(', ')) : ['No findings.']),
+  '',
 ].join('\n');
 fs.writeFileSync(path.join(auditDir, 'PHASE_3_INTERACTIVE_CONTROL_INVENTORY.md'), md);
 
@@ -256,4 +325,5 @@ if (issueRows.length) {
   if (issueRows.length > 250) console.error('- ... ' + (issueRows.length - 250) + ' additional findings omitted; see audit matrix.');
   process.exit(1);
 }
+
 console.log('PHASE 3 INTERACTIVE CONTROL AUDIT PASSED');
