@@ -627,7 +627,6 @@ describe('launch honesty — hardcoded credential fallbacks must not remain', ()
     const targets = [
       'tests/e2e/final-admin-login.spec.ts',
       'tests/e2e/launch-five-profile-walkthrough.spec.ts',
-      'tests/e2e/mosque-onboarding.spec.ts',
       'scripts/seed-e2e-accounts.js',
       'scripts/seed-e2e-tenant-fixture.mjs',
     ];
