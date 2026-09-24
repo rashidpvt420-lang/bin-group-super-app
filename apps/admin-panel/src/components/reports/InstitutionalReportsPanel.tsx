@@ -142,7 +142,7 @@ const InstitutionalReportsPanel: React.FC = () => {
           </h1>
           <p className="text-gray-500 font-medium tracking-wide mt-2">Institutional Asset Ledger & Institutional Truth Hub</p>
         </div>
-        <button className="flex items-center gap-3 bg-blue-600 hover:bg-blue-500 px-8 py-3 rounded-xl transition-all font-bold shadow-lg shadow-blue-500/20 uppercase tracking-widest text-xs">
+        <button disabled title="Unavailable until this workflow is connected" aria-label="Export Sovereign Audit" className="flex items-center gap-3 bg-blue-600 hover:bg-blue-500 px-8 py-3 rounded-xl transition-all font-bold shadow-lg shadow-blue-500/20 uppercase tracking-widest text-xs">
           <Download size={18} /> Export Sovereign Audit
         </button>
       </div>
