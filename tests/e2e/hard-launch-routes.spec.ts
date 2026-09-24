@@ -22,7 +22,9 @@ for (const candidate of [
 }
 
 const CRASH_PATTERN = /application error|unhandled runtime error|chunkloaderror|minified react error|cannot read properties of undefined|null is not an object/i;
-const ACCESS_DENIED = /permission-denied|unauthenticated|access denied|not authorized|app check|firebase.?app.?check|insufficient permissions/i;
+// Visible security copy may legitimately mention App Check. Real App Check failures remain
+// fail-closed through attachAuthenticatedAppCheckMonitor; this text matcher is for authz failures only.
+const ACCESS_DENIED = /permission-denied|unauthenticated|access denied|not authorized|insufficient permissions/i;
 const ADMIN_BASE_URL = String(process.env.E2E_ADMIN_BASE_URL || '').trim().replace(/\/+$/, '');
 
 type RoleCase = {

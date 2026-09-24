@@ -872,6 +872,37 @@ describe('Firestore Security Rules', () => {
     await assertFails(getDoc(doc(tenantBDb, 'conversations/conv_1')));
   });
 
+  it('BIN Connect enumeration is server-only while participant document reads stay isolated', async () => {
+    await seedServerDocument('binConnectThreads/thread_tech', {
+      createdBy: 'owner_a',
+      participantIds: ['owner_a', 'tech_a'],
+      status: 'open',
+      channel: 'owner_to_technician',
+      createdAt: new Date(),
+    });
+    await seedServerDocument('binConnectThreads/thread_other', {
+      createdBy: 'owner_b',
+      participantIds: ['owner_b', 'tech_b'],
+      status: 'open',
+      channel: 'owner_to_technician',
+      createdAt: new Date(),
+    });
+
+    const techDb = testEnv.authenticatedContext('tech_a', { role: 'technician' }).firestore();
+    await assertSucceeds(getDoc(doc(techDb, 'binConnectThreads/thread_tech')));
+    await assertFails(getDoc(doc(techDb, 'binConnectThreads/thread_other')));
+    await assertFails(getDocs(query(
+      collection(techDb, 'binConnectThreads'),
+      where('participantIds', 'array-contains', 'tech_a'),
+      limit(100),
+    )));
+    await assertFails(getDocs(query(collection(techDb, 'binConnectThreads'), limit(100))));
+
+    const adminDb = testEnv.authenticatedContext('admin_bin_connect', { admin: true, role: 'admin' }).firestore();
+    const adminRows = await assertSucceeds(getDocs(query(collection(adminDb, 'binConnectThreads'), limit(100))));
+    assert.equal(adminRows.size, 2);
+  });
+
   it('inspections: tenant can create own inspection and read it back', async () => {
     const tenantDb = testEnv.authenticatedContext('tenant_a').firestore();
     const adminDb = testEnv.authenticatedContext('admin_user', { admin: true }).firestore();

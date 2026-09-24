@@ -1,9 +1,11 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Alert, Box, Button, Card, CardContent, CircularProgress, Stack, TextField, Typography } from '@mui/material';
 import { addDoc, auth, collection, db, serverTimestamp } from '../lib/firebase';
 import { useLanguage } from '../context/LanguageContext';
 
 export default function AccountPrivacyRequestPage() {
+  const navigate = useNavigate();
   const { isRTL, lang } = useLanguage();
   const [notes, setNotes] = React.useState('');
   const [submitting, setSubmitting] = React.useState(false);
@@ -47,6 +49,15 @@ export default function AccountPrivacyRequestPage() {
       <Card sx={{ maxWidth: 760, mx: 'auto', borderRadius: 4, border: '1px solid #E5E7EB', boxShadow: '0 18px 50px rgba(17,24,39,0.08)' }}>
         <CardContent sx={{ p: { xs: 3, md: 5 } }}>
           <Stack spacing={3}>
+            <Button
+              type="button"
+              variant="text"
+              aria-label={label('Back', 'رجوع')}
+              onClick={() => navigate(-1)}
+              sx={{ alignSelf: isRTL ? 'flex-end' : 'flex-start', minWidth: 0, px: 0.5, color: '#667085', fontWeight: 900 }}
+            >
+              {label('← Back', 'رجوع →')}
+            </Button>
             <Box>
               <Typography variant="overline" sx={{ color: '#B8932F', fontWeight: 950, letterSpacing: 2 }}>
                 {label('ACCOUNT & PRIVACY', 'الحساب والخصوصية')}

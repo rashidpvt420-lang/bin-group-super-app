@@ -1887,7 +1887,10 @@ service cloud.firestore {
     }
 
     match /binConnectThreads/{threadId} {
-      allow read: if isAdmin() || isBinConnectParticipant(resource.data);
+      allow get: if isAdmin() || isBinConnectParticipant(resource.data);
+      // Non-admin enumeration is server-authoritative via listMyBinConnectThreads.
+      // This avoids broad browser list grants while preserving participant document access.
+      allow list: if isAdmin();
       allow create: if safeBinConnectThreadCreate(request.resource.data);
       allow update: if isAdmin() || (isBinConnectParticipant(resource.data) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastMessage', 'lastMessageAt', 'updatedAt', 'status']));
       allow delete: if isAdmin();

@@ -42,6 +42,7 @@ const BrokerPageFrame: React.FC<BrokerPageFrameProps> = ({
                                 <Button
                                     onClick={() => navigate(-1)}
                                     size="small"
+                                    aria-label={isRTL ? 'رجوع' : 'Back'}
                                     sx={{ color: binThemeTokens.textSecondary, minWidth: 0, p: 0.5 }}
                                 >
                                     <ArrowLeft size={20} style={{ transform: isRTL ? 'rotate(180deg)' : 'none' }} />
