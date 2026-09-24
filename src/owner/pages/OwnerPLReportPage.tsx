@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import {
   Box, Button, CircularProgress, Divider, Grid, Paper,
-  Stack, Typography, alpha,
+  Stack, Typography, alpha, Alert,
 } from '@mui/material';
 import {
   Download, TrendingDown, TrendingUp, DollarSign,
@@ -48,6 +48,8 @@ function generatePDF(owner: any, passports: any[], tickets: any[], year: number)
   doc.text(`Report Period: 1 Jan ${year} – 31 Dec ${year}`, MARGIN, 72);
 
   // ── Executive summary ──
+  if (error) return <Alert severity="error" sx={{ my: 4 }}>{error}</Alert>;
+
   const totalIncome = passports.reduce((s, p) => s + (p.rentCollectedTotal || 0), 0);
   const totalMaintenance = passports.reduce((s, p) => s + (p.maintenanceCostTotal || 0), 0);
   const mgmtFee = totalIncome * 0.08;
@@ -180,18 +182,32 @@ export default function OwnerPLReportPage() {
   const [loading, setLoading] = useState(true);
   const [passports, setPassports] = useState<any[]>([]);
   const [tickets, setTickets] = useState<any[]>([]);
+  const [error, setError] = useState('');
   const [year] = useState(new Date().getFullYear());
 
   useEffect(() => {
-    if (!user?.email) return;
+    if (!user?.email) {
+      setError('Owner email is unavailable.');
+      setLoading(false);
+      return;
+    }
     const email = user.email.toLowerCase();
     const unsubP = onSnapshot(
       query(collection(db, 'propertyPassports'), where('ownerEmail', '==', email)),
-      snap => { setPassports(snap.docs.map(d => ({ id: d.id, ...d.data() }))); setLoading(false); }
+      snap => {
+        setError('');
+        setPassports(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+        setLoading(false);
+      },
+      err => {
+        setError(err?.message || 'Could not load property financial records.');
+        setLoading(false);
+      }
     );
     const unsubT = onSnapshot(
       query(collection(db, 'maintenanceTickets'), where('ownerEmail', '==', email)),
-      snap => setTickets(snap.docs.map(d => ({ id: d.id, ...d.data() })))
+      snap => setTickets(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
+      err => setError(err?.message || 'Could not load maintenance financial records.')
     );
     return () => { unsubP(); unsubT(); };
   }, [user?.email]);
