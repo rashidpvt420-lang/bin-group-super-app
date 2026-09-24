@@ -104,8 +104,8 @@ export default function OwnerPropertiesPage() {
                     <Typography variant="h4" fontWeight="950" sx={{ color: '#FFF', mt: 1 }}>My Portfolio</Typography>
                 </Box>
                 <Stack direction="row" spacing={2}>
-                    <Button variant="outlined" startIcon={<Layout size={16} />} sx={{ borderColor: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.7)', fontWeight: 900, borderRadius: 3 }}>Grid View</Button>
-                    <Button variant="contained" sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 900, px: 3, borderRadius: 3 }}>Register New Asset</Button>
+                    <Button disabled title="Unavailable until this workflow is connected" aria-label="Grid View" variant="outlined" startIcon={<Layout size={16} />} sx={{ borderColor: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.7)', fontWeight: 900, borderRadius: 3 }}>Grid View</Button>
+                    <Button disabled title="Unavailable until this workflow is connected" aria-label="Register New Asset" variant="contained" sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 900, px: 3, borderRadius: 3 }}>Register New Asset</Button>
                 </Stack>
             </Box>
 
@@ -169,7 +169,7 @@ export default function OwnerPropertiesPage() {
                                     <Divider sx={{ borderColor: 'rgba(255,255,255,0.05)', mb: 3 }} />
 
                                     <Stack direction="row" spacing={2}>
-                                        <Button 
+                                        <Button disabled title="Unavailable until this workflow is connected" aria-label="PASSPORT" 
                                             fullWidth 
                                             variant="outlined" 
                                             startIcon={<Shield size={16} />}
@@ -177,7 +177,7 @@ export default function OwnerPropertiesPage() {
                                         >
                                             PASSPORT
                                         </Button>
-                                        <Button 
+                                        <Button disabled title="Unavailable until this workflow is connected" aria-label="HISTORY" 
                                             fullWidth 
                                             variant="outlined" 
                                             startIcon={<Activity size={16} />}
