@@ -112,7 +112,8 @@
     "mobile:open:ios": "npx cap open ios",
     "mobile:check": "npm run test:mobile-store-readiness && npm run build",
     "harden:final-firestore-authority": "node scripts/harden-final-firestore-authority.mjs",
-    "harden:property-identity-registry": "node scripts/harden-property-identity-registry-rules.mjs"
+    "harden:property-identity-registry": "node scripts/harden-property-identity-registry-rules.mjs",
+    "test:phase3-controls": "node scripts/verify-interactive-control-inventory.mjs && playwright test tests/e2e/phase3-interactive-controls.spec.ts --project=chromium-desktop"
   },
   "dependencies": {
     "@capacitor/app": "^7.1.0",
