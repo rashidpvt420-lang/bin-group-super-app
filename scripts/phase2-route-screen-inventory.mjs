@@ -36,28 +36,6 @@ const ADMIN_MODULE_PREFIXES = [
   [['/dashboard'], 'dashboard'],
 ];
 
-const ADMIN_MODULE_ROLES = {
-  dashboard: ['manager','operations_admin','finance_admin','hr_admin','support_admin','hr_manager','hr_staff','finance_staff','dispatcher','admin_assistant','account_manager','operations_manager'],
-  owners: ['account_manager','admin_assistant'],
-  tenants: ['support_admin','admin_assistant'],
-  tickets: ['operations_admin','operations_manager','dispatcher','support_admin'],
-  technicians: ['operations_admin','operations_manager','dispatcher','hr_admin','hr_manager'],
-  financials: ['finance_admin','finance_staff'],
-  transactions: ['finance_admin','finance_staff'],
-  broker: [],
-  documents: ['account_manager','admin_assistant'],
-  properties: ['account_manager'],
-  contracts: ['account_manager'],
-  reports: ['operations_manager','finance_admin','hr_manager','manager'],
-  audit: [],
-  compliance: [],
-  map: ['operations_admin','dispatcher'],
-  sos: ['operations_admin'],
-  settings: [],
-  hr: ['hr_admin','hr_manager','hr_staff'],
-  pricing: [],
-};
-
 const FULL_ADMIN_ROLES = ['admin','super_admin','ceo'];
 
 function read(rel) {
@@ -146,10 +124,9 @@ function parsePermission(router, line, route) {
   if (route === '/login' || route === '/auth-error') return { role: 'public', permission: 'public' };
   const moduleName = adminModuleForPath(route);
   if (!moduleName) return { role: FULL_ADMIN_ROLES.join('|'), permission: 'full-admin' };
-  const staff = ADMIN_MODULE_ROLES[moduleName] || [];
   return {
-    role: [...FULL_ADMIN_ROLES, ...staff].join('|'),
-    permission: 'full-admin OR staff-module:' + moduleName,
+    role: FULL_ADMIN_ROLES.join('|') + '|staff[module=' + moduleName + ']',
+    permission: 'full-admin OR claims.modules contains ' + moduleName,
   };
 }
 
