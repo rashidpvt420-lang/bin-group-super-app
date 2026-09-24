@@ -188,6 +188,7 @@ const roleCases: RoleCase[] = [
       '/technician/jobs',
       '/technician/proof-readiness',
       '/technician/chat',
+      '/technician/chat/phase2-missing',
       '/technician/map',
       '/technician/history',
       '/technician/profile',
