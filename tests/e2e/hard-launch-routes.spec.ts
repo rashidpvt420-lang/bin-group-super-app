@@ -445,6 +445,35 @@ test('Public Phase 2 routes survive direct URL, refresh, mobile and Arabic RTL',
   }
 });
 
+test('Admin login Phase 2 route survives direct URL, refresh, mobile and Arabic RTL', async ({ page }) => {
+  test.setTimeout(120_000);
+  if (!ADMIN_BASE_URL) throw new Error('Admin login route audit requires E2E_ADMIN_BASE_URL.');
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(`${ADMIN_BASE_URL}/login`, { waitUntil: 'domcontentloaded' });
+  await page.evaluate(() => localStorage.setItem('bin_language', 'ar'));
+  await page.reload({ waitUntil: 'domcontentloaded' });
+
+  await expect.poll(() => new URL(page.url()).pathname, {
+    message: 'Admin /login must remain exact after direct load and refresh',
+  }).toBe('/login');
+  await expect.poll(async () => page.evaluate(() => ({
+    dir: document.documentElement.dir,
+    lang: document.documentElement.lang,
+  })), {
+    message: 'Admin /login must expose Arabic RTL document semantics',
+  }).toEqual({ dir: 'rtl', lang: 'ar' });
+
+  const body = await page.locator('body').innerText({ timeout: 20_000 });
+  expect(body.trim().length, 'Admin /login must render visible content').toBeGreaterThan(0);
+  expect(body, 'Admin /login must not crash on mobile Arabic').not.toMatch(CRASH_PATTERN);
+  const overflow = await page.evaluate(() => ({
+    width: window.innerWidth,
+    scrollWidth: document.documentElement.scrollWidth,
+  }));
+  expect(overflow.scrollWidth, 'Admin /login must avoid page-level horizontal overflow').toBeLessThanOrEqual(overflow.width + 8);
+});
+
 for (const role of roleCases) {
   test(`${role.name} hard-launch routes remain exact and authenticated`, async ({ page }) => {
     test.setTimeout(600_000);
