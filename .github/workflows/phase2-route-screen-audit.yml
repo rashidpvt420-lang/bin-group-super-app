@@ -1,0 +1,57 @@
+name: Phase 2 Route Screen Audit
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'src/**'
+      - 'apps/admin-panel/src/**'
+      - 'firebase.json'
+      - 'scripts/phase2-route-screen-inventory.mjs'
+      - '.github/workflows/phase2-route-screen-audit.yml'
+      - '.github/workflows/pr-validation.yml'
+      - 'package.json'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: phase2-route-screen-audit-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  audit:
+    name: Exhaustive route and screen matrix
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact proposed commit
+        uses: actions/checkout@v4
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Generate strict Phase 2 matrix
+        id: audit
+        shell: bash
+        run: |
+          set +e
+          node scripts/phase2-route-screen-inventory.mjs --strict > phase2-route-screen-output.txt 2>&1
+          status=$?
+          cat phase2-route-screen-output.txt
+          exit $status
+
+      - name: Upload route-screen matrix
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: phase2-route-screen-matrix-${{ github.sha }}
+          path: |
+            .phase2-route-inventory/route-screen-matrix.json
+            .phase2-route-inventory/route-screen-matrix.md
+            phase2-route-screen-output.txt
+          if-no-files-found: error
+          retention-days: 14
