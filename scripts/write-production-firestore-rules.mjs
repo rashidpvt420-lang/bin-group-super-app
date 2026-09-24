@@ -165,7 +165,8 @@ if (!propertyIdentityBlock || !propertyIdentityBlock.includes('allow read, creat
   failures.push('property_identity_registry must be explicitly browser-denied');
 }
 const propertyIdentityFallback = matchBlock('    match /{collection}/{document=**} {');
-if (!propertyIdentityFallback.includes("'property_identity_registry']) && hasAdminClaim();")) {
+const propertyIdentityReadRule = propertyIdentityFallback.match(/allow\s+read:\s*([^;]+);/)?.[1] || '';
+if (!propertyIdentityReadRule.includes("'property_identity_registry'")) {
   failures.push('property_identity_registry is not excluded from the global Admin read fallback');
 }
 const propertyIdentityFallbackWrites = [...propertyIdentityFallback.matchAll(/allow\s+([^:;]+):\s*([^;]+);/g)]
