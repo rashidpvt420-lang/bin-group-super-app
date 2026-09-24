@@ -52,7 +52,7 @@ const AI_ENABLED_ROLES = [
   ...ADMIN_STAFF_ROLES,
 ];
 
-const ROLE_PORTAL_PREFIXES = ['/owner', '/tenant', '/technician', '/broker', '/admin'];
+const ROLE_PORTAL_PREFIXES = ['/owner', '/tenant', '/technician', '/broker', '/admin', '/auditor'];
 
 function PushNotificationBootstrap() {
   const { user, role } = useRole();
@@ -125,6 +125,7 @@ function AuthenticatedShellContent({ children, showChrome = true, publicAuth = f
     if (normalizedRole === 'tenant') return <Navigate to="/tenant/dashboard" replace />;
     if (normalizedRole === 'technician') return <Navigate to="/technician/dashboard" replace />;
     if (normalizedRole === 'broker') return <Navigate to="/broker/dashboard" replace />;
+    if (normalizedRole === 'auditor') return <Navigate to="/auditor" replace />;
     if (ADMIN_STAFF_ROLES.includes(normalizedRole)) return <Navigate to="/admin/dashboard" replace />;
     if (normalizedRole === 'owner') return <Navigate to="/owner/dashboard" replace />;
   }
