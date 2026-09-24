@@ -48,8 +48,6 @@ function generatePDF(owner: any, passports: any[], tickets: any[], year: number)
   doc.text(`Report Period: 1 Jan ${year} – 31 Dec ${year}`, MARGIN, 72);
 
   // ── Executive summary ──
-  if (loadError) return <Alert severity="error">{loadError}</Alert>;
-
   const totalIncome = passports.reduce((s, p) => s + (p.rentCollectedTotal || 0), 0);
   const totalMaintenance = passports.reduce((s, p) => s + (p.maintenanceCostTotal || 0), 0);
   const mgmtFee = totalIncome * 0.08;
@@ -206,6 +204,8 @@ export default function OwnerPLReportPage() {
       <CircularProgress sx={{ color: gold }} />
     </Box>
   );
+
+  if (loadError) return <Alert severity="error">{loadError}</Alert>;
 
   const totalIncome = passports.reduce((s, p) => s + (p.rentCollectedTotal || 0), 0);
   const totalMaint = passports.reduce((s, p) => s + (p.maintenanceCostTotal || 0), 0);
