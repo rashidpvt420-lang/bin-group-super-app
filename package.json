@@ -43,7 +43,7 @@
     "harden:private-hr-storage": "node scripts/harden-private-hr-storage.mjs",
     "harden:live-location-authority": "node scripts/harden-technician-live-location-authority.mjs",
     "write:production-rules": "node scripts/write-production-firestore-rules.mjs",
-    "prepare:rules": "npm run normalize:rules && npm run harden:rules && npm run harden:rules:warnings && npm run harden:owner-trust-rules && npm run harden:bin-connect-rules && npm run harden:system-secrets && npm run harden:broker-kyc-rules && node scripts/apply-profile-admin-rule.mjs && npm run harden:ticket-binding && npm run harden:hr-privacy && npm run harden:final-firestore-authority && npm run harden:private-hr-firestore && npm run harden:private-hr-storage && npm run harden:live-location-authority && npm run write:production-rules",
+    "prepare:rules": "npm run normalize:rules && npm run harden:rules && npm run harden:rules:warnings && npm run harden:owner-trust-rules && npm run harden:bin-connect-rules && npm run harden:system-secrets && npm run harden:broker-kyc-rules && node scripts/apply-profile-admin-rule.mjs && npm run harden:ticket-binding && npm run harden:hr-privacy && npm run harden:final-firestore-authority && npm run harden:private-hr-firestore && npm run harden:private-hr-storage && npm run harden:live-location-authority && npm run harden:property-identity-registry && npm run write:production-rules",
     "verify:rules-hardening": "node scripts/verify-firestore-launch-hardening.mjs",
     "verify:audit-bridge": "node scripts/verify-audit-write-bridge.mjs",
     "verify:uae-domination": "node scripts/verify-uae-domination-foundation.mjs",
@@ -111,7 +111,8 @@
     "mobile:open:android": "npx cap open android",
     "mobile:open:ios": "npx cap open ios",
     "mobile:check": "npm run test:mobile-store-readiness && npm run build",
-    "harden:final-firestore-authority": "node scripts/harden-final-firestore-authority.mjs"
+    "harden:final-firestore-authority": "node scripts/harden-final-firestore-authority.mjs",
+    "harden:property-identity-registry": "node scripts/harden-property-identity-registry-rules.mjs"
   },
   "dependencies": {
     "@capacitor/app": "^7.1.0",
