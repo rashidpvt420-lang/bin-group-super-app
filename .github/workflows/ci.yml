@@ -7,6 +7,7 @@ on:
     branches: [main]
 
 permissions:
+  actions: read
   contents: read
 
 concurrency:
@@ -88,6 +89,8 @@ jobs:
       - name: Launch honesty and workflow-security tests
         id: launch_honesty
         shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           set +e
           npm run test:launch-honesty > launch-honesty-output.txt 2>&1
