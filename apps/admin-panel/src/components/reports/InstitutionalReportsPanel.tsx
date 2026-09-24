@@ -17,52 +17,58 @@ import { collection, onSnapshot } from 'firebase/firestore';
  */
 const InstitutionalReportsPanel: React.FC = () => {
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const [portfolioData, setPortfolioData] = useState<any>({
-    towerName: "Global Portfolio Hub",
+    towerName: "Portfolio Operations",
     unitsActive: 0,
-    totalSavingsAED: 245000,
-    healthScore: 92,
-    slaCompliance: 96,
-    monthlyTrends: [
-      { month: 'Jan', savings: 12000, health: 95 },
-      { month: 'Feb', savings: 15400, health: 93 },
-      { month: 'Mar', savings: 18900, health: 94 }
-    ],
-    assetDistribution: [
-      { name: 'AC Units', count: 0, health: 88 },
-      { name: 'Plumbing', count: 0, health: 92 },
-      { name: 'Electrical', count: 0, health: 95 }
-    ]
+    totalSavingsAED: 0,
+    healthScore: 0,
+    slaCompliance: 0,
+    monthlyTrends: [],
+    assetDistribution: []
   });
 
   useEffect(() => {
     // 🏢 1. Active Units & Asset Distribution
     const unsubProperties = onSnapshot(collection(db, 'properties'), (snapshot) => {
-      const activeUnits = snapshot.size;
-      const acCount = snapshot.docs.filter(d => d.data().hasAC).length || (activeUnits * 2);
-      
+      const rows = snapshot.docs.map((d) => d.data() as any);
+      const healthValues = rows.map((row) => Number(row.healthScore ?? row.bpi ?? 0)).filter((value) => value > 0 && Number.isFinite(value));
+      const healthScore = healthValues.length ? Math.round(healthValues.reduce((sum, value) => sum + value, 0) / healthValues.length) : 0;
+      const typeCounts = new Map<string, number>();
+      rows.forEach((row) => {
+        const type = String(row.propertyType || row.type || 'Property');
+        typeCounts.set(type, (typeCounts.get(type) || 0) + 1);
+      });
+
       setPortfolioData((prev: any) => ({
         ...prev,
-        unitsActive: activeUnits,
-        assetDistribution: [
-          { name: 'HVAC Network', count: acCount, health: 91 },
-          { name: 'Plumbing Sys', count: activeUnits * 1.5, health: 96 },
-          { name: 'Power Grid', count: activeUnits, health: 98 }
-        ]
+        unitsActive: snapshot.size,
+        healthScore,
+        assetDistribution: [...typeCounts.entries()].map(([name, count]) => ({ name, count, health: healthScore }))
       }));
+      setLoadError('');
+      setLoading(false);
+    }, (error: any) => {
+      console.error('[InstitutionalReports] properties listener failed:', error);
+      setLoadError(error?.message || 'Unable to load portfolio records.');
       setLoading(false);
     });
 
     // 💰 2. Savings & Compliance (Derived from Contracts/Tickets)
     const unsubTickets = onSnapshot(collection(db, 'maintenanceTickets'), (snapshot) => {
-        const completed = snapshot.docs.filter(d => d.data().status === 'COMPLETED').length;
-        const total = snapshot.size || 1;
-        const compliance = Math.round((completed / total) * 100);
-        
+        const rows = snapshot.docs.map((d) => d.data() as any);
+        const completed = rows.filter((row) => ['COMPLETED', 'CLOSED', 'completed', 'closed'].includes(String(row.status || ''))).length;
+        const compliance = snapshot.size ? Math.round((completed / snapshot.size) * 100) : 0;
+        const totalSavingsAED = rows.reduce((sum, row) => sum + Number(row.costSavedAED || row.savingsAED || 0), 0);
+
         setPortfolioData((prev: any) => ({
             ...prev,
-            slaCompliance: compliance > 0 ? compliance : prev.slaCompliance
+            slaCompliance: compliance,
+            totalSavingsAED
         }));
+    }, (error: any) => {
+        console.error('[InstitutionalReports] tickets listener failed:', error);
+        setLoadError(error?.message || 'Unable to load maintenance reporting data.');
     });
 
     return () => {
@@ -76,6 +82,7 @@ const InstitutionalReportsPanel: React.FC = () => {
         GENERATING PORTFOLIO_INTELLIGENCE...
     </div>
   );
+  if (loadError) return <div className="p-8 bg-[#0a0a0b] text-red-300 min-h-screen">{loadError}</div>;
 
   return (
     <div className="p-8 bg-[#0a0a0b] text-white min-h-screen font-sans">
