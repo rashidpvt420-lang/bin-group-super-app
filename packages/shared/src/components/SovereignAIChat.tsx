@@ -310,7 +310,7 @@ export const SovereignAIChat: React.FC<SovereignAIChatProps> = ({
             <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)', letterSpacing: 1 }}>ADVISORY ASSISTANT · PROVIDER STATUS SHOWN</Typography>
           </Box>
         </Stack>
-        <IconButton onClick={() => setOpen(false)} sx={{ color: 'rgba(255,255,255,0.4)' }}>
+        <IconButton type="button" data-testid="sovereign-ai-close" aria-label="Close Sovereign AI chat" onClick={() => setOpen(false)} sx={{ color: 'rgba(255,255,255,0.4)' }}>
           <X size={20} />
         </IconButton>
       </Box>
@@ -374,7 +374,7 @@ export const SovereignAIChat: React.FC<SovereignAIChatProps> = ({
           InputProps={{
             endAdornment: (
               <InputAdornment position="end">
-                <IconButton disabled={loading || !sessionBound} onClick={() => void handleSend(input)} sx={{ color: binThemeTokens.gold }}>
+                <IconButton type="button" data-testid="sovereign-ai-send" aria-label="Send Sovereign AI message" disabled={loading || !sessionBound} onClick={() => void handleSend(input)} sx={{ color: binThemeTokens.gold }}>
                   <Send size={18} />
                 </IconButton>
               </InputAdornment>
@@ -397,6 +397,8 @@ export const SovereignAIChat: React.FC<SovereignAIChatProps> = ({
   return (
     <>
       <Fab
+        data-testid="sovereign-ai-open"
+        aria-label="Open Sovereign AI chat"
         onClick={() => setOpen(true)}
         sx={{ position: 'fixed', bottom: 30, right: 30, bgcolor: binThemeTokens.gold, color: '#000', boxShadow: `0 0 30px ${alpha(binThemeTokens.gold, 0.4)}`, '&:hover': { bgcolor: binThemeTokens.goldLight, transform: 'scale(1.05)' }, zIndex: 2000, transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)' }}
       >

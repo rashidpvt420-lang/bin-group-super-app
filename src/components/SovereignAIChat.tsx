@@ -378,7 +378,7 @@ export const SovereignAIChat: React.FC<SovereignAIChatProps> = ({
             <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)', letterSpacing: 1 }}>ADVISORY ASSISTANT · PROVIDER STATUS SHOWN</Typography>
           </Box>
         </Stack>
-        <IconButton onClick={() => setOpen(false)} sx={{ color: 'rgba(255,255,255,0.4)' }}><X size={20} /></IconButton>
+        <IconButton type="button" data-testid="sovereign-ai-close" aria-label="Close Sovereign AI chat" onClick={() => setOpen(false)} sx={{ color: 'rgba(255,255,255,0.4)' }}><X size={20} /></IconButton>
       </Box>
 
       <Box sx={{ flexGrow: 1, overflowY: 'auto', p: 3, display: 'flex', flexDirection: 'column', gap: 3 }}>
@@ -420,7 +420,7 @@ export const SovereignAIChat: React.FC<SovereignAIChatProps> = ({
           onKeyDown={(e) => e.key === 'Enter' && void handleSend(input)}
           autoComplete="off"
           sx={{ '& .MuiOutlinedInput-root': { bgcolor: 'rgba(255,255,255,0.03)', borderRadius: 3, '& fieldset': { borderColor: 'rgba(255,255,255,0.1)' }, '&:hover fieldset': { borderColor: binThemeTokens.gold } } }}
-          InputProps={{ endAdornment: <InputAdornment position="end"><IconButton disabled={loading || !input.trim()} onClick={() => void handleSend(input)} sx={{ color: binThemeTokens.gold }}><Send size={18} /></IconButton></InputAdornment> }}
+          InputProps={{ endAdornment: <InputAdornment position="end"><IconButton type="button" data-testid="sovereign-ai-send" aria-label="Send Sovereign AI message" disabled={loading || !input.trim()} onClick={() => void handleSend(input)} sx={{ color: binThemeTokens.gold }}><Send size={18} /></IconButton></InputAdornment> }}
         />
         <Typography variant="caption" sx={{ mt: 2, display: 'block', textAlign: 'center', color: 'rgba(255,255,255,0.35)', fontWeight: 900 }}>
           <ShieldCheck size={12} style={{ display: 'inline', marginRight: 4 }} /> {allowLiveProvider ? 'AUTHENTICATED SESSION · STATUS SHOWN' : 'LOCAL GUIDANCE ONLY · SIGN IN FOR LIVE AI'}
@@ -432,6 +432,7 @@ export const SovereignAIChat: React.FC<SovereignAIChatProps> = ({
   return (
     <>
       <Fab
+        data-testid="sovereign-ai-open"
         aria-label="Move or open Sovereign AI chat"
         onPointerDown={handleFabPointerDown}
         onPointerMove={handleFabPointerMove}

@@ -115,9 +115,12 @@ test.describe('Owner launch audit', () => {
 
   test('owner AR/EN switch works in shell', async () => {
     const page = pageForAudit();
-    await page.goto('/owner/dashboard', { waitUntil: 'domcontentloaded' });
+    // The launch Owner fixture may still be activation-gated. Prove language
+    // switching on an explicitly allowed pre-activation route instead of
+    // weakening the dashboard activation lock.
+    await page.goto('/owner/activation', { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(1_500);
-    await assertHealthy(page, '/owner/dashboard');
+    await assertHealthy(page, '/owner/activation');
     const langBtn = page.getByTestId('owner-language-toggle');
     await expect(langBtn, 'Language toggle must be visible in owner shell').toBeVisible({ timeout: 10_000 });
     await langBtn.click();
@@ -125,7 +128,7 @@ test.describe('Owner launch audit', () => {
     const afterText = await page.locator('body').innerText({ timeout: 10_000 });
     expect(afterText.trim().length, 'Content must render after AR switch').toBeGreaterThan(0);
     expect(afterText, 'No crash after language switch').not.toMatch(/application error|unhandled runtime error/i);
-    await expect.poll(() => new URL(page.url()).pathname).toBe('/owner/dashboard');
+    await expect.poll(() => new URL(page.url()).pathname).toBe('/owner/activation');
     await page.getByTestId('owner-language-toggle').click();
     await page.waitForTimeout(500);
   });

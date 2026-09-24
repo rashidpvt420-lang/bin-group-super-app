@@ -31,7 +31,13 @@ async function login(page: Page) {
   await page.waitForURL((url) => !url.pathname.endsWith('/login'), { timeout: 30_000 });
 }
 
+async function waitForResolvedBrokerShell(page: Page, context: string) {
+  const authSpinner = page.getByText(/Authenticating BIN-Groups Identity/i).first();
+  await expect(authSpinner, `${context}: broker identity must resolve before shell assertions`).toBeHidden({ timeout: 20_000 });
+}
+
 async function assertHealthy(page: Page, context: string) {
+  await waitForResolvedBrokerShell(page, context);
   const body = await page.locator('body').innerText({ timeout: 20_000 });
   expect(body.trim().length, `${context}: body must render text`).toBeGreaterThan(0);
   expect(body, `${context}: no crash text`).not.toMatch(CRASH_PATTERN);
@@ -130,7 +136,7 @@ test.describe('Broker launch audit', () => {
   test('broker nav bar renders correct labels (not hardcoded English)', async () => {
     const page = pageForAudit();
     await page.goto('/broker/dashboard', { waitUntil: 'domcontentloaded' });
-    await page.waitForTimeout(1_500);
+    await waitForResolvedBrokerShell(page, 'broker/dashboard nav');
     const dashBtn = page.locator('#broker-nav-dashboard, button[id="broker-nav-dashboard"]').first();
     const hasDashBtn = await dashBtn.isVisible({ timeout: 8_000 }).catch(() => false);
     if (!hasDashBtn) {
@@ -142,7 +148,7 @@ test.describe('Broker launch audit', () => {
   test('broker AR/EN language switch works (including shell labels)', async () => {
     const page = pageForAudit();
     await page.goto('/broker/dashboard', { waitUntil: 'domcontentloaded' });
-    await page.waitForTimeout(1_500);
+    await waitForResolvedBrokerShell(page, 'broker/dashboard language switch');
 
     const langBtn = page.getByTestId('broker-language-toggle');
     await expect(langBtn, 'Language toggle must be visible in broker shell').toBeVisible({ timeout: 10_000 });
@@ -163,7 +169,6 @@ test.describe('Broker launch audit', () => {
     const page = pageForAudit();
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto('/broker/dashboard', { waitUntil: 'domcontentloaded' });
-    await page.waitForTimeout(1_500);
     await assertHealthy(page, 'broker/dashboard (mobile)');
 
     const mobileNav = page.locator('#broker-mobile-nav-dashboard, [id^="broker-mobile-nav-"]').first();
