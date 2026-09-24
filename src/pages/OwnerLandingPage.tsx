@@ -141,7 +141,7 @@ const OwnerLandingPage: React.FC = () => {
                             </Typography>
                         </Box>
                         <Stack direction="row" spacing={2} alignItems="center">
-                            <IconButton onClick={() => setLang(lang === 'en' ? 'ar' : 'en')} sx={{ color: binThemeTokens.gold }}>
+                            <IconButton aria-label="Change language" onClick={() => setLang(lang === 'en' ? 'ar' : 'en')} sx={{ color: binThemeTokens.gold }}>
                                 <Languages size={20} />
                             </IconButton>
                             <Button 
