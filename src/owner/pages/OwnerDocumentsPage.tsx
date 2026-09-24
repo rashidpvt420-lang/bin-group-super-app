@@ -59,7 +59,7 @@ export default function OwnerDocumentsPage() {
                     <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.4)', mt: 1 }}>Secure repository for contracts, title deeds, invoices, receipts, service reports, and financial audits.</Typography>
                 </Box>
                 <Stack direction="row" spacing={2}>
-                    <Button variant="outlined" startIcon={<Lock size={16} />} sx={{ borderColor: alpha(binThemeTokens.gold, 0.3), color: binThemeTokens.gold, fontWeight: 900, borderRadius: 3 }}>Secure Link</Button>
+                    <Button disabled title="Unavailable until this workflow is connected" aria-label="Secure Link" variant="outlined" startIcon={<Lock size={16} />} sx={{ borderColor: alpha(binThemeTokens.gold, 0.3), color: binThemeTokens.gold, fontWeight: 900, borderRadius: 3 }}>Secure Link</Button>
                 </Stack>
             </Box>
 
