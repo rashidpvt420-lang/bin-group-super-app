@@ -270,6 +270,54 @@ async function assertExactRoute(page: Page, role: RoleCase, route: string) {
   expect(refreshedBody, `${role.name} ${route} must not lose authorization after refresh`).not.toMatch(ACCESS_DENIED);
 }
 
+async function assertMobileArabicRoute(page: Page, role: RoleCase, route: string) {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.evaluate(() => localStorage.setItem('bin_language', 'ar'));
+  const destination = role.baseUrl ? `${role.baseUrl}${route}` : route;
+  await page.goto(destination, { waitUntil: 'domcontentloaded' });
+  await page.waitForTimeout(route.includes('/map') ? 2_000 : 600);
+
+  await expect.poll(() => new URL(page.url()).pathname, {
+    message: `${role.name} ${route} must remain exact in mobile Arabic mode`,
+  }).toBe(route);
+
+  await expect.poll(async () => page.evaluate(() => document.documentElement.dir), {
+    message: `${role.name} ${route} must switch the document to RTL`,
+  }).toBe('rtl');
+
+  await expect.poll(async () => page.evaluate(() => document.documentElement.lang), {
+    message: `${role.name} ${route} must expose Arabic document language`,
+  }).toBe('ar');
+
+  const body = await page.locator('body').innerText({ timeout: 20_000 });
+  expect(body.trim().length, `${role.name} ${route} must render on phone viewport`).toBeGreaterThan(0);
+  expect(body, `${role.name} ${route} must not crash in mobile Arabic mode`).not.toMatch(CRASH_PATTERN);
+  expect(body, `${role.name} ${route} must remain authorized in mobile Arabic mode`).not.toMatch(ACCESS_DENIED);
+
+  const overflow = await page.evaluate(() => ({
+    width: window.innerWidth,
+    scrollWidth: document.documentElement.scrollWidth,
+  }));
+  expect(
+    overflow.scrollWidth,
+    `${role.name} ${route} must not create page-level horizontal overflow on a 390px viewport`,
+  ).toBeLessThanOrEqual(overflow.width + 8);
+
+  if (role.name !== 'Admin') {
+    const back = page.getByRole('button', { name: /Back|رجوع/i }).first();
+    await expect(back, `${role.name} ${route} must expose a route-aware back control`).toBeVisible({ timeout: 10_000 });
+  }
+
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await expect.poll(async () => page.evaluate(() => ({
+    path: location.pathname,
+    dir: document.documentElement.dir,
+    lang: document.documentElement.lang,
+  })), {
+    message: `${role.name} ${route} must preserve route + Arabic RTL after refresh`,
+  }).toEqual({ path: route, dir: 'rtl', lang: 'ar' });
+}
+
 for (const role of roleCases) {
   test(`${role.name} hard-launch routes remain exact and authenticated`, async ({ page }) => {
     test.setTimeout(600_000);
@@ -277,6 +325,7 @@ for (const role of roleCases) {
     await monitor.assertTokenFingerprint();
     await login(page, role);
     for (const route of role.routes) await assertExactRoute(page, role, route);
+    for (const route of role.routes) await assertMobileArabicRoute(page, role, route);
     monitor.assertClean(`${role.name} hard-launch exact routes`);
     monitor.assertAuthenticatedFirebaseRead(`${role.name} hard-launch exact routes`);
   });
