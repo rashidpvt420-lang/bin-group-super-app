@@ -1,5 +1,5 @@
 import React from 'react';
-import { Alert, Box, Button, Chip, Divider, Grid, MenuItem, Paper, Stack, TextField, Typography, alpha } from '@mui/material';
+import { Alert, Box, Button, Chip, CircularProgress, Divider, Grid, MenuItem, Paper, Stack, TextField, Typography, alpha } from '@mui/material';
 import { CheckCircle2, Inbox, MessageSquare, Send } from 'lucide-react';
 import { addDoc, collection, db, doc, limit, onSnapshot, orderBy, query, serverTimestamp, updateDoc } from '../../lib/firebase';
 import { useAuth } from '../../context/AuthContext';
@@ -54,17 +54,22 @@ export default function BinConnectInboxPage() {
   const [channelFilter, setChannelFilter] = React.useState('all');
   const [notice, setNotice] = React.useState('');
   const [busy, setBusy] = React.useState(false);
+  const [loadingThreads, setLoadingThreads] = React.useState(true);
 
   React.useEffect(() => {
     const q = query(collection(db, 'binConnectThreads'), orderBy('createdAt', 'desc'), limit(100));
     return onSnapshot(q, (snap) => {
       const rows = snap.docs.map((item) => ({ id: item.id, ...(item.data() as any) }));
       setThreads(rows);
+      setLoadingThreads(false);
       if (!selectedId && rows[0]) {
         setSelectedId(rows[0].id);
         setStatus(rows[0].status || 'open');
       }
-    }, (error) => setNotice(error.message || 'Could not load BIN Connect threads.'));
+    }, (error) => {
+      setNotice(error.message || 'Could not load BIN Connect threads.');
+      setLoadingThreads(false);
+    });
   }, [selectedId]);
 
   const selected = React.useMemo(() => threads.find((thread) => thread.id === selectedId), [threads, selectedId]);
@@ -149,6 +154,8 @@ export default function BinConnectInboxPage() {
         </Box>
         <Chip icon={<Inbox size={16} />} label={`${threads.length} total threads`} sx={{ bgcolor: alpha(binThemeTokens.gold, .12), color: binThemeTokens.gold, fontWeight: 950, alignSelf: { xs: 'flex-start', md: 'center' } }} />
       </Stack>
+
+      {loadingThreads && <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}><CircularProgress size={28} sx={{ color: binThemeTokens.gold }} /></Box>}
 
       {notice && <Alert severity={notice.includes('sent') || notice.includes('updated') ? 'success' : 'warning'} sx={{ mb: 3 }}>{notice}</Alert>}
 
