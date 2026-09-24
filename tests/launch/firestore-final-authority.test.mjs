@@ -66,7 +66,7 @@ test('final Firestore authority hardener is status-aware, explicit, bounded and 
 
     assert.match(
       rules,
-      /allow read: if collection != 'tickets' && collection != 'maintenanceTickets' && !\(collection in \['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions', 'private_hr_profiles', 'technician_live_locations', 'invoice_registry'\]\) && hasAdminClaim\(\);/,
+      /allow read: if collection != 'tickets' && collection != 'maintenanceTickets' && !\(collection in \['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions', 'private_hr_profiles', 'technician_live_locations', 'invoice_registry', 'payroll_entries', 'property_identity_registry'\]\) && hasAdminClaim\(\);/,
     );
     assert.match(rules, /allow create: if collection != 'tickets' && collection != 'maintenanceTickets' && !\(/);
     assert.match(rules, /allow update, delete: if collection != 'tickets' && collection != 'maintenanceTickets' && !\(/);
