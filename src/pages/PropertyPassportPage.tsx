@@ -122,7 +122,7 @@ export default function PropertyPassportPage() {
                         <Chip icon={<MapPin size={14}/>} label={gps.label} sx={{ bgcolor: alpha(gps.color, 0.1), color: gps.color, fontWeight: 950 }} />
                     </Stack>
                 </Box>
-                <Button variant="contained" startIcon={<Download size={18}/>} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, px: 4, borderRadius: 2 }}>
+                <Button disabled title="Unavailable until this workflow is connected" aria-label="EXPORT PASSPORT (PDF)" variant="contained" startIcon={<Download size={18}/>} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, px: 4, borderRadius: 2 }}>
                     EXPORT PASSPORT (PDF)
                 </Button>
             </Box>
