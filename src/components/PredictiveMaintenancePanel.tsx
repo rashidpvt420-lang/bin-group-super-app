@@ -103,7 +103,7 @@ const PredictiveMaintenancePanel: React.FC<Props> = ({ report }) => {
                                 </Stack>
                             </Grid>
                             <Grid item xs={12} md={4} sx={{ textAlign: 'right' }}>
-                                <Button 
+                                <Button disabled title="Unavailable until this workflow is connected" aria-label="MITIGATE NOW" 
                                     variant="outlined" 
                                     size="small"
                                     sx={{ 
