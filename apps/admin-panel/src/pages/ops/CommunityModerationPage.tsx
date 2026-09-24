@@ -86,10 +86,10 @@ export default function CommunityModerationPage() {
                                             <Stack direction="row" spacing={1} justifyContent="flex-end">
                                                 {p.status === 'pending' && (
                                                     <>
-                                                        <IconButton size="small" color="success" onClick={() => handleUpdateStatus(p.id, 'approved')}>
+                                                        <IconButton aria-label="Approve community post" size="small" color="success" onClick={() => handleUpdateStatus(p.id, 'approved')}>
                                                             <SafeIcon icon={Check} size={16} />
                                                         </IconButton>
-                                                        <IconButton size="small" color="error" onClick={() => handleUpdateStatus(p.id, 'rejected')}>
+                                                        <IconButton aria-label="Reject community post" size="small" color="error" onClick={() => handleUpdateStatus(p.id, 'rejected')}>
                                                             <SafeIcon icon={X} size={16} />
                                                         </IconButton>
                                                     </>
