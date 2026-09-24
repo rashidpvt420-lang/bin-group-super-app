@@ -119,7 +119,7 @@ export const HR_SELF_SERVICE_COLLECTIONS = [
   'salaryHistory',
   'staffMoodCheckins',
   'hrAiConversations',
-  'auditLogs',
+  'audit_logs',
 ] as const;
 
 export const PAPERLESS_HR_PUBLIC_COPY = {
