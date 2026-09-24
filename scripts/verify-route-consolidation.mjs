@@ -53,7 +53,8 @@ assertContains(mainAppPath, mainApp, '<Route path="/dashboard" element={<Navigat
 assertContains(ownerAppPath, ownerApp, '<Route path="/" element={<OwnerSimpleDashboardPage />} />', 'owner root starts with simple dashboard');
 assertContains(ownerAppPath, ownerApp, '<Route path="/dashboard" element={<OwnerSimpleDashboardPage />} />', 'owner dashboard starts with simple dashboard');
 assertContains(ownerAppPath, ownerApp, '<Route path="/dashboard/full" element={<OwnerDashboardPage />} />', 'full owner dashboard remains available under an explicit full route');
-assertContains(ownerAppPath, ownerApp, '<Route path="/legacy-units" element={<OwnerUnitsPage />} />', 'old owner units file must be explicitly named legacy instead of competing with the canonical unit registry');
+assertContains(ownerAppPath, ownerApp, '<Route path="/legacy-units" element={<Navigate to="/owner/units" replace />} />', 'legacy owner units URL must redirect to the canonical unit registry');
+assertNotContains(ownerAppPath, ownerApp, "import OwnerUnitsPage from './pages/OwnerUnitsPage';", 'legacy owner units implementation must not retain runtime authority');
 
 assertContains(tenantAppPath, tenantApp, '<Route path="/" element={<TenantSimpleDashboardPage />} />', 'tenant root starts with simple dashboard');
 assertContains(tenantAppPath, tenantApp, '<Route path="/dashboard/full" element={<TenantDashboardPage />} />', 'full tenant dashboard remains available under an explicit full route');
