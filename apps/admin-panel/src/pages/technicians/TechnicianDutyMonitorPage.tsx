@@ -109,7 +109,7 @@ export default function TechnicianDutyMonitorPage() {
                                         <Stack direction="row" spacing={1} alignItems="center">
                                             <Typography variant="body2" color={binThemeTokens.gold} fontWeight="950">#{tech.currentTicketId.substring(0,8)}</Typography>
                                             <Tooltip title="View Ticket">
-                                                <IconButton size="small" sx={{ color: 'rgba(255,255,255,0.3)' }}>
+                                                <IconButton disabled title="Unavailable until this workflow is connected" aria-label="View Ticket" size="small" sx={{ color: 'rgba(255,255,255,0.3)' }}>
                                                     <ExternalLink size={14}/>
                                                 </IconButton>
                                             </Tooltip>
@@ -133,12 +133,12 @@ export default function TechnicianDutyMonitorPage() {
                                 <TableCell>
                                     <Stack direction="row" spacing={1}>
                                         <Tooltip title="Emergency Alert">
-                                            <IconButton size="small" sx={{ color: '#ff4444', bgcolor: 'rgba(255,68,68,0.05)' }}>
+                                            <IconButton disabled title="Unavailable until this workflow is connected" aria-label="Emergency Alert" size="small" sx={{ color: '#ff4444', bgcolor: 'rgba(255,68,68,0.05)' }}>
                                                 <ShieldAlert size={18}/>
                                             </IconButton>
                                         </Tooltip>
                                         <Tooltip title="Force Sync">
-                                            <IconButton size="small" sx={{ color: 'rgba(255,255,255,0.5)' }}>
+                                            <IconButton disabled title="Unavailable until this workflow is connected" aria-label="Force Sync" size="small" sx={{ color: 'rgba(255,255,255,0.5)' }}>
                                                 <RefreshCcw size={18}/>
                                             </IconButton>
                                         </Tooltip>
