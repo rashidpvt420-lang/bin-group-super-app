@@ -19,6 +19,8 @@ export default function TenantNoticesPage() {
   const [filterCategory, setFilterCategory] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [noticesError, setNoticesError] = useState('');
+  const [noticesSuccess, setNoticesSuccess] = useState('');
+  const [markingReadId, setMarkingReadId] = useState<string | null>(null);
 
   const label = (key: string, en: string, ar: string) => lang === 'ar' ? ar : tx(key, en);
 
@@ -108,7 +110,10 @@ export default function TenantNoticesPage() {
   }, [propertyId, user?.uid]);
 
   const handleMarkAsRead = async (noticeId: string) => {
-    if (!user?.uid) return;
+    if (!user?.uid || markingReadId) return;
+    setMarkingReadId(noticeId);
+    setNoticesError('');
+    setNoticesSuccess('');
     try {
       await setDoc(doc(db, 'announcementReads', `${noticeId}_${user.uid}`), {
         announcementId: noticeId,
@@ -117,9 +122,12 @@ export default function TenantNoticesPage() {
         readAt: serverTimestamp(),
       });
       setReadNoticeIds((current) => new Set(current).add(noticeId));
+      setNoticesSuccess(label('tenant.notices.mark_success', 'Notice marked as read.', 'تم وضع علامة مقروء على الإشعار.'));
     } catch (err) {
       console.error('Failed to mark notice as read:', err);
       setNoticesError(label('tenant.notices.mark_error', 'This notice could not be marked as read.', 'تعذر وضع علامة مقروء على هذا الإشعار.'));
+    } finally {
+      setMarkingReadId(null);
     }
   };
 
@@ -156,6 +164,7 @@ export default function TenantNoticesPage() {
         </Typography>
       </Box>
       {noticesError && <Alert severity="error" sx={{ mb: 3 }}>{noticesError}</Alert>}
+      {noticesSuccess && <Alert severity="success" sx={{ mb: 3 }}>{noticesSuccess}</Alert>}
 
       <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mb: 4 }}>
         <TextField
@@ -245,7 +254,7 @@ export default function TenantNoticesPage() {
                         size="small"
                         variant="outlined"
                         startIcon={<SafeIcon icon={Eye} size={14} />}
-                        onClick={() => handleMarkAsRead(notice.id)}
+                        disabled={markingReadId === notice.id} onClick={() => handleMarkAsRead(notice.id)}
                         sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.gold, fontWeight: 950, borderRadius: 2 }}
                       >
                         {label('tenant.notices.mark_read', 'MARK AS READ', 'تحديد كمقروء')}
