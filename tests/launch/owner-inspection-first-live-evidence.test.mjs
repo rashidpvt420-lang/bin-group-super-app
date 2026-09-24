@@ -55,7 +55,9 @@ test('Owner evidence artifact excludes bank account and identity secrets', () =>
 test('Owner Playwright business proof requires server IDs, genuine visits, Phase 1 receipt and Founder MFA', () => {
   const runner = read('scripts/run-owner-business-suite-evidence.mjs');
   const spec = read('tests/e2e/business-owner.spec.ts');
-  assert.ok(runner.includes('run-owner-inspection-first-production-evidence.mjs'));
+  assert.ok(runner.includes('run-owner-inspection-first-production-evidence-unique.mjs'));
+  const identityWrapper = read('scripts/run-owner-inspection-first-production-evidence-unique.mjs');
+  assert.ok(identityWrapper.includes('run-owner-inspection-first-production-evidence.mjs'));
   assert.ok(!runner.includes('run-owner-onboarding-production-evidence-secure.mjs'));
   for (const required of [
     'serverGeneratedPropertyIds',
