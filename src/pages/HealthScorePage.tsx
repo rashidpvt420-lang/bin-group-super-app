@@ -116,7 +116,7 @@ export default function HealthScorePage() {
                 </Box>
                 <Typography variant="h5" fontWeight="900" sx={{ color: '#FFF', mb: 1.5 }}>{report?.label.toUpperCase()} CONDITION</Typography>
                 <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary, mb: 4 }}>Risk Level: **{report?.riskLevel}**</Typography>
-                <Button variant="contained" fullWidth sx={{ background: binThemeTokens.gold, color: '#000', fontWeight: 900, py: 2, borderRadius: 3 }}>DOWNLOAD AUDIT PDF</Button>
+                <Button disabled title="Unavailable until this workflow is connected" aria-label="DOWNLOAD AUDIT PDF" variant="contained" fullWidth sx={{ background: binThemeTokens.gold, color: '#000', fontWeight: 900, py: 2, borderRadius: 3 }}>DOWNLOAD AUDIT PDF</Button>
             </Card>
         </Grid>
 
