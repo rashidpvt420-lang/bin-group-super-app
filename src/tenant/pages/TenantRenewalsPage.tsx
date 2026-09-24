@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Box, Button, Card, CardContent, Chip, CircularProgress, Stack, Typography } from '@mui/material';
+import { Alert, Box, Button, Card, CardContent, Chip, CircularProgress, Stack, Typography } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { db, collection, getDocs, limit, orderBy, query, where, Timestamp } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
@@ -34,6 +34,7 @@ export default function TenantRenewalsPage() {
   const navigate = useNavigate();
   const { user } = useRole();
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const [renewals, setRenewals] = useState<RenewalWatchRecord[]>([]);
 
   useEffect(() => {
@@ -44,15 +45,19 @@ export default function TenantRenewalsPage() {
         return;
       }
       try {
+        setLoadError('');
         const map = new Map<string, RenewalWatchRecord>();
         const addAll = (items: RenewalWatchRecord[]) => items.forEach((item) => map.set(item.id, item));
         addAll(await loadRenewalsBy('tenantId', user.uid));
         if (user.email) addAll(await loadRenewalsBy('tenantEmail', String(user.email).trim().toLowerCase()));
         const merged = Array.from(map.values()).sort((a, b) => (a.daysRemaining ?? 9999) - (b.daysRemaining ?? 9999));
         if (!cancelled) setRenewals(merged);
-      } catch (error) {
+      } catch (error: any) {
         console.error('[TenantRenewals] Failed to load renewal watch records:', error);
-        if (!cancelled) setRenewals([]);
+        if (!cancelled) {
+          setRenewals([]);
+          setLoadError(error?.message || 'Renewal records could not be loaded.');
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -80,6 +85,8 @@ export default function TenantRenewalsPage() {
       </Box>
     );
   }
+
+  if (loadError) return <Alert severity="error">{loadError}</Alert>;
 
   return (
     <Box>
