@@ -221,6 +221,22 @@ function permission(row) {
 
 const exactRouteE2E = read('tests/e2e/hard-launch-routes.spec.ts');
 
+function blockBetween(content, startToken, endToken) {
+  const start = content.indexOf(startToken);
+  if (start < 0) return '';
+  const end = content.indexOf(endToken, start + startToken.length);
+  return end < 0 ? content.slice(start) : content.slice(start, end);
+}
+
+const exactRouteBlocks = {
+  public: blockBetween(exactRouteE2E, 'const publicRoutes = [', '] as const;'),
+  owner: blockBetween(exactRouteE2E, "name: 'Owner'", "name: 'Tenant'"),
+  tenant: blockBetween(exactRouteE2E, "name: 'Tenant'", "name: 'Technician'"),
+  technician: blockBetween(exactRouteE2E, "name: 'Technician'", "name: 'Broker'"),
+  broker: blockBetween(exactRouteE2E, "name: 'Broker'", "name: 'Admin'"),
+  adminops: blockBetween(exactRouteE2E, "name: 'Admin'", 'const PHASE_2_SENTINEL_ROUTE'),
+};
+
 function e2eCandidateRoute(row) {
   const candidate = row.scope === 'adminops' ? row.raw : row.route;
   return candidate.replace(/:[A-Za-z0-9_]+/g, 'phase2-missing');
@@ -230,7 +246,6 @@ function e2eCoversRoute(row) {
   if (/Navigate/.test(row.element) || row.raw === '*') return true;
   const candidate = e2eCandidateRoute(row);
   if (candidate.includes('*')) return false;
-  if (exactRouteE2E.includes(`'${candidate}'`)) return true;
 
   const portalRootAliases = {
     '/owner': '/owner/dashboard',
@@ -238,8 +253,17 @@ function e2eCoversRoute(row) {
     '/technician': '/technician/dashboard',
     '/broker': '/broker/dashboard',
   };
-  const alias = portalRootAliases[candidate];
-  return Boolean(alias && exactRouteE2E.includes(`'${alias}'`));
+  const aliasedCandidate = portalRootAliases[candidate] || candidate;
+
+  if (row.scope === 'main') {
+    if (row.route === '/auditor/*' || row.route === '/admin/*') return false;
+    if (exactRouteBlocks.public.includes(`'${aliasedCandidate}'`)) return true;
+    return ['owner', 'tenant', 'technician', 'broker', 'adminops']
+      .some((scope) => exactRouteBlocks[scope].includes(`'${aliasedCandidate}'`));
+  }
+
+  const block = exactRouteBlocks[row.scope] || '';
+  return block.includes(`'${aliasedCandidate}'`);
 }
 
 const STATIC_CONTENT_ROUTES = new Set([
@@ -364,11 +388,51 @@ function backNavigation(row, content) {
   return 'REVIEW';
 }
 
+const firebaseConfig = JSON.parse(read('firebase.json') || '{}');
+const hostingTargets = new Map(
+  (Array.isArray(firebaseConfig.hosting) ? firebaseConfig.hosting : [])
+    .map((entry) => [String(entry?.target || ''), entry]),
+);
+
+function hasSpaRewrite(target) {
+  const hosting = hostingTargets.get(target);
+  return Boolean(
+    hosting &&
+    Array.isArray(hosting.rewrites) &&
+    hosting.rewrites.some((rewrite) => rewrite?.source === '**' && rewrite?.destination === '/index.html'),
+  );
+}
+
+const mainSpaRewrite = hasSpaRewrite('app');
+const adminSpaRewrite = hasSpaRewrite('admin');
+
 function directAndRefresh(row) {
-  if (row.scope === 'adminops') return ['REGISTERED_ADMIN_SITE', 'AUTH_RESTORE/ROUTER'];
-  if (['owner', 'tenant', 'technician', 'broker'].includes(row.scope)) return ['REGISTERED', 'AUTH_RESTORE/ROUTER'];
-  if (/\/(owner|tenant|technician|broker|auditor|admin)\/\*/.test(row.route)) return ['REGISTERED', 'AUTH_RESTORE/ROUTER'];
-  return ['REGISTERED', 'ROUTER'];
+  const rewriteReady = row.scope === 'adminops' ? adminSpaRewrite : mainSpaRewrite;
+  if (!rewriteReady) return ['REVIEW', 'REVIEW'];
+
+  if (/Navigate/.test(row.element) || row.raw === '*') {
+    return ['HOSTING_REWRITE+ROUTER_ALIAS', 'HOSTING_REWRITE+ROUTER_ALIAS'];
+  }
+
+  if (row.scope === 'main' && ['/owner/*', '/tenant/*', '/technician/*', '/broker/*', '/admin/*'].includes(row.route)) {
+    return ['HOSTING_REWRITE+AUTH_ROUTE_CONTAINER', 'HOSTING_REWRITE+AUTH_ROUTE_CONTAINER'];
+  }
+
+  if (row.scope === 'main' && row.route === '/auditor/*') {
+    return ['HOSTING_REWRITE+AUDITOR_AUTH_GUARD', 'HOSTING_REWRITE+AUDITOR_AUTH_GUARD'];
+  }
+
+  if (row.scope === 'adminops' && row.raw === '/login') {
+    return ['HOSTING_REWRITE+ADMIN_AUTH_ENTRY', 'HOSTING_REWRITE+ADMIN_AUTH_ENTRY'];
+  }
+
+  if (row.scope === 'adminops' && row.raw === '/auth-error') {
+    return ['HOSTING_REWRITE+ADMIN_AUTH_ERROR', 'HOSTING_REWRITE+ADMIN_AUTH_ERROR'];
+  }
+
+  return e2eCoversRoute(row)
+    ? ['E2E_DIRECT_URL+HOSTING_REWRITE', 'E2E_REFRESH+HOSTING_REWRITE']
+    : ['REVIEW', 'REVIEW'];
 }
 
 function csvCell(value) {
@@ -411,6 +475,17 @@ for (const required of [
   'admin-site:/ops/public-launch-command',
 ]) {
   if (!canonicalRoutes.has(required)) failures.push(`Missing Phase 2 canonical route: ${required}`);
+}
+
+const liveAuditWorkflow = read('.github/workflows/live-launch-audit.yml');
+const launchHonestySource = read('scripts/lib/launch-honesty.mjs');
+if (!mainSpaRewrite) failures.push('Firebase app hosting does not rewrite deep links to /index.html.');
+if (!adminSpaRewrite) failures.push('Firebase Admin hosting does not rewrite deep links to /index.html.');
+if (!liveAuditWorkflow.includes("branches: [main]") || !liveAuditWorkflow.includes("GITHUB_REF\" != 'refs/heads/main'")) {
+  failures.push('Protected live launch audit must remain exact-main only.');
+}
+if (!launchHonestySource.includes("'tests/e2e/hard-launch-routes.spec.ts'")) {
+  failures.push('Protected launchAuditLive suite does not include the Phase 2 exact-route browser audit.');
 }
 
 const auditor = read('src/pages/public/AuditorPortalPage.tsx');
@@ -476,6 +551,8 @@ const reviews = {
   mobile: rows.filter((row) => row.mobile === 'REVIEW').length,
   arabic: rows.filter((row) => row.arabic === 'REVIEW').length,
   back: rows.filter((row) => row.backNavigation.startsWith('REVIEW')).length,
+  directUrl: rows.filter((row) => row.directUrl === 'REVIEW').length,
+  refresh: rows.filter((row) => row.refresh === 'REVIEW').length,
 };
 
 const unresolvedRows = {
@@ -485,6 +562,8 @@ const unresolvedRows = {
   mobile: rows.filter((row) => row.mobile === 'REVIEW'),
   arabic: rows.filter((row) => row.arabic === 'REVIEW'),
   back: rows.filter((row) => row.backNavigation.startsWith('REVIEW')),
+  directUrl: rows.filter((row) => row.directUrl === 'REVIEW'),
+  refresh: rows.filter((row) => row.refresh === 'REVIEW'),
 };
 
 for (const [dimension, unresolved] of Object.entries(unresolvedRows)) {
@@ -524,6 +603,8 @@ The CSV records:
 | Mobile | ${reviews.mobile} |
 | Arabic | ${reviews.arabic} |
 | Back navigation | ${reviews.back} |
+| Direct URL | ${reviews.directUrl} |
+| Refresh | ${reviews.refresh} |
 
 \`REVIEW\` is deliberately fail-honest: source inspection did not find an explicit implementation signal, so the row is not counted as a pass. Responsive/Arabic hints still require device/runtime evidence.
 
@@ -539,7 +620,7 @@ fs.writeFileSync(path.join(outDir, 'PHASE_2_ROUTE_SCREEN_INVENTORY.md'), summary
 
 notes.push(`[phase-2] Route entries: ${rows.length}`);
 for (const [key, value] of Object.entries(counts)) notes.push(`[phase-2] ${key}: ${value}`);
-notes.push(`[phase-2] REVIEW loading=${reviews.loading} empty=${reviews.empty} error=${reviews.error} mobile=${reviews.mobile} arabic=${reviews.arabic} back=${reviews.back}`);
+notes.push(`[phase-2] REVIEW loading=${reviews.loading} empty=${reviews.empty} error=${reviews.error} mobile=${reviews.mobile} arabic=${reviews.arabic} back=${reviews.back} directUrl=${reviews.directUrl} refresh=${reviews.refresh}`);
 notes.push('[phase-2] Matrix written to audit/phase-2-route-screen-inventory.csv');
 for (const note of notes) console.log(note);
 
