@@ -13,7 +13,7 @@ import {
     Zap, PaintBucket, Eraser, Key
 } from 'lucide-react';
 import { binThemeTokens } from '../theme/binGroupTheme';
-import { db, collection, query, where, getDocs, doc, updateDoc } from '../lib/firebase';
+import { db, collection, query, where, getDocs, functions, httpsCallable } from '../lib/firebase';
 import { useRole } from '../context/RoleContext';
 import { useLanguage } from '@bin/shared';
 import { fetchTurnoverStats } from '../utils/turnoverEngine';
@@ -43,6 +43,7 @@ export default function TurnoverEnginePage() {
   const [tab, setTab] = useState(0);
   const [selectedQuote, setSelectedQuote] = useState<TurnoverQuote | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const [decisionBusy, setDecisionBusy] = useState<'APPROVED' | 'REJECTED' | null>(null);
   const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: 'success' | 'error' | 'info' }>({ open: false, message: '', severity: 'info' });
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
@@ -73,27 +74,32 @@ export default function TurnoverEnginePage() {
     }
   };
 
-  const handleApprove = async (quoteId: string) => {
+  const handleDecision = async (quoteId: string, decision: 'APPROVED' | 'REJECTED') => {
+    if (decisionBusy) return;
+    setDecisionBusy(decision);
     try {
-      await updateDoc(doc(db, 'turnover-quotes', quoteId), { status: 'APPROVED' });
-      setSnackbar({ open: true, message: t('turnover.msg.approved'), severity: 'success' });
-      fetchQuotes();
+      const decideTurnoverQuote = httpsCallable(functions, 'ownerDecideTurnoverQuote');
+      await decideTurnoverQuote({ quoteId, decision });
+      setSnackbar({
+        open: true,
+        message: decision === 'APPROVED' ? t('turnover.msg.approved') : t('turnover.msg.rejected'),
+        severity: decision === 'APPROVED' ? 'success' : 'info',
+      });
+      await fetchQuotes();
       setDetailsOpen(false);
     } catch (error) {
-      setSnackbar({ open: true, message: t('turnover.msg.approve_failed'), severity: 'error' });
+      setSnackbar({
+        open: true,
+        message: decision === 'APPROVED' ? t('turnover.msg.approve_failed') : t('turnover.msg.reject_failed'),
+        severity: 'error',
+      });
+    } finally {
+      setDecisionBusy(null);
     }
   };
 
-  const handleReject = async (quoteId: string) => {
-    try {
-      await updateDoc(doc(db, 'turnover-quotes', quoteId), { status: 'REJECTED' });
-      setSnackbar({ open: true, message: t('turnover.msg.rejected'), severity: 'info' });
-      fetchQuotes();
-      setDetailsOpen(false);
-    } catch (error) {
-      setSnackbar({ open: true, message: t('turnover.msg.reject_failed'), severity: 'error' });
-    }
-  };
+  const handleApprove = (quoteId: string) => handleDecision(quoteId, 'APPROVED');
+  const handleReject = (quoteId: string) => handleDecision(quoteId, 'REJECTED');
 
   const getStatusColor = (status: string): any => {
     switch (status) {
@@ -248,8 +254,8 @@ export default function TurnoverEnginePage() {
               <Button onClick={() => setDetailsOpen(false)}>CLOSE</Button>
               {selectedQuote.status === 'PENDING' && (
                 <Stack direction="row" spacing={2}>
-                  <Button onClick={() => handleReject(selectedQuote.quoteId)} variant="outlined" color="error">REJECT</Button>
-                  <Button onClick={() => handleApprove(selectedQuote.quoteId)} variant="contained" color="success">APPROVE</Button>
+                  <Button data-testid="turnover-reject" disabled={decisionBusy !== null} onClick={() => handleReject(selectedQuote.quoteId)} variant="outlined" color="error">{decisionBusy === 'REJECTED' ? 'REJECTING...' : 'REJECT'}</Button>
+                  <Button data-testid="turnover-approve" disabled={decisionBusy !== null} onClick={() => handleApprove(selectedQuote.quoteId)} variant="contained" color="success">{decisionBusy === 'APPROVED' ? 'APPROVING...' : 'APPROVE'}</Button>
                 </Stack>
               )}
             </DialogActions>
