@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
     Box, Typography, Paper, Stack, Chip, 
-    CircularProgress, Grid, alpha, Divider,
+    CircularProgress, Grid, alpha, Divider, Alert,
     Avatar, Tooltip
 } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
@@ -22,6 +22,7 @@ export default function TechnicianHistoryPage() {
     const navigate = useNavigate();
     const [history, setHistory] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
+    const [loadError, setLoadError] = useState('');
     const [stats, setStats] = useState({
         total: 0,
         success: 0,
@@ -70,6 +71,11 @@ export default function TechnicianHistoryPage() {
                 slaCompliance
             }));
 
+            setLoadError('');
+            setLoading(false);
+        }, (error: any) => {
+            console.error('[TechnicianHistory] listener failed:', error);
+            setLoadError(error?.message || 'Unable to load technician history.');
             setLoading(false);
         });
 
@@ -77,6 +83,8 @@ export default function TechnicianHistoryPage() {
     }, [user]);
 
     if (loading) return <Box sx={{ display: 'flex', justifyContent: 'center', py: 10 }}><CircularProgress sx={{ color: binThemeTokens.gold }} /></Box>;
+
+    if (loadError) return <Alert severity="error">{loadError}</Alert>;
 
     return (
         <Box>

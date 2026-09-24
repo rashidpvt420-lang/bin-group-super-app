@@ -17,6 +17,7 @@ import { ToastProvider } from './context/ToastContext';
 import { SovereignAIChat } from './components/SovereignAIChat';
 import IOSPwaGuardian from './components/IOSPwaGuardian';
 import OwnerActivationGuard from './components/owner/OwnerActivationGuard';
+import { NavigationControl } from './components/navigation/NavigationControl';
 
 function lazyWithRetry(componentImport: () => Promise<any>) {
   return React.lazy(async () => {
@@ -238,6 +239,36 @@ function publicOrPilot(children: React.ReactNode) {
   return PRIVATE_PRODUCTION_DEPLOY ? <PilotLaunchPage /> : children;
 }
 
+const AUTH_SHELL_NAV_PREFIXES = [
+  '/owner',
+  '/tenant',
+  '/technician',
+  '/broker',
+  '/auditor',
+  '/admin',
+  '/government/',
+  '/properties/',
+  '/analytics/',
+  '/design-studio',
+];
+
+const AUTH_SHELL_NAV_EXACT = new Set([
+  '/financials',
+  '/calendar',
+  '/notifications',
+]);
+
+function PublicRouteNavigation() {
+  const location = useLocation();
+  const pathname = location.pathname;
+  const handledByAuthenticatedShell =
+    AUTH_SHELL_NAV_EXACT.has(pathname) ||
+    AUTH_SHELL_NAV_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(prefix));
+
+  if (handledByAuthenticatedShell) return null;
+  return <NavigationControl />;
+}
+
 function PublicSovereignAIEntry() {
   const location = useLocation();
   const isRolePortalRoute = ROLE_PORTAL_PREFIXES.some((prefix) => location.pathname === prefix || location.pathname.startsWith(`${prefix}/`));
@@ -340,6 +371,7 @@ export default function App() {
             <ToastProvider>
               <CssBaseline />
               <AppContent />
+              <PublicRouteNavigation />
               <PublicSovereignAIEntry />
               <IOSPwaGuardian />
             </ToastProvider>

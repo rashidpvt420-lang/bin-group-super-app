@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { 
     Container, Typography, Paper, Table, TableBody, TableCell, 
     TableContainer, TableHead, TableRow, Chip, Box, TextField, 
-    InputAdornment, IconButton, Grid
+    InputAdornment, IconButton, Grid, Alert, CircularProgress
 } from '@mui/material';
 import { collection, query, orderBy, limit, onSnapshot } from 'firebase/firestore';
 import { db } from '../lib/firebase';
@@ -15,6 +15,8 @@ export default function AuditLogPage() {
     const { t, lang, isRTL } = useLanguage();
     const [logs, setLogs] = useState<any[]>([]);
     const [search, setSearch] = useState('');
+    const [loading, setLoading] = useState(true);
+    const [loadError, setLoadError] = useState('');
 
     useEffect(() => {
         const q = query(collection(db, 'audit_logs'), orderBy('createdAt', 'desc'), limit(100));
@@ -32,6 +34,12 @@ export default function AuditLogPage() {
                 };
             });
             setLogs(data);
+            setLoadError('');
+            setLoading(false);
+        }, (error: any) => {
+            console.error('[AuditLog] listener failed:', error);
+            setLoadError(error?.message || 'Unable to load audit events.');
+            setLoading(false);
         });
         return () => unsubscribe();
     }, []);
@@ -71,6 +79,12 @@ export default function AuditLogPage() {
                 </Box>
             </Box>
 
+            {loadError && <Alert severity="error" sx={{ mb: 3 }}>{loadError}</Alert>}
+            {loading ? (
+                <Box role="status" sx={{ py: 10, display: 'grid', placeItems: 'center' }}>
+                    <CircularProgress />
+                </Box>
+            ) : (
             <Grid container spacing={4}>
                 <Grid item xs={12}>
                     <TableContainer component={Paper} elevation={0} sx={{ border: '1px solid rgba(0,0,0,0.05)', borderRadius: 3 }}>
@@ -112,6 +126,7 @@ export default function AuditLogPage() {
                     </TableContainer>
                 </Grid>
             </Grid>
+            )}
         </Container>
     );
 }

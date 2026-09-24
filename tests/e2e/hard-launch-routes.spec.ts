@@ -34,34 +34,194 @@ type RoleCase = {
   baseUrl?: string;
 };
 
+const publicRoutes = [
+  '/',
+  '/pilot',
+  '/owner-landing',
+  '/v1',
+  '/gateway',
+  '/login',
+  '/homes',
+  '/terms-of-service',
+  '/privacy-policy',
+  '/terms',
+  '/privacy',
+  '/support',
+  '/feedback',
+  '/pilot-feedback',
+  '/owners',
+  '/tenants',
+  '/technicians',
+  '/brokers',
+  '/property-management',
+  '/maintenance',
+  '/majlis-care',
+  '/stadiums',
+  '/hotels',
+  '/malls',
+  '/hospitals',
+  '/government-properties',
+  '/security',
+  '/trust',
+  '/trust-center',
+  '/uae-market-leadership',
+  '/owner-trust-os',
+  '/workforce-os',
+  '/services',
+  '/contact',
+  '/request-demo',
+  '/videos',
+  '/onboarding',
+  '/verify',
+  '/verify-cert',
+  '/tenant-invite',
+  '/invoices/phase2-missing',
+  '/verify/phase2-missing',
+  '/verify/invoice/phase2-missing',
+  '/verify/cert/phase2-missing',
+  '/verify/pass/phase2-missing',
+  '/verify-cert/phase2-missing',
+] as const;
+
 const roleCases: RoleCase[] = [
   {
     name: 'Owner',
     roleKey: 'owner',
     email: process.env.E2E_OWNER_MAILBOX_EMAIL || '',
     password: process.env.E2E_OWNER_PASSWORD || '',
-    routes: ['/owner/dashboard', '/owner/properties', '/owner/contracts', '/owner/financials', '/owner/tenants', '/owner/documents', '/owner/property-passport', '/owner/tickets', '/owner/units', '/owner/roi', '/owner/activation'],
+    routes: [
+      '/owner/dashboard',
+      '/owner/dashboard/full',
+      '/owner/activation',
+      '/owner/onboarding-status',
+      '/owner/properties',
+      '/owner/contracts',
+      '/owner/financials',
+      '/owner/payment-proof',
+      '/owner/iban',
+      '/owner/profile',
+      '/owner/roi',
+      '/owner/units',
+      '/owner/tenants',
+      '/owner/property-passport',
+      '/owner/documents',
+      '/owner/renewals',
+      '/owner/inspections',
+      '/owner/review-queue',
+      '/owner/design-studio',
+      '/owner/design-studio/request/phase2-missing',
+      '/owner/complaint',
+      '/owner/tickets',
+      '/owner/ai-intelligence',
+      '/owner/damage-estimate',
+      '/owner/p-l-report',
+      '/owner/find-room-rent',
+      '/owner/contractor-marketplace',
+      '/owner/home-discovery',
+      '/owner/approvals',
+      '/owner/bin-connect',
+      '/owner/pilot-completion',
+      '/owner/property-passport/phase2-missing',
+      '/owner/ticket/phase2-missing',
+      '/account-privacy',
+      '/government/phase2-missing',
+      '/financials',
+      '/calendar',
+      '/properties/phase2-missing/health',
+      '/analytics/reporting',
+      '/analytics/executive',
+      '/analytics/turnover',
+      '/properties/phase2-missing/units',
+      '/notifications',
+      '/design-studio',
+      '/design-studio/request/phase2-missing',
+    ],
   },
   {
     name: 'Tenant',
     roleKey: 'tenant',
     email: process.env.E2E_TENANT_EMAIL || '',
     password: process.env.E2E_TENANT_PASSWORD || '',
-    routes: ['/tenant/dashboard', '/tenant/unit', '/tenant/request', '/tenant/tickets', '/tenant/documents', '/tenant/emergency', '/tenant/chat', '/tenant/profile', '/tenant/gate-pass', '/tenant/amenities'],
+    routes: [
+      '/tenant/dashboard',
+      '/tenant/dashboard/full',
+      '/tenant/scheduled-service',
+      '/tenant/unit',
+      '/tenant/ai-concierge',
+      '/tenant/request',
+      '/tenant/tickets',
+      '/tenant/chat',
+      '/tenant/emergency',
+      '/tenant/profile',
+      '/tenant/documents',
+      '/tenant/design-studio',
+      '/tenant/design-studio/request/phase2-missing',
+      '/tenant/gate-pass',
+      '/tenant/amenities',
+      '/tenant/payments',
+      '/tenant/move-inspection',
+      '/tenant/notices',
+      '/tenant/keys',
+      '/tenant/parcels',
+      '/tenant/visitor-parking',
+      '/tenant/homes',
+      '/tenant/find-room-rent',
+      '/tenant/marketplace',
+      '/tenant/staff-directory',
+      '/tenant/messages',
+      '/tenant/community',
+      '/tenant/renewals',
+      '/tenant/ticket/phase2-missing',
+      '/tenant/chat/phase2-missing',
+      '/tenant/move-inspection/move-in',
+      '/notifications',
+      '/design-studio',
+      '/design-studio/request/phase2-missing',
+    ],
   },
   {
     name: 'Technician',
     roleKey: 'technician',
     email: process.env.E2E_TECHNICIAN_EMAIL || '',
     password: process.env.E2E_TECHNICIAN_PASSWORD || '',
-    routes: ['/technician/dashboard', '/technician/jobs', '/technician/map', '/technician/history', '/technician/hr', '/technician/profile', '/technician/chat'],
+    routes: [
+      '/technician/dashboard',
+      '/technician/dashboard/full',
+      '/technician/jobs',
+      '/technician/proof-readiness',
+      '/technician/chat',
+      '/technician/chat/phase2-missing',
+      '/technician/map',
+      '/technician/history',
+      '/technician/profile',
+      '/technician/hr',
+      '/technician/offline',
+      '/technician/support',
+      '/technician/bin-connect',
+      '/technician/pilot-completion',
+      '/technician/job/phase2-missing',
+      '/calendar',
+      '/notifications',
+    ],
   },
   {
     name: 'Broker',
     roleKey: 'broker',
     email: process.env.E2E_BROKER_MAILBOX_EMAIL || '',
     password: process.env.E2E_BROKER_PASSWORD || '',
-    routes: ['/broker/dashboard', '/broker/leads', '/broker/referrals', '/broker/commissions', '/broker/documents', '/broker/profile'],
+    routes: [
+      '/broker/dashboard',
+      '/broker/dashboard/full',
+      '/broker/leads',
+      '/broker/leads/new',
+      '/broker/referrals',
+      '/broker/referrals/new',
+      '/broker/commissions',
+      '/broker/attribution',
+      '/broker/documents',
+      '/broker/profile',
+      '/notifications',
+    ],
   },
   {
     name: 'Admin',
@@ -69,9 +229,71 @@ const roleCases: RoleCase[] = [
     email: process.env.E2E_ADMIN_EMAIL || '',
     password: process.env.E2E_ADMIN_PASSWORD || '',
     baseUrl: ADMIN_BASE_URL,
-    routes: ['/dashboard', '/profile', '/contracts', '/owners', '/tenants', '/tickets', '/technicians', '/sos', '/financials', '/audit'],
+    routes: [
+      '/dashboard',
+      '/profile',
+      '/mfa-recovery',
+      '/contracts',
+      '/financials',
+      '/financials/payroll',
+      '/transactions',
+      '/broker',
+      '/broker-attributions',
+      '/broker-commissions',
+      '/owners',
+      '/tenants',
+      '/unit-links',
+      '/tenant-services',
+      '/control-center',
+      '/properties/passport',
+      '/bulk-import',
+      '/tickets',
+      '/technicians',
+      '/technicians/map',
+      '/sos',
+      '/document-vault',
+      '/audit-shield',
+      '/reports',
+      '/settings',
+      '/smoke-test',
+      '/payments',
+      '/profitability',
+      '/compliance',
+      '/pilot',
+      '/ops/public',
+      '/ops/whatsapp-triage',
+      '/ops/bin-connect',
+      '/ops/pilot-completion',
+      '/ops/public-launch-command',
+      '/ops/rfq',
+      '/ops/vendors',
+      '/ops/data-governance',
+      '/reports/institutional',
+      '/ops/technicians',
+      '/vault',
+      '/orphans',
+      '/onboard-property',
+      '/design-studio',
+      '/hr',
+      '/audit',
+      '/admin/pricing-matrix',
+      '/admin/units',
+      '/admin/bin-gpt-engineer',
+      '/ops/amenity-control',
+      '/ops/announcements',
+      '/ops/document-library',
+      '/ops/key-register',
+      '/ops/parcel-desk',
+      '/ops/visitor-parking',
+      '/ops/marketplace-approvals',
+      '/ops/staff-directory',
+      '/ops/messages',
+      '/ops/community-moderation',
+    ],
   },
 ];
+
+const PHASE_2_SENTINEL_ROUTE = /phase2-missing/;
 
 function requireRoleConfiguration(role: RoleCase) {
   if (!role.email || !role.password || (role.name === 'Admin' && !role.baseUrl)) {
@@ -113,16 +335,153 @@ async function assertExactRoute(page: Page, role: RoleCase, route: string) {
   const body = await page.locator('body').innerText({ timeout: 20_000 });
   expect(body.trim().length, `${role.name} ${route} must render visible text`).toBeGreaterThan(0);
   expect(body, `${role.name} ${route} must not render a runtime crash`).not.toMatch(CRASH_PATTERN);
-  expect(body, `${role.name} ${route} must not render an access denial`).not.toMatch(ACCESS_DENIED);
+  if (!PHASE_2_SENTINEL_ROUTE.test(route)) {
+    expect(body, `${role.name} ${route} must not render an access denial`).not.toMatch(ACCESS_DENIED);
+  }
+
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await page.waitForTimeout(route.includes('/map') ? 2_000 : 500);
+  await expect.poll(() => new URL(page.url()).pathname, {
+    message: `${role.name} ${route} must survive browser refresh without wildcard/auth fallback`,
+  }).toBe(route);
+  const refreshedBody = await page.locator('body').innerText({ timeout: 20_000 });
+  expect(refreshedBody.trim().length, `${role.name} ${route} must render after refresh`).toBeGreaterThan(0);
+  expect(refreshedBody, `${role.name} ${route} must not crash after refresh`).not.toMatch(CRASH_PATTERN);
+  if (!PHASE_2_SENTINEL_ROUTE.test(route)) {
+    expect(refreshedBody, `${role.name} ${route} must not lose authorization after refresh`).not.toMatch(ACCESS_DENIED);
+  }
 }
+
+async function assertMobileArabicRoute(page: Page, role: RoleCase, route: string) {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.evaluate(() => localStorage.setItem('bin_language', 'ar'));
+  const destination = role.baseUrl ? `${role.baseUrl}${route}` : route;
+  await page.goto(destination, { waitUntil: 'domcontentloaded' });
+  await page.waitForTimeout(route.includes('/map') ? 2_000 : 600);
+
+  await expect.poll(() => new URL(page.url()).pathname, {
+    message: `${role.name} ${route} must remain exact in mobile Arabic mode`,
+  }).toBe(route);
+
+  await expect.poll(async () => page.evaluate(() => document.documentElement.dir), {
+    message: `${role.name} ${route} must switch the document to RTL`,
+  }).toBe('rtl');
+
+  await expect.poll(async () => page.evaluate(() => document.documentElement.lang), {
+    message: `${role.name} ${route} must expose Arabic document language`,
+  }).toBe('ar');
+
+  const body = await page.locator('body').innerText({ timeout: 20_000 });
+  expect(body.trim().length, `${role.name} ${route} must render on phone viewport`).toBeGreaterThan(0);
+  expect(body, `${role.name} ${route} must not crash in mobile Arabic mode`).not.toMatch(CRASH_PATTERN);
+  if (!PHASE_2_SENTINEL_ROUTE.test(route)) {
+    expect(body, `${role.name} ${route} must remain authorized in mobile Arabic mode`).not.toMatch(ACCESS_DENIED);
+  }
+
+  const overflow = await page.evaluate(() => ({
+    width: window.innerWidth,
+    scrollWidth: document.documentElement.scrollWidth,
+  }));
+  expect(
+    overflow.scrollWidth,
+    `${role.name} ${route} must not create page-level horizontal overflow on a 390px viewport`,
+  ).toBeLessThanOrEqual(overflow.width + 8);
+
+  const isPortalHome =
+    route === `/${role.roleKey}` ||
+    route === `/${role.roleKey}/dashboard`;
+
+  if (role.name !== 'Admin' && !isPortalHome) {
+    const back = page.getByRole('button', { name: /Back|رجوع/i }).first();
+    await expect(back, `${role.name} ${route} must expose a route-aware back control`).toBeVisible({ timeout: 10_000 });
+  }
+
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await expect.poll(async () => page.evaluate(() => ({
+    path: location.pathname,
+    dir: document.documentElement.dir,
+    lang: document.documentElement.lang,
+  })), {
+    message: `${role.name} ${route} must preserve route + Arabic RTL after refresh`,
+  }).toEqual({ path: route, dir: 'rtl', lang: 'ar' });
+}
+
+test('Public Phase 2 routes survive direct URL, refresh, mobile and Arabic RTL', async ({ page }) => {
+  test.setTimeout(600_000);
+
+  for (const route of publicRoutes) {
+    const response = await page.goto(route, { waitUntil: 'domcontentloaded' });
+    expect(response?.status() ?? 200, `Public ${route} must not return a server error`).toBeLessThan(500);
+    await expect.poll(() => new URL(page.url()).pathname, {
+      message: `Public ${route} must remain on its registered route`,
+    }).toBe(route);
+    let body = await page.locator('body').innerText({ timeout: 20_000 });
+    expect(body.trim().length, `Public ${route} must render visible content`).toBeGreaterThan(0);
+    expect(body, `Public ${route} must not crash`).not.toMatch(CRASH_PATTERN);
+
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await expect.poll(() => new URL(page.url()).pathname).toBe(route);
+
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.evaluate(() => localStorage.setItem('bin_language', 'ar'));
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await expect.poll(async () => page.evaluate(() => ({
+      path: location.pathname,
+      dir: document.documentElement.dir,
+      lang: document.documentElement.lang,
+    }))).toEqual({ path: route, dir: 'rtl', lang: 'ar' });
+
+    body = await page.locator('body').innerText({ timeout: 20_000 });
+    expect(body.trim().length, `Public ${route} must render on mobile Arabic`).toBeGreaterThan(0);
+    expect(body, `Public ${route} must not crash on mobile Arabic`).not.toMatch(CRASH_PATTERN);
+    const overflow = await page.evaluate(() => ({
+      width: window.innerWidth,
+      scrollWidth: document.documentElement.scrollWidth,
+    }));
+    expect(overflow.scrollWidth, `Public ${route} must avoid page-level horizontal overflow`).toBeLessThanOrEqual(overflow.width + 8);
+
+    await page.evaluate(() => localStorage.setItem('bin_language', 'en'));
+    await page.setViewportSize({ width: 1280, height: 720 });
+  }
+});
+
+test('Admin login Phase 2 route survives direct URL, refresh, mobile and Arabic RTL', async ({ page }) => {
+  test.setTimeout(120_000);
+  if (!ADMIN_BASE_URL) throw new Error('Admin login route audit requires E2E_ADMIN_BASE_URL.');
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(`${ADMIN_BASE_URL}/login`, { waitUntil: 'domcontentloaded' });
+  await page.evaluate(() => localStorage.setItem('bin_language', 'ar'));
+  await page.reload({ waitUntil: 'domcontentloaded' });
+
+  await expect.poll(() => new URL(page.url()).pathname, {
+    message: 'Admin /login must remain exact after direct load and refresh',
+  }).toBe('/login');
+  await expect.poll(async () => page.evaluate(() => ({
+    dir: document.documentElement.dir,
+    lang: document.documentElement.lang,
+  })), {
+    message: 'Admin /login must expose Arabic RTL document semantics',
+  }).toEqual({ dir: 'rtl', lang: 'ar' });
+
+  const body = await page.locator('body').innerText({ timeout: 20_000 });
+  expect(body.trim().length, 'Admin /login must render visible content').toBeGreaterThan(0);
+  expect(body, 'Admin /login must not crash on mobile Arabic').not.toMatch(CRASH_PATTERN);
+  const overflow = await page.evaluate(() => ({
+    width: window.innerWidth,
+    scrollWidth: document.documentElement.scrollWidth,
+  }));
+  expect(overflow.scrollWidth, 'Admin /login must avoid page-level horizontal overflow').toBeLessThanOrEqual(overflow.width + 8);
+});
 
 for (const role of roleCases) {
   test(`${role.name} hard-launch routes remain exact and authenticated`, async ({ page }) => {
-    test.setTimeout(180_000);
+    test.setTimeout(600_000);
     const monitor = await attachAuthenticatedAppCheckMonitor(page);
     await monitor.assertTokenFingerprint();
     await login(page, role);
     for (const route of role.routes) await assertExactRoute(page, role, route);
+    for (const route of role.routes) await assertMobileArabicRoute(page, role, route);
     monitor.assertClean(`${role.name} hard-launch exact routes`);
     monitor.assertAuthenticatedFirebaseRead(`${role.name} hard-launch exact routes`);
   });

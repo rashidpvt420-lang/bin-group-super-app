@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Alert, Box, Button, Chip, Dialog, DialogContent, DialogTitle, Divider, Grid, IconButton, Paper, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Typography, alpha } from '@mui/material';
+import { Alert, Box, Button, Chip, CircularProgress, Dialog, DialogContent, DialogTitle, Divider, Grid, IconButton, Paper, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Typography, alpha } from '@mui/material';
 import { Eye, FileText, X } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { collection, db, limit, onSnapshot, query, where } from '../../lib/firebase';
@@ -34,16 +34,22 @@ export default function OwnerPaymentProofReviewPanel() {
   const { user } = useRole();
   const [searchParams] = useSearchParams();
   const [proofs, setProofs] = useState<ProofRow[]>([]);
+  const [loading, setLoading] = useState(true);
   const [warning, setWarning] = useState('');
   const [selected, setSelected] = useState<ProofRow | null>(null);
 
   useEffect(() => {
-    if (!user?.email && !user?.uid) return;
+    if (!user?.email && !user?.uid) {
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
     const buckets: Record<string, ProofRow[]> = {};
     const publish = () => {
       const map = new Map<string, ProofRow>();
       Object.values(buckets).flat().forEach((row) => row?.id && map.set(row.id, row));
       setProofs(Array.from(map.values()).sort((a, b) => getMillis(b.submittedAt || b.createdAt || b.updatedAt) - getMillis(a.submittedAt || a.createdAt || a.updatedAt)));
+      setLoading(false);
     };
     const unsubs: Array<() => void> = [];
     const email = normalizeEmail(user?.email);
@@ -54,6 +60,7 @@ export default function OwnerPaymentProofReviewPanel() {
       }, (err) => {
         console.warn('[OwnerPaymentProofReviewPanel] ownerEmail listener failed:', err);
         setWarning('Payment proof records could not fully load. Check access rules if proof is missing.');
+        setLoading(false);
       }));
     }
     if (user?.uid) {
@@ -62,6 +69,8 @@ export default function OwnerPaymentProofReviewPanel() {
         publish();
       }, (err) => {
         console.warn('[OwnerPaymentProofReviewPanel] ownerId listener failed:', err);
+        setWarning('Payment proof records could not fully load. Check access rules if proof is missing.');
+        setLoading(false);
       }));
     }
     return () => unsubs.forEach((unsub) => unsub());
@@ -82,7 +91,7 @@ export default function OwnerPaymentProofReviewPanel() {
         <Chip label={`${filteredProofs.length} RECORDS`} sx={{ bgcolor: alpha(binThemeTokens.gold, 0.1), color: binThemeTokens.gold, fontWeight: 950 }} />
       </Box>
       {warning && <Alert severity="warning" sx={{ m: 2 }}>{warning}</Alert>}
-      <TableContainer>
+      {loading ? <Box role="status" sx={{ py: 8, display: 'grid', placeItems: 'center' }}><CircularProgress sx={{ color: binThemeTokens.gold }} /></Box> : <TableContainer>
         <Table>
           <TableHead>
             <TableRow sx={{ bgcolor: 'rgba(255,255,255,0.02)' }}>
@@ -110,7 +119,7 @@ export default function OwnerPaymentProofReviewPanel() {
             {filteredProofs.length === 0 && <TableRow><TableCell colSpan={5} align="center" sx={{ py: 6, color: 'rgba(255,255,255,0.3)', fontWeight: 800 }}>NO PAYMENT PROOF RECORDS FOUND</TableCell></TableRow>}
           </TableBody>
         </Table>
-      </TableContainer>
+      </TableContainer>}
 
       <Dialog open={Boolean(selected)} onClose={() => setSelected(null)} fullWidth maxWidth="sm" PaperProps={{ sx: { bgcolor: '#0f172a', color: '#fff', border: `1px solid ${alpha(binThemeTokens.gold, 0.22)}`, borderRadius: 4 } }}>
         <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontWeight: 950 }}>Payment Proof Detail<IconButton onClick={() => setSelected(null)} sx={{ color: '#fff' }}><X size={18} /></IconButton></DialogTitle>

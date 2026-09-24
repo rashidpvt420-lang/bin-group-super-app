@@ -6,7 +6,7 @@ import { registerArabicFont } from '../utils/arabicPdfFont';
 import { 
     Box, Container, Typography, Grid, Paper, Stack, alpha, 
     CircularProgress, Divider, Card, CardContent, Button, Chip,
-    LinearProgress
+    LinearProgress, Alert
 } from '@mui/material';
 import { 
     TrendingUp, Zap, ShieldCheck, Building2, Globe, 
@@ -24,10 +24,12 @@ const ReportingDashboard: React.FC = () => {
     const [stats, setStats] = useState<any>(null);
     const [selectedEmirate, setSelectedEmirate] = useState('ALL');
     const [loading, setLoading] = useState(true);
+    const [loadError, setLoadError] = useState('');
 
     useEffect(() => {
         const fetchAggregates = async () => {
             try {
+                setLoadError('');
                 const propsSnap = await getDocs(collection(db, 'properties'));
                 const allProps = propsSnap.docs.map(d => d.data());
                 
@@ -80,8 +82,9 @@ const ReportingDashboard: React.FC = () => {
                     emergencyTrend: [4, 2, 5, 1, 0, 3],
                     renewalRisk: 12
                 });
-            } catch (err) {
+            } catch (err: any) {
                 console.error("Aggregation Failed:", err);
+                setLoadError(err?.message || "Reporting data could not be loaded.");
             } finally {
                 setLoading(false);
             }
@@ -128,6 +131,7 @@ const ReportingDashboard: React.FC = () => {
     };
 
     if (loading) return <Box sx={{ display: 'flex', justifyContent: 'center', py: 10 }}><CircularProgress sx={{ color: binThemeTokens.gold }} /></Box>;
+    if (loadError) return <Container maxWidth="xl" sx={{ py: 6 }}><Alert severity="error">{loadError}</Alert></Container>;
 
     return (
         <Container maxWidth="xl" sx={{ py: 6 }}>

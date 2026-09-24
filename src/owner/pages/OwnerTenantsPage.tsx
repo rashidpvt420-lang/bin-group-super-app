@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { 
-    Box, Typography, Paper, Stack, Chip, CircularProgress, 
+    Box, Typography, Paper, Stack, Chip, CircularProgress, Alert, 
     Grid, Avatar, IconButton, TextField, InputAdornment, alpha,
     Button, Divider
 } from '@mui/material';
@@ -16,6 +16,7 @@ import { binThemeTokens } from '../../theme/binGroupTheme';
 export default function OwnerTenantsPage() {
     const { user } = useRole();
     const [loading, setLoading] = useState(true);
+    const [loadError, setLoadError] = useState('');
     const [tenants, setTenants] = useState<any[]>([]);
     const [search, setSearch] = useState('');
 
@@ -25,17 +26,20 @@ export default function OwnerTenantsPage() {
         // 1. Get properties linked to owner email
         const propQ = query(collection(db, 'properties'), where('ownerEmail', '==', user.email.toLowerCase()));
         
+        let unsubscribeTenants: (() => void) | undefined;
         const unsubscribe = onSnapshot(propQ, async (propSnap) => {
             const propIds = propSnap.docs.map(d => d.id);
-            if (propIds.length === 0) { 
+            if (propIds.length === 0) {
+                unsubscribeTenants?.();
                 setTenants([]);
-                setLoading(false); 
-                return; 
+                setLoadError('');
+                setLoading(false);
+                return;
             }
 
-            // 2. Get tenants linked to these properties
             const tenantQ = query(collection(db, 'users'), where('role', '==', 'tenant'), where('ownerId', '==', user.uid));
-            onSnapshot(tenantQ, (tenantSnap) => {
+            unsubscribeTenants?.();
+            unsubscribeTenants = onSnapshot(tenantQ, (tenantSnap) => {
                 const allTenants = tenantSnap.docs.map(d => {
                     const data = d.data();
                     const prop = propSnap.docs.find(p => p.id === data.propertyId)?.data();
@@ -46,11 +50,20 @@ export default function OwnerTenantsPage() {
                     };
                 });
                 setTenants(allTenants);
+                setLoadError('');
+                setLoading(false);
+            }, (error: any) => {
+                console.error('[OwnerTenants] tenant listener failed:', error);
+                setLoadError(error?.message || 'Unable to load tenant directory.');
                 setLoading(false);
             });
+        }, (error: any) => {
+            console.error('[OwnerTenants] property listener failed:', error);
+            setLoadError(error?.message || 'Unable to load owner properties for tenant mapping.');
+            setLoading(false);
         });
 
-        return () => unsubscribe();
+        return () => { unsubscribe(); unsubscribeTenants?.(); };
     }, [user?.email]);
 
     const filtered = tenants.filter(t => 
@@ -65,6 +78,8 @@ export default function OwnerTenantsPage() {
             <Typography variant="overline" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900 }}>Mapping Population...</Typography>
         </Box>
     );
+
+    if (loadError) return <Alert severity="error">{loadError}</Alert>;
 
     return (
         <Box>

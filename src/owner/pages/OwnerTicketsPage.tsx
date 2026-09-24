@@ -7,7 +7,7 @@
 import React, { useState, useEffect } from 'react';
 import {
     Box, Typography, Paper, Stack, Chip, CircularProgress,
-    alpha, Button
+    alpha, Button, Alert
 } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -50,6 +50,7 @@ export default function OwnerTicketsPage() {
     const navigate = useNavigate();
     const [tickets, setTickets] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
+    const [loadError, setLoadError] = useState('');
 
     useEffect(() => {
         if (!user?.uid) return;
@@ -62,16 +63,18 @@ export default function OwnerTicketsPage() {
 
         const unsub = onSnapshot(q, (snap) => {
             setTickets(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+            setLoadError('');
             setLoading(false);
         }, (err: any) => {
             const isPermissionDenied = err?.code === 'permission-denied' || 
                                        err?.message?.includes('permission-denied') || 
                                        err?.message?.includes('insufficient permissions');
             if (isPermissionDenied) {
-                console.warn('[OwnerTickets] query restricted (permission-denied). Failing silently with empty list.');
+                console.warn('[OwnerTickets] query restricted (permission-denied).');
             } else {
                 console.error('[OwnerTickets]', err);
             }
+            setLoadError(err?.message || 'Unable to load maintenance tickets.');
             setLoading(false);
         });
 
@@ -89,6 +92,7 @@ export default function OwnerTicketsPage() {
 
     return (
         <Box sx={{ direction: isRTL ? 'rtl' : 'ltr' }}>
+            {loadError && <Alert severity="error" sx={{ mb: 3 }}>{loadError}</Alert>}
             <Stack direction={isRTL ? 'row-reverse' : 'row'} justifyContent="space-between" alignItems="flex-start" sx={{ mb: 6 }}>
                 <Box sx={{ textAlign: isRTL ? 'right' : 'left' }}>
                     <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 4 }}>

@@ -30,7 +30,8 @@ import {
   Avatar,
   Stack,
   Divider,
-  Alert
+  Alert,
+  CircularProgress
 } from '@mui/material';
 import { db, functions } from '../../lib/firebase';
 import { collection, query, orderBy, limit, where, getDocs, updateDoc, doc, serverTimestamp } from 'firebase/firestore';
@@ -82,6 +83,8 @@ export default function TicketsManagementPage() {
   const [detailTicket, setDetailTicket] = useState<Ticket | null>(null);
   const [estimatedCost, setEstimatedCost] = useState<string>('');
   const [technicians, setTechnicians] = useState<Technician[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   
   const PAGE_SIZE = 20;
 
@@ -109,13 +112,23 @@ export default function TicketsManagementPage() {
   };
 
   useEffect(() => {
+    let cancelled = false;
     const fetchInitial = async () => {
+      setLoading(true);
+      setLoadError('');
+      try {
         const q = query(collection(db, 'maintenanceTickets'), orderBy('createdAt', 'desc'), limit(PAGE_SIZE));
         const snap = await getDocs(q);
-        setTickets(snap.docs.map(mapTicket));
-        setTickets(snap.docs.map(mapTicket));
+        if (!cancelled) setTickets(snap.docs.map(mapTicket));
+      } catch (err: any) {
+        console.error('[AdminTickets] initial load failed:', err);
+        if (!cancelled) setLoadError(err?.message || 'Unable to load maintenance tickets.');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
     };
-    fetchInitial();
+    void fetchInitial();
+    return () => { cancelled = true; };
   }, []);
 
 
@@ -230,6 +243,23 @@ export default function TicketsManagementPage() {
     const hours = Math.floor((completed.getTime() - created.getTime()) / (1000 * 60 * 60));
     return `${hours}h`;
   };
+
+  if (loading) {
+    return (
+      <Container maxWidth="lg" sx={{ py: 10, textAlign: 'center', direction: isRTL ? 'rtl' : 'ltr' }}>
+        <CircularProgress />
+        <Typography sx={{ mt: 2, fontWeight: 800 }}>Loading maintenance tickets…</Typography>
+      </Container>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <Container maxWidth="lg" sx={{ py: 6, direction: isRTL ? 'rtl' : 'ltr' }}>
+        <Alert severity="error">{loadError}</Alert>
+      </Container>
+    );
+  }
 
   return (
     <Container maxWidth="lg" sx={{ py: 4, direction: isRTL ? 'rtl' : 'ltr' }}>

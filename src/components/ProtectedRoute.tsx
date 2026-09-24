@@ -22,6 +22,7 @@ const ROLE_HOME_PATHS: Record<string, string> = {
     tenant: '/tenant/dashboard',
     technician: '/technician/dashboard',
     broker: '/broker/dashboard',
+    auditor: '/auditor',
     admin: '/admin/dashboard',
     super_admin: '/admin/dashboard',
     ceo: '/admin/dashboard',

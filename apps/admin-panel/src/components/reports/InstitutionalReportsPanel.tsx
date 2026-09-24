@@ -17,52 +17,95 @@ import { collection, onSnapshot } from 'firebase/firestore';
  */
 const InstitutionalReportsPanel: React.FC = () => {
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const [portfolioData, setPortfolioData] = useState<any>({
-    towerName: "Global Portfolio Hub",
+    towerName: "Portfolio Operations",
     unitsActive: 0,
-    totalSavingsAED: 245000,
-    healthScore: 92,
-    slaCompliance: 96,
-    monthlyTrends: [
-      { month: 'Jan', savings: 12000, health: 95 },
-      { month: 'Feb', savings: 15400, health: 93 },
-      { month: 'Mar', savings: 18900, health: 94 }
-    ],
-    assetDistribution: [
-      { name: 'AC Units', count: 0, health: 88 },
-      { name: 'Plumbing', count: 0, health: 92 },
-      { name: 'Electrical', count: 0, health: 95 }
-    ]
+    totalSavingsAED: 0,
+    healthScore: 0,
+    slaCompliance: 0,
+    ticketCount: 0,
+    monthlyTrends: [],
+    assetDistribution: [],
+    riskRows: []
   });
 
   useEffect(() => {
     // 🏢 1. Active Units & Asset Distribution
     const unsubProperties = onSnapshot(collection(db, 'properties'), (snapshot) => {
-      const activeUnits = snapshot.size;
-      const acCount = snapshot.docs.filter(d => d.data().hasAC).length || (activeUnits * 2);
-      
+      const rows = snapshot.docs.map((d) => d.data() as any);
+      const healthValues = rows.map((row) => Number(row.healthScore ?? row.bpi ?? 0)).filter((value) => value > 0 && Number.isFinite(value));
+      const healthScore = healthValues.length ? Math.round(healthValues.reduce((sum, value) => sum + value, 0) / healthValues.length) : 0;
+      const typeCounts = new Map<string, number>();
+      rows.forEach((row) => {
+        const type = String(row.propertyType || row.type || 'Property');
+        typeCounts.set(type, (typeCounts.get(type) || 0) + 1);
+      });
+
       setPortfolioData((prev: any) => ({
         ...prev,
-        unitsActive: activeUnits,
-        assetDistribution: [
-          { name: 'HVAC Network', count: acCount, health: 91 },
-          { name: 'Plumbing Sys', count: activeUnits * 1.5, health: 96 },
-          { name: 'Power Grid', count: activeUnits, health: 98 }
-        ]
+        unitsActive: snapshot.size,
+        healthScore,
+        assetDistribution: [...typeCounts.entries()].map(([name, count]) => ({ name, count, health: healthScore }))
       }));
+      setLoadError('');
+      setLoading(false);
+    }, (error: any) => {
+      console.error('[InstitutionalReports] properties listener failed:', error);
+      setLoadError(error?.message || 'Unable to load portfolio records.');
       setLoading(false);
     });
 
     // 💰 2. Savings & Compliance (Derived from Contracts/Tickets)
     const unsubTickets = onSnapshot(collection(db, 'maintenanceTickets'), (snapshot) => {
-        const completed = snapshot.docs.filter(d => d.data().status === 'COMPLETED').length;
-        const total = snapshot.size || 1;
-        const compliance = Math.round((completed / total) * 100);
-        
+        const rows = snapshot.docs.map((d) => ({ id: d.id, ...(d.data() as any) }));
+        const completed = rows.filter((row) => ['COMPLETED', 'CLOSED', 'completed', 'closed'].includes(String(row.status || ''))).length;
+        const compliance = snapshot.size ? Math.round((completed / snapshot.size) * 100) : 0;
+        const totalSavingsAED = rows.reduce((sum, row) => sum + Number(row.costSavedAED || row.savingsAED || 0), 0);
+
+        const monthMap = new Map<string, number>();
+        const toDate = (value: any): Date | null => {
+          if (typeof value?.toDate === 'function') return value.toDate();
+          if (typeof value?.seconds === 'number') return new Date(value.seconds * 1000);
+          const parsed = value ? new Date(value) : null;
+          return parsed && !Number.isNaN(parsed.getTime()) ? parsed : null;
+        };
+        rows.forEach((row) => {
+          const date = toDate(row.completedAt || row.updatedAt || row.createdAt);
+          if (!date) return;
+          const month = date.toLocaleString('en-AE', { month: 'short', year: '2-digit' });
+          monthMap.set(month, (monthMap.get(month) || 0) + Number(row.costSavedAED || row.savingsAED || 0));
+        });
+        const monthlyTrends = [...monthMap.entries()].map(([month, savings]) => ({ month, savings }));
+
+        const riskRows = rows
+          .filter((row) => {
+            const status = String(row.status || '').toUpperCase();
+            const priority = String(row.priority || row.slaPriority || '').toUpperCase();
+            return !['COMPLETED', 'CLOSED', 'CANCELLED'].includes(status) &&
+              ['EMERGENCY', 'CRITICAL', 'HIGH', 'URGENT'].includes(priority);
+          })
+          .slice(0, 10)
+          .map((row) => ({
+            id: row.id,
+            asset: row.propertyName || row.unitNumber || row.title || row.id,
+            risk: String(row.priority || row.slaPriority || 'HIGH').toUpperCase(),
+            action: row.status || row.trackingStatus || 'OPEN',
+            savings: Number(row.costSavedAED || row.savingsAED || 0),
+          }));
+
         setPortfolioData((prev: any) => ({
             ...prev,
-            slaCompliance: compliance > 0 ? compliance : prev.slaCompliance
+            slaCompliance: compliance,
+            totalSavingsAED,
+            ticketCount: snapshot.size,
+            monthlyTrends,
+            riskRows
         }));
+        setLoadError('');
+    }, (error: any) => {
+        console.error('[InstitutionalReports] tickets listener failed:', error);
+        setLoadError(error?.message || 'Unable to load maintenance reporting data.');
     });
 
     return () => {
@@ -76,6 +119,18 @@ const InstitutionalReportsPanel: React.FC = () => {
         GENERATING PORTFOLIO_INTELLIGENCE...
     </div>
   );
+  if (loadError) return <div className="p-8 bg-[#0a0a0b] text-red-300 min-h-screen">{loadError}</div>;
+  if (portfolioData.unitsActive === 0 && portfolioData.ticketCount === 0) {
+    return (
+      <div className="p-8 bg-[#0a0a0b] text-white min-h-screen flex items-center justify-center">
+        <div className="max-w-xl text-center">
+          <Building2 size={42} className="mx-auto mb-4 text-gray-500" />
+          <h2 className="text-xl font-black mb-2">No portfolio records available</h2>
+          <p className="text-gray-500">Live properties and maintenance records will populate this institutional report when records exist.</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-8 bg-[#0a0a0b] text-white min-h-screen font-sans">
@@ -98,27 +153,27 @@ const InstitutionalReportsPanel: React.FC = () => {
           icon={<BadgePercent className="text-emerald-400" />} 
           label="Total Savings (AED)" 
           value={portfolioData.totalSavingsAED.toLocaleString()} 
-          trend="+14% Growth"
+          trend="LIVE LEDGER"
         />
         <KPIBox 
           icon={<Activity className="text-blue-400" />} 
           label="Portfolio Health" 
           value={`${portfolioData.healthScore}%`} 
-          trend="OPTIMIZED"
+          trend={portfolioData.healthScore > 0 ? "LIVE SCORE" : "NO SCORE"}
           color="blue"
         />
         <KPIBox 
           icon={<ShieldCheck className="text-purple-400" />} 
           label="SLA Compliance" 
           value={`${portfolioData.slaCompliance}%`} 
-          trend="STABLE"
+          trend={`${portfolioData.ticketCount} TICKETS`}
           color="purple"
         />
         <KPIBox 
           icon={<Building2 className="text-orange-400" />} 
           label="Managed Units" 
           value={portfolioData.unitsActive} 
-          trend="LIVE SYNC"
+          trend="LIVE RECORDS"
           color="orange"
         />
       </div>
@@ -192,9 +247,21 @@ const InstitutionalReportsPanel: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/5">
-                <RiskRow asset="Main Chiller Cluster - A" risk="CRITICAL" action="Immediate Thermal Service" savings="14,200" />
-                <RiskRow asset="HVAC Control Board (Unit 402)" risk="MODERATE" action="Replace Sensor Array" savings="2,100" />
-                <RiskRow asset="Pumping Station West" risk="LOW" action="Predictive Maintenance" savings="4,500" />
+                {portfolioData.riskRows.length === 0 ? (
+                  <tr>
+                    <td colSpan={4} className="py-10 text-center text-gray-500 font-medium">
+                      No open high-priority maintenance risks are currently recorded.
+                    </td>
+                  </tr>
+                ) : portfolioData.riskRows.map((row: any) => (
+                  <RiskRow
+                    key={row.id}
+                    asset={row.asset}
+                    risk={row.risk}
+                    action={row.action}
+                    savings={Number(row.savings || 0).toLocaleString('en-AE')}
+                  />
+                ))}
               </tbody>
             </table>
         </div>
@@ -223,8 +290,8 @@ const RiskRow = ({ asset, risk, action, savings }: any) => (
     </td>
     <td className="py-6">
       <span className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest ${
-        risk === 'CRITICAL' ? 'bg-red-500/20 text-red-500' : 
-        risk === 'MODERATE' ? 'bg-orange-500/20 text-orange-400' : 'bg-blue-500/20 text-blue-400'
+        ['CRITICAL', 'EMERGENCY'].includes(risk) ? 'bg-red-500/20 text-red-500' :
+        ['HIGH', 'URGENT', 'MODERATE'].includes(risk) ? 'bg-orange-500/20 text-orange-400' : 'bg-blue-500/20 text-blue-400'
       }`}>
         {risk}
       </span>

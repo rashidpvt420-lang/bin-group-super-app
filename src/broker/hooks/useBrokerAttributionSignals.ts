@@ -4,6 +4,7 @@ import { useRole } from '../../context/RoleContext';
 
 type BrokerAttributionSignals = {
   loading: boolean;
+  error: string;
   referralLinkReady: boolean;
   qrReady: boolean;
   activeLeads: number;
@@ -24,6 +25,7 @@ const moneyValue = (value: unknown) => Number(value || 0) || 0;
 export function useBrokerAttributionSignals(): BrokerAttributionSignals {
   const { user } = useRole();
   const [loading, setLoading] = React.useState(true);
+  const [error, setError] = React.useState('');
   const [activeLeads, setActiveLeads] = React.useState(0);
   const [attributedContracts, setAttributedContracts] = React.useState(0);
   const [pendingCommissionAmount, setPendingCommissionAmount] = React.useState(0);
@@ -45,14 +47,16 @@ export function useBrokerAttributionSignals(): BrokerAttributionSignals {
 
     const unsubs: Array<() => void> = [];
     const publishLoaded = () => setLoading(false);
+    const publishError = (message: string) => { setError(message); setLoading(false); };
 
     unsubs.push(onSnapshot(query(collection(db, 'brokerLeads'), where('brokerId', '==', user.uid), limit(100)), (snap) => {
       setActiveLeads(snap.docs.filter((docSnap) => !String(docSnap.data()?.status || '').toUpperCase().includes('CLOSED')).length);
+      setError('');
       publishLoaded();
     }, (err) => {
       console.warn('[BrokerAttributionSignals] brokerLeads listener failed:', err);
       setActiveLeads(0);
-      publishLoaded();
+      publishError('Live broker lead attribution could not be loaded.');
     }));
 
     unsubs.push(onSnapshot(query(collection(db, 'broker_commissions'), where('brokerId', '==', user.uid), limit(100)), (snap) => {
@@ -68,12 +72,13 @@ export function useBrokerAttributionSignals(): BrokerAttributionSignals {
       });
       setAttributedContracts(contractCount);
       setPendingCommissionAmount(pendingAmount);
+      setError('');
       publishLoaded();
     }, (err) => {
       console.warn('[BrokerAttributionSignals] broker_commissions listener failed:', err);
       setAttributedContracts(0);
       setPendingCommissionAmount(0);
-      publishLoaded();
+      publishError('Live broker commission attribution could not be loaded.');
     }));
 
     return () => unsubs.forEach((unsub) => unsub());
@@ -110,6 +115,7 @@ export function useBrokerAttributionSignals(): BrokerAttributionSignals {
 
   return {
     loading,
+    error,
     referralLinkReady: Boolean(user?.uid && referralUrl),
     qrReady: Boolean(user?.uid && referralUrl),
     activeLeads,

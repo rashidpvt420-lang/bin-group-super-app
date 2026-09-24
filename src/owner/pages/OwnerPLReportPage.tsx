@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import {
-  Box, Button, CircularProgress, Divider, Grid, Paper,
+  Alert, Box, Button, CircularProgress, Divider, Grid, Paper,
   Stack, Typography, alpha,
 } from '@mui/material';
 import {
@@ -178,6 +178,7 @@ function MetricCard({ label, value, color = gold, icon: Icon, sub }: any) {
 export default function OwnerPLReportPage() {
   const { user } = useRole();
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const [passports, setPassports] = useState<any[]>([]);
   const [tickets, setTickets] = useState<any[]>([]);
   const [year] = useState(new Date().getFullYear());
@@ -187,11 +188,13 @@ export default function OwnerPLReportPage() {
     const email = user.email.toLowerCase();
     const unsubP = onSnapshot(
       query(collection(db, 'propertyPassports'), where('ownerEmail', '==', email)),
-      snap => { setPassports(snap.docs.map(d => ({ id: d.id, ...d.data() }))); setLoading(false); }
+      snap => { setPassports(snap.docs.map(d => ({ id: d.id, ...d.data() }))); setLoadError(''); setLoading(false); },
+      (error: any) => { console.error('[OwnerPL] passport listener failed:', error); setLoadError(error?.message || 'Unable to load portfolio financials.'); setLoading(false); }
     );
     const unsubT = onSnapshot(
       query(collection(db, 'maintenanceTickets'), where('ownerEmail', '==', email)),
-      snap => setTickets(snap.docs.map(d => ({ id: d.id, ...d.data() })))
+      snap => setTickets(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
+      (error: any) => { console.error('[OwnerPL] ticket listener failed:', error); setLoadError(error?.message || 'Unable to load maintenance costs.'); }
     );
     return () => { unsubP(); unsubT(); };
   }, [user?.email]);
@@ -201,6 +204,8 @@ export default function OwnerPLReportPage() {
       <CircularProgress sx={{ color: gold }} />
     </Box>
   );
+
+  if (loadError) return <Alert severity="error">{loadError}</Alert>;
 
   const totalIncome = passports.reduce((s, p) => s + (p.rentCollectedTotal || 0), 0);
   const totalMaint = passports.reduce((s, p) => s + (p.maintenanceCostTotal || 0), 0);

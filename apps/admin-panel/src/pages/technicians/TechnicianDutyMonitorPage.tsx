@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import {
     Box, Typography, Container, Paper, Table, TableBody, TableCell, 
     TableContainer, TableHead, TableRow, Chip, IconButton, Stack, 
-    alpha, CircularProgress, Tooltip
+    alpha, CircularProgress, Tooltip, Alert
 } from '@mui/material';
 import { 
     Clock, MapPin, 
@@ -15,12 +15,18 @@ import { binThemeTokens } from '../../theme/adminTheme';
 export default function TechnicianDutyMonitorPage() {
     const [technicians, setTechnicians] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
+    const [loadError, setLoadError] = useState('');
 
     useEffect(() => {
         // Monitor all users with role 'technician'
         const q = query(collection(db, 'users'), where('role', '==', 'technician'));
         const unsubscribe = onSnapshot(q, (snap) => {
             setTechnicians(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+            setLoadError('');
+            setLoading(false);
+        }, (error: any) => {
+            console.error('[TechnicianDutyMonitor] listener failed:', error);
+            setLoadError(error?.message || 'Unable to load technician duty status.');
             setLoading(false);
         });
         return () => unsubscribe();
@@ -37,6 +43,8 @@ export default function TechnicianDutyMonitorPage() {
     };
 
     if (loading) return <Box sx={{ display: 'flex', justifyContent: 'center', p: 10 }}><CircularProgress sx={{ color: binThemeTokens.gold }}/></Box>;
+
+    if (loadError) return <Container maxWidth="xl" sx={{ py: 6 }}><Alert severity="error">{loadError}</Alert></Container>;
 
     return (
         <Container maxWidth="xl" sx={{ py: 6 }}>
@@ -56,6 +64,8 @@ export default function TechnicianDutyMonitorPage() {
                     </Paper>
                 </Stack>
             </Stack>
+
+            {technicians.length === 0 && <Alert severity="info" sx={{ mb: 3 }}>No technician profiles are currently available.</Alert>}
 
             <TableContainer component={Paper} sx={{ bgcolor: 'rgba(22, 22, 24, 0.7)', borderRadius: 6, border: '1px solid rgba(255,255,255,0.05)', backdropFilter: 'blur(20px)' }}>
                 <Table>
