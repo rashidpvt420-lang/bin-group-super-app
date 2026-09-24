@@ -93,7 +93,7 @@ test('owner activation geo gate fails closed', async () => {
   const runtime = await read('functions/runtime.ts');
 
   assert.match(wrapper, /hasDispatchReadyPropertyGeo\(property\)/);
-  assert.match(wrapper, /inspectionFirst/);
+  assert.match(wrapper, /OWNER_FIVE_PAGE_INSPECTION_FIRST_V1/);
   assert.match(wrapper, /OWNER_ACTIVATION_GEO_GATE_BLOCKED/);
   assert.match(authority, /geo\.verified === true/);
   assert.match(authority, /geo\.dispatchReady === true/);
