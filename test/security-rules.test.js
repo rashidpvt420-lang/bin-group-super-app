@@ -113,6 +113,37 @@ describe('Firestore Security Rules', () => {
     await assertFails(deleteDoc(doc(adminDb, 'property_identity_registry/identity_hash_1')));
   });
 
+  it('support chat messages cannot forge a privileged sender role', async () => {
+    const ownerDb = testEnv.authenticatedContext('support_owner', { role: 'owner' }).firestore();
+
+    await assertSucceeds(setDoc(doc(ownerDb, 'support_chats/owner_message'), {
+      chatId: 'support_owner',
+      senderId: 'support_owner',
+      senderRole: 'owner',
+      text: 'Need help with my property.',
+      createdAt: new Date().toISOString(),
+      read: false,
+    }));
+
+    await assertFails(setDoc(doc(ownerDb, 'support_chats/forged_admin_message'), {
+      chatId: 'support_owner',
+      senderId: 'support_owner',
+      senderRole: 'admin',
+      text: 'Forged privileged role label.',
+      createdAt: new Date().toISOString(),
+      read: false,
+    }));
+
+    await assertFails(setDoc(doc(ownerDb, 'support_chats/forged_sender'), {
+      chatId: 'support_owner',
+      senderId: 'someone_else',
+      senderRole: 'owner',
+      text: 'Forged sender ID.',
+      createdAt: new Date().toISOString(),
+      read: false,
+    }));
+  });
+
   it('turnover quote decisions are server-authoritative and cannot be forged by browser clients', async () => {
     await seedServerDocument('turnover-quotes/quote_owner_a', {
       ownerId: 'owner_a',
