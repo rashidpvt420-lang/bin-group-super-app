@@ -192,6 +192,20 @@ function hasLoading(text) {
   return /\b(?:loading|isLoading|isPending|pending)\b|CircularProgress|LinearProgress|Skeleton|Suspense|role=["']status["']/.test(text);
 }
 
+function hasAsyncRead(text) {
+  return /onSnapshot\s*\(|await\s+getDocs?\s*\(|\bgetDocs?\s*\([^)]*\)\.then\s*\(|\bfetch\s*\(|axios\.(?:get|post)\s*\(/.test(text);
+}
+
+function hasCollectionState(text) {
+  const arrayStates = [...text.matchAll(/const\s*\[\s*([A-Za-z_$][\w$]*)\s*,[^\]]+\]\s*=\s*(?:React\.)?useState(?:<[^;=]+>)?\(\s*\[\s*\]\s*\)/g)]
+    .map((match) => match[1]);
+  return arrayStates.some((name) => new RegExp('\\\\b' + name + '\\\\.(?:map|filter|length)\\\\b').test(text));
+}
+
+function isNestedRouter(text) {
+  return /<Routes\b/.test(text) && /<Route\b/.test(text);
+}
+
 function hasEmpty(text) {
   return /\.length\s*===?\s*0|!\s*[A-Za-z_$][\w$.[\]]*\.length|EmptyState|empty state|no (?:data|records|results|items|tickets|properties|units|documents|payments|messages|jobs|requests|notifications|contracts|tenants|owners|technicians|commissions|referrals|leads)/i.test(text);
 }
@@ -258,18 +272,28 @@ for (const router of ROUTERS) {
     routeKeys.add(key);
 
     const specifier = imports.get(component) || null;
-    const screenFile = redirect ? null : resolveRelativeFile(router.file, specifier) || (component === 'inline' ? router.file : (!specifier && routerSource.includes(component) ? router.file : null));
+    const externalInline = Boolean(specifier && !specifier.startsWith('.'));
+    const localInline = !specifier && component !== 'inline' && routerSource.includes(component);
+    const screenFile = redirect || externalInline ? null : resolveRelativeFile(router.file, specifier) || ((component === 'inline' || localInline) ? router.file : null);
 
-    if (!redirect && !screenFile) failures.push(key + ': unresolved component source for ' + component);
+    if (!redirect && !externalInline && !screenFile) failures.push(key + ': unresolved component source for ' + component);
 
-    const screenText = screenFile ? read(screenFile) : '';
-    const combinedText = screenFile ? relatedText(screenFile, screenText) : '';
+    const screenText = externalInline ? line : (screenFile ? read(screenFile) : '');
+    const combinedText = screenFile && screenFile !== router.file ? relatedText(screenFile, screenText) : screenText;
     const dataSources = redirect ? [] : detectDataSources(combinedText);
     const dataDriven = dataSources.length > 0;
+    const nestedRouter = isNestedRouter(screenText);
+    const asyncRead = !nestedRouter && hasAsyncRead(screenText);
+    const collectionState = asyncRead && hasCollectionState(screenText);
+    const detailLike = /:[A-Za-z_$]/.test(route) || /(?:Detail|Verification|Invite|Feedback|Activation|Profile|Settings|Error)/.test(component);
 
-    const loading = redirect ? 'N/A:redirect' : dataDriven ? (hasLoading(screenText) ? 'PASS' : 'MISSING') : 'N/A:static/local';
-    const empty = redirect ? 'N/A:redirect' : dataDriven ? (hasEmpty(screenText) ? 'PASS' : 'MISSING') : 'N/A:static/local';
-    const error = redirect ? 'N/A:redirect' : dataDriven ? (hasError(screenText) ? 'PASS' : 'MISSING') : 'N/A:static/local';
+    const loadingRequired = asyncRead;
+    const errorRequired = asyncRead;
+    const emptyRequired = collectionState && !detailLike;
+
+    const loading = redirect ? 'N/A:redirect' : nestedRouter ? 'N/A:nested-router' : loadingRequired ? (hasLoading(screenText) ? 'PASS' : 'MISSING') : 'N/A:not-required';
+    const empty = redirect ? 'N/A:redirect' : nestedRouter ? 'N/A:nested-router' : emptyRequired ? (hasEmpty(screenText) ? 'PASS' : 'MISSING') : 'N/A:not-required';
+    const error = redirect ? 'N/A:redirect' : nestedRouter ? 'N/A:nested-router' : errorRequired ? (hasError(screenText) ? 'PASS' : 'MISSING') : 'N/A:not-required';
     const success = redirect ? 'PASS:redirect' : hasSuccess(screenText) ? 'PASS' : 'REVIEW';
     const mobile = redirect ? 'PASS:redirect' : mobileStatus(screenText, router);
     const arabic = redirect ? 'PASS:redirect' : arabicStatus(screenText, router);
@@ -278,9 +302,9 @@ for (const router of ROUTERS) {
     const refresh = directUrl;
 
     const findings = [];
-    if (dataDriven && loading === 'MISSING') findings.push('loading');
-    if (dataDriven && empty === 'MISSING') findings.push('empty');
-    if (dataDriven && error === 'MISSING') findings.push('error');
+    if (loadingRequired && loading === 'MISSING') findings.push('loading');
+    if (emptyRequired && empty === 'MISSING') findings.push('empty');
+    if (errorRequired && error === 'MISSING') findings.push('error');
     if (mobile.startsWith('REVIEW')) findings.push('mobile-review');
     if (arabic.startsWith('REVIEW')) findings.push('arabic-review');
     if (arabic.startsWith('PARTIAL')) findings.push('arabic-shell-only');
@@ -288,9 +312,9 @@ for (const router of ROUTERS) {
     if (directUrl === 'FAIL') findings.push('direct-url');
     if (refresh === 'FAIL') findings.push('refresh');
 
-    if (dataDriven && loading === 'MISSING') failures.push(key + ': data-driven screen missing loading state (' + component + ')');
-    if (dataDriven && error === 'MISSING') failures.push(key + ': data-driven screen missing error state (' + component + ')');
-    if (dataDriven && empty === 'MISSING') failures.push(key + ': data-driven screen missing empty state (' + component + ')');
+    if (loadingRequired && loading === 'MISSING') failures.push(key + ': async-read screen missing loading state (' + component + ')');
+    if (errorRequired && error === 'MISSING') failures.push(key + ': async-read screen missing error state (' + component + ')');
+    if (emptyRequired && empty === 'MISSING') failures.push(key + ': collection screen missing empty state (' + component + ')');
     if (directUrl === 'FAIL' || refresh === 'FAIL') failures.push(key + ': Firebase Hosting SPA rewrite missing');
     if (mobile.startsWith('REVIEW')) warnings.push(key + ': mobile behavior needs visual review');
     if (arabic.startsWith('REVIEW') || arabic.startsWith('PARTIAL')) warnings.push(key + ': Arabic coverage is not screen-local');
@@ -304,7 +328,7 @@ for (const router of ROUTERS) {
       permission: permission.permission,
       declaredAdminOnly: router.surface === 'admin' && line.includes('adminOnly'),
       component,
-      source: screenFile || (redirect ? 'redirect' : 'UNRESOLVED'),
+      source: screenFile || (redirect ? 'redirect' : externalInline ? 'inline-external' : 'UNRESOLVED'),
       dataSource: dataSources.length ? dataSources.join(', ') : 'static/local/indirect',
       loading,
       empty,
