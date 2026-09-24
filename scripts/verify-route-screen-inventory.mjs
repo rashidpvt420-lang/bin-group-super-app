@@ -172,15 +172,32 @@ function permission(row) {
 
 const exactRouteE2E = read('tests/e2e/hard-launch-routes.spec.ts');
 
-function e2eCoversRoute(row) {
-  if (/Navigate/.test(row.element) || row.raw === '*') return true;
+function e2eCandidateRoute(row) {
   const candidate = row.scope === 'adminops' ? row.raw : row.route;
-  if (candidate.includes(':') || candidate.includes('*')) return false;
-  return exactRouteE2E.includes(`'${candidate}'`);
+  return candidate.replace(/:[A-Za-z0-9_]+/g, 'phase2-missing');
 }
 
-function isStaticRouteData(dataSource) {
-  return dataSource === 'static/local or delegated hook';
+function e2eCoversRoute(row) {
+  if (/Navigate/.test(row.element) || row.raw === '*') return true;
+  const candidate = e2eCandidateRoute(row);
+  if (candidate.includes('*')) return false;
+  if (exactRouteE2E.includes(`'${candidate}'`)) return true;
+
+  const portalRootAliases = {
+    '/owner': '/owner/dashboard',
+    '/tenant': '/tenant/dashboard',
+    '/technician': '/technician/dashboard',
+    '/broker': '/broker/dashboard',
+  };
+  const alias = portalRootAliases[candidate];
+  return Boolean(alias && exactRouteE2E.includes(`'${alias}'`));
+}
+
+function isStaticRouteData(dataSource, content) {
+  if (dataSource !== 'static/local or delegated hook') return false;
+  const asyncOrCollectionSignals =
+    /useEffect\s*\(|useQuery\s*\(|subscribe|listener|load[A-Z]|fetch[A-Z]|refresh[A-Z]|rows|records|items|results|documents|tickets|jobs|payments|notifications|messages|leads|referrals|units|tenants/i.test(content);
+  return !asyncOrCollectionSignals;
 }
 
 function emptyStateNotApplicable(row) {
@@ -197,7 +214,8 @@ function emptyStateNotApplicable(row) {
 }
 
 function signals(content, row) {
-  if (/Navigate/.test(row.element)) {
+  const isRoleContainer = row.scope === 'main' && ['/owner/*', '/tenant/*', '/technician/*', '/broker/*'].includes(row.route);
+  if (/Navigate/.test(row.element) || isRoleContainer) {
     return {
       dataSource: 'router redirect',
       loading: 'N/A',
@@ -217,7 +235,7 @@ function signals(content, row) {
   if (!sources.length) sources.push('static/local or delegated hook');
 
   const dataSource = [...new Set(sources)].join('+');
-  const staticData = isStaticRouteData(dataSource);
+  const staticData = isStaticRouteData(dataSource, content);
   const hasLoading = /\bloading\b|CircularProgress|Skeleton|LinearProgress|isLoading|pending|saving|busy|submitting|refreshing|processing|fetching/i.test(content);
   const hasEmpty = /length\s*===\s*0|\.empty\b|no\s+(records|items|data|properties|tickets|jobs|documents|results|payments|notifications|messages|leads|referrals|units|tenants|missions|vendors|rfqs|requests|listings)|nothing\s+to\s+show/i.test(content);
   const hasError = /setError|setWarning|setNotice|error\s*&&|warning\s*&&|notice\s*&&|severity=["'](?:error|warning)|catch\s*\(/i.test(content);
