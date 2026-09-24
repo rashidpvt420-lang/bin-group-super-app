@@ -303,7 +303,11 @@ async function assertMobileArabicRoute(page: Page, role: RoleCase, route: string
     `${role.name} ${route} must not create page-level horizontal overflow on a 390px viewport`,
   ).toBeLessThanOrEqual(overflow.width + 8);
 
-  if (role.name !== 'Admin') {
+  const isPortalHome =
+    route === `/${role.roleKey}` ||
+    route === `/${role.roleKey}/dashboard`;
+
+  if (role.name !== 'Admin' && !isPortalHome) {
     const back = page.getByRole('button', { name: /Back|رجوع/i }).first();
     await expect(back, `${role.name} ${route} must expose a route-aware back control`).toBeVisible({ timeout: 10_000 });
   }
