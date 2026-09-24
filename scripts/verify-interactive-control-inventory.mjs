@@ -17,7 +17,7 @@ const canonicalControls = new Set([
 const fieldControls = new Set(['Switch', 'Checkbox', 'Radio', 'Select', 'TextField', 'Autocomplete', 'input', 'select', 'textarea']);
 const iconOnlyControls = new Set(['IconButton', 'Fab', 'SpeedDialAction']);
 const mutatingWords = /\b(save|submit|approve|reject|delete|remove|create|invite|upload|verify|unlock|complete|close|send|assign|dispatch|claim|accept|update|pay|refund|publish|archive|restore|resubmit|confirm|revoke|rotate)\b/i;
-const serverMutationPattern = /httpsCallable\s*\(|(?:addDoc|setDoc|updateDoc|deleteDoc|writeBatch|runTransaction)\s*\(|\.(?:set|update|delete)\s*\(/i;
+const serverMutationPattern = /httpsCallable\s*\(|callFunction\s*\(|(?:addDoc|setDoc|updateDoc|deleteDoc|writeBatch|runTransaction)\s*\(|\.(?:set|update|delete)\s*\(|\bfetch\s*\(|\baxios\.(?:post|put|patch|delete)\s*\(/i;
 const directClientWritePattern = /\b(addDoc|setDoc|updateDoc|deleteDoc|writeBatch|runTransaction)\s*\(/;
 
 function walk(dir, extensions = new Set(['.tsx', '.jsx'])) {
@@ -193,12 +193,12 @@ for (const fileAbs of sourceRoots.flatMap((dir) => walk(path.join(root, dir)))) 
       const hasChange = attrs.has('onChange');
       const hasSubmit = attrs.has('onSubmit');
       const hasHref = attrs.has('href') || attrs.has('to');
-      const interactive = canonicalControls.has(tag) || hasClick || hasChange || hasSubmit || hasHref;
+      const interactive = canonicalControls.has(tag) || hasClick || hasHref;
 
       if (interactive) {
         const line = sourceFile.getLineAndCharacterOfPosition(opening.getStart(sourceFile)).line + 1;
         const children = childLabel(node, sourceFile);
-        const aria = normalize(attrs.get('aria-label')?.text);
+        const aria = normalize(attrs.get('aria-label')?.text || attrs.get('aria-labelledby')?.text);
         const labelProp = normalize(attrs.get('label')?.text);
         const title = normalize(attrs.get('title')?.text);
         const placeholder = normalize(attrs.get('placeholder')?.text);
@@ -212,7 +212,8 @@ for (const fileAbs of sourceRoots.flatMap((dir) => walk(path.join(root, dir)))) 
         const handler = handlerName(handlerAttr, sourceFile);
         const context = handlerContext(handlerAttr, sourceFile, functions);
         const buttonLike = !fieldControls.has(tag);
-        const mutation = buttonLike && (serverMutationPattern.test(context) || mutatingWords.test(label + ' ' + handler));
+        const networkMutation = serverMutationPattern.test(context);
+        const mutation = buttonLike && networkMutation && (mutatingWords.test(label + ' ' + handler) || /httpsCallable|callFunction|addDoc|setDoc|updateDoc|deleteDoc|writeBatch|runTransaction/i.test(context));
         const action = mutation ? serverAction(context) : '';
         const busyGuard = mutation ? hasBusyGuard(attrs, context) : true;
         const errorHandling = mutation ? hasErrorHandling(context) : true;
