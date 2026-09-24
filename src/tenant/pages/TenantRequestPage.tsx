@@ -503,7 +503,7 @@ export default function TenantRequestPage() {
                                 ))}
                                 {previews.length < 5 && (
                                     <Grid item xs={4} md={3}>
-                                        <Button component="label" disabled={isOwnerSuspended} sx={{ minHeight: 110, width: '100%', border: '1px dashed rgba(255,255,255,.25)', color: binThemeTokens.gold }}>
+                                        <Button aria-label="Attach request photos" component="label" disabled={isOwnerSuspended} sx={{ minHeight: 110, width: '100%', border: '1px dashed rgba(255,255,255,.25)', color: binThemeTokens.gold }}>
                                             <Camera size={24} />
                                             <input type="file" hidden accept="image/*" multiple onChange={handlePhotoChange} />
                                         </Button>
