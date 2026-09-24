@@ -75,6 +75,12 @@ const publicRoutes = [
   '/verify',
   '/verify-cert',
   '/tenant-invite',
+  '/invoices/phase2-missing',
+  '/verify/phase2-missing',
+  '/verify/invoice/phase2-missing',
+  '/verify/cert/phase2-missing',
+  '/verify/pass/phase2-missing',
+  '/verify-cert/phase2-missing',
 ] as const;
 
 const roleCases: RoleCase[] = [
@@ -114,6 +120,20 @@ const roleCases: RoleCase[] = [
       '/owner/approvals',
       '/owner/bin-connect',
       '/owner/pilot-completion',
+      '/owner/property-passport/phase2-missing',
+      '/owner/ticket/phase2-missing',
+      '/account-privacy',
+      '/government/phase2-missing',
+      '/financials',
+      '/calendar',
+      '/properties/phase2-missing/health',
+      '/analytics/reporting',
+      '/analytics/executive',
+      '/analytics/turnover',
+      '/properties/phase2-missing/units',
+      '/notifications',
+      '/design-studio',
+      '/design-studio/request/phase2-missing',
     ],
   },
   {
@@ -149,6 +169,12 @@ const roleCases: RoleCase[] = [
       '/tenant/messages',
       '/tenant/community',
       '/tenant/renewals',
+      '/tenant/ticket/phase2-missing',
+      '/tenant/chat/phase2-missing',
+      '/tenant/move-inspection/move-in',
+      '/notifications',
+      '/design-studio',
+      '/design-studio/request/phase2-missing',
     ],
   },
   {
@@ -170,6 +196,9 @@ const roleCases: RoleCase[] = [
       '/technician/support',
       '/technician/bin-connect',
       '/technician/pilot-completion',
+      '/technician/job/phase2-missing',
+      '/calendar',
+      '/notifications',
     ],
   },
   {
@@ -188,6 +217,7 @@ const roleCases: RoleCase[] = [
       '/broker/attribution',
       '/broker/documents',
       '/broker/profile',
+      '/notifications',
     ],
   },
   {
@@ -260,6 +290,8 @@ const roleCases: RoleCase[] = [
   },
 ];
 
+const PHASE_2_SENTINEL_ROUTE = /phase2-missing/;
+
 function requireRoleConfiguration(role: RoleCase) {
   if (!role.email || !role.password || (role.name === 'Admin' && !role.baseUrl)) {
     throw new Error(`Hard-launch exact-route audit blocked: missing ${role.name} credentials${role.name === 'Admin' ? ' or E2E_ADMIN_BASE_URL' : ''}.`);
@@ -300,7 +332,9 @@ async function assertExactRoute(page: Page, role: RoleCase, route: string) {
   const body = await page.locator('body').innerText({ timeout: 20_000 });
   expect(body.trim().length, `${role.name} ${route} must render visible text`).toBeGreaterThan(0);
   expect(body, `${role.name} ${route} must not render a runtime crash`).not.toMatch(CRASH_PATTERN);
-  expect(body, `${role.name} ${route} must not render an access denial`).not.toMatch(ACCESS_DENIED);
+  if (!PHASE_2_SENTINEL_ROUTE.test(route)) {
+    expect(body, `${role.name} ${route} must not render an access denial`).not.toMatch(ACCESS_DENIED);
+  }
 
   await page.reload({ waitUntil: 'domcontentloaded' });
   await page.waitForTimeout(route.includes('/map') ? 2_000 : 500);
@@ -310,7 +344,9 @@ async function assertExactRoute(page: Page, role: RoleCase, route: string) {
   const refreshedBody = await page.locator('body').innerText({ timeout: 20_000 });
   expect(refreshedBody.trim().length, `${role.name} ${route} must render after refresh`).toBeGreaterThan(0);
   expect(refreshedBody, `${role.name} ${route} must not crash after refresh`).not.toMatch(CRASH_PATTERN);
-  expect(refreshedBody, `${role.name} ${route} must not lose authorization after refresh`).not.toMatch(ACCESS_DENIED);
+  if (!PHASE_2_SENTINEL_ROUTE.test(route)) {
+    expect(refreshedBody, `${role.name} ${route} must not lose authorization after refresh`).not.toMatch(ACCESS_DENIED);
+  }
 }
 
 async function assertMobileArabicRoute(page: Page, role: RoleCase, route: string) {
@@ -335,7 +371,9 @@ async function assertMobileArabicRoute(page: Page, role: RoleCase, route: string
   const body = await page.locator('body').innerText({ timeout: 20_000 });
   expect(body.trim().length, `${role.name} ${route} must render on phone viewport`).toBeGreaterThan(0);
   expect(body, `${role.name} ${route} must not crash in mobile Arabic mode`).not.toMatch(CRASH_PATTERN);
-  expect(body, `${role.name} ${route} must remain authorized in mobile Arabic mode`).not.toMatch(ACCESS_DENIED);
+  if (!PHASE_2_SENTINEL_ROUTE.test(route)) {
+    expect(body, `${role.name} ${route} must remain authorized in mobile Arabic mode`).not.toMatch(ACCESS_DENIED);
+  }
 
   const overflow = await page.evaluate(() => ({
     width: window.innerWidth,
