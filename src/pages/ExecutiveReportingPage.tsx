@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
     Container, Typography, Box, Paper, Grid, Stack, Button, 
-    Chip, Divider, alpha, CircularProgress, LinearProgress 
+    Chip, Divider, alpha, CircularProgress, LinearProgress, Alert 
 } from '@mui/material';
 import { 
     BarChart3, TrendingUp, ShieldAlert, History, 
@@ -25,38 +25,89 @@ const ExecutiveReportingPage: React.FC = () => {
     const { t, tx, isRTL } = useLanguage();
     const { user } = useRole();
     const [loading, setLoading] = useState(true);
+    const [loadError, setLoadError] = useState('');
     const [stats, setStats] = useState<any>(null);
 
     useEffect(() => {
+        let cancelled = false;
         const fetchExecutiveData = async () => {
-            if (!user?.uid) return;
-            // Simulated institutional aggregation
-            setTimeout(() => {
-                setStats({
-                    portfolioBPI: 82,
-                    totalSpend: 145000,
-                    spendTrend: [
-                        { month: 'Jan', spend: 12000 },
-                        { month: 'Feb', spend: 15000 },
-                        { month: 'Mar', spend: 22000 },
-                        { month: 'Apr', spend: 18000 },
-                    ],
-                    topRiskAssets: [
-                        { id: '1', name: 'Marina Heights', risk: 'HIGH', bpi: 58, reason: 'Repeated HVAC failure' },
-                        { id: '2', name: 'Downtown Suite', risk: 'MEDIUM', bpi: 74, reason: 'Mechanical fatigue' }
-                    ],
-                    incidentClusters: [
-                        { category: 'Cooling', intensity: 85, trend: 'UP' },
-                        { category: 'Hydraulic', intensity: 40, trend: 'DOWN' },
-                        { category: 'Envelope', intensity: 20, trend: 'STABLE' }
-                    ],
-                    renewalExposure: 340000 // Total contract value expiring in 90 days
-                });
+            if (!user?.uid) {
                 setLoading(false);
-            }, 1500);
+                return;
+            }
+            setLoading(true);
+            setLoadError('');
+            try {
+                const [propertySnap, ticketSnap] = await Promise.all([
+                    getDocs(query(collection(db, 'properties'), where('ownerId', '==', user.uid), limit(100))),
+                    getDocs(query(collection(db, 'maintenanceTickets'), where('ownerId', '==', user.uid), limit(250))),
+                ]);
+                if (cancelled) return;
+
+                const properties = propertySnap.docs.map((docSnap) => ({ id: docSnap.id, ...(docSnap.data() as any) }));
+                const tickets = ticketSnap.docs.map((docSnap) => ({ id: docSnap.id, ...(docSnap.data() as any) }));
+                const healthValues = properties
+                    .map((item: any) => Number(item.healthScore ?? item.bpi ?? item.propertyHealthScore ?? 0))
+                    .filter((value: number) => Number.isFinite(value) && value > 0);
+                const portfolioBPI = healthValues.length
+                    ? Math.round(healthValues.reduce((sum: number, value: number) => sum + value, 0) / healthValues.length)
+                    : 0;
+                const totalSpend = tickets.reduce((sum: number, ticket: any) => sum + Number(ticket.actualCost ?? ticket.approvedCost ?? ticket.estimatedCost ?? 0), 0);
+
+                const monthly = new Map<string, number>();
+                tickets.forEach((ticket: any) => {
+                    const raw = ticket.createdAt;
+                    const date = typeof raw?.toDate === 'function' ? raw.toDate() : raw ? new Date(raw) : null;
+                    if (!date || Number.isNaN(date.getTime())) return;
+                    const key = date.toLocaleString('en-AE', { month: 'short', year: '2-digit' });
+                    monthly.set(key, (monthly.get(key) || 0) + Number(ticket.actualCost ?? ticket.approvedCost ?? ticket.estimatedCost ?? 0));
+                });
+                const spendTrend = [...monthly.entries()].slice(-6).map(([month, spend]) => ({ month, spend }));
+
+                const topRiskAssets = properties
+                    .map((property: any) => ({
+                        id: property.id,
+                        name: property.name || property.propertyName || property.id,
+                        bpi: Number(property.healthScore ?? property.bpi ?? property.propertyHealthScore ?? 0),
+                        reason: property.riskReason || property.healthSummary || 'Health score requires review',
+                    }))
+                    .filter((property: any) => property.bpi > 0)
+                    .sort((a: any, b: any) => a.bpi - b.bpi)
+                    .slice(0, 5)
+                    .map((property: any) => ({ ...property, risk: property.bpi < 60 ? 'HIGH' : property.bpi < 80 ? 'MEDIUM' : 'LOW' }));
+
+                const categoryCounts = new Map<string, number>();
+                tickets.forEach((ticket: any) => {
+                    const category = String(ticket.category || ticket.trade || ticket.issueType || 'Other');
+                    categoryCounts.set(category, (categoryCounts.get(category) || 0) + 1);
+                });
+                const ticketTotal = tickets.length || 1;
+                const incidentClusters = [...categoryCounts.entries()]
+                    .map(([category, count]) => ({ category, intensity: Math.round((count / ticketTotal) * 100), trend: 'CURRENT' }))
+                    .sort((a, b) => b.intensity - a.intensity)
+                    .slice(0, 6);
+
+                const now = Date.now();
+                const ninetyDays = 90 * 24 * 60 * 60 * 1000;
+                const renewalExposure = properties.reduce((sum: number, property: any) => {
+                    const raw = property.contractEndDate || property.renewalDate;
+                    const date = typeof raw?.toDate === 'function' ? raw.toDate() : raw ? new Date(raw) : null;
+                    if (!date || Number.isNaN(date.getTime())) return sum;
+                    const delta = date.getTime() - now;
+                    return delta >= 0 && delta <= ninetyDays ? sum + Number(property.contractValue ?? property.annualContractValue ?? 0) : sum;
+                }, 0);
+
+                setStats({ portfolioBPI, totalSpend, spendTrend, topRiskAssets, incidentClusters, renewalExposure });
+            } catch (error: any) {
+                console.error('[ExecutiveReporting] load failed:', error);
+                if (!cancelled) setLoadError(error?.message || 'Unable to load executive reporting data.');
+            } finally {
+                if (!cancelled) setLoading(false);
+            }
         };
-        fetchExecutiveData();
-    }, [user]);
+        void fetchExecutiveData();
+        return () => { cancelled = true; };
+    }, [user?.uid]);
 
     const exportExecutiveSummary = () => {
         const doc = new jsPDF();
@@ -79,7 +130,7 @@ const ExecutiveReportingPage: React.FC = () => {
                 ['Portfolio BPI Average', `${stats.portfolioBPI}%`, 'STABLE'],
                 ['Total Operational Spend', `AED ${formatAED(stats.totalSpend)}`, 'VERIFIED'],
                 ['Renewal Exposure (90D)', `AED ${formatAED(stats.renewalExposure)}`, 'MONITORED'],
-                ['Risk Cluster Intensity', '85% Cooling', 'ACTION REQUIRED']
+                ['Risk Cluster Intensity', `${stats.incidentClusters?.[0]?.intensity || 0}% ${stats.incidentClusters?.[0]?.category || 'No incidents'}`, stats.incidentClusters?.length ? 'CURRENT' : 'NO DATA']
             ],
             theme: 'striped',
             headStyles: { fillColor: [198, 167, 94] }
@@ -89,6 +140,7 @@ const ExecutiveReportingPage: React.FC = () => {
     };
 
     if (loading) return <Box sx={{ display: 'flex', justifyContent: 'center', py: 20 }}><CircularProgress sx={{ color: binThemeTokens.gold }} /></Box>;
+    if (loadError) return <Alert severity="error">{loadError}</Alert>;
 
     return (
         <Container maxWidth="xl" sx={{ py: 6 }}>
