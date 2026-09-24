@@ -2,6 +2,7 @@ import { expect, Page, test } from '@playwright/test';
 import { attachAuthenticatedAppCheckMonitor } from './helpers/appCheckDebug';
 import { loginAdminWithRealMfa, requireAdminMfaCredentials } from './helpers/adminMfa';
 import { existsSync } from 'fs';
+import { auditInteractiveControls, assertNoPageLevelHorizontalOverflow } from './helpers/interactiveControlAudit';
 import { config as loadDotenv } from 'dotenv';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
@@ -340,6 +341,9 @@ async function assertExactRoute(page: Page, role: RoleCase, route: string) {
   if (!PHASE_2_SENTINEL_ROUTE.test(route)) {
     expect(body, `${role.name} ${route} must not render an access denial`).not.toMatch(ACCESS_DENIED);
   }
+  // Phase 3: every rendered interactive control on every authenticated route is audited.
+  await auditInteractiveControls(page, `Phase 3 ${role.name} ${route} English`);
+  await assertNoPageLevelHorizontalOverflow(page, `Phase 3 ${role.name} ${route} English`);
 
   await page.reload({ waitUntil: 'domcontentloaded' });
   await page.waitForTimeout(route.includes('/map') ? 2_000 : 500);
@@ -374,20 +378,14 @@ async function assertMobileArabicRoute(page: Page, role: RoleCase, route: string
   }).toBe('ar');
 
   const body = await page.locator('body').innerText({ timeout: 20_000 });
+  await auditInteractiveControls(page, `Phase 3 ${role.name} ${route} mobile Arabic RTL`);
   expect(body.trim().length, `${role.name} ${route} must render on phone viewport`).toBeGreaterThan(0);
   expect(body, `${role.name} ${route} must not crash in mobile Arabic mode`).not.toMatch(CRASH_PATTERN);
   if (!PHASE_2_SENTINEL_ROUTE.test(route)) {
     expect(body, `${role.name} ${route} must remain authorized in mobile Arabic mode`).not.toMatch(ACCESS_DENIED);
   }
 
-  const overflow = await page.evaluate(() => ({
-    width: window.innerWidth,
-    scrollWidth: document.documentElement.scrollWidth,
-  }));
-  expect(
-    overflow.scrollWidth,
-    `${role.name} ${route} must not create page-level horizontal overflow on a 390px viewport`,
-  ).toBeLessThanOrEqual(overflow.width + 8);
+  await assertNoPageLevelHorizontalOverflow(page, `Phase 3 ${role.name} ${route} mobile Arabic RTL`);
 
   const isPortalHome =
     route === `/${role.roleKey}` ||
@@ -434,13 +432,10 @@ test('Public Phase 2 routes survive direct URL, refresh, mobile and Arabic RTL',
     }))).toEqual({ path: route, dir: 'rtl', lang: 'ar' });
 
     body = await page.locator('body').innerText({ timeout: 20_000 });
+    await auditInteractiveControls(page, `Phase 3 public ${route} mobile Arabic RTL`);
     expect(body.trim().length, `Public ${route} must render on mobile Arabic`).toBeGreaterThan(0);
     expect(body, `Public ${route} must not crash on mobile Arabic`).not.toMatch(CRASH_PATTERN);
-    const overflow = await page.evaluate(() => ({
-      width: window.innerWidth,
-      scrollWidth: document.documentElement.scrollWidth,
-    }));
-    expect(overflow.scrollWidth, `Public ${route} must avoid page-level horizontal overflow`).toBeLessThanOrEqual(overflow.width + 8);
+    await assertNoPageLevelHorizontalOverflow(page, `Phase 3 public ${route} mobile Arabic RTL`);
 
     await page.evaluate(() => localStorage.setItem('bin_language', 'en'));
     await page.setViewportSize({ width: 1280, height: 720 });
@@ -467,13 +462,10 @@ test('Admin login Phase 2 route survives direct URL, refresh, mobile and Arabic 
   }).toEqual({ dir: 'rtl', lang: 'ar' });
 
   const body = await page.locator('body').innerText({ timeout: 20_000 });
+  await auditInteractiveControls(page, 'Phase 3 Admin /login mobile Arabic RTL');
   expect(body.trim().length, 'Admin /login must render visible content').toBeGreaterThan(0);
   expect(body, 'Admin /login must not crash on mobile Arabic').not.toMatch(CRASH_PATTERN);
-  const overflow = await page.evaluate(() => ({
-    width: window.innerWidth,
-    scrollWidth: document.documentElement.scrollWidth,
-  }));
-  expect(overflow.scrollWidth, 'Admin /login must avoid page-level horizontal overflow').toBeLessThanOrEqual(overflow.width + 8);
+  await assertNoPageLevelHorizontalOverflow(page, 'Phase 3 Admin /login mobile Arabic RTL');
 });
 
 for (const role of roleCases) {
