@@ -120,6 +120,20 @@ function AuthenticatedShellContent({ children, showChrome = true, publicAuth = f
     );
   }
 
+  const loginParams = new URLSearchParams(location.search);
+  const requestedReturnTo = loginParams.get('returnTo') || '';
+  const intendedRole = (loginParams.get('intendedRole') || '').trim().toLowerCase();
+  const safeReturnTo = requestedReturnTo.startsWith('/') && !requestedReturnTo.startsWith('//') ? requestedReturnTo : '';
+  const canResumeOwnerOnboarding =
+    location.pathname === '/login' &&
+    normalizedRole === 'owner' &&
+    (!intendedRole || intendedRole === 'owner') &&
+    (safeReturnTo === '/onboarding' || safeReturnTo.startsWith('/onboarding?') || safeReturnTo.startsWith('/onboarding/'));
+
+  if (user && !roleLoading && canResumeOwnerOnboarding) {
+    return <Navigate to={safeReturnTo} replace />;
+  }
+
   const isAuthEntryPage = location.pathname === '/' || location.pathname === '/login' || location.pathname === '/gateway';
   if (user && !roleLoading && isAuthEntryPage) {
     if (normalizedRole === 'tenant') return <Navigate to="/tenant/dashboard" replace />;

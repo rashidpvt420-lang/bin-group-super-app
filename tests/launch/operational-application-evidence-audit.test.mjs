@@ -644,8 +644,15 @@ test('[frozen-cent] refuses changed policy bytes and symlinked policy files', (t
   fs.appendFileSync(file, '\n// drift\n');
   assert.throws(() => verifyMoney({ amountReceived: 1500.15 }, lockedContract(), root), /unreviewed frozen payment policy/);
   fs.unlinkSync(file);
-  fs.symlinkSync(path.join(repoRoot, 'functions/shared/aedMoney.ts'), file);
-  assert.throws(() => verifyMoney({ amountReceived: 1500.15 }, lockedContract(), root), /not a regular file/);
+  try {
+    fs.symlinkSync(path.join(repoRoot, 'functions/shared/aedMoney.ts'), file);
+    assert.throws(() => verifyMoney({ amountReceived: 1500.15 }, lockedContract(), root), /not a regular file/);
+  } catch (err) {
+    if (process.platform === 'win32' && err.code === 'EPERM') {
+      return;
+    }
+    throw err;
+  }
 });
 
 test('[frozen-cent] restores the verifier after success, nonzero exit and policy rejection', (t) => {

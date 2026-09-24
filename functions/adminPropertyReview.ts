@@ -20,7 +20,6 @@ const REVIEWABLE_STATUSES = new Set([
   "pending_admin_review",
   "onboarding",
   "submitted",
-  "draft",
   "admin_review",
 ]);
 const APPROVED_STATUSES = new Set(["approved", "active"]);
@@ -94,6 +93,20 @@ export const adminReviewOwnerProperty = onCall(
       const alreadyVerified = hasDispatchReadyPropertyGeo(property);
       const geoOnlyReview = decision === "APPROVE" && approvedLegacy && !alreadyVerified;
 
+      if (status === "draft") {
+        throw new HttpsError("failed-precondition", "Draft properties are not eligible for an approval or geo-verification decision.");
+      }
+      const isInspectionFirst =
+        text(property.workflowVersion) === "OWNER_FIVE_PAGE_INSPECTION_FIRST_V1" ||
+        Boolean(text(property.intakeId, 240)) ||
+        status === "pending_property_inspection" ||
+        status === "submitted_for_property_inspection";
+      if (isInspectionFirst) {
+        throw new HttpsError(
+          "failed-precondition",
+          "Inspection-first properties cannot be approved or made dispatch-ready from the legacy property-review action. Complete the linked physical site-visit workflow instead.",
+        );
+      }
       if (!pendingReview && !geoOnlyReview) {
         throw new HttpsError("failed-precondition", "Property is no longer eligible for this Founder review decision.");
       }

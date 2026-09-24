@@ -133,6 +133,11 @@ export const checkPropertyUniqueness = onCall(
         .get(),
     ]);
 
-    return { available: activeContracts.empty && onboardingLeads.empty };
+    // Advisory legacy pre-check only. Write-authoritative duplicate protection is
+    // property_identity_registry via canonicalOwnerSubmission.ts using PROPERTY_IDENTITY_V1.
+    return { available: activeContracts.empty && onboardingLeads.empty,
+      advisoryOnly: true,
+      authoritativeGate: "property_identity_registry",
+    };
   },
 );

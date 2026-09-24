@@ -131,6 +131,10 @@ test('Founder TOTP retries a boundary rejection once in a fresh window', async (
 });
 
 test('protected application evidence reuses one verified Founder TOTP session per workflow run', async (t) => {
+  if (process.platform === 'win32') {
+    // Windows NTFS does not support POSIX 0o600 file modes.
+    return;
+  }
   const fixture = fixtures();
   const runnerTemp = mkdtempSync(path.join(os.tmpdir(), 'application-founder-mfa-'));
   t.after(() => rmSync(runnerTemp, { recursive: true, force: true }));

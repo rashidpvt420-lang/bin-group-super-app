@@ -1308,16 +1308,20 @@ service cloud.firestore {
 
     match /launch_evidence/{evidenceId} {
       allow read: if isAdmin();
-      allow create: if isAdmin();
-      allow update: if isAdmin();
-      allow delete: if isAdmin();
+      allow create: if isAdmin() &&
+        request.resource.data.get('source', '') != 'github-actions' &&
+        request.resource.data.get('executionGenerated', false) != true &&
+        request.resource.data.get('hardLaunchClaim', false) != true;
+      allow update, delete: if false;
     }
 
     match /signed_in_smoke_checks/{checkId} {
       allow read: if isAdmin();
-      allow create: if isAdmin();
-      allow update: if isAdmin();
-      allow delete: if isAdmin();
+      allow create: if isAdmin() &&
+        request.resource.data.get('source', '') != 'github-actions' &&
+        request.resource.data.get('executionGenerated', false) != true &&
+        request.resource.data.get('hardLaunchClaim', false) != true;
+      allow update, delete: if false;
     }
 
     match /staffRequests/{requestId} {
