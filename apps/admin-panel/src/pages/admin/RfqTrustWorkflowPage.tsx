@@ -1,5 +1,5 @@
 import React from 'react';
-import { Alert, Box, Button, Card, CardContent, Chip, Grid, MenuItem, Stack, TextField, Typography } from '@mui/material';
+import { Alert, Box, Button, Card, CardContent, Chip, CircularProgress, Grid, MenuItem, Stack, TextField, Typography } from '@mui/material';
 import { addDoc, collection, db, doc, limit, onSnapshot, orderBy, query, serverTimestamp, updateDoc } from '../../lib/firebase';
 
 type Rfq = { id: string; ticketId?: string; propertyId?: string; ownerId?: string; ownerEmail?: string; trade?: string; standardScope?: string; status?: string; estimateBandAed?: number; quotesReceived?: number; minimumQuotes?: number };
@@ -9,6 +9,7 @@ const minQuotes = (amount: number, emergency: boolean) => (!emergency && amount 
 export default function RfqTrustWorkflowPage() {
   const [rfqs, setRfqs] = React.useState<Rfq[]>([]);
   const [notice, setNotice] = React.useState('');
+  const [loading, setLoading] = React.useState(true);
   const [form, setForm] = React.useState({ ticketId: '', propertyId: '', ownerId: '', ownerEmail: '', trade: 'General maintenance', standardScope: '', estimateBandAed: '0', emergency: false });
   const [quoteForms, setQuoteForms] = React.useState<Record<string, { vendorId: string; vendorName: string; amountAed: string; warrantyDays: string; notes: string }>>({});
 
@@ -17,11 +18,15 @@ export default function RfqTrustWorkflowPage() {
     return onSnapshot(q, (snap) => {
       const rows = snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Rfq, 'id'>) }));
       setRfqs(rows);
+      setLoading(false);
       setQuoteForms((current) => {
         const next = { ...current };
         rows.forEach((r) => { if (!next[r.id]) next[r.id] = { vendorId: '', vendorName: '', amountAed: '', warrantyDays: '30', notes: '' }; });
         return next;
       });
+    }, (error) => {
+      setNotice(error?.message || 'Could not load RFQ records.');
+      setLoading(false);
     });
   }, []);
 
@@ -67,6 +72,7 @@ export default function RfqTrustWorkflowPage() {
       <Typography variant="overline" sx={{ color: '#DAA520', fontWeight: 900, letterSpacing: 3 }}>PROCUREMENT TRUST</Typography>
       <Typography variant="h4" sx={{ fontWeight: 950, mb: 1 }}>RFQ / Quote Workflow</Typography>
       <Typography sx={{ color: 'rgba(255,255,255,0.65)', mb: 3 }}>Ticket → standard scope → RFQ → vendor quotes → owner approval → execution proof → invoice comparison.</Typography>
+      {loading && <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}><CircularProgress sx={{ color: '#DAA520' }} /></Box>}
       {notice && <Alert sx={{ mb: 3 }} severity={notice.includes('required') ? 'warning' : 'success'}>{notice}</Alert>}
       <Card sx={{ bgcolor: '#0f172a', color: '#fff', border: '1px solid rgba(218,165,32,0.22)', mb: 3 }}><CardContent><Grid container spacing={2}>
         <Grid item xs={12} md={3}><TextField fullWidth size="small" label="Ticket ID" value={form.ticketId} onChange={(e) => setForm({ ...form, ticketId: e.target.value })} /></Grid>
@@ -78,6 +84,7 @@ export default function RfqTrustWorkflowPage() {
         <Grid item xs={12} md={6}><TextField fullWidth size="small" label="Standard scope" value={form.standardScope} onChange={(e) => setForm({ ...form, standardScope: e.target.value })} /></Grid>
         <Grid item xs={12}><Button variant="contained" onClick={createRfq} sx={{ bgcolor: '#DAA520', color: '#020617', fontWeight: 950 }}>Create RFQ</Button></Grid>
       </Grid></CardContent></Card>
+      {!loading && rfqs.length === 0 && <Alert severity="info" sx={{ mb: 2 }}>No RFQs have been created yet.</Alert>}
       <Grid container spacing={2}>{rfqs.map((rfq) => { const qf = quoteForms[rfq.id] || { vendorId: '', vendorName: '', amountAed: '', warrantyDays: '30', notes: '' }; return <Grid item xs={12} key={rfq.id}><Card sx={{ bgcolor: '#0f172a', color: '#fff' }}><CardContent>
         <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between"><Box><Typography variant="h6" sx={{ fontWeight: 950 }}>{rfq.trade} · {rfq.ticketId}</Typography><Typography sx={{ color: 'rgba(255,255,255,0.65)' }}>{rfq.standardScope}</Typography></Box><Stack direction="row" spacing={1}><Chip label={rfq.status || 'new'} /><Chip label={`${rfq.quotesReceived || 0}/${rfq.minimumQuotes || 1} quotes`} /></Stack></Stack>
         <Grid container spacing={2} sx={{ mt: 1 }}><Grid item xs={12} md={2}><TextField fullWidth size="small" label="Vendor ID" value={qf.vendorId} onChange={(e) => setQuoteForms({ ...quoteForms, [rfq.id]: { ...qf, vendorId: e.target.value } })} /></Grid><Grid item xs={12} md={3}><TextField fullWidth size="small" label="Vendor name" value={qf.vendorName} onChange={(e) => setQuoteForms({ ...quoteForms, [rfq.id]: { ...qf, vendorName: e.target.value } })} /></Grid><Grid item xs={12} md={2}><TextField fullWidth size="small" label="Amount AED" value={qf.amountAed} onChange={(e) => setQuoteForms({ ...quoteForms, [rfq.id]: { ...qf, amountAed: e.target.value } })} /></Grid><Grid item xs={12} md={2}><TextField fullWidth size="small" label="Warranty days" value={qf.warrantyDays} onChange={(e) => setQuoteForms({ ...quoteForms, [rfq.id]: { ...qf, warrantyDays: e.target.value } })} /></Grid><Grid item xs={12} md={3}><TextField fullWidth size="small" label="Notes" value={qf.notes} onChange={(e) => setQuoteForms({ ...quoteForms, [rfq.id]: { ...qf, notes: e.target.value } })} /></Grid></Grid>
