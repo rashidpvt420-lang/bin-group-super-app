@@ -233,7 +233,7 @@ const ReportingDashboard: React.FC = () => {
                                     <Typography variant="h1" fontWeight="950" color="#FFF">{stats.renewalRisk}%</Typography>
                                     <Typography variant="body2" color="textSecondary">Retention Hedge Layer</Typography>
                                 </Box>
-                                <Button fullWidth variant="contained" sx={{ mt: 2, bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>MITIGATE RISK</Button>
+                                <Button disabled title="Unavailable until this workflow is connected" aria-label="MITIGATE RISK" fullWidth variant="contained" sx={{ mt: 2, bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>MITIGATE RISK</Button>
                             </Paper>
                         </Grid>
                     </Grid>
