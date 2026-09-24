@@ -188,6 +188,23 @@ function relatedText(file, source) {
   return combined;
 }
 
+function uiEvidenceText(file, source) {
+  let combined = source;
+  if (!file) return combined;
+  const imports = parseImports(file, source);
+  for (const specifier of imports.values()) {
+    if (!specifier.startsWith('.')) continue;
+    const resolved = resolveRelativeFile(file, specifier);
+    if (!resolved || !/\.(?:tsx|jsx)$/.test(resolved)) continue;
+    const child = read(resolved);
+    // Follow direct presentation wrappers without recursively traversing the whole app.
+    if (source.length < 2500 || /return\s*<\s*[A-Z][A-Za-z0-9_]*/.test(source)) {
+      combined += '\n' + child;
+    }
+  }
+  return combined;
+}
+
 function hasLoading(text) {
   return /\b(?:loading|isLoading|isPending|pending)\b|CircularProgress|LinearProgress|Skeleton|Suspense|role=["']status["']/.test(text);
 }
@@ -220,6 +237,7 @@ function hasSuccess(text) {
 
 function mobileStatus(text, router) {
   if (/useMediaQuery|\bxs\s*:|\bsm\s*:|\bmd\s*:|@media|Grid\b|flexWrap|overflowX|width:\s*\{/.test(text)) return 'PASS:screen-responsive';
+  if (/<Container\b[^>]*maxWidth=|\bmaxWidth\s*:\s*\d+|\bmaxWidth\s*:\s*['"][^'"]+['"]/.test(text)) return 'PASS:bounded-responsive-layout';
   if (router.layout) return 'PASS:responsive-shell';
   return 'REVIEW:no-explicit-responsive-marker';
 }
@@ -280,6 +298,7 @@ for (const router of ROUTERS) {
 
     const screenText = externalInline ? line : (screenFile ? read(screenFile) : '');
     const combinedText = screenFile && screenFile !== router.file ? relatedText(screenFile, screenText) : screenText;
+    const uiText = screenFile && screenFile !== router.file ? uiEvidenceText(screenFile, screenText) : screenText;
     const dataSources = redirect ? [] : detectDataSources(combinedText);
     const dataDriven = dataSources.length > 0;
     const nestedRouter = isNestedRouter(screenText);
@@ -295,8 +314,8 @@ for (const router of ROUTERS) {
     const empty = redirect ? 'N/A:redirect' : nestedRouter ? 'N/A:nested-router' : emptyRequired ? (hasEmpty(screenText) ? 'PASS' : 'MISSING') : 'N/A:not-required';
     const error = redirect ? 'N/A:redirect' : nestedRouter ? 'N/A:nested-router' : errorRequired ? (hasError(screenText) ? 'PASS' : 'MISSING') : 'N/A:not-required';
     const success = redirect ? 'PASS:redirect' : hasSuccess(screenText) ? 'PASS' : 'REVIEW';
-    const mobile = redirect ? 'PASS:redirect' : mobileStatus(screenText, router);
-    const arabic = redirect ? 'PASS:redirect' : arabicStatus(screenText, router);
+    const mobile = redirect ? 'PASS:redirect' : mobileStatus(uiText, router);
+    const arabic = redirect ? 'PASS:redirect' : arabicStatus(uiText, router);
     const back = redirect ? 'PASS:redirect' : backStatus(screenText, router, route);
     const directUrl = router.surface === 'admin' ? (hasSpaRewrite(adminHosting) ? 'PASS' : 'FAIL') : (hasSpaRewrite(consumerHosting) ? 'PASS' : 'FAIL');
     const refresh = directUrl;
