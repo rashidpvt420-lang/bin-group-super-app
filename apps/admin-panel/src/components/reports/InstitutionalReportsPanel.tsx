@@ -17,6 +17,7 @@ import { collection, onSnapshot } from 'firebase/firestore';
  */
 const InstitutionalReportsPanel: React.FC = () => {
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [portfolioData, setPortfolioData] = useState<any>({
     towerName: "Global Portfolio Hub",
     unitsActive: 0,
@@ -50,6 +51,10 @@ const InstitutionalReportsPanel: React.FC = () => {
           { name: 'Power Grid', count: activeUnits, health: 98 }
         ]
       }));
+      setError('');
+      setLoading(false);
+    }, (err) => {
+      setError(err?.message || 'Could not load portfolio records.');
       setLoading(false);
     });
 
@@ -63,6 +68,9 @@ const InstitutionalReportsPanel: React.FC = () => {
             ...prev,
             slaCompliance: compliance > 0 ? compliance : prev.slaCompliance
         }));
+    }, (err) => {
+        setError(err?.message || 'Could not load maintenance reporting records.');
+        setLoading(false);
     });
 
     return () => {
@@ -70,6 +78,12 @@ const InstitutionalReportsPanel: React.FC = () => {
         unsubTickets();
     };
   }, []);
+
+  if (error) return (
+    <div className="p-8 text-center text-red-400 font-mono h-screen flex items-center justify-center bg-[#0a0a0b]">
+      {error}
+    </div>
+  );
 
   if (loading) return (
     <div className="p-8 text-center text-blue-400 font-mono tracking-widest animate-pulse h-screen flex items-center justify-center bg-[#0a0a0b]">
