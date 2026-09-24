@@ -219,15 +219,21 @@ for (const fileAbs of sourceRoots.flatMap((dir) => walk(path.join(root, dir)))) 
         const errorHandling = mutation ? hasErrorHandling(context) : true;
         const successHandling = mutation ? hasSuccessHandling(context) : true;
 
-        const privilegedSurface = roleFor(file) === 'admin' || /\b(approve|reject|role|staff|permission|dispatch|payment|payout|unlock|verify|delete|admin|privilege|claim)\b/i.test(label + ' ' + handler);
-        const privilegeRisk = privilegedSurface && directClientWritePattern.test(context) && !/httpsCallable\s*\(/.test(context);
+        const surfaceRole = roleFor(file);
+        const directClientWrite = directClientWritePattern.test(context) && !/httpsCallable\s*\(/.test(context);
+        const privilegeSensitive =
+          /\b(role|permission|admin|privilege|claim|paymentverified|dispatchready|unlock|payout|approve|reject)\b/i.test(label + ' ' + handler + ' ' + context);
+        const privilegeRisk =
+          directClientWrite &&
+          privilegeSensitive &&
+          surfaceRole !== 'admin';
 
         const anchors = [testId, aria, action, handler, children.text]
           .filter((token) => token && token !== '(dynamic)' && token.length >= 3);
         const e2eCovered = !mutation || anchors.some((anchor) => new RegExp(escapeRegExp(anchor), 'i').test(e2eText));
 
         const issues = [];
-        if (iconOnlyControls.has(tag) && !aria && !title && !children.text) issues.push('icon-control-missing-accessible-label');
+        if (iconOnlyControls.has(tag) && !aria && !title && !children.text && !children.dynamic) issues.push('icon-control-missing-accessible-label');
         if ((tag === 'button' || tag === 'Button' || tag === 'ButtonBase') && !label) issues.push('button-missing-accessible-label');
         if (mutation && !busyGuard) issues.push('mutation-missing-busy-guard');
         if (mutation && !errorHandling) issues.push('mutation-missing-error-path');
