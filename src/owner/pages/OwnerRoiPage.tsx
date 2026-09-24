@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { 
-    Box, Typography, Grid, Paper, CircularProgress, 
+    Box, Typography, Grid, Paper, CircularProgress, Alert, 
     Stack, LinearProgress, alpha, Button, Divider,
     Tooltip, IconButton
 } from '@mui/material';
@@ -16,6 +16,7 @@ import { binThemeTokens } from '../../theme/binGroupTheme';
 export default function OwnerRoiPage() {
     const { user } = useRole();
     const [loading, setLoading] = useState(true);
+    const [loadError, setLoadError] = useState('');
     const [passports, setPassports] = useState<any[]>([]);
 
     useEffect(() => {
@@ -26,6 +27,11 @@ export default function OwnerRoiPage() {
         
         const unsubscribe = onSnapshot(passportQ, (snap) => {
             setPassports(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+            setLoadError('');
+            setLoading(false);
+        }, (error: any) => {
+            console.error('[OwnerROI] listener failed:', error);
+            setLoadError(error?.message || 'Unable to load ROI data.');
             setLoading(false);
         });
 
@@ -38,6 +44,8 @@ export default function OwnerRoiPage() {
             <Typography variant="overline" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900 }}>Calculating Yields...</Typography>
         </Box>
     );
+
+    if (loadError) return <Alert severity="error">{loadError}</Alert>;
 
     const totalCollected = passports.reduce((s, p) => s + (p.rentCollectedTotal || 0), 0);
     const totalOutstanding = passports.reduce((s, p) => s + (p.rentOutstandingTotal || 0), 0);
