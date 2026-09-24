@@ -30,6 +30,7 @@ const projects = ciMode
   ? [
       { name: 'chromium-desktop', use: { ...devices['Desktop Chrome'] } },
       { name: 'android-mobile', use: { ...devices['Pixel 7'] } },
+      { name: 'ios-webkit', use: { ...devices['iPhone 15'] } },
     ]
   : [{ name: 'chromium-desktop', use: { ...devices['Desktop Chrome'] } }];
 

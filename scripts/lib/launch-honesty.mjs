@@ -105,6 +105,7 @@ export const SUITE_SPECS = Object.freeze({
       'tests/e2e/launch-audit-technician.spec.ts',
       'tests/e2e/launch-audit-broker.spec.ts',
       'tests/e2e/hard-launch-routes.spec.ts',
+      'tests/e2e/phase3-platform-shell.spec.ts',
     ],
     suiteName: 'launch-audit-live',
     evidenceKeys: ['launchAuditLive', 'appCheckAuthenticatedAccess'],

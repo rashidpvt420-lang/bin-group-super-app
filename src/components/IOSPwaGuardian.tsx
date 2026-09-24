@@ -46,7 +46,14 @@ export default function IOSPwaGuardian() {
                                     ENABLE IOS PUSH
                                 </Typography>
                             </Stack>
-                            <IconButton size="small" onClick={() => setIsVisible(false)} sx={{ color: 'rgba(255,255,255,0.3)' }}>
+                            <IconButton
+                                type="button"
+                                data-testid="ios-pwa-banner-close"
+                                aria-label="Close iOS Home Screen instructions"
+                                size="small"
+                                onClick={() => setIsVisible(false)}
+                                sx={{ color: 'rgba(255,255,255,0.3)' }}
+                            >
                                 <X size={18} />
                             </IconButton>
                         </Box>
