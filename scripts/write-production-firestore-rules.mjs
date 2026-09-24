@@ -92,7 +92,7 @@ const required = [
   'match /tickets/{ticketId} {',
   'match /payroll_entries/{entryId} {',
   "'invoice_registry', 'payroll_entries', 'property_identity_registry'",
-  "'technician_live_locations',\n          'properties',\n          'property_identity_registry',\n          'users'",
+  "'technician_live_locations',\n          'properties',\n          'property_identity_registry',\n          'turnover-quotes',\n          'users'",
   financeAdminPaymentTransactionsRead,
   "request.resource.data.get('source', '') != 'github-actions'",
   "request.resource.data.get('executionGenerated', false) != true",
@@ -176,6 +176,12 @@ if (
   propertyIdentityFallbackWrites.some(([, , condition]) => !condition.includes("'property_identity_registry'"))
 ) {
   failures.push('property_identity_registry must be excluded from both generic browser write fallbacks');
+}
+
+if (
+  propertyIdentityFallbackWrites.some(([, , condition]) => !condition.includes("'turnover-quotes'"))
+) {
+  failures.push('turnover-quotes must be excluded from both generic browser write fallbacks');
 }
 
 
