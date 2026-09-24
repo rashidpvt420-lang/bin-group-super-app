@@ -10,7 +10,9 @@ import {
     TableRow, 
     Chip, 
     Button, 
-    Grid 
+    Grid,
+    Alert,
+    CircularProgress
 } from '@mui/material';
 import SecurityIcon from '@mui/icons-material/Security';
 import { db } from '../../lib/firebase';
@@ -19,6 +21,8 @@ import { collection, onSnapshot, query, orderBy, limit } from 'firebase/firestor
 export default function AuditShieldPage() {
     const [logs, setLogs] = useState<any[]>([]);
     const [stats, setStats] = useState({ total: 0, verified: 0 });
+    const [loading, setLoading] = useState(true);
+    const [loadError, setLoadError] = useState('');
 
     useEffect(() => {
         const q = query(
@@ -44,10 +48,19 @@ export default function AuditShieldPage() {
                 total: auditLogs.length,
                 verified: auditLogs.filter((l: any) => l.forensicHash).length
             });
+            setLoadError('');
+            setLoading(false);
+        }, (error: any) => {
+            console.error('[AuditShield] listener failed:', error);
+            setLoadError(error?.message || 'Unable to load audit evidence.');
+            setLoading(false);
         });
 
         return () => unsubscribe();
     }, []);
+
+    if (loading) return <Box role="status" sx={{ minHeight: '50vh', display: 'grid', placeItems: 'center' }}><CircularProgress /></Box>;
+    if (loadError) return <Box sx={{ p: 4 }}><Alert severity="error">{loadError}</Alert></Box>;
 
     return (
         <Box sx={{ p: 4, bgcolor: '#020617', minHeight: '100vh', color: 'white' }}>
