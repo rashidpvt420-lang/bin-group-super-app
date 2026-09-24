@@ -81,6 +81,7 @@ export default function SOSFeedPage() {
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
+  const [actionId, setActionId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!autoRefresh) return undefined;
@@ -104,6 +105,8 @@ export default function SOSFeedPage() {
   }, [autoRefresh]);
 
   const handleRespond = async (sosId: string) => {
+    if (actionId) return;
+    setActionId(sosId);
     try {
       setActionError(null);
       setActionSuccess(null);
@@ -113,10 +116,14 @@ export default function SOSFeedPage() {
     } catch (error: any) {
       console.error('Failed to respond to SOS:', error);
       setActionError(error?.message || 'Failed to respond to SOS.');
+    } finally {
+      setActionId(null);
     }
   };
 
   const handleResolve = async (sosId: string) => {
+    if (actionId) return;
+    setActionId(sosId);
     try {
       setActionError(null);
       setActionSuccess(null);
@@ -126,6 +133,8 @@ export default function SOSFeedPage() {
     } catch (error: any) {
       console.error('Failed to resolve SOS:', error);
       setActionError(error?.message || 'Failed to resolve SOS.');
+    } finally {
+      setActionId(null);
     }
   };
 
@@ -238,8 +247,8 @@ export default function SOSFeedPage() {
             <Box sx={{ display: 'flex', gap: 1, ml: 2 }}>
               {event.status === 'ACTIVE' && (
                 <>
-                  <Button size="small" variant="contained" color="warning" onClick={() => handleRespond(event.sosId)}>Respond</Button>
-                  <Button size="small" variant="contained" color="success" onClick={() => handleResolve(event.sosId)}>Resolve</Button>
+                  <Button size="small" variant="contained" color="warning" disabled={actionId === event.sosId} onClick={() => handleRespond(event.sosId)}>Respond</Button>
+                  <Button size="small" variant="contained" color="success" disabled={actionId === event.sosId} onClick={() => handleResolve(event.sosId)}>Resolve</Button>
                 </>
               )}
               {event.status === 'RESPONDED' && (
