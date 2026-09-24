@@ -83,7 +83,7 @@ test('canonical property geo stays server-authoritative and inspection-first pro
   assert.match(completionWrapper, /geoVerification: canonical\.geoVerification/);
   assert.match(completionWrapper, /PHYSICAL_INSPECTION_EVIDENCE_V2/);
   assert.match(paymentGate, /hasDispatchReadyPropertyGeo\(property\)/);
-  assert.match(paymentGate, /inspectionFirst/);
+  assert.match(paymentGate, /OWNER_FIVE_PAGE_INSPECTION_FIRST_V1/);
 
   assert.match(reviewBackend, /Inspection-first properties cannot be approved or made dispatch-ready/);
   assert.match(reviewBackend, /status === "draft"/);
