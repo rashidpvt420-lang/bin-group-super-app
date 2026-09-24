@@ -17,9 +17,20 @@ export default function AuditLogPage() {
     const [search, setSearch] = useState('');
 
     useEffect(() => {
-        const q = query(collection(db, 'system_logs'), orderBy('timestamp', 'desc'), limit(100));
+        const q = query(collection(db, 'audit_logs'), orderBy('createdAt', 'desc'), limit(100));
         const unsubscribe = onSnapshot(q, (snap) => {
-            const data = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
+            const data = snap.docs.map(docSnap => {
+                const raw = docSnap.data() as any;
+                return {
+                    id: docSnap.id,
+                    ...raw,
+                    type: raw.action || raw.eventType || 'SYSTEM',
+                    resourceId: raw.resourceId || raw.targetId || '',
+                    actor: raw.actorEmail || raw.actorId || raw.actorRole || 'SYSTEM',
+                    message: raw.message || raw.note || raw.reason || raw.details?.message || raw.action || 'Audit event',
+                    timestamp: raw.createdAt || raw.timestamp,
+                };
+            });
             setLogs(data);
         });
         return () => unsubscribe();
@@ -75,16 +86,16 @@ export default function AuditLogPage() {
                                 </TableRow>
                             </TableHead>
                             <TableBody>
-                                {logs.length === 0 ? (
+                                {logs.filter((log) => !search.trim() || JSON.stringify(log).toLowerCase().includes(search.trim().toLowerCase())).length === 0 ? (
                                     <TableRow>
                                         <TableCell colSpan={6} align="center" sx={{ py: 8 }}>
                                             <HistoryIcon sx={{ fontSize: 40, color: '#94a3b8', mb: 1, display: 'block', mx: 'auto' }} />
                                             <Typography color="text.secondary">{t('audit.no_events')}</Typography>
                                         </TableCell>
                                     </TableRow>
-                                ) : logs.map((log) => (
+                                ) : logs.filter((log) => !search.trim() || JSON.stringify(log).toLowerCase().includes(search.trim().toLowerCase())).map((log) => (
                                     <TableRow key={log.id} hover sx={{ flexDirection: isRTL ? 'row-reverse' : 'row' }}>
-                                        <TableCell sx={{ textAlign: isRTL ? 'right' : 'left' }}>{log.timestamp?.toDate().toLocaleString(lang === 'ar' ? 'ar-AE' : 'en-AE')}</TableCell>
+                                        <TableCell sx={{ textAlign: isRTL ? 'right' : 'left' }}>{log.timestamp?.toDate?.()?.toLocaleString(lang === 'ar' ? 'ar-AE' : 'en-AE') || '—'}</TableCell>
                                         <TableCell sx={{ textAlign: isRTL ? 'right' : 'left' }}>
                                             <Chip label={log.type} size="small" color={getSeverityColor(log.type)} sx={{ fontWeight: 'bold' }} />
                                         </TableCell>
