@@ -146,7 +146,7 @@ export default function OwnerFinancialsPage() {
                     <Typography variant="h4" fontWeight="950" sx={{ color: '#FFF', mt: 1 }}>{tx('owner.fin.financial_sovereign', 'Financial Sovereign')}</Typography>
                 </Box>
                 <Stack direction="row" spacing={2}>
-                    <Button variant="outlined" startIcon={<Download size={16} />} sx={{ borderColor: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.7)', fontWeight: 900, borderRadius: 3 }}>{tx('owner.fin.export_txn', 'Export TXN')}</Button>
+                    <Button disabled title="Unavailable until this workflow is connected" aria-label="Unavailable financial action" variant="outlined" startIcon={<Download size={16} />} sx={{ borderColor: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.7)', fontWeight: 900, borderRadius: 3 }}>{tx('owner.fin.export_txn', 'Export TXN')}</Button>
                 </Stack>
             </Box>
 
