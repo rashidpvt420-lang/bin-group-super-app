@@ -42,7 +42,7 @@ test('launcher generator produces complete PWA, Android, and iOS asset sets', ()
 
 test('every root application build regenerates launcher assets before Vite runs', () => {
   const packageJson = JSON.parse(readFileSync('package.json', 'utf8'));
-  assert.equal(packageJson.scripts?.prebuild, 'node scripts/generate-launcher-assets.mjs');
+  assert.equal(packageJson.scripts?.prebuild, 'node scripts/write-root-firebase-messaging-config.mjs && node scripts/generate-launcher-assets.mjs');
   assert.match(packageJson.scripts?.mobile?.toString?.() ?? '', /^$/);
   assert.match(packageJson.scripts?.['mobile:sync'] ?? '', /npm run build/);
 });

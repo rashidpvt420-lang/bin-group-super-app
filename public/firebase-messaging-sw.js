@@ -1,15 +1,14 @@
 /* BIN GROUP — Firebase Cloud Messaging service worker */
+/* Generated Firebase client config is loaded from the same build inputs as the root app. */
+importScripts('/firebase-messaging-config.js');
 importScripts('https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/10.14.1/firebase-messaging-compat.js');
 
-firebase.initializeApp({
-  apiKey: 'AIzaSyCd-QdM7mjECh9UqDKk1ofBemanpTRgd4s',
-  authDomain: 'bin-group-57c60.firebaseapp.com',
-  projectId: 'bin-group-57c60',
-  storageBucket: 'bin-group-57c60.firebasestorage.app',
-  messagingSenderId: '123413252227',
-  appId: '1:123413252227:web:285cb53bc26626d699f3b6',
-});
+if (!self.__BIN_GROUP_FIREBASE_CONFIG) {
+  throw new Error('Missing generated Firebase messaging configuration.');
+}
+
+firebase.initializeApp(self.__BIN_GROUP_FIREBASE_CONFIG);
 
 const messaging = firebase.messaging();
 

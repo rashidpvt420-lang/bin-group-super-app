@@ -102,9 +102,17 @@ const deps = { ...(pkg.dependencies || {}), ...(pkg.devDependencies || {}) };
 ['mobile:init', 'mobile:add:android', 'mobile:add:ios', 'mobile:sync', 'mobile:check'].forEach((script) => {
   assert(Boolean(pkg.scripts?.[script]), `Missing package script: ${script}`);
 });
+const prebuildScript = String(pkg.scripts?.prebuild || '');
+const messagingConfigStep = 'node scripts/write-root-firebase-messaging-config.mjs';
+const launcherAssetStep = 'node scripts/generate-launcher-assets.mjs';
 assert(
-  pkg.scripts?.prebuild === 'node scripts/generate-launcher-assets.mjs',
+  prebuildScript.includes(launcherAssetStep),
   'Root build must regenerate deterministic launcher assets through prebuild.',
+);
+assert(
+  prebuildScript.indexOf(messagingConfigStep) >= 0 &&
+  prebuildScript.indexOf(messagingConfigStep) < prebuildScript.indexOf(launcherAssetStep),
+  'Root build must generate Firebase Messaging config before deterministic launcher assets.',
 );
 
 assert(

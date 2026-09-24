@@ -9,15 +9,6 @@ scratch/
 *.cjs
 *.mjs
 audit*.js
-copy_script.js
-diag.js
-fetch_proof.js
-fix_auth.js
-fix_lang.js
-patch-routes.js
 production_repair_runner.js
-qa-*.js
 repair_technician_feed.js
-rest_*.js
-translate.js
 public/firebase-messaging-sw.js

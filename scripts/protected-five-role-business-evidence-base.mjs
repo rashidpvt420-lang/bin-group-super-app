@@ -276,7 +276,7 @@ export function patchBusinessEvidenceFiles() {
   writeFileSync(ADMIN_FILE, adminPatched, 'utf8');
   writeFileSync(TENANT_FILE, tenantPatched, 'utf8');
   writeFileSync(TECHNICIAN_FILE, technicianPatched, 'utf8');
-  console.log('[five-role-business-evidence] patched Admin idempotent unlock, Tenant terminal completion states, exact-ticket, and Technician explicit-push-state proofs');
+  console.log('[five-role-business-evidence-base] patched Admin idempotent unlock, Tenant terminal completion states, exact-ticket, and Technician explicit-push-state proofs');
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1])) {

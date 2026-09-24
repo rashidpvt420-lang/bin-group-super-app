@@ -26,6 +26,28 @@ const forbiddenTrackedPathspecs = [
   ['android_signing_package', 'tracked Android signing package material'],
   [':(glob)staff-os-staging-*/**', 'tracked generated staff/staging deployment evidence'],
   ['launch_package/privileged-account-cleanup.json', 'tracked privileged-account cleanup evidence'],
+  ['approve_onboarding.cjs', 'deprecated direct onboarding activation bypass'],
+  ['firebase-proof-fix.mjs', 'historical unreviewed Firebase patcher'],
+  ['fix_auth.js', 'historical direct auth patcher'],
+  ['fix_lang.js', 'historical language rewrite tool'],
+  ['fix-map-fallback.cjs', 'historical map source patcher'],
+  ['patch-routes.js', 'historical built-output route patcher'],
+  ['qa-step2-owner-onboarding.js', 'historical direct production onboarding QA mutator'],
+  ['rest_audit.js', 'historical local-token production data dump'],
+  ['rest_dump.js', 'historical local-token production data dump'],
+  ['translate.js', 'historical source rewrite tool'],
+  ['verify_mosque.cjs', 'historical direct production collection reader'],
+  ['scripts/apply-five-role-business-evidence-fixes-legacy.mjs', 'legacy evidence source patcher'],
+  ['.github/workflows/persist-owner-app-payment-session.yml', 'legacy self-modifying Owner workflow'],
+  ['scripts/harden-owner-app-payment-session.mjs', 'legacy Owner source patcher'],
+  ['.github/workflows/persist-admin-payment-approval.yml', 'legacy self-modifying Admin workflow'],
+  ['scripts/harden-admin-payment-approval.mjs', 'legacy Admin source patcher'],
+  ['.github/workflows/persist-firestore-rules.yml', 'legacy self-modifying Firestore workflow'],
+  ['.github/workflows/sync-five-profile-hardening.yml', 'historical branch synchronization workflow'],
+  ['.github/workflows/revert-red-launch-suite-728.yml', 'historical one-off rollback workflow'],
+  ['src/owner/pages/OwnerUnitsPage.tsx', 'retired duplicate Owner units implementation'],
+  ['src/lib/offlineSync.ts', 'unreferenced legacy offline sync authority'],
+  ['apps/owner-app/src/lib/offlineSync.ts', 'unreferenced legacy Owner offline sync authority'],
 ];
 
 const violations = [];
@@ -106,6 +128,15 @@ for (const [pathspec, label] of forbiddenTrackedPathspecs) {
 }
 
 walk(root);
+
+const firebaseConfig = fs.readFileSync(path.join(root, 'firebase.json'), 'utf8');
+const capacitorConfig = fs.readFileSync(path.join(root, 'capacitor.config.ts'), 'utf8');
+if (firebaseConfig.includes('apps/owner-app/build')) {
+  violations.push('Legacy apps/owner-app must never be a Firebase Hosting production target.');
+}
+if (capacitorConfig.includes('apps/owner-app')) {
+  violations.push('Legacy apps/owner-app must never be the Capacitor production webDir.');
+}
 
 if (violations.length) {
   console.error('\nRepository hygiene guard failed:\n');
