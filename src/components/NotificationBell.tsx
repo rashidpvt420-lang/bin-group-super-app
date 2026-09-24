@@ -96,7 +96,7 @@ export function NotificationBell() {
     return (
         <>
             <Tooltip title={`${unreadCount} unread notifications`}>
-                <IconButton onClick={handleOpen} sx={{ color: '#FFF', position: 'relative' }}>
+                <IconButton aria-label={`${unreadCount} unread notifications`} onClick={handleOpen} sx={{ color: '#FFF', position: 'relative' }}>
                     <Badge badgeContent={unreadCount} color="error" max={99}>
                         {isRinging
                             ? <SafeIcon icon={BellRing} size={22} color="#C6A75E" />
