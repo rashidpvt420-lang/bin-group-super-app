@@ -103,7 +103,7 @@ const requiredFragments = [
   ['ticket create fallback rejects explicit ticket hierarchies first', "allow create: if collection != 'tickets' && collection != 'maintenanceTickets' && !("],
   ['ticket update fallback rejects explicit ticket hierarchies first', "allow update, delete: if collection != 'tickets' && collection != 'maintenanceTickets' && !("],
   ['ticket write fallback excludes explicit ticket hierarchies, live location, canonical property geo, HR cases and private HR', "'system_secrets',\n          'technician_live_locations',\n          'properties',\n          'users',\n          'staffRequests',\n          'hrAiConversations',\n          'audit_logs',\n          'admin_security_sessions',\n          'private_hr_profiles'"],
-  ['payroll mirror and property identity registry excluded from generic create and update/delete fallbacks', "'transactions',\n          'payroll_entries',\n          'property_identity_registry',\n          'invoices'"],
+  ['property identity registry excluded from generic create and update/delete fallbacks', "'technician_live_locations',\n          'properties',\n          'property_identity_registry',\n          'users'"],
   ['private Broker KYC profile rule exists', 'match /broker_kyc_profiles/{brokerId} {'],
   ['Broker KYC rate limits are server-only', "match /broker_kyc_submission_limits/{brokerId} {\n      allow read, write: if false;"],
   ['Admin security sessions are server-only', "match /admin_security_sessions/{sessionId} {\n      allow read, write: if false;"],
