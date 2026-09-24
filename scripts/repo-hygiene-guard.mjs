@@ -38,6 +38,13 @@ const forbiddenTrackedPathspecs = [
   ['translate.js', 'historical source rewrite tool'],
   ['verify_mosque.cjs', 'historical direct production collection reader'],
   ['scripts/apply-five-role-business-evidence-fixes-legacy.mjs', 'legacy evidence source patcher'],
+  ['.github/workflows/persist-owner-app-payment-session.yml', 'legacy self-modifying Owner workflow'],
+  ['scripts/harden-owner-app-payment-session.mjs', 'legacy Owner source patcher'],
+  ['.github/workflows/persist-admin-payment-approval.yml', 'legacy self-modifying Admin workflow'],
+  ['scripts/harden-admin-payment-approval.mjs', 'legacy Admin source patcher'],
+  ['.github/workflows/persist-firestore-rules.yml', 'legacy self-modifying Firestore workflow'],
+  ['.github/workflows/sync-five-profile-hardening.yml', 'historical branch synchronization workflow'],
+  ['.github/workflows/revert-red-launch-suite-728.yml', 'historical one-off rollback workflow'],
 ];
 
 const violations = [];
