@@ -24,10 +24,11 @@ function lineOf(source, index) {
   return source.slice(0, index).split('\n').length;
 }
 
-function textContent(openTag, after) {
-  const close = after.match(/^([\s\S]{0,700}?)<\//);
-  if (!close) return '';
-  const raw = close[1];
+function textContent(tagName, after) {
+  const closingToken = `</${tagName}>`;
+  const closingIndex = after.indexOf(closingToken);
+  if (closingIndex < 0 || closingIndex > 2000) return '';
+  const raw = after.slice(0, closingIndex);
   const literal = raw
     .replace(/<[^>]+>/g, ' ')
     .replace(/\{[^}]*\}/g, ' ')
@@ -70,7 +71,7 @@ function inspect(file, source) {
     const tagName = match[1];
     const index = match.index ?? 0;
     const after = source.slice(index + tag.length);
-    const staticLabel = attr(tag, 'aria-label') || attr(tag, 'title') || attr(tag, 'data-testid') || attr(tag, 'name') || textContent(tag, after);
+    const staticLabel = attr(tag, 'aria-label') || attr(tag, 'title') || attr(tag, 'data-testid') || attr(tag, 'name') || textContent(tagName, after);
     const hasDynamicLabel = dynamicAttr(tag, 'aria-label') || dynamicAttr(tag, 'title') || dynamicAttr(tag, 'data-testid');
     const hasAccessibleName = Boolean(staticLabel || hasDynamicLabel || /startIcon=|endIcon=/.test(tag) && textContent(tag, after));
     const mutating = /onClick=|onSubmit=|type=["']submit["']/.test(tag);
