@@ -40,7 +40,7 @@ const CoverageTracker: React.FC<Props> = ({ items }) => {
                 <Typography variant="h6" fontWeight="950" sx={{ color: '#FFF', display: 'flex', alignItems: 'center', gap: 2 }}>
                     <ShieldCheck color={binThemeTokens.gold} /> SYSTEM COVERAGE & WARRANTIES
                 </Typography>
-                <Button size="small" variant="text" sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>VIEW ALL POLICIES</Button>
+                <Button disabled title="Unavailable until this workflow is connected" aria-label="VIEW ALL POLICIES" size="small" variant="text" sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>VIEW ALL POLICIES</Button>
             </Box>
 
             <Stack spacing={2}>
@@ -94,7 +94,7 @@ const CoverageTracker: React.FC<Props> = ({ items }) => {
                             <Grid item xs={12} sm={2} sx={{ textAlign: 'right' }}>
                                 {item.status === 'ACTIVE' && (
                                     <Tooltip title="Claim Opportunity: Coverage covers current wear markers.">
-                                        <Button size="small" variant="outlined" sx={{ color: '#4ADE80', borderColor: alpha('#4ADE80', 0.3), fontWeight: 900, fontSize: '0.65rem' }}>
+                                        <Button disabled title="Unavailable until this workflow is connected" aria-label="FLAG CLAIM" size="small" variant="outlined" sx={{ color: '#4ADE80', borderColor: alpha('#4ADE80', 0.3), fontWeight: 900, fontSize: '0.65rem' }}>
                                             FLAG CLAIM
                                         </Button>
                                     </Tooltip>
