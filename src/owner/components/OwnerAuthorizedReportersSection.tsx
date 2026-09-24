@@ -140,7 +140,7 @@ export default function OwnerAuthorizedReportersSection({ properties, reporters,
           <Box component="form" onSubmit={handleSubmit} sx={{ p: { xs: 2, md: 3 }, mb: 4, bgcolor: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 3 }}>
             <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
               <Typography variant="h6" fontWeight={950} sx={{ color: '#fff' }}>Add Authorized Person</Typography>
-              <IconButton onClick={() => setShowAddForm(false)} sx={{ color: 'rgba(255,255,255,0.5)' }}><X size={20} /></IconButton>
+              <IconButton aria-label="Close authorized reporter form" onClick={() => setShowAddForm(false)} sx={{ color: 'rgba(255,255,255,0.5)' }}><X size={20} /></IconButton>
             </Stack>
             <Stack spacing={2.5}>
               <FormControl fullWidth>
