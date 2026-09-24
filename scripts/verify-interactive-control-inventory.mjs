@@ -6,7 +6,9 @@ const root = process.cwd();
 const auditDir = path.join(root, 'audit');
 fs.mkdirSync(auditDir, { recursive: true });
 
-const sourceRoots = ['src', 'apps/admin-panel/src', 'apps/owner-app/src'];
+// Canonical runtime surfaces only. apps/owner-app is a retired/manual-handoff tree
+// per the Phase 2 route-consolidation contract and must not be counted twice.
+const sourceRoots = ['src', 'apps/admin-panel/src'];
 const ignoredParts = new Set(['__tests__', '__mocks__', 'node_modules', 'dist', 'build']);
 const testRoots = ['tests/e2e', 'apps/admin-panel/src/__tests__'];
 const canonicalControls = new Set([
