@@ -45,6 +45,9 @@ const forbiddenTrackedPathspecs = [
   ['.github/workflows/persist-firestore-rules.yml', 'legacy self-modifying Firestore workflow'],
   ['.github/workflows/sync-five-profile-hardening.yml', 'historical branch synchronization workflow'],
   ['.github/workflows/revert-red-launch-suite-728.yml', 'historical one-off rollback workflow'],
+  ['src/owner/pages/OwnerUnitsPage.tsx', 'retired duplicate Owner units implementation'],
+  ['src/lib/offlineSync.ts', 'unreferenced legacy offline sync authority'],
+  ['apps/owner-app/src/lib/offlineSync.ts', 'unreferenced legacy Owner offline sync authority'],
 ];
 
 const violations = [];
