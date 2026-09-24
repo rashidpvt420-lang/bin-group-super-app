@@ -13,6 +13,7 @@ export default function TenantParcelsPage() {
   const [loading, setLoading] = useState(true);
   const [parcels, setParcels] = useState<any[]>([]);
   const [snackbar, setSnackbar] = useState<{open: boolean, message: string, severity: 'success' | 'error' | 'warning' | 'info'}>({ open: false, message: '', severity: 'info' });
+  const [collectingId, setCollectingId] = useState<string | null>(null);
 
   const label = (key: string, en: string, ar: string) => lang === 'ar' ? ar : tx(key, en);
 
@@ -41,15 +42,20 @@ export default function TenantParcelsPage() {
   }, [user?.uid]);
 
   const handleConfirmCollection = async (parcelId: string) => {
+    if (collectingId) return;
+    setCollectingId(parcelId);
     try {
       await updateDoc(doc(db, 'parcels', parcelId), {
         status: 'collected',
         collectedBy: user?.displayName || 'Tenant',
         collectedAt: serverTimestamp()
       });
+      setSnackbar({ open: true, message: 'Parcel collection confirmed.', severity: 'success' });
     } catch (err) {
       console.error('Failed to confirm collection:', err);
       setSnackbar({ open: true, message: 'Error confirming collection: ' + (err instanceof Error ? err.message : String(err)), severity: 'error' });
+    } finally {
+      setCollectingId(null);
     }
   };
 
@@ -144,7 +150,7 @@ export default function TenantParcelsPage() {
                         variant="contained"
                         size="small"
                         startIcon={<SafeIcon icon={FileCheck2} size={14} />}
-                        onClick={() => handleConfirmCollection(p.id)}
+                        disabled={collectingId === p.id} onClick={() => handleConfirmCollection(p.id)}
                         sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, borderRadius: 2 }}
                       >
                         {label('tenant.parcels.confirm', 'CONFIRM CLAIM', 'تأكيد الاستلام')}
