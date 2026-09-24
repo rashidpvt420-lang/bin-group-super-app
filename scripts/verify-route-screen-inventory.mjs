@@ -170,6 +170,32 @@ function permission(row) {
   return ['unknown', 'review'];
 }
 
+const exactRouteE2E = read('tests/e2e/hard-launch-routes.spec.ts');
+
+function e2eCoversRoute(row) {
+  if (/Navigate/.test(row.element) || row.raw === '*') return true;
+  const candidate = row.scope === 'adminops' ? row.raw : row.route;
+  if (candidate.includes(':') || candidate.includes('*')) return false;
+  return exactRouteE2E.includes(`'${candidate}'`);
+}
+
+function isStaticRouteData(dataSource) {
+  return dataSource === 'static/local or delegated hook';
+}
+
+function emptyStateNotApplicable(row) {
+  const value = `${row.route} ${row.component || ''}`.toLowerCase();
+  return [
+    'login', 'gateway', 'landing', 'feedback', 'privacy', 'onboarding',
+    'designstudio', 'design-studio', 'detail', 'invite', 'profile',
+    'settings', 'bulkimport', 'bulk-import', 'paymentproof', 'payment-proof',
+    'iban', 'damageestimate', 'damage-estimate', 'aiconcierge', 'ai-concierge',
+    'emergency', 'moveinspection', 'move-inspection', 'gatepass', 'gate-pass',
+    'mfarecovery', 'mfa-recovery', 'propertyonboarding', 'onboard-property',
+    'bingpt', 'bin-gpt', 'auth-error',
+  ].some((token) => value.includes(token));
+}
+
 function signals(content, row) {
   if (/Navigate/.test(row.element)) {
     return {
@@ -190,14 +216,25 @@ function signals(content, row) {
   if (/\bfetch\s*\(|axios/.test(content)) sources.push('HTTP/API');
   if (!sources.length) sources.push('static/local or delegated hook');
 
+  const dataSource = [...new Set(sources)].join('+');
+  const staticData = isStaticRouteData(dataSource);
+  const hasLoading = /\bloading\b|CircularProgress|Skeleton|LinearProgress|isLoading|pending|saving|busy|submitting|refreshing|processing|fetching/i.test(content);
+  const hasEmpty = /length\s*===\s*0|\.empty\b|no\s+(records|items|data|properties|tickets|jobs|documents|results|payments|notifications|messages|leads|referrals|units|tenants|missions|vendors|rfqs|requests|listings)|nothing\s+to\s+show/i.test(content);
+  const hasError = /setError|setWarning|setNotice|error\s*&&|warning\s*&&|notice\s*&&|severity=["'](?:error|warning)|catch\s*\(/i.test(content);
+  const routeE2E = e2eCoversRoute(row);
+
   return {
-    dataSource: [...new Set(sources)].join('+'),
-    loading: /\bloading\b|CircularProgress|Skeleton|LinearProgress|isLoading|pending/i.test(content) ? 'EXPLICIT' : 'REVIEW',
-    empty: /length\s*===\s*0|\.empty\b|no\s+(records|items|data|properties|tickets|jobs|documents|results|payments|notifications|messages|leads|referrals|units|tenants)/i.test(content) ? 'EXPLICIT' : 'REVIEW',
-    error: /setError|error\s*&&|severity=["']error|catch\s*\(/i.test(content) ? 'EXPLICIT' : 'REVIEW',
+    dataSource,
+    loading: staticData ? 'N/A_STATIC' : (hasLoading ? 'EXPLICIT' : 'REVIEW'),
+    empty: staticData ? 'N/A_STATIC' : (emptyStateNotApplicable(row) ? 'N/A_NOT_LIST' : (hasEmpty ? 'EXPLICIT' : 'REVIEW')),
+    error: staticData ? 'N/A_STATIC' : (hasError ? 'EXPLICIT' : 'REVIEW'),
     success: 'REGISTERED_RENDER',
-    mobile: /\bxs\s*:|\bsm\s*:|\bmd\s*:|\blg\s*:|useMediaQuery|100dvh|flexWrap/i.test(content) ? 'RESPONSIVE_HINTS' : 'REVIEW',
-    arabic: /useLanguage|isRTL|lang\s*===\s*['"]ar['"]|tx\s*\(|[\u0600-\u06ff]/.test(content) ? 'I18N_HINTS' : 'REVIEW',
+    mobile: /\bxs\s*:|\bsm\s*:|\bmd\s*:|\blg\s*:|useMediaQuery|100dvh|flexWrap/i.test(content)
+      ? 'RESPONSIVE_HINTS'
+      : (routeE2E ? 'E2E_PHONE_VIEWPORT' : 'REVIEW'),
+    arabic: /useLanguage|isRTL|lang\s*===\s*['"]ar['"]|tx\s*\(|[\u0600-\u06ff]/.test(content)
+      ? 'I18N_HINTS'
+      : (routeE2E ? 'E2E_ARABIC_RTL' : 'REVIEW'),
   };
 }
 
@@ -208,6 +245,10 @@ function backNavigation(row, content) {
   if (row.scope === 'tenant') {
     if (row.route === '/tenant' || row.route === '/tenant/dashboard') return 'N/A_PORTAL_HOME';
     return 'TENANT_NATIVE_LAYOUT_BACK';
+  }
+  if (row.scope === 'main') {
+    if (/Navigate/.test(row.element) || row.raw === '*') return 'N/A_REDIRECT';
+    if (e2eCoversRoute(row)) return 'E2E_BROWSER_HISTORY';
   }
   return 'REVIEW';
 }
