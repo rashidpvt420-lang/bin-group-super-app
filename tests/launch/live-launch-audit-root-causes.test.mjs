@@ -116,6 +116,29 @@ test('production workflow preserves failed live-audit diagnostics and reports th
   assert.match(appCheck, /REACT_APP_ADMIN_FIREBASE_APP_ID/);
 });
 
+test('Phase 3 control repairs label icon-only controls and keep owner activation gate intact', () => {
+  const ownerLanding = read('src/pages/OwnerLandingPage.tsx');
+  const ownerApp = read('src/owner/OwnerApp.tsx');
+  const tenantAi = read('src/tenant/pages/TenantAIConciergePage.tsx');
+  const sharedAi = read('packages/shared/src/components/SovereignAIChat.tsx');
+  const appAi = read('src/components/SovereignAIChat.tsx');
+  const ownerAudit = read('tests/e2e/launch-audit-owner.spec.ts');
+  const brokerAudit = read('tests/e2e/launch-audit-broker.spec.ts');
+
+  assert.match(ownerLanding, /owner-landing-language-toggle/);
+  assert.match(ownerLanding, /owner-landing-password-visibility/);
+  assert.match(ownerApp, /owner-header-back/);
+  assert.match(ownerApp, /owner-header-dashboard/);
+  assert.match(tenantAi, /tenant-ai-restart/);
+  assert.match(tenantAi, /tenant-ai-send/);
+  assert.match(sharedAi, /aria-label="Open Sovereign AI chat"/);
+  assert.match(appAi, /aria-label="Move or open Sovereign AI chat"/);
+  assert.match(ownerAudit, /page\.goto\('\/owner\/activation'/);
+  assert.doesNotMatch(ownerAudit, /owner AR\/EN switch works in shell[\s\S]{0,500}page\.goto\('\/owner\/dashboard'/);
+  assert.match(brokerAudit, /waitForResolvedBrokerShell/);
+  assert.match(brokerAudit, /Authenticating BIN-Groups Identity/);
+});
+
 test('portal language proofs bind to explicit controls instead of substring selectors', () => {
   const cases = [
     ['tests/e2e/launch-audit-owner.spec.ts', 'owner-language-toggle'],
