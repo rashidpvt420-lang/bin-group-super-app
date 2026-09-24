@@ -78,10 +78,10 @@ export default function VisitorParkingPage() {
                                         <TableCell align="right">
                                             {r.status === 'pending' && (
                                                 <Stack direction="row" spacing={1} justifyContent="flex-end">
-                                                    <IconButton size="small" color="success" onClick={() => handleUpdateStatus(r.id, 'approved')}>
+                                                    <IconButton aria-label="Approve visitor parking" size="small" color="success" onClick={() => handleUpdateStatus(r.id, 'approved')}>
                                                         <SafeIcon icon={Check} size={16} />
                                                     </IconButton>
-                                                    <IconButton size="small" color="error" onClick={() => handleUpdateStatus(r.id, 'rejected')}>
+                                                    <IconButton aria-label="Reject visitor parking" size="small" color="error" onClick={() => handleUpdateStatus(r.id, 'rejected')}>
                                                         <SafeIcon icon={X} size={16} />
                                                     </IconButton>
                                                 </Stack>
