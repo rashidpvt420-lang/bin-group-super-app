@@ -208,7 +208,7 @@ const ExecutiveReportingPage: React.FC = () => {
                                 <Typography variant="h4" fontWeight="950" color="#FFF">AED {formatAED(stats.renewalRiskExposure || stats.renewalExposure)}</Typography>
                                 <Typography variant="caption" color="textSecondary">CONTRACT VALUE AT RISK (90D)</Typography>
                             </Box>
-                            <Button fullWidth variant="outlined" sx={{ mt: 4, color: binThemeTokens.gold, borderColor: binThemeTokens.gold, fontWeight: 900 }}>INITIATE RETENTION</Button>
+                            <Button disabled title="Unavailable until this workflow is connected" aria-label="INITIATE RETENTION" fullWidth variant="outlined" sx={{ mt: 4, color: binThemeTokens.gold, borderColor: binThemeTokens.gold, fontWeight: 900 }}>INITIATE RETENTION</Button>
                         </Paper>
                     </Stack>
                 </Grid>
