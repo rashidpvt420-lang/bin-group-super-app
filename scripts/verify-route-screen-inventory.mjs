@@ -315,6 +315,12 @@ const reviews = {
   back: rows.filter((row) => row.backNavigation.startsWith('REVIEW')).length,
 };
 
+for (const [dimension, count] of Object.entries(reviews)) {
+  if (count > 0) {
+    failures.push(`Phase 2 unresolved ${dimension} coverage: ${count} route row(s) remain REVIEW.`);
+  }
+}
+
 const outDir = path.resolve(root, 'audit');
 fs.mkdirSync(outDir, { recursive: true });
 fs.writeFileSync(path.join(outDir, 'phase-2-route-screen-inventory.csv'), `${csv.join('\n')}\n`);
