@@ -1,5 +1,5 @@
 {
-  "version": "2026.07-runtime-authority-v3",
+  "version": "2026.09-phase11-payment-authority-v1",
   "product": "BIN GROUP Super App",
   "market": "United Arab Emirates",
   "decision": "NON_AUTHORITATIVE_GATE_CATALOGUE",
@@ -14,40 +14,98 @@
     "founderAttestationAcceptedAsProductionProof": false
   },
   "paymentPolicy": {
-    "controlledPilot": {
-      "mode": "bank-pilot",
-      "authority": "Secured manual bank transfer, cheque or cash evidence followed by explicit Admin approval and exactly-once activation",
-      "stripeRequired": false,
-      "publicReleaseGate": false
-    },
-    "unrestrictedPublicLaunch": {
-      "mode": "full-payment-launch",
-      "stripeRequiredByCurrentRuntimeGate": true,
-      "requiredProof": [
-        "Live AED checkout",
-        "Signed webhook",
-        "Verified amount and currency",
-        "Duplicate-event idempotency",
-        "Failure and refund handling"
+    "currentPhase1": {
+      "mode": "phase1-manual",
+      "policy": "PHASE1_CASH_CHEQUE_V1",
+      "approvedMethods": [
+        "CASH",
+        "CHEQUE"
       ],
-      "policyChangeRule": "Removing Stripe from unrestricted public launch requires a separate reviewed governance change to the runtime hard-launch gate; this static file cannot waive it."
+      "bankTransferEnabled": false,
+      "stripeEnabled": false,
+      "paymentDueOnlyAfterVerifiedInspection": true,
+      "serverAuthoritativeQuoteAndDeposit": true,
+      "exactAedFilsRequired": true,
+      "publicReleaseGate": true,
+      "requiredProof": "phase1-manual-payment-proof.json"
+    },
+    "futureGatewayMigration": {
+      "active": false,
+      "stripeRequiredByCurrentRuntimeGate": false,
+      "note": "Stripe/Card remains migration-only. Enabling it requires a separate reviewed policy change plus intent, signed-webhook, duplicate-event, failed-payment, refund, cancellation, and reconciliation evidence."
     }
   },
   "hardLaunchGates": [
-    { "id": "adminCredentialLogin", "evidence": "Canonical Founder/Admin authentication with verified Firebase MFA", "source": "protected_runtime" },
-    { "id": "fiveProfileSmoke", "evidence": "Owner, Tenant, Technician, Broker, Admin and global mechanics on one deployed exact SHA", "source": "protected_runtime" },
-    { "id": "ownerAcquisitionActivation", "evidence": "Owner acquisition, quote, OTP signature, payment review and exactly-once activation", "source": "protected_runtime" },
-    { "id": "tenantNotificationDelivery", "evidence": "Tenant request, Storage proof, dispatch, completion, approval/dispute and physical delivery evidence", "source": "protected_runtime_and_device" },
-    { "id": "technicianGpsStorageProof", "evidence": "Physical-device GPS plus before/after evidence with canonical server location records", "source": "protected_runtime_and_device" },
-    { "id": "brokerCommissionLockExactlyOnce", "evidence": "Lead conversion, active contract, deterministic commission, OTP payout and Admin settlement", "source": "protected_runtime" },
-    { "id": "appCheckProduction", "evidence": "Valid production clients accepted and invalid or missing tokens rejected for intended Firebase services", "source": "protected_runtime_and_console" },
-    { "id": "brandedEmailSender", "evidence": "Provider delivery receipt and recipient mailbox evidence with SPF, DKIM and DMARC alignment", "source": "protected_provider" },
-    { "id": "aiProviderHealth", "evidence": "Gemini, OpenAI fallback, App Check rejection, redaction, quota, token, cost and latency evidence", "source": "protected_runtime" },
-    { "id": "renewalWatch", "evidence": "Production scheduler execution and resulting renewal records and delivery evidence", "source": "protected_runtime" },
-    { "id": "privilegedAccessRotation", "evidence": "Current secret versions, revoked prior credentials and canonical Founder access", "source": "protected_runtime_and_console" },
-    { "id": "stripeLiveMode", "evidence": "Required only by the current unrestricted public-launch policy", "source": "protected_runtime_and_provider" },
-    { "id": "controlledPilot", "evidence": "Frozen SHA, monitoring, rollback and at least 24 real hours with zero open P0/P1", "source": "protected_runtime_and_operator" },
-    { "id": "signedFinalDecision", "evidence": "Final protected HMAC-signed decision bound to evidence hashes and exact deployed SHA", "source": "protected_runtime" }
+    {
+      "id": "adminCredentialLogin",
+      "evidence": "Canonical Founder/Admin authentication with verified Firebase MFA",
+      "source": "protected_runtime"
+    },
+    {
+      "id": "fiveProfileSmoke",
+      "evidence": "Owner, Tenant, Technician, Broker, Admin and global mechanics on one deployed exact SHA",
+      "source": "protected_runtime"
+    },
+    {
+      "id": "ownerAcquisitionActivation",
+      "evidence": "Owner acquisition, server quote, verified inspection, exact 15% AED-fils deposit, receipt review and exactly-once activation",
+      "source": "protected_runtime"
+    },
+    {
+      "id": "tenantNotificationDelivery",
+      "evidence": "Tenant request, Storage proof, dispatch, completion, approval/dispute and physical delivery evidence",
+      "source": "protected_runtime_and_device"
+    },
+    {
+      "id": "technicianGpsStorageProof",
+      "evidence": "Physical-device GPS plus before/after evidence with canonical server location records",
+      "source": "protected_runtime_and_device"
+    },
+    {
+      "id": "brokerCommissionLockExactlyOnce",
+      "evidence": "Lead conversion, active contract, deterministic commission, OTP payout and Admin settlement",
+      "source": "protected_runtime"
+    },
+    {
+      "id": "appCheckProduction",
+      "evidence": "Valid production clients accepted and invalid or missing tokens rejected for intended Firebase services",
+      "source": "protected_runtime_and_console"
+    },
+    {
+      "id": "brandedEmailSender",
+      "evidence": "Provider delivery receipt and recipient mailbox evidence with SPF, DKIM and DMARC alignment",
+      "source": "protected_provider"
+    },
+    {
+      "id": "aiProviderHealth",
+      "evidence": "Gemini, OpenAI fallback, App Check rejection, redaction, quota, token, cost and latency evidence",
+      "source": "protected_runtime"
+    },
+    {
+      "id": "renewalWatch",
+      "evidence": "Production scheduler execution and resulting renewal records and delivery evidence",
+      "source": "protected_runtime"
+    },
+    {
+      "id": "privilegedAccessRotation",
+      "evidence": "Current secret versions, revoked prior credentials and canonical Founder access",
+      "source": "protected_runtime_and_console"
+    },
+    {
+      "id": "phase1ManualPaymentProof",
+      "evidence": "Cash/Cheque-only production policy, exact AED-fils schedule, disabled Bank Transfer and Stripe/Card, Admin evidence approval",
+      "source": "protected_runtime"
+    },
+    {
+      "id": "controlledPilot",
+      "evidence": "Frozen SHA, monitoring, rollback and at least 24 real hours with zero open P0/P1",
+      "source": "protected_runtime_and_operator"
+    },
+    {
+      "id": "signedFinalDecision",
+      "evidence": "Final protected HMAC-signed decision bound to evidence hashes and exact deployed SHA",
+      "source": "protected_runtime"
+    }
   ],
   "interpretation": {
     "controlledPilot": "May start only after every pilot-required runtime gate is green for the same frozen deployed SHA.",

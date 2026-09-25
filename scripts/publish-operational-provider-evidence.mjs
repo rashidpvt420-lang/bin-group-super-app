@@ -55,38 +55,6 @@ const manifests = {
       return errors;
     },
   },
-  stripeLiveBilling: {
-    path: 'launch_package/stripe-live-proof.json',
-    evidenceType: 'production-transaction',
-    sourceSystem: 'Stripe API and Firebase stripeWebhook',
-    reference: (proof) => `stripe://events/${proof.webhookEventId}#checkout=${proof.checkoutSessionId}`,
-    sourceProof: (proof) => ({
-      source: proof.source,
-      checkoutSessionId: proof.checkoutSessionId,
-      webhookEventId: proof.webhookEventId,
-      paymentIntentId: proof.paymentIntentId,
-      amountMinor: proof.amountMinor,
-      currency: proof.currency,
-      webhookAttemptsBeforeReplay: proof.webhookAttemptsBeforeReplay,
-      webhookAttemptsAfterReplay: proof.webhookAttemptsAfterReplay,
-      replayHttpStatus: proof.replayHttpStatus,
-      replayDuplicate: proof.replayDuplicate,
-      duplicateReplaySafe: proof.duplicateReplaySafe,
-      observedAt: proof.observedAt,
-    }),
-    validate: (proof, context) => {
-      const errors = [];
-      if (proof.schemaVersion !== 1 || proof.status !== 'passed') errors.push('Stripe proof must be schemaVersion 1 and passed');
-      if (proof.source !== 'stripe-api-live-verifier' || proof.liveMode !== true) errors.push('Stripe live source/mode mismatch');
-      if (proof.commitSha !== context.commitSha || proof.repository !== EXPECTED_REPOSITORY) errors.push('Stripe proof commit/repository mismatch');
-      if (text(proof.workflowRunId) !== context.runId) errors.push('Stripe proof workflow run mismatch');
-      if (proof.webhookProcessed !== true || proof.currency !== 'AED' || Number(proof.amountMinor || 0) <= 0) errors.push('Stripe payment/webhook proof invalid');
-      if (proof.duplicateReplaySafe !== true || proof.replayDuplicate !== true || Number(proof.replayHttpStatus) !== 200) errors.push('Stripe duplicate replay was not safely acknowledged');
-      if (Number(proof.webhookAttemptsBeforeReplay) !== 1 || Number(proof.webhookAttemptsAfterReplay) !== 1) errors.push('Stripe event was not processed exactly once');
-      if (!validTime(proof.observedAt)) errors.push('Stripe observedAt invalid');
-      return errors;
-    },
-  },
   appCheckEnforcement: {
     path: 'launch_package/appcheck-enforcement-proof.json',
     evidenceType: 'workflow-artifact',

@@ -26,10 +26,13 @@ test('provider evidence workflow is protected, exact-commit and fixed-manifest',
   assert.match(workflow, /OPERATIONAL_GATE="\$gate" node scripts\/publish-operational-provider-evidence\.mjs/);
   assert.match(workflow, /OPERATIONAL_GATE="\$gate" node scripts\/finalize-operational-provider-evidence\.mjs/);
 
-  for (const gate of ['brandedEmailDelivery', 'appCheckEnforcement', 'stripeLiveBilling']) {
+  for (const gate of ['brandedEmailDelivery', 'appCheckEnforcement', 'aiProviderHealth']) {
     assert.match(workflow, new RegExp(gate));
     assert.match(publisher, new RegExp(`${gate}:`));
   }
+  assert.doesNotMatch(workflow, /stripeLiveBilling|stripe_checkout_session_id|stripe_webhook_event_id|verify-stripe-live-proof/);
+  assert.doesNotMatch(publisher, /stripeLiveBilling:/);
+  assert.doesNotMatch(finalizer, /stripeLiveBilling:/);
   assert.match(publisher, /system_health\/admin_summaries/);
   assert.match(publisher, /operationalEvidence/);
   assert.match(publisher, /artifactHash/);
@@ -62,29 +65,27 @@ test('branded SMTP proof requires provider acceptance and approved BIN GROUP sen
   assert.match(publisher, /Number\(proof\.acceptedCount \|\| 0\) < 1/);
 });
 
-test('Stripe provider proof signs and replays the same live webhook event exactly once', async () => {
-  const [workflow, verifier, webhook, publisher] = await Promise.all([
+test('Phase 1 provider evidence cannot publish Stripe as current production authority', async () => {
+  const [workflow, publisher, finalizer, runtime, hold, migrationVerifier] = await Promise.all([
     read('.github/workflows/operational-provider-evidence.yml'),
-    read('scripts/verify-stripe-live-proof.mjs'),
-    read('functions/stripePayment.ts'),
     read('scripts/publish-operational-provider-evidence.mjs'),
+    read('scripts/finalize-operational-provider-evidence.mjs'),
+    read('functions/runtime.ts'),
+    read('functions/stripePaymentPhase1Hold.ts'),
+    read('scripts/verify-stripe-live-proof.mjs'),
   ]);
 
-  assert.match(workflow, /STRIPE_REQUIRE_REPLAY_PROOF:\s*'true'/);
-  assert.match(workflow, /STRIPE_WEBHOOK_SECRET/);
-  assert.match(workflow, /STRIPE_SECRET_KEY="\$stripe_key" STRIPE_WEBHOOK_SECRET="\$webhook_secret"/);
-  assert.doesNotMatch(workflow, /STRIPE_SECRET_KEY=\$stripe_key[\s\S]*GITHUB_ENV|STRIPE_WEBHOOK_SECRET=\$webhook_secret[\s\S]*GITHUB_ENV/);
-  assert.match(verifier, /europe-west3-bin-group-57c60\.cloudfunctions\.net\/stripeWebhook/);
-  assert.match(verifier, /createHmac\('sha256', webhookSecret\)/);
-  assert.match(verifier, /stripe-signature/);
-  assert.match(verifier, /replayPayload\?\.duplicate === true/);
-  assert.match(verifier, /webhookAttemptsAfterReplay === webhookAttemptsBeforeReplay/);
-  assert.match(verifier, /duplicateReplaySafe/);
-  assert.match(webhook, /if \(data\.processed === true \|\| data\.ignored === true\) return "DUPLICATE"/);
-  assert.match(webhook, /duplicate:\s*true/);
-  assert.match(publisher, /proof\.duplicateReplaySafe !== true/);
-  assert.match(publisher, /webhookAttemptsBeforeReplay\) !== 1/);
-  assert.match(publisher, /webhookAttemptsAfterReplay\) !== 1/);
+  assert.doesNotMatch(workflow, /stripeLiveBilling|STRIPE_REQUIRE_REPLAY_PROOF|STRIPE_LIVE_CHECKOUT_SESSION_ID|STRIPE_LIVE_WEBHOOK_EVENT_ID/);
+  assert.doesNotMatch(publisher, /stripeLiveBilling:/);
+  assert.doesNotMatch(finalizer, /stripeLiveBilling:/);
+  assert.match(runtime, /export \* from "\.\/stripePaymentPhase1Hold"/);
+  assert.doesNotMatch(runtime, /export \* from "\.\/stripePayment"/);
+  assert.match(hold, /Phase 1|disabled|Cash|Cheque/i);
+
+  // Keep the signed webhook/idempotency verifier as migration tooling only; it is
+  // intentionally not reachable from the current Phase 1 provider-evidence gate.
+  assert.match(migrationVerifier, /stripe-signature/);
+  assert.match(migrationVerifier, /duplicateReplaySafe/);
 });
 
 test('App Check enforcement proof performs invalid and valid authenticated Firestore probes', async () => {

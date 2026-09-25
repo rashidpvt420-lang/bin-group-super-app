@@ -68,15 +68,18 @@ Do not describe an integration as **live**, **approved**, **production-ready**, 
 
 ### 3.3 Payments
 
-- [ ] Confirm gateway: Stripe, Network International, manual bank transfer, or phased combination.
-- [ ] Verify merchant account.
-- [ ] Configure production keys as backend secrets.
-- [ ] Implement webhook signature verification.
-- [ ] Test successful payment.
-- [ ] Test failed payment.
-- [ ] Test duplicate webhook/idempotency handling.
-- [ ] Test refund/cancellation process.
-- [ ] Confirm whether BIN GROUP holds money or payment goes directly to owner/vendor/bank account.
+**Current production authority: `PHASE1_CASH_CHEQUE_V1`.** Owner activation accepts Cash or Cheque evidence only. Bank Transfer and Stripe/Card are disabled and are not hard-public-launch gates.
+
+- [x] Server computes and locks the Owner quote and exact 15% mobilisation deposit in AED fils.
+- [x] Payment is not due until every required physical inspection is completed and the final verified portfolio quote is written.
+- [x] Admin receipt recording persists the server-locked amount; a browser-provided amount cannot become financial authority.
+- [x] Admin payment approval requires authenticated MFA authority, App Check, current payment-policy version/hash, immutable receipt evidence, exact quote/deposit agreement, and authoritative property/inspection evidence.
+- [x] Approval atomically marks the payment, contract, intake, owner and properties active and writes the deterministic paid mobilisation invoice.
+- [x] Approval replay is idempotent and Application Evidence proves exactly one invoice and one approval audit.
+- [x] Current Stripe checkout/webhook exports fail closed under the Phase 1 hold; live Stripe proof is migration-only and cannot publish current provider readiness.
+- [x] An activated payment cannot be rewritten through the rejection path.
+- [ ] Refund or contract-cancellation settlement remains a manual Finance/Admin review under the signed contract; do not describe an automated refund workflow as live.
+- [ ] Before a future Stripe/Card migration, separately approve merchant/provider policy and prove intent authority, signed webhook verification, duplicate-event idempotency, failed-payment handling, refunds, cancellations and reconciliation.
 - [ ] Confirm VAT/tax invoice wording with accountant/legal advisor.
 
 ### 3.4 WhatsApp / SMS notifications
@@ -111,7 +114,7 @@ Do not describe an integration as **live**, **approved**, **production-ready**, 
 - [ ] Confirm payment transaction created.
 - [ ] Confirm property passport created.
 - [ ] Approve payment in admin.
-- [ ] Approve contract activation in admin.
+- [x] Approve the bound payment through `adminApprovePayment`; legacy standalone contract activation is disabled.
 - [ ] Confirm owner dashboard unlocks only after trusted activation.
 - [ ] Confirm pending/locked screen shows correct guidance before approval.
 

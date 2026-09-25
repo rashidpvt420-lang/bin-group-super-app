@@ -228,6 +228,27 @@ test('CP-002: a missing/invalid locked schedule and invalid submitted money fail
   );
 });
 
+test('CP-002: Admin receipt capture cannot persist browser-controlled amounts', async () => {
+  const [onboarding, adminOwner] = await Promise.all([
+    read('functions/inspectionFirstOwnerOnboarding.ts'),
+    read('functions/adminOwnerOperations.ts'),
+  ]);
+
+  const start = onboarding.indexOf('export const adminRecordOwnerMobilizationPaymentEvidence');
+  const end = onboarding.indexOf('\nexport const', start + 1);
+  const receipt = onboarding.slice(start, end > start ? end : onboarding.length);
+  assert.match(receipt, /normalizeAedMoney\(payment\.activationDeposit \?\? payment\.amount\)/);
+  assert.match(receipt, /const amountReceived = expectedAmount/);
+  assert.match(receipt, /submittedAmount !== expectedAmount/);
+  assert.doesNotMatch(receipt, /const amountReceived = money\(request\.data\?\.amountReceived/);
+  assert.doesNotMatch(receipt, /amountReceived:\s*request\.data/);
+
+  assert.match(adminOwner, /normalizeAedMoney\(annual \* 0\.15\)/);
+  assert.match(adminOwner, /formatAedMoney\(v\)/);
+  assert.doesNotMatch(adminOwner, /Math\.round\(annual \* 0\.15\)/);
+  assert.doesNotMatch(adminOwner, /maximumFractionDigits:\s*0/);
+});
+
 test('CP-002: Owner activation/display paths contain no annual-value mobilisation fallback', async () => {
   const [page, activation, dashboard, executive, pricing] = await Promise.all([
     read('src/owner/pages/OwnerActivationPage.tsx'),

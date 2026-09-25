@@ -3,6 +3,7 @@ import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 import { generateContractPDF } from "./pdfEngine";
 import { termFieldsFromStart } from "./ownerContractTerm";
+import { formatAedMoney, normalizeAedMoney } from "./shared/aedMoney";
 import {
   consumeVerifiedContractSignatureOtp,
   validateVerifiedContractSignatureOtp,
@@ -16,7 +17,7 @@ const adminRoles = new Set(["admin", "super_admin", "ceo", "manager", "operation
 const s = (v: any, fallback = "") => String(v ?? "").trim() || fallback;
 const n = (v: any, fallback = 0) => Number.isFinite(Number(v)) ? Number(v) : fallback;
 const id = (v: any, fallback: string) => s(v).replace(/[^A-Za-z0-9_-]/g, "_").replace(/_+/g, "_").slice(0, 180) || fallback;
-const money = (v: number) => `AED ${Number(v || 0).toLocaleString("en-AE", { maximumFractionDigits: 0 })}`;
+const money = (v: number) => formatAedMoney(v);
 
 function clean(v: any): any {
   if (v === undefined || typeof v === "function") return null;
@@ -91,7 +92,7 @@ function pricingOf(intake: any) {
   const annual = n(pricing.annualContractValue || summary.estimatedACV || payment.annualValue || intake.annualContractValue, 0);
   return {
     annual,
-    mobilization: n(payment.amount || pricing.mobilizationAmount || intake.mobilizationAmount, Math.round(annual * 0.15)),
+    mobilization: n(payment.amount || pricing.mobilizationAmount || intake.mobilizationAmount, normalizeAedMoney(annual * 0.15)),
     method: s(payment.method || intake.paymentMethod || "MANUAL").toUpperCase(),
     currency: s(payment.currency || pricing.currency || "AED", "AED").toUpperCase()
   };

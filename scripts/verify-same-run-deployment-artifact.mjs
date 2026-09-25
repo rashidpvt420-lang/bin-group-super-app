@@ -133,7 +133,7 @@ function maybeWriteProvisionalPublicDecision({
     requiredEvidence: [...REQUIRED_PILOT_EVIDENCE],
     evidenceHashes,
     decisionRule:
-      'public mode requires postdeploy release clearance and Stripe live proof before hardLaunchClaim may become true',
+      'public mode requires postdeploy release clearance and the signed Phase 1 Cash/Cheque payment-policy proof before hardLaunchClaim may become true',
   };
 
   const decision = signDocument(payload, hmacKey);

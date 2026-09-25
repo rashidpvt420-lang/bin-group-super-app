@@ -403,14 +403,21 @@ test('application preparation preflight is gate-aware and requires Founder MFA f
   assert.match(selection, /VITE_FIREBASE_APPCHECK_DEBUG_TOKEN/);
 });
 
-test('reviewed application verifier still receives the cent-precision activation adapter', async () => {
-  const wrapper = await read('scripts/run-frozen-release-evidence.mjs');
+test('reviewed application verifier carries exact AED-fils logic and frozen releases retain the pinned adapter', async () => {
+  const [verifier, wrapper] = await Promise.all([
+    read('scripts/verify-operational-application-evidence.mjs'),
+    read('scripts/run-frozen-release-evidence.mjs'),
+  ]);
   const start = wrapper.indexOf('function installReviewedActivationAdapter');
   assert.ok(start >= 0);
   const end = wrapper.indexOf('\nfunction ', start + 1);
   const installer = wrapper.slice(start, end > start ? end : wrapper.length);
+  assert.match(verifier, /expectedDeposit = Math\.round\(annual \* 0\.15 \* 100\) \/ 100/);
+  assert.match(verifier, /amountMinor !== lockedDepositMinor/);
+  assert.match(verifier, /exact server-locked 15% deposit in AED fils/);
+  assert.doesNotMatch(verifier, /Math\.abs\(amount - Math\.round\(annual \* 0\.15\)\)/);
+  assert.match(installer, /state === 'reviewed'/);
   assert.match(installer, /transformFrozenActivationVerifier\(source\)/);
-  assert.doesNotMatch(installer, /state === 'reviewed'[\s\S]*return \(\) => \{\}/);
   assert.match(wrapper, /resolveLockedOwnerActivationSchedule/);
   assert.match(wrapper, /normalizeAedMoney/);
 });
@@ -698,13 +705,16 @@ test('[frozen-cent] Founder preflight is gate-aware and reports names, never val
   assert.doesNotThrow(() => assertApplicationEvidenceCredentials('ownerPaymentActivation', {}));
 });
 
-test('[frozen-source] the actual verifier matches the single reviewed replacement', async () => {
+test('[frozen-source] the current verifier is reviewed exact-fils code while legacy frozen source remains narrowly transformable', async () => {
   const source = await read('scripts/verify-operational-application-evidence.mjs');
-  assert.equal(source.split(legacyMoneyCheck).length, 2);
-  const transformed = transformFrozenActivationVerifier(source);
-  const start = source.indexOf(legacyMoneyCheck);
-  assert.equal(transformed.slice(0, start), source.slice(0, start));
-  assert.ok(transformed.endsWith(source.slice(start + legacyMoneyCheck.length)));
+  assert.equal(source.split(legacyMoneyCheck).length, 1);
+  assert.match(source, /lockedDepositMinor = Math\.round\(lockedDeposit \* 100\)/);
+  assert.match(source, /amountMinor = Math\.round\(amount \* 100\)/);
+  assert.match(source, /amountMinor !== lockedDepositMinor/);
+
+  const legacySource = `async function proof() {\n${legacyMoneyCheck}\n  return { amount };\n}\n`;
+  const transformed = transformFrozenActivationVerifier(legacySource);
+  assert.match(transformed, /verifyFrozenActivationPayment\(payment\.data, contract\)/);
   execFileSync(process.execPath, ['--input-type=module', '--check'], { input: transformed });
 });
 

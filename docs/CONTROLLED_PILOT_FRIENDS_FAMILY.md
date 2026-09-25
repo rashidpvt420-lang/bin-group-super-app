@@ -2,7 +2,7 @@
 
 This is the operator pack for sharing the live app with a small friends-and-family group **before** unrestricted public launch.
 
-It does **not** set `hardLaunchClaim=true`. Public hard launch remains locked behind protected same-SHA evidence, a verified 24-hour pilot, postdeploy clearance, and real Stripe live proof.
+It does **not** set `hardLaunchClaim=true`. Public hard launch remains locked behind protected same-SHA evidence, the already-completed verified pilot provenance, postdeploy clearance, and the signed Phase 1 Cash/Cheque payment-policy proof.
 
 ## Release phases
 
@@ -121,8 +121,6 @@ Use:
 - truthful empty incident/rollback state
 - hard-clearance run URL as the incident evidence reference
 - `hard_clearance_run_id=<successful hard-clearance run ID>`
-- `stripe_live_checkout_session_id=cs_live_...`
-- `stripe_live_webhook_event_id=evt_...`
 
 The final public workflow must verify:
 
@@ -136,7 +134,7 @@ The final public workflow must verify:
 - authenticated smoke tests
 - business workflow evidence
 - audit evidence
-- live Stripe checkout and signed webhook proof
+- signed Phase 1 Cash/Cheque policy proof with Bank Transfer and Stripe/Card disabled
 - HMAC signature and exact evidence hashes
 
 Only then may the final signed decision set `hardLaunchClaim=true`.
@@ -152,4 +150,4 @@ Stop the pilot and do not progress to public launch when any of these is true:
 - AI or callable flows retain stale sessions after a fresh sign-in.
 - P0/P1 issues remain open.
 - The release SHA changed during the pilot.
-- Stripe live proof cannot be verified.
+- the current Phase 1 Cash/Cheque payment-policy proof cannot be verified.

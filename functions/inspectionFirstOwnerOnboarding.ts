@@ -5,6 +5,7 @@ import * as admin from "firebase-admin";
 import * as crypto from "crypto";
 import { calculateOwnerOnboardingQuote } from "./ownerOnboardingQuote";
 import { loadActivePaymentConfiguration } from "./paymentConfiguration";
+import { normalizeAedMoney } from "./shared/aedMoney";
 
 if (!admin.apps.length) admin.initializeApp();
 
@@ -797,9 +798,29 @@ export const adminRecordOwnerMobilizationPaymentEvidence = onCall({ cors: true, 
   }
   const ownerUid = text(payment.ownerUid || payment.ownerId);
   const intakeId = text(payment.intakeId || paymentId);
-  const expectedAmount = money(payment.activationDeposit || payment.amount);
-  const amountReceived = money(request.data?.amountReceived || expectedAmount);
-  if (!ownerUid || expectedAmount <= 0 || Math.abs(amountReceived - expectedAmount) > 0.01) throw new HttpsError("failed-precondition", "Received amount must equal the locked 15% mobilisation deposit.");
+  let expectedAmount: number;
+  try {
+    expectedAmount = normalizeAedMoney(payment.activationDeposit ?? payment.amount);
+  } catch {
+    throw new HttpsError("failed-precondition", "The locked 15% mobilisation deposit is invalid.");
+  }
+  if (!ownerUid || expectedAmount <= 0) {
+    throw new HttpsError("failed-precondition", "Owner binding or locked 15% mobilisation deposit is invalid.");
+  }
+  if (request.data?.amountReceived !== undefined && request.data?.amountReceived !== null) {
+    let submittedAmount: number;
+    try {
+      submittedAmount = normalizeAedMoney(request.data.amountReceived);
+    } catch {
+      throw new HttpsError("invalid-argument", "Received amount must be a finite AED value.");
+    }
+    if (submittedAmount !== expectedAmount) {
+      throw new HttpsError("failed-precondition", "Received amount must equal the locked 15% mobilisation deposit.");
+    }
+  }
+  // The Admin browser may attest what was received, but the persisted financial amount
+  // is always the server-locked schedule value, never a browser-controlled calculation.
+  const amountReceived = expectedAmount;
   const receiptHash = crypto.createHash("sha256").update(buffer).digest("hex");
   const downloadToken = crypto.randomUUID();
   const storagePath = `payment-references/owners/${ownerUid}/${paymentId}/${Date.now()}_${filename}`;

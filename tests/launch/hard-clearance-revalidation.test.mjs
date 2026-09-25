@@ -195,7 +195,8 @@ test('operational evidence keeps current main as control plane while binding pro
 
   const providerWorkflow = await read('.github/workflows/operational-provider-evidence.yml');
   assert.match(providerWorkflow, /production_deploy_run_id:[\s\S]*?required: true/);
-  assert.match(providerWorkflow, /all-baseline must not receive Stripe-only inputs/);
+  assert.doesNotMatch(providerWorkflow, /stripeLiveBilling|stripe_checkout_session_id|stripe_webhook_event_id/);
+  assert.match(providerWorkflow, /Unsupported Phase 1 provider gate/);
   assert.doesNotMatch(providerWorkflow, /all-baseline must not receive deployment/);
 
   const publishers = await Promise.all([

@@ -53,7 +53,7 @@ const PAYMENT_POLICY_BLOBS = Object.freeze({
   'functions/ownerActivationPaymentPolicy.ts': '06f056113367bda1fca22bcdba95ab975e594f54',
 });
 const APPLICATION_VERIFIER = 'scripts/verify-operational-application-evidence.mjs';
-const REVIEWED_APPLICATION_VERIFIER_BLOB = '9d8b42f81606ac9ce6d0c68994c074ed98426c61';
+const REVIEWED_APPLICATION_VERIFIER_BLOB = 'e88024732455d7f035584c60eb82e3b9250ceaff';
 const APPLICATION_PREPARATION = 'scripts/prepare-operational-application-evidence.mjs';
 const REVIEWED_APPLICATION_PREPARATION_BLOB = 'a56a66faf8501fa6e0790215fa60e139aeb89136';
 const FOUNDER_MFA_HELPER = 'scripts/lib/firebase-mfa-sign-in.mjs';
@@ -372,6 +372,10 @@ function applicationVerifierState(releaseRoot) {
 
 function installReviewedActivationAdapter(releaseRoot) {
   const { file, source, state } = applicationVerifierState(releaseRoot);
+  if (state === 'reviewed') {
+    console.log(`[frozen-release-evidence] reviewed application verifier contains the exact AED-fils activation check sha256=${createHash('sha256').update(source).digest('hex')}`);
+    return () => {};
+  }
   const adapted = transformFrozenActivationVerifier(source);
   writeFileSync(file, adapted);
   console.log(`[frozen-release-evidence] reviewed activation-policy adapter state=${state} sha256=${createHash('sha256').update(adapted).digest('hex')}`);

@@ -344,9 +344,36 @@ async function ownerActivationProof() {
   if (properties.some(({ data }) => !statusIn(data.status || data.activationStatus, ['ACTIVE']) || text(data.ownerUid || data.ownerId) !== bindings.ownerUid)) fail('one or more properties are not active or owner-bound');
   if (!statusIn(invoice.data.status, ['PAID']) || invoice.data.paymentId !== bindings.paymentId || invoice.data.contractId !== bindings.contractId) fail('paid mobilization invoice is missing or mismatched');
 
-  const annual = Number(payment.data.quoteSnapshot?.annualContractValue || contract.quoteSnapshot?.annualContractValue || contract.annualContractValue || 0);
-  const amount = Number(payment.data.amountReceived || payment.data.quoteSnapshot?.activationDeposit || payment.data.amount || 0);
-  if (!Number.isFinite(annual) || annual <= 0 || !Number.isFinite(amount) || Math.abs(amount - Math.round(annual * 0.15)) > 0.01) fail('activation amount is not the locked 15% deposit');
+  const annual = Number(
+    payment.data.finalVerifiedQuoteSnapshot?.annualContractValue
+      ?? contract.finalVerifiedQuoteSnapshot?.annualContractValue
+      ?? payment.data.quoteSnapshot?.annualContractValue
+      ?? contract.quoteSnapshot?.annualContractValue
+      ?? contract.finalAnnualContractValue
+      ?? contract.annualContractValue,
+  );
+  const lockedDeposit = Number(
+    payment.data.finalVerifiedQuoteSnapshot?.activationDeposit
+      ?? contract.finalVerifiedQuoteSnapshot?.activationDeposit
+      ?? payment.data.finalActivationDeposit
+      ?? contract.finalActivationDeposit
+      ?? payment.data.activationDeposit
+      ?? payment.data.quoteSnapshot?.activationDeposit
+      ?? contract.quoteSnapshot?.activationDeposit,
+  );
+  const amount = Number(payment.data.amountReceived ?? payment.data.amount ?? lockedDeposit);
+  const expectedDeposit = Math.round(annual * 0.15 * 100) / 100;
+  const lockedDepositMinor = Math.round(lockedDeposit * 100);
+  const amountMinor = Math.round(amount * 100);
+  if (
+    !Number.isFinite(annual) || annual <= 0
+    || !Number.isFinite(lockedDeposit) || lockedDeposit <= 0
+    || !Number.isFinite(amount) || amount <= 0
+    || lockedDeposit !== expectedDeposit
+    || lockedDeposit !== lockedDepositMinor / 100
+    || amount !== amountMinor / 100
+    || amountMinor !== lockedDepositMinor
+  ) fail('activation amount is not the exact server-locked 15% deposit in AED fils');
 
   return {
     paymentId: bindings.paymentId,

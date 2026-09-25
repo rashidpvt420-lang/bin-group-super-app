@@ -14,10 +14,11 @@ test('provider evidence is finalized into the canonical hard-launch schema', asy
   assert.match(workflow, /Publish and finalize canonical provider evidence/);
   assert.match(workflow, /OPERATIONAL_GATE="\$gate" node scripts\/publish-operational-provider-evidence\.mjs[\s\S]*OPERATIONAL_GATE="\$gate" node scripts\/finalize-operational-provider-evidence\.mjs/);
 
-  for (const gate of ['brandedEmailDelivery', 'stripeLiveBilling', 'appCheckEnforcement']) {
+  for (const gate of ['brandedEmailDelivery', 'appCheckEnforcement', 'aiProviderHealth']) {
     assert.match(finalizer, new RegExp(`${gate}:\\s*'`));
-    assert.match(finalizer, new RegExp(`#\\$\\{gate\\}`));
   }
+  assert.doesNotMatch(finalizer, /stripeLiveBilling/);
+  assert.doesNotMatch(workflow, /stripeLiveBilling/);
 
   assert.match(finalizer, /evidenceReference:\s*`https:\/\/github\.com\/\$\{EXPECTED_REPOSITORY\}\/actions\/runs\/\$\{runId\}#\$\{gate\}`/);
   assert.match(finalizer, /githubRepository:\s*EXPECTED_REPOSITORY/);
