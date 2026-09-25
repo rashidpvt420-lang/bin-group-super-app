@@ -1,8 +1,9 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import {
-    getFirestore, collection, doc, getDoc, getDocs, setDoc, addDoc as firestoreAddDoc,
-    updateDoc, query, where, orderBy, limit, onSnapshot, serverTimestamp,
-    Timestamp, deleteDoc, writeBatch, or, arrayUnion
+    getFirestore, collection, doc, getDoc, getDocs,
+    setDoc as firestoreSetDoc, addDoc as firestoreAddDoc, updateDoc as firestoreUpdateDoc,
+    query, where, orderBy, limit, onSnapshot, serverTimestamp as firestoreServerTimestamp,
+    Timestamp, deleteDoc as firestoreDeleteDoc, writeBatch as firestoreWriteBatch, or, arrayUnion
 } from 'firebase/firestore';
 
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
@@ -212,85 +213,142 @@ const inferLegacyAuditTarget = (data: any) => {
         ['userId', 'users'],
         ['actorId', 'users'],
     ];
-
-    if (explicitTargetType && explicitTargetId) {
-        return { targetType: explicitTargetType, targetId: explicitTargetId };
-    }
-
+    if (explicitTargetType && explicitTargetId) return { targetType: explicitTargetType, targetId: explicitTargetId };
     for (const [field, fallbackType] of legacyTargets) {
         const targetId = String(data?.[field] || '').trim();
-        if (targetId) {
-            return { targetType: explicitTargetType || fallbackType, targetId };
-        }
+        if (targetId) return { targetType: explicitTargetType || fallbackType, targetId };
     }
-
     return { targetType: explicitTargetType, targetId: explicitTargetId };
 };
 
+type AdminMutationOperation = {
+    kind: 'create' | 'set' | 'update' | 'delete';
+    path: string;
+    data?: Record<string, unknown>;
+    merge?: boolean;
+};
+
+const serverTimestamp = (() => ({ __binFirestoreType: 'serverTimestamp' })) as typeof firestoreServerTimestamp;
+
+const serializeAdminMutationValue = (value: any): any => {
+    if (value === undefined) return undefined;
+    if (value === null || typeof value !== 'object') return value;
+    if (Array.isArray(value)) return value.map(serializeAdminMutationValue);
+    if (value instanceof Date) return { __binFirestoreType: 'date', value: value.toISOString() };
+    if (typeof value?.toDate === 'function') {
+        const date = value.toDate();
+        if (date instanceof Date && !Number.isNaN(date.getTime())) {
+            return { __binFirestoreType: 'date', value: date.toISOString() };
+        }
+    }
+    return Object.fromEntries(
+        Object.entries(value)
+            .filter(([, nested]) => nested !== undefined)
+            .map(([key, nested]) => [key, serializeAdminMutationValue(nested)]),
+    );
+};
+
+const runAdminMutation = async (operations: AdminMutationOperation[]) => {
+    if (!operations.length) return;
+    const mutate = httpsCallable(functions, 'adminAuthorizedFirestoreMutation');
+    await mutate({
+        operations: operations.map((operation) => ({
+            ...operation,
+            ...(operation.data ? { data: serializeAdminMutationValue(operation.data) } : {}),
+        })),
+    });
+};
+
 /**
- * Compatibility bridge for legacy screens that still call addDoc() directly on
- * audit_logs/auditLogs. Security Rules deny those client writes by design, so
- * route them through the authenticated Cloud Function instead. All other
- * collections retain the native Firestore addDoc behavior.
+ * Compatibility bridge for historical Admin screens. Audit collections keep
+ * their dedicated logger. Every other Admin Firestore mutation is sent through
+ * an App Check-protected, Firebase Auth + MFA-authorized Cloud Function that
+ * applies server policy and appends an immutable audit event.
  */
 const addDoc: typeof firestoreAddDoc = (async (reference: any, data: any) => {
     const collectionPath = String(reference?.path || '');
-    if (collectionPath !== 'audit_logs' && collectionPath !== 'auditLogs') {
-        return firestoreAddDoc(reference, data);
+    if (collectionPath === 'audit_logs' || collectionPath === 'auditLogs') {
+        const action = String(data?.action || '').trim();
+        const { targetType, targetId } = inferLegacyAuditTarget(data);
+        if (!action || !targetType || !targetId) {
+            throw new Error('Audit writes require action and a target identifier.');
+        }
+        const {
+            actorId, actorRole, createdAt: _createdAt, timestamp: _timestamp,
+            metadata, before, after, userAgent, action: _action,
+            targetType: _targetType, targetId: _targetId, ...extra
+        } = data || {};
+        const auditMetadata: Record<string, unknown> = {
+            ...(metadata && typeof metadata === 'object' ? metadata : {}),
+            ...extra,
+            ...(before !== undefined ? { before } : {}),
+            ...(after !== undefined ? { after } : {}),
+            ...(userAgent ? { userAgent } : {}),
+            ...(actorId ? { legacyClaimedActorId: actorId } : {}),
+            ...(actorRole ? { legacyClaimedActorRole: actorRole } : {}),
+            sourceCollection: collectionPath,
+        };
+        const dedupeKey = `${action}|${targetType}|${targetId}`;
+        let pending = pendingAuditWrites.get(dedupeKey);
+        if (!pending) {
+            const logUserAuditAction = firebaseHttpsCallable(functions, 'logUserAuditAction');
+            pending = logUserAuditAction({ action, targetType, targetId, metadata: auditMetadata }).then(() => undefined);
+            pendingAuditWrites.set(dedupeKey, pending);
+            const cleanup = () => queueMicrotask(() => {
+                if (pendingAuditWrites.get(dedupeKey) === pending) pendingAuditWrites.delete(dedupeKey);
+            });
+            void pending.then(cleanup, cleanup);
+        }
+        await pending;
+        return doc(reference);
     }
-
-    const action = String(data?.action || '').trim();
-    const { targetType, targetId } = inferLegacyAuditTarget(data);
-    if (!action || !targetType || !targetId) {
-        throw new Error('Audit writes require action and a target identifier.');
-    }
-
-    const {
-        actorId,
-        actorRole,
-        createdAt: _createdAt,
-        timestamp: _timestamp,
-        metadata,
-        before,
-        after,
-        userAgent,
-        action: _action,
-        targetType: _targetType,
-        targetId: _targetId,
-        ...extra
-    } = data || {};
-
-    const auditMetadata: Record<string, unknown> = {
-        ...(metadata && typeof metadata === 'object' ? metadata : {}),
-        ...extra,
-        ...(before !== undefined ? { before } : {}),
-        ...(after !== undefined ? { after } : {}),
-        ...(userAgent ? { userAgent } : {}),
-        ...(actorId ? { legacyClaimedActorId: actorId } : {}),
-        ...(actorRole ? { legacyClaimedActorRole: actorRole } : {}),
-        sourceCollection: collectionPath,
-    };
-
-    // Some legacy flows wrote the same event to both audit_logs and auditLogs
-    // in one Promise.all. Deduplicate only while the first callable is pending.
-    const dedupeKey = `${action}|${targetType}|${targetId}`;
-    let pending = pendingAuditWrites.get(dedupeKey);
-    if (!pending) {
-        // Audit logging is best-effort and must never invalidate an otherwise
-        // valid Admin session. Use the raw callable so an audit-only 401 does
-        // not trigger the global stale-session sign-out wrapper.
-        const logUserAuditAction = firebaseHttpsCallable(functions, 'logUserAuditAction');
-        pending = logUserAuditAction({ action, targetType, targetId, metadata: auditMetadata }).then(() => undefined);
-        pendingAuditWrites.set(dedupeKey, pending);
-        const cleanup = () => queueMicrotask(() => {
-            if (pendingAuditWrites.get(dedupeKey) === pending) pendingAuditWrites.delete(dedupeKey);
-        });
-        void pending.then(cleanup, cleanup);
-    }
-
-    await pending;
-    return doc(reference);
+    const generatedRef = doc(reference);
+    await runAdminMutation([{ kind: 'create', path: generatedRef.path, data }]);
+    return generatedRef;
 }) as typeof firestoreAddDoc;
+
+const setDoc: typeof firestoreSetDoc = (async (reference: any, data: any, options?: any) => {
+    if (options?.mergeFields) throw new Error('Admin mergeFields writes require a dedicated server workflow.');
+    await runAdminMutation([{ kind: 'set', path: String(reference.path), data, merge: options?.merge === true }]);
+}) as typeof firestoreSetDoc;
+
+const updateDoc: typeof firestoreUpdateDoc = (async (reference: any, data: any, ...moreFields: any[]) => {
+    if (moreFields.length || !data || typeof data !== 'object' || Array.isArray(data)) {
+        throw new Error('Admin field-path update overloads require a dedicated server workflow.');
+    }
+    await runAdminMutation([{ kind: 'update', path: String(reference.path), data }]);
+}) as typeof firestoreUpdateDoc;
+
+const deleteDoc: typeof firestoreDeleteDoc = (async (reference: any) => {
+    await runAdminMutation([{ kind: 'delete', path: String(reference.path) }]);
+}) as typeof firestoreDeleteDoc;
+
+const writeBatch: typeof firestoreWriteBatch = ((_firestore: any) => {
+    const operations: AdminMutationOperation[] = [];
+    const batch: any = {
+        set(reference: any, data: any, options?: any) {
+            if (options?.mergeFields) throw new Error('Admin mergeFields batches require a dedicated server workflow.');
+            operations.push({ kind: 'set', path: String(reference.path), data, merge: options?.merge === true });
+            return batch;
+        },
+        update(reference: any, data: any, ...moreFields: any[]) {
+            if (moreFields.length || !data || typeof data !== 'object' || Array.isArray(data)) {
+                throw new Error('Admin field-path batch updates require a dedicated server workflow.');
+            }
+            operations.push({ kind: 'update', path: String(reference.path), data });
+            return batch;
+        },
+        delete(reference: any) {
+            operations.push({ kind: 'delete', path: String(reference.path) });
+            return batch;
+        },
+        async commit() {
+            await runAdminMutation(operations);
+            return [];
+        },
+    };
+    return batch;
+}) as typeof firestoreWriteBatch;
 
 export {
     app, db, auth, storage, functions, httpsCallable, getMessaging, getToken, isSupported,
