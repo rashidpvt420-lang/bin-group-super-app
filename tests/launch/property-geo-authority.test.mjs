@@ -57,10 +57,14 @@ test('canonical property geo stays server-authoritative and inspection-first pro
   assert.match(rules, /function propertyCreateHasNoCanonicalGeo/);
   assert.match(rules, /function canonicalPropertyGeoUnchanged/);
   assert.match(rules, /function safeManagedPropertyUpdate/);
-  assert.match(rules, /function safeOwnerPropertyCreate[\s\S]*ownerDraftCreate\(data\)[\s\S]*propertyCreateHasNoCanonicalGeo\(data\)/);
+  assert.match(rules, /function propertyActivationAuthorityUnchanged/);
+  assert.match(rules, /function propertyCreateHasNoActivationAuthority/);
+  assert.doesNotMatch(rules, /function safeOwnerPropertyCreate\(/);
+  assert.doesNotMatch(rules, /function safeOwnerPropertyUpdate\(/);
   assert.match(rules, /'geoVerification'/);
-  assert.match(rules, /canManageProperties\(\) && safeManagedPropertyUpdate\(\)/);
-  assert.match(hardener, /Browser property writes are evidence-only/);
+  assert.match(rules, /canManageProperties\(\)[\s\S]{0,240}propertyCreateHasNoActivationAuthority\(request\.resource\.data\)/);
+  assert.match(rules, /canManageProperties\(\)[\s\S]{0,120}safeManagedPropertyUpdate\(\)/);
+  assert.match(hardener, /Owner property writes are server-callable only/);
 
   for (const component of [rootLocation, ownerLocation]) {
     assert.match(component, /submittedGeo:/);
@@ -99,17 +103,25 @@ test('canonical property geo stays server-authoritative and inspection-first pro
   assert.match(authority, /verificationVersion: 1/);
 });
 
-test('verified properties keep ordinary Owner updates while canonical geo stays immutable', async () => {
+test('property browser writes keep lifecycle authority server-side', async () => {
   const [rules, emulatorTest] = await Promise.all([
     Promise.resolve(preparedPropertyRules()),
     read('test/property-geo-authority-rules.test.js'),
   ]);
   const managedUpdate = ruleFunction(rules, 'safeManagedPropertyUpdate');
-  const ownerUpdate = ruleFunction(rules, 'safeOwnerPropertyUpdate');
   assert.match(managedUpdate, /canonicalPropertyGeoUnchanged\(\)/);
   assert.match(managedUpdate, /submittedPropertyGeoIsUnverified\(request\.resource\.data\)/);
-  assert.match(ownerUpdate, /safeManagedPropertyUpdate\(\)/);
-  assert.doesNotMatch(ownerUpdate, /ownerCannotSupplyCanonicalPropertyGeo/);
-  assert.match(emulatorTest, /Owner-updated ordinary property name/);
-  assert.match(emulatorTest, /assertFails\(updateDoc\(refOwner, \{ geo:/);
+  assert.match(managedUpdate, /propertyActivationAuthorityUnchanged\(\)/);
+  assert.doesNotMatch(rules, /function safeOwnerPropertyUpdate\(/);
+  assert.doesNotMatch(rules, /function safeOwnerPropertyCreate\(/);
+
+  const propertyBlock = rules.slice(
+    rules.indexOf('match /properties/{propertyId}'),
+    rules.indexOf('match /units/{unitId}'),
+  );
+  assert.doesNotMatch(propertyBlock, /ownerDraftCreate\(/);
+  assert.doesNotMatch(propertyBlock, /safeOwnerPropertyUpdate\(/);
+  assert.match(emulatorTest, /Owner browser direct edit is forbidden/);
+  assert.match(emulatorTest, /assertFails\(updateDoc\(refAdmin, \{ status: 'ACTIVE' \}\)\)/);
+  assert.match(emulatorTest, /assertFails\(updateDoc\(refAdmin, \{ inspectionVerified: true \}\)\)/);
 });
