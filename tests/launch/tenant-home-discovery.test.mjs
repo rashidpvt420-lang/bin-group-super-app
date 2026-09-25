@@ -40,11 +40,16 @@ test('tenant portal exposes the canonical Wave 2 home discovery route while pres
   assert.match(wave2, /TenantMarketplacePage/);
 });
 
-test('home discovery supports verified inventory, photos, filters, favorites, viewings and applications', async () => {
-  const page = await read('src/tenant/pages/TenantMarketplacePage.tsx');
+test('home discovery supports sanitized inventory, photos, filters, favorites, viewings and server-authoritative applications', async () => {
+  const [page, backend] = await Promise.all([
+    read('src/tenant/pages/TenantMarketplacePage.tsx'),
+    read('functions/homeDiscovery.ts'),
+  ]);
 
-  assert.match(page, /HOME_RENT_LISTING/);
-  assert.match(page, /PROPERTY_RENT_LISTING/);
+  assert.match(page, /getPublicHomeDiscoveryListings/);
+  assert.match(page, /submitHomeDiscoveryInterest/);
+  assert.doesNotMatch(page, /contractorProfiles/);
+  assert.doesNotMatch(page, /addDoc\(collection\(db, 'jobPostings'/);
   assert.match(page, /imageUrls/);
   assert.match(page, /coverImageUrl/);
   assert.match(page, /propertyType/);
@@ -55,15 +60,19 @@ test('home discovery supports verified inventory, photos, filters, favorites, vi
   assert.match(page, /furnishing/);
   assert.match(page, /bin_tenant_home_favorites_v1/);
   assert.match(page, /bin_tenant_home_search_v1/);
-  assert.match(page, /VIEWING_REQUESTED/);
-  assert.match(page, /APPLICATION_SUBMITTED/);
-  assert.match(page, /tenantLifecycleStage: 'APPLICANT'/);
-  assert.match(page, /type: 'ROOM_RENT_APPLICATION'/, 'requests must remain visible to the existing Admin marketplace queue');
   assert.match(page, /requestMode/);
   assert.match(page, /permitVerificationUrl/);
   assert.match(page, /google\.com\/maps\/search/);
   assert.match(page, /Maintenance history/);
   assert.match(page, /Rental cost snapshot/);
+  assert.match(page, /privacy-safe availability summary/);
+
+  assert.match(backend, /type: "ROOM_RENT_APPLICATION"/);
+  assert.match(backend, /VIEWING_REQUESTED/);
+  assert.match(backend, /APPLICATION_SUBMITTED/);
+  assert.match(backend, /tenantLifecycleStage: "APPLICANT"/);
+  assert.match(backend, /TENANT_HOME_VIEWING_REQUESTED/);
+  assert.match(backend, /TENANT_HOME_APPLICATION_SUBMITTED/);
   assert.match(page, ARABIC);
 });
 
@@ -107,12 +116,14 @@ test('Admin review publishes enriched verified inventory without breaking the le
   assert.match(admin, /VIEWING_COORDINATION_STARTED/);
 });
 
-test('home discovery remains BIN-contract and availability gated', async () => {
-  const page = await read('src/tenant/pages/TenantMarketplacePage.tsx');
+test('home discovery remains server-side BIN-contract and availability gated', async () => {
+  const backend = await read('functions/homeDiscovery.ts');
 
-  assert.match(page, /row\.active !== false/);
-  assert.match(page, /row\.approved !== false/);
-  assert.match(page, /row\.hasBinContract !== false/);
-  assert.match(page, /row\.notRented !== false/);
-  assert.match(page, /'RENTED', 'CLOSED', 'INACTIVE', 'WITHDRAWN'/);
+  assert.match(backend, /data\.active === true/);
+  assert.match(backend, /data\.approved === true/);
+  assert.match(backend, /data\.hasBinContract === true/);
+  assert.match(backend, /data\.verifiedByAdmin === true/);
+  assert.match(backend, /data\.notRented !== false/);
+  assert.match(backend, /RENTED/);
+  assert.match(backend, /WITHDRAWN/);
 });
