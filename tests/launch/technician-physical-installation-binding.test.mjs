@@ -195,7 +195,9 @@ test('19 queued arrival carries only hashed binding and is revalidated for ident
   assert.match(offline, /queuedTechnicianId/);
   assert.match(offline, /capturedAtMs/);
   assert.match(offline, /await callable\(\{[\s\S]*queuedTechnicianId:/);
-  assert.match(lifecycle, /serverNowMs - capturedAtMs > 15 \* 60_000/);
+  assert.match(lifecycle, /serverNowMs - capturedAtMs > \(queuedTechnicianId \? 15 \* 60_000 : 60_000\)/);
+  assert.match(offline, /nativeLocationMocked === false/);
+  assert.match(offline, /locationSource === 'native_android_location_manager'/);
   assert.match(lifecycle, /resolveTechnicianArrivalBinding\(\{/);
   assert.match(job, /installationHash/);
   assert.doesNotMatch(job, /firebaseInstallationId|rawInstallationId/);
@@ -205,7 +207,7 @@ test('20 release contract documents reinstall fail-closed behavior and uses Andr
   assert.match(docs, /Reinstalling the app or clearing app data can produce a new Firebase/);
   assert.match(docs, /never silently replaces an existing secure digest/);
   assert.match(docs, /separate, controlled administrative/);
-  assert.match(gradle, /versionCode\\s+13\\b/);
+  assert.match(gradle, /versionCode\s+13\b/);
   assert.match(gradle, /versionName\s+"1\.0"/);
   assert.match(gradle, /firebase-installations/);
   assert.match(runtime, /registerTechnicianDevice/);
