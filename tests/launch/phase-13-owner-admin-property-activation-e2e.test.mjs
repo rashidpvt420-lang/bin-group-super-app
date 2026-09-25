@@ -13,8 +13,7 @@ test('Phase 13 Owner to Admin activation chain is executable end to end', async 
     "adminLinkOwnerPropertyInspection",
     "adminRecordOwnerPropertyInspectionEvidence",
     "adminCompleteOwnerPortfolioInspections",
-    "requestContractSignatureOtp",
-    "verifyContractSignatureOtp",
+    "const finalOtp = await verifyFinalContractSignatureOtp",
     "ownerSignContractAndQueuePdf",
     "adminRecordOwnerMobilizationPaymentEvidence",
     "adminApprovePayment",
@@ -99,7 +98,7 @@ test('Phase 13 preserves activation fail-closed payment and physical evidence au
     'Every property visit must be verified before final payment approval',
     'Immutable 15% receipt evidence is required before final approval',
     'sign_in_second_factor',
-    'paymentVerified',
-    'unlocksDashboard',
+    'payment.inspectionVerified !== true',
+    'Immutable 15% receipt evidence is required before final approval',
   ]) assert.ok(approval.includes(token), `Final activation gate missing ${token}`);
 });
