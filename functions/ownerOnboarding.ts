@@ -107,10 +107,10 @@ export const registerOwnerOnboardingAccount = onCall({ cors: true, enforceAppChe
   );
 });
 
-// This callable intentionally relies on verified Firebase Auth rather than App Check.
-// It is used only after the customer has proved control of the email address and it
-// cannot create Auth users or grant an admin role.
-export const upsertOwnerOnboardingProfile = onCall({ cors: true, enforceAppCheck: false }, async (request) => {
+// Phase 10: authenticated onboarding remains App Check protected. Email
+// verification proves account control; App Check independently proves that the
+// request came through an attested BIN GROUP client.
+export const upsertOwnerOnboardingProfile = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Owner authentication required.");
 
   const uid = request.auth.uid;
