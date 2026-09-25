@@ -1,11 +1,11 @@
 import React from 'react';
 import { Alert, Box, Button, Chip, MenuItem, Paper, Stack, Table, TableBody, TableCell, TableHead, TableRow, TextField, Typography } from '@mui/material';
-import { addDoc, collection, db, doc, onSnapshot, serverTimestamp, updateDoc, functions, httpsCallable } from '../../lib/firebase';
+import { collection, db, onSnapshot, functions, httpsCallable } from '../../lib/firebase';
 
 const normalize = (value: unknown) => String(value || 'UNKNOWN').replace(/_/g, ' ').toUpperCase();
 const closedStates = ['CLOSED', 'CANCELLED', 'EXPIRED'];
 const isOpen = (row: any) => !closedStates.some((state) => normalize(row.contractStatus || row.status).includes(state));
-const money = (value: unknown) => `AED ${Number(value || 0).toLocaleString('en-AE', { maximumFractionDigits: 0 })}`;
+const money = (value: unknown) => `AED ${Number(value || 0).toLocaleString('en-AE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 export default function ContractTerminationPage() {
   const [rows, setRows] = React.useState<any[]>([]);
