@@ -25,6 +25,10 @@ export function validateGeoAnchor(geo: Partial<GeoAnchor>): string[] {
   const errors: string[] = [];
   if (typeof geo.lat !== 'number' || geo.lat < -90 || geo.lat > 90) errors.push('Invalid latitude');
   if (typeof geo.lng !== 'number' || geo.lng < -180 || geo.lng > 180) errors.push('Invalid longitude');
+  if (typeof geo.lat === 'number' && typeof geo.lng === 'number') {
+    if (geo.lat === 0 && geo.lng === 0) errors.push('Default zero coordinates are not valid');
+    if (looksLikeReversedUaeLatLng(geo.lat, geo.lng)) errors.push('Latitude and longitude appear reversed for a UAE property');
+  }
   if (!geo.emirate) errors.push('Emirate is required');
   if (!geo.city && !geo.area) errors.push('City or Area is required');
   if (!geo.address) errors.push('Address is required');
@@ -49,10 +53,12 @@ export function normalizeGeoAnchor(input: any): Partial<GeoAnchor> {
         area: input.area || '',
         placeId: input.placeId || null,
         source: input.source || 'google_maps',
-        verified: !!input.verified,
-        verifiedBy: input.verifiedBy || null,
-        requiresGeoReview: !!input.requiresGeoReview,
-        dispatchReady: input.dispatchReady === true,
+        // This helper is used by browser Owner onboarding. Browser input is
+        // evidence only and cannot mint canonical location authority.
+        verified: false,
+        verifiedBy: null,
+        requiresGeoReview: true,
+        dispatchReady: false,
         accuracyMeters: Number.isFinite(Number(input.accuracyMeters)) ? Number(input.accuracyMeters) : null,
         capturedAt: timestampOrNull(input.capturedAt),
     };
@@ -74,16 +80,32 @@ function deg2rad(deg: number): number {
     return deg * (Math.PI / 180);
 }
 
+export function looksLikeReversedUaeLatLng(lat: number, lng: number): boolean {
+    return Number.isFinite(lat) && Number.isFinite(lng) &&
+        lat >= 51 && lat <= 57 &&
+        lng >= 22 && lng <= 27;
+}
+
 export function isValidLatLng(lat: number, lng: number): boolean {
-    return typeof lat === 'number' && lat >= -90 && lat <= 90 &&
-           typeof lng === 'number' && lng >= -180 && lng <= 180;
+    return Number.isFinite(lat) && Number.isFinite(lng) &&
+           lat >= -90 && lat <= 90 &&
+           lng >= -180 && lng <= 180 &&
+           !(lat === 0 && lng === 0) &&
+           !looksLikeReversedUaeLatLng(lat, lng);
 }
 
 export function buildPersistableGeoAnchor(payload: any): GeoAnchor {
+    const lat = Number(payload.lat ?? payload.latitude);
+    const lng = Number(payload.lng ?? payload.longitude);
+    if (!isValidLatLng(lat, lng)) {
+        throw new Error(looksLikeReversedUaeLatLng(lat, lng)
+            ? 'Latitude and longitude appear reversed for a UAE property.'
+            : 'Please select a valid non-zero property coordinate.');
+    }
     return {
         point: null,
-        lat: payload.lat || 0,
-        lng: payload.lng || 0,
+        lat,
+        lng,
         geohash: payload.geohash || '',
         address: payload.address || '',
         emirate: payload.emirate || '',

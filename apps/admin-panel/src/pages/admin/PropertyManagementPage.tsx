@@ -38,6 +38,13 @@ interface Property {
         lat: number;
         lng: number;
     };
+    submittedGeo?: {
+        lat: number;
+        lng: number;
+        verified?: boolean;
+        dispatchReady?: boolean;
+        requiresGeoReview?: boolean;
+    };
     geo?: {
         lat: number;
         lng: number;
@@ -101,9 +108,16 @@ export default function PropertyManagementPage() {
                 propertyType: formData.propertyType,
                 address: formData.address,
                 addressLine: formData.address,
-                geo,
-                location: { lat: geo.lat, lng: geo.lng },
-                coordinates: { lat: geo.lat, lng: geo.lng },
+                submittedGeo: {
+                    ...geo,
+                    source: 'owner_submission',
+                    submittedSource: 'admin_asset_registry_candidate',
+                    verified: false,
+                    verifiedBy: null,
+                    verifiedAt: null,
+                    dispatchReady: false,
+                    requiresGeoReview: true,
+                },
                 ownerId: formData.ownerId,
                 emirate: formData.emirate,
                 city: formData.serviceZone || formData.emirate,
@@ -111,7 +125,7 @@ export default function PropertyManagementPage() {
                 serviceZone: formData.serviceZone,
                 unitsCount: parseInt(formData.unitsCount) || 0,
                 floorsCount: parseInt(formData.floorsCount) || 0,
-                status: 'active',
+                status: 'PENDING_REVIEW',
                 createdAt: serverTimestamp(),
             });
             setOpenAdd(false);
@@ -128,8 +142,8 @@ export default function PropertyManagementPage() {
             name: prop.name || '',
             propertyType: prop.propertyType || 'Villa',
             address: prop.address || '',
-            lat: (prop.geo?.lat ?? prop.coordinates?.lat)?.toString() || '',
-            lng: (prop.geo?.lng ?? prop.coordinates?.lng)?.toString() || '',
+            lat: (prop.submittedGeo?.lat ?? prop.geo?.lat ?? prop.coordinates?.lat)?.toString() || '',
+            lng: (prop.submittedGeo?.lng ?? prop.geo?.lng ?? prop.coordinates?.lng)?.toString() || '',
             ownerId: prop.ownerId || '',
             emirate: prop.emirate || '',
             serviceZone: prop.serviceZone || '',
@@ -157,9 +171,16 @@ export default function PropertyManagementPage() {
                 propertyType: formData.propertyType,
                 address: formData.address,
                 addressLine: formData.address,
-                geo,
-                location: { lat: geo.lat, lng: geo.lng },
-                coordinates: { lat: geo.lat, lng: geo.lng },
+                submittedGeo: {
+                    ...geo,
+                    source: 'owner_submission',
+                    submittedSource: 'admin_asset_registry_candidate',
+                    verified: false,
+                    verifiedBy: null,
+                    verifiedAt: null,
+                    dispatchReady: false,
+                    requiresGeoReview: true,
+                },
                 ownerId: formData.ownerId,
                 emirate: formData.emirate,
                 city: formData.serviceZone || formData.emirate,
@@ -210,7 +231,7 @@ export default function PropertyManagementPage() {
                         ASSET REGISTRY
                     </Typography>
                     <Typography variant="body1" sx={{ color: binThemeTokens.textSecondary }}>
-                        SOVEREIGN GEOGRAPHIC INVENTORY
+                        GEOGRAPHIC INVENTORY · BROWSER COORDINATES REMAIN UNTRUSTED UNTIL SERVER VERIFICATION
                     </Typography>
                 </Box>
                 <Button 
@@ -262,9 +283,17 @@ export default function PropertyManagementPage() {
                                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, color: binThemeTokens.gold }}>
                                         <MapPin size={14} />
                                         <Typography variant="caption" sx={{ fontFamily: 'monospace' }}>
-                                            {prop.geo ? `${prop.geo.lat.toFixed(4)}, ${prop.geo.lng.toFixed(4)}` : prop.coordinates ? `${prop.coordinates.lat.toFixed(4)}, ${prop.coordinates.lng.toFixed(4)}` : 'N/A'}
+                                            {prop.geo?.verified
+                                                ? `${prop.geo.lat.toFixed(4)}, ${prop.geo.lng.toFixed(4)}`
+                                                : prop.submittedGeo
+                                                    ? `${prop.submittedGeo.lat.toFixed(4)}, ${prop.submittedGeo.lng.toFixed(4)}`
+                                                    : 'N/A'}
                                         </Typography>
-                                        {prop.geo?.verified && <Chip label="VERIFIED" size="small" sx={{ height: 18, fontSize: 10, bgcolor: 'rgba(16,185,129,0.12)', color: '#10b981', fontWeight: 900 }} />}
+                                        {prop.geo?.verified
+                                            ? <Chip label="VERIFIED" size="small" sx={{ height: 18, fontSize: 10, bgcolor: 'rgba(16,185,129,0.12)', color: '#10b981', fontWeight: 900 }} />
+                                            : prop.submittedGeo
+                                                ? <Chip label="REVIEW" size="small" sx={{ height: 18, fontSize: 10, fontWeight: 900 }} />
+                                                : null}
                                     </Box>
                                 </TableCell>
                                 <TableCell align="right">
@@ -401,7 +430,7 @@ export default function PropertyManagementPage() {
                             color: binThemeTokens.black
                         }}
                     >
-                        {openAdd ? 'Finalize Asset' : 'Save DNA Changes'}
+                        {openAdd ? 'Save Review Candidate' : 'Save Review Candidate'}
                     </Button>
                 </DialogActions>
             </Dialog>

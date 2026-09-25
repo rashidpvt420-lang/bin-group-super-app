@@ -81,6 +81,7 @@ export const adminCompleteOwnerPortfolioInspections = onCall(
         dispatchReady: true,
         requiresGeoReview: false,
         geoAuthorityVersion: GEO_AUTHORITY_VERSION,
+        geoPromotionState: "CANONICAL_PHYSICAL_EVIDENCE_PROMOTED",
         geoVerifiedAt: now,
         geoVerifiedBy: evidenceActor,
         updatedAt: now,

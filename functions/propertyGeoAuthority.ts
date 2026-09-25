@@ -76,12 +76,19 @@ const timestampMillis = (value: unknown): number | null => {
   return Number.isFinite(parsed) ? parsed : null;
 };
 
+const looksLikeReversedUaeLatLng = (lat: number | null, lng: number | null) =>
+  lat !== null &&
+  lng !== null &&
+  lat >= 51 && lat <= 57 &&
+  lng >= 22 && lng <= 27;
+
 const validCoordinate = (lat: number | null, lng: number | null) =>
   lat !== null &&
   lng !== null &&
   lat >= -90 && lat <= 90 &&
   lng >= -180 && lng <= 180 &&
-  !(lat === 0 && lng === 0);
+  !(lat === 0 && lng === 0) &&
+  !looksLikeReversedUaeLatLng(lat, lng);
 
 const fail = (message: string): never => {
   throw new PropertyGeoAuthorityError(message);

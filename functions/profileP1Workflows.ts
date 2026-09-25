@@ -883,71 +883,111 @@ export const adminRepairOrphanLinkage = onCall({ cors: true, region: "europe-wes
   return { status: "REPAIRED", orphanId, orphanType, propertyId, unitId };
 });
 
-export const adminRepairPropertyGeo = onCall({ cors: true, region: "europe-west3" }, async (request) => {
-  await requireAdmin(request.auth);
+export const adminRepairPropertyGeo = onCall(
+  { cors: true, region: "europe-west3", enforceAppCheck: true },
+  async (request) => {
+    await requireAdmin(request.auth);
 
-  const propertyId = text(request.data?.propertyId);
-  const lat = numberValue(request.data?.lat, Number.NaN);
-  const lng = numberValue(request.data?.lng, Number.NaN);
-  if (!propertyId || !Number.isFinite(lat) || !Number.isFinite(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) {
-    throw new HttpsError("invalid-argument", "A propertyId and valid latitude/longitude are required.");
-  }
-  const propertyRef = db.collection("properties").doc(propertyId);
-  const propertySnap = await propertyRef.get();
-  if (!propertySnap.exists) throw new HttpsError("not-found", "Property not found.");
-  const property = propertySnap.data() || {};
-  const actorId = request.auth?.uid || "admin";
-  const now = ts();
-  const address = text(request.data?.address || property.addressLine || property.address);
-  const emirate = text(request.data?.emirate || property.emirate);
-  const city = text(request.data?.city || property.city || property.area);
-  const area = text(request.data?.area || property.area || property.city);
-  const companyId = text(property.companyId, "BIN_GROUP");
-  const geo = {
-    lat,
-    lng,
-    latitude: lat,
-    longitude: lng,
-    point: new admin.firestore.GeoPoint(lat, lng),
-    address,
-    emirate,
-    city,
-    area,
-    source: "ADMIN_WAR_ROOM_CALLABLE",
-    verified: true,
-  };
+    const propertyId = text(request.data?.propertyId);
+    const lat = numberValue(request.data?.lat, Number.NaN);
+    const lng = numberValue(request.data?.lng, Number.NaN);
+    const looksReversedForUae =
+      Number.isFinite(lat) && Number.isFinite(lng) &&
+      lat >= 51 && lat <= 57 && lng >= 22 && lng <= 27;
+    if (
+      !propertyId ||
+      !Number.isFinite(lat) ||
+      !Number.isFinite(lng) ||
+      lat < -90 || lat > 90 ||
+      lng < -180 || lng > 180 ||
+      (lat === 0 && lng === 0) ||
+      looksReversedForUae
+    ) {
+      throw new HttpsError(
+        "invalid-argument",
+        looksReversedForUae
+          ? "Latitude and longitude appear reversed for a UAE property."
+          : "A propertyId and valid non-zero latitude/longitude are required.",
+      );
+    }
 
-  const batch = db.batch();
-  const patch = {
-    geo,
-    location: { lat, lng },
-    coordinates: { lat, lng },
-    addressLine: address,
-    emirate,
-    city,
-    area,
-    geoAnchorStatus: "admin_repaired",
-    updatedAt: now,
-  };
-  batch.set(propertyRef, patch, { merge: true });
-  batch.set(db.collection("companies").doc(companyId).collection("properties").doc(propertyId), {
-    ...patch,
-    propertyId,
-    companyId,
-  }, { merge: true });
-  batch.set(db.collection("audit_logs").doc(), {
-    action: "GEO_ANCHOR_REPAIR",
-    actorId,
-    actorRole: "admin",
-    targetType: "properties",
-    targetId: propertyId,
-    metadata: { companyId, lat, lng },
-    createdAt: now,
-  });
-  await batch.commit();
+    const propertyRef = db.collection("properties").doc(propertyId);
+    const propertySnap = await propertyRef.get();
+    if (!propertySnap.exists) throw new HttpsError("not-found", "Property not found.");
+    const property = propertySnap.data() || {};
+    const actorId = request.auth?.uid || "admin";
+    const now = ts();
+    const address = text(request.data?.address || property.addressLine || property.address);
+    const emirate = text(request.data?.emirate || property.emirate);
+    const city = text(request.data?.city || property.city || property.area);
+    const area = text(request.data?.area || property.area || property.city);
+    if (!address || !emirate || (!city && !area)) {
+      throw new HttpsError(
+        "failed-precondition",
+        "Address, emirate, and city or area are required before a geo repair candidate can be saved.",
+      );
+    }
 
-  return { status: "REPAIRED", propertyId };
-});
+    // This legacy repair endpoint is deliberately evidence-only. It may recover
+    // a coordinate candidate, but it cannot mint canonical geo, verification,
+    // dispatch readiness, or physical-inspection evidence. Promotion remains in
+    // adminReviewOwnerProperty (legacy Founder-MFA compatibility) or the
+    // inspection-first physical evidence completion path.
+    const submittedGeo = {
+      lat,
+      lng,
+      latitude: lat,
+      longitude: lng,
+      point: new admin.firestore.GeoPoint(lat, lng),
+      address,
+      emirate,
+      city,
+      area,
+      placeId: text(request.data?.placeId || property.googlePlaceId) || null,
+      source: "owner_submission",
+      submittedSource: "admin_repair_candidate",
+      verified: false,
+      verifiedBy: null,
+      verifiedAt: null,
+      dispatchReady: false,
+      requiresGeoReview: true,
+      capturedAt: null,
+      accuracyMeters: null,
+      updatedAt: now,
+    };
+
+    const batch = db.batch();
+    batch.set(propertyRef, {
+      submittedGeo,
+      geoAnchorStatus: "candidate_review_required",
+      geoReviewStatus: "PENDING_REVIEW",
+      updatedAt: now,
+    }, { merge: true });
+    batch.set(db.collection("audit_logs").doc(), {
+      action: "GEO_REPAIR_CANDIDATE_SUBMITTED",
+      actorId,
+      actorRole: "admin",
+      targetType: "properties",
+      targetId: propertyId,
+      metadata: {
+        source: "admin_repair_candidate",
+        canonicalGeoChanged: false,
+        dispatchReadyGranted: false,
+      },
+      trustLevel: "UNTRUSTED_EVIDENCE",
+      createdAt: now,
+    });
+    await batch.commit();
+
+    return {
+      status: "REVIEW_REQUIRED",
+      propertyId,
+      canonicalGeoChanged: false,
+      dispatchReady: false,
+      requiresGeoReview: true,
+    };
+  },
+);
 
 export const submitBrokerKycProfile = onCall({ cors: true, region: "europe-west3", enforceAppCheck: true }, async (request) => {
   const broker = await requireProfileRole(request.auth, BROKER_ROLES, "Broker");

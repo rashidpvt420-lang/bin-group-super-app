@@ -113,9 +113,25 @@ function addonsOf(intake: any) {
 }
 
 function gpsOf(x: any) {
-  const lat = n(x?.geo?.lat ?? x?.geo?.latitude ?? x?.location?.lat ?? x?.location?.latitude ?? x?.coordinates?.lat ?? x?.coordinates?.latitude ?? x?.gps?.lat ?? x?.lat ?? x?.latitude, NaN);
-  const lng = n(x?.geo?.lng ?? x?.geo?.longitude ?? x?.location?.lng ?? x?.location?.longitude ?? x?.coordinates?.lng ?? x?.coordinates?.longitude ?? x?.gps?.lng ?? x?.lng ?? x?.longitude, NaN);
-  return Number.isFinite(lat) && Number.isFinite(lng) && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180 ? { lat, lng } : null;
+  // Operational inheritance must use only canonical, server-authoritative geo.
+  // Legacy location/coordinates/gps fields are never promoted by this helper.
+  const geo = x?.geo;
+  if (
+    !geo ||
+    geo.verified !== true ||
+    geo.dispatchReady !== true ||
+    geo.requiresGeoReview === true
+  ) return null;
+  const lat = n(geo.lat ?? geo.latitude, NaN);
+  const lng = n(geo.lng ?? geo.longitude, NaN);
+  const valid =
+    Number.isFinite(lat) &&
+    Number.isFinite(lng) &&
+    lat >= -90 && lat <= 90 &&
+    lng >= -180 && lng <= 180 &&
+    !(lat === 0 && lng === 0) &&
+    !(lat >= 51 && lat <= 57 && lng >= 22 && lng <= 27);
+  return valid ? { lat, lng } : null;
 }
 
 function geohash(lat: number, lng: number, precision = 9) {

@@ -124,6 +124,8 @@ assert(capacitorConfig.includes('dist'), 'Capacitor config must point to the Vit
 assert(capacitorConfig.includes('PushNotifications'), 'Capacitor config must include PushNotifications settings.');
 assert(capacitorConfig.includes('SplashScreen'), 'Capacitor config must include SplashScreen settings.');
 assert(capacitorConfig.includes('StatusBar'), 'Capacitor config must include StatusBar settings.');
+assert(capacitorConfig.includes("androidScheme: 'https'"), 'Android Capacitor WebView must use HTTPS so the browser Maps key can be HTTP-referrer restricted.');
+assert(capacitorConfig.includes("iosScheme: 'https'"), 'iOS Capacitor WebView must use HTTPS so the browser Maps key can be HTTP-referrer restricted.');
 
 assert(indexHtml.includes('apple-mobile-web-app-capable'), 'index.html must include Apple mobile web app meta.');
 assert(indexHtml.includes('manifest.json'), 'index.html must link to the web manifest.');
@@ -218,6 +220,9 @@ assert(androidManifest.includes('android.permission.POST_NOTIFICATIONS'), 'Andro
 assert(androidManifest.includes('android:icon="@mipmap/ic_launcher"'), 'Android manifest must bind the launcher icon.');
 assert(androidManifest.includes('android:roundIcon="@mipmap/ic_launcher_round"'), 'Android manifest must bind the round launcher icon.');
 assert(androidManifest.includes('android.intent.category.LAUNCHER'), 'Android manifest must include the launcher category.');
+assert(!androidBuildGradle.includes('play-services-maps'), 'Native Maps SDK for Android is not approved; use a dedicated Android-restricted key before adding it.');
+assert(!androidBuildGradle.includes('com.google.android.libraries.places'), 'Native Places SDK for Android is not approved; use a dedicated Android-restricted key before adding it.');
+assert(!androidManifest.includes('com.google.android.geo.API_KEY'), 'Do not embed a native Android Maps SDK key while the app uses the browser Maps architecture.');
 assert(androidMainActivity.includes('package ae.bingroups.superapp;'), 'Android MainActivity package must match app id.');
 for (const source of [androidAdaptiveLauncher, androidAdaptiveRoundLauncher, androidThemedLauncher, androidThemedRoundLauncher]) {
   assert(source.includes('@color/ic_launcher_background'), 'Android adaptive launcher must use BIN GROUP background color.');
@@ -250,6 +255,7 @@ for (const [density, size] of Object.entries(androidDensities)) {
 });
 assert(iosInfoPlist.includes('ITSAppUsesNonExemptEncryption'), 'iOS Info.plist must include encryption export compliance declaration.');
 assert(iosProject.includes(`PRODUCT_BUNDLE_IDENTIFIER = ${EXPECTED_APP_ID};`), `iOS bundle identifier must be ${EXPECTED_APP_ID}.`);
+assert(!/GoogleMaps|GooglePlaces|GoogleNavigation/.test(iosProject), 'Native Google Maps/Places/Navigation iOS SDK is not approved; use a dedicated iOS-restricted key before adding it.');
 assert(
   iosAppIconManifest.images?.some((image) => (
     image.filename === 'AppIcon-512@2x.png' && image.platform === 'ios' && image.size === '1024x1024'

@@ -26,6 +26,7 @@ export const mapCoordinate = (value: any): MapCoordinate | null => {
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
   if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return null;
   if (lat === 0 && lng === 0) return null;
+  if (lat >= 51 && lat <= 57 && lng >= 22 && lng <= 27) return null;
   return { lat, lng };
 };
 

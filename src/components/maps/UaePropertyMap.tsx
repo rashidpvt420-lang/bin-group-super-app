@@ -23,10 +23,13 @@ const toCoord = (value: number | string | null | undefined) => {
   return Number.isFinite(parsed) ? parsed : null;
 };
 
-const readMapsKey = () => {
-  const env = (import.meta as unknown as { env?: Record<string, string | undefined> }).env || {};
-  return env.VITE_GOOGLE_MAPS_API_KEY || env.VITE_MAPS_API_KEY || '';
-};
+const usableCoordinatePair = (lat: number | null, lng: number | null) =>
+  lat !== null &&
+  lng !== null &&
+  lat >= -90 && lat <= 90 &&
+  lng >= -180 && lng <= 180 &&
+  !(lat === 0 && lng === 0) &&
+  !(lat >= 51 && lat <= 57 && lng >= 22 && lng <= 27);
 
 export default function UaePropertyMap({
   title = 'Property Location',
@@ -42,10 +45,9 @@ export default function UaePropertyMap({
   height = 280,
   testId
 }: UaePropertyMapProps) {
-  const apiKey = readMapsKey();
-  const latitude = toCoord(lat);
+   const latitude = toCoord(lat);
   const longitude = toCoord(lng);
-  const hasCoords = latitude !== null && longitude !== null;
+  const hasCoords = usableCoordinatePair(latitude, longitude);
 
   // 1. Resolve open link
   let finalGoogleMapsUrl = customGoogleMapsUrl;
@@ -74,9 +76,10 @@ export default function UaePropertyMap({
       query = [address, emirate, 'United Arab Emirates'].filter(Boolean).join(', ');
     }
     if (query) {
-      embedUrl = apiKey
-        ? `https://www.google.com/maps/embed/v1/place?key=${apiKey}&q=${encodeURIComponent(query)}`
-        : `https://www.google.com/maps?q=${encodeURIComponent(query)}&output=embed`;
+      // This component uses the public Google Maps embed surface rather than
+      // consuming the production Maps Platform key. Interactive JS/Places/
+      // Geocoding and Static Maps remain behind the separately restricted key.
+      embedUrl = `https://www.google.com/maps?q=${encodeURIComponent(query)}&output=embed`;
     }
   }
 
@@ -177,9 +180,9 @@ export default function UaePropertyMap({
         <Box sx={{ height, display: 'grid', placeItems: 'center', p: 3, background: 'linear-gradient(135deg, rgba(198,167,94,0.12), rgba(15,23,42,0.6))' }}>
           <Stack spacing={2} alignItems="center" textAlign="center" maxWidth={560}>
             <Navigation size={36} color={binThemeTokens.gold} />
-            <Typography variant="h6" fontWeight="950" sx={{ color: '#FFF' }}>Google Maps key not configured</Typography>
+            <Typography variant="h6" fontWeight="950" sx={{ color: '#FFF' }}>Location unavailable</Typography>
             <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.58)' }}>
-              Add VITE_GOOGLE_MAPS_API_KEY in Firebase/Vite environment to show embedded maps. The external Google Maps link still works for dispatch and location verification.
+              A valid non-zero location or UAE address is required before this map can be shown.
             </Typography>
           </Stack>
         </Box>

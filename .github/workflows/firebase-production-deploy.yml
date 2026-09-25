@@ -372,6 +372,9 @@ jobs:
       - name: Install dependencies with retry
         run: bash scripts/npm-install-retry.sh
 
+      - name: Verify Google Maps production key restrictions and enabled APIs
+        run: node scripts/verify-google-maps-api-key-restrictions.mjs
+
       - name: Verify Firebase project billing and Cloud Functions deployment access
         run: node scripts/verify-firebase-deployment-readiness.mjs
 

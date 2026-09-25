@@ -123,6 +123,10 @@ function requireCoordinate(value: unknown, label: "latitude" | "longitude") {
   return parsed;
 }
 
+function looksLikeReversedUaeLatLng(latitude: number, longitude: number) {
+  return latitude >= 51 && latitude <= 57 && longitude >= 22 && longitude <= 27;
+}
+
 function requireSessionId(value: unknown) {
   const sessionId = String(value || "").trim();
   if (!/^[A-Za-z0-9_-]{8,128}$/.test(sessionId)) {
@@ -305,6 +309,9 @@ export const updateTechnicianLiveLocation = onCall(
       const longitude = requireCoordinate(request.data?.longitude ?? request.data?.lng, "longitude");
       if (latitude === 0 && longitude === 0) {
         throw new HttpsError("invalid-argument", "Zero coordinates are not valid Technician GPS evidence.");
+      }
+      if (looksLikeReversedUaeLatLng(latitude, longitude)) {
+        throw new HttpsError("invalid-argument", "Technician latitude and longitude appear reversed for UAE operations.");
       }
       const accuracy = finiteNumber(request.data?.accuracy, "accuracy");
       if (accuracy <= 0 || accuracy > 100) {

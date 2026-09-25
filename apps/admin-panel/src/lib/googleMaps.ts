@@ -55,5 +55,13 @@ export function loadAdminGoogleMaps(): Promise<any> {
 }
 
 export function googleMapsSearchUrl(lat: number, lng: number) {
+  const valid =
+    Number.isFinite(lat) &&
+    Number.isFinite(lng) &&
+    lat >= -90 && lat <= 90 &&
+    lng >= -180 && lng <= 180 &&
+    !(lat === 0 && lng === 0) &&
+    !(lat >= 51 && lat <= 57 && lng >= 22 && lng <= 27);
+  if (!valid) return 'https://www.google.com/maps';
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${lat},${lng}`)}`;
 }

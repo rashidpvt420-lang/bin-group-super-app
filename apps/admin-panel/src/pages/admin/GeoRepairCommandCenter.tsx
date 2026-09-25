@@ -4,9 +4,10 @@ import {
     CircularProgress, Stack, Snackbar, Alert
 } from '@mui/material';
 import { MapPin, Navigation, AlertTriangle, Crosshair } from 'lucide-react';
-import { db, collection, getDocs, doc, writeBatch, serverTimestamp } from '../../lib/firebase';
+import { db, functions, collection, getDocs, httpsCallable } from '../../lib/firebase';
 import { binThemeTokens } from '../../theme/adminTheme';
 import { buildGeoAnchor } from '../../utils/geoAnchor';
+import { resolveVerifiedPropertyPin } from '../../lib/verifiedPropertyPin';
 
 export default function GeoRepairCommandCenter() {
     const [loading, setLoading] = useState(true);
@@ -26,7 +27,7 @@ export default function GeoRepairCommandCenter() {
             // Fetch Properties
             const propSnap = await getDocs(collection(db, 'properties'));
             const propAnomalies = propSnap.docs.map(d => ({ id: d.id, ...d.data() }))
-                .filter((p: any) => !p.geo || !p.geo.lat || !p.geo.lng || !p.geo.emirate);
+                .filter((p: any) => !resolveVerifiedPropertyPin(p));
             
             // Fetch Tickets
             const ticketSnap = await getDocs(collection(db, 'maintenanceTickets'));
@@ -60,28 +61,27 @@ export default function GeoRepairCommandCenter() {
                 city: prop.city || prop.area || prop.serviceZone || prop.geo?.city,
                 area: prop.area || prop.serviceZone || prop.city || prop.geo?.area,
                 placeId: prop.googlePlaceId || prop.placeId || prop.geo?.placeId,
-                source: 'admin_manual',
-                verified: true,
-                verifiedBy: 'ADMIN_GEO_REPAIR_CENTER'
+                source: 'admin_manual'
             });
-            
+
             if (repairedGeo) {
-                const batch = writeBatch(db);
-                const companyId = prop.companyId || 'BIN_GROUP';
-                const payload = {
-                    companyId,
-                    geo: repairedGeo,
-                    location: { lat: repairedGeo.lat, lng: repairedGeo.lng },
-                    coordinates: { lat: repairedGeo.lat, lng: repairedGeo.lng },
-                    geoAnchorStatus: 'verified_and_locked',
-                    updatedAt: serverTimestamp()
-                };
-                batch.set(doc(db, 'properties', prop.id), payload, { merge: true });
-                batch.set(doc(db, 'companies', companyId, 'properties', prop.id), { ...prop, ...payload, propertyId: prop.id }, { merge: true });
-                
-                await batch.commit();
+                const submitCandidate = httpsCallable(functions, 'adminRepairPropertyGeo');
+                await submitCandidate({
+                    propertyId: prop.id,
+                    lat: repairedGeo.lat,
+                    lng: repairedGeo.lng,
+                    address: repairedGeo.address,
+                    emirate: repairedGeo.emirate,
+                    city: repairedGeo.city,
+                    area: repairedGeo.area,
+                    placeId: repairedGeo.placeId,
+                });
                 await fetchAnomalies();
-                setNotice({ open: true, message: `${prop.propertyName || prop.id} is now verified and locked.`, severity: 'success' });
+                setNotice({
+                    open: true,
+                    message: `${prop.propertyName || prop.id} location candidate was saved for authoritative review; it is not dispatch-ready.`,
+                    severity: 'success'
+                });
             }
         } catch (error) {
             console.error(error);
@@ -107,7 +107,7 @@ export default function GeoRepairCommandCenter() {
                             <MapPin color="#ef4444" />
                             <Typography variant="h6" fontWeight="900" sx={{ color: '#FFF' }}>Property Anomalies ({properties.length})</Typography>
                         </Stack>
-                        <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.6)', mb: 3 }}>Properties missing strict coordinates or emirate tags.</Typography>
+                        <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.6)', mb: 3 }}>Properties without server-verified canonical dispatch geography. Candidate repair never grants trust.</Typography>
                         
                         <Stack spacing={2}>
                             {properties.map(p => (
@@ -122,7 +122,7 @@ export default function GeoRepairCommandCenter() {
                                         startIcon={repairing === p.id ? <CircularProgress size={14} /> : <Crosshair size={14} />}
                                         sx={{ color: binThemeTokens.gold, borderColor: binThemeTokens.gold }}
                                     >
-                                        Auto-Repair Node
+                                        Submit Geo Candidate
                                     </Button>
                                 </Paper>
                             ))}
