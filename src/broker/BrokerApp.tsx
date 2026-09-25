@@ -117,6 +117,7 @@ export default function BrokerApp() {
         <Route path="/deals" element={<BrokerAttributionProofPage />} />
         <Route path="/attribution" element={<BrokerAttributionProofPage />} />
         <Route path="/documents" element={<BrokerDocumentsPage />} />
+        <Route path="/onboarding" element={<BrokerProfilePage />} />
         <Route path="/profile" element={<BrokerProfilePage />} />
       </Routes>
     </BrokerLayout>
