@@ -45,7 +45,7 @@ function referralLeadId(brokerUid: string, ownerUid: string) {
 // browser cannot obtain an App Check token. Authorization remains bound to the
 // verified Owner token and every write is server-side.
 export const captureBrokerReferralAttribution = onCall(
-  { cors: true, region: "europe-west3", enforceAppCheck: false },
+  { cors: true, region: "europe-west3", enforceAppCheck: true },
   async (request) => {
     const ownerUid = requireOwner(request.auth);
     const brokerUid = validBrokerUid(request.data?.brokerUid || request.data?.broker);
