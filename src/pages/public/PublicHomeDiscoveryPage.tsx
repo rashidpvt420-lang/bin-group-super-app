@@ -54,6 +54,7 @@ export default function PublicHomeDiscoveryPage() {
   const [loading, setLoading] = useState(true);
   const [listings, setListings] = useState<PublicListing[]>([]);
   const [error, setError] = useState('');
+  const [inventoryState, setInventoryState] = useState<'LOADING' | 'AVAILABLE' | 'EMPTY' | 'FAILED'>('LOADING');
   const [queryText, setQueryText] = useState('');
   const [propertyType, setPropertyType] = useState('ALL');
   const [emirate, setEmirate] = useState('ALL');
@@ -61,13 +62,28 @@ export default function PublicHomeDiscoveryPage() {
 
   useEffect(() => {
     const load = async () => {
+      setInventoryState('LOADING');
+      setError('');
       try {
         const call = httpsCallable(functions, 'getPublicHomeDiscoveryListings');
         const result: any = await call({});
-        setListings(Array.isArray(result?.data?.listings) ? result.data.listings : []);
-      } catch (err) {
-        console.error('[PublicHomeDiscovery] load failed', err);
-        setError(copy('public.home.failed', 'Verified homes could not be loaded right now. Please try again later.', 'تعذر تحميل المنازل الموثقة حالياً. يرجى المحاولة لاحقاً.'));
+        const nextListings = Array.isArray(result?.data?.listings) ? result.data.listings : [];
+        const state = String(result?.data?.inventoryState || '').toUpperCase();
+        setListings(nextListings);
+        setInventoryState(state === 'AVAILABLE' || nextListings.length > 0 ? 'AVAILABLE' : 'EMPTY');
+      } catch (err: any) {
+        const code = String(err?.code || '').toLowerCase();
+        const diagnosticCode = String(err?.details?.diagnosticCode || '');
+        console.error('[PublicHomeDiscovery] load failed', { code, diagnosticCode });
+        setListings([]);
+        setInventoryState('FAILED');
+        setError(copy(
+          'public.home.failed',
+          code.includes('app-check')
+            ? 'Verified homes could not be loaded because secure app verification failed. Please refresh and try again.'
+            : 'Verified homes could not be loaded right now. Please try again later.',
+          'تعذر تحميل المنازل الموثقة حالياً. يرجى تحديث الصفحة والمحاولة مرة أخرى.',
+        ));
       } finally {
         setLoading(false);
       }
@@ -107,7 +123,7 @@ export default function PublicHomeDiscoveryPage() {
             </Grid>
           </Paper>
 
-          {error && <Alert severity="warning">{error}</Alert>}
+          {inventoryState === 'FAILED' && error && <Alert severity="error" data-testid="public-home-load-failed">{error}</Alert>}
           {loading ? <Box sx={{ display: 'grid', placeItems: 'center', py: 10 }}><CircularProgress sx={{ color: gold }} /></Box> : (
             <Grid container spacing={2.5}>
               {filtered.map((item) => (
@@ -125,7 +141,7 @@ export default function PublicHomeDiscoveryPage() {
                   </Paper>
                 </Grid>
               ))}
-              {!filtered.length && <Grid item xs={12}><Paper sx={{ p: 5, textAlign: 'center', borderRadius: 4, bgcolor: binThemeTokens.softCanvas }}><Typography variant="h6" sx={{ fontWeight: 900 }}>{copy('public.home.none', 'No verified public listings match those filters yet.', 'لا توجد إعلانات عامة موثقة تطابق عوامل التصفية حالياً.')}</Typography></Paper></Grid>}
+              {inventoryState !== 'FAILED' && !filtered.length && <Grid item xs={12}><Paper data-testid="public-home-empty" sx={{ p: 5, textAlign: 'center', borderRadius: 4, bgcolor: binThemeTokens.softCanvas }}><Typography variant="h6" sx={{ fontWeight: 900 }}>{listings.length === 0 ? copy('public.home.noneInventory', 'There are currently zero verified public listings.', 'لا توجد حالياً أي إعلانات عامة موثقة.') : copy('public.home.none', 'No verified public listings match those filters yet.', 'لا توجد إعلانات عامة موثقة تطابق عوامل التصفية حالياً.')}</Typography></Paper></Grid>}
             </Grid>
           )}
         </Stack>

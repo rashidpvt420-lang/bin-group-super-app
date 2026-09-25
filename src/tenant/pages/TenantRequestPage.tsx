@@ -149,6 +149,7 @@ export default function TenantRequestPage() {
     const [propertyData, setPropertyData] = useState<any>(null);
     const [unitData, setUnitData] = useState<any>(null);
     const [residenceChecked, setResidenceChecked] = useState(false);
+    const [residenceLoadError, setResidenceLoadError] = useState('');
     const [photos, setPhotos] = useState<File[]>([]);
     const [previews, setPreviews] = useState<string[]>([]);
     const [isOwnerSuspended, setIsOwnerSuspended] = useState(false);
@@ -170,6 +171,7 @@ export default function TenantRequestPage() {
                 setResidenceChecked(true);
                 return;
             }
+            setResidenceLoadError('');
             try {
                 const unitCandidates = new Map<string, any>();
                 const addUnit = (id: string, data: any) => {
@@ -227,8 +229,16 @@ export default function TenantRequestPage() {
                     const ownerStatus = ownerSnap.exists() ? String(ownerSnap.data()?.status || '').toLowerCase() : '';
                     setIsOwnerSuspended(ownerStatus === 'suspended');
                 }
-            } catch (error) {
-                console.warn('Residence lookup failed:', error);
+            } catch (error: any) {
+                const code = String(error?.code || '').toLowerCase();
+                console.warn('Residence lookup failed:', { code });
+                setUnitData(null);
+                setPropertyData(null);
+                setResidenceLoadError(
+                    code.includes('permission-denied')
+                        ? 'Residence details could not be loaded because access was denied. Refresh your session or contact BIN GROUP Operations.'
+                        : 'Residence details could not be loaded. This is a data-loading failure, not confirmation that no unit is linked. Please retry or contact BIN GROUP Operations.',
+                );
             } finally {
                 setResidenceChecked(true);
             }
@@ -380,8 +390,16 @@ export default function TenantRequestPage() {
         );
     }
 
+    if (residenceLoadError) {
+        return (
+            <Paper data-testid="tenant-residence-load-failed" sx={{ p: 5, bgcolor: 'rgba(22,22,24,.7)', border: '1px solid #ef4444' }}>
+                <Alert severity="error">{residenceLoadError}</Alert>
+            </Paper>
+        );
+    }
+
     if (!unitData) {
-        return <TenantUnitLinkFallback message="A unit must be verified before a maintenance request can be dispatched." />;
+        return <TenantUnitLinkFallback message="No verified unit link was found. Submit a unit-link request before maintenance can be dispatched." />;
     }
 
     return (

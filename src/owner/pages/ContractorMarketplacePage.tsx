@@ -163,13 +163,10 @@ export default function ContractorMarketplacePage() {
     );
 
     const unsubCatalog = onSnapshot(
-      query(collection(db, 'contractorProfiles'), where('active', '==', true)),
-      (snap) => setCatalog(snap.docs.map((item) => ({ id: item.id, ...item.data() } as OwnerHomeRecord)).filter((item) => {
-        if (!isHomeListing(item)) return false;
-        return String(item.ownerEmail || '').toLowerCase() === ownerEmail || item.id === user?.uid;
-      })),
+      query(collection(db, 'contractorProfiles'), where('ownerEmail', '==', ownerEmail)),
+      (snap) => setCatalog(snap.docs.map((item) => ({ id: item.id, ...item.data() } as OwnerHomeRecord)).filter(isHomeListing)),
       (err) => {
-        console.warn('[OwnerHomeDiscovery] published listing listener failed:', err);
+        console.warn('[OwnerHomeDiscovery] owner-scoped listing listener failed:', err);
         setCatalog([]);
       },
     );

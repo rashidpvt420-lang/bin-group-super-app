@@ -1,7 +1,24 @@
+import * as admin from "firebase-admin";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { tenantRequestUnitLink as legacyTenantRequestUnitLink } from "./profileP1Workflows";
 
+if (!admin.apps.length) admin.initializeApp();
+
 const text = (value: unknown, maxLength = 500) => String(value ?? "").trim().slice(0, maxLength);
+
+async function requireCurrentTenant(auth: any) {
+  if (!auth?.uid) throw new HttpsError("unauthenticated", "Tenant login required.");
+  const tokenRole = text(auth.token?.role || auth.token?.userRole || auth.token?.primaryRole, 40).toLowerCase();
+  if (tokenRole !== "tenant" || auth.token?.suspended === true) {
+    throw new HttpsError("permission-denied", "Tenant role required.");
+  }
+  const record = await admin.auth().getUser(auth.uid);
+  const claims = record.customClaims || {};
+  const currentRole = text(claims.role || claims.userRole || claims.primaryRole, 40).toLowerCase();
+  if (record.disabled || !record.emailVerified || claims.suspended === true || currentRole !== "tenant") {
+    throw new HttpsError("permission-denied", "Current verified tenant authority is required.");
+  }
+}
 
 export function assertTenantUnitLinkRequest(data: any) {
   const propertyName = text(data?.propertyName, 180);
@@ -27,12 +44,7 @@ export function assertTenantUnitLinkRequest(data: any) {
 export const tenantRequestUnitLink = onCall(
   { cors: true, region: "europe-west3", enforceAppCheck: true },
   async (request) => {
-    if (!request.auth?.uid) throw new HttpsError("unauthenticated", "Tenant login required.");
-    const role = text(
-      request.auth.token?.role || request.auth.token?.userRole || request.auth.token?.primaryRole,
-      40,
-    ).toLowerCase();
-    if (role !== "tenant") throw new HttpsError("permission-denied", "Tenant role required.");
+    await requireCurrentTenant(request.auth);
 
     const validated = assertTenantUnitLinkRequest(request.data || {});
     request.data = validated;

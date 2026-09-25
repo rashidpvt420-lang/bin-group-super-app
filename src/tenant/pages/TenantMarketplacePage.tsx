@@ -44,17 +44,9 @@ import {
 } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { useRole } from '../../context/RoleContext';
-import { addDoc, collection, db, onSnapshot, query, serverTimestamp, where } from '../../lib/firebase';
+import { functions, httpsCallable } from '../../lib/firebase';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import SafeIcon from '../../components/SafeIcon';
-
-type RepairRow = {
-  date?: string;
-  title?: string;
-  issue?: string;
-  status?: string;
-  cost?: number;
-};
 
 type HomeListing = {
   id: string;
@@ -68,7 +60,7 @@ type HomeListing = {
   title?: string;
   unitTitle?: string;
   propertyName?: string;
-  propertyAddress?: string;
+  publicLocationQuery?: string;
   area?: string;
   community?: string;
   city?: string;
@@ -84,24 +76,14 @@ type HomeListing = {
   availableFrom?: string;
   numberOfCheques?: number;
   securityDeposit?: number;
-  ownerId?: string;
-  ownerEmail?: string;
-  propertyId?: string;
   imageUrls?: string[];
   photos?: string[];
   coverImageUrl?: string;
   imageUrl?: string;
   amenities?: string[];
-  latitude?: number;
-  longitude?: number;
-  lat?: number;
-  lng?: number;
   permitNumber?: string;
   permitVerified?: boolean;
   permitVerificationUrl?: string;
-  repairHistory?: RepairRow[];
-  repairHistorySummary?: string;
-  contractScope?: string;
 };
 
 type FilterState = {
@@ -117,14 +99,6 @@ type FilterState = {
 const gold = binThemeTokens.gold;
 const FAVORITES_KEY = 'bin_tenant_home_favorites_v1';
 const SAVED_SEARCH_KEY = 'bin_tenant_home_search_v1';
-const HOME_RECORD_TYPES = new Set([
-  'ROOM_RENT_LISTING',
-  'FIND_ROOM_RENT',
-  'HOME_RENT_LISTING',
-  'PROPERTY_RENT_LISTING',
-  'RENTAL_LISTING',
-]);
-
 const emptyFilters: FilterState = {
   query: '',
   propertyType: 'ALL',
@@ -161,17 +135,6 @@ function titleCase(value: unknown, fallback = '') {
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
-function isHomeRentListing(row: HomeListing) {
-  const recordType = String(row.recordType || row.listingType || '').toUpperCase();
-  const status = String(row.status || 'AVAILABLE').toUpperCase();
-  return HOME_RECORD_TYPES.has(recordType)
-    && row.active !== false
-    && row.approved !== false
-    && row.hasBinContract !== false
-    && row.notRented !== false
-    && !['RENTED', 'CLOSED', 'INACTIVE', 'WITHDRAWN'].includes(status);
-}
-
 function listingImages(listing: HomeListing) {
   const values = [
     ...(Array.isArray(listing.imageUrls) ? listing.imageUrls : []),
@@ -183,9 +146,9 @@ function listingImages(listing: HomeListing) {
 }
 
 function locationLabel(listing: HomeListing) {
-  return [listing.area || listing.community || listing.city, listing.emirate]
+  return listing.publicLocationQuery || [listing.area || listing.community || listing.city, listing.emirate]
     .filter(Boolean)
-    .join(', ') || listing.propertyAddress || 'UAE';
+    .join(', ') || 'UAE';
 }
 
 function listingTypeLabel(listing: HomeListing) {
@@ -203,7 +166,6 @@ function matchesQuery(listing: HomeListing, filters: FilterState) {
     listing.title,
     listing.unitTitle,
     listing.propertyName,
-    listing.propertyAddress,
     listing.area,
     listing.community,
     listing.city,
@@ -249,6 +211,8 @@ export default function TenantMarketplacePage() {
   const { user } = useRole();
   const [loading, setLoading] = useState(true);
   const [listings, setListings] = useState<HomeListing[]>([]);
+  const [catalogState, setCatalogState] = useState<'LOADING' | 'AVAILABLE' | 'EMPTY' | 'FAILED'>('LOADING');
+  const [catalogError, setCatalogError] = useState('');
   const [filters, setFilters] = useState<FilterState>(() => {
     try {
       const saved = JSON.parse(localStorage.getItem(SAVED_SEARCH_KEY) || 'null');
@@ -271,16 +235,38 @@ export default function TenantMarketplacePage() {
   const copy = (key: string, en: string, ar: string) => (lang === 'ar' ? ar : tx(key, en));
 
   useEffect(() => {
-    const listingsQuery = query(collection(db, 'contractorProfiles'), where('active', '==', true));
-    const unsub = onSnapshot(listingsQuery, (snap) => {
-      setListings(snap.docs.map((item) => ({ id: item.id, ...item.data() } as HomeListing)).filter(isHomeRentListing));
-      setLoading(false);
-    }, (err) => {
-      console.warn('[TenantHomeDiscovery] listing listener failed:', err);
-      setListings([]);
-      setLoading(false);
-    });
-    return () => unsub();
+    let cancelled = false;
+    const load = async () => {
+      setLoading(true);
+      setCatalogState('LOADING');
+      setCatalogError('');
+      try {
+        const call = httpsCallable(functions, 'getPublicHomeDiscoveryListings');
+        const result: any = await call({});
+        const nextListings = (Array.isArray(result?.data?.listings) ? result.data.listings : []) as HomeListing[];
+        if (cancelled) return;
+        setListings(nextListings);
+        setCatalogState(nextListings.length > 0 ? 'AVAILABLE' : 'EMPTY');
+      } catch (err: any) {
+        const code = String(err?.code || '').toLowerCase();
+        const diagnosticCode = String(err?.details?.diagnosticCode || '');
+        console.warn('[TenantHomeDiscovery] sanitized listing load failed:', { code, diagnosticCode });
+        if (cancelled) return;
+        setListings([]);
+        setCatalogState('FAILED');
+        setCatalogError(copy(
+          'tenant.home.loadFailed',
+          code.includes('app-check')
+            ? 'Home discovery could not verify this app session. Refresh and try again.'
+            : 'Home discovery could not load verified inventory. Please try again or contact BIN GROUP support.',
+          'تعذر تحميل العقارات الموثقة. يرجى المحاولة مرة أخرى أو التواصل مع دعم BIN GROUP.',
+        ));
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+    void load();
+    return () => { cancelled = true; };
   }, []);
 
   const propertyTypes = useMemo(() => [...new Set(listings.map((item) => String(item.propertyType || '').toUpperCase()).filter(Boolean))].sort(), [listings]);
@@ -317,30 +303,21 @@ export default function TenantMarketplacePage() {
     setSubmittingKey(key);
     setNotice('');
     try {
-      await addDoc(collection(db, 'jobPostings'), {
-        type: 'ROOM_RENT_APPLICATION',
-        applicationKind: 'HOME_RENT_APPLICATION',
-        requestMode,
-        source: 'tenant_home_discovery_v1',
+      const submit = httpsCallable(functions, 'submitHomeDiscoveryInterest');
+      let clientRequestId = '';
+      if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+        clientRequestId = `tenant_home_${crypto.randomUUID()}`;
+      } else if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
+        const bytes = new Uint8Array(16);
+        crypto.getRandomValues(bytes);
+        clientRequestId = `tenant_home_${Array.from(bytes, (value) => value.toString(16).padStart(2, '0')).join('')}`;
+      } else {
+        throw new Error('Secure browser randomness is required to submit a home request.');
+      }
+      await submit({
         listingId: listing.id,
-        listingTitle: listing.unitTitle || listing.title || listing.propertyName || 'BIN home listing',
-        propertyId: listing.propertyId || null,
-        propertyType: listing.propertyType || null,
-        propertyAddress: listing.propertyAddress || null,
-        area: listing.area || listing.community || null,
-        emirate: listing.emirate || null,
-        annualRent: annualRentValue(listing) || null,
-        ownerId: listing.ownerId || null,
-        ownerEmail: String(listing.ownerEmail || '').toLowerCase(),
-        tenantId: user.uid,
-        tenantEmail: String(user.email || '').toLowerCase(),
-        tenantName: user.displayName || user.email,
-        tenantLifecycleStage: 'APPLICANT',
-        status: 'OPEN',
-        stage: requestMode === 'VIEWING' ? 'VIEWING_REQUESTED' : 'APPLICATION_SUBMITTED',
-        requestedContractHandling: requestMode === 'APPLY',
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
+        requestMode,
+        clientRequestId,
       });
       setNotice(requestMode === 'VIEWING'
         ? copy('tenant.home.viewingSent', 'Viewing request sent. BIN GROUP will coordinate the next available time.', 'تم إرسال طلب المعاينة. ستقوم BIN GROUP بتنسيق أقرب موعد متاح.')
@@ -360,6 +337,11 @@ export default function TenantMarketplacePage() {
   return (
     <Box sx={{ py: 1, direction: isRTL ? 'rtl' : 'ltr' }}>
       <Stack spacing={3.5}>
+        {catalogState === 'FAILED' && (
+          <Paper data-testid="tenant-home-load-failed" sx={{ p: 3, borderRadius: 4, border: '1px solid #ef4444', bgcolor: alpha('#ef4444', 0.05) }}>
+            <Typography sx={{ color: '#b91c1c', fontWeight: 950 }}>{catalogError}</Typography>
+          </Paper>
+        )}
         <Paper sx={{ p: { xs: 3, md: 4.5 }, bgcolor: '#fff', border: `1px solid ${alpha(gold, 0.24)}`, borderRadius: 6, boxShadow: '0 22px 60px rgba(15,23,42,0.09)', overflow: 'hidden', position: 'relative' }}>
           <Box sx={{ position: 'absolute', width: 220, height: 220, borderRadius: '50%', bgcolor: alpha(gold, 0.08), top: -110, right: isRTL ? 'auto' : -80, left: isRTL ? -80 : 'auto' }} />
           <Stack spacing={2.3} sx={{ position: 'relative' }}>
@@ -538,7 +520,11 @@ export default function TenantMarketplacePage() {
           <Paper sx={{ p: { xs: 4, md: 6 }, textAlign: 'center', bgcolor: '#fff', border: `1px dashed ${alpha(gold, 0.4)}`, borderRadius: 5 }}>
             <SafeIcon icon={Home} size={48} style={{ color: alpha(gold, 0.5), margin: '0 auto' }} />
             <Typography variant="h6" sx={{ color: binThemeTokens.textPrimary, fontWeight: 950, mt: 2 }}>
-              {listings.length === 0 ? copy('tenant.home.none', 'No BIN-verified homes are available right now.', 'لا توجد عقارات موثقة من BIN متاحة حالياً.') : copy('tenant.home.noMatch', 'No homes match these filters yet.', 'لا توجد عقارات مطابقة لعوامل التصفية حالياً.')}
+              {catalogState === 'FAILED'
+                ? copy('tenant.home.failedTitle', 'Verified inventory failed to load.', 'فشل تحميل العقارات الموثقة.')
+                : listings.length === 0
+                  ? copy('tenant.home.none', 'There are currently zero BIN-verified homes available.', 'لا توجد حالياً عقارات موثقة من BIN متاحة.')
+                  : copy('tenant.home.noMatch', 'No homes match these filters yet.', 'لا توجد عقارات مطابقة لعوامل التصفية حالياً.')}
             </Typography>
             <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary, mt: 1, maxWidth: 620, mx: 'auto' }}>
               {copy('tenant.home.noneDesc', 'Adjust your filters or save your search. New approved owner inventory will appear here when it becomes available.', 'عدّل عوامل التصفية أو احفظ بحثك. ستظهر هنا عقارات الملاك المعتمدة الجديدة عند توفرها.')}
@@ -552,10 +538,9 @@ export default function TenantMarketplacePage() {
         {selected && (() => {
           const images = listingImages(selected);
           const annualRent = annualRentValue(selected);
-          const repairs = Array.isArray(selected.repairHistory) ? selected.repairHistory.slice(0, 4) : [];
-          const lat = numberValue(selected.latitude || selected.lat);
-          const lng = numberValue(selected.longitude || selected.lng);
-          const mapHref = lat && lng ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${lat},${lng}`)}` : selected.propertyAddress ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(selected.propertyAddress)}` : '';
+          const mapHref = selected.publicLocationQuery
+            ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(selected.publicLocationQuery)}`
+            : '';
           return (
             <>
               <DialogTitle sx={{ fontWeight: 950, pb: 1 }}>{selected.unitTitle || selected.title || selected.propertyName || copy('tenant.home.defaultTitle', 'Available BIN home', 'عقار BIN متاح')}</DialogTitle>
@@ -574,7 +559,7 @@ export default function TenantMarketplacePage() {
                   <Stack direction={{ xs: 'column', sm: isRTL ? 'row-reverse' : 'row' }} justifyContent="space-between" spacing={2}>
                     <Box sx={{ textAlign: isRTL ? 'right' : 'left' }}>
                       <Typography variant="h4" sx={{ color: binThemeTokens.goldHover, fontWeight: 950 }}>{annualRent > 0 ? money(annualRent) : money(selected.monthlyRent)}</Typography>
-                      <Typography sx={{ color: binThemeTokens.textSecondary, fontWeight: 750 }}>{selected.propertyAddress || locationLabel(selected)}</Typography>
+                      <Typography sx={{ color: binThemeTokens.textSecondary, fontWeight: 750 }}>{locationLabel(selected)}</Typography>
                     </Box>
                     <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap alignContent="flex-start">
                       <Chip icon={<SafeIcon icon={ShieldCheck} size={14} />} label={copy('tenant.home.binManaged', 'BIN managed / verified', 'تديرها / موثقة من BIN')} sx={{ bgcolor: alpha('#16A34A', 0.1), color: '#15803D', fontWeight: 900 }} />
@@ -631,16 +616,13 @@ export default function TenantMarketplacePage() {
                       <SafeIcon icon={Wrench} size={17} style={{ color: binThemeTokens.goldHover }} />
                       <Typography variant="h6" sx={{ fontWeight: 950 }}>{copy('tenant.home.repairHistory', 'Maintenance history', 'سجل الصيانة')}</Typography>
                     </Stack>
-                    {repairs.length > 0 ? (
-                      <Stack spacing={1}>
-                        {repairs.map((repair, index) => (
-                          <Paper key={`${selected.id}-repair-${index}`} sx={{ p: 1.7, bgcolor: '#FAFAFB', border: `1px solid ${binThemeTokens.border}`, borderRadius: 2.5 }}>
-                            <Typography sx={{ fontWeight: 900 }}>{repair.title || repair.issue || copy('tenant.home.repairCompleted', 'Maintenance completed', 'تمت الصيانة')}</Typography>
-                            <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary }}>{[repair.date, repair.status].filter(Boolean).join(' · ')}</Typography>
-                          </Paper>
-                        ))}
-                      </Stack>
-                    ) : <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary }}>{selected.repairHistorySummary || copy('tenant.home.noRepairHistory', 'No unresolved repair history is published for this home.', 'لا يوجد سجل صيانة غير محلول منشور لهذا العقار.')}</Typography>}
+                    <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary }}>
+                      {copy(
+                        'tenant.home.noPrivateMaintenance',
+                        'Only a privacy-safe availability summary is published before tenancy. Private repair records remain protected.',
+                        'يتم عرض ملخص آمن للخصوصية فقط قبل بدء الإيجار. تبقى سجلات الصيانة الخاصة محمية.',
+                      )}
+                    </Typography>
                   </Box>
 
                   {(mapHref || selected.permitNumber || selected.permitVerificationUrl) && (
