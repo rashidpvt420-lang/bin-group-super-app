@@ -25,6 +25,7 @@ test('live inspection-first Owner mobilisation path preserves fils and allows on
   assert.match(source, /const money = \(value: unknown\) => Math\.round\(finite\(value\) \* 100\) \/ 100;/);
   assert.match(source, /if \(!\["CASH", "CHEQUE"\]\.includes\(method\)\)/);
   assert.match(source, /Phase 1 Owner activation accepts Cash or Cheque only/);
-  assert.match(source, /Math\.abs\(amountReceived - expectedAmount\) > 0\.01/);
+  assert.match(source, /amountReceived !== expectedAmount/);
+  assert.match(source, /exactly to the fils/);
   assert.match(source, /loadActivePaymentConfiguration\(\)/);
 });
