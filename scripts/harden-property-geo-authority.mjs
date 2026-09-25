@@ -58,6 +58,8 @@ for (const name of [
   'submittedPropertyGeoIsUnverified',
   'propertyCreateHasNoCanonicalGeo',
   'canonicalPropertyGeoUnchanged',
+  'propertyActivationAuthorityUnchanged',
+  'propertyCreateHasNoActivationAuthority',
   'safeManagedPropertyUpdate',
   'safeOwnerPropertyCreate',
   'safeOwnerPropertyUpdate',
@@ -116,39 +118,66 @@ const propertyFunctions = `    function submittedPropertyGeoIsUnverified(data) {
       ]);
     }
 
+    function propertyActivationAuthorityUnchanged() {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+        'status',
+        'approvalStatus',
+        'onboardingStatus',
+        'canonicalOnboardingState',
+        'activationStatus',
+        'paymentStatus',
+        'paymentVerified',
+        'adminApproved',
+        'approved',
+        'contractActivated',
+        'dashboardUnlocked',
+        'dashboardLocked',
+        'dashboardUnlockApproved',
+        'unlocksDashboard',
+        'activeContractId',
+        'quoteHash',
+        'quoteSnapshot',
+        'quoteVersion',
+        'inspectionId',
+        'inspectionIds',
+        'inspectionStatus',
+        'inspectionVerified',
+        'inspectionEvidenceVerified',
+        'adminSiteVisitVerified',
+        'locationVerified',
+        'activatedAt',
+        'approvedAt',
+        'approvedBy',
+        'reviewedAt',
+        'reviewedBy',
+        'reviewedByRole',
+        'rejectedAt',
+        'rejectedBy',
+        'ownerId',
+        'ownerUid'
+      ]);
+    }
+
+    function propertyCreateHasNoActivationAuthority(data) {
+      return !(data.get('status', '') in ['active', 'ACTIVE', 'approved', 'APPROVED']) &&
+        !(data.get('activationStatus', '') in ['active', 'ACTIVE', 'approved', 'APPROVED']) &&
+        data.get('paymentVerified', false) == false &&
+        data.get('adminApproved', false) == false &&
+        data.get('approved', false) == false &&
+        data.get('contractActivated', false) == false &&
+        data.get('dashboardUnlocked', false) == false &&
+        data.get('dashboardUnlockApproved', false) == false &&
+        data.get('unlocksDashboard', false) == false &&
+        data.get('inspectionVerified', false) == false &&
+        data.get('inspectionEvidenceVerified', false) == false &&
+        data.get('adminSiteVisitVerified', false) == false &&
+        data.get('locationVerified', false) == false;
+    }
+
     function safeManagedPropertyUpdate() {
       return canonicalPropertyGeoUnchanged() &&
-        submittedPropertyGeoIsUnverified(request.resource.data);
-    }
-
-    function safeOwnerPropertyCreate(data) {
-      return ownerDraftCreate(data) && propertyCreateHasNoCanonicalGeo(data);
-    }
-
-    function safeOwnerPropertyUpdate() {
-      return signedIn() &&
-        owns(resource.data) &&
-        request.resource.data.get('ownerId', null) == resource.data.get('ownerId', null) &&
-        request.resource.data.get('ownerUid', null) == resource.data.get('ownerUid', null) &&
-        safeManagedPropertyUpdate() &&
-        !request.resource.data.diff(resource.data).affectedKeys().hasAny([
-          'status',
-          'activationStatus',
-          'paymentStatus',
-          'paymentVerified',
-          'adminApproved',
-          'approved',
-          'contractActivated',
-          'dashboardUnlocked',
-          'dashboardUnlockApproved',
-          'unlocksDashboard',
-          'activeContractId',
-          'quoteHash',
-          'quoteSnapshot',
-          'quoteVersion',
-          'ownerId',
-          'ownerUid'
-        ]);
+        submittedPropertyGeoIsUnverified(request.resource.data) &&
+        propertyActivationAuthorityUnchanged();
     }
 
 `;
@@ -160,12 +189,12 @@ const propertyBlock = `    match /properties/{propertyId} {
       allow get: if isNotSuspended() && getTenantPropertyId() == propertyId;
       allow read: if isNotSuspended() && (canManageProperties() || ownerCanRead(resource.data) || tenantOwns(resource.data) || (isTechnicianActor() && techOwns(resource.data)));
       allow create: if isNotSuspended() &&
+        canManageProperties() &&
         propertyCreateHasNoCanonicalGeo(request.resource.data) &&
-        (canManageProperties() || ownerDraftCreate(request.resource.data));
-      allow update: if isNotSuspended() && (
-        (canManageProperties() && safeManagedPropertyUpdate()) ||
-        safeOwnerPropertyUpdate()
-      );
+        propertyCreateHasNoActivationAuthority(request.resource.data);
+      allow update: if isNotSuspended() &&
+        canManageProperties() &&
+        safeManagedPropertyUpdate();
       allow delete: if isNotSuspended() && isAdmin();
     }`;
 replaceMatchBlock('    match /properties/{propertyId} {', propertyBlock);
@@ -174,9 +203,9 @@ for (const name of [
   'submittedPropertyGeoIsUnverified',
   'propertyCreateHasNoCanonicalGeo',
   'canonicalPropertyGeoUnchanged',
+  'propertyActivationAuthorityUnchanged',
+  'propertyCreateHasNoActivationAuthority',
   'safeManagedPropertyUpdate',
-  'safeOwnerPropertyCreate',
-  'safeOwnerPropertyUpdate',
 ]) {
   if (rules.split(`function ${name}(`).length - 1 !== 1) {
     throw new Error(`[property-geo-authority] ${name} must exist exactly once.`);
@@ -198,4 +227,4 @@ if ((catchAll.match(/'properties'/g) || []).length !== 2) {
 }
 
 writeFileSync(rulesPath, rules);
-console.log('[property-geo-authority] Browser property writes are evidence-only; canonical geo is server-authoritative.');
+console.log('[property-geo-authority] Owner property writes are server-callable only; Admin browser metadata writes cannot mutate geo, inspection, payment, or activation authority.');
