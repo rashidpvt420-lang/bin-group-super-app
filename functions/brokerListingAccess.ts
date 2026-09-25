@@ -1,5 +1,6 @@
 import * as admin from "firebase-admin";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
+import type * as FirebaseFirestore from "firebase-admin/firestore";
 
 if (!admin.apps.length) admin.initializeApp();
 const db = admin.firestore();
