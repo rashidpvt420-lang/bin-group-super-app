@@ -459,7 +459,7 @@ export const submitAIDesignRequest = onCall({
       status,
       workflowStage: status,
       approvalStatus,
-      quoteStatus: role === "tenant" ? "PENDING_OWNER_APPROVAL" : "DEPOSIT_PENDING",
+      quoteStatus: role === "tenant" ? "PRESENTED" : "READY",
       paymentStatus: "NOT_STARTED",
       adminHandoffStatus: role === "tenant" ? "WAITING_OWNER_APPROVAL" : "PAYMENT_NOT_STARTED",
       engineerHandoffStatus: "WAITING_PAYMENT",
@@ -479,7 +479,7 @@ export const submitAIDesignRequest = onCall({
         tenantId: role === "tenant" ? uid : null,
         quote,
         quoteHash: quote.quoteHash,
-        status: role === "tenant" ? "PENDING_OWNER_APPROVAL" : "DEPOSIT_PENDING",
+        status: role === "tenant" ? "PRESENTED" : "READY",
         createdAt: now,
         updatedAt: now,
       });
