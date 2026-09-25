@@ -19,6 +19,40 @@ const CONFIGURED_ANDROID_APP_ID = String(
 
 const text = (value: unknown) => String(value || "").trim();
 const role = (value: unknown) => text(value).toLowerCase();
+const DEVICE_RESET_ADMIN_ROLES = new Set(["admin", "super_admin", "ceo"]);
+
+async function requireDeviceResetAdmin(auth: any) {
+  if (!auth?.uid) throw new HttpsError("unauthenticated", "Admin login required.");
+  const token = auth.token || {};
+  const tokenRole = role(token.role || token.userRole || token.primaryRole);
+  const tokenAuthorized =
+    token.suspended !== true &&
+    (token.admin === true ||
+      token.isAdmin === true ||
+      token.superAdmin === true ||
+      token.super_admin === true ||
+      token.ceo === true ||
+      DEVICE_RESET_ADMIN_ROLES.has(tokenRole));
+  if (!tokenAuthorized || token.email_verified !== true || !token.firebase?.sign_in_second_factor) {
+    throw new HttpsError("permission-denied", "A verified Founder/Admin MFA session is required for Technician device re-registration.");
+  }
+
+  const record = await admin.auth().getUser(auth.uid);
+  const claims = record.customClaims || {};
+  const currentRole = role(claims.role || claims.userRole || claims.primaryRole);
+  const currentAuthorized =
+    claims.suspended !== true &&
+    (claims.admin === true ||
+      claims.isAdmin === true ||
+      claims.superAdmin === true ||
+      claims.super_admin === true ||
+      claims.ceo === true ||
+      DEVICE_RESET_ADMIN_ROLES.has(currentRole));
+  if (record.disabled || !record.emailVerified || !currentAuthorized) {
+    throw new HttpsError("permission-denied", "Current Founder/Admin authority is inactive or no longer valid.");
+  }
+  return { uid: auth.uid, role: tokenRole || "admin", email: text(token.email || record.email).toLowerCase() };
+}
 
 function claimedRole(auth: any): string {
   const token = auth?.token || {};
@@ -162,9 +196,12 @@ export const registerTechnicianDevice = onCall(
           : FieldValue.serverTimestamp();
         const registration = {
           deviceRegistered: true,
+          deviceVerified: true,
           registeredInstallationHash: installationHash,
           registeredDevicePlatform: "android",
           deviceRegisteredAt: registeredAt,
+          deviceReRegistrationRequired: false,
+          deviceRegistrationResetReason: FieldValue.delete(),
           updatedAt: FieldValue.serverTimestamp(),
         };
 
@@ -199,6 +236,127 @@ export const registerTechnicianDevice = onCall(
       }
       throw error;
     }
+  },
+);
+
+export const adminResetTechnicianDeviceRegistration = onCall(
+  { cors: true, region: "europe-west3", enforceAppCheck: true },
+  async (request) => {
+    const actor = await requireDeviceResetAdmin(request.auth);
+    const technicianId = text(request.data?.technicianId);
+    const reason = text(request.data?.reason);
+    if (!technicianId) throw new HttpsError("invalid-argument", "technicianId is required.");
+    if (reason.length < 8 || reason.length > 500) {
+      throw new HttpsError("invalid-argument", "A device reset reason of 8 to 500 characters is required.");
+    }
+    if (technicianId === actor.uid) {
+      throw new HttpsError("permission-denied", "Admin self-targeting is not permitted for Technician device reset.");
+    }
+
+    const authUser = await admin.auth().getUser(technicianId);
+    const authRole = role(
+      authUser.customClaims?.role ||
+      authUser.customClaims?.userRole ||
+      authUser.customClaims?.primaryRole,
+    );
+    if (authRole !== "technician") {
+      throw new HttpsError("failed-precondition", "Target Firebase Auth identity is not a Technician.");
+    }
+
+    // Revoke existing sessions before the audit records a successful reset.
+    // If the transactional reset fails afterwards, the Technician must simply sign in again.
+    await admin.auth().revokeRefreshTokens(technicianId);
+
+    const userRef = db.collection("users").doc(technicianId);
+    const technicianRef = db.collection("technicians").doc(technicianId);
+    const liveRef = db.collection("technician_live_locations").doc(technicianId);
+    const auditRef = db.collection("audit_logs").doc();
+    const now = FieldValue.serverTimestamp();
+
+    await db.runTransaction(async (transaction) => {
+      const [userSnap, technicianSnap, liveSnap] = await Promise.all([
+        transaction.get(userRef),
+        transaction.get(technicianRef),
+        transaction.get(liveRef),
+      ]);
+      if (!userSnap.exists || !technicianSnap.exists) {
+        throw new HttpsError("failed-precondition", "Both Technician identity registries are required before device reset.");
+      }
+      const user = userSnap.data() || {};
+      const technician = technicianSnap.data() || {};
+      const live = liveSnap.data() || {};
+      const activeTicketId = text(live.activeTicketId || technician.activeTicketId || user.activeTicketId);
+      const activeTicketRef = activeTicketId ? db.collection("maintenanceTickets").doc(activeTicketId) : null;
+      const activeTicketSnap = activeTicketRef ? await transaction.get(activeTicketRef) : null;
+      if (
+        role(user.role || user.userRole || user.primaryRole) !== "technician" ||
+        role(technician.role || technician.userRole || technician.primaryRole) !== "technician"
+      ) {
+        throw new HttpsError("failed-precondition", "Target profile is not consistently registered as a Technician.");
+      }
+
+      const resetPatch = {
+        deviceRegistered: false,
+        deviceVerified: false,
+        registeredInstallationHash: FieldValue.delete(),
+        registeredDeviceIdHash: FieldValue.delete(),
+        registeredDeviceId: FieldValue.delete(),
+        currentDeviceId: FieldValue.delete(),
+        deviceId: FieldValue.delete(),
+        registeredDevicePlatform: FieldValue.delete(),
+        deviceRegisteredAt: FieldValue.delete(),
+        deviceReRegistrationRequired: true,
+        deviceRegistrationResetAt: now,
+        deviceRegistrationResetBy: actor.uid,
+        deviceRegistrationResetReason: reason,
+        isTracking: false,
+        updatedAt: now,
+      };
+      transaction.set(userRef, resetPatch, { merge: true });
+      transaction.set(technicianRef, resetPatch, { merge: true });
+      transaction.set(liveRef, {
+        technicianUid: technicianId,
+        activeTicketId: null,
+        isTracking: false,
+        stopReason: "ADMIN_DEVICE_REREGISTRATION",
+        stoppedAt: now,
+        serverUpdatedAt: now,
+        expiresAt: now,
+        updatedAt: now,
+      }, { merge: true });
+      if (activeTicketRef && activeTicketSnap?.exists) {
+        transaction.set(activeTicketRef, {
+          trackingStatus: "STOPPED_DEVICE_REREGISTRATION",
+          technicianLocationExpiresAt: now,
+          trackingReconciledAt: now,
+          updatedAt: now,
+        }, { merge: true });
+      }
+      transaction.set(auditRef, {
+        action: "ADMIN_RESET_TECHNICIAN_DEVICE_REGISTRATION",
+        actorId: actor.uid,
+        actorEmail: actor.email || null,
+        actorRole: actor.role,
+        targetType: "technicians",
+        targetId: technicianId,
+        reason,
+        metadata: {
+          previousDeviceRegistered: user.deviceRegistered === true || technician.deviceRegistered === true,
+          previousPlatform: text(technician.registeredDevicePlatform || user.registeredDevicePlatform) || null,
+          rawDeviceIdentityExcluded: true,
+          refreshTokensRevoked: true,
+          activeTicketTrackingStopped: Boolean(activeTicketRef && activeTicketSnap?.exists),
+        },
+        createdAt: now,
+      });
+    });
+
+    return {
+      status: "RESET_REQUIRED",
+      technicianId,
+      reRegistrationRequired: true,
+      refreshTokensRevoked: true,
+    };
   },
 );
 

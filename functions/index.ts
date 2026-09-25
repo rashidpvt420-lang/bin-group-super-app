@@ -390,9 +390,10 @@ export const updateTicketLifecycle = onCall({ cors: true }, async (request) => {
             if (
                 !Number.isFinite(lat) || !Number.isFinite(lng) ||
                 lat < -90 || lat > 90 || lng < -180 || lng > 180 ||
+                (lat === 0 && lng === 0) ||
                 !Number.isFinite(accuracy) || accuracy <= 0 || accuracy > 100
             ) {
-                throw new HttpsError("invalid-argument", "Arrival GPS must include coordinates with accuracy of 100 metres or better.");
+                throw new HttpsError("invalid-argument", "Arrival GPS must include non-zero coordinates with accuracy of 100 metres or better.");
             }
             let propertyGeo = normalizeGeo(ticketData.jobLocation || ticketData.propertyLocation || ticketData.geo);
             if (!propertyGeo && ticketData.propertyId) {
@@ -406,19 +407,19 @@ export const updateTicketLifecycle = onCall({ cors: true }, async (request) => {
             }
             const queuedTechnicianId = String(request.data?.queuedTechnicianId || "").trim();
             const capturedAtMs = Number(arrivalLocation.capturedAtMs || 0);
-            if (queuedTechnicianId) {
-                const serverNowMs = Date.now();
-                if (
-                    !Number.isFinite(capturedAtMs) ||
-                    capturedAtMs <= 0 ||
-                    capturedAtMs > serverNowMs + 60_000 ||
-                    serverNowMs - capturedAtMs > 15 * 60_000
-                ) {
-                    throw new HttpsError(
-                        "failed-precondition",
-                        "Queued arrival GPS is stale or has no trustworthy capture time. Capture arrival again.",
-                    );
-                }
+            const serverNowMs = Date.now();
+            if (
+                !Number.isFinite(capturedAtMs) ||
+                capturedAtMs <= 0 ||
+                capturedAtMs > serverNowMs + 60_000 ||
+                serverNowMs - capturedAtMs > (queuedTechnicianId ? 15 * 60_000 : 60_000)
+            ) {
+                throw new HttpsError(
+                    "failed-precondition",
+                    queuedTechnicianId
+                        ? "Queued arrival GPS is stale or has no trustworthy capture time. Capture arrival again."
+                        : "Arrival GPS is stale or has no trustworthy capture time. Capture arrival again.",
+                );
             }
             const arrivalBinding = await resolveTechnicianArrivalBinding({
                 transaction,
@@ -426,6 +427,17 @@ export const updateTicketLifecycle = onCall({ cors: true }, async (request) => {
                 assignedTechnicianId: assignedId,
                 isAdminActor,
             });
+            if (arrivalBinding.physicalDeviceBound) {
+                if (
+                    arrivalLocation.nativeLocationMocked !== false ||
+                    String(arrivalLocation.locationSource || "") !== "native_android_location_manager"
+                ) {
+                    throw new HttpsError(
+                        "failed-precondition",
+                        "Physical arrival requires a fresh native Android non-mock GPS proof.",
+                    );
+                }
+            }
             const cleanArrivalLocation = {
                 lat,
                 lng,
@@ -434,7 +446,11 @@ export const updateTicketLifecycle = onCall({ cors: true }, async (request) => {
                 accuracy,
                 heading: arrivalLocation.heading ?? null,
                 speed: arrivalLocation.speed ?? null,
-                ...(capturedAtMs > 0 ? { capturedAtMs } : {}),
+                capturedAtMs,
+                locationSource: arrivalBinding.physicalDeviceBound
+                    ? "native_android_location_manager"
+                    : "browser_functional_only",
+                nativeLocationMocked: arrivalBinding.physicalDeviceBound ? false : null,
             };
             updateData.arrivedAt = now;
             updateData.trackingStatus = 'ARRIVED';
@@ -442,9 +458,11 @@ export const updateTicketLifecycle = onCall({ cors: true }, async (request) => {
             updateData.arrivedLocation = cleanArrivalLocation;
             updateData.technicianLocation = cleanArrivalLocation;
             updateData.technicianLocationUpdatedAt = now;
-            updateData.gpsVerified = true;
-            updateData.gpsVerifiedAt = now;
-            updateData.onSiteVerification = 'GPS_VERIFIED';
+            updateData.gpsVerified = arrivalBinding.physicalDeviceBound;
+            updateData.gpsVerifiedAt = arrivalBinding.physicalDeviceBound ? now : FieldValue.delete();
+            updateData.onSiteVerification = arrivalBinding.physicalDeviceBound
+                ? 'GPS_VERIFIED'
+                : 'FUNCTIONAL_ONLY';
             updateData.physicalDeviceBound = arrivalBinding.physicalDeviceBound;
             updateData.arrivalEvidenceMode = arrivalBinding.arrivalEvidenceMode;
             if (

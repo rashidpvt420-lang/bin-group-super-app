@@ -5,6 +5,8 @@ export type MinimalGpsPoint = {
   longitude: number;
   accuracy?: number;
   deviceTimestampMs?: number;
+  nativeLocationMocked?: false;
+  locationSource?: 'native_android_location_manager' | 'browser_geolocation';
 };
 
 export type GpsRetryTerminalReason = 'PERMANENT_CALLABLE_ERROR' | 'RETRY_EXHAUSTED';
@@ -15,6 +17,7 @@ export type QueuedGpsAction = {
   ticketId: string;
   technicianUid: string;
   trackingSessionId: string;
+  installationHash?: string;
   point?: MinimalGpsPoint;
   queuedAtMs: number;
   expiresAtMs: number;
@@ -134,11 +137,19 @@ const sanitizePoint = (input: unknown): MinimalGpsPoint | undefined => {
   if (latitude === 0 && longitude === 0) return undefined;
   const accuracy = finite(source.accuracy);
   const deviceTimestampMs = finite(source.deviceTimestampMs);
+  const nativeLocationMocked = source.nativeLocationMocked === false ? false : undefined;
+  const locationSource = source.locationSource === 'native_android_location_manager'
+    ? 'native_android_location_manager'
+    : source.locationSource === 'browser_geolocation'
+      ? 'browser_geolocation'
+      : undefined;
   return {
     latitude: Number(latitude.toFixed(6)),
     longitude: Number(longitude.toFixed(6)),
     ...(accuracy !== null ? { accuracy: Math.max(0, Math.round(accuracy)) } : {}),
     ...(deviceTimestampMs !== null ? { deviceTimestampMs: Math.max(0, Math.round(deviceTimestampMs)) } : {}),
+    ...(nativeLocationMocked === false ? { nativeLocationMocked } : {}),
+    ...(locationSource ? { locationSource } : {}),
   };
 };
 
@@ -173,6 +184,9 @@ const sanitizeEntry = (input: unknown, nowMs: number): QueuedGpsAction | null =>
     ticketId,
     technicianUid,
     trackingSessionId,
+    ...(source.installationHash && /^[a-f0-9]{64}$/.test(String(source.installationHash).trim().toLowerCase())
+      ? { installationHash: String(source.installationHash).trim().toLowerCase() }
+      : {}),
     ...(point ? { point } : {}),
     queuedAtMs: Math.floor(queuedAtMs),
     expiresAtMs: Math.floor(expiresAtMs),
@@ -416,6 +430,9 @@ export const enqueueGpsRetryAction = (
     ticketId: validIdentity(input.ticketId),
     technicianUid: validIdentity(input.technicianUid),
     trackingSessionId: validIdentity(input.trackingSessionId),
+    ...(input.installationHash && /^[a-f0-9]{64}$/.test(String(input.installationHash).trim().toLowerCase())
+      ? { installationHash: String(input.installationHash).trim().toLowerCase() }
+      : {}),
     ...(input.action === 'UPDATE' ? { point: sanitizePoint(input.point) } : {}),
     queuedAtMs: nowMs,
     expiresAtMs: nowMs + (input.action === 'STOP' ? STOP_TTL_MS : UPDATE_TTL_MS),

@@ -109,9 +109,19 @@ type NativeInstallationBindingResult = {
   installationHash?: string;
 };
 
+export type NativeLocationIntegrityResult = {
+  latitude?: number;
+  longitude?: number;
+  accuracy?: number;
+  capturedAtMs?: number;
+  nativeLocationMocked?: boolean;
+  locationSource?: string;
+};
+
 type NativeAppCheckBridge = {
   getAppCheckToken: (options: { forceRefresh: boolean }) => Promise<NativeAppCheckTokenResult>;
   getInstallationBindingProof: () => Promise<NativeInstallationBindingResult>;
+  getLocationIntegrityProof: () => Promise<NativeLocationIntegrityResult>;
 };
 
 type CapacitorRuntime = {
@@ -165,6 +175,38 @@ export const getNativeAndroidInstallationHash = async (): Promise<string | null>
     throw new Error('Native Android installation identity is invalid.');
   }
   return installationHash;
+};
+
+export const getNativeAndroidLocationIntegrityProof = async (): Promise<NativeLocationIntegrityResult | null> => {
+  if (!isCapacitorAndroid) return null;
+  const bridge = nativeAppCheckBridge;
+  if (!bridge || typeof bridge.getLocationIntegrityProof !== 'function') {
+    throw new Error('Native Android GPS integrity bridge plugin unavailable.');
+  }
+  const result = await bridge.getLocationIntegrityProof();
+  const latitude = Number(result?.latitude);
+  const longitude = Number(result?.longitude);
+  const accuracy = Number(result?.accuracy);
+  const capturedAtMs = Number(result?.capturedAtMs);
+  if (
+    !Number.isFinite(latitude) || latitude < -90 || latitude > 90 ||
+    !Number.isFinite(longitude) || longitude < -180 || longitude > 180 ||
+    (latitude === 0 && longitude === 0) ||
+    !Number.isFinite(accuracy) || accuracy <= 0 || accuracy > 100 ||
+    !Number.isFinite(capturedAtMs) || capturedAtMs <= 0 ||
+    result?.nativeLocationMocked !== false ||
+    String(result?.locationSource || '') !== 'native_android_location_manager'
+  ) {
+    throw new Error('Native Android GPS integrity proof is invalid.');
+  }
+  return {
+    latitude,
+    longitude,
+    accuracy,
+    capturedAtMs,
+    nativeLocationMocked: false,
+    locationSource: 'native_android_location_manager',
+  };
 };
 
 const appCheckSiteKey = readEnv('VITE_APP_CHECK_SITE_KEY');

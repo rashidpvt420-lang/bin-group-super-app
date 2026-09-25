@@ -32,8 +32,10 @@ function assignedTechnicianId(data: FirebaseFirestore.DocumentData) {
 }
 
 function hasTechnicianBeforeWorkEvidence(data: FirebaseFirestore.DocumentData) {
-  return Boolean(String(data.technicianBeforePhotoUrl || "").trim()) ||
-    (Array.isArray(data.technicianBeforePhotos) && data.technicianBeforePhotos.length > 0);
+  return data.technicianBeforeEvidenceState === "CONFIRMED" && (
+    Boolean(String(data.technicianBeforePhotoUrl || "").trim()) ||
+    (Array.isArray(data.technicianBeforePhotos) && data.technicianBeforePhotos.length > 0)
+  );
 }
 
 function hasTechnicianAfterWorkEvidence(data: FirebaseFirestore.DocumentData) {
@@ -196,6 +198,66 @@ async function assertLifecycleEvidence(auth: any, data: any) {
     throw new HttpsError(
       "failed-precondition",
       "Capture and verify a technician before-work site photo after arrival before starting or completing work.",
+    );
+  }
+
+  const beforeConfirmationId = String(ticket.technicianBeforeConfirmationId || "").trim();
+  const beforeStoragePath = String(ticket.technicianBeforeStoragePath || "").trim();
+  const beforeGeneration = String(ticket.technicianBeforeObjectGeneration || "").trim();
+  const beforeContentHash = String(ticket.technicianBeforeContentHash || "").trim();
+  if (!beforeConfirmationId || !beforeStoragePath || !beforeGeneration || !beforeContentHash) {
+    throw new HttpsError(
+      "failed-precondition",
+      "Before-work evidence is missing immutable Storage identity. Capture and verify a new site photo.",
+    );
+  }
+
+  const beforeConfirmationSnap = await db.collection("audit_logs").doc(beforeConfirmationId).get();
+  const beforeConfirmation = beforeConfirmationSnap.data() || {};
+  const beforeUrl = String(beforeConfirmation.downloadUrl || "").trim();
+  const beforePhotos = Array.isArray(ticket.technicianBeforePhotos) ? ticket.technicianBeforePhotos : [];
+  const beforeMatchesTicket = Boolean(beforeUrl) && (
+    String(ticket.technicianBeforePhotoUrl || "").trim() === beforeUrl ||
+    beforePhotos.includes(beforeUrl)
+  );
+  const evidenceBucket = admin.storage().bucket();
+  const beforeServerConfirmed =
+    beforeConfirmationSnap.exists &&
+    beforeConfirmation.recordType === "TECHNICIAN_EVIDENCE_CONFIRMATION" &&
+    beforeConfirmation.action === "TECHNICIAN_BEFORE_WORK_EVIDENCE_CONFIRMATION" &&
+    beforeConfirmation.state === "CONFIRMED" &&
+    beforeConfirmation.ticketId === ticketId &&
+    beforeConfirmation.technicianId === auth.uid &&
+    beforeConfirmation.evidenceType === "technician_before_work" &&
+    String(beforeConfirmation.bucketName || "").trim() === evidenceBucket.name &&
+    String(beforeConfirmation.storagePath || "").trim() === beforeStoragePath &&
+    String(beforeConfirmation.objectGeneration || "").trim() === beforeGeneration &&
+    String(beforeConfirmation.contentHash || "").trim() === beforeContentHash &&
+    beforeStoragePath.startsWith(`maintenanceTickets/${ticketId}/proofPhotos/`);
+
+  let immutableBeforeObjectMatches = false;
+  if (beforeServerConfirmed && beforeMatchesTicket) {
+    try {
+      const [metadata] = await evidenceBucket.file(beforeStoragePath).getMetadata();
+      const liveGeneration = String(metadata.generation || "").trim();
+      const liveContentHash = storageContentHash(metadata);
+      const liveContentType = String(metadata.contentType || "").trim().toLowerCase();
+      const liveSizeBytes = Number(metadata.size || 0);
+      immutableBeforeObjectMatches =
+        liveGeneration === beforeGeneration &&
+        liveContentHash === beforeContentHash &&
+        liveContentType === String(beforeConfirmation.contentType || "").trim().toLowerCase() &&
+        Number.isFinite(liveSizeBytes) &&
+        liveSizeBytes === Number(beforeConfirmation.sizeBytes || 0);
+    } catch {
+      immutableBeforeObjectMatches = false;
+    }
+  }
+
+  if (!beforeServerConfirmed || !beforeMatchesTicket || !immutableBeforeObjectMatches) {
+    throw new HttpsError(
+      "failed-precondition",
+      "Before-work evidence changed after verification. Capture and verify a new site photo before continuing.",
     );
   }
 

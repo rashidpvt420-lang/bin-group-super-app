@@ -1,10 +1,20 @@
 package ae.bingroups.superapp;
 
+import android.Manifest;
+import android.content.Context;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.Signature;
 import android.content.pm.SigningInfo;
+import android.location.Location;
+import android.location.LocationListener;
+import android.location.LocationManager;
 import android.os.Build;
+import android.os.CancellationSignal;
+import android.os.Handler;
+import android.os.Looper;
+
+import androidx.core.content.ContextCompat;
 
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
@@ -16,6 +26,7 @@ import com.google.firebase.installations.FirebaseInstallations;
 
 import java.security.MessageDigest;
 import java.util.Locale;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 @CapacitorPlugin(name = "FirebaseAppCheckBridge")
 public class FirebaseAppCheckBridgePlugin extends Plugin {
@@ -181,6 +192,126 @@ public class FirebaseAppCheckBridgePlugin extends Plugin {
         return root + "__" + installerState() + "__" + signingState() + "__" + versionState();
     }
 
+    private boolean hasLocationPermission() {
+        return ContextCompat.checkSelfPermission(getContext(), Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED;
+    }
+
+    @SuppressWarnings("deprecation")
+    private boolean isMockLocation(Location location) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) return location.isMock();
+        return location.isFromMockProvider();
+    }
+
+    private void resolveLocationIntegrityProof(PluginCall call, Location location) {
+        if (location == null) {
+            call.reject("Unable to obtain a current GPS fix.", "GPS_LOCATION_UNAVAILABLE");
+            return;
+        }
+        if (isMockLocation(location)) {
+            call.reject("Mock location was detected. Disable mock-location software before continuing.", "MOCK_LOCATION_DETECTED");
+            return;
+        }
+
+        double latitude = location.getLatitude();
+        double longitude = location.getLongitude();
+        float accuracy = location.getAccuracy();
+        long capturedAtMs = location.getTime();
+        long nowMs = System.currentTimeMillis();
+
+        if (!Double.isFinite(latitude) || !Double.isFinite(longitude) ||
+            latitude < -90d || latitude > 90d || longitude < -180d || longitude > 180d ||
+            (latitude == 0d && longitude == 0d)) {
+            call.reject("Native GPS returned invalid coordinates.", "GPS_COORDINATES_INVALID");
+            return;
+        }
+        if (!Float.isFinite(accuracy) || accuracy <= 0f || accuracy > 100f) {
+            call.reject("Native GPS accuracy must be 100 metres or better.", "GPS_ACCURACY_INSUFFICIENT");
+            return;
+        }
+        if (capturedAtMs <= 0L || capturedAtMs > nowMs + 60_000L || nowMs - capturedAtMs > 60_000L) {
+            call.reject("Native GPS fix is stale. Capture a fresh location.", "GPS_LOCATION_STALE");
+            return;
+        }
+
+        JSObject result = new JSObject();
+        result.put("latitude", latitude);
+        result.put("longitude", longitude);
+        result.put("accuracy", accuracy);
+        result.put("capturedAtMs", capturedAtMs);
+        result.put("nativeLocationMocked", false);
+        result.put("locationSource", "native_android_location_manager");
+        call.resolve(result);
+    }
+
+    @SuppressWarnings("deprecation")
+    private void requestCurrentGpsLocation(PluginCall call, LocationManager manager) {
+        AtomicBoolean completed = new AtomicBoolean(false);
+        Handler handler = new Handler(Looper.getMainLooper());
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            CancellationSignal cancellationSignal = new CancellationSignal();
+            Runnable timeout = () -> {
+                if (completed.compareAndSet(false, true)) {
+                    cancellationSignal.cancel();
+                    call.reject("GPS timed out. Move to an open area and retry.", "GPS_LOCATION_TIMEOUT");
+                }
+            };
+            handler.postDelayed(timeout, 20_000L);
+            try {
+                manager.getCurrentLocation(
+                    LocationManager.GPS_PROVIDER,
+                    cancellationSignal,
+                    getContext().getMainExecutor(),
+                    location -> {
+                        if (!completed.compareAndSet(false, true)) return;
+                        handler.removeCallbacks(timeout);
+                        resolveLocationIntegrityProof(call, location);
+                    }
+                );
+            } catch (SecurityException error) {
+                handler.removeCallbacks(timeout);
+                if (completed.compareAndSet(false, true)) {
+                    call.reject("Location permission is required for physical Technician GPS.", "GPS_PERMISSION_REQUIRED");
+                }
+            }
+            return;
+        }
+
+        final LocationListener[] listenerHolder = new LocationListener[1];
+        Runnable timeout = () -> {
+            if (!completed.compareAndSet(false, true)) return;
+            if (listenerHolder[0] != null) manager.removeUpdates(listenerHolder[0]);
+            call.reject("GPS timed out. Move to an open area and retry.", "GPS_LOCATION_TIMEOUT");
+        };
+        LocationListener listener = new LocationListener() {
+            @Override
+            public void onLocationChanged(Location location) {
+                if (!completed.compareAndSet(false, true)) return;
+                handler.removeCallbacks(timeout);
+                manager.removeUpdates(this);
+                resolveLocationIntegrityProof(call, location);
+            }
+
+            @Override
+            public void onProviderDisabled(String provider) {
+                if (!LocationManager.GPS_PROVIDER.equals(provider) || !completed.compareAndSet(false, true)) return;
+                handler.removeCallbacks(timeout);
+                manager.removeUpdates(this);
+                call.reject("GPS is disabled. Enable precise device location and retry.", "GPS_PROVIDER_DISABLED");
+            }
+        };
+        listenerHolder[0] = listener;
+        handler.postDelayed(timeout, 20_000L);
+        try {
+            manager.requestSingleUpdate(LocationManager.GPS_PROVIDER, listener, Looper.getMainLooper());
+        } catch (SecurityException error) {
+            handler.removeCallbacks(timeout);
+            if (completed.compareAndSet(false, true)) {
+                call.reject("Location permission is required for physical Technician GPS.", "GPS_PERMISSION_REQUIRED");
+            }
+        }
+    }
+
     @PluginMethod
     public void getAppCheckToken(PluginCall call) {
         Boolean requestedForceRefresh = call.getBoolean("forceRefresh", false);
@@ -205,6 +336,31 @@ public class FirebaseAppCheckBridgePlugin extends Plugin {
                 String code = diagnosticCode(error);
                 call.reject("Unable to obtain Firebase App Check token.", code, error);
             });
+    }
+
+    @PluginMethod
+    public void getLocationIntegrityProof(PluginCall call) {
+        String installer = installerState();
+        String signer = signingState();
+        if (!"I_OK".equals(installer)) {
+            call.reject("Google Play installation is required for physical Technician GPS.", "INSTALLER_NOT_GOOGLE_PLAY");
+            return;
+        }
+        if (!"S_OK".equals(signer)) {
+            call.reject("Google Play delivery signature validation failed.", "PLAY_SIGNING_IDENTITY_MISMATCH");
+            return;
+        }
+        if (!hasLocationPermission()) {
+            call.reject("Location permission is required for physical Technician GPS.", "GPS_PERMISSION_REQUIRED");
+            return;
+        }
+
+        LocationManager manager = (LocationManager) getContext().getSystemService(Context.LOCATION_SERVICE);
+        if (manager == null || !manager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
+            call.reject("GPS is disabled. Enable precise device location and retry.", "GPS_PROVIDER_DISABLED");
+            return;
+        }
+        requestCurrentGpsLocation(call, manager);
     }
 
     @PluginMethod

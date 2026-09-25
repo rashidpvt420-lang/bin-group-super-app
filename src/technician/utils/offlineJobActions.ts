@@ -122,12 +122,17 @@ export function isQueuedTechnicianActionAutoReplayable(action: QueuedTechnicianJ
     const lng = Number(location.lng ?? location.longitude);
     const accuracy = Number(location.accuracy);
     const capturedAtMs = Number(location.capturedAtMs);
+    const nativeLocationMocked = location.nativeLocationMocked;
+    const locationSource = String(location.locationSource || '');
     return INSTALLATION_HASH_RE.test(installationHash) &&
       Boolean(queuedTechnicianId) &&
       Number.isFinite(lat) && lat >= -90 && lat <= 90 &&
       Number.isFinite(lng) && lng >= -180 && lng <= 180 &&
+      !(lat === 0 && lng === 0) &&
       Number.isFinite(accuracy) && accuracy > 0 && accuracy <= 100 &&
-      Number.isFinite(capturedAtMs) && capturedAtMs > 0;
+      Number.isFinite(capturedAtMs) && capturedAtMs > 0 &&
+      nativeLocationMocked === false &&
+      locationSource === 'native_android_location_manager';
   }
   // Completion needs foreground photo upload and confirmation.
   return ['EN_ROUTE', 'IN_PROGRESS'].includes(status);

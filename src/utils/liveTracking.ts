@@ -13,7 +13,16 @@
  * - a pending STOP is replayed before a new tracking session can start.
  */
 
-import { db, doc, functions, httpsCallable, serverTimestamp, setDoc } from '../lib/firebase';
+import {
+    db,
+    doc,
+    functions,
+    getNativeAndroidInstallationHash,
+    getNativeAndroidLocationIntegrityProof,
+    httpsCallable,
+    serverTimestamp,
+    setDoc,
+} from '../lib/firebase';
 import {
     browserGpsQueueStorage,
     discardAllQueuedUpdates,
@@ -37,6 +46,8 @@ export interface GeoPoint {
     heading?: number | null;
     speed?: number | null;
     deviceTimestampMs?: number;
+    nativeLocationMocked?: false;
+    locationSource?: 'native_android_location_manager' | 'browser_geolocation';
     updatedAt?: any;
 }
 
@@ -73,6 +84,7 @@ type LiveTrackingAction = {
     ticketId: string;
     technicianUid: string;
     trackingSessionId: string;
+    installationHash?: string;
     point?: GeoPoint | QueuedGpsAction['point'];
     queuedAtMs: number;
 };
@@ -262,6 +274,7 @@ async function sendAction(action: LiveTrackingAction | QueuedGpsAction): Promise
         action: action.action,
         ticketId: action.ticketId,
         trackingSessionId: action.trackingSessionId,
+        ...(action.installationHash ? { installationHash: action.installationHash } : {}),
         ...(point ? {
             latitude: point.latitude,
             longitude: point.longitude,
@@ -269,6 +282,8 @@ async function sendAction(action: LiveTrackingAction | QueuedGpsAction): Promise
             ...(Object.prototype.hasOwnProperty.call(point, 'heading') ? { heading: (point as GeoPoint).heading } : {}),
             ...(Object.prototype.hasOwnProperty.call(point, 'speed') ? { speed: (point as GeoPoint).speed } : {}),
             deviceTimestampMs: point.deviceTimestampMs,
+            ...(point.nativeLocationMocked === false ? { nativeLocationMocked: false } : {}),
+            ...(point.locationSource ? { locationSource: point.locationSource } : {}),
         } : {}),
     });
     const data = (response as {
@@ -387,44 +402,98 @@ export const startLiveTracking = async (
     }
 
     const trackingSessionId = createTrackingSessionId();
+    let installationHash: string | null = null;
+    try {
+        installationHash = await getNativeAndroidInstallationHash();
+    } catch (error) {
+        const message = String((error as any)?.message || 'Technician Android installation binding is unavailable.');
+        await persistTrackingDiagnostic(technicianUid, ticketId, {
+            status: 'INSTALLATION_BINDING_FAILED',
+            error: message.slice(0, 240),
+            failedAt: serverTimestamp(),
+        });
+        onError?.(message);
+        throw error instanceof Error ? error : new Error(message);
+    }
     let captureLastPushTime = 0;
+    let integrityCaptureInFlight = false;
     let installedWatchId: number;
 
     try {
         installedWatchId = navigator.geolocation.watchPosition(
         async (position) => {
             const now = Date.now();
-            if (now - captureLastPushTime < CAPTURE_INTERVAL_MS) return;
+            if (now - captureLastPushTime < CAPTURE_INTERVAL_MS || integrityCaptureInFlight) return;
 
-            if (position.coords.accuracy <= 0 || position.coords.accuracy > 100) {
+            integrityCaptureInFlight = true;
+            let point: GeoPoint;
+            try {
+                const native = await getNativeAndroidLocationIntegrityProof();
+                if (native) {
+                    point = {
+                        lat: Number(native.latitude),
+                        lng: Number(native.longitude),
+                        latitude: Number(native.latitude),
+                        longitude: Number(native.longitude),
+                        accuracy: Number(native.accuracy),
+                        heading: null,
+                        speed: null,
+                        deviceTimestampMs: Number(native.capturedAtMs),
+                        nativeLocationMocked: false,
+                        locationSource: 'native_android_location_manager',
+                        updatedAt: new Date(now).toISOString(),
+                    };
+                } else {
+                    if (
+                        !Number.isFinite(position.coords.latitude) ||
+                        !Number.isFinite(position.coords.longitude) ||
+                        (position.coords.latitude === 0 && position.coords.longitude === 0) ||
+                        position.coords.accuracy <= 0 ||
+                        position.coords.accuracy > 100
+                    ) {
+                        await persistTrackingDiagnostic(technicianUid, ticketId, {
+                            status: 'WEAK_OR_INVALID_SIGNAL',
+                            accuracy: position.coords.accuracy,
+                            lastWeakSignalAt: serverTimestamp(),
+                        });
+                        return;
+                    }
+                    point = {
+                        lat: position.coords.latitude,
+                        lng: position.coords.longitude,
+                        latitude: position.coords.latitude,
+                        longitude: position.coords.longitude,
+                        accuracy: position.coords.accuracy,
+                        heading: position.coords.heading,
+                        speed: position.coords.speed,
+                        deviceTimestampMs: position.timestamp || now,
+                        locationSource: 'browser_geolocation',
+                        updatedAt: new Date(now).toISOString(),
+                    };
+                }
+            } catch (error) {
+                const message = String((error as any)?.message || 'Native GPS integrity verification failed.');
                 await persistTrackingDiagnostic(technicianUid, ticketId, {
-                    status: 'WEAK_SIGNAL',
-                    accuracy: position.coords.accuracy,
-                    lastWeakSignalAt: serverTimestamp(),
+                    status: 'GPS_INTEGRITY_REJECTED',
+                    error: message.slice(0, 240),
+                    failedAt: serverTimestamp(),
                 });
+                onError?.(message);
                 return;
+            } finally {
+                integrityCaptureInFlight = false;
             }
 
             captureLastPushTime = now;
             _state.lastPushTime = now;
             const sessionId = trackingSessionId;
 
-            const point: GeoPoint = {
-                lat: position.coords.latitude,
-                lng: position.coords.longitude,
-                latitude: position.coords.latitude,
-                longitude: position.coords.longitude,
-                accuracy: position.coords.accuracy,
-                heading: position.coords.heading,
-                speed: position.coords.speed,
-                deviceTimestampMs: position.timestamp || now,
-                updatedAt: new Date(now).toISOString(),
-            };
             const action: LiveTrackingAction = {
                 action: 'UPDATE',
                 ticketId,
                 technicianUid,
                 trackingSessionId: sessionId,
+                ...(installationHash ? { installationHash } : {}),
                 point,
                 queuedAtMs: now,
             };
@@ -439,6 +508,7 @@ export const startLiveTracking = async (
                     ticketId,
                     technicianUid,
                     trackingSessionId: sessionId,
+                    ...(installationHash ? { installationHash } : {}),
                     point,
                     queuedAtMs: now,
                 });

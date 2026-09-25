@@ -15,7 +15,7 @@ import {
 } from '@mui/material';
 import { useNavigate, useParams } from 'react-router-dom';
 import { AlertTriangle, Check, ChevronLeft, CloudOff, MapPin, MessageSquare, Navigation, Phone, Play, ShieldCheck } from 'lucide-react';
-import { db, doc, functions, httpsCallable, onSnapshot, serverTimestamp, updateDoc } from '../../lib/firebase';
+import { db, doc, functions, getNativeAndroidLocationIntegrityProof, httpsCallable, onSnapshot, serverTimestamp, updateDoc } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
@@ -73,30 +73,73 @@ const queueOfflineJobAction = (item: Omit<OfflineQueueItem, 'id' | 'status' | 'a
     return queued;
 };
 
-const getVerifiedArrivalPosition = () => new Promise<GeolocationPosition>((resolve, reject) => {
-    if (!navigator.geolocation) {
-        reject(new Error('GPS is not available on this device. Arrival cannot be confirmed.'));
-        return;
+type VerifiedArrivalFix = {
+    latitude: number;
+    longitude: number;
+    accuracy: number;
+    heading: number | null;
+    speed: number | null;
+    capturedAtMs: number;
+    nativeLocationMocked?: false;
+    locationSource: 'native_android_location_manager' | 'browser_geolocation';
+};
+
+const getVerifiedArrivalPosition = async (): Promise<VerifiedArrivalFix> => {
+    const native = await getNativeAndroidLocationIntegrityProof();
+    if (native) {
+        return {
+            latitude: Number(native.latitude),
+            longitude: Number(native.longitude),
+            accuracy: Number(native.accuracy),
+            heading: null,
+            speed: null,
+            capturedAtMs: Number(native.capturedAtMs),
+            nativeLocationMocked: false,
+            locationSource: 'native_android_location_manager',
+        };
     }
-    navigator.geolocation.getCurrentPosition(
-        (position) => {
-            if (position.coords.accuracy > ARRIVAL_MAX_GPS_ACCURACY_METERS) {
-                reject(new Error(`GPS signal is too weak (${Math.round(position.coords.accuracy)}m). Move to an open area and try Arrived again.`));
-                return;
-            }
-            resolve(position);
-        },
-        (error) => {
-            const message = error.code === error.PERMISSION_DENIED
-                ? 'GPS permission is required before marking arrival.'
-                : error.code === error.TIMEOUT
-                    ? 'GPS timed out. Move to an open area and try again.'
-                    : 'GPS position unavailable. Arrival was not recorded.';
-            reject(new Error(message));
-        },
-        { enableHighAccuracy: true, maximumAge: 0, timeout: 20000 }
-    );
-});
+
+    return new Promise<VerifiedArrivalFix>((resolve, reject) => {
+        if (!navigator.geolocation) {
+            reject(new Error('GPS is not available on this device. Arrival cannot be confirmed.'));
+            return;
+        }
+        navigator.geolocation.getCurrentPosition(
+            (position) => {
+                if (
+                    !Number.isFinite(position.coords.latitude) ||
+                    !Number.isFinite(position.coords.longitude) ||
+                    (position.coords.latitude === 0 && position.coords.longitude === 0)
+                ) {
+                    reject(new Error('GPS returned invalid zero coordinates. Move to an open area and retry.'));
+                    return;
+                }
+                if (position.coords.accuracy <= 0 || position.coords.accuracy > ARRIVAL_MAX_GPS_ACCURACY_METERS) {
+                    reject(new Error(`GPS signal is too weak (${Math.round(position.coords.accuracy)}m). Move to an open area and try Arrived again.`));
+                    return;
+                }
+                resolve({
+                    latitude: position.coords.latitude,
+                    longitude: position.coords.longitude,
+                    accuracy: position.coords.accuracy,
+                    heading: position.coords.heading,
+                    speed: position.coords.speed,
+                    capturedAtMs: position.timestamp || Date.now(),
+                    locationSource: 'browser_geolocation',
+                });
+            },
+            (error) => {
+                const message = error.code === error.PERMISSION_DENIED
+                    ? 'GPS permission is required before marking arrival.'
+                    : error.code === error.TIMEOUT
+                        ? 'GPS timed out. Move to an open area and try again.'
+                        : 'GPS position unavailable. Arrival was not recorded.';
+                reject(new Error(message));
+            },
+            { enableHighAccuracy: true, maximumAge: 0, timeout: 20000 }
+        );
+    });
+};
 
 export default function TechnicianJobDetailPage() {
     const { id } = useParams();
@@ -286,14 +329,16 @@ export default function TechnicianJobDetailPage() {
                 const position = await getVerifiedArrivalPosition();
                 const installationHash = await readNativeTechnicianInstallationHash();
                 const arrivalLocation = {
-                    lat: position.coords.latitude,
-                    lng: position.coords.longitude,
-                    latitude: position.coords.latitude,
-                    longitude: position.coords.longitude,
-                    accuracy: position.coords.accuracy,
-                    heading: position.coords.heading,
-                    speed: position.coords.speed,
-                    capturedAtMs: position.timestamp || Date.now(),
+                    lat: position.latitude,
+                    lng: position.longitude,
+                    latitude: position.latitude,
+                    longitude: position.longitude,
+                    accuracy: position.accuracy,
+                    heading: position.heading,
+                    speed: position.speed,
+                    capturedAtMs: position.capturedAtMs,
+                    locationSource: position.locationSource,
+                    ...(position.nativeLocationMocked === false ? { nativeLocationMocked: false } : {}),
                 };
                 lifecyclePayload.arrivalLocation = arrivalLocation;
                 if (installationHash) {
@@ -347,6 +392,10 @@ export default function TechnicianJobDetailPage() {
             await updateTicketLifecycle(lifecyclePayload);
             if (nextStatus === 'EN_ROUTE') {
                 try {
+                    const installationHash = await readNativeTechnicianInstallationHash();
+                    if (installationHash) {
+                        await ensureTechnicianInstallationRegistered(installationHash);
+                    }
                     await startLiveTracking(id, user.uid, () => undefined, (err) => {
                         setGpsError(err);
                         setIsTracking(false);

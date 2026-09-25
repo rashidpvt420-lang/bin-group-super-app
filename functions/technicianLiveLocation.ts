@@ -7,6 +7,7 @@ import {
   classifyWatchdogCandidate,
   liveSessionState,
 } from "./technicianLiveLocationCas";
+import { resolveTechnicianArrivalBinding } from "./technicianInstallationBinding";
 
 if (!admin.apps.length) admin.initializeApp();
 const db = admin.firestore();
@@ -302,9 +303,29 @@ export const updateTechnicianLiveLocation = onCall(
 
       const latitude = requireCoordinate(request.data?.latitude ?? request.data?.lat, "latitude");
       const longitude = requireCoordinate(request.data?.longitude ?? request.data?.lng, "longitude");
+      if (latitude === 0 && longitude === 0) {
+        throw new HttpsError("invalid-argument", "Zero coordinates are not valid Technician GPS evidence.");
+      }
       const accuracy = finiteNumber(request.data?.accuracy, "accuracy");
       if (accuracy <= 0 || accuracy > 100) {
         throw new HttpsError("failed-precondition", "GPS accuracy must be between 0 and 100 metres.");
+      }
+
+      const arrivalBinding = await resolveTechnicianArrivalBinding({
+        transaction: tx,
+        request,
+        assignedTechnicianId: assignedTechnicianId(ticket),
+        isAdminActor: false,
+      });
+      const locationSource = String(request.data?.locationSource || "").trim();
+      if (
+        arrivalBinding.physicalDeviceBound &&
+        (request.data?.nativeLocationMocked !== false || locationSource !== "native_android_location_manager")
+      ) {
+        throw new HttpsError(
+          "failed-precondition",
+          "Physical live GPS requires a fresh native Android non-mock location proof.",
+        );
       }
 
       const trackingSessionId = requireSessionId(request.data?.trackingSessionId);
@@ -323,8 +344,20 @@ export const updateTechnicianLiveLocation = onCall(
 
       const deviceTimestampMs = Math.max(
         0,
-        finiteNumber(request.data?.deviceTimestampMs || Date.now(), "deviceTimestampMs"),
+        finiteNumber(request.data?.deviceTimestampMs, "deviceTimestampMs"),
       );
+      const serverNowMs = now.toMillis();
+      const maxGpsAgeMs = arrivalBinding.physicalDeviceBound ? 60_000 : 5 * 60_000;
+      if (
+        deviceTimestampMs <= 0 ||
+        deviceTimestampMs > serverNowMs + 60_000 ||
+        serverNowMs - deviceTimestampMs > maxGpsAgeMs
+      ) {
+        throw new HttpsError(
+          "failed-precondition",
+          "Technician GPS is stale or has an invalid device capture time.",
+        );
+      }
       const previousDeviceTimestampMs = Math.max(0, Number(previous.location?.deviceTimestampMs || 0));
       if (
         previous.isTracking === true &&
@@ -344,6 +377,14 @@ export const updateTechnicianLiveLocation = onCall(
         heading: request.data?.heading == null ? null : finiteNumber(request.data.heading, "heading"),
         speed: request.data?.speed == null ? null : Math.max(0, finiteNumber(request.data.speed, "speed")),
         deviceTimestampMs,
+        physicalDeviceBound: arrivalBinding.physicalDeviceBound,
+        locationIntegrityMode: arrivalBinding.physicalDeviceBound
+          ? "PLAY_INTEGRITY_NATIVE_GPS"
+          : "BROWSER_FUNCTIONAL_ONLY",
+        locationSource: arrivalBinding.physicalDeviceBound
+          ? "native_android_location_manager"
+          : "browser_functional_only",
+        nativeLocationMocked: arrivalBinding.physicalDeviceBound ? false : null,
         serverUpdatedAt: now,
       };
 
@@ -363,6 +404,13 @@ export const updateTechnicianLiveLocation = onCall(
         expiresAt,
         stopReason: null,
         source: "technician-callable",
+        physicalDeviceBound: arrivalBinding.physicalDeviceBound,
+        locationIntegrityMode: arrivalBinding.physicalDeviceBound
+          ? "PLAY_INTEGRITY_NATIVE_GPS"
+          : "BROWSER_FUNCTIONAL_ONLY",
+        ...(arrivalBinding.arrivalInstallationHash
+          ? { installationHash: arrivalBinding.arrivalInstallationHash }
+          : {}),
       }, { merge: true });
 
       tx.set(ticketRef, {

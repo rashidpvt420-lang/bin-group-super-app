@@ -59,9 +59,16 @@ test('technician physical evidence is protected, canonical and requires real mob
   assert.match(verifier, /MAX_PROPERTY_DISTANCE_METERS = 500/);
   assert.match(verifier, /propertyDistanceMeters > MAX_PROPERTY_DISTANCE_METERS/);
   assert.match(verifier, /haversineMeters/);
-  assert.match(verifier, /millis\(data\.arrivedAt\) > 0/);
-  assert.match(verifier, /millis\(data\.startedAt\) >= millis\(data\.arrivedAt\)/);
+  assert.match(verifier, /const arrivedAtMs = millis\(data\.arrivedAt\)/);
+  assert.match(verifier, /arrivedAtMs > 0/);
+  assert.match(verifier, /location\.nativeLocationMocked === false/);
+  assert.match(verifier, /text\(location\.locationSource\) === 'native_android_location_manager'/);
+  assert.match(verifier, /capturedAtMs <= arrivedAtMs \+ 60_000/);
+  assert.match(verifier, /arrivedAtMs - capturedAtMs <= 60_000/);
+  assert.match(verifier, /millis\(data\.startedAt\) >= arrivedAtMs/);
   assert.match(verifier, /millis\(data\.completedAt\) >= millis\(data\.startedAt\)/);
+  assert.match(verifier, /technicianBeforeEvidenceState/);
+  assert.match(verifier, /technicianAfterEvidenceState/);
   assert.match(verifier, /bucket\.getFiles\(\{ prefix: 'maintenanceTickets\/'/);
   assert.match(verifier, /storedObjectNames\.has\(objectPath\)/);
   assert.doesNotMatch(verifier, /bucket\.file\(objectPath\)/);
