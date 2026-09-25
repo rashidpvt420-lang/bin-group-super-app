@@ -21,10 +21,12 @@ export default function OwnerPropertiesPage() {
     const [loadError, setLoadError] = useState('');
 
     useEffect(() => {
-        if (!user?.email) return;
+        if (!user?.uid) return;
 
-        const email = user.email.toLowerCase();
-        const propQ = query(collection(db, 'properties'), where('ownerEmail', '==', email));
+        // Launch-critical property access is identity-bound. Query the same
+        // canonical ownerId field that Firestore rules authorize; do not rely on
+        // mutable email or generic createdBy aliases for portfolio ownership.
+        const propQ = query(collection(db, 'properties'), where('ownerId', '==', user.uid));
         let active = true;
         
         const unsubscribe = onSnapshot(
@@ -36,13 +38,8 @@ export default function OwnerPropertiesPage() {
                     // against documents after the client filters them. Fetch only
                     // owner-authorized passports, then associate them locally.
                     const passportQueries = [
-                        getDocs(query(collection(db, 'propertyPassports'), where('ownerEmail', '==', email))),
+                        getDocs(query(collection(db, 'propertyPassports'), where('ownerId', '==', user.uid))),
                     ];
-                    if (user?.uid) {
-                        passportQueries.unshift(
-                            getDocs(query(collection(db, 'propertyPassports'), where('ownerId', '==', user.uid))),
-                        );
-                    }
                     const passportSnapshots = await Promise.all(passportQueries);
                     const passportsByPropertyId = new Map<string, any>();
                     for (const passportSnapshot of passportSnapshots) {
@@ -86,7 +83,7 @@ export default function OwnerPropertiesPage() {
             active = false;
             unsubscribe();
         };
-    }, [user?.email, user?.uid]);
+    }, [user?.uid]);
 
     if (loading) return (
         <Box sx={{ height: '60vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 2 }}>
@@ -105,7 +102,7 @@ export default function OwnerPropertiesPage() {
                 </Box>
                 <Stack direction="row" spacing={2}>
                     <Button variant="outlined" startIcon={<Layout size={16} />} sx={{ borderColor: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.7)', fontWeight: 900, borderRadius: 3 }}>Grid View</Button>
-                    <Button variant="contained" sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 900, px: 3, borderRadius: 3 }}>Register New Asset</Button>
+                    <Button type="button" data-testid="owner-register-property" variant="contained" onClick={() => navigate('/onboarding')} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 900, px: 3, borderRadius: 3 }}>Register New Asset</Button>
                 </Stack>
             </Box>
 
@@ -132,7 +129,7 @@ export default function OwnerPropertiesPage() {
                                 <Box sx={{ height: 160, bgcolor: alpha(binThemeTokens.gold, 0.05), display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
                                     <Building2 size={64} color={alpha(binThemeTokens.gold, 0.2)} />
                                     <Chip 
-                                        label={prop.status?.toUpperCase() || 'ACTIVE'} 
+                                        label={prop.status?.toUpperCase() || 'PENDING'} 
                                         sx={{ position: 'absolute', top: 20, right: 20, bgcolor: 'rgba(0,0,0,0.6)', color: binThemeTokens.gold, fontWeight: 950, backdropFilter: 'blur(10px)', border: `1px solid ${alpha(binThemeTokens.gold, 0.3)}` }} 
                                     />
                                 </Box>
@@ -171,16 +168,20 @@ export default function OwnerPropertiesPage() {
                                     <Stack direction="row" spacing={2}>
                                         <Button 
                                             fullWidth 
+                                            type="button"
                                             variant="outlined" 
                                             startIcon={<Shield size={16} />}
+                                            onClick={() => navigate(prop.passport?.id ? `/owner/property-passport/${prop.passport.id}` : '/owner/property-passport')}
                                             sx={{ borderRadius: 3, borderColor: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.6)', fontWeight: 900 }}
                                         >
                                             PASSPORT
                                         </Button>
                                         <Button 
                                             fullWidth 
+                                            type="button"
                                             variant="outlined" 
                                             startIcon={<Activity size={16} />}
+                                            onClick={() => navigate('/owner/tickets')}
                                             sx={{ borderRadius: 3, borderColor: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.6)', fontWeight: 900 }}
                                         >
                                             HISTORY
