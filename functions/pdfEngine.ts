@@ -251,16 +251,36 @@ function asArray(value: any): string[] {
     return [];
 }
 
-async function savePdf(buffer: Buffer, path: string, metadata: Record<string, any>) {
+export type CanonicalPdfArtifact = {
+    pdfUrl: string;
+    storagePath: string;
+    pdfSha256: string;
+    generation: string;
+    documentHash: string;
+    byteLength: number;
+};
+
+async function savePdf(buffer: Buffer, path: string, metadata: Record<string, any>): Promise<CanonicalPdfArtifact> {
     const storage = getStorage();
     const bucket = storage.bucket();
     const file = bucket.file(path);
+    const pdfSha256 = crypto.createHash('sha256').update(buffer).digest('hex');
     await file.save(buffer, {
         contentType: 'application/pdf',
-        metadata: { metadata }
+        metadata: { metadata: { ...metadata, pdfSha256 } }
     });
+    const [stored] = await file.getMetadata();
+    const generation = String(stored.generation || '');
+    if (!generation) throw new Error('Canonical PDF Storage generation is missing.');
     const url = await file.getSignedUrl({ action: 'read', expires: '03-09-2491' });
-    return url[0];
+    return {
+        pdfUrl: url[0],
+        storagePath: path,
+        pdfSha256,
+        generation,
+        documentHash: String(metadata.documentHash || ''),
+        byteLength: buffer.length,
+    };
 }
 
 /**
@@ -268,7 +288,7 @@ async function savePdf(buffer: Buffer, path: string, metadata: Record<string, an
  * This replaces the old short contract summary so the owner signs/downloads
  * the same protective English/Arabic agreement stored in the document vault.
  */
-export async function generateContractPDF(data: any) {
+export async function generateContractPdfArtifact(data: any): Promise<CanonicalPdfArtifact> {
     const PDFDocument = await loadPdfKit();
     let fontBuffer: Buffer | null = null;
     try {
@@ -277,7 +297,7 @@ export async function generateContractPDF(data: any) {
         console.error("Cairo font load failed:", err);
     }
 
-    return new Promise<string>((resolve, reject) => {
+    return new Promise<CanonicalPdfArtifact>((resolve, reject) => {
         const contractMode = normalizeContractMode(data);
         const contractId = textValue(data.contractId || data.id || `contract-${Date.now()}`);
         const propertyType = textValue(data.propertyType || data.assetClass || data.buildingType || 'property');
@@ -308,7 +328,7 @@ export async function generateContractPDF(data: any) {
         doc.on('end', async () => {
             try {
                 const buffer = Buffer.concat(chunks);
-                const url = await savePdf(buffer, `contracts/${contractId}/owner-service-agreement-${AGREEMENT_VERSION}.pdf`, {
+                const artifact = await savePdf(buffer, `contracts/${contractId}/owner-service-agreement-${AGREEMENT_VERSION}.pdf`, {
                     ownerId,
                     propertyId,
                     propertyPassportId,
@@ -322,7 +342,7 @@ export async function generateContractPDF(data: any) {
                     signedBy: textValue(data.signatureName || data.ownerName || data.fullName, ''),
                     signedAt: textValue(data.signedAt || data.acceptedAt || new Date().toISOString(), '')
                 });
-                resolve(url);
+                resolve(artifact);
             } catch (err) {
                 reject(err);
             }
@@ -700,4 +720,14 @@ export async function generateIntegrityAuditPDF(data: { propertyId: string; prop
 
         doc.end();
     });
+}
+
+
+/**
+ * Compatibility wrapper for callers that only need the URL.
+ * Canonical writers should use generateContractPdfArtifact so the byte hash,
+ * Storage generation and path are persisted with the contract.
+ */
+export async function generateContractPDF(data: any): Promise<string> {
+    return (await generateContractPdfArtifact(data)).pdfUrl;
 }
