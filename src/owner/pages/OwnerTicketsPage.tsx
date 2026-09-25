@@ -25,12 +25,9 @@ import {
 
 const STATUS_CONFIG: Record<string, { color: string; icon: any }> = {
     'OPEN':              { color: 'rgba(255,255,255,0.4)', icon: Clock },
-    'open':              { color: 'rgba(255,255,255,0.4)', icon: Clock },
-    'PENDING_ASSIGNMENT':{ color: 'rgba(255,255,255,0.4)', icon: Clock },
-    'accepted':          { color: '#3b82f6', icon: Clock },
-    'ASSIGNED':          { color: '#3b82f6', icon: Clock },
-    'on_the_way':        { color: binThemeTokens.gold, icon: Navigation },
-    'EN_ROUTE':          { color: binThemeTokens.gold, icon: Navigation },
+        'PENDING_ASSIGNMENT':{ color: 'rgba(255,255,255,0.4)', icon: Clock },
+        'ASSIGNED':          { color: '#3b82f6', icon: Clock },
+        'EN_ROUTE':          { color: binThemeTokens.gold, icon: Navigation },
     'arrived':           { color: '#8b5cf6', icon: MapPin },
     'ARRIVED':           { color: '#8b5cf6', icon: MapPin },
     'in_progress':       { color: '#10b981', icon: Play },
@@ -42,7 +39,7 @@ const STATUS_CONFIG: Record<string, { color: string; icon: any }> = {
     'emergency':         { color: '#ef4444', icon: AlertCircle },
 };
 
-const ACTIVE_STATUSES = ['accepted', 'ASSIGNED', 'on_the_way', 'EN_ROUTE', 'arrived', 'ARRIVED', 'in_progress', 'IN_PROGRESS'];
+const ACTIVE_STATUSES = ['ACCEPTED', 'ASSIGNED', 'EN_ROUTE', 'ARRIVED', 'IN_PROGRESS'];
 
 export default function OwnerTicketsPage() {
     const { user } = useRole();
@@ -115,9 +112,10 @@ export default function OwnerTicketsPage() {
 
             <Stack spacing={2}>
                 {tickets.map(ticket => {
-                    const sCfg = STATUS_CONFIG[ticket.status] || STATUS_CONFIG['OPEN'];
+                    const canonicalStatus = String(ticket.status || 'OPEN').trim().replace(/[\s-]+/g, '_').toUpperCase().replace('ON_THE_WAY', 'EN_ROUTE');
+        const sCfg = STATUS_CONFIG[canonicalStatus] || STATUS_CONFIG['OPEN'];
                     const Icon = sCfg.icon;
-                    const isActive = ACTIVE_STATUSES.includes(ticket.status);
+                    const isActive = ACTIVE_STATUSES.includes(canonicalStatus);
                     const techLoc = getTechnicianLocation(ticket);
                     const jobLoc  = getTicketJobLocation(ticket);
                     const distKm  = calculateDistanceKm(techLoc, jobLoc);
