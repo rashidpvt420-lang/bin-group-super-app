@@ -190,6 +190,9 @@ export const adminReviewBrokerKyc = onCall(
     const now = FieldValue.serverTimestamp();
     const actorId = request.auth!.uid;
     const actorEmail = request.auth?.token?.email || null;
+    const notificationRef = db.collection("notifications").doc(
+      "broker_kyc_" + brokerId + "_" + submissionHash.slice(0, 24) + "_" + decision.toLowerCase(),
+    );
 
     await db.runTransaction(async (transaction) => {
       const [freshPublic, freshPrivate, ...freshDocuments] = await Promise.all([
@@ -270,6 +273,19 @@ export const adminReviewBrokerKyc = onCall(
         sensitiveValuesExcluded: true,
         createdAt: now,
       });
+      transaction.set(notificationRef, {
+        recipientId: brokerId,
+        userId: brokerId,
+        recipientRole: "broker",
+        type: approved ? "BROKER_KYC_APPROVED" : "BROKER_KYC_REJECTED",
+        title: approved ? "Broker KYC approved" : "Broker KYC requires attention",
+        body: approved
+          ? "Your Broker KYC and RERA verification are approved. Verified listing and payout features are now available."
+          : "Your Broker KYC submission was rejected. Open your Broker profile to review and resubmit the required information.",
+        link: "/broker/profile",
+        read: false,
+        createdAt: now,
+      }, { merge: true });
     });
 
     let releasedCommissions = 0;
