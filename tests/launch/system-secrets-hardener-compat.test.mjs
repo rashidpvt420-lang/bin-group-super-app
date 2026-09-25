@@ -43,7 +43,8 @@ ${footer}`;
   const hardened = runHardener(legacy);
   assert.match(hardened, /match \/system_secrets\/\{secretId\} \{\n\s*allow read, write: if false;/);
   assert.match(hardened, /allow read: if collection != 'system_secrets' && hasAdminClaim\(\);/);
-  assert.match(hardened, /allow create: if collection != 'system_secrets' && hasAdminClaim\(\);/);
+  assert.match(hardened, /allow create, update, delete: if false;/);
+  assert.doesNotMatch(hardened, /allow create: if collection != 'system_secrets'/);
   assert.doesNotMatch(hardened, /match \/\{document=\*\*\}/);
 });
 
