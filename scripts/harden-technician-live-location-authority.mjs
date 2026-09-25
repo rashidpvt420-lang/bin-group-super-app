@@ -120,21 +120,31 @@ if (!rules.includes('match /technician_live_locations/{technicianId} {')) {
   );
 }
 
-const readCandidates = [
-  "!(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions', 'private_hr_profiles', 'technician_live_locations', 'invoice_registry', 'payroll_entries'])",
-  "!(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions', 'private_hr_profiles', 'technician_live_locations', 'invoice_registry'])",
-  "!(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions', 'private_hr_profiles', 'technician_live_locations'])",
-  "!(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions', 'private_hr_profiles'])",
-  "!(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions'])",
-];
-const strongestReadReplacement = "!(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions', 'private_hr_profiles', 'technician_live_locations', 'invoice_registry', 'payroll_entries'])";
-const propertyIdentityReadReplacement = "!(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions', 'private_hr_profiles', 'technician_live_locations', 'invoice_registry', 'payroll_entries', 'property_identity_registry'])";
-if (!rules.includes(propertyIdentityReadReplacement) && !rules.includes(strongestReadReplacement)) {
-  const candidate = readCandidates.find((value) => rules.includes(value));
-  if (!candidate) {
-    throw new Error('Generic Admin read fallback is not in a reviewed form; refusing to weaken or guess the rule.');
+const genericFallbackStart = rules.indexOf('    match /{collection}/{document=**} {');
+if (genericFallbackStart < 0) {
+  throw new Error('Generic Firestore fallback marker is missing; refusing to verify live-location authority.');
+}
+const genericFallback = rules.slice(genericFallbackStart);
+const readCondition = genericFallback.match(/allow\s+read:\s*if\s*([^;]+);/)?.[1] || '';
+for (const protectedCollection of [
+  'technician_live_locations',
+  'invoice_registry',
+  'payroll_entries',
+  'property_identity_registry',
+  'owner_portfolio_quotes',
+  'system_payment_config',
+  'propertyInspections',
+]) {
+  if (!readCondition.includes(`'${protectedCollection}'`)) {
+    throw new Error(`Generic Admin read fallback does not exclude ${protectedCollection}`);
   }
-  rules = rules.replace(candidate, strongestReadReplacement);
+}
+if (
+  !readCondition.includes("collection != 'tickets'") ||
+  !readCondition.includes("collection != 'maintenanceTickets'") ||
+  !readCondition.includes('hasAdminClaim()')
+) {
+  throw new Error('Generic Admin read fallback is not in a reviewed fail-closed form.');
 }
 
 const protectedCollectionAnchor = "          'system_secrets',\n          'users',";
