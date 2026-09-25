@@ -45,10 +45,12 @@ test('Owner submitted coordinates remain evidence-only across both onboarding cl
     assert.match(source, /dispatchReady: false/);
     assert.match(source, /requiresGeoReview: true/);
   }
-  assert.match(ownerGeo, /verified: false/);
-  assert.match(ownerGeo, /requiresGeoReview: true/);
-  assert.match(ownerGeo, /dispatchReady: false/);
-  assert.match(ownerGeo, /verifiedBy: null/);
+  for (const helper of [rootGeo, ownerGeo]) {
+    assert.match(helper, /verified: false/);
+    assert.match(helper, /requiresGeoReview: true/);
+    assert.match(helper, /dispatchReady: false/);
+    assert.match(helper, /verifiedBy: null/);
+  }
   assert.match(ownerGeo, /verifiedAt: null/);
   assert.doesNotMatch(ownerGeo, /verified: input\.verified \?\? !isManual/);
   assert.doesNotMatch(ownerGeo, /dispatchReady: isManual \? false : input\.dispatchReady \?\? true/);
