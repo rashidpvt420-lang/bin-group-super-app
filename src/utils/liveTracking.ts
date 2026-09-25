@@ -416,14 +416,16 @@ export const startLiveTracking = async (
         throw error instanceof Error ? error : new Error(message);
     }
     let captureLastPushTime = 0;
+    let integrityCaptureInFlight = false;
     let installedWatchId: number;
 
     try {
         installedWatchId = navigator.geolocation.watchPosition(
         async (position) => {
             const now = Date.now();
-            if (now - captureLastPushTime < CAPTURE_INTERVAL_MS) return;
+            if (now - captureLastPushTime < CAPTURE_INTERVAL_MS || integrityCaptureInFlight) return;
 
+            integrityCaptureInFlight = true;
             let point: GeoPoint;
             try {
                 const native = await getNativeAndroidLocationIntegrityProof();
@@ -478,6 +480,8 @@ export const startLiveTracking = async (
                 });
                 onError?.(message);
                 return;
+            } finally {
+                integrityCaptureInFlight = false;
             }
 
             captureLastPushTime = now;
