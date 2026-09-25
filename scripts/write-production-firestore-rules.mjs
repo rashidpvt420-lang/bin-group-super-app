@@ -172,9 +172,9 @@ for (const [collection, documentId, requiredFragment] of phase10Rules) {
   }
 }
 const phase10Fallback = matchBlock('    match /{collection}/{document=**} {');
-const phase10ReadCondition = phase10Fallback.match(/allow\\s+read:\\s*([^;]+);/)?.[1] || '';
-const phase10WriteConditions = [...phase10Fallback.matchAll(/allow\\s+([^:;]+):\\s*([^;]+);/g)]
-  .filter(([, operations]) => /\\b(create|update|delete|write)\\b/.test(operations));
+const phase10ReadCondition = phase10Fallback.match(/allow\s+read:\s*([^;]+);/)?.[1] || '';
+const phase10WriteConditions = [...phase10Fallback.matchAll(/allow\s+([^:;]+):\s*([^;]+);/g)]
+  .filter(([, operations]) => /\b(create|update|delete|write)\b/.test(operations));
 for (const collection of ['owner_portfolio_quotes', 'system_payment_config', 'propertyInspections']) {
   if (!phase10ReadCondition.includes(`'${collection}'`)) {
     failures.push(`${collection} is not excluded from the generic Admin read fallback`);
