@@ -138,7 +138,12 @@ export const adminApprovePayment = onCall({ cors: true, enforceAppCheck: true },
         idempotent: true,
       };
     }
-    const submittedRentAmount = Number(payment.amount || payment.amountPaid || payment.rentPaid || 0);
+    let submittedRentAmount: number;
+    try {
+      submittedRentAmount = money(payment.amount ?? payment.amountPaid ?? payment.rentPaid);
+    } catch {
+      throw new HttpsError("failed-precondition", "Rent approval requires a finite submitted AED amount.");
+    }
     const submittedReference = String(payment.reference || payment.paymentReference || payment.paymentReferenceId || "").trim();
     const submittedProofPath = String(
       payment.receiptPath ||
@@ -163,11 +168,16 @@ export const adminApprovePayment = onCall({ cors: true, enforceAppCheck: true },
     ) {
       throw new HttpsError("failed-precondition", "Rent approval requires immutable submitted amount, reference, and receipt evidence.");
     }
-    if (
-      Number.isFinite(Number(request.data?.amountReceived)) &&
-      Math.abs(Number(request.data.amountReceived) - submittedRentAmount) > 0.01
-    ) {
-      throw new HttpsError("failed-precondition", "Admin approval cannot alter the tenant or owner submitted rent amount.");
+    if (request.data?.amountReceived !== undefined && request.data?.amountReceived !== null) {
+      let confirmedRentAmount: number;
+      try {
+        confirmedRentAmount = money(request.data.amountReceived);
+      } catch {
+        throw new HttpsError("invalid-argument", "Confirmed rent amount must be a finite AED value.");
+      }
+      if (confirmedRentAmount !== submittedRentAmount) {
+        throw new HttpsError("failed-precondition", "Admin approval cannot alter the tenant or owner submitted rent amount, even by one fils.");
+      }
     }
     const receiptEvidence = await assertStoredOwnerPaymentReceipt({
       ownerUid: rentOwnerUid,
