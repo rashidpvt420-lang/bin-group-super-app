@@ -2,7 +2,7 @@ export type NormalizedTicketStatus =
   | 'OPEN'
   | 'ASSIGNED'
   | 'ACCEPTED'
-  | 'ON_THE_WAY'
+  | 'EN_ROUTE'
   | 'ARRIVED'
   | 'IN_PROGRESS'
   | 'WAITING_PARTS'
@@ -20,14 +20,14 @@ const aliases: Record<string, NormalizedTicketStatus> = {
   dispatched: 'ASSIGNED',
   accepted: 'ACCEPTED',
   claimed: 'ACCEPTED',
-  on_the_way: 'ON_THE_WAY',
-  en_route: 'ON_THE_WAY',
+  on_the_way: 'EN_ROUTE',
+  en_route: 'EN_ROUTE',
   arrived: 'ARRIVED',
   in_progress: 'IN_PROGRESS',
   started: 'IN_PROGRESS',
   waiting_parts: 'WAITING_PARTS',
   completed: 'COMPLETED',
-  resolved: 'COMPLETED',
+  resolved: 'CLOSED',
   tenant_approved: 'TENANT_APPROVED',
   closed: 'CLOSED',
   done: 'CLOSED',
