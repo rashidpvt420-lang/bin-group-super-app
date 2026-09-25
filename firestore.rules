@@ -2158,13 +2158,16 @@ service cloud.firestore {
     }
 
     match /{collection}/{document=**} {
-      allow read: if collection != 'tickets' && collection != 'maintenanceTickets' && !(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions', 'private_hr_profiles', 'technician_live_locations', 'invoice_registry', 'payroll_entries', 'property_identity_registry']) && hasAdminClaim();
+      allow read: if collection != 'tickets' && collection != 'maintenanceTickets' && !(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions', 'private_hr_profiles', 'technician_live_locations', 'invoice_registry', 'payroll_entries', 'property_identity_registry', 'owner_portfolio_quotes', 'system_payment_config', 'propertyInspections']) && hasAdminClaim();
       allow create: if collection != 'tickets' && collection != 'maintenanceTickets' && !(
         collection in [
           'system_secrets',
           'technician_live_locations',
           'properties',
           'property_identity_registry',
+          'owner_portfolio_quotes',
+          'system_payment_config',
+          'propertyInspections',
           'users',
           'staffRequests',
           'hrAiConversations',
@@ -2205,6 +2208,9 @@ service cloud.firestore {
           'technician_live_locations',
           'properties',
           'property_identity_registry',
+          'owner_portfolio_quotes',
+          'system_payment_config',
+          'propertyInspections',
           'users',
           'staffRequests',
           'hrAiConversations',
