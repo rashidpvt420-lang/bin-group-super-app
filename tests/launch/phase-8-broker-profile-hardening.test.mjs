@@ -51,7 +51,7 @@ test('Phase 8 Broker documents remain owner-scoped and Admin-reviewed', async ()
   ]);
 
   assert.match(page, /where\('brokerId', '==', user\.uid\)/);
-  assert.match(page, /pending_review/);
+  assert.match(page, /PENDING_REVIEW/);
   assert.match(page, /brokerDocuments\/\$\{user\.uid\}/);
   assert.match(rules, /match \/brokerDocuments\/\{documentId\}/);
   assert.match(rules, /resource\.data\.get\('brokerId', null\) == request\.auth\.uid/);
