@@ -8,23 +8,15 @@ import { binThemeTokens } from '../../theme/binGroupTheme';
 import ContractSignatureOtpControl from '../components/ContractSignatureOtpControl';
 import { isOwnerProfileActivated } from '../activationPolicy';
 import { formatAedMoney, normalizeAedMoney } from '../../../functions/shared/aedMoney';
+import { normalizeWorkflowState } from '../../lib/workflowStateMachines';
 
 const sha256File = async (file: File) => {
   const digest = await crypto.subtle.digest('SHA-256', await file.arrayBuffer());
   return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
 };
 
-const SIGNABLE_STATUSES = [
-  'PENDING_OWNER_SIGNATURE',
-  'APPROVED_PENDING_OWNER_SIGNATURE',
-  'PENDING_SIGNATURE',
-  'DRAFT',
-  'PENDING',
-];
-
-const READY_STATUSES = ['READY_FOR_ACTIVATION', 'OWNER_SIGNED', 'PENDING_ADMIN_PAYMENT_VERIFICATION', 'SIGNED'];
-const VERIFIED_PAYMENT_STATUSES = ['PAID', 'VERIFIED', 'ADMIN_VERIFIED', 'APPROVED', 'SETTLED', 'RECONCILED'];
-const PENDING_PAYMENT_STATUSES = ['PENDING', 'PENDING_VERIFICATION', 'PENDING_ADMIN_PAYMENT_VERIFICATION', 'ADMIN_VERIFICATION_REQUIRED', 'ADMIN_REVIEW'];
+const SIGNABLE_STATUSES = ['DRAFT', 'PENDING_OWNER_SIGNATURE'];
+const READY_STATUSES = ['SIGNED', 'PENDING_PAYMENT'];
 const ADMIN_APPROVED_STATUSES = ['APPROVED', 'ADMIN_APPROVED', 'BIN_APPROVED', 'ACTIVE'];
 
 type ActivationGate = {
@@ -107,7 +99,7 @@ const gate = (label: string, done: boolean, review: boolean, doneDetail: string,
 };
 
 function buildActivationGates(contract: any, profile: any, activated: boolean): ActivationGate[] {
-  const paymentStatus = normalizeGateStatus(contract?.paymentStatus || profile?.paymentStatus || contract?.status);
+  const paymentStatus = normalizeWorkflowState('PAYMENT', contract?.paymentStatus || profile?.paymentStatus || contract?.status, 'PENDING');
   const signatureStatus = normalizeGateStatus(contract?.signatureStatus || contract?.ownerSignatureStatus || profile?.signatureStatus);
   const approvalStatus = normalizeGateStatus(contract?.adminApprovalStatus || contract?.binApprovalStatus || contract?.approvalStatus || profile?.approvalStatus);
   const units = totalContractUnits(contract);
@@ -115,8 +107,8 @@ function buildActivationGates(contract: any, profile: any, activated: boolean): 
   const ibanPresent = Boolean(profile?.iban || profile?.bankDetails?.iban || profile?.payoutDetails?.iban || contract?.iban || contract?.bankDetails?.iban);
   const ibanVerified = isTruthyVerified(profile?.ibanVerified, profile?.payoutVerified, profile?.bankDetails?.verified, profile?.ibanStatus, contract?.ibanVerified, contract?.payoutVerified);
   const ownerSigned = contract?.ownerSigned === true || contract?.ownerSignature?.signed === true || signatureStatus === 'OWNER_SIGNED' || signatureStatus === 'SIGNED';
-  const paymentVerified = contract?.paymentVerified === true || profile?.paymentVerified === true || VERIFIED_PAYMENT_STATUSES.includes(paymentStatus);
-  const paymentInReview = !paymentVerified && (PENDING_PAYMENT_STATUSES.includes(paymentStatus) || paymentStatus.includes('PENDING') || paymentStatus.includes('REVIEW') || paymentStatus.includes('PROCESSING'));
+  const paymentVerified = contract?.paymentVerified === true || profile?.paymentVerified === true || paymentStatus === 'APPROVED';
+  const paymentInReview = !paymentVerified && (['PENDING', 'PARTIALLY_PAID', 'OVERDUE'].includes(paymentStatus));
   const adminApproved = contract?.adminApproved === true ||
     profile?.adminApproved === true ||
     ADMIN_APPROVED_STATUSES.includes(approvalStatus) ||
@@ -304,7 +296,7 @@ export default function OwnerActivationPage() {
 
   const primaryContract = useMemo(() => {
     return contracts.find((c) => SIGNABLE_STATUSES.includes(String(c.status || '').toUpperCase()) && c.ownerSigned !== true) ||
-      contracts.find((c) => READY_STATUSES.includes(String(c.status || '').toUpperCase()) || c.ownerSigned === true || c.signatureStatus === 'OWNER_SIGNED') ||
+      contracts.find((c) => READY_STATUSES.includes(normalizeWorkflowState('CONTRACT', c.status, 'DRAFT')) || c.ownerSigned === true || c.signatureStatus === 'OWNER_SIGNED') ||
       contracts.find((c) => String(c.status || '').toUpperCase() === 'ACTIVE') ||
       contracts[0];
   }, [contracts]);
@@ -322,7 +314,7 @@ export default function OwnerActivationPage() {
   const profile = user as any;
   const activated = isOwnerProfileActivated(profile);
   const canSign = !!primaryContract?.id && SIGNABLE_STATUSES.includes(status) && primaryContract?.ownerSigned !== true && primaryContract?.signatureStatus !== 'OWNER_SIGNED';
-  const signedWaitingActivation = !!primaryContract?.id && (primaryContract?.ownerSigned || READY_STATUSES.includes(status) || primaryContract?.signatureStatus === 'OWNER_SIGNED');
+  const signedWaitingActivation = !!primaryContract?.id && (primaryContract?.ownerSigned || READY_STATUSES.includes(normalizeWorkflowState('CONTRACT', status, 'DRAFT')) || primaryContract?.signatureStatus === 'OWNER_SIGNED');
   const lockedScheduleValid = hasValidLockedSchedule(annualValue, mobilization);
   const missingLockedSchedule = signedWaitingActivation && !lockedScheduleValid;
   const selectedMethodApproved = Boolean(
