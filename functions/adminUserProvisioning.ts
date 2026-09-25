@@ -112,14 +112,17 @@ function hasAdminAccess(token: any) {
 }
 
 async function requireProvisioningAdmin(request: any) {
-  if (!request.auth) throw new HttpsError("unauthenticated", "Admin session required.");
+  if (!request.auth?.uid) throw new HttpsError("unauthenticated", "Admin session required.");
   const actorToken = request.auth.token || {};
   if (!hasAdminAccess(actorToken)) {
     throw new HttpsError("permission-denied", "Only an authorized Founder or Admin can manage staff access.");
   }
+  if (actorToken.email_verified !== true || !actorToken.firebase?.sign_in_second_factor) {
+    throw new HttpsError("permission-denied", "A verified Admin MFA session is required to manage staff access.");
+  }
   const actorRecord = await admin.auth().getUser(request.auth.uid);
-  if (actorRecord.disabled) {
-    throw new HttpsError("permission-denied", "Disabled administrators cannot manage staff access.");
+  if (actorRecord.disabled || !actorRecord.emailVerified || !hasAdminAccess(actorRecord.customClaims || {})) {
+    throw new HttpsError("permission-denied", "Current Founder/Admin authority is inactive or no longer valid.");
   }
   return {
     actorId: request.auth.uid,
