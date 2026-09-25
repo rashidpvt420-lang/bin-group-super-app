@@ -27,7 +27,7 @@ test('canonical lifecycle keeps every exceptional unresolved class visible', () 
 });
 
 test('legacy unresolved aliases normalize to canonical unresolved states', () => {
-  const aliases = { new: 'OPEN', dispatched: 'ASSIGNED', claimed: 'ACCEPTED', started: 'WORK_STARTED' };
+  const aliases = { new: 'OPEN', dispatched: 'ASSIGNED', claimed: 'ACCEPTED', started: 'IN_PROGRESS' };
   for (const [alias, canonical] of Object.entries(aliases)) {
     assert.equal(lifecycle.normalizeMaintenanceTicketStatus(alias), canonical, alias);
     assert.equal(lifecycle.isUnresolvedMaintenanceTicketStatus(alias), true, alias);
