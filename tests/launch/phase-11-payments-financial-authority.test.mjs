@@ -68,6 +68,24 @@ test('Phase 11: exact fils authority and active UI never calculate the payable 1
   assert.match(summary, /canonicalQuote\?\.activationDeposit/);
 });
 
+test('Phase 11: live financial displays never reconstruct payable deposits from annual value', () => {
+  const ownerFinancials = read('src/owner/utils/ownerFinancialResolver.ts');
+  const ownerContracts = read('src/owner/pages/OwnerContractsResolvedPage.tsx');
+  const designDetail = read('src/pages/DesignRequestDetailPage.tsx');
+  const routeGuard = read('scripts/verify-route-consolidation.mjs');
+
+  assert.doesNotMatch(ownerFinancials, /annualContractValue\s*\*\s*0\.15/);
+  assert.match(ownerFinancials, /quoteSnapshot\?\.activationDeposit/);
+  assert.doesNotMatch(ownerContracts, /annual\s*>\s*0\s*\?\s*annual\s*\*\s*0\.15/);
+  assert.match(ownerContracts, /Pending admin confirmation/);
+  assert.doesNotMatch(designDetail, /finalTotal[^\n]*\*\s*0\.15/);
+  assert.match(designDetail, /quote\.mobilizationAmount/);
+  assert.match(designDetail, /Pending server quote/);
+
+  assert.match(routeGuard, /LegacyOwnerRedirectShell/);
+  assert.match(routeGuard, /Legacy owner app: manual handoff only/);
+});
+
 test('Phase 11: Admin Owner activation approval is Cash/Cheque only and creates immutable financial records', () => {
   const approval = read('functions/paymentTransactionApproval.ts');
   const secure = read('functions/securePaymentApproval.ts');
