@@ -796,33 +796,6 @@ service cloud.firestore {
         ]);
     }
 
-    function safeBrokerReferralCreate(data, referralId) {
-      return signedIn() &&
-        claimedRole() == 'broker' &&
-        data.get('brokerId', null) == request.auth.uid &&
-        data.get('sourceReferralId', '') == referralId &&
-        data.get('attributionId', '') == 'broker_referral_' + request.auth.uid + '_' + referralId &&
-        !data.keys().hasAny([
-          'commissionStatus',
-          'commissionRate',
-          'commissionAmount',
-          'commissionCreationStatus',
-          'approved',
-          'approvedAt',
-          'paidAt'
-        ]);
-    }
-
-    function safeBrokerReferralUpdate() {
-      return signedIn() &&
-        resource.data.get('brokerId', null) == request.auth.uid &&
-        request.resource.data.get('brokerId', null) == request.auth.uid &&
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-          'notes',
-          'updatedAt'
-        ]);
-    }
-
     // Direct client open-mission claims are denied. Assignment requires
     // canDispatchJobs() / Admin SDK or the acceptTechnicianTicket transaction.
     function safeParticipantDocumentCreate(data) {
