@@ -80,7 +80,7 @@ test('Owner portfolio and Tenant unit pages use rule-provable canonical bindings
   const tenantSource = read('src/tenant/pages/TenantUnitPage.tsx');
 
   assert.match(ownerSource, /where\('ownerId', '==', user\.uid\)/);
-  assert.match(ownerSource, /where\('ownerEmail', '==', email\)/);
+  assert.doesNotMatch(ownerSource, /where\('ownerEmail', '==', email\)/);
   assert.doesNotMatch(ownerSource, /where\('propertyId', '==', p\.id\)/);
   assert.match(ownerSource, /passportsByPropertyId/);
 
