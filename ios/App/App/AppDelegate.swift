@@ -1,5 +1,24 @@
 import UIKit
 import Capacitor
+import FirebaseCore
+import FirebaseAppCheck
+
+private final class BinGroupAppCheckProviderFactory: NSObject, AppCheckProviderFactory {
+    func createProvider(with app: FirebaseApp) -> AppCheckProvider? {
+        #if targetEnvironment(simulator)
+        #if DEBUG
+        return AppCheckDebugProvider(app: app)
+        #else
+        return nil
+        #endif
+        #else
+        if #available(iOS 14.0, *) {
+            return AppAttestProvider(app: app)
+        }
+        return DeviceCheckProvider(app: app)
+        #endif
+    }
+}
 
 @UIApplicationMain
 class AppDelegate: UIResponder, UIApplicationDelegate {
@@ -7,7 +26,22 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     var window: UIWindow?
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
-        // Override point for customization after application launch.
+        guard
+            let configPath = Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist"),
+            let options = FirebaseOptions(contentsOfFile: configPath),
+            !options.googleAppID.contains("REPLACE_WITH_")
+        else {
+            #if DEBUG
+            NSLog("[BIN_APPCHECK] Native Firebase config unavailable in debug/simulator build; production release injection is required.")
+            return true
+            #else
+            fatalError("Native iOS Firebase configuration is required for production App Check.")
+            #endif
+        }
+
+        AppCheck.setAppCheckProviderFactory(BinGroupAppCheckProviderFactory())
+        FirebaseApp.configure(options: options)
+        AppCheck.appCheck().isTokenAutoRefreshEnabled = true
         return true
     }
 
