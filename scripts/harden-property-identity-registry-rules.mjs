@@ -29,12 +29,23 @@ if (!next.includes(readNew)) throw new Error('[property-identity-registry] read 
 
 const writeAnchor = "          'properties',\n          'users',";
 const writeReplacement = "          'properties',\n          'property_identity_registry',\n          'users',";
-if (!next.includes("'property_identity_registry',\n          'users'")) {
+const phase10WriteReplacement = "          'properties',\n          'property_identity_registry',\n          'owner_portfolio_quotes',\n          'system_payment_config',\n          'propertyInspections',\n          'users',";
+if (!next.includes("'property_identity_registry'")) {
   next = next.replaceAll(writeAnchor, writeReplacement);
 }
-const identityWriteExclusions = (next.match(/'property_identity_registry',\n\s*'users'/g) || []).length;
-if (identityWriteExclusions !== 2) {
-  throw new Error(`[property-identity-registry] expected two write fallback exclusions, found ${identityWriteExclusions}`);
+const writeRules = [...next.matchAll(/allow\\s+([^:;]+):\\s*([^;]+);/g)]
+  .filter(([, operations]) => /\\b(create|update|delete|write)\\b/.test(operations));
+if (
+  writeRules.length !== 2 ||
+  writeRules.some(([, , condition]) => !condition.includes("'property_identity_registry'"))
+) {
+  throw new Error('[property-identity-registry] property identity must be excluded from both generic browser write fallbacks');
+}
+if (next.includes("'owner_portfolio_quotes'") && !next.includes(phase10WriteReplacement.trim())) {
+  const phase10Collections = ['owner_portfolio_quotes', 'system_payment_config', 'propertyInspections'];
+  if (writeRules.some(([, , condition]) => phase10Collections.some((name) => !condition.includes(`'${name}'`)))) {
+    throw new Error('[property-identity-registry] Phase 10 Firebase authority fallback exclusions are incomplete');
+  }
 }
 rules = rules.slice(0, genericStart) + next;
 
