@@ -38,7 +38,8 @@ test('Wave 2 provides tenant-owned server saved searches and event-driven new-ma
   assert.match(backend, /export const saveHomeDiscoverySearch = onCall/);
   assert.match(backend, /export const listHomeDiscoverySavedSearches = onCall/);
   assert.match(backend, /export const deleteHomeDiscoverySavedSearch = onCall/);
-  assert.match(backend, /assertTenantAuth\(request\.auth\)/);
+  assert.match(backend, /assertCurrentTenantAuthority\(request\.auth\)/);
+  assert.match(backend, /admin\.auth\(\)\.getUser\(uid\)/);
   assert.match(backend, /homeDiscoverySavedSearches/);
   assert.match(backend, /alertsEnabled/);
   assert.match(backend, /MAX_SAVED_SEARCHES_PER_TENANT = 30/);
