@@ -23,6 +23,7 @@ export {
   adminRecordOwnerMobilizationPaymentEvidence,
 } from "./inspectionFirstOwnerOnboarding";
 export { submitOwnerInspectionFirstOnboarding } from "./canonicalOwnerSubmission";
+export { resubmitOwnerProperty } from "./ownerPropertyResubmission";
 export * from "./ownerInspectionAdminLink";
 export { adminRecordOwnerPropertyInspectionEvidence } from "./ownerInspectionCompletion";
 export { adminCompleteOwnerPortfolioInspections } from "./canonicalOwnerInspectionCompletion";
