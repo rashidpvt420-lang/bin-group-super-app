@@ -544,9 +544,66 @@ service cloud.firestore {
       ]);
     }
 
+    function propertyActivationAuthorityUnchanged() {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+        'status',
+        'approvalStatus',
+        'onboardingStatus',
+        'canonicalOnboardingState',
+        'activationStatus',
+        'paymentStatus',
+        'paymentVerified',
+        'adminApproved',
+        'approved',
+        'contractActivated',
+        'dashboardUnlocked',
+        'dashboardLocked',
+        'dashboardUnlockApproved',
+        'unlocksDashboard',
+        'activeContractId',
+        'quoteHash',
+        'quoteSnapshot',
+        'quoteVersion',
+        'inspectionId',
+        'inspectionIds',
+        'inspectionStatus',
+        'inspectionVerified',
+        'inspectionEvidenceVerified',
+        'adminSiteVisitVerified',
+        'locationVerified',
+        'activatedAt',
+        'approvedAt',
+        'approvedBy',
+        'reviewedAt',
+        'reviewedBy',
+        'reviewedByRole',
+        'rejectedAt',
+        'rejectedBy',
+        'ownerId',
+        'ownerUid'
+      ]);
+    }
+
+    function propertyCreateHasNoActivationAuthority(data) {
+      return !(data.get('status', '') in ['active', 'ACTIVE', 'approved', 'APPROVED']) &&
+        !(data.get('activationStatus', '') in ['active', 'ACTIVE', 'approved', 'APPROVED']) &&
+        data.get('paymentVerified', false) == false &&
+        data.get('adminApproved', false) == false &&
+        data.get('approved', false) == false &&
+        data.get('contractActivated', false) == false &&
+        data.get('dashboardUnlocked', false) == false &&
+        data.get('dashboardUnlockApproved', false) == false &&
+        data.get('unlocksDashboard', false) == false &&
+        data.get('inspectionVerified', false) == false &&
+        data.get('inspectionEvidenceVerified', false) == false &&
+        data.get('adminSiteVisitVerified', false) == false &&
+        data.get('locationVerified', false) == false;
+    }
+
     function safeManagedPropertyUpdate() {
       return canonicalPropertyGeoUnchanged() &&
-        submittedPropertyGeoIsUnverified(request.resource.data);
+        submittedPropertyGeoIsUnverified(request.resource.data) &&
+        propertyActivationAuthorityUnchanged();
     }
 
     function safeOwnerPropertyCreate(data) {
@@ -1191,13 +1248,16 @@ service cloud.firestore {
     match /properties/{propertyId} {
       allow get: if isNotSuspended() && getTenantPropertyId() == propertyId;
       allow read: if isNotSuspended() && (canManageProperties() || ownerCanRead(resource.data) || tenantOwns(resource.data) || (isTechnicianActor() && techOwns(resource.data)));
+      // Canonical property creation and Owner corrections are server-authoritative.
+      // Browser Admins may create only non-activated records; Owners must use the
+      // App Check-protected onboarding/resubmission callables.
       allow create: if isNotSuspended() &&
+        canManageProperties() &&
         propertyCreateHasNoCanonicalGeo(request.resource.data) &&
-        (canManageProperties() || ownerDraftCreate(request.resource.data));
-      allow update: if isNotSuspended() && (
-        (canManageProperties() && safeManagedPropertyUpdate()) ||
-        safeOwnerPropertyUpdate()
-      );
+        propertyCreateHasNoActivationAuthority(request.resource.data);
+      allow update: if isNotSuspended() &&
+        canManageProperties() &&
+        safeManagedPropertyUpdate();
       allow delete: if isNotSuspended() && isAdmin();
     }
 
