@@ -429,19 +429,18 @@ export const resubmitOwnerProperty = onCall(
         ? patch.submittedGeo
         : existingSubmitted;
       const submittedGeo = normalizeSubmittedGeo(requestedSubmitted, existingSubmitted);
+      const {
+        geo: _legacyUnverifiedGeo,
+        geoVerification: _legacyGeoVerification,
+        verifiedGeo: _legacyVerifiedGeo,
+        dispatchReady: _legacyDispatchReady,
+        verified: _legacyVerified,
+        ...propertyWithoutCanonicalGeo
+      } = property;
       const nextProperty: PlainRecord = {
-        ...property,
+        ...propertyWithoutCanonicalGeo,
         ...patch,
         submittedGeo,
-        geo: {
-          ...submittedGeo,
-          source: "owner_submission",
-          verified: false,
-          dispatchReady: false,
-          requiresGeoReview: true,
-          verifiedBy: null,
-          verifiedAt: null,
-        },
       };
 
       const identities = buildPropertyIdentities(nextProperty);
@@ -523,11 +522,18 @@ export const resubmitOwnerProperty = onCall(
         const id = text(value.propertyId || value.id, 240);
         if (id !== propertyId) return value;
         matched += 1;
+        const {
+          geo: _legacyIntakeGeo,
+          geoVerification: _legacyIntakeGeoVerification,
+          verifiedGeo: _legacyIntakeVerifiedGeo,
+          dispatchReady: _legacyIntakeDispatchReady,
+          verified: _legacyIntakeVerified,
+          ...intakePropertyWithoutCanonicalGeo
+        } = value;
         return {
-          ...value,
+          ...intakePropertyWithoutCanonicalGeo,
           ...patch,
           submittedGeo,
-          geo: nextProperty.geo,
           status: "PENDING_PROPERTY_INSPECTION",
           activationStatus: "LOCKED_PENDING_INSPECTION_AND_PAYMENT",
           inspectionStatus: "PENDING_ADMIN_SITE_VISIT",
@@ -543,7 +549,11 @@ export const resubmitOwnerProperty = onCall(
       transaction.set(propertyRef, {
         ...patch,
         submittedGeo,
-        geo: nextProperty.geo,
+        geo: FieldValue.delete(),
+        geoVerification: FieldValue.delete(),
+        verifiedGeo: FieldValue.delete(),
+        verified: FieldValue.delete(),
+        dispatchReady: FieldValue.delete(),
         status: "PENDING_PROPERTY_INSPECTION",
         canonicalOnboardingState: "admin_review",
         approvalStatus: "PENDING_REVIEW",
