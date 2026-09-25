@@ -197,7 +197,8 @@ test('Phase 8 leads and deals preserve immutable server attribution', async () =
   assert.match(leads, /const leadRef = doc\(collection\(db, 'brokerLeads'\)\)/);
   assert.match(leads, /attributionId/);
   assert.match(leads, /sourceLeadId: leadRef\.id/);
-  assert.match(app, /path="\/deals"/);
+  assert.match(app, /Deals & Attribution/);
+  assert.match(app, /path: '\/broker\/attribution'/);
   assert.match(referralPage, /getBrokerVerifiedListings/);
   assert.match(referralPage, /submitBrokerReferral/);
   assert.doesNotMatch(referralPage, /collection\(db, 'properties'\)/);
@@ -227,7 +228,9 @@ test('Phase 8 notification lifecycle remains recipient-scoped for Brokers', asyn
 
 test('Phase 8 Broker portal exposes onboarding, listings, deals, commissions, documents and profile routes', async () => {
   const app = await read('src/broker/BrokerApp.tsx');
-  for (const route of ['/dashboard', '/leads', '/referrals', '/listings', '/deals', '/commissions', '/documents', '/profile']) {
+  for (const route of ['/dashboard', '/leads', '/referrals', '/listings', '/commissions', '/documents', '/profile']) {
     assert.ok(app.includes(`path="${route}"`), `Missing Broker route ${route}`);
   }
+  assert.match(app, /Deals & Attribution/);
+  assert.match(app, /path: '\/broker\/attribution'/);
 });
