@@ -1,4 +1,5 @@
 import { FieldValue } from "firebase-admin/firestore";
+import { assertWorkflowTransition, normalizeWorkflowState } from "./workflowStateMachines";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 import * as crypto from "crypto";
@@ -722,6 +723,8 @@ export const adminRejectPayment = onCall({ cors: true, enforceAppCheck: true }, 
     if (!freshPaymentSnap.exists) throw new HttpsError("not-found", "Payment transaction not found.");
     const freshPayment = freshPaymentSnap.data() || {};
     const freshContract = contractSnap?.data() || {};
+    const currentPaymentState = normalizeWorkflowState("PAYMENT", freshPayment.status || freshPayment.paymentStatus, "PENDING");
+    const currentContractState = normalizeWorkflowState("CONTRACT", freshContract.status || freshContract.contractStatus, "PENDING_PAYMENT");
     if (
       roleOf(freshPayment.status) === "approved" ||
       roleOf(freshContract.status) === "active" ||
@@ -732,6 +735,9 @@ export const adminRejectPayment = onCall({ cors: true, enforceAppCheck: true }, 
         "An activated payment cannot be rejected. Phase 1 refunds or contract-cancellation requests require manual Finance/Admin review under the signed contract; rejection must not mutate activated financial state.",
       );
     }
+
+    assertWorkflowTransition("PAYMENT", currentPaymentState, "REJECTED");
+    if (contractRef) assertWorkflowTransition("CONTRACT", currentContractState, "PENDING_PAYMENT");
 
     transaction.set(ref, {
       status: "REJECTED",
