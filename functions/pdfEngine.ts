@@ -559,11 +559,11 @@ export async function generatePayslipPDF(data: any) {
         doc.on('end', async () => {
             try {
                 const buffer = Buffer.concat(chunks);
-                const url = await savePdf(buffer, `payslips/${data.staffId}/${data.payPeriod}.pdf`, {
+                const artifact = await savePdf(buffer, `payslips/${data.staffId}/${data.payPeriod}.pdf`, {
                     staffId: textValue(data.staffId, ''),
                     payPeriod: textValue(data.payPeriod, '')
                 });
-                resolve(url);
+                resolve(artifact.pdfUrl);
             } catch (err) {
                 reject(err);
             }
@@ -630,13 +630,13 @@ export async function generateIntegrityAuditPDF(data: { propertyId: string; prop
         doc.on('end', async () => {
             try {
                 const buffer = Buffer.concat(chunks);
-                const url = await savePdf(buffer, `auditReports/${textValue(data.propertyId, 'unknown')}/${auditId}.pdf`, {
+                const artifact = await savePdf(buffer, `auditReports/${textValue(data.propertyId, 'unknown')}/${auditId}.pdf`, {
                     propertyId: textValue(data.propertyId, ''),
                     propertyName: textValue(data.propertyName, ''),
                     auditId,
                     generatedAt: textValue(intel.generatedAt, new Date().toISOString())
                 });
-                resolve(url);
+                resolve(artifact.pdfUrl);
             } catch (err) {
                 reject(err);
             }
