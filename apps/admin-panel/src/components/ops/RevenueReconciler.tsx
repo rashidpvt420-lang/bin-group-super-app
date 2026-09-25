@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { normalizeWorkflowState } from '@bin/shared';
 import { RefreshCcw, AlertCircle, ShieldCheck, History, CheckCircle2, Construction } from 'lucide-react';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
 import { db, collection, query, limit, getDocs } from '../../lib/firebase';
@@ -27,8 +28,6 @@ function toDate(value: any): Date | null {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
-const APPROVED_STATUSES = new Set(['APPROVED', 'VERIFIED', 'SETTLED', 'PAID', 'PAYMENT_VERIFIED']);
-const PENDING_STATUSES = new Set(['PENDING', 'PENDING_VERIFICATION', 'ADMIN_VERIFICATION_REQUIRED', 'PENDING_ADMIN_PAYMENT_VERIFICATION']);
 const PHASE1_METHODS = new Set(['CASH', 'CHEQUE']);
 
 const RevenueReconciler: React.FC = () => {
@@ -60,9 +59,9 @@ const RevenueReconciler: React.FC = () => {
 
   const live = useMemo(() => {
     const phase1 = records.filter((record) => PHASE1_METHODS.has(normalizeMethod(record.paymentMethod || record.method)));
-    const approved = phase1.filter((record) => APPROVED_STATUSES.has(normalizeStatus(record.status || record.paymentStatus || record.verificationState)));
-    const pending = phase1.filter((record) => PENDING_STATUSES.has(normalizeStatus(record.status || record.paymentStatus || record.verificationState)));
-    const rejected = phase1.filter((record) => normalizeStatus(record.status || record.paymentStatus || record.verificationState).includes('REJECT'));
+    const approved = phase1.filter((record) => normalizeWorkflowState('PAYMENT', record.status || record.paymentStatus || record.verificationState, 'PENDING') === 'APPROVED');
+    const pending = phase1.filter((record) => ['PENDING', 'PARTIALLY_PAID', 'OVERDUE'].includes(normalizeWorkflowState('PAYMENT', record.status || record.paymentStatus || record.verificationState, 'PENDING')));
+    const rejected = phase1.filter((record) => normalizeWorkflowState('PAYMENT', record.status || record.paymentStatus || record.verificationState, 'PENDING') === 'REJECTED');
 
     const approvedAmounts = approved
       .map((record) => finiteAmount(record.amount ?? record.amountReceived))
