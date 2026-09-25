@@ -80,8 +80,8 @@ assert(firebaseJson.includes('"public": "dist"'), 'Firebase Hosting must deploy 
 assert(firebaseJson.includes('"rules": "launch_generated/firestore.rules"'), 'Firebase must deploy the generated hardened Firestore rules artefact.');
 assert(packageJson.includes('"write:production-rules": "node scripts/write-production-firestore-rules.mjs"'), 'Package scripts must expose the production rules artefact writer.');
 assert(
-  packageJson.includes('npm run harden:live-location-authority && npm run harden:property-identity-registry && npm run write:production-rules'),
-  'The generated rules artefact must be written only after the final GPS and property-identity authority hardeners.',
+  packageJson.includes('npm run harden:live-location-authority && npm run harden:property-identity-registry && npm run harden:phase10-firebase-rules && npm run write:production-rules'),
+  'The generated rules artefact must be written only after the final GPS, property-identity, and Phase 10 Firebase authority hardeners.',
 );
 assert(firestoreRulesWriter.includes("const outputPath = `${outputDirectory}/firestore.rules`"), 'Rules writer must target launch_generated/firestore.rules.');
 assert(firestoreRulesWriter.includes("createHash('sha256')"), 'Rules writer must record a SHA-256 digest.');
