@@ -479,7 +479,7 @@ await db.collection('maintenanceTickets').doc(sosTicketId).set({
   category: 'emergency',
   priority: 'emergency',
   description: 'TENANT TRIGGERED SOS EMERGENCY (E2E seed)',
-  status: 'emergency_submitted',
+  status: 'OPEN',
   sosStatus: 'ACTIVE',
   isSOS: true,
   emergency: true,
