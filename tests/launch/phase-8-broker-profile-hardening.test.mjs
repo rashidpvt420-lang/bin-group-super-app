@@ -5,11 +5,13 @@ import test from 'node:test';
 const read = (path) => readFile(new URL(`../../${path}`, import.meta.url), 'utf8');
 
 test('Phase 8 Broker KYC is callable-only, App Check protected and cannot be self-approved', async () => {
-  const [profile, submission, review, rules] = await Promise.all([
+  const [profile, submission, review, rules, adminPage, runtime] = await Promise.all([
     read('src/broker/pages/BrokerProfilePage.tsx'),
     read('functions/secureBrokerKycSubmission.ts'),
     read('functions/secureBrokerKycReview.ts'),
     read('firestore.rules'),
+    read('apps/admin-panel/src/pages/brokers/BrokerManagementPage.tsx'),
+    read('functions/runtime.ts'),
   ]);
 
   assert.match(profile, /submitBrokerKycProfile/);
@@ -29,6 +31,11 @@ test('Phase 8 Broker KYC is callable-only, App Check protected and cannot be sel
   assert.match(review, /Brokers cannot approve or reject their own KYC/);
   assert.match(review, /submissionHash/);
   assert.match(review, /approvedSubmissionHash/);
+  assert.match(adminPage, /getAdminBrokerKycReviewSummary/);
+  assert.match(adminPage, /private-vault/);
+  assert.match(adminPage, /bankIbanMasked/);
+  assert.doesNotMatch(adminPage, /collection\(db, 'broker_kyc_profiles'\)/);
+  assert.match(runtime, /getAdminBrokerKycReviewSummary/);
 
   assert.match(rules, /match \/broker_kyc_profiles\/\{brokerId\}/);
   assert.match(rules, /request\.auth\.uid == brokerId/);
