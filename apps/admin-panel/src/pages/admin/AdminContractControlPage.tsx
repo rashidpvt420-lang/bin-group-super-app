@@ -20,6 +20,10 @@ export default function AdminContractControlPage() {
   const [busyId, setBusyId] = React.useState('');
   const [rebuilding, setRebuilding] = React.useState(false);
   const [notice, setNotice] = React.useState<Notice | null>(null);
+  const [refundDecision, setRefundDecision] = React.useState<'FULL_REFUND' | 'NO_REFUND'>('FULL_REFUND');
+  const [refundReference, setRefundReference] = React.useState('');
+  const [refundNote, setRefundNote] = React.useState('');
+  const [refundBusyId, setRefundBusyId] = React.useState('');
 
   React.useEffect(() => {
     const stopContracts = onSnapshot(collection(db, 'contracts'), (snapshot) => {
@@ -40,6 +44,7 @@ export default function AdminContractControlPage() {
   }, [isRTL, label]);
 
   const openContracts = contracts.filter(isOpen);
+  const refundReviewContracts = contracts.filter((row) => row.refundReviewRequired === true && String(row.linkedPaymentId || '').trim());
 
   const rebuildRenewals = async () => {
     setRebuilding(true);
@@ -82,6 +87,51 @@ export default function AdminContractControlPage() {
     }
   };
 
+  const resolveRefundDisposition = async (row: any) => {
+    const paymentId = String(row.linkedPaymentId || '').trim();
+    const auditNote = refundNote.trim();
+    const reference = refundReference.trim();
+    if (!paymentId) {
+      setNotice({ severity: 'error', text: label('The closed contract is missing its linked payment ID.', 'العقد المغلق لا يحتوي على معرف الدفعة المرتبطة.') });
+      return;
+    }
+    if (auditNote.length < 8) {
+      setNotice({ severity: 'warning', text: label('Enter a refund decision note of at least 8 characters.', 'أدخل ملاحظة قرار الاسترداد من 8 أحرف على الأقل.') });
+      return;
+    }
+    if (refundDecision === 'FULL_REFUND' && reference.length < 4) {
+      setNotice({ severity: 'warning', text: label('Enter the Cash/Cheque refund reference.', 'أدخل مرجع استرداد النقد/الشيك.') });
+      return;
+    }
+    setRefundBusyId(row.id);
+    setNotice(null);
+    try {
+      const callable = httpsCallable(functions, 'adminRecordOwnerPaymentRefund');
+      const response = await callable({
+        paymentId,
+        decision: refundDecision,
+        refundReferenceId: refundDecision === 'FULL_REFUND' ? reference : '',
+        note: auditNote,
+      });
+      const result = response.data as any;
+      setRefundReference('');
+      setRefundNote('');
+      setNotice({
+        severity: 'success',
+        text: result?.idempotent
+          ? label('This financial disposition was already recorded.', 'تم تسجيل هذا القرار المالي مسبقاً.')
+          : refundDecision === 'FULL_REFUND'
+            ? label(`Full refund recorded from the authoritative payment: AED ${Number(result?.refundAmount || 0).toLocaleString('en-AE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}.`, `تم تسجيل الاسترداد الكامل من الدفعة المعتمدة: ${Number(result?.refundAmount || 0).toLocaleString('en-AE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} درهم.`)
+            : label('No-refund disposition recorded with audit evidence.', 'تم تسجيل قرار عدم الاسترداد مع دليل التدقيق.'),
+      });
+    } catch (error: any) {
+      setNotice({ severity: 'error', text: error?.message || label('Refund disposition failed.', 'فشل قرار الاسترداد.') });
+    } finally {
+      setRefundBusyId('');
+    }
+  };
+
+
   return (
     <Box data-testid="admin-contract-control" sx={{ p: { xs: 2, md: 4 }, bgcolor: '#020617', minHeight: '100%', color: '#fff', direction: isRTL ? 'rtl' : 'ltr' }}>
       <Stack spacing={3}>
@@ -123,6 +173,40 @@ export default function AdminContractControlPage() {
               {!loading && openContracts.length === 0 && <TableRow><TableCell colSpan={6} align="center">{label('No open contracts found.', 'لا توجد عقود مفتوحة.')}</TableCell></TableRow>}
             </TableBody>
           </Table>
+        </Paper>
+
+        <Paper data-testid="admin-contract-refund-review" sx={{ p: 2, bgcolor: '#0f172a', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 3 }}>
+          <Stack spacing={2}>
+            <Box>
+              <Typography variant="overline" sx={{ color: '#DAA520', fontWeight: 950 }}>{label('Financial disposition queue', 'قائمة القرارات المالية')}</Typography>
+              <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.6)' }}>{label('Paid contract closures remain here until Finance records FULL REFUND or NO REFUND. Refund amount is server-derived; the browser cannot enter or change it.', 'تبقى إغلاقات العقود المدفوعة هنا حتى تسجل المالية استرداداً كاملاً أو عدم استرداد. مبلغ الاسترداد يحدده الخادم ولا يمكن للمتصفح إدخاله أو تغييره.')}</Typography>
+            </Box>
+            <Stack direction={{ xs: 'column', md: isRTL ? 'row-reverse' : 'row' }} spacing={2}>
+              <TextField data-testid="admin-refund-decision" select size="small" label={label('Decision', 'القرار')} value={refundDecision} onChange={(event) => setRefundDecision(event.target.value as 'FULL_REFUND' | 'NO_REFUND')} sx={{ minWidth: 220 }}>
+                <MenuItem value="FULL_REFUND">{label('Full refund', 'استرداد كامل')}</MenuItem>
+                <MenuItem value="NO_REFUND">{label('No refund', 'بدون استرداد')}</MenuItem>
+              </TextField>
+              <TextField data-testid="admin-refund-reference" size="small" label={label('Cash/Cheque refund reference', 'مرجع استرداد النقد/الشيك')} value={refundReference} onChange={(event) => setRefundReference(event.target.value)} disabled={refundDecision !== 'FULL_REFUND'} inputProps={{ maxLength: 180 }} sx={{ minWidth: 280 }} />
+              <TextField data-testid="admin-refund-note" size="small" label={label('Decision note', 'ملاحظة القرار')} value={refundNote} onChange={(event) => setRefundNote(event.target.value)} inputProps={{ maxLength: 1200 }} sx={{ minWidth: 320 }} />
+            </Stack>
+            {refundReviewContracts.length === 0 ? (
+              <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.45)' }}>{label('No paid closures are awaiting financial disposition.', 'لا توجد إغلاقات مدفوعة بانتظار قرار مالي.')}</Typography>
+            ) : (
+              <Stack spacing={1.2}>
+                {refundReviewContracts.map((row) => (
+                  <Stack key={row.id} direction={{ xs: 'column', md: isRTL ? 'row-reverse' : 'row' }} spacing={2} alignItems={{ xs: 'stretch', md: 'center' }} justifyContent="space-between" sx={{ p: 1.5, border: '1px solid rgba(255,255,255,0.08)', borderRadius: 2 }}>
+                    <Box>
+                      <Typography fontWeight={900}>{row.contractNumber || row.id}</Typography>
+                      <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)' }}>{label('Linked payment', 'الدفعة المرتبطة')}: {row.linkedPaymentId}</Typography>
+                    </Box>
+                    <Button data-testid={`admin-refund-resolve-${row.id}`} variant="contained" color="warning" disabled={refundBusyId === row.id} onClick={() => resolveRefundDisposition(row)}>
+                      {refundBusyId === row.id ? label('Recording...', 'جارٍ التسجيل...') : label('Record disposition', 'تسجيل القرار')}
+                    </Button>
+                  </Stack>
+                ))}
+              </Stack>
+            )}
+          </Stack>
         </Paper>
 
         <Paper sx={{ p: 2, bgcolor: '#0f172a', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 3 }}>
