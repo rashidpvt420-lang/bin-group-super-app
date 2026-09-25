@@ -58,8 +58,9 @@ export const adminCreateOwnerPortfolioPropertyInspection = onCall({ cors: true, 
   const properties = Array.isArray(intake.properties) ? intake.properties : [];
   const property = properties[propertyIndex];
   if (!property) throw new HttpsError("not-found", `Property ${propertyIndex + 1} was not found in this application.`);
-  const lat = Number(property?.geo?.lat ?? property?.geo?.point?.latitude);
-  const lng = Number(property?.geo?.lng ?? property?.geo?.point?.longitude);
+  const submittedGeo = property?.submittedGeo || property?.geo || {};
+  const lat = Number(submittedGeo?.lat ?? submittedGeo?.point?.latitude);
+  const lng = Number(submittedGeo?.lng ?? submittedGeo?.point?.longitude);
   if (!Number.isFinite(lat) || !Number.isFinite(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) {
     throw new HttpsError("failed-precondition", "Owner-submitted GPS is required before creating a site visit.");
   }
@@ -79,10 +80,10 @@ export const adminCreateOwnerPortfolioPropertyInspection = onCall({ cors: true, 
     lat,
     lng,
     point,
-    geohash: text(property?.geo?.geohash),
-    address: text(property?.geo?.address || property.address),
-    emirate: text(property?.geo?.emirate || property.emirate),
-    area: text(property?.geo?.area || property.area),
+    geohash: text(submittedGeo?.geohash),
+    address: text(submittedGeo?.address || property.address),
+    emirate: text(submittedGeo?.emirate || property.emirate),
+    area: text(submittedGeo?.area || property.area),
     source: "OWNER_SUBMITTED_PENDING_ADMIN_VERIFICATION",
     mapUrl: `https://www.google.com/maps?q=${lat},${lng}`,
     directionsUrl: `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`,
