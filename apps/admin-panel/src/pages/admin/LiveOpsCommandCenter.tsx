@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { normalizeWorkflowState } from '@bin/shared';
 import { Activity, MapPin, Radio, Users, Zap } from 'lucide-react';
 import { Alert, Avatar, Box, Chip, Grid, Paper, Stack, Typography } from '@mui/material';
 import { collection, limit, onSnapshot, orderBy, query } from 'firebase/firestore';
@@ -100,12 +101,12 @@ export default function LiveOpsCommandCenter() {
                 const docs = snapshot.docs;
                 const events: LiveEvent[] = docs.slice(0, 15).map((docSnap) => {
                     const data = docSnap.data();
-                    const status = normalizeStatus(data.status);
+                    const status = normalizeWorkflowState('TICKET', data.status, 'OPEN');
                     const priority = normalizeStatus(data.priority);
                     const type: LiveEvent['type'] =
-                        priority === 'HIGH' || priority === 'EMERGENCY' || status === 'EMERGENCY_SUBMITTED'
+                        priority === 'HIGH' || priority === 'EMERGENCY'
                             ? 'EMERGENCY'
-                            : ['COMPLETED', 'RESOLVED', 'CLOSED'].includes(status)
+                            : ['COMPLETED', 'TENANT_APPROVED', 'CLOSED'].includes(status)
                                 ? 'RESOLVED'
                                 : 'TRIAGE';
                     return {
@@ -119,7 +120,7 @@ export default function LiveOpsCommandCenter() {
 
                 setLiveEvents(events);
                 setTicketTotal(docs.length);
-                setCompletedTickets(docs.filter((docSnap) => ['COMPLETED', 'RESOLVED', 'CLOSED'].includes(normalizeStatus(docSnap.data().status))).length);
+                setCompletedTickets(docs.filter((docSnap) => ['COMPLETED', 'TENANT_APPROVED', 'CLOSED'].includes(normalizeWorkflowState('TICKET', docSnap.data().status, 'OPEN'))).length);
             },
             (error) => {
                 console.error('[LiveOps] ticket listener failed:', error);
