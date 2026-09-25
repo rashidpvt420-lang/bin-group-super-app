@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 const evidenceRunners = [
-  'scripts/run-owner-onboarding-production-evidence.mjs',
+  'scripts/run-owner-inspection-first-production-evidence.mjs',
   'scripts/run-broker-production-evidence.mjs',
 ];
 
