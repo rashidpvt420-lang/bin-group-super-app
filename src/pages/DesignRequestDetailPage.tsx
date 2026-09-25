@@ -333,7 +333,7 @@ function DesignRequestDetailContent() {
                                     <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950 }}>EXECUTION QUOTE</Typography>
                                     <Typography variant="h4" fontWeight="950" sx={{ color: '#FFF' }}>{formatAED(quote.finalTotal || 0)}</Typography>
                                     <Typography variant="caption" sx={{ color: '#10b981', fontWeight: 900, display: 'block', mt: 0.5 }}>
-                                        15% Upfront Deposit Required: {formatAED(Number(quote.mobilizationAmount ?? Math.round(Number(quote.finalTotal || 0) * 0.15 * 100) / 100))}
+                                        15% Upfront Deposit Required: {quote.mobilizationAmount != null ? formatAED(Number(quote.mobilizationAmount)) : 'Pending server quote'}
                                     </Typography>
                                 </Box>
                                 <Chip label={String(request.status || 'DRAFT').replace(/_/g, ' ')} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, maxWidth: 220 }} />
