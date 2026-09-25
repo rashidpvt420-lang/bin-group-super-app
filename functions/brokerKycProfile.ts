@@ -2,6 +2,7 @@ import * as admin from "firebase-admin";
 import * as crypto from "crypto";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
+import { assertCanonicalWorkflowState } from "./workflowStateMachines";
 
 if (!admin.apps.length) admin.initializeApp();
 
@@ -130,7 +131,7 @@ export async function submitBrokerKycProfileHandler(request: any) {
     commissionAgreementAccepted,
   ];
   const profileCompletionScore = Math.round((checks.filter(Boolean).length / checks.length) * 100);
-  const brokerKycStatus = profileCompletionScore === 100 ? "PENDING_REVIEW" : "CHANGES_REQUESTED";
+  const brokerKycStatus = assertCanonicalWorkflowState("BROKER_KYC", profileCompletionScore === 100 ? "PENDING_REVIEW" : "CHANGES_REQUESTED");
   const reraStatus = reraLicense ? "PENDING" : "NOT_SUBMITTED";
 
   const canonical = {
