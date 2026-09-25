@@ -346,6 +346,41 @@ async function collectRenewalRecords() {
   return output;
 }
 
+
+async function requireCurrentAdminMutationAuthority(auth: any) {
+  if (!auth?.uid) throw new HttpsError("unauthenticated", "Admin authentication required.");
+  const token = auth.token || {};
+  const tokenRole = safeString(token.role || token.userRole || token.primaryRole).toLowerCase();
+  const allowedRoles = new Set(["admin", "super_admin", "ceo", "operations_admin", "account_manager"]);
+  const tokenAuthorized =
+    token.suspended !== true &&
+    (token.admin === true ||
+      token.isAdmin === true ||
+      token.superAdmin === true ||
+      token.super_admin === true ||
+      token.ceo === true ||
+      allowedRoles.has(tokenRole));
+  if (!tokenAuthorized) throw new HttpsError("permission-denied", "Admin access required.");
+  if (token.email_verified !== true || !token.firebase?.sign_in_second_factor) {
+    throw new HttpsError("permission-denied", "A verified Admin MFA session is required.");
+  }
+  const currentUser = await admin.auth().getUser(auth.uid);
+  const currentClaims = currentUser.customClaims || {};
+  const currentRole = safeString(currentClaims.role || currentClaims.userRole || currentClaims.primaryRole).toLowerCase();
+  const currentAuthorized =
+    currentClaims.suspended !== true &&
+    (currentClaims.admin === true ||
+      currentClaims.isAdmin === true ||
+      currentClaims.superAdmin === true ||
+      currentClaims.super_admin === true ||
+      currentClaims.ceo === true ||
+      allowedRoles.has(currentRole));
+  if (currentUser.disabled || !currentUser.emailVerified || !currentAuthorized) {
+    throw new HttpsError("permission-denied", "Current Admin authority is inactive or no longer valid.");
+  }
+  return { uid: auth.uid, role: tokenRole || "admin" };
+}
+
 export const runContractRenewalWatch = onSchedule("every 24 hours", async () => {
   const records = await collectRenewalRecords();
   let processed = 0;
@@ -365,18 +400,25 @@ export const runContractRenewalWatch = onSchedule("every 24 hours", async () => 
   }, { merge: true });
 });
 
-export const rebuildContractRenewalWatch = onCall({ cors: true }, async (request) => {
-  if (!request.auth) throw new HttpsError("unauthenticated", "Auth required.");
-  const role = safeString(request.auth.token?.role || request.auth.token?.userRole || request.auth.token?.primaryRole).toLowerCase();
-  const adminAllowed = request.auth.token?.admin === true || ["admin", "super_admin", "ceo", "operations_admin", "account_manager"].includes(role);
-  if (!adminAllowed) throw new HttpsError("permission-denied", "Admin access required.");
+export const rebuildContractRenewalWatch = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
+  const actor = await requireCurrentAdminMutationAuthority(request.auth);
 
   const records = await collectRenewalRecords();
   const results = [] as any[];
   for (const record of records) {
     results.push({ id: renewalId(record), ...(await processRenewalRecord(record)) });
   }
-  return { status: "SUCCESS", scanned: records.length, processed: results.filter((r) => !r.skipped).length, results };
+  const processed = results.filter((r) => !r.skipped).length;
+  await db.collection("audit_logs").add({
+    actorId: actor.uid,
+    actorRole: actor.role,
+    action: "ADMIN_REBUILD_CONTRACT_RENEWAL_WATCH",
+    targetType: "system_health",
+    targetId: "contractRenewals",
+    metadata: { scanned: records.length, processed },
+    createdAt: FieldValue.serverTimestamp(),
+  });
+  return { status: "SUCCESS", scanned: records.length, processed, results };
 });
 
 import type * as FirebaseFirestore from "firebase-admin/firestore";
