@@ -12,7 +12,6 @@ on:
           - brandedEmailDelivery
           - appCheckEnforcement
           - aiProviderHealth
-          - stripeLiveBilling
       expected_commit_sha:
         description: 'Full lowercase current control-plane main SHA'
         required: true
@@ -24,14 +23,6 @@ on:
       production_deploy_run_id:
         description: 'Successful production deploy run ID for the frozen release SHA'
         required: true
-        type: string
-      stripe_checkout_session_id:
-        description: 'Stripe only: paid cs_live_ checkout session ID'
-        required: false
-        type: string
-      stripe_webhook_event_id:
-        description: 'Stripe only: matching evt_ checkout.session.completed event ID'
-        required: false
         type: string
       confirmation:
         description: 'Enter PUBLISH_OPERATIONAL_PROVIDER_EVIDENCE'
@@ -73,8 +64,6 @@ jobs:
           SELECTED_GATE: ${{ inputs.gate }}
           CONFIRMATION: ${{ inputs.confirmation }}
           DEPLOY_RUN_ID: ${{ inputs.production_deploy_run_id }}
-          STRIPE_SESSION: ${{ inputs.stripe_checkout_session_id }}
-          STRIPE_EVENT: ${{ inputs.stripe_webhook_event_id }}
         run: |
           set -euo pipefail
           if [[ "$GITHUB_REF" != "refs/heads/main" ]]; then
@@ -108,32 +97,10 @@ jobs:
             exit 1
           fi
           case "$SELECTED_GATE" in
-            all-baseline)
-              if [[ -n "${STRIPE_SESSION}${STRIPE_EVENT}" ]]; then
-                echo "::error::all-baseline must not receive Stripe-only inputs."
-                exit 1
-              fi
-              ;;
-            brandedEmailDelivery|appCheckEnforcement)
-              if [[ -n "${STRIPE_SESSION}${STRIPE_EVENT}" ]]; then
-                echo "::error::The selected baseline gate must not receive Stripe-only inputs."
-                exit 1
-              fi
-              ;;
-            aiProviderHealth)
-              if [[ -n "${STRIPE_SESSION}${STRIPE_EVENT}" ]]; then
-                echo "::error::AI proof must not receive Stripe transaction inputs."
-                exit 1
-              fi
-              ;;
-            stripeLiveBilling)
-              if [[ ! "$STRIPE_SESSION" =~ ^cs_live_ ]] || [[ ! "$STRIPE_EVENT" =~ ^evt_ ]]; then
-                echo "::error::Stripe proof requires matching live checkout and event IDs."
-                exit 1
-              fi
+            all-baseline|brandedEmailDelivery|appCheckEnforcement|aiProviderHealth)
               ;;
             *)
-              echo "::error::Unsupported provider gate."
+              echo "::error::Unsupported Phase 1 provider gate. Stripe/Card billing evidence is migration-only while Phase 1 Cash/Cheque is active."
               exit 1
               ;;
           esac
@@ -471,31 +438,6 @@ jobs:
           console.log(`[ai-evidence] fallback cleanup verified auth=${Boolean(user)} profile=${deletedProfile} usage=${deletedUsage}`);
           NODE
 
-      - name: Verify live Stripe payment and exactly-once webhook replay
-        if: inputs.gate == 'stripeLiveBilling'
-        working-directory: release
-        env:
-          RELEASE_ID: ${{ github.run_id }}-${{ github.run_attempt }}
-          STRIPE_LIVE_CHECKOUT_SESSION_ID: ${{ inputs.stripe_checkout_session_id }}
-          STRIPE_LIVE_WEBHOOK_EVENT_ID: ${{ inputs.stripe_webhook_event_id }}
-          STRIPE_REQUIRE_REPLAY_PROOF: 'true'
-        run: |
-          set -euo pipefail
-          stripe_key="$(gcloud secrets versions access latest --secret=STRIPE_SECRET_KEY --project="$GCP_PROJECT_ID")"
-          webhook_secret="$(gcloud secrets versions access latest --secret=STRIPE_WEBHOOK_SECRET --project="$GCP_PROJECT_ID")"
-          if [[ "$stripe_key" != sk_live_* ]]; then
-            echo "::error::STRIPE_SECRET_KEY is not a live key."
-            exit 1
-          fi
-          if [[ "$webhook_secret" != whsec_* ]]; then
-            echo "::error::STRIPE_WEBHOOK_SECRET is invalid."
-            exit 1
-          fi
-          echo "::add-mask::$stripe_key"
-          echo "::add-mask::$webhook_secret"
-          STRIPE_SECRET_KEY="$stripe_key" STRIPE_WEBHOOK_SECRET="$webhook_secret" \
-            node ../control-plane/scripts/run-frozen-release-evidence.mjs scripts/verify-stripe-live-proof.mjs
-
       - name: Publish and finalize canonical provider evidence
         working-directory: release
         env:
@@ -524,7 +466,6 @@ jobs:
             release/launch_package/smtp-live-proof.json
             release/launch_package/appcheck-enforcement-proof.json
             release/launch_package/ai-provider-health-proof.json
-            release/launch_package/stripe-live-proof.json
             release/launch_package/production-deployment.json
           if-no-files-found: ignore
           retention-days: 365
