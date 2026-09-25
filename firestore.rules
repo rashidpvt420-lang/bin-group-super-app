@@ -696,17 +696,8 @@ service cloud.firestore {
         isNotSuspended() &&
         request.resource.data.get('status', resource.data.get('status', '')) in [
           'OPEN',
-          'open',
           'PENDING_ASSIGNMENT',
-          'pending_assignment',
-          'EMERGENCY_SUBMITTED',
-          'emergency_submitted',
-          'ASSIGNED',
-          'assigned',
-          'AUTO_ASSIGNED',
-          'auto_assigned',
-          'REASSIGNED',
-          'reassigned'
+          'ASSIGNED'
         ];
     }
 
