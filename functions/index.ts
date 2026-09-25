@@ -990,7 +990,7 @@ async function attemptAutoAssignment(ticketRef: admin.firestore.DocumentReferenc
                     assignedTechnicianPhone: freshTechnician.phone || freshTechnician.phoneNumber || "",
                     assignedTechnicianAvatar: freshTechnician.photoURL || "",
                     technicianSpecialty: freshTechnician.specialty || freshTechnician.trade || "",
-                    status: "AUTO_ASSIGNED",
+                    status: "ASSIGNED",
                     dispatchStatus: "AUTO_ASSIGNED",
                     trackingStatus: "TECHNICIAN_ASSIGNED",
                     autoAssignedAt: FieldValue.serverTimestamp(),
