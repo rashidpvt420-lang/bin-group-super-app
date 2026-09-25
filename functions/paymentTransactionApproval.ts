@@ -498,7 +498,7 @@ export const adminApprovePayment = onCall({ cors: true, enforceAppCheck: true },
 
     transaction.set(contractRef, {
       status: "ACTIVE",
-      contractStatus: "active",
+      contractStatus: "ACTIVE",
       paymentStatus: "APPROVED",
       activationStatus: "ACTIVE",
       paymentVerified: true,
@@ -755,7 +755,8 @@ export const adminRejectPayment = onCall({ cors: true, enforceAppCheck: true }, 
 
     if (contractRef) {
       transaction.set(contractRef, {
-        status: "PAYMENT_REJECTED",
+        status: "PENDING_PAYMENT",
+        contractStatus: "PENDING_PAYMENT",
         paymentStatus: "REJECTED",
         activationStatus: "LOCKED_PAYMENT_REJECTED",
         paymentVerified: false,
@@ -770,7 +771,7 @@ export const adminRejectPayment = onCall({ cors: true, enforceAppCheck: true }, 
     }
     if (intakeId) {
       transaction.set(db.collection("intake_submissions").doc(intakeId), {
-        status: "payment_rejected",
+        status: "PAYMENT_PENDING",
         paymentStatus: "REJECTED",
         activationState: "LOCKED_PAYMENT_REJECTED",
         updatedAt: now,
@@ -779,6 +780,7 @@ export const adminRejectPayment = onCall({ cors: true, enforceAppCheck: true }, 
 
     const profilePatch = {
       status: "payment_pending_admin_verification",
+      onboardingStatus: "PAYMENT_PENDING",
       paymentVerified: false,
       adminApproved: false,
       dashboardUnlocked: false,
