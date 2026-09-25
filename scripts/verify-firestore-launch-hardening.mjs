@@ -99,11 +99,8 @@ const requiredFragments = [
   ['FCM token path is explicitly allowlisted', 'match /fcmTokens/{tokenId} {'],
   ['device readiness path is explicitly allowlisted', 'match /deviceReadiness/{readinessId} {'],
   ['unknown user subcollections are denied', 'match /{subcollection}/{document=**} {\n        allow read, write: if false;'],
-  ['ticket, Broker rate-limit, Admin-session, private-HR, live-location, invoice-registry, payroll-mirror and property-identity read fallback exclusions', "allow read: if collection != 'tickets' && collection != 'maintenanceTickets' && !(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions', 'private_hr_profiles', 'technician_live_locations', 'invoice_registry', 'payroll_entries', 'property_identity_registry']) && hasAdminClaim();"],
   ['ticket create fallback rejects explicit ticket hierarchies first', "allow create: if collection != 'tickets' && collection != 'maintenanceTickets' && !("],
   ['ticket update fallback rejects explicit ticket hierarchies first', "allow update, delete: if collection != 'tickets' && collection != 'maintenanceTickets' && !("],
-  ['ticket write fallback excludes explicit ticket hierarchies, live location, canonical property geo, property identity, HR cases and private HR', "'system_secrets',\n          'technician_live_locations',\n          'properties',\n          'property_identity_registry',\n          'users',\n          'staffRequests',\n          'hrAiConversations',\n          'audit_logs',\n          'admin_security_sessions',\n          'private_hr_profiles'"],
-  ['property identity registry excluded from generic create and update/delete fallbacks', "'technician_live_locations',\n          'properties',\n          'property_identity_registry',\n          'users'"],
   ['private Broker KYC profile rule exists', 'match /broker_kyc_profiles/{brokerId} {'],
   ['Broker KYC rate limits are server-only', "match /broker_kyc_submission_limits/{brokerId} {\n      allow read, write: if false;"],
   ['Admin security sessions are server-only', "match /admin_security_sessions/{sessionId} {\n      allow read, write: if false;"],
@@ -116,6 +113,67 @@ const requiredFragments = [
 const failures = [];
 for (const [label, text] of forbiddenFragments) if (rules.includes(text)) failures.push(`Forbidden rule fragment still exists: ${label}`);
 for (const [label, text] of requiredFragments) if (!rules.includes(text)) failures.push(`Required rule fragment missing: ${label}`);
+
+const globalFallbackStart = rules.indexOf('    match /{collection}/{document=**} {');
+if (globalFallbackStart < 0) {
+  failures.push('Global Admin collection fallback is missing.');
+} else {
+  const globalFallback = rules.slice(globalFallbackStart);
+  const readCondition = globalFallback.match(/allow\s+read:\s*if\s*([^;]+);/)?.[1] || '';
+  const requiredReadExclusions = [
+    'system_secrets',
+    'users',
+    'broker_kyc_submission_limits',
+    'admin_security_sessions',
+    'private_hr_profiles',
+    'technician_live_locations',
+    'invoice_registry',
+    'payroll_entries',
+    'property_identity_registry',
+    'owner_portfolio_quotes',
+    'system_payment_config',
+    'propertyInspections',
+  ];
+  if (
+    !readCondition.includes("collection != 'tickets'") ||
+    !readCondition.includes("collection != 'maintenanceTickets'") ||
+    !readCondition.includes('hasAdminClaim()') ||
+    requiredReadExclusions.some((collection) => !readCondition.includes(`'${collection}'`))
+  ) {
+    failures.push('Global Admin read fallback is missing one or more server-only Phase 10 exclusions.');
+  }
+
+  const writeConditions = [...globalFallback.matchAll(/allow\s+([^:;]+):\s*([^;]+);/g)]
+    .filter(([, operations]) => /\b(create|update|delete|write)\b/.test(operations));
+  const requiredWriteExclusions = [
+    'system_secrets',
+    'technician_live_locations',
+    'properties',
+    'property_identity_registry',
+    'owner_portfolio_quotes',
+    'system_payment_config',
+    'propertyInspections',
+    'users',
+    'staffRequests',
+    'hrAiConversations',
+    'audit_logs',
+    'admin_security_sessions',
+    'private_hr_profiles',
+    'broker_kyc_profiles',
+    'broker_kyc_submission_limits',
+  ];
+  if (
+    writeConditions.length !== 2 ||
+    writeConditions.some(([, , condition]) =>
+      !condition.includes("collection != 'tickets'") ||
+      !condition.includes("collection != 'maintenanceTickets'") ||
+      !condition.includes('hasAdminClaim()') ||
+      requiredWriteExclusions.some((collection) => !condition.includes(`'${collection}'`))
+    )
+  ) {
+    failures.push('Global Admin create/update/delete fallbacks are missing one or more server-only Phase 10 exclusions.');
+  }
+}
 
 const legacyBlock = readMatchBlock('    match /tickets/{ticketId} {');
 const canonicalBlock = readMatchBlock('    match /maintenanceTickets/{ticketId} {');
