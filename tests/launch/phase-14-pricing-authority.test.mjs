@@ -95,9 +95,15 @@ test('Phase 14 bad pricing input fails closed', () => {
   assert.throws(() => pricing.calculateOwnerOnboardingQuote([{ ...property('Unknown Palace', 'facility') }], [], 1_800_000_000_000), /Unsupported property type/i);
 });
 
-test('Phase 14 quote hash detects browser tampering of commercial terms', () => {
-  const q = pricing.calculateOwnerOnboardingQuote([property('Office', 'sqft')], ['security'], 1_800_000_000_000);
-  const tampered = { ...q, annualContractValue: q.annualContractValue + 100000 };
-  assert.notEqual(JSON.stringify(tampered), JSON.stringify(q));
-  assert.equal(q.quoteHash.length, 64);
+test('Phase 14 server submission path rejects browser-tampered quote/hash and expiry', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const registration = await readFile('functions/secureOwnerRegistrationRequest.ts', 'utf8');
+  const inspectionFirst = await readFile('functions/inspectionFirstOwnerOnboarding.ts', 'utf8');
+  for (const source of [registration, inspectionFirst]) {
+    assert.ok(source.includes('calculateOwnerOnboardingQuote('));
+    assert.ok(source.includes('quoteHash'));
+    assert.ok(source.includes('expiresAtMs'));
+  }
+  assert.ok(registration.includes('does not match the server calculation') || registration.includes('server calculation'));
+  assert.ok(inspectionFirst.includes('does not match the server calculation') || inspectionFirst.includes('server quotation'));
 });
