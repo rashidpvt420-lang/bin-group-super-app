@@ -20,7 +20,10 @@ test('Wave 2 backend is deployed through runtime and public browsing is sanitize
   assert.match(backend, /data\.verifiedByAdmin === true/);
   assert.match(backend, /SANITIZED_VERIFIED_LISTINGS_ONLY/);
   assert.match(backend, /exactAddressExposed: false/);
+  assert.match(backend, /exactCoordinatesExposed: false/);
   assert.match(backend, /ownerIdentityExposed: false/);
+  assert.match(backend, /inventoryState: rows\.length > 0 \? "AVAILABLE" : "EMPTY"/);
+  assert.match(backend, /HOME_DISCOVERY_INVENTORY_QUERY_FAILED/);
   assert.match(backend, /while \(rows\.length < limit\)/);
   assert.match(backend, /orderBy\(FieldPath\.documentId\(\)\)/);
   assert.match(backend, /queryRef = queryRef\.startAfter\(cursor\)/);
@@ -137,6 +140,8 @@ test('Wave 2 exposes a privacy-safe pre-login homes route and the landing page s
   assert.match(app, /PublicHomeDiscoveryPage/);
   assert.match(app, /path=["']\/homes["']/);
   assert.match(page, /getPublicHomeDiscoveryListings/);
+  assert.match(page, /public-home-load-failed/);
+  assert.match(page, /public-home-empty/);
   assert.match(page, /Public browsing never exposes owner identity, exact private property coordinates/);
   assert.match(page, /returnTo=\$\{encodeURIComponent\(["']\/tenant\/homes["']\)\}/);
   assert.match(page, /BIN VERIFIED/);
