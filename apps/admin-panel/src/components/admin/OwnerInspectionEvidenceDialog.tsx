@@ -34,6 +34,9 @@ type InspectionRow = {
   gymProfileSnapshot?: Record<string, any>;
   gymVerification?: GymVerification;
   gymVerificationStatus?: string;
+  pricingDriver?: 'facility' | 'unit' | 'sqft' | 'bed' | 'sqft+capacity';
+  ownerDeclaredPropertySnapshot?: Record<string, any>;
+  pricingVerificationStatus?: string;
 };
 
 type Draft = {
@@ -45,6 +48,18 @@ type Draft = {
   gps: { lat: number; lng: number } | null;
   checklist: Record<string, boolean>;
   gymVerification: GymVerification;
+  pricingVerification: {
+    units: number;
+    sqft: number;
+    beds: number;
+    annualRent: number;
+    annualRevenue: number;
+    propertyAge: number;
+    emirate: string;
+    zone: string;
+    slaTier: string;
+    paymentPlan: string;
+  };
 };
 
 const checklistItems = [
@@ -97,6 +112,18 @@ const defaultDraft = (row?: InspectionRow): Draft => ({
   gps: null,
   checklist: Object.fromEntries(checklistItems.map(([key]) => [key, false])),
   gymVerification: defaultGymVerification(row),
+  pricingVerification: {
+    units: Number(row?.ownerDeclaredPropertySnapshot?.units || 0),
+    sqft: Number(row?.ownerDeclaredPropertySnapshot?.sqft || 0),
+    beds: Number(row?.ownerDeclaredPropertySnapshot?.beds || row?.ownerDeclaredPropertySnapshot?.units || 0),
+    annualRent: Number(row?.ownerDeclaredPropertySnapshot?.annualRent || 0),
+    annualRevenue: Number(row?.ownerDeclaredPropertySnapshot?.annualRevenue || 0),
+    propertyAge: Number(row?.ownerDeclaredPropertySnapshot?.age || 0),
+    emirate: String(row?.ownerDeclaredPropertySnapshot?.emirate || ''),
+    zone: String(row?.ownerDeclaredPropertySnapshot?.zone || 'B'),
+    slaTier: String(row?.ownerDeclaredPropertySnapshot?.slaTier || 'standard'),
+    paymentPlan: String(row?.ownerDeclaredPropertySnapshot?.paymentPlan || 'annual'),
+  },
 });
 
 const fileToBase64 = (file: File): Promise<string> => new Promise((resolve, reject) => {
@@ -170,6 +197,14 @@ export default function OwnerInspectionEvidenceDialog({
     });
   };
 
+  const updatePricing = (id: string, key: keyof Draft['pricingVerification'], value: string | number) => {
+    const row = rows.find((entry) => entry.id === id);
+    setDrafts((current) => {
+      const currentDraft = current[id] || defaultDraft(row);
+      return { ...current, [id]: { ...currentDraft, pricingVerification: { ...currentDraft.pricingVerification, [key]: value } } };
+    });
+  };
+
   const captureGps = async (id: string) => {
     setError('');
     if (!navigator.geolocation) {
@@ -205,6 +240,19 @@ export default function OwnerInspectionEvidenceDialog({
       setError('Visit evidence exceeds the secure 10 MB limit.');
       return;
     }
+    const driver = row.pricingDriver || '';
+    if (driver === 'unit' && (!Number.isFinite(draft.pricingVerification.units) || draft.pricingVerification.units <= 0)) {
+      setError('Record the Admin-verified unit count before saving this visit.'); return;
+    }
+    if (driver === 'sqft' && (!Number.isFinite(draft.pricingVerification.sqft) || draft.pricingVerification.sqft <= 0)) {
+      setError('Record the Admin-measured service area before saving this visit.'); return;
+    }
+    if (driver === 'bed' && (!Number.isFinite(draft.pricingVerification.beds) || draft.pricingVerification.beds <= 0)) {
+      setError('Record the Admin-verified bed count before saving this visit.'); return;
+    }
+    if (driver === 'sqft+capacity' && ((!Number.isFinite(draft.pricingVerification.sqft) || draft.pricingVerification.sqft <= 0) || (!Number.isFinite(draft.pricingVerification.units) || draft.pricingVerification.units <= 0))) {
+      setError('Record the Admin-verified mosque area and worshipper capacity before saving this visit.'); return;
+    }
     if (isGym(row)) {
       const verifiedArea = Number(draft.gymVerification.verifiedServiceAreaSqft);
       if (!Number.isFinite(verifiedArea) || verifiedArea <= 0) {
@@ -231,6 +279,7 @@ export default function OwnerInspectionEvidenceDialog({
         arrivalLat: draft.gps.lat,
         arrivalLng: draft.gps.lng,
         checklist: draft.checklist,
+        pricingVerification: draft.pricingVerification,
         filename: draft.file.name.replace(/[^A-Za-z0-9._-]/g, '_'),
         contentType: draft.file.type || 'image/jpeg',
         encodedDocument: await fileToBase64(draft.file),
@@ -303,6 +352,23 @@ export default function OwnerInspectionEvidenceDialog({
                     </Alert>
                   )}
                 </Stack>
+
+                {!verified && (
+                  <Paper variant="outlined" sx={{ p: 2, mt: 2 }}>
+                    <Typography fontWeight={900}>Verified pricing authority</Typography>
+                    <Typography variant="caption">Pricing driver: {row.pricingDriver || 'not configured'}. Confirm the physical pricing input; Owner-declared values do not control the final quote.</Typography>
+                    <Grid container spacing={2} sx={{ mt: 0.5 }}>
+                      {row.pricingDriver === 'unit' && <Grid item xs={12} md={4}><TextField fullWidth required type="number" label="Verified unit count" value={draft.pricingVerification.units || ''} onChange={(e) => updatePricing(row.id, 'units', Number(e.target.value))} /></Grid>}
+                      {(row.pricingDriver === 'sqft' || row.pricingDriver === 'sqft+capacity') && <Grid item xs={12} md={4}><TextField fullWidth required type="number" label="Verified service area (sq ft)" value={draft.pricingVerification.sqft || ''} onChange={(e) => updatePricing(row.id, 'sqft', Number(e.target.value))} /></Grid>}
+                      {row.pricingDriver === 'bed' && <Grid item xs={12} md={4}><TextField fullWidth required type="number" label="Verified bed count" value={draft.pricingVerification.beds || ''} onChange={(e) => updatePricing(row.id, 'beds', Number(e.target.value))} /></Grid>}
+                      {row.pricingDriver === 'sqft+capacity' && <Grid item xs={12} md={4}><TextField fullWidth required type="number" label="Verified worshipper capacity" value={draft.pricingVerification.units || ''} onChange={(e) => updatePricing(row.id, 'units', Number(e.target.value))} /></Grid>}
+                      <Grid item xs={12} md={4}><TextField fullWidth type="number" label="Verified property age (years)" value={draft.pricingVerification.propertyAge || 0} onChange={(e) => updatePricing(row.id, 'propertyAge', Number(e.target.value))} /></Grid>
+                      <Grid item xs={12} md={4}><TextField fullWidth required label="Verified emirate" value={draft.pricingVerification.emirate} onChange={(e) => updatePricing(row.id, 'emirate', e.target.value)} /></Grid>
+                      <Grid item xs={12} md={4}><TextField fullWidth type="number" label="Verified annual rent (PM)" value={draft.pricingVerification.annualRent || ''} onChange={(e) => updatePricing(row.id, 'annualRent', Number(e.target.value))} /></Grid>
+                      <Grid item xs={12} md={4}><TextField fullWidth type="number" label="Verified managed revenue (PM)" value={draft.pricingVerification.annualRevenue || ''} onChange={(e) => updatePricing(row.id, 'annualRevenue', Number(e.target.value))} /></Grid>
+                    </Grid>
+                  </Paper>
+                )}
 
                 {isGym(row) && !verified && (
                   <Paper variant="outlined" sx={{ p: 2.5, mt: 2, bgcolor: 'rgba(218,165,32,0.05)' }}>

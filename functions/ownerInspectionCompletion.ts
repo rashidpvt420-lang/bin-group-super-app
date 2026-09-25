@@ -12,6 +12,7 @@ const MAX_VISIT_RADIUS_METRES = 750;
 const GYM_COMPLEXITIES = new Set(["STANDARD_DRY", "ENHANCED", "WET_RECOVERY"]);
 const GYM_OPENING_SCHEDULES = new Set(["STANDARD_HOURS", "EXTENDED_HOURS", "24_7"]);
 const GYM_DOCUMENT_STATUSES = new Set(["verified", "pending", "not_available", "not_applicable"]);
+const PRICING_DRIVERS = new Set(["facility", "unit", "sqft", "bed", "sqft+capacity"]);
 const text = (value: unknown) => String(value || "").trim();
 const upper = (value: unknown) => text(value).toUpperCase();
 const roleOf = (token: any) => text(token?.role || token?.userRole || token?.primaryRole).toLowerCase();
@@ -67,6 +68,51 @@ function gymDocumentStatus(value: unknown, label: string) {
   const status = text(value || "pending").toLowerCase();
   if (!GYM_DOCUMENT_STATUSES.has(status)) throw new HttpsError("invalid-argument", `${label} verification status is invalid.`);
   return status;
+}
+
+function verifiedPricingPayload(value: any, inspection: any, property: any) {
+  const driver = text(inspection?.pricingDriver);
+  if (!PRICING_DRIVERS.has(driver)) throw new HttpsError("failed-precondition", "Inspection pricing driver is missing or unsupported.");
+  const declared = inspection?.ownerDeclaredPropertySnapshot || {};
+  const requiredPositive = (raw: unknown, label: string, max = 100_000_000) => {
+    const parsed = finite(raw);
+    if (!Number.isFinite(parsed) || parsed <= 0 || parsed > max) throw new HttpsError("invalid-argument", `${label} must be a positive Admin-verified value.`);
+    return Math.round(parsed * 100) / 100;
+  };
+  const nonNegative = (raw: unknown, label: string, max = 100_000_000) => {
+    const parsed = finite(raw, 0);
+    if (!Number.isFinite(parsed) || parsed < 0 || parsed > max) throw new HttpsError("invalid-argument", `${label} is outside the accepted verification range.`);
+    return Math.round(parsed * 100) / 100;
+  };
+  const contractMode = text(property?.strategy || property?.serviceModel || property?.contractMode || property?.contractType || declared.strategy).toLowerCase();
+  const pmInScope = ["pm", "pm_only", "rent", "property_management", "both", "hybrid", "combined", "total_care", "total-care"].includes(contractMode);
+  const verified: Record<string, any> = {
+    pricingClass: text(inspection?.pricingClass),
+    pricingDriver: driver,
+    propertyType: text(property?.propertyType || inspection?.propertyType),
+    propertyAge: nonNegative(value?.propertyAge ?? declared.age ?? property?.age, "Property age", 300),
+    emirate: text(value?.emirate || declared.emirate || property?.emirate),
+    zone: text(value?.zone || declared.zone || property?.zone).toUpperCase(),
+    slaTier: text(value?.slaTier || declared.slaTier || property?.slaTier).toLowerCase(),
+    paymentPlan: text(value?.paymentPlan || declared.paymentPlan || property?.paymentPlan).toLowerCase(),
+  };
+  if (!verified.emirate) throw new HttpsError("invalid-argument", "Admin-verified emirate is required.");
+  if (driver === "unit") verified.units = requiredPositive(value?.units, "Verified unit count", 1_000_000);
+  if (driver === "sqft") verified.sqft = requiredPositive(value?.sqft, "Verified service area", 100_000_000);
+  if (driver === "bed") verified.beds = requiredPositive(value?.beds, "Verified bed count", 1_000_000);
+  if (driver === "sqft+capacity") {
+    verified.sqft = requiredPositive(value?.sqft, "Verified mosque service area", 100_000_000);
+    verified.units = requiredPositive(value?.units, "Verified worshipper capacity", 1_000_000);
+  }
+  if (pmInScope) {
+    const rent = finite(value?.annualRent ?? declared.annualRent ?? property?.annualRent, 0);
+    const revenue = finite(value?.annualRevenue ?? declared.annualRevenue ?? property?.annualRevenue, 0);
+    if (rent < 0 || revenue < 0) throw new HttpsError("invalid-argument", "Verified annual rent / managed revenue cannot be negative.");
+    verified.annualRent = Math.round(rent * 100) / 100;
+    verified.annualRevenue = Math.round(revenue * 100) / 100;
+    if (verified.annualRent <= 0 && verified.annualRevenue <= 0) throw new HttpsError("failed-precondition", "Verified annual rent / managed revenue is required for Property Management pricing.");
+  }
+  return verified;
 }
 
 function verifiedGymPayload(value: any) {
@@ -146,7 +192,9 @@ export const adminRecordOwnerPropertyInspectionEvidence = onCall({ cors: true, e
     throw new HttpsError("failed-precondition", `Arrival GPS is ${distance} metres from the submitted property. Capture evidence within ${MAX_VISIT_RADIUS_METRES} metres.`);
   }
 
+  const pricingVerification = verifiedPricingPayload(request.data?.pricingVerification || {}, inspection, property);
   const gymVerification = isGymProperty(property, inspection) ? verifiedGymPayload(request.data?.gymVerification || {}) : null;
+  if (gymVerification) pricingVerification.sqft = gymVerification.verifiedServiceAreaSqft;
   const evidenceHash = crypto.createHash("sha256").update(buffer).digest("hex");
   const ownerUid = text(intake.ownerUid || intake.ownerId);
   const storagePath = `inspection-evidence/owners/${safeId(ownerUid, "owner")}/${intakeId}/${inspectionId}/${Date.now()}_${filename}`;
@@ -179,6 +227,14 @@ export const adminRecordOwnerPropertyInspectionEvidence = onCall({ cors: true, e
     findings,
     checklist,
     checklistVerified: true,
+    pricingVerification: {
+      ...pricingVerification,
+      source: "ADMIN_SITE_VISIT",
+      verifiedBy: actor.uid,
+      verifiedByEmail: actor.email,
+      verifiedAt: now,
+    },
+    pricingVerificationStatus: "VERIFIED",
     ...(gymVerification ? {
       gymVerification: {
         ...gymVerification,
@@ -213,6 +269,13 @@ export const adminRecordOwnerPropertyInspectionEvidence = onCall({ cors: true, e
       evidenceHash,
       generation,
       checklistVerified: true,
+      pricingDriver: text(inspection.pricingDriver),
+      pricingVerificationStatus: "VERIFIED",
+      verifiedUnits: pricingVerification.units || null,
+      verifiedSqft: pricingVerification.sqft || null,
+      verifiedBeds: pricingVerification.beds || null,
+      verifiedAnnualRent: pricingVerification.annualRent || null,
+      verifiedAnnualRevenue: pricingVerification.annualRevenue || null,
       gymVerificationRequired: isGymProperty(property, inspection),
       gymVerifiedServiceAreaSqft: gymVerification?.verifiedServiceAreaSqft || null,
       gymVerifiedComplexity: gymVerification?.verifiedComplexity || null,
@@ -268,40 +331,69 @@ export const adminCompleteOwnerPortfolioInspections = onCall({ cors: true, enfor
     const propertyId = text(property?.propertyId || property?.id);
     const inspection = inspectionByPropertyId.get(propertyId);
     if (!inspection) throw new HttpsError("failed-precondition", `No verified inspection is linked to property ${propertyId || "unknown"}.`);
-    if (!isGymProperty(property, inspection)) return property;
+    if (upper(inspection.pricingVerificationStatus) !== "VERIFIED" || !inspection.pricingVerification) {
+      throw new HttpsError("failed-precondition", `Property ${propertyId || "unknown"} requires Admin-verified pricing inputs before the final quote can be issued.`);
+    }
+    const pricing = verifiedPricingPayload(inspection.pricingVerification, inspection, property);
+    const next: any = {
+      ...property,
+      emirate: pricing.emirate,
+      zone: pricing.zone || property.zone,
+      age: pricing.propertyAge,
+      slaTier: pricing.slaTier || property.slaTier,
+      paymentPlan: pricing.paymentPlan || property.paymentPlan,
+      pricingVerificationSource: "ADMIN_SITE_VISIT",
+      pricingVerificationInspectionId: text(inspection.id),
+      pricingVerificationEvidenceHash: text(inspection.evidenceHash),
+    };
+    if (pricing.pricingDriver === "unit") next.units = pricing.units;
+    if (pricing.pricingDriver === "sqft") next.sqft = pricing.sqft;
+    if (pricing.pricingDriver === "bed") { next.beds = pricing.beds; next.units = pricing.beds; }
+    if (pricing.pricingDriver === "sqft+capacity") {
+      next.sqft = pricing.sqft;
+      next.units = pricing.units;
+      next.mosqueProfile = {
+        ...(property.mosqueProfile || {}),
+        grossFloorAreaSqft: pricing.sqft,
+        maxWorshipperCapacity: pricing.units,
+        propertyAgeYears: pricing.propertyAge,
+      };
+    }
+    if (pricing.annualRent !== undefined) next.annualRent = pricing.annualRent;
+    if (pricing.annualRevenue !== undefined) next.annualRevenue = pricing.annualRevenue;
+    if (!isGymProperty(property, inspection)) return next;
     if (upper(inspection.gymVerificationStatus) !== "VERIFIED" || !inspection.gymVerification) {
       throw new HttpsError("failed-precondition", `Gym / Fitness Centre ${propertyId} requires verified service area and complexity before the final quote can be issued.`);
     }
     const verified = verifiedGymPayload(inspection.gymVerification);
     const existingProfile = property.gymProfile && typeof property.gymProfile === "object" ? property.gymProfile : {};
-    return {
-      ...property,
+    next.sqft = verified.verifiedServiceAreaSqft;
+    next.verifiedServiceAreaSqft = verified.verifiedServiceAreaSqft;
+    next.gymProfile = {
+      ...existingProfile,
+      ownerDeclaredServiceAreaSqft: Number(existingProfile.declaredServiceAreaSqft || property.sqft || 0),
+      ownerDeclaredOpeningSchedule: existingProfile.openingSchedule || null,
+      ownerDeclaredEquipmentCount: Number(existingProfile.equipmentCount || 0),
       verifiedServiceAreaSqft: verified.verifiedServiceAreaSqft,
-      gymProfile: {
-        ...existingProfile,
-        ownerDeclaredServiceAreaSqft: Number(existingProfile.declaredServiceAreaSqft || property.sqft || 0),
-        ownerDeclaredOpeningSchedule: existingProfile.openingSchedule || null,
-        ownerDeclaredEquipmentCount: Number(existingProfile.equipmentCount || 0),
-        verifiedServiceAreaSqft: verified.verifiedServiceAreaSqft,
-        verifiedComplexity: verified.verifiedComplexity,
-        openingSchedule: verified.openingSchedule,
-        verifiedOpeningSchedule: verified.openingSchedule,
-        equipmentCount: verified.equipmentCount,
-        verifiedEquipmentCount: verified.equipmentCount,
-        changingRooms: verified.changingRooms,
-        showers: verified.showers,
-        groupStudios: verified.groupStudios,
-        wetFacilities: verified.wetFacilities,
-        swimmingPool: verified.swimmingPool,
-        treatmentRecoveryArea: verified.treatmentRecoveryArea,
-        sportsEstablishmentApprovalStatus: verified.sportsEstablishmentApprovalStatus,
-        insuranceStatus: verified.insuranceStatus,
-        floorPlanStatus: verified.floorPlanStatus,
-        verificationSource: "ADMIN_SITE_VISIT",
-        verificationInspectionId: text(inspection.id),
-        verificationEvidenceHash: text(inspection.evidenceHash),
-      },
+      verifiedComplexity: verified.verifiedComplexity,
+      openingSchedule: verified.openingSchedule,
+      verifiedOpeningSchedule: verified.openingSchedule,
+      equipmentCount: verified.equipmentCount,
+      verifiedEquipmentCount: verified.equipmentCount,
+      changingRooms: verified.changingRooms,
+      showers: verified.showers,
+      groupStudios: verified.groupStudios,
+      wetFacilities: verified.wetFacilities,
+      swimmingPool: verified.swimmingPool,
+      treatmentRecoveryArea: verified.treatmentRecoveryArea,
+      sportsEstablishmentApprovalStatus: verified.sportsEstablishmentApprovalStatus,
+      insuranceStatus: verified.insuranceStatus,
+      floorPlanStatus: verified.floorPlanStatus,
+      verificationSource: "ADMIN_SITE_VISIT",
+      verificationInspectionId: text(inspection.id),
+      verificationEvidenceHash: text(inspection.evidenceHash),
     };
+    return next;
   });
 
   const finalQuotedAtMs = Date.now();
