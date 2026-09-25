@@ -1,3 +1,4 @@
+import "./functionGlobalOptions";
 import { onInit } from 'firebase-functions/v2/core';
 import * as admin from 'firebase-admin';
 
