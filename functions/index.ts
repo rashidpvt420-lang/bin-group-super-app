@@ -1238,73 +1238,63 @@ export const processTitleDeedOCR = onCall({ cors: true, enforceAppCheck: true },
 
 export const generateInstitutionalContract = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Sovereign identity required.");
-    const contractData = assertPlainObject(request.data?.contractData, "Contract payload");
-    const propertyId = safeString(contractData.propertyId || contractData.propertyPassportId || contractData.passportId);
-    const contractId = safeString(contractData.contractId || contractData.id);
-    let requesterEmail = safeString(request.auth.token?.email).toLowerCase();
+    const requested = assertPlainObject(request.data?.contractData, "Contract payload");
+    const contractId = safeString(requested.contractId || requested.id);
+    if (!contractId) throw new HttpsError("invalid-argument", "Canonical contractId is required.");
+
+    const contractDoc = await db.collection("contracts").doc(contractId).get();
+    if (!contractDoc.exists) throw new HttpsError("not-found", "Canonical contract not found.");
+    const contract = contractDoc.data() || {};
+    const propertyId = safeString(contract.propertyId || contract.propertyPassportId || contract.passportId);
+    const requesterEmail = safeString(request.auth.token?.email).toLowerCase();
     const hasPrivilegedAccess = await hasCallableRoleAccess(
         request.auth,
         new Set(["admin", "super_admin", "ceo", "operations_admin", "finance_admin", "account_manager"])
     );
-    if (!propertyId && !contractId) {
-        throw new HttpsError("invalid-argument", "Property ID or Contract ID is required.");
-    }
-
     if (!hasPrivilegedAccess) {
         const ownerAccess = await hasCallableRoleAccess(request.auth, new Set(["owner"]));
-        if (!ownerAccess || request.auth.token?.email_verified !== true || request.auth.token?.suspended === true) {
-            throw new HttpsError("permission-denied", "A verified, active owner account is required.");
-        }
+        const ownerId = safeString(contract.ownerId || contract.ownerUid || contract.userId);
+        const ownerEmail = safeString(contract.ownerEmail || contract.email).toLowerCase();
         const requesterUser = await admin.auth().getUser(request.auth.uid);
-        if (requesterUser.disabled || !requesterUser.emailVerified) {
-            throw new HttpsError("permission-denied", "A verified, active owner account is required.");
-        }
-        requesterEmail = safeString(requesterUser.email || requesterEmail).toLowerCase();
-        let authorized = false;
-
-        if (propertyId) {
-            const propertyDoc = await db.collection("properties").doc(propertyId).get();
-            if (propertyDoc.exists) {
-                const property = propertyDoc.data() || {};
-                authorized =
-                    safeString(property.ownerId) === request.auth.uid ||
-                    safeString(property.ownerUid) === request.auth.uid ||
-                    safeString(property.userId) === request.auth.uid ||
-                    (Boolean(requesterEmail) && safeString(property.ownerEmail).toLowerCase() === requesterEmail);
-            }
-        }
-
-        if (!authorized && contractId) {
-            const contractDoc = await db.collection("contracts").doc(contractId).get();
-            if (contractDoc.exists) {
-                const contract = contractDoc.data() || {};
-                authorized =
-                    safeString(contract.ownerId) === request.auth.uid ||
-                    safeString(contract.ownerUid) === request.auth.uid ||
-                    safeString(contract.userId) === request.auth.uid ||
-                    (Boolean(requesterEmail) && safeString(contract.ownerEmail).toLowerCase() === requesterEmail);
-            }
-        }
-
-        if (!authorized) {
-            throw new HttpsError("permission-denied", "You are not authorized to generate this contract.");
-        }
+        if (
+            !ownerAccess ||
+            request.auth.token?.email_verified !== true ||
+            request.auth.token?.suspended === true ||
+            requesterUser.disabled ||
+            !requesterUser.emailVerified ||
+            ownerId !== request.auth.uid ||
+            (ownerEmail && requesterEmail && ownerEmail !== requesterEmail)
+        ) throw new HttpsError("permission-denied", "You are not authorized to generate this contract.");
     }
 
+    // Browser payload is identification-only. All commercial/signature fields
+    // are reloaded from canonical Firestore state before server PDF rendering.
+    if (contract.ownerSigned !== true || !safeString(contract.otpVerificationId)) {
+        throw new HttpsError("failed-precondition", "Only the canonical OTP-signed contract may be rendered.");
+    }
     try {
-        const payload = hasPrivilegedAccess ? contractData : { ...contractData, ownerId: request.auth.uid };
-        const { generateContractPDF } = await import("./pdfEngine");
-        const pdfUrl = await generateContractPDF(payload);
+        const { generateContractPdfArtifact } = await import("./pdfEngine");
+        const artifact = await generateContractPdfArtifact({ ...contract, contractId, propertyId });
+        await db.collection("contracts").doc(contractId).set({
+            canonicalPdfUrl: artifact.pdfUrl,
+            canonicalPdfSha256: artifact.pdfSha256,
+            canonicalPdfStoragePath: artifact.storagePath,
+            canonicalPdfGeneration: artifact.generation,
+            canonicalPdfDocumentHash: artifact.documentHash,
+            canonicalPdfSource: "SERVER_PDF_ENGINE",
+            signedPdfUrl: artifact.pdfUrl,
+            updatedAt: FieldValue.serverTimestamp(),
+        }, { merge: true });
         await logAudit({
             actorId: request.auth.uid,
             actorRole: hasPrivilegedAccess ? "admin" : "owner",
-            action: "CONTRACT_GENERATE",
+            action: "CANONICAL_CONTRACT_PDF_REGENERATE",
             targetType: "contracts",
-            targetId: contractId || "new",
-            metadata: { propertyId: propertyId || null }
+            targetId: contractId,
+            metadata: { propertyId: propertyId || null, pdfSha256: artifact.pdfSha256, storagePath: artifact.storagePath }
         });
-        return { status: "SUCCESS", pdfUrl };
-    } catch (err: any) {
+        return { status: "SUCCESS", pdfUrl: artifact.pdfUrl, pdfSha256: artifact.pdfSha256 };
+    } catch {
         throw new HttpsError("internal", "Contract synthesis failed.");
     }
 });
