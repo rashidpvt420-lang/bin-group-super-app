@@ -261,16 +261,35 @@ text = text.replace(
 for (const candidate of readCatchAllCandidates) {
   if (text.includes(candidate)) text = text.replace(candidate, invoiceRegistryReadCatchAll);
 }
-const canonicalReadCatchAll = text.includes(propertyIdentityReadCatchAll)
-  ? propertyIdentityReadCatchAll
-  : text.includes(payrollReadCatchAll)
-    ? payrollReadCatchAll
-    : text.includes(invoiceRegistryReadCatchAll)
-      ? invoiceRegistryReadCatchAll
-      : '';
-if (!canonicalReadCatchAll) {
-  throw new Error('[final-firestore-authority] global read catch-all could not be bounded with canonical server-only exclusions');
+const globalFallbackStart = text.indexOf('    match /{collection}/{document=**} {');
+if (globalFallbackStart < 0) {
+  throw new Error('[final-firestore-authority] global collection fallback is missing');
 }
+let globalFallback = text.slice(globalFallbackStart);
+const canonicalReadCondition = globalFallback.match(/allow\s+read:\s*([^;]+);/)?.[1] || '';
+const requiredReadExclusions = [
+  'system_secrets',
+  'users',
+  'broker_kyc_submission_limits',
+  'admin_security_sessions',
+  'private_hr_profiles',
+  'technician_live_locations',
+  'invoice_registry',
+  'payroll_entries',
+  'property_identity_registry',
+  'owner_portfolio_quotes',
+  'system_payment_config',
+  'propertyInspections',
+];
+if (
+  !canonicalReadCondition.includes("collection != 'tickets'") ||
+  !canonicalReadCondition.includes("collection != 'maintenanceTickets'") ||
+  !canonicalReadCondition.includes('hasAdminClaim()') ||
+  requiredReadExclusions.some((collection) => !canonicalReadCondition.includes(`'${collection}'`))
+) {
+  throw new Error('[final-firestore-authority] global read catch-all is missing canonical server-only exclusions');
+}
+const canonicalReadCatchAll = `      allow read: if ${canonicalReadCondition};`;
 
 if (text.includes(duplicatedHrServerAuthorityWriteList)) {
   text = text.replaceAll(duplicatedHrServerAuthorityWriteList, hrServerAuthorityWriteList);
@@ -292,14 +311,41 @@ if (text.includes(duplicatedHrServerAuthorityWriteList)) {
   text = text.replaceAll(legacyWriteList, hrServerAuthorityWriteList);
 } else if (text.includes(boundedWriteList)) {
   text = text.replaceAll(boundedWriteList, hrServerAuthorityWriteList);
-} else {
-  throw new Error('[final-firestore-authority] global write fallback list could not be identified');
 }
-const canonicalWriteList = text.includes(propertyIdentityHrServerAuthorityWriteList)
-  ? propertyIdentityHrServerAuthorityWriteList
-  : hrServerAuthorityWriteList;
-if (text.split(canonicalWriteList).length - 1 !== 2) {
-  throw new Error('[final-firestore-authority] canonical server-only write fallback list must exist exactly twice');
+// Phase 10 may add stricter exclusions to the canonical wildcard lists. Verify
+// the invariant rather than requiring a byte-for-byte historical list shape.
+globalFallback = text.slice(text.indexOf('    match /{collection}/{document=**} {'));
+const canonicalWriteConditions = [...globalFallback.matchAll(/allow\s+([^:;]+):\s*([^;]+);/g)]
+  .filter(([, operations]) => /\b(create|update|delete|write)\b/.test(operations));
+if (canonicalWriteConditions.length !== 2) {
+  throw new Error(`[final-firestore-authority] expected two generic Admin write fallbacks, found ${canonicalWriteConditions.length}`);
+}
+const requiredWriteExclusions = [
+  'system_secrets',
+  'technician_live_locations',
+  'properties',
+  'property_identity_registry',
+  'owner_portfolio_quotes',
+  'system_payment_config',
+  'propertyInspections',
+  'users',
+  'staffRequests',
+  'hrAiConversations',
+  'audit_logs',
+  'admin_security_sessions',
+  'private_hr_profiles',
+  'broker_kyc_profiles',
+  'broker_kyc_submission_limits',
+];
+for (const [, , condition] of canonicalWriteConditions) {
+  if (
+    !condition.includes("collection != 'tickets'") ||
+    !condition.includes("collection != 'maintenanceTickets'") ||
+    !condition.includes('hasAdminClaim()') ||
+    requiredWriteExclusions.some((collection) => !condition.includes(`'${collection}'`))
+  ) {
+    throw new Error('[final-firestore-authority] generic Admin write fallback is missing canonical server-only exclusions');
+  }
 }
 
 if (text.includes(legacyCreateCatchAll) && !text.includes(boundedCreateCatchAll)) {
@@ -345,7 +391,6 @@ const required = [
   canonicalReadCatchAll.trim(),
   boundedCreateCatchAll.trim(),
   boundedUpdateCatchAll.trim(),
-  canonicalWriteList.trim(),
   confidentialRequestFunction.trim(),
   hrServerReservedFieldsFunction.trim(),
   hrClientClassificationGuardFunction.trim(),
