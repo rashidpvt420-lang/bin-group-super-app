@@ -3,6 +3,7 @@ import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 import * as crypto from "crypto";
 import { isValidReraFormat } from "./brokerCommissions";
+import { assertWorkflowTransition, normalizeWorkflowState } from "./workflowStateMachines";
 
 if (!admin.apps.length) admin.initializeApp();
 
@@ -225,6 +226,9 @@ export const adminReviewBrokerKyc = onCall({ cors: true, region: "europe-west3",
   const actorId = request.auth?.uid || "admin";
   const actorEmail = request.auth?.token?.email || null;
   const approved = decision === "APPROVE";
+  const currentKycState = normalizeWorkflowState("BROKER_KYC", broker.brokerKycStatus || broker.kycStatus || broker.status, "NOT_SUBMITTED");
+  const nextKycState = approved ? "APPROVED" : "REJECTED";
+  assertWorkflowTransition("BROKER_KYC", currentKycState, nextKycState);
   let releasedCommissions = 0;
 
   await db.runTransaction(async (transaction) => {
@@ -246,8 +250,8 @@ export const adminReviewBrokerKyc = onCall({ cors: true, region: "europe-west3",
     transaction.set(brokerRef, clean({
       status: approved ? "APPROVED" : "REJECTED",
       approvalStatus: approved ? "APPROVED" : "REJECTED",
-      kycStatus: approved ? "APPROVED" : "REJECTED",
-      brokerKycStatus: approved ? "APPROVED" : "REJECTED",
+      kycStatus: nextKycState,
+      brokerKycStatus: nextKycState,
       reraVerified: approved,
       ibanVerified: approved,
       reraStatus: approved ? "VERIFIED" : "REJECTED",
@@ -725,16 +729,19 @@ export const adminResolveTenantUnitLink = onCall({ cors: true, region: "europe-w
     const requestSnap = await transaction.get(requestRef);
     if (!requestSnap.exists) throw new HttpsError("not-found", "Tenant unit-link request not found.");
     const data = requestSnap.data() || {};
-    if (text(data.status).toUpperCase() !== "PENDING_ADMIN_REVIEW") {
+    const currentLinkState = normalizeWorkflowState("TENANT_LINK", data.status, "PENDING_ADMIN_REVIEW");
+    if (currentLinkState !== "PENDING_ADMIN_REVIEW") {
       throw new HttpsError("failed-precondition", "Tenant unit-link request has already been resolved.");
     }
+    const nextLinkState = decision === "APPROVE" ? "APPROVED" : "REJECTED";
+    assertWorkflowTransition("TENANT_LINK", currentLinkState, nextLinkState);
 
     const tenantId = text(data.tenantUid || data.tenantId);
     if (!tenantId) throw new HttpsError("failed-precondition", "Tenant identity is missing from the request.");
 
     if (decision === "REJECT") {
       transaction.set(requestRef, {
-        status: "REJECTED",
+        status: nextLinkState,
         verificationState: "ADMIN_REJECTED",
         resolvedAt: now,
         resolvedBy: actorId,
@@ -784,7 +791,7 @@ export const adminResolveTenantUnitLink = onCall({ cors: true, region: "europe-w
       updatedAt: now,
     }, { merge: true });
     transaction.set(requestRef, {
-      status: "APPROVED",
+      status: nextLinkState,
       verificationState: "ADMIN_VERIFIED",
       linkedUnitId: unitId,
       linkedAt: now,
