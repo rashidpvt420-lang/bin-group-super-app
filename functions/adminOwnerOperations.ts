@@ -486,7 +486,19 @@ export const ownerSignContractAndQueuePdf = onCall({ cors: true, enforceAppCheck
         updatedAt: ts(),
       }, { merge: true });
     }
-    transaction.set(db.collection("contract_signing_requests").doc(contractId), { status: "SIGNED_PDF_EMAILED", ownerSignedAt: ts(), pdfUrl, updatedAt: ts() }, { merge: true });
+    transaction.set(db.collection("contract_signing_requests").doc(contractId), { status: "SIGNED_PDF_EMAILED", ownerSignedAt: ts(), pdfUrl, pdfSha256: pdfArtifact.pdfSha256, storagePath: pdfArtifact.storagePath, pdfGeneration: pdfArtifact.generation, canonicalPdfSource: "SERVER_PDF_ENGINE", updatedAt: ts() }, { merge: true });
+    const propertyIds = Array.isArray(freshContract.propertyIds) ? freshContract.propertyIds : [freshContract.propertyId].filter(Boolean);
+    propertyIds.forEach((propertyId: string) => {
+      transaction.set(db.collection("propertyPassports").doc(propertyId), {
+        contractId,
+        canonicalContractPdfUrl: pdfUrl,
+        canonicalContractPdfSha256: pdfArtifact.pdfSha256,
+        canonicalContractPdfStoragePath: pdfArtifact.storagePath,
+        canonicalContractPdfGeneration: pdfArtifact.generation,
+        canonicalContractPdfSource: "SERVER_PDF_ENGINE",
+        updatedAt: ts(),
+      }, { merge: true });
+    });
     if (ownerId) {
       const ownerPatch = {
         email: ownerEmail || null,
