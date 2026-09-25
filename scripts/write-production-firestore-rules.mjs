@@ -171,11 +171,38 @@ if (!propertyIdentityReadRule.includes("'property_identity_registry'")) {
 }
 const propertyIdentityFallbackWrites = [...propertyIdentityFallback.matchAll(/allow\s+([^:;]+):\s*([^;]+);/g)]
   .filter(([, operations]) => /\b(create|update|delete|write)\b/.test(operations));
+const phase10ServerOnlyFallbackCollections = [
+  'system_health',
+  'staff_shifts',
+  'staff_daily_summaries',
+  'staff_quick_actions',
+  'staff_request_trackers',
+  'staff_exceptions',
+  'staff_inventory_confirmations',
+  'job_costs',
+  'pdf_reports',
+  'vehicles',
+  'launch_evidence',
+  'signed_in_smoke_checks',
+  'gatePasses',
+  'propertyReporters',
+  'broker_listing_claims',
+  'active_contracts',
+  'onboarding_leads',
+  'systemMetrics',
+];
 if (
   propertyIdentityFallbackWrites.length !== 2 ||
   propertyIdentityFallbackWrites.some(([, , condition]) => !condition.includes("'property_identity_registry'"))
 ) {
   failures.push('property_identity_registry must be excluded from both generic browser write fallbacks');
+}
+if (propertyIdentityFallbackWrites.length === 2) {
+  for (const collection of phase10ServerOnlyFallbackCollections) {
+    if (propertyIdentityFallbackWrites.some(([, , condition]) => !condition.includes(`'${collection}'`))) {
+      failures.push(`${collection} must be excluded from both generic browser write fallbacks`);
+    }
+  }
 }
 
 
