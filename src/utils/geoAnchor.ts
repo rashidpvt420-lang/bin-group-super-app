@@ -53,10 +53,12 @@ export function normalizeGeoAnchor(input: any): Partial<GeoAnchor> {
         area: input.area || '',
         placeId: input.placeId || null,
         source: input.source || 'google_maps',
-        verified: !!input.verified,
-        verifiedBy: input.verifiedBy || null,
-        requiresGeoReview: !!input.requiresGeoReview,
-        dispatchReady: input.dispatchReady === true,
+        // This helper is used by browser Owner onboarding. Browser input is
+        // evidence only and cannot mint canonical location authority.
+        verified: false,
+        verifiedBy: null,
+        requiresGeoReview: true,
+        dispatchReady: false,
         accuracyMeters: Number.isFinite(Number(input.accuracyMeters)) ? Number(input.accuracyMeters) : null,
         capturedAt: timestampOrNull(input.capturedAt),
     };
