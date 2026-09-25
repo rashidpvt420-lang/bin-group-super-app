@@ -39,7 +39,7 @@ import {
 } from '@mui/icons-material';
 import { Clock, FileCheck2, WalletCards } from 'lucide-react';
 import { collection, db, functions, httpsCallable, limit, onSnapshot, orderBy, query, where } from '../../lib/firebase';
-import { useLanguage } from '@bin/shared';
+import { normalizeWorkflowState, useLanguage } from '@bin/shared';
 
 type Broker = {
     id: string;
@@ -162,8 +162,8 @@ function dateLabel(value: any) {
 
 function brokerNeedsReview(broker: Broker) {
     const status = statusText(broker.status || broker.approvalStatus);
-    const kyc = statusText(broker.brokerKycStatus || broker.kycStatus || broker.reraStatus);
-    return !['APPROVED', 'VERIFIED'].includes(status) || ['PENDING REVIEW', 'PENDING', 'INCOMPLETE'].includes(kyc);
+    const kyc = normalizeWorkflowState('BROKER_KYC', broker.brokerKycStatus || broker.kycStatus || broker.reraStatus, 'NOT_SUBMITTED');
+    return status !== 'APPROVED' || ['NOT_SUBMITTED', 'PENDING_REVIEW', 'CHANGES_REQUESTED', 'REJECTED', 'EXPIRED', 'SUSPENDED'].includes(kyc);
 }
 
 function missingKycItems(broker: Broker, summary?: BrokerKycReviewSummary) {
