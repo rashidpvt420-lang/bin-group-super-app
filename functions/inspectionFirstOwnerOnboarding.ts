@@ -411,7 +411,7 @@ export const submitOwnerInspectionFirstOnboarding = onCall({ cors: true, enforce
 
   await db.runTransaction(async (transaction) => {
     const [otpSnap, freshIntake] = await Promise.all([transaction.get(otpRef), transaction.get(intakeRef)]);
-    if (freshIntake.exists && upper(freshIntake.data()?.status) === "SUBMITTED_FOR_PROPERTY_INSPECTION") return;
+    if (freshIntake.exists && upper(freshIntake.data()?.status) === "INSPECTION_REQUIRED") return;
     if (!otpSnap.exists) throw new HttpsError("failed-precondition", "Signature OTP verification was not found.");
     const otpData = otpSnap.data() || {};
     assertVerifiedOtp(otpData, { uid: owner.uid, contractId, contractHash: quote.quoteHash, signature: signatureName });
@@ -447,7 +447,7 @@ export const submitOwnerInspectionFirstOnboarding = onCall({ cors: true, enforce
       intakeId,
       workflowVersion: OWNER_WORKFLOW_VERSION,
       source: "PUBLIC_OWNER_FIVE_PAGE_APPLICATION",
-      status: "SUBMITTED_FOR_PROPERTY_INSPECTION",
+      status: "INSPECTION_REQUIRED",
       adminReviewState: "AWAITING_PROPERTY_REVIEW_AND_SITE_VISIT",
       inspectionStatus: "PENDING_ADMIN_SITE_VISIT",
       activationState: "LOCKED_PENDING_INSPECTION_AND_PAYMENT",
@@ -509,8 +509,8 @@ export const submitOwnerInspectionFirstOnboarding = onCall({ cors: true, enforce
       ownerName: fullName,
       propertyIds: normalizedProperties.map((property: PlainRecord) => property.propertyId),
       properties: normalizedProperties,
-      status: "SIGNED_PENDING_PROPERTY_INSPECTION",
-      contractStatus: "signed_pending_inspection",
+      status: "SIGNED",
+      contractStatus: "SIGNED",
       activationStatus: "LOCKED_PENDING_INSPECTION_AND_PAYMENT",
       adminApproved: false,
       ownerSigned: true,
@@ -549,8 +549,8 @@ export const submitOwnerInspectionFirstOnboarding = onCall({ cors: true, enforce
       activationDeposit: money(quote.activationDeposit),
       amount: money(quote.activationDeposit),
       currency: "AED",
-      status: "AWAITING_SITE_INSPECTION",
-      paymentStatus: "AWAITING_SITE_INSPECTION",
+      status: "PENDING",
+      paymentStatus: "PENDING",
       verificationState: "INSPECTION_REQUIRED_BEFORE_PAYMENT",
       adminApprovalRequired: true,
       unlocksDashboard: false,
@@ -567,8 +567,8 @@ export const submitOwnerInspectionFirstOnboarding = onCall({ cors: true, enforce
 
     const ownerPatch = {
       role: "owner",
-      status: "pending_property_inspection",
-      onboardingStatus: "SUBMITTED_AWAITING_ADMIN_SITE_VISIT",
+      status: "PENDING_PROPERTY_INSPECTION",
+      onboardingStatus: "INSPECTION_REQUIRED",
       latestIntakeId: intakeId,
       activeContractId: contractId,
       dashboardLocked: true,
@@ -687,8 +687,8 @@ export const adminCompleteOwnerPropertyInspection = onCall({ cors: true, enforce
     updatedAt: now,
   }, { merge: true });
   batch.set(paymentRef, {
-    status: "PENDING_ADMIN_PAYMENT_VERIFICATION",
-    paymentStatus: "PENDING_ADMIN_PAYMENT_VERIFICATION",
+    status: "PENDING",
+    paymentStatus: "PENDING",
     verificationState: "ADMIN_PAYMENT_EVIDENCE_REQUIRED",
     adminApprovalRequired: true,
     unlocksDashboard: false,
@@ -700,8 +700,8 @@ export const adminCompleteOwnerPropertyInspection = onCall({ cors: true, enforce
     updatedAt: now,
   }, { merge: true });
   batch.set(contractRef, {
-    status: "SIGNED_AWAITING_15_PERCENT_PAYMENT",
-    contractStatus: "signed_awaiting_payment",
+    status: "PENDING_PAYMENT",
+    contractStatus: "PENDING_PAYMENT",
     activationStatus: "LOCKED_PENDING_15_PERCENT_PAYMENT",
     inspectionId: inspectionIds[0],
     inspectionIds,
@@ -715,7 +715,7 @@ export const adminCompleteOwnerPropertyInspection = onCall({ cors: true, enforce
     const inspection = inspectionByPropertyId.get(document.id) || inspectionByPropertyId.get(text(property.propertyId));
     if (!inspection) throw new HttpsError("failed-precondition", `No linked inspection exists for property ${document.id}.`);
     batch.set(document.ref, {
-      status: "AWAITING_15_PERCENT_PAYMENT",
+      status: "PAYMENT_PENDING",
       activationStatus: "LOCKED_PENDING_15_PERCENT_PAYMENT",
       inspectionStatus: "COMPLETED",
       inspectionId: inspection.id,
@@ -734,14 +734,14 @@ export const adminCompleteOwnerPropertyInspection = onCall({ cors: true, enforce
   });
   batch.set(db.collection("users").doc(ownerUid), {
     status: "awaiting_activation_payment",
-    onboardingStatus: "INSPECTION_COMPLETE_AWAITING_15_PERCENT_PAYMENT",
+    onboardingStatus: "PAYMENT_PENDING",
     dashboardLocked: true,
     dashboardUnlocked: false,
     updatedAt: now,
   }, { merge: true });
   batch.set(db.collection("owners").doc(ownerUid), {
     status: "AWAITING_ACTIVATION_PAYMENT",
-    onboardingStatus: "INSPECTION_COMPLETE_AWAITING_15_PERCENT_PAYMENT",
+    onboardingStatus: "PAYMENT_PENDING",
     updatedAt: now,
   }, { merge: true });
   batch.set(db.collection("notifications").doc(), {
@@ -847,8 +847,8 @@ export const adminRecordOwnerMobilizationPaymentEvidence = onCall({ cors: true, 
   const receiptUrl = `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(storagePath)}?alt=media&token=${downloadToken}`;
   const batch = db.batch();
   batch.set(paymentRef, {
-    status: "PENDING_ADMIN_APPROVAL",
-    paymentStatus: "PENDING_ADMIN_APPROVAL",
+    status: "PENDING",
+    paymentStatus: "PENDING",
     verificationState: "PAYMENT_EVIDENCE_RECORDED",
     paymentMethod: method,
     method,
@@ -881,7 +881,8 @@ export const adminRecordOwnerMobilizationPaymentEvidence = onCall({ cors: true, 
     updatedAt: ts(),
   }, { merge: true });
   batch.set(db.collection("intake_submissions").doc(intakeId), {
-    paymentStatus: "PENDING_ADMIN_APPROVAL",
+    status: "PAYMENT_PROCESSING",
+    paymentStatus: "PENDING",
     paymentEvidenceRecorded: true,
     paymentReferenceId: reference,
     updatedAt: ts(),
