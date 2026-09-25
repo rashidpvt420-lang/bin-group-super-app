@@ -2122,6 +2122,35 @@ service cloud.firestore {
     }
 
 
+    // Phase 10: canonical server-issued portfolio quotes are immutable to every
+    // browser role. Owners/Admins consume quote results through protected
+    // callables so no client can replace amount/hash/expiry authority.
+    match /owner_portfolio_quotes/{quoteId} {
+      allow read, create, update, delete: if false;
+    }
+
+    // Phase 10: the active payment policy is launch authority. It is read and
+    // mutated only by Admin SDK callables/workflows, never by a browser Admin.
+    match /system_payment_config/{configId} {
+      allow read, create, update, delete: if false;
+    }
+
+    // Phase 10: tenant handover evidence is server-created. The owning property
+    // owner may review it, but may change only the explicit review fields.
+    match /propertyInspections/{inspectionId} {
+      allow read: if isAdmin() || ownerCanRead(resource.data);
+      allow create: if false;
+      allow update: if ownerCanRead(resource.data) &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'ownerReviewStatus',
+          'ownerReviewNotes',
+          'ownerReviewedAt'
+        ]) &&
+        request.resource.data.ownerReviewStatus in ['APPROVED', 'DISPUTED'];
+      allow delete: if false;
+    }
+
+
     // Canonical property identity claims are server-only. Cloud Functions use
     // Admin SDK transactions; browsers never read or mutate duplicate claims.
     match /property_identity_registry/{identityHash} {
