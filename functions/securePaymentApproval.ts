@@ -208,12 +208,16 @@ export const adminRecordOwnerPaymentRefund = onCall(
   async (request) => {
     await requireMfaFinanceAdmin(request.auth);
     const paymentId = text(request.data?.paymentId);
+    const decision = upper(request.data?.decision);
     const refundReferenceId = text(request.data?.refundReferenceId || request.data?.reference);
     const note = text(request.data?.note || request.data?.reason);
     if (!/^[A-Za-z0-9_-]{1,180}$/.test(paymentId)) {
       throw new HttpsError("invalid-argument", "A valid canonical paymentId is required.");
     }
-    if (refundReferenceId.length < 4) {
+    if (!["FULL_REFUND", "NO_REFUND"].includes(decision)) {
+      throw new HttpsError("invalid-argument", "Choose FULL_REFUND or NO_REFUND. Partial refunds require a separately approved server policy.");
+    }
+    if (decision === "FULL_REFUND" && refundReferenceId.length < 4) {
       throw new HttpsError("invalid-argument", "A durable Cash/Cheque refund reference is required.");
     }
     if (note.length < 8) {
@@ -251,21 +255,23 @@ export const adminRecordOwnerPaymentRefund = onCall(
         throw new HttpsError("failed-precondition", "The approved payment has no refundable amount.");
       }
 
+      const disposition = decision === "FULL_REFUND" ? "FULL_REFUND_RECORDED" : "NO_REFUND_APPROVED";
+      const recordedAmount = decision === "FULL_REFUND" ? refundAmount : 0;
       const existingRefundSnap = await transaction.get(refundRef);
       if (existingRefundSnap.exists) {
         const existing = existingRefundSnap.data() || {};
         if (
           text(existing.originalPaymentId) === paymentId &&
-          Number(existing.refundAmount) === refundAmount &&
-          text(existing.refundReferenceId) === refundReferenceId &&
-          upper(existing.status) === "REFUNDED"
+          Number(existing.refundAmount) === recordedAmount &&
+          upper(existing.refundStatus) === disposition &&
+          (decision === "NO_REFUND" || text(existing.refundReferenceId) === refundReferenceId)
         ) {
-          return { status: "SUCCESS", paymentId, refundId, refundAmount, currency: "AED", idempotent: true };
+          return { status: "SUCCESS", paymentId, refundId, refundAmount: recordedAmount, currency: "AED", disposition, idempotent: true };
         }
-        throw new HttpsError("already-exists", "This payment already has different refund evidence.");
+        throw new HttpsError("already-exists", "This payment already has different refund/disposition evidence.");
       }
-      if (upper(payment.refundStatus) === "FULL_REFUND_RECORDED") {
-        throw new HttpsError("already-exists", "This payment is already marked as fully refunded.");
+      if (["FULL_REFUND_RECORDED", "NO_REFUND_APPROVED"].includes(upper(payment.refundStatus))) {
+        throw new HttpsError("already-exists", "This payment already has a final refund disposition.");
       }
 
       const contractId = text(payment.contractId);
@@ -276,8 +282,8 @@ export const adminRecordOwnerPaymentRefund = onCall(
 
       transaction.create(refundRef, {
         paymentId: refundId,
-        recordType: "REFUND",
-        transactionType: "OWNER_ACTIVATION_REFUND",
+        recordType: decision === "FULL_REFUND" ? "REFUND" : "REFUND_DECISION",
+        transactionType: "OWNER_ACTIVATION_REFUND_DISPOSITION",
         originalPaymentId: paymentId,
         contractId: contractId || null,
         intakeId: text(payment.intakeId) || null,
@@ -287,13 +293,13 @@ export const adminRecordOwnerPaymentRefund = onCall(
         currency: "AED",
         paymentMethod: method,
         method,
-        amount: -refundAmount,
-        refundAmount,
-        refundReferenceId,
+        amount: decision === "FULL_REFUND" ? -recordedAmount : 0,
+        refundAmount: recordedAmount,
+        refundReferenceId: decision === "FULL_REFUND" ? refundReferenceId : null,
         refundNote: note,
-        status: "REFUNDED",
-        paymentStatus: "REFUNDED",
-        refundStatus: "FULL_REFUND_RECORDED",
+        status: decision === "FULL_REFUND" ? "REFUNDED" : "NO_REFUND",
+        paymentStatus: decision === "FULL_REFUND" ? "REFUNDED" : "NO_REFUND",
+        refundStatus: disposition,
         paymentVerified: false,
         verified: true,
         source: "ADMIN_RECORDED_PHASE1_MANUAL_REFUND",
@@ -305,12 +311,12 @@ export const adminRecordOwnerPaymentRefund = onCall(
       });
 
       transaction.set(paymentRef, {
-        refundStatus: "FULL_REFUND_RECORDED",
-        refundedAmount: refundAmount,
+        refundStatus: disposition,
+        refundedAmount: recordedAmount,
         refundRecordId: refundId,
-        refundReferenceId,
+        refundReferenceId: decision === "FULL_REFUND" ? refundReferenceId : null,
         refundReviewRequired: false,
-        financialDisposition: "FULL_REFUND_RECORDED",
+        financialDisposition: disposition,
         refundedBy: actorId,
         refundedAt: now,
         updatedAt: now,
@@ -321,9 +327,9 @@ export const adminRecordOwnerPaymentRefund = onCall(
           refundStatus: "FULL_REFUND_RECORDED",
           refundedAmount: refundAmount,
           refundRecordId: refundId,
-          refundReferenceId,
+          refundReferenceId: decision === "FULL_REFUND" ? refundReferenceId : null,
           refundReviewRequired: false,
-          financialDisposition: "FULL_REFUND_RECORDED",
+          financialDisposition: disposition,
           updatedAt: now,
         }, { merge: true });
       }
@@ -332,28 +338,29 @@ export const adminRecordOwnerPaymentRefund = onCall(
           refundStatus: "FULL_REFUND_RECORDED",
           refundedAmount: refundAmount,
           refundRecordId: refundId,
-          refundReferenceId,
+          refundReferenceId: decision === "FULL_REFUND" ? refundReferenceId : null,
           updatedAt: now,
         }, { merge: true });
       }
 
       transaction.set(db.collection("audit_logs").doc(), {
-        action: "ADMIN_RECORD_OWNER_PAYMENT_FULL_REFUND",
+        action: decision === "FULL_REFUND" ? "ADMIN_RECORD_OWNER_PAYMENT_FULL_REFUND" : "ADMIN_RECORD_OWNER_PAYMENT_NO_REFUND",
         actorId,
         actorEmail: actorEmail || null,
         paymentId,
         refundId,
         contractId: contractId || null,
         invoiceId: invoiceId || null,
-        refundAmount,
+        refundAmount: recordedAmount,
         currency: "AED",
+        disposition,
         paymentMethod: method,
-        refundReferenceId,
+        refundReferenceId: decision === "FULL_REFUND" ? refundReferenceId : null,
         note,
         createdAt: now,
       });
 
-      return { status: "SUCCESS", paymentId, refundId, refundAmount, currency: "AED", idempotent: false };
+      return { status: "SUCCESS", paymentId, refundId, refundAmount: recordedAmount, currency: "AED", disposition, idempotent: false };
     });
   },
 );
