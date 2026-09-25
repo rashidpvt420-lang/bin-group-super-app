@@ -376,7 +376,8 @@ export default function BrokerManagementPage() {
                             </TableHead>
                             <TableBody>
                                 {brokers.map((broker) => {
-                                    const missing = missingKycItems(broker);
+                                    const summary = kycReviewSummaries[broker.id];
+                                    const missing = summary ? missingKycItems(broker, summary) : [];
                                     const brokerDocs = documents[broker.id] || [];
                                     return (
                                         <TableRow key={broker.id} hover>
@@ -388,7 +389,7 @@ export default function BrokerManagementPage() {
                                             <TableCell sx={{ textAlign: isRTL ? 'right' : 'left' }}>
                                                 <Stack spacing={0.8}>
                                                     <Chip label={statusText(broker.brokerKycStatus || broker.kycStatus || broker.status)} color={chipColor(broker.brokerKycStatus || broker.kycStatus || broker.status) as any} size="small" sx={{ fontWeight: 900, width: 'fit-content' }} />
-                                                    <Typography variant="caption" color={missing.length ? 'error' : 'success.main'}>{missing.length ? `Missing: ${missing.join(', ')}` : 'KYC dossier complete'}</Typography>
+                                                    <Typography variant="caption" color={summary ? (missing.length ? 'error' : 'success.main') : 'text.secondary'}>{summary ? (missing.length ? `Missing: ${missing.join(', ')}` : 'Private-vault dossier complete') : 'Open dossier for private-vault completeness'}</Typography>
                                                 </Stack>
                                             </TableCell>
                                             <TableCell sx={{ textAlign: isRTL ? 'right' : 'left' }}>
@@ -396,8 +397,8 @@ export default function BrokerManagementPage() {
                                                 <Typography variant="caption" color="text.secondary">uploaded evidence</Typography>
                                             </TableCell>
                                             <TableCell sx={{ textAlign: isRTL ? 'right' : 'left' }}>
-                                                <Chip size="small" label={broker.bankName && (broker.bankIban || broker.iban) ? 'BANK READY' : 'BANK MISSING'} color={broker.bankName && (broker.bankIban || broker.iban) ? 'success' : 'warning'} sx={{ fontWeight: 900 }} />
-                                                <Typography variant="caption" display="block" color={broker.commissionAgreementAccepted ? 'success.main' : 'warning.main'}>{broker.commissionAgreementAccepted ? 'Terms accepted' : 'Terms missing'}</Typography>
+                                                <Chip size="small" label={summary ? (summary.kyc?.bankName && summary.kyc?.bankIbanMasked ? 'BANK READY' : 'BANK MISSING') : 'PRIVATE VAULT'} color={summary ? (summary.kyc?.bankName && summary.kyc?.bankIbanMasked ? 'success' : 'warning') : 'default'} sx={{ fontWeight: 900 }} />
+                                                <Typography variant="caption" display="block" color={summary?.kyc?.commissionAgreementAccepted ? 'success.main' : 'text.secondary'}>{summary ? (summary.kyc?.commissionAgreementAccepted ? 'Terms accepted' : 'Terms missing') : 'Open dossier to verify terms'}</Typography>
                                             </TableCell>
                                             <TableCell align={isRTL ? 'left' : 'right'}>
                                                 <Tooltip title="View KYC dossier"><span><IconButton disabled={busy === `summary-${broker.id}`} onClick={() => void openDossier(broker)}><VisibilityIcon /></IconButton></span></Tooltip>
@@ -474,18 +475,19 @@ export default function BrokerManagementPage() {
                                 <Grid item xs={12} md={6}>
                                     <Paper sx={{ p: 2, bgcolor: '#f8fafc', border: '1px solid #e5e7eb' }}>
                                         <Typography variant="overline" sx={{ fontWeight: 950 }}>Identity</Typography>
-                                        <Typography sx={{ fontWeight: 900 }}>RERA: {selectedBroker.reraLicense || 'Not provided'}</Typography>
-                                        <Typography variant="body2">Trade license: {selectedBroker.tradeLicenseNumber || 'Not provided'}</Typography>
-                                        <Typography variant="body2">Emirates ID: {selectedBroker.emiratesIdNumber || 'Not provided'}</Typography>
-                                        <Typography variant="body2">Passport: {selectedBroker.passportNumber || 'Not provided'}</Typography>
+                                        <Typography sx={{ fontWeight: 900 }}>RERA: {selectedSummary?.kyc?.reraLicenseMasked || 'Not provided'}</Typography>
+                                        <Typography variant="body2">Identity evidence: {selectedSummary?.kyc?.identityEvidencePresent ? 'Present in private vault' : 'Missing'}</Typography>
+                                        <Typography variant="body2">Profile completion: {Number(selectedSummary?.kyc?.profileCompletionScore || 0)}%</Typography>
+                                        <Typography variant="body2">Required documents: {selectedSummary?.documents?.requiredPresent ? 'Present' : 'Missing'}</Typography>
                                     </Paper>
                                 </Grid>
                                 <Grid item xs={12} md={6}>
                                     <Paper sx={{ p: 2, bgcolor: '#f8fafc', border: '1px solid #e5e7eb' }}>
                                         <Typography variant="overline" sx={{ fontWeight: 950 }}>Settlement</Typography>
-                                        <Stack direction="row" spacing={1.5} alignItems="center"><BankIcon fontSize="small" /><Typography sx={{ fontWeight: 900 }}>{selectedBroker.bankName || 'Bank missing'}</Typography></Stack>
-                                        <Stack direction="row" spacing={1.5} alignItems="center"><BadgeIcon fontSize="small" /><Typography>{selectedBroker.bankIban || selectedBroker.iban || 'IBAN missing'}</Typography></Stack>
-                                        <Typography variant="body2" color={selectedBroker.commissionAgreementAccepted ? 'success.main' : 'warning.main'}>{selectedBroker.commissionAgreementAccepted ? 'Commission agreement accepted' : 'Commission agreement not accepted'}</Typography>
+                                        <Stack direction="row" spacing={1.5} alignItems="center"><BankIcon fontSize="small" /><Typography sx={{ fontWeight: 900 }}>{selectedSummary?.kyc?.bankName || 'Bank missing'}</Typography></Stack>
+                                        <Stack direction="row" spacing={1.5} alignItems="center"><BadgeIcon fontSize="small" /><Typography>{selectedSummary?.kyc?.bankIbanMasked || 'IBAN missing'}</Typography></Stack>
+                                        <Typography variant="body2">{selectedSummary?.kyc?.bankAccountHolder || 'Account holder missing'}</Typography>
+                                        <Typography variant="body2" color={selectedSummary?.kyc?.commissionAgreementAccepted ? 'success.main' : 'warning.main'}>{selectedSummary?.kyc?.commissionAgreementAccepted ? 'Commission agreement accepted' : 'Commission agreement not accepted'}</Typography>
                                     </Paper>
                                 </Grid>
                             </Grid>
