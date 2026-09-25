@@ -70,10 +70,12 @@ async function assertNoExistingCanonicalProperty(
   const lookups: Array<Promise<FirebaseFirestore.QuerySnapshot>> = [];
 
   if (lat !== null) {
+    lookups.push(db.collection("properties").where("submittedGeo.lat", "==", lat).limit(50).get());
     lookups.push(db.collection("properties").where("geo.lat", "==", lat).limit(50).get());
   }
   if (address) {
     lookups.push(db.collection("properties").where("address", "==", address).limit(50).get());
+    lookups.push(db.collection("properties").where("submittedGeo.address", "==", address).limit(50).get());
     lookups.push(db.collection("properties").where("geo.address", "==", address).limit(50).get());
   }
   if (!lookups.length) return;
