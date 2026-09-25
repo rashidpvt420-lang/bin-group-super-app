@@ -233,7 +233,8 @@ async function createRenewalPdfRecord(record: RenewalRecord) {
       const contractSnap = await db.collection("contracts").doc(record.contractId).get();
       if (!contractSnap.exists) throw new Error("Canonical renewal contract is missing.");
       const canonicalContract = contractSnap.data() || {};
-      const artifact = await generateContractPdfArtifact({ ...canonicalContract,
+      const artifact = await generateContractPdfArtifact({
+        ...canonicalContract,
         contractId: record.contractId,
         propertyId: record.propertyId,
         propertyName: record.propertyName,
@@ -242,6 +243,10 @@ async function createRenewalPdfRecord(record: RenewalRecord) {
         expiryAt: record.expiryAt.toISOString(),
         documentPurpose: "RENEWAL_NOTICE",
       } as any);
+      pdfUrl = artifact.pdfUrl;
+      pdfSha256 = artifact.pdfSha256;
+      pdfStoragePath = artifact.storagePath;
+      pdfGeneration = artifact.generation;
     } catch (error) {
       console.error("Renewal PDF generation failed", record.contractId, error);
     }
