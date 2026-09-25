@@ -33,7 +33,7 @@ test('Phase 12 exposes one mirrored canonical contract for every required workfl
     'TECHNICIAN_JOB_STATE_MACHINE',
     'ONBOARDING_STATE_MACHINE',
   ]) {
-    assert.match(server, new RegExp(`export const ${symbol} = machine\\(`));
+    assert.ok(server.includes(`export const ${symbol} = machine(`));
   }
 });
 
@@ -137,9 +137,11 @@ test('Phase 12 preserves the existing onboarding canonical machine and removes o
   ]);
 
   for (const state of ['draft', 'admin_review', 'changes_requested', 'approved', 'active']) {
-    assert.match(server, new RegExp(`['"]${state}['"]`));
-    assert.match(client, new RegExp(`['"]${state}['"]`));
-    assert.match(umbrella, new RegExp(`['"]${state}['"]`));
+    const singleQuoted = `'${state}'`;
+    const doubleQuoted = `"${state}"`;
+    assert.ok(server.includes(singleQuoted) || server.includes(doubleQuoted));
+    assert.ok(client.includes(singleQuoted) || client.includes(doubleQuoted));
+    assert.ok(umbrella.includes(singleQuoted) || umbrella.includes(doubleQuoted));
   }
   assert.match(server, /changes_requested:\s*\[[^\]]*'admin_review'/);
   assert.match(client, /changes_requested:\s*\[[^\]]*'admin_review'/);
