@@ -238,8 +238,8 @@ export const createOwnerPaymentTransaction = onCall({ cors: true, enforceAppChec
         }, { merge: true });
         transaction.set(ref, {
           paymentId,
-          paymentStatus: "PENDING_VERIFICATION",
-          status: "PENDING_ADMIN_PAYMENT_VERIFICATION",
+          paymentStatus: "PENDING",
+          status: "PENDING_PAYMENT",
           activationStatus: "PAYMENT_REVIEW_REQUIRED",
           paymentReferenceId,
           paymentProofUrl,
@@ -329,8 +329,8 @@ export const createOwnerPaymentTransaction = onCall({ cors: true, enforceAppChec
     });
     transaction.set(ref, {
       paymentId,
-      paymentStatus: "PENDING_VERIFICATION",
-      status: "PENDING_ADMIN_PAYMENT_VERIFICATION",
+      paymentStatus: "PENDING",
+      status: "PENDING_PAYMENT",
       paymentMethod: method,
       provider,
       paymentConfigVersion,
