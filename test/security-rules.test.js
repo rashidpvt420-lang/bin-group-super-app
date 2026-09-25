@@ -46,6 +46,66 @@ describe('Firestore Security Rules', () => {
     await assertFails(getDoc(doc(ownerADb, 'properties/prop_b')));
   });
 
+  it('property ownership ignores generic createdBy aliases and binds only ownerId/ownerUid', async () => {
+    await seedServerDocument('properties/alias_owned_by_other', {
+      ownerId: 'owner_b',
+      createdByUid: 'owner_a',
+      status: 'draft',
+      name: 'Alias must not grant ownership',
+    });
+
+    const ownerADb = testEnv.authenticatedContext('owner_a', { role: 'owner' }).firestore();
+    await assertFails(getDoc(doc(ownerADb, 'properties/alias_owned_by_other')));
+    await assertFails(updateDoc(doc(ownerADb, 'properties/alias_owned_by_other'), { name: 'Forged edit' }));
+    await assertFails(setDoc(doc(ownerADb, 'properties/alias_create'), {
+      createdByUid: 'owner_a',
+      status: 'draft',
+      name: 'Alias-only forged property',
+    }));
+  });
+
+  it('owner property edits preserve server-only activation inspection and geo authority', async () => {
+    await seedServerDocument('properties/prop_owner_a', {
+      ownerId: 'owner_a',
+      ownerUid: 'owner_a',
+      status: 'draft',
+      name: 'Owned property',
+    });
+    const ownerADb = testEnv.authenticatedContext('owner_a', { role: 'owner' }).firestore();
+
+    await assertSucceeds(updateDoc(doc(ownerADb, 'properties/prop_owner_a'), { name: 'Safe descriptive edit' }));
+    await assertFails(updateDoc(doc(ownerADb, 'properties/prop_owner_a'), { active: true }));
+    await assertFails(updateDoc(doc(ownerADb, 'properties/prop_owner_a'), { isActive: true }));
+    await assertFails(updateDoc(doc(ownerADb, 'properties/prop_owner_a'), { status: 'active' }));
+    await assertFails(updateDoc(doc(ownerADb, 'properties/prop_owner_a'), { inspectionVerified: true }));
+    await assertFails(updateDoc(doc(ownerADb, 'properties/prop_owner_a'), { verified: true }));
+    await assertFails(updateDoc(doc(ownerADb, 'properties/prop_owner_a'), { dispatchReady: true }));
+
+    await assertSucceeds(setDoc(doc(ownerADb, 'properties/owner_created_draft'), {
+      ownerId: 'owner_a',
+      ownerUid: 'owner_a',
+      status: 'draft',
+      name: 'Owner draft',
+      submittedGeo: {
+        lat: 24.4539,
+        lng: 54.3773,
+        source: 'owner_submission',
+        verified: false,
+        dispatchReady: false,
+        requiresGeoReview: true,
+        verifiedBy: null,
+        verifiedAt: null,
+      },
+    }));
+    await assertFails(setDoc(doc(ownerADb, 'properties/owner_created_active'), {
+      ownerId: 'owner_a',
+      ownerUid: 'owner_a',
+      status: 'draft',
+      active: true,
+      name: 'Forged active draft',
+    }));
+  });
+
   it('units read isolation: Tenant A cannot read Tenant B unit', async () => {
     const adminDb = testEnv.authenticatedContext('admin_user', { admin: true }).firestore();
     await setDoc(doc(adminDb, 'users/admin_user'), { role: 'admin' });

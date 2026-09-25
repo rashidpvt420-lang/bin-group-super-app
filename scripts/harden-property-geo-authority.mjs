@@ -59,6 +59,7 @@ for (const name of [
   'propertyCreateHasNoCanonicalGeo',
   'canonicalPropertyGeoUnchanged',
   'safeManagedPropertyUpdate',
+  'propertyOwnedByCaller',
   'safeOwnerPropertyCreate',
   'safeOwnerPropertyUpdate',
 ]) removeFunction(name);
@@ -121,24 +122,54 @@ const propertyFunctions = `    function submittedPropertyGeoIsUnverified(data) {
         submittedPropertyGeoIsUnverified(request.resource.data);
     }
 
+    function propertyOwnedByCaller(data) {
+      return signedIn() && (
+        data.get('ownerId', null) == request.auth.uid ||
+        data.get('ownerUid', null) == request.auth.uid
+      );
+    }
+
     function safeOwnerPropertyCreate(data) {
-      return ownerDraftCreate(data) && propertyCreateHasNoCanonicalGeo(data);
+      return propertyOwnedByCaller(data) &&
+        ownerDraftCreate(data) &&
+        propertyCreateHasNoCanonicalGeo(data) &&
+        !data.keys().hasAny([
+          'active',
+          'isActive',
+          'locationVerified',
+          'inspectionVerified',
+          'inspectionCompletedAt',
+          'inspectionCompletedBy',
+          'resubmittedAt',
+          'resubmittedBy',
+          'resubmissionCount'
+        ]);
     }
 
     function safeOwnerPropertyUpdate() {
-      return signedIn() &&
-        owns(resource.data) &&
+      return propertyOwnedByCaller(resource.data) &&
         request.resource.data.get('ownerId', null) == resource.data.get('ownerId', null) &&
         request.resource.data.get('ownerUid', null) == resource.data.get('ownerUid', null) &&
         safeManagedPropertyUpdate() &&
         !request.resource.data.diff(resource.data).affectedKeys().hasAny([
           'status',
+          'lifecycleStatus',
+          'onboardingState',
           'activationStatus',
+          'active',
+          'isActive',
+          'locationVerified',
+          'inspectionStatus',
+          'inspectionVerified',
+          'inspectionResult',
+          'inspectionCompletedAt',
+          'inspectionCompletedBy',
           'paymentStatus',
           'paymentVerified',
           'adminApproved',
           'approved',
           'contractActivated',
+          'dashboardLocked',
           'dashboardUnlocked',
           'dashboardUnlockApproved',
           'unlocksDashboard',
@@ -146,6 +177,12 @@ const propertyFunctions = `    function submittedPropertyGeoIsUnverified(data) {
           'quoteHash',
           'quoteSnapshot',
           'quoteVersion',
+          'intakeId',
+          'contractId',
+          'workflowVersion',
+          'resubmittedAt',
+          'resubmittedBy',
+          'resubmissionCount',
           'ownerId',
           'ownerUid'
         ]);
@@ -158,10 +195,10 @@ rules = rules.replace(insertionAnchor, `${propertyFunctions}${insertionAnchor}`)
 
 const propertyBlock = `    match /properties/{propertyId} {
       allow get: if isNotSuspended() && getTenantPropertyId() == propertyId;
-      allow read: if isNotSuspended() && (canManageProperties() || ownerCanRead(resource.data) || tenantOwns(resource.data) || (isTechnicianActor() && techOwns(resource.data)));
+      allow read: if isNotSuspended() && (canManageProperties() || propertyOwnedByCaller(resource.data) || (isTechnicianActor() && techOwns(resource.data)));
       allow create: if isNotSuspended() &&
         propertyCreateHasNoCanonicalGeo(request.resource.data) &&
-        (canManageProperties() || ownerDraftCreate(request.resource.data));
+        (canManageProperties() || safeOwnerPropertyCreate(request.resource.data));
       allow update: if isNotSuspended() && (
         (canManageProperties() && safeManagedPropertyUpdate()) ||
         safeOwnerPropertyUpdate()
@@ -175,6 +212,7 @@ for (const name of [
   'propertyCreateHasNoCanonicalGeo',
   'canonicalPropertyGeoUnchanged',
   'safeManagedPropertyUpdate',
+  'propertyOwnedByCaller',
   'safeOwnerPropertyCreate',
   'safeOwnerPropertyUpdate',
 ]) {
