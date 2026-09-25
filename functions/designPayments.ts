@@ -91,7 +91,7 @@ export const createDesignPaymentRequest = onCall(options, async (request) => {
       currency: 'AED', method, paymentMethod: method, provider: 'MANUAL',
       paymentConfigVersion: s.config.version, paymentConfigHash: s.config.configHash,
       paymentManifest: { legalBeneficiary: s.config.legalBeneficiary, officeLocation: s.config.officeLocation, approvedMethods: s.config.approvedMethods },
-      status: 'PENDING_ADMIN_PAYMENT_VERIFICATION', paymentStatus: 'PENDING_ADMIN_PAYMENT_VERIFICATION',
+      status: 'PENDING', paymentStatus: 'PENDING',
       verificationState: 'AWAITING_CASH_CHEQUE_RECEIPT', adminApprovalRequired: true,
       paymentVerified: false, approved: false, amountReceived: 0, createdAt: now(), updatedAt: now(),
     });
@@ -135,7 +135,7 @@ export const submitDesignOwnerDecision = onCall(options, async (request) => {
     const status = action === 'REJECT' ? 'OWNER_REJECTED' : action === 'TAKEOVER' ? 'OWNER_APPROVED_OWNER_TO_PAY' : 'OWNER_APPROVED_TENANT_TO_PAY';
     transaction.update(designRef, { ...decision, status, workflowStage: status, quoteStatus: action === 'REJECT' ? 'REJECTED' : 'DEPOSIT_PENDING', ownerActionAt: now(), updatedAt: now() });
     transaction.update(approvalRef, { ...decision, status: decision.approvalStatus, decision: action === 'REJECT' ? 'REJECTED' : 'APPROVED', decidedBy: user.uid, decidedAt: now(), updatedAt: now() });
-    transaction.update(db.collection('design_quotes').doc(requestId), { status: action === 'REJECT' ? 'REJECTED' : 'DEPOSIT_PENDING', updatedAt: now() });
+    transaction.update(db.collection('design_quotes').doc(requestId), { status: action === 'REJECT' ? 'REJECTED' : 'ACCEPTED', updatedAt: now() });
     transaction.create(db.collection('audit_logs').doc(`design_owner_decision_${requestId}`), { action: `DESIGN_OWNER_${action}`, actorId: user.uid, actorRole: user.role, targetType: 'design_requests', targetId: requestId, ...decision, createdAt: now() });
     transaction.create(db.collection('notifications').doc(`design_owner_decision_${requestId}`), {
       recipientId: design.userId, type: 'DESIGN_OWNER_DECISION', title: 'Design Owner decision',
@@ -212,8 +212,8 @@ export const adminReviewDesignPayment = onCall({ ...options, enforceAppCheck: tr
       for (const ref of evidenceRefs) transaction.create(ref, { paymentId: s.paymentRef.id, designRequestId: requestId, receiptHash: receipt!.receiptHash, referenceHash, recordedBy: user.uid, createdAt: now() });
     }
     transaction.update(s.paymentRef, {
-      status: verified ? 'APPROVED' : 'PENDING_ADMIN_PAYMENT_VERIFICATION',
-      paymentStatus: verified ? 'APPROVED' : 'PENDING_ADMIN_PAYMENT_VERIFICATION',
+      status: verified ? 'APPROVED' : 'PENDING',
+      paymentStatus: verified ? 'APPROVED' : 'PENDING',
       verificationState: verified ? 'ADMIN_VERIFIED' : 'EVIDENCE_RETURNED',
       paymentVerified: verified, approved: verified, adminApprovalRequired: !verified,
       ...(verified ? { amountReceived: s.terms.amount, paymentReferenceId: reference, receiptPath: receipt!.storagePath, receiptHash: receipt!.receiptHash, receiptGeneration: receipt!.generation, receiptEvidence: receipt, approvedBy: user.uid, approvedAt: now() } : {}),
