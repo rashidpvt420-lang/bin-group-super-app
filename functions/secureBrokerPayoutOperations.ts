@@ -316,6 +316,7 @@ export const submitBrokerPayoutRequest = onCall({ cors: true, region: "europe-we
   const bindingHash = binding(broker.uid, commissions.ids, commissions.amount);
   const challengeRef = db.collection("broker_payout_otps").doc(challengeId);
   const payoutRef = db.collection("broker_payout_requests").doc();
+  const notificationRef = db.collection("notifications").doc("broker_payout_requested_" + payoutRef.id);
   const now = FieldValue.serverTimestamp();
   await db.runTransaction(async (tx) => {
     const challengeSnap = await tx.get(challengeRef);
@@ -376,6 +377,17 @@ export const submitBrokerPayoutRequest = onCall({ cors: true, region: "europe-we
       kycSubmissionHash: broker.approvedSubmissionHash,
       commissionIds: commissions.ids,
       amount: commissions.amount,
+      createdAt: now,
+    });
+    tx.set(notificationRef, {
+      recipientId: broker.uid,
+      userId: broker.uid,
+      recipientRole: "broker",
+      type: "BROKER_PAYOUT_REQUESTED",
+      title: "Payout request submitted",
+      body: "Your payout request has passed OTP verification and is pending Finance/Admin review.",
+      link: "/broker/commissions",
+      read: false,
       createdAt: now,
     });
   });
