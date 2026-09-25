@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 
 const read = (path) => readFileSync(path, 'utf8');
 
-test('public role bootstrap cannot be deadlocked by App Check before a role exists', () => {
+test('public role bootstrap requires Auth and App Check before assigning a role', () => {
   const callable = read('functions/publicRoleAssignment.ts');
 
   assert.match(callable, /export const assignPublicPortalRole = onCall\(\{/);
