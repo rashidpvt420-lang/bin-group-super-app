@@ -47,6 +47,29 @@ export default function AdminPropertyApprovalsPage() {
     && pendingStates.some((state) => normalize(row.approvalStatus || row.status || row.onboardingStatus).includes(state)),
   );
 
+  const requestChanges = async (row: any) => {
+    if (!inspectionFirst(row)) {
+      setMessage('Use the legacy review actions only for non-inspection-first properties.');
+      return;
+    }
+    if (note.trim().length < 8) {
+      setMessage('A change-request reason of at least 8 characters is required.');
+      return;
+    }
+    setBusyId(row.id);
+    setMessage('');
+    try {
+      const requestOwnerPropertyChanges = httpsCallable(functions, 'adminRequestOwnerPropertyChanges');
+      await requestOwnerPropertyChanges({ propertyId: row.id, reason: note.trim() });
+      setMessage('Owner corrections requested. Inspection, payment and activation remain locked.');
+      setNote('');
+    } catch (error: any) {
+      setMessage(error?.message || 'Change request failed. No lifecycle state was changed.');
+    } finally {
+      setBusyId('');
+    }
+  };
+
   const decide = async (row: any, decision: 'APPROVE' | 'REJECT') => {
     if (inspectionFirst(row)) {
       setMessage('Inspection-first properties must be processed through Intake Vault and their linked physical site visits.');
@@ -86,10 +109,38 @@ export default function AdminPropertyApprovalsPage() {
         </Box>
         {message && <Alert severity={message.includes('failed') || message.includes('Could not') || message.includes('required') ? 'error' : 'success'}>{message}</Alert>}
         <Paper sx={{ p: 2, bgcolor: '#0f172a', border: '1px solid rgba(218,165,32,0.35)', borderRadius: 3 }}>
-          <Stack spacing={1}>
-            <Typography variant="overline" sx={{ color: '#DAA520', fontWeight: 950 }}>Canonical inspection-first queue</Typography>
-            <Typography variant="h5" color="#fff" fontWeight="950">{inspectionFirstRows.length}</Typography>
-            <Typography color="rgba(255,255,255,0.7)">Use Intake Vault to create one site visit per property, record immutable visit evidence, and complete the portfolio. This page cannot approve those properties or manufacture dispatch-ready GPS.</Typography>
+          <Stack spacing={2}>
+            <Box>
+              <Typography variant="overline" sx={{ color: '#DAA520', fontWeight: 950 }}>Canonical inspection-first queue</Typography>
+              <Typography variant="h5" color="#fff" fontWeight="950">{inspectionFirstRows.length}</Typography>
+              <Typography color="rgba(255,255,255,0.7)">Use Intake Vault to create one site visit per property, record immutable visit evidence, and complete the portfolio. This page cannot approve those properties or manufacture dispatch-ready GPS.</Typography>
+            </Box>
+            {inspectionFirstRows.map((row) => (
+              <Stack
+                key={row.id}
+                direction={{ xs: 'column', md: 'row' }}
+                spacing={2}
+                alignItems={{ xs: 'stretch', md: 'center' }}
+                justifyContent="space-between"
+                sx={{ p: 2, borderRadius: 2, border: '1px solid rgba(255,255,255,0.08)' }}
+              >
+                <Box>
+                  <Typography color="#fff" fontWeight={900}>{row.propertyName || row.name || row.id}</Typography>
+                  <Typography variant="caption" color="rgba(255,255,255,0.6)">
+                    {normalize(row.status || row.approvalStatus || row.onboardingStatus)} · {row.ownerEmail || row.ownerId || 'Owner linked'}
+                  </Typography>
+                </Box>
+                <Button
+                  data-testid={`admin-request-owner-property-changes-${row.id}`}
+                  color="warning"
+                  variant="outlined"
+                  disabled={busyId === row.id}
+                  onClick={() => void requestChanges(row)}
+                >
+                  Request pre-inspection changes
+                </Button>
+              </Stack>
+            ))}
           </Stack>
         </Paper>
         <Paper sx={{ p: 2, bgcolor: '#0f172a', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 3 }}>
