@@ -23,7 +23,6 @@ const statusColor = (value: any) => {
   if (['REJECTED', 'FAILED', 'DISPUTED'].some((x) => status.includes(x))) return '#ef4444';
   return '#f59e0b';
 };
-const normalizeEmail = (value: unknown) => String(value || '').trim().toLowerCase();
 const idValue = (...values: unknown[]) => values.map((value) => String(value || '').trim()).find(Boolean) || '';
 const byId = (rows: Row[]): Map<string, Row> => new Map<string, Row>(rows.map((row) => [String(row.id), row]));
 const byField = (rows: Row[], field: string): Map<string, Row> => new Map<string, Row>(
