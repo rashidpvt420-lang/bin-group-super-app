@@ -758,6 +758,7 @@ service cloud.firestore {
 
     function safeBrokerLeadCreate(data) {
       return signedIn() &&
+        claimedRole() == 'broker' &&
         data.get('brokerId', null) == request.auth.uid &&
         !data.keys().hasAny([
           'commissionEligible',
@@ -795,6 +796,7 @@ service cloud.firestore {
 
     function safeBrokerReferralCreate(data) {
       return signedIn() &&
+        claimedRole() == 'broker' &&
         data.get('brokerId', null) == request.auth.uid &&
         !data.keys().hasAny([
           'commissionStatus',
