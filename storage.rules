@@ -249,7 +249,8 @@ service firebase.storage {
 
     match /owners/{ownerId}/{allPaths=**} {
       allow read: if isAuth() && (request.auth.uid == ownerId || isAdmin() || isAuditor());
-      allow write: if isAuth() && (request.auth.uid == ownerId || isAdmin()) && isDocumentUpload(15);
+      allow create: if isAuth() && request.auth.uid == ownerId && resource == null && isDocumentUpload(15);
+      allow update, delete: if false;
     }
 
     // Home Discovery property media has a dedicated non-overlapping path so
@@ -324,9 +325,16 @@ service firebase.storage {
       allow read: if isAuth() && (documentId.matches(request.auth.uid + '.*') || isAdmin() || isAuditor());
     }
 
-    match /onboarding-proof/{userId}/{intakeId}/{allPaths=**} {
+    match /onboarding-proof/{userId}/{intakeId}/{docType}/{fileName} {
       allow read: if isAuth() && (request.auth.uid == userId || isAdmin() || isAuditor());
-      allow write: if isAuth() && request.auth.uid == userId && isDocumentUpload(15);
+      allow create: if isAuth() &&
+        request.auth.uid == userId &&
+        resource == null &&
+        isDocumentUpload(15) &&
+        request.resource.metadata.ownerUid == userId &&
+        request.resource.metadata.intakeId == intakeId &&
+        request.resource.metadata.docType == docType;
+      allow update, delete: if false;
     }
 
     match /evidence/{ticketId}/{fileName} {
@@ -374,7 +382,9 @@ service firebase.storage {
       allow read, write: if isAdmin() &&
         collection != 'design-payment-receipts' &&
         collection != 'privateHrDocuments' &&
-        collection != 'staff-reports';
+        collection != 'staff-reports' &&
+        collection != 'owners' &&
+        collection != 'onboarding-proof';
     }
   }
 }
