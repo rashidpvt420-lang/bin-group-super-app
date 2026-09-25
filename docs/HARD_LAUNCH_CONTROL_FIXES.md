@@ -23,9 +23,9 @@ compatible layers (not two competing final judges).
 |---|---|---|
 | Founder authorization | `scripts/create-hard-launch-authorization.mjs` | HMAC-signs founder dispatch authorization bound to SHA/run |
 | Signed predeploy authorization | `scripts/hard-launch-predeploy-gate.mjs` | Validates HMAC authorization + incidents before deploy (**deploy only**) |
-| Signed decision | `scripts/hard-launch-decision-gate.mjs` | Records the post-evidence decision; `hardLaunchClaim` stays `false` for bank-pilot and becomes `true` only after public postdeploy + Stripe live proof clear |
+| Signed decision | `scripts/hard-launch-decision-gate.mjs` | Records the post-evidence decision; `hardLaunchClaim` stays `false` for bank-pilot and becomes `true` only after public postdeploy + the signed Phase 1 Cash/Cheque payment proof clear |
 
-GitHub `environment: production` and the split gates provide environment and technical fail-closed controls. The HMAC layer adds a cryptographically signed founder/run binding. They cooperate: HMAC authorizes deploy readiness; split predeploy enforces digests and build markers; only after same-SHA deploy, live evidence, postdeploy clearance, and Stripe live verification may the signed decision set `hardLaunchClaim=true`.
+GitHub `environment: production` and the split gates provide environment and technical fail-closed controls. The HMAC layer adds a cryptographically signed founder/run binding. They cooperate: HMAC authorizes deploy readiness; split predeploy enforces digests and build markers; only after same-SHA deploy, live evidence, postdeploy clearance, and the payment-policy-bound Phase 1 proof may the signed decision set `hardLaunchClaim=true`.
 
 ## Operator entrypoint
 
@@ -42,7 +42,7 @@ The operator does **not** manually enter:
 
 The dispatcher stabilizes current `main`, binds the exact 40-character SHA, inspects the latest completed protected deployment, enforces the 30-minute failed-deployment cooldown, and derives `CLEAR` versus `WITH_HOLDS`. It then passes the derived values to the protected `Firebase Production Deploy` workflow.
 
-The operator still supplies truthful active-incident JSON, explicit rollback-hold state/reason, and a current evidence reference. Public mode additionally requires a verified hard-clearance run ID and real Stripe live session/webhook identifiers.
+The operator still supplies truthful active-incident JSON, explicit rollback-hold state/reason, and a current evidence reference. Public mode additionally requires a verified hard-clearance run ID. Stripe/Card identifiers must remain blank while `PHASE1_CASH_CHEQUE_V1` is authoritative.
 
 ## Incident artifact provenance
 
@@ -79,7 +79,7 @@ Missing, incomplete, contradictory, stale, or manually forged incident state fai
 - No App Check 403 or permission-denied contamination
 - Operational readiness containing all required evidence-specific gates
 - Verified 24-hour controlled-pilot provenance with no open P0/P1 incident
-- Stripe live proof for `launch_mode=public`
+- Signed Phase 1 Cash/Cheque payment-policy proof for `launch_mode=public`
 - Incidents rechecked after deploy
 - HMAC-signed final decision whose evidence hashes match the exact runtime artifacts
 
