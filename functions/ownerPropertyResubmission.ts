@@ -1,8 +1,10 @@
 import * as admin from "firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
+import type * as FirebaseFirestore from "firebase-admin/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { buildPropertyIdentities, PROPERTY_IDENTITY_VERSION } from "./propertyIdentity";
 import { hasDispatchReadyPropertyGeo } from "./propertyGeoAuthority";
+import { assertOnboardingTransition } from "./onboardingStateMachine";
 
 if (!admin.apps.length) admin.initializeApp();
 const db = admin.firestore();
@@ -233,6 +235,8 @@ export const adminRequestOwnerPropertyChanges = onCall(
     if (!propertyId) throw new HttpsError("invalid-argument", "propertyId is required.");
     if (reason.length < 8) throw new HttpsError("invalid-argument", "A clear change request reason of at least 8 characters is required.");
 
+    assertOnboardingTransition("admin_review", "changes_requested");
+
     const propertyRef = db.collection("properties").doc(propertyId);
     const auditRef = db.collection("audit_logs").doc();
     const notificationRef = db.collection("notifications").doc();
@@ -272,6 +276,7 @@ export const adminRequestOwnerPropertyChanges = onCall(
 
       transaction.set(propertyRef, {
         status: "CHANGES_REQUESTED",
+        canonicalOnboardingState: "changes_requested",
         approvalStatus: "CHANGES_REQUESTED",
         onboardingStatus: "CHANGES_REQUESTED",
         inspectionStatus: "CHANGES_REQUESTED_BEFORE_SITE_VISIT",
@@ -288,6 +293,7 @@ export const adminRequestOwnerPropertyChanges = onCall(
 
       transaction.set(intakeRef, {
         status: "CHANGES_REQUESTED",
+        canonicalOnboardingState: "changes_requested",
         adminReviewState: "CHANGES_REQUESTED_BEFORE_SITE_VISIT",
         inspectionStatus: "CHANGES_REQUESTED_BEFORE_SITE_VISIT",
         activationState: "LOCKED_PENDING_OWNER_CORRECTIONS",
@@ -377,6 +383,8 @@ export const resubmitOwnerProperty = onCall(
     const propertyId = text(request.data?.propertyId, 240);
     if (!propertyId) throw new HttpsError("invalid-argument", "propertyId is required.");
     const patch = sanitizeOwnerPatch(request.data?.property || request.data?.updates);
+
+    assertOnboardingTransition("changes_requested", "admin_review");
 
     const propertyRef = db.collection("properties").doc(propertyId);
     const now = FieldValue.serverTimestamp();
@@ -537,6 +545,7 @@ export const resubmitOwnerProperty = onCall(
         submittedGeo,
         geo: nextProperty.geo,
         status: "PENDING_PROPERTY_INSPECTION",
+        canonicalOnboardingState: "admin_review",
         approvalStatus: "PENDING_REVIEW",
         onboardingStatus: "SUBMITTED_FOR_PROPERTY_INSPECTION",
         activationStatus: "LOCKED_PENDING_INSPECTION_AND_PAYMENT",
@@ -557,6 +566,7 @@ export const resubmitOwnerProperty = onCall(
       transaction.set(intakeRef, {
         properties: nextIntakeProperties,
         status: "SUBMITTED_FOR_PROPERTY_INSPECTION",
+        canonicalOnboardingState: "admin_review",
         adminReviewState: "AWAITING_PROPERTY_REVIEW_AND_SITE_VISIT",
         inspectionStatus: "PENDING_ADMIN_SITE_VISIT",
         activationState: "LOCKED_PENDING_INSPECTION_AND_PAYMENT",
