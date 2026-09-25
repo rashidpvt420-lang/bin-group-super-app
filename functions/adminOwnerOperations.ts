@@ -1,7 +1,7 @@
 import { FieldValue } from "firebase-admin/firestore";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
-import { generateContractPDF } from "./pdfEngine";
+import { generateContractPdfArtifact } from "./pdfEngine";
 import { termFieldsFromStart } from "./ownerContractTerm";
 import { formatAedMoney, normalizeAedMoney } from "./shared/aedMoney";
 import {
@@ -448,7 +448,8 @@ export const ownerSignContractAndQueuePdf = onCall({ cors: true, enforceAppCheck
 
   const signedAtDate = new Date();
   const termFields = termFieldsFromStart(signedAtDate);
-  const pdfUrl = await generateContractPDF({ ...clean(contract), contractId, ownerName: signatureName, ownerEmail, planName: contract.packageName, propertyName: contract.propertyName, annualValue: contract.annualContractValue || contract.annualValue, mobilizationAmount: contract.depositAmount || contract.mobilizationAmount || contract.paymentSchedule?.mobilizationAmount, signedAt: signedAtDate.toISOString() });
+  const pdfArtifact = await generateContractPdfArtifact({ ...clean(contract), contractId, ownerName: signatureName, ownerEmail, planName: contract.packageName, propertyName: contract.propertyName, annualValue: contract.annualContractValue || contract.annualValue, mobilizationAmount: contract.depositAmount || contract.mobilizationAmount || contract.paymentSchedule?.mobilizationAmount, signedAt: signedAtDate.toISOString() });
+  const pdfUrl = pdfArtifact.pdfUrl;
   // NOTE: signing only marks the contract ready for activation. Payment verification
   // (createOwnerPaymentTransaction -> adminApproveContractActivation) is what unlocks the
   // dashboard - signing must never set paymentVerified/dashboardUnlocked on its own.
@@ -468,7 +469,7 @@ export const ownerSignContractAndQueuePdf = onCall({ cors: true, enforceAppCheck
       return;
     }
     await consumeVerifiedContractSignatureOtp(transaction, otpEvidence);
-    transaction.set(ref, { status: "PENDING_ACTIVATION", contractStatus: "PENDING_ACTIVATION", activationStatus: "PENDING_PAYMENT_VERIFICATION", paymentStatus: "PENDING_ADMIN_PAYMENT_VERIFICATION", ownerSigned: true, signatureName, signatureStatus: "OWNER_SIGNED", otpVerificationId, otpEvidenceVerified: true, finalContractAccepted: true, finalContractAcceptedQuoteHash: contractHash, signatureState: { ...(freshContract.signatureState || {}), ownerSigned: true, ownerSignedAt: signedAtDate.toISOString(), ownerSignatureName: signatureName, acceptedQuoteHash: contractHash, pdfGenerated: true, pdfUrl, emailed: true }, signedPdfUrl: pdfUrl, ownerSignedAt: ts(), ...termFields, updatedAt: ts() }, { merge: true });
+    transaction.set(ref, { status: "PENDING_ACTIVATION", contractStatus: "PENDING_ACTIVATION", activationStatus: "PENDING_PAYMENT_VERIFICATION", paymentStatus: "PENDING_ADMIN_PAYMENT_VERIFICATION", ownerSigned: true, signatureName, signatureStatus: "OWNER_SIGNED", otpVerificationId, otpEvidenceVerified: true, finalContractAccepted: true, finalContractAcceptedQuoteHash: contractHash, signatureState: { ...(freshContract.signatureState || {}), ownerSigned: true, ownerSignedAt: signedAtDate.toISOString(), ownerSignatureName: signatureName, acceptedQuoteHash: contractHash, pdfGenerated: true, pdfUrl, pdfSha256: pdfArtifact.pdfSha256, pdfStoragePath: pdfArtifact.storagePath, pdfGeneration: pdfArtifact.generation, emailed: true }, signedPdfUrl: pdfUrl, canonicalPdfUrl: pdfUrl, canonicalPdfSha256: pdfArtifact.pdfSha256, canonicalPdfStoragePath: pdfArtifact.storagePath, canonicalPdfGeneration: pdfArtifact.generation, canonicalPdfDocumentHash: pdfArtifact.documentHash, canonicalPdfSource: "SERVER_PDF_ENGINE", ownerSignedAt: ts(), ...termFields, updatedAt: ts() }, { merge: true });
     if (paymentSnap.exists) {
       const payment = paymentSnap.data() || {};
       const paymentFinalHash = s(payment.finalVerifiedQuoteHash).toLowerCase();
@@ -480,6 +481,8 @@ export const ownerSignContractAndQueuePdf = onCall({ cors: true, enforceAppCheck
         ownerFinalContractSigned: true,
         finalContractAcceptedQuoteHash: contractHash,
         signedPdfUrl: pdfUrl,
+        canonicalContractPdfSha256: pdfArtifact.pdfSha256,
+        canonicalContractPdfGeneration: pdfArtifact.generation,
         updatedAt: ts(),
       }, { merge: true });
     }
