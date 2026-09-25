@@ -12,6 +12,11 @@ const ownerIntake = read('src/components/onboarding/PropertyIntakeStep.tsx');
 const ownerAppLocation = read('apps/owner-app/src/components/onboarding/PropertyLocationStep.tsx');
 const geoAuthority = read('functions/propertyGeoAuthority.ts');
 const adminReview = read('functions/adminPropertyReview.ts');
+const runtime = read('functions/runtime.ts');
+const inspectionFirstBackend = read('functions/inspectionFirstOwnerOnboarding.ts');
+const inspectionCompletion = read('functions/ownerInspectionCompletion.ts');
+const canonicalInspectionCompletion = read('functions/canonicalOwnerInspectionCompletion.ts');
+const adminOwnerOperations = read('functions/adminOwnerOperations.ts');
 const legacyGeoRepair = read('functions/profileP1Workflows.ts');
 const geoRepairCenter = read('apps/admin-panel/src/pages/admin/GeoRepairCommandCenter.tsx');
 const assetRegistry = read('apps/admin-panel/src/pages/admin/PropertyManagementPage.tsx');
@@ -73,6 +78,41 @@ test('Only server-authoritative review or physical inspection can promote proper
   assert.match(adminGeo, /dispatchReady: false/);
   assert.match(adminGeo, /requiresGeoReview: true/);
   assert.doesNotMatch(adminGeo, /verified: input\.verified \?\? true/);
+});
+
+test('Inspection-first geo promotion stays fail-closed across the two-stage server transaction', () => {
+  assert.doesNotMatch(runtime, /^export \* from "\.\/inspectionFirstOwnerOnboarding";/m);
+  assert.match(runtime, /export \{ adminCompleteOwnerPortfolioInspections \} from "\.\/canonicalOwnerInspectionCompletion"/);
+  assert.match(inspectionFirstBackend, /export const adminCompleteOwnerPropertyInspection/);
+  assert.doesNotMatch(runtime, /adminCompleteOwnerPropertyInspection/);
+
+  assert.match(inspectionCompletion, /evidenceStatus\) !== "VERIFIED"/);
+  assert.match(inspectionCompletion, /evidenceHash/);
+  assert.match(inspectionCompletion, /evidenceGeneration/);
+  assert.match(inspectionCompletion, /arrivalLocation\?\.withinRadius !== true/);
+  assert.match(inspectionCompletion, /checklistVerified !== true/);
+  assert.match(inspectionCompletion, /visitStartedAt/);
+  assert.match(inspectionCompletion, /visitCompletedAt/);
+  assert.match(inspectionCompletion, /geoPromotionState: "PENDING_CANONICAL_PHYSICAL_EVIDENCE_PROMOTION"/);
+  assert.match(inspectionCompletion, /locationVerified: false/);
+  assert.match(inspectionCompletion, /verified: false/);
+  assert.match(inspectionCompletion, /dispatchReady: false/);
+
+  assert.match(canonicalInspectionCompletion, /buildInspectionVerifiedPropertyGeo/);
+  assert.match(canonicalInspectionCompletion, /geo: canonical\.geo/);
+  assert.match(canonicalInspectionCompletion, /geoVerification: canonical\.geoVerification/);
+  assert.match(canonicalInspectionCompletion, /geoPromotionState: "CANONICAL_PHYSICAL_EVIDENCE_PROMOTED"/);
+  assert.match(canonicalInspectionCompletion, /dispatchReady: true/);
+
+  const retiredApproval = adminOwnerOperations.slice(
+    adminOwnerOperations.indexOf('export const approveOwnerSubmissionOperationalFlow'),
+    adminOwnerOperations.indexOf('export const', adminOwnerOperations.indexOf('export const approveOwnerSubmissionOperationalFlow') + 1),
+  );
+  assert.match(retiredApproval, /Legacy intake conversion is disabled/);
+  assert.ok(
+    retiredApproval.indexOf('throw new HttpsError') < retiredApproval.indexOf('const intakeId'),
+    'retired Admin conversion must fail before any legacy geo activation path can execute',
+  );
 });
 
 test('Legacy Admin geo repair cannot mint canonical trust', () => {
