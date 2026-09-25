@@ -14,11 +14,11 @@ const REQUIRED_API_TARGETS = new Set([
 ]);
 
 const REQUIRED_REFERRER_GROUPS = [
-  ['bin-groups.com/*'],
-  ['www.bin-groups.com/*'],
-  ['bin-group-57c60.web.app/*'],
-  ['bin-group-admin-panel.web.app/*'],
-  ['localhost/*'],
+  ['https://bin-groups.com/*'],
+  ['https://www.bin-groups.com/*'],
+  ['https://bin-group-57c60.web.app/*'],
+  ['https://bin-group-admin-panel.web.app/*'],
+  ['https://localhost/*'],
 ];
 
 function fail(message) {
@@ -53,7 +53,6 @@ async function getJson(url, token) {
 function normalizeReferrer(value) {
   return text(value)
     .toLowerCase()
-    .replace(/^https?:\/\//, '')
     .replace(/\/$/, '');
 }
 
@@ -62,7 +61,7 @@ function referrerCovered(allowed, required) {
   return allowed.some((entry) => {
     const normalized = normalizeReferrer(entry);
     if (normalized === wanted) return true;
-    if (wanted === 'www.bin-groups.com/*' && normalized === '*.bin-groups.com/*') return true;
+    if (wanted === 'https://www.bin-groups.com/*' && normalized === 'https://*.bin-groups.com/*') return true;
     return false;
   });
 }
@@ -110,7 +109,7 @@ async function main() {
     fail('Browser HTTP-referrer restrictions are missing.');
   }
   const normalizedReferrers = allowedReferrers.map(normalizeReferrer);
-  if (normalizedReferrers.some((value) => value === '*' || value === '*/*' || value === 'http://*/*')) {
+  if (normalizedReferrers.some((value) => value === '*' || value === '*/*' || value === 'http://*/*' || value === 'https://*/*')) {
     fail('An unrestricted/wildcard Maps referrer is present.');
   }
   for (const alternatives of REQUIRED_REFERRER_GROUPS) {
