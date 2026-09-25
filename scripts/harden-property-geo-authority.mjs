@@ -196,14 +196,10 @@ rules = rules.replace(insertionAnchor, `${propertyFunctions}${insertionAnchor}`)
 const propertyBlock = `    match /properties/{propertyId} {
       allow get: if isNotSuspended() && getTenantPropertyId() == propertyId;
       allow read: if isNotSuspended() && (canManageProperties() || propertyOwnedByCaller(resource.data) || (isTechnicianActor() && techOwns(resource.data)));
-      allow create: if isNotSuspended() &&
-        propertyCreateHasNoCanonicalGeo(request.resource.data) &&
-        (canManageProperties() || safeOwnerPropertyCreate(request.resource.data));
-      allow update: if isNotSuspended() && (
-        (canManageProperties() && safeManagedPropertyUpdate()) ||
-        safeOwnerPropertyUpdate()
-      );
-      allow delete: if isNotSuspended() && isAdmin();
+      // Admin mutations are server-authoritative via App Check-protected Functions.
+      allow create: if isNotSuspended() && safeOwnerPropertyCreate(request.resource.data);
+      allow update: if isNotSuspended() && safeOwnerPropertyUpdate();
+      allow delete: if false;
     }`;
 replaceMatchBlock('    match /properties/{propertyId} {', propertyBlock);
 
@@ -236,4 +232,4 @@ if ((catchAll.match(/'properties'/g) || []).length !== 2) {
 }
 
 writeFileSync(rulesPath, rules);
-console.log('[property-geo-authority] Browser property writes are evidence-only; canonical geo is server-authoritative.');
+console.log('[property-geo-authority] Owner browser writes stay evidence-only; Admin property mutations are server-authoritative.');
