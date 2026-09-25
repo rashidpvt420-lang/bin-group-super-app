@@ -33,8 +33,8 @@ const phase10WriteReplacement = "          'properties',\n          'property_id
 if (!next.includes("'property_identity_registry'")) {
   next = next.replaceAll(writeAnchor, writeReplacement);
 }
-const writeRules = [...next.matchAll(/allow\\s+([^:;]+):\\s*([^;]+);/g)]
-  .filter(([, operations]) => /\\b(create|update|delete|write)\\b/.test(operations));
+const writeRules = [...next.matchAll(/allow\s+([^:;]+):\s*([^;]+);/g)]
+  .filter(([, operations]) => /\b(create|update|delete|write)\b/.test(operations));
 if (
   writeRules.length !== 2 ||
   writeRules.some(([, , condition]) => !condition.includes("'property_identity_registry'"))
