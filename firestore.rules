@@ -1729,7 +1729,7 @@ service cloud.firestore {
       allow create: if signedIn() &&
         claimedRole() == 'broker' &&
         request.resource.data.get('brokerId', null) == request.auth.uid &&
-        request.resource.data.get('status', '') == 'pending_review' &&
+        request.resource.data.get('status', '') == 'PENDING_REVIEW' &&
         request.resource.data.get('docType', '') in [
           'emirates_id',
           'passport',
