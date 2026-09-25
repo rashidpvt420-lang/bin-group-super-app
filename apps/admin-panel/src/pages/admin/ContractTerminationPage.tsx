@@ -52,42 +52,26 @@ export default function ContractTerminationPage() {
   };
 
   const closeContract = async (row: any) => {
-    if (!note.trim()) {
-      setMessage('Admin note is required for audit evidence.');
+    const trimmedNote = note.trim();
+    if (trimmedNote.length < 8) {
+      setMessage('Admin note of at least 8 characters is required for audit evidence.');
       return;
     }
 
-    const trimmedNote = note.trim();
-    const auditPayload = {
-      action: 'CONTRACT_CLOSED',
-      entityType: 'contract',
-      entityId: row.id,
-      contractNumber: row.contractNumber || row.id,
-      ownerEmail: row.ownerEmail || '',
-      propertyId: row.propertyId || '',
-      propertyName: row.propertyName || '',
-      reason,
-      note: trimmedNote,
-      createdAt: serverTimestamp(),
-      source: 'admin_contract_control',
-    };
-
     setClosingId(row.id);
     try {
-      await updateDoc(doc(db, 'contracts', row.id), {
-        status: 'CLOSED',
-        contractStatus: 'CLOSED',
-        closureReason: reason,
-        closureNote: trimmedNote,
-        closedAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
-      await addDoc(collection(db, 'audit_logs'), auditPayload);
+      const callable = httpsCallable(functions, 'adminCloseContract');
+      const response = await callable({ contractId: row.id, reason, note: trimmedNote });
+      const result = response.data as any;
       setNote('');
-      setMessage('Contract closed and audit logged.');
+      setMessage(
+        result?.refundReviewRequired
+          ? 'Contract closed. The approved payment is preserved and a refund review is required.'
+          : 'Contract closed through the protected server workflow and audit trail.',
+      );
     } catch (error: any) {
       console.error('[ContractTerminationPage] close failed:', error);
-      setMessage(error?.message || 'Could not close contract. Check admin permissions and retry.');
+      setMessage(error?.message || 'Could not close contract. Check Admin MFA and retry.');
     } finally {
       setClosingId('');
     }
