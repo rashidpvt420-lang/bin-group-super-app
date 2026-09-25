@@ -15,9 +15,23 @@ async function requireBroker(auth: any) {
     admin.auth().getUser(auth.uid),
     db.collection("users").doc(auth.uid).get(),
   ]);
-  if (record.disabled) throw new HttpsError("permission-denied", "Disabled Broker account.");
-  const role = lower(auth.token?.role || auth.token?.userRole || auth.token?.primaryRole || publicSnap.data()?.role);
-  if (role !== "broker") throw new HttpsError("permission-denied", "Broker role required.");
+  const currentClaims = record.customClaims || {};
+  const currentRole = lower(
+    currentClaims.role ||
+    currentClaims.userRole ||
+    currentClaims.primaryRole ||
+    publicSnap.data()?.role,
+  );
+  const profileStatus = lower(publicSnap.data()?.status || publicSnap.data()?.accountStatus);
+  if (
+    record.disabled ||
+    !record.emailVerified ||
+    currentClaims.suspended === true ||
+    currentRole !== "broker" ||
+    ["suspended", "disabled", "rejected", "deleted"].includes(profileStatus)
+  ) {
+    throw new HttpsError("permission-denied", "Current verified Broker authority is required.");
+  }
   return { record, publicSnap };
 }
 
