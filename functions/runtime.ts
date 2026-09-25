@@ -52,6 +52,7 @@ export * from "./adminHrOperations";
 export * from "./adminLaunchConfiguration";
 export * from "./adminBridgeAuth";
 export * from "./adminSecurityProfile";
+export * from "./adminAuthorizedFirestoreMutation";
 export * from "./adminMfaReadiness";
 export * from "./secureAdminContractOperations";
 export * from "./adminMfaRecovery";
