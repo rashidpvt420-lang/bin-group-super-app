@@ -49,7 +49,7 @@ test('Broker referral link reaches public onboarding and locks attribution serve
   assert.match(accountCreation, /resolvedRole !== 'owner'/);
   assert.match(accountCreation, /captureBrokerReferralAttribution/);
   assert.match(accountCreation, /setBrokerAttribution/);
-  assert.match(brokerCallable, /enforceAppCheck:\s*false/);
+  assert.match(brokerCallable, /enforceAppCheck:\s*true/);
   assert.match(brokerCallable, /if \(!auth\?\.uid\)/);
   assert.match(brokerCallable, /role !== "owner"/);
   assert.match(brokerCallable, /email_verified !== true/);
