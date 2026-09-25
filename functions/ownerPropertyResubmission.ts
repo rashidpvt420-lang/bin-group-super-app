@@ -358,7 +358,7 @@ export const adminRequestOwnerPropertyChanges = onCall(
         title: "PROPERTY CHANGES REQUESTED",
         body: `BIN GROUP requested corrections before the physical inspection. Reason: ${reason}`,
         type: "OWNER_PROPERTY_CHANGES_REQUESTED",
-        link: "/owner/properties",
+        link: `/owner/properties/${propertyId}/correct`,
         read: false,
         createdAt: now,
       });
