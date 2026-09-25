@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Alert, Box, Chip, CircularProgress, Grid, Paper, Stack, Typography } from '@mui/material';
 import { Building2, MapPin, ShieldCheck } from 'lucide-react';
 import { functions, httpsCallable } from '../../lib/firebase';
@@ -64,9 +64,9 @@ export default function BrokerListingsPage() {
     return () => { cancelled = true; };
   }, [lang]);
 
-  const countLabel = useMemo(() => rows.length === 1
+  const countLabel = rows.length === 1
     ? label('1 verified listing', 'عقار موثق واحد')
-    : label(`${rows.length} verified listings`, `${rows.length} عقارات موثقة`), [rows.length, lang]);
+    : label(`${rows.length} verified listings`, `${rows.length} عقارات موثقة`);
 
   return (
     <BrokerPageFrame
