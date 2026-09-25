@@ -1,5 +1,4 @@
-import { db } from '../lib/firebase';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { db, collection, addDoc, serverTimestamp } from '../lib/firebase';
 import { calculateBuildingHealth } from './buildingHealthEngine';
 
 export type Emirate = 'Dubai' | 'Abu Dhabi' | 'Sharjah' | 'Ajman' | 'RAK' | 'Fujairah' | 'UAQ';
