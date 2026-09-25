@@ -81,8 +81,18 @@ const parseCoordinate = (val: any): number | null => {
     return Number.isFinite(num) ? num : null;
 };
 
+export const looksLikeReversedUaeLatLng = (lat: number, lng: number) => {
+    return Number.isFinite(lat) && Number.isFinite(lng) &&
+        lat >= 51 && lat <= 57 &&
+        lng >= 22 && lng <= 27;
+};
+
 export const isValidLatLng = (lat: number, lng: number) => {
-    return lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180;
+    return Number.isFinite(lat) && Number.isFinite(lng) &&
+        lat >= -90 && lat <= 90 &&
+        lng >= -180 && lng <= 180 &&
+        !(lat === 0 && lng === 0) &&
+        !looksLikeReversedUaeLatLng(lat, lng);
 };
 
 export const buildPersistableGeoAnchor = (input: GeoInput): GeoAnchor => {
@@ -93,7 +103,11 @@ export const buildPersistableGeoAnchor = (input: GeoInput): GeoAnchor => {
     const lng = parseCoordinate(input.lng);
 
     if (lat === null || lng === null || !isValidLatLng(lat, lng)) {
-        throw new Error("Please select the property location from Google Maps or enter valid manual coordinates.");
+        throw new Error(
+            lat !== null && lng !== null && looksLikeReversedUaeLatLng(lat, lng)
+                ? "Latitude and longitude appear reversed for a UAE property."
+                : "Please select a valid non-zero property location from Google Maps or enter valid manual coordinates."
+        );
     }
 
     const address = input.address?.trim();
@@ -133,11 +147,13 @@ export const buildPersistableGeoAnchor = (input: GeoInput): GeoAnchor => {
         area,
         placeId: input.placeId || (isManual ? "MANUAL" : null),
         source,
-        verified: input.verified ?? !isManual,
-        requiresGeoReview: isManual ? true : Boolean(input.requiresGeoReview),
-        dispatchReady: isManual ? false : input.dispatchReady ?? true,
-        verifiedBy: input.verifiedBy || null,
-        verifiedAt: input.verified ? serverTimestamp() : null,
+        // Browser-selected Owner/Tenant coordinates are evidence only. A client
+        // helper must never mint canonical dispatch authority.
+        verified: false,
+        requiresGeoReview: true,
+        dispatchReady: false,
+        verifiedBy: null,
+        verifiedAt: null,
         updatedAt: serverTimestamp()
     };
 };
