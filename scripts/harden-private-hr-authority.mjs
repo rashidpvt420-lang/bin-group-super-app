@@ -81,45 +81,68 @@ const privateBlock = `    // Sensitive employment, Emirates ID and salary data. 
 `;
 
 if (source.includes(legacyRead)) source = source.replace(legacyRead, hardenedRead);
+const fallbackStart = source.indexOf('    match /{collection}/{document=**} {');
+if (fallbackStart < 0) throw new Error('[harden-private-hr-authority] global collection fallback is missing');
+let fallback = source.slice(fallbackStart);
+const readCondition = fallback.match(/allow\s+read:\s*if\s*([^;]+);/)?.[1] || '';
+for (const collection of [
+  'private_hr_profiles',
+  'admin_security_sessions',
+  'technician_live_locations',
+  'invoice_registry',
+  'payroll_entries',
+  'property_identity_registry',
+  'owner_portfolio_quotes',
+  'system_payment_config',
+  'propertyInspections',
+]) {
+  if (!readCondition.includes(`'${collection}'`)) {
+    throw new Error(`[harden-private-hr-authority] global read fallback does not exclude ${collection}`);
+  }
+}
 if (
-  !source.includes(hardenedRead) &&
-  !source.includes(liveLocationRead) &&
-  !source.includes(invoiceRegistryRead) &&
-  !source.includes(payrollRead) &&
-  !source.includes(propertyIdentityRead)
+  !readCondition.includes("collection != 'tickets'") ||
+  !readCondition.includes("collection != 'maintenanceTickets'") ||
+  !readCondition.includes('hasAdminClaim()')
 ) {
-  throw new Error('[harden-private-hr-authority] global read fallback was not found or could not be hardened');
+  throw new Error('[harden-private-hr-authority] global read fallback is not fail-closed');
 }
 
-// Preserve a stricter canonical fallback if another authority hardener has also
-// excluded server-managed live locations. Never replace it with the shorter
-// private-HR-only list.
-let canonicalWritePrefix = hardenedWritePrefix;
+// Preserve historical migration behavior, then verify the resulting authority
+// semantically so later stronger hardeners can add more server-only collections.
 if (source.includes(duplicatedHrServerAuthorityWritePrefix)) {
   source = source.replaceAll(duplicatedHrServerAuthorityWritePrefix, hrServerAuthorityWritePrefix);
-  canonicalWritePrefix = hrServerAuthorityWritePrefix;
 } else if (source.includes(staleHrServerAuthorityWritePrefix)) {
   source = source.replaceAll(staleHrServerAuthorityWritePrefix, hrServerAuthorityWritePrefix);
-  canonicalWritePrefix = hrServerAuthorityWritePrefix;
-} else if (source.includes(propertyIdentityHrServerAuthorityWritePrefix)) {
-  canonicalWritePrefix = propertyIdentityHrServerAuthorityWritePrefix;
-} else if (source.includes(hrServerAuthorityWritePrefix)) {
-  canonicalWritePrefix = hrServerAuthorityWritePrefix;
 } else if (source.includes(propertyGeoWritePrefix)) {
   source = source.replaceAll(propertyGeoWritePrefix, hrServerAuthorityWritePrefix);
-  canonicalWritePrefix = hrServerAuthorityWritePrefix;
 } else if (source.includes(liveLocationWritePrefix)) {
   source = source.replaceAll(liveLocationWritePrefix, hrServerAuthorityWritePrefix);
-  canonicalWritePrefix = hrServerAuthorityWritePrefix;
-} else if (source.includes(hardenedWritePrefix)) {
-  // Already private-HR canonical.
 } else if (source.includes(legacyWritePrefix)) {
   source = source.replaceAll(legacyWritePrefix, hardenedWritePrefix);
-} else {
-  throw new Error('[harden-private-hr-authority] private HR write fallback could not be identified');
 }
-if (source.split(canonicalWritePrefix).length - 1 !== 2) {
-  throw new Error('[harden-private-hr-authority] hardened private HR fallback must exist exactly twice');
+
+fallback = source.slice(source.indexOf('    match /{collection}/{document=**} {'));
+const writeConditions = [...fallback.matchAll(/allow\s+([^:;]+):\s*([^;]+);/g)]
+  .filter(([, operations]) => /\b(create|update|delete|write)\b/.test(operations));
+if (writeConditions.length !== 2) {
+  throw new Error(`[harden-private-hr-authority] expected two global write fallbacks, found ${writeConditions.length}`);
+}
+for (const [, , condition] of writeConditions) {
+  for (const collection of [
+    'private_hr_profiles',
+    'property_identity_registry',
+    'owner_portfolio_quotes',
+    'system_payment_config',
+    'propertyInspections',
+  ]) {
+    if (!condition.includes(`'${collection}'`)) {
+      throw new Error(`[harden-private-hr-authority] global write fallback does not exclude ${collection}`);
+    }
+  }
+  if (!condition.includes('hasAdminClaim()')) {
+    throw new Error('[harden-private-hr-authority] global write fallback lost Admin-claim authority');
+  }
 }
 
 if (!source.includes('match /private_hr_profiles/{profileId}')) {
