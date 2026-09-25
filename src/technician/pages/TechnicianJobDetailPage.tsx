@@ -20,6 +20,7 @@ import { useRole } from '../../context/RoleContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { resolvePropertyLocation } from '../../utils/propertyLocationResolver';
+import { normalizeTicketStatus } from '../../utils/ticketStatus';
 import { startLiveTracking, stopLiveTracking } from '../../utils/liveTracking';
 import {
     ensureTechnicianInstallationRegistered,
@@ -213,7 +214,7 @@ export default function TechnicianJobDetailPage() {
     }, []);
 
     const resolved = useMemo(() => resolvePropertyLocation(ticket || {}), [ticket]);
-    const status = norm(ticket?.status);
+    const status = normalizeTicketStatus(ticket?.status);
     const hasTenantBeforeProof = Boolean(ticket?.beforePhotoUrl)
         || listLength(ticket?.beforePhotos) > 0
         || listLength(ticket?.tenantPhotos) > 0
@@ -507,13 +508,13 @@ export default function TechnicianJobDetailPage() {
                     <Paper sx={{ p: 4, bgcolor: 'rgba(22,22,24,0.72)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 5 }}>
                         <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950 }}>{tx('tech.job.lifecycle', 'Mission Lifecycle')}</Typography>
                         <Stack direction="row" flexWrap="wrap" gap={2} sx={{ mt: 2 }}>
-                            {['ASSIGNED', 'AUTO_ASSIGNED'].includes(status) ? (
+                            {status === 'ASSIGNED' ? (
                                 <Button variant="contained" disabled={actionLoading} onClick={acceptJob} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>{tx('tech.job.accept_mission', 'Accept Mission')}</Button>
                             ) : (
                                 <Stack spacing={2} sx={{ width: '100%' }}>
                                     <Stack direction="row" flexWrap="wrap" gap={2}>
-                                        <Button variant="outlined" disabled={actionLoading || !['AUTO_ASSIGNED', 'ASSIGNED', 'ACCEPTED'].includes(status)} startIcon={<Navigation />} onClick={() => updateLifecycle('EN_ROUTE')} sx={{ color: binThemeTokens.gold, borderColor: binThemeTokens.gold, fontWeight: 950 }}>{tx('tech.job.on_the_way', 'On The Way')}</Button>
-                                        <Button variant="outlined" disabled={actionLoading || !['EN_ROUTE', 'ON_THE_WAY'].includes(status)} startIcon={<MapPin />} onClick={() => updateLifecycle('ARRIVED')} sx={{ color: '#8b5cf6', borderColor: '#8b5cf6', fontWeight: 950 }}>{tx('tech.job.arrived', 'Arrived')}</Button>
+                                        <Button variant="outlined" disabled={actionLoading || !['ASSIGNED', 'ACCEPTED'].includes(status)} startIcon={<Navigation />} onClick={() => updateLifecycle('EN_ROUTE')} sx={{ color: binThemeTokens.gold, borderColor: binThemeTokens.gold, fontWeight: 950 }}>{tx('tech.job.on_the_way', 'On The Way')}</Button>
+                                        <Button variant="outlined" disabled={actionLoading || status !== 'EN_ROUTE'} startIcon={<MapPin />} onClick={() => updateLifecycle('ARRIVED')} sx={{ color: '#8b5cf6', borderColor: '#8b5cf6', fontWeight: 950 }}>{tx('tech.job.arrived', 'Arrived')}</Button>
                                         <Button data-testid="technician-start-work" variant="outlined" disabled={actionLoading || status !== 'ARRIVED' || !hasTechnicianBeforeProof || !ppeChecked || !safetyChecked} startIcon={<Play />} onClick={() => updateLifecycle('IN_PROGRESS')} sx={{ color: '#10b981', borderColor: '#10b981', fontWeight: 950 }}>{tx('tech.job.start_work', 'Start Work')}</Button>
                                     </Stack>
                                     {status === 'ARRIVED' && (
