@@ -14,11 +14,10 @@ import {
     Warning as WarningIcon
 } from '@mui/icons-material';
 import {
+    db, auth, functions, httpsCallable,
     collection, query, where, getDocs, doc, writeBatch,
     serverTimestamp, limit
-} from 'firebase/firestore';
-import { httpsCallable } from 'firebase/functions';
-import { db, auth, functions } from '../../lib/firebase';
+} from '../../lib/firebase';
 import Papa from 'papaparse';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
