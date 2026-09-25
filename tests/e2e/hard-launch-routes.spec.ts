@@ -219,6 +219,7 @@ const roleCases: RoleCase[] = [
       '/broker/leads/new',
       '/broker/referrals',
       '/broker/referrals/new',
+      '/broker/listings',
       '/broker/commissions',
       '/broker/attribution',
       '/broker/documents',
