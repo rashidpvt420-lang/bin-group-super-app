@@ -53,6 +53,27 @@ test('Phase 8 Broker documents remain owner-scoped and Admin-reviewed', async ()
   assert.match(review, /custom\.documentType !== documentType/);
 });
 
+test('Phase 8 Broker bank information stays private and only masked values return to the portal', async () => {
+  const [profile, secureSummary, persistence, payout] = await Promise.all([
+    read('src/broker/pages/BrokerProfilePage.tsx'),
+    read('functions/secureBrokerKycSubmission.ts'),
+    read('functions/brokerKycProfile.ts'),
+    read('functions/secureBrokerPayoutOperations.ts'),
+  ]);
+
+  assert.match(profile, /bankIban/);
+  assert.match(profile, /bankAccountHolder/);
+  assert.match(profile, /getBrokerKycProfileSummary/);
+  assert.doesNotMatch(profile, /broker_kyc_profiles/);
+
+  assert.match(persistence, /bankIban/);
+  assert.match(persistence, /bankIbanMasked/);
+  assert.match(persistence, /broker_kyc_profiles/);
+  assert.match(secureSummary, /bankIbanMasked/);
+  assert.doesNotMatch(secureSummary, /bankIban:\s*privateData\.bankIban/);
+  assert.match(payout, /privateKyc\.bankIban/);
+});
+
 test('Phase 8 Broker commission authority is immutable from the browser', async () => {
   const [rules, page, backend] = await Promise.all([
     read('firestore.rules'),
@@ -165,10 +186,11 @@ test('Phase 8 listing access is KYC-gated, sanitized and read-only', async () =>
 });
 
 test('Phase 8 leads and deals preserve immutable server attribution', async () => {
-  const [leads, app, deals, referral] = await Promise.all([
+  const [leads, app, deals, referralPage, referral] = await Promise.all([
     read('src/broker/pages/BrokerLeadsPage.tsx'),
     read('src/broker/BrokerApp.tsx'),
     read('src/broker/pages/BrokerAttributionProofPage.tsx'),
+    read('src/broker/pages/BrokerReferralsPage.tsx'),
     read('functions/secureBrokerReferralSubmission.ts'),
   ]);
 
@@ -176,6 +198,10 @@ test('Phase 8 leads and deals preserve immutable server attribution', async () =
   assert.match(leads, /attributionId/);
   assert.match(leads, /sourceLeadId: leadRef\.id/);
   assert.match(app, /path="\/deals"/);
+  assert.match(referralPage, /getBrokerVerifiedListings/);
+  assert.match(referralPage, /submitBrokerReferral/);
+  assert.doesNotMatch(referralPage, /collection\(db, 'properties'\)/);
+  assert.doesNotMatch(referralPage, /ownerEmail|ownerId|ownerUid/);
   assert.match(deals, /broker_commissions/);
   assert.match(deals, /brokerLeads/);
   assert.match(deals, /referrals/);
