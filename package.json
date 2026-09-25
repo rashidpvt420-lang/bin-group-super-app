@@ -52,7 +52,7 @@
     "test:rules": "npm run normalize:rule-tests && npm run prepare:rules && npm run verify:rules-hardening && npm run build:functions && firebase emulators:exec --only firestore,storage --project bin-group-57c60 \"node --test --test-concurrency=1 test/security-rules.test.js test/storage-rules.test.js test/phase10-firestore-matrix.test.js test/phase10-storage-matrix.test.js\"",
     "test:rules:node": "npm run normalize:rule-tests && npm run prepare:rules && npm run verify:rules-hardening && npm run build:functions && firebase emulators:exec --only firestore,storage \"node --test --test-concurrency=1 test/security-rules.test.js test/storage-rules.test.js test/phase10-firestore-matrix.test.js test/phase10-storage-matrix.test.js\"",
     "test:lockfile-platforms": "node --test test/package-lock-platform-natives.test.mjs",
-    "test:stability": "npm run test:lockfile-platforms && node --test test/stylis-dependency-contract.test.mjs && npm run prepare:rules && npm run verify:rules-hardening && npm run verify:audit-bridge && node scripts/production-stability-guard.mjs",
+    "test:stability": "npm run test:lockfile-platforms && node --test test/stylis-dependency-contract.test.mjs && npm run prepare:rules && npm run verify:rules-hardening && npm run verify:audit-bridge && npm run audit:phase10:functions && node scripts/production-stability-guard.mjs",
     "test:runtime-audit": "node scripts/production-runtime-audit.mjs",
     "test:mobile-store-readiness": "npm run verify:ios-apple-silicon && node scripts/mobile-store-readiness-audit.mjs",
     "test:repo-hygiene": "npm run normalize:rules && node scripts/repo-hygiene-guard.mjs",
@@ -115,7 +115,8 @@
     "harden:property-identity-registry": "node scripts/harden-property-identity-registry-rules.mjs",
     "test:phase3:controls": "node scripts/verify-interactive-control-inventory.mjs",
     "test:e2e:phase3:platforms": "playwright test tests/e2e/phase3-platform-shell.spec.ts --project=chromium-desktop --project=android-mobile --project=ios-webkit",
-    "harden:phase10-firebase-rules": "node scripts/harden-phase10-firebase-rules.mjs"
+    "harden:phase10-firebase-rules": "node scripts/harden-phase10-firebase-rules.mjs",
+    "audit:phase10:functions": "node scripts/audit-phase10-functions.mjs"
   },
   "dependencies": {
     "@capacitor/app": "^7.1.0",
