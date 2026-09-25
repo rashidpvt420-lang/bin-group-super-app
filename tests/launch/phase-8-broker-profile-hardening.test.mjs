@@ -20,6 +20,8 @@ test('Phase 8 Broker KYC is callable-only, App Check protected and cannot be sel
   assert.match(submission, /Current verified Broker authority is required/);
 
   assert.match(review, /adminReviewBrokerKyc = onCall/);
+  assert.match(review, /getAdminBrokerKycReviewSummary = onCall/);
+  assert.match(review, /sensitiveValuesMasked: true/);
   assert.match(review, /enforceAppCheck: true/);
   assert.match(review, /sign_in_second_factor/);
   assert.match(review, /currentClaims = record\.customClaims \|\| \{\}/);
