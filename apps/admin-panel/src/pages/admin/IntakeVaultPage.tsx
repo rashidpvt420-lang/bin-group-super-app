@@ -53,7 +53,7 @@ const ownerName = (item: IntakeSubmission) => item.ownerName || item.contactInfo
 const ownerEmail = (item: IntakeSubmission) => item.ownerEmail || item.contactInfo?.email || item.companyProfile?.email || '—';
 const propertyCount = (item: IntakeSubmission) => item.properties?.length || item.portfolioSummary?.totalProperties || 0;
 const annualValue = (item: IntakeSubmission) => Number(item.annualContractValue || item.payment?.annualValue || item.portfolioSummary?.estimatedACV || 0);
-const mobilisation = (item: IntakeSubmission) => Number(item.mobilizationAmount || item.payment?.amount || Math.round(annualValue(item) * 0.15));
+const mobilisation = (item: IntakeSubmission) => Number(item.mobilizationAmount ?? item.payment?.amount ?? 0);
 
 const stageFor = (item: IntakeSubmission): Stage => {
     const activation = upper(item.activationState);
