@@ -4,9 +4,8 @@ import {
     CircularProgress, Stack, Snackbar, Alert
 } from '@mui/material';
 import { MapPin, Navigation, AlertTriangle, Crosshair } from 'lucide-react';
-import { db, collection, getDocs, doc, writeBatch, serverTimestamp } from '../../lib/firebase';
+import { db, collection, getDocs, functions, httpsCallable } from '../../lib/firebase';
 import { binThemeTokens } from '../../theme/adminTheme';
-import { buildGeoAnchor } from '../../utils/geoAnchor';
 
 export default function GeoRepairCommandCenter() {
     const [loading, setLoading] = useState(true);
@@ -52,40 +51,31 @@ export default function GeoRepairCommandCenter() {
         setRepairing(prop.id);
         try {
             const source = prop.geo || prop.location || prop.coordinates;
-            const repairedGeo = buildGeoAnchor({
+            const repairGeo = httpsCallable(functions, 'adminRepairPropertyGeo');
+            await repairGeo({
+                propertyId: prop.id,
                 lat: source?.lat ?? source?.latitude,
                 lng: source?.lng ?? source?.longitude,
-                address: prop.addressLine || prop.address || prop.geo?.address,
-                emirate: prop.emirate || prop.geo?.emirate,
-                city: prop.city || prop.area || prop.serviceZone || prop.geo?.city,
-                area: prop.area || prop.serviceZone || prop.city || prop.geo?.area,
-                placeId: prop.googlePlaceId || prop.placeId || prop.geo?.placeId,
-                source: 'admin_manual',
-                verified: true,
-                verifiedBy: 'ADMIN_GEO_REPAIR_CENTER'
+                address: prop.addressLine || prop.address || prop.geo?.address || '',
+                emirate: prop.emirate || prop.geo?.emirate || '',
+                city: prop.city || prop.area || prop.serviceZone || prop.geo?.city || '',
+                area: prop.area || prop.serviceZone || prop.city || prop.geo?.area || '',
+                placeId: prop.googlePlaceId || prop.placeId || prop.geo?.placeId || '',
             });
-            
-            if (repairedGeo) {
-                const batch = writeBatch(db);
-                const companyId = prop.companyId || 'BIN_GROUP';
-                const payload = {
-                    companyId,
-                    geo: repairedGeo,
-                    location: { lat: repairedGeo.lat, lng: repairedGeo.lng },
-                    coordinates: { lat: repairedGeo.lat, lng: repairedGeo.lng },
-                    geoAnchorStatus: 'verified_and_locked',
-                    updatedAt: serverTimestamp()
-                };
-                batch.set(doc(db, 'properties', prop.id), payload, { merge: true });
-                batch.set(doc(db, 'companies', companyId, 'properties', prop.id), { ...prop, ...payload, propertyId: prop.id }, { merge: true });
-                
-                await batch.commit();
-                await fetchAnomalies();
-                setNotice({ open: true, message: `${prop.propertyName || prop.id} is now verified and locked.`, severity: 'success' });
-            }
+
+            await fetchAnomalies();
+            setNotice({
+                open: true,
+                message: `${prop.propertyName || prop.id} canonical geo was verified by the protected server workflow.`,
+                severity: 'success'
+            });
         } catch (error) {
             console.error(error);
-            setNotice({ open: true, message: error instanceof Error ? error.message : 'Geo repair failed. Select a verified pin and retry.', severity: 'error' });
+            setNotice({
+                open: true,
+                message: error instanceof Error ? error.message : 'Geo repair failed. Select a valid source pin and retry.',
+                severity: 'error'
+            });
         } finally {
             setRepairing(null);
         }
