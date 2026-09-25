@@ -9,7 +9,7 @@ import {
     MenuItem, Paper, Select, Stack, Table, TableBody, TableCell,
     TableContainer, TableHead, TableRow, TextField, Tooltip, Typography,
 } from '@mui/material';
-import { CheckCircle2, Edit, UserPlus, XCircle } from 'lucide-react';
+import { CheckCircle2, Edit, RotateCcw, UserPlus, XCircle } from 'lucide-react';
 import { collection, db, onSnapshot, query, where } from '../../lib/firebase';
 import { functions, httpsCallable } from '../../lib/firebase';
 import AdminPageFrame from '../../components/AdminPageFrame';
@@ -229,6 +229,26 @@ export default function StaffAccessPage() {
         }
     };
 
+    const resetTechnicianDevice = async (member: StaffMember) => {
+        if (member.role !== 'technician') return;
+        const reason = window.prompt(
+            `Reason for resetting ${member.displayName}'s registered device (required):`,
+            'Legitimate replacement or reinstall; require fresh Play Integrity device registration.',
+        )?.trim();
+        if (!reason) return;
+        try {
+            const resetDevice = httpsCallable(functions, 'adminResetTechnicianDeviceRegistration');
+            await resetDevice({ technicianId: member.id, reason });
+            setSnackbar({
+                open: true,
+                message: `${member.displayName}'s device binding was reset. Existing sessions were revoked; the next phone must pass Play Integrity and register a fresh installation.`,
+                error: false,
+            });
+        } catch (error) {
+            setSnackbar({ open: true, message: `Device reset blocked: ${safeErrorMessage(error)}`, error: true });
+        }
+    };
+
     const roleColor = (role: string) => {
         if (role.includes('finance')) return '#10b981';
         if (role.includes('hr')) return '#3b82f6';
@@ -295,6 +315,13 @@ export default function StaffAccessPage() {
                                             <TableCell align="right">
                                                 <Stack direction="row" spacing={0.5} justifyContent="flex-end">
                                                     <Tooltip title="Edit least-privilege access"><IconButton size="small" onClick={() => openEditDialog(member)} sx={{ color: binThemeTokens.gold }}><Edit size={14} /></IconButton></Tooltip>
+                                                    {member.role === 'technician' && (
+                                                        <Tooltip title="Reset registered device and require fresh Play Integrity registration">
+                                                            <IconButton size="small" onClick={() => resetTechnicianDevice(member)} sx={{ color: '#38bdf8' }}>
+                                                                <RotateCcw size={14} />
+                                                            </IconButton>
+                                                        </Tooltip>
+                                                    )}
                                                     {member.status === 'SUSPENDED' ? (
                                                         <Tooltip title="Restore and require fresh login"><IconButton size="small" onClick={() => setStaffStatus(member, 'ACTIVE')} sx={{ color: '#10b981' }}><CheckCircle2 size={14} /></IconButton></Tooltip>
                                                     ) : (
