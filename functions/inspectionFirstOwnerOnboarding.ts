@@ -799,7 +799,7 @@ export const adminRecordOwnerMobilizationPaymentEvidence = onCall({ cors: true, 
   const intakeId = text(payment.intakeId || paymentId);
   const expectedAmount = money(payment.activationDeposit || payment.amount);
   const amountReceived = money(request.data?.amountReceived || expectedAmount);
-  if (!ownerUid || expectedAmount <= 0 || Math.abs(amountReceived - expectedAmount) > 0.01) throw new HttpsError("failed-precondition", "Received amount must equal the locked 15% mobilisation deposit.");
+  if (!ownerUid || expectedAmount <= 0 || amountReceived !== expectedAmount) throw new HttpsError("failed-precondition", "Received amount must equal the locked 15% mobilisation deposit exactly to the fils.");
   const receiptHash = crypto.createHash("sha256").update(buffer).digest("hex");
   const downloadToken = crypto.randomUUID();
   const storagePath = `payment-references/owners/${ownerUid}/${paymentId}/${Date.now()}_${filename}`;
