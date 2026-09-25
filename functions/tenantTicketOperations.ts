@@ -182,7 +182,7 @@ export const createTenantServiceTicket = onCall(
           category: "emergency",
           priority: "emergency",
           description: "TENANT TRIGGERED SOS EMERGENCY",
-          status: "EMERGENCY_SUBMITTED",
+          status: "OPEN",
           dispatchStatus: "PENDING_EMERGENCY_DISPATCH",
           trackingStatus: "WAITING_FOR_EMERGENCY_TECHNICIAN",
           requiresImmediateDispatch: true,
