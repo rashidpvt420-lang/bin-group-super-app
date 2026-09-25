@@ -92,7 +92,7 @@ const required = [
   'match /tickets/{ticketId} {',
   'match /payroll_entries/{entryId} {',
   "'invoice_registry', 'payroll_entries', 'property_identity_registry'",
-  "'technician_live_locations',\n          'properties',\n          'property_identity_registry',\n          'users'",
+  "'technician_live_locations',\n          'properties',\n          'property_identity_registry',\n          'owner_portfolio_quotes',\n          'system_payment_config',\n          'propertyInspections',\n          'users'",
   financeAdminPaymentTransactionsRead,
   "request.resource.data.get('source', '') != 'github-actions'",
   "request.resource.data.get('executionGenerated', false) != true",
@@ -160,6 +160,30 @@ const payrollCatchAllOccurrences = source.match(/'payroll_entries'/g)?.length ||
 if (payrollCatchAllOccurrences !== 3) {
   failures.push(`payroll_entries must be excluded from read, create and update/delete catch-alls; found ${payrollCatchAllOccurrences}`);
 }
+const phase10Rules = [
+  ['owner_portfolio_quotes', 'quoteId', 'allow read, create, update, delete: if false;'],
+  ['system_payment_config', 'configId', 'allow read, create, update, delete: if false;'],
+  ['propertyInspections', 'inspectionId', "request.resource.data.ownerReviewStatus in ['APPROVED', 'DISPUTED']"],
+];
+for (const [collection, documentId, requiredFragment] of phase10Rules) {
+  const block = matchBlock(`    match /${collection}/{${documentId}} {`);
+  if (!block || !block.includes(requiredFragment)) {
+    failures.push(`Phase 10 Firebase authority rule missing or malformed: ${collection}`);
+  }
+}
+const phase10Fallback = matchBlock('    match /{collection}/{document=**} {');
+const phase10ReadCondition = phase10Fallback.match(/allow\\s+read:\\s*([^;]+);/)?.[1] || '';
+const phase10WriteConditions = [...phase10Fallback.matchAll(/allow\\s+([^:;]+):\\s*([^;]+);/g)]
+  .filter(([, operations]) => /\\b(create|update|delete|write)\\b/.test(operations));
+for (const collection of ['owner_portfolio_quotes', 'system_payment_config', 'propertyInspections']) {
+  if (!phase10ReadCondition.includes(`'${collection}'`)) {
+    failures.push(`${collection} is not excluded from the generic Admin read fallback`);
+  }
+  if (phase10WriteConditions.length !== 2 || phase10WriteConditions.some(([, , condition]) => !condition.includes(`'${collection}'`))) {
+    failures.push(`${collection} is not excluded from both generic Admin write fallbacks`);
+  }
+}
+
 const propertyIdentityBlock = matchBlock(propertyIdentityHeader);
 if (!propertyIdentityBlock || !propertyIdentityBlock.includes('allow read, create, update, delete: if false;')) {
   failures.push('property_identity_registry must be explicitly browser-denied');
@@ -227,5 +251,7 @@ writeFileSync(manifestPath, `${JSON.stringify({
   payrollMirrorSelfServiceRead: 'technician-uid-scoped',
   financeAdminPaymentQueueRead: 'finance_admin-transactions-module-read-only',
   launchEvidenceBrowserAuthority: 'manual-create-only-append-only-no-github-provenance',
+  phase10ServerAuthority: ['owner_portfolio_quotes', 'system_payment_config'],
+  phase10OwnerInspectionReview: 'owner-review-fields-only',
 }, null, 2)}\n`, { mode: 0o600 });
 console.log(`[production-firestore-rules] wrote ${outputPath} sha256=${sha256}`);
