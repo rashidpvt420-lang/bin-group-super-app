@@ -227,8 +227,8 @@ for (const forbidden of [
 }
 
 const catchAll = rules.slice(rules.indexOf('    match /{collection}/{document=**}'));
-if ((catchAll.match(/'properties'/g) || []).length !== 2) {
-  throw new Error('[property-geo-authority] Generic Admin write fallbacks must exclude properties exactly twice.');
+if (!catchAll.includes('allow create, update, delete: if false;')) {
+  throw new Error('[property-geo-authority] Generic Admin browser mutations must remain fail-closed.');
 }
 
 writeFileSync(rulesPath, rules);
