@@ -80,17 +80,27 @@ const candidates = candidateSnapshots
 const ticketRecord = candidates.find(({ data }) => {
   const location = data.arrivedLocation || data.technicianLocation || {};
   const accuracy = Number(location.accuracy);
+  const capturedAtMs = Number(location.capturedAtMs || 0);
+  const arrivedAtMs = millis(data.arrivedAt);
   return data.physicalDeviceBound === true
     && data.gpsVerified === true
     && text(data.onSiteVerification).toUpperCase() === 'GPS_VERIFIED'
     && SHA256_RE.test(text(data.arrivalInstallationHash))
-    && ['android', 'ios'].includes(text(data.arrivalDevicePlatform).toLowerCase())
+    && text(data.arrivalDevicePlatform).toLowerCase() === 'android'
+    && location.nativeLocationMocked === false
+    && text(location.locationSource) === 'native_android_location_manager'
     && coordinates(location)
     && Number.isFinite(accuracy)
     && accuracy > 0
     && accuracy <= MAX_GPS_ACCURACY_METERS
-    && millis(data.arrivedAt) > 0
-    && millis(data.startedAt) >= millis(data.arrivedAt)
+    && Number.isFinite(capturedAtMs)
+    && capturedAtMs > 0
+    && arrivedAtMs > 0
+    && capturedAtMs <= arrivedAtMs + 60_000
+    && arrivedAtMs - capturedAtMs <= 60_000
+    && text(data.technicianBeforeEvidenceState).toUpperCase() === 'CONFIRMED'
+    && text(data.technicianAfterEvidenceState).toUpperCase() === 'CONFIRMED'
+    && millis(data.startedAt) >= arrivedAtMs
     && millis(data.completedAt) >= millis(data.startedAt);
 });
 if (!ticketRecord) fail('no completed production ticket has physical-device binding, verified GPS and ordered lifecycle timestamps');
@@ -112,8 +122,67 @@ const arrivalHash = text(ticket.arrivalInstallationHash);
 const platform = text(ticket.arrivalDevicePlatform).toLowerCase();
 if (profile.deviceRegistered !== true || !SHA256_RE.test(registeredHash) || registeredHash !== arrivalHash) fail('ticket installation hash does not match the registered technician installation');
 if (text(profile.registeredDevicePlatform).toLowerCase() !== platform) fail('ticket platform does not match the registered technician platform');
+if (platform !== 'android') fail('physical Technician evidence currently requires the Google Play Android integrity path');
 
-const arrivalCoordinates = coordinates(ticket.arrivedLocation || ticket.technicianLocation);
+const arrivalLocation = ticket.arrivedLocation || ticket.technicianLocation || {};
+if (arrivalLocation.nativeLocationMocked !== false || text(arrivalLocation.locationSource) !== 'native_android_location_manager') {
+  fail('arrival is missing native non-mock Android GPS integrity evidence');
+}
+const capturedAtMs = Number(arrivalLocation.capturedAtMs || 0);
+const arrivedAtMs = millis(ticket.arrivedAt);
+if (!Number.isFinite(capturedAtMs) || capturedAtMs <= 0 || arrivedAtMs <= 0 || capturedAtMs > arrivedAtMs + 60_000 || arrivedAtMs - capturedAtMs > 60_000) {
+  fail('arrival native GPS capture time is stale or inconsistent with the server arrival timestamp');
+}
+
+const beforeConfirmationId = text(ticket.technicianBeforeConfirmationId);
+const afterConfirmationId = text(ticket.technicianAfterConfirmationId);
+const beforeStoragePath = text(ticket.technicianBeforeStoragePath);
+const afterStoragePath = text(ticket.technicianAfterStoragePath);
+const beforeGeneration = text(ticket.technicianBeforeObjectGeneration);
+const afterGeneration = text(ticket.technicianAfterObjectGeneration);
+const beforeContentHash = text(ticket.technicianBeforeContentHash);
+const afterContentHash = text(ticket.technicianAfterContentHash);
+if (!beforeConfirmationId || !afterConfirmationId || !beforeStoragePath || !afterStoragePath || !beforeGeneration || !afterGeneration || !beforeContentHash || !afterContentHash) {
+  fail('technician before/after evidence is missing immutable confirmation identity');
+}
+
+const [beforeConfirmationSnap, afterConfirmationSnap] = await Promise.all([
+  db.collection('audit_logs').doc(beforeConfirmationId).get(),
+  db.collection('audit_logs').doc(afterConfirmationId).get(),
+]);
+const beforeConfirmation = beforeConfirmationSnap.data() || {};
+const afterConfirmation = afterConfirmationSnap.data() || {};
+const validConfirmation = (snapshot, value, expectedType, storagePath, generation, contentHash) =>
+  snapshot.exists
+  && text(value.recordType) === 'TECHNICIAN_EVIDENCE_CONFIRMATION'
+  && text(value.state) === 'CONFIRMED'
+  && text(value.ticketId) === ticketId
+  && text(value.technicianId) === technicianId
+  && text(value.evidenceType) === expectedType
+  && text(value.bucketName) === bucket.name
+  && text(value.storagePath) === storagePath
+  && text(value.objectGeneration) === generation
+  && text(value.contentHash) === contentHash;
+if (!validConfirmation(beforeConfirmationSnap, beforeConfirmation, 'technician_before_work', beforeStoragePath, beforeGeneration, beforeContentHash)) {
+  fail('before-work immutable confirmation record is missing or mismatched');
+}
+if (!validConfirmation(afterConfirmationSnap, afterConfirmation, 'technician_after_work', afterStoragePath, afterGeneration, afterContentHash)) {
+  fail('after-work immutable confirmation record is missing or mismatched');
+}
+
+const [beforeMetadata, afterMetadata] = await Promise.all([
+  bucket.file(beforeStoragePath).getMetadata().then(([metadata]) => metadata),
+  bucket.file(afterStoragePath).getMetadata().then(([metadata]) => metadata),
+]);
+const liveContentHash = (metadata) => text(metadata.md5Hash || metadata.etag);
+if (text(beforeMetadata.generation) !== beforeGeneration || liveContentHash(beforeMetadata) !== beforeContentHash) {
+  fail('before-work Storage object changed after confirmation');
+}
+if (text(afterMetadata.generation) !== afterGeneration || liveContentHash(afterMetadata) !== afterContentHash) {
+  fail('after-work Storage object changed after confirmation');
+}
+
+const arrivalCoordinates = coordinates(arrivalLocation);
 const propertyCoordinates = firstCoordinates(
   ticket.jobLocation,
   ticket.propertyLocation,
@@ -211,9 +280,9 @@ const proof = {
   afterObjectHash: hash(afterStored.objectPath),
   checks: [
     { name: 'registered mobile installation matched arrival', status: 'passed', reference: `firestore://maintenanceTickets/${ticketId}#physical-device` },
-    { name: 'arrival GPS accuracy and property distance recomputed', status: 'passed', reference: `firestore://maintenanceTickets/${ticketId}#gps-geofence` },
-    { name: 'before evidence exists in Cloud Storage inventory', status: 'passed', reference: `storage-sha256://${beforeStored.referenceHash}` },
-    { name: 'after evidence exists in Cloud Storage inventory', status: 'passed', reference: `storage-sha256://${afterStored.referenceHash}` },
+    { name: 'arrival native non-mock GPS, capture time, accuracy and property distance recomputed', status: 'passed', reference: `firestore://maintenanceTickets/${ticketId}#gps-geofence` },
+    { name: 'before evidence immutable generation and content hash revalidated', status: 'passed', reference: `storage-sha256://${beforeStored.referenceHash}` },
+    { name: 'after evidence immutable generation and content hash revalidated', status: 'passed', reference: `storage-sha256://${afterStored.referenceHash}` },
   ],
 };
 mkdirSync('launch_package', { recursive: true });
