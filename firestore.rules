@@ -2047,7 +2047,7 @@ service cloud.firestore {
     }
 
     match /contractorProfiles/{profileId} {
-      allow read: if signedIn();
+      allow read: if isAdmin() || emailOwns(resource.data);
       allow write: if isAdmin();
     }
 
