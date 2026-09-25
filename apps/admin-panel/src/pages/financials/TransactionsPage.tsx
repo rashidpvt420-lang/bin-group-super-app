@@ -25,7 +25,7 @@ import {
   DialogActions,
   TextField,
 } from '@mui/material';
-import { db, collection, onSnapshot, query, orderBy, limit, doc, updateDoc, addDoc, serverTimestamp } from '../../lib/firebase';
+import { db, collection, onSnapshot, query, orderBy, limit, functions, httpsCallable } from '../../lib/firebase';
 import { ArrowUpCircle, ArrowDownCircle, Activity, Ban } from 'lucide-react';
 import { useLanguage } from '@bin/shared';
 
@@ -78,44 +78,28 @@ export default function TransactionsPage() {
 
   const handleTerminateContract = async () => {
     if (!selectedContract) return;
+    const reasonText = terminationReason.trim();
+    if (reasonText.length < 8) {
+      alert('Please provide a termination reason of at least 8 characters.');
+      return;
+    }
     try {
-      const contractRef = doc(db, 'contracts', selectedContract.id);
-      
-      const updateData = {
-        status: 'TERMINATED',
-        terminationDate: serverTimestamp(),
-        terminationReason: terminationReason,
-        settlementAmount: parseFloat(settlementAmount) || 0
-      };
-
-      await updateDoc(contractRef, updateData);
-
-      // Post-termination: archive to archived_contracts
-      await addDoc(collection(db, 'archived_contracts'), {
-        ...selectedContract,
-        ...updateData,
-        archivedAt: serverTimestamp()
-      });
-
-      // Write audit log
-      await addDoc(collection(db, 'audit_logs'), {
-        action: 'CONTRACT_TERMINATED',
+      const closeContract = httpsCallable(functions, 'adminCloseContract');
+      const settlement = parseFloat(settlementAmount) || 0;
+      await closeContract({
         contractId: selectedContract.id,
-        actorId: 'admin',
-        actorRole: 'admin',
-        timestamp: serverTimestamp(),
-        reason: terminationReason,
-        settlementAmount: parseFloat(settlementAmount) || 0
+        reason: 'OTHER',
+        note: `${reasonText} | Requested settlement: AED ${settlement.toFixed(2)}`,
       });
 
       setTerminateDialogOpen(false);
       setSelectedContract(null);
       setTerminationReason('');
       setSettlementAmount('');
-      alert('Contract terminated and archived successfully');
+      alert('Contract closed through the protected Admin workflow.');
     } catch (error: any) {
-      console.error('Failed to terminate contract:', error);
-      alert('Failed to terminate contract: ' + error.message);
+      console.error('Failed to close contract:', error);
+      alert('Failed to close contract: ' + error.message);
     }
   };
 
