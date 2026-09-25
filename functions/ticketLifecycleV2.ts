@@ -22,7 +22,7 @@ function assignedTechnicianId(ticket: Record<string, any>) {
   return text(ticket.assignedTechnicianId || ticket.technicianId || ticket.assignedTechId || ticket.techId);
 }
 
-export const updateTicketLifecycleV2 = onCall({ cors: true }, async (request) => {
+export const updateTicketLifecycleV2 = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
   if (!request.auth) throw new HttpsError('unauthenticated', 'Auth required.');
 
   const data = request.data || {};
