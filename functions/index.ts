@@ -988,7 +988,7 @@ async function attemptAutoAssignment(ticketRef: admin.firestore.DocumentReferenc
                     assignedTechnicianPhone: freshTechnician.phone || freshTechnician.phoneNumber || "",
                     assignedTechnicianAvatar: freshTechnician.photoURL || "",
                     technicianSpecialty: freshTechnician.specialty || freshTechnician.trade || "",
-                    status: "AUTO_ASSIGNED",
+                    status: "ASSIGNED",
                     dispatchStatus: "AUTO_ASSIGNED",
                     trackingStatus: "TECHNICIAN_ASSIGNED",
                     autoAssignedAt: FieldValue.serverTimestamp(),
@@ -2932,7 +2932,7 @@ export const pauseTechnicianWork = onCall({ cors: true, enforceAppCheck: true },
     await assertTechnicianTicketMutationAccess(request.auth, ticketSnap.data() || {});
 
     await ticketRef.update({
-        status: "on_hold",
+        status: "WAITING_PARTS",
         technicianStatus: "WAITING_PARTS",
         pausedAt: FieldValue.serverTimestamp(),
         pauseReason: reason || "Waiting for parts",
