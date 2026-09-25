@@ -496,13 +496,16 @@ const liveAuditWorkflow = read('.github/workflows/live-launch-audit.yml');
 const launchHonestySource = read('scripts/lib/launch-honesty.mjs');
 if (!mainSpaRewrite) failures.push('Firebase app hosting does not rewrite deep links to /index.html.');
 if (!adminSpaRewrite) failures.push('Firebase Admin hosting does not rewrite deep links to /index.html.');
-if (
-  !liveAuditWorkflow.includes('branches: [main]') ||
-  !/GITHUB_REF[^\n]*refs\/heads\/main/.test(liveAuditWorkflow) ||
-  !liveAuditWorkflow.includes('Verify exact checked-out main SHA') ||
-  !liveAuditWorkflow.includes('git fetch origin main --depth=1')
-) {
-  failures.push('Protected live launch audit must remain exact-main only.');
+const standaloneLiveAuditIsManualOnly =
+  liveAuditWorkflow.includes('workflow_dispatch:') &&
+  !/\n\s*push:/.test(liveAuditWorkflow);
+const standaloneLiveAuditIsExactDeployedMain =
+  /GITHUB_REF[^\n]*refs\/heads\/main/.test(liveAuditWorkflow) &&
+  liveAuditWorkflow.includes('Verify exact checked-out main SHA') &&
+  liveAuditWorkflow.includes('git fetch origin main --depth=1') &&
+  liveAuditWorkflow.includes('node scripts/verify-production-deployment.mjs');
+if (!standaloneLiveAuditIsManualOnly || !standaloneLiveAuditIsExactDeployedMain) {
+  failures.push('Protected standalone live launch audit must be manual-only and bound to exact deployed main.');
 }
 if (!launchHonestySource.includes("'tests/e2e/hard-launch-routes.spec.ts'")) {
   failures.push('Protected launchAuditLive suite does not include the Phase 2 exact-route browser audit.');

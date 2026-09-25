@@ -1,20 +1,9 @@
 name: Live Launch Audit
 
 on:
+  # Production-hosted evidence must never auto-run for an undeployed main SHA.
+  # The authoritative post-deploy audit remains inside Firebase Production Deploy.
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - 'scripts/run-live-launch-audit.mjs'
-      - 'scripts/e2e-admin-lifecycle.mjs'
-      - 'playwright.config.ts'
-      - 'tests/e2e/launch-audit-*.spec.ts'
-      - 'tests/e2e/hard-launch-routes.spec.ts'
-      - 'tests/e2e/phase3-platform-shell.spec.ts'
-      - 'scripts/verify-interactive-control-inventory.mjs'
-      - 'package.json'
-      - 'tests/e2e/helpers/**'
-      - '.github/workflows/live-launch-audit.yml'
 
 permissions:
   contents: read
@@ -109,7 +98,10 @@ jobs:
             exit 1
           fi
 
-      - name: Run protected live launch audit without Firebase deploy
+      - name: Verify current main is already the deployed production SHA
+        run: node scripts/verify-production-deployment.mjs
+
+      - name: Run protected live launch audit against the deployed current main
         run: npm run test:e2e:launch-audit:live
 
       - name: Upload live launch audit diagnostics

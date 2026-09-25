@@ -153,12 +153,22 @@ test('portal language proofs bind to explicit controls instead of substring sele
   }
 });
 
-test('live launch audit has a protected no-deploy workflow with always-on diagnostics', () => {
+test('standalone live launch audit is manual-only and bound to an already deployed main SHA', () => {
   const workflow = read('.github/workflows/live-launch-audit.yml');
+  const productionDeploy = read('.github/workflows/firebase-production-deploy.yml');
+
   assert.match(workflow, /name:\s*Live Launch Audit/);
+  assert.match(workflow, /workflow_dispatch:/);
+  assert.doesNotMatch(workflow, /\n\s*push:/);
   assert.match(workflow, /environment:\s*production/);
+  assert.match(workflow, /node scripts\/verify-production-deployment\.mjs/);
   assert.match(workflow, /npm run test:e2e:launch-audit:live/);
   assert.match(workflow, /if:\s*\$\{\{ always\(\) \}\}/);
   assert.match(workflow, /launch_package\/artifacts\/\*\.json/);
   assert.doesNotMatch(workflow, /deploy-firebase-production\.mjs|npx firebase deploy/i);
+
+  const deployAudit = productionDeploy.indexOf('npm run test:e2e:launch-audit:live');
+  const deployCommand = productionDeploy.indexOf('node scripts/deploy-firebase-production.mjs');
+  assert.ok(deployCommand >= 0, 'production workflow must retain the protected Firebase deploy');
+  assert.ok(deployAudit > deployCommand, 'production live audit must remain after the Firebase deploy');
 });
