@@ -116,8 +116,12 @@ test('Phase 8 Broker private records and pipeline ownership remain isolated', as
   const rules = await read('firestore.rules');
 
   assert.match(rules, /match \/brokerLeads\/\{leadId\}[\s\S]*?resource\.data\.get\('brokerId', null\) == request\.auth\.uid/);
-  assert.match(rules, /function safeBrokerLeadCreate\(data\)[\s\S]*?claimedRole\(\) == 'broker'/);
-  assert.match(rules, /function safeBrokerReferralCreate\(data\)[\s\S]*?claimedRole\(\) == 'broker'/);
+  assert.match(rules, /function safeBrokerLeadCreate\(data, leadId\)[\s\S]*?claimedRole\(\) == 'broker'/);
+  assert.match(rules, /data\.get\('sourceLeadId', ''\) == leadId/);
+  assert.match(rules, /broker_lead_' \+ request\.auth\.uid \+ '_' \+ leadId/);
+  assert.match(rules, /function safeBrokerReferralCreate\(data, referralId\)[\s\S]*?claimedRole\(\) == 'broker'/);
+  assert.match(rules, /data\.get\('sourceReferralId', ''\) == referralId/);
+  assert.match(rules, /broker_referral_' \+ request\.auth\.uid \+ '_' \+ referralId/);
   assert.match(rules, /safeBrokerLeadUpdate\(\)[\s\S]*?hasOnly\(\[[\s\S]*?'status'[\s\S]*?'notes'[\s\S]*?'updatedAt'/);
   const leadUpdate = rules.slice(rules.indexOf('function safeBrokerLeadUpdate'), rules.indexOf('function safeBrokerReferralCreate'));
   assert.doesNotMatch(leadUpdate, /'attributionId'|'sourceLeadId'/);
