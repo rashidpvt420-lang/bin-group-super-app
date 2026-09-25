@@ -232,13 +232,7 @@ export const adminReviewBrokerKyc = onCall(
     }
 
     const approved = decision === "APPROVE";
-    const currentKycState = normalizeWorkflowState(
-      "BROKER_KYC",
-      publicProfile.brokerKycStatus || publicProfile.kycStatus || privateProfile.brokerKycStatus || "NOT_SUBMITTED",
-      "NOT_SUBMITTED",
-    );
     const nextKycState = approved ? "APPROVED" : "REJECTED";
-    assertWorkflowTransition("BROKER_KYC", currentKycState, nextKycState);
     const submissionHash = text(privateProfile.submissionHash);
     if (!submissionHash || !/^[a-f0-9]{64}$/i.test(submissionHash)) {
       throw new HttpsError("failed-precondition", "Broker KYC submission hash is missing or invalid.");
@@ -284,7 +278,14 @@ export const adminReviewBrokerKyc = onCall(
       if (!freshPublic.exists || !freshPrivate.exists) {
         throw new HttpsError("not-found", "Broker KYC profile changed during review.");
       }
+      const freshPublicData = freshPublic.data() || {};
       const freshPrivateData = freshPrivate.data() || {};
+      const currentKycState = normalizeWorkflowState(
+        "BROKER_KYC",
+        freshPublicData.brokerKycStatus || freshPublicData.kycStatus || freshPrivateData.brokerKycStatus || "NOT_SUBMITTED",
+        "NOT_SUBMITTED",
+      );
+      assertWorkflowTransition("BROKER_KYC", currentKycState, nextKycState);
       if (text(freshPrivateData.submissionHash) !== submissionHash) {
         throw new HttpsError("failed-precondition", "Broker KYC submission changed during review.");
       }
