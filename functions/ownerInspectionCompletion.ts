@@ -331,40 +331,69 @@ export const adminCompleteOwnerPortfolioInspections = onCall({ cors: true, enfor
     const propertyId = text(property?.propertyId || property?.id);
     const inspection = inspectionByPropertyId.get(propertyId);
     if (!inspection) throw new HttpsError("failed-precondition", `No verified inspection is linked to property ${propertyId || "unknown"}.`);
-    if (!isGymProperty(property, inspection)) return property;
+    if (upper(inspection.pricingVerificationStatus) !== "VERIFIED" || !inspection.pricingVerification) {
+      throw new HttpsError("failed-precondition", `Property ${propertyId || "unknown"} requires Admin-verified pricing inputs before the final quote can be issued.`);
+    }
+    const pricing = verifiedPricingPayload(inspection.pricingVerification, inspection, property);
+    const next: any = {
+      ...property,
+      emirate: pricing.emirate,
+      zone: pricing.zone || property.zone,
+      age: pricing.propertyAge,
+      slaTier: pricing.slaTier || property.slaTier,
+      paymentPlan: pricing.paymentPlan || property.paymentPlan,
+      pricingVerificationSource: "ADMIN_SITE_VISIT",
+      pricingVerificationInspectionId: text(inspection.id),
+      pricingVerificationEvidenceHash: text(inspection.evidenceHash),
+    };
+    if (pricing.pricingDriver === "unit") next.units = pricing.units;
+    if (pricing.pricingDriver === "sqft") next.sqft = pricing.sqft;
+    if (pricing.pricingDriver === "bed") { next.beds = pricing.beds; next.units = pricing.beds; }
+    if (pricing.pricingDriver === "sqft+capacity") {
+      next.sqft = pricing.sqft;
+      next.units = pricing.units;
+      next.mosqueProfile = {
+        ...(property.mosqueProfile || {}),
+        grossFloorAreaSqft: pricing.sqft,
+        maxWorshipperCapacity: pricing.units,
+        propertyAgeYears: pricing.propertyAge,
+      };
+    }
+    if (pricing.annualRent !== undefined) next.annualRent = pricing.annualRent;
+    if (pricing.annualRevenue !== undefined) next.annualRevenue = pricing.annualRevenue;
+    if (!isGymProperty(property, inspection)) return next;
     if (upper(inspection.gymVerificationStatus) !== "VERIFIED" || !inspection.gymVerification) {
       throw new HttpsError("failed-precondition", `Gym / Fitness Centre ${propertyId} requires verified service area and complexity before the final quote can be issued.`);
     }
     const verified = verifiedGymPayload(inspection.gymVerification);
     const existingProfile = property.gymProfile && typeof property.gymProfile === "object" ? property.gymProfile : {};
-    return {
-      ...property,
+    next.sqft = verified.verifiedServiceAreaSqft;
+    next.verifiedServiceAreaSqft = verified.verifiedServiceAreaSqft;
+    next.gymProfile = {
+      ...existingProfile,
+      ownerDeclaredServiceAreaSqft: Number(existingProfile.declaredServiceAreaSqft || property.sqft || 0),
+      ownerDeclaredOpeningSchedule: existingProfile.openingSchedule || null,
+      ownerDeclaredEquipmentCount: Number(existingProfile.equipmentCount || 0),
       verifiedServiceAreaSqft: verified.verifiedServiceAreaSqft,
-      gymProfile: {
-        ...existingProfile,
-        ownerDeclaredServiceAreaSqft: Number(existingProfile.declaredServiceAreaSqft || property.sqft || 0),
-        ownerDeclaredOpeningSchedule: existingProfile.openingSchedule || null,
-        ownerDeclaredEquipmentCount: Number(existingProfile.equipmentCount || 0),
-        verifiedServiceAreaSqft: verified.verifiedServiceAreaSqft,
-        verifiedComplexity: verified.verifiedComplexity,
-        openingSchedule: verified.openingSchedule,
-        verifiedOpeningSchedule: verified.openingSchedule,
-        equipmentCount: verified.equipmentCount,
-        verifiedEquipmentCount: verified.equipmentCount,
-        changingRooms: verified.changingRooms,
-        showers: verified.showers,
-        groupStudios: verified.groupStudios,
-        wetFacilities: verified.wetFacilities,
-        swimmingPool: verified.swimmingPool,
-        treatmentRecoveryArea: verified.treatmentRecoveryArea,
-        sportsEstablishmentApprovalStatus: verified.sportsEstablishmentApprovalStatus,
-        insuranceStatus: verified.insuranceStatus,
-        floorPlanStatus: verified.floorPlanStatus,
-        verificationSource: "ADMIN_SITE_VISIT",
-        verificationInspectionId: text(inspection.id),
-        verificationEvidenceHash: text(inspection.evidenceHash),
-      },
+      verifiedComplexity: verified.verifiedComplexity,
+      openingSchedule: verified.openingSchedule,
+      verifiedOpeningSchedule: verified.openingSchedule,
+      equipmentCount: verified.equipmentCount,
+      verifiedEquipmentCount: verified.equipmentCount,
+      changingRooms: verified.changingRooms,
+      showers: verified.showers,
+      groupStudios: verified.groupStudios,
+      wetFacilities: verified.wetFacilities,
+      swimmingPool: verified.swimmingPool,
+      treatmentRecoveryArea: verified.treatmentRecoveryArea,
+      sportsEstablishmentApprovalStatus: verified.sportsEstablishmentApprovalStatus,
+      insuranceStatus: verified.insuranceStatus,
+      floorPlanStatus: verified.floorPlanStatus,
+      verificationSource: "ADMIN_SITE_VISIT",
+      verificationInspectionId: text(inspection.id),
+      verificationEvidenceHash: text(inspection.evidenceHash),
     };
+    return next;
   });
 
   const finalQuotedAtMs = Date.now();
