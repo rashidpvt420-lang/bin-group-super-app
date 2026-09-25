@@ -24,8 +24,7 @@ import {
     alpha
 } from '@mui/material';
 import { Plus as AddIcon, Edit as EditIcon, Trash2 as DeleteIcon, MapPin } from 'lucide-react';
-import { db } from '../../lib/firebase';
-import { collection, onSnapshot, query, addDoc, serverTimestamp, doc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { db, collection, onSnapshot, query, addDoc, serverTimestamp, doc, updateDoc, deleteDoc } from '../../lib/firebase';
 import { binThemeTokens } from '../../theme/adminTheme';
 import { buildGeoAnchor } from '../../utils/geoAnchor';
 
