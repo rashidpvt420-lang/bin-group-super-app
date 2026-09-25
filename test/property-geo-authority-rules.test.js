@@ -35,9 +35,9 @@ describe('Canonical property geo authority', () => {
   beforeEach(async () => testEnv.clearFirestore());
   after(async () => testEnv.cleanup());
 
-  it('Owner can submit unverified geo evidence but cannot create a verified canonical pin', async () => {
+  it('Owner browser cannot create canonical property records or certify submitted GPS', async () => {
     const ownerDb = testEnv.authenticatedContext('owner_geo', { role: 'owner' }).firestore();
-    await assertSucceeds(setDoc(doc(ownerDb, 'properties/submitted'), {
+    await assertFails(setDoc(doc(ownerDb, 'properties/submitted'), {
       ownerId: 'owner_geo',
       status: 'pending_admin_approval',
       name: 'Submitted Property',
@@ -74,22 +74,24 @@ describe('Canonical property geo authority', () => {
 
     await assertFails(updateDoc(refOwner, { geo: { ...submittedGeo, verified: true, dispatchReady: true } }));
     await assertFails(updateDoc(refOwner, { geoVerification: { state: 'VERIFIED', verifiedBy: 'owner_geo' } }));
+    await assertFails(updateDoc(refOwner, { name: 'Owner browser direct edit is forbidden' }));
     await assertFails(updateDoc(refAdmin, { geo: { ...submittedGeo, verified: true, dispatchReady: true, verifiedBy: 'admin_geo' } }));
-    await assertSucceeds(updateDoc(refOwner, { name: 'Owner-updated ordinary property name' }));
-    await assertSucceeds(updateDoc(refAdmin, { adminReviewNote: 'Non-geo administrative correction.' }));
+    await assertFails(updateDoc(refAdmin, { status: 'ACTIVE' }));
+    await assertFails(updateDoc(refAdmin, { inspectionVerified: true }));
+    await assertSucceeds(updateDoc(refAdmin, { adminReviewNote: 'Non-authoritative administrative correction.' }));
   });
 
-  it('Owner can revise submitted evidence only while it remains explicitly unverified', async () => {
+  it('Owner browser cannot revise property evidence directly; corrections are server-callable only', async () => {
     await seed('properties/review-pending', {
       ownerId: 'owner_geo',
       ownerUid: 'owner_geo',
-      status: 'pending_admin_approval',
+      status: 'CHANGES_REQUESTED',
       name: 'Review Pending',
       submittedGeo,
     });
     const ownerDb = testEnv.authenticatedContext('owner_geo', { role: 'owner' }).firestore();
     const ref = doc(ownerDb, 'properties/review-pending');
-    await assertSucceeds(updateDoc(ref, {
+    await assertFails(updateDoc(ref, {
       submittedGeo: { ...submittedGeo, area: 'Updated owner evidence' },
       address: 'Updated owner evidence, Al Ain',
     }));
