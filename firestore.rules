@@ -307,7 +307,9 @@ service cloud.firestore {
       );
     }
     function propertyScopedOwnerWrite(data) {
-      return isAdmin() || (docPropertyId(data) != null && isPropertyOwner(docPropertyId(data)));
+      // Admin portal mutations are server-authoritative; browser writes here
+      // remain available only to the bound property owner.
+      return docPropertyId(data) != null && isPropertyOwner(docPropertyId(data));
     }
     function isConfidentialRequest(data) {
       return ('privacyTier' in data && data.privacyTier == 'hr_manager_only') ||
@@ -1102,9 +1104,10 @@ service cloud.firestore {
                      resource.data.get('role', '') == 'tenant' &&
                      resource.data.get('ownerId', null) == request.auth.uid)
                   );
-      allow create: if isAdmin() || safeUserBootstrapCreate(request.resource.data, userId);
-      allow update: if isNotSuspended() && (isAdmin() || safeUserSelfUpdate(userId));
-      allow delete: if isNotSuspended() && isAdmin();
+      // Admin identity changes use App Check-protected Admin SDK callables.
+      allow create: if safeUserBootstrapCreate(request.resource.data, userId);
+      allow update: if isNotSuspended() && safeUserSelfUpdate(userId);
+      allow delete: if false;
       match /fcmTokens/{tokenId} {
         allow read, write: if false;
       }
@@ -1142,9 +1145,7 @@ service cloud.firestore {
 
     match /tenants/{tenantId} {
       allow read: if (signedIn() && request.auth.uid == tenantId) || isAdmin() || participantCanRead(resource.data);
-      allow create: if isAdmin();
-      allow update: if isAdmin();
-      allow delete: if isAdmin();
+      allow create, update, delete: if false;
     }
 
     match /technicians/{techId} {
@@ -1227,14 +1228,10 @@ service cloud.firestore {
     match /properties/{propertyId} {
       allow get: if isNotSuspended() && getTenantPropertyId() == propertyId;
       allow read: if isNotSuspended() && (canManageProperties() || propertyOwnedByCaller(resource.data) || (isTechnicianActor() && techOwns(resource.data)));
-      allow create: if isNotSuspended() &&
-        propertyCreateHasNoCanonicalGeo(request.resource.data) &&
-        (canManageProperties() || safeOwnerPropertyCreate(request.resource.data));
-      allow update: if isNotSuspended() && (
-        (canManageProperties() && safeManagedPropertyUpdate()) ||
-        safeOwnerPropertyUpdate()
-      );
-      allow delete: if isNotSuspended() && isAdmin();
+      // Admin mutations bypass Security Rules only from protected Cloud Functions.
+      allow create: if isNotSuspended() && safeOwnerPropertyCreate(request.resource.data);
+      allow update: if isNotSuspended() && safeOwnerPropertyUpdate();
+      allow delete: if false;
     }
 
     match /units/{unitId} {
@@ -1258,9 +1255,9 @@ service cloud.firestore {
 
     match /contracts/{contractId} {
       allow read: if participantCanRead(resource.data) || emailOwns(resource.data) || canManageContracts();
-      allow create: if canManageContracts() || ownerContractDraftCreate(request.resource.data);
-      allow update: if canManageContracts() || safeOwnerContractUpdate();
-      allow delete: if isAdmin();
+      allow create: if ownerContractDraftCreate(request.resource.data);
+      allow update: if safeOwnerContractUpdate();
+      allow delete: if false;
     }
 
     match /payments/{paymentId} {
@@ -1317,10 +1314,7 @@ service cloud.firestore {
     match /intake_submissions/{intakeId} {
       allow read: if isAdmin() || ownerCanRead(resource.data);
       // Onboarding state, payment and activation are server-authoritative.
-      // The live client uses callable Functions backed by the Admin SDK.
-      allow create: if isAdmin();
-      allow update: if isAdmin();
-      allow delete: if isAdmin();
+      allow create, update, delete: if false;
     }
 
     match /settings/{settingId} {
@@ -1344,20 +1338,12 @@ service cloud.firestore {
 
     match /launch_evidence/{evidenceId} {
       allow read: if isAdmin();
-      allow create: if isAdmin() &&
-        request.resource.data.get('source', '') != 'github-actions' &&
-        request.resource.data.get('executionGenerated', false) != true &&
-        request.resource.data.get('hardLaunchClaim', false) != true;
-      allow update, delete: if false;
+      allow create, update, delete: if false;
     }
 
     match /signed_in_smoke_checks/{checkId} {
       allow read: if isAdmin();
-      allow create: if isAdmin() &&
-        request.resource.data.get('source', '') != 'github-actions' &&
-        request.resource.data.get('executionGenerated', false) != true &&
-        request.resource.data.get('hardLaunchClaim', false) != true;
-      allow update, delete: if false;
+      allow create, update, delete: if false;
     }
 
     match /staffRequests/{requestId} {
@@ -1850,52 +1836,40 @@ service cloud.firestore {
     // (RfqTrustWorkflowPage, VendorCommandCenterPage, OwnerApprovalCenterPage).
     match /vendor_rfqs/{rfqId} {
       allow read: if isAdmin();
-      allow create: if isAdmin();
-      allow update: if isAdmin();
-      allow delete: if isAdmin();
+      allow create, update, delete: if false;
     }
 
     match /vendor_quotes/{quoteId} {
       allow read: if isAdmin();
-      allow create: if isAdmin();
-      allow update: if isAdmin();
-      allow delete: if isAdmin();
+      allow create, update, delete: if false;
     }
 
     match /vendors/{vendorId} {
       allow read: if isAdmin();
-      allow create: if isAdmin();
-      allow update: if isAdmin();
-      allow delete: if isAdmin();
+      allow create, update, delete: if false;
     }
 
     match /owner_approval_requests/{requestId} {
       allow read: if isAdmin() || (signedIn() && resource.data.get('ownerId', null) == request.auth.uid);
-      allow create: if isAdmin();
-      allow update: if isAdmin() || (
-        signedIn() &&
+      allow create: if false;
+      allow update: if signedIn() &&
         resource.data.get('ownerId', null) == request.auth.uid &&
         request.resource.data.get('ownerId', null) == resource.data.get('ownerId', null) &&
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'decision', 'decisionNote', 'ownerDecisionBy', 'decidedAt', 'updatedAt']) &&
         request.resource.data.get('ownerDecisionBy', null) == request.auth.uid &&
         request.resource.data.get('decision', null) in ['APPROVED', 'REJECTED', 'REQUEST_MORE_QUOTES', 'EMERGENCY_APPROVED'] &&
-        request.resource.data.get('status', null) in ['owner_approved', 'owner_approved_emergency', 'owner_rejected', 'more_quotes_requested']
-      );
-      allow delete: if isAdmin();
+        request.resource.data.get('status', null) in ['owner_approved', 'owner_approved_emergency', 'owner_rejected', 'more_quotes_requested'];
+      allow delete: if false;
     }
 
     match /maintenance_ledger/{ledgerId} {
       allow read: if isAdmin();
-      allow create: if isAdmin();
-      allow update: if isAdmin();
-      allow delete: if isAdmin();
+      allow create, update, delete: if false;
     }
 
     match /data_governance_events/{eventId} {
       allow read: if isAdmin();
-      allow create: if isAdmin();
-      allow update: if isAdmin();
-      allow delete: if isAdmin();
+      allow create, update, delete: if false;
     }
 
     match /communication_intake/{intakeId} {
