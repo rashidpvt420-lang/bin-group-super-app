@@ -37,6 +37,33 @@ export const adminApproveContractActivation = onCall({ cors: true, enforceAppChe
 
 const SIGNED_AWAITING_PAYMENT_STATUSES = new Set(["ready_for_activation", "owner_signed", "signed"]);
 
+const INSPECTION_FIRST_WORKFLOW = "OWNER_FIVE_PAGE_INSPECTION_FIRST_V1";
+
+function assertInspectionFirstPaymentReady(contract: Record<string, any>) {
+  if (String(contract.workflowVersion || "").trim() !== INSPECTION_FIRST_WORKFLOW) return;
+  const finalSnapshot = contract.finalVerifiedQuoteSnapshot;
+  const finalHash = String(contract.finalVerifiedQuoteHash || "").trim().toLowerCase();
+  const signedPreInspectionHash = String(contract.signedPreInspectionQuoteHash || "").trim().toLowerCase();
+  const verificationState = String(contract.quoteVerificationState || "").trim().toUpperCase();
+  const paymentStatus = String(contract.paymentStatus || "").trim().toUpperCase();
+  if (
+    contract.inspectionVerified !== true ||
+    contract.quoteRepricedAfterInspection !== true ||
+    verificationState !== "FINAL_VERIFIED_AFTER_ALL_SITE_VISITS" ||
+    !finalSnapshot ||
+    typeof finalSnapshot !== "object" ||
+    !/^[a-f0-9]{64}$/.test(finalHash) ||
+    !/^[a-f0-9]{64}$/.test(signedPreInspectionHash) ||
+    String(finalSnapshot.quoteHash || "").trim().toLowerCase() !== finalHash ||
+    !["PENDING_ADMIN_PAYMENT_VERIFICATION", "PENDING_VERIFICATION", "PAYMENT_REVIEW_REQUIRED"].includes(paymentStatus)
+  ) {
+    throw new HttpsError(
+      "failed-precondition",
+      "Owner activation payment is not due until every property inspection is verified and the final server quote is locked.",
+    );
+  }
+}
+
 function enforceOwnerActivationPolicy<T>(operation: () => T): T {
   try {
     return operation();
@@ -86,6 +113,8 @@ export const createOwnerPaymentTransaction = onCall({ cors: true, enforceAppChec
   if (!String(contract.otpVerificationId || "").trim()) {
     throw new HttpsError("failed-precondition", "Verified contract OTP evidence is required before payment submission.");
   }
+
+  assertInspectionFirstPaymentReady(contract);
 
   const activeConfiguration = await loadActivePaymentConfiguration();
   const policyBinding = enforceOwnerActivationPolicy(() => resolveOwnerActivationPaymentBinding(
@@ -164,6 +193,7 @@ export const createOwnerPaymentTransaction = onCall({ cors: true, enforceAppChec
       );
     }
     const freshContract = freshContractSnap.data() || {};
+    assertInspectionFirstPaymentReady(freshContract);
     if (
       String(freshContract.ownerId || freshContract.ownerUid || "").trim() !== request.auth?.uid ||
       String(freshContract.quoteHash || "").trim() !== String(contract.quoteHash || "").trim() ||
