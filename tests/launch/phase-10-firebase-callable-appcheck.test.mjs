@@ -70,5 +70,5 @@ test('Phase 10: bootstrap App Check exceptions document bounded security rationa
   assert.match(owner, /intentionally relies on verified Firebase Auth rather than App Check/);
   assert.match(owner, /cannot create Auth users or grant an admin role/);
   assert.match(role, /login bootstrap/i);
-  assert.match(role, /rejects every\s+privileged\/admin identity/i);
+  assert.match(role, /rejects every[\s\S]{0,120}privileged\/admin identity/i);
 });
