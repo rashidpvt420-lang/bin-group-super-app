@@ -2130,6 +2130,6 @@ service cloud.firestore {
       // match an explicitly reviewed rule or use an App Check-protected server
       // workflow. Admin SDK writes from Cloud Functions bypass Security Rules.
       allow create, update, delete: if false;
-    }   }
+    }
   }
 }
