@@ -508,7 +508,7 @@ export const ownerSignContractAndQueuePdf = onCall({ cors: true, enforceAppCheck
   return { status: "READY_FOR_ACTIVATION", contractId, pdfUrl, idempotent: signingWasIdempotent };
 });
 
-export const ownerInviteTenantToProperty = onCall({ cors: true }, async (request) => {
+export const ownerInviteTenantToProperty = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Owner authentication required.");
   const requesterRole = s(
     request.auth.token?.role ||
