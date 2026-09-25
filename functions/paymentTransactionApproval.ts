@@ -729,7 +729,7 @@ export const adminRejectPayment = onCall({ cors: true, enforceAppCheck: true }, 
     ) {
       throw new HttpsError(
         "failed-precondition",
-        "An activated payment cannot be rejected. Use the audited refund or contract-cancellation workflow.",
+        "An activated payment cannot be rejected. Phase 1 refunds or contract-cancellation requests require manual Finance/Admin review under the signed contract; rejection must not mutate activated financial state.",
       );
     }
 
