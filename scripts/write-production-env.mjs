@@ -30,6 +30,7 @@ const required = [
   'VITE_FIREBASE_APP_ID',
   'VITE_FIREBASE_MESSAGING_SENDER_ID',
   'VITE_FIREBASE_VAPID_KEY',
+  'VITE_GOOGLE_MAPS_API_KEY',
 ];
 
 const failures = [];
@@ -96,6 +97,7 @@ const adminLines = [
   ['REACT_APP_FIREBASE_PROJECT_ID', 'bin-group-57c60'],
   ['REACT_APP_FIREBASE_STORAGE_BUCKET', 'bin-group-57c60.firebasestorage.app'],
   ['REACT_APP_RELEASE_COMMIT_SHA', releaseCommitSha],
+  ['REACT_APP_GOOGLE_MAPS_API_KEY', process.env.VITE_GOOGLE_MAPS_API_KEY],
 ];
 
 function serialize(entries) {
