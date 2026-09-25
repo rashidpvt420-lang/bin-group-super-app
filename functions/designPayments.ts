@@ -133,7 +133,7 @@ export const submitDesignOwnerDecision = onCall(options, async (request) => {
     const decision = { payerId, payerRole, ownerAction: action, ownerActionBy: user.uid, approvedQuoteHash: design.quote?.quoteHash || '', approvalStatus: action === 'REJECT' ? 'OWNER_REJECTED' : 'OWNER_APPROVED' };
     if (action !== 'REJECT') termsFor({ ...design, ...decision }, quoteSnap.data() || {});
     const status = action === 'REJECT' ? 'OWNER_REJECTED' : action === 'TAKEOVER' ? 'OWNER_APPROVED_OWNER_TO_PAY' : 'OWNER_APPROVED_TENANT_TO_PAY';
-    transaction.update(designRef, { ...decision, status, workflowStage: status, quoteStatus: action === 'REJECT' ? 'REJECTED' : 'DEPOSIT_PENDING', ownerActionAt: now(), updatedAt: now() });
+    transaction.update(designRef, { ...decision, status, workflowStage: status, quoteStatus: action === 'REJECT' ? 'REJECTED' : 'ACCEPTED', ownerActionAt: now(), updatedAt: now() });
     transaction.update(approvalRef, { ...decision, status: decision.approvalStatus, decision: action === 'REJECT' ? 'REJECTED' : 'APPROVED', decidedBy: user.uid, decidedAt: now(), updatedAt: now() });
     transaction.update(db.collection('design_quotes').doc(requestId), { status: action === 'REJECT' ? 'REJECTED' : 'ACCEPTED', updatedAt: now() });
     transaction.create(db.collection('audit_logs').doc(`design_owner_decision_${requestId}`), { action: `DESIGN_OWNER_${action}`, actorId: user.uid, actorRole: user.role, targetType: 'design_requests', targetId: requestId, ...decision, createdAt: now() });
