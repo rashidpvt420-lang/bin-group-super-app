@@ -201,9 +201,13 @@ test('Static readiness file is a catalogue and cannot claim live launch readines
   assert.equal(readinessCatalogue.authority?.staticScoresAccepted, false);
   assert.equal('scores' in readinessCatalogue, false);
   assert.equal('profileScores' in readinessCatalogue, false);
-  assert.equal(readinessCatalogue.paymentPolicy?.controlledPilot?.mode, 'bank-pilot');
-  assert.equal(readinessCatalogue.paymentPolicy?.controlledPilot?.stripeRequired, false);
-  assert.equal(readinessCatalogue.paymentPolicy?.unrestrictedPublicLaunch?.stripeRequiredByCurrentRuntimeGate, true);
+  assert.equal(readinessCatalogue.paymentPolicy?.currentPhase1?.mode, 'phase1-manual');
+  assert.deepEqual(readinessCatalogue.paymentPolicy?.currentPhase1?.approvedMethods, ['CASH', 'CHEQUE']);
+  assert.equal(readinessCatalogue.paymentPolicy?.currentPhase1?.bankTransferEnabled, false);
+  assert.equal(readinessCatalogue.paymentPolicy?.currentPhase1?.stripeEnabled, false);
+  assert.equal(readinessCatalogue.paymentPolicy?.futureGatewayMigration?.stripeRequiredByCurrentRuntimeGate, false);
+  assert.ok(readinessCatalogue.hardLaunchGates.some((gate) => gate.id === 'phase1ManualPaymentProof'));
+  assert.ok(!readinessCatalogue.hardLaunchGates.some((gate) => gate.id === 'stripeLiveMode'));
   assert.ok(readinessCatalogue.hardLaunchGates.some((gate) => gate.id === 'aiProviderHealth'));
   assert.ok(readinessCatalogue.hardLaunchGates.some((gate) => gate.id === 'signedFinalDecision'));
 });
