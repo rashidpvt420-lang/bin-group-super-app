@@ -38,7 +38,7 @@ test('Technician portal exposes profile, HR, offline, map and proof-readiness su
 
 test('Broker compliance vault requires identity, RERA, bank and signed agreement evidence', async () => {
   const source = await read('src/broker/pages/BrokerDocumentsPage.tsx');
-  expectAll(source, [/where\(['"]brokerId['"],\s*['"]==['"],\s*user\.uid\)/, /emirates_id/, /rera_license/, /bank_details/, /broker_agreement/, /pending_review/, /brokerDocuments\/\$\{user\.uid\}/, /15 \* 1024 \* 1024/, /malware/i], 'Broker document review');
+  expectAll(source, [/where\(['"]brokerId['"],\s*['"]==['"],\s*user\.uid\)/, /emirates_id/, /rera_license/, /bank_details/, /broker_agreement/, /PENDING_REVIEW/, /brokerDocuments\/\$\{user\.uid\}/, /15 \* 1024 \* 1024/, /malware/i], 'Broker document review');
 });
 
 test('Broker KYC callable binds current terms, masked summaries and private bank ownership fields', async () => {

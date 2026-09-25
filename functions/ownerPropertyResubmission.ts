@@ -1,6 +1,7 @@
 import * as admin from "firebase-admin";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { assertOnboardingTransition, normalizeOnboardingState } from "./onboardingStateMachine";
+import { assertCanonicalTransition, normalizeCanonicalState } from "./canonicalStateMachines";
 
 if (!admin.apps.length) admin.initializeApp();
 
@@ -81,16 +82,17 @@ export const resubmitOwnerProperty = onCall(
         throw new HttpsError("failed-precondition", "Only the canonical inspection-first property workflow can be resubmitted.");
       }
 
-      const propertyState = normalizeOnboardingState(
-        property.lifecycleStatus || property.onboardingState || property.status,
+      const propertyState = normalizeCanonicalState(
+        "property",
+        property.lifecycleStatus || property.status || property.onboardingState,
       );
-      if (propertyState !== "changes_requested") {
+      if (propertyState !== "CHANGES_REQUESTED") {
         throw new HttpsError(
           "failed-precondition",
           "Owner resubmission is allowed only from CHANGES_REQUESTED.",
         );
       }
-      assertOnboardingTransition(propertyState, "admin_review");
+      assertCanonicalTransition("property", propertyState, "UNDER_REVIEW");
 
       const intakeId = text(property.intakeId, 240);
       if (!intakeId) {
@@ -119,10 +121,7 @@ export const resubmitOwnerProperty = onCall(
 
       const now = admin.firestore.FieldValue.serverTimestamp();
       const count = admin.firestore.FieldValue.increment(1);
-      const commonPatch = {
-        lifecycleStatus: "admin_review",
-        onboardingState: "admin_review",
-        status: "admin_review",
+      const sharedAuditPatch = {
         adminApproved: false,
         approved: false,
         resubmittedAt: now,
@@ -131,12 +130,24 @@ export const resubmitOwnerProperty = onCall(
         ownerResubmissionNote: note,
         updatedAt: now,
       };
+      const propertyPatch = {
+        ...sharedAuditPatch,
+        lifecycleStatus: "UNDER_REVIEW",
+        status: "UNDER_REVIEW",
+        onboardingState: admin.firestore.FieldValue.delete(),
+      };
+      const intakePatch = {
+        ...sharedAuditPatch,
+        lifecycleStatus: "admin_review",
+        onboardingState: "admin_review",
+        status: "admin_review",
+      };
 
       transaction.update(propertyRef, {
-        ...commonPatch,
+        ...propertyPatch,
         ...(submittedGeo ? { submittedGeo } : {}),
       });
-      transaction.update(intakeRef, commonPatch);
+      transaction.update(intakeRef, intakePatch);
 
       const auditRef = db.collection("audit_logs").doc();
       transaction.set(auditRef, {
@@ -148,8 +159,8 @@ export const resubmitOwnerProperty = onCall(
         propertyId,
         intakeId,
         workflowVersion: WORKFLOW_VERSION,
-        fromState: "changes_requested",
-        toState: "admin_review",
+        fromState: "CHANGES_REQUESTED",
+        toState: "UNDER_REVIEW",
         submittedGeoUpdated: Boolean(submittedGeo),
         createdAt: now,
       });
@@ -158,8 +169,8 @@ export const resubmitOwnerProperty = onCall(
         success: true,
         propertyId,
         intakeId,
-        fromState: "changes_requested",
-        state: "admin_review",
+        fromState: "CHANGES_REQUESTED",
+        state: "UNDER_REVIEW",
         submittedGeoVerified: false,
         dispatchReady: false,
       };

@@ -101,7 +101,7 @@ for (const token of [
   'OWNER_FIVE_PAGE_INSPECTION_FIRST_V1',
   'const propertyId = safeId(`${intakeId}_property_${index + 1}`',
   'paymentStatus: "NOT_DUE_UNTIL_INSPECTION_COMPLETE"',
-  'status: "AWAITING_SITE_INSPECTION"',
+  'status: "NOT_DUE_UNTIL_INSPECTION_COMPLETE"',
   'verificationState: "INSPECTION_REQUIRED_BEFORE_PAYMENT"',
   'approvedMethods.includes(method)',
   'paymentConfigVersion: activeConfiguration.version',

@@ -12,7 +12,7 @@ test('ticket normalization preserves the canonical lifecycle vocabulary', async 
   ]);
 
   assert.match(normalizer, /return "ASSIGNED"/);
-  assert.match(normalizer, /return "ON_THE_WAY"/);
+  assert.match(normalizer, /return "EN_ROUTE"/);
   assert.match(normalizer, /return "ARRIVED"/);
   assert.doesNotMatch(normalizer, /return "assigned"/);
   assert.doesNotMatch(normalizer, /return "on_the_way"/);

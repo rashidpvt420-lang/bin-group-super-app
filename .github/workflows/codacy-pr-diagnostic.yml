@@ -5,6 +5,8 @@ on:
     types: [opened, synchronize, reopened]
     paths:
       - 'functions/secureOwnerProfileOperations.ts'
+      - 'functions/canonicalStateMachines.ts'
+      - 'src/lib/canonicalStateMachines.ts'
       - 'src/owner/**'
       - 'tests/launch/owner-*.test.mjs'
       - 'scripts/codacy-pr-diagnostic.mjs'
@@ -17,7 +19,6 @@ permissions:
 jobs:
   inspect-codacy-issues:
     name: Inspect public Codacy PR issues
-    if: ${{ github.event.pull_request.number == 330 }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -30,11 +31,12 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
         run: node scripts/codacy-pr-diagnostic.mjs
       - name: Upload compact Codacy diagnostic
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: codacy-pr-330-diagnostic-${{ github.event.pull_request.head.sha }}
+          name: codacy-pr-${{ github.event.pull_request.number }}-diagnostic-${{ github.event.pull_request.head.sha }}
           path: codacy-pr-diagnostic.json
           if-no-files-found: error
           retention-days: 1

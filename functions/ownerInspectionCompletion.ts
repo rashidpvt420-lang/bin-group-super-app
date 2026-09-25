@@ -388,8 +388,8 @@ export const adminCompleteOwnerPortfolioInspections = onCall({ cors: true, enfor
     updatedAt: now,
   }, { merge: true });
   batch.set(contractRef, {
-    status: "SIGNED_AWAITING_15_PERCENT_PAYMENT",
-    contractStatus: "signed_awaiting_payment",
+    status: "SIGNED",
+    contractStatus: "SIGNED",
     activationStatus: "LOCKED_PENDING_15_PERCENT_PAYMENT",
     inspectionId: inspectionIds[0],
     inspectionIds,
@@ -410,7 +410,7 @@ export const adminCompleteOwnerPortfolioInspections = onCall({ cors: true, enfor
     if (!verifiedProperty) throw new HttpsError("failed-precondition", `No final verified property snapshot exists for ${document.id}.`);
     batch.set(document.ref, {
       ...verifiedProperty,
-      status: "AWAITING_15_PERCENT_PAYMENT",
+      status: "PAYMENT_PENDING",
       activationStatus: "LOCKED_PENDING_15_PERCENT_PAYMENT",
       inspectionStatus: "COMPLETED",
       adminSiteVisitVerified: true,

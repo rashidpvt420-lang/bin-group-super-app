@@ -72,7 +72,7 @@ export default function BrokerDocumentsPage() {
                 fileSize: file.size,
                 contentType: file.type || 'application/octet-stream',
                 docType,
-                status: 'pending_review',
+                status: 'PENDING_REVIEW',
                 uploadedAt: serverTimestamp()
             });
         } catch (err) {

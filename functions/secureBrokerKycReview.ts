@@ -326,7 +326,7 @@ export const adminReviewBrokerKyc = onCall(
 
       freshDocuments.forEach((document) => {
         transaction.set(document.ref, {
-          status: approved ? "verified" : "rejected",
+          status: approved ? "VERIFIED" : "REJECTED",
           reviewedAt: now,
           reviewedBy: actorId,
           updatedAt: now,

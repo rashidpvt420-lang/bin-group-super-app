@@ -145,7 +145,7 @@ export const submitTenantMoveInspection = onCall(
     transaction.set(ownerReviewRef, normalized);
     transaction.set(legacyRef, {
       ...normalized,
-      status: "submitted",
+      status: "SUBMITTED",
       ownerReviewInspectionId: ownerReviewRef.id,
     });
     transaction.set(auditRef, {

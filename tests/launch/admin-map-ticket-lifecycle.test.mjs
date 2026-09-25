@@ -27,7 +27,7 @@ test('canonical lifecycle keeps every exceptional unresolved class visible', () 
 });
 
 test('legacy unresolved aliases normalize to canonical unresolved states', () => {
-  const aliases = { new: 'OPEN', dispatched: 'ASSIGNED', claimed: 'ACCEPTED', started: 'WORK_STARTED' };
+  const aliases = { new: 'OPEN', dispatched: 'ASSIGNED', claimed: 'ACCEPTED', started: 'IN_PROGRESS' };
   for (const [alias, canonical] of Object.entries(aliases)) {
     assert.equal(lifecycle.normalizeMaintenanceTicketStatus(alias), canonical, alias);
     assert.equal(lifecycle.isUnresolvedMaintenanceTicketStatus(alias), true, alias);
@@ -62,7 +62,7 @@ test('Admin and Functions consume the same executable lifecycle module', () => {
 test('dispatch normalization preserves assignment until server acceptance evidence exists', () => {
   assert.match(functionSource, /\["DISPATCHED", "ASSIGNED", "TECHNICIAN_ASSIGNED"\]\.includes\(upper\)\) return "ASSIGNED"/);
   assert.doesNotMatch(functionSource, /\["DISPATCHED", "ASSIGNED", "TECHNICIAN_ASSIGNED"\]\.includes\(upper\)\) return "accepted"/);
-  assert.match(functionSource, /\["EN_ROUTE", "ON_THE_WAY", "LIVE_TRACKING"\]\.includes\(upper\)\) return "ON_THE_WAY"/);
+  assert.match(functionSource, /\["EN_ROUTE", "ON_THE_WAY", "LIVE_TRACKING"\]\.includes\(upper\)\) return "EN_ROUTE"/);
 });
 
 test('Admin map merges complete status, Technician and GPS listeners without silent truncation', () => {

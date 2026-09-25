@@ -303,7 +303,9 @@ export const acceptTechnicianTicket = onCall({ cors: true, enforceAppCheck: true
             throw new HttpsError("failed-precondition", "Ticket is already assigned to another technician.");
         }
 
-        if (!['OPEN', 'open', 'AUTO_ASSIGNED', 'auto_assigned', 'ASSIGNED', 'assigned', 'pending_assignment', 'PENDING_ASSIGNMENT', 'emergency_submitted', 'EMERGENCY_SUBMITTED'].includes(ticketData.status)) {
+        if (!['OPEN', 'AUTO_ASSIGNED', 'ASSIGNED', 'PENDING_ASSIGNMENT', 'EMERGENCY_SUBMITTED'].includes(
+            String(ticketData.status || '').trim().replace(/[\s-]+/g, '_').toUpperCase()
+        )) {
             throw new HttpsError("failed-precondition", "Ticket is not available for acceptance.");
         }
 
@@ -988,7 +990,7 @@ async function attemptAutoAssignment(ticketRef: admin.firestore.DocumentReferenc
                     assignedTechnicianPhone: freshTechnician.phone || freshTechnician.phoneNumber || "",
                     assignedTechnicianAvatar: freshTechnician.photoURL || "",
                     technicianSpecialty: freshTechnician.specialty || freshTechnician.trade || "",
-                    status: "AUTO_ASSIGNED",
+                    status: "ASSIGNED",
                     dispatchStatus: "AUTO_ASSIGNED",
                     trackingStatus: "TECHNICIAN_ASSIGNED",
                     autoAssignedAt: FieldValue.serverTimestamp(),
@@ -2932,7 +2934,7 @@ export const pauseTechnicianWork = onCall({ cors: true, enforceAppCheck: true },
     await assertTechnicianTicketMutationAccess(request.auth, ticketSnap.data() || {});
 
     await ticketRef.update({
-        status: "on_hold",
+        status: "ON_HOLD",
         technicianStatus: "WAITING_PARTS",
         pausedAt: FieldValue.serverTimestamp(),
         pauseReason: reason || "Waiting for parts",

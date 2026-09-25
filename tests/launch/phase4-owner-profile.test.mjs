@@ -92,7 +92,7 @@ test('duplicate property registration is server-authoritative and not name-only'
   assert.match(rules, /allow read, create, update, delete: if false/);
 });
 
-test('resubmitOwnerProperty is owner-bound and only performs changes_requested to admin_review', async () => {
+test('resubmitOwnerProperty keeps Property and Onboarding canonical machines separate', async () => {
   const [resubmission, runtime, stateMachine] = await Promise.all([
     read('functions/ownerPropertyResubmission.ts'),
     read('functions/runtime.ts'),
@@ -102,13 +102,14 @@ test('resubmitOwnerProperty is owner-bound and only performs changes_requested t
   assert.match(runtime, /export \{ resubmitOwnerProperty \} from "\.\/ownerPropertyResubmission"/);
   assert.match(resubmission, /enforceAppCheck:\s*true/);
   assert.match(resubmission, /This property belongs to another owner/);
-  assert.match(resubmission, /propertyState !== "changes_requested"/);
+  assert.match(resubmission, /propertyState !== "CHANGES_REQUESTED"/);
   assert.match(resubmission, /intakeState !== "changes_requested"/);
-  assert.match(resubmission, /assertOnboardingTransition\(propertyState, "admin_review"\)/);
+  assert.match(resubmission, /assertCanonicalTransition\("property", propertyState, "UNDER_REVIEW"\)/);
   assert.match(resubmission, /assertOnboardingTransition\(intakeState, "admin_review"\)/);
-  assert.match(resubmission, /status:\s*"admin_review"/);
-  assert.match(resubmission, /lifecycleStatus:\s*"admin_review"/);
-  assert.match(resubmission, /onboardingState:\s*"admin_review"/);
+  assert.match(resubmission, /lifecycleStatus:\s*"UNDER_REVIEW"/);
+  assert.match(resubmission, /status:\s*"UNDER_REVIEW"/);
+  assert.match(resubmission, /onboardingState:\s*admin\.firestore\.FieldValue\.delete\(\)/);
+  assert.match(resubmission, /const intakePatch = \{[\s\S]*?lifecycleStatus:\s*"admin_review"[\s\S]*?onboardingState:\s*"admin_review"[\s\S]*?status:\s*"admin_review"/);
   assert.match(stateMachine, /changes_requested:\s*\[[^\]]*'admin_review'/);
   assert.doesNotMatch(resubmission, /"draft"\s*\|\|\s*"under_review"/i);
 });

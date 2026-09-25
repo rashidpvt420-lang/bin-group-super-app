@@ -7,6 +7,7 @@ import { useRole } from '../../context/RoleContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { calculateDistanceKm, calculateEtaMinutes, getTechnicianLocation, getTicketJobLocation } from '../../utils/liveTracking';
+import { normalizeCanonicalState } from '../../lib/canonicalStateMachines';
 
 const normalizeEmail = (value: unknown) => String(value || '').trim().toLowerCase();
 const label = (value: unknown) => String(value || 'PENDING').replace(/_/g, ' ').toUpperCase();
@@ -20,9 +21,7 @@ const STATUS_CONFIG: Record<string, { color: string; icon: any }> = {
     SCHEDULED: { color: '#22c55e', icon: CalendarClock },
     RESCHEDULE_REQUESTED: { color: '#38bdf8', icon: CalendarClock },
     CANCELLATION_REQUESTED: { color: '#ef4444', icon: AlertCircle },
-    accepted: { color: '#3b82f6', icon: Clock },
     ASSIGNED: { color: '#3b82f6', icon: Clock },
-    on_the_way: { color: binThemeTokens.gold, icon: Navigation },
     EN_ROUTE: { color: binThemeTokens.gold, icon: Navigation },
     arrived: { color: '#8b5cf6', icon: CalendarClock },
     ARRIVED: { color: '#8b5cf6', icon: CalendarClock },
@@ -38,7 +37,7 @@ const STATUS_CONFIG: Record<string, { color: string; icon: any }> = {
     emergency_submitted: { color: '#ef4444', icon: AlertCircle },
 };
 
-const ACTIVE_STATUSES = ['accepted', 'ASSIGNED', 'on_the_way', 'EN_ROUTE', 'arrived', 'ARRIVED', 'in_progress', 'IN_PROGRESS'];
+const ACTIVE_STATUSES = ['ACCEPTED', 'ASSIGNED', 'EN_ROUTE', 'ARRIVED', 'IN_PROGRESS'];
 
 function createdMillis(ticket: any) {
     if (ticket.createdAt?.toDate) return ticket.createdAt.toDate().getTime();
@@ -130,7 +129,7 @@ export default function TenantTicketsPage() {
 
             <Stack spacing={2}>
                 {tickets.map((ticket) => {
-                    const status = String(ticket.status || 'OPEN');
+                    const status = normalizeCanonicalState('ticket', ticket.status) || 'OPEN';
                     const config = STATUS_CONFIG[status] || STATUS_CONFIG[ticket.priority === 'emergency' ? 'emergency' : 'ASSIGNED'];
                     const Icon = config.icon;
                     const isActive = ACTIVE_STATUSES.includes(status);

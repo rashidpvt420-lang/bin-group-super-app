@@ -29,7 +29,7 @@ function normalizeStatus(value: unknown): string | null {
   // hide an assignment from the Technician UI and break the next lifecycle
   // transition (for example ON_THE_WAY -> ARRIVED).
   if (["DISPATCHED", "ASSIGNED", "TECHNICIAN_ASSIGNED"].includes(upper)) return "ASSIGNED";
-  if (["EN_ROUTE", "ON_THE_WAY", "LIVE_TRACKING"].includes(upper)) return "ON_THE_WAY";
+  if (["EN_ROUTE", "ON_THE_WAY", "LIVE_TRACKING"].includes(upper)) return "EN_ROUTE";
   if (upper === "ARRIVED") return "ARRIVED";
   if (["IN_PROGRESS", "WORK_STARTED"].includes(upper)) return "IN_PROGRESS";
   if (upper === "WAITING_PARTS") return "WAITING_PARTS";

@@ -1,22 +1,15 @@
 export const FIRESTORE_STATUS_IN_LIMIT = 10;
 
 export const UNRESOLVED_MAINTENANCE_TICKET_STATUSES = Object.freeze([
-  "UNASSIGNED",
   "OPEN",
-  "PENDING",
-  "PENDING_ASSIGNMENT",
   "PENDING_SCHEDULING",
   "SCHEDULED",
   "ASSIGNED",
-  "AUTO_ASSIGNED",
   "ACCEPTED",
   "EN_ROUTE",
-  "ON_THE_WAY",
   "ARRIVED",
   "IN_PROGRESS",
-  "WORK_STARTED",
   "WAITING_PARTS",
-  "QUOTE_REJECTED",
   "RESCHEDULE_REQUESTED",
   "CANCELLATION_REQUESTED",
   "ESCALATED",
@@ -27,8 +20,6 @@ export const UNRESOLVED_MAINTENANCE_TICKET_STATUSES = Object.freeze([
 
 export const TERMINAL_MAINTENANCE_TICKET_STATUSES = Object.freeze([
   "COMPLETED",
-  "TENANT_APPROVED",
-  "RESOLVED",
   "CLOSED",
   "CANCELLED",
   "REJECTED",
@@ -36,9 +27,18 @@ export const TERMINAL_MAINTENANCE_TICKET_STATUSES = Object.freeze([
 
 const LEGACY_UNRESOLVED_STATUS_ALIASES = Object.freeze({
   NEW: "OPEN",
+  UNASSIGNED: "OPEN",
+  PENDING: "OPEN",
+  PENDING_ASSIGNMENT: "OPEN",
+  EMERGENCY_SUBMITTED: "OPEN",
+  AUTO_ASSIGNED: "ASSIGNED",
   DISPATCHED: "ASSIGNED",
+  TECHNICIAN_ASSIGNED: "ASSIGNED",
   CLAIMED: "ACCEPTED",
-  STARTED: "WORK_STARTED",
+  ON_THE_WAY: "EN_ROUTE",
+  STARTED: "IN_PROGRESS",
+  WORK_STARTED: "IN_PROGRESS",
+  QUOTE_REJECTED: "OPEN",
 });
 
 const normalizeRaw = (value) => String(value || "")
@@ -48,7 +48,7 @@ const normalizeRaw = (value) => String(value || "")
 
 const canonicalize = (value) => {
   const normalized = normalizeRaw(value);
-  return LEGACY_UNRESOLVED_STATUS_ALIASES[normalized] || normalized;
+  return LEGACY_UNRESOLVED_STATUS_ALIASES[normalized] || LEGACY_TERMINAL_STATUS_ALIASES[normalized] || normalized;
 };
 
 const unresolvedSet = new Set(UNRESOLVED_MAINTENANCE_TICKET_STATUSES);
@@ -67,8 +67,15 @@ export function isTerminalMaintenanceTicketStatus(value) {
 }
 
 const LEGACY_UNRESOLVED_STATUS_VALUES = Object.freeze(
-  Object.keys(LEGACY_UNRESOLVED_STATUS_ALIASES).map((status) => status.toLowerCase()),
+  Object.keys(LEGACY_UNRESOLVED_STATUS_ALIASES).flatMap((status) => [status, status.toLowerCase()]),
 );
+
+const LEGACY_TERMINAL_STATUS_ALIASES = Object.freeze({
+  TENANT_APPROVED: "CLOSED",
+  RESOLVED: "CLOSED",
+  CLOSED_VERIFIED: "CLOSED",
+  CANCELED: "CANCELLED",
+});
 
 export const UNRESOLVED_MAINTENANCE_TICKET_QUERY_VALUES = Object.freeze([
   ...UNRESOLVED_MAINTENANCE_TICKET_STATUSES,
