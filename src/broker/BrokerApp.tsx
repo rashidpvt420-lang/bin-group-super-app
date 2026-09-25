@@ -18,6 +18,7 @@ import BrokerCommissionsPage from './pages/BrokerCommissionsPage';
 import BrokerDocumentsPage from './pages/BrokerDocumentsPage';
 import BrokerProfilePage from './pages/BrokerProfilePage';
 import BrokerAttributionProofPage from './pages/BrokerAttributionProofPage';
+import BrokerListingsPage from './pages/BrokerListingsPage';
 
 type BrokerMenuItem = {
   key: string;
@@ -35,6 +36,8 @@ const BrokerLayout = ({ children }: { children: React.ReactNode }) => {
   const menuItems: BrokerMenuItem[] = [
     { key: 'broker.nav.dashboard', label: label('broker.nav.dashboard', 'Dashboard', 'لوحة التحكم'), path: '/broker/dashboard', icon: Home },
     { key: 'broker.nav.leads', label: label('broker.nav.leads', 'Leads', 'العملاء المحتملون'), path: '/broker/leads', icon: Users },
+    { key: 'broker.nav.listings', label: label('broker.nav.listings', 'Listings', 'العقارات'), path: '/broker/listings', icon: Building },
+    { key: 'broker.nav.deals', label: label('broker.nav.deals', 'Deals', 'الصفقات'), path: '/broker/deals', icon: Briefcase },
     { key: 'broker.nav.commissions', label: label('broker.nav.commissions', 'Commissions', 'العمولات'), path: '/broker/commissions', icon: Wallet },
     { key: 'broker.nav.documents', label: label('broker.nav.documents', 'Documents', 'المستندات'), path: '/broker/documents', icon: FileUp },
     { key: 'broker.nav.profile', label: label('broker.nav.profile', 'Profile', 'الملف الشخصي'), path: '/broker/profile', icon: Building },
@@ -109,6 +112,8 @@ export default function BrokerApp() {
         <Route path="/leads/new" element={<BrokerLeadsPage openFormByDefault={true} />} />
         <Route path="/referrals" element={<BrokerReferralsPage />} />
         <Route path="/referrals/new" element={<BrokerReferralsPage openFormByDefault={true} />} />
+        <Route path="/listings" element={<BrokerListingsPage />} />
+        <Route path="/deals" element={<BrokerAttributionProofPage />} />
         <Route path="/commissions" element={<BrokerCommissionsPage />} />
         <Route path="/attribution" element={<BrokerAttributionProofPage />} />
         <Route path="/documents" element={<BrokerDocumentsPage />} />
