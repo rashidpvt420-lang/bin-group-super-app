@@ -335,6 +335,7 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
                 const lat = Number(position.coords.latitude.toFixed(7));
                 const lng = Number(position.coords.longitude.toFixed(7));
                 const accuracyMeters = Math.round(position.coords.accuracy || 0);
+                const accurateEnough = accuracyMeters > 0 && accuracyMeters <= 50;
                 commitGeoAnchor({
                     lat,
                     lng,
@@ -350,6 +351,12 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
                     accuracyMeters,
                     capturedAt: new Date(position.timestamp || Date.now()).toISOString(),
                 });
+                if (!accurateEnough) {
+                    setLocationError(copy(
+                        'GPS accuracy is above 50 m. The coordinate was saved only as an untrusted review candidate.',
+                        'دقة GPS أكبر من 50 متر. تم حفظ الإحداثيات فقط كموقع مرشح غير موثوق للمراجعة.'
+                    ));
+                }
                 setLocating(false);
             },
             (error) => {
