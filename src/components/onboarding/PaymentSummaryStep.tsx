@@ -125,7 +125,7 @@ const PaymentSummaryStep: React.FC<{ onNext: () => void; onBack: () => void }> =
   }, [properties, selectedAddOns, valuationResult?.serverQuote, lang, setPaymentManifest, setPaymentMethod]);
 
   const annualTotal = Number(canonicalQuote?.annualContractValue || valuationResult?.serverQuote?.portfolioAnnualTotal || portfolioSummary.estimatedACV || 0);
-  const activationDeposit = Number(canonicalQuote?.activationDeposit || Math.round(annualTotal * 0.15));
+  const activationDeposit = Number(canonicalQuote?.activationDeposit ?? 0);
   const totalProperties = properties.length;
   const hasValidAmount = annualTotal > 0 && activationDeposit > 0 && Boolean(canonicalQuote?.quoteHash);
   const approvedMethods = useMemo(() => new Set<PaymentMethod>(configuration?.approvedMethods || []), [configuration?.approvedMethods]);
