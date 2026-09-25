@@ -105,7 +105,14 @@ export default function OwnerPropertiesPage() {
                 </Box>
                 <Stack direction="row" spacing={2}>
                     <Button variant="outlined" startIcon={<Layout size={16} />} sx={{ borderColor: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.7)', fontWeight: 900, borderRadius: 3 }}>Grid View</Button>
-                    <Button variant="contained" sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 900, px: 3, borderRadius: 3 }}>Register New Asset</Button>
+                    <Button
+                        data-testid="owner-register-new-asset"
+                        variant="contained"
+                        onClick={() => navigate('/onboarding')}
+                        sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 900, px: 3, borderRadius: 3 }}
+                    >
+                        Register New Asset
+                    </Button>
                 </Stack>
             </Box>
 
@@ -167,6 +174,18 @@ export default function OwnerPropertiesPage() {
                                     </Grid>
 
                                     <Divider sx={{ borderColor: 'rgba(255,255,255,0.05)', mb: 3 }} />
+
+                                    {String(prop.status || prop.approvalStatus || prop.onboardingStatus || '').trim().toLowerCase().replace(/[\s-]+/g, '_') === 'changes_requested' && (
+                                        <Button
+                                            data-testid={`owner-correct-property-${prop.id}`}
+                                            fullWidth
+                                            variant="contained"
+                                            onClick={() => navigate(`/owner/properties/${prop.id}/correct`)}
+                                            sx={{ mb: 2, borderRadius: 3, bgcolor: '#f59e0b', color: '#111827', fontWeight: 950 }}
+                                        >
+                                            Correct & Resubmit
+                                        </Button>
+                                    )}
 
                                     <Stack direction="row" spacing={2}>
                                         <Button 
