@@ -7,6 +7,7 @@ import { useRole } from '../../context/RoleContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { calculateDistanceKm, calculateEtaMinutes, getTechnicianLocation, getTicketJobLocation } from '../../utils/liveTracking';
+import { normalizeCanonicalState } from '../../lib/canonicalStateMachines';
 
 const normalizeEmail = (value: unknown) => String(value || '').trim().toLowerCase();
 const label = (value: unknown) => String(value || 'PENDING').replace(/_/g, ' ').toUpperCase();
@@ -128,7 +129,7 @@ export default function TenantTicketsPage() {
 
             <Stack spacing={2}>
                 {tickets.map((ticket) => {
-                    const status = String(ticket.status || 'OPEN');
+                    const status = normalizeCanonicalState('ticket', ticket.status) || 'OPEN';
                     const config = STATUS_CONFIG[status] || STATUS_CONFIG[ticket.priority === 'emergency' ? 'emergency' : 'ASSIGNED'];
                     const Icon = config.icon;
                     const isActive = ACTIVE_STATUSES.includes(status);
