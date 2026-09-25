@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import ts from 'typescript';
 
 const source = readFileSync(new URL('../../functions/technicianBeforeWorkEvidence.ts', import.meta.url), 'utf8');
@@ -32,6 +33,7 @@ async function submit({ ticket = {}, objectExists = true, evidenceType = 'techni
     storage: () => ({ bucket: () => ({ name: bucketName, file: () => ({
       exists: async () => [objectExists],
       getMetadata: async () => [{ contentType: 'image/jpeg', size: 1024,
+        generation: '1712345678901234', md5Hash: 'immutable-before-hash',
         metadata: { ticketId: 'ticket-1', technicianId: 'tech-1', evidenceType } }],
     }) }) }),
   };
@@ -39,6 +41,7 @@ async function submit({ ticket = {}, objectExists = true, evidenceType = 'techni
   const exports = {};
   new Function('require', 'exports', compiled)((name) => {
     if (name === 'firebase-admin') return admin;
+    if (name === 'node:crypto') return { createHash };
     if (name === 'firebase-admin/firestore') return { FieldValue: {
       arrayUnion: (value) => ({ arrayUnion: value }), serverTimestamp: () => 'SERVER_TIMESTAMP',
     } };
@@ -63,6 +66,10 @@ test('verified technician photo supplies canonical completion and verifier field
   assert.deepEqual(writes[0].beforePhotos, { arrayUnion: downloadUrl });
   assert.equal(writes[0].technicianBeforePhotoUrl, downloadUrl);
   assert.equal(writes[0].technicianBeforeEvidenceAt, 'SERVER_TIMESTAMP');
+  assert.equal(writes[0].technicianBeforeEvidenceState, 'CONFIRMED');
+  assert.equal(writes[0].technicianBeforeObjectGeneration, '1712345678901234');
+  assert.equal(writes[0].technicianBeforeContentHash, 'immutable-before-hash');
+  assert.match(writes[0].technicianBeforeConfirmationId, /^technician_before_work_[a-f0-9]{64}$/);
 });
 
 test('canonical publication preserves the original fault photo while appending verified site evidence', async () => {
