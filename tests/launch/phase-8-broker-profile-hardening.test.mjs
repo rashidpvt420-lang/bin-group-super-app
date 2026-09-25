@@ -257,7 +257,7 @@ test('Phase 8 notification lifecycle is server-produced and recipient-scoped for
 
 test('Phase 8 Broker portal exposes onboarding, listings, deals, commissions, documents and profile routes', async () => {
   const app = await read('src/broker/BrokerApp.tsx');
-  for (const route of ['/dashboard', '/leads', '/referrals', '/listings', '/deals', '/commissions', '/documents', '/profile']) {
+  for (const route of ['/dashboard', '/leads', '/referrals', '/listings', '/deals', '/commissions', '/documents', '/onboarding', '/profile']) {
     assert.ok(app.includes(`path="${route}"`), `Missing Broker route ${route}`);
   }
   assert.match(app, /Deals & Attribution/);
