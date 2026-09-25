@@ -261,5 +261,7 @@ test('Phase 8 Broker portal exposes onboarding, listings, deals, commissions, do
     assert.ok(app.includes(`path="${route}"`), `Missing Broker route ${route}`);
   }
   assert.match(app, /Deals & Attribution/);
-  assert.match(app, /path: '\/broker\/attribution'/);
+  assert.match(app, /path: '\/broker\/deals'/);
+  assert.match(app, /path="\/deals"/);
+  assert.match(app, /path="\/attribution"/);
 });
