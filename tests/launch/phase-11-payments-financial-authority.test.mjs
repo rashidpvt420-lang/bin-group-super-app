@@ -9,7 +9,7 @@ test('Phase 11: current production payment policy is exactly AED Cash/Cheque', (
   const launchTruth = read('packages/shared/src/config/providerLaunchTruth.ts');
   const phase1 = read('scripts/ensure-phase1-manual-payment-config.mjs');
 
-  assert.match(config, /approvedMethods: ["CASH", "CHEQUE"]/);
+  assert.match(config, /PHASE1_METHODS = \["CASH", "CHEQUE"\]/);
   assert.match(config, /bankTransferEnabled: false/);
   assert.match(config, /stripeEnabled: false/);
   assert.match(phase1, /EXPECTED_METHODS = ['CASH', 'CHEQUE']/);
@@ -21,8 +21,8 @@ test('Phase 11: Stripe is fail-closed in the deployed runtime', () => {
   const runtime = read('functions/runtime.ts');
   const hold = read('functions/stripePaymentPhase1Hold.ts');
 
-  assert.match(runtime, /export * from "\.\/stripePaymentPhase1Hold"/);
-  assert.doesNotMatch(runtime, /export * from "\.\/stripePayment"/);
+  assert.match(runtime, /export \\* from "\\.\\/stripePaymentPhase1Hold"/);
+  assert.doesNotMatch(runtime, /export \\* from "\\.\\/stripePayment";/);
   assert.match(hold, /createStripeCheckoutSession = onCall/);
   assert.match(hold, /enforceAppCheck: true/);
   assert.match(hold, /Stripe\/card collection is disabled/i);
