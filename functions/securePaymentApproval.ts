@@ -1,5 +1,6 @@
 import * as admin from "firebase-admin";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
+import { normalizeAedMoney } from "./shared/aedMoney";
 import {
   adminApprovePayment as legacyAdminApprovePayment,
   adminRejectPayment as legacyAdminRejectPayment,
@@ -198,5 +199,161 @@ export const adminRejectPayment = onCall(
       throw new HttpsError("internal", "The protected payment rejection handler is unavailable.");
     }
     return legacyRunner(request);
+  },
+);
+
+
+export const adminRecordOwnerPaymentRefund = onCall(
+  { cors: true, enforceAppCheck: true },
+  async (request) => {
+    await requireMfaFinanceAdmin(request.auth);
+    const paymentId = text(request.data?.paymentId);
+    const refundReferenceId = text(request.data?.refundReferenceId || request.data?.reference);
+    const note = text(request.data?.note || request.data?.reason);
+    if (!/^[A-Za-z0-9_-]{1,180}$/.test(paymentId)) {
+      throw new HttpsError("invalid-argument", "A valid canonical paymentId is required.");
+    }
+    if (refundReferenceId.length < 4) {
+      throw new HttpsError("invalid-argument", "A durable Cash/Cheque refund reference is required.");
+    }
+    if (note.length < 8) {
+      throw new HttpsError("invalid-argument", "A refund audit note of at least 8 characters is required.");
+    }
+
+    const paymentRef = db.collection("payment_transactions").doc(paymentId);
+    const refundId = `refund_${paymentId}`;
+    const refundRef = db.collection("payment_transactions").doc(refundId);
+    const actorId = request.auth!.uid;
+    const actorEmail = text(request.auth?.token?.email).toLowerCase();
+
+    return db.runTransaction(async (transaction) => {
+      const paymentSnap = await transaction.get(paymentRef);
+      if (!paymentSnap.exists) throw new HttpsError("not-found", "Approved Owner payment not found.");
+      const payment = paymentSnap.data() || {};
+      const method = upper(payment.paymentMethod || payment.method);
+      const paymentState = upper(payment.paymentStatus || payment.status);
+      if (payment.paymentVerified !== true || !["APPROVED", "PAID", "VERIFIED"].includes(paymentState)) {
+        throw new HttpsError("failed-precondition", "Only an approved Owner activation payment can be refunded.");
+      }
+      if (!["CASH", "CHEQUE"].includes(method)) {
+        throw new HttpsError("failed-precondition", "Phase 1 refunds may be recorded only for Cash or Cheque payments.");
+      }
+
+      let refundAmount: number;
+      try {
+        refundAmount = normalizeAedMoney(
+          payment.amountReceived ?? payment.amount ?? payment.activationDeposit,
+        );
+      } catch {
+        throw new HttpsError("failed-precondition", "The approved payment has no valid locked AED amount.");
+      }
+      if (refundAmount <= 0) {
+        throw new HttpsError("failed-precondition", "The approved payment has no refundable amount.");
+      }
+
+      const existingRefundSnap = await transaction.get(refundRef);
+      if (existingRefundSnap.exists) {
+        const existing = existingRefundSnap.data() || {};
+        if (
+          text(existing.originalPaymentId) === paymentId &&
+          Number(existing.refundAmount) === refundAmount &&
+          text(existing.refundReferenceId) === refundReferenceId &&
+          upper(existing.status) === "REFUNDED"
+        ) {
+          return { status: "SUCCESS", paymentId, refundId, refundAmount, currency: "AED", idempotent: true };
+        }
+        throw new HttpsError("already-exists", "This payment already has different refund evidence.");
+      }
+      if (upper(payment.refundStatus) === "FULL_REFUND_RECORDED") {
+        throw new HttpsError("already-exists", "This payment is already marked as fully refunded.");
+      }
+
+      const contractId = text(payment.contractId);
+      const invoiceId = text(payment.invoiceId);
+      const contractRef = contractId ? db.collection("contracts").doc(contractId) : null;
+      const invoiceRef = invoiceId ? db.collection("invoices").doc(invoiceId) : null;
+      const now = admin.firestore.FieldValue.serverTimestamp();
+
+      transaction.create(refundRef, {
+        paymentId: refundId,
+        recordType: "REFUND",
+        transactionType: "OWNER_ACTIVATION_REFUND",
+        originalPaymentId: paymentId,
+        contractId: contractId || null,
+        intakeId: text(payment.intakeId) || null,
+        invoiceId: invoiceId || null,
+        ownerUid: text(payment.ownerUid || payment.ownerId) || null,
+        ownerId: text(payment.ownerId || payment.ownerUid) || null,
+        currency: "AED",
+        paymentMethod: method,
+        method,
+        amount: -refundAmount,
+        refundAmount,
+        refundReferenceId,
+        refundNote: note,
+        status: "REFUNDED",
+        paymentStatus: "REFUNDED",
+        refundStatus: "FULL_REFUND_RECORDED",
+        paymentVerified: false,
+        verified: true,
+        source: "ADMIN_RECORDED_PHASE1_MANUAL_REFUND",
+        recordedBy: actorId,
+        recordedByEmail: actorEmail || null,
+        recordedAt: now,
+        createdAt: now,
+        updatedAt: now,
+      });
+
+      transaction.set(paymentRef, {
+        refundStatus: "FULL_REFUND_RECORDED",
+        refundedAmount: refundAmount,
+        refundRecordId: refundId,
+        refundReferenceId,
+        refundReviewRequired: false,
+        financialDisposition: "FULL_REFUND_RECORDED",
+        refundedBy: actorId,
+        refundedAt: now,
+        updatedAt: now,
+      }, { merge: true });
+
+      if (contractRef) {
+        transaction.set(contractRef, {
+          refundStatus: "FULL_REFUND_RECORDED",
+          refundedAmount: refundAmount,
+          refundRecordId: refundId,
+          refundReferenceId,
+          refundReviewRequired: false,
+          financialDisposition: "FULL_REFUND_RECORDED",
+          updatedAt: now,
+        }, { merge: true });
+      }
+      if (invoiceRef) {
+        transaction.set(invoiceRef, {
+          refundStatus: "FULL_REFUND_RECORDED",
+          refundedAmount: refundAmount,
+          refundRecordId: refundId,
+          refundReferenceId,
+          updatedAt: now,
+        }, { merge: true });
+      }
+
+      transaction.set(db.collection("audit_logs").doc(), {
+        action: "ADMIN_RECORD_OWNER_PAYMENT_FULL_REFUND",
+        actorId,
+        actorEmail: actorEmail || null,
+        paymentId,
+        refundId,
+        contractId: contractId || null,
+        invoiceId: invoiceId || null,
+        refundAmount,
+        currency: "AED",
+        paymentMethod: method,
+        refundReferenceId,
+        note,
+        createdAt: now,
+      });
+
+      return { status: "SUCCESS", paymentId, refundId, refundAmount, currency: "AED", idempotent: false };
+    });
   },
 );
