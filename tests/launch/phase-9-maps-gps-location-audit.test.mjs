@@ -8,6 +8,7 @@ const rootGeo = read('src/utils/geoAnchor.ts');
 const ownerGeo = read('apps/owner-app/src/utils/geoAnchor.ts');
 const adminGeo = read('apps/admin-panel/src/utils/geoAnchor.ts');
 const ownerLocation = read('src/components/onboarding/PropertyLocationStep.tsx');
+const ownerIntake = read('src/components/onboarding/PropertyIntakeStep.tsx');
 const ownerAppLocation = read('apps/owner-app/src/components/onboarding/PropertyLocationStep.tsx');
 const geoAuthority = read('functions/propertyGeoAuthority.ts');
 const adminReview = read('functions/adminPropertyReview.ts');
@@ -105,7 +106,7 @@ test('Technician live GPS is temporary, fresh, identity-bound, ticket-bound and 
   assert.match(technicianLive, /installationHash/);
   assert.match(technicianLive, /accuracy > 100/);
   assert.match(technicianLive, /deviceTimestampMs/);
-  assert.match(technicianLive, /MAX_PHYSICAL_DEVICE_POINT_AGE_MS/);
+  assert.match(technicianLive, /maxGpsAgeMs = arrivalBinding\.physicalDeviceBound \? 60_000 : 5 \* 60_000/);
   assert.match(technicianLive, /expiresAt/);
   assert.match(technicianLive, /90 \* 1000|90_000/);
   assert.match(technicianLive, /technicianUid/);
@@ -196,7 +197,10 @@ test('Android/iOS Maps restrictions are deliberately N-A until native Maps SDKs 
 
 test('Places/autocomplete, geocoding, map loading, routing and marker truth remain covered', () => {
   assert.match(ownerLocation, /new google\.maps\.Geocoder\(\)/);
-  assert.match(ownerLocation, /google\.maps\.places\.Autocomplete|importLibrary\('places'\)/);
+  assert.match(ownerIntake, /importLibrary\("places"\)/);
+  assert.match(ownerIntake, /new Autocomplete\(/);
+  assert.match(ownerAppLocation, /importLibrary\('places'\)/);
+  assert.match(ownerAppLocation, /importLibrary\('geocoding'\)/);
   assert.match(mapsLib, /libraries=places,geometry/);
   assert.match(mapsLib, /GOOGLE_MAPS_AUTH_FAILED/);
   assert.match(mapsLib, /GOOGLE_MAPS_SCRIPT_LOAD_FAILED/);
