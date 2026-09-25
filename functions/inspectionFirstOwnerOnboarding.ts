@@ -419,8 +419,16 @@ export const submitOwnerInspectionFirstOnboarding = onCall({ cors: true, enforce
     const normalizedProperties: PlainRecord[] = properties.map((property: PlainRecord, index: number) => {
       const clientDraftId = safeId(property.id || property.propertyId, `draft_property_${index + 1}`);
       const propertyId = safeId(`${intakeId}_property_${index + 1}`, `owner_${owner.uid}_property_${index + 1}`);
+      const {
+        geo: _ownerSubmittedGeo,
+        geoVerification: _ownerGeoVerification,
+        verifiedGeo: _ownerVerifiedGeo,
+        dispatchReady: _ownerDispatchReady,
+        verified: _ownerVerified,
+        ...ownerProperty
+      } = property;
       return {
-        ...property,
+        ...ownerProperty,
         clientDraftId,
         id: propertyId,
         propertyId,
@@ -430,7 +438,7 @@ export const submitOwnerInspectionFirstOnboarding = onCall({ cors: true, enforce
         intakeId,
         contractId,
         quoteHash: quote.quoteHash,
-        geo: normalizeGeo(property),
+        submittedGeo: normalizeGeo(property),
         status: "PENDING_PROPERTY_INSPECTION",
         canonicalOnboardingState: "admin_review",
         activationStatus: "LOCKED_PENDING_INSPECTION_AND_PAYMENT",
