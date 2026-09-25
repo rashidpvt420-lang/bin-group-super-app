@@ -96,10 +96,18 @@ function loadGoogleMapsScript(apiKey: string): Promise<void> {
   return mapsLoadPromise;
 }
 
+export const isUsableMapCoordinate = (lat: number, lng: number): boolean =>
+  Number.isFinite(lat) &&
+  Number.isFinite(lng) &&
+  lat >= -90 && lat <= 90 &&
+  lng >= -180 && lng <= 180 &&
+  !(lat === 0 && lng === 0) &&
+  !(lat >= 51 && lat <= 57 && lng >= 22 && lng <= 27);
+
 export const buildGoogleMapsSearchUrl = (args: { lat?: number | string | null; lng?: number | string | null; address?: string; emirate?: string }) => {
   const lat = Number(args.lat);
   const lng = Number(args.lng);
-  const hasCoords = Number.isFinite(lat) && Number.isFinite(lng);
+  const hasCoords = isUsableMapCoordinate(lat, lng);
   const query = hasCoords
     ? `${lat},${lng}`
     : [args.address, args.emirate, 'United Arab Emirates'].filter(Boolean).join(', ');
