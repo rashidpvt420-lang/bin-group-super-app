@@ -10,7 +10,6 @@ import BrokerPageFrame from '../components/BrokerPageFrame';
 import RoleJourneyStrip from '../../components/RoleJourneyStrip';
 
 const money = (value: number) => `AED ${Number(value || 0).toLocaleString('en-AE', { maximumFractionDigits: 0 })}`;
-const normalizeEmail = (value: unknown) => String(value || '').trim().toLowerCase();
 const uniqueRows = (rows: any[]) => Array.from(new Map(rows.map((row) => [String(row.id), row])).values());
 const rowTime = (row: any) => row?.createdAt?.toDate ? row.createdAt.toDate().getTime() : row?.createdAt?.seconds ? row.createdAt.seconds * 1000 : 0;
 
