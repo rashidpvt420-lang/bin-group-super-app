@@ -19,7 +19,6 @@ import {
 } from '@mui/material';
 import { Mail, MapPin, Phone, Plus, Search, Users } from 'lucide-react';
 import {
-    addDoc,
     collection,
     db,
     doc,
@@ -27,6 +26,7 @@ import {
     orderBy,
     query,
     serverTimestamp,
+    setDoc,
     updateDoc,
     where,
 } from '../../lib/firebase';
@@ -162,12 +162,12 @@ export default function BrokerLeadsPage({ openFormByDefault = false }: BrokerLea
                 updatedAt: serverTimestamp(),
             };
 
-            const leadRef = await addDoc(collection(db, 'brokerLeads'), leadPayload);
+            const leadRef = doc(collection(db, 'brokerLeads'));
             const attributionId = `broker_lead_${brokerId}_${leadRef.id}`;
-            await updateDoc(doc(db, 'brokerLeads', leadRef.id), {
+            await setDoc(leadRef, {
+                ...leadPayload,
                 attributionId,
                 sourceLeadId: leadRef.id,
-                updatedAt: serverTimestamp(),
             });
 
             await logAuditAction({
