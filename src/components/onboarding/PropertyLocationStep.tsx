@@ -279,9 +279,9 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
                     address: resolved?.formatted_address,
                     placeId: resolved?.place_id || 'MAP_PIN',
                     source: 'google_maps',
-                    verified: true,
-                    requiresGeoReview: false,
-                    dispatchReady: true
+                    verified: false,
+                    requiresGeoReview: true,
+                    dispatchReady: false
                 });
             });
         };
@@ -335,7 +335,6 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
                 const lat = Number(position.coords.latitude.toFixed(7));
                 const lng = Number(position.coords.longitude.toFixed(7));
                 const accuracyMeters = Math.round(position.coords.accuracy || 0);
-                const accurateEnough = accuracyMeters > 0 && accuracyMeters <= 50;
                 commitGeoAnchor({
                     lat,
                     lng,
@@ -345,9 +344,9 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
                     area: activeProperty?.area || '',
                     source: 'device_gps',
                     placeId: 'DEVICE_GPS',
-                    verified: accurateEnough,
-                    requiresGeoReview: !accurateEnough,
-                    dispatchReady: accurateEnough,
+                    verified: false,
+                    requiresGeoReview: true,
+                    dispatchReady: false,
                     accuracyMeters,
                     capturedAt: new Date(position.timestamp || Date.now()).toISOString(),
                 });
@@ -425,9 +424,9 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
                     area: activeProperty?.area || '',
                     source: mapsInput ? 'google_maps' : 'admin_manual',
                     placeId: mapsInput ? 'GOOGLE_MAPS_LINK' : 'MANUAL',
-                    verified: Boolean(mapsInput),
-                    requiresGeoReview: !mapsInput,
-                    dispatchReady: Boolean(mapsInput)
+                    verified: false,
+                    requiresGeoReview: true,
+                    dispatchReady: false
                 });
                 return;
             }
@@ -555,7 +554,7 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
                             {EMIRATES_LIST.map((item) => <MenuItem key={item.id} value={item.id}>{readable(t(item.key), copy(item.en, item.ar))}</MenuItem>)}
                         </TextField>
 
-                        <TextField fullWidth name="address" inputProps={{ 'data-testid': 'property-address-input' }} label={readable(t('onboarding.address'), copy('Property Address', 'عنوان العقار'))} placeholder={copy('Building, street, area, emirate — or a Google Maps link', 'المبنى، الشارع، المنطقة، الإمارة — أو رابط خرائط Google')} value={activeProperty?.address || ''} onChange={handleAddressChange} autoComplete="off" helperText={copy('Paste an expanded Google Maps URL containing @latitude,longitude for automatic verification.', 'الصق رابط خرائط Google كاملاً يحتوي على خط العرض والطول للتحقق التلقائي.')} FormHelperTextProps={{ sx: { color: 'rgba(255,255,255,0.56)', fontWeight: 700 } }} sx={fieldSx} />
+                        <TextField fullWidth name="address" inputProps={{ 'data-testid': 'property-address-input' }} label={readable(t('onboarding.address'), copy('Property Address', 'عنوان العقار'))} placeholder={copy('Building, street, area, emirate — or a Google Maps link', 'المبنى، الشارع، المنطقة، الإمارة — أو رابط خرائط Google')} value={activeProperty?.address || ''} onChange={handleAddressChange} autoComplete="off" helperText={copy('Paste an expanded Google Maps URL containing @latitude,longitude to submit a location candidate for review.', 'الصق رابط خرائط Google كاملاً يحتوي على خط العرض والطول لإرسال موقع مرشح للمراجعة.')} FormHelperTextProps={{ sx: { color: 'rgba(255,255,255,0.56)', fontWeight: 700 } }} sx={fieldSx} />
 
                         <Grid container spacing={2}>
                             <Grid item xs={12} sm={6}><TextField fullWidth name="latitude" inputProps={{ 'data-testid': 'property-latitude-input' }} label={copy('Latitude', 'خط العرض')} value={manualLat} onChange={(event) => setManualLat(event.target.value)} helperText={copy('Exact property pin latitude.', 'خط عرض علامة العقار الدقيقة.')} FormHelperTextProps={{ sx: { color: 'rgba(255,255,255,0.5)', fontWeight: 800 } }} sx={fieldSx} /></Grid>
@@ -581,7 +580,7 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
                             <Box sx={{ p: 2.5, display: 'flex', alignItems: { xs: 'flex-start', sm: 'center' }, justifyContent: 'space-between', gap: 2, flexDirection: { xs: 'column', sm: isRTL ? 'row-reverse' : 'row' } }}>
                                 <Box sx={{ textAlign: isRTL ? 'right' : 'left' }}>
                                     <Typography variant="h6" sx={{ color: '#FFF', fontWeight: 950, display: 'flex', alignItems: 'center', gap: 1, flexDirection: isRTL ? 'row-reverse' : 'row' }}><Navigation size={20} color={binThemeTokens.gold} />{mapsLoaded ? copy('Tap or drag the pin to mark the exact property', 'اضغط أو اسحب العلامة لتحديد العقار بدقة') : copy('Live coordinate map preview', 'معاينة مباشرة لخريطة الإحداثيات')}</Typography>
-                                    <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.62)' }}>{mapsLoaded ? copy('Click the map or drag the gold pin. Verified map selections remain verified when you continue.', 'اضغط على الخريطة أو اسحب العلامة الذهبية. تبقى المواقع الموثقة موثقة عند المتابعة.') : copy('Enter an address, expanded map link or coordinates, then select Find Property Address.', 'أدخل عنواناً أو رابط خريطة كاملاً أو إحداثيات، ثم اختر البحث عن عنوان العقار.')}</Typography>
+                                    <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.62)' }}>{mapsLoaded ? copy('Click the map or drag the gold pin. Owner-selected coordinates remain untrusted until authoritative review.', 'اضغط على الخريطة أو اسحب العلامة الذهبية. تبقى الإحداثيات التي يختارها المالك غير موثوقة حتى المراجعة الرسمية.') : copy('Enter an address, expanded map link or coordinates, then select Find Property Address.', 'أدخل عنواناً أو رابط خريطة كاملاً أو إحداثيات، ثم اختر البحث عن عنوان العقار.')}</Typography>
                                 </Box>
                                 <Button href={googleMapsUrl} target="_blank" rel="noreferrer" variant="contained" startIcon={<ExternalLink size={16} />} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, whiteSpace: 'nowrap' }}>{copy('Open Google Maps', 'فتح خرائط Google')}</Button>
                             </Box>
