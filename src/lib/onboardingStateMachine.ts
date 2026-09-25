@@ -124,7 +124,7 @@ const BLOCKERS: Record<OnboardingState, string> = {
   quote_ready: 'Contract package not selected',
   contract_selected: 'Mobilization deposit unpaid',
   deposit_pending: 'Awaiting deposit payment',
-  deposit_processing: 'Awaiting Stripe/admin payment confirmation',
+  deposit_processing: 'Awaiting Admin Cash/Cheque payment confirmation',
   deposit_paid: 'Identity verification incomplete',
   identity_pending: 'Contract signature outstanding',
   signature_pending: 'Contract signature OTP outstanding',
