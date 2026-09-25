@@ -2167,7 +2167,25 @@ service cloud.firestore {
           'technician_credential_renewals',
           'broker_kyc_profiles',
           'broker_kyc_submission_limits',
-          'ai_usage'
+          'ai_usage',
+          'system_health',
+          'staff_shifts',
+          'staff_daily_summaries',
+          'staff_quick_actions',
+          'staff_request_trackers',
+          'staff_exceptions',
+          'staff_inventory_confirmations',
+          'job_costs',
+          'pdf_reports',
+          'vehicles',
+          'launch_evidence',
+          'signed_in_smoke_checks',
+          'gatePasses',
+          'propertyReporters',
+          'broker_listing_claims',
+          'active_contracts',
+          'onboarding_leads',
+          'systemMetrics'
         ]
       ) && hasAdminClaim();
       allow update, delete: if collection != 'tickets' && collection != 'maintenanceTickets' && !(
@@ -2207,7 +2225,25 @@ service cloud.firestore {
           'technician_credential_renewals',
           'broker_kyc_profiles',
           'broker_kyc_submission_limits',
-          'ai_usage'
+          'ai_usage',
+          'system_health',
+          'staff_shifts',
+          'staff_daily_summaries',
+          'staff_quick_actions',
+          'staff_request_trackers',
+          'staff_exceptions',
+          'staff_inventory_confirmations',
+          'job_costs',
+          'pdf_reports',
+          'vehicles',
+          'launch_evidence',
+          'signed_in_smoke_checks',
+          'gatePasses',
+          'propertyReporters',
+          'broker_listing_claims',
+          'active_contracts',
+          'onboarding_leads',
+          'systemMetrics'
         ]
       ) && hasAdminClaim();
     }
