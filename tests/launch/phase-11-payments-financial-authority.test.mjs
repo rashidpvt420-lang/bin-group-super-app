@@ -12,17 +12,17 @@ test('Phase 11: current production payment policy is exactly AED Cash/Cheque', (
   assert.match(config, /PHASE1_METHODS = \["CASH", "CHEQUE"\]/);
   assert.match(config, /bankTransferEnabled: false/);
   assert.match(config, /stripeEnabled: false/);
-  assert.match(phase1, /EXPECTED_METHODS = ['CASH', 'CHEQUE']/);
-  assert.match(launchTruth, /paymentPolicy: 'phase1-manual'/);
-  assert.match(launchTruth, /approvedPaymentMethods: ['CASH', 'CHEQUE']/);
+  assert.match(phase1, /EXPECTED_METHODS = \['CASH', 'CHEQUE'\]/);
+  assert.match(launchTruth, /PHASE1_PAYMENT_POLICY/);
+  assert.match(launchTruth, /approvedMethods: Object\.freeze\(\['CASH', 'CHEQUE'\] as const\)/);\n  assert.match(launchTruth, /bankTransferEnabled: false/);\n  assert.match(launchTruth, /stripeEnabled: false/);
 });
 
 test('Phase 11: Stripe is fail-closed in the deployed runtime', () => {
   const runtime = read('functions/runtime.ts');
   const hold = read('functions/stripePaymentPhase1Hold.ts');
 
-  assert.match(runtime, /export \\* from "\\.\\/stripePaymentPhase1Hold"/);
-  assert.doesNotMatch(runtime, /export \\* from "\\.\\/stripePayment";/);
+  assert.match(runtime, /export \* from "\.\/stripePaymentPhase1Hold";/);
+  assert.doesNotMatch(runtime, /export \* from "\.\/stripePayment";/);
   assert.match(hold, /createStripeCheckoutSession = onCall/);
   assert.match(hold, /enforceAppCheck: true/);
   assert.match(hold, /Stripe\/card collection is disabled/i);
