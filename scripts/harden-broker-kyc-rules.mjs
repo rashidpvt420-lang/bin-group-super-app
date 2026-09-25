@@ -88,7 +88,7 @@ if (rules.includes(legacyAdminRead)) {
 const catchAllStart = rules.indexOf('    match /{collection}/{document=**} {');
 if (catchAllStart < 0) throw new Error('Missing generic Admin collection fallback.');
 const catchAll = rules.slice(catchAllStart);
-const readCondition = catchAll.match(/allow\\s+read:\\s*([^;]+);/)?.[1] || '';
+const readCondition = catchAll.match(/allow\s+read:\s*([^;]+);/)?.[1] || '';
 if (!readCondition.includes("'broker_kyc_submission_limits'") || !readCondition.includes('hasAdminClaim()')) {
   throw new Error('Unable to verify generic Admin read fallback excludes Broker KYC submission limits.');
 }
@@ -101,8 +101,8 @@ if ((rules.split(legacyWriteAnchor).length - 1) === 2) {
 
 const refreshedCatchAllStart = rules.indexOf('    match /{collection}/{document=**} {');
 const refreshedCatchAll = rules.slice(refreshedCatchAllStart);
-const writeConditions = [...refreshedCatchAll.matchAll(/allow\\s+([^:;]+):\\s*([^;]+);/g)]
-  .filter(([, operations]) => /\\b(create|update|delete|write)\\b/.test(operations));
+const writeConditions = [...refreshedCatchAll.matchAll(/allow\s+([^:;]+):\s*([^;]+);/g)]
+  .filter(([, operations]) => /\b(create|update|delete|write)\b/.test(operations));
 if (writeConditions.length !== 2) {
   throw new Error(`Expected two generic Admin write fallback rules, found ${writeConditions.length}`);
 }
