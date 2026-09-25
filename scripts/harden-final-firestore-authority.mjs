@@ -266,7 +266,7 @@ if (globalFallbackStart < 0) {
   throw new Error('[final-firestore-authority] global collection fallback is missing');
 }
 let globalFallback = text.slice(globalFallbackStart);
-const canonicalReadCondition = globalFallback.match(/allow\s+read:\s*([^;]+);/)?.[1] || '';
+const canonicalReadCondition = globalFallback.match(/allow\s+read:\s*if\s*([^;]+);/)?.[1] || '';
 const requiredReadExclusions = [
   'system_secrets',
   'users',
