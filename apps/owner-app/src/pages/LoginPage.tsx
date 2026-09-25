@@ -9,7 +9,7 @@ import { binThemeTokens } from '../theme/binGroupTheme';
 import { useRole } from '../context/RoleContext';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { auth, signInWithPopup } from '../lib/firebase';
-import { signInWithEmailAndPassword, GoogleAuthProvider, sendPasswordResetEmail } from 'firebase/auth';
+import { signInWithEmailAndPassword, GoogleAuthProvider, OAuthProvider, sendPasswordResetEmail } from 'firebase/auth';
 import { Mail, Eye, EyeOff, Shield, TrendingUp, Building, UserCircle, ArrowLeft, Key } from 'lucide-react';
 
 type NoticeState = { type: 'success' | 'error' | 'info' | 'warning'; text: string };
@@ -84,6 +84,25 @@ const LoginPage: React.FC = () => {
             const result = await signInWithPopup(auth, provider);
             if (result.user) {
                 console.log("🛡️ [AUTH] Google Auth Success:", result.user.email);
+                await refreshRole();
+                if (safeReturnTo && (!intendedRoleKey || intendedRoleKey === 'owner')) navigate(safeReturnTo, { replace: true });
+            }
+        } catch (err: any) {
+            setNotice({ type: 'error', text: getFriendlyAuthError(err) });
+            setLocalLoading(false);
+        }
+    };
+
+    const handleAppleLogin = async () => {
+        setLocalLoading(true);
+        setNotice(null);
+        try {
+            const provider = new OAuthProvider('apple.com');
+            provider.addScope('email');
+            provider.addScope('name');
+            const result = await signInWithPopup(auth, provider);
+            if (result.user) {
+                await result.user.getIdToken(true).catch(() => undefined);
                 await refreshRole();
                 if (safeReturnTo && (!intendedRoleKey || intendedRoleKey === 'owner')) navigate(safeReturnTo, { replace: true });
             }
@@ -260,6 +279,15 @@ const LoginPage: React.FC = () => {
                                     sx={{ py: 1.5, borderRadius: 4, fontWeight: 900, borderColor: 'rgba(255,255,255,0.1)', color: '#FFF', '&:hover': { borderColor: binThemeTokens.gold, bgcolor: 'rgba(198,167,94,0.05)' } }}
                                 >
                                     {t('login.google')}
+                                </Button>
+                                <Button
+                                    fullWidth
+                                    variant="outlined"
+                                    onClick={handleAppleLogin}
+                                    disabled={localLoading}
+                                    sx={{ py: 1.5, borderRadius: 4, fontWeight: 900, borderColor: 'rgba(255,255,255,0.1)', color: '#FFF', '&:hover': { borderColor: binThemeTokens.gold, bgcolor: 'rgba(198,167,94,0.05)' } }}
+                                >
+                                    {tx('login.apple', 'Continue with Apple')}
                                 </Button>
                             </Stack>
                         </form>
