@@ -731,3 +731,44 @@ export async function generateIntegrityAuditPDF(data: { propertyId: string; prop
 export async function generateContractPDF(data: any): Promise<string> {
     return (await generateContractPdfArtifact(data)).pdfUrl;
 }
+
+
+export async function generateMobilizationInvoicePdfArtifact(data: any): Promise<CanonicalPdfArtifact> {
+    const PDFDocument = await loadPdfKit();
+    const invoiceId = textValue(data.invoiceId);
+    const ownerId = textValue(data.ownerId || data.ownerUid, '');
+    const contractId = textValue(data.contractId, '');
+    const amount = Number(data.amount || data.amountPaid || 0);
+    const proofHash = textValue(data.proofHash, '');
+    if (!invoiceId || !contractId || !ownerId || !Number.isFinite(amount) || amount <= 0 || !/^[a-f0-9]{64}$/i.test(proofHash)) {
+        throw new Error('Canonical invoice fields are incomplete.');
+    }
+    return new Promise<CanonicalPdfArtifact>((resolve, reject) => {
+        const doc = new (PDFDocument as any)({ margin: 50, size: 'A4', info: { Title: `BIN GROUP Invoice ${invoiceId}`, Author: 'BIN GROUP Super App' } });
+        const chunks: Buffer[] = [];
+        doc.on('data', (chunk: Buffer) => chunks.push(chunk));
+        doc.on('error', reject);
+        doc.on('end', async () => {
+            try {
+                const buffer = Buffer.concat(chunks);
+                const documentHash = crypto.createHash('sha256').update(JSON.stringify({ invoiceId, contractId, ownerId, amount, proofHash, status: 'PAID' })).digest('hex');
+                resolve(await savePdf(buffer, `invoices/${invoiceId}/mobilization-invoice.pdf`, {
+                    invoiceId, contractId, ownerId, documentType: 'mobilization_deposit_invoice',
+                    language: 'en-ar', documentHash, proofHash, status: 'PAID'
+                }));
+            } catch (error) { reject(error); }
+        });
+        doc.fillColor(GOLD).fontSize(22).text('BIN GROUP L.L.C - S.P.C', { align: 'center' });
+        doc.fillColor(INK).fontSize(13).text('PAID MOBILIZATION INVOICE', { align: 'center' });
+        doc.fillColor(MUTED).fontSize(10).text(shapeArabicText('فاتورة دفعة التفعيل - مدفوعة'), { align: 'center' });
+        doc.moveDown();
+        row(doc, 'Invoice ID / رقم الفاتورة', invoiceId);
+        row(doc, 'Contract ID / رقم العقد', contractId);
+        row(doc, 'Amount Paid / المبلغ المدفوع', money(amount));
+        row(doc, 'Currency / العملة', 'AED / درهم إماراتي');
+        row(doc, 'Payment Reference / مرجع الدفع', textValue(data.paymentReferenceId));
+        row(doc, 'Verification Hash / رمز التحقق', proofHash);
+        para(doc, 'This invoice is generated only from the server-authoritative approved payment record.', 'تم إنشاء هذه الفاتورة فقط من سجل الدفع المعتمد والموثق على الخادم.');
+        doc.end();
+    });
+}
