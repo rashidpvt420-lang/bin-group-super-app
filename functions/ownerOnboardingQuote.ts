@@ -23,6 +23,24 @@ function number(value: unknown, fallback = 0) {
   return Number.isFinite(parsed) ? Math.max(parsed, 0) : fallback;
 }
 
+function rejectNegativeNumericInputs(property: PropertyInput, index: number) {
+  for (const key of ["sqft", "units", "beds", "bedrooms", "rooms", "annualRent", "annualRevenue", "age", "floors", "lifts", "hvacCount", "offices", "shops"]) {
+    const raw = property[key];
+    if (raw === undefined || raw === null || raw === "") continue;
+    const parsed = typeof raw === "string" ? Number.parseFloat(raw) : Number(raw);
+    if (Number.isFinite(parsed) && parsed < 0) throw new Error(`Property ${index + 1} has a negative ${key}; pricing inputs cannot be negative.`);
+  }
+  for (const profileKey of ["gymProfile", "mosqueProfile"]) {
+    const profile = property[profileKey];
+    if (!profile || typeof profile !== "object") continue;
+    for (const [key, raw] of Object.entries(profile)) {
+      if (typeof raw !== "number" && typeof raw !== "string") continue;
+      const parsed = typeof raw === "string" ? Number.parseFloat(raw) : Number(raw);
+      if (Number.isFinite(parsed) && parsed < 0) throw new Error(`Property ${index + 1} has a negative ${profileKey}.${key}; pricing inputs cannot be negative.`);
+    }
+  }
+}
+
 const money = normalizeAedMoney;
 
 function text(value: unknown) {
@@ -235,6 +253,7 @@ export function calculateOwnerOnboardingQuote(properties: unknown, addOns: unkno
   const contractMode = contractModes[0];
 
   const propertyQuotes = normalizedProperties.map((cleanProperty: PropertyInput, index: number) => {
+    rejectNegativeNumericInputs(cleanProperty, index);
     if (!text(cleanProperty.emirate) || !text(cleanProperty.propertyType)) {
       throw new Error(`Property ${index + 1} is missing emirate or property type.`);
     }
