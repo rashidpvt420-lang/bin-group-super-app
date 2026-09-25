@@ -108,6 +108,38 @@ type PayoutRequest = {
     updatedAt?: any;
 };
 
+type BrokerKycReviewSummary = {
+    brokerId: string;
+    profile?: {
+        displayName?: string;
+        email?: string;
+        companyName?: string;
+        brokerTerritory?: string;
+    };
+    kyc?: {
+        exists?: boolean;
+        brokerKycStatus?: string;
+        reraStatus?: string;
+        profileCompletionScore?: number;
+        reraLicenseMasked?: string;
+        identityEvidencePresent?: boolean;
+        bankName?: string;
+        bankAccountHolder?: string;
+        bankIbanMasked?: string;
+        commissionAgreementAccepted?: boolean;
+        commissionTermsVersion?: string;
+        submissionHashPresent?: boolean;
+        approvalBound?: boolean;
+        reviewReason?: string;
+    };
+    documents?: {
+        count?: number;
+        types?: string[];
+        requiredPresent?: boolean;
+    };
+    sensitiveValuesMasked?: boolean;
+};
+
 const statusText = (value?: string) => String(value || 'PENDING').replaceAll('_', ' ').toUpperCase();
 
 function chipColor(status?: string) {
@@ -134,13 +166,15 @@ function brokerNeedsReview(broker: Broker) {
     return !['APPROVED', 'VERIFIED'].includes(status) || ['PENDING REVIEW', 'PENDING', 'INCOMPLETE'].includes(kyc);
 }
 
-function missingKycItems(broker: Broker) {
+function missingKycItems(broker: Broker, summary?: BrokerKycReviewSummary) {
+    const kyc = summary?.kyc;
     return [
-        { label: 'RERA license', missing: !broker.reraLicense },
-        { label: 'ID / passport / trade license', missing: !broker.tradeLicenseNumber && !broker.emiratesIdNumber && !broker.passportNumber },
-        { label: 'Bank name', missing: !broker.bankName },
-        { label: 'IBAN', missing: !broker.bankIban && !broker.iban },
-        { label: 'Commission agreement', missing: broker.commissionAgreementAccepted !== true },
+        { label: 'RERA license', missing: summary ? !kyc?.reraLicenseMasked : !broker.reraLicense },
+        { label: 'ID / passport / trade license', missing: summary ? kyc?.identityEvidencePresent !== true : !broker.tradeLicenseNumber && !broker.emiratesIdNumber && !broker.passportNumber },
+        { label: 'Bank name', missing: summary ? !kyc?.bankName : !broker.bankName },
+        { label: 'IBAN', missing: summary ? !kyc?.bankIbanMasked : !broker.bankIban && !broker.iban },
+        { label: 'Commission agreement', missing: summary ? kyc?.commissionAgreementAccepted !== true : broker.commissionAgreementAccepted !== true },
+        { label: 'Required documents', missing: summary ? summary.documents?.requiredPresent !== true : false },
     ].filter((item) => item.missing).map((item) => item.label);
 }
 
@@ -149,6 +183,7 @@ export default function BrokerManagementPage() {
     const [brokers, setBrokers] = useState<Broker[]>([]);
     const [documents, setDocuments] = useState<Record<string, BrokerDocument[]>>({});
     const [payoutRequests, setPayoutRequests] = useState<PayoutRequest[]>([]);
+    const [kycReviewSummaries, setKycReviewSummaries] = useState<Record<string, BrokerKycReviewSummary>>({});
     const [selectedBroker, setSelectedBroker] = useState<Broker | null>(null);
     const [reviewBroker, setReviewBroker] = useState<Broker | null>(null);
     const [reviewDecision, setReviewDecision] = useState<'APPROVE' | 'REJECT'>('APPROVE');
@@ -200,13 +235,45 @@ export default function BrokerManagementPage() {
     }), [brokers, payoutRequests]);
 
     const selectedDocuments = selectedBroker ? documents[selectedBroker.id] || [] : [];
-    const selectedMissing = selectedBroker ? missingKycItems(selectedBroker) : [];
+    const selectedSummary = selectedBroker ? kycReviewSummaries[selectedBroker.id] : undefined;
+    const selectedMissing = selectedBroker ? missingKycItems(selectedBroker, selectedSummary) : [];
 
-    const openReview = (broker: Broker, decision: 'APPROVE' | 'REJECT') => {
-        setReviewBroker(broker);
-        setReviewDecision(decision);
-        setReviewReason('');
+    const loadKycReviewSummary = async (broker: Broker) => {
+        const existing = kycReviewSummaries[broker.id];
+        if (existing) return existing;
+        const callable = httpsCallable(functions, 'getAdminBrokerKycReviewSummary');
+        const result = await callable({ brokerId: broker.id });
+        const summary = result.data as BrokerKycReviewSummary;
+        setKycReviewSummaries((current) => ({ ...current, [broker.id]: summary }));
+        return summary;
+    };
+
+    const openDossier = async (broker: Broker) => {
+        setBusy(`summary-${broker.id}`);
         setNotice('');
+        try {
+            await loadKycReviewSummary(broker);
+            setSelectedBroker(broker);
+        } catch (error: any) {
+            setNotice(error?.message || 'Broker KYC review summary could not be loaded.');
+        } finally {
+            setBusy('');
+        }
+    };
+
+    const openReview = async (broker: Broker, decision: 'APPROVE' | 'REJECT') => {
+        setBusy(`summary-${broker.id}`);
+        setNotice('');
+        try {
+            await loadKycReviewSummary(broker);
+            setReviewBroker(broker);
+            setReviewDecision(decision);
+            setReviewReason('');
+        } catch (error: any) {
+            setNotice(error?.message || 'Broker KYC review summary could not be loaded.');
+        } finally {
+            setBusy('');
+        }
     };
 
     const submitKycReview = async () => {
@@ -333,9 +400,9 @@ export default function BrokerManagementPage() {
                                                 <Typography variant="caption" display="block" color={broker.commissionAgreementAccepted ? 'success.main' : 'warning.main'}>{broker.commissionAgreementAccepted ? 'Terms accepted' : 'Terms missing'}</Typography>
                                             </TableCell>
                                             <TableCell align={isRTL ? 'left' : 'right'}>
-                                                <Tooltip title="View KYC dossier"><IconButton onClick={() => setSelectedBroker(broker)}><VisibilityIcon /></IconButton></Tooltip>
-                                                <Tooltip title="Approve KYC"><span><IconButton disabled={busy === `kyc-${broker.id}`} color="success" onClick={() => openReview(broker, 'APPROVE')}><CheckCircleIcon /></IconButton></span></Tooltip>
-                                                <Tooltip title="Reject KYC"><span><IconButton disabled={busy === `kyc-${broker.id}`} color="error" onClick={() => openReview(broker, 'REJECT')}><CancelIcon /></IconButton></span></Tooltip>
+                                                <Tooltip title="View KYC dossier"><span><IconButton disabled={busy === `summary-${broker.id}`} onClick={() => void openDossier(broker)}><VisibilityIcon /></IconButton></span></Tooltip>
+                                                <Tooltip title="Approve KYC"><span><IconButton disabled={busy === `kyc-${broker.id}`} color="success" onClick={() => void openReview(broker, 'APPROVE')}><CheckCircleIcon /></IconButton></span></Tooltip>
+                                                <Tooltip title="Reject KYC"><span><IconButton disabled={busy === `kyc-${broker.id}`} color="error" onClick={() => void openReview(broker, 'REJECT')}><CancelIcon /></IconButton></span></Tooltip>
                                             </TableCell>
                                         </TableRow>
                                     );
@@ -446,8 +513,8 @@ export default function BrokerManagementPage() {
                 </DialogContent>
                 <DialogActions sx={{ p: 2 }}>
                     <Button onClick={() => setSelectedBroker(null)}>Close</Button>
-                    {selectedBroker && <Button color="error" onClick={() => openReview(selectedBroker, 'REJECT')}>Reject</Button>}
-                    {selectedBroker && <Button variant="contained" color="success" onClick={() => openReview(selectedBroker, 'APPROVE')}>Approve KYC</Button>}
+                    {selectedBroker && <Button color="error" onClick={() => void openReview(selectedBroker, 'REJECT')}>Reject</Button>}
+                    {selectedBroker && <Button variant="contained" color="success" onClick={() => void openReview(selectedBroker, 'APPROVE')}>Approve KYC</Button>}
                 </DialogActions>
             </Dialog>
 
@@ -456,8 +523,8 @@ export default function BrokerManagementPage() {
                 <DialogContent>
                     <Stack spacing={2} sx={{ pt: 1 }}>
                         <Typography>{reviewBroker?.displayName || reviewBroker?.email}</Typography>
-                        {reviewBroker && missingKycItems(reviewBroker).length > 0 && reviewDecision === 'APPROVE' && (
-                            <Alert severity="warning">Approval may fail until missing fields are fixed: {missingKycItems(reviewBroker).join(', ')}</Alert>
+                        {reviewBroker && missingKycItems(reviewBroker, kycReviewSummaries[reviewBroker.id]).length > 0 && reviewDecision === 'APPROVE' && (
+                            <Alert severity="warning">Approval may fail until missing private-vault evidence is fixed: {missingKycItems(reviewBroker, kycReviewSummaries[reviewBroker.id]).join(', ')}</Alert>
                         )}
                         <TextField
                             label={reviewDecision === 'REJECT' ? 'Rejection reason' : 'Review note'}
