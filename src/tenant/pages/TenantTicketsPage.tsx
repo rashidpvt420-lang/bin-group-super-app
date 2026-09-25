@@ -7,38 +7,34 @@ import { useRole } from '../../context/RoleContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { calculateDistanceKm, calculateEtaMinutes, getTechnicianLocation, getTicketJobLocation } from '../../utils/liveTracking';
+import { normalizeTicketStatus } from '../../utils/ticketStatus';
 
 const normalizeEmail = (value: unknown) => String(value || '').trim().toLowerCase();
 const label = (value: unknown) => String(value || 'PENDING').replace(/_/g, ' ').toUpperCase();
 
 const STATUS_CONFIG: Record<string, { color: string; icon: any }> = {
     OPEN: { color: 'rgba(255,255,255,0.48)', icon: Clock },
-    open: { color: 'rgba(255,255,255,0.48)', icon: Clock },
     PENDING_ASSIGNMENT: { color: 'rgba(255,255,255,0.48)', icon: Clock },
     PENDING_SCHEDULING: { color: '#38bdf8', icon: CalendarClock },
-    AWAITING_TENANT_QUOTE_APPROVAL: { color: '#f59e0b', icon: CalendarClock },
     SCHEDULED: { color: '#22c55e', icon: CalendarClock },
     RESCHEDULE_REQUESTED: { color: '#38bdf8', icon: CalendarClock },
     CANCELLATION_REQUESTED: { color: '#ef4444', icon: AlertCircle },
-    accepted: { color: '#3b82f6', icon: Clock },
     ASSIGNED: { color: '#3b82f6', icon: Clock },
-    on_the_way: { color: binThemeTokens.gold, icon: Navigation },
+    ACCEPTED: { color: '#3b82f6', icon: Clock },
     EN_ROUTE: { color: binThemeTokens.gold, icon: Navigation },
-    arrived: { color: '#8b5cf6', icon: CalendarClock },
     ARRIVED: { color: '#8b5cf6', icon: CalendarClock },
-    in_progress: { color: '#10b981', icon: Play },
     IN_PROGRESS: { color: '#10b981', icon: Play },
-    completed: { color: '#10b981', icon: CheckCircle2 },
+    WAITING_PARTS: { color: '#f59e0b', icon: Clock },
+    COMPLETED_PENDING_APPROVAL: { color: '#10b981', icon: CheckCircle2 },
     COMPLETED: { color: '#10b981', icon: CheckCircle2 },
-    closed: { color: '#10b981', icon: CheckCircle2 },
+    TENANT_APPROVED: { color: '#10b981', icon: CheckCircle2 },
     CLOSED: { color: '#10b981', icon: CheckCircle2 },
     CANCELLED: { color: '#ef4444', icon: AlertCircle },
-    QUOTE_REJECTED: { color: '#ef4444', icon: AlertCircle },
-    emergency: { color: '#ef4444', icon: AlertCircle },
-    emergency_submitted: { color: '#ef4444', icon: AlertCircle },
+    ON_HOLD: { color: '#f59e0b', icon: AlertCircle },
+    ESCALATED: { color: '#ef4444', icon: AlertCircle },
 };
 
-const ACTIVE_STATUSES = ['accepted', 'ASSIGNED', 'on_the_way', 'EN_ROUTE', 'arrived', 'ARRIVED', 'in_progress', 'IN_PROGRESS'];
+const ACTIVE_STATUSES = ['ASSIGNED', 'ACCEPTED', 'EN_ROUTE', 'ARRIVED', 'IN_PROGRESS', 'WAITING_PARTS', 'ESCALATED'];
 
 function createdMillis(ticket: any) {
     if (ticket.createdAt?.toDate) return ticket.createdAt.toDate().getTime();
@@ -130,7 +126,7 @@ export default function TenantTicketsPage() {
 
             <Stack spacing={2}>
                 {tickets.map((ticket) => {
-                    const status = String(ticket.status || 'OPEN');
+                    const status = normalizeTicketStatus(ticket.status);
                     const config = STATUS_CONFIG[status] || STATUS_CONFIG[ticket.priority === 'emergency' ? 'emergency' : 'ASSIGNED'];
                     const Icon = config.icon;
                     const isActive = ACTIVE_STATUSES.includes(status);
