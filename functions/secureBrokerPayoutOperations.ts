@@ -84,7 +84,7 @@ async function requireBroker(auth: any) {
   }
   if (
     profile.reraVerified !== true ||
-    lower(profile.brokerKycStatus) !== "verified" ||
+    !["approved", "verified"].includes(lower(profile.brokerKycStatus)) ||
     profile.ibanVerified !== true ||
     privateKyc.reraVerified !== true ||
     privateKyc.ibanVerified !== true ||
