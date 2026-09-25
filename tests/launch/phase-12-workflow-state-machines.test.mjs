@@ -96,6 +96,23 @@ test('Phase 12 Broker KYC and inspection new writes are canonical while legacy r
   assert.doesNotMatch(tenantInspection, /status:\s*"submitted"/);
 });
 
+test('Phase 12 inspection-first writes keep prerequisites out of primary financial lifecycle states', async () => {
+  const [submission, completion] = await Promise.all([
+    read('functions/inspectionFirstOwnerOnboarding.ts'),
+    read('functions/ownerInspectionCompletion.ts'),
+  ]);
+
+  for (const source of [submission, completion]) {
+    assert.doesNotMatch(source, /status:\s*"SIGNED_AWAITING_15_PERCENT_PAYMENT"/);
+    assert.doesNotMatch(source, /contractStatus:\s*"signed_awaiting_payment"/);
+    assert.doesNotMatch(source, /status:\s*"AWAITING_15_PERCENT_PAYMENT"/);
+    assert.match(source, /status:\s*"SIGNED"[\s\S]*?paymentStatus:\s*"PENDING_ADMIN_PAYMENT_VERIFICATION"/);
+    assert.match(source, /status:\s*"PAYMENT_PENDING"[\s\S]*?inspectionStatus:\s*"COMPLETED"/);
+  }
+  assert.doesNotMatch(submission, /status:\s*"AWAITING_SITE_INSPECTION"/);
+  assert.match(submission, /status:\s*"NOT_DUE_UNTIL_INSPECTION_COMPLETE"[\s\S]*?paymentStatus:\s*"NOT_DUE_UNTIL_INSPECTION_COMPLETE"/);
+});
+
 test('Phase 12 payment, quote, contract, tenant-link and technician-job transitions are explicit', async () => {
   const source = await read('functions/canonicalStateMachines.ts');
 
