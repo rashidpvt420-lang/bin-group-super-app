@@ -226,14 +226,15 @@ export const adminReviewBrokerKyc = onCall({ cors: true, region: "europe-west3",
   const actorId = request.auth?.uid || "admin";
   const actorEmail = request.auth?.token?.email || null;
   const approved = decision === "APPROVE";
-  const currentKycState = normalizeWorkflowState("BROKER_KYC", broker.brokerKycStatus || broker.kycStatus || broker.status, "NOT_SUBMITTED");
   const nextKycState = approved ? "APPROVED" : "REJECTED";
-  assertWorkflowTransition("BROKER_KYC", currentKycState, nextKycState);
   let releasedCommissions = 0;
 
   await db.runTransaction(async (transaction) => {
     const freshBrokerSnap = await transaction.get(brokerRef);
     if (!freshBrokerSnap.exists) throw new HttpsError("not-found", "Broker profile not found.");
+    const freshBroker = freshBrokerSnap.data() || {};
+    const currentKycState = normalizeWorkflowState("BROKER_KYC", freshBroker.brokerKycStatus || freshBroker.kycStatus || freshBroker.status, "NOT_SUBMITTED");
+    assertWorkflowTransition("BROKER_KYC", currentKycState, nextKycState);
     const freshDocuments = await Promise.all(
       verifiedDocumentRefs.map((documentRef) => transaction.get(documentRef)),
     );
