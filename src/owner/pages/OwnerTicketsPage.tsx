@@ -22,6 +22,7 @@ import {
     calculateDistanceKm, calculateEtaMinutes,
     getTechnicianLocation, getTicketJobLocation
 } from '../../utils/liveTracking';
+import { normalizeCanonicalState } from '../../lib/canonicalStateMachines';
 
 const STATUS_CONFIG: Record<string, { color: string; icon: any }> = {
     'OPEN':              { color: 'rgba(255,255,255,0.4)', icon: Clock },
@@ -112,7 +113,7 @@ export default function OwnerTicketsPage() {
 
             <Stack spacing={2}>
                 {tickets.map(ticket => {
-                    const canonicalStatus = String(ticket.status || 'OPEN').trim().replace(/[\s-]+/g, '_').toUpperCase().replace('ON_THE_WAY', 'EN_ROUTE');
+                    const canonicalStatus = normalizeCanonicalState('ticket', ticket.status) || 'OPEN';
         const sCfg = STATUS_CONFIG[canonicalStatus] || STATUS_CONFIG['OPEN'];
                     const Icon = sCfg.icon;
                     const isActive = ACTIVE_STATUSES.includes(canonicalStatus);
