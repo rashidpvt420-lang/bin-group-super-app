@@ -25,7 +25,7 @@ export default function EmergencyCommandCenterPage() {
 
     useEffect(() => {
         // Monitor all emergency tickets
-        // priority = 'emergency' or category = 'emergency' or status = 'emergency_submitted'
+        // Emergency is priority/category metadata; ticket status stays on the canonical lifecycle.
         const q = query(
             collection(db, 'maintenanceTickets'),
             where('priority', 'in', ['emergency', 'EMERGENCY', 'urgent', 'URGENT', 'high', 'HIGH', 'sos', 'SOS'])
@@ -220,7 +220,7 @@ export default function EmergencyCommandCenterPage() {
                                                 label={String(emerg.status || 'SOS').replace(/_/g, ' ')} 
                                                 size="small" 
                                                 sx={{ 
-                                                    bgcolor: emerg.status === 'emergency_submitted' ? 'rgba(239,68,68,0.15)' : 'rgba(255,255,255,0.08)', 
+                                                    bgcolor: String(emerg.priority || '').toUpperCase() === 'EMERGENCY' ? 'rgba(239,68,68,0.15)' : 'rgba(255,255,255,0.08)', 
                                                     color: emerg.status === 'emergency_submitted' ? '#ef4444' : 'rgba(255,255,255,0.5)',
                                                     fontWeight: 950,
                                                     fontSize: '0.6rem'
