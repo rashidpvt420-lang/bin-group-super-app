@@ -191,6 +191,33 @@ service cloud.firestore {
       );
     }
 
+    function canonicalTicketStatus(value) {
+      return value in [
+        'OPEN',
+        'PENDING_ASSIGNMENT',
+        'PENDING_SCHEDULING',
+        'SCHEDULED',
+        'ASSIGNED',
+        'ACCEPTED',
+        'EN_ROUTE',
+        'ARRIVED',
+        'IN_PROGRESS',
+        'WAITING_PARTS',
+        'COMPLETED_PENDING_APPROVAL',
+        'COMPLETED',
+        'TENANT_APPROVED',
+        'CLOSED',
+        'RESCHEDULE_REQUESTED',
+        'CANCELLATION_REQUESTED',
+        'CANCELLED',
+        'ESCALATED',
+        'REOPENED',
+        'ON_HOLD',
+        'DISPUTED',
+        'REJECTED'
+      ];
+    }
+
     function safeTicketUpdateByActor() {
       let authenticated = signedIn();
       let role = authenticated
@@ -213,7 +240,9 @@ service cloud.firestore {
         ('permissions' in request.auth.token && request.auth.token.permissions.get('canDispatchJobs', false) == true) ||
         role in ['operations_admin', 'operations_manager', 'dispatcher']
       );
-      return authenticated && (
+      return authenticated &&
+        (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['status']) || canonicalTicketStatus(request.resource.data.status)) &&
+        (
         (admin && isNotSuspended()) ||
         (!admin && dispatcher && safeDispatcherTicketUpdate()) ||
         (!admin && !dispatcher && role in ['', 'tenant'] && tenantOwns(resource.data) && safeTenantEvidenceUpdate()) ||
@@ -696,17 +725,9 @@ service cloud.firestore {
         isNotSuspended() &&
         request.resource.data.get('status', resource.data.get('status', '')) in [
           'OPEN',
-          'open',
           'PENDING_ASSIGNMENT',
-          'pending_assignment',
-          'EMERGENCY_SUBMITTED',
-          'emergency_submitted',
-          'ASSIGNED',
-          'assigned',
-          'AUTO_ASSIGNED',
-          'auto_assigned',
-          'REASSIGNED',
-          'reassigned'
+          'SCHEDULED',
+          'ASSIGNED'
         ];
     }
 
