@@ -2,7 +2,7 @@ import { FieldValue } from "firebase-admin/firestore";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import * as admin from "firebase-admin";
-import { generateContractPDF } from "./pdfEngine";
+import { generateContractPdfArtifact } from "./pdfEngine";
 
 if (!admin.apps.length) {
   admin.initializeApp();
@@ -225,9 +225,15 @@ async function createRenewalPdfRecord(record: RenewalRecord) {
   const pdfRef = db.collection("document_generation_requests").doc(pdfRecordId);
 
   let pdfUrl = "";
+  let pdfSha256 = "";
+  let pdfStoragePath = "";
+  let pdfGeneration = "";
   if (record.contractId) {
     try {
-      pdfUrl = await generateContractPDF({
+      const contractSnap = await db.collection("contracts").doc(record.contractId).get();
+      if (!contractSnap.exists) throw new Error("Canonical renewal contract is missing.");
+      const canonicalContract = contractSnap.data() || {};
+      const artifact = await generateContractPdfArtifact({ ...canonicalContract,
         contractId: record.contractId,
         propertyId: record.propertyId,
         propertyName: record.propertyName,
@@ -245,6 +251,10 @@ async function createRenewalPdfRecord(record: RenewalRecord) {
     type: "CONTRACT_RENEWAL_NOTICE_PDF",
     status: pdfUrl ? "GENERATED" : "PENDING_GENERATION",
     pdfUrl: pdfUrl || null,
+    pdfSha256: pdfSha256 || null,
+    storagePath: pdfStoragePath || null,
+    pdfGeneration: pdfGeneration || null,
+    canonicalPdfSource: "SERVER_CONTRACT_RENEWAL_SYSTEM",
     contractId: record.contractId,
     leaseId: record.leaseId,
     propertyId: record.propertyId,
