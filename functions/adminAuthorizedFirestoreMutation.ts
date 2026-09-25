@@ -14,7 +14,7 @@ const STAFF_ROLES = new Set([
 ]);
 const INACTIVE = new Set(["suspended", "disabled", "rejected", "inactive", "offboarded", "deleted"]);
 const CANONICAL_FOUNDER_EMAIL = "ceo@bin-groups.com";
-const MAX_OPERATIONS = 200;
+const MAX_OPERATIONS = 400;
 
 type MutationKind = "create" | "set" | "update" | "delete";
 type MutationOperation = {
@@ -316,8 +316,10 @@ export const adminAuthorizedFirestoreMutation = onCall(
         batch.create(ref, data);
       } else if (operation.kind === "update") {
         batch.update(ref, data);
+      } else if (operation.merge) {
+        batch.set(ref, data, { merge: true });
       } else {
-        batch.set(ref, data, operation.merge ? { merge: true } : undefined);
+        batch.set(ref, data);
       }
     }
 
