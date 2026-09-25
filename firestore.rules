@@ -1516,9 +1516,9 @@ service cloud.firestore {
 
     match /brokerReferrals/{referralId} {
       allow read: if isAdmin() || brokerOwns(resource.data);
-      allow create: if safeBrokerReferralCreate(request.resource.data, referralId);
-      allow update: if isAdmin() || safeBrokerReferralUpdate();
-      allow delete: if isAdmin();
+      // Legacy Broker referral writes are retired; canonical submissions use a callable.
+      allow create: if false;
+      allow update, delete: if isAdmin();
     }
 
     match /broker_payout_requests/{requestId} {
@@ -1974,9 +1974,9 @@ service cloud.firestore {
     }
     match /referrals/{referralId} {
       allow read: if isAdmin() || (signedIn() && resource.data.get('brokerId', null) == request.auth.uid);
-      allow create: if safeBrokerReferralCreate(request.resource.data, referralId);
-      allow update: if isAdmin() || safeBrokerReferralUpdate();
-      allow delete: if isAdmin();
+      // Broker referrals are server-created so listing/Owner linkage cannot be forged.
+      allow create: if false;
+      allow update, delete: if isAdmin();
     }
     match /broker_commissions/{commissionId} {
       allow read: if isAdmin() || (signedIn() && resource.data.get('brokerId', null) == request.auth.uid);
