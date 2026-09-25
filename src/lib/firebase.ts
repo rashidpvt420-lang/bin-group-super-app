@@ -143,6 +143,7 @@ const isCapacitorNative = Boolean(
   ),
 );
 const isCapacitorAndroid = isCapacitorNative && capacitorPlatform === 'android';
+const isCapacitorIos = isCapacitorNative && capacitorPlatform === 'ios';
 const nativeAppCheckBridge = registerPlugin<NativeAppCheckBridge>('FirebaseAppCheckBridge');
 
 const validateNativeAppCheckToken = (result: NativeAppCheckTokenResult) => {
@@ -155,10 +156,11 @@ const validateNativeAppCheckToken = (result: NativeAppCheckTokenResult) => {
 };
 
 export const forceNativeAppCheckRefresh = async (): Promise<void> => {
-  if (!isCapacitorAndroid) return;
+  if (!isCapacitorNative) return;
   const bridge = nativeAppCheckBridge;
   if (!bridge || typeof bridge.getAppCheckToken !== 'function') {
-    throw new Error('Native Play Integrity App Check bridge plugin unavailable.');
+    if (isCapacitorAndroid) throw new Error('Native Play Integrity App Check bridge plugin unavailable.');
+    throw new Error('Native iOS App Attest App Check bridge plugin unavailable.');
   }
   validateNativeAppCheckToken(await bridge.getAppCheckToken({ forceRefresh: true }));
 };
@@ -224,7 +226,9 @@ const appCheckRequired = import.meta.env.PROD && !localAppCheckHost;
 const webAppCheckRequired = appCheckRequired && !isCapacitorNative;
 const resolvedAppCheckProvider = isCapacitorAndroid
   ? 'play-integrity-native'
-  : webAppCheckProvider;
+  : isCapacitorIos
+    ? 'app-attest-native'
+    : webAppCheckProvider;
 let appCheckInitialized = false;
 export let appCheck = null as ReturnType<typeof initializeAppCheck> | null;
 
@@ -234,18 +238,15 @@ if (appCheckRequired && !appCheckExplicitlyEnabled) {
 if (webAppCheckRequired && !appCheckSiteKey) {
   throw new Error('[Firebase] App Check site key is required for production web builds.');
 }
-if (appCheckRequired && isCapacitorNative && !isCapacitorAndroid) {
-  throw new Error('[Firebase] Native App Check provider is not configured for this platform.');
-}
-
 if (appCheckExplicitlyEnabled && typeof window !== 'undefined') {
   try {
-    if (isCapacitorAndroid) {
+    if (isCapacitorNative) {
       const provider = new CustomProvider({
         getToken: async () => {
           const bridge = nativeAppCheckBridge;
           if (!bridge || typeof bridge.getAppCheckToken !== 'function') {
-            throw new Error('Native Play Integrity App Check bridge plugin unavailable.');
+            if (isCapacitorAndroid) throw new Error('Native Play Integrity App Check bridge plugin unavailable.');
+            throw new Error('Native iOS App Attest App Check bridge plugin unavailable.');
           }
 
           // Normal Web SDK refreshes reuse a valid native token. Explicit recovery
