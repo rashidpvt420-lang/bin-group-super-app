@@ -27,12 +27,7 @@ export default function BrokerDashboardPage() {
     if (!user?.uid) return;
     const unsubs: Array<() => void> = [];
     const buckets: Record<string, any[]> = {};
-    const identitySources = [
-      { field: 'brokerId', value: user.uid },
-      { field: 'brokerUid', value: user.uid },
-      { field: 'createdByUid', value: user.uid },
-      { field: 'brokerEmail', value: normalizeEmail(user.email) },
-    ].filter((source) => source.value);
+    const identitySources = [{ field: 'brokerId', value: user.uid }];
 
     const refreshLeads = () => {
       const rows = uniqueRows(Object.entries(buckets).filter(([key]) => key.startsWith('brokerLeads:')).flatMap(([, value]) => value)).sort((a, b) => rowTime(b) - rowTime(a));
