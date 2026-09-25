@@ -12,10 +12,12 @@ export type StateMachineDefinition = Readonly<{
   transitions: Readonly<Record<string, readonly string[]>>;
 }>;
 
-const key = (value: unknown) => String(value || '')
+const rawKey = (value: unknown) => String(value || '')
   .trim()
-  .replace(/[\s-]+/g, '_')
-  .toUpperCase();
+  .replace(/[\s-]+/g, '_');
+
+const keyFor = (machineName: string, value: unknown) =>
+  machineName === 'onboarding' ? rawKey(value).toLowerCase() : rawKey(value).toUpperCase();
 
 const machine = (
   states: readonly string[],
@@ -377,73 +379,73 @@ export const TECHNICIAN_JOB_STATE_MACHINE = machine(
 
 export const ONBOARDING_STATE_MACHINE = machine(
   [
-    'DRAFT',
-    'ACCOUNT_CREATED',
-    'PROPERTY_DETAILS_COMPLETE',
-    'DOCUMENTS_PENDING',
-    'QUOTE_READY',
-    'CONTRACT_SELECTED',
-    'DEPOSIT_PENDING',
-    'DEPOSIT_PROCESSING',
-    'DEPOSIT_PAID',
-    'IDENTITY_PENDING',
-    'SIGNATURE_PENDING',
-    'ADMIN_REVIEW',
-    'CHANGES_REQUESTED',
-    'APPROVED',
-    'ACTIVE',
-    'REJECTED',
-    'EXPIRED',
-    'SUSPENDED',
+    'draft',
+    'account_created',
+    'property_details_complete',
+    'documents_pending',
+    'quote_ready',
+    'contract_selected',
+    'deposit_pending',
+    'deposit_processing',
+    'deposit_paid',
+    'identity_pending',
+    'signature_pending',
+    'admin_review',
+    'changes_requested',
+    'approved',
+    'active',
+    'rejected',
+    'expired',
+    'suspended',
   ],
   {
-    AUTH_CREATED: 'ACCOUNT_CREATED',
-    OWNER_ACCOUNT_CREATED: 'ACCOUNT_CREATED',
-    PENDING: 'DRAFT',
-    UNDER_REVIEW: 'ADMIN_REVIEW',
-    PENDING_ADMIN_REVIEW: 'ADMIN_REVIEW',
-    PENDING_ADMIN_APPROVAL: 'ADMIN_REVIEW',
-    PAYMENT_VERIFIED_PENDING_ADMIN_APPROVAL: 'ADMIN_REVIEW',
-    PAYMENT_PENDING: 'DEPOSIT_PENDING',
-    PAYMENT_PENDING_APPROVAL: 'DEPOSIT_PROCESSING',
-    PENDING_ADMIN_PAYMENT_VERIFICATION: 'DEPOSIT_PROCESSING',
-    PENDING_PAYMENT_VERIFICATION: 'DEPOSIT_PROCESSING',
-    AWAITING_PAYMENT: 'DEPOSIT_PENDING',
-    AWAITING_VERIFICATION: 'ADMIN_REVIEW',
-    PAYMENT_SUBMITTED: 'DEPOSIT_PROCESSING',
-    PAYMENT_PROCESSING: 'DEPOSIT_PROCESSING',
-    PAID: 'DEPOSIT_PAID',
-    PAYMENT_VERIFIED: 'DEPOSIT_PAID',
-    AWAITING_SIGNATURE: 'SIGNATURE_PENDING',
-    APPROVED_AWAITING_OWNER_SIGNATURE: 'SIGNATURE_PENDING',
-    APPROVED_PENDING_OWNER_SIGNATURE: 'SIGNATURE_PENDING',
-    READY_FOR_ACTIVATION: 'APPROVED',
-    APPROVED_AWAITING_ACTIVATION: 'APPROVED',
-    ACTIVATED: 'ACTIVE',
-    LIVE: 'ACTIVE',
-    DENIED: 'REJECTED',
-    CANCELLED: 'EXPIRED',
-    CANCELED: 'EXPIRED',
+    auth_created: 'account_created',
+    owner_account_created: 'account_created',
+    pending: 'draft',
+    under_review: 'admin_review',
+    pending_admin_review: 'admin_review',
+    pending_admin_approval: 'admin_review',
+    payment_verified_pending_admin_approval: 'admin_review',
+    payment_pending: 'deposit_pending',
+    payment_pending_approval: 'deposit_processing',
+    pending_admin_payment_verification: 'deposit_processing',
+    pending_payment_verification: 'deposit_processing',
+    awaiting_payment: 'deposit_pending',
+    awaiting_verification: 'admin_review',
+    payment_submitted: 'deposit_processing',
+    payment_processing: 'deposit_processing',
+    paid: 'deposit_paid',
+    payment_verified: 'deposit_paid',
+    awaiting_signature: 'signature_pending',
+    approved_awaiting_owner_signature: 'signature_pending',
+    approved_pending_owner_signature: 'signature_pending',
+    ready_for_activation: 'approved',
+    approved_awaiting_activation: 'approved',
+    activated: 'active',
+    live: 'active',
+    denied: 'rejected',
+    cancelled: 'expired',
+    canceled: 'expired',
   },
   {
-    DRAFT: ['ACCOUNT_CREATED', 'EXPIRED', 'SUSPENDED'],
-    ACCOUNT_CREATED: ['PROPERTY_DETAILS_COMPLETE', 'DOCUMENTS_PENDING', 'EXPIRED', 'SUSPENDED'],
-    PROPERTY_DETAILS_COMPLETE: ['DOCUMENTS_PENDING', 'QUOTE_READY', 'EXPIRED', 'SUSPENDED'],
-    DOCUMENTS_PENDING: ['QUOTE_READY', 'CHANGES_REQUESTED', 'EXPIRED', 'SUSPENDED'],
-    QUOTE_READY: ['CONTRACT_SELECTED', 'EXPIRED', 'SUSPENDED'],
-    CONTRACT_SELECTED: ['IDENTITY_PENDING', 'SIGNATURE_PENDING', 'EXPIRED', 'SUSPENDED'],
-    DEPOSIT_PENDING: ['DEPOSIT_PROCESSING', 'EXPIRED', 'SUSPENDED'],
-    DEPOSIT_PROCESSING: ['DEPOSIT_PAID', 'DEPOSIT_PENDING', 'EXPIRED', 'SUSPENDED'],
-    DEPOSIT_PAID: ['ADMIN_REVIEW', 'SUSPENDED'],
-    IDENTITY_PENDING: ['SIGNATURE_PENDING', 'PROPERTY_DETAILS_COMPLETE', 'DOCUMENTS_PENDING', 'EXPIRED', 'SUSPENDED'],
-    SIGNATURE_PENDING: ['DEPOSIT_PENDING', 'ADMIN_REVIEW', 'APPROVED', 'SUSPENDED'],
-    ADMIN_REVIEW: ['CHANGES_REQUESTED', 'APPROVED', 'REJECTED', 'SIGNATURE_PENDING', 'SUSPENDED'],
-    CHANGES_REQUESTED: ['ACCOUNT_CREATED', 'DOCUMENTS_PENDING', 'QUOTE_READY', 'CONTRACT_SELECTED', 'DEPOSIT_PENDING', 'ADMIN_REVIEW', 'EXPIRED', 'SUSPENDED'],
-    APPROVED: ['ACTIVE', 'SUSPENDED'],
-    ACTIVE: ['SUSPENDED'],
-    REJECTED: ['DRAFT'],
-    EXPIRED: ['DRAFT'],
-    SUSPENDED: ['ADMIN_REVIEW', 'ACTIVE', 'DRAFT'],
+    draft: ['account_created', 'expired', 'suspended'],
+    account_created: ['property_details_complete', 'documents_pending', 'expired', 'suspended'],
+    property_details_complete: ['documents_pending', 'quote_ready', 'expired', 'suspended'],
+    documents_pending: ['quote_ready', 'changes_requested', 'expired', 'suspended'],
+    quote_ready: ['contract_selected', 'expired', 'suspended'],
+    contract_selected: ['identity_pending', 'signature_pending', 'expired', 'suspended'],
+    deposit_pending: ['deposit_processing', 'expired', 'suspended'],
+    deposit_processing: ['deposit_paid', 'deposit_pending', 'expired', 'suspended'],
+    deposit_paid: ['admin_review', 'suspended'],
+    identity_pending: ['signature_pending', 'property_details_complete', 'documents_pending', 'expired', 'suspended'],
+    signature_pending: ['deposit_pending', 'admin_review', 'approved', 'suspended'],
+    admin_review: ['changes_requested', 'approved', 'rejected', 'signature_pending', 'suspended'],
+    changes_requested: ['account_created', 'documents_pending', 'quote_ready', 'contract_selected', 'deposit_pending', 'admin_review', 'expired', 'suspended'],
+    approved: ['active', 'suspended'],
+    active: ['suspended'],
+    rejected: ['draft'],
+    expired: ['draft'],
+    suspended: ['admin_review', 'active', 'draft'],
   },
 );
 
@@ -464,14 +466,14 @@ export type CanonicalStateMachineName = keyof typeof CANONICAL_STATE_MACHINES;
 
 export function normalizeCanonicalState(machineName: CanonicalStateMachineName, raw: unknown): string {
   const definition = CANONICAL_STATE_MACHINES[machineName];
-  const normalized = key(raw);
+  const normalized = keyFor(machineName, raw);
   if (!normalized) return definition.states[0];
   const aliased = definition.aliases[normalized] || normalized;
   return definition.states.includes(aliased) ? aliased : definition.states[0];
 }
 
 export function isCanonicalState(machineName: CanonicalStateMachineName, raw: unknown): boolean {
-  return CANONICAL_STATE_MACHINES[machineName].states.includes(key(raw));
+  return CANONICAL_STATE_MACHINES[machineName].states.includes(keyFor(machineName, raw));
 }
 
 export function canTransitionCanonicalState(
