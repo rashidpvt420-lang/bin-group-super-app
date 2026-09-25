@@ -166,7 +166,7 @@ test('Phase 4 Owner UI exposes registration and correction before activation but
 
   assert.match(adminReview, /adminRequestOwnerPropertyChanges/);
   assert.match(adminReview, /Request pre-inspection changes/);
-  assert.doesNotMatch(adminReview, /inspectionFirst\(row\)[\s\S]{0,500}adminReviewOwnerProperty/);
+  assert.match(adminReview, /if \(inspectionFirst\(row\)\) \{[\s\S]{0,350}Inspection-first properties must be processed through Intake Vault[\s\S]{0,200}return;/);
 });
 
 test('Phase 4 Owner operational surfaces remain present after activation', async () => {
