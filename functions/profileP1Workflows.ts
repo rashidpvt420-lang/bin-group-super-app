@@ -246,8 +246,8 @@ export const adminReviewBrokerKyc = onCall({ cors: true, region: "europe-west3",
     transaction.set(brokerRef, clean({
       status: approved ? "APPROVED" : "REJECTED",
       approvalStatus: approved ? "APPROVED" : "REJECTED",
-      kycStatus: approved ? "VERIFIED" : "REJECTED",
-      brokerKycStatus: approved ? "VERIFIED" : "REJECTED",
+      kycStatus: approved ? "APPROVED" : "REJECTED",
+      brokerKycStatus: approved ? "APPROVED" : "REJECTED",
       reraVerified: approved,
       ibanVerified: approved,
       reraStatus: approved ? "VERIFIED" : "REJECTED",
@@ -264,7 +264,7 @@ export const adminReviewBrokerKyc = onCall({ cors: true, region: "europe-west3",
     }), { merge: true });
     freshDocuments.forEach((documentSnap) => {
       transaction.set(documentSnap.ref, {
-        status: approved ? "verified" : "rejected",
+        status: approved ? "APPROVED" : "REJECTED",
         reviewedAt: now,
         reviewedBy: actorId,
         updatedAt: now,
