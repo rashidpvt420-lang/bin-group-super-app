@@ -119,6 +119,7 @@ export const submitTenantMoveInspection = onCall(
   const timestamp = FieldValue.serverTimestamp();
   const ownerReviewRef = db.collection("propertyInspections").doc();
   const legacyRef = db.collection("inspections").doc();
+  const auditRef = db.collection("audit_logs").doc();
 
   const normalized = clean({
     ...payload,
@@ -147,16 +148,15 @@ export const submitTenantMoveInspection = onCall(
       status: "submitted",
       ownerReviewInspectionId: ownerReviewRef.id,
     });
-  });
-
-  await db.collection("audit_logs").add({
-    actorId: uid,
-    actorRole: "tenant",
-    action: `TENANT_${inspectionType}_HANDOVER_SUBMITTED`,
-    targetType: "propertyInspections",
-    targetId: ownerReviewRef.id,
-    metadata: { unitId, propertyId, legacyInspectionId: legacyRef.id },
-    createdAt: FieldValue.serverTimestamp(),
+    transaction.set(auditRef, {
+      actorId: uid,
+      actorRole: "tenant",
+      action: `TENANT_${inspectionType}_HANDOVER_SUBMITTED`,
+      targetType: "propertyInspections",
+      targetId: ownerReviewRef.id,
+      metadata: { unitId, propertyId, legacyInspectionId: legacyRef.id },
+      createdAt: timestamp,
+    });
   });
 
   return {
