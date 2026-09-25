@@ -7,6 +7,11 @@ export const OWNER_PRE_ACTIVATION_PATHS = new Set([
   '/owner/documents',
 ]);
 
+export function isOwnerPreActivationPath(pathname: string) {
+  return OWNER_PRE_ACTIVATION_PATHS.has(pathname) ||
+    /^\/owner\/properties\/[^/]+\/correct$/.test(pathname);
+}
+
 export const OWNER_LOCKED_STATUSES = new Set([
   'pending',
   'pending_approval',
@@ -27,10 +32,6 @@ export const OWNER_LOCKED_STATUSES = new Set([
   'profile_incomplete',
   'suspended',
 ]);
-
-export function isOwnerPreActivationPath(pathname: string) {
-  return OWNER_PRE_ACTIVATION_PATHS.has(pathname);
-}
 
 export function isOwnerProfileActivated(profile: any) {
   if (!profile) return false;
