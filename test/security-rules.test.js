@@ -669,6 +669,124 @@ describe('Firestore Security Rules', () => {
     }));
   });
 
+  it('broker private records: a Broker can read only their own KYC, commissions and payouts', async () => {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore();
+      await Promise.all([
+        setDoc(doc(db, 'users/broker_a'), { role: 'broker', status: 'APPROVED' }),
+        setDoc(doc(db, 'users/broker_b'), { role: 'broker', status: 'APPROVED' }),
+        setDoc(doc(db, 'broker_kyc_profiles/broker_a'), { brokerKycStatus: 'VERIFIED', reraVerified: true }),
+        setDoc(doc(db, 'broker_kyc_profiles/broker_b'), { brokerKycStatus: 'VERIFIED', reraVerified: true }),
+        setDoc(doc(db, 'broker_commissions/commission_a'), { brokerId: 'broker_a', amount: 1000, status: 'APPROVED' }),
+        setDoc(doc(db, 'broker_commissions/commission_b'), { brokerId: 'broker_b', amount: 2000, status: 'APPROVED' }),
+        setDoc(doc(db, 'broker_payout_requests/payout_a'), { brokerId: 'broker_a', brokerUid: 'broker_a', amount: 1000, status: 'PENDING_ADMIN_REVIEW' }),
+        setDoc(doc(db, 'broker_payout_requests/payout_b'), { brokerId: 'broker_b', brokerUid: 'broker_b', amount: 2000, status: 'PENDING_ADMIN_REVIEW' }),
+      ]);
+    });
+
+    const brokerA = testEnv.authenticatedContext('broker_a', { role: 'broker', email: 'broker-a@example.com' }).firestore();
+    await assertSucceeds(getDoc(doc(brokerA, 'broker_kyc_profiles/broker_a')));
+    await assertFails(getDoc(doc(brokerA, 'broker_kyc_profiles/broker_b')));
+    await assertSucceeds(getDoc(doc(brokerA, 'broker_commissions/commission_a')));
+    await assertFails(getDoc(doc(brokerA, 'broker_commissions/commission_b')));
+    await assertSucceeds(getDoc(doc(brokerA, 'broker_payout_requests/payout_a')));
+    await assertFails(getDoc(doc(brokerA, 'broker_payout_requests/payout_b')));
+  });
+
+  it('broker commission authority: browser cannot change amount, rate, approval or payout state', async () => {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), 'broker_commissions/commission_locked'), {
+        brokerId: 'broker_a',
+        amount: 1250,
+        percentage: 5,
+        status: 'APPROVED',
+        payoutStatus: 'AVAILABLE',
+      });
+    });
+    const brokerDb = testEnv.authenticatedContext('broker_a', { role: 'broker' }).firestore();
+    await assertFails(updateDoc(doc(brokerDb, 'broker_commissions/commission_locked'), { amount: 999999 }));
+    await assertFails(updateDoc(doc(brokerDb, 'broker_commissions/commission_locked'), { percentage: 8 }));
+    await assertFails(updateDoc(doc(brokerDb, 'broker_commissions/commission_locked'), { status: 'PAID' }));
+    await assertFails(updateDoc(doc(brokerDb, 'broker_commissions/commission_locked'), { payoutStatus: 'PAID' }));
+  });
+
+  it('broker listing permissions: browser cannot create a direct listing claim', async () => {
+    const brokerDb = testEnv.authenticatedContext('broker_a', { role: 'broker' }).firestore();
+    await assertFails(setDoc(doc(brokerDb, 'broker_listing_claims/claim_a'), {
+      brokerId: 'broker_a',
+      listingId: 'listing_any',
+      propertyId: 'property_any',
+      status: 'CLAIMED',
+    }));
+  });
+
+  it('broker lead and referral attribution identifiers must match the Broker and document id at creation', async () => {
+    const brokerDb = testEnv.authenticatedContext('broker_a', { role: 'broker' }).firestore();
+
+    await assertSucceeds(setDoc(doc(brokerDb, 'brokerLeads/lead_valid'), {
+      brokerId: 'broker_a',
+      sourceLeadId: 'lead_valid',
+      attributionId: 'broker_lead_broker_a_lead_valid',
+      status: 'new',
+      lifecycleStatus: 'LEAD_CAPTURED',
+    }));
+    await assertFails(setDoc(doc(brokerDb, 'brokerLeads/lead_forged'), {
+      brokerId: 'broker_a',
+      sourceLeadId: 'other_lead',
+      attributionId: 'broker_lead_broker_b_other_lead',
+      status: 'new',
+      lifecycleStatus: 'LEAD_CAPTURED',
+    }));
+
+    await assertFails(setDoc(doc(brokerDb, 'referrals/ref_valid'), {
+      brokerId: 'broker_a',
+      sourceReferralId: 'ref_valid',
+      attributionId: 'broker_referral_broker_a_ref_valid',
+      status: 'submitted',
+    }));
+    await assertFails(setDoc(doc(brokerDb, 'referrals/ref_forged'), {
+      brokerId: 'broker_a',
+      sourceReferralId: 'other_ref',
+      attributionId: 'broker_referral_broker_b_other_ref',
+      status: 'submitted',
+    }));
+  });
+
+  it('broker lead attribution identifiers are immutable after creation', async () => {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), 'brokerLeads/lead_locked'), {
+        brokerId: 'broker_a',
+        brokerUid: 'broker_a',
+        status: 'new',
+        lifecycleStatus: 'LEAD_CAPTURED',
+        attributionId: 'broker_lead_broker_a_lead_locked',
+        sourceLeadId: 'lead_locked',
+      });
+    });
+    const brokerDb = testEnv.authenticatedContext('broker_a', { role: 'broker' }).firestore();
+    await assertFails(updateDoc(doc(brokerDb, 'brokerLeads/lead_locked'), {
+      attributionId: 'forged-attribution',
+      sourceLeadId: 'other-lead',
+    }));
+    await assertSucceeds(updateDoc(doc(brokerDb, 'brokerLeads/lead_locked'), {
+      status: 'contacted',
+      lifecycleStatus: 'LEAD_CONTACTED',
+    }));
+  });
+
+  it('non-Broker identities cannot create Broker pipeline records by spoofing brokerId', async () => {
+    const tenantDb = testEnv.authenticatedContext('tenant_spoof', { role: 'tenant' }).firestore();
+    await assertFails(setDoc(doc(tenantDb, 'brokerLeads/spoof_lead'), {
+      brokerId: 'tenant_spoof',
+      status: 'new',
+      lifecycleStatus: 'LEAD_CAPTURED',
+    }));
+    await assertFails(setDoc(doc(tenantDb, 'referrals/spoof_referral'), {
+      brokerId: 'tenant_spoof',
+      status: 'submitted',
+    }));
+  });
+
   it('tenant unit link fallback: tenant can request verification but cannot self-link or request for another tenant', async () => {
     const tenantDb = testEnv.authenticatedContext('tenant_a', { role: 'tenant', email: 'tenant-a@example.com' }).firestore();
 

@@ -19,12 +19,29 @@ const BLOCKED_STATUSES = new Set([
 const text = (value: unknown, max = 160) => String(value || "").trim().slice(0, max);
 const normalized = (value: unknown) => text(value).toLowerCase();
 
-function requireOwner(auth: any) {
+async function requireOwner(auth: any) {
   if (!auth?.uid) throw new HttpsError("unauthenticated", "Owner login is required.");
-  const role = normalized(auth.token?.role || auth.token?.userRole || auth.token?.primaryRole);
-  if (role !== "owner") throw new HttpsError("permission-denied", "Only an Owner account can capture a Broker referral.");
-  if (auth.token?.email_verified !== true || auth.token?.suspended === true || auth.token?.disabled === true) {
+  const tokenRole = normalized(auth.token?.role || auth.token?.userRole || auth.token?.primaryRole);
+  if (tokenRole !== "owner" || auth.token?.email_verified !== true || auth.token?.suspended === true) {
     throw new HttpsError("permission-denied", "This Owner account is not verified and active.");
+  }
+
+  const [account, profileSnap] = await Promise.all([
+    admin.auth().getUser(auth.uid),
+    db.collection("users").doc(auth.uid).get(),
+  ]);
+  const claims = account.customClaims || {};
+  const profile = profileSnap.data() || {};
+  const currentRole = normalized(claims.role || claims.userRole || claims.primaryRole || profile.role);
+  const status = normalized(profile.status || profile.accountStatus);
+  if (
+    account.disabled ||
+    !account.emailVerified ||
+    claims.suspended === true ||
+    currentRole !== "owner" ||
+    ["suspended", "disabled", "rejected", "deleted"].includes(status)
+  ) {
+    throw new HttpsError("permission-denied", "Current verified Owner authority is required.");
   }
   return auth.uid as string;
 }
@@ -41,13 +58,13 @@ function referralLeadId(brokerUid: string, ownerUid: string) {
   return crypto.createHash("sha256").update(`${brokerUid}:${ownerUid}`).digest("hex");
 }
 
-// Referral capture is available to a verified Firebase Owner even when a public
-// browser cannot obtain an App Check token. Authorization remains bound to the
-// verified Owner token and every write is server-side.
+// Referral capture is available only to a verified current Owner session with
+// Firebase App Check. Authorization is revalidated against current Auth claims
+// and every attribution write remains server-side and transaction-bound.
 export const captureBrokerReferralAttribution = onCall(
-  { cors: true, region: "europe-west3", enforceAppCheck: false },
+  { cors: true, region: "europe-west3", enforceAppCheck: true },
   async (request) => {
-    const ownerUid = requireOwner(request.auth);
+    const ownerUid = await requireOwner(request.auth);
     const brokerUid = validBrokerUid(request.data?.brokerUid || request.data?.broker);
     if (brokerUid === ownerUid) {
       throw new HttpsError("invalid-argument", "An Owner cannot refer their own account.");

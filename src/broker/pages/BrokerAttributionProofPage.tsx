@@ -23,7 +23,6 @@ const statusColor = (value: any) => {
   if (['REJECTED', 'FAILED', 'DISPUTED'].some((x) => status.includes(x))) return '#ef4444';
   return '#f59e0b';
 };
-const normalizeEmail = (value: unknown) => String(value || '').trim().toLowerCase();
 const idValue = (...values: unknown[]) => values.map((value) => String(value || '').trim()).find(Boolean) || '';
 const byId = (rows: Row[]): Map<string, Row> => new Map<string, Row>(rows.map((row) => [String(row.id), row]));
 const byField = (rows: Row[], field: string): Map<string, Row> => new Map<string, Row>(
@@ -79,15 +78,9 @@ export default function BrokerAttributionProofPage() {
     if (!user?.uid) return;
     const unsubs: Array<() => void> = [];
     const buckets: Record<string, Row[]> = {};
-    const email = normalizeEmail(user.email);
 
     const bind = (collectionName: string, setter: React.Dispatch<React.SetStateAction<Row[]>>) => {
-      const sources = [
-        { field: 'brokerId', value: user.uid },
-        { field: 'brokerUid', value: user.uid },
-        { field: 'createdByUid', value: user.uid },
-        { field: 'brokerEmail', value: email },
-      ].filter((source) => source.value);
+      const sources = [{ field: 'brokerId', value: user.uid }];
 
       sources.forEach((source) => {
         const key = `${collectionName}:${source.field}:${source.value}`;

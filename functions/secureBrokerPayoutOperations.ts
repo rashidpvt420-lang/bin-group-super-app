@@ -67,12 +67,18 @@ async function requireBroker(auth: any) {
   ]);
   const profile = profileSnap.data() || {};
   const privateKyc = privateKycSnap.data() || {};
-  const role = lower(record.customClaims?.role || record.customClaims?.userRole || profile.role || profile.userRole);
-  if (record.disabled || auth.token?.suspended === true || ["suspended", "disabled", "rejected"].includes(lower(profile.status))) {
+  const currentClaims = record.customClaims || {};
+  const role = lower(currentClaims.role || currentClaims.userRole || currentClaims.primaryRole || profile.role || profile.userRole);
+  if (
+    record.disabled ||
+    auth.token?.suspended === true ||
+    currentClaims.suspended === true ||
+    ["suspended", "disabled", "rejected", "deleted"].includes(lower(profile.status))
+  ) {
     throw new HttpsError("permission-denied", "Broker account is not active.");
   }
   if (!record.emailVerified || !record.email) throw new HttpsError("failed-precondition", "A verified Broker email is required.");
-  if (role !== "broker") throw new HttpsError("permission-denied", "Broker role required.");
+  if (role !== "broker") throw new HttpsError("permission-denied", "Current Broker role required.");
   if (!privateKycSnap.exists) {
     throw new HttpsError("failed-precondition", "Private Broker KYC profile is required before payout requests.");
   }
@@ -310,6 +316,7 @@ export const submitBrokerPayoutRequest = onCall({ cors: true, region: "europe-we
   const bindingHash = binding(broker.uid, commissions.ids, commissions.amount);
   const challengeRef = db.collection("broker_payout_otps").doc(challengeId);
   const payoutRef = db.collection("broker_payout_requests").doc();
+  const notificationRef = db.collection("notifications").doc("broker_payout_requested_" + payoutRef.id);
   const now = FieldValue.serverTimestamp();
   await db.runTransaction(async (tx) => {
     const challengeSnap = await tx.get(challengeRef);
@@ -370,6 +377,17 @@ export const submitBrokerPayoutRequest = onCall({ cors: true, region: "europe-we
       kycSubmissionHash: broker.approvedSubmissionHash,
       commissionIds: commissions.ids,
       amount: commissions.amount,
+      createdAt: now,
+    });
+    tx.set(notificationRef, {
+      recipientId: broker.uid,
+      userId: broker.uid,
+      recipientRole: "broker",
+      type: "BROKER_PAYOUT_REQUESTED",
+      title: "Payout request submitted",
+      body: "Your payout request has passed OTP verification and is pending Finance/Admin review.",
+      link: "/broker/commissions",
+      read: false,
       createdAt: now,
     });
   });

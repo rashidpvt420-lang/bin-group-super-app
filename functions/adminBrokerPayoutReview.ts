@@ -38,10 +38,25 @@ async function requireFinanceAdmin(auth: any) {
     throw new HttpsError("permission-denied", "A verified Admin MFA session is required for payout review.");
   }
   const record = await admin.auth().getUser(auth.uid);
-  if (record.disabled || !record.emailVerified || !record.email) {
-    throw new HttpsError("permission-denied", "The Admin account is not active and verified.");
+  const currentClaims = record.customClaims || {};
+  const currentRole = roleOf(currentClaims);
+  const currentAuthorized =
+    currentClaims.admin === true ||
+    currentClaims.isAdmin === true ||
+    currentClaims.superAdmin === true ||
+    currentClaims.super_admin === true ||
+    currentClaims.ceo === true ||
+    ADMIN_ROLES.has(currentRole);
+  if (
+    record.disabled ||
+    !record.emailVerified ||
+    !record.email ||
+    currentClaims.suspended === true ||
+    !currentAuthorized
+  ) {
+    throw new HttpsError("permission-denied", "Current Finance/Admin authority is inactive or no longer valid.");
   }
-  return { uid: auth.uid, email: lower(record.email, 320), role };
+  return { uid: auth.uid, email: lower(record.email, 320), role: currentRole || role };
 }
 
 function requestState(data: FirebaseFirestore.DocumentData) {
@@ -103,6 +118,9 @@ export const adminReviewBrokerPayoutRequest = onCall(
       }
 
       const state = requestState(payout);
+      const notificationRef = db.collection("notifications").doc(
+        "broker_payout_" + requestId + "_" + action.toLowerCase(),
+      );
       if (action === "APPROVE") {
         if (["APPROVED", "PAID"].includes(state)) {
           idempotent = true;
@@ -212,6 +230,29 @@ export const adminReviewBrokerPayoutRequest = onCall(
         sensitiveValuesExcluded: true,
         createdAt: now,
       });
+      transaction.set(notificationRef, {
+        recipientId: brokerId,
+        userId: brokerId,
+        recipientRole: "broker",
+        type: action === "APPROVE"
+          ? "BROKER_PAYOUT_APPROVED"
+          : action === "REJECT"
+            ? "BROKER_PAYOUT_REJECTED"
+            : "BROKER_PAYOUT_PAID",
+        title: action === "APPROVE"
+          ? "Payout approved"
+          : action === "REJECT"
+            ? "Payout rejected"
+            : "Payout paid",
+        body: action === "APPROVE"
+          ? "Your Broker payout request was approved and is awaiting payment settlement."
+          : action === "REJECT"
+            ? "Your Broker payout request was rejected. Review the payout details before submitting a new request."
+            : "Your Broker payout has been marked paid. Open Commissions to review the settlement reference.",
+        link: "/broker/commissions",
+        read: false,
+        createdAt: now,
+      }, { merge: true });
     });
 
     return {

@@ -34,8 +34,27 @@ async function requireAdmin(auth: any) {
   if (!authorized || token.suspended === true) {
     throw new HttpsError("permission-denied", "Approved Admin authority is required.");
   }
+  if (token.email_verified !== true || !token.firebase?.sign_in_second_factor) {
+    throw new HttpsError("permission-denied", "A verified Admin MFA session is required for Broker KYC review.");
+  }
+
   const record = await admin.auth().getUser(auth.uid);
-  if (record.disabled) throw new HttpsError("permission-denied", "Disabled Admin account.");
+  const currentClaims = record.customClaims || {};
+  const currentAuthorized =
+    currentClaims.admin === true ||
+    currentClaims.isAdmin === true ||
+    currentClaims.superAdmin === true ||
+    currentClaims.super_admin === true ||
+    currentClaims.ceo === true ||
+    ADMIN_ROLES.has(roleOf(currentClaims));
+  if (
+    record.disabled ||
+    !record.emailVerified ||
+    currentClaims.suspended === true ||
+    !currentAuthorized
+  ) {
+    throw new HttpsError("permission-denied", "Current Admin authority is inactive or no longer valid.");
+  }
 }
 
 function validUaeIban(value: unknown) {
@@ -109,6 +128,79 @@ async function verifyBrokerDocuments(brokerId: string): Promise<VerifiedDocument
   return verified;
 }
 
+function masked(value: unknown, visible = 4) {
+  const compact = text(value).replace(/\s+/g, "");
+  if (!compact) return "";
+  if (compact.length <= visible) return "•".repeat(compact.length);
+  return `${"•".repeat(Math.min(12, compact.length - visible))}${compact.slice(-visible)}`;
+}
+
+export const getAdminBrokerKycReviewSummary = onCall(
+  { cors: true, region: "europe-west3", enforceAppCheck: true },
+  async (request) => {
+    await requireAdmin(request.auth);
+    const brokerId = text(request.data?.brokerId);
+    if (!brokerId) throw new HttpsError("invalid-argument", "brokerId is required.");
+
+    const [publicSnap, privateSnap, documentsSnap] = await Promise.all([
+      db.collection("users").doc(brokerId).get(),
+      db.collection("broker_kyc_profiles").doc(brokerId).get(),
+      db.collection("brokerDocuments").where("brokerId", "==", brokerId).limit(30).get(),
+    ]);
+    if (!publicSnap.exists) throw new HttpsError("not-found", "Broker profile not found.");
+    const publicProfile = publicSnap.data() || {};
+    if (lower(publicProfile.role || publicProfile.userRole || publicProfile.primaryRole) !== "broker") {
+      throw new HttpsError("failed-precondition", "Selected user is not a Broker profile.");
+    }
+
+    const privateProfile = privateSnap.data() || {};
+    const documentTypes = documentsSnap.docs.map((doc) =>
+      text(doc.data().docType || doc.data().documentType),
+    ).filter(Boolean);
+    const identityPresent = Boolean(
+      text(privateProfile.tradeLicenseNumber || privateProfile.emiratesIdNumber || privateProfile.passportNumber),
+    );
+    const submissionHash = text(privateProfile.submissionHash);
+    const approvedSubmissionHash = text(
+      privateProfile.approvedSubmissionHash || publicProfile.approvedSubmissionHash,
+    );
+
+    return {
+      status: "SUCCESS",
+      brokerId,
+      profile: {
+        displayName: text(publicProfile.displayName || publicProfile.name),
+        email: lower(publicProfile.email),
+        companyName: text(publicProfile.companyName),
+        brokerTerritory: text(publicProfile.brokerTerritory || publicProfile.primaryRegion),
+      },
+      kyc: {
+        exists: privateSnap.exists,
+        brokerKycStatus: text(publicProfile.brokerKycStatus || privateProfile.brokerKycStatus || "NOT_SUBMITTED"),
+        reraStatus: text(publicProfile.reraStatus || privateProfile.reraStatus || "NOT_SUBMITTED"),
+        profileCompletionScore: Number(privateProfile.profileCompletionScore || publicProfile.profileCompletionScore || 0),
+        reraLicenseMasked: text(privateProfile.reraLicenseMasked || publicProfile.reraLicenseMasked) || masked(privateProfile.reraLicense),
+        identityEvidencePresent: identityPresent,
+        bankName: text(privateProfile.bankName),
+        bankAccountHolder: text(privateProfile.bankAccountHolder),
+        bankIbanMasked: text(privateProfile.bankIbanMasked || publicProfile.bankIbanMasked) || masked(privateProfile.bankIban),
+        commissionAgreementAccepted: privateProfile.commissionAgreementAccepted === true,
+        commissionTermsVersion: text(privateProfile.commissionTermsVersion),
+        submissionHashPresent: /^[a-f0-9]{64}$/i.test(submissionHash),
+        approvalBound: Boolean(submissionHash && approvedSubmissionHash === submissionHash),
+        reviewReason: text(publicProfile.brokerKycReviewReason || privateProfile.reviewReason),
+      },
+      documents: {
+        count: documentsSnap.size,
+        types: Array.from(new Set(documentTypes)).sort(),
+        requiredPresent: requiredDocumentTypes().every((type) => documentTypes.includes(type)) &&
+          documentTypes.some((type) => ["emirates_id", "passport", "trade_license"].includes(type)),
+      },
+      sensitiveValuesMasked: true,
+    };
+  },
+);
+
 export const adminReviewBrokerKyc = onCall(
   { cors: true, region: "europe-west3", enforceAppCheck: true },
   async (request) => {
@@ -171,6 +263,9 @@ export const adminReviewBrokerKyc = onCall(
     const now = FieldValue.serverTimestamp();
     const actorId = request.auth!.uid;
     const actorEmail = request.auth?.token?.email || null;
+    const notificationRef = db.collection("notifications").doc(
+      "broker_kyc_" + brokerId + "_" + submissionHash.slice(0, 24) + "_" + decision.toLowerCase(),
+    );
 
     await db.runTransaction(async (transaction) => {
       const [freshPublic, freshPrivate, ...freshDocuments] = await Promise.all([
@@ -251,6 +346,19 @@ export const adminReviewBrokerKyc = onCall(
         sensitiveValuesExcluded: true,
         createdAt: now,
       });
+      transaction.set(notificationRef, {
+        recipientId: brokerId,
+        userId: brokerId,
+        recipientRole: "broker",
+        type: approved ? "BROKER_KYC_APPROVED" : "BROKER_KYC_REJECTED",
+        title: approved ? "Broker KYC approved" : "Broker KYC requires attention",
+        body: approved
+          ? "Your Broker KYC and RERA verification are approved. Verified listing and payout features are now available."
+          : "Your Broker KYC submission was rejected. Open your Broker profile to review and resubmit the required information.",
+        link: "/broker/profile",
+        read: false,
+        createdAt: now,
+      }, { merge: true });
     });
 
     let releasedCommissions = 0;

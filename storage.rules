@@ -291,7 +291,10 @@ service firebase.storage {
           'bank_details',
           'broker_agreement'
         ];
-      allow delete: if isAuth() && (request.auth.uid == brokerId || isAdmin());
+      // Uploaded Broker KYC evidence is immutable to the Broker. Replacement
+      // uses a new create-only object plus a fresh KYC submission; only Admin
+      // may remove retained compliance evidence.
+      allow delete: if isAdmin();
     }
 
     match /staffDocuments/{staffId}/{allPaths=**} {

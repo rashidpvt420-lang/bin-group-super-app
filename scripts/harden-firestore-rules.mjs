@@ -292,14 +292,13 @@ patchIfNeeded(
 
     match /referrals/{referralId} {
       allow read: if isAdmin() || brokerOwns(resource.data);
-      allow create: if brokerOwns(request.resource.data);
-      allow update: if isAdmin() || (brokerOwns(resource.data) && brokerOwns(request.resource.data));
-      allow delete: if isAdmin();
+      allow create: if false;
+      allow update, delete: if isAdmin();
     }
 
     match /brokerReferrals/{referralId} {
-      allow read: if isAdmin() || resource.data.brokerId == request.auth.uid || resource.data.brokerUid == request.auth.uid;
-      allow create: if signedIn() && (request.resource.data.brokerId == request.auth.uid || request.resource.data.brokerUid == request.auth.uid);
+      allow read: if isAdmin() || brokerOwns(resource.data);
+      allow create: if false;
       allow update, delete: if isAdmin();
     }`,
   ["match /brokerLeads/{leadId}", "match /referrals/{referralId}", "function brokerOwns(data)"]

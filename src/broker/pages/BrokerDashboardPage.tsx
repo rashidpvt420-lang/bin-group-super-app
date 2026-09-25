@@ -10,7 +10,6 @@ import BrokerPageFrame from '../components/BrokerPageFrame';
 import RoleJourneyStrip from '../../components/RoleJourneyStrip';
 
 const money = (value: number) => `AED ${Number(value || 0).toLocaleString('en-AE', { maximumFractionDigits: 0 })}`;
-const normalizeEmail = (value: unknown) => String(value || '').trim().toLowerCase();
 const uniqueRows = (rows: any[]) => Array.from(new Map(rows.map((row) => [String(row.id), row])).values());
 const rowTime = (row: any) => row?.createdAt?.toDate ? row.createdAt.toDate().getTime() : row?.createdAt?.seconds ? row.createdAt.seconds * 1000 : 0;
 
@@ -27,12 +26,7 @@ export default function BrokerDashboardPage() {
     if (!user?.uid) return;
     const unsubs: Array<() => void> = [];
     const buckets: Record<string, any[]> = {};
-    const identitySources = [
-      { field: 'brokerId', value: user.uid },
-      { field: 'brokerUid', value: user.uid },
-      { field: 'createdByUid', value: user.uid },
-      { field: 'brokerEmail', value: normalizeEmail(user.email) },
-    ].filter((source) => source.value);
+    const identitySources = [{ field: 'brokerId', value: user.uid }];
 
     const refreshLeads = () => {
       const rows = uniqueRows(Object.entries(buckets).filter(([key]) => key.startsWith('brokerLeads:')).flatMap(([, value]) => value)).sort((a, b) => rowTime(b) - rowTime(a));
