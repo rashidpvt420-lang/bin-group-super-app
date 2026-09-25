@@ -83,35 +83,35 @@ const payrollAdminRead = "allow read: if collection != 'tickets' && collection !
 const propertyIdentityAdminRead = "allow read: if collection != 'tickets' && collection != 'maintenanceTickets' && !(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions', 'private_hr_profiles', 'technician_live_locations', 'invoice_registry', 'payroll_entries', 'property_identity_registry']) && hasAdminClaim();";
 if (rules.includes(legacyAdminRead)) {
   rules = rules.replace(legacyAdminRead, hardenedAdminRead);
-} else if (
-  !rules.includes(hardenedAdminRead) &&
-  !rules.includes(boundedAdminRead) &&
-  !rules.includes(adminSecurityAdminRead) &&
-  !rules.includes(privateHrAdminRead) &&
-  !rules.includes(liveLocationAdminRead) &&
-  !rules.includes(invoiceRegistryAdminRead) &&
-  !rules.includes(payrollAdminRead) &&
-  !rules.includes(propertyIdentityAdminRead)
-) {
-  throw new Error('Unable to harden generic admin read fallback for Broker KYC rate limits.');
+}
+
+const catchAllStart = rules.indexOf('    match /{collection}/{document=**} {');
+if (catchAllStart < 0) throw new Error('Missing generic Admin collection fallback.');
+const catchAll = rules.slice(catchAllStart);
+const readCondition = catchAll.match(/allow\\s+read:\\s*([^;]+);/)?.[1] || '';
+if (!readCondition.includes("'broker_kyc_submission_limits'") || !readCondition.includes('hasAdminClaim()')) {
+  throw new Error('Unable to verify generic Admin read fallback excludes Broker KYC submission limits.');
 }
 
 const legacyWriteAnchor = "          'public_rate_limits',\n          'ai_usage'";
 const hardenedWriteAnchor = "          'public_rate_limits',\n          'broker_kyc_profiles',\n          'broker_kyc_submission_limits',\n          'ai_usage'";
-const technicianHardenedWriteAnchor = "          'public_rate_limits',\n          'technician_credential_renewals',\n          'broker_kyc_profiles',\n          'broker_kyc_submission_limits',\n          'ai_usage'";
-const legacyWriteCount = rules.split(legacyWriteAnchor).length - 1;
-const hardenedWriteCount = rules.split(hardenedWriteAnchor).length - 1;
-const technicianHardenedWriteCount = rules.split(technicianHardenedWriteAnchor).length - 1;
-if (legacyWriteCount === 2 && hardenedWriteCount === 0 && technicianHardenedWriteCount === 0) {
+if ((rules.split(legacyWriteAnchor).length - 1) === 2) {
   rules = rules.replaceAll(legacyWriteAnchor, hardenedWriteAnchor);
-} else if (!(
-  legacyWriteCount === 0 &&
-  (
-    (hardenedWriteCount === 2 && technicianHardenedWriteCount === 0) ||
-    (hardenedWriteCount === 0 && technicianHardenedWriteCount === 2)
-  )
-)) {
-  throw new Error(`Unexpected generic admin write fallback shape: legacy=${legacyWriteCount}, hardened=${hardenedWriteCount}, technicianHardened=${technicianHardenedWriteCount}`);
+}
+
+const refreshedCatchAllStart = rules.indexOf('    match /{collection}/{document=**} {');
+const refreshedCatchAll = rules.slice(refreshedCatchAllStart);
+const writeConditions = [...refreshedCatchAll.matchAll(/allow\\s+([^:;]+):\\s*([^;]+);/g)]
+  .filter(([, operations]) => /\\b(create|update|delete|write)\\b/.test(operations));
+if (writeConditions.length !== 2) {
+  throw new Error(`Expected two generic Admin write fallback rules, found ${writeConditions.length}`);
+}
+for (const [, , condition] of writeConditions) {
+  for (const collection of ['broker_kyc_profiles', 'broker_kyc_submission_limits']) {
+    if (!condition.includes(`'${collection}'`)) {
+      throw new Error(`Generic Admin write fallback does not exclude ${collection}`);
+    }
+  }
 }
 
 if (rules !== original) {
