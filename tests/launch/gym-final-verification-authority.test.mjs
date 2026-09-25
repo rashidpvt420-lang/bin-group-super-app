@@ -33,7 +33,7 @@ test('Admin Gym evidence requires verified measured area and verified complexity
   assert.match(inspectionDialog, /Member count and equipment count remain scope information only/);
 });
 
-test('completion re-prices the entire portfolio from verified Gym facts before payment becomes due', () => {
+test('completion re-prices the entire portfolio from verified Gym facts before final Owner acceptance', () => {
   assert.match(inspectionCompletion, /const verifiedProperties = properties\.map/);
   assert.match(inspectionCompletion, /calculateOwnerOnboardingQuote\(verifiedProperties/);
   assert.match(inspectionCompletion, /finalVerifiedQuoteHash/);
@@ -42,15 +42,17 @@ test('completion re-prices the entire portfolio from verified Gym facts before p
   assert.match(inspectionCompletion, /finalActivationDeposit/);
   assert.match(inspectionCompletion, /quoteRepricedAfterInspection:\s*true/);
   assert.match(inspectionCompletion, /FINAL_VERIFIED_AFTER_ALL_SITE_VISITS/);
-  assert.match(inspectionCompletion, /15_PERCENT_DUE_AFTER_COMPLETED_VISITS_AND_FINAL_REQUOTE/);
+  assert.match(inspectionCompletion, /AFTER_FINAL_VERIFIED_QUOTE_OWNER_SIGNATURE/);
+  assert.match(inspectionCompletion, /NOT_DUE_UNTIL_OWNER_FINAL_SIGNATURE/);
   assert.match(inspectionCompletion, /annualContractValue,\s*activationDeposit:\s*amount,\s*amount,/s);
 });
 
-test('signed pre-visit quote evidence is preserved instead of silently replacing the OTP-bound quote hash', () => {
+test('signed pre-visit quote evidence is preserved while final verified quote becomes new contract authority', () => {
   assert.match(inspectionCompletion, /signedPreInspectionQuoteHash/);
   assert.match(inspectionCompletion, /const signedQuoteHash = text\(intake\.quoteHash/);
-  assert.doesNotMatch(inspectionCompletion, /batch\.set\(contractRef,[\s\S]{0,2000}quoteHash:\s*finalQuote\.quoteHash/);
-  assert.doesNotMatch(inspectionCompletion, /batch\.set\(paymentRef,[\s\S]{0,2000}quoteHash:\s*finalQuote\.quoteHash/);
+  assert.match(inspectionCompletion, /preInspectionApplicationAcceptance:[\s\S]*?quoteHash:\s*signedQuoteHash/);
+  assert.match(inspectionCompletion, /batch\.set\(contractRef,[\s\S]{0,2500}quoteHash:\s*finalQuote\.quoteHash/);
+  assert.match(inspectionCompletion, /finalVerifiedQuoteHash:\s*finalQuote\.quoteHash/);
   assert.match(serverQuote, /quoteHash/);
 });
 

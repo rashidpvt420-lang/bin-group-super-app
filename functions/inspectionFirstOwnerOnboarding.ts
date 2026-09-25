@@ -792,6 +792,20 @@ export const adminRecordOwnerMobilizationPaymentEvidence = onCall({ cors: true, 
   if (!paymentSnap.exists) throw new HttpsError("not-found", "Payment transaction not found.");
   const payment = paymentSnap.data() || {};
   if (text(payment.workflowVersion) !== OWNER_WORKFLOW_VERSION || payment.inspectionVerified !== true) throw new HttpsError("failed-precondition", "Complete every Admin property visit before recording the 15% payment.");
+  const contractSnap = await db.collection("contracts").doc(text(payment.contractId || payment.intakeId || paymentId)).get();
+  const contract = contractSnap.data() || {};
+  const finalQuoteHash = text(payment.finalVerifiedQuoteHash).toLowerCase();
+  const contractQuoteHash = text(contract.quoteHash || contract.finalVerifiedQuoteHash).toLowerCase();
+  if (
+    !contractSnap.exists ||
+    contract.ownerSigned !== true ||
+    contract.signatureState?.ownerSigned !== true ||
+    !text(contract.signedPdfUrl || contract.signatureState?.pdfUrl) ||
+    !/^[a-f0-9]{64}$/.test(finalQuoteHash) ||
+    contractQuoteHash !== finalQuoteHash
+  ) {
+    throw new HttpsError("failed-precondition", "Owner must OTP-sign the final verified quote and generate the locked contract PDF before the 15% payment can be recorded.");
+  }
   const activeConfiguration = await loadActivePaymentConfiguration();
   if (!activeConfiguration.approvedMethods.includes(method)) {
     throw new HttpsError("failed-precondition", `The active corporate payment configuration does not approve ${method}.`);

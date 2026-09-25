@@ -131,7 +131,8 @@ assert(inspectionLink.includes('adminCreateOwnerPortfolioPropertyInspection'), '
 assert(inspectionLink.includes('paymentCollectionRequired: false'), 'Property visits must never collect Owner payment.');
 assert(inspectionLink.includes('Expected ${propertyCount}, received ${inspectionIds.length}'), 'Admin must create one linked inspection per property.');
 assert(inspectionCompletion.includes('Every property requires a linked site inspection'), 'Portfolio completion must require every property inspection.');
-assert(inspectionCompletion.includes('PENDING_ADMIN_PAYMENT_VERIFICATION'), 'Completed visits must make the exact 15% ready for Admin verification.');
+assert(inspectionCompletion.includes('NOT_DUE_UNTIL_OWNER_FINAL_SIGNATURE'), 'Completed visits must keep payment locked until the Owner OTP-signs the final verified contract.');
+assert(inspectionCompletion.includes('PENDING_OWNER_SIGNATURE'), 'Completed visits must return the final verified contract to Owner signature state.');
 
 // Keep legacy Phase 2 Stripe code fail-closed even though it is not routed from the five-page acquisition flow.
 assert(paymentStep.includes('uploadProofDocuments'), 'Legacy payment submission must upload proof documents.');

@@ -352,10 +352,10 @@ export const adminCompleteOwnerPortfolioInspections = onCall({ cors: true, enfor
     inspectionStatus: "COMPLETED",
     inspectionCompletedCount: inspectionIds.length,
     inspectionEvidenceVerifiedCount: inspectionIds.length,
-    adminReviewState: "ALL_INSPECTIONS_COMPLETE_FINAL_QUOTE_VERIFIED_AWAITING_15_PERCENT_PAYMENT",
-    activationState: "LOCKED_PENDING_15_PERCENT_PAYMENT",
-    paymentStatus: "PENDING_ADMIN_PAYMENT_VERIFICATION",
-    paymentCollectionStage: "15_PERCENT_DUE_AFTER_COMPLETED_VISITS_AND_FINAL_REQUOTE",
+    adminReviewState: "ALL_INSPECTIONS_COMPLETE_FINAL_QUOTE_VERIFIED_AWAITING_OWNER_ACCEPTANCE",
+    activationState: "LOCKED_PENDING_FINAL_CONTRACT_SIGNATURE_AND_PAYMENT",
+    paymentStatus: "NOT_DUE_UNTIL_OWNER_FINAL_SIGNATURE",
+    paymentCollectionStage: "AFTER_FINAL_VERIFIED_QUOTE_OWNER_SIGNATURE",
     inspectionNotes: notes,
     inspectionCompletedAt: now,
     inspectionCompletedBy: actor.uid,
@@ -371,9 +371,10 @@ export const adminCompleteOwnerPortfolioInspections = onCall({ cors: true, enfor
     updatedAt: now,
   }, { merge: true });
   batch.set(paymentRef, {
-    status: "PENDING_ADMIN_PAYMENT_VERIFICATION",
-    paymentStatus: "PENDING_ADMIN_PAYMENT_VERIFICATION",
-    verificationState: "ADMIN_PAYMENT_EVIDENCE_REQUIRED_AFTER_FINAL_VERIFIED_QUOTE",
+    status: "NOT_DUE_UNTIL_OWNER_FINAL_SIGNATURE",
+    paymentStatus: "NOT_DUE_UNTIL_OWNER_FINAL_SIGNATURE",
+    verificationState: "FINAL_VERIFIED_CONTRACT_SIGNATURE_REQUIRED_BEFORE_PAYMENT",
+    ownerFinalContractSigned: false,
     adminApprovalRequired: true,
     unlocksDashboard: false,
     inspectionId: inspectionIds[0],
@@ -388,14 +389,36 @@ export const adminCompleteOwnerPortfolioInspections = onCall({ cors: true, enfor
     updatedAt: now,
   }, { merge: true });
   batch.set(contractRef, {
-    status: "SIGNED",
-    contractStatus: "SIGNED",
-    activationStatus: "LOCKED_PENDING_15_PERCENT_PAYMENT",
+    status: "PENDING_OWNER_SIGNATURE",
+    contractStatus: "PENDING_OWNER_SIGNATURE",
+    activationStatus: "LOCKED_PENDING_FINAL_SIGNATURE_AND_15_PERCENT_PAYMENT",
+    ownerSigned: false,
+    signatureStatus: "PENDING_OWNER_SIGNATURE",
+    otpVerificationId: FieldValue.delete(),
+    signedPdfUrl: FieldValue.delete(),
+    quoteHash: finalQuote.quoteHash,
+    quoteSnapshot: finalQuote,
+    preInspectionApplicationAcceptance: {
+      signatureName: text(contractSnap.data()?.signatureName),
+      otpVerificationId: text(contractSnap.data()?.otpVerificationId),
+      quoteHash: signedQuoteHash,
+      acceptedBeforeInspection: true,
+    },
+    signatureState: {
+      ...(contractSnap.data()?.signatureState || {}),
+      applicationAcceptedBeforeInspection: true,
+      applicationAcceptanceQuoteHash: signedQuoteHash,
+      ownerSigned: false,
+      ownerSignedAt: null,
+      ownerSignatureName: null,
+      pdfGenerated: false,
+      pdfUrl: null,
+    },
     inspectionId: inspectionIds[0],
     inspectionIds,
     inspectionVerified: true,
     inspectionEvidenceVerified: true,
-    paymentStatus: "PENDING_ADMIN_PAYMENT_VERIFICATION",
+    paymentStatus: "NOT_DUE_UNTIL_OWNER_FINAL_SIGNATURE",
     annualContractValue,
     activationDeposit: amount,
     depositAmount: amount,
@@ -410,8 +433,8 @@ export const adminCompleteOwnerPortfolioInspections = onCall({ cors: true, enfor
     if (!verifiedProperty) throw new HttpsError("failed-precondition", `No final verified property snapshot exists for ${document.id}.`);
     batch.set(document.ref, {
       ...verifiedProperty,
-      status: "PAYMENT_PENDING",
-      activationStatus: "LOCKED_PENDING_15_PERCENT_PAYMENT",
+      status: "CONTRACT_PENDING",
+      activationStatus: "LOCKED_PENDING_FINAL_CONTRACT_SIGNATURE_AND_PAYMENT",
       inspectionStatus: "COMPLETED",
       adminSiteVisitVerified: true,
       // Evidence completion and canonical geo promotion are deliberately split.
@@ -431,14 +454,14 @@ export const adminCompleteOwnerPortfolioInspections = onCall({ cors: true, enfor
       updatedAt: now,
     }, { merge: true });
   });
-  batch.set(db.collection("users").doc(ownerUid), { status: "awaiting_activation_payment", onboardingStatus: "FINAL_QUOTE_VERIFIED_AWAITING_15_PERCENT_PAYMENT", dashboardLocked: true, dashboardUnlocked: false, updatedAt: now }, { merge: true });
-  batch.set(db.collection("owners").doc(ownerUid), { status: "AWAITING_ACTIVATION_PAYMENT", onboardingStatus: "FINAL_QUOTE_VERIFIED_AWAITING_15_PERCENT_PAYMENT", updatedAt: now }, { merge: true });
+  batch.set(db.collection("users").doc(ownerUid), { status: "awaiting_final_contract_signature", onboardingStatus: "FINAL_QUOTE_VERIFIED_AWAITING_OWNER_ACCEPTANCE", dashboardLocked: true, dashboardUnlocked: false, updatedAt: now }, { merge: true });
+  batch.set(db.collection("owners").doc(ownerUid), { status: "AWAITING_FINAL_CONTRACT_SIGNATURE", onboardingStatus: "FINAL_QUOTE_VERIFIED_AWAITING_OWNER_ACCEPTANCE", updatedAt: now }, { merge: true });
   batch.set(db.collection("notifications").doc(), {
     userId: ownerUid,
     toRole: "owner",
-    type: "OWNER_INSPECTIONS_COMPLETE_FINAL_QUOTE_PAYMENT_DUE",
-    title: "Property visits completed and final quote verified",
-    body: `All evidence-backed property visits are complete. The final verified annual value is AED ${annualContractValue.toLocaleString("en-AE")} and the exact 15% mobilisation payment of AED ${amount.toLocaleString("en-AE")} is now due for Admin verification.`,
+    type: "OWNER_INSPECTIONS_COMPLETE_FINAL_CONTRACT_SIGNATURE_REQUIRED",
+    title: "Final verified quote ready for acceptance",
+    body: `All evidence-backed property visits are complete. Review the final verified annual value of AED ${annualContractValue.toLocaleString("en-AE")} and exact 15% mobilisation amount of AED ${amount.toLocaleString("en-AE")}, then OTP-sign the final contract PDF before payment becomes due.`,
     read: false,
     createdAt: now,
   });
@@ -471,6 +494,6 @@ export const adminCompleteOwnerPortfolioInspections = onCall({ cors: true, enfor
     activationDeposit: amount,
     signedPreInspectionQuoteHash: signedQuoteHash,
     finalVerifiedQuoteHash: finalQuote.quoteHash,
-    nextState: "AWAITING_15_PERCENT_PAYMENT",
+    nextState: "AWAITING_OWNER_FINAL_CONTRACT_SIGNATURE",
   };
 });

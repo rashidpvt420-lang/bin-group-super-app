@@ -281,6 +281,43 @@ async function verifyInspectionSignatureOtp(ownerSession, appCheckToken, intakeI
   return { verificationId: requestId, ...mailboxEvidence };
 }
 
+async function verifyFinalContractSignatureOtp(ownerSession, appCheckToken, contractId, contractHash, signatureName, propertyName) {
+  const requested = await callFunction('requestContractSignatureOtp', {
+    contractId,
+    contractHash,
+    email: ownerEmail,
+    propertyName,
+  }, appCheckToken, ownerSession.idToken);
+  const requestId = text(requested.requestId);
+  assert(requestId, 'Final contract OTP request reference is missing.');
+  const otpRecord = await waitForDocument(
+    db.collection('contract_signature_otps').doc(requestId),
+    (value) => upper(value.status) === 'PENDING' && text(value.delivery?.messageId),
+    'final contract OTP delivery evidence',
+  );
+  assert(otpRecord.otp === undefined && otpRecord.code === undefined, 'Final contract OTP must never be stored in plaintext.');
+  const requestedAt = otpRecord.delivery?.sentAt?.toMillis?.() || otpRecord.createdAt?.toMillis?.() || Date.now() - 60_000;
+  const receipt = await readGmailOtp({
+    accessToken: await ownerMailboxAccessToken(),
+    expectedMailboxEmail: ownerMailboxEmail,
+    sender: CANONICAL_FOUNDER_EMAIL,
+    recipient: ownerEmail,
+    subject: 'BIN GROUP contract signature OTP',
+    providerMessageId: text(otpRecord.delivery?.messageId),
+    requestedAtMs: requestedAt,
+    otpPattern: /contract signature OTP:\s*(\d{6})/i,
+    timeoutMs: 120_000,
+    label: 'Owner final verified contract OTP',
+  });
+  const verified = await callFunction('verifyContractSignatureOtp', {
+    requestId,
+    otp: receipt.otp,
+    signature: signatureName,
+  }, appCheckToken, ownerSession.idToken);
+  assert(text(verified.verificationId) === requestId, 'Final contract OTP verification failed.');
+  return { verificationId: requestId, mailboxMessageIdHash: receipt.messageIdHash, mailboxReceivedAt: receipt.receivedAt };
+}
+
 async function uploadOwnerDocument(ownerSession, appCheckToken, intakeId, docType, label) {
   const bytes = minimalPdf(label);
   const result = await callFunction('uploadOwnerInspectionProofDocument', {
@@ -507,13 +544,32 @@ async function main() {
     intakeId,
     notes: 'All evidence-backed Owner portfolio visits completed and verified.',
   }, appCheckToken, founderSession.idToken);
-  assert(completedVisits.status === 'COMPLETED' && completedVisits.nextState === 'AWAITING_15_PERCENT_PAYMENT', 'Portfolio completion did not move the exact 15% payment to due.');
+  assert(completedVisits.status === 'COMPLETED' && completedVisits.nextState === 'AWAITING_OWNER_FINAL_CONTRACT_SIGNATURE', 'Portfolio completion did not require Owner acceptance of the final verified quote.');
 
-  const paymentBeforeEvidence = (await db.collection('payment_transactions').doc(intakeId).get()).data() || {};
-  assert(paymentBeforeEvidence.inspectionVerified === true && upper(paymentBeforeEvidence.paymentStatus) === 'PENDING_ADMIN_PAYMENT_VERIFICATION', 'Payment did not remain locked until verified visits completed.');
+  const paymentBeforeFinalSignature = (await db.collection('payment_transactions').doc(intakeId).get()).data() || {};
+  const contractBeforeFinalSignature = (await db.collection('contracts').doc(intakeId).get()).data() || {};
+  assert(paymentBeforeFinalSignature.inspectionVerified === true && upper(paymentBeforeFinalSignature.paymentStatus) === 'NOT_DUE_UNTIL_OWNER_FINAL_SIGNATURE', 'Payment became due before final verified contract acceptance.');
+  assert(upper(contractBeforeFinalSignature.status) === 'PENDING_OWNER_SIGNATURE', 'Final verified contract was not returned to Owner signature state.');
+  assert(text(contractBeforeFinalSignature.quoteHash) === text(completedVisits.finalVerifiedQuoteHash), 'Final contract is not bound to the verified post-inspection quote hash.');
   const propertyAfterVisit = (await db.collection('properties').doc(expectedPropertyId).get()).data() || {};
   assert(propertyAfterVisit.geo?.verified === true && propertyAfterVisit.geo?.dispatchReady === true && propertyAfterVisit.geo?.requiresGeoReview === false, 'Admin visit did not make the canonical GPS dispatch-ready.');
 
+  const finalOtp = await verifyFinalContractSignatureOtp(ownerSession, appCheckToken, intakeId, completedVisits.finalVerifiedQuoteHash, signatureName, propertyName);
+  const finalSigned = await callFunction('ownerSignContractAndQueuePdf', {
+    contractId: intakeId,
+    signatureName,
+    otpVerificationId: finalOtp.verificationId,
+    acceptedTerms: true,
+  }, appCheckToken, ownerSession.idToken);
+  assert(finalSigned.status === 'READY_FOR_ACTIVATION' && /^https:\/\//i.test(text(finalSigned.pdfUrl)), 'Final verified contract was not OTP-signed into an official server PDF.');
+  const finalContract = (await db.collection('contracts').doc(intakeId).get()).data() || {};
+  const paymentBeforeEvidence = (await db.collection('payment_transactions').doc(intakeId).get()).data() || {};
+  assert(finalContract.ownerSigned === true && finalContract.finalContractAccepted === true && text(finalContract.finalContractAcceptedQuoteHash) === text(completedVisits.finalVerifiedQuoteHash), 'Final contract acceptance is not bound to the verified quote.');
+  assert(/^https:\/\//i.test(text(finalContract.signedPdfUrl)), 'Official final contract PDF URL is missing.');
+  assert(paymentBeforeEvidence.ownerFinalContractSigned === true && upper(paymentBeforeEvidence.paymentStatus) === 'PENDING_ADMIN_PAYMENT_VERIFICATION', 'Payment did not become due only after final contract signature.');
+
+  const finalActivationDeposit = Number(completedVisits.activationDeposit);
+  assert(finalActivationDeposit > 0, 'Final verified activation deposit is invalid.');
   const receiptBytes = minimalPdf('Exact 15 percent cash mobilisation receipt');
   const receiptHash = sha256(receiptBytes);
   const paymentReferenceId = `E2E-CASH-${runId}`;
@@ -521,7 +577,7 @@ async function main() {
     paymentId: intakeId,
     paymentReferenceId,
     paymentMethod: 'CASH',
-    amountReceived: quote.activationDeposit,
+    amountReceived: finalActivationDeposit,
     filename: 'mobilisation-cash-receipt.pdf',
     contentType: 'application/pdf',
     encodedDocument: receiptBytes.toString('base64'),
@@ -538,7 +594,7 @@ async function main() {
   const approvalPayload = {
     paymentId: intakeId,
     paymentReferenceId,
-    amountReceived: quote.activationDeposit,
+    amountReceived: finalActivationDeposit,
     method: 'CASH',
     receivedAt: new Date().toISOString(),
     notes: 'E2E inspection-first Owner activation approval.',
@@ -566,7 +622,7 @@ async function main() {
   assert(upper(activatedProperty.status) === 'ACTIVE' && upper(activatedProperty.activationStatus) === 'ACTIVE', 'Server-generated property is not active.');
   assert(upper(inspection.status) === 'COMPLETED' && upper(inspection.evidenceStatus) === 'VERIFIED', 'Evidence-backed property inspection is not complete.');
   assert(invoiceId.startsWith('MOB-') && text(invoice.proofHash) === text(activatedPayment.invoiceProofHash), 'Mobilisation invoice hash is missing or inconsistent.');
-  assert(Math.abs(Number(invoice.amount) - Number(quote.activationDeposit)) <= 0.01, 'Mobilisation invoice does not equal the locked 15% deposit.');
+  assert(Math.abs(Number(invoice.amount) - finalActivationDeposit) <= 0.01, 'Mobilisation invoice does not equal the final verified locked 15% deposit.');
 
   const invoiceMail = await waitForMailDelivery(`owner_invoice_${intakeId}_${invoiceId}`, ownerEmail);
 
