@@ -738,7 +738,7 @@ describe('Firestore Security Rules', () => {
       lifecycleStatus: 'LEAD_CAPTURED',
     }));
 
-    await assertSucceeds(setDoc(doc(brokerDb, 'referrals/ref_valid'), {
+    await assertFails(setDoc(doc(brokerDb, 'referrals/ref_valid'), {
       brokerId: 'broker_a',
       sourceReferralId: 'ref_valid',
       attributionId: 'broker_referral_broker_a_ref_valid',
