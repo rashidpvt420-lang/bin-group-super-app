@@ -79,10 +79,20 @@ async function requireActiveActor(request: any) {
   const token = request.auth.token || {};
   if (token?.suspended === true) throw new HttpsError("permission-denied", "Suspended accounts cannot use staff operations.");
   const actor = await admin.auth().getUser(request.auth.uid);
-  if (actor.disabled) throw new HttpsError("permission-denied", "Disabled accounts cannot use staff operations.");
+  const currentClaims = actor.customClaims || {};
+  const tokenRole = roleFromToken(token) || (isFullAdminToken(token) ? "admin" : "");
+  const currentRole = roleFromToken(currentClaims) || (isFullAdminToken(currentClaims) ? "admin" : "");
+  if (
+    actor.disabled ||
+    currentClaims.suspended === true ||
+    !currentRole ||
+    currentRole !== tokenRole
+  ) {
+    throw new HttpsError("permission-denied", "Current staff authority is inactive or no longer matches this session.");
+  }
   return {
     actorId: request.auth.uid,
-    actorRole: roleFromToken(token) || (isFullAdminToken(token) ? "admin" : ""),
+    actorRole: tokenRole,
     token,
   };
 }

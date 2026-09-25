@@ -34,11 +34,36 @@ function clean(v: any): any {
 }
 
 async function assertAdmin(auth: any) {
-  if (!auth) throw new HttpsError("unauthenticated", "Admin authentication required.");
-  const t = auth.token || {};
-  const tr = s(t.role || t.userRole || t.primaryRole).toLowerCase();
-  if (t.admin === true || t.isAdmin === true || t.superAdmin === true || t.super_admin === true || adminRoles.has(tr)) return;
-  throw new HttpsError("permission-denied", "Admin access required.");
+  if (!auth?.uid) throw new HttpsError("unauthenticated", "Admin authentication required.");
+  const token = auth.token || {};
+  const tokenRole = s(token.role || token.userRole || token.primaryRole).toLowerCase();
+  const tokenAuthorized =
+    token.suspended !== true &&
+    (token.admin === true ||
+      token.isAdmin === true ||
+      token.superAdmin === true ||
+      token.super_admin === true ||
+      token.ceo === true ||
+      adminRoles.has(tokenRole));
+  if (!tokenAuthorized) throw new HttpsError("permission-denied", "Admin access required.");
+  if (token.email_verified !== true || !token.firebase?.sign_in_second_factor) {
+    throw new HttpsError("permission-denied", "A verified Admin MFA session is required.");
+  }
+
+  const currentUser = await admin.auth().getUser(auth.uid);
+  const currentClaims = currentUser.customClaims || {};
+  const currentRole = s(currentClaims.role || currentClaims.userRole || currentClaims.primaryRole).toLowerCase();
+  const currentAuthorized =
+    currentClaims.suspended !== true &&
+    (currentClaims.admin === true ||
+      currentClaims.isAdmin === true ||
+      currentClaims.superAdmin === true ||
+      currentClaims.super_admin === true ||
+      currentClaims.ceo === true ||
+      adminRoles.has(currentRole));
+  if (currentUser.disabled || !currentUser.emailVerified || !currentAuthorized) {
+    throw new HttpsError("permission-denied", "Current Admin authority is inactive or no longer valid.");
+  }
 }
 
 function ownerOf(intake: any) {
@@ -199,7 +224,7 @@ function activeProperty(raw: any, intakeId: string, ownerId: string, owner: any,
   });
 }
 
-export const adminSendOwnerOnboardingMessage = onCall({ cors: true }, async (request) => {
+export const adminSendOwnerOnboardingMessage = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
   await assertAdmin(request.auth);
   const intakeId = s(request.data?.intakeId);
   if (!intakeId) throw new HttpsError("invalid-argument", "intakeId is required.");
@@ -233,34 +258,15 @@ export const adminSendOwnerOnboardingMessage = onCall({ cors: true }, async (req
   return { status: "QUEUED", ownerId, ownerEmail: owner.email };
 });
 
-export const adminCreateOwnerPropertyInspection = onCall({ cors: true }, async (request) => {
+export const adminCreateOwnerPropertyInspection = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
   await assertAdmin(request.auth);
-  const intakeId = s(request.data?.intakeId);
-  if (!intakeId) throw new HttpsError("invalid-argument", "intakeId is required.");
-  const { data } = await intakeById(intakeId);
-  const owner = ownerOf(data);
-  const pricing = pricingOf(data);
-  const propertyIndex = n(request.data?.propertyIndex, 0);
-  const property = propertiesOf(data)[propertyIndex] || propertiesOf(data)[0];
-  if (!property) throw new HttpsError("failed-precondition", "No property found in owner submission.");
-  const g = gpsOf(property);
-  if (!g) throw new HttpsError("failed-precondition", "Property GPS is required before creating a site inspection.");
-  const ownerId = id(data.ownerUid || data.pendingOwnerId || data.ownerRegistrationId || owner.email || intakeId, `owner_${intakeId}`);
-  const propertyId = id(property.propertyId || property.id || `${intakeId}_property_${propertyIndex + 1}`, `${intakeId}_property_${propertyIndex + 1}`);
-  const location = { lat: g.lat, lng: g.lng, point: new admin.firestore.GeoPoint(g.lat, g.lng), geohash: geohash(g.lat, g.lng), address: addressOf(property), emirate: emirateOf(property), mapUrl: mapUrl(property), directionsUrl: dirUrl(property) };
-  const inspectionRef = db.collection("property_inspections").doc();
-  const ticketRef = db.collection("maintenanceTickets").doc();
-  const dispatchRef = db.collection("technician_dispatch_jobs").doc();
-  const batch = db.batch();
-  batch.set(inspectionRef, { id: inspectionRef.id, intakeId, ownerId, ownerName: owner.name, ownerEmail: owner.email, ownerMobile: owner.mobile, propertyId, propertyName: addressOf(property), location, status: "READY_FOR_SITE_VISIT", paymentCollectionRequired: true, paymentAmount: pricing.mobilization, createdBy: request.auth?.uid || "admin", createdAt: ts(), updatedAt: ts() });
-  batch.set(ticketRef, { id: ticketRef.id, intakeId, inspectionId: inspectionRef.id, ownerId, propertyId, title: "Owner onboarding site inspection", category: "ONBOARDING_INSPECTION", status: "OPEN", priority: "HIGH", location, assignedTechnicianId: null, createdAt: ts(), updatedAt: ts() });
-  batch.set(dispatchRef, { id: dispatchRef.id, intakeId, inspectionId: inspectionRef.id, ticketId: ticketRef.id, ownerId, propertyId, jobType: "OWNER_ONBOARDING_SITE_INSPECTION", status: "PENDING_ASSIGNMENT", assignmentState: "UNASSIGNED_NEAREST_TECH_REQUIRED", location, paymentCollectionRequired: true, paymentAmount: pricing.mobilization, createdAt: ts(), updatedAt: ts() });
-  batch.set(db.collection("audit_logs").doc(), { actorId: request.auth?.uid || "admin", actorRole: "admin", action: "CREATE_OWNER_ONBOARDING_SITE_INSPECTION", targetType: "property_inspections", targetId: inspectionRef.id, metadata: { ticketId: ticketRef.id, dispatchJobId: dispatchRef.id, intakeId, propertyId }, createdAt: ts() });
-  await batch.commit();
-  return { status: "CREATED", inspectionId: inspectionRef.id, ticketId: ticketRef.id, dispatchJobId: dispatchRef.id, directionsUrl: location.directionsUrl };
+  throw new HttpsError(
+    "failed-precondition",
+    "Legacy single-property inspection creation is disabled. Use adminCreateOwnerPortfolioPropertyInspection so submitted GPS stays untrusted until the canonical physical-inspection workflow verifies it.",
+  );
 });
 
-export const approveOwnerSubmissionOperationalFlow = onCall({ cors: true }, async (request) => {
+export const approveOwnerSubmissionOperationalFlow = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
   await assertAdmin(request.auth);
   throw new HttpsError(
     "failed-precondition",
@@ -533,7 +539,7 @@ export const ownerInviteTenantToProperty = onCall({ cors: true }, async (request
   return { status: "TENANT_INVITED", tenantId, inviteUrl, locationInherited: Boolean(tenantLocation) };
 });
 
-export const adminSuspendOwner = onCall({ cors: true }, async (request) => {
+export const adminSuspendOwner = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
   await assertAdmin(request.auth);
   const ownerId = s(request.data?.ownerId);
   if (!ownerId) throw new HttpsError("invalid-argument", "ownerId is required.");
@@ -571,7 +577,7 @@ export const adminSuspendOwner = onCall({ cors: true }, async (request) => {
   return { status: "SUSPENDED", ownerId };
 });
 
-export const adminResumeOwner = onCall({ cors: true }, async (request) => {
+export const adminResumeOwner = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
   await assertAdmin(request.auth);
   const ownerId = s(request.data?.ownerId);
   if (!ownerId) throw new HttpsError("invalid-argument", "ownerId is required.");
@@ -612,7 +618,7 @@ export const adminResumeOwner = onCall({ cors: true }, async (request) => {
   return { status: restoredStatus.toUpperCase(), ownerId };
 });
 
-export const approveOwnerActivation = onCall({ cors: true }, async (request) => {
+export const approveOwnerActivation = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
   await assertAdmin(request.auth);
   throw new HttpsError(
     "failed-precondition",
