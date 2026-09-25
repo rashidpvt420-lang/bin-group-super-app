@@ -125,9 +125,6 @@ export const adminCloseContract = onCall(
         completed: true,
         closureReason: reason,
         closureOperationId: operationId,
-        financialDisposition,
-        refundReviewRequired,
-        linkedPaymentId: linkedPaymentId || null,
         closedBy: actor.uid,
         closedAt: stagedAt,
         updatedAt: stagedAt,
@@ -167,6 +164,8 @@ export const adminCloseContract = onCall(
           ownerLocked: false,
           renewalRecordsClosed: renewalSnap.size,
           propertiesDisabled: propertySnap.size,
+          financialDisposition: text(contract.financialDisposition, 80) || "UNKNOWN",
+          refundReviewRequired: contract.refundReviewRequired === true,
         };
       }
       if (TERMINAL_CONTRACT_STATES.has(currentStatus)) {
@@ -202,6 +201,9 @@ export const adminCloseContract = onCall(
         closureReason: reason,
         closureNote: note,
         closureOperationId: operationId,
+        financialDisposition,
+        refundReviewRequired,
+        linkedPaymentId: linkedPaymentId || null,
         closedBy: actor.uid,
         closedByRole: actor.role,
         closedAt: now,
