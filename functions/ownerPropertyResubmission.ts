@@ -84,13 +84,13 @@ export const resubmitOwnerProperty = onCall(
       const propertyState = normalizeOnboardingState(
         property.lifecycleStatus || property.onboardingState || property.status,
       );
-      if (propertyState !== "changes_requested") {
+      if (propertyState !== "CHANGES_REQUESTED") {
         throw new HttpsError(
           "failed-precondition",
           "Owner resubmission is allowed only from CHANGES_REQUESTED.",
         );
       }
-      assertOnboardingTransition(propertyState, "admin_review");
+      assertOnboardingTransition(propertyState, "UNDER_REVIEW");
 
       const intakeId = text(property.intakeId, 240);
       if (!intakeId) {
@@ -109,20 +109,20 @@ export const resubmitOwnerProperty = onCall(
       const intakeState = normalizeOnboardingState(
         intake.lifecycleStatus || intake.onboardingState || intake.status,
       );
-      if (intakeState !== "changes_requested") {
+      if (intakeState !== "CHANGES_REQUESTED") {
         throw new HttpsError(
           "failed-precondition",
           "The linked intake must also be CHANGES_REQUESTED before resubmission.",
         );
       }
-      assertOnboardingTransition(intakeState, "admin_review");
+      assertOnboardingTransition(intakeState, "UNDER_REVIEW");
 
       const now = admin.firestore.FieldValue.serverTimestamp();
       const count = admin.firestore.FieldValue.increment(1);
       const commonPatch = {
-        lifecycleStatus: "admin_review",
-        onboardingState: "admin_review",
-        status: "admin_review",
+        lifecycleStatus: "UNDER_REVIEW",
+        onboardingState: "UNDER_REVIEW",
+        status: "UNDER_REVIEW",
         adminApproved: false,
         approved: false,
         resubmittedAt: now,
@@ -148,8 +148,8 @@ export const resubmitOwnerProperty = onCall(
         propertyId,
         intakeId,
         workflowVersion: WORKFLOW_VERSION,
-        fromState: "changes_requested",
-        toState: "admin_review",
+        fromState: "CHANGES_REQUESTED",
+        toState: "UNDER_REVIEW",
         submittedGeoUpdated: Boolean(submittedGeo),
         createdAt: now,
       });
@@ -158,8 +158,8 @@ export const resubmitOwnerProperty = onCall(
         success: true,
         propertyId,
         intakeId,
-        fromState: "changes_requested",
-        state: "admin_review",
+        fromState: "CHANGES_REQUESTED",
+        state: "UNDER_REVIEW",
         submittedGeoVerified: false,
         dispatchReady: false,
       };
