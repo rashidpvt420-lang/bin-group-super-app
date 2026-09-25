@@ -263,6 +263,10 @@ export const adminResetTechnicianDeviceRegistration = onCall(
       throw new HttpsError("failed-precondition", "Target Firebase Auth identity is not a Technician.");
     }
 
+    // Revoke existing sessions before the audit records a successful reset.
+    // If the transactional reset fails afterwards, the Technician must simply sign in again.
+    await admin.auth().revokeRefreshTokens(technicianId);
+
     const userRef = db.collection("users").doc(technicianId);
     const technicianRef = db.collection("technicians").doc(technicianId);
     const liveRef = db.collection("technician_live_locations").doc(technicianId);
@@ -270,15 +274,20 @@ export const adminResetTechnicianDeviceRegistration = onCall(
     const now = FieldValue.serverTimestamp();
 
     await db.runTransaction(async (transaction) => {
-      const [userSnap, technicianSnap] = await Promise.all([
+      const [userSnap, technicianSnap, liveSnap] = await Promise.all([
         transaction.get(userRef),
         transaction.get(technicianRef),
+        transaction.get(liveRef),
       ]);
       if (!userSnap.exists || !technicianSnap.exists) {
         throw new HttpsError("failed-precondition", "Both Technician identity registries are required before device reset.");
       }
       const user = userSnap.data() || {};
       const technician = technicianSnap.data() || {};
+      const live = liveSnap.data() || {};
+      const activeTicketId = text(live.activeTicketId || technician.activeTicketId || user.activeTicketId);
+      const activeTicketRef = activeTicketId ? db.collection("maintenanceTickets").doc(activeTicketId) : null;
+      const activeTicketSnap = activeTicketRef ? await transaction.get(activeTicketRef) : null;
       if (
         role(user.role || user.userRole || user.primaryRole) !== "technician" ||
         role(technician.role || technician.userRole || technician.primaryRole) !== "technician"
@@ -315,6 +324,14 @@ export const adminResetTechnicianDeviceRegistration = onCall(
         expiresAt: now,
         updatedAt: now,
       }, { merge: true });
+      if (activeTicketRef && activeTicketSnap?.exists) {
+        transaction.set(activeTicketRef, {
+          trackingStatus: "STOPPED_DEVICE_REREGISTRATION",
+          technicianLocationExpiresAt: now,
+          trackingReconciledAt: now,
+          updatedAt: now,
+        }, { merge: true });
+      }
       transaction.set(auditRef, {
         action: "ADMIN_RESET_TECHNICIAN_DEVICE_REGISTRATION",
         actorId: actor.uid,
@@ -328,12 +345,12 @@ export const adminResetTechnicianDeviceRegistration = onCall(
           previousPlatform: text(technician.registeredDevicePlatform || user.registeredDevicePlatform) || null,
           rawDeviceIdentityExcluded: true,
           refreshTokensRevoked: true,
+          activeTicketTrackingStopped: Boolean(activeTicketRef && activeTicketSnap?.exists),
         },
         createdAt: now,
       });
     });
 
-    await admin.auth().revokeRefreshTokens(technicianId);
     return {
       status: "RESET_REQUIRED",
       technicianId,
