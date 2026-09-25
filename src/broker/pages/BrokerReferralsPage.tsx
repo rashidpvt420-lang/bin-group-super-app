@@ -86,8 +86,14 @@ export default function BrokerReferralsPage({ openFormByDefault = false }: { ope
         setPropertiesList(Array.isArray(result?.data?.listings) ? result.data.listings : []);
       } catch (err: any) {
         if (cancelled) return;
-        console.warn('[BrokerReferrals] verified listing lookup failed:', err);
+        const code = String(err?.code || '').toLowerCase();
+        console.warn('[BrokerReferrals] verified listing lookup failed:', { code });
         setPropertiesList([]);
+        setWarning(
+          code.includes('failed-precondition')
+            ? 'Verified listing access requires approved Broker KYC and RERA verification.'
+            : 'Verified listing access could not be loaded. This is a loading failure, not confirmation that no listings exist.',
+        );
       }
     };
     void loadVerifiedListings();
