@@ -165,8 +165,8 @@ export const adminRecordOwnerPropertyInspectionEvidence = onCall({ cors: true, e
   const now = FieldValue.serverTimestamp();
   const batch = db.batch();
   batch.set(inspectionRef, {
-    status: "EVIDENCE_RECORDED_PENDING_COMPLETION",
-    inspectionStatus: "EVIDENCE_RECORDED_PENDING_COMPLETION",
+    status: "EVIDENCE_RECORDED",
+    inspectionStatus: "EVIDENCE_RECORDED",
     evidenceStatus: "VERIFIED",
     evidencePath: storagePath,
     evidenceHash,
@@ -196,7 +196,7 @@ export const adminRecordOwnerPropertyInspectionEvidence = onCall({ cors: true, e
   }, { merge: true });
   const ticketId = text(inspection.ticketId);
   const dispatchJobId = text(inspection.dispatchJobId);
-  if (ticketId) batch.set(db.collection("maintenanceTickets").doc(ticketId), { status: "INSPECTION_EVIDENCE_RECORDED", updatedAt: now }, { merge: true });
+  if (ticketId) batch.set(db.collection("maintenanceTickets").doc(ticketId), { status: "EVIDENCE_RECORDED", updatedAt: now }, { merge: true });
   if (dispatchJobId) batch.set(db.collection("technician_dispatch_jobs").doc(dispatchJobId), { status: "INSPECTION_EVIDENCE_RECORDED", updatedAt: now }, { merge: true });
   batch.set(db.collection("audit_logs").doc(), {
     actorId: actor.uid,
@@ -371,7 +371,7 @@ export const adminCompleteOwnerPortfolioInspections = onCall({ cors: true, enfor
     updatedAt: now,
   }, { merge: true });
   batch.set(paymentRef, {
-    status: "PENDING_ADMIN_PAYMENT_VERIFICATION",
+    status: "PENDING",
     paymentStatus: "PENDING_ADMIN_PAYMENT_VERIFICATION",
     verificationState: "ADMIN_PAYMENT_EVIDENCE_REQUIRED_AFTER_FINAL_VERIFIED_QUOTE",
     adminApprovalRequired: true,
@@ -388,7 +388,7 @@ export const adminCompleteOwnerPortfolioInspections = onCall({ cors: true, enfor
     updatedAt: now,
   }, { merge: true });
   batch.set(contractRef, {
-    status: "SIGNED_AWAITING_15_PERCENT_PAYMENT",
+    status: "PENDING_PAYMENT",
     contractStatus: "signed_awaiting_payment",
     activationStatus: "LOCKED_PENDING_15_PERCENT_PAYMENT",
     inspectionId: inspectionIds[0],
@@ -410,7 +410,7 @@ export const adminCompleteOwnerPortfolioInspections = onCall({ cors: true, enfor
     if (!verifiedProperty) throw new HttpsError("failed-precondition", `No final verified property snapshot exists for ${document.id}.`);
     batch.set(document.ref, {
       ...verifiedProperty,
-      status: "AWAITING_15_PERCENT_PAYMENT",
+      status: "PAYMENT_PENDING",
       activationStatus: "LOCKED_PENDING_15_PERCENT_PAYMENT",
       inspectionStatus: "COMPLETED",
       adminSiteVisitVerified: true,
@@ -431,8 +431,8 @@ export const adminCompleteOwnerPortfolioInspections = onCall({ cors: true, enfor
       updatedAt: now,
     }, { merge: true });
   });
-  batch.set(db.collection("users").doc(ownerUid), { status: "awaiting_activation_payment", onboardingStatus: "FINAL_QUOTE_VERIFIED_AWAITING_15_PERCENT_PAYMENT", dashboardLocked: true, dashboardUnlocked: false, updatedAt: now }, { merge: true });
-  batch.set(db.collection("owners").doc(ownerUid), { status: "AWAITING_ACTIVATION_PAYMENT", onboardingStatus: "FINAL_QUOTE_VERIFIED_AWAITING_15_PERCENT_PAYMENT", updatedAt: now }, { merge: true });
+  batch.set(db.collection("users").doc(ownerUid), { status: "awaiting_activation_payment", onboardingStatus: "PAYMENT_PENDING", dashboardLocked: true, dashboardUnlocked: false, updatedAt: now }, { merge: true });
+  batch.set(db.collection("owners").doc(ownerUid), { status: "AWAITING_ACTIVATION_PAYMENT", onboardingStatus: "PAYMENT_PENDING", updatedAt: now }, { merge: true });
   batch.set(db.collection("notifications").doc(), {
     userId: ownerUid,
     toRole: "owner",
