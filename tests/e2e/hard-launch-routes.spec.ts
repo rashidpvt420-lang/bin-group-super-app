@@ -98,7 +98,7 @@ const roleCases: RoleCase[] = [
       '/owner/activation',
       '/owner/onboarding-status',
       '/owner/properties',
-      '/owner/properties/phase4-missing/correct',
+      '/owner/properties/phase2-missing/correct',
       '/owner/contracts',
       '/owner/financials',
       '/owner/payment-proof',
