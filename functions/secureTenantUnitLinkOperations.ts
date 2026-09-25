@@ -1,5 +1,6 @@
 import * as admin from "firebase-admin";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
+import { assertWorkflowTransition, normalizeWorkflowState } from "./workflowStateMachines";
 
 if (!admin.apps.length) admin.initializeApp();
 const db = admin.firestore();
@@ -76,16 +77,19 @@ export const adminResolveTenantUnitLink = onCall(
       const requestSnap = await transaction.get(requestRef);
       if (!requestSnap.exists) throw new HttpsError("not-found", "Tenant unit-link request not found.");
       const data = requestSnap.data() || {};
-      if (text(data.status, 80).toUpperCase() !== "PENDING_ADMIN_REVIEW") {
+      const currentLinkState = normalizeWorkflowState("TENANT_LINK", data.status, "PENDING_ADMIN_REVIEW");
+      if (currentLinkState !== "PENDING_ADMIN_REVIEW") {
         throw new HttpsError("failed-precondition", "Tenant unit-link request has already been resolved.");
       }
+      const nextLinkState = decision === "APPROVE" ? "APPROVED" : "REJECTED";
+      assertWorkflowTransition("TENANT_LINK", currentLinkState, nextLinkState);
 
       const tenantId = text(data.tenantUid || data.tenantId, 128);
       if (!tenantId) throw new HttpsError("failed-precondition", "Tenant identity is missing from the request.");
 
       if (decision === "REJECT") {
         transaction.set(requestRef, {
-          status: "REJECTED",
+          status: nextLinkState,
           verificationState: "ADMIN_REJECTED",
           rejectionReason: reason,
           resolutionReason: reason,
@@ -141,7 +145,7 @@ export const adminResolveTenantUnitLink = onCall(
         updatedAt: now,
       }, { merge: true });
       transaction.set(requestRef, {
-        status: "APPROVED",
+        status: nextLinkState,
         verificationState: "ADMIN_VERIFIED",
         linkedUnitId: unitId,
         resolutionReason: reason || null,
