@@ -264,29 +264,6 @@ export const adminCreateOwnerPropertyInspection = onCall({ cors: true, enforceAp
     "failed-precondition",
     "Legacy single-property inspection creation is disabled. Use adminCreateOwnerPortfolioPropertyInspection so submitted GPS stays untrusted until the canonical physical-inspection workflow verifies it.",
   );
-  const intakeId = s(request.data?.intakeId);
-  if (!intakeId) throw new HttpsError("invalid-argument", "intakeId is required.");
-  const { data } = await intakeById(intakeId);
-  const owner = ownerOf(data);
-  const pricing = pricingOf(data);
-  const propertyIndex = n(request.data?.propertyIndex, 0);
-  const property = propertiesOf(data)[propertyIndex] || propertiesOf(data)[0];
-  if (!property) throw new HttpsError("failed-precondition", "No property found in owner submission.");
-  const g = gpsOf(property);
-  if (!g) throw new HttpsError("failed-precondition", "Property GPS is required before creating a site inspection.");
-  const ownerId = id(data.ownerUid || data.pendingOwnerId || data.ownerRegistrationId || owner.email || intakeId, `owner_${intakeId}`);
-  const propertyId = id(property.propertyId || property.id || `${intakeId}_property_${propertyIndex + 1}`, `${intakeId}_property_${propertyIndex + 1}`);
-  const location = { lat: g.lat, lng: g.lng, point: new admin.firestore.GeoPoint(g.lat, g.lng), geohash: geohash(g.lat, g.lng), address: addressOf(property), emirate: emirateOf(property), mapUrl: mapUrl(property), directionsUrl: dirUrl(property) };
-  const inspectionRef = db.collection("property_inspections").doc();
-  const ticketRef = db.collection("maintenanceTickets").doc();
-  const dispatchRef = db.collection("technician_dispatch_jobs").doc();
-  const batch = db.batch();
-  batch.set(inspectionRef, { id: inspectionRef.id, intakeId, ownerId, ownerName: owner.name, ownerEmail: owner.email, ownerMobile: owner.mobile, propertyId, propertyName: addressOf(property), location, status: "READY_FOR_SITE_VISIT", paymentCollectionRequired: true, paymentAmount: pricing.mobilization, createdBy: request.auth?.uid || "admin", createdAt: ts(), updatedAt: ts() });
-  batch.set(ticketRef, { id: ticketRef.id, intakeId, inspectionId: inspectionRef.id, ownerId, propertyId, title: "Owner onboarding site inspection", category: "ONBOARDING_INSPECTION", status: "OPEN", priority: "HIGH", location, assignedTechnicianId: null, createdAt: ts(), updatedAt: ts() });
-  batch.set(dispatchRef, { id: dispatchRef.id, intakeId, inspectionId: inspectionRef.id, ticketId: ticketRef.id, ownerId, propertyId, jobType: "OWNER_ONBOARDING_SITE_INSPECTION", status: "PENDING_ASSIGNMENT", assignmentState: "UNASSIGNED_NEAREST_TECH_REQUIRED", location, paymentCollectionRequired: true, paymentAmount: pricing.mobilization, createdAt: ts(), updatedAt: ts() });
-  batch.set(db.collection("audit_logs").doc(), { actorId: request.auth?.uid || "admin", actorRole: "admin", action: "CREATE_OWNER_ONBOARDING_SITE_INSPECTION", targetType: "property_inspections", targetId: inspectionRef.id, metadata: { ticketId: ticketRef.id, dispatchJobId: dispatchRef.id, intakeId, propertyId }, createdAt: ts() });
-  await batch.commit();
-  return { status: "CREATED", inspectionId: inspectionRef.id, ticketId: ticketRef.id, dispatchJobId: dispatchRef.id, directionsUrl: location.directionsUrl };
 });
 
 export const approveOwnerSubmissionOperationalFlow = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
