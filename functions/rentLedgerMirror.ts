@@ -1,4 +1,5 @@
 import { FieldValue } from "firebase-admin/firestore";
+import { normalizeWorkflowState } from "./workflowStateMachines";
 import { onDocumentWritten } from "firebase-functions/v2/firestore";
 import * as admin from "firebase-admin";
 
@@ -67,7 +68,7 @@ export const mirrorRentPaymentToTenantLedger = onDocumentWritten("payment_transa
     paid: rentPaid,
     balance,
     status: ledgerStatus(payment),
-    paymentStatus: payment.paymentStatus || payment.status || "PENDING_ADMIN_PAYMENT_VERIFICATION",
+    paymentStatus: normalizeWorkflowState("PAYMENT", payment.paymentStatus || payment.status || payment.verificationState, "PENDING"),
     paymentVerified: payment.paymentVerified === true,
     paymentMethod,
     paymentReference: payment.paymentReference || payment.paymentReferenceId || payment.referenceId || "",
