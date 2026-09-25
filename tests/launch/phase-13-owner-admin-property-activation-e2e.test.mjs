@@ -60,7 +60,7 @@ test('Phase 13 final verified quote requires fresh Owner OTP acceptance and serv
   for (const token of [
     'contract.finalVerifiedQuoteHash || contract.quoteHash || contract.contractHash',
     'validateVerifiedContractSignatureOtp',
-    'generateContractPDF',
+    'generateContractPdfArtifact',
     'finalContractAccepted: true',
     'finalContractAcceptedQuoteHash: contractHash',
     'ownerFinalContractSigned: true',
