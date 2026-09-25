@@ -782,8 +782,6 @@ service cloud.firestore {
           'status',
           'lifecycleStatus',
           'notes',
-          'attributionId',
-          'sourceLeadId',
           'updatedAt'
         ]) &&
         (!('status' in request.resource.data) || request.resource.data.status in [
@@ -1992,9 +1990,10 @@ service cloud.firestore {
     }
     match /broker_listing_claims/{claimId} {
       allow read: if isAdmin() || (signedIn() && resource.data.get('brokerId', null) == request.auth.uid);
-      allow create: if signedIn() && request.resource.data.get('brokerId', null) == request.auth.uid;
-      allow update: if isAdmin();
-      allow delete: if isAdmin();
+      // Direct browser listing claims are retired. A future Broker listing-access
+      // workflow must use an App Check-protected server authority that validates
+      // Broker KYC/RERA and Owner/listing permission before creating a claim.
+      allow create, update, delete: if false;
     }
 
     // ── Previously unruled collections — were silently falling through to the
