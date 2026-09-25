@@ -18,8 +18,7 @@ import WaterIcon from '@mui/icons-material/Water';
 import ElectricBoltIcon from '@mui/icons-material/ElectricBolt';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
-import { collection, query, where, onSnapshot, addDoc, serverTimestamp } from 'firebase/firestore';
-import { db } from '../lib/firebase';
+import { db, collection, query, where, onSnapshot, addDoc, serverTimestamp } from '../lib/firebase';
 import { useLanguage } from '@bin/shared';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
