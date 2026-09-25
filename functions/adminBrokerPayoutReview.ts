@@ -38,10 +38,25 @@ async function requireFinanceAdmin(auth: any) {
     throw new HttpsError("permission-denied", "A verified Admin MFA session is required for payout review.");
   }
   const record = await admin.auth().getUser(auth.uid);
-  if (record.disabled || !record.emailVerified || !record.email) {
-    throw new HttpsError("permission-denied", "The Admin account is not active and verified.");
+  const currentClaims = record.customClaims || {};
+  const currentRole = roleOf(currentClaims);
+  const currentAuthorized =
+    currentClaims.admin === true ||
+    currentClaims.isAdmin === true ||
+    currentClaims.superAdmin === true ||
+    currentClaims.super_admin === true ||
+    currentClaims.ceo === true ||
+    ADMIN_ROLES.has(currentRole);
+  if (
+    record.disabled ||
+    !record.emailVerified ||
+    !record.email ||
+    currentClaims.suspended === true ||
+    !currentAuthorized
+  ) {
+    throw new HttpsError("permission-denied", "Current Finance/Admin authority is inactive or no longer valid.");
   }
-  return { uid: auth.uid, email: lower(record.email, 320), role };
+  return { uid: auth.uid, email: lower(record.email, 320), role: currentRole || role };
 }
 
 function requestState(data: FirebaseFirestore.DocumentData) {
