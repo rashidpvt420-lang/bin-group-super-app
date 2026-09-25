@@ -48,14 +48,6 @@ import { functions, httpsCallable } from '../../lib/firebase';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import SafeIcon from '../../components/SafeIcon';
 
-type RepairRow = {
-  date?: string;
-  title?: string;
-  issue?: string;
-  status?: string;
-  cost?: number;
-};
-
 type HomeListing = {
   id: string;
   recordType?: string;
@@ -107,14 +99,6 @@ type FilterState = {
 const gold = binThemeTokens.gold;
 const FAVORITES_KEY = 'bin_tenant_home_favorites_v1';
 const SAVED_SEARCH_KEY = 'bin_tenant_home_search_v1';
-const HOME_RECORD_TYPES = new Set([
-  'ROOM_RENT_LISTING',
-  'FIND_ROOM_RENT',
-  'HOME_RENT_LISTING',
-  'PROPERTY_RENT_LISTING',
-  'RENTAL_LISTING',
-]);
-
 const emptyFilters: FilterState = {
   query: '',
   propertyType: 'ALL',
@@ -149,17 +133,6 @@ function titleCase(value: unknown, fallback = '') {
     .replace(/[_-]+/g, ' ')
     .toLowerCase()
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
-}
-
-function isHomeRentListing(row: HomeListing) {
-  const recordType = String(row.recordType || row.listingType || '').toUpperCase();
-  const status = String(row.status || 'AVAILABLE').toUpperCase();
-  return HOME_RECORD_TYPES.has(recordType)
-    && row.active !== false
-    && row.approved !== false
-    && row.hasBinContract !== false
-    && row.notRented !== false
-    && !['RENTED', 'CLOSED', 'INACTIVE', 'WITHDRAWN'].includes(status);
 }
 
 function listingImages(listing: HomeListing) {
@@ -331,9 +304,16 @@ export default function TenantMarketplacePage() {
     setNotice('');
     try {
       const submit = httpsCallable(functions, 'submitHomeDiscoveryInterest');
-      const clientRequestId = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
-        ? `tenant_home_${crypto.randomUUID()}`
-        : `tenant_home_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+      let clientRequestId = '';
+      if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+        clientRequestId = `tenant_home_${crypto.randomUUID()}`;
+      } else if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
+        const bytes = new Uint8Array(16);
+        crypto.getRandomValues(bytes);
+        clientRequestId = `tenant_home_${Array.from(bytes, (value) => value.toString(16).padStart(2, '0')).join('')}`;
+      } else {
+        throw new Error('Secure browser randomness is required to submit a home request.');
+      }
       await submit({
         listingId: listing.id,
         requestMode,
