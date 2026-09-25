@@ -3,6 +3,7 @@ import { Alert, Box, Card, CardContent, Chip, Grid, Stack, Typography, alpha } f
 import { Banknote, Building2, CheckCircle2, ClipboardList, CreditCard, Home, Lock, Users, Wrench } from 'lucide-react';
 import { collection, db, getDocs, query, where } from '../../lib/firebase';
 import { binThemeTokens } from '../../theme/binGroupTheme';
+import { normalizeWorkflowState } from '../../lib/workflowStateMachines';
 
 type ContractMode = 'MAINTENANCE_ONLY' | 'PROPERTY_MANAGEMENT_ONLY' | 'HYBRID' | 'UNKNOWN';
 
@@ -26,7 +27,7 @@ const textSafeSx = {
   wordBreak: 'break-word',
 };
 
-const ACTIVE_TICKET_STATUSES = new Set(['OPEN', 'PENDING', 'PENDING_ASSIGNMENT', 'ASSIGNED', 'ACCEPTED', 'ON_THE_WAY', 'EN_ROUTE', 'ARRIVED', 'IN_PROGRESS', 'WAITING_PARTS', 'ESCALATED']);
+const ACTIVE_TICKET_STATUSES = new Set(['OPEN', 'PENDING_ASSIGNMENT', 'PENDING_SCHEDULING', 'SCHEDULED', 'ASSIGNED', 'ACCEPTED', 'EN_ROUTE', 'ARRIVED', 'IN_PROGRESS', 'WAITING_PARTS', 'ESCALATED', 'REOPENED', 'ON_HOLD', 'DISPUTED']);
 const ACTIVE_TENANT_STATUSES = new Set(['ACCEPTED', 'ACTIVE', 'SIGNED', 'OCCUPIED']);
 const PENDING_TENANT_STATUSES = new Set(['PENDING', 'INVITED', 'SENT', 'PENDING_AUTH_CREATION']);
 
@@ -203,11 +204,11 @@ export default function OwnerContractModeMatrix({ user, contract, properties }: 
     const totalUnits = properties.reduce((sum, p) => sum + propertyUnits(p), 0);
     const activeTenants = occupancies.filter((item) => ACTIVE_TENANT_STATUSES.has(status(item.occupancyStatus || item.status))).length;
     const pendingTenants = invitations.filter((item) => PENDING_TENANT_STATUSES.has(status(item.invitationStatus || item.status))).length;
-    const openTickets = tickets.filter((ticket) => ACTIVE_TICKET_STATUSES.has(status(ticket.status))).length;
-    const emergencyTickets = tickets.filter((ticket) => ['EMERGENCY', 'CRITICAL', 'HIGH'].includes(status(ticket.priority || ticket.severity)) && ACTIVE_TICKET_STATUSES.has(status(ticket.status))).length;
+    const openTickets = tickets.filter((ticket) => ACTIVE_TICKET_STATUSES.has(normalizeWorkflowState('TICKET', ticket.status, 'OPEN'))).length;
+    const emergencyTickets = tickets.filter((ticket) => ['EMERGENCY', 'CRITICAL', 'HIGH'].includes(status(ticket.priority || ticket.severity)) && ACTIVE_TICKET_STATUSES.has(normalizeWorkflowState('TICKET', ticket.status, 'OPEN'))).length;
 
-    const paidFromPayments = payments.filter((p) => ['PAID', 'COMPLETED', 'SUCCESS'].includes(status(p.status || p.paymentStatus))).reduce((sum, p) => sum + toNumber(p.amount || p.total || p.paidAmount, 0), 0);
-    const pendingFromPayments = payments.filter((p) => !['PAID', 'COMPLETED', 'SUCCESS'].includes(status(p.status || p.paymentStatus))).reduce((sum, p) => sum + toNumber(p.amount || p.total || p.balance || p.pendingAmount, 0), 0);
+    const paidFromPayments = payments.filter((p) => normalizeWorkflowState('PAYMENT', p.status || p.paymentStatus, 'PENDING') === 'APPROVED').reduce((sum, p) => sum + toNumber(p.amount || p.total || p.paidAmount, 0), 0);
+    const pendingFromPayments = payments.filter((p) => normalizeWorkflowState('PAYMENT', p.status || p.paymentStatus, 'PENDING') !== 'APPROVED').reduce((sum, p) => sum + toNumber(p.amount || p.total || p.balance || p.pendingAmount, 0), 0);
     const rentDue = [...leases, ...ledger].reduce((sum, item) => sum + toNumber(item.rentDue || item.amountDue || item.annualRent || item.totalRent || item.invoiceAmount, 0), 0);
     const rentPaid = [...leases, ...ledger].reduce((sum, item) => sum + toNumber(item.rentPaid || item.amountPaid || item.paidAmount || item.collectedAmount, 0), 0);
     const balance = Math.max(0, rentDue + pendingFromPayments - rentPaid - paidFromPayments);
