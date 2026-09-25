@@ -105,6 +105,21 @@ test('Phase 11: Admin Owner activation approval is Cash/Cheque only and creates 
   assert.match(secure, /A verified Admin MFA session is required for payment decisions/);
 });
 
+test('Phase 11: Design and rent payment authority is server-bound or evidence-bound', () => {
+  const design = read('functions/designPayments.ts');
+  const rentApproval = read('functions/paymentTransactionApproval.ts');
+
+  assert.match(design, /const terms = termsFor\(design, quoteSnap\.data\(\) \|\| \{\}\)/);
+  assert.match(design, /\.\.\.s\.terms/);
+  assert.doesNotMatch(design, /request\.data\?\.amount[^R]/);
+  assert.match(design, /Number\(request\.data\?\.amountReceived\) !== initial\.terms\.amount/);
+
+  assert.match(rentApproval, /submittedRentAmount = money\(payment\.amount \?\? payment\.amountPaid \?\? payment\.rentPaid\)/);
+  assert.match(rentApproval, /confirmedRentAmount !== submittedRentAmount/);
+  assert.match(rentApproval, /even by one fils/);
+  assert.doesNotMatch(rentApproval, /Math\.abs\(Number\(request\.data\.amountReceived\) - submittedRentAmount\) > 0\.01/);
+});
+
 test('Phase 11: contract cancellation preserves paid history and forces a server-side refund disposition', () => {
   const closure = read('functions/secureAdminContractOperations.ts');
   const refund = read('functions/securePaymentApproval.ts');
