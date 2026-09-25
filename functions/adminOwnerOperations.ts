@@ -456,6 +456,8 @@ export const ownerSignContractAndQueuePdf = onCall({ cors: true, enforceAppCheck
   let signingWasIdempotent = false;
   await db.runTransaction(async (transaction) => {
     const freshContractSnap = await transaction.get(ref);
+    const paymentRef = db.collection("payment_transactions").doc(contractId);
+    const paymentSnap = await transaction.get(paymentRef);
     const freshContract = freshContractSnap.data() || {};
     if (
       ALREADY_SIGNED_STATUSES.has(s(freshContract.status).toUpperCase()) ||
@@ -467,8 +469,6 @@ export const ownerSignContractAndQueuePdf = onCall({ cors: true, enforceAppCheck
     }
     await consumeVerifiedContractSignatureOtp(transaction, otpEvidence);
     transaction.set(ref, { status: "PENDING_ACTIVATION", contractStatus: "PENDING_ACTIVATION", activationStatus: "PENDING_PAYMENT_VERIFICATION", paymentStatus: "PENDING_ADMIN_PAYMENT_VERIFICATION", ownerSigned: true, signatureName, signatureStatus: "OWNER_SIGNED", otpVerificationId, otpEvidenceVerified: true, finalContractAccepted: true, finalContractAcceptedQuoteHash: contractHash, signatureState: { ...(freshContract.signatureState || {}), ownerSigned: true, ownerSignedAt: signedAtDate.toISOString(), ownerSignatureName: signatureName, acceptedQuoteHash: contractHash, pdfGenerated: true, pdfUrl, emailed: true }, signedPdfUrl: pdfUrl, ownerSignedAt: ts(), ...termFields, updatedAt: ts() }, { merge: true });
-    const paymentRef = db.collection("payment_transactions").doc(contractId);
-    const paymentSnap = await transaction.get(paymentRef);
     if (paymentSnap.exists) {
       const payment = paymentSnap.data() || {};
       const paymentFinalHash = s(payment.finalVerifiedQuoteHash).toLowerCase();
