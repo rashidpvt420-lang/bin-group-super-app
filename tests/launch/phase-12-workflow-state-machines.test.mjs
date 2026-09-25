@@ -74,8 +74,8 @@ test('Phase 12 ticket aliases are read compatibility and authoritative writes us
   assert.match(functions, /status:\s*"ON_HOLD"/);
   assert.doesNotMatch(ownerPage, /const ACTIVE_STATUSES = \[[^\]]*on_the_way/);
   assert.doesNotMatch(tenantPage, /const ACTIVE_STATUSES = \[[^\]]*on_the_way/);
-  assert.match(ownerPage, /replace\('ON_THE_WAY', 'EN_ROUTE'\)/);
-  assert.match(tenantPage, /replace\('ON_THE_WAY', 'EN_ROUTE'\)/);
+  assert.match(ownerPage, /normalizeCanonicalState\('ticket', ticket\.status\)/);
+  assert.match(tenantPage, /normalizeCanonicalState\('ticket', ticket\.status\)/);
 });
 
 test('Phase 12 Broker KYC and inspection new writes are canonical while legacy reads stay normalized', async () => {
