@@ -130,7 +130,7 @@ export async function submitBrokerKycProfileHandler(request: any) {
     commissionAgreementAccepted,
   ];
   const profileCompletionScore = Math.round((checks.filter(Boolean).length / checks.length) * 100);
-  const brokerKycStatus = profileCompletionScore === 100 ? "PENDING_REVIEW" : "INCOMPLETE";
+  const brokerKycStatus = profileCompletionScore === 100 ? "PENDING_REVIEW" : "CHANGES_REQUESTED";
   const reraStatus = reraLicense ? "PENDING" : "NOT_SUBMITTED";
 
   const canonical = {
