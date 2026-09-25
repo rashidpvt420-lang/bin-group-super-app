@@ -195,7 +195,7 @@ rules = rules.replace(insertionAnchor, `${propertyFunctions}${insertionAnchor}`)
 
 const propertyBlock = `    match /properties/{propertyId} {
       allow get: if isNotSuspended() && getTenantPropertyId() == propertyId;
-      allow read: if isNotSuspended() && (canManageProperties() || propertyOwnedByCaller(resource.data) || tenantOwns(resource.data) || (isTechnicianActor() && techOwns(resource.data)));
+      allow read: if isNotSuspended() && (canManageProperties() || propertyOwnedByCaller(resource.data) || (isTechnicianActor() && techOwns(resource.data)));
       allow create: if isNotSuspended() &&
         propertyCreateHasNoCanonicalGeo(request.resource.data) &&
         (canManageProperties() || safeOwnerPropertyCreate(request.resource.data));
