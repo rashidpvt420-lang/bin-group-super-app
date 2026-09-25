@@ -1,6 +1,8 @@
 import { FieldValue } from "firebase-admin/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
+import { resolveOwnerOnboardingPricingClass } from "./ownerOnboardingQuote";
+import { UAE_PRICING_MATRIX_2026 } from "./pricing/uaePricingMatrix2026";
 
 if (!admin.apps.length) admin.initializeApp();
 const db = admin.firestore();
@@ -73,6 +75,10 @@ export const adminCreateOwnerPortfolioPropertyInspection = onCall({ cors: true, 
   const point = new admin.firestore.GeoPoint(lat, lng);
   const propertyType = text(property.propertyType || property.type);
   const isGym = propertyType === "Gym / Fitness Centre";
+  const pricingClass = resolveOwnerOnboardingPricingClass(property);
+  const matrixClass = UAE_PRICING_MATRIX_2026.assetClasses.find((entry) => entry.id === pricingClass);
+  const pricingDriver = pricingClass === "mosque_fm" ? "sqft+capacity" : text(matrixClass?.pricingUnit);
+  if (!pricingDriver) throw new HttpsError("failed-precondition", "Property pricing driver is not configured.");
   const gymProfile = isGym && property.gymProfile && typeof property.gymProfile === "object" ? plain(property.gymProfile) : null;
   const declaredGymArea = isGym ? Number(gymProfile?.declaredServiceAreaSqft || property.sqft || 0) : 0;
   const location = {
@@ -113,12 +119,26 @@ export const adminCreateOwnerPortfolioPropertyInspection = onCall({ cors: true, 
       propertyName: location.address || `Property ${propertyIndex + 1}`,
       propertyType,
       assetClass: text(property.assetClass),
+      pricingClass,
+      pricingDriver,
       ownerDeclaredPropertySnapshot: plain({
         propertyType,
+        pricingClass,
+        pricingDriver,
         sqft: property.sqft,
         floors: property.floors,
         units: property.units,
+        beds: property.beds,
+        annualRent: property.annualRent,
+        annualRevenue: property.annualRevenue,
+        age: property.age,
+        emirate: property.emirate,
+        zone: property.zone,
+        slaTier: property.slaTier,
+        paymentPlan: property.paymentPlan,
+        strategy: property.strategy || property.serviceModel || property.contractMode || property.contractType,
         gymProfile,
+        mosqueProfile: property.mosqueProfile,
       }),
       gymProfileSnapshot: gymProfile,
       gymVerificationRequired: isGym,
