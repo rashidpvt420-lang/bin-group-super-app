@@ -17,9 +17,8 @@ const secretBlock = `    // Server-managed cryptographic material. Cloud Functio
 
 const protectedAdminCatchAll = `    match /{collection}/{document=**} {
       allow read: if collection != 'system_secrets' && hasAdminClaim();
-      allow create: if collection != 'system_secrets' && hasAdminClaim();
-      allow update: if collection != 'system_secrets' && hasAdminClaim();
-      allow delete: if collection != 'system_secrets' && hasAdminClaim();
+      // Privileged browser writes are never granted by a generic fallback.
+      allow create, update, delete: if false;
     }`;
 
 function readMatchBlock(source, marker) {
@@ -74,8 +73,8 @@ if (!source.includes(secretMarker)) {
   recursiveCatchAll = readMatchBlock(source, recursiveCatchAllMarker);
 }
 
-// Migrate only the legacy unrestricted recursive fallback. Existing list-style
-// collection exclusions are stronger and must be preserved byte-for-byte.
+// Migrate only the legacy unrestricted recursive fallback. Existing collection
+// catch-alls are preserved here; the final authority hardener closes generic writes.
 if (recursiveCatchAll) {
   source = `${source.slice(0, recursiveCatchAll.start)}${protectedAdminCatchAll}${source.slice(recursiveCatchAll.end)}`;
 }
