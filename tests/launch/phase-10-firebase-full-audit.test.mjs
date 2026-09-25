@@ -150,6 +150,13 @@ test('Phase 10 iOS App Check uses native App Attest and bridges the token into t
 test('Phase 10 protected workflows verify live Firebase Auth providers and native iOS App Check without weakening launch gates', () => {
   assert.match(productionVerifier, /defaultSupportedIdpConfigs\/.*providerId|defaultSupportedIdpConfigs\//);
   assert.match(productionVerifier, /appAttestConfig/);
+  assert.match(productionVerifier, /playIntegrityConfig/);
+  assert.match(productionVerifier, /recaptchaEnterpriseConfig/);
+  assert.match(productionVerifier, /recaptchaV3Config/);
+  assert.match(productionVerifier, /identitytoolkit\.googleapis\.com/);
+  assert.match(productionVerifier, /firestore\.googleapis\.com/);
+  assert.match(productionVerifier, /firebasestorage\.googleapis\.com/);
+  assert.match(productionVerifier, /enforcementMode !== 'ENFORCED'/);
   assert.match(productionVerifier, /authorizedDomains/);
   assert.match(productionWorkflow, /verify-phase10-firebase-production-config\.mjs/);
   assert.match(iosReleaseWorkflow, /inject-ios-firebase-config\.mjs/);
