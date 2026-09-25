@@ -720,6 +720,38 @@ describe('Firestore Security Rules', () => {
     }));
   });
 
+  it('broker lead and referral attribution identifiers must match the Broker and document id at creation', async () => {
+    const brokerDb = testEnv.authenticatedContext('broker_a', { role: 'broker' }).firestore();
+
+    await assertSucceeds(setDoc(doc(brokerDb, 'brokerLeads/lead_valid'), {
+      brokerId: 'broker_a',
+      sourceLeadId: 'lead_valid',
+      attributionId: 'broker_lead_broker_a_lead_valid',
+      status: 'new',
+      lifecycleStatus: 'LEAD_CAPTURED',
+    }));
+    await assertFails(setDoc(doc(brokerDb, 'brokerLeads/lead_forged'), {
+      brokerId: 'broker_a',
+      sourceLeadId: 'other_lead',
+      attributionId: 'broker_lead_broker_b_other_lead',
+      status: 'new',
+      lifecycleStatus: 'LEAD_CAPTURED',
+    }));
+
+    await assertSucceeds(setDoc(doc(brokerDb, 'referrals/ref_valid'), {
+      brokerId: 'broker_a',
+      sourceReferralId: 'ref_valid',
+      attributionId: 'broker_referral_broker_a_ref_valid',
+      status: 'submitted',
+    }));
+    await assertFails(setDoc(doc(brokerDb, 'referrals/ref_forged'), {
+      brokerId: 'broker_a',
+      sourceReferralId: 'other_ref',
+      attributionId: 'broker_referral_broker_b_other_ref',
+      status: 'submitted',
+    }));
+  });
+
   it('broker lead attribution identifiers are immutable after creation', async () => {
     await testEnv.withSecurityRulesDisabled(async (context) => {
       await setDoc(doc(context.firestore(), 'brokerLeads/lead_locked'), {
