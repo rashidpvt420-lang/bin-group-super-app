@@ -302,6 +302,6 @@ export async function runGetAdminReports(
   };
 }
 
-export const getAdminReports = onCall({ cors: true }, async (request) => {
+export const getAdminReports = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
   return runGetAdminReports(request.data, request.auth);
 });
