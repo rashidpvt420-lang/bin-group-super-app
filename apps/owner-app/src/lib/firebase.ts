@@ -9,7 +9,7 @@ import { getStorage, ref, uploadBytes, uploadBytesResumable, getDownloadURL } fr
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { getAuth, onAuthStateChanged, getRedirectResult, signInWithPopup, signInWithEmailAndPassword, User } from 'firebase/auth';
 import { getToken, isSupported, getMessaging } from 'firebase/messaging';
-import { initializeAppCheck, ReCaptchaV3Provider } from 'firebase/app-check';
+import { initializeAppCheck, ReCaptchaEnterpriseProvider, ReCaptchaV3Provider } from 'firebase/app-check';
 
 type BinFirebaseConfig = {
     apiKey: string;
@@ -21,11 +21,21 @@ type BinFirebaseConfig = {
 };
 
 const readRequiredEnv = (name: string): string => {
-    // @ts-ignore
-    const value = (typeof import.meta !== 'undefined' && import.meta.env) ? import.meta.env[name] : '';
-    if (!value || value.includes('REPLACE_ME')) {
-        return '';
-    }
+    // CRACO/CRA uses REACT_APP_* while the unified Vite app uses VITE_*.
+    // Keep both names readable so the dedicated Owner build cannot silently
+    // lose Firebase security configuration.
+    const viteValue = (() => {
+        try {
+            // @ts-ignore
+            return (typeof import.meta !== 'undefined' && import.meta.env) ? import.meta.env[name] : '';
+        } catch {
+            return '';
+        }
+    })();
+    const reactName = name.startsWith('VITE_') ? `REACT_APP_${name.slice(5)}` : name;
+    const reactValue = typeof process !== 'undefined' ? (process.env as Record<string, string | undefined>)[reactName] || '' : '';
+    const value = String(viteValue || reactValue || '').trim();
+    if (!value || /REPLACE_(?:ME|WITH_)/i.test(value)) return '';
     return value;
 }
 
@@ -50,21 +60,28 @@ try {
     app = initializeApp(firebaseConfig, "SECONDARY_NODE");
 }
 
-// App Check (Monitoring Mode)
-if (typeof window !== 'undefined') {
-    const siteKey = readRequiredEnv('VITE_APP_CHECK_SITE_KEY');
-    if (siteKey) {
-        try {
-            initializeAppCheck(app, {
-                provider: new ReCaptchaV3Provider(siteKey),
-                isTokenAutoRefreshEnabled: true
-            });
-            console.log("🛡️ [SECURITY] App Check active in MONITORING mode.");
-        } catch (err) {
-            console.warn("App Check initialization failed:", err);
-        }
-    } else {
-        console.warn("VITE_APP_CHECK_SITE_KEY missing or placeholder. App Check not initialized.");
+const siteKey = readRequiredEnv('VITE_APP_CHECK_SITE_KEY');
+const appCheckEnabled = readRequiredEnv('VITE_ENABLE_FIREBASE_APPCHECK') === 'true';
+const requestedProvider = readRequiredEnv('VITE_APP_CHECK_PROVIDER').toLowerCase();
+const productionBuild = typeof process !== 'undefined' && process.env.NODE_ENV === 'production';
+let appCheck: ReturnType<typeof initializeAppCheck> | null = null;
+
+if (productionBuild && (!appCheckEnabled || !siteKey)) {
+    throw new Error('[Owner Firebase] App Check is required for production Owner builds.');
+}
+
+if (appCheckEnabled && typeof window !== 'undefined') {
+    try {
+        const provider = requestedProvider === 'enterprise'
+            ? new ReCaptchaEnterpriseProvider(siteKey)
+            : new ReCaptchaV3Provider(siteKey);
+        appCheck = initializeAppCheck(app, {
+            provider,
+            isTokenAutoRefreshEnabled: true
+        });
+    } catch (err) {
+        if (productionBuild) throw new Error('[Owner Firebase] App Check initialization failed in production.');
+        console.warn('[Owner Firebase] App Check initialization failed in development:', err);
     }
 }
 
@@ -78,7 +95,7 @@ const functions = getFunctions(app, PRIMARY_REGION);
 
 // Explicit Exports
 export {
-    app, db, auth, storage, functions, getToken, isSupported, getMessaging, httpsCallable,
+    app, appCheck, db, auth, storage, functions, getToken, isSupported, getMessaging, httpsCallable,
     onAuthStateChanged, getRedirectResult, signInWithPopup, signInWithEmailAndPassword, type User,
     ref, uploadBytes, uploadBytesResumable, getDownloadURL,
     collection, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, query, where, orderBy, limit, onSnapshot, serverTimestamp, Timestamp, deleteDoc, writeBatch, or, arrayUnion
