@@ -146,7 +146,10 @@ test('Phase 8 Broker private records and pipeline ownership remain isolated', as
   assert.match(referralRules, /allow create: if false/);
   assert.match(referralRules, /allow update, delete: if isAdmin\(\)/);
   assert.match(rules, /safeBrokerLeadUpdate\(\)[\s\S]*?hasOnly\(\[[\s\S]*?'status'[\s\S]*?'notes'[\s\S]*?'updatedAt'/);
-  const leadUpdate = rules.slice(rules.indexOf('function safeBrokerLeadUpdate'), rules.indexOf('function safeBrokerReferralCreate'));
+  const leadUpdateStart = rules.indexOf('function safeBrokerLeadUpdate');
+  const leadUpdateEnd = rules.indexOf('// Direct client open-mission claims', leadUpdateStart);
+  assert.ok(leadUpdateStart >= 0 && leadUpdateEnd > leadUpdateStart);
+  const leadUpdate = rules.slice(leadUpdateStart, leadUpdateEnd);
   assert.doesNotMatch(leadUpdate, /'attributionId'|'sourceLeadId'/);
 });
 
