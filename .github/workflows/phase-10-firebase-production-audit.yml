@@ -1,0 +1,76 @@
+name: Phase 10 Firebase Production Audit
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: phase-10-firebase-production-audit
+  cancel-in-progress: false
+
+jobs:
+  audit:
+    name: Read-only Firebase production configuration audit
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Require current main
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$GITHUB_REF" == "refs/heads/main" ]]
+          git ls-remote "https://github.com/${GITHUB_REPOSITORY}.git" refs/heads/main |
+            awk '{print $1}' |
+            grep -Fx "$GITHUB_SHA"
+
+      - name: Checkout exact main SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3.0.1
+
+      - name: Audit Firebase Authentication and App Check configuration
+        env:
+          GCP_PROJECT_ID: bin-group-57c60
+          VITE_FIREBASE_PROJECT_ID: bin-group-57c60
+          VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: node scripts/verify-phase10-firebase-production-config.mjs
+
+      - name: Record non-launch audit summary
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo "phase=10"
+            echo "mode=read-only"
+            echo "commit_sha=$GITHUB_SHA"
+            echo "firebase_project=bin-group-57c60"
+            echo "hard_launch_claim=false"
+            echo "pilot_mutated=false"
+            echo "deployment_performed=false"
+          } > phase-10-firebase-production-audit.txt
+
+      - name: Upload Phase 10 audit evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: phase-10-firebase-production-audit-${{ github.sha }}
+          path: phase-10-firebase-production-audit.txt
+          if-no-files-found: error
+          retention-days: 30
