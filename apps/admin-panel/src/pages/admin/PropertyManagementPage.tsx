@@ -26,7 +26,6 @@ import {
 import { Plus as AddIcon, Edit as EditIcon, Trash2 as DeleteIcon, MapPin } from 'lucide-react';
 import { db, collection, onSnapshot, query, addDoc, serverTimestamp, doc, updateDoc, deleteDoc } from '../../lib/firebase';
 import { binThemeTokens } from '../../theme/adminTheme';
-import { buildGeoAnchor } from '../../utils/geoAnchor';
 
 interface Property {
     id: string;
@@ -84,41 +83,7 @@ export default function PropertyManagementPage() {
     }, []);
 
     const handleAddProperty = async () => {
-        try {
-            const geo = buildGeoAnchor({
-                lat: formData.lat,
-                lng: formData.lng,
-                address: formData.address,
-                emirate: formData.emirate,
-                city: formData.serviceZone,
-                area: formData.serviceZone
-            });
-            await addDoc(collection(db, 'properties'), {
-                companyId: 'BIN_GROUP',
-                name: formData.name,
-                propertyName: formData.name,
-                propertyType: formData.propertyType,
-                address: formData.address,
-                addressLine: formData.address,
-                geo,
-                location: { lat: geo.lat, lng: geo.lng },
-                coordinates: { lat: geo.lat, lng: geo.lng },
-                ownerId: formData.ownerId,
-                emirate: formData.emirate,
-                city: formData.serviceZone || formData.emirate,
-                area: formData.serviceZone || formData.emirate,
-                serviceZone: formData.serviceZone,
-                unitsCount: parseInt(formData.unitsCount) || 0,
-                floorsCount: parseInt(formData.floorsCount) || 0,
-                status: 'active',
-                createdAt: serverTimestamp(),
-            });
-            setOpenAdd(false);
-            resetForm();
-        } catch (error: any) {
-            console.error("Error adding property:", error);
-            alert(error?.message || 'We could not verify this location. Admin review is required.');
-        }
+        alert('New canonical properties must be created through the Owner inspection-first onboarding workflow. Admin cannot bypass duplicate detection, physical inspection, or owner identity binding.');
     };
 
     const handleEditOpen = (prop: Property) => {
@@ -141,25 +106,12 @@ export default function PropertyManagementPage() {
     const handleUpdateProperty = async () => {
         if (!selectedProperty) return;
         try {
-            const geo = buildGeoAnchor({
-                lat: formData.lat,
-                lng: formData.lng,
-                address: formData.address,
-                emirate: formData.emirate,
-                city: formData.serviceZone,
-                area: formData.serviceZone
-            });
             await updateDoc(doc(db, 'properties', selectedProperty.id), {
-                companyId: 'BIN_GROUP',
                 name: formData.name,
                 propertyName: formData.name,
                 propertyType: formData.propertyType,
                 address: formData.address,
                 addressLine: formData.address,
-                geo,
-                location: { lat: geo.lat, lng: geo.lng },
-                coordinates: { lat: geo.lat, lng: geo.lng },
-                ownerId: formData.ownerId,
                 emirate: formData.emirate,
                 city: formData.serviceZone || formData.emirate,
                 area: formData.serviceZone || formData.emirate,
@@ -172,18 +124,12 @@ export default function PropertyManagementPage() {
             resetForm();
         } catch (error: any) {
             console.error("Error updating property:", error);
-            alert(error?.message || 'We could not verify this location. Admin review is required.');
+            alert(error?.message || 'Property descriptive update failed.');
         }
     };
 
-    const handleDeleteProperty = async (id: string) => {
-        if (window.confirm("Are you sure you want to delete this asset from the registry?")) {
-            try {
-                await deleteDoc(doc(db, 'properties', id));
-            } catch (error) {
-                console.error("Error deleting property:", error);
-            }
-        }
+    const handleDeleteProperty = async (_id: string) => {
+        alert('Canonical properties are never hard-deleted from the Admin browser. Use the governed archival/offboarding workflow instead.');
     };
 
     const resetForm = () => {
