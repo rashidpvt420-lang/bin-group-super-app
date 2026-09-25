@@ -28,6 +28,27 @@ function cleanText(value: unknown, maxLength = MAX_REVIEW_TEXT) {
   return String(value || "").trim().slice(0, maxLength);
 }
 
+async function requireCurrentReviewTenant(auth: any) {
+  if (!auth?.uid) throw new HttpsError("unauthenticated", "User must be authenticated.");
+  const tokenRole = cleanText(
+    auth.token?.role || auth.token?.userRole || auth.token?.primaryRole,
+    40,
+  ).toLowerCase();
+  if (tokenRole !== "tenant" || auth.token?.suspended === true) {
+    throw new HttpsError("permission-denied", "A current tenant identity is required.");
+  }
+  const account = await admin.auth().getUser(auth.uid);
+  const claims = account.customClaims || {};
+  const currentRole = cleanText(
+    claims.role || claims.userRole || claims.primaryRole,
+    40,
+  ).toLowerCase();
+  if (account.disabled || !account.emailVerified || claims.suspended === true || currentRole !== "tenant") {
+    throw new HttpsError("permission-denied", "Current verified tenant authority is required.");
+  }
+  return auth.uid;
+}
+
 function firstTenantId(data: FirebaseFirestore.DocumentData) {
   return cleanText(data.tenantId || data.tenantUid || data.userId || data.requesterId, 128);
 }
@@ -169,20 +190,7 @@ export const onTenantCompletionReviewRequired = onDocumentUpdated(
 export const tenantReviewTicketCompletion = onCall(
   { cors: true, region: "europe-west3", enforceAppCheck: true },
   async (request) => {
-    if (!request.auth?.uid) {
-      throw new HttpsError("unauthenticated", "User must be authenticated.");
-    }
-
-    const tenantId = request.auth.uid;
-    const role = String(
-      request.auth.token?.role ||
-      request.auth.token?.userRole ||
-      request.auth.token?.primaryRole ||
-      "",
-    ).trim().toLowerCase();
-    if (role !== "tenant") {
-      throw new HttpsError("permission-denied", "A tenant custom claim is required.");
-    }
+    const tenantId = await requireCurrentReviewTenant(request.auth);
 
     const ticketId = cleanText(request.data?.ticketId, 128);
     const action = cleanText(request.data?.action, 24).toLowerCase();
