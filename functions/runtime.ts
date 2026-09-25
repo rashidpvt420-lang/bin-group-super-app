@@ -35,6 +35,7 @@ export * from "./onboardingProofUpload";
 export * from "./stripePaymentPhase1Hold";
 export * from "./adminOwnerOperations";
 export * from "./adminPropertyReview";
+export * from "./ownerPropertyResubmission";
 export * from "./securePaymentApproval";
 export * from "./paymentConfiguration";
 export * from "./mailDelivery";
