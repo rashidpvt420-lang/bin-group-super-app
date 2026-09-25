@@ -19,21 +19,16 @@ import { binThemeTokens } from '../../theme/binGroupTheme';
 import { ALL_TECHNICIAN_ACTIVE_STATUSES } from '../../shared-exports';
 import type { SnapshotDoc } from '../../utils/queryUtils';
 import { calculateDistanceKm, calculateEtaMinutes, getTechnicianLocation, getTicketJobLocation } from '../../utils/liveTracking';
+import { normalizeTicketStatus } from '../../utils/ticketStatus';
 
 const STATUS_COLOR: Record<string, string> = {
-    accepted: '#3b82f6',
-    auto_assigned: '#3b82f6',
     ASSIGNED: '#3b82f6',
-    AUTO_ASSIGNED: '#3b82f6',
     ACCEPTED: '#3b82f6',
-    on_the_way: binThemeTokens.gold,
     EN_ROUTE: binThemeTokens.gold,
-    arrived: '#8b5cf6',
     ARRIVED: '#8b5cf6',
-    in_progress: '#10b981',
     IN_PROGRESS: '#10b981',
-    waiting_parts: '#ef4444',
     WAITING_PARTS: '#ef4444',
+    ESCALATED: '#ef4444',
 };
 
 const ACTIVE_STATUS_SET = new Set(ALL_TECHNICIAN_ACTIVE_STATUSES.map((status) => String(status)));
@@ -87,7 +82,7 @@ export default function TechnicianJobsPage() {
             (snap) => {
                 const jobs = snap.docs
                     .map((docSnap) => ({ id: docSnap.id, ...docSnap.data() } as SnapshotDoc))
-                    .filter((job) => ACTIVE_STATUS_SET.has(String(job.status || '')));
+                    .filter((job) => ACTIVE_STATUS_SET.has(normalizeTicketStatus(job.status as string)));
                 setAssignedJobs(jobs);
                 setLoadError('');
                 setLoading(false);
@@ -133,8 +128,9 @@ export default function TechnicianJobsPage() {
     );
 
     const renderJobCard = (job: any) => {
-        const statusColor = STATUS_COLOR[String(job.status)] || 'rgba(255,255,255,0.4)';
-        const isLive = ['on_the_way', 'EN_ROUTE'].includes(String(job.status));
+        const canonicalStatus = normalizeTicketStatus(job.status as string);
+                                const statusColor = STATUS_COLOR[canonicalStatus] || 'rgba(255,255,255,0.4)';
+        const isLive = canonicalStatus === 'EN_ROUTE';
         const techLoc = getTechnicianLocation(job);
         const jobLoc = getTicketJobLocation(job);
         const dist = calculateDistanceKm(techLoc, jobLoc);
@@ -186,7 +182,7 @@ export default function TechnicianJobsPage() {
                             />
                         )}
                         <Chip
-                            label={String(job.status || '').replace(/_/g, ' ')}
+                            label={canonicalStatus.replace(/_/g, ' ')}
                             size="small"
                             sx={{ bgcolor: alpha(statusColor, 0.12), color: statusColor, fontWeight: 950, fontSize: '0.7rem', border: `1px solid ${alpha(statusColor, 0.25)}` }}
                         />
