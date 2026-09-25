@@ -31,6 +31,7 @@ const androidBridge = read('android/app/src/main/java/ae/bingroups/superapp/Fire
 const productionVerifier = read('scripts/verify-phase10-firebase-production-config.mjs');
 const productionWorkflow = read('.github/workflows/firebase-production-deploy.yml');
 const iosReleaseWorkflow = read('.github/workflows/ios-app-store-release.yml');
+const phase10ProductionAuditWorkflow = read('.github/workflows/phase-10-firebase-production-audit.yml');
 
 function walk(dir) {
   const files = [];
@@ -161,4 +162,10 @@ test('Phase 10 protected workflows verify live Firebase Auth providers and nativ
   assert.match(productionWorkflow, /verify-phase10-firebase-production-config\.mjs/);
   assert.match(iosReleaseWorkflow, /inject-ios-firebase-config\.mjs/);
   assert.match(iosReleaseWorkflow, /verify-phase10-firebase-production-config\.mjs/);
+  assert.match(phase10ProductionAuditWorkflow, /workflow_dispatch/);
+  assert.match(phase10ProductionAuditWorkflow, /Require current main/);
+  assert.match(phase10ProductionAuditWorkflow, /verify-phase10-firebase-production-config\.mjs/);
+  assert.match(phase10ProductionAuditWorkflow, /hard_launch_claim=false/);
+  assert.match(phase10ProductionAuditWorkflow, /pilot_mutated=false/);
+  assert.match(phase10ProductionAuditWorkflow, /deployment_performed=false/);
 });
