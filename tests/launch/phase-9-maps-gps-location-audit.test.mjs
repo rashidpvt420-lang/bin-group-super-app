@@ -220,14 +220,16 @@ test('Google Maps production key is injected into both protected web builds and 
     assert.match(mapsRestrictionVerifier, new RegExp(service.replace(/\./g, '\\.'), 'i'));
   }
   for (const referrer of [
-    'bin-groups.com/*',
-    'www.bin-groups.com/*',
-    'bin-group-57c60.web.app/*',
-    'bin-group-admin-panel.web.app/*',
-    'localhost/*',
+    'https://bin-groups.com/*',
+    'https://www.bin-groups.com/*',
+    'https://bin-group-57c60.web.app/*',
+    'https://bin-group-admin-panel.web.app/*',
+    'https://localhost/*',
   ]) {
     assert.ok(mapsRestrictionVerifier.includes(referrer), `missing required Maps referrer: ${referrer}`);
   }
+  assert.doesNotMatch(mapsRestrictionVerifier, /replace\(\/\^https\?:/);
+  assert.match(mapsRestrictionVerifier, /https:\/\/localhost\/\*/);
   assert.match(deployWorkflow, /Verify Google Maps production key restrictions and enabled APIs/);
   assert.match(deployWorkflow, /verify-google-maps-api-key-restrictions\.mjs/);
 });
