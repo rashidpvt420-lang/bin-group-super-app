@@ -392,6 +392,10 @@ export default function TechnicianJobDetailPage() {
             await updateTicketLifecycle(lifecyclePayload);
             if (nextStatus === 'EN_ROUTE') {
                 try {
+                    const installationHash = await readNativeTechnicianInstallationHash();
+                    if (installationHash) {
+                        await ensureTechnicianInstallationRegistered(installationHash);
+                    }
                     await startLiveTracking(id, user.uid, () => undefined, (err) => {
                         setGpsError(err);
                         setIsTracking(false);
