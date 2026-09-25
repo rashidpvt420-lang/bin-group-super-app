@@ -14,6 +14,7 @@ import { db, collection, query, where, onSnapshot, orderBy, storage, ref, upload
 import { useRole } from '../../context/RoleContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { useLanguage } from '../../context/LanguageContext';
+import { normalizeWorkflowState } from '../../lib/workflowStateMachines';
 
 type Payment = {
     id: string;
@@ -30,16 +31,16 @@ type Payment = {
 };
 
 const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
-    VERIFIED: { label: 'VERIFIED', color: '#10b981' },
     APPROVED: { label: 'APPROVED', color: '#10b981' },
     PENDING: { label: 'PENDING VERIFICATION', color: '#f59e0b' },
-    PENDING_ADMIN_PAYMENT_VERIFICATION: { label: 'AWAITING ADMIN', color: '#f59e0b' },
-    ADMIN_VERIFICATION_REQUIRED: { label: 'AWAITING ADMIN', color: '#f59e0b' },
+    PARTIALLY_PAID: { label: 'PARTIALLY PAID', color: '#f59e0b' },
     REJECTED: { label: 'REJECTED', color: '#ef4444' },
+    FAILED: { label: 'FAILED', color: '#ef4444' },
     OVERDUE: { label: 'OVERDUE', color: '#ef4444' },
+    REFUND_PENDING: { label: 'REFUND PENDING', color: '#f59e0b' },
+    REFUNDED: { label: 'REFUNDED', color: '#10b981' },
+    CANCELLED: { label: 'CANCELLED', color: '#ef4444' },
 };
-
-const PAYMENT_PENDING_STATUSES = ['PENDING', 'PENDING_ADMIN_PAYMENT_VERIFICATION', 'ADMIN_VERIFICATION_REQUIRED'];
 const sanitizeReceiptName = (name: string) => name.replace(/[^a-zA-Z0-9._-]/g, '_').slice(-120) || 'receipt';
 
 const hashReceiptFile = async (file: File) => {
@@ -83,7 +84,7 @@ export default function TenantPaymentsPage() {
                 setPayments(snap.docs.map(d => ({
                     id: d.id,
                     amount: d.data().amount || 0,
-                    status: d.data().status || 'PENDING',
+                    status: normalizeWorkflowState('PAYMENT', d.data().status || d.data().paymentStatus || d.data().verificationState, 'PENDING'),
                     reference: d.data().reference || d.data().bankRef || d.data().transactionRef,
                     period: d.data().period || d.data().rentPeriod,
                     createdAt: d.data().createdAt,
@@ -110,7 +111,7 @@ export default function TenantPaymentsPage() {
                                 map.set(d.id, {
                                     id: d.id,
                                     amount: d.data().amount || 0,
-                                    status: d.data().status || 'PENDING',
+                                    status: normalizeWorkflowState('PAYMENT', d.data().status || d.data().paymentStatus || d.data().verificationState, 'PENDING'),
                                     reference: d.data().reference,
                                     period: d.data().period,
                                     createdAt: d.data().createdAt,
@@ -189,8 +190,8 @@ export default function TenantPaymentsPage() {
         return d.toLocaleDateString('en-AE', { day: '2-digit', month: 'short', year: 'numeric' });
     };
 
-    const totalPaid = payments.filter(p => ['VERIFIED', 'APPROVED'].includes(p.status)).reduce((sum, p) => sum + p.amount, 0);
-    const totalPending = payments.filter(p => PAYMENT_PENDING_STATUSES.includes(p.status)).reduce((sum, p) => sum + p.amount, 0);
+    const totalPaid = payments.filter(p => p.status === 'APPROVED').reduce((sum, p) => sum + p.amount, 0);
+    const totalPending = payments.filter(p => ['PENDING', 'PARTIALLY_PAID'].includes(p.status)).reduce((sum, p) => sum + p.amount, 0);
 
     return (
         <Box sx={{ direction: isRTL ? 'rtl' : 'ltr', pb: 8 }}>
