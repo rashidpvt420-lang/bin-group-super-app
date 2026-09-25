@@ -48,6 +48,8 @@ test('Phase 8 Broker documents remain owner-scoped and Admin-reviewed', async ()
   assert.match(rules, /resource\.data\.get\('brokerId', null\) == request\.auth\.uid/);
   assert.match(rules, /allow update: if isAdmin\(\)/);
   assert.match(storage, /brokerDocuments/);
+  assert.match(storage, /match \/brokerDocuments\/\{brokerId\}\/\{allPaths=\*\*\}[\s\S]*?allow delete: if isAdmin\(\);/);
+  assert.doesNotMatch(storage, /brokerDocuments[\s\S]*?allow delete: if isAuth\(\) && \(request\.auth\.uid == brokerId \|\| isAdmin\(\)\)/);
   assert.match(review, /verifyBrokerDocuments/);
   assert.match(review, /custom\.brokerId !== brokerId/);
   assert.match(review, /custom\.documentType !== documentType/);
