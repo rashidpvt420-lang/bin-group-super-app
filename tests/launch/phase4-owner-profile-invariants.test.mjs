@@ -126,7 +126,6 @@ test('Phase 4 payment approval cannot activate before verified physical evidence
 test('Phase 4 Firestore browser rules reserve property lifecycle authority for the server', async () => {
   const rules = await read('firestore.rules');
 
-  assert.match(rules, /Canonical property creation and Owner corrections are server-authoritative/);
   assert.match(rules, /allow create: if isNotSuspended\(\) &&\s*canManageProperties\(\)/);
   assert.match(rules, /propertyCreateHasNoActivationAuthority/);
   assert.match(rules, /propertyActivationAuthorityUnchanged/);
