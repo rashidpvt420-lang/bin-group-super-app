@@ -1,5 +1,6 @@
 import * as admin from "firebase-admin";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
+import { normalizeCanonicalState } from "./canonicalStateMachines";
 
 if (!admin.apps.length) admin.initializeApp();
 
@@ -173,13 +174,11 @@ const matchesFilters = (record: AnyRecord, filters: AnyRecord): boolean => {
 };
 
 const safePaymentStatus = (record: AnyRecord): boolean => {
-  const status = lower(record.status || record.paymentStatus || record.state);
+  const status = normalizeCanonicalState("payment", record.paymentStatus || record.status || record.state);
   const recordType = lower(record.recordType || record.transactionType || record.type);
   if (["sla_credit", "refund", "credit"].includes(recordType)) return false;
-  if (["rejected", "failed", "cancelled", "canceled", "void", "draft", "review_required"].includes(status)) return false;
-  return record.paymentVerified === true ||
-    record.verified === true ||
-    ["paid", "approved", "verified", "succeeded", "success"].includes(status);
+  if (["REJECTED", "FAILED", "CANCELLED", "REFUND_PENDING", "REFUNDED"].includes(status)) return false;
+  return record.paymentVerified === true || record.verified === true || status === "APPROVED";
 };
 
 const revenueFrom = (record: AnyRecord): number => {
@@ -201,8 +200,8 @@ const costFrom = (record: AnyRecord): number => {
 };
 
 const isCompletedTicket = (record: AnyRecord): boolean => {
-  const status = lower(record.status || record.ticketStatus);
-  return ["completed", "complete", "resolved", "closed", "done"].includes(status);
+  const status = normalizeCanonicalState("ticket", record.ticketStatus || record.status);
+  return ["COMPLETED", "CLOSED"].includes(status);
 };
 
 async function readCollection(firestore: admin.firestore.Firestore, collectionName: string, maxDocs: number): Promise<AnyRecord[]> {
