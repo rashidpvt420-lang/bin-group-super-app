@@ -45,7 +45,7 @@ async function assertOwner(request: any, ownerUid: string, ownerEmail: string) {
   }
 }
 
-export const uploadOwnerOnboardingProofDocument = onCall({ cors: true, memory: "512MiB" }, async (request) => {
+export const uploadOwnerOnboardingProofDocument = onCall({ cors: true, enforceAppCheck: true, memory: "512MiB" }, async (request) => {
   const ownerUid = text(request.data?.ownerUid, "ownerUid", 120);
   const ownerEmail = email(request.data?.ownerEmail);
   await assertOwner(request, ownerUid, ownerEmail);

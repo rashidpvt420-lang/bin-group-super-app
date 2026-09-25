@@ -143,22 +143,24 @@ const isCapacitorNative = Boolean(
   ),
 );
 const isCapacitorAndroid = isCapacitorNative && capacitorPlatform === 'android';
+const isCapacitoriOS = isCapacitorNative && capacitorPlatform === 'ios';
+const isSupportedNativeAppCheckPlatform = isCapacitorAndroid || isCapacitoriOS;
 const nativeAppCheckBridge = registerPlugin<NativeAppCheckBridge>('FirebaseAppCheckBridge');
 
 const validateNativeAppCheckToken = (result: NativeAppCheckTokenResult) => {
   const token = String(result?.token || '').trim();
   const expireTimeMillis = Number(result?.expireTimeMillis || 0);
   if (!token || !Number.isFinite(expireTimeMillis) || expireTimeMillis <= Date.now()) {
-    throw new Error('Native Play Integrity App Check token result is invalid.');
+    throw new Error('Native Firebase App Check token result is invalid.');
   }
   return { token, expireTimeMillis };
 };
 
 export const forceNativeAppCheckRefresh = async (): Promise<void> => {
-  if (!isCapacitorAndroid) return;
+  if (!isSupportedNativeAppCheckPlatform) return;
   const bridge = nativeAppCheckBridge;
   if (!bridge || typeof bridge.getAppCheckToken !== 'function') {
-    throw new Error('Native Play Integrity App Check bridge plugin unavailable.');
+    throw new Error('Native Firebase App Check bridge plugin unavailable.');
   }
   validateNativeAppCheckToken(await bridge.getAppCheckToken({ forceRefresh: true }));
 };
@@ -224,7 +226,9 @@ const appCheckRequired = import.meta.env.PROD && !localAppCheckHost;
 const webAppCheckRequired = appCheckRequired && !isCapacitorNative;
 const resolvedAppCheckProvider = isCapacitorAndroid
   ? 'play-integrity-native'
-  : webAppCheckProvider;
+  : isCapacitoriOS
+    ? 'app-attest-native'
+    : webAppCheckProvider;
 let appCheckInitialized = false;
 export let appCheck = null as ReturnType<typeof initializeAppCheck> | null;
 
@@ -234,22 +238,22 @@ if (appCheckRequired && !appCheckExplicitlyEnabled) {
 if (webAppCheckRequired && !appCheckSiteKey) {
   throw new Error('[Firebase] App Check site key is required for production web builds.');
 }
-if (appCheckRequired && isCapacitorNative && !isCapacitorAndroid) {
+if (appCheckRequired && isCapacitorNative && !isSupportedNativeAppCheckPlatform) {
   throw new Error('[Firebase] Native App Check provider is not configured for this platform.');
 }
 
 if (appCheckExplicitlyEnabled && typeof window !== 'undefined') {
   try {
-    if (isCapacitorAndroid) {
+    if (isSupportedNativeAppCheckPlatform) {
       const provider = new CustomProvider({
         getToken: async () => {
           const bridge = nativeAppCheckBridge;
           if (!bridge || typeof bridge.getAppCheckToken !== 'function') {
-            throw new Error('Native Play Integrity App Check bridge plugin unavailable.');
+            throw new Error('Native Firebase App Check bridge plugin unavailable.');
           }
 
-          // Normal Web SDK refreshes reuse a valid native token. Explicit recovery
-          // uses forceNativeAppCheckRefresh() before the Web SDK requests a token.
+          // Android uses Play Integrity and iOS uses App Attest through the native
+          // bridge. The Web SDK consumes the resulting Firebase App Check token.
           return validateNativeAppCheckToken(
             await bridge.getAppCheckToken({ forceRefresh: false }),
           );

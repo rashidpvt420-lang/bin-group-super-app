@@ -159,7 +159,7 @@ function receiptBytes(data: any) {
   return { bytes, contentType, hash: createHash('sha256').update(bytes).digest('hex') };
 }
 
-export const adminReviewDesignPayment = onCall({ ...options, memory: '512MiB' }, async (request) => {
+export const adminReviewDesignPayment = onCall({ ...options, enforceAppCheck: true, memory: '512MiB' }, async (request) => {
   const user = await actor(request, true);
   const requestId = id(request.data?.designRequestId);
   const decision = text(request.data?.decision).toUpperCase();

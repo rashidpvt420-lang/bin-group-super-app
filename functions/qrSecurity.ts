@@ -64,7 +64,7 @@ function getQrSecret() {
   return secret;
 }
 
-export const generateSignedQrPass = onCall({ cors: true, secrets: [QR_SIGNING_SECRET] }, async (request) => {
+export const generateSignedQrPass = onCall({ cors: true, enforceAppCheck: true, secrets: [QR_SIGNING_SECRET] }, async (request) => {
   const QR_SECRET = getQrSecret();
   const tenantId = request.auth?.uid || "";
   const propertyId = text(request.data?.propertyId);
@@ -158,7 +158,7 @@ export const generateSignedQrPass = onCall({ cors: true, secrets: [QR_SIGNING_SE
   return { passId, token, status };
 });
 
-export const cancelSignedQrPass = onCall({ cors: true }, async (request) => {
+export const cancelSignedQrPass = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
   if (!request.auth?.uid) throw new HttpsError("unauthenticated", "User must be authenticated.");
   const passId = text(request.data?.passId);
   const collectionName = text(request.data?.collectionName);
@@ -184,7 +184,7 @@ export const cancelSignedQrPass = onCall({ cors: true }, async (request) => {
   return { success: true, passId };
 });
 
-export const verifyQrPass = onCall({ cors: true, secrets: [QR_SIGNING_SECRET] }, async (request) => {
+export const verifyQrPass = onCall({ cors: true, enforceAppCheck: true, secrets: [QR_SIGNING_SECRET] }, async (request) => {
   const QR_SECRET = getQrSecret();
   const { token } = request.data;
   if (!token) throw new HttpsError("invalid-argument", "Missing token.");

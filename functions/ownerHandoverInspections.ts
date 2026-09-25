@@ -76,7 +76,7 @@ async function loadOwnerInspection(id: string, uid: string, email: string) {
   return { ref, data };
 }
 
-export const listOwnerHandoverInspections = onCall({ cors: true }, async (request) => {
+export const listOwnerHandoverInspections = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
   const email = await assertVerifiedOwner(request.auth);
   const uid = request.auth!.uid;
   const byId = new Map<string, any>();
@@ -99,7 +99,7 @@ export const listOwnerHandoverInspections = onCall({ cors: true }, async (reques
   return { inspections };
 });
 
-export const updateOwnerHandoverInspection = onCall({ cors: true }, async (request) => {
+export const updateOwnerHandoverInspection = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
   const email = await assertVerifiedOwner(request.auth);
   const uid = request.auth!.uid;
   const payload = asObject(request.data || {}, "Action payload");

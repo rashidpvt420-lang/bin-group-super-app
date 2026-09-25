@@ -27,7 +27,7 @@ async function requireAdmin(auth: any) {
   throw new HttpsError("permission-denied", "Admin permission required.");
 }
 
-export const adminApproveContractActivation = onCall({ cors: true }, async (request) => {
+export const adminApproveContractActivation = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
   await requireAdmin(request.auth);
   throw new HttpsError(
     "failed-precondition",
@@ -363,7 +363,7 @@ export const createOwnerPaymentTransaction = onCall({ cors: true, enforceAppChec
   return { paymentId, amountPendingAdminConfirmation: false, idempotent };
 });
 
-export const adminRejectContractActivation = onCall({ cors: true }, async (request) => {
+export const adminRejectContractActivation = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
   await requireAdmin(request.auth);
   throw new HttpsError(
     "failed-precondition",

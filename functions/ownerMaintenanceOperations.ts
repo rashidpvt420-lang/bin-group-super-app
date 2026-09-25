@@ -119,7 +119,7 @@ export const ownerCreateMaintenanceTicket = onCall(
 );
 
 export const ownerAttachMaintenanceEvidence = onCall(
-  { cors: true, region: "europe-west3" },
+  { cors: true, region: "europe-west3", enforceAppCheck: true },
   async (request) => {
     assertOwnerRole(request.auth);
     const ownerUid = request.auth!.uid;
@@ -167,7 +167,7 @@ export const ownerAttachMaintenanceEvidence = onCall(
 );
 
 export const ownerCreatePropertyReporter = onCall(
-  { cors: true, region: "europe-west3" },
+  { cors: true, region: "europe-west3", enforceAppCheck: true },
   async (request) => {
     assertOwnerRole(request.auth);
     const ownerUid = request.auth!.uid;
@@ -260,7 +260,7 @@ export const ownerCreatePropertyReporter = onCall(
 );
 
 export const ownerSuspendPropertyReporter = onCall(
-  { cors: true, region: "europe-west3" },
+  { cors: true, region: "europe-west3", enforceAppCheck: true },
   async (request) => {
     assertOwnerRole(request.auth);
     const ownerUid = request.auth!.uid;

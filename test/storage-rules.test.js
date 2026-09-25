@@ -122,4 +122,147 @@ describe('Storage Security Rules', () => {
     ));
     await assertSucceeds(uploadString(ref(tenantStorage, receiptPath), 'proof', 'raw', validMetadata));
   });
+
+  it('owner document uploads isolate title-deed and Emirates-ID style evidence by owner', async () => {
+    const ownerAStorage = testEnv.authenticatedContext('owner_a', { role: 'owner' }).storage();
+    const ownerBStorage = testEnv.authenticatedContext('owner_b', { role: 'owner' }).storage();
+    const unauthStorage = testEnv.unauthenticatedContext().storage();
+    const titlePath = 'owners/owner_a/properties/property_a/title_deed.pdf';
+    const emiratesPath = 'owners/owner_a/identity/emirates_id.pdf';
+
+    await assertSucceeds(uploadString(ref(ownerAStorage, titlePath), 'title deed', 'raw', { contentType: 'application/pdf' }));
+    await assertSucceeds(uploadString(ref(ownerAStorage, emiratesPath), 'identity', 'raw', { contentType: 'application/pdf' }));
+    await assertFails(getBytes(ref(ownerBStorage, titlePath)));
+    await assertFails(uploadString(ref(ownerBStorage, titlePath), 'forged', 'raw', { contentType: 'application/pdf' }));
+    await assertFails(getBytes(ref(unauthStorage, emiratesPath)));
+    await assertFails(uploadString(ref(ownerAStorage, 'owners/owner_a/identity/payload.exe'), 'x', 'raw', { contentType: 'application/octet-stream' }));
+  });
+
+  it('technician before and after evidence is image-only and bound to the assigned ticket', async () => {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), 'maintenanceTickets/ticket_evidence'), {
+        ownerId: 'owner_a',
+        tenantId: 'tenant_a',
+        assignedTechnicianId: 'tech_a',
+      });
+    });
+
+    const techAStorage = testEnv.authenticatedContext('tech_a', { role: 'technician' }).storage();
+    const techBStorage = testEnv.authenticatedContext('tech_b', { role: 'technician' }).storage();
+    const ownerStorage = testEnv.authenticatedContext('owner_a', { role: 'owner' }).storage();
+
+    await assertSucceeds(uploadString(
+      ref(techAStorage, 'maintenanceTickets/ticket_evidence/proofPhotos/before.jpg'),
+      'image',
+      'raw',
+      { contentType: 'image/jpeg' },
+    ));
+    await assertSucceeds(uploadString(
+      ref(techAStorage, 'maintenanceTickets/ticket_evidence/completionPhotos/after.jpg'),
+      'image',
+      'raw',
+      { contentType: 'image/jpeg' },
+    ));
+    await assertFails(uploadString(
+      ref(techBStorage, 'maintenanceTickets/ticket_evidence/completionPhotos/forged.jpg'),
+      'image',
+      'raw',
+      { contentType: 'image/jpeg' },
+    ));
+    await assertFails(uploadString(
+      ref(techAStorage, 'maintenanceTickets/ticket_evidence/completionPhotos/not-image.pdf'),
+      'pdf',
+      'raw',
+      { contentType: 'application/pdf' },
+    ));
+    await assertSucceeds(getBytes(ref(ownerStorage, 'maintenanceTickets/ticket_evidence/completionPhotos/after.jpg')));
+  });
+
+  it('Broker KYC uploads are owner-bound, metadata-bound and immutable to the Broker', async () => {
+    const brokerAStorage = testEnv.authenticatedContext('broker_a', { role: 'broker' }).storage();
+    const brokerBStorage = testEnv.authenticatedContext('broker_b', { role: 'broker' }).storage();
+    const path = 'brokerDocuments/broker_a/emirates_id/evidence.pdf';
+    const valid = {
+      contentType: 'application/pdf',
+      customMetadata: {
+        brokerId: 'broker_a',
+        documentType: 'emirates_id',
+      },
+    };
+
+    await assertSucceeds(uploadString(ref(brokerAStorage, path), 'kyc', 'raw', valid));
+    await assertFails(uploadString(ref(brokerAStorage, path), 'replacement', 'raw', valid));
+    await assertFails(getBytes(ref(brokerBStorage, path)));
+    await assertFails(uploadString(
+      ref(brokerAStorage, 'brokerDocuments/broker_a/emirates_id/bad.pdf'),
+      'kyc',
+      'raw',
+      {
+        contentType: 'application/pdf',
+        customMetadata: {
+          brokerId: 'broker_b',
+          documentType: 'emirates_id',
+        },
+      },
+    ));
+  });
+
+  it('temporary KYC evidence is isolated to the authenticated uploader', async () => {
+    const ownerAStorage = testEnv.authenticatedContext('owner_a', { role: 'owner' }).storage();
+    const ownerBStorage = testEnv.authenticatedContext('owner_b', { role: 'owner' }).storage();
+    const path = 'temp_kyc/owner_a/title_deed.pdf';
+
+    await assertSucceeds(uploadString(ref(ownerAStorage, path), 'proof', 'raw', { contentType: 'application/pdf' }));
+    await assertSucceeds(getBytes(ref(ownerAStorage, path)));
+    await assertFails(getBytes(ref(ownerBStorage, path)));
+    await assertFails(uploadString(ref(ownerBStorage, path), 'forged', 'raw', { contentType: 'application/pdf' }));
+  });
+
+  it('invoice evidence is server/Admin-authored and participant reads remain scoped', async () => {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), 'invoices/invoice_owner_a'), {
+        ownerId: 'owner_a',
+        amount: 100,
+      });
+      await uploadString(
+        ref(context.storage(), 'invoices/invoice_owner_a/invoice.pdf'),
+        'invoice',
+        'raw',
+        { contentType: 'application/pdf' },
+      );
+    });
+
+    const ownerAStorage = testEnv.authenticatedContext('owner_a', { role: 'owner' }).storage();
+    const ownerBStorage = testEnv.authenticatedContext('owner_b', { role: 'owner' }).storage();
+    const unauthStorage = testEnv.unauthenticatedContext().storage();
+
+    await assertSucceeds(getBytes(ref(ownerAStorage, 'invoices/invoice_owner_a/invoice.pdf')));
+    await assertFails(getBytes(ref(ownerBStorage, 'invoices/invoice_owner_a/invoice.pdf')));
+    await assertFails(getBytes(ref(unauthStorage, 'invoices/invoice_owner_a/invoice.pdf')));
+    await assertFails(uploadString(
+      ref(ownerAStorage, 'invoices/invoice_owner_a/forged.pdf'),
+      'invoice',
+      'raw',
+      { contentType: 'application/pdf' },
+    ));
+  });
+
+  it('private HR documents are inaccessible to every browser role including Admin and HR', async () => {
+    const path = 'privateHrDocuments/staff_a/contract.pdf';
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await uploadString(ref(context.storage(), path), 'private', 'raw', { contentType: 'application/pdf' });
+    });
+
+    for (const [uid, claims] of [
+      ['staff_a', { role: 'technician' }],
+      ['hr_a', { role: 'hr_admin' }],
+      ['admin_a', { role: 'admin', admin: true }],
+    ]) {
+      const storage = testEnv.authenticatedContext(uid, claims).storage();
+      await assertFails(getBytes(ref(storage, path)));
+      await assertFails(uploadString(ref(storage, path), 'rewrite', 'raw', { contentType: 'application/pdf' }));
+      await assertFails(uploadString(ref(storage, `privateHrDocuments/staff_a/new-${uid}.pdf`), 'new', 'raw', { contentType: 'application/pdf' }));
+    }
+  });
+
 });

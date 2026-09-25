@@ -540,7 +540,7 @@ export const adminReviewBrokerPayoutRequest = onCall({ cors: true, region: "euro
   return { status: "SUCCESS", requestId, action };
 });
 
-export const ownerGenerateUnits = onCall({ cors: true, region: "europe-west3" }, async (request) => {
+export const ownerGenerateUnits = onCall({ cors: true, region: "europe-west3", enforceAppCheck: true }, async (request) => {
   if (!request.auth?.uid) throw new HttpsError("unauthenticated", "Owner login required.");
 
   const token = request.auth.token || {};
@@ -628,7 +628,7 @@ export const ownerGenerateUnits = onCall({ cors: true, region: "europe-west3" },
   return { status: "SUCCESS", propertyId, createdCount: created.length, createdUnits: created, skipped };
 });
 
-export const tenantRequestUnitLink = onCall({ cors: true, region: "europe-west3" }, async (request) => {
+export const tenantRequestUnitLink = onCall({ cors: true, region: "europe-west3", enforceAppCheck: true }, async (request) => {
   if (!request.auth?.uid) throw new HttpsError("unauthenticated", "Tenant login required.");
 
   const uid = request.auth.uid;
@@ -689,7 +689,7 @@ export const tenantRequestUnitLink = onCall({ cors: true, region: "europe-west3"
   return { status: "PENDING_ADMIN_REVIEW", requestId: requestRef.id };
 });
 
-export const adminResolveTenantUnitLink = onCall({ cors: true, region: "europe-west3" }, async (request) => {
+export const adminResolveTenantUnitLink = onCall({ cors: true, region: "europe-west3", enforceAppCheck: true }, async (request) => {
   await requireAdmin(request.auth);
 
   const requestId = text(request.data?.requestId);
@@ -806,7 +806,7 @@ export const adminResolveTenantUnitLink = onCall({ cors: true, region: "europe-w
   return { status: decision === "APPROVE" ? "APPROVED" : "REJECTED", requestId, unitId: unitId || null };
 });
 
-export const adminRepairOrphanLinkage = onCall({ cors: true, region: "europe-west3" }, async (request) => {
+export const adminRepairOrphanLinkage = onCall({ cors: true, region: "europe-west3", enforceAppCheck: true }, async (request) => {
   await requireAdmin(request.auth);
 
   const orphanId = text(request.data?.orphanId);

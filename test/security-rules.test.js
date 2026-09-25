@@ -1502,4 +1502,92 @@ describe('Firestore Security Rules', () => {
     }));
   });
 
+
+  it('Phase 10 intake submissions are owner-readable but server-authoritative for every mutation', async () => {
+    await seedServerDocument('intake_submissions/intake_owner_a', {
+      ownerId: 'owner_a',
+      ownerUid: 'owner_a',
+      status: 'UNDER_REVIEW',
+      paymentVerified: false,
+      active: false,
+    });
+
+    const ownerA = testEnv.authenticatedContext('owner_a', { role: 'owner' }).firestore();
+    const ownerB = testEnv.authenticatedContext('owner_b', { role: 'owner' }).firestore();
+    const unauth = testEnv.unauthenticatedContext().firestore();
+
+    await assertSucceeds(getDoc(doc(ownerA, 'intake_submissions/intake_owner_a')));
+    await assertFails(getDoc(doc(ownerB, 'intake_submissions/intake_owner_a')));
+    await assertFails(getDoc(doc(unauth, 'intake_submissions/intake_owner_a')));
+    await assertFails(setDoc(doc(ownerA, 'intake_submissions/forged'), { ownerId: 'owner_a', status: 'ACTIVE' }));
+    await assertFails(updateDoc(doc(ownerA, 'intake_submissions/intake_owner_a'), { paymentVerified: true, active: true }));
+    await assertFails(deleteDoc(doc(ownerA, 'intake_submissions/intake_owner_a')));
+  });
+
+  it('Phase 10 sensitive evidence and configuration collections remain browser-immutable', async () => {
+    const seeded = [
+      ['audit_logs/audit_phase10', { action: 'TEST', actorId: 'server' }],
+      ['launch_evidence/evidence_phase10', { source: 'github-actions', executionGenerated: true }],
+      ['private_hr_profiles/staff_phase10', { salary: 1 }],
+      ['system_secrets/secret_phase10', { value: 'server-only' }],
+      ['technician_live_locations/tech_phase10', { technicianId: 'tech_phase10', latitude: 24.4, longitude: 54.3 }],
+    ];
+    for (const [path, data] of seeded) await seedServerDocument(path, data);
+
+    const owner = testEnv.authenticatedContext('owner_phase10', { role: 'owner' }).firestore();
+    const admin = testEnv.authenticatedContext('admin_phase10', { role: 'admin', admin: true }).firestore();
+    const unauth = testEnv.unauthenticatedContext().firestore();
+
+    for (const [path] of seeded) {
+      await assertFails(setDoc(doc(owner, `${path}_forged`), { forged: true }));
+      await assertFails(updateDoc(doc(owner, path), { forged: true }));
+      await assertFails(deleteDoc(doc(owner, path)));
+      await assertFails(getDoc(doc(unauth, path)));
+    }
+
+    await assertSucceeds(getDoc(doc(admin, 'audit_logs/audit_phase10')));
+    await assertSucceeds(getDoc(doc(admin, 'launch_evidence/evidence_phase10')));
+    await assertFails(updateDoc(doc(admin, 'audit_logs/audit_phase10'), { forged: true }));
+    await assertFails(updateDoc(doc(admin, 'launch_evidence/evidence_phase10'), { forged: true }));
+    await assertFails(getDoc(doc(admin, 'private_hr_profiles/staff_phase10')));
+    await assertFails(getDoc(doc(admin, 'system_secrets/secret_phase10')));
+    await assertFails(setDoc(doc(admin, 'private_hr_profiles/forged'), { salary: 999 }));
+    await assertFails(setDoc(doc(admin, 'system_secrets/forged'), { value: 'forged' }));
+  });
+
+  it('Phase 10 Broker KYC, payment and quote records do not cross role or identity boundaries', async () => {
+    await seedServerDocument('broker_kyc_profiles/broker_a', {
+      brokerId: 'broker_a',
+      brokerKycStatus: 'PENDING',
+      reraLicense: 'masked',
+    });
+    await seedServerDocument('payments/payment_owner_a', {
+      ownerId: 'owner_a',
+      payerId: 'owner_a',
+      paymentVerified: true,
+    });
+    await seedServerDocument('design_quotes/quote_owner_a', {
+      ownerId: 'owner_a',
+      userId: 'owner_a',
+      status: 'ISSUED',
+    });
+
+    const brokerA = testEnv.authenticatedContext('broker_a', { role: 'broker' }).firestore();
+    const brokerB = testEnv.authenticatedContext('broker_b', { role: 'broker' }).firestore();
+    const ownerA = testEnv.authenticatedContext('owner_a', { role: 'owner' }).firestore();
+    const ownerB = testEnv.authenticatedContext('owner_b', { role: 'owner' }).firestore();
+
+    await assertSucceeds(getDoc(doc(brokerA, 'broker_kyc_profiles/broker_a')));
+    await assertFails(getDoc(doc(brokerB, 'broker_kyc_profiles/broker_a')));
+    await assertFails(updateDoc(doc(brokerA, 'broker_kyc_profiles/broker_a'), { brokerKycStatus: 'APPROVED' }));
+
+    await assertSucceeds(getDoc(doc(ownerA, 'payments/payment_owner_a')));
+    await assertFails(getDoc(doc(ownerB, 'payments/payment_owner_a')));
+    await assertFails(updateDoc(doc(ownerA, 'payments/payment_owner_a'), { paymentVerified: false }));
+
+    await assertSucceeds(getDoc(doc(ownerA, 'design_quotes/quote_owner_a')));
+    await assertFails(getDoc(doc(ownerB, 'design_quotes/quote_owner_a')));
+    await assertFails(updateDoc(doc(ownerA, 'design_quotes/quote_owner_a'), { status: 'PAID' }));
+  });
+
 });

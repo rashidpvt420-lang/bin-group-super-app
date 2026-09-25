@@ -663,7 +663,7 @@ export const adminApprovePayment = onCall({ cors: true, enforceAppCheck: true },
   };
 });
 
-export const adminRejectPayment = onCall({ cors: true }, async (request) => {
+export const adminRejectPayment = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
   await requireAdmin(request.auth);
 
   const paymentId = resolvePaymentId(request.data);
