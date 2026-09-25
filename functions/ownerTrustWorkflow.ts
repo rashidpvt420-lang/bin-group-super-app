@@ -24,7 +24,7 @@ function statusForDecision(decision: string) {
 }
 
 export const submitOwnerApprovalDecision = onCall(
-  { cors: true, region: "europe-west3" },
+  { cors: true, region: "europe-west3", enforceAppCheck: true },
   async (request) => {
     if (!request.auth?.uid) throw new HttpsError("unauthenticated", "Owner authentication is required.");
 
