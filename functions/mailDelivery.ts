@@ -34,11 +34,35 @@ function stripHtml(html: string) {
 }
 
 async function assertAdmin(auth: any) {
-  if (!auth) throw new HttpsError("unauthenticated", "Admin authentication required.");
+  if (!auth?.uid) throw new HttpsError("unauthenticated", "Admin authentication required.");
   const token = auth.token || {};
   const tokenRole = asText(token.role || token.userRole || token.primaryRole).toLowerCase();
-  if (token.admin === true || token.isAdmin === true || token.superAdmin === true || token.super_admin === true || ADMIN_ROLES.has(tokenRole)) return;
-  throw new HttpsError("permission-denied", "Admin access required.");
+  const tokenAuthorized =
+    token.suspended !== true &&
+    (token.admin === true ||
+      token.isAdmin === true ||
+      token.superAdmin === true ||
+      token.super_admin === true ||
+      token.ceo === true ||
+      ADMIN_ROLES.has(tokenRole));
+  if (!tokenAuthorized) throw new HttpsError("permission-denied", "Admin access required.");
+  if (token.email_verified !== true || !token.firebase?.sign_in_second_factor) {
+    throw new HttpsError("permission-denied", "A verified Admin MFA session is required.");
+  }
+  const currentUser = await admin.auth().getUser(auth.uid);
+  const currentClaims = currentUser.customClaims || {};
+  const currentRole = asText(currentClaims.role || currentClaims.userRole || currentClaims.primaryRole).toLowerCase();
+  const currentAuthorized =
+    currentClaims.suspended !== true &&
+    (currentClaims.admin === true ||
+      currentClaims.isAdmin === true ||
+      currentClaims.superAdmin === true ||
+      currentClaims.super_admin === true ||
+      currentClaims.ceo === true ||
+      ADMIN_ROLES.has(currentRole));
+  if (currentUser.disabled || !currentUser.emailVerified || !currentAuthorized) {
+    throw new HttpsError("permission-denied", "Current Admin authority is inactive or no longer valid.");
+  }
 }
 
 async function createTransporter() {
@@ -141,6 +165,7 @@ export const sendQueuedMailOnCreate = onDocumentCreated({
 
 export const adminRetryMailDelivery = onCall({
   cors: true,
+  enforceAppCheck: true,
   secrets: [smtpUser, smtpPass],
 }, async (request) => {
   await assertAdmin(request.auth);
@@ -157,6 +182,15 @@ export const adminRetryMailDelivery = onCall({
     const snap = await db.collection("mail").doc(mailId).get();
     if (!snap.exists) throw new HttpsError("not-found", "Mail document not found.");
     const result = await deliverMail(mailId, snap.data() || {});
+    await db.collection("audit_logs").add({
+      action: "ADMIN_RETRY_MAIL_DELIVERY",
+      actorId: request.auth!.uid,
+      actorRole: asText(request.auth?.token?.role || request.auth?.token?.userRole || request.auth?.token?.primaryRole, "admin"),
+      targetType: "mail",
+      targetId: mailId,
+      metadata: { mode: "single", delivered: result?.delivered === true, skipped: result?.skipped === true },
+      createdAt: FieldValue.serverTimestamp(),
+    });
     return { status: "DONE", results: [{ mailId, ...result }] };
   }
 
@@ -172,5 +206,14 @@ export const adminRetryMailDelivery = onCall({
     }
   }
 
+  await db.collection("audit_logs").add({
+    action: "ADMIN_RETRY_MAIL_DELIVERY",
+    actorId: request.auth!.uid,
+    actorRole: asText(request.auth?.token?.role || request.auth?.token?.userRole || request.auth?.token?.primaryRole, "admin"),
+    targetType: "mail",
+    targetId: "retry_batch",
+    metadata: { mode: "batch", requestedLimit: limit, attempted: results.length },
+    createdAt: FieldValue.serverTimestamp(),
+  });
   return { status: "DONE", results };
 });
