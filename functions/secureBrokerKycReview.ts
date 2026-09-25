@@ -294,8 +294,8 @@ export const adminReviewBrokerKyc = onCall(
       transaction.set(publicRef, {
         status: approved ? "APPROVED" : "REJECTED",
         approvalStatus: approved ? "APPROVED" : "REJECTED",
-        kycStatus: approved ? "VERIFIED" : "REJECTED",
-        brokerKycStatus: approved ? "VERIFIED" : "REJECTED",
+        kycStatus: approved ? "APPROVED" : "REJECTED",
+        brokerKycStatus: approved ? "APPROVED" : "REJECTED",
         reraStatus: approved ? "VERIFIED" : "REJECTED",
         reraVerified: approved,
         ibanVerified: approved,
@@ -313,7 +313,7 @@ export const adminReviewBrokerKyc = onCall(
       }, { merge: true });
 
       transaction.set(privateRef, {
-        brokerKycStatus: approved ? "VERIFIED" : "REJECTED",
+        brokerKycStatus: approved ? "APPROVED" : "REJECTED",
         reraStatus: approved ? "VERIFIED" : "REJECTED",
         reraVerified: approved,
         ibanVerified: approved,
