@@ -45,7 +45,7 @@ const profileTests = [
 
 const blockers = [
   'Workflow run for latest commits must be green after deploy.',
-  'Stripe live keys must be configured before real payment collection.',
+  'Phase 1 real payment collection is Cash/Cheque only and requires verified Admin evidence.',
   'Firebase App Check production key must be active before broad sharing.',
   'Branded email sender must be configured before real customer notifications.',
   'Broker lead attribution, contract source, and commission trail still need verification.',
@@ -144,7 +144,7 @@ export default function PilotLaunchPage() {
           <Paper sx={{ p: 3, borderRadius: 5, border: '1px solid #E5E7EB', bgcolor: '#F8F9FB' }}>
             <Typography sx={{ fontWeight: 950, color: '#111827', mb: 1 }}>Pilot rule</Typography>
             <Typography sx={{ color: '#667085', lineHeight: 1.8 }}>
-              Share this only with trusted testers. This is for controlled workflow validation, not full public commercial launch. Do not collect live payments or promise full commercial onboarding until Stripe live keys, App Check production key, branded email, and full smoke testing are confirmed green.
+              Share this only with trusted testers. This is for controlled workflow validation, not full public commercial launch. Do not collect live payments or promise full commercial onboarding until Phase 1 Cash/Cheque payment evidence, App Check production enforcement, branded email, and full smoke testing are confirmed green.
             </Typography>
           </Paper>
 
