@@ -148,9 +148,16 @@ const tokenHasAdminRole = (token: AnyRecord): boolean => {
 
 async function assertAdmin(auth: AdminReportAuth, firestore: admin.firestore.Firestore): Promise<void> {
   if (!auth?.uid) throw new HttpsError("unauthenticated", "Admin authentication required.");
-  if (tokenHasAdminRole(asRecord(auth.token))) return;
+  const token = asRecord(auth.token);
+  if (!tokenHasAdminRole(token) || token.suspended === true) {
+    throw new HttpsError("permission-denied", "Admin access required.");
+  }
+  const currentUser = await admin.auth().getUser(auth.uid);
+  const currentClaims = asRecord(currentUser.customClaims);
+  if (currentUser.disabled || !currentUser.emailVerified || !tokenHasAdminRole(currentClaims) || currentClaims.suspended === true) {
+    throw new HttpsError("permission-denied", "Current Admin authority is inactive or no longer valid.");
+  }
   void firestore;
-  throw new HttpsError("permission-denied", "Admin access required.");
 }
 
 const matchesFilters = (record: AnyRecord, filters: AnyRecord): boolean => {
