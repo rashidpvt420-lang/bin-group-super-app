@@ -67,12 +67,18 @@ async function requireBroker(auth: any) {
   ]);
   const profile = profileSnap.data() || {};
   const privateKyc = privateKycSnap.data() || {};
-  const role = lower(record.customClaims?.role || record.customClaims?.userRole || profile.role || profile.userRole);
-  if (record.disabled || auth.token?.suspended === true || ["suspended", "disabled", "rejected"].includes(lower(profile.status))) {
+  const currentClaims = record.customClaims || {};
+  const role = lower(currentClaims.role || currentClaims.userRole || currentClaims.primaryRole || profile.role || profile.userRole);
+  if (
+    record.disabled ||
+    auth.token?.suspended === true ||
+    currentClaims.suspended === true ||
+    ["suspended", "disabled", "rejected", "deleted"].includes(lower(profile.status))
+  ) {
     throw new HttpsError("permission-denied", "Broker account is not active.");
   }
   if (!record.emailVerified || !record.email) throw new HttpsError("failed-precondition", "A verified Broker email is required.");
-  if (role !== "broker") throw new HttpsError("permission-denied", "Broker role required.");
+  if (role !== "broker") throw new HttpsError("permission-denied", "Current Broker role required.");
   if (!privateKycSnap.exists) {
     throw new HttpsError("failed-precondition", "Private Broker KYC profile is required before payout requests.");
   }
