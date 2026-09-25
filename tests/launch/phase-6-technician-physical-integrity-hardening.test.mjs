@@ -134,6 +134,20 @@ test('Phase 6 offline arrival retains native integrity and completion remains fo
   assert.match(resilience, /Completion requires foreground evidence upload/);
 });
 
+test('Phase 6 physical evidence verifier rejects legacy GPS and mutable photo evidence', async () => {
+  const verifier = await read('scripts/verify-technician-physical-evidence.mjs');
+
+  assert.match(verifier, /nativeLocationMocked === false/);
+  assert.match(verifier, /native_android_location_manager/);
+  assert.match(verifier, /arrival native GPS capture time is stale or inconsistent/);
+  assert.match(verifier, /technicianBeforeConfirmationId/);
+  assert.match(verifier, /technicianAfterConfirmationId/);
+  assert.match(verifier, /before-work immutable confirmation record is missing or mismatched/);
+  assert.match(verifier, /after-work immutable confirmation record is missing or mismatched/);
+  assert.match(verifier, /before-work Storage object changed after confirmation/);
+  assert.match(verifier, /after-work Storage object changed after confirmation/);
+});
+
 test('Phase 6 native release is versionCode 13', async () => {
   const gradle = await read('android/app/build.gradle');
   assert.match(gradle, /versionCode\s+13\b/);
