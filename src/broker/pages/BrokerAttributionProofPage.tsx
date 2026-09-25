@@ -79,15 +79,9 @@ export default function BrokerAttributionProofPage() {
     if (!user?.uid) return;
     const unsubs: Array<() => void> = [];
     const buckets: Record<string, Row[]> = {};
-    const email = normalizeEmail(user.email);
 
     const bind = (collectionName: string, setter: React.Dispatch<React.SetStateAction<Row[]>>) => {
-      const sources = [
-        { field: 'brokerId', value: user.uid },
-        { field: 'brokerUid', value: user.uid },
-        { field: 'createdByUid', value: user.uid },
-        { field: 'brokerEmail', value: email },
-      ].filter((source) => source.value);
+      const sources = [{ field: 'brokerId', value: user.uid }];
 
       sources.forEach((source) => {
         const key = `${collectionName}:${source.field}:${source.value}`;
