@@ -19,7 +19,6 @@ test('provider evidence is finalized into the canonical hard-launch schema', asy
   }
   assert.doesNotMatch(finalizer, /stripeLiveBilling/);
   assert.doesNotMatch(workflow, /stripeLiveBilling/);
-  assert.match(finalizer, /#\\$\\{gate\}/);
 
   assert.match(finalizer, /evidenceReference:\s*`https:\/\/github\.com\/\$\{EXPECTED_REPOSITORY\}\/actions\/runs\/\$\{runId\}#\$\{gate\}`/);
   assert.match(finalizer, /githubRepository:\s*EXPECTED_REPOSITORY/);
