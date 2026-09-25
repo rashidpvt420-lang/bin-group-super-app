@@ -616,16 +616,13 @@ export default function TenantMarketplacePage() {
                       <SafeIcon icon={Wrench} size={17} style={{ color: binThemeTokens.goldHover }} />
                       <Typography variant="h6" sx={{ fontWeight: 950 }}>{copy('tenant.home.repairHistory', 'Maintenance history', 'سجل الصيانة')}</Typography>
                     </Stack>
-                    {repairs.length > 0 ? (
-                      <Stack spacing={1}>
-                        {repairs.map((repair, index) => (
-                          <Paper key={`${selected.id}-repair-${index}`} sx={{ p: 1.7, bgcolor: '#FAFAFB', border: `1px solid ${binThemeTokens.border}`, borderRadius: 2.5 }}>
-                            <Typography sx={{ fontWeight: 900 }}>{repair.title || repair.issue || copy('tenant.home.repairCompleted', 'Maintenance completed', 'تمت الصيانة')}</Typography>
-                            <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary }}>{[repair.date, repair.status].filter(Boolean).join(' · ')}</Typography>
-                          </Paper>
-                        ))}
-                      </Stack>
-                    ) : <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary }}>{selected.repairHistorySummary || copy('tenant.home.noRepairHistory', 'No unresolved repair history is published for this home.', 'لا يوجد سجل صيانة غير محلول منشور لهذا العقار.')}</Typography>}
+                    <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary }}>
+                      {copy(
+                        'tenant.home.noPrivateMaintenance',
+                        'Only a privacy-safe availability summary is published before tenancy. Private repair records remain protected.',
+                        'يتم عرض ملخص آمن للخصوصية فقط قبل بدء الإيجار. تبقى سجلات الصيانة الخاصة محمية.',
+                      )}
+                    </Typography>
                   </Box>
 
                   {(mapHref || selected.permitNumber || selected.permitVerificationUrl) && (
