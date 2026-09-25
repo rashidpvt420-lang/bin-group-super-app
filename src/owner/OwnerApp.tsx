@@ -18,6 +18,7 @@ import PortalConnectionStrip from '../components/PortalConnectionStrip';
 import OwnerSimpleDashboardPage from './pages/OwnerSimpleDashboardPage';
 import OwnerDashboardPage from './pages/OwnerDashboardResolvedPage';
 import OwnerPropertiesPage from './pages/OwnerPropertiesPage';
+import OwnerPropertyCorrectionPage from './pages/OwnerPropertyCorrectionPage';
 import OwnerContractsPage from './pages/OwnerContractsResolvedPage';
 import OwnerFinancialsPage from './pages/OwnerFinancialsPage';
 import OwnerPaymentProofPage from './pages/OwnerPaymentProofPage';
@@ -91,6 +92,7 @@ export default function OwnerApp() {
                 <Route path="/activation" element={<OwnerActivationPage />} />
                 <Route path="/onboarding-status" element={<OwnerActivationPage />} />
                 <Route path="/properties" element={<OwnerPropertiesPage />} />
+                <Route path="/properties/:propertyId/correct" element={<OwnerPropertyCorrectionPage />} />
                 <Route path="/contracts" element={<OwnerContractsPage />} />
                 <Route path="/financials" element={<OwnerFinancialsPage />} />
                 <Route path="/payment-proof" element={<OwnerPaymentProofPage />} />
