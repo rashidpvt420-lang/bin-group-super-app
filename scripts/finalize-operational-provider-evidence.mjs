@@ -9,7 +9,6 @@ const EXPECTED_WORKFLOW = 'Operational Provider Evidence';
 const EXPECTED_JOB = 'verify-and-publish';
 const EVIDENCE_TYPES = Object.freeze({
   brandedEmailDelivery: 'workflow-artifact',
-  stripeLiveBilling: 'production-transaction',
   appCheckEnforcement: 'workflow-artifact',
   aiProviderHealth: 'workflow-artifact',
 });
