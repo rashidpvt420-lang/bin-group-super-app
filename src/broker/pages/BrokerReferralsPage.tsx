@@ -32,7 +32,6 @@ const amountOf = (value: unknown) => {
   const parsed = Number(String(value || '').replace(/[^0-9.]/g, ''));
   return Number.isFinite(parsed) ? parsed : 0;
 };
-const uniqueRows = (rows: any[]) => Array.from(new Map(rows.map((row) => [String(row.id), row])).values());
 const rowTime = (row: any) => row?.createdAt?.toDate ? row.createdAt.toDate().getTime() : row?.createdAt?.seconds ? row.createdAt.seconds * 1000 : 0;
 
 export default function BrokerReferralsPage({ openFormByDefault = false }: { openFormByDefault?: boolean }) {
