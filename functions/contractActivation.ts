@@ -363,7 +363,7 @@ export const createOwnerPaymentTransaction = onCall({ cors: true, enforceAppChec
   return { paymentId, amountPendingAdminConfirmation: false, idempotent };
 });
 
-export const adminRejectContractActivation = onCall({ cors: true }, async (request) => {
+export const adminRejectContractActivation = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
   await requireAdmin(request.auth);
   throw new HttpsError(
     "failed-precondition",
