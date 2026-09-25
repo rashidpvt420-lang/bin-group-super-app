@@ -118,6 +118,9 @@ export const adminReviewBrokerPayoutRequest = onCall(
       }
 
       const state = requestState(payout);
+      const notificationRef = db.collection("notifications").doc(
+        "broker_payout_" + requestId + "_" + action.toLowerCase(),
+      );
       if (action === "APPROVE") {
         if (["APPROVED", "PAID"].includes(state)) {
           idempotent = true;
@@ -227,6 +230,29 @@ export const adminReviewBrokerPayoutRequest = onCall(
         sensitiveValuesExcluded: true,
         createdAt: now,
       });
+      transaction.set(notificationRef, {
+        recipientId: brokerId,
+        userId: brokerId,
+        recipientRole: "broker",
+        type: action === "APPROVE"
+          ? "BROKER_PAYOUT_APPROVED"
+          : action === "REJECT"
+            ? "BROKER_PAYOUT_REJECTED"
+            : "BROKER_PAYOUT_PAID",
+        title: action === "APPROVE"
+          ? "Payout approved"
+          : action === "REJECT"
+            ? "Payout rejected"
+            : "Payout paid",
+        body: action === "APPROVE"
+          ? "Your Broker payout request was approved and is awaiting payment settlement."
+          : action === "REJECT"
+            ? "Your Broker payout request was rejected. Review the payout details before submitting a new request."
+            : "Your Broker payout has been marked paid. Open Commissions to review the settlement reference.",
+        link: "/broker/commissions",
+        read: false,
+        createdAt: now,
+      }, { merge: true });
     });
 
     return {
