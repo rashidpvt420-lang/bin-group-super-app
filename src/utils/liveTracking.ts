@@ -148,6 +148,12 @@ async function persistTrackingDiagnostic(technicianUid: string, ticketId: string
     }
 }
 
+export function looksLikeReversedUaeLatLng(lat: number, lng: number): boolean {
+    return Number.isFinite(lat) && Number.isFinite(lng) &&
+        lat >= 51 && lat <= 57 &&
+        lng >= 22 && lng <= 27;
+}
+
 export function normalizeLocation(input: any): { lat: number; lng: number; latitude: number; longitude: number } | null {
     if (!input) return null;
     const source = input.location || input;
@@ -156,6 +162,7 @@ export function normalizeLocation(input: any): { lat: number; lng: number; latit
     if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
     if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return null;
     if (lat === 0 && lng === 0) return null;
+    if (looksLikeReversedUaeLatLng(lat, lng)) return null;
     return { lat, lng, latitude: lat, longitude: lng };
 }
 
@@ -448,6 +455,7 @@ export const startLiveTracking = async (
                         !Number.isFinite(position.coords.latitude) ||
                         !Number.isFinite(position.coords.longitude) ||
                         (position.coords.latitude === 0 && position.coords.longitude === 0) ||
+                        looksLikeReversedUaeLatLng(position.coords.latitude, position.coords.longitude) ||
                         position.coords.accuracy <= 0 ||
                         position.coords.accuracy > 100
                     ) {
