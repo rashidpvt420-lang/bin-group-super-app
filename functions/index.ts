@@ -177,7 +177,7 @@ function safeString(value: any, fallback = "") {
     return text || fallback;
 }
 
-export const submitOwnerOnboarding = onCall({ cors: true }, async (request) => {
+export const submitOwnerOnboarding = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Please sign in before submitting onboarding.");
 
     const hasAccess = await hasCallableRoleAccess(request.auth, new Set(["owner", "admin", "super_admin"]));
@@ -191,7 +191,7 @@ export const submitOwnerOnboarding = onCall({ cors: true }, async (request) => {
 
 // ─── LEGACY TECHNICIAN DUTY REMOVED IN FAVOR OF STAGE 10 ─────────────────
 
-export const takeTechnicianBreak = onCall({ cors: true }, async (request) => {
+export const takeTechnicianBreak = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Auth required.");
     await assertApprovedTechnicianAccount(request.auth);
     const uid = request.auth.uid;
@@ -218,7 +218,7 @@ export const takeTechnicianBreak = onCall({ cors: true }, async (request) => {
     return { status: "SUCCESS" };
 });
 
-export const resumeTechnicianDuty = onCall({ cors: true }, async (request) => {
+export const resumeTechnicianDuty = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Auth required.");
     await assertApprovedTechnicianAccount(request.auth);
     const uid = request.auth.uid;
@@ -253,7 +253,7 @@ export const resumeTechnicianDuty = onCall({ cors: true }, async (request) => {
     return { status: "SUCCESS" };
 });
 
-export const acceptTechnicianTicket = onCall({ cors: true }, async (request) => {
+export const acceptTechnicianTicket = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Auth required.");
     const hasAccess = await hasCallableRoleAccess(request.auth, new Set(["technician", "admin", "super_admin", "operations_admin"]));
     if (!hasAccess) throw new HttpsError("permission-denied", "Technician access required.");
@@ -329,7 +329,7 @@ export const acceptTechnicianTicket = onCall({ cors: true }, async (request) => 
     return { status: "SUCCESS" };
 });
 
-export const updateTicketLifecycle = onCall({ cors: true }, async (request) => {
+export const updateTicketLifecycle = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Auth required.");
     const { ticketId, status, notes, proofType, proofUrl, arrivalLocation } = request.data;
     const allowedStatuses = ['EN_ROUTE', 'ARRIVED', 'IN_PROGRESS', 'COMPLETED_PENDING_APPROVAL', 'COMPLETED'];
@@ -560,7 +560,7 @@ export const updateTicketLifecycle = onCall({ cors: true }, async (request) => {
     return { status: "SUCCESS" };
 });
 
-export const ownerReviewTicketCompletion = onCall({ cors: true }, async (request) => {
+export const ownerReviewTicketCompletion = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Auth required.");
     const hasAccess = await hasCallableRoleAccess(request.auth, new Set(["owner", "admin", "super_admin", "operations_admin"]));
     if (!hasAccess) throw new HttpsError("permission-denied", "Owner or admin access required.");
@@ -1031,7 +1031,7 @@ export const autoRouteTicket = onDocumentCreated({ document: "maintenanceTickets
     await attemptAutoAssignment(snap.ref, snap.data());
 });
 
-export const createAiMaintenanceTicket = onCall({ cors: true }, async (request) => {
+export const createAiMaintenanceTicket = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Auth required.");
     const hasAccess = await hasCallableRoleAccess(request.auth, new Set(["owner", "admin", "super_admin"]));
     if (!hasAccess) throw new HttpsError("permission-denied", "Owner or admin access required.");
@@ -1076,7 +1076,7 @@ export const createAiMaintenanceTicket = onCall({ cors: true }, async (request) 
     return { status: "SUCCESS", ticketId: ticketRef.id };
 });
 
-export const approveMaintenanceProposal = onCall({ cors: true }, async (request) => {
+export const approveMaintenanceProposal = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Auth required.");
     const hasAccess = await hasCallableRoleAccess(request.auth, new Set(["owner", "admin", "super_admin"]));
     if (!hasAccess) throw new HttpsError("permission-denied", "Owner or admin access required.");
@@ -1181,7 +1181,7 @@ async function dispatchOmniNotification(userId: string, title: string, body: str
 
 // ─── INFRASTRUCTURE CALLABLES ──────────────────────────────────────────────
 
-export const processTitleDeedOCR = onCall({ cors: true }, async (request) => {
+export const processTitleDeedOCR = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
     // ── Auth + Role: delegated to assertOcrCallerRole ─────────────────────
     // Adapts Firestore lookup to the injected GetUserRoleFn interface.
     const { isAdmin } = await assertOcrCallerRole(
@@ -1234,7 +1234,7 @@ export const processTitleDeedOCR = onCall({ cors: true }, async (request) => {
     }
 });
 
-export const generateInstitutionalContract = onCall({ cors: true }, async (request) => {
+export const generateInstitutionalContract = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Sovereign identity required.");
     const contractData = assertPlainObject(request.data?.contractData, "Contract payload");
     const propertyId = safeString(contractData.propertyId || contractData.propertyPassportId || contractData.passportId);
@@ -1320,7 +1320,7 @@ export const generateAndEmailPayslip = onCall({
     );
 });
 
-export const generateIntegrityAudit = onCall({ cors: true }, async (request) => {
+export const generateIntegrityAudit = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Auth required.");
     const hasAccess = await hasCallableRoleAccess(request.auth, new Set(["owner", "admin", "super_admin"]));
     if (!hasAccess) throw new HttpsError("permission-denied", "Owner or admin access required.");
@@ -1358,7 +1358,7 @@ export const generateIntegrityAudit = onCall({ cors: true }, async (request) => 
 
 // ─── ADMIN PRICING, COMPLIANCE & ROI TOOLING ───────────────────────────────
 
-export const calculateAMCV2 = onCall({ cors: true }, async (request) => {
+export const calculateAMCV2 = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Auth required.");
     const hasAccess = await hasCallableRoleAccess(request.auth, new Set(["admin", "super_admin"]));
     if (!hasAccess) throw new HttpsError("permission-denied", "Admin access required.");
@@ -1382,7 +1382,7 @@ export const calculateAMCV2 = onCall({ cors: true }, async (request) => {
     };
 });
 
-export const exportComplianceReport = onCall({ cors: true }, async (request) => {
+export const exportComplianceReport = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Auth required.");
     const hasAccess = await hasCallableRoleAccess(request.auth, new Set(["admin", "super_admin"]));
     if (!hasAccess) throw new HttpsError("permission-denied", "Admin access required.");
@@ -1464,7 +1464,7 @@ export const exportComplianceReport = onCall({ cors: true }, async (request) => 
     }
 });
 
-export const generateTrialROIReport = onCall({ cors: true }, async (request) => {
+export const generateTrialROIReport = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Auth required.");
     const hasAccess = await hasCallableRoleAccess(request.auth, new Set(["admin", "super_admin"]));
     if (!hasAccess) throw new HttpsError("permission-denied", "Admin access required.");
@@ -1575,7 +1575,7 @@ export const generateTrialROIReport = onCall({ cors: true }, async (request) => 
     }
 });
 
-export const notifyRole = onCall({ cors: true }, async (request) => {
+export const notifyRole = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Auth required.");
     const hasAccess = await hasCallableRoleAccess(request.auth, new Set(["admin", "super_admin"]));
     if (!hasAccess) throw new HttpsError("permission-denied", "Admin access required.");
@@ -1646,7 +1646,7 @@ type GeminiGenerateResponse = {
     }>;
 };
 
-export const getMissionGuidance = onCall({ cors: true, secrets: [openAiKey] }, async (request) => {
+export const getMissionGuidance = onCall({ cors: true, enforceAppCheck: true, secrets: [openAiKey] }, async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Session invalid.');
     await enforceAiUsageQuota(
         request.auth,
@@ -1690,7 +1690,7 @@ export const getMissionGuidance = onCall({ cors: true, secrets: [openAiKey] }, a
  * [V11] SECURE ARCHITECTURAL CONCEPT GENERATOR
  * Calls Gemini from backend-only using Secret Manager.
  */
-export const generateDesignConcept = onCall({ cors: true, secrets: [geminiApiKey] }, async (request) => {
+export const generateDesignConcept = onCall({ cors: true, enforceAppCheck: true, secrets: [geminiApiKey] }, async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Session invalid.');
 
     const uid = request.auth.uid;
@@ -1847,7 +1847,7 @@ function hashToken(token: string) {
     return crypto.createHash('sha256').update(token).digest('hex');
 }
 
-export const validateTenantInvitation = onCall({ cors: true }, async (request) => {
+export const validateTenantInvitation = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
     const { token } = request.data || {};
     if (!token) throw new HttpsError("invalid-argument", "Token required.");
 
@@ -1879,7 +1879,7 @@ export const validateTenantInvitation = onCall({ cors: true }, async (request) =
     };
 });
 
-export const sendTenantInvitations = onCall({ cors: true }, async (request) => {
+export const sendTenantInvitations = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Sovereign identity required.");
     const hasAccess = await hasCallableRoleAccess(request.auth, new Set(["admin", "super_admin"]));
     if (!hasAccess) throw new HttpsError("permission-denied", "Admin access required.");
@@ -2002,7 +2002,7 @@ export const sendTenantInvitations = onCall({ cors: true }, async (request) => {
     return { sentCount, skippedCount };
 });
 
-export const resendTenantInvitation = onCall({ cors: true }, async (request) => {
+export const resendTenantInvitation = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Sovereign identity required.");
     const hasAccess = await hasCallableRoleAccess(request.auth, new Set(["admin", "super_admin"]));
     if (!hasAccess) throw new HttpsError("permission-denied", "Admin access required.");
@@ -2072,7 +2072,7 @@ export const resendTenantInvitation = onCall({ cors: true }, async (request) => 
     return { success: true };
 });
 
-export const acceptTenantInvitation = onCall({ cors: true }, async (request) => {
+export const acceptTenantInvitation = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Please sign in to accept invitation.");
     const { token } = request.data || {};
     if (!token) throw new HttpsError("invalid-argument", "Token required.");
@@ -2432,7 +2432,7 @@ export const onLedgerChangedSyncPassport = onDocumentUpdated("tenant_ledger/{led
     if (data?.propertyId) await aggregatePassportData(data.propertyId);
 });
 
-export const recalculatePropertyPassport = onCall({ cors: true }, async (request) => {
+export const recalculatePropertyPassport = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Admin access required.");
     const hasAccess = await hasCallableRoleAccess(request.auth, new Set(["admin", "super_admin"]));
     if (!hasAccess) throw new HttpsError("permission-denied", "Admin access required.");
@@ -2450,7 +2450,7 @@ export const recalculatePropertyPassport = onCall({ cors: true }, async (request
  * Administrative tool to detect and repair orphaned or invalid maintenance tickets.
  * Supports dryRun mode to preview changes before committing.
  */
-export const institutionalRepairTrigger = onCall({ cors: true }, async (request) => {
+export const institutionalRepairTrigger = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Unauthenticated.");
 
     // Security Check: Verify admin custom claims or Firestore admin role
@@ -2647,7 +2647,7 @@ async function sendSovereignPush(userId: string, title: string, body: string, da
 /**
  * Technician starts their duty shift.
  */
-export const startTechnicianDuty = onCall({ cors: true }, async (request) => {
+export const startTechnicianDuty = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Unauthenticated.");
 
     const isTech = await hasCallableRoleAccess(request.auth, new Set(["technician", "admin"]));
@@ -2736,7 +2736,7 @@ export const startTechnicianDuty = onCall({ cors: true }, async (request) => {
  * Technician ends their duty shift.
  * Blocks if there is an active job.
  */
-export const endTechnicianDuty = onCall({ cors: true }, async (request) => {
+export const endTechnicianDuty = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Unauthenticated.");
 
     const isTech = await hasCallableRoleAccess(request.auth, new Set(["technician", "admin"]));
@@ -2793,7 +2793,7 @@ export const endTechnicianDuty = onCall({ cors: true }, async (request) => {
 /**
  * Technician accepts an assigned job.
  */
-export const acceptTechnicianJob = onCall({ cors: true }, async (request) => {
+export const acceptTechnicianJob = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Unauthenticated.");
 
     const isTech = await hasCallableRoleAccess(request.auth, new Set(["technician", "admin"]));
@@ -2876,7 +2876,7 @@ export const acceptTechnicianJob = onCall({ cors: true }, async (request) => {
 /**
  * Technician starts actual work on site.
  */
-export const startTechnicianWork = onCall({ cors: true }, async (request) => {
+export const startTechnicianWork = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Unauthenticated.");
     const { ticketId } = request.data;
     if (!ticketId) throw new HttpsError("invalid-argument", "Ticket ID required.");
@@ -2920,7 +2920,7 @@ export const startTechnicianWork = onCall({ cors: true }, async (request) => {
 /**
  * Technician pauses work (e.g. waiting for parts).
  */
-export const pauseTechnicianWork = onCall({ cors: true }, async (request) => {
+export const pauseTechnicianWork = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Unauthenticated.");
     const { ticketId, reason } = request.data;
     if (!ticketId) throw new HttpsError("invalid-argument", "Ticket ID required.");
@@ -2954,7 +2954,7 @@ export const pauseTechnicianWork = onCall({ cors: true }, async (request) => {
 /**
  * Technician finishes work and submits evidence.
  */
-export const finishTechnicianWork = onCall({ cors: true }, async (request) => {
+export const finishTechnicianWork = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Unauthenticated.");
     const { ticketId, afterPhotos, beforePhotos, notes } = request.data;
     if (!ticketId) throw new HttpsError("invalid-argument", "Ticket ID required.");
@@ -3025,7 +3025,7 @@ export const finishTechnicianWork = onCall({ cors: true }, async (request) => {
 /**
  * Admin or system closes the job after verification.
  */
-export const closeTechnicianJob = onCall({ cors: true }, async (request) => {
+export const closeTechnicianJob = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Unauthenticated.");
     const { ticketId } = request.data;
     if (!ticketId) throw new HttpsError("invalid-argument", "Ticket ID required.");
@@ -3054,7 +3054,7 @@ export const closeTechnicianJob = onCall({ cors: true }, async (request) => {
  * Registers an FCM token for a user.
  * users/{uid}/fcmTokens/{token}
  */
-export const registerFCMToken = onCall({ cors: true }, async (request) => {
+export const registerFCMToken = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Auth required.");
     const { token, platform, userAgent } = request.data;
     if (!token) throw new HttpsError("invalid-argument", "Token required.");
@@ -3234,7 +3234,7 @@ export const onPendingTenantCreated = onDocumentCreated("pending_tenants/{tenant
  * [V15] SOVEREIGN PAYMENT PROCESSOR
  * Atomic transaction processing for AED institutional payments.
  */
-export const processPayment = onCall({ cors: true }, async (request) => {
+export const processPayment = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Identity verification failed.");
     throw new HttpsError(
         "failed-precondition",
@@ -3247,7 +3247,7 @@ export const processPayment = onCall({ cors: true }, async (request) => {
  * [PHASE 5] ADMIN UNIT OPERATIONS CONTROL
  * Allows administrators to update unit lifecycle state, occupancy, and maintenance status.
  */
-export const updateUnitOpsState = onCall({ cors: true }, async (request) => {
+export const updateUnitOpsState = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Admin identity required.");
     const adminUid = request.auth.uid;
     const hasAccess = await hasCallableRoleAccess(request.auth, new Set(["admin", "super_admin", "ceo"]));
