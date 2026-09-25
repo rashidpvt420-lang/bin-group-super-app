@@ -18,8 +18,34 @@ const ADMIN_ROLES = new Set(["admin", "ceo", "super_admin", "manager", "operatio
 async function requireAdmin(auth: any) {
   if (!auth?.uid) throw new HttpsError("unauthenticated", "Admin login required.");
   const claims = auth.token || {};
-  if (claims.admin === true || claims.isAdmin === true || ADMIN_ROLES.has(roleOf(claims.role))) return;
-  throw new HttpsError("permission-denied", "Admin permission required.");
+  const tokenRole = roleOf(claims.role || claims.userRole || claims.primaryRole);
+  const tokenAuthorized =
+    claims.suspended !== true &&
+    (claims.admin === true ||
+      claims.isAdmin === true ||
+      claims.superAdmin === true ||
+      claims.super_admin === true ||
+      claims.ceo === true ||
+      ADMIN_ROLES.has(tokenRole));
+  if (!tokenAuthorized) throw new HttpsError("permission-denied", "Admin permission required.");
+  if (claims.email_verified !== true || !claims.firebase?.sign_in_second_factor) {
+    throw new HttpsError("permission-denied", "A verified Admin MFA session is required.");
+  }
+
+  const currentUser = await admin.auth().getUser(auth.uid);
+  const currentClaims = currentUser.customClaims || {};
+  const currentRole = roleOf(currentClaims.role || currentClaims.userRole || currentClaims.primaryRole);
+  const currentAuthorized =
+    currentClaims.suspended !== true &&
+    (currentClaims.admin === true ||
+      currentClaims.isAdmin === true ||
+      currentClaims.superAdmin === true ||
+      currentClaims.super_admin === true ||
+      currentClaims.ceo === true ||
+      ADMIN_ROLES.has(currentRole));
+  if (currentUser.disabled || !currentUser.emailVerified || !currentAuthorized) {
+    throw new HttpsError("permission-denied", "Current Admin authority is inactive or no longer valid.");
+  }
 }
 
 /**
@@ -167,7 +193,7 @@ export const reconcileBrokerCommissionOnContractActivation = onDocumentUpdated(
  * broker also releases any commissions that were held because the broker was
  * not yet verified, moving them into the normal PENDING approval queue.
  */
-export const setBrokerReraVerification = onCall({ cors: true, region: "europe-west3" }, async (request) => {
+export const setBrokerReraVerification = onCall({ cors: true, region: "europe-west3", enforceAppCheck: true }, async (request) => {
   await requireAdmin(request.auth);
 
   const brokerId = String(request.data?.brokerId || "").trim();
