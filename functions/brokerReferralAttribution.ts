@@ -58,9 +58,9 @@ function referralLeadId(brokerUid: string, ownerUid: string) {
   return crypto.createHash("sha256").update(`${brokerUid}:${ownerUid}`).digest("hex");
 }
 
-// Referral capture is available to a verified Firebase Owner even when a public
-// browser cannot obtain an App Check token. Authorization remains bound to the
-// verified Owner token and every write is server-side.
+// Referral capture is available only to a verified current Owner session with
+// Firebase App Check. Authorization is revalidated against current Auth claims
+// and every attribution write remains server-side and transaction-bound.
 export const captureBrokerReferralAttribution = onCall(
   { cors: true, region: "europe-west3", enforceAppCheck: true },
   async (request) => {
