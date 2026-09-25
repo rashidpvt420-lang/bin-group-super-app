@@ -1,6 +1,7 @@
 import * as admin from "firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
+import { assertWorkflowTransition, normalizeWorkflowState } from "./workflowStateMachines";
 import { isValidReraFormat } from "./brokerCommissions";
 
 if (!admin.apps.length) admin.initializeApp();
@@ -231,6 +232,13 @@ export const adminReviewBrokerKyc = onCall(
     }
 
     const approved = decision === "APPROVE";
+    const currentKycState = normalizeWorkflowState(
+      "BROKER_KYC",
+      publicProfile.brokerKycStatus || publicProfile.kycStatus || privateProfile.brokerKycStatus || "NOT_SUBMITTED",
+      "NOT_SUBMITTED",
+    );
+    const nextKycState = approved ? "APPROVED" : "REJECTED";
+    assertWorkflowTransition("BROKER_KYC", currentKycState, nextKycState);
     const submissionHash = text(privateProfile.submissionHash);
     if (!submissionHash || !/^[a-f0-9]{64}$/i.test(submissionHash)) {
       throw new HttpsError("failed-precondition", "Broker KYC submission hash is missing or invalid.");
@@ -294,8 +302,8 @@ export const adminReviewBrokerKyc = onCall(
       transaction.set(publicRef, {
         status: approved ? "APPROVED" : "REJECTED",
         approvalStatus: approved ? "APPROVED" : "REJECTED",
-        kycStatus: approved ? "APPROVED" : "REJECTED",
-        brokerKycStatus: approved ? "APPROVED" : "REJECTED",
+        kycStatus: nextKycState,
+        brokerKycStatus: nextKycState,
         reraStatus: approved ? "VERIFIED" : "REJECTED",
         reraVerified: approved,
         ibanVerified: approved,
@@ -313,7 +321,7 @@ export const adminReviewBrokerKyc = onCall(
       }, { merge: true });
 
       transaction.set(privateRef, {
-        brokerKycStatus: approved ? "APPROVED" : "REJECTED",
+        brokerKycStatus: nextKycState,
         reraStatus: approved ? "VERIFIED" : "REJECTED",
         reraVerified: approved,
         ibanVerified: approved,
