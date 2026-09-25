@@ -8,8 +8,7 @@ import {
     Alert
 } from '@mui/material';
 import { CloudUpload } from '@mui/icons-material';
-import { db } from '../lib/firebase';
-import { writeBatch, doc } from 'firebase/firestore';
+import { db, writeBatch, doc } from '../lib/firebase';
 import { useLanguage } from '@bin/shared';
 
 const BulkImporter: React.FC = () => {
