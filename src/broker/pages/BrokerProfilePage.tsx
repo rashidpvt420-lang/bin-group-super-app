@@ -10,6 +10,7 @@ import { useLanguage } from '../../context/LanguageContext';
 import { auth, functions, sendPasswordResetEmail } from '../../lib/firebase';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import BrokerPageFrame from '../components/BrokerPageFrame';
+import { normalizeWorkflowState } from '../../lib/workflowStateMachines';
 
 type Notice = { type: 'success' | 'error' | 'info' | 'warning'; text: string };
 type BrokerSummary = {
@@ -188,11 +189,14 @@ export default function BrokerProfilePage() {
   };
 
   const localizedStatus = (value: string) => {
-    const normalized = String(value || '').toUpperCase();
+    const raw = String(value || '').toUpperCase();
+    const normalized = ['NOT_SUBMITTED', 'PENDING_REVIEW', 'CHANGES_REQUESTED', 'APPROVED', 'REJECTED', 'EXPIRED', 'SUSPENDED', 'VERIFIED', 'INCOMPLETE', 'PENDING'].includes(raw)
+      ? normalizeWorkflowState('BROKER_KYC', raw, 'NOT_SUBMITTED')
+      : raw;
     if (lang !== 'ar') return normalized.replaceAll('_', ' ');
     const map: Record<string, string> = {
-      NOT_SUBMITTED: 'غير مقدم', INCOMPLETE: 'غير مكتمل', PENDING: 'قيد المراجعة', PENDING_REVIEW: 'بانتظار المراجعة',
-      APPROVED: 'معتمد', VERIFIED: 'موثّق', REJECTED: 'مرفوض', SUSPENDED: 'موقوف', EXPIRED: 'منتهي',
+      NOT_SUBMITTED: 'غير مقدم', CHANGES_REQUESTED: 'يتطلب تعديلات', PENDING_REVIEW: 'بانتظار المراجعة',
+      APPROVED: 'معتمد', REJECTED: 'مرفوض', SUSPENDED: 'موقوف', EXPIRED: 'منتهي',
     };
     return map[normalized] || value;
   };
