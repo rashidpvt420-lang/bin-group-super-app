@@ -89,8 +89,11 @@ const requiredFragments = [
   ['submitted property geo validates coordinates and unverified state', 'function submittedPropertyGeoIsUnverified(data) {'],
   ['property creation excludes every canonical geo field', 'function propertyCreateHasNoCanonicalGeo(data) {'],
   ['managed property updates preserve canonical geo', 'function safeManagedPropertyUpdate() {'],
+  ['managed property updates preserve lifecycle authority', 'function propertyActivationAuthorityUnchanged() {'],
+  ['property creation cannot mint activation authority', 'function propertyCreateHasNoActivationAuthority(data) {'],
   ['property create uses shared canonical-geo guard', 'propertyCreateHasNoCanonicalGeo(request.resource.data) &&'],
-  ['Admin browser property update uses safe managed guard', '(canManageProperties() && safeManagedPropertyUpdate())'],
+  ['property create uses activation-authority guard', 'propertyCreateHasNoActivationAuthority(request.resource.data);'],
+  ['Admin browser property update uses safe managed guard', 'canManageProperties() &&\n        safeManagedPropertyUpdate();'],
   ['production status-aware suspension helper', 'function profileAllowsAccess(data) {'],
   ['production suspension status variants', "data.get('status', '') in ["],
   ['dispatch checks claims before database suspension', 'function hasDispatchAuthorityClaimOnly() {'],
@@ -116,6 +119,16 @@ const requiredFragments = [
 const failures = [];
 for (const [label, text] of forbiddenFragments) if (rules.includes(text)) failures.push(`Forbidden rule fragment still exists: ${label}`);
 for (const [label, text] of requiredFragments) if (!rules.includes(text)) failures.push(`Required rule fragment missing: ${label}`);
+
+const propertyBlock = readMatchBlock('    match /properties/{propertyId} {');
+for (const [label, pattern] of [
+  ['Owner direct property-create helper must not remain', /ownerDraftCreate\(/],
+  ['Owner direct property-update helper must not remain', /safeOwnerPropertyUpdate\(/],
+]) {
+  if (pattern.test(propertyBlock)) failures.push(label);
+}
+if (/function safeOwnerPropertyCreate\(/.test(rules)) failures.push('safeOwnerPropertyCreate helper must not remain in normalized production rules');
+if (/function safeOwnerPropertyUpdate\(/.test(rules)) failures.push('safeOwnerPropertyUpdate helper must not remain in normalized production rules');
 
 const legacyBlock = readMatchBlock('    match /tickets/{ticketId} {');
 const canonicalBlock = readMatchBlock('    match /maintenanceTickets/{ticketId} {');
