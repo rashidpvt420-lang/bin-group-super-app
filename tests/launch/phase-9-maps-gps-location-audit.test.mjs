@@ -80,6 +80,21 @@ test('Only server-authoritative review or physical inspection can promote proper
   assert.doesNotMatch(adminGeo, /verified: input\.verified \?\? true/);
 });
 
+test('Tenant/property operational inheritance accepts canonical verified geo only', () => {
+  const gpsHelper = adminOwnerOperations.slice(
+    adminOwnerOperations.indexOf('function gpsOf'),
+    adminOwnerOperations.indexOf('function geohash'),
+  );
+  assert.match(gpsHelper, /geo\.verified !== true/);
+  assert.match(gpsHelper, /geo\.dispatchReady !== true/);
+  assert.match(gpsHelper, /geo\.requiresGeoReview === true/);
+  assert.doesNotMatch(gpsHelper, /x\?\.location/);
+  assert.doesNotMatch(gpsHelper, /x\?\.coordinates/);
+  assert.doesNotMatch(gpsHelper, /x\?\.gps/);
+  assert.match(adminOwnerOperations, /const g = gpsOf\(prop\)/);
+  assert.match(adminOwnerOperations, /locationInherited: Boolean\(tenantLocation\)/);
+});
+
 test('Inspection-first geo promotion stays fail-closed across the two-stage server transaction', () => {
   assert.doesNotMatch(runtime, /^export \* from "\.\/inspectionFirstOwnerOnboarding";/m);
   assert.match(runtime, /export \{ adminCompleteOwnerPortfolioInspections \} from "\.\/canonicalOwnerInspectionCompletion"/);
