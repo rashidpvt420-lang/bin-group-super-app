@@ -441,7 +441,7 @@ service cloud.firestore {
 
     function ownerDraftCreate(data) {
       return signedIn() && owns(data) &&
-        (!('status' in data) || data.status in ['draft', 'quote_generated', 'contract_selected', 'payment_pending', 'pending_admin_approval', 'pending_approval']) &&
+        (!('status' in data) || data.status == 'DRAFT') &&
         (!('paymentVerified' in data) || data.paymentVerified == false) &&
         (!('adminApproved' in data) || data.adminApproved == false) &&
         (!('approved' in data) || data.approved == false) &&
@@ -517,7 +517,7 @@ service cloud.firestore {
       return signedIn() && owns(resource.data) &&
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'acceptedAt', 'signedAt', 'updatedAt']) &&
         (!('paymentVerified' in request.resource.data) || request.resource.data.paymentVerified == resource.data.get('paymentVerified', null)) &&
-        (!('status' in request.resource.data) || !(request.resource.data.status in ['active', 'ACTIVE']));
+        (!('status' in request.resource.data) || request.resource.data.status in ['DRAFT', 'PENDING_OWNER_SIGNATURE', 'SIGNED', 'PENDING_PAYMENT', 'CANCELLED']);
     }
 
     function submittedPropertyGeoIsUnverified(data) {
