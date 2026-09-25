@@ -6,6 +6,7 @@ import {
 } from '@mui/material';
 import { CheckCircle, FileCheck2, RefreshCw, Upload, XCircle } from 'lucide-react';
 import { collection, db, functions, httpsCallable, limit, onSnapshot, orderBy, query, where } from '../../lib/firebase';
+import { legacyWorkflowAliases, normalizeWorkflowState } from '@bin/shared';
 
 type PaymentRecord = {
     id: string;
@@ -76,7 +77,11 @@ type PaymentRecord = {
 };
 
 const FIVE_PAGE_WORKFLOW = 'OWNER_FIVE_PAGE_INSPECTION_FIRST_V1';
-const PENDING_PAYMENT_STATUSES = ['pending', 'pending_admin_approval', 'submitted', 'PENDING', 'PENDING_ADMIN_APPROVAL', 'PENDING_VERIFICATION', 'PENDING_ADMIN_PAYMENT_VERIFICATION', 'ADMIN_VERIFICATION_REQUIRED', 'AWAITING_VERIFICATION'];
+const LEGACY_PENDING_PAYMENT_ALIASES = Object.entries(legacyWorkflowAliases('PAYMENT'))
+    .filter(([, canonical]) => canonical === 'PENDING')
+    .map(([legacy]) => legacy);
+const PENDING_PAYMENT_QUERY_VALUES = ['PENDING', ...LEGACY_PENDING_PAYMENT_ALIASES].slice(0, 10);
+const APPROVED_PAYMENT_QUERY_VALUES = ['APPROVED', 'PAID']; // PAID is legacy read compatibility only.
 const MANUAL_METHODS = ['CASH', 'CHEQUE'];
 const formatMoney = (value?: number, currency = 'AED') => `${currency || 'AED'} ${Number(value || 0).toLocaleString('en-AE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const toNumber = (value: unknown) => { const parsed = Number(value); return Number.isFinite(parsed) ? parsed : 0; };
@@ -145,8 +150,8 @@ export default function PaymentApprovalsPage() {
             setError(err?.message || 'Payment approvals stream failed.');
         };
 
-        const pendingQuery = query(collection(db, 'payment_transactions'), where('status', 'in', PENDING_PAYMENT_STATUSES), orderBy('createdAt', 'desc'), limit(50));
-        const paidAwaitingApprovalQuery = query(collection(db, 'payment_transactions'), where('status', '==', 'PAID'), where('adminApprovalRequired', '==', true), limit(50));
+        const pendingQuery = query(collection(db, 'payment_transactions'), where('status', 'in', PENDING_PAYMENT_QUERY_VALUES), orderBy('createdAt', 'desc'), limit(50));
+        const paidAwaitingApprovalQuery = query(collection(db, 'payment_transactions'), where('status', 'in', APPROVED_PAYMENT_QUERY_VALUES), where('adminApprovalRequired', '==', true), limit(50));
         const unsubscribePending = onSnapshot(pendingQuery, (snapshot) => {
             pendingRows = snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...(docSnap.data() as any) }));
             pendingReady = true;
@@ -325,7 +330,7 @@ export default function PaymentApprovalsPage() {
                                         <TableCell>{row.paymentMethod || row.method || 'Not recorded'}</TableCell>
                                         <TableCell><Typography variant="body2" sx={{ maxWidth: 220, overflowWrap: 'anywhere' }}>{proofText(row)}</Typography><Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 0.5 }}><FileCheck2 size={13} color={hasImmutableReceipt(row) ? '#4ADE80' : '#F59E0B'} /><Typography variant="caption" color={hasImmutableReceipt(row) ? '#4ADE80' : '#F59E0B'}>{hasImmutableReceipt(row) ? 'Immutable receipt recorded' : 'Receipt required'}</Typography></Stack>{hasReferenceFile && <Button size="small" onClick={() => openReference(row)} sx={{ color: '#DAA520', fontWeight: 900, mt: 0.5 }}>Open evidence</Button>}</TableCell>
                                         <TableCell>{formatMoney(submittedAmount(row), row.currency)}</TableCell>
-                                        <TableCell><Chip label={!inspectionReady ? 'INSPECTION INCOMPLETE' : (row.status || row.paymentStatus || row.verificationState || 'pending')} size="small" sx={{ bgcolor: !inspectionReady ? 'rgba(239,68,68,0.16)' : 'rgba(218,165,32,0.16)', color: !inspectionReady ? '#F87171' : '#DAA520', fontWeight: 900 }} /></TableCell>
+                                        <TableCell><Chip label={!inspectionReady ? 'INSPECTION INCOMPLETE' : normalizeWorkflowState('PAYMENT', row.status || row.paymentStatus || row.verificationState, 'PENDING')} size="small" sx={{ bgcolor: !inspectionReady ? 'rgba(239,68,68,0.16)' : 'rgba(218,165,32,0.16)', color: !inspectionReady ? '#F87171' : '#DAA520', fontWeight: 900 }} /></TableCell>
                                         <TableCell align="right"><Stack direction="row" justifyContent="flex-end" gap={1}><Button data-testid="admin-payment-approve" size="small" startIcon={<CheckCircle size={14} />} disabled={busyId === row.id || !inspectionReady} onClick={() => openApproveDialog(row)} sx={{ bgcolor: '#16a34a', color: '#fff', fontWeight: 900, '&:hover': { bgcolor: '#15803d' } }}>{design ? 'Verify Design Deposit' : rent ? 'Verify Rent' : 'Record 15% & Approve'}</Button><Button size="small" startIcon={<XCircle size={14} />} disabled={busyId === row.id} onClick={() => openRejectDialog(row)} sx={{ color: '#f87171', fontWeight: 900 }}>Return</Button></Stack></TableCell>
                                     </TableRow>;
                                 })}
