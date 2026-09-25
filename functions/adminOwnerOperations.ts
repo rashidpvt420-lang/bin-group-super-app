@@ -91,7 +91,7 @@ function pricingOf(intake: any) {
   const annual = n(pricing.annualContractValue || summary.estimatedACV || payment.annualValue || intake.annualContractValue, 0);
   return {
     annual,
-    mobilization: n(payment.amount || pricing.mobilizationAmount || intake.mobilizationAmount, Math.round(annual * 0.15)),
+    mobilization: n(payment.amount || pricing.mobilizationAmount || intake.mobilizationAmount, 0),
     method: s(payment.method || intake.paymentMethod || "MANUAL").toUpperCase(),
     currency: s(payment.currency || pricing.currency || "AED", "AED").toUpperCase()
   };
