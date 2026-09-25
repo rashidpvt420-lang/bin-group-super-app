@@ -223,11 +223,7 @@ export const adminResolveTicketDispute = onCall(
         throw new HttpsError("failed-precondition", "Ticket is not awaiting dispute review.");
       }
 
-      const status = action === "request_revisit"
-        ? "DISPUTED_REVISIT_REQUIRED"
-        : action === "approve_credit"
-          ? "CLOSED_WITH_CREDIT"
-          : "CLOSED";
+      const status = action === "request_revisit" ? "REOPENED" : "CLOSED";
       transaction.set(ticketRef, {
         status,
         adminReviewStatus: "RESOLVED",
