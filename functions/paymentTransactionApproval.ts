@@ -599,7 +599,7 @@ export const adminApprovePayment = onCall({ cors: true, enforceAppCheck: true },
       contractId,
       intakeId,
       ownerUid,
-      paymentReferenceId: manualReference || payment.stripeSessionId,
+      paymentReferenceId: manualReference,
       amountReceived: expectedAmount,
       createdAt: now,
     });
