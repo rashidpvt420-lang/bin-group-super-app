@@ -6,6 +6,7 @@ export * from "./brokerCommissions";
 export * from "./brokerKycProfile";
 export * from "./brokerReferralAttribution";
 export * from "./brokerListingAccess";
+export * from "./secureBrokerReferralSubmission";
 export * from "./ownerOnboarding";
 export * from "./ownerPortfolioQuote";
 export * from "./secureOwnerRegistrationRequest";
