@@ -414,15 +414,19 @@ export const adminCompleteOwnerPortfolioInspections = onCall({ cors: true, enfor
       activationStatus: "LOCKED_PENDING_15_PERCENT_PAYMENT",
       inspectionStatus: "COMPLETED",
       adminSiteVisitVerified: true,
-      locationVerified: true,
+      // Evidence completion and canonical geo promotion are deliberately split.
+      // If the canonical wrapper fails after this batch, the property must remain
+      // non-dispatchable rather than inheriting Owner-submitted coordinates as trusted.
+      locationVerified: false,
+      geoPromotionState: "PENDING_CANONICAL_PHYSICAL_EVIDENCE_PROMOTION",
       finalVerifiedQuoteHash: finalQuote.quoteHash,
       geo: {
         ...(property.geo || verifiedProperty.geo || {}),
-        verified: true,
-        requiresGeoReview: false,
-        dispatchReady: true,
-        verifiedBy: actor.uid,
-        verifiedAt: now,
+        verified: false,
+        requiresGeoReview: true,
+        dispatchReady: false,
+        verifiedBy: null,
+        verifiedAt: null,
       },
       updatedAt: now,
     }, { merge: true });
