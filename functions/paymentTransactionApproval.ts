@@ -286,20 +286,22 @@ export const adminApprovePayment = onCall({ cors: true, enforceAppCheck: true },
     }
   }
   const normalizedMethod = upper(payment.paymentMethod || payment.method || method);
-  const stripeVerified = normalizedMethod === "STRIPE" &&
-    upper(payment.paymentStatus) === "PAID" &&
-    payment.verified === true &&
-    Boolean(payment.stripeSessionId);
+  if (!["CASH", "CHEQUE"].includes(normalizedMethod)) {
+    throw new HttpsError(
+      "failed-precondition",
+      "Phase 1 Owner activation payments may be approved only as Cash or Cheque.",
+    );
+  }
   const manualReference = paymentReferenceId || String(payment.paymentReferenceId || "").trim();
   const manualProofPath = String(payment.paymentProofPath || payment.receiptPath || payment.paymentManifest?.receiptPath || "").trim();
   const manualProofHash = String(payment.paymentProofHash || payment.paymentProofEvidence?.receiptHash || "").trim().toLowerCase();
   const manualVerified =
-    ["BANK_TRANSFER", "CHEQUE", "CASH"].includes(normalizedMethod) &&
+    ["CHEQUE", "CASH"].includes(normalizedMethod) &&
     Boolean(manualReference) &&
     manualProofPath.startsWith(`payment-references/owners/${ownerUid}/${paymentId}/`) &&
     /^[a-f0-9]{64}$/.test(manualProofHash);
-  if (!alreadyApproved && !stripeVerified && !manualVerified) {
-    throw new HttpsError("failed-precondition", "Verified Stripe evidence or a manual payment receipt reference is required.");
+  if (!alreadyApproved && !manualVerified) {
+    throw new HttpsError("failed-precondition", "Immutable Cash or Cheque receipt evidence is required.");
   }
   const verifiedReceiptEvidence = manualVerified
     ? await assertStoredOwnerPaymentReceipt({
@@ -324,7 +326,6 @@ export const adminApprovePayment = onCall({ cors: true, enforceAppCheck: true },
   const propertyQuery = db.collection("properties").where("intakeId", "==", intakeId).limit(100);
   const paymentConfigurationRef = db.collection("system_payment_config").doc("current");
   let approvalWasIdempotent = false;
-  let approvalUsesStripe = false;
   await db.runTransaction(async (transaction) => {
     const [freshPaymentSnap, freshContractSnap, propertySnap, paymentConfigurationSnap] = await Promise.all([
       transaction.get(ref),
@@ -433,14 +434,9 @@ export const adminApprovePayment = onCall({ cors: true, enforceAppCheck: true },
     ) {
       throw new HttpsError("aborted", "The payment policy binding changed during approval.");
     }
-    const freshStripeSessionId = String(freshPayment.stripeSessionId || "").trim();
-    const freshStripeVerified =
-      freshMethod === "STRIPE" &&
-      upper(freshPayment.paymentStatus) === "PAID" &&
-      freshPayment.verified === true &&
-      freshPayment.paymentVerified === true &&
-      Boolean(freshStripeSessionId) &&
-      freshStripeSessionId !== String(freshPayment.invalidatedStripeSessionId || "").trim();
+    if (!["CASH", "CHEQUE"].includes(freshMethod)) {
+      throw new HttpsError("aborted", "The payment method changed outside the active Cash/Cheque policy.");
+    }
     const freshManualReference = String(
       freshPayment.paymentReferenceId ||
       freshPayment.paymentReference ||
@@ -465,25 +461,24 @@ export const adminApprovePayment = onCall({ cors: true, enforceAppCheck: true },
       "",
     ).trim().toLowerCase();
     const freshManualVerified =
-      ["BANK_TRANSFER", "CHEQUE", "CASH"].includes(freshMethod) &&
+      ["CHEQUE", "CASH"].includes(freshMethod) &&
       Boolean(freshManualReference) &&
       Boolean(freshManualProofUrl) &&
       freshManualProofPath === verifiedReceiptEvidence?.storagePath &&
       freshManualProofHash === verifiedReceiptEvidence?.receiptHash &&
       String(freshPayment.paymentProofGeneration || freshPayment.paymentProofEvidence?.generation || "") ===
         verifiedReceiptEvidence?.generation;
-    if (!freshStripeVerified && !freshManualVerified) {
-      throw new HttpsError("aborted", "Payment evidence changed during approval.");
+    if (!freshManualVerified) {
+      throw new HttpsError("aborted", "Cash/Cheque payment evidence changed during approval.");
     }
-    approvalUsesStripe = freshStripeVerified;
 
     transaction.set(ref, {
       status: "APPROVED",
       paymentStatus: "APPROVED",
-      verificationState: approvalUsesStripe ? "STRIPE_VERIFIED_ADMIN_APPROVED" : "ADMIN_VERIFIED",
+      verificationState: "ADMIN_VERIFIED",
       paymentVerified: true,
       unlocksDashboard: true,
-      paymentReferenceId: manualReference || payment.stripeSessionId,
+      paymentReferenceId: manualReference,
       amountReceived: expectedAmount,
       paymentMethod: normalizedMethod,
       receivedAt: receivedAt || null,
@@ -504,7 +499,7 @@ export const adminApprovePayment = onCall({ cors: true, enforceAppCheck: true },
       paymentVerified: true,
       adminApproved: true,
       dashboardUnlockApproved: true,
-      paymentReferenceId: manualReference || payment.stripeSessionId,
+      paymentReferenceId: manualReference,
       amountReceived: expectedAmount,
       approvedBy: actorId,
       approvedAt: now,
@@ -578,7 +573,7 @@ export const adminApprovePayment = onCall({ cors: true, enforceAppCheck: true },
       feeType: "MOBILIZATION_DEPOSIT",
       status: "PAID",
       paymentMethod: normalizedMethod,
-      paymentReferenceId: manualReference || payment.stripeSessionId,
+      paymentReferenceId: manualReference,
       quoteHash: payment.quoteHash,
       proofHash: invoiceHash,
       issuedAt: now,
@@ -591,7 +586,7 @@ export const adminApprovePayment = onCall({ cors: true, enforceAppCheck: true },
       amount: expectedAmount,
       currency: "AED",
       status: "PAID",
-      reference: manualReference || payment.stripeSessionId,
+      reference: manualReference,
       proofHash: invoiceHash,
       issuedAt: now,
     });
