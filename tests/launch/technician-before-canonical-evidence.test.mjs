@@ -14,7 +14,8 @@ async function submit({ ticket = {}, objectExists = true, evidenceType = 'techni
   const data = { assignedTechnicianId: 'tech-1', status: 'ARRIVED', ...ticket };
   const snapshot = { exists: true, data: () => data, ref: { id: 'ticket-1' } };
   const db = {
-    collection: (name) => ({ doc: () => ({
+    collection: (name) => ({ doc: (id = 'ticket-1') => ({
+      id,
       get: async () => name === 'technicians'
         ? { exists: true, data: () => ({ status: 'approved' }) }
         : snapshot,
