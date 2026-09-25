@@ -306,7 +306,7 @@ patchIfNeeded(
 
 patchIfNeeded(
   'open mission pool must be technician/dispatcher scoped',
-  `    function openMissionPoolRead(data) { return signedIn() && data.assignedTechnicianId == null && data.status in ['OPEN', 'open', 'emergency_submitted']; }`,
+  `    function openMissionPoolRead(data) { return signedIn() && data.assignedTechnicianId == null && data.status == 'OPEN'; }`,
   `    function isTechnicianActor() {
       return signedIn() && (
         ('role' in request.auth.token && request.auth.token.role == 'technician') ||
@@ -321,7 +321,7 @@ patchIfNeeded(
       return isAdmin() || isOps() || hasPermission('canDispatchJobs') || isTechnicianActor();
     }
 
-    function openMissionPoolRead(data) { return hasTechnicianDispatchAuthority() && data.assignedTechnicianId == null && data.status in ['OPEN', 'open', 'emergency_submitted']; }`,
+    function openMissionPoolRead(data) { return hasTechnicianDispatchAuthority() && data.assignedTechnicianId == null && data.status == 'OPEN'; }`,
   ["function hasTechnicianDispatchAuthority()", "function openMissionPoolRead(data) { return hasTechnicianDispatchAuthority()"]
 );
 
