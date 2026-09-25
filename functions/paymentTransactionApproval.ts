@@ -478,6 +478,22 @@ export const adminApprovePayment = onCall({ cors: true, enforceAppCheck: true },
     }
     approvalUsesStripe = freshStripeVerified;
 
+    const currentPaymentState = normalizeWorkflowState("PAYMENT", freshPayment.status || freshPayment.paymentStatus, "PENDING");
+    const currentContractState = normalizeWorkflowState("CONTRACT", freshContract.status || freshContract.contractStatus, "PENDING_PAYMENT");
+    const intakeSnapshot = await transaction.get(db.collection("intake_submissions").doc(intakeId));
+    const currentOnboardingState = normalizeWorkflowState(
+      "ONBOARDING",
+      intakeSnapshot.data()?.status || intakeSnapshot.data()?.onboardingState || intakeSnapshot.data()?.lifecycleStatus,
+      "PAYMENT_PROCESSING",
+    );
+    assertWorkflowTransition("PAYMENT", currentPaymentState, "APPROVED");
+    assertWorkflowTransition("CONTRACT", currentContractState, "ACTIVE");
+    assertWorkflowTransition("ONBOARDING", currentOnboardingState, "ACTIVE");
+    for (const propertyDoc of propertySnap.docs) {
+      const propertyState = normalizeWorkflowState("PROPERTY", propertyDoc.data()?.status, "PAYMENT_PENDING");
+      assertWorkflowTransition("PROPERTY", propertyState, "ACTIVE");
+    }
+
     transaction.set(ref, {
       status: "APPROVED",
       paymentStatus: "APPROVED",
