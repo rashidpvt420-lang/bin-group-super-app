@@ -375,6 +375,9 @@ jobs:
       - name: Verify Google Maps production key restrictions and enabled APIs
         run: node scripts/verify-google-maps-api-key-restrictions.mjs
 
+      - name: Verify Phase 10 Firebase Auth and iOS App Check configuration
+        run: node scripts/verify-phase10-firebase-production-config.mjs
+
       - name: Verify Firebase project billing and Cloud Functions deployment access
         run: node scripts/verify-firebase-deployment-readiness.mjs
 
