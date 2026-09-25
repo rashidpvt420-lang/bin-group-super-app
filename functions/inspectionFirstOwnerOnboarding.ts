@@ -509,8 +509,8 @@ export const submitOwnerInspectionFirstOnboarding = onCall({ cors: true, enforce
       ownerName: fullName,
       propertyIds: normalizedProperties.map((property: PlainRecord) => property.propertyId),
       properties: normalizedProperties,
-      status: "SIGNED_PENDING_PROPERTY_INSPECTION",
-      contractStatus: "signed_pending_inspection",
+      status: "SIGNED",
+      contractStatus: "SIGNED",
       activationStatus: "LOCKED_PENDING_INSPECTION_AND_PAYMENT",
       adminApproved: false,
       ownerSigned: true,
@@ -549,8 +549,8 @@ export const submitOwnerInspectionFirstOnboarding = onCall({ cors: true, enforce
       activationDeposit: money(quote.activationDeposit),
       amount: money(quote.activationDeposit),
       currency: "AED",
-      status: "AWAITING_SITE_INSPECTION",
-      paymentStatus: "AWAITING_SITE_INSPECTION",
+      status: "NOT_DUE_UNTIL_INSPECTION_COMPLETE",
+      paymentStatus: "NOT_DUE_UNTIL_INSPECTION_COMPLETE",
       verificationState: "INSPECTION_REQUIRED_BEFORE_PAYMENT",
       adminApprovalRequired: true,
       unlocksDashboard: false,
@@ -700,8 +700,8 @@ export const adminCompleteOwnerPropertyInspection = onCall({ cors: true, enforce
     updatedAt: now,
   }, { merge: true });
   batch.set(contractRef, {
-    status: "SIGNED_AWAITING_15_PERCENT_PAYMENT",
-    contractStatus: "signed_awaiting_payment",
+    status: "SIGNED",
+    contractStatus: "SIGNED",
     activationStatus: "LOCKED_PENDING_15_PERCENT_PAYMENT",
     inspectionId: inspectionIds[0],
     inspectionIds,
@@ -715,7 +715,7 @@ export const adminCompleteOwnerPropertyInspection = onCall({ cors: true, enforce
     const inspection = inspectionByPropertyId.get(document.id) || inspectionByPropertyId.get(text(property.propertyId));
     if (!inspection) throw new HttpsError("failed-precondition", `No linked inspection exists for property ${document.id}.`);
     batch.set(document.ref, {
-      status: "AWAITING_15_PERCENT_PAYMENT",
+      status: "PAYMENT_PENDING",
       activationStatus: "LOCKED_PENDING_15_PERCENT_PAYMENT",
       inspectionStatus: "COMPLETED",
       inspectionId: inspection.id,
