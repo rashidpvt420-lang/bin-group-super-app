@@ -35,8 +35,26 @@ const hardenedCatchAll = priorHardenedCatchAll.replace(
 if (source.includes(legacyCatchAll)) source = source.replace(legacyCatchAll, hardenedCatchAll);
 if (source.includes(previousHardenedCatchAll)) source = source.replace(previousHardenedCatchAll, hardenedCatchAll);
 if (source.includes(priorHardenedCatchAll)) source = source.replace(priorHardenedCatchAll, hardenedCatchAll);
-if (!source.includes(hardenedCatchAll)) {
+const storageFallbackStart = source.indexOf('    match /{collection}/{allPaths=**} {');
+if (storageFallbackStart < 0) {
   throw new Error('[harden-private-hr-storage] global Storage fallback could not be bounded');
+}
+const storageFallback = source.slice(storageFallbackStart);
+for (const protectedCollection of [
+  'design-payment-receipts',
+  'privateHrDocuments',
+  'staff-reports',
+  'staffDocuments',
+  'hrDocuments',
+  'contracts',
+  'invoices',
+  'kyc_documents',
+  'owners',
+  'onboarding-proof',
+]) {
+  if (!storageFallback.includes(`collection != '${protectedCollection}'`)) {
+    throw new Error(`[harden-private-hr-storage] protected Storage namespace is missing from fallback exclusions: ${protectedCollection}`);
+  }
 }
 
 const privateBlock = `    match /privateHrDocuments/{staffId}/{allPaths=**} {
