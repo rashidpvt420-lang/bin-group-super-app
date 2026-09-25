@@ -407,7 +407,7 @@ export const approveOwnerSubmissionOperationalFlow = onCall({ cors: true, enforc
   return { status: "APPROVED_PENDING_OWNER_SIGNATURE", ownerId, contractId, propertyIds, paymentId, signUrl };
 });
 
-const ALREADY_SIGNED_STATUSES = new Set(["READY_FOR_ACTIVATION", "ACTIVE", "SIGNED"]);
+const ALREADY_SIGNED_STATUSES = new Set(["READY_FOR_ACTIVATION", "ACTIVE", "SIGNED", "PENDING_ACTIVATION"]);
 
 export const ownerSignContractAndQueuePdf = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Owner authentication required.");
@@ -421,7 +421,7 @@ export const ownerSignContractAndQueuePdf = onCall({ cors: true, enforceAppCheck
   const snap = await ref.get();
   if (!snap.exists) throw new HttpsError("not-found", "Contract not found.");
   const contract = snap.data() || {};
-  const contractHash = s(contract.quoteHash || contract.contractHash).toLowerCase();
+  const contractHash = s(contract.finalVerifiedQuoteHash || contract.quoteHash || contract.contractHash).toLowerCase();
   if (!/^[a-f0-9]{64}$/.test(contractHash)) {
     throw new HttpsError("failed-precondition", "Contract must have a locked server quote hash before signing.");
   }
@@ -466,7 +466,23 @@ export const ownerSignContractAndQueuePdf = onCall({ cors: true, enforceAppCheck
       return;
     }
     await consumeVerifiedContractSignatureOtp(transaction, otpEvidence);
-    transaction.set(ref, { status: "PENDING_ACTIVATION", contractStatus: "PENDING_ACTIVATION", activationStatus: "PENDING_PAYMENT_VERIFICATION", ownerSigned: true, signatureName, signatureStatus: "OWNER_SIGNED", otpVerificationId, otpEvidenceVerified: true, signatureState: { ...(freshContract.signatureState || {}), ownerSigned: true, ownerSignedAt: signedAtDate.toISOString(), ownerSignatureName: signatureName, pdfGenerated: true, pdfUrl, emailed: true }, signedPdfUrl: pdfUrl, ownerSignedAt: ts(), ...termFields, updatedAt: ts() }, { merge: true });
+    transaction.set(ref, { status: "PENDING_ACTIVATION", contractStatus: "PENDING_ACTIVATION", activationStatus: "PENDING_PAYMENT_VERIFICATION", paymentStatus: "PENDING_ADMIN_PAYMENT_VERIFICATION", ownerSigned: true, signatureName, signatureStatus: "OWNER_SIGNED", otpVerificationId, otpEvidenceVerified: true, finalContractAccepted: true, finalContractAcceptedQuoteHash: contractHash, signatureState: { ...(freshContract.signatureState || {}), ownerSigned: true, ownerSignedAt: signedAtDate.toISOString(), ownerSignatureName: signatureName, acceptedQuoteHash: contractHash, pdfGenerated: true, pdfUrl, emailed: true }, signedPdfUrl: pdfUrl, ownerSignedAt: ts(), ...termFields, updatedAt: ts() }, { merge: true });
+    const paymentRef = db.collection("payment_transactions").doc(contractId);
+    const paymentSnap = await transaction.get(paymentRef);
+    if (paymentSnap.exists) {
+      const payment = paymentSnap.data() || {};
+      const paymentFinalHash = s(payment.finalVerifiedQuoteHash).toLowerCase();
+      if (paymentFinalHash && paymentFinalHash !== contractHash) throw new HttpsError("failed-precondition", "Final contract signature does not match the verified payment quote.");
+      transaction.set(paymentRef, {
+        status: "PENDING_ADMIN_PAYMENT_VERIFICATION",
+        paymentStatus: "PENDING_ADMIN_PAYMENT_VERIFICATION",
+        verificationState: "ADMIN_PAYMENT_EVIDENCE_REQUIRED_AFTER_FINAL_OWNER_SIGNATURE",
+        ownerFinalContractSigned: true,
+        finalContractAcceptedQuoteHash: contractHash,
+        signedPdfUrl: pdfUrl,
+        updatedAt: ts(),
+      }, { merge: true });
+    }
     transaction.set(db.collection("contract_signing_requests").doc(contractId), { status: "SIGNED_PDF_EMAILED", ownerSignedAt: ts(), pdfUrl, updatedAt: ts() }, { merge: true });
     if (ownerId) {
       const ownerPatch = {
