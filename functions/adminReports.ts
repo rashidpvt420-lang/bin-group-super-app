@@ -1,5 +1,6 @@
 import * as admin from "firebase-admin";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
+import { normalizeWorkflowState } from "./workflowStateMachines";
 
 if (!admin.apps.length) admin.initializeApp();
 
