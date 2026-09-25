@@ -28,6 +28,7 @@ async function requireApprovedBroker(auth: any) {
   const submissionHash = text(privateKyc.submissionHash, 80);
   const approvedHash = text(privateKyc.approvedSubmissionHash || profile.approvedSubmissionHash, 80);
   const kycStatus = upper(profile.brokerKycStatus || profile.kycStatus || privateKyc.brokerKycStatus, 40);
+  // BROKER_KYC canonical state is APPROVED. VERIFIED remains read-only legacy compatibility.
 
   if (
     account.disabled ||
