@@ -4,6 +4,8 @@ import { execFileSync } from 'node:child_process';
 
 const projectId = String(process.env.VITE_FIREBASE_PROJECT_ID || process.env.GCP_PROJECT_ID || 'bin-group-57c60').trim();
 const bundleId = 'ae.bingroups.superapp';
+const androidPackage = 'ae.bingroups.superapp';
+const canonicalAdminWebAppId = '1:123413252227:web:285cb53bc26626d699f3b6';
 
 function fail(message) {
   console.error('[phase10-firebase-config] FAIL:', message);
@@ -24,8 +26,52 @@ async function getJson(url, token) {
     },
   });
   const body = await response.text();
-  if (!response.ok) throw new Error('HTTP ' + response.status + ': ' + body);
+  if (!response.ok) throw new Error('HTTP ' + response.status);
   return JSON.parse(body);
+}
+
+async function getJsonIfPresent(url, token) {
+  const response = await fetch(url, {
+    headers: {
+      Authorization: 'Bearer ' + token,
+      'X-Goog-User-Project': projectId,
+    },
+  });
+  if (response.status === 404) return null;
+  if (!response.ok) throw new Error('HTTP ' + response.status);
+  return response.json();
+}
+
+async function requireWebAppCheck(appId, label, token, projectNumber, enterpriseOnly = false) {
+  const encoded = encodeURIComponent(appId);
+  const enterprise = await getJsonIfPresent(
+    'https://firebaseappcheck.googleapis.com/v1/projects/' + projectNumber + '/apps/' +
+      encoded + '/recaptchaEnterpriseConfig',
+    token,
+  );
+  if (enterprise && String(enterprise.siteKey || '').trim()) {
+    return 'recaptcha-enterprise';
+  }
+  if (enterpriseOnly) fail(label + ' web app must use reCAPTCHA Enterprise App Check.');
+
+  const v3 = await getJsonIfPresent(
+    'https://firebaseappcheck.googleapis.com/v1/projects/' + projectNumber + '/apps/' +
+      encoded + '/recaptchaV3Config',
+    token,
+  );
+  if (v3?.siteSecretSet === true) return 'recaptcha-v3';
+  fail(label + ' web app has no valid reCAPTCHA Enterprise/V3 App Check registration.');
+}
+
+async function requireAppCheckService(serviceId, token, projectNumber) {
+  const service = await getJson(
+    'https://firebaseappcheck.googleapis.com/v1/projects/' + projectNumber + '/services/' +
+      encodeURIComponent(serviceId),
+    token,
+  );
+  if (service?.enforcementMode !== 'ENFORCED') {
+    fail('Firebase App Check enforcement is not ENFORCED for ' + serviceId + '.');
+  }
 }
 
 const token = gcloud(['auth', 'print-access-token']);
@@ -86,6 +132,64 @@ for (const providerId of ['google.com', 'apple.com']) {
   }
 }
 
+let webApps;
+try {
+  webApps = await getJson(
+    'https://firebase.googleapis.com/v1beta1/projects/' + projectId + '/webApps?pageSize=100',
+    token,
+  );
+} catch (error) {
+  fail('Unable to list Firebase Web apps: ' + (error instanceof Error ? error.message : error));
+}
+const activeWebApps = (webApps.apps || []).filter((app) => String(app?.state || 'ACTIVE') === 'ACTIVE');
+if (!activeWebApps.length) fail('No active Firebase Web app is registered.');
+const mainWebAppId = String(process.env.VITE_FIREBASE_APP_ID || '').trim();
+const requiredMainWebApp = mainWebAppId
+  ? activeWebApps.find((app) => app?.appId === mainWebAppId)
+  : activeWebApps.find((app) => app?.appId === canonicalAdminWebAppId) || activeWebApps[0];
+if (!requiredMainWebApp?.appId) fail('Configured production Firebase Web app is not active.');
+const adminWebApp = activeWebApps.find((app) => app?.appId === canonicalAdminWebAppId);
+if (!adminWebApp) fail('Canonical Admin Firebase Web app is not active.');
+const mainWebProvider = await requireWebAppCheck(requiredMainWebApp.appId, 'Main', token, projectNumber);
+const adminWebProvider = await requireWebAppCheck(adminWebApp.appId, 'Admin', token, projectNumber, true);
+
+let androidApps;
+try {
+  androidApps = await getJson(
+    'https://firebase.googleapis.com/v1beta1/projects/' + projectId + '/androidApps?pageSize=100',
+    token,
+  );
+} catch (error) {
+  fail('Unable to list Firebase Android apps: ' + (error instanceof Error ? error.message : error));
+}
+const androidMatches = (androidApps.apps || []).filter((app) =>
+  app?.packageName === androidPackage && String(app?.state || 'ACTIVE') === 'ACTIVE'
+);
+if (androidMatches.length !== 1 || !androidMatches[0]?.appId) {
+  fail('Expected exactly one active Firebase Android app for ' + androidPackage + '.');
+}
+const androidApp = androidMatches[0];
+const playIntegrity = await getJson(
+  'https://firebaseappcheck.googleapis.com/v1/projects/' + projectNumber + '/apps/' +
+    encodeURIComponent(androidApp.appId) + '/playIntegrityConfig',
+  token,
+);
+if (
+  !String(playIntegrity?.name || '').endsWith('/playIntegrityConfig') ||
+  playIntegrity?.appIntegrity?.allowUnrecognizedVersion === true ||
+  playIntegrity?.accountDetails?.requireLicensed !== true
+) {
+  fail('Firebase Android Play Integrity App Check policy is not fail-closed for Play delivery.');
+}
+
+for (const serviceId of [
+  'identitytoolkit.googleapis.com',
+  'firestore.googleapis.com',
+  'firebasestorage.googleapis.com',
+]) {
+  await requireAppCheckService(serviceId, token, projectNumber);
+}
+
 let iosApps;
 try {
   iosApps = await getJson(
@@ -118,5 +222,10 @@ try {
 console.log('[phase10-firebase-config] PASS');
 console.log('[phase10-firebase-config] auth=email-password,google,apple');
 console.log('[phase10-firebase-config] mfa=phone,totp');
+console.log('[phase10-firebase-config] webMainAppCheck=' + mainWebProvider);
+console.log('[phase10-firebase-config] webAdminAppCheck=' + adminWebProvider);
+console.log('[phase10-firebase-config] androidApp=' + androidApp.appId);
+console.log('[phase10-firebase-config] androidAppCheck=play-integrity');
 console.log('[phase10-firebase-config] iosApp=' + iosApp.appId);
 console.log('[phase10-firebase-config] iosAppCheck=app-attest');
+console.log('[phase10-firebase-config] enforcement=auth,firestore,storage');
