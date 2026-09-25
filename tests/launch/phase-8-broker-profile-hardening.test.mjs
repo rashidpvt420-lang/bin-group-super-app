@@ -119,9 +119,11 @@ test('Phase 8 Broker private records and pipeline ownership remain isolated', as
   assert.match(rules, /function safeBrokerLeadCreate\(data, leadId\)[\s\S]*?claimedRole\(\) == 'broker'/);
   assert.match(rules, /data\.get\('sourceLeadId', ''\) == leadId/);
   assert.match(rules, /broker_lead_' \+ request\.auth\.uid \+ '_' \+ leadId/);
-  assert.match(rules, /function safeBrokerReferralCreate\(data, referralId\)[\s\S]*?claimedRole\(\) == 'broker'/);
-  assert.match(rules, /data\.get\('sourceReferralId', ''\) == referralId/);
-  assert.match(rules, /broker_referral_' \+ request\.auth\.uid \+ '_' \+ referralId/);
+  const referralStart = rules.indexOf('match /referrals/{referralId}');
+  assert.ok(referralStart >= 0);
+  const referralRules = rules.slice(referralStart, referralStart + 450);
+  assert.match(referralRules, /allow create: if false/);
+  assert.match(referralRules, /allow update, delete: if isAdmin\(\)/);
   assert.match(rules, /safeBrokerLeadUpdate\(\)[\s\S]*?hasOnly\(\[[\s\S]*?'status'[\s\S]*?'notes'[\s\S]*?'updatedAt'/);
   const leadUpdate = rules.slice(rules.indexOf('function safeBrokerLeadUpdate'), rules.indexOf('function safeBrokerReferralCreate'));
   assert.doesNotMatch(leadUpdate, /'attributionId'|'sourceLeadId'/);
@@ -167,7 +169,7 @@ test('Phase 8 leads and deals preserve immutable server attribution', async () =
     read('src/broker/pages/BrokerLeadsPage.tsx'),
     read('src/broker/BrokerApp.tsx'),
     read('src/broker/pages/BrokerAttributionProofPage.tsx'),
-    read('functions/brokerReferralAttribution.ts'),
+    read('functions/secureBrokerReferralSubmission.ts'),
   ]);
 
   assert.match(leads, /const leadRef = doc\(collection\(db, 'brokerLeads'\)\)/);
@@ -177,9 +179,11 @@ test('Phase 8 leads and deals preserve immutable server attribution', async () =
   assert.match(deals, /broker_commissions/);
   assert.match(deals, /brokerLeads/);
   assert.match(deals, /referrals/);
+  assert.match(referral, /submitBrokerReferral = onCall/);
   assert.match(referral, /enforceAppCheck: true/);
-  assert.match(referral, /Current verified Owner authority is required/);
-  assert.match(referral, /attributionLocked: true/);
+  assert.match(referral, /Approved Broker KYC\/RERA is required/);
+  assert.match(referral, /privateOwnerLinkageServerResolved/);
+  assert.match(referral, /BROKER_REFERRAL_SUBMITTED/);
 });
 
 test('Phase 8 notification lifecycle remains recipient-scoped for Brokers', async () => {
