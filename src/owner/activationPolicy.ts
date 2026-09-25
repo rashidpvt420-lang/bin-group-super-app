@@ -5,6 +5,10 @@ export const OWNER_PRE_ACTIVATION_PATHS = new Set([
   '/owner/onboarding-status',
   '/owner/contracts',
   '/owner/documents',
+  '/owner/profile',
+  '/owner/properties',
+  '/owner/inspections',
+  '/owner/review-queue',
 ]);
 
 export function isOwnerPreActivationPath(pathname: string) {
