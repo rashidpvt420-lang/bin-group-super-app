@@ -21,10 +21,9 @@ import {
   alpha,
 } from '@mui/material';
 import { AlertCircle, Building, Building2, CheckCircle2, Clock, DollarSign, FileText, Info, Plus } from 'lucide-react';
-import { collection, db, doc, onSnapshot, orderBy, query, serverTimestamp, setDoc, where } from '../../lib/firebase';
+import { collection, db, functions, httpsCallable, onSnapshot, orderBy, query, where } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
-import { logAuditAction } from '../../utils/auditLogger';
 import BrokerPageFrame from '../components/BrokerPageFrame';
 
 const normalizeEmail = (value: unknown) => String(value || '').trim().toLowerCase();
@@ -65,44 +64,36 @@ export default function BrokerReferralsPage({ openFormByDefault = false }: { ope
 
   useEffect(() => {
     if (!user?.uid) return;
-    const buckets: Record<string, any[]> = {};
-    const unsubs: Array<() => void> = [];
-    const identitySources = [
-      { field: 'brokerId', value: user.uid },
-      { field: 'brokerUid', value: user.uid },
-      { field: 'createdByUid', value: user.uid },
-      { field: 'brokerEmail', value: normalizeEmail(user.email) },
-    ].filter((source) => source.value);
-
-    const refresh = () => {
-      const rows = uniqueRows(Object.values(buckets).flat()).sort((a, b) => rowTime(b) - rowTime(a));
-      setReferrals(rows);
+    const q = query(collection(db, 'referrals'), where('brokerId', '==', user.uid), orderBy('createdAt', 'desc'));
+    const unsub = onSnapshot(q, (snap) => {
+      setReferrals(snap.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => rowTime(b) - rowTime(a)));
       setLoading(false);
-    };
-
-    identitySources.forEach((source) => {
-      const key = `${source.field}:${source.value}`;
-      const q = query(collection(db, 'referrals'), where(source.field, '==', source.value), orderBy('createdAt', 'desc'));
-      unsubs.push(onSnapshot(q, (snap) => {
-        buckets[key] = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-        refresh();
-      }, (err) => {
-        console.warn(`[BrokerReferrals] ${source.field} listener failed:`, err);
-        setWarning('Some referral records could not load. Check Firestore access if this persists.');
-        setLoading(false);
-      }));
+    }, (err) => {
+      console.warn('[BrokerReferrals] brokerId listener failed:', err);
+      setWarning('Referral records could not load. Refresh your session or contact BIN GROUP Operations.');
+      setLoading(false);
     });
-
-    return () => unsubs.forEach((unsub) => unsub());
-  }, [user?.uid, user?.email]);
+    return () => unsub();
+  }, [user?.uid]);
 
   useEffect(() => {
-    const q = query(collection(db, 'properties'));
-    const unsub = onSnapshot(q, (snap) => {
-      setPropertiesList(snap.docs.map((propertyDoc) => ({ id: propertyDoc.id, ...propertyDoc.data() })));
-    }, (err) => console.warn('[BrokerReferrals] properties listener failed:', err));
-    return () => unsub();
-  }, []);
+    let cancelled = false;
+    const loadVerifiedListings = async () => {
+      if (!user?.uid) return;
+      try {
+        const call = httpsCallable(functions, 'getBrokerVerifiedListings');
+        const result: any = await call({});
+        if (cancelled) return;
+        setPropertiesList(Array.isArray(result?.data?.listings) ? result.data.listings : []);
+      } catch (err: any) {
+        if (cancelled) return;
+        console.warn('[BrokerReferrals] verified listing lookup failed:', err);
+        setPropertiesList([]);
+      }
+    };
+    void loadVerifiedListings();
+    return () => { cancelled = true; };
+  }, [user?.uid]);
 
   const resetForm = () => {
     setClientName('');
@@ -125,106 +116,47 @@ export default function BrokerReferralsPage({ openFormByDefault = false }: { ope
     setSubmitting(true);
     setWarning('');
     try {
-      let finalPropertyName = clean(propertyName);
-      let finalLocation = clean(location);
-      let matchedProp: any = null;
-      if (referralType === 'contract' && selectedPropertyId) {
-        matchedProp = propertiesList.find((p) => p.id === selectedPropertyId) || null;
-        if (matchedProp) {
-          finalPropertyName = clean(matchedProp.propertyName || matchedProp.name || '');
-          finalLocation = clean(matchedProp.location || matchedProp.emirate || '');
-        }
+      const selectedListing = referralType === 'contract' && selectedPropertyId
+        ? propertiesList.find((item) => item.id === selectedPropertyId) || null
+        : null;
+      if (referralType === 'contract' && !selectedListing) {
+        throw new Error('Select a currently verified BIN listing before submitting a contract referral.');
       }
 
-      const brokerId = String(user.uid);
-      const brokerEmail = normalizeEmail(user.email);
-      const brokerName = clean(user.displayName || user.email || 'Broker Partner');
-      const estimatedAmount = amountOf(estimatedValue);
-      const baseAttribution = {
-        attributionSource: 'BROKER_PORTAL_REFERRAL',
-        sourceChannel: 'broker_portal',
-        brokerId,
-        brokerUid: brokerId,
-        brokerEmail,
-        brokerName,
-        brokerDisplayName: brokerName,
-        createdByUid: brokerId,
-        broughtByRole: 'broker',
-        broughtByUid: brokerId,
-        broughtByEmail: brokerEmail,
-        attributionProof: {
-          clientName: clean(clientName),
-          phone: clean(phone),
-          email: normalizeEmail(email),
-          propertyName: finalPropertyName,
-          location: finalLocation,
-          estimatedValue: estimatedAmount,
-          referralType,
-          capturedFrom: 'broker_referrals_page',
-        },
-      };
+      let clientRequestId = '';
+      if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+        clientRequestId = `broker_referral_${crypto.randomUUID()}`;
+      } else if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
+        const bytes = new Uint8Array(16);
+        crypto.getRandomValues(bytes);
+        clientRequestId = `broker_referral_${Array.from(bytes, (value) => value.toString(16).padStart(2, '0')).join('')}`;
+      } else {
+        throw new Error('Secure browser randomness is required to submit a referral.');
+      }
 
-      const refRef = doc(collection(db, 'referrals'));
-      const attributionId = `broker_referral_${brokerId}_${refRef.id}`;
-      const referralData: any = {
-        ...baseAttribution,
-        attributionId,
-        sourceReferralId: refRef.id,
+      const submitReferral = httpsCallable(functions, 'submitBrokerReferral');
+      await submitReferral({
+        clientRequestId,
         referralType,
         clientName: clean(clientName),
         phone: clean(phone),
         email: normalizeEmail(email),
         notes: clean(notes),
-        status: 'submitted',
-        lifecycleStatus: 'REFERRAL_SUBMITTED',
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      };
-
-      if (referralType === 'contract') {
-        referralData.propertyId = selectedPropertyId;
-        referralData.propertyName = finalPropertyName;
-        referralData.location = finalLocation;
-        referralData.ownerId = matchedProp?.ownerId || matchedProp?.ownerUid || '';
-        referralData.ownerUid = matchedProp?.ownerUid || matchedProp?.ownerId || '';
-        referralData.ownerEmail = normalizeEmail(matchedProp?.ownerEmail);
-        referralData.contractType = contractType;
-        referralData.estimatedValue = estimatedAmount;
-        referralData.signedDate = signedDate;
-      } else {
-        referralData.propertyName = clean(propertyName);
-        referralData.propertyType = clean(propertyType);
-        referralData.location = clean(location);
-        referralData.units = clean(units);
-        referralData.estimatedValue = estimatedAmount;
-      }
-
-      await setDoc(refRef, referralData);
-
-      await logAuditAction({
-        action: 'BROKER_REFERRAL_SUBMITTED',
-        targetType: 'BROKER_REFERRAL',
-        targetId: refRef.id,
-        metadata: {
-          module: 'broker_referrals',
-          status: 'RECORDED',
-          brokerId,
-          brokerEmail,
-          attributionId,
-          referralType,
-          clientName: clean(clientName),
-          propertyId: selectedPropertyId,
-          propertyName: finalPropertyName,
-          estimatedAmount,
-          contractType: referralType === 'contract' ? contractType : null,
-        },
+        estimatedValue: amountOf(estimatedValue),
+        listingId: referralType === 'contract' ? selectedPropertyId : '',
+        contractType: referralType === 'contract' ? contractType : '',
+        signedDate: referralType === 'contract' ? signedDate : '',
+        propertyName: referralType === 'property' ? clean(propertyName) : '',
+        propertyType: referralType === 'property' ? clean(propertyType) : '',
+        location: referralType === 'property' ? clean(location) : '',
+        units: referralType === 'property' ? clean(units) : '',
       });
 
       setOpenAdd(false);
       resetForm();
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to add referral', err);
-      setWarning('Referral could not be submitted. Check access or try again.');
+      setWarning(err?.message || 'Referral could not be submitted. Check access or try again.');
     } finally {
       setSubmitting(false);
     }
@@ -298,7 +230,7 @@ export default function BrokerReferralsPage({ openFormByDefault = false }: { ope
             <Stack spacing={3} sx={{ mt: 1 }}>
               <TextField select label="Referral Type" value={referralType} onChange={(e) => setReferralType(e.target.value)} fullWidth><MenuItem value="property">Property Owner / Asset</MenuItem><MenuItem value="contract">Contract / Lease Opportunity</MenuItem></TextField>
               <Grid container spacing={2}><Grid item xs={12} md={6}><TextField required label="Client / Owner Name" value={clientName} onChange={(e) => setClientName(e.target.value)} fullWidth /></Grid><Grid item xs={12} md={6}><TextField label="Phone" value={phone} onChange={(e) => setPhone(e.target.value)} fullWidth /></Grid><Grid item xs={12}><TextField label="Email" value={email} onChange={(e) => setEmail(e.target.value)} fullWidth /></Grid></Grid>
-              {referralType === 'contract' ? <><TextField select label="Select BIN GROUP Property" value={selectedPropertyId} onChange={(e) => setSelectedPropertyId(e.target.value)} fullWidth>{propertiesList.map((prop) => <MenuItem key={prop.id} value={prop.id}>{prop.propertyName || prop.name || prop.id}</MenuItem>)}</TextField><Grid container spacing={2}><Grid item xs={12} md={6}><TextField select label="Contract Type" value={contractType} onChange={(e) => setContractType(e.target.value)} fullWidth><MenuItem value="annual_lease">Annual Lease</MenuItem><MenuItem value="maintenance_contract">Maintenance Contract</MenuItem><MenuItem value="property_management">Property Management</MenuItem></TextField></Grid><Grid item xs={12} md={6}><TextField type="date" label="Signed / Expected Date" value={signedDate} onChange={(e) => setSignedDate(e.target.value)} fullWidth InputLabelProps={{ shrink: true }} /></Grid></Grid></> : <Grid container spacing={2}><Grid item xs={12} md={6}><TextField label="Property Name" value={propertyName} onChange={(e) => setPropertyName(e.target.value)} fullWidth /></Grid><Grid item xs={12} md={6}><TextField label="Property Type" value={propertyType} onChange={(e) => setPropertyType(e.target.value)} fullWidth /></Grid><Grid item xs={12} md={6}><TextField label="Location" value={location} onChange={(e) => setLocation(e.target.value)} fullWidth /></Grid><Grid item xs={12} md={6}><TextField label="Number of Units" value={units} onChange={(e) => setUnits(e.target.value)} fullWidth /></Grid></Grid>}
+              {referralType === 'contract' ? <><TextField select label="Select Verified BIN Listing" value={selectedPropertyId} onChange={(e) => setSelectedPropertyId(e.target.value)} fullWidth>{propertiesList.map((prop) => <MenuItem key={prop.id} value={prop.id}>{prop.title || prop.id} · {prop.publicLocationQuery || prop.area || prop.emirate || 'UAE'}</MenuItem>)}</TextField><Grid container spacing={2}><Grid item xs={12} md={6}><TextField select label="Contract Type" value={contractType} onChange={(e) => setContractType(e.target.value)} fullWidth><MenuItem value="annual_lease">Annual Lease</MenuItem><MenuItem value="maintenance_contract">Maintenance Contract</MenuItem><MenuItem value="property_management">Property Management</MenuItem></TextField></Grid><Grid item xs={12} md={6}><TextField type="date" label="Signed / Expected Date" value={signedDate} onChange={(e) => setSignedDate(e.target.value)} fullWidth InputLabelProps={{ shrink: true }} /></Grid></Grid></> : <Grid container spacing={2}><Grid item xs={12} md={6}><TextField label="Property Name" value={propertyName} onChange={(e) => setPropertyName(e.target.value)} fullWidth /></Grid><Grid item xs={12} md={6}><TextField label="Property Type" value={propertyType} onChange={(e) => setPropertyType(e.target.value)} fullWidth /></Grid><Grid item xs={12} md={6}><TextField label="Location" value={location} onChange={(e) => setLocation(e.target.value)} fullWidth /></Grid><Grid item xs={12} md={6}><TextField label="Number of Units" value={units} onChange={(e) => setUnits(e.target.value)} fullWidth /></Grid></Grid>}
               <TextField label="Estimated Contract / Asset Value (AED)" value={estimatedValue} onChange={(e) => setEstimatedValue(e.target.value)} fullWidth InputProps={{ startAdornment: <DollarSign size={18} /> as any }} />
               <TextField label="Notes" value={notes} onChange={(e) => setNotes(e.target.value)} multiline rows={3} fullWidth />
             </Stack>
