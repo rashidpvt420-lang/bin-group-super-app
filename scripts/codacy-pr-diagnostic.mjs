@@ -4,7 +4,10 @@ import { writeFile } from 'node:fs/promises';
 const repository = process.env.REPOSITORY || '';
 const headSha = process.env.HEAD_SHA || '';
 const token = process.env.GH_TOKEN || '';
-const codacyApiUrl = 'https://api.codacy.com/api/v3/analysis/organizations/gh/rashidpvt420-lang/repositories/bin-group-super-app/pull-requests/330/issues';
+const prNumber = process.env.PR_NUMBER || '';
+const codacyApiUrl = prNumber
+  ? `https://api.codacy.com/api/v3/analysis/organizations/gh/rashidpvt420-lang/repositories/bin-group-super-app/pull-requests/${prNumber}/issues`
+  : '';
 
 const result = {
   repository,
@@ -66,7 +69,7 @@ if (repository && headSha && token) {
   }
 }
 
-for (let attempt = 1; attempt <= 48; attempt += 1) {
+for (let attempt = 1; codacyApiUrl && attempt <= 48; attempt += 1) {
   const probe = await fetchText(codacyApiUrl);
   let parsed = null;
   try {
@@ -90,7 +93,7 @@ for (let attempt = 1; attempt <= 48; attempt += 1) {
   await sleep(15_000);
 }
 
-const page = await fetchText('https://app.codacy.com/gh/rashidpvt420-lang/bin-group-super-app/pull-requests/330/issues');
+const page = await fetchText(`https://app.codacy.com/gh/rashidpvt420-lang/bin-group-super-app/pull-requests/${prNumber}/issues`);
 const needles = [
   'secureOwnerProfileOperations.ts',
   'OwnerPhoneVerificationCard.tsx',
