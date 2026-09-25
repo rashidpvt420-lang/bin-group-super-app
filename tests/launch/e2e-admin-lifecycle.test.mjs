@@ -141,11 +141,17 @@ test('Live Launch Audit is an approved protected E2E Admin retirement workflow',
   assert.match(lifecycleSource, /refs\/heads\/main/);
 });
 
-test('Live Launch Audit automatically reruns when its lifecycle dependency changes', () => {
+test('Live Launch Audit is manual-only so undeployed main changes cannot create production evidence', () => {
+  assert.match(liveAuditWorkflowSource, /workflow_dispatch:/);
+  assert.doesNotMatch(
+    liveAuditWorkflowSource,
+    /\n\s*push:/,
+    'standalone live audit must not auto-run against production for an undeployed main SHA',
+  );
   assert.match(
     liveAuditWorkflowSource,
-    /- 'scripts\/e2e-admin-lifecycle\.mjs'/,
-    'live-launch-audit push paths must include the lifecycle script it invokes during cleanup',
+    /node scripts\/verify-production-deployment\.mjs/,
+    'manual live audit must prove current main is already deployed before executing production E2E',
   );
 });
 
