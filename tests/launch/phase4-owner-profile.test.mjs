@@ -102,9 +102,9 @@ test('resubmitOwnerProperty keeps Property and Onboarding canonical machines sep
   assert.match(runtime, /export \{ resubmitOwnerProperty \} from "\.\/ownerPropertyResubmission"/);
   assert.match(resubmission, /enforceAppCheck:\s*true/);
   assert.match(resubmission, /This property belongs to another owner/);
-  assert.match(resubmission, /propertyState !== "changes_requested"/);
+  assert.match(resubmission, /propertyState !== "CHANGES_REQUESTED"/);
   assert.match(resubmission, /intakeState !== "changes_requested"/);
-  assert.match(resubmission, /assertOnboardingTransition\(propertyState, "admin_review"\)/);
+  assert.match(resubmission, /assertCanonicalTransition\("property", propertyState, "UNDER_REVIEW"\)/);
   assert.match(resubmission, /assertOnboardingTransition\(intakeState, "admin_review"\)/);
   assert.match(resubmission, /lifecycleStatus:\s*"UNDER_REVIEW"/);
   assert.match(resubmission, /status:\s*"UNDER_REVIEW"/);
