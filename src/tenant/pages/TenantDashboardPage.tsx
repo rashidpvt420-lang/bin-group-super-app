@@ -35,24 +35,14 @@ const isActiveTicket = (ticket: any) => !CLOSED_TICKET_STATUSES.has(String(ticke
 
 async function safeGetDocument(collectionName: string, id?: string) {
   if (!id) return null;
-  try {
-    const snap = await getDoc(doc(db, collectionName, id));
-    return snap.exists() ? { id: snap.id, ...snap.data() } : null;
-  } catch (err) {
-    console.warn(`[TenantDashboard] ${collectionName}/${id} read failed:`, err);
-    return null;
-  }
+  const snap = await getDoc(doc(db, collectionName, id));
+  return snap.exists() ? { id: snap.id, ...snap.data() } : null;
 }
 
 async function getFirstByField(collectionName: string, field: string, value?: string) {
   if (!value) return null;
-  try {
-    const snap = await getDocs(query(collection(db, collectionName), where(field, '==', value), limit(1)));
-    return snap.empty ? null : { id: snap.docs[0].id, ...snap.docs[0].data() };
-  } catch (err) {
-    console.warn(`[TenantDashboard] ${collectionName}.${field} lookup failed:`, err);
-    return null;
-  }
+  const snap = await getDocs(query(collection(db, collectionName), where(field, '==', value), limit(1)));
+  return snap.empty ? null : { id: snap.docs[0].id, ...snap.docs[0].data() };
 }
 
 export default function TenantDashboardPage() {
@@ -110,10 +100,11 @@ export default function TenantDashboardPage() {
           err?.message?.includes('permission-denied') ||
           err?.message?.includes('insufficient permissions');
         if (isPermissionDenied) {
-          console.warn('[TenantDashboard] residence fetch failed: permission-denied.', err);
-          if (!cancelled) setPermissionWarning(tx('dash.permissionWarning', 'Some residence records could not load because access rules blocked them. Please contact BIN GROUP Operations if this does not refresh.'));
+          console.warn('[TenantDashboard] residence fetch failed: permission-denied.', { code: err?.code });
+          if (!cancelled) setPermissionWarning(tx('dash.permissionWarning', 'Some residence records could not load because access rules blocked them. Please refresh your session or contact BIN GROUP Operations.'));
         } else {
-          console.error('[TenantDashboard] residence fetch failed:', err);
+          console.error('[TenantDashboard] residence fetch failed:', { code: err?.code || 'unknown' });
+          if (!cancelled) setPermissionWarning(tx('dash.residenceLoadFailed', 'Residence, property or lease data failed to load. This does not mean those records are missing. Please retry or contact BIN GROUP Operations.'));
         }
       } finally {
         if (!cancelled) setLoading(false);
