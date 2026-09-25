@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { FieldPath, FieldValue } from "firebase-admin/firestore";
 import type * as FirebaseFirestore from "firebase-admin/firestore";
 import { defineSecret } from "firebase-functions/params";
@@ -105,6 +105,13 @@ function publicListing(id: string, data: FirebaseFirestore.DocumentData) {
     permitVerificationUrl: /^https:\/\//i.test(cleanString(data.permitVerificationUrl, 1200))
       ? cleanString(data.permitVerificationUrl, 1200)
       : "",
+    maintenanceHistoryStatus: cleanString(data.repairHistorySummary, 500)
+      ? "PUBLISHED_SUMMARY_AVAILABLE"
+      : "NO_PUBLISHED_ISSUES",
+    publicLocationQuery: [
+      cleanString(data.area || data.community || data.city, 120),
+      cleanUpper(data.emirate, 40).replace(/_/g, " "),
+    ].filter(Boolean).join(", "),
     verifiedByAdmin: true,
     availabilityStatus: "AVAILABLE",
   };
@@ -179,6 +186,48 @@ function assertTenantAuth(auth: any) {
   return uid;
 }
 
+async function assertCurrentTenantAuthority(auth: any) {
+  const uid = assertTenantAuth(auth);
+  const authUser = await admin.auth().getUser(uid);
+  const currentClaims = authUser.customClaims || {};
+  const currentRole = cleanString(
+    currentClaims.role || currentClaims.userRole || currentClaims.primaryRole,
+    50,
+  ).toLowerCase();
+  if (
+    authUser.disabled ||
+    !authUser.emailVerified ||
+    currentClaims.suspended === true ||
+    currentRole !== "tenant"
+  ) {
+    throw new HttpsError("permission-denied", "A current verified tenant identity is required.");
+  }
+
+  const profileSnap = await db.collection("users").doc(uid).get();
+  const profile = profileSnap.data() || {};
+  const profileRole = cleanString(
+    profile.role || profile.userRole || profile.primaryRole || currentRole,
+    50,
+  ).toLowerCase();
+  const status = cleanString(profile.status || profile.accountStatus, 60).toLowerCase();
+  if (
+    profileSnap.exists &&
+    (
+      profileRole !== "tenant" ||
+      ["suspended", "disabled", "rejected", "deleted"].includes(status) ||
+      profile.suspended === true
+    )
+  ) {
+    throw new HttpsError("permission-denied", "Tenant profile authority is inactive.");
+  }
+
+  return {
+    uid,
+    email: cleanString(authUser.email || auth?.token?.email, 320).toLowerCase(),
+    displayName: cleanString(authUser.displayName || profile.displayName || auth?.token?.name, 160) || "Tenant",
+  };
+}
+
 async function verifiedListings(limit = 120) {
   const rows: Array<{ id: string; data: FirebaseFirestore.DocumentData }> = [];
   const pageSize = Math.max(100, Math.min(400, limit * 2));
@@ -214,13 +263,135 @@ export const getPublicHomeDiscoveryListings = onCall({
   enforceAppCheck: true,
   timeoutSeconds: 20,
 }, async () => {
-  const rows = await verifiedListings(100);
+  try {
+    const rows = await verifiedListings(100);
+    return {
+      listings: rows.map((row) => publicListing(row.id, row.data)),
+      inventoryState: rows.length > 0 ? "AVAILABLE" : "EMPTY",
+      verifiedListingCount: rows.length,
+      source: "SERVER_FIRESTORE_ADMIN",
+      publicDataPolicy: "SANITIZED_VERIFIED_LISTINGS_ONLY",
+      exactAddressExposed: false,
+      exactCoordinatesExposed: false,
+      ownerIdentityExposed: false,
+      generatedAt: new Date().toISOString(),
+    };
+  } catch (error) {
+    console.error("[HomeDiscovery] verified listing query failed", error);
+    throw new HttpsError(
+      "unavailable",
+      "HOME_DISCOVERY_INVENTORY_UNAVAILABLE",
+      { diagnosticCode: "HOME_DISCOVERY_INVENTORY_QUERY_FAILED" },
+    );
+  }
+});
+
+export const submitHomeDiscoveryInterest = onCall({
+  cors: true,
+  region: "europe-west3",
+  enforceAppCheck: true,
+  timeoutSeconds: 20,
+}, async (request) => {
+  const actor = await assertCurrentTenantAuthority(request.auth);
+  const listingId = cleanString(request.data?.listingId, 160);
+  const requestMode = cleanUpper(request.data?.requestMode, 20);
+  const clientRequestId = cleanString(request.data?.clientRequestId, 160);
+  if (!listingId || listingId.includes("/") || !["VIEWING", "APPLY"].includes(requestMode)) {
+    throw new HttpsError("invalid-argument", "A valid listing and request mode are required.");
+  }
+  if (!/^[A-Za-z0-9._:-]{8,160}$/.test(clientRequestId)) {
+    throw new HttpsError("invalid-argument", "A stable client request id is required.");
+  }
+
+  const applicationId = `home_${createHash("sha256")
+    .update(`${actor.uid}:${listingId}:${requestMode}:${clientRequestId}`)
+    .digest("hex")
+    .slice(0, 48)}`;
+  const listingRef = db.collection("contractorProfiles").doc(listingId);
+  const applicationRef = db.collection("jobPostings").doc(applicationId);
+  const auditRef = db.collection("audit_logs").doc();
+  const now = FieldValue.serverTimestamp();
+
+  const outcome = await db.runTransaction(async (transaction) => {
+    const [listingSnap, existingSnap] = await Promise.all([
+      transaction.get(listingRef),
+      transaction.get(applicationRef),
+    ]);
+    if (!listingSnap.exists || !isVerifiedPublicListing(listingSnap.data())) {
+      throw new HttpsError(
+        "failed-precondition",
+        "This home is no longer available as a verified BIN listing.",
+      );
+    }
+
+    if (existingSnap.exists) {
+      const existing = existingSnap.data() || {};
+      if (
+        cleanString(existing.tenantId, 128) !== actor.uid ||
+        cleanString(existing.listingId, 160) !== listingId ||
+        cleanUpper(existing.requestMode, 20) !== requestMode ||
+        cleanString(existing.clientRequestId, 160) !== clientRequestId
+      ) {
+        throw new HttpsError("already-exists", "This request id is already bound to another application.");
+      }
+      return { idempotent: true };
+    }
+
+    const listing = listingSnap.data() || {};
+    const annual = annualRent(listing);
+    transaction.create(applicationRef, {
+      type: "ROOM_RENT_APPLICATION",
+      applicationKind: "HOME_RENT_APPLICATION",
+      requestMode,
+      source: "tenant_home_discovery_v3_server",
+      clientRequestId,
+      listingId,
+      listingTitle: cleanString(
+        listing.unitTitle || listing.title || listing.propertyName || "BIN home listing",
+        180,
+      ),
+      propertyId: cleanString(listing.propertyId, 160) || null,
+      propertyType: cleanUpper(listing.propertyType, 60) || null,
+      propertyAddress: cleanString(listing.propertyAddress, 320) || null,
+      area: cleanString(listing.area || listing.community || listing.city, 160) || null,
+      emirate: cleanUpper(listing.emirate, 60) || null,
+      annualRent: annual > 0 ? annual : null,
+      ownerId: cleanString(listing.ownerId || listing.ownerUid, 160) || null,
+      ownerEmail: cleanString(listing.ownerEmail, 320).toLowerCase() || null,
+      tenantId: actor.uid,
+      tenantEmail: actor.email,
+      tenantName: actor.displayName,
+      tenantLifecycleStage: "APPLICANT",
+      status: "OPEN",
+      stage: requestMode === "VIEWING" ? "VIEWING_REQUESTED" : "APPLICATION_SUBMITTED",
+      requestedContractHandling: requestMode === "APPLY",
+      createdAt: now,
+      updatedAt: now,
+    });
+    transaction.create(auditRef, {
+      actorId: actor.uid,
+      actorRole: "tenant",
+      action: requestMode === "VIEWING"
+        ? "TENANT_HOME_VIEWING_REQUESTED"
+        : "TENANT_HOME_APPLICATION_SUBMITTED",
+      targetType: "jobPostings",
+      targetId: applicationId,
+      metadata: {
+        listingId,
+        requestMode,
+        clientRequestId,
+        source: "tenant_home_discovery_v3_server",
+      },
+      createdAt: now,
+    });
+    return { idempotent: false };
+  });
+
   return {
-    listings: rows.map((row) => publicListing(row.id, row.data)),
-    publicDataPolicy: "SANITIZED_VERIFIED_LISTINGS_ONLY",
-    exactAddressExposed: false,
-    ownerIdentityExposed: false,
-    generatedAt: new Date().toISOString(),
+    status: "SUCCESS",
+    applicationId,
+    requestMode,
+    idempotent: outcome.idempotent,
   };
 });
 
