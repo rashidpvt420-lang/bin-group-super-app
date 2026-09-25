@@ -19,6 +19,9 @@ const rawKey = (value: unknown) => String(value || '')
 const keyFor = (machineName: string, value: unknown) =>
   machineName === 'onboarding' ? rawKey(value).toLowerCase() : rawKey(value).toUpperCase();
 
+const ownEntryValue = <T>(record: Readonly<Record<string, T>>, key: string): T | undefined =>
+  Object.entries(record).find(([entryKey]) => entryKey === key)?.[1] as T | undefined;
+
 const machine = (
   states: readonly string[],
   aliases: Record<string, string>,
@@ -473,7 +476,7 @@ export function normalizeCanonicalState(machineName: CanonicalStateMachineName, 
   const definition = CANONICAL_STATE_MACHINES[machineName];
   const normalized = keyFor(machineName, raw);
   if (!normalized) return definition.states[0];
-  const aliased = definition.aliases[normalized] || normalized;
+  const aliased = ownEntryValue(definition.aliases, normalized) || normalized;
   return definition.states.includes(aliased) ? aliased : definition.states[0];
 }
 
@@ -490,7 +493,7 @@ export function canTransitionCanonicalState(
   const from = normalizeCanonicalState(machineName, fromRaw);
   const to = normalizeCanonicalState(machineName, toRaw);
   if (from === to) return true;
-  return (definition.transitions[from] || []).includes(to);
+  return (ownEntryValue(definition.transitions, from) || []).includes(to);
 }
 
 export function assertCanonicalTransition(
