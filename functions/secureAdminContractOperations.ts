@@ -89,6 +89,7 @@ export const adminCloseContract = onCall(
     if (!contractSnap.exists) throw new HttpsError("not-found", "Contract not found.");
     const initialContract = contractSnap.data() || {};
     const initialStatus = upper(initialContract.contractStatus || initialContract.status || initialContract.activationStatus);
+    const linkedPaymentId = text(initialContract.paymentId || initialContract.intakeId || contractId, 180);
     if (initialStatus === "CLOSED") {
       return {
         status: "SUCCESS",
@@ -124,6 +125,9 @@ export const adminCloseContract = onCall(
         completed: true,
         closureReason: reason,
         closureOperationId: operationId,
+        financialDisposition,
+        refundReviewRequired,
+        linkedPaymentId: linkedPaymentId || null,
         closedBy: actor.uid,
         closedAt: stagedAt,
         updatedAt: stagedAt,
@@ -171,8 +175,22 @@ export const adminCloseContract = onCall(
 
       const ownerUid = text(contract.ownerUid || contract.ownerId || contract.userId, 180);
       const ownerRef = ownerUid ? db.collection("users").doc(ownerUid) : null;
-      const ownerSnap = ownerRef ? await transaction.get(ownerRef) : null;
+      const paymentRef = linkedPaymentId ? db.collection("payment_transactions").doc(linkedPaymentId) : null;
+      const [ownerSnap, paymentSnap] = await Promise.all([
+        ownerRef ? transaction.get(ownerRef) : Promise.resolve(null),
+        paymentRef ? transaction.get(paymentRef) : Promise.resolve(null),
+      ]);
       const ownerProfile = ownerSnap?.data() || {};
+      const payment = paymentSnap?.data() || {};
+      const paymentState = upper(payment.paymentStatus || payment.status);
+      const hasApprovedPayment =
+        payment.paymentVerified === true &&
+        ["APPROVED", "PAID", "VERIFIED"].includes(paymentState);
+      const alreadyRefunded = upper(payment.refundStatus) === "FULL_REFUND_RECORDED";
+      const financialDisposition = hasApprovedPayment
+        ? (alreadyRefunded ? "FULL_REFUND_RECORDED" : "REFUND_REVIEW_REQUIRED")
+        : "NO_APPROVED_PAYMENT";
+      const refundReviewRequired = hasApprovedPayment && !alreadyRefunded;
       const ownerLocked = Boolean(ownerRef && ownerSnap?.exists && text(ownerProfile.activeContractId, 180) === contractId);
       const now = FieldValue.serverTimestamp();
 
@@ -189,6 +207,16 @@ export const adminCloseContract = onCall(
         closedAt: now,
         updatedAt: now,
       });
+
+      if (hasApprovedPayment && paymentRef) {
+        transaction.set(paymentRef, {
+          closureFinancialDisposition: financialDisposition,
+          refundReviewRequired,
+          linkedClosureOperationId: operationId,
+          contractClosedAt: now,
+          updatedAt: now,
+        }, { merge: true });
+      }
 
       if (ownerLocked && ownerRef) {
         transaction.set(ownerRef, {
@@ -225,7 +253,7 @@ export const adminCloseContract = onCall(
         targetType: "contracts",
         targetId: contractId,
         before: { status: currentStatus || "UNKNOWN" },
-        after: { status: "CLOSED", ownerDashboardLocked: ownerLocked },
+        after: { status: "CLOSED", ownerDashboardLocked: ownerLocked, financialDisposition, refundReviewRequired },
         reason,
         noteHash: sha256(note),
         noteLength: note.length,
@@ -244,6 +272,8 @@ export const adminCloseContract = onCall(
         ownerLocked,
         renewalRecordsClosed: renewalSnap.size,
         propertiesDisabled: propertySnap.size,
+        financialDisposition,
+        refundReviewRequired,
       };
     });
 
