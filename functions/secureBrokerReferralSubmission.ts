@@ -8,7 +8,7 @@ if (!admin.apps.length) admin.initializeApp();
 const db = admin.firestore();
 
 const text = (value: unknown, max = 500) => String(value ?? "").trim().slice(0, max);
-const lower = (value: unknown) => text(value).toLowerCase();
+const lower = (value: unknown, max = 500) => text(value, max).toLowerCase();
 const upper = (value: unknown, max = 80) => text(value, max).toUpperCase();
 const email = (value: unknown) => text(value, 320).toLowerCase();
 const money = (value: unknown) => Number.isFinite(Number(value)) ? Math.max(0, Number(value)) : 0;
