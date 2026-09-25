@@ -23,6 +23,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { auth, getFirebaseRuntimeDiagnostics } from '../lib/firebase';
 import {
     GoogleAuthProvider,
+    OAuthProvider,
     browserLocalPersistence,
     getRedirectResult,
     sendPasswordResetEmail,
@@ -344,6 +345,46 @@ const LoginPage: React.FC = () => {
         }
     };
 
+    const handleAppleLogin = async () => {
+        if (intendedRoleKey === 'admin' || isCanonicalAdminEmail(email)) {
+            redirectToAdminPanel(email);
+            return;
+        }
+        setLocalLoading(true);
+        setNotice(null);
+        try {
+            const provider = new OAuthProvider('apple.com');
+            provider.addScope('email');
+            provider.addScope('name');
+            await setPersistence(auth, browserLocalPersistence).catch(() => undefined);
+            sessionStorage.setItem(GOOGLE_REDIRECT_INTENT_KEY, intendedRoleKey || '');
+            sessionStorage.setItem(GOOGLE_REDIRECT_RETURN_TO_KEY, safeReturnTo || '');
+
+            try {
+                const result = await signInWithPopup(auth, provider);
+                if (result.user) {
+                    await result.user.getIdToken(true).catch(() => undefined);
+                    await refreshRole();
+                    if (safeReturnTo && (!intendedRoleKey || intendedRoleKey === 'owner')) navigate(safeReturnTo, { replace: true });
+                }
+            } catch (popupErr: any) {
+                const popupCode = popupErr?.code || '';
+                if ([
+                    'auth/popup-blocked',
+                    'auth/cancelled-popup-request',
+                    'auth/web-storage-unsupported',
+                ].includes(popupCode)) {
+                    await signInWithRedirect(auth, provider);
+                    return;
+                }
+                throw popupErr;
+            }
+        } catch (err: any) {
+            setNotice(getFriendlyAuthError(err));
+            setLocalLoading(false);
+        }
+    };
+
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
         setNotice(null);
@@ -544,6 +585,9 @@ const LoginPage: React.FC = () => {
                                 <Divider sx={{ my: 0.5 }}><Typography variant="caption" sx={{ color: palette.muted, px: 2, fontWeight: 900 }}>OR INSTITUTIONAL SSO</Typography></Divider>
                                 <Button fullWidth variant="outlined" onClick={handleGoogleLogin} disabled={localLoading} startIcon={renderSafeIcon(UserCircle, { size: 20 })} sx={{ py: 1.4, borderRadius: 2, fontWeight: 950, borderColor: alpha(palette.gold, 0.45), color: palette.ink }}>
                                     {t('login.google')}
+                                </Button>
+                                <Button fullWidth variant="outlined" onClick={handleAppleLogin} disabled={localLoading} sx={{ py: 1.4, borderRadius: 2, fontWeight: 950, borderColor: alpha(palette.gold, 0.45), color: palette.ink }}>
+                                    {tx('login.apple', 'Continue with Apple')}
                                 </Button>
                             </Stack>
                         </form>
