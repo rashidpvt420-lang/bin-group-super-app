@@ -181,7 +181,7 @@ const PROPERTY_AUTHORITY_FIELDS = new Set([
   "active", "isActive", "activationStatus", "locationVerified", "inspectionVerified",
   "inspectionResult", "inspectionCompletedAt", "inspectionCompletedBy", "paymentVerified",
   "adminApproved", "approved", "contractActivated", "dashboardUnlocked", "dashboardUnlockApproved",
-  "unlocksDashboard", "activeContractId", "geoAnchorStatus",
+  "unlocksDashboard", "activeContractId", "geoAnchorStatus", "ownerId", "ownerUid",
 ]);
 const PRIVILEGE_FIELDS = new Set([
   "admin", "isAdmin", "superAdmin", "super_admin", "ceo", "permissions", "modules", "customClaims",
@@ -229,6 +229,9 @@ function validateOperation(actor: MutationActor, operation: MutationOperation) {
   }
 
   if (parsed.root === "properties" && parsed.parts.length === 2) {
+    if (operation.kind === "create" || operation.kind === "set") {
+      throw new HttpsError("permission-denied", "Canonical property creation must use the Owner inspection-first onboarding workflow.");
+    }
     if (operation.kind === "delete") {
       throw new HttpsError("permission-denied", "Canonical properties cannot be hard-deleted from the Admin browser.");
     }
@@ -236,9 +239,6 @@ function validateOperation(actor: MutationActor, operation: MutationOperation) {
     if ("status" in data) assertStatusNotActive(data.status);
     if ("lifecycleStatus" in data) assertStatusNotActive(data.lifecycleStatus);
     if ("onboardingState" in data) assertStatusNotActive(data.onboardingState);
-    if ((operation.kind === "create" || operation.kind === "set") && !text(data.ownerId || data.ownerUid, 240)) {
-      throw new HttpsError("failed-precondition", "Canonical property creation requires an ownerId/ownerUid.");
-    }
   }
 
   if (parsed.root === "propertyPassports") {
