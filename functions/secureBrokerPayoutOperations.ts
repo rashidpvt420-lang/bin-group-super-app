@@ -88,7 +88,7 @@ async function requireBroker(auth: any) {
     profile.ibanVerified !== true ||
     privateKyc.reraVerified !== true ||
     privateKyc.ibanVerified !== true ||
-    lower(privateKyc.brokerKycStatus) !== "verified"
+    !["approved", "verified"].includes(lower(privateKyc.brokerKycStatus))
   ) {
     throw new HttpsError("failed-precondition", "Broker KYC must be admin verified before payout requests.");
   }
