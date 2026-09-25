@@ -33,8 +33,7 @@ import {
   Alert,
   CircularProgress
 } from '@mui/material';
-import { db, functions } from '../../lib/firebase';
-import { collection, query, orderBy, limit, where, getDocs, updateDoc, doc, serverTimestamp } from 'firebase/firestore';
+import { db, functions, collection, query, orderBy, limit, where, getDocs, updateDoc, doc, serverTimestamp } from '../../lib/firebase';
 import { httpsCallable } from 'firebase/functions';
 import { useLanguage } from '@bin/shared';
 import { UserCheck, Wrench } from 'lucide-react';
