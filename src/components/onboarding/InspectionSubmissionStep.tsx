@@ -62,7 +62,7 @@ export default function InspectionSubmissionStep({ onBack }: { onBack: () => voi
 
   const serverQuote = valuationResult?.serverQuote as any;
   const annualValue = Number(serverQuote?.annualContractValue || serverQuote?.portfolioAnnualTotal || portfolioSummary.estimatedACV || 0);
-  const activationDeposit = Number(serverQuote?.activationDeposit || serverQuote?.mobilisationDeposit || Math.round(annualValue * 0.15));
+  const activationDeposit = Number(serverQuote?.activationDeposit ?? serverQuote?.mobilisationDeposit ?? 0);
   const effectiveIntakeId = intakeId || onboardingSessionId || ownerAccount?.uid || '';
   const ownerEmail = ownerAccount?.email || companyProfile.email || '';
   const proofMap = proofDocuments as unknown as Record<ProofKey, ProofMeta>;
