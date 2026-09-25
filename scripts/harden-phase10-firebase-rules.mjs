@@ -39,8 +39,11 @@ const phase10Block = [
 function findMatchBlock(source, header) {
   const start = source.indexOf(header);
   if (start < 0) return '';
-  const open = source.indexOf('{', start);
-  if (open < 0) return '';
+  // The match path itself contains a wildcard placeholder such as {quoteId}.
+  // Start brace accounting at the final " {" in the full header, not at the
+  // placeholder brace inside the path.
+  const open = start + header.length - 1;
+  if (source[open] !== '{') return '';
   let depth = 0;
   for (let i = open; i < source.length; i += 1) {
     if (source[i] === '{') depth += 1;
