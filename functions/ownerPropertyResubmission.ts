@@ -27,7 +27,7 @@ async function requireVerifiedOwner(request: any) {
   return request.auth.uid as string;
 }
 
-function ownerBound(data: FirebaseFirestore.DocumentData, uid: string) {
+function ownerBound(data: Record<string, any>, uid: string) {
   return text(data.ownerId || data.ownerUid, 240) === uid;
 }
 
