@@ -322,7 +322,7 @@ export const submitBrokerPayoutRequest = onCall({ cors: true, region: "europe-we
   const uid = request.auth!.uid;
   const email = normalizedEmail(request.auth?.token?.email || broker.email);
 
-  if (broker.reraVerified !== true || normalizedRole(broker.brokerKycStatus) !== "verified") {
+  if (broker.reraVerified !== true || !["approved", "verified"].includes(normalizedRole(broker.brokerKycStatus))) {
     throw new HttpsError("failed-precondition", "Broker KYC must be admin verified before payout requests.");
   }
   if (broker.commissionAgreementAccepted !== true) {
@@ -1038,7 +1038,7 @@ export const submitBrokerKycProfile = onCall({ cors: true, region: "europe-west3
     broker.commissionAgreementAccepted === true || data.commissionAgreementAccepted === true,
   ];
   const profileCompletionScore = Math.round((profileChecks.filter(Boolean).length / profileChecks.length) * 100);
-  const brokerKycStatus = profileCompletionScore === 100 ? "PENDING_REVIEW" : "INCOMPLETE";
+  const brokerKycStatus = profileCompletionScore === 100 ? "PENDING_REVIEW" : "CHANGES_REQUESTED";
   const reraStatus = reraLicense ? "PENDING" : "NOT_SUBMITTED";
 
   const now = ts();
