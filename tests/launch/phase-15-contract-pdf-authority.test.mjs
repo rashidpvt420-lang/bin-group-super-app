@@ -7,10 +7,10 @@ const read = (path) => readFile(path, 'utf8');
 test('Phase 15 canonical Owner contract is server-rendered, bilingual and byte-hashed', async () => {
   const [pdf, signing] = await Promise.all([read('functions/pdfEngine.ts'), read('functions/adminOwnerOperations.ts')]);
   for (const token of ['PDFDocument', 'Cairo-Regular.ttf', 'shapeArabicText', "language: 'en-ar'", 'generateContractPdfArtifact', "createHash('sha256').update(buffer)", 'pdfSha256', 'generation']) {
-    assert.ok(pdf.includes(token), \`Server PDF engine missing \${token}\`);
+    assert.ok(pdf.includes(token), `Server PDF engine missing ${token}`);
   }
   for (const token of ['validateVerifiedContractSignatureOtp', 'canonicalPdfSha256', 'canonicalPdfStoragePath', 'canonicalPdfGeneration', 'canonicalPdfSource: "SERVER_PDF_ENGINE"', 'signedPdfUrl: pdfUrl']) {
-    assert.ok(signing.includes(token), \`Signed contract authority missing \${token}\`);
+    assert.ok(signing.includes(token), `Signed contract authority missing ${token}`);
   }
 });
 
@@ -39,14 +39,14 @@ test('Phase 15 Owner/Admin Storage visibility and Property Passport attachment a
 test('Phase 15 renewal PDF reloads canonical contract and persists immutable artifact identity', async () => {
   const renewal = await read('functions/contractRenewalPdfSystem.ts');
   for (const token of ['db.collection("contracts").doc(record.contractId).get()', 'generateContractPdfArtifact({ ...canonicalContract', 'pdfSha256', 'pdfGeneration', 'canonicalPdfSource: "SERVER_CONTRACT_RENEWAL_SYSTEM"']) {
-    assert.ok(renewal.includes(token), \`Renewal authority missing \${token}\`);
+    assert.ok(renewal.includes(token), `Renewal authority missing ${token}`);
   }
 });
 
 test('Phase 15 monthly Owner report is server-generated and byte-hashed', async () => {
   const report = await read('functions/monthlyOwnerPropertyReportSystem.ts');
   for (const token of ['PDFDocument', 'createHash("sha256").update(buffer)', 'owner_reports/', 'pdfSha256', 'pdfGeneration', 'canonicalPdfSource: "SERVER_MONTHLY_OWNER_REPORT_SYSTEM"', 'document_generation_requests']) {
-    assert.ok(report.includes(token), \`Monthly report authority missing \${token}\`);
+    assert.ok(report.includes(token), `Monthly report authority missing ${token}`);
   }
 });
 
@@ -56,7 +56,7 @@ test('Phase 15 paid invoice PDF is generated only after authoritative payment ap
   const artifact = approval.indexOf('generateMobilizationInvoicePdfArtifact', transaction);
   assert.ok(transaction >= 0 && artifact > transaction, 'Invoice PDF must follow authoritative paid invoice creation.');
   for (const token of ['pdfSha256', 'pdfGeneration', 'canonicalPdfSource: "SERVER_PAYMENT_APPROVAL"', 'invoice_registry']) assert.ok(approval.includes(token));
-  for (const token of ['PAID MOBILIZATION INVOICE', 'فاتورة دفعة التفعيل - مدفوعة', 'invoices/\${invoiceId}/mobilization-invoice.pdf', "createHash('sha256').update(buffer)"]) assert.ok(pdf.includes(token));
+  for (const token of ['PAID MOBILIZATION INVOICE', 'فاتورة دفعة التفعيل - مدفوعة', 'invoices/${invoiceId}/mobilization-invoice.pdf', "createHash('sha256').update(buffer)"]) assert.ok(pdf.includes(token));
 });
 
 test('Phase 15 PDF artifacts retain verification identity instead of URL-only authority', async () => {
