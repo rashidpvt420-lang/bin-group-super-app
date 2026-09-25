@@ -164,9 +164,7 @@ const annualValueOf = (contract: any) => firstPositiveNumber(
   contract?.amount
 );
 
-const mobilizationOf = (contract: any) => {
-  const annual = annualValueOf(contract);
-  return firstPositiveNumber(
+const mobilizationOf = (contract: any) => firstPositiveNumber(
     contract?.commercialSchedule?.mobilizationAmount,
     contract?.paymentSchedule?.mobilizationAmount,
     contract?.mobilizationAmount,
@@ -177,13 +175,12 @@ const mobilizationOf = (contract: any) => {
     contract?.quote?.mobilizationAmount,
     contract?.payment?.amount,
     contract?.paymentAmount,
-    annual > 0 ? annual * 0.15 : 0
+    0
   );
-};
 
 const money = (value: unknown) => {
   const numeric = Number(value || 0);
-  return numeric > 0 ? `AED ${Math.round(numeric).toLocaleString()}` : 'Pending admin confirmation';
+  return numeric > 0 ? `AED ${numeric.toLocaleString('en-AE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : 'Pending admin confirmation';
 };
 
 const normalizeScope = (contract: any): ContractScope => {
