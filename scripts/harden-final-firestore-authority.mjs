@@ -272,45 +272,30 @@ if (!canonicalReadCatchAll) {
   throw new Error('[final-firestore-authority] global read catch-all could not be bounded with canonical server-only exclusions');
 }
 
-if (text.includes(duplicatedHrServerAuthorityWriteList)) {
-  text = text.replaceAll(duplicatedHrServerAuthorityWriteList, hrServerAuthorityWriteList);
-} else if (text.includes(staleHrServerAuthorityWriteList)) {
-  text = text.replaceAll(staleHrServerAuthorityWriteList, hrServerAuthorityWriteList);
-} else if (text.includes(propertyIdentityHrServerAuthorityWriteList)) {
-  // Already canonical and stronger: property identity claims are server-only.
-} else if (text.includes(hrServerAuthorityWriteList)) {
-  // Already canonical.
-} else if (text.includes(liveLocationWriteList)) {
-  text = text.replaceAll(liveLocationWriteList, hrServerAuthorityWriteList);
-} else if (text.includes(legacyLiveLocationWriteList)) {
-  text = text.replaceAll(legacyLiveLocationWriteList, hrServerAuthorityWriteList);
-} else if (text.includes(privateHrWriteList)) {
-  text = text.replaceAll(privateHrWriteList, hrServerAuthorityWriteList);
-} else if (text.includes(adminSecurityWriteList)) {
-  text = text.replaceAll(adminSecurityWriteList, hrServerAuthorityWriteList);
-} else if (text.includes(legacyWriteList)) {
-  text = text.replaceAll(legacyWriteList, hrServerAuthorityWriteList);
-} else if (text.includes(boundedWriteList)) {
-  text = text.replaceAll(boundedWriteList, hrServerAuthorityWriteList);
-} else {
-  throw new Error('[final-firestore-authority] global write fallback list could not be identified');
+const genericCatchAllMarker = '    match /{collection}/{document=**} {';
+const genericCatchAllStart = text.indexOf(genericCatchAllMarker);
+if (genericCatchAllStart < 0) {
+  throw new Error('[final-firestore-authority] global Admin catch-all missing');
 }
-const canonicalWriteList = text.includes(propertyIdentityHrServerAuthorityWriteList)
-  ? propertyIdentityHrServerAuthorityWriteList
-  : hrServerAuthorityWriteList;
-if (text.split(canonicalWriteList).length - 1 !== 2) {
-  throw new Error('[final-firestore-authority] canonical server-only write fallback list must exist exactly twice');
+const genericCatchAllEnd = text.indexOf('\n    }', genericCatchAllStart);
+if (genericCatchAllEnd < 0) {
+  throw new Error('[final-firestore-authority] global Admin catch-all boundary missing');
 }
-
-if (text.includes(legacyCreateCatchAll) && !text.includes(boundedCreateCatchAll)) {
-  text = text.replace(legacyCreateCatchAll, boundedCreateCatchAll);
-} else if (!text.includes(boundedCreateCatchAll)) {
-  throw new Error('[final-firestore-authority] global create catch-all could not be bounded');
-}
-if (text.includes(legacyUpdateCatchAll) && !text.includes(boundedUpdateCatchAll)) {
-  text = text.replace(legacyUpdateCatchAll, boundedUpdateCatchAll);
-} else if (!text.includes(boundedUpdateCatchAll)) {
-  throw new Error('[final-firestore-authority] global update/delete catch-all could not be bounded');
+const genericCatchAll = text.slice(genericCatchAllStart, genericCatchAllEnd + 6);
+const serverOnlyAdminWriteCatchAll = '      allow create, update, delete: if false;';
+if (!genericCatchAll.includes(serverOnlyAdminWriteCatchAll)) {
+  const createStart = genericCatchAll.indexOf('      allow create:');
+  if (createStart < 0) {
+    throw new Error('[final-firestore-authority] global Admin create fallback missing');
+  }
+  const hardenedGenericCatchAll =
+    genericCatchAll.slice(0, createStart) +
+    serverOnlyAdminWriteCatchAll + '\n' +
+    '    }';
+  text =
+    text.slice(0, genericCatchAllStart) +
+    hardenedGenericCatchAll +
+    text.slice(genericCatchAllEnd + 6);
 }
 
 text = hardenHrServerAuthority(text);
@@ -343,9 +328,7 @@ const required = [
   ...Object.keys(reviewedRoleFields).map(reviewedRoleMarker),
   invoiceRegistryBlock.trim(),
   canonicalReadCatchAll.trim(),
-  boundedCreateCatchAll.trim(),
-  boundedUpdateCatchAll.trim(),
-  canonicalWriteList.trim(),
+  serverOnlyAdminWriteCatchAll,
   confidentialRequestFunction.trim(),
   hrServerReservedFieldsFunction.trim(),
   hrClientClassificationGuardFunction.trim(),
