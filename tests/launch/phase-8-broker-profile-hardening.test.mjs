@@ -216,17 +216,30 @@ test('Phase 8 leads and deals preserve immutable server attribution', async () =
   assert.match(referral, /BROKER_REFERRAL_SUBMITTED/);
 });
 
-test('Phase 8 notification lifecycle remains recipient-scoped for Brokers', async () => {
-  const [app, rules, service] = await Promise.all([
+test('Phase 8 notification lifecycle is server-produced and recipient-scoped for Brokers', async () => {
+  const [app, rules, service, kycReview, payoutSubmit, payoutReview] = await Promise.all([
     read('src/broker/BrokerApp.tsx'),
     read('firestore.rules'),
     read('src/services/notificationService.ts'),
+    read('functions/secureBrokerKycReview.ts'),
+    read('functions/secureBrokerPayoutOperations.ts'),
+    read('functions/adminBrokerPayoutReview.ts'),
   ]);
 
   assert.match(app, /<NotificationBell \/>/);
   assert.match(rules, /match \/notifications\/\{notificationId\}/);
   assert.match(rules, /recipientId.*request\.auth\.uid|userId.*request\.auth\.uid/);
   assert.match(service, /case 'broker': return '\/broker\/dashboard'/);
+
+  assert.match(kycReview, /BROKER_KYC_APPROVED/);
+  assert.match(kycReview, /BROKER_KYC_REJECTED/);
+  assert.match(kycReview, /recipientRole: "broker"/);
+  assert.match(payoutSubmit, /BROKER_PAYOUT_REQUESTED/);
+  assert.match(payoutSubmit, /pending Finance\/Admin review/);
+  assert.match(payoutReview, /BROKER_PAYOUT_APPROVED/);
+  assert.match(payoutReview, /BROKER_PAYOUT_REJECTED/);
+  assert.match(payoutReview, /BROKER_PAYOUT_PAID/);
+  assert.match(payoutReview, /link: "\/broker\/commissions"/);
 });
 
 test('Phase 8 Broker portal exposes onboarding, listings, deals, commissions, documents and profile routes', async () => {
