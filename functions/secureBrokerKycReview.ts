@@ -128,6 +128,79 @@ async function verifyBrokerDocuments(brokerId: string): Promise<VerifiedDocument
   return verified;
 }
 
+function masked(value: unknown, visible = 4) {
+  const compact = text(value).replace(/\s+/g, "");
+  if (!compact) return "";
+  if (compact.length <= visible) return "•".repeat(compact.length);
+  return `${"•".repeat(Math.min(12, compact.length - visible))}${compact.slice(-visible)}`;
+}
+
+export const getAdminBrokerKycReviewSummary = onCall(
+  { cors: true, region: "europe-west3", enforceAppCheck: true },
+  async (request) => {
+    await requireAdmin(request.auth);
+    const brokerId = text(request.data?.brokerId);
+    if (!brokerId) throw new HttpsError("invalid-argument", "brokerId is required.");
+
+    const [publicSnap, privateSnap, documentsSnap] = await Promise.all([
+      db.collection("users").doc(brokerId).get(),
+      db.collection("broker_kyc_profiles").doc(brokerId).get(),
+      db.collection("brokerDocuments").where("brokerId", "==", brokerId).limit(30).get(),
+    ]);
+    if (!publicSnap.exists) throw new HttpsError("not-found", "Broker profile not found.");
+    const publicProfile = publicSnap.data() || {};
+    if (lower(publicProfile.role || publicProfile.userRole || publicProfile.primaryRole) !== "broker") {
+      throw new HttpsError("failed-precondition", "Selected user is not a Broker profile.");
+    }
+
+    const privateProfile = privateSnap.data() || {};
+    const documentTypes = documentsSnap.docs.map((doc) =>
+      text(doc.data().docType || doc.data().documentType),
+    ).filter(Boolean);
+    const identityPresent = Boolean(
+      text(privateProfile.tradeLicenseNumber || privateProfile.emiratesIdNumber || privateProfile.passportNumber),
+    );
+    const submissionHash = text(privateProfile.submissionHash);
+    const approvedSubmissionHash = text(
+      privateProfile.approvedSubmissionHash || publicProfile.approvedSubmissionHash,
+    );
+
+    return {
+      status: "SUCCESS",
+      brokerId,
+      profile: {
+        displayName: text(publicProfile.displayName || publicProfile.name),
+        email: lower(publicProfile.email),
+        companyName: text(publicProfile.companyName),
+        brokerTerritory: text(publicProfile.brokerTerritory || publicProfile.primaryRegion),
+      },
+      kyc: {
+        exists: privateSnap.exists,
+        brokerKycStatus: text(publicProfile.brokerKycStatus || privateProfile.brokerKycStatus || "NOT_SUBMITTED"),
+        reraStatus: text(publicProfile.reraStatus || privateProfile.reraStatus || "NOT_SUBMITTED"),
+        profileCompletionScore: Number(privateProfile.profileCompletionScore || publicProfile.profileCompletionScore || 0),
+        reraLicenseMasked: text(privateProfile.reraLicenseMasked || publicProfile.reraLicenseMasked) || masked(privateProfile.reraLicense),
+        identityEvidencePresent: identityPresent,
+        bankName: text(privateProfile.bankName),
+        bankAccountHolder: text(privateProfile.bankAccountHolder),
+        bankIbanMasked: text(privateProfile.bankIbanMasked || publicProfile.bankIbanMasked) || masked(privateProfile.bankIban),
+        commissionAgreementAccepted: privateProfile.commissionAgreementAccepted === true,
+        commissionTermsVersion: text(privateProfile.commissionTermsVersion),
+        submissionHashPresent: /^[a-f0-9]{64}$/i.test(submissionHash),
+        approvalBound: Boolean(submissionHash && approvedSubmissionHash === submissionHash),
+        reviewReason: text(publicProfile.brokerKycReviewReason || privateProfile.reviewReason),
+      },
+      documents: {
+        count: documentsSnap.size,
+        types: Array.from(new Set(documentTypes)).sort(),
+        requiredPresent: requiredDocumentTypes().every((type) => documentTypes.includes(type)) &&
+          documentTypes.some((type) => ["emirates_id", "passport", "trade_license"].includes(type)),
+      },
+      sensitiveValuesMasked: true,
+    };
+  },
+);
+
 export const adminReviewBrokerKyc = onCall(
   { cors: true, region: "europe-west3", enforceAppCheck: true },
   async (request) => {
