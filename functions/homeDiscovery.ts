@@ -400,7 +400,7 @@ export const saveHomeDiscoverySearch = onCall({
   region: "europe-west3",
   enforceAppCheck: true,
 }, async (request) => {
-  const uid = assertTenantAuth(request.auth);
+  const { uid } = await assertCurrentTenantAuthority(request.auth);
   const existing = await db.collection("homeDiscoverySavedSearches")
     .where("userId", "==", uid)
     .limit(MAX_SAVED_SEARCHES_PER_TENANT + 1)
@@ -431,7 +431,7 @@ export const listHomeDiscoverySavedSearches = onCall({
   region: "europe-west3",
   enforceAppCheck: true,
 }, async (request) => {
-  const uid = assertTenantAuth(request.auth);
+  const { uid } = await assertCurrentTenantAuthority(request.auth);
   const snapshot = await db.collection("homeDiscoverySavedSearches")
     .where("userId", "==", uid)
     .limit(MAX_SAVED_SEARCHES_PER_TENANT)
@@ -454,7 +454,7 @@ export const deleteHomeDiscoverySavedSearch = onCall({
   region: "europe-west3",
   enforceAppCheck: true,
 }, async (request) => {
-  const uid = assertTenantAuth(request.auth);
+  const { uid } = await assertCurrentTenantAuthority(request.auth);
   const searchId = cleanString(request.data?.searchId, 128);
   if (!/^[A-Za-z0-9-]{16,128}$/.test(searchId)) throw new HttpsError("invalid-argument", "A valid saved search id is required.");
   await db.collection("homeDiscoverySavedSearches").doc(`${uid}_${searchId}`).delete();
