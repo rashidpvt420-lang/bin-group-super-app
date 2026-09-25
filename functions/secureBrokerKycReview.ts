@@ -34,8 +34,27 @@ async function requireAdmin(auth: any) {
   if (!authorized || token.suspended === true) {
     throw new HttpsError("permission-denied", "Approved Admin authority is required.");
   }
+  if (token.email_verified !== true || !token.firebase?.sign_in_second_factor) {
+    throw new HttpsError("permission-denied", "A verified Admin MFA session is required for Broker KYC review.");
+  }
+
   const record = await admin.auth().getUser(auth.uid);
-  if (record.disabled) throw new HttpsError("permission-denied", "Disabled Admin account.");
+  const currentClaims = record.customClaims || {};
+  const currentAuthorized =
+    currentClaims.admin === true ||
+    currentClaims.isAdmin === true ||
+    currentClaims.superAdmin === true ||
+    currentClaims.super_admin === true ||
+    currentClaims.ceo === true ||
+    ADMIN_ROLES.has(roleOf(currentClaims));
+  if (
+    record.disabled ||
+    !record.emailVerified ||
+    currentClaims.suspended === true ||
+    !currentAuthorized
+  ) {
+    throw new HttpsError("permission-denied", "Current Admin authority is inactive or no longer valid.");
+  }
 }
 
 function validUaeIban(value: unknown) {
