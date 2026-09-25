@@ -1,6 +1,6 @@
 import React from 'react';
 import { Alert, Box, Button, Chip, MenuItem, Paper, Stack, Table, TableBody, TableCell, TableHead, TableRow, TextField, Typography } from '@mui/material';
-import { addDoc, collection, db, doc, onSnapshot, serverTimestamp, updateDoc, functions, httpsCallable } from '../../lib/firebase';
+import { collection, db, onSnapshot, functions, httpsCallable } from '../../lib/firebase';
 
 const normalize = (value: unknown) => String(value || 'UNKNOWN').replace(/_/g, ' ').toUpperCase();
 const closedStates = ['CLOSED', 'CANCELLED', 'EXPIRED'];
@@ -52,42 +52,24 @@ export default function ContractTerminationPage() {
   };
 
   const closeContract = async (row: any) => {
-    if (!note.trim()) {
-      setMessage('Admin note is required for audit evidence.');
+    if (note.trim().length < 8) {
+      setMessage('Admin closure note must be at least 8 characters for protected audit evidence.');
       return;
     }
 
-    const trimmedNote = note.trim();
-    const auditPayload = {
-      action: 'CONTRACT_CLOSED',
-      entityType: 'contract',
-      entityId: row.id,
-      contractNumber: row.contractNumber || row.id,
-      ownerEmail: row.ownerEmail || '',
-      propertyId: row.propertyId || '',
-      propertyName: row.propertyName || '',
-      reason,
-      note: trimmedNote,
-      createdAt: serverTimestamp(),
-      source: 'admin_contract_control',
-    };
-
     setClosingId(row.id);
     try {
-      await updateDoc(doc(db, 'contracts', row.id), {
-        status: 'CLOSED',
-        contractStatus: 'CLOSED',
-        closureReason: reason,
-        closureNote: trimmedNote,
-        closedAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
+      const closeContractFn = httpsCallable(functions, 'adminCloseContract');
+      await closeContractFn({
+        contractId: row.id,
+        reason,
+        note: note.trim(),
       });
-      await addDoc(collection(db, 'audit_logs'), auditPayload);
       setNote('');
-      setMessage('Contract closed and audit logged.');
+      setMessage('Contract closed by the protected MFA-authorized server workflow.');
     } catch (error: any) {
-      console.error('[ContractTerminationPage] close failed:', error);
-      setMessage(error?.message || 'Could not close contract. Check admin permissions and retry.');
+      console.error('[ContractTerminationPage] protected close failed:', error);
+      setMessage(error?.message || 'Could not close contract. Check Admin MFA and retry.');
     } finally {
       setClosingId('');
     }
