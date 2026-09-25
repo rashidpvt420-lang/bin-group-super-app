@@ -451,6 +451,41 @@ async function collectEligibleOwnerContracts() {
   return grouped;
 }
 
+
+async function requireCurrentAdminMutationAuthority(auth: any) {
+  if (!auth?.uid) throw new HttpsError("unauthenticated", "Admin authentication required.");
+  const token = auth.token || {};
+  const tokenRole = safeString(token.role || token.userRole || token.primaryRole).toLowerCase();
+  const allowedRoles = new Set(["admin", "super_admin", "ceo", "operations_admin", "account_manager"]);
+  const tokenAuthorized =
+    token.suspended !== true &&
+    (token.admin === true ||
+      token.isAdmin === true ||
+      token.superAdmin === true ||
+      token.super_admin === true ||
+      token.ceo === true ||
+      allowedRoles.has(tokenRole));
+  if (!tokenAuthorized) throw new HttpsError("permission-denied", "Admin access required.");
+  if (token.email_verified !== true || !token.firebase?.sign_in_second_factor) {
+    throw new HttpsError("permission-denied", "A verified Admin MFA session is required.");
+  }
+  const currentUser = await admin.auth().getUser(auth.uid);
+  const currentClaims = currentUser.customClaims || {};
+  const currentRole = safeString(currentClaims.role || currentClaims.userRole || currentClaims.primaryRole).toLowerCase();
+  const currentAuthorized =
+    currentClaims.suspended !== true &&
+    (currentClaims.admin === true ||
+      currentClaims.isAdmin === true ||
+      currentClaims.superAdmin === true ||
+      currentClaims.super_admin === true ||
+      currentClaims.ceo === true ||
+      allowedRoles.has(currentRole));
+  if (currentUser.disabled || !currentUser.emailVerified || !currentAuthorized) {
+    throw new HttpsError("permission-denied", "Current Admin authority is inactive or no longer valid.");
+  }
+  return { uid: auth.uid, role: tokenRole || "admin" };
+}
+
 export const sendMonthlyOwnerPropertyReports = onSchedule({ schedule: "0 8 1 * *", timeZone: "Asia/Dubai" }, async () => {
   const { periodStart, periodEnd, periodKey } = previousMonthWindow();
   const eligible = await collectEligibleOwnerContracts();
@@ -471,11 +506,8 @@ export const sendMonthlyOwnerPropertyReports = onSchedule({ schedule: "0 8 1 * *
   }, { merge: true });
 });
 
-export const rebuildMonthlyOwnerPropertyReports = onCall({ cors: true }, async (request) => {
-  if (!request.auth) throw new HttpsError("unauthenticated", "Auth required.");
-  const role = safeString(request.auth.token?.role || request.auth.token?.userRole || request.auth.token?.primaryRole).toLowerCase();
-  const adminAllowed = request.auth.token?.admin === true || ["admin", "super_admin", "ceo", "operations_admin", "account_manager"].includes(role);
-  if (!adminAllowed) throw new HttpsError("permission-denied", "Admin access required.");
+export const rebuildMonthlyOwnerPropertyReports = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
+  const actor = await requireCurrentAdminMutationAuthority(request.auth);
 
   const requestedPeriod = safeString(request.data?.periodKey);
   let window = previousMonthWindow();
@@ -496,5 +528,14 @@ export const rebuildMonthlyOwnerPropertyReports = onCall({ cors: true }, async (
     results.push(await processOwnerReport(ownerId, contracts, window.periodStart, window.periodEnd, window.periodKey));
   }
 
-  return { status: "SUCCESS", periodKey: window.periodKey, eligibleOwners: eligible.size, processed: results.filter((r) => !r.skipped).length, results };
+  const processed = results.filter((r) => !r.skipped).length;
+  await logAudit({
+    actorId: actor.uid,
+    actorRole: actor.role,
+    action: "ADMIN_REBUILD_MONTHLY_OWNER_PROPERTY_REPORTS",
+    targetType: "system_health",
+    targetId: "monthlyOwnerReports",
+    metadata: { periodKey: window.periodKey, ownerFilter: ownerFilter || null, eligibleOwners: eligible.size, processed },
+  });
+  return { status: "SUCCESS", periodKey: window.periodKey, eligibleOwners: eligible.size, processed, results };
 });
