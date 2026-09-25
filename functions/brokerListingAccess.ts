@@ -38,8 +38,8 @@ async function requireApprovedBroker(auth: any) {
     !privateSnap.exists ||
     profile.reraVerified !== true ||
     privateKyc.reraVerified !== true ||
-    lower(profile.brokerKycStatus || profile.kycStatus) !== "verified" ||
-    lower(privateKyc.brokerKycStatus || privateKyc.kycStatus) !== "verified" ||
+    !["approved", "verified"].includes(lower(profile.brokerKycStatus || profile.kycStatus)) ||
+    !["approved", "verified"].includes(lower(privateKyc.brokerKycStatus || privateKyc.kycStatus)) ||
     !submissionHash ||
     submissionHash !== approvedSubmissionHash
   ) {
