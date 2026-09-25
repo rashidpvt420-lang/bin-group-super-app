@@ -324,8 +324,8 @@ export const adminRecordOwnerPaymentRefund = onCall(
 
       if (contractRef) {
         transaction.set(contractRef, {
-          refundStatus: "FULL_REFUND_RECORDED",
-          refundedAmount: refundAmount,
+          refundStatus: disposition,
+          refundedAmount: recordedAmount,
           refundRecordId: refundId,
           refundReferenceId: decision === "FULL_REFUND" ? refundReferenceId : null,
           refundReviewRequired: false,
@@ -335,8 +335,8 @@ export const adminRecordOwnerPaymentRefund = onCall(
       }
       if (invoiceRef) {
         transaction.set(invoiceRef, {
-          refundStatus: "FULL_REFUND_RECORDED",
-          refundedAmount: refundAmount,
+          refundStatus: disposition,
+          refundedAmount: recordedAmount,
           refundRecordId: refundId,
           refundReferenceId: decision === "FULL_REFUND" ? refundReferenceId : null,
           updatedAt: now,
