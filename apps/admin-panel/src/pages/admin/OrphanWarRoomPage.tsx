@@ -165,7 +165,7 @@ export default function OrphanWarRoomPage() {
                 city: property.city || property.area || property.serviceZone || property.geo?.city,
                 area: property.area || property.serviceZone || property.city || property.geo?.area,
                 placeId: property.googlePlaceId || property.placeId || property.geo?.placeId,
-                verifiedBy: auth.currentUser?.uid || 'SYSTEM_ADMIN'
+                source: 'admin_manual'
             });
             const repairGeo = httpsCallable(functions, 'adminRepairPropertyGeo');
             await repairGeo({
@@ -176,7 +176,9 @@ export default function OrphanWarRoomPage() {
                 city: property.city || geo.city,
                 area: property.area || geo.area,
                 emirate: property.emirate || geo.emirate,
+                placeId: geo.placeId,
             });
+            alert('Geo candidate saved. It remains untrusted until Founder/physical-inspection verification completes.');
         } catch (err: any) {
             alert(err?.message || 'Open map and select a verified pin before repairing this property.');
         }
@@ -305,7 +307,7 @@ export default function OrphanWarRoomPage() {
                     <Box>
                         <Typography variant="h6" fontWeight="950" sx={{ color: '#60A5FA' }}>GEO MIGRATION / REPAIR</Typography>
                         <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.6)', fontWeight: 800 }}>
-                            Finds properties missing geo, properties with legacy location/coordinates only, and repairs when coordinates are available. Map pin repair is required when no coordinates exist.
+                            Finds properties missing canonical verified geo and recovers legacy coordinates only as untrusted review candidates. Map pin review is required when no coordinates exist.
                         </Typography>
                     </Box>
                     <Chip label={`${geoRepairItems.length} PROPERTIES NEED GEO REVIEW`} sx={{ bgcolor: 'rgba(59,130,246,0.12)', color: '#93c5fd', fontWeight: 950 }} />
