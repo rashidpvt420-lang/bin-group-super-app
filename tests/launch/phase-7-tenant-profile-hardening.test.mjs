@@ -65,8 +65,14 @@ test('Phase 7 residence and documents never turn read failures into empty-state 
   assert.match(requestPage, /No verified unit link was found/);
 
   assert.match(dashboard, /Residence, property or lease data failed to load/);
-  assert.doesNotMatch(dashboard, /async function safeGetDocument[\s\S]*?catch/);
-  assert.doesNotMatch(dashboard, /async function getFirstByField[\s\S]*?catch/);
+  const safeGetStart = dashboard.indexOf('async function safeGetDocument');
+  const firstByFieldStart = dashboard.indexOf('async function getFirstByField');
+  const dashboardComponentStart = dashboard.indexOf('export default function TenantDashboardPage');
+  assert.ok(safeGetStart >= 0 && firstByFieldStart > safeGetStart && dashboardComponentStart > firstByFieldStart);
+  const safeGetBody = dashboard.slice(safeGetStart, firstByFieldStart);
+  const firstByFieldBody = dashboard.slice(firstByFieldStart, dashboardComponentStart);
+  assert.doesNotMatch(safeGetBody, /catch/);
+  assert.doesNotMatch(firstByFieldBody, /catch/);
 
   assert.match(docs, /tenant-documents-load-failed/);
   assert.match(docs, /This is a loading failure, not confirmation that your document vault is empty/);
