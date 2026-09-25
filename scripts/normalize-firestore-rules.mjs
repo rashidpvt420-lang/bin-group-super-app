@@ -18,14 +18,14 @@ function resolveKnownConflictMarkers(input) {
     .replace(
       [
         CONFLICT_START,
-        "    function openMissionAvailable(data) { return data.assignedTechnicianId == null && data.status in ['OPEN', 'open', 'emergency_submitted']; }",
+        "    function openMissionAvailable(data) { return data.assignedTechnicianId == null && data.status == 'OPEN'; }",
         '    function openMissionPoolRead(data) { return hasTechnicianDispatchAuthority() && openMissionAvailable(data); }',
         CONFLICT_MID,
-        "    function openMissionPoolRead(data) { return hasTechnicianDispatchAuthority() && data.assignedTechnicianId == null && data.status in ['OPEN', 'open', 'emergency_submitted']; }",
+        "    function openMissionPoolRead(data) { return hasTechnicianDispatchAuthority() && data.assignedTechnicianId == null && data.status == 'OPEN'; }",
         CONFLICT_END,
       ].join('\n'),
       [
-        "    function openMissionAvailable(data) { return data.assignedTechnicianId == null && data.status in ['OPEN', 'open', 'emergency_submitted']; }",
+        "    function openMissionAvailable(data) { return data.assignedTechnicianId == null && data.status == 'OPEN'; }",
         '    function openMissionPoolRead(data) { return hasTechnicianDispatchAuthority() && openMissionAvailable(data); }',
       ].join('\n'),
     )
