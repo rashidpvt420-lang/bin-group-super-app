@@ -215,7 +215,7 @@ service firebase.storage {
 
     match /maintenanceTickets/{ticketId}/completionPhotos/{fileName} {
       allow read: if canReadTicketEvidence(ticketId);
-      allow write: if canWriteTicketEvidence(ticketId) && isImageUpload(10);
+      allow write: if false;
     }
 
     match /design_requests/{userId}/{allPaths=**} {
@@ -300,29 +300,28 @@ service firebase.storage {
 
     match /staffDocuments/{staffId}/{allPaths=**} {
       allow read: if isAuth() && (request.auth.uid == staffId || isHrRole() || isAuditor());
-      allow write: if isAuth() && (request.auth.uid == staffId || isHrRole()) && isDocumentUpload(15);
+      allow create: if isAuth() && (request.auth.uid == staffId || isHrRole()) && resource == null && isDocumentUpload(15);
+      allow update: if false;
       allow delete: if isHrRole();
     }
 
     match /hrDocuments/{staffId}/{allPaths=**} {
       allow read: if isAuth() && (request.auth.uid == staffId || isHrRole() || isAuditor());
-      allow write: if isHrRole() && isDocumentUpload(25);
-      allow delete: if isHrRole();
+      allow write: if false;
     }
 
     match /contracts/{contractId}/{allPaths=**} {
       allow read: if canReadContractFile(contractId);
-      allow write: if isAdmin() && isDocumentUpload(25);
+      allow write: if false;
     }
 
     match /invoices/{invoiceId}/{allPaths=**} {
       allow read: if canReadInvoiceFile(invoiceId);
-      allow write: if isAdmin() && isDocumentUpload(15);
+      allow write: if false;
     }
 
     match /kyc_documents/{documentId} {
-      allow write: if isAuth() && (documentId.matches(request.auth.uid + '.*') || isAdmin()) && isDocumentUpload(15);
-      allow read: if isAuth() && (documentId.matches(request.auth.uid + '.*') || isAdmin() || isAuditor());
+      allow read, write: if false;
     }
 
     match /onboarding-proof/{userId}/{intakeId}/{docType}/{fileName} {
@@ -383,8 +382,25 @@ service firebase.storage {
         collection != 'design-payment-receipts' &&
         collection != 'privateHrDocuments' &&
         collection != 'staff-reports' &&
+        collection != 'maintenanceTickets' &&
+        collection != 'inspections' &&
+        collection != 'design_requests' &&
+        collection != 'ai_design_renders' &&
+        collection != 'proofs' &&
+        collection != 'payment-references' &&
         collection != 'owners' &&
-        collection != 'onboarding-proof';
+        collection != 'home-listing-media' &&
+        collection != 'tenants' &&
+        collection != 'brokerDocuments' &&
+        collection != 'staffDocuments' &&
+        collection != 'hrDocuments' &&
+        collection != 'contracts' &&
+        collection != 'invoices' &&
+        collection != 'kyc_documents' &&
+        collection != 'onboarding-proof' &&
+        collection != 'evidence' &&
+        collection != 'receipts' &&
+        collection != 'temp_kyc';
     }
   }
 }
