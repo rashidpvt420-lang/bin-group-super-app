@@ -2,7 +2,6 @@ import { FieldValue } from "firebase-admin/firestore";
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import { onDocumentCreated, onDocumentUpdated } from "firebase-functions/v2/firestore";
 import { onCall, HttpsError, onRequest } from "firebase-functions/v2/https";
-import { setGlobalOptions } from "firebase-functions/v2";
 import { defineSecret } from "firebase-functions/params";
 import * as admin from "firebase-admin";
 import * as crypto from "crypto";
@@ -14,9 +13,6 @@ import {
 import { enforceAiUsageQuota } from "./aiUsageQuota";
 import { sendTwilioSMS } from "./smsDelivery";
 import { resolveTechnicianArrivalBinding } from "./technicianInstallationBinding";
-
-// [V10] PRODUCTION GRADE FULL-STACK STABILIZATION
-setGlobalOptions({ region: "europe-west3", enforceAppCheck: true });
 
 if (!admin.apps.length) {
     admin.initializeApp();
