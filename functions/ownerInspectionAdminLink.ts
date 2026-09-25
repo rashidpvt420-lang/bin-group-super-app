@@ -243,8 +243,8 @@ export const adminLinkOwnerPropertyInspection = onCall({ cors: true, enforceAppC
     inspectionCount: inspectionIds.length,
     inspectionStatus: "READY_FOR_SITE_VISITS",
     inspectionVerified: false,
-    status: "AWAITING_SITE_INSPECTION",
-    paymentStatus: "AWAITING_SITE_INSPECTION",
+    status: "NOT_DUE_UNTIL_INSPECTION_COMPLETE",
+    paymentStatus: "NOT_DUE_UNTIL_INSPECTION_COMPLETE",
     verificationState: "INSPECTION_REQUIRED_BEFORE_PAYMENT",
     updatedAt: now,
   }, { merge: true });
