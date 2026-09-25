@@ -15,7 +15,7 @@ test('provider evidence is finalized into the canonical hard-launch schema', asy
   assert.match(workflow, /OPERATIONAL_GATE="\$gate" node scripts\/publish-operational-provider-evidence\.mjs[\s\S]*OPERATIONAL_GATE="\$gate" node scripts\/finalize-operational-provider-evidence\.mjs/);
 
   for (const gate of ['brandedEmailDelivery', 'appCheckEnforcement', 'aiProviderHealth']) {
-    assert.match(finalizer, new RegExp(`${gate}:\\\\s*'`));
+    assert.match(finalizer, new RegExp(`${gate}:\\s*'`));
   }
   assert.doesNotMatch(finalizer, /stripeLiveBilling/);
   assert.doesNotMatch(workflow, /stripeLiveBilling/);
