@@ -6,7 +6,7 @@ import { useLanguage } from '@bin/shared';
 const normalize = (value: unknown) => String(value || 'UNKNOWN').replace(/_/g, ' ').toUpperCase();
 const terminalStates = ['CLOSED', 'CANCELLED', 'EXPIRED', 'TERMINATED'];
 const isOpen = (row: any) => !terminalStates.some((state) => normalize(row.contractStatus || row.status).includes(state));
-const money = (value: unknown) => `AED ${Number(value || 0).toLocaleString('en-AE', { maximumFractionDigits: 0 })}`;
+const money = (value: unknown) => `AED ${Number(value || 0).toLocaleString('en-AE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 type Notice = { severity: 'success' | 'error' | 'info' | 'warning'; text: string };
 
 export default function AdminContractControlPage() {
