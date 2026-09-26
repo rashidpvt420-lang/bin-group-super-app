@@ -283,7 +283,7 @@ test('production deploy consumes frozen clearance under a separate current-main 
   assert.match(mapsVerifier, /GITHUB_WORKFLOW === 'Firebase Production Deploy'/);
   assert.match(mapsVerifier, /GITHUB_JOB === 'deploy-firebase-production-stack'/);
   assert.match(mapsVerifier, /GITHUB_REF === 'refs\/heads\/main'/);
-  assert.match(mapsVerifier, /repairTolerance=' \+ \(allowMissingKnownReferrersRepair \? 'admin-and-webview-referrers-only' : 'none'\)/);
+  assert.match(mapsVerifier, /repairTolerance=' \+ \(allowKnownProductionRestrictionRepair \? 'admin-webview-and-directions-target-only' : 'none'\)/);
   assert.match(mapsVerifier, /Unexpected API target/);
   assert.match(mapsVerifier, /An unrestricted\/wildcard Maps referrer is present/);
 });
