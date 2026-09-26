@@ -1,5 +1,6 @@
 import * as admin from "firebase-admin";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
+import type * as FirebaseFirestore from "firebase-admin/firestore";
 
 if (!admin.apps.length) admin.initializeApp();
 
@@ -10,12 +11,7 @@ const SECURE = { cors: true, region: "europe-west3", enforceAppCheck: true } as 
 const text = (value: unknown) => String(value ?? "").trim();
 const lower = (value: unknown) => text(value).toLowerCase();
 
-const ADMIN_ROLES = new Set([
-  "admin", "super_admin", "ceo", "manager",
-  "operations_admin", "operations_manager", "dispatcher",
-  "finance_admin", "finance_staff", "account_manager",
-  "hr_admin", "hr_manager", "hr_staff", "support_admin",
-]);
+const ADMIN_ROLES = new Set(["admin", "super_admin", "ceo", "manager"]);
 const HR_ROLES = new Set(["hr_admin", "hr_manager", "hr_staff"]);
 const FINANCE_ROLES = new Set(["finance_admin", "finance_staff", "account_manager"]);
 const OPS_ROLES = new Set(["operations_admin", "operations_manager", "dispatcher", "support_admin"]);
@@ -154,7 +150,6 @@ async function ownerArtifacts(actor: VaultActor) {
     ["ownerEmail", actor.email], ["recipientEmail", actor.email],
   ];
   const collections = ["contracts", "invoices", "owner_property_reports", "propertyInspections", "inspections"];
-  const rows = (await Promise.all(collections.map((name) => queryMany(name, ownerPairs)))).flat();
 
   const propertyIds = await propertyIdsForOwner(actor.uid);
   const library: FirebaseFirestore.QueryDocumentSnapshot[] = [];
@@ -164,7 +159,6 @@ async function ownerArtifacts(actor: VaultActor) {
   }
 
   return [
-    ...collections.flatMap((name, i) => rows.length ? [] : []),
     ...(
       await Promise.all(collections.map(async (name) =>
         (await queryMany(name, ownerPairs)).map((doc) => toArtifact(name, doc.id, doc.data()))
