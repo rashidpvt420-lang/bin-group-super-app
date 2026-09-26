@@ -392,45 +392,23 @@ jobs:
           [[ "$key_resource" == "projects/$project_number/locations/global/keys/"* ]] \
             || fail "Maps key does not belong to the configured production project."
 
-          key_json="$(gcloud services api-keys describe "$key_resource" --format=json)"
-          jq -e '
-            (.restrictions.androidKeyRestrictions == null) and
-            (.restrictions.iosKeyRestrictions == null) and
-            (.restrictions.serverKeyRestrictions == null) and
-            (.restrictions.browserKeyRestrictions.allowedReferrers | type == "array") and
-            (.restrictions.browserKeyRestrictions.allowedReferrers | length > 0) and
-            ([.restrictions.browserKeyRestrictions.allowedReferrers[] |
-              ascii_downcase |
-              sub("/$"; "")
-            ] | all(. != "*" and . != "*/*" and . != "http://*/*" and . != "https://*/*")) and
-            ((.restrictions.browserKeyRestrictions.allowedReferrers | index("https://bin-groups.com/*")) != null) and
-            (
-              ((.restrictions.browserKeyRestrictions.allowedReferrers | index("https://www.bin-groups.com/*")) != null) or
-              ((.restrictions.browserKeyRestrictions.allowedReferrers | index("https://*.bin-groups.com/*")) != null)
-            ) and
-            ((.restrictions.browserKeyRestrictions.allowedReferrers | index("https://bin-group-57c60.web.app/*")) != null) and
-            ((.restrictions.browserKeyRestrictions.allowedReferrers | index("https://localhost/*")) != null) and
-            (([.restrictions.apiTargets[].service] | sort) == [
-              "geocoding-backend.googleapis.com",
-              "maps-backend.googleapis.com",
-              "places-backend.googleapis.com",
-              "static-maps-backend.googleapis.com"
-            ])
-          ' <<<"$key_json" >/dev/null \
-            || fail "Refusing Maps key mutation because existing browser/API restrictions are not already fail-closed."
-
-          if jq -e --arg required "$required_admin_referrer" \
-            '.restrictions.browserKeyRestrictions.allowedReferrers | index($required) != null' \
-            <<<"$key_json" >/dev/null; then
-            echo "Required Admin Maps referrer already present; no mutation required."
+          if node scripts/verify-google-maps-api-key-restrictions.mjs; then
+            echo "Required Admin Maps referrer already present and the full restriction verifier passes; no mutation required."
           else
+            MAPS_ALLOW_MISSING_ADMIN_REFERRER_REPAIR=true \
+              node scripts/verify-google-maps-api-key-restrictions.mjs
+
             gcloud services api-keys update "$key_resource" \
               --append \
               --allowed-referrers="$required_admin_referrer" \
               --project="$GCP_PROJECT_ID" \
               --quiet
-            echo "Added the exact Admin Hosting referrer without replacing existing restrictions."
+            echo "Added only the exact Admin Hosting referrer after REST-backed fail-closed validation."
           fi
+
+          # The relaxed verifier is never sufficient evidence. The final strict
+          # verifier must pass in the same protected step before deployment continues.
+          node scripts/verify-google-maps-api-key-restrictions.mjs
 
       - name: Verify Google Maps production key restrictions and enabled APIs
         run: node scripts/verify-google-maps-api-key-restrictions.mjs

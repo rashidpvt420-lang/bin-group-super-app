@@ -5,6 +5,9 @@ import { execFileSync } from 'node:child_process';
 const text = (value) => String(value ?? '').trim();
 const projectId = text(process.env.GCP_PROJECT_ID || 'bin-group-57c60');
 const keyString = text(process.env.VITE_GOOGLE_MAPS_API_KEY);
+const ADMIN_HOSTING_REFERRER = 'https://bin-group-admin-panel.web.app/*';
+const allowMissingAdminReferrerRepair =
+  text(process.env.MAPS_ALLOW_MISSING_ADMIN_REFERRER_REPAIR).toLowerCase() === 'true';
 
 const REQUIRED_API_TARGETS = new Set([
   'maps-backend.googleapis.com',
@@ -67,6 +70,17 @@ function referrerCovered(allowed, required) {
 }
 
 async function main() {
+  if (allowMissingAdminReferrerRepair) {
+    const protectedRepairContext =
+      process.env.GITHUB_ACTIONS === 'true' &&
+      process.env.GITHUB_WORKFLOW === 'Firebase Production Deploy' &&
+      process.env.GITHUB_JOB === 'deploy-firebase-production-stack' &&
+      process.env.GITHUB_REF === 'refs/heads/main';
+    if (!protectedRepairContext) {
+      fail('Admin-referrer repair tolerance is allowed only inside the protected Firebase Production Deploy job on main.');
+    }
+  }
+
   if (!keyString || /^replace/i.test(keyString)) {
     fail('VITE_GOOGLE_MAPS_API_KEY is missing or placeholder.');
   }
@@ -113,6 +127,10 @@ async function main() {
     fail('An unrestricted/wildcard Maps referrer is present.');
   }
   for (const alternatives of REQUIRED_REFERRER_GROUPS) {
+    const isAdminRepairGroup =
+      alternatives.length === 1 &&
+      normalizeReferrer(alternatives[0]) === normalizeReferrer(ADMIN_HOSTING_REFERRER);
+    if (isAdminRepairGroup && allowMissingAdminReferrerRepair) continue;
     if (!alternatives.some((required) => referrerCovered(allowedReferrers, required))) {
       fail(`Required Maps referrer is not covered: ${alternatives.join(' OR ')}.`);
     }
@@ -144,6 +162,7 @@ async function main() {
   console.log('[maps-key-restrictions] project=' + projectId);
   console.log('[maps-key-restrictions] clientRestriction=browser');
   console.log('[maps-key-restrictions] requiredReferrerGroups=' + REQUIRED_REFERRER_GROUPS.length);
+  console.log('[maps-key-restrictions] repairTolerance=' + (allowMissingAdminReferrerRepair ? 'admin-referrer-only' : 'none'));
   console.log('[maps-key-restrictions] apiTargets=' + [...services].sort().join(','));
   console.log('[maps-key-restrictions] nativeMapsSdk=not-used-by-this-key');
 }
