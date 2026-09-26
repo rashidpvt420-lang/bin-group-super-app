@@ -98,7 +98,7 @@ test('Phase 19 private HR files remain browser-denied and are resolved only afte
   ]);
   assert.match(storage, /match \/privateHrDocuments\/\{staffId\}\/\{allPaths=\*\*\}[\s\S]*?allow read, write: if false;/);
   assert.ok(vault.includes('staffHrDocuments: "private_staff_document"'));
-  assert.ok(vault.includes('bucket.file(artifact.storagePath)'));
+  assert.ok(vault.includes('getStorageBucket().file(artifact.storagePath)'));
   assert.ok(vault.includes('authorizeArtifact(actor, collectionName, sourceId)'));
 });
 
