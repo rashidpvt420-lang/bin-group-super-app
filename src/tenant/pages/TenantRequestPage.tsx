@@ -152,7 +152,6 @@ export default function TenantRequestPage() {
     const [residenceLoadError, setResidenceLoadError] = useState('');
     const [photos, setPhotos] = useState<File[]>([]);
     const [previews, setPreviews] = useState<string[]>([]);
-    const [isOwnerSuspended, setIsOwnerSuspended] = useState(false);
 
     const selectedSlaKey = PRIORITY_TO_SLA_KEY[priority] || 'STANDARD';
     const selectedSlaPolicy = CANONICAL_SLA_POLICY[selectedSlaKey];
@@ -223,12 +222,6 @@ export default function TenantRequestPage() {
                 if (!selectedProperty) return;
                 setPropertyData(selectedProperty);
 
-                const ownerId = selectedProperty.ownerId || selectedProperty.ownerUid;
-                if (ownerId) {
-                    const ownerSnap = await getDoc(doc(db, 'users', ownerId));
-                    const ownerStatus = ownerSnap.exists() ? String(ownerSnap.data()?.status || '').toLowerCase() : '';
-                    setIsOwnerSuspended(ownerStatus === 'suspended');
-                }
             } catch (error: any) {
                 const code = String(error?.code || '').toLowerCase();
                 console.warn('Residence lookup failed:', { code });
@@ -419,11 +412,6 @@ export default function TenantRequestPage() {
             </Stack>
 
             <Paper sx={{ p: { xs: 3, md: 5 }, bgcolor: 'rgba(22,22,24,.7)', border: '1px solid rgba(255,255,255,.05)', borderRadius: 6 }}>
-                {isOwnerSuspended && (
-                    <Alert severity="error" sx={{ mb: 3 }}>
-                        {tt('dash.tenant.dispatchSuspendedDesc', 'Maintenance dispatch is suspended for this property. Contact the property owner or manager.')}
-                    </Alert>
-                )}
                 {!propertyGpsReady && (
                     <Alert severity="warning" sx={{ mb: 3 }}>
                         Founder-verified property geography is required before dispatch. No browser coordinate will be accepted.
@@ -443,7 +431,7 @@ export default function TenantRequestPage() {
                                         label={tt('dash.tenant.category', 'Category')}
                                         onChange={(event) => setCategory(event.target.value)}
                                         required
-                                        disabled={isOwnerSuspended}
+                                       
                                         sx={{ color: '#fff' }}
                                     >
                                         <MenuItem value="AC">{tt('dash.tenant.catAc', 'AC / Cooling')}</MenuItem>
@@ -470,7 +458,7 @@ export default function TenantRequestPage() {
                                         label={tt('dash.tenant.priority', 'Priority')}
                                         onChange={(event) => setPriority(event.target.value)}
                                         required
-                                        disabled={isOwnerSuspended}
+                                       
                                         sx={{ color: '#fff' }}
                                     >
                                         <MenuItem value="normal">{tt('dash.tenant.prioNormal', 'Normal (Standard 8h)')}</MenuItem>
@@ -489,7 +477,7 @@ export default function TenantRequestPage() {
                             value={specificLocation}
                             onChange={(event) => setSpecificLocation(event.target.value)}
                             placeholder={tt('dash.tenant.specificLocationHint', 'Example: Kitchen sink, Master bedroom AC, Bathroom ceiling')}
-                            disabled={isOwnerSuspended}
+                           
                         />
                         <TextField
                             fullWidth
@@ -500,7 +488,7 @@ export default function TenantRequestPage() {
                             data-testid="tenant-request-description"
                             value={description}
                             onChange={(event) => setDescription(event.target.value)}
-                            disabled={isOwnerSuspended}
+                           
                         />
 
                         <Box>
@@ -521,7 +509,7 @@ export default function TenantRequestPage() {
                                 ))}
                                 {previews.length < 5 && (
                                     <Grid item xs={4} md={3}>
-                                        <Button component="label" disabled={isOwnerSuspended} sx={{ minHeight: 110, width: '100%', border: '1px dashed rgba(255,255,255,.25)', color: binThemeTokens.gold }}>
+                                        <Button component="label" sx={{ minHeight: 110, width: '100%', border: '1px dashed rgba(255,255,255,.25)', color: binThemeTokens.gold }}>
                                             <Camera size={24} />
                                             <input type="file" hidden accept="image/*" multiple onChange={handlePhotoChange} />
                                         </Button>
@@ -547,7 +535,6 @@ export default function TenantRequestPage() {
                             disabled={
                                 submitting ||
                                 uploadingPhotos ||
-                                isOwnerSuspended ||
                                 !propertyGpsReady ||
                                 photos.length === 0 ||
                                 specificLocation.trim().length < 3 ||
