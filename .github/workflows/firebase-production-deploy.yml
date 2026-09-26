@@ -397,25 +397,28 @@ jobs:
             echo "Required Maps referrers already present and the full restriction verifier passes; no mutation required."
           else
             MAPS_ALLOW_MISSING_KNOWN_REFERRERS_REPAIR=true \
-            MAPS_ALLOW_LEGACY_DIRECTIONS_REPAIR=true \
+            MAPS_ALLOW_KNOWN_LEGACY_API_REPAIR=true \
               node scripts/verify-google-maps-api-key-restrictions.mjs
 
             key_json="$(gcloud services api-keys describe "$key_resource" --format=json)"
             jq -e --arg key "$key_resource" '.name == $key' <<<"$key_json" >/dev/null \
               || fail "Maps key changed between REST-backed validation and protected repair."
-            has_legacy_directions="$(jq -r '[.restrictions.apiTargets[]?.service] | index("directions-backend.googleapis.com") != null' <<<"$key_json")"
-            if [[ "$has_legacy_directions" == 'true' ]]; then
+            has_known_legacy_api="$(jq -r '
+              [.restrictions.apiTargets[]?.service]
+              | any(. == "directions-backend.googleapis.com" or . == "places.googleapis.com")
+            ' <<<"$key_json")"
+            if [[ "$has_known_legacy_api" == 'true' ]]; then
               jq -e '
                 ([.restrictions.apiTargets[]?.service] | sort) ==
                 (["maps-backend.googleapis.com", "places-backend.googleapis.com",
                   "geocoding-backend.googleapis.com", "static-maps-backend.googleapis.com",
-                  "directions-backend.googleapis.com"] | sort) and
+                  "directions-backend.googleapis.com", "places.googleapis.com"] | unique | sort) and
                 (all(.restrictions.apiTargets[]; ((.methods // []) | length) == 0)) and
                 ((.restrictions.browserKeyRestrictions.allowedReferrers | type) == "array") and
                 ((.restrictions.browserKeyRestrictions.allowedReferrers | length) > 0) and
                 (all(.restrictions.browserKeyRestrictions.allowedReferrers[]; (type == "string") and (contains(",") | not)))
               ' <<<"$key_json" >/dev/null \
-                || fail "Legacy Maps key differs from the exact five-service repair contract."
+                || fail "Legacy Maps key differs from the exact known repair contract."
               referrers_csv="$(jq -r --arg admin "$required_admin_referrer" --arg webview "$required_webview_referrer" \
                 '[.restrictions.browserKeyRestrictions.allowedReferrers[], $admin, $webview] | unique | join(",")' <<<"$key_json")"
               [[ -n "$referrers_csv" ]] || fail "Maps browser referrers could not be preserved."
@@ -427,7 +430,7 @@ jobs:
                 --api-target=service=static-maps-backend.googleapis.com \
                 --project="$GCP_PROJECT_ID" \
                 --quiet
-              echo "Removed only the unused legacy Directions API target, preserving browser referrers and adding the two exact origins."
+              echo "Removed only the known legacy Directions/Places API targets, preserving browser referrers and adding the two exact origins."
             else
               gcloud services api-keys update "$key_resource" \
                 --append \
