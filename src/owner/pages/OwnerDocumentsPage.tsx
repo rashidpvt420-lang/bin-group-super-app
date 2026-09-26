@@ -1,89 +1,92 @@
-import React, { useState, useEffect } from 'react';
-import { 
-    Box, Typography, Grid, Paper, CircularProgress, Alert, 
-    Stack, alpha, Button, IconButton, Tooltip, Chip, Divider
-} from '@mui/material';
-import { 
-    FolderOpen, FileText, Download, Eye, 
-    Lock, Shield, Clock 
-} from 'lucide-react';
-import { db, collection, query, where, onSnapshot } from '../../lib/firebase';
-import { useRole } from '../../context/RoleContext';
+import React, { useEffect, useState } from 'react';
+import { Alert, Box, Button, CircularProgress, Grid, Paper, Stack, Typography } from '@mui/material';
+import { FileText, FolderOpen, ShieldCheck } from 'lucide-react';
 import { binThemeTokens } from '../../theme/binGroupTheme';
-
-import DocumentCenterCard from '../../components/DocumentCenterCard';
+import { listUnifiedDocumentVault, openUnifiedDocument, type UnifiedVaultArtifact } from '../../services/unifiedDocumentVault';
 
 export default function OwnerDocumentsPage() {
-    const { user } = useRole();
-    const [loading, setLoading] = useState(true);
-    const [loadError, setLoadError] = useState('');
-    const [documents, setDocuments] = useState<any[]>([]);
+  const [documents, setDocuments] = useState<UnifiedVaultArtifact[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [opening, setOpening] = useState<string | null>(null);
 
-    useEffect(() => {
-        if (!user?.email) {
-            setLoading(false);
-            return;
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    listUnifiedDocumentVault()
+      .then((items) => {
+        if (!cancelled) {
+          setDocuments(items);
+          setError('');
         }
-        
-        const email = user.email.toLowerCase();
-        const docQ = query(collection(db, 'documents'), where('ownerEmail', '==', email));
-        
-        const unsubscribe = onSnapshot(docQ, (snap) => {
-            setDocuments(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-            setLoadError('');
-            setLoading(false);
-        }, (error) => {
-            console.error('[OwnerDocuments] vault listener failed:', error);
-            setDocuments([]);
-            setLoadError((error as any)?.message || 'Unable to load document vault.');
-            setLoading(false);
-        });
+      })
+      .catch((err: any) => {
+        if (!cancelled) {
+          setDocuments([]);
+          setError(err?.message || 'Unable to load document vault.');
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, []);
 
-        return () => unsubscribe();
-    }, [user?.email]);
+  const openDocument = async (artifactId: string) => {
+    setOpening(artifactId);
+    setError('');
+    try {
+      await openUnifiedDocument(artifactId);
+    } catch (err: any) {
+      setError(err?.message || 'Document access failed.');
+    } finally {
+      setOpening(null);
+    }
+  };
 
-    if (loading) return (
-        <Box sx={{ height: '60vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 2 }}>
-            <CircularProgress sx={{ color: binThemeTokens.gold }} />
-            <Typography variant="overline" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900 }}>Decrypting Vault...</Typography>
-        </Box>
-    );
+  if (loading) {
+    return <Box sx={{ py: 10, display: 'flex', justifyContent: 'center' }}><CircularProgress sx={{ color: binThemeTokens.gold }} /></Box>;
+  }
 
-    return (
-        <Box sx={{ pb: 6 }}>
-            {loadError && <Alert severity="error" sx={{ mb: 3 }}>{loadError}</Alert>}
-            <Box sx={{ mb: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
-                <Box>
-                    <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 4 }}>INSTITUTIONAL ASSET VAULT</Typography>
-                    <Typography variant="h4" fontWeight="950" sx={{ color: '#FFF', mt: 1 }}>Documents</Typography>
-                    <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.4)', mt: 1 }}>Secure repository for contracts, title deeds, invoices, receipts, service reports, and financial audits.</Typography>
-                </Box>
-                <Stack direction="row" spacing={2}>
-                    <Button variant="outlined" startIcon={<Lock size={16} />} sx={{ borderColor: alpha(binThemeTokens.gold, 0.3), color: binThemeTokens.gold, fontWeight: 900, borderRadius: 3 }}>Secure Link</Button>
+  return (
+    <Box sx={{ pb: 6 }}>
+      <Typography variant="h4" fontWeight={950} color="#FFF">Owner Document Vault</Typography>
+      <Typography variant="body2" sx={{ color: 'rgba(255,255,255,.55)', mt: 1, mb: 4 }}>Contracts, final quotes, invoices, property reports and inspection records authorized for this Owner.</Typography>
+
+      {error && <Alert severity="error" sx={{ mb: 3 }}>{error}</Alert>}
+
+      {documents.length === 0 ? (
+        <Paper sx={{ p: 7, textAlign: 'center', bgcolor: 'rgba(15,23,42,.45)', border: '1px dashed rgba(255,255,255,.08)', borderRadius: 5 }}>
+          <FolderOpen size={44} color="rgba(255,255,255,.15)" />
+          <Typography sx={{ mt: 2, color: 'rgba(255,255,255,.55)', fontWeight: 900 }}>NO AUTHORIZED DOCUMENTS YET</Typography>
+        </Paper>
+      ) : (
+        <Grid container spacing={2.5}>
+          {documents.map((doc) => (
+            <Grid item xs={12} md={6} key={doc.artifactId}>
+              <Paper sx={{ p: 3, bgcolor: 'rgba(15,23,42,.55)', border: '1px solid rgba(255,255,255,.07)', borderRadius: 4 }}>
+                <Stack direction="row" spacing={1.5} alignItems="center">
+                  <FileText size={20} color={binThemeTokens.gold} />
+                  <Box sx={{ minWidth: 0, flex: 1 }}>
+                    <Typography color="#FFF" fontWeight={900} noWrap>{doc.title}</Typography>
+                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,.4)' }}>{doc.sourceCollection} · {doc.sourceId}</Typography>
+                  </Box>
+                  <ShieldCheck size={16} color="#10b981" />
                 </Stack>
-            </Box>
-
-            {documents.length === 0 ? (
-                <Paper sx={{ p: 10, textAlign: 'center', bgcolor: 'rgba(15, 23, 42, 0.4)', border: '1px dashed rgba(255,255,255,0.08)', borderRadius: 6 }}>
-                    <FolderOpen size={48} color="rgba(255,255,255,0.05)" style={{ margin: '0 auto 16px' }} />
-                    <Typography sx={{ color: 'rgba(255,255,255,0.2)', fontWeight: 800 }}>VAULT IS EMPTY</Typography>
-                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.1)', mt: 1, display: 'block' }}>No downloadable documents have been securely transmitted to your ledger yet.</Typography>
-                </Paper>
-            ) : (
-                <Grid container spacing={3}>
-                    {documents.map(doc => (
-                        <Grid item xs={12} sm={6} md={4} key={doc.id}>
-                            <DocumentCenterCard doc={doc} themeColor={binThemeTokens.gold} />
-                        </Grid>
-                    ))}
-                </Grid>
-            )}
-
-            <Box sx={{ mt: 8, textAlign: 'center' }}>
-                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.15)', fontWeight: 800, letterSpacing: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1 }}>
-                    <Shield size={14} /> ALL DOCUMENTS ARE ACCESS-CONTROLLED AND STORED IN BIN GROUP SECURE VAULT
-                </Typography>
-            </Box>
-        </Box>
-    );
+                <Button
+                  fullWidth
+                  variant="outlined"
+                  sx={{ mt: 2.5, color: binThemeTokens.gold, borderColor: 'rgba(198,167,94,.35)', fontWeight: 900 }}
+                  disabled={!doc.storagePath || opening === doc.artifactId}
+                  onClick={() => void openDocument(doc.artifactId)}
+                >
+                  {opening === doc.artifactId ? <CircularProgress size={18} color="inherit" /> : doc.storagePath ? 'OPEN AUTHORIZED FILE' : 'METADATA ONLY'}
+                </Button>
+              </Paper>
+            </Grid>
+          ))}
+        </Grid>
+      )}
+    </Box>
+  );
 }

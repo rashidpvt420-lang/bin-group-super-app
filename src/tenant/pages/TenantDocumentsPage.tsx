@@ -1,93 +1,92 @@
-import React, { useState, useEffect } from 'react';
-import { Alert, Box, Typography, Paper, Grid, Stack, Button, CircularProgress, Chip, alpha } from '@mui/material';
-import { db, collection, query, where, getDocs, limit } from '../../lib/firebase';
-import { useRole } from '../../context/RoleContext';
+import React, { useEffect, useState } from 'react';
+import { Alert, Box, Button, CircularProgress, Grid, Paper, Stack, Typography } from '@mui/material';
+import { FileText, FolderOpen, ShieldCheck } from 'lucide-react';
 import { binThemeTokens } from '../../theme/binGroupTheme';
-import { FileText, Download, FileCheck, Info, Eye } from 'lucide-react';
-
-import DocumentCenterCard from '../../components/DocumentCenterCard';
-
-async function queryDocs(field: string, value?: string) {
-    if (!value) return [] as any[];
-    const snap = await getDocs(query(collection(db, 'tenantDocuments'), where(field, '==', value), limit(50)));
-    return snap.docs.map(d => ({ id: d.id, ...d.data() }));
-}
-
-async function queryGeneralDocs() {
-    const snap = await getDocs(query(collection(db, 'tenantDocuments'), where('tenantId', '==', 'ALL'), limit(50)));
-    return snap.docs.map(d => ({ id: d.id, ...d.data() }));
-}
+import { listUnifiedDocumentVault, openUnifiedDocument, type UnifiedVaultArtifact } from '../../services/unifiedDocumentVault';
 
 export default function TenantDocumentsPage() {
-    const { user } = useRole();
-    const [loading, setLoading] = useState(true);
-    const [documents, setDocuments] = useState<any[]>([]);
-    const [loadError, setLoadError] = useState('');
+  const [documents, setDocuments] = useState<UnifiedVaultArtifact[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+  const [opening, setOpening] = useState<string | null>(null);
 
-    useEffect(() => {
-        let cancelled = false;
-        const fetchDocuments = async () => {
-            if (!user?.uid) {
-                setLoading(false);
-                return;
-            }
-            setLoadError('');
-            try {
-                const seen = new Map<string, any>();
-                const addDocs = (items: any[]) => items.forEach((item) => seen.set(item.id, item));
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    listUnifiedDocumentVault()
+      .then((items) => {
+        if (!cancelled) {
+          setDocuments(items);
+          setLoadError('');
+        }
+      })
+      .catch((err: any) => {
+        if (!cancelled) {
+          setDocuments([]);
+          setLoadError(err?.message || 'This is a loading failure, not confirmation that your document vault is empty.');
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, []);
 
-                addDocs(await queryDocs('tenantId', user.uid));
-                addDocs(await queryDocs('tenantUid', user.uid));
-                if (user.email) {
-                    const email = String(user.email).trim().toLowerCase();
-                    addDocs(await queryDocs('tenantEmail', email));
-                    addDocs(await queryDocs('recipientEmail', email));
-                }
-                addDocs(await queryGeneralDocs());
+  const openDocument = async (artifactId: string) => {
+    setOpening(artifactId);
+    setLoadError('');
+    try {
+      await openUnifiedDocument(artifactId);
+    } catch (err: any) {
+      setLoadError(err?.message || 'Document access failed.');
+    } finally {
+      setOpening(null);
+    }
+  };
 
-                if (!cancelled) setDocuments(Array.from(seen.values()));
-            } catch (err: any) {
-                const code = String(err?.code || '').toLowerCase();
-                console.error('[TenantDocuments] document lookup failed:', { code });
-                if (!cancelled) {
-                    setDocuments([]);
-                    setLoadError(
-                        code.includes('permission-denied')
-                            ? 'Documents could not be loaded because access was denied. Refresh your session or contact BIN GROUP Operations.'
-                            : 'Documents could not be loaded. This is a loading failure, not confirmation that your document vault is empty.',
-                    );
-                }
-            } finally {
-                if (!cancelled) setLoading(false);
-            }
-        };
-        fetchDocuments();
-        return () => { cancelled = true; };
-    }, [user?.uid, user?.email]);
+  if (loading) {
+    return <Box sx={{ py: 10, display: 'flex', justifyContent: 'center' }}><CircularProgress sx={{ color: binThemeTokens.gold }} /></Box>;
+  }
 
-    if (loading) return <Box sx={{ display: 'flex', justifyContent: 'center', py: 10 }}><CircularProgress sx={{ color: binThemeTokens.gold }} /></Box>;
+  return (
+    <Box sx={{ pb: 6 }}>
+      <Typography variant="h4" fontWeight={950} color="#FFF">Tenant Document Vault</Typography>
+      <Typography variant="body2" sx={{ color: 'rgba(255,255,255,.55)', mt: 1, mb: 4 }}>Lease, handover and approved property documents authorized for this Tenant.</Typography>
 
-    return (
-        <Box>
-            <Typography variant="h4" fontWeight="950" sx={{ color: '#FFF', mb: 1 }}>Documents & Notices</Typography>
-            <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.45)', mb: 4 }}>Download your lease, invoices, receipts, notices, service documents, and building files shared by BIN GROUP.</Typography>
+      {loadError && <Alert severity="error" data-testid="tenant-documents-load-failed" sx={{ mb: 3 }}>{loadError}</Alert>}
 
-            {loadError && <Alert severity="error" data-testid="tenant-documents-load-failed" sx={{ mb: 3 }}>{loadError}</Alert>}
-
-            <Grid container spacing={3}>
-                {documents.map(doc => (
-                    <Grid item xs={12} md={6} key={doc.id}>
-                        <DocumentCenterCard doc={doc} themeColor={binThemeTokens.gold} />
-                    </Grid>
-                ))}
+      {!loadError && documents.length === 0 ? (
+        <Paper sx={{ p: 7, textAlign: 'center', bgcolor: 'rgba(15,23,42,.45)', border: '1px dashed rgba(255,255,255,.08)', borderRadius: 5 }}>
+          <FolderOpen size={44} color="rgba(255,255,255,.15)" />
+          <Typography sx={{ mt: 2, color: 'rgba(255,255,255,.55)', fontWeight: 900 }}>NO AUTHORIZED DOCUMENTS YET</Typography>
+        </Paper>
+      ) : (
+        <Grid container spacing={2.5}>
+          {documents.map((doc) => (
+            <Grid item xs={12} md={6} key={doc.artifactId}>
+              <Paper sx={{ p: 3, bgcolor: 'rgba(15,23,42,.55)', border: '1px solid rgba(255,255,255,.07)', borderRadius: 4 }}>
+                <Stack direction="row" spacing={1.5} alignItems="center">
+                  <FileText size={20} color={binThemeTokens.gold} />
+                  <Box sx={{ minWidth: 0, flex: 1 }}>
+                    <Typography color="#FFF" fontWeight={900} noWrap>{doc.title}</Typography>
+                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,.4)' }}>{doc.sourceCollection} · {doc.sourceId}</Typography>
+                  </Box>
+                  <ShieldCheck size={16} color="#10b981" />
+                </Stack>
+                <Button
+                  fullWidth
+                  variant="outlined"
+                  sx={{ mt: 2.5, color: binThemeTokens.gold, borderColor: 'rgba(198,167,94,.35)', fontWeight: 900 }}
+                  disabled={!doc.storagePath || opening === doc.artifactId}
+                  onClick={() => void openDocument(doc.artifactId)}
+                >
+                  {opening === doc.artifactId ? <CircularProgress size={18} color="inherit" /> : doc.storagePath ? 'OPEN AUTHORIZED FILE' : 'METADATA ONLY'}
+                </Button>
+              </Paper>
             </Grid>
-            {!loadError && documents.length === 0 && (
-                <Paper sx={{ p: 5, textAlign: 'center', bgcolor: 'rgba(255,255,255,0.02)', border: '1px dashed rgba(255,255,255,0.08)', borderRadius: 4 }}>
-                    <Typography variant="body1" color="textSecondary">
-                        No downloadable documents available yet.
-                    </Typography>
-                </Paper>
-            )}
-        </Box>
-    );
+          ))}
+        </Grid>
+      )}
+    </Box>
+  );
 }
