@@ -70,8 +70,13 @@ test('Phase 19 root Owner Tenant and Technician surfaces consume the unified vau
     read('src/tenant/pages/TenantDocumentsPage.tsx'),
     read('src/technician/pages/TechnicianHRPageV2.tsx'),
   ]);
-  assert.ok(owner.includes('UnifiedDocumentVault'));
-  assert.ok(tenant.includes('UnifiedDocumentVault'));
+  for (const page of [owner, tenant]) {
+    assert.ok(page.includes('listUnifiedDocumentVault'));
+    assert.ok(page.includes('openUnifiedDocument'));
+    assert.ok(page.includes('CircularProgress'));
+    assert.ok(page.includes('documents.length === 0'));
+    assert.ok(page.includes('severity="error"'));
+  }
   assert.ok(technician.includes('Technician Document Vault'));
   assert.ok(technician.includes('assigned-job record IDs'));
 });
