@@ -4,6 +4,7 @@ import { Award, Bot, CloudUpload, FileText, HeartPulse, Plus, Sun, Wallet } from
 import { useRole } from '../../context/RoleContext';
 import { addDoc, collection, db, doc, functions, getDoc, httpsCallable, onSnapshot, query, ref, serverTimestamp, storage, uploadBytes, where } from '../../lib/firebase';
 import { binThemeTokens } from '../../theme/binGroupTheme';
+import UnifiedDocumentVault from '../../components/UnifiedDocumentVault';
 import { BLUE_COLLAR_ESS_SUPPORTED_LANGUAGES } from '../utils/blueCollarEssIntentRouter';
 import { calculateEosbEstimate, getHeatStressSeasonStatus } from '../../lib/uaeWorkforceComplianceEngine';
 import type { EosbTerminationReason } from '../../lib/uaeWorkforceComplianceEngine';
@@ -327,6 +328,12 @@ export default function TechnicianHRPageV2() {
         {registryError && <Alert severity="warning" sx={{ mb: 2 }}>{registryError}</Alert>}
         {requests.length === 0 ? <Typography color="rgba(255,255,255,0.5)">No HR cases yet.</Typography> : <Stack spacing={1.5}>{requests.slice(0, 20).map((req) => <Paper key={req.id} sx={{ p: 2.5, bgcolor: req.optimistic ? 'rgba(198,167,94,0.08)' : 'rgba(255,255,255,0.03)', border: req.optimistic ? `1px solid ${binThemeTokens.gold}` : '1px solid rgba(255,255,255,0.06)', borderRadius: 3 }}><Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" gap={1.5}><Box><Typography color="#FFF" fontWeight="900" sx={{ textTransform: 'uppercase' }}>{requestTitle(req.requestLabel || req.requestType)}</Typography><Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.7)' }}>{req.reason}</Typography><Typography variant="caption" sx={{ color: binThemeTokens.gold }}>{req.detectedLanguage && `Language: ${String(req.detectedLanguage).toUpperCase()} · `}{req.confidence && `Confidence: ${Math.round(Number(req.confidence) * 100)}% · `}{req.recommendedNextAction}{req.optimistic ? ' · Saving...' : ''}</Typography></Box><Chip size="small" label={String(req.priority || 'normal').toUpperCase()} sx={{ color: req.priority === 'urgent' ? '#ef4444' : req.priority === 'high' ? '#eab308' : '#10b981', bgcolor: 'rgba(255,255,255,0.06)', fontWeight: 900 }} /></Stack></Paper>)}</Stack>}
       </Paper>
+      <Box sx={{ mt: 3 }}>
+        <UnifiedDocumentVault
+          title="Technician Document Vault"
+          subtitle="Work evidence and permitted HR documents linked to your staff and assigned-job record IDs."
+        />
+      </Box>
     </Box>
   );
 }
