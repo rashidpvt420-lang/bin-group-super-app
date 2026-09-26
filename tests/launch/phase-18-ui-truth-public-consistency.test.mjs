@@ -22,7 +22,7 @@ test('Phase 18 public Owner copy never advertises quote/contract/payment before 
     assert.doesNotMatch(source, /details → quote and contract → physical inspections/i);
   }
   assert.ok(owner.includes('Inspection → final quote → signed contract → payment'));
-  assert.ok(profile.includes('physical site inspection, final verified quotation, Owner contract acceptance, payment verification, and activation'));
+  assert.ok(profile.includes('physical inspection, final verified quotation, contract acceptance and OTP signature, payment verification, then activation'));
   assert.ok(profile.includes('authoritative property pricing remains server-calculated from verified inputs rather than AI-generated'));
 });
 
