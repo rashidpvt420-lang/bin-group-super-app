@@ -86,8 +86,9 @@ test('Tenant live-role fixture seeds dispatch-ready canonical property geo', () 
   assert.match(seed, /assignedUnitId: unitId/);
 });
 
-test('Tenant request page resolves the canonical dispatch-ready linked unit', () => {
+test('Tenant request page resolves the canonical dispatch-ready linked unit without reading the private Owner profile', () => {
   const page = read('src/tenant/pages/TenantRequestPage.tsx');
+  const ticketOps = read('functions/tenantTicketOperations.ts');
   assert.match(page, /profile\?\.unitId \|\| profile\?\.assignedUnitId/);
   assert.match(page, /await queryUnits\('tenantId', user\.uid\)/);
   assert.match(page, /await queryUnits\('tenantUid', user\.uid\)/);
@@ -96,6 +97,10 @@ test('Tenant request page resolves the canonical dispatch-ready linked unit', ()
   assert.match(page, /if \(property && hasCanonicalDispatchGeo\(property\)\)/);
   assert.match(page, /setUnitData\(selectedUnit\)/);
   assert.match(page, /setPropertyData\(selectedProperty\)/);
+  assert.doesNotMatch(page, /getDoc\(doc\(db, ['"]users['"], ownerId\)\)/);
+  assert.doesNotMatch(page, /isOwnerSuspended|setIsOwnerSuspended/);
+  assert.match(ticketOps, /transaction\.get\(db\.collection\("users"\)\.doc\(ownerId\)\)/);
+  assert.match(ticketOps, /Maintenance dispatch is suspended for this property/);
 });
 
 test('Tenant unit rules allow every client lookup path used by the request page', () => {

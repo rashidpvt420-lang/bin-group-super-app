@@ -132,6 +132,18 @@ export const createTenantServiceTicket = onCall(
         return { idempotent: true };
       }
 
+      const ownerId = text(property.ownerUid || property.ownerId || unit.ownerUid || unit.ownerId, 160);
+      if (ownerId) {
+        const ownerSnap = await transaction.get(db.collection("users").doc(ownerId));
+        const ownerProfile = ownerSnap.data() || {};
+        if (ownerSnap.exists && text(ownerProfile.status, 60).toLowerCase() === "suspended") {
+          throw new HttpsError(
+            "failed-precondition",
+            "Maintenance dispatch is suspended for this property. Contact the property owner or manager.",
+          );
+        }
+      }
+
       let canonicalGeo;
       try {
         canonicalGeo = resolveDispatchReadyPropertyGeo(property);
@@ -141,7 +153,6 @@ export const createTenantServiceTicket = onCall(
           : error;
       }
       const propertyName = text(property.name || property.propertyName || property.address, 240);
-      const ownerId = text(property.ownerUid || property.ownerId || unit.ownerUid || unit.ownerId, 160);
       const common: Record<string, unknown> = {
         requesterRole: "tenant",
         requestType: kind,
