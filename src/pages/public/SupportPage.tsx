@@ -13,8 +13,6 @@ const BIN_PUBLIC_CONTACT = {
 const SupportPage: React.FC = () => {
     const { lang, isRTL } = useLanguage();
     const label = (en: string, ar: string) => lang === 'ar' ? ar : en;
-    const ar = isRTL;
-    const label = (en: string, arText: string) => ar ? arText : en;
 
     return (
         <Box sx={{ minHeight: '100vh', bgcolor: '#000', py: 8, direction: isRTL ? 'rtl' : 'ltr' }}>
