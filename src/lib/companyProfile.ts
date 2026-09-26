@@ -72,7 +72,7 @@ export const DEFAULT_COMPANY_PROFILE: CompanyProfile = {
     'Ejari/Tawtheeq-style property reference fields can be stored for compliance context without claiming direct government integration unless approved access exists.',
     'Demo and video walkthroughs for public education and trust-building.',
     'Property passport records for every building, unit, contract, service request, compliance event, and staff-linked operation.',
-    'AI-powered quote, design, classification, maintenance, and staff People AI support intelligence.',
+    'AI-assisted design previews, classification, maintenance guidance, and staff People AI support intelligence; authoritative property pricing remains server-calculated from verified inputs rather than AI-generated.',
   ],
   serviceAreas: ['Al Ain', 'Abu Dhabi', 'Dubai', 'Sharjah', 'Ajman', 'Ras Al Khaimah', 'Fujairah', 'Umm Al Quwain'],
   contact: {
