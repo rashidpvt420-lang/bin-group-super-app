@@ -115,7 +115,7 @@ esac
       repair: true, legacyRepair: true, protectedContext: true,
     });
     assert.notEqual(unexpectedApi.status, 0);
-    assert.match(unexpectedApi.output, /Unexpected API target other.googleapis.com/);
+    assert.match(unexpectedApi.output, /Unexpected API target\(s\) other\.googleapis\.com/);
 
     const onlyAdmin = verify(dir, { referrers: [...withoutBoth, adminOrigin] });
     assert.notEqual(onlyAdmin.status, 0);
