@@ -74,8 +74,9 @@ test('legacy property review cannot approve drafts or inspection-first submissio
 
 test('inspection-first public copy never asks for 15 percent before required visits', async () => {
   const page = await read('src/pages/public/PublicMarketingPage.tsx');
-  assert.match(page, /15% mobilization only after required inspections/);
-  assert.match(page, /physical site visits/);
-  assert.match(page, /15٪ فقط بعد اكتمال الفحوصات المطلوبة/);
+  assert.match(page, /property submission → BIN GROUP review → site inspection → final quotation → contract → payment → activation/);
+  assert.match(page, /Only after all required inspections are complete does the server calculate the final commercial terms and exact 15% mobilisation amount/);
+  assert.match(page, /تقديم العقار ← مراجعة BIN GROUP ← فحص ميداني ← عرض نهائي ← عقد ← دفع ← تفعيل/);
+  assert.match(page, /بعد اكتمال جميع الفحوصات المطلوبة يحسب الخادم الشروط التجارية النهائية ومبلغ التفعيل الدقيق 15٪/);
   assert.doesNotMatch(page, /Submit documents and payment proof/);
 });
