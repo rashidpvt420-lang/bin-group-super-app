@@ -272,17 +272,18 @@ test('production deploy consumes frozen clearance under a separate current-main 
 
   assert.match(workflow, /PAYMENT_POLICY_INPUT[\s\S]*?phase1-manual/);
   assert.match(workflow, /\[\[ -z "\$STRIPE_LIVE_SESSION_ID_INPUT" && -z "\$STRIPE_LIVE_EVENT_ID_INPUT" \]\]/);
-  assert.match(workflow, /Repair only missing Admin Maps referrer without widening restrictions/);
+  assert.match(workflow, /Repair only missing Admin and WebView Maps referrers without widening restrictions/);
   assert.match(workflow, /required_admin_referrer='https:\/\/bin-group-admin-panel\.web\.app\/\*'/);
-  assert.match(workflow, /MAPS_ALLOW_MISSING_ADMIN_REFERRER_REPAIR=true[\s\S]*?verify-google-maps-api-key-restrictions\.mjs/);
-  assert.match(workflow, /gcloud services api-keys update "\$key_resource"[\s\S]*?--append[\s\S]*?--allowed-referrers="\$required_admin_referrer"/);
+  assert.match(workflow, /required_webview_referrer='https:\/\/localhost\/\*'/);
+  assert.match(workflow, /MAPS_ALLOW_MISSING_KNOWN_REFERRERS_REPAIR=true[\s\S]*?verify-google-maps-api-key-restrictions\.mjs/);
+  assert.match(workflow, /gcloud services api-keys update "\$key_resource"[\s\S]*?--append[\s\S]*?--allowed-referrers="\$required_admin_referrer,\$required_webview_referrer"/);
   const strictMapsVerifiers = workflow.match(/node scripts\/verify-google-maps-api-key-restrictions\.mjs/g) || [];
   assert.ok(strictMapsVerifiers.length >= 3);
   const mapsVerifier = await read('scripts/verify-google-maps-api-key-restrictions.mjs');
   assert.match(mapsVerifier, /GITHUB_WORKFLOW === 'Firebase Production Deploy'/);
   assert.match(mapsVerifier, /GITHUB_JOB === 'deploy-firebase-production-stack'/);
   assert.match(mapsVerifier, /GITHUB_REF === 'refs\/heads\/main'/);
-  assert.match(mapsVerifier, /repairTolerance=' \+ \(allowMissingAdminReferrerRepair \? 'admin-referrer-only' : 'none'\)/);
+  assert.match(mapsVerifier, /repairTolerance=' \+ \(allowMissingKnownReferrersRepair \? 'admin-and-webview-referrers-only' : 'none'\)/);
   assert.match(mapsVerifier, /Unexpected API target/);
   assert.match(mapsVerifier, /An unrestricted\/wildcard Maps referrer is present/);
 });
