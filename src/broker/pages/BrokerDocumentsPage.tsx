@@ -8,7 +8,8 @@ import {
     ShieldCheck, Eye, Trash2, Download, Info,
     Lock, Share2, MoreVertical
 } from 'lucide-react';
-import { db, storage, collection, query, where, addDoc, serverTimestamp, onSnapshot, ref, uploadBytes, getDownloadURL } from '../../lib/firebase';
+import { db, storage, collection, query, where, addDoc, serverTimestamp, onSnapshot, ref, uploadBytes } from '../../lib/firebase';
+import { openUnifiedDocument } from '../../services/unifiedDocumentVault';
 import { useRole } from '../../context/RoleContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
@@ -63,11 +64,9 @@ export default function BrokerDocumentsPage() {
                     documentType: docType,
                 },
             });
-            const fileUrl = await getDownloadURL(fileRef);
             await addDoc(collection(db, 'brokerDocuments'), {
                 brokerId: user.uid,
                 fileName: file.name,
-                fileUrl,
                 storagePath: fileRef.fullPath,
                 fileSize: file.size,
                 contentType: file.type || 'application/octet-stream',
@@ -157,11 +156,8 @@ export default function BrokerDocumentsPage() {
                                         <Button
                                             variant="contained"
                                             fullWidth
-                                            component="a"
-                                            href={uploadedDoc?.fileUrl || undefined}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            disabled={!uploadedDoc?.fileUrl}
+                                            onClick={() => uploadedDoc?.id && void openUnifiedDocument(`brokerDocuments:${uploadedDoc.id}`)}
+                                            disabled={!uploadedDoc?.id || !uploadedDoc?.storagePath}
                                             startIcon={<Eye size={18} />}
                                             sx={{ bgcolor: '#F3F4F6', color: binThemeTokens.textPrimary, fontWeight: 950, borderRadius: 3, '&:hover': { bgcolor: '#E5E7EB' } }}
                                         >
