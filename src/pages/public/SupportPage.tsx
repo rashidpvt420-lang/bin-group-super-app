@@ -11,7 +11,8 @@ const BIN_PUBLIC_CONTACT = {
 };
 
 const SupportPage: React.FC = () => {
-    const { isRTL } = useLanguage();
+    const { lang, isRTL } = useLanguage();
+    const label = (en: string, ar: string) => lang === 'ar' ? ar : en;
     const ar = isRTL;
     const label = (en: string, arText: string) => ar ? arText : en;
 
