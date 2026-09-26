@@ -55,9 +55,11 @@ async function requireActor(auth: any): Promise<VaultActor> {
     throw new HttpsError("permission-denied", "Inactive account.");
   }
 
-  const role = roleOf(user.customClaims || token) || roleOf(token);
-  const claimAdmin = token.admin === true || token.isAdmin === true || token.superAdmin === true ||
-    token.super_admin === true || token.ceo === true || ADMIN_ROLES.has(role);
+  const currentClaims = user.customClaims || {};
+  const role = roleOf(currentClaims);
+  const claimAdmin = currentClaims.admin === true || currentClaims.isAdmin === true ||
+    currentClaims.superAdmin === true || currentClaims.super_admin === true ||
+    currentClaims.ceo === true || ADMIN_ROLES.has(role);
 
   return {
     uid: auth.uid,
@@ -72,6 +74,7 @@ async function requireActor(auth: any): Promise<VaultActor> {
 
 const SOURCE_CATEGORIES: Record<string, string> = {
   contracts: "contract",
+  intake_submissions: "quote",
   invoices: "invoice",
   owner_property_reports: "property_report",
   propertyInspections: "inspection_report",
@@ -81,6 +84,7 @@ const SOURCE_CATEGORIES: Record<string, string> = {
   documentLibrary: "property_document",
   brokerDocuments: "broker_compliance",
   staffDocuments: "staff_document",
+  staffHrDocuments: "private_staff_document",
   pdf_reports: "staff_report",
   staffLetters: "staff_letter",
   maintenanceTickets: "work_evidence",
@@ -149,7 +153,7 @@ async function ownerArtifacts(actor: VaultActor) {
     ["ownerId", actor.uid], ["ownerUid", actor.uid], ["userId", actor.uid],
     ["ownerEmail", actor.email], ["recipientEmail", actor.email],
   ];
-  const collections = ["contracts", "invoices", "owner_property_reports", "propertyInspections", "inspections"];
+  const collections = ["contracts", "intake_submissions", "invoices", "owner_property_reports", "propertyInspections", "inspections"];
 
   const propertyIds = await propertyIdsForOwner(actor.uid);
   const library: FirebaseFirestore.QueryDocumentSnapshot[] = [];
@@ -161,7 +165,11 @@ async function ownerArtifacts(actor: VaultActor) {
   return [
     ...(
       await Promise.all(collections.map(async (name) =>
-        (await queryMany(name, ownerPairs)).map((doc) => toArtifact(name, doc.id, doc.data()))
+        (await queryMany(name, ownerPairs))
+          .filter((doc) => name !== "intake_submissions" || Boolean(
+            doc.data().finalVerifiedQuoteHash || doc.data().quoteHash || doc.data().quoteSnapshot || doc.data().finalQuote
+          ))
+          .map((doc) => toArtifact(name, doc.id, doc.data()))
       ))
     ).flat(),
     ...library.map((doc) => toArtifact("documentLibrary", doc.id, doc.data())),
@@ -224,9 +232,9 @@ async function staffArtifacts(actor: VaultActor) {
 
 async function adminArtifacts(actor: VaultActor) {
   const collections = new Set<string>();
-  if (actor.isOps) ["contracts", "owner_property_reports", "propertyInspections", "inspections", "tenantDocuments", "documentLibrary"].forEach((x) => collections.add(x));
+  if (actor.isOps) ["contracts", "intake_submissions", "owner_property_reports", "propertyInspections", "inspections", "tenantDocuments", "documentLibrary"].forEach((x) => collections.add(x));
   if (actor.isFinance) ["contracts", "invoices"].forEach((x) => collections.add(x));
-  if (actor.isHr) ["staffDocuments", "pdf_reports", "staffLetters"].forEach((x) => collections.add(x));
+  if (actor.isHr) ["staffDocuments", "staffHrDocuments", "pdf_reports", "staffLetters"].forEach((x) => collections.add(x));
   if (actor.isAdmin) ["brokerDocuments"].forEach((x) => collections.add(x));
 
   const artifacts: VaultArtifact[] = [];
