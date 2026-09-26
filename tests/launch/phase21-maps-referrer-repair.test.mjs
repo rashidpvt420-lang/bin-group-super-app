@@ -128,7 +128,7 @@ esac
     for (const { referrers, services, error } of [
       { referrers: withoutBoth.filter(x => !x.includes('www.')), error: /www\.bin-groups\.com/ },
       { referrers: [...withoutBoth, 'https://*/*'], error: /unrestricted\/wildcard Maps referrer/ },
-      { referrers: withoutBoth, services: [...requiredServices, 'other.googleapis.com'], error: /Unexpected API target/ },
+      { referrers: withoutBoth, services: [...requiredServices, 'other.googleapis.com'], error: /Unexpected API target(?:\(s\))?/ },
     ]) {
       const denied = verify(dir, { referrers, services, repair: true, protectedContext: true });
       assert.notEqual(denied.status, 0);
