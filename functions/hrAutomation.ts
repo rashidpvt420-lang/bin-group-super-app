@@ -61,6 +61,10 @@ function payrollEntryProjection(input: {
     timestamp: FirebaseFirestore.FieldValue;
     paymentReference?: string;
     payslipUrl?: string;
+    payslipPdfSha256?: string;
+    payslipStoragePath?: string;
+    payslipStorageGeneration?: string;
+    payslipCanonicalSource?: string;
     paidAt?: FirebaseFirestore.FieldValue;
 }) {
     return {
@@ -74,6 +78,10 @@ function payrollEntryProjection(input: {
         status: input.status,
         ...(input.paymentReference ? { paymentReference: input.paymentReference } : {}),
         ...(input.payslipUrl ? { payslipUrl: input.payslipUrl } : {}),
+        ...(input.payslipPdfSha256 ? { payslipPdfSha256: input.payslipPdfSha256 } : {}),
+        ...(input.payslipStoragePath ? { payslipStoragePath: input.payslipStoragePath } : {}),
+        ...(input.payslipStorageGeneration ? { payslipStorageGeneration: input.payslipStorageGeneration } : {}),
+        ...(input.payslipCanonicalSource ? { payslipCanonicalSource: input.payslipCanonicalSource } : {}),
         ...(input.paidAt ? { paidAt: input.paidAt } : {}),
         updatedAt: input.timestamp,
     };
