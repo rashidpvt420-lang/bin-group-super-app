@@ -106,13 +106,29 @@ function canReadPayslip(token: Record<string, unknown>, callerUid: string, targe
   return ["hr_admin", "finance_manager", "payroll_admin"].includes(callerRole(token));
 }
 
+function canIssueOfficialHrDocument(token: Record<string, unknown>): boolean {
+  return isCeoOrAdmin(token) || ["hr_admin", "hr_manager"].includes(callerRole(token));
+}
+
 async function loadStaffIdentity(db: FirebaseFirestore.Firestore, uid: string) {
-  const snap = await db.collection("users").doc(uid).get();
-  const data = snap.data() || {};
+  const [userSnap, hrSnap, privateHrSnap] = await Promise.all([
+    db.collection("users").doc(uid).get(),
+    db.collection("hrProfiles").doc(uid).get(),
+    db.collection("private_hr_profiles").doc(uid).get(),
+  ]);
+  const data = userSnap.data() || {};
+  const hr = hrSnap.data() || {};
+  const privateHr = privateHrSnap.data() || {};
   return {
     uid,
-    staffId: text(data.staffId || data.employeeId) || uid,
+    staffId: text(data.staffId || data.employeeId || privateHr.employeeId) || uid,
     displayName: text(data.displayName || data.name || data.email) || "Staff Member",
+    email: text(data.email || hr.email),
+    jobTitle: text(hr.jobTitle || data.jobTitle || data.position || data.role),
+    department: text(hr.department || data.department),
+    joiningDate: text(hr.joiningDate || privateHr.joiningDate),
+    employmentType: text(hr.employmentType || privateHr.employmentType),
+    salaryPackage: privateHr.salaryPackage && typeof privateHr.salaryPackage === "object" ? privateHr.salaryPackage : null,
   };
 }
 
@@ -159,8 +175,11 @@ async function persistPdfReport(
     staffUid: string;
     generatedBy: string;
     generatedAt: string;
-    monthPeriod: string;
+    monthPeriod?: string;
     buffer: Buffer;
+    officialHrDocument?: boolean;
+    documentLabel?: string;
+    sourceRecordIds?: string[];
   },
 ) {
   const hash = createHash("sha256").update(args.buffer).digest("hex");
@@ -175,25 +194,73 @@ async function persistPdfReport(
       metadata: {
         reportId: args.reportId,
         sha256Hash: hash,
+        staffUid: args.staffUid,
+        reportType: args.reportType,
+        canonicalSource: "SERVER_STAFF_PDF_REPORTING",
       },
     },
   });
+  const [storageMetadata] = await file.getMetadata();
+  const generation = text(storageMetadata.generation);
+  if (!generation) throw new HttpsError("internal", "Issued HR PDF is missing immutable Storage generation.");
 
-  await db.collection("pdf_reports").doc(args.reportId).set({
+  const issuedAt = admin.firestore.FieldValue.serverTimestamp();
+  const reportRef = db.collection("pdf_reports").doc(args.reportId);
+  const auditRef = db.collection("audit_logs").doc(`hr_document_issue_${args.reportId}`);
+  const batch = db.batch();
+  batch.create(reportRef, {
     reportId: args.reportId,
     reportType: args.reportType,
     staffUid: args.staffUid,
     generatedBy: args.generatedBy,
     generatedAt: args.generatedAt,
-    monthPeriod: args.monthPeriod,
+    monthPeriod: args.monthPeriod || null,
     sha256Hash: hash,
     storagePath,
+    storageGeneration: generation,
+    canonicalSource: "SERVER_STAFF_PDF_REPORTING",
+    officialHrDocument: args.officialHrDocument === true,
+    documentLabel: args.documentLabel || null,
+    sourceRecordIds: args.sourceRecordIds || [],
     version: 1,
     status: "ISSUED",
-    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    createdAt: issuedAt,
   });
+  batch.create(auditRef, {
+    action: "HR_DOCUMENT_ISSUED",
+    actorId: args.generatedBy,
+    actorRole: "server_authorized_hr_document_issuer",
+    targetType: "pdf_reports",
+    targetId: args.reportId,
+    staffUid: args.staffUid,
+    reportType: args.reportType,
+    sha256Hash: hash,
+    storagePath,
+    storageGeneration: generation,
+    sourceRecordIds: args.sourceRecordIds || [],
+    immutable: true,
+    createdAt: issuedAt,
+  });
+  if (args.officialHrDocument) {
+    batch.create(db.collection("staffLetters").doc(args.reportId), {
+      letterId: args.reportId,
+      staffUid: args.staffUid,
+      reportType: args.reportType,
+      documentLabel: args.documentLabel || args.reportType,
+      pdfReportId: args.reportId,
+      sha256Hash: hash,
+      storagePath,
+      storageGeneration: generation,
+      canonicalSource: "SERVER_STAFF_PDF_REPORTING",
+      issuedBy: args.generatedBy,
+      issuedAt,
+      status: "ISSUED",
+      immutable: true,
+    });
+  }
+  await batch.commit();
 
-  return hash;
+  return { hash, storagePath, generation };
 }
 
 /**
@@ -261,7 +328,7 @@ export const generateStaffAttendancePdf = onCall(SECURE_CALLABLE_OPTIONS, async 
     { label: "Report ID", value: reportId },
   ]);
 
-  const hash = await persistPdfReport(db, {
+  const artifact = await persistPdfReport(db, {
     reportId,
     reportType: "STAFF_ATTENDANCE_SUMMARY",
     staffUid: targetStaffUid,
@@ -277,7 +344,8 @@ export const generateStaffAttendancePdf = onCall(SECURE_CALLABLE_OPTIONS, async 
     reportType: "STAFF_ATTENDANCE_SUMMARY",
     generatedAt,
     monthPeriod,
-    sha256Hash: hash,
+    sha256Hash: artifact.hash,
+    storageGeneration: artifact.generation,
   };
 });
 
@@ -344,7 +412,7 @@ export const generateStaffOvertimePdf = onCall(SECURE_CALLABLE_OPTIONS, async (r
     { label: "Report ID", value: reportId },
   ]);
 
-  const hash = await persistPdfReport(db, {
+  const artifact = await persistPdfReport(db, {
     reportId,
     reportType: "STAFF_OVERTIME_VERIFICATION",
     staffUid: targetStaffUid,
@@ -360,7 +428,8 @@ export const generateStaffOvertimePdf = onCall(SECURE_CALLABLE_OPTIONS, async (r
     reportType: "STAFF_OVERTIME_VERIFICATION",
     generatedAt,
     monthPeriod,
-    sha256Hash: hash,
+    sha256Hash: artifact.hash,
+    storageGeneration: artifact.generation,
   };
 });
 
@@ -425,7 +494,7 @@ export const generateStaffPayslipPdf = onCall(SECURE_CALLABLE_OPTIONS, async (re
     { label: "Report ID", value: reportId },
   ]);
 
-  const hash = await persistPdfReport(db, {
+  const artifact = await persistPdfReport(db, {
     reportId,
     reportType: "STAFF_DIGITAL_PAYSLIP",
     staffUid: targetStaffUid,
@@ -441,7 +510,101 @@ export const generateStaffPayslipPdf = onCall(SECURE_CALLABLE_OPTIONS, async (re
     reportType: "STAFF_DIGITAL_PAYSLIP",
     generatedAt,
     monthPeriod,
-    sha256Hash: hash,
+    sha256Hash: artifact.hash,
+    storageGeneration: artifact.generation,
+  };
+});
+
+type OfficialHrDocumentType = "SALARY_CERTIFICATE" | "NOC_LETTER" | "EXPERIENCE_LETTER" | "OTHER_HR_LETTER";
+
+function normalizeOfficialHrDocumentType(value: unknown): OfficialHrDocumentType {
+  const normalized = upper(value);
+  if (["SALARY_CERTIFICATE", "NOC_LETTER", "EXPERIENCE_LETTER", "OTHER_HR_LETTER"].includes(normalized)) {
+    return normalized as OfficialHrDocumentType;
+  }
+  throw new HttpsError("invalid-argument", "Unsupported official HR document type.");
+}
+
+export const issueOfficialStaffHrDocument = onCall(SECURE_CALLABLE_OPTIONS, async (request) => {
+  if (!request.auth?.uid) throw new HttpsError("unauthenticated", "Authentication required.");
+  const token = request.auth.token || {};
+  if (!canIssueOfficialHrDocument(token)) throw new HttpsError("permission-denied", "HR Manager authority is required to issue official HR documents.");
+
+  const db = ensureDb();
+  const staffUid = text(request.data?.staffUid);
+  const documentType = normalizeOfficialHrDocumentType(request.data?.documentType);
+  if (!staffUid) throw new HttpsError("invalid-argument", "staffUid is required.");
+  await assertActiveAccount(request.auth.uid, token);
+
+  const identity = await loadStaffIdentity(db, staffUid);
+  const generatedAt = new Date().toISOString();
+  const reportId = `HR_${documentType}_${randomUUID()}`;
+  const sourceRecordIds: string[] = [`users/${staffUid}`, `hrProfiles/${staffUid}`, `private_hr_profiles/${staffUid}`];
+  const lines: Array<{ label: string; value: string }> = [
+    { label: "Employee", value: `${identity.displayName} (${identity.staffId})` },
+    { label: "Job title", value: identity.jobTitle || "Not recorded" },
+    { label: "Department", value: identity.department || "Not recorded" },
+    { label: "Employment type", value: identity.employmentType || "Not recorded" },
+    { label: "Joining date", value: identity.joiningDate || "Not recorded" },
+  ];
+
+  if (documentType === "SALARY_CERTIFICATE") {
+    const payrollSnap = await db.collection("payroll_entries").where("technicianId", "==", staffUid).limit(100).get();
+    const payrollDocs = payrollSnap.docs
+      .map((doc) => ({ id: doc.id, ...doc.data() as any }))
+      .filter((entry: any) => Number(entry.baseSalary || entry.grossSalary || entry.netSalary || 0) > 0)
+      .sort((a: any, b: any) => text(b.month || b.payPeriod).localeCompare(text(a.month || a.payPeriod)));
+    const latestPayroll: any = payrollDocs[0];
+    const packageBasic = Number((identity.salaryPackage as any)?.basicSalary || 0);
+    const basicSalary = latestPayroll ? Number(latestPayroll.baseSalary || 0) : packageBasic;
+    const currency = latestPayroll ? text(latestPayroll.currency) || "AED" : "AED";
+    if (!Number.isFinite(basicSalary) || basicSalary <= 0) {
+      throw new HttpsError("failed-precondition", "Canonical salary data is missing; salary certificate issuance is blocked.");
+    }
+    if (latestPayroll?.id) sourceRecordIds.push(`payroll_entries/${latestPayroll.id}`);
+    lines.push({ label: "Basic salary", value: money(basicSalary, currency) });
+    if (latestPayroll && Number(latestPayroll.grossSalary) > 0) lines.push({ label: "Gross salary", value: money(latestPayroll.grossSalary, currency) });
+  }
+
+  if (documentType === "EXPERIENCE_LETTER" && !identity.joiningDate) {
+    throw new HttpsError("failed-precondition", "Joining date is required before issuing an experience letter.");
+  }
+
+  if (documentType === "NOC_LETTER") {
+    const purpose = text(request.data?.purpose).slice(0, 240);
+    if (!purpose) throw new HttpsError("invalid-argument", "NOC purpose is required.");
+    lines.push({ label: "NOC purpose", value: purpose });
+    lines.push({ label: "Statement", value: "BIN GROUP has no objection to the stated purpose, subject to applicable law and company policy." });
+  }
+
+  if (documentType === "OTHER_HR_LETTER") {
+    const subject = text(request.data?.subject).slice(0, 160);
+    const body = text(request.data?.body).slice(0, 4000);
+    if (!subject || body.length < 10) throw new HttpsError("invalid-argument", "Official HR letter subject and body are required.");
+    lines.push({ label: "Subject", value: subject }, { label: "Official statement", value: body });
+  }
+
+  lines.push({ label: "Issued at", value: generatedAt }, { label: "Document ID", value: reportId });
+  const title = documentType.replaceAll("_", " ");
+  const buffer = await buildPdfBuffer(title, lines);
+  const artifact = await persistPdfReport(db, {
+    reportId,
+    reportType: `HR_${documentType}`,
+    staffUid,
+    generatedBy: request.auth.uid,
+    generatedAt,
+    buffer,
+    officialHrDocument: true,
+    documentLabel: title,
+    sourceRecordIds,
+  });
+  return {
+    success: true,
+    reportId,
+    reportType: `HR_${documentType}`,
+    generatedAt,
+    sha256Hash: artifact.hash,
+    storageGeneration: artifact.generation,
   };
 });
 

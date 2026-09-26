@@ -1395,10 +1395,10 @@ service cloud.firestore {
     }
 
     match /staffLetters/{letterId} {
+      // Official HR letters are server-issued canonical artifacts. HR and the
+      // employee may read them, but browser SDKs cannot issue, rewrite or delete them.
       allow read: if isHr() || staffCanRead(resource.data);
-      allow create: if isHr();
-      allow update: if isHr();
-      allow delete: if isHr();
+      allow create, update, delete: if false;
     }
 
     match /staffComplaints/{complaintId} {

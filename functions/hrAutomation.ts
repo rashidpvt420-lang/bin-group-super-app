@@ -61,6 +61,10 @@ function payrollEntryProjection(input: {
     timestamp: FirebaseFirestore.FieldValue;
     paymentReference?: string;
     payslipUrl?: string;
+    payslipPdfSha256?: string;
+    payslipStoragePath?: string;
+    payslipStorageGeneration?: string;
+    payslipCanonicalSource?: string;
     paidAt?: FirebaseFirestore.FieldValue;
 }) {
     return {
@@ -74,6 +78,10 @@ function payrollEntryProjection(input: {
         status: input.status,
         ...(input.paymentReference ? { paymentReference: input.paymentReference } : {}),
         ...(input.payslipUrl ? { payslipUrl: input.payslipUrl } : {}),
+        ...(input.payslipPdfSha256 ? { payslipPdfSha256: input.payslipPdfSha256 } : {}),
+        ...(input.payslipStoragePath ? { payslipStoragePath: input.payslipStoragePath } : {}),
+        ...(input.payslipStorageGeneration ? { payslipStorageGeneration: input.payslipStorageGeneration } : {}),
+        ...(input.payslipCanonicalSource ? { payslipCanonicalSource: input.payslipCanonicalSource } : {}),
         ...(input.paidAt ? { paidAt: input.paidAt } : {}),
         updatedAt: input.timestamp,
     };
@@ -282,9 +290,12 @@ export const adminSettlePayrollRecord = onCall(
         }
 
         let pdfUrl = "";
+        let payslipPdfSha256 = "";
+        let payslipStoragePath = "";
+        let payslipStorageGeneration = "";
         try {
-            const { generatePayslipPDF } = await import("./pdfEngine");
-            pdfUrl = await generatePayslipPDF({
+            const { generatePayslipPdfArtifact } = await import("./pdfEngine");
+            const payslipArtifact = await generatePayslipPdfArtifact({
                 staffId: techId,
                 staffName: techName,
                 payPeriod: month,
@@ -295,6 +306,10 @@ export const adminSettlePayrollRecord = onCall(
                 deductions: 0,
                 netSalary: amount,
             });
+            pdfUrl = payslipArtifact.pdfUrl;
+            payslipPdfSha256 = payslipArtifact.pdfSha256;
+            payslipStoragePath = payslipArtifact.storagePath;
+            payslipStorageGeneration = payslipArtifact.generation;
         } catch {
             throw new HttpsError("internal", "Payslip generation failed. Payroll was not marked paid.");
         }
@@ -327,6 +342,10 @@ export const adminSettlePayrollRecord = onCall(
                 status: "paid",
                 paymentReference,
                 payslipUrl: pdfUrl,
+                payslipPdfSha256,
+                payslipStoragePath,
+                payslipStorageGeneration,
+                payslipCanonicalSource: "SERVER_PDF_ENGINE",
                 paidAt: now,
                 paidBy: request.auth!.uid,
                 updatedAt: now,
@@ -343,6 +362,10 @@ export const adminSettlePayrollRecord = onCall(
                     timestamp: now,
                     paymentReference,
                     payslipUrl: pdfUrl,
+                    payslipPdfSha256,
+                    payslipStoragePath,
+                    payslipStorageGeneration,
+                    payslipCanonicalSource: "SERVER_PDF_ENGINE",
                     paidAt: now,
                 }),
                 createdAt: freshPayroll.createdAt || now,
@@ -364,6 +387,10 @@ export const adminSettlePayrollRecord = onCall(
                 currency: safeText(freshPayroll.currency, "AED"),
                 paymentReference,
                 payslipUrl: pdfUrl,
+                payslipPdfSha256,
+                payslipStoragePath,
+                payslipStorageGeneration,
+                immutable: true,
                 createdAt: now,
             };
             transaction.set(auditRef, auditPayload);
