@@ -7,8 +7,9 @@ const projectId = text(process.env.GCP_PROJECT_ID || 'bin-group-57c60');
 const keyString = text(process.env.VITE_GOOGLE_MAPS_API_KEY);
 const ADMIN_HOSTING_REFERRER = 'https://bin-group-admin-panel.web.app/*';
 const LOCAL_WEBVIEW_REFERRER = 'https://localhost/*';
-const allowMissingKnownReferrersRepair =
-  text(process.env.MAPS_ALLOW_MISSING_KNOWN_REFERRERS_REPAIR).toLowerCase() === 'true';
+const REPAIRABLE_EXTRA_API_TARGET = 'directions-backend.googleapis.com';
+const allowKnownProductionRestrictionRepair =
+  text(process.env.MAPS_ALLOW_PRODUCTION_RESTRICTION_REPAIR).toLowerCase() === 'true';
 
 const REQUIRED_API_TARGETS = new Set([
   'maps-backend.googleapis.com',
@@ -71,7 +72,7 @@ function referrerCovered(allowed, required) {
 }
 
 async function main() {
-  if (allowMissingKnownReferrersRepair) {
+  if (allowKnownProductionRestrictionRepair) {
     const protectedRepairContext =
       process.env.GITHUB_ACTIONS === 'true' &&
       process.env.GITHUB_WORKFLOW === 'Firebase Production Deploy' &&
@@ -132,7 +133,7 @@ async function main() {
       alternatives.length === 1 &&
       [ADMIN_HOSTING_REFERRER, LOCAL_WEBVIEW_REFERRER]
         .some((referrer) => normalizeReferrer(alternatives[0]) === normalizeReferrer(referrer));
-    if (isKnownRepairGroup && allowMissingKnownReferrersRepair) continue;
+    if (isKnownRepairGroup && allowKnownProductionRestrictionRepair) continue;
     if (!alternatives.some((required) => referrerCovered(allowedReferrers, required))) {
       fail(`Required Maps referrer is not covered: ${alternatives.join(' OR ')}.`);
     }
@@ -146,6 +147,7 @@ async function main() {
   }
   for (const service of services) {
     if (!REQUIRED_API_TARGETS.has(service)) {
+      if (allowKnownProductionRestrictionRepair && service === REPAIRABLE_EXTRA_API_TARGET) continue;
       fail(`Unexpected API target ${service}; use a separate key rather than widening the production Maps browser key.`);
     }
   }
@@ -164,7 +166,7 @@ async function main() {
   console.log('[maps-key-restrictions] project=' + projectId);
   console.log('[maps-key-restrictions] clientRestriction=browser');
   console.log('[maps-key-restrictions] requiredReferrerGroups=' + REQUIRED_REFERRER_GROUPS.length);
-  console.log('[maps-key-restrictions] repairTolerance=' + (allowMissingKnownReferrersRepair ? 'admin-and-webview-referrers-only' : 'none'));
+  console.log('[maps-key-restrictions] repairTolerance=' + (allowKnownProductionRestrictionRepair ? 'admin-webview-and-directions-target-only' : 'none'));
   console.log('[maps-key-restrictions] apiTargets=' + [...services].sort().join(','));
   console.log('[maps-key-restrictions] nativeMapsSdk=not-used-by-this-key');
 }
