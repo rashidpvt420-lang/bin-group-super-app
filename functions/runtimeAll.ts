@@ -16,3 +16,4 @@ export * from './rentLedgerMirror';
 export { onOwnerApprovalDecision, submitOwnerApprovalDecision } from './ownerTrustWorkflow';
 export { runContractRenewalWatch, rebuildContractRenewalWatch } from './contractRenewalPdfSystem';
 export { sendMonthlyOwnerPropertyReports, rebuildMonthlyOwnerPropertyReports } from './monthlyOwnerPropertyReportSystem';
+export { listUnifiedDocumentVault, getUnifiedDocumentFile } from './unifiedDocumentVault';
