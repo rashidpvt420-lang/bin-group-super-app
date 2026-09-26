@@ -363,6 +363,17 @@ service firebase.storage {
       allow read, write: if false;
     }
 
+    match /design_requests/{userId}/{allPaths=**} {
+      // AI Design Studio reference images are server-written private media.
+      // Browser clients receive only short-lived signed URLs after callable authorization.
+      allow read, write: if false;
+    }
+
+    match /ai_design_renders/{userId}/{allPaths=**} {
+      // Generated AI renders are never public Storage objects.
+      allow read, write: if false;
+    }
+
     match /design-payment-receipts/{requestId}/{allPaths=**} {
       allow read: if isAdmin() || isAuditor();
       allow write: if false;
@@ -374,7 +385,9 @@ service firebase.storage {
       allow read, write: if isAdmin() &&
         collection != 'design-payment-receipts' &&
         collection != 'privateHrDocuments' &&
-        collection != 'staff-reports';
+        collection != 'staff-reports' &&
+        collection != 'design_requests' &&
+        collection != 'ai_design_renders';
     }
   }
 }
