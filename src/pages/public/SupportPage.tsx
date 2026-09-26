@@ -52,10 +52,10 @@ const SupportPage: React.FC = () => {
 
                     <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mt: 6, justifyContent: 'center' }}>
                         <Button component="a" href="/onboarding" variant="contained" startIcon={<MessageCircle size={17} />} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>
-                            Request Support
+                            {label('Request Support', 'اطلب الدعم')}
                         </Button>
                         <Button component="a" href="/request-demo" variant="outlined" sx={{ color: binThemeTokens.gold, borderColor: binThemeTokens.gold, fontWeight: 950 }}>
-                            Schedule Demo
+                            {label('Schedule Demo', 'احجز عرضاً توضيحياً')}
                         </Button>
                     </Stack>
                 </Paper>
