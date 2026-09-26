@@ -5,11 +5,18 @@ import type * as FirebaseFirestore from "firebase-admin/firestore";
 if (!admin.apps.length) admin.initializeApp();
 
 const db = admin.firestore();
-const bucket = admin.storage().bucket();
 
 const SECURE = { cors: true, region: "europe-west3", enforceAppCheck: true } as const;
 const text = (value: unknown) => String(value ?? "").trim();
 const lower = (value: unknown) => text(value).toLowerCase();
+
+function getStorageBucket() {
+  const bucketName = text(admin.app().options.storageBucket);
+  if (!bucketName) {
+    throw new HttpsError("failed-precondition", "Firebase Storage bucket is not configured.");
+  }
+  return admin.storage().bucket(bucketName);
+}
 
 const ADMIN_ROLES = new Set(["admin", "super_admin", "ceo", "manager"]);
 const HR_ROLES = new Set(["hr_admin", "hr_manager", "hr_staff"]);
@@ -316,7 +323,7 @@ export const getUnifiedDocumentFile = onCall(SECURE, async (request) => {
   const artifact = await authorizeArtifact(actor, collectionName, sourceId);
   if (!artifact.storagePath) throw new HttpsError("failed-precondition", "This document has no canonical Storage path.");
 
-  const file = bucket.file(artifact.storagePath);
+  const file = getStorageBucket().file(artifact.storagePath);
   const [exists] = await file.exists();
   if (!exists) throw new HttpsError("not-found", "The linked document file is missing.");
 
