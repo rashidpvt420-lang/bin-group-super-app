@@ -25,7 +25,6 @@ const db = admin.firestore();
 
 // Secrets
 const openAiKey = defineSecret("OPENAI_API_KEY");
-const geminiApiKey = defineSecret("GEMINI_API_KEY");
 const iotGatewayToken = defineSecret("IOT_GATEWAY_TOKEN");
 
 // ─── AUDIT HELPER ──────────────────────────────────────────────────────────
@@ -1624,18 +1623,6 @@ export const notifyRole = onCall({ cors: true, enforceAppCheck: true }, async (r
 type OpenAiChatResponse = {
     error?: { message?: string };
     choices?: Array<{ message?: { content?: string } }>;
-};
-
-type GeminiGenerateResponse = {
-    error?: { message?: string };
-    candidates?: Array<{
-        content?: {
-            parts?: Array<{
-                text?: string;
-                inlineData?: { data?: string };
-            }>;
-        };
-    }>;
 };
 
 export const getMissionGuidance = onCall({ cors: true, enforceAppCheck: true, secrets: [openAiKey] }, async (request) => {
