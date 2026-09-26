@@ -272,11 +272,11 @@ test('production deploy consumes frozen clearance under a separate current-main 
 
   assert.match(workflow, /PAYMENT_POLICY_INPUT[\s\S]*?phase1-manual/);
   assert.match(workflow, /\[\[ -z "\$STRIPE_LIVE_SESSION_ID_INPUT" && -z "\$STRIPE_LIVE_EVENT_ID_INPUT" \]\]/);
-  assert.match(workflow, /Repair only missing Admin and WebView Maps referrers without widening restrictions/);
+  assert.match(workflow, /Repair exact known Maps restrictions without widening permissions/);
   assert.match(workflow, /required_admin_referrer='https:\/\/bin-group-admin-panel\.web\.app\/\*'/);
   assert.match(workflow, /required_webview_referrer='https:\/\/localhost\/\*'/);
-  assert.match(workflow, /MAPS_ALLOW_MISSING_KNOWN_REFERRERS_REPAIR=true[\s\S]*?verify-google-maps-api-key-restrictions\.mjs/);
-  assert.match(workflow, /gcloud services api-keys update "\$key_resource"[\s\S]*?--append[\s\S]*?--allowed-referrers="\$required_admin_referrer,\$required_webview_referrer"/);
+  assert.match(workflow, /MAPS_ALLOW_PRODUCTION_RESTRICTION_REPAIR=true[\s\S]*?verify-google-maps-api-key-restrictions\.mjs/);
+  assert.match(workflow, /gcloud services api-keys update "\\$key_resource"[\\s\\S]*?--allowed-referrers="\\$approved_referrers"[\\s\\S]*?--api-target=service=maps-backend\.googleapis\.com[\\s\\S]*?--api-target=service=places-backend\.googleapis\.com[\\s\\S]*?--api-target=service=geocoding-backend\.googleapis\.com[\\s\\S]*?--api-target=service=static-maps-backend\.googleapis\.com/);
   const strictMapsVerifiers = workflow.match(/node scripts\/verify-google-maps-api-key-restrictions\.mjs/g) || [];
   assert.ok(strictMapsVerifiers.length >= 3);
   const mapsVerifier = await read('scripts/verify-google-maps-api-key-restrictions.mjs');
