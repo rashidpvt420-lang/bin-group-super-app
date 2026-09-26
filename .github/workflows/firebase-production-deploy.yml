@@ -372,7 +372,7 @@ jobs:
       - name: Install dependencies with retry
         run: bash scripts/npm-install-retry.sh
 
-      - name: Repair only missing Admin and WebView Maps referrers without widening restrictions
+      - name: Repair exact known Maps restrictions without widening permissions
         shell: bash
         run: |
           set -euo pipefail
@@ -383,6 +383,7 @@ jobs:
 
           required_admin_referrer='https://bin-group-admin-panel.web.app/*'
           required_webview_referrer='https://localhost/*'
+          approved_api_targets='maps-backend.googleapis.com,places-backend.googleapis.com,geocoding-backend.googleapis.com,static-maps-backend.googleapis.com'
           key_resource="$(gcloud services api-keys lookup "$VITE_GOOGLE_MAPS_API_KEY" --format='value(name)')"
           [[ "$key_resource" =~ ^projects/[0-9]+/locations/global/keys/[A-Za-z0-9_-]+$ ]] \
             || fail "Maps key lookup did not return a canonical API Keys resource."
@@ -394,21 +395,27 @@ jobs:
             || fail "Maps key does not belong to the configured production project."
 
           if node scripts/verify-google-maps-api-key-restrictions.mjs; then
-            echo "Required Maps referrers already present and the full restriction verifier passes; no mutation required."
+            echo "Maps restrictions already satisfy the strict production policy; no mutation required."
           else
-            MAPS_ALLOW_MISSING_KNOWN_REFERRERS_REPAIR=true \
+            MAPS_ALLOW_PRODUCTION_RESTRICTION_REPAIR=true \
               node scripts/verify-google-maps-api-key-restrictions.mjs
 
+            current_referrers="$(gcloud services api-keys describe "$key_resource" --format='value(restrictions.browserKeyRestrictions.allowedReferrers.flatten())')"
+            [[ -n "${current_referrers// }" ]] || fail "Unable to read current Maps browser referrers."
+            normalized_referrers="$current_referrers"
+            [[ ",$normalized_referrers," == *",$required_admin_referrer,"* ]] || normalized_referrers="$normalized_referrers,$required_admin_referrer"
+            [[ ",$normalized_referrers," == *",$required_webview_referrer,"* ]] || normalized_referrers="$normalized_referrers,$required_webview_referrer"
+
             gcloud services api-keys update "$key_resource" \
-              --append \
-              --allowed-referrers="$required_admin_referrer,$required_webview_referrer" \
+              --allowed-referrers="$normalized_referrers" \
+              --api-target="$approved_api_targets" \
               --project="$GCP_PROJECT_ID" \
               --quiet
-            echo "Added only the exact Admin Hosting and local WebView referrers after REST-backed fail-closed validation."
+            echo "Replaced Maps restrictions with the exact approved referrer set plus the exact approved API targets."
           fi
 
-          # The relaxed verifier is never sufficient evidence. The final strict
-          # verifier must pass in the same protected step before deployment continues.
+          # Repair tolerance is never deployment evidence. The full strict verifier
+          # must pass in the same protected step before deployment can continue.
           node scripts/verify-google-maps-api-key-restrictions.mjs
 
       - name: Verify Google Maps production key restrictions and enabled APIs
