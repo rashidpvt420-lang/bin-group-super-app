@@ -383,7 +383,6 @@ jobs:
 
           required_admin_referrer='https://bin-group-admin-panel.web.app/*'
           required_webview_referrer='https://localhost/*'
-          approved_api_targets='maps-backend.googleapis.com,places-backend.googleapis.com,geocoding-backend.googleapis.com,static-maps-backend.googleapis.com'
           key_resource="$(gcloud services api-keys lookup "$VITE_GOOGLE_MAPS_API_KEY" --format='value(name)')"
           [[ "$key_resource" =~ ^projects/[0-9]+/locations/global/keys/[A-Za-z0-9_-]+$ ]] \
             || fail "Maps key lookup did not return a canonical API Keys resource."
