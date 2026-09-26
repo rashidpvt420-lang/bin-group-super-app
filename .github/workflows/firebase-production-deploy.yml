@@ -372,7 +372,7 @@ jobs:
       - name: Install dependencies with retry
         run: bash scripts/npm-install-retry.sh
 
-      - name: Repair only missing Admin Maps referrer without widening restrictions
+      - name: Repair only missing Admin and WebView Maps referrers without widening restrictions
         shell: bash
         run: |
           set -euo pipefail
@@ -382,6 +382,7 @@ jobs:
           }
 
           required_admin_referrer='https://bin-group-admin-panel.web.app/*'
+          required_webview_referrer='https://localhost/*'
           key_resource="$(gcloud services api-keys lookup "$VITE_GOOGLE_MAPS_API_KEY" --format='value(name)')"
           [[ "$key_resource" =~ ^projects/[0-9]+/locations/global/keys/[A-Za-z0-9_-]+$ ]] \
             || fail "Maps key lookup did not return a canonical API Keys resource."
@@ -393,17 +394,17 @@ jobs:
             || fail "Maps key does not belong to the configured production project."
 
           if node scripts/verify-google-maps-api-key-restrictions.mjs; then
-            echo "Required Admin Maps referrer already present and the full restriction verifier passes; no mutation required."
+            echo "Required Maps referrers already present and the full restriction verifier passes; no mutation required."
           else
-            MAPS_ALLOW_MISSING_ADMIN_REFERRER_REPAIR=true \
+            MAPS_ALLOW_MISSING_KNOWN_REFERRERS_REPAIR=true \
               node scripts/verify-google-maps-api-key-restrictions.mjs
 
             gcloud services api-keys update "$key_resource" \
               --append \
-              --allowed-referrers="$required_admin_referrer" \
+              --allowed-referrers="$required_admin_referrer,$required_webview_referrer" \
               --project="$GCP_PROJECT_ID" \
               --quiet
-            echo "Added only the exact Admin Hosting referrer after REST-backed fail-closed validation."
+            echo "Added only the exact Admin Hosting and local WebView referrers after REST-backed fail-closed validation."
           fi
 
           # The relaxed verifier is never sufficient evidence. The final strict
