@@ -48,7 +48,7 @@ function verify(key, { referrers, services = requiredServices, repair = false, p
       VITE_GOOGLE_MAPS_API_KEY: 'test-maps-key',
       MAPS_TEST_REFERRERS: JSON.stringify(referrers),
       MAPS_TEST_SERVICES: JSON.stringify(services),
-      MAPS_ALLOW_MISSING_KNOWN_REFERRERS_REPAIR: String(repair),
+      MAPS_ALLOW_PRODUCTION_RESTRICTION_REPAIR: String(repair),
       GITHUB_ACTIONS: protectedContext ? 'true' : 'false',
       GITHUB_WORKFLOW: protectedContext ? 'Firebase Production Deploy' : 'unit-test',
       GITHUB_JOB: protectedContext ? 'deploy-firebase-production-stack' : 'unit-test',
@@ -85,7 +85,7 @@ esac
 
     const repair = verify(dir, { referrers: withoutBoth, repair: true, protectedContext: true });
     assert.equal(repair.status, 0, repair.output);
-    assert.match(repair.output, /repairTolerance=admin-and-webview-referrers-only/);
+    assert.match(repair.output, /repairTolerance=admin-webview-and-directions-target-only/);
 
     const onlyAdmin = verify(dir, { referrers: [...withoutBoth, adminOrigin] });
     assert.notEqual(onlyAdmin.status, 0);
@@ -94,6 +94,15 @@ esac
     const complete = verify(dir, { referrers: [...withoutBoth, adminOrigin, webviewOrigin] });
     assert.equal(complete.status, 0, complete.output);
     assert.match(complete.output, /repairTolerance=none/);
+
+    const knownRepair = verify(dir, {
+      referrers: withoutBoth,
+      services: [...requiredServices, 'directions-backend.googleapis.com'],
+      repair: true,
+      protectedContext: true,
+    });
+    assert.equal(knownRepair.status, 0, knownRepair.output);
+    assert.match(knownRepair.output, /admin-webview-and-directions-target-only/);
 
     for (const { referrers, services, error } of [
       { referrers: withoutBoth.filter(x => !x.includes('www.')), error: /www\.bin-groups\.com/ },
