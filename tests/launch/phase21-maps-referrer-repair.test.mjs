@@ -49,7 +49,7 @@ function verify(key, { referrers, services = requiredServices, repair = false, l
       MAPS_TEST_REFERRERS: JSON.stringify(referrers),
       MAPS_TEST_SERVICES: JSON.stringify(services),
       MAPS_ALLOW_MISSING_KNOWN_REFERRERS_REPAIR: String(repair),
-      MAPS_ALLOW_LEGACY_DIRECTIONS_REPAIR: String(legacyRepair),
+      MAPS_ALLOW_KNOWN_LEGACY_API_REPAIR: String(legacyRepair),
       GITHUB_ACTIONS: protectedContext ? 'true' : 'false',
       GITHUB_WORKFLOW: protectedContext ? 'Firebase Production Deploy' : 'unit-test',
       GITHUB_JOB: protectedContext ? 'deploy-firebase-production-stack' : 'unit-test',
@@ -89,6 +89,7 @@ esac
     assert.match(repair.output, /repairTolerance=admin-and-webview-referrers-only/);
 
     const withLegacyDirections = [...requiredServices, 'directions-backend.googleapis.com'];
+    const withKnownLegacyApis = [...requiredServices, 'directions-backend.googleapis.com', 'places.googleapis.com'];
     const legacyStrict = verify(dir, { referrers: withoutBoth, services: withLegacyDirections });
     assert.notEqual(legacyStrict.status, 0);
 
@@ -102,14 +103,19 @@ esac
       referrers: withoutBoth, services: withLegacyDirections, repair: true, legacyRepair: true, protectedContext: true,
     });
     assert.equal(legacyProtected.status, 0, legacyProtected.output);
-    assert.match(legacyProtected.output, /legacyDirectionsRepair=protected-only/);
+    assert.match(legacyProtected.output, /legacyApiRepair=directions-and-places-new-protected-only/);
+
+    const bothKnownLegacyProtected = verify(dir, {
+      referrers: withoutBoth, services: withKnownLegacyApis, repair: true, legacyRepair: true, protectedContext: true,
+    });
+    assert.equal(bothKnownLegacyProtected.status, 0, bothKnownLegacyProtected.output);
 
     const unexpectedApi = verify(dir, {
-      referrers: withoutBoth, services: [...withLegacyDirections, 'other.googleapis.com'],
+      referrers: withoutBoth, services: [...withKnownLegacyApis, 'other.googleapis.com'],
       repair: true, legacyRepair: true, protectedContext: true,
     });
     assert.notEqual(unexpectedApi.status, 0);
-    assert.match(unexpectedApi.output, /Unexpected API target other.googleapis.com/);
+    assert.match(unexpectedApi.output, /Unexpected API target\(s\) other\.googleapis\.com/);
 
     const onlyAdmin = verify(dir, { referrers: [...withoutBoth, adminOrigin] });
     assert.notEqual(onlyAdmin.status, 0);
@@ -122,7 +128,7 @@ esac
     for (const { referrers, services, error } of [
       { referrers: withoutBoth.filter(x => !x.includes('www.')), error: /www\.bin-groups\.com/ },
       { referrers: [...withoutBoth, 'https://*/*'], error: /unrestricted\/wildcard Maps referrer/ },
-      { referrers: withoutBoth, services: [...requiredServices, 'other.googleapis.com'], error: /Unexpected API target/ },
+      { referrers: withoutBoth, services: [...requiredServices, 'other.googleapis.com'], error: /Unexpected API target(?:\(s\))?/ },
     ]) {
       const denied = verify(dir, { referrers, services, repair: true, protectedContext: true });
       assert.notEqual(denied.status, 0);

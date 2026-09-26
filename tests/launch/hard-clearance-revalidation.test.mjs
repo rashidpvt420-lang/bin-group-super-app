@@ -276,8 +276,8 @@ test('production deploy consumes frozen clearance under a separate current-main 
   assert.match(workflow, /required_admin_referrer='https:\/\/bin-group-admin-panel\.web\.app\/\*'/);
   assert.match(workflow, /required_webview_referrer='https:\/\/localhost\/\*'/);
   assert.match(workflow, /MAPS_ALLOW_MISSING_KNOWN_REFERRERS_REPAIR=true[\s\S]*?verify-google-maps-api-key-restrictions\.mjs/);
-  assert.match(workflow, /MAPS_ALLOW_LEGACY_DIRECTIONS_REPAIR=true[\s\S]*?verify-google-maps-api-key-restrictions\.mjs/);
-  assert.match(workflow, /has_legacy_directions[\s\S]*?--api-target=service=static-maps-backend\.googleapis\.com/);
+  assert.match(workflow, /MAPS_ALLOW_KNOWN_LEGACY_API_REPAIR=true[\s\S]*?verify-google-maps-api-key-restrictions\.mjs/);
+  assert.match(workflow, /has_known_legacy_api[\s\S]*?--api-target=service=static-maps-backend\.googleapis\.com/);
   assert.match(workflow, /--allowed-referrers="\$referrers_csv"/);
   assert.match(workflow, /gcloud services api-keys update "\$key_resource"[\s\S]*?--append[\s\S]*?--allowed-referrers="\$required_admin_referrer,\$required_webview_referrer"/);
   const strictMapsVerifiers = workflow.match(/node scripts\/verify-google-maps-api-key-restrictions\.mjs/g) || [];
