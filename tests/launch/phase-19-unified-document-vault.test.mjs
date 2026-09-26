@@ -98,6 +98,16 @@ test('Phase 19 private HR files remain browser-denied and are resolved only afte
   ]);
   assert.match(storage, /match \/privateHrDocuments\/\{staffId\}\/\{allPaths=\*\*\}[\s\S]*?allow read, write: if false;/);
   assert.ok(vault.includes('staffHrDocuments: "private_staff_document"'));
-  assert.ok(vault.includes('bucket.file(artifact.storagePath)'));
+  assert.ok(vault.includes('getStorageBucket().file(artifact.storagePath)'));
   assert.ok(vault.includes('authorizeArtifact(actor, collectionName, sourceId)'));
+});
+
+
+test('Phase 21 Functions discovery never resolves the default Storage bucket at module import time', async () => {
+  const source = await read('functions/unifiedDocumentVault.ts');
+  assert.doesNotMatch(source, /const\s+bucket\s*=\s*admin\.storage\(\)\.bucket\(\)/);
+  assert.ok(source.includes('function getStorageBucket()'));
+  assert.ok(source.includes('admin.app().options.storageBucket'));
+  assert.ok(source.includes('return admin.storage().bucket(bucketName)'));
+  assert.ok(source.includes('getStorageBucket().file(artifact.storagePath)'));
 });
