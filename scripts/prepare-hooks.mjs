@@ -54,6 +54,7 @@ function prepareProtectedLiveEvidenceReplay() {
     'scripts/patch-protected-admin-staff-access-interaction.mjs',
     'scripts/harden-repeated-business-evidence.mjs',
     'scripts/harden-tenant-before-work-convergence.mjs',
+    'scripts/patch-phase21-postdeploy-evidence.mjs',
   ];
   for (const script of replayScripts) {
     execFileSync(process.execPath, [script], { stdio: 'inherit', env: process.env });
