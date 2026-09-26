@@ -400,18 +400,17 @@ jobs:
             MAPS_ALLOW_PRODUCTION_RESTRICTION_REPAIR=true \
               node scripts/verify-google-maps-api-key-restrictions.mjs
 
-            current_referrers="$(gcloud services api-keys describe "$key_resource" --format='value(restrictions.browserKeyRestrictions.allowedReferrers.flatten())')"
-            [[ -n "${current_referrers// }" ]] || fail "Unable to read current Maps browser referrers."
-            normalized_referrers="$current_referrers"
-            [[ ",$normalized_referrers," == *",$required_admin_referrer,"* ]] || normalized_referrers="$normalized_referrers,$required_admin_referrer"
-            [[ ",$normalized_referrers," == *",$required_webview_referrer,"* ]] || normalized_referrers="$normalized_referrers,$required_webview_referrer"
+            approved_referrers='https://bin-groups.com/*,https://www.bin-groups.com/*,https://bin-group-57c60.web.app/*,https://bin-group-admin-panel.web.app/*,https://localhost/*'
 
             gcloud services api-keys update "$key_resource" \
-              --allowed-referrers="$normalized_referrers" \
-              --api-target="$approved_api_targets" \
+              --allowed-referrers="$approved_referrers" \
+              --api-target=service=maps-backend.googleapis.com \
+              --api-target=service=places-backend.googleapis.com \
+              --api-target=service=geocoding-backend.googleapis.com \
+              --api-target=service=static-maps-backend.googleapis.com \
               --project="$GCP_PROJECT_ID" \
               --quiet
-            echo "Replaced Maps restrictions with the exact approved referrer set plus the exact approved API targets."
+            echo "Replaced Maps restrictions with the exact approved referrer set and removed the unneeded Directions API target."
           fi
 
           # Repair tolerance is never deployment evidence. The full strict verifier
