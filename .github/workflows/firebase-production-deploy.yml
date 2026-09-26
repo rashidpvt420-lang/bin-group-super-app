@@ -409,10 +409,13 @@ jobs:
             ' <<<"$key_json")"
             if [[ "$has_known_legacy_api" == 'true' ]]; then
               jq -e '
-                ([.restrictions.apiTargets[]?.service] | sort) ==
+                ([.restrictions.apiTargets[]?.service] | unique) as $services |
                 (["maps-backend.googleapis.com", "places-backend.googleapis.com",
-                  "geocoding-backend.googleapis.com", "static-maps-backend.googleapis.com",
-                  "directions-backend.googleapis.com", "places.googleapis.com"] | unique | sort) and
+                  "geocoding-backend.googleapis.com", "static-maps-backend.googleapis.com"]) as $required |
+                (["directions-backend.googleapis.com", "places.googleapis.com"]) as $legacy |
+                (($required - $services) | length) == 0 and
+                (($services - ($required + $legacy)) | length) == 0 and
+                (($services - $required) | length) >= 1 and
                 (all(.restrictions.apiTargets[]; ((.methods // []) | length) == 0)) and
                 ((.restrictions.browserKeyRestrictions.allowedReferrers | type) == "array") and
                 ((.restrictions.browserKeyRestrictions.allowedReferrers | length) > 0) and
