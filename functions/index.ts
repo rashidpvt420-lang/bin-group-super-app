@@ -25,7 +25,6 @@ const db = admin.firestore();
 
 // Secrets
 const openAiKey = defineSecret("OPENAI_API_KEY");
-const geminiApiKey = defineSecret("GEMINI_API_KEY");
 const iotGatewayToken = defineSecret("IOT_GATEWAY_TOKEN");
 
 // ─── AUDIT HELPER ──────────────────────────────────────────────────────────
@@ -1626,18 +1625,6 @@ type OpenAiChatResponse = {
     choices?: Array<{ message?: { content?: string } }>;
 };
 
-type GeminiGenerateResponse = {
-    error?: { message?: string };
-    candidates?: Array<{
-        content?: {
-            parts?: Array<{
-                text?: string;
-                inlineData?: { data?: string };
-            }>;
-        };
-    }>;
-};
-
 export const getMissionGuidance = onCall({ cors: true, enforceAppCheck: true, secrets: [openAiKey] }, async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Session invalid.');
     await enforceAiUsageQuota(
@@ -1682,95 +1669,11 @@ export const getMissionGuidance = onCall({ cors: true, enforceAppCheck: true, se
  * [V11] SECURE ARCHITECTURAL CONCEPT GENERATOR
  * Calls Gemini from backend-only using Secret Manager.
  */
-export const generateDesignConcept = onCall({ cors: true, enforceAppCheck: true, secrets: [geminiApiKey] }, async (request) => {
-    if (!request.auth) throw new HttpsError('unauthenticated', 'Session invalid.');
-
-    const uid = request.auth.uid;
-    const tokenRole = normalizeRole(
-        request.auth.token.role ||
-        request.auth.token.userRole ||
-        request.auth.token.primaryRole,
+export const generateDesignConcept = onCall({ cors: true, enforceAppCheck: true }, async () => {
+    throw new HttpsError(
+        "failed-precondition",
+        "Legacy Design Studio generation is retired. Use generateDesignConceptCompat for Admin or submitAIDesignRequest for Owner/Tenant so quota, file validation, private media, canonical quote, payment and project handoff remain server-authoritative.",
     );
-    const isAdmin = request.auth.token.admin === true ||
-        request.auth.token.isAdmin === true ||
-        request.auth.token.superAdmin === true ||
-        request.auth.token.super_admin === true ||
-        ["admin", "super_admin", "ceo", "manager", "operations_admin"].includes(tokenRole);
-
-    if (!isAdmin) throw new HttpsError('permission-denied', 'Unauthorized execution node.');
-
-    try {
-        const { requestId, scope, designStyle, imageBase64, mimeType } = request.data;
-        const apiKey = geminiApiKey.value();
-        if (!apiKey) {
-            throw new HttpsError("failed-precondition", "AI service is not configured. Gemini API key is missing.");
-        }
-
-        const fullPrompt = `You are the Sovereign AI Architect for BIN GROUP LLC. 
-            Redesign this ${scope?.zoneType || 'space'} using a ${designStyle} interior design style. 
-            Maintain the original room structure, windows, and doors, but upgrade all materials, furniture, and lighting to ultra-premium institutional quality.
-            Generate both a technical concept summary in JSON and a high-fidelity architectural render.`;
-
-        const payload: any = {
-            contents: [{
-                parts: [
-                    { text: fullPrompt }
-                ]
-            }],
-            generationConfig: {
-                responseModalities: ["TEXT", "IMAGE"],
-                responseMimeType: "application/json"
-            }
-        };
-
-        if (imageBase64 && mimeType) {
-            payload.contents[0].parts.push({
-                inlineData: { mimeType, data: imageBase64 }
-            });
-        }
-
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload)
-        });
-
-        if (!response.ok) {
-            const errData = await response.json().catch(() => ({})) as GeminiGenerateResponse;
-            throw new Error(errData?.error?.message || `Gemini Error: ${response.statusText}`);
-        }
-
-        const result = await response.json() as GeminiGenerateResponse;
-        const textPart = result.candidates?.[0]?.content?.parts?.find((part) => part.text)?.text;
-        const imagePart = result.candidates?.[0]?.content?.parts?.find((part) => part.inlineData)?.inlineData?.data;
-
-        const aiResponse = textPart ? JSON.parse(textPart) : {};
-
-        // Sovereign Audit Log
-        await logAudit({
-            actorId: uid,
-            actorRole: "admin",
-            action: "GENERATE_DESIGN_CONCEPT",
-            targetType: "design_requests",
-            targetId: requestId || "unknown",
-            metadata: { style: designStyle, zone: scope?.zoneType, hasImage: !!imagePart, timestamp: new Date().toISOString() }
-        });
-
-        return {
-            status: "SUCCESS",
-            concept: {
-                conceptTitle: aiResponse.conceptTitle || "Sovereign Design Concept",
-                conceptSummary: aiResponse.conceptSummary || "A bespoke architectural transformation.",
-                recommendedMaterials: aiResponse.recommendedMaterials || [],
-                estimatedScope: aiResponse.estimatedScope || "Institutional Grade Execution",
-                generatedAt: new Date().toISOString()
-            },
-            generatedImage: imagePart || null
-        };
-    } catch (error: any) {
-        console.error("Gemini Backend Failure:", error);
-        throw new HttpsError('internal', 'Sovereign AI Synthesis faulty.');
-    }
 });
 
 // ─── SCHEDULED MISSIONS ────────────────────────────────────────────────────

@@ -2,7 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { defineSecret } from "firebase-functions/params";
 import * as admin from "firebase-admin";
-import { enforceAiUsageQuota } from "./aiUsageQuota";
+import { reserveAiUsageQuota, settleAiUsageQuota } from "./aiUsageQuota";
 
 if (!admin.apps.length) admin.initializeApp();
 
@@ -338,7 +338,7 @@ export const submitAIDesignRequest = onCall({
   secrets: [openAiKey, imageGenerationKey],
 }, async (request) => {
   if (!request.auth?.uid) throw new HttpsError("unauthenticated", "Sign in before submitting an AI design request.");
-  const quota = await enforceAiUsageQuota(request.auth, "design", PUBLIC_DESIGN_ROLES, 3);
+  const quota = await reserveAiUsageQuota(request.auth, "design", PUBLIC_DESIGN_ROLES, 3);
   const uid = request.auth.uid;
   const role = cleanText(quota.role || request.auth.token?.role).toLowerCase();
   const email = cleanText(request.auth.token?.email).toLowerCase();
@@ -393,6 +393,7 @@ export const submitAIDesignRequest = onCall({
 
   try {
     const rendered = await editReferenceImage(apiKey, prompt, reference.base64, mimeType);
+    const generatedImageSha256 = createHash("sha256").update(rendered.buffer).digest("hex");
     const referencePath = await writePrivateMedia(
       `design_requests/${uid}/${requestId}/reference.${extensionForMimeType(mimeType)}`,
       reference.buffer,
@@ -403,7 +404,7 @@ export const submitAIDesignRequest = onCall({
       `ai_design_renders/${uid}/${requestId}/primary.jpg`,
       rendered.buffer,
       rendered.mimeType,
-      { ownerUid: uid, requestId, kind: "generated", providerRequestId: rendered.providerRequestId || "" },
+      { ownerUid: uid, requestId, kind: "generated", providerRequestId: rendered.providerRequestId || "", sha256: generatedImageSha256 },
     );
     const media = await resolveMedia({
       referenceImagePaths: [referencePath],
@@ -456,6 +457,8 @@ export const submitAIDesignRequest = onCall({
       renderStatus: "AI_RENDER_COMPLETE",
       aiProvider: "openai",
       providerRequestId: rendered.providerRequestId || null,
+      inputImageSha256: reference.sha256,
+      generatedImageSha256,
       status,
       workflowStage: status,
       approvalStatus,
@@ -520,11 +523,13 @@ export const submitAIDesignRequest = onCall({
           inputImageSha256: reference.sha256,
           quoteHash: quote.quoteHash,
           providerRequestId: rendered.providerRequestId || null,
+          generatedImageSha256,
         },
         createdAt: now,
       });
     });
 
+    await settleAiUsageQuota(quota, true);
     return {
       status: "SUCCESS",
       idempotent: false,
@@ -540,6 +545,7 @@ export const submitAIDesignRequest = onCall({
       ...media,
     };
   } catch (error: any) {
+    await settleAiUsageQuota(quota, false).catch(() => undefined);
     console.error("submitAIDesignRequest failed", {
       requestId,
       uid,

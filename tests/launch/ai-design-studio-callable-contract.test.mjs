@@ -14,6 +14,11 @@ test('AI Design Studio exports distinct legacy hold, public and Admin compatibil
   ]);
 
   assert.match(legacy, /export const generateDesignConcept = onCall/);
+  const legacyStart = legacy.indexOf('export const generateDesignConcept = onCall');
+  const legacyEnd = legacy.indexOf('// ─── SCHEDULED MISSIONS', legacyStart);
+  const legacyBlock = legacy.slice(legacyStart, legacyEnd);
+  assert.match(legacyBlock, /Legacy Design Studio generation is retired/);
+  assert.doesNotMatch(legacyBlock, /generativelanguage\.googleapis\.com/);
   assert.match(publicAi, /export const submitAIDesignRequest = onCall/);
   assert.match(publicAi, /export const getAIDesignRequestMedia = onCall/);
   assert.doesNotMatch(publicAi, /export const generateAIDesignConceptImages/);
