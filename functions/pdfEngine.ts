@@ -533,7 +533,7 @@ export async function generateContractPdfArtifact(data: any): Promise<CanonicalP
     });
 }
 
-export async function generatePayslipPDF(data: any) {
+export async function generatePayslipPdfArtifact(data: any): Promise<CanonicalPdfArtifact> {
     const PDFDocument = await loadPdfKit();
     let fontBuffer: Buffer | null = null;
     try {
@@ -542,7 +542,7 @@ export async function generatePayslipPDF(data: any) {
         console.error("Cairo font load failed for payslip:", err);
     }
 
-    return new Promise<string>((resolve, reject) => {
+    return new Promise<CanonicalPdfArtifact>((resolve, reject) => {
         const doc = new (PDFDocument as any)({ margin: 50, size: 'A4' });
         if (fontBuffer) {
             try {
@@ -563,7 +563,7 @@ export async function generatePayslipPDF(data: any) {
                     staffId: textValue(data.staffId, ''),
                     payPeriod: textValue(data.payPeriod, '')
                 });
-                resolve(artifact.pdfUrl);
+                resolve(artifact);
             } catch (err) {
                 reject(err);
             }
@@ -771,4 +771,9 @@ export async function generateMobilizationInvoicePdfArtifact(data: any): Promise
         para(doc, 'This invoice is generated only from the server-authoritative approved payment record.', 'تم إنشاء هذه الفاتورة فقط من سجل الدفع المعتمد والموثق على الخادم.');
         doc.end();
     });
+}
+
+
+export async function generatePayslipPDF(data: any): Promise<string> {
+    return (await generatePayslipPdfArtifact(data)).pdfUrl;
 }
