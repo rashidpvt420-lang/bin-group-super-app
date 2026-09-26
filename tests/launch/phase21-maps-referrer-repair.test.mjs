@@ -35,7 +35,7 @@ const stubFetch = `
   };
 `;
 
-function verify(key, { referrers, services = requiredServices, repair = false, protectedContext = false }) {
+function verify(key, { referrers, services = requiredServices, repair = false, legacyRepair = false, protectedContext = false }) {
   const result = spawnSync(process.execPath, [
     `--import=data:text/javascript,${encodeURIComponent(stubFetch)}`,
     verifier,
@@ -49,6 +49,7 @@ function verify(key, { referrers, services = requiredServices, repair = false, p
       MAPS_TEST_REFERRERS: JSON.stringify(referrers),
       MAPS_TEST_SERVICES: JSON.stringify(services),
       MAPS_ALLOW_MISSING_KNOWN_REFERRERS_REPAIR: String(repair),
+      MAPS_ALLOW_LEGACY_DIRECTIONS_REPAIR: String(legacyRepair),
       GITHUB_ACTIONS: protectedContext ? 'true' : 'false',
       GITHUB_WORKFLOW: protectedContext ? 'Firebase Production Deploy' : 'unit-test',
       GITHUB_JOB: protectedContext ? 'deploy-firebase-production-stack' : 'unit-test',
@@ -86,6 +87,29 @@ esac
     const repair = verify(dir, { referrers: withoutBoth, repair: true, protectedContext: true });
     assert.equal(repair.status, 0, repair.output);
     assert.match(repair.output, /repairTolerance=admin-and-webview-referrers-only/);
+
+    const withLegacyDirections = [...requiredServices, 'directions-backend.googleapis.com'];
+    const legacyStrict = verify(dir, { referrers: withoutBoth, services: withLegacyDirections });
+    assert.notEqual(legacyStrict.status, 0);
+
+    const legacyUnprotected = verify(dir, {
+      referrers: withoutBoth, services: withLegacyDirections, repair: true, legacyRepair: true,
+    });
+    assert.notEqual(legacyUnprotected.status, 0);
+    assert.match(legacyUnprotected.output, /only inside the protected Firebase Production Deploy job/);
+
+    const legacyProtected = verify(dir, {
+      referrers: withoutBoth, services: withLegacyDirections, repair: true, legacyRepair: true, protectedContext: true,
+    });
+    assert.equal(legacyProtected.status, 0, legacyProtected.output);
+    assert.match(legacyProtected.output, /legacyDirectionsRepair=protected-only/);
+
+    const unexpectedApi = verify(dir, {
+      referrers: withoutBoth, services: [...withLegacyDirections, 'other.googleapis.com'],
+      repair: true, legacyRepair: true, protectedContext: true,
+    });
+    assert.notEqual(unexpectedApi.status, 0);
+    assert.match(unexpectedApi.output, /Unexpected API target other.googleapis.com/);
 
     const onlyAdmin = verify(dir, { referrers: [...withoutBoth, adminOrigin] });
     assert.notEqual(onlyAdmin.status, 0);

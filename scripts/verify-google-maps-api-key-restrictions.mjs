@@ -7,6 +7,8 @@ const projectId = text(process.env.GCP_PROJECT_ID || 'bin-group-57c60');
 const keyString = text(process.env.VITE_GOOGLE_MAPS_API_KEY);
 const ADMIN_HOSTING_REFERRER = 'https://bin-group-admin-panel.web.app/*';
 const LOCAL_WEBVIEW_REFERRER = 'https://localhost/*';
+const allowLegacyDirectionsRepair =
+  text(process.env.MAPS_ALLOW_LEGACY_DIRECTIONS_REPAIR).toLowerCase() === 'true';
 const allowMissingKnownReferrersRepair =
   text(process.env.MAPS_ALLOW_MISSING_KNOWN_REFERRERS_REPAIR).toLowerCase() === 'true';
 
@@ -71,7 +73,7 @@ function referrerCovered(allowed, required) {
 }
 
 async function main() {
-  if (allowMissingKnownReferrersRepair) {
+  if (allowMissingKnownReferrersRepair || allowLegacyDirectionsRepair) {
     const protectedRepairContext =
       process.env.GITHUB_ACTIONS === 'true' &&
       process.env.GITHUB_WORKFLOW === 'Firebase Production Deploy' &&
@@ -145,7 +147,7 @@ async function main() {
     if (!services.has(required)) fail(`Required Maps API target is missing: ${required}.`);
   }
   for (const service of services) {
-    if (!REQUIRED_API_TARGETS.has(service)) {
+    if (!REQUIRED_API_TARGETS.has(service) && !(allowLegacyDirectionsRepair && service === 'directions-backend.googleapis.com')) {
       fail(`Unexpected API target ${service}; use a separate key rather than widening the production Maps browser key.`);
     }
   }
@@ -165,6 +167,7 @@ async function main() {
   console.log('[maps-key-restrictions] clientRestriction=browser');
   console.log('[maps-key-restrictions] requiredReferrerGroups=' + REQUIRED_REFERRER_GROUPS.length);
   console.log('[maps-key-restrictions] repairTolerance=' + (allowMissingKnownReferrersRepair ? 'admin-and-webview-referrers-only' : 'none'));
+  console.log('[maps-key-restrictions] legacyDirectionsRepair=' + (allowLegacyDirectionsRepair ? 'protected-only' : 'none'));
   console.log('[maps-key-restrictions] apiTargets=' + [...services].sort().join(','));
   console.log('[maps-key-restrictions] nativeMapsSdk=not-used-by-this-key');
 }
