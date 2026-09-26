@@ -79,7 +79,7 @@ async function main() {
       process.env.GITHUB_JOB === 'deploy-firebase-production-stack' &&
       process.env.GITHUB_REF === 'refs/heads/main';
     if (!protectedRepairContext) {
-      fail('Maps referrer repair tolerance is allowed only inside the protected Firebase Production Deploy job on main.');
+      fail('Maps restriction repair tolerance is allowed only inside the protected Firebase Production Deploy job on main.');
     }
   }
 
