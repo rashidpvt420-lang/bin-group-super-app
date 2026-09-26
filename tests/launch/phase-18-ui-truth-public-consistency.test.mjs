@@ -22,7 +22,8 @@ test('Phase 18 public Owner copy never advertises quote/contract/payment before 
     assert.doesNotMatch(source, /details → quote and contract → physical inspections/i);
   }
   assert.ok(owner.includes('Inspection → final quote → signed contract → payment'));
-  assert.ok(profile.includes('physical inspection, final verified quotation, contract acceptance and OTP signature, payment verification, then activation'));
+  assert.ok(profile.includes('physical site inspection, final verified quotation, Owner contract acceptance, payment verification, and activation'));
+  assert.ok(profile.includes('authoritative property pricing remains server-calculated from verified inputs rather than AI-generated'));
 });
 
 test('Phase 18 public pricing language distinguishes final verified pricing from pre-inspection estimates', async () => {
@@ -49,6 +50,8 @@ test('Phase 18 public contact support Terms and Privacy routes expose real BIN G
   }
   assert.ok(owner.includes('ceo@bin-groups.com'));
   assert.ok(support.includes("label('Contact BIN GROUP', 'تواصل مع BIN GROUP')"));
+  assert.ok(support.includes("label('Request Support', 'اطلب الدعم')"));
+  assert.ok(support.includes("label('Schedule Demo', 'احجز عرضاً توضيحياً')"));
   assert.ok(terms.includes("t('terms.title')"));
   assert.ok(privacy.includes("t('privacy.title')"));
 });
