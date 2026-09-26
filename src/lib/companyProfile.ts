@@ -34,7 +34,7 @@ export const DEFAULT_COMPANY_PROFILE: CompanyProfile = {
   headline: 'BIN GROUP is a UAE maintenance and property management company rooted in Al Ain since 2010, now operating through a formally licensed LLC structure and building a trusted digital property-care and paperless staff operations platform.',
   mission: 'To deliver dependable maintenance and property management services that protect clients\' properties, reduce operational stress, and improve daily property care through clear communication, professional service standards, digital records, and accountable field execution.',
   vision: 'To become a trusted UAE property-care company starting from Al Ain, known for reliable maintenance, transparent property management, smart digital operations, paperless staff workflows, and long-term client relationships.',
-  promise: 'Trusted maintenance and property care, rooted in Al Ain: clear quotes, documented contracts, 15% mobilization, payment-plan visibility, tenant requests, technician dispatch, before-and-after evidence, owner reports, staff self-service, compliance records, and no unnecessary paperwork.',
+  promise: 'Trusted maintenance and property care, rooted in Al Ain: property submission, BIN GROUP review, physical inspection, final verified quotation, documented contract, payment only when contractually due, activation controls, tenant requests, technician evidence, owner reports, staff self-service, compliance records, and no unnecessary paperwork.',
   aboutText: 'BIN GROUP began as a small local maintenance operation in Al Ain in 2010, supporting practical property-care needs in the local market. The company has now moved into its formally licensed LLC phase, building on that experience with a more structured and technology-driven operating model for villas, apartments, buildings, hotels, schools, clinics, hospitals, offices, accommodations, retail spaces, warehouses, and large property portfolios. The public profile is designed around trust: legal company identity, licence details, service coverage, direct contact, clear service scope, and honest claims that can be verified. BIN GROUP also develops Workforce OS, a UAE-focused, multilingual, paperless staff self-service model for maintenance and property management field teams. The system is positioned as a field-operational HR workflow, not as an unsupported world-first claim: staff can request leave, upload sick leave documents, raise overtime and payroll queries, request HR letters, track document renewals, report safety issues, request tools/PPE, flag accommodation matters, and communicate with HR/Admin through one controlled digital chain.',
   services: [
     { id: 'maintenance-contracts', title: 'Annual Maintenance Contracts', desc: 'Custom maintenance contracts for villas, apartments, towers, hotels, schools, clinics, hospitals, offices, accommodations, malls, warehouses, and large portfolios. Scope is prepared by property type, asset condition, SLA level, risk profile, and service coverage.', icon: 'wrench' },
@@ -44,12 +44,12 @@ export const DEFAULT_COMPANY_PROFILE: CompanyProfile = {
     { id: 'workforce-os', title: 'Paperless Staff Self-Service', desc: 'A UAE-focused, multilingual, paperless staff self-service workflow for maintenance and property management field teams: leave, sick leave, overtime review, payslip support, salary queries, HR letters, document renewals, safety reports, accommodation issues, tools/PPE, and confidential HR support.', icon: 'users' },
     { id: 'wps-payroll-transparency', title: 'Payroll-Ready Staff Records', desc: 'Staff can view and query controlled payroll-related records such as basic salary context, allowances, overtime requests, deductions, payment status, and salary dispute cases while HR/Admin keeps approval authority.', icon: 'shield-check' },
     { id: 'compliance-passport', title: 'Digital Compliance Passport', desc: 'Visa, Emirates ID, passport, medical card, driving licence, trade certification, training references, PPE, toolbox talks, and dispatch-readiness records are tracked in one workforce dossier.', icon: 'shield-check' },
-    { id: 'owner-trust', title: 'Owner Trust & Proof', desc: 'Every serious action is designed to build trust: quote path, contract record, 15% mobilization step, service request trail, GPS context, photo evidence, reports, compliance logs, staff accountability, and property passport history.', icon: 'shield-check' },
+    { id: 'owner-trust', title: 'Owner Trust & Proof', desc: 'Every serious action follows the verified order: property submission, BIN GROUP review, physical inspection, final quotation, contract acceptance, payment verification, activation, then the service request, GPS, photo evidence, reports, compliance logs, staff accountability, and property passport history.', icon: 'shield-check' },
     { id: 'demo-video-guidance', title: 'Demo & Video Walkthroughs', desc: 'Public previews show what owners, tenants, technicians, brokers, and staff will see before they log in, making the app easier to understand, share, and trust.', icon: 'sparkles' },
     { id: 'ai-property-people-intelligence', title: 'AI-Assisted Property & People Intelligence', desc: 'AI-assisted quote logic, property classification, design previews, predictive maintenance signals, asset health scoring, staff HR triage, multilingual support, and portfolio-level decision support.', icon: 'sparkles' },
   ],
   workflows: [
-    'Owner Onboarding: property details, instant quote, contract selection, 15% mobilization, payment plan, and activation.',
+    'Owner Onboarding: property submission, BIN GROUP review, physical inspection, final verified quotation, contract acceptance and OTP signature, payment verification, then activation.',
     'Tenant Service: category, priority, photo proof, location context, service tracking, and completion confirmation.',
     'Technician Execution: direct job feed, route context, property-linked attendance, SLA expectation, safety notes, before-and-after proof, and job closure.',
     'Worker ESS: multilingual mobile self-service for leave, sick leave, overtime, payslip support, payroll dispute, HR letters, salary query, document renewal, accommodation issue, tools/PPE request, safety incident, and confidential complaint submission from the app.',
@@ -61,7 +61,7 @@ export const DEFAULT_COMPANY_PROFILE: CompanyProfile = {
   ],
   technologies: [
     'Bilingual English/Arabic company profile with professional, verifiable claims.',
-    'No-call owner journey from quote to contract to service tracking.',
+    'No-call owner journey from property submission and review through inspection, final quotation, signed contract, payment verification, activation, and service tracking.',
     'No-paperwork staff journey for leave, payroll support, document updates, staff letters, safety, tools/PPE, and HR case handling.',
     'Mobile-first multilingual ESS support for English, Arabic, Hindi, Urdu, Malayalam, Tagalog, Bengali, and Nepali workforce contexts.',
     'GPS-enabled technician routing, property-linked attendance context, and field accountability.',
@@ -72,7 +72,7 @@ export const DEFAULT_COMPANY_PROFILE: CompanyProfile = {
     'Ejari/Tawtheeq-style property reference fields can be stored for compliance context without claiming direct government integration unless approved access exists.',
     'Demo and video walkthroughs for public education and trust-building.',
     'Property passport records for every building, unit, contract, service request, compliance event, and staff-linked operation.',
-    'AI-powered quote, design, classification, maintenance, and staff People AI support intelligence.',
+    'AI-assisted design previews, classification, maintenance guidance, and staff People AI support intelligence; authoritative property pricing remains server-calculated from verified inputs rather than AI-generated.',
   ],
   serviceAreas: ['Al Ain', 'Abu Dhabi', 'Dubai', 'Sharjah', 'Ajman', 'Ras Al Khaimah', 'Fujairah', 'Umm Al Quwain'],
   contact: {
