@@ -30,11 +30,15 @@ test('Phase 17 validates image MIME signature and size before provider execution
 
 test('Phase 17 Design Studio quota is reserved then charged only after successful canonical workflow creation', async () => {
   const source = await read('functions/aiDesignStudio.ts');
-  const reserve = source.indexOf('reserveAiUsageQuota(request.auth, "design"');
-  const provider = source.indexOf('editReferenceImage(apiKey');
-  const create = source.indexOf('transaction.create(requestRef, requestPayload)');
-  const charge = source.indexOf('settleAiUsageQuota(quota, true)');
-  const release = source.indexOf('settleAiUsageQuota(quota, false)');
+  const start = source.indexOf('export const submitAIDesignRequest = onCall');
+  const end = source.indexOf('export const getAIDesignRequestMedia', start);
+  const callable = source.slice(start, end);
+  const reserve = callable.indexOf('reserveAiUsageQuota(request.auth, "design"');
+  const provider = callable.indexOf('editReferenceImage(apiKey');
+  const create = callable.indexOf('transaction.create(requestRef, requestPayload)');
+  const charge = callable.indexOf('settleAiUsageQuota(quota, true)');
+  const release = callable.indexOf('settleAiUsageQuota(quota, false)');
+  assert.ok(start >= 0 && end > start, 'submitAIDesignRequest callable boundary is missing');
   assert.ok(reserve >= 0 && provider > reserve && create > provider && charge > create);
   assert.ok(release > charge);
 });
