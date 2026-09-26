@@ -7,7 +7,7 @@ import { listUnifiedDocumentVault, openUnifiedDocument, type UnifiedVaultArtifac
 export default function TenantDocumentsPage() {
   const [documents, setDocuments] = useState<UnifiedVaultArtifact[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const [loadError, setLoadError] = useState('');
   const [opening, setOpening] = useState<string | null>(null);
 
   useEffect(() => {
@@ -17,13 +17,13 @@ export default function TenantDocumentsPage() {
       .then((items) => {
         if (!cancelled) {
           setDocuments(items);
-          setError('');
+          setLoadError('');
         }
       })
       .catch((err: any) => {
         if (!cancelled) {
           setDocuments([]);
-          setError(err?.message || 'Unable to load document vault.');
+          setLoadError(err?.message || 'This is a loading failure, not confirmation that your document vault is empty.');
         }
       })
       .finally(() => {
@@ -34,11 +34,11 @@ export default function TenantDocumentsPage() {
 
   const openDocument = async (artifactId: string) => {
     setOpening(artifactId);
-    setError('');
+    setLoadError('');
     try {
       await openUnifiedDocument(artifactId);
     } catch (err: any) {
-      setError(err?.message || 'Document access failed.');
+      setLoadError(err?.message || 'Document access failed.');
     } finally {
       setOpening(null);
     }
@@ -53,9 +53,9 @@ export default function TenantDocumentsPage() {
       <Typography variant="h4" fontWeight={950} color="#FFF">Tenant Document Vault</Typography>
       <Typography variant="body2" sx={{ color: 'rgba(255,255,255,.55)', mt: 1, mb: 4 }}>Lease, handover and approved property documents authorized for this Tenant.</Typography>
 
-      {error && <Alert severity="error" sx={{ mb: 3 }}>{error}</Alert>}
+      {loadError && <Alert severity="error" data-testid="tenant-documents-load-failed" sx={{ mb: 3 }}>{loadError}</Alert>}
 
-      {documents.length === 0 ? (
+      {!loadError && documents.length === 0 ? (
         <Paper sx={{ p: 7, textAlign: 'center', bgcolor: 'rgba(15,23,42,.45)', border: '1px dashed rgba(255,255,255,.08)', borderRadius: 5 }}>
           <FolderOpen size={44} color="rgba(255,255,255,.15)" />
           <Typography sx={{ mt: 2, color: 'rgba(255,255,255,.55)', fontWeight: 900 }}>NO AUTHORIZED DOCUMENTS YET</Typography>
