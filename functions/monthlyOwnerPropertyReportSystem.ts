@@ -2,6 +2,7 @@ import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import * as admin from "firebase-admin";
 import { getStorage } from "firebase-admin/storage";
+import { createHash } from "crypto";
 
 if (!admin.apps.length) {
   admin.initializeApp();
@@ -288,6 +289,7 @@ async function saveReportPdf(payload: OwnerReportPayload) {
   doc.end();
 
   const buffer = await completion;
+  const pdfSha256 = createHash("sha256").update(buffer).digest("hex");
   const storagePath = `owner_reports/${payload.ownerId}/${payload.periodKey}/monthly-property-report.pdf`;
   const file = getStorage().bucket().file(storagePath);
   await file.save(buffer, {
@@ -298,11 +300,16 @@ async function saveReportPdf(payload: OwnerReportPayload) {
         ownerEmail: payload.ownerEmail,
         periodKey: payload.periodKey,
         documentType: "monthly_owner_property_report",
+        pdfSha256,
+        canonicalSource: "SERVER_MONTHLY_OWNER_REPORT_SYSTEM",
       },
     },
   });
+  const [metadata] = await file.getMetadata();
+  const generation = String(metadata.generation || "");
+  if (!generation) throw new Error("Monthly Owner report Storage generation is missing.");
   const [signedUrl] = await file.getSignedUrl({ action: "read", expires: "03-09-2491" });
-  return { storagePath, signedUrl };
+  return { storagePath, signedUrl, pdfSha256, generation };
 }
 
 async function buildOwnerReport(ownerId: string, contracts: any[], periodStart: Date, periodEnd: Date, periodKey: string): Promise<OwnerReportPayload | null> {
@@ -397,6 +404,9 @@ async function processOwnerReport(ownerId: string, contracts: any[], periodStart
     maintenanceCost: payload.totals.maintenanceCost,
     storagePath: pdf.storagePath,
     reportUrl: pdf.signedUrl,
+    pdfSha256: pdf.pdfSha256,
+    pdfGeneration: pdf.generation,
+    canonicalPdfSource: "SERVER_MONTHLY_OWNER_REPORT_SYSTEM",
     emailQueued: true,
     status: "EMAIL_QUEUED",
     source: "MONTHLY_OWNER_PROPERTY_REPORT_SYSTEM",
@@ -412,6 +422,9 @@ async function processOwnerReport(ownerId: string, contracts: any[], periodStart
     periodKey,
     storagePath: pdf.storagePath,
     pdfUrl: pdf.signedUrl,
+    pdfSha256: pdf.pdfSha256,
+    pdfGeneration: pdf.generation,
+    canonicalPdfSource: "SERVER_MONTHLY_OWNER_REPORT_SYSTEM",
     createdAt: admin.firestore.FieldValue.serverTimestamp(),
     updatedAt: admin.firestore.FieldValue.serverTimestamp(),
   }, { merge: true });

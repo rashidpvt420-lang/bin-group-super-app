@@ -251,16 +251,36 @@ function asArray(value: any): string[] {
     return [];
 }
 
-async function savePdf(buffer: Buffer, path: string, metadata: Record<string, any>) {
+export type CanonicalPdfArtifact = {
+    pdfUrl: string;
+    storagePath: string;
+    pdfSha256: string;
+    generation: string;
+    documentHash: string;
+    byteLength: number;
+};
+
+async function savePdf(buffer: Buffer, path: string, metadata: Record<string, any>): Promise<CanonicalPdfArtifact> {
     const storage = getStorage();
     const bucket = storage.bucket();
     const file = bucket.file(path);
+    const pdfSha256 = crypto.createHash('sha256').update(buffer).digest('hex');
     await file.save(buffer, {
         contentType: 'application/pdf',
-        metadata: { metadata }
+        metadata: { metadata: { ...metadata, pdfSha256 } }
     });
+    const [stored] = await file.getMetadata();
+    const generation = String(stored.generation || '');
+    if (!generation) throw new Error('Canonical PDF Storage generation is missing.');
     const url = await file.getSignedUrl({ action: 'read', expires: '03-09-2491' });
-    return url[0];
+    return {
+        pdfUrl: url[0],
+        storagePath: path,
+        pdfSha256,
+        generation,
+        documentHash: String(metadata.documentHash || ''),
+        byteLength: buffer.length,
+    };
 }
 
 /**
@@ -268,7 +288,7 @@ async function savePdf(buffer: Buffer, path: string, metadata: Record<string, an
  * This replaces the old short contract summary so the owner signs/downloads
  * the same protective English/Arabic agreement stored in the document vault.
  */
-export async function generateContractPDF(data: any) {
+export async function generateContractPdfArtifact(data: any): Promise<CanonicalPdfArtifact> {
     const PDFDocument = await loadPdfKit();
     let fontBuffer: Buffer | null = null;
     try {
@@ -277,7 +297,7 @@ export async function generateContractPDF(data: any) {
         console.error("Cairo font load failed:", err);
     }
 
-    return new Promise<string>((resolve, reject) => {
+    return new Promise<CanonicalPdfArtifact>((resolve, reject) => {
         const contractMode = normalizeContractMode(data);
         const contractId = textValue(data.contractId || data.id || `contract-${Date.now()}`);
         const propertyType = textValue(data.propertyType || data.assetClass || data.buildingType || 'property');
@@ -308,7 +328,7 @@ export async function generateContractPDF(data: any) {
         doc.on('end', async () => {
             try {
                 const buffer = Buffer.concat(chunks);
-                const url = await savePdf(buffer, `contracts/${contractId}/owner-service-agreement-${AGREEMENT_VERSION}.pdf`, {
+                const artifact = await savePdf(buffer, `contracts/${contractId}/owner-service-agreement-${AGREEMENT_VERSION}.pdf`, {
                     ownerId,
                     propertyId,
                     propertyPassportId,
@@ -322,7 +342,7 @@ export async function generateContractPDF(data: any) {
                     signedBy: textValue(data.signatureName || data.ownerName || data.fullName, ''),
                     signedAt: textValue(data.signedAt || data.acceptedAt || new Date().toISOString(), '')
                 });
-                resolve(url);
+                resolve(artifact);
             } catch (err) {
                 reject(err);
             }
@@ -539,11 +559,11 @@ export async function generatePayslipPDF(data: any) {
         doc.on('end', async () => {
             try {
                 const buffer = Buffer.concat(chunks);
-                const url = await savePdf(buffer, `payslips/${data.staffId}/${data.payPeriod}.pdf`, {
+                const artifact = await savePdf(buffer, `payslips/${data.staffId}/${data.payPeriod}.pdf`, {
                     staffId: textValue(data.staffId, ''),
                     payPeriod: textValue(data.payPeriod, '')
                 });
-                resolve(url);
+                resolve(artifact.pdfUrl);
             } catch (err) {
                 reject(err);
             }
@@ -610,13 +630,13 @@ export async function generateIntegrityAuditPDF(data: { propertyId: string; prop
         doc.on('end', async () => {
             try {
                 const buffer = Buffer.concat(chunks);
-                const url = await savePdf(buffer, `auditReports/${textValue(data.propertyId, 'unknown')}/${auditId}.pdf`, {
+                const artifact = await savePdf(buffer, `auditReports/${textValue(data.propertyId, 'unknown')}/${auditId}.pdf`, {
                     propertyId: textValue(data.propertyId, ''),
                     propertyName: textValue(data.propertyName, ''),
                     auditId,
                     generatedAt: textValue(intel.generatedAt, new Date().toISOString())
                 });
-                resolve(url);
+                resolve(artifact.pdfUrl);
             } catch (err) {
                 reject(err);
             }
@@ -698,6 +718,57 @@ export async function generateIntegrityAuditPDF(data: { propertyId: string; prop
         doc.moveDown(1);
         doc.fillColor(MUTED).fontSize(7).text('This report is generated by BIN GROUP AI Mission Guidance for decision support only and does not replace professional engineering, financial, or legal advice.', { align: 'center' });
 
+        doc.end();
+    });
+}
+
+
+/**
+ * Compatibility wrapper for callers that only need the URL.
+ * Canonical writers should use generateContractPdfArtifact so the byte hash,
+ * Storage generation and path are persisted with the contract.
+ */
+export async function generateContractPDF(data: any): Promise<string> {
+    return (await generateContractPdfArtifact(data)).pdfUrl;
+}
+
+
+export async function generateMobilizationInvoicePdfArtifact(data: any): Promise<CanonicalPdfArtifact> {
+    const PDFDocument = await loadPdfKit();
+    const invoiceId = textValue(data.invoiceId);
+    const ownerId = textValue(data.ownerId || data.ownerUid, '');
+    const contractId = textValue(data.contractId, '');
+    const amount = Number(data.amount || data.amountPaid || 0);
+    const proofHash = textValue(data.proofHash, '');
+    if (!invoiceId || !contractId || !ownerId || !Number.isFinite(amount) || amount <= 0 || !/^[a-f0-9]{64}$/i.test(proofHash)) {
+        throw new Error('Canonical invoice fields are incomplete.');
+    }
+    return new Promise<CanonicalPdfArtifact>((resolve, reject) => {
+        const doc = new (PDFDocument as any)({ margin: 50, size: 'A4', info: { Title: `BIN GROUP Invoice ${invoiceId}`, Author: 'BIN GROUP Super App' } });
+        const chunks: Buffer[] = [];
+        doc.on('data', (chunk: Buffer) => chunks.push(chunk));
+        doc.on('error', reject);
+        doc.on('end', async () => {
+            try {
+                const buffer = Buffer.concat(chunks);
+                const documentHash = crypto.createHash('sha256').update(JSON.stringify({ invoiceId, contractId, ownerId, amount, proofHash, status: 'PAID' })).digest('hex');
+                resolve(await savePdf(buffer, `invoices/${invoiceId}/mobilization-invoice.pdf`, {
+                    invoiceId, contractId, ownerId, documentType: 'mobilization_deposit_invoice',
+                    language: 'en-ar', documentHash, proofHash, status: 'PAID'
+                }));
+            } catch (error) { reject(error); }
+        });
+        doc.fillColor(GOLD).fontSize(22).text('BIN GROUP L.L.C - S.P.C', { align: 'center' });
+        doc.fillColor(INK).fontSize(13).text('PAID MOBILIZATION INVOICE', { align: 'center' });
+        doc.fillColor(MUTED).fontSize(10).text(shapeArabicText('فاتورة دفعة التفعيل - مدفوعة'), { align: 'center' });
+        doc.moveDown();
+        row(doc, 'Invoice ID / رقم الفاتورة', invoiceId);
+        row(doc, 'Contract ID / رقم العقد', contractId);
+        row(doc, 'Amount Paid / المبلغ المدفوع', money(amount));
+        row(doc, 'Currency / العملة', 'AED / درهم إماراتي');
+        row(doc, 'Payment Reference / مرجع الدفع', textValue(data.paymentReferenceId));
+        row(doc, 'Verification Hash / رمز التحقق', proofHash);
+        para(doc, 'This invoice is generated only from the server-authoritative approved payment record.', 'تم إنشاء هذه الفاتورة فقط من سجل الدفع المعتمد والموثق على الخادم.');
         doc.end();
     });
 }

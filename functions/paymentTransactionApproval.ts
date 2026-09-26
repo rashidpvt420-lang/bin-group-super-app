@@ -5,6 +5,7 @@ import * as crypto from "crypto";
 import { createBrokerCommissionForContract } from "./brokerCommissions";
 import { assertStoredOwnerPaymentReceipt } from "./paymentReceiptEvidence";
 import { normalizeAedMoney } from "./shared/aedMoney";
+import { generateMobilizationInvoicePdfArtifact } from "./pdfEngine";
 import { resolveActivePaymentConfiguration } from "./paymentConfiguration";
 import {
   OwnerActivationPaymentPolicyError,
@@ -634,6 +635,32 @@ export const adminApprovePayment = onCall({ cors: true, enforceAppCheck: true },
       }, { merge: true });
     }
   });
+
+  if (!approvalWasIdempotent) {
+    const invoiceArtifact = await generateMobilizationInvoicePdfArtifact({
+      invoiceId,
+      paymentId,
+      contractId,
+      ownerId: ownerUid,
+      amount: expectedAmount,
+      paymentReferenceId: manualReference || payment.stripeSessionId,
+      proofHash: invoiceHash,
+    });
+    await db.collection("invoices").doc(invoiceId).set({
+      pdfUrl: invoiceArtifact.pdfUrl,
+      storagePath: invoiceArtifact.storagePath,
+      pdfSha256: invoiceArtifact.pdfSha256,
+      pdfGeneration: invoiceArtifact.generation,
+      canonicalPdfSource: "SERVER_PAYMENT_APPROVAL",
+      updatedAt: ts(),
+    }, { merge: true });
+    await db.collection("invoice_registry").doc(invoiceHash).set({
+      pdfSha256: invoiceArtifact.pdfSha256,
+      storagePath: invoiceArtifact.storagePath,
+      canonicalPdfSource: "SERVER_PAYMENT_APPROVAL",
+      updatedAt: ts(),
+    }, { merge: true });
+  }
 
   if (contractId && contractData.commissionGenerated !== true) {
     try {
