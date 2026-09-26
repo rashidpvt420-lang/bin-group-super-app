@@ -38,7 +38,9 @@ test('Phase 15 Owner/Admin Storage visibility and Property Passport attachment a
 
 test('Phase 15 renewal PDF reloads canonical contract and persists immutable artifact identity', async () => {
   const renewal = await read('functions/contractRenewalPdfSystem.ts');
-  for (const token of ['db.collection("contracts").doc(record.contractId).get()', 'generateContractPdfArtifact({ ...canonicalContract', 'pdfSha256', 'pdfGeneration', 'canonicalPdfSource: "SERVER_CONTRACT_RENEWAL_SYSTEM"']) {
+  assert.ok(renewal.includes('db.collection("contracts").doc(record.contractId).get()'));
+  assert.match(renewal, /generateContractPdfArtifact\(\{[\s\S]*?\.\.\.canonicalContract/);
+  for (const token of ['pdfSha256', 'pdfGeneration', 'canonicalPdfSource: "SERVER_CONTRACT_RENEWAL_SYSTEM"']) {
     assert.ok(renewal.includes(token), `Renewal authority missing ${token}`);
   }
 });
