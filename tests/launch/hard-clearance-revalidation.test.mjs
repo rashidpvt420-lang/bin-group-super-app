@@ -272,6 +272,11 @@ test('production deploy consumes frozen clearance under a separate current-main 
 
   assert.match(workflow, /PAYMENT_POLICY_INPUT[\s\S]*?phase1-manual/);
   assert.match(workflow, /\[\[ -z "\$STRIPE_LIVE_SESSION_ID_INPUT" && -z "\$STRIPE_LIVE_EVENT_ID_INPUT" \]\]/);
+  assert.match(workflow, /Repair only missing Admin Maps referrer without widening restrictions/);
+  assert.match(workflow, /required_admin_referrer='https:\/\/bin-group-admin-panel\.web\.app\/\*'/);
+  assert.match(workflow, /gcloud services api-keys update "\$key_resource"[\s\S]*?--append[\s\S]*?--allowed-referrers="\$required_admin_referrer"/);
+  assert.match(workflow, /Refusing Maps key mutation because existing browser\/API restrictions are not already fail-closed/);
+  assert.match(workflow, /"geocoding-backend\.googleapis\.com"[\s\S]*?"maps-backend\.googleapis\.com"[\s\S]*?"places-backend\.googleapis\.com"[\s\S]*?"static-maps-backend\.googleapis\.com"/);
 });
 
 test('fresh revalidation keeps mutable production checks strict instead of extending their expiry', async () => {
