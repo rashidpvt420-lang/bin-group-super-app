@@ -36,3 +36,48 @@ test('Admin Google Maps receives a real Firebase App Check token before map crea
   assert.match(maps, /Settings\.getInstance\(\)\.fetchAppCheckToken = \(\) => getAdminMapsAppCheckToken\(\)/);
   assert.match(maps, /await configureMapsAppCheck\(w\)/);
 });
+
+
+test('Phase 21 Step 48 repair covers all remaining live-route accessibility failures', () => {
+  const certificate = read('src/pages/public/CertificateVerificationPage.tsx');
+  const complaint = read('src/owner/pages/OwnerComplaintPage.tsx');
+  const messages = read('src/tenant/pages/TenantMessagesPage.tsx');
+  const referrals = read('src/broker/pages/BrokerReferralsPage.tsx');
+  const brokerAdmin = read('apps/admin-panel/src/pages/brokers/BrokerManagementPage.tsx');
+
+  // The certificate action must retain a name even while its visible text is
+  // replaced by a loading spinner.
+  assert.match(
+    certificate,
+    /aria-label=\{t\('cert\.validate_btn'\) \|\| 'Validate certificate'\}/,
+  );
+
+  // These icon-only controls were the exact unlabeled buttons reported by the
+  // protected launch audit.
+  assert.match(
+    complaint,
+    /<IconButton aria-label="Back" onClick=\{\(\) => navigate\(-1\)\}/,
+  );
+  assert.match(
+    messages,
+    /aria-label=\{isRTL \? 'بدء محادثة جديدة' : 'Start new conversation'\}/,
+  );
+  assert.match(
+    messages,
+    /aria-label=\{isRTL \? 'رجوع' : 'Back'\}/,
+  );
+
+  // A direct visit to /broker/referrals/new must have a true route-aware Back
+  // control rather than only closing the modal.
+  assert.match(referrals, /aria-label="Back"/);
+  assert.match(
+    referrals,
+    /if \(openFormByDefault\) navigate\('\/broker\/referrals'\)/,
+  );
+
+  // Tooltips do not provide a button accessible name; the buttons themselves
+  // must carry labels for every rendered Broker row.
+  assert.match(brokerAdmin, /aria-label="View KYC dossier"/);
+  assert.match(brokerAdmin, /aria-label="Approve KYC"/);
+  assert.match(brokerAdmin, /aria-label="Reject KYC"/);
+});
