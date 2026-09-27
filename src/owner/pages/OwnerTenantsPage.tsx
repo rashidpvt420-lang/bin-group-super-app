@@ -21,10 +21,11 @@ export default function OwnerTenantsPage() {
     const [search, setSearch] = useState('');
 
     useEffect(() => {
-        if (!user?.email) return;
+        if (!user?.uid) return;
         
-        // 1. Get properties linked to owner email
-        const propQ = query(collection(db, 'properties'), where('ownerEmail', '==', user.email.toLowerCase()));
+        // Firestore list authorization is UID-bound. Query the immutable canonical
+        // owner field so the database can prove ownership before returning rows.
+        const propQ = query(collection(db, 'properties'), where('ownerId', '==', user.uid));
         
         let unsubscribeTenants: (() => void) | undefined;
         const unsubscribe = onSnapshot(propQ, async (propSnap) => {
@@ -64,7 +65,7 @@ export default function OwnerTenantsPage() {
         });
 
         return () => { unsubscribe(); unsubscribeTenants?.(); };
-    }, [user?.email]);
+    }, [user?.uid]);
 
     const filtered = tenants.filter(t => 
         t.displayName?.toLowerCase().includes(search.toLowerCase()) ||
