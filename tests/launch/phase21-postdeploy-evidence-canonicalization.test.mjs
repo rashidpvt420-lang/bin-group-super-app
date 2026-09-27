@@ -63,12 +63,17 @@ test('final verified Owner quote becomes the canonical payment and property quot
   const propertyEnd = source.indexOf('batch.set(db.collection("users")', propertyStart);
   assert.ok(completionStart >= 0 && paymentStart > completionStart && contractStart > paymentStart);
   assert.ok(propertyStart > contractStart && propertyEnd > propertyStart);
+  const finalCommercialStart = source.lastIndexOf('const finalCommercial = {', paymentStart);
+  assert.ok(finalCommercialStart >= completionStart && finalCommercialStart < paymentStart);
+  const finalCommercialPatch = source.slice(finalCommercialStart, paymentStart);
   const paymentPatch = source.slice(paymentStart, contractStart);
   const contractPatch = source.slice(contractStart, propertyStart);
   const propertyPatch = source.slice(propertyStart, propertyEnd);
+  assert.match(finalCommercialPatch, /finalVerifiedQuoteHash:\s*finalQuote\.quoteHash/);
   assert.match(paymentPatch, /quoteHash:\s*finalQuote\.quoteHash/);
-  assert.match(paymentPatch, /finalVerifiedQuoteHash:\s*finalQuote\.quoteHash/);
+  assert.match(paymentPatch, /\.\.\.finalCommercial/);
   assert.match(contractPatch, /quoteHash:\s*finalQuote\.quoteHash/);
+  assert.match(contractPatch, /\.\.\.finalCommercial/);
   assert.match(propertyPatch, /quoteHash:\s*finalQuote\.quoteHash/);
   assert.match(propertyPatch, /finalVerifiedQuoteHash:\s*finalQuote\.quoteHash/);
 });
