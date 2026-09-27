@@ -28,17 +28,44 @@ const ReportingDashboard: React.FC = () => {
 
     useEffect(() => {
         const fetchAggregates = async () => {
+            if (!user?.uid) {
+                setLoadError('Owner identity is unavailable. Please refresh your secure session.');
+                setLoading(false);
+                return;
+            }
+
             try {
+                setLoading(true);
                 setLoadError('');
-                const propsSnap = await getDocs(collection(db, 'properties'));
-                const allProps = propsSnap.docs.map(d => d.data());
+
+                const isOwnerView = String(role || '').toLowerCase() === 'owner';
+                const readCollection = async (collectionName: string) => {
+                    if (!isOwnerView) {
+                        const snapshot = await getDocs(collection(db, collectionName));
+                        return snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+                    }
+
+                    // Owner analytics must be query-bound to immutable UID fields so
+                    // Firestore can prove ownership before returning any row. Never
+                    // widen rules or read an entire production collection in-browser.
+                    const [byOwnerId, byOwnerUid] = await Promise.all([
+                        getDocs(query(collection(db, collectionName), where('ownerId', '==', user.uid), limit(250))),
+                        getDocs(query(collection(db, collectionName), where('ownerUid', '==', user.uid), limit(250))),
+                    ]);
+                    const merged = new globalThis.Map<string, any>();
+                    for (const snapshot of [byOwnerId, byOwnerUid]) {
+                        for (const item of snapshot.docs) merged.set(item.id, { id: item.id, ...item.data() });
+                    }
+                    return [...merged.values()];
+                };
+
+                const allProps = await readCollection('properties');
                 
                 const filteredProps = selectedEmirate === 'ALL' 
                     ? allProps 
                     : allProps.filter(p => p.emirate?.toUpperCase() === selectedEmirate);
 
-                const ticketsSnap = await getDocs(collection(db, 'maintenanceTickets'));
-                const allTickets = ticketsSnap.docs.map(d => d.data());
+                const allTickets = await readCollection('maintenanceTickets');
                 const tickets = selectedEmirate === 'ALL' 
                     ? allTickets 
                     : allTickets.filter(t => filteredProps.some(p => p.id === t.propertyId));
@@ -46,14 +73,12 @@ const ReportingDashboard: React.FC = () => {
                 const completed = tickets.filter(t => t.status === 'COMPLETED');
                 const avgResponseTime = completed.length > 0 ? "42.5 mins" : "N/A";
 
-                const contractsSnap = await getDocs(collection(db, 'contracts'));
-                const allContracts = contractsSnap.docs.map(d => d.data());
+                const allContracts = await readCollection('contracts');
                 const totalSettled = allContracts
                     .filter(c => selectedEmirate === 'ALL' || filteredProps.some(p => p.id === c.propertyId))
                     .reduce((sum, c) => sum + (c.amountReceived || 0), 0);
 
-                const unitsSnap = await getDocs(collection(db, 'units'));
-                const allUnits = unitsSnap.docs.map(d => d.data());
+                const allUnits = await readCollection('units');
                 const units = selectedEmirate === 'ALL' 
                     ? allUnits 
                     : allUnits.filter(u => filteredProps.some(p => p.id === u.propertyId));
@@ -91,7 +116,7 @@ const ReportingDashboard: React.FC = () => {
         };
 
         fetchAggregates();
-    }, [selectedEmirate]);
+    }, [selectedEmirate, user?.uid, role]);
 
     const exportToPdf = () => {
         if (!stats) return;
