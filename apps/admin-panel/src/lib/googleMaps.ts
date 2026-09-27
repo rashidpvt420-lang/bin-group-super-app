@@ -1,8 +1,15 @@
+import { getAdminMapsAppCheckToken } from './firebase';
+
 const SCRIPT_ID = 'bin-admin-google-maps-js';
 let loadPromise: Promise<any> | null = null;
 
 const mapsKey = () => String(process.env.REACT_APP_GOOGLE_MAPS_API_KEY || '').trim();
 const mapsEnabled = () => String(process.env.REACT_APP_ENABLE_EMBEDDED_GOOGLE_MAPS || 'true').toLowerCase() !== 'false';
+
+async function configureMapsAppCheck(w: any) {
+  const { Settings } = await w.google.maps.importLibrary('core');
+  Settings.getInstance().fetchAppCheckToken = () => getAdminMapsAppCheckToken();
+}
 
 function installAuthFailureHook() {
   const w = window as any;
@@ -23,15 +30,26 @@ export function loadAdminGoogleMaps(): Promise<any> {
 
   const w = window as any;
   if (w.__BIN_ADMIN_MAPS_AUTH_FAILED__) return Promise.reject(new Error('GOOGLE_MAPS_AUTH_FAILED'));
-  if (w.google?.maps) return Promise.resolve(w.google.maps);
+  if (w.google?.maps) return configureMapsAppCheck(w).then(() => w.google.maps);
   if (loadPromise) return loadPromise;
 
   installAuthFailureHook();
   loadPromise = new Promise((resolve, reject) => {
-    const complete = () => window.setTimeout(() => {
-      if (w.__BIN_ADMIN_MAPS_AUTH_FAILED__) reject(new Error('GOOGLE_MAPS_AUTH_FAILED'));
-      else if (w.google?.maps) resolve(w.google.maps);
-      else reject(new Error('GOOGLE_MAPS_SCRIPT_LOADED_WITHOUT_MAPS'));
+    const complete = () => window.setTimeout(async () => {
+      if (w.__BIN_ADMIN_MAPS_AUTH_FAILED__) {
+        reject(new Error('GOOGLE_MAPS_AUTH_FAILED'));
+        return;
+      }
+      if (!w.google?.maps) {
+        reject(new Error('GOOGLE_MAPS_SCRIPT_LOADED_WITHOUT_MAPS'));
+        return;
+      }
+      try {
+        await configureMapsAppCheck(w);
+        resolve(w.google.maps);
+      } catch (error) {
+        reject(error);
+      }
     }, 250);
 
     const existing = document.getElementById(SCRIPT_ID) as HTMLScriptElement | null;
