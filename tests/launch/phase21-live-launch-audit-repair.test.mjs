@@ -81,3 +81,40 @@ test('Phase 21 Step 48 repair covers all remaining live-route accessibility fail
   assert.match(brokerAdmin, /aria-label="Approve KYC"/);
   assert.match(brokerAdmin, /aria-label="Reject KYC"/);
 });
+
+
+test('Phase 21 Step 48 round-two repair keeps Owner analytics UID-scoped', () => {
+  const reporting = read('src/pages/ReportingDashboard.tsx');
+  assert.match(reporting, /where\('ownerId', '==', user\.uid\)/);
+  assert.match(reporting, /where\('ownerUid', '==', user\.uid\)/);
+  assert.doesNotMatch(reporting, /getDocs\(collection\(db, 'properties'\)\)/);
+  assert.doesNotMatch(reporting, /getDocs\(collection\(db, 'maintenanceTickets'\)\)/);
+  assert.doesNotMatch(reporting, /getDocs\(collection\(db, 'contracts'\)\)/);
+  assert.doesNotMatch(reporting, /getDocs\(collection\(db, 'units'\)\)/);
+});
+
+test('Phase 21 Step 48 round-two repair avoids the Tenant RTL Stylis placeholder crash', () => {
+  const tenantAi = read('src/tenant/pages/TenantAIConciergePage.tsx');
+  assert.doesNotMatch(tenantAi, /MuiInputBase-input::placeholder/);
+  assert.match(tenantAi, /data-testid="tenant-ai-send"/);
+});
+
+test('Phase 21 Step 48 round-two repair labels the Admin audit filter', () => {
+  const audit = read('apps/admin-panel/src/pages/AuditLogPage.tsx');
+  assert.match(audit, /aria-label=\{lang === 'ar' \? 'تصفية سجل التدقيق' : 'Filter audit log'\}/);
+});
+
+test('Phase 21 Step 48 round-two repair preserves valid claims plus MFA across transient profile timeout', () => {
+  const auth = read('apps/admin-panel/src/context/AuthContext.tsx');
+  const catchStart = auth.indexOf('} catch (profileError: any) {');
+  const isAdminStart = auth.indexOf('const isAdmin = claimsAdmin;', catchStart);
+  assert.ok(catchStart >= 0 && isAdminStart > catchStart);
+  const block = auth.slice(catchStart, isAdminStart);
+  assert.doesNotMatch(block, /ADMIN_PROFILE_TIMEOUT'\) throw profileError/);
+  assert.match(block, /claims remain authoritative/);
+
+  // Security invariants remain intact.
+  assert.match(auth, /const isAdmin = claimsAdmin;/);
+  assert.match(auth, /const verifiedSecondFactor = factorCount > 0 && Boolean\(secondFactor\)/);
+  assert.match(auth, /if \(factorCount > 0 && !verifiedSecondFactor\)/);
+});
