@@ -75,7 +75,7 @@ export default function AuditLogPage() {
                             )
                         }}
                     />
-                    <IconButton><FilterListIcon /></IconButton>
+                    <IconButton aria-label={lang === 'ar' ? 'تصفية سجل التدقيق' : 'Filter audit log'}><FilterListIcon /></IconButton>
                 </Box>
             </Box>
 
