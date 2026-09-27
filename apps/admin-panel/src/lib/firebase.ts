@@ -18,7 +18,7 @@ import {
 } from 'firebase/auth';
 import type { User } from 'firebase/auth';
 import { getMessaging, getToken, isSupported } from 'firebase/messaging';
-import { initializeAppCheck, ReCaptchaEnterpriseProvider } from 'firebase/app-check';
+import { getToken as getAppCheckToken, initializeAppCheck, ReCaptchaEnterpriseProvider } from 'firebase/app-check';
 
 type BinFirebaseConfig = {
     apiKey: string;
@@ -51,6 +51,7 @@ const firebaseConfig: BinFirebaseConfig = {
 };
 
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
+let adminAppCheck: ReturnType<typeof initializeAppCheck> | null = null;
 
 if (typeof window !== 'undefined') {
     const enableAppCheck = clean(process.env.REACT_APP_ENABLE_FIREBASE_APPCHECK) === 'true';
@@ -83,7 +84,7 @@ if (typeof window !== 'undefined') {
 
         if (siteKey) {
             try {
-                initializeAppCheck(app, {
+                adminAppCheck = initializeAppCheck(app, {
                     provider: new ReCaptchaEnterpriseProvider(siteKey),
                     isTokenAutoRefreshEnabled: true
                 });
@@ -291,6 +292,19 @@ const addDoc: typeof firestoreAddDoc = (async (reference: any, data: any) => {
     await pending;
     return doc(reference);
 }) as typeof firestoreAddDoc;
+
+
+export const getAdminMapsAppCheckToken = async (): Promise<{ token: string }> => {
+    if (!adminAppCheck) {
+        throw new Error('[Firebase] Admin App Check is not initialized for Google Maps.');
+    }
+    const result = await getAppCheckToken(adminAppCheck, false);
+    const token = String(result?.token || '').trim();
+    if (!token) {
+        throw new Error('[Firebase] Admin App Check returned an empty Google Maps token.');
+    }
+    return { token };
+};
 
 export {
     app, db, auth, storage, functions, httpsCallable, getMessaging, getToken, isSupported,
