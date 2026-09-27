@@ -401,9 +401,9 @@ export default function BrokerManagementPage() {
                                                 <Typography variant="caption" display="block" color={summary?.kyc?.commissionAgreementAccepted ? 'success.main' : 'text.secondary'}>{summary ? (summary.kyc?.commissionAgreementAccepted ? 'Terms accepted' : 'Terms missing') : 'Open dossier to verify terms'}</Typography>
                                             </TableCell>
                                             <TableCell align={isRTL ? 'left' : 'right'}>
-                                                <Tooltip title="View KYC dossier"><span><IconButton disabled={busy === `summary-${broker.id}`} onClick={() => void openDossier(broker)}><VisibilityIcon /></IconButton></span></Tooltip>
-                                                <Tooltip title="Approve KYC"><span><IconButton disabled={busy === `kyc-${broker.id}`} color="success" onClick={() => void openReview(broker, 'APPROVE')}><CheckCircleIcon /></IconButton></span></Tooltip>
-                                                <Tooltip title="Reject KYC"><span><IconButton disabled={busy === `kyc-${broker.id}`} color="error" onClick={() => void openReview(broker, 'REJECT')}><CancelIcon /></IconButton></span></Tooltip>
+                                                <Tooltip title="View KYC dossier"><span><IconButton aria-label="View KYC dossier" disabled={busy === `summary-${broker.id}`} onClick={() => void openDossier(broker)}><VisibilityIcon /></IconButton></span></Tooltip>
+                                                <Tooltip title="Approve KYC"><span><IconButton aria-label="Approve KYC" disabled={busy === `kyc-${broker.id}`} color="success" onClick={() => void openReview(broker, 'APPROVE')}><CheckCircleIcon /></IconButton></span></Tooltip>
+                                                <Tooltip title="Reject KYC"><span><IconButton aria-label="Reject KYC" disabled={busy === `kyc-${broker.id}`} color="error" onClick={() => void openReview(broker, 'REJECT')}><CancelIcon /></IconButton></span></Tooltip>
                                             </TableCell>
                                         </TableRow>
                                     );
