@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
     Alert,
     Box,
@@ -54,6 +55,7 @@ type Notice = { severity: 'success' | 'error' | 'warning' | 'info'; message: str
 export default function BrokerLeadsPage({ openFormByDefault = false }: BrokerLeadsPageProps) {
     const { user } = useRole();
     const { isRTL } = useLanguage();
+    const navigate = useNavigate();
     const [leads, setLeads] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
@@ -356,7 +358,7 @@ export default function BrokerLeadsPage({ openFormByDefault = false }: BrokerLea
                         </Stack>
                     </DialogContent>
                     <DialogActions sx={{ p: 3 }}>
-                        <Button onClick={() => setOpenAdd(false)} disabled={submitting} sx={{ color: 'rgba(255,255,255,0.62)' }}>CANCEL</Button>
+                        <Button aria-label={isRTL ? 'رجوع' : 'Back'} onClick={() => { setOpenAdd(false); if (openFormByDefault) navigate('/broker/leads'); }} disabled={submitting} sx={{ color: 'rgba(255,255,255,0.62)' }}>{isRTL ? 'رجوع' : 'Back'}</Button>
                         <Button data-testid="broker-lead-submit" type="submit" variant="contained" disabled={submitting || !leadName.trim()} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>
                             {submitting ? <CircularProgress size={20} color="inherit" /> : 'INITIALIZE MISSION'}
                         </Button>
