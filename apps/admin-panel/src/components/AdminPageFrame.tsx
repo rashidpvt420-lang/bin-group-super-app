@@ -105,6 +105,7 @@ export default function AdminPageFrame({
             <Box sx={{ mb: 4 }}>
                 <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 2 }}>
                     <IconButton 
+                        aria-label={isRTL ? 'رجوع' : 'Back'}
                         onClick={handleBack}
                         sx={{ 
                             bgcolor: 'rgba(255,255,255,0.05)', 
