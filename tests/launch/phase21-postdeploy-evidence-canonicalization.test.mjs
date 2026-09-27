@@ -54,3 +54,27 @@ test('Owner final verified contract OTP proof is correlated to its exact request
   assert.match(helper, /label:\s*'Owner final verified contract OTP'/);
 });
 
+test('final verified Owner quote becomes the canonical payment and property quote binding', () => {
+  const source = read('functions/ownerInspectionCompletion.ts');
+  const completionStart = source.indexOf('export const adminCompleteOwnerPortfolioInspections');
+  const paymentStart = source.indexOf('batch.set(paymentRef, {', completionStart);
+  const contractStart = source.indexOf('batch.set(contractRef, {', paymentStart);
+  const propertyStart = source.indexOf('propertyQuery.docs.forEach', contractStart);
+  const propertyEnd = source.indexOf('batch.set(db.collection("users")', propertyStart);
+  assert.ok(completionStart >= 0 && paymentStart > completionStart && contractStart > paymentStart);
+  assert.ok(propertyStart > contractStart && propertyEnd > propertyStart);
+  const finalCommercialStart = source.lastIndexOf('const finalCommercial = {', paymentStart);
+  assert.ok(finalCommercialStart >= completionStart && finalCommercialStart < paymentStart);
+  const finalCommercialPatch = source.slice(finalCommercialStart, paymentStart);
+  const paymentPatch = source.slice(paymentStart, contractStart);
+  const contractPatch = source.slice(contractStart, propertyStart);
+  const propertyPatch = source.slice(propertyStart, propertyEnd);
+  assert.match(finalCommercialPatch, /finalVerifiedQuoteHash:\s*finalQuote\.quoteHash/);
+  assert.match(paymentPatch, /quoteHash:\s*finalQuote\.quoteHash/);
+  assert.match(paymentPatch, /\.\.\.finalCommercial/);
+  assert.match(contractPatch, /quoteHash:\s*finalQuote\.quoteHash/);
+  assert.match(contractPatch, /\.\.\.finalCommercial/);
+  assert.match(propertyPatch, /quoteHash:\s*finalQuote\.quoteHash/);
+  assert.match(propertyPatch, /finalVerifiedQuoteHash:\s*finalQuote\.quoteHash/);
+});
+

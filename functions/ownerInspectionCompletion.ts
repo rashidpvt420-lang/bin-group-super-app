@@ -477,6 +477,7 @@ export const adminCompleteOwnerPortfolioInspections = onCall({ cors: true, enfor
     annualContractValue,
     activationDeposit: amount,
     amount,
+    quoteHash: finalQuote.quoteHash,
     ...finalCommercial,
     updatedAt: now,
   }, { merge: true });
@@ -534,6 +535,7 @@ export const adminCompleteOwnerPortfolioInspections = onCall({ cors: true, enfor
       // non-dispatchable rather than inheriting Owner-submitted coordinates as trusted.
       locationVerified: false,
       geoPromotionState: "PENDING_CANONICAL_PHYSICAL_EVIDENCE_PROMOTION",
+      quoteHash: finalQuote.quoteHash,
       finalVerifiedQuoteHash: finalQuote.quoteHash,
       geo: {
         ...(property.geo || verifiedProperty.geo || {}),
