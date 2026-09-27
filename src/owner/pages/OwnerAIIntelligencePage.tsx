@@ -161,11 +161,13 @@ export default function OwnerAIIntelligencePage() {
   const [predictive, setPredictive] = useState<any>(null);
 
   useEffect(() => {
-    if (!user?.email) return;
-    const email = user.email.toLowerCase();
+    if (!user?.uid) return;
 
+    // Owner intelligence is identity-bound. Query the immutable ownerId field
+    // that Firestore can prove from request.auth.uid; do not depend on mailbox
+    // casing or email_verified state for launch-critical portfolio reads.
     const unsubProps = onSnapshot(
-      query(collection(db, 'properties'), where('ownerEmail', '==', email)),
+      query(collection(db, 'properties'), where('ownerId', '==', user.uid)),
       (snap) => {
         setProperties(snap.docs.map(d => ({ id: d.id, ...d.data() })));
         setLoadError('');
@@ -177,7 +179,7 @@ export default function OwnerAIIntelligencePage() {
       }
     );
     const unsubPassports = onSnapshot(
-      query(collection(db, 'propertyPassports'), where('ownerEmail', '==', email)),
+      query(collection(db, 'propertyPassports'), where('ownerId', '==', user.uid)),
       (snap) => {
         setPassports(snap.docs.map(d => ({ id: d.id, ...d.data() })));
         setLoadError('');
@@ -191,7 +193,7 @@ export default function OwnerAIIntelligencePage() {
     );
 
     return () => { unsubProps(); unsubPassports(); };
-  }, [user?.email]);
+  }, [user?.uid]);
 
   const buildPredictive = useCallback(async (props: any[], pass: any[]) => {
     if (!props.length || !user?.email) return;

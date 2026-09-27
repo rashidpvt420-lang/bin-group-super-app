@@ -253,7 +253,11 @@ export default function ProductionControlCenter() {
                                             />
                                         </TableCell>
                                         <TableCell>
-                                            <IconButton sx={{ color: 'rgba(255,255,255,0.3)' }} onClick={() => navigate(`/audit?batch=${batch.importBatchId}`)}>
+                                            <IconButton
+                                                aria-label={`Open audit for batch ${batch.importBatchId || batch.id}`}
+                                                sx={{ color: 'rgba(255,255,255,0.3)' }}
+                                                onClick={() => navigate(`/audit?batch=${batch.importBatchId}`)}
+                                            >
                                                 <ExternalLink size={18} />
                                             </IconButton>
                                         </TableCell>
