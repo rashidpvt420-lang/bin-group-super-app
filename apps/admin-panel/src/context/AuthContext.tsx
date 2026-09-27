@@ -242,7 +242,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             } catch (profileError: any) {
                 if (!isCurrentAttempt(attempt)) return;
                 profileReadError = profileError;
-                if (profileError?.message === 'ADMIN_PROFILE_TIMEOUT') throw profileError;
+                // Authorization authority is the verified Firebase token/claims,
+                // followed by the enrolled + present second factor below. The
+                // users document enriches the Admin UI but a transient Firestore
+                // profile timeout must not destroy an otherwise valid secure
+                // session. Unknown/invalid claims still fail closed below.
                 console.warn('[ADMIN-AUTH] Profile lookup failed; claims remain authoritative:', profileError);
             }
 
