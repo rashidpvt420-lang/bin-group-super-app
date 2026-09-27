@@ -464,7 +464,6 @@ export default function TenantAIConciergePage() {
                     '&:hover fieldset': { borderColor: alpha(binThemeTokens.gold, 0.4) },
                     '&.Mui-focused fieldset': { borderColor: binThemeTokens.gold },
                   },
-                  '& .MuiInputBase-input::placeholder': { color: 'rgba(255,255,255,0.3)' },
                 }}
               />
               <IconButton
