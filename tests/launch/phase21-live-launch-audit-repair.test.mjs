@@ -118,3 +118,24 @@ test('Phase 21 Step 48 round-two repair preserves valid claims plus MFA across t
   assert.match(auth, /const verifiedSecondFactor = factorCount > 0 && Boolean\(secondFactor\)/);
   assert.match(auth, /if \(factorCount > 0 && !verifiedSecondFactor\)/);
 });
+
+
+test('Phase 21 Step 48 round-three repair binds Owner AI intelligence to canonical owner UID', () => {
+  const ownerAi = read('src/owner/pages/OwnerAIIntelligencePage.tsx');
+  assert.match(ownerAi, /where\('ownerId', '==', user\.uid\)/);
+  assert.doesNotMatch(ownerAi, /where\('ownerEmail', '==', email\)/);
+  assert.match(ownerAi, /\}, \[user\?\.uid\]\);/);
+});
+
+test('Phase 21 Step 48 round-three repair keeps the missing Tenant ticket sentinel out of protected Firestore reads', () => {
+  const detail = read('src/tenant/pages/TenantTicketDetailPage.tsx');
+  assert.match(detail, /if \(id === 'phase2-missing'\)/);
+  assert.match(detail, /Ticket record was not found\./);
+  assert.match(detail, /aria-label="Back"/);
+});
+
+test('Phase 21 Step 48 round-three repair labels every control-center batch audit link', () => {
+  const control = read('apps/admin-panel/src/pages/ProductionControlCenter.tsx');
+  assert.match(control, /Open audit for batch/);
+  assert.match(control, /aria-label=\{/);
+});
