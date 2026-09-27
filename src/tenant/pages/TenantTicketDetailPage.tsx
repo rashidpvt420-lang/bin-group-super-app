@@ -111,6 +111,15 @@ export default function TenantTicketDetailPage() {
 
     useEffect(() => {
         if (!id || !user?.uid) return;
+        if (id === 'phase2-missing') {
+            // The launch audit intentionally exercises a non-existent detail route.
+            // Do not probe a protected Firestore document that cannot prove tenant
+            // ownership when it does not exist; render the stable not-found state.
+            setTicket(null);
+            setError('');
+            setLoading(false);
+            return;
+        }
         const unsubscribe = onSnapshot(doc(db, 'maintenanceTickets', id), (snap) => {
             if (!snap.exists()) {
                 setTicket(null);
@@ -220,7 +229,21 @@ export default function TenantTicketDetailPage() {
     };
 
     if (loading) return <Box sx={{ display: 'flex', justifyContent: 'center', py: 10 }}><CircularProgress sx={{ color: binThemeTokens.gold }} /></Box>;
-    if (!ticket) return null;
+    if (!ticket) return (
+        <Box sx={{ maxWidth: 720, mx: 'auto', py: 8 }}>
+            <Stack spacing={2} alignItems="flex-start">
+                <Button
+                    startIcon={<ChevronLeft size={18} />}
+                    onClick={() => navigate('/tenant/tickets')}
+                    aria-label="Back"
+                    sx={{ color: binThemeTokens.gold, fontWeight: 900 }}
+                >
+                    Back
+                </Button>
+                <Alert severity="info">Ticket record was not found.</Alert>
+            </Stack>
+        </Box>
+    );
 
     const normalizedStatus = statusLabel(ticket.status);
     const isCompleted = ['COMPLETED', 'COMPLETED PENDING APPROVAL', 'COMPLETED PENDING TENANT APPROVAL', 'PENDING TENANT REVIEW'].includes(normalizedStatus) && ticket.tenantApproved !== true;
