@@ -42,3 +42,15 @@ test('Phase 21 postdeploy repair is wired into both exact-main production eviden
   assert.match(runner, /run\('scripts\/patch-phase21-postdeploy-evidence\.mjs'\)/);
   assert.match(hooks, /scripts\/patch-phase21-postdeploy-evidence\.mjs/);
 });
+
+test('Owner final verified contract OTP proof is correlated to its exact request ID', () => {
+  const source = read('scripts/run-owner-inspection-first-production-evidence.mjs');
+  const start = source.indexOf('async function verifyFinalContractSignatureOtp');
+  const end = source.indexOf('\nasync function uploadOwnerDocument', start);
+  assert.ok(start >= 0 && end > start, 'final contract OTP helper must exist');
+  const helper = source.slice(start, end);
+  assert.match(helper, /correlationId:\s*requestId,/);
+  assert.match(helper, /providerMessageId:\s*text\(otpRecord\.delivery\?\.messageId\)/);
+  assert.match(helper, /label:\s*'Owner final verified contract OTP'/);
+});
+
