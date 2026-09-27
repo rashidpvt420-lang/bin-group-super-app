@@ -303,6 +303,7 @@ async function verifyFinalContractSignatureOtp(ownerSession, appCheckToken, cont
     sender: CANONICAL_FOUNDER_EMAIL,
     recipient: ownerEmail,
     subject: 'BIN GROUP contract signature OTP',
+    correlationId: requestId,
     providerMessageId: text(otpRecord.delivery?.messageId),
     requestedAtMs: requestedAt,
     otpPattern: /contract signature OTP:\s*(\d{6})/i,
