@@ -94,6 +94,7 @@ export default function CertificateVerificationPage() {
                         fullWidth
                         variant="contained"
                         size="large"
+                        aria-label={t('cert.validate_btn') || 'Validate certificate'}
                         onClick={() => verifyCert()}
                         sx={{
                             background: `linear-gradient(135deg, ${binThemeTokens.gold}, ${binThemeTokens.goldLight})`,

@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Alert,
   Box,
@@ -36,6 +37,7 @@ const rowTime = (row: any) => row?.createdAt?.toDate ? row.createdAt.toDate().ge
 
 export default function BrokerReferralsPage({ openFormByDefault = false }: { openFormByDefault?: boolean }) {
   const { user } = useRole();
+  const navigate = useNavigate();
   const [referrals, setReferrals] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [warning, setWarning] = useState('');
@@ -214,7 +216,7 @@ export default function BrokerReferralsPage({ openFormByDefault = false }: { ope
                       <Stack direction="row" spacing={4} sx={{ minWidth: { md: 400 } }}>
                         <Box><Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, fontWeight: 950, letterSpacing: 1 }}>EST. VALUE</Typography><Typography variant="body1" fontWeight="950" color={binThemeTokens.textPrimary}>{ref.estimatedValue ? `AED ${Number(ref.estimatedValue).toLocaleString()}` : 'N/A'}</Typography></Box>
                         <Box><Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, fontWeight: 950, letterSpacing: 1 }}>COMMISSION</Typography><Typography variant="body1" fontWeight="950" color={binThemeTokens.textPrimary}>{ref.commissionAmount ? `AED ${Number(ref.commissionAmount).toLocaleString()}` : ref.commissionStatus || 'N/A'}</Typography></Box>
-                        <Box sx={{ flex: 1, display: 'flex', justifyContent: 'flex-end', alignItems: 'center' }}><Tooltip title="View Referral Audit"><IconButton sx={{ bgcolor: '#FFFFFF', border: '1px solid #E5E7EB', borderRadius: 3, color: binThemeTokens.textSecondary }}><FileText size={20} /></IconButton></Tooltip></Box>
+                        <Box sx={{ flex: 1, display: 'flex', justifyContent: 'flex-end', alignItems: 'center' }}><Tooltip title="View Referral Audit"><IconButton aria-label="View referral audit" sx={{ bgcolor: '#FFFFFF', border: '1px solid #E5E7EB', borderRadius: 3, color: binThemeTokens.textSecondary }}><FileText size={20} /></IconButton></Tooltip></Box>
                       </Stack>
                     </Stack>
                     {ref.notes && <Box sx={{ mt: 3, p: 2, bgcolor: '#F3F4F6', borderRadius: 3, border: '1px solid #E5E7EB' }}><Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, fontWeight: 800 }}>NOTES</Typography><Typography variant="body2" sx={{ color: binThemeTokens.textPrimary, mt: 0.5 }}>{ref.notes}</Typography></Box>}
@@ -240,7 +242,7 @@ export default function BrokerReferralsPage({ openFormByDefault = false }: { ope
               <TextField label="Notes" value={notes} onChange={(e) => setNotes(e.target.value)} multiline rows={3} fullWidth />
             </Stack>
           </DialogContent>
-          <DialogActions sx={{ p: 3 }}><Button onClick={() => setOpenAdd(false)}>Cancel</Button><Button type="submit" variant="contained" disabled={submitting} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>{submitting ? <CircularProgress size={20} /> : 'Submit Referral'}</Button></DialogActions>
+          <DialogActions sx={{ p: 3 }}><Button aria-label="Back" onClick={() => { setOpenAdd(false); if (openFormByDefault) navigate('/broker/referrals'); }}>Back</Button><Button type="submit" variant="contained" disabled={submitting} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>{submitting ? <CircularProgress size={20} /> : 'Submit Referral'}</Button></DialogActions>
         </form>
       </Dialog>
     </BrokerPageFrame>

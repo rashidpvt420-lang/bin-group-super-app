@@ -179,7 +179,7 @@ export default function OwnerComplaintPage() {
     return (
         <Box sx={{ maxWidth: 800, mx: 'auto', pb: 10 }}>
             <Stack direction="row" alignItems="center" spacing={2} sx={{ mb: 4 }}>
-                <IconButton onClick={() => navigate(-1)} sx={{ color: 'rgba(255,255,255,0.5)' }}>
+                <IconButton aria-label="Back" onClick={() => navigate(-1)} sx={{ color: 'rgba(255,255,255,0.5)' }}>
                     <ChevronLeft />
                 </IconButton>
                 <Box>
