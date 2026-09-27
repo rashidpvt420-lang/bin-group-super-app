@@ -84,6 +84,7 @@ export default function InvoiceVerificationPage() {
                         fullWidth
                         variant="contained"
                         size="large"
+                        aria-label={proofType === 'contract' ? 'Verify contract proof' : (t('invoice.verify_btn') || 'Verify invoice proof')}
                         onClick={() => verifyHash()}
                         sx={{
                             background: `linear-gradient(135deg, ${binThemeTokens.gold}, ${binThemeTokens.goldLight})`,
