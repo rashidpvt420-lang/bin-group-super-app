@@ -52,7 +52,7 @@ const ReportingDashboard: React.FC = () => {
                         getDocs(query(collection(db, collectionName), where('ownerId', '==', user.uid), limit(250))),
                         getDocs(query(collection(db, collectionName), where('ownerUid', '==', user.uid), limit(250))),
                     ]);
-                    const merged = new Map<string, any>();
+                    const merged = new globalThis.Map<string, any>();
                     for (const snapshot of [byOwnerId, byOwnerUid]) {
                         for (const item of snapshot.docs) merged.set(item.id, { id: item.id, ...item.data() });
                     }
