@@ -61,6 +61,7 @@ run('scripts/ensure-protected-appcheck-debug-tokens.mjs');
 // listener convergence, stale synthetic correction cleanup, and exact callable
 // error diagnostics.
 run('scripts/harden-repeated-business-evidence.mjs');
+run('scripts/patch-phase21-postdeploy-evidence.mjs');
 
 const releaseId = String(process.env.RELEASE_ID || '').trim()
   || `${process.env.GITHUB_RUN_ID || 'unknown'}-${process.env.GITHUB_RUN_ATTEMPT || '1'}`;
