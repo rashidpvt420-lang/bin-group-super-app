@@ -474,7 +474,7 @@ async function brokerCommissionProof() {
   if (text(contractBefore.data.commissionId) !== commissionId || contractBefore.data.commissionGenerated !== true) fail('contract commission binding is incomplete');
   const commissionsBeforeSnapshot = await db.collection('broker_commissions').where('contractId', '==', contractId).limit(20).get();
   if (commissionsBeforeSnapshot.size !== 1) fail('commission is not locked exactly once before replay');
-  const auditBefore = await requireSnapshot(db.collection('auditLogs').doc(`broker_commission_${contractId}`), `auditLogs/broker_commission_${contractId}`);
+  const auditBefore = await requireSnapshot(db.collection('audit_logs').doc(`broker_commission_${contractId}`), `audit_logs/broker_commission_${contractId}`);
   if (auditBefore.data.action !== 'BROKER_COMMISSION_CREATED' || auditBefore.data.commissionId !== commissionId) fail('deterministic commission audit is missing');
   const beforeHash = sha256(JSON.stringify({
     id: commissionId,
@@ -489,7 +489,7 @@ async function brokerCommissionProof() {
   const [contractAfter, commissionsAfterSnapshot, auditAfter] = await Promise.all([
     requireSnapshot(db.collection('contracts').doc(contractId), `contracts/${contractId}`),
     db.collection('broker_commissions').where('contractId', '==', contractId).limit(20).get(),
-    requireSnapshot(db.collection('auditLogs').doc(`broker_commission_${contractId}`), `auditLogs/broker_commission_${contractId}`),
+    requireSnapshot(db.collection('audit_logs').doc(`broker_commission_${contractId}`), `audit_logs/broker_commission_${contractId}`),
   ]);
   if (commissionsAfterSnapshot.size !== 1 || commissionsAfterSnapshot.docs[0].id !== commissionId) fail('payment replay created or replaced a commission lock');
   const commissionAfter = commissionsAfterSnapshot.docs[0].data() || {};

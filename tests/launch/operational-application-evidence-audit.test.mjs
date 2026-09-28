@@ -280,6 +280,9 @@ test('payment and commission evidence uses real replay invariants and requires F
   assert.match(verifier, /broker_attribution_\$\{brokerLead\.id\}_\$\{contractId\}/);
   assert.ok(verifier.includes("db.collection('audit_logs').doc(`broker_attribution_${brokerLead.id}_${contractId}`)"));
   assert.ok(verifier.includes("`audit_logs/broker_attribution_${brokerLead.id}_${contractId}`"));
+  assert.ok(verifier.includes("db.collection('audit_logs').doc(`broker_commission_${contractId}`)"));
+  assert.ok(verifier.includes("`audit_logs/broker_commission_${contractId}`"));
+  assert.doesNotMatch(verifier, /collection\('auditLogs'\)\.doc\(`/);
   assert.match(verifier, /cloudfunctions\.net\/adminApprovePayment/);
   assert.match(verifier, /payload\?\.idempotent !== true/);
   assert.match(verifier, /invoicesAfter\.length !== 1/);
