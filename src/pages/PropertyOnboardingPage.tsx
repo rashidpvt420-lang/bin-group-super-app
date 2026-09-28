@@ -90,7 +90,7 @@ export default function PropertyOnboardingPage() {
     const fixPropertyLocation = () => {
         setGuardError('');
         requestedSectionRef.current = 2;
-        if (safePage === 2) setSection(2);
+        if (Number(step) === 2) setSection(2);
         else setStep(2);
         window.scrollTo({ top: 0, behavior: 'smooth' });
     };
