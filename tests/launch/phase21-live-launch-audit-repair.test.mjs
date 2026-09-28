@@ -159,3 +159,11 @@ test('Phase 21 Step 48 round-four repair UID-binds Owner health and property dri
   assert.match(units, /propertyId === 'phase2-missing'/);
   assert.match(units, /Back to Properties/);
 });
+
+
+test('Phase 21 Step 48 Admin vault icon controls remain explicitly labelled', () => {
+  const vault = read('apps/admin-panel/src/pages/admin/IntakeVaultPage.tsx');
+  assert.match(vault, /View Owner application for/);
+  assert.match(vault, /Message Owner/);
+  assert.match(vault, /aria-label="Close Owner application"/);
+});
