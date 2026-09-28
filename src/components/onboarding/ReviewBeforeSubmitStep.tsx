@@ -10,6 +10,7 @@ import { useLanguage } from '@bin/shared';
 import { formatAED } from '../../utils/formatters';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { auth, functions, httpsCallable } from '../../lib/firebase';
+import { isValidLatLng } from '../../utils/geoAnchor';
 
 const badCopy = (value?: string) => {
     const text = String(value || '').trim();
@@ -34,7 +35,7 @@ type ServerQuote = {
     propertyQuotes: Array<{ propertyId: string; annualTotal: number }>;
 };
 
-const ReviewBeforeSubmitStep: React.FC<{ onNext: () => void; onBack: () => void }> = ({ onNext, onBack }) => {
+const ReviewBeforeSubmitStep: React.FC<{ onNext: () => void; onBack: () => void; onFixLocation: () => void }> = ({ onNext, onBack, onFixLocation }) => {
     const {
         companyProfile,
         properties,
@@ -51,6 +52,11 @@ const ReviewBeforeSubmitStep: React.FC<{ onNext: () => void; onBack: () => void 
     const [authReady, setAuthReady] = React.useState(false);
     const [signedInUid, setSignedInUid] = React.useState<string | null>(auth.currentUser?.uid || null);
 
+    const missingGps = React.useMemo(
+        () => properties.some((property) => !isValidLatLng(Number(property?.geo?.lat), Number(property?.geo?.lng))),
+        [properties],
+    );
+
     const copy = React.useCallback((key: string, fallback: string, variables?: Record<string, any>) => {
         const value = t(key, variables);
         return badCopy(value) ? fallback : value;
@@ -60,6 +66,12 @@ const ReviewBeforeSubmitStep: React.FC<{ onNext: () => void; onBack: () => void 
         lang === 'ar'
             ? 'انتهت جلسة المالك الآمنة أو لم تكتمل استعادتها. سجّل الدخول مرة أخرى للمتابعة من هذه الصفحة.'
             : 'Your secure Owner session has expired or could not be restored. Sign in again to continue from this page.'
+    ), [lang]);
+
+    const missingGpsMessage = React.useCallback(() => (
+        lang === 'ar'
+            ? 'موقع GPS للعقار مفقود. ارجع إلى موقع العقار وGPS واحفظ إحداثيات صحيحة قبل إنشاء عرض السعر أو التوقيع.'
+            : 'Property GPS is missing. Return to Property Location & GPS and save valid coordinates before quotation or signature.'
     ), [lang]);
 
     React.useEffect(() => onAuthStateChanged(auth, (user) => {
@@ -84,6 +96,15 @@ const ReviewBeforeSubmitStep: React.FC<{ onNext: () => void; onBack: () => void 
                         'onboarding.server_quote_account_required',
                         'A verified Owner account and at least one property are required before Review.',
                     ));
+                }
+                return;
+            }
+            if (missingGps) {
+                if (active) {
+                    setValuationResult({ ...(valuationResult || {}), serverQuote: null, serverQuoteRequestKey: null });
+                    setQuoteNeedsSignIn(false);
+                    setQuoteLoading(false);
+                    setQuoteError(missingGpsMessage());
                 }
                 return;
             }
@@ -151,7 +172,7 @@ const ReviewBeforeSubmitStep: React.FC<{ onNext: () => void; onBack: () => void 
 
         if (!authReady || valuationResult?.serverQuoteRequestKey !== quoteRequestKey || !serverQuote || serverQuote.expiresAtMs <= Date.now()) void issueQuote();
         return () => { active = false; };
-    }, [authReady, copy, ownerAccount?.uid, properties, quoteRequestKey, selectedAddOns, secureSessionMessage, signedInUid]);
+    }, [authReady, copy, missingGps, missingGpsMessage, ownerAccount?.uid, properties, quoteRequestKey, selectedAddOns, secureSessionMessage, signedInUid]);
 
     const primaryProperty = properties[0];
     const localQuote = portfolioSummary.quoteResults?.[primaryProperty?.id];
@@ -162,12 +183,21 @@ const ReviewBeforeSubmitStep: React.FC<{ onNext: () => void; onBack: () => void 
         : planKey === 'pm'
             ? 'Property Management Only'
             : 'Maintenance + Property Management';
-    const installmentValue = primaryProperty?.paymentPlan === 'monthly'
-        ? localQuote?.monthlyPayment || 0
-        : (primaryProperty?.paymentPlan === 'quarterly' ? localQuote?.quarterlyPayment || 0 : serverPropertyAnnual || localQuote?.annualTotal || 0);
     const quoteExpired = !serverQuote || serverQuote.expiresAtMs <= Date.now();
+    const quoteAvailable = Boolean(serverQuote && !quoteExpired);
+    const installmentValue = quoteAvailable
+        ? (primaryProperty?.paymentPlan === 'monthly'
+            ? localQuote?.monthlyPayment || 0
+            : (primaryProperty?.paymentPlan === 'quarterly' ? localQuote?.quarterlyPayment || 0 : serverPropertyAnnual || localQuote?.annualTotal || 0))
+        : null;
+    const primaryPropertyGpsValid = isValidLatLng(Number(primaryProperty?.geo?.lat), Number(primaryProperty?.geo?.lng));
 
     const handleNext = () => {
+        if (missingGps) {
+            setQuoteNeedsSignIn(false);
+            setQuoteError(missingGpsMessage());
+            return;
+        }
         if (!serverQuote || quoteExpired) {
             setQuoteError(copy('onboarding.server_quote_expired', 'The server quotation expired. Generate a new quotation before continuing.'));
             return;
@@ -200,7 +230,9 @@ const ReviewBeforeSubmitStep: React.FC<{ onNext: () => void; onBack: () => void 
                         : `Protected server quotation valid until ${new Date(serverQuote.expiresAtMs).toLocaleTimeString()}. No payment is collected now; the 15% mobilisation is due after the property visit.`)
                     : copy('onboarding.review_info', 'Admin will verify the documents and property location during the site-visit workflow.')}
             </Alert>
-            {quoteError && <Alert severity="error" sx={{ mb: 3 }} action={quoteNeedsSignIn ? <Button color="inherit" size="small" onClick={handleSignInAgain}>{lang === 'ar' ? 'تسجيل الدخول' : 'Sign in again'}</Button> : undefined}>{quoteError}</Alert>}
+            {quoteError && <Alert severity="error" sx={{ mb: 3 }} action={missingGps
+                ? <Button color="inherit" size="small" onClick={onFixLocation}>{lang === 'ar' ? 'إصلاح موقع العقار' : 'Fix property GPS'}</Button>
+                : (quoteNeedsSignIn ? <Button color="inherit" size="small" onClick={handleSignInAgain}>{lang === 'ar' ? 'تسجيل الدخول' : 'Sign in again'}</Button> : undefined)}>{quoteError}</Alert>
             {quoteLoading && <Alert severity="warning" icon={<CircularProgress size={18} />} sx={{ mb: 3 }}>{authReady ? copy('onboarding.server_quote_loading', 'Generating the protected server quotation…') : (lang === 'ar' ? 'جارٍ استعادة جلسة المالك الآمنة…' : 'Restoring your secure Owner session…')}</Alert>}
 
             <Grid container spacing={3} sx={{ flexDirection: isRTL ? 'row-reverse' : 'row' }}>
@@ -219,7 +251,7 @@ const ReviewBeforeSubmitStep: React.FC<{ onNext: () => void; onBack: () => void 
                         <Typography variant="h6" fontWeight="950" sx={{ color: '#FFF' }}>{primaryProperty?.propertyType || 'Property'} · {copy('onboarding.zone', 'Zone')} {primaryProperty?.zone}</Typography>
                         <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.68)' }}>{primaryProperty?.address || primaryProperty?.emirate || 'UAE'}</Typography>
                         <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.68)' }}>{primaryProperty?.units} {copy('onboarding.units', 'Units')} · {primaryProperty?.sqft} {copy('onboarding.sqft', 'Sq Ft')}</Typography>
-                        <Typography variant="caption" sx={{ color: primaryProperty?.geo?.lat && primaryProperty?.geo?.lng ? '#4ADE80' : '#FCA5A5' }}>{primaryProperty?.geo?.lat && primaryProperty?.geo?.lng ? '✓ GPS captured for Admin verification' : 'GPS location missing'}</Typography>
+                        <Typography variant="caption" sx={{ color: primaryPropertyGpsValid ? '#4ADE80' : '#FCA5A5' }}>{primaryPropertyGpsValid ? '✓ GPS captured for Admin verification' : 'GPS location missing'}</Typography>
                     </Paper>
                 </Grid>
 
@@ -248,10 +280,10 @@ const ReviewBeforeSubmitStep: React.FC<{ onNext: () => void; onBack: () => void 
                     <Paper sx={{ p: 3, height: '100%', borderRadius: 4, bgcolor: alpha(binThemeTokens.gold, 0.07), border: `1px solid ${alpha(binThemeTokens.gold, 0.3)}`, textAlign: isRTL ? 'right' : 'left' }}>
                         <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950 }}>{copy('onboarding.financial_recap', 'Pre-Inspection Quotation')}</Typography>
                         <Stack spacing={2} sx={{ mt: 2 }}>
-                            <Box sx={{ display: 'flex', justifyContent: 'space-between', flexDirection: isRTL ? 'row-reverse' : 'row' }}><Typography variant="body2" color="rgba(255,255,255,0.6)">{copy('onboarding.annual_val', 'Annual Value')}</Typography><Typography variant="body2" fontWeight="950" color="#FFF">AED {formatAED(serverQuote?.annualContractValue || 0)}</Typography></Box>
-                            <Box sx={{ display: 'flex', justifyContent: 'space-between', flexDirection: isRTL ? 'row-reverse' : 'row' }}><Typography variant="body2" color="rgba(255,255,255,0.6)">{copy(`onboarding.payment.${primaryProperty?.paymentPlan}`, 'Selected Schedule')}</Typography><Typography variant="body2" fontWeight="950" color={binThemeTokens.gold}>AED {formatAED(installmentValue)}</Typography></Box>
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between', flexDirection: isRTL ? 'row-reverse' : 'row' }}><Typography variant="body2" color="rgba(255,255,255,0.6)">{copy('onboarding.annual_val', 'Annual Value')}</Typography><Typography variant="body2" fontWeight="950" color="#FFF">{quoteAvailable ? `AED ${formatAED(serverQuote?.annualContractValue || 0)}` : '—'}</Typography></Box>
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between', flexDirection: isRTL ? 'row-reverse' : 'row' }}><Typography variant="body2" color="rgba(255,255,255,0.6)">{copy(`onboarding.payment.${primaryProperty?.paymentPlan}`, 'Selected Schedule')}</Typography><Typography variant="body2" fontWeight="950" color={binThemeTokens.gold}>{quoteAvailable ? `AED ${formatAED(installmentValue || 0)}` : '—'}</Typography></Box>
                             <Divider sx={{ borderColor: 'rgba(255,255,255,0.1)' }} />
-                            <Box sx={{ p: 2, bgcolor: alpha(binThemeTokens.gold, 0.1), borderRadius: 2 }}><Typography variant="caption" display="block" sx={{ color: binThemeTokens.gold, fontWeight: 900, mb: 1 }}>{lang === 'ar' ? '15٪ مستحقة فقط بعد زيارة العقار' : '15% Due Only After Property Visit'}</Typography><Typography variant="h4" fontWeight="950" color={binThemeTokens.gold}>AED {formatAED(serverQuote?.activationDeposit || 0)}</Typography></Box>
+                            <Box sx={{ p: 2, bgcolor: alpha(binThemeTokens.gold, 0.1), borderRadius: 2 }}><Typography variant="caption" display="block" sx={{ color: binThemeTokens.gold, fontWeight: 900, mb: 1 }}>{lang === 'ar' ? '15٪ مستحقة فقط بعد زيارة العقار' : '15% Due Only After Property Visit'}</Typography><Typography variant="h4" fontWeight="950" color={binThemeTokens.gold}>{quoteAvailable ? `AED ${formatAED(serverQuote?.activationDeposit || 0)}` : '—'}</Typography></Box>
                         </Stack>
                     </Paper>
                 </Grid>
@@ -263,7 +295,7 @@ const ReviewBeforeSubmitStep: React.FC<{ onNext: () => void; onBack: () => void 
 
             <Box sx={{ mt: 4, display: 'flex', justifyContent: 'space-between', gap: 2, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
                 <Button variant="outlined" size="large" onClick={onBack} startIcon={!isRTL ? <ArrowLeft /> : null} endIcon={isRTL ? <ArrowLeft style={{ transform: 'rotate(180deg)' }} /> : null} sx={{ borderRadius: 100, px: 4, color: '#FFF', borderColor: 'rgba(255,255,255,0.16)' }}>{copy('onboarding.back', 'Back')}</Button>
-                <Button variant="contained" size="large" onClick={handleNext} disabled={quoteLoading || quoteExpired || Boolean(quoteError)} endIcon={isRTL ? <ArrowRight style={{ transform: 'rotate(180deg)' }} /> : <ArrowRight />} sx={{ borderRadius: 100, px: 6, bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>{lang === 'ar' ? 'المتابعة إلى التوقيع' : 'Continue to Signature'}</Button>
+                <Button variant="contained" size="large" onClick={handleNext} disabled={missingGps || quoteLoading || quoteExpired || Boolean(quoteError)} endIcon={isRTL ? <ArrowRight style={{ transform: 'rotate(180deg)' }} /> : <ArrowRight />} sx={{ borderRadius: 100, px: 6, bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>{lang === 'ar' ? 'المتابعة إلى التوقيع' : 'Continue to Signature'}</Button>
             </Box>
         </Container>
     );
