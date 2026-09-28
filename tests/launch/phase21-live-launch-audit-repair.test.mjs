@@ -139,3 +139,23 @@ test('Phase 21 Step 48 round-three repair labels every control-center batch audi
   assert.match(control, /Open audit for batch/);
   assert.match(control, /aria-label=\{/);
 });
+
+
+test('Phase 21 Step 48 round-four repair keeps Owner detail sentinels out of protected reads', () => {
+  const ticket = read('src/owner/pages/OwnerTicketDetailPage.tsx');
+  const government = read('src/pages/GovernmentPropertyPage.tsx');
+  assert.match(ticket, /if \(id === 'phase2-missing'\)/);
+  assert.match(ticket, /Ticket record was not found\./);
+  assert.match(government, /if \(id === 'phase2-missing'\)/);
+  assert.match(government, /Property record was not found\./);
+});
+
+test('Phase 21 Step 48 round-four repair UID-binds Owner health and property drill-down list queries', () => {
+  const health = read('src/pages/HealthScorePage.tsx');
+  const units = read('src/pages/PropertyUnitsPage.tsx');
+  assert.match(health, /where\('ownerId', '==', user\.uid\)/);
+  assert.match(health, /propertyId === 'phase2-missing'/);
+  assert.match(units, /where\('ownerId', '==', user\.uid\)/);
+  assert.match(units, /propertyId === 'phase2-missing'/);
+  assert.match(units, /Back to Properties/);
+});
