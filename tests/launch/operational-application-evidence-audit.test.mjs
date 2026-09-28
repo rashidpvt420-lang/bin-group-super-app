@@ -192,10 +192,11 @@ test('application evidence workflow is protected and auto-discovers fixed produc
   assert.match(preparation, /commissionQuery\.size !== 1/);
   assert.match(preparation, /commissionCreationStatus\) !== 'COMMISSION_CREATED_SERVER_SIDE'/);
   assert.match(preparation, /ADMIN_MATCH_BROKER_ATTRIBUTION/);
+  assert.match(preparation, /collection\\('audit_logs'\\)\\.doc\\(`broker_attribution_\\$\\{leadId\\}_\\$\\{target\\.contractId\\}`\\)/);
   assert.doesNotMatch(preparation, /collection\('broker_commissions'\)\.doc\([^)]*\)\.set/);
   assert.doesNotMatch(preparation, /collection\('auditLogs'\)\.doc\([^)]*\)\.set/);
 
-  assert.match(frozenWrapper, /REVIEWED_APPLICATION_PREPARATION_BLOB = 'a56a66faf8501fa6e0790215fa60e139aeb89136'/);
+  assert.match(frozenWrapper, /REVIEWED_APPLICATION_PREPARATION_BLOB = 'af30a26261a937b1649f30f83a80a773d0f53d25'/);
   assert.match(frozenWrapper, /assertReviewedApplicationPreparation\(releaseRoot\)/);
   assert.match(frozenWrapper, /resolveApplicationEvidenceActor\(env\)/);
   assert.doesNotThrow(() => assertReviewedApplicationPreparationSource(preparation));
@@ -277,6 +278,8 @@ test('payment and commission evidence uses real replay invariants and requires F
   assert.match(verifier, /lower\(data\.status\) === 'converted'/);
   assert.match(verifier, /commissionCreationStatus\) === 'COMMISSION_CREATED_SERVER_SIDE'/);
   assert.match(verifier, /broker_attribution_\$\{brokerLead\.id\}_\$\{contractId\}/);
+  assert.match(verifier, /collection\\('audit_logs'\\)\\.doc\\(`broker_attribution_\\$\\{brokerLead\\.id\\}_\\$\\{contractId\\}`\\)/);
+  assert.match(verifier, /`audit_logs\\/broker_attribution_\\$\\{brokerLead\\.id\\}_\\$\\{contractId\\}`/);
   assert.match(verifier, /cloudfunctions\.net\/adminApprovePayment/);
   assert.match(verifier, /payload\?\.idempotent !== true/);
   assert.match(verifier, /invoicesAfter\.length !== 1/);
