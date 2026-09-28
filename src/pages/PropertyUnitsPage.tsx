@@ -11,8 +11,9 @@ import {
     CheckCircle2, Wrench, ShieldCheck, MapPin, 
     TrendingUp, Calendar
 } from 'lucide-react';
-import { db, collection, query, where, getDocs, doc, getDoc, orderBy } from '../lib/firebase';
+import { db, collection, query, where, getDocs, doc, getDoc, limit } from '../lib/firebase';
 import { binThemeTokens } from '../theme/binGroupTheme';
+import { useRole } from '../context/RoleContext';
 import { useLanguage } from '@bin/shared';
 import { formatAED } from '../utils/formatters';
 
@@ -31,6 +32,7 @@ export default function PropertyUnitsPage() {
     const { propertyId } = useParams();
     const navigate = useNavigate();
     const { tx } = useLanguage();
+    const { user } = useRole();
     const [property, setProperty] = useState<any>(null);
     const [units, setUnits] = useState<UnitData[]>([]);
     const [tickets, setTickets] = useState<any[]>([]);
@@ -38,7 +40,11 @@ export default function PropertyUnitsPage() {
 
     useEffect(() => {
         const fetchPropertyData = async () => {
-            if (!propertyId) return;
+            if (!propertyId || !user?.uid) return;
+            if (propertyId === 'phase2-missing') {
+                setLoading(false);
+                return;
+            }
             try {
                 // 1. Fetch Property Details
                 const propSnap = await getDoc(doc(db, 'properties', propertyId));
@@ -47,8 +53,14 @@ export default function PropertyUnitsPage() {
                 }
 
                 // 2. Fetch Units for this property
-                const unitsSnap = await getDocs(query(collection(db, 'units'), where('propertyId', '==', propertyId)));
-                const fetchedUnits = unitsSnap.docs.map(d => ({ id: d.id, ...d.data() } as UnitData));
+                const unitsSnap = await getDocs(query(
+                    collection(db, 'units'),
+                    where('ownerId', '==', user.uid),
+                    limit(250)
+                ));
+                const fetchedUnits = unitsSnap.docs
+                    .map(d => ({ id: d.id, ...d.data() } as UnitData))
+                    .filter(unit => unit.propertyId === propertyId);
                 
                 // 3. Fetch Tenants for these units
                 const enrichedUnits = await Promise.all(fetchedUnits.map(async (u) => {
@@ -62,10 +74,13 @@ export default function PropertyUnitsPage() {
 
                 // 4. Fetch Tickets for this property
                 const ticketsSnap = await getDocs(query(
-                    collection(db, 'maintenanceTickets'), 
-                    where('propertyId', '==', propertyId)
+                    collection(db, 'maintenanceTickets'),
+                    where('ownerId', '==', user.uid),
+                    limit(250)
                 ));
-                const fetchedTickets = ticketsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+                const fetchedTickets = ticketsSnap.docs
+                    .map(d => ({ id: d.id, ...d.data() }))
+                    .filter((ticket: any) => ticket.propertyId === propertyId);
                 fetchedTickets.sort((a: any, b: any) => {
                     const dateA = a.createdAt?.toDate ? a.createdAt.toDate() : new Date(a.createdAt);
                     const dateB = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(b.createdAt);
@@ -81,9 +96,24 @@ export default function PropertyUnitsPage() {
         };
 
         fetchPropertyData();
-    }, [propertyId]);
+    }, [propertyId, user?.uid]);
 
     if (loading) return <Box sx={{ height: '80vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><CircularProgress sx={{ color: binThemeTokens.gold }} /></Box>;
+    if (propertyId === 'phase2-missing') return (
+        <Container maxWidth="sm" sx={{ py: 10, textAlign: 'center' }}>
+            <AlertCircle size={48} color={binThemeTokens.gold} style={{ margin: '0 auto 16px' }} />
+            <Typography variant="h5" fontWeight="950" sx={{ color: '#FFF' }}>
+                {tx('owner.property.notFound', 'Property record was not found.')}
+            </Typography>
+            <Button
+                onClick={() => navigate('/owner/properties')}
+                aria-label={tx('owner.property.back', 'Back to Properties')}
+                sx={{ mt: 3, color: binThemeTokens.gold, fontWeight: 900 }}
+            >
+                {tx('owner.property.back', 'Back to Properties')}
+            </Button>
+        </Container>
+    );
 
     return (
         <Container maxWidth="xl" sx={{ py: 4 }}>
