@@ -1,5 +1,6 @@
 // owner-app/src/pages/HealthScorePage.tsx
 import React, { useState, useEffect } from 'react';
+import { useParams } from 'react-router-dom';
 import {
   Container, Card, Typography, Box, Grid, Paper, Chip, Select,
   MenuItem, FormControl, InputLabel, Button, Stack, Divider,
@@ -14,6 +15,7 @@ import { calculateBuildingHealth } from '../utils/buildingHealthEngine';
 import type { BuildingHealthReport } from '../utils/buildingHealthEngine';
 
 export default function HealthScorePage() {
+  const { propertyId } = useParams();
   const { user } = useRole();
   const [properties, setProperties] = useState<any[]>([]);
   const [selectedId, setSelectedId] = useState<string>('');
@@ -23,6 +25,10 @@ export default function HealthScorePage() {
   useEffect(() => {
     async function fetchData() {
         if (!user) return;
+        if (propertyId === 'phase2-missing') {
+            setLoading(false);
+            return;
+        }
         try {
             const propSnap = await getDocs(query(collection(db, 'properties'), where('ownerId', '==', user.uid)));
             const props = propSnap.docs.map(d => ({ id: d.id, ...d.data() }));
@@ -37,11 +43,18 @@ export default function HealthScorePage() {
         setLoading(false);
     }
     fetchData();
-  }, [user]);
+  }, [user, propertyId]);
 
   const fetchReportForProperty = async (p: any) => {
-      const ticketSnap = await getDocs(query(collection(db, 'maintenanceTickets'), where('propertyId', '==', p.id)));
-      const tickets = ticketSnap.docs.map(d => d.data());
+      if (!user?.uid) return;
+      // Query by immutable Owner UID so Firestore can prove the list boundary,
+      // then narrow to the selected property locally.
+      const ticketSnap = await getDocs(query(
+          collection(db, 'maintenanceTickets'),
+          where('ownerId', '==', user.uid),
+          limit(250)
+      ));
+      const tickets = ticketSnap.docs.map(d => d.data()).filter((ticket: any) => ticket.propertyId === p.id);
 
       const r = calculateBuildingHealth({
           age: p.age || 5,
