@@ -116,7 +116,7 @@ const ReviewBeforeSubmitStep: React.FC<{ onNext: () => void; onBack: () => void;
                 }
                 return;
             }
-            if (!signedInUid || signedInUid !== ownerAccount.uid || !auth.currentUser) {
+            if (!signedInUid || signedInUid !== ownerAccount.uid || auth.currentUser?.uid !== ownerAccount.uid) {
                 if (active) {
                     setValuationResult({ ...(valuationResult || {}), serverQuote: null, serverQuoteRequestKey: null });
                     setQuoteNeedsSignIn(true);
@@ -170,7 +170,16 @@ const ReviewBeforeSubmitStep: React.FC<{ onNext: () => void; onBack: () => void;
             }
         };
 
-        if (!authReady || valuationResult?.serverQuoteRequestKey !== quoteRequestKey || !serverQuote || serverQuote.expiresAtMs <= Date.now()) void issueQuote();
+        if (
+            !authReady || missingGps || !signedInUid || signedInUid !== ownerAccount?.uid || auth.currentUser?.uid !== ownerAccount?.uid ||
+            valuationResult?.serverQuoteRequestKey !== quoteRequestKey || !serverQuote || serverQuote.expiresAtMs <= Date.now()
+        ) {
+            void issueQuote();
+        } else {
+            setQuoteLoading(false);
+            setQuoteNeedsSignIn(false);
+            setQuoteError('');
+        }
         return () => { active = false; };
     }, [authReady, copy, missingGps, missingGpsMessage, ownerAccount?.uid, properties, quoteRequestKey, selectedAddOns, secureSessionMessage, signedInUid]);
 
