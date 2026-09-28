@@ -194,8 +194,11 @@ test('operational evidence keeps current main as control plane while binding pro
   }
 
   const providerWorkflow = await read('.github/workflows/operational-provider-evidence.yml');
+  const evidenceBridge = await read('.github/workflows/technician-physical-evidence.yml');
+
   assert.match(providerWorkflow, /production_deploy_run_id:[\s\S]*?required: true/);
   assert.doesNotMatch(providerWorkflow, /stripeLiveBilling|stripe_checkout_session_id|stripe_webhook_event_id/);
+  assert.doesNotMatch(evidenceBridge, /stripe_checkout_session_id|stripe_webhook_event_id/);
   assert.match(providerWorkflow, /Unsupported Phase 1 provider gate/);
   assert.doesNotMatch(providerWorkflow, /all-baseline must not receive deployment/);
 

@@ -190,7 +190,7 @@ jobs:
                 --arg control "$CONTROL_SHA" \
                 --arg release "$RELEASE_SHA" \
                 --arg deploy "$SOURCE_RUN_ID" \
-                '{ref:$ref,inputs:{gate:"all-baseline",expected_commit_sha:$control,frozen_release_sha:$release,production_deploy_run_id:$deploy,stripe_checkout_session_id:"",stripe_webhook_event_id:"",confirmation:"PUBLISH_OPERATIONAL_PROVIDER_EVIDENCE"}}' \
+                '{ref:$ref,inputs:{gate:"all-baseline",expected_commit_sha:$control,frozen_release_sha:$release,production_deploy_run_id:$deploy,confirmation:"PUBLISH_OPERATIONAL_PROVIDER_EVIDENCE"}}' \
                 > dispatch.json
               dispatch operational-provider-evidence.yml dispatch.json
               ;;
@@ -200,7 +200,7 @@ jobs:
                 --arg control "$CONTROL_SHA" \
                 --arg release "$RELEASE_SHA" \
                 --arg deploy "$SOURCE_RUN_ID" \
-                '{ref:$ref,inputs:{gate:"aiProviderHealth",expected_commit_sha:$control,frozen_release_sha:$release,production_deploy_run_id:$deploy,stripe_checkout_session_id:"",stripe_webhook_event_id:"",confirmation:"PUBLISH_OPERATIONAL_PROVIDER_EVIDENCE"}}' \
+                '{ref:$ref,inputs:{gate:"aiProviderHealth",expected_commit_sha:$control,frozen_release_sha:$release,production_deploy_run_id:$deploy,confirmation:"PUBLISH_OPERATIONAL_PROVIDER_EVIDENCE"}}' \
                 > dispatch.json
               dispatch operational-provider-evidence.yml dispatch.json
               ;;
