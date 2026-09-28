@@ -232,7 +232,7 @@ const ReviewBeforeSubmitStep: React.FC<{ onNext: () => void; onBack: () => void;
             </Alert>
             {quoteError && <Alert severity="error" sx={{ mb: 3 }} action={missingGps
                 ? <Button color="inherit" size="small" onClick={onFixLocation}>{lang === 'ar' ? 'إصلاح موقع العقار' : 'Fix property GPS'}</Button>
-                : (quoteNeedsSignIn ? <Button color="inherit" size="small" onClick={handleSignInAgain}>{lang === 'ar' ? 'تسجيل الدخول' : 'Sign in again'}</Button> : undefined)}>{quoteError}</Alert>
+                : (quoteNeedsSignIn ? <Button color="inherit" size="small" onClick={handleSignInAgain}>{lang === 'ar' ? 'تسجيل الدخول' : 'Sign in again'}</Button> : undefined)}>{quoteError}</Alert>}
             {quoteLoading && <Alert severity="warning" icon={<CircularProgress size={18} />} sx={{ mb: 3 }}>{authReady ? copy('onboarding.server_quote_loading', 'Generating the protected server quotation…') : (lang === 'ar' ? 'جارٍ استعادة جلسة المالك الآمنة…' : 'Restoring your secure Owner session…')}</Alert>}
 
             <Grid container spacing={3} sx={{ flexDirection: isRTL ? 'row-reverse' : 'row' }}>
