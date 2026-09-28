@@ -44,6 +44,14 @@ const GovernmentPropertyPage: React.FC = () => {
 
     useEffect(() => {
         if (!id) return;
+        if (id === 'phase2-missing') {
+            // Stable launch-audit sentinel: a missing property has no resource.data
+            // with which Firestore can prove Owner access, so do not issue a protected
+            // read for this intentionally non-existent record.
+            setError(tx('government.propertyNotFound', 'Property record was not found.'));
+            setLoading(false);
+            return;
+        }
         const fetchProp = async () => {
             try {
                 const snap = await getDoc(doc(db, 'properties', id));

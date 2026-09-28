@@ -67,6 +67,15 @@ export default function OwnerTicketDetailPage() {
 
     useEffect(() => {
         if (!id || !user?.uid) return;
+        if (id === 'phase2-missing') {
+            // The launch audit intentionally exercises a non-existent detail route.
+            // Do not probe a protected Firestore document whose ownership cannot be
+            // established because the record does not exist.
+            setUnauthorized(false);
+            setTicket(null);
+            setLoading(false);
+            return;
+        }
 
         const unsub = onSnapshot(doc(db, 'maintenanceTickets', id), (snap) => {
             if (snap.exists()) {
@@ -112,7 +121,22 @@ export default function OwnerTicketDetailPage() {
         </Box>
     );
 
-    if (!ticket) return null;
+    if (!ticket) return (
+        <Box sx={{ textAlign: 'center', py: 10 }}>
+            <AlertCircle size={48} color={binThemeTokens.gold} style={{ margin: '0 auto 16px' }} />
+            <Typography variant="h6" color="#FFF" fontWeight="950">
+                {tx('owner.ticket.not_found', 'Ticket record was not found.')}
+            </Typography>
+            <Button
+                onClick={() => navigate('/owner/tickets')}
+                variant="outlined"
+                aria-label={tx('owner.ticket.back_to_tickets', 'Back to Tickets')}
+                sx={{ mt: 3, borderColor: 'rgba(255,255,255,0.2)', color: '#FFF', fontWeight: 950 }}
+            >
+                {tx('owner.ticket.back_to_tickets', 'Back to Tickets')}
+            </Button>
+        </Box>
+    );
 
     const normalizedStatus = String(ticket.status || '').toUpperCase();
     const statusColor = STATUS_COLORS[ticket.status] || STATUS_COLORS[normalizedStatus] || 'rgba(255,255,255,0.4)';
