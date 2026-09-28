@@ -167,3 +167,10 @@ test('Phase 21 Step 48 Admin vault icon controls remain explicitly labelled', ()
   assert.match(vault, /Message Owner/);
   assert.match(vault, /aria-label="Close Owner application"/);
 });
+
+
+test('Phase 21 Step 48 BIN-GPT history expander remains explicitly labelled', () => {
+  const page = read('apps/admin-panel/src/pages/admin/BinGptEngineerPage.tsx');
+  assert.match(page, /Collapse engineering command details/);
+  assert.match(page, /Expand engineering command details/);
+});

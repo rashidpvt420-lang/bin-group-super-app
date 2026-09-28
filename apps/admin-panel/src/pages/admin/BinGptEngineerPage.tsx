@@ -415,7 +415,12 @@ export default function BinGptEngineerPage() {
                       <React.Fragment key={docItem.id}>
                         <TableRow sx={{ '& td': { borderBottom: isExpanded ? 'none' : '1px solid rgba(255,255,255,0.05)' } }}>
                           <TableCell sx={{ width: 50 }}>
-                            <IconButton size="small" onClick={() => setExpandedId(isExpanded ? null : docItem.id)} sx={{ color: 'rgba(255,255,255,0.5)' }}>
+                            <IconButton
+                              size="small"
+                              aria-label={isExpanded ? 'Collapse engineering command details' : 'Expand engineering command details'}
+                              onClick={() => setExpandedId(isExpanded ? null : docItem.id)}
+                              sx={{ color: 'rgba(255,255,255,0.5)' }}
+                            >
                               {isExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
                             </IconButton>
                           </TableCell>
