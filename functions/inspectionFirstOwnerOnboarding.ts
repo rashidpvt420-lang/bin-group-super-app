@@ -4,6 +4,7 @@ import { HttpsError, onCall } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 import * as crypto from "crypto";
 import { calculateOwnerOnboardingQuote } from "./ownerOnboardingQuote";
+import { isValidOwnerSubmittedGps } from "./ownerSubmittedGps";
 import { loadActivePaymentConfiguration } from "./paymentConfiguration";
 import { normalizeAedMoney } from "./shared/aedMoney";
 
@@ -116,11 +117,13 @@ function propertyMode(property: PlainRecord): ContractMode {
 }
 
 function normalizeGeo(value: PlainRecord) {
-  const lat = finite(value?.geo?.lat ?? value?.geo?.point?.latitude ?? value?.lat, NaN);
-  const lng = finite(value?.geo?.lng ?? value?.geo?.point?.longitude ?? value?.lng, NaN);
-  if (!Number.isFinite(lat) || !Number.isFinite(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+  const rawLat = value?.geo?.lat ?? value?.geo?.point?.latitude ?? value?.lat;
+  const rawLng = value?.geo?.lng ?? value?.geo?.point?.longitude ?? value?.lng;
+  if (!isValidOwnerSubmittedGps(rawLat, rawLng)) {
     throw new HttpsError("failed-precondition", "A valid property GPS location is required before submission.");
   }
+  const lat = Number(rawLat);
+  const lng = Number(rawLng);
   return {
     ...(cleanPlain(value?.geo || {})),
     point: new admin.firestore.GeoPoint(lat, lng),
