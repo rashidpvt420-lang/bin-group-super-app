@@ -53,7 +53,9 @@ const ReviewBeforeSubmitStep: React.FC<{ onNext: () => void; onBack: () => void;
     const [signedInUid, setSignedInUid] = React.useState<string | null>(auth.currentUser?.uid || null);
 
     const missingGps = React.useMemo(
-        () => properties.some((property) => !isValidLatLng(Number(property?.geo?.lat), Number(property?.geo?.lng))),
+        () => properties.some((property) => property?.geo?.lat == null || property?.geo?.lng == null ||
+            String(property.geo.lat).trim() === '' || String(property.geo.lng).trim() === '' ||
+            !isValidLatLng(Number(property.geo.lat), Number(property.geo.lng))),
         [properties],
     );
 
