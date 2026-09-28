@@ -46,7 +46,7 @@ test('five-page Review issues a fresh authenticated quote and blocks progression
   assert.match(source, /serverQuote\.expiresAtMs <= Date\.now\(\)/);
   assert.match(source, /portfolioAnnualTotal:\s*nextQuote\.annualContractValue/);
   assert.match(source, /mobilisationDeposit:\s*nextQuote\.activationDeposit/);
-  assert.match(source, /disabled=\{quoteLoading \|\| quoteExpired \|\| Boolean\(quoteError\)\}/);
+  assert.match(source, /disabled=\{missingGps \|\| quoteLoading \|\| quoteExpired \|\| Boolean\(quoteError\)\}/);
   assert.match(source, /setValuationResult/);
 });
 
