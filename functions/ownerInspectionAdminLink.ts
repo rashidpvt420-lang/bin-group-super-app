@@ -3,6 +3,7 @@ import { HttpsError, onCall } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 import { resolveOwnerOnboardingPricingClass } from "./ownerOnboardingQuote";
 import { UAE_PRICING_MATRIX_2026 } from "./pricing/uaePricingMatrix2026";
+import { isValidOwnerSubmittedGps } from "./ownerSubmittedGps";
 
 if (!admin.apps.length) admin.initializeApp();
 const db = admin.firestore();
@@ -60,11 +61,13 @@ export const adminCreateOwnerPortfolioPropertyInspection = onCall({ cors: true, 
   const properties = Array.isArray(intake.properties) ? intake.properties : [];
   const property = properties[propertyIndex];
   if (!property) throw new HttpsError("not-found", `Property ${propertyIndex + 1} was not found in this application.`);
-  const lat = Number(property?.geo?.lat ?? property?.geo?.point?.latitude);
-  const lng = Number(property?.geo?.lng ?? property?.geo?.point?.longitude);
-  if (!Number.isFinite(lat) || !Number.isFinite(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+  const rawLat = property?.geo?.lat ?? property?.geo?.point?.latitude;
+  const rawLng = property?.geo?.lng ?? property?.geo?.point?.longitude;
+  if (!isValidOwnerSubmittedGps(rawLat, rawLng)) {
     throw new HttpsError("failed-precondition", "Owner-submitted GPS is required before creating a site visit.");
   }
+  const lat = Number(rawLat);
+  const lng = Number(rawLng);
 
   const ownerUid = text(intake.ownerUid || intake.ownerId);
   const propertyId = safeId(property.propertyId || property.id, `${intakeId}_property_${propertyIndex + 1}`);

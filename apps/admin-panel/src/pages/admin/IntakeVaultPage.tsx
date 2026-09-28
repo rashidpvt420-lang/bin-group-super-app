@@ -106,7 +106,13 @@ export const IntakeVaultPage: React.FC = () => {
         if (item.workflowVersion !== FIVE_PAGE_WORKFLOW) throw new Error('This submission is not on the protected five-page workflow.');
         const properties = item.properties || [];
         if (!properties.length) throw new Error('No property records are attached to this application.');
-        if (properties.some((property) => !Number.isFinite(Number(property?.geo?.lat)) || !Number.isFinite(Number(property?.geo?.lng)))) {
+        if (properties.some((property) => {
+            const lat = Number(property?.geo?.lat);
+            const lng = Number(property?.geo?.lng);
+            return property?.geo?.lat == null || property?.geo?.lng == null ||
+                !Number.isFinite(lat) || !Number.isFinite(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180 ||
+                (lat === 0 && lng === 0) || (lat >= 51 && lat <= 57 && lng >= 22 && lng <= 27);
+        })) {
             throw new Error('Every property requires valid Owner-submitted GPS before a visit can be created.');
         }
 
