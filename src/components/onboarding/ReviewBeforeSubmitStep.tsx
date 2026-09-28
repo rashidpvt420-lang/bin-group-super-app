@@ -54,6 +54,7 @@ const ReviewBeforeSubmitStep: React.FC<{ onNext: () => void; onBack: () => void;
 
     const missingGps = React.useMemo(
         () => properties.some((property) => property?.geo?.lat == null || property?.geo?.lng == null ||
+            String(property.geo.lat).trim() === '' || String(property.geo.lng).trim() === '' ||
             !isValidLatLng(Number(property.geo.lat), Number(property.geo.lng))),
         [properties],
     );

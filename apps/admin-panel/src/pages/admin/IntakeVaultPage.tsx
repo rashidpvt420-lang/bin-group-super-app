@@ -110,6 +110,7 @@ export const IntakeVaultPage: React.FC = () => {
             const lat = Number(property?.geo?.lat);
             const lng = Number(property?.geo?.lng);
             return property?.geo?.lat == null || property?.geo?.lng == null ||
+                String(property.geo.lat).trim() === '' || String(property.geo.lng).trim() === '' ||
                 !Number.isFinite(lat) || !Number.isFinite(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180 ||
                 (lat === 0 && lng === 0) || (lat >= 51 && lat <= 57 && lng >= 22 && lng <= 27);
         })) {
