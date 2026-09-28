@@ -461,8 +461,8 @@ async function brokerCommissionProof() {
   const brokerUid = canonicalId(commissionBefore.data.brokerId || commissionBefore.data.brokerUid, 'broker_uid');
   const brokerLead = await convertedBrokerLeadForCommission(commissionId, contractId, brokerUid);
   const attributionAudit = await requireSnapshot(
-    db.collection('auditLogs').doc(`broker_attribution_${brokerLead.id}_${contractId}`),
-    `auditLogs/broker_attribution_${brokerLead.id}_${contractId}`,
+    db.collection('audit_logs').doc(`broker_attribution_${brokerLead.id}_${contractId}`),
+    `audit_logs/broker_attribution_${brokerLead.id}_${contractId}`,
   );
   if (
     attributionAudit.data.action !== 'ADMIN_MATCH_BROKER_ATTRIBUTION' ||
