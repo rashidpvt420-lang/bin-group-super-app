@@ -59,6 +59,10 @@ test('property onboarding is a real five-page inspection-first Owner workflow', 
   assert.ok(page.indexOf('<CompanyProfileStep') < page.indexOf('<AccountCreationStep'));
   assert.ok(page.indexOf('<AccountCreationStep') < page.indexOf('<AssetProfileStep'));
   assert.match(page, /Submit for Visit/);
+  assert.match(page, /requestedSectionRef/);
+  assert.match(page, /fixPropertyLocation/);
+  assert.match(page, /setStep\(2\)/);
+  assert.match(page, /onFixLocation=\{fixPropertyLocation\}/);
   assert.match(page, /dir=\{isRTL \? ['"]rtl['"] : ['"]ltr['"]\}/);
   assert.match(page, ARABIC);
 
@@ -81,6 +85,7 @@ test('property onboarding is a real five-page inspection-first Owner workflow', 
   assert.match(backend, /Number\(quote\.annualContractValue\) \* 0\.15/);
 
   assert.match(intakeAdmin, /adminCreateOwnerPortfolioPropertyInspection/);
+  assert.match(intakeAdmin, /Every property requires valid Owner-submitted GPS before a visit can be created/);
   assert.match(intakeAdmin, /adminLinkOwnerPropertyInspection/);
   assert.match(intakeAdmin, /RECORD 15% & APPROVE/);
   assert.doesNotMatch(intakeAdmin, /adminCreateOwnerPropertyInspection|approveOwnerSubmissionOperationalFlow/);

@@ -55,6 +55,18 @@ test('commercial review renders every selectable building system with visible th
   assert.match(source, /water_tank: \{ en: 'Water Tank Sterilization'/);
 });
 
+test('resumed Owner review fails closed on missing GPS and never renders misleading zero quote values', async () => {
+  const source = await read('src/components/onboarding/ReviewBeforeSubmitStep.tsx');
+  assert.match(source, /const missingGps = React\.useMemo/);
+  assert.match(source, /Property GPS is missing\. Return to Property Location & GPS/);
+  assert.match(source, /Fix property GPS/);
+  assert.match(source, /disabled=\{missingGps \|\| quoteLoading \|\| quoteExpired \|\| Boolean\(quoteError\)\}/);
+  assert.match(source, /quoteAvailable/);
+  assert.match(source, /annualContractValue/);
+  assert.match(source, /activationDeposit/);
+  assert.match(source, /: '—'/);
+});
+
 test('review waits for restored Firebase Owner auth and never exposes raw unauthenticated state', async () => {
   const source = await read('src/components/onboarding/ReviewBeforeSubmitStep.tsx');
   assert.match(source, /onAuthStateChanged\(auth/);
