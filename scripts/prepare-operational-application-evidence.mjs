@@ -763,7 +763,7 @@ async function prepareBrokerCommissionEvidence({ db, auth, apiKey, appId, debugT
 
   const [commissionSnapshot, convertedLeadSnapshot, contractAfterSnapshot, attributionAuditSnapshot, commissionQuery] = await Promise.all([
     db.collection('broker_commissions').doc(expectedCommissionId).get(), leadRef.get(), db.collection('contracts').doc(target.contractId).get(),
-    db.collection('auditLogs').doc(`broker_attribution_${leadId}_${target.contractId}`).get(), db.collection('broker_commissions').where('contractId', '==', target.contractId).limit(20).get(),
+    db.collection('audit_logs').doc(`broker_attribution_${leadId}_${target.contractId}`).get(), db.collection('broker_commissions').where('contractId', '==', target.contractId).limit(20).get(),
   ]);
   const commission = commissionSnapshot.data() || {};
   const convertedLead = convertedLeadSnapshot.data() || {};
