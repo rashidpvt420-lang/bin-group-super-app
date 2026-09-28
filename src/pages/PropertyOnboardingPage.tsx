@@ -30,6 +30,7 @@ export default function PropertyOnboardingPage() {
     const validBrokerUid = /^[A-Za-z0-9_-]{6,128}$/.test(brokerUid);
     const [guardError, setGuardError] = React.useState('');
     const [section, setSection] = React.useState(0);
+    const requestedSectionRef = React.useRef<number | null>(null);
 
     const safePage = clampPage(step);
     const pageProgress = safePage * 20;
@@ -50,7 +51,9 @@ export default function PropertyOnboardingPage() {
 
     React.useEffect(() => {
         if (step !== safePage) setStep(safePage);
-        setSection(0);
+        const requestedSection = requestedSectionRef.current;
+        requestedSectionRef.current = null;
+        setSection(requestedSection ?? 0);
         setGuardError('');
         window.scrollTo({ top: 0, behavior: 'smooth' });
     }, [safePage, setStep, step]);
@@ -82,6 +85,14 @@ export default function PropertyOnboardingPage() {
             return;
         }
         goBackPage();
+    };
+
+    const fixPropertyLocation = () => {
+        setGuardError('');
+        requestedSectionRef.current = 2;
+        if (safePage === 2) setSection(2);
+        else setStep(2);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
     const guardedAssetNext = () => {
@@ -124,7 +135,7 @@ export default function PropertyOnboardingPage() {
         }
         if (safePage === 4) {
             return section === 0
-                ? <ReviewBeforeSubmitStep onNext={advanceSection} onBack={backSectionOrPage} />
+                ? <ReviewBeforeSubmitStep onNext={advanceSection} onBack={backSectionOrPage} onFixLocation={fixPropertyLocation} />
                 : <ContractSignatureStep onNext={advancePage} onBack={backSectionOrPage} />;
         }
         return <InspectionSubmissionStep onBack={goBackPage} />;
