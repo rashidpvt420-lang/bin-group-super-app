@@ -1,5 +1,5 @@
 import React from 'react';
-import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
+import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { Box, Container, AppBar, Toolbar, Typography, Button } from '@mui/material';
 import { ArrowLeft, Wrench, ChevronRight, User } from 'lucide-react';
 import { useLanguage } from '@bin/shared';
@@ -123,6 +123,7 @@ export default function TechnicianApp() {
                 <Route path="/support" element={<SupportPage />} />
                 <Route path="/bin-connect" element={<BinConnectInboxPage role="technician" />} />
                 <Route path="/pilot-completion" element={<PilotCompletionPage role="technician" />} />
+                <Route path="*" element={<Navigate to="/technician/dashboard" replace />} />
             </Routes>
         </TechnicianLayout>
     );
