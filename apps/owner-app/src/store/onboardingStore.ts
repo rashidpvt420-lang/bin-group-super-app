@@ -159,7 +159,7 @@ export interface OnboardingState {
     intakeId: string | null;
     onboardingSessionId: string;
     paymentManifest: any | null;
-    paymentMethod: 'CASH' | 'CHEQUE' | 'BANK_TRANSFER' | null;
+    paymentMethod: 'CASH' | 'CHEQUE' | null;
     companyProfile: {
         name: string;
         licenseNumber: string;
@@ -215,7 +215,7 @@ export interface OnboardingState {
     setAccountCreated: (status: boolean) => void;
     setValuationResult: (result: any) => void;
     setPaymentManifest: (manifest: any) => void;
-    setPaymentMethod: (method: 'CASH' | 'CHEQUE' | 'BANK_TRANSFER' | null) => void;
+    setPaymentMethod: (method: 'CASH' | 'CHEQUE' | null) => void;
     setOwnerAccount: (account: OnboardingState['ownerAccount']) => void;
     setProofDocument: (key: keyof Omit<OnboardingState['proofDocuments'], 'labels'>, file: File | null) => void;
     updatePropertyData: (data: Partial<PropertyData>) => void;
