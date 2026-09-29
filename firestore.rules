@@ -111,6 +111,26 @@ service cloud.firestore {
       return hasAdminClaim();
     }
 
+    // N-06: fields read by the server dispatch readiness gate (secureAdminTechnicianAssignment).
+    // Browser staff writes may not set them; they are written by Admin SDK callables only.
+    function technicianReadinessAuthorityKeys() {
+      return [
+        'approvalStatus', 'status', 'suspended', 'role',
+        'deviceVerified', 'deviceRegistered', 'registeredDeviceId', 'currentDeviceId', 'deviceId',
+        'lastGpsAt', 'lastLocationAt', 'locationUpdatedAt', 'gpsUpdatedAt', 'gpsMaxAgeMs',
+        'medicalCardStatus', 'medicalStatus', 'healthCardStatus', 'medicalCardExpiry', 'medicalExpiry', 'healthCardExpiry',
+        'drivingLicenseStatus', 'licenseStatus', 'drivingLicenseExpiry', 'licenseExpiry',
+        'certifications', 'certificationsStatus', 'certificationStatus', 'certificateStatus',
+        'currentShiftId', 'activeShiftId', 'shiftStatus', 'currentShiftStatus', 'dutyStatus', 'onDuty',
+        'isAvailable', 'available'
+      ];
+    }
+
+    // N-08: payroll data is limited to HR and payroll-capable Finance roles; account_manager is excluded.
+    function isPayrollFinance() {
+      return signedIn() && (isAdmin() || claimedRole() in ['finance_admin', 'finance_staff']);
+    }
+
     function isHr() {
       return signedIn() && (isAdmin() || (signedIn() && (
         ('role' in request.auth.token && request.auth.token.role in ['hr_admin', 'hr_manager', 'hr_staff']) ||
@@ -847,8 +867,20 @@ service cloud.firestore {
         (!('verificationStatus' in data) || data.verificationStatus in ['PENDING', 'PENDING_VERIFICATION']);
     }
 
+    // N-09: once an account is verified/approved its payout identity is frozen for the Owner.
+    // A new IBAN is a new ownerBankAccounts document that goes through verification.
+    function ownerBankAccountUnverified(data) {
+      return data.get('verified', false) != true &&
+        data.get('approved', false) != true &&
+        data.get('isVerified', false) != true &&
+        data.get('adminVerified', false) != true &&
+        !(data.get('status', '') in ['VERIFIED', 'APPROVED', 'ACTIVE', 'verified', 'approved', 'active']) &&
+        !(data.get('verificationStatus', '') in ['VERIFIED', 'APPROVED', 'verified', 'approved']);
+    }
+
     function safeOwnerBankAccountUpdate() {
       return ownerBankOwner(resource.data) &&
+        ownerBankAccountUnverified(resource.data) &&
         ownerBankOwner(request.resource.data) &&
         request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'iban',
@@ -1117,8 +1149,11 @@ service cloud.firestore {
 
     match /technicians/{techId} {
       allow read: if (signedIn() && request.auth.uid == techId) || isAdmin() || isHr() || isOps() || hasPermission('canManageTechnicians') || emailOwns(resource.data);
-      allow create: if isAdmin() || isHr() || isOps() || hasPermission('canManageTechnicians');
-      allow update: if isAdmin() || isHr() || isOps() || hasPermission('canManageTechnicians') || safeTechnicianProfileUpdate(techId);
+      allow create: if (isAdmin() || isHr() || isOps() || hasPermission('canManageTechnicians')) &&
+        !request.resource.data.keys().hasAny(technicianReadinessAuthorityKeys());
+      allow update: if ((isAdmin() || isHr() || isOps() || hasPermission('canManageTechnicians')) &&
+          !request.resource.data.diff(resource.data).affectedKeys().hasAny(technicianReadinessAuthorityKeys())) ||
+        safeTechnicianProfileUpdate(techId);
       allow delete: if isAdmin() || hasPermission('canManageTechnicians');
 
       match /deviceReadiness/{readinessId} {
@@ -1358,10 +1393,10 @@ service cloud.firestore {
     }
 
     match /staffPayslips/{payslipId} {
-      allow read: if isHr() || isFinance() || staffCanRead(resource.data);
-      allow create: if isHr() || isFinance();
-      allow update: if isHr() || isFinance();
-      allow delete: if isHr() || isFinance();
+      allow read: if isHr() || isPayrollFinance() || staffCanRead(resource.data);
+      allow create: if isHr() || isPayrollFinance();
+      allow update: if isHr() || isPayrollFinance();
+      allow delete: if isHr() || isPayrollFinance();
     }
 
     match /hrProfiles/{profileId} {
@@ -1423,10 +1458,10 @@ service cloud.firestore {
     }
 
     match /salaryHistory/{historyId} {
-      allow read: if isHr() || isFinance();
-      allow create: if isHr() || isFinance();
-      allow update: if isHr() || isFinance();
-      allow delete: if isHr() || isFinance();
+      allow read: if isHr() || isPayrollFinance();
+      allow create: if isHr() || isPayrollFinance();
+      allow update: if isHr() || isPayrollFinance();
+      allow delete: if isHr() || isPayrollFinance();
     }
 
     match /staffComplianceAlerts/{alertId} {
