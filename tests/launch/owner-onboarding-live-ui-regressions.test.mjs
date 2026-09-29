@@ -67,6 +67,38 @@ test('property location persists canonical untrusted geo for review and submissi
   }
 });
 
+test('commercial onboarding fails closed and applies one portfolio service mode', async () => {
+  const source = await read('src/components/onboarding/CommercialTermsStep.tsx');
+  assert.match(source, /selectPlanForPortfolio/);
+  assert.match(source, /properties\.forEach/);
+  assert.match(source, /disabled=\{commercialBlocked\}/);
+  assert.match(source, /pmRevenueMissing/);
+  assert.match(source, /pmSupportedForPortfolio/);
+  assert.match(source, /final verified re-quote and Owner final signature/);
+});
+
+test('systems and optional add-ons are scoped per property', async () => {
+  const source = await read('src/components/onboarding/SystemsDataStep.tsx');
+  const store = await read('src/store/onboardingStore.ts');
+  assert.match(source, /activePropertyIndex/);
+  assert.match(source, /activeProperty\.selectedAddOns/);
+  assert.match(source, /updateProperty\(activePropertyIndex, \{ selectedAddOns: next \}\)/);
+  assert.match(store, /selectedAddOns\?: string\[\]/);
+  assert.match(store, /property\.selectedAddOns/);
+});
+
+test('Admin final pricing authority captures verified FM facts, zone and rate bands', async () => {
+  const admin = await read('apps/admin-panel/src/components/admin/OwnerInspectionEvidenceDialog.tsx');
+  const backend = await read('functions/ownerInspectionCompletion.ts');
+  for (const token of ['Verified pricing zone', 'Verified Maintenance rate', 'Verified PM rate', 'Verified lifts', 'Verified HVAC count']) {
+    assert.ok(admin.includes(token), `missing Admin pricing authority control: ${token}`);
+  }
+  for (const token of ['verifiedMaintenanceRate', 'verifiedManagementRate', 'districtCooling', 'fireAlarm', 'firePump', 'ratesVerified: true']) {
+    assert.ok(backend.includes(token), `missing verified final pricing input: ${token}`);
+  }
+  assert.match(backend, /FINAL_VERIFIED_AFTER_ALL_SITE_VISITS/);
+});
+
 test('resumed Owner review fails closed on missing GPS and never renders misleading zero quote values', async () => {
   const source = await read('src/components/onboarding/ReviewBeforeSubmitStep.tsx');
   assert.match(source, /const missingGps = React\.useMemo/);

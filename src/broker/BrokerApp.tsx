@@ -1,5 +1,5 @@
 import React from 'react';
-import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
+import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { AppBar, Avatar, Box, Button, Container, IconButton, Paper, Stack, Toolbar, Typography, alpha } from '@mui/material';
 import { Briefcase, Building, FileUp, Home, Paintbrush, Users, Wallet } from 'lucide-react';
 import { useLanguage } from '@bin/shared';
@@ -119,6 +119,7 @@ export default function BrokerApp() {
         <Route path="/documents" element={<BrokerDocumentsPage />} />
         <Route path="/onboarding" element={<BrokerProfilePage />} />
         <Route path="/profile" element={<BrokerProfilePage />} />
+        <Route path="*" element={<Navigate to="/broker/dashboard" replace />} />
       </Routes>
     </BrokerLayout>
   );
