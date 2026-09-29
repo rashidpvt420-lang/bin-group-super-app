@@ -128,6 +128,21 @@ test('Owner onboarding exposes only Cash and Cheque in Phase 1', () => {
   assert.doesNotMatch(source, /BANK_TRANSFER|STRIPE|Secure Card Payment|Bank Transfer/);
 });
 
+test('legacy owner-app activation screens cannot select Bank Transfer', () => {
+  const submission = readFileSync('apps/owner-app/src/components/onboarding/PaymentSubmissionStep.tsx', 'utf8');
+  const summary = readFileSync('apps/owner-app/src/components/onboarding/PaymentSummaryStep.tsx', 'utf8');
+  const store = readFileSync('apps/owner-app/src/store/onboardingStore.ts', 'utf8');
+  for (const source of [submission, summary, store]) {
+    assert.doesNotMatch(source, /BANK_TRANSFER/);
+    assert.doesNotMatch(source, /value="BANK_TRANSFER"/);
+  }
+  assert.match(submission, /<MenuItem value="CASH">/);
+  assert.match(submission, /<MenuItem value="CHEQUE">/);
+  assert.match(summary, /handleGenerateManifest\('CASH'\)/);
+  assert.match(summary, /handleGenerateManifest\('CHEQUE'\)/);
+  assert.doesNotMatch(summary, /onboarding\.payment\.bank_transfer/);
+});
+
 test('server payment authority accepts exactly Cash and Cheque', () => {
   const source = readFileSync('functions/paymentConfiguration.ts', 'utf8');
   assert.match(source, /PHASE1_METHODS = \["CASH", "CHEQUE"\]/);
