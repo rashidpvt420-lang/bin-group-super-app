@@ -55,8 +55,20 @@ type Draft = {
     annualRent: number;
     annualRevenue: number;
     propertyAge: number;
+    condition: 'Mint' | 'Good' | 'Fair' | 'Poor';
     emirate: string;
-    zone: string;
+    zone: 'A' | 'B' | 'C';
+    floors: number;
+    lifts: number;
+    hvacCount: number;
+    hasPool: boolean;
+    hasCentralHVAC: boolean;
+    hasDistrictCooling: boolean;
+    hasCivilDefenseSystem: boolean;
+    hasSiraCctv: boolean;
+    hasGenerator: boolean;
+    hasBmu: boolean;
+    hasWaterTank: boolean;
     slaTier: string;
     paymentPlan: string;
   };
@@ -119,8 +131,20 @@ const defaultDraft = (row?: InspectionRow): Draft => ({
     annualRent: Number(row?.ownerDeclaredPropertySnapshot?.annualRent || 0),
     annualRevenue: Number(row?.ownerDeclaredPropertySnapshot?.annualRevenue || 0),
     propertyAge: Number(row?.ownerDeclaredPropertySnapshot?.age || 0),
+    condition: (row?.ownerDeclaredPropertySnapshot?.condition || 'Good') as Draft['pricingVerification']['condition'],
     emirate: String(row?.ownerDeclaredPropertySnapshot?.emirate || ''),
-    zone: String(row?.ownerDeclaredPropertySnapshot?.zone || 'B'),
+    zone: (row?.ownerDeclaredPropertySnapshot?.zone || 'B') as Draft['pricingVerification']['zone'],
+    floors: Number(row?.ownerDeclaredPropertySnapshot?.floors || 0),
+    lifts: Number(row?.ownerDeclaredPropertySnapshot?.lifts || 0),
+    hvacCount: Number(row?.ownerDeclaredPropertySnapshot?.hvacCount || 0),
+    hasPool: row?.ownerDeclaredPropertySnapshot?.pool === true,
+    hasCentralHVAC: row?.ownerDeclaredPropertySnapshot?.hvac === true,
+    hasDistrictCooling: row?.ownerDeclaredPropertySnapshot?.districtCooling === true,
+    hasCivilDefenseSystem: row?.ownerDeclaredPropertySnapshot?.fireAlarm === true || row?.ownerDeclaredPropertySnapshot?.firePump === true,
+    hasSiraCctv: row?.ownerDeclaredPropertySnapshot?.sira === true,
+    hasGenerator: row?.ownerDeclaredPropertySnapshot?.gen === true,
+    hasBmu: row?.ownerDeclaredPropertySnapshot?.bmu === true,
+    hasWaterTank: row?.ownerDeclaredPropertySnapshot?.tank === true,
     slaTier: String(row?.ownerDeclaredPropertySnapshot?.slaTier || 'standard'),
     paymentPlan: String(row?.ownerDeclaredPropertySnapshot?.paymentPlan || 'annual'),
   },
@@ -197,7 +221,7 @@ export default function OwnerInspectionEvidenceDialog({
     });
   };
 
-  const updatePricing = (id: string, key: keyof Draft['pricingVerification'], value: string | number) => {
+  const updatePricing = (id: string, key: keyof Draft['pricingVerification'], value: string | number | boolean) => {
     const row = rows.find((entry) => entry.id === id);
     setDrafts((current) => {
       const currentDraft = current[id] || defaultDraft(row);
@@ -363,9 +387,29 @@ export default function OwnerInspectionEvidenceDialog({
                       {row.pricingDriver === 'bed' && <Grid item xs={12} md={4}><TextField fullWidth required type="number" label="Verified bed count" value={draft.pricingVerification.beds || ''} onChange={(e) => updatePricing(row.id, 'beds', Number(e.target.value))} /></Grid>}
                       {row.pricingDriver === 'sqft+capacity' && <Grid item xs={12} md={4}><TextField fullWidth required type="number" label="Verified worshipper capacity" value={draft.pricingVerification.units || ''} onChange={(e) => updatePricing(row.id, 'units', Number(e.target.value))} /></Grid>}
                       <Grid item xs={12} md={4}><TextField fullWidth type="number" label="Verified property age (years)" value={draft.pricingVerification.propertyAge || 0} onChange={(e) => updatePricing(row.id, 'propertyAge', Number(e.target.value))} /></Grid>
+                      <Grid item xs={12} md={4}><TextField fullWidth select label="Verified condition" value={draft.pricingVerification.condition} onChange={(e) => updatePricing(row.id, 'condition', e.target.value)}><MenuItem value="Mint">Mint</MenuItem><MenuItem value="Good">Good</MenuItem><MenuItem value="Fair">Fair</MenuItem><MenuItem value="Poor">Poor</MenuItem></TextField></Grid>
                       <Grid item xs={12} md={4}><TextField fullWidth required label="Verified emirate" value={draft.pricingVerification.emirate} onChange={(e) => updatePricing(row.id, 'emirate', e.target.value)} /></Grid>
+                      <Grid item xs={12} md={4}><TextField fullWidth required select label="Verified pricing zone" value={draft.pricingVerification.zone} onChange={(e) => updatePricing(row.id, 'zone', e.target.value)}><MenuItem value="A">A — Premium</MenuItem><MenuItem value="B">B — Standard</MenuItem><MenuItem value="C">C — Budget / Industrial</MenuItem></TextField></Grid>
+                      <Grid item xs={12} md={4}><TextField fullWidth type="number" label="Verified floors" value={draft.pricingVerification.floors || 0} onChange={(e) => updatePricing(row.id, 'floors', Number(e.target.value))} /></Grid>
+                      <Grid item xs={12} md={4}><TextField fullWidth type="number" label="Verified lifts" value={draft.pricingVerification.lifts || 0} onChange={(e) => updatePricing(row.id, 'lifts', Number(e.target.value))} /></Grid>
+                      <Grid item xs={12} md={4}><TextField fullWidth type="number" label="Verified HVAC unit count" value={draft.pricingVerification.hvacCount || 0} onChange={(e) => updatePricing(row.id, 'hvacCount', Number(e.target.value))} /></Grid>
                       <Grid item xs={12} md={4}><TextField fullWidth type="number" label="Verified annual rent (PM)" value={draft.pricingVerification.annualRent || ''} onChange={(e) => updatePricing(row.id, 'annualRent', Number(e.target.value))} /></Grid>
                       <Grid item xs={12} md={4}><TextField fullWidth type="number" label="Verified managed revenue (PM)" value={draft.pricingVerification.annualRevenue || ''} onChange={(e) => updatePricing(row.id, 'annualRevenue', Number(e.target.value))} /></Grid>
+                      <Grid item xs={12}>
+                        <Typography variant="caption" sx={{ display: 'block', mb: 1 }}>Verify every technical system that can affect the final FM price.</Typography>
+                        <Grid container spacing={1}>
+                          {([
+                            ['hasCentralHVAC', 'Central HVAC'],
+                            ['hasDistrictCooling', 'District cooling'],
+                            ['hasCivilDefenseSystem', 'Fire / Civil Defense system'],
+                            ['hasSiraCctv', 'SIRA / CCTV'],
+                            ['hasGenerator', 'Generator'],
+                            ['hasBmu', 'BMU / facade access'],
+                            ['hasWaterTank', 'Water tank'],
+                            ['hasPool', 'Swimming pool'],
+                          ] as const).map(([key, label]) => <Grid item xs={12} sm={6} md={3} key={key}><FormControlLabel control={<Checkbox checked={draft.pricingVerification[key] === true} onChange={(e) => updatePricing(row.id, key, e.target.checked)} />} label={label} /></Grid>)}
+                        </Grid>
+                      </Grid>
                     </Grid>
                   </Paper>
                 )}
