@@ -382,6 +382,7 @@ async function assertServerQuote(request: any, data: ReturnType<typeof assertCan
       data.properties,
       data.serviceDetails.selectedAddOns,
       quoteStartedAt,
+      { trustServerVerifiedRates: false },
     );
   } catch (error: any) {
     throw new HttpsError("invalid-argument", error?.message || "The server could not revalidate the onboarding quote.");
