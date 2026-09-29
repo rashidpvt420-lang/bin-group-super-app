@@ -38,6 +38,7 @@ type InspectionRow = {
   pricingDriver?: 'facility' | 'unit' | 'sqft' | 'bed' | 'sqft+capacity';
   ownerDeclaredPropertySnapshot?: Record<string, any>;
   pricingVerificationStatus?: string;
+  pricingVerification?: Partial<Draft['pricingVerification']>;
 };
 
 type Draft = {
@@ -168,6 +169,7 @@ const fileToBase64 = (file: File): Promise<string> => new Promise((resolve, reje
 });
 
 const isGym = (row: InspectionRow) => row.propertyType === 'Gym / Fitness Centre';
+const verifiedIsGymFor = (row: InspectionRow, draft?: Draft) => (draft?.pricingVerification.propertyType || row.pricingVerification?.propertyType || row.propertyType) === 'Gym / Fitness Centre';
 const verifiedPricingDriverFor = (row: InspectionRow, draft: Draft) => {
   const classId = resolveAssetClassIdForPropertyType(draft.pricingVerification.propertyType, draft.pricingVerification.assetGrade);
   if (classId === 'mosque_fm') return 'sqft+capacity';
@@ -289,7 +291,7 @@ export default function OwnerInspectionEvidenceDialog({
     if (driver === 'sqft+capacity' && ((!Number.isFinite(draft.pricingVerification.sqft) || draft.pricingVerification.sqft <= 0) || (!Number.isFinite(draft.pricingVerification.units) || draft.pricingVerification.units <= 0))) {
       setError('Record the Admin-verified mosque area and worshipper capacity before saving this visit.'); return;
     }
-    if (isGym(row)) {
+    if (verifiedIsGymFor(row, draft)) {
       const verifiedArea = Number(draft.gymVerification.verifiedServiceAreaSqft);
       if (!Number.isFinite(verifiedArea) || verifiedArea <= 0) {
         setError('Gym / Fitness Centre requires the Admin-measured verified service area before the visit can be saved.');
@@ -319,7 +321,7 @@ export default function OwnerInspectionEvidenceDialog({
         filename: draft.file.name.replace(/[^A-Za-z0-9._-]/g, '_'),
         contentType: draft.file.type || 'image/jpeg',
         encodedDocument: await fileToBase64(draft.file),
-        ...(isGym(row) ? { gymVerification: draft.gymVerification } : {}),
+        ...(verifiedIsGymFor(row, draft) ? { gymVerification: draft.gymVerification } : {}),
       });
       setNotice(`Verified evidence recorded for ${row.propertyName || row.propertyId || row.id}.`);
     } catch (saveError: any) {
@@ -331,7 +333,8 @@ export default function OwnerInspectionEvidenceDialog({
 
   const allVerified = rows.length > 0 && rows.every((row) => {
     const evidenceVerified = String(row.evidenceStatus || '').toUpperCase() === 'VERIFIED';
-    const gymVerified = !isGym(row) || String(row.gymVerificationStatus || '').toUpperCase() === 'VERIFIED';
+    const gymRequired = (row.pricingVerification?.propertyType || row.propertyType) === 'Gym / Fitness Centre';
+    const gymVerified = !gymRequired || String(row.gymVerificationStatus || '').toUpperCase() === 'VERIFIED';
     return evidenceVerified && gymVerified;
   });
 
@@ -372,8 +375,9 @@ export default function OwnerInspectionEvidenceDialog({
         <Stack spacing={2}>
           {rows.map((row, index) => {
             const verified = String(row.evidenceStatus || '').toUpperCase() === 'VERIFIED';
-            const gymVerified = !isGym(row) || String(row.gymVerificationStatus || '').toUpperCase() === 'VERIFIED';
             const draft = drafts[row.id] || defaultDraft(row);
+            const gymRequired = verifiedIsGymFor(row, draft);
+            const gymVerified = !gymRequired || String(row.gymVerificationStatus || '').toUpperCase() === 'VERIFIED';
             const verifiedPricingDriver = verifiedPricingDriverFor(row, draft);
             return (
               <Paper key={row.id} variant="outlined" sx={{ p: 2.5, borderColor: verified && gymVerified ? 'success.main' : 'divider' }}>
@@ -430,7 +434,7 @@ export default function OwnerInspectionEvidenceDialog({
                   </Paper>
                 )}
 
-                {isGym(row) && !verified && (
+                {gymRequired && !verified && (
                   <Paper variant="outlined" sx={{ p: 2.5, mt: 2, bgcolor: 'rgba(218,165,32,0.05)' }}>
                     <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }}>
                       <Dumbbell size={19} />
@@ -458,7 +462,7 @@ export default function OwnerInspectionEvidenceDialog({
                   </Paper>
                 )}
 
-                {isGym(row) && verified && row.gymVerification && (
+                {gymRequired && verified && row.gymVerification && (
                   <Alert severity="success" sx={{ mt: 2 }}>
                     Gym authority locked: {Number(row.gymVerification.verifiedServiceAreaSqft || 0).toLocaleString('en-AE')} sq ft · {row.gymVerification.verifiedComplexity} · {row.gymVerification.openingSchedule}.
                   </Alert>
