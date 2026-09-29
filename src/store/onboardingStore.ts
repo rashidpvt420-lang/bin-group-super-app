@@ -272,7 +272,7 @@ const defaultProperty: PropertyData = {
   wasteMan: false, gen: false, hvac: false, districtCooling: false, electrical: false, plumbing: false,
   drainage: false, pumps: false, emergencyLighting: false, accessControl: false, bms: false, iotSensors: false,
   gym: false, majlis: false, majlisType: 'none', missions: [], condition: 'Good', assetGrade: 'Standard',
-  currentStatus: 'Active', address: '', strategy: 'fm', slaTier: 'standard', paymentPlan: 'annual',
+  currentStatus: 'Active', address: '', strategy: 'fm', slaTier: 'standard', paymentPlan: 'annual', selectedAddOns: [],
 };
 
 const emptySummary = (): PortfolioSummary => ({
