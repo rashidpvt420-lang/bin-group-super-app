@@ -127,7 +127,7 @@ export interface PropertyData {
     };
     ownerEmail?: string;
     exposure?: string;
-    strategy?: 'sale' | 'rent' | 'fm';
+    strategy?: 'sale' | 'rent' | 'fm' | 'fm_only' | 'pm_only' | 'both';
     slaTier?: 'standard' | 'premium' | 'elite';
     paymentPlan?: 'annual' | 'quarterly' | 'monthly';
 }
@@ -251,7 +251,7 @@ const calculatePropertyAnnualValue = (property: PropertyData, selectedAddOns: st
         assetClassId,
         emirate: emirateMap[property.emirate] || 'dubai',
         zone: property.zone || 'B',
-        contractType: property.strategy === 'rent' ? 'PM_ONLY' : (property.strategy === 'fm' ? 'FM_ONLY' : 'BOTH'),
+        contractType: property.strategy === 'rent' || property.strategy === 'pm_only' ? 'PM_ONLY' : (property.strategy === 'fm' || property.strategy === 'fm_only' ? 'FM_ONLY' : 'BOTH'),
         sqft: property.sqft,
         units: property.units,
         annualRent: property.annualRent,
