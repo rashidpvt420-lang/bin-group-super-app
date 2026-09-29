@@ -118,7 +118,11 @@ const SystemsDataStep: React.FC<{ onNext: () => void; onBack: () => void }> = ({
   const { properties, propertyData, updateProperty, calculateSummary } = useOnboardingStore();
   const { isRTL, lang } = useLanguage();
   const ar = lang === 'ar';
-  const activeProperty = properties[0] || propertyData || ({} as any);
+  const [activePropertyIndex, setActivePropertyIndex] = React.useState(0);
+  React.useEffect(() => {
+    if (activePropertyIndex >= properties.length) setActivePropertyIndex(Math.max(0, properties.length - 1));
+  }, [activePropertyIndex, properties.length]);
+  const activeProperty = properties[activePropertyIndex] || propertyData || ({} as any);
   const storedSelectedIds = Array.isArray(activeProperty.selectedAddOns) ? activeProperty.selectedAddOns : [];
   const requiredStackIds = useMemo(() => getRequiredStackIds(activeProperty), [activeProperty]);
   const hiddenAddOnIds = useMemo(() => getHiddenAddOnIds(activeProperty), [activeProperty]);
@@ -136,7 +140,7 @@ const SystemsDataStep: React.FC<{ onNext: () => void; onBack: () => void }> = ({
     let changed = false;
     LEGACY_OPTIONAL_ADDON_IDS.forEach((id) => {
       if (storedSelectedIds.includes(id)) {
-        updateProperty(0, { selectedAddOns: storedSelectedIds.filter((item: string) => item !== id) });
+        updateProperty(activePropertyIndex, { selectedAddOns: storedSelectedIds.filter((item: string) => item !== id) });
         changed = true;
       }
     });
@@ -147,12 +151,12 @@ const SystemsDataStep: React.FC<{ onNext: () => void; onBack: () => void }> = ({
   useEffect(() => {
     const next = storedSelectedIds.filter((id: string) => !hiddenAddOnIds.includes(id) && !requiredStackIds.includes(id));
     const changed = next.length !== storedSelectedIds.length || next.some((id, index) => id !== storedSelectedIds[index]);
-    if (changed) updateProperty(0, { selectedAddOns: next });
+    if (changed) updateProperty(activePropertyIndex, { selectedAddOns: next });
     else calculateSummary();
   }, [requiredStackIds.join('|'), hiddenAddOnIds.join('|')]);
 
   const setSystem = (key: string, checked: boolean) => {
-    updateProperty(0, { [key]: key === 'lifts' ? (checked ? Math.max(activeProperty.lifts || 1, 1) : 0) : checked } as any);
+    updateProperty(activePropertyIndex, { [key]: key === 'lifts' ? (checked ? Math.max(activeProperty.lifts || 1, 1) : 0) : checked } as any);
     calculateSummary();
   };
 
@@ -161,7 +165,7 @@ const SystemsDataStep: React.FC<{ onNext: () => void; onBack: () => void }> = ({
     const isSelected = storedSelectedIds.includes(id);
     if (checked !== isSelected) {
       const next = checked ? [...storedSelectedIds, id] : storedSelectedIds.filter((item: string) => item !== id);
-      updateProperty(0, { selectedAddOns: Array.from(new Set(next)) });
+      updateProperty(activePropertyIndex, { selectedAddOns: Array.from(new Set(next)) });
       calculateSummary();
     }
   };
@@ -170,7 +174,7 @@ const SystemsDataStep: React.FC<{ onNext: () => void; onBack: () => void }> = ({
     const next = Array.from(new Set(
       storedSelectedIds.filter((id: string) => !hiddenAddOnIds.includes(id) && !requiredStackIds.includes(id)),
     ));
-    updateProperty(0, { selectedAddOns: next });
+    updateProperty(activePropertyIndex, { selectedAddOns: next });
     calculateSummary();
     onNext();
   };
@@ -183,6 +187,17 @@ const SystemsDataStep: React.FC<{ onNext: () => void; onBack: () => void }> = ({
             <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: ar ? 0 : 4 }}>{label(copy.audit, ar)}</Typography>
             <Typography variant="h4" sx={{ color: '#fff', fontWeight: 950, mt: 1 }}>{label(copy.matrix, ar)}</Typography>
             <Typography sx={{ color: 'rgba(255,255,255,.58)', maxWidth: 900, mx: 'auto', mt: 1 }}>{label(copy.intro, ar)}</Typography>
+            {properties.length > 1 && <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} justifyContent="center" flexWrap="wrap" useFlexGap sx={{ mt: 2 }}>
+              {properties.map((item, index) => <Chip
+                key={item.id || index}
+                label={item.propertyType ? `${index + 1}. ${item.propertyType}` : `${label({ en: 'Property', ar: 'العقار' }, ar)} ${index + 1}`}
+                clickable
+                onClick={() => setActivePropertyIndex(index)}
+                color={index === activePropertyIndex ? 'warning' : 'default'}
+                variant={index === activePropertyIndex ? 'filled' : 'outlined'}
+                sx={{ fontWeight: 900 }}
+              />)}
+            </Stack>}
           </Box>
 
           <Grid container spacing={2.5} alignItems="stretch">
