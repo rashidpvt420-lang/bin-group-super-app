@@ -23,11 +23,15 @@ const Clause = ({ en, ar }: { en: string; ar: string }) => <Box sx={{ mb: 1.25 }
 
 export default function ContractSignatureStep({ onNext, onBack }: ContractSignatureStepProps) {
   const {
-    companyProfile, ownerAccount, properties, selectedAddOns, portfolioSummary, valuationResult,
+    companyProfile, ownerAccount, properties, portfolioSummary, valuationResult,
     isContractSigned, signatureName, contractOtpVerificationId, setContractSignature,
     setContractOtpVerificationId, setValuationResult, intakeId, onboardingSessionId, calculateSummary,
   } = useOnboardingStore();
   const { isRTL, lang } = useLanguage();
+  const quoteProperties = useMemo(
+    () => properties.map((property) => ({ ...property, selectedAddOns: Array.isArray(property.selectedAddOns) ? property.selectedAddOns : [] })),
+    [properties],
+  );
   const copy = (en: string, ar: string) => lang === 'ar' ? ar : en;
   const [typedName, setTypedName] = useState(signatureName || '');
   const [accepted, setAccepted] = useState(isContractSigned);
@@ -52,7 +56,7 @@ export default function ContractSignatureStep({ onNext, onBack }: ContractSignat
     setQuoteLoading(true);
     setOtpError('');
     try {
-      const result = await httpsCallable(functions, 'previewOwnerInspectionQuote')({ properties, selectedAddOns: selectedAddOns || [] });
+      const result = await httpsCallable(functions, 'previewOwnerInspectionQuote')({ properties: quoteProperties, selectedAddOns: [] });
       const quote = result.data as LockedQuote;
       if (!quote?.quoteHash || !/^[a-f0-9]{64}$/.test(quote.quoteHash) || quote.annualContractValue <= 0 || quote.activationDeposit <= 0 || !quote.quotedAtMs) {
         throw new Error(copy('The server did not return a valid property application quotation.', 'لم يُرجع الخادم عرضاً صالحاً لطلب العقار.'));
@@ -73,7 +77,7 @@ export default function ContractSignatureStep({ onNext, onBack }: ContractSignat
       setLockedQuote(null);
       setOtpError(error?.message || copy('The protected property quotation could not be loaded.', 'تعذر تحميل عرض العقار المحمي.'));
     } finally { setQuoteLoading(false); }
-  }, [ownerAccount?.uid, properties, selectedAddOns, reviewedQuote?.portfolioAnnualTotal, lang, setValuationResult]);
+  }, [ownerAccount?.uid, properties, quoteProperties, reviewedQuote?.portfolioAnnualTotal, lang, setValuationResult]);
 
   useEffect(() => { void loadLockedQuote(); }, [loadLockedQuote]);
 
