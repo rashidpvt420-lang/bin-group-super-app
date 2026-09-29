@@ -535,6 +535,8 @@ async function main() {
       serviceScopeConfirmed: true,
     },
     pricingVerification: {
+      propertyType: 'Residential Building',
+      assetGrade: 'Premium',
       units: 24,
       sqft: 42000,
       beds: 0,
