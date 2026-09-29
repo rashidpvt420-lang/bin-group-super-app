@@ -2,6 +2,7 @@ import * as admin from "firebase-admin";
 import type * as FirebaseFirestore from "firebase-admin/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { submitOwnerInspectionFirstOnboarding as legacySubmitOwnerInspectionFirstOnboarding } from "./inspectionFirstOwnerOnboarding";
+import { decideOwnerApplicationSubmission } from "./ownerApplicationBinding";
 import {
   buildPropertyIdentities,
   PROPERTY_IDENTITY_VERSION,
@@ -210,6 +211,26 @@ export const submitOwnerInspectionFirstOnboarding = onCall(
     if (!properties.length || properties.length > MAX_PROPERTIES) {
       throw new HttpsError("invalid-argument", "One to 100 properties are required.");
     }
+
+    // F-1: refuse foreign or progressed applications before claiming property identities.
+    const snapshotRecord = (snap: FirebaseFirestore.DocumentSnapshot) => (snap.exists ? snap.data() || {} : null);
+    const [intakeSnap, contractSnap, paymentSnap, ...propertySnaps] = await Promise.all([
+      db.collection("intake_submissions").doc(intakeId).get(),
+      db.collection("contracts").doc(intakeId).get(),
+      db.collection("payment_transactions").doc(intakeId).get(),
+      ...properties.map((_property, index) => db.collection("properties")
+        .doc(safeId(`${intakeId}_property_${index + 1}`, `owner_${ownerUid}_property_${index + 1}`)).get()),
+    ]);
+    decideOwnerApplicationSubmission({
+      callerUid: ownerUid,
+      applicationId: intakeId,
+      records: {
+        intake: snapshotRecord(intakeSnap),
+        contract: snapshotRecord(contractSnap),
+        payment: snapshotRecord(paymentSnap),
+        properties: propertySnaps.map(snapshotRecord),
+      },
+    });
 
     const createdClaimIds = await claimPropertyIdentities({ ownerUid, intakeId, properties });
     const runner = (legacySubmitOwnerInspectionFirstOnboarding as any).run;

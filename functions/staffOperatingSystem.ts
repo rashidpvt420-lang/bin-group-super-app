@@ -255,36 +255,14 @@ export const submitStaffQuickAction = onCall(CALLABLE_OPTIONS, async (request) =
     resultMessage = "Clock-in recorded.";
   }
 
-  if (actionType === "ARRIVE") {
-    if (!ticketDoc) {
-      throw new HttpsError("failed-precondition", "No active assigned work order is available.");
-    }
-    const currentStatus = upper(ticketDoc.data()?.status);
-    if (!["ASSIGNED", "EN_ROUTE", "ON_THE_WAY"].includes(currentStatus)) {
-      throw new HttpsError("failed-precondition", `Cannot mark arrival from status ${currentStatus || "UNKNOWN"}.`);
-    }
-    await ticketDoc.ref.set({
-      status: "ARRIVED",
-      arrivedAt: timestamp,
-      updatedAt: timestamp,
-    }, { merge: true });
-    resultMessage = "Arrival recorded for the assigned work order.";
-  }
-
-  if (actionType === "START_JOB") {
-    if (!ticketDoc) {
-      throw new HttpsError("failed-precondition", "No active assigned work order is available.");
-    }
-    const currentStatus = upper(ticketDoc.data()?.status);
-    if (currentStatus !== "ARRIVED") {
-      throw new HttpsError("failed-precondition", `Job can start only after ARRIVED. Current status: ${currentStatus || "UNKNOWN"}.`);
-    }
-    await ticketDoc.ref.set({
-      status: "IN_PROGRESS",
-      workStartedAt: timestamp,
-      updatedAt: timestamp,
-    }, { merge: true });
-    resultMessage = "Assigned work order started.";
+  if (actionType === "ARRIVE" || actionType === "START_JOB") {
+    // These labels stay supported so stale clients get a fail-closed response.
+    // Status writes here skipped GPS accuracy, the 250m geofence, capture time,
+    // and before-work evidence that updateTicketLifecycle already enforces.
+    throw new HttpsError(
+      "failed-precondition",
+      "Arrival and job start must use the secured mission lifecycle so GPS, geofence, and evidence are checked.",
+    );
   }
 
   if (actionType === "BREAKDOWN_REPORT") {
