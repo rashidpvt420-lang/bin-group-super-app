@@ -55,6 +55,32 @@ test('commercial review renders every selectable building system with visible th
   assert.match(source, /water_tank: \{ en: 'Water Tank Sterilization'/);
 });
 
+test('commercial terms enforce one portfolio mode, protected quote readiness and inspection-first payment wording', async () => {
+  const source = await read('src/components/onboarding/CommercialTermsStep.tsx');
+  assert.match(source, /properties\.forEach\(\(_, index\) => updateProperty\(index, data\)\)/);
+  assert.match(source, /portfolioPmSupported/);
+  assert.match(source, /missingPmBasis/);
+  assert.match(source, /invalidQuote/);
+  assert.match(source, /disabled=\{!canConfirm\}/);
+  assert.match(source, /After every site visit and the final verified Owner signature/);
+  assert.match(source, /Array\.isArray\(property\.selectedAddOns\)/);
+
+  const dedicated = await read('apps/owner-app/src/components/onboarding/CommercialTermsStep.tsx');
+  assert.match(dedicated, /plan\.id === 'PM' \? 'pm_only' : 'both'/);
+  assert.match(dedicated, /properties\.forEach\(\(_, index\) => updateProperty\(index, data\)\)/);
+  assert.match(dedicated, /disabled=\{!canConfirm\}/);
+});
+
+test('systems page keeps optional add-ons property-scoped and derives required scopes from real systems', async () => {
+  const source = await read('src/components/onboarding/SystemsDataStep.tsx');
+  assert.match(source, /activeProperty\.selectedAddOns/);
+  assert.match(source, /property\?\.fireAlarm === true \|\| property\?\.firePump === true/);
+  assert.match(source, /property\?\.tank === true/);
+  assert.match(source, /property\?\.hvac === true/);
+  assert.match(source, /Number\(property\?\.lifts \|\| 0\) > 0/);
+  assert.doesNotMatch(source, /BASE_REQUIRED_STACK_IDS/);
+});
+
 test('property location persists canonical untrusted geo for review and submission', async () => {
   for (const path of [
     'src/components/onboarding/PropertyLocationStep.tsx',
