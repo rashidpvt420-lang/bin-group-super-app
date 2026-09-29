@@ -11,6 +11,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { useRole } from '../../context/RoleContext';
 import { db, collection, query, where, onSnapshot } from '../../lib/firebase';
+import { useOwnerPropertyPassports } from '../utils/useOwnerPropertyPassports';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 
 const gold = binThemeTokens.gold;
@@ -177,27 +178,27 @@ function MetricCard({ label, value, color = gold, icon: Icon, sub }: any) {
 
 export default function OwnerPLReportPage() {
   const { user } = useRole();
-  const [loading, setLoading] = useState(true);
+  const [ticketsLoading, setTicketsLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
-  const [passports, setPassports] = useState<any[]>([]);
   const [tickets, setTickets] = useState<any[]>([]);
   const [year] = useState(new Date().getFullYear());
+  const { passports, loading: passportsLoading, error: passportError } = useOwnerPropertyPassports(user);
 
   useEffect(() => {
-    if (!user?.email) return;
+    if (!user?.email) {
+      setTicketsLoading(false);
+      return undefined;
+    }
     const email = user.email.toLowerCase();
-    const unsubP = onSnapshot(
-      query(collection(db, 'propertyPassports'), where('ownerEmail', '==', email)),
-      snap => { setPassports(snap.docs.map(d => ({ id: d.id, ...d.data() }))); setLoadError(''); setLoading(false); },
-      (error: any) => { console.error('[OwnerPL] passport listener failed:', error); setLoadError(error?.message || 'Unable to load portfolio financials.'); setLoading(false); }
-    );
     const unsubT = onSnapshot(
       query(collection(db, 'maintenanceTickets'), where('ownerEmail', '==', email)),
-      snap => setTickets(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
-      (error: any) => { console.error('[OwnerPL] ticket listener failed:', error); setLoadError(error?.message || 'Unable to load maintenance costs.'); }
+      snap => { setTickets(snap.docs.map(d => ({ id: d.id, ...d.data() }))); setTicketsLoading(false); },
+      (error: any) => { console.error('[OwnerPL] ticket listener failed:', error); setLoadError(error?.message || 'Unable to load maintenance costs.'); setTicketsLoading(false); }
     );
-    return () => { unsubP(); unsubT(); };
+    return () => { unsubT(); };
   }, [user?.email]);
+
+  const loading = passportsLoading || ticketsLoading;
 
   if (loading) return (
     <Box sx={{ height: '60vh', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 2, flexDirection: 'column' }}>
@@ -205,7 +206,7 @@ export default function OwnerPLReportPage() {
     </Box>
   );
 
-  if (loadError) return <Alert severity="error">{loadError}</Alert>;
+  if (passportError || loadError) return <Alert severity="error">{passportError || loadError}</Alert>;
 
   const totalIncome = passports.reduce((s, p) => s + (p.rentCollectedTotal || 0), 0);
   const totalMaint = passports.reduce((s, p) => s + (p.maintenanceCostTotal || 0), 0);
