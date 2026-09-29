@@ -15,8 +15,12 @@ import { binThemeTokens } from '../../theme/binGroupTheme';
 const SystemsDataStep: React.FC<{ onNext: () => void; onBack: () => void }> = ({ onNext, onBack }) => {
     const { properties, updateProperty } = useOnboardingStore();
     const { t, isRTL } = useLanguage();
+    const [activePropertyIndex, setActivePropertyIndex] = React.useState(0);
+    React.useEffect(() => {
+        if (activePropertyIndex >= properties.length) setActivePropertyIndex(Math.max(0, properties.length - 1));
+    }, [activePropertyIndex, properties.length]);
 
-    const activeProperty = properties[0] || ({} as any);
+    const activeProperty = properties[activePropertyIndex] || ({} as any);
     const safeSelectedAddOns = Array.isArray(activeProperty.selectedAddOns) ? activeProperty.selectedAddOns : [];
 
     const systemGroups = [
@@ -77,10 +81,10 @@ const SystemsDataStep: React.FC<{ onNext: () => void; onBack: () => void }> = ({
         const next = safeSelectedAddOns.includes(id)
             ? safeSelectedAddOns.filter((item: string) => item !== id)
             : [...safeSelectedAddOns, id];
-        updateProperty(0, { selectedAddOns: Array.from(new Set(next)) });
+        updateProperty(activePropertyIndex, { selectedAddOns: Array.from(new Set(next)) });
     };
     const continueNext = () => {
-        updateProperty(0, { selectedAddOns: Array.from(new Set(safeSelectedAddOns.filter((id: string) => !mandatoryIds.includes(id)))) });
+        updateProperty(activePropertyIndex, { selectedAddOns: Array.from(new Set(safeSelectedAddOns.filter((id: string) => !mandatoryIds.includes(id)))) });
         onNext();
     };
     const addOnTotal = selectedVisibleAddOns.reduce((sum, addon) => sum + addon.price, 0);
@@ -100,6 +104,17 @@ const SystemsDataStep: React.FC<{ onNext: () => void; onBack: () => void }> = ({
             </Box>
 
             <Container maxWidth="xl">
+                {properties.length > 1 && <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} justifyContent="center" flexWrap="wrap" useFlexGap sx={{ mb: 3 }}>
+                    {properties.map((item, index) => <Chip
+                        key={item.id || index}
+                        label={`${index + 1}. ${item.propertyType || 'Property'}`}
+                        clickable
+                        onClick={() => setActivePropertyIndex(index)}
+                        color={index === activePropertyIndex ? 'warning' : 'default'}
+                        variant={index === activePropertyIndex ? 'filled' : 'outlined'}
+                        sx={{ fontWeight: 900 }}
+                    />)}
+                </Stack>}
                 <Grid container spacing={3}>
                     <Grid item xs={12} lg={8}>
                         <Grid container spacing={3}>
@@ -116,7 +131,7 @@ const SystemsDataStep: React.FC<{ onNext: () => void; onBack: () => void }> = ({
                                                     control={
                                                         <Checkbox
                                                             checked={Boolean((activeProperty as any)[sys.key])}
-                                                            onChange={(e) => updateProperty(0, { [sys.key]: sys.key === 'lifts' ? (e.target.checked ? Math.max(activeProperty.lifts || 1, 1) : 0) : e.target.checked } as any)}
+                                                            onChange={(e) => updateProperty(activePropertyIndex, { [sys.key]: sys.key === 'lifts' ? (e.target.checked ? Math.max(activeProperty.lifts || 1, 1) : 0) : e.target.checked } as any)}
                                                             sx={{ color: 'rgba(255,255,255,0.2)', '&.Mui-checked': { color: binThemeTokens.gold } }}
                                                         />
                                                     }
