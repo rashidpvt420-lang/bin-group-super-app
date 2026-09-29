@@ -489,7 +489,7 @@ export function calculateUaeQuote2026(input: Partial<QuoteInput> | null | undefi
   if (safeInput.contractType === 'BOTH' && managementRate > 0) {
     if (managedRevenue <= 0) return zeroQuote('Annual rent / managed revenue is required for a combined Maintenance + Property Management quote; no placeholder revenue is assumed.', safeInput.slaTier, ['ANNUAL_RENT_REQUIRED']);
     managementFee = managedRevenue * (managementRate / 100);
-    pricingExplanation.push(`${managementRate}% property-management fee (AED ${Math.round(managementFee)}) added once from verified annual rent / managed revenue.`);
+    pricingExplanation.push(`${safeInput.ratesVerified ? 'Admin-verified' : 'Pre-visit baseline'} ${managementRate}% property-management fee (AED ${Math.round(managementFee)}) added once from ${safeInput.ratesVerified ? 'Admin-verified' : 'Owner-declared'} annual rent / managed revenue.`);
   }
 
   const subtotal = technicalSubtotal + managementFee;
