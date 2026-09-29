@@ -2,7 +2,7 @@ import { FieldValue } from "firebase-admin/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 import * as crypto from "crypto";
-import { calculateOwnerOnboardingQuote } from "./ownerOnboardingQuote";
+import { calculateOwnerOnboardingQuote, resolveOwnerOnboardingPricingClass } from "./ownerOnboardingQuote";
 
 if (!admin.apps.length) admin.initializeApp();
 const db = admin.firestore();
@@ -93,7 +93,8 @@ function verifiedPricingPayload(value: any, inspection: any, property: any) {
   const verified: Record<string, any> = {
     pricingClass: text(inspection?.pricingClass),
     pricingDriver: driver,
-    propertyType: text(property?.propertyType || inspection?.propertyType),
+    propertyType: text(value?.propertyType || property?.propertyType || inspection?.propertyType),
+    assetGrade: text(value?.assetGrade || property?.assetGrade || "Standard"),
     propertyAge: nonNegative(value?.propertyAge ?? declared.age ?? property?.age, "Property age", 300),
     condition: text(value?.condition || declared.condition || property?.condition || "Good"),
     emirate: text(value?.emirate || declared.emirate || property?.emirate),
@@ -113,6 +114,13 @@ function verifiedPricingPayload(value: any, inspection: any, property: any) {
     hasBmu: requiredBoolean(value?.hasBmu, "BMU / facade access"),
     hasWaterTank: requiredBoolean(value?.hasWaterTank, "Water tank"),
   };
+  if (!verified.propertyType) throw new HttpsError("invalid-argument", "Admin-verified property type is required.");
+  if (!["Standard", "Premium", "Luxury", "Ultra-Luxury", "Sovereign"].includes(verified.assetGrade)) throw new HttpsError("invalid-argument", "Admin-verified asset grade is invalid.");
+  try {
+    resolveOwnerOnboardingPricingClass({ ...property, propertyType: verified.propertyType, assetGrade: verified.assetGrade });
+  } catch (error: any) {
+    throw new HttpsError("invalid-argument", `Admin-verified property classification is not priceable: ${error?.message || String(error)}`);
+  }
   if (!verified.emirate) throw new HttpsError("invalid-argument", "Admin-verified emirate is required.");
   if (!["A", "B", "C"].includes(verified.zone)) throw new HttpsError("invalid-argument", "Admin-verified pricing zone must be A, B, or C.");
   if (!["Mint", "Good", "Fair", "Poor"].includes(verified.condition)) throw new HttpsError("invalid-argument", "Admin-verified property condition is invalid.");
@@ -295,6 +303,8 @@ export const adminRecordOwnerPropertyInspectionEvidence = onCall({ cors: true, e
       verifiedBeds: pricingVerification.beds || null,
       verifiedAnnualRent: pricingVerification.annualRent || null,
       verifiedAnnualRevenue: pricingVerification.annualRevenue || null,
+      verifiedPropertyType: pricingVerification.propertyType || null,
+      verifiedAssetGrade: pricingVerification.assetGrade || null,
       verifiedCondition: pricingVerification.condition || null,
       verifiedZone: pricingVerification.zone || null,
       verifiedFloors: pricingVerification.floors ?? null,
@@ -372,6 +382,8 @@ export const adminCompleteOwnerPortfolioInspections = onCall({ cors: true, enfor
     const pricing = verifiedPricingPayload(inspection.pricingVerification, inspection, property);
     const next: any = {
       ...property,
+      propertyType: pricing.propertyType,
+      assetGrade: pricing.assetGrade,
       emirate: pricing.emirate,
       zone: pricing.zone || property.zone,
       age: pricing.propertyAge,
