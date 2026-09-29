@@ -198,7 +198,7 @@ const zeroClientQuote = (reason: string): QuoteOutput => ({
 });
 
 const calculatePropertyAnnualValue = (property: PropertyData, selectedAddOns: string[]): QuoteOutput => {
-  const propertyAddOns = Array.isArray(property.selectedAddOns) ? property.selectedAddOns : selectedAddOns;
+  const propertyAddOns = Array.isArray(property.selectedAddOns) ? property.selectedAddOns : [];
   const mosqueProfile = property.mosqueProfile || {};
   const gymProfile = property.gymProfile || {};
   const isMosque = isMosqueAsset(property);
