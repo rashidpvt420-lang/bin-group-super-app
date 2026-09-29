@@ -92,6 +92,38 @@ test('Phase 13 Admin dossier exposes documents, submitted geo and protected site
   assert.ok(completion.includes('FINAL_VERIFIED_AFTER_ALL_SITE_VISITS'));
 });
 
+test('Phase 13 final re-quote replaces Owner FM pricing facts with Admin-verified inspection facts', async () => {
+  const [dialog, completion] = await Promise.all([
+    read('apps/admin-panel/src/components/admin/OwnerInspectionEvidenceDialog.tsx'),
+    read('functions/ownerInspectionCompletion.ts'),
+  ]);
+  for (const token of [
+    'Verified condition',
+    'Verified pricing zone',
+    'Verified lifts',
+    'Verified HVAC unit count',
+    'Fire / Civil Defense system',
+    'District cooling',
+    'Water tank',
+  ]) assert.ok(dialog.includes(token), `Admin pricing verification UI missing ${token}`);
+
+  for (const token of [
+    'condition: pricing.condition',
+    'floors: pricing.floors',
+    'lifts: pricing.lifts',
+    'hvacCount: pricing.hvacCount',
+    'pool: pricing.hasPool',
+    'hvac: pricing.hasCentralHVAC',
+    'districtCooling: pricing.hasDistrictCooling',
+    'fireAlarm: pricing.hasCivilDefenseSystem',
+    'sira: pricing.hasSiraCctv',
+    'gen: pricing.hasGenerator',
+    'bmu: pricing.hasBmu',
+    'tank: pricing.hasWaterTank',
+    'calculateOwnerOnboardingQuote(verifiedProperties',
+  ]) assert.ok(completion.includes(token), `Final verified quote is not bound to ${token}`);
+});
+
 test('Phase 13 preserves activation fail-closed payment and physical evidence authority', async () => {
   const approval = await read('functions/securePaymentApproval.ts');
   for (const token of [
