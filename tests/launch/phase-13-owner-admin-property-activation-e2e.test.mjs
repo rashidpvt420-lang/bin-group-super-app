@@ -98,6 +98,8 @@ test('Phase 13 final re-quote replaces Owner FM pricing facts with Admin-verifie
     read('functions/ownerInspectionCompletion.ts'),
   ]);
   for (const token of [
+    'Verified property type',
+    'Verified asset grade',
     'Verified condition',
     'Verified pricing zone',
     'Verified lifts',
@@ -109,6 +111,8 @@ test('Phase 13 final re-quote replaces Owner FM pricing facts with Admin-verifie
   ]) assert.ok(dialog.includes(token), `Admin pricing verification UI missing ${token}`);
 
   for (const token of [
+    'propertyType: pricing.propertyType',
+    'assetGrade: pricing.assetGrade',
     'condition: pricing.condition',
     'floors: pricing.floors',
     'lifts: pricing.lifts',
