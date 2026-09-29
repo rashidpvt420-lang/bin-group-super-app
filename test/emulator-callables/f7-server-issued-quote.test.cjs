@@ -34,13 +34,25 @@ async function verifiedOtp(owner, contractId, quoteHash) {
   return id;
 }
 
+// Real Owner-scoped objects, so this test is valid with or without F-6 document-path verification.
+async function ownerDocuments(owner, intakeId) {
+  const bucket = admin.storage().bucket();
+  const paths = {};
+  for (const key of ['propertyProof', 'emiratesId', 'passport']) {
+    const path = `onboarding-proof/${owner.uid}/${intakeId}/${key}/1_${key}.pdf`;
+    await bucket.file(path).save(Buffer.from(`%PDF-1.4 ${key}`), { resumable: false, metadata: { contentType: 'application/pdf', metadata: { ownerUid: owner.uid, docType: key } } });
+    paths[key] = path;
+  }
+  return paths;
+}
+
 async function submitWith(owner, quote) {
   const intakeId = crypto.randomUUID();
   const otpVerificationId = await verifiedOtp(owner, intakeId, quote.quoteHash);
   return call(submitOwnerInspectionFirstOnboarding, owner, {
     intakeId, ownerUid: owner.uid, ownerEmail: owner.token.email, properties: [PROPERTY], selectedAddOns: [],
     quoteHash: quote.quoteHash, quoteQuotedAtMs: quote.quotedAtMs, signatureName: `Owner ${owner.uid}`, otpVerificationId,
-    documentUrls: { propertyProof: 'https://example.invalid/p', emiratesId: 'https://example.invalid/e', passport: 'https://example.invalid/x' },
+    documentUrls: await ownerDocuments(owner, intakeId),
   });
 }
 
