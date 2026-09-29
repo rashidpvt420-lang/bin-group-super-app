@@ -60,7 +60,11 @@ export function isOwnerDesignRole(role?: string | null): boolean {
 }
 
 export function getDepositAmount(total: number, percent = 15): number {
-  return Math.round(total * (percent / 100));
+  const value = Number(total);
+  const rate = Number(percent);
+  if (!Number.isFinite(value) || value <= 0 || !Number.isFinite(rate) || rate <= 0) return 0;
+  const deposit = Math.round(Math.round(value * 100) * rate / 100) / 100;
+  return Object.is(deposit, -0) ? 0 : deposit;
 }
 
 export function getInitialDesignStatus(role?: string | null, hasImages = false): string {
@@ -84,7 +88,12 @@ function text(value: unknown, fallback = '') {
 
 function money(value: unknown) {
   const numeric = Number(value || 0);
-  return Number.isFinite(numeric) ? Math.round(numeric).toLocaleString() : '0';
+  if (!Number.isFinite(numeric)) return '0.00';
+  const normalized = Math.round(numeric * 100) / 100;
+  return (Object.is(normalized, -0) ? 0 : normalized).toLocaleString('en-AE', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
 }
 
 function requiresPlumbing(zoneType: string) {

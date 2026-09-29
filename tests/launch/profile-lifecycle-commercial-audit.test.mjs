@@ -59,7 +59,7 @@ test('Legacy payment summary remains server-configured and five-page acquisition
     read('src/components/onboarding/InspectionSubmissionStep.tsx'),
     read('functions/inspectionFirstOwnerOnboarding.ts'),
   ]);
-  expectAll(legacy, [/getOwnerPaymentConfiguration/, /nextConfiguration\.currency !== ['"]AED['"]/, /configVersion/, /configHash/, /configEffectiveAtMs/, /Math\.round\(annualTotal \* 0\.15\)/, /annualContractValue:\s*annualTotal/, /activationDeposit/, /approvedMethods/, /Payment initiation is disabled/], 'Legacy payment summary authority');
+  expectAll(legacy, [/getOwnerPaymentConfiguration/, /nextConfiguration\.currency !== ['"]AED['"]/, /configVersion/, /configHash/, /configEffectiveAtMs/, /mobilisationDepositFromAnnual\(annualTotal\)/, /annualContractValue:\s*annualTotal/, /activationDeposit/, /approvedMethods/, /Payment initiation is disabled/], 'Legacy payment summary authority');
   expectAll(finalSubmission, [/No payment is collected now/, /submitOwnerInspectionFirstOnboarding/, /activationDeposit/], 'Five-page final submission');
   expectAll(backend, [/NOT_DUE_UNTIL_INSPECTION_COMPLETE/, /INSPECTION_REQUIRED_BEFORE_PAYMENT/, /adminRecordOwnerMobilizationPaymentEvidence/], 'Inspection-first payment authority');
 });
