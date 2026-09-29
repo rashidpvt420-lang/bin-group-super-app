@@ -172,3 +172,9 @@ launch_package/production-deployment-verify.log
 launch_package/production-incidents.json
 launch_package/privileged-account-cleanup.json
 launch_package/artifacts/
+
+# Firebase Auth exports / credential dumps (never commit; rotate if ever exposed)
+users_temp.json
+*auth*export*.json
+*users*export*.json
+*service*account*.json

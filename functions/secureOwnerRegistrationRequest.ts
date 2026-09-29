@@ -8,9 +8,9 @@ import {
 import { loadActivePaymentConfiguration } from "./paymentConfiguration";
 import { assertOwnerPortfolioQuoteRecord } from "./ownerPortfolioQuote";
 import { calculateOwnerOnboardingQuote } from "./ownerOnboardingQuote";
+import { phase1OwnerActivationMethodOrNull } from "./ownerRegistrationPaymentMethods";
 
-const SUPPORTED_METHODS = new Set(["STRIPE", "BANK_TRANSFER", "CHEQUE", "CASH"]);
-const MANUAL_METHODS = new Set(["BANK_TRANSFER", "CHEQUE", "CASH"]);
+const MANUAL_METHODS = new Set(["CHEQUE", "CASH"]);
 const PAYMENT_PLANS = new Set(["annual", "quarterly", "monthly"]);
 
 type ContractMode = "FM_ONLY" | "PM_ONLY" | "BOTH";
@@ -314,8 +314,9 @@ function assertCanonicalCommercialTerms(rawData: unknown) {
 }
 
 async function assertCurrentPaymentConfiguration(data: ReturnType<typeof assertCanonicalCommercialTerms>["data"]) {
-  const method = upper(data.paymentMethod || data.paymentManifest.method);
-  if (!SUPPORTED_METHODS.has(method)) throw new HttpsError("invalid-argument", "Unsupported payment method.");
+  const acceptedMethod = phase1OwnerActivationMethodOrNull(data.paymentMethod || data.paymentManifest.method);
+  if (!acceptedMethod) throw new HttpsError("invalid-argument", "Unsupported payment method.");
+  const method = acceptedMethod as string;
 
   const activeConfiguration = await loadActivePaymentConfiguration();
   const manifest = data.paymentManifest;
@@ -381,6 +382,7 @@ async function assertServerQuote(request: any, data: ReturnType<typeof assertCan
       data.properties,
       data.serviceDetails.selectedAddOns,
       quoteStartedAt,
+      { trustServerVerifiedRates: false },
     );
   } catch (error: any) {
     throw new HttpsError("invalid-argument", error?.message || "The server could not revalidate the onboarding quote.");

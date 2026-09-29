@@ -163,19 +163,6 @@ function assignedTechnicianId(ticketData: FirebaseFirestore.DocumentData) {
     return safeString(ticketData.assignedTechnicianId || ticketData.technicianId || ticketData.assignedTechId || ticketData.techId);
 }
 
-async function assertTechnicianTicketMutationAccess(authContext: any, ticketData: FirebaseFirestore.DocumentData) {
-    const hasAccess = await hasCallableRoleAccess(authContext, new Set(["technician", "admin", "super_admin", "operations_admin"]));
-    if (!hasAccess) throw new HttpsError("permission-denied", "Technician access required.");
-
-    const isAdminActor = await hasCallableRoleAccess(authContext, new Set(["admin", "super_admin", "operations_admin"]));
-    if (isAdminActor) return;
-
-    await assertApprovedTechnicianAccount(authContext);
-    const assignedId = assignedTechnicianId(ticketData);
-    if (!assignedId) throw new HttpsError("failed-precondition", "Ticket is not assigned to this technician.");
-    if (assignedId !== authContext.uid) throw new HttpsError("permission-denied", "You are not assigned to this mission.");
-}
-
 function assertPlainObject(value: any, label: string) {
     if (!value || typeof value !== "object" || Array.isArray(value)) {
         throw new HttpsError("invalid-argument", `${label} is required.`);
@@ -706,8 +693,9 @@ export const ownerReviewTicketCompletion = onCall({ cors: true, enforceAppCheck:
             action: `OWNER_TICKET_${action}`,
             targetType: "maintenanceTickets",
             targetId: ticketId,
-            before: { status: fresh.status, ownerApproved: fresh.ownerApproved },
-            after: { status: baseUpdate.status, ownerApproved: baseUpdate.ownerApproved },
+            // N-03: tickets reach review without an ownerApproved field; Firestore rejects undefined.
+            before: { status: fresh.status ?? null, ownerApproved: fresh.ownerApproved ?? null },
+            after: { status: baseUpdate.status, ownerApproved: baseUpdate.ownerApproved ?? null },
             reason: reason || null,
             metadata: {
                 propertyId: fresh.propertyId || "",
@@ -2661,264 +2649,28 @@ export const endTechnicianDuty = onCall({ cors: true, enforceAppCheck: true }, a
 });
 
 /**
- * Technician accepts an assigned job.
+ * N-01: legacy technician lifecycle callables are retired.
+ * They wrote ticket status directly and bypassed ARRIVED, the 250 m geofence, GPS and
+ * the server evidence gates, and could reopen CLOSED tickets. The canonical guarded path
+ * is updateTicketLifecycle (secureTechnicianOperations runSecured + assertLifecycleEvidence)
+ * together with the ARRIVED / after-work evidence callables. These exports stay deployed
+ * as fail-closed stubs so stale clients get a clear error instead of a missing function.
  */
-export const acceptTechnicianJob = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
-    if (!request.auth) throw new HttpsError("unauthenticated", "Unauthenticated.");
-
-    const isTech = await hasCallableRoleAccess(request.auth, new Set(["technician", "admin"]));
-    if (!isTech) throw new HttpsError("permission-denied", "Technician access required.");
-    await assertApprovedTechnicianAccount(request.auth);
-
-    const { ticketId } = request.data;
-    if (!ticketId) throw new HttpsError("invalid-argument", "Ticket ID required.");
-
-    const techId = request.auth.uid;
-    const now = FieldValue.serverTimestamp();
-    const ticketRef = db.collection("maintenanceTickets").doc(ticketId);
-    const userRef = db.collection("users").doc(techId);
-
-    await db.runTransaction(async (transaction) => {
-        const ticketSnap = await transaction.get(ticketRef);
-        if (!ticketSnap.exists) throw new HttpsError("not-found", "Ticket not found.");
-
-        const ticketData = ticketSnap.data() || {};
-        const statusNorm = String(ticketData.status || "").toLowerCase();
-        const technicianStatusNorm = String(ticketData.technicianStatus || "").toLowerCase();
-        const assignedTechnicianId = ticketData.assignedTechnicianId || ticketData.technicianId || ticketData.assignedTechId || "";
-
-        const acceptableStatuses = new Set([
-            "open",
-            "auto_assigned",
-            "assigned",
-            "pending_assignment",
-            "technician_assigned"
-        ]);
-
-        if (!acceptableStatuses.has(statusNorm) && technicianStatusNorm !== "assigned") {
-            throw new HttpsError("failed-precondition", "Ticket is not available for technician acceptance.");
-        }
-
-        if (["completed", "closed", "cancelled", "rejected"].includes(statusNorm)) {
-            throw new HttpsError("failed-precondition", "Ticket is already closed or unavailable.");
-        }
-
-        if (!assignedTechnicianId && request.auth?.token?.admin !== true) {
-            throw new HttpsError(
-                "failed-precondition",
-                "This mission must be assigned by dispatch before it can be accepted.",
-            );
-        }
-        if (assignedTechnicianId && assignedTechnicianId !== techId && request.auth?.token?.admin !== true) {
-            throw new HttpsError("permission-denied", "This ticket is assigned to another technician.");
-        }
-
-        transaction.update(ticketRef, {
-            assignedTechnicianId: assignedTechnicianId || techId,
-            technicianId: assignedTechnicianId || techId,
-            status: "ACCEPTED",
-            technicianStatus: "ACCEPTED",
-            dispatchStatus: "ACCEPTED",
-            acceptedAt: now,
-            updatedAt: now
-        });
-
-        transaction.update(userRef, {
-            dutyStatus: "ON_JOB",
-            currentTicketId: ticketId,
-            activeTicketId: ticketId,
-            available: false,
-            updatedAt: now
-        });
+function retiredTechnicianLifecycleCallable(name: string) {
+    return onCall({ cors: true, enforceAppCheck: true }, async (request) => {
+        if (!request.auth) throw new HttpsError("unauthenticated", "Unauthenticated.");
+        throw new HttpsError(
+            "failed-precondition",
+            `${name} is retired. Use the guarded technician lifecycle (updateTicketLifecycle) with ARRIVED, geofence and server-verified evidence.`,
+        );
     });
+}
 
-    await logAudit({
-        actorId: techId,
-        actorRole: "technician",
-        action: "TECH_ACCEPT_JOB",
-        targetType: "maintenanceTicket",
-        targetId: ticketId
-    });
-
-    return { success: true };
-});
-
-/**
- * Technician starts actual work on site.
- */
-export const startTechnicianWork = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
-    if (!request.auth) throw new HttpsError("unauthenticated", "Unauthenticated.");
-    const { ticketId } = request.data;
-    if (!ticketId) throw new HttpsError("invalid-argument", "Ticket ID required.");
-
-    const techId = request.auth.uid;
-    const ticketRef = db.collection("maintenanceTickets").doc(ticketId);
-    const ticketSnap = await ticketRef.get();
-    if (!ticketSnap.exists) throw new HttpsError("not-found", "Ticket not found.");
-    const ticketData = ticketSnap.data() || {};
-    await assertTechnicianTicketMutationAccess(request.auth, ticketData);
-
-    await ticketRef.update({
-        status: "IN_PROGRESS",
-        technicianStatus: "WORK_STARTED",
-        workStartedAt: FieldValue.serverTimestamp(),
-        updatedAt: FieldValue.serverTimestamp()
-    });
-
-    await logAudit({
-        actorId: techId,
-        actorRole: "technician",
-        action: "TECH_START_WORK",
-        targetType: "maintenanceTicket",
-        targetId: ticketId
-    });
-
-    // Notify Tenant
-    if (ticketData.requesterId) {
-        await createNotification(ticketData.requesterId, {
-            title: "Work Started",
-            message: "The technician has started working on your request.",
-            type: "TICKET_UPDATE",
-            ticketId,
-            source: "TECH_PORTAL"
-        });
-    }
-
-    return { success: true };
-});
-
-/**
- * Technician pauses work (e.g. waiting for parts).
- */
-export const pauseTechnicianWork = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
-    if (!request.auth) throw new HttpsError("unauthenticated", "Unauthenticated.");
-    const { ticketId, reason } = request.data;
-    if (!ticketId) throw new HttpsError("invalid-argument", "Ticket ID required.");
-
-    const techId = request.auth.uid;
-    const ticketRef = db.collection("maintenanceTickets").doc(ticketId);
-    const ticketSnap = await ticketRef.get();
-    if (!ticketSnap.exists) throw new HttpsError("not-found", "Ticket not found.");
-    await assertTechnicianTicketMutationAccess(request.auth, ticketSnap.data() || {});
-
-    await ticketRef.update({
-        status: "ON_HOLD",
-        technicianStatus: "WAITING_PARTS",
-        pausedAt: FieldValue.serverTimestamp(),
-        pauseReason: reason || "Waiting for parts",
-        updatedAt: FieldValue.serverTimestamp()
-    });
-
-    await logAudit({
-        actorId: techId,
-        actorRole: "technician",
-        action: "TECH_PAUSE_WORK",
-        targetType: "maintenanceTicket",
-        targetId: ticketId,
-        reason: reason || "Waiting for parts"
-    });
-
-    return { success: true };
-});
-
-/**
- * Technician finishes work and submits evidence.
- */
-export const finishTechnicianWork = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
-    if (!request.auth) throw new HttpsError("unauthenticated", "Unauthenticated.");
-    const { ticketId, afterPhotos, beforePhotos, notes } = request.data;
-    if (!ticketId) throw new HttpsError("invalid-argument", "Ticket ID required.");
-    if (!beforePhotos || !Array.isArray(beforePhotos) || beforePhotos.length === 0) {
-        throw new HttpsError("invalid-argument", "Before photo proof is mandatory to finish work.");
-    }
-
-    if (!afterPhotos || !Array.isArray(afterPhotos) || afterPhotos.length === 0) {
-        throw new HttpsError("invalid-argument", "After photo proof is mandatory to finish work.");
-    }
-
-    const completionNotes = String(notes || '').trim();
-    if (completionNotes.length < 10) {
-        throw new HttpsError("invalid-argument", "Technician completion notes must be at least 10 characters.");
-    }
-
-    const techId = request.auth.uid;
-    const ticketRef = db.collection("maintenanceTickets").doc(ticketId);
-    const ticketSnap = await ticketRef.get();
-    if (!ticketSnap.exists) throw new HttpsError("not-found", "Ticket not found.");
-    const ticketData = ticketSnap.data() || {};
-    await assertTechnicianTicketMutationAccess(request.auth, ticketData);
-
-    await db.runTransaction(async (transaction) => {
-        transaction.update(ticketRef, {
-            status: "COMPLETED_PENDING_APPROVAL",
-            technicianStatus: "COMPLETED",
-            completedAt: FieldValue.serverTimestamp(),
-            beforePhotos,
-            afterPhotos,
-            completionNotes,
-            notes: completionNotes,
-            technicianNotes: completionNotes,
-            tenantApprovalRequired: true,
-            updatedAt: FieldValue.serverTimestamp()
-        });
-
-        transaction.update(db.collection("users").doc(techId), {
-            dutyStatus: "ON_DUTY",
-            currentTicketId: null,
-            updatedAt: FieldValue.serverTimestamp()
-        });
-    });
-
-    await logAudit({
-        actorId: techId,
-        actorRole: "technician",
-        action: "TECH_FINISH_WORK",
-        targetType: "maintenanceTicket",
-        targetId: ticketId,
-        metadata: { photoCount: afterPhotos.length }
-    });
-
-    // Notify Tenant for Approval
-    if (ticketData.requesterId) {
-        await createNotification(ticketData.requesterId, {
-            title: "Work Completed",
-            message: "Technician has finished the work. Please review and approve.",
-            type: "TICKET_UPDATE",
-            ticketId,
-            source: "TECH_PORTAL"
-        });
-    }
-
-    return { success: true };
-});
-
-/**
- * Admin or system closes the job after verification.
- */
-export const closeTechnicianJob = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
-    if (!request.auth) throw new HttpsError("unauthenticated", "Unauthenticated.");
-    const { ticketId } = request.data;
-    if (!ticketId) throw new HttpsError("invalid-argument", "Ticket ID required.");
-
-    const isAdmin = await hasCallableRoleAccess(request.auth, new Set(["admin", "super_admin"]));
-    if (!isAdmin) throw new HttpsError("permission-denied", "Only administrators can close tickets.");
-    await db.collection("maintenanceTickets").doc(ticketId).update({
-        status: "CLOSED",
-        technicianStatus: "CLOSED",
-        closedAt: FieldValue.serverTimestamp(),
-        updatedAt: FieldValue.serverTimestamp()
-    });
-
-    await logAudit({
-        actorId: request.auth.uid,
-        actorRole: "admin",
-        action: "ADMIN_CLOSE_TICKET",
-        targetType: "maintenanceTicket",
-        targetId: ticketId
-    });
-
-    return { success: true };
-});
+export const acceptTechnicianJob = retiredTechnicianLifecycleCallable("acceptTechnicianJob");
+export const startTechnicianWork = retiredTechnicianLifecycleCallable("startTechnicianWork");
+export const pauseTechnicianWork = retiredTechnicianLifecycleCallable("pauseTechnicianWork");
+export const finishTechnicianWork = retiredTechnicianLifecycleCallable("finishTechnicianWork");
+export const closeTechnicianJob = retiredTechnicianLifecycleCallable("closeTechnicianJob");
 
 /**
  * Registers an FCM token for a user.
