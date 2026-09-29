@@ -6,6 +6,18 @@ import { setGlobalOptions } from "firebase-functions/v2";
 import { defineSecret } from "firebase-functions/params";
 import * as admin from "firebase-admin";
 import * as crypto from "crypto";
+import * as path from "path";
+import { createRequire } from "module";
+import type { SummarizePropertyPassportSources, PassportIdentity } from "./shared/propertyPassportAggregationTypes";
+
+const requirePropertyPassportAggregation = createRequire(__filename);
+const {
+    summarizePropertyPassportSources,
+    passportIdentity,
+}: {
+    summarizePropertyPassportSources: SummarizePropertyPassportSources;
+    passportIdentity: PassportIdentity;
+} = requirePropertyPassportAggregation(path.join(__dirname, "..", "shared", "propertyPassportAggregation.mjs"));
 import {
     parseFirebaseStoragePath,
     assertOcrCallerRole,
@@ -2212,68 +2224,31 @@ async function aggregatePassportData(propertyId: string) {
     if (!propDoc.exists) return;
 
     const propData = propDoc.data()!;
-    const ownerId = propData.ownerId;
+    const identity = passportIdentity(propData);
 
-    // Aggregate Units
-    const unitsSnap = await db.collection("units").where("propertyId", "==", propertyId).get();
-    const totalUnits = unitsSnap.size;
-    let occupiedUnits = 0;
-    let vacantUnits = 0;
-
-    unitsSnap.forEach(doc => {
-        if (doc.data().occupancyStatus === 'occupied') occupiedUnits++;
-        else vacantUnits++;
-    });
-
-    // Aggregate Leases & Ledgers
-    const leasesSnap = await db.collection("leases").where("propertyId", "==", propertyId).get();
-    let activeLeases = 0;
-    let expiredLeases = 0;
-
-    leasesSnap.forEach(doc => {
-        const data = doc.data();
-        if (data.leaseStatus === 'active') activeLeases++;
-        else if (data.leaseStatus === 'expired') expiredLeases++;
-    });
-
-    const ledgersSnap = await db.collection("tenant_ledger").where("propertyId", "==", propertyId).get();
-    let rentCollectedTotal = 0;
-    let rentOutstandingTotal = 0;
-
-    ledgersSnap.forEach(doc => {
-        const data = doc.data();
-        rentCollectedTotal += (Number(data.paidBalance) || 0);
-        rentOutstandingTotal += (Number(data.outstandingBalance) || 0);
-    });
-
-    // Maintenance Tickets (Assuming maintenanceTickets collection)
-    const ticketsSnap = await db.collection("maintenanceTickets").where("propertyId", "==", propertyId).get();
-    let openTickets = 0;
-    let closedTickets = 0;
-    ticketsSnap.forEach(doc => {
-        if (doc.data().status === 'closed' || doc.data().status === 'resolved') closedTickets++;
-        else openTickets++;
+    const [unitsSnap, leasesSnap, ledgersSnap, ticketsSnap] = await Promise.all([
+        db.collection("units").where("propertyId", "==", propertyId).get(),
+        db.collection("leases").where("propertyId", "==", propertyId).get(),
+        db.collection("tenant_ledger").where("propertyId", "==", propertyId).get(),
+        db.collection("maintenanceTickets").where("propertyId", "==", propertyId).get(),
+    ]);
+    const summary = summarizePropertyPassportSources({
+        units: unitsSnap.docs.map((doc) => doc.data()),
+        leases: leasesSnap.docs.map((doc) => doc.data()),
+        ledgers: ledgersSnap.docs.map((doc) => doc.data()),
+        tickets: ticketsSnap.docs.map((doc) => doc.data()),
     });
 
     const passportRef = db.collection("propertyPassports").doc(propertyId);
 
     await passportRef.set({
         propertyId,
-        ownerId,
+        ...identity,
         propertyName: propData.name,
         propertyType: propData.type || "Institutional",
         emirate: propData.emirate || "Dubai",
         address: propData.address || "",
-        totalUnits,
-        occupiedUnits,
-        vacantUnits,
-        activeLeases,
-        expiredLeases,
-        rentCollectedTotal,
-        rentOutstandingTotal,
-        maintenanceTicketsOpen: openTickets,
-        maintenanceTicketsClosed: closedTickets,
-        tenantCount: occupiedUnits,
+        ...summary,
         passportStatus: 'active',
         updatedAt: FieldValue.serverTimestamp()
     }, { merge: true });
