@@ -48,6 +48,13 @@ async function requireAdmin(auth: any) {
   }
 }
 
+/** Server-activated contract: canonical ACTIVE status plus server-written payment verification and approval. */
+export function isServerActivatedContract(contract: FirebaseFirestore.DocumentData | undefined | null): boolean {
+  return String(contract?.status || "").trim() === "ACTIVE" &&
+    contract?.paymentVerified === true &&
+    contract?.adminApproved === true;
+}
+
 /**
  * Light-touch RERA/BRN format check: alphanumeric (separators allowed), 3-24
  * chars, must contain at least one digit. This is intentionally permissive —
@@ -179,8 +186,11 @@ export const reconcileBrokerCommissionOnContractActivation = onDocumentUpdated(
   async (event) => {
     const before = event.data?.before.data() || {};
     const after = event.data?.after.data() || {};
-    const becameActive = roleOf(after.status) === "active" && roleOf(before.status) !== "active";
-    const needsRepair = roleOf(after.status) === "active" && after.commissionGenerated !== true;
+    // Only the server payment-approval path activates contracts: exact canonical "ACTIVE" plus
+    // server-written paymentVerified/adminApproved. Client-style "Active"/"active" never counts.
+    const activatedByServer = isServerActivatedContract(after);
+    const becameActive = activatedByServer && String(before.status || "").trim() !== "ACTIVE";
+    const needsRepair = activatedByServer && after.commissionGenerated !== true;
     if (!becameActive && !needsRepair) return;
     await createBrokerCommissionForContract(String(event.params.contractId), after, {
       annualContractValue: Number(after.quoteSnapshot?.annualContractValue || after.annualContractValue || 0),
@@ -313,6 +323,18 @@ export const adminReviewBrokerCommission = onCall(
       if (action === "APPROVE" && !["PENDING", "REJECTED"].includes(currentStatus)) {
         throw new HttpsError("failed-precondition", "Commission is not awaiting approval.");
       }
+      if (action === "APPROVE" || action === "MARK_PAID") {
+        // Re-check the source contract at decision time: the commission is only payable for a
+        // contract the server activated after payment verification.
+        const contractId = String(commission.contractId || "").trim();
+        const contractSnap = contractId ? await transaction.get(db.collection("contracts").doc(contractId)) : null;
+        if (!contractSnap?.exists || !isServerActivatedContract(contractSnap.data())) {
+          throw new HttpsError(
+            "failed-precondition",
+            "The source contract is not payment-verified and server-activated. The commission cannot be approved or paid.",
+          );
+        }
+      }
       transaction.set(commissionRef, {
         status: targetStatus,
         ...(action === "APPROVE" ? { approvedAt: now, approvedBy: request.auth!.uid } : {}),
@@ -363,7 +385,7 @@ export const adminMatchBrokerAttribution = onCall(
     const lead = leadSnap.data() || {};
     const contract = contractSnap.data() || {};
     const brokerId = String(lead.brokerId || lead.brokerUid || "").trim();
-    if (!brokerId || String(contract.status || "").toUpperCase() !== "ACTIVE") {
+    if (!brokerId || !isServerActivatedContract(contract)) {
       throw new HttpsError("failed-precondition", "Commission attribution requires a broker-owned lead and active contract.");
     }
     const leadStatus = String(lead.status || "").trim().toLowerCase();

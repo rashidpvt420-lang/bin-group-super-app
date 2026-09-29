@@ -82,8 +82,20 @@ import {
 } from 'firebase/app-check';
 
 const readEnv = (key: string): string => {
-  const metaEnv = (import.meta as unknown as { env?: Record<string, string | undefined> }).env;
-  const value = metaEnv?.[key] || '';
+  // Static import.meta.env reads only. A dynamic env object would embed every
+  // VITE_/REACT_APP_ value present at build time, including App Check debug tokens.
+  const metaEnv: Record<string, string | undefined> = {
+    VITE_FIREBASE_API_KEY: import.meta.env.VITE_FIREBASE_API_KEY,
+    VITE_FIREBASE_AUTH_DOMAIN: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+    VITE_FIREBASE_PROJECT_ID: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+    VITE_FIREBASE_STORAGE_BUCKET: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+    VITE_FIREBASE_MESSAGING_SENDER_ID: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+    VITE_FIREBASE_APP_ID: import.meta.env.VITE_FIREBASE_APP_ID,
+    VITE_APP_CHECK_SITE_KEY: import.meta.env.VITE_APP_CHECK_SITE_KEY,
+    VITE_APP_CHECK_PROVIDER: import.meta.env.VITE_APP_CHECK_PROVIDER,
+    VITE_ENABLE_FIREBASE_APPCHECK: import.meta.env.VITE_ENABLE_FIREBASE_APPCHECK,
+  };
+  const value = metaEnv[key] || '';
   if (!value) return '';
   if (value.includes('REPLACE_ME') || value.includes('REPLACE_WITH')) return '';
   return value;
@@ -213,8 +225,12 @@ export const getNativeAndroidLocationIntegrityProof = async (): Promise<NativeLo
 
 const appCheckSiteKey = readEnv('VITE_APP_CHECK_SITE_KEY');
 const requestedAppCheckProvider = readEnv('VITE_APP_CHECK_PROVIDER').toLowerCase();
+const productionPublicWeb =
+  import.meta.env.PROD && firebaseConfig.projectId === 'bin-group-57c60';
 const webAppCheckProvider =
-  requestedAppCheckProvider === 'enterprise' || firebaseConfig.projectId === 'bin-group-staging'
+  requestedAppCheckProvider === 'enterprise' ||
+  firebaseConfig.projectId === 'bin-group-staging' ||
+  productionPublicWeb
     ? 'enterprise'
     : 'v3';
 const appCheckExplicitlyEnabled = readEnv('VITE_ENABLE_FIREBASE_APPCHECK') === 'true';
@@ -266,20 +282,23 @@ if (appCheckExplicitlyEnabled && typeof window !== 'undefined') {
       });
       appCheckInitialized = true;
     } else if (appCheckSiteKey) {
-      const existingDebug = (self as unknown as Record<string, unknown>).FIREBASE_APPCHECK_DEBUG_TOKEN;
-      const hasRegisteredDebug =
-        typeof existingDebug === 'string' &&
-        existingDebug.length > 8 &&
-        existingDebug !== 'true' &&
-        existingDebug !== 'false';
-      if (!hasRegisteredDebug && import.meta.env.DEV) {
-        (self as unknown as Record<string, unknown>).FIREBASE_APPCHECK_DEBUG_TOKEN = true;
+      // Registered debug UUIDs are injected by non-production E2E before Firebase
+      // loads. Production builds must not assign FIREBASE_APPCHECK_DEBUG_TOKEN.
+      if (import.meta.env.DEV) {
+        const existingDebug = (self as unknown as Record<string, unknown>).FIREBASE_APPCHECK_DEBUG_TOKEN;
+        const hasRegisteredDebug =
+          typeof existingDebug === 'string' &&
+          existingDebug.length > 8 &&
+          existingDebug !== 'true' &&
+          existingDebug !== 'false';
+        if (!hasRegisteredDebug) {
+          (self as unknown as Record<string, unknown>).FIREBASE_APPCHECK_DEBUG_TOKEN = true;
+        } else {
+          const fingerprint = `${String(existingDebug).slice(0, 8)}…${String(existingDebug).slice(-4)}`;
+          console.info(`[Firebase] App Check debug token active fingerprint=${fingerprint}`);
+        }
       }
-      if (hasRegisteredDebug) {
-        const fingerprint = `${String(existingDebug).slice(0, 8)}…${String(existingDebug).slice(-4)}`;
-        console.info(`[Firebase] App Check debug token active fingerprint=${fingerprint}`);
-      }
-      const provider = webAppCheckProvider === 'enterprise'
+      const provider = import.meta.env.PROD || webAppCheckProvider === 'enterprise'
         ? new ReCaptchaEnterpriseProvider(appCheckSiteKey)
         : new ReCaptchaV3Provider(appCheckSiteKey);
       appCheck = initializeAppCheck(app, {

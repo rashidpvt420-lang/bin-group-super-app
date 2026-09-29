@@ -113,6 +113,28 @@ test('Property Management applies percentage once and never multiplies annual re
   assert.ok(missingRevenue.riskFlags.includes('ANNUAL_RENT_REQUIRED'));
 });
 
+test('post-inspection verified pricing rates are bounded and authoritative', () => {
+  const { calculateUaeQuote2026 } = moduleUnderTest;
+  const base = {
+    assetClassId: 'villa-std', emirate: 'Abu Dhabi', zone: 'B', contractType: 'BOTH',
+    annualRent: 200000, units: 1, propertyAge: 8, floors: 2, lifts: 1,
+    hasCentralHVAC: true, hasWaterTank: true, slaTier: 'standard', paymentPlan: 'annual',
+    ratesVerified: true, verifiedMaintenanceRate: 7000, verifiedManagementRate: 7,
+  };
+  const quote = calculateUaeQuote2026(base);
+  assert.ok(quote.annualTotal > 0);
+  assert.ok(quote.pricingExplanation.some((value) => value.includes('Admin-verified Maintenance rate')));
+  assert.ok(quote.pricingExplanation.some((value) => value.includes('Admin-verified 7%')));
+
+  const badFm = calculateUaeQuote2026({ ...base, verifiedMaintenanceRate: 100000 });
+  assert.equal(badFm.annualTotal, 0);
+  assert.ok(badFm.riskFlags.includes('VERIFIED_FM_RATE_OUT_OF_RANGE'));
+
+  const badPm = calculateUaeQuote2026({ ...base, verifiedManagementRate: 99 });
+  assert.equal(badPm.annualTotal, 0);
+  assert.ok(badPm.riskFlags.includes('VERIFIED_PM_RATE_OUT_OF_RANGE'));
+});
+
 test('Majlis and estate facility pricing cannot be multiplied by generic capacity', () => {
   const { calculateUaeQuote2026 } = moduleUnderTest;
   for (const assetClassId of ['government_majlis', 'private_majlis', 'estate']) {

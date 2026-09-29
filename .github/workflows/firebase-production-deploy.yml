@@ -68,6 +68,9 @@ env:
   VITE_GOOGLE_MAPS_API_KEY: ${{ secrets.VITE_GOOGLE_MAPS_API_KEY }}
   VITE_APP_CHECK_SITE_KEY: ${{ secrets.VITE_APP_CHECK_SITE_KEY }}
   FIREBASE_APPCHECK_ENTERPRISE_SITE_KEY: ${{ secrets.FIREBASE_APPCHECK_ENTERPRISE_SITE_KEY }}
+  # Public www.bin-groups.com builds use reCAPTCHA Enterprise. The site key
+  # embedded in the web bundle is FIREBASE_APPCHECK_ENTERPRISE_SITE_KEY.
+  VITE_APP_CHECK_PROVIDER: enterprise
   VITE_ENABLE_FIREBASE_APPCHECK: 'true'
   VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
   VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
@@ -187,7 +190,11 @@ jobs:
         run: npm run build --workspace=@bin/shared
 
       - name: Build unified public app
-        run: npm run build
+        run: |
+          set -euo pipefail
+          unset VITE_FIREBASE_APPCHECK_DEBUG_TOKEN
+          unset FIREBASE_APPCHECK_DEBUG_TOKEN
+          npm run build
 
       - name: Build dedicated admin panel
         run: npm run build:admin
@@ -584,6 +591,8 @@ jobs:
         id: build_public
         run: |
           set -euo pipefail
+          unset VITE_FIREBASE_APPCHECK_DEBUG_TOKEN
+          unset FIREBASE_APPCHECK_DEBUG_TOKEN
           npm run build
           echo "ok=true" >> "$GITHUB_OUTPUT"
 

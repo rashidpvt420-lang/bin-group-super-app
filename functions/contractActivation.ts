@@ -35,7 +35,6 @@ export const adminApproveContractActivation = onCall({ cors: true, enforceAppChe
   );
 });
 
-const SIGNED_AWAITING_PAYMENT_STATUSES = new Set(["ready_for_activation", "owner_signed", "signed"]);
 
 function enforceOwnerActivationPolicy<T>(operation: () => T): T {
   try {
@@ -81,7 +80,9 @@ export const createOwnerPaymentTransaction = onCall({ cors: true, enforceAppChec
     throw new HttpsError("permission-denied", "This contract belongs to another owner.");
   }
 
-  const signed = SIGNED_AWAITING_PAYMENT_STATUSES.has(roleOf(contract.status)) || contract.ownerSigned === true || contract.signatureState?.ownerSigned === true;
+  // Only server-written signature evidence counts. A contract `status` string is not
+  // proof of signature (it was historically client-writable, e.g. "signed").
+  const signed = contract.ownerSigned === true || contract.signatureState?.ownerSigned === true;
   if (!signed) throw new HttpsError("failed-precondition", "Contract must be signed before submitting a payment verification request.");
   if (!String(contract.otpVerificationId || "").trim()) {
     throw new HttpsError("failed-precondition", "Verified contract OTP evidence is required before payment submission.");
