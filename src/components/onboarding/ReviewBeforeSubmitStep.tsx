@@ -41,11 +41,14 @@ const ReviewBeforeSubmitStep: React.FC<{ onNext: () => void; onBack: () => void;
         properties,
         portfolioSummary,
         ownerAccount,
-        selectedAddOns,
         valuationResult,
         setValuationResult,
     } = useOnboardingStore();
     const { t, isRTL, lang } = useLanguage();
+    const quoteProperties = React.useMemo(
+        () => properties.map((property) => ({ ...property, selectedAddOns: Array.isArray(property.selectedAddOns) ? property.selectedAddOns : [] })),
+        [properties],
+    );
     const [quoteLoading, setQuoteLoading] = React.useState(false);
     const [quoteError, setQuoteError] = React.useState('');
     const [quoteNeedsSignIn, setQuoteNeedsSignIn] = React.useState(false);
@@ -82,8 +85,8 @@ const ReviewBeforeSubmitStep: React.FC<{ onNext: () => void; onBack: () => void;
     }), []);
 
     const quoteRequestKey = React.useMemo(
-        () => JSON.stringify({ properties, selectedAddOns: selectedAddOns || [] }),
-        [properties, selectedAddOns],
+        () => JSON.stringify({ properties: quoteProperties, selectedAddOns: [] }),
+        [quoteProperties],
     );
     const serverQuote = valuationResult?.serverQuote as ServerQuote | undefined;
 
@@ -133,7 +136,7 @@ const ReviewBeforeSubmitStep: React.FC<{ onNext: () => void; onBack: () => void;
             try {
                 await auth.currentUser.getIdToken(true);
                 const callable = httpsCallable(functions, 'previewOwnerInspectionQuote');
-                const result = await callable({ properties, selectedAddOns: selectedAddOns || [] });
+                const result = await callable({ properties: quoteProperties, selectedAddOns: [] });
                 if (!active) return;
                 const nextQuote = result.data as ServerQuote;
                 if (
@@ -183,7 +186,7 @@ const ReviewBeforeSubmitStep: React.FC<{ onNext: () => void; onBack: () => void;
             setQuoteError('');
         }
         return () => { active = false; };
-    }, [authReady, copy, missingGps, missingGpsMessage, ownerAccount?.uid, properties, quoteRequestKey, selectedAddOns, secureSessionMessage, signedInUid]);
+    }, [authReady, copy, missingGps, missingGpsMessage, ownerAccount?.uid, properties, quoteProperties, quoteRequestKey, secureSessionMessage, signedInUid]);
 
     const primaryProperty = properties[0];
     const localQuote = portfolioSummary.quoteResults?.[primaryProperty?.id];
