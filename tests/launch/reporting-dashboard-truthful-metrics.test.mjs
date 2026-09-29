@@ -9,7 +9,6 @@ import { build } from 'esbuild';
 
 const page = fs.readFileSync('src/pages/ReportingDashboard.tsx', 'utf8');
 const outDir = path.resolve('node_modules/.cache/reporting-dashboard-test');
-fs.mkdirSync(outDir, { recursive: true });
 const outfile = path.join(outDir, `stats-${process.pid}.cjs`);
 await build({ entryPoints: ['src/pages/reportingDashboardStats.ts'], bundle: true, platform: 'node', format: 'cjs', outfile, logLevel: 'silent' });
 const { computeReportingStats, formatResolutionTime, formatOccupancy } = createRequire(import.meta.url)(outfile);
