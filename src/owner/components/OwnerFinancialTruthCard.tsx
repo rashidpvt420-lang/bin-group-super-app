@@ -2,11 +2,12 @@ import React from 'react';
 import { Alert, Box, Button, Chip, CircularProgress, Paper, Stack, Typography, alpha } from '@mui/material';
 import { Calculator, Clock3, ReceiptText } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { collection, db, onSnapshot, query, where } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
 import { useLanguage } from '@bin/shared';
 import SafeIcon from '../../components/SafeIcon';
 import { binThemeTokens } from '../../theme/binGroupTheme';
+import { useOwnerPropertyPassports } from '../utils/useOwnerPropertyPassports';
+import { summarizeOwnerPassportFinancials } from '../../../functions/shared/propertyPassportAggregation.mjs';
 
 const MANAGEMENT_FEE_RATE = 0.05;
 const money = (value: number) => `AED ${Number(value || 0).toLocaleString('en-AE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -15,51 +16,26 @@ export default function OwnerFinancialTruthCard() {
   const navigate = useNavigate();
   const { user } = useRole();
   const { lang } = useLanguage();
-  const [loading, setLoading] = React.useState(true);
-  const [error, setError] = React.useState('');
-  const [sourceCount, setSourceCount] = React.useState(0);
   const [refreshedAt, setRefreshedAt] = React.useState<Date | null>(null);
-  const [summary, setSummary] = React.useState({ rentReceived: 0, expenses: 0, binFees: 0, payable: 0, pendingVerification: 0 });
+  const { passports, loading, error: passportError } = useOwnerPropertyPassports(user);
+  const totals = summarizeOwnerPassportFinancials(passports, MANAGEMENT_FEE_RATE);
+  const summary = {
+    rentReceived: totals.totalRevenue,
+    expenses: totals.maintenanceDeductions,
+    binFees: totals.managementFees,
+    payable: totals.netPayout,
+    pendingVerification: totals.pendingVerification,
+  };
+  const sourceCount = totals.propertyCount;
+  const error = passportError
+    ? (lang === 'ar'
+      ? 'تعذر تحميل المصدر المالي المباشر. لا تعتمد على رقم قديم لاتخاذ قرار.'
+      : 'The live financial source could not be loaded. Do not rely on a stale number for a decision.')
+    : '';
 
   React.useEffect(() => {
-    if (!user?.email) {
-      setLoading(false);
-      setError('Authenticated Owner email is unavailable.');
-      return undefined;
-    }
-
-    setLoading(true);
-    setError('');
-    const ownerEmail = user.email.toLowerCase();
-    const sourceQuery = query(collection(db, 'propertyPassports'), where('ownerEmail', '==', ownerEmail));
-    return onSnapshot(sourceQuery, (snapshot) => {
-      let rentReceived = 0;
-      let expenses = 0;
-      let pendingVerification = 0;
-      snapshot.docs.forEach((record) => {
-        const data = record.data() as Record<string, any>;
-        rentReceived += Number(data.rentCollectedTotal || data.grossRentCollected || data.grossRent || 0);
-        expenses += Number(data.maintenanceCostTotal || data.outstandingMaintenanceInvoices || data.maintenanceDeductions || 0);
-        pendingVerification += Number(data.pendingRentVerification || data.pendingVerification || 0);
-      });
-      const binFees = rentReceived * MANAGEMENT_FEE_RATE;
-      setSourceCount(snapshot.size);
-      setSummary({
-        rentReceived,
-        expenses,
-        binFees,
-        payable: Math.max(rentReceived - expenses - binFees, 0),
-        pendingVerification,
-      });
-      setRefreshedAt(new Date());
-      setLoading(false);
-    }, () => {
-      setLoading(false);
-      setError(lang === 'ar'
-        ? 'تعذر تحميل المصدر المالي المباشر. لا تعتمد على رقم قديم لاتخاذ قرار.'
-        : 'The live financial source could not be loaded. Do not rely on a stale number for a decision.');
-    });
-  }, [lang, user?.email]);
+    if (!loading) setRefreshedAt(new Date());
+  }, [loading, sourceCount, summary.rentReceived, summary.expenses, summary.pendingVerification]);
 
   const copy = lang === 'ar'
     ? {

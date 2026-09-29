@@ -5,6 +5,7 @@ import * as crypto from "crypto";
 import { createBrokerCommissionForContract } from "./brokerCommissions";
 import { assertStoredOwnerPaymentReceipt } from "./paymentReceiptEvidence";
 import { normalizeAedMoney } from "./shared/aedMoney";
+import { decideRentConfirmedAmount, rentApprovalDecision, rentRejectionDecision } from "./rentPaymentStatus";
 import { generateMobilizationInvoicePdfArtifact } from "./pdfEngine";
 import { resolveActivePaymentConfiguration } from "./paymentConfiguration";
 import {
@@ -131,13 +132,20 @@ export const adminApprovePayment = onCall({ cors: true, enforceAppCheck: true },
   const actorEmail = request.auth?.token?.email || null;
 
   if (isRentCollectionPayment(payment)) {
-    if (roleOf(payment.status) === "approved" && payment.paymentVerified === true) {
+    const initialApprovalDecision = rentApprovalDecision(payment);
+    if (initialApprovalDecision === "replay") {
       return {
         status: "SUCCESS",
         paymentId,
         paymentKind: "RENT_COLLECTION",
         idempotent: true,
       };
+    }
+    if (initialApprovalDecision === "refuse_rejected") {
+      throw new HttpsError(
+        "failed-precondition",
+        "A rejected rent payment cannot be approved. Record a new rent payment instead of reopening a rejected ledger row.",
+      );
     }
     const submittedRentAmount = Number(payment.amount || payment.amountPaid || payment.rentPaid || 0);
     const submittedReference = String(payment.reference || payment.paymentReference || payment.paymentReferenceId || "").trim();
@@ -165,10 +173,20 @@ export const adminApprovePayment = onCall({ cors: true, enforceAppCheck: true },
       throw new HttpsError("failed-precondition", "Rent approval requires immutable submitted amount, reference, and receipt evidence.");
     }
     if (
-      Number.isFinite(Number(request.data?.amountReceived)) &&
-      Math.abs(Number(request.data.amountReceived) - submittedRentAmount) > 0.01
+      request.data?.amountReceived !== undefined &&
+      request.data?.amountReceived !== null &&
+      String(request.data.amountReceived).trim() !== ""
     ) {
-      throw new HttpsError("failed-precondition", "Admin approval cannot alter the tenant or owner submitted rent amount.");
+      const amountDecision = decideRentConfirmedAmount(
+        payment.amount || payment.amountPaid || payment.rentPaid,
+        request.data.amountReceived,
+      );
+      if (amountDecision === "invalid") {
+        throw new HttpsError("invalid-argument", "Received amount must be a finite AED value.");
+      }
+      if (amountDecision === "mismatch") {
+        throw new HttpsError("failed-precondition", "Admin approval cannot alter the tenant or owner submitted rent amount.");
+      }
     }
     const receiptEvidence = await assertStoredOwnerPaymentReceipt({
       ownerUid: rentOwnerUid,
@@ -176,7 +194,21 @@ export const adminApprovePayment = onCall({ cors: true, enforceAppCheck: true },
       storagePath: submittedProofPath,
       expectedHash: submittedProofHash,
     });
+    let rentApprovalIdempotent = false;
     await db.runTransaction(async (transaction) => {
+      const freshSnap = await transaction.get(ref);
+      if (!freshSnap.exists) throw new HttpsError("not-found", "Payment transaction not found.");
+      const decision = rentApprovalDecision(freshSnap.data() || {});
+      if (decision === "replay") {
+        rentApprovalIdempotent = true;
+        return;
+      }
+      if (decision === "refuse_rejected") {
+        throw new HttpsError(
+          "failed-precondition",
+          "A rejected rent payment cannot be approved. Record a new rent payment instead of reopening a rejected ledger row.",
+        );
+      }
       transaction.set(ref, {
         status: "APPROVED",
         paymentStatus: "APPROVED",
@@ -214,7 +246,7 @@ export const adminApprovePayment = onCall({ cors: true, enforceAppCheck: true },
       status: "SUCCESS",
       paymentId,
       paymentKind: "RENT_COLLECTION",
-      idempotent: false,
+      idempotent: rentApprovalIdempotent,
     };
   }
 
@@ -706,7 +738,21 @@ export const adminRejectPayment = onCall({ cors: true, enforceAppCheck: true }, 
   const actorId = request.auth?.uid || "admin";
 
   if (isRentCollectionPayment(payment)) {
+    let rentRejectionIdempotent = false;
     await db.runTransaction(async (transaction) => {
+      const freshSnap = await transaction.get(ref);
+      if (!freshSnap.exists) throw new HttpsError("not-found", "Payment transaction not found.");
+      const decision = rentRejectionDecision(freshSnap.data() || {});
+      if (decision === "replay") {
+        rentRejectionIdempotent = true;
+        return;
+      }
+      if (decision === "refuse_approved") {
+        throw new HttpsError(
+          "failed-precondition",
+          "An approved rent payment cannot be rejected. Reversal requires a separate finance adjustment and must not clear paymentVerified.",
+        );
+      }
       transaction.set(ref, {
         status: "REJECTED",
         paymentStatus: "REJECTED",
@@ -731,7 +777,7 @@ export const adminRejectPayment = onCall({ cors: true, enforceAppCheck: true }, 
       });
     });
 
-    return { status: "SUCCESS", paymentId, paymentKind: "RENT_COLLECTION", idempotent: false };
+    return { status: "SUCCESS", paymentId, paymentKind: "RENT_COLLECTION", idempotent: rentRejectionIdempotent };
   }
 
   const { contractId, intakeId } = resolveActivationIds(paymentId, payment);
