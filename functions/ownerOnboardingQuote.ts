@@ -232,6 +232,9 @@ function quoteInputForProperty(
       gymComplexity: isGym ? safeGymComplexity(gymProfile.verifiedComplexity || gymProfile.suggestedComplexity) : undefined,
       gymOpeningSchedule: isGym ? safeGymOpeningSchedule(gymProfile.openingSchedule) : undefined,
       gymEquipmentCount: isGym ? number(gymProfile.equipmentCount) : 0,
+      ratesVerified: property.ratesVerified === true,
+      verifiedMaintenanceRate: number(property.verifiedMaintenanceRate),
+      verifiedManagementRate: number(property.verifiedManagementRate),
     },
   };
 }
@@ -258,7 +261,10 @@ export function calculateOwnerOnboardingQuote(properties: unknown, addOns: unkno
       throw new Error(`Property ${index + 1} is missing emirate or property type.`);
     }
 
-    const { assetClassId, pricingDriver, input } = quoteInputForProperty(cleanProperty, selectedAddOns, contractMode);
+    const propertyAddOns = Array.isArray(cleanProperty.selectedAddOns)
+      ? cleanProperty.selectedAddOns.map(text).filter(Boolean)
+      : selectedAddOns;
+    const { assetClassId, pricingDriver, input } = quoteInputForProperty(cleanProperty, propertyAddOns, contractMode);
     const quote = calculateUaeQuote2026(input);
     if (!Number.isFinite(quote.annualTotal) || quote.annualTotal <= 0) {
       const reasons = quote.riskFlags.length ? quote.riskFlags.join(", ") : "automatic pricing returned no annual total";
