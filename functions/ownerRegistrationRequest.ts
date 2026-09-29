@@ -251,6 +251,8 @@ export async function previewOwnerOnboardingQuoteHandler(request: any) {
     const quote = calculateOwnerOnboardingQuote(
       request.data?.properties,
       request.data?.selectedAddOns,
+      Date.now(),
+      { trustServerVerifiedRates: false },
     );
     return {
       ...quote,
@@ -503,7 +505,12 @@ export async function submitOwnerOnboardingPaymentPackageHandler(request: any) {
   }
   let serverQuote: ReturnType<typeof calculateOwnerOnboardingQuote>;
   try {
-    serverQuote = calculateOwnerOnboardingQuote(properties, serviceDetails.selectedAddOns, quoteStartedAt);
+    serverQuote = calculateOwnerOnboardingQuote(
+      properties,
+      serviceDetails.selectedAddOns,
+      quoteStartedAt,
+      { trustServerVerifiedRates: false },
+    );
   } catch (error: any) {
     throw new HttpsError("invalid-argument", error?.message || "The server could not calculate this property quote.");
   }
