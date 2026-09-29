@@ -89,12 +89,13 @@ test('no owner uid / no contracts is a no-op', async () => {
   assert.equal(db.store.size, 1);
 });
 
-for (const script of [
-  'scripts/run-owner-inspection-first-production-evidence.mjs',
-  'scripts/run-owner-onboarding-production-evidence.mjs',
-]) {
+const RUNNER_SOURCES = {
+  'scripts/run-owner-inspection-first-production-evidence.mjs': fs.readFileSync('scripts/run-owner-inspection-first-production-evidence.mjs', 'utf8'),
+  'scripts/run-owner-onboarding-production-evidence.mjs': fs.readFileSync('scripts/run-owner-onboarding-production-evidence.mjs', 'utf8'),
+};
+
+for (const [script, source] of Object.entries(RUNNER_SOURCES)) {
   test(`${script} cleans broker commissions before deleting the owner contracts`, () => {
-    const source = fs.readFileSync(script, 'utf8');
     const fn = source.slice(source.indexOf('async function deleteOwnerScopedRecords(uid) {'));
     const body = fn.slice(0, fn.indexOf('\n}\n'));
     const collect = body.indexOf('collectOwnerContractIds(db, uid)');
