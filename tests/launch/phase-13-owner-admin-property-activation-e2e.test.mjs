@@ -126,8 +126,13 @@ test('Phase 13 final re-quote replaces Owner FM pricing facts with Admin-verifie
     'gen: pricing.hasGenerator',
     'bmu: pricing.hasBmu',
     'tank: pricing.hasWaterTank',
+    'resolveOwnerOnboardingPricingClass',
+    'verified.pricingDriver',
+    'pricing.propertyType !== "Gym / Fitness Centre"',
     'calculateOwnerOnboardingQuote(verifiedProperties',
   ]) assert.ok(completion.includes(token), `Final verified quote is not bound to ${token}`);
+  assert.match(dialog, /verifiedPricingDriverFor/);
+  assert.match(dialog, /verifiedIsGymFor/);
 });
 
 test('Phase 13 preserves activation fail-closed payment and physical evidence authority', async () => {
