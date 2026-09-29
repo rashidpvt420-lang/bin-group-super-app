@@ -70,7 +70,7 @@ export const ownerPortfolioQuoteInputForProperty = (
   }
 
   const gymArea = Number(gymProfile.verifiedServiceAreaSqft || gymProfile.declaredServiceAreaSqft || property.sqft || 0);
-  const propertyAddOns = Array.isArray(property.selectedAddOns) ? property.selectedAddOns : selectedAddOns;
+  const propertyAddOns = Array.isArray(property.selectedAddOns) ? property.selectedAddOns : [];
 
   return {
     assetClassId,
