@@ -31,6 +31,8 @@ Do not use a Google Workspace Admin Console 2-step-verification setting for this
 
 The Admin build initializes `ReCaptchaEnterpriseProvider` with `REACT_APP_APP_CHECK_SITE_KEY`. The protected production workflow obtains that public site key from the canonical Firebase App Check Enterprise config, or from the validated `FIREBASE_APPCHECK_ENTERPRISE_SITE_KEY` override. Firebase App Check must register the dedicated Admin web app with the matching Enterprise provider configuration before a token exchange can succeed.
 
+The public web app (`www.bin-groups.com`) uses the same Enterprise site key. Production builds set `VITE_APP_CHECK_PROVIDER=enterprise` and embed `FIREBASE_APPCHECK_ENTERPRISE_SITE_KEY` as `VITE_APP_CHECK_SITE_KEY`. Register the public web app in App Check with reCAPTCHA Enterprise, and allow `www.bin-groups.com`, `bin-groups.com`, `bin-group-57c60.web.app`, and `bin-group-57c60.firebaseapp.com` on that key. Do not embed `VITE_FIREBASE_APPCHECK_DEBUG_TOKEN` in a production web bundle.
+
 ## 2. Repair Firebase Authentication access
 
 In Firebase Console for **bin-group-57c60**:
