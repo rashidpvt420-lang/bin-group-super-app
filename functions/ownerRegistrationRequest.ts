@@ -9,6 +9,7 @@ import {
 } from "./contractSignatureOtp";
 import { assertStoredOwnerPaymentReceipt } from "./paymentReceiptEvidence";
 import { calculateOwnerOnboardingQuote } from "./ownerOnboardingQuote";
+import { phase1OwnerActivationMethodOrNull } from "./ownerRegistrationPaymentMethods";
 
 if (!admin.apps.length) admin.initializeApp();
 
@@ -420,8 +421,8 @@ export async function submitOwnerOnboardingPaymentPackageHandler(request: any) {
 
   const intakeId = cleanText(data.intakeId, "intakeId", 120);
   const onboardingSessionId = cleanText(data.onboardingSessionId, "onboardingSessionId", 120);
-  const paymentMethod = cleanText(data.paymentMethod, "paymentMethod", 60);
-  if (!["STRIPE", "BANK_TRANSFER", "CHEQUE", "CASH"].includes(paymentMethod)) {
+  const paymentMethod = phase1OwnerActivationMethodOrNull(cleanText(data.paymentMethod, "paymentMethod", 60));
+  if (!paymentMethod) {
     throw new HttpsError("invalid-argument", "Unsupported payment method.");
   }
   const submittedAmount = cleanMoney(data.amount, "Payment amount", true);
@@ -458,26 +459,21 @@ export async function submitOwnerOnboardingPaymentPackageHandler(request: any) {
   const manualReceiptPath = String(paymentManifest?.receiptPath || "").trim();
   const manualReceiptHash = String(paymentManifest?.receiptHash || "").trim().toLowerCase();
   if (
-    paymentMethod !== "STRIPE" &&
-    (
-      manualPaymentReference.length < 4 ||
-      !manualReceiptPath.startsWith(`payment-references/owners/${ownerUid}/${intakeId}/`) ||
-      !/^[a-f0-9]{64}$/.test(manualReceiptHash)
-    )
+    manualPaymentReference.length < 4 ||
+    !manualReceiptPath.startsWith(`payment-references/owners/${ownerUid}/${intakeId}/`) ||
+    !/^[a-f0-9]{64}$/.test(manualReceiptHash)
   ) {
     throw new HttpsError(
       "failed-precondition",
       "Manual payment submissions require an owner-scoped uploaded receipt and payment reference.",
     );
   }
-  const receiptEvidence = paymentMethod === "STRIPE"
-    ? null
-    : await assertStoredOwnerPaymentReceipt({
-      ownerUid,
-      paymentId: intakeId,
-      storagePath: manualReceiptPath,
-      expectedHash: manualReceiptHash,
-    });
+  const receiptEvidence = await assertStoredOwnerPaymentReceipt({
+    ownerUid,
+    paymentId: intakeId,
+    storagePath: manualReceiptPath,
+    expectedHash: manualReceiptHash,
+  });
 
   const paymentRef = db.collection("payment_transactions").doc(intakeId);
   const existingPayment = await paymentRef.get();
