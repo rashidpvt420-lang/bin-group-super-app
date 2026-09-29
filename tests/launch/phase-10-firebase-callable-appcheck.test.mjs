@@ -5,6 +5,7 @@ import path from 'node:path';
 
 const ROOT = path.resolve('functions');
 const APPROVED_EXCEPTIONS = new Set([
+  'homeDiscovery.ts:getPublicHomeDiscoveryListings',
   'ownerOnboarding.ts:upsertOwnerOnboardingProfile',
   'publicRoleAssignment.ts:assignPublicPortalRole',
 ]);
@@ -66,9 +67,19 @@ test('Phase 10: every directly configured callable enforces App Check unless exp
 test('Phase 10: bootstrap App Check exceptions document bounded security rationale', () => {
   const owner = readFileSync(path.join(ROOT, 'ownerOnboarding.ts'), 'utf8');
   const role = readFileSync(path.join(ROOT, 'publicRoleAssignment.ts'), 'utf8');
+  const homes = readFileSync(path.join(ROOT, 'homeDiscovery.ts'), 'utf8');
+  const publicRead = homes.slice(
+    homes.indexOf('export const getPublicHomeDiscoveryListings'),
+    homes.indexOf('export const submitHomeDiscoveryInterest'),
+  );
 
   assert.match(owner, /intentionally relies on verified Firebase Auth rather than App Check/);
   assert.match(owner, /cannot create Auth users or grant an admin role/);
   assert.match(role, /login bootstrap/i);
   assert.match(role, /rejects every[\s\S]{0,120}privileged\/admin identity/i);
+  assert.match(publicRead, /enforceAppCheck:\s*false/);
+  assert.match(publicRead, /invoker:\s*"public"/);
+  assert.match(publicRead, /cannot write, grant a role, or expose owner identity/);
+  assert.doesNotMatch(publicRead, /request\.auth/);
+  assert.match(homes, /export const submitHomeDiscoveryInterest = onCall\(\{[\s\S]*?enforceAppCheck:\s*true/);
 });

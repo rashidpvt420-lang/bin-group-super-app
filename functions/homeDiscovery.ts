@@ -260,7 +260,13 @@ async function verifiedListings(limit = 120) {
 export const getPublicHomeDiscoveryListings = onCall({
   cors: true,
   region: "europe-west3",
-  enforceAppCheck: true,
+  invoker: "public",
+  // Public verified-home browsing has no signed-in user. A missing or rejected
+  // reCAPTCHA App Check token was returned to logged-out visitors as HTTP 401
+  // functions/unauthenticated. This read returns only the sanitized public
+  // listing projection and cannot write, grant a role, or expose owner identity,
+  // exact address, or coordinates. Authenticated home actions stay App Check protected.
+  enforceAppCheck: false,
   timeoutSeconds: 20,
 }, async () => {
   try {
