@@ -39,7 +39,7 @@ const formatInvoiceDate = (value: any) => {
 export default function OwnerFinancialsPage() {
     const { user } = useRole();
     const { tx, isRTL } = useLanguage();
-    const [streamsLoading, setStreamsLoading] = useState(true);
+    const [streamsLoading, setLoading] = useState(true);
     const [transactions, setTransactions] = useState<any[]>([]);
     const [invoices, setInvoices] = useState<any[]>([]);
     const [loadError, setLoadError] = useState('');
@@ -48,18 +48,18 @@ export default function OwnerFinancialsPage() {
 
     useEffect(() => {
         if (!user?.email || !user?.uid) {
-            setStreamsLoading(false);
+            setLoading(false);
             setLoadError('Authenticated Owner identity is unavailable. Reload the portal and try again.');
             return undefined;
         }
 
-        setStreamsLoading(true);
+        setLoading(true);
         setLoadError('');
         const email = user.email.toLowerCase();
         let payoutsReady = false;
         let invoicesReady = false;
         const finishStreams = () => {
-            if (payoutsReady && invoicesReady) setStreamsLoading(false);
+            if (payoutsReady && invoicesReady) setLoading(false);
         };
 
         // Sort the Owner-scoped result on the client. Combining where +
