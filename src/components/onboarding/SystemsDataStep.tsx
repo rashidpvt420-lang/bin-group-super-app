@@ -13,6 +13,7 @@ const label = (text: LocalText, ar: boolean) => (ar ? text.ar : text.en);
 
 const ELEVATOR_ADDON_ID = 'elevator_amc';
 const LEGACY_OPTIONAL_ADDON_IDS = ['waste_management'];
+const SYSTEM_DERIVED_ADDON_IDS = ['fire_safety', 'water_tank', 'elevator_amc', 'hvac_pm'];
 const LEGACY_OPTIONAL_PRUNE_KEY = 'bin-group:onboarding:optional-addons-pruned:v1';
 
 const copy = {
@@ -126,7 +127,10 @@ const SystemsDataStep: React.FC<{ onNext: () => void; onBack: () => void }> = ({
   const storedSelectedIds = Array.isArray(activeProperty.selectedAddOns) ? activeProperty.selectedAddOns : [];
   const requiredStackIds = useMemo(() => getRequiredStackIds(activeProperty), [activeProperty]);
   const hiddenAddOnIds = useMemo(() => getHiddenAddOnIds(activeProperty), [activeProperty]);
-  const visibleAddOns = addOns.filter((addon) => !hiddenAddOnIds.includes(addon.id));
+  const visibleAddOns = addOns.filter((addon) =>
+    !hiddenAddOnIds.includes(addon.id) &&
+    (!SYSTEM_DERIVED_ADDON_IDS.includes(addon.id) || requiredStackIds.includes(addon.id)),
+  );
   const selectedIds = new Set([...storedSelectedIds.filter((id) => !hiddenAddOnIds.includes(id)), ...requiredStackIds]);
   const selectedAddOnRows = visibleAddOns.filter((a) => selectedIds.has(a.id));
   const selectedSystemGroups = systemGroups
@@ -149,7 +153,10 @@ const SystemsDataStep: React.FC<{ onNext: () => void; onBack: () => void }> = ({
   }, []);
 
   useEffect(() => {
-    const next = storedSelectedIds.filter((id: string) => !hiddenAddOnIds.includes(id) && !requiredStackIds.includes(id));
+    const next = storedSelectedIds.filter((id: string) =>
+      !hiddenAddOnIds.includes(id) &&
+      !SYSTEM_DERIVED_ADDON_IDS.includes(id),
+    );
     const changed = next.length !== storedSelectedIds.length || next.some((id, index) => id !== storedSelectedIds[index]);
     if (changed) updateProperty(activePropertyIndex, { selectedAddOns: next });
     else calculateSummary();
@@ -161,7 +168,7 @@ const SystemsDataStep: React.FC<{ onNext: () => void; onBack: () => void }> = ({
   };
 
   const setAddOn = (id: string, checked: boolean) => {
-    if (requiredStackIds.includes(id) || hiddenAddOnIds.includes(id)) return;
+    if (SYSTEM_DERIVED_ADDON_IDS.includes(id) || requiredStackIds.includes(id) || hiddenAddOnIds.includes(id)) return;
     const isSelected = storedSelectedIds.includes(id);
     if (checked !== isSelected) {
       const next = checked ? [...storedSelectedIds, id] : storedSelectedIds.filter((item: string) => item !== id);
@@ -172,7 +179,7 @@ const SystemsDataStep: React.FC<{ onNext: () => void; onBack: () => void }> = ({
 
   const continueNext = () => {
     const next: string[] = Array.from(new Set<string>(
-      storedSelectedIds.filter((id: string) => !hiddenAddOnIds.includes(id) && !requiredStackIds.includes(id)),
+      storedSelectedIds.filter((id: string) => !hiddenAddOnIds.includes(id) && !SYSTEM_DERIVED_ADDON_IDS.includes(id)),
     ));
     updateProperty(activePropertyIndex, { selectedAddOns: next });
     calculateSummary();
