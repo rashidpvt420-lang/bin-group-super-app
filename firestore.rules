@@ -965,8 +965,6 @@ service cloud.firestore {
           'lastLoginAt',
           'lastSeenAt',
           'onboardingLastSeenAt',
-          'lastLocation',
-          'activeTicketId',
           'requestedTrade',
           'serviceZonePreference',
           'emergencyContact',
@@ -1427,8 +1425,10 @@ service cloud.firestore {
     }
 
     match /attendanceLogs/{logId} {
+      // N-16: attendance is recorded by HR/Operations or server duty callables; staff
+      // may read their own rows but cannot author clock-in/out evidence for themselves.
       allow read: if isHr() || isFinance() || isOps() || staffCanRead(resource.data);
-      allow create: if isHr() || isOps() || staffRequestCreate(request.resource.data);
+      allow create: if isHr() || isOps();
       allow update: if isHr() || isOps();
       allow delete: if isHr() || isOps();
     }
