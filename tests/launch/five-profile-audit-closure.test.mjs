@@ -135,7 +135,7 @@ test('Owner onboarding quote and contract values remain server-authoritative for
   ], 'Owner commercial authority');
   expectAll(payment, [
     /getOwnerPaymentConfiguration/,
-    /Math\.round\(annualTotal \* 0\.15\)/,
+    /mobilisationDepositFromAnnual\(annualTotal\)/,
     /configHash/,
   ], 'Owner payment summary authority');
 });
