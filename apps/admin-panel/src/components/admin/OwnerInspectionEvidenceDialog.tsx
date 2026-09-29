@@ -4,6 +4,7 @@ import {
   DialogTitle, FormControlLabel, Grid, MenuItem, Paper, Stack, TextField, Typography,
 } from '@mui/material';
 import { Camera, CheckCircle2, Dumbbell, MapPin, ShieldCheck } from 'lucide-react';
+import { ASSET_PROFILE_PROPERTY_TYPES } from '@bin/shared';
 import { auth, collection, db, functions, httpsCallable, onSnapshot, query, where } from '../../lib/firebase';
 
 type GymVerification = {
@@ -49,6 +50,8 @@ type Draft = {
   checklist: Record<string, boolean>;
   gymVerification: GymVerification;
   pricingVerification: {
+    propertyType: string;
+    assetGrade: 'Standard' | 'Premium' | 'Luxury' | 'Ultra-Luxury' | 'Sovereign';
     units: number;
     sqft: number;
     beds: number;
@@ -126,6 +129,8 @@ const defaultDraft = (row?: InspectionRow): Draft => ({
   checklist: Object.fromEntries(checklistItems.map(([key]) => [key, false])),
   gymVerification: defaultGymVerification(row),
   pricingVerification: {
+    propertyType: String(row?.ownerDeclaredPropertySnapshot?.propertyType || row?.propertyType || ''),
+    assetGrade: (row?.ownerDeclaredPropertySnapshot?.assetGrade || 'Standard') as Draft['pricingVerification']['assetGrade'],
     units: Number(row?.ownerDeclaredPropertySnapshot?.units || 0),
     sqft: Number(row?.ownerDeclaredPropertySnapshot?.sqft || 0),
     beds: Number(row?.ownerDeclaredPropertySnapshot?.beds || row?.ownerDeclaredPropertySnapshot?.units || 0),
@@ -384,6 +389,8 @@ export default function OwnerInspectionEvidenceDialog({
                     <Typography fontWeight={900}>Verified pricing authority</Typography>
                     <Typography variant="caption">Pricing driver: {row.pricingDriver || 'not configured'}. Confirm the physical pricing input; Owner-declared values do not control the final quote.</Typography>
                     <Grid container spacing={2} sx={{ mt: 0.5 }}>
+                      <Grid item xs={12} md={4}><TextField fullWidth required select label="Verified property type" value={draft.pricingVerification.propertyType} onChange={(e) => updatePricing(row.id, 'propertyType', e.target.value)}>{Array.from(new Set([draft.pricingVerification.propertyType, ...ASSET_PROFILE_PROPERTY_TYPES].filter(Boolean))).map((type) => <MenuItem key={type} value={type}>{type}</MenuItem>)}</TextField></Grid>
+                      <Grid item xs={12} md={4}><TextField fullWidth required select label="Verified asset grade" value={draft.pricingVerification.assetGrade} onChange={(e) => updatePricing(row.id, 'assetGrade', e.target.value)}><MenuItem value="Standard">Standard</MenuItem><MenuItem value="Premium">Premium</MenuItem><MenuItem value="Luxury">Luxury</MenuItem><MenuItem value="Ultra-Luxury">Ultra-Luxury</MenuItem><MenuItem value="Sovereign">Sovereign</MenuItem></TextField></Grid>
                       {row.pricingDriver === 'unit' && <Grid item xs={12} md={4}><TextField fullWidth required type="number" label="Verified unit count" value={draft.pricingVerification.units || ''} onChange={(e) => updatePricing(row.id, 'units', Number(e.target.value))} /></Grid>}
                       {(row.pricingDriver === 'sqft' || row.pricingDriver === 'sqft+capacity') && <Grid item xs={12} md={4}><TextField fullWidth required type="number" label="Verified service area (sq ft)" value={draft.pricingVerification.sqft || ''} onChange={(e) => updatePricing(row.id, 'sqft', Number(e.target.value))} /></Grid>}
                       {row.pricingDriver === 'bed' && <Grid item xs={12} md={4}><TextField fullWidth required type="number" label="Verified bed count" value={draft.pricingVerification.beds || ''} onChange={(e) => updatePricing(row.id, 'beds', Number(e.target.value))} /></Grid>}
