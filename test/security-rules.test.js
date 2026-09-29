@@ -1,3 +1,4 @@
+import './n06-n08-n09-rules.test.js';
 import './owner-contract-status-rules.test.js';
 import './invoice-verification-rules.test.js';
 import './tenant-ticket-server-authority-rules.test.js';
