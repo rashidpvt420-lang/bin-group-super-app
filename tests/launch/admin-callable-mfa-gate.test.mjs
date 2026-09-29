@@ -35,11 +35,20 @@ const EXEMPT = {
 };
 const MFA_MARKERS = /requirePrivilegedMfaSession|sign_in_second_factor|requireMfa|Mfa[A-Z]\w*\(/;
 
+// Literal search (no dynamic RegExp): the export name must end at a non-identifier character.
+function findExport(source, name) {
+  const needle = `export const ${name}`;
+  for (let at = source.indexOf(needle); at >= 0; at = source.indexOf(needle, at + 1)) {
+    if (!/[\w$]/.test(source.charAt(at + needle.length))) return at;
+  }
+  return -1;
+}
+
 test('each covered privileged callable calls requirePrivilegedMfaSession before doing work', async () => {
   for (const [file, names] of Object.entries(COVERED)) {
     const source = await read(file);
     for (const name of names) {
-      const start = source.search(new RegExp(`export const ${name}\\b`));
+      const start = findExport(source, name);
       assert.ok(start >= 0, `${file}: ${name} missing`);
       const head = source.slice(start, start + 700);
       assert.match(head, /await requirePrivilegedMfaSession\(request\.auth\);/, `${file}: ${name} must enforce server-side MFA`);
