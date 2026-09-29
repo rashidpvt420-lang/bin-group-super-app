@@ -9,12 +9,11 @@ const LEGACY = ['acceptTechnicianJob', 'startTechnicianWork', 'pauseTechnicianWo
 test('legacy technician lifecycle callables are retired stubs that cannot write ticket state', async () => {
   const source = await readFile(new URL('../../functions/index.ts', import.meta.url), 'utf8');
   for (const name of LEGACY) {
-    assert.match(
-      source,
-      new RegExp(`export const ${name} = retiredTechnicianLifecycleCallable\\("${name}"\\);`),
+    assert.ok(
+      source.includes(`export const ${name} = retiredTechnicianLifecycleCallable("${name}");`),
       `${name} must be a retired fail-closed stub`,
     );
-    assert.doesNotMatch(source, new RegExp(`export const ${name} = onCall\\(`), `${name} must not have a live handler`);
+    assert.ok(!source.includes(`export const ${name} = onCall(`), `${name} must not have a live handler`);
   }
   const stubStart = source.indexOf('function retiredTechnicianLifecycleCallable(');
   assert.ok(stubStart > 0, 'retired stub factory must exist');
