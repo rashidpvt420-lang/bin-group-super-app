@@ -4,7 +4,7 @@ import { useParams } from 'react-router-dom';
 import {
   Container, Card, Typography, Box, Grid, Paper, Chip, Select,
   MenuItem, FormControl, InputLabel, Button, Stack, Divider,
-  LinearProgress, CircularProgress, alpha
+  LinearProgress, CircularProgress, alpha, Alert
 } from '@mui/material';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { binThemeTokens } from '../theme/binGroupTheme';
@@ -13,6 +13,7 @@ import { db, collection, query, where, getDocs, limit, doc } from '../lib/fireba
 import { useRole } from '../context/RoleContext';
 import { calculateBuildingHealth } from '../utils/buildingHealthEngine';
 import type { BuildingHealthReport } from '../utils/buildingHealthEngine';
+import { buildBuildingHealthInput } from '../utils/buildingHealthInputs';
 
 export default function HealthScorePage() {
   const { propertyId } = useParams();
@@ -20,6 +21,7 @@ export default function HealthScorePage() {
   const [properties, setProperties] = useState<any[]>([]);
   const [selectedId, setSelectedId] = useState<string>('');
   const [report, setReport] = useState<BuildingHealthReport | null>(null);
+  const [missingInputs, setMissingInputs] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -56,20 +58,15 @@ export default function HealthScorePage() {
       ));
       const tickets = ticketSnap.docs.map(d => d.data()).filter((ticket: any) => ticket.propertyId === p.id);
 
-      const r = calculateBuildingHealth({
-          age: p.age || 5,
-          floors: p.floors || 1,
-          units: p.units || 1,
-          propertyType: p.propertyType || 'Villa',
-          hvacType: p.hvacType || 'DX',
-          liftCount: p.lifts || 0,
-          pool: !!p.pool,
-          complaintFrequency: tickets.length / 3,
-          unresolvedTickets: tickets.filter(t => !['COMPLETED', 'RESOLVED', 'CLOSED'].includes(t.status)).length,
-          emergencyIncidents: tickets.filter(t => t.priority === 'EMERGENCY').length,
-          maintenanceLoad: 50
-      });
-      setReport(r);
+      // N-29: never score a property from invented defaults.
+      const built = buildBuildingHealthInput(p, tickets);
+      if (!built.ok || !built.input) {
+          setReport(null);
+          setMissingInputs(built.missing);
+          return;
+      }
+      setMissingInputs([]);
+      setReport(calculateBuildingHealth(built.input));
   };
 
   const handleSelectProperty = async (id: string) => {
@@ -112,6 +109,12 @@ export default function HealthScorePage() {
         </FormControl>
       </Box>
 
+      {missingInputs.length > 0 ? (
+        <Alert severity="info" sx={{ borderRadius: 4 }}>
+          Health score not available yet: this property is missing {missingInputs.join(' and ')}. BIN GROUP will calculate the
+          Building Performance Index once these details are recorded in the property passport.
+        </Alert>
+      ) : (
       <Grid container spacing={6}>
         <Grid item xs={12} md={4}>
             <Card sx={{ 
@@ -162,6 +165,7 @@ export default function HealthScorePage() {
             </Paper>
         </Grid>
       </Grid>
+      )}
     </Container>
   );
 }
