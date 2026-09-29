@@ -13,8 +13,14 @@ import { db, collection, query, where, onSnapshot, limit } from '../../lib/fireb
 import { useRole } from '../../context/RoleContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
+import { useOwnerPropertyPassports } from '../utils/useOwnerPropertyPassports';
+import { summarizeOwnerPassportFinancials } from '../../../functions/shared/propertyPassportAggregation.mjs';
 
 const MANAGEMENT_FEE_RATE = 0.05;
+const formatRecordedAed = (value: number) => Number(value || 0).toLocaleString('en-AE', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+});
 
 const timestampMs = (value: any) => {
     if (typeof value?.toMillis === 'function') return value.toMillis();
@@ -33,17 +39,12 @@ const formatInvoiceDate = (value: any) => {
 export default function OwnerFinancialsPage() {
     const { user } = useRole();
     const { tx, isRTL } = useLanguage();
-    const [loading, setLoading] = useState(true);
-    const [summary, setSummary] = useState({
-        totalRevenue: 0,
-        netPayout: 0,
-        pendingVerification: 0,
-        managementFees: 0,
-        maintenanceDeductions: 0
-    });
+    const [streamsLoading, setLoading] = useState(true);
     const [transactions, setTransactions] = useState<any[]>([]);
     const [invoices, setInvoices] = useState<any[]>([]);
     const [loadError, setLoadError] = useState('');
+    const { passports, loading: passportsLoading, error: passportError } = useOwnerPropertyPassports(user);
+    const summary = summarizeOwnerPassportFinancials(passports, MANAGEMENT_FEE_RATE);
 
     useEffect(() => {
         if (!user?.email || !user?.uid) {
@@ -55,31 +56,11 @@ export default function OwnerFinancialsPage() {
         setLoading(true);
         setLoadError('');
         const email = user.email.toLowerCase();
-
-        const passportQ = query(collection(db, 'propertyPassports'), where('ownerEmail', '==', email));
-        const unsubscribePassports = onSnapshot(passportQ, (snap) => {
-            let rev = 0, maint = 0, pending = 0;
-            snap.docs.forEach(d => {
-                const data = d.data();
-                rev += Number(data.rentCollectedTotal || data.grossRentCollected || data.grossRent || 0);
-                maint += Number(data.maintenanceCostTotal || data.outstandingMaintenanceInvoices || data.maintenanceDeductions || 0);
-                pending += Number(data.pendingRentVerification || data.pendingVerification || 0);
-            });
-
-            const fees = rev * MANAGEMENT_FEE_RATE;
-            setSummary({
-                totalRevenue: rev,
-                netPayout: Math.max(rev - fees - maint, 0),
-                pendingVerification: pending,
-                managementFees: fees,
-                maintenanceDeductions: maint
-            });
-            setLoading(false);
-        }, (error) => {
-            console.error('Owner financial passport stream failed:', error);
-            setLoadError('The property financial summary could not be loaded. Invoice and payout records remain available below.');
-            setLoading(false);
-        });
+        let payoutsReady = false;
+        let invoicesReady = false;
+        const finishStreams = () => {
+            if (payoutsReady && invoicesReady) setLoading(false);
+        };
 
         // Sort the Owner-scoped result on the client. Combining where +
         // orderBy previously required a production composite index and left
@@ -91,12 +72,14 @@ export default function OwnerFinancialsPage() {
                 .sort((a: any, b: any) => timestampMs(b.createdAt || b.date) - timestampMs(a.createdAt || a.date))
                 .slice(0, 10);
             setTransactions(rows);
-            setLoading(false);
+            payoutsReady = true;
+            finishStreams();
         }, (error) => {
             console.error('Owner payout stream failed:', error);
             setTransactions([]);
             setLoadError('Payout history is temporarily unavailable. Onboarding invoices can still be reviewed.');
-            setLoading(false);
+            payoutsReady = true;
+            finishStreams();
         });
 
         const invoiceQ = query(collection(db, 'invoices'), where('ownerUid', '==', user.uid), limit(20));
@@ -105,20 +88,24 @@ export default function OwnerFinancialsPage() {
             setInvoices(
                 rows.sort((a, b) => timestampMs(b.issuedAt || b.createdAt) - timestampMs(a.issuedAt || a.createdAt)),
             );
-            setLoading(false);
+            invoicesReady = true;
+            finishStreams();
         }, (error) => {
             console.error('Owner invoice stream failed:', error);
             setInvoices([]);
             setLoadError('Owner invoices could not be loaded. Please retry before approving or paying any amount.');
-            setLoading(false);
+            invoicesReady = true;
+            finishStreams();
         });
 
         return () => {
-            unsubscribePassports();
             unsubscribeTrans();
             unsubscribeInvoices();
         };
     }, [user?.email, user?.uid]);
+
+    const loading = streamsLoading || passportsLoading;
+    const visibleError = passportError || loadError;
 
     const FINANCIAL_KPIs = [
         { label: tx('owner.fin.gross_revenue', 'Gross Revenue'), value: summary.totalRevenue, color: '#10b981', icon: <TrendingUp size={20} /> },
@@ -136,8 +123,8 @@ export default function OwnerFinancialsPage() {
 
     return (
         <Box sx={{ pb: 6, direction: isRTL ? 'rtl' : 'ltr' }}>
-            {loadError && (
-                <Alert severity="warning" sx={{ mb: 3 }}>{loadError}</Alert>
+            {visibleError && (
+                <Alert severity="warning" sx={{ mb: 3 }}>{visibleError}</Alert>
             )}
 
             <Box sx={{ mb: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
@@ -156,9 +143,9 @@ export default function OwnerFinancialsPage() {
                         <Paper sx={{ p: 3, bgcolor: 'rgba(15, 23, 42, 0.4)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 6 }}>
                             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
                                 <Box sx={{ p: 1, bgcolor: alpha(kpi.color, 0.1), borderRadius: 2, color: kpi.color }}>{kpi.icon}</Box>
-                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.3)', fontWeight: 800 }}>{tx('owner.fin.monthly', 'MONTHLY')}</Typography>
+                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.3)', fontWeight: 800 }}>{tx('owner.fin.recorded', 'RECORDED')}</Typography>
                             </Box>
-                            <Typography variant="h5" fontWeight="950" sx={{ color: '#FFF' }}>AED {kpi.value.toLocaleString()}</Typography>
+                            <Typography variant="h5" fontWeight="950" sx={{ color: '#FFF' }}>AED {formatRecordedAed(kpi.value)}</Typography>
                             <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900, display: 'block', mt: 0.5 }}>{kpi.label.toUpperCase()}</Typography>
                         </Paper>
                     </Grid>
