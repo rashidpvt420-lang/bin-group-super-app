@@ -3,6 +3,7 @@ import './owner-contract-status-rules.test.js';
 import './invoice-verification-rules.test.js';
 import './tenant-ticket-server-authority-rules.test.js';
 import './technician-assigned-list-security-rules.test.js';
+import './n14-n34-tenant-self-approval-rules.test.js';
 import './broker-kyc-security-rules.test.js';
 import './five-profile-protected-fields-rules.test.js';
 import './push-token-security-rules.test.js';
