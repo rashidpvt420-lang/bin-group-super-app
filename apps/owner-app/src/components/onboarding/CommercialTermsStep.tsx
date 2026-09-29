@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { 
-    Box, Typography, Grid, Paper, alpha, Stack, Button, Divider, Chip, Container, RadioGroup, FormControlLabel, Radio 
+    Alert, Box, Typography, Grid, Paper, alpha, Stack, Button, Divider, Chip, Container, RadioGroup, FormControlLabel, Radio 
 } from '@mui/material';
 import { Wrench, UserCheck, ShieldCheck, ArrowRight, CheckCircle2, XCircle, Info, AlertTriangle, ArrowLeft } from 'lucide-react';
 import { useOnboardingStore } from '../../store/onboardingStore';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { formatAED } from '../../utils/formatters';
+import { UAE_PRICING_MATRIX_2026, resolveAssetClassIdForPropertyType } from '@bin/shared';
 
 const CommercialTermsStep: React.FC<{ onNext: () => void; onBack: () => void }> = ({ onNext, onBack }) => {
     const { setSelectedPlan, selectedPlan, properties, updateProperty, calculateSummary, portfolioSummary } = useOnboardingStore();
@@ -56,10 +57,25 @@ const CommercialTermsStep: React.FC<{ onNext: () => void; onBack: () => void }> 
     ];
 
     const handleUpdate = (data: any) => {
-        updateProperty(activePropertyIndex, data);
+        properties.forEach((_, index) => updateProperty(index, data));
     };
 
     const quote = portfolioSummary.quoteResults?.[property?.id];
+    const supportsAutomaticPm = (candidate: any) => {
+        const descriptor = String(candidate?.propertyType || '').toLowerCase();
+        if (candidate?.majlis || descriptor.includes('majlis') || descriptor.includes('mosque') || descriptor.includes('masjid')) return false;
+        if (candidate?.propertyType === 'Gym / Fitness Centre' && String(candidate?.gymProfile?.pmPricingBasis || '').toLowerCase() === 'flat_custom') return false;
+        const classId = resolveAssetClassIdForPropertyType(String(candidate?.propertyType || ''), String(candidate?.assetGrade || 'Standard'));
+        const pricingClass = UAE_PRICING_MATRIX_2026.assetClasses.find((asset) => asset.id === classId);
+        return Number(pricingClass?.managementRange?.min || 0) > 0;
+    };
+    const portfolioPmSupported = properties.length > 0 && properties.every(supportsAutomaticPm);
+    const selectedStrategy = property?.strategy === 'rent' || property?.strategy === 'pm_only' ? 'pm_only' : property?.strategy === 'both' ? 'both' : 'fm_only';
+    const pmInScope = selectedStrategy === 'pm_only' || selectedStrategy === 'both';
+    const missingPmBasis = pmInScope && properties.some((item: any) => !(Number(item.annualRent || 0) > 0 || Number(item.annualRevenue || 0) > 0));
+    const quoteResults = Object.values(portfolioSummary.quoteResults || {});
+    const invalidQuote = quoteResults.length === 0 || quoteResults.some((item: any) => !(Number(item?.annualTotal || 0) > 0));
+    const canConfirm = !missingPmBasis && !invalidQuote;
 
     return (
         <Box sx={{ py: 2 }}>
@@ -80,14 +96,14 @@ const CommercialTermsStep: React.FC<{ onNext: () => void; onBack: () => void }> 
                                 1. {t('onboarding.plan_select')}
                             </Typography>
                             <Grid container spacing={2}>
-                                {plans.map((plan) => (
+                                {plans.filter((plan) => portfolioPmSupported || plan.id === 'AMC').map((plan) => (
                                     <Grid item xs={12} sm={4} key={plan.id}>
                                         <Paper 
-                                            onClick={() => handleUpdate({ strategy: plan.id === 'AMC' ? 'fm' : (plan.id === 'PM' ? 'rent' : 'fm') })}
+                                            onClick={() => handleUpdate({ strategy: plan.id === 'AMC' ? 'fm_only' : (plan.id === 'PM' ? 'pm_only' : 'both') })}
                                             sx={{ 
                                                 p: 3, height: '100%', cursor: 'pointer',
-                                                bgcolor: (property.strategy === (plan.id === 'AMC' ? 'fm' : (plan.id === 'PM' ? 'rent' : 'fm'))) ? alpha(binThemeTokens.gold, 0.1) : 'rgba(255,255,255,0.02)',
-                                                border: `2px solid ${(property.strategy === (plan.id === 'AMC' ? 'fm' : (plan.id === 'PM' ? 'rent' : 'fm'))) ? binThemeTokens.gold : 'rgba(255,255,255,0.05)'}`,
+                                                bgcolor: (selectedStrategy === (plan.id === 'AMC' ? 'fm_only' : (plan.id === 'PM' ? 'pm_only' : 'both'))) ? alpha(binThemeTokens.gold, 0.1) : 'rgba(255,255,255,0.02)',
+                                                border: `2px solid ${(selectedStrategy === (plan.id === 'AMC' ? 'fm_only' : (plan.id === 'PM' ? 'pm_only' : 'both'))) ? binThemeTokens.gold : 'rgba(255,255,255,0.05)'}`,
                                                 borderRadius: 4, transition: 'all 0.2s ease',
                                                 textAlign: 'center'
                                             }}
@@ -180,8 +196,11 @@ const CommercialTermsStep: React.FC<{ onNext: () => void; onBack: () => void }> 
                                 </Box>
                             </Stack>
 
+                            {(missingPmBasis || invalidQuote) && <Alert severity="warning" sx={{ mb: 2 }}>{missingPmBasis ? 'Enter annual rent or managed revenue for every property before confirming Property Management pricing.' : 'The current property facts cannot produce a protected quotation. Review the property profile and pricing inputs.'}</Alert>}
+                            <Alert severity="info" sx={{ mb: 2 }}>The 15% mobilisation becomes due only after every site visit, the final verified re-quote, and the Owner final signature.</Alert>
                             <Button 
-                                variant="contained" fullWidth size="large" 
+                                variant="contained" fullWidth size="large"
+                                disabled={!canConfirm}
                                 onClick={onNext}
                                 endIcon={isRTL ? <ArrowRight style={{ transform: 'rotate(180deg)' }} /> : <ArrowRight />}
                                 sx={{ 
