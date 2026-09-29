@@ -2,7 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { defineSecret } from "firebase-functions/params";
 import * as admin from "firebase-admin";
-import { enforceAiUsageQuota } from "./aiUsageQuota";
+import { reserveAiUsageQuota, settleAiUsageQuota } from "./aiUsageQuota";
 
 const openAiKey = defineSecret("OPENAI_API_KEY");
 const imageGenerationKey = defineSecret("IMAGE_GENERATION_API_KEY");
@@ -157,13 +157,6 @@ export const generateDesignConceptCompat = onCall({
     throw new HttpsError("unauthenticated", "Sign in before using AI Design Studio.");
   }
 
-  const quota = await enforceAiUsageQuota(
-    request.auth,
-    "design",
-    new Set(["admin", "super_admin", "ceo", "operations_admin"]),
-    3,
-  );
-
   const payload = request.data || {};
   const requestId = cleanRequestId(payload.requestId);
   const mimeType = normalizeMimeType(payload.mimeType);
@@ -177,6 +170,13 @@ export const generateDesignConceptCompat = onCall({
       "AI image generation is not configured in Firebase Functions secrets.",
     );
   }
+
+  const quota = await reserveAiUsageQuota(
+    request.auth,
+    "design",
+    new Set(["admin", "super_admin", "ceo", "operations_admin"]),
+    3,
+  );
 
   try {
     const result = await editImageWithOpenAI(apiKey, prompt, reference.base64, mimeType);
@@ -192,6 +192,7 @@ export const generateDesignConceptCompat = onCall({
       createdAt: new Date().toISOString(),
     };
 
+    await settleAiUsageQuota(quota, true);
     await db.collection("design_requests").add({
       userId: request.auth.uid,
       createdBy: request.auth.uid,
@@ -224,6 +225,7 @@ export const generateDesignConceptCompat = onCall({
       concept,
     };
   } catch (error: any) {
+    await settleAiUsageQuota(quota, false).catch(() => undefined);
     const message = cleanText(error?.message, "AI image provider did not complete the request.", 300);
     console.error("generateDesignConceptCompat failed", {
       requestId,
