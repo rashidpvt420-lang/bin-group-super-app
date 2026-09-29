@@ -64,7 +64,8 @@ type Draft = {
     hasPool: boolean;
     hasCentralHVAC: boolean;
     hasDistrictCooling: boolean;
-    hasCivilDefenseSystem: boolean;
+    hasFireAlarm: boolean;
+    hasFirePump: boolean;
     hasSiraCctv: boolean;
     hasGenerator: boolean;
     hasBmu: boolean;
@@ -140,7 +141,8 @@ const defaultDraft = (row?: InspectionRow): Draft => ({
     hasPool: row?.ownerDeclaredPropertySnapshot?.pool === true,
     hasCentralHVAC: row?.ownerDeclaredPropertySnapshot?.hvac === true,
     hasDistrictCooling: row?.ownerDeclaredPropertySnapshot?.districtCooling === true,
-    hasCivilDefenseSystem: row?.ownerDeclaredPropertySnapshot?.fireAlarm === true || row?.ownerDeclaredPropertySnapshot?.firePump === true,
+    hasFireAlarm: row?.ownerDeclaredPropertySnapshot?.fireAlarm === true,
+    hasFirePump: row?.ownerDeclaredPropertySnapshot?.firePump === true,
     hasSiraCctv: row?.ownerDeclaredPropertySnapshot?.sira === true,
     hasGenerator: row?.ownerDeclaredPropertySnapshot?.gen === true,
     hasBmu: row?.ownerDeclaredPropertySnapshot?.bmu === true,
@@ -401,7 +403,8 @@ export default function OwnerInspectionEvidenceDialog({
                           {([
                             ['hasCentralHVAC', 'Central HVAC'],
                             ['hasDistrictCooling', 'District cooling'],
-                            ['hasCivilDefenseSystem', 'Fire / Civil Defense system'],
+                            ['hasFireAlarm', 'Fire alarm system'],
+                            ['hasFirePump', 'Fire pump system'],
                             ['hasSiraCctv', 'SIRA / CCTV'],
                             ['hasGenerator', 'Generator'],
                             ['hasBmu', 'BMU / facade access'],
