@@ -55,7 +55,12 @@ async function seedInspected(intakeId) {
     arrivalLocation: { withinRadius: true, lat: 25.0801, lng: 55.1401, expectedLat: 25.08, expectedLng: 55.14, distanceMetres: 15, accuracyMeters: 8, capturedAtMs: Date.now() },
     visitStartedAt: now(), visitCompletedAt: now(),
     pricingDriver: 'unit', pricingClass: 'apt-std', pricingVerificationStatus: 'VERIFIED',
-    pricingVerification: { units: 1, emirate: 'Dubai', zone: 'B', propertyAge: 3, slaTier: 'standard', paymentPlan: 'annual' },
+    // Admin-verified FM inputs required by the #1479 pricing authority (explicit yes/no systems + in-band rate).
+    pricingVerification: {
+      units: 1, emirate: 'Dubai', zone: 'B', propertyAge: 3, slaTier: 'standard', paymentPlan: 'annual',
+      floors: 1, lifts: 0, hvac: true, districtCooling: false, fireAlarm: true, firePump: false, sira: false,
+      gen: false, bmu: false, tank: false, pool: false, verifiedMaintenanceRate: 2500,
+    },
   });
 }
 

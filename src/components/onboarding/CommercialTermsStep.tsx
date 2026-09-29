@@ -1,12 +1,14 @@
 import React, { useEffect } from 'react';
 import {
-    Box, Typography, Grid, Paper, alpha, Stack, Button, Divider, Container, RadioGroup, FormControlLabel, Radio, Chip
+    Alert, Box, Typography, Grid, Paper, alpha, Stack, Button, Divider, Container, RadioGroup, FormControlLabel, Radio, Chip
 } from '@mui/material';
 import { Wrench, UserCheck, ShieldCheck, ArrowRight, CalendarCheck, CheckCircle2, XCircle, ClipboardCheck, Timer } from 'lucide-react';
 import { useOnboardingStore } from '../../store/onboardingStore';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { formatAED } from '../../utils/formatters';
+import { resolveAssetClassIdForPropertyType } from '../../utils/calculateUaeQuote2026';
+import { UAE_PRICING_MATRIX_2026 } from '../../utils/uaePricingMatrix2026';
 
 type LocalText = { en: string; ar: string };
 const tx = (text: LocalText, ar: boolean) => (ar ? text.ar : text.en);
@@ -90,9 +92,9 @@ const responseTextByTier: Record<string, LocalText> = {
 };
 
 const paymentPlanDetails: Record<string, LocalText> = {
-    annual: { en: '15% mobilization first, then one annual settlement.', ar: 'دفعة تعبئة 15% أولاً، ثم تسوية سنوية واحدة.' },
-    quarterly: { en: '15% mobilization first, then four scheduled payments.', ar: 'دفعة تعبئة 15% أولاً، ثم أربع دفعات مجدولة.' },
-    monthly: { en: '15% mobilization first, then monthly billing after verification.', ar: 'دفعة تعبئة 15% أولاً، ثم فوترة شهرية بعد التحقق.' },
+    annual: { en: 'After all site visits, final verified re-quote and Owner final signature: 15% mobilisation, then annual settlement.', ar: 'بعد اكتمال الزيارات وإعادة التسعير الموثق والتوقيع النهائي للمالك: دفعة تعبئة 15% ثم التسوية السنوية.' },
+    quarterly: { en: 'After all site visits, final verified re-quote and Owner final signature: 15% mobilisation, then four scheduled payments.', ar: 'بعد اكتمال الزيارات وإعادة التسعير الموثق والتوقيع النهائي للمالك: دفعة تعبئة 15% ثم أربع دفعات.' },
+    monthly: { en: 'After all site visits, final verified re-quote and Owner final signature: 15% mobilisation, then monthly billing.', ar: 'بعد اكتمال الزيارات وإعادة التسعير الموثق والتوقيع النهائي للمالك: دفعة تعبئة 15% ثم فوترة شهرية.' },
 };
 
 const includedScopes: Record<string, LocalText[]> = {
@@ -134,7 +136,7 @@ const excludedScopes: Record<string, LocalText[]> = {
 };
 
 const CommercialTermsStep: React.FC<{ onNext: () => void; onBack: () => void }> = ({ onNext, onBack }) => {
-    const { properties, propertyData, selectedAddOns, updateProperty, calculateSummary, portfolioSummary } = useOnboardingStore();
+    const { properties, propertyData, updateProperty, calculateSummary, portfolioSummary } = useOnboardingStore();
     const { t, isRTL, lang } = useLanguage();
     const ar = lang === 'ar';
 
@@ -153,7 +155,12 @@ const CommercialTermsStep: React.FC<{ onNext: () => void; onBack: () => void }> 
 
     const propertyType = String(property.propertyType || '').toLowerCase();
     const isMajlis = Boolean(property.majlis || propertyType.includes('majlis') || property.useType === 'Government');
-    const availablePlans = isMajlis ? plans.filter(p => p.id === 'FM_ONLY') : plans;
+    const pmSupportedForPortfolio = properties.every((entry) => {
+        const classId = resolveAssetClassIdForPropertyType(entry.propertyType, entry.assetGrade);
+        const matrixClass = UAE_PRICING_MATRIX_2026.assetClasses.find((asset) => asset.id === classId);
+        return Boolean(matrixClass && Number(matrixClass.managementRange?.max || 0) > 0);
+    });
+    const availablePlans = (isMajlis || !pmSupportedForPortfolio) ? plans.filter(p => p.id === 'FM_ONLY') : plans;
 
     useEffect(() => {
         if (isMajlis && property.strategy !== 'fm_only') updateProperty(activePropertyIndex, { strategy: 'fm_only' });
@@ -172,17 +179,31 @@ const CommercialTermsStep: React.FC<{ onNext: () => void; onBack: () => void }> 
     ];
 
     const handleUpdate = (data: any) => updateProperty(activePropertyIndex, data);
-    const quote = portfolioSummary.quoteResults?.[property?.id] || Object.values(portfolioSummary.quoteResults || {})[0];
+    const selectPlanForPortfolio = (strategy: 'fm_only' | 'pm_only' | 'both') => {
+        properties.forEach((_, index) => updateProperty(index, { strategy }));
+        calculateSummary();
+    };
     const selectedStrategy = property.strategy || 'fm_only';
     const selectedPaymentPlan = property.paymentPlan || 'annual';
     const selectedSlaTier = property.slaTier || 'standard';
     const isAnnualPayment = selectedPaymentPlan === 'annual';
-    const selectedPaymentAmount = selectedPaymentPlan === 'monthly' ? quote?.monthlyPayment || 0 : selectedPaymentPlan === 'quarterly' ? quote?.quarterlyPayment || 0 : quote?.annualTotal || 0;
+    const portfolioQuoteRows = Object.values(portfolioSummary.quoteResults || {});
+    const portfolioAnnualTotal = Number(portfolioSummary.estimatedACV || 0);
+    const selectedPaymentAmount = selectedPaymentPlan === 'monthly'
+        ? portfolioQuoteRows.reduce((sum, row) => sum + Number(row.monthlyPayment || 0), 0)
+        : selectedPaymentPlan === 'quarterly'
+            ? portfolioQuoteRows.reduce((sum, row) => sum + Number(row.quarterlyPayment || 0), 0)
+            : portfolioAnnualTotal;
     const selectedPaymentLabel = isAnnualPayment ? tx(copy.fullAnnualPayment, ar) : t(`onboarding.payment.${selectedPaymentPlan}`);
     const selectedPpmText = selectedStrategy === 'pm_only' ? (ar ? 'لا توجد صيانة وقائية تقنية ضمن إدارة العقارات فقط.' : 'No technical PPM included in Property Management Only.') : tx(isMajlis ? majlisPpmTextByTier[selectedSlaTier] : ppmTextByTier[selectedSlaTier], ar);
     const selectedResponseText = tx(responseTextByTier[selectedSlaTier] || responseTextByTier.standard, ar);
     const selectedSystems = Object.entries(systemLabels).filter(([key]) => key === 'lifts' ? Number(property.lifts || 0) > 0 : Boolean(property[key])).map(([key, value]) => key === 'lifts' ? `${tx(value, ar)} (${property.lifts || 1})` : tx(value, ar));
-    const selectedAddOnNames = (selectedAddOns || []).map((id) => addOnLabels[id] ? tx(addOnLabels[id], ar) : id.replace(/_/g, ' '));
+    const portfolioAddOnIds = Array.from(new Set(properties.flatMap((entry) => Array.isArray(entry.selectedAddOns) ? entry.selectedAddOns : [])));
+    const selectedAddOnNames = portfolioAddOnIds.map((id) => addOnLabels[id] ? tx(addOnLabels[id], ar) : id.replace(/_/g, ' '));
+    const pmRevenueMissing = (selectedStrategy === 'pm_only' || selectedStrategy === 'both')
+        && properties.some((entry) => !(Number(entry.annualRent || entry.annualRevenue || 0) > 0));
+    const quoteBlocked = portfolioAnnualTotal <= 0 || portfolioQuoteRows.some((row) => Number(row.annualTotal || 0) <= 0 || (row.riskFlags || []).includes('ANNUAL_RENT_REQUIRED'));
+    const commercialBlocked = pmRevenueMissing || quoteBlocked;
     const includedScope = selectedStrategy === 'pm_only' ? includedScopes.pm_only : selectedStrategy === 'both' ? includedScopes.both : includedScopes.fm_only;
     const excludedScope = selectedStrategy === 'pm_only' ? excludedScopes.pm_only : excludedScopes.default;
 
@@ -202,7 +223,7 @@ const CommercialTermsStep: React.FC<{ onNext: () => void; onBack: () => void }> 
                                 {availablePlans.map((plan) => {
                                     const isSelected = selectedStrategy === plan.strategy;
                                     return <Grid item xs={12} sm={isMajlis ? 12 : 4} key={plan.id}>
-                                        <Paper onClick={() => handleUpdate({ strategy: plan.strategy })} sx={{ p: 3, height: '100%', cursor: 'pointer', bgcolor: isSelected ? alpha(binThemeTokens.gold, 0.1) : 'rgba(255,255,255,0.02)', border: `2px solid ${isSelected ? binThemeTokens.gold : 'rgba(255,255,255,0.05)'}`, borderRadius: 4, transition: 'all 0.2s ease', textAlign: 'center' }}>
+                                        <Paper onClick={() => selectPlanForPortfolio(plan.strategy as 'fm_only' | 'pm_only' | 'both')} sx={{ p: 3, height: '100%', cursor: 'pointer', bgcolor: isSelected ? alpha(binThemeTokens.gold, 0.1) : 'rgba(255,255,255,0.02)', border: `2px solid ${isSelected ? binThemeTokens.gold : 'rgba(255,255,255,0.05)'}`, borderRadius: 4, transition: 'all 0.2s ease', textAlign: 'center' }}>
                                             <Box sx={{ color: binThemeTokens.gold, mb: 2, display: 'flex', justifyContent: 'center' }}>{plan.icon}</Box>
                                             <Typography variant="subtitle2" fontWeight="950" sx={{ color: '#FFF', mb: 1 }}>{isMajlis ? t('onboarding.plan.majlis') : plan.name}</Typography>
                                             <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.62)', display: 'block', lineHeight: 1.7 }}>{isMajlis ? t('onboarding.plan.majlis_desc') : plan.desc}</Typography>
@@ -240,16 +261,17 @@ const CommercialTermsStep: React.FC<{ onNext: () => void; onBack: () => void }> 
 
                     <Grid item xs={12} lg={4}>
                         <Paper sx={{ p: 4, borderRadius: 6, bgcolor: 'rgba(22, 22, 24, 0.8)', border: `2px solid ${binThemeTokens.gold}`, position: { lg: 'sticky' }, top: 24 }}>
-                            <Box sx={{ textAlign: 'center', mb: 3 }}><Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: ar ? 0 : 2 }}>{t('onboarding.quote_est')}</Typography><Typography variant="h3" fontWeight="950" sx={{ color: '#FFF', mt: 1 }}>AED {formatAED(quote?.annualTotal || 0)}</Typography><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)' }}>{t('onboarding.vat_excl')}</Typography></Box>
+                            <Box sx={{ textAlign: 'center', mb: 3 }}><Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: ar ? 0 : 2 }}>{t('onboarding.quote_est')}</Typography><Typography variant="h3" fontWeight="950" sx={{ color: '#FFF', mt: 1 }}>AED {formatAED(portfolioAnnualTotal)}</Typography><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)' }}>{t('onboarding.vat_excl')}</Typography></Box>
                             <Divider sx={{ my: 3, borderColor: 'rgba(255,255,255,0.1)' }} />
                             <Stack spacing={2} sx={{ mb: 4 }}>
                                 <Box sx={{ display: 'flex', justifyContent: 'space-between', flexDirection: isRTL ? 'row-reverse' : 'row', gap: 2 }}><Typography variant="body2" color="rgba(255,255,255,0.6)">{selectedPaymentLabel}</Typography><Typography variant="body2" fontWeight="900" color={binThemeTokens.gold}>AED {formatAED(selectedPaymentAmount)}</Typography></Box>
-                                <Box sx={{ display: 'flex', justifyContent: 'space-between', flexDirection: isRTL ? 'row-reverse' : 'row', gap: 2 }}><Typography variant="body2" color="rgba(255,255,255,0.6)">{t('onboarding.mobilization')}</Typography><Typography variant="body2" fontWeight="900" color="#FFF">AED {formatAED(quote?.mobilizationFee || 0)}</Typography></Box>
+                                <Box sx={{ display: 'flex', justifyContent: 'space-between', flexDirection: isRTL ? 'row-reverse' : 'row', gap: 2 }}><Typography variant="body2" color="rgba(255,255,255,0.6)">{t('onboarding.mobilization')}</Typography><Typography variant="body2" fontWeight="900" color="#FFF">AED {formatAED(portfolioAnnualTotal * 0.15)}</Typography></Box>
                                 <Divider sx={{ borderColor: 'rgba(255,255,255,0.08)' }} />
                                 <Box><Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 950, display: 'block' }}>{tx(copy.ppmSchedule, ar)}</Typography><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.65)', lineHeight: 1.6 }}>{selectedPpmText}</Typography></Box>
                                 <Box><Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 950, display: 'block' }}>{tx(copy.approvalRule, ar)}</Typography><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.65)', lineHeight: 1.6 }}>{tx(copy.approvalRuleText, ar)}</Typography></Box>
                             </Stack>
-                            <Button variant="contained" fullWidth size="large" onClick={onNext} endIcon={isRTL ? <ArrowRight style={{ transform: 'rotate(180deg)' }} /> : <ArrowRight />} sx={{ borderRadius: 4, bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, py: 2, boxShadow: '0 10px 20px rgba(198, 167, 94, 0.3)', '&:hover': { bgcolor: '#E6C77A' } }}>{t('onboarding.confirm_btn')}</Button>
+                            {commercialBlocked && <Alert severity="warning" sx={{ mb: 2 }}>{pmRevenueMissing ? tx({ en: 'Enter annual rent / managed revenue for every property before confirming Property Management.', ar: 'أدخل الإيجار السنوي / الإيراد المدار لكل عقار قبل تأكيد إدارة العقار.' }, ar) : tx({ en: 'This service plan cannot produce a valid automatic quote. Review the property pricing inputs before continuing.', ar: 'لا يمكن لهذه الخطة إنشاء عرض سعر تلقائي صالح. راجع بيانات تسعير العقار قبل المتابعة.' }, ar)}</Alert>}
+                            <Button variant="contained" fullWidth size="large" disabled={commercialBlocked} onClick={onNext} endIcon={isRTL ? <ArrowRight style={{ transform: 'rotate(180deg)' }} /> : <ArrowRight />} sx={{ borderRadius: 4, bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, py: 2, boxShadow: '0 10px 20px rgba(198, 167, 94, 0.3)', '&:hover': { bgcolor: '#E6C77A' } }}>{t('onboarding.confirm_btn')}</Button>
                             <Button variant="text" fullWidth onClick={onBack} sx={{ mt: 1, color: 'rgba(255,255,255,0.45)', fontWeight: 800 }}>{t('onboarding.revise_btn')}</Button>
                         </Paper>
                     </Grid>
