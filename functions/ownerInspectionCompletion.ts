@@ -3,6 +3,7 @@ import { HttpsError, onCall } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 import * as crypto from "crypto";
 import { calculateOwnerOnboardingQuote, resolveOwnerOnboardingPricingClass } from "./ownerOnboardingQuote";
+import { UAE_PRICING_MATRIX_2026 } from "./pricing/uaePricingMatrix2026";
 
 if (!admin.apps.length) admin.initializeApp();
 const db = admin.firestore();
@@ -71,8 +72,6 @@ function gymDocumentStatus(value: unknown, label: string) {
 }
 
 function verifiedPricingPayload(value: any, inspection: any, property: any) {
-  const driver = text(inspection?.pricingDriver);
-  if (!PRICING_DRIVERS.has(driver)) throw new HttpsError("failed-precondition", "Inspection pricing driver is missing or unsupported.");
   const declared = inspection?.ownerDeclaredPropertySnapshot || {};
   const requiredPositive = (raw: unknown, label: string, max = 100_000_000) => {
     const parsed = finite(raw);
@@ -91,8 +90,6 @@ function verifiedPricingPayload(value: any, inspection: any, property: any) {
   const contractMode = text(property?.strategy || property?.serviceModel || property?.contractMode || property?.contractType || declared.strategy).toLowerCase();
   const pmInScope = ["pm", "pm_only", "rent", "property_management", "both", "hybrid", "combined", "total_care", "total-care"].includes(contractMode);
   const verified: Record<string, any> = {
-    pricingClass: text(inspection?.pricingClass),
-    pricingDriver: driver,
     propertyType: text(value?.propertyType || property?.propertyType || inspection?.propertyType),
     assetGrade: text(value?.assetGrade || property?.assetGrade || "Standard"),
     propertyAge: nonNegative(value?.propertyAge ?? declared.age ?? property?.age, "Property age", 300),
@@ -117,10 +114,14 @@ function verifiedPricingPayload(value: any, inspection: any, property: any) {
   if (!verified.propertyType) throw new HttpsError("invalid-argument", "Admin-verified property type is required.");
   if (!["Standard", "Premium", "Luxury", "Ultra-Luxury", "Sovereign"].includes(verified.assetGrade)) throw new HttpsError("invalid-argument", "Admin-verified asset grade is invalid.");
   try {
-    resolveOwnerOnboardingPricingClass({ ...property, propertyType: verified.propertyType, assetGrade: verified.assetGrade });
+    verified.pricingClass = resolveOwnerOnboardingPricingClass({ ...property, propertyType: verified.propertyType, assetGrade: verified.assetGrade });
   } catch (error: any) {
     throw new HttpsError("invalid-argument", `Admin-verified property classification is not priceable: ${error?.message || String(error)}`);
   }
+  const matrixClass = UAE_PRICING_MATRIX_2026.assetClasses.find((asset) => asset.id === verified.pricingClass);
+  verified.pricingDriver = verified.pricingClass === "mosque_fm" ? "sqft+capacity" : text(matrixClass?.pricingUnit);
+  const driver = verified.pricingDriver;
+  if (!PRICING_DRIVERS.has(driver)) throw new HttpsError("failed-precondition", "Admin-verified property classification has no supported pricing driver.");
   if (!verified.emirate) throw new HttpsError("invalid-argument", "Admin-verified emirate is required.");
   if (!["A", "B", "C"].includes(verified.zone)) throw new HttpsError("invalid-argument", "Admin-verified pricing zone must be A, B, or C.");
   if (!["Mint", "Good", "Fair", "Poor"].includes(verified.condition)) throw new HttpsError("invalid-argument", "Admin-verified property condition is invalid.");
