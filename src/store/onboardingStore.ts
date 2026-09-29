@@ -197,7 +197,7 @@ const zeroClientQuote = (reason: string): QuoteOutput => ({
   riskFlags: [reason],
 });
 
-const calculatePropertyAnnualValue = (property: PropertyData, selectedAddOns: string[]): QuoteOutput => {
+const calculatePropertyAnnualValue = (property: PropertyData): QuoteOutput => {
   const propertyAddOns = Array.isArray(property.selectedAddOns) ? property.selectedAddOns : [];
   const mosqueProfile = property.mosqueProfile || {};
   const gymProfile = property.gymProfile || {};
@@ -381,7 +381,7 @@ export const useOnboardingStore = create<OnboardingState>()(
           return;
         }
         const quoteResults: Record<string, QuoteOutput> = {};
-        for (const property of properties) quoteResults[property.id] = calculatePropertyAnnualValue(property, get().selectedAddOns || []);
+        for (const property of properties) quoteResults[property.id] = calculatePropertyAnnualValue(property);
         const estimatedACV = Object.values(quoteResults).reduce((total, quote) => total + Number(quote.annualTotal || 0), 0);
         const summary: PortfolioSummary = {
           totalProperties: properties.length,
