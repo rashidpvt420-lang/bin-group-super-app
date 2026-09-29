@@ -75,8 +75,7 @@ const PaymentSubmissionStep: React.FC<{ onBack: () => void }> = ({ onBack }) => 
                                     <Typography variant="h6" fontWeight="950" sx={{ color: binThemeTokens.gold }}>{formatAED(mobilizationAmount)}</Typography>
                                 </Grid>
                             </Grid>
-                            <TextField select fullWidth label={t('onboarding.payment_method')} value={paymentMethod || ''} onChange={(e) => setPaymentMethod(e.target.value as any)} sx={{ '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.5)' }, '& .MuiOutlinedInput-root': { color: '#FFF' } }}>
-                                <MenuItem value="BANK_TRANSFER">{t('onboarding.bank_transfer')}</MenuItem>
+                            <TextField select fullWidth label={t('onboarding.payment_method')} value={paymentMethod || ''} onChange={(e) => setPaymentMethod(e.target.value as 'CASH' | 'CHEQUE')} sx={{ '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.5)' }, '& .MuiOutlinedInput-root': { color: '#FFF' } }}>
                                 <MenuItem value="CHEQUE">{t('onboarding.corp_cheque')}</MenuItem>
                                 <MenuItem value="CASH">{t('onboarding.cash_payment')}</MenuItem>
                             </TextField>

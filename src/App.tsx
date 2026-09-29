@@ -3,8 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'r
 import { Box, Button, Typography, CssBaseline, CircularProgress } from '@mui/material';
 
 import PublicMarketingPage from './pages/public/PublicMarketingPage';
-import PrivacyPage from './pages/public/PrivacyPage';
-import TermsPage from './pages/public/TermsPage';
+import LegalRedirect from './pages/public/LegalRedirect';
 import SupportPage from './pages/public/SupportPage';
 import PilotFeedbackPage from './pages/public/PilotFeedbackPage';
 import DemoVideosPage from './pages/public/DemoVideosPage';
@@ -287,10 +286,10 @@ function AppContent() {
         <Route path="/gateway" element={publicOrPilot(withAuth(<RoleGatewayPage />, { publicAuth: true, showChrome: false }))} />
         <Route path="/login" element={withAuth(<LoginPage />, { publicAuth: true, showChrome: false })} />
         <Route path="/homes" element={publicOrPilot(withAuth(<PublicHomeDiscoveryPage />, { publicAuth: true, showChrome: false }))} />
-        <Route path="/terms-of-service" element={<TermsPage />} />
-        <Route path="/privacy-policy" element={<PrivacyPage />} />
-        <Route path="/terms" element={<TermsPage />} />
-        <Route path="/privacy" element={<PrivacyPage />} />
+        <Route path="/terms-of-service" element={<LegalRedirect to="/terms-of-service.html" />} />
+        <Route path="/privacy-policy" element={<LegalRedirect to="/privacy-policy.html" />} />
+        <Route path="/terms" element={<LegalRedirect to="/terms-of-service.html" />} />
+        <Route path="/privacy" element={<LegalRedirect to="/privacy-policy.html" />} />
         <Route path="/account-privacy" element={withAuth(<AccountPrivacyRequestPage />, { publicAuth: false, showChrome: false })} />
         <Route path="/support" element={<SupportPage />} />
         <Route path="/feedback" element={<PilotFeedbackPage />} />

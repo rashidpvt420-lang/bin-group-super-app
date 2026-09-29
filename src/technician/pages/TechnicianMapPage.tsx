@@ -7,16 +7,13 @@ import React, { useEffect, useState } from 'react';
 import { Alert, Box, Typography, Paper, CircularProgress, Stack, Button, alpha, Grid, Divider, Chip } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { MapPin, Navigation, Compass, Info, ExternalLink, LocateFixed, ShieldAlert, Wifi, WifiOff, Clock } from 'lucide-react';
-import { collection, doc, limit, onSnapshot, query, where, db } from '../../lib/firebase';
+import { collection, doc, onSnapshot, db } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { resolvePropertyLocation } from '../../utils/propertyLocationResolver';
 import { calculateDistanceKm, calculateEtaMinutes, getStaleLabel, getTechnicianLocation, getTicketJobLocation, isLocationStale } from '../../utils/liveTracking';
-
-const ACTIVE_STATUSES = [
-  'accepted', 'on_the_way', 'arrived', 'in_progress', 'waiting_parts',
-  'ACCEPTED', 'EN_ROUTE', 'ARRIVED', 'IN_PROGRESS', 'WAITING_PARTS',
-];
+import { onSnapshotSplitIn } from '../../utils/queryUtils';
+import { ALL_TECHNICIAN_ACTIVE_STATUSES } from '../../utils/ticketConstants';
 
 function buildDirectionsUrl(techLoc: any, jobLoc: any) {
   if (!jobLoc) return 'https://www.google.com/maps';
@@ -51,22 +48,23 @@ export default function TechnicianMapPage() {
       setJobsError('Technician identity is unavailable. Sign in again before using Mission Control.');
       return;
     }
-    const activeJobsQuery = query(
+    const unsubscribe = onSnapshotSplitIn(
       collection(db, 'maintenanceTickets'),
-      where('assignedTechnicianId', '==', user.uid),
-      where('status', 'in', ACTIVE_STATUSES),
-      limit(50),
+      { field: 'assignedTechnicianId', value: user.uid },
+      'status',
+      ALL_TECHNICIAN_ACTIVE_STATUSES,
+      (rows) => {
+        setJobs(rows);
+        setJobsError('');
+        setLoading(false);
+      },
+      (error) => {
+        console.error('[TechnicianMap] Active mission listener failed:', error);
+        setJobs([]);
+        setJobsError('Active missions could not be loaded. This may indicate a network, App Check, permission or Firestore index failure. Mission Control will not report an empty healthy queue.');
+        setLoading(false);
+      },
     );
-    const unsubscribe = onSnapshot(activeJobsQuery, (snapshot) => {
-      setJobs(snapshot.docs.map((document) => ({ id: document.id, ...document.data() })));
-      setJobsError('');
-      setLoading(false);
-    }, (error) => {
-      console.error('[TechnicianMap] Active mission listener failed:', error);
-      setJobs([]);
-      setJobsError('Active missions could not be loaded. This may indicate a network, App Check, permission or Firestore index failure. Mission Control will not report an empty healthy queue.');
-      setLoading(false);
-    });
     return () => unsubscribe();
   }, [user?.uid]);
 
@@ -157,7 +155,7 @@ export default function TechnicianMapPage() {
             const jobLoc = getTicketJobLocation(job);
             const dist = calculateDistanceKm(techLoc, jobLoc);
             const eta = calculateEtaMinutes(dist);
-            const isOnTheWay = ['on_the_way', 'EN_ROUTE'].includes(String(job.status));
+            const isOnTheWay = ['on_the_way', 'EN_ROUTE', 'ON_THE_WAY'].includes(String(job.status));
             const jobLocationTimestamp = locationTimestamp(job.technicianLocation, job.technicianLocationUpdatedAt);
             const locationStale = isLocationStale(jobLocationTimestamp, 2);
             const staticMapUrl = buildSafeStaticMapUrl(jobLoc, techLoc);

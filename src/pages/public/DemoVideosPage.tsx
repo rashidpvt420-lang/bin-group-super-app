@@ -15,6 +15,7 @@ import {
 } from '@mui/material';
 import {
   ArrowLeft,
+  ArrowRight,
   Briefcase,
   Building2,
   Camera,
@@ -208,7 +209,7 @@ export default function DemoVideosPage() {
             <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1.1} alignItems="center"><Box component="img" src="/logo.png" sx={{ width: 40, height: 40, borderRadius: 1.2 }} /><Typography fontWeight={950}>{c.brand}</Typography></Stack>
           </Button>
           <Stack direction="row" spacing={1} alignItems="center" sx={{ flexWrap: 'wrap', justifyContent: 'flex-end', gap: 1 }}>
-            <Button component="a" href="/" startIcon={<ArrowLeft size={16} />} sx={{ color: palette.ink, fontWeight: 900 }}>{c.company}</Button>
+            <Button component="a" href="/" data-testid="request-demo-home" startIcon={isRTL ? <ArrowRight size={16} /> : <ArrowLeft size={16} />} sx={{ color: palette.ink, fontWeight: 900 }}>{c.company}</Button>
             <Button type="button" onClick={() => setLang(language === 'en' ? 'ar' : 'en')} startIcon={<Languages size={16} />} sx={{ color: palette.goldDark, fontWeight: 950 }}>{language === 'en' ? 'العربية' : 'EN'}</Button>
             <Button component="a" href={QUOTE_URL} variant="outlined" sx={{ ...buttonSx, color: palette.goldDark, borderColor: palette.gold }}>{c.quote}</Button>
             <Button component="a" href={ONBOARDING_URL} variant="contained" sx={{ ...buttonSx, bgcolor: palette.gold, color: palette.ink }}>{c.request}</Button>
