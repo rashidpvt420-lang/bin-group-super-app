@@ -192,11 +192,18 @@ const CommercialTermsStep: React.FC<{ onNext: () => void; onBack: () => void }> 
 
     const handleUpdate = (data: any) => updatePortfolio(data);
     const quote = portfolioSummary.quoteResults?.[property?.id] || Object.values(portfolioSummary.quoteResults || {})[0];
+    const allQuotes = Object.values(portfolioSummary.quoteResults || {});
+    const portfolioAnnualTotal = allQuotes.reduce((sum, item) => sum + Number(item?.annualTotal || 0), 0);
+    const portfolioMobilization = allQuotes.reduce((sum, item) => sum + Number(item?.mobilizationFee || 0), 0);
     const selectedStrategy = property.strategy || 'fm_only';
     const selectedPaymentPlan = property.paymentPlan || 'annual';
     const selectedSlaTier = property.slaTier || 'standard';
     const isAnnualPayment = selectedPaymentPlan === 'annual';
-    const selectedPaymentAmount = selectedPaymentPlan === 'monthly' ? quote?.monthlyPayment || 0 : selectedPaymentPlan === 'quarterly' ? quote?.quarterlyPayment || 0 : quote?.annualTotal || 0;
+    const selectedPaymentAmount = allQuotes.reduce((sum, item) => sum + Number(
+        selectedPaymentPlan === 'monthly' ? item?.monthlyPayment || 0
+            : selectedPaymentPlan === 'quarterly' ? item?.quarterlyPayment || 0
+                : item?.annualTotal || 0,
+    ), 0);
     const selectedPaymentLabel = isAnnualPayment ? tx(copy.fullAnnualPayment, ar) : t(`onboarding.payment.${selectedPaymentPlan}`);
     const selectedPpmText = selectedStrategy === 'pm_only' ? (ar ? 'لا توجد صيانة وقائية تقنية ضمن إدارة العقارات فقط.' : 'No technical PPM included in Property Management Only.') : tx(isMajlis ? majlisPpmTextByTier[selectedSlaTier] : ppmTextByTier[selectedSlaTier], ar);
     const selectedResponseText = tx(responseTextByTier[selectedSlaTier] || responseTextByTier.standard, ar);
@@ -265,11 +272,11 @@ const CommercialTermsStep: React.FC<{ onNext: () => void; onBack: () => void }> 
 
                     <Grid item xs={12} lg={4}>
                         <Paper sx={{ p: 4, borderRadius: 6, bgcolor: 'rgba(22, 22, 24, 0.8)', border: `2px solid ${binThemeTokens.gold}`, position: { lg: 'sticky' }, top: 24 }}>
-                            <Box sx={{ textAlign: 'center', mb: 3 }}><Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: ar ? 0 : 2 }}>{t('onboarding.quote_est')}</Typography><Typography variant="h3" fontWeight="950" sx={{ color: '#FFF', mt: 1 }}>AED {formatAED(quote?.annualTotal || 0)}</Typography><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)' }}>{t('onboarding.vat_excl')}</Typography></Box>
+                            <Box sx={{ textAlign: 'center', mb: 3 }}><Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: ar ? 0 : 2 }}>{t('onboarding.quote_est')}</Typography><Typography variant="h3" fontWeight="950" sx={{ color: '#FFF', mt: 1 }}>AED {formatAED(portfolioAnnualTotal)}</Typography><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)' }}>{t('onboarding.vat_excl')}</Typography></Box>
                             <Divider sx={{ my: 3, borderColor: 'rgba(255,255,255,0.1)' }} />
                             <Stack spacing={2} sx={{ mb: 4 }}>
                                 <Box sx={{ display: 'flex', justifyContent: 'space-between', flexDirection: isRTL ? 'row-reverse' : 'row', gap: 2 }}><Typography variant="body2" color="rgba(255,255,255,0.6)">{selectedPaymentLabel}</Typography><Typography variant="body2" fontWeight="900" color={binThemeTokens.gold}>AED {formatAED(selectedPaymentAmount)}</Typography></Box>
-                                <Box sx={{ display: 'flex', justifyContent: 'space-between', flexDirection: isRTL ? 'row-reverse' : 'row', gap: 2 }}><Typography variant="body2" color="rgba(255,255,255,0.6)">{t('onboarding.mobilization')}</Typography><Typography variant="body2" fontWeight="900" color="#FFF">AED {formatAED(quote?.mobilizationFee || 0)}</Typography></Box>
+                                <Box sx={{ display: 'flex', justifyContent: 'space-between', flexDirection: isRTL ? 'row-reverse' : 'row', gap: 2 }}><Typography variant="body2" color="rgba(255,255,255,0.6)">{t('onboarding.mobilization')}</Typography><Typography variant="body2" fontWeight="900" color="#FFF">AED {formatAED(portfolioMobilization)}</Typography></Box>
                                 <Divider sx={{ borderColor: 'rgba(255,255,255,0.08)' }} />
                                 <Box><Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 950, display: 'block' }}>{tx(copy.ppmSchedule, ar)}</Typography><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.65)', lineHeight: 1.6 }}>{selectedPpmText}</Typography></Box>
                                 <Box><Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 950, display: 'block' }}>{tx(copy.approvalRule, ar)}</Typography><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.65)', lineHeight: 1.6 }}>{tx(copy.approvalRuleText, ar)}</Typography></Box>
