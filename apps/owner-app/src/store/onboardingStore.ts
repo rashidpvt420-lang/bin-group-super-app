@@ -29,6 +29,7 @@ export interface PropertyData {
     age: number;
     annualRent?: number;
     annualRevenue?: number;
+    selectedAddOns?: string[];
     // Systems
     pool: boolean;
     lifts: number;
@@ -224,6 +225,7 @@ export interface OnboardingState {
 }
 
 const calculatePropertyAnnualValue = (property: PropertyData, selectedAddOns: string[]): QuoteOutput => {
+    const propertyAddOns = Array.isArray(property.selectedAddOns) ? property.selectedAddOns : selectedAddOns;
     // Map internal types to Pricing Matrix types
     let assetClassId = 'standard_apartment';
     if (property.propertyType === 'Villa') assetClassId = property.assetGrade === 'Luxury' || property.assetGrade === 'Ultra-Luxury' ? 'luxury_estate_villa' : 'standard_villa';
@@ -254,6 +256,7 @@ const calculatePropertyAnnualValue = (property: PropertyData, selectedAddOns: st
         units: property.units,
         annualRent: property.annualRent,
         propertyAge: property.age,
+        condition: property.condition || 'Good',
         floors: property.floors,
         lifts: property.lifts,
         hasPool: property.pool,
@@ -263,7 +266,7 @@ const calculatePropertyAnnualValue = (property: PropertyData, selectedAddOns: st
         hasSiraCctv: property.sira,
         hasGenerator: property.gen,
         hasBmu: property.bmu,
-        addOns: selectedAddOns,
+        addOns: propertyAddOns,
         slaTier: property.slaTier || 'standard',
         paymentPlan: property.paymentPlan || 'annual',
         hasWaterTank: property.tank,
@@ -310,6 +313,7 @@ const defaultProperty: PropertyData = {
     majlisType: 'none',
     missions: [],
     condition: 'Good',
+    selectedAddOns: [],
     assetGrade: 'Premium',
     currentStatus: 'Active',
     address: '',
