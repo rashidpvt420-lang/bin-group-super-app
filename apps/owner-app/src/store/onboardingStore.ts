@@ -95,7 +95,7 @@ export interface PropertyData {
         lng: number;
         geohash: string;
         source: string;
-        placeId?: string;
+        placeId?: string | null;
         address: string;
         emirate: string;
         city: string;
@@ -103,7 +103,8 @@ export interface PropertyData {
         verified: boolean;
         dispatchReady?: boolean;
         requiresGeoReview?: boolean;
-        verifiedAt?: string;
+        verifiedBy?: string | null;
+        verifiedAt?: string | null;
         updatedAt?: string;
     };
     submittedGeo?: Omit<NonNullable<PropertyData['geo']>, 'source' | 'verified' | 'verifiedAt' | 'dispatchReady' | 'requiresGeoReview' | 'placeId'> & {
