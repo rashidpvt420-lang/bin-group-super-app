@@ -779,6 +779,7 @@ export const adminCompleteOwnerPropertyInspection = onCall({ cors: true, enforce
 
 export const adminRecordOwnerMobilizationPaymentEvidence = onCall({ cors: true, enforceAppCheck: true, memory: "512MiB" }, async (request) => {
   const actor = await requireAdmin(request);
+  await requirePrivilegedMfaSession(request.auth);
   const paymentId = safeId(request.data?.paymentId, "");
   const reference = text(request.data?.paymentReferenceId || request.data?.reference);
   const method = upper(request.data?.paymentMethod || request.data?.method);
@@ -917,3 +918,4 @@ export const adminRecordOwnerMobilizationPaymentEvidence = onCall({ cors: true, 
 });
 
 import type * as FirebaseFirestore from "firebase-admin/firestore";
+import { requirePrivilegedMfaSession } from "./adminMfaSession";

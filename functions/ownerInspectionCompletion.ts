@@ -3,6 +3,7 @@ import { HttpsError, onCall } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 import * as crypto from "crypto";
 import { calculateOwnerOnboardingQuote } from "./ownerOnboardingQuote";
+import { requirePrivilegedMfaSession } from "./adminMfaSession";
 
 if (!admin.apps.length) admin.initializeApp();
 const db = admin.firestore();
@@ -146,6 +147,7 @@ function verifiedGymPayload(value: any) {
 
 export const adminRecordOwnerPropertyInspectionEvidence = onCall({ cors: true, enforceAppCheck: true, memory: "512MiB" }, async (request) => {
   const actor = await requireAdmin(request);
+  await requirePrivilegedMfaSession(request.auth);
   const intakeId = safeId(request.data?.intakeId, "");
   const inspectionId = safeId(request.data?.inspectionId, "");
   const inspectorName = text(request.data?.inspectorName || actor.name).slice(0, 160);
@@ -297,6 +299,7 @@ export const adminRecordOwnerPropertyInspectionEvidence = onCall({ cors: true, e
 
 export const adminCompleteOwnerPortfolioInspections = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
   const actor = await requireAdmin(request);
+  await requirePrivilegedMfaSession(request.auth);
   const intakeId = text(request.data?.intakeId);
   const notes = text(request.data?.notes || request.data?.inspectionNotes);
   if (!intakeId) throw new HttpsError("invalid-argument", "intakeId is required.");

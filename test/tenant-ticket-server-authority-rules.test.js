@@ -29,7 +29,7 @@ describe('Server-authoritative Tenant ticket creation', () => {
   after(async () => testEnv.cleanup());
 
   it('denies direct Tenant creates in both ticket collections, including forged coordinates', async () => {
-    const adminDb = testEnv.authenticatedContext('admin_server_authority', { admin: true, role: 'admin' }).firestore();
+    const adminDb = testEnv.authenticatedContext('admin_server_authority', { firebase: { sign_in_second_factor: 'phone' }, admin: true, role: 'admin' }).firestore();
     await assertSucceeds(setDoc(doc(adminDb, 'units/unit_server_authority'), {
       tenantId: 'tenant_server_authority',
       tenantUid: 'tenant_server_authority',

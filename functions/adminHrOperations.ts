@@ -1,6 +1,7 @@
 import { FieldValue } from "firebase-admin/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
+import { requirePrivilegedMfaSession } from "./adminMfaSession";
 
 if (!admin.apps.length) admin.initializeApp();
 const db = admin.firestore();
@@ -32,6 +33,7 @@ async function assertStaff(uid: string) {
 
 export const adminGetHrOperations = onCall({ cors: true, region: "europe-west3", enforceAppCheck: true }, async (request) => {
   await requireHrAdmin(request);
+  await requirePrivilegedMfaSession(request.auth);
   const [attendanceSnap, leaveSnap, documentSnap] = await Promise.all([
     db.collection("staffAttendance").orderBy("workDate", "desc").limit(100).get().catch(() => null),
     db.collection("staffLeaveRequests").orderBy("createdAt", "desc").limit(100).get().catch(() => null),
@@ -48,6 +50,7 @@ export const adminGetHrOperations = onCall({ cors: true, region: "europe-west3",
 
 export const adminRecordStaffAttendance = onCall({ cors: true, region: "europe-west3", enforceAppCheck: true }, async (request) => {
   const { actorId, actorRole } = await requireHrAdmin(request);
+  await requirePrivilegedMfaSession(request.auth);
   const uid = clean(request.data?.uid);
   const workDate = clean(request.data?.workDate);
   const status = clean(request.data?.status).toUpperCase();
@@ -77,6 +80,7 @@ export const adminRecordStaffAttendance = onCall({ cors: true, region: "europe-w
 
 export const adminCreateStaffLeaveRequest = onCall({ cors: true, region: "europe-west3", enforceAppCheck: true }, async (request) => {
   const { actorId, actorRole } = await requireHrAdmin(request);
+  await requirePrivilegedMfaSession(request.auth);
   const uid = clean(request.data?.uid);
   await assertStaff(uid);
   const leaveType = clean(request.data?.leaveType, "ANNUAL").toUpperCase();
@@ -105,6 +109,7 @@ export const adminCreateStaffLeaveRequest = onCall({ cors: true, region: "europe
 
 export const adminReviewStaffLeaveRequest = onCall({ cors: true, region: "europe-west3", enforceAppCheck: true }, async (request) => {
   const { actorId, actorRole } = await requireHrAdmin(request);
+  await requirePrivilegedMfaSession(request.auth);
   const requestId = clean(request.data?.requestId);
   const decision = clean(request.data?.decision).toUpperCase();
   if (!["APPROVED", "REJECTED", "CANCELLED"].includes(decision)) throw new HttpsError("invalid-argument", "Invalid leave decision.");
@@ -128,6 +133,7 @@ export const adminReviewStaffLeaveRequest = onCall({ cors: true, region: "europe
 
 export const adminRegisterHrDocumentMetadata = onCall({ cors: true, region: "europe-west3", enforceAppCheck: true }, async (request) => {
   const { actorId, actorRole } = await requireHrAdmin(request);
+  await requirePrivilegedMfaSession(request.auth);
   const uid = clean(request.data?.uid);
   await assertStaff(uid);
   const documentType = clean(request.data?.documentType).toUpperCase();

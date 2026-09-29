@@ -53,7 +53,7 @@ const canonicalUserSubcollectionBlock = `  it('user push token and readiness sub
 
     const selfDb = testEnv.authenticatedContext('user_a', { role: 'tenant' }).firestore();
     const otherDb = testEnv.authenticatedContext('user_b', { role: 'tenant' }).firestore();
-    const adminDb = testEnv.authenticatedContext('admin_user', { admin: true, role: 'admin' }).firestore();
+    const adminDb = testEnv.authenticatedContext('admin_user', { firebase: { sign_in_second_factor: 'phone' }, admin: true, role: 'admin' }).firestore();
     const hrDb = testEnv.authenticatedContext('hr_user', { role: 'hr_admin' }).firestore();
     const opsDb = testEnv.authenticatedContext('ops_user', { role: 'operations_manager' }).firestore();
     const financeDb = testEnv.authenticatedContext('finance_user', { role: 'finance_admin' }).firestore();
@@ -96,6 +96,26 @@ const legacyStaleSuspensionBlock = `  it('stale-token suspended user is denied a
   });`;
 
 const canonicalStaleSuspensionBlock = `  it('stale-token suspended user can resolve own status while protected data stays denied', async () => {
+    const adminDb = testEnv.authenticatedContext('admin_user', { firebase: { sign_in_second_factor: 'phone' }, admin: true }).firestore();
+    await setDoc(doc(adminDb, 'users/admin_user'), { role: 'admin' });
+    // Production suspension callables write status='suspended' before stale tokens refresh.
+    await setDoc(doc(adminDb, 'users/suspended_user'), { status: 'suspended', suspended: false });
+    await setDoc(doc(adminDb, 'properties/suspended_owner_prop'), { ownerId: 'suspended_user' });
+
+    // The user's token does NOT have suspended claim (stale token representation).
+    // The account may read only its own profile so the client can resolve and render
+    // the authoritative blocked state instead of misclassifying it as connectivity loss.
+    const staleTokenDb = testEnv.authenticatedContext('suspended_user', {
+      role: 'owner'
+    }).firestore();
+
+    await assertFails(getDoc(doc(staleTokenDb, 'properties/suspended_owner_prop')));
+    const ownProfile = await assertSucceeds(getDoc(doc(staleTokenDb, 'users/suspended_user')));
+    assert.equal(ownProfile.data()?.status, 'suspended');
+  });`;
+
+// N-05: Admin rules access requires a second factor; the pre-MFA canonical text is migrated.
+const preMfaCanonicalStaleSuspensionBlock = `  it('stale-token suspended user can resolve own status while protected data stays denied', async () => {
     const adminDb = testEnv.authenticatedContext('admin_user', { admin: true }).firestore();
     await setDoc(doc(adminDb, 'users/admin_user'), { role: 'admin' });
     // Production suspension callables write status='suspended' before stale tokens refresh.
@@ -181,6 +201,9 @@ if (legacyStartIndex >= 0) {
   );
 }
 
+if (next.split(preMfaCanonicalStaleSuspensionBlock).length - 1 === 1) {
+  next = next.replace(preMfaCanonicalStaleSuspensionBlock, canonicalStaleSuspensionBlock);
+}
 const legacyStaleSuspensionCount = next.split(legacyStaleSuspensionBlock).length - 1;
 const canonicalStaleSuspensionCount = next.split(canonicalStaleSuspensionBlock).length - 1;
 if (legacyStaleSuspensionCount === 1 && canonicalStaleSuspensionCount === 0) {

@@ -331,6 +331,7 @@ export const adminRevealScheduledServiceAccessCode = onCall(
   { region: REGION, enforceAppCheck: true },
   async (request) => {
     const role = await assertOperations(request.auth);
+    await requirePrivilegedMfaSession(request.auth);
     const ticketId = clean(request.data?.ticketId);
     if (!ticketId) throw new HttpsError('invalid-argument', 'ticketId is required.');
     const ref = db.collection('maintenanceTickets').doc(ticketId);
@@ -570,3 +571,4 @@ export const createNextRecurringScheduledService = onDocumentUpdated(
 );
 
 import type * as FirebaseFirestore from "firebase-admin/firestore";
+import { requirePrivilegedMfaSession } from "./adminMfaSession";

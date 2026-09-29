@@ -68,7 +68,7 @@ describe('Canonical property geo authority', () => {
       geoVerification: { state: 'VERIFIED', verifiedBy: 'founder' },
     });
     const ownerDb = testEnv.authenticatedContext('owner_geo', { role: 'owner' }).firestore();
-    const adminDb = testEnv.authenticatedContext('admin_geo', { admin: true, role: 'admin' }).firestore();
+    const adminDb = testEnv.authenticatedContext('admin_geo', { firebase: { sign_in_second_factor: 'phone' }, admin: true, role: 'admin' }).firestore();
     const refOwner = doc(ownerDb, 'properties/canonical');
     const refAdmin = doc(adminDb, 'properties/canonical');
 

@@ -1,5 +1,6 @@
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
+import { requirePrivilegedMfaSession } from "./adminMfaSession";
 
 if (!admin.apps.length) admin.initializeApp();
 
@@ -49,6 +50,7 @@ function serialize(value: any): any {
 
 export const adminGetLaunchConfigurationSummary = onCall(OPTIONS, async (request) => {
   const actor = await requireCurrentFullAdmin(request);
+  await requirePrivilegedMfaSession(request.auth);
   const [healthSnap, paymentSnap] = await Promise.all([
     db.doc("system_health/admin_summaries").get(),
     db.doc("system_payment_config/current").get(),
