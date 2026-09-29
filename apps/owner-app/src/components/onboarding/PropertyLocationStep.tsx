@@ -106,6 +106,14 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
                 city: geo.city,
                 area: geo.area,
                 googlePlaceId: geo.placeId || undefined,
+                geo: {
+                    ...geo,
+                    verified: false,
+                    verifiedBy: null,
+                    verifiedAt: null,
+                    requiresGeoReview: true,
+                    dispatchReady: false,
+                },
                 submittedGeo: {
                     ...geo,
                     source: 'owner_submission',
