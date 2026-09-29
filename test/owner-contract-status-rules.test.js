@@ -68,6 +68,37 @@ describe('F-4 owner contract status is server-authored', () => {
     await assertFails(updateDoc(doc(otherDb, 'contracts/f4_contract'), { status: 'SIGNED' }));
   });
 
+  const ownerCreateBase = { ownerId: 'owner_f4', ownerUid: 'owner_f4', status: 'draft' };
+  for (const [field, value] of [
+    ['brokerId', 'broker_c'],
+    ['brokerUid', 'broker_c'],
+    ['annualContractValue', 10000000],
+    ['brokerCommissionRate', 0.08],
+    ['commissionRate', 0.08],
+    ['contractValue', 10000000],
+    ['commissionGenerated', true],
+  ]) {
+    it(`Owner cannot create a contract carrying server-authored ${field}`, async () => {
+      await assertFails(setDoc(doc(ownerDb(), 'contracts/f4_new'), { ...ownerCreateBase, [field]: value }));
+    });
+  }
+
+  it('Owner cannot create the phase4 probe contract (broker + value + rate)', async () => {
+    await assertFails(setDoc(doc(ownerDb(), 'contracts/c_x'), {
+      ...ownerCreateBase, brokerId: 'broker_c', annualContractValue: 10000000, brokerCommissionRate: 0.08,
+    }));
+  });
+
+  it('Owner can still create a plain draft contract', async () => {
+    await assertSucceeds(setDoc(doc(ownerDb(), 'contracts/f4_new'), { ...ownerCreateBase }));
+  });
+
+  it('Owner cannot create a contract as ACTIVE or with verification flags', async () => {
+    await assertFails(setDoc(doc(ownerDb(), 'contracts/f4_new'), { ...ownerCreateBase, status: 'ACTIVE' }));
+    await assertFails(setDoc(doc(ownerDb(), 'contracts/f4_new'), { ...ownerCreateBase, status: 'Active' }));
+    await assertFails(setDoc(doc(ownerDb(), 'contracts/f4_new'), { ...ownerCreateBase, paymentVerified: true }));
+  });
+
   it('Contract managers keep their existing update path', async () => {
     await seed('users/admin_f4', { role: 'admin' });
     const adminDb = testEnv.authenticatedContext('admin_f4', { admin: true, role: 'admin' }).firestore();

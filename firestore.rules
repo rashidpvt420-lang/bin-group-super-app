@@ -432,7 +432,22 @@ service cloud.firestore {
           'signatureState',
           'paymentReferenceId',
           'paymentProofUrl',
-          'paymentProofPath'
+          'paymentProofPath',
+          // Broker attribution, commission and contract value are server-authored (N-02 / F-4).
+          'brokerId',
+          'brokerUid',
+          'brokerName',
+          'brokerCode',
+          'brokerCommissionRate',
+          'commissionRate',
+          'commissionGenerated',
+          'commissionId',
+          'annualContractValue',
+          'contractValue',
+          'totalValue',
+          'activationDeposit',
+          'depositAmount',
+          'mobilizationAmount'
         ]);
     }
 
