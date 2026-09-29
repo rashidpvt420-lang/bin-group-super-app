@@ -43,7 +43,6 @@ const gymSchedule = (value: unknown): QuoteInput['gymOpeningSchedule'] => {
 
 export const ownerPortfolioQuoteInputForProperty = (
   property: PropertyData,
-  selectedAddOns: string[],
 ): QuoteInput => {
   const mosqueProfile = property.mosqueProfile || {};
   const gymProfile = property.gymProfile || {};
@@ -111,9 +110,9 @@ export const ownerPortfolioQuoteInputForProperty = (
   };
 };
 
-export const ownerPortfolioQuoteRequest = (properties: PropertyData[], selectedAddOns: string[]) => ({
+export const ownerPortfolioQuoteRequest = (properties: PropertyData[]) => ({
   properties: properties.map((property) => ({
     id: property.id,
-    input: ownerPortfolioQuoteInputForProperty(property, selectedAddOns),
+    input: ownerPortfolioQuoteInputForProperty(property),
   })),
 });
