@@ -11,8 +11,7 @@ import {
     Snackbar,
     Alert,
     Card,
-    CardContent,
-    Chip
+    CardContent
 } from '@mui/material';
 import { 
     Banknote, 
@@ -60,7 +59,7 @@ const PaymentSummaryStep: React.FC<{ onNext: () => void, onBack: () => void }> =
     const totalProperties = properties?.length || 0;
     const baseContractPrice = selectedPlan?.annualPrice || 0;
 
-    const handleGenerateManifest = async (method: 'CASH' | 'CHEQUE' | 'BANK_TRANSFER') => {
+    const handleGenerateManifest = async (method: 'CASH' | 'CHEQUE') => {
         setIsGenerating(true);
         setPaymentMethod(method);
         
@@ -250,24 +249,6 @@ const PaymentSummaryStep: React.FC<{ onNext: () => void, onBack: () => void }> =
                                             <Typography fontWeight={700}>{t('onboarding.payment.cash')}</Typography>
                                         </Box>
                                         <ChevronRight size={20} style={{ transform: isRTL ? 'rotate(180deg)' : 'none' }} />
-                                    </Button>
-
-                                    <Button 
-                                        variant="outlined" 
-                                        fullWidth 
-                                        disabled
-                                        sx={{ 
-                                            py: 2, borderRadius: 4, borderColor: 'rgba(255,255,255,0.05)', 
-                                            color: 'rgba(255,255,255,0.3)', display: 'flex', justifyContent: 'space-between',
-                                            flexDirection: isRTL ? 'row-reverse' : 'row',
-                                            '&.Mui-disabled': { borderColor: 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.3)' }
-                                        }}
-                                    >
-                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
-                                            <TrendingUp size={24} color="rgba(255,255,255,0.2)" />
-                                            <Typography fontWeight={700}>{t('onboarding.payment.bank_transfer')}</Typography>
-                                        </Box>
-                                        <Chip label={t('onboarding.payment.coming_soon')} size="small" sx={{ fontSize: '0.6rem', height: 16, bgcolor: 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.4)' }} />
                                     </Button>
 
                                     {isGenerating && (
