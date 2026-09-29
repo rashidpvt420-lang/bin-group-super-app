@@ -73,6 +73,7 @@ export interface PropertyData {
   strategy?: 'fm_only' | 'pm_only' | 'both' | 'sale' | 'rent' | 'fm';
   slaTier?: 'standard' | 'premium' | 'elite';
   paymentPlan?: 'annual' | 'quarterly' | 'monthly';
+  selectedAddOns?: string[];
   titleDeedStatus?: 'uploaded' | 'queued' | 'scanning' | 'extracted' | 'verification_pending' | 'verified' | 'mismatch' | 'manual_review_required' | 'rejected';
   mosqueProfile?: Record<string, any>;
   gymProfile?: Record<string, any>;
@@ -378,7 +379,10 @@ export const useOnboardingStore = create<OnboardingState>()(
           return;
         }
         const quoteResults: Record<string, QuoteOutput> = {};
-        for (const property of properties) quoteResults[property.id] = calculatePropertyAnnualValue(property, get().selectedAddOns || []);
+        for (const property of properties) {
+          const propertyAddOns = Array.isArray(property.selectedAddOns) ? property.selectedAddOns : (get().selectedAddOns || []);
+          quoteResults[property.id] = calculatePropertyAnnualValue(property, propertyAddOns);
+        }
         const estimatedACV = Object.values(quoteResults).reduce((total, quote) => total + Number(quote.annualTotal || 0), 0);
         const summary: PortfolioSummary = {
           totalProperties: properties.length,
