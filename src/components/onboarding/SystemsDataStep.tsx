@@ -145,10 +145,7 @@ const SystemsDataStep: React.FC<{ onNext: () => void; onBack: () => void }> = ({
   }, []);
 
   useEffect(() => {
-    const next = Array.from(new Set([
-      ...storedSelectedIds.filter((id: string) => !hiddenAddOnIds.includes(id)),
-      ...requiredStackIds,
-    ]));
+    const next = storedSelectedIds.filter((id: string) => !hiddenAddOnIds.includes(id) && !requiredStackIds.includes(id));
     const changed = next.length !== storedSelectedIds.length || next.some((id, index) => id !== storedSelectedIds[index]);
     if (changed) updateProperty(0, { selectedAddOns: next });
     else calculateSummary();
@@ -170,10 +167,9 @@ const SystemsDataStep: React.FC<{ onNext: () => void; onBack: () => void }> = ({
   };
 
   const continueNext = () => {
-    const next = Array.from(new Set([
-      ...storedSelectedIds.filter((id: string) => !hiddenAddOnIds.includes(id)),
-      ...requiredStackIds,
-    ]));
+    const next = Array.from(new Set(
+      storedSelectedIds.filter((id: string) => !hiddenAddOnIds.includes(id) && !requiredStackIds.includes(id)),
+    ));
     updateProperty(0, { selectedAddOns: next });
     calculateSummary();
     onNext();
