@@ -1,3 +1,4 @@
+import './owner-contract-status-rules.test.js';
 import './invoice-verification-rules.test.js';
 import './tenant-ticket-server-authority-rules.test.js';
 import './technician-assigned-list-security-rules.test.js';
