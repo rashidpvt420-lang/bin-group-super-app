@@ -11,7 +11,6 @@ type AddOnItem = { id: string; name: LocalText; desc: LocalText; price: number; 
 const aed = (value: number) => `AED ${value.toLocaleString()}`;
 const label = (text: LocalText, ar: boolean) => (ar ? text.ar : text.en);
 
-const BASE_REQUIRED_STACK_IDS = ['fire_safety', 'water_tank', 'hvac_pm'];
 const ELEVATOR_ADDON_ID = 'elevator_amc';
 const LEGACY_OPTIONAL_ADDON_IDS = ['waste_management'];
 const LEGACY_OPTIONAL_PRUNE_KEY = 'bin-group:onboarding:optional-addons-pruned:v1';
@@ -48,9 +47,11 @@ const isMajlisAsset = (property: any) => {
 };
 
 const getRequiredStackIds = (property: any) => {
-  const ids = [...BASE_REQUIRED_STACK_IDS];
-  const hasRealLiftScope = Number(property?.lifts || 0) > 0 || Number(property?.floors || 0) > 1;
-  if (!isMajlisAsset(property) && hasRealLiftScope) ids.push(ELEVATOR_ADDON_ID);
+  const ids: string[] = [];
+  if (property?.fireAlarm === true || property?.firePump === true) ids.push('fire_safety');
+  if (property?.tank === true) ids.push('water_tank');
+  if (property?.hvac === true || Number(property?.hvacCount || 0) > 0) ids.push('hvac_pm');
+  if (!isMajlisAsset(property) && Number(property?.lifts || 0) > 0) ids.push(ELEVATOR_ADDON_ID);
   return ids;
 };
 
@@ -114,11 +115,11 @@ const addOns: AddOnItem[] = [
 ];
 
 const SystemsDataStep: React.FC<{ onNext: () => void; onBack: () => void }> = ({ onNext, onBack }) => {
-  const { properties, propertyData, updateProperty, selectedAddOns, toggleAddOn, calculateSummary } = useOnboardingStore();
+  const { properties, propertyData, updateProperty, calculateSummary } = useOnboardingStore();
   const { isRTL, lang } = useLanguage();
   const ar = lang === 'ar';
   const activeProperty = properties[0] || propertyData || ({} as any);
-  const storedSelectedIds = Array.isArray(selectedAddOns) ? selectedAddOns : [];
+  const storedSelectedIds = Array.isArray(activeProperty.selectedAddOns) ? activeProperty.selectedAddOns : [];
   const requiredStackIds = useMemo(() => getRequiredStackIds(activeProperty), [activeProperty]);
   const hiddenAddOnIds = useMemo(() => getHiddenAddOnIds(activeProperty), [activeProperty]);
   const visibleAddOns = addOns.filter((addon) => !hiddenAddOnIds.includes(addon.id));
@@ -135,7 +136,7 @@ const SystemsDataStep: React.FC<{ onNext: () => void; onBack: () => void }> = ({
     let changed = false;
     LEGACY_OPTIONAL_ADDON_IDS.forEach((id) => {
       if (storedSelectedIds.includes(id)) {
-        toggleAddOn(id);
+        updateProperty(0, { selectedAddOns: storedSelectedIds.filter((item: string) => item !== id) });
         changed = true;
       }
     });
@@ -147,13 +148,13 @@ const SystemsDataStep: React.FC<{ onNext: () => void; onBack: () => void }> = ({
     let changed = false;
     requiredStackIds.forEach((id) => {
       if (!storedSelectedIds.includes(id)) {
-        toggleAddOn(id);
+        updateProperty(0, { selectedAddOns: [...storedSelectedIds, id] });
         changed = true;
       }
     });
     hiddenAddOnIds.forEach((id) => {
       if (storedSelectedIds.includes(id)) {
-        toggleAddOn(id);
+        updateProperty(0, { selectedAddOns: storedSelectedIds.filter((item: string) => item !== id) });
         changed = true;
       }
     });
@@ -168,16 +169,19 @@ const SystemsDataStep: React.FC<{ onNext: () => void; onBack: () => void }> = ({
   const setAddOn = (id: string, checked: boolean) => {
     if (requiredStackIds.includes(id) || hiddenAddOnIds.includes(id)) return;
     const isSelected = storedSelectedIds.includes(id);
-    if (checked !== isSelected) toggleAddOn(id);
+    if (checked !== isSelected) {
+      const next = checked ? [...storedSelectedIds, id] : storedSelectedIds.filter((item: string) => item !== id);
+      updateProperty(0, { selectedAddOns: Array.from(new Set(next)) });
+      calculateSummary();
+    }
   };
 
   const continueNext = () => {
-    requiredStackIds.forEach((id) => {
-      if (!selectedAddOns.includes(id)) toggleAddOn(id);
-    });
-    hiddenAddOnIds.forEach((id) => {
-      if (selectedAddOns.includes(id)) toggleAddOn(id);
-    });
+    const next = Array.from(new Set([
+      ...storedSelectedIds.filter((id: string) => !hiddenAddOnIds.includes(id)),
+      ...requiredStackIds,
+    ]));
+    updateProperty(0, { selectedAddOns: next });
     calculateSummary();
     onNext();
   };
