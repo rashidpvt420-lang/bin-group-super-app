@@ -182,12 +182,15 @@ service firebase.storage {
           firestore.get(/databases/(default)/documents/tenants/$(tenantId)).data.ownerUid == request.auth.uid
         ))
       );
-      allow write: if isAuth() && request.auth.uid == tenantId && isImageUpload(10);
+      // Move-in/out inspection evidence is create-only (N-07).
+      allow create: if resource == null && isAuth() && request.auth.uid == tenantId && isImageUpload(10);
+      allow update, delete: if false;
     }
 
     match /maintenanceTickets/{ticketId}/tenant/{fileName} {
       allow read: if canReadTicketEvidence(ticketId);
-      allow write: if isAuth() && ticketExists(ticketId) && (
+      allow update, delete: if false;
+      allow create: if resource == null && isAuth() && ticketExists(ticketId) && (
         ticket(ticketId).get('tenantId', null) == request.auth.uid ||
         ticket(ticketId).get('tenantUid', null) == request.auth.uid ||
         isAdmin()
@@ -196,7 +199,8 @@ service firebase.storage {
 
     match /maintenanceTickets/{ticketId}/owner/{fileName} {
       allow read: if canReadTicketEvidence(ticketId);
-      allow write: if isAuth() && ticketExists(ticketId) && (
+      allow update, delete: if false;
+      allow create: if resource == null && isAuth() && ticketExists(ticketId) && (
         ticket(ticketId).get('ownerId', null) == request.auth.uid ||
         ticket(ticketId).get('ownerUid', null) == request.auth.uid ||
         isAdmin()
@@ -205,7 +209,8 @@ service firebase.storage {
 
     match /maintenanceTickets/{ticketId}/proofs/{fileName} {
       allow read: if canReadTicketEvidence(ticketId);
-      allow write: if canWriteTicketEvidence(ticketId) && isImageUpload(10);
+      allow create: if resource == null && canWriteTicketEvidence(ticketId) && isImageUpload(10);
+      allow update, delete: if false;
     }
 
     match /maintenanceTickets/{ticketId}/proofPhotos/{fileName} {
@@ -215,23 +220,14 @@ service firebase.storage {
 
     match /maintenanceTickets/{ticketId}/completionPhotos/{fileName} {
       allow read: if canReadTicketEvidence(ticketId);
-      allow write: if canWriteTicketEvidence(ticketId) && isImageUpload(10);
-    }
-
-    match /design_requests/{userId}/{allPaths=**} {
-      allow read: if isAuth() && (request.auth.uid == userId || isAdmin() || isAuditor());
-      allow create, update: if isAuth() && request.auth.uid == userId && isImageUpload(50);
-      allow delete: if isAuth() && (request.auth.uid == userId || isAdmin());
-    }
-
-    match /ai_design_renders/{userId}/{allPaths=**} {
-      allow read: if isAuth() && (request.auth.uid == userId || isAdmin() || isAuditor());
-      allow create, update, delete: if isAdmin();
+      allow create: if resource == null && canWriteTicketEvidence(ticketId) && isImageUpload(10);
+      allow update, delete: if false;
     }
 
     match /proofs/{ticketId}/{allPaths=**} {
       allow read: if canReadTicketEvidence(ticketId);
-      allow write: if canWriteTicketEvidence(ticketId) && isImageUpload(10);
+      allow create: if resource == null && canWriteTicketEvidence(ticketId) && isImageUpload(10);
+      allow update, delete: if false;
     }
 
     match /payment-references/owners/{ownerId}/{paymentId}/{allPaths=**} {
@@ -331,12 +327,16 @@ service firebase.storage {
 
     match /evidence/{ticketId}/{fileName} {
       allow read: if canReadTicketEvidence(ticketId);
-      allow write: if canWriteTicketEvidence(ticketId) && isImageUpload(10);
+      allow create: if resource == null && canWriteTicketEvidence(ticketId) && isImageUpload(10);
+      allow update, delete: if false;
     }
 
     match /receipts/{tenantId}/{fileName} {
       allow read: if isAuth() && (request.auth.uid == tenantId || isAdmin() || isAuditor());
-      allow write: if isAuth() &&
+      // Hash-bound receipts are create-only; a replacement is a new object (N-07).
+      allow update, delete: if false;
+      allow create: if resource == null &&
+        isAuth() &&
         request.auth.uid == tenantId &&
         isDocumentUpload(10) &&
         hasTenantReceiptMetadata(tenantId);
