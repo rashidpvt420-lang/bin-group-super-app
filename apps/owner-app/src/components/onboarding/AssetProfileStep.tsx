@@ -242,6 +242,27 @@ const AssetProfileStep: React.FC<{ onNext: () => void; onBack?: () => void }> = 
                                             sx={{ '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.5)' }, '& .MuiOutlinedInput-root': { color: '#FFF' } }}
                                         />
                                     </Grid>
+                                    <Grid item xs={6}>
+                                        <TextField
+                                            fullWidth select label="Property condition" size="small"
+                                            value={activeProperty?.condition || 'Good'}
+                                            onChange={(e) => updateProperty(0, { condition: e.target.value as any })}
+                                            sx={{ '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.5)' }, '& .MuiOutlinedInput-root': { color: '#FFF' } }}
+                                        >
+                                            <MenuItem value="Mint">Mint</MenuItem>
+                                            <MenuItem value="Good">Good</MenuItem>
+                                            <MenuItem value="Fair">Fair</MenuItem>
+                                            <MenuItem value="Poor">Poor</MenuItem>
+                                        </TextField>
+                                    </Grid>
+                                    <Grid item xs={12}>
+                                        <TextField
+                                            fullWidth label="Annual rent / managed revenue (AED) — required for Property Management" type="number" size="small"
+                                            value={activeProperty?.annualRent ?? ''}
+                                            onChange={(e) => updateProperty(0, { annualRent: e.target.value === '' ? undefined : Math.max(0, Number(e.target.value)) })}
+                                            sx={{ '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.5)' }, '& .MuiOutlinedInput-root': { color: '#FFF' } }}
+                                        />
+                                    </Grid>
                                 </Grid>
 
                                 <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ flexDirection: isRTL ? 'row-reverse' : 'row' }}>
