@@ -38,21 +38,25 @@ The protected production build also writes the exact deployment commit into `VIT
 
 ---
 
-## 2. Firebase App Check (reCAPTCHA v3) — Required for Public Launch
+## 2. Firebase App Check (reCAPTCHA Enterprise) — Required for Public Launch
 
 > [!CAUTION]
 > Without App Check enforcement, Firebase APIs are exposed to automated abuse even if Firestore rules are strong.
 
+The public site (`www.bin-groups.com`) and the Admin panel share one production site key: the protected secret `FIREBASE_APPCHECK_ENTERPRISE_SITE_KEY`. Production web builds set `VITE_APP_CHECK_PROVIDER=enterprise` and write that secret into `VITE_APP_CHECK_SITE_KEY`. Do not point the public production bundle at a separate reCAPTCHA v3 key.
+
 | Secret Name | Where to Get It |
 |---|---|
-| `VITE_APP_CHECK_SITE_KEY` | 1. Go to [Google reCAPTCHA Admin Console](https://www.google.com/recaptcha/admin) <br>2. Create a new site → **reCAPTCHA v3** <br>3. Add domains: `bin-group-57c60.web.app`, `bin-group-57c60.firebaseapp.com`, and your custom domain <br>4. Copy the **Site Key** |
-| `VITE_ENABLE_FIREBASE_APPCHECK` | Set to `true` in production GitHub Secrets only |
+| `FIREBASE_APPCHECK_ENTERPRISE_SITE_KEY` | reCAPTCHA Enterprise site key already used by the Admin panel. Allowed domains must include `www.bin-groups.com`, `bin-groups.com`, `bin-group-57c60.web.app`, and `bin-group-57c60.firebaseapp.com`. |
+| `VITE_ENABLE_FIREBASE_APPCHECK` | Set to `true` in production GitHub Secrets only. The production workflow already passes this as `true`. |
 
-**After creating the reCAPTCHA site key**, also register it in Firebase:
+**Register the public web app in Firebase App Check** with that same Enterprise key:
 1. Firebase Console → **App Check** → Apps
-2. Select your web app → **reCAPTCHA v3** → paste the site key
+2. Select the public web app → **reCAPTCHA Enterprise** → use the Enterprise site key
 3. Click **Save**
-4. Enable enforcement for Firestore, Storage, and callable/HTTP Functions after the live smoke test passes
+4. Keep enforcement enabled for Firestore, Storage, and callable/HTTP Functions
+
+Production web builds must not receive `VITE_FIREBASE_APPCHECK_DEBUG_TOKEN`. CI and local E2E inject a debug token only in non-production runs.
 
 ---
 
@@ -183,8 +187,8 @@ Ensure these domains are in Firebase Console → **Authentication** → **Settin
 - [ ] Firebase project confirmed on **Blaze (pay-as-you-go)** plan, not Spark
 - [ ] All required `VITE_FIREBASE_*` keys set in GitHub Secrets
 - [ ] Protected production build contains the exact current release SHA (`VITE_RELEASE_COMMIT_SHA` / `REACT_APP_RELEASE_COMMIT_SHA`)
-- [ ] `VITE_APP_CHECK_SITE_KEY` set and registered in Firebase App Check console
-- [ ] `VITE_ENABLE_FIREBASE_APPCHECK=true` set in GitHub Secrets (production only)
+- [ ] Public web app registered in Firebase App Check with reCAPTCHA Enterprise (`FIREBASE_APPCHECK_ENTERPRISE_SITE_KEY`)
+- [ ] `VITE_ENABLE_FIREBASE_APPCHECK=true` for production web builds, with no debug token embedded
 - [ ] App Check enforcement active for Firestore, Storage, and Functions
 - [ ] Firebase Authentication **Phone** provider enabled
 - [ ] Production domains authorized for Firebase Phone Authentication and invisible reCAPTCHA
