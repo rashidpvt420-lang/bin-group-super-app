@@ -28,6 +28,7 @@ const STATUS_COLOR: Record<string, string> = {
     ACCEPTED: '#3b82f6',
     on_the_way: binThemeTokens.gold,
     EN_ROUTE: binThemeTokens.gold,
+    ON_THE_WAY: binThemeTokens.gold,
     arrived: '#8b5cf6',
     ARRIVED: '#8b5cf6',
     in_progress: '#10b981',
@@ -134,7 +135,7 @@ export default function TechnicianJobsPage() {
 
     const renderJobCard = (job: any) => {
         const statusColor = STATUS_COLOR[String(job.status)] || 'rgba(255,255,255,0.4)';
-        const isLive = ['on_the_way', 'EN_ROUTE'].includes(String(job.status));
+        const isLive = ['on_the_way', 'EN_ROUTE', 'ON_THE_WAY'].includes(String(job.status));
         const techLoc = getTechnicianLocation(job);
         const jobLoc = getTicketJobLocation(job);
         const dist = calculateDistanceKm(techLoc, jobLoc);
