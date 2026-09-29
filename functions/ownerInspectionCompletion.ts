@@ -295,6 +295,29 @@ export const adminRecordOwnerPropertyInspectionEvidence = onCall({ cors: true, e
   };
 });
 
+/**
+ * F-2: completing the portfolio re-quotes and resets the contract to PENDING_OWNER_SIGNATURE.
+ * That is only valid before the Owner's final (post-inspection) signature and before any
+ * payment evidence/approval. Re-running it later would silently regress a signed or ACTIVE record.
+ */
+export function assertPortfolioCompletionAllowed(intake: any, contract: any, payment: any) {
+  const intakeState = upper(intake?.status);
+  const contractState = upper(contract?.status || contract?.contractStatus);
+  const paymentState = upper(payment?.status || payment?.paymentStatus);
+  const finalSigned = contract?.inspectionVerified === true &&
+    (contract?.ownerSigned === true || contract?.signatureState?.ownerSigned === true);
+  if (
+    intakeState === "ACTIVE" || contractState === "ACTIVE" ||
+    ["APPROVED", "PAID", "VERIFIED", "PENDING_ADMIN_APPROVAL"].includes(paymentState) ||
+    payment?.paymentVerified === true || contract?.adminApproved === true || finalSigned
+  ) {
+    throw new HttpsError(
+      "failed-precondition",
+      `Portfolio inspection completion is locked: the Owner has already final-signed or payment has progressed (${contractState || intakeState}/${paymentState || "NO_PAYMENT_STATE"}).`,
+    );
+  }
+}
+
 export const adminCompleteOwnerPortfolioInspections = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
   const actor = await requireAdmin(request);
   const intakeId = text(request.data?.intakeId);
@@ -308,6 +331,7 @@ export const adminCompleteOwnerPortfolioInspections = onCall({ cors: true, enfor
   if (!intakeSnap.exists || !paymentSnap.exists || !contractSnap.exists) throw new HttpsError("failed-precondition", "The inspection-first onboarding package is incomplete.");
   const intake = intakeSnap.data() || {};
   if (text(intake.workflowVersion) !== WORKFLOW_VERSION) throw new HttpsError("failed-precondition", "This action is only for the five-page inspection-first workflow.");
+  assertPortfolioCompletionAllowed(intake, contractSnap.data() || {}, paymentSnap.data() || {});
   const properties = Array.isArray(intake.properties) ? intake.properties : [];
   const inspectionIds = Array.isArray(intake.inspectionIds) ? Array.from(new Set(intake.inspectionIds.map(text).filter(Boolean))) : [text(intake.inspectionId)].filter(Boolean);
   if (!properties.length || inspectionIds.length !== properties.length) throw new HttpsError("failed-precondition", `Every property requires a linked site inspection. Expected ${properties.length}, found ${inspectionIds.length}.`);
