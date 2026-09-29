@@ -83,6 +83,8 @@ test('systems page keeps optional add-ons property-scoped and derives required s
   assert.match(source, /property\?\.tank === true/);
   assert.match(source, /property\?\.hvac === true/);
   assert.match(source, /Number\(property\?\.lifts \|\| 0\) > 0/);
+  assert.match(source, /SYSTEM_DERIVED_ADDON_IDS/);
+  assert.match(source, /!SYSTEM_DERIVED_ADDON_IDS\.includes\(id\)/);
   assert.doesNotMatch(source, /BASE_REQUIRED_STACK_IDS/);
 });
 
