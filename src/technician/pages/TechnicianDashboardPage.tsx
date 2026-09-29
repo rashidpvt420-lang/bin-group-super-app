@@ -230,7 +230,7 @@ export default function TechnicianDashboardPage() {
             jobs.forEach((data: SnapshotDoc) => {
                 assigned += 1;
                 const status = String(data.status || '');
-                if (['on_the_way', 'arrived', 'in_progress', 'EN_ROUTE', 'ARRIVED', 'IN_PROGRESS'].includes(status)) inProgress += 1;
+                if (['on_the_way', 'arrived', 'in_progress', 'EN_ROUTE', 'ON_THE_WAY', 'ARRIVED', 'IN_PROGRESS'].includes(status)) inProgress += 1;
                 if (String(data.priority || '').toLowerCase() === 'emergency') emergency += 1;
                 if (data.slaBreached === true || String(data.slaStatus || '').toLowerCase().includes('risk')) slaRisk += 1;
             });

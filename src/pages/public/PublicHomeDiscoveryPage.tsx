@@ -17,7 +17,7 @@ import {
   Typography,
   alpha,
 } from '@mui/material';
-import { Bath, BedDouble, Home, MapPin, Search, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Bath, BedDouble, Home, MapPin, Search, ShieldCheck } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { functions, httpsCallable } from '../../lib/firebase';
 import { useLanguage } from '../../context/LanguageContext';
@@ -103,11 +103,35 @@ export default function PublicHomeDiscoveryPage() {
   }), [listings, queryText, propertyType, emirate, maxRent]);
 
   const startTenantJourney = () => navigate(`/login?intendedRole=tenant&returnTo=${encodeURIComponent('/tenant/homes')}`);
+  const goBack = () => {
+    if (window.history.length > 2) navigate(-1);
+    else navigate('/');
+  };
 
   return (
     <Box sx={{ minHeight: '100vh', bgcolor: '#fff', color: binThemeTokens.textPrimary, direction: isRTL ? 'rtl' : 'ltr' }}>
       <Container maxWidth="lg" sx={{ py: { xs: 4, md: 7 } }}>
         <Stack spacing={4}>
+          <Button
+            type="button"
+            data-testid="public-home-back"
+            onClick={goBack}
+            startIcon={isRTL ? <ArrowRight size={18} /> : <ArrowLeft size={18} />}
+            sx={{
+              alignSelf: 'flex-start',
+              position: 'static',
+              minHeight: 42,
+              px: 1.8,
+              borderRadius: 2,
+              bgcolor: '#FFFFFF',
+              color: '#111827',
+              border: `1px solid ${gold}`,
+              fontWeight: 950,
+              textTransform: 'none',
+            }}
+          >
+            {copy('nav.back', 'Back', 'رجوع')}
+          </Button>
           <Stack spacing={2} sx={{ maxWidth: 900 }}>
             <Typography variant="h2" sx={{ fontWeight: 950, letterSpacing: -2.2, lineHeight: 1.02 }}>{copy('public.home.title', 'Find a verified BIN home before you sign in.', 'ابحث عن منزل موثق من BIN قبل تسجيل الدخول.')}</Typography>
             <Typography variant="h6" sx={{ color: binThemeTokens.textSecondary, fontWeight: 700, lineHeight: 1.6 }}>{copy('public.home.sub', 'Browse sanitized, Admin-verified rental inventory. Public browsing never exposes owner identity, exact private property coordinates or internal operational records.', 'تصفح عقارات إيجار موثقة من المسؤول وببيانات عامة آمنة. التصفح العام لا يكشف هوية المالك أو الإحداثيات الخاصة الدقيقة أو السجلات التشغيلية الداخلية.')}</Typography>
