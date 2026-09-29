@@ -83,8 +83,15 @@ test('admin financial reporting uses only verified canonical payment transaction
   const ledger = read('apps/admin-panel/src/lib/canonicalPaymentLedger.mjs');
   const ops = read('apps/admin-panel/src/components/ops/PublicLaunchOpsPanel.tsx');
   const reports = read('functions/adminReports.ts');
+  const transactions = read('apps/admin-panel/src/pages/financials/TransactionsPage.tsx');
+  const control = read('apps/admin-panel/src/pages/ProductionControlCenter.tsx');
 
   assert.match(cfo, /collection\(db,\s*['"]payment_transactions['"]\)/);
+  assert.match(transactions, /collection\(db,\s*['"]payment_transactions['"]\)/);
+  assert.doesNotMatch(transactions, /collection\(db,\s*['"]transactions['"]\)/);
+  assert.match(transactions, /summarizeCanonicalPaymentLedger/);
+  assert.match(control, /summarizeControlCentreMoney/);
+  assert.doesNotMatch(control, /rentCollectedTotal/);
   assert.doesNotMatch(cfo, /collection\(db,\s*['"]payments['"]\)/);
   assert.match(cfo, /paymentVerified\s*===\s*true/);
   assert.match(cfo, /Not available/);
