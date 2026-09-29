@@ -1,4 +1,3 @@
-import React, { useState, useEffect } from 'react';
 import { 
     Box, Typography, Grid, Paper, CircularProgress, Alert, 
     Stack, LinearProgress, alpha, Button, Divider,
@@ -9,34 +8,13 @@ import {
     ArrowUpRight, Info, Shield, CheckCircle2,
     Calendar, Activity, Building2, TrendingDown
 } from 'lucide-react';
-import { db, collection, query, where, getDocs, onSnapshot } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
+import { useOwnerPropertyPassports } from '../utils/useOwnerPropertyPassports';
 
 export default function OwnerRoiPage() {
     const { user } = useRole();
-    const [loading, setLoading] = useState(true);
-    const [loadError, setLoadError] = useState('');
-    const [passports, setPassports] = useState<any[]>([]);
-
-    useEffect(() => {
-        if (!user?.email) return;
-        
-        const email = user.email.toLowerCase();
-        const passportQ = query(collection(db, 'propertyPassports'), where('ownerEmail', '==', email));
-        
-        const unsubscribe = onSnapshot(passportQ, (snap) => {
-            setPassports(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-            setLoadError('');
-            setLoading(false);
-        }, (error: any) => {
-            console.error('[OwnerROI] listener failed:', error);
-            setLoadError(error?.message || 'Unable to load ROI data.');
-            setLoading(false);
-        });
-
-        return () => unsubscribe();
-    }, [user?.email]);
+    const { passports, loading, error: loadError } = useOwnerPropertyPassports(user);
 
     if (loading) return (
         <Box sx={{ height: '60vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 2 }}>
