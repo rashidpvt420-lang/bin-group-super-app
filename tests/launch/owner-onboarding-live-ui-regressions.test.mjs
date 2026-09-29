@@ -64,11 +64,16 @@ test('commercial terms enforce one portfolio mode, protected quote readiness and
   assert.match(source, /disabled=\{!canConfirm\}/);
   assert.match(source, /After every site visit and the final verified Owner signature/);
   assert.match(source, /Array\.isArray\(property\.selectedAddOns\)/);
+  assert.match(source, /const portfolioAnnualTotal = allQuotes\.reduce/);
+  assert.match(source, /const portfolioMobilization = allQuotes\.reduce/);
+  assert.match(source, /const selectedPaymentAmount = allQuotes\.reduce/);
 
   const dedicated = await read('apps/owner-app/src/components/onboarding/CommercialTermsStep.tsx');
   assert.match(dedicated, /plan\.id === 'PM' \? 'pm_only' : 'both'/);
   assert.match(dedicated, /properties\.forEach\(\(_, index\) => updateProperty\(index, data\)\)/);
   assert.match(dedicated, /disabled=\{!canConfirm\}/);
+  assert.match(dedicated, /const portfolioAnnualTotal = allQuotes\.reduce/);
+  assert.match(dedicated, /const portfolioScheduledPayment = allQuotes\.reduce/);
 });
 
 test('systems page keeps optional add-ons property-scoped and derives required scopes from real systems', async () => {
