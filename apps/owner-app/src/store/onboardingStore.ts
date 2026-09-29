@@ -224,7 +224,7 @@ export interface OnboardingState {
     reset: () => void;
 }
 
-const calculatePropertyAnnualValue = (property: PropertyData, selectedAddOns: string[]): QuoteOutput => {
+const calculatePropertyAnnualValue = (property: PropertyData): QuoteOutput => {
     const propertyAddOns = Array.isArray(property.selectedAddOns) ? property.selectedAddOns : [];
     // Map internal types to Pricing Matrix types
     let assetClassId = 'standard_apartment';
@@ -449,7 +449,7 @@ export const useOnboardingStore = create<OnboardingState>()(
                 const quoteResults: Record<string, QuoteOutput> = {};
                 
                 props.forEach(p => {
-                    quoteResults[p.id] = calculatePropertyAnnualValue(p, selectedAddOns);
+                    quoteResults[p.id] = calculatePropertyAnnualValue(p);
                 });
 
                 const summary: PortfolioSummary = {
