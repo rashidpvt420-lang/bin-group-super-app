@@ -19,6 +19,7 @@ import { useLanguage } from '../../context/LanguageContext';
 import { useRole } from '../../context/RoleContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import ContractSignatureOtpControl from '../components/ContractSignatureOtpControl';
+import { formatAedMoney, mobilisationDepositFromAnnual } from '../../../functions/shared/aedMoney';
 
 type ContractScope = 'FM_ONLY' | 'PM_ONLY' | 'BOTH';
 type NoticeState = { type: 'success' | 'error' | 'info' | 'warning'; text: string };
@@ -177,13 +178,14 @@ const mobilizationOf = (contract: any) => {
     contract?.quote?.mobilizationAmount,
     contract?.payment?.amount,
     contract?.paymentAmount,
-    annual > 0 ? annual * 0.15 : 0
+    annual > 0 ? mobilisationDepositFromAnnual(annual) : 0
   );
 };
 
 const money = (value: unknown) => {
   const numeric = Number(value || 0);
-  return numeric > 0 ? `AED ${Math.round(numeric).toLocaleString()}` : 'Pending admin confirmation';
+  if (!(numeric > 0) || !Number.isFinite(numeric)) return 'Pending admin confirmation';
+  return formatAedMoney(numeric);
 };
 
 const normalizeScope = (contract: any): ContractScope => {
