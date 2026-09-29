@@ -66,7 +66,7 @@ describe('Broker KYC security rules', () => {
 
     const brokerADb = testEnv.authenticatedContext('broker_a', { role: 'broker' }).firestore();
     const brokerBDb = testEnv.authenticatedContext('broker_b', { role: 'broker' }).firestore();
-    const adminDb = testEnv.authenticatedContext('admin_user', { admin: true, role: 'admin' }).firestore();
+    const adminDb = testEnv.authenticatedContext('admin_user', { firebase: { sign_in_second_factor: 'phone' }, admin: true, role: 'admin' }).firestore();
 
     await assertSucceeds(getDoc(doc(brokerADb, 'broker_kyc_profiles/broker_a')));
     await assertFails(getDoc(doc(brokerBDb, 'broker_kyc_profiles/broker_a')));
@@ -80,7 +80,7 @@ describe('Broker KYC security rules', () => {
     await seed('broker_kyc_submission_limits/broker_a', { brokerUid: 'broker_a', count: 1 });
 
     const brokerDb = testEnv.authenticatedContext('broker_a', { role: 'broker' }).firestore();
-    const adminDb = testEnv.authenticatedContext('admin_user', { admin: true, role: 'admin' }).firestore();
+    const adminDb = testEnv.authenticatedContext('admin_user', { firebase: { sign_in_second_factor: 'phone' }, admin: true, role: 'admin' }).firestore();
 
     await assertFails(updateDoc(doc(brokerDb, 'broker_kyc_profiles/broker_a'), {
       brokerKycStatus: 'APPROVED',

@@ -3,6 +3,7 @@ import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 import * as crypto from "crypto";
 import { createBrokerCommissionForContract } from "./brokerCommissions";
+import { requirePrivilegedMfaSession } from "./adminMfaSession";
 import { assertStoredOwnerPaymentReceipt } from "./paymentReceiptEvidence";
 import { normalizeAedMoney } from "./shared/aedMoney";
 import { decideRentConfirmedAmount, rentApprovalDecision, rentRejectionDecision } from "./rentPaymentStatus";
@@ -114,6 +115,7 @@ async function hasDurableOtpSignatureEvidence(
 
 export const adminApprovePayment = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
   await requireAdmin(request.auth);
+  await requirePrivilegedMfaSession(request.auth);
 
   const paymentId = resolvePaymentId(request.data);
   if (!paymentId) throw new HttpsError("invalid-argument", "paymentId is required.");
@@ -724,6 +726,7 @@ export const adminApprovePayment = onCall({ cors: true, enforceAppCheck: true },
 
 export const adminRejectPayment = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
   await requireAdmin(request.auth);
+  await requirePrivilegedMfaSession(request.auth);
 
   const paymentId = resolvePaymentId(request.data);
   if (!paymentId) throw new HttpsError("invalid-argument", "paymentId is required.");

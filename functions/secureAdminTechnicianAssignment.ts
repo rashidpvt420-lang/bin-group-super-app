@@ -83,6 +83,7 @@ export const adminAssignTechnician = onCall(
   { cors: true, region: "europe-west3", enforceAppCheck: true },
   async (request) => {
     requireDispatcher(request.auth);
+    await requirePrivilegedMfaSession(request.auth);
     const ticketId = text(request.data?.ticketId, 160);
     const technicianId = text(request.data?.technicianId, 160);
     const requestedReassignmentReason = text(request.data?.reassignmentReason, 500);
@@ -171,3 +172,4 @@ export const adminAssignTechnician = onCall(
 );
 
 import type * as FirebaseFirestore from "firebase-admin/firestore";
+import { requirePrivilegedMfaSession } from "./adminMfaSession";

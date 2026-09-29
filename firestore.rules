@@ -89,8 +89,15 @@ service cloud.firestore {
         emailMatchesCycleFree(data.get('contactEmail', null));
     }
 
+    // N-05: Admin-tier authority requires an ID token minted with a second factor.
+    // A non-enrolled, bridged or custom-token Admin session gets no Admin rules access.
+    function hasAdminSecondFactor() {
+      return signedIn() &&
+        request.auth.token.get('firebase', {}).get('sign_in_second_factor', null) != null;
+    }
+
     function hasAdminClaim() {
-      return signedIn() && (
+      return signedIn() && hasAdminSecondFactor() && (
         (
           claimedRole() == '' &&
           (

@@ -173,6 +173,7 @@ export const adminGeneratePayrollBatch = onCall(
     { cors: true, region: "europe-west3", enforceAppCheck: true },
     async (request) => {
         requirePayrollAdmin(request.auth);
+        await requirePrivilegedMfaSession(request.auth);
         const month = safeText(request.data?.month);
         if (!/^\d{4}-\d{2}$/.test(month)) {
             throw new HttpsError("invalid-argument", "Payroll month must use YYYY-MM.");
@@ -256,6 +257,7 @@ export const adminSettlePayrollRecord = onCall(
     { cors: true, region: "europe-west3", enforceAppCheck: true },
     async (request) => {
         requirePayrollAdmin(request.auth);
+        await requirePrivilegedMfaSession(request.auth);
         const payrollId = safeText(request.data?.payrollId);
         const paymentReference = safeText(request.data?.paymentReference).slice(0, 180);
         if (!payrollId || paymentReference.length < 4) {
@@ -976,3 +978,4 @@ export const dailyHrComplianceSweep = onSchedule("every 24 hours", async () => {
 });
 
 import type * as FirebaseFirestore from "firebase-admin/firestore";
+import { requirePrivilegedMfaSession } from "./adminMfaSession";
