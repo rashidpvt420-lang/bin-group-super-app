@@ -210,6 +210,7 @@ function quoteInputForProperty(
       annualRent,
       annualRevenue,
       propertyAge: isMosque ? number(mosqueProfile.propertyAgeYears || property.age) : number(property.age),
+      condition: ["Mint", "Good", "Fair", "Poor"].includes(text(property.condition)) ? text(property.condition) as QuoteInput["condition"] : "Good",
       floors: number(property.floors),
       lifts: number(property.lifts),
       hasPool: isGym ? gymProfile.swimmingPool === true || property.pool === true : property.pool === true,
@@ -258,7 +259,10 @@ export function calculateOwnerOnboardingQuote(properties: unknown, addOns: unkno
       throw new Error(`Property ${index + 1} is missing emirate or property type.`);
     }
 
-    const { assetClassId, pricingDriver, input } = quoteInputForProperty(cleanProperty, selectedAddOns, contractMode);
+    const propertyAddOns = Array.isArray(cleanProperty.selectedAddOns)
+      ? cleanProperty.selectedAddOns.map(text).filter(Boolean)
+      : selectedAddOns;
+    const { assetClassId, pricingDriver, input } = quoteInputForProperty(cleanProperty, propertyAddOns, contractMode);
     const quote = calculateUaeQuote2026(input);
     if (!Number.isFinite(quote.annualTotal) || quote.annualTotal <= 0) {
       const reasons = quote.riskFlags.length ? quote.riskFlags.join(", ") : "automatic pricing returned no annual total";
@@ -270,6 +274,7 @@ export function calculateOwnerOnboardingQuote(properties: unknown, addOns: unkno
       contractMode,
       pricingClass: assetClassId,
       pricingDriver,
+      selectedAddOns: propertyAddOns,
       annualTotal: money(quote.annualTotal),
     };
   });
