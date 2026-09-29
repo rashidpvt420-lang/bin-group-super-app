@@ -19,7 +19,8 @@ import { useLanguage } from '../../context/LanguageContext';
 import { useRole } from '../../context/RoleContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import ContractSignatureOtpControl from '../components/ContractSignatureOtpControl';
-import { formatAedMoney, mobilisationDepositFromAnnual } from '../../../functions/shared/aedMoney';
+import { formatAedMoney } from '../../../functions/shared/aedMoney';
+import { mobilisationDepositFromAnnual } from '../../../functions/shared/mobilisationDeposit';
 
 type ContractScope = 'FM_ONLY' | 'PM_ONLY' | 'BOTH';
 type NoticeState = { type: 'success' | 'error' | 'info' | 'warning'; text: string };

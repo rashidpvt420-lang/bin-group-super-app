@@ -10,7 +10,7 @@ import {
 import { useOnboardingStore } from '../../store/onboardingStore';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { formatAED } from '../../utils/formatters';
-import { mobilisationDepositFromAnnual } from '../../../functions/shared/aedMoney';
+import { mobilisationDepositFromAnnual } from '../../../functions/shared/mobilisationDeposit';
 import { functions, httpsCallable } from '../../lib/firebase';
 import { useLanguage } from '@bin/shared';
 

@@ -11,7 +11,7 @@ import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { clearStagedFiles, getStagedFile } from '../../lib/onboardingDb';
 import { formatAED } from '../../utils/formatters';
-import { mobilisationDepositFromAnnual } from '../../../functions/shared/aedMoney';
+import { mobilisationDepositFromAnnual } from '../../../functions/shared/mobilisationDeposit';
 
 type ProofKey = 'propertyProof' | 'emiratesId' | 'passport' | 'tradeLicense' | 'tenancySupport' | 'gymSportsApproval' | 'gymInsurance' | 'gymFloorPlan';
 type ProofMeta = { name: string; size: number; type: string } | null;

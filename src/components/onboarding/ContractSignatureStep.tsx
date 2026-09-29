@@ -7,7 +7,7 @@ import { FileSignature, ScrollText, ShieldCheck } from 'lucide-react';
 import { useOnboardingStore } from '../../store/onboardingStore';
 import { useLanguage } from '@bin/shared';
 import { formatAED } from '../../utils/formatters';
-import { mobilisationDepositFromAnnual } from '../../../functions/shared/aedMoney';
+import { mobilisationDepositFromAnnual } from '../../../functions/shared/mobilisationDeposit';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { functions, httpsCallable } from '../../lib/firebase';
 
