@@ -1,7 +1,7 @@
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { defineSecret } from "firebase-functions/params";
 import * as admin from "firebase-admin";
-import { enforceAiUsageQuota } from "./aiUsageQuota";
+import { reserveAiUsageQuota, settleAiUsageQuota } from "./aiUsageQuota";
 
 if (!admin.apps.length) admin.initializeApp();
 
@@ -95,7 +95,7 @@ export const getMissionGuidanceV2 = onCall({
   secrets: [geminiKey, openAiKey],
 }, async (request) => {
   if (!request.auth?.uid) throw new HttpsError("unauthenticated", "Sign in before requesting mission guidance.");
-  const quota = await enforceAiUsageQuota(request.auth, "chat", ALLOWED_ROLES, 12);
+  const quota = await reserveAiUsageQuota(request.auth, "chat", ALLOWED_ROLES, 12);
   const context = cleanContext(request.data?.context);
   const prompt = promptFor(context, quota.role);
   const providerErrors: string[] = [];
@@ -124,6 +124,11 @@ export const getMissionGuidanceV2 = onCall({
 
   if (!guidance) guidance = fallbackGuidance(context);
   const degraded = provider === "rule-based-fallback";
+  if (provider === "gemini" || provider === "openai") {
+    await settleAiUsageQuota(quota, true);
+  } else {
+    await settleAiUsageQuota(quota, false).catch(() => undefined);
+  }
 
   await db.collection("ai_usage_events").add({
     uid: request.auth.uid,
