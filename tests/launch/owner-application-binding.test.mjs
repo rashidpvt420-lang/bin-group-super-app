@@ -3,12 +3,10 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { build } from 'esbuild';
 import path from 'node:path';
-import fs from 'node:fs';
 import { createRequire } from 'node:module';
 
 // Output inside node_modules/.cache so firebase-functions resolves from the workspace install.
 const outDir = path.resolve('node_modules/.cache/owner-application-binding-test');
-fs.mkdirSync(outDir, { recursive: true });
 const outfile = path.join(outDir, `binding-${process.pid}.cjs`);
 await build({ entryPoints: ['functions/ownerApplicationBinding.ts'], bundle: true, platform: 'node', format: 'cjs', outfile, external: ['firebase-functions', 'firebase-functions/*'], logLevel: 'silent' });
 const { decideOwnerApplicationSubmission, assertOtpApplicationBinding } = createRequire(import.meta.url)(outfile);
