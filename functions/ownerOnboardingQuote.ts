@@ -280,6 +280,7 @@ export function calculateOwnerOnboardingQuote(properties: unknown, addOns: unkno
   });
 
   const portfolioAnnualTotal = money(propertyQuotes.reduce((sum: number, quote) => sum + quote.annualTotal, 0));
+  const portfolioSelectedAddOns = Array.from(new Set(propertyQuotes.flatMap((quote) => quote.selectedAddOns)));
   if (portfolioAnnualTotal <= 0) throw new Error("Portfolio annual total must be positive.");
   const activationDeposit = money(portfolioAnnualTotal * 0.15);
   const remainingAmount = money(portfolioAnnualTotal - activationDeposit);
@@ -298,7 +299,7 @@ export function calculateOwnerOnboardingQuote(properties: unknown, addOns: unkno
     remainingAmount,
     vatAmount: 0,
     vatTreatment: "NOT_APPLIED",
-    selectedAddOns,
+    selectedAddOns: portfolioSelectedAddOns,
     propertyQuotes,
     quotedAtMs,
     expiresAtMs,
