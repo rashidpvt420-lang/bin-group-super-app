@@ -70,6 +70,7 @@ export const ownerPortfolioQuoteInputForProperty = (
   }
 
   const gymArea = Number(gymProfile.verifiedServiceAreaSqft || gymProfile.declaredServiceAreaSqft || property.sqft || 0);
+  const propertyAddOns = Array.isArray(property.selectedAddOns) ? property.selectedAddOns : selectedAddOns;
 
   return {
     assetClassId,
@@ -86,6 +87,7 @@ export const ownerPortfolioQuoteInputForProperty = (
     annualRent,
     annualRevenue,
     propertyAge: isMosque ? Number(mosqueProfile.propertyAgeYears) || property.age : property.age,
+    condition: property.condition || 'Good',
     floors: property.floors,
     lifts: property.lifts,
     hasPool: isGym ? Boolean(gymProfile.swimmingPool || property.pool) : property.pool,
@@ -96,7 +98,7 @@ export const ownerPortfolioQuoteInputForProperty = (
     hasSiraCctv: isMosque ? Boolean(property.sira || mosqueProfile.cctvInstalled || Number(mosqueProfile.cctvCameraCount) > 0) : property.sira,
     hasGenerator: property.gen,
     hasBmu: property.bmu,
-    addOns: selectedAddOns,
+    addOns: propertyAddOns,
     slaTier: property.slaTier || (isMosque ? 'premium' : 'standard'),
     paymentPlan: property.paymentPlan || 'annual',
     hasWaterTank: property.tank,
