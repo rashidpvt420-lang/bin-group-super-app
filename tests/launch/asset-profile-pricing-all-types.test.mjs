@@ -113,6 +113,24 @@ test('Property Management applies percentage once and never multiplies annual re
   assert.ok(missingRevenue.riskFlags.includes('ANNUAL_RENT_REQUIRED'));
 });
 
+test('condition selects FM maintenance band and PM tier selects management percentage deterministically', () => {
+  const { calculateUaeQuote2026 } = moduleUnderTest;
+  const fmBase = {
+    assetClassId: 'villa-std', emirate: 'Abu Dhabi', zone: 'B', contractType: 'FM_ONLY',
+    units: 1, propertyAge: 4, floors: 1, lifts: 0, slaTier: 'standard', paymentPlan: 'annual', addOns: [],
+  };
+  const good = calculateUaeQuote2026({ ...fmBase, condition: 'Good' });
+  const fair = calculateUaeQuote2026({ ...fmBase, condition: 'Fair' });
+  const poor = calculateUaeQuote2026({ ...fmBase, condition: 'Poor' });
+  assert.ok(fair.annualTotal > good.annualTotal, 'Fair condition must use the configured target FM rate');
+  assert.ok(poor.annualTotal > fair.annualTotal, 'Poor condition must use the configured maximum FM rate');
+
+  const pmBase = { ...fmBase, assetClassId: 'apt-std', contractType: 'PM_ONLY', annualRent: 100000 };
+  assert.equal(calculateUaeQuote2026({ ...pmBase, slaTier: 'standard' }).annualTotal, 5000);
+  assert.equal(calculateUaeQuote2026({ ...pmBase, slaTier: 'premium' }).annualTotal, 6000);
+  assert.equal(calculateUaeQuote2026({ ...pmBase, slaTier: 'elite' }).annualTotal, 8000);
+});
+
 test('Majlis and estate facility pricing cannot be multiplied by generic capacity', () => {
   const { calculateUaeQuote2026 } = moduleUnderTest;
   for (const assetClassId of ['government_majlis', 'private_majlis', 'estate']) {
