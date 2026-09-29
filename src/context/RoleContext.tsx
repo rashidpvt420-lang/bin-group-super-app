@@ -209,6 +209,8 @@ export function RoleProvider({ children }: { children: ReactNode }) {
     const [legalAccepted, setLegalAccepted] = useState(true);
     const [permissions, setPermissions] = useState<Record<string, boolean>>({});
     const loadingRef = useRef(loading);
+    const profileSyncInFlightRef = useRef(0);
+    const authObserverSettledRef = useRef(false);
 
     const enableNotifications = async (): Promise<boolean> => {
         const activeUser = auth.currentUser;
@@ -223,6 +225,7 @@ export function RoleProvider({ children }: { children: ReactNode }) {
     };
 
     const syncProfile = async (currentUser: User) => {
+        profileSyncInFlightRef.current += 1;
         console.log("[AUTH_DIAG] syncProfile started for:", currentUser.uid);
         try {
             const tokenPromise = currentUser.getIdTokenResult(true);
@@ -350,6 +353,7 @@ export function RoleProvider({ children }: { children: ReactNode }) {
             console.error("[ROLE-SYNC] Fatal failure:", err);
             setError("IDENTITY SYNC FAULT: " + err.message);
         } finally {
+            profileSyncInFlightRef.current = Math.max(0, profileSyncInFlightRef.current - 1);
             setLoading(false);
         }
     };
@@ -406,16 +410,28 @@ export function RoleProvider({ children }: { children: ReactNode }) {
     useEffect(() => {
         let unsubscribe: () => void = () => {};
         const timeoutId = window.setTimeout(() => {
-            if (loadingRef.current) {
-                console.warn("[AUTH_DIAG] Auth sync timeout. Releasing blocker.");
-                setLoading(false);
+            if (!loadingRef.current) return;
+            // ProtectedRoute treats loading=false and user=null as a logout.
+            // A persisted session can still be inside onAuthStateChanged or
+            // syncProfile after 8s (token race plus profile retries), so the
+            // boot timer must not open that path while either is in progress.
+            if (profileSyncInFlightRef.current > 0 || auth.currentUser) {
+                console.warn("[AUTH_DIAG] Auth sync still proving a persisted session. Holding the portal gate.");
+                return;
             }
+            if (!authObserverSettledRef.current) {
+                console.warn("[AUTH_DIAG] Auth observer has not settled. Holding the portal gate.");
+                return;
+            }
+            console.warn("[AUTH_DIAG] Auth sync timeout with no persisted session. Releasing blocker.");
+            setLoading(false);
         }, AUTH_BOOT_TIMEOUT_MS);
 
         const initAuth = async () => {
             console.log("[AUTH_DIAG] Initializing Sovereign Identity Bridge...");
             try {
                 unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+                    authObserverSettledRef.current = true;
                     console.log("[AUTH_DIAG] Auth state changed. User:", currentUser?.email || 'NULL');
                     if (currentUser) {
                         await syncProfile(currentUser);
@@ -431,6 +447,7 @@ export function RoleProvider({ children }: { children: ReactNode }) {
                     }
                     markGlobalAuthReady();
                 }, (err) => {
+                    authObserverSettledRef.current = true;
                     console.error("[AUTH_DIAG] Auth observer error:", err);
                     setError("PROTOCOL VIOLATION: " + err.message);
                     setLoading(false);
