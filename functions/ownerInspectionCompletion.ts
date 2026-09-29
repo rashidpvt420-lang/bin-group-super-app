@@ -221,7 +221,8 @@ export const adminRecordOwnerPropertyInspectionEvidence = onCall({ cors: true, e
   }
 
   const pricingVerification = verifiedPricingPayload(request.data?.pricingVerification || {}, inspection, property);
-  const gymVerification = isGymProperty(property, inspection) ? verifiedGymPayload(request.data?.gymVerification || {}) : null;
+  const verifiedIsGym = pricingVerification.propertyType === "Gym / Fitness Centre";
+  const gymVerification = verifiedIsGym ? verifiedGymPayload(request.data?.gymVerification || {}) : null;
   if (gymVerification) pricingVerification.sqft = gymVerification.verifiedServiceAreaSqft;
   const evidenceHash = crypto.createHash("sha256").update(buffer).digest("hex");
   const ownerUid = text(intake.ownerUid || intake.ownerId);
@@ -322,7 +323,7 @@ export const adminRecordOwnerPropertyInspectionEvidence = onCall({ cors: true, e
         hasBmu: pricingVerification.hasBmu,
         hasWaterTank: pricingVerification.hasWaterTank,
       },
-      gymVerificationRequired: isGymProperty(property, inspection),
+      gymVerificationRequired: verifiedIsGym,
       gymVerifiedServiceAreaSqft: gymVerification?.verifiedServiceAreaSqft || null,
       gymVerifiedComplexity: gymVerification?.verifiedComplexity || null,
     },
@@ -422,7 +423,7 @@ export const adminCompleteOwnerPortfolioInspections = onCall({ cors: true, enfor
     }
     if (pricing.annualRent !== undefined) next.annualRent = pricing.annualRent;
     if (pricing.annualRevenue !== undefined) next.annualRevenue = pricing.annualRevenue;
-    if (!isGymProperty(property, inspection)) return next;
+    if (pricing.propertyType !== "Gym / Fitness Centre") return next;
     if (upper(inspection.gymVerificationStatus) !== "VERIFIED" || !inspection.gymVerification) {
       throw new HttpsError("failed-precondition", `Gym / Fitness Centre ${propertyId} requires verified service area and complexity before the final quote can be issued.`);
     }
