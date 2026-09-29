@@ -6,6 +6,7 @@ import {
 } from '@mui/material';
 import { collection, limit, onSnapshot, orderBy, query } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
+import { formatAedLedgerMoney, summarizeCanonicalPaymentLedger } from '../../lib/canonicalPaymentLedger.mjs';
 import { binThemeTokens } from '../../theme/adminTheme';
 
 type LedgerTransaction = {
@@ -38,7 +39,7 @@ const normalize = (value: unknown) => String(value || '').trim().toUpperCase().r
 const finiteMoney = (value: unknown): number | null => {
     if (value === null || value === undefined || value === '') return null;
     const parsed = Number(value);
-    return Number.isFinite(parsed) ? parsed : null;
+    return Number.isFinite(parsed) ? Math.round(parsed * 100) / 100 : null;
 };
 
 const annualContractValue = (contract: ContractRecord): number | null => finiteMoney(
@@ -55,7 +56,7 @@ const isActiveContract = (contract: ContractRecord) => [
 ].includes(normalize(contract.status || contract.activationStatus));
 
 function moneyLabel(value: number | null) {
-    return value === null ? 'N/A' : `AED ${value.toLocaleString()}`;
+    return formatAedLedgerMoney(value);
 }
 
 export default function ProfitabilityDashboardPage() {
@@ -78,7 +79,7 @@ export default function ProfitabilityDashboardPage() {
         };
 
         const unsubTransactions = onSnapshot(
-            query(collection(db, 'transactions'), orderBy('createdAt', 'desc'), limit(500)),
+            query(collection(db, 'payment_transactions'), orderBy('createdAt', 'desc'), limit(500)),
             (snapshot) => {
                 setTransactions(snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() } as LedgerTransaction)));
                 clearSourceError('Ledger');
@@ -118,73 +119,22 @@ export default function ProfitabilityDashboardPage() {
     }, []);
 
     const financials = useMemo(() => {
-        const credits = transactions.filter((tx) => normalize(tx.type) === 'CREDIT');
-        const debits = transactions.filter((tx) => normalize(tx.type) === 'DEBIT');
-        const relevantLedgerRows = [...credits, ...debits];
-        const ledgerComplete = relevantLedgerRows.every((tx) => finiteMoney(tx.amount) !== null);
-
-        const totalRevenue = ledgerComplete
-            ? credits.reduce((sum, tx) => sum + (finiteMoney(tx.amount) as number), 0)
-            : null;
-        const expenses = ledgerComplete
-            ? debits.reduce((sum, tx) => sum + (finiteMoney(tx.amount) as number), 0)
-            : null;
-        const netProfit = totalRevenue !== null && expenses !== null ? totalRevenue - expenses : null;
-        const margin = totalRevenue !== null && netProfit !== null && totalRevenue > 0 ? (netProfit / totalRevenue) * 100 : null;
-
+        const ledger = summarizeCanonicalPaymentLedger(transactions);
         const activeContracts = contracts.filter(isActiveContract);
         const contractValues = activeContracts.map(annualContractValue).filter((value): value is number => value !== null);
         const contractValuesComplete = contractValues.length === activeContracts.length;
-        const arr = contractValuesComplete ? contractValues.reduce((sum, value) => sum + value, 0) : null;
-        const mrr = arr === null ? null : arr / 12;
-
-        const assets = new Map<string, { name: string; revenue: number; opex: number }>();
-        if (ledgerComplete) {
-            transactions.forEach((tx) => {
-                const value = finiteMoney(tx.amount);
-                if (value === null) return;
-                const key = String(tx.propertyId || tx.assetId || tx.propertyName || tx.assetName || '').trim();
-                if (!key) return;
-                const name = String(tx.propertyName || tx.assetName || tx.propertyId || tx.assetId || 'Property not recorded');
-                const row = assets.get(key) || { name, revenue: 0, opex: 0 };
-                if (normalize(tx.type) === 'CREDIT') row.revenue += value;
-                if (normalize(tx.type) === 'DEBIT') row.opex += value;
-                assets.set(key, row);
-            });
-        }
-
-        const propertyRows = [...assets.values()]
-            .sort((a, b) => (b.revenue - b.opex) - (a.revenue - a.opex))
-            .slice(0, 20);
-
-        const categories = new Map<string, number>();
-        if (ledgerComplete) {
-            debits.forEach((tx) => {
-                const value = finiteMoney(tx.amount);
-                if (value === null) return;
-                const category = String(tx.category || 'Uncategorized').trim() || 'Uncategorized';
-                categories.set(category, (categories.get(category) || 0) + value);
-            });
-        }
-        const expenseBreakdown = [...categories.entries()]
-            .map(([label, amount]) => ({ label, amount }))
-            .sort((a, b) => b.amount - a.amount)
-            .slice(0, 10);
+        const arrFils = contractValuesComplete
+            ? contractValues.reduce((sum, value) => sum + Math.round(value * 100), 0)
+            : null;
+        const arr = arrFils === null ? null : arrFils / 100;
+        const mrr = arrFils === null ? null : Math.round(arrFils / 12) / 100;
 
         return {
-            totalRevenue,
-            expenses,
-            netProfit,
-            margin,
+            ...ledger,
             arr,
             mrr,
             activeContracts: activeContracts.length,
             recordedContractValues: contractValues.length,
-            ledgerComplete,
-            propertyRows,
-            expenseBreakdown,
-            creditCount: credits.length,
-            debitCount: debits.length,
         };
     }, [contracts, transactions]);
 
@@ -214,7 +164,7 @@ export default function ProfitabilityDashboardPage() {
             {(errors.length > 0 || ledgerIncomplete || contractValuesIncomplete) && (
                 <Stack spacing={1} sx={{ mb: 4 }}>
                     {errors.map((error) => <Alert severity="error" key={error}>{error}</Alert>)}
-                    {ledgerIncomplete && <Alert severity="warning">One or more credit/debit ledger records have no valid amount. Revenue, expenses, net position and property profitability remain N/A.</Alert>}
+                    {ledgerIncomplete && <Alert severity="warning">One or more verified payment or expense records have no valid amount. Revenue, expenses, net position and property profitability remain N/A.</Alert>}
                     {contractValuesIncomplete && <Alert severity="warning">Only {financials.recordedContractValues} of {financials.activeContracts} active contracts have a recorded annual value. ARR and MRR remain N/A.</Alert>}
                 </Stack>
             )}
@@ -224,17 +174,22 @@ export default function ProfitabilityDashboardPage() {
                     <Paper sx={{ p: 4, borderRadius: 4, bgcolor: 'rgba(22, 22, 24, 0.6)', border: '1px solid rgba(255,255,255,0.05)' }}>
                         <Typography variant="caption" color="textSecondary">LEDGER REVENUE</Typography>
                         <Typography variant="h4" fontWeight="950" color="#FFF">{ledgerUnavailable ? 'N/A' : moneyLabel(financials.totalRevenue)}</Typography>
-                        <Typography variant="caption" color="textSecondary">From {financials.creditCount} credit entries</Typography>
+                        <Typography variant="caption" color="textSecondary">From {financials.creditCount} verified payments</Typography>
+                        <Typography variant="caption" color="textSecondary" sx={{ display: 'block' }}>
+                            {financials.pendingComplete
+                                ? `Pending verification: ${moneyLabel(financials.pendingAmount)} · ${financials.pendingCount}`
+                                : 'Pending verification: N/A'}
+                        </Typography>
                     </Paper>
                 </Grid>
                 <Grid item xs={12} md={3}>
                     <Paper sx={{ p: 4, borderRadius: 4, bgcolor: 'rgba(22, 22, 24, 0.6)', border: '1px solid rgba(255,255,255,0.05)' }}>
                         <Typography variant="caption" color="textSecondary">ACTIVE CONTRACT MRR / ARR</Typography>
                         <Typography variant="h4" fontWeight="950" color={binThemeTokens.gold}>
-                            {contractsUnavailable ? 'N/A' : financials.mrr === null ? 'N/A' : `AED ${financials.mrr.toLocaleString(undefined, { maximumFractionDigits: 0 })}`}
+                            {contractsUnavailable ? 'N/A' : moneyLabel(financials.mrr)}
                         </Typography>
                         <Typography variant="caption" color="textSecondary">
-                            {contractsUnavailable || financials.arr === null ? 'ARR: N/A' : `ARR: AED ${financials.arr.toLocaleString()} · ${financials.activeContracts} contracts`}
+                            {contractsUnavailable || financials.arr === null ? 'ARR: N/A' : `ARR: ${moneyLabel(financials.arr)} · ${financials.activeContracts} contracts`}
                         </Typography>
                     </Paper>
                 </Grid>
@@ -253,7 +208,9 @@ export default function ProfitabilityDashboardPage() {
                     <Paper sx={{ p: 4, borderRadius: 4, bgcolor: alpha('#ef4444', 0.05), border: '1px solid rgba(239,68,68,0.2)' }}>
                         <Typography variant="caption" sx={{ color: '#ef4444', fontWeight: 900 }}>LEDGER EXPENSES</Typography>
                         <Typography variant="h4" fontWeight="950" color="#ef4444">{ledgerUnavailable ? 'N/A' : moneyLabel(financials.expenses)}</Typography>
-                        <Typography variant="caption" sx={{ color: '#ef4444' }}>From {financials.debitCount} debit entries</Typography>
+                        <Typography variant="caption" sx={{ color: '#ef4444' }}>
+                            {financials.debitCount === 0 ? 'No expense rows in the payment ledger' : `From ${financials.debitCount} expense entries`}
+                        </Typography>
                     </Paper>
                 </Grid>
             </Grid>
@@ -284,9 +241,9 @@ export default function ProfitabilityDashboardPage() {
                                         return (
                                             <TableRow key={row.name}>
                                                 <TableCell sx={{ color: '#FFF', fontWeight: 700, borderBottom: '1px solid rgba(255,255,255,0.02)' }}>{row.name}</TableCell>
-                                                <TableCell sx={{ color: '#FFF', borderBottom: '1px solid rgba(255,255,255,0.02)' }}>AED {row.revenue.toLocaleString()}</TableCell>
-                                                <TableCell sx={{ color: 'rgba(255,255,255,0.55)', borderBottom: '1px solid rgba(255,255,255,0.02)' }}>AED {row.opex.toLocaleString()}</TableCell>
-                                                <TableCell sx={{ color: profit >= 0 ? '#10b981' : '#ef4444', fontWeight: 900, borderBottom: '1px solid rgba(255,255,255,0.02)' }} align="right">AED {profit.toLocaleString()}</TableCell>
+                                                <TableCell sx={{ color: '#FFF', borderBottom: '1px solid rgba(255,255,255,0.02)' }}>{moneyLabel(row.revenue)}</TableCell>
+                                                <TableCell sx={{ color: 'rgba(255,255,255,0.55)', borderBottom: '1px solid rgba(255,255,255,0.02)' }}>{moneyLabel(row.opex)}</TableCell>
+                                                <TableCell sx={{ color: profit >= 0 ? '#10b981' : '#ef4444', fontWeight: 900, borderBottom: '1px solid rgba(255,255,255,0.02)' }} align="right">{moneyLabel(Math.round(profit * 100) / 100)}</TableCell>
                                             </TableRow>
                                         );
                                     })}
@@ -309,7 +266,7 @@ export default function ProfitabilityDashboardPage() {
                                     <Box key={expense.label}>
                                         <Stack direction="row" justifyContent="space-between" spacing={2} sx={{ mb: 1 }}>
                                             <Typography variant="caption" color="textSecondary">{expense.label.toUpperCase()}</Typography>
-                                            <Typography variant="caption" fontWeight="900" color="#FFF">AED {expense.amount.toLocaleString()}</Typography>
+                                            <Typography variant="caption" fontWeight="900" color="#FFF">{moneyLabel(expense.amount)}</Typography>
                                         </Stack>
                                         <LinearProgress
                                             variant="determinate"
