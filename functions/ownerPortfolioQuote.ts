@@ -2,6 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import * as admin from "firebase-admin";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { calculateUaeQuote2026, type QuoteInput, type QuoteOutput } from "./pricing/calculateUaeQuote2026";
+import { omitClientVerifiedRates } from "./ownerOnboardingQuote";
 import { UAE_PRICING_MATRIX_2026 } from "./pricing/uaePricingMatrix2026";
 
 if (!admin.apps.length) admin.initializeApp();
@@ -79,7 +80,7 @@ function parseProperties(value: unknown): QuotePropertyRequest[] {
     if (!item?.input || typeof item.input !== "object" || Array.isArray(item.input)) {
       throw new HttpsError("invalid-argument", `Pricing input is required for property ${id}.`);
     }
-    return { id, input: item.input as QuoteInput };
+    return { id, input: omitClientVerifiedRates(item.input as Record<string, any>) as QuoteInput };
   });
 }
 
@@ -88,7 +89,10 @@ function calculatePortfolio(properties: QuotePropertyRequest[]): {
   portfolioAnnualTotal: number;
   mobilisationDeposit: number;
 } {
-  const propertyQuotes = properties.map(({ id, input }) => ({ propertyId: id, input, output: calculateUaeQuote2026(input) }));
+  const propertyQuotes = properties.map(({ id, input }) => {
+    const trustedInput = omitClientVerifiedRates(input as Record<string, any>) as QuoteInput;
+    return { propertyId: id, input: trustedInput, output: calculateUaeQuote2026(trustedInput) };
+  });
   const portfolioAnnualTotal = money(
     propertyQuotes.reduce((total, property) => total + Number(property.output.annualTotal || 0), 0),
     "Portfolio annual total",

@@ -32,6 +32,9 @@ export interface QuoteInput {
   gymComplexity?: 'STANDARD_DRY' | 'ENHANCED' | 'WET_RECOVERY';
   gymOpeningSchedule?: 'STANDARD_HOURS' | 'EXTENDED_HOURS' | '24_7';
   gymEquipmentCount?: number;
+  ratesVerified?: boolean;
+  verifiedMaintenanceRate?: number;
+  verifiedManagementRate?: number;
 }
 
 export interface QuoteOutput {
@@ -154,6 +157,10 @@ const VALID_GYM_COMPLEXITY = new Set(['STANDARD_DRY', 'ENHANCED', 'WET_RECOVERY'
 const VALID_GYM_OPENING_SCHEDULES = new Set(['STANDARD_HOURS', 'EXTENDED_HOURS', '24_7']);
 const QUARTERLY_BILLING_SURCHARGE = 0.03;
 const MONTHLY_BILLING_SURCHARGE = 0.06;
+const SYSTEM_DRIVEN_ADDON_IDS = new Set([
+  'fire_safety', 'water_tank', 'elevator_amc', 'hvac_pm',
+  'sira_renewal', 'facade_access', 'façade_access', 'pca_audit', 'pool_care',
+]);
 
 const ASSET_CLASS_ALIASES: Record<string, string> = {
   standard_apartment: 'apt-std', apartment: 'apt-std', residential: 'apt-std', luxury_apartment: 'apt-lux',
@@ -244,6 +251,9 @@ function sanitizeQuoteInput(input: Partial<QuoteInput> | null | undefined): Quot
     gymComplexity: safeGymComplexity(raw.gymComplexity),
     gymOpeningSchedule: safeGymOpeningSchedule(raw.gymOpeningSchedule),
     gymEquipmentCount: positiveNumber(raw.gymEquipmentCount),
+    ratesVerified: raw.ratesVerified === true,
+    verifiedMaintenanceRate: positiveNumber(raw.verifiedMaintenanceRate),
+    verifiedManagementRate: positiveNumber(raw.verifiedManagementRate),
   };
 }
 
@@ -327,7 +337,8 @@ function calculateMosqueQuote(input: QuoteInput): QuoteOutput {
   const ramadanSurge = 8500 + (safeInput.hasCentralHVAC ? 1500 : 0);
   const compliancePremium = Math.max(baseQuote * 0.03, 1500);
   const complexityPremium = (baseQuote + softServices) * 0.06;
-  const mergedAddOns = Array.from(new Set([...(safeInput.addOns || []), ...resolveMandatoryAddOns(safeInput)]));
+  const ownerOptionalAddOns = (safeInput.addOns || []).filter((id) => !SYSTEM_DRIVEN_ADDON_IDS.has(id));
+  const mergedAddOns = Array.from(new Set([...ownerOptionalAddOns, ...resolveMandatoryAddOns(safeInput)]));
   const addOnTotal = calculateAddOnAnnualValue(mergedAddOns, { ...safeInput, units: 1 });
   const subtotal = baseQuote + softServices + wuduCleaning + ramadanSurge + compliancePremium + complexityPremium + addOnTotal;
   const annualTotal = subtotal * slaMultiplier(safeInput.slaTier) * (1 + planSurcharge(safeInput.paymentPlan));
@@ -356,7 +367,19 @@ export function calculateUaeQuote2026(input: Partial<QuoteInput> | null | undefi
   const pricingExplanation: string[] = [];
   const riskFlags: string[] = [];
   const managedRevenue = safeInput.annualRent || safeInput.annualRevenue || 0;
-  const managementRate = positiveNumber(assetClass.managementRange.min);
+  const managementRateMin = positiveNumber(assetClass.managementRange.min);
+  const managementRateMax = positiveNumber(assetClass.managementRange.max, managementRateMin);
+  let managementRate = managementRateMin;
+  if (safeInput.ratesVerified && (safeInput.contractType === 'PM_ONLY' || safeInput.contractType === 'BOTH')) {
+    const verifiedRate = positiveNumber(safeInput.verifiedManagementRate);
+    if (managementRateMin <= 0 || managementRateMax <= 0) {
+      return zeroQuote(`${assetClass.label} does not support verified Property Management pricing.`, safeInput.slaTier, ['PM_NOT_SUPPORTED']);
+    }
+    if (verifiedRate < managementRateMin || verifiedRate > managementRateMax) {
+      return zeroQuote(`Verified Property Management rate must be between ${managementRateMin}% and ${managementRateMax}% for ${assetClass.label}.`, safeInput.slaTier, ['VERIFIED_PM_RATE_OUT_OF_RANGE']);
+    }
+    managementRate = verifiedRate;
+  }
 
   // Property Management is a percentage of actual annual rent/revenue. It must never be multiplied by sqft/units/beds.
   if (safeInput.contractType === 'PM_ONLY') {
@@ -364,7 +387,7 @@ export function calculateUaeQuote2026(input: Partial<QuoteInput> | null | undefi
     if (managedRevenue <= 0) return zeroQuote('Annual rent / managed revenue is required for Property Management pricing; no placeholder revenue is assumed.', safeInput.slaTier, ['ANNUAL_RENT_REQUIRED']);
     const baseQuote = managedRevenue * (managementRate / 100);
     const annualTotal = baseQuote * (1 + planSurcharge(safeInput.paymentPlan));
-    pricingExplanation.push(`${managementRate}% property-management fee applied once to AED ${Math.round(managedRevenue)} annual rent / managed revenue.`);
+    pricingExplanation.push(`${safeInput.ratesVerified ? 'Admin-verified' : 'Pre-visit baseline'} ${managementRate}% property-management fee applied once to AED ${Math.round(managedRevenue)} annual rent / managed revenue.`);
     pricingExplanation.push('No technical FM add-ons, sqft multiplier, unit multiplier, age premium or regional premium is applied to PM-only pricing.');
     addPaymentExplanation(safeInput.paymentPlan, pricingExplanation);
     return {
@@ -374,10 +397,20 @@ export function calculateUaeQuote2026(input: Partial<QuoteInput> | null | undefi
     };
   }
 
-  let baseRate = positiveNumber(assetClass.maintenanceRange.min);
+  const maintenanceRateMin = positiveNumber(assetClass.maintenanceRange.min);
+  const maintenanceRateMax = positiveNumber(assetClass.maintenanceRange.max, maintenanceRateMin);
+  let baseRate = maintenanceRateMin;
+  if (safeInput.ratesVerified) {
+    const verifiedRate = positiveNumber(safeInput.verifiedMaintenanceRate);
+    if (verifiedRate < maintenanceRateMin || verifiedRate > maintenanceRateMax) {
+      return zeroQuote(`Verified Maintenance rate must be between AED ${maintenanceRateMin} and AED ${maintenanceRateMax} per configured pricing unit for ${assetClass.label}.`, safeInput.slaTier, ['VERIFIED_FM_RATE_OUT_OF_RANGE']);
+    }
+    baseRate = verifiedRate;
+    pricingExplanation.push(`Admin-verified Maintenance rate of AED ${verifiedRate} per configured pricing unit applied after site inspection.`);
+  }
   if (assetId === 'gym-fitness-centre') {
-    if (safeInput.gymComplexity === 'WET_RECOVERY') baseRate = positiveNumber(assetClass.maintenanceRange.max, baseRate);
-    else if (safeInput.gymComplexity === 'ENHANCED') baseRate = positiveNumber(assetClass.maintenanceRange.target, baseRate);
+    if (!safeInput.ratesVerified && safeInput.gymComplexity === 'WET_RECOVERY') baseRate = positiveNumber(assetClass.maintenanceRange.max, baseRate);
+    else if (!safeInput.ratesVerified && safeInput.gymComplexity === 'ENHANCED') baseRate = positiveNumber(assetClass.maintenanceRange.target, baseRate);
     pricingExplanation.push(`Gym ${safeInput.gymComplexity} BIN-configured service-rate band selected; this is not a statutory UAE tariff.`);
     pricingExplanation.push('Gym member count, licensed capacity and equipment count are scope information only and do not multiply the property price.');
     if (safeInput.gymOpeningSchedule === '24_7') pricingExplanation.push('24/7 operation is recorded for visit/SLA verification; no occupancy multiplier is applied automatically.');
@@ -446,7 +479,8 @@ export function calculateUaeQuote2026(input: Partial<QuoteInput> | null | undefi
   const appliedSlaMultiplier = slaMultiplier(safeInput.slaTier);
   if (appliedSlaMultiplier > 1) pricingExplanation.push(`${safeInput.slaTier.toUpperCase()} service-level factor ${appliedSlaMultiplier}x applied to technical FM.`);
 
-  const mergedAddOns = Array.from(new Set([...(safeInput.addOns || []), ...resolveMandatoryAddOns(safeInput)]));
+  const ownerOptionalAddOns = (safeInput.addOns || []).filter((id) => !SYSTEM_DRIVEN_ADDON_IDS.has(id));
+  const mergedAddOns = Array.from(new Set([...ownerOptionalAddOns, ...resolveMandatoryAddOns(safeInput)]));
   const addOnDriver = assetClass.pricingUnit === 'facility' ? { ...safeInput, units: 1, offices: 0, shops: 0 } : safeInput;
   const addOnTotal = calculateAddOnAnnualValue(mergedAddOns, addOnDriver);
   const technicalSubtotal = (emirateAdjustedQuote * ageMultiplier * appliedSlaMultiplier) + complexityPremium + addOnTotal;
@@ -455,7 +489,7 @@ export function calculateUaeQuote2026(input: Partial<QuoteInput> | null | undefi
   if (safeInput.contractType === 'BOTH' && managementRate > 0) {
     if (managedRevenue <= 0) return zeroQuote('Annual rent / managed revenue is required for a combined Maintenance + Property Management quote; no placeholder revenue is assumed.', safeInput.slaTier, ['ANNUAL_RENT_REQUIRED']);
     managementFee = managedRevenue * (managementRate / 100);
-    pricingExplanation.push(`${managementRate}% property-management fee (AED ${Math.round(managementFee)}) added once from verified annual rent / managed revenue.`);
+    pricingExplanation.push(`${safeInput.ratesVerified ? 'Admin-verified' : 'Pre-visit baseline'} ${managementRate}% property-management fee (AED ${Math.round(managementFee)}) added once from ${safeInput.ratesVerified ? 'Admin-verified' : 'Owner-declared'} annual rent / managed revenue.`);
   }
 
   const subtotal = technicalSubtotal + managementFee;
