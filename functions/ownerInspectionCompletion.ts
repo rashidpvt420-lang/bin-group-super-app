@@ -84,6 +84,10 @@ function verifiedPricingPayload(value: any, inspection: any, property: any) {
     if (!Number.isFinite(parsed) || parsed < 0 || parsed > max) throw new HttpsError("invalid-argument", `${label} is outside the accepted verification range.`);
     return Math.round(parsed * 100) / 100;
   };
+  const requiredBoolean = (raw: unknown, label: string) => {
+    if (typeof raw !== "boolean") throw new HttpsError("invalid-argument", `${label} must be explicitly verified as yes or no.`);
+    return raw;
+  };
   const contractMode = text(property?.strategy || property?.serviceModel || property?.contractMode || property?.contractType || declared.strategy).toLowerCase();
   const pmInScope = ["pm", "pm_only", "rent", "property_management", "both", "hybrid", "combined", "total_care", "total-care"].includes(contractMode);
   const verified: Record<string, any> = {
@@ -91,12 +95,26 @@ function verifiedPricingPayload(value: any, inspection: any, property: any) {
     pricingDriver: driver,
     propertyType: text(property?.propertyType || inspection?.propertyType),
     propertyAge: nonNegative(value?.propertyAge ?? declared.age ?? property?.age, "Property age", 300),
+    condition: text(value?.condition || declared.condition || property?.condition || "Good"),
     emirate: text(value?.emirate || declared.emirate || property?.emirate),
     zone: text(value?.zone || declared.zone || property?.zone).toUpperCase(),
-    slaTier: text(value?.slaTier || declared.slaTier || property?.slaTier).toLowerCase(),
-    paymentPlan: text(value?.paymentPlan || declared.paymentPlan || property?.paymentPlan).toLowerCase(),
+    slaTier: text(declared.slaTier || property?.slaTier || "standard").toLowerCase(),
+    paymentPlan: text(declared.paymentPlan || property?.paymentPlan || "annual").toLowerCase(),
+    floors: nonNegative(value?.floors, "Verified floor count", 500),
+    lifts: nonNegative(value?.lifts, "Verified lift count", 500),
+    hvacCount: nonNegative(value?.hvacCount, "Verified HVAC unit count", 100000),
+    hasPool: requiredBoolean(value?.hasPool, "Swimming pool"),
+    hasCentralHVAC: requiredBoolean(value?.hasCentralHVAC, "Central HVAC"),
+    hasDistrictCooling: requiredBoolean(value?.hasDistrictCooling, "District cooling"),
+    hasCivilDefenseSystem: requiredBoolean(value?.hasCivilDefenseSystem, "Fire / Civil Defense system"),
+    hasSiraCctv: requiredBoolean(value?.hasSiraCctv, "SIRA / CCTV"),
+    hasGenerator: requiredBoolean(value?.hasGenerator, "Generator"),
+    hasBmu: requiredBoolean(value?.hasBmu, "BMU / facade access"),
+    hasWaterTank: requiredBoolean(value?.hasWaterTank, "Water tank"),
   };
   if (!verified.emirate) throw new HttpsError("invalid-argument", "Admin-verified emirate is required.");
+  if (!["A", "B", "C"].includes(verified.zone)) throw new HttpsError("invalid-argument", "Admin-verified pricing zone must be A, B, or C.");
+  if (!["Mint", "Good", "Fair", "Poor"].includes(verified.condition)) throw new HttpsError("invalid-argument", "Admin-verified property condition is invalid.");
   if (driver === "unit") verified.units = requiredPositive(value?.units, "Verified unit count", 1_000_000);
   if (driver === "sqft") verified.sqft = requiredPositive(value?.sqft, "Verified service area", 100_000_000);
   if (driver === "bed") verified.beds = requiredPositive(value?.beds, "Verified bed count", 1_000_000);
@@ -276,6 +294,21 @@ export const adminRecordOwnerPropertyInspectionEvidence = onCall({ cors: true, e
       verifiedBeds: pricingVerification.beds || null,
       verifiedAnnualRent: pricingVerification.annualRent || null,
       verifiedAnnualRevenue: pricingVerification.annualRevenue || null,
+      verifiedCondition: pricingVerification.condition || null,
+      verifiedZone: pricingVerification.zone || null,
+      verifiedFloors: pricingVerification.floors ?? null,
+      verifiedLifts: pricingVerification.lifts ?? null,
+      verifiedHvacCount: pricingVerification.hvacCount ?? null,
+      verifiedTechnicalSystems: {
+        hasPool: pricingVerification.hasPool,
+        hasCentralHVAC: pricingVerification.hasCentralHVAC,
+        hasDistrictCooling: pricingVerification.hasDistrictCooling,
+        hasCivilDefenseSystem: pricingVerification.hasCivilDefenseSystem,
+        hasSiraCctv: pricingVerification.hasSiraCctv,
+        hasGenerator: pricingVerification.hasGenerator,
+        hasBmu: pricingVerification.hasBmu,
+        hasWaterTank: pricingVerification.hasWaterTank,
+      },
       gymVerificationRequired: isGymProperty(property, inspection),
       gymVerifiedServiceAreaSqft: gymVerification?.verifiedServiceAreaSqft || null,
       gymVerifiedComplexity: gymVerification?.verifiedComplexity || null,
@@ -340,6 +373,19 @@ export const adminCompleteOwnerPortfolioInspections = onCall({ cors: true, enfor
       emirate: pricing.emirate,
       zone: pricing.zone || property.zone,
       age: pricing.propertyAge,
+      condition: pricing.condition,
+      floors: pricing.floors,
+      lifts: pricing.lifts,
+      hvacCount: pricing.hvacCount,
+      pool: pricing.hasPool,
+      hvac: pricing.hasCentralHVAC,
+      districtCooling: pricing.hasDistrictCooling,
+      fireAlarm: pricing.hasCivilDefenseSystem,
+      firePump: pricing.hasCivilDefenseSystem,
+      sira: pricing.hasSiraCctv,
+      gen: pricing.hasGenerator,
+      bmu: pricing.hasBmu,
+      tank: pricing.hasWaterTank,
       slaTier: pricing.slaTier || property.slaTier,
       paymentPlan: pricing.paymentPlan || property.paymentPlan,
       pricingVerificationSource: "ADMIN_SITE_VISIT",
