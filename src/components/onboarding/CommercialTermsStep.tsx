@@ -188,6 +188,8 @@ const CommercialTermsStep: React.FC<{ onNext: () => void; onBack: () => void }> 
     const selectedPaymentPlan = property.paymentPlan || 'annual';
     const selectedSlaTier = property.slaTier || 'standard';
     const isAnnualPayment = selectedPaymentPlan === 'annual';
+    const portfolioQuoteRows = Object.values(portfolioSummary.quoteResults || {});
+    const portfolioAnnualTotal = Number(portfolioSummary.estimatedACV || 0);
     const selectedPaymentAmount = selectedPaymentPlan === 'monthly'
         ? portfolioQuoteRows.reduce((sum, row) => sum + Number(row.monthlyPayment || 0), 0)
         : selectedPaymentPlan === 'quarterly'
@@ -199,8 +201,6 @@ const CommercialTermsStep: React.FC<{ onNext: () => void; onBack: () => void }> 
     const selectedSystems = Object.entries(systemLabels).filter(([key]) => key === 'lifts' ? Number(property.lifts || 0) > 0 : Boolean(property[key])).map(([key, value]) => key === 'lifts' ? `${tx(value, ar)} (${property.lifts || 1})` : tx(value, ar));
     const portfolioAddOnIds = Array.from(new Set(properties.flatMap((entry) => Array.isArray(entry.selectedAddOns) ? entry.selectedAddOns : [])));
     const selectedAddOnNames = portfolioAddOnIds.map((id) => addOnLabels[id] ? tx(addOnLabels[id], ar) : id.replace(/_/g, ' '));
-    const portfolioQuoteRows = Object.values(portfolioSummary.quoteResults || {});
-    const portfolioAnnualTotal = Number(portfolioSummary.estimatedACV || 0);
     const pmRevenueMissing = (selectedStrategy === 'pm_only' || selectedStrategy === 'both')
         && properties.some((entry) => !(Number(entry.annualRent || entry.annualRevenue || 0) > 0));
     const quoteBlocked = portfolioAnnualTotal <= 0 || portfolioQuoteRows.some((row) => Number(row.annualTotal || 0) <= 0 || (row.riskFlags || []).includes('ANNUAL_RENT_REQUIRED'));
