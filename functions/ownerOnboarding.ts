@@ -1,6 +1,7 @@
 import { FieldValue } from "firebase-admin/firestore";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
+import { assertApplicationRecordsOwnedBy, assertNewApplicationIdAllowed } from "./ownerApplicationBinding";
 
 if (!admin.apps.length) {
   admin.initializeApp();
@@ -76,7 +77,10 @@ async function writeOwnerProfile(uid: string, email: string, fullName: string, m
   batch.set(ownerRef, { ...ownerProfile, ownerUid: uid, ownerEmail: email }, { merge: true });
 
   if (intakeId) {
-    batch.set(db.collection("intake_submissions").doc(intakeId), {
+    // F-1: never rebind another Owner's application. New references must be UUIDs or caller-scoped.
+    const intakeRef = db.collection("intake_submissions").doc(intakeId);
+    const intakeSnap = await intakeRef.get();
+    const intakeBinding = {
       ownerUid: uid,
       ownerEmail: email,
       accountCreated: true,
@@ -84,7 +88,14 @@ async function writeOwnerProfile(uid: string, email: string, fullName: string, m
       accountCreatedAt: now,
       workflowVersion: "OWNER_FIVE_PAGE_INSPECTION_FIRST_V1",
       updatedAt: now
-    }, { merge: true });
+    };
+    if (intakeSnap.exists) {
+      assertApplicationRecordsOwnedBy(uid, { intake: intakeSnap.data() || {} });
+      batch.set(intakeRef, intakeBinding, { merge: true });
+    } else {
+      assertNewApplicationIdAllowed(intakeId, uid);
+      batch.create(intakeRef, intakeBinding);
+    }
   }
 
   batch.set(db.collection("audit_logs").doc(), {

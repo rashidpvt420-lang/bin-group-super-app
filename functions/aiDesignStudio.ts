@@ -338,9 +338,8 @@ export const submitAIDesignRequest = onCall({
   secrets: [openAiKey, imageGenerationKey],
 }, async (request) => {
   if (!request.auth?.uid) throw new HttpsError("unauthenticated", "Sign in before submitting an AI design request.");
-  const quota = await reserveAiUsageQuota(request.auth, "design", PUBLIC_DESIGN_ROLES, 3);
   const uid = request.auth.uid;
-  const role = cleanText(quota.role || request.auth.token?.role).toLowerCase();
+  const role = cleanText(request.auth.token?.role || request.auth.token?.userRole || request.auth.token?.primaryRole).toLowerCase();
   const email = cleanText(request.auth.token?.email).toLowerCase();
   const payload = request.data || {};
   const requestId = cleanRequestId(payload.requestId);
@@ -387,6 +386,7 @@ export const submitAIDesignRequest = onCall({
     ? cleanText(property.ownerId || property.ownerUid || unit.ownerId || unit.ownerUid, "", 160)
     : uid;
   if (!ownerId) throw new HttpsError("failed-precondition", "The canonical property owner could not be resolved.");
+  const quota = await reserveAiUsageQuota(request.auth, "design", PUBLIC_DESIGN_ROLES, 3);
   const ownerEmail = role === "tenant"
     ? cleanText(property.ownerEmail || unit.ownerEmail).toLowerCase() || null
     : email || null;

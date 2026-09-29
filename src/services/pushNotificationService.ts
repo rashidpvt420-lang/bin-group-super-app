@@ -1,9 +1,6 @@
 import { auth, functions, getSafeMessaging, getToken, httpsCallable, onMessage } from '../lib/firebase';
 
-const readEnv = (key: string): string => {
-  const metaEnv = (import.meta as unknown as { env?: Record<string, string | undefined> }).env;
-  return metaEnv?.[key] || '';
-};
+const readEnv = (value: string | undefined): string => String(value || '');
 
 const PUSH_ENABLED_ROLES = new Set([
   'tenant',
@@ -27,8 +24,8 @@ const PUSH_ENABLED_ROLES = new Set([
 ]);
 
 const getVapidKey = () =>
-  readEnv('VITE_FIREBASE_VAPID_KEY') ||
-  readEnv('REACT_APP_FIREBASE_VAPID_KEY');
+  readEnv(import.meta.env.VITE_FIREBASE_VAPID_KEY) ||
+  readEnv(import.meta.env.REACT_APP_FIREBASE_VAPID_KEY);
 
 const PUSH_REGISTRATION_ATTEMPTS = 4;
 const PUSH_REGISTRATION_BASE_DELAY_MS = 1_000;
