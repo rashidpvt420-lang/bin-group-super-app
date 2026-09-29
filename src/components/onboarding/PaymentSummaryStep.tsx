@@ -10,6 +10,7 @@ import {
 import { useOnboardingStore } from '../../store/onboardingStore';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { formatAED } from '../../utils/formatters';
+import { mobilisationDepositFromAnnual } from '../../../functions/shared/mobilisationDeposit';
 import { functions, httpsCallable } from '../../lib/firebase';
 import { useLanguage } from '@bin/shared';
 
@@ -125,7 +126,7 @@ const PaymentSummaryStep: React.FC<{ onNext: () => void; onBack: () => void }> =
   }, [properties, selectedAddOns, valuationResult?.serverQuote, lang, setPaymentManifest, setPaymentMethod]);
 
   const annualTotal = Number(canonicalQuote?.annualContractValue || valuationResult?.serverQuote?.portfolioAnnualTotal || portfolioSummary.estimatedACV || 0);
-  const activationDeposit = Number(canonicalQuote?.activationDeposit || Math.round(annualTotal * 0.15));
+  const activationDeposit = Number(canonicalQuote?.activationDeposit || mobilisationDepositFromAnnual(annualTotal));
   const totalProperties = properties.length;
   const hasValidAmount = annualTotal > 0 && activationDeposit > 0 && Boolean(canonicalQuote?.quoteHash);
   const approvedMethods = useMemo(() => new Set<PaymentMethod>(configuration?.approvedMethods || []), [configuration?.approvedMethods]);

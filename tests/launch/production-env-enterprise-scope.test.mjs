@@ -66,6 +66,17 @@ test('exact Firebase production validation job may compile with a non-deployable
       adminEnvironment,
       new RegExp(`^REACT_APP_APP_CHECK_SITE_KEY=${VALIDATION_ONLY_ENTERPRISE_SITE_KEY}$`, 'm'),
     );
+    const publicEnvironment = readFileSync(
+      path.join(execution.workingDirectory, '.env.production'),
+      'utf8',
+    );
+    assert.match(publicEnvironment, /^VITE_APP_CHECK_PROVIDER=enterprise$/m);
+    assert.match(
+      publicEnvironment,
+      new RegExp(`^VITE_APP_CHECK_SITE_KEY=${VALIDATION_ONLY_ENTERPRISE_SITE_KEY}$`, 'm'),
+    );
+    assert.doesNotMatch(publicEnvironment, /public-app-check-site-key-for-test/);
+    assert.doesNotMatch(publicEnvironment, /FIREBASE_APPCHECK_DEBUG_TOKEN/);
     const githubEnvironment = readFileSync(
       path.join(execution.workingDirectory, 'github-env'),
       'utf8',
@@ -121,7 +132,42 @@ test('production deployment writes only the supplied protected Enterprise key', 
       new RegExp(`^REACT_APP_APP_CHECK_SITE_KEY=${protectedEnterpriseKey}$`, 'm'),
     );
     assert.doesNotMatch(adminEnvironment, new RegExp(VALIDATION_ONLY_ENTERPRISE_SITE_KEY));
+    const publicEnvironment = readFileSync(
+      path.join(execution.workingDirectory, '.env.production'),
+      'utf8',
+    );
+    assert.match(publicEnvironment, /^VITE_APP_CHECK_PROVIDER=enterprise$/m);
+    assert.match(
+      publicEnvironment,
+      new RegExp(`^VITE_APP_CHECK_SITE_KEY=${protectedEnterpriseKey}$`, 'm'),
+    );
+    assert.doesNotMatch(publicEnvironment, /public-app-check-site-key-for-test/);
+    assert.doesNotMatch(publicEnvironment, /FIREBASE_APPCHECK_DEBUG_TOKEN/);
     assert.match(execution.result.stdout, /production environment files created/);
+  } finally {
+    execution.cleanup();
+  }
+});
+
+test('production env files never copy an App Check debug token', () => {
+  const execution = runWriter({
+    GITHUB_ACTIONS: 'true',
+    GITHUB_WORKFLOW: 'Firebase Production Deploy',
+    GITHUB_JOB: 'deploy-firebase-production-stack',
+    DEPLOYMENT_ENVIRONMENT: 'production',
+    FIREBASE_APPCHECK_ENTERPRISE_SITE_KEY: 'enterprise-site-key-from-protected-environment',
+    VITE_FIREBASE_APPCHECK_DEBUG_TOKEN: '123e4567-e89b-42d3-a456-426614174000',
+    FIREBASE_APPCHECK_DEBUG_TOKEN: '123e4567-e89b-42d3-a456-426614174000',
+  });
+
+  try {
+    assert.equal(execution.result.status, 0, execution.result.stderr);
+    for (const relativePath of ['.env.production', '.env.local', 'apps/admin-panel/.env.production', 'apps/admin-panel/.env.local']) {
+      const contents = readFileSync(path.join(execution.workingDirectory, relativePath), 'utf8');
+      assert.doesNotMatch(contents, /FIREBASE_APPCHECK_DEBUG_TOKEN/);
+      assert.doesNotMatch(contents, /123e4567-e89b-42d3-a456-426614174000/);
+    }
+    assert.doesNotMatch(`${execution.result.stdout}\n${execution.result.stderr}`, /123e4567-e89b-42d3-a456-426614174000/);
   } finally {
     execution.cleanup();
   }

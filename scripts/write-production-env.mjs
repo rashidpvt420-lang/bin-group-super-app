@@ -25,7 +25,6 @@ const enterpriseSiteKey = useValidationOnlyEnterpriseSiteKey
   : rawEnterpriseSiteKey;
 
 const required = [
-  'VITE_APP_CHECK_SITE_KEY',
   'VITE_FIREBASE_API_KEY',
   'VITE_FIREBASE_APP_ID',
   'VITE_FIREBASE_MESSAGING_SENDER_ID',
@@ -67,7 +66,7 @@ if (useValidationOnlyEnterpriseSiteKey) {
   if (githubEnvironmentPath) {
     appendFileSync(
       githubEnvironmentPath,
-      `REACT_APP_APP_CHECK_SITE_KEY=${VALIDATION_ONLY_ENTERPRISE_SITE_KEY}\n`,
+      `VITE_APP_CHECK_PROVIDER=enterprise\nVITE_APP_CHECK_SITE_KEY=${VALIDATION_ONLY_ENTERPRISE_SITE_KEY}\nREACT_APP_APP_CHECK_SITE_KEY=${VALIDATION_ONLY_ENTERPRISE_SITE_KEY}\n`,
       { mode: 0o600 },
     );
   }
@@ -75,7 +74,8 @@ if (useValidationOnlyEnterpriseSiteKey) {
 
 const rootLines = [
   ['VITE_GOOGLE_MAPS_API_KEY', process.env.VITE_GOOGLE_MAPS_API_KEY || ''],
-  ['VITE_APP_CHECK_SITE_KEY', process.env.VITE_APP_CHECK_SITE_KEY],
+  ['VITE_APP_CHECK_PROVIDER', 'enterprise'],
+  ['VITE_APP_CHECK_SITE_KEY', enterpriseSiteKey],
   ['VITE_ENABLE_FIREBASE_APPCHECK', 'true'],
   ['VITE_ENABLE_HR_MODULE', 'true'],
   ['VITE_FIREBASE_API_KEY', process.env.VITE_FIREBASE_API_KEY],
@@ -112,5 +112,5 @@ copyFileSync('apps/admin-panel/.env.production', 'apps/admin-panel/.env.local');
 console.log(
   useValidationOnlyEnterpriseSiteKey
     ? '[production-env] validation-only environment files created; no deployable Admin Enterprise App Check key was written'
-    : '[production-env] production environment files created with public App Check, Admin Enterprise App Check, HR, canonical Admin Firebase identity and exact release SHA enabled',
+    : '[production-env] production environment files created with public and Admin Enterprise App Check, HR, canonical Admin Firebase identity and exact release SHA enabled',
 );

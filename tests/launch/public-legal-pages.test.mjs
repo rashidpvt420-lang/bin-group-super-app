@@ -1,0 +1,31 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+
+const read = (path) => readFile(path, 'utf8');
+
+test('public privacy and terms routes serve the reviewed static legal documents', async () => {
+  const [app, redirect, privacy, terms] = await Promise.all([
+    read('src/App.tsx'),
+    read('src/pages/public/LegalRedirect.tsx'),
+    read('public/privacy-policy.html'),
+    read('public/terms-of-service.html'),
+  ]);
+
+  assert.match(app, /path="\/privacy" element=\{<LegalRedirect to="\/privacy-policy\.html" \/>\}/);
+  assert.match(app, /path="\/privacy-policy" element=\{<LegalRedirect to="\/privacy-policy\.html" \/>\}/);
+  assert.match(app, /path="\/terms" element=\{<LegalRedirect to="\/terms-of-service\.html" \/>\}/);
+  assert.match(app, /path="\/terms-of-service" element=\{<LegalRedirect to="\/terms-of-service\.html" \/>\}/);
+  assert.doesNotMatch(app, /element=\{<PrivacyPage/);
+  assert.doesNotMatch(app, /element=\{<TermsPage/);
+
+  assert.match(redirect, /window\.location\.replace\('\/privacy-policy\.html'\)/);
+  assert.match(redirect, /window\.location\.replace\('\/terms-of-service\.html'\)/);
+
+  assert.match(privacy, /<h1>Privacy Policy<\/h1>/);
+  assert.match(privacy, /All Kind Building Projects Contracting L\.L\.C S\.P\.C/);
+  assert.doesNotMatch(privacy, />Title<|>Desc<|>Contact Info</);
+  assert.match(terms, /<h1>Terms of Service<\/h1>/);
+  assert.match(terms, /United Arab Emirates/);
+  assert.doesNotMatch(terms, />Title<|>Desc<|>Contact Info</);
+});
