@@ -86,6 +86,11 @@ function verifiedPricingPayload(value: any, inspection: any, property: any) {
   };
   const contractMode = text(property?.strategy || property?.serviceModel || property?.contractMode || property?.contractType || declared.strategy).toLowerCase();
   const pmInScope = ["pm", "pm_only", "rent", "property_management", "both", "hybrid", "combined", "total_care", "total-care"].includes(contractMode);
+  const fmInScope = ["fm", "fm_only", "maintenance", "maintenance_only", "mosque_fm", "both", "hybrid", "combined", "total_care", "total-care"].includes(contractMode);
+  const verifiedBoolean = (raw: unknown, label: string) => {
+    if (typeof raw !== "boolean") throw new HttpsError("invalid-argument", `${label} must be explicitly verified as yes or no.`);
+    return raw;
+  };
   const verified: Record<string, any> = {
     pricingClass: text(inspection?.pricingClass),
     pricingDriver: driver,
@@ -95,14 +100,35 @@ function verifiedPricingPayload(value: any, inspection: any, property: any) {
     zone: text(value?.zone || declared.zone || property?.zone).toUpperCase(),
     slaTier: text(value?.slaTier || declared.slaTier || property?.slaTier).toLowerCase(),
     paymentPlan: text(value?.paymentPlan || declared.paymentPlan || property?.paymentPlan).toLowerCase(),
+    ratesVerified: true,
   };
   if (!verified.emirate) throw new HttpsError("invalid-argument", "Admin-verified emirate is required.");
+  if (!["A", "B", "C"].includes(verified.zone)) throw new HttpsError("invalid-argument", "Admin-verified pricing zone must be A, B, or C.");
+  if (!["standard", "premium", "elite"].includes(verified.slaTier)) throw new HttpsError("invalid-argument", "Admin-verified SLA tier is invalid.");
+  if (!["annual", "quarterly", "monthly"].includes(verified.paymentPlan)) throw new HttpsError("invalid-argument", "Admin-verified payment plan is invalid.");
   if (driver === "unit") verified.units = requiredPositive(value?.units, "Verified unit count", 1_000_000);
   if (driver === "sqft") verified.sqft = requiredPositive(value?.sqft, "Verified service area", 100_000_000);
   if (driver === "bed") verified.beds = requiredPositive(value?.beds, "Verified bed count", 1_000_000);
   if (driver === "sqft+capacity") {
     verified.sqft = requiredPositive(value?.sqft, "Verified mosque service area", 100_000_000);
     verified.units = requiredPositive(value?.units, "Verified worshipper capacity", 1_000_000);
+  }
+  if (fmInScope) {
+    verified.floors = nonNegative(value?.floors, "Verified floor count", 1000);
+    verified.lifts = nonNegative(value?.lifts, "Verified lift count", 1000);
+    verified.hvacCount = nonNegative(value?.hvacCount, "Verified HVAC count", 100000);
+    verified.hvac = verifiedBoolean(value?.hvac, "HVAC presence");
+    verified.districtCooling = verifiedBoolean(value?.districtCooling, "District cooling");
+    verified.fireAlarm = verifiedBoolean(value?.fireAlarm, "Fire alarm");
+    verified.firePump = verifiedBoolean(value?.firePump, "Fire pump");
+    verified.sira = verifiedBoolean(value?.sira, "SIRA/CCTV");
+    verified.gen = verifiedBoolean(value?.gen, "Generator");
+    verified.bmu = verifiedBoolean(value?.bmu, "BMU/façade access");
+    verified.tank = verifiedBoolean(value?.tank, "Water tank");
+    verified.pool = verifiedBoolean(value?.pool, "Swimming pool");
+    if (driver !== "sqft+capacity") {
+      verified.verifiedMaintenanceRate = requiredPositive(value?.verifiedMaintenanceRate, "Verified Maintenance rate", 1_000_000);
+    }
   }
   if (pmInScope) {
     const rent = finite(value?.annualRent ?? declared.annualRent ?? property?.annualRent, 0);
@@ -111,6 +137,7 @@ function verifiedPricingPayload(value: any, inspection: any, property: any) {
     verified.annualRent = Math.round(rent * 100) / 100;
     verified.annualRevenue = Math.round(revenue * 100) / 100;
     if (verified.annualRent <= 0 && verified.annualRevenue <= 0) throw new HttpsError("failed-precondition", "Verified annual rent / managed revenue is required for Property Management pricing.");
+    verified.verifiedManagementRate = requiredPositive(value?.verifiedManagementRate, "Verified Property Management rate", 100);
   }
   return verified;
 }
@@ -340,8 +367,23 @@ export const adminCompleteOwnerPortfolioInspections = onCall({ cors: true, enfor
       emirate: pricing.emirate,
       zone: pricing.zone || property.zone,
       age: pricing.propertyAge,
+      floors: pricing.floors ?? property.floors,
+      lifts: pricing.lifts ?? property.lifts,
+      hvacCount: pricing.hvacCount ?? property.hvacCount,
+      hvac: pricing.hvac ?? property.hvac,
+      districtCooling: pricing.districtCooling ?? property.districtCooling,
+      fireAlarm: pricing.fireAlarm ?? property.fireAlarm,
+      firePump: pricing.firePump ?? property.firePump,
+      sira: pricing.sira ?? property.sira,
+      gen: pricing.gen ?? property.gen,
+      bmu: pricing.bmu ?? property.bmu,
+      tank: pricing.tank ?? property.tank,
+      pool: pricing.pool ?? property.pool,
       slaTier: pricing.slaTier || property.slaTier,
       paymentPlan: pricing.paymentPlan || property.paymentPlan,
+      ratesVerified: pricing.ratesVerified === true,
+      verifiedMaintenanceRate: pricing.verifiedMaintenanceRate,
+      verifiedManagementRate: pricing.verifiedManagementRate,
       pricingVerificationSource: "ADMIN_SITE_VISIT",
       pricingVerificationInspectionId: text(inspection.id),
       pricingVerificationEvidenceHash: text(inspection.evidenceHash),
@@ -399,7 +441,9 @@ export const adminCompleteOwnerPortfolioInspections = onCall({ cors: true, enfor
   const finalQuotedAtMs = Date.now();
   let finalQuote: ReturnType<typeof calculateOwnerOnboardingQuote>;
   try {
-    finalQuote = calculateOwnerOnboardingQuote(verifiedProperties, Array.isArray(intake.selectedAddOns) ? intake.selectedAddOns : [], finalQuotedAtMs);
+    finalQuote = calculateOwnerOnboardingQuote(verifiedProperties, Array.isArray(intake.selectedAddOns) ? intake.selectedAddOns : [], finalQuotedAtMs, {
+      trustServerVerifiedRates: true,
+    });
   } catch (error: any) {
     throw new HttpsError("failed-precondition", `Final verified portfolio quote failed: ${error?.message || String(error)}`);
   }
