@@ -452,7 +452,22 @@ service cloud.firestore {
           'signatureState',
           'paymentReferenceId',
           'paymentProofUrl',
-          'paymentProofPath'
+          'paymentProofPath',
+          // Broker attribution, commission and contract value are server-authored (N-02 / F-4).
+          'brokerId',
+          'brokerUid',
+          'brokerName',
+          'brokerCode',
+          'brokerCommissionRate',
+          'commissionRate',
+          'commissionGenerated',
+          'commissionId',
+          'annualContractValue',
+          'contractValue',
+          'totalValue',
+          'activationDeposit',
+          'depositAmount',
+          'mobilizationAmount'
         ]);
     }
 
@@ -504,9 +519,12 @@ service cloud.firestore {
         (!('linkedAt' in data) || data.linkedAt == null);
     }
 
+    // Contract status, acceptance and signature timestamps are server-authored only
+    // (OTP-bound signing and payment approval callables). Owners may not write them:
+    // a client-chosen status such as SIGNED/Active previously spoofed signing state.
     function safeOwnerContractUpdate() {
       return signedIn() && owns(resource.data) &&
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'acceptedAt', 'signedAt', 'updatedAt']) &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['updatedAt']) &&
         (!('paymentVerified' in request.resource.data) || request.resource.data.paymentVerified == resource.data.get('paymentVerified', null)) &&
         (!('status' in request.resource.data) || !(request.resource.data.status in ['active', 'ACTIVE']));
     }
