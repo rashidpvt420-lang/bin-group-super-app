@@ -445,7 +445,6 @@ export const useOnboardingStore = create<OnboardingState>()(
 
             calculateSummary: () => {
                 const props = get().properties;
-                const selectedAddOns = get().selectedAddOns || [];
                 const quoteResults: Record<string, QuoteOutput> = {};
                 
                 props.forEach(p => {
