@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Box, Typography, Grid, Paper, Checkbox, Button, Stack, Chip, Divider, Container } from '@mui/material';
 import { useOnboardingStore } from '../../store/onboardingStore';
 import { useLanguage } from '../../context/LanguageContext';
@@ -11,7 +11,6 @@ type AddOnItem = { id: string; name: LocalText; desc: LocalText; price: number; 
 const aed = (value: number) => `AED ${value.toLocaleString()}`;
 const label = (text: LocalText, ar: boolean) => (ar ? text.ar : text.en);
 
-const BASE_REQUIRED_STACK_IDS = ['fire_safety', 'water_tank', 'hvac_pm'];
 const ELEVATOR_ADDON_ID = 'elevator_amc';
 const LEGACY_OPTIONAL_ADDON_IDS = ['waste_management'];
 const LEGACY_OPTIONAL_PRUNE_KEY = 'bin-group:onboarding:optional-addons-pruned:v1';
@@ -48,9 +47,11 @@ const isMajlisAsset = (property: any) => {
 };
 
 const getRequiredStackIds = (property: any) => {
-  const ids = [...BASE_REQUIRED_STACK_IDS];
-  const hasRealLiftScope = Number(property?.lifts || 0) > 0 || Number(property?.floors || 0) > 1;
-  if (!isMajlisAsset(property) && hasRealLiftScope) ids.push(ELEVATOR_ADDON_ID);
+  const ids: string[] = [];
+  if (property?.fireAlarm === true || property?.firePump === true) ids.push('fire_safety');
+  if (property?.tank === true) ids.push('water_tank');
+  if (property?.hvac === true || Number(property?.hvacCount || 0) > 0) ids.push('hvac_pm');
+  if (!isMajlisAsset(property) && Number(property?.lifts || 0) > 0) ids.push(ELEVATOR_ADDON_ID);
   return ids;
 };
 
@@ -114,11 +115,12 @@ const addOns: AddOnItem[] = [
 ];
 
 const SystemsDataStep: React.FC<{ onNext: () => void; onBack: () => void }> = ({ onNext, onBack }) => {
-  const { properties, propertyData, updateProperty, selectedAddOns, toggleAddOn, calculateSummary } = useOnboardingStore();
+  const { properties, propertyData, updateProperty, calculateSummary } = useOnboardingStore();
   const { isRTL, lang } = useLanguage();
   const ar = lang === 'ar';
-  const activeProperty = properties[0] || propertyData || ({} as any);
-  const storedSelectedIds = Array.isArray(selectedAddOns) ? selectedAddOns : [];
+  const [activePropertyIndex, setActivePropertyIndex] = useState(0);
+  const activeProperty = properties[activePropertyIndex] || propertyData || ({} as any);
+  const storedSelectedIds = Array.isArray(activeProperty.selectedAddOns) ? activeProperty.selectedAddOns : [];
   const requiredStackIds = useMemo(() => getRequiredStackIds(activeProperty), [activeProperty]);
   const hiddenAddOnIds = useMemo(() => getHiddenAddOnIds(activeProperty), [activeProperty]);
   const visibleAddOns = addOns.filter((addon) => !hiddenAddOnIds.includes(addon.id));
@@ -130,54 +132,21 @@ const SystemsDataStep: React.FC<{ onNext: () => void; onBack: () => void }> = ({
   const selectedSystemCount = selectedSystemGroups.reduce((count, group) => count + group.systems.length, 0);
   const total = selectedAddOnRows.reduce((sum, a) => sum + a.price, 0);
 
-  useEffect(() => {
-    if (typeof window === 'undefined' || window.localStorage.getItem(LEGACY_OPTIONAL_PRUNE_KEY) === 'done') return;
-    let changed = false;
-    LEGACY_OPTIONAL_ADDON_IDS.forEach((id) => {
-      if (storedSelectedIds.includes(id)) {
-        toggleAddOn(id);
-        changed = true;
-      }
-    });
-    window.localStorage.setItem(LEGACY_OPTIONAL_PRUNE_KEY, 'done');
-    if (changed) calculateSummary();
-  }, []);
-
-  useEffect(() => {
-    let changed = false;
-    requiredStackIds.forEach((id) => {
-      if (!storedSelectedIds.includes(id)) {
-        toggleAddOn(id);
-        changed = true;
-      }
-    });
-    hiddenAddOnIds.forEach((id) => {
-      if (storedSelectedIds.includes(id)) {
-        toggleAddOn(id);
-        changed = true;
-      }
-    });
-    if (!changed) calculateSummary();
-  }, [requiredStackIds.join('|'), hiddenAddOnIds.join('|')]);
-
   const setSystem = (key: string, checked: boolean) => {
-    updateProperty(0, { [key]: key === 'lifts' ? (checked ? Math.max(activeProperty.lifts || 1, 1) : 0) : checked } as any);
+    updateProperty(activePropertyIndex, { [key]: key === 'lifts' ? (checked ? Math.max(activeProperty.lifts || 1, 1) : 0) : checked } as any);
     calculateSummary();
   };
 
   const setAddOn = (id: string, checked: boolean) => {
     if (requiredStackIds.includes(id) || hiddenAddOnIds.includes(id)) return;
-    const isSelected = storedSelectedIds.includes(id);
-    if (checked !== isSelected) toggleAddOn(id);
+    const next = checked
+      ? Array.from(new Set([...storedSelectedIds, id]))
+      : storedSelectedIds.filter((item) => item !== id);
+    updateProperty(activePropertyIndex, { selectedAddOns: next });
+    calculateSummary();
   };
 
   const continueNext = () => {
-    requiredStackIds.forEach((id) => {
-      if (!selectedAddOns.includes(id)) toggleAddOn(id);
-    });
-    hiddenAddOnIds.forEach((id) => {
-      if (selectedAddOns.includes(id)) toggleAddOn(id);
-    });
     calculateSummary();
     onNext();
   };
@@ -192,6 +161,9 @@ const SystemsDataStep: React.FC<{ onNext: () => void; onBack: () => void }> = ({
             <Typography sx={{ color: 'rgba(255,255,255,.58)', maxWidth: 900, mx: 'auto', mt: 1 }}>{label(copy.intro, ar)}</Typography>
           </Box>
 
+          {properties.length > 1 && <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} useFlexGap flexWrap="wrap" sx={{ mb: 2 }}>
+            {properties.map((property, index) => <Chip key={property.id || index} label={property.address || property.propertyType || `Property ${index + 1}`} color={index === activePropertyIndex ? 'primary' : 'default'} onClick={() => setActivePropertyIndex(index)} />)}
+          </Stack>}
           <Grid container spacing={2.5} alignItems="stretch">
             <Grid item xs={12} xl={6.8}>
               <Grid container spacing={1.5} sx={{ height: '100%' }}>
