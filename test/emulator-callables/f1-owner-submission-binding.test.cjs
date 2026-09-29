@@ -40,6 +40,18 @@ async function verifiedOtp(owner, contractId, quoteHash) {
   return id;
 }
 
+// F-6: submissions reference Owner-scoped objects written by the protected upload.
+async function ownerDocuments(owner, intakeId) {
+  const bucket = admin.storage().bucket();
+  const paths = {};
+  for (const key of ['propertyProof', 'emiratesId', 'passport']) {
+    const path = `onboarding-proof/${owner.uid}/${intakeId}/${key}/1_${key}.pdf`;
+    await bucket.file(path).save(Buffer.from(`%PDF-1.4 ${key}`), { resumable: false, metadata: { contentType: 'application/pdf', metadata: { ownerUid: owner.uid, docType: key } } });
+    paths[key] = path;
+  }
+  return paths;
+}
+
 async function submit(owner, intakeId, prop) {
   const quotedAtMs = Date.now() - 1000;
   const quote = calculateOwnerOnboardingQuote([prop], [], quotedAtMs);
@@ -47,7 +59,7 @@ async function submit(owner, intakeId, prop) {
   return call(submitOwnerInspectionFirstOnboarding, owner, {
     intakeId, ownerUid: owner.uid, ownerEmail: owner.token.email, properties: [prop], selectedAddOns: [],
     quoteHash: quote.quoteHash, quoteQuotedAtMs: quotedAtMs, signatureName: `Owner ${owner.uid}`, otpVerificationId,
-    documentUrls: { propertyProof: 'https://example.invalid/p', emiratesId: 'https://example.invalid/e', passport: 'https://example.invalid/x' },
+    documentPaths: await ownerDocuments(owner, intakeId),
   });
 }
 

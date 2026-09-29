@@ -331,7 +331,8 @@ async function uploadOwnerDocument(ownerSession, appCheckToken, intakeId, docTyp
     contentType: 'application/pdf',
     encodedDocument: bytes.toString('base64'),
   }, appCheckToken, ownerSession.idToken);
-  assert(text(result.downloadUrl).startsWith('https://'), `${docType} upload did not return a secure URL.`);
+  // F-6: the protected upload returns an Owner-scoped Storage path, never a permanent download URL.
+  assert(!result.downloadUrl, `${docType} upload must not return a permanent download URL.`);
   assert(text(result.storagePath).startsWith(`onboarding-proof/${ownerSession.uid}/${intakeId}/`), `${docType} upload is not Owner scoped.`);
   const [exists] = await bucket.file(text(result.storagePath)).exists();
   assert(exists, `${docType} proof is missing from production Storage.`);
@@ -474,10 +475,10 @@ async function main() {
       email: ownerEmail,
       phone: '+971500000000',
     },
-    documentUrls: {
-      propertyProof: documents.propertyProof.downloadUrl,
-      emiratesId: documents.emiratesId.downloadUrl,
-      passport: documents.passport.downloadUrl,
+    documentPaths: {
+      propertyProof: documents.propertyProof.storagePath,
+      emiratesId: documents.emiratesId.storagePath,
+      passport: documents.passport.storagePath,
       tradeLicense: '',
     },
   };
