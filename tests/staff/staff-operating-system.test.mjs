@@ -13,6 +13,7 @@ test('TODAY dashboard uses live records and callable actions instead of local cl
   assert.doesNotMatch(source, /setClockedIn\(!clockedIn\)/);
   assert.doesNotMatch(source, /Hilux 18|Villa 104|REG-UAE|Dubai, UAE/);
   assert.doesNotMatch(source, /label="VERIFIED"/);
+  assert.match(source, /aria-label="Prepare voice or text completion report"/);
 });
 
 test('Quick Actions expose only wired contextual staff workflows and no fake assignment defaults', () => {

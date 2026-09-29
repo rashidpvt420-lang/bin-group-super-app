@@ -394,6 +394,7 @@ export const StaffTodayDashboard: React.FC<StaffTodayDashboardProps> = ({
                       <Tooltip title="Prepare voice/text completion report">
                         <span>
                           <IconButton
+                            aria-label="Prepare voice or text completion report"
                             disabled={!activeJob || !["ARRIVED", "IN_PROGRESS"].includes(activeJob.status)}
                             onClick={() => setVoiceDialogOpen(true)}
                             sx={{ bgcolor: "#3b82f6", color: "#fff" }}
