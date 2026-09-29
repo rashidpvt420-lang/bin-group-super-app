@@ -171,7 +171,7 @@ const SystemsDataStep: React.FC<{ onNext: () => void; onBack: () => void }> = ({
   };
 
   const continueNext = () => {
-    const next = Array.from(new Set(
+    const next: string[] = Array.from(new Set<string>(
       storedSelectedIds.filter((id: string) => !hiddenAddOnIds.includes(id) && !requiredStackIds.includes(id)),
     ));
     updateProperty(activePropertyIndex, { selectedAddOns: next });
