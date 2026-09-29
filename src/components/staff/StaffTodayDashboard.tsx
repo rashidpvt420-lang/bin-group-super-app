@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Alert,
   Avatar,
@@ -105,6 +106,7 @@ export const StaffTodayDashboard: React.FC<StaffTodayDashboardProps> = ({
   role: fallbackRole,
   isRtl = false,
 }) => {
+  const navigate = useNavigate();
   const currentUid = auth.currentUser?.uid;
   const [profile, setProfile] = useState<StaffProfile | null>(null);
   const [activeShift, setActiveShift] = useState<any | null>(null);
@@ -260,12 +262,12 @@ export const StaffTodayDashboard: React.FC<StaffTodayDashboardProps> = ({
       else await callQuickAction("CLOCK_IN");
       return;
     }
-    if (actionType === "ARRIVE") {
-      await callQuickAction("ARRIVE");
-      return;
-    }
-    if (actionType === "START_JOB") {
-      await callQuickAction("START_JOB");
+    if (actionType === "ARRIVE" || actionType === "START_JOB") {
+      if (!activeJob?.id) {
+        setActionError("No active work order is available. Arrival and job start stay on the mission screen so GPS and evidence can be checked.");
+        return;
+      }
+      navigate(`/technician/job/${activeJob.id}`);
       return;
     }
     if (actionType === "FINISH_JOB") {

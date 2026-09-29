@@ -336,9 +336,13 @@ const OwnerLandingPage: React.FC = () => {
                                     fullWidth
                                     label={t('login.email')}
                                     variant="outlined"
+                                    type="email"
+                                    name="email"
+                                    autoComplete="email"
                                     value={email}
                                     onChange={(e) => setEmail(e.target.value)}
                                     required
+                                    inputProps={{ autoComplete: 'email' }}
                                     InputProps={{
                                         sx: { bgcolor: 'rgba(255,255,255,0.02)', borderRadius: 3, height: 65, fontSize: '1.1rem' }
                                     }}
@@ -348,10 +352,13 @@ const OwnerLandingPage: React.FC = () => {
                                     fullWidth
                                     label={t('login.password')}
                                     type={showPassword ? 'text' : 'password'}
+                                    name="password"
+                                    autoComplete="current-password"
                                     variant="outlined"
                                     value={password}
                                     onChange={(e) => setPassword(e.target.value)}
                                     required
+                                    inputProps={{ autoComplete: 'current-password' }}
                                     InputProps={{
                                         endAdornment: (<InputAdornment position="end"><IconButton
                                             type="button"

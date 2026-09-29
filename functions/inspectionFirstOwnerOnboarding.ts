@@ -2,11 +2,15 @@ import { FieldValue } from "firebase-admin/firestore";
 import { defineSecret } from "firebase-functions/params";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
+import type * as FirebaseFirestore from "firebase-admin/firestore";
 import * as crypto from "crypto";
 import { calculateOwnerOnboardingQuote } from "./ownerOnboardingQuote";
 import { isValidOwnerSubmittedGps } from "./ownerSubmittedGps";
 import { loadActivePaymentConfiguration } from "./paymentConfiguration";
 import { normalizeAedMoney } from "./shared/aedMoney";
+import { requirePrivilegedMfaSession } from "./adminMfaSession";
+import { requireMfaFinanceAdminActor } from "./financeAdminMfa";
+import { assertOtpApplicationBinding, decideOwnerApplicationSubmission } from "./ownerApplicationBinding";
 
 if (!admin.apps.length) admin.initializeApp();
 
@@ -137,7 +141,7 @@ function normalizeGeo(value: PlainRecord) {
 }
 
 function quoteFor(properties: PlainRecord[], selectedAddOns: string[], quotedAtMs?: number) {
-  return calculateOwnerOnboardingQuote(properties, selectedAddOns, quotedAtMs);
+  return calculateOwnerOnboardingQuote(properties, selectedAddOns, quotedAtMs, { trustServerVerifiedRates: false });
 }
 
 function assertQuote(data: PlainRecord, properties: PlainRecord[], selectedAddOns: string[]) {
@@ -256,6 +260,17 @@ export const requestOwnerInspectionSignatureOtp = onCall({
   const contractHash = lower(request.data?.contractHash);
   const propertyName = text(request.data?.propertyName || "BIN GROUP property application").slice(0, 180);
   if (!/^[a-f0-9]{64}$/.test(contractHash)) throw new HttpsError("failed-precondition", "A server-authoritative quotation hash is required.");
+  // F-1: an OTP may only be issued for the caller's own application (or a new, well-formed one).
+  const [bindingIntakeSnap, bindingContractSnap] = await Promise.all([
+    db.collection("intake_submissions").doc(contractId).get(),
+    db.collection("contracts").doc(contractId).get(),
+  ]);
+  assertOtpApplicationBinding({
+    callerUid: owner.uid,
+    applicationId: contractId,
+    intake: bindingIntakeSnap.exists ? bindingIntakeSnap.data() || {} : null,
+    contract: bindingContractSnap.exists ? bindingContractSnap.data() || {} : null,
+  });
   await enforceOtpRate(owner.uid);
   const ref = db.collection("contract_signature_otps").doc();
   const otp = String(crypto.randomInt(100000, 1000000));
@@ -407,14 +422,48 @@ export const submitOwnerInspectionFirstOnboarding = onCall({ cors: true, enforce
   const contractRef = db.collection("contracts").doc(contractId);
   const intakeRef = db.collection("intake_submissions").doc(intakeId);
   const otpRef = db.collection("contract_signature_otps").doc(verificationId);
-  const existingIntake = await intakeRef.get();
-  if (existingIntake.exists && upper(existingIntake.data()?.status) === "SUBMITTED_FOR_PROPERTY_INSPECTION") {
+  const propertyRefs = properties.map((_property: PlainRecord, index: number) =>
+    db.collection("properties").doc(safeId(`${intakeId}_property_${index + 1}`, `owner_${owner.uid}_property_${index + 1}`)));
+  const snapshotRecord = (snap: FirebaseFirestore.DocumentSnapshot) => (snap.exists ? snap.data() || {} : null);
+  // F-1: bind every existing application record to the caller and refuse to reset progressed applications.
+  const [existingIntake, existingContract, existingPayment, ...existingProperties] = await Promise.all([
+    intakeRef.get(), contractRef.get(), paymentRef.get(), ...propertyRefs.map((ref) => ref.get()),
+  ]);
+  const initialDecision = decideOwnerApplicationSubmission({
+    callerUid: owner.uid,
+    applicationId: intakeId,
+    records: {
+      intake: snapshotRecord(existingIntake),
+      contract: snapshotRecord(existingContract),
+      payment: snapshotRecord(existingPayment),
+      properties: existingProperties.map(snapshotRecord),
+    },
+  });
+  if (initialDecision === "IDEMPOTENT") {
     return { success: true, idempotent: true, intakeId, contractId, paymentId: intakeId, nextState: "ADMIN_PROPERTY_REVIEW" };
   }
 
-  await db.runTransaction(async (transaction) => {
-    const [otpSnap, freshIntake] = await Promise.all([transaction.get(otpRef), transaction.get(intakeRef)]);
-    if (freshIntake.exists && upper(freshIntake.data()?.status) === "SUBMITTED_FOR_PROPERTY_INSPECTION") return;
+  const transactionOutcome = await db.runTransaction(async (transaction) => {
+    const [otpSnap, freshIntake, freshContract, freshPayment, ...freshProperties] = await Promise.all([
+      transaction.get(otpRef), transaction.get(intakeRef), transaction.get(contractRef), transaction.get(paymentRef),
+      ...propertyRefs.map((ref) => transaction.get(ref)),
+    ]);
+    const decision = decideOwnerApplicationSubmission({
+      callerUid: owner.uid,
+      applicationId: intakeId,
+      records: {
+        intake: snapshotRecord(freshIntake),
+        contract: snapshotRecord(freshContract),
+        payment: snapshotRecord(freshPayment),
+        properties: freshProperties.map(snapshotRecord),
+      },
+    });
+    if (decision === "IDEMPOTENT") return "IDEMPOTENT" as const;
+    // Brand-new records are created (fail if they appeared concurrently); existing ones were verified above.
+    const writeRecord = (ref: FirebaseFirestore.DocumentReference, exists: boolean, value: PlainRecord) => {
+      if (exists) transaction.set(ref, value, { merge: true });
+      else transaction.create(ref, value);
+    };
     if (!otpSnap.exists) throw new HttpsError("failed-precondition", "Signature OTP verification was not found.");
     const otpData = otpSnap.data() || {};
     assertVerifiedOtp(otpData, { uid: owner.uid, contractId, contractHash: quote.quoteHash, signature: signatureName });
@@ -445,7 +494,7 @@ export const submitOwnerInspectionFirstOnboarding = onCall({ cors: true, enforce
       };
     });
 
-    transaction.set(intakeRef, {
+    writeRecord(intakeRef, freshIntake.exists, {
       id: intakeId,
       intakeId,
       workflowVersion: OWNER_WORKFLOW_VERSION,
@@ -499,9 +548,9 @@ export const submitOwnerInspectionFirstOnboarding = onCall({ cors: true, enforce
       submittedAt: now,
       createdAt: freshIntake.exists ? freshIntake.data()?.createdAt || now : now,
       updatedAt: now,
-    }, { merge: true });
+    });
 
-    transaction.set(contractRef, {
+    writeRecord(contractRef, freshContract.exists, {
       id: contractId,
       contractId,
       intakeId,
@@ -533,9 +582,9 @@ export const submitOwnerInspectionFirstOnboarding = onCall({ cors: true, enforce
       documentUrls,
       createdAt: now,
       updatedAt: now,
-    }, { merge: true });
+    });
 
-    transaction.set(paymentRef, {
+    writeRecord(paymentRef, freshPayment.exists, {
       id: intakeId,
       paymentId: intakeId,
       intakeId,
@@ -562,10 +611,10 @@ export const submitOwnerInspectionFirstOnboarding = onCall({ cors: true, enforce
       otpVerificationId: verificationId,
       createdAt: now,
       updatedAt: now,
-    }, { merge: true });
+    });
 
-    normalizedProperties.forEach((property: PlainRecord) => {
-      transaction.set(db.collection("properties").doc(property.propertyId), { ...property, createdAt: now }, { merge: true });
+    normalizedProperties.forEach((property: PlainRecord, index: number) => {
+      writeRecord(db.collection("properties").doc(property.propertyId), Boolean(freshProperties[index]?.exists), { ...property, createdAt: now });
     });
 
     const ownerPatch = {
@@ -600,7 +649,12 @@ export const submitOwnerInspectionFirstOnboarding = onCall({ cors: true, enforce
       metadata: { contractId, paymentId: intakeId, propertyCount: normalizedProperties.length, quoteHash: quote.quoteHash },
       createdAt: now,
     });
+    return "WRITTEN" as const;
   });
+
+  if (transactionOutcome === "IDEMPOTENT") {
+    return { success: true, idempotent: true, intakeId, contractId, paymentId: intakeId, nextState: "ADMIN_PROPERTY_REVIEW" };
+  }
 
   return {
     success: true,
@@ -778,8 +832,9 @@ export const adminCompleteOwnerPropertyInspection = onCall({ cors: true, enforce
 });
 
 export const adminRecordOwnerMobilizationPaymentEvidence = onCall({ cors: true, enforceAppCheck: true, memory: "512MiB" }, async (request) => {
-  const actor = await requireAdmin(request);
+  // F-2: recording 15% payment evidence is a payment decision: MFA finance Admin only.
   await requirePrivilegedMfaSession(request.auth);
+  const actor = await requireMfaFinanceAdminActor(request);
   const paymentId = safeId(request.data?.paymentId, "");
   const reference = text(request.data?.paymentReferenceId || request.data?.reference);
   const method = upper(request.data?.paymentMethod || request.data?.method);
@@ -796,6 +851,16 @@ export const adminRecordOwnerMobilizationPaymentEvidence = onCall({ cors: true, 
   if (!paymentSnap.exists) throw new HttpsError("not-found", "Payment transaction not found.");
   const payment = paymentSnap.data() || {};
   if (text(payment.workflowVersion) !== OWNER_WORKFLOW_VERSION || payment.inspectionVerified !== true) throw new HttpsError("failed-precondition", "Complete every Admin property visit before recording the 15% payment.");
+  // F-2: never reopen an approved / verified payment by re-recording evidence.
+  const recordedPaymentState = upper(payment.status || payment.paymentStatus);
+  if (
+    ["APPROVED", "PAID", "VERIFIED", "ACTIVE"].includes(recordedPaymentState) ||
+    ["APPROVED", "PAID", "VERIFIED"].includes(upper(payment.paymentStatus)) ||
+    payment.paymentVerified === true ||
+    payment.approved === true
+  ) {
+    throw new HttpsError("failed-precondition", "This 15% payment is already approved. Evidence cannot be re-recorded on an approved payment.");
+  }
   const contractSnap = await db.collection("contracts").doc(text(payment.contractId || payment.intakeId || paymentId)).get();
   const contract = contractSnap.data() || {};
   const finalQuoteHash = text(payment.finalVerifiedQuoteHash).toLowerCase();
@@ -916,6 +981,3 @@ export const adminRecordOwnerMobilizationPaymentEvidence = onCall({ cors: true, 
   await batch.commit();
   return { status: "RECORDED", paymentId, intakeId, amountReceived, method, paymentReferenceId: reference, receiptUrl, receiptHash, generation };
 });
-
-import type * as FirebaseFirestore from "firebase-admin/firestore";
-import { requirePrivilegedMfaSession } from "./adminMfaSession";
