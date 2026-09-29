@@ -1,12 +1,14 @@
 import React, { useEffect } from 'react';
 import {
-    Box, Typography, Grid, Paper, alpha, Stack, Button, Divider, Container, RadioGroup, FormControlLabel, Radio, Chip
+    Alert, Box, Typography, Grid, Paper, alpha, Stack, Button, Divider, Container, RadioGroup, FormControlLabel, Radio, Chip
 } from '@mui/material';
 import { Wrench, UserCheck, ShieldCheck, ArrowRight, CalendarCheck, CheckCircle2, XCircle, ClipboardCheck, Timer } from 'lucide-react';
 import { useOnboardingStore } from '../../store/onboardingStore';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { formatAED } from '../../utils/formatters';
+import { resolveAssetClassIdForPropertyType } from '../../utils/calculateUaeQuote2026';
+import { UAE_PRICING_MATRIX_2026 } from '../../utils/uaePricingMatrix2026';
 
 type LocalText = { en: string; ar: string };
 const tx = (text: LocalText, ar: boolean) => (ar ? text.ar : text.en);
@@ -90,9 +92,9 @@ const responseTextByTier: Record<string, LocalText> = {
 };
 
 const paymentPlanDetails: Record<string, LocalText> = {
-    annual: { en: '15% mobilization first, then one annual settlement.', ar: 'دفعة تعبئة 15% أولاً، ثم تسوية سنوية واحدة.' },
-    quarterly: { en: '15% mobilization first, then four scheduled payments.', ar: 'دفعة تعبئة 15% أولاً، ثم أربع دفعات مجدولة.' },
-    monthly: { en: '15% mobilization first, then monthly billing after verification.', ar: 'دفعة تعبئة 15% أولاً، ثم فوترة شهرية بعد التحقق.' },
+    annual: { en: 'After every site visit and the final verified Owner signature: 15% mobilization, then one annual settlement.', ar: 'بعد اكتمال جميع الزيارات والتوقيع النهائي الموثق للمالك: دفعة تعبئة 15% ثم تسوية سنوية واحدة.' },
+    quarterly: { en: 'After every site visit and the final verified Owner signature: 15% mobilization, then four scheduled payments.', ar: 'بعد اكتمال جميع الزيارات والتوقيع النهائي الموثق للمالك: دفعة تعبئة 15% ثم أربع دفعات مجدولة.' },
+    monthly: { en: 'After every site visit and the final verified Owner signature: 15% mobilization, then monthly billing.', ar: 'بعد اكتمال جميع الزيارات والتوقيع النهائي الموثق للمالك: دفعة تعبئة 15% ثم فوترة شهرية.' },
 };
 
 const includedScopes: Record<string, LocalText[]> = {
@@ -134,7 +136,7 @@ const excludedScopes: Record<string, LocalText[]> = {
 };
 
 const CommercialTermsStep: React.FC<{ onNext: () => void; onBack: () => void }> = ({ onNext, onBack }) => {
-    const { properties, propertyData, selectedAddOns, updateProperty, calculateSummary, portfolioSummary } = useOnboardingStore();
+    const { properties, propertyData, updateProperty, calculateSummary, portfolioSummary } = useOnboardingStore();
     const { t, isRTL, lang } = useLanguage();
     const ar = lang === 'ar';
 
@@ -152,12 +154,29 @@ const CommercialTermsStep: React.FC<{ onNext: () => void; onBack: () => void }> 
     ];
 
     const propertyType = String(property.propertyType || '').toLowerCase();
-    const isMajlis = Boolean(property.majlis || propertyType.includes('majlis') || property.useType === 'Government');
-    const availablePlans = isMajlis ? plans.filter(p => p.id === 'FM_ONLY') : plans;
+    const isMajlis = Boolean(property.majlis || propertyType.includes('majlis'));
+    const supportsAutomaticPm = (candidate: any) => {
+        const descriptor = String(candidate?.propertyType || '').toLowerCase();
+        if (candidate?.majlis || descriptor.includes('majlis') || descriptor.includes('mosque') || descriptor.includes('masjid')) return false;
+        if (candidate?.propertyType === 'Gym / Fitness Centre' && String(candidate?.gymProfile?.pmPricingBasis || '').toLowerCase() === 'flat_custom') return false;
+        const classId = resolveAssetClassIdForPropertyType(String(candidate?.propertyType || ''), String(candidate?.assetGrade || 'Standard'));
+        const pricingClass = UAE_PRICING_MATRIX_2026.assetClasses.find((asset) => asset.id === classId);
+        return Number(pricingClass?.managementRange?.min || 0) > 0;
+    };
+    const portfolioPmSupported = properties.length > 0 && properties.every(supportsAutomaticPm);
+    const availablePlans = (isMajlis || !portfolioPmSupported) ? plans.filter(p => p.id === 'FM_ONLY') : plans;
+
+    const updatePortfolio = (data: any) => {
+        if (properties.length === 0) {
+            updateProperty(activePropertyIndex, data);
+            return;
+        }
+        properties.forEach((_, index) => updateProperty(index, data));
+    };
 
     useEffect(() => {
-        if (isMajlis && property.strategy !== 'fm_only') updateProperty(activePropertyIndex, { strategy: 'fm_only' });
-    }, [isMajlis, property.strategy, updateProperty]);
+        if ((isMajlis || !portfolioPmSupported) && property.strategy !== 'fm_only') updatePortfolio({ strategy: 'fm_only' });
+    }, [isMajlis, portfolioPmSupported, property.strategy]);
 
     const slaTiers = [
         { id: 'standard', label: isMajlis ? t('onboarding.sla.majlis_basic') : t('onboarding.sla.standard'), desc: isMajlis ? t('onboarding.sla.majlis_basic_desc') : t('onboarding.sla.standard_desc'), ppm: isMajlis ? majlisPpmTextByTier.standard : ppmTextByTier.standard },
@@ -171,7 +190,7 @@ const CommercialTermsStep: React.FC<{ onNext: () => void; onBack: () => void }> 
         { id: 'monthly', label: t('onboarding.payment.monthly'), desc: t('onboarding.payment.monthly_desc'), detail: paymentPlanDetails.monthly }
     ];
 
-    const handleUpdate = (data: any) => updateProperty(activePropertyIndex, data);
+    const handleUpdate = (data: any) => updatePortfolio(data);
     const quote = portfolioSummary.quoteResults?.[property?.id] || Object.values(portfolioSummary.quoteResults || {})[0];
     const selectedStrategy = property.strategy || 'fm_only';
     const selectedPaymentPlan = property.paymentPlan || 'annual';
@@ -182,9 +201,15 @@ const CommercialTermsStep: React.FC<{ onNext: () => void; onBack: () => void }> 
     const selectedPpmText = selectedStrategy === 'pm_only' ? (ar ? 'لا توجد صيانة وقائية تقنية ضمن إدارة العقارات فقط.' : 'No technical PPM included in Property Management Only.') : tx(isMajlis ? majlisPpmTextByTier[selectedSlaTier] : ppmTextByTier[selectedSlaTier], ar);
     const selectedResponseText = tx(responseTextByTier[selectedSlaTier] || responseTextByTier.standard, ar);
     const selectedSystems = Object.entries(systemLabels).filter(([key]) => key === 'lifts' ? Number(property.lifts || 0) > 0 : Boolean(property[key])).map(([key, value]) => key === 'lifts' ? `${tx(value, ar)} (${property.lifts || 1})` : tx(value, ar));
-    const selectedAddOnNames = (selectedAddOns || []).map((id) => addOnLabels[id] ? tx(addOnLabels[id], ar) : id.replace(/_/g, ' '));
+    const selectedAddOnNames = (Array.isArray(property.selectedAddOns) ? property.selectedAddOns : []).map((id: string) => addOnLabels[id] ? tx(addOnLabels[id], ar) : id.replace(/_/g, ' '));
     const includedScope = selectedStrategy === 'pm_only' ? includedScopes.pm_only : selectedStrategy === 'both' ? includedScopes.both : includedScopes.fm_only;
     const excludedScope = selectedStrategy === 'pm_only' ? excludedScopes.pm_only : excludedScopes.default;
+    const pmInScope = selectedStrategy === 'pm_only' || selectedStrategy === 'both';
+    const missingPmBasis = pmInScope && properties.some((item: any) => !(Number(item.annualRent || 0) > 0 || Number(item.annualRevenue || 0) > 0));
+    const quoteResults = Object.values(portfolioSummary.quoteResults || {});
+    const invalidQuote = quoteResults.length === 0 || quoteResults.some((item: any) => !(Number(item?.annualTotal || 0) > 0));
+    const quoteReasons = Array.from(new Set(quoteResults.flatMap((item: any) => Array.isArray(item?.riskFlags) ? item.riskFlags : []).filter(Boolean)));
+    const canConfirm = !missingPmBasis && !invalidQuote;
 
     return (
         <Box sx={{ py: 2 }} dir={isRTL ? 'rtl' : 'ltr'}>
@@ -249,7 +274,8 @@ const CommercialTermsStep: React.FC<{ onNext: () => void; onBack: () => void }> 
                                 <Box><Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 950, display: 'block' }}>{tx(copy.ppmSchedule, ar)}</Typography><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.65)', lineHeight: 1.6 }}>{selectedPpmText}</Typography></Box>
                                 <Box><Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 950, display: 'block' }}>{tx(copy.approvalRule, ar)}</Typography><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.65)', lineHeight: 1.6 }}>{tx(copy.approvalRuleText, ar)}</Typography></Box>
                             </Stack>
-                            <Button variant="contained" fullWidth size="large" onClick={onNext} endIcon={isRTL ? <ArrowRight style={{ transform: 'rotate(180deg)' }} /> : <ArrowRight />} sx={{ borderRadius: 4, bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, py: 2, boxShadow: '0 10px 20px rgba(198, 167, 94, 0.3)', '&:hover': { bgcolor: '#E6C77A' } }}>{t('onboarding.confirm_btn')}</Button>
+                            {(missingPmBasis || invalidQuote) && <Alert severity="warning" sx={{ mb: 2, textAlign: isRTL ? 'right' : 'left' }}>{missingPmBasis ? tx({ en: 'Enter annual rent or managed revenue for every property before confirming Property Management pricing.', ar: 'أدخل الإيجار السنوي أو الإيراد المُدار لكل عقار قبل تأكيد تسعير إدارة العقار.' }, ar) : (quoteReasons[0] || tx({ en: 'The current property facts cannot produce a protected quotation. Review the property profile and pricing inputs.', ar: 'لا يمكن للبيانات الحالية إنشاء عرض سعر محمي. راجع ملف العقار ومدخلات التسعير.' }, ar))}</Alert>}
+                            <Button variant="contained" fullWidth size="large" disabled={!canConfirm} onClick={onNext} endIcon={isRTL ? <ArrowRight style={{ transform: 'rotate(180deg)' }} /> : <ArrowRight />} sx={{ borderRadius: 4, bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, py: 2, boxShadow: '0 10px 20px rgba(198, 167, 94, 0.3)', '&:hover': { bgcolor: '#E6C77A' } }}>{t('onboarding.confirm_btn')}</Button>
                             <Button variant="text" fullWidth onClick={onBack} sx={{ mt: 1, color: 'rgba(255,255,255,0.45)', fontWeight: 800 }}>{t('onboarding.revise_btn')}</Button>
                         </Paper>
                     </Grid>
