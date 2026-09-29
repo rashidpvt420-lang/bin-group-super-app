@@ -79,6 +79,8 @@ test('technician privacy is dispatch-first with explicit denied and listener-err
 
 test('admin financial reporting uses only verified canonical payment transactions', () => {
   const cfo = read('apps/admin-panel/src/pages/admin/ProfitabilityPage.tsx');
+  const commandCenter = read('apps/admin-panel/src/pages/financials/ProfitabilityDashboardPage.tsx');
+  const ledger = read('apps/admin-panel/src/lib/canonicalPaymentLedger.mjs');
   const ops = read('apps/admin-panel/src/components/ops/PublicLaunchOpsPanel.tsx');
   const reports = read('functions/adminReports.ts');
 
@@ -86,6 +88,11 @@ test('admin financial reporting uses only verified canonical payment transaction
   assert.doesNotMatch(cfo, /collection\(db,\s*['"]payments['"]\)/);
   assert.match(cfo, /paymentVerified\s*===\s*true/);
   assert.match(cfo, /Not available/);
+  assert.match(commandCenter, /collection\(db,\s*['"]payment_transactions['"]\)/);
+  assert.doesNotMatch(commandCenter, /collection\(db,\s*['"]transactions['"]\)/);
+  assert.match(commandCenter, /summarizeCanonicalPaymentLedger/);
+  assert.match(ledger, /paymentVerified === true/);
+  assert.match(ledger, /Math\.round\(parsed \* 100\)/);
   assert.match(ops, /collection\(db,\s*['"]payment_transactions['"]\)/);
   assert.doesNotMatch(ops, /collection\(db,\s*['"]payments['"]\)/);
   assert.match(reports, /readCollection\(services\.db,\s*["']payment_transactions["']/);
