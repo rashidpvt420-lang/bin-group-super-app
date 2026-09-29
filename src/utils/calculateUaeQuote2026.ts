@@ -11,6 +11,7 @@ export interface QuoteInput {
   annualRent?: number;
   annualRevenue?: number;
   propertyAge: number;
+  condition?: 'Mint' | 'Good' | 'Fair' | 'Poor';
   floors?: number;
   lifts?: number;
   hasPool?: boolean;
@@ -233,7 +234,9 @@ function sanitizeQuoteInput(input: Partial<QuoteInput> | null | undefined): Quot
     contractType: safeContractType(raw.contractType),
     sqft: positiveNumber(raw.sqft), units: positiveNumber(raw.units), beds: positiveNumber(raw.beds),
     annualRent: positiveNumber(raw.annualRent), annualRevenue: positiveNumber(raw.annualRevenue),
-    propertyAge: positiveNumber(raw.propertyAge), floors: positiveNumber(raw.floors), lifts: positiveNumber(raw.lifts),
+    propertyAge: positiveNumber(raw.propertyAge),
+    condition: ['Mint', 'Good', 'Fair', 'Poor'].includes(String(raw.condition || '')) ? raw.condition as QuoteInput['condition'] : 'Good',
+    floors: positiveNumber(raw.floors), lifts: positiveNumber(raw.lifts),
     hasPool: raw.hasPool === true, hasGym: raw.hasGym === true, hasCentralHVAC: raw.hasCentralHVAC === true,
     hasDistrictCooling: raw.hasDistrictCooling === true, hasCivilDefenseSystem: raw.hasCivilDefenseSystem === true,
     hasSiraCctv: raw.hasSiraCctv === true, hasGenerator: raw.hasGenerator === true, hasBmu: raw.hasBmu === true,
@@ -256,6 +259,16 @@ function slaMultiplier(slaTier: QuoteInput['slaTier']): number {
   if (slaTier === 'elite') return 1.3;
   if (slaTier === 'premium') return 1.15;
   return 1;
+}
+function maintenanceRateForCondition(range: { min: number; max: number; target?: number }, condition: QuoteInput['condition']): number {
+  if (condition === 'Poor') return positiveNumber(range.max, range.min);
+  if (condition === 'Fair') return positiveNumber(range.target, range.min);
+  return positiveNumber(range.min);
+}
+function managementRateForTier(range: { min: number; max: number; target?: number }, tier: QuoteInput['slaTier']): number {
+  if (tier === 'elite') return positiveNumber(range.max, range.min);
+  if (tier === 'premium') return positiveNumber(range.target, range.min);
+  return positiveNumber(range.min);
 }
 function addPaymentExplanation(paymentPlan: QuoteInput['paymentPlan'], explanation: string[]) {
   if (paymentPlan === 'monthly') explanation.push('Monthly billing facility adds 6% to the annual service value.');
@@ -356,7 +369,7 @@ export function calculateUaeQuote2026(input: Partial<QuoteInput> | null | undefi
   const pricingExplanation: string[] = [];
   const riskFlags: string[] = [];
   const managedRevenue = safeInput.annualRent || safeInput.annualRevenue || 0;
-  const managementRate = positiveNumber(assetClass.managementRange.min);
+  const managementRate = managementRateForTier(assetClass.managementRange, safeInput.slaTier);
 
   // Property Management is a percentage of actual annual rent/revenue. It must never be multiplied by sqft/units/beds.
   if (safeInput.contractType === 'PM_ONLY') {
@@ -364,7 +377,7 @@ export function calculateUaeQuote2026(input: Partial<QuoteInput> | null | undefi
     if (managedRevenue <= 0) return zeroQuote('Annual rent / managed revenue is required for Property Management pricing; no placeholder revenue is assumed.', safeInput.slaTier, ['ANNUAL_RENT_REQUIRED']);
     const baseQuote = managedRevenue * (managementRate / 100);
     const annualTotal = baseQuote * (1 + planSurcharge(safeInput.paymentPlan));
-    pricingExplanation.push(`${managementRate}% property-management fee applied once to AED ${Math.round(managedRevenue)} annual rent / managed revenue.`);
+    pricingExplanation.push(`${managementRate}% property-management fee applied once to AED ${Math.round(managedRevenue)} annual rent / managed revenue for the ${safeInput.slaTier.toUpperCase()} management tier.`);
     pricingExplanation.push('No technical FM add-ons, sqft multiplier, unit multiplier, age premium or regional premium is applied to PM-only pricing.');
     addPaymentExplanation(safeInput.paymentPlan, pricingExplanation);
     return {
@@ -374,7 +387,8 @@ export function calculateUaeQuote2026(input: Partial<QuoteInput> | null | undefi
     };
   }
 
-  let baseRate = positiveNumber(assetClass.maintenanceRange.min);
+  let baseRate = maintenanceRateForCondition(assetClass.maintenanceRange, safeInput.condition);
+  pricingExplanation.push(`${safeInput.condition || "Good"} condition selected the configured technical maintenance rate band.`);
   if (assetId === 'gym-fitness-centre') {
     if (safeInput.gymComplexity === 'WET_RECOVERY') baseRate = positiveNumber(assetClass.maintenanceRange.max, baseRate);
     else if (safeInput.gymComplexity === 'ENHANCED') baseRate = positiveNumber(assetClass.maintenanceRange.target, baseRate);
