@@ -120,6 +120,7 @@ export default function OwnerApp() {
                 <Route path="/approvals" element={<OwnerApprovalCenterPage />} />
                 <Route path="/bin-connect" element={<BinConnectInboxPage role="owner" />} />
                 <Route path="/pilot-completion" element={<PilotCompletionPage role="owner" />} />
+                <Route path="*" element={<Navigate to="/owner/dashboard" replace />} />
             </Routes>
         </OwnerLayout>
     );
