@@ -47,11 +47,15 @@ const fileToBase64 = (file: File): Promise<string> => new Promise((resolve, reje
 
 export default function InspectionSubmissionStep({ onBack }: { onBack: () => void }) {
   const {
-    companyProfile, ownerAccount, properties, selectedAddOns, proofDocuments,
+    companyProfile, ownerAccount, properties, proofDocuments,
     intakeId, onboardingSessionId, signatureName, contractOtpVerificationId,
     isContractSigned, valuationResult, portfolioSummary,
   } = useOnboardingStore();
   const { lang, isRTL } = useLanguage();
+  const submissionProperties = useMemo(
+    () => properties.map((property) => ({ ...property, selectedAddOns: Array.isArray(property.selectedAddOns) ? property.selectedAddOns : [] })),
+    [properties],
+  );
   const copy = (en: string, ar: string) => lang === 'ar' ? ar : en;
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -146,8 +150,8 @@ export default function InspectionSubmissionStep({ onBack }: { onBack: () => voi
       intakeId: effectiveIntakeId,
       onboardingSessionId: effectiveIntakeId,
       companyProfile,
-      properties,
-      selectedAddOns: selectedAddOns || [],
+      properties: submissionProperties,
+      selectedAddOns: [],
       signatureName: signatureName.trim(),
       otpVerificationId: contractOtpVerificationId,
       contractOtpVerificationId,
