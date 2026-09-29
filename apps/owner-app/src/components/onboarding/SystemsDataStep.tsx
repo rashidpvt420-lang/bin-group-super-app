@@ -13,11 +13,11 @@ import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 
 const SystemsDataStep: React.FC<{ onNext: () => void; onBack: () => void }> = ({ onNext, onBack }) => {
-    const { properties, updateProperty, selectedAddOns, toggleAddOn } = useOnboardingStore();
+    const { properties, updateProperty } = useOnboardingStore();
     const { t, isRTL } = useLanguage();
 
     const activeProperty = properties[0] || ({} as any);
-    const safeSelectedAddOns = Array.isArray(selectedAddOns) ? selectedAddOns : [];
+    const safeSelectedAddOns = Array.isArray(activeProperty.selectedAddOns) ? activeProperty.selectedAddOns : [];
 
     const systemGroups = [
         {
@@ -54,23 +54,35 @@ const SystemsDataStep: React.FC<{ onNext: () => void; onBack: () => void }> = ({
     ];
 
     const allAddOns = [
-        { id: 'fire_safety', icon: ShieldAlert, name: 'Fire Safety AMC', desc: 'Civil Defense compliance checks, alarm readiness and certification support.', price: 2500, mandatory: true, showIf: true, reason: 'Mandatory baseline for UAE occupied assets.' },
-        { id: 'water_tank', icon: Droplets, name: 'Water Tank Sterilization', desc: 'Quarterly cleaning, sterilization and hygiene documentation.', price: 1200, mandatory: !!activeProperty.tank, showIf: !!activeProperty.tank, reason: 'Required when water tanks exist.' },
-        { id: 'elevator_amc', icon: Activity, name: 'Elevator / Lift AMC', desc: 'Lift inspections, safety checks and service coordination.', price: 3200, mandatory: (activeProperty.floors || 0) > 2 || (activeProperty.lifts || 0) > 0, showIf: (activeProperty.floors || 0) > 2 || (activeProperty.lifts || 0) > 0, reason: 'Required for multi-floor assets.' },
-        { id: 'hvac_pm', icon: Wind, name: 'HVAC Preventive Maintenance', desc: 'AC inspections, filters, coils, drain lines and performance checks.', price: 4500, mandatory: !!activeProperty.hvac, showIf: true, reason: 'UAE climate makes HVAC continuity mission-critical.' },
-        { id: 'cleaning', icon: Droplets, name: 'Cleaning Team / Deep Cleaning', desc: 'Common area cleaning and scheduled hygiene operations.', price: 9000, mandatory: false, showIf: true, reason: 'Recommended for shared facilities and Majlis readiness.' },
-        { id: 'security', icon: ShieldAlert, name: 'Security Services / CCTV', desc: 'Guarding coordination, access control and incident logging.', price: 12000, mandatory: false, showIf: true, reason: 'Optional manpower layer for towers, retail and high-value assets.' },
-        { id: 'technician_standby', icon: Activity, name: 'Technician Standby / Event Support', desc: 'Dedicated on-site technician for VIP events or critical operations.', price: 5000, mandatory: false, showIf: !!activeProperty.majlis || activeProperty.propertyType === 'Hotel', reason: 'Crucial for VIP operational continuity.' },
-        { id: 'pest_control', icon: ShieldAlert, name: 'Pest Control', desc: 'Quarterly municipality-approved pest control treatments.', price: 1500, mandatory: false, showIf: true, reason: 'Standard preventive hygiene measure.' },
-        { id: 'landscaping', icon: Waves, name: 'Landscaping & Irrigation', desc: 'Garden maintenance, pruning and irrigation system checks.', price: 4000, mandatory: false, showIf: activeProperty.propertyType === 'Villa' || !!activeProperty.majlis, reason: 'Essential for outdoor and garden spaces.' },
-        { id: 'move_in_out_inspection', icon: Check, name: 'Move-in / Move-out Inspection', desc: 'Snagging and condition report before/after tenancy or event.', price: 800, mandatory: false, showIf: true, reason: 'Protects asset condition and lifecycle.' },
-        { id: 'mep_support', icon: Wrench, name: 'MEP Support', desc: 'Integrated mechanical, electrical and plumbing preventive support.', price: 8500, mandatory: false, showIf: true, reason: 'Core operational resilience layer.' },
-        { id: 'office_units', icon: Building, name: 'Office Unit Support', desc: 'Office unit, pantry, lighting and fit-out coordination checks.', price: 2500, mandatory: false, showIf: (activeProperty.offices || 0) > 0, reason: 'Office units need separate occupancy tracking.' },
-        { id: 'parking_management', icon: Camera, name: 'Parking Management', desc: 'Parking access coordination and incident reporting.', price: 6000, mandatory: false, showIf: (activeProperty.parkingCapacity || 0) > 0 || (activeProperty.units || 0) >= 20, reason: 'Recommended for towers and high-occupancy assets.' },
-        { id: 'waste_management', icon: Trash2, name: 'Waste Management', desc: 'Waste room checks and disposal schedule coordination.', price: 3500, mandatory: !!activeProperty.wasteMan, showIf: true, reason: 'Protects hygiene and compliance.' },
+        { id: 'fire_safety', icon: ShieldAlert, name: 'Fire Safety AMC', desc: 'Civil Defense compliance checks, alarm readiness and certification support.', price: 8000, mandatory: !!activeProperty.fireAlarm || !!activeProperty.firePump, showIf: true, reason: 'Required when a Fire / Civil Defense system exists.' },
+        { id: 'water_tank', icon: Droplets, name: 'Water Tank Sterilization', desc: 'Quarterly cleaning, sterilization and hygiene documentation.', price: 2200, mandatory: !!activeProperty.tank, showIf: true, reason: 'Required when water tanks exist.' },
+        { id: 'elevator_amc', icon: Activity, name: 'Elevator / Lift AMC', desc: 'Lift inspections, safety checks and service coordination.', price: 7500, mandatory: (activeProperty.lifts || 0) > 0, showIf: true, reason: 'Required when lifts exist.' },
+        { id: 'hvac_pm', icon: Wind, name: 'HVAC Preventive Maintenance', desc: 'AC inspections, filters, coils, drain lines and performance checks.', price: 6680, mandatory: !!activeProperty.hvac || Number(activeProperty.hvacCount || 0) > 0, showIf: true, reason: 'Required when HVAC is in scope.' },
+        { id: 'cleaning', icon: Droplets, name: 'Cleaning Team / Deep Cleaning', desc: 'Common area cleaning and scheduled hygiene operations.', price: 18450, mandatory: false, showIf: true, reason: 'Recommended for shared facilities and Majlis readiness.' },
+        { id: 'security', icon: ShieldAlert, name: 'Security Services / CCTV', desc: 'Guarding coordination, access control and incident logging.', price: 36600, mandatory: false, showIf: true, reason: 'Optional manpower layer for towers, retail and high-value assets.' },
+        { id: 'technician_standby', icon: Activity, name: 'Technician Standby / Event Support', desc: 'Dedicated on-site technician for VIP events or critical operations.', price: 7500, mandatory: false, showIf: !!activeProperty.majlis || activeProperty.propertyType === 'Hotel', reason: 'Crucial for VIP operational continuity.' },
+        { id: 'pest_control', icon: ShieldAlert, name: 'Pest Control', desc: 'Quarterly municipality-approved pest control treatments.', price: 2475, mandatory: false, showIf: true, reason: 'Standard preventive hygiene measure.' },
+        { id: 'landscaping', icon: Waves, name: 'Landscaping & Irrigation', desc: 'Garden maintenance, pruning and irrigation system checks.', price: 12000, mandatory: false, showIf: activeProperty.propertyType === 'Villa' || !!activeProperty.majlis, reason: 'Essential for outdoor and garden spaces.' },
+        { id: 'move_in_out_inspection', icon: Check, name: 'Move-in / Move-out Inspection', desc: 'Snagging and condition report before/after tenancy or event.', price: 1200, mandatory: false, showIf: true, reason: 'Protects asset condition and lifecycle.' },
+        { id: 'mep_support', icon: Wrench, name: 'MEP Support', desc: 'Integrated mechanical, electrical and plumbing preventive support.', price: 13500, mandatory: false, showIf: true, reason: 'Core operational resilience layer.' },
+        { id: 'office_units', icon: Building, name: 'Office Unit Support', desc: 'Office unit, pantry, lighting and fit-out coordination checks.', price: 6500, mandatory: false, showIf: (activeProperty.offices || 0) > 0, reason: 'Office units need separate occupancy tracking.' },
+        { id: 'parking_management', icon: Camera, name: 'Parking Management', desc: 'Parking access coordination and incident reporting.', price: 9000, mandatory: false, showIf: (activeProperty.parkingCapacity || 0) > 0 || (activeProperty.units || 0) >= 20, reason: 'Recommended for towers and high-occupancy assets.' },
+        { id: 'waste_management', icon: Trash2, name: 'Waste Management', desc: 'Waste room checks and disposal schedule coordination.', price: 6600, mandatory: !!activeProperty.wasteMan, showIf: true, reason: 'Protects hygiene and compliance.' },
     ].filter((addon) => addon.showIf);
 
+    const mandatoryIds = allAddOns.filter((addon) => addon.mandatory).map((addon) => addon.id);
     const selectedVisibleAddOns = allAddOns.filter((addon) => safeSelectedAddOns.includes(addon.id) || addon.mandatory);
+    const setAddOn = (id: string) => {
+        if (mandatoryIds.includes(id)) return;
+        const next = safeSelectedAddOns.includes(id)
+            ? safeSelectedAddOns.filter((item: string) => item !== id)
+            : [...safeSelectedAddOns, id];
+        updateProperty(0, { selectedAddOns: Array.from(new Set(next)) });
+    };
+    const continueNext = () => {
+        updateProperty(0, { selectedAddOns: Array.from(new Set([...safeSelectedAddOns, ...mandatoryIds])) });
+        onNext();
+    };
     const addOnTotal = selectedVisibleAddOns.reduce((sum, addon) => sum + addon.price, 0);
 
     return (
@@ -147,7 +159,7 @@ const SystemsDataStep: React.FC<{ onNext: () => void; onBack: () => void }> = ({
                                 return (
                                     <Grid item xs={12} md={6} key={addon.id}>
                                         <Paper
-                                            onClick={() => !addon.mandatory && toggleAddOn(addon.id)}
+                                            onClick={() => setAddOn(addon.id)}
                                             sx={{
                                                 p: 2.5,
                                                 borderRadius: 4,
@@ -217,7 +229,7 @@ const SystemsDataStep: React.FC<{ onNext: () => void; onBack: () => void }> = ({
                     <Button
                         variant="contained"
                         size="large"
-                        onClick={onNext}
+                        onClick={continueNext}
                         endIcon={isRTL ? <ArrowRight style={{ transform: 'rotate(180deg)' }} /> : <ArrowRight />}
                         sx={{ borderRadius: 100, px: 8, bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, '&:hover': { bgcolor: '#E6C77A' } }}
                     >
