@@ -706,8 +706,9 @@ export const ownerReviewTicketCompletion = onCall({ cors: true, enforceAppCheck:
             action: `OWNER_TICKET_${action}`,
             targetType: "maintenanceTickets",
             targetId: ticketId,
-            before: { status: fresh.status, ownerApproved: fresh.ownerApproved },
-            after: { status: baseUpdate.status, ownerApproved: baseUpdate.ownerApproved },
+            // N-03: tickets reach review without an ownerApproved field; Firestore rejects undefined.
+            before: { status: fresh.status ?? null, ownerApproved: fresh.ownerApproved ?? null },
+            after: { status: baseUpdate.status, ownerApproved: baseUpdate.ownerApproved ?? null },
             reason: reason || null,
             metadata: {
                 propertyId: fresh.propertyId || "",
