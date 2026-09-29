@@ -406,12 +406,12 @@ export const adminCompleteOwnerPortfolioInspections = onCall({ cors: true, enfor
       slaTier: pricing.slaTier || property.slaTier,
       paymentPlan: pricing.paymentPlan || property.paymentPlan,
       ratesVerified: pricing.ratesVerified === true,
-      verifiedMaintenanceRate: pricing.verifiedMaintenanceRate,
-      verifiedManagementRate: pricing.verifiedManagementRate,
       pricingVerificationSource: "ADMIN_SITE_VISIT",
       pricingVerificationInspectionId: text(inspection.id),
       pricingVerificationEvidenceHash: text(inspection.evidenceHash),
     };
+    if (pricing.verifiedMaintenanceRate !== undefined) next.verifiedMaintenanceRate = pricing.verifiedMaintenanceRate;
+    if (pricing.verifiedManagementRate !== undefined) next.verifiedManagementRate = pricing.verifiedManagementRate;
     if (pricing.pricingDriver === "unit") next.units = pricing.units;
     if (pricing.pricingDriver === "sqft") next.sqft = pricing.sqft;
     if (pricing.pricingDriver === "bed") { next.beds = pricing.beds; next.units = pricing.beds; }
