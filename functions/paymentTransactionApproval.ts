@@ -5,7 +5,7 @@ import * as crypto from "crypto";
 import { createBrokerCommissionForContract } from "./brokerCommissions";
 import { assertStoredOwnerPaymentReceipt } from "./paymentReceiptEvidence";
 import { normalizeAedMoney } from "./shared/aedMoney";
-import { rentApprovalDecision, rentRejectionDecision } from "./rentPaymentStatus";
+import { decideRentConfirmedAmount, rentApprovalDecision, rentRejectionDecision } from "./rentPaymentStatus";
 import { generateMobilizationInvoicePdfArtifact } from "./pdfEngine";
 import { resolveActivePaymentConfiguration } from "./paymentConfiguration";
 import {
@@ -173,10 +173,20 @@ export const adminApprovePayment = onCall({ cors: true, enforceAppCheck: true },
       throw new HttpsError("failed-precondition", "Rent approval requires immutable submitted amount, reference, and receipt evidence.");
     }
     if (
-      Number.isFinite(Number(request.data?.amountReceived)) &&
-      Math.abs(Number(request.data.amountReceived) - submittedRentAmount) > 0.01
+      request.data?.amountReceived !== undefined &&
+      request.data?.amountReceived !== null &&
+      String(request.data.amountReceived).trim() !== ""
     ) {
-      throw new HttpsError("failed-precondition", "Admin approval cannot alter the tenant or owner submitted rent amount.");
+      const amountDecision = decideRentConfirmedAmount(
+        payment.amount || payment.amountPaid || payment.rentPaid,
+        request.data.amountReceived,
+      );
+      if (amountDecision === "invalid") {
+        throw new HttpsError("invalid-argument", "Received amount must be a finite AED value.");
+      }
+      if (amountDecision === "mismatch") {
+        throw new HttpsError("failed-precondition", "Admin approval cannot alter the tenant or owner submitted rent amount.");
+      }
     }
     const receiptEvidence = await assertStoredOwnerPaymentReceipt({
       ownerUid: rentOwnerUid,

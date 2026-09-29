@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import {
+  decideRentConfirmedAmount,
   rentApprovalDecision,
   rentRejectionDecision,
 } from '../functions/rentPaymentStatus.ts';
@@ -55,4 +56,25 @@ test('rent approval and rejection re-check the fresh ledger row inside the trans
   assert.match(rejectBlock, /An approved rent payment cannot be rejected/);
   assert.match(rejectBlock, /idempotent: rentRejectionIdempotent/);
   assert.match(approval, /An activated payment cannot be rejected/);
+  assert.match(approveBlock, /decideRentConfirmedAmount/);
+  assert.doesNotMatch(approveBlock, />\s*0\.01/);
+});
+
+test('an exact fils match, including 1234.50 and 1234.5, approves', () => {
+  assert.equal(decideRentConfirmedAmount(1234.5, 1234.5), 'match');
+  assert.equal(decideRentConfirmedAmount(1234.5, '1234.50'), 'match');
+  assert.equal(decideRentConfirmedAmount('1234.50', 1234.5), 'match');
+  assert.equal(decideRentConfirmedAmount('1234.5', '1234.50'), 'match');
+});
+
+test('a 0.01 AED difference is rejected', () => {
+  assert.equal(decideRentConfirmedAmount(1234.5, 1234.51), 'mismatch');
+  assert.equal(decideRentConfirmedAmount('1234.50', '1234.49'), 'mismatch');
+  assert.equal(decideRentConfirmedAmount(100, '100.01'), 'mismatch');
+});
+
+test('a larger confirmed-amount difference is rejected', () => {
+  assert.equal(decideRentConfirmedAmount(1234.5, 2000), 'mismatch');
+  assert.equal(decideRentConfirmedAmount('1234.50', '1334.50'), 'mismatch');
+  assert.equal(decideRentConfirmedAmount(10, 0), 'mismatch');
 });

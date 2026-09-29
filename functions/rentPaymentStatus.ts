@@ -14,6 +14,7 @@ export type RentPaymentSnapshot = {
 
 export type RentApprovalDecision = "replay" | "approve" | "refuse_rejected";
 export type RentRejectionDecision = "replay" | "reject" | "refuse_approved";
+export type RentConfirmedAmountDecision = "match" | "mismatch" | "invalid";
 
 const roleOf = (value: unknown) => String(value ?? "").trim().toLowerCase();
 
@@ -44,4 +45,48 @@ export function rentRejectionDecision(payment: RentPaymentSnapshot): RentRejecti
   if (phase === "rejected") return "replay";
   if (phase === "approved") return "refuse_approved";
   return "reject";
+}
+
+const parseDecimalStringToFils = (text: string): number | null => {
+  const match = /^(-?)(\d+)(?:\.(\d+))?$/.exec(text);
+  if (!match) return null;
+  const sign = match[1] === "-" ? -1 : 1;
+  const whole = BigInt(match[2]);
+  const fraction = match[3] ?? "";
+  let fils = whole * 100n;
+  if (fraction.length === 1) fils += BigInt(fraction) * 10n;
+  else if (fraction.length >= 2) {
+    fils += BigInt(fraction.slice(0, 2));
+    if (fraction.length > 2 && fraction[2] >= "5") fils += 1n;
+  }
+  const signed = sign < 0 ? -fils : fils;
+  if (signed > BigInt(Number.MAX_SAFE_INTEGER) || signed < BigInt(Number.MIN_SAFE_INTEGER)) return null;
+  return Number(signed);
+};
+
+/**
+ * Convert an AED amount to integer fils. Strings are parsed in decimal so
+ * "1234.50" and 1234.5 are the same 123450 fils. The comparison itself is
+ * integer equality, with no dirham tolerance.
+ */
+export function aedToFils(value: unknown): number | null {
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+    return parseDecimalStringToFils(trimmed);
+  }
+  if (typeof value !== "number" || !Number.isFinite(value)) return null;
+  const normalized = Object.is(value, -0) ? 0 : value;
+  const text = normalized.toString();
+  const fractionLength = text.includes(".") && !/[eE]/.test(text) ? text.split(".")[1].length : 0;
+  if (!/[eE]/.test(text) && fractionLength <= 2) return parseDecimalStringToFils(text);
+  const fils = Math.round(normalized * 100);
+  return Number.isSafeInteger(fils) ? fils : null;
+}
+
+export function decideRentConfirmedAmount(submitted: unknown, confirmed: unknown): RentConfirmedAmountDecision {
+  const submittedFils = aedToFils(submitted);
+  const confirmedFils = aedToFils(confirmed);
+  if (submittedFils === null || confirmedFils === null) return "invalid";
+  return submittedFils === confirmedFils ? "match" : "mismatch";
 }
