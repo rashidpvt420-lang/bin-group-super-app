@@ -1,3 +1,5 @@
+import { isValidLatLng } from './geoAnchor';
+
 export interface ResolvedPropertyLocation {
   latitude: number | null;
   longitude: number | null;
@@ -79,7 +81,9 @@ export function resolvePropertyLocation(record: any): ResolvedPropertyLocation {
     if (longitude === null) longitude = getVal(record.propertyLocation?.lng);
   }
 
-  const hasExactCoordinates = latitude !== null && longitude !== null;
+  const hasExactCoordinates = latitude !== null
+    && longitude !== null
+    && isValidLatLng(latitude, longitude);
 
   // Resolve address & emirate
   const address = record?.address || record?.addressLine || record?.locationText || record?.location?.address || record?.geo?.address || (typeof record?.location === 'string' ? record.location : '') || '';
