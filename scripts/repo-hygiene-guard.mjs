@@ -48,6 +48,26 @@ const forbiddenTrackedPathspecs = [
   ['src/owner/pages/OwnerUnitsPage.tsx', 'retired duplicate Owner units implementation'],
   ['src/lib/offlineSync.ts', 'unreferenced legacy offline sync authority'],
   ['apps/owner-app/src/lib/offlineSync.ts', 'unreferenced legacy Owner offline sync authority'],
+  // Firebase Auth exports and credential dumps must never be committed. Removing a file
+  // does not remove it from git history: exposed credentials must also be rotated.
+  ['users_temp.json', 'tracked Firebase Auth user export (credential material)'],
+  [':(glob,icase)**/*auth*export*.json', 'tracked Firebase Auth user export (credential material)'],
+  [':(glob,icase)**/*users*export*.json', 'tracked Firebase Auth user export (credential material)'],
+  [':(glob,icase)**/*service*account*.json', 'tracked service-account key material'],
+];
+
+// Content signatures for credential material in tracked JSON, independent of file name.
+// Firebase Auth exports carry per-user localId + passwordHash + salt; service-account
+// keys carry type service_account + an inline PEM private key.
+const credentialJsonSignatures = [
+  {
+    label: 'Firebase Auth user export (password hashes/salts)',
+    matches: (content) => /"localId"\s*:/.test(content) && /"passwordHash"\s*:\s*"/.test(content) && /"salt"\s*:\s*"/.test(content),
+  },
+  {
+    label: 'service-account private key',
+    matches: (content) => /"type"\s*:\s*"service_account"/.test(content) && /"private_key"\s*:\s*"-----BEGIN/.test(content),
+  },
 ];
 
 const violations = [];
@@ -99,6 +119,14 @@ function inspectFile(filePath) {
     const trimmedFile = content.trim();
     if (trimmedFile === '{}' || trimmedFile.length < 100) {
       violations.push(`${rel}: invalid placeholder package-lock.json detected. Delete it or generate a real workspace lockfile.`);
+    }
+  }
+
+  if (path.extname(filePath) === '.json' && rel !== 'package-lock.json') {
+    for (const signature of credentialJsonSignatures) {
+      if (signature.matches(content)) {
+        violations.push(`${rel}: ${signature.label} detected. Remove it and rotate the exposed credentials; deleting the file does not remove it from git history.`);
+      }
     }
   }
 

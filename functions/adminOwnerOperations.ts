@@ -407,7 +407,9 @@ export const approveOwnerSubmissionOperationalFlow = onCall({ cors: true, enforc
   return { status: "APPROVED_PENDING_OWNER_SIGNATURE", ownerId, contractId, propertyIds, paymentId, signUrl };
 });
 
-const ALREADY_SIGNED_STATUSES = new Set(["READY_FOR_ACTIVATION", "ACTIVE", "SIGNED", "PENDING_ACTIVATION"]);
+// Idempotent "already signed" short-circuit requires server-written signature evidence.
+// Status strings other than ACTIVE (which only payment approval can set) are not trusted.
+const ALREADY_SIGNED_STATUSES = new Set(["ACTIVE"]);
 
 export const ownerSignContractAndQueuePdf = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Owner authentication required.");

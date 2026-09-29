@@ -12,6 +12,12 @@ import { binThemeTokens } from '../theme/binGroupTheme';
 import { db, doc, getDoc } from '../lib/firebase';
 import { useRole } from '../context/RoleContext';
 import { formatAED } from '../utils/formatters';
+import { aedTotalWithVat } from '../utils/uaeVat.mjs';
+
+const formatInvoiceAed = (value: number) => Number(value || 0).toLocaleString('en-AE', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+});
 
 // Issuer's own TRN — not yet confirmed against FTA registration. Replace with the real
 // registered number once verified; until then this must not assert an unverified figure,
@@ -101,9 +107,8 @@ export default function InvoiceDetailsPage() {
         );
     }
 
-    const total = (invoice.items || []).reduce((sum: number, item: any) => sum + (item.total || 0), 0);
-    const vat = Math.round(total * 0.05);
-    const finalTotal = total + vat;
+    const lineNet = (invoice.items || []).reduce((sum: number, item: any) => sum + Number(item.total || 0), 0);
+    const { net: total, vat, total: finalTotal } = aedTotalWithVat(lineNet);
 
     return (
         <Container maxWidth="lg" sx={{ py: 10 }}>
@@ -231,16 +236,16 @@ export default function InvoiceDetailsPage() {
                         <Stack spacing={2}>
                             <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                                 <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary }}>SUBTOTAL</Typography>
-                                <Typography variant="body2" sx={{ color: binThemeTokens.textPrimary, fontWeight: 700 }}>{formatAED(total)} AED</Typography>
+                                <Typography variant="body2" sx={{ color: binThemeTokens.textPrimary, fontWeight: 700 }}>{formatInvoiceAed(total)} AED</Typography>
                             </Box>
                             <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                                 <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary }}>{t('common.vat_5')}</Typography>
-                                <Typography variant="body2" sx={{ color: binThemeTokens.textPrimary, fontWeight: 700 }}>{formatAED(vat)} AED</Typography>
+                                <Typography variant="body2" sx={{ color: binThemeTokens.textPrimary, fontWeight: 700 }}>{formatInvoiceAed(vat)} AED</Typography>
                             </Box>
                             <Divider sx={{ borderColor: 'rgba(198, 167, 94, 0.2)', my: 1 }} />
                             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                 <Typography variant="h6" fontWeight="900" sx={{ color: binThemeTokens.gold }}>TOTAL DUE / إجمالي المستحق</Typography>
-                                <Typography variant="h3" fontWeight="900" sx={{ color: binThemeTokens.goldLight }}>{formatAED(finalTotal)} AED</Typography>
+                                <Typography variant="h3" fontWeight="900" sx={{ color: binThemeTokens.goldLight }}>{formatInvoiceAed(finalTotal)} AED</Typography>
                             </Box>
                         </Stack>
                     </Box>
