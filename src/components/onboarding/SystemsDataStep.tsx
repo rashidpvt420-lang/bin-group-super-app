@@ -12,8 +12,6 @@ const aed = (value: number) => `AED ${value.toLocaleString()}`;
 const label = (text: LocalText, ar: boolean) => (ar ? text.ar : text.en);
 
 const ELEVATOR_ADDON_ID = 'elevator_amc';
-const LEGACY_OPTIONAL_ADDON_IDS = ['waste_management'];
-const LEGACY_OPTIONAL_PRUNE_KEY = 'bin-group:onboarding:optional-addons-pruned:v1';
 
 const copy = {
   audit: { en: 'Systems & Add-ons Audit', ar: 'تدقيق الأنظمة والإضافات' },
