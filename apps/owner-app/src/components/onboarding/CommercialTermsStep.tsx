@@ -10,7 +10,7 @@ import { formatAED } from '../../utils/formatters';
 import { UAE_PRICING_MATRIX_2026, resolveAssetClassIdForPropertyType } from '@bin/shared';
 
 const CommercialTermsStep: React.FC<{ onNext: () => void; onBack: () => void }> = ({ onNext, onBack }) => {
-    const { setSelectedPlan, selectedPlan, properties, updateProperty, calculateSummary, portfolioSummary } = useOnboardingStore();
+    const { properties, updateProperty, calculateSummary, portfolioSummary } = useOnboardingStore();
     const { t, isRTL } = useLanguage();
     
     const activePropertyIndex = 0;
