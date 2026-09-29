@@ -98,6 +98,18 @@ test('property location persists canonical untrusted geo for review and submissi
   }
 });
 
+test('protected five-page calls never let legacy global add-ons become portfolio pricing authority', async () => {
+  const [review, signature, submission] = await Promise.all([
+    read('src/components/onboarding/ReviewBeforeSubmitStep.tsx'),
+    read('src/components/onboarding/ContractSignatureStep.tsx'),
+    read('src/components/onboarding/InspectionSubmissionStep.tsx'),
+  ]);
+  for (const source of [review, signature, submission]) {
+    assert.match(source, /selectedAddOns:\s*Array\.isArray\(property\.selectedAddOns\) \? property\.selectedAddOns : \[\]/);
+    assert.match(source, /selectedAddOns:\s*\[\]/);
+  }
+});
+
 test('resumed Owner review fails closed on missing GPS and never renders misleading zero quote values', async () => {
   const source = await read('src/components/onboarding/ReviewBeforeSubmitStep.tsx');
   assert.match(source, /const missingGps = React\.useMemo/);
