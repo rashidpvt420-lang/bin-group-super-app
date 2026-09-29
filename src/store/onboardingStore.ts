@@ -41,6 +41,7 @@ export interface PropertyData {
   age: number;
   annualRent?: number;
   annualRevenue?: number;
+  selectedAddOns?: string[];
   pool: boolean;
   lifts: number;
   tank: boolean;
@@ -197,6 +198,7 @@ const zeroClientQuote = (reason: string): QuoteOutput => ({
 });
 
 const calculatePropertyAnnualValue = (property: PropertyData, selectedAddOns: string[]): QuoteOutput => {
+  const propertyAddOns = Array.isArray(property.selectedAddOns) ? property.selectedAddOns : selectedAddOns;
   const mosqueProfile = property.mosqueProfile || {};
   const gymProfile = property.gymProfile || {};
   const isMosque = isMosqueAsset(property);
@@ -238,6 +240,7 @@ const calculatePropertyAnnualValue = (property: PropertyData, selectedAddOns: st
     annualRent,
     annualRevenue,
     propertyAge: isMosque ? Number(mosqueProfile.propertyAgeYears) || property.age : property.age,
+    condition: property.condition || 'Good',
     floors: property.floors,
     lifts: property.lifts,
     hasPool: isGym ? Boolean(gymProfile.swimmingPool || property.pool) : property.pool,
@@ -248,7 +251,7 @@ const calculatePropertyAnnualValue = (property: PropertyData, selectedAddOns: st
     hasSiraCctv: isMosque ? Boolean(property.sira || mosqueProfile.cctvInstalled || Number(mosqueProfile.cctvCameraCount) > 0) : property.sira,
     hasGenerator: property.gen,
     hasBmu: property.bmu,
-    addOns: selectedAddOns,
+    addOns: propertyAddOns,
     slaTier: property.slaTier || (isMosque ? 'premium' : 'standard'),
     paymentPlan: property.paymentPlan || 'annual',
     hasWaterTank: property.tank,
@@ -271,7 +274,7 @@ const defaultProperty: PropertyData = {
   wasteMan: false, gen: false, hvac: false, districtCooling: false, electrical: false, plumbing: false,
   drainage: false, pumps: false, emergencyLighting: false, accessControl: false, bms: false, iotSensors: false,
   gym: false, majlis: false, majlisType: 'none', missions: [], condition: 'Good', assetGrade: 'Standard',
-  currentStatus: 'Active', address: '', strategy: 'fm', slaTier: 'standard', paymentPlan: 'annual',
+  currentStatus: 'Active', address: '', strategy: 'fm', slaTier: 'standard', paymentPlan: 'annual', selectedAddOns: [],
 };
 
 const emptySummary = (): PortfolioSummary => ({
