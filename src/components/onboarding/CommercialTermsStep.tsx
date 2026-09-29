@@ -136,7 +136,7 @@ const excludedScopes: Record<string, LocalText[]> = {
 };
 
 const CommercialTermsStep: React.FC<{ onNext: () => void; onBack: () => void }> = ({ onNext, onBack }) => {
-    const { properties, propertyData, selectedAddOns, updateProperty, calculateSummary, portfolioSummary } = useOnboardingStore();
+    const { properties, propertyData, updateProperty, calculateSummary, portfolioSummary } = useOnboardingStore();
     const { t, isRTL, lang } = useLanguage();
     const ar = lang === 'ar';
 
@@ -183,7 +183,6 @@ const CommercialTermsStep: React.FC<{ onNext: () => void; onBack: () => void }> 
         properties.forEach((_, index) => updateProperty(index, { strategy }));
         calculateSummary();
     };
-    const quote = portfolioSummary.quoteResults?.[property?.id] || Object.values(portfolioSummary.quoteResults || {})[0];
     const selectedStrategy = property.strategy || 'fm_only';
     const selectedPaymentPlan = property.paymentPlan || 'annual';
     const selectedSlaTier = property.slaTier || 'standard';
