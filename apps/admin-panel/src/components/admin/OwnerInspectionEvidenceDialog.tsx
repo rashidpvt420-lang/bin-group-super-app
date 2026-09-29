@@ -36,6 +36,7 @@ type InspectionRow = {
   gymVerificationStatus?: string;
   pricingDriver?: 'facility' | 'unit' | 'sqft' | 'bed' | 'sqft+capacity';
   ownerDeclaredPropertySnapshot?: Record<string, any>;
+  pricingRateBounds?: { maintenanceMin?: number; maintenanceMax?: number; managementMin?: number; managementMax?: number };
   pricingVerificationStatus?: string;
 };
 
@@ -59,6 +60,20 @@ type Draft = {
     zone: string;
     slaTier: string;
     paymentPlan: string;
+    floors: number;
+    lifts: number;
+    hvacCount: number;
+    hvac: boolean;
+    districtCooling: boolean;
+    fireAlarm: boolean;
+    firePump: boolean;
+    sira: boolean;
+    gen: boolean;
+    bmu: boolean;
+    tank: boolean;
+    pool: boolean;
+    verifiedMaintenanceRate: number;
+    verifiedManagementRate: number;
   };
 };
 
@@ -123,6 +138,20 @@ const defaultDraft = (row?: InspectionRow): Draft => ({
     zone: String(row?.ownerDeclaredPropertySnapshot?.zone || 'B'),
     slaTier: String(row?.ownerDeclaredPropertySnapshot?.slaTier || 'standard'),
     paymentPlan: String(row?.ownerDeclaredPropertySnapshot?.paymentPlan || 'annual'),
+    floors: Number(row?.ownerDeclaredPropertySnapshot?.floors || 0),
+    lifts: Number(row?.ownerDeclaredPropertySnapshot?.lifts || 0),
+    hvacCount: Number(row?.ownerDeclaredPropertySnapshot?.hvacCount || 0),
+    hvac: row?.ownerDeclaredPropertySnapshot?.hvac === true,
+    districtCooling: row?.ownerDeclaredPropertySnapshot?.districtCooling === true,
+    fireAlarm: row?.ownerDeclaredPropertySnapshot?.fireAlarm === true,
+    firePump: row?.ownerDeclaredPropertySnapshot?.firePump === true,
+    sira: row?.ownerDeclaredPropertySnapshot?.sira === true,
+    gen: row?.ownerDeclaredPropertySnapshot?.gen === true,
+    bmu: row?.ownerDeclaredPropertySnapshot?.bmu === true,
+    tank: row?.ownerDeclaredPropertySnapshot?.tank === true,
+    pool: row?.ownerDeclaredPropertySnapshot?.pool === true,
+    verifiedMaintenanceRate: Number(row?.pricingRateBounds?.maintenanceMin || 0),
+    verifiedManagementRate: Number(row?.pricingRateBounds?.managementMin || 0),
   },
 });
 
@@ -197,12 +226,20 @@ export default function OwnerInspectionEvidenceDialog({
     });
   };
 
-  const updatePricing = (id: string, key: keyof Draft['pricingVerification'], value: string | number) => {
+  const updatePricing = (id: string, key: keyof Draft['pricingVerification'], value: string | number | boolean) => {
     const row = rows.find((entry) => entry.id === id);
     setDrafts((current) => {
       const currentDraft = current[id] || defaultDraft(row);
       return { ...current, [id]: { ...currentDraft, pricingVerification: { ...currentDraft.pricingVerification, [key]: value } } };
     });
+  };
+
+  const contractScopeFor = (row: InspectionRow) => {
+    const mode = String(row.ownerDeclaredPropertySnapshot?.strategy || '').trim().toLowerCase();
+    return {
+      fm: ['fm', 'fm_only', 'maintenance', 'maintenance_only', 'mosque_fm', 'both', 'hybrid', 'combined', 'total_care', 'total-care'].includes(mode),
+      pm: ['pm', 'pm_only', 'rent', 'property_management', 'both', 'hybrid', 'combined', 'total_care', 'total-care'].includes(mode),
+    };
   };
 
   const captureGps = async (id: string) => {
@@ -252,6 +289,16 @@ export default function OwnerInspectionEvidenceDialog({
     }
     if (driver === 'sqft+capacity' && ((!Number.isFinite(draft.pricingVerification.sqft) || draft.pricingVerification.sqft <= 0) || (!Number.isFinite(draft.pricingVerification.units) || draft.pricingVerification.units <= 0))) {
       setError('Record the Admin-verified mosque area and worshipper capacity before saving this visit.'); return;
+    }
+    const scope = contractScopeFor(row);
+    if (!['A', 'B', 'C'].includes(String(draft.pricingVerification.zone || '').toUpperCase())) {
+      setError('Select the Admin-verified pricing zone A, B, or C.'); return;
+    }
+    if (scope.fm && driver !== 'sqft+capacity' && !(Number(draft.pricingVerification.verifiedMaintenanceRate) > 0)) {
+      setError('Record the Admin-verified Maintenance rate within the configured asset range.'); return;
+    }
+    if (scope.pm && !(Number(draft.pricingVerification.verifiedManagementRate) > 0)) {
+      setError('Record the Admin-verified Property Management rate within the configured asset range.'); return;
     }
     if (isGym(row)) {
       const verifiedArea = Number(draft.gymVerification.verifiedServiceAreaSqft);
@@ -364,8 +411,22 @@ export default function OwnerInspectionEvidenceDialog({
                       {row.pricingDriver === 'sqft+capacity' && <Grid item xs={12} md={4}><TextField fullWidth required type="number" label="Verified worshipper capacity" value={draft.pricingVerification.units || ''} onChange={(e) => updatePricing(row.id, 'units', Number(e.target.value))} /></Grid>}
                       <Grid item xs={12} md={4}><TextField fullWidth type="number" label="Verified property age (years)" value={draft.pricingVerification.propertyAge || 0} onChange={(e) => updatePricing(row.id, 'propertyAge', Number(e.target.value))} /></Grid>
                       <Grid item xs={12} md={4}><TextField fullWidth required label="Verified emirate" value={draft.pricingVerification.emirate} onChange={(e) => updatePricing(row.id, 'emirate', e.target.value)} /></Grid>
-                      <Grid item xs={12} md={4}><TextField fullWidth type="number" label="Verified annual rent (PM)" value={draft.pricingVerification.annualRent || ''} onChange={(e) => updatePricing(row.id, 'annualRent', Number(e.target.value))} /></Grid>
-                      <Grid item xs={12} md={4}><TextField fullWidth type="number" label="Verified managed revenue (PM)" value={draft.pricingVerification.annualRevenue || ''} onChange={(e) => updatePricing(row.id, 'annualRevenue', Number(e.target.value))} /></Grid>
+                      <Grid item xs={12} md={4}><TextField fullWidth select required label="Verified pricing zone" value={draft.pricingVerification.zone || 'B'} onChange={(e) => updatePricing(row.id, 'zone', e.target.value)}><MenuItem value="A">A — Premium</MenuItem><MenuItem value="B">B — Standard</MenuItem><MenuItem value="C">C — Budget / Industrial</MenuItem></TextField></Grid>
+                      <Grid item xs={12} md={4}><TextField fullWidth select required label="Verified SLA tier" value={draft.pricingVerification.slaTier || 'standard'} onChange={(e) => updatePricing(row.id, 'slaTier', e.target.value)}><MenuItem value="standard">Standard</MenuItem><MenuItem value="premium">Premium</MenuItem><MenuItem value="elite">Elite</MenuItem></TextField></Grid>
+                      <Grid item xs={12} md={4}><TextField fullWidth select required label="Verified payment plan" value={draft.pricingVerification.paymentPlan || 'annual'} onChange={(e) => updatePricing(row.id, 'paymentPlan', e.target.value)}><MenuItem value="annual">Annual</MenuItem><MenuItem value="quarterly">Quarterly</MenuItem><MenuItem value="monthly">Monthly</MenuItem></TextField></Grid>
+                      {contractScopeFor(row).fm && row.pricingDriver !== 'sqft+capacity' && <Grid item xs={12} md={4}><TextField fullWidth required type="number" label="Verified Maintenance rate" value={draft.pricingVerification.verifiedMaintenanceRate || ''} helperText={`Allowed: AED ${Number(row.pricingRateBounds?.maintenanceMin || 0).toLocaleString()}–${Number(row.pricingRateBounds?.maintenanceMax || 0).toLocaleString()} per pricing unit`} onChange={(e) => updatePricing(row.id, 'verifiedMaintenanceRate', Number(e.target.value))} /></Grid>}
+                      {contractScopeFor(row).pm && <Grid item xs={12} md={4}><TextField fullWidth required type="number" label="Verified PM rate (%)" value={draft.pricingVerification.verifiedManagementRate || ''} helperText={`Allowed: ${Number(row.pricingRateBounds?.managementMin || 0)}%–${Number(row.pricingRateBounds?.managementMax || 0)}%`} onChange={(e) => updatePricing(row.id, 'verifiedManagementRate', Number(e.target.value))} /></Grid>}
+                      {contractScopeFor(row).pm && <Grid item xs={12} md={4}><TextField fullWidth type="number" label="Verified annual rent (PM)" value={draft.pricingVerification.annualRent || ''} onChange={(e) => updatePricing(row.id, 'annualRent', Number(e.target.value))} /></Grid>}
+                      {contractScopeFor(row).pm && <Grid item xs={12} md={4}><TextField fullWidth type="number" label="Verified managed revenue (PM)" value={draft.pricingVerification.annualRevenue || ''} onChange={(e) => updatePricing(row.id, 'annualRevenue', Number(e.target.value))} /></Grid>}
+                      {contractScopeFor(row).fm && <>
+                        <Grid item xs={6} md={3}><TextField fullWidth type="number" label="Verified floors" value={draft.pricingVerification.floors || 0} onChange={(e) => updatePricing(row.id, 'floors', Number(e.target.value))} /></Grid>
+                        <Grid item xs={6} md={3}><TextField fullWidth type="number" label="Verified lifts" value={draft.pricingVerification.lifts || 0} onChange={(e) => updatePricing(row.id, 'lifts', Number(e.target.value))} /></Grid>
+                        <Grid item xs={6} md={3}><TextField fullWidth type="number" label="Verified HVAC count" value={draft.pricingVerification.hvacCount || 0} onChange={(e) => updatePricing(row.id, 'hvacCount', Number(e.target.value))} /></Grid>
+                        {([
+                          ['hvac', 'Central HVAC / AC'], ['districtCooling', 'District cooling'], ['fireAlarm', 'Fire alarm'], ['firePump', 'Fire pump'],
+                          ['sira', 'SIRA / CCTV'], ['gen', 'Generator'], ['bmu', 'BMU / façade access'], ['tank', 'Water tank'], ['pool', 'Swimming pool'],
+                        ] as const).map(([key, label]) => <Grid item xs={12} sm={6} md={4} key={key}><FormControlLabel control={<Checkbox checked={Boolean(draft.pricingVerification[key])} onChange={(e) => updatePricing(row.id, key, e.target.checked)} />} label={`Verified: ${label}`} /></Grid>)}
+                      </>}
                     </Grid>
                   </Paper>
                 )}

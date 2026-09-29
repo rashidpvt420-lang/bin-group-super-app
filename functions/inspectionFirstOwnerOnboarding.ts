@@ -138,7 +138,7 @@ function normalizeGeo(value: PlainRecord) {
 }
 
 function quoteFor(properties: PlainRecord[], selectedAddOns: string[], quotedAtMs?: number) {
-  return calculateOwnerOnboardingQuote(properties, selectedAddOns, quotedAtMs);
+  return calculateOwnerOnboardingQuote(properties, selectedAddOns, quotedAtMs, { trustServerVerifiedRates: false });
 }
 
 function assertQuote(data: PlainRecord, properties: PlainRecord[], selectedAddOns: string[]) {
