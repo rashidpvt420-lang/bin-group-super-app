@@ -59,8 +59,6 @@ const CommercialTermsStep: React.FC<{ onNext: () => void; onBack: () => void }> 
     const handleUpdate = (data: any) => {
         properties.forEach((_, index) => updateProperty(index, data));
     };
-
-    const quote = portfolioSummary.quoteResults?.[property?.id];
     const allQuotes = Object.values(portfolioSummary.quoteResults || {});
     const portfolioAnnualTotal = allQuotes.reduce((sum, item) => sum + Number(item?.annualTotal || 0), 0);
     const portfolioMobilization = allQuotes.reduce((sum, item) => sum + Number(item?.mobilizationFee || 0), 0);
