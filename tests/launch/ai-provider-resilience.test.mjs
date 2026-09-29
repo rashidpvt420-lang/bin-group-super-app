@@ -55,7 +55,9 @@ test('mission guidance uses Gemini, OpenAI and a visible deterministic degraded 
   assert.match(mission, /defineSecret\("GEMINI_API_KEY"\)/);
   assert.match(mission, /defineSecret\("OPENAI_API_KEY"\)/);
   assert.match(mission, /enforceAppCheck:\s*true/);
-  assert.match(mission, /enforceAiUsageQuota/);
+  assert.match(mission, /reserveAiUsageQuota/);
+  assert.match(mission, /settleAiUsageQuota\(quota, true\)/);
+  assert.match(mission, /provider === "gemini" \|\| provider === "openai"/);
   assert.match(mission, /callGemini/);
   assert.match(mission, /callOpenAI/);
   assert.ok(mission.indexOf('callGemini') < mission.lastIndexOf('callOpenAI'), 'Gemini must be attempted before the OpenAI fallback');
