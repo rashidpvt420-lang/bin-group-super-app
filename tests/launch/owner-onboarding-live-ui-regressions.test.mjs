@@ -55,6 +55,18 @@ test('commercial review renders every selectable building system with visible th
   assert.match(source, /water_tank: \{ en: 'Water Tank Sterilization'/);
 });
 
+test('property location persists canonical untrusted geo for review and submission', async () => {
+  for (const path of [
+    'src/components/onboarding/PropertyLocationStep.tsx',
+    'apps/owner-app/src/components/onboarding/PropertyLocationStep.tsx',
+  ]) {
+    const source = await read(path);
+    assert.match(source, /geo:\s*\{\s*\.\.\.geo,/);
+    assert.match(source, /geo:\s*\{[\s\S]*?verified:\s*false,[\s\S]*?requiresGeoReview:\s*true,[\s\S]*?dispatchReady:\s*false,/);
+    assert.match(source, /submittedGeo:\s*\{/);
+  }
+});
+
 test('resumed Owner review fails closed on missing GPS and never renders misleading zero quote values', async () => {
   const source = await read('src/components/onboarding/ReviewBeforeSubmitStep.tsx');
   assert.match(source, /const missingGps = React\.useMemo/);
