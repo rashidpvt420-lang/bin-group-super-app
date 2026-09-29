@@ -4,7 +4,7 @@ import {
   DialogTitle, FormControlLabel, Grid, MenuItem, Paper, Stack, TextField, Typography,
 } from '@mui/material';
 import { Camera, CheckCircle2, Dumbbell, MapPin, ShieldCheck } from 'lucide-react';
-import { ASSET_PROFILE_PROPERTY_TYPES } from '@bin/shared';
+import { ASSET_PROFILE_PROPERTY_TYPES, resolveAssetClassIdForPropertyType, UAE_PRICING_MATRIX_2026 } from '@bin/shared';
 import { auth, collection, db, functions, httpsCallable, onSnapshot, query, where } from '../../lib/firebase';
 
 type GymVerification = {
@@ -168,6 +168,11 @@ const fileToBase64 = (file: File): Promise<string> => new Promise((resolve, reje
 });
 
 const isGym = (row: InspectionRow) => row.propertyType === 'Gym / Fitness Centre';
+const verifiedPricingDriverFor = (row: InspectionRow, draft: Draft) => {
+  const classId = resolveAssetClassIdForPropertyType(draft.pricingVerification.propertyType, draft.pricingVerification.assetGrade);
+  if (classId === 'mosque_fm') return 'sqft+capacity';
+  return UAE_PRICING_MATRIX_2026.assetClasses.find((asset) => asset.id === classId)?.pricingUnit || row.pricingDriver || '';
+};
 const formatMoney = (value: number) => Number(value || 0).toLocaleString('en-AE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 export default function OwnerInspectionEvidenceDialog({
@@ -271,7 +276,7 @@ export default function OwnerInspectionEvidenceDialog({
       setError('Visit evidence exceeds the secure 10 MB limit.');
       return;
     }
-    const driver = row.pricingDriver || '';
+    const driver = verifiedPricingDriverFor(row, draft);
     if (driver === 'unit' && (!Number.isFinite(draft.pricingVerification.units) || draft.pricingVerification.units <= 0)) {
       setError('Record the Admin-verified unit count before saving this visit.'); return;
     }
@@ -369,6 +374,7 @@ export default function OwnerInspectionEvidenceDialog({
             const verified = String(row.evidenceStatus || '').toUpperCase() === 'VERIFIED';
             const gymVerified = !isGym(row) || String(row.gymVerificationStatus || '').toUpperCase() === 'VERIFIED';
             const draft = drafts[row.id] || defaultDraft(row);
+            const verifiedPricingDriver = verifiedPricingDriverFor(row, draft);
             return (
               <Paper key={row.id} variant="outlined" sx={{ p: 2.5, borderColor: verified && gymVerified ? 'success.main' : 'divider' }}>
                 <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" gap={1}>
@@ -387,14 +393,14 @@ export default function OwnerInspectionEvidenceDialog({
                 {!verified && (
                   <Paper variant="outlined" sx={{ p: 2, mt: 2 }}>
                     <Typography fontWeight={900}>Verified pricing authority</Typography>
-                    <Typography variant="caption">Pricing driver: {row.pricingDriver || 'not configured'}. Confirm the physical pricing input; Owner-declared values do not control the final quote.</Typography>
+                    <Typography variant="caption">Pricing driver: {verifiedPricingDriver || 'not configured'}. Confirm the physical pricing input; Owner-declared values do not control the final quote.</Typography>
                     <Grid container spacing={2} sx={{ mt: 0.5 }}>
                       <Grid item xs={12} md={4}><TextField fullWidth required select label="Verified property type" value={draft.pricingVerification.propertyType} onChange={(e) => updatePricing(row.id, 'propertyType', e.target.value)}>{Array.from(new Set([draft.pricingVerification.propertyType, ...ASSET_PROFILE_PROPERTY_TYPES].filter(Boolean))).map((type) => <MenuItem key={type} value={type}>{type}</MenuItem>)}</TextField></Grid>
                       <Grid item xs={12} md={4}><TextField fullWidth required select label="Verified asset grade" value={draft.pricingVerification.assetGrade} onChange={(e) => updatePricing(row.id, 'assetGrade', e.target.value)}><MenuItem value="Standard">Standard</MenuItem><MenuItem value="Premium">Premium</MenuItem><MenuItem value="Luxury">Luxury</MenuItem><MenuItem value="Ultra-Luxury">Ultra-Luxury</MenuItem><MenuItem value="Sovereign">Sovereign</MenuItem></TextField></Grid>
-                      {row.pricingDriver === 'unit' && <Grid item xs={12} md={4}><TextField fullWidth required type="number" label="Verified unit count" value={draft.pricingVerification.units || ''} onChange={(e) => updatePricing(row.id, 'units', Number(e.target.value))} /></Grid>}
-                      {(row.pricingDriver === 'sqft' || row.pricingDriver === 'sqft+capacity') && <Grid item xs={12} md={4}><TextField fullWidth required type="number" label="Verified service area (sq ft)" value={draft.pricingVerification.sqft || ''} onChange={(e) => updatePricing(row.id, 'sqft', Number(e.target.value))} /></Grid>}
-                      {row.pricingDriver === 'bed' && <Grid item xs={12} md={4}><TextField fullWidth required type="number" label="Verified bed count" value={draft.pricingVerification.beds || ''} onChange={(e) => updatePricing(row.id, 'beds', Number(e.target.value))} /></Grid>}
-                      {row.pricingDriver === 'sqft+capacity' && <Grid item xs={12} md={4}><TextField fullWidth required type="number" label="Verified worshipper capacity" value={draft.pricingVerification.units || ''} onChange={(e) => updatePricing(row.id, 'units', Number(e.target.value))} /></Grid>}
+                      {verifiedPricingDriver === 'unit' && <Grid item xs={12} md={4}><TextField fullWidth required type="number" label="Verified unit count" value={draft.pricingVerification.units || ''} onChange={(e) => updatePricing(row.id, 'units', Number(e.target.value))} /></Grid>}
+                      {(verifiedPricingDriver === 'sqft' || verifiedPricingDriver === 'sqft+capacity') && <Grid item xs={12} md={4}><TextField fullWidth required type="number" label="Verified service area (sq ft)" value={draft.pricingVerification.sqft || ''} onChange={(e) => updatePricing(row.id, 'sqft', Number(e.target.value))} /></Grid>}
+                      {verifiedPricingDriver === 'bed' && <Grid item xs={12} md={4}><TextField fullWidth required type="number" label="Verified bed count" value={draft.pricingVerification.beds || ''} onChange={(e) => updatePricing(row.id, 'beds', Number(e.target.value))} /></Grid>}
+                      {verifiedPricingDriver === 'sqft+capacity' && <Grid item xs={12} md={4}><TextField fullWidth required type="number" label="Verified worshipper capacity" value={draft.pricingVerification.units || ''} onChange={(e) => updatePricing(row.id, 'units', Number(e.target.value))} /></Grid>}
                       <Grid item xs={12} md={4}><TextField fullWidth type="number" label="Verified property age (years)" value={draft.pricingVerification.propertyAge || 0} onChange={(e) => updatePricing(row.id, 'propertyAge', Number(e.target.value))} /></Grid>
                       <Grid item xs={12} md={4}><TextField fullWidth select label="Verified condition" value={draft.pricingVerification.condition} onChange={(e) => updatePricing(row.id, 'condition', e.target.value)}><MenuItem value="Mint">Mint</MenuItem><MenuItem value="Good">Good</MenuItem><MenuItem value="Fair">Fair</MenuItem><MenuItem value="Poor">Poor</MenuItem></TextField></Grid>
                       <Grid item xs={12} md={4}><TextField fullWidth required label="Verified emirate" value={draft.pricingVerification.emirate} onChange={(e) => updatePricing(row.id, 'emirate', e.target.value)} /></Grid>
