@@ -80,7 +80,7 @@ const SystemsDataStep: React.FC<{ onNext: () => void; onBack: () => void }> = ({
         updateProperty(0, { selectedAddOns: Array.from(new Set(next)) });
     };
     const continueNext = () => {
-        updateProperty(0, { selectedAddOns: Array.from(new Set([...safeSelectedAddOns, ...mandatoryIds])) });
+        updateProperty(0, { selectedAddOns: Array.from(new Set(safeSelectedAddOns.filter((id: string) => !mandatoryIds.includes(id)))) });
         onNext();
     };
     const addOnTotal = selectedVisibleAddOns.reduce((sum, addon) => sum + addon.price, 0);
