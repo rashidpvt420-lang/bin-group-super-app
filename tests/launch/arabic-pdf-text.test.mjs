@@ -8,7 +8,6 @@ import fs from 'node:fs';
 import { createRequire } from 'node:module';
 
 const outDir = path.resolve('node_modules/.cache/arabic-pdf-text-test');
-fs.mkdirSync(outDir, { recursive: true });
 const outfile = path.join(outDir, `arabic-${process.pid}.cjs`);
 await build({ entryPoints: ['functions/arabicPdfText.ts'], bundle: true, platform: 'node', format: 'cjs', outfile, logLevel: 'silent' });
 const { logicalToVisualRtl, displayWords, layoutBidiText, toVisualArabic } = createRequire(import.meta.url)(outfile);
