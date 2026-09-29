@@ -12,6 +12,28 @@ const QUOTE_VERSION = "uae-owner-onboarding-2026-v4-gym-server-authority";
 const QUOTE_TTL_MS = 72 * 60 * 60 * 1000;
 const VALID_CONTRACT_MODES = new Set(["FM_ONLY", "PM_ONLY", "BOTH"]);
 const BED_PRICED_ASSET_IDS = new Set(["lab-camp", "staff-accom"]);
+const CLIENT_VERIFIED_RATE_KEYS = [
+  "ratesVerified",
+  "verifiedMaintenanceRate",
+  "verifiedManagementRate",
+  "verifiedPmRate",
+] as const;
+
+export type OwnerOnboardingQuoteOptions = {
+  /**
+   * Admin inspection completion only. Owner preview, portfolio quote, and
+   * payment submission must leave this false so client property payloads
+   * cannot set a verified Maintenance or Property Management rate.
+   */
+  trustServerVerifiedRates?: boolean;
+};
+
+/** Drop client-supplied verified-rate fields before any owner-facing calculator call. */
+export function omitClientVerifiedRates<T extends Record<string, any>>(value: T): T {
+  const next: Record<string, any> = { ...value };
+  for (const key of CLIENT_VERIFIED_RATE_KEYS) delete next[key];
+  return next as T;
+}
 
 type PropertyInput = Record<string, any>;
 type ContractMode = "FM_ONLY" | "PM_ONLY" | "BOTH";
@@ -146,6 +168,7 @@ function quoteInputForProperty(
   property: PropertyInput,
   selectedAddOns: string[],
   mode: ContractMode,
+  trustServerVerifiedRates: boolean,
 ): { assetClassId: string; pricingDriver: string; input: QuoteInput } {
   const assetClassId = resolveOwnerOnboardingPricingClass(property);
   const mosqueProfile = property.mosqueProfile && typeof property.mosqueProfile === "object"
@@ -232,14 +255,20 @@ function quoteInputForProperty(
       gymComplexity: isGym ? safeGymComplexity(gymProfile.verifiedComplexity || gymProfile.suggestedComplexity) : undefined,
       gymOpeningSchedule: isGym ? safeGymOpeningSchedule(gymProfile.openingSchedule) : undefined,
       gymEquipmentCount: isGym ? number(gymProfile.equipmentCount) : 0,
-      ratesVerified: property.ratesVerified === true,
-      verifiedMaintenanceRate: number(property.verifiedMaintenanceRate),
-      verifiedManagementRate: number(property.verifiedManagementRate),
+      ratesVerified: trustServerVerifiedRates && property.ratesVerified === true,
+      verifiedMaintenanceRate: trustServerVerifiedRates ? number(property.verifiedMaintenanceRate) : 0,
+      verifiedManagementRate: trustServerVerifiedRates ? number(property.verifiedManagementRate) : 0,
     },
   };
 }
 
-export function calculateOwnerOnboardingQuote(properties: unknown, addOns: unknown, nowMs = Date.now()) {
+export function calculateOwnerOnboardingQuote(
+  properties: unknown,
+  addOns: unknown,
+  nowMs = Date.now(),
+  options?: OwnerOnboardingQuoteOptions,
+) {
+  const trustServerVerifiedRates = options?.trustServerVerifiedRates === true;
   if (!Array.isArray(properties) || properties.length < 1 || properties.length > 100) {
     throw new Error("One to 100 properties are required.");
   }
@@ -264,7 +293,12 @@ export function calculateOwnerOnboardingQuote(properties: unknown, addOns: unkno
     const propertyAddOns = Array.isArray(cleanProperty.selectedAddOns)
       ? cleanProperty.selectedAddOns.map(text).filter(Boolean)
       : selectedAddOns;
-    const { assetClassId, pricingDriver, input } = quoteInputForProperty(cleanProperty, propertyAddOns, contractMode);
+    const { assetClassId, pricingDriver, input } = quoteInputForProperty(
+      cleanProperty,
+      propertyAddOns,
+      contractMode,
+      trustServerVerifiedRates,
+    );
     const quote = calculateUaeQuote2026(input);
     if (!Number.isFinite(quote.annualTotal) || quote.annualTotal <= 0) {
       const reasons = quote.riskFlags.length ? quote.riskFlags.join(", ") : "automatic pricing returned no annual total";

@@ -441,7 +441,9 @@ export const adminCompleteOwnerPortfolioInspections = onCall({ cors: true, enfor
   const finalQuotedAtMs = Date.now();
   let finalQuote: ReturnType<typeof calculateOwnerOnboardingQuote>;
   try {
-    finalQuote = calculateOwnerOnboardingQuote(verifiedProperties, Array.isArray(intake.selectedAddOns) ? intake.selectedAddOns : [], finalQuotedAtMs);
+    finalQuote = calculateOwnerOnboardingQuote(verifiedProperties, Array.isArray(intake.selectedAddOns) ? intake.selectedAddOns : [], finalQuotedAtMs, {
+      trustServerVerifiedRates: true,
+    });
   } catch (error: any) {
     throw new HttpsError("failed-precondition", `Final verified portfolio quote failed: ${error?.message || String(error)}`);
   }
