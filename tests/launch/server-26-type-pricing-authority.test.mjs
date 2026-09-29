@@ -269,6 +269,7 @@ test('server portfolio quote keeps optional add-ons property-scoped', () => {
   assert.equal(quote.propertyQuotes.length, 2);
   assert.deepEqual(quote.propertyQuotes[0].selectedAddOns, ['fire_safety']);
   assert.deepEqual(quote.propertyQuotes[1].selectedAddOns, []);
+  assert.deepEqual(quote.selectedAddOns, ['fire_safety'], 'Portfolio compatibility add-ons must be derived from property-scoped selections');
   assert.ok(quote.propertyQuotes[0].annualTotal > quote.propertyQuotes[1].annualTotal, 'First property optional add-on was not isolated to that property');
 });
 
