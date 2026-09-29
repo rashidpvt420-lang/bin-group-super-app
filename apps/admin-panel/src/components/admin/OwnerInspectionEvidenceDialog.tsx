@@ -168,7 +168,6 @@ const fileToBase64 = (file: File): Promise<string> => new Promise((resolve, reje
   reader.readAsDataURL(file);
 });
 
-const isGym = (row: InspectionRow) => row.propertyType === 'Gym / Fitness Centre';
 const verifiedIsGymFor = (row: InspectionRow, draft?: Draft) => (draft?.pricingVerification.propertyType || row.pricingVerification?.propertyType || row.propertyType) === 'Gym / Fitness Centre';
 const verifiedPricingDriverFor = (row: InspectionRow, draft: Draft) => {
   const classId = resolveAssetClassIdForPropertyType(draft.pricingVerification.propertyType, draft.pricingVerification.assetGrade);
