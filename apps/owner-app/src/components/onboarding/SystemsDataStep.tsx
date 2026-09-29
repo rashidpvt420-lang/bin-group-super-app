@@ -58,10 +58,10 @@ const SystemsDataStep: React.FC<{ onNext: () => void; onBack: () => void }> = ({
     ];
 
     const allAddOns = [
-        { id: 'fire_safety', icon: ShieldAlert, name: 'Fire Safety AMC', desc: 'Civil Defense compliance checks, alarm readiness and certification support.', price: 8000, mandatory: !!activeProperty.fireAlarm || !!activeProperty.firePump, showIf: true, reason: 'Required when a Fire / Civil Defense system exists.' },
-        { id: 'water_tank', icon: Droplets, name: 'Water Tank Sterilization', desc: 'Quarterly cleaning, sterilization and hygiene documentation.', price: 2200, mandatory: !!activeProperty.tank, showIf: true, reason: 'Required when water tanks exist.' },
-        { id: 'elevator_amc', icon: Activity, name: 'Elevator / Lift AMC', desc: 'Lift inspections, safety checks and service coordination.', price: 7500, mandatory: (activeProperty.lifts || 0) > 0, showIf: true, reason: 'Required when lifts exist.' },
-        { id: 'hvac_pm', icon: Wind, name: 'HVAC Preventive Maintenance', desc: 'AC inspections, filters, coils, drain lines and performance checks.', price: 6680, mandatory: !!activeProperty.hvac || Number(activeProperty.hvacCount || 0) > 0, showIf: true, reason: 'Required when HVAC is in scope.' },
+        { id: 'fire_safety', icon: ShieldAlert, name: 'Fire Safety AMC', desc: 'Civil Defense compliance checks, alarm readiness and certification support.', price: 8000, mandatory: !!activeProperty.fireAlarm || !!activeProperty.firePump, showIf: !!activeProperty.fireAlarm || !!activeProperty.firePump, reason: 'Required when a Fire / Civil Defense system exists.' },
+        { id: 'water_tank', icon: Droplets, name: 'Water Tank Sterilization', desc: 'Quarterly cleaning, sterilization and hygiene documentation.', price: 2200, mandatory: !!activeProperty.tank, showIf: !!activeProperty.tank, reason: 'Required when water tanks exist.' },
+        { id: 'elevator_amc', icon: Activity, name: 'Elevator / Lift AMC', desc: 'Lift inspections, safety checks and service coordination.', price: 7500, mandatory: (activeProperty.lifts || 0) > 0, showIf: (activeProperty.lifts || 0) > 0, reason: 'Required when lifts exist.' },
+        { id: 'hvac_pm', icon: Wind, name: 'HVAC Preventive Maintenance', desc: 'AC inspections, filters, coils, drain lines and performance checks.', price: 6680, mandatory: !!activeProperty.hvac || Number(activeProperty.hvacCount || 0) > 0, showIf: !!activeProperty.hvac || Number(activeProperty.hvacCount || 0) > 0, reason: 'Required when HVAC is in scope.' },
         { id: 'cleaning', icon: Droplets, name: 'Cleaning Team / Deep Cleaning', desc: 'Common area cleaning and scheduled hygiene operations.', price: 18450, mandatory: false, showIf: true, reason: 'Recommended for shared facilities and Majlis readiness.' },
         { id: 'security', icon: ShieldAlert, name: 'Security Services / CCTV', desc: 'Guarding coordination, access control and incident logging.', price: 36600, mandatory: false, showIf: true, reason: 'Optional manpower layer for towers, retail and high-value assets.' },
         { id: 'technician_standby', icon: Activity, name: 'Technician Standby / Event Support', desc: 'Dedicated on-site technician for VIP events or critical operations.', price: 7500, mandatory: false, showIf: !!activeProperty.majlis || activeProperty.propertyType === 'Hotel', reason: 'Crucial for VIP operational continuity.' },
@@ -71,20 +71,22 @@ const SystemsDataStep: React.FC<{ onNext: () => void; onBack: () => void }> = ({
         { id: 'mep_support', icon: Wrench, name: 'MEP Support', desc: 'Integrated mechanical, electrical and plumbing preventive support.', price: 13500, mandatory: false, showIf: true, reason: 'Core operational resilience layer.' },
         { id: 'office_units', icon: Building, name: 'Office Unit Support', desc: 'Office unit, pantry, lighting and fit-out coordination checks.', price: 6500, mandatory: false, showIf: (activeProperty.offices || 0) > 0, reason: 'Office units need separate occupancy tracking.' },
         { id: 'parking_management', icon: Camera, name: 'Parking Management', desc: 'Parking access coordination and incident reporting.', price: 9000, mandatory: false, showIf: (activeProperty.parkingCapacity || 0) > 0 || (activeProperty.units || 0) >= 20, reason: 'Recommended for towers and high-occupancy assets.' },
-        { id: 'waste_management', icon: Trash2, name: 'Waste Management', desc: 'Waste room checks and disposal schedule coordination.', price: 6600, mandatory: !!activeProperty.wasteMan, showIf: true, reason: 'Protects hygiene and compliance.' },
+        { id: 'waste_management', icon: Trash2, name: 'Waste Management', desc: 'Waste room checks and disposal schedule coordination.', price: 6600, mandatory: false, showIf: true, reason: 'Optional hygiene and disposal coordination layer.' },
     ].filter((addon) => addon.showIf);
 
+    const systemDerivedIds = ['fire_safety', 'water_tank', 'elevator_amc', 'hvac_pm'];
     const mandatoryIds = allAddOns.filter((addon) => addon.mandatory).map((addon) => addon.id);
-    const selectedVisibleAddOns = allAddOns.filter((addon) => safeSelectedAddOns.includes(addon.id) || addon.mandatory);
+    const cleanOptionalAddOns = safeSelectedAddOns.filter((id: string) => !systemDerivedIds.includes(id));
+    const selectedVisibleAddOns = allAddOns.filter((addon) => cleanOptionalAddOns.includes(addon.id) || addon.mandatory);
     const setAddOn = (id: string) => {
-        if (mandatoryIds.includes(id)) return;
-        const next = safeSelectedAddOns.includes(id)
-            ? safeSelectedAddOns.filter((item: string) => item !== id)
-            : [...safeSelectedAddOns, id];
+        if (systemDerivedIds.includes(id) || mandatoryIds.includes(id)) return;
+        const next = cleanOptionalAddOns.includes(id)
+            ? cleanOptionalAddOns.filter((item: string) => item !== id)
+            : [...cleanOptionalAddOns, id];
         updateProperty(activePropertyIndex, { selectedAddOns: Array.from(new Set(next)) });
     };
     const continueNext = () => {
-        updateProperty(activePropertyIndex, { selectedAddOns: Array.from(new Set(safeSelectedAddOns.filter((id: string) => !mandatoryIds.includes(id)))) });
+        updateProperty(activePropertyIndex, { selectedAddOns: Array.from(new Set(cleanOptionalAddOns)) });
         onNext();
     };
     const addOnTotal = selectedVisibleAddOns.reduce((sum, addon) => sum + addon.price, 0);
