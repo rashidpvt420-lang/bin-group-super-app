@@ -225,7 +225,7 @@ export interface OnboardingState {
 }
 
 const calculatePropertyAnnualValue = (property: PropertyData, selectedAddOns: string[]): QuoteOutput => {
-    const propertyAddOns = Array.isArray(property.selectedAddOns) ? property.selectedAddOns : selectedAddOns;
+    const propertyAddOns = Array.isArray(property.selectedAddOns) ? property.selectedAddOns : [];
     // Map internal types to Pricing Matrix types
     let assetClassId = 'standard_apartment';
     if (property.propertyType === 'Villa') assetClassId = property.assetGrade === 'Luxury' || property.assetGrade === 'Ultra-Luxury' ? 'luxury_estate_villa' : 'standard_villa';
