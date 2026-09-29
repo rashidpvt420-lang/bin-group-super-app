@@ -400,7 +400,7 @@ export function calculateUaeQuote2026(input: Partial<QuoteInput> | null | undefi
   const maintenanceRateMin = positiveNumber(assetClass.maintenanceRange.min);
   const maintenanceRateMax = positiveNumber(assetClass.maintenanceRange.max, maintenanceRateMin);
   let baseRate = maintenanceRateMin;
-  if (safeInput.ratesVerified && safeInput.contractType !== 'PM_ONLY') {
+  if (safeInput.ratesVerified) {
     const verifiedRate = positiveNumber(safeInput.verifiedMaintenanceRate);
     if (verifiedRate < maintenanceRateMin || verifiedRate > maintenanceRateMax) {
       return zeroQuote(`Verified Maintenance rate must be between AED ${maintenanceRateMin} and AED ${maintenanceRateMax} per configured pricing unit for ${assetClass.label}.`, safeInput.slaTier, ['VERIFIED_FM_RATE_OUT_OF_RANGE']);
