@@ -4,14 +4,19 @@ const GOOGLE_MAPS_SCRIPT_ID = 'bin-google-maps-js';
 
 type MapsFailureSubscriber = (error: Error) => void;
 
-const getMapsKey = (): string => {
-  const env = (import.meta as unknown as { env?: Record<string, string | undefined> }).env;
-  return env?.VITE_GOOGLE_MAPS_API_KEY || env?.REACT_APP_GOOGLE_MAPS_API_KEY || '';
+const readPublicEnv = (value: string | undefined): string => {
+  const normalized = String(value || '');
+  if (!normalized || normalized.includes('REPLACE_ME') || normalized.includes('REPLACE_WITH')) return '';
+  return normalized;
 };
 
+const getMapsKey = (): string =>
+  readPublicEnv(import.meta.env.VITE_GOOGLE_MAPS_API_KEY) ||
+  readPublicEnv(import.meta.env.REACT_APP_GOOGLE_MAPS_API_KEY);
+
 const isEmbeddedMapsEnabled = (): boolean => {
-  const env = (import.meta as unknown as { env?: Record<string, string | undefined> }).env;
-  const flag = env?.VITE_ENABLE_EMBEDDED_GOOGLE_MAPS ?? env?.REACT_APP_ENABLE_EMBEDDED_GOOGLE_MAPS;
+  const flag = import.meta.env.VITE_ENABLE_EMBEDDED_GOOGLE_MAPS
+    ?? import.meta.env.REACT_APP_ENABLE_EMBEDDED_GOOGLE_MAPS;
 
   // Production-safe default:
   // - explicit "false" disables embedded maps and keeps the manual/open-in-Google-Maps fallback.

@@ -20,6 +20,8 @@ import {
 } from 'lucide-react';
 import { collection, query, onSnapshot, orderBy, limit, getDocs, where } from 'firebase/firestore';
 import { db } from '../lib/firebase';
+import { formatAedLedgerMoney } from '../lib/canonicalPaymentLedger.mjs';
+import { summarizeControlCentreMoney } from '../lib/controlCentreMoney.mjs';
 import { useLanguage } from '@bin/shared';
 import { useNavigate } from 'react-router-dom';
 import { jsPDF } from 'jspdf';
@@ -33,9 +35,9 @@ export default function ProductionControlCenter() {
         totalTenants: 0,
         totalUnits: 0,
         totalProperties: 0,
-        totalAnnualRent: 0,
-        totalCollected: 0,
-        totalOutstanding: 0,
+        totalAnnualRent: null as number | null,
+        totalCollected: null as number | null,
+        totalOutstanding: null as number | null,
         failedInvites: 0,
         openTickets: 0
     });
@@ -49,17 +51,20 @@ export default function ProductionControlCenter() {
     useEffect(() => {
         const fetchMetrics = async () => {
             try {
-                // Property Passport Aggregation for total financials
                 const passportSnap = await getDocs(collection(db, 'propertyPassports'));
-                let rent = 0, collected = 0, outstanding = 0, units = 0, properties = 0;
+                let units = 0, properties = 0;
                 passportSnap.forEach(doc => {
                     const data = doc.data();
-                    rent += (data.annualRentTotal || 0);
-                    collected += (data.rentCollectedTotal || 0);
-                    outstanding += (data.rentOutstandingTotal || 0);
                     units += (data.totalUnits || 0);
                     properties++;
                 });
+
+                const paymentSnap = await getDocs(collection(db, 'payment_transactions'));
+                const contractSnap = await getDocs(collection(db, 'contracts'));
+                const money = summarizeControlCentreMoney(
+                    paymentSnap.docs.map((row) => row.data()),
+                    contractSnap.docs.map((row) => row.data()),
+                );
 
                 // Invitations
                 const failedInviteSnap = await getDocs(query(collection(db, 'tenant_invitations'), where('status', '==', 'failed')));
@@ -74,9 +79,9 @@ export default function ProductionControlCenter() {
                     totalTenants: tenantSnap.size,
                     totalUnits: units,
                     totalProperties: properties,
-                    totalAnnualRent: rent,
-                    totalCollected: collected,
-                    totalOutstanding: outstanding,
+                    totalAnnualRent: money.projectedAnnualRent,
+                    totalCollected: money.collected,
+                    totalOutstanding: money.outstanding,
                     failedInvites: failedInviteSnap.size,
                     openTickets: ticketSnap.size
                 });
@@ -111,9 +116,9 @@ export default function ProductionControlCenter() {
             ["Total Managed Properties", metrics.totalProperties.toString()],
             ["Total Operational Units", metrics.totalUnits.toString()],
             ["Total Tenant Population", metrics.totalTenants.toString()],
-            ["Gross Annual Revenue (Projected)", `AED ${metrics.totalAnnualRent.toLocaleString()}`],
-            ["Total Collected to Date", `AED ${metrics.totalCollected.toLocaleString()}`],
-            ["Total Outstanding Balance", `AED ${metrics.totalOutstanding.toLocaleString()}`],
+            ["Gross Annual Revenue (Projected)", formatAedLedgerMoney(metrics.totalAnnualRent)],
+            ["Total Collected to Date", formatAedLedgerMoney(metrics.totalCollected)],
+            ["Total Outstanding Balance", formatAedLedgerMoney(metrics.totalOutstanding)],
             ["Open Maintenance Requests", metrics.openTickets.toString()],
             ["Failed Invitations", metrics.failedInvites.toString()]
         ];
@@ -203,9 +208,9 @@ export default function ProductionControlCenter() {
             {/* KPI GRID */}
             <Grid container spacing={3} sx={{ mb: 6 }}>
                 {[
-                    { label: 'Total Annual Rent', value: `AED ${(metrics.totalAnnualRent / 1000000).toFixed(2)}M`, icon: <CreditCard />, color: '#6366f1' },
-                    { label: 'Total Collected', value: `AED ${(metrics.totalCollected / 1000000).toFixed(2)}M`, icon: <CheckCircle />, color: '#10b981' },
-                    { label: 'Total Outstanding', value: `AED ${(metrics.totalOutstanding / 1000).toFixed(1)}K`, icon: <AlertTriangle />, color: '#ef4444' },
+                    { label: 'Total Annual Rent', value: formatAedLedgerMoney(metrics.totalAnnualRent), icon: <CreditCard />, color: '#6366f1' },
+                    { label: 'Total Collected', value: formatAedLedgerMoney(metrics.totalCollected), icon: <CheckCircle />, color: '#10b981' },
+                    { label: 'Total Outstanding', value: formatAedLedgerMoney(metrics.totalOutstanding), icon: <AlertTriangle />, color: '#ef4444' },
                     { label: 'Active Tenants', value: metrics.totalTenants.toLocaleString(), icon: <Users />, color: '#DAA520' },
                     { label: 'Failed Invitations', value: metrics.failedInvites.toString(), icon: <XCircle />, color: metrics.failedInvites > 0 ? '#ef4444' : '#94a3b8' },
                     { label: 'Open SOS Missions', value: metrics.openTickets.toString(), icon: <Activity />, color: metrics.openTickets > 5 ? '#ef4444' : '#10b981' }
