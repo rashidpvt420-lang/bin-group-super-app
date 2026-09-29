@@ -251,6 +251,27 @@ test('server PM quote is percentage-of-rent once, independent of unit/sqft drive
   assert.equal(huge.annualTotal, normal.annualTotal);
 });
 
+test('server portfolio quote keeps optional add-ons property-scoped', () => {
+  const first = {
+    ...propertyFor('Villa', 'unit'),
+    strategy: 'fm_only',
+    condition: 'Good',
+    selectedAddOns: ['fire_safety'],
+  };
+  const second = {
+    ...propertyFor('Villa', 'unit'),
+    id: 'test-villa-2',
+    strategy: 'fm_only',
+    condition: 'Good',
+    selectedAddOns: [],
+  };
+  const quote = server.calculateOwnerOnboardingQuote([first, second], [], 1_800_000_000_000);
+  assert.equal(quote.propertyQuotes.length, 2);
+  assert.deepEqual(quote.propertyQuotes[0].selectedAddOns, ['fire_safety']);
+  assert.deepEqual(quote.propertyQuotes[1].selectedAddOns, []);
+  assert.ok(quote.propertyQuotes[0].annualTotal > quote.propertyQuotes[1].annualTotal, 'First property optional add-on was not isolated to that property');
+});
+
 test('all quote adapters are wired to canonical classification with no apartment/Dubai fallback', () => {
   assert.match(serverSource, /calculateUaeQuote2026/);
   assert.match(serverSource, /resolveAssetClassIdForPropertyType/);
