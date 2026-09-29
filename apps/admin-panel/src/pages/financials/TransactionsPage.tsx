@@ -28,15 +28,13 @@ import {
 import { db, collection, onSnapshot, query, orderBy, limit, doc, updateDoc, addDoc, serverTimestamp } from '../../lib/firebase';
 import { ArrowUpCircle, ArrowDownCircle, Activity, Ban } from 'lucide-react';
 import { useLanguage } from '@bin/shared';
+import { formatAedLedgerMoney, summarizeCanonicalPaymentLedger } from '../../lib/canonicalPaymentLedger.mjs';
+import { presentCanonicalTransaction } from '../../lib/canonicalTransactionView.mjs';
 
 interface Transaction {
   id: string;
-  amount: number;
-  type: 'credit' | 'debit';
-  category: string;
-  description: string;
-  status: string;
-  createdAt: any;
+  createdAt?: { toDate?: () => Date };
+  [key: string]: unknown;
 }
 
 export default function TransactionsPage() {
@@ -52,7 +50,7 @@ export default function TransactionsPage() {
   const [settlementAmount, setSettlementAmount] = useState('');
 
   useEffect(() => {
-    const q = query(collection(db, 'transactions'), orderBy('createdAt', 'desc'), limit(100));
+    const q = query(collection(db, 'payment_transactions'), orderBy('createdAt', 'desc'), limit(100));
     const unsubscribe = onSnapshot(q, (snap) => {
       setTransactions(snap.docs.map(d => ({ id: d.id, ...d.data() } as Transaction)));
     });
@@ -68,13 +66,10 @@ export default function TransactionsPage() {
     };
   }, []);
 
-  const income = transactions.filter(t => t.type === 'credit').reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
-  const expenses = transactions.filter(t => t.type === 'debit').reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
-
-  const formatAED = (val?: number | null) => {
-    const safeVal = typeof val === 'number' && !isNaN(val) ? val : 0;
-    return safeVal.toLocaleString(lang === 'ar' ? 'ar-AE' : 'en-AE');
-  };
+  const ledger = summarizeCanonicalPaymentLedger(transactions);
+  const incomeLabel = formatAedLedgerMoney(ledger.totalRevenue);
+  const expenseLabel = ledger.debitCount === 0 ? 'No expense rows' : formatAedLedgerMoney(ledger.expenses);
+  const netLabel = formatAedLedgerMoney(ledger.netProfit);
 
   const handleTerminateContract = async () => {
     if (!selectedContract) return;
@@ -144,7 +139,7 @@ export default function TransactionsPage() {
                     <Typography variant="overline" sx={{ fontWeight: 'bold' }}>{t('fin.total_income')}</Typography>
                     <ArrowUpCircle color="#10b981" size={20} />
                   </Box>
-                  <Typography variant="h4" sx={{ fontWeight: 900, color: '#10b981' }}>{t('common.currency_aed')} {formatAED(income)}</Typography>
+                  <Typography variant="h4" sx={{ fontWeight: 900, color: '#10b981' }}>{incomeLabel}</Typography>
                 </CardContent>
               </Card>
             </Grid>
@@ -155,7 +150,7 @@ export default function TransactionsPage() {
                     <Typography variant="overline" sx={{ fontWeight: 'bold' }}>{t('fin.total_expenses')}</Typography>
                     <ArrowDownCircle color="#ef4444" size={20} />
                   </Box>
-                  <Typography variant="h4" sx={{ fontWeight: 900, color: '#ef4444' }}>{t('common.currency_aed')} {formatAED(expenses)}</Typography>
+                  <Typography variant="h4" sx={{ fontWeight: 900, color: '#ef4444' }}>{expenseLabel}</Typography>
                 </CardContent>
               </Card>
             </Grid>
@@ -166,7 +161,7 @@ export default function TransactionsPage() {
                     <Typography variant="overline" sx={{ fontWeight: 'bold', opacity: 0.8 }}>{t('fin.net_position')}</Typography>
                     <Activity color="#fff" size={20} />
                   </Box>
-                  <Typography variant="h4" sx={{ fontWeight: 900 }}>{t('common.currency_aed')} {formatAED(income - expenses)}</Typography>
+                  <Typography variant="h4" sx={{ fontWeight: 900 }}>{netLabel}</Typography>
                 </CardContent>
               </Card>
             </Grid>
@@ -184,24 +179,36 @@ export default function TransactionsPage() {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {transactions.map((tx) => (
+                {transactions.map((tx) => {
+                  const view = presentCanonicalTransaction(tx);
+                  const amountLabel = view.amount === null ? 'N/A' : formatAedLedgerMoney(view.amount);
+                  const tone = view.direction === 'credit' ? '#10b981' : view.direction === 'debit' || view.direction === 'rejected' ? '#ef4444' : '#d97706';
+                  const typeLabel = view.direction === 'credit'
+                    ? t('status.settled')
+                    : view.direction === 'debit'
+                      ? t('fin.total_expenses')
+                      : view.direction === 'rejected'
+                        ? 'Rejected'
+                        : t('status.pending');
+                  return (
                   <TableRow key={tx.id} hover sx={{ flexDirection: isRTL ? 'row-reverse' : 'row' }}>
                     <TableCell sx={{ textAlign: isRTL ? 'right' : 'left' }}>{tx.createdAt?.toDate?.()?.toLocaleDateString(lang === 'ar' ? 'ar-AE' : 'en-AE') || t('status.pending')}</TableCell>
-                    <TableCell sx={{ fontWeight: 'bold', textAlign: isRTL ? 'right' : 'left' }}>{tx.description}</TableCell>
-                    <TableCell sx={{ textAlign: isRTL ? 'right' : 'left' }}><Chip label={(tx.category || 'N/A').toUpperCase()} size="small" variant="outlined" sx={{ fontSize: 10, fontWeight: 'bold' }} /></TableCell>
-                    <TableCell sx={{ fontWeight: 900, color: tx.type === 'credit' ? '#10b981' : '#ef4444', textAlign: isRTL ? 'right' : 'left' }}>
-                      {tx.type === 'credit' ? '+' : '-'} {formatAED(tx.amount)}
+                    <TableCell sx={{ fontWeight: 'bold', textAlign: isRTL ? 'right' : 'left' }}>{view.description}</TableCell>
+                    <TableCell sx={{ textAlign: isRTL ? 'right' : 'left' }}><Chip label={view.category.toUpperCase()} size="small" variant="outlined" sx={{ fontSize: 10, fontWeight: 'bold' }} /></TableCell>
+                    <TableCell sx={{ fontWeight: 900, color: tone, textAlign: isRTL ? 'right' : 'left' }}>
+                      {view.direction === 'debit' ? '-' : view.direction === 'credit' ? '+' : ''} {amountLabel}
                     </TableCell>
                     <TableCell sx={{ textAlign: isRTL ? 'right' : 'left' }}>
                       <Chip 
-                        label={tx.type === 'credit' ? t('status.settled') : t('status.pending')} 
-                        color={tx.type === 'credit' ? 'success' : 'error'} 
+                        label={typeLabel} 
+                        color={view.direction === 'credit' ? 'success' : view.direction === 'pending' ? 'warning' : 'error'} 
                         size="small" 
                         sx={{ fontWeight: 'bold', fontSize: 10 }} 
                       />
                     </TableCell>
                   </TableRow>
-                ))}
+                  );
+                })}
               </TableBody>
             </Table>
           </TableContainer>
@@ -237,7 +244,7 @@ export default function TransactionsPage() {
                       </TableCell>
                       <TableCell sx={{ textAlign: isRTL ? 'right' : 'left' }}>{contract.ownerEmail || '—'}</TableCell>
                       <TableCell sx={{ textAlign: isRTL ? 'right' : 'left', fontWeight: 900 }}>
-                        AED {formatAED(annualVal)}
+                        {formatAedLedgerMoney(typeof annualVal === 'number' && Number.isFinite(annualVal) ? annualVal : Number(annualVal) || 0)}
                       </TableCell>
                       <TableCell sx={{ textAlign: isRTL ? 'right' : 'left' }}>{startDStr}</TableCell>
                       <TableCell sx={{ textAlign: isRTL ? 'right' : 'left' }}>
