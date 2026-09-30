@@ -41,7 +41,7 @@ test.each([
   ['Audit Log', '/audit'],
 ])('the %s action opens %s', (label, route) => {
   renderDashboard();
-  fireEvent.click(screen.getByRole('button', { name: new RegExp(label) }));
+  fireEvent.click(screen.getByRole('button', { name: (accessibleName) => accessibleName.startsWith(label) }));
   expect(screen.getByTestId('location')).toHaveTextContent(route);
 });
 
