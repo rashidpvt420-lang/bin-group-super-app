@@ -404,6 +404,19 @@ service cloud.firestore {
 
     function participantCanRead(data) { return isAdmin() || ownerCanRead(data) || tenantOwns(data) || (isApprovedTechnician() && techOwns(data)) || brokerOwns(data); }
 
+    // N-14: tenant-submitted requests start in a pending state and never carry
+    // review/approval outcomes; those are written by staff, Owners or the server.
+    function tenantSubmissionPendingStatuses() {
+      return ['pending', 'PENDING', 'submitted', 'SUBMITTED', 'open', 'OPEN', 'requested', 'REQUESTED', 'draft', 'DRAFT'];
+    }
+    function tenantSubmissionReviewKeys() {
+      return ['approved', 'approvedAt', 'approvedBy', 'adminApproved', 'ownerApproved', 'ownerApprovedAt', 'reviewedAt', 'reviewedBy', 'verified', 'verifiedAt', 'verifiedBy', 'signedOffAt', 'signedOffBy', 'resolvedAt', 'resolvedBy', 'resolution', 'completedAt', 'closedAt'];
+    }
+    function tenantPendingSubmission(data) {
+      return (!('status' in data) || data.status in tenantSubmissionPendingStatuses()) &&
+        !data.keys().hasAny(tenantSubmissionReviewKeys());
+    }
+
     function staffRequestCreate(data) {
       return staffCanCreate(data) &&
         (!('status' in data) || data.status in ['pending_hr_review', 'pending_finance_review', 'submitted']) &&
@@ -1036,23 +1049,46 @@ service cloud.firestore {
       return signedIn() && request.auth.uid == ownerId &&
         (!('role' in data) || data.role == 'owner') &&
         (!('status' in data) || !(data.status in ['ACTIVE','active'])) &&
-        (!('dashboardUnlocked' in data)) &&
-        (!('paymentVerified' in data));
+        !data.keys().hasAny(ownerProfileServerAuthorityKeys().removeAll(['role', 'status']));
     }
 
     function safeOwnerProfileUpdate() {
       return signedIn() &&
-        (!('status' in request.resource.data) || request.resource.data.status == resource.data.get('status', null)) &&
-        (!('dashboardUnlocked' in request.resource.data) || request.resource.data.dashboardUnlocked == resource.data.get('dashboardUnlocked', null)) &&
-        (!('dashboardLocked' in request.resource.data) || request.resource.data.dashboardLocked == resource.data.get('dashboardLocked', null)) &&
-        (!('dashboardUnlockApproved' in request.resource.data) || request.resource.data.dashboardUnlockApproved == resource.data.get('dashboardUnlockApproved', null)) &&
-        (!('paymentVerified' in request.resource.data) || request.resource.data.paymentVerified == resource.data.get('paymentVerified', null)) &&
-        (!('paymentStatus' in request.resource.data) || request.resource.data.paymentStatus == resource.data.get('paymentStatus', null)) &&
-        (!('adminApproved' in request.resource.data) || request.resource.data.adminApproved == resource.data.get('adminApproved', null)) &&
-        (!('approved' in request.resource.data) || request.resource.data.approved == resource.data.get('approved', null)) &&
-        (!('activeContractId' in request.resource.data) || request.resource.data.activeContractId == resource.data.get('activeContractId', null)) &&
-        (!('activationStatus' in request.resource.data) || request.resource.data.activationStatus == resource.data.get('activationStatus', null)) &&
-        (!('contractActivated' in request.resource.data) || request.resource.data.contractActivated == resource.data.get('contractActivated', null));
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny(ownerProfileServerAuthorityKeys());
+    }
+
+    // N-12: verification, trust and activation state on owners/{uid} is written only by
+    // server callables (Admin SDK). An Owner browser may neither self-create a
+    // pre-verified profile nor set, change or delete any of these keys.
+    function ownerProfileServerAuthorityKeys() {
+      return [
+        'role',
+        'status',
+        'onboardingStatus',
+        'verified',
+        'isVerified',
+        'kycVerified',
+        'kycStatus',
+        'identityVerified',
+        'verificationStatus',
+        'verifiedAt',
+        'verifiedBy',
+        'trustScore',
+        'trustLevel',
+        'trustTier',
+        'dashboardUnlocked',
+        'dashboardLocked',
+        'dashboardUnlockApproved',
+        'paymentVerified',
+        'paymentStatus',
+        'adminApproved',
+        'approved',
+        'approvedAt',
+        'approvedBy',
+        'activeContractId',
+        'activationStatus',
+        'contractActivated'
+      ];
     }
 
     function ownsOnboardingProof(data) {
@@ -1588,8 +1624,9 @@ service cloud.firestore {
 
     match /amenityBookings/{bookingId} {
       allow read: if isAdmin() || (docPropertyId(resource.data) != null && isPropertyOwner(docPropertyId(resource.data))) || tenantUidOwns(resource.data);
-      allow create: if isAdmin() || (signedIn() && request.resource.data.get('tenantUid', null) == request.auth.uid && getTenantPropertyId() == docPropertyId(request.resource.data));
-      allow update: if isAdmin() || (docPropertyId(resource.data) != null && isPropertyOwner(docPropertyId(resource.data))) || (signedIn() && tenantUidOwns(resource.data) && request.resource.data.get('tenantUid', null) == request.auth.uid && docPropertyId(resource.data) != null && getTenantPropertyId() == docPropertyId(resource.data));
+      // N-14: a tenant books as 'pending' and may only cancel; approval is staff/Owner authority.
+      allow create: if isAdmin() || (signedIn() && request.resource.data.get('tenantUid', null) == request.auth.uid && getTenantPropertyId() == docPropertyId(request.resource.data) && request.resource.data.get('status', 'pending') == 'pending' && !request.resource.data.keys().hasAny(tenantSubmissionReviewKeys()));
+      allow update: if isAdmin() || (docPropertyId(resource.data) != null && isPropertyOwner(docPropertyId(resource.data))) || (signedIn() && tenantUidOwns(resource.data) && request.resource.data.get('tenantUid', null) == request.auth.uid && docPropertyId(resource.data) != null && getTenantPropertyId() == docPropertyId(resource.data) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'cancelledAt', 'updatedAt']) && request.resource.data.get('status', '') == 'cancelled');
       allow delete: if isAdmin() || (docPropertyId(resource.data) != null && isPropertyOwner(docPropertyId(resource.data))) || tenantUidOwns(resource.data);
     }
 
@@ -1637,7 +1674,6 @@ service cloud.firestore {
       allow read: if isAdmin() || (signedIn() && (
         resource.data.get('tenantId', null) == request.auth.uid ||
         resource.data.get('tenantUid', null) == request.auth.uid ||
-        resource.data.get('tenantId', null) == 'ALL' ||
         emailMatches(resource.data.get('tenantEmail', null)) ||
         emailMatches(resource.data.get('recipientEmail', null))
       ));
@@ -1741,10 +1777,11 @@ service cloud.firestore {
     }
 
     match /pricingAuditLogs/{logId} {
+      // N-13: pricing audit entries are append-only server evidence. Browsers
+      // (including the Owner the entry is about) cannot create, rewrite or delete them.
+      // Residual N-11: the pinned generic Admin catch-all still ORs Admin-claim writes.
       allow read: if isAdmin() || (signedIn() && resource.data.get('ownerId', null) == request.auth.uid);
-      allow create: if signedIn() && request.resource.data.get('ownerId', null) == request.auth.uid;
-      allow update: if isAdmin();
-      allow delete: if isAdmin();
+      allow create, update, delete: if false;
     }
 
     match /turnover-quotes/{quoteId} {
@@ -1804,7 +1841,7 @@ service cloud.firestore {
 
     match /move_out_requests/{requestId} {
       allow read: if isAdmin() || (signedIn() && (resource.data.get('userId', null) == request.auth.uid || resource.data.get('tenantUid', null) == request.auth.uid));
-      allow create: if signedIn() && (request.resource.data.get('userId', null) == request.auth.uid || request.resource.data.get('tenantUid', null) == request.auth.uid);
+      allow create: if signedIn() && (request.resource.data.get('userId', null) == request.auth.uid || request.resource.data.get('tenantUid', null) == request.auth.uid) && tenantPendingSubmission(request.resource.data);
       allow update: if isAdmin();
       allow delete: if isAdmin();
     }
@@ -1969,7 +2006,7 @@ service cloud.firestore {
     // ── inspections: move-in / move-out digital inspection records ──────────
     match /inspections/{inspectionId} {
       allow read: if isAdmin() || (signedIn() && resource.data.get('tenantId', null) == request.auth.uid);
-      allow create: if signedIn() && request.resource.data.get('tenantId', null) == request.auth.uid;
+      allow create: if signedIn() && request.resource.data.get('tenantId', null) == request.auth.uid && tenantPendingSubmission(request.resource.data);
       allow update: if isAdmin();
       allow delete: if isAdmin();
     }
@@ -1977,8 +2014,9 @@ service cloud.firestore {
     // ── maintenanceRequests: AI concierge ticket submissions ─────────────────
     match /maintenanceRequests/{requestId} {
       allow read: if isAdmin() || (signedIn() && resource.data.get('tenantId', null) == request.auth.uid);
-      allow create: if signedIn() && request.resource.data.get('tenantId', null) == request.auth.uid;
-      allow update: if isAdmin() || (signedIn() && resource.data.get('tenantId', null) == request.auth.uid && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt']));
+      allow create: if signedIn() && request.resource.data.get('tenantId', null) == request.auth.uid && tenantPendingSubmission(request.resource.data);
+      // N-14: the tenant may only withdraw its own request, never resolve or approve it.
+      allow update: if isAdmin() || (signedIn() && resource.data.get('tenantId', null) == request.auth.uid && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt']) && request.resource.data.get('status', '') in ['cancelled', 'CANCELLED']);
       allow delete: if isAdmin();
     }
 
