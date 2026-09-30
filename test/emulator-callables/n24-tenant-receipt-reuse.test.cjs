@@ -51,6 +51,24 @@ test('the same receipt cannot be resubmitted under a new submissionId for anothe
   await uploadReceipt('receipts/tenant_n24/sub_nov_receipt.pdf');
   const first = await call(submitTenantPaymentProof, tenant, payload('sub_oct', 'receipts/tenant_n24/sub_oct_receipt.pdf'));
   assert.equal(first.ok, true);
+  const registry = await db.doc(`tenant_receipt_registry/${RECEIPT_HASH}`).get();
+  assert.equal(registry.exists, true);
+  assert.equal(registry.data().paymentId, 'tenant_tenant_n24_sub_oct');
+  const error = await expectHttpsError(
+    call(submitTenantPaymentProof, tenant, payload('sub_nov', 'receipts/tenant_n24/sub_nov_receipt.pdf')),
+    'already-exists',
+  );
+  assert.match(error.message, /already submitted/i);
+  assert.equal((await db.doc('payment_transactions/tenant_tenant_n24_sub_nov').get()).exists, false);
+});
+
+test('a claimed receipt hash blocks a different submission even before a payment row is visible', async () => {
+  await uploadReceipt('receipts/tenant_n24/sub_nov_receipt.pdf');
+  await db.doc(`tenant_receipt_registry/${RECEIPT_HASH}`).set({
+    receiptHash: RECEIPT_HASH,
+    paymentId: 'tenant_tenant_n24_sub_oct',
+    tenantId: 'tenant_n24',
+  });
   const error = await expectHttpsError(
     call(submitTenantPaymentProof, tenant, payload('sub_nov', 'receipts/tenant_n24/sub_nov_receipt.pdf')),
     'already-exists',
@@ -64,6 +82,17 @@ test('a retry of the same submission stays idempotent', async () => {
   const data = payload('sub_retry', 'receipts/tenant_n24/sub_retry_receipt.pdf');
   assert.equal((await call(submitTenantPaymentProof, tenant, data)).idempotent, false);
   assert.equal((await call(submitTenantPaymentProof, tenant, data)).idempotent, true);
+});
+
+test('a retry of a legacy payment backfills the receipt registry claim', async () => {
+  await uploadReceipt('receipts/tenant_n24/sub_legacy_receipt.pdf');
+  const data = payload('sub_legacy', 'receipts/tenant_n24/sub_legacy_receipt.pdf');
+  await call(submitTenantPaymentProof, tenant, data);
+  await db.doc(`tenant_receipt_registry/${RECEIPT_HASH}`).delete();
+  assert.equal((await call(submitTenantPaymentProof, tenant, data)).idempotent, true);
+  const registry = await db.doc(`tenant_receipt_registry/${RECEIPT_HASH}`).get();
+  assert.equal(registry.exists, true);
+  assert.equal(registry.data().paymentId, 'tenant_tenant_n24_sub_legacy');
 });
 
 test('the stored receiptUrl is derived from the verified Storage object, not the client URL', async () => {

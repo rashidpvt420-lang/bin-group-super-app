@@ -21,7 +21,7 @@ const money = (value: unknown) => Math.round(Number(value || 0) * 100) / 100;
 const finite = (value: unknown, fallback = NaN) => Number.isFinite(Number(value)) ? Number(value) : fallback;
 const safeId = (value: unknown, fallback: string) => text(value).replace(/[^A-Za-z0-9_-]/g, "_").replace(/_+/g, "_").slice(0, 180) || fallback;
 
-async function requireAdmin(request: any) {
+export async function requireAdmin(request: any) {
   if (!request.auth?.uid) throw new HttpsError("unauthenticated", "Admin authentication required.");
   const token = request.auth.token || {};
   if (token.suspended === true || !(ADMIN_ROLES.has(roleOf(token)) || token.admin === true || token.isAdmin === true || token.superAdmin === true || token.super_admin === true)) {

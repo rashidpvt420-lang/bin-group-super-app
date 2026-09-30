@@ -150,6 +150,11 @@ describe('Firestore Security Rules', () => {
       await assertFails(setDoc(doc(client, 'design_receipt_registry/forged'), { paymentId: 'design_2' }));
       await assertFails(updateDoc(receiptRef, { paymentId: 'design_2' }));
       await assertFails(deleteDoc(receiptRef));
+      const tenantReceiptRef = doc(client, 'tenant_receipt_registry/hash_test');
+      await seedServerDocument('tenant_receipt_registry/hash_test', { paymentId: 'tenant_payment_1' });
+      await assertFails(setDoc(doc(client, 'tenant_receipt_registry/forged'), { paymentId: 'tenant_payment_2' }));
+      await assertFails(updateDoc(tenantReceiptRef, { paymentId: 'tenant_payment_2' }));
+      await assertFails(deleteDoc(tenantReceiptRef));
     }
   });
 
@@ -1191,7 +1196,7 @@ describe('Firestore Security Rules', () => {
     await assertFails(deleteDoc(doc(financeDb, 'payment_transactions/design_pending')));
     // Finance review uses a protected callable; the queue grant must not expose
     // unrelated contracts, design drafts or the receipt uniqueness registry.
-    for (const path of ['contracts/private_contract', 'design_requests/private_design', 'design_quotes/private_design', 'design_receipt_registry/private_receipt']) {
+    for (const path of ['contracts/private_contract', 'design_requests/private_design', 'design_quotes/private_design', 'design_receipt_registry/private_receipt', 'tenant_receipt_registry/private_receipt']) {
       await seedServerDocument(path, { ownerId: 'design_owner' });
       await assertFails(getDoc(doc(financeDb, path)));
       await assertFails(setDoc(doc(financeDb, `${path}_forged`), { ownerId: 'design_owner', status: 'ACTIVE' }));
