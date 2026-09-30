@@ -1,0 +1,38 @@
+# BIN GROUP (bin-groups.com). Public marketing pages may be indexed; authenticated
+# portals, verification links, invitations and onboarding flows must not be.
+# Portal rules use "/x/" + "/x$" so public pages such as /owners or /tenants stay indexable.
+User-agent: *
+Allow: /
+Disallow: /owner/
+Disallow: /owner$
+Disallow: /tenant/
+Disallow: /tenant$
+Disallow: /technician/
+Disallow: /technician$
+Disallow: /tech/
+Disallow: /broker/
+Disallow: /broker$
+Disallow: /admin/
+Disallow: /admin$
+Disallow: /auditor/
+Disallow: /auditor$
+Disallow: /analytics/
+Disallow: /properties/
+Disallow: /government/
+Disallow: /design-studio
+Disallow: /financials
+Disallow: /calendar
+Disallow: /notifications
+Disallow: /invoices/
+Disallow: /verify
+Disallow: /tenant-invite
+Disallow: /account-privacy
+Disallow: /onboarding
+Disallow: /login
+Disallow: /gateway
+Disallow: /pilot
+Disallow: /feedback
+Disallow: /dashboard
+Disallow: /owner-dashboard
+
+Sitemap: https://bin-groups.com/sitemap.xml

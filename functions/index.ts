@@ -10,6 +10,7 @@ import { newInvitationOpenTrackingId, parseOpenTrackingId, tenantInvitationTrack
 import * as path from "path";
 import { createRequire } from "module";
 import type { SummarizePropertyPassportSources, PassportIdentity } from "./shared/propertyPassportAggregationTypes";
+import { assertOwnerClosureEvidence } from "./ticketClosureEvidence";
 
 const requirePropertyPassportAggregation = createRequire(__filename);
 const {
@@ -27,6 +28,7 @@ import {
 import { enforceAiUsageQuota } from "./aiUsageQuota";
 import { sendTwilioSMS } from "./smsDelivery";
 import { resolveTechnicianArrivalBinding } from "./technicianInstallationBinding";
+import { flagSlaBreaches } from "./slaCron";
 
 // [V10] PRODUCTION GRADE FULL-STACK STABILIZATION
 setGlobalOptions({ region: "europe-west3", enforceAppCheck: true });
@@ -616,6 +618,8 @@ export const ownerReviewTicketCompletion = onCall({ cors: true, enforceAppCheck:
     if (!reviewableStatuses.has(normalizeRole(ticketData.status))) {
         throw new HttpsError("failed-precondition", "Ticket is not ready for owner completion review.");
     }
+    // N-22: an Owner may only approve closure of work with verified after-work evidence.
+    if (action === "APPROVE_CLOSE" && !isAdmin) await assertOwnerClosureEvidence(ticketId, ticketData);
 
     const now = FieldValue.serverTimestamp();
     const baseUpdate: any = {
@@ -1692,15 +1696,8 @@ export const onApprovalStagnant = onSchedule({ schedule: "every 24 hours" }, asy
 });
 
 export const evaluateSLACron = onSchedule("every 4 hours", async () => {
-    const now = admin.firestore.Timestamp.now();
-    const twentyFourHoursAgo = new Date(now.toDate().getTime() - 24 * 60 * 60 * 1000);
-    const staleTickets = await db.collection("maintenanceTickets")
-        .where("status", "in", ["OPEN", "assigned"])
-        .where("createdAt", "<", admin.firestore.Timestamp.fromDate(twentyFourHoursAgo))
-        .get();
-    for (const doc of staleTickets.docs) {
-        await doc.ref.update({ slaViolated: true, lastEscalatedAt: now });
-    }
+    // N-36: canonical + alias pre-work statuses in both cases (see slaCron.ts).
+    await flagSlaBreaches(db, admin.firestore.Timestamp.now());
 });
 
 export const scheduledDailyBackup = onSchedule("0 3 * * *", async () => {

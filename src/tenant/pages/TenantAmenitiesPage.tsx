@@ -57,7 +57,7 @@ export default function TenantAmenitiesPage() {
         amenityName: selectedAmenity.name,
         bookingDate,
         timeSlot,
-        status: 'booked',
+        status: 'pending',
         createdAt: serverTimestamp(),
       });
       setOpenAdd(false); setSelectedAmenity(null); setBookingDate(''); setTimeSlot('09:00 AM - 11:00 AM');
