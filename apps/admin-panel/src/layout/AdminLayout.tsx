@@ -46,7 +46,8 @@ export default function AdminLayout({ children, currentPage }: AdminLayoutProps)
   const { t, isRTL } = useLanguage();
   const navigate = useNavigate();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
-  const [sosCount] = useState(3); // Mock SOS count
+  // N-35: no live SOS feed is wired into this (unused) layout; never show a mock count.
+  const sosCount = 0;
 
   const handleMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
     setAnchorEl(event.currentTarget);

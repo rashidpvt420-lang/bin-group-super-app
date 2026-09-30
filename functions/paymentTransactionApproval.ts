@@ -3,7 +3,7 @@ import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 import * as crypto from "crypto";
 import { createBrokerCommissionForContract } from "./brokerCommissions";
-import { assertStoredOwnerPaymentReceipt } from "./paymentReceiptEvidence";
+import { assertStoredOwnerPaymentReceipt, assertStoredTenantPaymentReceipt } from "./paymentReceiptEvidence";
 import { normalizeAedMoney } from "./shared/aedMoney";
 import { parseExactAedAmount } from "./shared/aedMoneyInput";
 import { decideRentConfirmedAmount, rentApprovalDecision, rentRejectionDecision } from "./rentPaymentStatus";
@@ -194,12 +194,24 @@ export const adminApprovePayment = onCall({ cors: true, enforceAppCheck: true },
         throw new HttpsError("failed-precondition", "Admin approval cannot alter the tenant or owner submitted rent amount.");
       }
     }
-    const receiptEvidence = await assertStoredOwnerPaymentReceipt({
-      ownerUid: rentOwnerUid,
-      paymentId,
-      storagePath: submittedProofPath,
-      expectedHash: submittedProofHash,
-    });
+    // The payment method is part of the submitted evidence; Admin approval confirms it, never changes it.
+    const storedRentMethod = String(payment.paymentMethod || payment.method || "").trim().toUpperCase();
+    if (method && storedRentMethod && method.toUpperCase() !== storedRentMethod) {
+      throw new HttpsError("failed-precondition", "Admin approval cannot alter the submitted rent payment method.");
+    }
+    const isTenantProof = String(payment.recordType || "").trim().toUpperCase() === "TENANT_RENT_PAYMENT_PROOF";
+    const receiptEvidence = isTenantProof
+      ? await assertStoredTenantPaymentReceipt({
+        tenantId: String(payment.tenantId || payment.tenantUid || "").trim(),
+        storagePath: submittedProofPath,
+        expectedHash: submittedProofHash,
+      })
+      : await assertStoredOwnerPaymentReceipt({
+        ownerUid: rentOwnerUid,
+        paymentId,
+        storagePath: submittedProofPath,
+        expectedHash: submittedProofHash,
+      });
     let rentApprovalIdempotent = false;
     await db.runTransaction(async (transaction) => {
       const freshSnap = await transaction.get(ref);
@@ -224,7 +236,7 @@ export const adminApprovePayment = onCall({ cors: true, enforceAppCheck: true },
         paymentReferenceId: submittedReference,
         amountReceived: submittedRentAmount,
         receiptEvidence,
-        paymentMethod: method || payment.paymentMethod || null,
+        paymentMethod: storedRentMethod || method || null,
         receivedAt: receivedAt || null,
         adminNotes: notes,
         approvedBy: actorId,
