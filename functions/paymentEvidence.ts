@@ -34,6 +34,43 @@ function positiveMoney(value: unknown, label: string) {
   return amount;
 }
 
+// Phase 1 rent collection is Cash or Cheque only. Tenant proof must name the method; bank transfer,
+// card, online or any other channel is refused server-side (the approval gate in
+// securePaymentApproval.ts only approves CASH / CHEQUE rent, so accepting anything else here would
+// create proof that can never be approved).
+const TENANT_PROOF_METHODS = new Set(["CASH", "CHEQUE"]);
+
+function tenantProofMethod(value: unknown) {
+  const method = text(value, 40).toUpperCase().replace(/[\s-]+/g, "_");
+  if (!method) {
+    throw new HttpsError("invalid-argument", "Select the payment method: Cash or Cheque.");
+  }
+  if (!TENANT_PROOF_METHODS.has(method)) {
+    throw new HttpsError(
+      "invalid-argument",
+      "Only Cash or Cheque rent payments are accepted. Bank transfer, card and online payments are not accepted.",
+    );
+  }
+  return method as "CASH" | "CHEQUE";
+}
+
+function chequeDetails(data: any) {
+  const chequeNumber = text(data?.chequeNumber, 40).replace(/\s+/g, "");
+  const chequeBank = text(data?.chequeBank || data?.bankName, 180);
+  const chequeDate = text(data?.chequeDate, 20);
+  if (!/^[0-9]{4,12}$/.test(chequeNumber)) {
+    throw new HttpsError("invalid-argument", "Cheque payments require the cheque number (4-12 digits).");
+  }
+  if (chequeBank.length < 2) {
+    throw new HttpsError("invalid-argument", "Cheque payments require the issuing bank name.");
+  }
+  const parsed = /^\d{4}-\d{2}-\d{2}$/.test(chequeDate) ? new Date(`${chequeDate}T00:00:00Z`) : null;
+  if (!parsed || Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== chequeDate) {
+    throw new HttpsError("invalid-argument", "Cheque payments require the cheque date (YYYY-MM-DD).");
+  }
+  return { chequeNumber, chequeBank, chequeDate };
+}
+
 function storageDownloadUrl(bucketName: string, objectPath: string, token: string) {
   return `https://firebasestorage.googleapis.com/v0/b/${bucketName}/o/${encodeURIComponent(objectPath)}?alt=media&token=${encodeURIComponent(token)}`;
 }
@@ -97,8 +134,11 @@ export const submitTenantPaymentProof = onCall(
     const tenantId = request.auth.uid;
     const submissionId = safeId(request.data?.submissionId, "submissionId");
     const amount = positiveMoney(request.data?.amount, "Payment amount");
-    const reference = text(request.data?.reference, 180);
-    const bankName = text(request.data?.bankName, 180);
+    const paymentMethod = tenantProofMethod(request.data?.paymentMethod ?? request.data?.method);
+    const cheque = paymentMethod === "CHEQUE" ? chequeDetails(request.data) : null;
+    // Cash: the office cash-receipt number. Cheque: the cheque number is the reference.
+    const reference = cheque ? cheque.chequeNumber : text(request.data?.reference, 180);
+    const bankName = cheque ? cheque.chequeBank : "";
     const period = text(request.data?.period, 120);
     const notes = text(request.data?.notes, 1000);
     const receiptUrl = text(request.data?.receiptUrl, 2000);
@@ -112,7 +152,7 @@ export const submitTenantPaymentProof = onCall(
     ) {
       throw new HttpsError(
         "failed-precondition",
-        "A tenant-scoped receipt, transfer reference, and SHA-256 receipt hash are required.",
+        "A tenant-scoped receipt, Cash receipt number or cheque number, and SHA-256 receipt hash are required.",
       );
     }
 
@@ -162,6 +202,7 @@ export const submitTenantPaymentProof = onCall(
         if (
           existing.tenantId !== tenantId ||
           Number(existing.amount || 0) !== amount ||
+          text(existing.paymentMethod, 40) !== paymentMethod ||
           text(existing.reference, 180) !== reference ||
           text(existing.receiptHash, 128) !== receiptHash
         ) {
@@ -185,8 +226,11 @@ export const submitTenantPaymentProof = onCall(
         ownerId: text(unit.ownerId || unit.ownerUid || profile.ownerId || profile.ownerUid, 160) || null,
         amount,
         currency: "AED",
+        paymentMethod,
+        method: paymentMethod,
         reference,
         bankName,
+        cheque,
         period,
         notes,
         receiptUrl: verifiedReceiptUrl,
@@ -198,7 +242,7 @@ export const submitTenantPaymentProof = onCall(
         verificationState: "ADMIN_VERIFICATION_REQUIRED",
         paymentVerified: false,
         approved: false,
-        transferDestination: "OWNER_DIRECT_IBAN",
+        collectionChannel: paymentMethod === "CHEQUE" ? "CHEQUE_HANDED_OVER" : "CASH_HANDED_OVER",
         binGroupFundsCustody: false,
         submittedByTenant: true,
         createdAt: now,
@@ -213,6 +257,7 @@ export const submitTenantPaymentProof = onCall(
         unitId,
         amount,
         currency: "AED",
+        paymentMethod,
         createdAt: now,
       });
       return false;
