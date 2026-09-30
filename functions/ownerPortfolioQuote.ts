@@ -4,6 +4,7 @@ import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { calculateUaeQuote2026, type QuoteInput, type QuoteOutput } from "./pricing/calculateUaeQuote2026";
 import { omitClientVerifiedRates } from "./ownerOnboardingQuote";
 import { UAE_PRICING_MATRIX_2026 } from "./pricing/uaePricingMatrix2026";
+import { normalizeAedMoney } from "./shared/aedMoney";
 
 if (!admin.apps.length) admin.initializeApp();
 const db = admin.firestore();
@@ -63,7 +64,8 @@ function sha256(value: unknown): string {
 }
 
 function money(value: unknown, label: string): number {
-  const result = Math.round(Number(value) * 100) / 100;
+  const amount = Number(value);
+  const result = Number.isFinite(amount) && Math.abs(amount) <= 1e12 ? normalizeAedMoney(amount) : Number.NaN;
   if (!Number.isFinite(result) || result < 0 || result > 100_000_000) throw new HttpsError("invalid-argument", `${label} is invalid.`);
   return result;
 }

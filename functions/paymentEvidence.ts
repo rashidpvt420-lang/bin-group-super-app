@@ -190,15 +190,26 @@ export const submitTenantPaymentProof = onCall(
 
     const paymentId = `tenant_${tenantId}_${submissionId}`;
     const paymentRef = db.collection("payment_transactions").doc(paymentId);
+    const receiptRegistryRef = db.collection("tenant_receipt_registry").doc(receiptHash);
     const auditRef = db.collection("audit_logs").doc(`tenant_payment_${tenantId}_${submissionId}`);
     const now = FieldValue.serverTimestamp();
-    // N-24: one receipt file (by SHA-256) can back only one payment submission. The query runs
-    // inside the transaction, so a concurrent resubmission of the same receipt is serialised.
+    // N-24: one receipt file (by SHA-256) can back only one payment submission. The registry
+    // document is the uniqueness claim; the payment query rejects legacy duplicates that predate it.
     const sameReceiptQuery = db.collection("payment_transactions").where("receiptHash", "==", receiptHash).limit(5);
     const idempotent = await db.runTransaction(async (transaction) => {
-      const existingSnap = await transaction.get(paymentRef);
-      const sameReceipt = await transaction.get(sameReceiptQuery);
+      const [existingSnap, sameReceipt, receiptRegistrySnap] = await Promise.all([
+        transaction.get(paymentRef),
+        transaction.get(sameReceiptQuery),
+        transaction.get(receiptRegistryRef),
+      ]);
+      const registeredPaymentId = text(receiptRegistrySnap.data()?.paymentId, 220);
       if (sameReceipt.docs.some((document) => document.id !== paymentId)) {
+        throw new HttpsError(
+          "already-exists",
+          "This receipt was already submitted as evidence for another payment. Upload the receipt for this payment.",
+        );
+      }
+      if (receiptRegistrySnap.exists && registeredPaymentId !== paymentId) {
         throw new HttpsError(
           "already-exists",
           "This receipt was already submitted as evidence for another payment. Upload the receipt for this payment.",
@@ -215,9 +226,29 @@ export const submitTenantPaymentProof = onCall(
         ) {
           throw new HttpsError("already-exists", "This submission ID is already bound to different evidence.");
         }
+        if (!receiptRegistrySnap.exists) {
+          transaction.create(receiptRegistryRef, {
+            receiptHash,
+            paymentId,
+            tenantId,
+            propertyId,
+            unitId,
+            receiptPath,
+            createdAt: now,
+          });
+        }
         return true;
       }
 
+      transaction.create(receiptRegistryRef, {
+        receiptHash,
+        paymentId,
+        tenantId,
+        propertyId,
+        unitId,
+        receiptPath,
+        createdAt: now,
+      });
       transaction.create(paymentRef, {
         paymentId,
         recordType: "TENANT_RENT_PAYMENT_PROOF",

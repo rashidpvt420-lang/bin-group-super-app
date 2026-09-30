@@ -177,18 +177,26 @@ describe('AdminMfaEnrollmentCard - Founder TOTP Enrollment Flow', () => {
   });
 
   test('recent login required handles requires-recent-login errors and fails closed', async () => {
+    // The card no longer only shows a notice: on requires-recent-login during TOTP setup it clears
+    // the secret state and the Admin security session marker, signs out and sends the Admin back to
+    // /login?reason=recent-auth-required (AdminMfaEnrollmentCard generateTotpSecret).
     const testError = { code: 'auth/requires-recent-login' };
     mockInstance.getSession.mockRejectedValue(testError);
+    (signOut as jest.Mock).mockResolvedValue(undefined);
+    window.sessionStorage.setItem('bin-admin-security-session', 'as_founder');
 
     render(<AdminMfaEnrollmentCard enrolled={false} isRTL={false} />);
     const generateBtn = screen.getByTestId('admin-totp-generate');
     fireEvent.click(generateBtn);
 
     await waitFor(() => {
-      expect(screen.getByText(/For security, sign out and sign in again before continuing/i)).toBeInTheDocument();
+      expect(signOut).toHaveBeenCalledWith(auth);
     });
-    // Check that we did not transition to verifying step
+    expect(window.sessionStorage.getItem('bin-admin-security-session')).toBeNull();
+    expect(TotpMultiFactorGenerator.generateSecret).not.toHaveBeenCalled();
+    // Fail closed: never transition to the verifying step or reveal a setup key
     expect(screen.queryByTestId('admin-totp-code-input')).toBeNull();
+    expect(screen.queryByTestId('totp-setup-key')).toBeNull();
   });
 
   test('TOTP secret key is never logged or persisted in console, outputs, or call payloads', async () => {

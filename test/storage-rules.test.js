@@ -9,11 +9,14 @@ import { doc, setDoc } from 'firebase/firestore';
 import { getBytes, ref, uploadString } from 'firebase/storage';
 
 let testEnv;
+// Storage rules cross-read Firestore in the emulator's project. Match the
+// project selected by emulators:exec, including isolated demo-project runs.
+const projectId = process.env.GCLOUD_PROJECT || 'bin-group-57c60';
 
 describe('Storage Security Rules', () => {
   before(async () => {
     testEnv = await initializeTestEnvironment({
-      projectId: 'bin-group-57c60',
+      projectId,
       firestore: {
         rules: fs.readFileSync('firestore.rules', 'utf8'),
       },

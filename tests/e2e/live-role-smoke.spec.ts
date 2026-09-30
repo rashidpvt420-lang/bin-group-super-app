@@ -11,7 +11,16 @@ const roleRoutes: Record<RoleName, string> = {
   broker: '/broker/dashboard',
 };
 
-const publicRoutes = ['/', '/login', '/owners', '/tenants', '/technicians', '/brokers', '/company', '/support', '/privacy', '/terms'];
+const publicRoutes = ['/', '/login', '/owners', '/tenants', '/technicians', '/brokers', '/company', '/support'];
+
+// Legal routes redirect (src/App.tsx LegalRedirect) to static pages in public/, which do not mount
+// the SPA root, so they are checked as static documents rather than as SPA routes.
+const staticLegalRoutes: Array<{ route: string; page: string; heading: RegExp }> = [
+  { route: '/privacy', page: '/privacy-policy.html', heading: /Privacy Policy/ },
+  { route: '/privacy-policy', page: '/privacy-policy.html', heading: /Privacy Policy/ },
+  { route: '/terms', page: '/terms-of-service.html', heading: /Terms of Service/ },
+  { route: '/terms-of-service', page: '/terms-of-service.html', heading: /Terms of Service/ },
+];
 
 const criticalRuntimeFailureText = /application error|unhandled runtime error|chunkloaderror|firebaseerror: missing|minified react error|cannot read properties of undefined|null is not an object/i;
 const serverErrorText = /bad gateway|service unavailable|internal server error|gateway timeout/i;
@@ -147,6 +156,21 @@ test.describe('BIN GROUP production public smoke', () => {
   for (const route of publicRoutes) {
     test(`public route loads: ${route}`, async ({ page }) => {
       await expectHealthyPublicRoute(page, route);
+    });
+  }
+
+  for (const legal of staticLegalRoutes) {
+    test(`public route loads: ${legal.route} -> ${legal.page}`, async ({ page }) => {
+      const response = await page.goto(legal.route, { waitUntil: 'domcontentloaded', timeout: 30_000 });
+      expect(response, `${legal.route} should return an HTTP response`).toBeTruthy();
+      expect(response?.status(), `${legal.route} should not return a server error`).toBeLessThan(500);
+      // Short aliases go through the SPA redirect; the canonical names may be served statically as-is.
+      await expect(page.locator('h1').first(), `${legal.page} must render its legal heading`).toHaveText(legal.heading, { timeout: 30_000 });
+      expect([legal.route, legal.page]).toContain(new URL(page.url()).pathname);
+      const bodyText = (await page.locator('body').innerText()).trim();
+      expect(bodyText.length, `${legal.page} should render visible legal content`).toBeGreaterThan(200);
+      expect(bodyText).not.toMatch(criticalRuntimeFailureText);
+      expect(bodyText).not.toMatch(serverErrorText);
     });
   }
 });

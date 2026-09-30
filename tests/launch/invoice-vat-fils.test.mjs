@@ -15,7 +15,8 @@ test('invoice VAT keeps fils instead of rounding to a whole dirham', () => {
 
 test('the live invoice page uses fils VAT and does not round the tax to a dirham', () => {
   const source = readFileSync('src/pages/InvoiceDetailsPage.tsx', 'utf8');
-  assert.match(source, /aedTotalWithVat/);
+  // invoiceTotals applies aedTotalWithVat (fils VAT) once the issuer TRN is verified.
+  assert.match(source, /invoiceTotals\(lineNet\)/);
   assert.doesNotMatch(source, /Math\.round\(total \* 0\.05\)/);
   assert.match(source, /minimumFractionDigits: 2/);
 });
