@@ -6,6 +6,7 @@ import { setGlobalOptions } from "firebase-functions/v2";
 import { defineSecret } from "firebase-functions/params";
 import * as admin from "firebase-admin";
 import * as crypto from "crypto";
+import { newInvitationOpenTrackingId, parseOpenTrackingId, tenantInvitationTrackingPixelUrl } from "./tenantInvitationTracking";
 import * as path from "path";
 import { createRequire } from "module";
 import type { SummarizePropertyPassportSources, PassportIdentity } from "./shared/propertyPassportAggregationTypes";
@@ -26,6 +27,7 @@ import {
 import { enforceAiUsageQuota } from "./aiUsageQuota";
 import { sendTwilioSMS } from "./smsDelivery";
 import { resolveTechnicianArrivalBinding } from "./technicianInstallationBinding";
+import { flagSlaBreaches } from "./slaCron";
 
 // [V10] PRODUCTION GRADE FULL-STACK STABILIZATION
 setGlobalOptions({ region: "europe-west3", enforceAppCheck: true });
@@ -1691,15 +1693,8 @@ export const onApprovalStagnant = onSchedule({ schedule: "every 24 hours" }, asy
 });
 
 export const evaluateSLACron = onSchedule("every 4 hours", async () => {
-    const now = admin.firestore.Timestamp.now();
-    const twentyFourHoursAgo = new Date(now.toDate().getTime() - 24 * 60 * 60 * 1000);
-    const staleTickets = await db.collection("maintenanceTickets")
-        .where("status", "in", ["OPEN", "assigned"])
-        .where("createdAt", "<", admin.firestore.Timestamp.fromDate(twentyFourHoursAgo))
-        .get();
-    for (const doc of staleTickets.docs) {
-        await doc.ref.update({ slaViolated: true, lastEscalatedAt: now });
-    }
+    // N-36: canonical + alias pre-work statuses in both cases (see slaCron.ts).
+    await flagSlaBreaches(db, admin.firestore.Timestamp.now());
 });
 
 export const scheduledDailyBackup = onSchedule("0 3 * * *", async () => {
@@ -1807,12 +1802,14 @@ export const sendTenantInvitations = onCall({ cors: true, enforceAppCheck: true 
 
         const rawToken = crypto.randomBytes(32).toString('hex');
         const tokenHash = hashToken(rawToken);
+        const openTrackingId = newInvitationOpenTrackingId();
 
         const mailRef = db.collection("mail").doc();
         const mailDocumentId = mailRef.id;
 
         batch.update(doc.ref, {
             inviteTokenHash: tokenHash,
+            openTrackingId,
             status: 'sent',
             emailStatus: 'queued',
             emailQueuedAt: FieldValue.serverTimestamp(),
@@ -1826,7 +1823,7 @@ export const sendTenantInvitations = onCall({ cors: true, enforceAppCheck: true 
         const inviteLink = "https://bin-groups.com/tenant-invite?token=" + rawToken;
         const region = "europe-west3";
         const projectId = admin.app().options.projectId || process.env.GCLOUD_PROJECT || "bin-group-57c60";
-        const trackingPixel = `https://${region}-${projectId}.cloudfunctions.net/trackTenantInvitationOpen?token=${rawToken}`;
+        const trackingPixel = tenantInvitationTrackingPixelUrl(region, projectId, openTrackingId);
 
         batch.set(mailRef, {
             to: invite.tenantEmail,
@@ -2093,11 +2090,12 @@ export const acceptTenantInvitation = onCall({ cors: true, enforceAppCheck: true
 });
 
 export const trackTenantInvitationOpen = onRequest(async (req, res) => {
-    const { token } = req.query;
-    if (token && typeof token === 'string') {
-        const tokenHash = hashToken(token);
+    // N-21: only the opaque open-tracking id is accepted. The legacy ?token= form is ignored
+    // so the invitation secret is never needed (or useful) in a tracking URL.
+    const tid = parseOpenTrackingId(req.query.tid);
+    if (tid) {
         const inviteSnap = await db.collection("tenant_invitations")
-            .where("inviteTokenHash", "==", tokenHash)
+            .where("openTrackingId", "==", tid)
             .limit(1)
             .get();
 

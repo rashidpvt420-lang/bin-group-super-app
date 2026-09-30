@@ -18,10 +18,11 @@ import { binThemeTokens } from '../theme/binGroupTheme';
 import { db, collection, getDocs, query, where, orderBy, limit } from '../lib/firebase';
 import { useRole } from '../context/RoleContext';
 import { formatAED } from '../utils/formatters';
+import { computeReportingStats, formatOccupancy, formatResolutionTime, NOT_AVAILABLE, type ReportingStats } from './reportingDashboardStats';
 
 const ReportingDashboard: React.FC = () => {
     const { user, role } = useRole();
-    const [stats, setStats] = useState<any>(null);
+    const [stats, setStats] = useState<ReportingStats | null>(null);
     const [selectedEmirate, setSelectedEmirate] = useState('ALL');
     const [loading, setLoading] = useState(true);
     const [loadError, setLoadError] = useState('');
@@ -59,54 +60,14 @@ const ReportingDashboard: React.FC = () => {
                     return [...merged.values()];
                 };
 
-                const allProps = await readCollection('properties');
-                
-                const filteredProps = selectedEmirate === 'ALL' 
-                    ? allProps 
-                    : allProps.filter(p => p.emirate?.toUpperCase() === selectedEmirate);
-
-                const allTickets = await readCollection('maintenanceTickets');
-                const tickets = selectedEmirate === 'ALL' 
-                    ? allTickets 
-                    : allTickets.filter(t => filteredProps.some(p => p.id === t.propertyId));
-
-                const completed = tickets.filter(t => t.status === 'COMPLETED');
-                const avgResponseTime = completed.length > 0 ? "42.5 mins" : "N/A";
-
-                const allContracts = await readCollection('contracts');
-                const totalSettled = allContracts
-                    .filter(c => selectedEmirate === 'ALL' || filteredProps.some(p => p.id === c.propertyId))
-                    .reduce((sum, c) => sum + (c.amountReceived || 0), 0);
-
-                const allUnits = await readCollection('units');
-                const units = selectedEmirate === 'ALL' 
-                    ? allUnits 
-                    : allUnits.filter(u => filteredProps.some(p => p.id === u.propertyId));
-
-                const occupiedCount = units.filter(u => u.tenantId).length;
-                const totalUnits = units.length || occupiedCount + 5;
-
-                const emirates = Array.from(new Set(allProps.map(p => p.emirate?.toUpperCase()))).filter(Boolean);
-
-                setStats({
-                    velocity: avgResponseTime,
-                    totalSettled,
-                    assetDensity: Math.round((occupiedCount / totalUnits) * 100) || 85,
-                    activeMissions: tickets.filter(t => t.status !== 'COMPLETED').length,
-                    emiratesList: ['ALL', ...emirates],
-                    regionalStats: emirates.map(e => ({
-                        emirate: e,
-                        count: allProps.filter(p => p.emirate?.toUpperCase() === e).length,
-                        uptime: 100
-                    })),
-                    faultTrend: [
-                        { category: 'HVAC', count: 12, trend: '+15%' },
-                        { category: 'Electrical', count: 8, trend: '-5%' },
-                        { category: 'Plumbing', count: 5, trend: 'Stable' }
-                    ],
-                    emergencyTrend: [4, 2, 5, 1, 0, 3],
-                    renewalRisk: 12
-                });
+                const [properties, tickets, contracts, units] = await Promise.all([
+                    readCollection('properties'),
+                    readCollection('maintenanceTickets'),
+                    readCollection('contracts'),
+                    readCollection('units'),
+                ]);
+                // N-10: every KPI is computed from these records; missing data yields null → "Not available".
+                setStats(computeReportingStats({ properties, tickets, contracts, units, selectedEmirate }));
             } catch (err: any) {
                 console.error("Aggregation Failed:", err);
                 setLoadError(err?.message || "Reporting data could not be loaded.");
@@ -137,13 +98,13 @@ const ReportingDashboard: React.FC = () => {
         
         (doc as any).autoTable({
             startY: 70,
-            head: [['KPI Indicator', 'Value', 'Status']],
+            head: [['KPI Indicator', 'Value', 'Basis']],
             body: [
-                ['Operational Velocity', stats.velocity, 'OPTIMAL'],
-                ['Financial Integrity', `AED ${formatAED(stats.totalSettled)}`, 'VERIFIED'],
-                ['Asset Density', `${stats.assetDensity}%`, 'STABLE'],
-                ['Active Missions', stats.activeMissions.toString(), 'MONITORED'],
-                ['Renewal Risk Score', `${stats.renewalRisk}%`, 'MITIGATED']
+                ['Average Ticket Resolution', formatResolutionTime(stats.avgResolutionMinutes), stats.avgResolutionMinutes === null ? 'No completed tickets with timestamps' : `${stats.resolutionSampleSize} completed ticket(s)`],
+                ['Total Direct Settlements', `AED ${formatAED(stats.totalSettled)}`, 'Sum of amountReceived on visible contracts'],
+                ['Portfolio Occupancy', formatOccupancy(stats.occupancyPercent), stats.occupancyPercent === null ? 'No unit records' : `${stats.occupiedUnits} of ${stats.totalUnits} unit(s) occupied`],
+                ['Open Tickets', stats.activeTickets.toString(), 'Tickets not COMPLETED'],
+                ['Renewal Risk Score', NOT_AVAILABLE, 'No renewal risk model is connected']
             ],
             theme: 'striped',
             headStyles: { fillColor: [198, 167, 94] }
@@ -151,12 +112,14 @@ const ReportingDashboard: React.FC = () => {
 
         doc.setFontSize(8);
         doc.setTextColor(150, 150, 150);
-        doc.text("This document is a certified institutional export. BIN GROUP Dubai HQ.", 105, 280, { align: 'center' });
+        doc.text("Generated from the records visible to this account at the time of export. Metrics without source data are marked Not available.", 105, 280, { align: 'center' });
         doc.save(`Sovereign_Report_${selectedEmirate}_${Date.now()}.pdf`);
     };
 
     if (loading) return <Box sx={{ display: 'flex', justifyContent: 'center', py: 10 }}><CircularProgress sx={{ color: binThemeTokens.gold }} /></Box>;
     if (loadError) return <Container maxWidth="xl" sx={{ py: 6 }}><Alert severity="error">{loadError}</Alert></Container>;
+    if (!stats) return null;
+    const emergencyMax = Math.max(1, ...stats.emergencyByMonth.map((m) => m.count));
 
     return (
         <Container maxWidth="xl" sx={{ py: 6 }}>
@@ -190,9 +153,9 @@ const ReportingDashboard: React.FC = () => {
                     <Paper sx={{ p: 4, bgcolor: alpha(binThemeTokens.gold, 0.05), border: `1px solid ${alpha(binThemeTokens.gold, 0.2)}`, borderRadius: 6 }}>
                         <Stack spacing={1}>
                             <Timer color={binThemeTokens.gold} size={32} />
-                            <Typography variant="overline" sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 800 }}>Operational Velocity</Typography>
-                            <Typography variant="h2" fontWeight="950" sx={{ color: '#FFF' }}>{stats.velocity}</Typography>
-                            <Typography variant="caption" sx={{ color: binThemeTokens.gold }}>AVG SOS → DISPATCH TERMINAL</Typography>
+                            <Typography variant="overline" sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 800 }}>Average Ticket Resolution</Typography>
+                            <Typography variant="h2" fontWeight="950" sx={{ color: '#FFF' }} data-testid="reporting-resolution-time">{formatResolutionTime(stats.avgResolutionMinutes)}</Typography>
+                            <Typography variant="caption" sx={{ color: binThemeTokens.gold }}>{stats.avgResolutionMinutes === null ? 'NO COMPLETED TICKETS WITH TIMESTAMPS' : `CREATED → COMPLETED · ${stats.resolutionSampleSize} TICKET(S)`}</Typography>
                         </Stack>
                     </Paper>
                 </Grid>
@@ -210,9 +173,9 @@ const ReportingDashboard: React.FC = () => {
                     <Paper sx={{ p: 4, bgcolor: alpha(binThemeTokens.gold, 0.05), border: `1px solid ${alpha(binThemeTokens.gold, 0.2)}`, borderRadius: 6 }}>
                         <Stack spacing={1}>
                             <PieChart color={binThemeTokens.gold} size={32} />
-                            <Typography variant="overline" sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 800 }}>Asset Density</Typography>
-                            <Typography variant="h2" fontWeight="950" sx={{ color: '#FFF' }}>{stats.assetDensity}%</Typography>
-                            <Typography variant="caption" sx={{ color: binThemeTokens.gold }}>PORTFOLIO OCCUPANCY</Typography>
+                            <Typography variant="overline" sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 800 }}>Portfolio Occupancy</Typography>
+                            <Typography variant="h2" fontWeight="950" sx={{ color: '#FFF' }} data-testid="reporting-occupancy">{formatOccupancy(stats.occupancyPercent)}</Typography>
+                            <Typography variant="caption" sx={{ color: binThemeTokens.gold }}>{stats.occupancyPercent === null ? 'NO UNIT RECORDS' : `${stats.occupiedUnits} OF ${stats.totalUnits} UNITS OCCUPIED`}</Typography>
                         </Stack>
                     </Paper>
                 </Grid>
@@ -226,15 +189,15 @@ const ReportingDashboard: React.FC = () => {
                     <Grid container spacing={4}>
                         <Grid item xs={12} md={4}>
                             <Paper sx={{ p: 4, bgcolor: 'rgba(22, 22, 24, 0.7)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 6 }}>
-                                <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>REPEATED FAULT TREND</Typography>
+                                <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>TOP FAULT CATEGORIES</Typography>
                                 <Stack spacing={3} sx={{ mt: 3 }}>
-                                    {stats.faultTrend.map((f: any, i: number) => (
-                                        <Box key={i} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                            <Box>
-                                                <Typography variant="body1" fontWeight="900" color="#FFF">{f.category}</Typography>
-                                                <Typography variant="caption" color="textSecondary">{f.count} INCIDENTS</Typography>
-                                            </Box>
-                                            <Chip label={f.trend} size="small" sx={{ bgcolor: f.trend.startsWith('+') ? 'rgba(239,68,68,0.1)' : 'rgba(16,185,129,0.1)', color: f.trend.startsWith('+') ? '#ef4444' : '#10b981', fontWeight: 900 }} />
+                                    {stats.faultCategories.length === 0 && (
+                                        <Typography variant="body2" color="textSecondary">{NOT_AVAILABLE}: no categorised tickets yet.</Typography>
+                                    )}
+                                    {stats.faultCategories.map((f) => (
+                                        <Box key={f.category} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                            <Typography variant="body1" fontWeight="900" color="#FFF">{f.category}</Typography>
+                                            <Typography variant="caption" color="textSecondary">{f.count} TICKET(S)</Typography>
                                         </Box>
                                     ))}
                                 </Stack>
@@ -242,23 +205,22 @@ const ReportingDashboard: React.FC = () => {
                         </Grid>
                         <Grid item xs={12} md={4}>
                             <Paper sx={{ p: 4, bgcolor: 'rgba(22, 22, 24, 0.7)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 6 }}>
-                                <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>EMERGENCY VELOCITY (6M)</Typography>
+                                <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>EMERGENCY TICKETS (6M)</Typography>
                                 <Box sx={{ mt: 4, display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', height: 100 }}>
-                                    {stats.emergencyTrend.map((val: number, i: number) => (
-                                        <Box key={i} sx={{ width: '12%', bgcolor: val > 3 ? '#ef4444' : binThemeTokens.gold, height: `${(val / 5) * 100}%`, borderRadius: 1 }} />
+                                    {stats.emergencyByMonth.map((m) => (
+                                        <Box key={m.month} title={`${m.month}: ${m.count}`} sx={{ width: '12%', bgcolor: binThemeTokens.gold, height: `${(m.count / emergencyMax) * 100}%`, minHeight: 2, borderRadius: 1 }} />
                                     ))}
                                 </Box>
-                                <Typography variant="caption" color="textSecondary" sx={{ mt: 2, display: 'block', textAlign: 'center' }}>Response Uptime: 100%</Typography>
+                                <Typography variant="caption" color="textSecondary" sx={{ mt: 2, display: 'block', textAlign: 'center' }}>{stats.emergencyByMonth.reduce((sum, m) => sum + m.count, 0)} emergency ticket(s) in the last 6 months</Typography>
                             </Paper>
                         </Grid>
                         <Grid item xs={12} md={4}>
                             <Paper sx={{ p: 4, bgcolor: '#0B0B0C', border: `2px solid ${binThemeTokens.gold}`, borderRadius: 6 }}>
                                 <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950 }}>RENEWAL RISK SCORE</Typography>
                                 <Box sx={{ textAlign: 'center', py: 2 }}>
-                                    <Typography variant="h1" fontWeight="950" color="#FFF">{stats.renewalRisk}%</Typography>
-                                    <Typography variant="body2" color="textSecondary">Retention Hedge Layer</Typography>
+                                    <Typography variant="h4" fontWeight="950" color="#FFF" data-testid="reporting-renewal-risk">{NOT_AVAILABLE}</Typography>
+                                    <Typography variant="body2" color="textSecondary">No renewal risk model is connected to your records yet.</Typography>
                                 </Box>
-                                <Button fullWidth variant="contained" sx={{ mt: 2, bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>MITIGATE RISK</Button>
                             </Paper>
                         </Grid>
                     </Grid>
@@ -267,7 +229,7 @@ const ReportingDashboard: React.FC = () => {
                 <Grid item xs={12}>
                     <Typography variant="h5" fontWeight="900" sx={{ color: '#FFF', mb: 4, mt: 4 }}>Regional Performance Distribution</Typography>
                     <Grid container spacing={3}>
-                        {stats.regionalStats.map((reg: any) => (
+                        {stats.regionalStats.map((reg) => (
                             <Grid item xs={12} md={4} key={reg.emirate}>
                                 <Card sx={{ bgcolor: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 6 }}>
                                     <CardContent sx={{ p: 4 }}>
@@ -278,15 +240,7 @@ const ReportingDashboard: React.FC = () => {
                                             </Box>
                                             <Globe color={binThemeTokens.gold} />
                                         </Stack>
-                                        <Box sx={{ mt: 4 }}>
-                                            <Stack direction="row" justifyContent="space-between" sx={{ mb: 1 }}>
-                                                <Typography variant="caption" sx={{ color: binThemeTokens.gold }}>SERVICE UPTIME</Typography>
-                                                <Typography variant="caption" sx={{ color: '#FFF' }}>{reg.uptime}%</Typography>
-                                            </Stack>
-                                            <Box sx={{ height: 4, bgcolor: 'rgba(255,255,255,0.05)', borderRadius: 2, overflow: 'hidden' }}>
-                                                <Box sx={{ height: '100%', width: `${reg.uptime}%`, bgcolor: binThemeTokens.gold }} />
-                                            </Box>
-                                        </Box>
+                                        <Typography variant="caption" sx={{ mt: 4, display: 'block', color: 'rgba(255,255,255,0.4)' }}>SERVICE UPTIME: {NOT_AVAILABLE.toUpperCase()} (NOT TRACKED)</Typography>
                                     </CardContent>
                                 </Card>
                             </Grid>
