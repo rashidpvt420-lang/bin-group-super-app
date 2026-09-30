@@ -40,7 +40,7 @@ function technicianRole(auth: any) {
   return normalize(token.role || token.userRole || token.primaryRole);
 }
 
-function requireTechnician(auth: any) {
+export function requireTechnician(auth: any) {
   if (!auth?.uid) throw new HttpsError("unauthenticated", "Technician login required.");
   const role = technicianRole(auth);
   if (role !== "technician" && role !== "tech" && auth.token?.technician !== true) {
@@ -75,7 +75,7 @@ function profileAllowsIdentityAccess(data: FirebaseFirestore.DocumentData) {
     !BLOCKED_PROFILE_STATUSES.has(status);
 }
 
-async function assertTechnicianLiveLocationEligibility(uid: string) {
+export async function assertTechnicianLiveLocationEligibility(uid: string) {
   const [authUser, technicianSnap, userSnap] = await Promise.all([
     admin.auth().getUser(uid),
     db.collection("technicians").doc(uid).get(),
@@ -108,13 +108,13 @@ function assignedTechnicianId(data: FirebaseFirestore.DocumentData) {
   ).trim();
 }
 
-function finiteNumber(value: unknown, label: string) {
+export function finiteNumber(value: unknown, label: string) {
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) throw new HttpsError("invalid-argument", `${label} must be a finite number.`);
   return parsed;
 }
 
-function requireCoordinate(value: unknown, label: "latitude" | "longitude") {
+export function requireCoordinate(value: unknown, label: "latitude" | "longitude") {
   const parsed = finiteNumber(value, label);
   const valid = label === "latitude"
     ? parsed >= -90 && parsed <= 90
@@ -123,7 +123,7 @@ function requireCoordinate(value: unknown, label: "latitude" | "longitude") {
   return parsed;
 }
 
-function looksLikeReversedUaeLatLng(latitude: number, longitude: number) {
+export function looksLikeReversedUaeLatLng(latitude: number, longitude: number) {
   return latitude >= 51 && latitude <= 57 && longitude >= 22 && longitude <= 27;
 }
 
