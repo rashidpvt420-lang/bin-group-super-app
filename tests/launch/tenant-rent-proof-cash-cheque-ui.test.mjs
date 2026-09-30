@@ -13,7 +13,9 @@ test('tenant payment proof page offers only Cash and Cheque and never asks for a
   assert.match(page, /<MenuItem value="CHEQUE">Cheque<\/MenuItem>/);
   assert.doesNotMatch(page, /MenuItem value="(BANK|TRANSFER|CARD|ONLINE)/i);
   assert.match(page, /paymentMethod: proofForm\.paymentMethod/);
-  for (const field of ['chequeNumber', 'chequeBank', 'chequeDate']) assert.match(page, new RegExp(`${field}: proofForm\\.`));
+  assert.match(page, /chequeNumber: proofForm\./);
+  assert.match(page, /chequeBank: proofForm\./);
+  assert.match(page, /chequeDate: proofForm\./);
   assert.match(page, /disabled=\{uploading \|\| Boolean\(proofFormError\) \|\| !receiptFile\}/);
 });
 
