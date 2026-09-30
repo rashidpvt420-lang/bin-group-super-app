@@ -98,6 +98,7 @@ export * from "./proofVerification";
 export * from "./staffOperatingSystem";
 export * from "./staffInventoryEngine";
 export * from "./staffPdfReporting";
+export * from "./jobEvidenceExceptions";
 
 export {
   resumeTechnicianDuty,

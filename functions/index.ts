@@ -10,7 +10,7 @@ import { newInvitationOpenTrackingId, parseOpenTrackingId, tenantInvitationTrack
 import * as path from "path";
 import { createRequire } from "module";
 import type { SummarizePropertyPassportSources, PassportIdentity } from "./shared/propertyPassportAggregationTypes";
-import { assertOwnerClosureEvidence } from "./ticketClosureEvidence";
+import { assertJobClosureAllowed, closureGateRecord } from "./jobEvidenceGate";
 
 const requirePropertyPassportAggregation = createRequire(__filename);
 const {
@@ -486,34 +486,16 @@ export const updateTicketLifecycle = onCall({ cors: true, enforceAppCheck: true 
             updateData.dispatchStatus = 'IN_PROGRESS';
         }
         if (requestedStatus === 'COMPLETED' || requestedStatus === 'COMPLETED_PENDING_APPROVAL') {
-            const nextBeforePhotoUrl = proofType === 'BEFORE' && proofUrl ? proofUrl : ticketData.beforePhotoUrl;
-            const nextAfterPhotoUrl = proofType === 'AFTER' && proofUrl ? proofUrl : ticketData.afterPhotoUrl;
-            const nextNotes = String(notes || ticketData.notes || ticketData.technicianNotes || '').trim();
-            const beforeCollections = [
-                ticketData.beforePhotos,
-                ticketData.photos,
-                ticketData.tenantPhotos,
-                ticketData.initialPhotoUrls,
-            ];
-            const afterCollections = [
-                ticketData.afterPhotos,
-                ticketData.completionPhotos,
-                ticketData.proofPhotos,
-                ticketData.evidencePhotos,
-            ];
-            const hasBeforeProof = Boolean(nextBeforePhotoUrl) ||
-                beforeCollections.some((items) => Array.isArray(items) && items.length > 0);
-            const hasAfterProof = Boolean(nextAfterPhotoUrl) ||
-                afterCollections.some((items) => Array.isArray(items) && items.length > 0);
-            if (!hasBeforeProof) {
-                throw new HttpsError('failed-precondition', 'Before photo proof is required before completing this ticket.');
+            // Proof is enforced by the job evidence gate in the secure wrapper, on server-verified
+            // evidence only. The former checks here accepted client-writable fields (proofUrl,
+            // afterPhotos, tenant photos) as proof, so they are no longer the gate.
+            const nextNotes = String(notes || ticketData.technicianNotes || '').trim();
+            // Job evidence gate decision computed by the secure wrapper (server context, not request.data).
+            const serverClosureEvidenceGate = (request as any).serverClosureEvidenceGate;
+            if (!serverClosureEvidenceGate) {
+                throw new HttpsError('failed-precondition', 'Completion must pass the job evidence gate.');
             }
-            if (!hasAfterProof) {
-                throw new HttpsError('failed-precondition', 'After photo proof is required before completing this ticket.');
-            }
-            if (nextNotes.length < 10) {
-                throw new HttpsError('failed-precondition', 'Technician completion notes are required before completing this ticket.');
-            }
+            updateData.closureEvidenceGate = serverClosureEvidenceGate;
             updateData.completedAt = now;
             updateData.trackingStatus = 'COMPLETED';
             updateData.dispatchStatus = 'COMPLETED_PENDING_REVIEW';
@@ -547,7 +529,12 @@ export const updateTicketLifecycle = onCall({ cors: true, enforceAppCheck: true 
             action: `LIFECYCLE_${requestedStatus}`,
             targetType: "maintenanceTickets",
             targetId: ticketId,
-            metadata: { notes: safeString(notes, "").slice(0, 500), proofType: safeString(proofType) },
+            metadata: {
+                notes: safeString(notes, "").slice(0, 500),
+                proofType: safeString(proofType),
+                closureEvidenceMode: (request as any).serverClosureEvidenceGate?.mode || null,
+                evidenceExceptionId: (request as any).serverClosureEvidenceGate?.exceptionId || null,
+            },
             createdAt: now,
         });
     });
@@ -618,8 +605,10 @@ export const ownerReviewTicketCompletion = onCall({ cors: true, enforceAppCheck:
     if (!reviewableStatuses.has(normalizeRole(ticketData.status))) {
         throw new HttpsError("failed-precondition", "Ticket is not ready for owner completion review.");
     }
-    // N-22: an Owner may only approve closure of work with verified after-work evidence.
-    if (action === "APPROVE_CLOSE" && !isAdmin) await assertOwnerClosureEvidence(ticketId, ticketData);
+    // N-22 + job evidence gate: nobody (owner or admin) can close work whose proof is
+    // incomplete unless a supervisor-approved exception covers the gap. Fail fast here and
+    // re-check inside the transaction against the fresh ticket.
+    if (action === "APPROVE_CLOSE") await assertJobClosureAllowed(ticketId, ticketData, { action: "close" });
 
     const now = FieldValue.serverTimestamp();
     const baseUpdate: any = {
@@ -714,6 +703,15 @@ export const ownerReviewTicketCompletion = onCall({ cors: true, enforceAppCheck:
         if (!reviewableStatuses.has(normalizeRole(fresh.status))) {
             throw new HttpsError("failed-precondition", "Ticket is no longer ready for owner completion review.");
         }
+        let closureGate: ReturnType<typeof closureGateRecord> | null = null;
+        if (action === "APPROVE_CLOSE") {
+            const decision = await assertJobClosureAllowed(ticketId, fresh, {
+                action: "close",
+                read: (ref) => transaction.get(ref),
+            });
+            closureGate = closureGateRecord(decision, "OWNER_REVIEW");
+        }
+        if (closureGate) baseUpdate.closureEvidenceGate = closureGate;
         transaction.update(ticketRef, baseUpdate);
         if (revisitRef && revisitSnap && !revisitSnap.exists) {
             transaction.create(revisitRef, {
@@ -757,6 +755,8 @@ export const ownerReviewTicketCompletion = onCall({ cors: true, enforceAppCheck:
                 propertyName: fresh.propertyName || "",
                 assignedTechnicianId: fresh.assignedTechnicianId || "",
                 revisitChildId: action === "REQUEST_REVISIT" ? revisitChildId : "",
+                closureEvidenceMode: closureGate?.mode || null,
+                evidenceExceptionId: closureGate?.exceptionId || null,
             },
             createdAt: now,
         });

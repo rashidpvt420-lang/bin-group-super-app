@@ -1,6 +1,7 @@
 import { onDocumentUpdated } from "firebase-functions/v2/firestore";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
+import { assertJobClosureAllowed, closureGateRecord } from "./jobEvidenceGate";
 
 if (!admin.apps.length) admin.initializeApp();
 
@@ -241,7 +242,15 @@ export const tenantReviewTicketCompletion = onCall(
 
       const auditRef = db.collection("audit_logs").doc();
       if (action === "approve") {
+        // Job evidence gate: a tenant approval cannot close a job whose proof is incomplete
+        // unless a supervisor-approved exception covers the gap. Reads happen before writes.
+        const closureDecision = await assertJobClosureAllowed(ticketId, data, {
+          action: "close",
+          read: (ref) => transaction.get(ref),
+        });
+        const closureEvidenceGate = closureGateRecord(closureDecision, "TENANT_REVIEW");
         transaction.update(ticketRef, {
+          closureEvidenceGate,
           closureStatus: "tenant_approved",
           tenantApproved: true,
           tenantApprovalStatus: "APPROVED",
@@ -258,7 +267,12 @@ export const tenantReviewTicketCompletion = onCall(
           action: "TENANT_APPROVED_TICKET",
           targetType: "maintenanceTickets",
           targetId: ticketId,
-          metadata: { rating, feedback: feedback || null },
+          metadata: {
+            rating,
+            feedback: feedback || null,
+            closureEvidenceMode: closureDecision.mode,
+            evidenceExceptionId: closureDecision.exceptionId,
+          },
           createdAt: ts(),
         });
       } else {

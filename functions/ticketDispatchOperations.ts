@@ -3,6 +3,7 @@ import * as admin from "firebase-admin";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { requirePrivilegedMfaSession } from "./adminMfaSession";
 import { requireMfaFinanceAdminActor } from "./financeAdminMfa";
+import { assertJobClosureAllowed, assignedTechnicianIdOf, closureGateRecord } from "./jobEvidenceGate";
 
 if (!admin.apps.length) admin.initializeApp();
 const db = admin.firestore();
@@ -249,9 +250,21 @@ export const adminResolveTicketDispute = onCall(
       }
 
       // Close the disputed ticket; dispatch only the dedicated revisit child so
-      // ops cannot double-assign the parent and the child at the same time.
+      // ops cannot double-assign the parent and the child at the same time (#1552/#1557).
+      // Job evidence gate: dismissing a dispute or crediting it closes the job as done, so the
+      // proof must be complete or covered by a supervisor-approved exception. A revisit does
+      // not certify the work: the parent is superseded by the revisit child, which carries
+      // its own evidence gate when it closes.
+      const closureGate = action === "request_revisit"
+        ? { mode: "SUPERSEDED_BY_REVISIT", path: "ADMIN_DISPUTE_RESOLUTION", revisitTicketId: revisitRef.id, checkedAt: now }
+        : closureGateRecord(
+          await assertJobClosureAllowed(ticketId, ticket, { action: "close", read: (ref) => transaction.get(ref) }),
+          "ADMIN_DISPUTE_RESOLUTION",
+        );
       transaction.set(ticketRef, {
         status: "CLOSED",
+        closureEvidenceGate: closureGate,
+        closedAt: now,
         adminReviewStatus: "RESOLVED",
         requiresAdminReview: false,
         disputeStatus: action === "request_revisit" ? "REOPENED_FOR_REVISIT" : "RESOLVED",
@@ -326,6 +339,8 @@ export const adminResolveTicketDispute = onCall(
         ticketId,
         resolutionAction: action,
         resolutionNote: note,
+        closureEvidenceMode: closureGate?.mode || null,
+        evidenceExceptionId: "exceptionId" in closureGate ? closureGate.exceptionId : null,
         slaCreditAmount: action === "approve_credit" ? STANDARD_SLA_CREDIT_AED : 0,
         createdAt: now,
       }, { merge: false });
@@ -392,9 +407,21 @@ export const adminUpdateEmergencyTicket = onCall(
         throw new HttpsError("failed-precondition", "An emergency must be acknowledged before it is resolved.");
       }
 
+      // Job evidence gate: once a technician was dispatched, resolving the emergency closes
+      // their job, so the proof must be complete or covered by an approved exception. An
+      // alert-only SOS with no technician is recorded as such (open question for Rashid).
+      const closureGate = action === "resolve"
+        ? assignedTechnicianIdOf(ticket)
+          ? closureGateRecord(
+            await assertJobClosureAllowed(ticketId, ticket, { action: "resolve", read: (ref) => transaction.get(ref) }),
+            "ADMIN_EMERGENCY_RESOLVE",
+          )
+          : { mode: "NO_TECHNICIAN_DISPATCHED", path: "ADMIN_EMERGENCY_RESOLVE", checkedAt: now }
+        : null;
       transaction.set(ticketRef, {
         status: targetStatus,
         sosStatus: targetSosStatus,
+        ...(closureGate ? { closureEvidenceGate: closureGate } : {}),
         ...(action === "respond"
           ? { respondedAt: now, respondedBy: request.auth!.uid }
           : { resolvedAt: now, resolvedBy: request.auth!.uid }),
@@ -402,6 +429,7 @@ export const adminUpdateEmergencyTicket = onCall(
       }, { merge: true });
       transaction.set(auditRef, {
         action: action === "respond" ? "ADMIN_RESPOND_EMERGENCY" : "ADMIN_RESOLVE_EMERGENCY",
+        closureEvidenceMode: closureGate?.mode || null,
         actorId: request.auth!.uid,
         actorRole: role(
           request.auth!.token?.role ||

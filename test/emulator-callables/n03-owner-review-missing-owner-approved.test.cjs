@@ -8,8 +8,8 @@ const test = require('node:test');
 const { db, lib, createUser, clearFirestore, call, expectHttpsError } = require('./_setup.cjs');
 
 const { ownerReviewTicketCompletion } = lib('runtimeAll.js');
-// N-22: approving closure now requires verified after-work evidence; seed it like the real flow.
-const { seedVerifiedAfterWorkEvidence } = require('./_ticketEvidence.cjs');
+// N-22 + job evidence gate: approving closure requires complete verified job proof; seed it like the real flow.
+const { seedCompleteJobEvidence } = require('./_ticketEvidence.cjs');
 let owner;
 let otherOwner;
 test.before(async () => {
@@ -27,7 +27,7 @@ const expectedStatus = { APPROVE_CLOSE: 'CLOSED', DISPUTE: 'DISPUTED', REQUEST_R
 for (const action of Object.keys(expectedStatus)) {
   test(`${action} works on a fresh ticket with no ownerApproved field`, async () => {
     const id = `n03_${action.toLowerCase()}`;
-    await db.doc(`maintenanceTickets/${id}`).set({ ...base, ...(await seedVerifiedAfterWorkEvidence(id, base.assignedTechnicianId)) });
+    await db.doc(`maintenanceTickets/${id}`).set({ ...base, ...(await seedCompleteJobEvidence(id, base.assignedTechnicianId)) });
     const result = await call(ownerReviewTicketCompletion, owner, { ticketId: id, action, reason: 'Checked on site by the owner' });
     assert.equal(result.status, 'SUCCESS');
     const ticket = (await db.doc(`maintenanceTickets/${id}`).get()).data();
@@ -51,7 +51,7 @@ for (const action of Object.keys(expectedStatus)) {
 }
 
 test('control: a ticket that already carries ownerApproved=false still closes', async () => {
-  await db.doc('maintenanceTickets/n03_withfield').set({ ...base, ownerApproved: false, ...(await seedVerifiedAfterWorkEvidence('n03_withfield', base.assignedTechnicianId)) });
+  await db.doc('maintenanceTickets/n03_withfield').set({ ...base, ownerApproved: false, ...(await seedCompleteJobEvidence('n03_withfield', base.assignedTechnicianId)) });
   const result = await call(ownerReviewTicketCompletion, owner, { ticketId: 'n03_withfield', action: 'APPROVE_CLOSE' });
   assert.equal(result.nextStatus, 'CLOSED');
 });

@@ -5,6 +5,7 @@ import {
   acceptTechnicianTicket as legacyAcceptTechnicianTicket,
   updateTicketLifecycle as legacyUpdateTicketLifecycle,
 } from "./index";
+import { assertJobClosureAllowed, closureGateRecord, loadApprovedEvidenceException } from "./jobEvidenceGate";
 
 if (!admin.apps.length) admin.initializeApp();
 const db = admin.firestore();
@@ -362,11 +363,53 @@ export const getTechnicianOperationalReadiness = onCall(
   },
 );
 
+const LIFECYCLE_COMPLETION_STATUSES = ["COMPLETED", "COMPLETED_PENDING_APPROVAL"];
+
+/**
+ * Job evidence gate for the lifecycle callable. Completion is gated for every actor,
+ * admins included: proof must be complete (arrival, verified before/after photos, notes,
+ * signature when required) or a supervisor-approved exception must cover the gap.
+ * Returns the gate decision so the legacy handler can persist it with the completion write.
+ */
+async function assertLifecycleEvidenceOrException(auth: any, data: any) {
+  const nextStatus = String(data?.status || "").trim().toUpperCase();
+  const ticketId = String(data?.ticketId || "").trim();
+  const gatedCompletion = LIFECYCLE_COMPLETION_STATUSES.includes(nextStatus);
+  if ((!gatedCompletion && nextStatus !== "IN_PROGRESS") || !ticketId) {
+    await assertLifecycleEvidence(auth, data);
+    return null;
+  }
+  const ticketSnap = await db.collection("maintenanceTickets").doc(ticketId).get();
+  if (!ticketSnap.exists) {
+    await assertLifecycleEvidence(auth, data);
+    return null;
+  }
+  const ticket = ticketSnap.data() || {};
+  if (!isAdmin(auth) && assignedTechnicianId(ticket) !== auth?.uid) {
+    throw new HttpsError("permission-denied", "You are not assigned to this mission.");
+  }
+  if (!gatedCompletion) {
+    // A supervisor may accept a missing before-work photo (e.g. site already opened up);
+    // completion is still gated below.
+    const exception = await loadApprovedEvidenceException(ticketId, ticket);
+    if (!exception?.approvedMissingEvidence.includes("BEFORE_PHOTO")) await assertLifecycleEvidence(auth, data);
+    return null;
+  }
+  const decision = await assertJobClosureAllowed(ticketId, ticket, { candidateNotes: data?.notes, action: "complete" });
+  // Complete proof still goes through the detailed technician checks (defence in depth).
+  if (decision.mode === "EVIDENCE_COMPLETE") await assertLifecycleEvidence(auth, data);
+  return decision;
+}
+
 async function runSecured(legacyCallable: any, request: any, action: TechnicianAction) {
   await assertTechnicianReadiness(request.auth, action);
-  if (action === "UPDATE_LIFECYCLE") await assertLifecycleEvidence(request.auth, request.data);
+  let closureDecision = null;
+  if (action === "UPDATE_LIFECYCLE") closureDecision = await assertLifecycleEvidenceOrException(request.auth, request.data);
   if (typeof legacyCallable?.run !== "function") throw new HttpsError("internal", "Operational callable handler is unavailable.");
-  return legacyCallable.run(request);
+  // Server-side context only (never read from request.data): the legacy handler persists it.
+  return legacyCallable.run(closureDecision
+    ? { ...request, serverClosureEvidenceGate: closureGateRecord(closureDecision, "TECHNICIAN_LIFECYCLE") }
+    : request);
 }
 
 export const resumeTechnicianDuty = onCall(

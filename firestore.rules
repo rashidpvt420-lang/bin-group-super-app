@@ -233,13 +233,76 @@ service cloud.firestore {
     }
 
     function safeAdminTicketUpdate() {
-      // Admin browsers may not reopen a closed ticket by rewriting status.
-      // Lifecycle transitions for closed tickets stay on audited callables.
+      // Admin browsers may not reopen a closed ticket by rewriting status (#1552).
+      // Job evidence gate: an admin browser may still manage a ticket directly (estimates,
+      // owner-approval routing, assignment, metadata) but can neither complete / resolve /
+      // close a job nor write proof, arrival, approval, closure-gate or exception fields.
+      // Those are callable-only, so the server evidence gate (functions/jobEvidenceGate.ts)
+      // cannot be skipped by a direct write.
+      let changed = request.resource.data.diff(resource.data).affectedKeys();
+      let nextStatus = string(request.resource.data.get('status', '')).upper();
       return isAdmin() &&
         isNotSuspended() &&
         (
           !isClosedTicketStatus(resource.data.get('status', '')) ||
           request.resource.data.get('status', resource.data.get('status', '')) == resource.data.get('status', '')
+        ) &&
+        !changed.hasAny([
+          'technicianBeforePhotos',
+          'technicianBeforePhotoUrl',
+          'technicianBeforeStoragePath',
+          'technicianBeforeObjectGeneration',
+          'technicianBeforeContentHash',
+          'technicianBeforeEvidenceAt',
+          'technicianBeforeEvidenceBy',
+          'technicianBeforeEvidenceState',
+          'technicianBeforeConfirmationId',
+          'technicianAfterPhotos',
+          'technicianAfterPhotoUrl',
+          'technicianAfterStoragePath',
+          'technicianAfterObjectGeneration',
+          'technicianAfterContentHash',
+          'technicianAfterEvidenceAt',
+          'technicianAfterEvidenceBy',
+          'technicianAfterEvidenceState',
+          'technicianAfterConfirmationId',
+          'arrivedAt',
+          'arrivedLocation',
+          'gpsVerified',
+          'gpsVerifiedAt',
+          'onSiteVerification',
+          'physicalDeviceBound',
+          'arrivalEvidenceMode',
+          'reopenedAt',
+          'completedAt',
+          'closedAt',
+          'closureSource',
+          'closureStatus',
+          'finalApproval',
+          'tenantApproved',
+          'tenantApprovalStatus',
+          'ownerApproved',
+          'ownerVerifiedAt',
+          'closureEvidenceGate',
+          'evidenceExceptionId',
+          'evidenceExceptionStatus',
+          'evidenceExceptionRequestedAt',
+          'evidenceExceptionDecidedAt',
+          'evidenceExceptionDecidedBy'
+        ]) &&
+        (
+          !changed.hasAny(['status']) ||
+          !(nextStatus in [
+            'COMPLETED',
+            'COMPLETED_PENDING_APPROVAL',
+            'COMPLETED_PENDING_TENANT_APPROVAL',
+            'CLOSED',
+            'RESOLVED',
+            'RESOLVED_PENDING_APPROVAL',
+            'TENANT_APPROVED',
+            'AWAITING_REVIEW',
+            'PENDING_TENANT_REVIEW'
+          ])
         );
     }
 

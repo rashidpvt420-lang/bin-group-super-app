@@ -1,5 +1,6 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
+import { assertJobClosureAllowed, closureGateRecord } from "./jobEvidenceGate";
 
 const FUNCTION_REGION = "europe-west3";
 const CALLABLE_OPTIONS = {
@@ -406,14 +407,20 @@ export const completeStaffJobWithAi = onCall(CALLABLE_OPTIONS, async (request) =
     if (!["ARRIVED", "IN_PROGRESS"].includes(liveStatus)) {
       throw new HttpsError("failed-precondition", `Work order is no longer completable from status ${liveStatus || "UNKNOWN"}.`);
     }
-    if (ticketData.requiresCompletionPhoto !== false && !hasCompletionPhotoEvidence(ticketData)) {
-      throw new HttpsError("failed-precondition", "Required after-work completion evidence is missing.");
-    }
+    // Job evidence gate replaces the old client-writable photo-field check and the
+    // requiresCompletionPhoto:false bypass (hasCompletionPhotoEvidence is kept for summaries).
+    const closureDecision = await assertJobClosureAllowed(jobId, ticketData, {
+      candidateNotes: rawSpokenText,
+      action: "complete",
+      read: (ref) => transaction.get(ref),
+    });
+    const closureEvidenceGate = closureGateRecord(closureDecision, "STAFF_AI_COMPLETION");
 
     const timestamp = admin.firestore.FieldValue.serverTimestamp();
     transaction.set(ticketRef, {
       status: "COMPLETED",
       completionNotes: rawSpokenText,
+      closureEvidenceGate,
       proposedMaterials,
       completedByUid: liveAssignedTechId || uid,
       completionConfirmedByUid: uid,
@@ -431,6 +438,8 @@ export const completeStaffJobWithAi = onCall(CALLABLE_OPTIONS, async (request) =
       assignedTechnicianUid: liveAssignedTechId || null,
       previousStatus: liveStatus,
       newStatus: "COMPLETED",
+      closureEvidenceMode: closureDecision.mode,
+      evidenceExceptionId: closureDecision.exceptionId,
       proposedMaterials,
       timestamp,
     });

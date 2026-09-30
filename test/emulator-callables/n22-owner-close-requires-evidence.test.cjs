@@ -4,7 +4,7 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
 const { admin, db, lib, createUser, clearFirestore, call, expectHttpsError } = require('./_setup.cjs');
-const { seedVerifiedAfterWorkEvidence } = require('./_ticketEvidence.cjs');
+const { seedVerifiedAfterWorkEvidence, seedCompleteJobEvidence } = require('./_ticketEvidence.cjs');
 
 const { ownerReviewTicketCompletion } = lib('runtimeAll.js');
 let owner;
@@ -43,8 +43,15 @@ test("evidence confirmed for another technician is refused", async () => {
   await expectHttpsError(call(ownerReviewTicketCompletion, owner, { ticketId: 'n22_othertech', action: 'APPROVE_CLOSE' }), 'failed-precondition');
 });
 
-test('verified after-work evidence allows the Owner to close', async () => {
-  await db.doc('maintenanceTickets/n22_ok').set({ ...base, ...(await seedVerifiedAfterWorkEvidence('n22_ok', base.assignedTechnicianId)) });
+test('after-work evidence alone is no longer enough (job evidence gate: arrival, before photo, notes)', async () => {
+  await db.doc('maintenanceTickets/n22_afteronly').set({ ...base, ...(await seedVerifiedAfterWorkEvidence('n22_afteronly', base.assignedTechnicianId)) });
+  const error = await expectHttpsError(call(ownerReviewTicketCompletion, owner, { ticketId: 'n22_afteronly', action: 'APPROVE_CLOSE' }), 'failed-precondition');
+  assert.deepEqual(error.details.missingEvidence, ['ARRIVAL', 'BEFORE_PHOTO', 'NOTES']);
+  assert.equal(await statusOf('n22_afteronly'), 'COMPLETED_PENDING_APPROVAL');
+});
+
+test('complete verified job evidence allows the Owner to close', async () => {
+  await db.doc('maintenanceTickets/n22_ok').set({ ...base, ...(await seedCompleteJobEvidence('n22_ok', base.assignedTechnicianId)) });
   const result = await call(ownerReviewTicketCompletion, owner, { ticketId: 'n22_ok', action: 'APPROVE_CLOSE' });
   assert.equal(result.nextStatus, 'CLOSED');
   assert.equal(await statusOf('n22_ok'), 'CLOSED');
