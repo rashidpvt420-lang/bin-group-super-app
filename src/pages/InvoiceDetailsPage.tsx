@@ -12,17 +12,19 @@ import { binThemeTokens } from '../theme/binGroupTheme';
 import { db, doc, getDoc } from '../lib/firebase';
 import { useRole } from '../context/RoleContext';
 import { formatAED } from '../utils/formatters';
-import { aedTotalWithVat } from '../utils/uaeVat.mjs';
+import { BIN_GROUP_VAT_REGISTRATION, invoiceTotals } from '../utils/uaeVat.mjs';
 
 const formatInvoiceAed = (value: number) => Number(value || 0).toLocaleString('en-AE', {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
 });
 
-// Issuer's own TRN — not yet confirmed against FTA registration. Replace with the real
-// registered number once verified; until then this must not assert an unverified figure,
-// same honesty standard already applied to the recipient's TRN fallback below.
-const BIN_GROUP_TRN = 'Pending Verification';
+// Issuer's own TRN — not yet confirmed against FTA registration. It comes from the VAT
+// registration config (src/utils/uaeVat.mjs); until it is verified the page must not assert an
+// unverified figure or charge VAT, same honesty standard applied to the recipient's TRN below.
+const BIN_GROUP_TRN = BIN_GROUP_VAT_REGISTRATION.trnVerified && BIN_GROUP_VAT_REGISTRATION.trn
+    ? BIN_GROUP_VAT_REGISTRATION.trn
+    : 'Pending Verification';
 
 export default function InvoiceDetailsPage() {
     const { t } = useLanguage();
@@ -108,13 +110,14 @@ export default function InvoiceDetailsPage() {
     }
 
     const lineNet = (invoice.items || []).reduce((sum: number, item: any) => sum + Number(item.total || 0), 0);
-    const { net: total, vat, total: finalTotal } = aedTotalWithVat(lineNet);
+    // No VAT while the issuer TRN is unverified, so the invoice matches the VAT-free quote.
+    const { net: total, vat, total: finalTotal, vatApplied } = invoiceTotals(lineNet);
 
     return (
         <Container maxWidth="lg" sx={{ py: 10 }}>
             <Box sx={{ mb: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
                 <Box>
-                    <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 3 }}>TAX INVOICE / فاتورة ضريبية</Typography>
+                    <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 3 }}>{vatApplied ? 'TAX INVOICE / فاتورة ضريبية' : 'INVOICE / فاتورة'}</Typography>
                     <Typography variant="h3" fontWeight="900" sx={{ color: binThemeTokens.textPrimary, mt: 1 }}>{invoice.id}</Typography>
                 </Box>
                 <Stack direction="row" spacing={2}>
@@ -198,7 +201,7 @@ export default function InvoiceDetailsPage() {
                                 </Box>
                                 <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                                     <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary }}>COMPLIANCE</Typography>
-                                    <Chip label="UAE-VAT-CERTIFIED" size="small" sx={{ height: 18, fontSize: '0.6rem', fontWeight: 900, bgcolor: 'rgba(198, 167, 94, 0.1)', color: binThemeTokens.gold }} />
+                                    <Chip label={vatApplied ? 'UAE VAT REGISTERED' : 'VAT NOT APPLIED'} size="small" sx={{ height: 18, fontSize: '0.6rem', fontWeight: 900, bgcolor: 'rgba(198, 167, 94, 0.1)', color: binThemeTokens.gold }} />
                                 </Box>
                             </Stack>
                         </Box>
@@ -239,7 +242,7 @@ export default function InvoiceDetailsPage() {
                                 <Typography variant="body2" sx={{ color: binThemeTokens.textPrimary, fontWeight: 700 }}>{formatInvoiceAed(total)} AED</Typography>
                             </Box>
                             <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                                <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary }}>{t('common.vat_5')}</Typography>
+                                <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary }}>{vatApplied ? t('common.vat_5') : 'VAT: not applied (TRN pending verification) / ضريبة القيمة المضافة: غير مطبقة'}</Typography>
                                 <Typography variant="body2" sx={{ color: binThemeTokens.textPrimary, fontWeight: 700 }}>{formatInvoiceAed(vat)} AED</Typography>
                             </Box>
                             <Divider sx={{ borderColor: 'rgba(198, 167, 94, 0.2)', my: 1 }} />

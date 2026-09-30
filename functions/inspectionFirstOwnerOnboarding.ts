@@ -52,7 +52,8 @@ const text = (value: unknown) => String(value ?? "").trim();
 const lower = (value: unknown) => text(value).toLowerCase();
 const upper = (value: unknown) => text(value).toUpperCase();
 const finite = (value: unknown, fallback = 0) => Number.isFinite(Number(value)) ? Number(value) : fallback;
-const money = (value: unknown) => Math.round(finite(value) * 100) / 100;
+// Same half-up fils rule as the quote engine, so the 15% deposit check cannot disagree with the quote.
+const money = (value: unknown) => normalizeAedMoney(finite(value));
 const safeId = (value: unknown, fallback: string) => text(value)
   .replace(/[^A-Za-z0-9_-]/g, "_")
   .replace(/_+/g, "_")
@@ -150,7 +151,14 @@ function ownerGeoSource(raw: unknown) {
 }
 
 function quoteFor(properties: PlainRecord[], selectedAddOns: string[], quotedAtMs?: number) {
-  return calculateOwnerOnboardingQuote(properties, selectedAddOns, quotedAtMs, { trustServerVerifiedRates: false });
+  try {
+    return calculateOwnerOnboardingQuote(properties, selectedAddOns, quotedAtMs, { trustServerVerifiedRates: false });
+  } catch (error: any) {
+    if (error instanceof HttpsError) throw error;
+    // Calculator validation messages are Owner-facing reasons. A plain Error would reach the
+    // Owner only as "INTERNAL", so report it as invalid-argument with the reason.
+    throw new HttpsError("invalid-argument", text(error?.message) || "The server could not calculate this property quotation.");
+  }
 }
 
 function assertQuote(data: PlainRecord, properties: PlainRecord[], selectedAddOns: string[]) {
