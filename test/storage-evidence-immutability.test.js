@@ -84,18 +84,24 @@ describe('N-07 / N-18 storage evidence immutability', () => {
     await assertFails(deleteObject(ref(tenant(), path)));
   });
 
-  it('N-18: Owner cannot upload to or read design_requests directly', async () => {
-    await assertFails(uploadString(ref(owner(), 'design_requests/owner_n07/ref.jpg'), 'img', 'raw', IMG));
-    await seed('design_requests/owner_n07/req_1/reference.jpg');
-    await assertFails(getBytes(ref(owner(), 'design_requests/owner_n07/req_1/reference.jpg')));
-    await assertFails(deleteObject(ref(owner(), 'design_requests/owner_n07/req_1/reference.jpg')));
-  });
-
-  it('N-18: ai_design_renders is closed to Owner and Admin browsers', async () => {
-    await seed('ai_design_renders/owner_n07/render.png', 'image/png');
-    await assertFails(getBytes(ref(owner(), 'ai_design_renders/owner_n07/render.png')));
-    await assertFails(uploadString(ref(adminS(), 'ai_design_renders/owner_n07/new.png'), 'img', 'raw', { contentType: 'image/png' }));
-  });
+  for (const collection of ['design_requests', 'ai_design_renders']) {
+    for (const [label, client] of [
+      ['Owner', owner],
+      ['another Owner', () => actor('owner_other', { role: 'owner' })],
+      ['Admin', adminS],
+      ['anonymous', () => testEnv.unauthenticatedContext().storage()],
+    ]) {
+      it(`N-18: ${collection} denies direct read/create/update/delete by ${label}`, async () => {
+        const path = `${collection}/owner_n07/req_1/reference.jpg`;
+        await seed(path);
+        const storage = client();
+        await assertFails(getBytes(ref(storage, path)));
+        await assertFails(uploadString(ref(storage, `${collection}/owner_n07/req_1/new.jpg`), 'img', 'raw', IMG));
+        await assertFails(uploadString(ref(storage, path), 'replacement', 'raw', IMG));
+        await assertFails(deleteObject(ref(storage, path)));
+      });
+    }
+  }
 
   // Residual (documented in the PR): the Admin catch-all `match /{collection}/{allPaths=**}` still ORs
   // admin write over these paths. Its exact text is pinned by scripts/harden-private-hr-storage.mjs,
