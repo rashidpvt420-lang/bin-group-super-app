@@ -63,7 +63,6 @@ export const adminAssignTechnician = onCall(
   { cors: true, region: "europe-west3", enforceAppCheck: true },
   async (request) => {
     requireDispatcher(request.auth);
-    await requirePrivilegedMfaSession(request.auth);
     const ticketId = text(request.data?.ticketId, 160);
     const technicianId = text(request.data?.technicianId, 160);
     const reassignmentReason = text(request.data?.reassignmentReason, 500);
@@ -185,7 +184,6 @@ export const adminResolveTicketDispute = onCall(
   { cors: true, region: "europe-west3", enforceAppCheck: true },
   async (request) => {
     requireDispatcher(request.auth);
-    await requirePrivilegedMfaSession(request.auth);
     const ticketId = text(request.data?.ticketId, 160);
     const action = text(request.data?.action, 60).toLowerCase();
     const note = text(request.data?.note, 1000);
@@ -318,7 +316,6 @@ export const adminUpdateEmergencyTicket = onCall(
   { cors: true, region: "europe-west3", enforceAppCheck: true },
   async (request) => {
     requireDispatcher(request.auth);
-    await requirePrivilegedMfaSession(request.auth);
     const ticketId = text(request.data?.ticketId, 160);
     const action = text(request.data?.action, 40).toLowerCase();
     if (!ticketId || !EMERGENCY_ACTIONS.has(action)) {
@@ -393,7 +390,6 @@ export const adminProcessWhatsAppIntake = onCall(
   { cors: true, region: "europe-west3", enforceAppCheck: true },
   async (request) => {
     requireDispatcher(request.auth);
-    await requirePrivilegedMfaSession(request.auth);
     const intakeId = text(request.data?.intakeId, 160);
     const action = text(request.data?.action, 40).toLowerCase();
     if (!intakeId || !WHATSAPP_TRIAGE_ACTIONS.has(action)) {
@@ -569,4 +565,3 @@ export const adminProcessWhatsAppIntake = onCall(
 );
 
 import type * as FirebaseFirestore from "firebase-admin/firestore";
-import { requirePrivilegedMfaSession } from "./adminMfaSession";

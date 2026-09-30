@@ -1,7 +1,6 @@
 import * as admin from 'firebase-admin';
 import { FieldValue, Timestamp } from 'firebase-admin/firestore';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
-import { requirePrivilegedMfaSession } from "./adminMfaSession";
 
 if (!admin.apps.length) admin.initializeApp();
 const db = admin.firestore();
@@ -84,7 +83,6 @@ export const adminManageScheduledServiceAvailability = onCall(
   { region: REGION, enforceAppCheck: true },
   async (request) => {
     const role = await operationsRole(request.auth);
-    await requirePrivilegedMfaSession(request.auth);
     const action = normalized(request.data?.action);
 
     if (action === 'list') {
@@ -144,7 +142,6 @@ export const adminUpdateScheduledService = onCall(
   { region: REGION, enforceAppCheck: true },
   async (request) => {
     const role = await operationsRole(request.auth);
-    await requirePrivilegedMfaSession(request.auth);
     const action = normalized(request.data?.action);
     const ticketId = clean(request.data?.ticketId);
     if (!ticketId) throw new HttpsError('invalid-argument', 'ticketId is required.');
