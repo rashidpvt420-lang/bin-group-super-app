@@ -3,6 +3,7 @@ import { HttpsError, onCall } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 import * as crypto from "crypto";
 import { calculateOwnerOnboardingQuote } from "./ownerOnboardingQuote";
+import { parseExactAedAmount } from "./shared/aedMoneyInput";
 
 if (!admin.apps.length) admin.initializeApp();
 const db = admin.firestore();
@@ -85,6 +86,29 @@ function verifiedPricingPayload(value: any, inspection: any, property: any) {
     if (!Number.isFinite(parsed) || parsed < 0 || parsed > max) throw new HttpsError("invalid-argument", `${label} is outside the accepted verification range.`);
     return Math.round(parsed * 100) / 100;
   };
+  // Counts (units, beds, capacity, floors, lifts, HVAC units) multiply into the quote and must be
+  // whole numbers; a fractional count is rejected instead of being priced.
+  const wholeCount = (raw: unknown, label: string, max: number, { required }: { required: boolean }) => {
+    const parsed = required ? finite(raw) : finite(raw, 0);
+    if (!Number.isInteger(parsed) || parsed < (required ? 1 : 0) || parsed > max) {
+      throw new HttpsError("invalid-argument", `${label} must be a whole ${required ? "positive " : ""}number within the accepted verification range.`);
+    }
+    return parsed;
+  };
+  // Admin-verified AED values are exact to the fils; sub-fils input is rejected, never rounded.
+  const exactAed = (raw: unknown, label: string, { required, max }: { required: boolean; max: number }) => {
+    if (!required && (raw === undefined || raw === null || raw === "")) return 0;
+    let amount: number;
+    try {
+      amount = parseExactAedAmount(raw);
+    } catch {
+      throw new HttpsError("invalid-argument", `${label} must be an AED amount exact to the fils (at most 2 decimals).`);
+    }
+    if (amount < 0 || amount > max || (required && amount <= 0)) {
+      throw new HttpsError("invalid-argument", required ? `${label} must be a positive Admin-verified value.` : `${label} cannot be negative.`);
+    }
+    return amount;
+  };
   const contractMode = text(property?.strategy || property?.serviceModel || property?.contractMode || property?.contractType || declared.strategy).toLowerCase();
   const pmInScope = ["pm", "pm_only", "rent", "property_management", "both", "hybrid", "combined", "total_care", "total-care"].includes(contractMode);
   const fmInScope = ["fm", "fm_only", "maintenance", "maintenance_only", "mosque_fm", "both", "hybrid", "combined", "total_care", "total-care"].includes(contractMode);
@@ -107,17 +131,17 @@ function verifiedPricingPayload(value: any, inspection: any, property: any) {
   if (!["A", "B", "C"].includes(verified.zone)) throw new HttpsError("invalid-argument", "Admin-verified pricing zone must be A, B, or C.");
   if (!["standard", "premium", "elite"].includes(verified.slaTier)) throw new HttpsError("invalid-argument", "Admin-verified SLA tier is invalid.");
   if (!["annual", "quarterly", "monthly"].includes(verified.paymentPlan)) throw new HttpsError("invalid-argument", "Admin-verified payment plan is invalid.");
-  if (driver === "unit") verified.units = requiredPositive(value?.units, "Verified unit count", 1_000_000);
+  if (driver === "unit") verified.units = wholeCount(value?.units, "Verified unit count", 1_000_000, { required: true });
   if (driver === "sqft") verified.sqft = requiredPositive(value?.sqft, "Verified service area", 100_000_000);
-  if (driver === "bed") verified.beds = requiredPositive(value?.beds, "Verified bed count", 1_000_000);
+  if (driver === "bed") verified.beds = wholeCount(value?.beds, "Verified bed count", 1_000_000, { required: true });
   if (driver === "sqft+capacity") {
     verified.sqft = requiredPositive(value?.sqft, "Verified mosque service area", 100_000_000);
-    verified.units = requiredPositive(value?.units, "Verified worshipper capacity", 1_000_000);
+    verified.units = wholeCount(value?.units, "Verified worshipper capacity", 1_000_000, { required: true });
   }
   if (fmInScope) {
-    verified.floors = nonNegative(value?.floors, "Verified floor count", 1000);
-    verified.lifts = nonNegative(value?.lifts, "Verified lift count", 1000);
-    verified.hvacCount = nonNegative(value?.hvacCount, "Verified HVAC count", 100000);
+    verified.floors = wholeCount(value?.floors, "Verified floor count", 1000, { required: false });
+    verified.lifts = wholeCount(value?.lifts, "Verified lift count", 1000, { required: false });
+    verified.hvacCount = wholeCount(value?.hvacCount, "Verified HVAC count", 100000, { required: false });
     verified.hvac = verifiedBoolean(value?.hvac, "HVAC presence");
     verified.districtCooling = verifiedBoolean(value?.districtCooling, "District cooling");
     verified.fireAlarm = verifiedBoolean(value?.fireAlarm, "Fire alarm");
@@ -128,15 +152,12 @@ function verifiedPricingPayload(value: any, inspection: any, property: any) {
     verified.tank = verifiedBoolean(value?.tank, "Water tank");
     verified.pool = verifiedBoolean(value?.pool, "Swimming pool");
     if (driver !== "sqft+capacity") {
-      verified.verifiedMaintenanceRate = requiredPositive(value?.verifiedMaintenanceRate, "Verified Maintenance rate", 1_000_000);
+      verified.verifiedMaintenanceRate = exactAed(value?.verifiedMaintenanceRate, "Verified Maintenance rate", { required: true, max: 1_000_000 });
     }
   }
   if (pmInScope) {
-    const rent = finite(value?.annualRent ?? declared.annualRent ?? property?.annualRent, 0);
-    const revenue = finite(value?.annualRevenue ?? declared.annualRevenue ?? property?.annualRevenue, 0);
-    if (rent < 0 || revenue < 0) throw new HttpsError("invalid-argument", "Verified annual rent / managed revenue cannot be negative.");
-    verified.annualRent = Math.round(rent * 100) / 100;
-    verified.annualRevenue = Math.round(revenue * 100) / 100;
+    verified.annualRent = exactAed(value?.annualRent ?? declared.annualRent ?? property?.annualRent, "Verified annual rent", { required: false, max: 100_000_000_000 });
+    verified.annualRevenue = exactAed(value?.annualRevenue ?? declared.annualRevenue ?? property?.annualRevenue, "Verified managed revenue", { required: false, max: 100_000_000_000 });
     if (verified.annualRent <= 0 && verified.annualRevenue <= 0) throw new HttpsError("failed-precondition", "Verified annual rent / managed revenue is required for Property Management pricing.");
     verified.verifiedManagementRate = requiredPositive(value?.verifiedManagementRate, "Verified Property Management rate", 100);
   }
