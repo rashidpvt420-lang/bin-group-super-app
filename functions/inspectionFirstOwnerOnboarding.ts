@@ -5,6 +5,7 @@ import * as admin from "firebase-admin";
 import * as crypto from "crypto";
 import { calculateOwnerOnboardingQuote } from "./ownerOnboardingQuote";
 import { isValidOwnerSubmittedGps } from "./ownerSubmittedGps";
+import { verifiedOwnerDocumentPaths } from "./ownerOnboardingDocuments";
 import { loadActivePaymentConfiguration } from "./paymentConfiguration";
 import { normalizeAedMoney } from "./shared/aedMoney";
 import { requireMfaFinanceAdminActor } from "./financeAdminMfa";
@@ -399,7 +400,6 @@ export const uploadOwnerInspectionProofDocument = onCall({ cors: true, enforceAp
   if (!contentType.match(/^image\//) && contentType !== "application/pdf" && contentType !== "application/octet-stream") throw new HttpsError("invalid-argument", "Only PDF and image documents are allowed.");
   const buffer = Buffer.from(encoded.includes(",") ? encoded.split(",").pop() || "" : encoded, "base64");
   if (!buffer.length || buffer.length > 8 * 1024 * 1024) throw new HttpsError("invalid-argument", "Document is empty or exceeds 8 MB.");
-  const downloadToken = crypto.randomUUID();
   const storagePath = `onboarding-proof/${owner.uid}/${intakeId}/${docType}/${Date.now()}_${filename}`;
   const bucket = admin.storage().bucket();
   await bucket.file(storagePath).save(buffer, {
@@ -407,7 +407,7 @@ export const uploadOwnerInspectionProofDocument = onCall({ cors: true, enforceAp
     metadata: {
       contentType,
       metadata: {
-        firebaseStorageDownloadTokens: downloadToken,
+        // F-6: no firebaseStorageDownloadTokens: no permanent bearer URL for identity documents.
         ownerUid: owner.uid,
         intakeId,
         docType,
@@ -416,8 +416,7 @@ export const uploadOwnerInspectionProofDocument = onCall({ cors: true, enforceAp
       },
     },
   });
-  const downloadUrl = `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(storagePath)}?alt=media&token=${downloadToken}`;
-  return { success: true, downloadUrl, storagePath, docType, size: buffer.length };
+  return { success: true, storagePath, docType, size: buffer.length, sha256: crypto.createHash("sha256").update(buffer).digest("hex") };
 });
 
 export const submitOwnerInspectionFirstOnboarding = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
@@ -443,10 +442,7 @@ export const submitOwnerInspectionFirstOnboarding = onCall({ cors: true, enforce
   const signatureName = text(data.signatureName).slice(0, 180);
   const verificationId = text(data.otpVerificationId || data.contractOtpVerificationId);
   if (signatureName.length < 3 || !verificationId) throw new HttpsError("failed-precondition", "A verified digital signature is required.");
-  const documentUrls: PlainRecord = cleanPlain(data.documentUrls || {});
-  if (!text(documentUrls.propertyProof) || !((text(documentUrls.emiratesId) && text(documentUrls.passport)) || text(documentUrls.tradeLicense))) {
-    throw new HttpsError("failed-precondition", "Property proof and Owner identity documents are required.");
-  }
+  const documentPaths = await verifiedOwnerDocumentPaths(owner.uid, data);
   const companyProfile: PlainRecord = cleanPlain(data.companyProfile || {});
   const fullName = text(data.ownerName || companyProfile.contactPerson || data.signatureName).slice(0, 160);
   const mobile = text(data.ownerMobile || companyProfile.phone).slice(0, 60);
@@ -568,11 +564,10 @@ export const submitOwnerInspectionFirstOnboarding = onCall({ cors: true, enforce
         estimatedACV: money(quote.annualContractValue),
         recommendedTier: canonicalPlanName,
       },
-      documentUrls,
+      documentPaths,
+      documentUrls: {},
       proofDocuments: Object.fromEntries(
-        Object.entries(documentUrls)
-          .filter(([, url]) => Boolean(text(url)))
-          .map(([key, url]) => [key, { label: key, url }]),
+        Object.entries(documentPaths).map(([key, storagePath]) => [key, { label: key, storagePath }]),
       ),
       payment: {
         paymentId: intakeId,
@@ -617,7 +612,8 @@ export const submitOwnerInspectionFirstOnboarding = onCall({ cors: true, enforce
       planType: contractMode,
       selectedPlan: { id: contractMode, name: canonicalPlanName },
       selectedAddOns,
-      documentUrls,
+      documentPaths,
+      documentUrls: {},
       createdAt: now,
       updatedAt: now,
     });
