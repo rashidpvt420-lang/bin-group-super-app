@@ -2,6 +2,7 @@ import { FieldValue } from "firebase-admin/firestore";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 import { generateContractPdfArtifact } from "./pdfEngine";
+import { assertMobilizationInvoiceImmutable, buildMobilizationInvoiceSnapshot } from "./mobilizationInvoice";
 import { termFieldsFromStart } from "./ownerContractTerm";
 import { formatAedMoney, normalizeAedMoney } from "./shared/aedMoney";
 import {
@@ -504,7 +505,26 @@ export const ownerSignContractAndQueuePdf = onCall({ cors: true, enforceAppCheck
 
     const signedAtDate = new Date();
     const termFields = termFieldsFromStart(signedAtDate);
-    const pdfArtifact = await generateContractPdfArtifact({ ...clean(contract), contractId, ownerName: signatureName, ownerEmail, planName: contract.packageName, propertyName: contract.propertyName, annualValue: contract.annualContractValue || contract.annualValue, mobilizationAmount: contract.depositAmount || contract.mobilizationAmount || contract.paymentSchedule?.mobilizationAmount, signedAt: signedAtDate.toISOString() });
+    const signedMobilizationAmount = normalizeAedMoney(
+      contract.depositAmount ||
+      contract.mobilizationAmount ||
+      contract.paymentSchedule?.mobilizationAmount ||
+      contract.quoteSnapshot?.activationDeposit ||
+      0,
+    );
+    if (signedMobilizationAmount <= 0) {
+      throw new HttpsError("failed-precondition", "The signed contract has no valid 15% mobilisation amount.");
+    }
+    const invoiceSnapshot = buildMobilizationInvoiceSnapshot({
+      paymentId: contractId,
+      contractId,
+      intakeId: s(contract.intakeId || contractId),
+      ownerUid: ownerId,
+      amount: signedMobilizationAmount,
+      quoteHash: contractHash,
+    });
+    const invoiceRef = db.collection("invoices").doc(invoiceSnapshot.invoiceId);
+    const pdfArtifact = await generateContractPdfArtifact({ ...clean(contract), contractId, ownerName: signatureName, ownerEmail, planName: contract.packageName, propertyName: contract.propertyName, annualValue: contract.annualContractValue || contract.annualValue, mobilizationAmount: signedMobilizationAmount, signedAt: signedAtDate.toISOString() });
     const pdfUrl = pdfArtifact.pdfUrl;
     // NOTE: signing only marks the contract ready for activation. Payment verification
     // (createOwnerPaymentTransaction -> adminApproveContractActivation) is what unlocks the
@@ -515,6 +535,7 @@ export const ownerSignContractAndQueuePdf = onCall({ cors: true, enforceAppCheck
       const freshContractSnap = await transaction.get(ref);
       const paymentRef = db.collection("payment_transactions").doc(contractId);
       const paymentSnap = await transaction.get(paymentRef);
+      const invoiceSnap = await transaction.get(invoiceRef);
       const freshContract = freshContractSnap.data() || {};
       if (contractIsServerSigned(freshContract)) {
         signingWasIdempotent = true;
@@ -523,8 +544,29 @@ export const ownerSignContractAndQueuePdf = onCall({ cors: true, enforceAppCheck
       if (s(freshContract.signingLease?.attemptId) !== signingAttemptId) {
         throw new HttpsError("aborted", "This contract signing attempt was superseded. Please refresh and try again.");
       }
+      if (invoiceSnap.exists) {
+        try {
+          assertMobilizationInvoiceImmutable(invoiceSnap.data() || {}, invoiceSnapshot);
+        } catch (error: any) {
+          throw new HttpsError("aborted", error?.message || "Existing mobilisation invoice identity changed.");
+        }
+      }
       await consumeVerifiedContractSignatureOtp(transaction, otpEvidence);
-      transaction.set(ref, { status: "PENDING_ACTIVATION", contractStatus: "PENDING_ACTIVATION", activationStatus: "PENDING_PAYMENT_VERIFICATION", paymentStatus: "PENDING_ADMIN_PAYMENT_VERIFICATION", ownerSigned: true, signatureName, signatureStatus: "OWNER_SIGNED", otpVerificationId, otpEvidenceVerified: true, finalContractAccepted: true, finalContractAcceptedQuoteHash: contractHash, signatureState: { ...(freshContract.signatureState || {}), ownerSigned: true, ownerSignedAt: signedAtDate.toISOString(), ownerSignatureName: signatureName, acceptedQuoteHash: contractHash, pdfGenerated: true, pdfUrl, pdfSha256: pdfArtifact.pdfSha256, pdfStoragePath: pdfArtifact.storagePath, pdfGeneration: pdfArtifact.generation, emailed: false, emailQueued: true, emailQueuedAt: signedAtDate.toISOString() }, signingLease: FieldValue.delete(), signedPdfUrl: pdfUrl, canonicalPdfUrl: pdfUrl, canonicalPdfSha256: pdfArtifact.pdfSha256, canonicalPdfStoragePath: pdfArtifact.storagePath, canonicalPdfGeneration: pdfArtifact.generation, canonicalPdfDocumentHash: pdfArtifact.documentHash, canonicalPdfSource: "SERVER_PDF_ENGINE", ownerSignedAt: ts(), ...termFields, updatedAt: ts() }, { merge: true });
+      transaction.set(ref, { status: "PENDING_ACTIVATION", contractStatus: "PENDING_ACTIVATION", activationStatus: "PENDING_PAYMENT_VERIFICATION", paymentStatus: "PENDING_ADMIN_PAYMENT_VERIFICATION", ownerSigned: true, signatureName, signatureStatus: "OWNER_SIGNED", otpVerificationId, otpEvidenceVerified: true, finalContractAccepted: true, finalContractAcceptedQuoteHash: contractHash, invoiceId: invoiceSnapshot.invoiceId, signatureState: { ...(freshContract.signatureState || {}), ownerSigned: true, ownerSignedAt: signedAtDate.toISOString(), ownerSignatureName: signatureName, acceptedQuoteHash: contractHash, pdfGenerated: true, pdfUrl, pdfSha256: pdfArtifact.pdfSha256, pdfStoragePath: pdfArtifact.storagePath, pdfGeneration: pdfArtifact.generation, emailed: false, emailQueued: true, emailQueuedAt: signedAtDate.toISOString() }, signingLease: FieldValue.delete(), signedPdfUrl: pdfUrl, canonicalPdfUrl: pdfUrl, canonicalPdfSha256: pdfArtifact.pdfSha256, canonicalPdfStoragePath: pdfArtifact.storagePath, canonicalPdfGeneration: pdfArtifact.generation, canonicalPdfDocumentHash: pdfArtifact.documentHash, canonicalPdfSource: "SERVER_PDF_ENGINE", ownerSignedAt: ts(), ...termFields, updatedAt: ts() }, { merge: true });
+      if (!invoiceSnap.exists) {
+        transaction.create(invoiceRef, {
+          ...invoiceSnapshot,
+          ownerId,
+          ownerEmail: ownerEmail || null,
+          amountPaid: 0,
+          status: "PENDING",
+          paymentStatus: "UNPAID",
+          documentState: "AWAITING_PAYMENT",
+          issuedAt: ts(),
+          createdAt: ts(),
+          updatedAt: ts(),
+        });
+      }
       if (paymentSnap.exists) {
         const payment = paymentSnap.data() || {};
         const paymentFinalHash = s(payment.finalVerifiedQuoteHash).toLowerCase();
@@ -573,6 +615,18 @@ export const ownerSignContractAndQueuePdf = onCall({ cors: true, enforceAppCheck
         transaction.set(db.collection("owners").doc(ownerId), ownerPatch, { merge: true });
         transaction.set(db.collection("users").doc(ownerId), ownerPatch, { merge: true });
       }
+      transaction.set(db.collection("notifications").doc(`owner_payment_invoice_issued_${contractId}`), {
+        recipientId: ownerId,
+        recipientRole: "owner",
+        type: "PAYMENT_INVOICE_ISSUED",
+        title: "15% MOBILISATION INVOICE ISSUED",
+        body: `Invoice ${invoiceSnapshot.invoiceId} for AED ${money(invoiceSnapshot.amount)} is now due and awaiting payment verification.`,
+        link: `/invoices/${invoiceSnapshot.invoiceId}`,
+        metadata: { contractId, invoiceId: invoiceSnapshot.invoiceId, amount: invoiceSnapshot.amount },
+        read: false,
+        createdAt: ts(),
+        updatedAt: ts(),
+      }, { merge: true });
       transaction.set(db.collection("mail").doc(`owner_contract_signed_${contractId}`), {
         to: ownerEmail,
         message: {
@@ -582,12 +636,14 @@ export const ownerSignContractAndQueuePdf = onCall({ cors: true, enforceAppCheck
           html: `<p>Dear ${escapeHtml(signatureName)},</p>
   <p><b>Your BIN GROUP contract has been signed. Your signed PDF is linked below.</b></p>
   <p><a href="${safeHttpsHref(pdfUrl)}">Download signed contract PDF</a></p>
-  <p>Submit your mobilization payment from the owner portal to begin admin verification. Your dashboard unlocks once BIN GROUP confirms receipt of payment (typically within 24 hours).</p>
+  <p>Your 15% mobilisation invoice <b>${invoiceSnapshot.invoiceId}</b> is now issued and unpaid.</p>
+  <p><a href="${safeHttpsHref(`${appBaseUrl()}/invoices/${invoiceSnapshot.invoiceId}`)}">Open mobilisation invoice</a></p>
+  <p>Submit your mobilisation payment from the owner portal to begin admin verification. Your dashboard unlocks once BIN GROUP confirms receipt of payment.</p>
   <p><a href="${safeHttpsHref(dashboardUrl)}" style="background:#C6A75E;color:#000;padding:12px 18px;text-decoration:none;font-weight:bold;border-radius:8px">Open Owner Portal</a></p>
   <p>Support: support@bin-groups.com</p>
   <p>BIN GROUP - Made in UAE 🇦🇪</p>`
         },
-        metadata: { type: "owner_signed_contract_pdf_pending_payment", contractId, ownerId, pdfUrl, dashboardUrl },
+        metadata: { type: "owner_signed_contract_pdf_pending_payment", contractId, ownerId, pdfUrl, dashboardUrl, invoiceId: invoiceSnapshot.invoiceId },
         createdAt: ts()
       });
       transaction.set(db.collection("audit_logs").doc(), { actorId: request.auth!.uid, actorRole: "owner", action: "OWNER_SIGN_CONTRACT_AND_QUEUE_PDF", targetType: "contracts", targetId: contractId, metadata: { ownerId, ownerEmail, pdfUrl }, createdAt: ts() });
