@@ -6,7 +6,7 @@ import {
     Box, Paper, Typography, Stack, Chip, Grid, Button,
     CircularProgress, Alert, Table, TableBody, TableCell, TableContainer,
     TableHead, TableRow, alpha, Divider, TextField, Dialog,
-    DialogTitle, DialogContent, DialogActions, InputAdornment
+    DialogTitle, DialogContent, DialogActions, InputAdornment, MenuItem
 } from '@mui/material';
 import { CreditCard, DollarSign, CheckCircle2, Clock, Upload, FileText, Download, AlertTriangle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -14,12 +14,14 @@ import { db, collection, query, where, onSnapshot, orderBy, storage, ref, upload
 import { useRole } from '../../context/RoleContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { useLanguage } from '../../context/LanguageContext';
+import { EMPTY_PROOF_FORM, tenantProofFormError, type TenantProofMethod } from '../tenantPaymentProof';
 
 type Payment = {
     id: string;
     amount: number;
     status: string;
     reference?: string;
+    paymentMethod?: string;
     period?: string;
     createdAt: any;
     verifiedAt?: any;
@@ -61,13 +63,8 @@ export default function TenantPaymentsPage() {
     const [snackbar, setSnackbar] = useState({ open: false, message: '', error: false });
 
     // Upload proof form
-    const [proofForm, setProofForm] = useState({
-        amount: '',
-        reference: '',
-        bankName: '',
-        period: '',
-        notes: '',
-    });
+    const [proofForm, setProofForm] = useState({ ...EMPTY_PROOF_FORM });
+    const proofFormError = tenantProofFormError(proofForm);
     const submissionIdRef = useRef(
         window.crypto?.randomUUID?.() || `proof_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`
     );
@@ -85,6 +82,7 @@ export default function TenantPaymentsPage() {
                     amount: d.data().amount || 0,
                     status: d.data().status || 'PENDING',
                     reference: d.data().reference || d.data().bankRef || d.data().transactionRef,
+                    paymentMethod: d.data().paymentMethod,
                     period: d.data().period || d.data().rentPeriod,
                     createdAt: d.data().createdAt,
                     verifiedAt: d.data().verifiedAt,
@@ -134,9 +132,13 @@ export default function TenantPaymentsPage() {
     }, [user?.uid, user?.email]);
 
     const handleSubmitProof = async () => {
-        if (!proofForm.amount.trim() || !user?.uid) return;
+        if (!user?.uid) return;
+        if (proofFormError) {
+            setSnackbar({ open: true, message: proofFormError, error: true });
+            return;
+        }
         if (!receiptFile) {
-            setSnackbar({ open: true, message: 'A receipt or transfer screenshot is required before admin verification.', error: true });
+            setSnackbar({ open: true, message: 'A photo or scan of the cash receipt or cheque is required before admin verification.', error: true });
             return;
         }
         if (receiptFile.size > 10 * 1024 * 1024) {
@@ -162,9 +164,15 @@ export default function TenantPaymentsPage() {
             const submitTenantPaymentProof = httpsCallable(functions, 'submitTenantPaymentProof');
             await submitTenantPaymentProof({
                 submissionId: submissionIdRef.current,
-                amount: parseFloat(proofForm.amount),
-                reference: proofForm.reference.trim(),
-                bankName: proofForm.bankName.trim(),
+                paymentMethod: proofForm.paymentMethod,
+                amount: proofForm.amount.trim(),
+                ...(proofForm.paymentMethod === 'CHEQUE'
+                    ? {
+                        chequeNumber: proofForm.chequeNumber.replace(/\s+/g, ''),
+                        chequeBank: proofForm.chequeBank.trim(),
+                        chequeDate: proofForm.chequeDate,
+                    }
+                    : { reference: proofForm.reference.trim() }),
                 period: proofForm.period.trim(),
                 notes: proofForm.notes.trim(),
                 receiptUrl,
@@ -173,7 +181,7 @@ export default function TenantPaymentsPage() {
             });
             setSnackbar({ open: true, message: 'Payment proof submitted. Admin will verify within 24 hours.', error: false });
             setUploadDialogOpen(false);
-            setProofForm({ amount: '', reference: '', bankName: '', period: '', notes: '' });
+            setProofForm({ ...EMPTY_PROOF_FORM });
             setReceiptFile(null);
             submissionIdRef.current = window.crypto?.randomUUID?.() || `proof_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
         } catch (error: any) {
@@ -239,9 +247,9 @@ export default function TenantPaymentsPage() {
             <Paper sx={{ p: 3, mb: 4, bgcolor: alpha(binThemeTokens.gold, 0.04), border: `1px solid ${alpha(binThemeTokens.gold, 0.15)}`, borderRadius: 4 }}>
                 <Typography variant="body2" sx={{ color: binThemeTokens.gold, fontWeight: 900, mb: 1 }}>HOW TO SUBMIT PAYMENT</Typography>
                 <Stack direction={{ xs: 'column', md: 'row' }} spacing={3} sx={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.875rem' }}>
-                    <Typography variant="body2">1. Transfer rent directly to the Owner's bank account (see your contract for details)</Typography>
-                    <Typography variant="body2">2. Click "SUBMIT PAYMENT PROOF" and upload your transfer receipt</Typography>
-                    <Typography variant="body2">3. Admin will verify the transfer within 24 hours and update your status</Typography>
+                    <Typography variant="body2">1. Pay rent by Cash (against an official receipt) or by Cheque. Bank transfer and online payment are not accepted.</Typography>
+                    <Typography variant="body2">2. Click "SUBMIT PAYMENT PROOF", choose Cash or Cheque, and upload a photo of the cash receipt or the cheque</Typography>
+                    <Typography variant="body2">3. Admin will verify the payment within 24 hours and update your status</Typography>
                 </Stack>
             </Paper>
 
@@ -282,7 +290,7 @@ export default function TenantPaymentsPage() {
                                         <TableRow key={payment.id} hover>
                                             <TableCell sx={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.8rem' }}>{formatDate(payment.createdAt)}</TableCell>
                                             <TableCell sx={{ color: '#fff', fontWeight: 700 }}>AED {payment.amount.toLocaleString()}</TableCell>
-                                            <TableCell sx={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem' }}>{payment.reference || '—'}</TableCell>
+                                            <TableCell sx={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem' }}>{[payment.paymentMethod, payment.reference].filter(Boolean).join(' · ') || '—'}</TableCell>
                                             <TableCell sx={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem' }}>{payment.period || '—'}</TableCell>
                                             <TableCell>
                                                 <Chip label={config.label} size="small" sx={{ bgcolor: alpha(config.color, 0.1), color: config.color, fontWeight: 900, fontSize: '0.6rem' }} />
@@ -313,20 +321,47 @@ export default function TenantPaymentsPage() {
                 <DialogContent sx={{ pt: 3 }}>
                     <Stack spacing={2.5}>
                         <TextField
-                            fullWidth label="Amount (AED)" type="number" value={proofForm.amount}
+                            select fullWidth required label="Payment Method" value={proofForm.paymentMethod}
+                            onChange={e => setProofForm(p => ({ ...p, paymentMethod: e.target.value as TenantProofMethod }))}
+                            inputProps={{ 'data-testid': 'tenant-proof-method' }}
+                            sx={{ '& .MuiInputBase-root': { color: '#fff' }, '& label': { color: 'rgba(255,255,255,0.5)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.2)' } }}
+                        >
+                            <MenuItem value="CASH">Cash</MenuItem>
+                            <MenuItem value="CHEQUE">Cheque</MenuItem>
+                        </TextField>
+                        <TextField
+                            fullWidth required label="Amount (AED)" inputMode="decimal" value={proofForm.amount}
                             onChange={e => setProofForm(p => ({ ...p, amount: e.target.value }))}
+                            helperText="Exact amount, at most two decimals (fils)."
                             sx={{ '& .MuiInputBase-root': { color: '#fff' }, '& label': { color: 'rgba(255,255,255,0.5)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.2)' } }}
                         />
-                        <TextField
-                            fullWidth label="Bank Transfer Reference / Transaction ID" value={proofForm.reference}
-                            onChange={e => setProofForm(p => ({ ...p, reference: e.target.value }))}
-                            sx={{ '& .MuiInputBase-root': { color: '#fff' }, '& label': { color: 'rgba(255,255,255,0.5)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.2)' } }}
-                        />
-                        <TextField
-                            fullWidth label="Bank Name (optional)" value={proofForm.bankName}
-                            onChange={e => setProofForm(p => ({ ...p, bankName: e.target.value }))}
-                            sx={{ '& .MuiInputBase-root': { color: '#fff' }, '& label': { color: 'rgba(255,255,255,0.5)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.2)' } }}
-                        />
+                        {proofForm.paymentMethod === 'CASH' && (
+                            <TextField
+                                fullWidth required label="Cash Receipt Number" value={proofForm.reference}
+                                onChange={e => setProofForm(p => ({ ...p, reference: e.target.value }))}
+                                sx={{ '& .MuiInputBase-root': { color: '#fff' }, '& label': { color: 'rgba(255,255,255,0.5)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.2)' } }}
+                            />
+                        )}
+                        {proofForm.paymentMethod === 'CHEQUE' && (
+                            <>
+                                <TextField
+                                    fullWidth required label="Cheque Number" inputMode="numeric" value={proofForm.chequeNumber}
+                                    onChange={e => setProofForm(p => ({ ...p, chequeNumber: e.target.value }))}
+                                    sx={{ '& .MuiInputBase-root': { color: '#fff' }, '& label': { color: 'rgba(255,255,255,0.5)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.2)' } }}
+                                />
+                                <TextField
+                                    fullWidth required label="Issuing Bank" value={proofForm.chequeBank}
+                                    onChange={e => setProofForm(p => ({ ...p, chequeBank: e.target.value }))}
+                                    sx={{ '& .MuiInputBase-root': { color: '#fff' }, '& label': { color: 'rgba(255,255,255,0.5)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.2)' } }}
+                                />
+                                <TextField
+                                    fullWidth required label="Cheque Date" type="date" value={proofForm.chequeDate}
+                                    InputLabelProps={{ shrink: true }}
+                                    onChange={e => setProofForm(p => ({ ...p, chequeDate: e.target.value }))}
+                                    sx={{ '& .MuiInputBase-root': { color: '#fff' }, '& label': { color: 'rgba(255,255,255,0.5)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.2)' } }}
+                                />
+                            </>
+                        )}
                         <TextField
                             fullWidth label="Payment Period (e.g. July 2026)" value={proofForm.period}
                             onChange={e => setProofForm(p => ({ ...p, period: e.target.value }))}
@@ -343,7 +378,7 @@ export default function TenantPaymentsPage() {
                             startIcon={<Upload size={18} />}
                             sx={{ color: '#fff', borderColor: 'rgba(255,255,255,0.2)', py: 1.5 }}
                         >
-                            {receiptFile ? receiptFile.name : 'UPLOAD RECEIPT / SCREENSHOT *'}
+                            {receiptFile ? receiptFile.name : 'UPLOAD CASH RECEIPT / CHEQUE PHOTO *'}
                             <input
                                 type="file"
                                 hidden
@@ -362,7 +397,7 @@ export default function TenantPaymentsPage() {
                 </DialogContent>
                 <DialogActions sx={{ p: 3, borderTop: '1px solid rgba(255,255,255,0.05)' }}>
                     <Button onClick={() => setUploadDialogOpen(false)} sx={{ color: 'rgba(255,255,255,0.5)' }}>CANCEL</Button>
-                    <Button variant="contained" onClick={handleSubmitProof} disabled={uploading || !proofForm.amount.trim() || !receiptFile}
+                    <Button variant="contained" onClick={handleSubmitProof} disabled={uploading || Boolean(proofFormError) || !receiptFile}
                         sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 900 }}
                     >
                         {uploading ? 'SUBMITTING...' : 'SUBMIT PROOF'}

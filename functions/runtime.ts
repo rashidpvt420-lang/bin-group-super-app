@@ -32,6 +32,7 @@ export { adminCompleteOwnerPortfolioInspections } from "./canonicalOwnerInspecti
 export * from "./ownerFinancialOperations";
 export * from "./ownerMaintenanceOperations";
 export * from "./onboardingProofUpload";
+export * from "./ownerOnboardingDocuments";
 // Phase 1 payment policy is Cash + Cheque only. Keep the historical Stripe
 // implementation in source for a future reviewed migration, but deploy only the
 // fail-closed compatibility endpoints so environment/secret drift cannot enable it.
