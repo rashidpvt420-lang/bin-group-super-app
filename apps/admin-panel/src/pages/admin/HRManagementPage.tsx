@@ -11,6 +11,7 @@ import { binThemeTokens } from '../../theme/adminTheme';
 import { useAuth } from '../../context/AuthContext';
 import StaffAccessPage from './StaffAccessPage';
 import StaffLifecycleDetailsDialog from './StaffLifecycleDetailsDialog';
+import { describeIncompleteHrRead } from '../../utils/hrReadCompleteness';
 
 type StaffLifecycle = {
     uid: string;
@@ -108,8 +109,12 @@ export default function HRManagementPage() {
                     leaveRequests: Array.isArray(opsResponse.data?.leaveRequests) ? opsResponse.data.leaveRequests : [],
                     documents: Array.isArray(opsResponse.data?.documents) ? opsResponse.data.documents : [],
                 });
+                const incomplete = describeIncompleteHrRead(lifecycleResponse.data, opsResponse.data);
+                if (incomplete) setNotice({ type: 'error', message: incomplete });
             } else {
                 setHrOps({ attendance: [], leaveRequests: [], documents: [] });
+                const incomplete = describeIncompleteHrRead(lifecycleResponse.data);
+                if (incomplete) setNotice({ type: 'error', message: incomplete });
             }
         } catch (error) {
             setStaff([]);
