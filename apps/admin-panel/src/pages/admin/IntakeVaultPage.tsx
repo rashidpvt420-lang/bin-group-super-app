@@ -29,6 +29,7 @@ type IntakeSubmission = {
     properties?: any[];
     selectedPlan?: { name?: string; packageName?: string };
     documentUrls?: Record<string, string>;
+    documentPaths?: Record<string, string>;
     annualContractValue?: number;
     mobilizationAmount?: number;
     portfolioSummary?: { totalProperties?: number; totalUnits?: number; estimatedACV?: number; recommendedTier?: string };
@@ -47,6 +48,12 @@ const FIVE_PAGE_WORKFLOW = 'OWNER_FIVE_PAGE_INSPECTION_FIRST_V1';
 const GOLD = (binThemeTokens as any)?.gold || '#DAA520';
 const upper = (value: unknown) => String(value || '').trim().toUpperCase();
 const text = (value: unknown) => String(value || '').trim();
+const protectedDocumentEntries = (submission: { documentPaths?: Record<string, string>; documentUrls?: Record<string, string> }) => {
+    const keys = new Set([...Object.keys(submission.documentPaths || {}), ...Object.keys(submission.documentUrls || {})]);
+    return [...keys]
+        .filter((key) => text(submission.documentPaths?.[key]) || text(submission.documentUrls?.[key]))
+        .map((key) => ({ key, legacyUrl: text(submission.documentUrls?.[key]) }));
+};
 const money = (value: unknown) => Number(value || 0).toLocaleString('en-AE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const timestampMs = (value: any) => value?.toMillis?.() || Date.parse(String(value || '')) || 0;
 const ownerName = (item: IntakeSubmission) => item.ownerName || item.contactInfo?.name || item.companyProfile?.contactPerson || item.companyProfile?.name || 'Owner';
@@ -75,6 +82,26 @@ export const IntakeVaultPage: React.FC = () => {
     const [busyId, setBusyId] = React.useState('');
     const [selected, setSelected] = React.useState<IntakeSubmission | null>(null);
     const [evidenceTarget, setEvidenceTarget] = React.useState<IntakeSubmission | null>(null);
+
+    // F-6: documents are Storage paths; open them through a 5-minute signed URL minted (and
+    // audit-logged) by the server. Legacy records keep their stored URL as a fallback.
+    const openIntakeDocument = async (submission: IntakeSubmission, key: string, legacyUrl: string) => {
+        const popup = window.open('', '_blank');
+        try {
+            if (!text(submission.documentPaths?.[key])) {
+                if (!legacyUrl) throw new Error('This document has no stored file.');
+                if (popup) { popup.opener = null; popup.location.href = legacyUrl; }
+                return;
+            }
+            const response: any = await httpsCallable(functions, 'getOwnerOnboardingDocumentLink')({ intakeId: submission.id, key });
+            const url = text(response?.data?.url);
+            if (!url) throw new Error('The protected document link was not returned.');
+            if (popup) { popup.opener = null; popup.location.href = url; } else { window.location.assign(url); }
+        } catch (openError: any) {
+            popup?.close();
+            setError(openError?.message || 'Unable to open the protected document.');
+        }
+    };
 
     React.useEffect(() => {
         const intakeQuery = query(collection(db, 'intake_submissions'), orderBy('createdAt', 'desc'));
@@ -200,7 +227,7 @@ export const IntakeVaultPage: React.FC = () => {
                     <Paper sx={{ p: 2.5, bgcolor: 'rgba(218,165,32,0.06)', border: '1px solid rgba(218,165,32,0.22)' }}><Typography variant="overline" color={GOLD} fontWeight={950}>LOCKED COMMERCIALS</Typography><Grid container spacing={2} sx={{ mt: 0.2 }}><Grid item xs={6}><Typography variant="caption" color="text.secondary">Annual value</Typography><Typography color="#FFF" fontWeight={950}>AED {money(annualValue(selected))}</Typography></Grid><Grid item xs={6}><Typography variant="caption" color="text.secondary">15% after visits</Typography><Typography color={GOLD} fontWeight={950}>AED {money(mobilisation(selected))}</Typography></Grid></Grid></Paper>
                     <Divider sx={{ borderColor: 'rgba(255,255,255,0.08)' }} />
                     <Box><Typography variant="overline" color={GOLD} fontWeight={950}>PROPERTIES & GPS</Typography><Stack spacing={1.5} sx={{ mt: 1 }}>{(selected.properties || []).map((property, index) => <Paper key={property.id || index} sx={{ p: 2, bgcolor: 'rgba(255,255,255,0.035)', border: '1px solid rgba(255,255,255,0.06)' }}><Stack direction="row" spacing={1.5} alignItems="flex-start"><Building2 size={18} color={GOLD} /><Box><Typography color="#FFF" fontWeight={900}>{property.address || property.area || property.emirate || `Property ${index + 1}`}</Typography><Typography variant="caption" color="rgba(255,255,255,0.5)">{property.propertyType} · {property.units || 0} units</Typography><Stack direction="row" spacing={0.7} alignItems="center" sx={{ mt: 0.8 }}><MapPinned size={13} color={property.geo?.lat && property.geo?.lng ? '#4ADE80' : '#EF4444'} /><Typography variant="caption" color={property.geo?.lat && property.geo?.lng ? '#4ADE80' : '#EF4444'}>{property.geo?.lat && property.geo?.lng ? `${property.geo.lat}, ${property.geo.lng}` : 'GPS missing'}</Typography></Stack></Box></Stack></Paper>)}</Stack></Box>
-                    <Box><Typography variant="overline" color={GOLD} fontWeight={950}>PROTECTED DOCUMENTS</Typography><Stack spacing={1} sx={{ mt: 1 }}>{Object.entries(selected.documentUrls || {}).filter(([, url]) => text(url)).map(([key, url]) => <Button key={key} variant="outlined" startIcon={<FileText size={16} />} onClick={() => window.open(url, '_blank', 'noopener,noreferrer')} sx={{ justifyContent: 'flex-start', color: '#FFF', borderColor: 'rgba(255,255,255,0.16)' }}>{key.replace(/([A-Z])/g, ' $1')}</Button>)}</Stack></Box>
+                    <Box><Typography variant="overline" color={GOLD} fontWeight={950}>PROTECTED DOCUMENTS</Typography><Stack spacing={1} sx={{ mt: 1 }}>{protectedDocumentEntries(selected).map(({ key, legacyUrl }) => <Button key={key} variant="outlined" startIcon={<FileText size={16} />} onClick={() => void openIntakeDocument(selected, key, legacyUrl)} sx={{ justifyContent: 'flex-start', color: '#FFF', borderColor: 'rgba(255,255,255,0.16)' }}>{key.replace(/([A-Z])/g, ' $1')}</Button>)}</Stack></Box>
                     {actionButton(selected)}
                 </Stack>}
             </Drawer>

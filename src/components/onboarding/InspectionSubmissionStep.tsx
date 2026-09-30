@@ -12,10 +12,11 @@ import { binThemeTokens } from '../../theme/binGroupTheme';
 import { clearStagedFiles, getStagedFile } from '../../lib/onboardingDb';
 import { formatAED } from '../../utils/formatters';
 import { mobilisationDepositFromAnnual } from '../../../functions/shared/mobilisationDeposit';
+import { clearOwnerDocumentUploadCache, uploadOwnerDocuments, type OwnerDocumentInput } from './ownerDocumentUploads';
 
 type ProofKey = 'propertyProof' | 'emiratesId' | 'passport' | 'tradeLicense' | 'tenancySupport' | 'gymSportsApproval' | 'gymInsurance' | 'gymFloorPlan';
 type ProofMeta = { name: string; size: number; type: string } | null;
-type UploadedDocument = { downloadUrl?: string; storagePath?: string };
+type UploadedDocument = { storagePath?: string; sha256?: string };
 type SubmissionResult = {
   intakeId: string;
   contractId: string;
@@ -108,36 +109,57 @@ export default function InspectionSubmissionStep({ onBack }: { onBack: () => voi
     if (gymRequired.gymFloorPlan && !proofMap.gymFloorPlan) throw new Error(copy('Upload the Gym floor plan marked as available.', 'ارفع مخطط النادي الذي تم تحديده كمتوفر.'));
   };
 
+  const sha256Hex = async (file: Blob) => {
+    const digest = await crypto.subtle.digest('SHA-256', await file.arrayBuffer());
+    return Array.from(new Uint8Array(digest)).map((byte) => byte.toString(16).padStart(2, '0')).join('');
+  };
+  const uploadCache = typeof window !== 'undefined' ? window.sessionStorage : null;
+
+  // F-6 / F-9: upload returns Storage paths (no permanent URLs); transient failures retry with
+  // backoff; documents already uploaded with identical bytes are not re-uploaded on retry.
   const uploadDocuments = async (user: FirebaseUser) => {
-    const urls: Record<string, string> = {};
+    const staged: OwnerDocumentInput[] = [];
     for (const document of readyDocuments) {
-      const staged = await getStagedFile(document.key);
-      if (!staged) throw new Error(copy(`${document.en} is missing from this browser. Upload it again.`, `ملف ${document.ar} غير موجود في هذا المتصفح. ارفعه مرة أخرى.`));
-      if (staged.size > 8 * 1024 * 1024) throw new Error(copy(`${document.en} exceeds the secure 8 MB final-upload limit.`, `يتجاوز ملف ${document.ar} حد الرفع الآمن البالغ 8 ميجابايت.`));
-      setUploadProgress((current) => ({ ...current, [document.key]: 20 }));
-      const callable = httpsCallable(functions, 'uploadOwnerInspectionProofDocument');
-      const result = await callable({
-        ownerUid: user.uid,
-        ownerEmail: user.email || ownerEmail,
-        intakeId: effectiveIntakeId,
-        onboardingSessionId: effectiveIntakeId,
-        docType: document.key,
-        filename: staged.name.replace(/[^A-Za-z0-9._-]/g, '_'),
-        contentType: staged.type || 'application/octet-stream',
-        encodedDocument: await fileToBase64(staged),
-      });
-      const uploaded = result.data as UploadedDocument;
-      if (!uploaded.downloadUrl) throw new Error(copy(`Secure upload failed for ${document.en}.`, `فشل الرفع الآمن لملف ${document.ar}.`));
-      urls[document.key] = uploaded.downloadUrl;
-      setUploadProgress((current) => ({ ...current, [document.key]: 100 }));
+      const file = await getStagedFile(document.key);
+      if (!file) throw new Error(copy(`${document.en} is missing from this browser. Upload it again.`, `ملف ${document.ar} غير موجود في هذا المتصفح. ارفعه مرة أخرى.`));
+      if (file.size > 8 * 1024 * 1024) throw new Error(copy(`${document.en} exceeds the secure 8 MB final-upload limit.`, `يتجاوز ملف ${document.ar} حد الرفع الآمن البالغ 8 ميجابايت.`));
+      staged.push({ key: document.key, file });
     }
-    return urls;
+    const callable = httpsCallable(functions, 'uploadOwnerInspectionProofDocument');
+    try {
+      return await uploadOwnerDocuments({
+        uid: user.uid,
+        intakeId: effectiveIntakeId,
+        documents: staged,
+        hash: sha256Hex,
+        cache: uploadCache,
+        onProgress: (key, percent) => setUploadProgress((current) => ({ ...current, [key]: percent })),
+        upload: async ({ key, file }) => {
+          const namedFile = file as File;
+          const result = await callable({
+            ownerUid: user.uid,
+            ownerEmail: user.email || ownerEmail,
+            intakeId: effectiveIntakeId,
+            onboardingSessionId: effectiveIntakeId,
+            docType: key,
+            filename: String(namedFile.name || key).replace(/[^A-Za-z0-9._-]/g, '_'),
+            contentType: namedFile.type || 'application/octet-stream',
+            encodedDocument: await fileToBase64(namedFile),
+          });
+          return result.data as UploadedDocument;
+        },
+      });
+    } catch (uploadError: any) {
+      const failed = documents.find((item) => item.key === uploadError?.documentKey);
+      if (failed) throw new Error(copy(`Secure upload failed for ${failed.en}.`, `فشل الرفع الآمن لملف ${failed.ar}.`));
+      throw uploadError;
+    }
   };
 
   const submitWithUser = async (user: FirebaseUser) => {
     validate(user);
     await user.getIdToken(true);
-    const documentUrls = await uploadDocuments(user);
+    const documentPaths = await uploadDocuments(user);
     const callable = httpsCallable(functions, 'submitOwnerInspectionFirstOnboarding');
     const response = await callable({
       ownerUid: user.uid,
@@ -154,10 +176,17 @@ export default function InspectionSubmissionStep({ onBack }: { onBack: () => voi
       contractOtpVerificationId,
       quoteHash: serverQuote.quoteHash,
       quoteQuotedAtMs: serverQuote.quotedAtMs,
-      documentUrls,
+      documentPaths,
+    }).catch((submitError: any) => {
+      // A path the server could not verify (e.g. object removed) must be uploaded again next time.
+      if (String(submitError?.code || '').includes('failed-precondition') && /document/i.test(String(submitError?.message || ''))) {
+        clearOwnerDocumentUploadCache(uploadCache, user.uid, effectiveIntakeId, Object.keys(documentPaths));
+      }
+      throw submitError;
     });
     const result = response.data as SubmissionResult;
     if (!result?.intakeId || !result?.contractId || !result?.paymentId) throw new Error(copy('The server did not return the protected application references.', 'لم يُرجع الخادم مراجع الطلب المحمية.'));
+    clearOwnerDocumentUploadCache(uploadCache, user.uid, effectiveIntakeId, Object.keys(documentPaths));
     await clearStagedFiles();
     setSuccess(result);
   };
