@@ -4,6 +4,7 @@
 // public, owner, broker, tenant, technician, and admin source trees.
 
 import { registerPlugin } from '@capacitor/core';
+import { installOfflineCacheTeardown } from './offlineCacheTeardown';
 import { initializeApp, getApp, getApps, type FirebaseApp } from 'firebase/app';
 import {
   getAuth,
@@ -49,6 +50,8 @@ import {
   documentId,
   Timestamp,
   enableIndexedDbPersistence,
+  clearIndexedDbPersistence,
+  terminate,
   type Firestore,
   type DocumentData,
   type DocumentReference,
@@ -329,6 +332,15 @@ if (typeof window !== 'undefined') {
     } else if (err.code === 'unimplemented') {
       console.warn('[Firebase] The current browser does not support all of the features required to enable persistence.');
     }
+  });
+
+  // N-28: never leave the previous user's offline Firestore cache on the device after sign-out.
+  installOfflineCacheTeardown({
+    subscribe: (listener) => onAuthStateChanged(auth, listener),
+    terminate: () => terminate(db),
+    clearPersistence: () => clearIndexedDbPersistence(db),
+    reload: () => window.location.reload(),
+    log: (message, error) => console.warn(message, error),
   });
 }
 

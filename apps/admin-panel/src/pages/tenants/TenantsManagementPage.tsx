@@ -11,6 +11,7 @@ import { collection, onSnapshot, query, where, serverTimestamp, doc, writeBatch,
 import { httpsCallable } from 'firebase/functions';
 import { Add as AddIcon, Edit as EditIcon, Search as SearchIcon, History as HistoryIcon, CloudUpload as BulkIcon, Send as SendIcon, Delete as DeleteIcon } from '@mui/icons-material';
 import BulkTenantImportDialog from '../../components/tenants/BulkTenantImportDialog';
+import { subscribeTenantLookups } from './tenantLookupSubscriptions';
 
 interface Unit {
     id: string;
@@ -74,16 +75,20 @@ export default function TenantsManagementPage() {
   const [lastDoc, setLastDoc] = useState<any>(null);
   const [hasMore, setHasMore] = useState(true);
 
+  useEffect(() => subscribeTenantLookups({
+    owners: (next, fail) => onSnapshot(query(collection(db, 'users'), where('role', 'in', ['owner', 'OWNER'])), next, fail),
+    properties: (next, fail) => onSnapshot(query(collection(db, 'properties')), next, fail),
+  }, {
+    onOwners: (rows) => setOwners(rows),
+    onProperties: (rows) => setProperties(rows),
+    onError: (source, lookupError: any) => {
+      console.error(`[tenants] ${source} lookup listener failed`, lookupError);
+      setError(`${source === 'owners' ? 'Owner' : 'Property'} list could not be loaded (${lookupError?.code || 'error'}). Owner/property pickers may be incomplete — refresh to retry.`);
+    },
+  }), []);
+
   useEffect(() => {
     const fetchInitialData = async () => {
-        // Load Lookups
-        onSnapshot(query(collection(db, 'users'), where('role', 'in', ['owner', 'OWNER'])), (snap) => {
-            setOwners(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-        });
-        onSnapshot(query(collection(db, 'properties')), (snap) => {
-            setProperties(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-        });
-        
         // Initial Tenants
         const q = query(collection(db, 'users'), where('role', '==', 'tenant'), orderBy('createdAt', 'desc'), limit(PAGE_SIZE));
         const snap = await getDocs(q);
@@ -91,7 +96,10 @@ export default function TenantsManagementPage() {
         if (snap.docs.length < PAGE_SIZE) setHasMore(false);
         setLastDoc(snap.docs[snap.docs.length - 1]);
     };
-    fetchInitialData();
+    fetchInitialData().catch((loadError: any) => {
+        console.error('[tenants] initial tenant page failed', loadError);
+        setError(`Tenants could not be loaded (${loadError?.code || 'error'}). The list below is not complete — refresh to retry.`);
+    });
 
     // Check admin status
     const checkAdminStatus = async () => {
@@ -101,7 +109,7 @@ export default function TenantsManagementPage() {
         }
     };
     checkAdminStatus();
-    fetchImportHistory();
+    fetchImportHistory().catch((historyError: any) => console.error('[tenants] import history failed', historyError));
   }, []);
 
   const fetchImportHistory = async () => {
