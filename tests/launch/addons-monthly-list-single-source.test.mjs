@@ -100,7 +100,8 @@ test('the owner onboarding add-on cards take their prices from the engine resolv
   assert.ok(ids.length >= 11);
   assert.doesNotMatch(block, /price: \d/);
   for (const id of ids) {
-    assert.match(block, new RegExp(`id: '${id}'.*price: addOnPrice\\('${id}'\\)`), id);
+    const row = block.split('\n').find((line) => line.includes(`{ id: '${id}'`)) || '';
+    assert.ok(row.includes(`price: addOnPrice('${id}')`), id);
     assert.notEqual(m['src/utils/calculateUaeQuote2026.ts'].resolveAddOnAnnualPrice(id), null, `${id} must have an automatic annual price`);
   }
 });
