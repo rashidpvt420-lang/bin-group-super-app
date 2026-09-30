@@ -8,6 +8,7 @@ import admin from 'firebase-admin';
 import { initializeFirebaseAdmin, resolveFirebaseAdminProjectId } from './firebase-admin-bootstrap.mjs';
 import { exchangeGmailAccessToken, readGmailOtp } from './lib/gmail-otp-reader.mjs';
 import { signInWithRequiredTotpMfa } from './lib/firebase-mfa-sign-in.mjs';
+import { cleanupBrokerCommissionsForContracts, collectOwnerContractIds } from './lib/e2e-contract-commission-cleanup.mjs';
 
 const PROJECT_ID = 'bin-group-57c60';
 const API_KEY = 'AIzaSyCd-QdM7mjECh9UqDKk1ofBemanpTRgd4s';
@@ -137,6 +138,10 @@ async function deleteQuery(query) {
 
 async function deleteOwnerScopedRecords(uid) {
   if (!uid) return;
+  // Broker commissions are keyed by contract, not owner: remove/void them before the
+  // synthetic contracts disappear, otherwise they linger in the production ledger.
+  const contractIds = await collectOwnerContractIds(db, uid);
+  await cleanupBrokerCommissionsForContracts(db, contractIds, { log: (line) => console.log(line) });
   const collections = [
     'payment_transactions',
     'contracts',
@@ -331,7 +336,8 @@ async function uploadOwnerDocument(ownerSession, appCheckToken, intakeId, docTyp
     contentType: 'application/pdf',
     encodedDocument: bytes.toString('base64'),
   }, appCheckToken, ownerSession.idToken);
-  assert(text(result.downloadUrl).startsWith('https://'), `${docType} upload did not return a secure URL.`);
+  // F-6: the protected upload returns an Owner-scoped Storage path, never a permanent download URL.
+  assert(!result.downloadUrl, `${docType} upload must not return a permanent download URL.`);
   assert(text(result.storagePath).startsWith(`onboarding-proof/${ownerSession.uid}/${intakeId}/`), `${docType} upload is not Owner scoped.`);
   const [exists] = await bucket.file(text(result.storagePath)).exists();
   assert(exists, `${docType} proof is missing from production Storage.`);
@@ -474,10 +480,10 @@ async function main() {
       email: ownerEmail,
       phone: '+971500000000',
     },
-    documentUrls: {
-      propertyProof: documents.propertyProof.downloadUrl,
-      emiratesId: documents.emiratesId.downloadUrl,
-      passport: documents.passport.downloadUrl,
+    documentPaths: {
+      propertyProof: documents.propertyProof.storagePath,
+      emiratesId: documents.emiratesId.storagePath,
+      passport: documents.passport.storagePath,
       tradeLicense: '',
     },
   };

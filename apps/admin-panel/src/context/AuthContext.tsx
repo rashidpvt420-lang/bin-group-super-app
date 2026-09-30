@@ -1,6 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { getIdTokenResult, multiFactor, signInWithCustomToken, signInWithEmailAndPassword, signOut } from 'firebase/auth';
-import { addDoc, auth, collection, db, doc, getDoc, onAuthStateChanged, serverTimestamp } from '../lib/firebase';
+import { auth, db, doc, functions, getDoc, httpsCallable, onAuthStateChanged } from '../lib/firebase';
+import { clearAdminSecuritySession, recordAdminLoginAudit } from '../security/adminLoginAudit';
 
 interface AuthContextType {
     isAuthenticated: boolean;
@@ -268,17 +269,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             }
             if (!isCurrentAttempt(attempt)) return;
 
-            await addDoc(collection(db, 'audit_logs'), {
-                actorId: firebaseUser.uid,
-                actorRole: claimRole,
-                targetType: 'system',
-                targetId: 'admin-panel',
-                action: enrollmentRequired ? 'ADMIN_LOGIN_MFA_ENROLLMENT_REQUIRED' : 'ADMIN_LOGIN_MFA_VERIFIED',
-                mfaFactorCount: factorCount,
-                mfaSecondFactorPresent: verifiedSecondFactor,
-                userAgent: navigator.userAgent,
-                createdAt: serverTimestamp(),
-            }).catch((auditError) => console.warn('[ADMIN-AUTH] Audit log write skipped:', auditError));
+            // N-17: the login audit is recorded server-side (audit_logs are browser write-denied).
+            // Non-blocking so a slow Functions cold start cannot stall Admin sign-in, but a
+            // failure is reported as an error instead of being swallowed.
+            void recordAdminLoginAudit(httpsCallable(functions, 'registerAdminSecuritySession', { timeout: 15000 }), {
+                language: typeof document !== 'undefined' ? document.documentElement.lang || 'en' : 'en',
+                storage: typeof window !== 'undefined' ? window.sessionStorage : null,
+            });
 
             if (!isCurrentAttempt(attempt)) return;
             if (attempt.timer !== null) window.clearTimeout(attempt.timer);
@@ -409,6 +406,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const logout = useCallback(async () => {
         invalidateActiveAttempt();
+        clearAdminSecuritySession(typeof window !== 'undefined' ? window.sessionStorage : null);
         await signOut(auth);
         setIsAuthenticated(false);
         setUser(null);
