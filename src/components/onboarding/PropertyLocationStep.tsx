@@ -9,6 +9,7 @@ import { useLanguage } from '@bin/shared';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { buildPersistableGeoAnchor, isValidLatLng } from '../../utils/geoAnchor';
 import { buildGoogleMapsSearchUrl, useGoogleMaps } from '../../lib/maps';
+import { OWNER_MANUAL_GEO_SOURCE, isEmirateCentroid } from './ownerLocationRules';
 
 const EMIRATES_LIST = [
     { id: 'Dubai', key: 'onboarding.emirate.dubai', en: 'Dubai', ar: 'دبي', lat: 25.2048, lng: 55.2708 },
@@ -43,7 +44,7 @@ type RemoteAddressResult = {
     placeId?: string;
 };
 
-type GeoSource = 'google_maps' | 'title_deed' | 'admin_manual' | 'device_gps';
+type GeoSource = 'google_maps' | 'title_deed' | 'device_gps' | typeof OWNER_MANUAL_GEO_SOURCE;
 
 const parseCoordinatesFromText = (value: string): { lat: number; lng: number } | null => {
     const decoded = safeDecode(value || '');
@@ -96,8 +97,9 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
     const [locationError, setLocationError] = useState<string | null>(null);
     const [locating, setLocating] = useState(false);
     const [resolvingAddress, setResolvingAddress] = useState(false);
-    const [manualLat, setManualLat] = useState(String(activeProperty?.location?.lat || activeProperty?.geo?.lat || fallbackEmirate.lat));
-    const [manualLng, setManualLng] = useState(String(activeProperty?.location?.lng || activeProperty?.geo?.lng || fallbackEmirate.lng));
+    // F-8: never pre-fill the emirate centroid as the property's coordinates.
+    const [manualLat, setManualLat] = useState(String(activeProperty?.location?.lat || activeProperty?.geo?.lat || ''));
+    const [manualLng, setManualLng] = useState(String(activeProperty?.location?.lng || activeProperty?.geo?.lng || ''));
     const [googleMapsUrlField, setGoogleMapsUrlField] = useState(activeProperty?.googleMapsUrl || activeProperty?.location?.googleMapsUrl || '');
     const [plusCodeField, setPlusCodeField] = useState(activeProperty?.plusCode || activeProperty?.location?.plusCode || '');
 
@@ -109,10 +111,6 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
 
     useEffect(() => {
         if (!activeProperty?.emirate) updateProperty(0, { emirate: fallbackEmirate.id, city: fallbackEmirate.id } as any);
-        if (!activeProperty?.location?.lat && !activeProperty?.geo?.lat) {
-            setManualLat(String(fallbackEmirate.lat));
-            setManualLng(String(fallbackEmirate.lng));
-        }
     }, []);
 
     const directGoogleMapsInput = useMemo(
@@ -172,8 +170,8 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
         capturedAt?: string;
     }) => {
         try {
-            const source = payload.source || 'admin_manual';
-            const isManual = source === 'admin_manual' || !payload.placeId || payload.placeId === 'MANUAL' || payload.placeId === 'REMOTE_ADDRESS';
+            const source = payload.source || OWNER_MANUAL_GEO_SOURCE;
+            const isManual = source === OWNER_MANUAL_GEO_SOURCE || !payload.placeId || payload.placeId === 'MANUAL' || payload.placeId === 'REMOTE_ADDRESS';
             const resolvedEmirate = payload.emirate || activeProperty?.emirate || fallbackEmirate.id;
             const resolvedCity = payload.city || activeProperty?.city || resolvedEmirate;
             const resolvedArea = payload.area || activeProperty?.area || '';
@@ -328,8 +326,8 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
         const emirateId = event.target.value;
         const emirate = getEmirate(emirateId);
         updateProperty(0, { emirate: emirateId, city: emirateId } as any);
-        setManualLat(String(emirate.lat));
-        setManualLng(String(emirate.lng));
+        // F-8: move the map view only; the Owner still has to pin the exact property location.
+        if (mapObjRef.current && !isValidLatLng(Number(manualLat), Number(manualLng))) mapObjRef.current.panTo({ lat: emirate.lat, lng: emirate.lng });
     };
 
     const useCurrentLocation = () => {
@@ -389,7 +387,7 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
             emirate: activeProperty?.emirate || fallbackEmirate.id,
             city: activeProperty?.city || activeProperty?.emirate || fallbackEmirate.id,
             area: activeProperty?.area || '',
-            source: 'admin_manual',
+            source: OWNER_MANUAL_GEO_SOURCE,
             placeId: 'MANUAL',
             verified: false,
             requiresGeoReview: true,
@@ -437,7 +435,7 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
                     emirate: selectedEmirate,
                     city: activeProperty?.city || selectedEmirate,
                     area: activeProperty?.area || '',
-                    source: mapsInput ? 'google_maps' : 'admin_manual',
+                    source: mapsInput ? 'google_maps' : OWNER_MANUAL_GEO_SOURCE,
                     placeId: mapsInput ? 'GOOGLE_MAPS_LINK' : 'MANUAL',
                     verified: false,
                     requiresGeoReview: true,
@@ -465,7 +463,7 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
                 city: resolved.city || selectedEmirate,
                 area: resolved.area || activeProperty?.area || '',
                 placeId: 'REMOTE_ADDRESS',
-                source: 'admin_manual',
+                source: OWNER_MANUAL_GEO_SOURCE,
                 verified: false,
                 requiresGeoReview: true,
                 dispatchReady: false
@@ -484,6 +482,7 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
         if (!activeProperty?.emirate) return setLocationError(copy('Select the emirate before continuing.', 'اختر الإمارة قبل المتابعة.'));
         if (!activeProperty?.address || activeProperty.address.trim().length < 3) return setLocationError(copy('Enter the property address before continuing.', 'أدخل عنوان العقار قبل المتابعة.'));
         if (!isValidLatLng(lat, lng)) return setLocationError(copy('Enter valid coordinates.', 'أدخل إحداثيات صحيحة.'));
+        if (isEmirateCentroid(lat, lng, EMIRATES_LIST)) return setLocationError(copy('These are the emirate centre coordinates, not the property. Use your location, drop the pin on the building, or paste its Google Maps link.', 'هذه إحداثيات مركز الإمارة وليست العقار. استخدم موقعك أو ضع العلامة على المبنى أو الصق رابط خرائط Google الخاص به.'));
 
         const currentGeo = activeProperty?.geo;
         const coordinatesUnchanged = currentGeo && sameCoordinate(currentGeo.lat, lat) && sameCoordinate(currentGeo.lng, lng);
@@ -525,7 +524,7 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
                 emirate: activeProperty.emirate,
                 city: activeProperty.city || activeProperty.emirate,
                 area: activeProperty.area || '',
-                source: 'admin_manual',
+                source: OWNER_MANUAL_GEO_SOURCE,
                 placeId: 'MANUAL',
                 verified: false,
                 requiresGeoReview: true,
@@ -536,7 +535,7 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
         onNext();
     };
 
-    const canProceed = Boolean(activeProperty?.emirate && activeProperty?.address && isValidLatLng(Number(manualLat), Number(manualLng)));
+    const canProceed = Boolean(activeProperty?.emirate && activeProperty?.address && isValidLatLng(Number(manualLat), Number(manualLng)) && !isEmirateCentroid(Number(manualLat), Number(manualLng), EMIRATES_LIST));
     const locationVerified = activeProperty?.geo?.verified === true;
     const dispatchReady = activeProperty?.geo?.dispatchReady === true;
 
