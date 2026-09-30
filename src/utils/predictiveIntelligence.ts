@@ -22,11 +22,12 @@ export interface HistoricalContext {
     amount: number;
     category: string;
   }>;
+  // Unknown facts are null; callers must not substitute invented defaults.
   propertyDetails: {
-    sqft: number;
-    grade: string;
-    propertyType: string;
-    emirate: string;
+    sqft: number | null;
+    grade: string | null;
+    propertyType: string | null;
+    emirate: string | null;
   };
 }
 
