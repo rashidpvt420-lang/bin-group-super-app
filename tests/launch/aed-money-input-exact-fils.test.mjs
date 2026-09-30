@@ -1,5 +1,5 @@
 // parseExactAedAmount: AED input exact to the fils; sub-fils rejected, never rounded.
-// normalizeAedMoney (functions/shared/aedMoney.ts) stays byte-identical: its blob is pinned by the
+// normalizeAedMoney (functions/shared/aedMoney.ts) must match the blob pinned by the
 // frozen release evidence (scripts/run-frozen-release-evidence.mjs).
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
@@ -32,7 +32,7 @@ test('sub-fils and malformed inputs are rejected, not rounded', async () => {
   assert.throws(() => parseExactAedAmount(1e21), (error) => error.reason === 'OUT_OF_RANGE');
 });
 
-test('the frozen-release pinned aedMoney.ts blob is untouched', () => {
+test('aedMoney.ts matches the blob pinned by the frozen-release gate', () => {
   const pinned = readFileSync(new URL('../../scripts/run-frozen-release-evidence.mjs', import.meta.url), 'utf8');
   const expected = /'functions\/shared\/aedMoney\.ts': '([0-9a-f]{40})'/.exec(pinned)?.[1];
   assert.ok(expected);

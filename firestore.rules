@@ -1897,6 +1897,11 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
 
+    match /tenant_receipt_registry/{receiptHash} {
+      allow read: if isAdmin();
+      allow create, update, delete: if false;
+    }
+
     match /pilotFeedback/{feedbackId} {
       allow read: if isAdmin();
       allow create: if signedIn() && request.resource.data.get('status', null) == 'new';
@@ -2233,6 +2238,7 @@ service cloud.firestore {
           'design_quotes',
           'design_approvals',
           'design_receipt_registry',
+          'tenant_receipt_registry',
           'payments',
           'transactions',
           'payroll_entries',
@@ -2291,6 +2297,7 @@ service cloud.firestore {
           'design_quotes',
           'design_approvals',
           'design_receipt_registry',
+          'tenant_receipt_registry',
           'payments',
           'transactions',
           'payroll_entries',
