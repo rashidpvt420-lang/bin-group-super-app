@@ -70,7 +70,12 @@ patch(
   'staff operating system server-authoritative rules',
   `    match /properties/{propertyId} {`,
   `    match /staff_shifts/{shiftId} {
+      // Shift docs are keyed SHIFT_<uid>_<yyyy-mm-dd> by submitStaffQuickAction.
+      // The id-bound branch lets staff subscribe to TODAY's own shift before
+      // Clock In creates it (resource == null would otherwise deny the get and
+      // permanently kill the client listener).
       allow read: if isNotSuspended() && (
+        shiftId.matches('SHIFT_' + request.auth.uid + '_[0-9]{4}-[0-9]{2}-[0-9]{2}') ||
         resource.data.get('staffId', '') == request.auth.uid ||
         isHr() || isOps() || isAdmin()
       );
@@ -79,6 +84,7 @@ patch(
 
     match /staff_daily_summaries/{summaryId} {
       allow read: if isNotSuspended() && (
+        summaryId.matches('SUMMARY_' + request.auth.uid + '_[0-9]{4}-[0-9]{2}-[0-9]{2}') ||
         resource.data.get('staffId', '') == request.auth.uid ||
         isHr() || isOps() || isAdmin()
       );
