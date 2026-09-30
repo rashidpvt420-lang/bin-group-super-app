@@ -1,13 +1,13 @@
 import { FieldValue } from "firebase-admin/firestore";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
-import * as crypto from "crypto";
 import { createBrokerCommissionForContract } from "./brokerCommissions";
 import { assertStoredOwnerPaymentReceipt, assertStoredTenantPaymentReceipt } from "./paymentReceiptEvidence";
 import { normalizeAedMoney } from "./shared/aedMoney";
 import { parseExactAedAmount } from "./shared/aedMoneyInput";
 import { decideRentConfirmedAmount, rentApprovalDecision, rentRejectionDecision } from "./rentPaymentStatus";
-import { generateMobilizationInvoicePdfArtifact } from "./pdfEngine";
+import { generateOwnerPaymentReceiptPdfArtifact } from "./pdfEngine";
+import { assertMobilizationInvoiceImmutable, buildMobilizationInvoiceSnapshot } from "./mobilizationInvoice";
 import { resolveActivePaymentConfiguration } from "./paymentConfiguration";
 import {
   OwnerActivationPaymentPolicyError,
@@ -360,31 +360,38 @@ export const adminApprovePayment = onCall({ cors: true, enforceAppCheck: true },
       expectedHash: manualProofHash,
     })
     : null;
-  const invoiceId = `MOB-${crypto.createHash("sha256").update(paymentId).digest("hex").slice(0, 20).toUpperCase()}`;
-  const invoiceCanonical = JSON.stringify({
-    invoiceId,
+  const invoiceSnapshot = buildMobilizationInvoiceSnapshot({
     paymentId,
     contractId,
     intakeId,
+    ownerUid,
     amount: expectedAmount,
-    currency: "AED",
-    feeType: "MOBILIZATION_DEPOSIT",
     quoteHash: String(payment.quoteHash),
   });
-  const invoiceHash = crypto.createHash("sha256").update(invoiceCanonical).digest("hex");
+  const { invoiceId, proofHash: invoiceHash } = invoiceSnapshot;
+  const invoiceRef = db.collection("invoices").doc(invoiceId);
   const propertyQuery = db.collection("properties").where("intakeId", "==", intakeId).limit(100);
   const paymentConfigurationRef = db.collection("system_payment_config").doc("current");
   let approvalWasIdempotent = false;
   let approvalUsesStripe = false;
   await db.runTransaction(async (transaction) => {
-    const [freshPaymentSnap, freshContractSnap, propertySnap, paymentConfigurationSnap] = await Promise.all([
+    const [freshPaymentSnap, freshContractSnap, propertySnap, paymentConfigurationSnap, invoiceSnap] = await Promise.all([
       transaction.get(ref),
       transaction.get(contractRef),
       transaction.get(propertyQuery),
       transaction.get(paymentConfigurationRef),
+      transaction.get(invoiceRef),
     ]);
     if (!freshPaymentSnap.exists || !freshContractSnap.exists) {
       throw new HttpsError("failed-precondition", "Payment or contract disappeared during approval.");
+    }
+    if (!invoiceSnap.exists) {
+      throw new HttpsError("failed-precondition", "The signed-contract 15% mobilisation invoice is missing.");
+    }
+    try {
+      assertMobilizationInvoiceImmutable(invoiceSnap.data() || {}, invoiceSnapshot);
+    } catch (error: any) {
+      throw new HttpsError("aborted", error?.message || "The mobilisation invoice identity changed.");
     }
     if (!paymentConfigurationSnap.exists) {
       throw new HttpsError("failed-precondition", "The current payment policy is missing.");
@@ -615,25 +622,16 @@ export const adminApprovePayment = onCall({ cors: true, enforceAppCheck: true },
       }, { merge: true });
     });
 
-    transaction.set(db.collection("invoices").doc(invoiceId), {
-      invoiceId,
-      paymentId,
-      contractId,
-      intakeId,
-      ownerId: ownerUid,
-      ownerUid,
-      ownerEmail: payment.ownerEmail || null,
-      amount: expectedAmount,
+    transaction.set(invoiceRef, {
       amountPaid: expectedAmount,
-      currency: "AED",
-      feeType: "MOBILIZATION_DEPOSIT",
       status: "PAID",
+      paymentStatus: "PAID",
+      documentState: "PAID_RECEIPT_PENDING",
       paymentMethod: normalizedMethod,
       paymentReferenceId: manualReference || payment.stripeSessionId,
-      quoteHash: payment.quoteHash,
-      proofHash: invoiceHash,
-      issuedAt: now,
       paidAt: now,
+      approvedBy: actorId,
+      approvedByEmail: actorEmail,
       updatedAt: now,
     }, { merge: true });
     transaction.set(db.collection("invoice_registry").doc(invoiceHash), {
@@ -659,6 +657,18 @@ export const adminApprovePayment = onCall({ cors: true, enforceAppCheck: true },
       amountReceived: expectedAmount,
       createdAt: now,
     });
+    transaction.set(db.collection("notifications").doc(`owner_payment_approved_${paymentId}`), {
+      recipientId: ownerUid,
+      recipientRole: "owner",
+      type: "PAYMENT_APPROVED",
+      title: "PAYMENT APPROVED",
+      body: `Your 15% mobilisation payment of AED ${expectedAmount.toFixed(2)} is approved. Your receipt is available in Financials.`,
+      link: `/invoices/${invoiceId}`,
+      metadata: { paymentId, contractId, invoiceId, amount: expectedAmount, state: "PAID" },
+      read: false,
+      createdAt: now,
+      updatedAt: now,
+    }, { merge: true });
     if (payment.ownerEmail) {
       transaction.set(db.collection("mail").doc(`owner_payment_approved_${paymentId}`), {
         to: String(payment.ownerEmail).toLowerCase(),
@@ -686,28 +696,35 @@ export const adminApprovePayment = onCall({ cors: true, enforceAppCheck: true },
     }
   });
 
-  if (!approvalWasIdempotent) {
-    const invoiceArtifact = await generateMobilizationInvoicePdfArtifact({
-      invoiceId,
-      paymentId,
-      contractId,
+  const approvedInvoiceSnap = await invoiceRef.get();
+  if (!approvedInvoiceSnap.exists) {
+    throw new HttpsError("internal", "The approved mobilisation invoice disappeared before receipt generation.");
+  }
+  const approvedInvoice = approvedInvoiceSnap.data() || {};
+  try {
+    assertMobilizationInvoiceImmutable(approvedInvoice, invoiceSnapshot);
+  } catch (error: any) {
+    throw new HttpsError("aborted", error?.message || "The approved mobilisation invoice identity changed.");
+  }
+  if (!String(approvedInvoice.receiptPdfUrl || "").trim() || !String(approvedInvoice.receiptStoragePath || "").trim()) {
+    const receiptArtifact = await generateOwnerPaymentReceiptPdfArtifact({
+      ...invoiceSnapshot,
       ownerId: ownerUid,
-      amount: expectedAmount,
       paymentReferenceId: manualReference || payment.stripeSessionId,
-      proofHash: invoiceHash,
     });
-    await db.collection("invoices").doc(invoiceId).set({
-      pdfUrl: invoiceArtifact.pdfUrl,
-      storagePath: invoiceArtifact.storagePath,
-      pdfSha256: invoiceArtifact.pdfSha256,
-      pdfGeneration: invoiceArtifact.generation,
-      canonicalPdfSource: "SERVER_PAYMENT_APPROVAL",
+    await invoiceRef.set({
+      receiptPdfUrl: receiptArtifact.pdfUrl,
+      receiptStoragePath: receiptArtifact.storagePath,
+      receiptPdfSha256: receiptArtifact.pdfSha256,
+      receiptPdfGeneration: receiptArtifact.generation,
+      receiptCanonicalSource: "SERVER_PAYMENT_APPROVAL",
+      documentState: "PAID_RECEIPT_READY",
       updatedAt: ts(),
     }, { merge: true });
     await db.collection("invoice_registry").doc(invoiceHash).set({
-      pdfSha256: invoiceArtifact.pdfSha256,
-      storagePath: invoiceArtifact.storagePath,
-      canonicalPdfSource: "SERVER_PAYMENT_APPROVAL",
+      receiptPdfSha256: receiptArtifact.pdfSha256,
+      receiptStoragePath: receiptArtifact.storagePath,
+      receiptCanonicalSource: "SERVER_PAYMENT_APPROVAL",
       updatedAt: ts(),
     }, { merge: true });
   }
@@ -897,6 +914,18 @@ export const adminRejectPayment = onCall({ cors: true, enforceAppCheck: true }, 
       }, { merge: true });
     }
 
+    transaction.set(db.collection("notifications").doc(`owner_payment_rejected_${paymentId}`), {
+      recipientId: ownerUid,
+      recipientRole: "owner",
+      type: "PAYMENT_REJECTED",
+      title: "PAYMENT EVIDENCE REJECTED",
+      body: `Your 15% mobilisation payment evidence was rejected: ${reason}`,
+      link: "/owner/payment-proof",
+      metadata: { paymentId, contractId: contractId || null, reason, state: "REJECTED" },
+      read: false,
+      createdAt: now,
+      updatedAt: now,
+    }, { merge: true });
     transaction.set(db.collection("audit_logs").doc(), {
       action: "ADMIN_REJECT_PAYMENT",
       actorId,
