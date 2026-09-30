@@ -135,8 +135,17 @@ function normalizeGeo(value: PlainRecord) {
     verified: false,
     dispatchReady: false,
     requiresGeoReview: true,
-    source: text(value?.geo?.source || "owner_five_page_submission"),
+    source: ownerGeoSource(value?.geo?.source),
   };
+}
+
+// F-8: an Owner submission must never carry a server-authority geo provenance tag
+// ("admin_manual" is the Founder-MFA verification source, "physical_inspection" the
+// inspection-evidence source). Owner-typed pins are tagged "owner_manual".
+const SERVER_AUTHORITY_GEO_SOURCES = new Set(["admin_manual", "physical_inspection", "founder_mfa_review"]);
+function ownerGeoSource(raw: unknown) {
+  const source = text(raw || "owner_five_page_submission");
+  return SERVER_AUTHORITY_GEO_SOURCES.has(source.toLowerCase()) ? "owner_manual" : source;
 }
 
 function quoteFor(properties: PlainRecord[], selectedAddOns: string[], quotedAtMs?: number) {
