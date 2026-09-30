@@ -71,7 +71,10 @@ test('Phase 12 ticket aliases are read compatibility and authoritative writes us
   assert.doesNotMatch(functions, /status:\s*["']AUTO_ASSIGNED["']/);
   assert.doesNotMatch(functions, /status:\s*["']on_hold["']/);
   assert.match(functions, /status:\s*"ASSIGNED"[\s\S]*?dispatchStatus:\s*"AUTO_ASSIGNED"/);
-  assert.match(functions, /status:\s*"ON_HOLD"/);
+  // N-01: the only index.ts ON_HOLD writer (legacy pauseTechnicianWork) is retired; ON_HOLD stays a
+  // canonical transition reached through the guarded lifecycle state machine.
+  assert.match(contract, /IN_PROGRESS:\s*\[[^\]]*'ON_HOLD'/);
+  assert.match(functions, /export const pauseTechnicianWork = retiredTechnicianLifecycleCallable\("pauseTechnicianWork"\);/);
   assert.doesNotMatch(ownerPage, /const ACTIVE_STATUSES = \[[^\]]*on_the_way/);
   assert.doesNotMatch(tenantPage, /const ACTIVE_STATUSES = \[[^\]]*on_the_way/);
   assert.match(ownerPage, /normalizeCanonicalState\('ticket', ticket\.status\)/);

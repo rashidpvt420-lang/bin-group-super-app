@@ -6,7 +6,7 @@ const read = (path) => readFile(path, 'utf8');
 
 test('Phase 15 canonical Owner contract is server-rendered, bilingual and byte-hashed', async () => {
   const [pdf, signing] = await Promise.all([read('functions/pdfEngine.ts'), read('functions/adminOwnerOperations.ts')]);
-  for (const token of ['PDFDocument', 'Cairo-Regular.ttf', 'shapeArabicText', "language: 'en-ar'", 'generateContractPdfArtifact', "createHash('sha256').update(buffer)", 'pdfSha256', 'generation']) {
+  for (const token of ['PDFDocument', 'Cairo-Regular.ttf', 'bidiText', 'layoutBidiText', "language: 'en-ar'", 'generateContractPdfArtifact', "createHash('sha256').update(buffer)", 'pdfSha256', 'generation']) {
     assert.ok(pdf.includes(token), `Server PDF engine missing ${token}`);
   }
   for (const token of ['validateVerifiedContractSignatureOtp', 'canonicalPdfSha256', 'canonicalPdfStoragePath', 'canonicalPdfGeneration', 'canonicalPdfSource: "SERVER_PDF_ENGINE"', 'signedPdfUrl: pdfUrl']) {
