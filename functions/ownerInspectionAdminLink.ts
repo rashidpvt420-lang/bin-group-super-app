@@ -4,7 +4,6 @@ import * as admin from "firebase-admin";
 import { resolveOwnerOnboardingPricingClass } from "./ownerOnboardingQuote";
 import { UAE_PRICING_MATRIX_2026 } from "./pricing/uaePricingMatrix2026";
 import { isValidOwnerSubmittedGps } from "./ownerSubmittedGps";
-import { requirePrivilegedMfaSession } from "./adminMfaSession";
 
 if (!admin.apps.length) admin.initializeApp();
 const db = admin.firestore();
@@ -46,7 +45,6 @@ async function requireAdmin(request: any) {
 
 export const adminCreateOwnerPortfolioPropertyInspection = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
   const actor = await requireAdmin(request);
-  await requirePrivilegedMfaSession(request.auth);
   const intakeId = safeId(request.data?.intakeId, "");
   const propertyIndex = Number(request.data?.propertyIndex);
   if (!intakeId || !Number.isInteger(propertyIndex) || propertyIndex < 0 || propertyIndex > 99) {
@@ -246,7 +244,6 @@ export const adminCreateOwnerPortfolioPropertyInspection = onCall({ cors: true, 
 
 export const adminLinkOwnerPropertyInspection = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
   const actor = await requireAdmin(request);
-  await requirePrivilegedMfaSession(request.auth);
   const intakeId = text(request.data?.intakeId);
   const suppliedIds: unknown[] = Array.isArray(request.data?.inspectionIds)
     ? request.data.inspectionIds

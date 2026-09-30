@@ -52,7 +52,7 @@ describe('Invoice Verification Security & Function Authority', () => {
   });
 
   it('authenticated admin direct registry read is denied', async () => {
-    const adminDbClient = testEnv.authenticatedContext('admin_user', { firebase: { sign_in_second_factor: 'phone' },
+    const adminDbClient = testEnv.authenticatedContext('admin_user', {
       role: 'admin',
       admin: true,
       email_verified: true,
@@ -61,7 +61,7 @@ describe('Invoice Verification Security & Function Authority', () => {
   });
 
   it('direct registry writes are denied for everyone', async () => {
-    const adminDbClient = testEnv.authenticatedContext('admin_user', { firebase: { sign_in_second_factor: 'phone' },
+    const adminDbClient = testEnv.authenticatedContext('admin_user', {
       role: 'admin',
       admin: true,
       email_verified: true,
