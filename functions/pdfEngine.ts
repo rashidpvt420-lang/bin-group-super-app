@@ -2,6 +2,7 @@ import { getStorage } from 'firebase-admin/storage';
 import crypto from 'crypto';
 // PDFKit is lazy-loaded below to keep Functions discovery fast.
 import { isArabic, layoutBidiText } from "./arabicPdfText";
+import { formatAedMoney } from "./shared/aedMoney";
 
 type PdfKitCtor = typeof import('pdfkit');
 let cachedPdfKit: PdfKitCtor | null = null;
@@ -72,9 +73,12 @@ const MUTED = '#6B7280';
 const BORDER = '#E5E7EB';
 const AGREEMENT_VERSION = 'BIN-GROUP-OWNER-AGREEMENT-v1.0';
 
+// Documents must show the same amount the server locked and the owner pays, exact to the fils
+// (half-up, shared/aedMoney). Rounding to whole dirhams printed AED 9,363 for a 9,363.04 deposit.
 function money(value: any) {
     const amount = Number(value || 0);
-    return `AED ${amount.toLocaleString('en-AE', { maximumFractionDigits: 0 })}`;
+    if (!Number.isFinite(amount)) return 'AED ---';
+    return formatAedMoney(amount);
 }
 
 function textValue(value: any, fallback = '---') {
@@ -845,8 +849,24 @@ export async function generateMobilizationInvoicePdfArtifact(data: any): Promise
     if (!invoiceId || !contractId || !ownerId || !Number.isFinite(amount) || amount <= 0 || !/^[a-f0-9]{64}$/i.test(proofHash)) {
         throw new Error('Canonical invoice fields are incomplete.');
     }
+    // The bilingual invoice needs the Arabic-capable Cairo font like the contract; without it
+    // PDFKit's default Helvetica rendered every Arabic label as garbage glyphs.
+    let fontBuffer: Buffer | null = null;
+    try {
+        fontBuffer = await getCairoFont();
+    } catch (err) {
+        console.error("Cairo font load failed for invoice:", err);
+    }
     return new Promise<CanonicalPdfArtifact>((resolve, reject) => {
         const doc = new (PDFDocument as any)({ margin: 50, size: 'A4', info: { Title: `BIN GROUP Invoice ${invoiceId}`, Author: 'BIN GROUP Super App' } });
+        if (fontBuffer) {
+            try {
+                doc.registerFont('Cairo', fontBuffer);
+                doc.font('Cairo');
+            } catch (err) {
+                console.error("Font registration failed for invoice:", err);
+            }
+        }
         const chunks: Buffer[] = [];
         doc.on('data', (chunk: Buffer) => chunks.push(chunk));
         doc.on('error', reject);
