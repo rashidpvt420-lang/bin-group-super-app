@@ -259,8 +259,8 @@ export const adminSendOwnerOnboardingMessage = onCall({ cors: true, enforceAppCh
       from: "BIN GROUP <ceo@bin-groups.com>",
       replyTo: "BIN GROUP Admin <ceo@bin-groups.com>",
       subject,
-      html: `<p>Dear ${owner.name},</p>
-<p>${body.replace(/\n/g, "<br/>")}</p>
+      html: `<p>Dear ${escapeHtml(owner.name)},</p>
+<p>${escapeHtml(body).replace(/\n/g, "<br/>")}</p>
 <hr/>
 <p><b>How to respond:</b></p>
 <p>Reply directly to this email. Your reply must go to <b>ceo@bin-groups.com</b>.</p>
@@ -346,7 +346,7 @@ export const approveOwnerSubmissionOperationalFlow = onCall({ cors: true, enforc
     batch.set(db.collection("propertyPassports").doc(p.propertyId), { passportId: p.propertyId, propertyId: p.propertyId, ownerId, ownerName: owner.name, ownerEmail: owner.email, contractId, intakeId, address: p.addressLine, emirate: p.emirate, gps: p.geo ? { lat: p.geo.lat, lng: p.geo.lng, geohash: p.geo.geohash } : null, mapUrl: mapUrl(p), directionsUrl: dirUrl(p), dispatchReady: p.dispatchReady, status: "ACTIVE", tenantLocationInheritance: "TENANT_INHERITS_PROPERTY_LOCATION", paymentVerified: true, documentsVerified: true, locationVerified: true, annualContractValue: pricing.annual, mobilizationAmount: pricing.mobilization, createdAt: ts(), updatedAt: ts() }, { merge: true });
     batch.set(db.collection("tenant_location_policies").doc(p.propertyId), { propertyId: p.propertyId, ownerId, defaultLocation: p.geo ? { lat: p.geo.lat, lng: p.geo.lng, address: p.addressLine, emirate: p.emirate } : null, inheritanceMode: "TENANT_INHERITS_PROPERTY_LOCATION_UNLESS_UNIT_GPS_OVERRIDDEN", dispatchToTenantUsesPropertyGeo: true, updatedAt: ts() }, { merge: true });
   });
-  batch.set(db.collection("contracts").doc(contractId), { contractId, id: contractId, intakeId, ownerId, ownerName: owner.name, ownerEmail: owner.email, propertyId: primary.propertyId, propertyIds, propertyName: primary.propertyName || "Portfolio", properties, status: "PENDING_OWNER_SIGNATURE", contractStatus: "PENDING_OWNER_SIGNATURE", activationStatus: "PENDING_OWNER_SIGNATURE", paymentVerified: true, paymentStatus: "RECONCILED", documentsVerified: true, locationVerified: true, approved: true, approvedAt: ts(), approvedBy: adminId, packageName: plan.name, planType: plan.type, selectedPlan: plan.raw || {}, selectedAddOns: addOns || [], annualValue: pricing.annual, annualContractValue: pricing.annual, depositAmount: pricing.mobilization, mobilizationAmount: pricing.mobilization, currency: pricing.currency, paymentSchedule: { mobilizationPercent: 15, mobilizationAmount: pricing.mobilization, remainingBalance: Math.max(pricing.annual - pricing.mobilization, 0), currency: pricing.currency }, signatureState: { ownerSigned: false, binGroupsApproved: true, binGroupsApprovedAt: new Date().toISOString(), pdfGenerated: false, emailed: true, signUrl }, binGroupStamp: { stamped: true, stampedAt: ts(), stampedAtIso: new Date().toISOString(), stampedBy: adminId || "admin", label: "BIN GROUP ADMIN APPROVED / DIGITAL STAMP" }, emailDelivery: { signRequestQueued: true, signRequestQueuedAt: new Date().toISOString(), recipient: owner.email }, createdAt: ts(), updatedAt: ts() }, { merge: true });
+  batch.set(db.collection("contracts").doc(contractId), { contractId, id: contractId, intakeId, ownerId, ownerName: owner.name, ownerEmail: owner.email, propertyId: primary.propertyId, propertyIds, propertyName: primary.propertyName || "Portfolio", properties, status: "PENDING_OWNER_SIGNATURE", contractStatus: "PENDING_OWNER_SIGNATURE", activationStatus: "PENDING_OWNER_SIGNATURE", paymentVerified: true, paymentStatus: "RECONCILED", documentsVerified: true, locationVerified: true, approved: true, approvedAt: ts(), approvedBy: adminId, packageName: plan.name, planType: plan.type, selectedPlan: plan.raw || {}, selectedAddOns: addOns || [], annualValue: pricing.annual, annualContractValue: pricing.annual, depositAmount: pricing.mobilization, mobilizationAmount: pricing.mobilization, currency: pricing.currency, paymentSchedule: { mobilizationPercent: 15, mobilizationAmount: pricing.mobilization, remainingBalance: Math.max(pricing.annual - pricing.mobilization, 0), currency: pricing.currency }, signatureState: { ownerSigned: false, binGroupsApproved: true, binGroupsApprovedAt: new Date().toISOString(), pdfGenerated: false, emailed: false, emailQueued: true, signUrl }, binGroupStamp: { stamped: true, stampedAt: ts(), stampedAtIso: new Date().toISOString(), stampedBy: adminId || "admin", label: "BIN GROUP ADMIN APPROVED / DIGITAL STAMP" }, emailDelivery: { signRequestQueued: true, signRequestQueuedAt: new Date().toISOString(), recipient: owner.email }, createdAt: ts(), updatedAt: ts() }, { merge: true });
   batch.set(db.collection("contract_signing_requests").doc(contractId), { contractId, intakeId, ownerId, ownerEmail: owner.email, ownerName: owner.name, signUrl, status: "PENDING_OWNER_SIGNATURE", packageName: plan.name, annualContractValue: pricing.annual, mobilizationAmount: pricing.mobilization, createdAt: ts(), updatedAt: ts() }, { merge: true });
   batch.set(db.collection("payment_transactions").doc(paymentId), { paymentId, intakeId, ownerId, ownerEmail: owner.email, contractId, propertyId: primary.propertyId, amount: pricing.mobilization, currency: pricing.currency, method: pricing.method, status: "APPROVED", paymentStatus: "APPROVED", verificationState: "ADMIN_VERIFIED", verified: true, verifiedAt: ts(), verifiedBy: adminId, unlocksDashboard: true, createdAt: ts(), updatedAt: ts() }, { merge: true });
   batch.set(db.collection("owner_dashboard_unlocks").doc(ownerId), { ownerId, intakeId, contractId, propertyIds, unlocked: false, unlockState: "PENDING_OWNER_SIGNATURE", unlockedAt: ts(), unlockedBy: adminId, updatedAt: ts() }, { merge: true });
@@ -368,12 +368,12 @@ export const approveOwnerSubmissionOperationalFlow = onCall({ cors: true, enforc
       from: "BIN GROUP <ceo@bin-groups.com>",
       replyTo: "BIN GROUP Admin <ceo@bin-groups.com>",
       subject: `BIN GROUP Owner Approval - Contract Signature Required`,
-      html: `<p>Dear ${owner.name},</p>
+      html: `<p>Dear ${escapeHtml(owner.name)},</p>
 <p><b>Congratulations. Your BIN GROUP owner onboarding has been approved.</b></p>
 <p>Admin has verified your 15% mobilization payment, uploaded documents, and property location.</p>
 <table cellpadding="6" cellspacing="0" style="border-collapse:collapse">
-<tr><td><b>Owner Email</b></td><td>${owner.email}</td></tr>
-<tr><td><b>Plan</b></td><td>${plan.name}</td></tr>
+<tr><td><b>Owner Email</b></td><td>${escapeHtml(owner.email)}</td></tr>
+<tr><td><b>Plan</b></td><td>${escapeHtml(plan.name)}</td></tr>
 <tr><td><b>Annual Contract Value</b></td><td>${money(pricing.annual)}</td></tr>
 <tr><td><b>15% Mobilization</b></td><td>${money(pricing.mobilization)}</td></tr>
 <tr><td><b>Contract Reference</b></td><td>${contractId}</td></tr>
@@ -382,7 +382,7 @@ export const approveOwnerSubmissionOperationalFlow = onCall({ cors: true, enforc
 <p><b>Next step:</b> Please open and sign your contract.</p>
 <p><a href="${signUrl}" style="background:#C6A75E;color:#000;padding:12px 18px;text-decoration:none;font-weight:bold;border-radius:8px">Open and Sign Contract</a></p>
 <p><b>Owner Dashboard Access</b></p>
-<p>You can log in using your owner email: <b>${owner.email}</b></p>
+<p>You can log in using your owner email: <b>${escapeHtml(owner.email)}</b></p>
 <p>Owner Dashboard: <a href="${ownerDashboardUrl}">${ownerDashboardUrl}</a></p>
 <p>Activation Status Page: <a href="${ownerActivationUrl}">${ownerActivationUrl}</a></p>
 <p>Your dashboard remains in secure activation mode until the contract is signed. After signature, BIN GROUP will activate the owner dashboard, property passport, documents, tickets, tenants and contract records.</p>
@@ -411,6 +411,29 @@ export const approveOwnerSubmissionOperationalFlow = onCall({ cors: true, enforc
 // Status strings other than ACTIVE (which only payment approval can set) are not trusted.
 const ALREADY_SIGNED_STATUSES = new Set(["ACTIVE"]);
 
+// N-31: a signing attempt holds a short-lived lease on the contract while the canonical PDF
+// is generated, so two concurrent submissions cannot overwrite each other's PDF object after
+// one of them has recorded its sha256/generation as canonical evidence.
+const CONTRACT_SIGNING_LEASE_MS = 2 * 60 * 1000;
+
+function contractIsServerSigned(contract: Record<string, any>) {
+  return ALREADY_SIGNED_STATUSES.has(s(contract.status).toUpperCase()) || contract.ownerSigned === true || contract.signatureState?.ownerSigned === true;
+}
+
+function escapeHtml(value: unknown) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function safeHttpsHref(value: unknown) {
+  const text = s(value);
+  return /^https:\/\//i.test(text) ? escapeHtml(text) : "#";
+}
+
 export const ownerSignContractAndQueuePdf = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Owner authentication required.");
   if (request.auth.token?.email_verified !== true || request.auth.token?.suspended === true) {
@@ -434,7 +457,7 @@ export const ownerSignContractAndQueuePdf = onCall({ cors: true, enforceAppCheck
     throw new HttpsError("permission-denied", "This contract belongs to another owner.");
   }
 
-  const alreadySigned = ALREADY_SIGNED_STATUSES.has(s(contract.status).toUpperCase()) || contract.ownerSigned === true || contract.signatureState?.ownerSigned === true;
+  const alreadySigned = contractIsServerSigned(contract);
   if (alreadySigned) {
     return { status: s(contract.status, "READY_FOR_ACTIVATION"), contractId, pdfUrl: contract.signedPdfUrl || contract.pdfUrl || "", idempotent: true };
   }
@@ -448,98 +471,131 @@ export const ownerSignContractAndQueuePdf = onCall({ cors: true, enforceAppCheck
   };
   await validateVerifiedContractSignatureOtp(otpEvidence);
 
-  const signedAtDate = new Date();
-  const termFields = termFieldsFromStart(signedAtDate);
-  const pdfArtifact = await generateContractPdfArtifact({ ...clean(contract), contractId, ownerName: signatureName, ownerEmail, planName: contract.packageName, propertyName: contract.propertyName, annualValue: contract.annualContractValue || contract.annualValue, mobilizationAmount: contract.depositAmount || contract.mobilizationAmount || contract.paymentSchedule?.mobilizationAmount, signedAt: signedAtDate.toISOString() });
-  const pdfUrl = pdfArtifact.pdfUrl;
-  // NOTE: signing only marks the contract ready for activation. Payment verification
-  // (createOwnerPaymentTransaction -> adminApproveContractActivation) is what unlocks the
-  // dashboard - signing must never set paymentVerified/dashboardUnlocked on its own.
-  const dashboardUrl = `${appBaseUrl()}/owner/dashboard`;
-  let signingWasIdempotent = false;
-  await db.runTransaction(async (transaction) => {
-    const freshContractSnap = await transaction.get(ref);
-    const paymentRef = db.collection("payment_transactions").doc(contractId);
-    const paymentSnap = await transaction.get(paymentRef);
-    const freshContract = freshContractSnap.data() || {};
-    if (
-      ALREADY_SIGNED_STATUSES.has(s(freshContract.status).toUpperCase()) ||
-      freshContract.ownerSigned === true ||
-      freshContract.signatureState?.ownerSigned === true
-    ) {
-      signingWasIdempotent = true;
-      return;
+  const signingAttemptId = db.collection("contracts").doc().id;
+  const leaseState = await db.runTransaction(async (transaction) => {
+    const leaseSnap = await transaction.get(ref);
+    const leaseContract = leaseSnap.data() || {};
+    if (contractIsServerSigned(leaseContract)) return { idempotent: true, contract: leaseContract };
+    const lease = leaseContract.signingLease || {};
+    const leaseExpiresAtMs = Number(lease.expiresAtMs || 0);
+    if (s(lease.attemptId) && s(lease.attemptId) !== signingAttemptId && leaseExpiresAtMs > Date.now()) {
+      throw new HttpsError("aborted", "This contract is already being signed. Please wait a moment and refresh.");
     }
-    await consumeVerifiedContractSignatureOtp(transaction, otpEvidence);
-    transaction.set(ref, { status: "PENDING_ACTIVATION", contractStatus: "PENDING_ACTIVATION", activationStatus: "PENDING_PAYMENT_VERIFICATION", paymentStatus: "PENDING_ADMIN_PAYMENT_VERIFICATION", ownerSigned: true, signatureName, signatureStatus: "OWNER_SIGNED", otpVerificationId, otpEvidenceVerified: true, finalContractAccepted: true, finalContractAcceptedQuoteHash: contractHash, signatureState: { ...(freshContract.signatureState || {}), ownerSigned: true, ownerSignedAt: signedAtDate.toISOString(), ownerSignatureName: signatureName, acceptedQuoteHash: contractHash, pdfGenerated: true, pdfUrl, pdfSha256: pdfArtifact.pdfSha256, pdfStoragePath: pdfArtifact.storagePath, pdfGeneration: pdfArtifact.generation, emailed: true }, signedPdfUrl: pdfUrl, canonicalPdfUrl: pdfUrl, canonicalPdfSha256: pdfArtifact.pdfSha256, canonicalPdfStoragePath: pdfArtifact.storagePath, canonicalPdfGeneration: pdfArtifact.generation, canonicalPdfDocumentHash: pdfArtifact.documentHash, canonicalPdfSource: "SERVER_PDF_ENGINE", ownerSignedAt: ts(), ...termFields, updatedAt: ts() }, { merge: true });
-    if (paymentSnap.exists) {
-      const payment = paymentSnap.data() || {};
-      const paymentFinalHash = s(payment.finalVerifiedQuoteHash).toLowerCase();
-      if (paymentFinalHash && paymentFinalHash !== contractHash) throw new HttpsError("failed-precondition", "Final contract signature does not match the verified payment quote.");
-      transaction.set(paymentRef, {
-        status: "PENDING_ADMIN_PAYMENT_VERIFICATION",
-        paymentStatus: "PENDING_ADMIN_PAYMENT_VERIFICATION",
-        verificationState: "ADMIN_PAYMENT_EVIDENCE_REQUIRED_AFTER_FINAL_OWNER_SIGNATURE",
-        ownerFinalContractSigned: true,
-        finalContractAcceptedQuoteHash: contractHash,
-        signedPdfUrl: pdfUrl,
-        canonicalContractPdfSha256: pdfArtifact.pdfSha256,
-        canonicalContractPdfGeneration: pdfArtifact.generation,
-        updatedAt: ts(),
-      }, { merge: true });
-    }
-    transaction.set(db.collection("contract_signing_requests").doc(contractId), { status: "SIGNED_PDF_EMAILED", ownerSignedAt: ts(), pdfUrl, pdfSha256: pdfArtifact.pdfSha256, storagePath: pdfArtifact.storagePath, pdfGeneration: pdfArtifact.generation, canonicalPdfSource: "SERVER_PDF_ENGINE", updatedAt: ts() }, { merge: true });
-    const propertyIds = Array.isArray(freshContract.propertyIds) ? freshContract.propertyIds : [freshContract.propertyId].filter(Boolean);
-    propertyIds.forEach((propertyId: string) => {
-      transaction.set(db.collection("propertyPassports").doc(propertyId), {
-        contractId,
-        canonicalContractPdfUrl: pdfUrl,
-        canonicalContractPdfSha256: pdfArtifact.pdfSha256,
-        canonicalContractPdfStoragePath: pdfArtifact.storagePath,
-        canonicalContractPdfGeneration: pdfArtifact.generation,
-        canonicalContractPdfSource: "SERVER_PDF_ENGINE",
-        updatedAt: ts(),
-      }, { merge: true });
-    });
-    if (ownerId) {
-      const ownerPatch = {
-        email: ownerEmail || null,
-        pendingContractId: contractId,
-        latestActivationContractId: contractId,
-        contractSignatureStatus: 'SIGNED_AWAITING_PAYMENT_VERIFICATION',
-        activationStatus: 'PENDING_PAYMENT_VERIFICATION',
-        activeContractTermMonths: termFields.contractTermMonths,
-        activeContractValidFrom: termFields.effectiveFrom,
-        activeContractValidTo: termFields.validTo,
-        ownerCanRequestPlanChangeUntil: termFields.ownerCanRequestPlanChangeUntil,
-        dashboardLocked: true,
-        dashboardUnlocked: false,
-        signedPdfUrl: pdfUrl,
-        updatedAt: ts()
-      };
-      transaction.set(db.collection("owners").doc(ownerId), ownerPatch, { merge: true });
-      transaction.set(db.collection("users").doc(ownerId), ownerPatch, { merge: true });
-    }
-    transaction.set(db.collection("mail").doc(`owner_contract_signed_${contractId}`), {
-      to: ownerEmail,
-      message: {
-        from: "BIN GROUP <ceo@bin-groups.com>",
-        replyTo: "BIN GROUP Admin <ceo@bin-groups.com>",
-        subject: "BIN GROUP Contract Signed - Payment Verification Pending",
-        html: `<p>Dear ${signatureName},</p>
-<p><b>Your BIN GROUP contract has been signed. Your signed PDF is attached below.</b></p>
-<p><a href="${pdfUrl}">Download signed contract PDF</a></p>
-<p>Submit your mobilization payment from the owner portal to begin admin verification. Your dashboard unlocks once BIN GROUP confirms receipt of payment (typically within 24 hours).</p>
-<p><a href="${dashboardUrl}" style="background:#C6A75E;color:#000;padding:12px 18px;text-decoration:none;font-weight:bold;border-radius:8px">Open Owner Portal</a></p>
-<p>Support: support@bin-groups.com</p>
-<p>BIN GROUP - Made in UAE 🇦🇪</p>`
-      },
-      metadata: { type: "owner_signed_contract_pdf_pending_payment", contractId, ownerId, pdfUrl, dashboardUrl },
-      createdAt: ts()
-    });
-    transaction.set(db.collection("audit_logs").doc(), { actorId: request.auth!.uid, actorRole: "owner", action: "OWNER_SIGN_CONTRACT_AND_QUEUE_PDF", targetType: "contracts", targetId: contractId, metadata: { ownerId, ownerEmail, pdfUrl }, createdAt: ts() });
+    transaction.set(ref, { signingLease: { attemptId: signingAttemptId, uid: request.auth!.uid, expiresAtMs: Date.now() + CONTRACT_SIGNING_LEASE_MS } }, { merge: true });
+    return { idempotent: false, contract: leaseContract };
   });
-  return { status: "READY_FOR_ACTIVATION", contractId, pdfUrl, idempotent: signingWasIdempotent };
+  if (leaseState.idempotent) {
+    const signedContract = leaseState.contract;
+    return { status: s(signedContract.status, "READY_FOR_ACTIVATION"), contractId, pdfUrl: signedContract.signedPdfUrl || signedContract.pdfUrl || "", idempotent: true };
+  }
+  const releaseSigningLease = async () => {
+    try {
+      await db.runTransaction(async (transaction) => {
+        const current = await transaction.get(ref);
+        if (s(current.data()?.signingLease?.attemptId) === signingAttemptId) {
+          transaction.set(ref, { signingLease: FieldValue.delete() }, { merge: true });
+        }
+      });
+    } catch (releaseError: any) {
+      console.error("CONTRACT_SIGNING_LEASE_RELEASE_FAILED", { contractId, message: releaseError?.message });
+    }
+  };
+  try {
+
+    const signedAtDate = new Date();
+    const termFields = termFieldsFromStart(signedAtDate);
+    const pdfArtifact = await generateContractPdfArtifact({ ...clean(contract), contractId, ownerName: signatureName, ownerEmail, planName: contract.packageName, propertyName: contract.propertyName, annualValue: contract.annualContractValue || contract.annualValue, mobilizationAmount: contract.depositAmount || contract.mobilizationAmount || contract.paymentSchedule?.mobilizationAmount, signedAt: signedAtDate.toISOString() });
+    const pdfUrl = pdfArtifact.pdfUrl;
+    // NOTE: signing only marks the contract ready for activation. Payment verification
+    // (createOwnerPaymentTransaction -> adminApproveContractActivation) is what unlocks the
+    // dashboard - signing must never set paymentVerified/dashboardUnlocked on its own.
+    const dashboardUrl = `${appBaseUrl()}/owner/dashboard`;
+    let signingWasIdempotent = false;
+    await db.runTransaction(async (transaction) => {
+      const freshContractSnap = await transaction.get(ref);
+      const paymentRef = db.collection("payment_transactions").doc(contractId);
+      const paymentSnap = await transaction.get(paymentRef);
+      const freshContract = freshContractSnap.data() || {};
+      if (contractIsServerSigned(freshContract)) {
+        signingWasIdempotent = true;
+        return;
+      }
+      if (s(freshContract.signingLease?.attemptId) !== signingAttemptId) {
+        throw new HttpsError("aborted", "This contract signing attempt was superseded. Please refresh and try again.");
+      }
+      await consumeVerifiedContractSignatureOtp(transaction, otpEvidence);
+      transaction.set(ref, { status: "PENDING_ACTIVATION", contractStatus: "PENDING_ACTIVATION", activationStatus: "PENDING_PAYMENT_VERIFICATION", paymentStatus: "PENDING_ADMIN_PAYMENT_VERIFICATION", ownerSigned: true, signatureName, signatureStatus: "OWNER_SIGNED", otpVerificationId, otpEvidenceVerified: true, finalContractAccepted: true, finalContractAcceptedQuoteHash: contractHash, signatureState: { ...(freshContract.signatureState || {}), ownerSigned: true, ownerSignedAt: signedAtDate.toISOString(), ownerSignatureName: signatureName, acceptedQuoteHash: contractHash, pdfGenerated: true, pdfUrl, pdfSha256: pdfArtifact.pdfSha256, pdfStoragePath: pdfArtifact.storagePath, pdfGeneration: pdfArtifact.generation, emailed: false, emailQueued: true, emailQueuedAt: signedAtDate.toISOString() }, signingLease: FieldValue.delete(), signedPdfUrl: pdfUrl, canonicalPdfUrl: pdfUrl, canonicalPdfSha256: pdfArtifact.pdfSha256, canonicalPdfStoragePath: pdfArtifact.storagePath, canonicalPdfGeneration: pdfArtifact.generation, canonicalPdfDocumentHash: pdfArtifact.documentHash, canonicalPdfSource: "SERVER_PDF_ENGINE", ownerSignedAt: ts(), ...termFields, updatedAt: ts() }, { merge: true });
+      if (paymentSnap.exists) {
+        const payment = paymentSnap.data() || {};
+        const paymentFinalHash = s(payment.finalVerifiedQuoteHash).toLowerCase();
+        if (paymentFinalHash && paymentFinalHash !== contractHash) throw new HttpsError("failed-precondition", "Final contract signature does not match the verified payment quote.");
+        transaction.set(paymentRef, {
+          status: "PENDING_ADMIN_PAYMENT_VERIFICATION",
+          paymentStatus: "PENDING_ADMIN_PAYMENT_VERIFICATION",
+          verificationState: "ADMIN_PAYMENT_EVIDENCE_REQUIRED_AFTER_FINAL_OWNER_SIGNATURE",
+          ownerFinalContractSigned: true,
+          finalContractAcceptedQuoteHash: contractHash,
+          signedPdfUrl: pdfUrl,
+          canonicalContractPdfSha256: pdfArtifact.pdfSha256,
+          canonicalContractPdfGeneration: pdfArtifact.generation,
+          updatedAt: ts(),
+        }, { merge: true });
+      }
+      transaction.set(db.collection("contract_signing_requests").doc(contractId), { status: "SIGNED_PDF_EMAIL_QUEUED", ownerSignedAt: ts(), pdfUrl, pdfSha256: pdfArtifact.pdfSha256, storagePath: pdfArtifact.storagePath, pdfGeneration: pdfArtifact.generation, canonicalPdfSource: "SERVER_PDF_ENGINE", updatedAt: ts() }, { merge: true });
+      const propertyIds = Array.isArray(freshContract.propertyIds) ? freshContract.propertyIds : [freshContract.propertyId].filter(Boolean);
+      propertyIds.forEach((propertyId: string) => {
+        transaction.set(db.collection("propertyPassports").doc(propertyId), {
+          contractId,
+          canonicalContractPdfUrl: pdfUrl,
+          canonicalContractPdfSha256: pdfArtifact.pdfSha256,
+          canonicalContractPdfStoragePath: pdfArtifact.storagePath,
+          canonicalContractPdfGeneration: pdfArtifact.generation,
+          canonicalContractPdfSource: "SERVER_PDF_ENGINE",
+          updatedAt: ts(),
+        }, { merge: true });
+      });
+      if (ownerId) {
+        const ownerPatch = {
+          email: ownerEmail || null,
+          pendingContractId: contractId,
+          latestActivationContractId: contractId,
+          contractSignatureStatus: 'SIGNED_AWAITING_PAYMENT_VERIFICATION',
+          activationStatus: 'PENDING_PAYMENT_VERIFICATION',
+          activeContractTermMonths: termFields.contractTermMonths,
+          activeContractValidFrom: termFields.effectiveFrom,
+          activeContractValidTo: termFields.validTo,
+          ownerCanRequestPlanChangeUntil: termFields.ownerCanRequestPlanChangeUntil,
+          dashboardLocked: true,
+          dashboardUnlocked: false,
+          signedPdfUrl: pdfUrl,
+          updatedAt: ts()
+        };
+        transaction.set(db.collection("owners").doc(ownerId), ownerPatch, { merge: true });
+        transaction.set(db.collection("users").doc(ownerId), ownerPatch, { merge: true });
+      }
+      transaction.set(db.collection("mail").doc(`owner_contract_signed_${contractId}`), {
+        to: ownerEmail,
+        message: {
+          from: "BIN GROUP <ceo@bin-groups.com>",
+          replyTo: "BIN GROUP Admin <ceo@bin-groups.com>",
+          subject: "BIN GROUP Contract Signed - Payment Verification Pending",
+          html: `<p>Dear ${escapeHtml(signatureName)},</p>
+  <p><b>Your BIN GROUP contract has been signed. Your signed PDF is linked below.</b></p>
+  <p><a href="${safeHttpsHref(pdfUrl)}">Download signed contract PDF</a></p>
+  <p>Submit your mobilization payment from the owner portal to begin admin verification. Your dashboard unlocks once BIN GROUP confirms receipt of payment (typically within 24 hours).</p>
+  <p><a href="${safeHttpsHref(dashboardUrl)}" style="background:#C6A75E;color:#000;padding:12px 18px;text-decoration:none;font-weight:bold;border-radius:8px">Open Owner Portal</a></p>
+  <p>Support: support@bin-groups.com</p>
+  <p>BIN GROUP - Made in UAE 🇦🇪</p>`
+        },
+        metadata: { type: "owner_signed_contract_pdf_pending_payment", contractId, ownerId, pdfUrl, dashboardUrl },
+        createdAt: ts()
+      });
+      transaction.set(db.collection("audit_logs").doc(), { actorId: request.auth!.uid, actorRole: "owner", action: "OWNER_SIGN_CONTRACT_AND_QUEUE_PDF", targetType: "contracts", targetId: contractId, metadata: { ownerId, ownerEmail, pdfUrl }, createdAt: ts() });
+    });
+    return { status: "READY_FOR_ACTIVATION", contractId, pdfUrl, idempotent: signingWasIdempotent };
+  } finally {
+    await releaseSigningLease();
+  }
 });
 
 export const ownerInviteTenantToProperty = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
@@ -583,7 +639,7 @@ export const ownerInviteTenantToProperty = onCall({ cors: true, enforceAppCheck:
   const batch = db.batch();
   batch.set(db.collection("tenants").doc(tenantId), { tenantId, propertyId, ownerId, name: tenantName, email: tenantEmail, unitNumber, status: "INVITED", location: tenantLocation, locationSource: tenantLocation ? "PROPERTY_INHERITED" : "PENDING_PROPERTY_LOCATION", createdAt: ts(), updatedAt: ts() }, { merge: true });
   batch.set(db.collection("tenant_invites").doc(tenantId), { tenantId, propertyId, ownerId, tenantEmail, tenantName, unitNumber, status: "SENT", inviteUrl, locationInherited: Boolean(tenantLocation), createdAt: ts(), updatedAt: ts() }, { merge: true });
-  batch.set(db.collection("mail").doc(), { to: tenantEmail, message: { subject: "BIN GROUP tenant access invitation", html: `<p>Dear ${tenantName},</p><p>You have been invited to BIN GROUP for ${addressOf(prop)}, ${unitNumber}.</p><p><a href="${inviteUrl}">Open tenant invitation</a></p>` }, metadata: { type: "tenant_invitation", tenantId, propertyId, ownerId }, createdAt: ts() });
+  batch.set(db.collection("mail").doc(), { to: tenantEmail, message: { subject: "BIN GROUP tenant access invitation", html: `<p>Dear ${escapeHtml(tenantName)},</p><p>You have been invited to BIN GROUP for ${escapeHtml(addressOf(prop))}, ${escapeHtml(unitNumber)}.</p><p><a href="${safeHttpsHref(inviteUrl)}">Open tenant invitation</a></p>` }, metadata: { type: "tenant_invitation", tenantId, propertyId, ownerId }, createdAt: ts() });
   batch.set(db.collection("audit_logs").doc(), { actorId: request.auth.uid, actorRole: "owner", action: "OWNER_INVITE_TENANT_TO_PROPERTY", targetType: "tenants", targetId: tenantId, metadata: { propertyId, tenantEmail, unitNumber }, createdAt: ts() });
   await batch.commit();
   return { status: "TENANT_INVITED", tenantId, inviteUrl, locationInherited: Boolean(tenantLocation) };

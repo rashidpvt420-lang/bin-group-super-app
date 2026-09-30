@@ -76,3 +76,49 @@ export async function assertStoredOwnerPaymentReceipt(args: {
     );
   }
 }
+
+/**
+ * Tenant-submitted rent proof (submitTenantPaymentProof) lives under receipts/{tenantUid}/ and is
+ * bound by tenantId + SHA-256 metadata, not by the Owner receipt prefix. Re-verify the stored object
+ * at approval time with the same constraints the submission callable enforced, and pin its
+ * immutable generation into the approval record.
+ */
+export async function assertStoredTenantPaymentReceipt(args: {
+  tenantId: string;
+  storagePath: string;
+  expectedHash: string;
+}): Promise<OwnerPaymentReceiptEvidence> {
+  const tenantId = text(args.tenantId);
+  const storagePath = text(args.storagePath);
+  const expectedHash = text(args.expectedHash).toLowerCase();
+  if (!tenantId || !storagePath.startsWith(`receipts/${tenantId}/`) || !/^[a-f0-9]{64}$/.test(expectedHash)) {
+    throw new HttpsError("failed-precondition", "Tenant payment receipt path is not bound to this tenant.");
+  }
+  try {
+    const bucket = admin.storage().bucket();
+    const [metadata] = await bucket.file(storagePath).getMetadata();
+    const contentType = text(metadata.contentType).toLowerCase();
+    const size = Number(metadata.size || 0);
+    const generation = text(metadata.generation);
+    const customMetadata = metadata.metadata || {};
+    const receiptHash = text(customMetadata.receiptHash).toLowerCase();
+    if (
+      (!contentType.startsWith("image/") && contentType !== "application/pdf") ||
+      !Number.isFinite(size) ||
+      size <= 0 ||
+      size > 10 * 1024 * 1024 ||
+      !generation ||
+      customMetadata.tenantId !== tenantId ||
+      receiptHash !== expectedHash
+    ) {
+      throw new Error("receipt metadata mismatch");
+    }
+    return { bucket: bucket.name, storagePath, generation, size, contentType, receiptHash };
+  } catch (error) {
+    if (error instanceof HttpsError) throw error;
+    throw new HttpsError(
+      "failed-precondition",
+      "Stored tenant payment receipt is missing or its immutable metadata does not match.",
+    );
+  }
+}
