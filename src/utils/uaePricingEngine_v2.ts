@@ -1,4 +1,4 @@
-import { BIN_CONTRACT_TYPES, MAJLIS_MAINTENANCE_PACKAGES, SERVICE_ADDONS } from './uaePricingMatrix2026';
+import { BIN_CONTRACT_TYPES, MAJLIS_MAINTENANCE_PACKAGES, serviceAddOnAnnualPrice } from './uaePricingMatrix2026';
 
 export const UAE_VAT_RATE = 0.05;
 
@@ -79,8 +79,10 @@ export const generateSmartQuote = (inputs: QuoteInputs): SmartQuoteAdvisory => {
   let addonTotal = 0;
   if (inputs.selectedAddons?.length) {
     inputs.selectedAddons.forEach((addonId) => {
-      const addon = SERVICE_ADDONS.find((a) => a.id === addonId);
-      if (addon) addonTotal += addon.price;
+      // Annual advisory: convert the monthly list by its period (per month x 12, per quarter x 4).
+      const annual = serviceAddOnAnnualPrice(addonId);
+      if (annual === null) notes.push(`Add-on ${addonId} needs a manual quote (priced per event / visit / service / unit or one-time).`);
+      else addonTotal += annual;
     });
     notes.push(`${inputs.selectedAddons.length} service add-ons integrated.`);
   }
