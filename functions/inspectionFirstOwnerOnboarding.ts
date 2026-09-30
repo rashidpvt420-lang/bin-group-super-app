@@ -5,6 +5,7 @@ import * as admin from "firebase-admin";
 import * as crypto from "crypto";
 import { calculateOwnerOnboardingQuote } from "./ownerOnboardingQuote";
 import { isValidOwnerSubmittedGps } from "./ownerSubmittedGps";
+import { verifiedOwnerDocumentPaths } from "./ownerOnboardingDocuments";
 import { loadActivePaymentConfiguration } from "./paymentConfiguration";
 import { normalizeAedMoney } from "./shared/aedMoney";
 import { requireMfaFinanceAdminActor } from "./financeAdminMfa";
@@ -134,8 +135,17 @@ function normalizeGeo(value: PlainRecord) {
     verified: false,
     dispatchReady: false,
     requiresGeoReview: true,
-    source: text(value?.geo?.source || "owner_five_page_submission"),
+    source: ownerGeoSource(value?.geo?.source),
   };
+}
+
+// F-8: an Owner submission must never carry a server-authority geo provenance tag
+// ("admin_manual" is the Founder-MFA verification source, "physical_inspection" the
+// inspection-evidence source). Owner-typed pins are tagged "owner_manual".
+const SERVER_AUTHORITY_GEO_SOURCES = new Set(["admin_manual", "physical_inspection", "founder_mfa_review"]);
+function ownerGeoSource(raw: unknown) {
+  const source = text(raw || "owner_five_page_submission");
+  return SERVER_AUTHORITY_GEO_SOURCES.has(source.toLowerCase()) ? "owner_manual" : source;
 }
 
 function quoteFor(properties: PlainRecord[], selectedAddOns: string[], quotedAtMs?: number) {
@@ -152,6 +162,43 @@ function assertQuote(data: PlainRecord, properties: PlainRecord[], selectedAddOn
     throw new HttpsError("failed-precondition", "The server quotation does not contain the required 15% mobilisation deposit.");
   }
   return quote;
+}
+
+// F-7: quoteHash is an unkeyed SHA-256 over the quote body, including the client-supplied
+// quotedAtMs, so a client could recompute it with a fresh timestamp and bypass the 72 h expiry.
+// Every quote the server issues is now recorded, and submission requires the issuance record for
+// this Owner with the same hash and timestamp.
+const QUOTE_ISSUANCE_COLLECTION = "owner_quote_issuances";
+const quoteIssuanceId = (uid: string, quoteHash: string) => `${uid}_${quoteHash}`;
+
+async function recordServerQuoteIssuance(uid: string, quote: PlainRecord) {
+  const expiresAtMs = Number(quote.expiresAtMs || 0);
+  await db.collection(QUOTE_ISSUANCE_COLLECTION).doc(quoteIssuanceId(uid, text(quote.quoteHash))).set({
+    uid,
+    quoteHash: text(quote.quoteHash),
+    quotedAtMs: Number(quote.quotedAtMs || 0),
+    expiresAtMs,
+    annualContractValue: Number(quote.annualContractValue || 0),
+    activationDeposit: Number(quote.activationDeposit || 0),
+    source: "previewOwnerInspectionQuote",
+    createdAt: FieldValue.serverTimestamp(),
+    // Eligible for a Firestore TTL policy once the quote can no longer be submitted.
+    purgeAfter: admin.firestore.Timestamp.fromMillis(expiresAtMs + 7 * 24 * 60 * 60 * 1000),
+  });
+}
+
+async function assertServerIssuedQuote(uid: string, quote: PlainRecord) {
+  const snap = await db.collection(QUOTE_ISSUANCE_COLLECTION).doc(quoteIssuanceId(uid, text(quote.quoteHash))).get();
+  const issued = snap.data() || {};
+  if (
+    !snap.exists ||
+    text(issued.uid) !== uid ||
+    text(issued.quoteHash) !== text(quote.quoteHash) ||
+    Number(issued.quotedAtMs) !== Number(quote.quotedAtMs) ||
+    Number(issued.expiresAtMs || 0) <= Date.now()
+  ) {
+    throw new HttpsError("failed-precondition", "This quotation was not issued by the server for your account or has expired. Return to Contract and request a fresh quote.");
+  }
 }
 
 function otpDigest(args: { requestId: string; uid: string; contractHash: string; otp: string; salt: string; pepper: string }) {
@@ -245,7 +292,9 @@ export const previewOwnerInspectionQuote = onCall({ cors: true, enforceAppCheck:
   const selectedAddOns: string[] = Array.isArray(request.data?.selectedAddOns)
     ? request.data.selectedAddOns.map((value: unknown) => text(value)).filter(Boolean).slice(0, 50)
     : [];
-  return quoteFor(properties, selectedAddOns);
+  const quote = quoteFor(properties, selectedAddOns);
+  await recordServerQuoteIssuance(request.auth!.uid, quote);
+  return quote;
 });
 
 export const requestOwnerInspectionSignatureOtp = onCall({
@@ -360,7 +409,6 @@ export const uploadOwnerInspectionProofDocument = onCall({ cors: true, enforceAp
   if (!contentType.match(/^image\//) && contentType !== "application/pdf" && contentType !== "application/octet-stream") throw new HttpsError("invalid-argument", "Only PDF and image documents are allowed.");
   const buffer = Buffer.from(encoded.includes(",") ? encoded.split(",").pop() || "" : encoded, "base64");
   if (!buffer.length || buffer.length > 8 * 1024 * 1024) throw new HttpsError("invalid-argument", "Document is empty or exceeds 8 MB.");
-  const downloadToken = crypto.randomUUID();
   const storagePath = `onboarding-proof/${owner.uid}/${intakeId}/${docType}/${Date.now()}_${filename}`;
   const bucket = admin.storage().bucket();
   await bucket.file(storagePath).save(buffer, {
@@ -368,7 +416,7 @@ export const uploadOwnerInspectionProofDocument = onCall({ cors: true, enforceAp
     metadata: {
       contentType,
       metadata: {
-        firebaseStorageDownloadTokens: downloadToken,
+        // F-6: no firebaseStorageDownloadTokens: no permanent bearer URL for identity documents.
         ownerUid: owner.uid,
         intakeId,
         docType,
@@ -377,8 +425,7 @@ export const uploadOwnerInspectionProofDocument = onCall({ cors: true, enforceAp
       },
     },
   });
-  const downloadUrl = `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(storagePath)}?alt=media&token=${downloadToken}`;
-  return { success: true, downloadUrl, storagePath, docType, size: buffer.length };
+  return { success: true, storagePath, docType, size: buffer.length, sha256: crypto.createHash("sha256").update(buffer).digest("hex") };
 });
 
 export const submitOwnerInspectionFirstOnboarding = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
@@ -400,13 +447,11 @@ export const submitOwnerInspectionFirstOnboarding = onCall({ cors: true, enforce
     ? data.selectedAddOns.map((value: unknown) => text(value)).filter(Boolean).slice(0, 50)
     : [];
   const quote = assertQuote(data, properties, selectedAddOns);
+  await assertServerIssuedQuote(owner.uid, quote);
   const signatureName = text(data.signatureName).slice(0, 180);
   const verificationId = text(data.otpVerificationId || data.contractOtpVerificationId);
   if (signatureName.length < 3 || !verificationId) throw new HttpsError("failed-precondition", "A verified digital signature is required.");
-  const documentUrls: PlainRecord = cleanPlain(data.documentUrls || {});
-  if (!text(documentUrls.propertyProof) || !((text(documentUrls.emiratesId) && text(documentUrls.passport)) || text(documentUrls.tradeLicense))) {
-    throw new HttpsError("failed-precondition", "Property proof and Owner identity documents are required.");
-  }
+  const documentPaths = await verifiedOwnerDocumentPaths(owner.uid, data);
   const companyProfile: PlainRecord = cleanPlain(data.companyProfile || {});
   const fullName = text(data.ownerName || companyProfile.contactPerson || data.signatureName).slice(0, 160);
   const mobile = text(data.ownerMobile || companyProfile.phone).slice(0, 60);
@@ -528,11 +573,10 @@ export const submitOwnerInspectionFirstOnboarding = onCall({ cors: true, enforce
         estimatedACV: money(quote.annualContractValue),
         recommendedTier: canonicalPlanName,
       },
-      documentUrls,
+      documentPaths,
+      documentUrls: {},
       proofDocuments: Object.fromEntries(
-        Object.entries(documentUrls)
-          .filter(([, url]) => Boolean(text(url)))
-          .map(([key, url]) => [key, { label: key, url }]),
+        Object.entries(documentPaths).map(([key, storagePath]) => [key, { label: key, storagePath }]),
       ),
       payment: {
         paymentId: intakeId,
@@ -577,7 +621,8 @@ export const submitOwnerInspectionFirstOnboarding = onCall({ cors: true, enforce
       planType: contractMode,
       selectedPlan: { id: contractMode, name: canonicalPlanName },
       selectedAddOns,
-      documentUrls,
+      documentPaths,
+      documentUrls: {},
       createdAt: now,
       updatedAt: now,
     });

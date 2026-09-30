@@ -1,4 +1,5 @@
 import { FieldValue } from "firebase-admin/firestore";
+import { settleSection, unavailableSections } from "./hrReadHealth";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 
@@ -33,13 +34,19 @@ async function assertStaff(uid: string) {
 export const adminGetHrOperations = onCall({ cors: true, region: "europe-west3", enforceAppCheck: true }, async (request) => {
   await requireHrAdmin(request);
   const [attendanceSnap, leaveSnap, documentSnap] = await Promise.all([
-    db.collection("staffAttendance").orderBy("workDate", "desc").limit(100).get().catch(() => null),
-    db.collection("staffLeaveRequests").orderBy("createdAt", "desc").limit(100).get().catch(() => null),
-    db.collection("staffHrDocuments").orderBy("createdAt", "desc").limit(100).get().catch(() => null),
+    settleSection("attendance", db.collection("staffAttendance").orderBy("workDate", "desc").limit(100).get()),
+    settleSection("leaveRequests", db.collection("staffLeaveRequests").orderBy("createdAt", "desc").limit(100).get()),
+    settleSection("documents", db.collection("staffHrDocuments").orderBy("createdAt", "desc").limit(100).get()),
   ]);
-  const mapDocs = (snapshot: any) => snapshot ? snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() })) : [];
+  const unavailable = unavailableSections([attendanceSnap, leaveSnap, documentSnap]);
+  if (unavailable.length === 3) {
+    throw new HttpsError("unavailable", "HR operations data could not be loaded. Nothing is shown as empty; retry shortly.");
+  }
+  const mapDocs = (settled: any) => settled.value ? settled.value.docs.map((doc: any) => ({ id: doc.id, ...doc.data() })) : [];
   return {
-    success: true,
+    success: unavailable.length === 0,
+    complete: unavailable.length === 0,
+    unavailableSections: unavailable,
     attendance: mapDocs(attendanceSnap),
     leaveRequests: mapDocs(leaveSnap),
     documents: mapDocs(documentSnap),
