@@ -1,103 +1,59 @@
 // admin-panel/src/__tests__/pages/DashboardPage.test.tsx
+// DashboardPage renders the route-safe Admin command centre (AdminSimpleDashboardPage). It has no
+// data source: every action must go to a registered route, the SLA ladder must match the canonical
+// policy, and pilot metrics must say "Not measured" instead of showing invented KPIs.
+// (The previous version mocked a REST financial API the page no longer calls and rendered it
+// outside a Router, so every case failed.)
 import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import DashboardPage from '../../pages/dashboard/DashboardPage';
-import { apiClient } from '../../services/api';
 
-jest.mock('../../services/api');
-jest.mock('recharts', () => {
-  const React = require('react');
-  return {
-    LineChart: (props: any) => <div data-testid="line-chart">{props.children}</div>,
-    BarChart: (props: any) => <div data-testid="bar-chart">{props.children}</div>,
-    Line: () => null,
-    Bar: () => null,
-    XAxis: () => null,
-    YAxis: () => null,
-    CartesianGrid: () => null,
-    Tooltip: () => null,
-    Legend: () => null,
-    ResponsiveContainer: (props: any) => <div>{props.children}</div>,
-  };
+function LocationProbe() {
+  const location = useLocation();
+  return <div data-testid="location">{location.pathname}</div>;
+}
+
+function renderDashboard() {
+  return render(
+    <MemoryRouter initialEntries={['/dashboard']}>
+      <Routes>
+        <Route path="/dashboard" element={<DashboardPage />} />
+        <Route path="*" element={<LocationProbe />} />
+      </Routes>
+    </MemoryRouter>,
+  );
+}
+
+test('renders the Admin command centre', () => {
+  renderDashboard();
+  expect(screen.getByText('ADMIN COMMAND CENTER')).toBeInTheDocument();
+  expect(screen.getByText('Everything that needs control today')).toBeInTheDocument();
+  expect(screen.getByText('Hard launch remains evidence-gated')).toBeInTheDocument();
 });
 
-describe('AdminPanel - DashboardPage', () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
+test.each([
+  ['Payment Approvals', '/payments'],
+  ['Live Dispatch', '/technicians/map'],
+  ['Owner Activation', '/owners'],
+  ['HR Command', '/hr'],
+  ['Audit Log', '/audit'],
+])('the %s action opens %s', (label, route) => {
+  renderDashboard();
+  fireEvent.click(screen.getByRole('button', { name: new RegExp(label) }));
+  expect(screen.getByTestId('location')).toHaveTextContent(route);
+});
 
-    (apiClient.get as jest.Mock).mockImplementation((url: string) => {
-      if (url.includes('financials/daily')) {
-        return Promise.resolve({
-          data: {
-            cashCollected: 125000,
-            pending: 45000,
-            overdue: 15000,
-            successRate: 94.5,
-            collections: { rent: 110000, services: 15000 },
-            dailyTrend: [
-              { date: '2026-02-13', collections: 80000, expenses: 32000 },
-              { date: '2026-02-14', collections: 95000, expenses: 38000 },
-            ],
-            weeklyTrend: [
-              { week: '1', amount: 180000 },
-              { week: '2', amount: 220000 },
-            ],
-          },
-        });
-      }
-      return Promise.reject(new Error('Not found'));
-    });
-  });
+test('shows the canonical SLA ladder', () => {
+  renderDashboard();
+  const minutes = screen.getAllByText(/^\d+m$/).map((node) => node.textContent);
+  expect(minutes).toEqual(['30m', '120m', '240m', '480m', '1440m']);
+  for (const key of ['EMERGENCY', 'HIGH', 'MEDIUM', 'STANDARD', 'LOW']) expect(screen.getByText(key)).toBeInTheDocument();
+});
 
-  test('should render dashboard', async () => {
-    render(<DashboardPage />);
-
-    expect(screen.getByText(/Dashboard/)).toBeTruthy();
-  });
-
-  test('should display KPI cards', async () => {
-    render(<DashboardPage />);
-
-    await waitFor(() => {
-      expect(screen.getByText(/Cash Collected/)).toBeTruthy();
-    });
-    expect(screen.getByText(/Pending Payments/)).toBeTruthy();
-    expect(screen.getByText(/Overdue/)).toBeTruthy();
-    expect(screen.getByText(/Success Rate/)).toBeTruthy();
-  });
-
-  test('should display financial metrics', async () => {
-    render(<DashboardPage />);
-
-    await waitFor(() => {
-      expect(screen.getByText(/125,000|125000/)).toBeTruthy(); // Cash collected
-    });
-    expect(screen.getByText(/45,000|45000/)).toBeTruthy();   // Pending
-    expect(screen.getByText(/15,000|15000/)).toBeTruthy();   // Overdue
-    expect(screen.getByText(/94.5%|94.5/)).toBeTruthy();     // Success rate
-  });
-
-  test('should render charts', async () => {
-    render(<DashboardPage />);
-
-    await waitFor(() => {
-      expect(screen.getByTestId('bar-chart')).toBeTruthy();
-    });
-    expect(screen.getByTestId('line-chart')).toBeTruthy();
-  });
-
-  test('should refresh data on interval', async () => {
-    jest.useFakeTimers();
-    render(<DashboardPage />);
-
-    expect(apiClient.get).toHaveBeenCalled();
-
-    jest.advanceTimersByTime(30000); // Advance 30 seconds
-
-    // Should have been called again
-    expect(apiClient.get).toHaveBeenCalledTimes(2);
-
-    jest.useRealTimers();
-  });
+test('pilot metrics are reported as not measured, never as invented values', () => {
+  renderDashboard();
+  expect(screen.getAllByText('Not measured')).toHaveLength(6);
+  for (const bar of screen.getAllByRole('progressbar')) expect(bar).toHaveAttribute('aria-valuenow', '0');
 });
