@@ -93,6 +93,7 @@ export * from "./secureOwnerProfileOperations";
 export * from "./ownerProfileReadiness";
 export * from "./technicianLiveLocation";
 export * from "./technicianLiveLocationOverflow";
+export * from "./technicianAvailabilityLocation";
 export * from "./proofVerification";
 export * from "./staffOperatingSystem";
 export * from "./staffInventoryEngine";
