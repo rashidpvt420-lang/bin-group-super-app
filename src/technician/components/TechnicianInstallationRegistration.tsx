@@ -2,26 +2,9 @@ import React from 'react';
 import { Alert } from '@mui/material';
 import { useRole } from '../../context/RoleContext';
 import { ensureTechnicianInstallationRegistered } from '../utils/technicianInstallationBinding';
+import { classifyTechnicianRegistrationFailure } from '../utils/technicianAccessDiagnostics';
 
-type RegistrationState = 'not-native' | 'checking' | 'registered' | 'blocked';
-
-const safeDiagnosticCode = (error: any): string => {
-  const candidates = [
-    error?.code,
-    error?.details?.code,
-    error?.cause?.code,
-  ];
-  for (const value of candidates) {
-    const code = String(value || '')
-      .trim()
-      .toUpperCase()
-      .replace(/[^A-Z0-9_-]+/g, '_')
-      .replace(/^_+|_+$/g, '')
-      .slice(0, 80);
-    if (/^[A-Z0-9_-]{2,80}$/.test(code)) return code;
-  }
-  return '';
-};
+type RegistrationState = 'not-native' | 'checking' | 'registered' | 'blocked' | 'account-inactive';
 
 export default function TechnicianInstallationRegistration() {
   const { user } = useRole();
@@ -36,14 +19,12 @@ export default function TechnicianInstallationRegistration() {
       const installationHash = await ensureTechnicianInstallationRegistered();
       setState(installationHash ? 'registered' : 'not-native');
     } catch (error: any) {
-      setState('blocked');
-      const code = String(error?.code || '').toLowerCase();
-      const diagnostic = safeDiagnosticCode(error);
-      setMessage(
-        code.includes('failed-precondition')
-          ? 'This Technician account is bound to another installation. Ask an authorised administrator to use the controlled device re-registration process.'
-          : `This Android installation could not be verified through Google Play Integrity. Physical arrival evidence is blocked.${diagnostic ? ` Diagnostic: ${diagnostic}` : ''}`,
-      );
+      // permission-denied from registerTechnicianDevice is only reachable after
+      // App Check accepted the Play Integrity token, so account/profile refusals
+      // are reported as account state, never as a Play Integrity failure.
+      const failure = classifyTechnicianRegistrationFailure(error);
+      setState(failure.kind === 'ACCOUNT_INACTIVE' ? 'account-inactive' : 'blocked');
+      setMessage(failure.message);
     }
   }, [user?.uid]);
 
@@ -57,6 +38,7 @@ export default function TechnicianInstallationRegistration() {
     <>
       <span hidden data-testid="technician-installation-registration" data-registration-state={state} />
       {state === 'blocked' && <Alert severity="error" sx={{ mb: 2 }}>{message}</Alert>}
+      {state === 'account-inactive' && <Alert severity="warning" sx={{ mb: 2 }}>{message}</Alert>}
     </>
   );
 }

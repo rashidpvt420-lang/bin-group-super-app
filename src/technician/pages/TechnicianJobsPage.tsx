@@ -19,6 +19,7 @@ import { binThemeTokens } from '../../theme/binGroupTheme';
 import { ALL_TECHNICIAN_ACTIVE_STATUSES } from '../../shared-exports';
 import type { SnapshotDoc } from '../../utils/queryUtils';
 import { calculateDistanceKm, calculateEtaMinutes, getTechnicianLocation, getTicketJobLocation } from '../../utils/liveTracking';
+import { classifyTechnicianJobsLoadError } from '../utils/technicianAccessDiagnostics';
 
 const STATUS_COLOR: Record<string, string> = {
     accepted: '#3b82f6',
@@ -93,9 +94,12 @@ export default function TechnicianJobsPage() {
                 setLoadError('');
                 setLoading(false);
             },
-            () => {
+            (error) => {
+                // permission-denied here is an account/rules decision (suspended
+                // claim or unapproved technicians/{uid}), not a network failure.
+                const failure = classifyTechnicianJobsLoadError(error);
                 setAssignedJobs([]);
-                setLoadError(tx('tech.jobs.load_error', 'Assigned jobs could not be loaded. Check your connection or contact dispatch.'));
+                setLoadError(tx(failure.key, failure.fallback));
                 setLoading(false);
             },
         );

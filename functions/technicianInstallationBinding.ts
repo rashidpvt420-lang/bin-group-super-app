@@ -21,6 +21,23 @@ const text = (value: unknown) => String(value || "").trim();
 const role = (value: unknown) => text(value).toLowerCase();
 const DEVICE_RESET_ADMIN_ROLES = new Set(["admin", "super_admin", "ceo"]);
 
+// Machine-readable permission-denied reasons for registerTechnicianDevice.
+// Only APP_CHECK_APP_ID_MISMATCH is an integrity failure; every other reason is
+// an account/profile state problem that the Technician client must not present
+// as a Google Play Integrity failure. Reasons carry no identity material.
+export const TECHNICIAN_REGISTRATION_DENIAL = {
+  APP_CHECK_APP_ID_MISMATCH: "APP_CHECK_APP_ID_MISMATCH",
+  ACCOUNT_DISABLED_OR_SUSPENDED: "TECHNICIAN_ACCOUNT_DISABLED_OR_SUSPENDED",
+  ROLE_REQUIRED: "TECHNICIAN_ROLE_REQUIRED",
+  PROFILE_SUSPENDED: "TECHNICIAN_PROFILE_SUSPENDED",
+} as const;
+
+function registrationDenied(reason: string, message: string): HttpsError {
+  // Structured, identity-free log line so production logs name the exact gate.
+  console.warn("registerTechnicianDevice denied", { reason });
+  return new HttpsError("permission-denied", message, { reason });
+}
+
 async function requireDeviceResetAdmin(auth: any) {
   if (!auth?.uid) throw new HttpsError("unauthenticated", "Admin login required.");
   const token = auth.token || {};
@@ -86,6 +103,7 @@ export function assertVerifiedNativeAndroidAppCheck(request: any): string {
     throw new HttpsError(
       "permission-denied",
       "A verified production Android Play Integrity App Check identity is required.",
+      { reason: TECHNICIAN_REGISTRATION_DENIAL.APP_CHECK_APP_ID_MISMATCH },
     );
   }
   return appId;
@@ -132,7 +150,10 @@ export const registerTechnicianDevice = onCall(
 
     const liveUser = await admin.auth().getUser(uid);
     if (liveUser.disabled || liveUser.customClaims?.suspended === true) {
-      throw new HttpsError("permission-denied", "This Technician account is disabled or suspended.");
+      throw registrationDenied(
+        TECHNICIAN_REGISTRATION_DENIAL.ACCOUNT_DISABLED_OR_SUSPENDED,
+        "This Technician account is disabled or suspended.",
+      );
     }
 
     const userRef = db.collection("users").doc(uid);
@@ -150,10 +171,13 @@ export const registerTechnicianDevice = onCall(
           throw new HttpsError("not-found", "Technician profile not found.");
         }
         if (!isTechnicianIdentity(request.auth, user, technician)) {
-          throw new HttpsError("permission-denied", "Technician role required.");
+          throw registrationDenied(TECHNICIAN_REGISTRATION_DENIAL.ROLE_REQUIRED, "Technician role required.");
         }
         if (isSuspended(user, technician)) {
-          throw new HttpsError("permission-denied", "This Technician profile is suspended.");
+          throw registrationDenied(
+            TECHNICIAN_REGISTRATION_DENIAL.PROFILE_SUSPENDED,
+            "This Technician profile is suspended.",
+          );
         }
 
         const decision = classifyInstallationRegistration(
