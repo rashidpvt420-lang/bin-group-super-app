@@ -40,7 +40,7 @@ function credentialValid(statusValue: unknown, expiryValue: unknown, nowMs: numb
   return ["valid", "verified", "approved", "active", "current"].includes(status);
 }
 
-function approvedAndReadyTechnician(user: FirebaseFirestore.DocumentData, technician: FirebaseFirestore.DocumentData, userExists: boolean, technicianExists: boolean, nowMs = Date.now()) {
+export function approvedAndReadyTechnician(user: FirebaseFirestore.DocumentData, technician: FirebaseFirestore.DocumentData, userExists: boolean, technicianExists: boolean, nowMs = Date.now()) {
   const profiles = [...(userExists ? [user] : []), ...(technicianExists ? [technician] : [])];
   if (!profiles.length) return { ready: false, failures: ["profile"] };
   if (userExists && role(user.role) !== "technician") return { ready: false, failures: ["role"] };
