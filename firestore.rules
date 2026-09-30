@@ -404,6 +404,19 @@ service cloud.firestore {
 
     function participantCanRead(data) { return isAdmin() || ownerCanRead(data) || tenantOwns(data) || (isApprovedTechnician() && techOwns(data)) || brokerOwns(data); }
 
+    // N-14: tenant-submitted requests start in a pending state and never carry
+    // review/approval outcomes; those are written by staff, Owners or the server.
+    function tenantSubmissionPendingStatuses() {
+      return ['pending', 'PENDING', 'submitted', 'SUBMITTED', 'open', 'OPEN', 'requested', 'REQUESTED', 'draft', 'DRAFT'];
+    }
+    function tenantSubmissionReviewKeys() {
+      return ['approved', 'approvedAt', 'approvedBy', 'adminApproved', 'ownerApproved', 'ownerApprovedAt', 'reviewedAt', 'reviewedBy', 'verified', 'verifiedAt', 'verifiedBy', 'signedOffAt', 'signedOffBy', 'resolvedAt', 'resolvedBy', 'resolution', 'completedAt', 'closedAt'];
+    }
+    function tenantPendingSubmission(data) {
+      return (!('status' in data) || data.status in tenantSubmissionPendingStatuses()) &&
+        !data.keys().hasAny(tenantSubmissionReviewKeys());
+    }
+
     function staffRequestCreate(data) {
       return staffCanCreate(data) &&
         (!('status' in data) || data.status in ['pending_hr_review', 'pending_finance_review', 'submitted']) &&
@@ -1611,8 +1624,9 @@ service cloud.firestore {
 
     match /amenityBookings/{bookingId} {
       allow read: if isAdmin() || (docPropertyId(resource.data) != null && isPropertyOwner(docPropertyId(resource.data))) || tenantUidOwns(resource.data);
-      allow create: if isAdmin() || (signedIn() && request.resource.data.get('tenantUid', null) == request.auth.uid && getTenantPropertyId() == docPropertyId(request.resource.data));
-      allow update: if isAdmin() || (docPropertyId(resource.data) != null && isPropertyOwner(docPropertyId(resource.data))) || (signedIn() && tenantUidOwns(resource.data) && request.resource.data.get('tenantUid', null) == request.auth.uid && docPropertyId(resource.data) != null && getTenantPropertyId() == docPropertyId(resource.data));
+      // N-14: a tenant books as 'pending' and may only cancel; approval is staff/Owner authority.
+      allow create: if isAdmin() || (signedIn() && request.resource.data.get('tenantUid', null) == request.auth.uid && getTenantPropertyId() == docPropertyId(request.resource.data) && request.resource.data.get('status', 'pending') == 'pending' && !request.resource.data.keys().hasAny(tenantSubmissionReviewKeys()));
+      allow update: if isAdmin() || (docPropertyId(resource.data) != null && isPropertyOwner(docPropertyId(resource.data))) || (signedIn() && tenantUidOwns(resource.data) && request.resource.data.get('tenantUid', null) == request.auth.uid && docPropertyId(resource.data) != null && getTenantPropertyId() == docPropertyId(resource.data) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'cancelledAt', 'updatedAt']) && request.resource.data.get('status', '') == 'cancelled');
       allow delete: if isAdmin() || (docPropertyId(resource.data) != null && isPropertyOwner(docPropertyId(resource.data))) || tenantUidOwns(resource.data);
     }
 
@@ -1660,7 +1674,6 @@ service cloud.firestore {
       allow read: if isAdmin() || (signedIn() && (
         resource.data.get('tenantId', null) == request.auth.uid ||
         resource.data.get('tenantUid', null) == request.auth.uid ||
-        resource.data.get('tenantId', null) == 'ALL' ||
         emailMatches(resource.data.get('tenantEmail', null)) ||
         emailMatches(resource.data.get('recipientEmail', null))
       ));
@@ -1828,7 +1841,7 @@ service cloud.firestore {
 
     match /move_out_requests/{requestId} {
       allow read: if isAdmin() || (signedIn() && (resource.data.get('userId', null) == request.auth.uid || resource.data.get('tenantUid', null) == request.auth.uid));
-      allow create: if signedIn() && (request.resource.data.get('userId', null) == request.auth.uid || request.resource.data.get('tenantUid', null) == request.auth.uid);
+      allow create: if signedIn() && (request.resource.data.get('userId', null) == request.auth.uid || request.resource.data.get('tenantUid', null) == request.auth.uid) && tenantPendingSubmission(request.resource.data);
       allow update: if isAdmin();
       allow delete: if isAdmin();
     }
@@ -1993,7 +2006,7 @@ service cloud.firestore {
     // ── inspections: move-in / move-out digital inspection records ──────────
     match /inspections/{inspectionId} {
       allow read: if isAdmin() || (signedIn() && resource.data.get('tenantId', null) == request.auth.uid);
-      allow create: if signedIn() && request.resource.data.get('tenantId', null) == request.auth.uid;
+      allow create: if signedIn() && request.resource.data.get('tenantId', null) == request.auth.uid && tenantPendingSubmission(request.resource.data);
       allow update: if isAdmin();
       allow delete: if isAdmin();
     }
@@ -2001,8 +2014,9 @@ service cloud.firestore {
     // ── maintenanceRequests: AI concierge ticket submissions ─────────────────
     match /maintenanceRequests/{requestId} {
       allow read: if isAdmin() || (signedIn() && resource.data.get('tenantId', null) == request.auth.uid);
-      allow create: if signedIn() && request.resource.data.get('tenantId', null) == request.auth.uid;
-      allow update: if isAdmin() || (signedIn() && resource.data.get('tenantId', null) == request.auth.uid && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt']));
+      allow create: if signedIn() && request.resource.data.get('tenantId', null) == request.auth.uid && tenantPendingSubmission(request.resource.data);
+      // N-14: the tenant may only withdraw its own request, never resolve or approve it.
+      allow update: if isAdmin() || (signedIn() && resource.data.get('tenantId', null) == request.auth.uid && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt']) && request.resource.data.get('status', '') in ['cancelled', 'CANCELLED']);
       allow delete: if isAdmin();
     }
 
