@@ -236,16 +236,29 @@ const addDoc: typeof firestoreAddDoc = (async (reference: any, data: any) => {
   return doc(reference);
 }) as typeof firestoreAddDoc;
 
+// The emulator decision is made on every page load. It used to be remembered in localStorage
+// ('bin_emulators_connected'), so after one reload on localhost the emulators were skipped and the
+// same local session silently talked to production Firebase. The in-memory flag only prevents a
+// second connect for the same SDK instances (e.g. hot module reload), which the SDK rejects.
+const EMULATORS_CONNECTED_FLAG = '__BIN_SHARED_FIREBASE_EMULATORS_CONNECTED__';
+const LEGACY_EMULATORS_CONNECTED_KEY = 'bin_emulators_connected';
+
 if (typeof window !== 'undefined') {
   const hostname = window.location.hostname;
   const shouldUseEmulators = hostname === 'localhost' || hostname === '127.0.0.1';
-  if (shouldUseEmulators && !window.localStorage.getItem('bin_emulators_connected')) {
+  try {
+    window.localStorage?.removeItem(LEGACY_EMULATORS_CONNECTED_KEY);
+  } catch {
+    // Storage can be unavailable (privacy mode); the decision never depended on it.
+  }
+  const pageScope = window as unknown as Record<string, unknown>;
+  if (shouldUseEmulators && pageScope[EMULATORS_CONNECTED_FLAG] !== true) {
     try {
       connectAuthEmulator(auth, 'http://127.0.0.1:9099', { disableWarnings: true });
       connectFirestoreEmulator(db, '127.0.0.1', 8080);
       connectStorageEmulator(storage, '127.0.0.1', 9199);
       connectFunctionsEmulator(functions, '127.0.0.1', 5001);
-      window.localStorage.setItem('bin_emulators_connected', 'true');
+      pageScope[EMULATORS_CONNECTED_FLAG] = true;
     } catch (error) {
       console.warn('[BIN SHARED] Emulator connection skipped:', error);
     }
