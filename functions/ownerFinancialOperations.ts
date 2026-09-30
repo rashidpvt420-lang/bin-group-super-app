@@ -2,16 +2,23 @@ import { FieldValue } from "firebase-admin/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 import { assertStoredOwnerPaymentReceipt } from "./paymentReceiptEvidence";
+import { parseExactAedAmount } from "./shared/aedMoneyInput";
 
 if (!admin.apps.length) admin.initializeApp();
 
 const db = admin.firestore();
 const text = (value: unknown, max = 300) => String(value ?? "").trim().slice(0, max);
 const PHASE1_RENT_PAYMENT_METHODS = new Set(["CASH", "CHEQUE"]);
+// Exact to the fils: sub-fils input (e.g. 7083.385) is rejected, never silently rounded.
 const money = (value: unknown, label: string) => {
-  const amount = Number(value);
-  if (!Number.isFinite(amount) || amount < 0) throw new HttpsError("invalid-argument", `${label} must be a valid non-negative amount.`);
-  return Math.round(amount * 100) / 100;
+  let amount: number;
+  try {
+    amount = parseExactAedAmount(value);
+  } catch (error: any) {
+    throw new HttpsError("invalid-argument", `${label} must be a valid non-negative AED amount exact to the fils (at most 2 decimals).`, { reason: error?.reason || "NOT_A_NUMBER" });
+  }
+  if (amount < 0) throw new HttpsError("invalid-argument", `${label} must be a valid non-negative amount.`);
+  return amount;
 };
 
 export const ownerRecordRentPayment = onCall(

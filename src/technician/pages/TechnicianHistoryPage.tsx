@@ -16,6 +16,7 @@ import {
 } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
+import { computeTechnicianHistoryStats, formatPercentOrNoData, type TechnicianHistoryStats } from './technicianHistoryStats';
 
 export default function TechnicianHistoryPage() {
     const { user } = useRole();
@@ -23,12 +24,8 @@ export default function TechnicianHistoryPage() {
     const [history, setHistory] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [loadError, setLoadError] = useState('');
-    const [stats, setStats] = useState({
-        total: 0,
-        success: 0,
-        avgRating: 0,
-        slaCompliance: 0
-    });
+    // N-35: success / SLA compliance are null when there is no data to measure.
+    const [stats, setStats] = useState<TechnicianHistoryStats>(() => computeTechnicianHistoryStats([]));
 
     useEffect(() => {
         if (!user?.uid) return;
@@ -45,31 +42,7 @@ export default function TechnicianHistoryPage() {
             const docs: any[] = snap.docs.map(d => ({ id: d.id, ...d.data() }));
             setHistory(docs);
 
-            const closed = docs.filter(d => d.status === 'CLOSED').length;
-
-            // Quality score: average of real qualityScore/rating/technicianScore fields
-            // recorded on completed tickets (same fields TechnicianDashboardPage reads).
-            const ratingScores = docs
-                .map((job: any) => Number(job.qualityScore || job.rating || job.technicianScore || 0))
-                .filter((score) => Number.isFinite(score) && score > 0);
-            const avgRating = ratingScores.length
-                ? Math.round((ratingScores.reduce((sum, score) => sum + score, 0) / ratingScores.length) * 10) / 10
-                : 0;
-
-            // SLA compliance: share of tickets that were NOT flagged slaBreached / at-risk.
-            const slaEligible = docs.filter((job: any) => job.slaBreached !== undefined || job.slaStatus !== undefined);
-            const slaBreachedCount = slaEligible.filter((job: any) => job.slaBreached === true || String(job.slaStatus || '').toLowerCase().includes('risk')).length;
-            const slaCompliance = slaEligible.length
-                ? Math.round(((slaEligible.length - slaBreachedCount) / slaEligible.length) * 100)
-                : 0;
-
-            setStats(prev => ({
-                ...prev,
-                total: docs.length,
-                success: docs.length > 0 ? Math.round((closed / docs.length) * 100) : 100,
-                avgRating,
-                slaCompliance
-            }));
+            setStats(computeTechnicianHistoryStats(docs));
 
             setLoadError('');
             setLoading(false);
@@ -104,7 +77,7 @@ export default function TechnicianHistoryPage() {
                             </Box>
                             <Box>
                                 <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900 }}>MISSION SUCCESS</Typography>
-                                <Typography variant="h5" fontWeight="950" color="#FFF">{stats.success}%</Typography>
+                                <Typography variant="h5" fontWeight="950" color="#FFF">{formatPercentOrNoData(stats.success)}</Typography>
                             </Box>
                         </Stack>
                     </Grid>
@@ -115,7 +88,7 @@ export default function TechnicianHistoryPage() {
                             </Box>
                             <Box>
                                 <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900 }}>SLA COMPLIANCE</Typography>
-                                <Typography variant="h5" fontWeight="950" color="#FFF">{stats.slaCompliance > 0 || stats.total > 0 ? `${stats.slaCompliance}%` : 'No data yet'}</Typography>
+                                <Typography variant="h5" fontWeight="950" color="#FFF">{formatPercentOrNoData(stats.slaCompliance)}</Typography>
                             </Box>
                         </Stack>
                     </Grid>

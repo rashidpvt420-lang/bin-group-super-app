@@ -51,6 +51,7 @@ import {
     functions,
     httpsCallable
 } from '../../lib/firebase';
+import { AVAILABILITY_REPORT_INTERVAL_MS, reportTechnicianAvailabilityLocation } from '../utils/availabilityLocation';
 import { useRole } from '../../context/RoleContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
@@ -207,6 +208,7 @@ export default function TechnicianDashboardPage() {
     const [dutyStatus, setDutyStatus] = useState(user?.dutyStatus || 'OFF');
     const [updating, setUpdating] = useState(false);
     const [dutyError, setDutyError] = useState('');
+    const [availabilityGpsError, setAvailabilityGpsError] = useState('');
     const [profileSources, setProfileSources] = useState<any>({});
     const [certRows, setCertRows] = useState<any[]>([]);
     const [recentCompleted, setRecentCompleted] = useState<any[]>([]);
@@ -347,6 +349,27 @@ export default function TechnicianDashboardPage() {
         }
     };
 
+    // First-dispatch bootstrap: an on-duty Technician with no active mission reports availability GPS
+    // through the server so Admin can assign the first job (mission GPS uses live tracking instead).
+    const shouldReportAvailability = Boolean(user?.uid) && isOnDuty && !isBreakDuty && activeJobs.length === 0;
+    useEffect(() => {
+        if (!shouldReportAvailability) return;
+        let cancelled = false;
+        const report = () => {
+            reportTechnicianAvailabilityLocation().then(() => {
+                if (!cancelled) setAvailabilityGpsError('');
+            }).catch((err) => {
+                if (!cancelled) setAvailabilityGpsError((err as any)?.message || 'Availability location could not be shared.');
+            });
+        };
+        report();
+        const timer = window.setInterval(report, AVAILABILITY_REPORT_INTERVAL_MS);
+        return () => {
+            cancelled = true;
+            window.clearInterval(timer);
+        };
+    }, [shouldReportAvailability]);
+
     if (loading) return (
         <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', py: 10, gap: 2, color: ui.ink }}>
             <CircularProgress sx={{ color: ui.gold }} />
@@ -402,6 +425,7 @@ export default function TechnicianDashboardPage() {
             </Grid>
 
             {dutyError && <Alert severity="warning" sx={{ mb: 2.5 }}>{dutyError}</Alert>}
+            {availabilityGpsError && <Alert severity="info" sx={{ mb: 2.5 }} data-testid="technician-availability-gps-error">Dispatch location not shared: {availabilityGpsError}</Alert>}
 
             <SectionCard sx={{ mb: 3.5, bgcolor: isOnDuty ? alpha(ui.green, 0.045) : ui.soft, border: `1px solid ${isOnDuty ? alpha(ui.green, 0.25) : ui.line}` }}>
                 <Grid container spacing={3} alignItems="center" sx={{ flexDirection: isRTL ? 'row-reverse' : 'row' }}>
