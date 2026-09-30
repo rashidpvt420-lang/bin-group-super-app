@@ -1,6 +1,7 @@
 import { FieldValue } from "firebase-admin/firestore";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
+import type * as FirebaseFirestore from "firebase-admin/firestore";
 import { createBrokerCommissionForContract } from "./brokerCommissions";
 import { requirePrivilegedMfaSession } from "./adminMfaSession";
 import { assertStoredOwnerPaymentReceipt, assertStoredTenantPaymentReceipt } from "./paymentReceiptEvidence";
@@ -10,6 +11,12 @@ import { decideRentConfirmedAmount, rentApprovalDecision, rentRejectionDecision 
 import { generateMobilizationUnpaidInvoicePdfArtifact, generateOwnerPaymentReceiptPdfArtifact } from "./pdfEngine";
 import { assertMobilizationInvoiceImmutable, buildMobilizationInvoiceSnapshot } from "./mobilizationInvoice";
 import { resolveActivePaymentConfiguration } from "./paymentConfiguration";
+import {
+  assertOwnerOnboardingTransition,
+  ownerOnboardingStatePatch,
+  resolveOwnerOnboardingState,
+  type OwnerOnboardingState,
+} from "./ownerOnboardingLifecycle";
 import {
   OwnerActivationPaymentPolicyError,
   resolveLockedOwnerActivationSchedule,
@@ -79,6 +86,29 @@ function resolveActivationIds(paymentId: string, payment: any) {
   const intakeId = String(payment?.intakeId || "").trim();
   const contractId = String(payment?.contractId || intakeId || paymentId || "").trim();
   return { contractId, intakeId };
+}
+
+const INSPECTION_FIRST_WORKFLOW_VERSION = "OWNER_FIVE_PAGE_INSPECTION_FIRST_V1";
+
+/**
+ * F-5: for inspection-first Owner applications, activation and rejection are lifecycle
+ * transitions asserted against the transactionally-read intake / contract / payment.
+ * Other (legacy / rent) payment kinds are not part of this lifecycle and return null.
+ */
+function assertInspectionFirstPaymentTransition(
+  intakeSnap: FirebaseFirestore.DocumentSnapshot | null,
+  contract: any,
+  payment: any,
+  to: OwnerOnboardingState,
+): OwnerOnboardingState | null {
+  const inspectionFirst = String(payment?.workflowVersion || "").trim() === INSPECTION_FIRST_WORKFLOW_VERSION ||
+    String(contract?.workflowVersion || "").trim() === INSPECTION_FIRST_WORKFLOW_VERSION ||
+    String(intakeSnap?.data()?.workflowVersion || "").trim() === INSPECTION_FIRST_WORKFLOW_VERSION;
+  if (!inspectionFirst) return null;
+  if (!intakeSnap?.exists) throw new HttpsError("failed-precondition", "The Owner application for this payment is missing.");
+  const from = resolveOwnerOnboardingState({ intake: intakeSnap.data() || {}, contract, payment });
+  assertOwnerOnboardingTransition(from, to, "finance_admin");
+  return from;
 }
 
 function resolveContractSignature(contract: any, payment?: any) {
@@ -406,13 +436,15 @@ export const adminApprovePayment = onCall({ cors: true, enforceAppCheck: true },
   const paymentConfigurationRef = db.collection("system_payment_config").doc("current");
   let approvalWasIdempotent = false;
   let approvalUsesStripe = false;
+  const approvalIntakeRef = db.collection("intake_submissions").doc(intakeId);
   await db.runTransaction(async (transaction) => {
-    const [freshPaymentSnap, freshContractSnap, propertySnap, paymentConfigurationSnap, invoiceSnap] = await Promise.all([
+    const [freshPaymentSnap, freshContractSnap, propertySnap, paymentConfigurationSnap, invoiceSnap, freshIntakeSnap] = await Promise.all([
       transaction.get(ref),
       transaction.get(contractRef),
       transaction.get(propertyQuery),
       transaction.get(paymentConfigurationRef),
       transaction.get(invoiceRef),
+      transaction.get(approvalIntakeRef),
     ]);
     if (!freshPaymentSnap.exists || !freshContractSnap.exists) {
       throw new HttpsError("failed-precondition", "Payment or contract disappeared during approval.");
@@ -434,6 +466,9 @@ export const adminApprovePayment = onCall({ cors: true, enforceAppCheck: true },
       approvalWasIdempotent = true;
       return;
     }
+    // F-5: activation is legal only from PAYMENT_EVIDENCE_PENDING_APPROVAL (never e.g. from a
+    // pending final signature, a rejected payment, or an unrecognised state).
+    const lifecycleFrom = assertInspectionFirstPaymentTransition(freshIntakeSnap, freshContract, freshPayment, "ACTIVE");
     if (
       ["rejected", "payment_rejected"].includes(roleOf(freshPayment.status)) ||
       ["rejected", "payment_rejected"].includes(roleOf(freshPayment.paymentStatus)) ||
@@ -602,12 +637,13 @@ export const adminApprovePayment = onCall({ cors: true, enforceAppCheck: true },
       invoiceProofHash: invoiceHash,
       updatedAt: now,
     }, { merge: true });
-    transaction.set(db.collection("intake_submissions").doc(intakeId), {
+    transaction.set(approvalIntakeRef, {
       status: "ACTIVE",
       paymentStatus: "APPROVED",
       activationState: "ACTIVE",
       approvedAt: now,
       approvedBy: actorId,
+      ...(lifecycleFrom ? ownerOnboardingStatePatch(lifecycleFrom, "ACTIVE", "finance_admin", actorId, now) : {}),
       updatedAt: now,
     }, { merge: true });
 
@@ -869,12 +905,14 @@ export const adminRejectPayment = onCall({ cors: true, enforceAppCheck: true }, 
   const contractRef = contractId ? db.collection("contracts").doc(contractId) : null;
   const userRef = ownerUid ? db.collection("users").doc(ownerUid) : null;
   const ownerRef = ownerUid ? db.collection("owners").doc(ownerUid) : null;
+  const rejectionIntakeRef = intakeId ? db.collection("intake_submissions").doc(intakeId) : null;
   await db.runTransaction(async (transaction) => {
-    const [freshPaymentSnap, contractSnap, userSnap, ownerSnap] = await Promise.all([
+    const [freshPaymentSnap, contractSnap, userSnap, ownerSnap, rejectionIntakeSnap] = await Promise.all([
       transaction.get(ref),
       contractRef ? transaction.get(contractRef) : Promise.resolve(null),
       userRef ? transaction.get(userRef) : Promise.resolve(null),
       ownerRef ? transaction.get(ownerRef) : Promise.resolve(null),
+      rejectionIntakeRef ? transaction.get(rejectionIntakeRef) : Promise.resolve(null),
     ]);
     if (!freshPaymentSnap.exists) throw new HttpsError("not-found", "Payment transaction not found.");
     const freshPayment = freshPaymentSnap.data() || {};
@@ -889,6 +927,8 @@ export const adminRejectPayment = onCall({ cors: true, enforceAppCheck: true }, 
         "An activated payment cannot be rejected. Phase 1 refunds or contract-cancellation requests require manual Finance/Admin review under the signed contract; rejection must not mutate activated financial state.",
       );
     }
+    // F-5: only recorded 15% payment evidence can be rejected (not a payment that was never due).
+    const rejectionLifecycleFrom = assertInspectionFirstPaymentTransition(rejectionIntakeSnap, freshContract, freshPayment, "PAYMENT_REJECTED");
 
     transaction.set(ref, {
       status: "REJECTED",
@@ -930,6 +970,7 @@ export const adminRejectPayment = onCall({ cors: true, enforceAppCheck: true }, 
         status: "payment_rejected",
         paymentStatus: "REJECTED",
         activationState: "LOCKED_PAYMENT_REJECTED",
+        ...(rejectionLifecycleFrom ? ownerOnboardingStatePatch(rejectionLifecycleFrom, "PAYMENT_REJECTED", "finance_admin", actorId, now) : {}),
         updatedAt: now,
       }, { merge: true });
     }

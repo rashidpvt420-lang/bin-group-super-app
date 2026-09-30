@@ -2,6 +2,7 @@ import { FieldValue } from "firebase-admin/firestore";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 import { assertApplicationRecordsOwnedBy, assertNewApplicationIdAllowed } from "./ownerApplicationBinding";
+import { assertOwnerOnboardingActionAllowed, resolveOwnerOnboardingState, OWNER_ONBOARDING_LIFECYCLE_VERSION } from "./ownerOnboardingLifecycle";
 
 if (!admin.apps.length) {
   admin.initializeApp();
@@ -91,10 +92,28 @@ async function writeOwnerProfile(uid: string, email: string, fullName: string, m
     };
     if (intakeSnap.exists) {
       assertApplicationRecordsOwnedBy(uid, { intake: intakeSnap.data() || {} });
+      // F-5: account binding may only touch an application that has not been submitted yet.
+      const [contractSnap, paymentSnap] = await Promise.all([
+        db.collection("contracts").doc(intakeId).get(),
+        db.collection("payment_transactions").doc(intakeId).get(),
+      ]);
+      assertOwnerOnboardingActionAllowed(
+        resolveOwnerOnboardingState({
+          intake: intakeSnap.data() || {},
+          contract: contractSnap.exists ? contractSnap.data() || {} : null,
+          payment: paymentSnap.exists ? paymentSnap.data() || {} : null,
+        }),
+        ["DRAFT", "CHANGES_REQUESTED"],
+        "Binding the Owner account to an application",
+      );
       batch.set(intakeRef, intakeBinding, { merge: true });
     } else {
       assertNewApplicationIdAllowed(intakeId, uid);
-      batch.create(intakeRef, intakeBinding);
+      batch.create(intakeRef, {
+        ...intakeBinding,
+        ownerOnboardingState: "DRAFT",
+        ownerOnboardingStateVersion: OWNER_ONBOARDING_LIFECYCLE_VERSION,
+      });
     }
   }
 

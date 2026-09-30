@@ -1,6 +1,7 @@
 import * as admin from "firebase-admin";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
-import { assertOnboardingTransition, normalizeOnboardingState } from "./onboardingStateMachine";
+import { normalizeOnboardingState } from "./onboardingStateMachine";
+import { assertOwnerOnboardingTransition, ownerOnboardingStatePatch, resolveOwnerOnboardingState } from "./ownerOnboardingLifecycle";
 import { assertCanonicalTransition, normalizeCanonicalState } from "./canonicalStateMachines";
 
 if (!admin.apps.length) admin.initializeApp();
@@ -117,7 +118,17 @@ export const resubmitOwnerProperty = onCall(
           "The linked intake must also be CHANGES_REQUESTED before resubmission.",
         );
       }
-      assertOnboardingTransition(intakeState, "admin_review");
+      // F-5: enforced by the single inspection-first lifecycle (CHANGES_REQUESTED -> resubmitted for review).
+      const [linkedContractSnap, linkedPaymentSnap] = await Promise.all([
+        transaction.get(db.collection("contracts").doc(intakeId)),
+        transaction.get(db.collection("payment_transactions").doc(intakeId)),
+      ]);
+      const lifecycleFrom = resolveOwnerOnboardingState({
+        intake,
+        contract: linkedContractSnap.exists ? linkedContractSnap.data() || {} : null,
+        payment: linkedPaymentSnap.exists ? linkedPaymentSnap.data() || {} : null,
+      });
+      assertOwnerOnboardingTransition(lifecycleFrom, "SUBMITTED_FOR_PROPERTY_INSPECTION", "owner");
 
       const now = admin.firestore.FieldValue.serverTimestamp();
       const count = admin.firestore.FieldValue.increment(1);
@@ -141,6 +152,7 @@ export const resubmitOwnerProperty = onCall(
         lifecycleStatus: "admin_review",
         onboardingState: "admin_review",
         status: "admin_review",
+        ...ownerOnboardingStatePatch(lifecycleFrom, "SUBMITTED_FOR_PROPERTY_INSPECTION", "owner", ownerUid, now),
       };
 
       transaction.update(propertyRef, {

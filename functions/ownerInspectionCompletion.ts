@@ -5,6 +5,13 @@ import * as crypto from "crypto";
 import { calculateOwnerOnboardingQuote } from "./ownerOnboardingQuote";
 import { parseExactAedAmount } from "./shared/aedMoneyInput";
 import { requirePrivilegedMfaSession } from "./adminMfaSession";
+import {
+  assertOwnerOnboardingTransition,
+  commitOwnerOnboardingBatch,
+  ownerOnboardingStatePatch,
+  resolveOwnerOnboardingState,
+  stageOwnerOnboardingTransition,
+} from "./ownerOnboardingLifecycle";
 
 if (!admin.apps.length) admin.initializeApp();
 const db = admin.firestore();
@@ -231,6 +238,19 @@ export const adminRecordOwnerPropertyInspectionEvidence = onCall({ cors: true, e
     throw new HttpsError("failed-precondition", "Inspection is not bound to this protected five-page Owner application.");
   }
   if (upper(inspection.status) === "CANCELLED") throw new HttpsError("failed-precondition", "Cancelled inspections cannot receive evidence.");
+  // F-5: visit evidence is legal only once visits are scheduled and before the Owner's final
+  // signature. It must never overwrite a completed, signed, paid or ACTIVE application.
+  const [evidenceContractSnap, evidencePaymentSnap] = await Promise.all([
+    db.collection("contracts").doc(intakeId).get(),
+    db.collection("payment_transactions").doc(intakeId).get(),
+  ]);
+  const lifecycleFrom = resolveOwnerOnboardingState({
+    intake,
+    contract: evidenceContractSnap.exists ? evidenceContractSnap.data() || {} : null,
+    payment: evidencePaymentSnap.exists ? evidencePaymentSnap.data() || {} : null,
+    inspections: [inspection],
+  });
+  assertOwnerOnboardingTransition(lifecycleFrom, "INSPECTION_EVIDENCE_RECORDED", "admin");
   const propertyId = text(inspection.propertyId);
   const properties = Array.isArray(intake.properties) ? intake.properties : [];
   const property = properties.find((entry: any) => text(entry?.propertyId || entry?.id) === propertyId);
@@ -263,6 +283,7 @@ export const adminRecordOwnerPropertyInspectionEvidence = onCall({ cors: true, e
   if (!generation) throw new HttpsError("internal", "Stored visit evidence has no immutable generation.");
   const now = FieldValue.serverTimestamp();
   const batch = db.batch();
+  stageOwnerOnboardingTransition(batch, intakeSnap, ownerOnboardingStatePatch(lifecycleFrom, "INSPECTION_EVIDENCE_RECORDED", "admin", actor.uid, now));
   batch.set(inspectionRef, {
     status: "EVIDENCE_RECORDED_PENDING_COMPLETION",
     inspectionStatus: "EVIDENCE_RECORDED_PENDING_COMPLETION",
@@ -330,10 +351,12 @@ export const adminRecordOwnerPropertyInspectionEvidence = onCall({ cors: true, e
       gymVerificationRequired: isGymProperty(property, inspection),
       gymVerifiedServiceAreaSqft: gymVerification?.verifiedServiceAreaSqft || null,
       gymVerifiedComplexity: gymVerification?.verifiedComplexity || null,
+      lifecycleFrom,
+      lifecycleTo: "INSPECTION_EVIDENCE_RECORDED",
     },
     createdAt: now,
   });
-  await batch.commit();
+  await commitOwnerOnboardingBatch(batch);
   return {
     status: "VERIFIED",
     intakeId,
@@ -402,6 +425,14 @@ export const adminCompleteOwnerPortfolioInspections = onCall({ cors: true, enfor
     inspectionByPropertyId.set(propertyId, value);
   });
   if (inspectionByPropertyId.size !== properties.length) throw new HttpsError("failed-precondition", "Every property must have one unique evidence-backed inspection.");
+  // F-5: the final re-quote is legal only from INSPECTION_EVIDENCE_RECORDED (or re-issued before the Owner signs).
+  const lifecycleFrom = resolveOwnerOnboardingState({
+    intake,
+    contract: contractSnap.data() || {},
+    payment: paymentSnap.data() || {},
+    inspections: inspectionSnaps.map((snapshot) => snapshot.data() || {}),
+  });
+  assertOwnerOnboardingTransition(lifecycleFrom, "FINAL_QUOTE_AWAITING_OWNER_SIGNATURE", "admin");
 
   const verifiedProperties = properties.map((property: any) => {
     const propertyId = text(property?.propertyId || property?.id);
@@ -514,6 +545,7 @@ export const adminCompleteOwnerPortfolioInspections = onCall({ cors: true, enfor
     quoteVerificationState: "FINAL_VERIFIED_AFTER_ALL_SITE_VISITS",
   };
   const batch = db.batch();
+  stageOwnerOnboardingTransition(batch, intakeSnap, ownerOnboardingStatePatch(lifecycleFrom, "FINAL_QUOTE_AWAITING_OWNER_SIGNATURE", "admin", actor.uid, now));
   inspectionRefs.forEach((inspectionRef, index) => batch.set(inspectionRef, {
     status: "COMPLETED",
     inspectionStatus: "COMPLETED",
@@ -662,10 +694,12 @@ export const adminCompleteOwnerPortfolioInspections = onCall({ cors: true, enfor
       annualContractValue,
       amount,
       gymPropertyCount: verifiedProperties.filter((property: any) => isGymProperty(property)).length,
+      lifecycleFrom,
+      lifecycleTo: "FINAL_QUOTE_AWAITING_OWNER_SIGNATURE",
     },
     createdAt: now,
   });
-  await batch.commit();
+  await commitOwnerOnboardingBatch(batch);
   return {
     status: "COMPLETED",
     intakeId,

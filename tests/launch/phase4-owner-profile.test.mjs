@@ -105,7 +105,9 @@ test('resubmitOwnerProperty keeps Property and Onboarding canonical machines sep
   assert.match(resubmission, /propertyState !== "CHANGES_REQUESTED"/);
   assert.match(resubmission, /intakeState !== "changes_requested"/);
   assert.match(resubmission, /assertCanonicalTransition\("property", propertyState, "UNDER_REVIEW"\)/);
-  assert.match(resubmission, /assertOnboardingTransition\(intakeState, "admin_review"\)/);
+  // F-5: the intake move is asserted by the single inspection-first lifecycle, not the legacy display machine.
+  assert.match(resubmission, /assertOwnerOnboardingTransition\(lifecycleFrom, "SUBMITTED_FOR_PROPERTY_INSPECTION", "owner"\)/);
+  assert.doesNotMatch(resubmission, /assertOnboardingTransition\(/);
   assert.match(resubmission, /lifecycleStatus:\s*"UNDER_REVIEW"/);
   assert.match(resubmission, /status:\s*"UNDER_REVIEW"/);
   assert.match(resubmission, /onboardingState:\s*admin\.firestore\.FieldValue\.delete\(\)/);

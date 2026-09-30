@@ -13,6 +13,13 @@ import { parseExactAedAmount } from "./shared/aedMoneyInput";
 import { requirePrivilegedMfaSession } from "./adminMfaSession";
 import { requireMfaFinanceAdminActor } from "./financeAdminMfa";
 import { assertOtpApplicationBinding, decideOwnerApplicationSubmission } from "./ownerApplicationBinding";
+import {
+  assertOwnerOnboardingTransition,
+  commitOwnerOnboardingBatch,
+  ownerOnboardingStatePatch,
+  resolveOwnerOnboardingState,
+  stageOwnerOnboardingTransition,
+} from "./ownerOnboardingLifecycle";
 
 if (!admin.apps.length) admin.initializeApp();
 
@@ -513,6 +520,13 @@ export const submitOwnerInspectionFirstOnboarding = onCall({ cors: true, enforce
       },
     });
     if (decision === "IDEMPOTENT") return "IDEMPOTENT" as const;
+    // F-5: the five-page submission is only legal from DRAFT or CHANGES_REQUESTED.
+    const fromState = resolveOwnerOnboardingState({
+      intake: snapshotRecord(freshIntake),
+      contract: snapshotRecord(freshContract),
+      payment: snapshotRecord(freshPayment),
+    });
+    assertOwnerOnboardingTransition(fromState, "SUBMITTED_FOR_PROPERTY_INSPECTION", "owner");
     // Brand-new records are created (fail if they appeared concurrently); existing ones were verified above.
     const writeRecord = (ref: FirebaseFirestore.DocumentReference, exists: boolean, value: PlainRecord) => {
       if (exists) transaction.set(ref, value, { merge: true });
@@ -554,6 +568,7 @@ export const submitOwnerInspectionFirstOnboarding = onCall({ cors: true, enforce
       workflowVersion: OWNER_WORKFLOW_VERSION,
       source: "PUBLIC_OWNER_FIVE_PAGE_APPLICATION",
       status: "SUBMITTED_FOR_PROPERTY_INSPECTION",
+      ...ownerOnboardingStatePatch(fromState, "SUBMITTED_FOR_PROPERTY_INSPECTION", "owner", owner.uid, now),
       adminReviewState: "AWAITING_PROPERTY_REVIEW_AND_SITE_VISIT",
       inspectionStatus: "PENDING",
       activationState: "LOCKED_PENDING_INSPECTION_AND_PAYMENT",
@@ -723,166 +738,19 @@ export const submitOwnerInspectionFirstOnboarding = onCall({ cors: true, enforce
   };
 });
 
+/**
+ * F-5: retired. This pre-requote, single-step completion moved an application straight to
+ * "15% payment due" without the final verified quote or the Owner's final OTP signature, i.e.
+ * it skipped FINAL_QUOTE_AWAITING_OWNER_SIGNATURE -> OWNER_SIGNED_AWAITING_PAYMENT_EVIDENCE.
+ * It was never on the deployed runtime export list; it now fails closed if ever exported.
+ * The canonical path is adminRecordOwnerPropertyInspectionEvidence + adminCompleteOwnerPortfolioInspections.
+ */
 export const adminCompleteOwnerPropertyInspection = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
-  const actor = await requireAdmin(request);
-  const intakeId = safeId(request.data?.intakeId, "");
-  const notes = text(request.data?.notes || request.data?.inspectionNotes);
-  if (!intakeId) throw new HttpsError("invalid-argument", "intakeId is required.");
-  if (notes.length < 8) throw new HttpsError("invalid-argument", "Record clear property inspection notes.");
-
-  const intakeRef = db.collection("intake_submissions").doc(intakeId);
-  const paymentRef = db.collection("payment_transactions").doc(intakeId);
-  const contractRef = db.collection("contracts").doc(intakeId);
-  const [intakeSnap, paymentSnap, contractSnap] = await Promise.all([intakeRef.get(), paymentRef.get(), contractRef.get()]);
-  if (!intakeSnap.exists || !paymentSnap.exists || !contractSnap.exists) throw new HttpsError("failed-precondition", "The inspection-first onboarding package is incomplete.");
-  const intake = intakeSnap.data() || {};
-  if (text(intake.workflowVersion) !== OWNER_WORKFLOW_VERSION) throw new HttpsError("failed-precondition", "This action is only for the five-page inspection-first workflow.");
-
-  const ownerUid = text(intake.ownerUid || intake.ownerId);
-  const amount = money(paymentSnap.data()?.activationDeposit || paymentSnap.data()?.amount);
-  const properties: PlainRecord[] = Array.isArray(intake.properties) ? intake.properties.map((property: unknown) => cleanPlain(property)) : [];
-  if (!ownerUid || amount <= 0 || !properties.length) throw new HttpsError("failed-precondition", "Owner binding, portfolio properties, or 15% mobilisation amount is missing.");
-
-  const linkedIds: string[] = Array.isArray(intake.inspectionIds)
-    ? Array.from(new Set(intake.inspectionIds.map((value: unknown) => text(value)).filter(Boolean)))
-    : [];
-  const inspectionSnaps = linkedIds.length
-    ? await Promise.all(linkedIds.map((inspectionId: string) => db.collection("property_inspections").doc(inspectionId).get()))
-    : (await db.collection("property_inspections").where("intakeId", "==", intakeId).limit(100).get()).docs;
-  const validInspections = inspectionSnaps.filter((snapshot) => snapshot.exists && upper(snapshot.data()?.status) !== "CANCELLED");
-  if (validInspections.length !== properties.length) {
-    throw new HttpsError("failed-precondition", `Complete one linked site inspection for every property. Expected ${properties.length}, found ${validInspections.length}.`);
-  }
-  validInspections.forEach((snapshot) => {
-    if (text(snapshot.data()?.intakeId) !== intakeId) throw new HttpsError("failed-precondition", "A linked inspection belongs to another Owner application.");
-  });
-
-  const inspectionByPropertyId = new Map<string, FirebaseFirestore.QueryDocumentSnapshot | FirebaseFirestore.DocumentSnapshot>();
-  validInspections.forEach((snapshot) => {
-    const propertyId = text(snapshot.data()?.propertyId);
-    if (propertyId) inspectionByPropertyId.set(propertyId, snapshot);
-  });
-  if (inspectionByPropertyId.size !== properties.length) {
-    throw new HttpsError("failed-precondition", "Every property must have one unique linked inspection before payment becomes due.");
-  }
-
-  const propertyQuery = await db.collection("properties").where("intakeId", "==", intakeId).limit(100).get();
-  if (propertyQuery.size !== properties.length) throw new HttpsError("failed-precondition", "Canonical property records do not match the submitted portfolio.");
-
-  const inspectionIds = validInspections.map((snapshot) => snapshot.id).sort();
-  const now = ts();
-  const batch = db.batch();
-  validInspections.forEach((snapshot) => {
-    batch.set(snapshot.ref, {
-      status: "COMPLETED",
-      inspectionStatus: "COMPLETED",
-      notes,
-      completedBy: actor.uid,
-      completedByEmail: actor.email,
-      completedAt: now,
-      updatedAt: now,
-    }, { merge: true });
-  });
-  batch.set(intakeRef, {
-    inspectionId: inspectionIds[0],
-    inspectionIds,
-    inspectionCount: inspectionIds.length,
-    inspectionStatus: "COMPLETED",
-    adminReviewState: "INSPECTION_COMPLETE_AWAITING_15_PERCENT_PAYMENT",
-    activationState: "LOCKED_PENDING_15_PERCENT_PAYMENT",
-    paymentStatus: "PENDING_ADMIN_PAYMENT_VERIFICATION",
-    paymentCollectionStage: "15_PERCENT_DUE_AFTER_COMPLETED_VISITS",
-    inspectionNotes: notes,
-    inspectionCompletedAt: now,
-    inspectionCompletedBy: actor.uid,
-    updatedAt: now,
-  }, { merge: true });
-  batch.set(paymentRef, {
-    status: "PENDING_ADMIN_PAYMENT_VERIFICATION",
-    paymentStatus: "PENDING_ADMIN_PAYMENT_VERIFICATION",
-    verificationState: "ADMIN_PAYMENT_EVIDENCE_REQUIRED",
-    adminApprovalRequired: true,
-    unlocksDashboard: false,
-    inspectionId: inspectionIds[0],
-    inspectionIds,
-    inspectionCount: inspectionIds.length,
-    inspectionVerified: true,
-    paymentDueAfterInspection: true,
-    updatedAt: now,
-  }, { merge: true });
-  batch.set(contractRef, {
-    status: "SIGNED",
-    contractStatus: "SIGNED",
-    activationStatus: "LOCKED_PENDING_15_PERCENT_PAYMENT",
-    inspectionId: inspectionIds[0],
-    inspectionIds,
-    inspectionCount: inspectionIds.length,
-    inspectionVerified: true,
-    paymentStatus: "PENDING_ADMIN_PAYMENT_VERIFICATION",
-    updatedAt: now,
-  }, { merge: true });
-  propertyQuery.docs.forEach((document) => {
-    const property = document.data() || {};
-    const inspection = inspectionByPropertyId.get(document.id) || inspectionByPropertyId.get(text(property.propertyId));
-    if (!inspection) throw new HttpsError("failed-precondition", `No linked inspection exists for property ${document.id}.`);
-    batch.set(document.ref, {
-      status: "PAYMENT_PENDING",
-      activationStatus: "LOCKED_PENDING_15_PERCENT_PAYMENT",
-      inspectionStatus: "COMPLETED",
-      inspectionId: inspection.id,
-      locationVerified: true,
-      adminSiteVisitVerified: true,
-      geo: {
-        ...(property.geo || {}),
-        verified: true,
-        requiresGeoReview: false,
-        dispatchReady: true,
-        verifiedBy: actor.uid,
-        verifiedAt: now,
-      },
-      updatedAt: now,
-    }, { merge: true });
-  });
-  batch.set(db.collection("users").doc(ownerUid), {
-    status: "awaiting_activation_payment",
-    onboardingStatus: "INSPECTION_COMPLETE_AWAITING_15_PERCENT_PAYMENT",
-    dashboardLocked: true,
-    dashboardUnlocked: false,
-    updatedAt: now,
-  }, { merge: true });
-  batch.set(db.collection("owners").doc(ownerUid), {
-    status: "AWAITING_ACTIVATION_PAYMENT",
-    onboardingStatus: "INSPECTION_COMPLETE_AWAITING_15_PERCENT_PAYMENT",
-    updatedAt: now,
-  }, { merge: true });
-  batch.set(db.collection("notifications").doc(), {
-    userId: ownerUid,
-    toRole: "owner",
-    type: "OWNER_INSPECTION_COMPLETE_PAYMENT_DUE",
-    title: "Property visits completed",
-    body: `All required property visits are complete. The 15% mobilisation payment of AED ${amount.toLocaleString("en-AE")} is now due for Admin verification.`,
-    read: false,
-    createdAt: now,
-  });
-  batch.set(db.collection("audit_logs").doc(), {
-    actorId: actor.uid,
-    actorRole: "admin",
-    action: "COMPLETE_OWNER_PORTFOLIO_PROPERTY_INSPECTIONS",
-    targetType: "intake_submissions",
-    targetId: intakeId,
-    metadata: { intakeId, paymentId: intakeId, amount, inspectionIds, propertyCount: properties.length },
-    createdAt: now,
-  });
-  await batch.commit();
-  return {
-    status: "COMPLETED",
-    intakeId,
-    inspectionId: inspectionIds[0],
-    inspectionIds,
-    paymentId: intakeId,
-    activationDeposit: amount,
-    nextState: "AWAITING_15_PERCENT_PAYMENT",
-  };
+  await requireAdmin(request);
+  throw new HttpsError(
+    "failed-precondition",
+    "This legacy completion path is retired. Record evidence for every visit and use adminCompleteOwnerPortfolioInspections so the Owner signs the final verified quote before payment.",
+  );
 });
 
 export const adminRecordOwnerMobilizationPaymentEvidence = onCall({ cors: true, enforceAppCheck: true, memory: "512MiB" }, async (request) => {
@@ -935,6 +803,12 @@ export const adminRecordOwnerMobilizationPaymentEvidence = onCall({ cors: true, 
   }
   const ownerUid = text(payment.ownerUid || payment.ownerId);
   const intakeId = text(payment.intakeId || paymentId);
+  // F-5: payment evidence is legal only after the Owner's final signature (or to replace
+  // evidence that is still pending approval / was rejected), never before or after activation.
+  const intakeSnap = await db.collection("intake_submissions").doc(intakeId).get();
+  if (!intakeSnap.exists) throw new HttpsError("failed-precondition", "The Owner application for this payment is missing.");
+  const lifecycleFrom = resolveOwnerOnboardingState({ intake: intakeSnap.data() || {}, contract, payment });
+  assertOwnerOnboardingTransition(lifecycleFrom, "PAYMENT_EVIDENCE_PENDING_APPROVAL", "finance_admin");
   let expectedAmount: number;
   try {
     expectedAmount = normalizeAedMoney(payment.activationDeposit ?? payment.amount);
@@ -983,6 +857,7 @@ export const adminRecordOwnerMobilizationPaymentEvidence = onCall({ cors: true, 
   if (!generation) throw new HttpsError("internal", "Stored payment evidence has no immutable generation.");
   const receiptUrl = `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(storagePath)}?alt=media&token=${downloadToken}`;
   const batch = db.batch();
+  stageOwnerOnboardingTransition(batch, intakeSnap, ownerOnboardingStatePatch(lifecycleFrom, "PAYMENT_EVIDENCE_PENDING_APPROVAL", "finance_admin", actor.uid, ts()));
   batch.set(paymentRef, {
     status: "PENDING_ADMIN_APPROVAL",
     paymentStatus: "PENDING_ADMIN_APPROVAL",
@@ -1032,6 +907,6 @@ export const adminRecordOwnerMobilizationPaymentEvidence = onCall({ cors: true, 
     metadata: { intakeId, ownerUid, method, reference, amountReceived, receiptHash, generation, paymentConfigVersion: activeConfiguration.version, paymentConfigHash: activeConfiguration.configHash },
     createdAt: ts(),
   });
-  await batch.commit();
+  await commitOwnerOnboardingBatch(batch);
   return { status: "RECORDED", paymentId, intakeId, amountReceived, method, paymentReferenceId: reference, receiptUrl, receiptHash, generation };
 });

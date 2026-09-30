@@ -446,7 +446,8 @@ export const ONBOARDING_STATE_MACHINE = machine(
     deposit_processing: ['deposit_paid', 'deposit_pending', 'expired', 'suspended'],
     deposit_paid: ['admin_review', 'suspended'],
     identity_pending: ['signature_pending', 'property_details_complete', 'documents_pending', 'expired', 'suspended'],
-    signature_pending: ['deposit_pending', 'admin_review', 'approved', 'suspended'],
+    // F-5: no signature_pending -> approved shortcut.
+    signature_pending: ['deposit_pending', 'admin_review', 'suspended'],
     admin_review: ['changes_requested', 'approved', 'rejected', 'signature_pending', 'suspended'],
     changes_requested: ['account_created', 'documents_pending', 'quote_ready', 'contract_selected', 'deposit_pending', 'admin_review', 'expired', 'suspended'],
     approved: ['active', 'suspended'],
@@ -484,11 +485,20 @@ export function isCanonicalState(machineName: CanonicalStateMachineName, raw: un
   return CANONICAL_STATE_MACHINES[machineName].states.includes(keyFor(machineName, raw));
 }
 
+/** F-5: a canonical state or an explicit alias. Transition checks never normalise unknown input. */
+export function isKnownCanonicalState(machineName: CanonicalStateMachineName, raw: unknown): boolean {
+  const definition = CANONICAL_STATE_MACHINES[machineName];
+  const normalized = keyFor(machineName, raw);
+  if (!normalized) return false;
+  return definition.states.includes(normalized) || Boolean(ownEntryValue(definition.aliases, normalized));
+}
+
 export function canTransitionCanonicalState(
   machineName: CanonicalStateMachineName,
   fromRaw: unknown,
   toRaw: unknown,
 ): boolean {
+  if (!isKnownCanonicalState(machineName, fromRaw) || !isKnownCanonicalState(machineName, toRaw)) return false;
   const definition = CANONICAL_STATE_MACHINES[machineName];
   const from = normalizeCanonicalState(machineName, fromRaw);
   const to = normalizeCanonicalState(machineName, toRaw);
@@ -501,6 +511,9 @@ export function assertCanonicalTransition(
   fromRaw: unknown,
   toRaw: unknown,
 ): string {
+  if (!isKnownCanonicalState(machineName, fromRaw) || !isKnownCanonicalState(machineName, toRaw)) {
+    throw new Error(`Unknown ${machineName} state in transition: ${String(fromRaw)} -> ${String(toRaw)}`);
+  }
   const from = normalizeCanonicalState(machineName, fromRaw);
   const to = normalizeCanonicalState(machineName, toRaw);
   if (!canTransitionCanonicalState(machineName, from, to)) {

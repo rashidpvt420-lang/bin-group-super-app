@@ -1,9 +1,16 @@
 import { FieldValue } from "firebase-admin/firestore";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
+import type * as FirebaseFirestore from "firebase-admin/firestore";
 import { generateContractPdfArtifact, generateMobilizationUnpaidInvoicePdfArtifact } from "./pdfEngine";
 import { assertMobilizationInvoiceImmutable, buildMobilizationInvoiceSnapshot } from "./mobilizationInvoice";
 import { termFieldsFromStart } from "./ownerContractTerm";
+import {
+  assertOwnerOnboardingTransition,
+  ownerOnboardingStatePatch,
+  resolveOwnerOnboardingState,
+  type OwnerOnboardingState,
+} from "./ownerOnboardingLifecycle";
 import { formatAedMoney, normalizeAedMoney } from "./shared/aedMoney";
 import {
   consumeVerifiedContractSignatureOtp,
@@ -506,6 +513,27 @@ const ALREADY_SIGNED_STATUSES = new Set(["ACTIVE"]);
 // one of them has recorded its sha256/generation as canonical evidence.
 const CONTRACT_SIGNING_LEASE_MS = 2 * 60 * 1000;
 
+const INSPECTION_FIRST_WORKFLOW_VERSION = "OWNER_FIVE_PAGE_INSPECTION_FIRST_V1";
+
+/** F-5: the intake that governs an inspection-first contract's lifecycle (null for other workflows). */
+function inspectionFirstIntakeRef(contract: Record<string, any>, contractId: string) {
+  if (s(contract.workflowVersion) !== INSPECTION_FIRST_WORKFLOW_VERSION) return null;
+  return db.collection("intake_submissions").doc(s(contract.intakeId) || contractId);
+}
+
+/** F-5: the Owner's final signature is legal only from FINAL_QUOTE_AWAITING_OWNER_SIGNATURE. */
+function assertOwnerFinalSignatureTransition(
+  intakeSnap: FirebaseFirestore.DocumentSnapshot | null,
+  contract: Record<string, any>,
+  payment: Record<string, any> | null,
+): OwnerOnboardingState | null {
+  if (!intakeSnap) return null;
+  if (!intakeSnap.exists) throw new HttpsError("failed-precondition", "The Owner application for this contract is missing.");
+  const from = resolveOwnerOnboardingState({ intake: intakeSnap.data() || {}, contract, payment });
+  assertOwnerOnboardingTransition(from, "OWNER_SIGNED_AWAITING_PAYMENT_EVIDENCE", "owner");
+  return from;
+}
+
 function contractIsServerSigned(contract: Record<string, any>) {
   return ALREADY_SIGNED_STATUSES.has(s(contract.status).toUpperCase()) || contract.ownerSigned === true || contract.signatureState?.ownerSigned === true;
 }
@@ -561,6 +589,15 @@ export const ownerSignContractAndQueuePdf = onCall({ cors: true, enforceAppCheck
     contractHash,
   };
   await validateVerifiedContractSignatureOtp(otpEvidence);
+  // F-5: fail before generating a PDF when the application is not awaiting the final signature.
+  const lifecycleIntakeRef = inspectionFirstIntakeRef(contract, contractId);
+  if (lifecycleIntakeRef) {
+    const [precheckIntake, precheckPayment] = await Promise.all([
+      lifecycleIntakeRef.get(),
+      db.collection("payment_transactions").doc(contractId).get(),
+    ]);
+    assertOwnerFinalSignatureTransition(precheckIntake, contract, precheckPayment.exists ? precheckPayment.data() || {} : null);
+  }
 
   const signingAttemptId = db.collection("contracts").doc().id;
   const leaseState = await db.runTransaction(async (transaction) => {
@@ -634,6 +671,8 @@ export const ownerSignContractAndQueuePdf = onCall({ cors: true, enforceAppCheck
       const paymentSnap = await transaction.get(paymentRef);
       const invoiceSnap = await transaction.get(invoiceRef);
       const freshContract = freshContractSnap.data() || {};
+      const freshIntakeRef = inspectionFirstIntakeRef(freshContract, contractId);
+      const freshIntakeSnap = freshIntakeRef ? await transaction.get(freshIntakeRef) : null;
       if (contractIsServerSigned(freshContract)) {
         signingWasIdempotent = true;
         return;
@@ -648,7 +687,14 @@ export const ownerSignContractAndQueuePdf = onCall({ cors: true, enforceAppCheck
           throw new HttpsError("aborted", error?.message || "Existing mobilisation invoice identity changed.");
         }
       }
+      const lifecycleFrom = assertOwnerFinalSignatureTransition(freshIntakeSnap, freshContract, paymentSnap.exists ? paymentSnap.data() || {} : null);
       await consumeVerifiedContractSignatureOtp(transaction, otpEvidence);
+      if (freshIntakeRef && lifecycleFrom) {
+        transaction.set(freshIntakeRef, {
+          ...ownerOnboardingStatePatch(lifecycleFrom, "OWNER_SIGNED_AWAITING_PAYMENT_EVIDENCE", "owner", request.auth!.uid, ts()),
+          updatedAt: ts(),
+        }, { merge: true });
+      }
       transaction.set(ref, { status: "PENDING_ACTIVATION", contractStatus: "PENDING_ACTIVATION", activationStatus: "PENDING_PAYMENT_VERIFICATION", paymentStatus: "PENDING_ADMIN_PAYMENT_VERIFICATION", ownerSigned: true, signatureName, signatureStatus: "OWNER_SIGNED", otpVerificationId, otpEvidenceVerified: true, finalContractAccepted: true, finalContractAcceptedQuoteHash: contractHash, invoiceId: invoiceSnapshot.invoiceId, signatureState: { ...(freshContract.signatureState || {}), ownerSigned: true, ownerSignedAt: signedAtDate.toISOString(), ownerSignatureName: signatureName, acceptedQuoteHash: contractHash, pdfGenerated: true, pdfUrl, pdfSha256: pdfArtifact.pdfSha256, pdfStoragePath: pdfArtifact.storagePath, pdfGeneration: pdfArtifact.generation, emailed: false, emailQueued: true, emailQueuedAt: signedAtDate.toISOString() }, signingLease: FieldValue.delete(), signedPdfUrl: pdfUrl, canonicalPdfUrl: pdfUrl, canonicalPdfSha256: pdfArtifact.pdfSha256, canonicalPdfStoragePath: pdfArtifact.storagePath, canonicalPdfGeneration: pdfArtifact.generation, canonicalPdfDocumentHash: pdfArtifact.documentHash, canonicalPdfSource: "SERVER_PDF_ENGINE", ownerSignedAt: ts(), ...termFields, updatedAt: ts() }, { merge: true });
       if (!invoiceSnap.exists) {
         transaction.create(invoiceRef, {
