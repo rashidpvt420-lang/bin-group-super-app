@@ -27,6 +27,7 @@ import {
 import { Mail, Save, ShieldAlert, UserX } from 'lucide-react';
 import { functions, httpsCallable } from '../../lib/firebase';
 import { binThemeTokens } from '../../theme/adminTheme';
+import { describeIncompleteHrRead } from '../../utils/hrReadCompleteness';
 
 const EMIRATES = ['Dubai', 'Abu Dhabi', 'Sharjah', 'Ajman', 'Umm Al Quwain', 'Ras Al Khaimah', 'Fujairah', 'Al Ain'];
 
@@ -162,6 +163,8 @@ export default function StaffLifecycleDetailsDialog({
         deviceReady: staff.role === 'technician' ? current.deviceReady === true : true,
         activationApproved: current.activationApproved === true,
       });
+      const incomplete = describeIncompleteHrRead(data);
+      if (incomplete) setNotice({ severity: 'warning', message: incomplete });
     } catch (error) {
       setDetails(null);
       setNotice({ severity: 'error', message: `Staff lifecycle could not load: ${safeError(error)}` });
