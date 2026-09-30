@@ -13,6 +13,7 @@ const GYM_COMPLEXITIES = new Set(["STANDARD_DRY", "ENHANCED", "WET_RECOVERY"]);
 const GYM_OPENING_SCHEDULES = new Set(["STANDARD_HOURS", "EXTENDED_HOURS", "24_7"]);
 const GYM_DOCUMENT_STATUSES = new Set(["verified", "pending", "not_available", "not_applicable"]);
 const PRICING_DRIVERS = new Set(["facility", "unit", "sqft", "bed", "sqft+capacity"]);
+const FM_VERIFIED_PROPERTY_FIELDS = ["floors", "lifts", "hvacCount", "hvac", "districtCooling", "fireAlarm", "firePump", "sira", "gen", "bmu", "tank", "pool"] as const;
 const text = (value: unknown) => String(value || "").trim();
 const upper = (value: unknown) => text(value).toUpperCase();
 const roleOf = (token: any) => text(token?.role || token?.userRole || token?.primaryRole).toLowerCase();
@@ -20,7 +21,7 @@ const money = (value: unknown) => Math.round(Number(value || 0) * 100) / 100;
 const finite = (value: unknown, fallback = NaN) => Number.isFinite(Number(value)) ? Number(value) : fallback;
 const safeId = (value: unknown, fallback: string) => text(value).replace(/[^A-Za-z0-9_-]/g, "_").replace(/_+/g, "_").slice(0, 180) || fallback;
 
-async function requireAdmin(request: any) {
+export async function requireAdmin(request: any) {
   if (!request.auth?.uid) throw new HttpsError("unauthenticated", "Admin authentication required.");
   const token = request.auth.token || {};
   if (token.suspended === true || !(ADMIN_ROLES.has(roleOf(token)) || token.admin === true || token.isAdmin === true || token.superAdmin === true || token.super_admin === true)) {
@@ -391,18 +392,6 @@ export const adminCompleteOwnerPortfolioInspections = onCall({ cors: true, enfor
       emirate: pricing.emirate,
       zone: pricing.zone || property.zone,
       age: pricing.propertyAge,
-      floors: pricing.floors ?? property.floors,
-      lifts: pricing.lifts ?? property.lifts,
-      hvacCount: pricing.hvacCount ?? property.hvacCount,
-      hvac: pricing.hvac ?? property.hvac,
-      districtCooling: pricing.districtCooling ?? property.districtCooling,
-      fireAlarm: pricing.fireAlarm ?? property.fireAlarm,
-      firePump: pricing.firePump ?? property.firePump,
-      sira: pricing.sira ?? property.sira,
-      gen: pricing.gen ?? property.gen,
-      bmu: pricing.bmu ?? property.bmu,
-      tank: pricing.tank ?? property.tank,
-      pool: pricing.pool ?? property.pool,
       slaTier: pricing.slaTier || property.slaTier,
       paymentPlan: pricing.paymentPlan || property.paymentPlan,
       ratesVerified: pricing.ratesVerified === true,
@@ -410,6 +399,12 @@ export const adminCompleteOwnerPortfolioInspections = onCall({ cors: true, enfor
       pricingVerificationInspectionId: text(inspection.id),
       pricingVerificationEvidenceHash: text(inspection.evidenceHash),
     };
+    // FM building-system inputs are only Admin-verified when Facility Management is in scope. A PM_ONLY
+    // property has none of them, and Firestore rejects `undefined`, so only copy verified values and
+    // otherwise keep whatever the Owner-declared snapshot already carries (spread above).
+    for (const key of FM_VERIFIED_PROPERTY_FIELDS) {
+      if (pricing[key] !== undefined) next[key] = pricing[key];
+    }
     if (pricing.verifiedMaintenanceRate !== undefined) next.verifiedMaintenanceRate = pricing.verifiedMaintenanceRate;
     if (pricing.verifiedManagementRate !== undefined) next.verifiedManagementRate = pricing.verifiedManagementRate;
     if (pricing.pricingDriver === "unit") next.units = pricing.units;

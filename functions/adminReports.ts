@@ -46,6 +46,13 @@ const amount = (value: unknown): number => {
   return Number.isFinite(n) ? n : 0;
 };
 
+/**
+ * Report money is summed in integer fils so totals are exact to the fils. Summing AED floats
+ * directly drifted (three 6982.14 payments reported 20946.420000000002).
+ */
+const toFils = (value: unknown): number => Math.round(amount(value) * 100);
+const filsToAed = (fils: number): number => fils / 100;
+
 const toDate = (value: unknown): Date | null => {
   if (!value) return null;
   if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
@@ -209,15 +216,18 @@ async function readCollection(firestore: admin.firestore.Firestore, collectionNa
   return snap.docs.map((doc) => ({ id: doc.id, ...asRecord(doc.data()) }));
 }
 
-const emptyRow = (date: string) => ({ date, revenue: 0, costs: 0, tickets: 0, completedJobs: 0 });
+// revenueFils/costsFils are integer fils; converted to AED only when the report is returned.
+const emptyRow = (date: string) => ({ date, revenueFils: 0, costsFils: 0, tickets: 0, completedJobs: 0 });
 
-function addRowValue(rows: Map<string, ReturnType<typeof emptyRow>>, date: Date, update: Partial<ReturnType<typeof emptyRow>>): void {
+type RowUpdate = { revenue?: number; costs?: number; tickets?: number; completedJobs?: number };
+
+function addRowValue(rows: Map<string, ReturnType<typeof emptyRow>>, date: Date, update: RowUpdate): void {
   const key = dayKey(date);
   const existing = rows.get(key) || emptyRow(key);
   rows.set(key, {
     ...existing,
-    revenue: existing.revenue + amount(update.revenue),
-    costs: existing.costs + amount(update.costs),
+    revenueFils: existing.revenueFils + toFils(update.revenue),
+    costsFils: existing.costsFils + toFils(update.costs),
     tickets: existing.tickets + amount(update.tickets),
     completedJobs: existing.completedJobs + amount(update.completedJobs),
   });
@@ -247,20 +257,27 @@ async function buildDailyReport(params: NormalizedParams, services: ReportServic
     });
   });
 
-  const data = Array.from(rows.values()).sort((a, b) => a.date.localeCompare(b.date));
-  const totalRevenue = data.reduce((sum, row) => sum + row.revenue, 0);
-  const totalCosts = data.reduce((sum, row) => sum + row.costs, 0);
-  const totalTickets = data.reduce((sum, row) => sum + row.tickets, 0);
-  const totalCompleted = data.reduce((sum, row) => sum + row.completedJobs, 0);
+  const sortedRows = Array.from(rows.values()).sort((a, b) => a.date.localeCompare(b.date));
+  const totalRevenueFils = sortedRows.reduce((sum, row) => sum + row.revenueFils, 0);
+  const totalCostsFils = sortedRows.reduce((sum, row) => sum + row.costsFils, 0);
+  const totalTickets = sortedRows.reduce((sum, row) => sum + row.tickets, 0);
+  const totalCompleted = sortedRows.reduce((sum, row) => sum + row.completedJobs, 0);
+  const data = sortedRows.map(({ revenueFils, costsFils, ...row }) => ({
+    date: row.date,
+    revenue: filsToAed(revenueFils),
+    costs: filsToAed(costsFils),
+    tickets: row.tickets,
+    completedJobs: row.completedJobs,
+  }));
 
   return {
     data,
     summary: {
-      totalRevenue,
-      totalCosts,
+      totalRevenue: filsToAed(totalRevenueFils),
+      totalCosts: filsToAed(totalCostsFils),
       totalTickets,
       totalCompleted,
-      profit: totalRevenue - totalCosts,
+      profit: filsToAed(totalRevenueFils - totalCostsFils),
     },
   };
 }
@@ -273,7 +290,7 @@ async function buildSlaReport(params: NormalizedParams, services: ReportServices
       ticketId: text(record.ticketId),
       ownerId: text(record.ownerId),
       tier: text(record.tier || record.severity || "standard"),
-      penaltyAmount: amount(record.penaltyAmount || record.penalty || record.creditAmount),
+      penaltyAmount: filsToAed(toFils(record.penaltyAmount || record.penalty || record.creditAmount)),
       status: text(record.status || "open"),
       detectedAt: dateFromRecord(record)?.toISOString() || null,
     }))
@@ -284,7 +301,7 @@ async function buildSlaReport(params: NormalizedParams, services: ReportServices
     breaches,
     summary: {
       totalBreaches: breaches.length,
-      totalPenaltyAmount: breaches.reduce((sum, item) => sum + item.penaltyAmount, 0),
+      totalPenaltyAmount: filsToAed(breaches.reduce((sum, item) => sum + toFils(item.penaltyAmount), 0)),
     },
   };
 }

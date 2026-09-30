@@ -95,8 +95,9 @@ test('Gym compliance documents are staged, protected-uploaded and visible to Adm
   }
   assert.match(proofUpload, /stageFile\(key, file\)/);
   assert.match(finalSubmission, /uploadOwnerInspectionProofDocument/);
-  assert.match(finalSubmission, /docType:\s*document\.key/);
-  assert.match(finalSubmission, /documentUrls/);
+  assert.match(finalSubmission, /docType:\s*key/);
+  // F-6: documents are submitted as verified Owner-scoped Storage paths, not URLs.
+  assert.match(finalSubmission, /documentPaths/);
 });
 
 test('Owner-facing inspection-first copy states Gym verification and final server re-quote before payment', () => {

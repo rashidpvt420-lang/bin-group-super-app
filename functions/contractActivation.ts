@@ -2,6 +2,7 @@ import { FieldValue } from "firebase-admin/firestore";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 import { assertStoredOwnerPaymentReceipt } from "./paymentReceiptEvidence";
+import { parseExactAedAmount } from "./shared/aedMoneyInput";
 import {
   loadActivePaymentConfiguration,
   resolveActivePaymentConfiguration,
@@ -100,6 +101,13 @@ export const createOwnerPaymentTransaction = onCall({ cors: true, enforceAppChec
   const paymentConfigHash = activeConfiguration.configHash;
 
   const submittedAmount = request.data?.amount ?? request.data?.mobilizationAmount;
+  if (submittedAmount !== undefined && submittedAmount !== null && submittedAmount !== "") {
+    try {
+      parseExactAedAmount(submittedAmount);
+    } catch {
+      throw new HttpsError("invalid-argument", "The submitted Owner payment amount must be exact to the fils (at most 2 decimals).");
+    }
+  }
   const { annualContractValue, mobilizationAmount } = enforceOwnerActivationPolicy(
     () => resolveLockedOwnerActivationSchedule(contract, submittedAmount),
   );

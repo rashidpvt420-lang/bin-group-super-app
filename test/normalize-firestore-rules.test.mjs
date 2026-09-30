@@ -28,6 +28,23 @@ function conflictTokens() {
   };
 }
 
+// The own-profile read rule the normalizer hardens (scripts/normalize-firestore-rules.mjs
+// normalizeOwnUserProfileReadRule). Real firestore.rules always carries it and the normalizer fails
+// closed when it is missing, so the fixtures must include it.
+function legacyUserProfileGetRule() {
+  return [
+    '    match /users/{userId} {',
+    '      allow get: if signedIn() && (',
+    '                    (request.auth.uid == userId && (resource == null || profileAllowsAccess(resource.data))) ||',
+    '                    (',
+    '                      request.auth.uid != userId &&',
+    '                      isAdmin()',
+    '                    )',
+    '                  );',
+    '    }',
+  ];
+}
+
 function makeConflictedFixture() {
   const { start, mid, end } = conflictTokens();
   return [
@@ -51,6 +68,7 @@ function makeConflictedFixture() {
     '    }',
     "      allow read: if isAdmin() || hasPermission('canManageProperties') || ownerCanRead(resource.data) || tenantOwns(resource.data) ||",
     "get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'tenant');",
+    ...legacyUserProfileGetRule(),
     '    match /notifications/{notificationId} {',
     '      allow read: if isAdmin();',
     '      allow create: if signedIn();',
@@ -80,6 +98,7 @@ function makeCleanFixture() {
     '    }',
     "      allow read: if isAdmin() || hasPermission('canManageProperties') || ownerCanRead(resource.data) || tenantOwns(resource.data) ||",
     "get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'tenant');",
+    ...legacyUserProfileGetRule(),
     '    match /notifications/{notificationId} {',
     '      allow read: if isAdmin();',
     '      allow create: if signedIn();',
@@ -141,6 +160,19 @@ describe('normalize-firestore-rules.mjs', () => {
         output,
         /function openMissionPoolRead\(data\) \{ return hasTechnicianDispatchAuthority\(\) && openMissionAvailable\(data\); \}/,
       );
+      // Own profile stays readable by the account itself; non-self reads keep their guards.
+      assert.match(output, /allow get: if request\.auth != null && \(\n\s+request\.auth\.uid == userId \|\|\n\s+\(\n\s+signedIn\(\) &&\n\s+request\.auth\.uid != userId &&/);
+      assert.doesNotMatch(output, /allow get: if signedIn\(\) && \(\n\s+\(request\.auth\.uid == userId && \(resource == null/);
+    });
+  });
+
+  it('fails closed when the own user profile read rule boundary is missing', () => {
+    const withoutProfileRule = makeCleanFixture().replace(/    match \/users\/\{userId\} \{[\s\S]*?\n    \}\n/, '');
+    assert.doesNotMatch(withoutProfileRule, /match \/users\//);
+    withTempRules(withoutProfileRule, (directory) => {
+      const result = runNormalizer(directory);
+      assert.notEqual(result.status, 0);
+      assert.match(result.stderr, /Missing own user profile read rule boundary/);
     });
   });
 
