@@ -155,6 +155,43 @@ function assertQuote(data: PlainRecord, properties: PlainRecord[], selectedAddOn
   return quote;
 }
 
+// F-7: quoteHash is an unkeyed SHA-256 over the quote body, including the client-supplied
+// quotedAtMs, so a client could recompute it with a fresh timestamp and bypass the 72 h expiry.
+// Every quote the server issues is now recorded, and submission requires the issuance record for
+// this Owner with the same hash and timestamp.
+const QUOTE_ISSUANCE_COLLECTION = "owner_quote_issuances";
+const quoteIssuanceId = (uid: string, quoteHash: string) => `${uid}_${quoteHash}`;
+
+async function recordServerQuoteIssuance(uid: string, quote: PlainRecord) {
+  const expiresAtMs = Number(quote.expiresAtMs || 0);
+  await db.collection(QUOTE_ISSUANCE_COLLECTION).doc(quoteIssuanceId(uid, text(quote.quoteHash))).set({
+    uid,
+    quoteHash: text(quote.quoteHash),
+    quotedAtMs: Number(quote.quotedAtMs || 0),
+    expiresAtMs,
+    annualContractValue: Number(quote.annualContractValue || 0),
+    activationDeposit: Number(quote.activationDeposit || 0),
+    source: "previewOwnerInspectionQuote",
+    createdAt: FieldValue.serverTimestamp(),
+    // Eligible for a Firestore TTL policy once the quote can no longer be submitted.
+    purgeAfter: admin.firestore.Timestamp.fromMillis(expiresAtMs + 7 * 24 * 60 * 60 * 1000),
+  });
+}
+
+async function assertServerIssuedQuote(uid: string, quote: PlainRecord) {
+  const snap = await db.collection(QUOTE_ISSUANCE_COLLECTION).doc(quoteIssuanceId(uid, text(quote.quoteHash))).get();
+  const issued = snap.data() || {};
+  if (
+    !snap.exists ||
+    text(issued.uid) !== uid ||
+    text(issued.quoteHash) !== text(quote.quoteHash) ||
+    Number(issued.quotedAtMs) !== Number(quote.quotedAtMs) ||
+    Number(issued.expiresAtMs || 0) <= Date.now()
+  ) {
+    throw new HttpsError("failed-precondition", "This quotation was not issued by the server for your account or has expired. Return to Contract and request a fresh quote.");
+  }
+}
+
 function otpDigest(args: { requestId: string; uid: string; contractHash: string; otp: string; salt: string; pepper: string }) {
   return crypto.createHmac("sha256", args.pepper).update([
     OTP_HASH_ALGORITHM,
@@ -246,7 +283,9 @@ export const previewOwnerInspectionQuote = onCall({ cors: true, enforceAppCheck:
   const selectedAddOns: string[] = Array.isArray(request.data?.selectedAddOns)
     ? request.data.selectedAddOns.map((value: unknown) => text(value)).filter(Boolean).slice(0, 50)
     : [];
-  return quoteFor(properties, selectedAddOns);
+  const quote = quoteFor(properties, selectedAddOns);
+  await recordServerQuoteIssuance(request.auth!.uid, quote);
+  return quote;
 });
 
 export const requestOwnerInspectionSignatureOtp = onCall({
@@ -399,6 +438,7 @@ export const submitOwnerInspectionFirstOnboarding = onCall({ cors: true, enforce
     ? data.selectedAddOns.map((value: unknown) => text(value)).filter(Boolean).slice(0, 50)
     : [];
   const quote = assertQuote(data, properties, selectedAddOns);
+  await assertServerIssuedQuote(owner.uid, quote);
   const signatureName = text(data.signatureName).slice(0, 180);
   const verificationId = text(data.otpVerificationId || data.contractOtpVerificationId);
   if (signatureName.length < 3 || !verificationId) throw new HttpsError("failed-precondition", "A verified digital signature is required.");
