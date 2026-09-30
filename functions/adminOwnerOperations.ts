@@ -1,7 +1,7 @@
 import { FieldValue } from "firebase-admin/firestore";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
-import { generateContractPdfArtifact } from "./pdfEngine";
+import { generateContractPdfArtifact, generateMobilizationUnpaidInvoicePdfArtifact } from "./pdfEngine";
 import { assertMobilizationInvoiceImmutable, buildMobilizationInvoiceSnapshot } from "./mobilizationInvoice";
 import { termFieldsFromStart } from "./ownerContractTerm";
 import { formatAedMoney, normalizeAedMoney } from "./shared/aedMoney";
@@ -524,7 +524,13 @@ export const ownerSignContractAndQueuePdf = onCall({ cors: true, enforceAppCheck
       quoteHash: contractHash,
     });
     const invoiceRef = db.collection("invoices").doc(invoiceSnapshot.invoiceId);
-    const pdfArtifact = await generateContractPdfArtifact({ ...clean(contract), contractId, ownerName: signatureName, ownerEmail, planName: contract.packageName, propertyName: contract.propertyName, annualValue: contract.annualContractValue || contract.annualValue, mobilizationAmount: signedMobilizationAmount, signedAt: signedAtDate.toISOString() });
+    const [pdfArtifact, invoicePdfArtifact] = await Promise.all([
+      generateContractPdfArtifact({ ...clean(contract), contractId, ownerName: signatureName, ownerEmail, planName: contract.packageName, propertyName: contract.propertyName, annualValue: contract.annualContractValue || contract.annualValue, mobilizationAmount: signedMobilizationAmount, signedAt: signedAtDate.toISOString() }),
+      generateMobilizationUnpaidInvoicePdfArtifact({
+        ...invoiceSnapshot,
+        ownerId,
+      }),
+    ]);
     const pdfUrl = pdfArtifact.pdfUrl;
     // NOTE: signing only marks the contract ready for activation. Payment verification
     // (createOwnerPaymentTransaction -> adminApproveContractActivation) is what unlocks the
@@ -562,6 +568,11 @@ export const ownerSignContractAndQueuePdf = onCall({ cors: true, enforceAppCheck
           status: "PENDING",
           paymentStatus: "UNPAID",
           documentState: "AWAITING_PAYMENT",
+          pdfUrl: invoicePdfArtifact.pdfUrl,
+          storagePath: invoicePdfArtifact.storagePath,
+          pdfSha256: invoicePdfArtifact.pdfSha256,
+          pdfGeneration: invoicePdfArtifact.generation,
+          canonicalPdfSource: "SERVER_CONTRACT_SIGNATURE",
           issuedAt: ts(),
           createdAt: ts(),
           updatedAt: ts(),
