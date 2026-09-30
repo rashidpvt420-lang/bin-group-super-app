@@ -1051,23 +1051,46 @@ service cloud.firestore {
       return signedIn() && request.auth.uid == ownerId &&
         (!('role' in data) || data.role == 'owner') &&
         (!('status' in data) || !(data.status in ['ACTIVE','active'])) &&
-        (!('dashboardUnlocked' in data)) &&
-        (!('paymentVerified' in data));
+        !data.keys().hasAny(ownerProfileServerAuthorityKeys().removeAll(['role', 'status']));
     }
 
     function safeOwnerProfileUpdate() {
       return signedIn() &&
-        (!('status' in request.resource.data) || request.resource.data.status == resource.data.get('status', null)) &&
-        (!('dashboardUnlocked' in request.resource.data) || request.resource.data.dashboardUnlocked == resource.data.get('dashboardUnlocked', null)) &&
-        (!('dashboardLocked' in request.resource.data) || request.resource.data.dashboardLocked == resource.data.get('dashboardLocked', null)) &&
-        (!('dashboardUnlockApproved' in request.resource.data) || request.resource.data.dashboardUnlockApproved == resource.data.get('dashboardUnlockApproved', null)) &&
-        (!('paymentVerified' in request.resource.data) || request.resource.data.paymentVerified == resource.data.get('paymentVerified', null)) &&
-        (!('paymentStatus' in request.resource.data) || request.resource.data.paymentStatus == resource.data.get('paymentStatus', null)) &&
-        (!('adminApproved' in request.resource.data) || request.resource.data.adminApproved == resource.data.get('adminApproved', null)) &&
-        (!('approved' in request.resource.data) || request.resource.data.approved == resource.data.get('approved', null)) &&
-        (!('activeContractId' in request.resource.data) || request.resource.data.activeContractId == resource.data.get('activeContractId', null)) &&
-        (!('activationStatus' in request.resource.data) || request.resource.data.activationStatus == resource.data.get('activationStatus', null)) &&
-        (!('contractActivated' in request.resource.data) || request.resource.data.contractActivated == resource.data.get('contractActivated', null));
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny(ownerProfileServerAuthorityKeys());
+    }
+
+    // N-12: verification, trust and activation state on owners/{uid} is written only by
+    // server callables (Admin SDK). An Owner browser may neither self-create a
+    // pre-verified profile nor set, change or delete any of these keys.
+    function ownerProfileServerAuthorityKeys() {
+      return [
+        'role',
+        'status',
+        'onboardingStatus',
+        'verified',
+        'isVerified',
+        'kycVerified',
+        'kycStatus',
+        'identityVerified',
+        'verificationStatus',
+        'verifiedAt',
+        'verifiedBy',
+        'trustScore',
+        'trustLevel',
+        'trustTier',
+        'dashboardUnlocked',
+        'dashboardLocked',
+        'dashboardUnlockApproved',
+        'paymentVerified',
+        'paymentStatus',
+        'adminApproved',
+        'approved',
+        'approvedAt',
+        'approvedBy',
+        'activeContractId',
+        'activationStatus',
+        'contractActivated'
+      ];
     }
 
     function ownsOnboardingProof(data) {
@@ -1754,10 +1777,11 @@ service cloud.firestore {
     }
 
     match /pricingAuditLogs/{logId} {
+      // N-13: pricing audit entries are append-only server evidence. Browsers
+      // (including the Owner the entry is about) cannot create, rewrite or delete them.
+      // Residual N-11: the pinned generic Admin catch-all still ORs Admin-claim writes.
       allow read: if isAdmin() || (signedIn() && resource.data.get('ownerId', null) == request.auth.uid);
-      allow create: if signedIn() && request.resource.data.get('ownerId', null) == request.auth.uid;
-      allow update: if isAdmin();
-      allow delete: if isAdmin();
+      allow create, update, delete: if false;
     }
 
     match /turnover-quotes/{quoteId} {

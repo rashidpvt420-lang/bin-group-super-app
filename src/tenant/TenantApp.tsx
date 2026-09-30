@@ -1,5 +1,5 @@
 import React from 'react';
-import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
+import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { Box, Container, AppBar, Toolbar, Typography, IconButton, Stack, Button, alpha } from '@mui/material';
 import { ArrowLeft, Home, User } from 'lucide-react';
 import { useLanguage } from '@bin/shared';
@@ -127,6 +127,7 @@ export default function TenantApp() {
                 <Route path="/messages" element={<TenantMessagesPage />} />
                 <Route path="/community" element={<TenantCommunityPage />} />
                 <Route path="/renewals" element={<TenantRenewalsPage />} />
+                <Route path="*" element={<Navigate to="/tenant/dashboard" replace />} />
             </Routes>
         </TenantLayout>
     );

@@ -7,6 +7,7 @@ import { calculateOwnerOnboardingQuote } from "./ownerOnboardingQuote";
 import { isValidOwnerSubmittedGps } from "./ownerSubmittedGps";
 import { loadActivePaymentConfiguration } from "./paymentConfiguration";
 import { normalizeAedMoney } from "./shared/aedMoney";
+import { requireMfaFinanceAdminActor } from "./financeAdminMfa";
 import { assertOtpApplicationBinding, decideOwnerApplicationSubmission } from "./ownerApplicationBinding";
 
 if (!admin.apps.length) admin.initializeApp();
@@ -829,7 +830,8 @@ export const adminCompleteOwnerPropertyInspection = onCall({ cors: true, enforce
 });
 
 export const adminRecordOwnerMobilizationPaymentEvidence = onCall({ cors: true, enforceAppCheck: true, memory: "512MiB" }, async (request) => {
-  const actor = await requireAdmin(request);
+  // F-2: recording 15% payment evidence is a payment decision: MFA finance Admin only.
+  const actor = await requireMfaFinanceAdminActor(request);
   const paymentId = safeId(request.data?.paymentId, "");
   const reference = text(request.data?.paymentReferenceId || request.data?.reference);
   const method = upper(request.data?.paymentMethod || request.data?.method);
@@ -846,6 +848,16 @@ export const adminRecordOwnerMobilizationPaymentEvidence = onCall({ cors: true, 
   if (!paymentSnap.exists) throw new HttpsError("not-found", "Payment transaction not found.");
   const payment = paymentSnap.data() || {};
   if (text(payment.workflowVersion) !== OWNER_WORKFLOW_VERSION || payment.inspectionVerified !== true) throw new HttpsError("failed-precondition", "Complete every Admin property visit before recording the 15% payment.");
+  // F-2: never reopen an approved / verified payment by re-recording evidence.
+  const recordedPaymentState = upper(payment.status || payment.paymentStatus);
+  if (
+    ["APPROVED", "PAID", "VERIFIED", "ACTIVE"].includes(recordedPaymentState) ||
+    ["APPROVED", "PAID", "VERIFIED"].includes(upper(payment.paymentStatus)) ||
+    payment.paymentVerified === true ||
+    payment.approved === true
+  ) {
+    throw new HttpsError("failed-precondition", "This 15% payment is already approved. Evidence cannot be re-recorded on an approved payment.");
+  }
   const contractSnap = await db.collection("contracts").doc(text(payment.contractId || payment.intakeId || paymentId)).get();
   const contract = contractSnap.data() || {};
   const finalQuoteHash = text(payment.finalVerifiedQuoteHash).toLowerCase();
