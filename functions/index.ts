@@ -10,6 +10,7 @@ import { newInvitationOpenTrackingId, parseOpenTrackingId, tenantInvitationTrack
 import * as path from "path";
 import { createRequire } from "module";
 import type { SummarizePropertyPassportSources, PassportIdentity } from "./shared/propertyPassportAggregationTypes";
+import { assertOwnerClosureEvidence } from "./ticketClosureEvidence";
 
 const requirePropertyPassportAggregation = createRequire(__filename);
 const {
@@ -617,6 +618,8 @@ export const ownerReviewTicketCompletion = onCall({ cors: true, enforceAppCheck:
     if (!reviewableStatuses.has(normalizeRole(ticketData.status))) {
         throw new HttpsError("failed-precondition", "Ticket is not ready for owner completion review.");
     }
+    // N-22: an Owner may only approve closure of work with verified after-work evidence.
+    if (action === "APPROVE_CLOSE" && !isAdmin) await assertOwnerClosureEvidence(ticketId, ticketData);
 
     const now = FieldValue.serverTimestamp();
     const baseUpdate: any = {
