@@ -27,6 +27,7 @@ import {
 import { enforceAiUsageQuota } from "./aiUsageQuota";
 import { sendTwilioSMS } from "./smsDelivery";
 import { resolveTechnicianArrivalBinding } from "./technicianInstallationBinding";
+import { flagSlaBreaches } from "./slaCron";
 
 // [V10] PRODUCTION GRADE FULL-STACK STABILIZATION
 setGlobalOptions({ region: "europe-west3", enforceAppCheck: true });
@@ -1692,15 +1693,8 @@ export const onApprovalStagnant = onSchedule({ schedule: "every 24 hours" }, asy
 });
 
 export const evaluateSLACron = onSchedule("every 4 hours", async () => {
-    const now = admin.firestore.Timestamp.now();
-    const twentyFourHoursAgo = new Date(now.toDate().getTime() - 24 * 60 * 60 * 1000);
-    const staleTickets = await db.collection("maintenanceTickets")
-        .where("status", "in", ["OPEN", "assigned"])
-        .where("createdAt", "<", admin.firestore.Timestamp.fromDate(twentyFourHoursAgo))
-        .get();
-    for (const doc of staleTickets.docs) {
-        await doc.ref.update({ slaViolated: true, lastEscalatedAt: now });
-    }
+    // N-36: canonical + alias pre-work statuses in both cases (see slaCron.ts).
+    await flagSlaBreaches(db, admin.firestore.Timestamp.now());
 });
 
 export const scheduledDailyBackup = onSchedule("0 3 * * *", async () => {
