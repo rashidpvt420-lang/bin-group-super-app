@@ -8,6 +8,7 @@ import admin from 'firebase-admin';
 import { initializeFirebaseAdmin, resolveFirebaseAdminProjectId } from './firebase-admin-bootstrap.mjs';
 import { exchangeGmailAccessToken, readGmailOtp } from './lib/gmail-otp-reader.mjs';
 import { signInWithRequiredTotpMfa } from './lib/firebase-mfa-sign-in.mjs';
+import { cleanupBrokerCommissionsForContracts, collectOwnerContractIds } from './lib/e2e-contract-commission-cleanup.mjs';
 
 const PROJECT_ID = 'bin-group-57c60';
 const API_KEY = 'AIzaSyCd-QdM7mjECh9UqDKk1ofBemanpTRgd4s';
@@ -137,6 +138,10 @@ async function deleteQuery(query) {
 
 async function deleteOwnerScopedRecords(uid) {
   if (!uid) return;
+  // Broker commissions are keyed by contract, not owner: remove/void them before the
+  // synthetic contracts disappear, otherwise they linger in the production ledger.
+  const contractIds = await collectOwnerContractIds(db, uid);
+  await cleanupBrokerCommissionsForContracts(db, contractIds, { log: (line) => console.log(line) });
   const collections = [
     'payment_transactions',
     'contracts',

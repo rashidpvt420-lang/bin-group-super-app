@@ -1,61 +1,23 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
-import * as admin from "firebase-admin";
 
-if (!admin.apps.length) {
-  admin.initializeApp();
-}
-
-// Lets the main app, once a user is already signed in, exchange that session
-// for a Firebase custom token the separate admin-panel origin can redeem via
-// signInWithCustomToken. This removes the second manual login step on the
-// cross-domain admin redirect without granting any new privilege: it only
-// re-asserts the caller's own uid, so the admin-panel's own role/claims gate
-// still decides whether that identity is allowed in.
+// N-30: RETIRED. This callable used to mint a Firebase custom token for any caller holding an
+// admin/staff claim so a second origin could signInWithCustomToken. A custom-token session has
+// no second factor, so the bridge let a password-only session become an Admin session without
+// MFA. No client calls it any more (the Admin Command Center is in-app at /admin/*; see
+// scripts/verify-admin-dashboard-access.mjs). The export is kept, hard-disabled, so an existing
+// deployment is replaced by a function that refuses instead of being left running on an old
+// revision. It never mints a token.
 export const mintAdminBridgeToken = onCall({
   cors: true,
   region: "europe-west3",
   enforceAppCheck: true,
   consumeAppCheckToken: true,
 }, async (request) => {
-  const authContext = request.auth;
-  if (!authContext) {
-    throw new HttpsError("unauthenticated", "Sign-in required before bridging to the admin panel.");
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "Sign-in required.");
   }
-  const claims = authContext.token || {};
-  if (claims.suspended === true) {
-    throw new HttpsError("permission-denied", "Suspended accounts cannot open the admin panel.");
-  }
-  const userRecord = await admin.auth().getUser(authContext.uid);
-  if (userRecord.disabled) {
-    throw new HttpsError("permission-denied", "Disabled accounts cannot open the admin panel.");
-  }
-  const role = String(claims.role || claims.userRole || claims.primaryRole || "").trim().toLowerCase();
-  const allowedRoles = new Set([
-    "admin",
-    "super_admin",
-    "ceo",
-    "manager",
-    "operations_admin",
-    "finance_admin",
-    "hr_admin",
-    "support_admin",
-    "hr_manager",
-    "hr_staff",
-    "finance_staff",
-    "account_manager",
-    "dispatcher",
-    "operations_manager",
-  ]);
-  if (
-    claims.admin !== true &&
-    claims.isAdmin !== true &&
-    claims.superAdmin !== true &&
-    claims.super_admin !== true &&
-    !allowedRoles.has(role)
-  ) {
-    throw new HttpsError("permission-denied", "An admin or staff custom claim is required.");
-  }
-
-  const token = await admin.auth().createCustomToken(authContext.uid);
-  return { token };
+  throw new HttpsError(
+    "failed-precondition",
+    "The admin bridge token is retired. Open the Admin Command Center at /admin and sign in with email/password + MFA.",
+  );
 });

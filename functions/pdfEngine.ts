@@ -1,9 +1,7 @@
 import { getStorage } from 'firebase-admin/storage';
 import crypto from 'crypto';
-// @ts-ignore — reshaper is tiny; keep sync. PDFKit is lazy-loaded below to keep Functions discovery fast.
-import arabicReshaper from 'arabic-persian-reshaper';
-
-const reshap = (arabicReshaper as any)?.ArabicReshaper || arabicReshaper;
+// PDFKit is lazy-loaded below to keep Functions discovery fast.
+import { isArabic, layoutBidiText } from "./arabicPdfText";
 
 type PdfKitCtor = typeof import('pdfkit');
 let cachedPdfKit: PdfKitCtor | null = null;
@@ -29,34 +27,42 @@ async function getCairoFont(): Promise<Buffer> {
     return fontBuffer;
 }
 
-function isArabic(text: string): boolean {
-    const arabicRegex = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/;
-    return arabicRegex.test(text);
-}
+// N-04: the previous shapeArabicText/shapeBilingualText called a non-existent reshaper API
+// (reshap.reshape; the package exports ArabicShaper.convertArabic), so nothing was shaped, and they
+// reversed whole strings, which also reversed digits ("13" -> "31") and Latin runs. The bundled
+// Cairo-Regular.ttf was a Latin-only subset. Shaping is now done by fontkit with the full Cairo
+// font, and bidiText() below owns word order, spacing, wrapping and alignment.
 
-function shapeArabicText(text: string): string {
-    if (!text || !isArabic(text)) return text;
-    try {
-        const shaped = typeof reshap?.reshape === 'function' ? reshap.reshape(text) : text;
-        return shaped.split('').reverse().join('');
-    } catch (e) {
-        console.error("Shaping failed:", e);
-        return text;
+/**
+ * Draw Arabic / bilingual text word by word (see arabicPdfText.ts). PDFKit shapes each Arabic word
+ * through fontkit; word order, spacing, wrapping and alignment are computed here so digits and
+ * Latin runs are never reversed and wrapped RTL paragraphs start on the first line.
+ */
+function bidiText(doc: any, text: string, x?: number | null, y?: number | null, options: Record<string, any> = {}) {
+    const value = String(text ?? '');
+    if (!isArabic(value)) {
+        if (x != null && y != null) doc.text(value, x, y, options);
+        else doc.text(value, options);
+        return;
     }
-}
-
-function shapeBilingualText(text: string): string {
-    if (!text) return text;
-    const str = String(text);
-    if (str.includes(' / ')) {
-        const parts = str.split(' / ');
-        return parts.map(part => isArabic(part) ? shapeArabicText(part) : part).join(' / ');
+    const left = x ?? doc.page.margins.left;
+    const maxWidth = options.width || (doc.page.width - doc.page.margins.right - left);
+    const lineGap = Number(options.lineGap || 0);
+    let lineY = y ?? doc.y;
+    const lines = layoutBidiText(value, {
+        maxWidth,
+        measure: (word) => doc.widthOfString(word),
+        spaceWidth: doc.widthOfString(' '),
+        align: options.align === 'center' ? 'center' : options.align === 'right' ? 'right' : options.align === 'left' ? 'left' : undefined,
+    });
+    for (const line of lines) {
+        for (const token of line.tokens) {
+            doc.text(token.text, left + token.x, lineY, { lineBreak: false });
+        }
+        lineY += doc.currentLineHeight(true) + lineGap;
     }
-    if (str.includes(' : ')) {
-        const parts = str.split(' : ');
-        return parts.map(part => isArabic(part) ? shapeArabicText(part) : part).join(' : ');
-    }
-    return isArabic(str) ? shapeArabicText(str) : str;
+    doc.x = doc.page.margins.left;
+    doc.y = lineY;
 }
 
 
@@ -217,7 +223,8 @@ function section(doc: any, titleEn: string, titleAr: string) {
     if (doc.y > 690) doc.addPage();
     doc.moveDown(0.9);
     doc.fillColor(GOLD).fontSize(12).text(titleEn.toUpperCase(), { continued: false });
-    doc.fillColor(MUTED).fontSize(9).text(shapeArabicText(titleAr), { align: 'right' });
+    doc.fillColor(MUTED).fontSize(9);
+    bidiText(doc, titleAr, null, null, { align: 'right' });
     doc.moveDown(0.35);
     doc.strokeColor(BORDER).lineWidth(1).moveTo(50, doc.y).lineTo(545, doc.y).stroke();
     doc.moveDown(0.45);
@@ -227,15 +234,20 @@ function para(doc: any, en: string, ar: string) {
     if (doc.y > 705) doc.addPage();
     doc.fillColor(INK).fontSize(8.7).text(en, { align: 'justify', lineGap: 2 });
     doc.moveDown(0.25);
-    doc.fillColor(MUTED).fontSize(8.3).text(shapeArabicText(ar), { align: 'right', lineGap: 2 });
+    doc.fillColor(MUTED).fontSize(8.3);
+    bidiText(doc, ar, null, null, { align: 'right', lineGap: 2 });
     doc.moveDown(0.5);
 }
 
 function row(doc: any, label: string, value: string) {
     if (doc.y > 720) doc.addPage();
     const y = doc.y;
-    doc.fillColor(MUTED).fontSize(8).text(shapeBilingualText(label), 55, y, { width: 165 });
-    doc.fillColor(INK).fontSize(9.5).text(shapeBilingualText(value), 220, y, { width: 315 });
+    doc.fillColor(MUTED).fontSize(8);
+    bidiText(doc, label, 55, y, { width: 165 });
+    const labelBottom = doc.y;
+    doc.fillColor(INK).fontSize(9.5);
+    bidiText(doc, value, 220, y, { width: 315 });
+    doc.y = Math.max(doc.y, labelBottom);
     doc.moveDown(0.65);
 }
 
@@ -350,7 +362,8 @@ export async function generateContractPdfArtifact(data: any): Promise<CanonicalP
 
         doc.fillColor(GOLD).fontSize(24).text('BIN GROUP L.L.C - S.P.C', { align: 'center' });
         doc.fillColor(INK).fontSize(10).text('13-MONTH OWNER SERVICE AGREEMENT', { align: 'center' });
-        doc.fillColor(MUTED).fontSize(9).text(shapeArabicText('اتفاقية خدمات المالك لمدة 13 شهراً'), { align: 'center' });
+        doc.fillColor(MUTED).fontSize(9);
+        bidiText(doc, 'اتفاقية خدمات المالك لمدة 13 شهراً', null, null, { align: 'center' });
         doc.moveDown(0.6);
         doc.fillColor(MUTED).fontSize(7).text(`Version: ${AGREEMENT_VERSION} | Contract ID: ${contractId} | Hash: ${documentHash.slice(0, 20)}...`, { align: 'center' });
         doc.moveDown(0.9);
@@ -511,7 +524,8 @@ export async function generateContractPdfArtifact(data: any): Promise<CanonicalP
         if (doc.y > 650) doc.addPage();
         doc.strokeColor('#9CA3AF').lineWidth(1).moveTo(55, y + 45).lineTo(240, y + 45).stroke();
         doc.strokeColor('#9CA3AF').moveTo(350, y + 45).lineTo(535, y + 45).stroke();
-        doc.fillColor(INK).fontSize(8).text(`OWNER: ${textValue(data.signatureName || data.ownerName || data.fullName)}`, 55, y + 55, { width: 190 });
+        doc.fillColor(INK).fontSize(8);
+        bidiText(doc, `OWNER: ${textValue(data.signatureName || data.ownerName || data.fullName)}`, 55, y + 55, { width: 190 });
         doc.text('BIN GROUP AUTHORIZED SIGNATORY', 350, y + 55, { width: 190 });
 
         const signedAtStr = data.ownerSignedAt || data.signedAt || data.acceptedAt || data.ownerSignature?.signedAt;
@@ -570,7 +584,8 @@ export async function generatePayslipPdfArtifact(data: any): Promise<CanonicalPd
         });
 
         doc.fillColor(GOLD).fontSize(20).text('BIN GROUP - PAY ADVICE', { align: 'center' }).moveDown(2);
-        doc.fillColor(INK).fontSize(12).text(`Staff Name: ${textValue(data.staffName)}`);
+        doc.fillColor(INK).fontSize(12);
+        bidiText(doc, `Staff Name: ${textValue(data.staffName)}`);
         doc.text(`Employee ID: ${textValue(data.staffId)}`);
         doc.text(`Position: ${textValue(data.position)}`).moveDown(1);
         doc.text(`Pay Period: ${textValue(data.payPeriod)}`);
@@ -647,7 +662,8 @@ export async function generateIntegrityAuditPDF(data: { propertyId: string; prop
         doc.fillColor(MUTED).fontSize(9).text(`Report ID: ${auditId}`, { align: 'center' });
         doc.moveDown(1.2);
 
-        doc.fillColor(INK).fontSize(12).text(`Property: ${textValue(data.propertyName)}`);
+        doc.fillColor(INK).fontSize(12);
+        bidiText(doc, `Property: ${textValue(data.propertyName)}`);
         doc.fillColor(MUTED).fontSize(10).text(`Generated: ${new Date().toLocaleString('en-AE')}`);
         doc.moveDown(1);
         doc.rect(50, doc.y, 495, 2).fill(GOLD);
@@ -760,7 +776,8 @@ export async function generateMobilizationInvoicePdfArtifact(data: any): Promise
         });
         doc.fillColor(GOLD).fontSize(22).text('BIN GROUP L.L.C - S.P.C', { align: 'center' });
         doc.fillColor(INK).fontSize(13).text('PAID MOBILIZATION INVOICE', { align: 'center' });
-        doc.fillColor(MUTED).fontSize(10).text(shapeArabicText('فاتورة دفعة التفعيل - مدفوعة'), { align: 'center' });
+        doc.fillColor(MUTED).fontSize(10);
+        bidiText(doc, 'فاتورة دفعة التفعيل - مدفوعة', null, null, { align: 'center' });
         doc.moveDown();
         row(doc, 'Invoice ID / رقم الفاتورة', invoiceId);
         row(doc, 'Contract ID / رقم العقد', contractId);
