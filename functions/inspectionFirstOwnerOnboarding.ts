@@ -151,7 +151,14 @@ function ownerGeoSource(raw: unknown) {
 }
 
 function quoteFor(properties: PlainRecord[], selectedAddOns: string[], quotedAtMs?: number) {
-  return calculateOwnerOnboardingQuote(properties, selectedAddOns, quotedAtMs, { trustServerVerifiedRates: false });
+  try {
+    return calculateOwnerOnboardingQuote(properties, selectedAddOns, quotedAtMs, { trustServerVerifiedRates: false });
+  } catch (error: any) {
+    if (error instanceof HttpsError) throw error;
+    // Calculator validation messages are Owner-facing reasons. A plain Error would reach the
+    // Owner only as "INTERNAL", so report it as invalid-argument with the reason.
+    throw new HttpsError("invalid-argument", text(error?.message) || "The server could not calculate this property quotation.");
+  }
 }
 
 function assertQuote(data: PlainRecord, properties: PlainRecord[], selectedAddOns: string[]) {
