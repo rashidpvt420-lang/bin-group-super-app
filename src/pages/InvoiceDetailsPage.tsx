@@ -41,28 +41,31 @@ export default function InvoiceDetailsPage() {
             }
 
             try {
-                // In BIN-OS, invoices are often linked to contracts or specific billingEvents
-                const docRef = doc(db, 'contracts', id);
+                const docRef = doc(db, 'invoices', id);
                 const snap = await getDoc(docRef);
 
                 if (snap.exists()) {
                     const data = snap.data();
-                    // Basic security check: owner must own the contract.
-                    if (data.ownerId !== user?.uid) {
+                    const boundOwnerUid = String(data.ownerUid || data.ownerId || '').trim();
+                    if (!user?.uid || boundOwnerUid !== user.uid) {
                         setInvoice(null);
                     } else {
+                        const amount = Number(data.amount || 0);
                         setInvoice({
+                            ...data,
                             id: snap.id,
-                            date: data.createdAt?.toDate ? data.createdAt.toDate().toLocaleDateString() : 'N/A',
-                            dueDate: data.dueDate?.toDate ? data.dueDate.toDate().toLocaleDateString() : 'N/A',
-                            owner: data.ownerName || 'Valued Partner',
-                            entity: data.entityName || 'Authorized Asset',
-                            campus: data.campus || 'Main Cluster',
+                            date: data.issuedAt?.toDate ? data.issuedAt.toDate().toLocaleDateString('en-AE') : 'N/A',
+                            dueDate: data.paidAt?.toDate ? 'PAID ' + data.paidAt.toDate().toLocaleDateString('en-AE') : 'PAYMENT PENDING',
+                            owner: data.ownerName || user?.displayName || user?.email || 'Valued Partner',
+                            entity: data.entityName || 'BIN GROUP Owner Account',
+                            campus: data.campus || 'UAE Portfolio',
                             ownerTrn: data.trn || 'Pending Verification',
                             region: data.region || 'UAE',
-                            integrityHash: data.integrityHash || '0xVIRTUAL_SETTLEMENT_LAYER',
-                            property: data.propertyName || 'Registered Property',
-                            items: data.billingItems || []
+                            integrityHash: data.proofHash || data.integrityHash || '',
+                            property: data.propertyName || 'Mobilisation Deposit',
+                            items: Array.isArray(data.billingItems) && data.billingItems.length
+                                ? data.billingItems
+                                : [{ descEn: '15% Mobilisation Deposit', descAr: 'دفعة التفعيل 15%', total: amount }],
                         });
                     }
                 }
@@ -109,7 +112,7 @@ export default function InvoiceDetailsPage() {
         );
     }
 
-    const lineNet = (invoice.items || []).reduce((sum: number, item: any) => sum + Number(item.total || 0), 0);
+    const lineNet = (invoice.items || []).reduce((sum: number, item: any) => sum + Number(item.total || 0), 0) || Number(invoice.amount || 0);
     // No VAT while the issuer TRN is unverified, so the invoice matches the VAT-free quote.
     const { net: total, vat, total: finalTotal, vatApplied } = invoiceTotals(lineNet);
 
@@ -119,6 +122,12 @@ export default function InvoiceDetailsPage() {
                 <Box>
                     <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 3 }}>{vatApplied ? 'TAX INVOICE / فاتورة ضريبية' : 'INVOICE / فاتورة'}</Typography>
                     <Typography variant="h3" fontWeight="900" sx={{ color: binThemeTokens.textPrimary, mt: 1 }}>{invoice.id}</Typography>
+                    <Chip
+                        label={String(invoice.status || invoice.paymentStatus || 'PENDING').toUpperCase()}
+                        size="small"
+                        sx={{ mt: 1.5, fontWeight: 900, color: binThemeTokens.gold, borderColor: binThemeTokens.gold }}
+                        variant="outlined"
+                    />
                 </Box>
                 <Stack direction="row" spacing={2}>
                     <Button 
@@ -128,18 +137,30 @@ export default function InvoiceDetailsPage() {
                     >
                         PRINT
                     </Button>
-                    <Button 
-                        startIcon={<Download size={18} />} 
-                        variant="contained" 
-                        sx={{ 
-                            background: 'linear-gradient(135deg, #C6A75E, #E6C77A)', 
-                            color: '#0B0B0C', 
+                    <Button
+                        startIcon={<Download size={18} />}
+                        variant="contained"
+                        disabled={!invoice.pdfUrl}
+                        onClick={() => invoice.pdfUrl && window.open(invoice.pdfUrl, '_blank', 'noopener,noreferrer')}
+                        sx={{
+                            background: 'linear-gradient(135deg, #C6A75E, #E6C77A)',
+                            color: '#0B0B0C',
                             fontWeight: 900,
                             px: 4
                         }}
                     >
-                        EXPORT PDF
+                        INVOICE PDF / ملف الفاتورة
                     </Button>
+                    {invoice.receiptPdfUrl && (
+                        <Button
+                            startIcon={<ShieldCheck size={18} />}
+                            variant="outlined"
+                            onClick={() => window.open(invoice.receiptPdfUrl, '_blank', 'noopener,noreferrer')}
+                            sx={{ color: binThemeTokens.gold, borderColor: binThemeTokens.gold, fontWeight: 900, px: 3 }}
+                        >
+                            RECEIPT / إيصال
+                        </Button>
+                    )}
                 </Stack>
             </Box>
 

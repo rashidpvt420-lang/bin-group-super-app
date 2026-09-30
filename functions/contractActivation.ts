@@ -265,6 +265,18 @@ export const createOwnerPaymentTransaction = onCall({ cors: true, enforceAppChec
           paymentSubmittedAt: now,
           updatedAt: now,
         }, { merge: true });
+        transaction.set(db.collection("notifications").doc(`owner_payment_submitted_${paymentId}`), {
+          recipientId: request.auth?.uid,
+          recipientRole: "owner",
+          type: "PAYMENT_SUBMITTED",
+          title: "PAYMENT EVIDENCE SUBMITTED",
+          body: "Your 15% mobilisation payment evidence is pending Admin verification.",
+          link: "/owner/financials",
+          metadata: { paymentId, contractId, amount, state: "PENDING" },
+          read: false,
+          createdAt: now,
+          updatedAt: now,
+        }, { merge: true });
         transaction.set(db.collection("audit_logs").doc(`owner_payment_request_${paymentId}`), {
           action: "OWNER_RESUBMIT_PAYMENT_TRANSACTION",
           actorId: request.auth?.uid,
@@ -351,6 +363,18 @@ export const createOwnerPaymentTransaction = onCall({ cors: true, enforceAppChec
       mobilizationAmount,
       annualContractValue,
       paymentSubmittedAt: now,
+      updatedAt: now,
+    }, { merge: true });
+    transaction.set(db.collection("notifications").doc(`owner_payment_submitted_${paymentId}`), {
+      recipientId: request.auth?.uid,
+      recipientRole: "owner",
+      type: "PAYMENT_SUBMITTED",
+      title: "PAYMENT EVIDENCE SUBMITTED",
+      body: "Your 15% mobilisation payment evidence is pending Admin verification.",
+      link: "/owner/financials",
+      metadata: { paymentId, contractId, amount, state: "PENDING" },
+      read: false,
+      createdAt: now,
       updatedAt: now,
     }, { merge: true });
     transaction.set(db.collection("audit_logs").doc(`owner_payment_request_${paymentId}`), {

@@ -52,13 +52,43 @@ test('Phase 15 monthly Owner report is server-generated and byte-hashed', async 
   }
 });
 
-test('Phase 15 paid invoice PDF is generated only after authoritative payment approval', async () => {
-  const [approval, pdf] = await Promise.all([read('functions/paymentTransactionApproval.ts'), read('functions/pdfEngine.ts')]);
-  const transaction = approval.indexOf('transaction.set(db.collection("invoices").doc(invoiceId)');
-  const artifact = approval.indexOf('generateMobilizationInvoicePdfArtifact', transaction);
-  assert.ok(transaction >= 0 && artifact > transaction, 'Invoice PDF must follow authoritative paid invoice creation.');
-  for (const token of ['pdfSha256', 'pdfGeneration', 'canonicalPdfSource: "SERVER_PAYMENT_APPROVAL"', 'invoice_registry']) assert.ok(approval.includes(token));
-  for (const token of ['PAID MOBILIZATION INVOICE', 'فاتورة دفعة التفعيل - مدفوعة', 'invoices/${invoiceId}/mobilization-invoice.pdf', "createHash('sha256').update(buffer)"]) assert.ok(pdf.includes(token));
+test('Phase 15 signed contract issues one unpaid 15% invoice and approval creates a separate bilingual receipt', async () => {
+  const [signing, approval, pdf, invoiceHelper, invoicePage] = await Promise.all([
+    read('functions/adminOwnerOperations.ts'),
+    read('functions/paymentTransactionApproval.ts'),
+    read('functions/pdfEngine.ts'),
+    read('functions/mobilizationInvoice.ts'),
+    read('src/pages/InvoiceDetailsPage.tsx'),
+  ]);
+  for (const token of [
+    'buildMobilizationInvoiceSnapshot',
+    'status: "PENDING"',
+    'paymentStatus: "UNPAID"',
+    'generateMobilizationUnpaidInvoicePdfArtifact',
+    'owner_payment_invoice_issued_',
+  ]) assert.ok(signing.includes(token), `Signed-contract invoice lifecycle missing ${token}`);
+  for (const token of [
+    'assertMobilizationInvoiceImmutable',
+    'status: "PAID"',
+    'paymentStatus: "PAID"',
+    'generateOwnerPaymentReceiptPdfArtifact',
+    'receiptPdfUrl',
+    'PAID_RECEIPT_READY',
+    'owner_payment_approved_',
+  ]) assert.ok(approval.includes(token), `Payment approval lifecycle missing ${token}`);
+  assert.ok(approval.includes('if (!String(approvedInvoice.receiptPdfUrl || "").trim()'), 'Approval replay must repair a missing receipt.');
+  for (const token of [
+    '15% MOBILISATION INVOICE - UNPAID',
+    'فاتورة دفعة التفعيل 15% - غير مدفوعة',
+    'PAYMENT RECEIPT',
+    'إيصال دفع',
+    'invoices/${invoiceId}/mobilization-invoice.pdf',
+    'invoices/${invoiceId}/payment-receipt.pdf',
+  ]) assert.ok(pdf.includes(token), `Bilingual invoice/receipt PDF missing ${token}`);
+  assert.ok(invoiceHelper.includes('mobilizationInvoiceId'));
+  assert.ok(invoiceHelper.includes('proofHash'));
+  assert.ok(invoicePage.includes("doc(db, 'invoices', id)"));
+  assert.ok(invoicePage.includes('receiptPdfUrl'));
 });
 
 test('Phase 15 PDF artifacts retain verification identity instead of URL-only authority', async () => {
