@@ -206,11 +206,12 @@ export default function OwnerAIIntelligencePage() {
         ownerId: user.email,
         workOrderHistory: passport.workOrders || [],
         financialHistory: passport.financials || [],
+        // N-35: pass only recorded property facts; never invent size, grade, type or emirate.
         propertyDetails: {
-          sqft: first.sqft || 1200,
-          grade: first.grade || 'B',
-          propertyType: first.propertyType || 'APARTMENT',
-          emirate: first.emirate || 'Abu Dhabi',
+          sqft: Number(first.sqft) > 0 ? Number(first.sqft) : null,
+          grade: first.grade || null,
+          propertyType: first.propertyType || null,
+          emirate: first.emirate || null,
         },
       });
       setPredictive(result);

@@ -10,7 +10,7 @@ export interface GeoAnchor {
   city: string;
   area: string;
   placeId: string | null;
-  source: "google_maps" | "title_deed" | "admin_manual" | "device_gps";
+  source: "google_maps" | "title_deed" | "admin_manual" | "device_gps" | "owner_manual";
   verified: boolean;
   verifiedBy: string | null;
   verifiedAt: Timestamp | null;

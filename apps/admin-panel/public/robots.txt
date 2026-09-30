@@ -1,0 +1,3 @@
+# BIN GROUP Admin panel: never index.
+User-agent: *
+Disallow: /
