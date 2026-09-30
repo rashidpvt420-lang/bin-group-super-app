@@ -9,9 +9,8 @@ const test = require('node:test');
 const { admin, db, lib, createUser, clearFirestore, call, expectHttpsError } = require('./_setup.cjs');
 
 const { submitOwnerInspectionFirstOnboarding } = lib('canonicalOwnerSubmission.js');
-const { requestOwnerInspectionSignatureOtp } = lib('inspectionFirstOwnerOnboarding.js');
+const { requestOwnerInspectionSignatureOtp, previewOwnerInspectionQuote } = lib('inspectionFirstOwnerOnboarding.js');
 const { upsertOwnerOnboardingProfile } = lib('ownerOnboarding.js');
-const { calculateOwnerOnboardingQuote } = lib('ownerOnboardingQuote.js');
 
 let ownerA;
 let ownerB;
@@ -41,8 +40,9 @@ async function verifiedOtp(owner, contractId, quoteHash) {
 }
 
 async function submit(owner, intakeId, prop) {
-  const quotedAtMs = Date.now() - 1000;
-  const quote = calculateOwnerOnboardingQuote([prop], [], quotedAtMs);
+  // F-7: the quote must be issued by the server (previewOwnerInspectionQuote), as the real client does.
+  const quote = await call(previewOwnerInspectionQuote, owner, { properties: [prop], selectedAddOns: [] });
+  const quotedAtMs = quote.quotedAtMs;
   const otpVerificationId = await verifiedOtp(owner, intakeId, quote.quoteHash);
   return call(submitOwnerInspectionFirstOnboarding, owner, {
     intakeId, ownerUid: owner.uid, ownerEmail: owner.token.email, properties: [prop], selectedAddOns: [],
