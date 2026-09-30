@@ -381,6 +381,12 @@ export function calculateUaeQuote2026(input: Partial<QuoteInput> | null | undefi
     managementRate = verifiedRate;
   }
 
+  // A class with a 0% management rate (e.g. Government Majlis, Stadium) has no Property Management
+  // service to bundle. Refuse the combined mode instead of labelling a Maintenance-only price as Hybrid.
+  if (safeInput.contractType === 'BOTH' && managementRate <= 0) {
+    return zeroQuote(`${assetClass.label} does not support Property Management, so a combined Maintenance + Property Management quote cannot be issued; select Maintenance Only`, safeInput.slaTier, ['PM_NOT_SUPPORTED']);
+  }
+
   // Property Management is a percentage of actual annual rent/revenue. It must never be multiplied by sqft/units/beds.
   if (safeInput.contractType === 'PM_ONLY') {
     if (managementRate <= 0) return zeroQuote(`${assetClass.label} does not support an automatic Property Management Only quote.`, safeInput.slaTier, ['PM_NOT_SUPPORTED']);
@@ -486,7 +492,7 @@ export function calculateUaeQuote2026(input: Partial<QuoteInput> | null | undefi
   const technicalSubtotal = (emirateAdjustedQuote * ageMultiplier * appliedSlaMultiplier) + complexityPremium + addOnTotal;
 
   let managementFee = 0;
-  if (safeInput.contractType === 'BOTH' && managementRate > 0) {
+  if (safeInput.contractType === 'BOTH') {
     if (managedRevenue <= 0) return zeroQuote('Annual rent / managed revenue is required for a combined Maintenance + Property Management quote; no placeholder revenue is assumed.', safeInput.slaTier, ['ANNUAL_RENT_REQUIRED']);
     managementFee = managedRevenue * (managementRate / 100);
     pricingExplanation.push(`${safeInput.ratesVerified ? 'Admin-verified' : 'Pre-visit baseline'} ${managementRate}% property-management fee (AED ${Math.round(managementFee)}) added once from ${safeInput.ratesVerified ? 'Admin-verified' : 'Owner-declared'} annual rent / managed revenue.`);
