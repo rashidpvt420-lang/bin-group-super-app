@@ -33,6 +33,22 @@ function normalizeRole(value: unknown) {
     return String(value || "").trim().toLowerCase();
 }
 
+/**
+ * Payroll money is exact to the fils. A salary with sub-fils precision (e.g. 8500.555) is rejected,
+ * never stored as-is and never silently rounded. Returns null when the value is not an exact
+ * positive AED amount. (Same rule as functions/shared/aedMoneyInput.ts parseExactAedAmount.)
+ */
+export function exactPositivePayrollAmount(value: unknown): number | null {
+    const amount = typeof value === "string" && /^\d+(?:\.\d+)?$/.test(value.trim()) ? Number(value) : value;
+    if (typeof amount !== "number" || !Number.isFinite(amount) || amount <= 0) return null;
+    const decimal = String(amount);
+    if (/e/i.test(decimal)) return null;
+    const fraction = decimal.split(".")[1] || "";
+    if (fraction.length > 2) return null;
+    const fils = Math.round(amount * 100);
+    return Number.isSafeInteger(fils) ? fils / 100 : null;
+}
+
 function requirePayrollAdmin(auth: any) {
     if (!auth?.uid) throw new HttpsError("unauthenticated", "Admin login required.");
     const token = auth.token || {};
@@ -189,15 +205,24 @@ export const adminGeneratePayrollBatch = onCall(
         const existing = payrollRefs.length ? await db.getAll(...payrollRefs) : [];
         const existingIds = new Set(existing.filter((snap) => snap.exists).map((snap) => snap.id));
         const skipped: string[] = [];
+        const rejected: Array<{ techId: string; techName: string; reason: string }> = [];
         let processed = 0;
         const batch = db.batch();
         const now = serverTimestamp();
         candidates.forEach((tech) => {
             const payrollId = `${tech.id}_${month}`;
-            const amount = Number((tech as any).baseSalary || 0);
+            const rawSalary = (tech as any).baseSalary;
             if (existingIds.has(payrollId)) return;
-            if (!Number.isFinite(amount) || amount <= 0) {
+            const rawNumber = Number(rawSalary || 0);
+            if (!Number.isFinite(rawNumber) || rawNumber <= 0) {
                 skipped.push(safeText((tech as any).displayName || (tech as any).email || tech.id));
+                return;
+            }
+            const amount = exactPositivePayrollAmount(rawSalary);
+            if (amount === null) {
+                const techName = safeText((tech as any).displayName || (tech as any).email || tech.id);
+                skipped.push(techName);
+                rejected.push({ techId: tech.id, techName, reason: "BASE_SALARY_NOT_EXACT_TO_THE_FILS" });
                 return;
             }
             batch.create(db.collection("payroll").doc(payrollId), {
@@ -247,6 +272,7 @@ export const adminGeneratePayrollBatch = onCall(
             month,
             processed,
             skipped,
+            rejected,
             nextAfterId: techSnap.size === 200 ? techSnap.docs[techSnap.docs.length - 1]?.id || null : null,
         };
     },
@@ -284,9 +310,9 @@ export const adminSettlePayrollRecord = onCall(
         const techId = safeText(payroll.techId || payroll.staffId);
         const techName = safeText(payroll.techName || payroll.displayName, techId);
         const month = safeText(payroll.month || payroll.payPeriod);
-        const amount = Number(payroll.amount || payroll.netSalary || payroll.baseSalary || 0);
-        if (!techId || !/^\d{4}-\d{2}$/.test(month) || !Number.isFinite(amount) || amount <= 0) {
-            throw new HttpsError("failed-precondition", "Payroll record is incomplete or has an invalid amount.");
+        const amount = exactPositivePayrollAmount(payroll.amount || payroll.netSalary || payroll.baseSalary || 0);
+        if (!techId || !/^\d{4}-\d{2}$/.test(month) || amount === null) {
+            throw new HttpsError("failed-precondition", "Payroll record is incomplete or its amount is not an exact AED amount to the fils.");
         }
 
         let pdfUrl = "";

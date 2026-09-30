@@ -35,6 +35,7 @@ function payload(submissionId, receiptPath, overrides = {}) {
   return {
     submissionId,
     amount: 5000,
+    paymentMethod: 'CASH', // Phase 1 tenant proof must name Cash or Cheque (#1526)
     reference: `REF-${submissionId}`,
     bankName: 'Bank',
     period: submissionId,

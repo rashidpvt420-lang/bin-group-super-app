@@ -10,6 +10,7 @@ import { newInvitationOpenTrackingId, parseOpenTrackingId, tenantInvitationTrack
 import * as path from "path";
 import { createRequire } from "module";
 import type { SummarizePropertyPassportSources, PassportIdentity } from "./shared/propertyPassportAggregationTypes";
+import { assertOwnerClosureEvidence } from "./ticketClosureEvidence";
 
 const requirePropertyPassportAggregation = createRequire(__filename);
 const {
@@ -617,6 +618,8 @@ export const ownerReviewTicketCompletion = onCall({ cors: true, enforceAppCheck:
     if (!reviewableStatuses.has(normalizeRole(ticketData.status))) {
         throw new HttpsError("failed-precondition", "Ticket is not ready for owner completion review.");
     }
+    // N-22: an Owner may only approve closure of work with verified after-work evidence.
+    if (action === "APPROVE_CLOSE" && !isAdmin) await assertOwnerClosureEvidence(ticketId, ticketData);
 
     const now = FieldValue.serverTimestamp();
     const baseUpdate: any = {
@@ -1750,12 +1753,13 @@ export const validateTenantInvitation = onCall({ cors: true, enforceAppCheck: tr
     if (inviteSnap.empty) throw new HttpsError("not-found", "Invalid or expired invitation.");
 
     const invite = inviteSnap.docs[0].data();
-    if (invite.status === 'accepted' || invite.status === 'cancelled') {
+    if (invite.status === 'accepted' || invite.status === 'cancelled' || invite.status === 'expired') {
         throw new HttpsError("failed-precondition", "This invitation is no longer active.");
     }
 
-    // Safety check for expiresAt
-    if (invite.expiresAt && invite.expiresAt.toDate() < new Date()) {
+    // N-21: an invitation without a valid expiry is never presented as valid.
+    const validateExpiresAtMillis = typeof invite.expiresAt?.toMillis === "function" ? invite.expiresAt.toMillis() : Number.NaN;
+    if (!Number.isFinite(validateExpiresAtMillis) || validateExpiresAtMillis <= Date.now()) {
         throw new HttpsError("failed-precondition", "This invitation has expired.");
     }
 
@@ -1964,6 +1968,37 @@ export const resendTenantInvitation = onCall({ cors: true, enforceAppCheck: true
     return { success: true };
 });
 
+const TENANT_INVITATION_ROLE_KEYS = ["role", "userRole", "primaryRole"];
+const TENANT_INVITATION_PRIVILEGED_KEYS = ["admin", "isAdmin", "superAdmin", "super_admin", "ceo", "manager"];
+
+function assertTenantInvitationRoleCompatible(source: Record<string, any>, label: "account" | "profile") {
+    if (TENANT_INVITATION_PRIVILEGED_KEYS.some((key) => source?.[key] === true)) {
+        throw new HttpsError("failed-precondition", `This ${label} is a privileged account and cannot accept a tenant invitation. Use a separate email address.`);
+    }
+    for (const key of TENANT_INVITATION_ROLE_KEYS) {
+        const role = String(source?.[key] || "").trim().toLowerCase();
+        if (role && role !== "tenant") {
+            throw new HttpsError("failed-precondition", `This ${label} already has the ${role} role. Tenant invitations must be accepted with a separate email address.`);
+        }
+    }
+}
+
+async function migrateTenantInvitationStubRecords(stubId: string, tenantUid: string) {
+    const counts: Record<string, number> = { leases: 0, tenant_ledger: 0 };
+    for (const collectionName of ["leases", "tenant_ledger"]) {
+        for (let page = 0; page < 100; page += 1) {
+            const snap = await db.collection(collectionName).where("tenantId", "==", stubId).limit(200).get();
+            if (snap.empty) break;
+            const batch = db.batch();
+            snap.docs.forEach((doc) => batch.update(doc.ref, { tenantId: tenantUid, tenantUid, migratedFromTenantStubId: stubId }));
+            await batch.commit();
+            counts[collectionName] += snap.size;
+            if (page === 99) throw new Error(`Stub migration for ${collectionName} exceeded 20000 records.`);
+        }
+    }
+    return { leasesMigrated: counts.leases, ledgerRowsMigrated: counts.tenant_ledger };
+}
+
 export const acceptTenantInvitation = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Please sign in to accept invitation.");
     const { token } = request.data || {};
@@ -1979,8 +2014,11 @@ export const acceptTenantInvitation = onCall({ cors: true, enforceAppCheck: true
 
     const inviteDoc = inviteSnap.docs[0];
     const invite = inviteDoc.data();
+    // N-21: the same verified invitee may re-run acceptance to finish an interrupted
+    // stub migration / claim update; anyone else gets "already used".
+    const resumingAcceptance = invite.status === 'accepted' && invite.acceptedBy === request.auth.uid;
 
-    if (invite.status === 'accepted') throw new HttpsError("failed-precondition", "Invitation already used.");
+    if (invite.status === 'accepted' && !resumingAcceptance) throw new HttpsError("failed-precondition", "Invitation already used.");
     if (invite.status === 'cancelled') throw new HttpsError("failed-precondition", "Invitation cancelled.");
     const expiresAtMillis = typeof invite.expiresAt?.toMillis === "function"
         ? invite.expiresAt.toMillis()
@@ -1988,7 +2026,7 @@ export const acceptTenantInvitation = onCall({ cors: true, enforceAppCheck: true
     if (!Number.isFinite(expiresAtMillis)) {
         throw new HttpsError("failed-precondition", "Invitation has no valid expiry and cannot be accepted.");
     }
-    if (expiresAtMillis < Date.now()) {
+    if (!resumingAcceptance && expiresAtMillis < Date.now()) {
         await inviteDoc.ref.update({ status: 'expired' });
         throw new HttpsError("failed-precondition", "Invitation expired.");
     }
@@ -2002,6 +2040,11 @@ export const acceptTenantInvitation = onCall({ cors: true, enforceAppCheck: true
         throw new HttpsError("permission-denied", "This invitation was sent to a different email address.");
     }
 
+    // N-21: accepting a tenant invitation must never replace another role on the account
+    // (same single-role policy as assignPublicPortalRole).
+    const existingClaims = (await admin.auth().getUser(authUid)).customClaims || {};
+    assertTenantInvitationRoleCompatible(existingClaims, "account");
+
     let ownerId = "";
     if (invite && invite.propertyId) {
         const propDoc = await db.collection("properties").doc(String(invite.propertyId)).get();
@@ -2014,6 +2057,7 @@ export const acceptTenantInvitation = onCall({ cors: true, enforceAppCheck: true
         const currentInviteSnap = await transaction.get(inviteDoc.ref);
         if (!currentInviteSnap.exists) throw new HttpsError("not-found", "Invitation no longer exists.");
         const currentInvite = currentInviteSnap.data() || {};
+        if (resumingAcceptance && currentInvite.status === "accepted" && currentInvite.acceptedBy === authUid) return;
         if (currentInvite.status === "accepted") throw new HttpsError("already-exists", "Invitation already used.");
         if (currentInvite.status === "cancelled" || currentInvite.status === "expired") {
             throw new HttpsError("failed-precondition", "Invitation is no longer active.");
@@ -2034,6 +2078,8 @@ export const acceptTenantInvitation = onCall({ cors: true, enforceAppCheck: true
         }
 
         const userRef = db.collection("users").doc(authUid);
+        const userSnap = await transaction.get(userRef);
+        assertTenantInvitationRoleCompatible(userSnap.data() || {}, "profile");
         transaction.set(userRef, {
             uid: authUid,
             email: authEmail,
@@ -2042,7 +2088,7 @@ export const acceptTenantInvitation = onCall({ cors: true, enforceAppCheck: true
             displayName: currentInvite.tenantName,
             propertyId: currentInvite.propertyId,
             ownerId,
-            unitId: currentInvite.unitId,
+            ...(currentInvite.unitId ? { unitId: currentInvite.unitId } : {}),
             tenantInvitationId: inviteDoc.id,
             acceptedAt: FieldValue.serverTimestamp(),
             updatedAt: FieldValue.serverTimestamp()
@@ -2062,7 +2108,8 @@ export const acceptTenantInvitation = onCall({ cors: true, enforceAppCheck: true
         transaction.update(inviteDoc.ref, {
             status: "accepted",
             acceptedAt: FieldValue.serverTimestamp(),
-            acceptedBy: authUid
+            acceptedBy: authUid,
+            stubMigration: { status: invite.tenantId && invite.tenantId !== authUid ? "pending" : "not_required" }
         });
         transaction.set(db.collection("tenant_invitation_events").doc(), {
             invitationId: inviteDoc.id,
@@ -2072,20 +2119,22 @@ export const acceptTenantInvitation = onCall({ cors: true, enforceAppCheck: true
         });
     });
 
+    await admin.auth().setCustomUserClaims(authUid, { ...existingClaims, role: "tenant" });
+
+    // N-21: migrate every stub lease/ledger row (paged, not capped at 200) and record the
+    // outcome. A failure leaves stubMigration "pending"/"failed" and the invitee can re-run
+    // acceptance to resume; migrated rows no longer match the stub query, so it is idempotent.
     const stubId = invite.tenantId;
     if (stubId && stubId !== authUid) {
-        const [leases, ledgers] = await Promise.all([
-            db.collection("leases").where("tenantId", "==", stubId).limit(200).get(),
-            db.collection("tenant_ledger").where("tenantId", "==", stubId).limit(200).get(),
-        ]);
-        const writer = db.bulkWriter();
-        for (const d of leases.docs) writer.update(d.ref, { tenantId: authUid, tenantUid: authUid });
-        for (const d of ledgers.docs) writer.update(d.ref, { tenantId: authUid, tenantUid: authUid });
-        await writer.close();
+        try {
+            const migrated = await migrateTenantInvitationStubRecords(String(stubId), authUid);
+            await inviteDoc.ref.set({ stubMigration: { status: "complete", ...migrated, completedAt: FieldValue.serverTimestamp() } }, { merge: true });
+        } catch (error: any) {
+            console.error("TENANT_INVITATION_STUB_MIGRATION_FAILED", { invitationId: inviteDoc.id, message: error?.message });
+            await inviteDoc.ref.set({ stubMigration: { status: "failed", lastError: String(error?.message || "unknown").slice(0, 300), failedAt: FieldValue.serverTimestamp() } }, { merge: true });
+            throw new HttpsError("internal", "Your invitation was accepted but your lease records are still being linked. Please retry in a moment.");
+        }
     }
-
-    const existingClaims = (await admin.auth().getUser(authUid)).customClaims || {};
-    await admin.auth().setCustomUserClaims(authUid, { ...existingClaims, role: "tenant" });
     return { status: "success", redirect: "/tenant", tokenRefreshRequired: true };
 });
 
