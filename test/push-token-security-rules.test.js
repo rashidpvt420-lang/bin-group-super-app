@@ -57,7 +57,7 @@ describe('Push token server authority', () => {
     await assertFails(updateDoc(tokenRef, { active: false }));
     await assertFails(deleteDoc(tokenRef));
 
-    const adminDb = testEnv.authenticatedContext('browser_admin', { firebase: { sign_in_second_factor: 'phone' },
+    const adminDb = testEnv.authenticatedContext('browser_admin', {
       role: 'admin',
       admin: true,
       email_verified: true,

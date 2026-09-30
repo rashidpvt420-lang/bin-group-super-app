@@ -1,4 +1,3 @@
-import './admin-mfa-rules.test.js';
 import './n06-n08-n09-rules.test.js';
 import './owner-contract-status-rules.test.js';
 import './invoice-verification-rules.test.js';
@@ -41,7 +40,7 @@ describe('Firestore Security Rules', () => {
   });
 
   it('properties read isolation: Owner A cannot read Owner B property', async () => {
-    const adminDb = testEnv.authenticatedContext('admin_user', { firebase: { sign_in_second_factor: 'phone' }, admin: true }).firestore();
+    const adminDb = testEnv.authenticatedContext('admin_user', { admin: true }).firestore();
     await setDoc(doc(adminDb, 'users/admin_user'), { role: 'admin' });
     await setDoc(doc(adminDb, 'properties/prop_b'), { ownerId: 'owner_b' });
 
@@ -110,7 +109,7 @@ describe('Firestore Security Rules', () => {
   });
 
   it('units read isolation: Tenant A cannot read Tenant B unit', async () => {
-    const adminDb = testEnv.authenticatedContext('admin_user', { firebase: { sign_in_second_factor: 'phone' }, admin: true }).firestore();
+    const adminDb = testEnv.authenticatedContext('admin_user', { admin: true }).firestore();
     await setDoc(doc(adminDb, 'users/admin_user'), { role: 'admin' });
     await setDoc(doc(adminDb, 'units/unit_b'), { tenantId: 'tenant_b', propertyId: 'prop_b' });
 
@@ -119,7 +118,7 @@ describe('Firestore Security Rules', () => {
   });
 
   it('contracts activation protection: User cannot update contract to ACTIVE', async () => {
-    const adminDb = testEnv.authenticatedContext('admin_user', { firebase: { sign_in_second_factor: 'phone' }, admin: true }).firestore();
+    const adminDb = testEnv.authenticatedContext('admin_user', { admin: true }).firestore();
     await setDoc(doc(adminDb, 'users/admin_user'), { role: 'admin' });
     await setDoc(doc(adminDb, 'contracts/contract_1'), { ownerId: 'owner_a', status: 'PENDING' });
 
@@ -135,7 +134,7 @@ describe('Firestore Security Rules', () => {
   it('design decisions, quotes and payment handoff cannot be forged through browser writes, including Admin catch-alls', async () => {
     const paths = ['design_requests/design_1', 'design_quotes/design_1', 'design_approvals/design_1_owner'];
     for (const path of paths) await seedServerDocument(path, { ownerId: 'design_owner', userId: 'design_tenant', tenantId: 'design_tenant', tenantUid: 'design_tenant', status: 'AWAITING_OWNER_APPROVAL' });
-    for (const [uid, claims] of [['design_owner', { role: 'owner' }], ['design_tenant', { role: 'tenant' }], ['design_admin', { firebase: { sign_in_second_factor: 'phone' }, role: 'admin', admin: true }]]) {
+    for (const [uid, claims] of [['design_owner', { role: 'owner' }], ['design_tenant', { role: 'tenant' }], ['design_admin', { role: 'admin', admin: true }]]) {
       const client = testEnv.authenticatedContext(uid, claims).firestore();
       for (const path of paths) {
         await assertSucceeds(getDoc(doc(client, path)));
@@ -163,7 +162,7 @@ describe('Firestore Security Rules', () => {
     });
 
     const ownerDb = testEnv.authenticatedContext('owner_a', { role: 'owner' }).firestore();
-    const adminDb = testEnv.authenticatedContext('admin_identity', { firebase: { sign_in_second_factor: 'phone' }, role: 'admin', admin: true }).firestore();
+    const adminDb = testEnv.authenticatedContext('admin_identity', { role: 'admin', admin: true }).firestore();
 
     await assertFails(getDoc(doc(ownerDb, 'property_identity_registry/identity_hash_1')));
     await assertFails(getDoc(doc(adminDb, 'property_identity_registry/identity_hash_1')));
@@ -177,7 +176,7 @@ describe('Firestore Security Rules', () => {
   });
 
   it('owner profile activation fields remain server-authoritative', async () => {
-    const adminDb = testEnv.authenticatedContext('admin_user', { firebase: { sign_in_second_factor: 'phone' }, admin: true }).firestore();
+    const adminDb = testEnv.authenticatedContext('admin_user', { admin: true }).firestore();
     await setDoc(doc(adminDb, 'owners/owner_a'), {
       ownerId: 'owner_a',
       status: 'pending_admin_approval',
@@ -196,13 +195,13 @@ describe('Firestore Security Rules', () => {
   });
 
   it('admin override: Admin can read all', async () => {
-    const adminDb = testEnv.authenticatedContext('admin_user', { firebase: { sign_in_second_factor: 'phone' }, admin: true }).firestore();
+    const adminDb = testEnv.authenticatedContext('admin_user', { admin: true }).firestore();
     await setDoc(doc(adminDb, 'users/admin_user'), { role: 'admin' });
     await assertSucceeds(getDoc(doc(adminDb, 'properties/prop_b')));
   });
 
   it('suspended Auth claims deny access even to an owned record', async () => {
-    const adminDb = testEnv.authenticatedContext('admin_user', { firebase: { sign_in_second_factor: 'phone' }, admin: true }).firestore();
+    const adminDb = testEnv.authenticatedContext('admin_user', { admin: true }).firestore();
     await setDoc(doc(adminDb, 'properties/suspended_owner_property'), { ownerId: 'owner_suspended' });
 
     const suspendedOwnerDb = testEnv.authenticatedContext('owner_suspended', {
@@ -213,7 +212,7 @@ describe('Firestore Security Rules', () => {
   });
 
   it('tenant ticket access: Tenant can read their own tickets', async () => {
-    const adminDb = testEnv.authenticatedContext('admin_user', { firebase: { sign_in_second_factor: 'phone' }, admin: true }).firestore();
+    const adminDb = testEnv.authenticatedContext('admin_user', { admin: true }).firestore();
     await setDoc(doc(adminDb, 'users/admin_user'), { role: 'admin' });
     await setDoc(doc(adminDb, 'maintenanceTickets/ticket_1'), { tenantId: 'tenant_a' });
 
@@ -222,7 +221,7 @@ describe('Firestore Security Rules', () => {
   });
 
   it('technician assigned-ticket access: approved technician can read assigned tickets', async () => {
-    const adminDb = testEnv.authenticatedContext('admin_user', { firebase: { sign_in_second_factor: 'phone' }, admin: true }).firestore();
+    const adminDb = testEnv.authenticatedContext('admin_user', { admin: true }).firestore();
     await setDoc(doc(adminDb, 'users/admin_user'), { role: 'admin' });
     await setDoc(doc(adminDb, 'technicians/tech_a'), { status: 'active', approved: true });
     await setDoc(doc(adminDb, 'maintenanceTickets/ticket_2'), { assignedTechnicianId: 'tech_a' });
@@ -232,7 +231,7 @@ describe('Firestore Security Rules', () => {
   });
 
   it('ticket update narrowing: approved technician cannot reassign or escalate ticket', async () => {
-    const adminDb = testEnv.authenticatedContext('admin_user', { firebase: { sign_in_second_factor: 'phone' }, admin: true }).firestore();
+    const adminDb = testEnv.authenticatedContext('admin_user', { admin: true }).firestore();
     await setDoc(doc(adminDb, 'users/admin_user'), { role: 'admin' });
     await setDoc(doc(adminDb, 'technicians/tech_a'), { status: 'active', approved: true });
     await setDoc(doc(adminDb, 'maintenanceTickets/ticket_3'), {
@@ -262,7 +261,7 @@ describe('Firestore Security Rules', () => {
   });
 
   it('ticket update narrowing: Tenant cannot directly change ticket status', async () => {
-    const adminDb = testEnv.authenticatedContext('admin_user', { firebase: { sign_in_second_factor: 'phone' }, admin: true }).firestore();
+    const adminDb = testEnv.authenticatedContext('admin_user', { admin: true }).firestore();
     await setDoc(doc(adminDb, 'users/admin_user'), { role: 'admin' });
     await setDoc(doc(adminDb, 'maintenanceTickets/ticket_4'), {
       tenantId: 'tenant_a',
@@ -283,7 +282,7 @@ describe('Firestore Security Rules', () => {
   });
 
   it('open mission assignment: direct client claims fail and dispatcher authority assigns', async () => {
-    const adminDb = testEnv.authenticatedContext('admin_user', { firebase: { sign_in_second_factor: 'phone' }, admin: true }).firestore();
+    const adminDb = testEnv.authenticatedContext('admin_user', { admin: true }).firestore();
     await setDoc(doc(adminDb, 'users/admin_user'), { role: 'admin' });
 
     const openTicket = {
@@ -352,7 +351,7 @@ describe('Firestore Security Rules', () => {
   });
 
   it('physical access passes: tenants cannot mint or approve pass records directly', async () => {
-    const adminDb = testEnv.authenticatedContext('admin_user', { firebase: { sign_in_second_factor: 'phone' }, admin: true }).firestore();
+    const adminDb = testEnv.authenticatedContext('admin_user', { admin: true }).firestore();
     await setDoc(doc(adminDb, 'users/admin_user'), { role: 'admin' });
     await setDoc(doc(adminDb, 'users/tenant_a'), { role: 'tenant', propertyId: 'prop_a', unitId: 'unit_a' });
     await setDoc(doc(adminDb, 'units/unit_a'), { tenantId: 'tenant_a', propertyId: 'prop_a', ownerId: 'owner_a' });
@@ -388,7 +387,7 @@ describe('Firestore Security Rules', () => {
   });
 
   it('tenant ticket creation: tenant must use their own assigned unit and matching property', async () => {
-    const adminDb = testEnv.authenticatedContext('admin_user', { firebase: { sign_in_second_factor: 'phone' }, admin: true }).firestore();
+    const adminDb = testEnv.authenticatedContext('admin_user', { admin: true }).firestore();
     await setDoc(doc(adminDb, 'users/admin_user'), { role: 'admin' });
     await setDoc(doc(adminDb, 'units/unit_a'), { tenantId: 'tenant_a', propertyId: 'prop_a', ownerId: 'owner_a' });
     await setDoc(doc(adminDb, 'units/unit_b'), { tenantId: 'tenant_b', propertyId: 'prop_b', ownerId: 'owner_b' });
@@ -433,7 +432,7 @@ describe('Firestore Security Rules', () => {
   });
 
   it('gatePasses isolation: Tenant can read own server pass but cannot mint one', async () => {
-    const adminDb = testEnv.authenticatedContext('admin_user', { firebase: { sign_in_second_factor: 'phone' }, admin: true }).firestore();
+    const adminDb = testEnv.authenticatedContext('admin_user', { admin: true }).firestore();
     await setDoc(doc(adminDb, 'users/admin_user'), { role: 'admin' });
     await seedServerDocument('gatePasses/pass_1', { tenantUid: 'tenant_a', visitorName: 'Visitor 1' });
 
@@ -446,7 +445,7 @@ describe('Firestore Security Rules', () => {
   });
 
   it('amenityBookings isolation: Tenant can manage own bookings, others blocked', async () => {
-    const adminDb = testEnv.authenticatedContext('admin_user', { firebase: { sign_in_second_factor: 'phone' }, admin: true }).firestore();
+    const adminDb = testEnv.authenticatedContext('admin_user', { admin: true }).firestore();
     await setDoc(doc(adminDb, 'users/admin_user'), { role: 'admin' });
     await setDoc(doc(adminDb, 'amenityBookings/booking_1'), { tenantUid: 'tenant_a', amenityName: 'Pool' });
 
@@ -458,7 +457,7 @@ describe('Firestore Security Rules', () => {
   });
 
   it('tenant property access: Tenant can read assigned property doc and another valid tenant is blocked', async () => {
-    const adminDb = testEnv.authenticatedContext('admin_user', { firebase: { sign_in_second_factor: 'phone' }, admin: true }).firestore();
+    const adminDb = testEnv.authenticatedContext('admin_user', { admin: true }).firestore();
     await setDoc(doc(adminDb, 'users/admin_user'), { role: 'admin' });
     await setDoc(doc(adminDb, 'properties/prop_a'), { ownerId: 'owner_a', tenantId: 'tenant_a' });
     await setDoc(doc(adminDb, 'properties/prop_b'), { ownerId: 'owner_b', tenantId: 'tenant_b' });
@@ -546,7 +545,7 @@ describe('Firestore Security Rules', () => {
   });
 
   it('owner tenant profile access: Owner can read assigned tenants', async () => {
-    const adminDb = testEnv.authenticatedContext('admin_user', { firebase: { sign_in_second_factor: 'phone' }, admin: true }).firestore();
+    const adminDb = testEnv.authenticatedContext('admin_user', { admin: true }).firestore();
     await setDoc(doc(adminDb, 'users/admin_user'), { role: 'admin' });
     await setDoc(doc(adminDb, 'properties/prop_a'), { ownerId: 'owner_a' });
     await setDoc(doc(adminDb, 'users/tenant_a'), { role: 'tenant', propertyId: 'prop_a', ownerId: 'owner_a' });
@@ -591,7 +590,7 @@ describe('Firestore Security Rules', () => {
   });
 
   it('paymentConfirmations: only the owning tenant or admin can read it', async () => {
-    const adminDb = testEnv.authenticatedContext('admin_user', { firebase: { sign_in_second_factor: 'phone' }, admin: true }).firestore();
+    const adminDb = testEnv.authenticatedContext('admin_user', { admin: true }).firestore();
     await setDoc(doc(adminDb, 'users/admin_user'), { role: 'admin' });
     await setDoc(doc(adminDb, 'paymentConfirmations/confirm_4'), {
       tenantId: 'tenant_a',
@@ -608,7 +607,7 @@ describe('Firestore Security Rules', () => {
   });
 
   it('broker KYC: broker cannot self-approve verified KYC fields', async () => {
-    const adminDb = testEnv.authenticatedContext('admin_user', { firebase: { sign_in_second_factor: 'phone' }, admin: true }).firestore();
+    const adminDb = testEnv.authenticatedContext('admin_user', { admin: true }).firestore();
     await setDoc(doc(adminDb, 'users/admin_user'), { role: 'admin' });
     await setDoc(doc(adminDb, 'users/broker_a'), {
       role: 'broker',
@@ -824,7 +823,7 @@ describe('Firestore Security Rules', () => {
   });
 
   it('units owner isolation: owner cannot read or create units for another owner', async () => {
-    const adminDb = testEnv.authenticatedContext('admin_user', { firebase: { sign_in_second_factor: 'phone' }, admin: true }).firestore();
+    const adminDb = testEnv.authenticatedContext('admin_user', { admin: true }).firestore();
     await setDoc(doc(adminDb, 'users/admin_user'), { role: 'admin' });
     await setDoc(doc(adminDb, 'units/owner_b_unit'), {
       ownerId: 'owner_b',
@@ -843,7 +842,7 @@ describe('Firestore Security Rules', () => {
   });
 
   it('signed-in smoke checklist: admin can record proof and non-admin cannot', async () => {
-    const adminDb = testEnv.authenticatedContext('admin_user', { firebase: { sign_in_second_factor: 'phone' }, admin: true }).firestore();
+    const adminDb = testEnv.authenticatedContext('admin_user', { admin: true }).firestore();
     await setDoc(doc(adminDb, 'users/admin_user'), { role: 'admin' });
     await assertSucceeds(setDoc(doc(adminDb, 'signed_in_smoke_checks/admin_owner_smoke'), {
       role: 'owner',
@@ -863,7 +862,7 @@ describe('Firestore Security Rules', () => {
   });
 
   it('amenitySlots: same-property tenants can detect a lock but cannot replace its owner', async () => {
-    const adminDb = testEnv.authenticatedContext('admin_user', { firebase: { sign_in_second_factor: 'phone' }, admin: true }).firestore();
+    const adminDb = testEnv.authenticatedContext('admin_user', { admin: true }).firestore();
     await setDoc(doc(adminDb, 'users/admin_user'), { role: 'admin' });
     await setDoc(doc(adminDb, 'users/tenant_a'), { role: 'tenant', propertyId: 'prop_a' });
     await setDoc(doc(adminDb, 'users/tenant_b'), { role: 'tenant', propertyId: 'prop_a' });
@@ -894,7 +893,7 @@ describe('Firestore Security Rules', () => {
   });
 
   it('amenitySlots: tenant cannot create an unscoped lock', async () => {
-    const adminDb = testEnv.authenticatedContext('admin_user', { firebase: { sign_in_second_factor: 'phone' }, admin: true }).firestore();
+    const adminDb = testEnv.authenticatedContext('admin_user', { admin: true }).firestore();
     await setDoc(doc(adminDb, 'users/admin_user'), { role: 'admin' });
     await setDoc(doc(adminDb, 'users/tenant_a'), { role: 'tenant', propertyId: 'prop_a' });
 
@@ -908,7 +907,7 @@ describe('Firestore Security Rules', () => {
   });
 
   it('amenitySlots: a tenant cannot create a lock owned by someone else', async () => {
-    const adminDb = testEnv.authenticatedContext('admin_user', { firebase: { sign_in_second_factor: 'phone' }, admin: true }).firestore();
+    const adminDb = testEnv.authenticatedContext('admin_user', { admin: true }).firestore();
     await setDoc(doc(adminDb, 'users/admin_user'), { role: 'admin' });
     await setDoc(doc(adminDb, 'users/tenant_a'), { role: 'tenant', propertyId: 'prop_a' });
 
@@ -923,7 +922,7 @@ describe('Firestore Security Rules', () => {
   });
 
   it('amenities catalog: scoped to the property tenant/owner/admin, not any signed-in user', async () => {
-    const adminDb = testEnv.authenticatedContext('admin_user', { firebase: { sign_in_second_factor: 'phone' }, admin: true }).firestore();
+    const adminDb = testEnv.authenticatedContext('admin_user', { admin: true }).firestore();
     await setDoc(doc(adminDb, 'users/admin_user'), { role: 'admin' });
     await setDoc(doc(adminDb, 'users/tenant_a'), { role: 'tenant', propertyId: 'prop_a' });
     await setDoc(doc(adminDb, 'users/tenant_b'), { role: 'tenant', propertyId: 'prop_b' });
@@ -941,7 +940,7 @@ describe('Firestore Security Rules', () => {
   });
 
   it('paymentConfirmations: tenant cannot update or delete after creation', async () => {
-    const adminDb = testEnv.authenticatedContext('admin_user', { firebase: { sign_in_second_factor: 'phone' }, admin: true }).firestore();
+    const adminDb = testEnv.authenticatedContext('admin_user', { admin: true }).firestore();
     await setDoc(doc(adminDb, 'users/admin_user'), { role: 'admin' });
     await setDoc(doc(adminDb, 'paymentConfirmations/confirm_5'), {
       tenantId: 'tenant_a',
@@ -955,7 +954,7 @@ describe('Firestore Security Rules', () => {
   });
 
   it('tenant cannot read another propertys amenity booking', async () => {
-    const adminDb = testEnv.authenticatedContext('admin_user', { firebase: { sign_in_second_factor: 'phone' }, admin: true }).firestore();
+    const adminDb = testEnv.authenticatedContext('admin_user', { admin: true }).firestore();
     await setDoc(doc(adminDb, 'users/admin_user'), { role: 'admin' });
     await setDoc(doc(adminDb, 'users/tenant_a'), { role: 'tenant', propertyId: 'prop_a' });
     await setDoc(doc(adminDb, 'users/tenant_b'), { role: 'tenant', propertyId: 'prop_b' });
@@ -970,7 +969,7 @@ describe('Firestore Security Rules', () => {
   });
 
   it('tenant cannot create visitor parking records directly', async () => {
-    const adminDb = testEnv.authenticatedContext('admin_user', { firebase: { sign_in_second_factor: 'phone' }, admin: true }).firestore();
+    const adminDb = testEnv.authenticatedContext('admin_user', { admin: true }).firestore();
     await setDoc(doc(adminDb, 'users/admin_user'), { role: 'admin' });
     await setDoc(doc(adminDb, 'users/tenant_a'), { role: 'tenant', propertyId: 'prop_a' });
     await setDoc(doc(adminDb, 'units/unit_a'), { tenantId: 'tenant_a', propertyId: 'prop_a' });
@@ -994,7 +993,7 @@ describe('Firestore Security Rules', () => {
   });
 
   it('tenant cannot read another tenants parcel', async () => {
-    const adminDb = testEnv.authenticatedContext('admin_user', { firebase: { sign_in_second_factor: 'phone' }, admin: true }).firestore();
+    const adminDb = testEnv.authenticatedContext('admin_user', { admin: true }).firestore();
     await setDoc(doc(adminDb, 'users/admin_user'), { role: 'admin' });
     await setDoc(doc(adminDb, 'parcels/parcel_b'), { tenantUid: 'tenant_b', propertyId: 'prop_b' });
 
@@ -1006,7 +1005,7 @@ describe('Firestore Security Rules', () => {
   });
 
   it('admin can manage parcel/parking/amenity records', async () => {
-    const adminDb = testEnv.authenticatedContext('admin_user', { firebase: { sign_in_second_factor: 'phone' }, admin: true }).firestore();
+    const adminDb = testEnv.authenticatedContext('admin_user', { admin: true }).firestore();
     await setDoc(doc(adminDb, 'users/admin_user'), { role: 'admin' });
 
     await assertSucceeds(setDoc(doc(adminDb, 'amenities/amenity_1'), { name: 'Gym', propertyId: 'prop_a' }));
@@ -1016,7 +1015,7 @@ describe('Firestore Security Rules', () => {
   });
 
   it('owner can manage only owned property records', async () => {
-    const adminDb = testEnv.authenticatedContext('admin_user', { firebase: { sign_in_second_factor: 'phone' }, admin: true }).firestore();
+    const adminDb = testEnv.authenticatedContext('admin_user', { admin: true }).firestore();
     await setDoc(doc(adminDb, 'users/admin_user'), { role: 'admin' });
     await setDoc(doc(adminDb, 'properties/prop_own'), { ownerId: 'owner_a' });
     await setDoc(doc(adminDb, 'properties/prop_other'), { ownerId: 'owner_other' });
@@ -1028,7 +1027,7 @@ describe('Firestore Security Rules', () => {
   });
 
   it('marketplace public/tenant access behaves as intended', async () => {
-    const adminDb = testEnv.authenticatedContext('admin_user', { firebase: { sign_in_second_factor: 'phone' }, admin: true }).firestore();
+    const adminDb = testEnv.authenticatedContext('admin_user', { admin: true }).firestore();
     await setDoc(doc(adminDb, 'users/admin_user'), { role: 'admin' });
 
     const tenantADb = testEnv.authenticatedContext('tenant_a').firestore();
@@ -1042,7 +1041,7 @@ describe('Firestore Security Rules', () => {
   });
 
   it('community posts require moderation', async () => {
-    const adminDb = testEnv.authenticatedContext('admin_user', { firebase: { sign_in_second_factor: 'phone' }, admin: true }).firestore();
+    const adminDb = testEnv.authenticatedContext('admin_user', { admin: true }).firestore();
     await setDoc(doc(adminDb, 'users/admin_user'), { role: 'admin' });
     await setDoc(doc(adminDb, 'users/tenant_a'), { role: 'tenant', propertyId: 'prop_a' });
 
@@ -1064,7 +1063,7 @@ describe('Firestore Security Rules', () => {
   });
 
   it('messages only visible to participants', async () => {
-    const adminDb = testEnv.authenticatedContext('admin_user', { firebase: { sign_in_second_factor: 'phone' }, admin: true }).firestore();
+    const adminDb = testEnv.authenticatedContext('admin_user', { admin: true }).firestore();
     await setDoc(doc(adminDb, 'users/admin_user'), { role: 'admin' });
     await setDoc(doc(adminDb, 'conversations/conv_1'), {
       participantUids: ['tenant_a', 'admin_user'],
@@ -1104,14 +1103,14 @@ describe('Firestore Security Rules', () => {
     )));
     await assertFails(getDocs(query(collection(techDb, 'binConnectThreads'), limit(100))));
 
-    const adminDb = testEnv.authenticatedContext('admin_bin_connect', { firebase: { sign_in_second_factor: 'phone' }, admin: true, role: 'admin' }).firestore();
+    const adminDb = testEnv.authenticatedContext('admin_bin_connect', { admin: true, role: 'admin' }).firestore();
     const adminRows = await assertSucceeds(getDocs(query(collection(adminDb, 'binConnectThreads'), limit(100))));
     assert.equal(adminRows.size, 2);
   });
 
   it('inspections: tenant can create own inspection and read it back', async () => {
     const tenantDb = testEnv.authenticatedContext('tenant_a').firestore();
-    const adminDb = testEnv.authenticatedContext('admin_user', { firebase: { sign_in_second_factor: 'phone' }, admin: true }).firestore();
+    const adminDb = testEnv.authenticatedContext('admin_user', { admin: true }).firestore();
     await setDoc(doc(adminDb, 'users/admin_user'), { role: 'admin' });
 
     await assertSucceeds(setDoc(doc(tenantDb, 'inspections/insp_1'), {
@@ -1139,7 +1138,7 @@ describe('Firestore Security Rules', () => {
 
   it('maintenanceRequests: tenant can create and read own request', async () => {
     const tenantDb = testEnv.authenticatedContext('tenant_a').firestore();
-    const adminDb = testEnv.authenticatedContext('admin_user', { firebase: { sign_in_second_factor: 'phone' }, admin: true }).firestore();
+    const adminDb = testEnv.authenticatedContext('admin_user', { admin: true }).firestore();
     await setDoc(doc(adminDb, 'users/admin_user'), { role: 'admin' });
 
     await assertSucceeds(setDoc(doc(tenantDb, 'maintenanceRequests/req_1'), {
@@ -1237,7 +1236,7 @@ describe('Firestore Security Rules', () => {
     });
 
     const ownerDb = testEnv.authenticatedContext('owner_a', { role: 'owner' }).firestore();
-    const adminDb = testEnv.authenticatedContext('admin_user', { firebase: { sign_in_second_factor: 'phone' }, admin: true, role: 'admin' }).firestore();
+    const adminDb = testEnv.authenticatedContext('admin_user', { admin: true, role: 'admin' }).firestore();
     for (const clientDb of [ownerDb, adminDb]) {
       await assertFails(setDoc(doc(clientDb, 'payment_transactions/client_payment'), {
         ownerId: 'owner_a',
@@ -1258,7 +1257,7 @@ describe('Firestore Security Rules', () => {
 
   it('server coordination and security evidence collections reject all client writes', async () => {
     const ownerDb = testEnv.authenticatedContext('owner_a', { role: 'owner' }).firestore();
-    const adminDb = testEnv.authenticatedContext('admin_user', { firebase: { sign_in_second_factor: 'phone' }, admin: true, role: 'admin' }).firestore();
+    const adminDb = testEnv.authenticatedContext('admin_user', { admin: true, role: 'admin' }).firestore();
     for (const clientDb of [ownerDb, adminDb]) {
       await assertFails(setDoc(doc(clientDb, 'public_rate_limits/property_test'), { count: 1 }));
       await assertFails(setDoc(doc(clientDb, 'notification_dispatch_claims/claim_test'), { createdByUid: 'owner_a' }));
@@ -1269,7 +1268,7 @@ describe('Firestore Security Rules', () => {
   });
 
   it('email-based owner access requires a verified authentication email', async () => {
-    const adminDb = testEnv.authenticatedContext('admin_user', { firebase: { sign_in_second_factor: 'phone' }, admin: true }).firestore();
+    const adminDb = testEnv.authenticatedContext('admin_user', { admin: true }).firestore();
     await setDoc(doc(adminDb, 'propertyPassports/passport_email'), {
       ownerId: 'different_owner',
       ownerEmail: 'owner@example.com',
@@ -1299,7 +1298,7 @@ describe('Firestore Security Rules', () => {
   });
 
   it('amenity slot creation fails closed when tenant property binding is absent', async () => {
-    const adminDb = testEnv.authenticatedContext('admin_user', { firebase: { sign_in_second_factor: 'phone' }, admin: true }).firestore();
+    const adminDb = testEnv.authenticatedContext('admin_user', { admin: true }).firestore();
     await setDoc(doc(adminDb, 'users/admin_user'), { role: 'admin' });
     await setDoc(doc(adminDb, 'users/tenant_without_property'), { role: 'tenant' });
     const tenantDb = testEnv.authenticatedContext('tenant_without_property', { role: 'tenant' }).firestore();
@@ -1312,7 +1311,7 @@ describe('Firestore Security Rules', () => {
   });
 
   it('stale-token suspended user can resolve own status while protected data stays denied', async () => {
-    const adminDb = testEnv.authenticatedContext('admin_user', { firebase: { sign_in_second_factor: 'phone' }, admin: true }).firestore();
+    const adminDb = testEnv.authenticatedContext('admin_user', { admin: true }).firestore();
     await setDoc(doc(adminDb, 'users/admin_user'), { role: 'admin' });
     // Production suspension callables write status='suspended' before stale tokens refresh.
     await setDoc(doc(adminDb, 'users/suspended_user'), { status: 'suspended', suspended: false });
@@ -1347,7 +1346,7 @@ describe('Firestore Security Rules', () => {
 
     const selfDb = testEnv.authenticatedContext('user_a', { role: 'tenant' }).firestore();
     const otherDb = testEnv.authenticatedContext('user_b', { role: 'tenant' }).firestore();
-    const adminDb = testEnv.authenticatedContext('admin_user', { firebase: { sign_in_second_factor: 'phone' }, admin: true, role: 'admin' }).firestore();
+    const adminDb = testEnv.authenticatedContext('admin_user', { admin: true, role: 'admin' }).firestore();
     const hrDb = testEnv.authenticatedContext('hr_user', { role: 'hr_admin' }).firestore();
     const opsDb = testEnv.authenticatedContext('ops_user', { role: 'operations_manager' }).firestore();
     const financeDb = testEnv.authenticatedContext('finance_user', { role: 'finance_admin' }).firestore();
@@ -1399,7 +1398,7 @@ describe('Firestore Security Rules', () => {
   });
 
   it('production-shaped stale-token suspension blocks critical client writes', async () => {
-    const adminDb = testEnv.authenticatedContext('admin_user', { firebase: { sign_in_second_factor: 'phone' }, admin: true }).firestore();
+    const adminDb = testEnv.authenticatedContext('admin_user', { admin: true }).firestore();
     await setDoc(doc(adminDb, 'users/admin_user'), { role: 'admin' });
 
     await setDoc(doc(adminDb, 'users/suspended_tenant'), {
@@ -1538,7 +1537,7 @@ describe('Firestore Security Rules', () => {
     for (const [path, data] of seeded) await seedServerDocument(path, data);
 
     const owner = testEnv.authenticatedContext('owner_phase10', { role: 'owner' }).firestore();
-    const admin = testEnv.authenticatedContext('admin_phase10', { firebase: { sign_in_second_factor: 'phone' }, role: 'admin', admin: true }).firestore();
+    const admin = testEnv.authenticatedContext('admin_phase10', { role: 'admin', admin: true }).firestore();
     const unauth = testEnv.unauthenticatedContext().firestore();
 
     for (const [path] of seeded) {

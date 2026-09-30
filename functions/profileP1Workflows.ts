@@ -691,7 +691,6 @@ export const tenantRequestUnitLink = onCall({ cors: true, region: "europe-west3"
 
 export const adminResolveTenantUnitLink = onCall({ cors: true, region: "europe-west3", enforceAppCheck: true }, async (request) => {
   await requireAdmin(request.auth);
-  await requirePrivilegedMfaSession(request.auth);
 
   const requestId = text(request.data?.requestId);
   const decision = text(request.data?.decision).toUpperCase();
@@ -809,7 +808,6 @@ export const adminResolveTenantUnitLink = onCall({ cors: true, region: "europe-w
 
 export const adminRepairOrphanLinkage = onCall({ cors: true, region: "europe-west3", enforceAppCheck: true }, async (request) => {
   await requireAdmin(request.auth);
-  await requirePrivilegedMfaSession(request.auth);
 
   const orphanId = text(request.data?.orphanId);
   const orphanType = text(request.data?.orphanType).toUpperCase();
@@ -889,7 +887,6 @@ export const adminRepairPropertyGeo = onCall(
   { cors: true, region: "europe-west3", enforceAppCheck: true },
   async (request) => {
     await requireAdmin(request.auth);
-    await requirePrivilegedMfaSession(request.auth);
 
     const propertyId = text(request.data?.propertyId);
     const lat = numberValue(request.data?.lat, Number.NaN);
@@ -1084,4 +1081,3 @@ export const submitBrokerKycProfile = onCall({ cors: true, region: "europe-west3
 });
 
 import type * as FirebaseFirestore from "firebase-admin/firestore";
-import { requirePrivilegedMfaSession } from "./adminMfaSession";

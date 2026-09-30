@@ -101,7 +101,7 @@ describe('F-4 owner contract status is server-authored', () => {
 
   it('Contract managers keep their existing update path', async () => {
     await seed('users/admin_f4', { role: 'admin' });
-    const adminDb = testEnv.authenticatedContext('admin_f4', { firebase: { sign_in_second_factor: 'phone' }, admin: true, role: 'admin' }).firestore();
+    const adminDb = testEnv.authenticatedContext('admin_f4', { admin: true, role: 'admin' }).firestore();
     await assertSucceeds(updateDoc(doc(adminDb, 'contracts/f4_contract'), { status: 'TERMINATED', updatedAt: serverTimestamp() }));
   });
 });

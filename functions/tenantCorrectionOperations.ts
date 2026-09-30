@@ -351,7 +351,6 @@ export const listAdminTenantCorrectionRequests = onCall(
   { cors: true, region: "europe-west3", enforceAppCheck: true },
   async (request) => {
     await requireAdmin(request.auth);
-    await requirePrivilegedMfaSession(request.auth);
     const requestedStatus = text(request.data?.status || "ALL").toUpperCase();
     if (!["ALL", "PENDING_ADMIN_REVIEW", "APPROVED", "REJECTED"].includes(requestedStatus)) {
       throw new HttpsError("invalid-argument", "Unsupported Tenant correction status filter.");
@@ -373,7 +372,6 @@ export const adminResolveTenantCorrectionRequest = onCall(
   { cors: true, region: "europe-west3", enforceAppCheck: true },
   async (request) => {
     const adminAuthority = await requireAdmin(request.auth);
-    await requirePrivilegedMfaSession(request.auth);
     const requestId = cleanRequestId(request.data?.requestId);
     const decision = text(request.data?.decision).toUpperCase();
     const reviewReason = text(request.data?.reason || request.data?.reviewReason);
@@ -564,4 +562,3 @@ export const adminResolveTenantCorrectionRequest = onCall(
 );
 
 import type * as FirebaseFirestore from "firebase-admin/firestore";
-import { requirePrivilegedMfaSession } from "./adminMfaSession";
