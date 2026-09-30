@@ -3,6 +3,7 @@ import { Box, Typography, Grid, Paper, Checkbox, Button, Stack, Chip, Divider, C
 import { useOnboardingStore } from '../../store/onboardingStore';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
+import { resolveAddOnAnnualPrice } from '../../utils/calculateUaeQuote2026';
 
 type LocalText = { en: string; ar: string };
 type SystemItem = { key: string; label: LocalText };
@@ -10,6 +11,14 @@ type AddOnItem = { id: string; name: LocalText; desc: LocalText; price: number; 
 
 const aed = (value: number) => `AED ${value.toLocaleString()}`;
 const label = (text: LocalText, ar: boolean) => (ar ? text.ar : text.en);
+
+// Displayed prices are the engine's annual prices (monthly list x 12 where the list is monthly),
+// so the card can never disagree with what the server quote charges.
+const addOnPrice = (id: string): number => {
+  const annual = resolveAddOnAnnualPrice(id);
+  if (annual === null) throw new Error(`Add-on '${id}' has no automatic annual price.`);
+  return annual;
+};
 
 const ELEVATOR_ADDON_ID = 'elevator_amc';
 
@@ -99,17 +108,17 @@ const systemGroups: Array<{ title: LocalText; systems: SystemItem[] }> = [
 ];
 
 const addOns: AddOnItem[] = [
-  { id: 'fire_safety', name: { en: 'Fire Safety AMC', ar: 'عقد سلامة الحريق' }, required: true, defaultSelected: true, price: 8000, desc: { en: 'Civil Defense compliance checks, alarm readiness and certification support.', ar: 'فحوصات امتثال الدفاع المدني وجاهزية الإنذار ودعم الشهادات.' }, reason: { en: 'Mandatory baseline for UAE occupied assets.', ar: 'متطلب أساسي للعقارات المشغولة في الإمارات.' } },
-  { id: 'water_tank', name: { en: 'Water Tank Sterilization', ar: 'تعقيم خزان المياه' }, required: true, defaultSelected: true, price: 2200, desc: { en: 'Quarterly cleaning, sterilization and hygiene documentation.', ar: 'تنظيف وتعقيم ربع سنوي مع توثيق النظافة.' }, reason: { en: 'Required when water tanks exist.', ar: 'مطلوب عند وجود خزانات مياه.' } },
-  { id: 'elevator_amc', name: { en: 'Elevator / Lift AMC', ar: 'عقد صيانة المصاعد' }, price: 7500, desc: { en: 'Lift inspections, safety checks and service coordination.', ar: 'فحوصات المصاعد والسلامة وتنسيق الخدمة.' }, reason: { en: 'Required only when the asset has floors/lifts. Hidden for Majlis assets.', ar: 'مطلوب فقط عند وجود أدوار أو مصاعد. مخفي لأصول المجالس.' } },
-  { id: 'hvac_pm', name: { en: 'HVAC Preventive Maintenance', ar: 'صيانة وقائية للتكييف' }, required: true, defaultSelected: true, price: 6680, desc: { en: 'AC inspections, filters, coils, drain lines and performance checks.', ar: 'فحوصات المكيفات والفلاتر والملفات وخطوط التصريف والأداء.' }, reason: { en: 'UAE climate makes HVAC continuity mission-critical.', ar: 'مناخ الإمارات يجعل استمرارية التكييف أمراً أساسياً.' } },
-  { id: 'cleaning', name: { en: 'Cleaning Team / Deep Cleaning', ar: 'فريق تنظيف / تنظيف عميق' }, price: 18450, desc: { en: 'Common area cleaning and scheduled hygiene operations.', ar: 'تنظيف المناطق المشتركة وجدولة عمليات النظافة.' }, reason: { en: 'Recommended for shared facilities and Majlis readiness.', ar: 'موصى به للمرافق المشتركة وجاهزية المجالس.' } },
-  { id: 'security', name: { en: 'Security Services / CCTV', ar: 'خدمات أمن / كاميرات' }, price: 36600, desc: { en: 'Guarding coordination, access control and incident logging.', ar: 'تنسيق الحراسة والتحكم بالدخول وتسجيل الحوادث.' }, reason: { en: 'Optional manpower layer for towers, retail and high-value assets.', ar: 'طبقة عمالة اختيارية للأبراج والتجزئة والأصول عالية القيمة.' } },
-  { id: 'pest_control', name: { en: 'Pest Control', ar: 'مكافحة الحشرات' }, price: 2475, desc: { en: 'Quarterly municipality-approved pest control treatments.', ar: 'معالجات ربع سنوية معتمدة من البلدية لمكافحة الحشرات.' }, reason: { en: 'Standard preventive hygiene measure.', ar: 'إجراء وقائي قياسي للنظافة.' } },
-  { id: 'landscaping', name: { en: 'Landscaping & Irrigation', ar: 'تنسيق الحدائق والري' }, price: 12000, desc: { en: 'Garden maintenance, pruning and irrigation system checks.', ar: 'صيانة الحدائق والتقليم وفحص نظام الري.' }, reason: { en: 'Essential for outdoor and garden spaces.', ar: 'أساسي للمساحات الخارجية والحدائق.' } },
-  { id: 'move_in_out_inspection', name: { en: 'Move-in / Move-out Inspection', ar: 'فحص الدخول / الخروج' }, price: 1200, desc: { en: 'Snagging and condition report before/after tenancy or event.', ar: 'تقرير ملاحظات وحالة قبل أو بعد الإيجار أو المناسبة.' }, reason: { en: 'Protects asset condition and lifecycle.', ar: 'يحمي حالة الأصل ودورة حياته.' } },
-  { id: 'mep_support', name: { en: 'MEP Support', ar: 'دعم MEP' }, price: 13500, desc: { en: 'Integrated mechanical, electrical and plumbing preventive support.', ar: 'دعم وقائي متكامل للميكانيكا والكهرباء والسباكة.' }, reason: { en: 'Core operational resilience layer.', ar: 'طبقة أساسية لاستمرارية التشغيل.' } },
-  { id: 'waste_management', name: { en: 'Waste Management', ar: 'إدارة النفايات' }, price: 6600, desc: { en: 'Waste room checks and disposal schedule coordination.', ar: 'فحص غرفة النفايات وتنسيق جدول التخلص.' }, reason: { en: 'Optional hygiene and disposal coordination layer.', ar: 'طبقة اختيارية للنظافة وتنسيق التخلص.' } },
+  { id: 'fire_safety', name: { en: 'Fire Safety AMC', ar: 'عقد سلامة الحريق' }, required: true, defaultSelected: true, price: addOnPrice('fire_safety'), desc: { en: 'Civil Defense compliance checks, alarm readiness and certification support.', ar: 'فحوصات امتثال الدفاع المدني وجاهزية الإنذار ودعم الشهادات.' }, reason: { en: 'Mandatory baseline for UAE occupied assets.', ar: 'متطلب أساسي للعقارات المشغولة في الإمارات.' } },
+  { id: 'water_tank', name: { en: 'Water Tank Sterilization', ar: 'تعقيم خزان المياه' }, required: true, defaultSelected: true, price: addOnPrice('water_tank'), desc: { en: 'Quarterly cleaning, sterilization and hygiene documentation.', ar: 'تنظيف وتعقيم ربع سنوي مع توثيق النظافة.' }, reason: { en: 'Required when water tanks exist.', ar: 'مطلوب عند وجود خزانات مياه.' } },
+  { id: 'elevator_amc', name: { en: 'Elevator / Lift AMC', ar: 'عقد صيانة المصاعد' }, price: addOnPrice('elevator_amc'), desc: { en: 'Lift inspections, safety checks and service coordination.', ar: 'فحوصات المصاعد والسلامة وتنسيق الخدمة.' }, reason: { en: 'Required only when the asset has floors/lifts. Hidden for Majlis assets.', ar: 'مطلوب فقط عند وجود أدوار أو مصاعد. مخفي لأصول المجالس.' } },
+  { id: 'hvac_pm', name: { en: 'HVAC Preventive Maintenance', ar: 'صيانة وقائية للتكييف' }, required: true, defaultSelected: true, price: addOnPrice('hvac_pm'), desc: { en: 'AC inspections, filters, coils, drain lines and performance checks.', ar: 'فحوصات المكيفات والفلاتر والملفات وخطوط التصريف والأداء.' }, reason: { en: 'UAE climate makes HVAC continuity mission-critical.', ar: 'مناخ الإمارات يجعل استمرارية التكييف أمراً أساسياً.' } },
+  { id: 'cleaning', name: { en: 'Cleaning Team / Deep Cleaning', ar: 'فريق تنظيف / تنظيف عميق' }, price: addOnPrice('cleaning'), desc: { en: 'Common area cleaning and scheduled hygiene operations.', ar: 'تنظيف المناطق المشتركة وجدولة عمليات النظافة.' }, reason: { en: 'Recommended for shared facilities and Majlis readiness.', ar: 'موصى به للمرافق المشتركة وجاهزية المجالس.' } },
+  { id: 'security', name: { en: 'Security Services / CCTV', ar: 'خدمات أمن / كاميرات' }, price: addOnPrice('security'), desc: { en: 'Guarding coordination, access control and incident logging.', ar: 'تنسيق الحراسة والتحكم بالدخول وتسجيل الحوادث.' }, reason: { en: 'Optional manpower layer for towers, retail and high-value assets.', ar: 'طبقة عمالة اختيارية للأبراج والتجزئة والأصول عالية القيمة.' } },
+  { id: 'pest_control', name: { en: 'Pest Control', ar: 'مكافحة الحشرات' }, price: addOnPrice('pest_control'), desc: { en: 'Quarterly municipality-approved pest control treatments.', ar: 'معالجات ربع سنوية معتمدة من البلدية لمكافحة الحشرات.' }, reason: { en: 'Standard preventive hygiene measure.', ar: 'إجراء وقائي قياسي للنظافة.' } },
+  { id: 'landscaping', name: { en: 'Landscaping & Irrigation', ar: 'تنسيق الحدائق والري' }, price: addOnPrice('landscaping'), desc: { en: 'Garden maintenance, pruning and irrigation system checks.', ar: 'صيانة الحدائق والتقليم وفحص نظام الري.' }, reason: { en: 'Essential for outdoor and garden spaces.', ar: 'أساسي للمساحات الخارجية والحدائق.' } },
+  { id: 'move_in_out_inspection', name: { en: 'Move-in / Move-out Inspection', ar: 'فحص الدخول / الخروج' }, price: addOnPrice('move_in_out_inspection'), desc: { en: 'Snagging and condition report before/after tenancy or event.', ar: 'تقرير ملاحظات وحالة قبل أو بعد الإيجار أو المناسبة.' }, reason: { en: 'Protects asset condition and lifecycle.', ar: 'يحمي حالة الأصل ودورة حياته.' } },
+  { id: 'mep_support', name: { en: 'MEP Support', ar: 'دعم MEP' }, price: addOnPrice('mep_support'), desc: { en: 'Integrated mechanical, electrical and plumbing preventive support.', ar: 'دعم وقائي متكامل للميكانيكا والكهرباء والسباكة.' }, reason: { en: 'Core operational resilience layer.', ar: 'طبقة أساسية لاستمرارية التشغيل.' } },
+  { id: 'waste_management', name: { en: 'Waste Management', ar: 'إدارة النفايات' }, price: addOnPrice('waste_management'), desc: { en: 'Waste room checks and disposal schedule coordination.', ar: 'فحص غرفة النفايات وتنسيق جدول التخلص.' }, reason: { en: 'Optional hygiene and disposal coordination layer.', ar: 'طبقة اختيارية للنظافة وتنسيق التخلص.' } },
 ];
 
 const SystemsDataStep: React.FC<{ onNext: () => void; onBack: () => void }> = ({ onNext, onBack }) => {

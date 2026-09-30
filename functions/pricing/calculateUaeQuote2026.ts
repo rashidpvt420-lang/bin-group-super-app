@@ -1,4 +1,4 @@
-import { UAE_PRICING_MATRIX_2026 } from './uaePricingMatrix2026';
+import { SERVICE_ADDONS, UAE_PRICING_MATRIX_2026, serviceAddOnAnnualPrice } from './uaePricingMatrix2026';
 
 export interface QuoteInput {
   assetClassId: string;
@@ -105,7 +105,12 @@ export function resolveAssetClassIdForPropertyType(propertyType: string, assetGr
   }
 }
 
-export const ADD_ON_PRICING: Record<string, { label: string; base: number; perUnit?: number; perFloor?: number }> = {
+/**
+ * Annual add-on catalogue used by the quote engine. Every id that appears in the authoritative
+ * monthly list (SERVICE_ADDONS) takes its annual price from that list (see applyServiceAddOnList
+ * below); the base values written here are only used for ids the monthly list does not price yet.
+ */
+const ANNUAL_ADD_ON_CATALOGUE: Record<string, { label: string; base: number; perUnit?: number; perFloor?: number }> = {
   fire_safety: { label: 'Fire Safety AMC', base: 8000 },
   water_tank: { label: 'Water Tank Sterilization', base: 2200 },
   elevator_amc: { label: 'Elevator / Lift AMC', base: 7500 },
@@ -148,6 +153,50 @@ export const ADD_ON_PRICING: Record<string, { label: string; base: number; perUn
   gym_wet_area_care: { label: 'Gym Wet / Recovery Area Specialist Care — separate scope', base: 0 },
   gym_pool_operations: { label: 'Gym Pool Operations / Specialist Scope — separate scope', base: 0 },
 };
+
+/** Add-on ids whose authoritative price has no defined yearly count (per event / visit / service, one-time, per unit). */
+export const MANUAL_QUOTE_ADD_ON_IDS: ReadonlySet<string> = new Set(
+  SERVICE_ADDONS.filter((item) => serviceAddOnAnnualPrice(item.id) === null).map((item) => item.id),
+);
+
+function applyServiceAddOnList(catalogue: typeof ANNUAL_ADD_ON_CATALOGUE) {
+  const priced: typeof ANNUAL_ADD_ON_CATALOGUE = {};
+  for (const [id, item] of Object.entries(catalogue)) {
+    if (MANUAL_QUOTE_ADD_ON_IDS.has(id)) continue;
+    const annual = serviceAddOnAnnualPrice(id);
+    priced[id] = annual === null ? item : { label: item.label, base: annual };
+  }
+  for (const item of SERVICE_ADDONS) {
+    const annual = serviceAddOnAnnualPrice(item.id);
+    if (annual !== null && !priced[item.id]) priced[item.id] = { label: item.label, base: annual };
+  }
+  return Object.freeze(priced);
+}
+
+export const ADD_ON_PRICING: Readonly<Record<string, { label: string; base: number; perUnit?: number; perFloor?: number }>> =
+  applyServiceAddOnList(ANNUAL_ADD_ON_CATALOGUE);
+
+/** Annual price of one add-on as charged by the engine, or null when it needs a manual quote / is unknown. */
+export function resolveAddOnAnnualPrice(id: string): number | null {
+  const canonicalId = id === 'façade_access' ? 'facade_access' : id;
+  if (MANUAL_QUOTE_ADD_ON_IDS.has(canonicalId)) return null;
+  const item = ADD_ON_PRICING[canonicalId];
+  return item ? item.base : null;
+}
+
+function manualQuoteAddOns(addOns: string[] | undefined): string[] {
+  return Array.from(new Set((addOns || []).filter((id) => MANUAL_QUOTE_ADD_ON_IDS.has(id))));
+}
+
+function monthlyListExplanation(addOns: string[], explanation: string[]) {
+  for (const id of new Set(addOns)) {
+    const item = SERVICE_ADDONS.find((addOn) => addOn.id === id);
+    const annual = serviceAddOnAnnualPrice(id);
+    if (!item || annual === null || annual === 0 || item.unit === 'annual') continue;
+    const periods = item.unit === 'per month' ? 12 : 4;
+    explanation.push(`${item.label} add-on: AED ${item.price} ${item.unit} x ${periods} = AED ${annual} per year.`);
+  }
+}
 
 const VALID_ZONES = new Set(['A', 'B', 'C']);
 const VALID_CONTRACT_TYPES = new Set(['FM_ONLY', 'PM_ONLY', 'BOTH']);
@@ -339,7 +388,10 @@ function calculateMosqueQuote(input: QuoteInput): QuoteOutput {
   const complexityPremium = (baseQuote + softServices) * 0.06;
   const ownerOptionalAddOns = (safeInput.addOns || []).filter((id) => !SYSTEM_DRIVEN_ADDON_IDS.has(id));
   const mergedAddOns = Array.from(new Set([...ownerOptionalAddOns, ...resolveMandatoryAddOns(safeInput)]));
+  const manualAddOns = manualQuoteAddOns(mergedAddOns);
+  if (manualAddOns.length) return zeroQuote(`Add-on(s) ${manualAddOns.join(', ')} are priced per event / visit / service / unit or one-time and need a manual quote; they cannot be annualised automatically.`, safeInput.slaTier, ['ADD_ON_MANUAL_QUOTE_REQUIRED']);
   const addOnTotal = calculateAddOnAnnualValue(mergedAddOns, { ...safeInput, units: 1 });
+  monthlyListExplanation(mergedAddOns, pricingExplanation);
   const subtotal = baseQuote + softServices + wuduCleaning + ramadanSurge + compliancePremium + complexityPremium + addOnTotal;
   const annualTotal = subtotal * slaMultiplier(safeInput.slaTier) * (1 + planSurcharge(safeInput.paymentPlan));
   pricingExplanation.push(`${mepRate} AED/sqft mosque MEP benchmark applied to ${sqft} measured sqft.`);
@@ -481,8 +533,11 @@ export function calculateUaeQuote2026(input: Partial<QuoteInput> | null | undefi
 
   const ownerOptionalAddOns = (safeInput.addOns || []).filter((id) => !SYSTEM_DRIVEN_ADDON_IDS.has(id));
   const mergedAddOns = Array.from(new Set([...ownerOptionalAddOns, ...resolveMandatoryAddOns(safeInput)]));
+  const manualAddOns = manualQuoteAddOns(mergedAddOns);
+  if (manualAddOns.length) return zeroQuote(`Add-on(s) ${manualAddOns.join(', ')} are priced per event / visit / service / unit or one-time and need a manual quote; they cannot be annualised automatically.`, safeInput.slaTier, ['ADD_ON_MANUAL_QUOTE_REQUIRED']);
   const addOnDriver = assetClass.pricingUnit === 'facility' ? { ...safeInput, units: 1, offices: 0, shops: 0 } : safeInput;
   const addOnTotal = calculateAddOnAnnualValue(mergedAddOns, addOnDriver);
+  monthlyListExplanation(mergedAddOns, pricingExplanation);
   const technicalSubtotal = (emirateAdjustedQuote * ageMultiplier * appliedSlaMultiplier) + complexityPremium + addOnTotal;
 
   let managementFee = 0;
