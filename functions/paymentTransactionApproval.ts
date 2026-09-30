@@ -5,6 +5,7 @@ import * as crypto from "crypto";
 import { createBrokerCommissionForContract } from "./brokerCommissions";
 import { assertStoredOwnerPaymentReceipt } from "./paymentReceiptEvidence";
 import { normalizeAedMoney } from "./shared/aedMoney";
+import { parseExactAedAmount } from "./shared/aedMoneyInput";
 import { decideRentConfirmedAmount, rentApprovalDecision, rentRejectionDecision } from "./rentPaymentStatus";
 import { generateMobilizationInvoicePdfArtifact } from "./pdfEngine";
 import { resolveActivePaymentConfiguration } from "./paymentConfiguration";
@@ -177,6 +178,11 @@ export const adminApprovePayment = onCall({ cors: true, enforceAppCheck: true },
       request.data?.amountReceived !== null &&
       String(request.data.amountReceived).trim() !== ""
     ) {
+      try {
+        parseExactAedAmount(request.data.amountReceived);
+      } catch {
+        throw new HttpsError("invalid-argument", "Received amount must be a finite AED value exact to the fils (at most 2 decimals).");
+      }
       const amountDecision = decideRentConfirmedAmount(
         payment.amount || payment.amountPaid || payment.rentPaid,
         request.data.amountReceived,
@@ -310,9 +316,9 @@ export const adminApprovePayment = onCall({ cors: true, enforceAppCheck: true },
   if (request.data?.amountReceived !== undefined && request.data?.amountReceived !== null) {
     let submittedAmount: number;
     try {
-      submittedAmount = money(request.data.amountReceived);
+      submittedAmount = money(parseExactAedAmount(request.data.amountReceived));
     } catch {
-      throw new HttpsError("invalid-argument", "Received amount must be a finite AED value.");
+      throw new HttpsError("invalid-argument", "Received amount must be a finite AED value exact to the fils (at most 2 decimals).");
     }
     if (submittedAmount <= 0 || submittedAmount !== expectedAmount) {
       throw new HttpsError("failed-precondition", "Received amount does not match the locked mobilization deposit.");

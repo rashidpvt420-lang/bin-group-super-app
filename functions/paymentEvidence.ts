@@ -1,6 +1,7 @@
 import { FieldValue } from "firebase-admin/firestore";
 import * as admin from "firebase-admin";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
+import { parseExactAedAmount } from "./shared/aedMoneyInput";
 
 if (!admin.apps.length) admin.initializeApp();
 const db = admin.firestore();
@@ -26,8 +27,14 @@ function roleOf(auth: any) {
   ).toLowerCase();
 }
 
+// Exact to the fils: sub-fils input (e.g. 7083.385) is rejected, never silently rounded.
 function positiveMoney(value: unknown, label: string) {
-  const amount = Math.round(Number(value) * 100) / 100;
+  let amount: number;
+  try {
+    amount = parseExactAedAmount(value);
+  } catch {
+    throw new HttpsError("invalid-argument", `${label} must be a positive AED amount exact to the fils (at most 2 decimals).`);
+  }
   if (!Number.isFinite(amount) || amount <= 0 || amount > 100_000_000) {
     throw new HttpsError("invalid-argument", `${label} must be a positive AED amount.`);
   }

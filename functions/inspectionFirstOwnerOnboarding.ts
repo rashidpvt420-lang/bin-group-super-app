@@ -7,6 +7,7 @@ import { calculateOwnerOnboardingQuote } from "./ownerOnboardingQuote";
 import { isValidOwnerSubmittedGps } from "./ownerSubmittedGps";
 import { loadActivePaymentConfiguration } from "./paymentConfiguration";
 import { normalizeAedMoney } from "./shared/aedMoney";
+import { parseExactAedAmount } from "./shared/aedMoneyInput";
 import { requireMfaFinanceAdminActor } from "./financeAdminMfa";
 import { assertOtpApplicationBinding, decideOwnerApplicationSubmission } from "./ownerApplicationBinding";
 
@@ -890,9 +891,9 @@ export const adminRecordOwnerMobilizationPaymentEvidence = onCall({ cors: true, 
   if (request.data?.amountReceived !== undefined && request.data?.amountReceived !== null) {
     let submittedAmount: number;
     try {
-      submittedAmount = normalizeAedMoney(request.data.amountReceived);
+      submittedAmount = parseExactAedAmount(request.data.amountReceived);
     } catch {
-      throw new HttpsError("invalid-argument", "Received amount must be a finite AED value.");
+      throw new HttpsError("invalid-argument", "Received amount must be a finite AED value exact to the fils (at most 2 decimals).");
     }
     if (submittedAmount !== expectedAmount) {
       throw new HttpsError("failed-precondition", "Received amount must equal the locked 15% mobilisation deposit.");
