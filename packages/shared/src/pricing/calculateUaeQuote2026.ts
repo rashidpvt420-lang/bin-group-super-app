@@ -157,6 +157,7 @@ const VALID_GYM_COMPLEXITY = new Set(['STANDARD_DRY', 'ENHANCED', 'WET_RECOVERY'
 const VALID_GYM_OPENING_SCHEDULES = new Set(['STANDARD_HOURS', 'EXTENDED_HOURS', '24_7']);
 const QUARTERLY_BILLING_SURCHARGE = 0.03;
 const MONTHLY_BILLING_SURCHARGE = 0.06;
+const INTEGRATED_BUNDLE_DISCOUNT = 0.10;
 const SYSTEM_DRIVEN_ADDON_IDS = new Set([
   'fire_safety', 'water_tank', 'elevator_amc', 'hvac_pm',
   'sira_renewal', 'facade_access', 'façade_access', 'pca_audit', 'pool_care',
@@ -457,12 +458,15 @@ export function calculateUaeQuote2026(input: Partial<QuoteInput> | null | undefi
   const emirateAdjustedQuote = zoneAdjustedQuote * emirateMultiplier;
   if (emirateMultiplier !== 1) pricingExplanation.push(`Regional technical-service factor ${emirateMultiplier}x applied for ${safeInput.emirate}.`);
 
-  const ageMultiplier = safeInput.propertyAge > 20 ? 1.2 : safeInput.propertyAge > 10 ? 1.12 : safeInput.propertyAge > 5 ? 1.06 : 1;
+  // Pricing model (launch_package/BIN_GROUP_PRICING_MODEL.md, Premium Factors): age 11-20 yrs +15%, 20+ yrs +25%.
+  // No other age band is defined, so assets of 10 years or less carry no age uplift.
+  const ageMultiplier = safeInput.propertyAge > 20 ? 1.25 : safeInput.propertyAge > 10 ? 1.15 : 1;
   if (ageMultiplier > 1) pricingExplanation.push(`Asset-age factor ${ageMultiplier}x applied for ${safeInput.propertyAge} years.`);
 
   let complexityPremiumPercent = 0;
-  if ((safeInput.floors || 0) >= 40) complexityPremiumPercent += 12;
-  else if ((safeInput.floors || 0) >= 15) complexityPremiumPercent += 6;
+  // Pricing model height factor: 15+ floors +8%, 40+ floors +15%.
+  if ((safeInput.floors || 0) >= 40) complexityPremiumPercent += 15;
+  else if ((safeInput.floors || 0) >= 15) complexityPremiumPercent += 8;
   if ((safeInput.lifts || 0) > 10) complexityPremiumPercent += 8;
   else if ((safeInput.lifts || 0) > 4) complexityPremiumPercent += 4;
   if (safeInput.hasCentralHVAC) complexityPremiumPercent += 4;
@@ -493,11 +497,18 @@ export function calculateUaeQuote2026(input: Partial<QuoteInput> | null | undefi
   }
 
   const subtotal = technicalSubtotal + managementFee;
-  const annualTotal = subtotal * (1 + planSurcharge(safeInput.paymentPlan));
+  // Integrated bundle (PRICING_STRATEGY_UAE.md §4, QUOTATION_ENGINE_UI_LOGIC.md §3):
+  // Final = (IFM + PM fee + add-ons) x 0.90 when Property Management is bundled with Maintenance.
+  const bundleDiscountRate = safeInput.contractType === 'BOTH' && managementFee > 0 ? INTEGRATED_BUNDLE_DISCOUNT : 0;
+  const discountedSubtotal = subtotal * (1 - bundleDiscountRate);
+  if (bundleDiscountRate > 0) pricingExplanation.push(`${bundleDiscountRate * 100}% integrated Maintenance + Property Management bundle discount applied to the combined annual value (AED ${Math.round(subtotal * bundleDiscountRate)}).`);
+  const planFactor = 1 + planSurcharge(safeInput.paymentPlan);
+  const annualTotal = discountedSubtotal * planFactor;
+  const discount = subtotal * bundleDiscountRate * planFactor;
   addPaymentExplanation(safeInput.paymentPlan, pricingExplanation);
   return {
     baseQuote, zoneAdjustedQuote, emirateAdjustedQuote, complexityPremium, compliancePremium: 0, addOnTotal,
-    discount: 0, annualTotal, quarterlyPayment: annualTotal / 4, monthlyPayment: annualTotal / 12,
+    discount, annualTotal, quarterlyPayment: annualTotal / 4, monthlyPayment: annualTotal / 12,
     mobilizationFee: annualTotal * 0.15, recommendedTier: safeInput.slaTier, pricingExplanation, riskFlags,
   };
 }

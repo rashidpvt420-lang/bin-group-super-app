@@ -114,7 +114,8 @@ export const UAE_PRICING_MATRIX_2026: PricingMatrix = {
       maintenanceRange: { min: 3500, max: 9000, target: 6000 }, managementRange: { min: 5, max: 8, target: 6 }, combinedRange: { min: 0, max: 0, target: 0 },
     },
     {
-      id: 'villa-lux', category: 'Residential', label: 'Luxury Estate Villa', minimumAnnualContract: 9000,
+      // Pricing model guardrail: Luxury Villa AMC minimum AED 15,000.
+      id: 'villa-lux', category: 'Residential', label: 'Luxury Estate Villa', minimumAnnualContract: 15000,
       pmRate: '7-10% annual rent', ifm: 'FM + PM', pricingUnit: 'unit', riskLevel: 'High',
       maintenanceRange: { min: 9000, max: 40000, target: 18000 }, managementRange: { min: 7, max: 10, target: 8 }, combinedRange: { min: 0, max: 0, target: 0 },
     },
