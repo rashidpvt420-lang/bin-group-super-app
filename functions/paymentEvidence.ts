@@ -41,13 +41,30 @@ function positiveMoney(value: unknown, label: string) {
   return amount;
 }
 
+function storageDownloadUrl(bucketName: string, objectPath: string, token: string) {
+  return `https://firebasestorage.googleapis.com/v0/b/${bucketName}/o/${encodeURIComponent(objectPath)}?alt=media&token=${encodeURIComponent(token)}`;
+}
+
+function downloadTokenFromUrl(value: string) {
+  try {
+    return text(new URL(value).searchParams.get("token"), 200);
+  } catch {
+    return "";
+  }
+}
+
+// N-24: the stored receipt link is derived on the server from the verified Storage object
+// (receiptPath + one of its own download tokens). A client-supplied receiptUrl is never
+// persisted, so it cannot point Admin reviewers at a different file.
 async function assertStoredTenantReceipt(
   tenantId: string,
   receiptPath: string,
   receiptHash: string,
-) {
+  clientReceiptUrl: string,
+): Promise<string | null> {
   try {
-    const [metadata] = await admin.storage().bucket().file(receiptPath).getMetadata();
+    const bucket = admin.storage().bucket();
+    const [metadata] = await bucket.file(receiptPath).getMetadata();
     const customMetadata = (metadata.metadata || {}) as Record<string, string>;
     const contentType = text(metadata.contentType, 120).toLowerCase();
     const size = Number(metadata.size || 0);
@@ -61,6 +78,13 @@ async function assertStoredTenantReceipt(
     ) {
       throw new Error("receipt metadata mismatch");
     }
+    const tokens = text(customMetadata.firebaseStorageDownloadTokens, 2000)
+      .split(",")
+      .map((token) => token.trim())
+      .filter(Boolean);
+    const clientToken = downloadTokenFromUrl(clientReceiptUrl);
+    const token = tokens.includes(clientToken) ? clientToken : tokens[0];
+    return token ? storageDownloadUrl(bucket.name, receiptPath, token) : null;
   } catch {
     throw new HttpsError(
       "failed-precondition",
@@ -99,7 +123,7 @@ export const submitTenantPaymentProof = onCall(
       );
     }
 
-    await assertStoredTenantReceipt(tenantId, receiptPath, receiptHash);
+    const verifiedReceiptUrl = await assertStoredTenantReceipt(tenantId, receiptPath, receiptHash, receiptUrl);
 
     const profileSnap = await db.collection("users").doc(tenantId).get();
     const profile = profileSnap.data() || {};
@@ -128,8 +152,18 @@ export const submitTenantPaymentProof = onCall(
     const paymentRef = db.collection("payment_transactions").doc(paymentId);
     const auditRef = db.collection("audit_logs").doc(`tenant_payment_${tenantId}_${submissionId}`);
     const now = FieldValue.serverTimestamp();
+    // N-24: one receipt file (by SHA-256) can back only one payment submission. The query runs
+    // inside the transaction, so a concurrent resubmission of the same receipt is serialised.
+    const sameReceiptQuery = db.collection("payment_transactions").where("receiptHash", "==", receiptHash).limit(5);
     const idempotent = await db.runTransaction(async (transaction) => {
       const existingSnap = await transaction.get(paymentRef);
+      const sameReceipt = await transaction.get(sameReceiptQuery);
+      if (sameReceipt.docs.some((document) => document.id !== paymentId)) {
+        throw new HttpsError(
+          "already-exists",
+          "This receipt was already submitted as evidence for another payment. Upload the receipt for this payment.",
+        );
+      }
       if (existingSnap.exists) {
         const existing = existingSnap.data() || {};
         if (
@@ -162,7 +196,8 @@ export const submitTenantPaymentProof = onCall(
         bankName,
         period,
         notes,
-        receiptUrl,
+        receiptUrl: verifiedReceiptUrl,
+        receiptUrlSource: "SERVER_DERIVED_FROM_RECEIPT_PATH",
         receiptPath,
         receiptHash,
         status: "PENDING_ADMIN_PAYMENT_VERIFICATION",
