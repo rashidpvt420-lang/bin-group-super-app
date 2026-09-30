@@ -22,7 +22,8 @@ test('retired pre-inspection Owner payment callable is explicitly overridden by 
 
 test('live inspection-first Owner mobilisation path preserves fils and allows only Cash or Cheque', async () => {
   const source = await read('functions/inspectionFirstOwnerOnboarding.ts');
-  assert.match(source, /const money = \(value: unknown\) => Math\.round\(finite\(value\) \* 100\) \/ 100;/);
+  // Fils are preserved with the shared half-up rule (same as the quote engine), not binary Math.round.
+  assert.match(source, /const money = \(value: unknown\) => normalizeAedMoney\(finite\(value\)\);/);
   assert.match(source, /if \(!\["CASH", "CHEQUE"\]\.includes\(method\)\)/);
   assert.match(source, /Phase 1 Owner activation accepts Cash or Cheque only/);
   assert.match(source, /expectedAmount = normalizeAedMoney\(payment\.activationDeposit \?\? payment\.amount\)/);

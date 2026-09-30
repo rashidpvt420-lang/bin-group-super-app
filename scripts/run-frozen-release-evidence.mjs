@@ -46,10 +46,15 @@ const fail = (message) => {
 };
 
 // Use the deployed pure policy, including its final inspected quote selection.
-// These exact Git blobs belong to frozen release 15b0951. A different policy
+// These exact Git blobs are the reviewed payment policy. A different policy
 // requires another reviewed control-plane repair, not an implicit fallback.
+// ownerActivationPaymentPolicy.ts is the frozen release 15b0951 blob.
+// aedMoney.ts was re-pinned (reviewed repair, 2026-09-30) from 15b0951's
+// 4526fb637327beb59bb11feb849f58fecc38ff0d to the half-up fils rounding
+// (274.275 -> 274.28) approved by the Founder. A release deployed before
+// that repair no longer matches and fails closed here until it is redeployed.
 const PAYMENT_POLICY_BLOBS = Object.freeze({
-  'functions/shared/aedMoney.ts': '4526fb637327beb59bb11feb849f58fecc38ff0d',
+  'functions/shared/aedMoney.ts': 'f7753c1f15e4d1d969139cf278eb414c9db49b80',
   'functions/ownerActivationPaymentPolicy.ts': '06f056113367bda1fca22bcdba95ab975e594f54',
 });
 const APPLICATION_VERIFIER = 'scripts/verify-operational-application-evidence.mjs';
