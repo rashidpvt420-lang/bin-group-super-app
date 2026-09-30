@@ -70,6 +70,27 @@ export const SERVICE_ADDONS = [
   { id: 'gym_pool_operations', label: 'Gym Pool Operations / Specialist Scope', price: 0, unit: 'separate scope after visit' },
 ];
 
+/**
+ * SERVICE_ADDONS is the authoritative add-on price list (Founder decision 2026-09-30).
+ * Annual quotes convert each listed price by its billing period: per month x 12,
+ * per quarter x 4, annual x 1; zero-priced (free / separate-scope) items stay 0.
+ * Per-event, per-visit, per-service, one-time and per-unit prices have no defined yearly
+ * count, so they cannot be converted automatically and return null (manual quote).
+ */
+export const SERVICE_ADDON_PERIODS_PER_YEAR: Readonly<Record<string, number>> = Object.freeze({
+  'per month': 12,
+  'per quarter': 4,
+  annual: 1,
+});
+
+export function serviceAddOnAnnualPrice(id: string): number | null {
+  const item = SERVICE_ADDONS.find((addOn) => addOn.id === id);
+  if (!item) return null;
+  if (item.price === 0) return 0;
+  const periodsPerYear = SERVICE_ADDON_PERIODS_PER_YEAR[item.unit];
+  return periodsPerYear === undefined ? null : item.price * periodsPerYear;
+}
+
 export interface PricingMatrix {
   version: string;
   lastUpdated: string;
