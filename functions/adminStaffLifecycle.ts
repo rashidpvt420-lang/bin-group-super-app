@@ -1,4 +1,5 @@
 import { FieldValue } from "firebase-admin/firestore";
+import { readPayrollForStaff, settleSection, unavailableSections } from "./hrReadHealth";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 
@@ -233,12 +234,23 @@ export const adminGetStaffLifecycle = onCall({ cors: true, region: "europe-west3
   const rows = await Promise.all(users.docs.map(async (doc) => {
     try {
       const staff = await loadStaff(doc.id);
-      return staffLifecycleRow(staff);
-    } catch {
-      return null;
+      return { row: staffLifecycleRow(staff) };
+    } catch (error: any) {
+      // A users doc flagged isStaff that is not a provisioned staff role is filtered out by
+      // design. Any other failure (missing Auth identity, read error) is reported, not hidden.
+      if (error instanceof HttpsError && error.code === "failed-precondition") return { row: null };
+      console.error("[hr-read] staff lifecycle row failed", doc.id, error?.code || error?.message || error);
+      return { row: null, unavailable: { uid: doc.id, reason: clean(error?.code || error?.errorInfo?.code || "read_failed") } };
     }
   }));
-  return { success: true, staff: rows.filter(Boolean), canManageLifecycle: actor.canManageLifecycle };
+  const unavailableStaff = rows.flatMap((entry) => entry.unavailable ? [entry.unavailable] : []);
+  return {
+    success: unavailableStaff.length === 0,
+    complete: unavailableStaff.length === 0,
+    unavailableStaff,
+    staff: rows.map((entry) => entry.row).filter(Boolean),
+    canManageLifecycle: actor.canManageLifecycle,
+  };
 });
 
 export const adminGetStaffDetails = onCall({ cors: true, region: "europe-west3", enforceAppCheck: true }, async (request) => {
@@ -248,13 +260,14 @@ export const adminGetStaffDetails = onCall({ cors: true, region: "europe-west3",
   const includePrivate = actor.canManageLifecycle;
 
   const [attendanceSnap, leaveSnap, documentSnap, payrollSnap] = await Promise.all([
-    db.collection("staffAttendance").where("uid", "==", uid).limit(120).get().catch(() => null),
-    db.collection("staffLeaveRequests").where("uid", "==", uid).limit(120).get().catch(() => null),
-    db.collection("staffHrDocuments").where("uid", "==", uid).limit(120).get().catch(() => null),
-    includePrivate ? db.collection("payroll").limit(500).get().catch(() => null) : Promise.resolve(null),
+    settleSection("attendance", db.collection("staffAttendance").where("uid", "==", uid).limit(120).get()),
+    settleSection("leaveRequests", db.collection("staffLeaveRequests").where("uid", "==", uid).limit(120).get()),
+    settleSection("documents", db.collection("staffHrDocuments").where("uid", "==", uid).limit(120).get()),
+    includePrivate ? settleSection("payroll", readPayrollForStaff(db, uid)) : Promise.resolve({ section: "payroll", value: null, failed: false }),
   ]);
+  const unavailable = unavailableSections([attendanceSnap, leaveSnap, documentSnap, payrollSnap]);
 
-  const mapDocs = (snapshot: any) => snapshot ? snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() })) : [];
+  const mapDocs = (settled: any) => settled?.value ? settled.value.docs.map((doc: any) => ({ id: doc.id, ...doc.data() })) : [];
   const attendance = mapDocs(attendanceSnap)
     .sort((a: any, b: any) => clean(b.workDate).localeCompare(clean(a.workDate)))
     .slice(0, 60)
@@ -303,7 +316,9 @@ export const adminGetStaffDetails = onCall({ cors: true, region: "europe-west3",
     : [];
 
   return {
-    success: true,
+    success: unavailable.length === 0,
+    complete: unavailable.length === 0,
+    unavailableSections: unavailable,
     canManageLifecycle: actor.canManageLifecycle,
     privateFieldsIncluded: includePrivate,
     staff: {
