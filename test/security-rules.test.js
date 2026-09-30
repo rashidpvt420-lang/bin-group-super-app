@@ -1,11 +1,14 @@
 import './n06-n08-n09-rules.test.js';
 import './owner-contract-status-rules.test.js';
+import './n12-n13-owner-trust-rules.test.js';
 import './invoice-verification-rules.test.js';
 import './tenant-ticket-server-authority-rules.test.js';
 import './technician-assigned-list-security-rules.test.js';
+import './n14-n34-tenant-self-approval-rules.test.js';
 import './broker-kyc-security-rules.test.js';
 import './five-profile-protected-fields-rules.test.js';
 import './push-token-security-rules.test.js';
+import './n16-n19-technician-self-authority-rules.test.js';
 import './property-geo-authority-rules.test.js';
 import { describe, it, before, after, beforeEach } from 'node:test';
 import assert from 'node:assert';
