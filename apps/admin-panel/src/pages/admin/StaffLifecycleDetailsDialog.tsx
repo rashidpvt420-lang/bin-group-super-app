@@ -15,6 +15,7 @@ import {
   Grid,
   MenuItem,
   Paper,
+  Snackbar,
   Stack,
   Table,
   TableBody,
@@ -28,6 +29,7 @@ import { Mail, Save, ShieldAlert, UserX } from 'lucide-react';
 import { functions, httpsCallable } from '../../lib/firebase';
 import { binThemeTokens } from '../../theme/adminTheme';
 import { describeIncompleteHrRead } from '../../utils/hrReadCompleteness';
+import { onboardingSaveNotice, staffOperationErrorMessage, type StaffNotice } from '../../utils/staffLifecycleNotices';
 
 const EMIRATES = ['Dubai', 'Abu Dhabi', 'Sharjah', 'Ajman', 'Umm Al Quwain', 'Ras Al Khaimah', 'Fujairah', 'Al Ain'];
 
@@ -108,14 +110,21 @@ export default function StaffLifecycleDetailsDialog({
   const [details, setDetails] = useState<any>(null);
   const [profile, setProfile] = useState(emptyProfile);
   const [checklist, setChecklist] = useState(emptyChecklist);
-  const [notice, setNotice] = useState<{ severity: 'success' | 'error' | 'warning'; message: string } | null>(null);
+  const [notice, setNotice] = useState<StaffNotice | null>(null);
+  // Mirrors the latest save result in a toast so it is visible even when the
+  // admin has scrolled down to the checklist.
+  const [toast, setToast] = useState<StaffNotice | null>(null);
   const [offboardReason, setOffboardReason] = useState('');
   const [confirmOffboard, setConfirmOffboard] = useState(false);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (options: { background?: boolean } = {}) => {
     if (!open || !uid) return;
-    setLoading(true);
-    setNotice(null);
+    // A background reload (after a save) keeps the form on screen and leaves
+    // the notice to the caller; only the initial load shows the spinner.
+    if (!options.background) {
+      setLoading(true);
+      setNotice(null);
+    }
     try {
       const getDetails = httpsCallable(functions, 'adminGetStaffDetails');
       const response: any = await getDetails({ uid });
@@ -164,12 +173,16 @@ export default function StaffLifecycleDetailsDialog({
         activationApproved: current.activationApproved === true,
       });
       const incomplete = describeIncompleteHrRead(data);
-      if (incomplete) setNotice({ severity: 'warning', message: incomplete });
+      if (incomplete && !options.background) setNotice({ severity: 'warning', message: incomplete });
+      return true;
     } catch (error) {
-      setDetails(null);
-      setNotice({ severity: 'error', message: `Staff lifecycle could not load: ${safeError(error)}` });
+      if (!options.background) {
+        setDetails(null);
+        setNotice({ severity: 'error', message: `Staff lifecycle could not load: ${safeError(error)}` });
+      }
+      return false;
     } finally {
-      setLoading(false);
+      if (!options.background) setLoading(false);
     }
   }, [open, uid]);
 
@@ -185,19 +198,37 @@ export default function StaffLifecycleDetailsDialog({
   const documents = useMemo(() => Array.isArray(details?.documents) ? details.documents : [], [details?.documents]);
   const payroll = useMemo(() => Array.isArray(details?.payroll) ? details.payroll : [], [details?.payroll]);
 
-  const invoke = async (name: string, payload: Record<string, unknown>, success: string) => {
+  const invoke = async (
+    name: string,
+    payload: Record<string, unknown>,
+    action: string,
+    success: string | ((data: any) => StaffNotice),
+  ) => {
     setBusy(true);
     setNotice(null);
+    let result: StaffNotice;
     try {
-      await httpsCallable(functions, name)(payload);
-      setNotice({ severity: 'success', message: success });
-      await load();
+      const response: any = await httpsCallable(functions, name)(payload);
+      result = typeof success === 'string'
+        ? { severity: 'success', message: success }
+        : success(response?.data);
+      // Reload BEFORE publishing the result: load() used to clear the notice,
+      // which is why a successful SAVE ONBOARDING showed no confirmation.
+      const reloaded = await load({ background: true });
+      if (reloaded === false) {
+        result = {
+          severity: result.severity === 'success' ? 'warning' : result.severity,
+          message: `${result.message} The refreshed record could not be loaded; reload the page to confirm.`,
+        };
+      }
       await onChanged?.();
     } catch (error) {
-      setNotice({ severity: 'error', message: safeError(error) });
+      result = { severity: 'error', message: staffOperationErrorMessage(action, error) };
     } finally {
       setBusy(false);
     }
+    setNotice(result);
+    setToast(result);
   };
 
   const saveProfile = async () => {
@@ -243,17 +274,22 @@ export default function StaffLifecycleDetailsDialog({
         emergencyEligible: profile.emergencyEligible,
       });
     }
-    await invoke('adminUpdateStaffProfile', payload, `${staff.displayName} profile updated through the canonical HR lifecycle.`);
+    await invoke('adminUpdateStaffProfile', payload, 'Profile save', `${staff.displayName} profile updated through the canonical HR lifecycle.`);
   };
 
   const saveOnboarding = async () => {
     if (!staff) return;
-    await invoke('adminUpdateStaffOnboarding', { uid, ...checklist }, `${staff.displayName} onboarding state updated.`);
+    await invoke(
+      'adminUpdateStaffOnboarding',
+      { uid, ...checklist },
+      'Onboarding save',
+      (data) => onboardingSaveNotice(staff.displayName, data, staff.role),
+    );
   };
 
   const resendInvitation = async () => {
     if (!staff) return;
-    await invoke('adminResendStaffInvitation', { uid }, `Secure invitation re-queued for ${staff.displayName}.`);
+    await invoke('adminResendStaffInvitation', { uid }, 'Invitation resend', `Secure invitation re-queued for ${staff.displayName}.`);
   };
 
   const offboard = async () => {
@@ -261,7 +297,7 @@ export default function StaffLifecycleDetailsDialog({
       setNotice({ severity: 'warning', message: 'Enter a clear offboarding reason before continuing.' });
       return;
     }
-    await invoke('adminOffboardStaff', { uid, reason: offboardReason.trim() }, `${staff.displayName} offboarded. Auth disabled, tokens revoked and historical records preserved.`);
+    await invoke('adminOffboardStaff', { uid, reason: offboardReason.trim() }, 'Offboarding', `${staff.displayName} offboarded. Auth disabled, tokens revoked and historical records preserved.`);
     setConfirmOffboard(false);
     setOffboardReason('');
   };
@@ -281,7 +317,7 @@ export default function StaffLifecycleDetailsDialog({
 
       <DialogContent sx={{ bgcolor: '#020617', color: '#fff', py: 3 }}>
         {loading && <Box sx={{ py: 10, textAlign: 'center' }}><CircularProgress sx={{ color: binThemeTokens.gold }} /></Box>}
-        {notice && <Alert severity={notice.severity} sx={{ mb: 2 }}>{notice.message}</Alert>}
+        {notice && <Alert severity={notice.severity} sx={{ mb: 2 }} data-testid="staff-lifecycle-notice">{notice.message}</Alert>}
         {!loading && staff && (
           <Stack spacing={3}>
             {!canManage && <Alert severity="info">HR Staff access is read-only. Private identity and salary fields remain server-redacted.</Alert>}
@@ -357,6 +393,16 @@ export default function StaffLifecycleDetailsDialog({
         <DialogContent><Alert severity="warning" sx={{ mb: 2 }}>Firebase Auth will be disabled, refresh tokens revoked, active access archived, and historical work/payroll/audit records preserved.</Alert><TextField fullWidth label="Offboarding reason" value={offboardReason} onChange={(e) => setOffboardReason(e.target.value)} /></DialogContent>
         <DialogActions><Button onClick={() => setConfirmOffboard(false)}>CANCEL</Button><Button color="error" variant="contained" onClick={() => void offboard()} disabled={busy}>DISABLE & OFFBOARD</Button></DialogActions>
       </Dialog>
+      {toast && (
+        <Snackbar
+          open
+          autoHideDuration={toast.severity === 'success' ? 8000 : null}
+          onClose={(_, reason) => { if (reason !== 'clickaway') setToast(null); }}
+          anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+        >
+          <Alert severity={toast.severity} variant="filled" onClose={() => setToast(null)} data-testid="staff-lifecycle-toast" sx={{ maxWidth: 720 }}>{toast.message}</Alert>
+        </Snackbar>
+      )}
     </Dialog>
   );
 }
