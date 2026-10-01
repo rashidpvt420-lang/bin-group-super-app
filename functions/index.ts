@@ -694,7 +694,14 @@ export const ownerReviewTicketCompletion = onCall({ cors: true, enforceAppCheck:
 
     const revisitChildId = `revisit_${ticketId}`;
     await db.runTransaction(async (transaction) => {
-        const freshSnap = await transaction.get(ticketRef);
+        const revisitRef = action === "REQUEST_REVISIT"
+            ? db.collection("maintenanceTickets").doc(revisitChildId)
+            : null;
+        // Firestore transactions require every read before any write.
+        const [freshSnap, revisitSnap] = await Promise.all([
+            transaction.get(ticketRef),
+            revisitRef ? transaction.get(revisitRef) : Promise.resolve(null),
+        ]);
         if (!freshSnap.exists) throw new HttpsError("not-found", "Ticket not found.");
         const fresh = freshSnap.data() || {};
         const freshOwnerEmail = normalizeRole(fresh.ownerEmail);
@@ -708,36 +715,32 @@ export const ownerReviewTicketCompletion = onCall({ cors: true, enforceAppCheck:
             throw new HttpsError("failed-precondition", "Ticket is no longer ready for owner completion review.");
         }
         transaction.update(ticketRef, baseUpdate);
-        if (action === "REQUEST_REVISIT") {
-            const revisitRef = db.collection("maintenanceTickets").doc(revisitChildId);
-            const revisitSnap = await transaction.get(revisitRef);
-            if (!revisitSnap.exists) {
-                transaction.create(revisitRef, {
-                    parentId: ticketId,
-                    tenantId: fresh.tenantId || null,
-                    tenantUid: fresh.tenantUid || fresh.tenantId || null,
-                    ownerId: fresh.ownerId || fresh.ownerUid || null,
-                    ownerUid: fresh.ownerUid || fresh.ownerId || null,
-                    propertyId: fresh.propertyId || null,
-                    unitId: fresh.unitId || null,
-                    unitNumber: fresh.unitNumber || fresh.unit || null,
-                    unit: fresh.unit || fresh.unitNumber || null,
-                    category: fresh.category || fresh.requestType || "GENERAL",
-                    requestType: fresh.requestType || fresh.category || "GENERAL",
-                    title: `REVISIT: ${safeString(fresh.title) || "Owner requested revisit"}`,
-                    description: `Owner revisit request. Reason: ${reason}`,
-                    priority: String(fresh.priority || "HIGH").trim().toUpperCase() || "HIGH",
-                    status: "OPEN",
-                    source: "OWNER_REQUEST_REVISIT",
-                    jobLocation: fresh.jobLocation || fresh.location || null,
-                    location: fresh.location || fresh.jobLocation || null,
-                    tenantName: fresh.tenantName || null,
-                    tenantPhone: fresh.tenantPhone || fresh.phone || null,
-                    tenantEmail: fresh.tenantEmail || null,
-                    createdAt: now,
-                    updatedAt: now,
-                });
-            }
+        if (revisitRef && revisitSnap && !revisitSnap.exists) {
+            transaction.create(revisitRef, {
+                parentId: ticketId,
+                tenantId: fresh.tenantId || null,
+                tenantUid: fresh.tenantUid || fresh.tenantId || null,
+                ownerId: fresh.ownerId || fresh.ownerUid || null,
+                ownerUid: fresh.ownerUid || fresh.ownerId || null,
+                propertyId: fresh.propertyId || null,
+                unitId: fresh.unitId || null,
+                unitNumber: fresh.unitNumber || fresh.unit || null,
+                unit: fresh.unit || fresh.unitNumber || null,
+                category: fresh.category || fresh.requestType || "GENERAL",
+                requestType: fresh.requestType || fresh.category || "GENERAL",
+                title: `REVISIT: ${safeString(fresh.title) || "Owner requested revisit"}`,
+                description: `Owner revisit request. Reason: ${reason}`,
+                priority: String(fresh.priority || "HIGH").trim().toUpperCase() || "HIGH",
+                status: "OPEN",
+                source: "OWNER_REQUEST_REVISIT",
+                jobLocation: fresh.jobLocation || fresh.location || null,
+                location: fresh.location || fresh.jobLocation || null,
+                tenantName: fresh.tenantName || null,
+                tenantPhone: fresh.tenantPhone || fresh.phone || null,
+                tenantEmail: fresh.tenantEmail || null,
+                createdAt: now,
+                updatedAt: now,
+            });
         }
         transaction.set(db.collection("audit_logs").doc(), {
             actorId: uid,
