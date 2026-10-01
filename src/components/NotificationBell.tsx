@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
     Box, Badge, IconButton, Paper, Typography, Stack, Chip,
     Divider, CircularProgress, Tooltip, Popover, Button
@@ -23,6 +24,7 @@ const TYPE_CONFIG: Record<string, NotificationTypeConfig> = {
 
 export function NotificationBell() {
     const { user, enableNotifications } = useRole();
+    const navigate = useNavigate();
     const [notifications, setNotifications] = useState<BinNotification[]>([]);
     const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
     const [loading, setLoading] = useState(true);
@@ -60,6 +62,20 @@ export function NotificationBell() {
 
     const handleMarkRead = async (notifId: string) => {
         await markNotificationRead(notifId!);
+    };
+
+    const handleOpenNotification = async (notif: BinNotification) => {
+        if (!notif.read && notif.id) {
+            await handleMarkRead(notif.id);
+        }
+        const link = String(notif.link || '').trim();
+        if (!link) return;
+        handleClose();
+        if (/^https?:\/\//i.test(link)) {
+            window.open(link, '_blank', 'noopener,noreferrer');
+            return;
+        }
+        navigate(link.startsWith('/') ? link : `/${link}`);
     };
 
     const handleMarkAllRead = async () => {
@@ -185,12 +201,12 @@ export function NotificationBell() {
                             return (
                                 <Box
                                     key={notif.id || idx}
-                                    onClick={() => !notif.read && handleMarkRead(notif.id!)}
+                                    onClick={() => { void handleOpenNotification(notif); }}
                                     sx={{
                                         px: 3, py: 2,
                                         bgcolor: notif.read ? 'transparent' : 'rgba(198,167,94,0.04)',
                                         borderBottom: '1px solid rgba(255,255,255,0.04)',
-                                        cursor: notif.read ? 'default' : 'pointer',
+                                        cursor: notif.link || !notif.read ? 'pointer' : 'default',
                                         transition: 'background 0.2s',
                                         '&:hover': { bgcolor: 'rgba(255,255,255,0.03)' }
                                     }}

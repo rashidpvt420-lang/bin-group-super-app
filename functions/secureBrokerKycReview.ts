@@ -369,8 +369,12 @@ export const adminReviewBrokerKyc = onCall(
         .get();
       if (!holdSnap.empty) {
         const batch = db.batch();
-        holdSnap.docs.forEach((commission) => {
-          batch.set(commission.ref, {
+        holdSnap.docs.forEach((commissionDoc) => {
+          const commission = commissionDoc.data() || {};
+          // KYC/RERA approval only clears RERA holds. Rate-review holds stay for Finance Admin.
+          if (String(commission.holdReason || "") !== "BROKER_RERA_UNVERIFIED") return;
+          if (Number(commission.amount || 0) <= 0) return;
+          batch.set(commissionDoc.ref, {
             status: "PENDING",
             complianceHold: false,
             holdReason: null,

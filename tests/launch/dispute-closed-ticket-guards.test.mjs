@@ -20,7 +20,30 @@ test('tenant and owner disputes enter the Admin PENDING_DISPUTE_REVIEW queue', (
   assert.match(owner, /requiresAdminReview:\s*true/);
 
   assert.match(resolve, /disputeStatus:\s*action === "request_revisit" \? "REOPENED_FOR_REVISIT" : "RESOLVED"/);
+  assert.match(resolve, /status:\s*"CLOSED"/);
+  assert.match(resolve, /source:\s*"ADMIN_DISPUTE_REVISIT"/);
+  assert.match(resolve, /jobLocation:\s*ticket\.jobLocation/);
   assert.match(queue, /adminReviewStatus',\s*'==',\s*'PENDING_DISPUTE_REVIEW'/);
+});
+
+test('Owner financials and notifications expose invoice and receipt links', () => {
+  const financials = read('src/owner/pages/OwnerFinancialsPage.tsx');
+  const bell = read('src/components/NotificationBell.tsx');
+  assert.match(financials, /navigate\(`\/invoices\/\$\{invoice\.id\}`\)/);
+  assert.match(financials, /invoice\.pdfUrl/);
+  assert.match(financials, /invoice\.receiptPdfUrl/);
+  assert.match(bell, /handleOpenNotification/);
+  assert.match(bell, /notif\.link/);
+  assert.match(bell, /navigate\(link/);
+});
+
+test('Broker KYC release only clears payable RERA holds', () => {
+  const kyc = read('functions/secureBrokerKycReview.ts');
+  const commissions = read('functions/brokerCommissions.ts');
+  assert.match(kyc, /BROKER_RERA_UNVERIFIED/);
+  assert.match(kyc, /Number\(commission\.amount \|\| 0\) <= 0/);
+  assert.match(commissions, /Math\.round\(base \* commissionRate \* 100\) \/ 100/);
+  assert.doesNotMatch(commissions, /amount = commissionRateApproved \? Math\.round/);
 });
 
 test('closed and disputed tickets cannot be recreated or redispatched', () => {

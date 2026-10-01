@@ -224,9 +224,10 @@ export const adminResolveTicketDispute = onCall(
         throw new HttpsError("failed-precondition", "Ticket is not awaiting dispute review.");
       }
 
-      const status = action === "request_revisit" ? "REOPENED" : "CLOSED";
+      // Close the disputed ticket; dispatch only the dedicated revisit child so
+      // ops cannot double-assign the parent and the child at the same time.
       transaction.set(ticketRef, {
-        status,
+        status: "CLOSED",
         adminReviewStatus: "RESOLVED",
         requiresAdminReview: false,
         disputeStatus: action === "request_revisit" ? "REOPENED_FOR_REVISIT" : "RESOLVED",
@@ -241,17 +242,25 @@ export const adminResolveTicketDispute = onCall(
         transaction.create(revisitRef, {
           parentId: ticketId,
           tenantId: ticket.tenantId || null,
-          tenantUid: ticket.tenantUid || null,
+          tenantUid: ticket.tenantUid || ticket.tenantId || null,
           ownerId: ticket.ownerId || ticket.ownerUid || null,
           ownerUid: ticket.ownerUid || ticket.ownerId || null,
           propertyId: ticket.propertyId || null,
           unitId: ticket.unitId || null,
-          unitNumber: ticket.unitNumber || null,
+          unitNumber: ticket.unitNumber || ticket.unit || null,
+          unit: ticket.unit || ticket.unitNumber || null,
+          category: ticket.category || ticket.requestType || "GENERAL",
+          requestType: ticket.requestType || ticket.category || "GENERAL",
           title: `REVISIT: ${text(ticket.title, 180) || "Disputed Job"}`,
           description: `Admin revisit dispatch. Reason: ${note}`,
+          priority: text(ticket.priority, 40).toUpperCase() || "HIGH",
           status: "OPEN",
-          priority: "HIGH",
           source: "ADMIN_DISPUTE_REVISIT",
+          jobLocation: ticket.jobLocation || ticket.location || null,
+          location: ticket.location || ticket.jobLocation || null,
+          tenantName: ticket.tenantName || null,
+          tenantPhone: ticket.tenantPhone || ticket.phone || null,
+          tenantEmail: ticket.tenantEmail || null,
           createdAt: now,
           updatedAt: now,
         });
