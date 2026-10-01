@@ -129,6 +129,13 @@ export const createTenantServiceTicket = onCall(
         ) {
           throw new HttpsError("already-exists", "Request ID is already bound to another ticket.");
         }
+        const existingStatus = text(existing.status, 60).toUpperCase();
+        if (["CLOSED", "CANCELLED", "REJECTED", "RESOLVED"].includes(existingStatus)) {
+          throw new HttpsError(
+            "failed-precondition",
+            "This request ID is already bound to a closed ticket. Submit a new request.",
+          );
+        }
         return { idempotent: true };
       }
 

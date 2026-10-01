@@ -100,7 +100,7 @@ test('Ticket rule preparation repeatedly enforces callable-only canonical creati
     assert.match(legacy, /allow create, update, delete: if false;/);
     assert.doesNotMatch(legacy, /allow update: if safeTicketUpdateByActor\(\);/);
     const canonical = ticketBlock(hardened, 'maintenanceTickets');
-    assert.match(canonical, /allow create: if isAdmin\(\);/);
+    assert.match(canonical, /allow create: if safeAdminTicketCreate\(\);/);
     assert.doesNotMatch(canonical, /canCreateTenantBoundTicket/);
     assert.match(canonical, /allow update: if safeTicketUpdateByActor\(\);/);
   } finally {

@@ -74,6 +74,7 @@ import MessagesPage from './pages/ops/MessagesPage';
 import CommunityModerationPage from './pages/ops/CommunityModerationPage';
 import ScheduledServicesOperationsPage from './pages/ops/ScheduledServicesOperationsPage';
 import TenantUnitLinkQueuePage from './pages/ops/TenantUnitLinkQueuePage';
+import DisputeQueuePage from './pages/ops/DisputeQueuePage';
 
 import { adminTheme } from './theme/adminTheme';
 import { functions as adminFunctions } from './lib/firebase';
@@ -121,6 +122,7 @@ function AppContent() {
                     <Route path="/properties/passport" element={<ProtectedRoute><PropertyPassportPage /></ProtectedRoute>} />
                     <Route path="/bulk-import" element={<ProtectedRoute adminOnly><BulkImporter /></ProtectedRoute>} />
                     <Route path="/tickets" element={<ProtectedRoute><TicketsPage /></ProtectedRoute>} />
+                    <Route path="/ops/disputes" element={<ProtectedRoute><DisputeQueuePage /></ProtectedRoute>} />
                     <Route path="/technicians" element={<ProtectedRoute><TechniciansPage /></ProtectedRoute>} />
                     <Route path="/technicians/map" element={<ProtectedRoute><LiveMapPage /></ProtectedRoute>} />
                     <Route path="/live-map" element={<Navigate to="/technicians/map" replace />} />

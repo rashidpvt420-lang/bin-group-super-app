@@ -6,7 +6,7 @@ import { assertStoredOwnerPaymentReceipt, assertStoredTenantPaymentReceipt } fro
 import { normalizeAedMoney } from "./shared/aedMoney";
 import { parseExactAedAmount } from "./shared/aedMoneyInput";
 import { decideRentConfirmedAmount, rentApprovalDecision, rentRejectionDecision } from "./rentPaymentStatus";
-import { generateOwnerPaymentReceiptPdfArtifact } from "./pdfEngine";
+import { generateMobilizationUnpaidInvoicePdfArtifact, generateOwnerPaymentReceiptPdfArtifact } from "./pdfEngine";
 import { assertMobilizationInvoiceImmutable, buildMobilizationInvoiceSnapshot } from "./mobilizationInvoice";
 import { resolveActivePaymentConfiguration } from "./paymentConfiguration";
 import {
@@ -370,6 +370,36 @@ export const adminApprovePayment = onCall({ cors: true, enforceAppCheck: true },
   });
   const { invoiceId, proofHash: invoiceHash } = invoiceSnapshot;
   const invoiceRef = db.collection("invoices").doc(invoiceId);
+  // Approval must not fail closed solely because an earlier sign/replay missed
+  // persisting the unpaid mobilisation invoice. Rebuild it from the locked
+  // payment identity before the approval transaction.
+  const preApproveInvoiceSnap = await invoiceRef.get();
+  if (!preApproveInvoiceSnap.exists) {
+    const unpaidInvoicePdf = await generateMobilizationUnpaidInvoicePdfArtifact({
+      ...invoiceSnapshot,
+      ownerId: ownerUid,
+    });
+    await invoiceRef.set({
+      ...invoiceSnapshot,
+      ownerId: ownerUid,
+      ownerEmail: String(payment.ownerEmail || contractData.ownerEmail || "").trim() || null,
+      amountPaid: 0,
+      status: "PENDING",
+      paymentStatus: "UNPAID",
+      documentState: "AWAITING_PAYMENT",
+      pdfUrl: unpaidInvoicePdf.pdfUrl,
+      storagePath: unpaidInvoicePdf.storagePath,
+      pdfSha256: unpaidInvoicePdf.pdfSha256,
+      pdfGeneration: unpaidInvoicePdf.generation,
+      canonicalPdfSource: "SERVER_PAYMENT_APPROVAL_INVOICE_REPAIR",
+      issuedAt: ts(),
+      createdAt: ts(),
+      updatedAt: ts(),
+    }, { merge: false });
+    if (!String(contractData.invoiceId || "").trim()) {
+      await contractRef.set({ invoiceId, updatedAt: ts() }, { merge: true });
+    }
+  }
   const propertyQuery = db.collection("properties").where("intakeId", "==", intakeId).limit(100);
   const paymentConfigurationRef = db.collection("system_payment_config").doc("current");
   let approvalWasIdempotent = false;
@@ -706,27 +736,43 @@ export const adminApprovePayment = onCall({ cors: true, enforceAppCheck: true },
   } catch (error: any) {
     throw new HttpsError("aborted", error?.message || "The approved mobilisation invoice identity changed.");
   }
-  if (!String(approvedInvoice.receiptPdfUrl || "").trim() || !String(approvedInvoice.receiptStoragePath || "").trim()) {
-    const receiptArtifact = await generateOwnerPaymentReceiptPdfArtifact({
-      ...invoiceSnapshot,
-      ownerId: ownerUid,
-      paymentReferenceId: manualReference || payment.stripeSessionId,
-    });
-    await invoiceRef.set({
-      receiptPdfUrl: receiptArtifact.pdfUrl,
-      receiptStoragePath: receiptArtifact.storagePath,
-      receiptPdfSha256: receiptArtifact.pdfSha256,
-      receiptPdfGeneration: receiptArtifact.generation,
-      receiptCanonicalSource: "SERVER_PAYMENT_APPROVAL",
-      documentState: "PAID_RECEIPT_READY",
-      updatedAt: ts(),
-    }, { merge: true });
-    await db.collection("invoice_registry").doc(invoiceHash).set({
-      receiptPdfSha256: receiptArtifact.pdfSha256,
-      receiptStoragePath: receiptArtifact.storagePath,
-      receiptCanonicalSource: "SERVER_PAYMENT_APPROVAL",
-      updatedAt: ts(),
-    }, { merge: true });
+  const receiptMissing =
+    !String(approvedInvoice.receiptPdfUrl || "").trim() ||
+    !String(approvedInvoice.receiptStoragePath || "").trim();
+  const receiptNeedsRepair =
+    receiptMissing ||
+    ["PAID_RECEIPT_PENDING", "PAID_RECEIPT_FAILED"].includes(String(approvedInvoice.documentState || "").trim().toUpperCase());
+  if (receiptNeedsRepair) {
+    try {
+      const receiptArtifact = await generateOwnerPaymentReceiptPdfArtifact({
+        ...invoiceSnapshot,
+        ownerId: ownerUid,
+        paymentReferenceId: manualReference || payment.stripeSessionId,
+      });
+      await invoiceRef.set({
+        receiptPdfUrl: receiptArtifact.pdfUrl,
+        receiptStoragePath: receiptArtifact.storagePath,
+        receiptPdfSha256: receiptArtifact.pdfSha256,
+        receiptPdfGeneration: receiptArtifact.generation,
+        receiptCanonicalSource: "SERVER_PAYMENT_APPROVAL",
+        documentState: "PAID_RECEIPT_READY",
+        receiptPdfError: FieldValue.delete(),
+        updatedAt: ts(),
+      }, { merge: true });
+      await db.collection("invoice_registry").doc(invoiceHash).set({
+        receiptPdfSha256: receiptArtifact.pdfSha256,
+        receiptStoragePath: receiptArtifact.storagePath,
+        receiptCanonicalSource: "SERVER_PAYMENT_APPROVAL",
+        updatedAt: ts(),
+      }, { merge: true });
+    } catch (receiptError: any) {
+      await invoiceRef.set({
+        documentState: "PAID_RECEIPT_FAILED",
+        receiptPdfError: String(receiptError?.message || receiptError || "Receipt PDF generation failed").slice(0, 500),
+        updatedAt: ts(),
+      }, { merge: true });
+      throw receiptError;
+    }
   }
 
   if (contractId && contractData.commissionGenerated !== true) {

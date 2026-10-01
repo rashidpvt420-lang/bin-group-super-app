@@ -69,17 +69,19 @@ export default function DisputeQueuePage() {
 
     return (
         <AdminPageFrame title="Dispute Resolution Queue">
-            <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Typography variant="h5" color="#FFF" fontWeight="950">Dispute & Escalation Queue</Typography>
+            <Box sx={{ mb: 4, display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: 2 }}>
+                <Typography variant="h5" color="#FFF" fontWeight="950" sx={{ fontSize: { xs: '1.15rem', md: '1.5rem' } }}>
+                    Dispute & Escalation Queue
+                </Typography>
                 <Chip label={`${disputes.length} Pending`} color={disputes.length > 0 ? "error" : "success"} />
             </Box>
             {resolveError && <Alert severity="error" sx={{ mb: 3 }}>{resolveError}</Alert>}
 
-            <Grid container spacing={3}>
+            <Grid container spacing={{ xs: 2, md: 3 }}>
                 {disputes.map(dispute => (
                     <Grid item xs={12} key={dispute.id}>
-                        <Paper sx={{ p: 3, bgcolor: 'rgba(22, 22, 24, 0.7)', border: `1px solid ${alpha('#ef4444', 0.2)}`, borderRadius: 4 }}>
-                            <Stack direction="row" justifyContent="space-between" alignItems="flex-start" sx={{ mb: 2 }}>
+                        <Paper sx={{ p: { xs: 2, md: 3 }, bgcolor: 'rgba(22, 22, 24, 0.7)', border: `1px solid ${alpha('#ef4444', 0.2)}`, borderRadius: 4 }}>
+                            <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" alignItems={{ xs: 'stretch', sm: 'flex-start' }} spacing={2} sx={{ mb: 2 }}>
                                 <Stack direction="row" spacing={2} alignItems="center">
                                     <Box sx={{ p: 1.5, borderRadius: 2, bgcolor: alpha('#ef4444', 0.1), color: '#ef4444' }}>
                                         <AlertTriangle size={24} />
@@ -131,6 +133,12 @@ export default function DisputeQueuePage() {
                         <MenuItem value="dismiss">Dismiss Dispute (Close Ticket)</MenuItem>
                     </Select>
 
+                    {resolutionAction === 'approve_credit' && (
+                        <Alert severity="warning" sx={{ mb: 2 }}>
+                            SLA credit is a payment decision. A verified Finance Admin MFA session is required.
+                        </Alert>
+                    )}
+
                     <TextField 
                         fullWidth 
                         multiline 
@@ -144,7 +152,7 @@ export default function DisputeQueuePage() {
                 </DialogContent>
                 <DialogActions sx={{ p: 3 }}>
                     <Button onClick={() => setOpenResolve(false)} sx={{ color: 'text.secondary' }}>CANCEL</Button>
-                    <Button variant="contained" color="primary" onClick={handleResolve} disabled={!resolutionNote.trim()}>
+                    <Button variant="contained" color="primary" onClick={handleResolve} disabled={resolutionNote.trim().length < 8}>
                         CONFIRM RESOLUTION
                     </Button>
                 </DialogActions>

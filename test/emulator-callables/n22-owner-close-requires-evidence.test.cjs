@@ -52,6 +52,9 @@ test('verified after-work evidence allows the Owner to close', async () => {
 
 test('without evidence the Owner can still dispute or request a revisit', async () => {
   await db.doc('maintenanceTickets/n22_revisit').set(base);
-  await call(ownerReviewTicketCompletion, owner, { ticketId: 'n22_revisit', action: 'REQUEST_REVISIT', reason: 'No completion photos were provided' });
-  assert.equal(await statusOf('n22_revisit'), 'REOPENED');
+  const result = await call(ownerReviewTicketCompletion, owner, { ticketId: 'n22_revisit', action: 'REQUEST_REVISIT', reason: 'No completion photos were provided' });
+  // Parent closes; dispatch happens on the dedicated revisit child ticket.
+  assert.equal(await statusOf('n22_revisit'), 'CLOSED');
+  assert.equal(result.revisitTicketId, 'revisit_n22_revisit');
+  assert.equal(await statusOf('revisit_n22_revisit'), 'OPEN');
 });

@@ -63,6 +63,7 @@ const Navigation = () => {
         { text: navText('Vendor Command', 'قيادة الموردين'), icon: <PeopleIcon />, path: '/ops/vendors' },
         { text: navText('PDPL Governance', 'حوكمة حماية البيانات الشخصية'), icon: <SecurityIcon />, path: '/ops/data-governance' },
         { text: tx('nav.tickets', 'Mission Logs'), icon: <ReceiptIcon />, path: '/tickets' },
+        { text: navText('Dispute Queue', 'قائمة النزاعات'), icon: <PendingActionsIcon />, path: '/ops/disputes', color: '#ef4444' },
         { text: tx('nav.sos_feed', 'SOS Live Feed'), icon: <ReceiptIcon />, path: '/sos' },
         { text: tx('nav.audit_log', 'Systemic Audit Log'), icon: <SecurityIcon />, path: '/audit' },
         ...(isHRAuthorized ? [{ text: navText('HR Command', 'قيادة الموارد البشرية'), icon: <Users size={20} />, path: '/hr' }] : []),

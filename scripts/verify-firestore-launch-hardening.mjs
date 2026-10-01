@@ -73,7 +73,10 @@ const requiredFragments = [
   ['technician dispatch authority helper', 'function hasTechnicianDispatchAuthority() {\n      return canDispatchJobs();\n    }'],
   ['approved technician read helper', 'function isApprovedTechnician() {'],
   ['dedicated technician write-approval helper', 'function hasApprovedTechnicianRecord() {'],
-  ['canonical ticket creation is Admin/server only', 'allow create: if isAdmin();'],
+  ['closed ticket status helper', 'function isClosedTicketStatus(status) {'],
+  ['safe admin ticket create helper', 'function safeAdminTicketCreate() {'],
+  ['safe admin ticket update helper', 'function safeAdminTicketUpdate() {'],
+  ['canonical ticket creation blocks closed statuses', 'allow create: if safeAdminTicketCreate();'],
   ['legacy tickets are read-only compatibility data', 'allow create, update, delete: if false;'],
   ['technician evidence update helper', 'function safeTechnicianTicketUpdate() {'],
   ['bounded ticket update router', 'function safeTicketUpdateByActor() {'],
@@ -82,7 +85,7 @@ const requiredFragments = [
   ['router caches canonical role once', 'let role = authenticated'],
   ['router caches admin authority once', 'let admin = authenticated && ('],
   ['router caches dispatcher authority once', 'let dispatcher = authenticated && ('],
-  ['admin branch uses cached authority', '(admin && isNotSuspended())'],
+  ['admin branch uses closed-ticket-safe authority', '(admin && safeAdminTicketUpdate())'],
   ['dispatcher branch uses cached authority', '(!admin && dispatcher && safeDispatcherTicketUpdate())'],
   ['tenant branch supports roleless legacy claims but excludes named non-tenant roles', "(!admin && !dispatcher && role in ['', 'tenant'] && tenantOwns(resource.data) && safeTenantEvidenceUpdate())"],
   ['technician branch is role-discriminated', "(!admin && !dispatcher && role in ['technician', 'tech'] && techOwns(resource.data) && safeTechnicianTicketUpdate())"],
@@ -122,7 +125,7 @@ const canonicalBlock = readMatchBlock('    match /maintenanceTickets/{ticketId} 
 const payrollBlock = readMatchBlock('    match /payroll_entries/{entryId} {');
 if (!legacyBlock.includes('allow create, update, delete: if false;')) failures.push('Legacy /tickets must deny every browser write.');
 if (legacyBlock.includes('allow update: if safeTicketUpdateByActor();')) failures.push('Legacy /tickets still has an operational update gate.');
-if (!canonicalBlock.includes('allow create: if isAdmin();')) failures.push('Canonical /maintenanceTickets must reserve direct creates for Admin/server authority.');
+if (!canonicalBlock.includes('allow create: if safeAdminTicketCreate();')) failures.push('Canonical /maintenanceTickets must reserve direct creates for Admin/server authority.');
 if (!canonicalBlock.includes('allow update: if safeTicketUpdateByActor();')) failures.push('Canonical /maintenanceTickets update router is missing.');
 if (
   !payrollBlock.includes("resource.data.get('technicianId', null) == request.auth.uid") &&
@@ -146,7 +149,7 @@ if (!router) {
   const role = router.indexOf('let role = authenticated');
   const adminClaim = router.indexOf('let admin = authenticated && (');
   const dispatcherClaim = router.indexOf('let dispatcher = authenticated && (');
-  const admin = router.indexOf('(admin && isNotSuspended())');
+  const admin = router.indexOf('(admin && safeAdminTicketUpdate())');
   const dispatcher = router.indexOf('(!admin && dispatcher && safeDispatcherTicketUpdate())');
   const tenant = router.indexOf("(!admin && !dispatcher && role in ['', 'tenant'] && tenantOwns(resource.data) && safeTenantEvidenceUpdate())");
   const technician = router.indexOf("(!admin && !dispatcher && role in ['technician', 'tech'] && techOwns(resource.data) && safeTechnicianTicketUpdate())");

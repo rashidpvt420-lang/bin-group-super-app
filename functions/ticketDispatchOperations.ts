@@ -1,6 +1,7 @@
 import { FieldValue } from "firebase-admin/firestore";
 import * as admin from "firebase-admin";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
+import { requireMfaFinanceAdminActor } from "./financeAdminMfa";
 
 if (!admin.apps.length) admin.initializeApp();
 const db = admin.firestore();
@@ -12,7 +13,8 @@ const ADMIN_ROLES = new Set([
   "operations_manager",
   "dispatcher",
 ]);
-const CLOSED_STATUSES = new Set(["COMPLETED", "CLOSED", "CANCELLED", "REJECTED"]);
+const CLOSED_STATUSES = new Set(["COMPLETED", "CLOSED", "CANCELLED", "REJECTED", "RESOLVED"]);
+const NON_DISPATCHABLE_STATUSES = new Set([...CLOSED_STATUSES, "DISPUTED"]);
 const ACTIVE_STATUSES = new Set(["ACCEPTED", "EN_ROUTE", "ARRIVED", "IN_PROGRESS"]);
 
 function role(value: unknown) {
@@ -35,6 +37,16 @@ function requireDispatcher(auth: any) {
     permissions.canDispatchJobs === true
   ) return;
   throw new HttpsError("permission-denied", "Dispatch permission is required.");
+}
+
+function requireVerifiedAdminMfa(auth: any) {
+  const token = auth?.token || {};
+  if (token.email_verified !== true || !token.firebase?.sign_in_second_factor) {
+    throw new HttpsError(
+      "permission-denied",
+      "A verified Admin MFA session is required to resolve ticket disputes.",
+    );
+  }
 }
 
 function isApprovedTechnician(
@@ -99,8 +111,8 @@ export const adminAssignTechnician = onCall(
       }
 
       const currentStatus = text(ticket.status, 60).toUpperCase();
-      if (CLOSED_STATUSES.has(currentStatus)) {
-        throw new HttpsError("failed-precondition", "Closed or cancelled tickets cannot be dispatched.");
+      if (NON_DISPATCHABLE_STATUSES.has(currentStatus)) {
+        throw new HttpsError("failed-precondition", "Closed, cancelled, or disputed tickets cannot be dispatched.");
       }
       const previousTechnicianId = text(
         ticket.assignedTechnicianId || ticket.technicianId || ticket.techId,
@@ -183,7 +195,6 @@ const STANDARD_SLA_CREDIT_AED = 50;
 export const adminResolveTicketDispute = onCall(
   { cors: true, region: "europe-west3", enforceAppCheck: true },
   async (request) => {
-    requireDispatcher(request.auth);
     const ticketId = text(request.data?.ticketId, 160);
     const action = text(request.data?.action, 60).toLowerCase();
     const note = text(request.data?.note, 1000);
@@ -191,6 +202,26 @@ export const adminResolveTicketDispute = onCall(
       throw new HttpsError(
         "invalid-argument",
         "A valid dispute action and an audited resolution note are required.",
+      );
+    }
+
+    // SLA credits are payment decisions: Finance Admin MFA only.
+    // Revisit/dismiss stay with dispatcher authority plus selective MFA.
+    let actorUid = "";
+    let actorRoleLabel = "dispatcher";
+    if (action === "approve_credit") {
+      const financeActor = await requireMfaFinanceAdminActor(request);
+      actorUid = financeActor.uid;
+      actorRoleLabel = "finance_admin";
+    } else {
+      requireDispatcher(request.auth);
+      requireVerifiedAdminMfa(request.auth);
+      actorUid = request.auth!.uid;
+      actorRoleLabel = role(
+        request.auth!.token?.role ||
+        request.auth!.token?.userRole ||
+        request.auth!.token?.primaryRole ||
+        "dispatcher",
       );
     }
 
@@ -223,15 +254,17 @@ export const adminResolveTicketDispute = onCall(
         throw new HttpsError("failed-precondition", "Ticket is not awaiting dispute review.");
       }
 
-      const status = action === "request_revisit" ? "REOPENED" : "CLOSED";
+      // Close the disputed ticket; dispatch only the dedicated revisit child so
+      // ops cannot double-assign the parent and the child at the same time.
       transaction.set(ticketRef, {
-        status,
+        status: "CLOSED",
         adminReviewStatus: "RESOLVED",
         requiresAdminReview: false,
+        disputeStatus: action === "request_revisit" ? "REOPENED_FOR_REVISIT" : "RESOLVED",
         disputeResolutionAction: action,
         disputeResolutionNote: note,
         disputeResolvedAt: now,
-        disputeResolvedBy: request.auth!.uid,
+        disputeResolvedBy: actorUid,
         updatedAt: now,
       }, { merge: true });
 
@@ -239,17 +272,25 @@ export const adminResolveTicketDispute = onCall(
         transaction.create(revisitRef, {
           parentId: ticketId,
           tenantId: ticket.tenantId || null,
-          tenantUid: ticket.tenantUid || null,
+          tenantUid: ticket.tenantUid || ticket.tenantId || null,
           ownerId: ticket.ownerId || ticket.ownerUid || null,
           ownerUid: ticket.ownerUid || ticket.ownerId || null,
           propertyId: ticket.propertyId || null,
           unitId: ticket.unitId || null,
-          unitNumber: ticket.unitNumber || null,
+          unitNumber: ticket.unitNumber || ticket.unit || null,
+          unit: ticket.unit || ticket.unitNumber || null,
+          category: ticket.category || ticket.requestType || "GENERAL",
+          requestType: ticket.requestType || ticket.category || "GENERAL",
           title: `REVISIT: ${text(ticket.title, 180) || "Disputed Job"}`,
           description: `Admin revisit dispatch. Reason: ${note}`,
+          priority: text(ticket.priority, 40).toUpperCase() || "HIGH",
           status: "OPEN",
-          priority: "HIGH",
           source: "ADMIN_DISPUTE_REVISIT",
+          jobLocation: ticket.jobLocation || ticket.location || null,
+          location: ticket.location || ticket.jobLocation || null,
+          tenantName: ticket.tenantName || null,
+          tenantPhone: ticket.tenantPhone || ticket.phone || null,
+          tenantEmail: ticket.tenantEmail || null,
           createdAt: now,
           updatedAt: now,
         });
@@ -276,7 +317,8 @@ export const adminResolveTicketDispute = onCall(
             verificationState: "ADMIN_VERIFIED",
             approved: true,
             paymentVerified: true,
-            createdBy: request.auth!.uid,
+            createdBy: actorUid,
+            approvedBy: actorUid,
             createdAt: now,
             updatedAt: now,
           });
@@ -285,13 +327,8 @@ export const adminResolveTicketDispute = onCall(
 
       transaction.set(auditRef, {
         action: "ADMIN_RESOLVE_TICKET_DISPUTE",
-        actorId: request.auth!.uid,
-        actorRole: role(
-          request.auth!.token?.role ||
-          request.auth!.token?.userRole ||
-          request.auth!.token?.primaryRole ||
-          "dispatcher",
-        ),
+        actorId: actorUid,
+        actorRole: actorRoleLabel,
         ticketId,
         resolutionAction: action,
         resolutionNote: note,
@@ -342,10 +379,13 @@ export const adminUpdateEmergencyTicket = onCall(
         throw new HttpsError("failed-precondition", "Ticket is not marked as an emergency.");
       }
 
-      const targetStatus = action === "respond" ? "RESPONDED" : "RESOLVED";
+      const targetSosStatus = action === "respond" ? "RESPONDED" : "RESOLVED";
+      // Resolve writes canonical CLOSED so the ticket is immediately non-mutable
+      // (RESOLVED alone is only a sosStatus alias until normalization runs).
+      const targetStatus = action === "respond" ? "RESPONDED" : "CLOSED";
       if (
         text(ticket.status, 80).toUpperCase() === targetStatus &&
-        text(ticket.sosStatus, 80).toUpperCase() === targetStatus
+        text(ticket.sosStatus, 80).toUpperCase() === targetSosStatus
       ) {
         idempotent = true;
         return;
@@ -359,7 +399,7 @@ export const adminUpdateEmergencyTicket = onCall(
 
       transaction.set(ticketRef, {
         status: targetStatus,
-        sosStatus: targetStatus,
+        sosStatus: targetSosStatus,
         ...(action === "respond"
           ? { respondedAt: now, respondedBy: request.auth!.uid }
           : { resolvedAt: now, resolvedBy: request.auth!.uid }),
@@ -380,7 +420,7 @@ export const adminUpdateEmergencyTicket = onCall(
       }, { merge: false });
     });
 
-    return { ok: true, ticketId, status: action === "respond" ? "RESPONDED" : "RESOLVED", idempotent };
+    return { ok: true, ticketId, status: action === "respond" ? "RESPONDED" : "CLOSED", sosStatus: action === "respond" ? "RESPONDED" : "RESOLVED", idempotent };
   },
 );
 

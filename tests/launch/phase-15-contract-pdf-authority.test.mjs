@@ -53,12 +53,13 @@ test('Phase 15 monthly Owner report is server-generated and byte-hashed', async 
 });
 
 test('Phase 15 signed contract issues one unpaid 15% invoice and approval creates a separate bilingual receipt', async () => {
-  const [signing, approval, pdf, invoiceHelper, invoicePage] = await Promise.all([
+  const [signing, approval, pdf, invoiceHelper, invoicePage, paymentsUi] = await Promise.all([
     read('functions/adminOwnerOperations.ts'),
     read('functions/paymentTransactionApproval.ts'),
     read('functions/pdfEngine.ts'),
     read('functions/mobilizationInvoice.ts'),
     read('src/pages/InvoiceDetailsPage.tsx'),
+    read('apps/admin-panel/src/pages/financials/PaymentApprovalsPage.tsx'),
   ]);
   for (const token of [
     'buildMobilizationInvoiceSnapshot',
@@ -76,7 +77,15 @@ test('Phase 15 signed contract issues one unpaid 15% invoice and approval create
     'PAID_RECEIPT_READY',
     'owner_payment_approved_',
   ]) assert.ok(approval.includes(token), `Payment approval lifecycle missing ${token}`);
-  assert.ok(approval.includes('if (!String(approvedInvoice.receiptPdfUrl || "").trim()'), 'Approval replay must repair a missing receipt.');
+  assert.ok(approval.includes('receiptNeedsRepair'), 'Approval replay must repair a missing or failed receipt.');
+  assert.ok(approval.includes('PAID_RECEIPT_FAILED'), 'Failed receipt generation must mark PAID_RECEIPT_FAILED for repair.');
+  assert.ok(approval.includes('PAID_RECEIPT_READY'), 'Successful receipt repair must mark PAID_RECEIPT_READY.');
+  assert.ok(signing.includes('repairMissingMobilizationInvoicePdf'), 'Signed-contract replay must repair a missing unpaid invoice PDF.');
+  assert.ok(signing.includes('SERVER_CONTRACT_SIGNATURE_REPAIR'), 'Invoice PDF repair must persist a repair source marker.');
+  assert.ok(signing.includes('documentState: "AWAITING_PAYMENT"'), 'Signed-contract replay must recreate a missing mobilisation invoice document.');
+  assert.ok(approval.includes('SERVER_PAYMENT_APPROVAL_INVOICE_REPAIR'), 'Payment approval must recreate a missing mobilisation invoice before approving.');
+  assert.ok(paymentsUi.includes('PAID_RECEIPT_FAILED'), 'Finance Admin UI must surface PAID_RECEIPT_FAILED repair.');
+  assert.ok(paymentsUi.includes('Repair receipt'), 'Finance Admin UI must expose a receipt repair action.');
   for (const token of [
     '15% MOBILISATION INVOICE - UNPAID',
     'فاتورة دفعة التفعيل 15% - غير مدفوعة',
