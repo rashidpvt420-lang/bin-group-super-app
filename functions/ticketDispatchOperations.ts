@@ -187,6 +187,9 @@ const STANDARD_SLA_CREDIT_AED = 50;
 export const adminResolveTicketDispute = onCall(
   { cors: true, region: "europe-west3", enforceAppCheck: true },
   async (request) => {
+    // N-05: MFA before argument validation so empty/bridged Admin sessions fail closed.
+    await requirePrivilegedMfaSession(request.auth);
+
     const ticketId = text(request.data?.ticketId, 160);
     const action = text(request.data?.action, 60).toLowerCase();
     const note = text(request.data?.note, 1000);
@@ -196,8 +199,6 @@ export const adminResolveTicketDispute = onCall(
         "A valid dispute action and an audited resolution note are required.",
       );
     }
-    // N-05 MFA for every dispute resolution; Finance role still required for credits.
-    await requirePrivilegedMfaSession(request.auth);
 
     // SLA credits are payment decisions: Finance Admin MFA only.
     // Revisit/dismiss stay with dispatcher authority.
