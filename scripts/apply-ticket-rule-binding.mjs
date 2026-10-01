@@ -6,8 +6,8 @@ let text = readFileSync(file, 'utf8').replace(/\r\n?/g, '\n');
 let changed = false;
 
 // Browser applications create canonical tickets through App Check callables.
-// Direct Firestore creation remains Admin-only for controlled operations.
-const canonicalCreate = '      allow create: if isAdmin();';
+// Direct Firestore creation remains Admin-only for controlled non-terminal intake.
+const canonicalCreate = '      allow create: if safeAdminTicketCreate();';
 const assignedTechnicianList = '      allow list: if canListAssignedTechnicianTicket(resource.data);';
 const dispatchList = '      allow list: if isNotSuspended() && canDispatchJobs();';
 for (const legacyCreate of [
@@ -79,6 +79,9 @@ const removedClaimFields = removeRuleFunction('missionClaimFieldsLookValid');
 const removedDirectClaims = removeRuleFunction('safeOpenMissionClaim');
 const removedOpenPool = removeRuleFunction('openMissionPoolRead');
 const removedOpenAvailability = removeRuleFunction('openMissionAvailable');
+removeRuleFunction('isClosedTicketStatus');
+removeRuleFunction('safeAdminTicketCreate');
+removeRuleFunction('safeAdminTicketUpdate');
 removeRuleFunction('safeTicketUpdateByActor');
 
 const directClaimReference = /\s*\|\|\s*safeOpenMissionClaim\(\)/g;
@@ -87,7 +90,32 @@ if (directClaimReference.test(text)) {
   changed = true;
 }
 
-const router = `    function safeTicketUpdateByActor() {
+const router = `    function isClosedTicketStatus(status) {
+      return status in [
+        'CLOSED', 'closed',
+        'CANCELLED', 'cancelled',
+        'REJECTED', 'rejected',
+        'RESOLVED', 'resolved'
+      ];
+    }
+
+    function safeAdminTicketCreate() {
+      // Closed/cancelled tickets are created only by audited server callables (Admin SDK).
+      return isAdmin() && !isClosedTicketStatus(request.resource.data.get('status', 'OPEN'));
+    }
+
+    function safeAdminTicketUpdate() {
+      // Admin browsers may not reopen a closed ticket by rewriting status.
+      // Lifecycle transitions for closed tickets stay on audited callables.
+      return isAdmin() &&
+        isNotSuspended() &&
+        (
+          !isClosedTicketStatus(resource.data.get('status', '')) ||
+          request.resource.data.get('status', resource.data.get('status', '')) == resource.data.get('status', '')
+        );
+    }
+
+    function safeTicketUpdateByActor() {
       let authenticated = signedIn();
       let role = authenticated
         ? request.auth.token.get('role', request.auth.token.get('userRole', request.auth.token.get('primaryRole', '')))
@@ -110,7 +138,7 @@ const router = `    function safeTicketUpdateByActor() {
         role in ['operations_admin', 'operations_manager', 'dispatcher']
       );
       return authenticated && (
-        (admin && isNotSuspended()) ||
+        (admin && safeAdminTicketUpdate()) ||
         (!admin && dispatcher && safeDispatcherTicketUpdate()) ||
         (!admin && !dispatcher && role in ['', 'tenant'] && tenantOwns(resource.data) && safeTenantEvidenceUpdate()) ||
         (!admin && !dispatcher && role in ['technician', 'tech'] && techOwns(resource.data) && safeTechnicianTicketUpdate())
@@ -147,11 +175,14 @@ if (![1, 2].includes(updateGateCount)) throw new Error(`[ticket-rule-binding] Ex
 if (text.split('function safeTicketUpdateByActor() {').length - 1 !== 1) throw new Error('[ticket-rule-binding] Expected exactly one shared ticket update router.');
 
 for (const required of [
+  'function isClosedTicketStatus(status) {',
+  'function safeAdminTicketCreate() {',
+  'function safeAdminTicketUpdate() {',
   'let authenticated = signedIn();',
   'let role = authenticated',
   'let admin = authenticated && (',
   'let dispatcher = authenticated && (',
-  '(admin && isNotSuspended())',
+  '(admin && safeAdminTicketUpdate())',
   '(!admin && dispatcher && safeDispatcherTicketUpdate())',
   "(!admin && !dispatcher && role in ['', 'tenant'] && tenantOwns(resource.data) && safeTenantEvidenceUpdate())",
   "(!admin && !dispatcher && role in ['technician', 'tech'] && techOwns(resource.data) && safeTechnicianTicketUpdate())",
@@ -183,6 +214,13 @@ replaceMatchBlock(legacyHeader, legacyReadOnlyBlock, 'legacy /tickets');
 
 const maintenanceHeader = '    match /maintenanceTickets/{ticketId} {';
 ensureRuleInMatchBlock(maintenanceHeader, dispatchList, 'canonical /maintenanceTickets');
+const maintenanceBeforeCreate = readMatchBlock(maintenanceHeader, 'canonical /maintenanceTickets');
+const legacyAdminCreate = '      allow create: if isAdmin();';
+if (maintenanceBeforeCreate.content.includes(legacyAdminCreate)) {
+  const repaired = maintenanceBeforeCreate.content.split(legacyAdminCreate).join(canonicalCreate);
+  text = `${text.slice(0, maintenanceBeforeCreate.start)}${repaired}${text.slice(maintenanceBeforeCreate.end)}`;
+  changed = true;
+}
 const maintenanceBlock = readMatchBlock(maintenanceHeader, 'canonical /maintenanceTickets').content;
 for (const required of [
   assignedTechnicianList.trim(),

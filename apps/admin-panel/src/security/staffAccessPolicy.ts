@@ -83,7 +83,7 @@ const PATH_MODULES: Array<{ prefixes: string[]; module: StaffModule }> = [
     { prefixes: ['/ops/public-launch-command', '/ops/pilot-completion', '/ops/data-governance', '/ops/public', '/pilot', '/compliance', '/smoke-test'], module: 'compliance' },
     { prefixes: ['/ops/document-library', '/ops/rfq', '/ops/vendors', '/document-vault', '/vault'], module: 'documents' },
     { prefixes: ['/admin/unit-status', '/admin/units', '/properties/passport', '/onboard-property', '/bulk-import', '/units'], module: 'properties' },
-    { prefixes: ['/ops/whatsapp-triage', '/ops/bin-connect', '/tickets'], module: 'tickets' },
+    { prefixes: ['/ops/whatsapp-triage', '/ops/bin-connect', '/ops/disputes', '/tickets'], module: 'tickets' },
     { prefixes: ['/ops/technicians', '/technicians'], module: 'technicians' },
     { prefixes: ['/ops/amenity-control', '/ops/announcements', '/ops/key-register', '/ops/parcel-desk', '/ops/visitor-parking', '/ops/marketplace-approvals', '/ops/messages', '/ops/community-moderation', '/tenant-services', '/unit-links', '/tenants'], module: 'tenants' },
     { prefixes: ['/control-center', '/design-studio', '/admin/bin-gpt-engineer', '/bin-gpt-engineer', '/settings'], module: 'settings' },

@@ -788,7 +788,7 @@ test.describe('Tenant Business Workflow', () => {
       const snap = await db.collection('maintenanceTickets').doc(ticketId).get();
       const data = snap.data() || {};
       return `${data.status}|${data.tenantApprovalStatus}|${data.requiresAdminReview}|${data.adminReviewStatus}|${data.disputeReason}`;
-    }, { timeout: 40_000 }).toContain(`DISPUTED|DISPUTED|true|pending|${disputeReason}`);
+    }, { timeout: 40_000 }).toContain(`DISPUTED|DISPUTED|true|PENDING_DISPUTE_REVIEW|${disputeReason}`);
 
     await expect.poll(async () => {
       const audit = await db.collection('audit_logs')

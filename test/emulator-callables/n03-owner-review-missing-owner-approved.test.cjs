@@ -22,7 +22,7 @@ test.beforeEach(async () => {
 });
 
 const base = { propertyId: 'prop_n03', ownerId: 'owner_n03', status: 'COMPLETED_PENDING_APPROVAL', assignedTechnicianId: 'tech_n03' };
-const expectedStatus = { APPROVE_CLOSE: 'CLOSED', DISPUTE: 'DISPUTED', REQUEST_REVISIT: 'REOPENED', ESCALATE: 'ESCALATED' };
+const expectedStatus = { APPROVE_CLOSE: 'CLOSED', DISPUTE: 'DISPUTED', REQUEST_REVISIT: 'CLOSED', ESCALATE: 'ESCALATED' };
 
 for (const action of Object.keys(expectedStatus)) {
   test(`${action} works on a fresh ticket with no ownerApproved field`, async () => {
@@ -33,6 +33,17 @@ for (const action of Object.keys(expectedStatus)) {
     const ticket = (await db.doc(`maintenanceTickets/${id}`).get()).data();
     assert.equal(ticket.status, expectedStatus[action]);
     assert.equal(ticket.ownerApproved, action === 'APPROVE_CLOSE');
+    if (action === 'REQUEST_REVISIT') {
+      assert.equal(result.revisitTicketId, `revisit_${id}`);
+      const child = (await db.doc(`maintenanceTickets/revisit_${id}`).get()).data();
+      assert.equal(child.status, 'OPEN');
+      assert.equal(child.source, 'OWNER_REQUEST_REVISIT');
+      assert.equal(child.parentId, id);
+    }
+    if (action === 'ESCALATE' || action === 'DISPUTE') {
+      assert.equal(ticket.requiresAdminReview, true);
+      assert.equal(ticket.adminReviewStatus, 'PENDING_DISPUTE_REVIEW');
+    }
     const audits = await db.collection('audit_logs').where('targetId', '==', id).get();
     assert.equal(audits.size, 1);
     assert.deepEqual(audits.docs[0].data().before, { status: 'COMPLETED_PENDING_APPROVAL', ownerApproved: null });

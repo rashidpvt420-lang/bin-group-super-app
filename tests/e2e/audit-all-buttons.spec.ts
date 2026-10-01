@@ -55,6 +55,7 @@ test.describe('Admin Button & Menu Verification Audit', () => {
     { label: 'Technicians', path: '/technicians' },
     { label: 'Duty Command Center', path: '/ops/technicians' },
     { label: 'Mission Logs', path: '/tickets' },
+    { label: 'Dispute Queue', path: '/ops/disputes' },
     { label: 'WhatsApp Triage', path: '/ops/whatsapp-triage' },
     { label: 'BIN Connect Inbox', path: '/ops/bin-connect' },
     { label: 'Pilot Completion', path: '/ops/pilot-completion' },

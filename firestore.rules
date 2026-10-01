@@ -211,6 +211,31 @@ service cloud.firestore {
       );
     }
 
+    function isClosedTicketStatus(status) {
+      return status in [
+        'CLOSED', 'closed',
+        'CANCELLED', 'cancelled',
+        'REJECTED', 'rejected',
+        'RESOLVED', 'resolved'
+      ];
+    }
+
+    function safeAdminTicketCreate() {
+      // Closed/cancelled tickets are created only by audited server callables (Admin SDK).
+      return isAdmin() && !isClosedTicketStatus(request.resource.data.get('status', 'OPEN'));
+    }
+
+    function safeAdminTicketUpdate() {
+      // Admin browsers may not reopen a closed ticket by rewriting status.
+      // Lifecycle transitions for closed tickets stay on audited callables.
+      return isAdmin() &&
+        isNotSuspended() &&
+        (
+          !isClosedTicketStatus(resource.data.get('status', '')) ||
+          request.resource.data.get('status', resource.data.get('status', '')) == resource.data.get('status', '')
+        );
+    }
+
     function safeTicketUpdateByActor() {
       let authenticated = signedIn();
       let role = authenticated
@@ -234,7 +259,7 @@ service cloud.firestore {
         role in ['operations_admin', 'operations_manager', 'dispatcher']
       );
       return authenticated && (
-        (admin && isNotSuspended()) ||
+        (admin && safeAdminTicketUpdate()) ||
         (!admin && dispatcher && safeDispatcherTicketUpdate()) ||
         (!admin && !dispatcher && role in ['', 'tenant'] && tenantOwns(resource.data) && safeTenantEvidenceUpdate()) ||
         (!admin && !dispatcher && role in ['technician', 'tech'] && techOwns(resource.data) && safeTechnicianTicketUpdate())
@@ -1351,7 +1376,7 @@ service cloud.firestore {
       allow list: if canListAssignedTechnicianTicket(resource.data);
       allow get: if canGetAssignedTechnicianTicket(resource.data);
       allow read: if isNotSuspended() && (participantCanRead(resource.data) || canDispatchJobs());
-      allow create: if isAdmin();
+      allow create: if safeAdminTicketCreate();
       allow update: if safeTicketUpdateByActor();
       allow delete: if isAdmin();
       match /messages/{messageId} {

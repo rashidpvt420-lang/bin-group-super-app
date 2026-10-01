@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
     Alert, Box, Typography, Paper, Stack, Chip, CircularProgress,
     Grid, alpha, Button, Divider,
@@ -7,7 +8,7 @@ import {
 import {
     CreditCard, Download,
     Clock, CheckCircle2,
-    Shield, TrendingUp, AlertCircle, FileText
+    Shield, TrendingUp, AlertCircle, FileText, ExternalLink
 } from 'lucide-react';
 import { db, collection, query, where, onSnapshot, limit } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
@@ -39,6 +40,7 @@ const formatInvoiceDate = (value: any) => {
 export default function OwnerFinancialsPage() {
     const { user } = useRole();
     const { tx, isRTL } = useLanguage();
+    const navigate = useNavigate();
     const [streamsLoading, setLoading] = useState(true);
     const [transactions, setTransactions] = useState<any[]>([]);
     const [invoices, setInvoices] = useState<any[]>([]);
@@ -173,6 +175,7 @@ export default function OwnerFinancialsPage() {
                                     <TableCell sx={{ color: 'rgba(255,255,255,0.35)', fontWeight: 900 }}>TYPE</TableCell>
                                     <TableCell sx={{ color: 'rgba(255,255,255,0.35)', fontWeight: 900 }}>AMOUNT</TableCell>
                                     <TableCell sx={{ color: 'rgba(255,255,255,0.35)', fontWeight: 900 }}>STATUS</TableCell>
+                                    <TableCell align="right" sx={{ color: 'rgba(255,255,255,0.35)', fontWeight: 900 }}>DOCUMENTS</TableCell>
                                 </TableRow>
                             </TableHead>
                             <TableBody>
@@ -185,6 +188,36 @@ export default function OwnerFinancialsPage() {
                                         <TableCell sx={{ color: 'rgba(255,255,255,0.7)', fontWeight: 700 }}>{String(invoice.feeType || invoice.type || 'SERVICE_INVOICE').replace(/_/g, ' ')}</TableCell>
                                         <TableCell sx={{ color: '#FFF', fontWeight: 900 }}>{invoice.currency || 'AED'} {Number(invoice.amount || invoice.amountPaid || 0).toLocaleString()}</TableCell>
                                         <TableCell><Chip label={String(invoice.status || 'PENDING').toUpperCase()} size="small" sx={{ bgcolor: alpha(invoice.status === 'PAID' ? '#10b981' : '#f59e0b', 0.12), color: invoice.status === 'PAID' ? '#10b981' : '#f59e0b', fontWeight: 950 }} /></TableCell>
+                                        <TableCell align="right">
+                                            <Stack direction="row" spacing={1} justifyContent="flex-end">
+                                                <Button
+                                                    size="small"
+                                                    startIcon={<ExternalLink size={14} />}
+                                                    onClick={() => navigate(`/invoices/${invoice.id}`)}
+                                                    sx={{ color: binThemeTokens.gold, fontWeight: 900 }}
+                                                >
+                                                    Open
+                                                </Button>
+                                                <Button
+                                                    size="small"
+                                                    startIcon={<Download size={14} />}
+                                                    disabled={!invoice.pdfUrl}
+                                                    onClick={() => invoice.pdfUrl && window.open(invoice.pdfUrl, '_blank', 'noopener,noreferrer')}
+                                                    sx={{ color: '#FFF', fontWeight: 800 }}
+                                                >
+                                                    Invoice
+                                                </Button>
+                                                <Button
+                                                    size="small"
+                                                    startIcon={<Shield size={14} />}
+                                                    disabled={!invoice.receiptPdfUrl}
+                                                    onClick={() => invoice.receiptPdfUrl && window.open(invoice.receiptPdfUrl, '_blank', 'noopener,noreferrer')}
+                                                    sx={{ color: invoice.receiptPdfUrl ? '#10b981' : 'rgba(255,255,255,0.25)', fontWeight: 800 }}
+                                                >
+                                                    Receipt
+                                                </Button>
+                                            </Stack>
+                                        </TableCell>
                                     </TableRow>
                                 ))}
                             </TableBody>

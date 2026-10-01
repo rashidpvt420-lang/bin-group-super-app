@@ -119,8 +119,10 @@ export async function createBrokerCommissionForContract(
     Number.isFinite(requestedCommissionRate) &&
     requestedCommissionRate >= MIN_COMMISSION_RATE &&
     requestedCommissionRate <= MAX_COMMISSION_RATE;
+  // Always price with an approved or default rate so a later RERA/KYC release is payable.
+  // Rate-out-of-band rows still go on HOLD for Admin review, but keep a non-zero amount.
   const commissionRate = commissionRateApproved ? requestedCommissionRate : DEFAULT_COMMISSION_RATE;
-  const amount = commissionRateApproved ? Math.round(base * commissionRate * 100) / 100 : 0;
+  const amount = Math.round(base * commissionRate * 100) / 100;
   const complianceHold = !reraVerified || !commissionRateApproved;
   const holdReason = !commissionRateApproved
     ? "COMMISSION_RATE_REQUIRES_ADMIN_REVIEW"
@@ -240,7 +242,9 @@ export const setBrokerReraVerification = onCall({ cors: true, region: "europe-we
     if (!holds.empty) {
       const batch = db.batch();
       holds.forEach((d) => {
-        if (String(d.data().holdReason || "") !== "BROKER_RERA_UNVERIFIED") return;
+        const commission = d.data() || {};
+        if (String(commission.holdReason || "") !== "BROKER_RERA_UNVERIFIED") return;
+        if (Number(commission.amount || 0) <= 0) return;
         batch.set(d.ref, {
           status: "PENDING",
           complianceHold: false,
