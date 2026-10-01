@@ -24,13 +24,15 @@ const ENV = {
   VITE_FIREBASE_VAPID_KEY: `B${'V'.repeat(86)}`,
   VITE_GOOGLE_MAPS_API_KEY: `AIza${'M'.repeat(35)}`,
   VITE_APP_CHECK_SITE_KEY: `6L${'A'.repeat(38)}`,
+  FIREBASE_APPCHECK_ENTERPRISE_SITE_KEY: `6L${'E'.repeat(38)}`,
+  VITE_APP_CHECK_PROVIDER: 'enterprise',
   REACT_APP_APP_CHECK_SITE_KEY: `6L${'B'.repeat(38)}`,
 };
 
 function mainTexts() {
   return [
     `bin-group-57c60 bin-group-57c60.firebaseapp.com bin-group-57c60.firebasestorage.app ${ENV.VITE_FIREBASE_API_KEY}`,
-    `${ENV.VITE_FIREBASE_APP_ID} ${ENV.VITE_FIREBASE_MESSAGING_SENDER_ID} ${ENV.VITE_APP_CHECK_SITE_KEY}`,
+    `${ENV.VITE_FIREBASE_APP_ID} ${ENV.VITE_FIREBASE_MESSAGING_SENDER_ID} ${ENV.FIREBASE_APPCHECK_ENTERPRISE_SITE_KEY}`,
     `${ENV.VITE_GOOGLE_MAPS_API_KEY} ${ENV.VITE_FIREBASE_VAPID_KEY}`,
   ];
 }
@@ -68,6 +70,20 @@ test('hosted client summaries require exact main and Admin runtime values', () =
   });
   assert.equal(missingMaps.mapsApiKeyMatched, false);
   assert.equal(missingMaps.allRequiredMatched, false);
+});
+
+test('main hosted verification expects Enterprise App Check key when provider is enterprise', () => {
+  const main = summarizeHostedClientBundle({ texts: mainTexts(), assetCount: 7, site: 'main', env: ENV });
+  assert.equal(main.appCheckSiteKeyMatched, true);
+
+  const legacyOnly = summarizeHostedClientBundle({
+    texts: mainTexts().map((source) => source.replace(ENV.FIREBASE_APPCHECK_ENTERPRISE_SITE_KEY, ENV.VITE_APP_CHECK_SITE_KEY)),
+    assetCount: 7,
+    site: 'main',
+    env: ENV,
+  });
+  assert.equal(legacyOnly.appCheckSiteKeyMatched, false);
+  assert.equal(legacyOnly.allRequiredMatched, false);
 });
 
 test('Admin hosted verification cannot be satisfied by public-app runtime values', () => {
@@ -126,6 +142,7 @@ test('hosted client evidence is exact-run bound and aggregate-only', () => {
     ENV.VITE_GOOGLE_MAPS_API_KEY,
     ENV.VITE_FIREBASE_VAPID_KEY,
     ENV.VITE_APP_CHECK_SITE_KEY,
+    ENV.FIREBASE_APPCHECK_ENTERPRISE_SITE_KEY,
     ENV.REACT_APP_APP_CHECK_SITE_KEY,
   ]) assert.doesNotMatch(serialized, new RegExp(secretLikeValue));
 });
