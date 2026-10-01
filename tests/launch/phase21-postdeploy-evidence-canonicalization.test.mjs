@@ -20,7 +20,16 @@ test('Phase 21 postdeploy repair supplies the Admin-verified Owner pricing paylo
   assert.match(patched, /annualRevenue: property\.annualRevenue/);
   assert.match(patched, /hvac: property\.hvac === true/);
   assert.match(patched, /fireAlarm: property\.fireAlarm === true/);
-  assert.match(patched, /verifiedMaintenanceRate: 12\.5/);
+  assert.match(patched, /verifiedMaintenanceRate: 10/);
+  assert.match(patched, /verifiedManagementRate: 5/);
+});
+
+test('Phase 21 postdeploy Owner FM rate stays inside Residential Building bounds', () => {
+  const patched = patchOwnerEvidence(read('scripts/run-owner-inspection-first-production-evidence.mjs'));
+  const match = patched.match(/verifiedMaintenanceRate:\s*([0-9.]+)/);
+  assert.ok(match, 'verifiedMaintenanceRate must be present');
+  const rate = Number(match[1]);
+  assert.ok(rate >= 6 && rate <= 12, `verifiedMaintenanceRate ${rate} must be within AED 6-12 for Residential Building`);
 });
 
 test('Broker production evidence activates contracts with server payment verification markers', () => {
@@ -44,6 +53,15 @@ test('Phase 21 postdeploy repair treats EN_ROUTE as the canonical persisted Tech
   assert.match(technician, /fixtureTicket\(gpsDeniedTicketId, 'EN_ROUTE', true\)/);
   assert.match(technician, /fixtureTicket\(gpsPoorTicketId, 'EN_ROUTE', true\)/);
   assert.doesNotMatch(technician, /toBe\('ON_THE_WAY'\)/);
+});
+
+test('Technician business evidence GPS matches the Al Ain live-role property geofence', () => {
+  const technician = read('tests/e2e/business-technician.spec.ts');
+  assert.match(technician, /lat:\s*24\.2075/);
+  assert.match(technician, /lng:\s*55\.7447/);
+  assert.match(technician, /geolocation:\s*\{\s*longitude:\s*55\.7447,\s*latitude:\s*24\.2075/);
+  assert.doesNotMatch(technician, /latitude:\s*25\.2048/);
+  assert.doesNotMatch(technician, /longitude:\s*55\.2708/);
 });
 
 test('Phase 21 postdeploy repair is wired into both exact-main production evidence paths', () => {

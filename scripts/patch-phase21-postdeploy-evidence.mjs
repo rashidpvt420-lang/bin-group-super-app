@@ -45,7 +45,7 @@ export function patchOwnerEvidence(source) {
       bmu: property.bmu === true,
       tank: property.tank === true || property.pumps === true,
       pool: property.pool === true,
-      verifiedMaintenanceRate: 12.5,
+      verifiedMaintenanceRate: 10,
       verifiedManagementRate: 5,
     },
     checklist: {
