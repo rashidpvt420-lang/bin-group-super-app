@@ -159,6 +159,22 @@ test('public hosting enables cleanUrls so static legal pages keep SPA paths afte
   assert.equal(appHost?.cleanUrls, true);
 });
 
+test('static legal pages load boot-init so Arabic RTL applies outside the SPA', () => {
+  const pages = [
+    'public/terms-of-service.html',
+    'public/privacy-policy.html',
+    'public/terms.html',
+    'public/privacy.html',
+  ];
+  for (const path of pages) {
+    const html = read(path);
+    assert.match(html, /src="\/boot-init\.js"/, `${path} must apply bin_language via boot-init`);
+  }
+  const boot = read('public/boot-init.js');
+  assert.match(boot, /localStorage\.getItem\('bin_language'\)/);
+  assert.match(boot, /document\.documentElement\.dir = lang === 'ar' \? 'rtl' : 'ltr'/);
+});
+
 test('Admin tenants registry labels icon-only row actions for launch a11y audit', () => {
   const source = read('apps/admin-panel/src/pages/tenants/TenantsManagementPage.tsx');
   assert.match(source, /aria-label=\{`Edit tenant/);
