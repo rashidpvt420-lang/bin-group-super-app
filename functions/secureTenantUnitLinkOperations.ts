@@ -1,5 +1,6 @@
 import * as admin from "firebase-admin";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
+import { requirePrivilegedMfaSession } from "./adminMfaSession";
 
 if (!admin.apps.length) admin.initializeApp();
 const db = admin.firestore();
@@ -43,6 +44,7 @@ export const adminResolveTenantUnitLink = onCall(
   { cors: true, region: "europe-west3", enforceAppCheck: true },
   async (request) => {
     await requireAdmin(request.auth);
+    await requirePrivilegedMfaSession(request.auth);
     const requestId = text(request.data?.requestId, 128);
     const requestedUnitId = text(request.data?.unitId, 128);
     const { decision, reason } = assertTenantUnitLinkReviewEvidence(request.data);

@@ -12,6 +12,7 @@ import {
   resolveLockedOwnerActivationSchedule,
   resolveOwnerActivationPaymentBinding,
 } from "./ownerActivationPaymentPolicy";
+import { requirePrivilegedMfaSession } from "./adminMfaSession";
 
 if (!admin.apps.length) admin.initializeApp();
 
@@ -30,6 +31,7 @@ async function requireAdmin(auth: any) {
 
 export const adminApproveContractActivation = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
   await requireAdmin(request.auth);
+  await requirePrivilegedMfaSession(request.auth);
   throw new HttpsError(
     "failed-precondition",
     "Legacy contract activation is disabled. Approve the bound payment transaction with adminApprovePayment.",
@@ -398,6 +400,7 @@ export const createOwnerPaymentTransaction = onCall({ cors: true, enforceAppChec
 
 export const adminRejectContractActivation = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
   await requireAdmin(request.auth);
+  await requirePrivilegedMfaSession(request.auth);
   throw new HttpsError(
     "failed-precondition",
     "Legacy contract rejection is disabled. Reject the canonical payment transaction with adminRejectPayment.",

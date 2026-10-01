@@ -1,6 +1,7 @@
 import { FieldValue } from "firebase-admin/firestore";
 import * as admin from "firebase-admin";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
+import { requirePrivilegedMfaSession } from "./adminMfaSession";
 import { requireMfaFinanceAdminActor } from "./financeAdminMfa";
 
 if (!admin.apps.length) admin.initializeApp();
@@ -75,6 +76,7 @@ export const adminAssignTechnician = onCall(
   { cors: true, region: "europe-west3", enforceAppCheck: true },
   async (request) => {
     requireDispatcher(request.auth);
+    await requirePrivilegedMfaSession(request.auth);
     const ticketId = text(request.data?.ticketId, 160);
     const technicianId = text(request.data?.technicianId, 160);
     const reassignmentReason = text(request.data?.reassignmentReason, 500);
@@ -195,6 +197,8 @@ const STANDARD_SLA_CREDIT_AED = 50;
 export const adminResolveTicketDispute = onCall(
   { cors: true, region: "europe-west3", enforceAppCheck: true },
   async (request) => {
+    // Keep Finance MFA for approve_credit and selective MFA for revisit/dismiss.
+    // Do not blanket-require dispatcher MFA ahead of Finance-only SLA credits.
     const ticketId = text(request.data?.ticketId, 160);
     const action = text(request.data?.action, 60).toLowerCase();
     const note = text(request.data?.note, 1000);
@@ -353,6 +357,7 @@ export const adminUpdateEmergencyTicket = onCall(
   { cors: true, region: "europe-west3", enforceAppCheck: true },
   async (request) => {
     requireDispatcher(request.auth);
+    await requirePrivilegedMfaSession(request.auth);
     const ticketId = text(request.data?.ticketId, 160);
     const action = text(request.data?.action, 40).toLowerCase();
     if (!ticketId || !EMERGENCY_ACTIONS.has(action)) {
@@ -430,6 +435,7 @@ export const adminProcessWhatsAppIntake = onCall(
   { cors: true, region: "europe-west3", enforceAppCheck: true },
   async (request) => {
     requireDispatcher(request.auth);
+    await requirePrivilegedMfaSession(request.auth);
     const intakeId = text(request.data?.intakeId, 160);
     const action = text(request.data?.action, 40).toLowerCase();
     if (!intakeId || !WHATSAPP_TRIAGE_ACTIONS.has(action)) {
@@ -605,3 +611,4 @@ export const adminProcessWhatsAppIntake = onCall(
 );
 
 import type * as FirebaseFirestore from "firebase-admin/firestore";
+import { requirePrivilegedMfaSession } from "./adminMfaSession";
