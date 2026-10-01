@@ -47,7 +47,7 @@ test('checked-in rules become server-authoritative under the final prepare:rules
     const canonical = ticketBlock(preparedRules, 'maintenanceTickets');
     assert.match(legacy, /allow create, update, delete: if false;/);
     assert.doesNotMatch(legacy, /safeTicketUpdateByActor/);
-    assert.match(canonical, /allow create: if isAdmin\(\);/);
+    assert.match(canonical, /allow create: if safeAdminTicketCreate\(\);/);
     assert.match(canonical, /allow update: if safeTicketUpdateByActor\(\);/);
     assert.match(preparedRules, /let authenticated = signedIn\(\);/);
     assert.match(preparedRules, /let role = authenticated/);

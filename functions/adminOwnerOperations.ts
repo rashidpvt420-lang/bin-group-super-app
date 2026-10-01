@@ -35,6 +35,52 @@ function clean(v: any): any {
   return v;
 }
 
+function invoicePdfMissing(invoice: Record<string, any> | undefined | null) {
+  return !s(invoice?.pdfUrl) || !s(invoice?.storagePath);
+}
+
+async function repairMissingMobilizationInvoicePdf(contract: Record<string, any>, contractId: string) {
+  const invoiceId = s(contract.invoiceId);
+  if (!invoiceId) return;
+  const invoiceRef = db.collection("invoices").doc(invoiceId);
+  const invoiceSnap = await invoiceRef.get();
+  if (!invoiceSnap.exists) return;
+  const invoice = invoiceSnap.data() || {};
+  if (!invoicePdfMissing(invoice)) return;
+
+  const ownerId = s(invoice.ownerUid || invoice.ownerId || contract.ownerId || contract.ownerUid);
+  const quoteHash = s(invoice.quoteHash || contract.finalVerifiedQuoteHash || contract.quoteHash || contract.contractHash).toLowerCase();
+  const amount = normalizeAedMoney(invoice.amount || contract.depositAmount || contract.mobilizationAmount || 0);
+  if (!ownerId || amount <= 0 || !/^[a-f0-9]{64}$/.test(quoteHash)) return;
+
+  const invoiceSnapshot = buildMobilizationInvoiceSnapshot({
+    paymentId: s(invoice.paymentId || contractId),
+    contractId: s(invoice.contractId || contractId),
+    intakeId: s(invoice.intakeId || contract.intakeId || contractId),
+    ownerUid: ownerId,
+    amount,
+    quoteHash,
+  });
+  try {
+    assertMobilizationInvoiceImmutable(invoice, invoiceSnapshot);
+  } catch {
+    return;
+  }
+
+  const invoicePdfArtifact = await generateMobilizationUnpaidInvoicePdfArtifact({
+    ...invoiceSnapshot,
+    ownerId,
+  });
+  await invoiceRef.set({
+    pdfUrl: invoicePdfArtifact.pdfUrl,
+    storagePath: invoicePdfArtifact.storagePath,
+    pdfSha256: invoicePdfArtifact.pdfSha256,
+    pdfGeneration: invoicePdfArtifact.generation,
+    canonicalPdfSource: "SERVER_CONTRACT_SIGNATURE_REPAIR",
+    updatedAt: ts(),
+  }, { merge: true });
+}
+
 async function assertAdmin(auth: any) {
   if (!auth?.uid) throw new HttpsError("unauthenticated", "Admin authentication required.");
   const token = auth.token || {};
@@ -460,6 +506,7 @@ export const ownerSignContractAndQueuePdf = onCall({ cors: true, enforceAppCheck
 
   const alreadySigned = contractIsServerSigned(contract);
   if (alreadySigned) {
+    await repairMissingMobilizationInvoicePdf(contract, contractId);
     return { status: s(contract.status, "READY_FOR_ACTIVATION"), contractId, pdfUrl: contract.signedPdfUrl || contract.pdfUrl || "", idempotent: true };
   }
   const otpVerificationId = s(request.data?.otpVerificationId);
@@ -487,6 +534,7 @@ export const ownerSignContractAndQueuePdf = onCall({ cors: true, enforceAppCheck
   });
   if (leaseState.idempotent) {
     const signedContract = leaseState.contract;
+    await repairMissingMobilizationInvoicePdf(signedContract, contractId);
     return { status: s(signedContract.status, "READY_FOR_ACTIVATION"), contractId, pdfUrl: signedContract.signedPdfUrl || signedContract.pdfUrl || "", idempotent: true };
   }
   const releaseSigningLease = async () => {
@@ -577,6 +625,15 @@ export const ownerSignContractAndQueuePdf = onCall({ cors: true, enforceAppCheck
           createdAt: ts(),
           updatedAt: ts(),
         });
+      } else if (invoicePdfMissing(invoiceSnap.data() || {})) {
+        transaction.set(invoiceRef, {
+          pdfUrl: invoicePdfArtifact.pdfUrl,
+          storagePath: invoicePdfArtifact.storagePath,
+          pdfSha256: invoicePdfArtifact.pdfSha256,
+          pdfGeneration: invoicePdfArtifact.generation,
+          canonicalPdfSource: "SERVER_CONTRACT_SIGNATURE_REPAIR",
+          updatedAt: ts(),
+        }, { merge: true });
       }
       if (paymentSnap.exists) {
         const payment = paymentSnap.data() || {};

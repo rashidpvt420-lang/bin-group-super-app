@@ -706,27 +706,43 @@ export const adminApprovePayment = onCall({ cors: true, enforceAppCheck: true },
   } catch (error: any) {
     throw new HttpsError("aborted", error?.message || "The approved mobilisation invoice identity changed.");
   }
-  if (!String(approvedInvoice.receiptPdfUrl || "").trim() || !String(approvedInvoice.receiptStoragePath || "").trim()) {
-    const receiptArtifact = await generateOwnerPaymentReceiptPdfArtifact({
-      ...invoiceSnapshot,
-      ownerId: ownerUid,
-      paymentReferenceId: manualReference || payment.stripeSessionId,
-    });
-    await invoiceRef.set({
-      receiptPdfUrl: receiptArtifact.pdfUrl,
-      receiptStoragePath: receiptArtifact.storagePath,
-      receiptPdfSha256: receiptArtifact.pdfSha256,
-      receiptPdfGeneration: receiptArtifact.generation,
-      receiptCanonicalSource: "SERVER_PAYMENT_APPROVAL",
-      documentState: "PAID_RECEIPT_READY",
-      updatedAt: ts(),
-    }, { merge: true });
-    await db.collection("invoice_registry").doc(invoiceHash).set({
-      receiptPdfSha256: receiptArtifact.pdfSha256,
-      receiptStoragePath: receiptArtifact.storagePath,
-      receiptCanonicalSource: "SERVER_PAYMENT_APPROVAL",
-      updatedAt: ts(),
-    }, { merge: true });
+  const receiptMissing =
+    !String(approvedInvoice.receiptPdfUrl || "").trim() ||
+    !String(approvedInvoice.receiptStoragePath || "").trim();
+  const receiptNeedsRepair =
+    receiptMissing ||
+    ["PAID_RECEIPT_PENDING", "PAID_RECEIPT_FAILED"].includes(String(approvedInvoice.documentState || "").trim().toUpperCase());
+  if (receiptNeedsRepair) {
+    try {
+      const receiptArtifact = await generateOwnerPaymentReceiptPdfArtifact({
+        ...invoiceSnapshot,
+        ownerId: ownerUid,
+        paymentReferenceId: manualReference || payment.stripeSessionId,
+      });
+      await invoiceRef.set({
+        receiptPdfUrl: receiptArtifact.pdfUrl,
+        receiptStoragePath: receiptArtifact.storagePath,
+        receiptPdfSha256: receiptArtifact.pdfSha256,
+        receiptPdfGeneration: receiptArtifact.generation,
+        receiptCanonicalSource: "SERVER_PAYMENT_APPROVAL",
+        documentState: "PAID_RECEIPT_READY",
+        receiptPdfError: FieldValue.delete(),
+        updatedAt: ts(),
+      }, { merge: true });
+      await db.collection("invoice_registry").doc(invoiceHash).set({
+        receiptPdfSha256: receiptArtifact.pdfSha256,
+        receiptStoragePath: receiptArtifact.storagePath,
+        receiptCanonicalSource: "SERVER_PAYMENT_APPROVAL",
+        updatedAt: ts(),
+      }, { merge: true });
+    } catch (receiptError: any) {
+      await invoiceRef.set({
+        documentState: "PAID_RECEIPT_FAILED",
+        receiptPdfError: String(receiptError?.message || receiptError || "Receipt PDF generation failed").slice(0, 500),
+        updatedAt: ts(),
+      }, { merge: true });
+      throw receiptError;
+    }
   }
 
   if (contractId && contractData.commissionGenerated !== true) {

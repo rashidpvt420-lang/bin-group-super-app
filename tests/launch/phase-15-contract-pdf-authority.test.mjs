@@ -76,7 +76,11 @@ test('Phase 15 signed contract issues one unpaid 15% invoice and approval create
     'PAID_RECEIPT_READY',
     'owner_payment_approved_',
   ]) assert.ok(approval.includes(token), `Payment approval lifecycle missing ${token}`);
-  assert.ok(approval.includes('if (!String(approvedInvoice.receiptPdfUrl || "").trim()'), 'Approval replay must repair a missing receipt.');
+  assert.ok(approval.includes('receiptNeedsRepair'), 'Approval replay must repair a missing or failed receipt.');
+  assert.ok(approval.includes('PAID_RECEIPT_FAILED'), 'Failed receipt generation must mark PAID_RECEIPT_FAILED for repair.');
+  assert.ok(approval.includes('PAID_RECEIPT_READY'), 'Successful receipt repair must mark PAID_RECEIPT_READY.');
+  assert.ok(signing.includes('repairMissingMobilizationInvoicePdf'), 'Signed-contract replay must repair a missing unpaid invoice PDF.');
+  assert.ok(signing.includes('SERVER_CONTRACT_SIGNATURE_REPAIR'), 'Invoice PDF repair must persist a repair source marker.');
   for (const token of [
     '15% MOBILISATION INVOICE - UNPAID',
     'فاتورة دفعة التفعيل 15% - غير مدفوعة',

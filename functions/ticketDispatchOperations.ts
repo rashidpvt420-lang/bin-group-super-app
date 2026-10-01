@@ -12,7 +12,8 @@ const ADMIN_ROLES = new Set([
   "operations_manager",
   "dispatcher",
 ]);
-const CLOSED_STATUSES = new Set(["COMPLETED", "CLOSED", "CANCELLED", "REJECTED"]);
+const CLOSED_STATUSES = new Set(["COMPLETED", "CLOSED", "CANCELLED", "REJECTED", "RESOLVED"]);
+const NON_DISPATCHABLE_STATUSES = new Set([...CLOSED_STATUSES, "DISPUTED"]);
 const ACTIVE_STATUSES = new Set(["ACCEPTED", "EN_ROUTE", "ARRIVED", "IN_PROGRESS"]);
 
 function role(value: unknown) {
@@ -99,8 +100,8 @@ export const adminAssignTechnician = onCall(
       }
 
       const currentStatus = text(ticket.status, 60).toUpperCase();
-      if (CLOSED_STATUSES.has(currentStatus)) {
-        throw new HttpsError("failed-precondition", "Closed or cancelled tickets cannot be dispatched.");
+      if (NON_DISPATCHABLE_STATUSES.has(currentStatus)) {
+        throw new HttpsError("failed-precondition", "Closed, cancelled, or disputed tickets cannot be dispatched.");
       }
       const previousTechnicianId = text(
         ticket.assignedTechnicianId || ticket.technicianId || ticket.techId,
@@ -228,6 +229,7 @@ export const adminResolveTicketDispute = onCall(
         status,
         adminReviewStatus: "RESOLVED",
         requiresAdminReview: false,
+        disputeStatus: action === "request_revisit" ? "REOPENED_FOR_REVISIT" : "RESOLVED",
         disputeResolutionAction: action,
         disputeResolutionNote: note,
         disputeResolvedAt: now,
@@ -342,10 +344,13 @@ export const adminUpdateEmergencyTicket = onCall(
         throw new HttpsError("failed-precondition", "Ticket is not marked as an emergency.");
       }
 
-      const targetStatus = action === "respond" ? "RESPONDED" : "RESOLVED";
+      const targetSosStatus = action === "respond" ? "RESPONDED" : "RESOLVED";
+      // Resolve writes canonical CLOSED so the ticket is immediately non-mutable
+      // (RESOLVED alone is only a sosStatus alias until normalization runs).
+      const targetStatus = action === "respond" ? "RESPONDED" : "CLOSED";
       if (
         text(ticket.status, 80).toUpperCase() === targetStatus &&
-        text(ticket.sosStatus, 80).toUpperCase() === targetStatus
+        text(ticket.sosStatus, 80).toUpperCase() === targetSosStatus
       ) {
         idempotent = true;
         return;
@@ -359,7 +364,7 @@ export const adminUpdateEmergencyTicket = onCall(
 
       transaction.set(ticketRef, {
         status: targetStatus,
-        sosStatus: targetStatus,
+        sosStatus: targetSosStatus,
         ...(action === "respond"
           ? { respondedAt: now, respondedBy: request.auth!.uid }
           : { resolvedAt: now, resolvedBy: request.auth!.uid }),
@@ -380,7 +385,7 @@ export const adminUpdateEmergencyTicket = onCall(
       }, { merge: false });
     });
 
-    return { ok: true, ticketId, status: action === "respond" ? "RESPONDED" : "RESOLVED", idempotent };
+    return { ok: true, ticketId, status: action === "respond" ? "RESPONDED" : "CLOSED", sosStatus: action === "respond" ? "RESPONDED" : "RESOLVED", idempotent };
   },
 );
 

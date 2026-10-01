@@ -40,7 +40,7 @@ test('ticket updates are actor-discriminated and cannot authorize technician sel
   assert.match(rules, /let role = authenticated/);
   assert.match(rules, /let admin = authenticated && \(/);
   assert.match(rules, /let dispatcher = authenticated && \(/);
-  assert.match(rules, /\(admin && isNotSuspended\(\)\)/);
+  assert.match(rules, /\(admin && safeAdminTicketUpdate\(\)\)/);
   assert.match(rules, /\(!admin && dispatcher && safeDispatcherTicketUpdate\(\)\)/);
   assert.match(rules, /\(!admin && !dispatcher && role in \['', 'tenant'\] && tenantOwns\(resource\.data\) && safeTenantEvidenceUpdate\(\)\)/);
   assert.match(rules, /\(!admin && !dispatcher && role in \['technician', 'tech'\] && techOwns\(resource\.data\) && safeTechnicianTicketUpdate\(\)\)/);

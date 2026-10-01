@@ -651,7 +651,10 @@ export const ownerReviewTicketCompletion = onCall({ cors: true, enforceAppCheck:
             ownerDisputeReason: reason,
             disputeReason: reason,
             disputedAt: now,
-            disputeSource: "OWNER_REVIEW"
+            disputeSource: "OWNER_REVIEW",
+            requiresAdminReview: true,
+            adminReviewStatus: "PENDING_DISPUTE_REVIEW",
+            disputeStatus: "OPEN_ADMIN_REVIEW",
         });
     }
 

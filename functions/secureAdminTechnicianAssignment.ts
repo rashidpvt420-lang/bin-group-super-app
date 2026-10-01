@@ -5,7 +5,8 @@ import { HttpsError, onCall } from "firebase-functions/v2/https";
 if (!admin.apps.length) admin.initializeApp();
 const db = admin.firestore();
 const ADMIN_ROLES = new Set(["admin", "super_admin", "operations_admin", "operations_manager", "dispatcher"]);
-const CLOSED_STATUSES = new Set(["COMPLETED", "CLOSED", "CANCELLED", "REJECTED"]);
+const CLOSED_STATUSES = new Set(["COMPLETED", "CLOSED", "CANCELLED", "REJECTED", "RESOLVED"]);
+const NON_DISPATCHABLE_STATUSES = new Set([...CLOSED_STATUSES, "DISPUTED"]);
 const role = (value: unknown) => String(value || "").trim().toLowerCase();
 const text = (value: unknown, max = 180) => String(value || "").trim().slice(0, max);
 const firstPresent = (...values: unknown[]) => values.find((value) => value !== undefined && value !== null && String(value).trim() !== "");
@@ -113,7 +114,9 @@ export const adminAssignTechnician = onCall(
       if (!text(ticket.propertyId) || !text(ticket.unitId || ticket.unitNumber || ticket.unit)) throw new HttpsError("failed-precondition", "Ticket must be linked to a property and unit before dispatch.");
 
       const currentStatus = text(ticket.status, 60).toUpperCase();
-      if (CLOSED_STATUSES.has(currentStatus)) throw new HttpsError("failed-precondition", "Closed or cancelled tickets cannot be dispatched.");
+      if (NON_DISPATCHABLE_STATUSES.has(currentStatus)) {
+        throw new HttpsError("failed-precondition", "Closed, cancelled, or disputed tickets cannot be dispatched.");
+      }
       const previousTechnicianId = text(ticket.assignedTechnicianId || ticket.technicianId || ticket.techId, 160);
       if (previousTechnicianId === technicianId) { idempotent = true; return; }
       const isReassignment = Boolean(previousTechnicianId && previousTechnicianId !== technicianId);
