@@ -153,6 +153,27 @@ test('portal language proofs bind to explicit controls instead of substring sele
   }
 });
 
+test('public hosting enables cleanUrls so static legal pages keep SPA paths after reload', () => {
+  const hosting = JSON.parse(read('firebase.json')).hosting;
+  const appHost = hosting.find((entry) => entry.target === 'app');
+  assert.equal(appHost?.cleanUrls, true);
+});
+
+test('Admin tenants registry labels icon-only row actions for launch a11y audit', () => {
+  const source = read('apps/admin-panel/src/pages/tenants/TenantsManagementPage.tsx');
+  assert.match(source, /aria-label=\{`Edit tenant/);
+  assert.match(source, /aria-label=\{`Delete tenant/);
+  assert.match(source, /aria-label=\{`Resend invitation for/);
+  assert.match(source, /aria-label="Search existing tenant by email"/);
+});
+
+test('Admin live map audit does not treat KPI counts like "403 unresolved tickets" as HTTP failures', () => {
+  const source = read('tests/e2e/launch-audit-admin.spec.ts');
+  assert.match(source, /not KPI counts like "403 unresolved tickets"/);
+  assert.match(source, /Forbidden\|Unauthorized\|Error/);
+  assert.doesNotMatch(source, /const APPCHECK_HTTP = \/\\b401\\b\|\\b403\\b\|\\b429\\b\|too many requests\/i;/);
+});
+
 test('standalone live launch audit is manual-only and bound to an already deployed main SHA', () => {
   const workflow = read('.github/workflows/live-launch-audit.yml');
   const productionDeploy = read('.github/workflows/firebase-production-deploy.yml');

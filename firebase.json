@@ -50,6 +50,7 @@
     {
       "target": "app",
       "public": "dist",
+      "cleanUrls": true,
       "ignore": [
         "firebase.json",
         "**/.*",
