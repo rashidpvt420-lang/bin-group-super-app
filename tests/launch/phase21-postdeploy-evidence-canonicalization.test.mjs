@@ -18,6 +18,16 @@ test('Phase 21 postdeploy repair supplies the Admin-verified Owner pricing paylo
   assert.match(patched, /emirate: property\.emirate/);
   assert.match(patched, /annualRent: property\.annualRent/);
   assert.match(patched, /annualRevenue: property\.annualRevenue/);
+  assert.match(patched, /hvac: property\.hvac === true/);
+  assert.match(patched, /fireAlarm: property\.fireAlarm === true/);
+  assert.match(patched, /verifiedMaintenanceRate: 12\.5/);
+});
+
+test('Broker production evidence activates contracts with server payment verification markers', () => {
+  const source = read('scripts/run-broker-production-evidence.mjs');
+  assert.match(source, /paymentVerified:\s*true/);
+  assert.match(source, /adminApproved:\s*true/);
+  assert.match(source, /status:\s*'ACTIVE'/);
 });
 
 test('Phase 21 postdeploy repair treats EN_ROUTE as the canonical persisted Technician travel state', () => {

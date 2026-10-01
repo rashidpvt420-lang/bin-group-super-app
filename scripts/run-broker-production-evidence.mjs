@@ -347,8 +347,16 @@ async function main() {
     updatedAt: serverTimestamp(),
   });
 
+  // Commission creation only runs for server-activated contracts
+  // (ACTIVE + paymentVerified + adminApproved). Plain ACTIVE writes are ignored.
   await Promise.all([
-    contractRef.set({ status: 'ACTIVE', activatedAt: serverTimestamp(), updatedAt: serverTimestamp() }, { merge: true }),
+    contractRef.set({
+      status: 'ACTIVE',
+      paymentVerified: true,
+      adminApproved: true,
+      activatedAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    }, { merge: true }),
     leadDocument.ref.set({
       status: 'converted',
       lifecycleStatus: 'CONTRACT_ACTIVATED',
