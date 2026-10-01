@@ -6,7 +6,7 @@ import { assertStoredOwnerPaymentReceipt, assertStoredTenantPaymentReceipt } fro
 import { normalizeAedMoney } from "./shared/aedMoney";
 import { parseExactAedAmount } from "./shared/aedMoneyInput";
 import { decideRentConfirmedAmount, rentApprovalDecision, rentRejectionDecision } from "./rentPaymentStatus";
-import { generateOwnerPaymentReceiptPdfArtifact } from "./pdfEngine";
+import { generateMobilizationUnpaidInvoicePdfArtifact, generateOwnerPaymentReceiptPdfArtifact } from "./pdfEngine";
 import { assertMobilizationInvoiceImmutable, buildMobilizationInvoiceSnapshot } from "./mobilizationInvoice";
 import { resolveActivePaymentConfiguration } from "./paymentConfiguration";
 import {
@@ -370,6 +370,36 @@ export const adminApprovePayment = onCall({ cors: true, enforceAppCheck: true },
   });
   const { invoiceId, proofHash: invoiceHash } = invoiceSnapshot;
   const invoiceRef = db.collection("invoices").doc(invoiceId);
+  // Approval must not fail closed solely because an earlier sign/replay missed
+  // persisting the unpaid mobilisation invoice. Rebuild it from the locked
+  // payment identity before the approval transaction.
+  const preApproveInvoiceSnap = await invoiceRef.get();
+  if (!preApproveInvoiceSnap.exists) {
+    const unpaidInvoicePdf = await generateMobilizationUnpaidInvoicePdfArtifact({
+      ...invoiceSnapshot,
+      ownerId: ownerUid,
+    });
+    await invoiceRef.set({
+      ...invoiceSnapshot,
+      ownerId: ownerUid,
+      ownerEmail: String(payment.ownerEmail || contractData.ownerEmail || "").trim() || null,
+      amountPaid: 0,
+      status: "PENDING",
+      paymentStatus: "UNPAID",
+      documentState: "AWAITING_PAYMENT",
+      pdfUrl: unpaidInvoicePdf.pdfUrl,
+      storagePath: unpaidInvoicePdf.storagePath,
+      pdfSha256: unpaidInvoicePdf.pdfSha256,
+      pdfGeneration: unpaidInvoicePdf.generation,
+      canonicalPdfSource: "SERVER_PAYMENT_APPROVAL_INVOICE_REPAIR",
+      issuedAt: ts(),
+      createdAt: ts(),
+      updatedAt: ts(),
+    }, { merge: false });
+    if (!String(contractData.invoiceId || "").trim()) {
+      await contractRef.set({ invoiceId, updatedAt: ts() }, { merge: true });
+    }
+  }
   const propertyQuery = db.collection("properties").where("intakeId", "==", intakeId).limit(100);
   const paymentConfigurationRef = db.collection("system_payment_config").doc("current");
   let approvalWasIdempotent = false;

@@ -110,8 +110,22 @@ const fileToBase64 = (file: File): Promise<string> => new Promise((resolve, reje
     reader.readAsDataURL(file);
 });
 
+type ReceiptRepairRecord = {
+    id: string;
+    paymentId?: string;
+    ownerEmail?: string;
+    ownerId?: string;
+    ownerUid?: string;
+    contractId?: string;
+    documentState?: string;
+    receiptPdfError?: string;
+    amount?: number;
+    currency?: string;
+};
+
 export default function PaymentApprovalsPage() {
     const [rows, setRows] = React.useState<PaymentRecord[]>([]);
+    const [receiptRepairs, setReceiptRepairs] = React.useState<ReceiptRepairRecord[]>([]);
     const [loading, setLoading] = React.useState(true);
     const [busyId, setBusyId] = React.useState<string | null>(null);
     const [error, setError] = React.useState<string | null>(null);
@@ -147,6 +161,11 @@ export default function PaymentApprovalsPage() {
 
         const pendingQuery = query(collection(db, 'payment_transactions'), where('status', 'in', PENDING_PAYMENT_STATUSES), orderBy('createdAt', 'desc'), limit(50));
         const paidAwaitingApprovalQuery = query(collection(db, 'payment_transactions'), where('status', '==', 'PAID'), where('adminApprovalRequired', '==', true), limit(50));
+        const receiptRepairQuery = query(
+            collection(db, 'invoices'),
+            where('documentState', 'in', ['PAID_RECEIPT_FAILED', 'PAID_RECEIPT_PENDING']),
+            limit(30),
+        );
         const unsubscribePending = onSnapshot(pendingQuery, (snapshot) => {
             pendingRows = snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...(docSnap.data() as any) }));
             pendingReady = true;
@@ -157,8 +176,17 @@ export default function PaymentApprovalsPage() {
             paidReady = true;
             publish();
         }, handleError);
+        const unsubscribeReceiptRepairs = onSnapshot(receiptRepairQuery, (snapshot) => {
+            setReceiptRepairs(snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...(docSnap.data() as any) })));
+        }, (err) => {
+            console.error('[ADMIN_PAYMENTS] receipt repair stream failed', err);
+        });
 
-        return () => { unsubscribePending(); unsubscribePaidAwaitingApproval(); };
+        return () => {
+            unsubscribePending();
+            unsubscribePaidAwaitingApproval();
+            unsubscribeReceiptRepairs();
+        };
     }, []);
 
     const openApproveDialog = React.useCallback((row: PaymentRecord) => {
@@ -290,6 +318,28 @@ export default function PaymentApprovalsPage() {
         if (url) window.open(url, '_blank', 'noopener,noreferrer');
     };
 
+    const repairPaidReceipt = async (invoice: ReceiptRepairRecord) => {
+        const paymentId = String(invoice.paymentId || '').trim();
+        if (!paymentId) {
+            setError('This invoice is missing its paymentId binding and cannot be repaired.');
+            return;
+        }
+        setBusyId(invoice.id);
+        setError(null);
+        setNotice(null);
+        try {
+            // Idempotent approve replay regenerates PAID_RECEIPT_FAILED / PENDING receipts.
+            const callable = httpsCallable(functions, 'adminApprovePayment');
+            await callable({ paymentId });
+            setNotice(`Paid receipt repaired for invoice ${invoice.id}.`);
+        } catch (err: any) {
+            console.error('[ADMIN_PAYMENTS] receipt repair failed', err);
+            setError(err?.details || err?.message || 'Receipt repair failed.');
+        } finally {
+            setBusyId(null);
+        }
+    };
+
     return (
         <Box sx={{ p: { xs: 2, md: 4 }, color: '#fff' }}>
             <Stack direction={{ xs: 'column', md: 'row' }} alignItems={{ xs: 'flex-start', md: 'center' }} justifyContent="space-between" gap={2} sx={{ mb: 4 }}>
@@ -304,6 +354,47 @@ export default function PaymentApprovalsPage() {
             <Alert severity="warning" sx={{ mb: 3 }}>For five-page Owner applications, final approval is blocked until all property inspections are complete and the exact locked 15% mobilisation amount has immutable receipt evidence.</Alert>
             {error && <Alert severity="error" onClose={() => setError(null)} sx={{ mb: 3 }}>{error}</Alert>}
             {notice && <Alert severity="success" onClose={() => setNotice(null)} sx={{ mb: 3 }}>{notice}</Alert>}
+
+            {receiptRepairs.length > 0 && (
+                <Paper sx={{ mb: 3, p: 3, bgcolor: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.28)', borderRadius: 4 }}>
+                    <Typography variant="h6" sx={{ fontWeight: 900, mb: 1 }}>Paid receipt repair queue</Typography>
+                    <Typography sx={{ color: 'rgba(255,255,255,0.65)', mb: 2 }}>
+                        These invoices were approved but the paid receipt PDF is still pending or failed. Finance Admin MFA can replay generation.
+                    </Typography>
+                    <Stack spacing={1.5}>
+                        {receiptRepairs.map((invoice) => (
+                            <Stack
+                                key={invoice.id}
+                                direction={{ xs: 'column', md: 'row' }}
+                                justifyContent="space-between"
+                                alignItems={{ xs: 'stretch', md: 'center' }}
+                                gap={1}
+                                sx={{ p: 2, borderRadius: 2, bgcolor: 'rgba(0,0,0,0.25)' }}
+                            >
+                                <Box>
+                                    <Typography sx={{ fontWeight: 900 }}>{invoice.id}</Typography>
+                                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.55)' }}>
+                                        {invoice.documentState} · payment {invoice.paymentId || '—'} · {invoice.ownerEmail || invoice.ownerUid || invoice.ownerId || 'Owner'}
+                                    </Typography>
+                                    {invoice.receiptPdfError && (
+                                        <Typography variant="caption" sx={{ display: 'block', color: '#f87171', mt: 0.5 }}>
+                                            {invoice.receiptPdfError}
+                                        </Typography>
+                                    )}
+                                </Box>
+                                <Button
+                                    size="small"
+                                    disabled={busyId === invoice.id || !invoice.paymentId}
+                                    onClick={() => void repairPaidReceipt(invoice)}
+                                    sx={{ bgcolor: '#DAA520', color: '#000', fontWeight: 950 }}
+                                >
+                                    {busyId === invoice.id ? 'Repairing…' : 'Repair receipt'}
+                                </Button>
+                            </Stack>
+                        ))}
+                    </Stack>
+                </Paper>
+            )}
 
             <Paper sx={{ bgcolor: 'rgba(15,23,42,0.92)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 4, overflow: 'hidden' }}>
                 {loading ? <Box sx={{ p: 8, display: 'flex', justifyContent: 'center' }}><CircularProgress sx={{ color: '#DAA520' }} /></Box> : rows.length === 0 ? (

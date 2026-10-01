@@ -131,6 +131,12 @@ export default function DisputeQueuePage() {
                         <MenuItem value="dismiss">Dismiss Dispute (Close Ticket)</MenuItem>
                     </Select>
 
+                    {resolutionAction === 'approve_credit' && (
+                        <Alert severity="warning" sx={{ mb: 2 }}>
+                            SLA credit is a payment decision. A verified Finance Admin MFA session is required.
+                        </Alert>
+                    )}
+
                     <TextField 
                         fullWidth 
                         multiline 
@@ -144,7 +150,7 @@ export default function DisputeQueuePage() {
                 </DialogContent>
                 <DialogActions sx={{ p: 3 }}>
                     <Button onClick={() => setOpenResolve(false)} sx={{ color: 'text.secondary' }}>CANCEL</Button>
-                    <Button variant="contained" color="primary" onClick={handleResolve} disabled={!resolutionNote.trim()}>
+                    <Button variant="contained" color="primary" onClick={handleResolve} disabled={resolutionNote.trim().length < 8}>
                         CONFIRM RESOLUTION
                     </Button>
                 </DialogActions>

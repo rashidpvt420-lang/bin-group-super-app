@@ -659,14 +659,22 @@ export const ownerReviewTicketCompletion = onCall({ cors: true, enforceAppCheck:
     }
 
     if (action === "REQUEST_REVISIT") {
+        // Align with Admin dispute revisit: close the parent and open a child
+        // revisit ticket so ops cannot double-assign parent + child.
         Object.assign(baseUpdate, {
-            status: "REOPENED",
+            status: "CLOSED",
             ownerApproved: false,
             revisitRequested: true,
             revisitReason: reason,
             technicianStatus: "REVISIT_REQUESTED",
+            disputeStatus: "REOPENED_FOR_REVISIT",
+            requiresAdminReview: false,
+            adminReviewStatus: "RESOLVED",
+            disputeResolutionAction: "owner_request_revisit",
             reopenedAt: now,
-            reopenSource: "OWNER_REVIEW"
+            reopenSource: "OWNER_REVIEW",
+            closedAt: now,
+            closureSource: "OWNER_REVISIT_CHILD",
         });
     }
 
@@ -676,10 +684,15 @@ export const ownerReviewTicketCompletion = onCall({ cors: true, enforceAppCheck:
             ownerApproved: false,
             escalationReason: reason,
             escalatedAt: now,
-            escalationSource: "OWNER_REVIEW"
+            escalationSource: "OWNER_REVIEW",
+            requiresAdminReview: true,
+            adminReviewStatus: "PENDING_DISPUTE_REVIEW",
+            disputeStatus: "OPEN_ADMIN_REVIEW",
+            disputeReason: reason,
         });
     }
 
+    const revisitChildId = `revisit_${ticketId}`;
     await db.runTransaction(async (transaction) => {
         const freshSnap = await transaction.get(ticketRef);
         if (!freshSnap.exists) throw new HttpsError("not-found", "Ticket not found.");
@@ -695,6 +708,37 @@ export const ownerReviewTicketCompletion = onCall({ cors: true, enforceAppCheck:
             throw new HttpsError("failed-precondition", "Ticket is no longer ready for owner completion review.");
         }
         transaction.update(ticketRef, baseUpdate);
+        if (action === "REQUEST_REVISIT") {
+            const revisitRef = db.collection("maintenanceTickets").doc(revisitChildId);
+            const revisitSnap = await transaction.get(revisitRef);
+            if (!revisitSnap.exists) {
+                transaction.create(revisitRef, {
+                    parentId: ticketId,
+                    tenantId: fresh.tenantId || null,
+                    tenantUid: fresh.tenantUid || fresh.tenantId || null,
+                    ownerId: fresh.ownerId || fresh.ownerUid || null,
+                    ownerUid: fresh.ownerUid || fresh.ownerId || null,
+                    propertyId: fresh.propertyId || null,
+                    unitId: fresh.unitId || null,
+                    unitNumber: fresh.unitNumber || fresh.unit || null,
+                    unit: fresh.unit || fresh.unitNumber || null,
+                    category: fresh.category || fresh.requestType || "GENERAL",
+                    requestType: fresh.requestType || fresh.category || "GENERAL",
+                    title: `REVISIT: ${safeString(fresh.title) || "Owner requested revisit"}`,
+                    description: `Owner revisit request. Reason: ${reason}`,
+                    priority: String(fresh.priority || "HIGH").trim().toUpperCase() || "HIGH",
+                    status: "OPEN",
+                    source: "OWNER_REQUEST_REVISIT",
+                    jobLocation: fresh.jobLocation || fresh.location || null,
+                    location: fresh.location || fresh.jobLocation || null,
+                    tenantName: fresh.tenantName || null,
+                    tenantPhone: fresh.tenantPhone || fresh.phone || null,
+                    tenantEmail: fresh.tenantEmail || null,
+                    createdAt: now,
+                    updatedAt: now,
+                });
+            }
+        }
         transaction.set(db.collection("audit_logs").doc(), {
             actorId: uid,
             actorRole: isAdmin ? "admin" : "owner",
@@ -708,7 +752,8 @@ export const ownerReviewTicketCompletion = onCall({ cors: true, enforceAppCheck:
             metadata: {
                 propertyId: fresh.propertyId || "",
                 propertyName: fresh.propertyName || "",
-                assignedTechnicianId: fresh.assignedTechnicianId || ""
+                assignedTechnicianId: fresh.assignedTechnicianId || "",
+                revisitChildId: action === "REQUEST_REVISIT" ? revisitChildId : "",
             },
             createdAt: now,
         });
@@ -735,13 +780,39 @@ export const ownerReviewTicketCompletion = onCall({ cors: true, enforceAppCheck:
     await Promise.allSettled(Array.from(notifyTargets)
         .filter((targetId) => targetId && targetId !== uid)
         .map((targetId) => dispatchOmniNotification(targetId, notificationTitle, notificationBody, {
-            extraData: { ticketId, type: "owner_ticket_review", action },
+            extraData: {
+                ticketId: action === "REQUEST_REVISIT" ? revisitChildId : ticketId,
+                parentTicketId: ticketId,
+                type: "owner_ticket_review",
+                action,
+            },
             url: targetId === ticketData.assignedTechnicianId || targetId === ticketData.technicianId
-                ? `/technician/job/${ticketId}`
-                : `/tenant/ticket/${ticketId}`
+                ? `/technician/job/${action === "REQUEST_REVISIT" ? revisitChildId : ticketId}`
+                : `/tenant/ticket/${action === "REQUEST_REVISIT" ? revisitChildId : ticketId}`
         })));
 
-    return { status: "SUCCESS", ticketId, action, nextStatus: baseUpdate.status };
+    if (action === "DISPUTE" || action === "ESCALATE") {
+        try {
+            const adminSnap = await db.collection("users").where("role", "in", ["admin", "super_admin", "operations_admin", "operations_manager", "dispatcher"]).limit(10).get();
+            await Promise.allSettled(adminSnap.docs
+                .map((adminDoc) => adminDoc.id)
+                .filter((adminId) => adminId && adminId !== uid)
+                .map((adminId) => dispatchOmniNotification(adminId, notificationTitle, notificationBody, {
+                    extraData: { ticketId, type: "admin_dispute_queue", action },
+                    url: "/ops/disputes",
+                })));
+        } catch (adminNotifyError) {
+            console.error("ADMIN_DISPUTE_NOTIFY_FAILED", adminNotifyError);
+        }
+    }
+
+    return {
+        status: "SUCCESS",
+        ticketId,
+        action,
+        nextStatus: baseUpdate.status,
+        revisitTicketId: action === "REQUEST_REVISIT" ? revisitChildId : null,
+    };
 });
 
 // ─── [V10] TICKET LIFECYCLE & AUTO-REPAIR ──────────────────────────────────────────

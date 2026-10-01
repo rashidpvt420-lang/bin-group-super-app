@@ -1,6 +1,7 @@
 import { FieldValue } from "firebase-admin/firestore";
 import * as admin from "firebase-admin";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
+import { requireMfaFinanceAdminActor } from "./financeAdminMfa";
 
 if (!admin.apps.length) admin.initializeApp();
 const db = admin.firestore();
@@ -36,6 +37,16 @@ function requireDispatcher(auth: any) {
     permissions.canDispatchJobs === true
   ) return;
   throw new HttpsError("permission-denied", "Dispatch permission is required.");
+}
+
+function requireVerifiedAdminMfa(auth: any) {
+  const token = auth?.token || {};
+  if (token.email_verified !== true || !token.firebase?.sign_in_second_factor) {
+    throw new HttpsError(
+      "permission-denied",
+      "A verified Admin MFA session is required to resolve ticket disputes.",
+    );
+  }
 }
 
 function isApprovedTechnician(
@@ -184,7 +195,6 @@ const STANDARD_SLA_CREDIT_AED = 50;
 export const adminResolveTicketDispute = onCall(
   { cors: true, region: "europe-west3", enforceAppCheck: true },
   async (request) => {
-    requireDispatcher(request.auth);
     const ticketId = text(request.data?.ticketId, 160);
     const action = text(request.data?.action, 60).toLowerCase();
     const note = text(request.data?.note, 1000);
@@ -192,6 +202,26 @@ export const adminResolveTicketDispute = onCall(
       throw new HttpsError(
         "invalid-argument",
         "A valid dispute action and an audited resolution note are required.",
+      );
+    }
+
+    // SLA credits are payment decisions: Finance Admin MFA only.
+    // Revisit/dismiss stay with dispatcher authority plus selective MFA.
+    let actorUid = "";
+    let actorRoleLabel = "dispatcher";
+    if (action === "approve_credit") {
+      const financeActor = await requireMfaFinanceAdminActor(request);
+      actorUid = financeActor.uid;
+      actorRoleLabel = "finance_admin";
+    } else {
+      requireDispatcher(request.auth);
+      requireVerifiedAdminMfa(request.auth);
+      actorUid = request.auth!.uid;
+      actorRoleLabel = role(
+        request.auth!.token?.role ||
+        request.auth!.token?.userRole ||
+        request.auth!.token?.primaryRole ||
+        "dispatcher",
       );
     }
 
@@ -234,7 +264,7 @@ export const adminResolveTicketDispute = onCall(
         disputeResolutionAction: action,
         disputeResolutionNote: note,
         disputeResolvedAt: now,
-        disputeResolvedBy: request.auth!.uid,
+        disputeResolvedBy: actorUid,
         updatedAt: now,
       }, { merge: true });
 
@@ -287,7 +317,8 @@ export const adminResolveTicketDispute = onCall(
             verificationState: "ADMIN_VERIFIED",
             approved: true,
             paymentVerified: true,
-            createdBy: request.auth!.uid,
+            createdBy: actorUid,
+            approvedBy: actorUid,
             createdAt: now,
             updatedAt: now,
           });
@@ -296,13 +327,8 @@ export const adminResolveTicketDispute = onCall(
 
       transaction.set(auditRef, {
         action: "ADMIN_RESOLVE_TICKET_DISPUTE",
-        actorId: request.auth!.uid,
-        actorRole: role(
-          request.auth!.token?.role ||
-          request.auth!.token?.userRole ||
-          request.auth!.token?.primaryRole ||
-          "dispatcher",
-        ),
+        actorId: actorUid,
+        actorRole: actorRoleLabel,
         ticketId,
         resolutionAction: action,
         resolutionNote: note,

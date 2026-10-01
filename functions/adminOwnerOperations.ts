@@ -40,37 +40,80 @@ function invoicePdfMissing(invoice: Record<string, any> | undefined | null) {
 }
 
 async function repairMissingMobilizationInvoicePdf(contract: Record<string, any>, contractId: string) {
-  const invoiceId = s(contract.invoiceId);
-  if (!invoiceId) return;
-  const invoiceRef = db.collection("invoices").doc(invoiceId);
-  const invoiceSnap = await invoiceRef.get();
-  if (!invoiceSnap.exists) return;
-  const invoice = invoiceSnap.data() || {};
-  if (!invoicePdfMissing(invoice)) return;
-
-  const ownerId = s(invoice.ownerUid || invoice.ownerId || contract.ownerId || contract.ownerUid);
-  const quoteHash = s(invoice.quoteHash || contract.finalVerifiedQuoteHash || contract.quoteHash || contract.contractHash).toLowerCase();
-  const amount = normalizeAedMoney(invoice.amount || contract.depositAmount || contract.mobilizationAmount || 0);
-  if (!ownerId || amount <= 0 || !/^[a-f0-9]{64}$/.test(quoteHash)) return;
+  const ownerId = s(contract.ownerId || contract.ownerUid);
+  const quoteHash = s(contract.finalVerifiedQuoteHash || contract.quoteHash || contract.contractHash).toLowerCase();
+  let amount = 0;
+  try {
+    amount = normalizeAedMoney(
+      contract.depositAmount ||
+      contract.mobilizationAmount ||
+      contract.paymentSchedule?.mobilizationAmount ||
+      contract.quoteSnapshot?.activationDeposit ||
+      0,
+    );
+  } catch {
+    return;
+  }
+  const paymentId = s(contract.paymentId || contract.intakeId || contractId);
+  const intakeId = s(contract.intakeId || contractId);
+  if (!ownerId || amount <= 0 || !/^[a-f0-9]{64}$/.test(quoteHash) || !paymentId || !intakeId) return;
 
   const invoiceSnapshot = buildMobilizationInvoiceSnapshot({
-    paymentId: s(invoice.paymentId || contractId),
-    contractId: s(invoice.contractId || contractId),
-    intakeId: s(invoice.intakeId || contract.intakeId || contractId),
+    paymentId,
+    contractId: s(contractId),
+    intakeId,
     ownerUid: ownerId,
     amount,
     quoteHash,
   });
-  try {
-    assertMobilizationInvoiceImmutable(invoice, invoiceSnapshot);
-  } catch {
-    return;
+  // Prefer the contract-bound invoice id when present and matching; otherwise repair the
+  // canonical MOB-* identity derived from paymentId (the approve path looks this up).
+  const invoiceId = s(contract.invoiceId) || invoiceSnapshot.invoiceId;
+  if (s(contract.invoiceId) && s(contract.invoiceId) !== invoiceSnapshot.invoiceId) return;
+
+  const invoiceRef = db.collection("invoices").doc(invoiceId);
+  const invoiceSnap = await invoiceRef.get();
+  const invoice = invoiceSnap.data() || {};
+  if (invoiceSnap.exists) {
+    try {
+      assertMobilizationInvoiceImmutable(invoice, invoiceSnapshot);
+    } catch {
+      return;
+    }
+    if (!invoicePdfMissing(invoice)) return;
   }
 
   const invoicePdfArtifact = await generateMobilizationUnpaidInvoicePdfArtifact({
     ...invoiceSnapshot,
     ownerId,
   });
+  if (!invoiceSnap.exists) {
+    await invoiceRef.set({
+      ...invoiceSnapshot,
+      ownerId,
+      ownerEmail: s(contract.ownerEmail) || null,
+      amountPaid: 0,
+      status: "PENDING",
+      paymentStatus: "UNPAID",
+      documentState: "AWAITING_PAYMENT",
+      pdfUrl: invoicePdfArtifact.pdfUrl,
+      storagePath: invoicePdfArtifact.storagePath,
+      pdfSha256: invoicePdfArtifact.pdfSha256,
+      pdfGeneration: invoicePdfArtifact.generation,
+      canonicalPdfSource: "SERVER_CONTRACT_SIGNATURE_REPAIR",
+      issuedAt: ts(),
+      createdAt: ts(),
+      updatedAt: ts(),
+    }, { merge: false });
+    if (!s(contract.invoiceId)) {
+      await db.collection("contracts").doc(contractId).set({
+        invoiceId: invoiceSnapshot.invoiceId,
+        updatedAt: ts(),
+      }, { merge: true });
+    }
+    return;
+  }
+
   await invoiceRef.set({
     pdfUrl: invoicePdfArtifact.pdfUrl,
     storagePath: invoicePdfArtifact.storagePath,

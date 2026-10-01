@@ -9,6 +9,9 @@ test('tenant and owner disputes enter the Admin PENDING_DISPUTE_REVIEW queue', (
   const owner = read('functions/index.ts');
   const resolve = read('functions/ticketDispatchOperations.ts');
   const queue = read('apps/admin-panel/src/pages/ops/DisputeQueuePage.tsx');
+  const app = read('apps/admin-panel/src/App.tsx');
+  const nav = read('apps/admin-panel/src/components/Navigation.tsx');
+  const access = read('apps/admin-panel/src/security/staffAccessPolicy.ts');
 
   assert.match(tenant, /adminReviewStatus:\s*"PENDING_DISPUTE_REVIEW"/);
   assert.match(tenant, /disputeStatus:\s*"OPEN_ADMIN_REVIEW"/);
@@ -18,12 +21,20 @@ test('tenant and owner disputes enter the Admin PENDING_DISPUTE_REVIEW queue', (
   assert.match(owner, /adminReviewStatus:\s*"PENDING_DISPUTE_REVIEW"/);
   assert.match(owner, /disputeStatus:\s*"OPEN_ADMIN_REVIEW"/);
   assert.match(owner, /requiresAdminReview:\s*true/);
+  assert.match(owner, /source:\s*"OWNER_REQUEST_REVISIT"/);
+  assert.match(owner, /url:\s*"\/ops\/disputes"/);
 
   assert.match(resolve, /disputeStatus:\s*action === "request_revisit" \? "REOPENED_FOR_REVISIT" : "RESOLVED"/);
   assert.match(resolve, /status:\s*"CLOSED"/);
   assert.match(resolve, /source:\s*"ADMIN_DISPUTE_REVISIT"/);
   assert.match(resolve, /jobLocation:\s*ticket\.jobLocation/);
+  assert.match(resolve, /requireMfaFinanceAdminActor/);
+  assert.match(resolve, /requireVerifiedAdminMfa/);
   assert.match(queue, /adminReviewStatus',\s*'==',\s*'PENDING_DISPUTE_REVIEW'/);
+  assert.match(app, /path="\/ops\/disputes"/);
+  assert.match(app, /DisputeQueuePage/);
+  assert.match(nav, /path:\s*'\/ops\/disputes'/);
+  assert.match(access, /\/ops\/disputes/);
 });
 
 test('Owner financials and notifications expose invoice and receipt links', () => {
