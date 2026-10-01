@@ -54,9 +54,12 @@ function expectedMessagingSenderId(site, env) {
 }
 
 function expectedAppCheckSiteKey(site, env) {
-  return site === 'admin'
-    ? text(env.REACT_APP_APP_CHECK_SITE_KEY)
-    : text(env.VITE_APP_CHECK_SITE_KEY);
+  if (site === 'admin') return text(env.REACT_APP_APP_CHECK_SITE_KEY);
+  const provider = text(env.VITE_APP_CHECK_PROVIDER).toLowerCase();
+  if (provider === 'enterprise') {
+    return text(env.FIREBASE_APPCHECK_ENTERPRISE_SITE_KEY) || text(env.VITE_APP_CHECK_SITE_KEY);
+  }
+  return text(env.VITE_APP_CHECK_SITE_KEY);
 }
 
 export function summarizeHostedClientBundle({
