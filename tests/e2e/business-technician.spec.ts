@@ -72,7 +72,15 @@ function fixtureTicket(id: string, status: string, assigned: boolean) {
     beforePhotos: ['data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9ZrC8AAAAASUVORK5CYII='],
     tenantPhotos: ['data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9ZrC8AAAAASUVORK5CYII='],
     evidenceStatus: 'TENANT_EVIDENCE_UPLOADED',
-    propertyLocation: { latitude: 25.2048, longitude: 55.2708, address: 'Dubai, UAE' },
+    // Must match e2e-live-role-property canonical geo (Al Ain). normalizeGeo only
+    // accepts lat/lng keys; latitude/longitude alone falls through to the property doc.
+    propertyLocation: {
+      lat: 24.2075,
+      lng: 55.7447,
+      latitude: 24.2075,
+      longitude: 55.7447,
+      address: 'E2E Live Role Tower, Al Ain, UAE',
+    },
     serviceLocationDetail: 'Utility room beside unit entrance',
     accessNotes: 'Call resident before entry.',
     createdAt: now,
@@ -177,7 +185,7 @@ async function reloadMission(page: Page, ticketId: string) {
 test.describe('Technician Business Workflow', () => {
   test.describe.configure({ mode: 'serial' });
   test.use({
-    geolocation: { longitude: 55.2708, latitude: 25.2048, accuracy: 15 },
+    geolocation: { longitude: 55.7447, latitude: 24.2075, accuracy: 15 },
     permissions: ['geolocation', 'notifications'],
   });
 
@@ -398,7 +406,7 @@ test.describe('Technician Business Workflow', () => {
 
   test('poor GPS accuracy keeps arrival fail-closed', async ({ page, context }) => {
     test.setTimeout(90_000);
-    await context.setGeolocation({ longitude: 55.2708, latitude: 25.2048, accuracy: 250 });
+    await context.setGeolocation({ longitude: 55.7447, latitude: 24.2075, accuracy: 250 });
     await page.goto(`/technician/job/${gpsPoorTicketId}`, { waitUntil: 'domcontentloaded' });
     await clickRequired(page, ['button:has-text("Arrived")'], 'Poor accuracy arrival action', 20_000);
     await expect(page.locator('body')).toContainText(/GPS signal is too weak|Move to an open area/i, { timeout: 25_000 });
