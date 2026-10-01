@@ -1,6 +1,7 @@
 import * as admin from "firebase-admin";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { normalizeCanonicalState } from "./canonicalStateMachines";
+import { requirePrivilegedMfaSession } from "./adminMfaSession";
 
 if (!admin.apps.length) admin.initializeApp();
 
@@ -326,5 +327,6 @@ export async function runGetAdminReports(
 }
 
 export const getAdminReports = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
+  await requirePrivilegedMfaSession(request.auth);
   return runGetAdminReports(request.data, request.auth);
 });

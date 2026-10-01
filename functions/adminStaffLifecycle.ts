@@ -2,6 +2,7 @@ import { FieldValue } from "firebase-admin/firestore";
 import { readPayrollForStaff, settleSection, unavailableSections } from "./hrReadHealth";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
+import { requirePrivilegedMfaSession } from "./adminMfaSession";
 
 if (!admin.apps.length) admin.initializeApp();
 
@@ -230,6 +231,7 @@ function staffLifecycleRow(staff: Awaited<ReturnType<typeof loadStaff>>) {
 
 export const adminGetStaffLifecycle = onCall({ cors: true, region: "europe-west3", enforceAppCheck: true }, async (request) => {
   const actor = await requireHrReader(request);
+  await requirePrivilegedMfaSession(request.auth);
   const users = await db.collection("users").where("isStaff", "==", true).limit(500).get();
   const rows = await Promise.all(users.docs.map(async (doc) => {
     try {
@@ -255,6 +257,7 @@ export const adminGetStaffLifecycle = onCall({ cors: true, region: "europe-west3
 
 export const adminGetStaffDetails = onCall({ cors: true, region: "europe-west3", enforceAppCheck: true }, async (request) => {
   const actor = await requireHrReader(request);
+  await requirePrivilegedMfaSession(request.auth);
   const uid = clean(request.data?.uid);
   const staff = await loadStaff(uid);
   const includePrivate = actor.canManageLifecycle;
@@ -349,6 +352,7 @@ export const adminGetStaffDetails = onCall({ cors: true, region: "europe-west3",
 
 export const adminGetTechnicianOperationsDirectory = onCall({ cors: true, region: "europe-west3", enforceAppCheck: true }, async (request) => {
   const actor = await requireTechnicianDirectoryReader(request);
+  await requirePrivilegedMfaSession(request.auth);
   const [usersSnap, techniciansSnap] = await Promise.all([
     db.collection("users").where("isStaff", "==", true).limit(500).get(),
     db.collection("technicians").limit(500).get(),
@@ -396,6 +400,7 @@ function preservedNumber(incoming: unknown, existing: unknown) {
 
 export const adminUpdateStaffProfile = onCall({ cors: true, region: "europe-west3", enforceAppCheck: true }, async (request) => {
   const { actorId, actorRole } = await requireHrManager(request);
+  await requirePrivilegedMfaSession(request.auth);
   const payload = request.data || {};
   const uid = clean(payload.uid);
   const staff = await loadStaff(uid);
@@ -499,6 +504,7 @@ export const adminUpdateStaffProfile = onCall({ cors: true, region: "europe-west
 
 export const adminUpdateStaffOnboarding = onCall({ cors: true, region: "europe-west3", enforceAppCheck: true }, async (request) => {
   const { actorId, actorRole } = await requireHrManager(request);
+  await requirePrivilegedMfaSession(request.auth);
   const uid = clean(request.data?.uid);
   const staff = await loadStaff(uid);
   if (staff.authUser.disabled || ["SUSPENDED", "OFFBOARDED"].includes(clean(staff.data.status).toUpperCase())) {
@@ -587,6 +593,7 @@ export const adminUpdateStaffOnboarding = onCall({ cors: true, region: "europe-w
 
 export const adminOffboardStaff = onCall({ cors: true, region: "europe-west3", enforceAppCheck: true }, async (request) => {
   const { actorId, actorRole } = await requireHrManager(request);
+  await requirePrivilegedMfaSession(request.auth);
   const uid = clean(request.data?.uid);
   const reason = clean(request.data?.reason, "Administrative offboarding");
   if (uid === actorId) throw new HttpsError("failed-precondition", "You cannot offboard your own account.");
@@ -626,6 +633,7 @@ export const adminOffboardStaff = onCall({ cors: true, region: "europe-west3", e
 
 export const adminResendStaffInvitation = onCall({ cors: true, region: "europe-west3", enforceAppCheck: true }, async (request) => {
   const { actorId, actorRole } = await requireHrManager(request);
+  await requirePrivilegedMfaSession(request.auth);
   const uid = clean(request.data?.uid);
   const staff = await loadStaff(uid);
   const email = clean(staff.authUser.email || staff.data.email).toLowerCase();
