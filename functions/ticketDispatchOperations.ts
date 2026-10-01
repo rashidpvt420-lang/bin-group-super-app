@@ -40,16 +40,6 @@ function requireDispatcher(auth: any) {
   throw new HttpsError("permission-denied", "Dispatch permission is required.");
 }
 
-function requireVerifiedAdminMfa(auth: any) {
-  const token = auth?.token || {};
-  if (token.email_verified !== true || !token.firebase?.sign_in_second_factor) {
-    throw new HttpsError(
-      "permission-denied",
-      "A verified Admin MFA session is required to resolve ticket disputes.",
-    );
-  }
-}
-
 function isApprovedTechnician(
   user: FirebaseFirestore.DocumentData,
   technician: FirebaseFirestore.DocumentData,
@@ -197,8 +187,6 @@ const STANDARD_SLA_CREDIT_AED = 50;
 export const adminResolveTicketDispute = onCall(
   { cors: true, region: "europe-west3", enforceAppCheck: true },
   async (request) => {
-    // Keep Finance MFA for approve_credit and selective MFA for revisit/dismiss.
-    // Do not blanket-require dispatcher MFA ahead of Finance-only SLA credits.
     const ticketId = text(request.data?.ticketId, 160);
     const action = text(request.data?.action, 60).toLowerCase();
     const note = text(request.data?.note, 1000);
@@ -208,9 +196,11 @@ export const adminResolveTicketDispute = onCall(
         "A valid dispute action and an audited resolution note are required.",
       );
     }
+    // N-05 MFA for every dispute resolution; Finance role still required for credits.
+    await requirePrivilegedMfaSession(request.auth);
 
     // SLA credits are payment decisions: Finance Admin MFA only.
-    // Revisit/dismiss stay with dispatcher authority plus selective MFA.
+    // Revisit/dismiss stay with dispatcher authority.
     let actorUid = "";
     let actorRoleLabel = "dispatcher";
     if (action === "approve_credit") {
@@ -219,7 +209,6 @@ export const adminResolveTicketDispute = onCall(
       actorRoleLabel = "finance_admin";
     } else {
       requireDispatcher(request.auth);
-      requireVerifiedAdminMfa(request.auth);
       actorUid = request.auth!.uid;
       actorRoleLabel = role(
         request.auth!.token?.role ||
@@ -611,4 +600,3 @@ export const adminProcessWhatsAppIntake = onCall(
 );
 
 import type * as FirebaseFirestore from "firebase-admin/firestore";
-import { requirePrivilegedMfaSession } from "./adminMfaSession";
