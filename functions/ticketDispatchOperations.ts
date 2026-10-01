@@ -1,6 +1,7 @@
 import { FieldValue } from "firebase-admin/firestore";
 import * as admin from "firebase-admin";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
+import { requirePrivilegedMfaSession } from "./adminMfaSession";
 import { requireMfaFinanceAdminActor } from "./financeAdminMfa";
 
 if (!admin.apps.length) admin.initializeApp();
@@ -39,16 +40,6 @@ function requireDispatcher(auth: any) {
   throw new HttpsError("permission-denied", "Dispatch permission is required.");
 }
 
-function requireVerifiedAdminMfa(auth: any) {
-  const token = auth?.token || {};
-  if (token.email_verified !== true || !token.firebase?.sign_in_second_factor) {
-    throw new HttpsError(
-      "permission-denied",
-      "A verified Admin MFA session is required to resolve ticket disputes.",
-    );
-  }
-}
-
 function isApprovedTechnician(
   user: FirebaseFirestore.DocumentData,
   technician: FirebaseFirestore.DocumentData,
@@ -75,6 +66,7 @@ export const adminAssignTechnician = onCall(
   { cors: true, region: "europe-west3", enforceAppCheck: true },
   async (request) => {
     requireDispatcher(request.auth);
+    await requirePrivilegedMfaSession(request.auth);
     const ticketId = text(request.data?.ticketId, 160);
     const technicianId = text(request.data?.technicianId, 160);
     const reassignmentReason = text(request.data?.reassignmentReason, 500);
@@ -195,6 +187,9 @@ const STANDARD_SLA_CREDIT_AED = 50;
 export const adminResolveTicketDispute = onCall(
   { cors: true, region: "europe-west3", enforceAppCheck: true },
   async (request) => {
+    // N-05: MFA before argument validation so empty/bridged Admin sessions fail closed.
+    await requirePrivilegedMfaSession(request.auth);
+
     const ticketId = text(request.data?.ticketId, 160);
     const action = text(request.data?.action, 60).toLowerCase();
     const note = text(request.data?.note, 1000);
@@ -206,7 +201,7 @@ export const adminResolveTicketDispute = onCall(
     }
 
     // SLA credits are payment decisions: Finance Admin MFA only.
-    // Revisit/dismiss stay with dispatcher authority plus selective MFA.
+    // Revisit/dismiss stay with dispatcher authority.
     let actorUid = "";
     let actorRoleLabel = "dispatcher";
     if (action === "approve_credit") {
@@ -215,7 +210,6 @@ export const adminResolveTicketDispute = onCall(
       actorRoleLabel = "finance_admin";
     } else {
       requireDispatcher(request.auth);
-      requireVerifiedAdminMfa(request.auth);
       actorUid = request.auth!.uid;
       actorRoleLabel = role(
         request.auth!.token?.role ||
@@ -353,6 +347,7 @@ export const adminUpdateEmergencyTicket = onCall(
   { cors: true, region: "europe-west3", enforceAppCheck: true },
   async (request) => {
     requireDispatcher(request.auth);
+    await requirePrivilegedMfaSession(request.auth);
     const ticketId = text(request.data?.ticketId, 160);
     const action = text(request.data?.action, 40).toLowerCase();
     if (!ticketId || !EMERGENCY_ACTIONS.has(action)) {
@@ -430,6 +425,7 @@ export const adminProcessWhatsAppIntake = onCall(
   { cors: true, region: "europe-west3", enforceAppCheck: true },
   async (request) => {
     requireDispatcher(request.auth);
+    await requirePrivilegedMfaSession(request.auth);
     const intakeId = text(request.data?.intakeId, 160);
     const action = text(request.data?.action, 40).toLowerCase();
     if (!intakeId || !WHATSAPP_TRIAGE_ACTIONS.has(action)) {

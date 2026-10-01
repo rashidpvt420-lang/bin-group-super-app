@@ -2,6 +2,7 @@ import { FieldValue } from "firebase-admin/firestore";
 import { defineSecret } from "firebase-functions/params";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
+import type * as FirebaseFirestore from "firebase-admin/firestore";
 import * as crypto from "crypto";
 import { calculateOwnerOnboardingQuote } from "./ownerOnboardingQuote";
 import { isValidOwnerSubmittedGps } from "./ownerSubmittedGps";
@@ -9,6 +10,7 @@ import { verifiedOwnerDocumentPaths } from "./ownerOnboardingDocuments";
 import { loadActivePaymentConfiguration } from "./paymentConfiguration";
 import { normalizeAedMoney } from "./shared/aedMoney";
 import { parseExactAedAmount } from "./shared/aedMoneyInput";
+import { requirePrivilegedMfaSession } from "./adminMfaSession";
 import { requireMfaFinanceAdminActor } from "./financeAdminMfa";
 import { assertOtpApplicationBinding, decideOwnerApplicationSubmission } from "./ownerApplicationBinding";
 
@@ -885,6 +887,7 @@ export const adminCompleteOwnerPropertyInspection = onCall({ cors: true, enforce
 
 export const adminRecordOwnerMobilizationPaymentEvidence = onCall({ cors: true, enforceAppCheck: true, memory: "512MiB" }, async (request) => {
   // F-2: recording 15% payment evidence is a payment decision: MFA finance Admin only.
+  await requirePrivilegedMfaSession(request.auth);
   const actor = await requireMfaFinanceAdminActor(request);
   const paymentId = safeId(request.data?.paymentId, "");
   const reference = text(request.data?.paymentReferenceId || request.data?.reference);
@@ -1032,5 +1035,3 @@ export const adminRecordOwnerMobilizationPaymentEvidence = onCall({ cors: true, 
   await batch.commit();
   return { status: "RECORDED", paymentId, intakeId, amountReceived, method, paymentReferenceId: reference, receiptUrl, receiptHash, generation };
 });
-
-import type * as FirebaseFirestore from "firebase-admin/firestore";

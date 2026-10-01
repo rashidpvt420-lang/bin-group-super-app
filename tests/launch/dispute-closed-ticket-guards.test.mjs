@@ -29,7 +29,7 @@ test('tenant and owner disputes enter the Admin PENDING_DISPUTE_REVIEW queue', (
   assert.match(resolve, /source:\s*"ADMIN_DISPUTE_REVISIT"/);
   assert.match(resolve, /jobLocation:\s*ticket\.jobLocation/);
   assert.match(resolve, /requireMfaFinanceAdminActor/);
-  assert.match(resolve, /requireVerifiedAdminMfa/);
+  assert.match(resolve, /requirePrivilegedMfaSession/);
   assert.match(queue, /adminReviewStatus',\s*'==',\s*'PENDING_DISPUTE_REVIEW'/);
   assert.match(app, /path="\/ops\/disputes"/);
   assert.match(app, /DisputeQueuePage/);
