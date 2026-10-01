@@ -12,7 +12,9 @@ const CRASH_PATTERN = /application error|unhandled runtime error|chunkloaderror|
 const ACCESS_DENIED = /permission-denied|unauthenticated|access denied|not authorized|insufficient permissions/i;
 const APPCHECK_FAILURE_TEXT =
   /(?:(?:app check|firebase.?app.?check).{0,60}(?:fail(?:ed|ure)?|error|invalid|missing|required|denied|rejected|blocked|unauthorized)|(?:fail(?:ed|ure)?|error|invalid|missing|required|denied|rejected|blocked|unauthorized).{0,60}(?:app check|firebase.?app.?check))/i;
-const APPCHECK_HTTP = /\b401\b|\b403\b|\b429\b|too many requests/i;
+// Match HTTP auth/rate-limit failures, not KPI counts like "403 unresolved tickets".
+const APPCHECK_HTTP =
+  /(?:\bHTTP\s*[:=]?\s*(?:401|403|429)\b|\b(?:401|403|429)\s+(?:Forbidden|Unauthorized|Error)\b|\bstatus(?:\s*code)?\s*[:=]\s*(?:401|403|429)\b|too many requests)/i;
 
 function requireAuditCredentials() {
   if (!ADMIN_BASE_URL) {

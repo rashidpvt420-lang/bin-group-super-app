@@ -563,7 +563,12 @@ export default function TenantsManagementPage() {
                                 </Typography>
                             )}
                             {tenant.invitationStatus !== 'accepted' && (
-                                <IconButton size="small" onClick={() => handleResendInvitation(tenant.tenantInvitationId)} title="Resend Invite">
+                                <IconButton
+                                  size="small"
+                                  onClick={() => handleResendInvitation(tenant.tenantInvitationId)}
+                                  title="Resend Invite"
+                                  aria-label={`Resend invitation for ${tenant.displayName || tenant.email || 'tenant'}`}
+                                >
                                     <SendIcon sx={{ fontSize: 14 }} />
                                 </IconButton>
                             )}
@@ -572,8 +577,23 @@ export default function TenantsManagementPage() {
                       <TableCell><Chip label={tenant.status?.toUpperCase()} size="small" color={tenant.status === 'active' ? 'success' : 'default'} sx={{ fontWeight: 900, fontSize: '0.65rem' }} /></TableCell>
                       <TableCell align="right">
                           <Stack direction="row" spacing={1} justifyContent="flex-end">
-                              <IconButton size="small" onClick={() => handleOpenEdit(tenant)}><EditIcon fontSize="small" /></IconButton>
-                              <IconButton size="small" color="error" onClick={() => confirmDelete(tenant)}><DeleteIcon fontSize="small" /></IconButton>
+                              <IconButton
+                                size="small"
+                                onClick={() => handleOpenEdit(tenant)}
+                                aria-label={`Edit tenant ${tenant.displayName || tenant.email || 'record'}`}
+                                title="Edit tenant"
+                              >
+                                <EditIcon fontSize="small" />
+                              </IconButton>
+                              <IconButton
+                                size="small"
+                                color="error"
+                                onClick={() => confirmDelete(tenant)}
+                                aria-label={`Delete tenant ${tenant.displayName || tenant.email || 'record'}`}
+                                title="Delete tenant"
+                              >
+                                <DeleteIcon fontSize="small" />
+                              </IconButton>
                               <Button size="small" variant="text" color="warning" onClick={() => handleArchiveTenant(tenant)} sx={{ fontWeight: 800, fontSize: '0.7rem' }}>ARCHIVE</Button>
                           </Stack>
                       </TableCell>
@@ -713,7 +733,15 @@ export default function TenantsManagementPage() {
                         <Stack spacing={2}>
                             <Box sx={{ display: 'flex', gap: 1 }}>
                                 <TextField label="Search Email" fullWidth size="small" value={existingTenantSearch} onChange={(e) => setExistingTenantSearch(e.target.value)} />
-                                <IconButton onClick={handleSearchExisting} disabled={searchLoading} color="primary"><SearchIcon /></IconButton>
+                                <IconButton
+                                  onClick={handleSearchExisting}
+                                  disabled={searchLoading}
+                                  color="primary"
+                                  aria-label="Search existing tenant by email"
+                                  title="Search existing tenant"
+                                >
+                                  <SearchIcon />
+                                </IconButton>
                             </Box>
                             <FormControl fullWidth>
                                 <InputLabel>Select Linked Tenant</InputLabel>
