@@ -9,6 +9,8 @@ test('live role smoke carries production client expectations and restores protec
   for (const required of [
     'VITE_GOOGLE_MAPS_API_KEY',
     'VITE_APP_CHECK_SITE_KEY',
+    'FIREBASE_APPCHECK_ENTERPRISE_SITE_KEY',
+    'VITE_APP_CHECK_PROVIDER: enterprise',
     'VITE_FIREBASE_API_KEY',
     'VITE_FIREBASE_APP_ID',
     'VITE_FIREBASE_MESSAGING_SENDER_ID',
