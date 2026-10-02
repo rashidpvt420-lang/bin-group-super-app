@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
     Alert, Box, Button, CircularProgress, Dialog, DialogActions, DialogContent,
     DialogTitle, Paper, Stack, Typography, alpha
@@ -7,7 +7,7 @@ import { AlertCircle, CheckCircle, Dumbbell, FileText, Trash2, Upload } from 'lu
 import { useOnboardingStore } from '../../store/onboardingStore';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
-import { removeStagedFile, stageFile } from '../../lib/onboardingDb';
+import { probeStagedFile, removeStagedFile, stageFile } from '../../lib/onboardingDb';
 
 interface ProofUploadStepProps { onNext: () => void; onBack: () => void }
 type ProofKey = 'propertyProof' | 'emiratesId' | 'passport' | 'tradeLicense' | 'tenancySupport' | 'gymSportsApproval' | 'gymInsurance' | 'gymFloorPlan';
@@ -76,6 +76,32 @@ export default function ProofUploadStep({ onNext, onBack }: ProofUploadStepProps
         if (key === 'gymFloorPlan') return gymRequired.gymFloorPlan;
         return false;
     };
+
+    useEffect(() => {
+        let active = true;
+        const reconcile = async () => {
+            for (const item of visibleDocumentTypes) {
+                if (!proofMap[item.key]) continue;
+                const staged = await probeStagedFile(item.key);
+                if (!active) return;
+                if (!staged) setProofDocument(item.key as any, null);
+            }
+        };
+        void reconcile();
+        return () => { active = false; };
+        // Only re-check when the set of metadata names changes.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [
+        proofDocuments.propertyProof?.name,
+        proofDocuments.emiratesId?.name,
+        proofDocuments.passport?.name,
+        proofDocuments.tradeLicense?.name,
+        proofDocuments.tenancySupport?.name,
+        (proofDocuments as any).gymSportsApproval?.name,
+        (proofDocuments as any).gymInsurance?.name,
+        (proofDocuments as any).gymFloorPlan?.name,
+        hasGym,
+    ]);
 
     const handleFileSelect = async (key: ProofKey, file: File | null) => {
         setError(null);

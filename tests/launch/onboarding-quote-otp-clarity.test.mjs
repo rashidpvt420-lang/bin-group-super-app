@@ -108,6 +108,19 @@ test('disabled OTP buttons stay visually disabled on white-platinum theme', () =
   assert.match(css, /cursor:not-allowed!important/);
 });
 
+test('page 5 detects missing staged proofs and allows in-place re-upload', () => {
+  const source = readFileSync('src/components/onboarding/InspectionSubmissionStep.tsx', 'utf8');
+  const db = readFileSync('src/lib/onboardingDb.ts', 'utf8');
+  const page = readFileSync('src/pages/PropertyOnboardingPage.tsx', 'utf8');
+  assert.match(db, /export async function probeStagedFile/);
+  assert.match(source, /probeStagedFile/);
+  assert.match(source, /Re-upload/);
+  assert.match(source, /onFixDocuments/);
+  assert.match(source, /missingRequired/);
+  assert.match(page, /fixProtectedDocuments/);
+  assert.match(page, /onFixDocuments=\{fixProtectedDocuments\}/);
+});
+
 test('Commercial terms surfaces engine factor lines beside the quote estimate', () => {
   const source = readFileSync('src/components/onboarding/CommercialTermsStep.tsx', 'utf8');
   assert.match(source, /quoteFactorLines/);

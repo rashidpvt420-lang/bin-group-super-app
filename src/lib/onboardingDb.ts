@@ -185,6 +185,15 @@ export async function getStagedFile(key: string): Promise<File | null> {
     }
 }
 
+/** Non-throwing probe used by Page 5 / Proof Upload to detect stale metadata after session key loss. */
+export async function probeStagedFile(key: string): Promise<File | null> {
+    try {
+        return await getStagedFile(key);
+    } catch {
+        return null;
+    }
+}
+
 export async function removeStagedFile(key: string): Promise<void> {
     const db = await openOnboardingDb();
     try {

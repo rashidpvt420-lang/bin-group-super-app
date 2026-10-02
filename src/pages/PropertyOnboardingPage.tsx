@@ -95,6 +95,15 @@ export default function PropertyOnboardingPage() {
         window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
+    const fixProtectedDocuments = () => {
+        setGuardError('');
+        // Page 3 section 1 = Protected Documents (ProofUploadStep).
+        requestedSectionRef.current = 1;
+        if (Number(step) === 3) setSection(1);
+        else setStep(3);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+
     const guardedAssetNext = () => {
         const property = properties[0];
         const descriptor = `${property?.propertyType || ''} ${property?.subType || ''}`.toLowerCase();
@@ -138,7 +147,7 @@ export default function PropertyOnboardingPage() {
                 ? <ReviewBeforeSubmitStep onNext={advanceSection} onBack={backSectionOrPage} onFixLocation={fixPropertyLocation} />
                 : <ContractSignatureStep onNext={advancePage} onBack={backSectionOrPage} />;
         }
-        return <InspectionSubmissionStep onBack={goBackPage} />;
+        return <InspectionSubmissionStep onBack={goBackPage} onFixDocuments={fixProtectedDocuments} />;
     };
 
     return (
