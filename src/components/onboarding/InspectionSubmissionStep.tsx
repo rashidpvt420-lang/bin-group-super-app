@@ -122,17 +122,14 @@ export default function InspectionSubmissionStep({
         nextReady[document.key] = false;
         continue;
       }
+      // Keep proof metadata even when bytes are gone — clearing it would flip Owners
+      // from the trade-licence path onto Emirates ID + Passport after a session loss.
       const file = await probeStagedFile(document.key);
-      if (!file) {
-        setProofDocument(document.key as any, null);
-        nextReady[document.key] = false;
-      } else {
-        nextReady[document.key] = true;
-      }
+      nextReady[document.key] = Boolean(file);
     }
     setStagedReady(nextReady);
     setProbingDocs(false);
-  }, [visibleDocuments, proofMap, setProofDocument]);
+  }, [visibleDocuments, proofMap]);
 
   useEffect(() => {
     void reconcileStagedDocuments();

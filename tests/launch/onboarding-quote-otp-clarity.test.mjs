@@ -117,6 +117,9 @@ test('page 5 detects missing staged proofs and allows in-place re-upload', () =>
   assert.match(source, /Re-upload/);
   assert.match(source, /onFixDocuments/);
   assert.match(source, /missingRequired/);
+  // Stale-byte probe must not wipe proof metadata (that flips trade-licence path → ID/passport).
+  assert.match(source, /Keep proof metadata even when bytes are gone/);
+  assert.doesNotMatch(source, /setProofDocument\(document\.key as any, null\)/);
   assert.match(page, /fixProtectedDocuments/);
   assert.match(page, /onFixDocuments=\{fixProtectedDocuments\}/);
 });
