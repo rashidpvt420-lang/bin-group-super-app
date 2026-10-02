@@ -130,6 +130,16 @@ test('Commercial terms surfaces engine factor lines beside the quote estimate', 
   assert.match(source, /Quote factors \(same engine as Review\)/);
 });
 
+test('page 3 commercial CTA makes Protected Documents the obvious next step', () => {
+  const source = readFileSync('src/components/onboarding/CommercialTermsStep.tsx', 'utf8');
+  const page = readFileSync('src/pages/PropertyOnboardingPage.tsx', 'utf8');
+  assert.match(source, /Confirm plan → Documents/);
+  assert.match(source, /documentsNext/);
+  assert.match(page, /Part 1 of 2 · Commercial plan/);
+  assert.match(page, /Part 2 of 2 · Protected document upload/);
+  assert.match(page, /onBack=\{fixProtectedDocuments\}/);
+});
+
 test('automatic property calculations expose every space group so chips sum to Declared spaces', async () => {
   const intelligenceMod = await bundle('src/utils/propertyIntelligence.ts', 'intel');
   const summary = intelligenceMod.calculatePropertyIntelligence({

@@ -147,7 +147,9 @@ export default function PropertyOnboardingPage() {
                 ? <ReviewBeforeSubmitStep onNext={advanceSection} onBack={backSectionOrPage} onFixLocation={fixPropertyLocation} />
                 : <ContractSignatureStep onNext={advancePage} onBack={backSectionOrPage} />;
         }
-        return <InspectionSubmissionStep onBack={goBackPage} onFixDocuments={fixProtectedDocuments} />;
+        // From Page 5, Back lands on Protected Documents (page 3 §2) so Owners can re-upload
+        // without hunting through commercial terms again.
+        return <InspectionSubmissionStep onBack={fixProtectedDocuments} onFixDocuments={fixProtectedDocuments} />;
     };
 
     return (
@@ -164,6 +166,15 @@ export default function PropertyOnboardingPage() {
                 <Box sx={{ mb: 2, textAlign: 'center' }}>
                     <Typography variant="h6" fontWeight={950}>{sectionLabels[safePage]?.[section] || pageLabels[safePage - 1]}</Typography>
                     <Typography variant="caption" color="text.secondary">{label('Five clear pages. Payment is requested only after BIN GROUP completes the property visit.', 'خمس صفحات واضحة. يتم طلب الدفع فقط بعد إكمال BIN GROUP زيارة العقار.')}</Typography>
+                    {safePage === 3 && (
+                        <Chip
+                            size="small"
+                            sx={{ mt: 1.25, fontWeight: 900 }}
+                            label={section === 0
+                                ? label('Page 3 · Part 1 of 2 · Commercial plan (documents next)', 'الصفحة 3 · الجزء 1 من 2 · الخطة التجارية (المستندات التالية)')
+                                : label('Page 3 · Part 2 of 2 · Protected document upload', 'الصفحة 3 · الجزء 2 من 2 · رفع المستندات المحمية')}
+                        />
+                    )}
                 </Box>
                 <Stepper activeStep={safePage - 1} alternativeLabel sx={{ mb: 3 }}>{pageLabels.map((pageLabel) => <Step key={pageLabel}><StepLabel>{pageLabel}</StepLabel></Step>)}</Stepper>
                 <LinearProgress variant="determinate" value={pageProgress} sx={{ mb: 1, height: 8, borderRadius: 99 }} />

@@ -31,6 +31,11 @@ const copy = {
     includedValue: { en: 'Included', ar: 'مشمول' },
     approvalRule: { en: 'Approval Rule', ar: 'قاعدة الموافقة' },
     approvalRuleText: { en: 'Work above AED 1,000 needs owner approval before execution.', ar: 'أي عمل يتجاوز 1,000 درهم يحتاج موافقة المالك قبل التنفيذ.' },
+    documentsNext: {
+        en: 'Property Proof and identity documents are on the next screen. Confirm this plan to open Protected Documents upload.',
+        ar: 'إثبات العقار ومستندات الهوية في الشاشة التالية. أكّد هذه الخطة لفتح رفع المستندات المحمية.',
+    },
+    confirmToDocuments: { en: 'Confirm plan → Documents', ar: 'تأكيد الخطة ← المستندات' },
 };
 
 const systemLabels: Record<string, LocalText> = {
@@ -231,6 +236,9 @@ const CommercialTermsStep: React.FC<{ onNext: () => void; onBack: () => void }> 
             <Box sx={{ textAlign: 'center', mb: 4 }}>
                 <Typography variant="h4" fontWeight="950" sx={{ color: '#FFF', mb: 1 }}>{t('onboarding.commercial_title')}</Typography>
                 <Typography variant="body1" sx={{ color: 'rgba(255,255,255,0.5)', maxWidth: 820, mx: 'auto' }}>{t('onboarding.commercial_desc')}</Typography>
+                <Alert severity="info" sx={{ mt: 2.5, maxWidth: 820, mx: 'auto', textAlign: isRTL ? 'right' : 'left' }}>
+                    {tx(copy.documentsNext, ar)}
+                </Alert>
             </Box>
 
             <Container maxWidth="xl">
@@ -322,7 +330,7 @@ const CommercialTermsStep: React.FC<{ onNext: () => void; onBack: () => void }> 
                                 <Box><Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 950, display: 'block' }}>{tx(copy.approvalRule, ar)}</Typography><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.65)', lineHeight: 1.6 }}>{tx(copy.approvalRuleText, ar)}</Typography></Box>
                             </Stack>
                             {commercialBlocked && <Alert severity="warning" sx={{ mb: 2 }}>{pmRevenueMissing ? tx({ en: 'Enter annual rent / managed revenue for every property before confirming Property Management.', ar: 'أدخل الإيجار السنوي / الإيراد المدار لكل عقار قبل تأكيد إدارة العقار.' }, ar) : tx({ en: 'This service plan cannot produce a valid automatic quote. Review the property pricing inputs before continuing.', ar: 'لا يمكن لهذه الخطة إنشاء عرض سعر تلقائي صالح. راجع بيانات تسعير العقار قبل المتابعة.' }, ar)}</Alert>}
-                            <Button variant="contained" fullWidth size="large" disabled={commercialBlocked} onClick={onNext} endIcon={isRTL ? <ArrowRight style={{ transform: 'rotate(180deg)' }} /> : <ArrowRight />} sx={{ borderRadius: 4, bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, py: 2, boxShadow: '0 10px 20px rgba(198, 167, 94, 0.3)', '&:hover': { bgcolor: '#E6C77A' } }}>{t('onboarding.confirm_btn')}</Button>
+                            <Button variant="contained" fullWidth size="large" disabled={commercialBlocked} onClick={onNext} endIcon={isRTL ? <ArrowRight style={{ transform: 'rotate(180deg)' }} /> : <ArrowRight />} sx={{ borderRadius: 4, bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, py: 2, boxShadow: '0 10px 20px rgba(198, 167, 94, 0.3)', '&:hover': { bgcolor: '#E6C77A' } }}>{tx(copy.confirmToDocuments, ar)}</Button>
                             <Button variant="text" fullWidth onClick={onBack} sx={{ mt: 1, color: 'rgba(255,255,255,0.45)', fontWeight: 800 }}>{t('onboarding.revise_btn')}</Button>
                         </Paper>
                     </Grid>
