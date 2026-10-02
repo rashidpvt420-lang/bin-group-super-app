@@ -190,11 +190,26 @@ function manualQuoteAddOns(addOns: string[] | undefined): string[] {
 
 function monthlyListExplanation(addOns: string[], explanation: string[]) {
   for (const id of new Set(addOns)) {
-    const item = SERVICE_ADDONS.find((addOn) => addOn.id === id);
-    const annual = serviceAddOnAnnualPrice(id);
-    if (!item || annual === null || annual === 0 || item.unit === 'annual') continue;
-    const periods = item.unit === 'per month' ? 12 : 4;
-    explanation.push(`${item.label} add-on: AED ${item.price} ${item.unit} x ${periods} = AED ${annual} per year.`);
+    const canonicalId = id === 'façade_access' ? 'facade_access' : id;
+    const listItem = SERVICE_ADDONS.find((addOn) => addOn.id === canonicalId);
+    const listAnnual = serviceAddOnAnnualPrice(canonicalId);
+    if (listItem && listAnnual !== null && listAnnual > 0) {
+      if (listItem.unit === 'per month' || listItem.unit === 'per quarter') {
+        const periods = listItem.unit === 'per month' ? 12 : 4;
+        explanation.push(`${listItem.label} add-on: AED ${listItem.price} ${listItem.unit} x ${periods} = AED ${listAnnual} per year.`);
+        continue;
+      }
+      if (listItem.unit === 'annual') {
+        explanation.push(`${listItem.label} add-on: AED ${listAnnual} per year.`);
+        continue;
+      }
+    }
+    // Catalogue-only system/age add-ons (e.g. pca_audit, water_tank, hvac_pm) must appear in the
+    // factor list so Annual Value cannot look like "base × factors only" while silently adding AED.
+    const catalogue = ADD_ON_PRICING[canonicalId];
+    if (catalogue?.base > 0) {
+      explanation.push(`${catalogue.label} add-on: AED ${catalogue.base} per year.`);
+    }
   }
 }
 
@@ -206,7 +221,8 @@ const VALID_GYM_COMPLEXITY = new Set(['STANDARD_DRY', 'ENHANCED', 'WET_RECOVERY'
 const VALID_GYM_OPENING_SCHEDULES = new Set(['STANDARD_HOURS', 'EXTENDED_HOURS', '24_7']);
 const QUARTERLY_BILLING_SURCHARGE = 0.03;
 const MONTHLY_BILLING_SURCHARGE = 0.06;
-const SYSTEM_DRIVEN_ADDON_IDS = new Set([
+/** Add-ons the Owner cannot bill by checkbox alone — only systems / age / visit facts unlock them. */
+export const SYSTEM_DRIVEN_ADDON_IDS = new Set([
   'fire_safety', 'water_tank', 'elevator_amc', 'hvac_pm',
   'sira_renewal', 'facade_access', 'façade_access', 'pca_audit', 'pool_care',
 ]);

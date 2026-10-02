@@ -28,6 +28,10 @@ export interface PropertyIntelligenceSummary {
   totalWetAreas: number;
   totalWorkspaces: number;
   totalServiceSpaces: number;
+  totalAmenitySpaces: number;
+  totalOutdoorSpaces: number;
+  totalSpecialSpaces: number;
+  totalOtherSpaces: number;
   averageAreaPerFloorSqft: number | null;
   serviceAreaPerUnitSqft: number | null;
   declaredSpacesPer1000Sqft: number | null;
@@ -145,6 +149,14 @@ export const PROPERTY_SPACE_CATALOG: Record<CanonicalPropertyType, SpaceDefiniti
 
 export const ALL_SELECTABLE_PROPERTY_TYPES = [...ASSET_PROFILE_PROPERTY_TYPES];
 
+/** Global id → definition so inventory grouping works even when a space came from AI/custom for another asset class. */
+const ALL_SPACE_DEFINITIONS = new Map<string, SpaceDefinition>();
+for (const spaces of Object.values(PROPERTY_SPACE_CATALOG)) {
+  for (const space of spaces) {
+    if (!ALL_SPACE_DEFINITIONS.has(space.id)) ALL_SPACE_DEFINITIONS.set(space.id, space);
+  }
+}
+
 export function getSuggestedSpaces(propertyType: string): SpaceDefinition[] {
   if (!ASSET_PROFILE_PROPERTY_TYPES.includes(propertyType as CanonicalPropertyType)) return [];
   const seen = new Set<string>();
@@ -153,6 +165,10 @@ export function getSuggestedSpaces(propertyType: string): SpaceDefinition[] {
     seen.add(item.id);
     return true;
   });
+}
+
+function resolveSpaceDefinition(item: SpaceInventoryItem): SpaceDefinition | undefined {
+  return ALL_SPACE_DEFINITIONS.get(item.type) || ALL_SPACE_DEFINITIONS.get(item.id);
 }
 
 function inventoryOf(property: PropertyData): SpaceInventoryItem[] {
@@ -183,12 +199,21 @@ function ageBand(age: number): PropertyIntelligenceSummary['ageBand'] {
 
 export function calculatePropertyIntelligence(property: PropertyData): PropertyIntelligenceSummary {
   const inventory = inventoryOf(property);
-  const definitions = new Map(getSuggestedSpaces(property.propertyType).map((item) => [item.id, item]));
   const groupTotal = (group: SpaceDefinition['group']) => inventory.reduce((sum, item) => {
-    const definition = definitions.get(item.type) || definitions.get(item.id);
+    const definition = resolveSpaceDefinition(item);
     return sum + (definition?.group === group ? item.count : 0);
   }, 0);
   const totalDeclaredSpaces = inventory.reduce((sum, item) => sum + item.count, 0);
+  const totalRoomSpaces = groupTotal('room');
+  const totalWetAreas = groupTotal('wet');
+  const totalWorkspaces = groupTotal('work');
+  const totalServiceSpaces = groupTotal('service');
+  const totalAmenitySpaces = groupTotal('amenity');
+  const totalOutdoorSpaces = groupTotal('outdoor');
+  const totalSpecialSpaces = groupTotal('special');
+  const groupedSpaces = totalRoomSpaces + totalWetAreas + totalWorkspaces + totalServiceSpaces
+    + totalAmenitySpaces + totalOutdoorSpaces + totalSpecialSpaces;
+  const totalOtherSpaces = Math.max(0, totalDeclaredSpaces - groupedSpaces);
   const floors = Math.max(0, Number(property.floors) || 0);
   const sqft = Math.max(0, Number(property.sqft) || 0);
   const units = Math.max(0, Number(property.units) || 0);
@@ -207,10 +232,14 @@ export function calculatePropertyIntelligence(property: PropertyData): PropertyI
 
   return {
     totalDeclaredSpaces,
-    totalRoomSpaces: groupTotal('room'),
-    totalWetAreas: groupTotal('wet'),
-    totalWorkspaces: groupTotal('work'),
-    totalServiceSpaces: groupTotal('service'),
+    totalRoomSpaces,
+    totalWetAreas,
+    totalWorkspaces,
+    totalServiceSpaces,
+    totalAmenitySpaces,
+    totalOutdoorSpaces,
+    totalSpecialSpaces,
+    totalOtherSpaces,
     averageAreaPerFloorSqft: floors > 0 && sqft > 0 ? Math.round((sqft / floors) * 10) / 10 : null,
     serviceAreaPerUnitSqft: units > 0 && sqft > 0 ? Math.round((sqft / units) * 10) / 10 : null,
     declaredSpacesPer1000Sqft: sqft > 0 ? Math.round((totalDeclaredSpaces / sqft) * 10000) / 10 : null,

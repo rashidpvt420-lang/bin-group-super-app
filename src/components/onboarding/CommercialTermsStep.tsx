@@ -189,6 +189,9 @@ const CommercialTermsStep: React.FC<{ onNext: () => void; onBack: () => void }> 
     const isAnnualPayment = selectedPaymentPlan === 'annual';
     const portfolioQuoteRows = Object.values(portfolioSummary.quoteResults || {});
     const portfolioAnnualTotal = Number(portfolioSummary.estimatedACV || 0);
+    const quoteFactorLines = Array.from(new Set(
+      portfolioQuoteRows.flatMap((row) => Array.isArray(row.pricingExplanation) ? row.pricingExplanation : []),
+    ));
     const selectedPaymentAmount = selectedPaymentPlan === 'monthly'
         ? portfolioQuoteRows.reduce((sum, row) => sum + Number(row.monthlyPayment || 0), 0)
         : selectedPaymentPlan === 'quarterly'
@@ -266,6 +269,16 @@ const CommercialTermsStep: React.FC<{ onNext: () => void; onBack: () => void }> 
                             <Stack spacing={2} sx={{ mb: 4 }}>
                                 <Box sx={{ display: 'flex', justifyContent: 'space-between', flexDirection: isRTL ? 'row-reverse' : 'row', gap: 2 }}><Typography variant="body2" color="rgba(255,255,255,0.6)">{selectedPaymentLabel}</Typography><Typography variant="body2" fontWeight="900" color={binThemeTokens.gold}>AED {formatAED(selectedPaymentAmount)}</Typography></Box>
                                 <Box sx={{ display: 'flex', justifyContent: 'space-between', flexDirection: isRTL ? 'row-reverse' : 'row', gap: 2 }}><Typography variant="body2" color="rgba(255,255,255,0.6)">{t('onboarding.mobilization')}</Typography><Typography variant="body2" fontWeight="900" color="#FFF">AED {formatAED(portfolioAnnualTotal * 0.15)}</Typography></Box>
+                                {quoteFactorLines.length > 0 && (
+                                  <Box sx={{ p: 1.5, borderRadius: 2, bgcolor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                                    <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 950, display: 'block', mb: 1 }}>{tx({ en: 'Quote factors (same engine as Review)', ar: 'عوامل العرض (نفس محرك المراجعة)' }, ar)}</Typography>
+                                    <Stack spacing={0.75}>
+                                      {quoteFactorLines.slice(0, 8).map((line) => (
+                                        <Typography key={line} variant="caption" sx={{ color: 'rgba(255,255,255,0.62)', lineHeight: 1.45, textAlign: isRTL ? 'right' : 'left' }}>• {line}</Typography>
+                                      ))}
+                                    </Stack>
+                                  </Box>
+                                )}
                                 <Divider sx={{ borderColor: 'rgba(255,255,255,0.08)' }} />
                                 <Box><Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 950, display: 'block' }}>{tx(copy.ppmSchedule, ar)}</Typography><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.65)', lineHeight: 1.6 }}>{selectedPpmText}</Typography></Box>
                                 <Box><Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 950, display: 'block' }}>{tx(copy.approvalRule, ar)}</Typography><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.65)', lineHeight: 1.6 }}>{tx(copy.approvalRuleText, ar)}</Typography></Box>

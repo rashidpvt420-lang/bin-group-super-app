@@ -94,7 +94,7 @@ test('add-ons the monthly list does not price yet keep their current annual pric
 
 test('the owner onboarding add-on cards take their prices from the engine resolver', () => {
   const source = readFileSync('src/components/onboarding/SystemsDataStep.tsx', 'utf8');
-  assert.match(source, /import \{ resolveAddOnAnnualPrice \} from '\.\.\/\.\.\/utils\/calculateUaeQuote2026';/);
+  assert.match(source, /import \{ resolveAddOnAnnualPrice(?:, SYSTEM_DRIVEN_ADDON_IDS)? \} from '\.\.\/\.\.\/utils\/calculateUaeQuote2026';/);
   const block = source.slice(source.indexOf('const addOns: AddOnItem[] = ['), source.indexOf('];', source.indexOf('const addOns: AddOnItem[] = [')));
   const ids = [...block.matchAll(/\{ id: '([a-z_]+)'/g)].map((match) => match[1]);
   assert.ok(ids.length >= 11);

@@ -78,15 +78,37 @@ export default function ContractSignatureStep({ onNext, onBack }: ContractSignat
 
   useEffect(() => { void loadLockedQuote(); }, [loadLockedQuote]);
 
-  const canRequestOtp = typedName.trim().length >= 3 && accepted && Boolean(ownerAccount?.uid && contractReference && lockedQuote?.quoteHash);
+  const ownerEmail = String(ownerAccount?.email || '').trim();
+  const canRequestOtp = typedName.trim().length >= 3 && accepted && Boolean(ownerAccount?.uid && contractReference && lockedQuote?.quoteHash && ownerEmail);
   const isValid = canRequestOtp && Boolean(contractOtpVerificationId);
+
+  const mapOtpError = (error: any, fallbackEn: string, fallbackAr: string) => {
+    const code = String(error?.code || '').replace(/^functions\//, '');
+    const message = String(error?.message || '');
+    if (code === 'resource-exhausted' || /rate|too many|5\/hour/i.test(message)) {
+      return copy('OTP send limit reached (max 5 per hour). Wait and try again, or check spam for the last code.', 'تم بلوغ حد إرسال الرمز (5 في الساعة). انتظر ثم أعد المحاولة، أو تحقق من البريد المزعج للرمز الأخير.');
+    }
+    if (/app.?check|attestation|recaptcha/i.test(message)) {
+      return copy('Browser security check blocked the OTP request. Refresh the page, disable strict blockers, and try again.', 'أوقفت حماية المتصفح طلب الرمز. حدّث الصفحة وعطّل أدوات الحظر الصارمة ثم أعد المحاولة.');
+    }
+    if (code === 'failed-precondition' || /SMTP|not configured|pepper|sender/i.test(message)) {
+      return copy('Email OTP service is not ready on this environment. Contact BIN GROUP ops before signing.', 'خدمة رمز البريد غير جاهزة في هذه البيئة. تواصل مع عمليات BIN GROUP قبل التوقيع.');
+    }
+    if (code === 'unauthenticated' || code === 'permission-denied') {
+      return copy('Your Owner session expired or is not verified. Sign in again, then resend the OTP.', 'انتهت جلسة المالك أو لم يتم التحقق منها. سجّل الدخول مرة أخرى ثم أعد إرسال الرمز.');
+    }
+    if (code === 'invalid-argument' || /invalid|expired|attempts/i.test(message)) {
+      return copy('That OTP is invalid or expired. Request a new code and enter the latest 6 digits.', 'رمز التحقق غير صالح أو منتهٍ. اطلب رمزاً جديداً وأدخل آخر 6 أرقام.');
+    }
+    return message || copy(fallbackEn, fallbackAr);
+  };
 
   const requestOtp = async () => {
     if (!canRequestOtp || !lockedQuote) return;
     setOtpBusy(true); setOtpError('');
     try {
       const result = await httpsCallable(functions, 'requestOwnerInspectionSignatureOtp')({
-        email: ownerAccount?.email,
+        email: ownerEmail,
         contractId: contractReference,
         contractHash: lockedQuote.quoteHash,
         propertyName: properties.length === 1 ? (properties[0]?.address || properties[0]?.emirate || 'BIN GROUP property') : `BIN GROUP portfolio · ${properties.length} properties`,
@@ -94,9 +116,10 @@ export default function ContractSignatureStep({ onNext, onBack }: ContractSignat
       const requestId = String((result.data as any)?.requestId || '');
       if (!requestId) throw new Error(copy('OTP request reference was not returned.', 'لم يتم إرجاع مرجع طلب الرمز.'));
       setOtpRequestId(requestId);
+      setOtp('');
       setContractOtpVerificationId(null);
     } catch (error: any) {
-      setOtpError(error?.message || copy('OTP delivery failed.', 'تعذر إرسال رمز التحقق.'));
+      setOtpError(mapOtpError(error, 'OTP delivery failed.', 'تعذر إرسال رمز التحقق.'));
     } finally { setOtpBusy(false); }
   };
 
@@ -110,7 +133,7 @@ export default function ContractSignatureStep({ onNext, onBack }: ContractSignat
       setContractOtpVerificationId(data.verificationId);
     } catch (error: any) {
       setContractOtpVerificationId(null);
-      setOtpError(error?.message || copy('OTP verification failed.', 'فشل التحقق من الرمز.'));
+      setOtpError(mapOtpError(error, 'OTP verification failed.', 'فشل التحقق من الرمز.'));
     } finally { setOtpBusy(false); }
   };
 
@@ -175,9 +198,38 @@ export default function ContractSignatureStep({ onNext, onBack }: ContractSignat
           <TextField fullWidth label={copy('Type your full legal name to sign', 'اكتب اسمك القانوني الكامل للتوقيع')} value={typedName} onChange={(event) => setTypedName(event.target.value)} sx={{ mb: 2 }} InputProps={{ sx: { color: '#FFF', fontFamily: 'monospace', fontSize: '1.1rem' } }} />
           <FormControlLabel control={<Checkbox checked={accepted} onChange={(event) => setAccepted(event.target.checked)} sx={{ color: binThemeTokens.gold, '&.Mui-checked': { color: binThemeTokens.gold } }} />} label={<Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.75)' }}>{copy(`I, ${typedName || '___'}, accept this five-page property application, the inspection-first sequence, the locked server quotation, and the UAE legal terms.`, `أنا ${typedName || '___'} أوافق على طلب العقار المكون من خمس صفحات وتسلسل الفحص أولاً وعرض الخادم المقفل والشروط القانونية الإماراتية.`)}</Typography>} />
           <Divider sx={{ my: 2, borderColor: 'rgba(255,255,255,0.12)' }} />
+          <Alert severity="info" sx={{ mb: 2 }}>
+            {ownerEmail
+              ? copy(
+                  `OTP is emailed only to your Owner login address: ${ownerEmail}. Subject: “BIN GROUP property application signature OTP”. Check Inbox and Spam.`,
+                  `يُرسل رمز التحقق فقط إلى بريد تسجيل دخول المالك: ${ownerEmail}. العنوان: «BIN GROUP property application signature OTP». تحقق من الوارد والبريد المزعج.`,
+                )
+              : copy('Owner login email is missing. Sign in again before requesting the OTP.', 'بريد تسجيل دخول المالك مفقود. سجّل الدخول مرة أخرى قبل طلب الرمز.')}
+          </Alert>
           {contractOtpVerificationId ? <Alert severity="success">{copy('Email OTP verified for this property application.', 'تم التحقق من رمز البريد لهذا الطلب.')}</Alert> : <Stack spacing={2}>
             <Button variant="outlined" disabled={!canRequestOtp || otpBusy || quoteLoading} onClick={() => void requestOtp()}>{otpBusy ? <CircularProgress size={20} /> : copy('SEND SIGNATURE OTP', 'إرسال رمز التوقيع')}</Button>
-            {otpRequestId && <Stack direction={{ xs: 'column', sm: isRTL ? 'row-reverse' : 'row' }} spacing={2}><TextField fullWidth label={copy('6-digit OTP', 'رمز التحقق من 6 أرقام')} value={otp} onChange={(event) => setOtp(event.target.value.replace(/\D/g, '').slice(0, 6))} inputProps={{ inputMode: 'numeric', maxLength: 6 }} /><Button variant="contained" disabled={otp.length !== 6 || otpBusy} onClick={() => void verifyOtp()}>{copy('VERIFY OTP', 'تحقق من الرمز')}</Button></Stack>}
+            {!canRequestOtp && !quoteLoading && (
+              <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.55)' }}>
+                {copy(
+                  'Send OTP unlocks after: full legal name (3+ characters), consent checked, and a locked server quotation.',
+                  'يُفعّل إرسال الرمز بعد: الاسم القانوني (3 أحرف فأكثر)، الموافقة، وقفل عرض الخادم.',
+                )}
+              </Typography>
+            )}
+            {otpRequestId && (
+              <Stack spacing={1.5}>
+                <Alert severity="success">
+                  {copy(
+                    `Code sent to ${ownerEmail}. Reference: ${otpRequestId.slice(0, 8)}… Enter the latest 6 digits (valid ~10 minutes).`,
+                    `تم إرسال الرمز إلى ${ownerEmail}. المرجع: ${otpRequestId.slice(0, 8)}… أدخل آخر 6 أرقام (صالح نحو 10 دقائق).`,
+                  )}
+                </Alert>
+                <Stack direction={{ xs: 'column', sm: isRTL ? 'row-reverse' : 'row' }} spacing={2}>
+                  <TextField fullWidth label={copy('6-digit OTP', 'رمز التحقق من 6 أرقام')} value={otp} onChange={(event) => setOtp(event.target.value.replace(/\D/g, '').slice(0, 6))} inputProps={{ inputMode: 'numeric', maxLength: 6, autoComplete: 'one-time-code' }} />
+                  <Button variant="contained" disabled={otp.length !== 6 || otpBusy} onClick={() => void verifyOtp()}>{copy('VERIFY OTP', 'تحقق من الرمز')}</Button>
+                </Stack>
+              </Stack>
+            )}
           </Stack>}
         </Box>
       </Paper>

@@ -3,11 +3,11 @@ import { Box, Typography, Grid, Paper, Checkbox, Button, Stack, Chip, Divider, C
 import { useOnboardingStore } from '../../store/onboardingStore';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
-import { resolveAddOnAnnualPrice } from '../../utils/calculateUaeQuote2026';
+import { resolveAddOnAnnualPrice, SYSTEM_DRIVEN_ADDON_IDS } from '../../utils/calculateUaeQuote2026';
 
 type LocalText = { en: string; ar: string };
 type SystemItem = { key: string; label: LocalText };
-type AddOnItem = { id: string; name: LocalText; desc: LocalText; price: number; reason: LocalText; required?: boolean; defaultSelected?: boolean };
+type AddOnItem = { id: string; name: LocalText; desc: LocalText; price: number; reason: LocalText; systemDriven?: boolean };
 
 const aed = (value: number) => `AED ${value.toLocaleString()}`;
 const label = (text: LocalText, ar: boolean) => (ar ? text.ar : text.en);
@@ -21,6 +21,9 @@ const addOnPrice = (id: string): number => {
 };
 
 const ELEVATOR_ADDON_ID = 'elevator_amc';
+const PCA_AUDIT_ID = 'pca_audit';
+/** Checkbox-only system add-ons — billed only when the matching system (or age for PCA) is true. */
+const SYSTEM_LOCKED_ADDON_IDS = new Set(['fire_safety', 'water_tank', 'hvac_pm', ELEVATOR_ADDON_ID]);
 
 const copy = {
   audit: { en: 'Systems & Add-ons Audit', ar: 'تدقيق الأنظمة والإضافات' },
@@ -28,19 +31,22 @@ const copy = {
   intro: { en: 'Select every critical building system. These choices control SLA scope, add-ons, dispatch readiness and quote accuracy.', ar: 'اختر كل نظام أساسي في العقار. هذه الخيارات تحدد نطاق الخدمة، الإضافات، جاهزية الإرسال ودقة التسعير.' },
   addonsOverline: { en: 'Operational Add-ons', ar: 'إضافات تشغيلية' },
   addonsTitle: { en: 'Select Additional Service Layers', ar: 'اختر طبقات خدمة إضافية' },
-  addonsDesc: { en: 'Add manpower, compliance, hygiene, standby and specialist services directly to the same systems page before commercial confirmation.', ar: 'أضف خدمات العمالة والامتثال والنظافة والاستعداد والخدمات المتخصصة مباشرة قبل تأكيد العرض التجاري.' },
+  addonsDesc: { en: 'Optional layers can be selected here. Fire, tank, HVAC and lift packages unlock only when you tick the matching system above — the quote never bills a system add-on from a checkbox alone.', ar: 'يمكن اختيار الطبقات الاختيارية هنا. تُفعّل باقات الحريق والخزان والتكييف والمصعد فقط عند تحديد النظام المطابق أعلاه — ولا يحتسب العرض إضافة نظام من مربع اختيار وحده.' },
   required: { en: 'Required', ar: 'إلزامي' },
+  unlockHint: { en: 'Select matching system above', ar: 'حدد النظام المطابق أعلاه' },
   annual: { en: 'Annual', ar: 'سنوي' },
   serviceStack: { en: 'Service Stack', ar: 'حزمة الخدمة' },
   scopeSummary: { en: 'Service scope summary', ar: 'ملخص نطاق الخدمة' },
   systemsSelected: { en: 'systems selected', ar: 'أنظمة مختارة' },
-  commercialAddons: { en: 'commercial add-ons', ar: 'إضافات تجارية' },
+  commercialAddons: { en: 'billable add-ons', ar: 'إضافات قابلة للفوترة' },
   buildingScope: { en: 'Building systems scope', ar: 'نطاق أنظمة العقار' },
   selected: { en: 'selected', ar: 'مختارة' },
   detailNote: { en: 'Full system details remain selected in the matrix and will be saved to the property scope.', ar: 'تبقى تفاصيل الأنظمة محددة في المصفوفة وسيتم حفظها ضمن نطاق العقار.' },
-  commercialTitle: { en: 'Commercial add-ons', ar: 'الإضافات التجارية' },
+  commercialTitle: { en: 'Billable add-ons in quote', ar: 'الإضافات المحتسبة في العرض' },
   totalTitle: { en: 'Annual add-on total', ar: 'إجمالي الإضافات السنوية' },
-  totalNote: { en: 'Systems define scope. Only commercial add-ons are counted in this AED total.', ar: 'الأنظمة تحدد نطاق الخدمة. يتم احتساب الإضافات التجارية فقط في إجمالي الدرهم.' },
+  totalNote: { en: 'This total matches the quote engine: system packages only when systems are selected, plus age-required PCA when the asset is older than 15 years, plus optional layers.', ar: 'يطابق هذا الإجمالي محرك التسعير: باقات الأنظمة فقط عند اختيار الأنظمة، بالإضافة إلى تدقيق PCA عند تجاوز عمر الأصل 15 سنة، والإضافات الاختيارية.' },
+  pcaLabel: { en: 'PCA Asset Audit', ar: 'تدقيق أصول PCA' },
+  pcaReason: { en: 'Required for assets older than 15 years (silent until visit verification).', ar: 'مطلوب للأصول الأقدم من 15 سنة (يُحتسب حتى التحقق في الزيارة).' },
   back: { en: 'Back', ar: 'رجوع' },
   next: { en: 'Initialize Analysis', ar: 'بدء التحليل' },
 };
@@ -108,10 +114,10 @@ const systemGroups: Array<{ title: LocalText; systems: SystemItem[] }> = [
 ];
 
 const addOns: AddOnItem[] = [
-  { id: 'fire_safety', name: { en: 'Fire Safety AMC', ar: 'عقد سلامة الحريق' }, required: true, defaultSelected: true, price: addOnPrice('fire_safety'), desc: { en: 'Civil Defense compliance checks, alarm readiness and certification support.', ar: 'فحوصات امتثال الدفاع المدني وجاهزية الإنذار ودعم الشهادات.' }, reason: { en: 'Mandatory baseline for UAE occupied assets.', ar: 'متطلب أساسي للعقارات المشغولة في الإمارات.' } },
-  { id: 'water_tank', name: { en: 'Water Tank Sterilization', ar: 'تعقيم خزان المياه' }, required: true, defaultSelected: true, price: addOnPrice('water_tank'), desc: { en: 'Quarterly cleaning, sterilization and hygiene documentation.', ar: 'تنظيف وتعقيم ربع سنوي مع توثيق النظافة.' }, reason: { en: 'Required when water tanks exist.', ar: 'مطلوب عند وجود خزانات مياه.' } },
-  { id: 'elevator_amc', name: { en: 'Elevator / Lift AMC', ar: 'عقد صيانة المصاعد' }, price: addOnPrice('elevator_amc'), desc: { en: 'Lift inspections, safety checks and service coordination.', ar: 'فحوصات المصاعد والسلامة وتنسيق الخدمة.' }, reason: { en: 'Required only when the asset has floors/lifts. Hidden for Majlis assets.', ar: 'مطلوب فقط عند وجود أدوار أو مصاعد. مخفي لأصول المجالس.' } },
-  { id: 'hvac_pm', name: { en: 'HVAC Preventive Maintenance', ar: 'صيانة وقائية للتكييف' }, required: true, defaultSelected: true, price: addOnPrice('hvac_pm'), desc: { en: 'AC inspections, filters, coils, drain lines and performance checks.', ar: 'فحوصات المكيفات والفلاتر والملفات وخطوط التصريف والأداء.' }, reason: { en: 'UAE climate makes HVAC continuity mission-critical.', ar: 'مناخ الإمارات يجعل استمرارية التكييف أمراً أساسياً.' } },
+  { id: 'fire_safety', name: { en: 'Fire Safety AMC', ar: 'عقد سلامة الحريق' }, systemDriven: true, price: addOnPrice('fire_safety'), desc: { en: 'Civil Defense compliance checks, alarm readiness and certification support.', ar: 'فحوصات امتثال الدفاع المدني وجاهزية الإنذار ودعم الشهادات.' }, reason: { en: 'Unlocks when Fire alarm or Fire pump is selected above.', ar: 'يُفعّل عند اختيار إنذار الحريق أو مضخة الحريق أعلاه.' } },
+  { id: 'water_tank', name: { en: 'Water Tank Sterilization', ar: 'تعقيم خزان المياه' }, systemDriven: true, price: addOnPrice('water_tank'), desc: { en: 'Quarterly cleaning, sterilization and hygiene documentation.', ar: 'تنظيف وتعقيم ربع سنوي مع توثيق النظافة.' }, reason: { en: 'Unlocks when Water tank is selected above.', ar: 'يُفعّل عند اختيار خزان المياه أعلاه.' } },
+  { id: 'elevator_amc', name: { en: 'Elevator / Lift AMC', ar: 'عقد صيانة المصاعد' }, systemDriven: true, price: addOnPrice('elevator_amc'), desc: { en: 'Lift inspections, safety checks and service coordination.', ar: 'فحوصات المصاعد والسلامة وتنسيق الخدمة.' }, reason: { en: 'Unlocks when Lifts / elevators are selected. Hidden for Majlis assets.', ar: 'يُفعّل عند اختيار المصاعد. مخفي لأصول المجالس.' } },
+  { id: 'hvac_pm', name: { en: 'HVAC Preventive Maintenance', ar: 'صيانة وقائية للتكييف' }, systemDriven: true, price: addOnPrice('hvac_pm'), desc: { en: 'AC inspections, filters, coils, drain lines and performance checks.', ar: 'فحوصات المكيفات والفلاتر والملفات وخطوط التصريف والأداء.' }, reason: { en: 'Unlocks when HVAC / AC systems is selected above.', ar: 'يُفعّل عند اختيار أنظمة التكييف أعلاه.' } },
   { id: 'cleaning', name: { en: 'Cleaning Team / Deep Cleaning', ar: 'فريق تنظيف / تنظيف عميق' }, price: addOnPrice('cleaning'), desc: { en: 'Common area cleaning and scheduled hygiene operations.', ar: 'تنظيف المناطق المشتركة وجدولة عمليات النظافة.' }, reason: { en: 'Recommended for shared facilities and Majlis readiness.', ar: 'موصى به للمرافق المشتركة وجاهزية المجالس.' } },
   { id: 'security', name: { en: 'Security Services / CCTV', ar: 'خدمات أمن / كاميرات' }, price: addOnPrice('security'), desc: { en: 'Guarding coordination, access control and incident logging.', ar: 'تنسيق الحراسة والتحكم بالدخول وتسجيل الحوادث.' }, reason: { en: 'Optional manpower layer for towers, retail and high-value assets.', ar: 'طبقة عمالة اختيارية للأبراج والتجزئة والأصول عالية القيمة.' } },
   { id: 'pest_control', name: { en: 'Pest Control', ar: 'مكافحة الحشرات' }, price: addOnPrice('pest_control'), desc: { en: 'Quarterly municipality-approved pest control treatments.', ar: 'معالجات ربع سنوية معتمدة من البلدية لمكافحة الحشرات.' }, reason: { en: 'Standard preventive hygiene measure.', ar: 'إجراء وقائي قياسي للنظافة.' } },
@@ -131,30 +137,58 @@ const SystemsDataStep: React.FC<{ onNext: () => void; onBack: () => void }> = ({
   const requiredStackIds = useMemo(() => getRequiredStackIds(activeProperty), [activeProperty]);
   const hiddenAddOnIds = useMemo(() => getHiddenAddOnIds(activeProperty), [activeProperty]);
   const visibleAddOns = addOns.filter((addon) => !hiddenAddOnIds.includes(addon.id));
-  const selectedIds = new Set([...storedSelectedIds.filter((id) => !hiddenAddOnIds.includes(id)), ...requiredStackIds]);
-  const selectedAddOnRows = visibleAddOns.filter((a) => selectedIds.has(a.id));
+  // Owner-optional IDs only — strip stale system-driven checkboxes that the engine would ignore.
+  const optionalSelectedIds = storedSelectedIds.filter(
+    (id) => !hiddenAddOnIds.includes(id) && !SYSTEM_LOCKED_ADDON_IDS.has(id) && !SYSTEM_DRIVEN_ADDON_IDS.has(id),
+  );
+  const billableIds = Array.from(new Set([...optionalSelectedIds, ...requiredStackIds]));
+  const pcaRequired = Number(activeProperty.age || 0) > 15;
+  const selectedAddOnRows = [
+    ...visibleAddOns.filter((addon) => billableIds.includes(addon.id)),
+    ...(pcaRequired
+      ? [{
+          id: PCA_AUDIT_ID,
+          name: copy.pcaLabel,
+          desc: copy.pcaReason,
+          price: addOnPrice(PCA_AUDIT_ID),
+          reason: copy.pcaReason,
+          systemDriven: true,
+        } satisfies AddOnItem]
+      : []),
+  ];
   const selectedSystemGroups = systemGroups
     .map((group) => ({ title: group.title, systems: group.systems.filter((system) => Boolean((activeProperty as any)[system.key])) }))
     .filter((group) => group.systems.length > 0);
   const selectedSystemCount = selectedSystemGroups.reduce((count, group) => count + group.systems.length, 0);
   const total = selectedAddOnRows.reduce((sum, a) => sum + a.price, 0);
 
-  const setSystem = (key: string, checked: boolean) => {
-    updateProperty(activePropertyIndex, { [key]: key === 'lifts' ? (checked ? Math.max(activeProperty.lifts || 1, 1) : 0) : checked } as any);
-    calculateSummary();
-  };
-
-  const setAddOn = (id: string, checked: boolean) => {
-    if (requiredStackIds.includes(id) || hiddenAddOnIds.includes(id)) return;
-    const next = checked
-      ? Array.from(new Set([...storedSelectedIds, id]))
-      : storedSelectedIds.filter((item) => item !== id);
+  const syncOptionalAddOns = (next: string[]) => {
     updateProperty(activePropertyIndex, { selectedAddOns: next });
     calculateSummary();
   };
 
-  const continueNext = () => {
+  const setSystem = (key: string, checked: boolean) => {
+    // Drop system-driven IDs from stored selection so cards cannot look "checked" without systems.
+    const cleanedOptional = (Array.isArray(activeProperty.selectedAddOns) ? activeProperty.selectedAddOns : [])
+      .filter((id) => !SYSTEM_LOCKED_ADDON_IDS.has(id) && !SYSTEM_DRIVEN_ADDON_IDS.has(id));
+    updateProperty(activePropertyIndex, {
+      [key]: key === 'lifts' ? (checked ? Math.max(activeProperty.lifts || 1, 1) : 0) : checked,
+      selectedAddOns: cleanedOptional,
+    } as any);
     calculateSummary();
+  };
+
+  const setAddOn = (id: string, checked: boolean) => {
+    if (SYSTEM_LOCKED_ADDON_IDS.has(id) || SYSTEM_DRIVEN_ADDON_IDS.has(id) || hiddenAddOnIds.includes(id)) return;
+    const next = checked
+      ? Array.from(new Set([...optionalSelectedIds, id]))
+      : optionalSelectedIds.filter((item) => item !== id);
+    syncOptionalAddOns(next);
+  };
+
+  const continueNext = () => {
+    // Persist a clean optional list before commercial terms so client/server quotes stay aligned.
+    syncOptionalAddOns(optionalSelectedIds);
     onNext();
   };
 
@@ -202,16 +236,35 @@ const SystemsDataStep: React.FC<{ onNext: () => void; onBack: () => void }> = ({
                 <Typography variant="caption" sx={{ display: 'block', color: 'rgba(255,255,255,.52)', mb: 1.5, lineHeight: 1.55 }}>{label(copy.addonsDesc, ar)}</Typography>
                 <Stack spacing={1} sx={{ maxHeight: { xl: 590 }, overflowY: { xl: 'auto' }, pr: { xl: 0.5 } }}>
                   {visibleAddOns.map((addon) => {
-                    const checked = selectedIds.has(addon.id);
+                    const systemDriven = SYSTEM_LOCKED_ADDON_IDS.has(addon.id) || addon.systemDriven === true;
                     const locked = requiredStackIds.includes(addon.id);
+                    const checked = systemDriven ? locked : optionalSelectedIds.includes(addon.id);
+                    const interactive = !systemDriven;
                     return (
-                      <Paper key={addon.id} onClick={() => setAddOn(addon.id, !checked)} sx={{ p: 1.2, borderRadius: 3, cursor: locked ? 'default' : 'pointer', bgcolor: checked ? 'rgba(198,167,94,.1)' : 'rgba(255,255,255,.025)', border: `1px solid ${checked ? 'rgba(198,167,94,.6)' : 'rgba(255,255,255,.07)'}` }}>
+                      <Paper
+                        key={addon.id}
+                        onClick={() => { if (interactive) setAddOn(addon.id, !checked); }}
+                        sx={{
+                          p: 1.2,
+                          borderRadius: 3,
+                          cursor: interactive ? 'pointer' : 'default',
+                          opacity: systemDriven && !locked ? 0.72 : 1,
+                          bgcolor: checked ? 'rgba(198,167,94,.1)' : 'rgba(255,255,255,.025)',
+                          border: `1px solid ${checked ? 'rgba(198,167,94,.6)' : 'rgba(255,255,255,.07)'}`,
+                        }}
+                      >
                         <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} alignItems="flex-start">
-                          <Checkbox checked={checked} disabled={locked} onChange={(e) => setAddOn(addon.id, e.target.checked)} sx={{ p: 0.2, color: 'rgba(255,255,255,.3)', '&.Mui-checked': { color: binThemeTokens.gold } }} />
+                          <Checkbox
+                            checked={checked}
+                            disabled={!interactive}
+                            onChange={(e) => setAddOn(addon.id, e.target.checked)}
+                            sx={{ p: 0.2, color: 'rgba(255,255,255,.3)', '&.Mui-checked': { color: binThemeTokens.gold } }}
+                          />
                           <Box sx={{ minWidth: 0, flex: 1, textAlign: isRTL ? 'right' : 'left' }}>
                             <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={0.75} alignItems="center" flexWrap="wrap">
                               <Typography sx={{ color: '#fff', fontWeight: 950, fontSize: 13 }}>{label(addon.name, ar)}</Typography>
                               {locked && <Chip label={label(copy.required, ar)} size="small" sx={{ height: 18, fontSize: 9, color: '#ef4444', bgcolor: 'rgba(239,68,68,.12)', fontWeight: 900 }} />}
+                              {systemDriven && !locked && <Chip label={label(copy.unlockHint, ar)} size="small" sx={{ height: 18, fontSize: 9, color: 'rgba(255,255,255,.7)', bgcolor: 'rgba(255,255,255,.08)', fontWeight: 900 }} />}
                             </Stack>
                             <Typography variant="caption" sx={{ display: 'block', color: 'rgba(255,255,255,.54)', lineHeight: 1.45 }}>{label(addon.desc, ar)}</Typography>
                             <Typography variant="caption" sx={{ display: 'block', color: binThemeTokens.gold, fontWeight: 950, mt: 0.5 }}>{aed(addon.price)} / {label(copy.annual, ar)}</Typography>
