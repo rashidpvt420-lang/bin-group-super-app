@@ -187,7 +187,6 @@ const ReviewBeforeSubmitStep: React.FC<{ onNext: () => void; onBack: () => void;
 
     const primaryProperty = properties[0];
     const localQuote = portfolioSummary.quoteResults?.[primaryProperty?.id];
-    const serverPropertyAnnual = serverQuote?.propertyQuotes?.find((item) => item.propertyId === primaryProperty?.id)?.annualTotal;
     const planKey = reviewPlanKeyForStrategy(primaryProperty?.strategy);
     const planFallback = planKey === 'amc'
         ? 'Maintenance Only'
@@ -196,10 +195,14 @@ const ReviewBeforeSubmitStep: React.FC<{ onNext: () => void; onBack: () => void;
             : 'Maintenance + Property Management';
     const quoteExpired = !serverQuote || serverQuote.expiresAtMs <= Date.now();
     const quoteAvailable = Boolean(serverQuote && !quoteExpired);
+    // Schedule amounts always derive from the locked portfolio annual (same source as Annual Value).
+    const portfolioAnnual = Number(serverQuote?.annualContractValue || 0);
     const installmentValue = quoteAvailable
         ? (primaryProperty?.paymentPlan === 'monthly'
-            ? localQuote?.monthlyPayment || 0
-            : (primaryProperty?.paymentPlan === 'quarterly' ? localQuote?.quarterlyPayment || 0 : serverPropertyAnnual || localQuote?.annualTotal || 0))
+            ? Math.round((portfolioAnnual / 12) * 100) / 100
+            : (primaryProperty?.paymentPlan === 'quarterly'
+                ? Math.round((portfolioAnnual / 4) * 100) / 100
+                : portfolioAnnual))
         : null;
     const primaryPropertyGpsValid = isValidLatLng(Number(primaryProperty?.geo?.lat), Number(primaryProperty?.geo?.lng));
 

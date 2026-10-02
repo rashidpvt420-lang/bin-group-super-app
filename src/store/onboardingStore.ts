@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { calculateUaeQuote2026, resolveAssetClassIdForPropertyType } from '../utils/calculateUaeQuote2026';
 import type { QuoteOutput } from '../utils/calculateUaeQuote2026';
+import { collectPortfolioSelectedAddOns } from '../utils/ownerOnboardingAddOns';
 
 const OWNER_PAGE_COUNT = 5;
 const createOnboardingSessionId = () => {
@@ -272,7 +273,7 @@ const defaultProperty: PropertyData = {
   wasteMan: false, gen: false, hvac: false, districtCooling: false, electrical: false, plumbing: false,
   drainage: false, pumps: false, emergencyLighting: false, accessControl: false, bms: false, iotSensors: false,
   gym: false, majlis: false, majlisType: 'none', missions: [], condition: 'Good', assetGrade: 'Standard',
-  currentStatus: 'Active', address: '', strategy: 'fm', slaTier: 'standard', paymentPlan: 'annual', selectedAddOns: [],
+  currentStatus: 'Active', address: '', strategy: 'fm_only', slaTier: 'standard', paymentPlan: 'annual', selectedAddOns: [],
 };
 
 const emptySummary = (): PortfolioSummary => ({
@@ -375,7 +376,7 @@ export const useOnboardingStore = create<OnboardingState>()(
       calculateSummary: () => {
         const properties = get().properties;
         if (properties.length === 0) {
-          set({ portfolioSummary: emptySummary() });
+          set({ portfolioSummary: emptySummary(), selectedAddOns: [] });
           return;
         }
         const quoteResults: Record<string, QuoteOutput> = {};
@@ -384,6 +385,8 @@ export const useOnboardingStore = create<OnboardingState>()(
           quoteResults[property.id] = calculatePropertyAnnualValue(property, propertyAddOns);
         }
         const estimatedACV = Object.values(quoteResults).reduce((total, quote) => total + Number(quote.annualTotal || 0), 0);
+        // Keep root selectedAddOns aligned with per-property Systems Matrix selections for Review/OTP/submit payloads.
+        const selectedAddOns = collectPortfolioSelectedAddOns(properties);
         const summary: PortfolioSummary = {
           totalProperties: properties.length,
           totalUnits: properties.reduce((total, property) => total + (property.units || 0), 0),
@@ -399,7 +402,7 @@ export const useOnboardingStore = create<OnboardingState>()(
         };
         if (summary.totalUnits > 100 || summary.isSovereignPortfolio) summary.recommendedTier = 'Sovereign Institutional';
         else if (summary.totalUnits > 20) summary.recommendedTier = 'Institutional';
-        set({ portfolioSummary: summary });
+        set({ portfolioSummary: summary, selectedAddOns });
       },
       reset: () => set({
         step: 1,

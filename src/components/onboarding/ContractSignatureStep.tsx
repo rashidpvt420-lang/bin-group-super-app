@@ -53,33 +53,63 @@ export default function ContractSignatureStep({ onNext, onBack }: ContractSignat
     setQuoteLoading(true);
     setOtpError('');
     try {
-      const result = await httpsCallable(functions, 'previewOwnerInspectionQuote')({ properties, selectedAddOns: selectedAddOns || [] });
-      const quote = result.data as LockedQuote;
-      if (!quote?.quoteHash || !/^[a-f0-9]{64}$/.test(quote.quoteHash) || quote.annualContractValue <= 0 || quote.activationDeposit <= 0 || !quote.quotedAtMs) {
-        throw new Error(copy('The server did not return a valid property application quotation.', 'لم يُرجع الخادم عرضاً صالحاً لطلب العقار.'));
-      }
-      if (reviewedQuote?.portfolioAnnualTotal && Math.abs(Number(reviewedQuote.portfolioAnnualTotal) - quote.annualContractValue) > 0.01) {
-        throw new Error(copy('The portfolio amount changed after Review. Return to Review and confirm the new amount.', 'تغيّر مبلغ المحفظة بعد المراجعة. ارجع إلى المراجعة وأكد المبلغ الجديد.'));
+      // Reuse the Review-locked issuance when still valid — re-previewing mints a new quoteHash
+      // and would invalidate an already-verified signature OTP.
+      const existing = reviewedQuote as LockedQuote | undefined;
+      const existingValid = Boolean(
+        existing?.quoteHash
+        && /^[a-f0-9]{64}$/.test(existing.quoteHash)
+        && Number(existing.annualContractValue) > 0
+        && Number(existing.activationDeposit) > 0
+        && Number(existing.quotedAtMs) > 0
+        && Number(existing.expiresAtMs || 0) > Date.now(),
+      );
+      let quote: LockedQuote;
+      if (existingValid && existing) {
+        quote = {
+          quoteHash: existing.quoteHash,
+          annualContractValue: Number(existing.annualContractValue),
+          activationDeposit: Number(existing.activationDeposit),
+          currency: existing.currency,
+          quotedAtMs: existing.quotedAtMs,
+          expiresAtMs: existing.expiresAtMs,
+          version: existing.version,
+        };
+      } else {
+        const result = await httpsCallable(functions, 'previewOwnerInspectionQuote')({ properties, selectedAddOns: selectedAddOns || [] });
+        quote = result.data as LockedQuote;
+        if (!quote?.quoteHash || !/^[a-f0-9]{64}$/.test(quote.quoteHash) || quote.annualContractValue <= 0 || quote.activationDeposit <= 0 || !quote.quotedAtMs) {
+          throw new Error(copy('The server did not return a valid property application quotation.', 'لم يُرجع الخادم عرضاً صالحاً لطلب العقار.'));
+        }
+        // A freshly issued hash cannot keep OTP evidence bound to the previous Review hash.
+        setContractOtpVerificationId(null);
+        setOtpRequestId('');
+        setOtp('');
       }
       setLockedQuote(quote);
-      setValuationResult({
-        ...(valuationResult || {}),
-        serverQuote: {
-          ...quote,
-          portfolioAnnualTotal: quote.annualContractValue,
-          mobilisationDeposit: quote.activationDeposit,
-        },
-      });
+      const previous = useOnboardingStore.getState().valuationResult || {};
+      const previousHash = String((previous as any)?.serverQuote?.quoteHash || '');
+      if (previousHash !== quote.quoteHash) {
+        setValuationResult({
+          ...previous,
+          serverQuote: {
+            ...quote,
+            portfolioAnnualTotal: quote.annualContractValue,
+            mobilisationDeposit: quote.activationDeposit,
+          },
+        });
+      }
     } catch (error: any) {
       setLockedQuote(null);
       setOtpError(error?.message || copy('The protected property quotation could not be loaded.', 'تعذر تحميل عرض العقار المحمي.'));
     } finally { setQuoteLoading(false); }
-  }, [ownerAccount?.uid, properties, selectedAddOns, reviewedQuote?.portfolioAnnualTotal, lang, setValuationResult]);
+  }, [ownerAccount?.uid, properties, selectedAddOns, reviewedQuote?.quoteHash, reviewedQuote?.annualContractValue, reviewedQuote?.activationDeposit, reviewedQuote?.quotedAtMs, reviewedQuote?.expiresAtMs, reviewedQuote?.currency, reviewedQuote?.version, lang, setValuationResult, setContractOtpVerificationId]);
 
   useEffect(() => { void loadLockedQuote(); }, [loadLockedQuote]);
 
   const ownerEmail = String(ownerAccount?.email || '').trim();
-  const canRequestOtp = typedName.trim().length >= 3 && accepted && Boolean(ownerAccount?.uid && contractReference && lockedQuote?.quoteHash && ownerEmail);
+  const quoteStillValid = Boolean(lockedQuote?.quoteHash && Number(lockedQuote.expiresAtMs || 0) > Date.now());
+  const canRequestOtp = typedName.trim().length >= 3 && accepted && Boolean(ownerAccount?.uid && contractReference && quoteStillValid && ownerEmail);
   const isValid = canRequestOtp && Boolean(contractOtpVerificationId);
 
   const mapOtpError = (error: any, fallbackEn: string, fallbackAr: string) => {

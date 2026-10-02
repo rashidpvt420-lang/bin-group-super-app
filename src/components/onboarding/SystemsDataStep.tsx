@@ -4,6 +4,7 @@ import { useOnboardingStore } from '../../store/onboardingStore';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { resolveAddOnAnnualPrice, SYSTEM_DRIVEN_ADDON_IDS } from '../../utils/calculateUaeQuote2026';
+import { resolveSystemBillableAddOnIds } from '../../utils/ownerOnboardingAddOns';
 
 type LocalText = { en: string; ar: string };
 type SystemItem = { key: string; label: LocalText };
@@ -60,11 +61,9 @@ const isMajlisAsset = (property: any) => {
 };
 
 const getRequiredStackIds = (property: any) => {
-  const ids: string[] = [];
-  if (property?.fireAlarm === true || property?.firePump === true) ids.push('fire_safety');
-  if (property?.tank === true) ids.push('water_tank');
-  if (property?.hvac === true || Number(property?.hvacCount || 0) > 0) ids.push('hvac_pm');
-  if (!isMajlisAsset(property) && Number(property?.lifts || 0) > 0) ids.push(ELEVATOR_ADDON_ID);
+  const ids = resolveSystemBillableAddOnIds(property).filter((id) => id !== PCA_AUDIT_ID);
+  // Majlis assets hide elevator AMC even when lifts are declared.
+  if (isMajlisAsset(property)) return ids.filter((id) => id !== ELEVATOR_ADDON_ID);
   return ids;
 };
 
@@ -143,8 +142,23 @@ const SystemsDataStep: React.FC<{ onNext: () => void; onBack: () => void }> = ({
   );
   const billableIds = Array.from(new Set([...optionalSelectedIds, ...requiredStackIds]));
   const pcaRequired = Number(activeProperty.age || 0) > 15;
+  const extraSystemLabels: Record<string, LocalText> = {
+    sira_renewal: { en: 'CCTV / SIRA Renewal', ar: 'تجديد كاميرات / SIRA' },
+    facade_access: { en: 'Facade / BMU Access', ar: 'الوصول للواجهة / BMU' },
+    pool_care: { en: 'Swimming Pool Maintenance', ar: 'صيانة المسبح' },
+  };
   const selectedAddOnRows = [
     ...visibleAddOns.filter((addon) => billableIds.includes(addon.id)),
+    ...billableIds
+      .filter((id) => !visibleAddOns.some((addon) => addon.id === id) && id !== PCA_AUDIT_ID)
+      .map((id) => ({
+        id,
+        name: extraSystemLabels[id] || { en: id.replace(/_/g, ' '), ar: id.replace(/_/g, ' ') },
+        desc: { en: 'Unlocked by selected systems above.', ar: 'مفعّل بالأنظمة المحددة أعلاه.' },
+        price: addOnPrice(id),
+        reason: { en: 'Included in the quote engine when the matching system is selected.', ar: 'يُحتسب في محرك التسعير عند اختيار النظام المطابق.' },
+        systemDriven: true,
+      } satisfies AddOnItem)),
     ...(pcaRequired
       ? [{
           id: PCA_AUDIT_ID,

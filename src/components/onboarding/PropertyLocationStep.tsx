@@ -91,7 +91,9 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
     const { properties, updateProperty } = useOnboardingStore();
     const { t, isRTL, lang } = useLanguage();
     const copy = (en: string, ar: string) => lang === 'ar' ? ar : en;
-    const activeProperty = properties[0];
+    const [activePropertyIndex, setActivePropertyIndex] = useState(0);
+    const safeIndex = Math.min(Math.max(activePropertyIndex, 0), Math.max(properties.length - 1, 0));
+    const activeProperty = properties[safeIndex];
     const fallbackEmirate = getEmirate(activeProperty?.emirate);
 
     const [locationError, setLocationError] = useState<string | null>(null);
@@ -103,6 +105,14 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
     const [googleMapsUrlField, setGoogleMapsUrlField] = useState(activeProperty?.googleMapsUrl || activeProperty?.location?.googleMapsUrl || '');
     const [plusCodeField, setPlusCodeField] = useState(activeProperty?.plusCode || activeProperty?.location?.plusCode || '');
 
+    useEffect(() => {
+        setManualLat(String(activeProperty?.location?.lat || activeProperty?.geo?.lat || ''));
+        setManualLng(String(activeProperty?.location?.lng || activeProperty?.geo?.lng || ''));
+        setGoogleMapsUrlField(activeProperty?.googleMapsUrl || activeProperty?.location?.googleMapsUrl || '');
+        setPlusCodeField(activeProperty?.plusCode || activeProperty?.location?.plusCode || '');
+        setLocationError(null);
+    }, [safeIndex, activeProperty?.id]);
+
     const { isLoaded: mapsLoaded } = useGoogleMaps();
     const mapDivRef = useRef<HTMLDivElement | null>(null);
     const mapObjRef = useRef<any>(null);
@@ -110,8 +120,8 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
     const commitGeoAnchorRef = useRef<(payload: any) => void>(() => {});
 
     useEffect(() => {
-        if (!activeProperty?.emirate) updateProperty(0, { emirate: fallbackEmirate.id, city: fallbackEmirate.id } as any);
-    }, []);
+        if (!activeProperty?.emirate) updateProperty(safeIndex, { emirate: fallbackEmirate.id, city: fallbackEmirate.id } as any);
+    }, [safeIndex]);
 
     const directGoogleMapsInput = useMemo(
         () => findGoogleMapsInput(googleMapsUrlField, activeProperty?.address),
@@ -139,19 +149,19 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
             patch.googleMapsUrl = value;
             patch.location = { ...(activeProperty?.location || {}), googleMapsUrl: value };
         }
-        updateProperty(0, patch);
+        updateProperty(safeIndex, patch);
     };
 
     const handleGoogleMapsUrlChange = (event: React.ChangeEvent<HTMLInputElement>) => {
         const value = event.target.value;
         setGoogleMapsUrlField(value);
-        updateProperty(0, { googleMapsUrl: value, location: { ...(activeProperty?.location || {}), googleMapsUrl: value } } as any);
+        updateProperty(safeIndex, { googleMapsUrl: value, location: { ...(activeProperty?.location || {}), googleMapsUrl: value } } as any);
     };
 
     const handlePlusCodeChange = (event: React.ChangeEvent<HTMLInputElement>) => {
         const value = event.target.value;
         setPlusCodeField(value);
-        updateProperty(0, { plusCode: value, location: { ...(activeProperty?.location || {}), plusCode: value } } as any);
+        updateProperty(safeIndex, { plusCode: value, location: { ...(activeProperty?.location || {}), plusCode: value } } as any);
     };
 
     const commitGeoAnchor = (payload: {
@@ -193,7 +203,7 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
                 accuracyMeters: payload.accuracyMeters,
                 capturedAt: payload.capturedAt,
             });
-            updateProperty(0, {
+            updateProperty(safeIndex, {
                 address: geo.address,
                 emirate: geo.emirate,
                 city: geo.city,
@@ -325,7 +335,7 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
     const handleEmirateChange = (event: React.ChangeEvent<HTMLInputElement>) => {
         const emirateId = event.target.value;
         const emirate = getEmirate(emirateId);
-        updateProperty(0, { emirate: emirateId, city: emirateId } as any);
+        updateProperty(safeIndex, { emirate: emirateId, city: emirateId } as any);
         // F-8: move the map view only; the Owner still has to pin the exact property location.
         if (mapObjRef.current && !isValidLatLng(Number(manualLat), Number(manualLng))) mapObjRef.current.panTo({ lat: emirate.lat, lng: emirate.lng });
     };
@@ -487,7 +497,7 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
         const currentGeo = activeProperty?.geo;
         const coordinatesUnchanged = currentGeo && sameCoordinate(currentGeo.lat, lat) && sameCoordinate(currentGeo.lng, lng);
         if (coordinatesUnchanged) {
-            updateProperty(0, {
+            updateProperty(safeIndex, {
                 address: activeProperty.address,
                 emirate: activeProperty.emirate,
                 city: activeProperty.city || activeProperty.emirate,
@@ -531,6 +541,22 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
                 dispatchReady: false
             });
         }
+        const latest = useOnboardingStore.getState().properties;
+        const missingIndex = latest.findIndex((property, index) => {
+            if (index === safeIndex) return false;
+            return !isValidLatLng(Number(property?.geo?.lat), Number(property?.geo?.lng))
+              || !String(property?.address || '').trim()
+              || !String(property?.emirate || '').trim();
+        });
+        if (missingIndex >= 0) {
+            setActivePropertyIndex(missingIndex);
+            setLocationError(copy(
+              `GPS saved for this property. Capture location for property ${missingIndex + 1} before continuing.`,
+              `تم حفظ GPS لهذا العقار. سجّل موقع العقار ${missingIndex + 1} قبل المتابعة.`,
+            ));
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+            return;
+        }
         window.scrollTo({ top: 0, behavior: 'smooth' });
         onNext();
     };
@@ -552,6 +578,22 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
             </Box>
 
             <Container maxWidth="md" sx={{ px: { xs: 0, sm: 3 } }}>
+            {properties.length > 1 && (
+              <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} useFlexGap flexWrap="wrap" sx={{ mb: 2 }}>
+                {properties.map((property, index) => {
+                  const ready = isValidLatLng(Number(property?.geo?.lat), Number(property?.geo?.lng));
+                  return (
+                    <Chip
+                      key={property.id || index}
+                      label={`${property.address || property.propertyType || `Property ${index + 1}`}${ready ? ' ✓' : ''}`}
+                      color={index === safeIndex ? 'primary' : ready ? 'success' : 'default'}
+                      onClick={() => setActivePropertyIndex(index)}
+                      variant={index === safeIndex ? 'filled' : 'outlined'}
+                    />
+                  );
+                })}
+              </Stack>
+            )}
                 <Paper sx={{ p: { xs: 2, sm: 3, md: 6 }, borderRadius: { xs: 3, md: 6 }, bgcolor: 'rgba(22, 22, 24, 0.6)', border: '1px solid rgba(255,255,255,0.05)', overflow: 'visible' }}>
                     <Stack spacing={{ xs: 2.5, md: 4 }}>
                         <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} flexWrap="wrap" useFlexGap>

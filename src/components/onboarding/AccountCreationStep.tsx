@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
     Alert, Box, Button, CircularProgress, Container, Grid, IconButton, InputAdornment,
     Paper, Stack, TextField, Typography,
@@ -29,7 +29,8 @@ const readable = (value: string | undefined, fallback: string) => {
     return value;
 };
 
-const normalizePhone = (value: string) => value.replace(/[^0-9+]/g, '').trim();
+const normalizePhone = (value: string) => value.replace(/[\s()-]/g, '').replace(/^00971/, '+971').replace(/^05/, '+9715').replace(/[^0-9+]/g, '').trim();
+const validUaePhone = (value: string) => /^\+971\d{8,9}$/.test(normalizePhone(value));
 const authCode = (error: unknown) => String((error as { code?: unknown })?.code || 'auth/unknown');
 const authMessage = (error: unknown) => String((error as { message?: unknown })?.message || '');
 const isBlockingFunctionFailure = (error: unknown) => (
@@ -38,14 +39,14 @@ const isBlockingFunctionFailure = (error: unknown) => (
 );
 
 export default function AccountCreationStep({ onBack, onNext, brokerUid = "" }: AccountCreationStepProps) {
-    const { companyProfile, setOwnerAccount, setBrokerAttribution, intakeId, setIntakeId, onboardingSessionId } = useOnboardingStore();
+    const { companyProfile, setOwnerAccount, setBrokerAttribution, intakeId, setIntakeId, onboardingSessionId, ownerAccount } = useOnboardingStore();
     const { t, isRTL, lang } = useLanguage();
     const copy = (en: string, ar: string) => (lang === 'ar' ? ar : en);
 
     const [formData, setFormData] = useState({
-        fullName: companyProfile.contactPerson || '',
-        email: companyProfile.email || '',
-        mobile: companyProfile.phone || '',
+        fullName: companyProfile.contactPerson || ownerAccount?.fullName || '',
+        email: companyProfile.email || ownerAccount?.email || '',
+        mobile: companyProfile.phone || ownerAccount?.mobile || '',
         password: '',
         confirmPassword: '',
     });
@@ -53,7 +54,10 @@ export default function AccountCreationStep({ onBack, onNext, brokerUid = "" }: 
     const [loading, setLoading] = useState(false);
     const [checkingVerification, setCheckingVerification] = useState(false);
     const [error, setError] = useState<{ message: string; type: 'error' | 'warning' | 'info'; action?: 'signin' } | null>(null);
-    const [accountReady, setAccountReady] = useState(false);
+    const [accountReady, setAccountReady] = useState(Boolean(ownerAccount?.uid));
+    useEffect(() => {
+        if (ownerAccount?.uid) setAccountReady(true);
+    }, [ownerAccount?.uid]);
 
     const errorText = (key: string, fallback: string) => readable(t(key), fallback);
 
@@ -65,7 +69,7 @@ export default function AccountCreationStep({ onBack, onNext, brokerUid = "" }: 
             return errorText('onboarding.error.all_fields', 'Please complete all account fields before continuing.');
         }
         if (!/^\S+@\S+\.\S+$/.test(email)) return errorText('onboarding.error.invalid_email', 'Enter a valid email address.');
-        if (mobile.length < 8) return copy('Enter a valid mobile number.', 'يرجى إدخال رقم هاتف صحيح.');
+        if (!validUaePhone(mobile)) return copy('Enter a valid UAE mobile number (+971…).', 'أدخل رقم هاتف إماراتي صالح (+971…).');
         if (formData.password.length < 8) return errorText('onboarding.error.weak_password', 'Password must be at least 8 characters.');
         if (formData.password !== formData.confirmPassword) return errorText('onboarding.error.password_mismatch', 'Passwords do not match.');
         return null;

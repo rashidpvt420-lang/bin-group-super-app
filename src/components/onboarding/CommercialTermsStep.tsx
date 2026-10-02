@@ -8,6 +8,7 @@ import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { formatAED } from '../../utils/formatters';
 import { resolveAssetClassIdForPropertyType } from '../../utils/calculateUaeQuote2026';
+import { collectPortfolioBillableAddOnIds } from '../../utils/ownerOnboardingAddOns';
 import { UAE_PRICING_MATRIX_2026 } from '../../utils/uaePricingMatrix2026';
 
 type LocalText = { en: string; ar: string };
@@ -66,11 +67,16 @@ const addOnLabels: Record<string, LocalText> = {
     elevator_amc: { en: 'Lift AMC', ar: 'عقد صيانة المصاعد' },
     hvac_pm: { en: 'HVAC Preventive Maintenance', ar: 'صيانة وقائية للتكييف' },
     cleaning: { en: 'Cleaning / Deep Cleaning', ar: 'تنظيف / تنظيف عميق' },
+    security: { en: 'Security Services / CCTV', ar: 'خدمات أمن / كاميرات' },
     pest_control: { en: 'Pest Control', ar: 'مكافحة الحشرات' },
     landscaping: { en: 'Landscaping', ar: 'تنسيق الحدائق' },
     move_in_out_inspection: { en: 'Move-in / Move-out Inspection', ar: 'فحص الدخول / الخروج' },
     mep_support: { en: 'MEP Support', ar: 'دعم MEP' },
     waste_management: { en: 'Waste Management', ar: 'إدارة النفايات' },
+    pca_audit: { en: 'PCA Asset Audit', ar: 'تدقيق أصول PCA' },
+    sira_renewal: { en: 'CCTV / SIRA Renewal', ar: 'تجديد كاميرات / SIRA' },
+    facade_access: { en: 'Facade / BMU Access', ar: 'الوصول للواجهة / BMU' },
+    pool_care: { en: 'Swimming Pool Maintenance', ar: 'صيانة المسبح' },
 };
 
 const ppmTextByTier: Record<string, LocalText> = {
@@ -147,6 +153,13 @@ const CommercialTermsStep: React.FC<{ onNext: () => void; onBack: () => void }> 
         calculateSummary();
     }, [properties, calculateSummary]);
 
+    useEffect(() => {
+        // Normalize legacy strategy seed so the FM plan card appears selected.
+        properties.forEach((entry, index) => {
+            if (entry.strategy === 'fm') updateProperty(index, { strategy: 'fm_only' });
+        });
+    }, []);
+
     const plans = [
         { id: 'FM_ONLY', strategy: 'fm_only', name: t('onboarding.plan.amc'), icon: <Wrench size={24} />, desc: t('onboarding.plan.amc_desc') },
         { id: 'PM_ONLY', strategy: 'pm_only', name: t('onboarding.plan.pm'), icon: <UserCheck size={24} />, desc: t('onboarding.plan.pm_desc') },
@@ -178,12 +191,15 @@ const CommercialTermsStep: React.FC<{ onNext: () => void; onBack: () => void }> 
         { id: 'monthly', label: t('onboarding.payment.monthly'), desc: t('onboarding.payment.monthly_desc'), detail: paymentPlanDetails.monthly }
     ];
 
-    const handleUpdate = (data: any) => updateProperty(activePropertyIndex, data);
+    const handleUpdate = (data: any) => {
+        // SLA and payment plan apply to the whole portfolio — same rule as service strategy.
+        properties.forEach((_, index) => updateProperty(index, data));
+    };
     const selectPlanForPortfolio = (strategy: 'fm_only' | 'pm_only' | 'both') => {
         properties.forEach((_, index) => updateProperty(index, { strategy }));
         calculateSummary();
     };
-    const selectedStrategy = property.strategy || 'fm_only';
+    const selectedStrategy = property.strategy === 'fm' ? 'fm_only' : (property.strategy || 'fm_only');
     const selectedPaymentPlan = property.paymentPlan || 'annual';
     const selectedSlaTier = property.slaTier || 'standard';
     const isAnnualPayment = selectedPaymentPlan === 'annual';
@@ -201,7 +217,7 @@ const CommercialTermsStep: React.FC<{ onNext: () => void; onBack: () => void }> 
     const selectedPpmText = selectedStrategy === 'pm_only' ? (ar ? 'لا توجد صيانة وقائية تقنية ضمن إدارة العقارات فقط.' : 'No technical PPM included in Property Management Only.') : tx(isMajlis ? majlisPpmTextByTier[selectedSlaTier] : ppmTextByTier[selectedSlaTier], ar);
     const selectedResponseText = tx(responseTextByTier[selectedSlaTier] || responseTextByTier.standard, ar);
     const selectedSystems = Object.entries(systemLabels).filter(([key]) => key === 'lifts' ? Number(property.lifts || 0) > 0 : Boolean(property[key])).map(([key, value]) => key === 'lifts' ? `${tx(value, ar)} (${property.lifts || 1})` : tx(value, ar));
-    const portfolioAddOnIds = Array.from(new Set(properties.flatMap((entry) => Array.isArray(entry.selectedAddOns) ? entry.selectedAddOns : [])));
+    const portfolioAddOnIds = collectPortfolioBillableAddOnIds(properties);
     const selectedAddOnNames = portfolioAddOnIds.map((id) => addOnLabels[id] ? tx(addOnLabels[id], ar) : id.replace(/_/g, ' '));
     const pmRevenueMissing = (selectedStrategy === 'pm_only' || selectedStrategy === 'both')
         && properties.some((entry) => !(Number(entry.annualRent || entry.annualRevenue || 0) > 0));

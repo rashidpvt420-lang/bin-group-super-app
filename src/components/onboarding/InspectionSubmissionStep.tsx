@@ -13,6 +13,7 @@ import { clearStagedFiles, getStagedFile } from '../../lib/onboardingDb';
 import { formatAED } from '../../utils/formatters';
 import { mobilisationDepositFromAnnual } from '../../../functions/shared/mobilisationDeposit';
 import { clearOwnerDocumentUploadCache, uploadOwnerDocuments, type OwnerDocumentInput } from './ownerDocumentUploads';
+import { isValidLatLng } from '../../utils/geoAnchor';
 
 type ProofKey = 'propertyProof' | 'emiratesId' | 'passport' | 'tradeLicense' | 'tenancySupport' | 'gymSportsApproval' | 'gymInsurance' | 'gymFloorPlan';
 type ProofMeta = { name: string; size: number; type: string } | null;
@@ -99,7 +100,7 @@ export default function InspectionSubmissionStep({ onBack }: { onBack: () => voi
     if (!ownerAccount?.uid || user.uid !== ownerAccount.uid) throw new Error(copy('The signed-in Owner does not match this application.', 'حساب المالك المسجل لا يطابق هذا الطلب.'));
     if (!user.emailVerified) throw new Error(copy('Verify the Owner email before final submission.', 'تحقق من بريد المالك قبل الإرسال النهائي.'));
     if (!properties.length) throw new Error(copy('Add at least one property.', 'أضف عقاراً واحداً على الأقل.'));
-    if (!properties.every((property) => Number.isFinite(Number(property.geo?.lat)) && Number.isFinite(Number(property.geo?.lng)))) throw new Error(copy('Every property must include a valid GPS location.', 'يجب أن يحتوي كل عقار على موقع GPS صالح.'));
+    if (!properties.every((property) => isValidLatLng(Number(property.geo?.lat), Number(property.geo?.lng)))) throw new Error(copy('Every property must include a valid GPS location.', 'يجب أن يحتوي كل عقار على موقع GPS صالح.'));
     if (!isContractSigned || signatureName.trim().length < 3 || !contractOtpVerificationId) throw new Error(copy('Complete the signed email-OTP agreement before submission.', 'أكمل الاتفاقية الموقعة والمتحقق منها عبر البريد قبل الإرسال.'));
     if (!serverQuote?.quoteHash || !serverQuote?.quotedAtMs || annualValue <= 0 || activationDeposit <= 0) throw new Error(copy('The signed server quotation is missing. Return to the Contract page and refresh it.', 'عرض الخادم الموقع غير موجود. ارجع إلى صفحة العقد وحدّثه.'));
     const hasIndividualIdentity = Boolean(proofDocuments.emiratesId && proofDocuments.passport);

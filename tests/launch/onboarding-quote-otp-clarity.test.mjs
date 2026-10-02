@@ -146,6 +146,46 @@ test('automatic property calculations expose every space group so chips sum to D
   assert.match(panel, /Other spaces/);
 });
 
+test('signature step reuses Review-locked quote and clears OTP only when a new hash is issued', () => {
+  const source = readFileSync('src/components/onboarding/ContractSignatureStep.tsx', 'utf8');
+  assert.match(source, /Reuse the Review-locked issuance when still valid/);
+  assert.match(source, /setContractOtpVerificationId\(null\)/);
+  assert.match(source, /quoteStillValid/);
+  assert.match(source, /expiresAtMs/);
+});
+
+test('portfolio selectedAddOns sync from per-property Systems Matrix selections', () => {
+  const store = readFileSync('src/store/onboardingStore.ts', 'utf8');
+  const helper = readFileSync('src/utils/ownerOnboardingAddOns.ts', 'utf8');
+  assert.match(helper, /collectPortfolioSelectedAddOns/);
+  assert.match(helper, /resolveSystemBillableAddOnIds/);
+  assert.match(store, /collectPortfolioSelectedAddOns/);
+  assert.match(store, /selectedAddOns \}/);
+  assert.match(store, /strategy: 'fm_only'/);
+});
+
+test('commercial SLA and payment plan apply to every portfolio property', () => {
+  const source = readFileSync('src/components/onboarding/CommercialTermsStep.tsx', 'utf8');
+  assert.match(source, /SLA and payment plan apply to the whole portfolio/);
+  assert.match(source, /collectPortfolioBillableAddOnIds/);
+  assert.match(source, /security: \{ en: 'Security Services \/ CCTV'/);
+  assert.match(source, /pca_audit:/);
+});
+
+test('review schedule amounts derive from locked portfolio annual value', () => {
+  const source = readFileSync('src/components/onboarding/ReviewBeforeSubmitStep.tsx', 'utf8');
+  assert.match(source, /portfolioAnnual \/ 12/);
+  assert.match(source, /portfolioAnnual \/ 4/);
+  assert.doesNotMatch(source, /localQuote\?\.monthlyPayment/);
+});
+
+test('property location supports multi-property GPS capture', () => {
+  const source = readFileSync('src/components/onboarding/PropertyLocationStep.tsx', 'utf8');
+  assert.match(source, /activePropertyIndex/);
+  assert.match(source, /updateProperty\(safeIndex,/);
+  assert.match(source, /Capture location for property/);
+});
+
 test('AED 12,506 with zero systems is FM factors + silent PCA, not missing fire/tank/HVAC cards', () => {
   const quote = engine.calculateUaeQuote2026({
     assetClassId: 'villa-std',
