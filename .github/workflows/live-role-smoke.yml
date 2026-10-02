@@ -63,6 +63,9 @@ env:
   VITE_GOOGLE_MAPS_API_KEY: ${{ secrets.VITE_GOOGLE_MAPS_API_KEY }}
   VITE_APP_CHECK_SITE_KEY: ${{ secrets.VITE_APP_CHECK_SITE_KEY }}
   FIREBASE_APPCHECK_ENTERPRISE_SITE_KEY: ${{ secrets.FIREBASE_APPCHECK_ENTERPRISE_SITE_KEY }}
+  # Production hosting embeds FIREBASE_APPCHECK_ENTERPRISE_SITE_KEY. Live-evidence
+  # deploy-verify must expect that Enterprise key (same as firebase-production-deploy).
+  VITE_APP_CHECK_PROVIDER: enterprise
   VITE_ENABLE_FIREBASE_APPCHECK: 'true'
   VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
   VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}

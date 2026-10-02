@@ -12,6 +12,7 @@ import {
 
 const firebaseSource = readFileSync('src/lib/firebase.ts', 'utf8');
 const workflow = readFileSync('.github/workflows/firebase-production-deploy.yml', 'utf8');
+const liveRoleSmokeWorkflow = readFileSync('.github/workflows/live-role-smoke.yml', 'utf8');
 const ENTERPRISE_SITE_KEY = '6LenterprisePublicSiteKeyExample1234567890';
 const LEGACY_SITE_KEY = '6LlegacyPublicV3SiteKeyExample12345678901';
 
@@ -44,6 +45,18 @@ test('production deploy workflow forces Enterprise and keeps the debug token out
     assert.match(step, /unset VITE_FIREBASE_APPCHECK_DEBUG_TOKEN/);
     assert.match(step, /unset FIREBASE_APPCHECK_DEBUG_TOKEN/);
   }
+});
+
+test('live-role-smoke expects Enterprise App Check when verifying the hosted production bundle', () => {
+  assert.match(liveRoleSmokeWorkflow, /VITE_APP_CHECK_PROVIDER:\s*enterprise/);
+  assert.match(
+    liveRoleSmokeWorkflow,
+    /FIREBASE_APPCHECK_ENTERPRISE_SITE_KEY:\s*\$\{\{\s*secrets\.FIREBASE_APPCHECK_ENTERPRISE_SITE_KEY\s*\}\}/,
+  );
+  assert.match(
+    liveRoleSmokeWorkflow,
+    /REACT_APP_APP_CHECK_SITE_KEY:\s*\$\{\{\s*secrets\.FIREBASE_APPCHECK_ENTERPRISE_SITE_KEY\s*\}\}/,
+  );
 });
 
 test('production deploy resolves the Enterprise site key and fails closed without one', () => {
