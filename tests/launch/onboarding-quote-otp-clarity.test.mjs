@@ -94,6 +94,18 @@ test('signature OTP step shows Owner login mailbox and maps delivery failures', 
   assert.match(source, /mapOtpError/);
   assert.match(source, /resource-exhausted/);
   assert.match(source, /Code sent to \$\{ownerEmail\}/);
+  assert.match(source, /RESEND SIGNATURE OTP/);
+  assert.match(source, /normalizeAppId/);
+  assert.match(source, /data\.verificationId !== otpRequestId/);
+  assert.match(source, /Enter all 6 digits from the email before verifying/);
+  assert.match(source, /Sign & Continue stays locked until VERIFY OTP succeeds/);
+  assert.match(source, /owner-signature-otp-input/);
+});
+
+test('disabled OTP buttons stay visually disabled on white-platinum theme', () => {
+  const css = readFileSync('src/styles/onboardingReadable.css', 'utf8');
+  assert.match(css, /MuiButton-contained\.Mui-disabled/);
+  assert.match(css, /cursor:not-allowed!important/);
 });
 
 test('Commercial terms surfaces engine factor lines beside the quote estimate', () => {
