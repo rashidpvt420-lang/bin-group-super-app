@@ -172,6 +172,16 @@ test('commercial SLA and payment plan apply to every portfolio property', () => 
   assert.match(source, /pca_audit:/);
 });
 
+test('commercial contract cards keep a visible selected state on white-platinum theme', () => {
+  const source = readFileSync('src/components/onboarding/CommercialTermsStep.tsx', 'utf8');
+  const css = readFileSync('src/styles/onboardingReadable.css', 'utf8');
+  assert.match(source, /bin-choice-card--selected/);
+  assert.match(source, /Selected contract model:/);
+  assert.match(source, /aria-pressed=\{isSelected\}/);
+  assert.match(css, /\.bin-choice-card--selected/);
+  assert.match(css, /border:2px solid #b8932f!important/);
+});
+
 test('review schedule amounts derive from locked portfolio annual value', () => {
   const source = readFileSync('src/components/onboarding/ReviewBeforeSubmitStep.tsx', 'utf8');
   assert.match(source, /portfolioAnnual \/ 12/);

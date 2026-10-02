@@ -241,15 +241,37 @@ const CommercialTermsStep: React.FC<{ onNext: () => void; onBack: () => void }> 
                             <Grid container spacing={2}>
                                 {availablePlans.map((plan) => {
                                     const isSelected = selectedStrategy === plan.strategy;
+                                    const planName = isMajlis ? t('onboarding.plan.majlis') : plan.name;
                                     return <Grid item xs={12} sm={isMajlis ? 12 : 4} key={plan.id}>
-                                        <Paper onClick={() => selectPlanForPortfolio(plan.strategy as 'fm_only' | 'pm_only' | 'both')} sx={{ p: 3, height: '100%', cursor: 'pointer', bgcolor: isSelected ? alpha(binThemeTokens.gold, 0.1) : 'rgba(255,255,255,0.02)', border: `2px solid ${isSelected ? binThemeTokens.gold : 'rgba(255,255,255,0.05)'}`, borderRadius: 4, transition: 'all 0.2s ease', textAlign: 'center' }}>
+                                        <Paper
+                                          role="button"
+                                          aria-pressed={isSelected}
+                                          onClick={() => selectPlanForPortfolio(plan.strategy as 'fm_only' | 'pm_only' | 'both')}
+                                          className={`bin-choice-card${isSelected ? ' bin-choice-card--selected' : ''}`}
+                                          sx={{ p: 3, height: '100%', cursor: 'pointer', borderRadius: 4, textAlign: 'center', position: 'relative' }}
+                                        >
+                                            {isSelected && (
+                                              <Chip
+                                                size="small"
+                                                icon={<CheckCircle2 size={14} />}
+                                                label={tx({ en: 'Selected', ar: 'مختار' }, ar)}
+                                                className="bin-choice-selected-chip"
+                                                sx={{ position: 'absolute', top: 12, right: isRTL ? 'auto' : 12, left: isRTL ? 12 : 'auto', height: 24 }}
+                                              />
+                                            )}
                                             <Box sx={{ color: binThemeTokens.gold, mb: 2, display: 'flex', justifyContent: 'center' }}>{plan.icon}</Box>
-                                            <Typography variant="subtitle2" fontWeight="950" sx={{ color: '#FFF', mb: 1 }}>{isMajlis ? t('onboarding.plan.majlis') : plan.name}</Typography>
-                                            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.62)', display: 'block', lineHeight: 1.7 }}>{isMajlis ? t('onboarding.plan.majlis_desc') : plan.desc}</Typography>
+                                            <Typography variant="subtitle2" fontWeight="950" sx={{ mb: 1 }}>{planName}</Typography>
+                                            <Typography variant="caption" sx={{ display: 'block', lineHeight: 1.7 }}>{isMajlis ? t('onboarding.plan.majlis_desc') : plan.desc}</Typography>
                                         </Paper>
                                     </Grid>;
                                 })}
                             </Grid>
+                            <Alert severity="success" icon={<CheckCircle2 size={18} />} sx={{ mt: 2 }}>
+                              {tx({
+                                en: `Selected contract model: ${availablePlans.find((plan) => plan.strategy === selectedStrategy)?.name || selectedStrategy}. Scroll down for SLA level, payment cycle, and quote.`,
+                                ar: `نموذج العقد المختار: ${availablePlans.find((plan) => plan.strategy === selectedStrategy)?.name || selectedStrategy}. مرّر لأسفل لمستوى SLA ودورة الدفع والعرض.`,
+                              }, ar)}
+                            </Alert>
                         </Paper>
 
                         <Paper sx={{ p: { xs: 3, md: 4 }, borderRadius: 6, bgcolor: 'rgba(17,17,18,0.82)', border: `1px solid ${alpha(binThemeTokens.gold, 0.25)}`, mb: 4 }}>
@@ -273,8 +295,8 @@ const CommercialTermsStep: React.FC<{ onNext: () => void; onBack: () => void }> 
                         </Paper>
 
                         <Grid container spacing={4}>
-                            <Grid item xs={12} md={6}><Paper sx={{ p: { xs: 3, md: 4 }, borderRadius: 6, bgcolor: 'rgba(22, 22, 24, 0.6)', border: '1px solid rgba(255,255,255,0.05)', height: '100%' }}><Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, mb: 3, display: 'block', textAlign: isRTL ? 'right' : 'left' }}>2. {t('onboarding.sla_title')}</Typography><RadioGroup value={selectedSlaTier} onChange={(e) => handleUpdate({ slaTier: e.target.value })}>{slaTiers.map(tier => <FormControlLabel key={tier.id} value={tier.id} control={<Radio sx={{ color: binThemeTokens.gold, '&.Mui-checked': { color: binThemeTokens.gold } }} />} label={<Box sx={{ ml: isRTL ? 0 : 1, mr: isRTL ? 1 : 0, textAlign: isRTL ? 'right' : 'left' }}><Typography variant="subtitle2" fontWeight="900" color="#FFF">{tier.label}</Typography><Typography variant="caption" color="rgba(255,255,255,0.58)" sx={{ lineHeight: 1.65, display: 'block' }}>{tier.desc}</Typography><Typography variant="caption" color={binThemeTokens.gold} sx={{ lineHeight: 1.65, display: 'block', mt: 0.5 }}>{tx(copy.ppmPrefix, ar)} {tx(tier.ppm, ar)}</Typography></Box>} sx={{ mb: 2, p: 1.5, borderRadius: 2, border: '1px solid rgba(255,255,255,0.05)', mr: 0, flexDirection: isRTL ? 'row-reverse' : 'row' }} />)}</RadioGroup></Paper></Grid>
-                            <Grid item xs={12} md={6}><Paper sx={{ p: { xs: 3, md: 4 }, borderRadius: 6, bgcolor: 'rgba(22, 22, 24, 0.6)', border: '1px solid rgba(255,255,255,0.05)', height: '100%' }}><Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, mb: 3, display: 'block', textAlign: isRTL ? 'right' : 'left' }}>3. {t('onboarding.payment_title')}</Typography><RadioGroup value={selectedPaymentPlan} onChange={(e) => handleUpdate({ paymentPlan: e.target.value })}>{paymentPlans.map(plan => <FormControlLabel key={plan.id} value={plan.id} control={<Radio sx={{ color: binThemeTokens.gold, '&.Mui-checked': { color: binThemeTokens.gold } }} />} label={<Box sx={{ ml: isRTL ? 0 : 1, mr: isRTL ? 1 : 0, textAlign: isRTL ? 'right' : 'left' }}><Typography variant="subtitle2" fontWeight="900" color="#FFF">{plan.label}</Typography><Typography variant="caption" color="rgba(255,255,255,0.58)" sx={{ lineHeight: 1.65, display: 'block' }}>{plan.desc}</Typography><Typography variant="caption" color={binThemeTokens.gold} sx={{ lineHeight: 1.65, display: 'block', mt: 0.5 }}>{tx(plan.detail, ar)}</Typography></Box>} sx={{ mb: 2, p: 1.5, borderRadius: 2, border: '1px solid rgba(255,255,255,0.05)', mr: 0, flexDirection: isRTL ? 'row-reverse' : 'row' }} />)}</RadioGroup></Paper></Grid>
+                            <Grid item xs={12} md={6}><Paper sx={{ p: { xs: 3, md: 4 }, borderRadius: 6, height: '100%' }}><Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, mb: 3, display: 'block', textAlign: isRTL ? 'right' : 'left' }}>2. {t('onboarding.sla_title')}</Typography><RadioGroup value={selectedSlaTier} onChange={(e) => handleUpdate({ slaTier: e.target.value })}>{slaTiers.map(tier => <FormControlLabel key={tier.id} value={tier.id} className={selectedSlaTier === tier.id ? 'bin-choice-row--selected' : undefined} control={<Radio sx={{ color: binThemeTokens.gold, '&.Mui-checked': { color: binThemeTokens.gold } }} />} label={<Box sx={{ ml: isRTL ? 0 : 1, mr: isRTL ? 1 : 0, textAlign: isRTL ? 'right' : 'left' }}><Typography variant="subtitle2" fontWeight="900">{tier.label}</Typography><Typography variant="caption" sx={{ lineHeight: 1.65, display: 'block' }}>{tier.desc}</Typography><Typography variant="caption" color={binThemeTokens.gold} sx={{ lineHeight: 1.65, display: 'block', mt: 0.5 }}>{tx(copy.ppmPrefix, ar)} {tx(tier.ppm, ar)}</Typography></Box>} sx={{ mb: 2, p: 1.5, borderRadius: 2, border: '1px solid rgba(17,24,39,0.08)', mr: 0, flexDirection: isRTL ? 'row-reverse' : 'row' }} />)}</RadioGroup></Paper></Grid>
+                            <Grid item xs={12} md={6}><Paper sx={{ p: { xs: 3, md: 4 }, borderRadius: 6, height: '100%' }}><Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, mb: 3, display: 'block', textAlign: isRTL ? 'right' : 'left' }}>3. {t('onboarding.payment_title')}</Typography><RadioGroup value={selectedPaymentPlan} onChange={(e) => handleUpdate({ paymentPlan: e.target.value })}>{paymentPlans.map(plan => <FormControlLabel key={plan.id} value={plan.id} className={selectedPaymentPlan === plan.id ? 'bin-choice-row--selected' : undefined} control={<Radio sx={{ color: binThemeTokens.gold, '&.Mui-checked': { color: binThemeTokens.gold } }} />} label={<Box sx={{ ml: isRTL ? 0 : 1, mr: isRTL ? 1 : 0, textAlign: isRTL ? 'right' : 'left' }}><Typography variant="subtitle2" fontWeight="900">{plan.label}</Typography><Typography variant="caption" sx={{ lineHeight: 1.65, display: 'block' }}>{plan.desc}</Typography><Typography variant="caption" color={binThemeTokens.gold} sx={{ lineHeight: 1.65, display: 'block', mt: 0.5 }}>{tx(plan.detail, ar)}</Typography></Box>} sx={{ mb: 2, p: 1.5, borderRadius: 2, border: '1px solid rgba(17,24,39,0.08)', mr: 0, flexDirection: isRTL ? 'row-reverse' : 'row' }} />)}</RadioGroup></Paper></Grid>
                         </Grid>
                     </Grid>
 

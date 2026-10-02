@@ -230,7 +230,7 @@ const SystemsDataStep: React.FC<{ onNext: () => void; onBack: () => void }> = ({
                         {group.systems.map((system) => {
                           const checked = Boolean((activeProperty as any)[system.key]);
                           return (
-                            <Paper key={system.key} onClick={() => setSystem(system.key, !checked)} sx={{ p: 1, minHeight: 48, borderRadius: 2.5, cursor: 'pointer', display: 'flex', gap: 1, alignItems: 'center', flexDirection: isRTL ? 'row-reverse' : 'row', bgcolor: checked ? 'rgba(198,167,94,.14)' : 'rgba(255,255,255,.025)', border: `1px solid ${checked ? 'rgba(198,167,94,.65)' : 'rgba(255,255,255,.06)'}`, transition: '150ms ease', '&:hover': { borderColor: 'rgba(198,167,94,.7)' } }}>
+                            <Paper key={system.key} onClick={() => setSystem(system.key, !checked)} className={`bin-choice-card${checked ? ' bin-choice-card--selected' : ''}`} sx={{ p: 1, minHeight: 48, borderRadius: 2.5, cursor: 'pointer', display: 'flex', gap: 1, alignItems: 'center', flexDirection: isRTL ? 'row-reverse' : 'row', transition: '150ms ease' }}>
                               <Checkbox checked={checked} onClick={(e) => e.stopPropagation()} onChange={(e) => setSystem(system.key, e.target.checked)} sx={{ p: 0, color: 'rgba(255,255,255,.3)', '&.Mui-checked': { color: binThemeTokens.gold } }} />
                               <Typography sx={{ color: checked ? '#fff' : 'rgba(255,255,255,.72)', fontWeight: 850, lineHeight: 1.22, fontSize: { xs: 14, md: 13.5 }, textAlign: isRTL ? 'right' : 'left' }}>{label(system.label, ar)}</Typography>
                             </Paper>
@@ -258,13 +258,12 @@ const SystemsDataStep: React.FC<{ onNext: () => void; onBack: () => void }> = ({
                       <Paper
                         key={addon.id}
                         onClick={() => { if (interactive) setAddOn(addon.id, !checked); }}
+                        className={`bin-choice-card${checked ? ' bin-choice-card--selected' : ''}`}
                         sx={{
                           p: 1.2,
                           borderRadius: 3,
                           cursor: interactive ? 'pointer' : 'default',
                           opacity: systemDriven && !locked ? 0.72 : 1,
-                          bgcolor: checked ? 'rgba(198,167,94,.1)' : 'rgba(255,255,255,.025)',
-                          border: `1px solid ${checked ? 'rgba(198,167,94,.6)' : 'rgba(255,255,255,.07)'}`,
                         }}
                       >
                         <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} alignItems="flex-start">
