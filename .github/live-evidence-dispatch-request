@@ -1,5 +1,5 @@
 request=dispatch-protected-live-evidence
-production_deploy_run_id=0
-expected_commit_sha=0000000000000000000000000000000000000000
+production_deploy_run_id=36977950876
+expected_commit_sha=bb4df313df36e1636423ed90e8a77c990a6c50ff
 incident_evidence_refs=https://github.com/rashidpvt420-lang/bin-group-super-app/issues/434
 hard_launch_claim=false
