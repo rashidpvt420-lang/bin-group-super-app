@@ -1,0 +1,224 @@
+name: Dispatch Protected Live Evidence
+run-name: Live-evidence dispatch · ${{ github.run_id }}
+
+on:
+  pull_request:
+    branches:
+      - main
+    types: [opened, synchronize, reopened, converted_to_draft]
+    paths:
+      - .github/live-evidence-dispatch-request
+
+permissions:
+  actions: write
+  contents: read
+  pull-requests: read
+
+# Serialize every owner live-evidence request. A per-PR concurrency key would
+# allow two draft requests for the same main SHA to race.
+concurrency:
+  group: live-evidence-dispatch
+  cancel-in-progress: false
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  REPOSITORY: ${{ github.repository }}
+  REQUEST_PR: ${{ github.event.pull_request.number }}
+  REQUEST_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+
+jobs:
+  dispatch:
+    name: Validate exact-main bank-pilot deploy and dispatch live-evidence
+    if: >-
+      github.event.pull_request.draft == true &&
+      github.event.pull_request.base.ref == 'main' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.user.login == github.repository_owner &&
+      startsWith(github.event.pull_request.head.ref, 'ops/dispatch-live-evidence-workflow-') &&
+      github.event.pull_request.title == 'Dispatch protected live-evidence workflow'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Validate canonical one-file owner live-evidence request
+        id: request
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          mapfile -t files < <(gh api --paginate "repos/$REPOSITORY/pulls/$REQUEST_PR/files" --jq '.[].filename')
+          [[ "${#files[@]}" -eq 1 && "${files[0]}" == '.github/live-evidence-dispatch-request' ]] || {
+            printf '::error::Request must change only .github/live-evidence-dispatch-request. Found: %s\n' "${files[*]:-none}"
+            exit 1
+          }
+
+          marker="$(gh api "repos/$REPOSITORY/contents/.github/live-evidence-dispatch-request?ref=$REQUEST_HEAD_SHA" --jq '.content' | tr -d '\n' | base64 --decode)"
+          request="$(sed -n 's/^request=//p' <<<"$marker")"
+          deploy_run_id="$(sed -n 's/^production_deploy_run_id=//p' <<<"$marker")"
+          expected_sha="$(sed -n 's/^expected_commit_sha=//p' <<<"$marker")"
+          incident_reference="$(sed -n 's/^incident_evidence_refs=//p' <<<"$marker")"
+          hard_launch_claim="$(sed -n 's/^hard_launch_claim=//p' <<<"$marker")"
+          line_count="$(awk 'END{print NR}' <<<"$marker")"
+
+          [[ "$line_count" -eq 5 ]]
+          [[ "$request" == 'dispatch-protected-live-evidence' ]]
+          [[ "$deploy_run_id" =~ ^[0-9]+$ ]]
+          [[ "$deploy_run_id" != '0' ]]
+          [[ "$expected_sha" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$incident_reference" == 'https://github.com/rashidpvt420-lang/bin-group-super-app/issues/434' ]]
+          [[ "$hard_launch_claim" == 'false' ]]
+
+          echo "deploy_run_id=$deploy_run_id" >> "$GITHUB_OUTPUT"
+          echo "expected_sha=$expected_sha" >> "$GITHUB_OUTPUT"
+          echo "incident_reference=$incident_reference" >> "$GITHUB_OUTPUT"
+
+      - name: Resolve stable exact current main
+        id: release
+        env:
+          EXPECTED_SHA: ${{ steps.request.outputs.expected_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          first_sha="$(gh api "repos/$REPOSITORY/commits/main" --jq '.sha')"
+          [[ "$first_sha" =~ ^[0-9a-f]{40}$ ]]
+          sleep 3
+          second_sha="$(gh api "repos/$REPOSITORY/commits/main" --jq '.sha')"
+          [[ "$first_sha" == "$second_sha" ]] || {
+            echo '::error::Main moved while preparing live-evidence dispatch.'
+            exit 1
+          }
+          [[ "$second_sha" == "$EXPECTED_SHA" ]] || {
+            echo "::error::Request expected_commit_sha $EXPECTED_SHA does not match current main $second_sha."
+            exit 1
+          }
+          echo "sha=$second_sha" >> "$GITHUB_OUTPUT"
+
+      - name: Validate exact-SHA successful bank-pilot production deploy
+        id: deploy
+        env:
+          RELEASE_SHA: ${{ steps.release.outputs.sha }}
+          DEPLOY_RUN_ID: ${{ steps.request.outputs.deploy_run_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          run_json="$(gh api "repos/$REPOSITORY/actions/runs/$DEPLOY_RUN_ID")"
+          [[ "$(jq -r '.name' <<<"$run_json")" == 'Firebase Production Deploy' ]]
+          [[ "$(jq -r '.path' <<<"$run_json")" == '.github/workflows/firebase-production-deploy.yml' ]]
+          [[ "$(jq -r '.status' <<<"$run_json")" == 'completed' ]]
+          [[ "$(jq -r '.conclusion' <<<"$run_json")" == 'success' ]]
+          [[ "$(jq -r '.head_branch' <<<"$run_json")" == 'main' ]]
+          [[ "$(jq -r '.head_sha' <<<"$run_json")" == "$RELEASE_SHA" ]]
+          [[ "$(jq -r '.event' <<<"$run_json")" == 'workflow_dispatch' ]]
+
+          expected_artifact="production-deployment-$RELEASE_SHA"
+          artifacts="$(gh api --paginate --slurp "repos/$REPOSITORY/actions/runs/$DEPLOY_RUN_ID/artifacts?per_page=100" | jq -ce '{artifacts:[.[].artifacts[]]}')"
+          jq -e --arg expected "$expected_artifact" \
+            '[.artifacts[] | select(.name == $expected and .expired == false)] | length == 1' \
+            <<<"$artifacts" >/dev/null || {
+              echo "::error::Expected exactly one non-expired $expected_artifact artifact on deploy run $DEPLOY_RUN_ID."
+              exit 1
+            }
+
+          echo "run_url=$(jq -r '.html_url' <<<"$run_json")" >> "$GITHUB_OUTPUT"
+
+      - name: Snapshot live-role-smoke workflow runs
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api --paginate --slurp \
+            "repos/$REPOSITORY/actions/workflows/live-role-smoke.yml/runs?event=workflow_dispatch&branch=main&per_page=100" \
+            | jq -r '.[].workflow_runs[].id' > live-evidence-run-baseline.txt
+
+      - name: Dispatch protected Live Role Smoke live-evidence
+        env:
+          RELEASE_SHA: ${{ steps.release.outputs.sha }}
+          DEPLOY_RUN_ID: ${{ steps.request.outputs.deploy_run_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          jq -n \
+            --arg ref main \
+            --arg sha "$RELEASE_SHA" \
+            --arg deploy "$DEPLOY_RUN_ID" \
+            '{ref:$ref,inputs:{mode:"live-evidence",expected_commit_sha:$sha,production_deploy_run_id:$deploy}}' \
+            > live-evidence-dispatch.json
+
+          gh api --method POST \
+            "repos/$REPOSITORY/actions/workflows/live-role-smoke.yml/dispatches" \
+            --input live-evidence-dispatch.json
+
+      - name: Correlate new exact-main live-evidence run
+        id: correlate
+        env:
+          RELEASE_SHA: ${{ steps.release.outputs.sha }}
+          DEPLOY_RUN_ID: ${{ steps.request.outputs.deploy_run_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          run_id=''
+          run_url=''
+
+          for _ in $(seq 1 60); do
+            new="$(
+              gh api --paginate --slurp \
+                "repos/$REPOSITORY/actions/workflows/live-role-smoke.yml/runs?event=workflow_dispatch&branch=main&per_page=100" \
+                | jq -r --arg sha "$RELEASE_SHA" '.[].workflow_runs[] | select(.head_sha == $sha) | [.id, .html_url, .display_title // .name] | @tsv' |
+                awk 'NR==FNR {baseline[$0]=1; next} {split($0,a,"\t"); if (!baseline[a[1]]) print $0}' live-evidence-run-baseline.txt -
+            )"
+            new_count="$(awk 'NF{c++} END{print c+0}' <<<"$new")"
+
+            if [[ "$new_count" -eq 1 ]]; then
+              IFS=$'\t' read -r run_id run_url _display <<<"$new"
+              break
+            fi
+
+            if [[ "$new_count" -gt 1 ]]; then
+              echo '::error::Live-evidence was dispatched, but no unique exact-main run could be correlated.'
+              exit 1
+            fi
+
+            sleep 5
+          done
+
+          [[ "$run_id" =~ ^[0-9]+$ ]] || {
+            echo '::error::Live-evidence was dispatched, but no unique exact-main run could be correlated.'
+            exit 1
+          }
+
+          latest_main="$(gh api "repos/$REPOSITORY/commits/main" --jq '.sha')"
+          [[ "$latest_main" == "$RELEASE_SHA" ]] || {
+            echo "::error::Main moved from $RELEASE_SHA to $latest_main after live-evidence dispatch."
+            exit 1
+          }
+
+          jq -n \
+            --arg commitSha "$RELEASE_SHA" \
+            --arg productionDeployRunId "$DEPLOY_RUN_ID" \
+            --arg workflowRunId "$run_id" \
+            --arg workflowRunUrl "$run_url" \
+            --arg requestPullRequest "$REQUEST_PR" \
+            '{schemaVersion:1,commitSha:$commitSha,productionDeployRunId:$productionDeployRunId,workflowRunId:$workflowRunId,workflowRunUrl:$workflowRunUrl,requestPullRequest:$requestPullRequest,mode:"live-evidence",hardLaunchClaim:false}' \
+            > live-evidence-dispatch-evidence.json
+
+          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+          echo "run_url=$run_url" >> "$GITHUB_OUTPUT"
+          echo "Protected live-evidence run: $run_url"
+          {
+            echo '## Protected live-evidence dispatched'
+            echo
+            echo "- Exact main SHA: \`$RELEASE_SHA\`"
+            echo "- Production deploy run ID: \`$DEPLOY_RUN_ID\`"
+            echo "- Live-evidence workflow run ID: \`$run_id\`"
+            echo "- Live-evidence workflow run: $run_url"
+            echo '- Mode: live-evidence'
+            echo '- Hard-launch claim: false'
+            echo '- Next: wait a real 24 continuous hours on this SHA, then run hard-clearance'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload sanitized live-evidence dispatch evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: live-evidence-dispatch-${{ steps.release.outputs.sha }}-${{ steps.correlate.outputs.run_id }}
+          path: live-evidence-dispatch-evidence.json
+          if-no-files-found: error
+          retention-days: 14
