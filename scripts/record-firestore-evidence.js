@@ -4,7 +4,6 @@ import crypto from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { applicationDefault, getApps, initializeApp } from 'firebase-admin/app';
 import { FieldValue, getFirestore } from 'firebase-admin/firestore';
-import { isAcceptedProductionDeploymentArtifactName } from './lib/production-deployment-artifact.mjs';
 
 const EXPECTED_PROJECT = 'bin-group-57c60';
 const EXPECTED_REPOSITORY = 'rashidpvt420-lang/bin-group-super-app';
@@ -217,7 +216,7 @@ function enforceIssueCommentBackfillContext(validated) {
   if (sourceSha !== validated.releaseSha || sourceRunId !== validated.workflowRunId) {
     fail('verified production source must match manifest SHA and workflow run ID');
   }
-  if (!isAcceptedProductionDeploymentArtifactName(artifactName, validated.releaseSha, validated.workflowRunId)) {
+  if (artifactName !== `production-deployment-${validated.releaseSha}-${validated.workflowRunId}`) {
     fail('verified production artifact name does not match exact SHA/run binding');
   }
   if (!DIGEST_PATTERN.test(artifactDigest)) fail('verified production artifact digest is missing or malformed');
