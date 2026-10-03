@@ -5,13 +5,24 @@ import { auth, collection, db, doc, getDoc, getDocs, query, sendPasswordResetEma
 import { useRole } from '../../context/RoleContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
-import { pickProfileCover, pickProfilePhoto, profileCoverSx } from '../../utils/profileImages';
+import { pickProfilePhoto } from '../../utils/profileImages';
 import TenantCorrectionPanel from '../components/TenantCorrectionPanel';
 
+const ink = {
+    title: binThemeTokens.textPrimary,
+    body: binThemeTokens.textSecondary,
+    muted: binThemeTokens.textTertiary,
+    paper: '#FFFFFF',
+    soft: binThemeTokens.softCanvas,
+    border: binThemeTokens.border,
+};
 const readOnlyInputSx = {
-    '& .MuiOutlinedInput-root': { color: '#FFF', bgcolor: 'rgba(255,255,255,0.03)', borderRadius: 2 },
-    '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.5)' },
-    '& .MuiInputBase-input.Mui-disabled': { WebkitTextFillColor: 'rgba(255,255,255,0.82)' },
+    '& .MuiOutlinedInput-root': {
+        color: ink.title, bgcolor: '#FFFFFF', borderRadius: 2,
+        '& fieldset': { borderColor: 'rgba(184,147,47,0.42)' },
+    },
+    '& .MuiInputLabel-root': { color: ink.body, fontWeight: 850 },
+    '& .MuiInputBase-input.Mui-disabled': { WebkitTextFillColor: `${ink.title} !important`, color: `${ink.title} !important` },
 };
 
 type Notice = { type: 'success' | 'error' | 'info' | 'warning'; text: string };
@@ -195,8 +206,8 @@ export default function TenantProfilePage() {
     }) => (
         <Box sx={{ mb: 4 }}>
             <Stack direction={isRTL ? 'row-reverse' : 'row'} justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
-                <Typography variant="h6" fontWeight={950} color="#FFF">{label(titleEn, titleAr)}</Typography>
-                <Chip label={records.length} size="small" sx={{ bgcolor: 'rgba(198,167,94,0.12)', color: binThemeTokens.gold, fontWeight: 950 }} />
+                <Typography variant="h6" fontWeight={950} sx={{ color: ink.title }}>{label(titleEn, titleAr)}</Typography>
+                <Chip label={records.length} size="small" sx={{ bgcolor: 'rgba(184,147,47,0.12)', color: binThemeTokens.goldHover, fontWeight: 950 }} />
             </Stack>
             {records.length ? (
                 <Grid container spacing={2} sx={{ flexDirection: isRTL ? 'row-reverse' : 'row' }}>
@@ -204,21 +215,21 @@ export default function TenantProfilePage() {
                         const property = propertiesById.get(String(record.propertyId || '')) || {};
                         return (
                             <Grid item xs={12} md={6} key={record.id}>
-                                <Paper sx={{ p: 3, height: '100%', bgcolor: 'rgba(22,22,24,0.72)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 4, textAlign: isRTL ? 'right' : 'left' }}>
+                                <Paper sx={{ p: 3, height: '100%', bgcolor: ink.soft, border: `1px solid ${ink.border}`, borderRadius: 4, textAlign: isRTL ? 'right' : 'left', boxShadow: 'none' }}>
                                     <Stack direction={isRTL ? 'row-reverse' : 'row'} justifyContent="space-between" gap={2} alignItems="flex-start">
                                         <Box>
-                                            <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>{label('Property', 'العقار')}</Typography>
-                                            <Typography variant="h6" fontWeight={950} color="#FFF">{property.name || property.propertyName || record.propertyName || label('Assigned Property', 'العقار المخصص')}</Typography>
-                                            <Typography variant="body2" color="text.secondary">{property.address || record.address || '—'}</Typography>
+                                            <Typography variant="overline" sx={{ color: binThemeTokens.goldHover, fontWeight: 900 }}>{label('Property', 'العقار')}</Typography>
+                                            <Typography variant="h6" fontWeight={950} sx={{ color: ink.title }}>{property.name || property.propertyName || record.propertyName || label('Assigned Property', 'العقار المخصص')}</Typography>
+                                            <Typography variant="body2" sx={{ color: ink.body }}>{property.address || record.address || '—'}</Typography>
                                         </Box>
                                         <Chip label={localizedStatus(record)} size="small" color={historical ? 'default' : 'success'} />
                                     </Stack>
-                                    <Divider sx={{ my: 2, borderColor: 'rgba(255,255,255,0.1)' }} />
+                                    <Divider sx={{ my: 2, borderColor: ink.border }} />
                                     <Grid container spacing={2} sx={{ flexDirection: isRTL ? 'row-reverse' : 'row' }}>
-                                        <Grid item xs={6}><Typography variant="caption" color="text.secondary">{label('Unit', 'الوحدة')}</Typography><Typography fontWeight={900} color="#FFF">{record.unitNumber || record.unit || '—'}</Typography></Grid>
-                                        <Grid item xs={6}><Typography variant="caption" color="text.secondary">{label('Floor', 'الطابق')}</Typography><Typography fontWeight={900} color="#FFF">{record.floorNumber || record.floor || '—'}</Typography></Grid>
-                                        <Grid item xs={6}><Typography variant="caption" color="text.secondary">{label('Lease start', 'بداية العقد')}</Typography><Typography variant="body2" color="#FFF">{formatDate(record.leaseStart || record.startDate)}</Typography></Grid>
-                                        <Grid item xs={6}><Typography variant="caption" color="text.secondary">{label('Lease end', 'نهاية العقد')}</Typography><Typography variant="body2" color="#FFF">{formatDate(record.leaseEnd || record.endDate)}</Typography></Grid>
+                                        <Grid item xs={6}><Typography variant="caption" sx={{ color: ink.muted }}>{label('Unit', 'الوحدة')}</Typography><Typography fontWeight={900} sx={{ color: ink.title }}>{record.unitNumber || record.unit || '—'}</Typography></Grid>
+                                        <Grid item xs={6}><Typography variant="caption" sx={{ color: ink.muted }}>{label('Floor', 'الطابق')}</Typography><Typography fontWeight={900} sx={{ color: ink.title }}>{record.floorNumber || record.floor || '—'}</Typography></Grid>
+                                        <Grid item xs={6}><Typography variant="caption" sx={{ color: ink.muted }}>{label('Lease start', 'بداية العقد')}</Typography><Typography variant="body2" sx={{ color: ink.title }}>{formatDate(record.leaseStart || record.startDate)}</Typography></Grid>
+                                        <Grid item xs={6}><Typography variant="caption" sx={{ color: ink.muted }}>{label('Lease end', 'نهاية العقد')}</Typography><Typography variant="body2" sx={{ color: ink.title }}>{formatDate(record.leaseEnd || record.endDate)}</Typography></Grid>
                                     </Grid>
                                 </Paper>
                             </Grid>
@@ -226,7 +237,7 @@ export default function TenantProfilePage() {
                     })}
                 </Grid>
             ) : (
-                <Typography variant="body2" color="text.secondary">
+                <Typography variant="body2" sx={{ color: ink.body }}>
                     {label(
                         historical ? 'No historical residences.' : 'No active residence assigned.',
                         historical ? 'لا توجد مساكن سابقة.' : 'لا يوجد سكن نشط مخصص.',
@@ -245,23 +256,22 @@ export default function TenantProfilePage() {
     const emergencyName = profileData?.emergencyContact?.name || '';
     const emergencyPhone = profileData?.emergencyContact?.phone || '';
     const profilePhoto = pickProfilePhoto(profileData, user);
-    const profileCover = pickProfileCover(profileData, user);
 
     return (
         <Box sx={{ direction: isRTL ? 'rtl' : 'ltr' }}>
-            <Typography variant="h4" fontWeight={950} sx={{ color: '#FFF', mb: 4, textAlign: isRTL ? 'right' : 'left' }}>
+            <Typography variant="h4" fontWeight={950} sx={{ color: ink.title, mb: 4, textAlign: isRTL ? 'right' : 'left' }}>
                 {label('Tenant Profile', 'ملف المستأجر')}
             </Typography>
             {notice && <Alert severity={notice.type} sx={{ mb: 3 }} onClose={() => setNotice(null)}>{notice.text}</Alert>}
-            <Paper sx={{ p: 4, mb: 4, border: '1px solid rgba(255,255,255,0.05)', borderRadius: 6, ...profileCoverSx(profileCover) }}>
+            <Paper sx={{ p: 4, mb: 4, bgcolor: ink.paper, border: `1px solid ${ink.border}`, borderRadius: 6, boxShadow: binThemeTokens.cardShadow }}>
                 <Stack direction={{ xs: 'column', md: isRTL ? 'row-reverse' : 'row' }} spacing={4} alignItems="center" sx={{ mb: 4 }}>
-                    <Avatar src={profilePhoto || undefined} sx={{ width: 100, height: 100, bgcolor: binThemeTokens.gold, color: '#000', border: '4px solid rgba(255,255,255,0.18)', boxShadow: '0 18px 42px rgba(0,0,0,0.35)' }}>
+                    <Avatar src={profilePhoto || undefined} sx={{ width: 100, height: 100, bgcolor: binThemeTokens.gold, color: ink.title, border: `4px solid ${binThemeTokens.gold}`, boxShadow: binThemeTokens.cardShadow }}>
                         {displayName.charAt(0) || user?.displayName?.charAt(0) || <User size={40} />}
                     </Avatar>
                     <Box sx={{ textAlign: { xs: 'center', md: isRTL ? 'right' : 'left' }, width: '100%' }}>
-                        <Typography variant="h5" fontWeight={900} color="#FFF">{displayName || label('Resident', 'المقيم')}</Typography>
-                        <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={2} alignItems="center" justifyContent={{ xs: 'center', md: isRTL ? 'flex-end' : 'flex-start' }} sx={{ mt: 1, color: 'rgba(255,255,255,0.78)' }}><Mail size={16} /><Typography variant="body2">{user?.email}</Typography></Stack>
-                        <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={2} alignItems="center" justifyContent={{ xs: 'center', md: isRTL ? 'flex-end' : 'flex-start' }} sx={{ mt: 1, color: 'rgba(255,255,255,0.78)' }}><Phone size={16} /><Typography variant="body2">{phone || label('No phone registered', 'لا يوجد رقم هاتف مسجل')}</Typography></Stack>
+                        <Typography variant="h5" fontWeight={900} sx={{ color: ink.title }}>{displayName || label('Resident', 'المقيم')}</Typography>
+                        <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={2} alignItems="center" justifyContent={{ xs: 'center', md: isRTL ? 'flex-end' : 'flex-start' }} sx={{ mt: 1 }}><Mail size={16} color={binThemeTokens.goldHover} /><Typography variant="body2" sx={{ color: ink.title, fontWeight: 800 }}>{user?.email}</Typography></Stack>
+                        <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={2} alignItems="center" justifyContent={{ xs: 'center', md: isRTL ? 'flex-end' : 'flex-start' }} sx={{ mt: 1 }}><Phone size={16} color={binThemeTokens.goldHover} /><Typography variant="body2" sx={{ color: ink.title, fontWeight: 800 }}>{phone || label('No phone registered', 'لا يوجد رقم هاتف مسجل')}</Typography></Stack>
                     </Box>
                 </Stack>
                 <Alert icon={<ShieldCheck size={20} />} severity="info" sx={{ mb: 3 }}>
@@ -276,7 +286,7 @@ export default function TenantProfilePage() {
                     <Grid item xs={12} md={6}><TextField disabled fullWidth label={label('Emergency Contact Name', 'اسم جهة الاتصال للطوارئ')} value={emergencyName} sx={readOnlyInputSx} /></Grid>
                     <Grid item xs={12} md={6}><TextField disabled fullWidth label={label('Emergency Contact Phone', 'هاتف جهة الاتصال للطوارئ')} value={emergencyPhone} sx={readOnlyInputSx} /></Grid>
                 </Grid>
-                <Button variant="outlined" startIcon={<KeyRound size={17} />} onClick={handlePasswordReset} disabled={resetting} sx={{ mt: 4, borderColor: binThemeTokens.gold, color: binThemeTokens.gold, fontWeight: 900 }}>
+                <Button variant="outlined" startIcon={<KeyRound size={17} />} onClick={handlePasswordReset} disabled={resetting} sx={{ mt: 4, borderColor: binThemeTokens.gold, color: binThemeTokens.goldHover, bgcolor: '#fff', fontWeight: 900 }}>
                     {resetting ? label('Sending...', 'جارٍ الإرسال...') : label('Send Password Reset', 'إرسال إعادة تعيين كلمة المرور')}
                 </Button>
             </Paper>

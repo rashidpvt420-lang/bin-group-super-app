@@ -18,9 +18,22 @@
 .tenant-shell .MuiPaper-root,
 .broker-shell .MuiPaper-root {
   background: #ffffff !important;
+  background-image: none !important;
   color: #111827 !important;
   border: 1px solid #e5e7eb !important;
   box-shadow: 0 14px 34px rgba(17, 24, 39, 0.08) !important;
+}
+
+/* Kill leftover dark theme cover overlays that sit above Paper and wash out ink. */
+.authenticated-shell .MuiPaper-root::before,
+.admin-shell .MuiPaper-root::before,
+.technician-shell .MuiPaper-root::before,
+.owner-shell .MuiPaper-root::before,
+.tenant-shell .MuiPaper-root::before,
+.broker-shell .MuiPaper-root::before {
+  background: transparent !important;
+  background-image: none !important;
+  backdrop-filter: none !important;
 }
 
 .authenticated-shell .MuiPaper-root .MuiPaper-root,

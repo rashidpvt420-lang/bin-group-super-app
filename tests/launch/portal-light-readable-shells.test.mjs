@@ -28,4 +28,25 @@ test('all role portal shells bind the light-readable CSS class', () => {
   assert.match(adminIndex, /whitePlatinumAuthenticated\.css/);
   assert.match(adminTheme, /mode:\s*'light'/);
   assert.match(adminTheme, /textPrimary:\s*'#111827'/);
+  assert.match(css, /background-image:\s*none\s*!important/);
+  assert.match(css, /\.technician-shell \.MuiPaper-root::before/);
+});
+
+test('role profile pages keep light ink and never paint dark cover overlays', () => {
+  const tech = read('src/technician/pages/TechnicianProfilePage.tsx');
+  const owner = read('src/owner/pages/OwnerProfilePage.tsx');
+  const tenant = read('src/tenant/pages/TenantProfilePage.tsx');
+  const cover = read('src/utils/profileImages.ts');
+
+  for (const source of [tech, owner, tenant]) {
+    assert.match(source, /textPrimary/);
+    assert.doesNotMatch(source, /rgba\(2,\s*6,\s*23/);
+    assert.doesNotMatch(source, /profileCoverSx\(/);
+  }
+
+  assert.match(tech, /bgcolor:\s*ink\.paper/);
+  assert.match(owner, /bgcolor:\s*ink\.paper/);
+  assert.match(tenant, /bgcolor:\s*ink\.paper/);
+  assert.match(cover, /Light White-Platinum profile shell/);
+  assert.doesNotMatch(cover, /rgba\(2,\s*6,\s*23/);
 });
