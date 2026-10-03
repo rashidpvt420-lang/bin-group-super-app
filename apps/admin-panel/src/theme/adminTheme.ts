@@ -1,12 +1,8 @@
 import { createTheme, alpha } from '@mui/material/styles';
 
 /**
- * BIN-GROUP Sovereign Identity System (V1.18)
- * Standalone Admin Panel Theme
- *
- * This file intentionally does not import from ../../../../src/theme/binGroupTheme.
- * The CRA/CRACO standalone admin build cannot safely parse TypeScript-only syntax
- * from the root Vite app source tree through source-map-loader.
+ * BIN-GROUP Admin theme — White + Platinum + Gold (readable light surfaces).
+ * Standalone copy so CRA/CRACO does not import the root Vite TypeScript theme tree.
  */
 export const binThemeTokens = {
   black: '#111827',
@@ -21,25 +17,25 @@ export const binThemeTokens = {
   goldHover: '#B8932F',
   champagne: '#F7E8B9',
   darkBlue: '#0F172A',
-  textPrimary: '#FFFFFF',
-  textSecondary: '#CBD5E1',
-  textTertiary: '#94A3B8',
+  textPrimary: '#111827',
+  textSecondary: '#6B7280',
+  textTertiary: '#9CA3AF',
   danger: '#EF4444',
   warning: '#F59E0B',
   alert: '#F59E0B',
   active: '#C9A646',
-  border: '#334155',
-  panel: '#0F172A',
-  tray: '#020617',
+  border: '#E5E7EB',
+  panel: '#FFFFFF',
+  tray: '#F8F9FB',
   watermarkOpacity: 0.04,
-  cardShadow: '0 12px 32px rgba(0, 0, 0, 0.32)',
-  cardShadowHover: '0 18px 45px rgba(0, 0, 0, 0.42)',
+  cardShadow: '0 12px 32px rgba(17, 24, 39, 0.08)',
+  cardShadowHover: '0 18px 45px rgba(17, 24, 39, 0.12)',
   goldGradient: 'linear-gradient(135deg, #C9A646, #E5C86B)',
 };
 
 export const adminTheme = createTheme({
   palette: {
-    mode: 'dark',
+    mode: 'light',
     primary: {
       main: binThemeTokens.gold,
       light: binThemeTokens.goldLight,
@@ -53,8 +49,8 @@ export const adminTheme = createTheme({
       contrastText: binThemeTokens.black,
     },
     background: {
-      default: binThemeTokens.tray,
-      paper: binThemeTokens.panel,
+      default: binThemeTokens.softCanvas,
+      paper: binThemeTokens.card,
     },
     text: {
       primary: binThemeTokens.textPrimary,
@@ -66,16 +62,16 @@ export const adminTheme = createTheme({
     warning: {
       main: binThemeTokens.warning,
     },
-    divider: alpha(binThemeTokens.gold, 0.12),
+    divider: binThemeTokens.border,
   },
   typography: {
     fontFamily: "'Inter', 'Outfit', 'Cairo', sans-serif",
-    h1: { fontWeight: 900, letterSpacing: '-0.02em' },
-    h2: { fontWeight: 900, letterSpacing: '-0.02em' },
-    h3: { fontWeight: 900, letterSpacing: '-0.01em' },
-    h4: { fontWeight: 900 },
-    h5: { fontWeight: 800 },
-    h6: { fontWeight: 700 },
+    h1: { fontWeight: 900, letterSpacing: '-0.02em', color: binThemeTokens.textPrimary },
+    h2: { fontWeight: 900, letterSpacing: '-0.02em', color: binThemeTokens.textPrimary },
+    h3: { fontWeight: 900, letterSpacing: '-0.01em', color: binThemeTokens.textPrimary },
+    h4: { fontWeight: 900, color: binThemeTokens.textPrimary },
+    h5: { fontWeight: 800, color: binThemeTokens.textPrimary },
+    h6: { fontWeight: 700, color: binThemeTokens.textPrimary },
   },
   shape: {
     borderRadius: 12,
@@ -103,16 +99,18 @@ export const adminTheme = createTheme({
       styleOverrides: {
         root: {
           backgroundImage: 'none',
-          backgroundColor: binThemeTokens.panel,
-          border: `1px solid ${alpha(binThemeTokens.gold, 0.12)}`,
+          backgroundColor: binThemeTokens.card,
+          border: `1px solid ${binThemeTokens.border}`,
+          color: binThemeTokens.textPrimary,
         },
       },
     },
     MuiDrawer: {
       styleOverrides: {
         paper: {
-          backgroundColor: binThemeTokens.tray,
-          borderRight: `1px solid ${alpha(binThemeTokens.gold, 0.12)}`,
+          backgroundColor: binThemeTokens.card,
+          borderRight: `1px solid ${binThemeTokens.border}`,
+          color: binThemeTokens.textPrimary,
         },
       },
     },
@@ -120,11 +118,12 @@ export const adminTheme = createTheme({
       styleOverrides: {
         head: {
           fontWeight: 900,
-          color: binThemeTokens.gold,
-          borderBottom: `2px solid ${alpha(binThemeTokens.gold, 0.2)}`,
+          color: binThemeTokens.goldHover,
+          borderBottom: `2px solid ${alpha(binThemeTokens.gold, 0.25)}`,
         },
         root: {
-          borderBottom: `1px solid ${alpha(binThemeTokens.gold, 0.08)}`,
+          borderBottom: `1px solid ${binThemeTokens.border}`,
+          color: binThemeTokens.textPrimary,
         },
       },
     },

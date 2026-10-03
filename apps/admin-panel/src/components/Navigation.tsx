@@ -90,9 +90,10 @@ const Navigation = () => {
                 '& .MuiDrawer-paper': {
                     width: 280,
                     boxSizing: 'border-box',
-                    bgcolor: '#020617',
-                    borderRight: isRTL ? 'none' : `1px solid ${alpha(binThemeTokens.gold, 0.1)}`,
-                    borderLeft: isRTL ? `1px solid ${alpha(binThemeTokens.gold, 0.1)}` : 'none',
+                    bgcolor: '#FFFFFF',
+                    color: '#111827',
+                    borderRight: isRTL ? 'none' : `1px solid ${alpha(binThemeTokens.gold, 0.22)}`,
+                    borderLeft: isRTL ? `1px solid ${alpha(binThemeTokens.gold, 0.22)}` : 'none',
                     right: isRTL ? 0 : 'auto',
                     left: isRTL ? 'auto' : 0,
                 },

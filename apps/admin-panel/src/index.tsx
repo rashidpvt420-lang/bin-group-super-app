@@ -1,6 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import './index.css';
+import '../../../src/styles/whitePlatinumAuthenticated.css';
 
 let reactMounted = false;
 let bootErrorRendered = false;
