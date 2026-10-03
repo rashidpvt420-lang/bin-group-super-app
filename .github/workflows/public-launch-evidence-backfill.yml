@@ -68,12 +68,42 @@ jobs:
              .head_sha == $sha' \
             <<<"$run_json" >/dev/null
 
-          artifact_name="production-deployment-${SOURCE_SHA}-${SOURCE_RUN_ID}"
+          # firebase-production-deploy.yml uploads the canonical
+          # production-deployment-<sha> artifact. The legacy
+          # production-deployment-<sha>-<runId> name is still accepted for
+          # older deploy runs. Exactly one non-expired artifact across both
+          # names must exist, and it must belong to this exact run and SHA.
+          canonical_artifact_name="production-deployment-${SOURCE_SHA}"
+          legacy_artifact_name="production-deployment-${SOURCE_SHA}-${SOURCE_RUN_ID}"
           artifacts="$(gh api "repos/$REPOSITORY/actions/runs/$SOURCE_RUN_ID/artifacts?per_page=100")"
-          artifact_count="$(jq --arg name "$artifact_name" '[.artifacts[] | select(.name == $name and (.expired | not))] | length' <<<"$artifacts")"
-          [[ "$artifact_count" == "1" ]]
-          artifact_id="$(jq -r --arg name "$artifact_name" '.artifacts[] | select(.name == $name and (.expired | not)) | .id' <<<"$artifacts")"
-          artifact_digest="$(jq -r --arg name "$artifact_name" '.artifacts[] | select(.name == $name and (.expired | not)) | .digest // empty' <<<"$artifacts" | tr '[:upper:]' '[:lower:]')"
+          total_count="$(jq -r '.total_count' <<<"$artifacts")"
+          listed_count="$(jq -r '.artifacts | length' <<<"$artifacts")"
+          [[ "$total_count" =~ ^[0-9]+$ && "$total_count" == "$listed_count" ]] || {
+            echo "::error::Deploy run artifact listing is incomplete; refusing to select an artifact."
+            exit 1
+          }
+          matches="$(jq -c \
+            --arg canonical "$canonical_artifact_name" \
+            --arg legacy "$legacy_artifact_name" \
+            '[.artifacts[] | select((.name == $canonical or .name == $legacy) and (.expired | not))]' \
+            <<<"$artifacts")"
+          artifact_count="$(jq 'length' <<<"$matches")"
+          [[ "$artifact_count" == "1" ]] || {
+            echo "::error::Expected exactly one non-expired production deployment artifact named $canonical_artifact_name or $legacy_artifact_name; found $artifact_count."
+            exit 1
+          }
+          jq -e \
+            --arg sha "$SOURCE_SHA" \
+            --argjson run_id "$SOURCE_RUN_ID" \
+            '.[0].workflow_run.id == $run_id and .[0].workflow_run.head_sha == $sha' \
+            <<<"$matches" >/dev/null || {
+            echo "::error::Production deployment artifact is not bound to the exact deploy run and SHA."
+            exit 1
+          }
+          artifact_name="$(jq -r '.[0].name' <<<"$matches")"
+          artifact_id="$(jq -r '.[0].id' <<<"$matches")"
+          artifact_digest="$(jq -r '.[0].digest // empty' <<<"$matches" | tr '[:upper:]' '[:lower:]')"
+          [[ "$artifact_name" == "$canonical_artifact_name" || "$artifact_name" == "$legacy_artifact_name" ]]
           [[ "$artifact_id" =~ ^[0-9]+$ ]]
           [[ "$artifact_digest" =~ ^sha256:[0-9a-f]{64}$ ]]
 

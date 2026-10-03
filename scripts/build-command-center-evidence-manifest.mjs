@@ -11,6 +11,7 @@ import {
   validateDeploymentDocument,
   validateEvidenceRecord,
 } from './lib/launch-honesty.mjs';
+import { isAcceptedProductionDeploymentArtifactName } from './lib/production-deployment-artifact.mjs';
 
 const root = process.cwd();
 const repository = String(process.env.GITHUB_REPOSITORY || 'rashidpvt420-lang/bin-group-super-app').trim();
@@ -39,11 +40,16 @@ if (!RUN_PATTERN.test(workflowRunId)) fail('SOURCE_EVIDENCE_RUN_ID must be numer
 if (!sourceArtifactName) fail('SOURCE_EVIDENCE_ARTIFACT_NAME is required');
 if (!DIGEST_PATTERN.test(sourceArtifactDigest)) fail('SOURCE_EVIDENCE_ARTIFACT_DIGEST must be a sha256 digest');
 
-const expectedArtifactName = mode === 'live-role-smoke'
-  ? `live-launch-evidence-${releaseSha}`
-  : `production-deployment-${releaseSha}-${workflowRunId}`;
-if (sourceArtifactName !== expectedArtifactName) {
-  fail(`source artifact name mismatch (have=${sourceArtifactName} want=${expectedArtifactName})`);
+if (mode === 'live-role-smoke') {
+  const expectedArtifactName = `live-launch-evidence-${releaseSha}`;
+  if (sourceArtifactName !== expectedArtifactName) {
+    fail(`source artifact name mismatch (have=${sourceArtifactName} want=${expectedArtifactName})`);
+  }
+} else if (!isAcceptedProductionDeploymentArtifactName(sourceArtifactName, releaseSha, workflowRunId)) {
+  fail(
+    `source artifact name mismatch (have=${sourceArtifactName} want=production-deployment-${releaseSha} `
+    + `or legacy production-deployment-${releaseSha}-${workflowRunId})`,
+  );
 }
 
 const batch = readJsonSafe(evidencePath(root), null);
