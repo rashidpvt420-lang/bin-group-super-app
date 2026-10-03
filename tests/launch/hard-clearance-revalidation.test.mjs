@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import {
+  cleanUrlHostedRequestPath,
   protectedHostedAssetUrl,
   validateHostedReleaseBinding,
 } from '../../scripts/hard-clearance-production-revalidation.mjs';
@@ -329,6 +330,8 @@ test('fresh revalidation keeps mutable production checks strict instead of exten
   assert.doesNotMatch(revalidation, /fetchProtectedHostedAsset/);
   assert.match(revalidation, /frozen-release-rebuild-and-live-byte-comparison/);
   assert.match(revalidation, /\['run', 'prepare:rules'\]/);
+  assert.match(revalidation, /cleanUrlHostedRequestPath/);
+  assert.match(revalidation, /cleanUrls:\s*true/);
 
   // The repair must never solve the 24-hour contradiction by weakening the
   // original freshness guards. It generates new evidence instead.
@@ -345,6 +348,17 @@ test('hosted byte verifier can only address fixed production origins', () => {
   assert.equal(
     protectedHostedAssetUrl('admin', 'static/js/main.js').href,
     'https://bin-group-admin-panel.web.app/static/js/main.js',
+  );
+  assert.equal(cleanUrlHostedRequestPath('index.html'), '');
+  assert.equal(cleanUrlHostedRequestPath('privacy.html'), 'privacy');
+  assert.equal(cleanUrlHostedRequestPath('assets/index.js'), 'assets/index.js');
+  assert.equal(
+    protectedHostedAssetUrl('main', 'index.html', { cleanUrls: true }).href,
+    'https://bin-group-57c60.web.app/',
+  );
+  assert.equal(
+    protectedHostedAssetUrl('main', 'privacy.html', { cleanUrls: true }).href,
+    'https://bin-group-57c60.web.app/privacy',
   );
   for (const candidate of [
     'https://attacker.example/payload.js',
