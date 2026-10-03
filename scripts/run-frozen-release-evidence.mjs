@@ -68,6 +68,44 @@ const LEGACY_ACTIVATION_CHECK = [
   '  const amount = Number(payment.data.amountReceived || payment.data.quoteSnapshot?.activationDeposit || payment.data.amount || 0);',
   "  if (!Number.isFinite(annual) || annual <= 0 || !Number.isFinite(amount) || Math.abs(amount - Math.round(annual * 0.15)) > 0.01) fail('activation amount is not the locked 15% deposit');",
 ].join('\n');
+// Reviewed exact-fils activation check carried by the frozen application
+// verifier from release bb4df313 onward (reviewed blob fa22b229). Releases that
+// commit this reviewed verifier no longer contain LEGACY_ACTIVATION_CHECK, so
+// the control plane keeps this inline check unchanged and additionally enforces
+// the deployed, blob-pinned Owner activation policy after it.
+const REVIEWED_ACTIVATION_CHECK = [
+  '  const annual = Number(',
+  '    payment.data.finalVerifiedQuoteSnapshot?.annualContractValue',
+  '      ?? contract.finalVerifiedQuoteSnapshot?.annualContractValue',
+  '      ?? payment.data.quoteSnapshot?.annualContractValue',
+  '      ?? contract.quoteSnapshot?.annualContractValue',
+  '      ?? contract.finalAnnualContractValue',
+  '      ?? contract.annualContractValue,',
+  '  );',
+  '  const lockedDeposit = Number(',
+  '    payment.data.finalVerifiedQuoteSnapshot?.activationDeposit',
+  '      ?? contract.finalVerifiedQuoteSnapshot?.activationDeposit',
+  '      ?? payment.data.finalActivationDeposit',
+  '      ?? contract.finalActivationDeposit',
+  '      ?? payment.data.activationDeposit',
+  '      ?? payment.data.quoteSnapshot?.activationDeposit',
+  '      ?? contract.quoteSnapshot?.activationDeposit,',
+  '  );',
+  '  const amount = Number(payment.data.amountReceived ?? payment.data.amount ?? lockedDeposit);',
+  '  const expectedDeposit = Math.round(annual * 0.15 * 100) / 100;',
+  '  const lockedDepositMinor = Math.round(lockedDeposit * 100);',
+  '  const amountMinor = Math.round(amount * 100);',
+  '  if (',
+  '    !Number.isFinite(annual) || annual <= 0',
+  '    || !Number.isFinite(lockedDeposit) || lockedDeposit <= 0',
+  '    || !Number.isFinite(amount) || amount <= 0',
+  '    || lockedDeposit !== expectedDeposit',
+  '    || lockedDeposit !== lockedDepositMinor / 100',
+  '    || amount !== amountMinor / 100',
+  '    || amountMinor !== lockedDepositMinor',
+  "  ) fail('activation amount is not the exact server-locked 15% deposit in AED fils');",
+].join('\n');
+const FROZEN_ACTIVATION_ADAPTER_CALL = 'verifyFrozenActivationPayment(payment.data, contract)';
 const LEGACY_TENANT_PHOTO_SELECTION = [
   '    ticket.requestPhotoUrl,',
   '    ...(Array.isArray(ticket.photoUrls) ? ticket.photoUrls : []),',
@@ -311,13 +349,32 @@ export function verifyFrozenActivationPayment(payment, contract, releaseRoot = p
 }
 
 export function transformFrozenActivationVerifier(source, adapterUrl = import.meta.url) {
-  if (source.split(LEGACY_ACTIVATION_CHECK).length !== 2) {
-    fail('frozen activation verifier source drift; exact legacy check is required');
+  if (source.includes(FROZEN_ACTIVATION_ADAPTER_CALL)) {
+    fail('frozen activation verifier source drift; the activation-policy adapter is already installed');
   }
-  return source.replace(LEGACY_ACTIVATION_CHECK, [
-    `  const { verifyFrozenActivationPayment } = await import(${JSON.stringify(adapterUrl)});`,
-    '  const { amount } = verifyFrozenActivationPayment(payment.data, contract);',
-  ].join('\n'));
+  const legacyMatches = source.split(LEGACY_ACTIVATION_CHECK).length - 1;
+  const reviewedMatches = source.split(REVIEWED_ACTIVATION_CHECK).length - 1;
+  const adapterImport = `  const { verifyFrozenActivationPayment } = await import(${JSON.stringify(adapterUrl)});`;
+  if (legacyMatches === 1 && reviewedMatches === 0) {
+    const replacement = [
+      adapterImport,
+      `  const { amount } = ${FROZEN_ACTIVATION_ADAPTER_CALL};`,
+    ].join('\n');
+    return source.replace(LEGACY_ACTIVATION_CHECK, () => replacement);
+  }
+  if (legacyMatches === 0 && reviewedMatches === 1) {
+    // Keep every reviewed inline check and additionally require the deployed
+    // pinned policy (half-up AED fils, final verified repricing, recorded
+    // receipt, AED currency) to accept the exact same received amount.
+    const replacement = [
+      REVIEWED_ACTIVATION_CHECK,
+      adapterImport,
+      `  const frozenActivationPolicy = ${FROZEN_ACTIVATION_ADAPTER_CALL};`,
+      "  if (frozenActivationPolicy.amountMinor !== amountMinor) fail('activation amount does not match the deployed frozen activation payment policy');",
+    ].join('\n');
+    return source.replace(REVIEWED_ACTIVATION_CHECK, () => replacement);
+  }
+  fail('frozen activation verifier source drift; exactly one legacy or reviewed activation check is required');
 }
 
 export function transformFrozenTenantPhotoVerifier(source) {
@@ -376,11 +433,9 @@ function applicationVerifierState(releaseRoot) {
 }
 
 function installReviewedActivationAdapter(releaseRoot) {
+  // Both the unchanged frozen verifier and the exact reviewed verifier blob
+  // receive the pinned activation-policy adapter; there is no reviewed bypass.
   const { file, source, state } = applicationVerifierState(releaseRoot);
-  if (state === 'reviewed') {
-    console.log(`[frozen-release-evidence] reviewed application verifier contains the exact AED-fils activation check sha256=${createHash('sha256').update(source).digest('hex')}`);
-    return () => {};
-  }
   const adapted = transformFrozenActivationVerifier(source);
   writeFileSync(file, adapted);
   console.log(`[frozen-release-evidence] reviewed activation-policy adapter state=${state} sha256=${createHash('sha256').update(adapted).digest('hex')}`);
