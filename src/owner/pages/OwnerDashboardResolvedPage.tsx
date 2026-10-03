@@ -26,6 +26,7 @@ import { resolveTenantLedger } from '../utils/ownerTenantLedgerResolver';
 import RoleJourneyStrip from '../../components/RoleJourneyStrip';
 import { isOwnerContractActivated, isOwnerProfileActivated } from '../activationPolicy';
 import { formatAedMoney } from '../../../functions/shared/aedMoney';
+import { ownerInk } from '../ownerReadableSx';
 
 const ACTIVE_TICKET_STATUSES = new Set(['OPEN', 'PENDING_ASSIGNMENT', 'ASSIGNED', 'ACCEPTED', 'EN_ROUTE', 'ARRIVED', 'IN_PROGRESS', 'WAITING_PARTS', 'ESCALATED']);
 
@@ -729,15 +730,15 @@ export default function OwnerDashboardResolvedPage() {
     const contractId = resolution.contract?.id || resolution.profile?.activeContractId || resolution.profile?.latestActivationContractId;
     return (
       <Box sx={{ minHeight: '70vh', display: 'grid', placeItems: 'center', direction: isRTL ? 'rtl' : 'ltr' }}>
-        <Paper sx={{ p: { xs: 3, md: 6 }, maxWidth: 720, bgcolor: 'rgba(22,22,24,.82)', border: `1px solid ${alpha(binThemeTokens.gold, .18)}`, borderRadius: 6, textAlign: 'center' }}>
+        <Paper sx={{ p: { xs: 3, md: 6 }, maxWidth: 720, bgcolor: ownerInk.paper, border: `1px solid ${ownerInk.goldBorder}`, borderRadius: 6, textAlign: 'center', boxShadow: binThemeTokens.cardShadow }}>
           <Shield size={58} color={binThemeTokens.gold} style={{ margin: '0 auto 20px' }} />
-          <Typography variant="h4" fontWeight={950} sx={{ color: '#fff', mb: 2 }}>{resolution.state === 'locked' ? tx('dash.owner.noLink', 'Owner profile not linked yet') : tx('dash.owner.needsApproval', 'Activation still requires verified approval')}</Typography>
-          <Typography sx={{ color: 'rgba(255,255,255,.62)', mb: 3, lineHeight: 1.8 }}>{resolution.reason || tx('dash.owner.reasonDefault', 'Your profile was found, but verified activation flags are not complete yet.')}</Typography>
+          <Typography variant="h4" fontWeight={950} sx={{ color: ownerInk.title, mb: 2 }}>{resolution.state === 'locked' ? tx('dash.owner.noLink', 'Owner profile not linked yet') : tx('dash.owner.needsApproval', 'Activation still requires verified approval')}</Typography>
+          <Typography sx={{ color: ownerInk.body, mb: 3, lineHeight: 1.8 }}>{resolution.reason || tx('dash.owner.reasonDefault', 'Your profile was found, but verified activation flags are not complete yet.')}</Typography>
           {loadError && <Alert severity="warning" sx={{ mb: 3 }}>{loadError}</Alert>}
           <OwnerActivationTimeline steps={activationSteps} compact />
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} justifyContent="center">
-            <Button variant="contained" onClick={() => navigate(contractId ? `/owner/contracts?contractId=${encodeURIComponent(contractId)}` : '/owner/contracts')} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>{tx('dash.owner.reviewContracts', 'Review Contracts')}</Button>
-            <Button variant="outlined" onClick={async () => { await refreshRole?.(); window.location.reload(); }} sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.gold, fontWeight: 950 }}>{tx('dash.owner.refreshIdentity', 'Refresh Identity')}</Button>
+            <Button variant="contained" onClick={() => navigate(contractId ? `/owner/contracts?contractId=${encodeURIComponent(contractId)}` : '/owner/contracts')} sx={{ bgcolor: binThemeTokens.gold, color: ownerInk.title, fontWeight: 950 }}>{tx('dash.owner.reviewContracts', 'Review Contracts')}</Button>
+            <Button variant="outlined" onClick={async () => { await refreshRole?.(); window.location.reload(); }} sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.goldHover, bgcolor: '#fff', fontWeight: 950 }}>{tx('dash.owner.refreshIdentity', 'Refresh Identity')}</Button>
           </Stack>
         </Paper>
       </Box>
@@ -860,25 +861,25 @@ export default function OwnerDashboardResolvedPage() {
 function OwnerActivationTimeline({ steps, compact = false }: { steps: ActivationStep[]; compact?: boolean }) {
   const doneCount = steps.filter((step) => step.tone === '#10b981').length;
   return (
-    <Paper sx={{ p: compact ? 2 : { xs: 2.25, md: 3 }, mb: compact ? 3 : 5, bgcolor: compact ? 'rgba(255,255,255,.035)' : 'rgba(15,23,42,.50)', border: `1px solid ${alpha(binThemeTokens.gold, 0.16)}`, borderRadius: compact ? 4 : 5, textAlign: 'left' }}>
+    <Paper sx={{ p: compact ? 2 : { xs: 2.25, md: 3 }, mb: compact ? 3 : 5, bgcolor: ownerInk.paper, border: `1px solid ${ownerInk.goldBorder}`, borderRadius: compact ? 4 : 5, textAlign: 'left', boxShadow: binThemeTokens.cardShadow }}>
       <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" spacing={1.5} sx={{ mb: 2 }}>
         <Box>
-          <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 2 }}>OWNER ACTIVATION TIMELINE</Typography>
-          <Typography variant={compact ? 'subtitle1' : 'h6'} sx={{ color: '#fff', fontWeight: 950 }}>
+          <Typography variant="overline" sx={{ color: binThemeTokens.goldHover, fontWeight: 950, letterSpacing: 2 }}>OWNER ACTIVATION TIMELINE</Typography>
+          <Typography variant={compact ? 'subtitle1' : 'h6'} sx={{ color: ownerInk.title, fontWeight: 950 }}>
             {doneCount}/{steps.length} gates complete
           </Typography>
         </Box>
-        <Chip size="small" label={doneCount === steps.length ? 'READY' : 'ACTION NEEDED'} sx={{ bgcolor: alpha(doneCount === steps.length ? '#10b981' : '#f59e0b', 0.12), color: doneCount === steps.length ? '#10b981' : '#f59e0b', fontWeight: 950, width: 'fit-content' }} />
+        <Chip size="small" label={doneCount === steps.length ? 'READY' : 'ACTION NEEDED'} sx={{ bgcolor: alpha(doneCount === steps.length ? ownerInk.success : ownerInk.warning, 0.12), color: doneCount === steps.length ? ownerInk.success : ownerInk.warning, fontWeight: 950, width: 'fit-content' }} />
       </Stack>
       <Grid container spacing={1.5}>
         {steps.map((step) => (
           <Grid item xs={12} sm={compact ? 12 : 6} md={compact ? 12 : 4} key={step.gate}>
-            <Paper sx={{ p: 1.75, height: '100%', bgcolor: alpha(step.tone, 0.07), border: `1px solid ${alpha(step.tone, 0.22)}`, borderRadius: 3 }}>
+            <Paper sx={{ p: 1.75, height: '100%', bgcolor: ownerInk.paperSoft, border: `1px solid ${alpha(step.tone, 0.35)}`, borderRadius: 3 }}>
               <Stack direction="row" justifyContent="space-between" alignItems="center" spacing={1}>
-                <Typography variant="body2" sx={{ color: '#fff', fontWeight: 900 }}>{step.gate}</Typography>
+                <Typography variant="body2" sx={{ color: ownerInk.title, fontWeight: 900 }}>{step.gate}</Typography>
                 <Chip size="small" label={step.status} sx={{ height: 20, bgcolor: alpha(step.tone, 0.16), color: step.tone, fontWeight: 950, fontSize: '0.62rem' }} />
               </Stack>
-              {!compact && <Typography variant="caption" sx={{ color: 'rgba(255,255,255,.58)', fontWeight: 700, display: 'block', mt: 1 }}>{step.detail}</Typography>}
+              {!compact && <Typography variant="caption" sx={{ color: ownerInk.body, fontWeight: 700, display: 'block', mt: 1 }}>{step.detail}</Typography>}
             </Paper>
           </Grid>
         ))}

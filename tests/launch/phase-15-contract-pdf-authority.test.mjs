@@ -14,6 +14,34 @@ test('Phase 15 canonical Owner contract is server-rendered, bilingual and byte-h
   }
 });
 
+test('Phase 15 contract PDF cover resolves nested property fields instead of blank dashes', async () => {
+  const pdf = await read('functions/pdfEngine.ts');
+  assert.match(pdf, /function resolveContractCoverFields/);
+  assert.match(pdf, /data\.properties\[0\]/);
+  assert.match(pdf, /cover\.propertyName/);
+  assert.match(pdf, /cover\.address/);
+  assert.match(pdf, /cover\.mobilizationAmount/);
+});
+
+test('Owner contracts and activation screens use readable light-theme ink with owner/property summary', async () => {
+  const [contracts, activation, otp, helper] = await Promise.all([
+    read('src/owner/pages/OwnerContractsResolvedPage.tsx'),
+    read('src/owner/pages/OwnerActivationPage.tsx'),
+    read('src/owner/components/ContractSignatureOtpControl.tsx'),
+    read('src/owner/ownerReadableSx.ts'),
+  ]);
+  assert.match(helper, /export const ownerInk/);
+  assert.match(helper, /propertyDisplayName/);
+  assert.match(contracts, /Owner & property/);
+  assert.match(contracts, /ownerInk\.title/);
+  assert.doesNotMatch(contracts, /color: '#FFF'/);
+  assert.match(activation, /Owner & property on this contract/);
+  assert.match(activation, /ownerInk\.title/);
+  assert.doesNotMatch(activation, /rgba\(255,255,255/);
+  assert.match(otp, /binThemeTokens\.textSecondary/);
+  assert.doesNotMatch(otp, /rgba\(255,255,255/);
+});
+
 test('Phase 15 browser PDF can never override canonical signed contract', async () => {
   const [callable, browser, rules] = await Promise.all([read('functions/index.ts'), read('src/utils/bilingualContractPdf.ts'), read('storage.rules')]);
   assert.ok(browser.includes('jsPDF'));

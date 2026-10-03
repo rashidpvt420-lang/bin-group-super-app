@@ -21,6 +21,7 @@ import { binThemeTokens } from '../../theme/binGroupTheme';
 import ContractSignatureOtpControl from '../components/ContractSignatureOtpControl';
 import { formatAedMoney } from '../../../functions/shared/aedMoney';
 import { mobilisationDepositFromAnnual } from '../../../functions/shared/mobilisationDeposit';
+import { ownerDisplayName, ownerInk, propertyAddressLine, propertyDisplayName } from '../ownerReadableSx';
 
 type ContractScope = 'FM_ONLY' | 'PM_ONLY' | 'BOTH';
 type NoticeState = { type: 'success' | 'error' | 'info' | 'warning'; text: string };
@@ -396,68 +397,100 @@ export default function OwnerContractsResolvedPage() {
     return <Box sx={{ height: '60vh', display: 'grid', placeItems: 'center' }}><CircularProgress sx={{ color: binThemeTokens.gold }} /></Box>;
   }
 
+  const summaryContract = primaryContract || contracts[0];
+  const summaryOwner = ownerDisplayName(summaryContract, user?.displayName || user?.email || '');
+  const summaryProperty = summaryContract ? propertyDisplayName(summaryContract) : '';
+  const summaryAddress = summaryContract ? propertyAddressLine(summaryContract) : '';
+
   return (
     <Box sx={{ pb: 6, direction: isRTL ? 'rtl' : 'ltr' }}>
-      <Box sx={{ mb: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexDirection: { xs: 'column', md: isRTL ? 'row-reverse' : 'row' }, gap: 3 }}>
+      <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexDirection: { xs: 'column', md: isRTL ? 'row-reverse' : 'row' }, gap: 3 }}>
         <Box sx={{ textAlign: isRTL ? 'right' : 'left' }}>
-          <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 4 }}>{t('gov.institutional_governance') || 'INSTITUTIONAL GOVERNANCE'}</Typography>
-          <Typography variant="h4" fontWeight="950" sx={{ color: '#FFF', mt: 1 }}>{t('nav.contracts') || 'Contracts'}</Typography>
-          <Typography variant="body2" sx={{ color: 'rgba(255,255,255,.5)', mt: 1 }}>Permission-safe contract lookup using linked UID, email and direct contract records.</Typography>
+          <Typography variant="overline" sx={{ color: binThemeTokens.goldHover, fontWeight: 900, letterSpacing: 4 }}>{t('gov.institutional_governance') || 'INSTITUTIONAL GOVERNANCE'}</Typography>
+          <Typography variant="h4" fontWeight="950" sx={{ color: ownerInk.title, mt: 1 }}>{t('nav.contracts') || 'Contracts'}</Typography>
+          <Typography variant="body2" sx={{ color: ownerInk.body, mt: 1 }}>Your agreements, property scope, and downloadable signed PDF live here.</Typography>
         </Box>
-        <Button disabled={!contracts[0]} variant="outlined" startIcon={<Download size={16} />} sx={{ borderColor: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.7)', fontWeight: 900, borderRadius: 3 }} onClick={() => openOrDownloadContract(contracts[0])}>
+        <Button disabled={!contracts[0]} variant="outlined" startIcon={<Download size={16} />} sx={{ borderColor: ownerInk.goldBorder, color: binThemeTokens.goldHover, bgcolor: '#fff', fontWeight: 900, borderRadius: 3 }} onClick={() => openOrDownloadContract(contracts[0])}>
           Download Master
         </Button>
       </Box>
+
+      {summaryContract && (
+        <Paper sx={{ p: 3, mb: 4, bgcolor: ownerInk.paper, border: `1px solid ${ownerInk.goldBorder}`, borderRadius: 4, boxShadow: binThemeTokens.cardShadow }}>
+          <Typography variant="overline" sx={{ color: binThemeTokens.goldHover, fontWeight: 950 }}>Owner & property</Typography>
+          <Grid container spacing={2} sx={{ mt: 0.5 }}>
+            <Grid item xs={12} md={4}>
+              <Typography variant="caption" sx={{ color: ownerInk.muted, fontWeight: 900 }}>OWNER</Typography>
+              <Typography sx={{ color: ownerInk.title, fontWeight: 950 }}>{summaryOwner || 'Owner account'}</Typography>
+              <Typography variant="caption" sx={{ color: ownerInk.body }}>{user?.email || summaryContract?.ownerEmail || '—'}</Typography>
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <Typography variant="caption" sx={{ color: ownerInk.muted, fontWeight: 900 }}>PROPERTY</Typography>
+              <Typography sx={{ color: ownerInk.title, fontWeight: 950 }}>{summaryProperty}</Typography>
+              <Typography variant="caption" sx={{ color: ownerInk.body }}>{summaryAddress}</Typography>
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <Typography variant="caption" sx={{ color: ownerInk.muted, fontWeight: 900 }}>CONTRACT</Typography>
+              <Typography sx={{ color: ownerInk.title, fontWeight: 950 }}>#{String(summaryContract.id).slice(0, 8).toUpperCase()}</Typography>
+              <Typography variant="caption" sx={{ color: ownerInk.body }}>{summaryContract.status || 'PENDING'}</Typography>
+            </Grid>
+          </Grid>
+        </Paper>
+      )}
 
       {urlContractNotFound && <Alert severity="warning" sx={{ mb: 3 }}>The contract link was not found by direct ID, but other linked agreements may still be shown below.</Alert>}
       {notice && <Alert severity={notice.type} sx={{ mb: 3 }}>{notice.text}</Alert>}
 
       {hasSignatureRequired && primaryContract && (
-        <Paper sx={{ p: 4, mb: 5, bgcolor: alpha(binThemeTokens.gold, 0.06), border: `1px solid ${alpha(binThemeTokens.gold, 0.28)}`, borderRadius: 5 }}>
+        <Paper sx={{ p: 4, mb: 5, bgcolor: ownerInk.paper, border: `1px solid ${ownerInk.goldBorder}`, borderRadius: 5, boxShadow: binThemeTokens.cardShadow }}>
           <Stack spacing={3}>
-            <Typography variant="h5" fontWeight="950" sx={{ color: '#FFF', display: 'flex', gap: 1, alignItems: 'center' }}><PenLine color={binThemeTokens.gold} /> Contract Signature Required</Typography>
-            <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.65)' }}>Type your full legal name and sign. Dashboard unlock still requires payment verification.</Typography>
-            <TextField fullWidth label="Full legal name for e-signature" value={signatureName} onChange={(event) => setSignatureName(event.target.value)} InputLabelProps={{ style: { color: 'rgba(255,255,255,0.5)' } }} InputProps={{ style: { color: '#FFF' } }} />
+            <Typography variant="h5" fontWeight="950" sx={{ color: ownerInk.title, display: 'flex', gap: 1, alignItems: 'center' }}><PenLine color={binThemeTokens.gold} /> Contract Signature Required</Typography>
+            <Typography variant="body2" sx={{ color: ownerInk.body }}>
+              Sign for <strong>{propertyDisplayName(primaryContract)}</strong>
+              {ownerDisplayName(primaryContract) ? ` · Owner: ${ownerDisplayName(primaryContract)}` : ''}.
+              Dashboard unlock still requires 15% payment verification.
+            </Typography>
+            <TextField fullWidth label="Full legal name for e-signature" value={signatureName} onChange={(event) => setSignatureName(event.target.value)} />
             <ContractSignatureOtpControl
               contractId={primaryContract.id}
               contractHash={String(primaryContract.quoteHash || primaryContract.contractHash || '')}
               email={user?.email || ''}
-              propertyName={primaryContract.propertyName}
+              propertyName={propertyDisplayName(primaryContract)}
               signatureName={signatureName}
               onVerified={setOtpVerificationId}
             />
-            <Button variant="contained" disabled={signingId === primaryContract.id || !otpVerificationId} onClick={() => handleSignContract(primaryContract)} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, px: 4, py: 1.5, borderRadius: 3, alignSelf: 'flex-start' }}>
+            <Button variant="contained" disabled={signingId === primaryContract.id || !otpVerificationId} onClick={() => handleSignContract(primaryContract)} sx={{ bgcolor: binThemeTokens.gold, color: ownerInk.title, fontWeight: 950, px: 4, py: 1.5, borderRadius: 3, alignSelf: 'flex-start' }}>
               {signingId === primaryContract.id ? 'Signing...' : 'Review & Sign Contract'}
             </Button>
           </Stack>
         </Paper>
       )}
 
-      <Typography variant="overline" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900, letterSpacing: 2, display: 'block', mb: 3 }}>
+      <Typography variant="overline" sx={{ color: ownerInk.muted, fontWeight: 900, letterSpacing: 2, display: 'block', mb: 3 }}>
         {isPostSignature(primaryContract) ? 'LOCKED CONTRACT SCOPE' : 'SELECTED CONTRACT SCOPE'}
       </Typography>
       <Grid container spacing={3} sx={{ mb: 6 }}>
         <Grid item xs={12}>
-          <Paper sx={{ p: 4, bgcolor: alpha(binThemeTokens.gold, 0.05), border: `2px solid ${binThemeTokens.gold}`, borderRadius: 8 }}>
+          <Paper sx={{ p: 4, bgcolor: ownerInk.paperSoft, border: `2px solid ${binThemeTokens.gold}`, borderRadius: 8 }}>
             <Stack spacing={2}>
               <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                <Box sx={{ p: 1.5, bgcolor: alpha(binThemeTokens.gold, 0.1), borderRadius: 3, color: binThemeTokens.gold }}><ScopeIcon size={24} /></Box>
+                <Box sx={{ p: 1.5, bgcolor: ownerInk.goldWash, borderRadius: 3, color: binThemeTokens.gold }}><ScopeIcon size={24} /></Box>
                 <CheckCircle2 color={binThemeTokens.gold} />
               </Box>
               <Box>
-                <Typography variant="h6" fontWeight="950" sx={{ color: '#FFF' }}>{selectedScopeCopy.title}</Typography>
-                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 700 }}>{selectedScopeCopy.desc}</Typography>
+                <Typography variant="h6" fontWeight="950" sx={{ color: ownerInk.title }}>{selectedScopeCopy.title}</Typography>
+                <Typography variant="caption" sx={{ color: ownerInk.body, fontWeight: 700 }}>{selectedScopeCopy.desc}</Typography>
               </Box>
-              <Divider sx={{ borderColor: 'rgba(255,255,255,0.05)' }} />
-              {selectedScopeCopy.features.map((feature) => <Typography key={feature} variant="caption" sx={{ color: 'rgba(255,255,255,0.6)', fontWeight: 800 }}><Zap size={12} color={binThemeTokens.gold} /> {feature}</Typography>)}
+              <Divider sx={{ borderColor: ownerInk.border }} />
+              {selectedScopeCopy.features.map((feature) => <Typography key={feature} variant="caption" sx={{ color: ownerInk.body, fontWeight: 800 }}><Zap size={12} color={binThemeTokens.gold} /> {feature}</Typography>)}
             </Stack>
           </Paper>
         </Grid>
       </Grid>
 
-      <Typography variant="overline" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900, letterSpacing: 2, display: 'block', mb: 3 }}>ACTIVE AGREEMENTS</Typography>
+      <Typography variant="overline" sx={{ color: ownerInk.muted, fontWeight: 900, letterSpacing: 2, display: 'block', mb: 3 }}>ACTIVE AGREEMENTS</Typography>
       {contracts.length === 0 ? (
-        <Paper sx={{ p: 10, textAlign: 'center', bgcolor: 'rgba(15, 23, 42, 0.4)', border: '1px dashed rgba(255,255,255,0.08)', borderRadius: 6 }}><FileText size={48} color="rgba(255,255,255,0.08)" /><Typography sx={{ color: 'rgba(255,255,255,0.25)', fontWeight: 800 }}>NO CONTRACTS ON RECORD</Typography></Paper>
+        <Paper sx={{ p: 10, textAlign: 'center', bgcolor: ownerInk.paperSoft, border: `1px dashed ${ownerInk.border}`, borderRadius: 6 }}><FileText size={48} color={binThemeTokens.platinumDark} /><Typography sx={{ color: ownerInk.body, fontWeight: 800, mt: 2 }}>NO CONTRACTS ON RECORD</Typography></Paper>
       ) : (
         <Grid container spacing={2}>
           {contracts.map((contract) => {
@@ -465,22 +498,23 @@ export default function OwnerContractsResolvedPage() {
             const term = termDates(contract);
             return (
               <Grid item xs={12} key={contract.id}>
-                <Paper sx={{ p: 3, bgcolor: 'rgba(15,23,42,.55)', border: '1px solid rgba(255,255,255,.06)', borderRadius: 5 }}>
+                <Paper sx={{ p: 3, bgcolor: ownerInk.paper, border: `1px solid ${ownerInk.border}`, borderRadius: 5, boxShadow: binThemeTokens.cardShadow }}>
                   <Grid container spacing={2} alignItems="center">
                     <Grid item xs={12} md={4}>
-                      <Typography variant="body1" sx={{ color: '#FFF', fontWeight: 950 }}>{contract.propertyName || contract.companyProfile?.name || 'Portfolio Contract'}</Typography>
-                      <Typography variant="caption" sx={{ color: 'rgba(255,255,255,.35)', fontWeight: 800 }}>Ref: #{String(contract.id).slice(0, 8)}</Typography>
+                      <Typography variant="body1" sx={{ color: ownerInk.title, fontWeight: 950 }}>{propertyDisplayName(contract)}</Typography>
+                      <Typography variant="caption" sx={{ color: ownerInk.body, fontWeight: 800, display: 'block' }}>{propertyAddressLine(contract)}</Typography>
+                      <Typography variant="caption" sx={{ color: ownerInk.muted, fontWeight: 800 }}>Ref: #{String(contract.id).slice(0, 8)}</Typography>
                     </Grid>
-                    <Grid item xs={12} md={3}><Chip label={contract.packageName || contract.selectedPlan?.name || contract.serviceDetails?.selectedPlan || contractScope.title} size="small" sx={{ bgcolor: alpha(binThemeTokens.gold, 0.1), color: binThemeTokens.gold, fontWeight: 950 }} /></Grid>
+                    <Grid item xs={12} md={3}><Chip label={contract.packageName || contract.selectedPlan?.name || contract.serviceDetails?.selectedPlan || contractScope.title} size="small" sx={{ bgcolor: ownerInk.goldWash, color: binThemeTokens.goldHover, fontWeight: 950 }} /></Grid>
                     <Grid item xs={12} md={3}>
                       <Stack spacing={0.75}>
-                        <Stack direction="row" spacing={1} alignItems="center"><Calendar size={14} color="rgba(255,255,255,.45)" /><Typography variant="caption" sx={{ color: 'rgba(255,255,255,.75)', fontWeight: 900 }}>{termSummaryText(contract)}</Typography></Stack>
-                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,.45)', fontWeight: 700 }}>Cancel/upgrade request window: until {formatDateTime(term.firstMonthEnd)}</Typography>
-                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,.45)', fontWeight: 700 }}>{signatureSummaryText(contract)}</Typography>
-                        <Typography variant="caption" sx={{ color: alpha(binThemeTokens.gold, 0.85), fontWeight: 800 }}>{adminStampSummaryText(contract)}</Typography>
+                        <Stack direction="row" spacing={1} alignItems="center"><Calendar size={14} color={binThemeTokens.textSecondary} /><Typography variant="caption" sx={{ color: ownerInk.title, fontWeight: 900 }}>{termSummaryText(contract)}</Typography></Stack>
+                        <Typography variant="caption" sx={{ color: ownerInk.body, fontWeight: 700 }}>Cancel/upgrade request window: until {formatDateTime(term.firstMonthEnd)}</Typography>
+                        <Typography variant="caption" sx={{ color: ownerInk.body, fontWeight: 700 }}>{signatureSummaryText(contract)}</Typography>
+                        <Typography variant="caption" sx={{ color: binThemeTokens.goldHover, fontWeight: 800 }}>{adminStampSummaryText(contract)}</Typography>
                       </Stack>
                     </Grid>
-                    <Grid item xs={12} md={2}><Stack direction="row" spacing={1} justifyContent={{ xs: 'flex-start', md: 'flex-end' }}><Button size="small" startIcon={<Download size={14} />} onClick={() => openOrDownloadContract(contract)} sx={{ color: binThemeTokens.gold, fontWeight: 950 }}>Download</Button></Stack></Grid>
+                    <Grid item xs={12} md={2}><Stack direction="row" spacing={1} justifyContent={{ xs: 'flex-start', md: 'flex-end' }}><Button size="small" startIcon={<Download size={14} />} onClick={() => openOrDownloadContract(contract)} sx={{ color: binThemeTokens.goldHover, fontWeight: 950 }}>Download</Button></Stack></Grid>
                   </Grid>
                 </Paper>
               </Grid>

@@ -8,6 +8,7 @@ import { binThemeTokens } from '../../theme/binGroupTheme';
 import ContractSignatureOtpControl from '../components/ContractSignatureOtpControl';
 import { isOwnerProfileActivated } from '../activationPolicy';
 import { formatAedMoney, normalizeAedMoney } from '../../../functions/shared/aedMoney';
+import { firstProperty, ownerDisplayName, ownerInk, propertyAddressLine, propertyDisplayName } from '../ownerReadableSx';
 
 const sha256File = async (file: File) => {
   const digest = await crypto.subtle.digest('SHA-256', await file.arrayBuffer());
@@ -485,14 +486,19 @@ export default function OwnerActivationPage() {
     </Button>
   );
 
+  const activationOwner = ownerDisplayName(primaryContract, user?.displayName || user?.email || '');
+  const activationProperty = primaryContract ? propertyDisplayName(primaryContract) : 'No property linked yet';
+  const activationAddress = primaryContract ? propertyAddressLine(primaryContract) : '';
+  const activationPropertyMeta = firstProperty(primaryContract);
+
   return (
     <Box sx={{ direction: isRTL ? 'rtl' : 'ltr', pb: 6 }}>
       <Stack spacing={4}>
         <Box sx={{ textAlign: isRTL ? 'right' : 'left' }}>
-          <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 4 }}>CONTRACT ACTIVATION</Typography>
-          <Typography variant="h4" fontWeight="950" sx={{ color: '#FFF', mt: 1 }}>15% Mobilization Payment Gate</Typography>
-          <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.55)', maxWidth: 820, mt: 1 }}>
-            First sign the admin-approved contract. Then submit or complete the 15% mobilization payment request. Full dashboard access unlocks only after admin payment verification.
+          <Typography variant="overline" sx={{ color: binThemeTokens.goldHover, fontWeight: 950, letterSpacing: 4 }}>CONTRACT ACTIVATION</Typography>
+          <Typography variant="h4" fontWeight="950" sx={{ color: ownerInk.title, mt: 1 }}>15% Mobilization Payment Gate</Typography>
+          <Typography variant="body2" sx={{ color: ownerInk.body, maxWidth: 820, mt: 1 }}>
+            First sign the admin-approved contract. Then submit the 15% mobilization payment proof. Full dashboard access unlocks only after admin payment verification.
           </Typography>
         </Box>
 
@@ -508,43 +514,69 @@ export default function OwnerActivationPage() {
         )}
         {!primaryContract?.id && <Alert severity="warning">No contract was found for this owner account. Ask admin to approve and email the selected contract for owner signature.</Alert>}
 
+        {primaryContract?.id && (
+          <Paper sx={{ p: 3, bgcolor: ownerInk.paper, border: `1px solid ${ownerInk.goldBorder}`, borderRadius: 4, boxShadow: binThemeTokens.cardShadow }}>
+            <Typography variant="overline" sx={{ color: binThemeTokens.goldHover, fontWeight: 950 }}>Owner & property on this contract</Typography>
+            <Grid container spacing={2} sx={{ mt: 0.5 }}>
+              <Grid item xs={12} md={4}>
+                <Typography variant="caption" sx={{ color: ownerInk.muted, fontWeight: 900 }}>OWNER</Typography>
+                <Typography sx={{ color: ownerInk.title, fontWeight: 950 }}>{activationOwner || 'Owner account'}</Typography>
+                <Typography variant="caption" sx={{ color: ownerInk.body }}>{user?.email || primaryContract?.ownerEmail || '—'}</Typography>
+              </Grid>
+              <Grid item xs={12} md={5}>
+                <Typography variant="caption" sx={{ color: ownerInk.muted, fontWeight: 900 }}>PROPERTY</Typography>
+                <Typography sx={{ color: ownerInk.title, fontWeight: 950 }}>{activationProperty}</Typography>
+                <Typography variant="caption" sx={{ color: ownerInk.body, display: 'block' }}>{activationAddress}</Typography>
+                <Typography variant="caption" sx={{ color: ownerInk.muted }}>
+                  {[activationPropertyMeta?.propertyType || activationPropertyMeta?.type, activationPropertyMeta?.emirate].filter(Boolean).join(' · ') || 'Details pending visit verification'}
+                </Typography>
+              </Grid>
+              <Grid item xs={12} md={3}>
+                <Typography variant="caption" sx={{ color: ownerInk.muted, fontWeight: 900 }}>15% DUE</Typography>
+                <Typography sx={{ color: ownerInk.title, fontWeight: 950 }}>{moneyLabel(mobilization, primaryContract)}</Typography>
+                <Typography variant="caption" sx={{ color: ownerInk.body }}>of {moneyLabel(annualValue, primaryContract)} / year</Typography>
+              </Grid>
+            </Grid>
+          </Paper>
+        )}
+
         <ActivationTimeline gates={activationGates} />
 
         <Grid container spacing={3} sx={{ flexDirection: isRTL ? 'row-reverse' : 'row' }}>
           <Grid item xs={12} md={7}>
-            <Paper sx={{ p: 4, bgcolor: 'rgba(15,23,42,0.64)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 6 }}>
+            <Paper sx={{ p: 4, bgcolor: ownerInk.paper, border: `1px solid ${ownerInk.border}`, borderRadius: 6, boxShadow: binThemeTokens.cardShadow }}>
               <Stack spacing={3}>
                 <Stack direction={isRTL ? 'row-reverse' : 'row'} justifyContent="space-between" alignItems="center">
                   <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={2} alignItems="center">
-                    <Box sx={{ width: 52, height: 52, borderRadius: 3, display: 'grid', placeItems: 'center', bgcolor: alpha(binThemeTokens.gold, 0.12), color: binThemeTokens.gold }}>
+                    <Box sx={{ width: 52, height: 52, borderRadius: 3, display: 'grid', placeItems: 'center', bgcolor: ownerInk.goldWash, color: binThemeTokens.gold }}>
                       <FileSignature />
                     </Box>
                     <Box sx={{ textAlign: isRTL ? 'right' : 'left' }}>
-                      <Typography variant="h6" fontWeight="950" sx={{ color: '#FFF' }}>{primaryContract?.propertyName || primaryContract?.companyProfile?.name || 'Selected Property Contract'}</Typography>
-                      <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.38)', fontWeight: 800 }}>REF: {primaryContract?.id?.slice(0, 8)?.toUpperCase() || 'NO-CONTRACT'}</Typography>
+                      <Typography variant="h6" fontWeight="950" sx={{ color: ownerInk.title }}>{activationProperty}</Typography>
+                      <Typography variant="caption" sx={{ color: ownerInk.muted, fontWeight: 800 }}>REF: {primaryContract?.id?.slice(0, 8)?.toUpperCase() || 'NO-CONTRACT'}</Typography>
                     </Box>
                   </Stack>
-                  <Chip label={primaryContract?.status || 'NO_CONTRACT'} sx={{ bgcolor: alpha(canSign ? '#10b981' : '#f59e0b', 0.12), color: canSign ? '#10b981' : '#f59e0b', fontWeight: 950 }} />
+                  <Chip label={primaryContract?.status || 'NO_CONTRACT'} sx={{ bgcolor: alpha(canSign ? ownerInk.success : ownerInk.warning, 0.12), color: canSign ? ownerInk.success : ownerInk.warning, fontWeight: 950 }} />
                 </Stack>
 
-                <Divider sx={{ borderColor: 'rgba(255,255,255,0.07)' }} />
+                <Divider sx={{ borderColor: ownerInk.border }} />
 
                 <Grid container spacing={2}>
                   <Grid item xs={12} sm={4}>
-                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.35)', fontWeight: 900 }}>ANNUAL VALUE</Typography>
-                    <Typography variant="h6" fontWeight="950" sx={{ color: '#FFF' }}>{moneyLabel(annualValue, primaryContract)}</Typography>
+                    <Typography variant="caption" sx={{ color: ownerInk.muted, fontWeight: 900 }}>ANNUAL VALUE</Typography>
+                    <Typography variant="h6" fontWeight="950" sx={{ color: ownerInk.title }}>{moneyLabel(annualValue, primaryContract)}</Typography>
                   </Grid>
                   <Grid item xs={12} sm={4}>
-                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.35)', fontWeight: 900 }}>MOBILIZATION</Typography>
-                    <Typography variant="h6" fontWeight="950" sx={{ color: binThemeTokens.gold }}>{moneyLabel(mobilization, primaryContract)}</Typography>
+                    <Typography variant="caption" sx={{ color: ownerInk.muted, fontWeight: 900 }}>MOBILIZATION</Typography>
+                    <Typography variant="h6" fontWeight="950" sx={{ color: binThemeTokens.goldHover }}>{moneyLabel(mobilization, primaryContract)}</Typography>
                   </Grid>
                   <Grid item xs={12} sm={4}>
-                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.35)', fontWeight: 900 }}>PAYMENT PLAN</Typography>
-                    <Typography variant="h6" fontWeight="950" sx={{ color: '#FFF' }}>{paymentPlanText}</Typography>
+                    <Typography variant="caption" sx={{ color: ownerInk.muted, fontWeight: 900 }}>PAYMENT PLAN</Typography>
+                    <Typography variant="h6" fontWeight="950" sx={{ color: ownerInk.title }}>{paymentPlanText}</Typography>
                   </Grid>
                 </Grid>
 
-                <Alert severity="info" sx={{ bgcolor: alpha(binThemeTokens.gold, 0.08), color: '#f8fafc', border: `1px solid ${alpha(binThemeTokens.gold, 0.22)}` }}>
+                <Alert severity="info">
                   Owner signature is processed through a secure backend callable. The client cannot unlock the dashboard or mark payment verified by itself.
                 </Alert>
 
@@ -569,7 +601,7 @@ export default function OwnerActivationPage() {
                       onClick={handleOwnerSignContract}
                       variant="contained"
                       startIcon={<PenLine size={18} />}
-                      sx={{ bgcolor: '#10b981', color: '#FFF', fontWeight: 950, borderRadius: 3, py: 1.5 }}
+                      sx={{ bgcolor: ownerInk.success, color: '#fff', fontWeight: 950, borderRadius: 3, py: 1.5 }}
                     >
                       {signing ? 'Signing...' : 'Sign Contract'}
                     </Button>
@@ -612,7 +644,7 @@ export default function OwnerActivationPage() {
                       />
                     </Button>
                     {paymentConfiguration?.officeLocation && (
-                      <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.48)' }}>
+                      <Typography variant="caption" sx={{ color: ownerInk.body }}>
                         Approved office: {paymentConfiguration.officeLocation}
                       </Typography>
                     )}
@@ -625,10 +657,10 @@ export default function OwnerActivationPage() {
           </Grid>
 
           <Grid item xs={12} md={5}>
-            <Paper sx={{ p: 4, height: '100%', bgcolor: 'rgba(15,23,42,0.38)', border: `1px solid ${alpha(binThemeTokens.gold, 0.16)}`, borderRadius: 6 }}>
+            <Paper sx={{ p: 4, height: '100%', bgcolor: ownerInk.paperSoft, border: `1px solid ${ownerInk.goldBorder}`, borderRadius: 6 }}>
               <Stack spacing={2} sx={{ textAlign: isRTL ? 'right' : 'left' }}>
-                <Chip icon={<LockKeyhole size={14} />} label="NO ORPHAN CONTRACTS" sx={{ alignSelf: isRTL ? 'flex-end' : 'flex-start', bgcolor: alpha('#10b981', 0.1), color: '#10b981', fontWeight: 950 }} />
-                <Typography variant="h6" fontWeight="950" sx={{ color: '#FFF' }}>Activation rules</Typography>
+                <Chip icon={<LockKeyhole size={14} />} label="NO ORPHAN CONTRACTS" sx={{ alignSelf: isRTL ? 'flex-end' : 'flex-start', bgcolor: alpha(ownerInk.success, 0.1), color: ownerInk.success, fontWeight: 950 }} />
+                <Typography variant="h6" fontWeight="950" sx={{ color: ownerInk.title }}>Activation rules</Typography>
                 <Stack spacing={1.5}>
                   {[
                     'Contract must exist and be linked to owner email/UID.',
@@ -638,15 +670,15 @@ export default function OwnerActivationPage() {
                   ].map((item) => (
                     <Stack key={item} direction={isRTL ? 'row-reverse' : 'row'} spacing={1.2} alignItems="center">
                       <ShieldCheck size={16} color={binThemeTokens.gold} />
-                      <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.62)' }}>{item}</Typography>
+                      <Typography variant="body2" sx={{ color: ownerInk.body }}>{item}</Typography>
                     </Stack>
                   ))}
                 </Stack>
-                <Divider sx={{ borderColor: 'rgba(255,255,255,0.07)', my: 1 }} />
+                <Divider sx={{ borderColor: ownerInk.border, my: 1 }} />
                 <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} alignItems="center">
                   <WalletCards size={18} color={binThemeTokens.gold} />
-                  <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.42)', fontWeight: 800 }}>
-                    PSP-ready fields: ownerSigned, signedAt, paymentStatus, mobilizationAmount, activeContractId, paymentVerified.
+                  <Typography variant="caption" sx={{ color: ownerInk.muted, fontWeight: 800 }}>
+                    After approval: download the contract PDF and paid 15% receipt from Financials and Contracts.
                   </Typography>
                 </Stack>
               </Stack>
@@ -662,30 +694,30 @@ function ActivationTimeline({ gates }: { gates: ActivationGate[] }) {
   const doneCount = gates.filter((step) => step.status === 'Done').length;
 
   return (
-    <Paper sx={{ p: { xs: 2.25, md: 3 }, bgcolor: 'rgba(15,23,42,0.52)', border: `1px solid ${alpha(binThemeTokens.gold, 0.16)}`, borderRadius: 6 }}>
+    <Paper sx={{ p: { xs: 2.25, md: 3 }, bgcolor: ownerInk.paper, border: `1px solid ${ownerInk.goldBorder}`, borderRadius: 6, boxShadow: binThemeTokens.cardShadow }}>
       <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" alignItems={{ xs: 'flex-start', md: 'center' }} spacing={1.5} sx={{ mb: 2.5 }}>
         <Box>
-          <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 2 }}>
+          <Typography variant="overline" sx={{ color: binThemeTokens.goldHover, fontWeight: 950, letterSpacing: 2 }}>
             OWNER ACTIVATION TIMELINE
           </Typography>
-          <Typography variant="h6" sx={{ color: '#fff', fontWeight: 950 }}>
+          <Typography variant="h6" sx={{ color: ownerInk.title, fontWeight: 950 }}>
             {doneCount}/{gates.length} gates complete
           </Typography>
         </Box>
         <Chip
           label={doneCount === gates.length ? 'READY' : 'ACTION NEEDED'}
-          sx={{ bgcolor: alpha(doneCount === gates.length ? '#10b981' : '#f59e0b', 0.12), color: doneCount === gates.length ? '#10b981' : '#f59e0b', fontWeight: 950 }}
+          sx={{ bgcolor: alpha(doneCount === gates.length ? ownerInk.success : ownerInk.warning, 0.12), color: doneCount === gates.length ? ownerInk.success : ownerInk.warning, fontWeight: 950 }}
         />
       </Stack>
       <Grid container spacing={1.5}>
         {gates.map((step) => (
           <Grid item xs={12} sm={6} md={4} key={step.label}>
-            <Paper sx={{ p: 1.75, height: '100%', bgcolor: alpha(step.tone, 0.07), border: `1px solid ${alpha(step.tone, 0.22)}`, borderRadius: 3 }}>
+            <Paper sx={{ p: 1.75, height: '100%', bgcolor: ownerInk.paperSoft, border: `1px solid ${alpha(step.tone, 0.35)}`, borderRadius: 3 }}>
               <Stack direction="row" spacing={1} justifyContent="space-between" alignItems="center">
-                <Typography variant="body2" sx={{ color: '#fff', fontWeight: 900 }}>{step.label}</Typography>
+                <Typography variant="body2" sx={{ color: ownerInk.title, fontWeight: 900 }}>{step.label}</Typography>
                 <Chip size="small" label={step.status} sx={{ height: 20, bgcolor: alpha(step.tone, 0.16), color: step.tone, fontWeight: 950, fontSize: '0.62rem' }} />
               </Stack>
-              <Typography variant="caption" sx={{ display: 'block', mt: 1, color: 'rgba(255,255,255,0.58)', fontWeight: 700 }}>
+              <Typography variant="caption" sx={{ display: 'block', mt: 1, color: ownerInk.body, fontWeight: 700 }}>
                 {step.detail}
               </Typography>
             </Paper>
