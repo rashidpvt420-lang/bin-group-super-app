@@ -1,3 +1,6 @@
+/* Light portal shells: force readable dark ink on white/platinum surfaces.
+   Inline sx color:#FFF leftovers from the old dark theme must lose to these rules. */
+
 .authenticated-shell,
 .admin-shell,
 .technician-shell,
@@ -10,17 +13,57 @@
 
 .authenticated-shell .MuiPaper-root,
 .admin-shell .MuiPaper-root,
-.technician-shell .MuiPaper-root {
+.technician-shell .MuiPaper-root,
+.owner-shell .MuiPaper-root,
+.tenant-shell .MuiPaper-root,
+.broker-shell .MuiPaper-root {
   background: #ffffff !important;
+  background-image: none !important;
   color: #111827 !important;
   border: 1px solid #e5e7eb !important;
-  box-shadow: 0 14px 34px rgba(17,24,39,.08) !important;
+  box-shadow: 0 14px 34px rgba(17, 24, 39, 0.08) !important;
+}
+
+/* Kill leftover dark theme cover overlays that sit above Paper and wash out ink. */
+.authenticated-shell .MuiPaper-root::before,
+.admin-shell .MuiPaper-root::before,
+.technician-shell .MuiPaper-root::before,
+.owner-shell .MuiPaper-root::before,
+.tenant-shell .MuiPaper-root::before,
+.broker-shell .MuiPaper-root::before {
+  background: transparent !important;
+  background-image: none !important;
+  backdrop-filter: none !important;
+}
+
+.authenticated-shell .MuiPaper-root .MuiPaper-root,
+.admin-shell .MuiPaper-root .MuiPaper-root,
+.technician-shell .MuiPaper-root .MuiPaper-root,
+.owner-shell .MuiPaper-root .MuiPaper-root,
+.tenant-shell .MuiPaper-root .MuiPaper-root,
+.broker-shell .MuiPaper-root .MuiPaper-root {
+  background: #f8f9fb !important;
 }
 
 .authenticated-shell .MuiTypography-root,
 .admin-shell .MuiTypography-root,
-.technician-shell .MuiTypography-root {
+.technician-shell .MuiTypography-root,
+.owner-shell .MuiTypography-root,
+.tenant-shell .MuiTypography-root,
+.broker-shell .MuiTypography-root {
   color: #111827 !important;
+  text-shadow: none !important;
+}
+
+/* Captions/helpers stay muted. body1/body2 keep full ink so DetailRow values,
+   profile contact lines, and status text stay readable on white cards. */
+.authenticated-shell .MuiTypography-caption,
+.admin-shell .MuiTypography-caption,
+.technician-shell .MuiTypography-caption,
+.owner-shell .MuiTypography-caption,
+.tenant-shell .MuiTypography-caption,
+.broker-shell .MuiTypography-caption {
+  color: #667085 !important;
 }
 
 .authenticated-shell .MuiTypography-body1,
@@ -28,18 +71,187 @@
 .admin-shell .MuiTypography-body1,
 .admin-shell .MuiTypography-body2,
 .technician-shell .MuiTypography-body1,
-.technician-shell .MuiTypography-body2 {
+.technician-shell .MuiTypography-body2,
+.owner-shell .MuiTypography-body1,
+.owner-shell .MuiTypography-body2,
+.tenant-shell .MuiTypography-body1,
+.tenant-shell .MuiTypography-body2,
+.broker-shell .MuiTypography-body1,
+.broker-shell .MuiTypography-body2,
+.authenticated-shell .portal-detail-value,
+.admin-shell .portal-detail-value,
+.technician-shell .portal-detail-value,
+.owner-shell .portal-detail-value,
+.tenant-shell .portal-detail-value,
+.broker-shell .portal-detail-value {
+  color: #111827 !important;
+}
+
+.authenticated-shell .MuiTypography-overline,
+.admin-shell .MuiTypography-overline,
+.technician-shell .MuiTypography-overline,
+.owner-shell .MuiTypography-overline,
+.tenant-shell .MuiTypography-overline,
+.broker-shell .MuiTypography-overline {
+  color: #b8932f !important;
+  font-weight: 900 !important;
+}
+
+.authenticated-shell .MuiInputLabel-root,
+.admin-shell .MuiInputLabel-root,
+.technician-shell .MuiInputLabel-root,
+.owner-shell .MuiInputLabel-root,
+.tenant-shell .MuiInputLabel-root,
+.broker-shell .MuiInputLabel-root {
   color: #667085 !important;
+  font-weight: 800 !important;
+}
+
+.authenticated-shell .MuiOutlinedInput-root,
+.admin-shell .MuiOutlinedInput-root,
+.technician-shell .MuiOutlinedInput-root,
+.owner-shell .MuiOutlinedInput-root,
+.tenant-shell .MuiOutlinedInput-root,
+.broker-shell .MuiOutlinedInput-root {
+  background: #ffffff !important;
+  color: #111827 !important;
 }
 
 .authenticated-shell input,
 .admin-shell input,
 .technician-shell input,
+.owner-shell input,
+.tenant-shell input,
+.broker-shell input,
 .authenticated-shell textarea,
 .admin-shell textarea,
-.technician-shell textarea {
+.technician-shell textarea,
+.owner-shell textarea,
+.tenant-shell textarea,
+.broker-shell textarea {
   color: #111827 !important;
   -webkit-text-fill-color: #111827 !important;
+}
+
+.authenticated-shell input::placeholder,
+.admin-shell input::placeholder,
+.technician-shell input::placeholder,
+.owner-shell input::placeholder,
+.tenant-shell input::placeholder,
+.broker-shell input::placeholder,
+.authenticated-shell textarea::placeholder,
+.admin-shell textarea::placeholder,
+.technician-shell textarea::placeholder,
+.owner-shell textarea::placeholder,
+.tenant-shell textarea::placeholder,
+.broker-shell textarea::placeholder {
+  color: #667085 !important;
+  opacity: 1 !important;
+  -webkit-text-fill-color: #667085 !important;
+}
+
+.authenticated-shell .MuiButton-outlined,
+.admin-shell .MuiButton-outlined,
+.technician-shell .MuiButton-outlined,
+.owner-shell .MuiButton-outlined,
+.tenant-shell .MuiButton-outlined,
+.broker-shell .MuiButton-outlined {
+  background: #ffffff !important;
+  color: #111827 !important;
+  border-color: rgba(184, 147, 47, 0.42) !important;
+}
+
+.authenticated-shell .MuiButton-contained,
+.admin-shell .MuiButton-contained,
+.technician-shell .MuiButton-contained,
+.owner-shell .MuiButton-contained,
+.tenant-shell .MuiButton-contained,
+.broker-shell .MuiButton-contained {
+  background: linear-gradient(135deg, #d3b34e, #f0e2af) !important;
+  color: #111827 !important;
+}
+
+.authenticated-shell .MuiButton-text,
+.admin-shell .MuiButton-text,
+.technician-shell .MuiButton-text,
+.owner-shell .MuiButton-text,
+.tenant-shell .MuiButton-text,
+.broker-shell .MuiButton-text {
+  color: #b8932f !important;
+}
+
+.authenticated-shell .MuiChip-root,
+.admin-shell .MuiChip-root,
+.technician-shell .MuiChip-root,
+.owner-shell .MuiChip-root,
+.tenant-shell .MuiChip-root,
+.broker-shell .MuiChip-root {
+  background: #ffffff !important;
+  color: #111827 !important;
+  border: 1px solid rgba(184, 147, 47, 0.28) !important;
+}
+
+.authenticated-shell .MuiChip-label,
+.admin-shell .MuiChip-label,
+.technician-shell .MuiChip-label,
+.owner-shell .MuiChip-label,
+.tenant-shell .MuiChip-label,
+.broker-shell .MuiChip-label {
+  color: #111827 !important;
+}
+
+.authenticated-shell .MuiAlert-message,
+.admin-shell .MuiAlert-message,
+.technician-shell .MuiAlert-message,
+.owner-shell .MuiAlert-message,
+.tenant-shell .MuiAlert-message,
+.broker-shell .MuiAlert-message {
+  color: #111827 !important;
+}
+
+.authenticated-shell .MuiAlert-standardInfo,
+.admin-shell .MuiAlert-standardInfo,
+.technician-shell .MuiAlert-standardInfo,
+.owner-shell .MuiAlert-standardInfo,
+.tenant-shell .MuiAlert-standardInfo,
+.broker-shell .MuiAlert-standardInfo,
+.authenticated-shell .MuiAlert-standardSuccess,
+.admin-shell .MuiAlert-standardSuccess,
+.technician-shell .MuiAlert-standardSuccess,
+.owner-shell .MuiAlert-standardSuccess,
+.tenant-shell .MuiAlert-standardSuccess,
+.broker-shell .MuiAlert-standardSuccess,
+.authenticated-shell .MuiAlert-standardWarning,
+.admin-shell .MuiAlert-standardWarning,
+.technician-shell .MuiAlert-standardWarning,
+.owner-shell .MuiAlert-standardWarning,
+.tenant-shell .MuiAlert-standardWarning,
+.broker-shell .MuiAlert-standardWarning,
+.authenticated-shell .MuiAlert-standardError,
+.admin-shell .MuiAlert-standardError,
+.technician-shell .MuiAlert-standardError,
+.owner-shell .MuiAlert-standardError,
+.tenant-shell .MuiAlert-standardError,
+.broker-shell .MuiAlert-standardError {
+  color: #111827 !important;
+}
+
+.authenticated-shell .MuiDivider-root,
+.admin-shell .MuiDivider-root,
+.technician-shell .MuiDivider-root,
+.owner-shell .MuiDivider-root,
+.tenant-shell .MuiDivider-root,
+.broker-shell .MuiDivider-root {
+  border-color: #e5e7eb !important;
+}
+
+.authenticated-shell .MuiFormHelperText-root,
+.admin-shell .MuiFormHelperText-root,
+.technician-shell .MuiFormHelperText-root,
+.owner-shell .MuiFormHelperText-root,
+.tenant-shell .MuiFormHelperText-root,
+.broker-shell .MuiFormHelperText-root {
+  color: #667085 !important;
 }
 
 /* Global Portal (Dialog, Menu, Popover) Overrides for White & Platinum */
@@ -50,7 +262,7 @@ body .MuiAutocomplete-paper {
   background: #ffffff !important;
   color: #111827 !important;
   border: 1px solid #e5e7eb !important;
-  box-shadow: 0 14px 34px rgba(17,24,39,.08) !important;
+  box-shadow: 0 14px 34px rgba(17, 24, 39, 0.08) !important;
 }
 
 body .MuiDialog-root .MuiTypography-root,

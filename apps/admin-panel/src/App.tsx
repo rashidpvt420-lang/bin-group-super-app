@@ -88,9 +88,9 @@ function AppContent() {
 
     if (loading) {
         return (
-            <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', bgcolor: '#020617', p: 4, direction: isRTL ? 'rtl' : 'ltr' }}>
-                <CircularProgress sx={{ color: '#DAA520', mb: 4 }} />
-                <Typography variant="h6" sx={{ color: '#DAA520', fontWeight: 900, letterSpacing: 2, textAlign: isRTL ? 'right' : 'left' }}>
+            <Box className="admin-shell" sx={{ height: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', bgcolor: '#FFFFFF', color: '#111827', p: 4, direction: isRTL ? 'rtl' : 'ltr' }}>
+                <CircularProgress sx={{ color: '#C9A646', mb: 4 }} />
+                <Typography variant="h6" sx={{ color: '#B8932F', fontWeight: 900, letterSpacing: 2, textAlign: isRTL ? 'right' : 'left' }}>
                     {t('dash.command_subtitle') || (isRTL ? 'جارٍ التحقق من مركز قيادة المسؤول' : 'Authenticating Admin Command Center')}
                 </Typography>
             </Box>
@@ -200,17 +200,17 @@ function Layout() {
     };
 
     return (
-        <Box sx={{ display: 'flex', height: '100vh', width: '100vw', bgcolor: '#020617', overflow: 'hidden', direction: isRTL ? 'rtl' : 'ltr' }}>
+        <Box className="admin-shell" sx={{ display: 'flex', height: '100vh', width: '100vw', bgcolor: '#FFFFFF', color: '#111827', overflow: 'hidden', direction: isRTL ? 'rtl' : 'ltr' }}>
             <Navigation />
             <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden', position: 'relative' }}>
-                <BrandWatermark opacity={0.035} />
-                <Box sx={{ px: 4, py: 1.5, display: 'flex', justifyContent: 'space-between', alignItems: 'center', bgcolor: 'rgba(2, 6, 23, 0.8)', backdropFilter: 'blur(10px)', borderBottom: '1px solid rgba(255,255,255,0.05)', zIndex: 1100 }}>
-                    <Typography variant="overline" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900, letterSpacing: 2 }}>
-                        {t('nav.administry')} / <Box component="span" sx={{ color: '#DAA520' }}>{shellText('COMMAND · UAE 🇦🇪', 'القيادة · الإمارات 🇦🇪')}</Box>
+                <BrandWatermark opacity={0.025} />
+                <Box sx={{ px: 4, py: 1.5, display: 'flex', justifyContent: 'space-between', alignItems: 'center', bgcolor: 'rgba(255,255,255,0.96)', backdropFilter: 'blur(10px)', borderBottom: '1px solid #E5E7EB', zIndex: 1100 }}>
+                    <Typography variant="overline" sx={{ color: '#6B7280', fontWeight: 900, letterSpacing: 2 }}>
+                        {t('nav.administry')} / <Box component="span" sx={{ color: '#B8932F' }}>{shellText('COMMAND · UAE 🇦🇪', 'القيادة · الإمارات 🇦🇪')}</Box>
                     </Typography>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 3 }}>
                         <LanguageSwitcher />
-                        <Box sx={{ width: '1px', height: 24, bgcolor: 'rgba(255,255,255,0.1)' }} />
+                        <Box sx={{ width: '1px', height: 24, bgcolor: '#E5E7EB' }} />
                         <Button
                             href="/profile"
                             onClick={(event) => {
@@ -219,14 +219,14 @@ function Layout() {
                             }}
                             data-testid="admin-profile-link"
                             aria-label={shellText('Open Admin profile and security', 'فتح ملف المسؤول والأمان')}
-                            sx={{ display: 'flex', alignItems: 'center', gap: 1.5, px: 2, py: 0.5, minWidth: 0, borderRadius: 100, bgcolor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.05)', color: '#FFF', textTransform: 'none', '&:hover': { bgcolor: 'rgba(218,165,32,0.10)', borderColor: 'rgba(218,165,32,0.45)' } }}
+                            sx={{ display: 'flex', alignItems: 'center', gap: 1.5, px: 2, py: 0.5, minWidth: 0, borderRadius: 100, bgcolor: '#F8F9FB', border: '1px solid #E5E7EB', color: '#111827', textTransform: 'none', '&:hover': { bgcolor: 'rgba(184,147,47,0.10)', borderColor: 'rgba(184,147,47,0.45)' } }}
                         >
-                            <Box sx={{ width: 24, height: 24, borderRadius: '50%', bgcolor: '#DAA520', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                <UserIcon size={14} color="#000" />
+                            <Box sx={{ width: 24, height: 24, borderRadius: '50%', bgcolor: '#C9A646', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                <UserIcon size={14} color="#111827" />
                             </Box>
                             <Box>
-                                <Typography variant="caption" sx={{ color: '#FFF', fontWeight: 900, display: 'block', lineHeight: 1 }}>{user?.displayName?.split(' ')[0] || shellText('ADMIN', 'مسؤول')}</Typography>
-                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.6rem', fontWeight: 700, textTransform: 'uppercase' }}>{user?.role || shellText('operator', 'مشغّل')}</Typography>
+                                <Typography variant="caption" sx={{ color: '#111827', fontWeight: 900, display: 'block', lineHeight: 1 }}>{user?.displayName?.split(' ')[0] || shellText('ADMIN', 'مسؤول')}</Typography>
+                                <Typography variant="caption" sx={{ color: '#6B7280', fontSize: '0.6rem', fontWeight: 700, textTransform: 'uppercase' }}>{user?.role || shellText('operator', 'مشغّل')}</Typography>
                             </Box>
                         </Button>
                         <Button onClick={handleLogout} data-testid="admin-logout" startIcon={<LogOut size={16} />} sx={{ color: '#ef4444', fontWeight: 900, fontSize: '0.75rem', '&:hover': { bgcolor: 'rgba(239, 68, 68, 0.1)' } }}>
@@ -235,10 +235,10 @@ function Layout() {
                     </Box>
                 </Box>
 
-                <Box component="main" sx={{ flexGrow: 1, overflowY: 'auto', p: 0, bgcolor: '#020617', display: 'flex', flexDirection: 'column', '&::-webkit-scrollbar': { width: '8px' }, '&::-webkit-scrollbar-thumb': { bgcolor: 'rgba(255,255,255,0.1)', borderRadius: '4px' } }}>
+                <Box component="main" sx={{ flexGrow: 1, overflowY: 'auto', p: 0, bgcolor: '#F8F9FB', display: 'flex', flexDirection: 'column', '&::-webkit-scrollbar': { width: '8px' }, '&::-webkit-scrollbar-thumb': { bgcolor: 'rgba(17,24,39,0.15)', borderRadius: '4px' } }}>
                     <Box sx={{ flexGrow: 1 }}><Outlet /></Box>
-                    <Box component="footer" sx={{ p: 4, borderTop: '1px solid rgba(255, 255, 255, 0.05)', textAlign: 'center', bgcolor: 'rgba(255,255,255,0.01)' }}>
-                        <Typography variant="caption" sx={{ color: 'text.secondary', letterSpacing: 2, fontWeight: 900 }}>
+                    <Box component="footer" sx={{ p: 4, borderTop: '1px solid #E5E7EB', textAlign: 'center', bgcolor: '#FFFFFF' }}>
+                        <Typography variant="caption" sx={{ color: '#6B7280', letterSpacing: 2, fontWeight: 900 }}>
                             © 2026 BIN GROUP | {t('landing.footer.built_for_uae')} | {shellText('MADE IN UAE 🇦🇪', 'صُنع في الإمارات 🇦🇪')}
                         </Typography>
                     </Box>

@@ -54,7 +54,7 @@ const OwnerLayout = ({ children }: { children: React.ReactNode }) => {
     const isHome = location.pathname === '/owner' || location.pathname === '/owner/dashboard';
 
     return (
-        <Box sx={{ minHeight: '100vh', bgcolor: binThemeTokens.canvas, color: binThemeTokens.textPrimary, direction: isRTL ? 'rtl' : 'ltr', display: 'flex', flexDirection: 'column', position: 'relative', isolation: 'isolate', background: `linear-gradient(180deg, ${binThemeTokens.canvas} 0%, ${binThemeTokens.softCanvas} 100%)` }}>
+        <Box className="owner-shell" sx={{ minHeight: '100vh', bgcolor: binThemeTokens.canvas, color: binThemeTokens.textPrimary, direction: isRTL ? 'rtl' : 'ltr', display: 'flex', flexDirection: 'column', position: 'relative', isolation: 'isolate', background: `linear-gradient(180deg, ${binThemeTokens.canvas} 0%, ${binThemeTokens.softCanvas} 100%)` }}>
             <BrandWatermark label="BIN GROUPS" opacity={binThemeTokens.watermarkOpacity} />
             <AppBar position="sticky" elevation={0} sx={{ bgcolor: alpha(binThemeTokens.canvas, 0.94), backdropFilter: 'blur(18px)', borderBottom: `1px solid ${binThemeTokens.border}`, boxShadow: '0 8px 24px rgba(17,24,39,0.06)', zIndex: 1200 }}>
                 <Toolbar sx={{ justifyContent: 'space-between', px: { xs: 2, md: 4 }, flexDirection: isRTL ? 'row-reverse' : 'row', gap: 1 }}>

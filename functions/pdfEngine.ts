@@ -82,6 +82,34 @@ function textValue(value: any, fallback = '---') {
     return text || fallback;
 }
 
+/** Flatten nested onboarding property arrays so cover pages are not all "---". */
+function resolveContractCoverFields(data: any) {
+    const property = Array.isArray(data?.properties) && data.properties[0]
+        ? data.properties[0]
+        : (data?.propertyDetails || data?.property || data?.assetProfile || {});
+    const geo = property?.geo || property?.location?.geo || property?.coordinates || {};
+    const lat = data.lat ?? geo.lat ?? property?.lat;
+    const lng = data.lng ?? geo.lng ?? property?.lng;
+    return {
+        propertyName: data.propertyName || data.propertyTitle || property?.name || property?.propertyName || property?.address || data.address,
+        propertyType: data.propertyType || data.assetClass || data.buildingType || property?.propertyType || property?.type || property?.subType || 'property',
+        emirate: data.emirate || property?.emirate || property?.location?.emirate || property?.city,
+        address: data.address || data.location || data.formattedAddress || property?.address || property?.formattedAddress || property?.location?.address,
+        titleDeedReference: data.titleDeedReference || data.titleDeedNo || data.deedNumber || property?.titleDeedReference || property?.titleDeedNo || property?.deedNumber,
+        gps: data.gpsCoordinates || data.coordinates || (lat != null && lng != null && String(lat) && String(lng) ? `${lat}, ${lng}` : ''),
+        units: data.units || data.totalUnits || data.unitCount || property?.units || property?.totalUnits || property?.unitCount || property?.numberOfUnits,
+        floors: data.floors || data.floorCount || property?.floors || property?.floorCount,
+        tenants: data.tenants || data.tenantSummary || property?.tenants,
+        reporters: data.authorizedReporters || data.reporters || property?.authorizedReporters,
+        companyName: data.companyName || data.entityName || data.companyProfile?.name || property?.companyName,
+        ownerEmail: data.ownerEmail || data.email || data.companyProfile?.email,
+        paymentPlan: data.paymentPlan || data.billingFrequency || data.commercialSchedule?.paymentPlan || data.paymentSchedule?.paymentPlan || property?.paymentPlan,
+        annualValue: data.annualValue || data.totalAnnualValue || data.estimatedAnnualValue || data.annualContractValue || data.quoteSnapshot?.annualContractValue || data.commercialSchedule?.annualContractValue,
+        mobilizationAmount: data.mobilizationFee || data.mobilizationAmount || data.upfrontAmount || data.activationDeposit || data.quoteSnapshot?.activationDeposit || data.commercialSchedule?.mobilizationAmount || data.paymentSchedule?.mobilizationAmount,
+        servicePackage: data.servicePackage || data.planName || data.contractType || data.packageName || data.selectedPlan?.name,
+    };
+}
+
 function asDate(value: any): Date | null {
     if (!value) return null;
     if (typeof value?.toDate === "function") return value.toDate();
@@ -370,11 +398,14 @@ export async function generateContractPdfArtifact(data: any): Promise<CanonicalP
         doc.rect(50, doc.y, 495, 2).fill(GOLD);
         doc.moveDown(1.0);
 
+        const cover = resolveContractCoverFields(data);
+        const resolvedPropertyType = textValue(cover.propertyType, propertyType);
+
         section(doc, '1. Contract Cover', 'غلاف العقد');
         row(doc, 'Agreement Date / تاريخ الاتفاقية', new Date().toLocaleDateString('en-AE'));
         row(doc, 'Owner / المالك', textValue(data.ownerName || data.fullName || data.signatureName));
-        row(doc, 'Owner Email / بريد المالك', textValue(data.ownerEmail || data.email));
-        row(doc, 'Company / الشركة', textValue(data.companyName || data.entityName || 'Private Owner'));
+        row(doc, 'Owner Email / بريد المالك', textValue(cover.ownerEmail));
+        row(doc, 'Company / الشركة', textValue(cover.companyName || 'Private Owner'));
         row(doc, 'Service Provider / مقدم الخدمة', 'BIN GROUP L.L.C - S.P.C');
         row(doc, 'Contract Mode / نوع العقد', contractModeLabel(contractMode));
 
@@ -391,22 +422,22 @@ export async function generateContractPdfArtifact(data: any): Promise<CanonicalP
         row(doc, 'Contract Term / مدة العقد', `13 Months: ${start.toLocaleDateString('en-AE')} to ${end.toLocaleDateString('en-AE')} / مستمر لمدة 13 شهراً`);
 
         section(doc, '2. Property and Submitted Details', 'بيانات العقار والمستندات المقدمة');
-        row(doc, 'Property Name / اسم العقار', textValue(data.propertyName || data.propertyTitle || data.address));
-        row(doc, 'Property Type / نوع العقار', propertyType);
-        row(doc, 'Emirate / الإمارة', textValue(data.emirate));
-        row(doc, 'Address / العنوان', textValue(data.address || data.location || data.formattedAddress));
-        row(doc, 'Title Deed / سند الملكية', textValue(data.titleDeedReference || data.titleDeedNo || data.deedNumber));
-        row(doc, 'GPS / إحداثيات الموقع', textValue(data.gpsCoordinates || data.coordinates || (data.lat && data.lng ? `${data.lat}, ${data.lng}` : '---')));
-        row(doc, 'Units / الوحدات', textValue(data.units || data.totalUnits || data.unitCount));
-        row(doc, 'Floors / الطوابق', textValue(data.floors || data.floorCount));
-        row(doc, 'Tenants / المستأجرون', safeArray(data.tenants || data.tenantSummary));
-        row(doc, 'Authorized Reporters / المبلغون المعتمدون', safeArray(data.authorizedReporters || data.reporters));
+        row(doc, 'Property Name / اسم العقار', textValue(cover.propertyName));
+        row(doc, 'Property Type / نوع العقار', resolvedPropertyType);
+        row(doc, 'Emirate / الإمارة', textValue(cover.emirate));
+        row(doc, 'Address / العنوان', textValue(cover.address));
+        row(doc, 'Title Deed / سند الملكية', textValue(cover.titleDeedReference));
+        row(doc, 'GPS / إحداثيات الموقع', textValue(cover.gps));
+        row(doc, 'Units / الوحدات', textValue(cover.units));
+        row(doc, 'Floors / الطوابق', textValue(cover.floors));
+        row(doc, 'Tenants / المستأجرون', safeArray(cover.tenants));
+        row(doc, 'Authorized Reporters / المبلغون المعتمدون', safeArray(cover.reporters));
 
         section(doc, '3. Commercial Terms', 'الشروط التجارية');
-        row(doc, 'Package / الباقة', textValue(data.servicePackage || data.planName || data.contractType));
-        row(doc, 'Annual Value / القيمة السنوية', money(data.annualValue || data.totalAnnualValue || data.estimatedAnnualValue));
-        row(doc, 'Mobilization / Activation / التفعيل', money(data.mobilizationFee || data.mobilizationAmount || data.upfrontAmount));
-        row(doc, 'Payment Plan / خطة السداد', textValue(data.paymentPlan || data.billingFrequency));
+        row(doc, 'Package / الباقة', textValue(cover.servicePackage));
+        row(doc, 'Annual Value / القيمة السنوية', money(cover.annualValue));
+        row(doc, 'Mobilization / Activation / التفعيل', money(cover.mobilizationAmount));
+        row(doc, 'Payment Plan / خطة السداد', textValue(cover.paymentPlan));
         row(doc, 'VAT / ضريبة القيمة المضافة', textValue(data.vatTreatment || 'VAT applies where legally required'));
 
         section(doc, '4. Contract Mode Matrix', 'مصفوفة نوع العقد');

@@ -494,7 +494,17 @@ export const submitOwnerInspectionFirstOnboarding = onCall({ cors: true, enforce
     },
   });
   if (initialDecision === "IDEMPOTENT") {
-    return { success: true, idempotent: true, intakeId, contractId, paymentId: intakeId, nextState: "ADMIN_PROPERTY_REVIEW" };
+    const existing = existingIntake.exists ? existingIntake.data() || {} : {};
+    return {
+      success: true,
+      idempotent: true,
+      intakeId,
+      contractId,
+      paymentId: intakeId,
+      annualContractValue: Number(existing.annualContractValue || existing.annualValue || 0),
+      activationDeposit: Number(existing.activationDeposit || existing.mobilizationAmount || existing.depositAmount || 0),
+      nextState: "ADMIN_PROPERTY_REVIEW",
+    };
   }
 
   const transactionOutcome = await db.runTransaction(async (transaction) => {
@@ -707,7 +717,17 @@ export const submitOwnerInspectionFirstOnboarding = onCall({ cors: true, enforce
   });
 
   if (transactionOutcome === "IDEMPOTENT") {
-    return { success: true, idempotent: true, intakeId, contractId, paymentId: intakeId, nextState: "ADMIN_PROPERTY_REVIEW" };
+    const existing = existingIntake.exists ? existingIntake.data() || {} : {};
+    return {
+      success: true,
+      idempotent: true,
+      intakeId,
+      contractId,
+      paymentId: intakeId,
+      annualContractValue: Number(existing.annualContractValue || existing.annualValue || 0),
+      activationDeposit: Number(existing.activationDeposit || existing.mobilizationAmount || existing.depositAmount || 0),
+      nextState: "ADMIN_PROPERTY_REVIEW",
+    };
   }
 
   return {

@@ -1,18 +1,19 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Alert, Box, Button, CircularProgress, Container, Dialog, DialogActions, DialogContent,
   DialogTitle, Paper, Stack, TextField, Typography,
 } from '@mui/material';
-import { Building2, CheckCircle, ClipboardCheck, Dumbbell, MapPinned, ShieldCheck, WalletCards } from 'lucide-react';
+import { Building2, CheckCircle, ClipboardCheck, Dumbbell, MapPinned, ShieldCheck, Upload, WalletCards } from 'lucide-react';
 import { onAuthStateChanged, signInWithEmailAndPassword, type User as FirebaseUser } from 'firebase/auth';
 import { auth, functions, httpsCallable } from '../../lib/firebase';
 import { useOnboardingStore } from '../../store/onboardingStore';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
-import { clearStagedFiles, getStagedFile } from '../../lib/onboardingDb';
+import { clearStagedFiles, getStagedFile, probeStagedFile, stageFile } from '../../lib/onboardingDb';
 import { formatAED } from '../../utils/formatters';
 import { mobilisationDepositFromAnnual } from '../../../functions/shared/mobilisationDeposit';
 import { clearOwnerDocumentUploadCache, uploadOwnerDocuments, type OwnerDocumentInput } from './ownerDocumentUploads';
+import { isValidLatLng } from '../../utils/geoAnchor';
 
 type ProofKey = 'propertyProof' | 'emiratesId' | 'passport' | 'tradeLicense' | 'tenancySupport' | 'gymSportsApproval' | 'gymInsurance' | 'gymFloorPlan';
 type ProofMeta = { name: string; size: number; type: string } | null;
@@ -26,16 +27,18 @@ type SubmissionResult = {
   idempotent?: boolean;
 };
 
-const documents: Array<{ key: ProofKey; en: string; ar: string; gymOnly?: boolean }> = [
-  { key: 'propertyProof', en: 'Property Proof', ar: 'إثبات العقار' },
-  { key: 'emiratesId', en: 'Emirates ID', ar: 'الهوية الإماراتية' },
-  { key: 'passport', en: 'Passport', ar: 'جواز السفر' },
-  { key: 'tradeLicense', en: 'Trade Licence', ar: 'الرخصة التجارية' },
-  { key: 'tenancySupport', en: 'Tenancy Support', ar: 'مستندات إيجارية داعمة' },
-  { key: 'gymSportsApproval', en: 'Gym Sports Establishment / Fitness Centre Approval', ar: 'موافقة المنشأة الرياضية / مركز اللياقة', gymOnly: true },
-  { key: 'gymInsurance', en: 'Gym Insurance Evidence', ar: 'إثبات تأمين النادي', gymOnly: true },
-  { key: 'gymFloorPlan', en: 'Gym Floor Plan', ar: 'مخطط النادي الرياضي', gymOnly: true },
+const documents: Array<{ key: ProofKey; en: string; ar: string; gymOnly?: boolean; accept?: string }> = [
+  { key: 'propertyProof', en: 'Property Proof', ar: 'إثبات العقار', accept: '.pdf,.jpg,.jpeg,.png' },
+  { key: 'emiratesId', en: 'Emirates ID', ar: 'الهوية الإماراتية', accept: '.pdf,.jpg,.jpeg,.png' },
+  { key: 'passport', en: 'Passport', ar: 'جواز السفر', accept: '.pdf,.jpg,.jpeg,.png' },
+  { key: 'tradeLicense', en: 'Trade Licence', ar: 'الرخصة التجارية', accept: '.pdf,.jpg,.jpeg,.png' },
+  { key: 'tenancySupport', en: 'Tenancy Support', ar: 'مستندات إيجارية داعمة', accept: '.pdf,.jpg,.jpeg,.png' },
+  { key: 'gymSportsApproval', en: 'Gym Sports Establishment / Fitness Centre Approval', ar: 'موافقة المنشأة الرياضية / مركز اللياقة', gymOnly: true, accept: '.pdf,.jpg,.jpeg,.png' },
+  { key: 'gymInsurance', en: 'Gym Insurance Evidence', ar: 'إثبات تأمين النادي', gymOnly: true, accept: '.pdf,.jpg,.jpeg,.png' },
+  { key: 'gymFloorPlan', en: 'Gym Floor Plan', ar: 'مخطط النادي الرياضي', gymOnly: true, accept: '.pdf,.jpg,.jpeg,.png' },
 ];
+
+const MAX_DOCUMENT_SIZE = 8 * 1024 * 1024;
 
 const fileToBase64 = (file: File): Promise<string> => new Promise((resolve, reject) => {
   const reader = new FileReader();
@@ -47,11 +50,17 @@ const fileToBase64 = (file: File): Promise<string> => new Promise((resolve, reje
   reader.readAsDataURL(file);
 });
 
-export default function InspectionSubmissionStep({ onBack }: { onBack: () => void }) {
+export default function InspectionSubmissionStep({
+  onBack,
+  onFixDocuments,
+}: {
+  onBack: () => void;
+  onFixDocuments?: () => void;
+}) {
   const {
     companyProfile, ownerAccount, properties, selectedAddOns, proofDocuments,
     intakeId, onboardingSessionId, signatureName, contractOtpVerificationId,
-    isContractSigned, valuationResult, portfolioSummary,
+    isContractSigned, valuationResult, portfolioSummary, setProofDocument,
   } = useOnboardingStore();
   const { lang, isRTL } = useLanguage();
   const copy = (en: string, ar: string) => lang === 'ar' ? ar : en;
@@ -61,6 +70,9 @@ export default function InspectionSubmissionStep({ onBack }: { onBack: () => voi
   const [reauthOpen, setReauthOpen] = useState(false);
   const [reauthPassword, setReauthPassword] = useState('');
   const [uploadProgress, setUploadProgress] = useState<Record<string, number>>({});
+  const [stagedReady, setStagedReady] = useState<Record<string, boolean>>({});
+  const [probingDocs, setProbingDocs] = useState(true);
+  const [stagingKey, setStagingKey] = useState<ProofKey | null>(null);
 
   const serverQuote = valuationResult?.serverQuote as any;
   const annualValue = Number(serverQuote?.annualContractValue || serverQuote?.portfolioAnnualTotal || portfolioSummary.estimatedACV || 0);
@@ -71,12 +83,75 @@ export default function InspectionSubmissionStep({ onBack }: { onBack: () => voi
   const gymProperties = useMemo(() => properties.filter((property) => property.propertyType === 'Gym / Fitness Centre'), [properties]);
   const hasGym = gymProperties.length > 0;
   const visibleDocuments = useMemo(() => documents.filter((item) => !item.gymOnly || hasGym), [hasGym]);
-  const readyDocuments = useMemo(() => visibleDocuments.filter((item) => Boolean(proofMap[item.key])), [proofMap, visibleDocuments]);
   const gymRequired = {
     gymSportsApproval: gymProperties.some((property) => property.gymProfile?.sportsEstablishmentApprovalStatus === 'available'),
     gymInsurance: gymProperties.some((property) => property.gymProfile?.insuranceStatus === 'available'),
     gymFloorPlan: gymProperties.some((property) => property.gymProfile?.floorPlanStatus === 'available'),
   };
+
+  const requiredKeys = useMemo(() => {
+    const keys: ProofKey[] = ['propertyProof'];
+    const identityReady = Boolean(stagedReady.emiratesId && stagedReady.passport);
+    const entityReady = Boolean(stagedReady.tradeLicense);
+    if (!identityReady && !entityReady) {
+      // Keep the identity path the Owner already started; default to individual docs.
+      if (proofMap.tradeLicense && !proofMap.emiratesId && !proofMap.passport) keys.push('tradeLicense');
+      else keys.push('emiratesId', 'passport');
+    }
+    if (gymRequired.gymSportsApproval) keys.push('gymSportsApproval');
+    if (gymRequired.gymInsurance) keys.push('gymInsurance');
+    if (gymRequired.gymFloorPlan) keys.push('gymFloorPlan');
+    return Array.from(new Set(keys));
+  }, [
+    stagedReady.emiratesId,
+    stagedReady.passport,
+    stagedReady.tradeLicense,
+    proofMap.tradeLicense,
+    proofMap.emiratesId,
+    proofMap.passport,
+    gymRequired.gymSportsApproval,
+    gymRequired.gymInsurance,
+    gymRequired.gymFloorPlan,
+  ]);
+
+  const reconcileStagedDocuments = React.useCallback(async () => {
+    setProbingDocs(true);
+    const nextReady: Record<string, boolean> = {};
+    for (const document of visibleDocuments) {
+      if (!proofMap[document.key]) {
+        nextReady[document.key] = false;
+        continue;
+      }
+      // Keep proof metadata even when bytes are gone — clearing it would flip Owners
+      // from the trade-licence path onto Emirates ID + Passport after a session loss.
+      const file = await probeStagedFile(document.key);
+      nextReady[document.key] = Boolean(file);
+    }
+    setStagedReady(nextReady);
+    setProbingDocs(false);
+  }, [visibleDocuments, proofMap]);
+
+  useEffect(() => {
+    void reconcileStagedDocuments();
+    // Re-run when metadata keys change (upload/remove), not on every render object identity.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    proofDocuments.propertyProof?.name,
+    proofDocuments.emiratesId?.name,
+    proofDocuments.passport?.name,
+    proofDocuments.tradeLicense?.name,
+    proofDocuments.tenancySupport?.name,
+    (proofDocuments as any).gymSportsApproval?.name,
+    (proofDocuments as any).gymInsurance?.name,
+    (proofDocuments as any).gymFloorPlan?.name,
+    hasGym,
+  ]);
+
+  const missingRequired = requiredKeys.filter((key) => !stagedReady[key]);
+  const readyDocuments = useMemo(
+    () => visibleDocuments.filter((item) => stagedReady[item.key]),
+    [visibleDocuments, stagedReady],
+  );
 
   const waitForCurrentUser = (timeoutMs = 8000): Promise<FirebaseUser | null> => new Promise((resolve) => {
     if (auth.currentUser) { resolve(auth.currentUser); return; }
@@ -99,14 +174,19 @@ export default function InspectionSubmissionStep({ onBack }: { onBack: () => voi
     if (!ownerAccount?.uid || user.uid !== ownerAccount.uid) throw new Error(copy('The signed-in Owner does not match this application.', 'حساب المالك المسجل لا يطابق هذا الطلب.'));
     if (!user.emailVerified) throw new Error(copy('Verify the Owner email before final submission.', 'تحقق من بريد المالك قبل الإرسال النهائي.'));
     if (!properties.length) throw new Error(copy('Add at least one property.', 'أضف عقاراً واحداً على الأقل.'));
-    if (!properties.every((property) => Number.isFinite(Number(property.geo?.lat)) && Number.isFinite(Number(property.geo?.lng)))) throw new Error(copy('Every property must include a valid GPS location.', 'يجب أن يحتوي كل عقار على موقع GPS صالح.'));
+    if (!properties.every((property) => isValidLatLng(Number(property.geo?.lat), Number(property.geo?.lng)))) throw new Error(copy('Every property must include a valid GPS location.', 'يجب أن يحتوي كل عقار على موقع GPS صالح.'));
     if (!isContractSigned || signatureName.trim().length < 3 || !contractOtpVerificationId) throw new Error(copy('Complete the signed email-OTP agreement before submission.', 'أكمل الاتفاقية الموقعة والمتحقق منها عبر البريد قبل الإرسال.'));
     if (!serverQuote?.quoteHash || !serverQuote?.quotedAtMs || annualValue <= 0 || activationDeposit <= 0) throw new Error(copy('The signed server quotation is missing. Return to the Contract page and refresh it.', 'عرض الخادم الموقع غير موجود. ارجع إلى صفحة العقد وحدّثه.'));
-    const hasIndividualIdentity = Boolean(proofDocuments.emiratesId && proofDocuments.passport);
-    if (!proofDocuments.propertyProof || (!hasIndividualIdentity && !proofDocuments.tradeLicense)) throw new Error(copy('Property proof and Owner identity documents are required.', 'يلزم إثبات العقار ومستندات هوية المالك.'));
-    if (gymRequired.gymSportsApproval && !proofMap.gymSportsApproval) throw new Error(copy('Upload the Gym sports-establishment / fitness-centre approval marked as available.', 'ارفع موافقة المنشأة الرياضية / مركز اللياقة التي تم تحديدها كمتوفرة.'));
-    if (gymRequired.gymInsurance && !proofMap.gymInsurance) throw new Error(copy('Upload the Gym insurance evidence marked as available.', 'ارفع إثبات تأمين النادي الذي تم تحديده كمتوفر.'));
-    if (gymRequired.gymFloorPlan && !proofMap.gymFloorPlan) throw new Error(copy('Upload the Gym floor plan marked as available.', 'ارفع مخطط النادي الذي تم تحديده كمتوفر.'));
+    if (missingRequired.length) {
+      const labels = missingRequired.map((key) => {
+        const doc = documents.find((item) => item.key === key);
+        return copy(doc?.en || key, doc?.ar || key);
+      });
+      throw new Error(copy(
+        `Protected documents missing from this browser session: ${labels.join(', ')}. Re-upload them below.`,
+        `مستندات محمية مفقودة من جلسة هذا المتصفح: ${labels.join('، ')}. أعد رفعها أدناه.`,
+      ));
+    }
   };
 
   const sha256Hex = async (file: Blob) => {
@@ -115,6 +195,30 @@ export default function InspectionSubmissionStep({ onBack }: { onBack: () => voi
   };
   const uploadCache = typeof window !== 'undefined' ? window.sessionStorage : null;
 
+  const handleRestage = async (key: ProofKey, file: File | null) => {
+    if (!file) return;
+    setError('');
+    if (file.size > MAX_DOCUMENT_SIZE) {
+      setError(copy('File is larger than the secure 8 MB limit.', 'حجم الملف أكبر من الحد الآمن البالغ 8 ميجابايت.'));
+      return;
+    }
+    const allowedTypes = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'];
+    if (!allowedTypes.includes(file.type) && !/\.(pdf|jpg|jpeg|png)$/i.test(file.name)) {
+      setError(copy('Only PDF, JPG and PNG files are accepted.', 'يتم قبول ملفات PDF وJPG وPNG فقط.'));
+      return;
+    }
+    setStagingKey(key);
+    try {
+      await stageFile(key, file);
+      setProofDocument(key as any, { name: file.name, size: file.size, type: file.type });
+      setStagedReady((current) => ({ ...current, [key]: true }));
+    } catch (stageError: any) {
+      setError(stageError?.message || copy('Failed to stage file.', 'فشل تجهيز الملف.'));
+    } finally {
+      setStagingKey(null);
+    }
+  };
+
   // F-6 / F-9: upload returns Storage paths (no permanent URLs); transient failures retry with
   // backoff; documents already uploaded with identical bytes are not re-uploaded on retry.
   const uploadDocuments = async (user: FirebaseUser) => {
@@ -122,8 +226,15 @@ export default function InspectionSubmissionStep({ onBack }: { onBack: () => voi
     for (const document of readyDocuments) {
       const file = await getStagedFile(document.key);
       if (!file) throw new Error(copy(`${document.en} is missing from this browser. Upload it again.`, `ملف ${document.ar} غير موجود في هذا المتصفح. ارفعه مرة أخرى.`));
-      if (file.size > 8 * 1024 * 1024) throw new Error(copy(`${document.en} exceeds the secure 8 MB final-upload limit.`, `يتجاوز ملف ${document.ar} حد الرفع الآمن البالغ 8 ميجابايت.`));
+      if (file.size > MAX_DOCUMENT_SIZE) throw new Error(copy(`${document.en} exceeds the secure 8 MB final-upload limit.`, `يتجاوز ملف ${document.ar} حد الرفع الآمن البالغ 8 ميجابايت.`));
       staged.push({ key: document.key, file });
+    }
+    // Also include optional docs that are still staged (e.g. tenancy support).
+    for (const document of visibleDocuments) {
+      if (readyDocuments.some((item) => item.key === document.key)) continue;
+      if (!stagedReady[document.key]) continue;
+      const file = await probeStagedFile(document.key);
+      if (file) staged.push({ key: document.key, file });
     }
     const callable = httpsCallable(functions, 'uploadOwnerInspectionProofDocument');
     try {
@@ -157,6 +268,7 @@ export default function InspectionSubmissionStep({ onBack }: { onBack: () => voi
   };
 
   const submitWithUser = async (user: FirebaseUser) => {
+    await reconcileStagedDocuments();
     validate(user);
     await user.getIdToken(true);
     const documentPaths = await uploadDocuments(user);
@@ -247,6 +359,19 @@ export default function InspectionSubmissionStep({ onBack }: { onBack: () => voi
         <Typography color="rgba(255,255,255,0.6)" sx={{ mt: 1 }}>{copy('This is page 5 of 5. No payment is collected now.', 'هذه الصفحة 5 من 5. لا يتم تحصيل الدفع الآن.')}</Typography>
       </Box>
       {error && <Alert severity="error" sx={{ mb: 3 }}>{error}</Alert>}
+      {probingDocs && <Alert severity="info" icon={<CircularProgress size={18} />} sx={{ mb: 3 }}>{copy('Checking protected documents in this browser…', 'جارٍ التحقق من المستندات المحمية في هذا المتصفح…')}</Alert>}
+      {!!missingRequired.length && !probingDocs && (
+        <Alert
+          severity="warning"
+          sx={{ mb: 3 }}
+          action={onFixDocuments ? <Button color="inherit" onClick={onFixDocuments}>{copy('Open Documents page', 'فتح صفحة المستندات')}</Button> : undefined}
+        >
+          {copy(
+            'Some protected documents are no longer available in this browser session (encrypted staging is session-bound). Re-upload the missing files below, then submit.',
+            'بعض المستندات المحمية لم تعد متاحة في جلسة هذا المتصفح (التجهيز المشفّر مرتبط بالجلسة). أعد رفع الملفات المفقودة أدناه ثم أرسل.',
+          )}
+        </Alert>
+      )}
       <Paper sx={{ p: { xs: 2.5, md: 5 }, borderRadius: 6, bgcolor: 'rgba(22,22,24,0.72)', border: '1px solid rgba(255,255,255,0.07)' }}>
         <Alert severity="info" icon={<ShieldCheck size={20} />} sx={{ mb: 4 }}>
           {copy('Payment order: application submitted → Admin document review → property visit and measured verification → final server re-quote → exact 15% received → final Admin approval → dashboard unlocked.', 'ترتيب الدفع: إرسال الطلب ← مراجعة المستندات إدارياً ← زيارة العقار والتحقق من القياسات ← إعادة التسعير النهائي من الخادم ← استلام دفعة 15٪ الدقيقة ← الموافقة النهائية ← فتح لوحة التحكم.')}
@@ -257,12 +382,55 @@ export default function InspectionSubmissionStep({ onBack }: { onBack: () => voi
           <Stack direction="row" spacing={2} alignItems="center"><MapPinned color={binThemeTokens.gold} /><Typography color="#FFF" fontWeight={900}>{copy('GPS and measured property facts will be verified during the Admin site visit', 'سيتم التحقق من GPS وقياسات العقار الفعلية خلال زيارة الموقع الإدارية')}</Typography></Stack>
           {hasGym && <Stack direction="row" spacing={2} alignItems="center"><Dumbbell color={binThemeTokens.gold} /><Typography color="#FFF" fontWeight={900}>{copy('Gym area and complexity will be verified on site before the final payable quote is issued', 'سيتم التحقق من مساحة النادي وتعقيده في الموقع قبل إصدار عرض السعر النهائي المستحق')}</Typography></Stack>}
           <Stack direction="row" spacing={2} alignItems="center"><WalletCards color={binThemeTokens.gold} /><Typography color="#FFF" fontWeight={900}>{copy(`AED ${formatAED(activationDeposit)} is a pre-visit 15% estimate; the payable amount is locked only after final verification`, `مبلغ ${formatAED(activationDeposit)} درهم هو تقدير 15٪ قبل الزيارة؛ يتم تثبيت المبلغ المستحق فقط بعد التحقق النهائي`)}</Typography></Stack>
-          {readyDocuments.map((document) => <Typography key={document.key} variant="caption" color={uploadProgress[document.key] === 100 ? '#4ADE80' : 'rgba(255,255,255,0.58)'}>{uploadProgress[document.key] === 100 ? '✓' : '•'} {copy(document.en, document.ar)} {uploadProgress[document.key] ? `· ${uploadProgress[document.key]}%` : ''}</Typography>)}
+          {visibleDocuments.map((document) => {
+            const ready = stagedReady[document.key];
+            const required = requiredKeys.includes(document.key);
+            if (!ready && !required && !proofMap[document.key]) return null;
+            return (
+              <Box key={document.key} sx={{ p: 1.5, borderRadius: 2, border: '1px solid rgba(255,255,255,0.08)' }}>
+                <Typography variant="caption" color={ready ? '#4ADE80' : required ? '#FCA5A5' : 'rgba(255,255,255,0.58)'}>
+                  {ready ? '✓' : '•'} {copy(document.en, document.ar)}
+                  {uploadProgress[document.key] ? ` · ${uploadProgress[document.key]}%` : ''}
+                  {!ready && required ? ` · ${copy('missing — re-upload required', 'مفقود — يلزم إعادة الرفع')}` : ''}
+                </Typography>
+                {!ready && required && (
+                  <Button
+                    component="label"
+                    size="small"
+                    startIcon={stagingKey === document.key ? <CircularProgress size={14} /> : <Upload size={14} />}
+                    disabled={Boolean(stagingKey)}
+                    sx={{ mt: 1, color: binThemeTokens.gold, fontWeight: 900 }}
+                  >
+                    {copy(`Re-upload ${document.en}`, `إعادة رفع ${document.ar}`)}
+                    <input
+                      hidden
+                      type="file"
+                      accept={document.accept || '.pdf,.jpg,.jpeg,.png'}
+                      onChange={(event) => void handleRestage(document.key, event.target.files?.[0] || null)}
+                    />
+                  </Button>
+                )}
+              </Box>
+            );
+          })}
         </Stack>
         <Stack direction={{ xs: 'column', sm: isRTL ? 'row-reverse' : 'row' }} spacing={2} sx={{ mt: 5 }}>
           <Button variant="outlined" fullWidth onClick={onBack} disabled={loading} sx={{ py: 1.5, borderRadius: 100, fontWeight: 950 }}>{copy('Back', 'رجوع')}</Button>
-          <Button variant="contained" fullWidth onClick={() => void submit()} disabled={loading} sx={{ py: 1.5, borderRadius: 100, bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>{loading ? <CircularProgress size={22} color="inherit" /> : copy('Submit All 5 Pages', 'إرسال الصفحات الخمس')}</Button>
+          <Button
+            variant="contained"
+            fullWidth
+            onClick={() => void submit()}
+            disabled={loading || probingDocs || missingRequired.length > 0}
+            sx={{ py: 1.5, borderRadius: 100, bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}
+          >
+            {loading ? <CircularProgress size={22} color="inherit" /> : copy('Submit All 5 Pages', 'إرسال الصفحات الخمس')}
+          </Button>
         </Stack>
+        {missingRequired.length > 0 && !probingDocs && (
+          <Typography variant="caption" display="block" sx={{ mt: 2, color: 'rgba(255,255,255,0.55)', textAlign: 'center' }}>
+            {copy('Submit unlocks after every required document is re-uploaded in this browser.', 'يُفعّل الإرسال بعد إعادة رفع كل مستند مطلوب في هذا المتصفح.')}
+          </Typography>
+        )}
       </Paper>
 
       <Dialog open={reauthOpen} onClose={() => setReauthOpen(false)} fullWidth maxWidth="sm">

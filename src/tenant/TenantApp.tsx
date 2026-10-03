@@ -47,7 +47,6 @@ const TenantLayout = ({ children }: { children: React.ReactNode }) => {
     const { isRTL, tx, lang } = useLanguage();
     const copy = (en: string, ar: string) => lang === 'ar' ? ar : en;
     const isSimpleHome = location.pathname === '/tenant' || location.pathname === '/tenant/dashboard';
-    const isLightRoute = isSimpleHome || location.pathname === '/tenant/dashboard/full' || location.pathname === '/tenant/scheduled-service' || location.pathname === '/tenant/find-room-rent' || location.pathname === '/tenant/marketplace' || location.pathname === '/tenant/homes';
     const quickButtonSx = {
         display: { xs: 'none', md: 'inline-flex' },
         color: binThemeTokens.textPrimary,
@@ -61,8 +60,8 @@ const TenantLayout = ({ children }: { children: React.ReactNode }) => {
     } as const;
 
     return (
-        <Box sx={{ minHeight: '100vh', bgcolor: isLightRoute ? binThemeTokens.softCanvas : binThemeTokens.black, color: isLightRoute ? binThemeTokens.textPrimary : '#FFFFFF', direction: isRTL ? 'rtl' : 'ltr', display: 'flex', flexDirection: 'column', position: 'relative', isolation: 'isolate' }}>
-            <BrandWatermark opacity={isLightRoute ? 0.025 : 0.038} />
+        <Box className="tenant-shell" sx={{ minHeight: '100vh', bgcolor: binThemeTokens.softCanvas, color: binThemeTokens.textPrimary, direction: isRTL ? 'rtl' : 'ltr', display: 'flex', flexDirection: 'column', position: 'relative', isolation: 'isolate' }}>
+            <BrandWatermark opacity={0.025} />
             <AppBar position="sticky" elevation={0} sx={{ bgcolor: 'rgba(255,255,255,0.96)', color: binThemeTokens.textPrimary, backdropFilter: 'blur(16px)', borderBottom: `1px solid ${binThemeTokens.border}`, boxShadow: '0 8px 24px rgba(17, 24, 39, 0.06)', zIndex: 1200 }}>
                 <Toolbar sx={{ justifyContent: 'space-between', px: { xs: 2, md: 4 }, flexDirection: isRTL ? 'row-reverse' : 'row', gap: 1 }}>
                     <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1.5} alignItems="center" sx={{ minWidth: 0 }}>
@@ -84,8 +83,8 @@ const TenantLayout = ({ children }: { children: React.ReactNode }) => {
                     </Stack>
                 </Toolbar>
             </AppBar>
-            <Container maxWidth="lg" sx={{ py: 4, flexGrow: 1, position: 'relative', zIndex: 1, overflowX: 'hidden' }}><PortalConnectionStrip dark={!isLightRoute} /><Box sx={{ animation: 'fadeIn 0.5s ease-out', minWidth: 0 }}>{children}</Box></Container>
-            <Box sx={{ py: 3, textAlign: 'center', borderTop: `1px solid ${isLightRoute ? binThemeTokens.border : 'rgba(255,255,255,0.05)'}`, bgcolor: isLightRoute ? binThemeTokens.card : 'rgba(11,11,12,0.5)', position: 'relative', zIndex: 1 }}><Typography variant="caption" sx={{ color: isLightRoute ? binThemeTokens.textTertiary : 'rgba(255,255,255,0.3)', fontWeight: 800, letterSpacing: 2 }}>{copy('2026 BIN GROUP PROPERTY OPERATIONS OS', '2026 نظام BIN GROUP لتشغيل العقارات')}</Typography></Box>
+            <Container maxWidth="lg" sx={{ py: 4, flexGrow: 1, position: 'relative', zIndex: 1, overflowX: 'hidden' }}><PortalConnectionStrip /><Box sx={{ animation: 'fadeIn 0.5s ease-out', minWidth: 0 }}>{children}</Box></Container>
+            <Box sx={{ py: 3, textAlign: 'center', borderTop: `1px solid ${binThemeTokens.border}`, bgcolor: binThemeTokens.card, position: 'relative', zIndex: 1 }}><Typography variant="caption" sx={{ color: binThemeTokens.textTertiary, fontWeight: 800, letterSpacing: 2 }}>{copy('2026 BIN GROUP PROPERTY OPERATIONS OS', '2026 نظام BIN GROUP لتشغيل العقارات')}</Typography></Box>
             <style>{`@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }`}</style>
         </Box>
     );

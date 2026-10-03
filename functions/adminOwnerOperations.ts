@@ -616,7 +616,19 @@ export const ownerSignContractAndQueuePdf = onCall({ cors: true, enforceAppCheck
     });
     const invoiceRef = db.collection("invoices").doc(invoiceSnapshot.invoiceId);
     const [pdfArtifact, invoicePdfArtifact] = await Promise.all([
-      generateContractPdfArtifact({ ...clean(contract), contractId, ownerName: signatureName, ownerEmail, planName: contract.packageName, propertyName: contract.propertyName, annualValue: contract.annualContractValue || contract.annualValue, mobilizationAmount: signedMobilizationAmount, signedAt: signedAtDate.toISOString() }),
+      generateContractPdfArtifact({
+        ...clean(contract),
+        contractId,
+        ownerName: signatureName,
+        ownerEmail,
+        companyName: contract.companyProfile?.name || contract.companyName,
+        planName: contract.packageName,
+        propertyName: contract.propertyName,
+        annualValue: contract.annualContractValue || contract.annualValue || contract.quoteSnapshot?.annualContractValue,
+        mobilizationAmount: signedMobilizationAmount,
+        paymentPlan: contract.paymentPlan || contract.commercialSchedule?.paymentPlan || contract.paymentSchedule?.paymentPlan,
+        signedAt: signedAtDate.toISOString(),
+      }),
       generateMobilizationUnpaidInvoicePdfArtifact({
         ...invoiceSnapshot,
         ownerId,

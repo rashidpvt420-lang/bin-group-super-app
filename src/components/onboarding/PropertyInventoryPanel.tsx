@@ -410,6 +410,10 @@ const PropertyInventoryPanel: React.FC<Props> = ({ property, onChange, ar, isRTL
         <Chip label={`${label('Wet areas', 'المناطق الرطبة')}: ${intelligence.totalWetAreas}`} />
         <Chip label={`${label('Workspaces', 'مساحات العمل')}: ${intelligence.totalWorkspaces}`} />
         <Chip label={`${label('Service spaces', 'مساحات الخدمة')}: ${intelligence.totalServiceSpaces}`} />
+        {intelligence.totalAmenitySpaces > 0 && <Chip label={`${label('Amenities', 'المرافق')}: ${intelligence.totalAmenitySpaces}`} />}
+        {intelligence.totalOutdoorSpaces > 0 && <Chip label={`${label('Outdoor', 'خارجي')}: ${intelligence.totalOutdoorSpaces}`} />}
+        {intelligence.totalSpecialSpaces > 0 && <Chip label={`${label('Special', 'خاص')}: ${intelligence.totalSpecialSpaces}`} />}
+        {intelligence.totalOtherSpaces > 0 && <Chip label={`${label('Other spaces', 'مساحات أخرى')}: ${intelligence.totalOtherSpaces}`} />}
         {intelligence.averageAreaPerFloorSqft !== null && <Chip label={`${label('Avg. area / floor', 'متوسط المساحة / طابق')}: ${intelligence.averageAreaPerFloorSqft.toLocaleString()} ft²`} />}
         {intelligence.serviceAreaPerUnitSqft !== null && <Chip label={`${label('Area / unit', 'المساحة / وحدة')}: ${intelligence.serviceAreaPerUnitSqft.toLocaleString()} ft²`} />}
         {intelligence.declaredSpacesPer1000Sqft !== null && <Chip label={`${label('Spaces / 1,000 ft²', 'المساحات / 1000 قدم²')}: ${intelligence.declaredSpacesPer1000Sqft}`} />}

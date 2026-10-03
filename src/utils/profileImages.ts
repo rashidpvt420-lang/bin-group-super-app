@@ -88,17 +88,22 @@ export const pickProfileCover = (profileData?: any, user?: any): string => {
   return candidates.find((value) => typeof value === 'string' && value.trim().length > 0)?.trim() || BIN_PROFILE_COVER_FALLBACK;
 };
 
+/** Light White-Platinum profile shell — never paint dark overlays under portal ink. */
 export const profileCoverSx = (coverUrl?: string) => ({
   position: 'relative' as const,
   overflow: 'hidden' as const,
-  background: coverUrl
-    ? `linear-gradient(135deg, rgba(2, 6, 23, 0.5), rgba(2, 6, 23, 0.88)), url("${coverUrl}") center/cover no-repeat`
-    : `linear-gradient(135deg, rgba(2, 6, 23, 0.5), rgba(2, 6, 23, 0.88)), url("${BIN_PROFILE_COVER_FALLBACK}") center/cover no-repeat`,
+  bgcolor: '#FFFFFF',
+  backgroundImage: coverUrl
+    ? `linear-gradient(180deg, rgba(248,249,251,0.92) 0%, rgba(255,255,255,0.98) 55%, #FFFFFF 100%), url("${coverUrl}")`
+    : `linear-gradient(180deg, #F8F9FB 0%, #FFFFFF 62%)`,
+  backgroundSize: 'cover',
+  backgroundPosition: 'center',
+  backgroundRepeat: 'no-repeat',
   '&::before': {
     content: '""',
     position: 'absolute' as const,
     inset: 0,
-    background: 'linear-gradient(135deg, rgba(255,255,255,0.08), transparent 42%, rgba(198,167,94,0.14))',
+    background: 'linear-gradient(135deg, rgba(201,166,70,0.08), transparent 48%, rgba(229,228,226,0.35))',
     pointerEvents: 'none' as const,
   },
   '&::after': {
@@ -109,7 +114,7 @@ export const profileCoverSx = (coverUrl?: string) => ({
     fontSize: { xs: 38, md: 58 },
     fontWeight: 950,
     letterSpacing: 3,
-    color: 'rgba(255,255,255,0.055)',
+    color: 'rgba(17,24,39,0.04)',
     pointerEvents: 'none' as const,
   },
   '& > *': {

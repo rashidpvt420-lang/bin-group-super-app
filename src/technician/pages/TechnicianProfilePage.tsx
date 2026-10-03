@@ -11,7 +11,7 @@ import {
     User, Phone, Mail, Wrench, Star, Clock, Save, KeyRound, MapPin, ShieldCheck,
     ShieldAlert, Upload, RefreshCcw, FileCheck2, Navigation
 } from 'lucide-react';
-import { pickProfileCover, pickProfilePhoto, profileCoverSx } from '../../utils/profileImages';
+import { pickProfilePhoto } from '../../utils/profileImages';
 
 type Notice = { type: 'success' | 'error' | 'info' | 'warning'; text: string };
 type TechnicianPreferenceResponse = { status?: string; profile?: { serviceZonePreference?: string; emergencyContact?: { name?: string; phone?: string }; language?: string } };
@@ -41,17 +41,25 @@ type ReadinessResponse = {
 };
 type RenewalRecord = { requestId: string; credentialType: string; credentialName: string; status: string; proposedExpiryAtMs: number; createdAtMs: number; rejectionReason?: string };
 
+const ink = {
+    title: binThemeTokens.textPrimary,
+    body: binThemeTokens.textSecondary,
+    muted: binThemeTokens.textTertiary,
+    paper: '#FFFFFF',
+    soft: binThemeTokens.softCanvas,
+    border: binThemeTokens.border,
+};
 const inputSx = {
     '& .MuiOutlinedInput-root': {
-        bgcolor: 'rgba(2,6,23,0.72)', color: '#FFF', borderRadius: 3,
-        '& fieldset': { borderColor: 'rgba(198,167,94,0.45)' },
-        '&:hover fieldset': { borderColor: 'rgba(198,167,94,0.75)' },
+        bgcolor: '#FFFFFF', color: ink.title, borderRadius: 3,
+        '& fieldset': { borderColor: 'rgba(184,147,47,0.42)' },
+        '&:hover fieldset': { borderColor: binThemeTokens.goldHover },
         '&.Mui-focused fieldset': { borderColor: binThemeTokens.gold },
     },
-    '& .MuiInputBase-input': { color: '#FFF !important', fontWeight: 850, WebkitTextFillColor: '#FFF' },
-    '& .MuiInputLabel-root': { color: 'rgba(255,255,255,.72)', fontWeight: 850 },
-    '& .MuiInputLabel-root.Mui-focused': { color: binThemeTokens.gold },
-    '& .MuiFormHelperText-root': { color: 'rgba(255,255,255,.58)' },
+    '& .MuiInputBase-input': { color: `${ink.title} !important`, fontWeight: 850, WebkitTextFillColor: ink.title },
+    '& .MuiInputLabel-root': { color: ink.body, fontWeight: 850 },
+    '& .MuiInputLabel-root.Mui-focused': { color: binThemeTokens.goldHover },
+    '& .MuiFormHelperText-root': { color: ink.muted },
 };
 const statusChipSx = (tone: string) => ({
     bgcolor: `${alpha(tone, 0.18)} !important`, color: `${tone} !important`, border: `1px solid ${alpha(tone, 0.42)}`,
@@ -232,7 +240,6 @@ export default function TechnicianProfilePage() {
     const statusLower = status.toLowerCase();
     const localizedStatus = localizedState(statusLower);
     const profilePhoto = pickProfilePhoto(techData, user);
-    const profileCover = pickProfileCover(techData, user);
     const statusTone = statusLower === 'active' ? '#10b981' : statusLower === 'suspended' ? '#ef4444' : binThemeTokens.gold;
     const dispatchReady = readiness ? !readiness.dispatchFrozen : isAvailable;
     const dispatchTone = dispatchReady ? '#10b981' : '#ef4444';
@@ -240,8 +247,8 @@ export default function TechnicianProfilePage() {
     return (
         <Box sx={{ direction: isRTL ? 'rtl' : 'ltr', pr: { xs: isRTL ? 0 : 8, sm: isRTL ? 0 : 10, md: 0 }, pl: { xs: isRTL ? 8 : 0, sm: isRTL ? 10 : 0, md: 0 }, pb: { xs: 14, md: 4 } }}>
             <Stack direction={{ xs: 'column', sm: isRTL ? 'row-reverse' : 'row' }} justifyContent="space-between" alignItems={{ xs: 'stretch', sm: 'center' }} gap={2} sx={{ mb: 4 }}>
-                <Typography variant="h4" fontWeight="950" sx={{ color: '#FFF', textAlign: isRTL ? 'right' : 'left', fontSize: { xs: '2.2rem', sm: '2.6rem' } }}>{label('Technician Profile', 'ملف الفني')}</Typography>
-                <Button onClick={() => void loadReadiness()} disabled={readinessLoading} startIcon={readinessLoading ? <CircularProgress size={16} /> : <RefreshCcw size={17} />} variant="outlined" sx={{ color: binThemeTokens.gold, borderColor: binThemeTokens.gold }}>{label('Refresh readiness', 'تحديث الجاهزية')}</Button>
+                <Typography variant="h4" fontWeight="950" sx={{ color: ink.title, textAlign: isRTL ? 'right' : 'left', fontSize: { xs: '2.2rem', sm: '2.6rem' } }}>{label('Technician Profile', 'ملف الفني')}</Typography>
+                <Button onClick={() => void loadReadiness()} disabled={readinessLoading} startIcon={readinessLoading ? <CircularProgress size={16} /> : <RefreshCcw size={17} />} variant="outlined" sx={{ color: binThemeTokens.goldHover, borderColor: binThemeTokens.gold, bgcolor: '#fff' }}>{label('Refresh readiness', 'تحديث الجاهزية')}</Button>
             </Stack>
             {notice && <Alert severity={notice.type} sx={{ mb: 3 }} onClose={() => setNotice(null)}>{notice.text}</Alert>}
 
@@ -251,25 +258,25 @@ export default function TechnicianProfilePage() {
                     : label('All server-authoritative readiness checks passed. Dispatch is available.', 'اجتازت جميع فحوصات الجاهزية المعتمدة من الخادم. الإرسال متاح.')}
             </Alert>}
 
-            <Paper sx={{ p: { xs: 3, sm: 4 }, mb: 4, border: '1px solid rgba(255,255,255,0.08)', borderRadius: 6, position: 'relative', overflow: 'hidden', ...profileCoverSx(profileCover), '&:before': { content: '""', position: 'absolute', inset: 0, bgcolor: 'rgba(2,6,23,0.58)', backdropFilter: 'blur(1px)' }, '& > *': { position: 'relative', zIndex: 1 } }}>
+            <Paper sx={{ p: { xs: 3, sm: 4 }, mb: 4, bgcolor: ink.paper, border: `1px solid ${ink.border}`, borderRadius: 6, boxShadow: binThemeTokens.cardShadow }}>
                 <Stack direction="column" spacing={3} alignItems="center" sx={{ mb: 4 }}>
-                    <Avatar src={profilePhoto || undefined} sx={{ width: 108, height: 108, bgcolor: binThemeTokens.gold, color: '#000', border: `4px solid ${binThemeTokens.gold}`, boxShadow: '0 18px 42px rgba(0,0,0,0.45)' }}>{displayName?.charAt(0) || <User size={40} />}</Avatar>
+                    <Avatar src={profilePhoto || undefined} sx={{ width: 108, height: 108, bgcolor: binThemeTokens.gold, color: ink.title, border: `4px solid ${binThemeTokens.gold}`, boxShadow: binThemeTokens.cardShadow }}>{displayName?.charAt(0) || <User size={40} />}</Avatar>
                     <Box sx={{ textAlign: 'center', maxWidth: '100%' }}>
-                        <Typography variant="h5" fontWeight="950" color="#FFF">{displayName || label('Technician', 'الفني')}</Typography>
-                        <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1.5} alignItems="center" justifyContent="center" sx={{ mt: 1, color: 'rgba(255,255,255,0.82)' }}><Mail size={16} /><Typography variant="body2">{techData?.email || user?.email}</Typography></Stack>
-                        <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1.5} alignItems="center" justifyContent="center" sx={{ mt: 1, color: 'rgba(255,255,255,0.82)' }}><Phone size={16} /><Typography variant="body2">{phone || label('No phone registered', 'لا يوجد رقم هاتف مسجل')}</Typography></Stack>
-                        <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1.5} alignItems="center" justifyContent="center" sx={{ mt: 1, color: 'rgba(255,255,255,0.82)' }}><Wrench size={16} /><Typography variant="body2">{trade || label('General Maintenance', 'صيانة عامة')}</Typography></Stack>
-                        {serviceZone && <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1.5} alignItems="center" justifyContent="center" sx={{ mt: 1, color: 'rgba(255,255,255,0.82)' }}><MapPin size={16} /><Typography variant="body2">{serviceZone}</Typography></Stack>}
+                        <Typography variant="h5" fontWeight="950" sx={{ color: ink.title }}>{displayName || label('Technician', 'الفني')}</Typography>
+                        <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1.5} alignItems="center" justifyContent="center" sx={{ mt: 1, color: ink.body }}><Mail size={16} color={binThemeTokens.goldHover} /><Typography variant="body2" sx={{ color: ink.title, fontWeight: 800 }}>{techData?.email || user?.email}</Typography></Stack>
+                        <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1.5} alignItems="center" justifyContent="center" sx={{ mt: 1, color: ink.body }}><Phone size={16} color={binThemeTokens.goldHover} /><Typography variant="body2" sx={{ color: ink.title, fontWeight: 800 }}>{phone || label('No phone registered', 'لا يوجد رقم هاتف مسجل')}</Typography></Stack>
+                        <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1.5} alignItems="center" justifyContent="center" sx={{ mt: 1, color: ink.body }}><Wrench size={16} color={binThemeTokens.goldHover} /><Typography variant="body2" sx={{ color: ink.title, fontWeight: 800 }}>{trade || label('General Maintenance', 'صيانة عامة')}</Typography></Stack>
+                        {serviceZone && <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1.5} alignItems="center" justifyContent="center" sx={{ mt: 1, color: ink.body }}><MapPin size={16} color={binThemeTokens.goldHover} /><Typography variant="body2" sx={{ color: ink.title, fontWeight: 800 }}>{serviceZone}</Typography></Stack>}
                     </Box>
                 </Stack>
                 <Grid container spacing={3} sx={{ mb: 4, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
-                    <Grid item xs={6} md={3}><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.48)', fontWeight: 850 }}>{label('ACCOUNT STATUS', 'حالة الحساب')}</Typography><Box sx={{ mt: 1 }}><Chip label={localizedStatus} size="small" sx={statusChipSx(statusTone)} /></Box></Grid>
-                    <Grid item xs={6} md={3}><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.48)', fontWeight: 850 }}>{label('QUALITY SCORE', 'تقييم الجودة')}</Typography><Stack direction={isRTL ? 'row-reverse' : 'row'} alignItems="center" spacing={1} sx={{ mt: 1, color: binThemeTokens.gold }}><Star size={18} fill={binThemeTokens.gold} /><Typography fontWeight="950" color="#FFF">{typeof score === 'number' ? `${score}/5` : score}</Typography></Stack></Grid>
-                    <Grid item xs={6} md={3}><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.48)', fontWeight: 850 }}>{label('SLA COMPLIANCE', 'الالتزام بزمن الخدمة')}</Typography><Stack direction={isRTL ? 'row-reverse' : 'row'} alignItems="center" spacing={1} sx={{ mt: 1, color: '#4ade80' }}><Clock size={18} /><Typography fontWeight="950" color="#FFF">{typeof sla === 'number' ? `${sla}%` : sla}</Typography></Stack></Grid>
-                    <Grid item xs={6} md={3}><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.48)', fontWeight: 850 }}>{label('DISPATCH', 'الإرسال')}</Typography><Box sx={{ mt: 1 }}><Chip label={dispatchReady ? label('READY', 'جاهز') : label('FROZEN', 'موقوف')} size="small" sx={statusChipSx(dispatchTone)} /></Box></Grid>
+                    <Grid item xs={6} md={3}><Typography variant="caption" sx={{ color: ink.muted, fontWeight: 850 }}>{label('ACCOUNT STATUS', 'حالة الحساب')}</Typography><Box sx={{ mt: 1 }}><Chip label={localizedStatus} size="small" sx={statusChipSx(statusTone)} /></Box></Grid>
+                    <Grid item xs={6} md={3}><Typography variant="caption" sx={{ color: ink.muted, fontWeight: 850 }}>{label('QUALITY SCORE', 'تقييم الجودة')}</Typography><Stack direction={isRTL ? 'row-reverse' : 'row'} alignItems="center" spacing={1} sx={{ mt: 1 }}><Star size={18} color={binThemeTokens.gold} fill={binThemeTokens.gold} /><Typography fontWeight="950" sx={{ color: ink.title }}>{typeof score === 'number' ? `${score}/5` : score}</Typography></Stack></Grid>
+                    <Grid item xs={6} md={3}><Typography variant="caption" sx={{ color: ink.muted, fontWeight: 850 }}>{label('SLA COMPLIANCE', 'الالتزام بزمن الخدمة')}</Typography><Stack direction={isRTL ? 'row-reverse' : 'row'} alignItems="center" spacing={1} sx={{ mt: 1 }}><Clock size={18} color="#059669" /><Typography fontWeight="950" sx={{ color: ink.title }}>{typeof sla === 'number' ? `${sla}%` : sla}</Typography></Stack></Grid>
+                    <Grid item xs={6} md={3}><Typography variant="caption" sx={{ color: ink.muted, fontWeight: 850 }}>{label('DISPATCH', 'الإرسال')}</Typography><Box sx={{ mt: 1 }}><Chip label={dispatchReady ? label('READY', 'جاهز') : label('FROZEN', 'موقوف')} size="small" sx={statusChipSx(dispatchTone)} /></Box></Grid>
                 </Grid>
-                <Divider sx={{ borderColor: 'rgba(255,255,255,0.14)', my: 4 }} />
-                <Typography variant="h6" fontWeight="950" color="#FFF" sx={{ mb: 2, textAlign: isRTL ? 'right' : 'left' }}>{label('Verified Identity & Preferences', 'الهوية الموثقة والتفضيلات')}</Typography>
+                <Divider sx={{ borderColor: ink.border, my: 4 }} />
+                <Typography variant="h6" fontWeight="950" sx={{ color: ink.title, mb: 2, textAlign: isRTL ? 'right' : 'left' }}>{label('Verified Identity & Preferences', 'الهوية الموثقة والتفضيلات')}</Typography>
                 <Alert severity="info" icon={<ShieldCheck size={20} />} sx={{ mb: 3 }}>{label('Identity, trade and dispatch authority are read-only. Only preferences and renewal evidence can be submitted here.', 'الهوية والتخصص وصلاحية الإرسال بيانات للقراءة فقط. يمكن هنا تحديث التفضيلات وإرسال إثباتات التجديد فقط.')}</Alert>
                 <Grid container spacing={3} sx={{ mb: 4, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
                     <Grid item xs={12} md={6}><TextField fullWidth label={label('Verified Full Name', 'الاسم الكامل الموثق')} value={displayName} InputProps={{ readOnly: true }} sx={inputSx} /></Grid>
@@ -278,34 +285,34 @@ export default function TechnicianProfilePage() {
                     <Grid item xs={12} md={6}><TextField fullWidth label={label('Preferred Service Zone', 'منطقة الخدمة المفضلة')} value={serviceZone} onChange={(event) => setServiceZone(event.target.value)} sx={inputSx} /></Grid>
                     <Grid item xs={12} md={6}><TextField fullWidth label={label('Emergency Contact Name', 'اسم جهة الاتصال للطوارئ')} value={emergencyName} onChange={(event) => setEmergencyName(event.target.value)} sx={inputSx} /></Grid>
                     <Grid item xs={12} md={6}><TextField fullWidth label={label('Emergency Contact Phone', 'هاتف جهة الاتصال للطوارئ')} value={emergencyPhone} onChange={(event) => setEmergencyPhone(event.target.value)} helperText={label('Use international format, for example +9715XXXXXXXX.', 'استخدم الصيغة الدولية، مثل +9715XXXXXXXX.')} sx={inputSx} /></Grid>
-                    <Grid item xs={12} md={6}><FormControlLabel disabled control={<Switch checked={isAvailable} />} label={<Typography color="#FFF" fontWeight="900">{label('Availability is controlled by duty status', 'يتم التحكم في التوفر من خلال حالة الدوام')}</Typography>} /></Grid>
+                    <Grid item xs={12} md={6}><FormControlLabel disabled control={<Switch checked={isAvailable} />} label={<Typography sx={{ color: ink.title, fontWeight: 900 }}>{label('Availability is controlled by duty status', 'يتم التحكم في التوفر من خلال حالة الدوام')}</Typography>} /></Grid>
                 </Grid>
                 <Stack direction={{ xs: 'column', sm: isRTL ? 'row-reverse' : 'row' }} spacing={2}>
-                    <Button variant="contained" startIcon={<Save size={17} />} onClick={handleSave} disabled={updating} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 900, px: 4, py: 1.5 }}>{updating ? <CircularProgress size={24} color="inherit" /> : label('SAVE PREFERENCES', 'حفظ التفضيلات')}</Button>
-                    <Button variant="outlined" startIcon={<KeyRound size={17} />} onClick={handlePasswordReset} disabled={resetting} sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.gold, fontWeight: 900, px: 4, py: 1.5 }}>{resetting ? label('SENDING...', 'جارٍ الإرسال...') : label('SEND PASSWORD RESET', 'إرسال إعادة تعيين كلمة المرور')}</Button>
+                    <Button variant="contained" startIcon={<Save size={17} />} onClick={handleSave} disabled={updating} sx={{ bgcolor: binThemeTokens.gold, color: ink.title, fontWeight: 900, px: 4, py: 1.5 }}>{updating ? <CircularProgress size={24} color="inherit" /> : label('SAVE PREFERENCES', 'حفظ التفضيلات')}</Button>
+                    <Button variant="outlined" startIcon={<KeyRound size={17} />} onClick={handlePasswordReset} disabled={resetting} sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.goldHover, bgcolor: '#fff', fontWeight: 900, px: 4, py: 1.5 }}>{resetting ? label('SENDING...', 'جارٍ الإرسال...') : label('SEND PASSWORD RESET', 'إرسال إعادة تعيين كلمة المرور')}</Button>
                 </Stack>
             </Paper>
 
-            <Paper sx={{ p: { xs: 3, md: 4 }, mb: 4, borderRadius: 6, bgcolor: 'rgba(2,6,23,0.86)', border: `1px solid ${alpha(binThemeTokens.gold, 0.32)}` }}>
-                <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1.5} alignItems="center" mb={3}><Navigation color={binThemeTokens.gold} /><Typography variant="h5" fontWeight="950" color="#FFF">{label('Server-Authoritative Dispatch Readiness', 'جاهزية الإرسال المعتمدة من الخادم')}</Typography></Stack>
-                <Grid container spacing={2}>{readinessChecks.map((item) => <Grid item xs={12} sm={6} md={4} key={item.key}><Paper sx={{ p: 2.5, height: '100%', bgcolor: alpha(item.ok ? '#10b981' : '#ef4444', 0.08), border: `1px solid ${alpha(item.ok ? '#10b981' : '#ef4444', 0.32)}`, borderRadius: 4 }}><Typography fontWeight="950" color="#FFF">{item.label}</Typography><Chip size="small" label={item.value} color={item.ok ? 'success' : 'error'} sx={{ mt: 1 }} />{item.date ? <Typography variant="caption" display="block" color="text.secondary" mt={1}>{label('Expiry', 'الانتهاء')}: {formatDate(item.date)}</Typography> : null}</Paper></Grid>)}</Grid>
-                {readiness && <Typography variant="body2" color="text.secondary" mt={3}>{label('Workload', 'عبء العمل')}: {readiness.readiness.activeJobs}/{readiness.readiness.maxJobs} · {label('Checked', 'تم الفحص')}: {formatDate(readiness.checkedAtMs)}</Typography>}
+            <Paper sx={{ p: { xs: 3, md: 4 }, mb: 4, borderRadius: 6, bgcolor: ink.paper, border: `1px solid ${alpha(binThemeTokens.gold, 0.35)}`, boxShadow: binThemeTokens.cardShadow }}>
+                <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1.5} alignItems="center" mb={3}><Navigation color={binThemeTokens.goldHover} /><Typography variant="h5" fontWeight="950" sx={{ color: ink.title }}>{label('Server-Authoritative Dispatch Readiness', 'جاهزية الإرسال المعتمدة من الخادم')}</Typography></Stack>
+                <Grid container spacing={2}>{readinessChecks.map((item) => <Grid item xs={12} sm={6} md={4} key={item.key}><Paper sx={{ p: 2.5, height: '100%', bgcolor: ink.soft, border: `1px solid ${alpha(item.ok ? '#059669' : '#b91c1c', 0.35)}`, borderRadius: 4 }}><Typography fontWeight="950" sx={{ color: ink.title }}>{item.label}</Typography><Chip size="small" label={item.value} color={item.ok ? 'success' : 'error'} sx={{ mt: 1 }} />{item.date ? <Typography variant="caption" display="block" sx={{ color: ink.body }} mt={1}>{label('Expiry', 'الانتهاء')}: {formatDate(item.date)}</Typography> : null}</Paper></Grid>)}</Grid>
+                {readiness && <Typography variant="body2" sx={{ color: ink.body }} mt={3}>{label('Workload', 'عبء العمل')}: {readiness.readiness.activeJobs}/{readiness.readiness.maxJobs} · {label('Checked', 'تم الفحص')}: {formatDate(readiness.checkedAtMs)}</Typography>}
             </Paper>
 
-            <Paper sx={{ p: { xs: 3, md: 4 }, mb: 4, borderRadius: 6, bgcolor: 'rgba(2,6,23,0.86)', border: '1px solid rgba(255,255,255,0.1)' }}>
-                <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1.5} alignItems="center" mb={1}><FileCheck2 color={binThemeTokens.gold} /><Typography variant="h5" fontWeight="950" color="#FFF">{label('Credential Renewal Evidence', 'إثبات تجديد المؤهلات')}</Typography></Stack>
-                <Typography variant="body2" color="text.secondary" mb={3}>{label('Upload a replacement credential for Admin review. Expired mandatory credentials keep dispatch frozen until approval.', 'ارفع مؤهلاً بديلاً لمراجعة الإدارة. تبقي المؤهلات الإلزامية المنتهية الإرسال موقوفاً حتى الاعتماد.')}</Typography>
+            <Paper sx={{ p: { xs: 3, md: 4 }, mb: 4, borderRadius: 6, bgcolor: ink.paper, border: `1px solid ${ink.border}`, boxShadow: binThemeTokens.cardShadow }}>
+                <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1.5} alignItems="center" mb={1}><FileCheck2 color={binThemeTokens.goldHover} /><Typography variant="h5" fontWeight="950" sx={{ color: ink.title }}>{label('Credential Renewal Evidence', 'إثبات تجديد المؤهلات')}</Typography></Stack>
+                <Typography variant="body2" sx={{ color: ink.body }} mb={3}>{label('Upload a replacement credential for Admin review. Expired mandatory credentials keep dispatch frozen until approval.', 'ارفع مؤهلاً بديلاً لمراجعة الإدارة. تبقي المؤهلات الإلزامية المنتهية الإرسال موقوفاً حتى الاعتماد.')}</Typography>
                 <Grid container spacing={2.5}>
                     <Grid item xs={12} md={4}><TextField select fullWidth label={label('Credential type', 'نوع المؤهل')} value={credentialType} onChange={(event) => setCredentialType(event.target.value)} sx={inputSx}><MenuItem value="medical_card">{label('Medical card', 'البطاقة الطبية')}</MenuItem><MenuItem value="driving_licence">{label('Driving licence', 'رخصة القيادة')}</MenuItem><MenuItem value="trade_certificate">{label('Trade certificate', 'شهادة التخصص')}</MenuItem><MenuItem value="safety_certificate">{label('Safety certificate', 'شهادة السلامة')}</MenuItem><MenuItem value="other">{label('Other', 'أخرى')}</MenuItem></TextField></Grid>
                     <Grid item xs={12} md={4}><TextField fullWidth label={label('Credential name / number', 'اسم / رقم المؤهل')} value={credentialName} onChange={(event) => setCredentialName(event.target.value)} sx={inputSx} /></Grid>
                     <Grid item xs={12} md={4}><TextField fullWidth type="date" label={label('New expiry date', 'تاريخ الانتهاء الجديد')} InputLabelProps={{ shrink: true }} value={proposedExpiryDate} onChange={(event) => setProposedExpiryDate(event.target.value)} sx={inputSx} /></Grid>
-                    <Grid item xs={12}><Button component="label" variant="outlined" startIcon={<Upload size={18} />} sx={{ color: '#FFF', borderColor: binThemeTokens.gold }}>{credentialFile ? credentialFile.name : label('Select PDF or image evidence — max 5 MB', 'اختر ملف PDF أو صورة — بحد أقصى 5 ميجابايت')}<input hidden type="file" accept="application/pdf,image/jpeg,image/png,image/webp" onChange={(event) => setCredentialFile(event.target.files?.[0] || null)} /></Button></Grid>
+                    <Grid item xs={12}><Button component="label" variant="outlined" startIcon={<Upload size={18} />} sx={{ color: binThemeTokens.goldHover, borderColor: binThemeTokens.gold, bgcolor: '#fff' }}>{credentialFile ? credentialFile.name : label('Select PDF or image evidence — max 5 MB', 'اختر ملف PDF أو صورة — بحد أقصى 5 ميجابايت')}<input hidden type="file" accept="application/pdf,image/jpeg,image/png,image/webp" onChange={(event) => setCredentialFile(event.target.files?.[0] || null)} /></Button></Grid>
                 </Grid>
-                <Button onClick={() => void submitCredentialRenewal()} disabled={renewalBusy} variant="contained" startIcon={renewalBusy ? <CircularProgress size={18} /> : <Upload size={18} />} sx={{ mt: 3, bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>{label('SUBMIT FOR ADMIN REVIEW', 'إرسال لمراجعة الإدارة')}</Button>
+                <Button onClick={() => void submitCredentialRenewal()} disabled={renewalBusy} variant="contained" startIcon={renewalBusy ? <CircularProgress size={18} /> : <Upload size={18} />} sx={{ mt: 3, bgcolor: binThemeTokens.gold, color: ink.title, fontWeight: 950 }}>{label('SUBMIT FOR ADMIN REVIEW', 'إرسال لمراجعة الإدارة')}</Button>
 
-                <Divider sx={{ my: 4, borderColor: 'rgba(255,255,255,0.12)' }} />
-                <Typography variant="h6" fontWeight="950" color="#FFF" mb={2}>{label('Renewal history', 'سجل التجديد')}</Typography>
-                <Stack spacing={1.5}>{renewals.length ? renewals.map((item) => <Box key={item.requestId} sx={{ p: 2, border: '1px solid rgba(255,255,255,0.09)', borderRadius: 3 }}><Stack direction={{ xs: 'column', sm: isRTL ? 'row-reverse' : 'row' }} justifyContent="space-between" gap={1}><Box><Typography color="#FFF" fontWeight="900">{item.credentialName}</Typography><Typography variant="caption" color="text.secondary">{formatDate(item.createdAtMs)} · {label('Proposed expiry', 'الانتهاء المقترح')}: {formatDate(item.proposedExpiryAtMs)}</Typography></Box><Chip label={localizedState(item.status)} color={String(item.status).includes('REJECT') ? 'error' : String(item.status).includes('APPROV') ? 'success' : 'warning'} /></Stack>{item.rejectionReason && <Alert severity="error" sx={{ mt: 1 }}>{item.rejectionReason}</Alert>}</Box>) : <Typography color="text.secondary">{label('No renewal requests submitted.', 'لم يتم إرسال طلبات تجديد.')}</Typography>}</Stack>
+                <Divider sx={{ my: 4, borderColor: ink.border }} />
+                <Typography variant="h6" fontWeight="950" sx={{ color: ink.title }} mb={2}>{label('Renewal history', 'سجل التجديد')}</Typography>
+                <Stack spacing={1.5}>{renewals.length ? renewals.map((item) => <Box key={item.requestId} sx={{ p: 2, border: `1px solid ${ink.border}`, borderRadius: 3, bgcolor: ink.soft }}><Stack direction={{ xs: 'column', sm: isRTL ? 'row-reverse' : 'row' }} justifyContent="space-between" gap={1}><Box><Typography sx={{ color: ink.title, fontWeight: 900 }}>{item.credentialName}</Typography><Typography variant="caption" sx={{ color: ink.body }}>{formatDate(item.createdAtMs)} · {label('Proposed expiry', 'الانتهاء المقترح')}: {formatDate(item.proposedExpiryAtMs)}</Typography></Box><Chip label={localizedState(item.status)} color={String(item.status).includes('REJECT') ? 'error' : String(item.status).includes('APPROV') ? 'success' : 'warning'} /></Stack>{item.rejectionReason && <Alert severity="error" sx={{ mt: 1 }}>{item.rejectionReason}</Alert>}</Box>) : <Typography sx={{ color: ink.body }}>{label('No renewal requests submitted.', 'لم يتم إرسال طلبات تجديد.')}</Typography>}</Stack>
             </Paper>
         </Box>
     );

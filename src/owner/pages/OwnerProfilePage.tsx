@@ -5,15 +5,28 @@ import { auth, db, doc, functions, getDoc, httpsCallable, sendPasswordResetEmail
 import { useRole } from '../../context/RoleContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
-import { pickProfileCover, pickProfilePhoto, profileCoverSx } from '../../utils/profileImages';
+import { pickProfilePhoto } from '../../utils/profileImages';
 import OwnerPhoneVerificationCard from '../components/OwnerPhoneVerificationCard';
 
 type Notice = { type: 'success' | 'error' | 'info' | 'warning'; text: string };
 
+const ink = {
+  title: binThemeTokens.textPrimary,
+  body: binThemeTokens.textSecondary,
+  muted: binThemeTokens.textTertiary,
+  paper: '#FFFFFF',
+  border: binThemeTokens.border,
+};
 const inputSx = {
-  '& .MuiOutlinedInput-root': { bgcolor: 'rgba(255,255,255,0.03)', color: '#FFF', borderRadius: 2 },
-  '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.5)' },
-  '& .MuiFormHelperText-root': { color: 'rgba(255,255,255,0.35)' },
+  '& .MuiOutlinedInput-root': {
+    bgcolor: '#FFFFFF', color: ink.title, borderRadius: 2,
+    '& fieldset': { borderColor: 'rgba(184,147,47,0.42)' },
+    '&:hover fieldset': { borderColor: binThemeTokens.goldHover },
+    '&.Mui-focused fieldset': { borderColor: binThemeTokens.gold },
+  },
+  '& .MuiInputBase-input': { color: `${ink.title} !important`, WebkitTextFillColor: ink.title, fontWeight: 800 },
+  '& .MuiInputLabel-root': { color: ink.body, fontWeight: 850 },
+  '& .MuiFormHelperText-root': { color: ink.muted },
 };
 
 export default function OwnerProfilePage() {
@@ -148,7 +161,6 @@ export default function OwnerProfilePage() {
   if (loading) return <Box sx={{ display: 'flex', justifyContent: 'center', py: 10 }}><CircularProgress sx={{ color: binThemeTokens.gold }} /></Box>;
 
   const profilePhoto = pickProfilePhoto(profileData, user);
-  const profileCover = pickProfileCover(profileData, user);
   const verifiedFieldHelp = label(
     'Verified field. Phone changes use Firebase SMS. Legal and billing identity changes require the protected KYC review workflow.',
     'حقل موثق. تستخدم تغييرات الهاتف رسالة Firebase النصية. وتتطلب تغييرات الهوية القانونية والفوترة مسار مراجعة اعرف عميلك المحمي.',
@@ -156,29 +168,29 @@ export default function OwnerProfilePage() {
 
   return (
     <Box sx={{ direction: isRTL ? 'rtl' : 'ltr' }}>
-      <Typography variant="h4" fontWeight="950" sx={{ color: '#FFF', mb: 1, textAlign: isRTL ? 'right' : 'left' }}>{label('Owner Profile', 'ملف المالك')}</Typography>
-      <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.45)', mb: 4, textAlign: isRTL ? 'right' : 'left' }}>{label('Identity and billing changes are verified against Firebase Auth and Owner KYC records before they are accepted.', 'يتم التحقق من تغييرات الهوية والفوترة مقابل مصادقة Firebase وسجلات اعرف عميلك للمالك قبل قبولها.')}</Typography>
+      <Typography variant="h4" fontWeight="950" sx={{ color: ink.title, mb: 1, textAlign: isRTL ? 'right' : 'left' }}>{label('Owner Profile', 'ملف المالك')}</Typography>
+      <Typography variant="body2" sx={{ color: ink.body, mb: 4, textAlign: isRTL ? 'right' : 'left' }}>{label('Identity and billing changes are verified against Firebase Auth and Owner KYC records before they are accepted.', 'يتم التحقق من تغييرات الهوية والفوترة مقابل مصادقة Firebase وسجلات اعرف عميلك للمالك قبل قبولها.')}</Typography>
       {notice && <Alert severity={notice.type} sx={{ mb: 3 }} onClose={() => setNotice(null)}>{notice.text}</Alert>}
 
-      <Paper sx={{ p: 4, mb: 4, border: '1px solid rgba(255,255,255,0.06)', borderRadius: 6, ...profileCoverSx(profileCover) }}>
+      <Paper sx={{ p: 4, mb: 4, bgcolor: ink.paper, border: `1px solid ${ink.border}`, borderRadius: 6, boxShadow: binThemeTokens.cardShadow }}>
         <Stack direction={{ xs: 'column', md: isRTL ? 'row-reverse' : 'row' }} spacing={4} alignItems="center" sx={{ mb: 4 }}>
-          <Avatar src={profilePhoto || undefined} sx={{ width: 104, height: 104, bgcolor: binThemeTokens.gold, color: '#000', border: '4px solid rgba(255,255,255,0.18)', boxShadow: '0 18px 42px rgba(0,0,0,0.35)' }}>{displayName?.charAt(0) || <User size={42} />}</Avatar>
+          <Avatar src={profilePhoto || undefined} sx={{ width: 104, height: 104, bgcolor: binThemeTokens.gold, color: ink.title, border: `4px solid ${binThemeTokens.gold}`, boxShadow: binThemeTokens.cardShadow }}>{displayName?.charAt(0) || <User size={42} />}</Avatar>
           <Box sx={{ width: '100%', textAlign: { xs: 'center', md: isRTL ? 'right' : 'left' } }}>
-            <Typography variant="h5" fontWeight="950" color="#FFF">{displayName || label('Owner', 'المالك')}</Typography>
-            <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={2} alignItems="center" justifyContent={{ xs: 'center', md: isRTL ? 'flex-end' : 'flex-start' }} sx={{ mt: 1, color: 'rgba(255,255,255,0.78)' }}><Mail size={16} /><Typography variant="body2">{user?.email}</Typography></Stack>
-            <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={2} alignItems="center" justifyContent={{ xs: 'center', md: isRTL ? 'flex-end' : 'flex-start' }} sx={{ mt: 1, color: 'rgba(255,255,255,0.78)' }}><Phone size={16} /><Typography variant="body2">{phone || label('No phone registered', 'لا يوجد رقم هاتف مسجل')}</Typography></Stack>
-            {companyName && <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={2} alignItems="center" justifyContent={{ xs: 'center', md: isRTL ? 'flex-end' : 'flex-start' }} sx={{ mt: 1, color: 'rgba(255,255,255,0.78)' }}><Building2 size={16} /><Typography variant="body2">{companyName}</Typography></Stack>}
+            <Typography variant="h5" fontWeight="950" sx={{ color: ink.title }}>{displayName || label('Owner', 'المالك')}</Typography>
+            <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={2} alignItems="center" justifyContent={{ xs: 'center', md: isRTL ? 'flex-end' : 'flex-start' }} sx={{ mt: 1 }}><Mail size={16} color={binThemeTokens.goldHover} /><Typography variant="body2" sx={{ color: ink.title, fontWeight: 800 }}>{user?.email}</Typography></Stack>
+            <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={2} alignItems="center" justifyContent={{ xs: 'center', md: isRTL ? 'flex-end' : 'flex-start' }} sx={{ mt: 1 }}><Phone size={16} color={binThemeTokens.goldHover} /><Typography variant="body2" sx={{ color: ink.title, fontWeight: 800 }}>{phone || label('No phone registered', 'لا يوجد رقم هاتف مسجل')}</Typography></Stack>
+            {companyName && <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={2} alignItems="center" justifyContent={{ xs: 'center', md: isRTL ? 'flex-end' : 'flex-start' }} sx={{ mt: 1 }}><Building2 size={16} color={binThemeTokens.goldHover} /><Typography variant="body2" sx={{ color: ink.title, fontWeight: 800 }}>{companyName}</Typography></Stack>}
           </Box>
         </Stack>
 
-        <Divider sx={{ borderColor: 'rgba(255,255,255,0.12)', mb: 4 }} />
+        <Divider sx={{ borderColor: ink.border, mb: 4 }} />
         <Alert severity="warning" sx={{ mb: 3 }}>{verifiedFieldHelp}</Alert>
         <Grid container spacing={3}>
           <Grid item xs={12} md={6}><TextField fullWidth label={label('Owner Full Name', 'اسم المالك الكامل')} value={displayName} onChange={(e) => setDisplayName(e.target.value)} sx={inputSx} /></Grid>
           <Grid item xs={12} md={6}><TextField data-testid="owner-verified-phone" fullWidth label={label('Verified Mobile Number', 'رقم الهاتف المتحرك الموثق')} value={phone} InputProps={{ readOnly: true }} helperText={label('Read-only. Use Firebase SMS verification below to change this number.', 'للقراءة فقط. استخدم التحقق برسالة Firebase أدناه لتغيير الرقم.')} sx={inputSx} /></Grid>
           <Grid item xs={12} md={6}><TextField fullWidth label={label('Verified Company / Portfolio Name', 'اسم الشركة / المحفظة الموثق')} value={companyName} onChange={(e) => setCompanyName(e.target.value)} helperText={label('Legal changes must match the verified Owner KYC record.', 'يجب أن تتطابق التغييرات القانونية مع سجل اعرف عميلك الموثق للمالك.')} sx={inputSx} /></Grid>
           <Grid item xs={12} md={6}><TextField fullWidth label={label('Preferred Contact Channel', 'قناة التواصل المفضلة')} value={preferredContact} onChange={(e) => setPreferredContact(e.target.value)} helperText={label('email, phone, whatsapp', 'البريد الإلكتروني، الهاتف، واتساب')} sx={inputSx} /></Grid>
-          <Grid item xs={12}><Typography variant="h6" fontWeight="950" color="#FFF" sx={{ mt: 2 }}>{label('Verified Billing Contact', 'جهة اتصال الفوترة الموثقة')}</Typography></Grid>
+          <Grid item xs={12}><Typography variant="h6" fontWeight="950" sx={{ color: ink.title, mt: 2 }}>{label('Verified Billing Contact', 'جهة اتصال الفوترة الموثقة')}</Typography></Grid>
           <Grid item xs={12} md={4}><TextField fullWidth label={label('Billing Name', 'اسم جهة الفوترة')} value={billingName} onChange={(e) => setBillingName(e.target.value)} sx={inputSx} /></Grid>
           <Grid item xs={12} md={4}><TextField fullWidth label={label('Billing Email', 'بريد الفوترة الإلكتروني')} value={billingEmail} onChange={(e) => setBillingEmail(e.target.value)} sx={inputSx} /></Grid>
           <Grid item xs={12} md={4}><TextField fullWidth label={label('Billing Phone', 'هاتف الفوترة')} value={billingPhone} onChange={(e) => setBillingPhone(e.target.value)} helperText={label('Must match the Firebase-verified Owner phone.', 'يجب أن يطابق هاتف المالك الموثق في Firebase.')} sx={inputSx} /></Grid>
@@ -187,13 +199,13 @@ export default function OwnerProfilePage() {
         <OwnerPhoneVerificationCard currentPhone={phone} isRTL={isRTL} lang={lang} onVerified={handleVerifiedPhone} />
 
         <Stack direction={{ xs: 'column', sm: isRTL ? 'row-reverse' : 'row' }} spacing={2} sx={{ mt: 4 }}>
-          <Button variant="contained" startIcon={<Save size={17} />} onClick={handleSave} disabled={saving} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, '& .MuiButton-startIcon': { mr: isRTL ? 0 : 1, ml: isRTL ? 1 : 0 } }}>{saving ? label('Verifying and saving...', 'جارٍ التحقق والحفظ...') : label('Save Verified Profile', 'حفظ الملف الموثق')}</Button>
-          <Button variant="outlined" startIcon={<KeyRound size={17} />} onClick={handlePasswordReset} disabled={resetting} sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.gold, fontWeight: 900, '& .MuiButton-startIcon': { mr: isRTL ? 0 : 1, ml: isRTL ? 1 : 0 } }}>{resetting ? label('Sending...', 'جارٍ الإرسال...') : label('Send Password Reset', 'إرسال إعادة تعيين كلمة المرور')}</Button>
+          <Button variant="contained" startIcon={<Save size={17} />} onClick={handleSave} disabled={saving} sx={{ bgcolor: binThemeTokens.gold, color: ink.title, fontWeight: 950, '& .MuiButton-startIcon': { mr: isRTL ? 0 : 1, ml: isRTL ? 1 : 0 } }}>{saving ? label('Verifying and saving...', 'جارٍ التحقق والحفظ...') : label('Save Verified Profile', 'حفظ الملف الموثق')}</Button>
+          <Button variant="outlined" startIcon={<KeyRound size={17} />} onClick={handlePasswordReset} disabled={resetting} sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.goldHover, bgcolor: '#fff', fontWeight: 900, '& .MuiButton-startIcon': { mr: isRTL ? 0 : 1, ml: isRTL ? 1 : 0 } }}>{resetting ? label('Sending...', 'جارٍ الإرسال...') : label('Send Password Reset', 'إرسال إعادة تعيين كلمة المرور')}</Button>
         </Stack>
       </Paper>
 
-      <Paper sx={{ p: 3, bgcolor: 'rgba(198,167,94,0.06)', border: '1px solid rgba(198,167,94,0.2)', borderRadius: 4 }}>
-        <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={2} alignItems="center"><Shield color={binThemeTokens.gold} /><Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.72)', fontWeight: 800 }}>{label('Sensitive changes are server-validated and recorded in immutable audit history. IBAN and payout details remain managed separately.', 'يتم التحقق من التغييرات الحساسة على الخادم وتسجيلها في سجل تدقيق غير قابل للتغيير. تظل تفاصيل الآيبان والتحويلات مُدارة بشكل منفصل.')}</Typography></Stack>
+      <Paper sx={{ p: 3, bgcolor: binThemeTokens.softCanvas, border: `1px solid rgba(184,147,47,0.28)`, borderRadius: 4 }}>
+        <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={2} alignItems="center"><Shield color={binThemeTokens.goldHover} /><Typography variant="body2" sx={{ color: ink.body, fontWeight: 800 }}>{label('Sensitive changes are server-validated and recorded in immutable audit history. IBAN and payout details remain managed separately.', 'يتم التحقق من التغييرات الحساسة على الخادم وتسجيلها في سجل تدقيق غير قابل للتغيير. تظل تفاصيل الآيبان والتحويلات مُدارة بشكل منفصل.')}</Typography></Stack>
       </Paper>
     </Box>
   );

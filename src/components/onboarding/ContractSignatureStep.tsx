@@ -53,40 +53,119 @@ export default function ContractSignatureStep({ onNext, onBack }: ContractSignat
     setQuoteLoading(true);
     setOtpError('');
     try {
-      const result = await httpsCallable(functions, 'previewOwnerInspectionQuote')({ properties, selectedAddOns: selectedAddOns || [] });
-      const quote = result.data as LockedQuote;
-      if (!quote?.quoteHash || !/^[a-f0-9]{64}$/.test(quote.quoteHash) || quote.annualContractValue <= 0 || quote.activationDeposit <= 0 || !quote.quotedAtMs) {
-        throw new Error(copy('The server did not return a valid property application quotation.', 'لم يُرجع الخادم عرضاً صالحاً لطلب العقار.'));
-      }
-      if (reviewedQuote?.portfolioAnnualTotal && Math.abs(Number(reviewedQuote.portfolioAnnualTotal) - quote.annualContractValue) > 0.01) {
-        throw new Error(copy('The portfolio amount changed after Review. Return to Review and confirm the new amount.', 'تغيّر مبلغ المحفظة بعد المراجعة. ارجع إلى المراجعة وأكد المبلغ الجديد.'));
+      // Reuse the Review-locked issuance when still valid — re-previewing mints a new quoteHash
+      // and would invalidate an already-verified signature OTP.
+      const existing = reviewedQuote as LockedQuote | undefined;
+      const existingValid = Boolean(
+        existing?.quoteHash
+        && /^[a-f0-9]{64}$/.test(existing.quoteHash)
+        && Number(existing.annualContractValue) > 0
+        && Number(existing.activationDeposit) > 0
+        && Number(existing.quotedAtMs) > 0
+        && Number(existing.expiresAtMs || 0) > Date.now(),
+      );
+      let quote: LockedQuote;
+      if (existingValid && existing) {
+        quote = {
+          quoteHash: existing.quoteHash,
+          annualContractValue: Number(existing.annualContractValue),
+          activationDeposit: Number(existing.activationDeposit),
+          currency: existing.currency,
+          quotedAtMs: existing.quotedAtMs,
+          expiresAtMs: existing.expiresAtMs,
+          version: existing.version,
+        };
+      } else {
+        const result = await httpsCallable(functions, 'previewOwnerInspectionQuote')({ properties, selectedAddOns: selectedAddOns || [] });
+        quote = result.data as LockedQuote;
+        if (!quote?.quoteHash || !/^[a-f0-9]{64}$/.test(quote.quoteHash) || quote.annualContractValue <= 0 || quote.activationDeposit <= 0 || !quote.quotedAtMs) {
+          throw new Error(copy('The server did not return a valid property application quotation.', 'لم يُرجع الخادم عرضاً صالحاً لطلب العقار.'));
+        }
+        // A freshly issued hash cannot keep OTP evidence bound to the previous Review hash.
+        setContractOtpVerificationId(null);
+        setOtpRequestId('');
+        setOtp('');
       }
       setLockedQuote(quote);
-      setValuationResult({
-        ...(valuationResult || {}),
-        serverQuote: {
-          ...quote,
-          portfolioAnnualTotal: quote.annualContractValue,
-          mobilisationDeposit: quote.activationDeposit,
-        },
-      });
+      const previous = useOnboardingStore.getState().valuationResult || {};
+      const previousHash = String((previous as any)?.serverQuote?.quoteHash || '');
+      if (previousHash !== quote.quoteHash) {
+        setValuationResult({
+          ...previous,
+          serverQuote: {
+            ...quote,
+            portfolioAnnualTotal: quote.annualContractValue,
+            mobilisationDeposit: quote.activationDeposit,
+          },
+        });
+      }
     } catch (error: any) {
       setLockedQuote(null);
       setOtpError(error?.message || copy('The protected property quotation could not be loaded.', 'تعذر تحميل عرض العقار المحمي.'));
     } finally { setQuoteLoading(false); }
-  }, [ownerAccount?.uid, properties, selectedAddOns, reviewedQuote?.portfolioAnnualTotal, lang, setValuationResult]);
+  }, [ownerAccount?.uid, properties, selectedAddOns, reviewedQuote?.quoteHash, reviewedQuote?.annualContractValue, reviewedQuote?.activationDeposit, reviewedQuote?.quotedAtMs, reviewedQuote?.expiresAtMs, reviewedQuote?.currency, reviewedQuote?.version, lang, setValuationResult, setContractOtpVerificationId]);
 
   useEffect(() => { void loadLockedQuote(); }, [loadLockedQuote]);
 
-  const canRequestOtp = typedName.trim().length >= 3 && accepted && Boolean(ownerAccount?.uid && contractReference && lockedQuote?.quoteHash);
+  const ownerEmail = String(ownerAccount?.email || '').trim();
+  const quoteStillValid = Boolean(
+    lockedQuote?.quoteHash
+    && (
+      !lockedQuote.expiresAtMs
+      || Number(lockedQuote.expiresAtMs) > Date.now()
+    ),
+  );
+  const canRequestOtp = typedName.trim().length >= 3 && accepted && Boolean(ownerAccount?.uid && contractReference && quoteStillValid && ownerEmail);
   const isValid = canRequestOtp && Boolean(contractOtpVerificationId);
+  const normalizeAppId = (value: string) => String(value || '').replace(/[^A-Za-z0-9_-]/g, '_').replace(/_+/g, '_').slice(0, 160);
+
+  const otpBlockedReason = (() => {
+    if (quoteLoading) return copy('Wait for the server quotation to lock…', 'انتظر قفل عرض السعر من الخادم…');
+    if (!ownerAccount?.uid) return copy('Owner session missing. Sign in again.', 'جلسة المالك مفقودة. سجّل الدخول مرة أخرى.');
+    if (!ownerEmail) return copy('Owner login email missing. Sign in again.', 'بريد تسجيل دخول المالك مفقود. سجّل الدخول مرة أخرى.');
+    if (!contractReference) return copy('Application reference missing. Restart onboarding from Page 1.', 'مرجع الطلب مفقود. أعد بدء التسجيل من الصفحة 1.');
+    if (!quoteStillValid) return copy('Server quotation expired or missing. Scroll up and retry quote lock.', 'عرض الخادم منتهٍ أو مفقود. مرّر لأعلى وأعد قفل العرض.');
+    if (typedName.trim().length < 3) return copy('Type your full legal name (at least 3 characters).', 'اكتب اسمك القانوني الكامل (3 أحرف على الأقل).');
+    if (!accepted) return copy('Tick the consent checkbox before requesting the OTP.', 'فعّل مربع الموافقة قبل طلب الرمز.');
+    return '';
+  })();
+
+  const mapOtpError = (error: any, fallbackEn: string, fallbackAr: string) => {
+    const code = String(error?.code || '').replace(/^functions\//, '');
+    const message = String(error?.message || '');
+    if (code === 'resource-exhausted' || /rate|too many|5\/hour|maximum otp attempts/i.test(message)) {
+      return copy('OTP send/verify limit reached. Wait and try again, or check spam for the last code.', 'تم بلوغ حد الرمز. انتظر ثم أعد المحاولة، أو تحقق من البريد المزعج للرمز الأخير.');
+    }
+    if (code === 'deadline-exceeded' || /expired/i.test(message)) {
+      return copy('That OTP expired. Tap SEND SIGNATURE OTP again for a fresh 6-digit code.', 'انتهت صلاحية الرمز. اضغط إرسال رمز التوقيع مرة أخرى للحصول على رمز جديد.');
+    }
+    if (/invalid otp|invalid-argument/i.test(message) || (code === 'permission-denied' && /invalid otp/i.test(message))) {
+      return copy('That OTP is invalid. Enter the latest 6 digits from the email, or resend a new code.', 'رمز التحقق غير صالح. أدخل آخر 6 أرقام من البريد، أو أعد إرسال رمز جديد.');
+    }
+    if (/app.?check|attestation|recaptcha/i.test(message)) {
+      return copy('Browser security check blocked the OTP request. Refresh the page, disable strict blockers, and try again.', 'أوقفت حماية المتصفح طلب الرمز. حدّث الصفحة وعطّل أدوات الحظر الصارمة ثم أعد المحاولة.');
+    }
+    if (code === 'failed-precondition' || /SMTP|not configured|pepper|sender/i.test(message)) {
+      return copy('Email OTP service is not ready on this environment. Contact BIN GROUP ops before signing.', 'خدمة رمز البريد غير جاهزة في هذه البيئة. تواصل مع عمليات BIN GROUP قبل التوقيع.');
+    }
+    if (code === 'unauthenticated' || (code === 'permission-denied' && /owner|session|belong/i.test(message))) {
+      return copy('Your Owner session expired or is not verified. Sign in again, then resend the OTP.', 'انتهت جلسة المالك أو لم يتم التحقق منها. سجّل الدخول مرة أخرى ثم أعد إرسال الرمز.');
+    }
+    if (/signature/i.test(message)) {
+      return copy('OTP is bound to another signature name. Use the exact name you typed when the code was sent.', 'الرمز مرتبط باسم توقيع آخر. استخدم نفس الاسم الذي كتبته عند إرسال الرمز.');
+    }
+    return message || copy(fallbackEn, fallbackAr);
+  };
 
   const requestOtp = async () => {
-    if (!canRequestOtp || !lockedQuote) return;
+    if (!canRequestOtp || !lockedQuote) {
+      setOtpError(otpBlockedReason || copy('Complete name, consent, and quote lock before sending OTP.', 'أكمل الاسم والموافقة وقفل العرض قبل إرسال الرمز.'));
+      return;
+    }
     setOtpBusy(true); setOtpError('');
     try {
       const result = await httpsCallable(functions, 'requestOwnerInspectionSignatureOtp')({
-        email: ownerAccount?.email,
+        email: ownerEmail,
         contractId: contractReference,
         contractHash: lockedQuote.quoteHash,
         propertyName: properties.length === 1 ? (properties[0]?.address || properties[0]?.emirate || 'BIN GROUP property') : `BIN GROUP portfolio · ${properties.length} properties`,
@@ -94,23 +173,41 @@ export default function ContractSignatureStep({ onNext, onBack }: ContractSignat
       const requestId = String((result.data as any)?.requestId || '');
       if (!requestId) throw new Error(copy('OTP request reference was not returned.', 'لم يتم إرجاع مرجع طلب الرمز.'));
       setOtpRequestId(requestId);
+      setOtp('');
       setContractOtpVerificationId(null);
+      window.setTimeout(() => {
+        document.getElementById('owner-signature-otp-input')?.focus();
+      }, 50);
     } catch (error: any) {
-      setOtpError(error?.message || copy('OTP delivery failed.', 'تعذر إرسال رمز التحقق.'));
+      setOtpError(mapOtpError(error, 'OTP delivery failed.', 'تعذر إرسال رمز التحقق.'));
     } finally { setOtpBusy(false); }
   };
 
   const verifyOtp = async () => {
-    if (!otpRequestId || otp.trim().length !== 6) return;
+    if (!otpRequestId) {
+      setOtpError(copy('Send the signature OTP first, then enter the 6-digit code from your email.', 'أرسل رمز التوقيع أولاً، ثم أدخل الرمز المكون من 6 أرقام من بريدك.'));
+      return;
+    }
+    if (otp.trim().length !== 6) {
+      setOtpError(copy('Enter all 6 digits from the email before verifying.', 'أدخل الأرقام الستة كاملة من البريد قبل التحقق.'));
+      return;
+    }
     setOtpBusy(true); setOtpError('');
     try {
       const result = await httpsCallable(functions, 'verifyOwnerInspectionSignatureOtp')({ requestId: otpRequestId, otp: otp.trim(), signature: typedName.trim() });
       const data = result.data as { verificationId?: string; contractId?: string };
-      if (!data.verificationId || data.contractId !== contractReference) throw new Error(copy('OTP verification did not match this application.', 'لم يطابق التحقق بالرمز هذا الطلب.'));
+      // Trust the server verification id for this request. Compare application ids after the same
+      // safeId normalization the callable applies, so UUID/intake formatting cannot false-fail VERIFY.
+      if (!data.verificationId || data.verificationId !== otpRequestId) {
+        throw new Error(copy('OTP verification did not match this application.', 'لم يطابق التحقق بالرمز هذا الطلب.'));
+      }
+      if (data.contractId && normalizeAppId(data.contractId) !== normalizeAppId(contractReference)) {
+        throw new Error(copy('OTP verification did not match this application.', 'لم يطابق التحقق بالرمز هذا الطلب.'));
+      }
       setContractOtpVerificationId(data.verificationId);
     } catch (error: any) {
       setContractOtpVerificationId(null);
-      setOtpError(error?.message || copy('OTP verification failed.', 'فشل التحقق من الرمز.'));
+      setOtpError(mapOtpError(error, 'OTP verification failed.', 'فشل التحقق من الرمز.'));
     } finally { setOtpBusy(false); }
   };
 
@@ -175,9 +272,50 @@ export default function ContractSignatureStep({ onNext, onBack }: ContractSignat
           <TextField fullWidth label={copy('Type your full legal name to sign', 'اكتب اسمك القانوني الكامل للتوقيع')} value={typedName} onChange={(event) => setTypedName(event.target.value)} sx={{ mb: 2 }} InputProps={{ sx: { color: '#FFF', fontFamily: 'monospace', fontSize: '1.1rem' } }} />
           <FormControlLabel control={<Checkbox checked={accepted} onChange={(event) => setAccepted(event.target.checked)} sx={{ color: binThemeTokens.gold, '&.Mui-checked': { color: binThemeTokens.gold } }} />} label={<Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.75)' }}>{copy(`I, ${typedName || '___'}, accept this five-page property application, the inspection-first sequence, the locked server quotation, and the UAE legal terms.`, `أنا ${typedName || '___'} أوافق على طلب العقار المكون من خمس صفحات وتسلسل الفحص أولاً وعرض الخادم المقفل والشروط القانونية الإماراتية.`)}</Typography>} />
           <Divider sx={{ my: 2, borderColor: 'rgba(255,255,255,0.12)' }} />
-          {contractOtpVerificationId ? <Alert severity="success">{copy('Email OTP verified for this property application.', 'تم التحقق من رمز البريد لهذا الطلب.')}</Alert> : <Stack spacing={2}>
-            <Button variant="outlined" disabled={!canRequestOtp || otpBusy || quoteLoading} onClick={() => void requestOtp()}>{otpBusy ? <CircularProgress size={20} /> : copy('SEND SIGNATURE OTP', 'إرسال رمز التوقيع')}</Button>
-            {otpRequestId && <Stack direction={{ xs: 'column', sm: isRTL ? 'row-reverse' : 'row' }} spacing={2}><TextField fullWidth label={copy('6-digit OTP', 'رمز التحقق من 6 أرقام')} value={otp} onChange={(event) => setOtp(event.target.value.replace(/\D/g, '').slice(0, 6))} inputProps={{ inputMode: 'numeric', maxLength: 6 }} /><Button variant="contained" disabled={otp.length !== 6 || otpBusy} onClick={() => void verifyOtp()}>{copy('VERIFY OTP', 'تحقق من الرمز')}</Button></Stack>}
+          <Alert severity="info" sx={{ mb: 2 }}>
+            {ownerEmail
+              ? copy(
+                  `OTP is emailed only to your Owner login address: ${ownerEmail}. Subject: “BIN GROUP property application signature OTP”. Check Inbox and Spam.`,
+                  `يُرسل رمز التحقق فقط إلى بريد تسجيل دخول المالك: ${ownerEmail}. العنوان: «BIN GROUP property application signature OTP». تحقق من الوارد والبريد المزعج.`,
+                )
+              : copy('Owner login email is missing. Sign in again before requesting the OTP.', 'بريد تسجيل دخول المالك مفقود. سجّل الدخول مرة أخرى قبل طلب الرمز.')}
+          </Alert>
+          {contractOtpVerificationId ? <Alert severity="success">{copy('Email OTP verified for this property application. You can continue to final submission.', 'تم التحقق من رمز البريد لهذا الطلب. يمكنك المتابعة إلى الإرسال النهائي.')}</Alert> : <Stack spacing={2}>
+            <Button variant="outlined" disabled={!canRequestOtp || otpBusy || quoteLoading} onClick={() => void requestOtp()}>
+              {otpBusy ? <CircularProgress size={20} /> : copy(otpRequestId ? 'RESEND SIGNATURE OTP' : 'SEND SIGNATURE OTP', otpRequestId ? 'إعادة إرسال رمز التوقيع' : 'إرسال رمز التوقيع')}
+            </Button>
+            {!!otpBlockedReason && !quoteLoading && (
+              <Alert severity="warning">{otpBlockedReason}</Alert>
+            )}
+            {otpRequestId && (
+              <Stack spacing={1.5}>
+                <Alert severity="success">
+                  {copy(
+                    `Code sent to ${ownerEmail}. Subject: “BIN GROUP property application signature OTP”. Check Inbox and Spam. Reference: ${otpRequestId.slice(0, 8)}… (valid ~10 minutes).`,
+                    `تم إرسال الرمز إلى ${ownerEmail}. العنوان: «BIN GROUP property application signature OTP». تحقق من الوارد والبريد المزعج. المرجع: ${otpRequestId.slice(0, 8)}… (صالح نحو 10 دقائق).`,
+                  )}
+                </Alert>
+                <Stack direction={{ xs: 'column', sm: isRTL ? 'row-reverse' : 'row' }} spacing={2}>
+                  <TextField
+                    id="owner-signature-otp-input"
+                    fullWidth
+                    label={copy('6-digit OTP', 'رمز التحقق من 6 أرقام')}
+                    value={otp}
+                    onChange={(event) => setOtp(event.target.value.replace(/\D/g, '').slice(0, 6))}
+                    onKeyDown={(event) => { if (event.key === 'Enter') void verifyOtp(); }}
+                    inputProps={{ inputMode: 'numeric', maxLength: 6, autoComplete: 'one-time-code' }}
+                  />
+                  <Button variant="contained" disabled={otp.length !== 6 || otpBusy} onClick={() => void verifyOtp()}>
+                    {otpBusy ? <CircularProgress size={20} /> : copy('VERIFY OTP', 'تحقق من الرمز')}
+                  </Button>
+                </Stack>
+                {otp.length > 0 && otp.length < 6 && (
+                  <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.55)' }}>
+                    {copy(`Enter ${6 - otp.length} more digit(s) to enable VERIFY.`, `أدخل ${6 - otp.length} رقماً إضافياً لتفعيل التحقق.`)}
+                  </Typography>
+                )}
+              </Stack>
+            )}
           </Stack>}
         </Box>
       </Paper>
@@ -186,6 +324,13 @@ export default function ContractSignatureStep({ onNext, onBack }: ContractSignat
         <Button variant="outlined" onClick={onBack} fullWidth sx={{ color: '#FFF', borderColor: 'rgba(255,255,255,0.2)', py: 1.5, borderRadius: 100, fontWeight: 950 }}>{copy('Back', 'رجوع')}</Button>
         <Button variant="contained" onClick={onNext} disabled={!isValid || !lockedQuote} fullWidth sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, py: 1.5, borderRadius: 100 }}><ScrollText size={18} style={{ marginInlineEnd: 8 }} />{copy('Sign & Continue to Final Submission', 'التوقيع والمتابعة إلى الإرسال النهائي')}</Button>
       </Stack>
+      {!isValid && !quoteLoading && (
+        <Alert severity="info" sx={{ mt: 2 }}>
+          {contractOtpVerificationId
+            ? copy('Complete the locked quotation before continuing.', 'أكمل قفل العرض قبل المتابعة.')
+            : copy('Sign & Continue stays locked until VERIFY OTP succeeds with the 6-digit email code.', 'يبقى زر التوقيع والمتابعة مقفلاً حتى ينجح التحقق برمز البريد المكون من 6 أرقام.')}
+        </Alert>
+      )}
     </Box>
   );
 }

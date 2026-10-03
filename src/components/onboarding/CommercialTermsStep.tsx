@@ -8,6 +8,7 @@ import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { formatAED } from '../../utils/formatters';
 import { resolveAssetClassIdForPropertyType } from '../../utils/calculateUaeQuote2026';
+import { collectPortfolioBillableAddOnIds } from '../../utils/ownerOnboardingAddOns';
 import { UAE_PRICING_MATRIX_2026 } from '../../utils/uaePricingMatrix2026';
 
 type LocalText = { en: string; ar: string };
@@ -30,6 +31,11 @@ const copy = {
     includedValue: { en: 'Included', ar: 'مشمول' },
     approvalRule: { en: 'Approval Rule', ar: 'قاعدة الموافقة' },
     approvalRuleText: { en: 'Work above AED 1,000 needs owner approval before execution.', ar: 'أي عمل يتجاوز 1,000 درهم يحتاج موافقة المالك قبل التنفيذ.' },
+    documentsNext: {
+        en: 'Property Proof and identity documents are on the next screen. Confirm this plan to open Protected Documents upload.',
+        ar: 'إثبات العقار ومستندات الهوية في الشاشة التالية. أكّد هذه الخطة لفتح رفع المستندات المحمية.',
+    },
+    confirmToDocuments: { en: 'Confirm plan → Documents', ar: 'تأكيد الخطة ← المستندات' },
 };
 
 const systemLabels: Record<string, LocalText> = {
@@ -66,11 +72,16 @@ const addOnLabels: Record<string, LocalText> = {
     elevator_amc: { en: 'Lift AMC', ar: 'عقد صيانة المصاعد' },
     hvac_pm: { en: 'HVAC Preventive Maintenance', ar: 'صيانة وقائية للتكييف' },
     cleaning: { en: 'Cleaning / Deep Cleaning', ar: 'تنظيف / تنظيف عميق' },
+    security: { en: 'Security Services / CCTV', ar: 'خدمات أمن / كاميرات' },
     pest_control: { en: 'Pest Control', ar: 'مكافحة الحشرات' },
     landscaping: { en: 'Landscaping', ar: 'تنسيق الحدائق' },
     move_in_out_inspection: { en: 'Move-in / Move-out Inspection', ar: 'فحص الدخول / الخروج' },
     mep_support: { en: 'MEP Support', ar: 'دعم MEP' },
     waste_management: { en: 'Waste Management', ar: 'إدارة النفايات' },
+    pca_audit: { en: 'PCA Asset Audit', ar: 'تدقيق أصول PCA' },
+    sira_renewal: { en: 'CCTV / SIRA Renewal', ar: 'تجديد كاميرات / SIRA' },
+    facade_access: { en: 'Facade / BMU Access', ar: 'الوصول للواجهة / BMU' },
+    pool_care: { en: 'Swimming Pool Maintenance', ar: 'صيانة المسبح' },
 };
 
 const ppmTextByTier: Record<string, LocalText> = {
@@ -147,6 +158,13 @@ const CommercialTermsStep: React.FC<{ onNext: () => void; onBack: () => void }> 
         calculateSummary();
     }, [properties, calculateSummary]);
 
+    useEffect(() => {
+        // Normalize legacy strategy seed so the FM plan card appears selected.
+        properties.forEach((entry, index) => {
+            if (entry.strategy === 'fm') updateProperty(index, { strategy: 'fm_only' });
+        });
+    }, []);
+
     const plans = [
         { id: 'FM_ONLY', strategy: 'fm_only', name: t('onboarding.plan.amc'), icon: <Wrench size={24} />, desc: t('onboarding.plan.amc_desc') },
         { id: 'PM_ONLY', strategy: 'pm_only', name: t('onboarding.plan.pm'), icon: <UserCheck size={24} />, desc: t('onboarding.plan.pm_desc') },
@@ -178,17 +196,23 @@ const CommercialTermsStep: React.FC<{ onNext: () => void; onBack: () => void }> 
         { id: 'monthly', label: t('onboarding.payment.monthly'), desc: t('onboarding.payment.monthly_desc'), detail: paymentPlanDetails.monthly }
     ];
 
-    const handleUpdate = (data: any) => updateProperty(activePropertyIndex, data);
+    const handleUpdate = (data: any) => {
+        // SLA and payment plan apply to the whole portfolio — same rule as service strategy.
+        properties.forEach((_, index) => updateProperty(index, data));
+    };
     const selectPlanForPortfolio = (strategy: 'fm_only' | 'pm_only' | 'both') => {
         properties.forEach((_, index) => updateProperty(index, { strategy }));
         calculateSummary();
     };
-    const selectedStrategy = property.strategy || 'fm_only';
+    const selectedStrategy = property.strategy === 'fm' ? 'fm_only' : (property.strategy || 'fm_only');
     const selectedPaymentPlan = property.paymentPlan || 'annual';
     const selectedSlaTier = property.slaTier || 'standard';
     const isAnnualPayment = selectedPaymentPlan === 'annual';
     const portfolioQuoteRows = Object.values(portfolioSummary.quoteResults || {});
     const portfolioAnnualTotal = Number(portfolioSummary.estimatedACV || 0);
+    const quoteFactorLines = Array.from(new Set(
+      portfolioQuoteRows.flatMap((row) => Array.isArray(row.pricingExplanation) ? row.pricingExplanation : []),
+    ));
     const selectedPaymentAmount = selectedPaymentPlan === 'monthly'
         ? portfolioQuoteRows.reduce((sum, row) => sum + Number(row.monthlyPayment || 0), 0)
         : selectedPaymentPlan === 'quarterly'
@@ -198,7 +222,7 @@ const CommercialTermsStep: React.FC<{ onNext: () => void; onBack: () => void }> 
     const selectedPpmText = selectedStrategy === 'pm_only' ? (ar ? 'لا توجد صيانة وقائية تقنية ضمن إدارة العقارات فقط.' : 'No technical PPM included in Property Management Only.') : tx(isMajlis ? majlisPpmTextByTier[selectedSlaTier] : ppmTextByTier[selectedSlaTier], ar);
     const selectedResponseText = tx(responseTextByTier[selectedSlaTier] || responseTextByTier.standard, ar);
     const selectedSystems = Object.entries(systemLabels).filter(([key]) => key === 'lifts' ? Number(property.lifts || 0) > 0 : Boolean(property[key])).map(([key, value]) => key === 'lifts' ? `${tx(value, ar)} (${property.lifts || 1})` : tx(value, ar));
-    const portfolioAddOnIds = Array.from(new Set(properties.flatMap((entry) => Array.isArray(entry.selectedAddOns) ? entry.selectedAddOns : [])));
+    const portfolioAddOnIds = collectPortfolioBillableAddOnIds(properties);
     const selectedAddOnNames = portfolioAddOnIds.map((id) => addOnLabels[id] ? tx(addOnLabels[id], ar) : id.replace(/_/g, ' '));
     const pmRevenueMissing = (selectedStrategy === 'pm_only' || selectedStrategy === 'both')
         && properties.some((entry) => !(Number(entry.annualRent || entry.annualRevenue || 0) > 0));
@@ -212,6 +236,9 @@ const CommercialTermsStep: React.FC<{ onNext: () => void; onBack: () => void }> 
             <Box sx={{ textAlign: 'center', mb: 4 }}>
                 <Typography variant="h4" fontWeight="950" sx={{ color: '#FFF', mb: 1 }}>{t('onboarding.commercial_title')}</Typography>
                 <Typography variant="body1" sx={{ color: 'rgba(255,255,255,0.5)', maxWidth: 820, mx: 'auto' }}>{t('onboarding.commercial_desc')}</Typography>
+                <Alert severity="info" sx={{ mt: 2.5, maxWidth: 820, mx: 'auto', textAlign: isRTL ? 'right' : 'left' }}>
+                    {tx(copy.documentsNext, ar)}
+                </Alert>
             </Box>
 
             <Container maxWidth="xl">
@@ -222,15 +249,37 @@ const CommercialTermsStep: React.FC<{ onNext: () => void; onBack: () => void }> 
                             <Grid container spacing={2}>
                                 {availablePlans.map((plan) => {
                                     const isSelected = selectedStrategy === plan.strategy;
+                                    const planName = isMajlis ? t('onboarding.plan.majlis') : plan.name;
                                     return <Grid item xs={12} sm={isMajlis ? 12 : 4} key={plan.id}>
-                                        <Paper onClick={() => selectPlanForPortfolio(plan.strategy as 'fm_only' | 'pm_only' | 'both')} sx={{ p: 3, height: '100%', cursor: 'pointer', bgcolor: isSelected ? alpha(binThemeTokens.gold, 0.1) : 'rgba(255,255,255,0.02)', border: `2px solid ${isSelected ? binThemeTokens.gold : 'rgba(255,255,255,0.05)'}`, borderRadius: 4, transition: 'all 0.2s ease', textAlign: 'center' }}>
+                                        <Paper
+                                          role="button"
+                                          aria-pressed={isSelected}
+                                          onClick={() => selectPlanForPortfolio(plan.strategy as 'fm_only' | 'pm_only' | 'both')}
+                                          className={`bin-choice-card${isSelected ? ' bin-choice-card--selected' : ''}`}
+                                          sx={{ p: 3, height: '100%', cursor: 'pointer', borderRadius: 4, textAlign: 'center', position: 'relative' }}
+                                        >
+                                            {isSelected && (
+                                              <Chip
+                                                size="small"
+                                                icon={<CheckCircle2 size={14} />}
+                                                label={tx({ en: 'Selected', ar: 'مختار' }, ar)}
+                                                className="bin-choice-selected-chip"
+                                                sx={{ position: 'absolute', top: 12, right: isRTL ? 'auto' : 12, left: isRTL ? 12 : 'auto', height: 24 }}
+                                              />
+                                            )}
                                             <Box sx={{ color: binThemeTokens.gold, mb: 2, display: 'flex', justifyContent: 'center' }}>{plan.icon}</Box>
-                                            <Typography variant="subtitle2" fontWeight="950" sx={{ color: '#FFF', mb: 1 }}>{isMajlis ? t('onboarding.plan.majlis') : plan.name}</Typography>
-                                            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.62)', display: 'block', lineHeight: 1.7 }}>{isMajlis ? t('onboarding.plan.majlis_desc') : plan.desc}</Typography>
+                                            <Typography variant="subtitle2" fontWeight="950" sx={{ mb: 1 }}>{planName}</Typography>
+                                            <Typography variant="caption" sx={{ display: 'block', lineHeight: 1.7 }}>{isMajlis ? t('onboarding.plan.majlis_desc') : plan.desc}</Typography>
                                         </Paper>
                                     </Grid>;
                                 })}
                             </Grid>
+                            <Alert severity="success" icon={<CheckCircle2 size={18} />} sx={{ mt: 2 }}>
+                              {tx({
+                                en: `Selected contract model: ${availablePlans.find((plan) => plan.strategy === selectedStrategy)?.name || selectedStrategy}. Scroll down for SLA level, payment cycle, and quote.`,
+                                ar: `نموذج العقد المختار: ${availablePlans.find((plan) => plan.strategy === selectedStrategy)?.name || selectedStrategy}. مرّر لأسفل لمستوى SLA ودورة الدفع والعرض.`,
+                              }, ar)}
+                            </Alert>
                         </Paper>
 
                         <Paper sx={{ p: { xs: 3, md: 4 }, borderRadius: 6, bgcolor: 'rgba(17,17,18,0.82)', border: `1px solid ${alpha(binThemeTokens.gold, 0.25)}`, mb: 4 }}>
@@ -254,8 +303,8 @@ const CommercialTermsStep: React.FC<{ onNext: () => void; onBack: () => void }> 
                         </Paper>
 
                         <Grid container spacing={4}>
-                            <Grid item xs={12} md={6}><Paper sx={{ p: { xs: 3, md: 4 }, borderRadius: 6, bgcolor: 'rgba(22, 22, 24, 0.6)', border: '1px solid rgba(255,255,255,0.05)', height: '100%' }}><Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, mb: 3, display: 'block', textAlign: isRTL ? 'right' : 'left' }}>2. {t('onboarding.sla_title')}</Typography><RadioGroup value={selectedSlaTier} onChange={(e) => handleUpdate({ slaTier: e.target.value })}>{slaTiers.map(tier => <FormControlLabel key={tier.id} value={tier.id} control={<Radio sx={{ color: binThemeTokens.gold, '&.Mui-checked': { color: binThemeTokens.gold } }} />} label={<Box sx={{ ml: isRTL ? 0 : 1, mr: isRTL ? 1 : 0, textAlign: isRTL ? 'right' : 'left' }}><Typography variant="subtitle2" fontWeight="900" color="#FFF">{tier.label}</Typography><Typography variant="caption" color="rgba(255,255,255,0.58)" sx={{ lineHeight: 1.65, display: 'block' }}>{tier.desc}</Typography><Typography variant="caption" color={binThemeTokens.gold} sx={{ lineHeight: 1.65, display: 'block', mt: 0.5 }}>{tx(copy.ppmPrefix, ar)} {tx(tier.ppm, ar)}</Typography></Box>} sx={{ mb: 2, p: 1.5, borderRadius: 2, border: '1px solid rgba(255,255,255,0.05)', mr: 0, flexDirection: isRTL ? 'row-reverse' : 'row' }} />)}</RadioGroup></Paper></Grid>
-                            <Grid item xs={12} md={6}><Paper sx={{ p: { xs: 3, md: 4 }, borderRadius: 6, bgcolor: 'rgba(22, 22, 24, 0.6)', border: '1px solid rgba(255,255,255,0.05)', height: '100%' }}><Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, mb: 3, display: 'block', textAlign: isRTL ? 'right' : 'left' }}>3. {t('onboarding.payment_title')}</Typography><RadioGroup value={selectedPaymentPlan} onChange={(e) => handleUpdate({ paymentPlan: e.target.value })}>{paymentPlans.map(plan => <FormControlLabel key={plan.id} value={plan.id} control={<Radio sx={{ color: binThemeTokens.gold, '&.Mui-checked': { color: binThemeTokens.gold } }} />} label={<Box sx={{ ml: isRTL ? 0 : 1, mr: isRTL ? 1 : 0, textAlign: isRTL ? 'right' : 'left' }}><Typography variant="subtitle2" fontWeight="900" color="#FFF">{plan.label}</Typography><Typography variant="caption" color="rgba(255,255,255,0.58)" sx={{ lineHeight: 1.65, display: 'block' }}>{plan.desc}</Typography><Typography variant="caption" color={binThemeTokens.gold} sx={{ lineHeight: 1.65, display: 'block', mt: 0.5 }}>{tx(plan.detail, ar)}</Typography></Box>} sx={{ mb: 2, p: 1.5, borderRadius: 2, border: '1px solid rgba(255,255,255,0.05)', mr: 0, flexDirection: isRTL ? 'row-reverse' : 'row' }} />)}</RadioGroup></Paper></Grid>
+                            <Grid item xs={12} md={6}><Paper sx={{ p: { xs: 3, md: 4 }, borderRadius: 6, height: '100%' }}><Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, mb: 3, display: 'block', textAlign: isRTL ? 'right' : 'left' }}>2. {t('onboarding.sla_title')}</Typography><RadioGroup value={selectedSlaTier} onChange={(e) => handleUpdate({ slaTier: e.target.value })}>{slaTiers.map(tier => <FormControlLabel key={tier.id} value={tier.id} className={selectedSlaTier === tier.id ? 'bin-choice-row--selected' : undefined} control={<Radio sx={{ color: binThemeTokens.gold, '&.Mui-checked': { color: binThemeTokens.gold } }} />} label={<Box sx={{ ml: isRTL ? 0 : 1, mr: isRTL ? 1 : 0, textAlign: isRTL ? 'right' : 'left' }}><Typography variant="subtitle2" fontWeight="900">{tier.label}</Typography><Typography variant="caption" sx={{ lineHeight: 1.65, display: 'block' }}>{tier.desc}</Typography><Typography variant="caption" color={binThemeTokens.gold} sx={{ lineHeight: 1.65, display: 'block', mt: 0.5 }}>{tx(copy.ppmPrefix, ar)} {tx(tier.ppm, ar)}</Typography></Box>} sx={{ mb: 2, p: 1.5, borderRadius: 2, border: '1px solid rgba(17,24,39,0.08)', mr: 0, flexDirection: isRTL ? 'row-reverse' : 'row' }} />)}</RadioGroup></Paper></Grid>
+                            <Grid item xs={12} md={6}><Paper sx={{ p: { xs: 3, md: 4 }, borderRadius: 6, height: '100%' }}><Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, mb: 3, display: 'block', textAlign: isRTL ? 'right' : 'left' }}>3. {t('onboarding.payment_title')}</Typography><RadioGroup value={selectedPaymentPlan} onChange={(e) => handleUpdate({ paymentPlan: e.target.value })}>{paymentPlans.map(plan => <FormControlLabel key={plan.id} value={plan.id} className={selectedPaymentPlan === plan.id ? 'bin-choice-row--selected' : undefined} control={<Radio sx={{ color: binThemeTokens.gold, '&.Mui-checked': { color: binThemeTokens.gold } }} />} label={<Box sx={{ ml: isRTL ? 0 : 1, mr: isRTL ? 1 : 0, textAlign: isRTL ? 'right' : 'left' }}><Typography variant="subtitle2" fontWeight="900">{plan.label}</Typography><Typography variant="caption" sx={{ lineHeight: 1.65, display: 'block' }}>{plan.desc}</Typography><Typography variant="caption" color={binThemeTokens.gold} sx={{ lineHeight: 1.65, display: 'block', mt: 0.5 }}>{tx(plan.detail, ar)}</Typography></Box>} sx={{ mb: 2, p: 1.5, borderRadius: 2, border: '1px solid rgba(17,24,39,0.08)', mr: 0, flexDirection: isRTL ? 'row-reverse' : 'row' }} />)}</RadioGroup></Paper></Grid>
                         </Grid>
                     </Grid>
 
@@ -266,12 +315,22 @@ const CommercialTermsStep: React.FC<{ onNext: () => void; onBack: () => void }> 
                             <Stack spacing={2} sx={{ mb: 4 }}>
                                 <Box sx={{ display: 'flex', justifyContent: 'space-between', flexDirection: isRTL ? 'row-reverse' : 'row', gap: 2 }}><Typography variant="body2" color="rgba(255,255,255,0.6)">{selectedPaymentLabel}</Typography><Typography variant="body2" fontWeight="900" color={binThemeTokens.gold}>AED {formatAED(selectedPaymentAmount)}</Typography></Box>
                                 <Box sx={{ display: 'flex', justifyContent: 'space-between', flexDirection: isRTL ? 'row-reverse' : 'row', gap: 2 }}><Typography variant="body2" color="rgba(255,255,255,0.6)">{t('onboarding.mobilization')}</Typography><Typography variant="body2" fontWeight="900" color="#FFF">AED {formatAED(portfolioAnnualTotal * 0.15)}</Typography></Box>
+                                {quoteFactorLines.length > 0 && (
+                                  <Box sx={{ p: 1.5, borderRadius: 2, bgcolor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                                    <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 950, display: 'block', mb: 1 }}>{tx({ en: 'Quote factors (same engine as Review)', ar: 'عوامل العرض (نفس محرك المراجعة)' }, ar)}</Typography>
+                                    <Stack spacing={0.75}>
+                                      {quoteFactorLines.slice(0, 8).map((line) => (
+                                        <Typography key={line} variant="caption" sx={{ color: 'rgba(255,255,255,0.62)', lineHeight: 1.45, textAlign: isRTL ? 'right' : 'left' }}>• {line}</Typography>
+                                      ))}
+                                    </Stack>
+                                  </Box>
+                                )}
                                 <Divider sx={{ borderColor: 'rgba(255,255,255,0.08)' }} />
                                 <Box><Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 950, display: 'block' }}>{tx(copy.ppmSchedule, ar)}</Typography><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.65)', lineHeight: 1.6 }}>{selectedPpmText}</Typography></Box>
                                 <Box><Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 950, display: 'block' }}>{tx(copy.approvalRule, ar)}</Typography><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.65)', lineHeight: 1.6 }}>{tx(copy.approvalRuleText, ar)}</Typography></Box>
                             </Stack>
                             {commercialBlocked && <Alert severity="warning" sx={{ mb: 2 }}>{pmRevenueMissing ? tx({ en: 'Enter annual rent / managed revenue for every property before confirming Property Management.', ar: 'أدخل الإيجار السنوي / الإيراد المدار لكل عقار قبل تأكيد إدارة العقار.' }, ar) : tx({ en: 'This service plan cannot produce a valid automatic quote. Review the property pricing inputs before continuing.', ar: 'لا يمكن لهذه الخطة إنشاء عرض سعر تلقائي صالح. راجع بيانات تسعير العقار قبل المتابعة.' }, ar)}</Alert>}
-                            <Button variant="contained" fullWidth size="large" disabled={commercialBlocked} onClick={onNext} endIcon={isRTL ? <ArrowRight style={{ transform: 'rotate(180deg)' }} /> : <ArrowRight />} sx={{ borderRadius: 4, bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, py: 2, boxShadow: '0 10px 20px rgba(198, 167, 94, 0.3)', '&:hover': { bgcolor: '#E6C77A' } }}>{t('onboarding.confirm_btn')}</Button>
+                            <Button variant="contained" fullWidth size="large" disabled={commercialBlocked} onClick={onNext} endIcon={isRTL ? <ArrowRight style={{ transform: 'rotate(180deg)' }} /> : <ArrowRight />} sx={{ borderRadius: 4, bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, py: 2, boxShadow: '0 10px 20px rgba(198, 167, 94, 0.3)', '&:hover': { bgcolor: '#E6C77A' } }}>{tx(copy.confirmToDocuments, ar)}</Button>
                             <Button variant="text" fullWidth onClick={onBack} sx={{ mt: 1, color: 'rgba(255,255,255,0.45)', fontWeight: 800 }}>{t('onboarding.revise_btn')}</Button>
                         </Paper>
                     </Grid>

@@ -90,18 +90,23 @@ export default function ContractSignatureOtpControl({
 
   return (
     <Stack spacing={1.5} sx={{ direction: isRTL ? 'rtl' : 'ltr' }}>
-      <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.68)' }}>
+      <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary }}>
         {copy(
           'Verify the signature through the OTP sent to your authenticated email. The contract cannot be signed without this server evidence.',
           'تحقق من التوقيع عبر الرمز المرسل إلى بريدك الإلكتروني المسجل. لا يمكن توقيع العقد دون هذا الإثبات من الخادم.',
         )}
       </Typography>
+      {email ? (
+        <Typography variant="caption" sx={{ color: binThemeTokens.textPrimary, fontWeight: 850 }}>
+          {copy('OTP mailbox', 'صندوق رمز التحقق')}: {email}
+        </Typography>
+      ) : null}
       <Stack direction={{ xs: 'column', sm: isRTL ? 'row-reverse' : 'row' }} spacing={1.5}>
         <Button
           variant="outlined"
           disabled={busy || !contractId || !contractHash || !signatureName.trim()}
           onClick={requestOtp}
-          sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.gold, fontWeight: 900 }}
+          sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.goldHover, fontWeight: 900, bgcolor: '#fff' }}
         >
           {copy(requestId ? 'RESEND OTP' : 'SEND CONTRACT OTP', requestId ? 'إعادة إرسال الرمز' : 'إرسال رمز العقد')}
         </Button>
@@ -112,14 +117,12 @@ export default function ContractSignatureOtpControl({
               onChange={(event) => setOtp(event.target.value.replace(/\D/g, '').slice(0, 6))}
               label={copy('6-digit OTP', 'رمز التحقق من 6 أرقام')}
               inputProps={{ inputMode: 'numeric', autoComplete: 'one-time-code' }}
-              InputLabelProps={{ style: { color: 'rgba(255,255,255,0.5)' } }}
-              InputProps={{ style: { color: '#fff' } }}
             />
             <Button
               variant="contained"
               disabled={busy || otp.length !== 6 || verified}
               onClick={verifyOtp}
-              sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 900 }}
+              sx={{ bgcolor: binThemeTokens.gold, color: binThemeTokens.textPrimary, fontWeight: 900 }}
             >
               {verified ? copy('OTP VERIFIED', 'تم التحقق') : copy('VERIFY OTP', 'تحقق من الرمز')}
             </Button>
@@ -127,7 +130,7 @@ export default function ContractSignatureOtpControl({
         )}
       </Stack>
       {requestId && (
-        <Typography data-testid="owner-contract-otp-correlation" variant="caption" sx={{ color: 'rgba(255,255,255,0.7)', wordBreak: 'break-all' }}>
+        <Typography data-testid="owner-contract-otp-correlation" variant="caption" sx={{ color: binThemeTokens.textSecondary, wordBreak: 'break-all' }}>
           {copy('Verification reference', 'مرجع التحقق')}: {requestId}
         </Typography>
       )}
