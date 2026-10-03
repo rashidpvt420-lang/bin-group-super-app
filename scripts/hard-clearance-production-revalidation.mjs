@@ -189,7 +189,7 @@ function protectedHostedHostname(site) {
   throw new Error(`unsupported hosted site: ${site}`);
 }
 
-function requestProtectedHostedBytes(site, requestedUrl) {
+function assertProtectedHostedUrl(site, requestedUrl) {
   const hostname = protectedHostedHostname(site);
   if (
     !(requestedUrl instanceof URL)
@@ -203,14 +203,72 @@ function requestProtectedHostedBytes(site, requestedUrl) {
   ) {
     throw new Error(`unsafe ${site} hosted asset URL`);
   }
+  return hostname;
+}
 
+const CLEAN_URL_REDIRECT_STATUSES = new Set([301, 308]);
+
+/**
+ * Firebase Hosting `cleanUrls: true` answers a literal `.html` request with a
+ * permanent redirect to its extensionless equivalent and serves the same file
+ * there: `x.html` -> `x`, `index.html` -> `/`, `dir/index.html` -> `dir/`.
+ * Returns that single equivalent URL on the same fixed origin, or null when
+ * the requested asset is not an `.html` file (no redirect is ever acceptable).
+ */
+export function cleanUrlsEquivalentUrl(site, requestedUrl) {
+  assertProtectedHostedUrl(site, requestedUrl);
+  const pathname = requestedUrl.pathname;
+  const lastSlash = pathname.lastIndexOf('/');
+  const directory = pathname.slice(0, lastSlash + 1);
+  const fileName = pathname.slice(lastSlash + 1);
+  if (!fileName.endsWith('.html')) return null;
+  const stem = fileName.slice(0, -'.html'.length);
+  if (!stem) return null;
+  const cleanPath = stem === 'index' ? directory : `${directory}${stem}`;
+  const equivalent = new URL(cleanPath, requestedUrl.origin);
+  assertProtectedHostedUrl(site, equivalent);
+  return equivalent;
+}
+
+/**
+ * Accept at most one redirect, and only the exact Firebase cleanUrls
+ * equivalent of the frozen `.html` asset on the same fixed hostname. Any other
+ * origin, path, query, fragment, scheme, port or credential fails closed.
+ */
+export function acceptedCleanUrlsRedirect(site, requestedUrl, status, locationHeader) {
+  const label = `${site} hosted asset returned HTTP ${status}`;
+  if (!CLEAN_URL_REDIRECT_STATUSES.has(status)) throw new Error(label);
+  const equivalent = cleanUrlsEquivalentUrl(site, requestedUrl);
+  if (!equivalent) throw new Error(`${label}; redirects are only accepted for frozen .html assets`);
+  if (typeof locationHeader !== 'string' || !locationHeader || /[?#\s\\\0]/.test(locationHeader)) {
+    throw new Error(`${label}; redirect location is missing or unsafe`);
+  }
+  let target;
+  try {
+    target = new URL(locationHeader, requestedUrl);
+  } catch {
+    throw new Error(`${label}; redirect location is malformed`);
+  }
+  try {
+    assertProtectedHostedUrl(site, target);
+  } catch {
+    throw new Error(`${label}; redirect leaves the fixed ${site} hosted origin`);
+  }
+  if (target.href !== equivalent.href) {
+    throw new Error(`${label}; redirect is not the cleanUrls equivalent of the frozen asset`);
+  }
+  return target;
+}
+
+function requestProtectedHostedOnce(site, targetUrl, transport) {
+  const hostname = assertProtectedHostedUrl(site, targetUrl);
   return new Promise((resolve, reject) => {
-    const request = httpsRequest({
+    const request = transport({
       protocol: 'https:',
       hostname,
       port: 443,
       method: 'GET',
-      path: requestedUrl.pathname,
+      path: targetUrl.pathname,
       headers: {
         Accept: 'application/octet-stream',
         'Cache-Control': 'no-cache',
@@ -219,7 +277,7 @@ function requestProtectedHostedBytes(site, requestedUrl) {
       const status = Number(response.statusCode || 0);
       if (status < 200 || status >= 300) {
         response.resume();
-        reject(new Error(`${site} hosted asset returned HTTP ${status}`));
+        resolve({ status, location: response.headers?.location, bytes: null });
         return;
       }
       const declaredLength = Number(response.headers['content-length'] || 0);
@@ -239,7 +297,7 @@ function requestProtectedHostedBytes(site, requestedUrl) {
         }
         chunks.push(chunk);
       });
-      response.on('end', () => resolve(Buffer.concat(chunks, received)));
+      response.on('end', () => resolve({ status, location: undefined, bytes: Buffer.concat(chunks, received) }));
       response.on('error', reject);
     });
     request.setTimeout(FETCH_TIMEOUT_MS, () => {
@@ -248,6 +306,21 @@ function requestProtectedHostedBytes(site, requestedUrl) {
     request.on('error', reject);
     request.end();
   });
+}
+
+/**
+ * Read exact live bytes for one frozen asset below a fixed production origin.
+ * `transport` exists only so tests can simulate Hosting responses offline.
+ */
+export async function requestProtectedHostedBytes(site, requestedUrl, { transport = httpsRequest } = {}) {
+  assertProtectedHostedUrl(site, requestedUrl);
+  const first = await requestProtectedHostedOnce(site, requestedUrl, transport);
+  if (first.bytes) return first.bytes;
+
+  const redirectTarget = acceptedCleanUrlsRedirect(site, requestedUrl, first.status, first.location);
+  const second = await requestProtectedHostedOnce(site, redirectTarget, transport);
+  if (second.bytes) return second.bytes;
+  throw new Error(`${site} hosted asset returned HTTP ${second.status} after its single cleanUrls redirect`);
 }
 
 function listRegularFiles(rootDir) {
