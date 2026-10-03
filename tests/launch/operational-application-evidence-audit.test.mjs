@@ -550,6 +550,7 @@ import {
   transformFrozenActivationVerifier,
   validateFrozenReleaseEvidenceContext,
   runFrozenReleaseEvidence,
+  REVIEWED_ACTIVATION_CHECK,
 } from '../../scripts/run-frozen-release-evidence.mjs';
 
 const repoRoot = fileURLToPath(new URL('../../', import.meta.url));
@@ -615,6 +616,30 @@ test('[frozen-cent] source transform is narrow, single-use and refuses drift', (
   execFileSync(process.execPath, ['--input-type=module', '--check'], { input: transformed });
 });
 
+test('[frozen-activation] adapts one legacy check, keeps one exact-fils check, and fails closed otherwise', async () => {
+  const reviewed = await read('scripts/verify-operational-application-evidence.mjs');
+  const legacySource = `async function proof() {\n${legacyMoneyCheck}\n  return { amount };\n}\n`;
+  const adapted = transformFrozenActivationVerifier(legacySource);
+  assert.match(adapted, /verifyFrozenActivationPayment\(payment\.data, contract\)/);
+  assert.doesNotMatch(adapted, /Math\.abs\(amount - Math\.round\(annual \* 0\.15\)\)/);
+  assert.equal(reviewed.split(legacyMoneyCheck).length, 1);
+  assert.equal(reviewed.split(REVIEWED_ACTIVATION_CHECK).length, 2);
+  assert.equal(transformFrozenActivationVerifier(reviewed), reviewed);
+
+  for (const input of [
+    'async function proof() {\n  return { amount };\n}\n',
+    `${reviewed}\n${legacyMoneyCheck}`,
+    `${reviewed}\n${reviewed}`,
+    reviewed.replace('amountMinor !== lockedDepositMinor', 'amountMinor === lockedDepositMinor'),
+    `${legacySource}\n${legacyMoneyCheck}`,
+  ]) {
+    assert.throws(
+      () => transformFrozenActivationVerifier(input),
+      /exact legacy or reviewed exact-fils check is required/,
+    );
+  }
+});
+
 function makeFrozenFixture(t) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'frozen-cent-test-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
@@ -671,6 +696,20 @@ test('[frozen-cent] restores the verifier after success, nonzero exit and policy
   assert.equal(fs.readFileSync(f.verifierPath, 'utf8'), f.original);
 });
 
+test('[frozen-activation] a committed exact-fils verifier is left byte-for-byte', (t) => {
+  const f = makeFrozenFixture(t);
+  const exactSource = `const fail = (message) => { throw new Error(message); };\nasync function proof() {\n  const payment = { data: { amountReceived: Number(process.env.FIXTURE_RECEIVED_AMOUNT ?? '1500.15') } };\n  const contract = ${JSON.stringify(lockedContract())};\n${REVIEWED_ACTIVATION_CHECK}\n  if (amount !== 1500.15) throw new Error('wrong fixture amount');\n}\nawait proof();\n`;
+  fs.writeFileSync(f.verifierPath, exactSource);
+  const git = (...args) => execFileSync('git', args, { cwd: f.root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
+  git('add', 'scripts/verify-operational-application-evidence.mjs');
+  git('-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid', '-c', 'commit.gpgsign=false', 'commit', '-m', 'exact-fils frozen verifier');
+  const releaseSha = git('rev-parse', 'HEAD');
+  const deployment = { ...f.deployment, deployedCommitSha: releaseSha };
+  fs.writeFileSync(f.deploymentPath, JSON.stringify(deployment));
+  assert.equal(runFrozenReleaseEvidence(f.entrypoint, { ...f.env, PRODUCTION_RELEASE_SHA: releaseSha }, f.root), 0);
+  assert.equal(fs.readFileSync(f.verifierPath, 'utf8'), exactSource);
+});
+
 test('[frozen-cent] retains exact deployment, freshness, workflow and working-tree guards', (t) => {
   const f = makeFrozenFixture(t);
   for (const overrides of [
@@ -717,6 +756,7 @@ test('[frozen-source] the current verifier is reviewed exact-fils code while leg
   assert.match(source, /lockedDepositMinor = Math\.round\(lockedDeposit \* 100\)/);
   assert.match(source, /amountMinor = Math\.round\(amount \* 100\)/);
   assert.match(source, /amountMinor !== lockedDepositMinor/);
+  assert.equal(transformFrozenActivationVerifier(source), source);
 
   const legacySource = `async function proof() {\n${legacyMoneyCheck}\n  return { amount };\n}\n`;
   const transformed = transformFrozenActivationVerifier(legacySource);

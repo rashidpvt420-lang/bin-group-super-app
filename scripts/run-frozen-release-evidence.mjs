@@ -68,6 +68,42 @@ const LEGACY_ACTIVATION_CHECK = [
   '  const amount = Number(payment.data.amountReceived || payment.data.quoteSnapshot?.activationDeposit || payment.data.amount || 0);',
   "  if (!Number.isFinite(annual) || annual <= 0 || !Number.isFinite(amount) || Math.abs(amount - Math.round(annual * 0.15)) > 0.01) fail('activation amount is not the locked 15% deposit');",
 ].join('\n');
+// Cash/Cheque exact-fils activation check already shipped by frozen release
+// bb4df313 (the reviewed application verifier blob). One exact copy and no
+// legacy check: leave it. One legacy annual*0.15 ±0.01 check and no exact-fils
+// check: replace it with the pinned activation adapter. Any other shape fails closed.
+export const REVIEWED_ACTIVATION_CHECK = [
+  '  const annual = Number(',
+  '    payment.data.finalVerifiedQuoteSnapshot?.annualContractValue',
+  '      ?? contract.finalVerifiedQuoteSnapshot?.annualContractValue',
+  '      ?? payment.data.quoteSnapshot?.annualContractValue',
+  '      ?? contract.quoteSnapshot?.annualContractValue',
+  '      ?? contract.finalAnnualContractValue',
+  '      ?? contract.annualContractValue,',
+  '  );',
+  '  const lockedDeposit = Number(',
+  '    payment.data.finalVerifiedQuoteSnapshot?.activationDeposit',
+  '      ?? contract.finalVerifiedQuoteSnapshot?.activationDeposit',
+  '      ?? payment.data.finalActivationDeposit',
+  '      ?? contract.finalActivationDeposit',
+  '      ?? payment.data.activationDeposit',
+  '      ?? payment.data.quoteSnapshot?.activationDeposit',
+  '      ?? contract.quoteSnapshot?.activationDeposit,',
+  '  );',
+  '  const amount = Number(payment.data.amountReceived ?? payment.data.amount ?? lockedDeposit);',
+  '  const expectedDeposit = Math.round(annual * 0.15 * 100) / 100;',
+  '  const lockedDepositMinor = Math.round(lockedDeposit * 100);',
+  '  const amountMinor = Math.round(amount * 100);',
+  '  if (',
+  '    !Number.isFinite(annual) || annual <= 0',
+  '    || !Number.isFinite(lockedDeposit) || lockedDeposit <= 0',
+  '    || !Number.isFinite(amount) || amount <= 0',
+  '    || lockedDeposit !== expectedDeposit',
+  '    || lockedDeposit !== lockedDepositMinor / 100',
+  '    || amount !== amountMinor / 100',
+  '    || amountMinor !== lockedDepositMinor',
+  "  ) fail('activation amount is not the exact server-locked 15% deposit in AED fils');",
+].join('\n');
 const LEGACY_TENANT_PHOTO_SELECTION = [
   '    ticket.requestPhotoUrl,',
   '    ...(Array.isArray(ticket.photoUrls) ? ticket.photoUrls : []),',
@@ -311,13 +347,16 @@ export function verifyFrozenActivationPayment(payment, contract, releaseRoot = p
 }
 
 export function transformFrozenActivationVerifier(source, adapterUrl = import.meta.url) {
-  if (source.split(LEGACY_ACTIVATION_CHECK).length !== 2) {
-    fail('frozen activation verifier source drift; exact legacy check is required');
+  const legacyMatches = source.split(LEGACY_ACTIVATION_CHECK).length - 1;
+  const reviewedMatches = source.split(REVIEWED_ACTIVATION_CHECK).length - 1;
+  if (legacyMatches === 1 && reviewedMatches === 0) {
+    return source.replace(LEGACY_ACTIVATION_CHECK, [
+      `  const { verifyFrozenActivationPayment } = await import(${JSON.stringify(adapterUrl)});`,
+      '  const { amount } = verifyFrozenActivationPayment(payment.data, contract);',
+    ].join('\n'));
   }
-  return source.replace(LEGACY_ACTIVATION_CHECK, [
-    `  const { verifyFrozenActivationPayment } = await import(${JSON.stringify(adapterUrl)});`,
-    '  const { amount } = verifyFrozenActivationPayment(payment.data, contract);',
-  ].join('\n'));
+  if (legacyMatches === 0 && reviewedMatches === 1) return source;
+  fail('frozen activation verifier source drift; exact legacy or reviewed exact-fils check is required');
 }
 
 export function transformFrozenTenantPhotoVerifier(source) {
@@ -382,6 +421,10 @@ function installReviewedActivationAdapter(releaseRoot) {
     return () => {};
   }
   const adapted = transformFrozenActivationVerifier(source);
+  if (adapted === source) {
+    console.log(`[frozen-release-evidence] frozen application verifier already contains the exact AED-fils activation check state=${state} sha256=${createHash('sha256').update(source).digest('hex')}`);
+    return () => {};
+  }
   writeFileSync(file, adapted);
   console.log(`[frozen-release-evidence] reviewed activation-policy adapter state=${state} sha256=${createHash('sha256').update(adapted).digest('hex')}`);
   return () => writeFileSync(file, source);
