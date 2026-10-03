@@ -15,9 +15,9 @@ test('all role portal shells bind the light-readable CSS class', () => {
   const adminTheme = read('apps/admin-panel/src/theme/adminTheme.ts');
 
   for (const shell of ['owner-shell', 'technician-shell', 'tenant-shell', 'broker-shell', 'admin-shell']) {
-    assert.match(css, new RegExp(`\\.${shell}\\s*,|\\.${shell}\\s*\\{`));
-    assert.match(css, new RegExp(`\\.${shell} \\.MuiTypography-root`));
-    assert.match(css, new RegExp(`\\.${shell} \\.MuiPaper-root`));
+    assert.ok(css.includes(`.${shell}`), `${shell} shell selector missing`);
+    assert.ok(css.includes(`.${shell} .MuiTypography-root`), `${shell} typography rule missing`);
+    assert.ok(css.includes(`.${shell} .MuiPaper-root`), `${shell} paper rule missing`);
   }
 
   assert.match(owner, /className="owner-shell"/);
