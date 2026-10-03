@@ -152,10 +152,12 @@ function freshHostedClientEvidence(releaseSha, runAttempt, hostedBundles) {
   return buildHostedClientConfigEvidence({ main, admin }, { env: evidenceEnv, now: new Date() });
 }
 
-/** Construct an asset URL only below one of the two fixed production Hosting origins. */
-export function protectedHostedAssetUrl(site, relativePath) {
-  const config = HOSTED_SITES[site];
-  if (!config) throw new Error(`unsupported hosted site: ${site}`);
+/**
+ * Firebase Hosting cleanUrls serves HTML without the .html suffix and maps
+ * index.html to the directory root. Live fetches must use that public path or
+ * Hosting returns HTTP 301 (hard-clearance rejects redirects).
+ */
+export function cleanUrlHostedRequestPath(relativePath) {
   const normalized = text(relativePath).replaceAll('\\', '/');
   const segments = normalized.split('/');
   if (
@@ -164,10 +166,48 @@ export function protectedHostedAssetUrl(site, relativePath) {
     || normalized.includes('\0')
     || segments.some((segment) => !segment || segment === '.' || segment === '..')
   ) {
+    throw new Error('unsafe hosted asset path');
+  }
+  if (normalized === 'index.html') return '';
+  if (normalized.endsWith('/index.html')) return normalized.slice(0, -'/index.html'.length);
+  if (normalized.endsWith('.html')) return normalized.slice(0, -'.html'.length);
+  return normalized;
+}
+
+/** Construct an asset URL only below one of the two fixed production Hosting origins. */
+export function protectedHostedAssetUrl(site, relativePath, { cleanUrls = false } = {}) {
+  const config = HOSTED_SITES[site];
+  if (!config) throw new Error(`unsupported hosted site: ${site}`);
+  const normalized = cleanUrls
+    ? cleanUrlHostedRequestPath(relativePath)
+    : text(relativePath).replaceAll('\\', '/');
+  const segments = normalized ? normalized.split('/') : [];
+  if (!cleanUrls) {
+    if (
+      !normalized
+      || normalized.startsWith('/')
+      || normalized.includes('\0')
+      || segments.some((segment) => !segment || segment === '.' || segment === '..')
+    ) {
+      throw new Error(`unsafe ${site} hosted asset path`);
+    }
+  } else if (segments.some((segment) => !segment || segment === '.' || segment === '..')) {
     throw new Error(`unsafe ${site} hosted asset path`);
   }
 
   const base = new URL(`${config.baseUrl}/`);
+  if (!normalized) {
+    if (
+      base.protocol !== 'https:'
+      || base.username
+      || base.password
+      || base.search
+      || base.hash
+    ) {
+      throw new Error(`unsafe ${site} hosted asset URL`);
+    }
+    return base;
+  }
   const encodedPath = segments.map((segment) => encodeURIComponent(segment)).join('/');
   const candidate = new URL(encodedPath, base);
   if (
@@ -310,7 +350,9 @@ async function verifyHostedDirectoryBytes({ root, site, releaseSha }) {
     if (!allowedHostedAssetUrls.includes(requestedHref)) {
       throw new Error(`${site} hosted asset is absent from the frozen release URL allowlist`);
     }
-    const liveBytes = await requestProtectedHostedBytes(site, requestedUrl);
+    // Live Hosting uses cleanUrls; frozen allowlist keeps the on-disk .html path.
+    const liveUrl = protectedHostedAssetUrl(site, relative, { cleanUrls: true });
+    const liveBytes = await requestProtectedHostedBytes(site, liveUrl);
     if (!liveBytes.equals(localBytes)) {
       throw new Error(`${site} hosted file differs from frozen release bytes: ${relative}`);
     }
