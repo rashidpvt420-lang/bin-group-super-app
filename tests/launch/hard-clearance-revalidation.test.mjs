@@ -1,9 +1,14 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict';
+import { EventEmitter } from 'node:events';
 import { readFile } from 'node:fs/promises';
+import { Readable } from 'node:stream';
 import test from 'node:test';
 import {
+  acceptedCleanUrlsRedirect,
+  cleanUrlsEquivalentUrl,
   protectedHostedAssetUrl,
+  requestProtectedHostedBytes,
   validateHostedReleaseBinding,
 } from '../../scripts/hard-clearance-production-revalidation.mjs';
 import { assertProtectedProductionContext } from '../../scripts/resolve-admin-app-check-site-key.mjs';
@@ -357,6 +362,176 @@ test('hosted byte verifier can only address fixed production origins', () => {
     assert.throws(() => protectedHostedAssetUrl('main', candidate), /unsafe main hosted asset path/);
   }
   assert.throws(() => protectedHostedAssetUrl('other', 'assets/index.js'), /unsupported hosted site/);
+});
+
+/**
+ * Offline stand-in for node:https request(). `routes` maps an exact request
+ * path to { status, headers, body }; every request is recorded so tests can
+ * prove the verifier never leaves the fixed hostname or follows extra hops.
+ */
+function fakeHostingTransport(routes) {
+  const calls = [];
+  const transport = (options, onResponse) => {
+    calls.push({ hostname: options.hostname, port: options.port, path: options.path, method: options.method });
+    const request = new EventEmitter();
+    request.setTimeout = () => request;
+    request.destroy = (error) => { if (error) request.emit('error', error); };
+    request.end = () => {
+      const route = routes[options.path] || { status: 404, headers: {}, body: 'not found' };
+      const response = Readable.from(route.body ? [Buffer.from(route.body)] : []);
+      response.statusCode = route.status;
+      response.headers = route.headers || {};
+      queueMicrotask(() => onResponse(response));
+    };
+    return request;
+  };
+  return { transport, calls };
+}
+
+test('cleanUrls equivalents map only frozen .html assets on the fixed origin', () => {
+  const equivalent = (relative) => cleanUrlsEquivalentUrl('main', protectedHostedAssetUrl('main', relative))?.href ?? null;
+  assert.equal(equivalent('index.html'), 'https://bin-group-57c60.web.app/');
+  assert.equal(equivalent('privacy-policy.html'), 'https://bin-group-57c60.web.app/privacy-policy');
+  assert.equal(equivalent('legal/index.html'), 'https://bin-group-57c60.web.app/legal/');
+  assert.equal(equivalent('legal/terms.html'), 'https://bin-group-57c60.web.app/legal/terms');
+  assert.equal(equivalent('assets/index-abc.js'), null);
+  assert.equal(equivalent('manifest.json'), null);
+  assert.equal(equivalent('page.htm'), null);
+});
+
+test('hosted byte verifier follows one same-origin cleanUrls 301 for index.html', async () => {
+  const { transport, calls } = fakeHostingTransport({
+    '/index.html': { status: 301, headers: { location: '/' }, body: 'Redirecting...' },
+    '/': { status: 200, headers: {}, body: '<!doctype html><title>BIN GROUP</title>' },
+  });
+  const bytes = await requestProtectedHostedBytes('main', protectedHostedAssetUrl('main', 'index.html'), { transport });
+  assert.equal(bytes.toString('utf8'), '<!doctype html><title>BIN GROUP</title>');
+  assert.deepEqual(calls.map((call) => call.path), ['/index.html', '/']);
+  for (const call of calls) {
+    assert.equal(call.hostname, 'bin-group-57c60.web.app');
+    assert.equal(call.port, 443);
+    assert.equal(call.method, 'GET');
+  }
+});
+
+test('hosted byte verifier follows one same-origin cleanUrls 301/308 for page.html', async () => {
+  for (const [status, location] of [
+    [301, 'https://bin-group-57c60.web.app/privacy-policy'],
+    [308, '/privacy-policy'],
+  ]) {
+    const { transport, calls } = fakeHostingTransport({
+      '/privacy-policy.html': { status, headers: { location }, body: '' },
+      '/privacy-policy': { status: 200, headers: {}, body: 'privacy bytes' },
+    });
+    const bytes = await requestProtectedHostedBytes(
+      'main',
+      protectedHostedAssetUrl('main', 'privacy-policy.html'),
+      { transport },
+    );
+    assert.equal(bytes.toString('utf8'), 'privacy bytes');
+    assert.deepEqual(calls.map((call) => call.path), ['/privacy-policy.html', '/privacy-policy']);
+  }
+});
+
+test('hosted byte verifier rejects every redirect that is not the exact same-origin cleanUrls equivalent', async () => {
+  const page = protectedHostedAssetUrl('main', 'privacy-policy.html');
+  const cases = [
+    ['another host', page, 301, 'https://attacker.example/privacy-policy', /leaves the fixed main hosted origin/],
+    ['the admin origin', page, 301, 'https://bin-group-admin-panel.web.app/privacy-policy', /leaves the fixed main hosted origin/],
+    ['a protocol-relative host', page, 301, '//attacker.example/privacy-policy', /leaves the fixed main hosted origin/],
+    ['plain http', page, 301, 'http://bin-group-57c60.web.app/privacy-policy', /leaves the fixed main hosted origin/],
+    ['an explicit port', page, 301, 'https://bin-group-57c60.web.app:8443/privacy-policy', /leaves the fixed main hosted origin/],
+    ['embedded credentials', page, 301, 'https://user:pw@bin-group-57c60.web.app/privacy-policy', /leaves the fixed main hosted origin/],
+    ['another path', page, 301, '/terms-of-service', /not the cleanUrls equivalent/],
+    ['the site root', page, 301, '/', /not the cleanUrls equivalent/],
+    ['a trailing-slash variant', page, 301, '/privacy-policy/', /not the cleanUrls equivalent/],
+    ['a query string', page, 301, '/privacy-policy?next=https://attacker.example', /missing or unsafe/],
+    ['an empty query', page, 301, '/privacy-policy?', /missing or unsafe/],
+    ['a fragment', page, 301, '/privacy-policy#x', /missing or unsafe/],
+    ['a missing Location', page, 301, undefined, /missing or unsafe/],
+    ['a temporary 302', page, 302, '/privacy-policy', /HTTP 302$/],
+    ['a 307', page, 307, '/privacy-policy', /HTTP 307$/],
+    ['a non-.html asset', protectedHostedAssetUrl('main', 'assets/index-abc.js'), 301, '/assets/index-abc', /only accepted for frozen \.html assets/],
+    ['a non-.html asset to itself', protectedHostedAssetUrl('main', 'manifest.json'), 308, '/manifest.json', /only accepted for frozen \.html assets/],
+  ];
+  for (const [label, requested, status, location, expected] of cases) {
+    assert.throws(
+      () => acceptedCleanUrlsRedirect('main', requested, status, location),
+      expected,
+      `redirect to ${label} must fail closed`,
+    );
+    const { transport, calls } = fakeHostingTransport({
+      [requested.pathname]: { status, headers: location === undefined ? {} : { location }, body: '' },
+      '/privacy-policy': { status: 200, headers: {}, body: 'attacker-controlled bytes' },
+      '/terms-of-service': { status: 200, headers: {}, body: 'attacker-controlled bytes' },
+      '/': { status: 200, headers: {}, body: 'attacker-controlled bytes' },
+      '/assets/index-abc': { status: 200, headers: {}, body: 'attacker-controlled bytes' },
+    });
+    await assert.rejects(
+      requestProtectedHostedBytes('main', requested, { transport }),
+      expected,
+      `redirect to ${label} must fail closed`,
+    );
+    assert.equal(calls.length, 1, `redirect to ${label} must not be followed`);
+  }
+});
+
+test('hosted byte verifier follows at most one redirect and keeps other non-2xx responses fatal', async () => {
+  const page = protectedHostedAssetUrl('main', 'privacy-policy.html');
+  const double = fakeHostingTransport({
+    '/privacy-policy.html': { status: 301, headers: { location: '/privacy-policy' }, body: '' },
+    '/privacy-policy': { status: 301, headers: { location: '/privacy-policy' }, body: '' },
+  });
+  await assert.rejects(
+    requestProtectedHostedBytes('main', page, { transport: double.transport }),
+    /main hosted asset returned HTTP 301 after its single cleanUrls redirect/,
+  );
+  assert.deepEqual(double.calls.map((call) => call.path), ['/privacy-policy.html', '/privacy-policy']);
+
+  const missingTarget = fakeHostingTransport({
+    '/index.html': { status: 301, headers: { location: '/' }, body: '' },
+    '/': { status: 404, headers: {}, body: '' },
+  });
+  await assert.rejects(
+    requestProtectedHostedBytes('main', protectedHostedAssetUrl('main', 'index.html'), { transport: missingTarget.transport }),
+    /main hosted asset returned HTTP 404 after its single cleanUrls redirect/,
+  );
+
+  for (const status of [404, 500, 403, 304]) {
+    const { transport, calls } = fakeHostingTransport({
+      '/index.html': { status, headers: { location: '/' }, body: '' },
+    });
+    await assert.rejects(
+      requestProtectedHostedBytes('main', protectedHostedAssetUrl('main', 'index.html'), { transport }),
+      (error) => error instanceof Error && error.message === `main hosted asset returned HTTP ${status}`,
+    );
+    assert.equal(calls.length, 1);
+  }
+
+  const direct = fakeHostingTransport({
+    '/assets/index-abc.js': { status: 200, headers: {}, body: 'console.log(1)' },
+  });
+  const bytes = await requestProtectedHostedBytes('main', protectedHostedAssetUrl('main', 'assets/index-abc.js'), { transport: direct.transport });
+  assert.equal(bytes.toString('utf8'), 'console.log(1)');
+  assert.equal(direct.calls.length, 1);
+
+  const oversized = fakeHostingTransport({
+    '/index.html': { status: 301, headers: { location: '/' }, body: '' },
+    '/': { status: 200, headers: { 'content-length': String(26 * 1024 * 1024) }, body: 'x' },
+  });
+  await assert.rejects(
+    requestProtectedHostedBytes('main', protectedHostedAssetUrl('main', 'index.html'), { transport: oversized.transport }),
+    /exceeds the per-file safety limit/,
+  );
+
+  await assert.rejects(
+    requestProtectedHostedBytes('main', new URL('https://attacker.example/index.html'), { transport: direct.transport }),
+    /unsafe main hosted asset URL/,
+  );
+  await assert.rejects(
+    requestProtectedHostedBytes('admin', protectedHostedAssetUrl('main', 'index.html'), { transport: direct.transport }),
+    /unsafe admin hosted asset URL/,
+  );
 });
 
 test('fresh hosted proof binds original artifact digest to exact live bytes', () => {
