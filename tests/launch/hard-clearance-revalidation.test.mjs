@@ -503,7 +503,7 @@ test('hosted byte verifier follows at most one redirect and keeps other non-2xx 
     });
     await assert.rejects(
       requestProtectedHostedBytes('main', protectedHostedAssetUrl('main', 'index.html'), { transport }),
-      new RegExp(`main hosted asset returned HTTP ${status}$`),
+      (error) => error instanceof Error && error.message === `main hosted asset returned HTTP ${status}`,
     );
     assert.equal(calls.length, 1);
   }
