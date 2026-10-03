@@ -422,7 +422,8 @@ test('reviewed application verifier carries exact AED-fils logic and frozen rele
   assert.match(verifier, /amountMinor !== lockedDepositMinor/);
   assert.match(verifier, /exact server-locked 15% deposit in AED fils/);
   assert.doesNotMatch(verifier, /Math\.abs\(amount - Math\.round\(annual \* 0\.15\)\)/);
-  assert.match(installer, /state === 'reviewed'/);
+  assert.doesNotMatch(installer, /state === 'reviewed'/);
+  assert.doesNotMatch(installer, /return \(\) => \{\}/);
   assert.match(installer, /transformFrozenActivationVerifier\(source\)/);
   assert.match(wrapper, /resolveLockedOwnerActivationSchedule/);
   assert.match(wrapper, /normalizeAedMoney/);
@@ -732,4 +733,138 @@ test('[frozen-workflow] complete-batch binding preflight runs before production 
   assert.ok(preflight < workflow.indexOf('for gate in "${gates[@]}"'));
   assert.match(workflow, /environment: \$\{\{ \(inputs\.founder_totp_operation == 'verify' \|\| inputs\.founder_totp_operation == 'repair-and-sync'\) && 'production' \|\| 'hard-public-launch' \}\}/);
   assert.match(workflow, /E2E_FOUNDER_TOTP_SECRET: \$\{\{ secrets\.E2E_FOUNDER_TOTP_SECRET \}\}/);
+});
+
+// Regression for Operational Application Evidence run 37132320157: frozen
+// release bb4df313 commits the exact reviewed verifier blob, which carries the
+// reviewed exact-fils activation check instead of the legacy cent check.
+const FROZEN_RELEASE_BB4DF313 = 'bb4df313df36e1636423ed90e8a77c990a6c50ff';
+const BB4DF313_APPLICATION_VERIFIER_BLOB = 'fa22b229dc55127fb74e4e5d5cc220d6fc77803a';
+const APPLICATION_VERIFIER_PATH = 'scripts/verify-operational-application-evidence.mjs';
+const REVIEWED_ACTIVATION_FAIL = "  ) fail('activation amount is not the exact server-locked 15% deposit in AED fils');";
+const REVIEWED_ACTIVATION_START = '  const annual = Number(\n    payment.data.finalVerifiedQuoteSnapshot?.annualContractValue';
+const gitBlobOf = (source) => {
+  const bytes = Buffer.from(source, 'utf8');
+  return crypto.createHash('sha1').update(Buffer.concat([Buffer.from(`blob ${bytes.length}\0`), bytes])).digest('hex');
+};
+const countOf = (source, needle) => source.split(needle).length - 1;
+
+function frozenBb4df313Verifier() {
+  let source;
+  try {
+    source = execFileSync('git', ['show', `${FROZEN_RELEASE_BB4DF313}:${APPLICATION_VERIFIER_PATH}`], {
+      cwd: repoRoot, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], maxBuffer: 16 * 1024 * 1024,
+    });
+  } catch {
+    // Shallow CI checkouts do not carry the release commit. The checked-in
+    // verifier is only accepted when it is byte-identical to the bb4df313 blob.
+    source = fs.readFileSync(path.join(repoRoot, APPLICATION_VERIFIER_PATH), 'utf8');
+  }
+  assert.equal(gitBlobOf(source), BB4DF313_APPLICATION_VERIFIER_BLOB, 'bb4df313 application verifier bytes are not the reviewed blob');
+  return source;
+}
+
+function reviewedActivationRegion(source) {
+  const start = source.indexOf(REVIEWED_ACTIVATION_START);
+  assert.ok(start >= 0);
+  const marker = "fail('activation amount does not match the deployed frozen activation payment policy');";
+  const end = source.indexOf(marker, start);
+  assert.ok(end > start);
+  return source.slice(start, end + marker.length);
+}
+
+test('[bb4df313-anchor] frozen release verifier receives the pinned activation adapter exactly once', () => {
+  const source = frozenBb4df313Verifier();
+  assert.equal(countOf(source, legacyMoneyCheck), 0);
+  assert.equal(countOf(source, REVIEWED_ACTIVATION_FAIL), 1);
+  assert.equal(countOf(source, 'verifyFrozenActivationPayment'), 0);
+  const transformed = transformFrozenActivationVerifier(source);
+  const start = source.indexOf(REVIEWED_ACTIVATION_START);
+  const end = source.indexOf(REVIEWED_ACTIVATION_FAIL) + REVIEWED_ACTIVATION_FAIL.length;
+  assert.equal(transformed.slice(0, end), source.slice(0, end), 'reviewed inline exact-fils check must stay unchanged');
+  assert.ok(transformed.endsWith(source.slice(end)), 'verifier source after the activation check must stay unchanged');
+  assert.ok(start > 0 && end > start);
+  assert.equal(countOf(transformed, 'verifyFrozenActivationPayment(payment.data, contract)'), 1);
+  assert.equal(countOf(transformed, '{ verifyFrozenActivationPayment } = await import('), 1);
+  assert.equal(countOf(transformed, 'frozenActivationPolicy.amountMinor !== amountMinor'), 1);
+  assert.equal(countOf(transformed, REVIEWED_ACTIVATION_FAIL), 1);
+  execFileSync(process.execPath, ['--input-type=module', '--check'], { input: transformed });
+});
+
+test('[bb4df313-anchor] activation transform stays single-use and fail-closed on reviewed-source drift', () => {
+  const source = frozenBb4df313Verifier();
+  const block = source.slice(source.indexOf(REVIEWED_ACTIVATION_START), source.indexOf(REVIEWED_ACTIVATION_FAIL) + REVIEWED_ACTIVATION_FAIL.length);
+  const transformed = transformFrozenActivationVerifier(source);
+  for (const input of [
+    transformed,
+    `${source}\nasync function duplicate(payment, contract) {\n${block}\n}\n`,
+    `${source}\nasync function legacy(payment, contract) {\n${legacyMoneyCheck}\n}\n`,
+    source.replace('Math.round(annual * 0.15 * 100) / 100', 'Math.floor(annual * 0.15 * 100) / 100'),
+    source.replace('    || amountMinor !== lockedDepositMinor\n', ''),
+    source.replace("deposit in AED fils');", "deposit');"),
+    source.replace(block, ''),
+    source.replace(/\n/g, '\r\n'),
+  ]) {
+    assert.throws(() => transformFrozenActivationVerifier(input), /source drift/);
+  }
+});
+
+test('[bb4df313-anchor] injected activation check requires both the reviewed inline and the deployed policy', async () => {
+  const transformed = transformFrozenActivationVerifier(frozenBb4df313Verifier());
+  const AsyncFunction = (async () => {}).constructor;
+  const check = new AsyncFunction('payment', 'contract', 'fail', `${reviewedActivationRegion(transformed)}\nreturn { amount, amountMinor, policyMinor: frozenActivationPolicy.amountMinor };`);
+  const reject = (message) => { throw new Error(message); };
+  const run = (data, contract) => check({ data }, contract, reject);
+  const contract = lockedContract(521720, 78258);
+  assert.deepEqual(await run({ amountReceived: 78258, currency: 'AED' }, contract), { amount: 78258, amountMinor: 7825800, policyMinor: 7825800 });
+  assert.deepEqual(await run({ amountReceived: 1500.15, currency: 'AED' }, lockedContract()), { amount: 1500.15, amountMinor: 150015, policyMinor: 150015 });
+  // Reviewed inline exact-fils rejections remain.
+  for (const received of [78257.99, 78258.01, 78258.005, 0, -1]) {
+    await assert.rejects(run({ amountReceived: received, currency: 'AED' }, contract), /exact server-locked 15% deposit in AED fils/);
+  }
+  await assert.rejects(run({ amountReceived: 78258 }, lockedContract(521720, 78259)), /exact server-locked/);
+  // The deployed pinned policy is additionally enforced after the inline check.
+  await assert.rejects(run({ amountReceived: 78258, currency: 'USD' }, contract), /currency/);
+  await assert.rejects(run({ currency: 'AED' }, contract), /recorded received amount/);
+  const hash = 'a'.repeat(64);
+  const repriced = {
+    ...lockedContract(), quoteRepricedAfterInspection: true,
+    finalVerifiedQuoteHash: '', signedPreInspectionQuoteHash: 'b'.repeat(64),
+    quoteVerificationState: 'FINAL_VERIFIED_AFTER_ALL_SITE_VISITS',
+    finalVerifiedQuoteSnapshot: { annualContractValue: 10002, activationDeposit: 1500.30, quoteHash: hash },
+  };
+  await assert.rejects(run({ amountReceived: 1500.30 }, repriced), /final verified quote evidence/);
+  assert.equal((await run({ amountReceived: 1500.30 }, { ...repriced, finalVerifiedQuoteHash: hash })).policyMinor, 150030);
+});
+
+function makeReviewedReleaseFixture(t, committedVerifier) {
+  const f = makeFrozenFixture(t);
+  const git = (...args) => execFileSync('git', args, { cwd: f.root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
+  fs.writeFileSync(f.verifierPath, committedVerifier);
+  fs.writeFileSync(path.join(f.root, f.entrypoint), [
+    "import { readFileSync } from 'node:fs';",
+    "const source = readFileSync(new URL('./verify-operational-application-evidence.mjs', import.meta.url), 'utf8');",
+    "const installs = source.split('verifyFrozenActivationPayment(payment.data, contract)').length - 1;",
+    "if (installs !== 1) throw new Error(`activation adapter installs=${installs}`);",
+    "if (!source.includes(\"exact server-locked 15% deposit in AED fils\")) throw new Error('reviewed inline check missing');",
+    'process.exit(Number(process.env.FIXTURE_EXIT_CODE || 0));',
+    '',
+  ].join('\n'));
+  git('add', 'scripts');
+  git('-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid', '-c', 'commit.gpgsign=false', 'commit', '-m', 'local-only reviewed release fixture');
+  const releaseSha = git('rev-parse', 'HEAD');
+  const deployment = { ...f.deployment, deployedCommitSha: releaseSha };
+  fs.writeFileSync(f.deploymentPath, JSON.stringify(deployment));
+  return { ...f, env: { ...f.env, PRODUCTION_RELEASE_SHA: releaseSha }, deployment, original: committedVerifier };
+}
+
+test('[bb4df313-anchor] frozen release committing the reviewed verifier installs the adapter and restores it', (t) => {
+  const reviewed = frozenBb4df313Verifier();
+  const f = makeReviewedReleaseFixture(t, reviewed);
+  for (const status of [0, 23]) {
+    assert.equal(runFrozenReleaseEvidence(f.entrypoint, { ...f.env, FIXTURE_EXIT_CODE: String(status) }, f.root), status);
+    assert.equal(fs.readFileSync(f.verifierPath, 'utf8'), reviewed);
+  }
+  fs.writeFileSync(f.verifierPath, reviewed.replace('Math.round(annual * 0.15 * 100) / 100', 'Math.floor(annual * 0.15 * 100) / 100'));
+  assert.throws(() => runFrozenReleaseEvidence(f.entrypoint, f.env, f.root));
 });
