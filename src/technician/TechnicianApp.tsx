@@ -54,16 +54,19 @@ const TechnicianLayout = ({ children }: { children: React.ReactNode }) => {
     const { isRTL, lang, t, tx } = useLanguage();
     const label = (key: string, en: string, ar: string) => lang === 'ar' ? ar : tx(key, en);
     const pathnames = location.pathname.split('/').filter(Boolean);
-    const isDashboard = location.pathname === '/technician' || location.pathname === '/technician/dashboard';
+    const isDashboard =
+        location.pathname === '/technician'
+        || location.pathname === '/technician/dashboard'
+        || location.pathname === '/technician/dashboard/full';
     const quickButtonSx = { color: shell.gold, border: `1px solid ${shell.gold}`, borderRadius: 2, fontWeight: 900, display: { xs: 'none', md: 'inline-flex' }, whiteSpace: 'nowrap', textTransform: 'none' } as const;
 
     return (
         <Box className="technician-shell" sx={{ minHeight: '100vh', bgcolor: shell.canvas, color: shell.ink, direction: isRTL ? 'rtl' : 'ltr', position: 'relative', isolation: 'isolate' }}>
             <BrandWatermark opacity={0.025} compact />
             <AppBar position="sticky" sx={{ bgcolor: 'rgba(255,255,255,0.96)', color: shell.ink, backdropFilter: 'blur(20px)', borderBottom: `1px solid ${shell.border}`, px: { xs: 1, md: 4 }, zIndex: 1200, boxShadow: '0 10px 28px rgba(17,24,39,0.06)' }} elevation={0}>
-                <Toolbar sx={{ justifyContent: 'space-between', px: 0, flexDirection: isRTL ? 'row-reverse' : 'row', gap: 1 }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.4, flexDirection: isRTL ? 'row-reverse' : 'row', minWidth: 0 }}>
-                        {!isDashboard && <Button aria-label={label('nav.back', 'Back', 'رجوع')} onClick={() => navigate(-1)} startIcon={renderSafeIcon(ArrowLeft, { size: 18, style: { transform: isRTL ? 'rotate(180deg)' : 'none' } })} sx={{ color: shell.ink, border: `1px solid ${shell.gold}`, borderRadius: 2, fontWeight: 950, minHeight: 42, px: 1.6, bgcolor: '#FFFFFF' }}>{label('nav.back', 'Back', 'رجوع')}</Button>}
+                <Toolbar sx={{ justifyContent: 'space-between', px: 0, flexDirection: isRTL ? 'row-reverse' : 'row', gap: 1, flexWrap: 'wrap', minHeight: { xs: 56, md: 64 }, py: { xs: 0.75, md: 0 } }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.4, flexDirection: isRTL ? 'row-reverse' : 'row', minWidth: 0, flex: '1 1 auto' }}>
+                        {!isDashboard && <Button aria-label={label('nav.back', 'Back', 'رجوع')} onClick={() => navigate(-1)} startIcon={renderSafeIcon(ArrowLeft, { size: 18, style: { transform: isRTL ? 'rotate(180deg)' : 'none' } })} sx={{ color: shell.ink, border: `1px solid ${shell.gold}`, borderRadius: 2, fontWeight: 950, minHeight: 42, px: 1.6, bgcolor: '#FFFFFF', flexShrink: 0 }}>{label('nav.back', 'Back', 'رجوع')}</Button>}
                         <Typography variant="h6" fontWeight="950" sx={{ color: shell.gold, textTransform: 'uppercase', letterSpacing: 1.6, display: 'flex', alignItems: 'center', gap: 1.2, fontSize: { xs: '0.82rem', md: '1.15rem' }, flexDirection: isRTL ? 'row-reverse' : 'row', textAlign: isRTL ? 'right' : 'left', minWidth: 0 }}><SafeIcon icon={Wrench} size={19} /> {label('portal.technician.title', 'FIELD NODE', 'بوابة الفني')}</Typography>
                     </Box>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 0.8, md: 1.1 }, flexDirection: isRTL ? 'row-reverse' : 'row' }}>

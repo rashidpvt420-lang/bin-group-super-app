@@ -177,8 +177,8 @@ function MetricCard({ icon, label, value, tone = ui.gold, helper }: { icon: Reac
 function DetailRow({ label, value, icon }: { label: string; value: React.ReactNode; icon?: React.ReactNode }) {
     return (
         <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '130px minmax(0, 1fr)', md: '142px minmax(0, 1fr)' }, gap: { xs: 0.25, sm: 1.4 }, alignItems: 'start', py: 1.05, minWidth: 0, borderBottom: `1px solid ${alpha(ui.line, 0.75)}` }}>
-            <Typography variant="caption" sx={{ color: ui.muted, fontWeight: 900, textTransform: 'uppercase', letterSpacing: 0.25, lineHeight: 1.25 }}>{label}</Typography>
-            <Typography variant="body2" sx={{ color: ui.ink, fontWeight: 850, minWidth: 0, overflowWrap: 'anywhere', wordBreak: 'break-word', lineHeight: 1.45, display: 'flex', gap: 0.7, alignItems: 'center' }}>
+            <Typography variant="caption" className="portal-detail-label" sx={{ color: `${ui.muted} !important`, fontWeight: 900, textTransform: 'uppercase', letterSpacing: 0.25, lineHeight: 1.25 }}>{label}</Typography>
+            <Typography variant="body2" className="portal-detail-value" sx={{ color: `${ui.ink} !important`, fontWeight: 850, minWidth: 0, overflowWrap: 'anywhere', wordBreak: 'break-word', lineHeight: 1.45, display: 'flex', gap: 0.7, alignItems: 'center' }}>
                 {icon}{value || 'Not set'}
             </Typography>
         </Box>

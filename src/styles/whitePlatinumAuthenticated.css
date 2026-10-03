@@ -55,25 +55,36 @@
   text-shadow: none !important;
 }
 
-.authenticated-shell .MuiTypography-body1,
-.authenticated-shell .MuiTypography-body2,
+/* Captions/helpers stay muted. body1/body2 keep full ink so DetailRow values,
+   profile contact lines, and status text stay readable on white cards. */
 .authenticated-shell .MuiTypography-caption,
-.admin-shell .MuiTypography-body1,
-.admin-shell .MuiTypography-body2,
 .admin-shell .MuiTypography-caption,
-.technician-shell .MuiTypography-body1,
-.technician-shell .MuiTypography-body2,
 .technician-shell .MuiTypography-caption,
-.owner-shell .MuiTypography-body1,
-.owner-shell .MuiTypography-body2,
 .owner-shell .MuiTypography-caption,
-.tenant-shell .MuiTypography-body1,
-.tenant-shell .MuiTypography-body2,
 .tenant-shell .MuiTypography-caption,
-.broker-shell .MuiTypography-body1,
-.broker-shell .MuiTypography-body2,
 .broker-shell .MuiTypography-caption {
   color: #667085 !important;
+}
+
+.authenticated-shell .MuiTypography-body1,
+.authenticated-shell .MuiTypography-body2,
+.admin-shell .MuiTypography-body1,
+.admin-shell .MuiTypography-body2,
+.technician-shell .MuiTypography-body1,
+.technician-shell .MuiTypography-body2,
+.owner-shell .MuiTypography-body1,
+.owner-shell .MuiTypography-body2,
+.tenant-shell .MuiTypography-body1,
+.tenant-shell .MuiTypography-body2,
+.broker-shell .MuiTypography-body1,
+.broker-shell .MuiTypography-body2,
+.authenticated-shell .portal-detail-value,
+.admin-shell .portal-detail-value,
+.technician-shell .portal-detail-value,
+.owner-shell .portal-detail-value,
+.tenant-shell .portal-detail-value,
+.broker-shell .portal-detail-value {
+  color: #111827 !important;
 }
 
 .authenticated-shell .MuiTypography-overline,

@@ -30,6 +30,19 @@ test('all role portal shells bind the light-readable CSS class', () => {
   assert.match(adminTheme, /textPrimary:\s*'#111827'/);
   assert.match(css, /background-image:\s*none\s*!important/);
   assert.match(css, /\.technician-shell \.MuiPaper-root::before/);
+  assert.match(css, /\.technician-shell \.MuiTypography-body2[\s\S]*?#111827\s*!important/);
+  assert.match(css, /\.technician-shell \.MuiTypography-caption[\s\S]*?#667085\s*!important/);
+});
+
+test('technician advanced dashboard keeps Back off the Skills card and DetailRow values use ink', () => {
+  const app = read('src/technician/TechnicianApp.tsx');
+  const dash = read('src/technician/pages/TechnicianDashboardPage.tsx');
+
+  assert.match(app, /dashboard\/full/);
+  assert.match(app, /isDashboard/);
+  assert.match(dash, /portal-detail-value/);
+  assert.match(dash, /color:\s*`\$\{ui\.ink\} !important`/);
+  assert.match(dash, /Skills, Tools & Assets/);
 });
 
 test('role profile pages keep light ink and never paint dark cover overlays', () => {
