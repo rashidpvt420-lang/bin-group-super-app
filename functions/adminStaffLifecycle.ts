@@ -126,6 +126,31 @@ async function requireTechnicianDirectoryReader(request: any) {
   };
 }
 
+// Read-only credential summary for the HR "Verified credentials" panel. Document references are
+// private HR data and are only returned to managers (includePrivate).
+function technicianCredentialSummary(user: any, technician: any, includePrivate: boolean) {
+  const merged = { ...user, ...technician };
+  const certifications = Array.isArray(merged.certifications) ? merged.certifications : [];
+  return {
+    medicalCardStatus: merged.medicalCardStatus || null,
+    medicalCardExpiry: serializeDate(merged.medicalCardExpiry),
+    medicalCardReference: includePrivate ? merged.medicalCardReference || null : null,
+    drivingLicenseStatus: merged.drivingLicenseStatus || null,
+    drivingLicenseExpiry: serializeDate(merged.drivingLicenseExpiry),
+    drivingLicenseReference: includePrivate ? merged.drivingLicenseReference || null : null,
+    certificationsStatus: merged.certificationsStatus || null,
+    certifications: certifications.slice(0, 20).map((item: any) => ({
+      name: clean(item?.name) || null,
+      status: item?.status || null,
+      expiryAt: serializeDate(item?.expiryAt),
+      documentReference: includePrivate ? item?.documentReference || null : null,
+    })),
+    credentialsReviewedAt: serializeDate(merged.credentialsReviewedAt),
+    credentialRenewalPending: merged.credentialRenewalPending === true,
+    latestCredentialRenewalRequestId: merged.credentialRenewalPending === true ? merged.latestCredentialRenewalRequestId || null : null,
+  };
+}
+
 async function loadStaff(uid: string) {
   if (!uid) throw new HttpsError("invalid-argument", "Staff UID is required.");
   const [authUser, userSnap, hrSnap, privateSnap, accessSnap, technicianSnap] = await Promise.all([
@@ -342,6 +367,7 @@ export const adminGetStaffDetails = onCall({ cors: true, region: "europe-west3",
       available: staff.role === "technician" ? Boolean(staff.technician.available) : false,
       currentJobCount: staff.role === "technician" ? Number(staff.technician.currentJobCount || 0) : 0,
       performanceScore: staff.data.performanceScore ?? null,
+      credentials: staff.role === "technician" ? technicianCredentialSummary(staff.data, staff.technician, includePrivate) : null,
     },
     attendance,
     leaveRequests,
