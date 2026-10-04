@@ -27,7 +27,7 @@ const copy = {
     title: 'TENANT INVITATION',
     titleAr: 'دعوة المستأجر',
     subtitle: 'You have been invited to the BIN GROUP property care platform.',
-    subtitleAr: 'تمت دعوتك إلى منصة بن جروب لإدارة ورعاية العقارات.',
+    subtitleAr: 'تمت دعوتك إلى منصة مجموعة بن لإدارة ورعاية العقارات.',
     tenantName: 'TENANT NAME / اسم المستأجر',
     assignedUnit: 'ASSIGNED UNIT / الوحدة المخصصة',
     secure: 'Secure invitation link / رابط دعوة آمن',
