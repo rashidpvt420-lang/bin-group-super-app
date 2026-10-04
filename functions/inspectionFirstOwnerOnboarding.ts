@@ -1011,6 +1011,11 @@ export const adminRecordOwnerMobilizationPaymentEvidence = onCall({ cors: true, 
     paymentProofHash: receiptHash,
     paymentProofGeneration: generation,
     paymentProofEvidence: { receiptUrl, storagePath, receiptHash, generation, recordedBy: actor.uid },
+    // D-5: the recording Admin is bound to the evidence; adminApprovePayment refuses this Admin
+    // as the approver, so a second Finance Admin must confirm the money arrived.
+    paymentEvidenceRecordedBy: actor.uid,
+    paymentEvidenceRecordedByEmail: actor.email || null,
+    paymentEvidenceRecordedAt: ts(),
     receiptUrl,
     receiptPath: storagePath,
     receiptHash,

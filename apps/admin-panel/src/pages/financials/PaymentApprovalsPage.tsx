@@ -269,6 +269,12 @@ export default function PaymentApprovalsPage() {
                     contentType: receiptFile?.type || 'application/pdf',
                     encodedDocument: receiptFile ? await fileToBase64(receiptFile) : '',
                 });
+                // D-5 dual control: the Admin who records the 15% evidence cannot also approve it.
+                // Stop here; a second Finance Admin verifies the recorded receipt and approves.
+                setNotice('15% payment evidence recorded. A second Finance Admin must now verify the receipt and approve this payment (dual control).');
+                setApprovalTarget(null);
+                setReceiptFile(null);
+                return;
             }
             const callable = httpsCallable(functions, 'adminApprovePayment');
             await callable({
@@ -283,7 +289,7 @@ export default function PaymentApprovalsPage() {
             setReceiptFile(null);
         } catch (err: any) {
             console.error('[ADMIN_PAYMENTS] approval failed', err);
-            setError(err?.details || err?.message || 'Approval failed.');
+            setError((typeof err?.details === 'string' && err.details) || err?.message || 'Approval failed.');
         } finally {
             setBusyId(null);
         }
