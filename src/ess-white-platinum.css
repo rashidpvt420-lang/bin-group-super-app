@@ -30,7 +30,7 @@ body:has(textarea[placeholder*="Type staff issue"]) .MuiTypography-root {
 
 body:has(textarea[placeholder*="Type staff issue"]) .MuiTypography-overline,
 body:has(textarea[placeholder*="Type staff issue"]) .MuiTypography-caption {
-  color: #B8932F !important;
+  color: #7A5C12 !important; /* 6.2:1 on white; #B8932F was 2.9:1 */
   font-weight: 900 !important;
 }
 
