@@ -58,7 +58,7 @@ export default function AuditLogPage() {
         <Container maxWidth="xl" sx={{ py: 6, direction: isRTL ? 'rtl' : 'ltr' }}>
             <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexDirection: isRTL ? 'row-reverse' : 'row' }}>
                 <Box sx={{ textAlign: isRTL ? 'right' : 'left' }}>
-                    <Typography variant="h4" fontWeight="black" gutterBottom>{t('audit.title')}</Typography>
+                    <Typography variant="h4" fontWeight="black" gutterBottom sx={{ color: 'text.primary' }}>{t('audit.title')}</Typography>
                     <Typography variant="body2" color="text.secondary">{t('audit.subtitle')}</Typography>
                 </Box>
                 <Box sx={{ display: 'flex', gap: 2, flexDirection: isRTL ? 'row-reverse' : 'row' }}>

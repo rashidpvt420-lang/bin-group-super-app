@@ -496,7 +496,7 @@ export default function TenantsManagementPage() {
   return (
     <Container maxWidth="xl" sx={{ py: 4 }}>
       <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Typography variant="h4" fontWeight="950">TENANT REGISTRY</Typography>
+        <Typography variant="h4" fontWeight="950" sx={{ color: 'text.primary' }}>TENANT REGISTRY</Typography>
         <Stack direction="row" spacing={2}>
             <Button 
                 variant="outlined" 

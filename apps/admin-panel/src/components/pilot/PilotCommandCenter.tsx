@@ -139,7 +139,7 @@ export default function PilotCommandCenter() {
                     <Typography variant="h4" fontWeight="black" sx={{ color: '#0f172a', letterSpacing: -1 }}>
                         PILOT COMMAND CENTER <Chip label="LIVE FIRESTORE" size="small" sx={{ ml: 1, bgcolor: '#0f172a', color: 'white', fontWeight: 'bold' }} />
                     </Typography>
-                    <Typography variant="body2" color="text.secondary">
+                    <Typography variant="body2" color="#475467">
                         Owner pipeline, activated contracts, and pricing evidence from persisted production records. Missing financial fields remain N/A.
                     </Typography>
                 </Box>

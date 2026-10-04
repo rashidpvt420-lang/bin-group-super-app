@@ -3,7 +3,7 @@ import { Typography, Container } from '@mui/material';
 
 const PlaceholderPage: React.FC<{ title: string }> = ({ title }) => (
     <Container sx={{ mt: 4 }}>
-        <Typography variant="h4" fontWeight="bold">{title}</Typography>
+        <Typography variant="h4" fontWeight="bold" sx={{ color: 'text.primary' }}>{title}</Typography>
         <Typography sx={{ mt: 2 }}>This module is currently being finalized.</Typography>
     </Container>
 );
