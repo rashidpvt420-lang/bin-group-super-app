@@ -26,3 +26,14 @@ test('public verify pages drop the internal protocol label', () => {
     assert.ok(src.includes('BIN GROUP document check'), f);
   }
 });
+
+test('spinners have an accessible name by default', () => {
+  const theme = read('src/theme/binGroupTheme.ts');
+  assert.ok(theme.includes("MuiCircularProgress: {\n      defaultProps: { 'aria-label': 'Loading' },"));
+});
+
+test('connection strip only shows when offline', () => {
+  const src = read('src/components/PortalConnectionStrip.tsx');
+  assert.ok(src.includes('if (online) return null;'));
+  assert.ok(src.includes("offline: 'You are working offline'"), 'offline warning is kept');
+});
