@@ -119,7 +119,7 @@ export default function TechnicianDutyAvailabilityCard({ isRTL = false }: { isRT
               </Button>
             ) : (
               <>
-                <Button variant="outlined" disabled={updating} onClick={() => changeDuty(duty === 'ON_BREAK' ? 'ON_DUTY' : 'ON_BREAK')} sx={{ borderColor: binThemeTokens.goldHover, color: binThemeTokens.goldHover, fontWeight: 950 }}>
+                <Button variant="outlined" disabled={updating} onClick={() => changeDuty(duty === 'ON_BREAK' ? 'ON_DUTY' : 'ON_BREAK')} sx={{ borderColor: binThemeTokens.goldHover, color: '#7A5C12', fontWeight: 950 }}>
                   {duty === 'ON_BREAK' ? tx('tech.duty.resume', 'RESUME DUTY') : tx('tech.duty.break', 'TAKE BREAK')}
                 </Button>
                 <Button variant="outlined" color="error" disabled={updating} onClick={() => changeDuty('OFF_DUTY')} sx={{ fontWeight: 950 }}>
