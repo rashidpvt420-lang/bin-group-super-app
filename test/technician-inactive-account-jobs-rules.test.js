@@ -4,14 +4,15 @@
 // because HR onboarding activation was never completed. The TechnicianJobsPage query is a
 // single-field equality on assignedTechnicianId (no composite index involved); these tests pin
 // that the rules deny it for that account state and allow it once activation completes.
-// RULES_FILE may point at a copy of the live production rules for a like-for-like check.
+// For a like-for-like check against the live rules, run it in a scratch checkout whose
+// firestore.rules is the deployed copy (e.g. `git show bb4df313:firestore.rules > firestore.rules`).
 import { describe, it, before, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { initializeTestEnvironment, assertFails, assertSucceeds } from '@firebase/rules-unit-testing';
 import { collection, doc, getDocs, query, setDoc, where } from 'firebase/firestore';
 
-const RULES_FILE = process.env.RULES_FILE || 'firestore.rules';
+const RULES_FILE = 'firestore.rules';
 let testEnv;
 
 async function seed(path, data) {
@@ -40,7 +41,7 @@ describe(`Technician jobs query vs account activation state (${RULES_FILE})`, ()
   before(async () => {
     testEnv = await initializeTestEnvironment({
       projectId: 'demo-bin-technician-inactive-jobs',
-      firestore: { rules: fs.readFileSync(RULES_FILE, 'utf8') },
+      firestore: { rules: fs.readFileSync('firestore.rules', 'utf8') },
     });
   });
 

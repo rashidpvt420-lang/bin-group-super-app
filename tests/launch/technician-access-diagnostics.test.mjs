@@ -92,7 +92,7 @@ test('08 UI uses the classifiers and the server tags every permission-denied gat
   assert.match(registrationComponent, /classifyTechnicianRegistrationFailure\(error\)/);
   assert.match(jobsPage, /classifyTechnicianJobsLoadError\(error\)/);
   for (const reason of ['APP_CHECK_APP_ID_MISMATCH', 'ACCOUNT_DISABLED_OR_SUSPENDED', 'ROLE_REQUIRED', 'PROFILE_SUSPENDED']) {
-    assert.match(backend, new RegExp(`TECHNICIAN_REGISTRATION_DENIAL\\.${reason}`));
+    assert.ok(backend.includes(`TECHNICIAN_REGISTRATION_DENIAL.${reason}`), `backend tags ${reason}`);
   }
   assert.match(backend, /enforceAppCheck: true/);
 });
