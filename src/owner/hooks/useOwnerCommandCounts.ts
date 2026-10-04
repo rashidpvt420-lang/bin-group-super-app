@@ -1,6 +1,7 @@
 import React from 'react';
 import { collection, db, limit, onSnapshot, query, where } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
+import { isOwnerActiveTicket, normalizeTicketStatus } from '../utils/ownerActiveTicketStatus';
 
 type OwnerCommandCounts = {
   loading: boolean;
@@ -11,8 +12,7 @@ type OwnerCommandCounts = {
   monthlyCostVariancePct: number | null;
 };
 
-const OPEN_TICKET_STATUSES = new Set(['OPEN', 'ASSIGNED', 'IN_PROGRESS', 'PENDING_ASSIGNMENT', 'WAITING_FOR_TECHNICIAN', 'ON_SITE']);
-const HIGH_RISK_PRIORITIES = new Set(['EMERGENCY', 'HIGH', 'emergency', 'urgent', 'high']);
+const HIGH_RISK_PRIORITIES = new Set(['EMERGENCY', 'HIGH', 'URGENT']);
 const PENDING_APPROVAL_STATUSES = new Set(['PENDING', 'pending', 'REQUESTED', 'requested', 'OPEN', 'open']);
 
 function toMillis(value: any): number | null {
@@ -93,8 +93,9 @@ export function useOwnerCommandCounts(): OwnerCommandCounts {
     try {
       unsubs.push(onSnapshot(query(collection(db, 'maintenanceTickets'), where('ownerId', '==', ownerId), limit(150)), (snap) => {
         const rows = snap.docs.map((docSnap) => docSnap.data());
-        const openRows = rows.filter((ticket) => OPEN_TICKET_STATUSES.has(String(ticket?.status || 'OPEN')) || OPEN_TICKET_STATUSES.has(String(ticket?.trackingStatus || '')));
-        partial.highRiskTickets = openRows.filter((ticket) => HIGH_RISK_PRIORITIES.has(String(ticket?.slaPriority || ticket?.priority || ''))).length;
+        // Case/format-insensitive: lowercase `pending_assignment` / `open` tickets count too.
+        const openRows = rows.filter((ticket) => isOwnerActiveTicket(ticket));
+        partial.highRiskTickets = openRows.filter((ticket) => HIGH_RISK_PRIORITIES.has(normalizeTicketStatus(ticket?.slaPriority || ticket?.priority || ''))).length;
         partial.openDisputes = openRows.filter((ticket) => String(ticket?.status || '').toUpperCase().includes('DISPUT') || String(ticket?.evidenceStatus || '').toUpperCase().includes('DISPUT')).length;
         partial.monthlyCostVariancePct = monthlyCostVariance(rows);
         publish();
