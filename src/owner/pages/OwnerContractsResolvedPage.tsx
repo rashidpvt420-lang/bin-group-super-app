@@ -318,9 +318,10 @@ export default function OwnerContractsResolvedPage() {
         ...emailLookupCandidates((user as any)?.ownerEmail),
       ]);
       for (const email of emails) {
+        // Only ownerEmail is provable by the contracts read rule (emailOwns). Nested
+        // emailDelivery.recipient / companyProfile.email lookups were always denied and
+        // exhausted the 1000-expression budget at the contracts read rule, so they are not issued.
         for (const c of await safeQueryContracts('ownerEmail', email)) seen.set(c.id, c);
-        for (const c of await safeQueryContracts('emailDelivery.recipient', email)) seen.set(c.id, c);
-        for (const c of await safeQueryContracts('companyProfile.email', email)) seen.set(c.id, c);
       }
 
       const sorted = Array.from(seen.values()).sort((a, b) => {

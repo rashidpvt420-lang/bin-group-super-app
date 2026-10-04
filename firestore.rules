@@ -434,6 +434,14 @@ service cloud.firestore {
         isNotSuspended();
     }
 
+    function canListOwnTenantTicket(data) {
+      // Query-provable subset of participantCanRead (tenantOwns) for tenant list queries.
+      return isNotSuspended() && (
+        isTenantId(data.get('tenantId', null)) ||
+        isTenantId(data.get('tenantUid', null))
+      );
+    }
+
     function participantCanRead(data) { return isAdmin() || ownerCanRead(data) || tenantOwns(data) || (isApprovedTechnician() && techOwns(data)) || brokerOwns(data); }
 
     // N-14: tenant-submitted requests start in a pending state and never carry
@@ -882,8 +890,20 @@ service cloud.firestore {
         (!('status' in data) || data.status in ['PENDING', 'pending', 'PENDING_VERIFICATION', 'pending_verification', 'UPLOADED']);
     }
 
+    function assignedTechnicianCanReadTicket(data) {
+      // Strict subset of participantCanRead's technician branch
+      // (isApprovedTechnician() && techOwns(data)): technician claim plus the
+      // dedicated approved technicians record. Checked first so ticket chat for
+      // the assigned technician does not walk every Admin, Owner, e-mail and
+      // Tenant branch and exceed Firestore's 1000-expression limit.
+      return hasTechnicianClaim() && techOwns(data) && hasApprovedTechnicianRecord();
+    }
+
     function canAccessMaintenanceTicket(ticketId) {
-      return signedIn() && exists(/databases/$(database)/documents/maintenanceTickets/$(ticketId)) && participantCanRead(get(/databases/$(database)/documents/maintenanceTickets/$(ticketId)).data);
+      return signedIn() && exists(/databases/$(database)/documents/maintenanceTickets/$(ticketId)) && (
+        assignedTechnicianCanReadTicket(get(/databases/$(database)/documents/maintenanceTickets/$(ticketId)).data) ||
+        participantCanRead(get(/databases/$(database)/documents/maintenanceTickets/$(ticketId)).data)
+      );
     }
 
     function safeTicketMessageCreate(ticketId) {
@@ -1379,6 +1399,7 @@ service cloud.firestore {
     }
 
     match /maintenanceTickets/{ticketId} {
+      allow list: if canListOwnTenantTicket(resource.data);
       allow list: if isNotSuspended() && canDispatchJobs();
       allow list: if canListAssignedTechnicianTicket(resource.data);
       allow get: if canGetAssignedTechnicianTicket(resource.data);

@@ -43,13 +43,15 @@ export default function TenantKeysPage() {
 
   // 2. Query keys & movements
   useEffect(() => {
-    if (!unitId) {
+    if (!unitId || !propertyId) {
       if (!loading) setLoading(false);
       return;
     }
 
-    // Read keys
-    const qKeys = query(collection(db, 'keyRegister'), where('unitId', '==', unitId));
+    // The tenant read rule requires the record's propertyId to match the tenant's property.
+    // A unitId-only query cannot prove that, so Firestore rejects it (rules evaluation error
+    // on keyRegister/keyMovements). Constrain both listeners by unit AND property.
+    const qKeys = query(collection(db, 'keyRegister'), where('unitId', '==', unitId), where('propertyId', '==', propertyId));
     const unsubKeys = onSnapshot(qKeys, (snap) => {
       setKeys(snap.docs.map(d => ({ id: d.id, ...d.data() })));
       setLoading(false);
@@ -59,7 +61,7 @@ export default function TenantKeysPage() {
     });
 
     // Read movements
-    const qMove = query(collection(db, 'keyMovements'), where('unitId', '==', unitId));
+    const qMove = query(collection(db, 'keyMovements'), where('unitId', '==', unitId), where('propertyId', '==', propertyId));
     const unsubMove = onSnapshot(qMove, (snap) => {
       const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       list.sort((a: any, b: any) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
@@ -72,7 +74,7 @@ export default function TenantKeysPage() {
       unsubKeys();
       unsubMove();
     };
-  }, [unitId]);
+  }, [unitId, propertyId]);
 
   const getStatusColor = (status: string) => {
     switch (status) {

@@ -54,23 +54,47 @@ export default function TenantCommunityPage() {
       return;
     }
 
-    const q = query(
-      collection(db, 'communityPosts'),
-      where('propertyId', '==', propertyId)
-    );
-
-    const unsub = onSnapshot(q, (snap) => {
-      const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      const filtered = list.filter((item: any) => item.status === 'approved' || item.authorUid === user?.uid);
-      filtered.sort((a: any, b: any) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
-      setPosts(filtered);
-      setLoading(false);
-    }, (err) => {
-      console.warn('Community posts listener failed:', err);
-      setLoading(false);
+    // Firestore rules must be able to prove every result readable from the query itself:
+    // a tenant may read approved posts for their property, or their own posts. A query
+    // constrained only by propertyId cannot prove that (others' pending posts would match),
+    // so it is rejected outright (rules evaluation error at communityPosts read). Query the
+    // two provable sets separately and merge them.
+    const buckets: Record<'approved' | 'own', any[]> = { approved: [], own: [] };
+    const settled = { approved: false, own: !user?.uid };
+    const publish = () => {
+      const merged = new Map<string, any>();
+      for (const item of [...buckets.approved, ...buckets.own]) merged.set(item.id, item);
+      const list = Array.from(merged.values());
+      list.sort((a: any, b: any) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+      setPosts(list);
+      if (settled.approved && settled.own) setLoading(false);
+    };
+    const listen = (bucket: 'approved' | 'own', q: any) => onSnapshot(q, (snap: any) => {
+      buckets[bucket] = snap.docs.map((d: any) => ({ id: d.id, ...d.data() }));
+      settled[bucket] = true;
+      publish();
+    }, (err: unknown) => {
+      console.warn(`Community posts listener failed (${bucket}):`, err);
+      settled[bucket] = true;
+      publish();
     });
 
-    return () => unsub();
+    const unsubs = [
+      listen('approved', query(
+        collection(db, 'communityPosts'),
+        where('propertyId', '==', propertyId),
+        where('status', '==', 'approved')
+      )),
+    ];
+    if (user?.uid) {
+      unsubs.push(listen('own', query(
+        collection(db, 'communityPosts'),
+        where('propertyId', '==', propertyId),
+        where('authorUid', '==', user.uid)
+      )));
+    }
+
+    return () => unsubs.forEach((unsub) => unsub());
   }, [propertyId, user?.uid]);
 
   // 3. Listen to comments on selected post

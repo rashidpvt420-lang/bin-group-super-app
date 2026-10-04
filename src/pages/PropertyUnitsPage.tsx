@@ -65,8 +65,16 @@ export default function PropertyUnitsPage() {
                 // 3. Fetch Tenants for these units
                 const enrichedUnits = await Promise.all(fetchedUnits.map(async (u) => {
                     if (u.currentTenantId) {
-                        const tenantSnap = await getDoc(doc(db, 'users', u.currentTenantId));
-                        return { ...u, tenant: tenantSnap.exists() ? tenantSnap.data() : null };
+                        // A tenant profile is readable by the owner only when the profile names
+                        // them (users rule). One unreadable profile must not reject Promise.all
+                        // and blank the whole drill-down (units and tickets), so degrade per unit.
+                        try {
+                            const tenantSnap = await getDoc(doc(db, 'users', u.currentTenantId));
+                            return { ...u, tenant: tenantSnap.exists() ? tenantSnap.data() : null };
+                        } catch (tenantErr) {
+                            console.warn(`[PropertyUnits] tenant profile for unit ${u.id} not readable:`, tenantErr);
+                            return { ...u, tenant: null };
+                        }
                     }
                     return { ...u, tenant: null };
                 }));

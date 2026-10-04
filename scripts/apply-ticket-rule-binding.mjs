@@ -214,6 +214,27 @@ replaceMatchBlock(legacyHeader, legacyReadOnlyBlock, 'legacy /tickets');
 
 const maintenanceHeader = '    match /maintenanceTickets/{ticketId} {';
 ensureRuleInMatchBlock(maintenanceHeader, dispatchList, 'canonical /maintenanceTickets');
+// Tenant dashboards list tickets with where('tenantId' | 'tenantUid', '==', uid). Proving that
+// query through participantCanRead walks every Admin, Owner, e-mail and Broker branch and exceeds
+// Firestore's 1000-expression limit, so the list was denied. This narrow predicate grants nothing
+// the canonical read rule does not: tenantOwns() already allows the same documents under the same
+// isNotSuspended() guard.
+const tenantOwnList = '      allow list: if canListOwnTenantTicket(resource.data);';
+const tenantOwnListHelper = `    function canListOwnTenantTicket(data) {
+      // Query-provable subset of participantCanRead (tenantOwns) for tenant list queries.
+      return isNotSuspended() && (
+        isTenantId(data.get('tenantId', null)) ||
+        isTenantId(data.get('tenantUid', null))
+      );
+    }`;
+if (!text.includes('    function canListOwnTenantTicket(data) {')) {
+  const marker = '    function participantCanRead(data) {';
+  const index = text.indexOf(marker);
+  if (index < 0) throw new Error('[ticket-rule-binding] Tenant list helper insertion point not found.');
+  text = `${text.slice(0, index)}${tenantOwnListHelper}\n\n${text.slice(index)}`;
+  changed = true;
+}
+ensureRuleInMatchBlock(maintenanceHeader, tenantOwnList, 'canonical /maintenanceTickets');
 const maintenanceBeforeCreate = readMatchBlock(maintenanceHeader, 'canonical /maintenanceTickets');
 const legacyAdminCreate = '      allow create: if isAdmin();';
 if (maintenanceBeforeCreate.content.includes(legacyAdminCreate)) {
@@ -225,6 +246,7 @@ const maintenanceBlock = readMatchBlock(maintenanceHeader, 'canonical /maintenan
 for (const required of [
   assignedTechnicianList.trim(),
   dispatchList.trim(),
+  tenantOwnList.trim(),
   'allow read: if isNotSuspended() && (participantCanRead(resource.data) || canDispatchJobs());',
   canonicalCreate.trim(),
   canonicalUpdate.trim(),
@@ -233,5 +255,6 @@ for (const required of [
   if (!maintenanceBlock.includes(required)) throw new Error(`[ticket-rule-binding] Canonical /maintenanceTickets fragment is missing: ${required}`);
 }
 
+if (!text.includes(tenantOwnListHelper)) throw new Error('[ticket-rule-binding] Tenant list helper drifted from the reviewed predicate.');
 if (changed) writeFileSync(file, text);
 console.log(`Applied canonical maintenanceTickets authority and read-only legacy tickets (legacy helpers removed: ${removedClaimFields + removedDirectClaims + removedOpenPool + removedOpenAvailability}).`);

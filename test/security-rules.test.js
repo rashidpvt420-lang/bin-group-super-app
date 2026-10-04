@@ -1,3 +1,4 @@
+import './ticket-list-expression-budget-rules.test.js';
 import './admin-mfa-rules.test.js';
 import './n06-n08-n09-rules.test.js';
 import './owner-contract-status-rules.test.js';
