@@ -80,7 +80,7 @@ export default function TechnicianSyncStatusStrip() {
             {!online ? copy.offline : copy.completion}
           </Typography>
         </Box>
-        <Button size="small" onClick={() => navigate('/technician/offline')} sx={{ flexShrink: 0, fontWeight: 900 }}>
+        <Button size="small" onClick={() => navigate('/technician/offline')} sx={{ flexShrink: 0, fontWeight: 900, color: '#7A5C12' }}>
           {copy.open}
         </Button>
       </Stack>

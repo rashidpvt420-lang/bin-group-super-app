@@ -41,6 +41,10 @@ export default function PortalSessionControls({
   const logoutLabel = lang === 'ar' ? 'تسجيل الخروج' : 'Logout';
   const softBackground = dark ? alpha('#FFFFFF', 0.08) : '#FFFFFF';
   const borderColor = dark ? alpha('#FFFFFF', 0.18) : alpha(accent, 0.35);
+  // On light shells the brand accent (e.g. gold #C9A646, 2.3:1) is kept for the border only; the
+  // label uses dark ink, and Logout uses a red that reaches 4.5:1 on its pink tint.
+  const labelColor = dark ? accent : '#111827';
+  const logoutColor = dark ? '#EF4444' : '#B91C1C';
 
   const handleLogout = async () => {
     const technicianUid = role === 'technician' ? auth.currentUser?.uid || '' : '';
@@ -90,7 +94,7 @@ export default function PortalSessionControls({
           minWidth: compact ? 44 : 70,
           px: compact ? 1 : 1.5,
           borderRadius: 3,
-          color: accent,
+          color: labelColor,
           bgcolor: softBackground,
           border: `1px solid ${borderColor}`,
           fontWeight: 950,
@@ -115,7 +119,7 @@ export default function PortalSessionControls({
           onClick={handleLogout}
           startIcon={<SafeIcon icon={LogOut} size={16} />}
           sx={{
-            color: '#EF4444',
+            color: logoutColor,
             border: `1px solid ${alpha('#EF4444', 0.3)}`,
             borderRadius: 3,
             fontWeight: 950,
@@ -138,7 +142,7 @@ export default function PortalSessionControls({
             aria-label={logoutLabel}
             onClick={handleLogout}
             sx={{
-              color: '#EF4444',
+              color: logoutColor,
               bgcolor: alpha('#EF4444', dark ? 0.14 : 0.08),
               border: `1px solid ${alpha('#EF4444', 0.3)}`,
               borderRadius: 3,
