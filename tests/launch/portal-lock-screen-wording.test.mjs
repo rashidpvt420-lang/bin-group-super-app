@@ -11,18 +11,26 @@ const enBlock = ctx.slice(ctx.indexOf('en: {'), ctx.indexOf('ar: {'));
 const arBlock = ctx.slice(ctx.indexOf('ar: {'));
 const usedKeys = [...new Set([...route.matchAll(/\bt\('(lock\.[a-z_]+)'\)/g)].map((m) => m[1]))];
 
+// Plain string lookup (no dynamic RegExp): returns the quoted value after 'key': or null.
+const valueOf = (block, key) => {
+  const at = block.indexOf(`'${key}':`);
+  if (at < 0) return null;
+  const m = /^\s*'([^']*)'/.exec(block.slice(at + key.length + 3));
+  return m ? m[1] : null;
+};
+
 test('ProtectedRoute uses lock.* keys', () => {
   assert.ok(usedKeys.length >= 5, `expected lock keys, got ${usedKeys}`);
 });
 
 for (const key of usedKeys) {
   test(`${key} has English and Arabic copy`, () => {
-    const en = enBlock.match(new RegExp(`'${key.replace('.', '\\.')}':\\s*'([^']+)'`));
-    const ar = arBlock.match(new RegExp(`'${key.replace('.', '\\.')}':\\s*'([^']+)'`));
+    const en = valueOf(enBlock, key);
+    const ar = valueOf(arBlock, key);
     assert.ok(en, `missing English copy for ${key}`);
     assert.ok(ar, `missing Arabic copy for ${key}`);
-    assert.match(ar[1], /[\u0600-\u06FF]/, `Arabic copy for ${key} must be Arabic`);
+    assert.match(ar, /[\u0600-\u06FF]/, `Arabic copy for ${key} must be Arabic`);
     const humanised = key.split('.').pop().replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
-    assert.notEqual(en[1], humanised, `${key} must not be the humanised key`);
+    assert.notEqual(en, humanised, `${key} must not be the humanised key`);
   });
 }
