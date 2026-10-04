@@ -9,7 +9,7 @@ import React, { useState, useEffect } from 'react';
 import {
     Box, Typography, Paper, Grid, Stack, Chip, CircularProgress,
     Button, Divider, IconButton, alpha, Avatar, ImageList, ImageListItem,
-    Dialog, DialogActions, DialogContent, DialogTitle, TextField
+    Dialog, DialogActions, DialogContent, DialogTitle, TextField, Alert
 } from '@mui/material';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
@@ -21,19 +21,8 @@ import { useRole } from '../../context/RoleContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import LiveTechnicianTrackingCard from '../../components/tracking/LiveTechnicianTrackingCard';
-
-const STATUS_COLORS: Record<string, string> = {
-    open: 'rgba(255,255,255,0.4)',
-    OPEN: 'rgba(255,255,255,0.4)',
-    accepted: '#3b82f6',
-    on_the_way: binThemeTokens.gold,
-    EN_ROUTE: binThemeTokens.gold,
-    arrived: '#8b5cf6',
-    in_progress: '#10b981',
-    completed: '#10b981',
-    closed: '#10b981',
-    emergency: '#ef4444',
-};
+import { OwnerTicketAssignmentLine, OwnerTicketStageChip } from '../components/OwnerTicketStatusSummary';
+import { ticketLifecycleStage } from '../../utils/ticketLifecycleStage';
 
 type OwnerReviewAction = 'APPROVE_CLOSE' | 'DISPUTE' | 'REQUEST_REVISIT' | 'ESCALATE';
 
@@ -139,7 +128,6 @@ export default function OwnerTicketDetailPage() {
     );
 
     const normalizedStatus = String(ticket.status || '').toUpperCase();
-    const statusColor = STATUS_COLORS[ticket.status] || STATUS_COLORS[normalizedStatus] || 'rgba(255,255,255,0.4)';
     const beforeProofs = [
         ...(Array.isArray(ticket.beforePhotos) ? ticket.beforePhotos : []),
         ...(Array.isArray(ticket.photos) ? ticket.photos : []),
@@ -207,11 +195,18 @@ export default function OwnerTicketDetailPage() {
                         {tx('owner.ticket.reference', 'Ticket')} #{ticket.id.substring(0, 8).toUpperCase()}
                     </Typography>
                 </Box>
-                <Chip
-                    label={ticket.status?.replace(/_/g, ' ')}
-                    sx={{ ml: 'auto', bgcolor: alpha(statusColor, 0.1), color: statusColor, fontWeight: 950, border: `1px solid ${alpha(statusColor, 0.2)}` }}
-                />
+                <Box sx={{ ml: 'auto' }}>
+                    <OwnerTicketStageChip ticket={ticket} tx={tx} />
+                </Box>
             </Stack>
+
+            {ticketLifecycleStage(ticket).stage === 'PENDING' && (
+                <Alert severity={ticketLifecycleStage(ticket).needsManualDispatch ? 'warning' : 'info'} sx={{ mb: 3 }} data-testid="owner-ticket-pending-notice">
+                    {ticketLifecycleStage(ticket).needsManualDispatch
+                        ? tx('owner.ticket.pendingManual', 'No technician could be assigned automatically. BIN GROUP operations has been alerted and is arranging one.')
+                        : tx('owner.ticket.pendingAuto', 'We are assigning a qualified technician. You will be notified as soon as someone is assigned.')}
+                </Alert>
+            )}
 
             <Grid container spacing={4}>
                 {/* Left: Ticket Details */}
@@ -248,7 +243,7 @@ export default function OwnerTicketDetailPage() {
                                             {ticket.createdAt?.toDate ? ticket.createdAt.toDate().toLocaleString() : tx('owner.ticket.recently_filed', 'Recently filed')}
                                         </Typography>
                                         <Typography variant="caption" color="textSecondary">
-                                            {tx('owner.ticket.priority_label', 'Priority:')} <span style={{ color: ticket.priority === 'emergency' ? '#ef4444' : '#FFF', fontWeight: 900 }}>{ticket.priority?.toUpperCase()}</span>
+                                            {tx('owner.ticket.priority_label', 'Priority:')} <span style={{ color: ticket.priority === 'emergency' ? '#B91C1C' : '#111827', fontWeight: 900 }}>{ticket.priority?.toUpperCase()}</span>
                                         </Typography>
                                     </Box>
                                 </Stack>
@@ -388,6 +383,7 @@ export default function OwnerTicketDetailPage() {
                         <Stack spacing={3}>
                             {[
                                 { label: tx('owner.ticket.filed', 'Complaint Filed'), ts: ticket.createdAt, color: '#4ade80' },
+                                { label: tx('owner.ticket.assigned', 'Technician Assigned'), ts: ticket.assignedAt || ticket.autoAssignedAt, color: '#3b82f6' },
                                 { label: tx('owner.ticket.accepted', 'Technician Accepted'), ts: ticket.acceptedAt, color: binThemeTokens.gold },
                                 { label: tx('owner.ticket.on_the_way', 'On The Way'), ts: ticket.onTheWayAt, color: '#f59e0b' },
                                 { label: tx('owner.ticket.arrived', 'Arrived at Property'), ts: ticket.arrivedAt, color: '#6366f1' },
@@ -438,6 +434,10 @@ export default function OwnerTicketDetailPage() {
                                 <Typography variant="body2" fontWeight="900" color="#FFF">
                                     #{ticket.id.substring(0, 8).toUpperCase()}
                                 </Typography>
+                            </Box>
+                            <Box>
+                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.3)', fontWeight: 900 }}>{tx('owner.ticket.assignment', 'ASSIGNMENT')}</Typography>
+                                <OwnerTicketAssignmentLine ticket={ticket} tx={tx} />
                             </Box>
                             <Box>
                                 <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.3)', fontWeight: 900 }}>{tx('owner.ticket.source', 'SOURCE')}</Typography>
