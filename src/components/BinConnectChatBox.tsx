@@ -138,14 +138,18 @@ export default function BinConnectChatBox({ role, dark = false }: { role: Portal
       setTicketId('');
       setNotice('Message sent to BIN Connect. Open inbox to continue the conversation.');
     } catch (error: any) {
-      setNotice(error?.message || 'Message could not be sent. Check Firestore rules or connection.');
+      console.warn('[BinConnectChatBox] send failed', error);
+      setNotice('Message could not be sent. Check your connection and try again.');
     } finally {
       setBusy(false);
     }
   };
 
   return (
-    <Box sx={{ position: 'fixed', right: { xs: 16, md: 26 }, bottom: { xs: 74, md: 28 }, zIndex: 1500 }}>
+    <Box sx={{ position: 'fixed', right: { xs: 16, md: 26 }, bottom: { xs: 100, md: 100 }, zIndex: 1500 }}>
+      {/* Sits above the draggable Sovereign AI button, whose default spot is 30px from the
+          bottom-right corner (SovereignAIChat getDefaultFabPosition). At bottom 28/74 the AI
+          button (z-index 2500) covered this one and "BIN Connect chat" could not be tapped. */}
       {open && (
         <Paper elevation={14} sx={{ width: { xs: 'calc(100vw - 32px)', sm: 440 }, maxHeight: '78vh', overflow: 'auto', mb: 1.5, borderRadius: 4, border: `1px solid ${alpha(binThemeTokens.gold, 0.32)}`, bgcolor: dark ? '#111827' : '#FFFFFF', color: dark ? '#FFFFFF' : binThemeTokens.textPrimary }}>
           <Stack spacing={2} sx={{ p: 2.4 }}>
