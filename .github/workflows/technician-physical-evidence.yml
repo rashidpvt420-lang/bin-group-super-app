@@ -438,6 +438,77 @@ jobs:
             if (arrived > 0 && started >= arrived && completed >= started) orderedLifecycle += 1;
           }
           console.log(`[technician-candidate-diagnostic] registeredNative=${registeredNative} completed=${docs.length} physicalBound=${physicalBound} gpsVerified=${gpsVerified} orderedLifecycle=${orderedLifecycle}`);
+
+          const activeStatuses = ['ASSIGNED', 'ACCEPTED', 'ON_THE_WAY', 'ARRIVED', 'IN_PROGRESS', 'WORK_IN_PROGRESS', 'STARTED'];
+          const activeDocs = [];
+          for (const status of activeStatuses) {
+            const snap = await db.collection('maintenanceTickets').where('status', '==', status).limit(100).get();
+            for (const doc of snap.docs) activeDocs.push({ id: doc.id, status, data: doc.data() || {} });
+          }
+          let activePhysicalBound = 0;
+          let activeGpsVerified = 0;
+          const activeBoundSamples = [];
+          for (const row of activeDocs) {
+            const data = row.data;
+            if (data.physicalDeviceBound !== true) continue;
+            activePhysicalBound += 1;
+            const location = data.arrivedLocation || data.technicianLocation || {};
+            const accuracy = Number(location.accuracy);
+            const gpsOk =
+              data.gpsVerified === true &&
+              text(data.onSiteVerification).toUpperCase() === 'GPS_VERIFIED' &&
+              sha256.test(text(data.arrivalInstallationHash)) &&
+              text(data.arrivalDevicePlatform).toLowerCase() === 'android' &&
+              location.nativeLocationMocked === false &&
+              text(location.locationSource) === 'native_android_location_manager' &&
+              coords(location) &&
+              Number.isFinite(accuracy) &&
+              accuracy > 0 &&
+              accuracy <= 100;
+            if (gpsOk) activeGpsVerified += 1;
+            if (activeBoundSamples.length < 5) {
+              activeBoundSamples.push({
+                status: row.status,
+                platform: text(data.arrivalDevicePlatform),
+                gpsVerified: data.gpsVerified === true,
+                onSite: text(data.onSiteVerification),
+                before: text(data.technicianBeforeEvidenceState),
+                after: text(data.technicianAfterEvidenceState),
+                hasArrivedAt: toMs(data.arrivedAt) > 0,
+                hasStartedAt: toMs(data.startedAt) > 0,
+                locationSource: text(location.locationSource),
+                mocked: location.nativeLocationMocked,
+                accuracy: Number.isFinite(accuracy) ? accuracy : null,
+              });
+            }
+          }
+          console.log(`[technician-active-diagnostic] active=${activeDocs.length} activePhysicalBound=${activePhysicalBound} activeGpsVerified=${activeGpsVerified} samples=${JSON.stringify(activeBoundSamples)}`);
+
+          const miss = {
+            noPhysicalBound: 0,
+            noGps: 0,
+            badPlatform: 0,
+            badLocationSource: 0,
+            badAccuracy: 0,
+            badCaptureWindow: 0,
+            missingEvidence: 0,
+            badLifecycleOrder: 0,
+          };
+          for (const data of docs) {
+            if (data.physicalDeviceBound !== true) { miss.noPhysicalBound += 1; continue; }
+            const location = data.arrivedLocation || data.technicianLocation || {};
+            const accuracy = Number(location.accuracy);
+            const capturedAtMs = Number(location.capturedAtMs || 0);
+            const arrivedAtMs = toMs(data.arrivedAt);
+            if (data.gpsVerified !== true || text(data.onSiteVerification).toUpperCase() !== 'GPS_VERIFIED') { miss.noGps += 1; continue; }
+            if (text(data.arrivalDevicePlatform).toLowerCase() !== 'android' || !sha256.test(text(data.arrivalInstallationHash))) { miss.badPlatform += 1; continue; }
+            if (location.nativeLocationMocked !== false || text(location.locationSource) !== 'native_android_location_manager' || !coords(location)) { miss.badLocationSource += 1; continue; }
+            if (!(Number.isFinite(accuracy) && accuracy > 0 && accuracy <= 100)) { miss.badAccuracy += 1; continue; }
+            if (!(capturedAtMs > 0 && arrivedAtMs > 0 && capturedAtMs <= arrivedAtMs + 60_000 && arrivedAtMs - capturedAtMs <= 60_000)) { miss.badCaptureWindow += 1; continue; }
+            if (text(data.technicianBeforeEvidenceState).toUpperCase() !== 'CONFIRMED' || text(data.technicianAfterEvidenceState).toUpperCase() !== 'CONFIRMED') { miss.missingEvidence += 1; continue; }
+            if (!(toMs(data.startedAt) >= arrivedAtMs && toMs(data.completedAt) >= toMs(data.startedAt))) { miss.badLifecycleOrder += 1; continue; }
+          }
+          console.log(`[technician-miss-diagnostic] ${JSON.stringify(miss)}`);
           NODE
 
       - name: Download exact production deployment metadata
