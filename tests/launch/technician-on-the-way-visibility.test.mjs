@@ -16,7 +16,8 @@ test('canonical ON_THE_WAY missions stay visible to technician navigation', () =
   assert.match(map, /onSnapshotSplitIn\(/);
   assert.match(map, /\['on_the_way', 'EN_ROUTE', 'ON_THE_WAY'\]/);
   assert.match(jobs, /\['on_the_way', 'EN_ROUTE', 'ON_THE_WAY'\]/);
-  assert.match(jobs, /ON_THE_WAY: binThemeTokens\.gold/);
+  // Status colour still mapped for ON_THE_WAY; the token moved to the readable palette (#7A5C12, 6.2:1).
+  assert.match(jobs, /ON_THE_WAY: JOBS_READABLE\.gold/);
   assert.match(dashboard, /'ON_THE_WAY'/);
   assert.doesNotMatch(map, /where\('status', 'in', ACTIVE_STATUSES\)/);
 });

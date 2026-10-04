@@ -20,21 +20,34 @@ import { ALL_TECHNICIAN_ACTIVE_STATUSES } from '../../shared-exports';
 import type { SnapshotDoc } from '../../utils/queryUtils';
 import { calculateDistanceKm, calculateEtaMinutes, getTechnicianLocation, getTicketJobLocation } from '../../utils/liveTracking';
 
+// Text colours readable on the white technician shell (all >= 4.5:1 on white and on their 12% tint).
+// The previous palette (#3b82f6, gold #C9A646, #10b981, #f59e0b) measured 2.1-3.7:1.
+const JOBS_READABLE = {
+    ink: '#111827',
+    muted: '#475467',
+    gold: '#7A5C12',
+    amber: '#92400E',
+    blue: '#1D4ED8',
+    violet: '#6D28D9',
+    green: '#047857',
+    red: '#B91C1C',
+} as const;
+
 const STATUS_COLOR: Record<string, string> = {
-    accepted: '#3b82f6',
-    auto_assigned: '#3b82f6',
-    ASSIGNED: '#3b82f6',
-    AUTO_ASSIGNED: '#3b82f6',
-    ACCEPTED: '#3b82f6',
-    on_the_way: binThemeTokens.gold,
-    EN_ROUTE: binThemeTokens.gold,
-    ON_THE_WAY: binThemeTokens.gold,
-    arrived: '#8b5cf6',
-    ARRIVED: '#8b5cf6',
-    in_progress: '#10b981',
-    IN_PROGRESS: '#10b981',
-    waiting_parts: '#ef4444',
-    WAITING_PARTS: '#ef4444',
+    accepted: JOBS_READABLE.blue,
+    auto_assigned: JOBS_READABLE.blue,
+    ASSIGNED: JOBS_READABLE.blue,
+    AUTO_ASSIGNED: JOBS_READABLE.blue,
+    ACCEPTED: JOBS_READABLE.blue,
+    on_the_way: JOBS_READABLE.gold,
+    EN_ROUTE: JOBS_READABLE.gold,
+    ON_THE_WAY: JOBS_READABLE.gold,
+    arrived: JOBS_READABLE.violet,
+    ARRIVED: JOBS_READABLE.violet,
+    in_progress: JOBS_READABLE.green,
+    IN_PROGRESS: JOBS_READABLE.green,
+    waiting_parts: JOBS_READABLE.red,
+    WAITING_PARTS: JOBS_READABLE.red,
 };
 
 const ACTIVE_STATUS_SET = new Set(ALL_TECHNICIAN_ACTIVE_STATUSES.map((status) => String(status)));
@@ -134,7 +147,7 @@ export default function TechnicianJobsPage() {
     );
 
     const renderJobCard = (job: any) => {
-        const statusColor = STATUS_COLOR[String(job.status)] || 'rgba(255,255,255,0.4)';
+        const statusColor = STATUS_COLOR[String(job.status)] || JOBS_READABLE.muted;
         const isLive = ['on_the_way', 'EN_ROUTE', 'ON_THE_WAY'].includes(String(job.status));
         const techLoc = getTechnicianLocation(job);
         const jobLoc = getTicketJobLocation(job);
@@ -146,19 +159,19 @@ export default function TechnicianJobsPage() {
 
         return (
             <Paper key={job.id} data-testid="technician-assigned-job-card" sx={{
-                p: 4, bgcolor: 'rgba(22, 22, 24, 0.7)', borderRadius: 6,
-                border: `1px solid ${isLive ? alpha(binThemeTokens.gold, 0.35) : 'rgba(255,255,255,0.05)'}`,
+                p: 4, bgcolor: '#FFFFFF', borderRadius: 6,
+                border: `1px solid ${isLive ? alpha(binThemeTokens.gold, 0.55) : '#E5E7EB'}`,
                 transition: 'transform 0.2s', '&:hover': { transform: 'translateY(-2px)' }
             }}>
                 <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" alignItems={{ xs: 'flex-start', sm: 'center' }} spacing={2} sx={{ mb: 2 }}>
                     <Box>
-                        <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 1 }}>
+                        <Typography variant="overline" sx={{ color: JOBS_READABLE.gold, fontWeight: 950, letterSpacing: 1 }}>
                             REF #{String(job.id).substring(0, 8)}
                         </Typography>
-                        <Typography variant="h6" fontWeight="950" color="#FFF">
+                        <Typography variant="h6" fontWeight="950" sx={{ color: JOBS_READABLE.ink }}>
                             {String(job.category || job.complaintCategory || 'Maintenance')}
                         </Typography>
-                        <Typography variant="body2" color="textSecondary">
+                        <Typography variant="body2" sx={{ color: JOBS_READABLE.muted }}>
                             {String(job.propertyName || 'Property')} · Unit {String(job.unitNumber || 'N/A')}
                         </Typography>
                     </Box>
@@ -173,8 +186,8 @@ export default function TechnicianJobsPage() {
                             sx={{
                                 fontSize: '0.62rem',
                                 fontWeight: 950,
-                                bgcolor: alpha(deliverySucceeded ? '#10b981' : '#f59e0b', 0.12),
-                                color: deliverySucceeded ? '#10b981' : '#f59e0b',
+                                bgcolor: alpha(deliverySucceeded ? JOBS_READABLE.green : JOBS_READABLE.amber, 0.1),
+                                color: deliverySucceeded ? JOBS_READABLE.green : JOBS_READABLE.amber,
                                 '& .MuiChip-icon': { color: 'inherit' },
                             }}
                         />
@@ -183,35 +196,35 @@ export default function TechnicianJobsPage() {
                                 size="small"
                                 icon={<Clock size={11} />}
                                 label={`~${eta} min rough estimate`}
-                                sx={{ fontSize: '0.65rem', fontWeight: 900, bgcolor: alpha(binThemeTokens.gold, 0.1), color: binThemeTokens.gold, height: 22, '& .MuiChip-icon': { color: binThemeTokens.gold } }}
+                                sx={{ fontSize: '0.65rem', fontWeight: 900, bgcolor: alpha(JOBS_READABLE.gold, 0.1), color: JOBS_READABLE.gold, height: 22, '& .MuiChip-icon': { color: JOBS_READABLE.gold } }}
                             />
                         )}
                         <Chip
                             label={String(job.status || '').replace(/_/g, ' ')}
                             size="small"
-                            sx={{ bgcolor: alpha(statusColor, 0.12), color: statusColor, fontWeight: 950, fontSize: '0.7rem', border: `1px solid ${alpha(statusColor, 0.25)}` }}
+                            sx={{ bgcolor: alpha(statusColor, 0.1), color: statusColor, fontWeight: 950, fontSize: '0.7rem', border: `1px solid ${alpha(statusColor, 0.3)}` }}
                         />
                     </Stack>
                 </Stack>
 
                 {isLive && (
-                    <Alert severity="info" icon={<Navigation size={16} />} sx={{ mb: 2, borderRadius: 3, bgcolor: alpha(binThemeTokens.gold, 0.06), border: `1px solid ${alpha(binThemeTokens.gold, 0.2)}`, color: binThemeTokens.gold }}>
+                    <Alert severity="info" icon={<Navigation size={16} />} sx={{ mb: 2, borderRadius: 3, bgcolor: alpha(binThemeTokens.gold, 0.06), border: `1px solid ${alpha(binThemeTokens.gold, 0.3)}`, color: JOBS_READABLE.gold }}>
                         {tx('tech.jobs.gps_active', 'GPS tracking ACTIVE — sharing location with requester')}
                     </Alert>
                 )}
 
-                <Divider sx={{ my: 2, borderColor: 'rgba(255,255,255,0.06)' }} />
+                <Divider sx={{ my: 2, borderColor: '#E5E7EB' }} />
 
                 <Grid container spacing={2} sx={{ mb: 3 }}>
                     <Grid item xs={12} sm={6}>
-                        <Typography variant="caption" color="textSecondary">{tx('tech.jobs.requester', 'REQUESTER')}</Typography>
-                        <Typography variant="body1" fontWeight="900" color="#FFF">
+                        <Typography variant="caption" sx={{ color: JOBS_READABLE.muted }}>{tx('tech.jobs.requester', 'REQUESTER')}</Typography>
+                        <Typography variant="body1" fontWeight="900" sx={{ color: JOBS_READABLE.ink }}>
                             {String(job.tenantName || job.ownerName || 'N/A')}
                         </Typography>
                     </Grid>
                     <Grid item xs={12} sm={6}>
-                        <Typography variant="caption" color="textSecondary">{tx('tech.jobs.priority', 'PRIORITY')}</Typography>
-                        <Typography variant="body1" fontWeight="900" sx={{ color: String(job.priority).toLowerCase() === 'emergency' ? '#ef4444' : '#FFF', textTransform: 'uppercase' }}>
+                        <Typography variant="caption" sx={{ color: JOBS_READABLE.muted }}>{tx('tech.jobs.priority', 'PRIORITY')}</Typography>
+                        <Typography variant="body1" fontWeight="900" sx={{ color: String(job.priority).toLowerCase() === 'emergency' ? JOBS_READABLE.red : JOBS_READABLE.ink, textTransform: 'uppercase' }}>
                             {String(job.priority || 'normal')}
                         </Typography>
                     </Grid>
@@ -223,7 +236,7 @@ export default function TechnicianJobsPage() {
                     fullWidth variant="contained"
                     onClick={() => navigate(`/technician/job/${job.id}`)}
                     endIcon={<ArrowRight size={18} />}
-                    sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, py: 1.5, borderRadius: 3, '&:hover': { bgcolor: '#b4954e' } }}
+                    sx={{ bgcolor: binThemeTokens.gold, color: '#111827', fontWeight: 950, py: 1.5, borderRadius: 3, '&:hover': { bgcolor: '#b4954e' } }}
                 >
                     {tx('tech.jobs.open_job', 'OPEN JOB CARD')}
                 </Button>
@@ -234,20 +247,20 @@ export default function TechnicianJobsPage() {
     return (
         <Box sx={{ direction: isRTL ? 'rtl' : 'ltr' }}>
             {loadError && <Alert data-testid="technician-jobs-load-error" severity="error" sx={{ mb: 3 }}>{loadError}</Alert>}
-            <Typography variant="h4" fontWeight="950" sx={{ color: '#FFF', mb: 2 }}>
+            <Typography variant="h4" fontWeight="950" sx={{ color: JOBS_READABLE.ink, mb: 2 }}>
                 {tx('tech.jobs.title', 'My Jobs')}
             </Typography>
-            <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.4)', mb: 5 }}>
+            <Typography variant="body2" sx={{ color: JOBS_READABLE.muted, mb: 5 }}>
                 {tx('tech.jobs.subtitle', 'Active assignments securely issued by dispatch.')} Assignment alerts include a server delivery receipt.
             </Typography>
 
-            <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 4, mb: 3, display: 'block' }}>
+            <Typography variant="overline" sx={{ color: JOBS_READABLE.gold, fontWeight: 900, letterSpacing: 4, mb: 3, display: 'block' }}>
                 {tx('tech.jobs.active_assignments', 'ACTIVE ASSIGNMENTS')} ({assignedJobs.length})
             </Typography>
 
             {assignedJobs.length === 0 ? (
-                <Paper data-testid="technician-no-active-assignments" sx={{ p: 5, textAlign: 'center', bgcolor: 'rgba(255,255,255,0.02)', borderRadius: 6, border: '1px dashed rgba(255,255,255,0.1)', mb: 5 }}>
-                    <Typography color="textSecondary" fontWeight="900">{tx('tech.jobs.no_active', 'NO ACTIVE ASSIGNMENTS')}</Typography>
+                <Paper data-testid="technician-no-active-assignments" sx={{ p: 5, textAlign: 'center', bgcolor: '#F8F9FB', borderRadius: 6, border: '1px dashed #D0D5DD', mb: 5 }}>
+                    <Typography fontWeight="900" sx={{ color: JOBS_READABLE.muted }}>{tx('tech.jobs.no_active', 'NO ACTIVE ASSIGNMENTS')}</Typography>
                 </Paper>
             ) : (
                 <Stack spacing={3} sx={{ mb: 6 }}>
