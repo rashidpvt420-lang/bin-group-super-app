@@ -21,9 +21,10 @@ import {
   evidenceLayerSatisfies,
   normalizeCommitSha,
   requiredEvidenceLayerForGate,
+  selectAuthoritativeLaunchEvidence,
   type LaunchEvidenceLayer,
 } from '@bin/shared';
-import { addDoc, collection, db, limit, onSnapshot, orderBy, query, serverTimestamp } from '../../lib/firebase';
+import { addDoc, collection, db, limit, onSnapshot, query, serverTimestamp, where } from '../../lib/firebase';
 import { useAuth } from '../../context/AuthContext';
 import { binThemeTokens } from '../../theme/adminTheme';
 
@@ -54,7 +55,8 @@ type LaunchEvidence = {
   proofRef?: string;
   notes?: string;
   source?: string;
-  hardLaunchClaim?: boolean;
+  executionGenerated?: boolean | null;
+  hardLaunchClaim?: boolean | null;
   recordedByEmail?: string | null;
   createdAt?: any;
 };
@@ -79,10 +81,18 @@ type SignedInSmokeRecord = {
   proofRef?: string;
   notes?: string;
   source?: string;
-  hardLaunchClaim?: boolean;
+  executionGenerated?: boolean | null;
+  hardLaunchClaim?: boolean | null;
   recordedByEmail?: string | null;
   createdAt?: any;
 };
+
+function createdAtMillis(value: { toMillis?: () => number; seconds?: number } | null | undefined): number {
+  if (!value || typeof value !== 'object') return 0;
+  if (typeof value.toMillis === 'function') return value.toMillis();
+  if (typeof value.seconds === 'number') return value.seconds * 1000;
+  return 0;
+}
 
 type LaunchAuthorization = {
   authorized: boolean;
@@ -222,10 +232,20 @@ export default function PublicLaunchCommandCenterPageV2() {
       setEvidenceError(`Claim role "${authorization.role || 'none'}" is not authorized by the Firestore launch-evidence policy.`);
       return undefined;
     }
+    if (!RELEASE_SHA) {
+      setEvidence([]);
+      setEvidenceLoading(false);
+      setEvidenceError('This build is not bound to an exact 40-character release SHA.');
+      return undefined;
+    }
 
     setEvidenceLoading(true);
     setEvidenceError(null);
-    const q = query(collection(db, 'launch_evidence'), orderBy('createdAt', 'desc'), limit(400));
+    const q = query(
+      collection(db, 'launch_evidence'),
+      where('releaseSha', '==', RELEASE_SHA),
+      limit(400),
+    );
     const unsubscribe = onSnapshot(q, (snapshot) => {
       setEvidence(snapshot.docs.map((doc) => ({ id: doc.id, ...(doc.data() as Omit<LaunchEvidence, 'id'>) })));
       setEvidenceError(null);
@@ -251,10 +271,20 @@ export default function PublicLaunchCommandCenterPageV2() {
       setSmokeError(`Claim role "${authorization.role || 'none'}" is not authorized by the Firestore signed-in-smoke policy.`);
       return undefined;
     }
+    if (!RELEASE_SHA) {
+      setSmokeRecords([]);
+      setSmokeLoading(false);
+      setSmokeError('This build is not bound to an exact 40-character release SHA.');
+      return undefined;
+    }
 
     setSmokeLoading(true);
     setSmokeError(null);
-    const q = query(collection(db, 'signed_in_smoke_checks'), orderBy('createdAt', 'desc'), limit(150));
+    const q = query(
+      collection(db, 'signed_in_smoke_checks'),
+      where('releaseSha', '==', RELEASE_SHA),
+      limit(150),
+    );
     const unsubscribe = onSnapshot(q, (snapshot) => {
       setSmokeRecords(snapshot.docs.map((doc) => ({ id: doc.id, ...(doc.data() as Omit<SignedInSmokeRecord, 'id'>) })));
       setSmokeError(null);
@@ -272,7 +302,18 @@ export default function PublicLaunchCommandCenterPageV2() {
     if (!RELEASE_SHA) return map;
     for (const item of evidence) {
       if (evidenceSha(item) !== RELEASE_SHA) continue;
-      if (!map.has(item.gateId)) map.set(item.gateId, item);
+      const requiredLayer = requiredEvidenceLayerForGate(item.gateId, item.gateGroup);
+      const existing = map.get(item.gateId);
+      map.set(
+        item.gateId,
+        selectAuthoritativeLaunchEvidence(
+          existing,
+          item,
+          RELEASE_SHA,
+          requiredLayer,
+          createdAtMillis(item.createdAt) > createdAtMillis(existing?.createdAt),
+        ),
+      );
     }
     return map;
   }, [evidence]);
@@ -282,7 +323,17 @@ export default function PublicLaunchCommandCenterPageV2() {
     if (!RELEASE_SHA) return map;
     for (const item of smokeRecords) {
       if (evidenceSha(item) !== RELEASE_SHA) continue;
-      if (!map.has(item.role)) map.set(item.role, item);
+      const existing = map.get(item.role);
+      map.set(
+        item.role,
+        selectAuthoritativeLaunchEvidence(
+          existing,
+          item,
+          RELEASE_SHA,
+          'hosted',
+          createdAtMillis(item.createdAt) > createdAtMillis(existing?.createdAt),
+        ),
+      );
     }
     return map;
   }, [smokeRecords]);

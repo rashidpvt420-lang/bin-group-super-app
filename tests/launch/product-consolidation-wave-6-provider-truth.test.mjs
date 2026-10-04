@@ -84,7 +84,11 @@ test('provider gates distinguish hosted from physical-device proof', () => {
 });
 
 test('production builds carry the exact release SHA into both app surfaces', () => {
-  assert.match(envWriter, /GITHUB_SHA \|\| process\.env\.RELEASE_COMMIT_SHA/);
+  assert.match(envWriter, /PUBLIC_LAUNCH_RELEASE_COMMIT_SHA/);
+  assert.match(
+    envWriter,
+    /PUBLIC_LAUNCH_RELEASE_COMMIT_SHA[\s\S]*RELEASE_COMMIT_SHA[\s\S]*GITHUB_SHA/,
+  );
   assert.match(envWriter, /\['VITE_RELEASE_COMMIT_SHA', releaseCommitSha\]/);
   assert.match(envWriter, /\['REACT_APP_RELEASE_COMMIT_SHA', releaseCommitSha\]/);
   assert.match(envWriter, /\^\[a-f0-9\]\{40\}\$/);

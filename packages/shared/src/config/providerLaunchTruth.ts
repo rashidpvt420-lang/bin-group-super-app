@@ -174,6 +174,27 @@ export function evidenceCountsForPublicLaunch(
   return evidenceLayerSatisfies(evidence.evidenceLayer, requiredLayer);
 }
 
+/**
+ * Picks the authoritative record when scanning release evidence.
+ * Newer manual/history rows must not shadow older protected
+ * execution-generated evidence that already qualifies for the release.
+ * When both records qualify (or both fail), keep the newer one.
+ */
+export function selectAuthoritativeLaunchEvidence<T extends LaunchEvidenceRecord>(
+  current: T | undefined,
+  candidate: T,
+  expectedCommitSha: unknown,
+  requiredLayer: LaunchEvidenceLayer,
+  candidateIsNewerThanCurrent = false,
+): T {
+  if (!current) return candidate;
+  const currentPass = evidenceCountsForPublicLaunch(current, expectedCommitSha, requiredLayer);
+  const candidatePass = evidenceCountsForPublicLaunch(candidate, expectedCommitSha, requiredLayer);
+  if (candidatePass && !currentPass) return candidate;
+  if (currentPass && !candidatePass) return current;
+  return candidateIsNewerThanCurrent ? candidate : current;
+}
+
 export function providerRuntimeState({
   configured,
   verified,

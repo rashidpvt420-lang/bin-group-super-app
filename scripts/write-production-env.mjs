@@ -8,7 +8,13 @@ const VALIDATION_ONLY_ENTERPRISE_SITE_KEY = 'BIN_GROUP_VALIDATION_ONLY_ENTERPRIS
 
 const clean = (value) => String(value || '').trim();
 const isMalformed = (value) => !value || /REPLACE|undefined|null/i.test(value);
-const releaseCommitSha = clean(process.env.GITHUB_SHA || process.env.RELEASE_COMMIT_SHA).toLowerCase();
+// Prefer an explicit public-launch binding when rebuilding Admin against a frozen
+// release SHA while shipping control-plane UI repairs from a newer commit.
+const releaseCommitSha = clean(
+  process.env.PUBLIC_LAUNCH_RELEASE_COMMIT_SHA
+  || process.env.RELEASE_COMMIT_SHA
+  || process.env.GITHUB_SHA,
+).toLowerCase();
 
 const isExactProductionValidationJob = () => (
   clean(process.env.GITHUB_ACTIONS) === 'true' &&

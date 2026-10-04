@@ -4,6 +4,7 @@ import crypto from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { applicationDefault, getApps, initializeApp } from 'firebase-admin/app';
 import { FieldValue, getFirestore } from 'firebase-admin/firestore';
+import { isAcceptedProductionDeploymentArtifactName } from './lib/production-deployment-artifact.mjs';
 
 const EXPECTED_PROJECT = 'bin-group-57c60';
 const EXPECTED_REPOSITORY = 'rashidpvt420-lang/bin-group-super-app';
@@ -216,7 +217,7 @@ function enforceIssueCommentBackfillContext(validated) {
   if (sourceSha !== validated.releaseSha || sourceRunId !== validated.workflowRunId) {
     fail('verified production source must match manifest SHA and workflow run ID');
   }
-  if (artifactName !== `production-deployment-${validated.releaseSha}-${validated.workflowRunId}`) {
+  if (!isAcceptedProductionDeploymentArtifactName(artifactName, validated.releaseSha, validated.workflowRunId)) {
     fail('verified production artifact name does not match exact SHA/run binding');
   }
   if (!DIGEST_PATTERN.test(artifactDigest)) fail('verified production artifact digest is missing or malformed');
@@ -253,25 +254,27 @@ function enforceProtectedWriteContext(validated) {
   }
 }
 
-async function publish(validated) {
-  if (!getApps().length) {
-    initializeApp({ projectId: EXPECTED_PROJECT, credential: applicationDefault() });
-  }
-  const db = getFirestore();
-  const actor = String(process.env.GITHUB_ACTOR || 'github-actions[bot]').trim();
-  const repository = String(process.env.GITHUB_REPOSITORY || EXPECTED_REPOSITORY).trim();
-  const runAttempt = String(process.env.GITHUB_RUN_ATTEMPT || '1').trim();
+function evidenceDocumentId(validated, record, publicationRunId = '') {
+  return crypto.createHash('sha256').update([
+    validated.releaseSha,
+    validated.workflowRunId,
+    record.collection,
+    record.payload.gateId || record.payload.role,
+    record.payload.evidenceHash,
+    publicationRunId,
+  ].filter(Boolean).join('|')).digest('hex');
+}
 
+async function commitEvidenceBatch(db, validated, records, {
+  actor,
+  repository,
+  runAttempt,
+  publicationRunId = '',
+  republication = false,
+}) {
   const batch = db.batch();
-  for (const record of validated.records) {
-    const deterministicId = crypto.createHash('sha256').update([
-      validated.releaseSha,
-      validated.workflowRunId,
-      record.collection,
-      record.payload.gateId || record.payload.role,
-      record.payload.evidenceHash,
-    ].join('|')).digest('hex');
-
+  for (const record of records) {
+    const deterministicId = evidenceDocumentId(validated, record, publicationRunId);
     const ref = db.collection(record.collection).doc(deterministicId);
     batch.create(ref, {
       ...record.payload,
@@ -280,18 +283,67 @@ async function publish(validated) {
       recordedBy: actor,
       recordedByEmail: null,
       createdAt: FieldValue.serverTimestamp(),
+      ...(republication ? {
+        republication: true,
+        publicationWorkflowRunId: publicationRunId,
+      } : {}),
     });
   }
+  await batch.commit();
+}
+
+async function publish(validated) {
+  if (!getApps().length) {
+    initializeApp({ projectId: EXPECTED_PROJECT, credential: applicationDefault() });
+  }
+  const db = getFirestore();
+  const actor = String(process.env.GITHUB_ACTOR || 'github-actions[bot]').trim();
+  const repository = String(process.env.GITHUB_REPOSITORY || EXPECTED_REPOSITORY).trim();
+  const runAttempt = String(process.env.GITHUB_RUN_ATTEMPT || '1').trim();
+  const publicationRunId = String(process.env.GITHUB_RUN_ID || '').trim();
 
   try {
-    await batch.commit();
+    await commitEvidenceBatch(db, validated, validated.records, {
+      actor,
+      repository,
+      runAttempt,
+    });
   } catch (error) {
     const message = String(error?.message || error || '');
-    if (/already exists|ALREADY_EXISTS/i.test(message)) {
+    if (!/already exists|ALREADY_EXISTS/i.test(message)) throw error;
+
+    // Exact source evidence is append-only/idempotent. When it already exists,
+    // republish only signed-in smoke rows under this publication run ID so a
+    // newer protected surface can outrank later manual history in the Admin UI
+    // without rewriting gate evidence or weakening provenance checks.
+    if (!RUN_ID_PATTERN.test(publicationRunId)) {
+      fail('republication requires numeric GITHUB_RUN_ID');
+    }
+    const smokeRecords = validated.records.filter((record) => record.collection === 'signed_in_smoke_checks');
+    if (smokeRecords.length === 0) {
       console.log(`[launch-evidence-publisher] exact evidence already published for ${validated.releaseSha} run ${validated.workflowRunId}; idempotent no-op`);
       return;
     }
-    throw error;
+
+    try {
+      await commitEvidenceBatch(db, validated, smokeRecords, {
+        actor,
+        repository,
+        runAttempt,
+        publicationRunId,
+        republication: true,
+      });
+    } catch (republicationError) {
+      const republicationMessage = String(republicationError?.message || republicationError || '');
+      if (/already exists|ALREADY_EXISTS/i.test(republicationMessage)) {
+        console.log(`[launch-evidence-publisher] smoke republication already published for publication run ${publicationRunId}; idempotent no-op`);
+        return;
+      }
+      throw republicationError;
+    }
+
+    console.log(`[launch-evidence-publisher] republished ${smokeRecords.length} protected signed-in smoke record(s) for ${validated.releaseSha} source run ${validated.workflowRunId} via publication run ${publicationRunId}`);
+    return;
   }
 
   console.log(`[launch-evidence-publisher] published ${validated.records.length} append-only record(s) for ${validated.releaseSha} run ${validated.workflowRunId}`);

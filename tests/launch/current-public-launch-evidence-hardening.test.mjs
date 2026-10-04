@@ -16,16 +16,21 @@ test('public launch route fails closed until all five protected role smokes pass
   }
   assert.match(routeGuard, /normalizeCommitSha\(process\.env\.REACT_APP_RELEASE_COMMIT_SHA\)/);
   assert.match(routeGuard, /evidenceCountsForPublicLaunch/);
+  assert.match(routeGuard, /selectAuthoritativeLaunchEvidence/);
+  assert.match(routeGuard, /where\('releaseSha', '==', RELEASE_SHA\)/);
   assert.match(routeGuard, /smokePassedCount === REQUIRED_SMOKE_ROLES\.length/);
   assert.match(routeGuard, /if \(!fiveRoleSmokeReady\)/);
   assert.match(routeGuard, /PUBLIC LAUNCH BLOCKED/);
   assert.match(routeGuard, /executionGenerated=true/);
   assert.match(routeGuard, /hardLaunchClaim=false/);
+  assert.match(routeGuard, /cannot shadow protected GitHub Actions evidence/);
   assert.match(routeGuard, /return <PublicLaunchCommandCenterPageV2 \/>/);
 });
 
 test('detailed command center remains exact-SHA and protected-execution evidence aware', () => {
   assert.match(detailedCommandCenter, /evidenceCountsForPublicLaunch/);
+  assert.match(detailedCommandCenter, /selectAuthoritativeLaunchEvidence/);
+  assert.match(detailedCommandCenter, /where\('releaseSha', '==', RELEASE_SHA\)/);
   assert.match(detailedCommandCenter, /RELEASE_SHA = normalizeCommitSha\(process\.env\.REACT_APP_RELEASE_COMMIT_SHA\)/);
   assert.match(detailedCommandCenter, /executionGenerated: false/);
   assert.match(detailedCommandCenter, /hardLaunchClaim: false/);

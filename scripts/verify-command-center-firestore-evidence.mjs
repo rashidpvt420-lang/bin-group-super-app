@@ -39,21 +39,31 @@ const [gateSnapshot, smokeSnapshot] = await Promise.all([
   db.collection('signed_in_smoke_checks').where('releaseSha', '==', releaseSha).get(),
 ]);
 
+function qualifiesProtectedHosted(record) {
+  return record
+    && String(record.status || '').trim().toLowerCase() === 'passed'
+    && String(record.source || '').trim().toLowerCase() === 'github-actions'
+    && record.executionGenerated === true
+    && record.hardLaunchClaim === false
+    && String(record.evidenceLayer || '').trim().toLowerCase() === 'hosted'
+    && String(record.workflowRunId || '') === workflowRunId;
+}
+
 const gates = gateSnapshot.docs
   .map((doc) => doc.data())
-  .filter((record) => String(record.workflowRunId || '') === workflowRunId && record.source === 'github-actions' && record.status === 'passed');
+  .filter((record) => qualifiesProtectedHosted(record));
 const smokes = smokeSnapshot.docs
   .map((doc) => doc.data())
-  .filter((record) => String(record.workflowRunId || '') === workflowRunId && record.source === 'github-actions' && record.status === 'passed');
+  .filter((record) => qualifiesProtectedHosted(record));
 
 for (const gateId of expectedGates) {
   if (!gates.some((record) => record.gateId === gateId)) {
-    throw new Error(`[command-center-evidence-verify] missing published gate ${gateId}`);
+    throw new Error(`[command-center-evidence-verify] missing protected hosted gate ${gateId}`);
   }
 }
 for (const role of expectedRoles) {
   if (!smokes.some((record) => record.role === role)) {
-    throw new Error(`[command-center-evidence-verify] missing published signed-in smoke role ${role}`);
+    throw new Error(`[command-center-evidence-verify] missing protected hosted signed-in smoke role ${role}`);
   }
 }
 

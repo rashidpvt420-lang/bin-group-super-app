@@ -1,7 +1,11 @@
 import React from 'react';
-import { Alert, Box, CircularProgress, Stack, Typography } from '@mui/material';
-import { evidenceCountsForPublicLaunch, normalizeCommitSha } from '@bin/shared';
-import { collection, db, limit, onSnapshot, orderBy, query } from '../../lib/firebase';
+import { Alert, Box, Chip, CircularProgress, Stack, Typography, alpha } from '@mui/material';
+import {
+  evidenceCountsForPublicLaunch,
+  normalizeCommitSha,
+  selectAuthoritativeLaunchEvidence,
+} from '@bin/shared';
+import { collection, db, limit, onSnapshot, query, where } from '../../lib/firebase';
 import { useAuth } from '../../context/AuthContext';
 import PublicLaunchCommandCenterPageV2, { LAUNCH_GATES } from './PublicLaunchCommandCenterPageV2';
 
@@ -17,12 +21,20 @@ type SmokeRecord = {
   source?: string | null;
   executionGenerated?: boolean | null;
   hardLaunchClaim?: boolean | null;
+  createdAt?: { toMillis?: () => number; seconds?: number } | null;
 };
 
 const REQUIRED_SMOKE_ROLES: readonly SmokeRole[] = ['owner', 'tenant', 'technician', 'broker', 'admin'];
 const RELEASE_SHA = normalizeCommitSha(process.env.REACT_APP_RELEASE_COMMIT_SHA);
 
 export { LAUNCH_GATES };
+
+function createdAtMillis(value: SmokeRecord['createdAt']): number {
+  if (!value || typeof value !== 'object') return 0;
+  if (typeof value.toMillis === 'function') return value.toMillis();
+  if (typeof value.seconds === 'number') return value.seconds * 1000;
+  return 0;
+}
 
 /**
  * Route-level fail-closed guard for the public-launch command center.
@@ -51,9 +63,11 @@ export default function PublicLaunchCommandCenterPage() {
 
     setLoading(true);
     setReadError(null);
+    // Scope to the exact release SHA so protected evidence cannot fall out of a
+    // global newest-N window after unrelated smoke history grows.
     const smokeQuery = query(
       collection(db, 'signed_in_smoke_checks'),
-      orderBy('createdAt', 'desc'),
+      where('releaseSha', '==', RELEASE_SHA),
       limit(150),
     );
     const unsubscribe = onSnapshot(smokeQuery, (snapshot) => {
@@ -79,17 +93,40 @@ export default function PublicLaunchCommandCenterPage() {
     for (const record of records) {
       if (!record.role || !REQUIRED_SMOKE_ROLES.includes(record.role)) continue;
       const observedSha = normalizeCommitSha(record.releaseSha || record.commitSha);
-      if (observedSha !== RELEASE_SHA || result.has(record.role)) continue;
-      result.set(record.role, record);
+      if (observedSha !== RELEASE_SHA) continue;
+      const existing = result.get(record.role);
+      result.set(
+        record.role,
+        selectAuthoritativeLaunchEvidence(
+          existing,
+          record,
+          RELEASE_SHA,
+          'hosted',
+          createdAtMillis(record.createdAt) > createdAtMillis(existing?.createdAt),
+        ),
+      );
     }
     return result;
   }, [records]);
 
-  const smokePassedCount = REQUIRED_SMOKE_ROLES.filter((role) => evidenceCountsForPublicLaunch(
-    currentByRole.get(role),
-    RELEASE_SHA,
-    'hosted',
-  )).length;
+  const roleStatuses = REQUIRED_SMOKE_ROLES.map((role) => {
+    const latest = currentByRole.get(role);
+    const passed = evidenceCountsForPublicLaunch(latest, RELEASE_SHA, 'hosted');
+    return {
+      role,
+      passed,
+      label: passed
+        ? 'passed'
+        : !latest
+          ? 'missing'
+          : latest.source === 'github-actions' && latest.executionGenerated === true
+            ? 'proof insufficient'
+            : latest.source === 'admin-manual-evidence'
+              ? 'manual only'
+              : 'not protected',
+    };
+  });
+  const smokePassedCount = roleStatuses.filter((item) => item.passed).length;
   const fiveRoleSmokeReady = Boolean(RELEASE_SHA)
     && !loading
     && !readError
@@ -116,8 +153,25 @@ export default function PublicLaunchCommandCenterPage() {
               {readError || 'All five roles must pass on this exact release before the command center can evaluate PUBLIC READY.'}
             </Alert>
           )}
+          {!loading && !readError && (
+            <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
+              {roleStatuses.map((item) => (
+                <Chip
+                  key={item.role}
+                  size="small"
+                  label={`${item.role}: ${item.label}`}
+                  sx={{
+                    textTransform: 'capitalize',
+                    fontWeight: 850,
+                    bgcolor: alpha(item.passed ? '#22c55e' : '#f59e0b', 0.16),
+                    color: item.passed ? '#22c55e' : '#f59e0b',
+                  }}
+                />
+              ))}
+            </Stack>
+          )}
           <Typography variant="body2" sx={{ color: 'rgba(255,255,255,.68)', maxWidth: 900 }}>
-            Manual browser evidence remains history/review material only. It cannot unlock this guard; only GitHub Actions evidence marked executionGenerated=true and hardLaunchClaim=false can qualify.
+            Manual browser evidence remains history/review material only. It cannot unlock this guard and cannot shadow protected GitHub Actions evidence; only records marked executionGenerated=true and hardLaunchClaim=false can qualify.
           </Typography>
         </Stack>
       </Box>
