@@ -43,6 +43,17 @@ import FinishShiftChecklistModal from "./FinishShiftChecklistModal";
 import StaffVoicePaperworkDialog from "./StaffVoicePaperworkDialog";
 import UnifiedRequestStatusTracker from "./UnifiedRequestStatusTracker";
 
+// Light-shell palette (>= 4.5:1 on white). This card was written for a dark page: a #0f172a root
+// with white text. Inside the white technician shell the text was forced dark on that navy root
+// (1.01:1) and slate-400 secondary text (#94a3b8) measured 2.6:1 on the white cards.
+const STAFF_TODAY_READABLE = {
+  ink: "#111827",
+  muted: "#475467",
+  surface: "#FFFFFF",
+  soft: "#F8F9FB",
+  line: "#E5E7EB",
+} as const;
+
 interface StaffTodayDashboardProps {
   userName?: string;
   role?: string;
@@ -338,12 +349,12 @@ export const StaffTodayDashboard: React.FC<StaffTodayDashboardProps> = ({
   };
 
   return (
-    <Box dir={isRtl ? "rtl" : "ltr"} sx={{ minHeight: "100vh", bgcolor: "#0f172a", color: "#f8fafc", pb: 10 }}>
-      <Box sx={{ borderBottom: "1px solid #334155", py: 3, px: 2, background: "linear-gradient(135deg, #1e293b 0%, #0f172a 100%)" }}>
+    <Box dir={isRtl ? "rtl" : "ltr"} data-testid="staff-today-dashboard" sx={{ bgcolor: STAFF_TODAY_READABLE.surface, color: STAFF_TODAY_READABLE.ink, pb: 10 }}>
+      <Box sx={{ borderBottom: `1px solid ${STAFF_TODAY_READABLE.line}`, py: 3, px: 2, background: "linear-gradient(135deg, #F8F9FB 0%, #FFFFFF 100%)" }}>
         <Container maxWidth="md">
           <Stack direction={{ xs: "column", sm: "row" }} gap={2} justifyContent="space-between" alignItems={{ xs: "stretch", sm: "center" }}>
             <Stack direction="row" spacing={2} alignItems="center">
-              <Avatar sx={{ width: 56, height: 56, bgcolor: "#3b82f6", fontWeight: 800 }}>
+              <Avatar sx={{ width: 56, height: 56, bgcolor: "#1D4ED8", fontWeight: 800 }}>
                 {displayName.charAt(0).toUpperCase()}
               </Avatar>
               <Box>
@@ -351,7 +362,7 @@ export const StaffTodayDashboard: React.FC<StaffTodayDashboardProps> = ({
                   <Typography variant="h6" sx={{ fontWeight: 800 }}>{displayName}</Typography>
                   <Chip label={clockedIn ? "ON DUTY" : "OFF DUTY"} color={clockedIn ? "success" : "default"} size="small" />
                 </Stack>
-                <Typography variant="body2" sx={{ color: "#94a3b8" }}>
+                <Typography variant="body2" sx={{ color: STAFF_TODAY_READABLE.muted }}>
                   {displayRole} • Shift: {shiftLabel}
                 </Typography>
               </Box>
@@ -377,7 +388,7 @@ export const StaffTodayDashboard: React.FC<StaffTodayDashboardProps> = ({
 
         <Grid container spacing={2}>
           <Grid item xs={12}>
-            <Card sx={{ bgcolor: "#1e293b", color: "#fff", border: "1px solid #3b82f6", borderRadius: 3 }}>
+            <Card sx={{ bgcolor: STAFF_TODAY_READABLE.surface, color: STAFF_TODAY_READABLE.ink, border: "1px solid #93C5FD", borderRadius: 3 }}>
               <CardContent sx={{ p: 3 }}>
                 {activeJob ? (
                   <>
@@ -389,7 +400,7 @@ export const StaffTodayDashboard: React.FC<StaffTodayDashboardProps> = ({
                           <Chip label={activeJob.status} variant="outlined" size="small" />
                         </Stack>
                         <Typography variant="h5" sx={{ fontWeight: 800 }}>{activeJob.title}</Typography>
-                        <Typography variant="body2" sx={{ color: "#94a3b8", display: "flex", alignItems: "center", gap: 0.5, mt: 0.5 }}>
+                        <Typography variant="body2" sx={{ color: STAFF_TODAY_READABLE.muted, display: "flex", alignItems: "center", gap: 0.5, mt: 0.5 }}>
                           <LocationIcon fontSize="small" /> {activeJob.location || "Location not recorded"}
                         </Typography>
                       </Box>
@@ -399,15 +410,15 @@ export const StaffTodayDashboard: React.FC<StaffTodayDashboardProps> = ({
                             aria-label="Prepare voice or text completion report"
                             disabled={!activeJob || !["ARRIVED", "IN_PROGRESS"].includes(activeJob.status)}
                             onClick={() => setVoiceDialogOpen(true)}
-                            sx={{ bgcolor: "#3b82f6", color: "#fff" }}
+                            sx={{ bgcolor: "#1D4ED8", color: "#FFFFFF" }}
                           >
                             <VoiceIcon />
                           </IconButton>
                         </span>
                       </Tooltip>
                     </Stack>
-                    <Box sx={{ mt: 2, p: 2, bgcolor: "#0f172a", borderRadius: 2 }}>
-                      <Typography variant="body2" sx={{ color: "#94a3b8" }}>
+                    <Box sx={{ mt: 2, p: 2, bgcolor: STAFF_TODAY_READABLE.soft, border: `1px solid ${STAFF_TODAY_READABLE.line}`, borderRadius: 2 }}>
+                      <Typography variant="body2" sx={{ color: STAFF_TODAY_READABLE.muted }}>
                         SLA deadline: <strong>{readableDateTime(activeJob.slaDeadline)}</strong>
                       </Typography>
                     </Box>
@@ -426,7 +437,7 @@ export const StaffTodayDashboard: React.FC<StaffTodayDashboardProps> = ({
                 ) : (
                   <Box sx={{ py: 2, textAlign: "center" }}>
                     <Typography variant="h6" sx={{ fontWeight: 800 }}>No Active Job Dispatched</Typography>
-                    <Typography variant="body2" sx={{ color: "#94a3b8", mt: 1 }}>Assigned work appears here automatically.</Typography>
+                    <Typography variant="body2" sx={{ color: STAFF_TODAY_READABLE.muted, mt: 1 }}>Assigned work appears here automatically.</Typography>
                   </Box>
                 )}
               </CardContent>
@@ -434,7 +445,7 @@ export const StaffTodayDashboard: React.FC<StaffTodayDashboardProps> = ({
           </Grid>
 
           <Grid item xs={12} sm={6}>
-            <Card sx={{ bgcolor: "#1e293b", color: "#fff", border: "1px solid #334155", borderRadius: 3 }}>
+            <Card sx={{ bgcolor: STAFF_TODAY_READABLE.surface, color: STAFF_TODAY_READABLE.ink, border: `1px solid ${STAFF_TODAY_READABLE.line}`, borderRadius: 3 }}>
               <CardContent>
                 <Stack direction="row" justifyContent="space-between" alignItems="center">
                   <Stack direction="row" spacing={1.5} alignItems="center">
@@ -443,7 +454,7 @@ export const StaffTodayDashboard: React.FC<StaffTodayDashboardProps> = ({
                       <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>
                         {activeVehicle ? `${activeVehicle.id}${activeVehicle.plate ? ` (${activeVehicle.plate})` : ""}` : "No Vehicle Assigned"}
                       </Typography>
-                      <Typography variant="caption" sx={{ color: "#94a3b8" }}>
+                      <Typography variant="caption" sx={{ color: STAFF_TODAY_READABLE.muted }}>
                         {activeVehicle
                           ? `Status ${activeVehicle.status || "not recorded"} • Fuel ${activeVehicle.fuelLevel === null ? "not recorded" : `${activeVehicle.fuelLevel}%`}`
                           : "Fleet assignment will appear here when issued."}
@@ -457,12 +468,12 @@ export const StaffTodayDashboard: React.FC<StaffTodayDashboardProps> = ({
           </Grid>
 
           <Grid item xs={12} sm={6}>
-            <Card sx={{ bgcolor: "#1e293b", color: "#fff", border: "1px solid #334155", borderRadius: 3 }}>
+            <Card sx={{ bgcolor: STAFF_TODAY_READABLE.surface, color: STAFF_TODAY_READABLE.ink, border: `1px solid ${STAFF_TODAY_READABLE.line}`, borderRadius: 3 }}>
               <CardContent>
                 <Stack direction="row" justifyContent="space-between" alignItems="center">
                   <Box>
                     <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>Overtime</Typography>
-                    <Typography variant="caption" sx={{ color: "#94a3b8" }}>
+                    <Typography variant="caption" sx={{ color: STAFF_TODAY_READABLE.muted }}>
                       {overtimeTracker ? `${overtimeTracker.estimatedMinutes || "—"} min requested` : "No active overtime request"}
                     </Typography>
                   </Box>
