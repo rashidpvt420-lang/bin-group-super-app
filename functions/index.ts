@@ -29,6 +29,7 @@ import { enforceAiUsageQuota } from "./aiUsageQuota";
 import { sendTwilioSMS } from "./smsDelivery";
 import { resolveTechnicianArrivalBinding } from "./technicianInstallationBinding";
 import { flagSlaBreaches } from "./slaCron";
+import { notifyTicketStakeholders, TicketStakeholderEvent } from "./ticketStakeholderNotifications";
 
 // [V10] PRODUCTION GRADE FULL-STACK STABILIZATION
 setGlobalOptions({ region: "europe-west3", enforceAppCheck: true });
@@ -913,9 +914,14 @@ export const onTicketStatusChanged = onDocumentUpdated({ document: "maintenanceT
     // ── Status-based notifications ────────────────────────────────────────
     const statusNorm = (after.status || "").toLowerCase();
 
-    if (["accepted", "assigned", "technician_assigned"].includes(statusNorm)) {
-        await notifyRequester("Technician Assigned ✓", `${techName} has accepted ticket #${ref8} and will be on the way soon.`);
-        if (techId) await dispatchOmniNotification(techId, "Job Accepted", `You are now assigned to #${ref8} at ${prop}.`, { extraData: { ticketId, type: "job_assigned" }, url: `/technician/job/${ticketId}` });
+    if (["assigned", "technician_assigned", "auto_assigned", "dispatched"].includes(statusNorm)) {
+        // Assigned is not accepted: the technician has not confirmed yet.
+        await notifyRequester("Technician Assigned ✓", `${techName} has been assigned to ticket #${ref8}.`);
+        if (techId) await dispatchOmniNotification(techId, "New Job Assigned", `You are now assigned to #${ref8} at ${prop}.`, { extraData: { ticketId, type: "job_assigned" }, url: `/technician/job/${ticketId}` });
+        await notifyStakeholdersSafely(ticketId, after, "ASSIGNED");
+    }
+    else if (["accepted", "claimed"].includes(statusNorm)) {
+        await notifyRequester("Technician Confirmed ✓", `${techName} accepted ticket #${ref8} and will be on the way soon.`);
     }
     else if (["on_the_way", "en_route"].includes(statusNorm)) {
         await notifyRequester("Technician On The Way 🚗", `${techName} is heading to ${prop} now. Track live in your app.`);
@@ -928,6 +934,7 @@ export const onTicketStatusChanged = onDocumentUpdated({ document: "maintenanceT
     }
     else if (["completed", "completed_pending_approval", "completed_pending_tenant_approval"].includes(statusNorm)) {
         await notifyRequester("Work Completed ✅", `${techName} has completed ticket #${ref8}. Please confirm the resolution.`);
+        await notifyStakeholdersSafely(ticketId, after, "COMPLETED");
     }
     else if (["cancelled", "escalated"].includes(statusNorm)) {
         await notifyRequester("Ticket Update", `Ticket #${ref8} status changed to: ${after.status?.replace(/_/g, " ")}.`);
@@ -1104,9 +1111,19 @@ async function attemptAutoAssignment(ticketRef: admin.firestore.DocumentReferenc
     }
 }
 
+// Admin/Owner lifecycle alerts must never break the ticket workflow that triggered them.
+async function notifyStakeholdersSafely(ticketId: string, ticket: any, stakeholderEvent: TicketStakeholderEvent) {
+    try {
+        await notifyTicketStakeholders({ db, ticketId, ticket, event: stakeholderEvent });
+    } catch (error) {
+        console.error(`[ticket-notify] ${stakeholderEvent} alert failed for ${ticketId}:`, error);
+    }
+}
+
 export const autoRouteTicket = onDocumentCreated({ document: "maintenanceTickets/{ticketId}" }, async (event) => {
     const snap = event.data;
     if (!snap) return;
+    await notifyStakeholdersSafely(snap.id, snap.data(), "CREATED");
     if (
         snap.data().photoEvidenceRequired === true &&
         snap.data().evidenceStatus !== "TENANT_EVIDENCE_UPLOADED"
