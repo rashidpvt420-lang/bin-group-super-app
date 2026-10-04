@@ -9,6 +9,8 @@ import { binThemeTokens } from '../../theme/binGroupTheme';
 import { useOwnerPropertyPassports } from '../utils/useOwnerPropertyPassports';
 import { summarizeOwnerPassportFinancials } from '../../../functions/shared/propertyPassportAggregation.mjs';
 
+// Data source: Owner-scoped propertyPassports (via useOwnerPropertyPassports). The visible copy says
+// "your verified property records" so owners are not shown internal collection names.
 const MANAGEMENT_FEE_RATE = 0.05;
 const money = (value: number) => `AED ${Number(value || 0).toLocaleString('en-AE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
@@ -43,7 +45,7 @@ export default function OwnerFinancialTruthCard() {
         title: 'المبلغ المستحق لك حالياً',
         empty: 'لا توجد حالياً سجلات مالية موثقة في جوازات العقارات لهذا الحساب.',
         equation: 'الإيجار المستلم − المصروفات/الصيانة − رسوم إدارة BIN = المبلغ المستحق',
-        source: 'المصدر: propertyPassports الخاصة بالمالك. تستخدم نفس قاعدة رسوم الإدارة الحالية 5% المعروضة في صفحة المالية.',
+        source: 'الأرقام من سجلات عقاراتك الموثقة. رسوم إدارة مجموعة بن المعروضة هنا 5% من الإيجار المحصّل.',
         refreshed: 'آخر تحديث',
         pending: 'قيد التحقق',
         open: 'فتح التفاصيل المالية',
@@ -51,9 +53,9 @@ export default function OwnerFinancialTruthCard() {
     : {
         eyebrow: 'OWNER FINANCIAL TRUTH',
         title: 'Current amount payable to you',
-        empty: 'No verified property-passport financial records are currently available for this Owner account.',
+        empty: 'No verified financial records for your properties yet.',
         equation: 'Rent received − maintenance/expenses − BIN management fee = amount payable',
-        source: 'Source: Owner-scoped propertyPassports. This mirrors the current 5% management-fee rule used by the Financials page.',
+        source: 'Figures come from your verified property records. The BIN GROUP management fee shown here is 5% of collected rent.',
         refreshed: 'Refreshed',
         pending: 'Pending verification',
         open: 'Open financial details',

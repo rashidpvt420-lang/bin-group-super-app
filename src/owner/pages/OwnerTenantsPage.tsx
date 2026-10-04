@@ -212,9 +212,7 @@ export default function OwnerTenantsPage() {
                         </Typography>
                     </Grid>
                     <Grid item xs={12} md={4} sx={{ textAlign: 'right' }}>
-                        <Button variant="outlined" sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.gold, fontWeight: 900, px: 3, borderRadius: 3 }} startIcon={<CheckCircle2 size={16} />}>
-                            RERA Compliant
-                        </Button>
+                        <Chip variant="outlined" icon={<CheckCircle2 size={16} />} label="RERA compliant" sx={{ borderColor: binThemeTokens.gold, fontWeight: 900, px: 1, borderRadius: 3 }} />
                     </Grid>
                 </Grid>
             </Paper>

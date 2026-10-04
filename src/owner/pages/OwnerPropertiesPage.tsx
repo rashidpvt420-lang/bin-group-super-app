@@ -5,8 +5,7 @@ import {
 } from '@mui/material';
 import { 
     Building2, MapPin, Activity, 
-    Shield, ArrowUpRight,
-    Layout
+    Shield, ArrowUpRight
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { db, collection, query, where, getDocs, onSnapshot } from '../../lib/firebase';
@@ -101,7 +100,6 @@ export default function OwnerPropertiesPage() {
                     <Typography variant="h4" fontWeight="950" sx={{ color: '#FFF', mt: 1 }}>My Portfolio</Typography>
                 </Box>
                 <Stack direction="row" spacing={2}>
-                    <Button variant="outlined" startIcon={<Layout size={16} />} sx={{ borderColor: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.7)', fontWeight: 900, borderRadius: 3 }}>Grid View</Button>
                     <Button type="button" data-testid="owner-register-property" variant="contained" onClick={() => navigate('/onboarding')} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 900, px: 3, borderRadius: 3 }}>Register New Asset</Button>
                 </Stack>
             </Box>

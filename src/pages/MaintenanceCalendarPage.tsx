@@ -161,20 +161,20 @@ const MaintenanceCalendarPage: React.FC = () => {
             case 'OVERDUE': return '#EF4444';
             case 'IN_PROGRESS':
             case 'ACCEPTED': return binThemeTokens.gold;
-            default: return 'rgba(255,255,255,0.4)';
+            default: return '#475467';
         }
     };
 
     if (loading) return (
         <Box sx={{ height: '80vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <CircularProgress sx={{ color: binThemeTokens.gold }} />
+            <CircularProgress sx={{ color: '#7A5C12' }} />
         </Box>
     );
 
     return (
         <Container maxWidth="xl" sx={{ py: 6 }}>
             <Box sx={{ mb: 8, textAlign: isRTL ? 'right' : 'left' }}>
-                <Typography variant="h3" fontWeight="950" sx={{ color: binThemeTokens.gold, letterSpacing: -1 }}>
+                <Typography variant="h3" fontWeight="950" sx={{ color: '#7A5C12', letterSpacing: -1 }}>
                     PREVENTIVE MAINTENANCE CALENDAR
                 </Typography>
                 <Typography variant="h6" sx={{ color: binThemeTokens.textSecondary, fontWeight: 500 }}>
@@ -188,8 +188,8 @@ const MaintenanceCalendarPage: React.FC = () => {
                 <Grid item xs={12} md={8}>
                     <Stack spacing={3}>
                         {sortedTasks.length === 0 && !loadError && (
-                            <Paper sx={{ p: 5, borderRadius: 4, bgcolor: 'rgba(22, 22, 24, 0.6)', border: '1px solid rgba(255,255,255,0.05)' }}>
-                                <Typography variant="h6" fontWeight={900} color="#FFF">No scheduled maintenance yet</Typography>
+                            <Paper sx={{ p: 5, borderRadius: 4, bgcolor: '#FFFFFF', border: '1px solid #E5E7EB' }}>
+                                <Typography variant="h6" fontWeight={900} color="#111827">No scheduled maintenance yet</Typography>
                                 <Typography variant="body2" color="textSecondary" sx={{ mt: 1 }}>
                                     This page will populate automatically when a real maintenance ticket receives a service date.
                                 </Typography>
@@ -198,16 +198,16 @@ const MaintenanceCalendarPage: React.FC = () => {
 
                         {sortedTasks.map((task) => (
                             <Paper key={task.id} sx={{
-                                p: 4, borderRadius: 4, bgcolor: 'rgba(22, 22, 24, 0.6)',
+                                p: 4, borderRadius: 4, bgcolor: '#FFFFFF',
                                 borderLeft: `4px solid ${getStatusColor(task.status)}`,
-                                borderTop: '1px solid rgba(255,255,255,0.05)',
-                                borderRight: '1px solid rgba(255,255,255,0.05)',
-                                borderBottom: '1px solid rgba(255,255,255,0.05)'
+                                borderTop: '1px solid #E5E7EB',
+                                borderRight: '1px solid #E5E7EB',
+                                borderBottom: '1px solid #E5E7EB'
                             }}>
                                 <Grid container spacing={3} alignItems="center">
                                     <Grid item xs={12} sm={2}>
                                         <Box sx={{ textAlign: 'center' }}>
-                                            <Typography variant="h4" fontWeight="950" color="#FFF">{task.dueDate.getDate()}</Typography>
+                                            <Typography variant="h4" fontWeight="950" color="#111827">{task.dueDate.getDate()}</Typography>
                                             <Typography variant="overline" color="textSecondary" fontWeight="900">
                                                 {task.dueDate.toLocaleString('default', { month: 'short' }).toUpperCase()}
                                             </Typography>
@@ -215,12 +215,12 @@ const MaintenanceCalendarPage: React.FC = () => {
                                     </Grid>
                                     <Grid item xs={12} sm={7}>
                                         <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
-                                            <Box sx={{ color: binThemeTokens.gold }}>{getCategoryIcon(task.category)}</Box>
-                                            <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 1 }}>
+                                            <Box sx={{ color: '#7A5C12' }}>{getCategoryIcon(task.category)}</Box>
+                                            <Typography variant="caption" sx={{ color: '#7A5C12', fontWeight: 900, letterSpacing: 1 }}>
                                                 {task.category} · {task.frequency}
                                             </Typography>
                                         </Stack>
-                                        <Typography variant="h6" fontWeight="900" color="#FFF">{task.taskName}</Typography>
+                                        <Typography variant="h6" fontWeight="900" color="#111827">{task.taskName}</Typography>
                                         <Typography variant="body2" color="textSecondary">{task.propertyName}</Typography>
                                     </Grid>
                                     <Grid item xs={12} sm={3} sx={{ textAlign: 'right' }}>
@@ -242,11 +242,11 @@ const MaintenanceCalendarPage: React.FC = () => {
 
                 <Grid item xs={12} md={4}>
                     <Paper sx={{ p: 4, borderRadius: 6, bgcolor: alpha(binThemeTokens.gold, 0.05), border: `1px solid ${alpha(binThemeTokens.gold, 0.2)}` }}>
-                        <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 2 }}>
+                        <Typography variant="overline" sx={{ color: '#7A5C12', fontWeight: 950, letterSpacing: 2 }}>
                             COMPLIANCE METRICS
                         </Typography>
                         <Box sx={{ mt: 4 }}>
-                            <Typography variant="h3" fontWeight="950" color="#FFF">
+                            <Typography variant="h3" fontWeight="950" color="#111827">
                                 {completionMetric === null ? 'N/A' : `${completionMetric}%`}
                             </Typography>
                             <Typography variant="body2" color="textSecondary">On-Time Completion Rate</Typography>
