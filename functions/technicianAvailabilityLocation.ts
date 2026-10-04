@@ -8,6 +8,7 @@ import {
   requireTechnician,
 } from "./technicianLiveLocation";
 import { approvedAndReadyTechnician } from "./secureAdminTechnicianAssignment";
+import { technicianDutyMirrorFromUser, technicianDutyMirrorStale, withTechnicianDutyMirror } from "./technicianDutyMirror";
 
 if (!admin.apps.length) admin.initializeApp();
 const db = admin.firestore();
@@ -73,7 +74,14 @@ export const reportTechnicianAvailabilityLocation = onCall(
       }
 
       const user = userSnap.data() || {};
-      const technician = technicianSnap.data() || {};
+      const storedTechnician = technicianSnap.data() || {};
+      // Duty state is server-authoritative on users/{uid} (browser writes to
+      // these fields are rule-denied). Reconcile a stale technicians profile
+      // (e.g. available:false / onDuty:false left by provisioning before the
+      // duty callables mirrored state) so readiness sees the live duty state.
+      const reconcileDutyMirror = userSnap.exists && technicianSnap.exists &&
+        technicianDutyMirrorStale(user, storedTechnician);
+      const technician = reconcileDutyMirror ? withTechnicianDutyMirror(storedTechnician, user) : storedTechnician;
       const readiness = approvedAndReadyTechnician(user, technician, userSnap.exists, technicianSnap.exists, serverNowMs);
       const blocking = readiness.failures.filter((failure) => failure !== GPS_READINESS_FAILURE);
       if (blocking.length) {
@@ -124,7 +132,12 @@ export const reportTechnicianAvailabilityLocation = onCall(
         lastSeenAt: now,
         updatedAt: now,
       };
-      if (technicianSnap.exists) tx.set(technicianRef, profileUpdate, { merge: true });
+      if (technicianSnap.exists) {
+        tx.set(technicianRef, {
+          ...profileUpdate,
+          ...(reconcileDutyMirror ? technicianDutyMirrorFromUser(user) : {}),
+        }, { merge: true });
+      }
       if (userSnap.exists) tx.set(userRef, profileUpdate, { merge: true });
       tx.set(diagnosticRef, {
         status: "AVAILABILITY_REPORTED",

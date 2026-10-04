@@ -29,6 +29,7 @@ import { enforceAiUsageQuota } from "./aiUsageQuota";
 import { sendTwilioSMS } from "./smsDelivery";
 import { resolveTechnicianArrivalBinding } from "./technicianInstallationBinding";
 import { flagSlaBreaches } from "./slaCron";
+import { mirrorTechnicianDutyState } from "./technicianDutyMirror";
 
 // [V10] PRODUCTION GRADE FULL-STACK STABILIZATION
 setGlobalOptions({ region: "europe-west3", enforceAppCheck: true });
@@ -207,7 +208,9 @@ export const takeTechnicianBreak = onCall({ cors: true, enforceAppCheck: true },
     const nowDate = new Date();
 
     const batch = db.batch();
-    batch.update(userRef, { dutyStatus: 'ON_BREAK', onDuty: true, isAvailable: false, available: false, breakStartedAt: now, updatedAt: now });
+    const breakDutyState = { dutyStatus: 'ON_BREAK', onDuty: true, isAvailable: false, available: false, currentShiftId: shiftId };
+    batch.update(userRef, { ...breakDutyState, breakStartedAt: now, updatedAt: now });
+    await mirrorTechnicianDutyState(batch, uid, { ...breakDutyState, breakStartedAt: now, updatedAt: now });
     batch.update(db.collection("technician_shifts").doc(shiftId), {
         status: "ON_BREAK",
         breaks: FieldValue.arrayUnion({ start: nowDate, type: 'STANDARD', startedBy: uid }),
@@ -242,7 +245,9 @@ export const resumeTechnicianDuty = onCall({ cors: true, enforceAppCheck: true }
 
     const now = FieldValue.serverTimestamp();
     const batch = db.batch();
-    batch.update(userRef, { dutyStatus: 'ON_DUTY', onDuty: true, isAvailable: true, available: true, breakEndedAt: now, updatedAt: now });
+    const resumedDutyState = { dutyStatus: 'ON_DUTY', onDuty: true, isAvailable: true, available: true, currentShiftId: shiftId };
+    batch.update(userRef, { ...resumedDutyState, breakEndedAt: now, updatedAt: now });
+    await mirrorTechnicianDutyState(batch, uid, { ...resumedDutyState, breakEndedAt: now, updatedAt: now });
     batch.update(db.collection("technician_shifts").doc(shiftId), {
         status: "ACTIVE",
         breaks,
@@ -2678,7 +2683,7 @@ export const startTechnicianDuty = onCall({ cors: true, enforceAppCheck: true },
 
     batch.set(shiftRef, shiftPayload, { merge: true });
 
-    batch.update(techRef, {
+    const startedDutyState = {
         onDuty: true,
         isAvailable: true,
         available: true,
@@ -2687,7 +2692,12 @@ export const startTechnicianDuty = onCall({ cors: true, enforceAppCheck: true },
         currentShiftId: shiftId,
         lastSeenAt: now,
         updatedAt: now
-    });
+    };
+    batch.update(techRef, startedDutyState);
+    // Readiness merges {...users, ...technicians}; a stale technicians
+    // available:false / onDuty:false (e.g. from provisioning) would otherwise
+    // override the live duty state and block dispatch.
+    await mirrorTechnicianDutyState(batch, techId, startedDutyState, technicianProfile.exists);
 
     await batch.commit();
 
@@ -2739,7 +2749,7 @@ export const endTechnicianDuty = onCall({ cors: true, enforceAppCheck: true }, a
     const shiftId = String(techData.currentShiftId || "");
     const batch = db.batch();
 
-    batch.update(techDoc.ref, {
+    const endedDutyState = {
         onDuty: false,
         isAvailable: false,
         available: false,
@@ -2747,7 +2757,9 @@ export const endTechnicianDuty = onCall({ cors: true, enforceAppCheck: true }, a
         dutyEndedAt: now,
         currentShiftId: FieldValue.delete(),
         updatedAt: now
-    });
+    };
+    batch.update(techDoc.ref, endedDutyState);
+    await mirrorTechnicianDutyState(batch, techId, endedDutyState);
 
     if (shiftId) {
         batch.set(db.collection("technician_shifts").doc(shiftId), {
