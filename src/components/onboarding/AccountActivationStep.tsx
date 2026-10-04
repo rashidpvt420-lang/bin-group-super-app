@@ -103,18 +103,18 @@ const AccountActivationStep: React.FC<{ onNext: () => void; onBack: () => void }
                 </Alert>
 
                 <Stack spacing={3}>
-                    <TextField fullWidth label="Full Name" value={formData.fullName} onChange={(e) => setFormData({ ...formData, fullName: e.target.value })} InputProps={{ startAdornment: <User size={18} style={{ marginRight: 12, color: binThemeTokens.gold }} /> }} />
+                    <TextField fullWidth label="Full Name" value={formData.fullName} onChange={(e) => setFormData({ ...formData, fullName: e.target.value })} InputProps={{ startAdornment: <User size={18} style={{ marginRight: 12, color: binThemeTokens.goldText }} /> }} />
                     <Grid container spacing={2}>
                         <Grid item xs={12} md={7}>
-                            <TextField fullWidth label="Email" value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} InputProps={{ startAdornment: <Mail size={18} style={{ marginRight: 12, color: binThemeTokens.gold }} /> }} />
+                            <TextField fullWidth label="Email" value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} InputProps={{ startAdornment: <Mail size={18} style={{ marginRight: 12, color: binThemeTokens.goldText }} /> }} />
                         </Grid>
                         <Grid item xs={12} md={5}>
-                            <TextField fullWidth label="Mobile Number" value={formData.mobile} onChange={(e) => setFormData({ ...formData, mobile: e.target.value })} InputProps={{ startAdornment: <Phone size={18} style={{ marginRight: 12, color: binThemeTokens.gold }} /> }} />
+                            <TextField fullWidth label="Mobile Number" value={formData.mobile} onChange={(e) => setFormData({ ...formData, mobile: e.target.value })} InputProps={{ startAdornment: <Phone size={18} style={{ marginRight: 12, color: binThemeTokens.goldText }} /> }} />
                         </Grid>
                     </Grid>
                     <Grid container spacing={2}>
                         <Grid item xs={12} md={6}>
-                            <TextField fullWidth type="password" label="Password" value={formData.password} onChange={(e) => setFormData({ ...formData, password: e.target.value })} InputProps={{ startAdornment: <Lock size={18} style={{ marginRight: 12, color: binThemeTokens.gold }} /> }} />
+                            <TextField fullWidth type="password" label="Password" value={formData.password} onChange={(e) => setFormData({ ...formData, password: e.target.value })} InputProps={{ startAdornment: <Lock size={18} style={{ marginRight: 12, color: binThemeTokens.goldText }} /> }} />
                         </Grid>
                         <Grid item xs={12} md={6}>
                             <TextField fullWidth type="password" label="Confirm Password" value={formData.confirmPassword} onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })} />

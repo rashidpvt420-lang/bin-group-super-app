@@ -314,7 +314,7 @@ export default function DesignStudioPage() {
                 Take photo
                 <input type="file" hidden accept="image/jpeg,image/png,image/webp" capture="environment" onChange={handleImageUpload} />
               </Button>
-              <Button component="label" variant="outlined" disabled={submitting} sx={{ py: 2, color: binThemeTokens.gold, borderColor: binThemeTokens.gold, fontWeight: 950 }}>
+              <Button component="label" variant="outlined" disabled={submitting} sx={{ py: 2, color: binThemeTokens.goldText, borderColor: binThemeTokens.gold, fontWeight: 950 }}>
                 Upload from gallery
                 <input type="file" hidden accept="image/jpeg,image/png,image/webp" onChange={handleImageUpload} />
               </Button>
@@ -349,7 +349,7 @@ export default function DesignStudioPage() {
               <TextField select label="Finish tier" value={scope.finishTier} onChange={(event) => setScope({ ...scope, finishTier: event.target.value as DesignScope['finishTier'] })} fullWidth>{['Standard', 'Premium', 'Luxury'].map((tier) => <MenuItem key={tier} value={tier}>{tier}</MenuItem>)}</TextField>
               <Box>
                 <Typography variant="caption" color="text.secondary" fontWeight={900} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}><Ruler size={14} /> Area: {scope.dimensions} sq ft</Typography>
-                <Slider value={scope.dimensions} min={10} max={5000} onChange={(_, value) => setScope({ ...scope, dimensions: value as number })} sx={{ color: binThemeTokens.gold }} />
+                <Slider value={scope.dimensions} min={10} max={5000} onChange={(_, value) => setScope({ ...scope, dimensions: value as number })} sx={{ color: binThemeTokens.goldText }} />
               </Box>
             </Stack>
           </Paper>

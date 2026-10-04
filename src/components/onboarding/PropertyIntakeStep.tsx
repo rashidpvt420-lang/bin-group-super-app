@@ -281,9 +281,9 @@ const PropertyIntakeStep: React.FC<{ onNext: () => void }> = ({ onNext }) => {
                                     <MenuItem value="Mall">Mall</MenuItem>
                                     <MenuItem value="Mixed-Use Tower">Mixed-Use Tower</MenuItem>
                                     <Divider />
-                                    <MenuItem value="GOVERNMENT_MAJLIS" sx={{ fontWeight: 'bold', color: binThemeTokens.gold }}>Government Majlis ★</MenuItem>
-                                    <MenuItem value="GOVERNMENT_PROPERTY" sx={{ fontWeight: 'bold', color: binThemeTokens.gold }}>Government Property ★</MenuItem>
-                                    <MenuItem value="HOTEL" sx={{ fontWeight: 'bold', color: binThemeTokens.gold }}>Hotel ★</MenuItem>
+                                    <MenuItem value="GOVERNMENT_MAJLIS" sx={{ fontWeight: 'bold', color: binThemeTokens.goldText }}>Government Majlis ★</MenuItem>
+                                    <MenuItem value="GOVERNMENT_PROPERTY" sx={{ fontWeight: 'bold', color: binThemeTokens.goldText }}>Government Property ★</MenuItem>
+                                    <MenuItem value="HOTEL" sx={{ fontWeight: 'bold', color: binThemeTokens.goldText }}>Hotel ★</MenuItem>
                                 </TextField>
                             </Grid>
                             

@@ -59,7 +59,7 @@ export default function AccountPrivacyRequestPage() {
               {label('← Back', 'رجوع →')}
             </Button>
             <Box>
-              <Typography variant="overline" sx={{ color: '#B8932F', fontWeight: 950, letterSpacing: 2 }}>
+              <Typography variant="overline" sx={{ color: '#7A5C12', fontWeight: 950, letterSpacing: 2 }}>
                 {label('ACCOUNT & PRIVACY', 'الحساب والخصوصية')}
               </Typography>
               <Typography variant="h4" sx={{ color: '#111827', fontWeight: 950, mt: 1 }}>

@@ -284,7 +284,7 @@ export default function OwnerPLReportPage() {
                       </Box>
                       <Box sx={{ textAlign: 'right' }}>
                         <Typography variant="caption" sx={{ color: alpha('#fff', 0.3), fontWeight: 900 }}>MAINT.</Typography>
-                        <Typography sx={{ color: '#EF4444', fontWeight: 950, fontSize: '0.88rem' }}>{maint.toLocaleString()} AED</Typography>
+                        <Typography sx={{ color: '#B91C1C', fontWeight: 950, fontSize: '0.88rem' }}>{maint.toLocaleString()} AED</Typography>
                       </Box>
                       <Box sx={{ textAlign: 'right' }}>
                         <Typography variant="caption" sx={{ color: alpha('#fff', 0.3), fontWeight: 900 }}>NET</Typography>
@@ -310,7 +310,7 @@ export default function OwnerPLReportPage() {
       {/* Tax note */}
       <Paper sx={{ p: 3, bgcolor: alpha('#22C55E', 0.05), border: `1px solid ${alpha('#22C55E', 0.18)}`, borderRadius: 4 }}>
         <Stack direction="row" spacing={2} alignItems="flex-start">
-          <Box sx={{ p: 1, bgcolor: alpha('#22C55E', 0.1), borderRadius: 2, color: '#22C55E', flexShrink: 0 }}>
+          <Box sx={{ p: 1, bgcolor: alpha('#22C55E', 0.1), borderRadius: 2, color: '#047857', flexShrink: 0 }}>
             <FileText size={18} />
           </Box>
           <Box>

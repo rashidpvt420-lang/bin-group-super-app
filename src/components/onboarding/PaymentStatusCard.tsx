@@ -99,7 +99,7 @@ const PaymentStatusCard: React.FC<{ statusData: PaymentStatus }> = ({ statusData
                         </Grid>
                         <Grid item xs={6}>
                             <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 900 }}>DUE AMOUNT</Typography>
-                            <Typography variant="body1" fontWeight="700" sx={{ color: binThemeTokens.gold }}>AED {statusData.amount.toLocaleString()}</Typography>
+                            <Typography variant="body1" fontWeight="700" sx={{ color: binThemeTokens.goldText }}>AED {statusData.amount.toLocaleString()}</Typography>
                         </Grid>
                     </Grid>
                 </Box>

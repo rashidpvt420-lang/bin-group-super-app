@@ -32,9 +32,9 @@ const unitsOf = (property: any) => n(property?.units || property?.totalUnits || 
 const money = (value: unknown) => `AED ${n(value).toLocaleString()}`;
 
 const statusFor = (balance: number, overdue: number) => {
-  if (balance <= 0) return { label: 'PAID', color: '#10b981' };
-  if (overdue > 0) return { label: 'OVERDUE', color: '#ef4444' };
-  return { label: 'PENDING', color: '#f59e0b' };
+  if (balance <= 0) return { label: 'PAID', color: '#047857' };
+  if (overdue > 0) return { label: 'OVERDUE', color: '#B91C1C' };
+  return { label: 'PENDING', color: '#92400E' };
 };
 
 export default function OwnerMoneyRiskDashboardSection({ properties, financials, complaints, tickets, tenantCount }: Props) {
@@ -80,8 +80,8 @@ export default function OwnerMoneyRiskDashboardSection({ properties, financials,
           : 'Schedule preventive maintenance';
 
   const cards = [
-    { label: 'Rent due', value: rentDue ? money(rentDue) : 'Ledger pending', icon: <CreditCard size={20} />, color: binThemeTokens.gold },
-    { label: 'Rent collected', value: rentCollected ? money(rentCollected) : 'AED 0', icon: <ReceiptText size={20} />, color: '#10b981' },
+    { label: 'Rent due', value: rentDue ? money(rentDue) : 'Ledger pending', icon: <CreditCard size={20} />, color: binThemeTokens.goldText },
+    { label: 'Rent collected', value: rentCollected ? money(rentCollected) : 'AED 0', icon: <ReceiptText size={20} />, color: '#047857' },
     { label: 'Balance', value: money(rentBalance), icon: <ShieldAlert size={20} />, color: rentBalance ? '#f59e0b' : '#10b981' },
     { label: 'Collection rate', value: rentDue ? `${collectionRate}%` : 'Pending', icon: <TrendingUp size={20} />, color: collectionRate >= 90 ? '#10b981' : '#f59e0b' },
     { label: 'Pending verification', value: pendingVerification, icon: <ClipboardCheck size={20} />, color: pendingVerification ? '#f59e0b' : '#10b981' },

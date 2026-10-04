@@ -110,7 +110,7 @@ export default function OwnerFinancialsPage() {
     const visibleError = passportError || loadError;
 
     const FINANCIAL_KPIs = [
-        { label: tx('owner.fin.gross_revenue', 'Gross Revenue'), value: summary.totalRevenue, color: '#10b981', icon: <TrendingUp size={20} /> },
+        { label: tx('owner.fin.gross_revenue', 'Gross Revenue'), value: summary.totalRevenue, color: '#047857', icon: <TrendingUp size={20} /> },
         { label: tx('owner.fin.net_payout', 'Net Payout'), value: summary.netPayout, color: binThemeTokens.gold, icon: <CreditCard size={20} /> },
         { label: tx('owner.fin.pending_verification', 'Pending Verification'), value: summary.pendingVerification, color: '#f59e0b', icon: <Clock size={20} /> },
         { label: tx('owner.fin.management_fees', 'Management Fees'), value: summary.managementFees, color: '#3b82f6', icon: <Shield size={20} /> },
@@ -267,7 +267,7 @@ export default function OwnerFinancialsPage() {
                                                     <Chip
                                                         label={txn.status?.toUpperCase() || 'COMPLETED'}
                                                         size="small"
-                                                        sx={{ height: 18, fontSize: '0.6rem', fontWeight: 950, bgcolor: alpha('#10b981', 0.1), color: '#10b981' }}
+                                                        sx={{ height: 18, fontSize: '0.6rem', fontWeight: 950, bgcolor: alpha('#10b981', 0.1), color: '#047857' }}
                                                     />
                                                 </TableCell>
                                             </TableRow>

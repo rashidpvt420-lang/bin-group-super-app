@@ -104,7 +104,7 @@ export default function AppReviewDemoPage() {
                 <Button variant="outlined" href="/privacy" sx={{ borderColor: '#C9A646', color: '#C9A646', fontWeight: 950 }}>
                   Privacy Policy
                 </Button>
-                <Button variant="outlined" href="/support" sx={{ borderColor: '#C9A646', color: '#C9A646', fontWeight: 950 }}>
+                <Button variant="outlined" href="/support" sx={{ borderColor: '#C9A646', color: '#7A5C12', fontWeight: 950 }}>
                   Support URL
                 </Button>
               </Stack>

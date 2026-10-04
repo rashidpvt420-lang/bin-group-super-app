@@ -89,7 +89,7 @@ export default function HealthScorePage() {
     <Container maxWidth="xl" sx={{ py: 6 }}>
       <Box sx={{ mb: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <Box>
-            <Typography variant="h3" fontWeight="900" sx={{ color: binThemeTokens.gold, letterSpacing: -1 }}>Building Performance Index (BPI)</Typography>
+            <Typography variant="h3" fontWeight="900" sx={{ color: binThemeTokens.goldText, letterSpacing: -1 }}>Building Performance Index (BPI)</Typography>
             <Typography variant="h6" sx={{ color: binThemeTokens.textSecondary }}>Institutional asset integrity layers and decay monitoring.</Typography>
         </Box>
         <FormControl sx={{ minWidth: 350 }}>

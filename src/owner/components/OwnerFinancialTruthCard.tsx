@@ -75,7 +75,7 @@ export default function OwnerFinancialTruthCard() {
         </Stack>
 
         {loading ? (
-          <Stack direction="row" spacing={1.5} alignItems="center"><CircularProgress size={20} sx={{ color: binThemeTokens.gold }} /><Typography variant="body2">Loading live Owner financial source…</Typography></Stack>
+          <Stack direction="row" spacing={1.5} alignItems="center"><CircularProgress size={20} sx={{ color: binThemeTokens.goldText }} /><Typography variant="body2">Loading live Owner financial source…</Typography></Stack>
         ) : error ? (
           <Alert severity="warning">{error}</Alert>
         ) : sourceCount === 0 ? (

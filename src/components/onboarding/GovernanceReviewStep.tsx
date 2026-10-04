@@ -86,7 +86,7 @@ const GovernanceReviewStep: React.FC<{ onNext: () => void; onBack: () => void }>
                     <Grid item xs={12} lg={7}>
                         <Stack spacing={3}>
                             <Paper sx={{ p: 4, borderRadius: 6, bgcolor: 'rgba(22, 22, 24, 0.6)', border: '1px solid rgba(255,255,255,0.05)' }}>
-                                <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, mb: 2, display: 'block' }}>ASSET SUMMARY</Typography>
+                                <Typography variant="overline" sx={{ color: binThemeTokens.goldText, fontWeight: 900, mb: 2, display: 'block' }}>ASSET SUMMARY</Typography>
                                 <Grid container spacing={2}>
                                     <Grid item xs={6}>
                                         <Typography variant="caption" color="textSecondary">CATEGORY</Typography>

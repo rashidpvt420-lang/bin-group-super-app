@@ -315,7 +315,7 @@ export default function LiveTechnicianTrackingCard({
                             <Stack direction="row" spacing={2} alignItems="center" sx={{ minWidth: 0 }}>
                                 <Avatar
                                     src={ticket.assignedTechnicianAvatar || ticket.technicianPhotoURL}
-                                    sx={{ width: 48, height: 48, bgcolor: alpha(binThemeTokens.gold, 0.15), color: binThemeTokens.gold, fontWeight: 900, flexShrink: 0 }}
+                                    sx={{ width: 48, height: 48, bgcolor: alpha(binThemeTokens.gold, 0.15), color: binThemeTokens.goldText, fontWeight: 900, flexShrink: 0 }}
                                 >
                                     {(ticket.assignedTechnicianName || 'T').charAt(0)}
                                 </Avatar>
@@ -327,7 +327,7 @@ export default function LiveTechnicianTrackingCard({
                                         {ticket.assignedTechnicianSpecialty || ticket.technicianSpecialty || 'Maintenance Specialist'}
                                     </Typography>
                                     {(ticket.assignedTechnicianPhone || ticket.technicianPhone) && (
-                                        <Typography variant="caption" sx={{ color: binThemeTokens.gold, display: 'block', fontWeight: 900 }}>
+                                        <Typography variant="caption" sx={{ color: binThemeTokens.goldText, display: 'block', fontWeight: 900 }}>
                                             {ticket.assignedTechnicianPhone || ticket.technicianPhone}
                                         </Typography>
                                     )}
@@ -351,7 +351,7 @@ export default function LiveTechnicianTrackingCard({
                                                 if (phone) window.open(`tel:${phone}`);
                                             }
                                         }}
-                                        sx={{ bgcolor: alpha(binThemeTokens.gold, 0.1), color: binThemeTokens.gold }}
+                                        sx={{ bgcolor: alpha(binThemeTokens.gold, 0.1), color: binThemeTokens.goldText }}
                                     >
                                         <Phone size={18} />
                                     </IconButton>

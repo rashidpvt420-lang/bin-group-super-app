@@ -133,7 +133,7 @@ export default function UaePropertyMap({
               bgcolor: alpha('#f59e0b', 0.08), 
               color: '#f8fafc', 
               border: `1px solid ${alpha('#f59e0b', 0.25)}`,
-              '& .MuiAlert-icon': { color: '#f59e0b' }
+              '& .MuiAlert-icon': { color: '#92400E' }
             }}
           >
             Exact GPS pin is not saved yet. This map is using address-level lookup only.

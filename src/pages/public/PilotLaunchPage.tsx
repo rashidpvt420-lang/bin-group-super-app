@@ -92,7 +92,7 @@ export default function PilotLaunchPage() {
               <Grid item xs={12} sm={6} md={3} key={card.title}>
                 <Paper sx={{ height: '100%', p: 3, borderRadius: 5, border: '1px solid #E5E7EB', boxShadow: '0 18px 42px rgba(17,24,39,0.06)' }}>
                   <Stack spacing={2} sx={{ height: '100%' }}>
-                    <Box sx={{ width: 46, height: 46, borderRadius: 3, display: 'grid', placeItems: 'center', bgcolor: alpha(binThemeTokens.gold, 0.12), color: binThemeTokens.goldHover }}>
+                    <Box sx={{ width: 46, height: 46, borderRadius: 3, display: 'grid', placeItems: 'center', bgcolor: alpha(binThemeTokens.gold, 0.12), color: binThemeTokens.goldText }}>
                       <SafeIcon icon={card.icon} size={22} />
                     </Box>
                     <Typography variant="h6" sx={{ color: '#111827', fontWeight: 950 }}>{card.title}</Typography>
@@ -119,7 +119,7 @@ export default function PilotLaunchPage() {
                         <CheckCircle2 size={17} color="#10b981" style={{ marginTop: 2 }} />
                         <Typography variant="caption" sx={{ color: '#475467', fontWeight: 800, lineHeight: 1.55 }}>{test.pass}</Typography>
                       </Stack>
-                      <Button size="small" onClick={() => navigate(test.route)} sx={{ alignSelf: 'flex-start', color: binThemeTokens.goldHover, fontWeight: 950 }}>Open {test.role}</Button>
+                      <Button size="small" onClick={() => navigate(test.route)} sx={{ alignSelf: 'flex-start', color: binThemeTokens.goldText, fontWeight: 950 }}>Open {test.role}</Button>
                     </Stack>
                   </Paper>
                 </Grid>

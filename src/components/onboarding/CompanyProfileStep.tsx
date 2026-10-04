@@ -26,7 +26,7 @@ const CompanyProfileStep: React.FC<{ onNext: () => void }> = ({ onNext }) => {
         companyProfile.contactPerson.trim().length >= 2 &&
         emailValid && phoneValid
     );
-    const iconSpacing = { marginRight: isRTL ? 0 : 12, marginLeft: isRTL ? 12 : 0, color: binThemeTokens.gold };
+    const iconSpacing = { marginRight: isRTL ? 0 : 12, marginLeft: isRTL ? 12 : 0, color: binThemeTokens.goldText };
 
     const chips = [
         copy('Tenant Registry', 'سجل المستأجرين'),

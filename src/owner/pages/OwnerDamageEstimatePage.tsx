@@ -209,7 +209,7 @@ export default function OwnerDamageEstimatePage() {
 
               {error && (
                 <Box sx={{ p: 2, bgcolor: alpha('#EF4444', 0.08), border: `1px solid ${alpha('#EF4444', 0.22)}`, borderRadius: 3 }}>
-                  <Typography sx={{ color: '#EF4444', fontWeight: 900, fontSize: '0.8rem', mb: 0.5 }}>NO LIVE AI ASSESSMENT</Typography>
+                  <Typography sx={{ color: '#B91C1C', fontWeight: 900, fontSize: '0.8rem', mb: 0.5 }}>NO LIVE AI ASSESSMENT</Typography>
                   <Typography sx={{ color: alpha('#fff', 0.65), fontWeight: 700, fontSize: '0.8rem' }}>{error}</Typography>
                 </Box>
               )}
@@ -234,7 +234,7 @@ export default function OwnerDamageEstimatePage() {
             <Stack spacing={2.5}>
               <Paper sx={{ p: 2, bgcolor: alpha('#F59E0B', 0.08), border: `1px solid ${alpha('#F59E0B', 0.28)}`, borderRadius: 3 }}>
                 <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} justifyContent="space-between" alignItems={{ xs: 'flex-start', sm: 'center' }}>
-                  <Typography sx={{ color: '#F59E0B', fontWeight: 950, fontSize: '0.78rem', letterSpacing: 1.4 }}>
+                  <Typography sx={{ color: '#92400E', fontWeight: 950, fontSize: '0.78rem', letterSpacing: 1.4 }}>
                     AI PRE-SCREEN · NOT INSPECTED · NOT A QUOTATION
                   </Typography>
                   <Chip size="small" label={`LIVE · ${String(result.provider || 'AI').toUpperCase()}`} sx={{ color: '#10B981', bgcolor: alpha('#10B981', 0.08), fontWeight: 950 }} />

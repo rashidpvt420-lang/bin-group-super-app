@@ -50,7 +50,7 @@ const resolveGps = (property: any): GpsState => {
     const hasCoordinates = latitude !== null && longitude !== null;
     const exact = Boolean(property?.geo?.verified || property?.gps?.verified || property?.location?.accuracy === 'EXACT' || property?.locationQuality === 'EXACT');
     if (!hasCoordinates) {
-        return { hasCoordinates: false, exact: false, latitude: null, longitude: null, label: 'GPS NOT CONFIGURED', color: '#ef4444', googleMapsUrl: '' };
+        return { hasCoordinates: false, exact: false, latitude: null, longitude: null, label: 'GPS NOT CONFIGURED', color: '#B91C1C', googleMapsUrl: '' };
     }
     return {
         hasCoordinates,
@@ -105,7 +105,7 @@ export default function PropertyPassportPage() {
 
     const gps = useMemo(() => resolveGps(property || {}), [property]);
 
-    if (loading) return <Box sx={{ display: 'flex', justifyContent: 'center', p: 10 }}><CircularProgress sx={{ color: binThemeTokens.gold }}/></Box>;
+    if (loading) return <Box sx={{ display: 'flex', justifyContent: 'center', p: 10 }}><CircularProgress sx={{ color: binThemeTokens.goldText }}/></Box>;
     if (!property) return <Container sx={{ py: 10 }}><Typography color="error">PROPERTY NODE NOT FOUND</Typography></Container>;
 
     const isVerified = property.titleDeedStatus === 'verified' || property.geo?.verified === true;
@@ -131,7 +131,7 @@ export default function PropertyPassportPage() {
                 <Grid item xs={12} lg={4}>
                     <Stack spacing={4}>
                         <Paper sx={{ p: 4, borderRadius: 6, bgcolor: 'rgba(22, 22, 24, 0.6)', border: '1px solid rgba(255,255,255,0.05)' }}>
-                            <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, mb: 3, display: 'block' }}>STRUCTURAL DNA</Typography>
+                            <Typography variant="overline" sx={{ color: binThemeTokens.goldText, fontWeight: 900, mb: 3, display: 'block' }}>STRUCTURAL DNA</Typography>
                             <Grid container spacing={3}>
                                 <Grid item xs={6}><Stack spacing={0.5}><Typography variant="caption" color="textSecondary">TYPE</Typography><Typography fontWeight="900" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}><Building size={16} color={binThemeTokens.gold}/> {property.propertyType || 'Not set'}</Typography></Stack></Grid>
                                 <Grid item xs={6}><Stack spacing={0.5}><Typography variant="caption" color="textSecondary">GRADE</Typography><Typography fontWeight="900" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}><BadgeCheck size={16} color={binThemeTokens.gold}/> {property.assetGrade || 'Standard'}</Typography></Stack></Grid>
@@ -186,7 +186,7 @@ export default function PropertyPassportPage() {
                 <Grid item xs={12} lg={8}>
                     <Stack spacing={4}>
                         <Paper sx={{ p: 4, borderRadius: 6, bgcolor: alpha(binThemeTokens.gold, 0.03), border: `1px solid ${alpha(binThemeTokens.gold, 0.1)}` }}>
-                            <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, mb: 3, display: 'block' }}>VERIFICATION HUB</Typography>
+                            <Typography variant="overline" sx={{ color: binThemeTokens.goldText, fontWeight: 900, mb: 3, display: 'block' }}>VERIFICATION HUB</Typography>
                             <Grid container spacing={3}>
                                 <Grid item xs={12} md={4}><Stack direction="row" spacing={2} alignItems="center"><Box sx={{ p: 1.5, bgcolor: alpha(isVerified ? '#10b981' : '#f59e0b', 0.1), borderRadius: 3 }}><ShieldCheck color={isVerified ? '#10b981' : '#f59e0b'} /></Box><Box><Typography variant="subtitle2" fontWeight="900" color="#FFF">TITLE DEED</Typography><Typography variant="caption" color={isVerified ? '#10b981' : '#f59e0b'}>{isVerified ? 'VERIFIED' : 'PENDING REVIEW'}</Typography></Box></Stack></Grid>
                                 <Grid item xs={12} md={4}><Stack direction="row" spacing={2} alignItems="center"><Box sx={{ p: 1.5, bgcolor: alpha(gps.color, 0.1), borderRadius: 3 }}><MapPin color={gps.color} /></Box><Box><Typography variant="subtitle2" fontWeight="900" color="#FFF">GEO-ANCHOR</Typography><Typography variant="caption" color={gps.color}>{gps.label}</Typography></Box></Stack></Grid>

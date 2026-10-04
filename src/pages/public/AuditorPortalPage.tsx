@@ -112,7 +112,7 @@ export default function AuditorPortalPage() {
                 }}
             >
                 <Stack spacing={2} alignItems="center">
-                    <CircularProgress sx={{ color: binThemeTokens.gold }} />
+                    <CircularProgress sx={{ color: binThemeTokens.goldText }} />
                     <Typography color={binThemeTokens.textSecondary}>
                         {copy('auditor.role_loading', 'Verifying auditor access…', 'جارٍ التحقق من صلاحية المدقق…')}
                     </Typography>
@@ -193,7 +193,7 @@ export default function AuditorPortalPage() {
                     }}
                 >
                     <Stack spacing={2} alignItems="center">
-                        <CircularProgress sx={{ color: binThemeTokens.gold }} />
+                        <CircularProgress sx={{ color: binThemeTokens.goldText }} />
                         <Typography color={binThemeTokens.textSecondary}>
                             {copy('auditor.records_loading', 'Loading audit records…', 'جارٍ تحميل سجلات التدقيق…')}
                         </Typography>

@@ -55,7 +55,7 @@ export default function TechnicianHistoryPage() {
         return () => unsub();
     }, [user]);
 
-    if (loading) return <Box sx={{ display: 'flex', justifyContent: 'center', py: 10 }}><CircularProgress sx={{ color: binThemeTokens.gold }} /></Box>;
+    if (loading) return <Box sx={{ display: 'flex', justifyContent: 'center', py: 10 }}><CircularProgress sx={{ color: binThemeTokens.goldText }} /></Box>;
 
     if (loadError) return <Alert severity="error">{loadError}</Alert>;
 
@@ -143,7 +143,7 @@ export default function TechnicianHistoryPage() {
                             <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" alignItems="center" spacing={3}>
                                 <Box sx={{ flex: 1 }}>
                                     <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 1 }}>
-                                        <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950 }}>REF #{job.id.substring(0,8)}</Typography>
+                                        <Typography variant="overline" sx={{ color: binThemeTokens.goldText, fontWeight: 950 }}>REF #{job.id.substring(0,8)}</Typography>
                                         <Chip 
                                             size="small"
                                             label={job.status?.toUpperCase().replace('_', ' ')} 

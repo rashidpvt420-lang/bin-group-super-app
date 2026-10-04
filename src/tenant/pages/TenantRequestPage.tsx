@@ -492,7 +492,7 @@ export default function TenantRequestPage() {
                         />
 
                         <Box>
-                            <Typography variant="subtitle2" fontWeight="900" sx={{ color: binThemeTokens.gold, mb: 2 }}>
+                            <Typography variant="subtitle2" fontWeight="900" sx={{ color: binThemeTokens.goldText, mb: 2 }}>
                                 <Camera size={18} /> {tt('dash.tenant.attachPhotos', 'ATTACH PHOTOS')}
                             </Typography>
                             {uploadingPhotos && <CircularProgress size={22} sx={{ color: binThemeTokens.gold, mb: 2 }} />}

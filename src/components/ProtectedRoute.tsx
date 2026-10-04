@@ -51,7 +51,7 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles,
         return (
             <Box role="status" aria-live="polite" sx={{ minHeight: '100vh', display: 'grid', placeItems: 'center', bgcolor: binThemeTokens.canvas }}>
                 <Stack spacing={2} alignItems="center">
-                    <CircularProgress sx={{ color: binThemeTokens.gold }} />
+                    <CircularProgress sx={{ color: binThemeTokens.goldText }} />
                     <Typography color={binThemeTokens.textSecondary}>
                         {lang === 'ar' ? 'جارٍ التحقق من حالة الحساب…' : 'Verifying account status…'}
                     </Typography>
@@ -244,7 +244,7 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles,
                     }}>
                         <Lock size={64} color={binThemeTokens.gold} />
                     </Box>
-                    <Typography variant="h3" sx={{ color: binThemeTokens.goldHover, fontWeight: 900, mb: 2, letterSpacing: -1 }}>
+                    <Typography variant="h3" sx={{ color: binThemeTokens.goldText, fontWeight: 900, mb: 2, letterSpacing: -1 }}>
                         {isPendingApproval ? t('lock.title_offline') : t('lock.title')}
                     </Typography>
                     <Typography variant="h6" sx={{ color: binThemeTokens.textSecondary, mb: 4, maxWidth: 600, fontWeight: 700 }}>
@@ -272,7 +272,7 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles,
                             <Button
                                 variant="outlined"
                                 href="/owner/contracts"
-                                sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.goldHover, fontWeight: 900, px: 4 }}
+                                sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.goldText, fontWeight: 900, px: 4 }}
                             >
                                 {isRTL ? 'العقود والدفع' : 'CONTRACTS & PAYMENT'}
                             </Button>

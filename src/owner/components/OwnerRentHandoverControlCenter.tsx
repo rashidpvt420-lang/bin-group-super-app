@@ -52,9 +52,9 @@ function statusFor(row: LedgerRow) {
 }
 
 function statusChip(status: string) {
-  if (status === 'PAID') return { color: '#10b981', bg: alpha('#10b981', 0.1) };
-  if (status === 'OVERDUE') return { color: '#ef4444', bg: alpha('#ef4444', 0.1) };
-  return { color: '#f59e0b', bg: alpha('#f59e0b', 0.1) };
+  if (status === 'PAID') return { color: '#047857', bg: alpha('#10b981', 0.1) };
+  if (status === 'OVERDUE') return { color: '#B91C1C', bg: alpha('#ef4444', 0.1) };
+  return { color: '#92400E', bg: alpha('#f59e0b', 0.1) };
 }
 
 export default function OwnerRentHandoverControlCenter({
@@ -76,8 +76,8 @@ export default function OwnerRentHandoverControlCenter({
   const collectionRate = ledgerSummary?.collectionRate || 0;
 
   const cards = [
-    { label: tx('owner.money.rentDue', 'Rent Due'), value: money(rentDue), icon: <CreditCard size={20} />, color: binThemeTokens.goldHover },
-    { label: tx('owner.money.rentCollected', 'Rent Collected'), value: money(rentPaid), icon: <CheckCircle2 size={20} />, color: '#10b981' },
+    { label: tx('owner.money.rentDue', 'Rent Due'), value: money(rentDue), icon: <CreditCard size={20} />, color: binThemeTokens.goldText },
+    { label: tx('owner.money.rentCollected', 'Rent Collected'), value: money(rentPaid), icon: <CheckCircle2 size={20} />, color: '#047857' },
     { label: tx('owner.money.balance', 'Balance'), value: money(balance), icon: <AlertTriangle size={20} />, color: balance > 0 ? '#f59e0b' : '#10b981' },
     { label: tx('owner.money.collectionRate', 'Collection Rate'), value: `${collectionRate}%`, icon: <ReceiptText size={20} />, color: collectionRate >= 90 ? '#10b981' : '#f59e0b' },
     { label: tx('owner.money.pendingVerification', 'Pending Verification'), value: pendingPayments, icon: <FileText size={20} />, color: pendingPayments ? '#f59e0b' : '#10b981' },
@@ -155,7 +155,7 @@ export default function OwnerRentHandoverControlCenter({
                   <TableCell><Chip size="small" label={status} sx={{ bgcolor: colors.bg, color: colors.color, fontWeight: 950 }} /></TableCell>
                   <TableCell>{row.lastPaymentDate || '—'}</TableCell>
                   <TableCell align="right">
-                    <Button size="small" onClick={() => navigate(`/owner/financials?tenantLedgerRow=${encodeURIComponent(row.id)}`)} sx={{ color: binThemeTokens.goldHover, fontWeight: 950 }}>
+                    <Button size="small" onClick={() => navigate(`/owner/financials?tenantLedgerRow=${encodeURIComponent(row.id)}`)} sx={{ color: binThemeTokens.goldText, fontWeight: 950 }}>
                       {tx('owner.ledger.viewProof', 'View Proof')}
                     </Button>
                   </TableCell>

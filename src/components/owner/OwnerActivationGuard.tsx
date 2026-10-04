@@ -79,7 +79,7 @@ export default function OwnerActivationGuard({ children }: { children: React.Rea
               variant="outlined"
               startIcon={<FileText size={18} />}
               onClick={() => navigate(contractRoute(profile))}
-              sx={{ borderColor: alpha(binThemeTokens.gold, 0.45), color: binThemeTokens.gold, fontWeight: 950, borderRadius: 3, px: 3, py: 1.4 }}
+              sx={{ borderColor: alpha(binThemeTokens.gold, 0.45), color: binThemeTokens.goldText, fontWeight: 950, borderRadius: 3, px: 3, py: 1.4 }}
             >
               {copy('Review Contracts', 'مراجعة العقود')}
             </Button>

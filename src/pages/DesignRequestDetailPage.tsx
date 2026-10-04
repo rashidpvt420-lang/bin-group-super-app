@@ -225,7 +225,7 @@ function DesignRequestDetailContent() {
         }
     };
 
-    if (loading) return <Box sx={{ height: '80vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><CircularProgress sx={{ color: binThemeTokens.gold }} /></Box>;
+    if (loading) return <Box sx={{ height: '80vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><CircularProgress sx={{ color: binThemeTokens.goldText }} /></Box>;
     if (!request) return <Container sx={{ py: 10 }}>{actionError ? <Alert severity="error">{actionError}</Alert> : <Typography>Design request not found.</Typography>}</Container>;
 
     const { scope = {}, quote = {} } = request;

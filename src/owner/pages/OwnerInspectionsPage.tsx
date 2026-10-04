@@ -155,7 +155,7 @@ export default function OwnerInspectionsPage() {
     <Box>
       <Stack spacing={3}>
         <Box>
-          <Typography variant="overline" sx={{ color: binThemeTokens.goldHover, fontWeight: 950, letterSpacing: 3 }}>{tx('owner.inspections.overline', 'OWNER HANDOVER EVIDENCE')}</Typography>
+          <Typography variant="overline" sx={{ color: binThemeTokens.goldText, fontWeight: 950, letterSpacing: 3 }}>{tx('owner.inspections.overline', 'OWNER HANDOVER EVIDENCE')}</Typography>
           <Typography variant="h3" sx={{ color: binThemeTokens.textPrimary, fontWeight: 950 }}>{tx('owner.inspections.title', 'Move-In / Move-Out Reviews')}</Typography>
           <Typography sx={{ color: binThemeTokens.textSecondary, mt: 1, fontWeight: 700 }}>{tx('owner.inspections.subtitle', 'Review condition reports, settlement status, and handover evidence linked to your properties.')}</Typography>
         </Box>
@@ -163,9 +163,9 @@ export default function OwnerInspectionsPage() {
         <Grid container spacing={2}>
           {[
             { label: tx('owner.inspections.pending', 'Pending Reviews'), value: pending, icon: <ShieldAlert size={22} />, color: pending ? '#f59e0b' : '#10b981' },
-            { label: tx('owner.inspections.moveIns', 'Move-In Reports'), value: moveIns, icon: <Home size={22} />, color: binThemeTokens.goldHover },
-            { label: tx('owner.inspections.moveOuts', 'Move-Out Reports'), value: moveOuts, icon: <ClipboardCheck size={22} />, color: binThemeTokens.goldHover },
-            { label: tx('owner.inspections.settlements', 'Settlement Ledgers'), value: settlementCount, icon: <ReceiptText size={22} />, color: '#3b82f6' },
+            { label: tx('owner.inspections.moveIns', 'Move-In Reports'), value: moveIns, icon: <Home size={22} />, color: binThemeTokens.goldText },
+            { label: tx('owner.inspections.moveOuts', 'Move-Out Reports'), value: moveOuts, icon: <ClipboardCheck size={22} />, color: binThemeTokens.goldText },
+            { label: tx('owner.inspections.settlements', 'Settlement Ledgers'), value: settlementCount, icon: <ReceiptText size={22} />, color: '#1D4ED8' },
           ].map((card) => (
             <Grid item xs={12} sm={6} md={3} key={card.label}>
               <Paper sx={{ p: 3, borderRadius: 5, border: `1px solid ${alpha(card.color, 0.2)}`, bgcolor: alpha(card.color, 0.06) }}>
@@ -206,18 +206,18 @@ export default function OwnerInspectionsPage() {
                         <Grid item xs={6}><Typography variant="caption" color="text.secondary">Tenant Refund / Balance Due</Typography><Typography fontWeight={950}>{ledger.balanceDue > 0 ? `${money(ledger.balanceDue)} due` : `${money(ledger.balanceToTenant)} refund`}</Typography></Grid>
                       </Grid>
                       {inspection.depositNotes && <Typography variant="caption" sx={{ display: 'block', mt: 1.5, color: binThemeTokens.textSecondary }}>Notes: {inspection.depositNotes}</Typography>}
-                      {poorItems.length > 0 && <Typography variant="caption" sx={{ display: 'block', mt: 1, color: '#ef4444', fontWeight: 800 }}>{poorItems.length} flagged condition item(s)</Typography>}
+                      {poorItems.length > 0 && <Typography variant="caption" sx={{ display: 'block', mt: 1, color: '#B91C1C', fontWeight: 800 }}>{poorItems.length} flagged condition item(s)</Typography>}
                     </Paper>
 
                     <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
                       {urls.map((url, index) => (
-                        <Button key={`${inspection.id}-evidence-${index}`} variant="outlined" onClick={() => window.open(url, '_blank', 'noopener,noreferrer')} startIcon={<Eye size={16} />} sx={{ borderColor: binThemeTokens.goldHover, color: binThemeTokens.goldHover, fontWeight: 950 }}>
+                        <Button key={`${inspection.id}-evidence-${index}`} variant="outlined" onClick={() => window.open(url, '_blank', 'noopener,noreferrer')} startIcon={<Eye size={16} />} sx={{ borderColor: binThemeTokens.goldHover, color: binThemeTokens.goldText, fontWeight: 950 }}>
                           Evidence {index + 1}
                         </Button>
                       ))}
-                      <Button variant="outlined" disabled={busyId === `${inspection.id}:APPROVED`} onClick={() => updateInspection(inspection, 'APPROVED')} sx={{ borderColor: '#10b981', color: '#10b981', fontWeight: 950 }}>{busyId === `${inspection.id}:APPROVED` ? <CircularProgress size={16} /> : tx('owner.inspections.approve', 'Approve Condition')}</Button>
-                      <Button variant="outlined" disabled={busyId === `${inspection.id}:REINSPECTION_REQUESTED`} onClick={() => updateInspection(inspection, 'REINSPECTION_REQUESTED')} sx={{ borderColor: '#f59e0b', color: '#f59e0b', fontWeight: 950 }}>{busyId === `${inspection.id}:REINSPECTION_REQUESTED` ? <CircularProgress size={16} /> : tx('owner.inspections.claim', 'Claim / Reinspection')}</Button>
-                      <Button variant="outlined" disabled={busyId === `${inspection.id}:SETTLEMENT_REQUESTED`} onClick={() => updateInspection(inspection, 'SETTLEMENT_REQUESTED')} sx={{ borderColor: '#3b82f6', color: '#3b82f6', fontWeight: 950 }}>{busyId === `${inspection.id}:SETTLEMENT_REQUESTED` ? <CircularProgress size={16} /> : tx('owner.inspections.settlement', 'Settlement')}</Button>
+                      <Button variant="outlined" disabled={busyId === `${inspection.id}:APPROVED`} onClick={() => updateInspection(inspection, 'APPROVED')} sx={{ borderColor: '#10b981', color: '#047857', fontWeight: 950 }}>{busyId === `${inspection.id}:APPROVED` ? <CircularProgress size={16} /> : tx('owner.inspections.approve', 'Approve Condition')}</Button>
+                      <Button variant="outlined" disabled={busyId === `${inspection.id}:REINSPECTION_REQUESTED`} onClick={() => updateInspection(inspection, 'REINSPECTION_REQUESTED')} sx={{ borderColor: '#f59e0b', color: '#92400E', fontWeight: 950 }}>{busyId === `${inspection.id}:REINSPECTION_REQUESTED` ? <CircularProgress size={16} /> : tx('owner.inspections.claim', 'Claim / Reinspection')}</Button>
+                      <Button variant="outlined" disabled={busyId === `${inspection.id}:SETTLEMENT_REQUESTED`} onClick={() => updateInspection(inspection, 'SETTLEMENT_REQUESTED')} sx={{ borderColor: '#3b82f6', color: '#1D4ED8', fontWeight: 950 }}>{busyId === `${inspection.id}:SETTLEMENT_REQUESTED` ? <CircularProgress size={16} /> : tx('owner.inspections.settlement', 'Settlement')}</Button>
                     </Stack>
                   </Stack>
                 </Paper>

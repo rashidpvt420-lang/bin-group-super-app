@@ -359,7 +359,7 @@ export default function TenantMarketplacePage() {
             </Typography>
             <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
               <Chip icon={<SafeIcon icon={ShieldCheck} size={14} />} label={copy('tenant.home.verified', 'BIN verified', 'موثق من BIN')} sx={{ bgcolor: alpha('#16A34A', 0.1), color: '#15803D', fontWeight: 900 }} />
-              <Chip icon={<SafeIcon icon={CalendarDays} size={14} />} label={copy('tenant.home.viewings', 'Viewing requests', 'طلبات المعاينة')} sx={{ bgcolor: alpha(gold, 0.12), color: binThemeTokens.goldHover, fontWeight: 900 }} />
+              <Chip icon={<SafeIcon icon={CalendarDays} size={14} />} label={copy('tenant.home.viewings', 'Viewing requests', 'طلبات المعاينة')} sx={{ bgcolor: alpha(gold, 0.12), color: binThemeTokens.goldText, fontWeight: 900 }} />
               <Chip icon={<SafeIcon icon={WalletCards} size={14} />} label={copy('tenant.home.fullJourney', 'Contract → move-in → maintenance', 'العقد ← الاستلام ← الصيانة')} sx={{ bgcolor: '#F7F8FA', color: '#475467', fontWeight: 900 }} />
             </Stack>
           </Stack>
@@ -433,12 +433,12 @@ export default function TenantMarketplacePage() {
 
             <Stack direction={isRTL ? 'row-reverse' : 'row'} justifyContent="space-between" alignItems="center" spacing={1} flexWrap="wrap" useFlexGap>
               <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} alignItems="center">
-                <SafeIcon icon={SlidersHorizontal} size={17} style={{ color: binThemeTokens.goldHover }} />
+                <SafeIcon icon={SlidersHorizontal} size={17} style={{ color: binThemeTokens.goldText }} />
                 <Typography sx={{ color: binThemeTokens.textSecondary, fontWeight: 800 }}>
                   {copy('tenant.home.matches', `${filteredListings.length} homes match`, `${filteredListings.length} عقار مطابق`)}
                 </Typography>
               </Stack>
-              <Button onClick={resetFilters} sx={{ color: binThemeTokens.goldHover, fontWeight: 900, textTransform: 'none' }}>{copy('tenant.home.reset', 'Reset filters', 'إعادة التصفية')}</Button>
+              <Button onClick={resetFilters} sx={{ color: binThemeTokens.goldText, fontWeight: 900, textTransform: 'none' }}>{copy('tenant.home.reset', 'Reset filters', 'إعادة التصفية')}</Button>
             </Stack>
           </Stack>
         </Paper>
@@ -481,7 +481,7 @@ export default function TenantMarketplacePage() {
                       </Box>
 
                       <Box>
-                        <Typography variant="h5" sx={{ color: binThemeTokens.goldHover, fontWeight: 950 }}>{annualRent > 0 ? money(annualRent) : money(listing.monthlyRent)}</Typography>
+                        <Typography variant="h5" sx={{ color: binThemeTokens.goldText, fontWeight: 950 }}>{annualRent > 0 ? money(annualRent) : money(listing.monthlyRent)}</Typography>
                         <Typography variant="caption" sx={{ color: binThemeTokens.textTertiary, fontWeight: 800 }}>{annualRent > 0 ? copy('tenant.home.perYear', 'per year', 'سنوياً') : copy('tenant.home.priceRequest', 'price on request', 'السعر عند الطلب')}</Typography>
                       </Box>
 
@@ -502,7 +502,7 @@ export default function TenantMarketplacePage() {
                     </Stack>
 
                     <Stack direction="row" spacing={1.2} sx={{ mt: 2.5 }}>
-                      <Button fullWidth variant="outlined" onClick={() => setSelected(listing)} sx={{ borderColor: alpha(gold, 0.48), color: binThemeTokens.goldHover, fontWeight: 950, borderRadius: 3 }}>
+                      <Button fullWidth variant="outlined" onClick={() => setSelected(listing)} sx={{ borderColor: alpha(gold, 0.48), color: binThemeTokens.goldText, fontWeight: 950, borderRadius: 3 }}>
                         {copy('tenant.home.details', 'View details', 'عرض التفاصيل')}
                       </Button>
                       <Button fullWidth variant="contained" disabled={submittingKey === `${listing.id}:VIEWING`} onClick={() => submitInterest(listing, 'VIEWING')} sx={{ bgcolor: gold, color: '#111827', fontWeight: 950, borderRadius: 3 }}>
@@ -529,7 +529,7 @@ export default function TenantMarketplacePage() {
             <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary, mt: 1, maxWidth: 620, mx: 'auto' }}>
               {copy('tenant.home.noneDesc', 'Adjust your filters or save your search. New approved owner inventory will appear here when it becomes available.', 'عدّل عوامل التصفية أو احفظ بحثك. ستظهر هنا عقارات الملاك المعتمدة الجديدة عند توفرها.')}
             </Typography>
-            {listings.length > 0 && <Button onClick={resetFilters} sx={{ mt: 2, color: binThemeTokens.goldHover, fontWeight: 950 }}>{copy('tenant.home.reset', 'Reset filters', 'إعادة التصفية')}</Button>}
+            {listings.length > 0 && <Button onClick={resetFilters} sx={{ mt: 2, color: binThemeTokens.goldText, fontWeight: 950 }}>{copy('tenant.home.reset', 'Reset filters', 'إعادة التصفية')}</Button>}
           </Paper>
         )}
       </Stack>
@@ -558,7 +558,7 @@ export default function TenantMarketplacePage() {
 
                   <Stack direction={{ xs: 'column', sm: isRTL ? 'row-reverse' : 'row' }} justifyContent="space-between" spacing={2}>
                     <Box sx={{ textAlign: isRTL ? 'right' : 'left' }}>
-                      <Typography variant="h4" sx={{ color: binThemeTokens.goldHover, fontWeight: 950 }}>{annualRent > 0 ? money(annualRent) : money(selected.monthlyRent)}</Typography>
+                      <Typography variant="h4" sx={{ color: binThemeTokens.goldText, fontWeight: 950 }}>{annualRent > 0 ? money(annualRent) : money(selected.monthlyRent)}</Typography>
                       <Typography sx={{ color: binThemeTokens.textSecondary, fontWeight: 750 }}>{locationLabel(selected)}</Typography>
                     </Box>
                     <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap alignContent="flex-start">
@@ -576,7 +576,7 @@ export default function TenantMarketplacePage() {
                     ].map(([Icon, label, value]: any) => (
                       <Grid item xs={6} sm={3} key={label}>
                         <Paper sx={{ p: 2, border: `1px solid ${binThemeTokens.border}`, borderRadius: 3, bgcolor: '#FAFAFB' }}>
-                          <SafeIcon icon={Icon} size={18} style={{ color: binThemeTokens.goldHover }} />
+                          <SafeIcon icon={Icon} size={18} style={{ color: binThemeTokens.goldText }} />
                           <Typography variant="caption" sx={{ display: 'block', mt: 0.8, color: binThemeTokens.textTertiary, fontWeight: 800 }}>{label}</Typography>
                           <Typography sx={{ color: binThemeTokens.textPrimary, fontWeight: 950 }}>{value}</Typography>
                         </Paper>
@@ -613,7 +613,7 @@ export default function TenantMarketplacePage() {
 
                   <Box>
                     <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} alignItems="center" sx={{ mb: 1 }}>
-                      <SafeIcon icon={Wrench} size={17} style={{ color: binThemeTokens.goldHover }} />
+                      <SafeIcon icon={Wrench} size={17} style={{ color: binThemeTokens.goldText }} />
                       <Typography variant="h6" sx={{ fontWeight: 950 }}>{copy('tenant.home.repairHistory', 'Maintenance history', 'سجل الصيانة')}</Typography>
                     </Stack>
                     <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary }}>
@@ -627,7 +627,7 @@ export default function TenantMarketplacePage() {
 
                   {(mapHref || selected.permitNumber || selected.permitVerificationUrl) && (
                     <Stack direction="row" spacing={1.2} flexWrap="wrap" useFlexGap>
-                      {mapHref && <Button component="a" href={mapHref} target="_blank" rel="noreferrer" startIcon={<SafeIcon icon={MapPin} size={16} />} endIcon={<SafeIcon icon={ExternalLink} size={14} />} sx={{ color: binThemeTokens.goldHover, fontWeight: 900 }}>{copy('tenant.home.openMap', 'Open location', 'فتح الموقع')}</Button>}
+                      {mapHref && <Button component="a" href={mapHref} target="_blank" rel="noreferrer" startIcon={<SafeIcon icon={MapPin} size={16} />} endIcon={<SafeIcon icon={ExternalLink} size={14} />} sx={{ color: binThemeTokens.goldText, fontWeight: 900 }}>{copy('tenant.home.openMap', 'Open location', 'فتح الموقع')}</Button>}
                       {selected.permitVerificationUrl && <Button component="a" href={selected.permitVerificationUrl} target="_blank" rel="noreferrer" startIcon={<SafeIcon icon={ShieldCheck} size={16} />} endIcon={<SafeIcon icon={ExternalLink} size={14} />} sx={{ color: '#0369A1', fontWeight: 900 }}>{copy('tenant.home.verifyPermit', 'Verify listing permit', 'تحقق من تصريح الإعلان')}</Button>}
                       {selected.permitNumber && <Chip label={`${copy('tenant.home.permit', 'Permit', 'التصريح')}: ${selected.permitNumber}`} />}
                     </Stack>
@@ -636,7 +636,7 @@ export default function TenantMarketplacePage() {
               </DialogContent>
               <DialogActions sx={{ p: 2.5, gap: 1, flexWrap: 'wrap' }}>
                 <Button onClick={() => setSelected(null)} sx={{ color: binThemeTokens.textSecondary, fontWeight: 850 }}>{copy('common.close', 'Close', 'إغلاق')}</Button>
-                <Button variant="outlined" disabled={submittingKey === `${selected.id}:VIEWING`} onClick={() => submitInterest(selected, 'VIEWING')} sx={{ borderColor: alpha(gold, 0.5), color: binThemeTokens.goldHover, fontWeight: 950 }}>{copy('tenant.home.bookViewing', 'Book viewing', 'حجز معاينة')}</Button>
+                <Button variant="outlined" disabled={submittingKey === `${selected.id}:VIEWING`} onClick={() => submitInterest(selected, 'VIEWING')} sx={{ borderColor: alpha(gold, 0.5), color: binThemeTokens.goldText, fontWeight: 950 }}>{copy('tenant.home.bookViewing', 'Book viewing', 'حجز معاينة')}</Button>
                 <Button variant="contained" disabled={submittingKey === `${selected.id}:APPLY`} onClick={() => submitInterest(selected, 'APPLY')} startIcon={<SafeIcon icon={CheckCircle2} size={17} />} sx={{ bgcolor: gold, color: '#111827', fontWeight: 950 }}>{submittingKey === `${selected.id}:APPLY` ? <CircularProgress size={18} sx={{ color: '#111827' }} /> : copy('tenant.home.apply', 'Apply for this home', 'التقديم لهذا العقار')}</Button>
               </DialogActions>
             </>

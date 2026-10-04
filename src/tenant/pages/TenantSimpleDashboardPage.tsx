@@ -64,7 +64,7 @@ export default function TenantSimpleDashboardPage() {
     <Box sx={{ direction: isRTL ? 'rtl' : 'ltr', minWidth: 0, overflowX: 'hidden' }}>
       <Stack spacing={4} sx={{ minWidth: 0 }}>
         <Box sx={{ textAlign: isRTL ? 'right' : 'left', minWidth: 0 }}>
-          <Typography variant="overline" sx={{ color: binThemeTokens.goldHover, fontWeight: 950, letterSpacing: 3 }}>
+          <Typography variant="overline" sx={{ color: binThemeTokens.goldText, fontWeight: 950, letterSpacing: 3 }}>
             {tx('tenant.simple.overline', 'TENANT SIMPLE MODE')}
           </Typography>
           <Typography variant="h3" sx={{ color: binThemeTokens.textPrimary, fontWeight: 950, mt: 1, ...readableTextSx }}>
@@ -122,7 +122,7 @@ export default function TenantSimpleDashboardPage() {
         >
           <Stack spacing={2.5} sx={{ textAlign: isRTL ? 'right' : 'left' }}>
             <Box>
-              <Typography variant="overline" sx={{ color: binThemeTokens.goldHover, fontWeight: 950, letterSpacing: 2 }}>
+              <Typography variant="overline" sx={{ color: binThemeTokens.goldText, fontWeight: 950, letterSpacing: 2 }}>
                 {tx('tenant.simple.oneTap', 'ONE-TAP MAINTENANCE')}
               </Typography>
               <Typography variant="h6" sx={{ color: binThemeTokens.textPrimary, fontWeight: 950 }}>
@@ -160,7 +160,7 @@ export default function TenantSimpleDashboardPage() {
                       }}
                     >
                       <Stack spacing={1} alignItems={isRTL ? 'flex-end' : 'flex-start'} sx={{ width: '100%', minWidth: 0 }}>
-                        <Box sx={{ color: binThemeTokens.goldHover }}>{item.icon}</Box>
+                        <Box sx={{ color: binThemeTokens.goldText }}>{item.icon}</Box>
                         <Typography sx={{ color: binThemeTokens.textPrimary, fontWeight: 950, ...readableTextSx }}>{itemLabel}</Typography>
                         <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, ...readableTextSx }}>
                           {item.priority === 'urgent'
@@ -187,7 +187,7 @@ export default function TenantSimpleDashboardPage() {
         >
           <Stack spacing={2.5} sx={{ textAlign: isRTL ? 'right' : 'left' }}>
             <Box>
-              <Typography variant="overline" sx={{ color: binThemeTokens.goldHover, fontWeight: 950, letterSpacing: 2 }}>
+              <Typography variant="overline" sx={{ color: binThemeTokens.goldText, fontWeight: 950, letterSpacing: 2 }}>
                 {tx('tenant.services.overline', 'PLANNED HOME SERVICES')}
               </Typography>
               <Typography variant="h6" sx={{ color: binThemeTokens.textPrimary, fontWeight: 950 }}>
@@ -220,10 +220,10 @@ export default function TenantSimpleDashboardPage() {
                     }}
                   >
                     <Stack spacing={1} alignItems={isRTL ? 'flex-end' : 'flex-start'} sx={{ width: '100%', minWidth: 0 }}>
-                      <Box sx={{ color: binThemeTokens.goldHover }}>{service.icon}</Box>
+                      <Box sx={{ color: binThemeTokens.goldText }}>{service.icon}</Box>
                       <Typography sx={{ color: binThemeTokens.textPrimary, fontWeight: 950, ...readableTextSx }}>{ar ? service.ar : service.en}</Typography>
                       <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, lineHeight: 1.5, ...readableTextSx }}>{ar ? service.descriptionAr : service.descriptionEn}</Typography>
-                      <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={0.6} alignItems="center" sx={{ color: binThemeTokens.goldHover }}>
+                      <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={0.6} alignItems="center" sx={{ color: binThemeTokens.goldText }}>
                         <CalendarDays size={14} />
                         <Typography variant="caption" sx={{ fontWeight: 950 }}>{ar ? 'حجز الخدمة' : 'Schedule service'}</Typography>
                       </Stack>
@@ -261,7 +261,7 @@ export default function TenantSimpleDashboardPage() {
 
         <Button
           onClick={() => navigate('/tenant/dashboard/full')}
-          sx={{ alignSelf: isRTL ? 'flex-end' : 'flex-start', color: binThemeTokens.goldHover, fontWeight: 950 }}
+          sx={{ alignSelf: isRTL ? 'flex-end' : 'flex-start', color: binThemeTokens.goldText, fontWeight: 950 }}
         >
           {tx('tenant.simple.advanced', 'Open advanced dashboard')}
         </Button>

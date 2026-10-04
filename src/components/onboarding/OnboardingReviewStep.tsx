@@ -16,8 +16,8 @@ const OnboardingReviewStep: React.FC<{ onNext: () => void; onBack: () => void }>
     const SummarySection = ({ icon, title, children }: { icon: React.ReactNode, title: string, children: React.ReactNode }) => (
         <Box sx={{ mb: 4 }}>
             <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 2 }}>
-                <Box sx={{ color: binThemeTokens.gold }}>{icon}</Box>
-                <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 2 }}>
+                <Box sx={{ color: binThemeTokens.goldText }}>{icon}</Box>
+                <Typography variant="overline" sx={{ color: binThemeTokens.goldText, fontWeight: 900, letterSpacing: 2 }}>
                     {title}
                 </Typography>
             </Stack>
@@ -47,7 +47,7 @@ const OnboardingReviewStep: React.FC<{ onNext: () => void; onBack: () => void }>
                         </Grid>
                         <Grid item xs={6} md={4}>
                             <Typography variant="caption" color="text.secondary">QUALITY GRADE</Typography>
-                            <Typography variant="body1" fontWeight="900" sx={{ color: binThemeTokens.gold }}>{activeProperty?.assetGrade}</Typography>
+                            <Typography variant="body1" fontWeight="900" sx={{ color: binThemeTokens.goldText }}>{activeProperty?.assetGrade}</Typography>
                         </Grid>
                         <Grid item xs={6} md={4}>
                             <Typography variant="caption" color="text.secondary">UNITS / FLOORS</Typography>

@@ -84,7 +84,7 @@ export default function RoleQuickActionsPanel({ role, title = 'Simple Mode', sub
     >
       <Stack spacing={2.5} sx={{ textAlign: isRTL ? 'right' : 'left' }}>
         <Box>
-          <Typography variant="overline" sx={{ color: binThemeTokens.goldHover, fontWeight: 950, letterSpacing: 2 }}>{title}</Typography>
+          <Typography variant="overline" sx={{ color: binThemeTokens.goldText, fontWeight: 950, letterSpacing: 2 }}>{title}</Typography>
           <Typography variant="body2" sx={{ color: subtitleColor, mt: 0.5 }}>{subtitle}</Typography>
         </Box>
         <Grid container spacing={2}>
@@ -116,7 +116,7 @@ export default function RoleQuickActionsPanel({ role, title = 'Simple Mode', sub
                   }}
                 >
                   <Stack spacing={1} alignItems={isRTL ? 'flex-end' : 'flex-start'}>
-                    <Box sx={{ color: binThemeTokens.goldHover }}>{ICONS[action.id] || <Activity size={22} />}</Box>
+                    <Box sx={{ color: binThemeTokens.goldText }}>{ICONS[action.id] || <Activity size={22} />}</Box>
                     <Typography sx={{ color: cardTextColor, fontWeight: 950 }}>{copy?.label || action.label}</Typography>
                     <Typography variant="caption" sx={{ color: cardDetailColor, lineHeight: 1.45 }}>{copy?.whyItMatters || action.whyItMatters}</Typography>
                   </Stack>

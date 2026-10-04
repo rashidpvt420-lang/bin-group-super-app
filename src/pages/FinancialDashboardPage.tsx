@@ -149,8 +149,8 @@ export default function FinancialDashboardPage() {
 
   const kpis = [
     { label: t('fin.kpi.total_collection'), val: safeFinancials.totalRentCollected, color: binThemeTokens.textPrimary, icon: <Wallet size={20} /> },
-    { label: t('fin.kpi.sovereign_payout'), val: safeFinancials.netPayout, color: binThemeTokens.gold, icon: <ShieldCheck size={20} /> },
-    { label: t('fin.kpi.pending_liquidity'), val: safeFinancials.pendingPayments, color: binThemeTokens.goldLight, icon: <Landmark size={20} /> },
+    { label: t('fin.kpi.sovereign_payout'), val: safeFinancials.netPayout, color: binThemeTokens.goldText, icon: <ShieldCheck size={20} /> },
+    { label: t('fin.kpi.pending_liquidity'), val: safeFinancials.pendingPayments, color: binThemeTokens.goldText, icon: <Landmark size={20} /> },
     { label: t('fin.kpi.overdue_deficit'), val: safeFinancials.overdueAmount, color: '#ff4d4d', icon: <TrendingUp size={20} /> },
   ];
 
@@ -164,7 +164,7 @@ export default function FinancialDashboardPage() {
         mb: 8, gap: 4 
       }}>
         <Box>
-            <Typography variant="h3" fontWeight="900" sx={{ color: binThemeTokens.gold, letterSpacing: -1, fontSize: { xs: '2.4rem', md: '3rem' } }}>{t('fin.title')}</Typography>
+            <Typography variant="h3" fontWeight="900" sx={{ color: binThemeTokens.goldText, letterSpacing: -1, fontSize: { xs: '2.4rem', md: '3rem' } }}>{t('fin.title')}</Typography>
             <Typography variant="body1" sx={{ color: binThemeTokens.textSecondary, fontWeight: 600 }}>{t('fin.subtitle')}</Typography>
         </Box>
         <Button 
@@ -172,7 +172,7 @@ export default function FinancialDashboardPage() {
             onClick={handleExportCSV}
             startIcon={<Download size={20} />}
             sx={{ 
-                color: binThemeTokens.gold, 
+                color: binThemeTokens.goldText, 
                 borderColor: binThemeTokens.gold, 
                 px: 4, py: 2, 
                 fontWeight: 900, 
@@ -216,7 +216,7 @@ export default function FinancialDashboardPage() {
               p: 4, borderRadius: 6, bgcolor: 'rgba(22, 22, 24, 0.6)', 
               border: '1px solid rgba(255,255,255,0.05)', mb: 4
           }}>
-            <Typography variant="h6" fontWeight="900" sx={{ mb: 4, color: binThemeTokens.gold, letterSpacing: 1 }}>{t('fin.deductions_title')}</Typography>
+            <Typography variant="h6" fontWeight="900" sx={{ mb: 4, color: binThemeTokens.goldText, letterSpacing: 1 }}>{t('fin.deductions_title')}</Typography>
             <Stack spacing={4} divider={<Divider sx={{ borderColor: 'rgba(255,255,255,0.05)' }} />}>
                 {[
                     { label: t('fin.deduction.fee'), desc: t('fin.deduction.fee_desc'), val: safeFinancials.breakdown.binGroupFee },
@@ -237,8 +237,8 @@ export default function FinancialDashboardPage() {
 
             <Box sx={{ mt: 6, p: 3, borderRadius: 4, bgcolor: 'rgba(198,167,94,0.05)', border: '1px solid rgba(198,167,94,0.1)' }}>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Typography variant="h6" fontWeight="900" sx={{ color: binThemeTokens.gold }}>{t('fin.total_deductions')}</Typography>
-                <Typography variant="h4" fontWeight="900" sx={{ color: binThemeTokens.goldLight }}>
+                <Typography variant="h6" fontWeight="900" sx={{ color: binThemeTokens.goldText }}>{t('fin.total_deductions')}</Typography>
+                <Typography variant="h4" fontWeight="900" sx={{ color: binThemeTokens.goldText }}>
                   AED {formatAED((Object.values(safeFinancials.breakdown) as number[]).reduce((a, b) => a + b, 0))}
                 </Typography>
               </Box>
@@ -319,10 +319,10 @@ export default function FinancialDashboardPage() {
             <Table>
                 <TableHead>
                     <TableRow>
-                        <TableCell sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>{t('fin.log.date')}</TableCell>
-                        <TableCell sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>{t('fin.log.hash')}</TableCell>
-                        <TableCell sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>{t('fin.log.amount')}</TableCell>
-                        <TableCell sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>{t('fin.log.status')}</TableCell>
+                        <TableCell sx={{ color: binThemeTokens.goldText, fontWeight: 900 }}>{t('fin.log.date')}</TableCell>
+                        <TableCell sx={{ color: binThemeTokens.goldText, fontWeight: 900 }}>{t('fin.log.hash')}</TableCell>
+                        <TableCell sx={{ color: binThemeTokens.goldText, fontWeight: 900 }}>{t('fin.log.amount')}</TableCell>
+                        <TableCell sx={{ color: binThemeTokens.goldText, fontWeight: 900 }}>{t('fin.log.status')}</TableCell>
                     </TableRow>
                 </TableHead>
                 <TableBody>
@@ -334,7 +334,7 @@ export default function FinancialDashboardPage() {
                                 {tx.type === 'debit' ? '-' : '+'} AED {formatAED(tx.amount)}
                             </TableCell>
                             <TableCell>
-                                <Chip label={t('status.settled')} size="small" sx={{ bgcolor: 'rgba(198, 167, 94, 0.1)', color: binThemeTokens.gold, border: '1px solid rgba(198, 167, 94, 0.4)' }} />
+                                <Chip label={t('status.settled')} size="small" sx={{ bgcolor: 'rgba(198, 167, 94, 0.1)', color: binThemeTokens.goldText, border: '1px solid rgba(198, 167, 94, 0.4)' }} />
                             </TableCell>
                         </TableRow>
                     ))}

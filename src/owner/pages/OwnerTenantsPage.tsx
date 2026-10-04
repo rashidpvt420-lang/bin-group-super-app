@@ -145,7 +145,7 @@ export default function OwnerTenantsPage() {
                                                         fontSize: '0.6rem', 
                                                         fontWeight: 950,
                                                         bgcolor: alpha('#10b981', 0.1),
-                                                        color: '#10b981',
+                                                        color: '#047857',
                                                         mt: 0.5
                                                     }} 
                                                 />

@@ -147,7 +147,7 @@ export default function BrokerAttributionProofPage() {
         </Box>
         {warning && <Alert severity="warning">{warning}</Alert>}
         <Grid container spacing={2}>
-          {[{ label: 'Chains', value: chains.length, icon: <Link2 />, color: gold }, { label: 'Locked / paid', value: locked, icon: <ShieldCheck />, color: '#10b981' }, { label: 'With commission', value: withCommission, icon: <Wallet />, color: '#3b82f6' }, { label: 'Missing links', value: missingLead + missingReferral, icon: <FileText />, color: missingLead + missingReferral ? '#f59e0b' : '#10b981' }].map((card) => (
+          {[{ label: 'Chains', value: chains.length, icon: <Link2 />, color: gold }, { label: 'Locked / paid', value: locked, icon: <ShieldCheck />, color: '#047857' }, { label: 'With commission', value: withCommission, icon: <Wallet />, color: '#1D4ED8' }, { label: 'Missing links', value: missingLead + missingReferral, icon: <FileText />, color: missingLead + missingReferral ? '#f59e0b' : '#10b981' }].map((card) => (
             <Grid item xs={12} sm={6} md={3} key={card.label}><Paper sx={{ p: 3, borderRadius: 4, border: `1px solid ${alpha(card.color, 0.24)}`, bgcolor: alpha(card.color, 0.06) }}><Box sx={{ color: card.color, mb: 1 }}>{card.icon}</Box><Typography variant="h4" sx={{ color: '#111827', fontWeight: 950 }}>{card.value}</Typography><Typography variant="caption" sx={{ color: '#667085', fontWeight: 900 }}>{card.label.toUpperCase()}</Typography></Paper></Grid>
           ))}
         </Grid>

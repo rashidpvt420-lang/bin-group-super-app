@@ -105,7 +105,7 @@ const OwnerReportGenerator: React.FC<OwnerReportGeneratorProps> = ({
             disabled={loading}
             startIcon={loading ? <CircularProgress size={16} color="inherit" /> : <FileText size={18} />}
             sx={{ 
-                color: binThemeTokens.gold, 
+                color: binThemeTokens.goldText, 
                 borderColor: binThemeTokens.gold, 
                 borderRadius: 8, 
                 fontWeight: 950, 

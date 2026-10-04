@@ -51,7 +51,7 @@ const BrokerPageFrame: React.FC<BrokerPageFrameProps> = ({
                             <Typography
                                 variant="overline"
                                 sx={{
-                                    color: binThemeTokens.gold,
+                                    color: binThemeTokens.goldText,
                                     fontWeight: 950,
                                     letterSpacing: 4
                                 }}
@@ -102,7 +102,7 @@ const BrokerPageFrame: React.FC<BrokerPageFrameProps> = ({
             {/* Content Area */}
             {loading ? (
                 <Box sx={{ display: 'flex', justifyContent: 'center', py: 20 }}>
-                    <CircularProgress sx={{ color: binThemeTokens.gold }} />
+                    <CircularProgress sx={{ color: binThemeTokens.goldText }} />
                 </Box>
             ) : (
                 children

@@ -83,7 +83,7 @@ export default function UnifiedDocumentVault({ title = 'Documents', subtitle }: 
                   variant="outlined"
                   disabled={!item.storagePath || opening === item.artifactId}
                   onClick={() => void open(item.artifactId)}
-                  sx={{ color: binThemeTokens.gold, borderColor: 'rgba(198,167,94,.35)', fontWeight: 900 }}
+                  sx={{ color: binThemeTokens.goldText, borderColor: 'rgba(198,167,94,.35)', fontWeight: 900 }}
                 >
                   {opening === item.artifactId ? <CircularProgress size={18} color="inherit" /> : item.storagePath ? 'OPEN AUTHORIZED FILE' : 'METADATA ONLY'}
                 </Button>

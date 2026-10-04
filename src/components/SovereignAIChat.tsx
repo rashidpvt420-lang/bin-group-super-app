@@ -409,7 +409,7 @@ export const SovereignAIChat: React.FC<SovereignAIChatProps> = ({
       <Box sx={{ p: 3, borderTop: '1px solid rgba(255,255,255,0.05)' }}>
         <Box sx={{ mb: 2, display: 'flex', gap: 1, overflowX: 'auto', pb: 1, '&::-webkit-scrollbar': { display: 'none' } }}>
           {activeRole.prompts.map((prompt) => (
-            <Chip key={prompt.label} label={prompt.label} onClick={() => handlePrompt(prompt)} sx={{ bgcolor: 'rgba(255,255,255,0.02)', border: '1px solid rgba(198,167,94,0.3)', color: binThemeTokens.gold, fontWeight: 700, fontSize: '0.7rem', '&:hover': { bgcolor: alpha(binThemeTokens.gold, 0.1) } }} />
+            <Chip key={prompt.label} label={prompt.label} onClick={() => handlePrompt(prompt)} sx={{ bgcolor: 'rgba(255,255,255,0.02)', border: '1px solid rgba(198,167,94,0.3)', color: binThemeTokens.goldText, fontWeight: 700, fontSize: '0.7rem', '&:hover': { bgcolor: alpha(binThemeTokens.gold, 0.1) } }} />
           ))}
         </Box>
         <TextField

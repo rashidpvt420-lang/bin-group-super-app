@@ -106,13 +106,13 @@ export default function TurnoverEnginePage() {
     }
   };
 
-  if (loading) return <Box sx={{ display: 'flex', justifyContent: 'center', py: 10 }}><CircularProgress sx={{ color: binThemeTokens.gold }} /></Box>;
+  if (loading) return <Box sx={{ display: 'flex', justifyContent: 'center', py: 10 }}><CircularProgress sx={{ color: binThemeTokens.goldText }} /></Box>;
 
   return (
     <Container maxWidth="xl" sx={{ py: 6 }}>
       <Box sx={{ mb: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
         <Box>
-            <Typography variant="h3" fontWeight="900" sx={{ color: binThemeTokens.gold, letterSpacing: -1 }}>VACANCY COMMAND</Typography>
+            <Typography variant="h3" fontWeight="900" sx={{ color: binThemeTokens.goldText, letterSpacing: -1 }}>VACANCY COMMAND</Typography>
             <Typography variant="h6" sx={{ color: binThemeTokens.textSecondary, fontWeight: 500 }}>Turnover Optimization & Readiness Protocol</Typography>
         </Box>
         <Stack direction="row" spacing={2} sx={{ mb: 1 }}>
@@ -126,7 +126,7 @@ export default function TurnoverEnginePage() {
             {/* Statistics */}
             <Grid container spacing={isMobile ? 2 : 4} sx={{ mb: 8 }}>
                 {[
-                    { label: t('turnover.pending_quotes'), val: stats?.pending || 0, icon: <Clock size={24} />, color: binThemeTokens.gold },
+                    { label: t('turnover.pending_quotes'), val: stats?.pending || 0, icon: <Clock size={24} />, color: binThemeTokens.goldText },
                     { label: t('turnover.approved_works'), val: stats?.approved || 0, icon: <CheckCircle size={24} />, color: '#4ADE80' },
                     { label: t('turnover.in_progress'), val: stats?.inProgress || 0, icon: <TrendingUp size={24} />, color: '#60A5FA' },
                     { label: t('turnover.completed_assets'), val: stats?.completed || 0, icon: <Package size={24} />, color: binThemeTokens.goldLight },
@@ -147,10 +147,10 @@ export default function TurnoverEnginePage() {
                 <Table>
                 <TableHead sx={{ bgcolor: 'rgba(255,255,255,0.02)' }}>
                     <TableRow>
-                    <TableCell sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>QUOTE ID</TableCell>
-                    <TableCell sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>UNIT</TableCell>
-                    <TableCell sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>TYPE</TableCell>
-                    <TableCell align="right" sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>AMOUNT</TableCell>
+                    <TableCell sx={{ color: binThemeTokens.goldText, fontWeight: 900 }}>QUOTE ID</TableCell>
+                    <TableCell sx={{ color: binThemeTokens.goldText, fontWeight: 900 }}>UNIT</TableCell>
+                    <TableCell sx={{ color: binThemeTokens.goldText, fontWeight: 900 }}>TYPE</TableCell>
+                    <TableCell align="right" sx={{ color: binThemeTokens.goldText, fontWeight: 900 }}>AMOUNT</TableCell>
                     <TableCell align="right" sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>FINAL</TableCell>
                     <TableCell sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>STATUS</TableCell>
                     <TableCell sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>ACTIONS</TableCell>

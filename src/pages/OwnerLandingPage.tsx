@@ -146,7 +146,7 @@ const OwnerLandingPage: React.FC = () => {
                                 data-testid="owner-landing-language-toggle"
                                 aria-label={lang === 'ar' ? 'التبديل إلى الإنجليزية' : 'Switch language to Arabic'}
                                 onClick={() => setLang(lang === 'en' ? 'ar' : 'en')}
-                                sx={{ color: binThemeTokens.gold }}
+                                sx={{ color: binThemeTokens.goldText }}
                             >
                                 <Languages size={20} />
                             </IconButton>

@@ -132,7 +132,7 @@ export default function TechnicianOfflinePage() {
 
   return (
     <Box>
-      <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 3 }}>FIELD RESILIENCE · SYNC QUEUE</Typography>
+      <Typography variant="overline" sx={{ color: binThemeTokens.goldText, fontWeight: 950, letterSpacing: 3 }}>FIELD RESILIENCE · SYNC QUEUE</Typography>
       <Typography variant="h3" fontWeight="950" color="#111827" sx={{ mb: 1 }}>Offline Sync Queue</Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 4, maxWidth: 760 }}>
         Safe accept, on-the-way, start-work, and fully bound Android arrival actions replay through protected Firebase callables when connectivity returns. The server re-reads the Technician registration and rechecks identity, GPS accuracy, capture age, and geofence. Completion stays foreground-only because it requires live evidence upload.
@@ -147,7 +147,7 @@ export default function TechnicianOfflinePage() {
               <Typography variant="caption" color="text.secondary">{online ? 'Eligible actions sync automatically; manual replay remains available.' : 'Actions remain stored locally until connectivity returns.'}</Typography>
             </Box>
           </Stack>
-          <Button data-testid="technician-replay-eligible" variant="outlined" startIcon={syncing ? <CircularProgress size={16} /> : <RefreshCw size={16} />} disabled={!online || syncing || queue.length === 0} onClick={syncAll} sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.gold, fontWeight: 900, borderRadius: 2 }}>{syncing ? 'REPLAYING...' : 'REPLAY ELIGIBLE'}</Button>
+          <Button data-testid="technician-replay-eligible" variant="outlined" startIcon={syncing ? <CircularProgress size={16} /> : <RefreshCw size={16} />} disabled={!online || syncing || queue.length === 0} onClick={syncAll} sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.goldText, fontWeight: 900, borderRadius: 2 }}>{syncing ? 'REPLAYING...' : 'REPLAY ELIGIBLE'}</Button>
         </Stack>
       </Paper>
 
@@ -178,7 +178,7 @@ export default function TechnicianOfflinePage() {
                 <Box key={item.id} sx={{ p: 2.5 }}>
                   <Stack direction="row" spacing={2} alignItems="flex-start" justifyContent="space-between" flexWrap="wrap" gap={1}>
                     <Stack direction="row" spacing={1.5} alignItems="flex-start" sx={{ flex: 1, minWidth: 260 }}>
-                      {item.status === 'retrying' ? <CircularProgress size={20} sx={{ mt: 0.3, color: binThemeTokens.gold }} /> : item.status === 'failed' ? <CloudOff size={20} color="#ef4444" style={{ marginTop: 3 }} /> : <CloudUpload size={20} color={typeColor(item.type)} style={{ marginTop: 3 }} />}
+                      {item.status === 'retrying' ? <CircularProgress size={20} sx={{ mt: 0.3, color: binThemeTokens.goldText }} /> : item.status === 'failed' ? <CloudOff size={20} color="#ef4444" style={{ marginTop: 3 }} /> : <CloudUpload size={20} color={typeColor(item.type)} style={{ marginTop: 3 }} />}
                       <Box sx={{ flex: 1 }}>
                         <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
                           <Typography fontWeight="900" color="#111827">{item.label}</Typography>
@@ -186,12 +186,12 @@ export default function TechnicianOfflinePage() {
                           <Chip size="small" label={item.status.toUpperCase()} sx={{ fontWeight: 900, fontSize: '0.65rem' }} />
                         </Stack>
                         <Typography variant="body2" color="text.secondary" sx={{ mt: 0.7 }}>{item.detail}</Typography>
-                        {reason && <Typography variant="caption" sx={{ color: '#f59e0b', display: 'block', mt: 0.8 }}>{reason}</Typography>}
+                        {reason && <Typography variant="caption" sx={{ color: '#92400E', display: 'block', mt: 0.8 }}>{reason}</Typography>}
                         <Typography variant="caption" color="text.disabled">Queued {new Date(item.createdAt).toLocaleString()} · Attempts {item.attempts}/3</Typography>
                       </Box>
                     </Stack>
                     <Stack direction="row" spacing={1}>
-                      <Button size="small" variant="outlined" disabled={!online || syncing || Boolean(reason)} onClick={() => replaySingle(item)} sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.gold, fontWeight: 900 }}>REPLAY</Button>
+                      <Button size="small" variant="outlined" disabled={!online || syncing || Boolean(reason)} onClick={() => replaySingle(item)} sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.goldText, fontWeight: 900 }}>REPLAY</Button>
                       <Button size="small" color="error" onClick={() => removeItem(item.id)} sx={{ fontWeight: 900 }}>REMOVE</Button>
                     </Stack>
                   </Stack>

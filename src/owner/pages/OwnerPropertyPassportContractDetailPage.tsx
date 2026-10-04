@@ -199,7 +199,7 @@ export default function OwnerPropertyPassportContractDetailPage() {
 
   const propertyLocation = useMemo(() => passport ? resolvePropertyLocation(passport) : null, [passport]);
 
-  if (loading) return <Box sx={{ height: '60vh', display: 'grid', placeItems: 'center' }}><CircularProgress sx={{ color: binThemeTokens.gold }} /></Box>;
+  if (loading) return <Box sx={{ height: '60vh', display: 'grid', placeItems: 'center' }}><CircularProgress sx={{ color: binThemeTokens.goldText }} /></Box>;
   if (error) return <Alert severity="error">{error}</Alert>;
   if (!passport || !propertyLocation) return null;
 

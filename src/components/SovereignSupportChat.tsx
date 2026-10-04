@@ -113,7 +113,7 @@ export const SovereignSupportChat: React.FC<SovereignSupportChatProps> = ({ role
                     onKeyPress={(e) => e.key === 'Enter' && handleSend()}
                     InputProps={{
                         endAdornment: (
-                            <IconButton onClick={handleSend} sx={{ color: binThemeTokens.gold }}>
+                            <IconButton onClick={handleSend} sx={{ color: binThemeTokens.goldText }}>
                                 <Send size={18} />
                             </IconButton>
                         )

@@ -201,7 +201,7 @@ function LoadingScreen() {
           <Box sx={{ display: 'flex', gap: 2, justifyContent: 'center', flexWrap: 'wrap' }}>
             <Button variant="outlined" color="error" onClick={handleClearSession}>RESET SESSION</Button>
             <Button variant="contained" sx={{ bgcolor: '#C9A646', color: '#111827', fontWeight: 900 }} onClick={() => window.location.reload()}>RELOAD</Button>
-            <Button variant="outlined" sx={{ borderColor: '#C9A646', color: '#B8932F' }} onClick={() => window.location.href = '/login'}>GO TO LOGIN</Button>
+            <Button variant="outlined" sx={{ borderColor: '#C9A646', color: '#7A5C12' }} onClick={() => window.location.href = '/login'}>GO TO LOGIN</Button>
           </Box>
         </Box>
       )}

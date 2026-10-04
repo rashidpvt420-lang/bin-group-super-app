@@ -18,9 +18,9 @@ export default function TenantAmenitiesPage() {
   const [submitting, setSubmitting] = useState(false);
 
   const amenities = [
-    { name: 'Fitness Center', icon: <Dumbbell size={24} />, status: 'Available', color: '#10b981', location: 'Ground Floor' },
-    { name: 'Community Pool', icon: <Waves size={24} />, status: 'Available', color: '#3b82f6', location: 'Podium Level' },
-    { name: 'Resident Majlis', icon: <Coffee size={24} />, status: 'Requires Booking', color: binThemeTokens.gold, location: 'Clubhouse Entrance' },
+    { name: 'Fitness Center', icon: <Dumbbell size={24} />, status: 'Available', color: '#047857', location: 'Ground Floor' },
+    { name: 'Community Pool', icon: <Waves size={24} />, status: 'Available', color: '#1D4ED8', location: 'Podium Level' },
+    { name: 'Resident Majlis', icon: <Coffee size={24} />, status: 'Requires Booking', color: binThemeTokens.goldText, location: 'Clubhouse Entrance' },
   ];
 
   useEffect(() => {

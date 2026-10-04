@@ -45,7 +45,7 @@ const PredictiveMaintenancePanel: React.FC<Props> = ({ report }) => {
         }}>
             <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <Box>
-                    <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 2 }}>
+                    <Typography variant="overline" sx={{ color: binThemeTokens.goldText, fontWeight: 950, letterSpacing: 2 }}>
                         INSTITUTIONAL PREDICTION LAYER
                     </Typography>
                     <Typography variant="h5" fontWeight="950" color="#FFF">
@@ -131,7 +131,7 @@ const PredictiveMaintenancePanel: React.FC<Props> = ({ report }) => {
             </Stack>
 
             <Box sx={{ mt: 4, p: 2, bgcolor: alpha(binThemeTokens.gold, 0.05), borderRadius: 2 }}>
-                <Typography variant="caption" sx={{ color: binThemeTokens.gold, display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Typography variant="caption" sx={{ color: binThemeTokens.goldText, display: 'flex', alignItems: 'center', gap: 1 }}>
                     <Info size={14} /> ADVISORY: Predictions are probabilistic based on historical decay patterns and sensor telemetry where available.
                 </Typography>
             </Box>

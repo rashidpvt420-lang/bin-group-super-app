@@ -60,7 +60,7 @@ export default function AssetAnalysisStep({ onNext }: { onNext: () => void }) {
             <Box sx={{ maxWidth: 800, mx: 'auto', py: 8 }}>
                 <Box sx={{ textAlign: 'center', mb: 6 }}>
                     <Binary color={binThemeTokens.gold} size={48} className="animate-pulse" />
-                    <Typography variant="h3" fontWeight="900" sx={{ mt: 2, mb: 1, color: binThemeTokens.gold, textTransform: 'uppercase' }}>
+                    <Typography variant="h3" fontWeight="900" sx={{ mt: 2, mb: 1, color: binThemeTokens.goldText, textTransform: 'uppercase' }}>
                         {t('onboarding.analysis')}
                     </Typography>
                     <Typography variant="body1" sx={{ color: 'text.secondary' }}>
@@ -94,7 +94,7 @@ export default function AssetAnalysisStep({ onNext }: { onNext: () => void }) {
                 <Typography variant="h3" fontWeight="900" sx={{ mb: 2, textTransform: 'uppercase' }}>
                     {t('analysis.classified')}
                 </Typography>
-                <Typography variant="h5" sx={{ color: binThemeTokens.gold, fontWeight: 700, letterSpacing: 1.5 }}>
+                <Typography variant="h5" sx={{ color: binThemeTokens.goldText, fontWeight: 700, letterSpacing: 1.5 }}>
                     {t('analysis.grade_assets', { tier: portfolioSummary?.recommendedTier || 'STANDARD' })}
                 </Typography>
             </Box>
@@ -120,7 +120,7 @@ export default function AssetAnalysisStep({ onNext }: { onNext: () => void }) {
 
                 <Grid item xs={12} md={4}>
                     <Box sx={{ p: 4, bgcolor: alpha(binThemeTokens.gold, 0.05), borderRadius: 6, border: `2px solid ${binThemeTokens.gold}`, height: '100%' }}>
-                        <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, mb: 3, display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Typography variant="overline" sx={{ color: binThemeTokens.goldText, fontWeight: 900, mb: 3, display: 'flex', alignItems: 'center', gap: 1 }}>
                             <Zap size={18} /> {t('analysis.efficiency')}
                         </Typography>
                         <Typography variant="h2" fontWeight="900" sx={{ mb: 2 }}>
@@ -157,7 +157,7 @@ export default function AssetAnalysisStep({ onNext }: { onNext: () => void }) {
 
 const PaperWithLabel: React.FC<{ label: string, icon: any, children: any }> = ({ label, icon, children }) => (
     <Box sx={{ p: 4, bgcolor: 'background.paper', borderRadius: 6, border: '1px solid rgba(255,255,255,0.08)', height: '100%' }}>
-        <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, mb: 3, display: 'flex', alignItems: 'center', gap: 1 }}>
+        <Typography variant="overline" sx={{ color: binThemeTokens.goldText, fontWeight: 900, mb: 3, display: 'flex', alignItems: 'center', gap: 1 }}>
             {icon} {String(label)}
         </Typography>
         <Stack spacing={2}>{children}</Stack>

@@ -72,7 +72,7 @@ export default function PendingOwnerRegistrationStep({ onNext, onBack }: Props) 
         <Paper sx={{ p: 4, borderRadius: 6, bgcolor: 'rgba(22,22,24,.8)', border: '1px solid #4ADE80', textAlign: 'center' }}>
           <Typography variant="h4" fontWeight={950} color="#fff">{label('onboarding.success_title', 'Registration Submitted')}</Typography>
           <Typography sx={{ color: '#4ADE80', mt: 2, fontWeight: 800 }}>{label('onboarding.success_locked', 'Your owner registration is pending contract/payment verification and admin approval.')}</Typography>
-          <CircularProgress sx={{ mt: 4, color: binThemeTokens.gold }} />
+          <CircularProgress sx={{ mt: 4, color: binThemeTokens.goldText }} />
         </Paper>
       </Box>
     );

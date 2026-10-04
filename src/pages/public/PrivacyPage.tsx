@@ -27,14 +27,14 @@ const PrivacyPage: React.FC = () => {
                         {t('privacy.section1.desc')}
                     </Typography>
 
-                    <Typography variant="h5" sx={{ color: binThemeTokens.gold, mt: 4, mb: 2, textAlign: isRTL ? 'right' : 'left' }}>
+                    <Typography variant="h5" sx={{ color: binThemeTokens.goldText, mt: 4, mb: 2, textAlign: isRTL ? 'right' : 'left' }}>
                         {t('privacy.section2.title')}
                     </Typography>
                     <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary, mb: 2, textAlign: isRTL ? 'right' : 'left' }}>
                         {t('privacy.section2.desc')}
                     </Typography>
 
-                    <Typography variant="h5" sx={{ color: binThemeTokens.gold, mt: 4, mb: 2, textAlign: isRTL ? 'right' : 'left' }}>
+                    <Typography variant="h5" sx={{ color: binThemeTokens.goldText, mt: 4, mb: 2, textAlign: isRTL ? 'right' : 'left' }}>
                         {t('privacy.section3.title')}
                     </Typography>
                     <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary, textAlign: isRTL ? 'right' : 'left' }}>

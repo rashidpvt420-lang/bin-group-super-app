@@ -238,7 +238,7 @@ export default function TenantNoticesPage() {
                       <Chip
                         icon={<CheckCircle2 size={14} color="#10b981" />}
                         label={label('tenant.notices.read', 'Read', 'مقروء')}
-                        sx={{ bgcolor: alpha('#10b981', 0.1), color: '#10b981', fontWeight: 900, '& .MuiChip-icon': { color: '#10b981' } }}
+                        sx={{ bgcolor: alpha('#10b981', 0.1), color: '#047857', fontWeight: 900, '& .MuiChip-icon': { color: '#047857' } }}
                       />
                     ) : (
                       <Button
@@ -246,7 +246,7 @@ export default function TenantNoticesPage() {
                         variant="outlined"
                         startIcon={<SafeIcon icon={Eye} size={14} />}
                         onClick={() => handleMarkAsRead(notice.id)}
-                        sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.gold, fontWeight: 950, borderRadius: 2 }}
+                        sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.goldText, fontWeight: 950, borderRadius: 2 }}
                       >
                         {label('tenant.notices.mark_read', 'MARK AS READ', 'تحديد كمقروء')}
                       </Button>

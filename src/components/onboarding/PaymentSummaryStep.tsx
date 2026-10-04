@@ -183,7 +183,7 @@ const PaymentSummaryStep: React.FC<{ onNext: () => void; onBack: () => void }> =
     if (!paymentManifest || !paymentMethod) return null;
     return (
       <Box sx={{ mt: 2, textAlign: isRTL ? 'right' : 'left' }}>
-        <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>{copy('Verified payment instructions', 'تعليمات دفع موثقة')}</Typography>
+        <Typography variant="overline" sx={{ color: binThemeTokens.goldText, fontWeight: 900 }}>{copy('Verified payment instructions', 'تعليمات دفع موثقة')}</Typography>
         <Paper sx={{ mt: 2, p: 3, bgcolor: 'rgba(255,255,255,0.03)', borderRadius: 4, border: '1px solid rgba(255,255,255,0.08)' }}>
           <Stack spacing={2} divider={<Divider sx={{ borderColor: 'rgba(255,255,255,0.08)' }} />}>
             <Box><Typography variant="caption" color={binThemeTokens.textSecondary}>{copy('Legal beneficiary', 'المستفيد القانوني')}</Typography><Typography fontWeight={800} color={binThemeTokens.textPrimary}>{paymentManifest.legalBeneficiary}</Typography></Box>

@@ -74,7 +74,7 @@ export const IbanManager: React.FC = () => {
         }
     };
 
-    if (loading) return <CircularProgress size={24} sx={{ color: binThemeTokens.gold }} />;
+    if (loading) return <CircularProgress size={24} sx={{ color: binThemeTokens.goldText }} />;
 
     return (
         <Paper sx={{ p: 4, borderRadius: 6, bgcolor: 'rgba(22, 22, 24, 0.6)', border: '1px solid rgba(255,255,255,0.05)', mb: 4 }}>

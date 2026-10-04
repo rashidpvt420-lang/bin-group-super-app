@@ -171,10 +171,10 @@ export default function BrokerReferralsPage({ openFormByDefault = false }: { ope
 
   const getStatusConfig = (status: string) => {
     switch (status) {
-      case 'approved': return { color: '#10b981', icon: <CheckCircle2 size={14} />, label: 'APPROVED' };
-      case 'rejected': return { color: '#ef4444', icon: <AlertCircle size={14} />, label: 'REJECTED' };
-      case 'under_review': return { color: binThemeTokens.gold, icon: <Clock size={14} />, label: 'UNDER REVIEW' };
-      default: return { color: '#3b82f6', icon: <Clock size={14} />, label: 'SUBMITTED' };
+      case 'approved': return { color: '#047857', icon: <CheckCircle2 size={14} />, label: 'APPROVED' };
+      case 'rejected': return { color: '#B91C1C', icon: <AlertCircle size={14} />, label: 'REJECTED' };
+      case 'under_review': return { color: binThemeTokens.goldText, icon: <Clock size={14} />, label: 'UNDER REVIEW' };
+      default: return { color: '#1D4ED8', icon: <Clock size={14} />, label: 'SUBMITTED' };
     }
   };
 
@@ -207,7 +207,7 @@ export default function BrokerReferralsPage({ openFormByDefault = false }: { ope
                       <Box sx={{ flex: 1 }}>
                         <Stack direction="row" spacing={1.5} alignItems="center" flexWrap="wrap" useFlexGap sx={{ mb: 1 }}>
                           <Typography variant="h6" fontWeight="950" color={binThemeTokens.textPrimary}>{ref.clientName}</Typography>
-                          <Chip label={String(ref.referralType || 'referral').toUpperCase()} size="small" sx={{ bgcolor: '#F3F4F6', color: binThemeTokens.gold, fontWeight: 900, fontSize: '0.6rem' }} />
+                          <Chip label={String(ref.referralType || 'referral').toUpperCase()} size="small" sx={{ bgcolor: '#F3F4F6', color: binThemeTokens.goldText, fontWeight: 900, fontSize: '0.6rem' }} />
                           <Chip label={ref.attributionId ? 'ATTRIBUTED' : 'ATTRIBUTION PENDING'} size="small" sx={{ bgcolor: alpha(ref.attributionId ? '#10b981' : '#f59e0b', 0.1), color: ref.attributionId ? '#10b981' : '#f59e0b', fontWeight: 900, fontSize: '0.6rem' }} />
                         </Stack>
                         <Typography variant="body2" color="textSecondary" sx={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: 1 }}><Building size={14} /> {ref.propertyName || 'Unnamed Asset'} • {ref.location || 'Unknown Location'}</Typography>

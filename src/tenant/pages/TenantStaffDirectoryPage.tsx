@@ -94,7 +94,7 @@ export default function TenantStaffDirectoryPage() {
                     <Stack direction="row" justifyContent="space-between" alignItems="center">
                       <Box>
                         <Typography variant="h6" fontWeight="950" color="#FFF" sx={{ mb: 0.5 }}>{s.displayName}</Typography>
-                        <Chip label={s.role?.toUpperCase()} size="small" sx={{ bgcolor: 'rgba(255,255,255,0.05)', color: binThemeTokens.gold, fontWeight: 900, fontSize: '0.65rem' }} />
+                        <Chip label={s.role?.toUpperCase()} size="small" sx={{ bgcolor: 'rgba(255,255,255,0.05)', color: binThemeTokens.goldText, fontWeight: 900, fontSize: '0.65rem' }} />
                       </Box>
                       {isEmergency && (
                         <Chip

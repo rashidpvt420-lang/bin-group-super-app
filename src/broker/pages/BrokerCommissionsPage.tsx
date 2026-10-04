@@ -145,14 +145,14 @@ export default function BrokerCommissionsPage() {
 
       <Grid container spacing={3} sx={{ mb: 4 }}>
         {[
-          { label: 'PENDING SETTLEMENT', value: stats.pending, icon: <Clock size={22} />, color: binThemeTokens.gold },
-          { label: 'APPROVED FOR PAYOUT', value: stats.approved, icon: <ShieldCheck size={22} />, color: '#3b82f6' },
-          { label: 'LIFETIME EARNED', value: stats.totalPaid, icon: <TrendingUp size={22} />, color: '#10b981' },
+          { label: 'PENDING SETTLEMENT', value: stats.pending, icon: <Clock size={22} />, color: binThemeTokens.goldText },
+          { label: 'APPROVED FOR PAYOUT', value: stats.approved, icon: <ShieldCheck size={22} />, color: '#1D4ED8' },
+          { label: 'LIFETIME EARNED', value: stats.totalPaid, icon: <TrendingUp size={22} />, color: '#047857' },
         ].map((item) => <Grid item xs={12} md={4} key={item.label}><Paper sx={{ p: 3, borderRadius: 4, bgcolor: alpha(item.color, 0.05), border: `1px solid ${alpha(item.color, 0.15)}` }}><Stack direction="row" justifyContent="space-between"><Box><Typography variant="caption" fontWeight={900}>{item.label}</Typography><Typography variant="h4" fontWeight={950}>AED {item.value.toLocaleString()}</Typography></Box>{item.icon}</Stack></Paper></Grid>)}
       </Grid>
 
       <Paper sx={{ p: 3, mb: 4, borderRadius: 4, border: '1px solid #E5E7EB' }}>
-        <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950 }}>SECURE PAYOUT WORKFLOW</Typography>
+        <Typography variant="overline" sx={{ color: binThemeTokens.goldText, fontWeight: 950 }}>SECURE PAYOUT WORKFLOW</Typography>
         <Typography variant="h6" fontWeight={950}>{payableIds.length ? `${payableIds.length} approved commission(s) ready` : 'No approved commission is payable'}</Typography>
         <Typography variant="body2" color="text.secondary">Every request requires a short-lived, single-use code sent to the verified Broker email. The code is bound to the exact commissions and amount.</Typography>
         {latestPayout && <Chip sx={{ mt: 2 }} label={String(latestPayout.status || 'PENDING_ADMIN_REVIEW').replaceAll('_', ' ').toUpperCase()} />}

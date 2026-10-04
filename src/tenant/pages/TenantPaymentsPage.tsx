@@ -32,13 +32,13 @@ type Payment = {
 };
 
 const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
-    VERIFIED: { label: 'VERIFIED', color: '#10b981' },
-    APPROVED: { label: 'APPROVED', color: '#10b981' },
-    PENDING: { label: 'PENDING VERIFICATION', color: '#f59e0b' },
-    PENDING_ADMIN_PAYMENT_VERIFICATION: { label: 'AWAITING ADMIN', color: '#f59e0b' },
-    ADMIN_VERIFICATION_REQUIRED: { label: 'AWAITING ADMIN', color: '#f59e0b' },
-    REJECTED: { label: 'REJECTED', color: '#ef4444' },
-    OVERDUE: { label: 'OVERDUE', color: '#ef4444' },
+    VERIFIED: { label: 'VERIFIED', color: '#047857' },
+    APPROVED: { label: 'APPROVED', color: '#047857' },
+    PENDING: { label: 'PENDING VERIFICATION', color: '#92400E' },
+    PENDING_ADMIN_PAYMENT_VERIFICATION: { label: 'AWAITING ADMIN', color: '#92400E' },
+    ADMIN_VERIFICATION_REQUIRED: { label: 'AWAITING ADMIN', color: '#92400E' },
+    REJECTED: { label: 'REJECTED', color: '#B91C1C' },
+    OVERDUE: { label: 'OVERDUE', color: '#B91C1C' },
 };
 
 const PAYMENT_PENDING_STATUSES = ['PENDING', 'PENDING_ADMIN_PAYMENT_VERIFICATION', 'ADMIN_VERIFICATION_REQUIRED'];

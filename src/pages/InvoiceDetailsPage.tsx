@@ -82,8 +82,8 @@ export default function InvoiceDetailsPage() {
     if (loading) {
         return (
             <Container sx={{ py: 10, textAlign: 'center' }}>
-                <CircularProgress color="inherit" sx={{ color: binThemeTokens.gold }} />
-                <Typography sx={{ mt: 2, color: binThemeTokens.gold }}>Retrieving Secure Ledger...</Typography>
+                <CircularProgress color="inherit" sx={{ color: binThemeTokens.goldText }} />
+                <Typography sx={{ mt: 2, color: binThemeTokens.goldText }}>Retrieving Secure Ledger...</Typography>
             </Container>
         );
     }
@@ -104,7 +104,7 @@ export default function InvoiceDetailsPage() {
                 <Button 
                     variant="outlined" 
                     onClick={() => window.history.back()}
-                    sx={{ mt: 6, borderColor: binThemeTokens.gold, color: binThemeTokens.gold }}
+                    sx={{ mt: 6, borderColor: binThemeTokens.gold, color: binThemeTokens.goldText }}
                 >
                     RETURN TO PORTFOLIO
                 </Button>
@@ -120,12 +120,12 @@ export default function InvoiceDetailsPage() {
         <Container maxWidth="lg" sx={{ py: 10 }}>
             <Box sx={{ mb: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
                 <Box>
-                    <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 3 }}>{vatApplied ? 'TAX INVOICE / فاتورة ضريبية' : 'INVOICE / فاتورة'}</Typography>
+                    <Typography variant="overline" sx={{ color: binThemeTokens.goldText, fontWeight: 900, letterSpacing: 3 }}>{vatApplied ? 'TAX INVOICE / فاتورة ضريبية' : 'INVOICE / فاتورة'}</Typography>
                     <Typography variant="h3" fontWeight="900" sx={{ color: binThemeTokens.textPrimary, mt: 1 }}>{invoice.id}</Typography>
                     <Chip
                         label={String(invoice.status || invoice.paymentStatus || 'PENDING').toUpperCase()}
                         size="small"
-                        sx={{ mt: 1.5, fontWeight: 900, color: binThemeTokens.gold, borderColor: binThemeTokens.gold }}
+                        sx={{ mt: 1.5, fontWeight: 900, color: binThemeTokens.goldText, borderColor: binThemeTokens.gold }}
                         variant="outlined"
                     />
                 </Box>
@@ -156,7 +156,7 @@ export default function InvoiceDetailsPage() {
                             startIcon={<ShieldCheck size={18} />}
                             variant="outlined"
                             onClick={() => window.open(invoice.receiptPdfUrl, '_blank', 'noopener,noreferrer')}
-                            sx={{ color: binThemeTokens.gold, borderColor: binThemeTokens.gold, fontWeight: 900, px: 3 }}
+                            sx={{ color: binThemeTokens.goldText, borderColor: binThemeTokens.gold, fontWeight: 900, px: 3 }}
                         >
                             RECEIPT / إيصال
                         </Button>
@@ -178,16 +178,16 @@ export default function InvoiceDetailsPage() {
                     position: 'absolute', top: 50, right: 50, opacity: 0.05, 
                     transform: 'rotate(-15deg) scale(2.5)', pointerEvents: 'none' 
                 }}>
-                    <Typography variant="h1" fontWeight="900" sx={{ color: binThemeTokens.gold }}>BIN</Typography>
+                    <Typography variant="h1" fontWeight="900" sx={{ color: binThemeTokens.goldText }}>BIN</Typography>
                 </Box>
 
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 10 }}>
                     <Box>
-                        <Typography variant="h4" fontWeight="900" sx={{ color: binThemeTokens.gold, mb: 1.5, letterSpacing: -1 }}>BIN-GROUP</Typography>
+                        <Typography variant="h4" fontWeight="900" sx={{ color: binThemeTokens.goldText, mb: 1.5, letterSpacing: -1 }}>BIN-GROUP</Typography>
                         <Stack spacing={0.5}>
                             <Typography variant="body2" sx={{ color: binThemeTokens.textPrimary, fontWeight: 700 }}>Institutional Asset Management Headquarters</Typography>
                             <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary }}>Business Bay, One Central Tower, Dubai, UAE</Typography>
-                            <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>TRN: {BIN_GROUP_TRN}</Typography>
+                            <Typography variant="caption" sx={{ color: binThemeTokens.goldText, fontWeight: 900 }}>TRN: {BIN_GROUP_TRN}</Typography>
                         </Stack>
                     </Box>
                     <Box sx={{ textAlign: 'right' }}>
@@ -201,16 +201,16 @@ export default function InvoiceDetailsPage() {
 
                 <Grid container spacing={8} sx={{ mb: 10 }}>
                     <Grid item xs={12} md={7}>
-                        <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, display: 'block', mb: 2, letterSpacing: 2 }}>BILLED TO / فاتورة إلى</Typography>
+                        <Typography variant="overline" sx={{ color: binThemeTokens.goldText, fontWeight: 900, display: 'block', mb: 2, letterSpacing: 2 }}>BILLED TO / فاتورة إلى</Typography>
                         <Typography variant="h5" fontWeight="900" sx={{ color: binThemeTokens.textPrimary, mb: 1 }}>{invoice.owner}</Typography>
-                        <Typography variant="subtitle1" fontWeight="800" sx={{ color: binThemeTokens.goldLight }}>{invoice.entity}</Typography>
+                        <Typography variant="subtitle1" fontWeight="800" sx={{ color: binThemeTokens.goldText }}>{invoice.entity}</Typography>
                         <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mt: 1 }}>
                             <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary }}>{invoice.region}</Typography>
                             <Box sx={{ width: 4, height: 4, borderRadius: '50%', bgcolor: binThemeTokens.gold, opacity: 0.3 }} />
                             <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary }}>{invoice.campus}</Typography>
                         </Stack>
                         <Typography variant="body2" sx={{ mt: 2, color: binThemeTokens.textPrimary, opacity: 0.8 }}>{invoice.property}</Typography>
-                        <Typography variant="caption" sx={{ mt: 1, display: 'block', fontWeight: 900, color: binThemeTokens.gold }}>TRN: {invoice.ownerTrn}</Typography>
+                        <Typography variant="caption" sx={{ mt: 1, display: 'block', fontWeight: 900, color: binThemeTokens.goldText }}>TRN: {invoice.ownerTrn}</Typography>
                     </Grid>
                     <Grid item xs={12} md={5} sx={{ textAlign: 'right' }}>
                         <Box sx={{ p: 4, bgcolor: 'rgba(22, 22, 24, 0.6)', borderRadius: 4, border: '1px solid rgba(255,255,255,0.03)' }}>
@@ -222,7 +222,7 @@ export default function InvoiceDetailsPage() {
                                 </Box>
                                 <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                                     <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary }}>COMPLIANCE</Typography>
-                                    <Chip label={vatApplied ? 'UAE VAT REGISTERED' : 'VAT NOT APPLIED'} size="small" sx={{ height: 18, fontSize: '0.6rem', fontWeight: 900, bgcolor: 'rgba(198, 167, 94, 0.1)', color: binThemeTokens.gold }} />
+                                    <Chip label={vatApplied ? 'UAE VAT REGISTERED' : 'VAT NOT APPLIED'} size="small" sx={{ height: 18, fontSize: '0.6rem', fontWeight: 900, bgcolor: 'rgba(198, 167, 94, 0.1)', color: binThemeTokens.goldText }} />
                                 </Box>
                             </Stack>
                         </Box>
@@ -233,8 +233,8 @@ export default function InvoiceDetailsPage() {
                     <Table>
                         <TableHead sx={{ bgcolor: 'rgba(255,255,255,0.02)' }}>
                             <TableRow>
-                                <TableCell sx={{ color: binThemeTokens.gold, fontWeight: 900, borderBottom: '1px solid rgba(198, 167, 94, 0.2)' }}>DESCRIPTION / الوصف</TableCell>
-                                <TableCell align="right" sx={{ color: binThemeTokens.gold, fontWeight: 900, borderBottom: '1px solid rgba(198, 167, 94, 0.2)' }}>TOTAL / الإجمالي</TableCell>
+                                <TableCell sx={{ color: binThemeTokens.goldText, fontWeight: 900, borderBottom: '1px solid rgba(198, 167, 94, 0.2)' }}>DESCRIPTION / الوصف</TableCell>
+                                <TableCell align="right" sx={{ color: binThemeTokens.goldText, fontWeight: 900, borderBottom: '1px solid rgba(198, 167, 94, 0.2)' }}>TOTAL / الإجمالي</TableCell>
                             </TableRow>
                         </TableHead>
                         <TableBody>
@@ -268,8 +268,8 @@ export default function InvoiceDetailsPage() {
                             </Box>
                             <Divider sx={{ borderColor: 'rgba(198, 167, 94, 0.2)', my: 1 }} />
                             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                <Typography variant="h6" fontWeight="900" sx={{ color: binThemeTokens.gold }}>TOTAL DUE / إجمالي المستحق</Typography>
-                                <Typography variant="h3" fontWeight="900" sx={{ color: binThemeTokens.goldLight }}>{formatInvoiceAed(finalTotal)} AED</Typography>
+                                <Typography variant="h6" fontWeight="900" sx={{ color: binThemeTokens.goldText }}>TOTAL DUE / إجمالي المستحق</Typography>
+                                <Typography variant="h3" fontWeight="900" sx={{ color: binThemeTokens.goldText }}>{formatInvoiceAed(finalTotal)} AED</Typography>
                             </Box>
                         </Stack>
                     </Box>
@@ -285,13 +285,13 @@ export default function InvoiceDetailsPage() {
                             <ShieldCheck color={binThemeTokens.gold} size={28} />
                         </Box>
                         <Box>
-                            <Typography variant="subtitle2" fontWeight="900" sx={{ color: binThemeTokens.gold, letterSpacing: 0.5 }}>SHA-256 INTEGRITY HANDSHAKE</Typography>
+                            <Typography variant="subtitle2" fontWeight="900" sx={{ color: binThemeTokens.goldText, letterSpacing: 0.5 }}>SHA-256 INTEGRITY HANDSHAKE</Typography>
                             <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary }}>Verified by BIN-OS Institutional Audit Engine 1.4</Typography>
                         </Box>
                     </Stack>
                     <Box sx={{ textAlign: 'right' }}>
                         <Typography variant="caption" sx={{ fontFamily: 'monospace', color: binThemeTokens.textSecondary, display: 'block', mb: 0.5 }}>MISSION-CRITICAL HASH</Typography>
-                        <Typography variant="caption" sx={{ fontFamily: 'monospace', fontWeight: 900, color: binThemeTokens.goldLight, letterSpacing: 1 }}>{invoice?.integrityHash?.slice(0, 32).toUpperCase() || 'VIRTUAL'}...</Typography>
+                        <Typography variant="caption" sx={{ fontFamily: 'monospace', fontWeight: 900, color: binThemeTokens.goldText, letterSpacing: 1 }}>{invoice?.integrityHash?.slice(0, 32).toUpperCase() || 'VIRTUAL'}...</Typography>
                     </Box>
                 </Box>
             </Paper>

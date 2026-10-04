@@ -226,7 +226,7 @@ export default function TenantDashboardPage() {
   ];
 
   if (loading) {
-    return <Box sx={{ minHeight: '70vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><CircularProgress sx={{ color: binThemeTokens.gold }} /></Box>;
+    return <Box sx={{ minHeight: '70vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><CircularProgress sx={{ color: binThemeTokens.goldText }} /></Box>;
   }
 
   return (

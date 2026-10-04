@@ -430,7 +430,7 @@ export default function OwnerAIIntelligencePage() {
                 <Stack direction="row" alignItems="center" spacing={3} sx={{ mb: 3 }}>
                   <Box>
                     <Typography sx={{ color: alpha('#fff', 0.45), fontWeight: 900, fontSize: '0.7rem', letterSpacing: 2 }}>HEALTH INDEX</Typography>
-                    <Typography sx={{ color: '#22C55E', fontWeight: 950, fontSize: '2.4rem', lineHeight: 1 }}>
+                    <Typography sx={{ color: '#047857', fontWeight: 950, fontSize: '2.4rem', lineHeight: 1 }}>
                       {predictive.assetResilience.healthIndex}
                     </Typography>
                   </Box>
@@ -455,8 +455,8 @@ export default function OwnerAIIntelligencePage() {
                   {predictive.assetResilience.criticalFailureWindows.map((w: any, i: number) => (
                     <Box key={i} sx={{ p: 1.8, bgcolor: alpha('#F59E0B', 0.07), borderRadius: 3, border: `1px solid ${alpha('#F59E0B', 0.18)}` }}>
                       <Stack direction="row" justifyContent="space-between" alignItems="center">
-                        <Typography sx={{ color: '#F59E0B', fontWeight: 950, fontSize: '0.8rem' }}>{w.assetCategory}</Typography>
-                        <Chip label={`${Math.round(w.probability * 100)}% risk`} size="small" sx={{ bgcolor: alpha('#F59E0B', 0.12), color: '#F59E0B', fontWeight: 950, fontSize: '0.6rem' }} />
+                        <Typography sx={{ color: '#92400E', fontWeight: 950, fontSize: '0.8rem' }}>{w.assetCategory}</Typography>
+                        <Chip label={`${Math.round(w.probability * 100)}% risk`} size="small" sx={{ bgcolor: alpha('#F59E0B', 0.12), color: '#92400E', fontWeight: 950, fontSize: '0.6rem' }} />
                       </Stack>
                       <Typography variant="caption" sx={{ color: alpha('#fff', 0.45), display: 'block', mt: 0.5 }}>{w.guidance}</Typography>
                     </Box>
@@ -478,7 +478,7 @@ export default function OwnerAIIntelligencePage() {
                 <Stack direction="row" alignItems="center" spacing={3} sx={{ mb: 3 }}>
                   <Box>
                     <Typography sx={{ color: alpha('#fff', 0.45), fontWeight: 900, fontSize: '0.7rem', letterSpacing: 2 }}>EXPECTED NET ROI</Typography>
-                    <Typography sx={{ color: '#22C55E', fontWeight: 950, fontSize: '2.4rem', lineHeight: 1 }}>
+                    <Typography sx={{ color: '#047857', fontWeight: 950, fontSize: '2.4rem', lineHeight: 1 }}>
                       {predictive.financialForecast.expectedNetROI}%
                     </Typography>
                   </Box>
@@ -494,8 +494,8 @@ export default function OwnerAIIntelligencePage() {
                     <Stack key={q.quarter} direction="row" justifyContent="space-between" alignItems="center">
                       <Typography sx={{ color: alpha('#fff', 0.55), fontWeight: 850, fontSize: '0.8rem' }}>{q.quarter}</Typography>
                       <Stack direction="row" spacing={2}>
-                        <Typography sx={{ color: '#22C55E', fontWeight: 950, fontSize: '0.8rem' }}>+{q.projectedIncome.toLocaleString()} AED</Typography>
-                        <Typography sx={{ color: '#EF4444', fontWeight: 850, fontSize: '0.8rem' }}>-{q.projectedExpenses.toLocaleString()}</Typography>
+                        <Typography sx={{ color: '#047857', fontWeight: 950, fontSize: '0.8rem' }}>+{q.projectedIncome.toLocaleString()} AED</Typography>
+                        <Typography sx={{ color: '#B91C1C', fontWeight: 850, fontSize: '0.8rem' }}>-{q.projectedExpenses.toLocaleString()}</Typography>
                       </Stack>
                     </Stack>
                   ))}
@@ -536,7 +536,7 @@ export default function OwnerAIIntelligencePage() {
       {/* ── EVIDENCE PROTOCOL ── */}
       <Paper sx={{ p: 3, mb: 5, bgcolor: CARD, border: `1px solid ${alpha('#22C55E', 0.2)}`, borderRadius: 4 }}>
         <Stack direction="row" spacing={2} alignItems="center">
-          <Box sx={{ p: 1, bgcolor: alpha('#22C55E', 0.1), borderRadius: 2, color: '#22C55E', flexShrink: 0 }}>
+          <Box sx={{ p: 1, bgcolor: alpha('#22C55E', 0.1), borderRadius: 2, color: '#047857', flexShrink: 0 }}>
             <Lock size={18} />
           </Box>
           <Box>

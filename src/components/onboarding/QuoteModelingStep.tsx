@@ -55,7 +55,7 @@ export default function QuoteModelingStep({ onNext, onBack }: Props) {
             }}>
                 <Box sx={{ textAlign: 'center' }}>
                     <Typography variant="overline" sx={{ color: binThemeTokens.textSecondary, fontWeight: 900, mb: 1, display: 'block' }}>{t('quote.annual_valuation')}</Typography>
-                    <Typography variant={isMobile ? "h4" : "h3"} fontWeight="900" sx={{ color: binThemeTokens.goldLight }}>
+                    <Typography variant={isMobile ? "h4" : "h3"} fontWeight="900" sx={{ color: binThemeTokens.goldText }}>
                         AED {formatAED(packages?.[1]?.annualPrice)}
                     </Typography>
                 </Box>

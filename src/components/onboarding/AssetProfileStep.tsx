@@ -332,7 +332,7 @@ const AssetProfileStep: React.FC<{ onNext: () => void; onBack?: () => void }> = 
               <Typography variant="h5" fontWeight={950} color="#FFF">{label('Gym / Fitness Centre Operations Profile', 'ملف تشغيل النادي الرياضي / مركز اللياقة')}</Typography>
               <Typography variant="body2" color="text.secondary">{label('Sports & Wellness · Commercial asset · area-priced after BIN GROUP verification', 'رياضة وعافية · أصل تجاري · التسعير حسب المساحة بعد تحقق BIN GROUP')}</Typography>
             </Box>
-            <Chip label={label(`Suggested: ${String(gym.suggestedComplexity || 'STANDARD_DRY').replace(/_/g, ' ')}`, `التصنيف المقترح: ${String(gym.suggestedComplexity || 'STANDARD_DRY').replace(/_/g, ' ')}`)} variant="outlined" sx={{ color: binThemeTokens.gold, borderColor: binThemeTokens.gold, fontWeight: 900 }} />
+            <Chip label={label(`Suggested: ${String(gym.suggestedComplexity || 'STANDARD_DRY').replace(/_/g, ' ')}`, `التصنيف المقترح: ${String(gym.suggestedComplexity || 'STANDARD_DRY').replace(/_/g, ' ')}`)} variant="outlined" sx={{ color: binThemeTokens.goldText, borderColor: binThemeTokens.gold, fontWeight: 900 }} />
           </Stack>
 
           <Alert severity="info" sx={{ mb: 3 }}>

@@ -196,7 +196,7 @@ export default function TenantDashboardLightPage() {
   if (loading) {
     return (
       <Box sx={{ minHeight: '60vh', display: 'grid', placeItems: 'center' }}>
-        <CircularProgress sx={{ color: binThemeTokens.goldHover }} />
+        <CircularProgress sx={{ color: binThemeTokens.goldText }} />
       </Box>
     );
   }
@@ -212,7 +212,7 @@ export default function TenantDashboardLightPage() {
           sx={{ minWidth: 0 }}
         >
           <Box sx={{ textAlign: isRTL ? 'right' : 'left', minWidth: 0 }}>
-            <Typography variant="overline" sx={{ color: binThemeTokens.goldHover, fontWeight: 950, letterSpacing: 3 }}>
+            <Typography variant="overline" sx={{ color: binThemeTokens.goldText, fontWeight: 950, letterSpacing: 3 }}>
               {tx('dash.terminal.tenant', 'TENANT DASHBOARD')}
             </Typography>
             <Typography variant="h3" sx={{ color: binThemeTokens.textPrimary, fontWeight: 950, mt: 0.75, ...readableTextSx }}>
@@ -228,7 +228,7 @@ export default function TenantDashboardLightPage() {
               height: 64,
               flexShrink: 0,
               bgcolor: alpha(binThemeTokens.gold, 0.14),
-              color: binThemeTokens.goldHover,
+              color: binThemeTokens.goldText,
               border: `1px solid ${alpha(binThemeTokens.gold, 0.38)}`,
               fontWeight: 950,
             }}
@@ -290,7 +290,7 @@ export default function TenantDashboardLightPage() {
         <Paper sx={{ ...surfaceSx, p: { xs: 2.5, md: 3.5 } }}>
           <Stack spacing={2.5}>
             <Box sx={{ textAlign: isRTL ? 'right' : 'left' }}>
-              <Typography variant="overline" sx={{ color: binThemeTokens.goldHover, fontWeight: 950, letterSpacing: 2 }}>
+              <Typography variant="overline" sx={{ color: binThemeTokens.goldText, fontWeight: 950, letterSpacing: 2 }}>
                 {tx('tenant.services.overline', 'PLANNED HOME SERVICES')}
               </Typography>
               <Typography variant="h5" sx={{ color: binThemeTokens.textPrimary, fontWeight: 950, ...readableTextSx }}>
@@ -322,10 +322,10 @@ export default function TenantDashboardLightPage() {
                     }}
                   >
                     <Stack spacing={1} alignItems={isRTL ? 'flex-end' : 'flex-start'} sx={{ width: '100%', minWidth: 0 }}>
-                      <Box sx={{ color: binThemeTokens.goldHover }}>{service.icon}</Box>
+                      <Box sx={{ color: binThemeTokens.goldText }}>{service.icon}</Box>
                       <Typography sx={{ color: binThemeTokens.textPrimary, fontWeight: 950, ...readableTextSx }}>{service.title}</Typography>
                       <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary, lineHeight: 1.55, ...readableTextSx }}>{service.description}</Typography>
-                      <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={0.7} alignItems="center" sx={{ color: binThemeTokens.goldHover, pt: 0.5 }}>
+                      <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={0.7} alignItems="center" sx={{ color: binThemeTokens.goldText, pt: 0.5 }}>
                         <CalendarDays size={15} />
                         <Typography variant="caption" sx={{ fontWeight: 950 }}>{tx('tenant.services.schedule', 'Schedule')}</Typography>
                       </Stack>
@@ -340,7 +340,7 @@ export default function TenantDashboardLightPage() {
         <Paper sx={{ ...surfaceSx, p: { xs: 2.5, md: 3.5 } }}>
           <Stack spacing={2.5}>
             <Box sx={{ textAlign: isRTL ? 'right' : 'left' }}>
-              <Typography variant="overline" sx={{ color: binThemeTokens.goldHover, fontWeight: 950, letterSpacing: 2 }}>
+              <Typography variant="overline" sx={{ color: binThemeTokens.goldText, fontWeight: 950, letterSpacing: 2 }}>
                 {tx('tenant.workflow.overline', 'NO-CALL SERVICE WORKFLOW')}
               </Typography>
               <Typography variant="h5" sx={{ color: binThemeTokens.textPrimary, fontWeight: 950, ...readableTextSx }}>
@@ -358,7 +358,7 @@ export default function TenantDashboardLightPage() {
               ].map(([title, description, icon]) => (
                 <Grid item xs={12} md={4} key={String(title)} sx={{ minWidth: 0 }}>
                   <Box sx={{ ...innerCardSx, p: 2.5, height: '100%', textAlign: isRTL ? 'right' : 'left', minWidth: 0 }}>
-                    <Box sx={{ color: binThemeTokens.goldHover, mb: 1 }}>{icon}</Box>
+                    <Box sx={{ color: binThemeTokens.goldText, mb: 1 }}>{icon}</Box>
                     <Typography sx={{ color: binThemeTokens.textPrimary, fontWeight: 950, ...readableTextSx }}>{title}</Typography>
                     <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary, mt: 0.75, lineHeight: 1.6, ...readableTextSx }}>
                       {description}
@@ -382,7 +382,7 @@ export default function TenantDashboardLightPage() {
                     {tx('tenant.light.activeDesc', 'Your current repair and scheduled-service requests.')}
                   </Typography>
                 </Box>
-                <Chip label={activeTickets.length} sx={{ flexShrink: 0, bgcolor: alpha(binThemeTokens.gold, 0.12), color: binThemeTokens.goldHover, fontWeight: 950 }} />
+                <Chip label={activeTickets.length} sx={{ flexShrink: 0, bgcolor: alpha(binThemeTokens.gold, 0.12), color: binThemeTokens.goldText, fontWeight: 950 }} />
               </Stack>
 
               {activeTickets.length ? (
@@ -398,7 +398,7 @@ export default function TenantDashboardLightPage() {
                             REF: {String(ticket.id).slice(0, 8)} · {String(ticket.status || 'OPEN').replaceAll('_', ' ')}
                           </Typography>
                         </Box>
-                        <Button size="small" onClick={() => navigate(`/tenant/ticket/${ticket.id}`)} sx={{ flexShrink: 0, color: binThemeTokens.goldHover, fontWeight: 950 }}>
+                        <Button size="small" onClick={() => navigate(`/tenant/ticket/${ticket.id}`)} sx={{ flexShrink: 0, color: binThemeTokens.goldText, fontWeight: 950 }}>
                           {tx('common.view_details', 'View Details')}
                         </Button>
                       </Stack>
@@ -444,7 +444,7 @@ export default function TenantDashboardLightPage() {
                         '&:hover': { bgcolor: alpha(binThemeTokens.gold, 0.07), borderColor: alpha(binThemeTokens.gold, 0.42) },
                       }}
                     >
-                      <Box sx={{ color: binThemeTokens.goldHover }}>{service.icon}</Box>
+                      <Box sx={{ color: binThemeTokens.goldText }}>{service.icon}</Box>
                       {service.label}
                     </Button>
                   </Grid>
@@ -457,7 +457,7 @@ export default function TenantDashboardLightPage() {
                 sx={{
                   mt: 2,
                   borderColor: binThemeTokens.goldHover,
-                  color: binThemeTokens.goldHover,
+                  color: binThemeTokens.goldText,
                   fontWeight: 950,
                   '&:hover': { borderColor: binThemeTokens.goldHover, bgcolor: alpha(binThemeTokens.gold, 0.05) }
                 }}

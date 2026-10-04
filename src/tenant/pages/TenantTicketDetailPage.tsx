@@ -228,7 +228,7 @@ export default function TenantTicketDetailPage() {
         }
     };
 
-    if (loading) return <Box sx={{ display: 'flex', justifyContent: 'center', py: 10 }}><CircularProgress sx={{ color: binThemeTokens.gold }} /></Box>;
+    if (loading) return <Box sx={{ display: 'flex', justifyContent: 'center', py: 10 }}><CircularProgress sx={{ color: binThemeTokens.goldText }} /></Box>;
     if (!ticket) return (
         <Box sx={{ maxWidth: 720, mx: 'auto', py: 8 }}>
             <Stack spacing={2} alignItems="flex-start">
@@ -236,7 +236,7 @@ export default function TenantTicketDetailPage() {
                     startIcon={<ChevronLeft size={18} />}
                     onClick={() => navigate('/tenant/tickets')}
                     aria-label="Back"
-                    sx={{ color: binThemeTokens.gold, fontWeight: 900 }}
+                    sx={{ color: binThemeTokens.goldText, fontWeight: 900 }}
                 >
                     Back
                 </Button>

@@ -126,7 +126,7 @@ export default function TenantInvitePage() {
                 ) : (
                     <>
                         <Typography variant="h4" fontWeight="950" gutterBottom>{copy.title}</Typography>
-                        <Typography variant="h6" fontWeight="900" sx={{ color: binThemeTokens.gold, mb: 1 }}>{copy.titleAr}</Typography>
+                        <Typography variant="h6" fontWeight="900" sx={{ color: binThemeTokens.goldText, mb: 1 }}>{copy.titleAr}</Typography>
                         <Typography color="text.secondary" sx={{ mb: 0.5 }}>{copy.subtitle}</Typography>
                         <Typography color="text.secondary" sx={{ mb: 4, direction: 'rtl' }}>{copy.subtitleAr}</Typography>
 

@@ -74,7 +74,7 @@ export default function OwnerReviewQueuePage() {
     <Box>
       <Stack spacing={3}>
         <Box>
-          <Typography variant="overline" sx={{ color: binThemeTokens.goldHover, fontWeight: 950, letterSpacing: 3 }}>OWNER REVIEW QUEUE</Typography>
+          <Typography variant="overline" sx={{ color: binThemeTokens.goldText, fontWeight: 950, letterSpacing: 3 }}>OWNER REVIEW QUEUE</Typography>
           <Typography variant="h3" sx={{ color: binThemeTokens.textPrimary, fontWeight: 950 }}>Move-In / Move-Out Evidence</Typography>
           <Typography sx={{ color: binThemeTokens.textSecondary, mt: 1, fontWeight: 700 }}>Review tenant-submitted condition records and attached evidence.</Typography>
         </Box>

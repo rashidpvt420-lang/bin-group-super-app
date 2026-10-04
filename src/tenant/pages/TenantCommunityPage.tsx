@@ -197,7 +197,7 @@ export default function TenantCommunityPage() {
                                 size="small"
                                 icon={<Clock size={12} />}
                                 label="PENDING MODERATION"
-                                sx={{ bgcolor: alpha(binThemeTokens.gold, 0.1), color: binThemeTokens.gold, fontWeight: 950, '& .MuiChip-icon': { color: binThemeTokens.gold } }}
+                                sx={{ bgcolor: alpha(binThemeTokens.gold, 0.1), color: binThemeTokens.goldText, fontWeight: 950, '& .MuiChip-icon': { color: binThemeTokens.goldText } }}
                               />
                             )}
                           </Stack>
@@ -217,7 +217,7 @@ export default function TenantCommunityPage() {
                             variant="text"
                             startIcon={<SafeIcon icon={MessageSquare} size={15} />}
                             onClick={() => setSelectedPostForComments(p)}
-                            sx={{ color: binThemeTokens.gold, fontWeight: 950 }}
+                            sx={{ color: binThemeTokens.goldText, fontWeight: 950 }}
                           >
                             COMMENTS
                           </Button>

@@ -241,7 +241,7 @@ function AssetIntelligenceCard({ property, user }: { property: any; user?: any }
           return (
             <Box sx={{ mt: 2.5 }}>
               <Divider sx={{ mb: 2, borderColor: 'rgba(255,255,255,0.06)' }} />
-              <Typography variant="caption" fontWeight={900} sx={{ color: binThemeTokens.gold, display: 'block', mb: 1.5, letterSpacing: 1 }}>
+              <Typography variant="caption" fontWeight={900} sx={{ color: binThemeTokens.goldText, display: 'block', mb: 1.5, letterSpacing: 1 }}>
                 {template.title.toUpperCase()}
               </Typography>
               <Grid container spacing={1.5}>
@@ -274,7 +274,7 @@ function AssetIntelligenceCard({ property, user }: { property: any; user?: any }
             size="small"
             endIcon={<ExternalLink size={14} />} 
             sx={{ 
-              color: binThemeTokens.gold, 
+              color: binThemeTokens.goldText, 
               borderColor: alpha(binThemeTokens.gold, 0.3),
               fontWeight: 950,
               fontSize: '0.7rem'
@@ -448,7 +448,7 @@ export default function OwnerExecutiveDashboardSection({
           <Grid container spacing={3}>
             {renderMetric('Annual Contract Value', formatCurrency(annualContractValue), `Package: ${packageName}`, binThemeTokens.gold)}
             {renderMetric('15% Mobilization', formatCurrency(mobilization), `Payment: ${paymentStatus}`)}
-            {renderMetric('Signature Status', <Chip label={signatureStatus} sx={{ bgcolor: alpha('#10b981', 0.12), color: '#10b981', fontWeight: 950, maxWidth: '100%' }} />, `${formatDate(contractStart)} → ${formatDate(contractEnd)}`)}
+            {renderMetric('Signature Status', <Chip label={signatureStatus} sx={{ bgcolor: alpha('#10b981', 0.12), color: '#047857', fontWeight: 950, maxWidth: '100%' }} />, `${formatDate(contractStart)} → ${formatDate(contractEnd)}`)}
             {renderMetric('Next Invoice / SLA', nextInvoiceAmount ? formatCurrency(nextInvoiceAmount) : 'Not scheduled', nextInvoiceDue ? `Due: ${formatDate(nextInvoiceDue)} · SLA: ${slaTier}` : `SLA: ${slaTier}`)}
           </Grid>
         </CardContent>
@@ -500,7 +500,7 @@ export default function OwnerExecutiveDashboardSection({
               </Alert>
             )}
 
-            <Alert severity="info" sx={{ bgcolor: alpha(binThemeTokens.gold, 0.035), border: `1px solid ${alpha(binThemeTokens.gold, 0.14)}`, color: binThemeTokens.gold, borderRadius: 3 }}>
+            <Alert severity="info" sx={{ bgcolor: alpha(binThemeTokens.gold, 0.035), border: `1px solid ${alpha(binThemeTokens.gold, 0.14)}`, color: binThemeTokens.goldText, borderRadius: 3 }}>
               <Typography variant="caption" fontWeight={900} sx={{ display: 'block', ...textSafeSx }}>
                 Tenants must never share the owner UID. Tenant records must use ownerId/ownerUid + propertyId + unitId + tenantUid + tenantEmail, with each tenant using their own Firebase Auth UID/login.
               </Typography>

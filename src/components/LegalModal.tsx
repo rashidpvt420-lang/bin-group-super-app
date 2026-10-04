@@ -163,7 +163,7 @@ export default function LegalModal({ userId, onAccepted }: LegalModalProps) {
         tabIndex={0}
         sx={{ py: 4, maxHeight: '60vh' }}
       >
-        <Typography variant="body2" paragraph sx={{ mb: 4, color: '#D4AF37', fontWeight: 'bold' }}>
+        <Typography variant="body2" paragraph sx={{ mb: 4, color: '#7A5C12', fontWeight: 'bold' }}>
           PLEASE READ THE FOLLOWING TERMS CAREFULLY. YOU MUST SCROLL TO THE END TO ACCEPT.
         </Typography>
 
@@ -178,7 +178,7 @@ export default function LegalModal({ userId, onAccepted }: LegalModalProps) {
         <Section title="5. FINANCIAL OBLIGATIONS" content="Owners and Corporate Entities acknowledge that all management fees are calculated based on the Fixed Rounding Protocol (2-decimal precision) and are payable upon issuance of the Institutional Manifest." />
 
         <Box sx={{ mt: 4, p: 2, bgcolor: 'rgba(212, 175, 55, 0.1)', borderRadius: 2 }}>
-          <Typography variant="caption" sx={{ color: '#D4AF37' }}>
+          <Typography variant="caption" sx={{ color: '#7A5C12' }}>
             BY CLICKING 'I AGREE', YOU PROVIDE EXPLICIT CONSENT FOR DATA PROCESSING AND LOCATION TRACKING UNDER THE LAWS OF THE UNITED ARAB EMIRATES.
           </Typography>
         </Box>
@@ -214,7 +214,7 @@ export default function LegalModal({ userId, onAccepted }: LegalModalProps) {
 
 const Section = ({ title, content }: { title: string, content: string }) => (
   <Box sx={{ mb: 3 }}>
-    <Typography variant="subtitle2" sx={{ color: '#D4AF37', fontWeight: 900, mb: 1 }}>{title}</Typography>
+    <Typography variant="subtitle2" sx={{ color: '#7A5C12', fontWeight: 900, mb: 1 }}>{title}</Typography>
     <Typography variant="body2" sx={{ color: '#ccc', textAlign: 'justify' }}>{content}</Typography>
   </Box>
 );

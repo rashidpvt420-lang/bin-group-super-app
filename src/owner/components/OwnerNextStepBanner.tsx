@@ -20,7 +20,7 @@ export default function OwnerNextStepBanner({ missingTitleDeed, hasVerifiedIban,
       desc: 'Verify your property ownership to unlock full payouts and verified badges.',
       action: 'Upload now',
       href: '#owner-properties',
-      color: '#ef4444'
+      color: '#B91C1C'
     };
   } else if (!hasVerifiedIban) {
     nextStep = {
@@ -28,7 +28,7 @@ export default function OwnerNextStepBanner({ missingTitleDeed, hasVerifiedIban,
       desc: 'Add your verified bank details so we can transfer rent collections.',
       action: 'Add IBAN',
       href: '/owner/iban',
-      color: '#f59e0b'
+      color: '#92400E'
     };
   } else if (pendingPayments > 0) {
     nextStep = {
@@ -36,7 +36,7 @@ export default function OwnerNextStepBanner({ missingTitleDeed, hasVerifiedIban,
       desc: `You have ${pendingPayments} rent payment(s) awaiting your verification.`,
       action: 'Review payments',
       href: '#owner-money-snapshot',
-      color: binThemeTokens.gold
+      color: binThemeTokens.goldText
     };
   } else if (overdueTenants > 0) {
     nextStep = {
@@ -44,7 +44,7 @@ export default function OwnerNextStepBanner({ missingTitleDeed, hasVerifiedIban,
       desc: `You have ${overdueTenants} tenant(s) with overdue rent.`,
       action: 'Manage ledger',
       href: '#owner-money-snapshot',
-      color: '#ef4444'
+      color: '#B91C1C'
     };
   } else if (pendingApprovals > 0) {
     nextStep = {
@@ -52,7 +52,7 @@ export default function OwnerNextStepBanner({ missingTitleDeed, hasVerifiedIban,
       desc: `You have ${pendingApprovals} maintenance item(s) awaiting approval.`,
       action: 'Review tickets',
       href: '#complaints-command-center',
-      color: '#f59e0b'
+      color: '#92400E'
     };
   }
 
@@ -60,7 +60,7 @@ export default function OwnerNextStepBanner({ missingTitleDeed, hasVerifiedIban,
     return (
       <Paper sx={{ p: 2, bgcolor: alpha('#10b981', 0.1), border: '1px solid rgba(16, 185, 129, 0.2)', borderRadius: 4, display: 'flex', alignItems: 'center', gap: 2 }}>
         <CheckCircle2 color="#10b981" />
-        <Typography sx={{ color: '#10b981', fontWeight: 700 }}>All caught up! Your dashboard requires no immediate action.</Typography>
+        <Typography sx={{ color: '#047857', fontWeight: 700 }}>All caught up! Your dashboard requires no immediate action.</Typography>
       </Paper>
     );
   }

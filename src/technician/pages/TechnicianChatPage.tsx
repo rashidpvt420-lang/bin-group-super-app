@@ -90,7 +90,7 @@ export default function TechnicianChatPage() {
         }
     };
 
-    if (loading) return <Box sx={{ display: 'flex', justifyContent: 'center', py: 10 }}><CircularProgress sx={{ color: binThemeTokens.gold }} /></Box>;
+    if (loading) return <Box sx={{ display: 'flex', justifyContent: 'center', py: 10 }}><CircularProgress sx={{ color: binThemeTokens.goldText }} /></Box>;
     if (accessError) return (
         <Stack spacing={2} sx={{ py: 5 }}>
             <Alert severity="error">{accessError}</Alert>

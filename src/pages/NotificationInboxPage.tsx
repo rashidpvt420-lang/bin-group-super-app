@@ -175,11 +175,11 @@ export default function NotificationInboxPage() {
         <Container maxWidth="md" sx={{ py: 6 }}>
             <Box sx={{ mb: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
                 <Box>
-                    <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 4 }}>
+                    <Typography variant="overline" sx={{ color: binThemeTokens.goldText, fontWeight: 950, letterSpacing: 4 }}>
                         {tx('notifications.overline', 'INSTITUTIONAL ACTIVITY')}
                     </Typography>
                     <Typography variant="h3" fontWeight="950" color="#FFF">
-                        {tx('notifications.title_a', 'Notification')} <Box component="span" sx={{ color: binThemeTokens.gold }}>{tx('notifications.title_b', 'Inbox')}</Box>
+                        {tx('notifications.title_a', 'Notification')} <Box component="span" sx={{ color: binThemeTokens.goldText }}>{tx('notifications.title_b', 'Inbox')}</Box>
                     </Typography>
                 </Box>
                 <Chip

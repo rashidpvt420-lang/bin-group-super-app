@@ -17,14 +17,27 @@ export const binThemeTokens = {
   gold: '#C9A646',
   goldLight: '#E5C86B',
   goldHover: '#B8932F',
+  /**
+   * Gold for TEXT and icons on light surfaces. #C9A646 is 2.33:1 and #B8932F is 2.90:1 on white,
+   * so they fail WCAG AA. Keep `gold` for fills, borders and accents, and use these for text.
+   * goldText #7A5C12 = 6.24:1 on #FFFFFF, 5.92:1 on #F8F9FB, 5.11:1 on #F7E8B9.
+   * goldTextHover #8A6D1F = 4.90:1 on #FFFFFF.
+   * Do not use on dark surfaces (#7A5C12 on #020617 is 3.23:1); keep `gold` there.
+   */
+  goldText: '#7A5C12',
+  goldTextHover: '#8A6D1F',
   champagne: '#F7E8B9',
   darkBlue: '#0F172A',
   textPrimary: '#111827',
   textSecondary: '#6B7280',
   textTertiary: '#9CA3AF',
-  danger: '#EF4444',
-  warning: '#F59E0B',
-  alert: '#F59E0B',
+  // Status colours that pass WCAG AA as text on white (and with white text on them):
+  // red 6.47:1, amber 7.09:1, green 5.48:1, blue 6.70:1. Were #EF4444 3.76:1 and #F59E0B 2.15:1.
+  danger: '#B91C1C',
+  warning: '#92400E',
+  alert: '#92400E',
+  success: '#047857',
+  info: '#1D4ED8',
   active: '#C9A646',
   border: '#E5E7EB',
   panel: '#FFFFFF',
@@ -63,6 +76,12 @@ const themeConfig: ThemeOptions = {
     },
     warning: {
       main: binThemeTokens.warning,
+    },
+    success: {
+      main: binThemeTokens.success,
+    },
+    info: {
+      main: binThemeTokens.info,
     },
     divider: binThemeTokens.border,
   },
@@ -109,9 +128,13 @@ const themeConfig: ThemeOptions = {
             transform: 'translateY(-1px)',
           },
         },
+        textPrimary: {
+          color: binThemeTokens.goldText,
+          '&:hover': { color: binThemeTokens.goldTextHover },
+        },
         outlinedPrimary: {
           borderColor: alpha(binThemeTokens.gold, 0.55),
-          color: binThemeTokens.goldHover,
+          color: binThemeTokens.goldText,
           '&:hover': { borderColor: binThemeTokens.gold, background: alpha(binThemeTokens.gold, 0.08) },
         },
       },
@@ -184,15 +207,25 @@ const themeConfig: ThemeOptions = {
           '& .MuiOutlinedInput-notchedOutline': { borderColor: binThemeTokens.border },
           '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: alpha(binThemeTokens.gold, 0.45) },
           '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: binThemeTokens.gold },
-          '& .MuiSvgIcon-root': { color: binThemeTokens.goldHover },
+          '& .MuiSvgIcon-root': { color: binThemeTokens.goldText },
         },
+      },
+    },
+    MuiLink: {
+      styleOverrides: {
+        root: { color: binThemeTokens.goldText, '&:hover': { color: binThemeTokens.goldTextHover } },
+      },
+    },
+    MuiTab: {
+      styleOverrides: {
+        root: { '&.Mui-selected': { color: binThemeTokens.goldText } },
       },
     },
     MuiInputLabel: {
       styleOverrides: {
         root: {
           color: binThemeTokens.textSecondary,
-          '&.Mui-focused': { color: binThemeTokens.goldHover },
+          '&.Mui-focused': { color: binThemeTokens.goldText },
         },
       },
     },

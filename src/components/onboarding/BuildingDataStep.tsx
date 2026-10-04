@@ -31,7 +31,7 @@ const BuildingDataStep: React.FC<{ onNext: () => void; onBack: () => void }> = (
                 <Paper sx={{ p: 6, borderRadius: 6, bgcolor: 'rgba(22, 22, 24, 0.6)', border: '1px solid rgba(255,255,255,0.05)' }}>
                     <Grid container spacing={4}>
                         <Grid item xs={12} sm={6}>
-                            <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, mb: 2, display: 'block' }}>
+                            <Typography variant="overline" sx={{ color: binThemeTokens.goldText, fontWeight: 900, mb: 2, display: 'block' }}>
                                 OWNER CLASSIFICATION
                             </Typography>
                             <TextField 
@@ -47,7 +47,7 @@ const BuildingDataStep: React.FC<{ onNext: () => void; onBack: () => void }> = (
                             </TextField>
                         </Grid>
                         <Grid item xs={12} sm={6}>
-                            <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, mb: 2, display: 'block' }}>
+                            <Typography variant="overline" sx={{ color: binThemeTokens.goldText, fontWeight: 900, mb: 2, display: 'block' }}>
                                 ASSET GRADE
                             </Typography>
                             <TextField 

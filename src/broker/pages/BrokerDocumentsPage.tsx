@@ -85,9 +85,9 @@ export default function BrokerDocumentsPage() {
 
     const getDocStatus = (type: string) => {
         const doc = documents.find(d => d.docType === type);
-        if (!doc) return { status: 'missing', label: 'PENDING UPLOAD', color: '#ef4444', icon: <AlertCircle size={14} /> };
-        if (doc.status === 'verified') return { status: 'verified', label: 'VERIFIED', color: '#10b981', icon: <CheckCircle2 size={14} /> };
-        return { status: 'pending', label: 'UNDER REVIEW', color: binThemeTokens.gold, icon: <Clock size={14} /> };
+        if (!doc) return { status: 'missing', label: 'PENDING UPLOAD', color: '#B91C1C', icon: <AlertCircle size={14} /> };
+        if (doc.status === 'verified') return { status: 'verified', label: 'VERIFIED', color: '#047857', icon: <CheckCircle2 size={14} /> };
+        return { status: 'pending', label: 'UNDER REVIEW', color: binThemeTokens.goldText, icon: <Clock size={14} /> };
     };
 
     const requiredDocs = [
@@ -106,8 +106,8 @@ export default function BrokerDocumentsPage() {
                 <Box sx={{ p: 2, bgcolor: alpha('#10b981', 0.1), borderRadius: 3, border: '1px solid rgba(16, 185, 129, 0.2)', display: 'flex', alignItems: 'center', gap: 2 }}>
                     <ShieldCheck size={20} color="#10b981" />
                     <Box>
-                        <Typography variant="caption" sx={{ color: '#10b981', fontWeight: 950, display: 'block' }}>COMPLIANCE STATUS</Typography>
-                        <Typography variant="body2" sx={{ color: '#10b981', fontWeight: 900 }}>LEVEL 2 VERIFIED</Typography>
+                        <Typography variant="caption" sx={{ color: '#047857', fontWeight: 950, display: 'block' }}>COMPLIANCE STATUS</Typography>
+                        <Typography variant="body2" sx={{ color: '#047857', fontWeight: 900 }}>LEVEL 2 VERIFIED</Typography>
                     </Box>
                 </Box>
             }
@@ -148,7 +148,7 @@ export default function BrokerDocumentsPage() {
 
                                 {uploading === req.type ? (
                                     <Box sx={{ mt: 3 }}>
-                                        <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 900, mb: 1, display: 'block' }}>ENCRYPTING ASSET...</Typography>
+                                        <Typography variant="caption" sx={{ color: binThemeTokens.goldText, fontWeight: 900, mb: 1, display: 'block' }}>ENCRYPTING ASSET...</Typography>
                                         <LinearProgress sx={{ height: 4, borderRadius: 2, bgcolor: '#E5E7EB', '& .MuiLinearProgress-bar': { bgcolor: binThemeTokens.gold } }} />
                                     </Box>
                                 ) : isUploaded ? (

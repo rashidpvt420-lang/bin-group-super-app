@@ -81,7 +81,7 @@ export default function TenantRenewalsPage() {
   if (loading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
-        <CircularProgress sx={{ color: '#B8932F' }} />
+        <CircularProgress sx={{ color: '#7A5C12' }} />
       </Box>
     );
   }
