@@ -141,6 +141,22 @@ const getVerifiedArrivalPosition = async (): Promise<VerifiedArrivalFix> => {
     });
 };
 
+// Text colours readable on the white technician shell (>= 4.5:1 on white and on their tints). The
+// page was written for the old dark theme; the shell forces Paper white, so white buttons ("Contact
+// Operations Base", "Call Tenant"), the white-on-amber proof count and gold/amber/green text
+// (2.1-2.5:1) were unreadable.
+const JOB_READABLE = {
+    ink: '#111827',
+    muted: '#475467',
+    gold: '#7A5C12',
+    amber: '#92400E',
+    green: '#047857',
+    violet: '#6D28D9',
+    surface: '#FFFFFF',
+    line: '#E5E7EB',
+    control: '#D0D5DD',
+} as const;
+
 export default function TechnicianJobDetailPage() {
     const { id } = useParams();
     const navigate = useNavigate();
@@ -450,71 +466,71 @@ export default function TechnicianJobDetailPage() {
             {!online && <Alert icon={<CloudOff />} severity="warning" sx={{ mb: 2, borderRadius: 3 }}>Offline mode: lifecycle actions and evidence can be saved locally. Completion remains locked until the protected evidence upload is server-verified and synchronization succeeds.</Alert>}
             {gpsError && <Alert severity="warning" onClose={() => setGpsError(null)} sx={{ mb: 2, borderRadius: 3 }}>{gpsError}</Alert>}
 
-            <Paper sx={{ p: 3, mb: 3, bgcolor: 'rgba(15,23,42,0.7)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 5 }}>
+            <Paper sx={{ p: 3, mb: 3, bgcolor: JOB_READABLE.surface, border: `1px solid ${JOB_READABLE.line}`, borderRadius: 5 }}>
                 <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={2}>
                     <Stack direction="row" spacing={2} alignItems="center">
-                        <IconButton onClick={() => navigate('/technician/jobs')} sx={{ color: '#FFF' }}><ChevronLeft /></IconButton>
+                        <IconButton aria-label="Back to jobs" onClick={() => navigate('/technician/jobs')} sx={{ color: JOB_READABLE.ink }}><ChevronLeft /></IconButton>
                         <Box>
-                            <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 950 }}>{tx('tech.job.mission_ref', 'MISSION REF')} {ticket.id.substring(0, 8).toUpperCase()}</Typography>
-                            <Typography variant="h5" fontWeight="950" color="#FFF">{ticket.category || ticket.complaintCategory || 'Maintenance Mission'}</Typography>
+                            <Typography variant="caption" sx={{ color: JOB_READABLE.gold, fontWeight: 950 }}>{tx('tech.job.mission_ref', 'MISSION REF')} {ticket.id.substring(0, 8).toUpperCase()}</Typography>
+                            <Typography variant="h5" fontWeight="950" color={JOB_READABLE.ink}>{ticket.category || ticket.complaintCategory || 'Maintenance Mission'}</Typography>
                         </Box>
                     </Stack>
-                    <Chip label={status.replace(/_/g, ' ')} sx={{ bgcolor: alpha(binThemeTokens.gold, 0.15), color: binThemeTokens.gold, fontWeight: 950 }} />
+                    <Chip data-testid="technician-job-status-chip" label={status.replace(/_/g, ' ')} sx={{ bgcolor: alpha(binThemeTokens.gold, 0.15), color: JOB_READABLE.gold, fontWeight: 950 }} />
                 </Stack>
             </Paper>
 
             <Grid container spacing={3}>
                 <Grid item xs={12} lg={8}>
-                    <Paper sx={{ p: 4, mb: 3, bgcolor: 'rgba(22,22,24,0.72)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 5 }}>
-                        <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950 }}>{tx('tech.job.tenant_property', 'Tenant / Property Details')}</Typography>
+                    <Paper sx={{ p: 4, mb: 3, bgcolor: JOB_READABLE.surface, border: `1px solid ${JOB_READABLE.line}`, borderRadius: 5 }}>
+                        <Typography variant="overline" sx={{ color: JOB_READABLE.gold, fontWeight: 950 }}>{tx('tech.job.tenant_property', 'Tenant / Property Details')}</Typography>
                         <Grid container spacing={3} sx={{ mt: 1 }}>
                             <Grid item xs={12} md={6}>
                                 <Typography variant="caption" color="textSecondary">{tx('tech.job.resident', 'Resident')}</Typography>
-                                <Typography variant="h6" fontWeight="900" color="#FFF">{requesterName}</Typography>
+                                <Typography variant="h6" fontWeight="900" color={JOB_READABLE.ink}>{requesterName}</Typography>
                                 <Typography variant="body2" color="textSecondary">{contactPhone || tx('tech.job.phone_unavailable', 'Phone not available')}</Typography>
                             </Grid>
                             <Grid item xs={12} md={6}>
                                 <Typography variant="caption" color="textSecondary">{tx('tech.job.property_unit', 'Property / Unit')}</Typography>
-                                <Typography variant="h6" fontWeight="900" color="#FFF">{ticket.propertyName || 'Property'}</Typography>
+                                <Typography variant="h6" fontWeight="900" color={JOB_READABLE.ink}>{ticket.propertyName || 'Property'}</Typography>
                                 <Typography variant="body2" color="textSecondary">Unit {ticket.unitNumber || ticket.unitLabel || 'N/A'} · Floor {ticket.floorNumber || ticket.floor || 'N/A'}</Typography>
                             </Grid>
                             <Grid item xs={12}>
                                 <Paper sx={{ p: 2.25, bgcolor: alpha(binThemeTokens.gold, 0.08), border: `1px solid ${alpha(binThemeTokens.gold, 0.24)}`, borderRadius: 3 }}>
-                                    <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 950 }}>{tx('tech.job.exact_service_location', 'EXACT SERVICE LOCATION')}</Typography>
-                                    <Typography variant="h6" fontWeight="950" color="#FFF" sx={{ mt: 0.5 }}>{serviceLocationDetail || tx('tech.job.service_location_missing', 'Not specified — call tenant before moving to site.')}</Typography>
+                                    <Typography variant="caption" sx={{ color: JOB_READABLE.gold, fontWeight: 950 }}>{tx('tech.job.exact_service_location', 'EXACT SERVICE LOCATION')}</Typography>
+                                    <Typography variant="h6" fontWeight="950" color={JOB_READABLE.ink} sx={{ mt: 0.5 }}>{serviceLocationDetail || tx('tech.job.service_location_missing', 'Not specified — call tenant before moving to site.')}</Typography>
                                 </Paper>
                             </Grid>
                             <Grid item xs={12}>
                                 <Typography variant="caption" color="textSecondary">{tx('tech.job.address', 'Address')}</Typography>
-                                <Typography variant="body1" color="#FFF">{ticket.address || ticket.propertyLocation?.address || 'Address not available'}</Typography>
+                                <Typography variant="body1" color={JOB_READABLE.ink}>{ticket.address || ticket.propertyLocation?.address || 'Address not available'}</Typography>
                                 <Typography variant="body2" color="textSecondary">Access: {ticket.permissionToEnter || 'CALL_FIRST'} · Anyone home: {ticket.isAnyoneHome || 'UNKNOWN'} · Notes: {ticket.accessNotes || '—'}</Typography>
                             </Grid>
                         </Grid>
                     </Paper>
 
-                    <Paper sx={{ p: 4, mb: 3, bgcolor: 'rgba(22,22,24,0.72)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 5 }}>
-                        <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950 }}>{tx('tech.job.complaint', 'Complaint')}</Typography>
-                        <Typography variant="body1" color="#FFF" sx={{ mt: 1, lineHeight: 1.8 }}>{ticket.description || tx('tech.job.no_description', 'No description provided.')}</Typography>
+                    <Paper sx={{ p: 4, mb: 3, bgcolor: JOB_READABLE.surface, border: `1px solid ${JOB_READABLE.line}`, borderRadius: 5 }}>
+                        <Typography variant="overline" sx={{ color: JOB_READABLE.gold, fontWeight: 950 }}>{tx('tech.job.complaint', 'Complaint')}</Typography>
+                        <Typography variant="body1" color={JOB_READABLE.ink} sx={{ mt: 1, lineHeight: 1.8 }}>{ticket.description || tx('tech.job.no_description', 'No description provided.')}</Typography>
                         {(ticket.tenantPhotos || ticket.photos || ticket.initialPhotoUrls)?.length > 0 && (
                             <Stack direction="row" spacing={1.5} flexWrap="wrap" sx={{ mt: 3 }}>
                                 {(ticket.tenantPhotos || ticket.photos || ticket.initialPhotoUrls).map((url: string, i: number) => (
-                                    <Box key={i} component="img" src={url} onClick={() => window.open(url, '_blank')} sx={{ width: 92, height: 92, borderRadius: 2, objectFit: 'cover', cursor: 'pointer', border: '1px solid rgba(255,255,255,0.12)' }} />
+                                    <Box key={i} component="img" src={url} onClick={() => window.open(url, '_blank')} sx={{ width: 92, height: 92, borderRadius: 2, objectFit: 'cover', cursor: 'pointer', border: `1px solid ${JOB_READABLE.line}` }} />
                                 ))}
                             </Stack>
                         )}
                     </Paper>
 
-                    <Paper sx={{ p: 4, bgcolor: 'rgba(22,22,24,0.72)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 5 }}>
-                        <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950 }}>{tx('tech.job.lifecycle', 'Mission Lifecycle')}</Typography>
+                    <Paper sx={{ p: 4, bgcolor: JOB_READABLE.surface, border: `1px solid ${JOB_READABLE.line}`, borderRadius: 5 }}>
+                        <Typography variant="overline" sx={{ color: JOB_READABLE.gold, fontWeight: 950 }}>{tx('tech.job.lifecycle', 'Mission Lifecycle')}</Typography>
                         <Stack direction="row" flexWrap="wrap" gap={2} sx={{ mt: 2 }}>
                             {['ASSIGNED', 'AUTO_ASSIGNED'].includes(status) ? (
                                 <Button variant="contained" disabled={actionLoading} onClick={acceptJob} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>{tx('tech.job.accept_mission', 'Accept Mission')}</Button>
                             ) : (
                                 <Stack spacing={2} sx={{ width: '100%' }}>
                                     <Stack direction="row" flexWrap="wrap" gap={2}>
-                                        <Button variant="outlined" disabled={actionLoading || !['AUTO_ASSIGNED', 'ASSIGNED', 'ACCEPTED'].includes(status)} startIcon={<Navigation />} onClick={() => updateLifecycle('EN_ROUTE')} sx={{ color: binThemeTokens.gold, borderColor: binThemeTokens.gold, fontWeight: 950 }}>{tx('tech.job.on_the_way', 'On The Way')}</Button>
-                                        <Button variant="outlined" disabled={actionLoading || !['EN_ROUTE', 'ON_THE_WAY'].includes(status)} startIcon={<MapPin />} onClick={() => updateLifecycle('ARRIVED')} sx={{ color: '#8b5cf6', borderColor: '#8b5cf6', fontWeight: 950 }}>{tx('tech.job.arrived', 'Arrived')}</Button>
-                                        <Button data-testid="technician-start-work" variant="outlined" disabled={actionLoading || status !== 'ARRIVED' || !hasTechnicianBeforeProof || !ppeChecked || !safetyChecked} startIcon={<Play />} onClick={() => updateLifecycle('IN_PROGRESS')} sx={{ color: '#10b981', borderColor: '#10b981', fontWeight: 950 }}>{tx('tech.job.start_work', 'Start Work')}</Button>
+                                        <Button variant="outlined" disabled={actionLoading || !['AUTO_ASSIGNED', 'ASSIGNED', 'ACCEPTED'].includes(status)} startIcon={<Navigation />} onClick={() => updateLifecycle('EN_ROUTE')} sx={{ color: JOB_READABLE.gold, borderColor: binThemeTokens.gold, fontWeight: 950 }}>{tx('tech.job.on_the_way', 'On The Way')}</Button>
+                                        <Button variant="outlined" disabled={actionLoading || !['EN_ROUTE', 'ON_THE_WAY'].includes(status)} startIcon={<MapPin />} onClick={() => updateLifecycle('ARRIVED')} sx={{ color: JOB_READABLE.violet, borderColor: JOB_READABLE.violet, fontWeight: 950 }}>{tx('tech.job.arrived', 'Arrived')}</Button>
+                                        <Button data-testid="technician-start-work" variant="outlined" disabled={actionLoading || status !== 'ARRIVED' || !hasTechnicianBeforeProof || !ppeChecked || !safetyChecked} startIcon={<Play />} onClick={() => updateLifecycle('IN_PROGRESS')} sx={{ color: JOB_READABLE.green, borderColor: JOB_READABLE.green, fontWeight: 950 }}>{tx('tech.job.start_work', 'Start Work')}</Button>
                                     </Stack>
                                     {status === 'ARRIVED' && (
                                         <Paper sx={{ p: 2, bgcolor: alpha('#f59e0b', 0.05), border: `1px dashed ${alpha('#f59e0b', 0.3)}`, borderRadius: 3 }}>
@@ -523,7 +539,7 @@ export default function TechnicianJobDetailPage() {
                                                     {tx('tech.job.before_work_required', 'Capture and verify the before-work site photo above before Start Work can be enabled.')}
                                                 </Alert>
                                             )}
-                                            <Typography variant="caption" sx={{ color: '#f59e0b', fontWeight: 950, display: 'block', mb: 1 }}>{tx('tech.job.safety_check', 'PRE-WORK SAFETY PROTOCOL')}</Typography>
+                                            <Typography variant="caption" sx={{ color: JOB_READABLE.amber, fontWeight: 950, display: 'block', mb: 1 }}>{tx('tech.job.safety_check', 'PRE-WORK SAFETY PROTOCOL')}</Typography>
                                             <Stack spacing={1}>
                                                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                                                     <input type="checkbox" id="ppe" checked={ppeChecked} onChange={(e) => setPpeChecked(e.target.checked)} style={{ transform: 'scale(1.2)', accentColor: '#f59e0b' }} />
@@ -544,11 +560,12 @@ export default function TechnicianJobDetailPage() {
                             <Box sx={{ mt: 4, p: 3, borderRadius: 4, border: `1px dashed ${alpha(binThemeTokens.gold, 0.35)}` }}>
                                 <Paper sx={{ p: 2, mb: 2, bgcolor: alpha(canComplete ? '#10b981' : '#f59e0b', 0.08), border: `1px solid ${alpha(canComplete ? '#10b981' : '#f59e0b', 0.22)}`, borderRadius: 3 }}>
                                     <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1 }}>
-                                        <Typography sx={{ color: '#FFF', fontWeight: 950 }}>{tx('tech.job.proof_readiness', 'Proof readiness')}</Typography>
-                                        <Chip label={`${proofReadyCount}/${proofChecks.length}`} sx={{ bgcolor: canComplete ? '#10b981' : '#f59e0b', color: '#fff', fontWeight: 950 }} />
+                                        <Typography sx={{ color: JOB_READABLE.ink, fontWeight: 950 }}>{tx('tech.job.proof_readiness', 'Proof readiness')}</Typography>
+                                        {/* Global chip CSS forces chip backgrounds to white, so the count uses coloured text, not white-on-colour. */}
+                                        <Chip data-testid="technician-proof-count-chip" label={`${proofReadyCount}/${proofChecks.length}`} sx={{ bgcolor: '#FFFFFF', color: canComplete ? JOB_READABLE.green : JOB_READABLE.amber, border: `1px solid ${canComplete ? JOB_READABLE.green : JOB_READABLE.amber}`, fontWeight: 950 }} />
                                     </Stack>
                                     <Stack direction="row" flexWrap="wrap" gap={1}>
-                                        {proofChecks.map((check) => <Chip key={check.label} size="small" label={`${check.ready ? '✓' : '•'} ${check.label}`} sx={{ bgcolor: check.ready ? alpha('#10b981', 0.16) : alpha('#f59e0b', 0.16), color: check.ready ? '#10b981' : '#f59e0b', fontWeight: 900 }} />)}
+                                        {proofChecks.map((check) => <Chip key={check.label} size="small" label={`${check.ready ? '✓' : '•'} ${check.label}`} sx={{ bgcolor: check.ready ? alpha('#10b981', 0.16) : alpha('#f59e0b', 0.16), color: check.ready ? JOB_READABLE.green : JOB_READABLE.amber, fontWeight: 900 }} />)}
                                     </Stack>
                                 </Paper>
                                 {closeBlockers.length > 0 && <Alert severity="warning" sx={{ mb: 2 }}>{tx('tech.job.close_blockers', 'Mission cannot close until these proof items are complete:')} {closeBlockers.join(', ')}</Alert>}
@@ -559,7 +576,7 @@ export default function TechnicianJobDetailPage() {
                                         ? 'The protected after-work evidence is server-confirmed. Completion can proceed once notes and parts disposition are ready.'
                                         : 'Capture and verify the after-work photo in the protected evidence panel above. This close button unlocks only after server confirmation.'}
                                 </Alert>
-                                <Button fullWidth variant="contained" disabled={actionLoading || !canComplete} startIcon={actionLoading ? <CircularProgress size={18} color="inherit" /> : <Check />} onClick={() => updateLifecycle('COMPLETED')} sx={{ bgcolor: '#10b981', color: '#FFF', fontWeight: 950, py: 1.6 }}>
+                                <Button fullWidth variant="contained" disabled={actionLoading || !canComplete} startIcon={actionLoading ? <CircularProgress size={18} color="inherit" /> : <Check />} onClick={() => updateLifecycle('COMPLETED')} sx={{ bgcolor: JOB_READABLE.green, color: '#FFFFFF', fontWeight: 950, py: 1.6, '&:hover': { bgcolor: '#065F46' } }}>
                                     {tx('tech.job.complete_mission', 'Complete Mission & Request Tenant Feedback')}
                                 </Button>
                             </Box>
@@ -569,24 +586,24 @@ export default function TechnicianJobDetailPage() {
 
                 <Grid item xs={12} lg={4}>
                     <Stack spacing={3}>
-                        <Paper sx={{ p: 3, bgcolor: 'rgba(15,23,42,0.7)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 5 }}>
-                            <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950 }}>{tx('tech.job.location', 'Location')}</Typography>
-                            {serviceLocationDetail && <Paper sx={{ mt: 2, p: 1.5, bgcolor: alpha(binThemeTokens.gold, 0.08), border: `1px solid ${alpha(binThemeTokens.gold, 0.2)}`, borderRadius: 2 }}><Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 950 }}>SERVICE POINT</Typography><Typography color="#FFF" fontWeight={900}>{serviceLocationDetail}</Typography></Paper>}
+                        <Paper sx={{ p: 3, bgcolor: JOB_READABLE.surface, border: `1px solid ${JOB_READABLE.line}`, borderRadius: 5 }}>
+                            <Typography variant="overline" sx={{ color: JOB_READABLE.gold, fontWeight: 950 }}>{tx('tech.job.location', 'Location')}</Typography>
+                            {serviceLocationDetail && <Paper sx={{ mt: 2, p: 1.5, bgcolor: alpha(binThemeTokens.gold, 0.08), border: `1px solid ${alpha(binThemeTokens.gold, 0.2)}`, borderRadius: 2 }}><Typography variant="caption" sx={{ color: JOB_READABLE.gold, fontWeight: 950 }}>SERVICE POINT</Typography><Typography color={JOB_READABLE.ink} fontWeight={900}>{serviceLocationDetail}</Typography></Paper>}
                             {resolved.hasExactCoordinates ? (
-                                <Button fullWidth variant="contained" startIcon={<Navigation />} onClick={() => window.open(resolved.googleMapsUrl, '_blank', 'noopener,noreferrer')} sx={{ mt: 2, bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>
+                                <Button fullWidth variant="contained" startIcon={<Navigation />} onClick={() => window.open(resolved.googleMapsUrl, '_blank', 'noopener,noreferrer')} sx={{ mt: 2, bgcolor: binThemeTokens.gold, color: '#111827', fontWeight: 950 }}>
                                     {tx('tech.job.navigate', 'Navigate to Tenant Property')}
                                 </Button>
                             ) : <Alert severity="warning" sx={{ mt: 2 }}>{tx('tech.job.gps_missing', 'Exact GPS pin missing. Use address and contact resident/admin.')}</Alert>}
                             <Typography variant="body2" color="textSecondary" sx={{ mt: 2 }}>{ticket.address || ticket.propertyLocation?.address || 'No address'}</Typography>
                         </Paper>
 
-                        <Paper sx={{ p: 3, bgcolor: 'rgba(15,23,42,0.7)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 5 }}>
-                            <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950 }}>{tx('tech.job.contact', 'Contact')}</Typography>
+                        <Paper sx={{ p: 3, bgcolor: JOB_READABLE.surface, border: `1px solid ${JOB_READABLE.line}`, borderRadius: 5 }}>
+                            <Typography variant="overline" sx={{ color: JOB_READABLE.gold, fontWeight: 950 }}>{tx('tech.job.contact', 'Contact')}</Typography>
                             <Stack spacing={1.5} sx={{ mt: 2 }}>
-                                <Button fullWidth variant="outlined" startIcon={<MessageSquare />} onClick={() => navigate(`/technician/chat/${id}`)} sx={{ color: binThemeTokens.gold, borderColor: alpha(binThemeTokens.gold, 0.5), fontWeight: 950 }}>{tx('tech.job.chat_tenant', 'Chat with Tenant')}</Button>
-                                <Button fullWidth variant="outlined" disabled={!contactPhone} startIcon={<Phone />} onClick={() => window.open(`tel:${contactPhone}`)} sx={{ color: '#FFF', borderColor: 'rgba(255,255,255,0.25)', fontWeight: 950 }}>{tx('tech.job.call_tenant', 'Call Tenant')}</Button>
-                                <Button fullWidth variant="outlined" disabled={!contactPhone} startIcon={<MessageSquare />} onClick={() => window.open(`https://wa.me/${String(contactPhone).replace(/\D/g, '')}`, '_blank')} sx={{ color: '#25D366', borderColor: alpha('#25D366', 0.5), fontWeight: 950 }}>{tx('tech.job.whatsapp_tenant', 'WhatsApp Tenant')}</Button>
-                                <Button fullWidth variant="outlined" startIcon={<ShieldCheck />} onClick={() => navigate('/technician/support')} sx={{ color: 'rgba(255,255,255,0.7)', borderColor: 'rgba(255,255,255,0.18)', fontWeight: 950 }}>{tx('tech.job.contact_admin', 'Contact Operations Base')}</Button>
+                                <Button fullWidth variant="outlined" startIcon={<MessageSquare />} onClick={() => navigate(`/technician/chat/${id}`)} sx={{ color: JOB_READABLE.gold, borderColor: alpha(binThemeTokens.gold, 0.6), fontWeight: 950 }}>{tx('tech.job.chat_tenant', 'Chat with Tenant')}</Button>
+                                <Button fullWidth variant="outlined" disabled={!contactPhone} startIcon={<Phone />} onClick={() => window.open(`tel:${contactPhone}`)} sx={{ color: JOB_READABLE.ink, borderColor: JOB_READABLE.control, fontWeight: 950 }}>{tx('tech.job.call_tenant', 'Call Tenant')}</Button>
+                                <Button fullWidth variant="outlined" disabled={!contactPhone} startIcon={<MessageSquare />} onClick={() => window.open(`https://wa.me/${String(contactPhone).replace(/\D/g, '')}`, '_blank')} sx={{ color: JOB_READABLE.green, borderColor: alpha('#25D366', 0.7), fontWeight: 950 }}>{tx('tech.job.whatsapp_tenant', 'WhatsApp Tenant')}</Button>
+                                <Button fullWidth variant="outlined" startIcon={<ShieldCheck />} onClick={() => navigate('/technician/support')} sx={{ color: JOB_READABLE.ink, borderColor: JOB_READABLE.control, fontWeight: 950 }}>{tx('tech.job.contact_admin', 'Contact Operations Base')}</Button>
                             </Stack>
                         </Paper>
 
