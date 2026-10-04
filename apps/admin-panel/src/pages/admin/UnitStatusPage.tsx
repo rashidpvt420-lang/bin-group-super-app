@@ -27,7 +27,8 @@ import {
     Stack,
     InputAdornment,
     alpha,
-    CircularProgress
+    CircularProgress,
+    Alert
 } from '@mui/material';
 import { 
     Search, 
@@ -65,6 +66,8 @@ interface Unit {
 interface Property {
     id: string;
     name: string;
+    declaredUnits: number;
+    active: boolean;
 }
 
 export default function UnitStatusPage() {
@@ -86,13 +89,17 @@ export default function UnitStatusPage() {
         adminStatusNotes: ''
     });
     const [submitting, setSubmitting] = useState(false);
+    const [provisioning, setProvisioning] = useState(false);
+    const [provisionMessage, setProvisionMessage] = useState<{ severity: 'success' | 'error'; text: string } | null>(null);
 
     useEffect(() => {
         const q = query(collection(db, 'properties'));
         const unsubscribe = onSnapshot(q, (snapshot) => {
             const fetched = snapshot.docs.map(doc => ({
                 id: doc.id,
-                name: doc.data().name || doc.data().propertyName || 'Unnamed Property'
+                name: doc.data().name || doc.data().propertyName || 'Unnamed Property',
+                declaredUnits: Math.max(0, Math.floor(Number(doc.data().units ?? doc.data().numberOfUnits ?? doc.data().unitCount ?? doc.data().totalUnits ?? 0) || 0)),
+                active: [doc.data().status, doc.data().activationStatus].some((value) => String(value || '').toUpperCase() === 'ACTIVE'),
             }));
             setProperties(fetched);
         });
@@ -151,6 +158,32 @@ export default function UnitStatusPage() {
         }
     };
 
+    const selectedProperty = properties.find((property) => property.id === selectedPropertyId);
+    const missingDeclaredUnits = Boolean(
+        selectedProperty && selectedProperty.active && selectedProperty.declaredUnits > 0 && !loading && units.length === 0,
+    );
+
+    // Properties activated before declared units were provisioned automatically
+    // can have units > 0 but no unit records; this runs the audited server backfill.
+    const handleProvisionDeclaredUnits = async () => {
+        if (!selectedPropertyId) return;
+        setProvisioning(true);
+        setProvisionMessage(null);
+        try {
+            const provision = httpsCallable(functions, 'adminProvisionDeclaredPropertyUnits');
+            const response: any = await provision({ propertyId: selectedPropertyId });
+            const created = Number(response.data?.createdCount || 0);
+            setProvisionMessage({
+                severity: 'success',
+                text: created > 0 ? `${created} unit record(s) created.` : `No units created (${response.data?.status || 'NO_CHANGES'}).`,
+            });
+        } catch (error: any) {
+            setProvisionMessage({ severity: 'error', text: error?.message || 'Could not create unit records.' });
+        } finally {
+            setProvisioning(false);
+        }
+    };
+
     const filteredUnits = units.filter(unit => {
         const matchesSearch = 
             unit.unitNumber?.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -189,6 +222,25 @@ export default function UnitStatusPage() {
                     Institutional Oversight of Asset Occupancy & Lifecycle
                 </Typography>
             </Box>
+
+            {missingDeclaredUnits && (
+                <Alert
+                    severity="warning"
+                    sx={{ mb: 3 }}
+                    action={
+                        <Button color="inherit" size="small" disabled={provisioning} onClick={handleProvisionDeclaredUnits}>
+                            {provisioning ? 'Creating…' : 'Create declared units'}
+                        </Button>
+                    }
+                >
+                    This property declares {selectedProperty?.declaredUnits} unit(s) but has no unit records, so complaints cannot name a unit and tenants cannot be linked.
+                </Alert>
+            )}
+            {provisionMessage && (
+                <Alert severity={provisionMessage.severity} sx={{ mb: 3 }} onClose={() => setProvisionMessage(null)}>
+                    {provisionMessage.text}
+                </Alert>
+            )}
 
             {/* Selector & Stats */}
             <Grid container spacing={3} sx={{ mb: 4 }}>
