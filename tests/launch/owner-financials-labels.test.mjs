@@ -9,7 +9,14 @@ const page = readFileSync(new URL('../../src/pages/FinancialDashboardPage.tsx', 
 const enBlock = ctx.slice(ctx.indexOf('en: {'), ctx.indexOf('ar: {'));
 const arBlock = ctx.slice(ctx.indexOf('ar: {'));
 const keys = [...new Set([...page.matchAll(/\bt\('(fin\.[a-z_.]+)'\)/g)].map((m) => m[1]))];
-const has = (block, key) => new RegExp(`'${key.replace(/\./g, '\\.')}':\\s*'[^']+'`).test(block);
+// Plain string lookup (no dynamic RegExp): returns the quoted value after 'key': or null.
+const valueOf = (block, key) => {
+  const at = block.indexOf(`'${key}':`);
+  if (at < 0) return null;
+  const m = /^\s*'([^']*)'/.exec(block.slice(at + key.length + 3));
+  return m ? m[1] : null;
+};
+const has = (block, key) => Boolean(valueOf(block, key));
 
 test('every fin.* key on /financials has English and Arabic copy', () => {
   assert.ok(keys.length > 10);
