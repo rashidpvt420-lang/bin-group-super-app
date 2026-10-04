@@ -3,14 +3,15 @@
 // staff_shifts/SHIFT_<uid>_<yyyy-mm-dd>. Before Clock In that doc does not exist, so a rule
 // that only checks resource.data.staffId denies the get (resource == null) and the Firestore
 // SDK terminates the listener; the header then stays OFF DUTY even after Clock In succeeds.
-// RULES_FILE may point at the live rules copy; set EXPECT_MISSING_OWN_SHIFT=deny to pin the
-// production behaviour.
+// To check the live rules, run it in a scratch checkout whose firestore.rules is the deployed
+// copy (e.g. `git show bb4df313:firestore.rules > firestore.rules`) with
+// EXPECT_MISSING_OWN_SHIFT=deny to pin the production behaviour.
 import { describe, it, before, after, beforeEach } from 'node:test';
 import fs from 'node:fs';
 import { initializeTestEnvironment, assertFails, assertSucceeds } from '@firebase/rules-unit-testing';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 
-const RULES_FILE = process.env.RULES_FILE || 'firestore.rules';
+const RULES_FILE = 'firestore.rules';
 const LIVE_DENY = process.env.EXPECT_MISSING_OWN_SHIFT === 'deny';
 let testEnv;
 
@@ -33,7 +34,7 @@ describe(`staff_shifts / staff_daily_summaries own-doc reads (${RULES_FILE})`, (
   before(async () => {
     testEnv = await initializeTestEnvironment({
       projectId: 'demo-bin-staff-shift-own-doc',
-      firestore: { rules: fs.readFileSync(RULES_FILE, 'utf8') },
+      firestore: { rules: fs.readFileSync('firestore.rules', 'utf8') },
     });
   });
 
