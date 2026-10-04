@@ -125,7 +125,7 @@ export default function TenantGatePassPage() {
                     <Typography variant="h3" sx={{ color: '#fff', fontWeight: 950, display: 'flex', alignItems: 'center', gap: 2, justifyContent: isRTL ? 'flex-end' : 'flex-start' }}>
                         <ShieldCheck size={36} color={binThemeTokens.gold} /> {tx('tenant.gatePasses.title', 'Gate Passes')}
                     </Typography>
-                    <Typography sx={{ color: 'rgba(255,255,255,0.5)', mt: 1 }}>
+                    <Typography sx={{ color: 'rgba(255,255,255,0.72)', mt: 1 }}>
                         {tx('tenant.gatePasses.desc', 'Register visitors, contractors, or deliveries to generate security access QR codes.')}
                     </Typography>
                 </Box>
@@ -140,7 +140,7 @@ export default function TenantGatePassPage() {
                 <Paper sx={{ p: 8, textAlign: 'center', bgcolor: alpha(binThemeTokens.gold, 0.03), border: `1px dashed ${alpha(binThemeTokens.gold, 0.22)}`, borderRadius: 6 }}>
                     <ShieldCheck color={binThemeTokens.gold} size={48} />
                     <Typography sx={{ color: '#fff', fontWeight: 950, mt: 2 }}>{tx('tenant.gatePasses.noPasses', 'No Active Gate Passes')}</Typography>
-                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.45)', display: 'block', mb: 3 }}>
+                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.72)', display: 'block', mb: 3 }}>
                         {tx('tenant.gatePasses.noPassesHint', 'Register your first visitor to generate an access pass.')}
                     </Typography>
                 </Paper>
