@@ -27,11 +27,19 @@ const dict = (src, langKey) => {
   return src.slice(start, next);
 };
 
+// Plain string lookup (no dynamic RegExp): returns the quoted value after 'key': or null.
+const valueOf = (block, key) => {
+  const at = block.indexOf(`'${key}':`);
+  if (at < 0) return null;
+  const m = /^\s*'([^']*)'/.exec(block.slice(at + key.length + 3));
+  return m ? m[1] : null;
+};
+
 test('tenant headings that showed key names now have EN and AR strings', () => {
   const src = read('src/context/LanguageContext.tsx');
   for (const key of ['tenant.amenities.title', 'tenant.gatePasses.title', 'tenant.gatePasses.noPassesHint', 'dash.tenant.emergencySos', 'common.continue']) {
-    assert.match(dict(src, 'en'), new RegExp(`'${key.replace(/\./g, '\\.')}':`), `en ${key}`);
-    assert.match(dict(src, 'ar'), new RegExp(`'${key.replace(/\./g, '\\.')}': '[^']*[\\u0600-\\u06FF]`), `ar ${key}`);
+    assert.ok(valueOf(dict(src, 'en'), key), `en ${key}`);
+    assert.match(valueOf(dict(src, 'ar'), key) || '', /[\u0600-\u06FF]/, `ar ${key}`);
   }
 });
 
