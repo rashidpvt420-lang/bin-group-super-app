@@ -328,6 +328,8 @@ export const adminGetStaffDetails = onCall({ cors: true, region: "europe-west3",
       fileName: entry.fileName || null,
       expiryDate: entry.expiryDate || null,
       status: entry.status || null,
+      verificationStatus: entry.verificationStatus || null,
+      verifiedExpiryDate: entry.credentialVerification?.expiryDate || null,
       createdAt: serializeDate(entry.createdAt),
     }));
   const payroll = includePrivate

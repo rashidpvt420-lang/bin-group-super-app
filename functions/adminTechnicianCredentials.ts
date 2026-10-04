@@ -20,7 +20,21 @@ const MAX_EXPIRY_YEARS = 15;
 const MAX_CERTIFICATIONS = 20;
 
 type Decision = "VERIFIED" | "REJECTED";
-type CredentialInput = { decision: Decision; expiryAt: Timestamp | null; reference: string };
+type CredentialKind = "medicalCard" | "drivingLicence" | "certification";
+// A credential decision can be linked to the document HR already holds: an HR-registered document
+// (staffHrDocuments, HR Management → HR Documents) or a document the technician uploaded in the
+// staff vault (staffDocuments). Linking never verifies anything by itself: the reviewer still makes
+// the decision, enters the expiry they read on the original, and the document must belong to the
+// technician and be of the matching type.
+type DocumentSource = { collection: "staffHrDocuments" | "staffDocuments"; id: string; path: string };
+type CredentialInput = { decision: Decision; expiryAt: Timestamp | null; expiryDate: string | null; reference: string; source: DocumentSource | null };
+
+const CREDENTIAL_DOCUMENT_TYPES: Record<CredentialKind, { staffHrDocuments: string[]; staffDocuments: string[] }> = {
+    medicalCard: { staffHrDocuments: ["MEDICAL_CARD"], staffDocuments: ["medical_card"] },
+    drivingLicence: { staffHrDocuments: ["DRIVING_LICENCE", "DRIVING_LICENSE"], staffDocuments: ["driving_license", "driving_licence"] },
+    certification: { staffHrDocuments: ["CERTIFICATE"], staffDocuments: ["trade_certificate"] },
+};
+const CLOSED_DOCUMENT_STATUSES = new Set(["ARCHIVED", "REVOKED", "DELETED", "SUPERSEDED", "WITHDRAWN"]);
 
 function clean(value: unknown, max = 200): string {
     return String(value ?? "").replace(/\s+/g, " ").trim().slice(0, max);
@@ -64,17 +78,44 @@ function parseCredentialExpiry(value: unknown, label: string, nowMs = Date.now()
     return Timestamp.fromMillis(ms);
 }
 
+function parseDocumentSource(raw: any, label: string): DocumentSource | null {
+    const hrDocumentId = clean(raw.hrDocumentId, 128);
+    const staffDocumentId = clean(raw.staffDocumentId, 128);
+    if (hrDocumentId && staffDocumentId) throw new HttpsError("invalid-argument", `${label}: link one document, not two.`);
+    const id = hrDocumentId || staffDocumentId;
+    if (!id) return null;
+    if (!/^[A-Za-z0-9_-]{1,128}$/.test(id)) throw new HttpsError("invalid-argument", `${label}: invalid document id.`);
+    const collection = hrDocumentId ? "staffHrDocuments" : "staffDocuments";
+    return { collection, id, path: `${collection}/${id}` };
+}
+
 function parseCredential(raw: any, label: string, nowMs = Date.now()): CredentialInput | null {
     if (raw === undefined || raw === null) return null;
     if (typeof raw !== "object" || Array.isArray(raw)) throw new HttpsError("invalid-argument", `${label} must be an object.`);
     const decision = clean(raw.decision, 20).toUpperCase();
     if (!DECISIONS.has(decision)) throw new HttpsError("invalid-argument", `${label} decision must be VERIFIED or REJECTED.`);
-    const reference = clean(raw.documentReference, 120);
+    const source = parseDocumentSource(raw, label);
+    // A linked HR document is itself the reference; a typed document number is still preferred.
+    const reference = clean(raw.documentReference, 120) || (source ? source.path : "");
     if (decision === "VERIFIED") {
         if (!reference) throw new HttpsError("invalid-argument", `${label}: record the document number or reference you checked.`);
-        return { decision: "VERIFIED", expiryAt: parseCredentialExpiry(raw.expiryDate, label, nowMs), reference };
+        return { decision: "VERIFIED", expiryAt: parseCredentialExpiry(raw.expiryDate, label, nowMs), expiryDate: clean(raw.expiryDate, 40), reference, source };
     }
-    return { decision: "REJECTED", expiryAt: null, reference };
+    return { decision: "REJECTED", expiryAt: null, expiryDate: null, reference, source };
+}
+
+function assertLinkedDocument(snap: admin.firestore.DocumentSnapshot, source: DocumentSource, kind: CredentialKind, technicianId: string, label: string) {
+    if (!snap.exists) throw new HttpsError("not-found", `${label}: the linked HR document was not found.`);
+    const data = snap.data() || {};
+    const owner = clean(data.uid || data.technicianId || data.userId, 128);
+    if (owner !== technicianId) throw new HttpsError("failed-precondition", `${label}: the linked document belongs to a different staff member.`);
+    const type = clean(data.documentType, 80);
+    const allowed = CREDENTIAL_DOCUMENT_TYPES[kind][source.collection];
+    const matches = source.collection === "staffHrDocuments" ? allowed.includes(type.toUpperCase()) : allowed.includes(type.toLowerCase());
+    if (!matches) throw new HttpsError("failed-precondition", `${label}: the linked document is a ${type || "untyped"} document, not the matching credential type.`);
+    if (CLOSED_DOCUMENT_STATUSES.has(clean(data.status, 40).toUpperCase())) {
+        throw new HttpsError("failed-precondition", `${label}: the linked document is no longer active.`);
+    }
 }
 
 function stateOf(decision: Decision) {
@@ -120,8 +161,11 @@ export const adminRecordTechnicianCredentials = onCall({ cors: true, region: "eu
                 status: stateOf(parsed.decision),
                 expiryAt: parsed.expiryAt,
                 documentReference: parsed.reference || null,
+                documentPath: parsed.source?.path || null,
                 verifiedBy: actorId,
                 verifiedAtMs: nowMs,
+                _source: parsed.source,
+                _expiryDate: parsed.expiryDate,
             };
         });
     }
@@ -130,6 +174,18 @@ export const adminRecordTechnicianCredentials = onCall({ cors: true, region: "eu
     }
     const renewalRequestId = clean(payload.renewalRequestId, 128);
 
+    const links: Array<{ kind: CredentialKind; label: string; source: DocumentSource; decision: Decision; expiryDate: string | null; name?: string }> = [];
+    if (medical?.source) links.push({ kind: "medicalCard", label: "Medical card", source: medical.source, decision: medical.decision, expiryDate: medical.expiryDate });
+    if (licence?.source) links.push({ kind: "drivingLicence", label: "Driving licence", source: licence.source, decision: licence.decision, expiryDate: licence.expiryDate });
+    for (const item of certifications || []) {
+        const source = item._source as DocumentSource | null;
+        if (source) links.push({ kind: "certification", label: `Certification "${item.name}"`, source, decision: item.status === "verified" ? "VERIFIED" : "REJECTED", expiryDate: (item._expiryDate as string | null) || null, name: String(item.name) });
+    }
+    if (new Set(links.map((link) => link.source.path)).size !== links.length) {
+        throw new HttpsError("invalid-argument", "One HR document cannot back two different credentials.");
+    }
+    const storedCertifications = certifications?.map(({ _source, _expiryDate, ...item }) => item) || null;
+
     const userRef = db.collection("users").doc(technicianId);
     const technicianRef = db.collection("technicians").doc(technicianId);
     const renewalRef = renewalRequestId ? db.collection("technician_credential_renewals").doc(renewalRequestId) : null;
@@ -137,10 +193,11 @@ export const adminRecordTechnicianCredentials = onCall({ cors: true, region: "eu
     const now = FieldValue.serverTimestamp();
 
     const result = await db.runTransaction(async (transaction) => {
-        const [userSnap, technicianSnap, renewalSnap] = await Promise.all([
+        const [userSnap, technicianSnap, renewalSnap, ...linkSnaps] = await Promise.all([
             transaction.get(userRef),
             transaction.get(technicianRef),
             renewalRef ? transaction.get(renewalRef) : Promise.resolve(null),
+            ...links.map((link) => transaction.get(db.collection(link.source.collection).doc(link.source.id))),
         ]);
         if (!userSnap.exists) throw new HttpsError("not-found", "Technician profile was not found.");
         const user = userSnap.data() || {};
@@ -151,6 +208,7 @@ export const adminRecordTechnicianCredentials = onCall({ cors: true, region: "eu
         if (renewalSnap?.exists && clean(renewalSnap.data()?.status, 40).toUpperCase() !== "PENDING_ADMIN_REVIEW") {
             throw new HttpsError("failed-precondition", "This credential renewal request has already been reviewed.");
         }
+        links.forEach((link, index) => assertLinkedDocument(linkSnaps[index] as admin.firestore.DocumentSnapshot, link.source, link.kind, technicianId, link.label));
         const technician = technicianSnap.exists ? technicianSnap.data() || {} : {};
         const before = summary({ ...user, ...technician });
 
@@ -165,6 +223,7 @@ export const adminRecordTechnicianCredentials = onCall({ cors: true, region: "eu
                 medicalCardStatus: stateOf(medical.decision),
                 medicalCardExpiry: medical.expiryAt,
                 medicalCardReference: medical.reference || null,
+                medicalCardDocumentPath: medical.source?.path || null,
                 medicalCardVerifiedBy: actorId,
                 medicalCardVerifiedAt: now,
             });
@@ -174,14 +233,21 @@ export const adminRecordTechnicianCredentials = onCall({ cors: true, region: "eu
                 drivingLicenseStatus: stateOf(licence.decision),
                 drivingLicenseExpiry: licence.expiryAt,
                 drivingLicenseReference: licence.reference || null,
+                drivingLicenseDocumentPath: licence.source?.path || null,
                 drivingLicenseVerifiedBy: actorId,
                 drivingLicenseVerifiedAt: now,
             });
         }
-        if (certifications) {
+        if (storedCertifications) {
+            // Merge by certificate name: verifying one certificate (e.g. from a single HR document)
+            // must not erase the other certificates already on record.
+            const reviewedNames = new Set(storedCertifications.map((item) => clean(item.name, 120).toLowerCase()));
+            const existing = Array.isArray(technician.certifications) ? technician.certifications : Array.isArray(user.certifications) ? user.certifications : [];
+            const kept = existing.filter((item: any) => item && typeof item === "object" && !reviewedNames.has(clean(item.name, 120).toLowerCase()));
+            const merged = [...kept, ...storedCertifications].slice(-MAX_CERTIFICATIONS);
             Object.assign(update, {
-                certifications,
-                certificationsStatus: certifications.every((item) => item.status === "verified") ? "verified" : "rejected",
+                certifications: merged,
+                certificationsStatus: merged.every((item: any) => item.status === "verified") ? "verified" : "rejected",
                 certificationsVerifiedBy: actorId,
                 certificationsVerifiedAt: now,
             });
@@ -205,6 +271,25 @@ export const adminRecordTechnicianCredentials = onCall({ cors: true, region: "eu
         }
         transaction.set(userRef, update, { merge: true });
         transaction.set(technicianRef, update, { merge: true });
+        // Record the outcome on the HR document itself so the register shows what was verified.
+        for (const link of links) {
+            const verification = {
+                status: link.decision,
+                credential: link.kind,
+                certificationName: link.name || null,
+                expiryDate: link.decision === "VERIFIED" ? link.expiryDate : null,
+                reviewedBy: actorId,
+                reviewedAt: now,
+                auditId: auditRef.id,
+            };
+            transaction.set(db.collection(link.source.collection).doc(link.source.id), {
+                verificationStatus: link.decision,
+                credentialVerification: verification,
+                ...(link.source.collection === "staffDocuments" ? { status: link.decision === "VERIFIED" ? "hr_verified" : "hr_rejected" } : {}),
+                ...(link.decision === "VERIFIED" && link.source.collection === "staffHrDocuments" ? { expiryDate: link.expiryDate } : {}),
+                updatedAt: now,
+            }, { merge: true });
+        }
 
         const after = summary({ ...user, ...technician, ...update, medicalCardExpiry: medical ? medical.expiryAt : (technician.medicalCardExpiry ?? user.medicalCardExpiry), drivingLicenseExpiry: licence ? licence.expiryAt : (technician.drivingLicenseExpiry ?? user.drivingLicenseExpiry) });
         transaction.set(auditRef, {
@@ -218,8 +303,9 @@ export const adminRecordTechnicianCredentials = onCall({ cors: true, region: "eu
             decisions: {
                 medicalCard: medical?.decision || null,
                 drivingLicence: licence?.decision || null,
-                certifications: certifications ? certifications.map((item) => ({ name: item.name, status: item.status })) : null,
+                certifications: storedCertifications ? storedCertifications.map((item) => ({ name: item.name, status: item.status })) : null,
             },
+            linkedDocuments: links.map((link) => ({ credential: link.kind, path: link.source.path, decision: link.decision })),
             renewalRequestId: renewalRequestId || null,
             reviewNote,
             mfaVerified: true,

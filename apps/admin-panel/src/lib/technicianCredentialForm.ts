@@ -76,3 +76,70 @@ export function buildCredentialPayload(uid: string, draft: CredentialDraft, rene
   if (renewalRequestId) payload.renewalRequestId = renewalRequestId;
   return { ok: true, payload };
 }
+
+// ---- Verify a credential from a document HR already holds (HR Documents tab) ----
+// HR-registered documents (staffHrDocuments) and staff vault uploads (staffDocuments) are only
+// evidence. Uploading/registering never makes a credential valid; an Admin/HR Manager opens the
+// document, checks the original and records a decision with the expiry they read on it.
+
+export type CredentialKind = 'medicalCard' | 'drivingLicence' | 'certification';
+export type DocumentSourceCollection = 'staffHrDocuments' | 'staffDocuments';
+
+const KIND_BY_DOCUMENT_TYPE: Record<DocumentSourceCollection, Record<string, CredentialKind>> = {
+  staffHrDocuments: { MEDICAL_CARD: 'medicalCard', DRIVING_LICENCE: 'drivingLicence', DRIVING_LICENSE: 'drivingLicence', CERTIFICATE: 'certification' },
+  staffDocuments: { medical_card: 'medicalCard', driving_license: 'drivingLicence', driving_licence: 'drivingLicence', trade_certificate: 'certification' },
+};
+
+export function credentialKindForDocument(source: DocumentSourceCollection, documentType: string | null | undefined): CredentialKind | null {
+  const raw = String(documentType || '').trim();
+  const key = source === 'staffHrDocuments' ? raw.toUpperCase() : raw.toLowerCase();
+  return KIND_BY_DOCUMENT_TYPE[source][key] || null;
+}
+
+export const CREDENTIAL_KIND_LABEL: Record<CredentialKind, string> = {
+  medicalCard: 'Medical card',
+  drivingLicence: 'Driving licence',
+  certification: 'Certification',
+};
+
+export type DocumentVerificationDraft = DecisionDraft & { certificationName: string; reviewNote: string; attested: boolean };
+
+export function emptyDocumentVerificationDraft(): DocumentVerificationDraft {
+  // Expiry is deliberately NOT copied from the registered metadata: the reviewer types what the
+  // original document shows.
+  return { decision: '', expiryDate: '', documentReference: '', certificationName: '', reviewNote: '', attested: false };
+}
+
+export function buildDocumentVerificationPayload(
+  document: { source: DocumentSourceCollection; id: string; uid: string; documentType: string | null | undefined },
+  draft: DocumentVerificationDraft,
+): { ok: true; payload: Record<string, unknown> } | { ok: false; error: string } {
+  const kind = credentialKindForDocument(document.source, document.documentType);
+  if (!kind) return { ok: false, error: 'This document type is not a technician credential (medical card, driving licence or certificate).' };
+  if (!document.uid || !document.id) return { ok: false, error: 'The document is not linked to a staff member.' };
+  if (!draft.attested) return { ok: false, error: 'Confirm you personally checked the original document.' };
+  if (draft.reviewNote.trim().length < 8) return { ok: false, error: 'Describe what you checked (at least 8 characters).' };
+  if (!draft.decision) return { ok: false, error: 'Choose Verified or Rejected.' };
+  const label = CREDENTIAL_KIND_LABEL[kind];
+  const link: Record<string, string> = document.source === 'staffHrDocuments' ? { hrDocumentId: document.id } : { staffDocumentId: document.id };
+  let decision: Record<string, string>;
+  if (draft.decision === 'VERIFIED') {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(draft.expiryDate)) return { ok: false, error: `${label}: enter the expiry date shown on the original document.` };
+    decision = { decision: 'VERIFIED', expiryDate: draft.expiryDate, ...link };
+  } else if (draft.decision === 'REJECTED') {
+    decision = { decision: 'REJECTED', ...link };
+  } else {
+    return { ok: false, error: 'Choose Verified or Rejected.' };
+  }
+  const reference = draft.documentReference.trim();
+  if (reference) decision.documentReference = reference;
+  const payload: Record<string, unknown> = { technicianId: document.uid, reviewNote: draft.reviewNote.trim() };
+  if (kind === 'medicalCard') payload.medicalCard = decision;
+  if (kind === 'drivingLicence') payload.drivingLicence = decision;
+  if (kind === 'certification') {
+    const name = draft.certificationName.trim();
+    if (!name) return { ok: false, error: 'Certification: enter the certificate name (e.g. "HVAC Technician").' };
+    payload.certifications = [{ name, ...decision }];
+  }
+  return { ok: true, payload };
+}
