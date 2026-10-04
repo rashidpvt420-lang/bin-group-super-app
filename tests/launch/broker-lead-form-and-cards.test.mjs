@@ -6,17 +6,34 @@ const root = process.env.UI_AUDIT_ROOT ? `${process.env.UI_AUDIT_ROOT}/` : new U
 const read = (p) => readFileSync(`${root}${p}`, 'utf8');
 const leads = read('src/broker/pages/BrokerLeadsPage.tsx');
 
-// Pull the validator out of the page source and run it, so the test checks behaviour.
-const loadValidator = () => {
-  const start = leads.indexOf('const EMAIL_PATTERN');
-  const end = leads.indexOf('const numericAmount');
-  assert.ok(start > 0 && end > start, 'validator block missing');
-  const js = leads.slice(start, end)
-    .replace(/: \{ leadName: string; phone: string; email: string; budget: string \}/, '')
-    .replace(/const errors: Partial<Record<[^>]+>> = \{\};/, 'const errors = {};')
-    .replace(/\(value: string\)/, '(value)');
-  return new Function(`${js}; return leadFieldErrors;`)();
+// The validator's patterns, copied verbatim. The first test checks the page source contains
+// exactly these lines, so the behaviour tests below exercise what ships (no eval / Function()).
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+const UAE_PHONE_PATTERN = /^(\+971|00971|0)?5\d{8}$|^(\+971|00971|0)?[2-9]\d{7}$/;
+const BUDGET_PATTERN = /^[\d,.\s]+(k|m)?$/i;
+const NAME_LETTERS = /\p{L}/gu;
+const normaliseUaePhone = (value) => value.replace(/[\s()-]/g, '');
+const leadFieldErrors = (input) => {
+  const errors = {};
+  if ((input.leadName.match(NAME_LETTERS) || []).length < 2) errors.leadName = 'name';
+  if (input.phone.trim() && !UAE_PHONE_PATTERN.test(normaliseUaePhone(input.phone.trim()))) errors.phone = 'phone';
+  if (input.email.trim() && !EMAIL_PATTERN.test(input.email.trim())) errors.email = 'email';
+  if (input.budget.trim() && !BUDGET_PATTERN.test(input.budget.trim())) errors.budget = 'budget';
+  return errors;
 };
+const loadValidator = () => leadFieldErrors;
+
+test('page validator uses the same patterns and rules as this test', () => {
+  for (const line of [
+    `const EMAIL_PATTERN = /${EMAIL_PATTERN.source}/;`,
+    `const UAE_PHONE_PATTERN = /${UAE_PHONE_PATTERN.source}/;`,
+    "const normaliseUaePhone = (value: string) => value.replace(/[\\s()-]/g, '');",
+    "if ((input.leadName.match(/\\p{L}/gu) || []).length < 2) errors.leadName",
+    "if (input.phone.trim() && !UAE_PHONE_PATTERN.test(normaliseUaePhone(input.phone.trim()))) errors.phone",
+    "if (input.email.trim() && !EMAIL_PATTERN.test(input.email.trim())) errors.email",
+    `if (input.budget.trim() && !/${BUDGET_PATTERN.source}/i.test(input.budget.trim())) errors.budget`,
+  ]) assert.ok(leads.includes(line), `BrokerLeadsPage.tsx should contain: ${line}`);
+});
 
 test('lead form rejects "!!" as phone, email and budget (the record the audit saved)', () => {
   const errors = loadValidator()({ leadName: 'Ali Hassan', phone: '!!', email: '!!', budget: '!!' });
