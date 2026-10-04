@@ -121,6 +121,10 @@ export const StaffTodayDashboard: React.FC<StaffTodayDashboardProps> = ({
   const [actionBusy, setActionBusy] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
+  // Bumped after every successful server quick action so the own-shift
+  // listener re-subscribes; a Firestore listener that once received an error
+  // is terminated and would otherwise never show the new ACTIVE shift.
+  const [shiftListenerEpoch, setShiftListenerEpoch] = useState(0);
 
   useEffect(() => {
     if (!currentUid) return;
@@ -151,7 +155,7 @@ export const StaffTodayDashboard: React.FC<StaffTodayDashboardProps> = ({
       (snap) => setActiveShift(snap.exists() ? snap.data() : null),
       (err) => setActionError(`Shift sync failed: ${err.message}`),
     );
-  }, [currentUid]);
+  }, [currentUid, shiftListenerEpoch]);
 
   useEffect(() => {
     if (!currentUid) return;
@@ -249,6 +253,7 @@ export const StaffTodayDashboard: React.FC<StaffTodayDashboardProps> = ({
         vehicleId: activeVehicle?.id || undefined,
       });
       setActionMessage(response.data?.message || `${actionType} completed.`);
+      setShiftListenerEpoch((epoch) => epoch + 1);
     } catch (err: any) {
       setActionError(err?.message || `${actionType} failed.`);
     } finally {

@@ -1247,8 +1247,25 @@ service cloud.firestore {
       }
     }
 
+    // Own-shift listener: StaffTodayDashboard subscribes to
+    // staff_shifts/SHIFT_<uid>_<YYYY-MM-DD> before the server has created it.
+    // A get on a missing document has resource == null, so allow it only for
+    // the caller's own deterministic shift id. Existing documents keep the
+    // staffId binding, so no other staff member's shift becomes readable.
+    function isOwnStaffShiftId(shiftId) {
+      return signedIn() &&
+        shiftId.size() == ('SHIFT_' + request.auth.uid + '_').size() + 10 &&
+        shiftId[0:('SHIFT_' + request.auth.uid + '_').size()] == 'SHIFT_' + request.auth.uid + '_' &&
+        shiftId[('SHIFT_' + request.auth.uid + '_').size():shiftId.size()].matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+    }
+
     match /staff_shifts/{shiftId} {
-      allow read: if isNotSuspended() && (
+      allow get: if isNotSuspended() && (
+        resource == null
+          ? isOwnStaffShiftId(shiftId)
+          : (resource.data.get('staffId', '') == request.auth.uid || isHr() || isOps() || isAdmin())
+      );
+      allow list: if isNotSuspended() && (
         resource.data.get('staffId', '') == request.auth.uid ||
         isHr() || isOps() || isAdmin()
       );
