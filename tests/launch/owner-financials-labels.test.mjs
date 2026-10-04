@@ -29,3 +29,13 @@ test('every fin.* key on /financials has English and Arabic copy', () => {
 test('occupancy never renders "null%"', () => {
   assert.doesNotMatch(page, /\$\{safeFinancials\.pm\?\.occupancyRate\}%/);
 });
+
+test('/financials uses plain wording, a readable axis and a light payout card', () => {
+  const iban = readFileSync(new URL('../../src/components/IbanManager.tsx', import.meta.url), 'utf8');
+  assert.ok(!iban.includes('SOVEREIGN PAYOUT DESTINATION') && iban.includes('>Payout bank account<'));
+  assert.ok(!iban.includes("bgcolor: 'rgba(22, 22, 24, 0.6)'"), 'payout card must not be a translucent dark card on a light page');
+  assert.equal(valueOf(enBlock, 'fin.transactions_title'), 'Transaction history');
+  assert.ok(!page.includes("t('fin.logs_title')"));
+  assert.ok(!page.includes('`AED ${value/1000}k`'), 'axis must not print AED0.001k');
+  assert.match(page, /disabled\s+onClick=\{handleBridgeActivation\}/);
+});
