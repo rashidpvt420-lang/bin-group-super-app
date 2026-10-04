@@ -398,7 +398,7 @@ export default function TenantRequestPage() {
     return (
         <Box sx={{ maxWidth: 800, mx: 'auto', pb: 10, direction: isRTL ? 'rtl' : 'ltr' }}>
             <Stack direction={isRTL ? 'row-reverse' : 'row'} alignItems="center" spacing={2} sx={{ mb: 4 }}>
-                <IconButton onClick={() => navigate(-1)} sx={{ color: 'rgba(255,255,255,.5)', transform: isRTL ? 'rotate(180deg)' : 'none' }}>
+                <IconButton onClick={() => navigate(-1)} sx={{ color: 'rgba(255,255,255,0.72)', transform: isRTL ? 'rotate(180deg)' : 'none' }}>
                     <ChevronLeft />
                 </IconButton>
                 <Box sx={{ textAlign: isRTL ? 'right' : 'left', width: '100%' }}>

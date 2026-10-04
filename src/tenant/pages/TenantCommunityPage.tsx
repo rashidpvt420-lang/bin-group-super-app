@@ -153,7 +153,7 @@ export default function TenantCommunityPage() {
             <SafeIcon icon={Users} size={36} style={{ color: binThemeTokens.gold }} />
             {label('tenant.community.title', 'Community Board', 'لوحة المجتمع')}
           </Typography>
-          <Typography sx={{ color: 'rgba(255,255,255,0.5)', mt: 1 }}>
+          <Typography sx={{ color: 'rgba(255,255,255,0.72)', mt: 1 }}>
             {label('tenant.community.desc', 'Share recommendation, rule queries, events, and recommendations with other residents (subject to admin moderation).', 'شارك التوصيات واستفسارات القواعد والفعاليات والتوصيات مع السكان الآخرين (تخضع لرقابة المسؤول).')}
           </Typography>
         </Box>
@@ -170,7 +170,7 @@ export default function TenantCommunityPage() {
 
       {!propertyId ? (
         <Paper sx={{ p: 5, textAlign: 'center', bgcolor: 'rgba(255,255,255,0.01)', border: '1px dashed rgba(255,255,255,0.08)', borderRadius: 4 }}>
-          <SafeIcon icon={AlertCircle} size={48} style={{ color: 'rgba(255,255,255,0.2)', margin: '0 auto' }} />
+          <SafeIcon icon={AlertCircle} size={48} style={{ color: 'rgba(255,255,255,0.72)', margin: '0 auto' }} />
           <Typography sx={{ color: '#FFF', fontWeight: 950, mt: 2 }}>
             {label('tenant.community.no_prop', 'No Assigned Property Found', 'لم يتم العثور على عقار معين')}
           </Typography>
@@ -201,7 +201,7 @@ export default function TenantCommunityPage() {
                               />
                             )}
                           </Stack>
-                          <Typography variant="caption" color="textSecondary">
+                          <Typography variant="caption" color="rgba(255,255,255,0.72)">
                             {p.createdAt?.toDate ? p.createdAt.toDate().toLocaleDateString() : 'Just now'}
                           </Typography>
                         </Stack>
@@ -238,7 +238,7 @@ export default function TenantCommunityPage() {
                   <Typography variant="h6" color="#FFF" fontWeight="950">
                     Comments: {selectedPostForComments.title}
                   </Typography>
-                  <Button size="small" onClick={() => setSelectedPostForComments(null)} sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900 }}>CLOSE</Button>
+                  <Button size="small" onClick={() => setSelectedPostForComments(null)} sx={{ color: 'rgba(255,255,255,0.72)', fontWeight: 900 }}>CLOSE</Button>
                 </Stack>
 
                 <Stack spacing={2} sx={{ mb: 4, maxHeight: 400, overflowY: 'auto', pr: 1 }}>
@@ -246,7 +246,7 @@ export default function TenantCommunityPage() {
                     <Box key={c.id} sx={{ p: 2, bgcolor: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.03)', borderRadius: 3 }}>
                       <Stack direction="row" justifyContent="space-between" sx={{ mb: 1 }}>
                         <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 950 }}>{c.authorName}</Typography>
-                        <Typography variant="caption" color="textSecondary">
+                        <Typography variant="caption" color="rgba(255,255,255,0.72)">
                           {c.createdAt?.toDate ? c.createdAt.toDate().toLocaleDateString() : ''}
                         </Typography>
                       </Stack>
@@ -254,7 +254,7 @@ export default function TenantCommunityPage() {
                     </Box>
                   ))}
                   {activePostComments.length === 0 && (
-                    <Typography variant="caption" color="textSecondary" align="center" display="block" sx={{ py: 3 }}>
+                    <Typography variant="caption" color="rgba(255,255,255,0.72)" align="center" display="block" sx={{ py: 3 }}>
                       No comments yet. Write the first comment!
                     </Typography>
                   )}
@@ -286,14 +286,14 @@ export default function TenantCommunityPage() {
         <form onSubmit={handleCreatePost}>
           <DialogTitle sx={{ p: 4, pb: 0, fontWeight: 950, color: binThemeTokens.gold, textTransform: 'uppercase', letterSpacing: 2 }}>Create Community Post</DialogTitle>
           <DialogContent sx={{ p: 4 }}>
-            <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.4)', mb: 3 }}>
+            <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.72)', mb: 3 }}>
               Create a new building post. All posts are held in review and will appear to other residents once moderated.
             </Typography>
             <Stack spacing={3}>
               <TextField fullWidth label="Title *" required value={title} onChange={e => setTitle(e.target.value)} variant="filled" sx={{ '& .MuiFilledInput-root': { bgcolor: 'rgba(255,255,255,0.03)', borderRadius: 2, color: '#FFF' } }} />
               <TextField fullWidth multiline rows={4} label="Message *" required value={body} onChange={e => setBody(e.target.value)} variant="filled" sx={{ '& .MuiFilledInput-root': { bgcolor: 'rgba(255,255,255,0.03)', borderRadius: 2, color: '#FFF' } }} />
               <FormControl fullWidth variant="filled">
-                <InputLabel sx={{ color: 'rgba(255,255,255,0.5)' }}>Category</InputLabel>
+                <InputLabel sx={{ color: 'rgba(255,255,255,0.72)' }}>Category</InputLabel>
                 <Select value={category} onChange={e => setCategory(e.target.value)} sx={{ bgcolor: 'rgba(255,255,255,0.03)', color: '#FFF', borderRadius: 2 }}>
                   <MenuItem value="general">General</MenuItem>
                   <MenuItem value="event">Event</MenuItem>
@@ -305,7 +305,7 @@ export default function TenantCommunityPage() {
             </Stack>
           </DialogContent>
           <DialogActions sx={{ p: 4, borderTop: '1px solid rgba(255,255,255,0.05)' }}>
-            <Button onClick={() => setOpenAdd(false)} sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900 }}>CANCEL</Button>
+            <Button onClick={() => setOpenAdd(false)} sx={{ color: 'rgba(255,255,255,0.72)', fontWeight: 900 }}>CANCEL</Button>
             <Button type="submit" variant="contained" disabled={submitting || !title.trim() || !body.trim()} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, px: 4, py: 1.2, borderRadius: 3 }}>
               {submitting ? <CircularProgress size={20} color="inherit" /> : 'SUBMIT POST'}
             </Button>

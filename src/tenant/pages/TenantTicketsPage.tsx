@@ -13,9 +13,9 @@ const normalizeEmail = (value: unknown) => String(value || '').trim().toLowerCas
 const label = (value: unknown) => String(value || 'PENDING').replace(/_/g, ' ').toUpperCase();
 
 const STATUS_CONFIG: Record<string, { color: string; icon: any }> = {
-    OPEN: { color: 'rgba(255,255,255,0.48)', icon: Clock },
-    open: { color: 'rgba(255,255,255,0.48)', icon: Clock },
-    PENDING_ASSIGNMENT: { color: 'rgba(255,255,255,0.48)', icon: Clock },
+    OPEN: { color: 'rgba(255,255,255,0.72)', icon: Clock },
+    open: { color: 'rgba(255,255,255,0.72)', icon: Clock },
+    PENDING_ASSIGNMENT: { color: 'rgba(255,255,255,0.72)', icon: Clock },
     PENDING_SCHEDULING: { color: '#38bdf8', icon: CalendarClock },
     AWAITING_TENANT_QUOTE_APPROVAL: { color: '#f59e0b', icon: CalendarClock },
     SCHEDULED: { color: '#22c55e', icon: CalendarClock },
@@ -113,7 +113,7 @@ export default function TenantTicketsPage() {
     if (loading) return (
         <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', py: 10, gap: 2 }}>
             <CircularProgress sx={{ color: binThemeTokens.gold }} />
-            <Typography variant="overline" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900 }}>{t('dash.initializing_stream') || 'Initializing Request Stream...'}</Typography>
+            <Typography variant="overline" sx={{ color: 'rgba(255,255,255,0.72)', fontWeight: 900 }}>{t('dash.initializing_stream') || 'Initializing Request Stream...'}</Typography>
         </Box>
     );
 
@@ -122,7 +122,7 @@ export default function TenantTicketsPage() {
             <Box sx={{ mb: 5, textAlign: isRTL ? 'right' : 'left' }}>
                 <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 4 }}>{t('dash.residency_ops') || 'RESIDENCY OPERATIONS'}</Typography>
                 <Typography variant="h4" fontWeight="950" color="#FFF" sx={{ mt: 1 }}>{t('nav.tickets') || 'Requests & Service History'}</Typography>
-                <Typography sx={{ color: 'rgba(255,255,255,0.5)', mt: 1 }}>Repairs, emergencies, cleaning, pest control, vacation care and moving services appear in one timeline.</Typography>
+                <Typography sx={{ color: 'rgba(255,255,255,0.72)', mt: 1 }}>Repairs, emergencies, cleaning, pest control, vacation care and moving services appear in one timeline.</Typography>
             </Box>
 
             {warning && <Alert severity="warning" sx={{ mb: 3 }}>{warning}</Alert>}
@@ -158,7 +158,7 @@ export default function TenantTicketsPage() {
                                     <Typography variant="body1" fontWeight="950" color="#FFF" sx={{ mb: 0.5, wordBreak: 'break-word' }}>
                                         {ticket.serviceLabel || ticket.description || ticket.category || t('ticket.no_description') || 'No Description'}
                                     </Typography>
-                                    <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} alignItems="center" sx={{ color: 'rgba(255,255,255,0.4)', flexWrap: 'wrap' }}>
+                                    <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} alignItems="center" sx={{ color: 'rgba(255,255,255,0.72)', flexWrap: 'wrap' }}>
                                         <Typography variant="caption" sx={{ fontWeight: 800 }}>{t('common.ref') || 'REF'}: #{ticket.id.substring(0, 8).toUpperCase()}</Typography>
                                         <Typography variant="caption">•</Typography>
                                         <Typography variant="caption" sx={{ fontWeight: 800 }}>{ticket.category}</Typography>
@@ -171,7 +171,7 @@ export default function TenantTicketsPage() {
                                                 <Chip size="small" label={`Quote: ${label(ticket.quoteStatus || 'PENDING')}`} sx={{ bgcolor: alpha('#f59e0b', 0.12), color: '#fbbf24' }} />
                                                 {ticket.recurrenceFrequency && ticket.recurrenceFrequency !== 'one-time' && <Chip size="small" icon={<Repeat2 size={12} />} label={`${label(ticket.recurrenceFrequency)} · ${ticket.recurrenceSequence || 1}/${ticket.recurrenceOccurrences || 1}`} sx={{ bgcolor: alpha('#8b5cf6', 0.12), color: '#c4b5fd', '& .MuiChip-icon': { color: '#c4b5fd' } }} />}
                                             </Stack>
-                                            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)' }}>Access: {label(ticket.accessMethod || 'TENANT PRESENT')} · Security: {label(ticket.securityAccessStatus || 'PENDING')}</Typography>
+                                            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.72)' }}>Access: {label(ticket.accessMethod || 'TENANT PRESENT')} · Security: {label(ticket.securityAccessStatus || 'PENDING')}</Typography>
                                         </Stack>
                                     )}
 
@@ -182,7 +182,7 @@ export default function TenantTicketsPage() {
                                             <Chip size="small" icon={<Navigation size={11} />} label="Track" sx={{ fontSize: '0.65rem', fontWeight: 900, bgcolor: alpha(config.color, 0.15), color: config.color, height: 22, '& .MuiChip-icon': { color: config.color } }} />
                                         </Stack>
                                     )}
-                                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.25)', fontWeight: 700, mt: 1, display: 'block' }}>{ticket.createdAt?.toDate ? ticket.createdAt.toDate().toLocaleString() : ''}</Typography>
+                                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.72)', fontWeight: 700, mt: 1, display: 'block' }}>{ticket.createdAt?.toDate ? ticket.createdAt.toDate().toLocaleString() : ''}</Typography>
                                 </Box>
                                 <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} alignItems="center" flexShrink={0}>
                                     <Chip icon={<Icon size={14} />} label={label(status)} sx={{ bgcolor: alpha(config.color, 0.1), color: config.color, fontWeight: 950, fontSize: '0.65rem', height: 24, borderRadius: 2, border: `1px solid ${alpha(config.color, 0.2)}`, '& .MuiChip-icon': { color: config.color } }} />
@@ -196,7 +196,7 @@ export default function TenantTicketsPage() {
                 {tickets.length === 0 && (
                     <Paper sx={{ p: 8, textAlign: 'center', bgcolor: 'rgba(15, 23, 42, 0.4)', border: '1px dashed rgba(255,255,255,0.08)', borderRadius: 8 }}>
                         <FileText size={48} color="rgba(255,255,255,0.08)" style={{ margin: '0 auto 16px' }} />
-                        <Typography variant="body1" sx={{ color: 'rgba(255,255,255,0.35)', fontWeight: 800 }}>NO REQUESTS YET</Typography>
+                        <Typography variant="body1" sx={{ color: 'rgba(255,255,255,0.72)', fontWeight: 800 }}>NO REQUESTS YET</Typography>
                     </Paper>
                 )}
             </Stack>

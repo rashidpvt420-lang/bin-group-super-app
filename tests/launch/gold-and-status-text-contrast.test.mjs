@@ -53,3 +53,20 @@ for (const file of lightPages) {
     assert.doesNotMatch(src, /(?<![A-Za-z])color:\s*['"]#(C9A646|B8932F|DAA520|D4AF37|E5C86B)['"]/i);
   });
 }
+
+// Dark tenant routes (TenantApp paints them black): dim white text below 0.6 alpha is under 4.5:1,
+// and goldText (#7A5C12) is only about 3:1 on black, so these files keep bright gold and >= 0.72 white.
+const darkFiles = [
+  'src/tenant/pages/TenantTicketsPage.tsx', 'src/tenant/pages/TenantTicketDetailPage.tsx', 'src/tenant/pages/TenantPaymentsPage.tsx',
+  'src/tenant/pages/TenantMoveInspectionPage.tsx', 'src/tenant/pages/TenantKeysPage.tsx', 'src/tenant/pages/TenantAmenitiesPage.tsx',
+  'src/tenant/pages/TenantNoticesPage.tsx', 'src/tenant/pages/TenantGatePassPage.tsx', 'src/tenant/pages/TenantVisitorParkingPage.tsx',
+  'src/components/tracking/LiveTechnicianTrackingCard.tsx',
+];
+for (const file of darkFiles) {
+  test(`${file.split('/').pop()} has no dim or dark-gold text on its dark surface`, () => {
+    const src = read(file);
+    assert.doesNotMatch(src, /(?<![A-Za-z])color:\s*'rgba\(\s*255\s*,\s*255\s*,\s*255\s*,\s*0?\.[0-5]\d*\s*\)'/);
+    assert.doesNotMatch(src, /color="text(Secondary|\.secondary)"/);
+    assert.ok(!src.includes('binThemeTokens.goldText'), 'goldText is for light surfaces only');
+  });
+}

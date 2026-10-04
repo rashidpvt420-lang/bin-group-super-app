@@ -327,7 +327,7 @@ export default function TenantAIConciergePage() {
               aria-label={tx('tenant.ai.restart', 'Start over')}
               size="small"
               onClick={handleRestart}
-              sx={{ color: 'rgba(255,255,255,0.4)', '&:hover': { color: '#fff' } }}
+              sx={{ color: 'rgba(255,255,255,0.72)', '&:hover': { color: '#fff' } }}
             >
               <X size={16} />
             </IconButton>
@@ -366,7 +366,7 @@ export default function TenantAIConciergePage() {
                   {msg.from === 'bot' ? renderBotText(msg.text) : (
                     <Typography variant="body2" sx={{ color: '#fff', fontWeight: 600 }}>{msg.text}</Typography>
                   )}
-                  <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.28)', mt: 0.5, display: 'block', textAlign: msg.from === 'user' ? 'right' : 'left' }}>
+                  <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.72)', mt: 0.5, display: 'block', textAlign: msg.from === 'user' ? 'right' : 'left' }}>
                     {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                   </Typography>
                 </Box>

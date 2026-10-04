@@ -170,7 +170,7 @@ export default function LiveTechnicianTrackingCard({
                         position: 'absolute',
                         top: 12,
                         left: 12,
-                        color: 'rgba(255,255,255,0.45)',
+                        color: 'rgba(255,255,255,0.72)',
                         fontWeight: 900,
                         letterSpacing: 1,
                     }}
@@ -203,7 +203,7 @@ export default function LiveTechnicianTrackingCard({
                             <Tooltip title="Last verified Technician coordinate">
                                 <Stack alignItems="center" spacing={0.5}>
                                     <Box sx={{ width: 16, height: 16, borderRadius: '50%', bgcolor: trackingFresh ? '#22d3ee' : '#64748b', border: '2px solid #FFF' }} />
-                                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.6rem', fontWeight: 900 }}>TECH</Typography>
+                                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.72)', fontSize: '0.6rem', fontWeight: 900 }}>TECH</Typography>
                                 </Stack>
                             </Tooltip>
                             <Box sx={{ width: { xs: 35, sm: 70 }, borderTop: '1.5px dashed rgba(255,255,255,0.18)' }} />
@@ -214,11 +214,11 @@ export default function LiveTechnicianTrackingCard({
                             <Tooltip title="Verified job/property coordinate">
                                 <Stack alignItems="center" spacing={0.5}>
                                     <Box sx={{ width: 16, height: 16, borderRadius: '50%', bgcolor: binThemeTokens.gold, border: '2px solid #FFF' }} />
-                                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.6rem', fontWeight: 900 }}>JOB</Typography>
+                                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.72)', fontSize: '0.6rem', fontWeight: 900 }}>JOB</Typography>
                                 </Stack>
                             </Tooltip>
                         </Stack>
-                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.45)', fontWeight: 700, textAlign: 'center' }}>
+                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.72)', fontWeight: 700, textAlign: 'center' }}>
                             In-app estimate uses approximate straight-line distance and a fixed average speed. Road routing is available only in Google Maps.
                         </Typography>
                         <Button
@@ -233,7 +233,7 @@ export default function LiveTechnicianTrackingCard({
                 ) : jobLocation ? (
                     <>
                         <MapPin size={32} color={binThemeTokens.gold} style={{ opacity: 0.7 }} />
-                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 900 }}>
+                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.72)', fontWeight: 900 }}>
                             Verified job pin available; Technician GPS point pending.
                         </Typography>
                         {jobMapsUrl && (
@@ -250,7 +250,7 @@ export default function LiveTechnicianTrackingCard({
                 ) : (
                     <>
                         <AlertCircle size={28} color="rgba(255,255,255,0.25)" />
-                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900, textAlign: 'center' }}>
+                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.72)', fontWeight: 900, textAlign: 'center' }}>
                             Exact job coordinates are unavailable. Dispatch distance and route cannot be verified.
                         </Typography>
                     </>
@@ -290,7 +290,7 @@ export default function LiveTechnicianTrackingCard({
                                 icon={<Navigation size={13} />}
                                 label={`${straightLineDistanceKm.toFixed(1)} km approximate straight-line distance`}
                                 size="small"
-                                sx={{ bgcolor: 'rgba(255,255,255,0.04)', color: 'rgba(255,255,255,0.65)', fontWeight: 900, border: '1px solid rgba(255,255,255,0.08)', '& .MuiChip-icon': { color: 'rgba(255,255,255,0.45)' } }}
+                                sx={{ bgcolor: 'rgba(255,255,255,0.04)', color: 'rgba(255,255,255,0.65)', fontWeight: 900, border: '1px solid rgba(255,255,255,0.08)', '& .MuiChip-icon': { color: 'rgba(255,255,255,0.72)' } }}
                             />
                         )}
                     </Stack>
@@ -315,7 +315,7 @@ export default function LiveTechnicianTrackingCard({
                             <Stack direction="row" spacing={2} alignItems="center" sx={{ minWidth: 0 }}>
                                 <Avatar
                                     src={ticket.assignedTechnicianAvatar || ticket.technicianPhotoURL}
-                                    sx={{ width: 48, height: 48, bgcolor: alpha(binThemeTokens.gold, 0.15), color: binThemeTokens.goldText, fontWeight: 900, flexShrink: 0 }}
+                                    sx={{ width: 48, height: 48, bgcolor: alpha(binThemeTokens.gold, 0.15), color: binThemeTokens.gold, fontWeight: 900, flexShrink: 0 }}
                                 >
                                     {(ticket.assignedTechnicianName || 'T').charAt(0)}
                                 </Avatar>
@@ -323,11 +323,11 @@ export default function LiveTechnicianTrackingCard({
                                     <Typography variant="body2" fontWeight="950" color="#FFF" sx={{ overflowWrap: 'anywhere' }}>
                                         {ticket.assignedTechnicianName || 'Technician'}
                                     </Typography>
-                                    <Typography variant="caption" color="textSecondary" sx={{ fontWeight: 700 }}>
+                                    <Typography variant="caption" color="rgba(255,255,255,0.72)" sx={{ fontWeight: 700 }}>
                                         {ticket.assignedTechnicianSpecialty || ticket.technicianSpecialty || 'Maintenance Specialist'}
                                     </Typography>
                                     {(ticket.assignedTechnicianPhone || ticket.technicianPhone) && (
-                                        <Typography variant="caption" sx={{ color: binThemeTokens.goldText, display: 'block', fontWeight: 900 }}>
+                                        <Typography variant="caption" sx={{ color: binThemeTokens.gold, display: 'block', fontWeight: 900 }}>
                                             {ticket.assignedTechnicianPhone || ticket.technicianPhone}
                                         </Typography>
                                     )}
@@ -351,7 +351,7 @@ export default function LiveTechnicianTrackingCard({
                                                 if (phone) window.open(`tel:${phone}`);
                                             }
                                         }}
-                                        sx={{ bgcolor: alpha(binThemeTokens.gold, 0.1), color: binThemeTokens.goldText }}
+                                        sx={{ bgcolor: alpha(binThemeTokens.gold, 0.1), color: binThemeTokens.gold }}
                                     >
                                         <Phone size={18} />
                                     </IconButton>
@@ -364,7 +364,7 @@ export default function LiveTechnicianTrackingCard({
                 {showTimeline && (
                     <>
                         <Divider sx={{ mb: 2.5, borderColor: 'rgba(255,255,255,0.05)' }} />
-                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.35)', fontWeight: 900, letterSpacing: 2, mb: 2, display: 'block' }}>
+                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.72)', fontWeight: 900, letterSpacing: 2, mb: 2, display: 'block' }}>
                             STATUS TIMELINE
                         </Typography>
                         <Stack spacing={2}>

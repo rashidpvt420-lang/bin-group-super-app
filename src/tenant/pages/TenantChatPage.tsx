@@ -114,7 +114,7 @@ export default function TenantChatPage() {
                         const isMe = message.senderUid === user?.uid;
                         return (
                             <Box key={message.id} sx={{ alignSelf: isMe ? 'flex-end' : 'flex-start', maxWidth: '80%' }}>
-                                {!isMe && <Typography variant="caption" color="textSecondary" sx={{ ml: 1 }}>{message.senderName}</Typography>}
+                                {!isMe && <Typography variant="caption" color="rgba(255,255,255,0.72)" sx={{ ml: 1 }}>{message.senderName}</Typography>}
                                 <Paper sx={{
                                     p: 2,
                                     bgcolor: isMe ? binThemeTokens.gold : 'rgba(255,255,255,0.05)',
@@ -127,7 +127,7 @@ export default function TenantChatPage() {
                         );
                     })}
                     {messages.length === 0 && !messageError && (
-                        <Typography variant="body2" color="textSecondary" align="center" sx={{ mt: 10 }}>
+                        <Typography variant="body2" color="rgba(255,255,255,0.72)" align="center" sx={{ mt: 10 }}>
                             Send a message to the technician.
                         </Typography>
                     )}

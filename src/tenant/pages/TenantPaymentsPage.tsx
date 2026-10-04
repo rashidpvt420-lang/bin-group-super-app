@@ -211,7 +211,7 @@ export default function TenantPaymentsPage() {
                     <Typography variant="h4" fontWeight={950} sx={{ color: '#fff', mt: 0.5 }}>
                         Your Payment History
                     </Typography>
-                    <Typography sx={{ color: 'rgba(255,255,255,0.55)', mt: 0.5 }}>
+                    <Typography sx={{ color: 'rgba(255,255,255,0.72)', mt: 0.5 }}>
                         View all payments, submit proof, and track verification status.
                     </Typography>
                 </Box>
@@ -237,7 +237,7 @@ export default function TenantPaymentsPage() {
                         <Paper sx={{ p: 2.5, bgcolor: 'rgba(15,23,42,0.6)', border: `1px solid ${alpha(kpi.color, 0.25)}`, borderRadius: 4 }}>
                             <Box sx={{ color: kpi.color, mb: 1 }}>{kpi.icon}</Box>
                             <Typography variant="h5" fontWeight={950} sx={{ color: '#fff' }}>{kpi.value}</Typography>
-                            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900 }}>{kpi.label}</Typography>
+                            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.72)', fontWeight: 900 }}>{kpi.label}</Typography>
                         </Paper>
                     </Grid>
                 ))}
@@ -265,8 +265,8 @@ export default function TenantPaymentsPage() {
                 ) : payments.length === 0 ? (
                     <Box sx={{ p: 8, textAlign: 'center' }}>
                         <DollarSign size={48} color="rgba(255,255,255,0.1)" style={{ margin: '0 auto 16px' }} />
-                        <Typography sx={{ color: 'rgba(255,255,255,0.3)', fontWeight: 800 }}>NO PAYMENT RECORDS YET</Typography>
-                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.2)' }}>
+                        <Typography sx={{ color: 'rgba(255,255,255,0.72)', fontWeight: 800 }}>NO PAYMENT RECORDS YET</Typography>
+                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.72)' }}>
                             Submit your first payment proof to get started.
                         </Typography>
                     </Box>
@@ -275,23 +275,23 @@ export default function TenantPaymentsPage() {
                         <Table>
                             <TableHead>
                                 <TableRow>
-                                    <TableCell sx={{ bgcolor: '#0a0f1e', color: 'rgba(255,255,255,0.4)', fontWeight: 900 }}>DATE</TableCell>
-                                    <TableCell sx={{ bgcolor: '#0a0f1e', color: 'rgba(255,255,255,0.4)', fontWeight: 900 }}>AMOUNT</TableCell>
-                                    <TableCell sx={{ bgcolor: '#0a0f1e', color: 'rgba(255,255,255,0.4)', fontWeight: 900 }}>REFERENCE</TableCell>
-                                    <TableCell sx={{ bgcolor: '#0a0f1e', color: 'rgba(255,255,255,0.4)', fontWeight: 900 }}>PERIOD</TableCell>
-                                    <TableCell sx={{ bgcolor: '#0a0f1e', color: 'rgba(255,255,255,0.4)', fontWeight: 900 }}>STATUS</TableCell>
-                                    <TableCell sx={{ bgcolor: '#0a0f1e', color: 'rgba(255,255,255,0.4)', fontWeight: 900 }} align="right">RECEIPT</TableCell>
+                                    <TableCell sx={{ bgcolor: '#0a0f1e', color: 'rgba(255,255,255,0.72)', fontWeight: 900 }}>DATE</TableCell>
+                                    <TableCell sx={{ bgcolor: '#0a0f1e', color: 'rgba(255,255,255,0.72)', fontWeight: 900 }}>AMOUNT</TableCell>
+                                    <TableCell sx={{ bgcolor: '#0a0f1e', color: 'rgba(255,255,255,0.72)', fontWeight: 900 }}>REFERENCE</TableCell>
+                                    <TableCell sx={{ bgcolor: '#0a0f1e', color: 'rgba(255,255,255,0.72)', fontWeight: 900 }}>PERIOD</TableCell>
+                                    <TableCell sx={{ bgcolor: '#0a0f1e', color: 'rgba(255,255,255,0.72)', fontWeight: 900 }}>STATUS</TableCell>
+                                    <TableCell sx={{ bgcolor: '#0a0f1e', color: 'rgba(255,255,255,0.72)', fontWeight: 900 }} align="right">RECEIPT</TableCell>
                                 </TableRow>
                             </TableHead>
                             <TableBody>
                                 {payments.map((payment) => {
-                                    const config = STATUS_CONFIG[payment.status] || { label: payment.status, color: 'rgba(255,255,255,0.4)' };
+                                    const config = STATUS_CONFIG[payment.status] || { label: payment.status, color: 'rgba(255,255,255,0.72)' };
                                     return (
                                         <TableRow key={payment.id} hover>
                                             <TableCell sx={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.8rem' }}>{formatDate(payment.createdAt)}</TableCell>
                                             <TableCell sx={{ color: '#fff', fontWeight: 700 }}>AED {payment.amount.toLocaleString()}</TableCell>
-                                            <TableCell sx={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem' }}>{[payment.paymentMethod, payment.reference].filter(Boolean).join(' · ') || '—'}</TableCell>
-                                            <TableCell sx={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem' }}>{payment.period || '—'}</TableCell>
+                                            <TableCell sx={{ color: 'rgba(255,255,255,0.72)', fontSize: '0.8rem' }}>{[payment.paymentMethod, payment.reference].filter(Boolean).join(' · ') || '—'}</TableCell>
+                                            <TableCell sx={{ color: 'rgba(255,255,255,0.72)', fontSize: '0.8rem' }}>{payment.period || '—'}</TableCell>
                                             <TableCell>
                                                 <Chip label={config.label} size="small" sx={{ bgcolor: alpha(config.color, 0.1), color: config.color, fontWeight: 900, fontSize: '0.6rem' }} />
                                             </TableCell>
@@ -300,7 +300,7 @@ export default function TenantPaymentsPage() {
                                                     <Button size="small" variant="outlined" sx={{ fontWeight: 900, fontSize: '0.65rem', color: binThemeTokens.gold, borderColor: binThemeTokens.gold }} onClick={() => window.open(payment.receiptUrl, '_blank')}>
                                                         VIEW
                                                     </Button>
-                                                ) : <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.2)' }}>—</Typography>}
+                                                ) : <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.72)' }}>—</Typography>}
                                             </TableCell>
                                         </TableRow>
                                     );
@@ -324,7 +324,7 @@ export default function TenantPaymentsPage() {
                             select fullWidth required label="Payment Method" value={proofForm.paymentMethod}
                             onChange={e => setProofForm(p => ({ ...p, paymentMethod: e.target.value as TenantProofMethod }))}
                             inputProps={{ 'data-testid': 'tenant-proof-method' }}
-                            sx={{ '& .MuiInputBase-root': { color: '#fff' }, '& label': { color: 'rgba(255,255,255,0.5)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.2)' } }}
+                            sx={{ '& .MuiInputBase-root': { color: '#fff' }, '& label': { color: 'rgba(255,255,255,0.72)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.2)' } }}
                         >
                             <MenuItem value="CASH">Cash</MenuItem>
                             <MenuItem value="CHEQUE">Cheque</MenuItem>
@@ -333,13 +333,13 @@ export default function TenantPaymentsPage() {
                             fullWidth required label="Amount (AED)" inputMode="decimal" value={proofForm.amount}
                             onChange={e => setProofForm(p => ({ ...p, amount: e.target.value }))}
                             helperText="Exact amount, at most two decimals (fils)."
-                            sx={{ '& .MuiInputBase-root': { color: '#fff' }, '& label': { color: 'rgba(255,255,255,0.5)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.2)' } }}
+                            sx={{ '& .MuiInputBase-root': { color: '#fff' }, '& label': { color: 'rgba(255,255,255,0.72)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.2)' } }}
                         />
                         {proofForm.paymentMethod === 'CASH' && (
                             <TextField
                                 fullWidth required label="Cash Receipt Number" value={proofForm.reference}
                                 onChange={e => setProofForm(p => ({ ...p, reference: e.target.value }))}
-                                sx={{ '& .MuiInputBase-root': { color: '#fff' }, '& label': { color: 'rgba(255,255,255,0.5)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.2)' } }}
+                                sx={{ '& .MuiInputBase-root': { color: '#fff' }, '& label': { color: 'rgba(255,255,255,0.72)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.2)' } }}
                             />
                         )}
                         {proofForm.paymentMethod === 'CHEQUE' && (
@@ -347,30 +347,30 @@ export default function TenantPaymentsPage() {
                                 <TextField
                                     fullWidth required label="Cheque Number" inputMode="numeric" value={proofForm.chequeNumber}
                                     onChange={e => setProofForm(p => ({ ...p, chequeNumber: e.target.value }))}
-                                    sx={{ '& .MuiInputBase-root': { color: '#fff' }, '& label': { color: 'rgba(255,255,255,0.5)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.2)' } }}
+                                    sx={{ '& .MuiInputBase-root': { color: '#fff' }, '& label': { color: 'rgba(255,255,255,0.72)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.2)' } }}
                                 />
                                 <TextField
                                     fullWidth required label="Issuing Bank" value={proofForm.chequeBank}
                                     onChange={e => setProofForm(p => ({ ...p, chequeBank: e.target.value }))}
-                                    sx={{ '& .MuiInputBase-root': { color: '#fff' }, '& label': { color: 'rgba(255,255,255,0.5)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.2)' } }}
+                                    sx={{ '& .MuiInputBase-root': { color: '#fff' }, '& label': { color: 'rgba(255,255,255,0.72)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.2)' } }}
                                 />
                                 <TextField
                                     fullWidth required label="Cheque Date" type="date" value={proofForm.chequeDate}
                                     InputLabelProps={{ shrink: true }}
                                     onChange={e => setProofForm(p => ({ ...p, chequeDate: e.target.value }))}
-                                    sx={{ '& .MuiInputBase-root': { color: '#fff' }, '& label': { color: 'rgba(255,255,255,0.5)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.2)' } }}
+                                    sx={{ '& .MuiInputBase-root': { color: '#fff' }, '& label': { color: 'rgba(255,255,255,0.72)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.2)' } }}
                                 />
                             </>
                         )}
                         <TextField
                             fullWidth label="Payment Period (e.g. July 2026)" value={proofForm.period}
                             onChange={e => setProofForm(p => ({ ...p, period: e.target.value }))}
-                            sx={{ '& .MuiInputBase-root': { color: '#fff' }, '& label': { color: 'rgba(255,255,255,0.5)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.2)' } }}
+                            sx={{ '& .MuiInputBase-root': { color: '#fff' }, '& label': { color: 'rgba(255,255,255,0.72)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.2)' } }}
                         />
                         <TextField
                             fullWidth label="Notes (optional)" multiline rows={2} value={proofForm.notes}
                             onChange={e => setProofForm(p => ({ ...p, notes: e.target.value }))}
-                            sx={{ '& .MuiInputBase-root': { color: '#fff' }, '& label': { color: 'rgba(255,255,255,0.5)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.2)' } }}
+                            sx={{ '& .MuiInputBase-root': { color: '#fff' }, '& label': { color: 'rgba(255,255,255,0.72)' }, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.2)' } }}
                         />
                         <Button
                             variant="outlined"
@@ -396,7 +396,7 @@ export default function TenantPaymentsPage() {
                     </Stack>
                 </DialogContent>
                 <DialogActions sx={{ p: 3, borderTop: '1px solid rgba(255,255,255,0.05)' }}>
-                    <Button onClick={() => setUploadDialogOpen(false)} sx={{ color: 'rgba(255,255,255,0.5)' }}>CANCEL</Button>
+                    <Button onClick={() => setUploadDialogOpen(false)} sx={{ color: 'rgba(255,255,255,0.72)' }}>CANCEL</Button>
                     <Button variant="contained" onClick={handleSubmitProof} disabled={uploading || Boolean(proofFormError) || !receiptFile}
                         sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 900 }}
                     >

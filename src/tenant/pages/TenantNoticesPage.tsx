@@ -151,7 +151,7 @@ export default function TenantNoticesPage() {
           <SafeIcon icon={Bell} size={36} style={{ color: binThemeTokens.gold }} />
           {label('tenant.notices.title', 'Notices & Announcements', 'الإخطارات والإعلانات')}
         </Typography>
-        <Typography sx={{ color: 'rgba(255,255,255,0.5)', mt: 1 }}>
+        <Typography sx={{ color: 'rgba(255,255,255,0.72)', mt: 1 }}>
           {label('tenant.notices.desc', 'Stay updated with active announcements, maintenance alerts, and emergency updates for your building.', 'ابق على اطلاع بالإعلانات النشطة وتنبيهات الصيانة وتحديثات الطوارئ لمبناك.')}
         </Typography>
       </Box>
@@ -166,7 +166,7 @@ export default function TenantNoticesPage() {
           variant="filled"
           InputProps={{
             startAdornment: (
-              <InputAdornment position="start" sx={{ color: 'rgba(255,255,255,0.4)' }}>
+              <InputAdornment position="start" sx={{ color: 'rgba(255,255,255,0.72)' }}>
                 <SafeIcon icon={Search} size={18} />
               </InputAdornment>
             ),
@@ -174,7 +174,7 @@ export default function TenantNoticesPage() {
           }}
         />
         <FormControl variant="filled" sx={{ minWidth: 160 }}>
-          <InputLabel sx={{ color: 'rgba(255,255,255,0.5)' }}>{label('tenant.notices.category', 'Category', 'الفئة')}</InputLabel>
+          <InputLabel sx={{ color: 'rgba(255,255,255,0.72)' }}>{label('tenant.notices.category', 'Category', 'الفئة')}</InputLabel>
           <Select
             value={filterCategory}
             onChange={(e) => setFilterCategory(e.target.value)}
@@ -219,7 +219,7 @@ export default function TenantNoticesPage() {
                         sx={{ bgcolor: alpha(priorityColor, 0.12), color: priorityColor, fontWeight: 900 }}
                       />
                     </Stack>
-                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)' }}>
+                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.72)' }}>
                       {notice.publishedAt?.toDate ? notice.publishedAt.toDate().toLocaleString() : 'Just now'}
                     </Typography>
                   </Stack>
@@ -261,11 +261,11 @@ export default function TenantNoticesPage() {
 
       {filteredNotices.length === 0 && (
         <Paper sx={{ p: 6, textAlign: 'center', bgcolor: 'rgba(255,255,255,0.01)', border: '1px dashed rgba(255,255,255,0.08)', borderRadius: 4 }}>
-          <SafeIcon icon={AlertCircle} size={48} style={{ color: 'rgba(255,255,255,0.2)', margin: '0 auto' }} />
+          <SafeIcon icon={AlertCircle} size={48} style={{ color: 'rgba(255,255,255,0.72)', margin: '0 auto' }} />
           <Typography sx={{ color: '#FFF', fontWeight: 950, mt: 2 }}>
             {label('tenant.notices.none', 'No Announcements Found', 'لم يتم العثور على إعلانات')}
           </Typography>
-          <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', display: 'block', mt: 1 }}>
+          <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.72)', display: 'block', mt: 1 }}>
             {label('tenant.notices.none_hint', 'Check back later for updates or alerts.', 'تحقق مرة أخرى لاحقًا لمعرفة التحديثات والتنبيهات.')}
           </Typography>
         </Paper>

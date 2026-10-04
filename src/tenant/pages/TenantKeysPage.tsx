@@ -94,14 +94,14 @@ export default function TenantKeysPage() {
           <SafeIcon icon={Key} size={36} style={{ color: binThemeTokens.gold }} />
           {label('tenant.keys.title', 'Key Register', 'سجل المفاتيح')}
         </Typography>
-        <Typography sx={{ color: 'rgba(255,255,255,0.5)', mt: 1 }}>
+        <Typography sx={{ color: 'rgba(255,255,255,0.72)', mt: 1 }}>
           {label('tenant.keys.desc', 'View custody logs, active keys, and key movements registered for your unit.', 'عرض سجلات العهدة والمفاتيح النشطة وحركة المفاتيح المسجلة لوحدتك.')}
         </Typography>
       </Box>
 
       {!unitId ? (
         <Paper sx={{ p: 5, textAlign: 'center', bgcolor: 'rgba(255,255,255,0.01)', border: '1px dashed rgba(255,255,255,0.08)', borderRadius: 4 }}>
-          <SafeIcon icon={AlertTriangle} size={48} style={{ color: 'rgba(255,255,255,0.2)', margin: '0 auto' }} />
+          <SafeIcon icon={AlertTriangle} size={48} style={{ color: 'rgba(255,255,255,0.72)', margin: '0 auto' }} />
           <Typography sx={{ color: '#FFF', fontWeight: 950, mt: 2 }}>
             {label('tenant.keys.no_unit', 'No Assigned Unit Found', 'لم يتم العثور على وحدة معينة')}
           </Typography>
@@ -116,7 +116,7 @@ export default function TenantKeysPage() {
               </Typography>
 
               {keys.length === 0 ? (
-                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', display: 'block', py: 2 }}>
+                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.72)', display: 'block', py: 2 }}>
                   {label('tenant.keys.none', 'No active keys registered.', 'لا توجد مفاتيح نشطة مسجلة.')}
                 </Typography>
               ) : (
@@ -126,7 +126,7 @@ export default function TenantKeysPage() {
                       <Stack direction="row" justifyContent="space-between" alignItems="center">
                         <Box>
                           <Typography variant="body2" fontWeight="900" color="#FFF">{k.keyType?.toUpperCase() || 'UNIT KEY'}</Typography>
-                          <Typography variant="caption" color="textSecondary">{k.keyCodeMasked || '••••••••'}</Typography>
+                          <Typography variant="caption" color="rgba(255,255,255,0.72)">{k.keyCodeMasked || '••••••••'}</Typography>
                         </Box>
                         <Chip
                           size="small"
@@ -136,7 +136,7 @@ export default function TenantKeysPage() {
                       </Stack>
                       {k.currentCustodianName && (
                         <Box sx={{ mt: 1.5, pt: 1, borderTop: '1px solid rgba(255,255,255,0.03)' }}>
-                          <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', display: 'block' }}>
+                          <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.72)', display: 'block' }}>
                             {label('tenant.keys.custodian', 'Current Custodian:', 'الحارس الحالي:')}
                           </Typography>
                           <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>
@@ -160,7 +160,7 @@ export default function TenantKeysPage() {
 
               {movements.length === 0 ? (
                 <Paper sx={{ p: 4, textAlign: 'center', bgcolor: 'rgba(255,255,255,0.01)', border: '1px dashed rgba(255,255,255,0.05)', borderRadius: 2 }}>
-                  <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.3)' }}>
+                  <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.72)' }}>
                     {label('tenant.keys.no_history', 'No key movements recorded yet.', 'لم يتم تسجيل حركة للمفاتيح بعد.')}
                   </Typography>
                 </Paper>
