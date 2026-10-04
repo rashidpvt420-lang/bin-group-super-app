@@ -40,10 +40,10 @@ function contrastOnWhite(hex) {
 
 test('job page text palette is >= 4.5:1 on the white shell', () => {
   const block = jobDetail.slice(jobDetail.indexOf('const JOB_READABLE = {'), jobDetail.indexOf('} as const;', jobDetail.indexOf('const JOB_READABLE = {')));
+  const palette = Object.fromEntries([...block.matchAll(/(\w+): '(#[0-9A-Fa-f]{6})'/g)].map((m) => [m[1], m[2]]));
   for (const key of ['ink', 'muted', 'gold', 'amber', 'green', 'violet']) {
-    const m = block.match(new RegExp(`${key}: '(#[0-9A-Fa-f]{6})'`)); // eslint-disable-line security/detect-non-literal-regexp
-    assert.ok(m, `${key} defined`);
-    assert.ok(contrastOnWhite(m[1]) >= 4.5, `${key} ${m[1]} contrast ${contrastOnWhite(m[1]).toFixed(2)}`);
+    assert.ok(palette[key], `${key} defined`);
+    assert.ok(contrastOnWhite(palette[key]) >= 4.5, `${key} ${palette[key]} contrast ${contrastOnWhite(palette[key]).toFixed(2)}`);
   }
 });
 
