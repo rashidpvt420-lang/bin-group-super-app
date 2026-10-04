@@ -13,7 +13,7 @@ import { binThemeTokens } from '../../theme/binGroupTheme';
 import { useLanguage } from '@bin/shared';
 
 export default function InvoiceVerificationPage() {
-    const { t } = useLanguage();
+    const { t, tx } = useLanguage();
     const { id: routeHash } = useParams();
     const [searchParams] = useSearchParams();
     const proofType = String(searchParams.get('type') || 'invoice').toLowerCase();
@@ -84,7 +84,7 @@ export default function InvoiceVerificationPage() {
                         fullWidth
                         variant="contained"
                         size="large"
-                        aria-label={proofType === 'contract' ? 'Verify contract proof' : (t('invoice.verify_btn') || 'Verify invoice proof')}
+                        aria-label={proofType === 'contract' ? 'Verify contract proof' : (tx('invoice.verify_btn', 'Verify invoice proof'))}
                         onClick={() => verifyHash()}
                         sx={{
                             background: `linear-gradient(135deg, ${binThemeTokens.gold}, ${binThemeTokens.goldLight})`,

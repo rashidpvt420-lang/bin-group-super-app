@@ -55,7 +55,7 @@ function appointmentText(ticket: any) {
 export default function TenantTicketsPage() {
     const { user } = useRole();
     const navigate = useNavigate();
-    const { t, isRTL } = useLanguage();
+    const { t, isRTL, tx } = useLanguage();
     const [tickets, setTickets] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [warning, setWarning] = useState('');
@@ -113,14 +113,14 @@ export default function TenantTicketsPage() {
     if (loading) return (
         <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', py: 10, gap: 2 }}>
             <CircularProgress sx={{ color: binThemeTokens.gold }} />
-            <Typography variant="overline" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900 }}>{t('dash.initializing_stream') || 'Initializing Request Stream...'}</Typography>
+            <Typography variant="overline" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900 }}>{tx('dash.initializing_stream', 'Initializing Request Stream...')}</Typography>
         </Box>
     );
 
     return (
         <Box sx={{ direction: isRTL ? 'rtl' : 'ltr' }}>
             <Box sx={{ mb: 5, textAlign: isRTL ? 'right' : 'left' }}>
-                <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 4 }}>{t('dash.residency_ops') || 'RESIDENCY OPERATIONS'}</Typography>
+                <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 4 }}>{tx('dash.residency_ops', 'RESIDENCY OPERATIONS')}</Typography>
                 <Typography variant="h4" fontWeight="950" color="#FFF" sx={{ mt: 1 }}>{t('nav.tickets') || 'Requests & Service History'}</Typography>
                 <Typography sx={{ color: 'rgba(255,255,255,0.5)', mt: 1 }}>Repairs, emergencies, cleaning, pest control, vacation care and moving services appear in one timeline.</Typography>
             </Box>
@@ -156,10 +156,10 @@ export default function TenantTicketsPage() {
                             <Stack direction={isRTL ? 'row-reverse' : 'row'} justifyContent="space-between" alignItems="flex-start" spacing={2}>
                                 <Box sx={{ textAlign: isRTL ? 'right' : 'left', flex: 1, minWidth: 0 }}>
                                     <Typography variant="body1" fontWeight="950" color="#FFF" sx={{ mb: 0.5, wordBreak: 'break-word' }}>
-                                        {ticket.serviceLabel || ticket.description || ticket.category || t('ticket.no_description') || 'No Description'}
+                                        {ticket.serviceLabel || ticket.description || ticket.category || tx('ticket.no_description', 'No Description')}
                                     </Typography>
                                     <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} alignItems="center" sx={{ color: 'rgba(255,255,255,0.4)', flexWrap: 'wrap' }}>
-                                        <Typography variant="caption" sx={{ fontWeight: 800 }}>{t('common.ref') || 'REF'}: #{ticket.id.substring(0, 8).toUpperCase()}</Typography>
+                                        <Typography variant="caption" sx={{ fontWeight: 800 }}>{tx('common.ref', 'REF')}: #{ticket.id.substring(0, 8).toUpperCase()}</Typography>
                                         <Typography variant="caption">•</Typography>
                                         <Typography variant="caption" sx={{ fontWeight: 800 }}>{ticket.category}</Typography>
                                     </Stack>

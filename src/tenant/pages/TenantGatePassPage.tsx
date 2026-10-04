@@ -13,7 +13,7 @@ import { db, collection, onSnapshot, query, where, functions, httpsCallable, get
 import { binThemeTokens } from '../../theme/binGroupTheme';
 
 export default function TenantGatePassPage() {
-    const { t, isRTL } = useLanguage();
+    const { t, isRTL, tx } = useLanguage();
     const { user } = useRole();
     const [passes, setPasses] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
@@ -123,14 +123,14 @@ export default function TenantGatePassPage() {
             <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
                 <Box sx={{ textAlign: isRTL ? 'right' : 'left' }}>
                     <Typography variant="h3" sx={{ color: '#fff', fontWeight: 950, display: 'flex', alignItems: 'center', gap: 2, justifyContent: isRTL ? 'flex-end' : 'flex-start' }}>
-                        <ShieldCheck size={36} color={binThemeTokens.gold} /> {t('tenant.gatePasses.title') || 'Gate Passes'}
+                        <ShieldCheck size={36} color={binThemeTokens.gold} /> {tx('tenant.gatePasses.title', 'Gate Passes')}
                     </Typography>
                     <Typography sx={{ color: 'rgba(255,255,255,0.5)', mt: 1 }}>
-                        {t('tenant.gatePasses.desc') || 'Register visitors, contractors, or deliveries to generate security access QR codes.'}
+                        {tx('tenant.gatePasses.desc', 'Register visitors, contractors, or deliveries to generate security access QR codes.')}
                     </Typography>
                 </Box>
                 <Button variant="contained" startIcon={<Plus />} onClick={() => setOpenAdd(true)} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, borderRadius: 3, px: 3, py: 1.2, '&:hover': { bgcolor: '#b4954e' } }}>
-                    {t('tenant.gatePasses.register') || 'REGISTER VISITOR'}
+                    {tx('tenant.gatePasses.register', 'REGISTER VISITOR')}
                 </Button>
             </Box>
 
@@ -139,9 +139,9 @@ export default function TenantGatePassPage() {
             ) : passes.length === 0 ? (
                 <Paper sx={{ p: 8, textAlign: 'center', bgcolor: alpha(binThemeTokens.gold, 0.03), border: `1px dashed ${alpha(binThemeTokens.gold, 0.22)}`, borderRadius: 6 }}>
                     <ShieldCheck color={binThemeTokens.gold} size={48} />
-                    <Typography sx={{ color: '#fff', fontWeight: 950, mt: 2 }}>{t('tenant.gatePasses.noPasses') || 'No Active Gate Passes'}</Typography>
+                    <Typography sx={{ color: '#fff', fontWeight: 950, mt: 2 }}>{tx('tenant.gatePasses.noPasses', 'No Active Gate Passes')}</Typography>
                     <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.45)', display: 'block', mb: 3 }}>
-                        {t('tenant.gatePasses.noPassesHint') || 'Register your first visitor to generate an access pass.'}
+                        {tx('tenant.gatePasses.noPassesHint', 'Register your first visitor to generate an access pass.')}
                     </Typography>
                 </Paper>
             ) : (

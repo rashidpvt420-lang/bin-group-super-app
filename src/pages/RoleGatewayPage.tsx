@@ -209,7 +209,7 @@ const RoleGatewayPage: React.FC = () => {
                                                     <Typography variant="body2" sx={{ color: '#667085', mt: 1, lineHeight: 1.7, fontWeight: 700 }}>{r.desc}</Typography>
                                                 </Box>
                                                 <Stack direction="row" alignItems="center" spacing={1} sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>
-                                                    <Typography variant="button" sx={{ fontWeight: 950 }}>{t('common.continue') || 'Continue'}</Typography>
+                                                    <Typography variant="button" sx={{ fontWeight: 950 }}>{tx('common.continue', 'Continue')}</Typography>
                                                     {isRTL ? <ArrowLeft size={18} /> : <ChevronRight size={18} />}
                                                 </Stack>
                                             </Stack>

@@ -429,7 +429,7 @@ export default function PaymentSubmissionStep({ onBack }: PaymentSubmissionStepP
                 <Paper sx={{ p: { xs: 3, md: 6 }, borderRadius: { xs: 4, md: 8 }, bgcolor: 'rgba(22,22,24,0.8)', border: '1px solid #4ADE80' }}>
                     <CheckCircle size={56} color="#4ADE80" />
                     <Typography variant="h4" fontWeight={950} color="#FFF" sx={{ mt: 3 }}>
-                        {t('onboarding.payment.success_title') || copy('Payment Submitted Successfully', 'تم إرسال الدفع بنجاح')}
+                        {copy('Payment Submitted Successfully', 'تم إرسال الدفع بنجاح')}
                     </Typography>
                     <Typography color="#4ADE80" fontWeight={700} sx={{ mt: 2 }}>
                         {copy(

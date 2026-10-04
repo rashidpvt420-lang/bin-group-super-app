@@ -45,7 +45,7 @@ function statusColor(status: string) {
 }
 
 export default function OwnerRentCollectionSection({ ledgerSummary }: OwnerRentCollectionSectionProps) {
-  const { t } = useLanguage();
+  const { t, tx } = useLanguage();
   const navigate = useNavigate();
 
   if (!ledgerSummary) return null;
@@ -80,7 +80,7 @@ export default function OwnerRentCollectionSection({ ledgerSummary }: OwnerRentC
             </Box>
             <Box sx={{ minWidth: 0 }}>
               <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 2, ...textSafeSx }}>
-                {t('owner.rentCollection') || 'Rent Collection'}
+                {tx('owner.rentCollection', 'Rent Collection')}
               </Typography>
               <Typography variant="h5" fontWeight={950} sx={{ color: '#fff', ...textSafeSx }}>
                 Tenant Ledger & Collection Rate

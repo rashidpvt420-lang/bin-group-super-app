@@ -25,7 +25,7 @@ const BrokerPageFrame: React.FC<BrokerPageFrameProps> = ({
     showBack = false
 }) => {
     const navigate = useNavigate();
-    const { isRTL, t } = useLanguage();
+    const { isRTL, t, tx } = useLanguage();
 
     return (
         <Box sx={{ animation: 'fadeIn 0.5s ease-out' }}>
@@ -56,7 +56,7 @@ const BrokerPageFrame: React.FC<BrokerPageFrameProps> = ({
                                     letterSpacing: 4
                                 }}
                             >
-                                {t('dash.terminal.broker') || 'SOVEREIGN BROKERAGE'}
+                                {tx('dash.terminal.broker', 'SOVEREIGN BROKERAGE')}
                             </Typography>
                         </Stack>
                         <Typography variant="h3" fontWeight="950" color={binThemeTokens.textPrimary} sx={{ letterSpacing: -1 }}>

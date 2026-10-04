@@ -13,7 +13,7 @@ import { binThemeTokens } from '../../theme/binGroupTheme';
 import { useLanguage } from '@bin/shared';
 
 export default function CertificateVerificationPage() {
-    const { t } = useLanguage();
+    const { t, tx } = useLanguage();
     const { id: routeId } = useParams();
     const [searchParams] = useSearchParams();
     const externalId = searchParams.get('id') || '';
@@ -94,7 +94,7 @@ export default function CertificateVerificationPage() {
                         fullWidth
                         variant="contained"
                         size="large"
-                        aria-label={t('cert.validate_btn') || 'Validate certificate'}
+                        aria-label={tx('cert.validate_btn', 'Validate certificate')}
                         onClick={() => verifyCert()}
                         sx={{
                             background: `linear-gradient(135deg, ${binThemeTokens.gold}, ${binThemeTokens.goldLight})`,

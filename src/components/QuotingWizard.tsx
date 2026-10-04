@@ -14,7 +14,7 @@ import { useLanguage } from '@bin/shared';
  * to continue.
  */
 const QuotingWizard: React.FC<{ onResult?: (result: any) => void }> = () => {
-    const { t, isRTL } = useLanguage();
+    const { t, isRTL, tx } = useLanguage();
 
     const startVerifiedQuote = () => {
         window.location.assign('/onboarding');
@@ -23,7 +23,7 @@ const QuotingWizard: React.FC<{ onResult?: (result: any) => void }> = () => {
     return (
         <Box sx={{ direction: isRTL ? 'rtl' : 'ltr' }}>
             <Typography variant="h4" fontWeight="950" sx={{ color: '#FFF', mb: 1, letterSpacing: -1 }}>
-                {t('quote.title') || 'Verified Property Quote'}
+                {tx('quote.title', 'Verified Property Quote')}
             </Typography>
             <Typography variant="body1" sx={{ color: binThemeTokens.textSecondary, mb: 4, maxWidth: 760 }}>
                 BIN GROUP does not display estimated commercial figures from incomplete property data. Complete the secure property application so the protected server pricing engine can issue the current AED quote from your real property details.
