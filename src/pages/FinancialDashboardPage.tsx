@@ -297,7 +297,7 @@ export default function FinancialDashboardPage() {
           </Typography>
           <Grid container spacing={3}>
               {[
-                  { label: 'Occupied Units', val: safeFinancials.pm?.occupiedUnits, sub: `${safeFinancials.pm?.occupancyRate}% Occupancy` },
+                  { label: 'Occupied Units', val: safeFinancials.pm?.occupiedUnits, sub: `${Number.isFinite(Number(safeFinancials.pm?.occupancyRate)) ? Number(safeFinancials.pm?.occupancyRate) : 0}% Occupancy` },
                   { label: 'Vacant Units', val: safeFinancials.pm?.vacantUnits, sub: 'Ready for Leasing' },
                   { label: 'Renewals Processed', val: safeFinancials.pm?.renewalsProcessed, sub: 'Institutional Retention' },
                   { label: 'Issues Resolved', val: safeFinancials.pm?.resolvedTickets, sub: `${safeFinancials.pm?.resolutionRate}% Resolution Rate` }
