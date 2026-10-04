@@ -1,13 +1,13 @@
 /**
  * Download rows that are already on screen as a CSV file. Client-side only: no server call,
- * no extra data access. Cells are quoted, and a leading = + - @ is escaped so spreadsheet
+ * no extra data access. Cells are quoted, and a leading = + - @ (or tab / carriage return) is escaped so spreadsheet
  * apps do not treat the value as a formula.
  */
 export type CsvCell = string | number | boolean | null | undefined;
 
 const escapeCell = (value: CsvCell) => {
   let text = value === null || value === undefined ? '' : String(value);
-  if (/^[=+\-@]/.test(text)) text = `'${text}`;
+  if (/^[=+\-@\t\r]/.test(text)) text = `'${text}`;
   return `"${text.replace(/"/g, '""')}"`;
 };
 

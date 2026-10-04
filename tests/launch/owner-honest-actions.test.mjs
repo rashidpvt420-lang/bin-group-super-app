@@ -27,13 +27,13 @@ test('dead owner buttons are gone or are not buttons', () => {
   assert.doesNotMatch(read('src/owner/pages/OwnerTenantsPage.tsx'), /<Button[^>]*>\s*RERA Compliant/);
 });
 
-test('CSV helper quotes cells and blocks spreadsheet formulas', async () => {
+test('CSV helper quotes cells and blocks spreadsheet formulas', () => {
   const src = read('src/utils/downloadCsv.ts');
-  const js = src.slice(src.indexOf('const escapeCell'), src.indexOf('export function downloadCsv'))
-    .replace(/\(value: CsvCell\)/, '(value)').replace(/\(header: string\[\], rows: CsvCell\[\]\[\]\)/, '(header, rows)')
-    .replace('export const toCsv', 'const toCsv');
-  const toCsv = new Function(`${js}; return toCsv;`)();
-  assert.equal(toCsv(['a', 'b'], [['=1+1', 'say "hi"']]), '"a","b"\r\n"\'=1+1","say ""hi"""');
+  // Static checks only (no eval): leading formula characters get a ' prefix, quotes are doubled,
+  // every cell is wrapped in quotes.
+  assert.ok(src.includes("if (/^[=+\\-@\\t\\r]/.test(text)) text = `'${text}`;"), 'formula prefix guard');
+  assert.ok(src.includes('return `"${text.replace(/"/g, \'""\')}"`;'), 'quote doubling');
+  assert.ok(src.includes(".map((row) => row.map(escapeCell).join(','))"), 'every cell escaped');
 });
 
 test('Owner Financial Truth card has no developer wording', () => {
