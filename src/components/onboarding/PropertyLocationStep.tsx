@@ -10,7 +10,7 @@ import { binThemeTokens } from '../../theme/binGroupTheme';
 import { buildPersistableGeoAnchor, isValidLatLng } from '../../utils/geoAnchor';
 import { buildGoogleMapsSearchUrl, useGoogleMaps } from '../../lib/maps';
 import { OWNER_MANUAL_GEO_SOURCE, isEmirateCentroid } from './ownerLocationRules';
-import { buildAddressQuery, isNetworkFetchError, resolvePropertyAddress } from './propertyAddressLookup';
+import { buildAddressQuery, createNominatimFetch, isNetworkFetchError, resolvePropertyAddress } from './propertyAddressLookup';
 
 const EMIRATES_LIST = [
     { id: 'Dubai', key: 'onboarding.emirate.dubai', en: 'Dubai', ar: 'دبي', lat: 25.2048, lng: 55.2708 },
@@ -437,7 +437,7 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
             const outcome = await resolvePropertyAddress({
                 query: buildAddressQuery(cleanAddress || plusCodeField, selectedEmirate),
                 googleGeocoder: mapsLoaded && google?.maps?.Geocoder ? new google.maps.Geocoder() : null,
-                fetchImpl: typeof fetch === 'function' ? (input, init) => fetch(input, init as RequestInit) : null,
+                fetchImpl: typeof fetch === 'function' ? createNominatimFetch(window.fetch.bind(window) as any) : null,
             });
             const resolved = outcome.ok ? outcome.result : undefined;
             if (!resolved) {

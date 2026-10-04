@@ -38,10 +38,26 @@ export const NOMINATIM_SEARCH_ENDPOINT = 'https://nominatim.openstreetmap.org/se
 
 const UAE_SUFFIX_PATTERN = /(?:^|[\s,])(uae|u\.a\.e\.?|united arab emirates)\s*$/i;
 
-const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const WORD_CHAR = /[\p{L}\p{N}]/u;
 
-const containsWord = (haystack: string, needle: string) =>
-    Boolean(needle) && new RegExp(`(?:^|[^\\p{L}\\p{N}])${escapeRegExp(needle)}(?:$|[^\\p{L}\\p{N}])`, 'iu').test(haystack);
+/** Last code point before `index` (handles surrogate pairs), or '' at the start. */
+const codePointBefore = (text: string, index: number) => Array.from(text.slice(Math.max(0, index - 2), index)).pop() || '';
+
+/** First code point at `index`, or '' at the end. */
+const codePointFrom = (text: string, index: number) => Array.from(text.slice(index, index + 2))[0] || '';
+
+/** Case-insensitive whole-word match without building a RegExp from Owner input. */
+const containsWord = (haystack: string, needle: string) => {
+    if (!needle) return false;
+    const text = haystack.toLowerCase();
+    const word = needle.toLowerCase();
+    for (let at = text.indexOf(word); at !== -1; at = text.indexOf(word, at + 1)) {
+        const before = codePointBefore(text, at);
+        const after = codePointFrom(text, at + word.length);
+        if (!WORD_CHAR.test(before) && !WORD_CHAR.test(after)) return true;
+    }
+    return false;
+};
 
 /**
  * Build the geocoder query. The emirate and "UAE" are appended only when the Owner has not
@@ -124,6 +140,24 @@ export function geocodeWithGoogle(geocoder: GeocoderLike, query: string, timeout
             reject(error);
         }
     });
+}
+
+const NOMINATIM_ALLOWED_ENDPOINTS = [NOMINATIM_SEARCH_ENDPOINT];
+
+/**
+ * Browser fetch restricted to the Nominatim search endpoint, the only URL geocodeWithNominatim
+ * builds. Any other URL is refused (counted as a transport failure, so the Owner sees the
+ * "address search is unavailable" copy) and never reaches the network.
+ */
+export function createNominatimFetch(fetchFn: (input: string, init?: Record<string, unknown>) => Promise<{ ok: boolean; json: () => Promise<any> }>): FetchLike {
+    return async (input, init) => {
+        const url = new URL(input);
+        const endpoint = `${url.origin}${url.pathname}`;
+        if (NOMINATIM_ALLOWED_ENDPOINTS.includes(endpoint)) {
+            return fetchFn(url.toString(), init);
+        }
+        throw new Error('Address lookup is limited to the Nominatim search endpoint.');
+    };
 }
 
 /** Geocode with Nominatim (fallback when the Google Maps script is not available). */

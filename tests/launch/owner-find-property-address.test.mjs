@@ -14,7 +14,7 @@ function loadTypeScriptModule(path) {
     fileName: path,
   }).outputText;
   const module = { exports: {} };
-  vm.runInContext(compiled, vm.createContext({ module, exports: module.exports, Number, Math, String, Array, Boolean, Promise, Error, RegExp, setTimeout, clearTimeout, encodeURIComponent }), { filename: path });
+  vm.runInContext(compiled, vm.createContext({ module, exports: module.exports, Number, Math, String, Array, Boolean, Promise, Error, RegExp, URL, setTimeout, clearTimeout, encodeURIComponent }), { filename: path });
   return module.exports;
 }
 
@@ -103,6 +103,29 @@ test('invalid geocoder coordinates are rejected', async () => {
   assert.deepEqual(plain(outcome), { ok: false, reason: 'not_found' });
 });
 
+test('the browser fetch wrapper only ever reaches the Nominatim search endpoint', async () => {
+  const calls = [];
+  const guarded = lookup.createNominatimFetch(async (url) => { calls.push(url); return { ok: true, json: async () => [] }; });
+  await guarded('https://nominatim.openstreetmap.org/search?format=jsonv2&q=Business%20Bay');
+  assert.deepEqual(calls, ['https://nominatim.openstreetmap.org/search?format=jsonv2&q=Business%20Bay']);
+  for (const url of ['https://evil.example/search?q=x', 'https://nominatim.openstreetmap.org/reverse?lat=1', 'http://nominatim.openstreetmap.org/search?q=x', 'https://nominatim.openstreetmap.org.evil.example/search']) {
+    await assert.rejects(guarded(url), /limited to the Nominatim search endpoint/);
+  }
+  assert.equal(calls.length, 1, 'refused URLs never reach fetch');
+  // A refused URL is a transport failure: the Owner gets the "unavailable" copy, not a raw error.
+  const outcome = await lookup.resolvePropertyAddress({ query: 'Business Bay, Dubai, UAE', googleGeocoder: null, fetchImpl: lookup.createNominatimFetch(async () => { throw new Error('unreachable'); }) });
+  assert.deepEqual(plain(outcome), { ok: false, reason: 'unavailable' });
+});
+
+test('emirate de-duplication is a whole-word, case-insensitive match', () => {
+  assert.equal(lookup.buildAddressQuery('Marina, DUBAI', 'Dubai'), 'Marina, DUBAI, UAE');
+  assert.equal(lookup.buildAddressQuery('Al Ain Oasis, Al Ain', 'Al Ain'), 'Al Ain Oasis, Al Ain, UAE');
+  assert.equal(lookup.buildAddressQuery('Ras Al Khaimah (RAK)', 'Ras Al Khaimah'), 'Ras Al Khaimah (RAK), UAE');
+  assert.equal(lookup.buildAddressQuery('Abu Dhabi.Corniche', 'Dubai'), 'Abu Dhabi.Corniche, Dubai, UAE');
+  assert.equal(lookup.buildAddressQuery('القصيص، دبي', 'دبي'), 'القصيص، دبي, UAE');
+  assert.equal(lookup.buildAddressQuery('دبيلاند', 'دبي'), 'دبيلاند, دبي, UAE');
+});
+
 test('the location step uses the lookup module and never shows the raw browser error', () => {
   assert.match(step, /from '\.\/propertyAddressLookup'/);
   assert.match(step, /resolvePropertyAddress\(\{/);
@@ -110,6 +133,7 @@ test('the location step uses the lookup module and never shows the raw browser e
   assert.match(step, /new google\.maps\.Geocoder\(\)/);
   assert.doesNotMatch(step, /setLocationError\(error\?\.message \|\| copy\('Property-address lookup failed\./);
   assert.doesNotMatch(step, /fetch\(`https:\/\/nominatim/);
+  assert.match(step, /fetchImpl: typeof fetch === 'function' \? createNominatimFetch\(/);
   assert.doesNotMatch(step, /\$\{cleanAddress \|\| plusCodeField\}, \$\{selectedEmirate\}, UAE/);
   // The failure copy points the Owner to the manual fallbacks that do not need a network lookup.
   assert.match(step, /Address search is unavailable right now\. You can still continue: drag the pin on the map, paste an expanded Google Maps link, or enter the latitude and longitude and select Save Coordinates\./);
