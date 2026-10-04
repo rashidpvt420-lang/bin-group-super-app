@@ -15,7 +15,7 @@ const {
 } = runtime;
 
 const MFA = { tokenExtra: { firebase: { sign_in_second_factor: 'phone' } } };
-let tech; let otherTech; let adminActor; let opsAdmin; let supervisor; let supervisor2; let dispatcher; let owner; let tenant;
+let mfaDispatcher; let tech; let otherTech; let adminActor; let opsAdmin; let supervisor; let supervisor2; let dispatcher; let owner; let tenant;
 test.before(async () => {
   tech = await createUser('tech_jeg', { role: 'technician' });
   otherTech = await createUser('tech_jeg_other', { role: 'technician' });
@@ -24,6 +24,8 @@ test.before(async () => {
   supervisor = await createUser('sup_jeg', { role: 'supervisor' }, MFA);
   supervisor2 = await createUser('sup2_jeg', { role: 'operations_manager' });
   dispatcher = await createUser('disp_jeg', { role: 'dispatcher' });
+  // Dispute / emergency callables require a privileged MFA session since N-05 (#1552/#1557).
+  mfaDispatcher = await createUser('disp_jeg_mfa', { role: 'dispatcher' }, MFA);
   owner = await createUser('owner_jeg', { role: 'owner' });
   tenant = await createUser('tenant_jeg', { role: 'tenant' });
 });
@@ -152,20 +154,26 @@ test('completeStaffJobWithAi: complete proof completes with the gate recorded', 
 test('adminResolveTicketDispute: dismiss / credit cannot close an unproven job; revisit still works', async () => {
   const disputed = { status: 'DISPUTED', requiresAdminReview: true, adminReviewStatus: 'PENDING_DISPUTE_REVIEW' };
   await seed('jeg_dispute', disputed);
-  for (const action of ['dismiss', 'approve_credit']) {
-    await expectHttpsError(call(adminResolveTicketDispute, dispatcher, { ticketId: 'jeg_dispute', action, note: 'Reviewed the dispute file' }), 'failed-precondition');
-  }
+  // dismiss is dispatcher authority; approve_credit is Finance Admin MFA only (#1552).
+  await expectHttpsError(call(adminResolveTicketDispute, mfaDispatcher, { ticketId: 'jeg_dispute', action: 'dismiss', note: 'Reviewed the dispute file' }), 'failed-precondition');
+  await expectHttpsError(call(adminResolveTicketDispute, adminActor, { ticketId: 'jeg_dispute', action: 'approve_credit', note: 'Reviewed the dispute file' }), 'failed-precondition');
   assert.equal((await ticket('jeg_dispute')).status, 'DISPUTED');
   assert.equal((await db.doc('payment_transactions/sla_credit_jeg_dispute').get()).exists, false);
-  await call(adminResolveTicketDispute, dispatcher, { ticketId: 'jeg_dispute', action: 'request_revisit', note: 'Send the technician back' });
+  await call(adminResolveTicketDispute, mfaDispatcher, { ticketId: 'jeg_dispute', action: 'request_revisit', note: 'Send the technician back' });
+  // #1557: the disputed parent is closed and superseded by a revisit child, which goes through
+  // its own evidence gate when it closes. The parent records why it closed without proof.
   const data = await ticket('jeg_dispute');
-  assert.equal(data.status, 'REOPENED');
-  assert.ok(data.reopenedAt, 'a revisit stamps reopenedAt so earlier evidence/exceptions stop counting');
+  assert.equal(data.status, 'CLOSED');
+  assert.equal(data.closureEvidenceGate.mode, 'SUPERSEDED_BY_REVISIT');
+  assert.equal(data.closureEvidenceGate.revisitTicketId, 'revisit_jeg_dispute');
+  const child = await ticket('revisit_jeg_dispute');
+  assert.equal(child.status, 'OPEN');
+  assert.equal(child.parentId, 'jeg_dispute');
 });
 
 test('adminResolveTicketDispute: dismiss closes a proven job and records the gate', async () => {
   await seed('jeg_dispute_ok', { status: 'DISPUTED', requiresAdminReview: true, adminReviewStatus: 'PENDING_DISPUTE_REVIEW', ...(await seedCompleteJobEvidence('jeg_dispute_ok', 'tech_jeg')) });
-  await call(adminResolveTicketDispute, dispatcher, { ticketId: 'jeg_dispute_ok', action: 'dismiss', note: 'Photos show the work done' });
+  await call(adminResolveTicketDispute, mfaDispatcher, { ticketId: 'jeg_dispute_ok', action: 'dismiss', note: 'Photos show the work done' });
   const data = await ticket('jeg_dispute_ok');
   assert.equal(data.status, 'CLOSED');
   assert.equal(data.closureEvidenceGate.path, 'ADMIN_DISPUTE_RESOLUTION');
@@ -173,12 +181,14 @@ test('adminResolveTicketDispute: dismiss closes a proven job and records the gat
 
 test('adminUpdateEmergencyTicket: resolving a dispatched emergency needs proof; alert-only SOS is recorded as such', async () => {
   await seed('jeg_sos_tech', { status: 'RESPONDED', sosStatus: 'RESPONDED' });
-  await expectHttpsError(call(adminUpdateEmergencyTicket, dispatcher, { ticketId: 'jeg_sos_tech', action: 'resolve' }), 'failed-precondition');
+  await expectHttpsError(call(adminUpdateEmergencyTicket, mfaDispatcher, { ticketId: 'jeg_sos_tech', action: 'resolve' }), 'failed-precondition');
   assert.equal((await ticket('jeg_sos_tech')).status, 'RESPONDED');
   await db.doc('maintenanceTickets/jeg_sos_alert').set({ propertyId: 'prop_jeg', priority: 'EMERGENCY', status: 'RESPONDED', sosStatus: 'RESPONDED' });
-  await call(adminUpdateEmergencyTicket, dispatcher, { ticketId: 'jeg_sos_alert', action: 'resolve' });
+  await call(adminUpdateEmergencyTicket, mfaDispatcher, { ticketId: 'jeg_sos_alert', action: 'resolve' });
   const alert = await ticket('jeg_sos_alert');
-  assert.equal(alert.status, 'RESOLVED');
+  // Main writes canonical CLOSED with sosStatus RESOLVED on resolve (#1552/#1557).
+  assert.equal(alert.status, 'CLOSED');
+  assert.equal(alert.sosStatus, 'RESOLVED');
   assert.equal(alert.closureEvidenceGate.mode, 'NO_TECHNICIAN_DISPATCHED');
 });
 

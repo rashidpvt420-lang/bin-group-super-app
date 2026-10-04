@@ -10,8 +10,9 @@ import fs from 'node:fs';
 let testEnv;
 const ctx = (uid, claims) => testEnv.authenticatedContext(uid, { email: `${uid}@example.com`, email_verified: true, ...claims }).firestore();
 const seed = (path, data) => testEnv.withSecurityRulesDisabled((c) => setDoc(doc(c.firestore(), path), data));
-const adminDb = () => ctx('admin_jcr', { role: 'admin', admin: true });
-const ceoDb = () => ctx('ceo_jcr', { role: 'ceo' });
+const MFA = { firebase: { sign_in_provider: 'password', sign_in_second_factor: 'phone' } };
+const adminDb = () => ctx('admin_jcr', { role: 'admin', admin: true, ...MFA });
+const ceoDb = () => ctx('ceo_jcr', { role: 'ceo', ...MFA });
 const techDb = () => ctx('tech_jcr', { role: 'technician' });
 const dispatcherDb = () => ctx('disp_jcr', { role: 'dispatcher' });
 
