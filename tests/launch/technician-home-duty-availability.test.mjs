@@ -28,7 +28,7 @@ test('the default technician home renders the duty + availability card', () => {
 
 test('duty changes go through the server duty callables and surface their errors', () => {
   for (const name of ['startTechnicianDuty', 'takeTechnicianBreak', 'resumeTechnicianDuty', 'endTechnicianDuty']) {
-    assert.match(card, new RegExp(`'${name}'`));
+    assert.ok(card.includes(`'${name}'`), `${name} callable is wired`);
   }
   assert.match(card, /httpsCallable\(functions, dutyCallableFor\(duty, target\)\)/);
   assert.match(card, /setDutyError\(errorText\(err,/);
