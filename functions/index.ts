@@ -29,6 +29,8 @@ import { enforceAiUsageQuota } from "./aiUsageQuota";
 import { sendTwilioSMS } from "./smsDelivery";
 import { resolveTechnicianArrivalBinding } from "./technicianInstallationBinding";
 import { flagSlaBreaches } from "./slaCron";
+import { verifyTenantTicketUnitLink } from "./tenantUnitLink";
+import { escalateManualDispatch } from "./ticketDispatchAlerts";
 
 // [V10] PRODUCTION GRADE FULL-STACK STABILIZATION
 setGlobalOptions({ region: "europe-west3", enforceAppCheck: true });
@@ -961,20 +963,18 @@ async function attemptAutoAssignment(ticketRef: admin.firestore.DocumentReferenc
         const requesterRole = normalizeRole(ticketData.requesterRole);
         const source = safeString(ticketData.source).toUpperCase();
         if (requesterRole === "tenant" || source === "TENANT_PORTAL") {
-            const tenantId = safeString(ticketData.tenantId || ticketData.tenantUid);
-            const unitId = safeString(ticketData.unitId);
-            const propertyId = safeString(ticketData.propertyId);
-            if (!tenantId || !unitId || !propertyId) return;
-            const unitSnap = await db.collection("units").doc(unitId).get();
-            const unit = unitSnap.data() || {};
-            const unitTenantId = safeString(
-                unit.tenantId || unit.tenantUid || unit.userId || unit.authUid,
-            );
-            if (
-                !unitSnap.exists ||
-                unitTenantId !== tenantId ||
-                safeString(unit.propertyId) !== propertyId
-            ) return;
+            // Same tenant-unit link createTenantServiceTicket accepted (uid fields or the
+            // tenant's verified email); an unverified link is escalated, never dropped silently.
+            const link = await verifyTenantTicketUnitLink({ db, auth: admin.auth(), ticket: ticketData });
+            if (!link.linked) {
+                await escalateManualDispatch({
+                    db,
+                    ticketRef,
+                    reasonCode: "TENANT_UNIT_LINK_UNVERIFIED",
+                    details: link.details,
+                });
+                return;
+            }
         }
         // Works for both tenant-filed AND owner-filed tickets
         const requesterId: string = ticketData.tenantId || ticketData.tenantUid || ticketData.ownerId || "";

@@ -2,6 +2,7 @@ import * as admin from "firebase-admin";
 import * as crypto from "crypto";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { PropertyGeoAuthorityError, resolveDispatchReadyPropertyGeo } from "./propertyGeoAuthority";
+import { tenantUnitLinkMatches } from "./tenantUnitLink";
 
 if (!admin.apps.length) admin.initializeApp();
 
@@ -34,14 +35,11 @@ function roleOf(auth: any, profile: FirebaseFirestore.DocumentData) {
 }
 
 function tenantOwnsUnit(unit: FirebaseFirestore.DocumentData, auth: any) {
-  const uid = text(auth?.uid, 160);
-  if ([unit.tenantId, unit.tenantUid, unit.currentTenantId].some((value) => text(value, 160) === uid)) {
-    return true;
-  }
+  // Shared with attemptAutoAssignment so creation and dispatch accept the same link.
   const verifiedEmail = auth?.token?.email_verified === true
     ? text(auth?.token?.email, 320).toLowerCase()
     : "";
-  return Boolean(verifiedEmail) && text(unit.tenantEmail, 320).toLowerCase() === verifiedEmail;
+  return tenantUnitLinkMatches(unit, { uid: text(auth?.uid, 160), verifiedEmail });
 }
 
 function timestampOrNull(value: unknown) {
