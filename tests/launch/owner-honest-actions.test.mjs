@@ -31,7 +31,7 @@ test('CSV helper quotes cells and blocks spreadsheet formulas', () => {
   const src = read('src/utils/downloadCsv.ts');
   // Static checks only (no eval): leading formula characters get a ' prefix, quotes are doubled,
   // every cell is wrapped in quotes.
-  assert.ok(src.includes("if (/^[=+\\-@\\t\\r]/.test(text)) text = `'${text}`;"), 'formula prefix guard');
+  assert.ok(src.includes("if (typeof value === 'string' && /^[=+\\-@\\t\\r]/.test(text)) text = `'${text}`;"), 'formula prefix guard');
   assert.ok(src.includes('return `"${text.replace(/"/g, \'""\')}"`;'), 'quote doubling');
   assert.ok(src.includes(".map((row) => row.map(escapeCell).join(','))"), 'every cell escaped');
 });

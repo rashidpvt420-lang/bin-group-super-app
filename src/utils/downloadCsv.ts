@@ -7,7 +7,7 @@ export type CsvCell = string | number | boolean | null | undefined;
 
 const escapeCell = (value: CsvCell) => {
   let text = value === null || value === undefined ? '' : String(value);
-  if (/^[=+\-@\t\r]/.test(text)) text = `'${text}`;
+  if (typeof value === 'string' && /^[=+\-@\t\r]/.test(text)) text = `'${text}`;
   return `"${text.replace(/"/g, '""')}"`;
 };
 
