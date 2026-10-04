@@ -492,7 +492,7 @@ export default function TenantAIConciergePage() {
               <Button fullWidth variant="contained" startIcon={<SafeIcon icon={CheckCircle2} size={18} />} onClick={() => { window.location.href = '/tenant/tickets'; }} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, borderRadius: 4 }}>
                 View My Tickets
               </Button>
-              <Button fullWidth variant="outlined" startIcon={<SafeIcon icon={Send} size={18} />} onClick={handleRestart} sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.goldText, fontWeight: 950, borderRadius: 4 }}>
+              <Button fullWidth variant="outlined" startIcon={<SafeIcon icon={Send} size={18} />} onClick={handleRestart} sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.gold, fontWeight: 950, borderRadius: 4 }}>
                 New Request
               </Button>
             </Stack>

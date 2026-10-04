@@ -82,7 +82,7 @@ export default function TenantProfileReadinessCard() {
           <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1.2} alignItems="center"><ShieldCheck color={binThemeTokens.gold} /><Typography variant="h5" fontWeight={950} color="#FFF">{copy('Tenant Profile Readiness', 'جاهزية ملف المستأجر')}</Typography></Stack>
           <Typography variant="body2" color="text.secondary" mt={0.5}>{copy('Identity, residence, unit-link, lease and move-in readiness.', 'جاهزية الهوية والسكن وربط الوحدة وعقد الإيجار والدخول.')}</Typography>
         </Box>
-        <Button startIcon={loading ? <CircularProgress size={16} /> : <RefreshCcw size={17} />} onClick={() => void load()} disabled={loading} variant="outlined" sx={{ color: binThemeTokens.goldText, borderColor: binThemeTokens.gold }}>{copy('Refresh', 'تحديث')}</Button>
+        <Button startIcon={loading ? <CircularProgress size={16} /> : <RefreshCcw size={17} />} onClick={() => void load()} disabled={loading} variant="outlined" sx={{ color: binThemeTokens.gold, borderColor: binThemeTokens.gold }}>{copy('Refresh', 'تحديث')}</Button>
       </Stack>
       {error && <Alert severity="warning" sx={{ mt: 2 }}>{error}</Alert>}
       {!!checks.length && <>

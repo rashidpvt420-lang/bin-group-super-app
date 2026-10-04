@@ -160,7 +160,7 @@ export default function TenantUnitPage() {
     }
   };
 
-  if (loading) return <Box sx={{ minHeight: '60vh', display: 'grid', placeItems: 'center' }}><CircularProgress sx={{ color: binThemeTokens.goldText }} /></Box>;
+  if (loading) return <Box sx={{ minHeight: '60vh', display: 'grid', placeItems: 'center' }}><CircularProgress sx={{ color: binThemeTokens.gold }} /></Box>;
   if (error && !unit) return <TenantUnitLinkFallback message={error} />;
   if (!unit) return null;
 

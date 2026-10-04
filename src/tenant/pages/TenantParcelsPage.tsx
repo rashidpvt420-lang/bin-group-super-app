@@ -61,7 +61,7 @@ export default function TenantParcelsPage() {
             size="small"
             icon={<CheckCircle size={14} />}
             label={label('tenant.parcels.status.collected', 'COLLECTED', 'تم الاستلام')}
-            sx={{ bgcolor: alpha('#10b981', 0.12), color: '#047857', fontWeight: 950, '& .MuiChip-icon': { color: '#047857' } }}
+            sx={{ bgcolor: alpha('#10b981', 0.12), color: '#10b981', fontWeight: 950, '& .MuiChip-icon': { color: '#10b981' } }}
           />
         );
       case 'received':
@@ -152,7 +152,7 @@ export default function TenantParcelsPage() {
                     )}
                   </Box>
                   {p.status === 'collected' && p.collectedAt && (
-                    <Typography variant="caption" sx={{ color: '#047857', fontWeight: 800, mt: 1, alignSelf: 'flex-end' }}>
+                    <Typography variant="caption" sx={{ color: '#10b981', fontWeight: 800, mt: 1, alignSelf: 'flex-end' }}>
                       Claimed by {p.collectedBy} on {p.collectedAt.toDate ? p.collectedAt.toDate().toLocaleString() : ''}
                     </Typography>
                   )}
