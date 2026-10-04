@@ -127,6 +127,8 @@ export {
   listAdminTenantCorrectionRequests,
   adminResolveTenantCorrectionRequest,
 } from "./tenantCorrectionOperations";
+// Tenant photo-evidence stall: flags (never dispatches) tickets whose tenant photos never arrived.
+export { tenantEvidenceStallSweep, clearTenantEvidenceOverdueOnUpload } from "./tenantEvidenceStall";
 
 if (!admin.apps.length) {
   admin.initializeApp();
