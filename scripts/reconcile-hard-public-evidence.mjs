@@ -216,6 +216,39 @@ const manualPhysicalRecords = manualSnapshot.docs
   .map((doc) => ({ __documentId: doc.id, ...(doc.data() || {}) }))
   .sort((left, right) => evidenceMillis(right.createdAt) - evidenceMillis(left.createdAt));
 
+const physicalRejectReasons = {};
+const physicalGateCounts = {};
+for (const record of manualPhysicalRecords) {
+  const gateId = text(record.gateId) || '(missing-gateId)';
+  physicalGateCounts[gateId] = (physicalGateCounts[gateId] || 0) + 1;
+  const reasons = [];
+  if (text(record.status).toLowerCase() !== 'passed') reasons.push(`status=${text(record.status) || 'missing'}`);
+  if (text(record.evidenceLayer).toLowerCase() !== 'physical_device') reasons.push(`layer=${text(record.evidenceLayer) || 'missing'}`);
+  if (text(record.source).toLowerCase() !== 'admin-manual-evidence') reasons.push(`source=${text(record.source) || 'missing'}`);
+  if (record.executionGenerated !== false) reasons.push(`executionGenerated=${String(record.executionGenerated)}`);
+  if (record.hardLaunchClaim !== false) reasons.push(`hardLaunchClaim=${String(record.hardLaunchClaim)}`);
+  if (text(record.commitSha).toLowerCase() !== releaseSha) reasons.push('commitShaMismatch');
+  if (!text(record.testerName) || !text(record.proofRef) || !text(record.recordedBy)) reasons.push('missingTesterOrProofOrRecorder');
+  const createdAtMs = evidenceMillis(record.createdAt);
+  if (!Number.isFinite(createdAtMs)) reasons.push('badCreatedAt');
+  else if (createdAtMs > Date.now() + MAX_CLOCK_SKEW_MS) reasons.push('createdAtFuture');
+  else if (Date.now() - createdAtMs > MANUAL_EVIDENCE_MAX_AGE_MS) reasons.push('createdAtExpired');
+  const device = text(record.device);
+  if (!/(android|iphone|tablet|physical device)/i.test(device) || /desktop/i.test(device)) reasons.push(`device=${device || 'missing'}`);
+  if (reasons.length) {
+    const key = `${gateId}:${reasons.join(',')}`;
+    physicalRejectReasons[key] = (physicalRejectReasons[key] || 0) + 1;
+  }
+}
+console.log(JSON.stringify({
+  physicalEvidenceDiagnostic: {
+    releaseSha,
+    totalLaunchEvidenceForRelease: manualPhysicalRecords.length,
+    gateCounts: physicalGateCounts,
+    rejectReasons: physicalRejectReasons,
+  },
+}, null, 2));
+
 const summarySnapshot = await db.doc('system_health/admin_summaries').get();
 const technicianPhysicalProof =
   summarySnapshot.get('operationalEvidence.technicianPhysicalGpsEvidence') || null;
