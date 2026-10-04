@@ -432,6 +432,9 @@ export const updateTechnicianLiveLocation = onCall(
         currentLocation: point,
         lastLocation: point,
         liveLocationRef: liveRef.path,
+        // A validated mission GPS fix (accuracy, capture age, monotonic sequence checked above) is
+        // fresh GPS evidence for the unchanged 15-minute readiness window; STOP never stamps this.
+        lastGpsAt: now,
         locationUpdatedAt: now,
         activeTicketId: ticketId,
         isTracking: true,
@@ -442,6 +445,9 @@ export const updateTechnicianLiveLocation = onCall(
         currentLocation: point,
         lastLocation: point,
         liveLocationRef: liveRef.path,
+        // A validated mission GPS fix (accuracy, capture age, monotonic sequence checked above) is
+        // fresh GPS evidence for the unchanged 15-minute readiness window; STOP never stamps this.
+        lastGpsAt: now,
         locationUpdatedAt: now,
         activeTicketId: ticketId,
         isTracking: true,
