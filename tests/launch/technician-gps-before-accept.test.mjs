@@ -60,6 +60,10 @@ test('refreshTechnicianDispatchGps sends a real fix and surfaces real refusals',
   globalThis.__gpsCallable = async () => { throw Object.assign(new Error('Availability location was reported moments ago; try again shortly.'), { code: 'functions/resource-exhausted' }); };
   assert.deepEqual(await helper.refreshTechnicianDispatchGps(), { ok: true });
 
+  // Live mission tracking owns GPS while EN_ROUTE — availability refusal is not a failure.
+  globalThis.__gpsCallable = async () => { throw Object.assign(new Error('An active mission tracking session is running; mission GPS is published through live tracking.'), { code: 'functions/failed-precondition' }); };
+  assert.deepEqual(await helper.refreshTechnicianDispatchGps(), { ok: true });
+
   // A readiness / accuracy refusal is NOT swallowed.
   globalThis.__gpsCallable = async () => { throw Object.assign(new Error('GPS accuracy must be between 0 and 100 metres.'), { code: 'functions/failed-precondition' }); };
   const refused = await helper.refreshTechnicianDispatchGps();
@@ -92,10 +96,11 @@ test('job page shares dispatch GPS on open and before Accept and every lifecycle
 
   const lifecycleStart = acceptEnd;
   const lifecycle = page.slice(lifecycleStart, page.indexOf('if (loading) {', lifecycleStart));
-  const refreshAt = lifecycle.indexOf('if (!trackingActive && !(await ensureFreshDispatchGps())) return;');
+  const refreshAt = lifecycle.indexOf("if (nextStatus !== 'ARRIVED' && !trackingActive && !(await ensureFreshDispatchGps())) return;");
   const lifecycleCallAt = lifecycle.indexOf("httpsCallable(functions, 'updateTicketLifecycle')");
-  assert.ok(refreshAt > 0 && lifecycleCallAt > refreshAt, 'fresh GPS must be shared before updateTicketLifecycle');
-  assert.ok(lifecycle.indexOf("stopLiveTracking(user.uid, id, 'ARRIVED')") < refreshAt, 'tracking stops before the arrival GPS refresh');
+  assert.ok(refreshAt > 0 && lifecycleCallAt > refreshAt, 'fresh GPS must be shared before updateTicketLifecycle for non-ARRIVED steps');
+  assert.match(lifecycle, /ARRIVED must NOT call availability GPS/);
+  assert.ok(lifecycle.indexOf("stopLiveTracking(user.uid, id, 'ARRIVED')") > 0, 'ARRIVED still stops live tracking when the client session is known');
   assert.equal((lifecycle.match(/trackingActive = false;/g) || []).length, 3);
 });
 

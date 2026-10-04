@@ -421,8 +421,11 @@ export default function TechnicianJobDetailPage() {
 
             // While live tracking runs, mission GPS (which also stamps lastGpsAt) keeps readiness
             // fresh. Otherwise refresh dispatch GPS so the 15-minute readiness window is met.
-            // ARRIVED also carries its own arrivalLocation proof used by the server readiness gate.
-            if (!trackingActive && !(await ensureFreshDispatchGps())) return;
+            // ARRIVED must NOT call availability GPS: after a refresh the client often loses the
+            // live-tracking session id, availability then refuses "active mission tracking", and
+            // Arrived never reached the server. ARRIVED carries arrivalLocation; the server
+            // bootstraps readiness from that proof.
+            if (nextStatus !== 'ARRIVED' && !trackingActive && !(await ensureFreshDispatchGps())) return;
 
             if (nextStatus === 'COMPLETED') {
                 await updateDoc(doc(db, 'maintenanceTickets', id), {

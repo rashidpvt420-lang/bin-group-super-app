@@ -46,14 +46,16 @@ export async function reportTechnicianAvailabilityLocation(): Promise<void> {
     });
 }
 
-// A refusal that proves a fix was accepted moments ago (15 s throttle, or a newer fix already on
-// record) means the server-side GPS is already fresh; it is not a failure for the caller.
+// A refusal that proves GPS is already fresh (or is being published by live mission tracking)
+// means the caller should proceed; it is not a failure for Accept / lifecycle gates.
 export function isAlreadyFreshAvailabilityRefusal(error: any): boolean {
     const code = String(error?.code || '').toLowerCase();
     const message = String(error?.message || '');
     return code.endsWith('resource-exhausted')
         || /reported moments ago/i.test(message)
-        || /older than the last reported availability location/i.test(message);
+        || /older than the last reported availability location/i.test(message)
+        // Live tracking owns GPS while EN_ROUTE; availability reports are refused on purpose.
+        || /active mission tracking session is running/i.test(message);
 }
 
 export type DispatchGpsRefreshResult = { ok: boolean; message?: string };
