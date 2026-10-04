@@ -12,7 +12,12 @@ const lum = (hex) => {
   return 0.2126 * r + 0.7152 * g + 0.0722 * b;
 };
 const ratio = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((m, n) => n - m); return (x + 0.05) / (y + 0.05); };
-const token = (src, name) => (src.match(new RegExp(`\\b${name}: '(#[0-9A-Fa-f]{6})'`)) || [])[1];
+const token = (src, name) => {
+  const at = src.indexOf(`  ${name}: '#`);
+  if (at < 0) return undefined;
+  const m = /'(#[0-9A-Fa-f]{6})'/.exec(src.slice(at, at + name.length + 16));
+  return m ? m[1] : undefined;
+};
 
 test('theme exposes AA-compliant gold text and status colours', () => {
   const theme = read('src/theme/binGroupTheme.ts');
