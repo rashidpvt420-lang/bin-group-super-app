@@ -101,7 +101,9 @@ function AuthenticatedShellContent({ children, showChrome = true, publicAuth = f
   const isRolePortalRoute = ROLE_PORTAL_PREFIXES.some((prefix) => location.pathname === prefix || location.pathname.startsWith(`${prefix}/`));
   const normalizedRole = (role || '').toLowerCase();
   const shouldRenderGlobalHeader = showChrome;
-  const shouldRenderFloatingNavigation = showChrome && !isAdminRoute && !isTenantRoute;
+  // Role portals already render in-flow Back chrome. The fixed NavigationControl
+  // overlaps technician/owner/broker job pages (including ARRIVED mission cards).
+  const shouldRenderFloatingNavigation = showChrome && !isAdminRoute && !isTenantRoute && !isRolePortalRoute;
   const shouldRenderSovereignAI = showChrome && isRolePortalRoute && Boolean(user?.uid) && AI_ENABLED_ROLES.includes(normalizedRole);
 
   if (roleLoading && !publicAuth) {

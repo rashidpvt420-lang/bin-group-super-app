@@ -105,7 +105,19 @@ export function evaluateTechnicianReadiness(
   const deviceId = String(firstPresent(merged.registeredDeviceId, merged.currentDeviceId, merged.deviceId) || "").trim();
   const deviceReady = merged.deviceRegistered === true || merged.deviceVerified === true || Boolean(deviceId);
 
-  const gpsAt = technicianCredentialMillis(firstPresent(merged.lastGpsAt, merged.lastLocationAt, merged.locationUpdatedAt, merged.gpsUpdatedAt));
+  // Use the newest GPS timestamp. Preferring firstPresent(lastGpsAt, ...) left
+  // stale availability GPS shadowing fresher live-mission locationUpdatedAt and
+  // blocked ARRIVED with "Technician is not operationally ready: fresh GPS location."
+  const gpsAt = [
+    technicianCredentialMillis(merged.lastGpsAt),
+    technicianCredentialMillis(merged.lastLocationAt),
+    technicianCredentialMillis(merged.locationUpdatedAt),
+    technicianCredentialMillis(merged.gpsUpdatedAt),
+  ].reduce<number | null>((newest, candidate) => {
+    if (candidate === null) return newest;
+    if (newest === null || candidate > newest) return candidate;
+    return newest;
+  }, null);
   const gpsMaxAgeMs = Math.max(60_000, Number(merged.gpsMaxAgeMs || 15 * 60_000));
   const gpsFresh = gpsAt !== null && nowMs - gpsAt >= 0 && nowMs - gpsAt <= gpsMaxAgeMs;
 
@@ -161,7 +173,53 @@ async function loadTechnicianReadiness(uid: string, action: TechnicianAction, no
   return { user, technician, merged, readiness: evaluateTechnicianReadiness(merged, action, nowMs) };
 }
 
-async function assertTechnicianReadiness(auth: any, action: TechnicianAction, nowMs = Date.now()) {
+function isFreshArrivalGpsPayload(arrivalLocation: any, nowMs: number) {
+  if (!arrivalLocation || typeof arrivalLocation !== "object") return false;
+  const lat = Number(arrivalLocation.lat ?? arrivalLocation.latitude);
+  const lng = Number(arrivalLocation.lng ?? arrivalLocation.longitude);
+  const accuracy = Number(arrivalLocation.accuracy);
+  const capturedAtMs = Number(arrivalLocation.capturedAtMs || 0);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) return false;
+  if (lat === 0 && lng === 0) return false;
+  if (!Number.isFinite(accuracy) || accuracy <= 0 || accuracy > 100) return false;
+  if (!Number.isFinite(capturedAtMs) || capturedAtMs <= 0) return false;
+  if (capturedAtMs > nowMs + 60_000 || nowMs - capturedAtMs > 60_000) return false;
+  return true;
+}
+
+async function refreshTechnicianGpsFromArrival(uid: string, arrivalLocation: any, nowMs: number) {
+  const now = admin.firestore.Timestamp.fromMillis(nowMs);
+  const lat = Number(arrivalLocation.lat ?? arrivalLocation.latitude);
+  const lng = Number(arrivalLocation.lng ?? arrivalLocation.longitude);
+  const point = {
+    lat,
+    lng,
+    latitude: lat,
+    longitude: lng,
+    accuracy: Number(arrivalLocation.accuracy),
+    deviceTimestampMs: Number(arrivalLocation.capturedAtMs || nowMs),
+    locationSource: String(arrivalLocation.locationSource || "arrival_lifecycle"),
+    purpose: "ARRIVAL_LIFECYCLE",
+    serverUpdatedAt: now,
+  };
+  const profileUpdate = {
+    currentLocation: point,
+    lastLocation: point,
+    lastGpsAt: now,
+    locationUpdatedAt: now,
+    lastSeenAt: now,
+    updatedAt: now,
+  };
+  const userRef = db.collection("users").doc(uid);
+  const technicianRef = db.collection("technicians").doc(uid);
+  const [userSnap, technicianSnap] = await Promise.all([userRef.get(), technicianRef.get()]);
+  const writes = [];
+  if (userSnap.exists) writes.push(userRef.set(profileUpdate, { merge: true }));
+  if (technicianSnap.exists) writes.push(technicianRef.set(profileUpdate, { merge: true }));
+  if (writes.length) await Promise.all(writes);
+}
+
+async function assertTechnicianReadiness(auth: any, action: TechnicianAction, requestData?: any, nowMs = Date.now()) {
   if (!auth?.uid) throw new HttpsError("unauthenticated", "Authentication required.");
   if (isAdmin(auth)) return;
 
@@ -171,13 +229,27 @@ async function assertTechnicianReadiness(auth: any, action: TechnicianAction, no
   }
 
   const { readiness } = await loadTechnicianReadiness(auth.uid, action, nowMs);
-  if (!readiness.ready) {
-    throw new HttpsError(
-      "failed-precondition",
-      `Technician is not operationally ready: ${readiness.failures.join(", ")}.`,
-      { action, failures: readiness.failures },
-    );
+  if (readiness.ready) return;
+
+  const requestedStatus = String(requestData?.status || "").trim().toUpperCase();
+  const gpsOnlyFailure = readiness.failures.length === 1 && readiness.failures[0] === "fresh GPS location";
+  if (
+    action === "UPDATE_LIFECYCLE"
+    && requestedStatus === "ARRIVED"
+    && gpsOnlyFailure
+    && isFreshArrivalGpsPayload(requestData?.arrivalLocation, nowMs)
+  ) {
+    // Arrived already captures a fresh GPS proof in the request. Refresh profile
+    // readiness from that proof so ARRIVED is not blocked by stale availability GPS.
+    await refreshTechnicianGpsFromArrival(auth.uid, requestData.arrivalLocation, nowMs);
+    return;
   }
+
+  throw new HttpsError(
+    "failed-precondition",
+    `Technician is not operationally ready: ${readiness.failures.join(", ")}.`,
+    { action, failures: readiness.failures },
+  );
 }
 
 async function assertLifecycleEvidence(auth: any, data: any) {
@@ -363,7 +435,7 @@ export const getTechnicianOperationalReadiness = onCall(
 );
 
 async function runSecured(legacyCallable: any, request: any, action: TechnicianAction) {
-  await assertTechnicianReadiness(request.auth, action);
+  await assertTechnicianReadiness(request.auth, action, request?.data);
   if (action === "UPDATE_LIFECYCLE") await assertLifecycleEvidence(request.auth, request.data);
   if (typeof legacyCallable?.run !== "function") throw new HttpsError("internal", "Operational callable handler is unavailable.");
   return legacyCallable.run(request);

@@ -18,6 +18,7 @@ test('Technician readiness evaluator covers credentials, shift, device, GPS, dut
     /currentShiftId/,
     /registeredDeviceId/,
     /lastGpsAt/,
+    /locationUpdatedAt/,
     /15 \* 60_000/,
     /onDuty/,
     /isAvailable/,
@@ -25,6 +26,28 @@ test('Technician readiness evaluator covers credentials, shift, device, GPS, dut
     /maxConcurrentJobs/,
     /workload capacity/,
   ], 'Unified Technician readiness');
+});
+
+test('GPS readiness uses newest timestamp and ARRIVED may refresh from arrival payload', async () => {
+  const [operations, liveLocation, assignment] = await Promise.all([
+    read('functions/secureTechnicianOperations.ts'),
+    read('functions/technicianLiveLocation.ts'),
+    read('functions/secureAdminTechnicianAssignment.ts'),
+  ]);
+  expectAll(operations, [
+    /stale availability GPS shadowing fresher live-mission locationUpdatedAt/,
+    /isFreshArrivalGpsPayload/,
+    /refreshTechnicianGpsFromArrival/,
+    /requestedStatus === "ARRIVED"/,
+    /fresh GPS location/,
+  ], 'ARRIVED GPS readiness bootstrap');
+  expectAll(liveLocation, [
+    /lastGpsAt: now/,
+  ], 'Live mission GPS writes lastGpsAt');
+  expectAll(assignment, [
+    /Newest GPS timestamp wins/,
+    /millis\(merged\.locationUpdatedAt\)/,
+  ], 'Dispatch assignment GPS newest-timestamp');
 });
 
 test('Expired or pending Technician credentials fail closed', async () => {

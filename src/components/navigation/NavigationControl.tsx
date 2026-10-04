@@ -18,6 +18,14 @@ export const NavigationControl: React.FC = () => {
   if (hiddenRoutes.has(location.pathname) || inFlowNavigationRoutes.has(location.pathname)) return null;
   if (location.pathname.startsWith('/admin')) return null;
   if (location.pathname.startsWith('/onboarding')) return null;
+  // Authenticated role portals own their header Back control.
+  if (
+    location.pathname.startsWith('/technician')
+    || location.pathname.startsWith('/owner')
+    || location.pathname.startsWith('/tenant')
+    || location.pathname.startsWith('/broker')
+    || location.pathname.startsWith('/auditor')
+  ) return null;
 
   const label = t('nav.back') || (lang === 'ar' ? 'رجوع' : 'Back');
 

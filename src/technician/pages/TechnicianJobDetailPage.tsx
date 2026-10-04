@@ -410,7 +410,11 @@ export default function TechnicianJobDetailPage() {
             if (nextStatus === 'COMPLETED') navigate('/technician/jobs');
         } catch (err: any) {
             if (nextStatus === 'ARRIVED') {
-                setGpsError(err?.message || 'GPS arrival verification failed. Arrival was not recorded.');
+                const raw = String(err?.message || '');
+                const arrivalHint = /fresh GPS location|operationally ready/i.test(raw)
+                    ? ' Arrival GPS was captured on this device, but the server still needs a fresh operational GPS write. Keep the job open with Location allowed, wait a few seconds for live tracking, then tap Arrived again.'
+                    : '';
+                setGpsError((raw || 'GPS arrival verification failed. Arrival was not recorded.') + arrivalHint);
                 setMessage(null);
             } else if (isRetryableNetworkError(err)) {
                 queueAction(nextStatus, err?.message || 'Mission lifecycle update failed because the network was unavailable.');

@@ -61,7 +61,18 @@ export function approvedAndReadyTechnician(user: FirebaseFirestore.DocumentData,
   const shiftStatus = role(firstPresent(merged.shiftStatus, merged.currentShiftStatus, merged.dutyStatus));
   const activeShift = Boolean(currentShiftId) && !["ended", "closed", "cancelled", "off_duty"].includes(shiftStatus);
   const deviceReady = merged.deviceRegistered === true || merged.deviceVerified === true || Boolean(text(firstPresent(merged.registeredDeviceId, merged.currentDeviceId, merged.deviceId), 180));
-  const gpsAt = millis(firstPresent(merged.lastGpsAt, merged.lastLocationAt, merged.locationUpdatedAt, merged.gpsUpdatedAt));
+  // Newest GPS timestamp wins — stale availability lastGpsAt must not shadow
+  // fresher live-mission locationUpdatedAt during dispatch readiness checks.
+  const gpsAt = [
+    millis(merged.lastGpsAt),
+    millis(merged.lastLocationAt),
+    millis(merged.locationUpdatedAt),
+    millis(merged.gpsUpdatedAt),
+  ].reduce<number | null>((newest, candidate) => {
+    if (candidate === null) return newest;
+    if (newest === null || candidate > newest) return candidate;
+    return newest;
+  }, null);
   const gpsFresh = gpsAt !== null && nowMs - gpsAt >= 0 && nowMs - gpsAt <= Math.max(60_000, Number(merged.gpsMaxAgeMs || 15 * 60_000));
   const dutyStatus = role(firstPresent(merged.dutyStatus, merged.shiftStatus));
   const onDuty = merged.onDuty === true || ["on_duty", "active", "available"].includes(dutyStatus);
