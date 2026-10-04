@@ -113,7 +113,7 @@ export default function TenantTicketsPage() {
     if (loading) return (
         <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', py: 10, gap: 2 }}>
             <CircularProgress sx={{ color: binThemeTokens.gold }} />
-            <Typography variant="overline" sx={{ color: 'rgba(255,255,255,0.72)', fontWeight: 900 }}>{t('dash.initializing_stream') || 'Initializing Request Stream...'}</Typography>
+            <Typography variant="overline" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900 }}>{t('dash.initializing_stream') || 'Initializing Request Stream...'}</Typography>
         </Box>
     );
 
@@ -158,7 +158,7 @@ export default function TenantTicketsPage() {
                                     <Typography variant="body1" fontWeight="950" color="#FFF" sx={{ mb: 0.5, wordBreak: 'break-word' }}>
                                         {ticket.serviceLabel || ticket.description || ticket.category || t('ticket.no_description') || 'No Description'}
                                     </Typography>
-                                    <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} alignItems="center" sx={{ color: 'rgba(255,255,255,0.72)', flexWrap: 'wrap' }}>
+                                    <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} alignItems="center" sx={{ color: 'rgba(255,255,255,0.4)', flexWrap: 'wrap' }}>
                                         <Typography variant="caption" sx={{ fontWeight: 800 }}>{t('common.ref') || 'REF'}: #{ticket.id.substring(0, 8).toUpperCase()}</Typography>
                                         <Typography variant="caption">•</Typography>
                                         <Typography variant="caption" sx={{ fontWeight: 800 }}>{ticket.category}</Typography>

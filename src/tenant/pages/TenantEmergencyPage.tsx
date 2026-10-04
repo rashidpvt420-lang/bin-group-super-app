@@ -71,7 +71,7 @@ export default function TenantEmergencyPage() {
         <Box sx={{ textAlign: 'center', py: 10, direction: isRTL ? 'rtl' : 'ltr' }}>
             <AlertTriangle size={80} color="#ef4444" style={{ margin: '0 auto', marginBottom: '24px' }} className="animate-pulse" />
             <Typography variant="h3" fontWeight="950" color="#ef4444" sx={{ mb: 2 }}>{t('dash.tenant.emergencySos') || 'EMERGENCY SOS'}</Typography>
-            <Typography variant="h6" color="rgba(255,255,255,0.72)" sx={{ mb: 6, maxWidth: 500, mx: 'auto' }}>
+            <Typography variant="h6" color="textSecondary" sx={{ mb: 6, maxWidth: 500, mx: 'auto' }}>
                 {t('dash.tenant.emergencyDesc') || 'Trigger this only for immediate life-safety or severe property damage incidents (e.g., major flood, complete blackout, fire).'}
             </Typography>
             {!unitData && (

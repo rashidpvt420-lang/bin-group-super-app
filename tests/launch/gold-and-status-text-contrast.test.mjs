@@ -56,10 +56,11 @@ for (const file of lightPages) {
 
 // Dark tenant routes (TenantApp paints them black): dim white text below 0.6 alpha is under 4.5:1,
 // and goldText (#7A5C12) is only about 3:1 on black, so these files keep bright gold and >= 0.72 white.
+// Tickets, Amenities, Gate pass and Emergency lines are fixed in #1608 (same lines as its tx() change).
 const darkFiles = [
-  'src/tenant/pages/TenantTicketsPage.tsx', 'src/tenant/pages/TenantTicketDetailPage.tsx', 'src/tenant/pages/TenantPaymentsPage.tsx',
-  'src/tenant/pages/TenantMoveInspectionPage.tsx', 'src/tenant/pages/TenantKeysPage.tsx', 'src/tenant/pages/TenantAmenitiesPage.tsx',
-  'src/tenant/pages/TenantNoticesPage.tsx', 'src/tenant/pages/TenantGatePassPage.tsx', 'src/tenant/pages/TenantVisitorParkingPage.tsx',
+  'src/tenant/pages/TenantTicketDetailPage.tsx', 'src/tenant/pages/TenantPaymentsPage.tsx',
+  'src/tenant/pages/TenantMoveInspectionPage.tsx', 'src/tenant/pages/TenantKeysPage.tsx',
+  'src/tenant/pages/TenantNoticesPage.tsx', 'src/tenant/pages/TenantVisitorParkingPage.tsx',
   'src/components/tracking/LiveTechnicianTrackingCard.tsx',
 ];
 for (const file of darkFiles) {
