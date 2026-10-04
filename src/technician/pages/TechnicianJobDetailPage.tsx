@@ -527,11 +527,11 @@ export default function TechnicianJobDetailPage() {
                                             <Stack spacing={1}>
                                                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                                                     <input type="checkbox" id="ppe" checked={ppeChecked} onChange={(e) => setPpeChecked(e.target.checked)} style={{ transform: 'scale(1.2)', accentColor: '#f59e0b' }} />
-                                                    <label htmlFor="ppe" style={{ color: '#FFF', fontSize: '0.85rem' }}>{tx('tech.job.ppe_confirm', 'I am wearing all required PPE (Personal Protective Equipment)')}</label>
+                                                    <label htmlFor="ppe" style={{ color: '#111827', fontSize: '0.85rem', fontWeight: 700 }}>{tx('tech.job.ppe_confirm', 'I am wearing all required PPE (Personal Protective Equipment)')}</label>
                                                 </Box>
                                                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                                                     <input type="checkbox" id="safety" checked={safetyChecked} onChange={(e) => setSafetyChecked(e.target.checked)} style={{ transform: 'scale(1.2)', accentColor: '#f59e0b' }} />
-                                                    <label htmlFor="safety" style={{ color: '#FFF', fontSize: '0.85rem' }}>{tx('tech.job.safety_confirm', 'I have assessed the area and confirm it is safe to begin work')}</label>
+                                                    <label htmlFor="safety" style={{ color: '#111827', fontSize: '0.85rem', fontWeight: 700 }}>{tx('tech.job.safety_confirm', 'I have assessed the area and confirm it is safe to begin work')}</label>
                                                 </Box>
                                             </Stack>
                                         </Paper>
@@ -552,8 +552,8 @@ export default function TechnicianJobDetailPage() {
                                     </Stack>
                                 </Paper>
                                 {closeBlockers.length > 0 && <Alert severity="warning" sx={{ mb: 2 }}>{tx('tech.job.close_blockers', 'Mission cannot close until these proof items are complete:')} {closeBlockers.join(', ')}</Alert>}
-                                <TextField fullWidth multiline rows={3} label={tx('tech.job.resolution_notes', 'Resolution notes — minimum 10 characters')} value={notes} onChange={(e) => setNotes(e.target.value)} sx={{ mb: 2, '& .MuiOutlinedInput-root': { color: '#FFF' }, '& label': { color: 'rgba(255,255,255,0.5)' } }} />
-                                <TextField fullWidth label={tx('tech.job.materials_used', 'Materials used / No parts required')} value={materials} onChange={(e) => setMaterials(e.target.value)} sx={{ mb: 2, '& .MuiOutlinedInput-root': { color: '#FFF' }, '& label': { color: 'rgba(255,255,255,0.5)' } }} />
+                                <TextField fullWidth multiline rows={3} label={tx('tech.job.resolution_notes', 'Resolution notes — minimum 10 characters')} value={notes} onChange={(e) => setNotes(e.target.value)} sx={{ mb: 2, '& .MuiOutlinedInput-root': { color: '#111827' }, '& label': { color: '#475569' } }} />
+                                <TextField fullWidth label={tx('tech.job.materials_used', 'Materials used / No parts required')} value={materials} onChange={(e) => setMaterials(e.target.value)} sx={{ mb: 2, '& .MuiOutlinedInput-root': { color: '#111827' }, '& label': { color: '#475569' } }} />
                                 <Alert data-testid="technician-protected-after-work-guidance" severity={hasProtectedAfterProof ? 'success' : 'info'} sx={{ mb: 2 }}>
                                     {hasProtectedAfterProof
                                         ? 'The protected after-work evidence is server-confirmed. Completion can proceed once notes and parts disposition are ready.'
