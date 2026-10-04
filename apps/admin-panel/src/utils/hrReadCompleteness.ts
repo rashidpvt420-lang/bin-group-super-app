@@ -1,6 +1,7 @@
 // N-25: HR read callables report sections (or staff rows) they could not load. The UI must say
 // so instead of rendering the gap as an empty list.
 const SECTION_LABELS: Record<string, string> = {
+    unprovisionedTechnicians: 'technicians missing from the staff registry',
     attendance: 'attendance',
     leaveRequests: 'leave requests',
     documents: 'HR documents',

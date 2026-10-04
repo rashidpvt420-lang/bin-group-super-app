@@ -246,14 +246,56 @@ export const adminGetStaffLifecycle = onCall({ cors: true, region: "europe-west3
     }
   }));
   const unavailableStaff = rows.flatMap((entry) => entry.unavailable ? [entry.unavailable] : []);
+  const listedUids = new Set(users.docs.map((doc) => doc.id));
+  const gap = await findUnprovisionedTechnicians(listedUids, actor.canManageLifecycle);
+  const unavailable = gap.failed ? ["unprovisionedTechnicians"] : [];
   return {
-    success: unavailableStaff.length === 0,
-    complete: unavailableStaff.length === 0,
+    success: unavailableStaff.length === 0 && !gap.failed,
+    complete: unavailableStaff.length === 0 && !gap.failed,
     unavailableStaff,
+    unavailableSections: unavailable,
     staff: rows.map((entry) => entry.row).filter(Boolean),
+    // Technicians who exist on the dispatch roster / as technician users but were never provisioned
+    // as staff (created by a seed, script or legacy path without isStaff). They are dispatchable and
+    // visible on the live map, so HR must see them instead of the registry silently omitting them.
+    unprovisionedTechnicians: gap.rows,
     canManageLifecycle: actor.canManageLifecycle,
   };
 });
+
+async function findUnprovisionedTechnicians(listedUids: Set<string>, includeEmail: boolean) {
+  const [technicianUsers, roster] = await Promise.all([
+    settleSection("technicianUsers", db.collection("users").where("role", "==", "technician").limit(500).get()),
+    settleSection("technicians", db.collection("technicians").limit(500).get()),
+  ]);
+  if (technicianUsers.failed || roster.failed || !technicianUsers.value || !roster.value) return { failed: true, rows: [] as any[] };
+  const userById = new Map(technicianUsers.value.docs.map((doc) => [doc.id, doc.data() || {}]));
+  const rosterById = new Map(roster.value.docs.map((doc) => [doc.id, doc.data() || {}]));
+  const candidates = new Set<string>([...userById.keys(), ...rosterById.keys()].filter((uid) => !listedUids.has(uid)));
+  // Roster entries whose users profile was not returned by the technician-role query.
+  const missingProfiles = [...candidates].filter((uid) => !userById.has(uid));
+  const profileSnaps = missingProfiles.length ? await db.getAll(...missingProfiles.map((uid) => db.collection("users").doc(uid))) : [];
+  const profileById = new Map(profileSnaps.map((snap) => [snap.id, snap.exists ? snap.data() || {} : null]));
+  const rows = [...candidates].map((uid) => {
+    const user: any = userById.get(uid) ?? profileById.get(uid) ?? null;
+    const technician: any = rosterById.get(uid) || null;
+    const role = clean(user?.role || user?.userRole || user?.primaryRole).toLowerCase();
+    const reason = !user ? "NO_USER_PROFILE" : role !== "technician" ? "ROLE_MISMATCH" : "NOT_PROVISIONED_AS_STAFF";
+    const status = clean(user?.status || technician?.status).toUpperCase() || null;
+    return {
+      uid,
+      displayName: clean(user?.displayName || user?.fullName || technician?.displayName || technician?.fullName, "Technician"),
+      email: includeEmail ? clean(user?.email || technician?.email) || null : null,
+      reason,
+      status,
+      onDispatchRoster: Boolean(technician),
+      specialization: clean(technician?.primaryTrade || technician?.trade || technician?.specialization || user?.specialization) || null,
+      // Only a users profile with the technician role can be adopted; other gaps need remediation.
+      adoptable: reason === "NOT_PROVISIONED_AS_STAFF" && status !== "OFFBOARDED" && user?.offboarded !== true,
+    };
+  }).sort((a, b) => a.displayName.localeCompare(b.displayName));
+  return { failed: false, rows };
+}
 
 export const adminGetStaffDetails = onCall({ cors: true, region: "europe-west3", enforceAppCheck: true }, async (request) => {
   const actor = await requireHrReader(request);

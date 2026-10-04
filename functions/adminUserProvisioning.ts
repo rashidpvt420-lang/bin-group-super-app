@@ -3,6 +3,7 @@ import { FieldValue } from "firebase-admin/firestore";
 import { onDocumentUpdated } from "firebase-functions/v2/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
+import { requirePrivilegedMfaSession } from "./adminMfaSession";
 
 if (!admin.apps.length) {
   admin.initializeApp();
@@ -488,6 +489,106 @@ export const adminSetStaffStatus = onCall({ cors: true, region: "europe-west3", 
       .catch((rollbackError) => console.error("Failed to restore staff Auth state after status update failure", { uid, rollbackError }));
     if (error instanceof HttpsError) throw error;
     throw new HttpsError("internal", `Unable to update staff status safely: ${error?.message || error}`);
+  }
+});
+
+// A technician created outside adminCreateUser (seed, script or legacy path) can be on the
+// dispatch roster and the live map while missing `isStaff`, staffAccess and HR profiles, so HR's
+// Staff Registry never lists them and HR operations refuse them. adminCreateUser cannot fix this
+// (it refuses an email that already has a profile). This Founder/Admin + MFA action adopts the
+// EXISTING technician identity into the registry: it adds the staff markers and empty HR shells,
+// never invents HR data (no salary, Emirates ID or employee ID), keeps the current suspension
+// state, and is audited. The technician's role is not changed.
+export const adminAdoptTechnicianIntoStaffRegistry = onCall({ cors: true, region: "europe-west3", enforceAppCheck: true }, async (request) => {
+  const { actorId, actorRole } = await requireProvisioningAdmin(request);
+  await requirePrivilegedMfaSession(request.auth);
+  const uid = cleanString(request.data?.uid);
+  if (!uid) throw new HttpsError("invalid-argument", "Technician UID is required.");
+  if (uid === actorId) throw new HttpsError("permission-denied", "You cannot adopt your own identity.");
+  const reason = cleanString(request.data?.reason);
+  if (reason.length < 8) throw new HttpsError("invalid-argument", "Record why this technician is being added to the HR registry (at least 8 characters).");
+
+  let authUser: admin.auth.UserRecord;
+  try {
+    authUser = await admin.auth().getUser(uid);
+  } catch (error: any) {
+    if (error?.code === "auth/user-not-found") throw new HttpsError("not-found", "No sign-in identity exists for this technician; it cannot be adopted.");
+    throw error;
+  }
+  const previousClaims = authUser.customClaims || {};
+  if (previousClaims.admin === true || previousClaims.isAdmin === true || previousClaims.superAdmin === true || previousClaims.super_admin === true || previousClaims.ceo === true) {
+    throw new HttpsError("permission-denied", "Privileged identities cannot be adopted as technicians.");
+  }
+  const claimRole = cleanString(previousClaims.role || previousClaims.userRole || previousClaims.primaryRole).toLowerCase();
+  if (claimRole && claimRole !== "technician") throw new HttpsError("failed-precondition", "The sign-in identity does not hold the technician role.");
+
+  const { modules, permissions } = canonicalAccess("technician", {});
+  const userRef = db.collection("users").doc(uid);
+  const now = FieldValue.serverTimestamp();
+  const preview = await userRef.get();
+  if (!preview.exists) throw new HttpsError("failed-precondition", "No users profile exists for this technician. Provision a new staff identity instead.");
+  const previewData = preview.data() || {};
+  const suspended = authUser.disabled || previousClaims.suspended === true || previewData.suspended === true ||
+    cleanString(previewData.status).toUpperCase() === "SUSPENDED";
+
+  // Claims first (as adminCreateUser does); restored if the Firestore write fails.
+  await admin.auth().setCustomUserClaims(uid, { ...previousClaims, ...claimsForAccess("technician", modules, permissions, suspended) });
+  try {
+    const auditRef = db.collection("audit_logs").doc();
+    await db.runTransaction(async (tx) => {
+      const refs = ["users", "staffAccess", "hrProfiles", "private_hr_profiles", "technicians"].map((name) => db.collection(name).doc(uid));
+      const [userSnap, accessSnap, hrSnap, privateSnap, technicianSnap] = await Promise.all(refs.map((ref) => tx.get(ref)));
+      if (!userSnap.exists) throw new HttpsError("failed-precondition", "No users profile exists for this technician.");
+      const user = userSnap.data() || {};
+      const role = cleanString(user.role || user.userRole || user.primaryRole).toLowerCase();
+      if (role !== "technician") throw new HttpsError("failed-precondition", "Only a technician profile can be adopted into the staff registry.");
+      if (user.isStaff === true) throw new HttpsError("already-exists", "This technician is already in the staff registry.");
+      const status = cleanString(user.status).toUpperCase();
+      if (status === "OFFBOARDED" || user.offboarded === true || previousClaims.offboarded === true) {
+        throw new HttpsError("failed-precondition", "OFFBOARDED is terminal; provision a new staff identity instead.");
+      }
+      const technician = technicianSnap.exists ? technicianSnap.data() || {} : {};
+      const displayName = cleanString(user.displayName || user.fullName || technician.displayName || technician.fullName || authUser.displayName, "Technician");
+      const specialization = cleanString(user.specialization || technician.primaryTrade || technician.trade || technician.specialization, "General Maintenance");
+      tx.set(refs[0], {
+        isStaff: true, isAdmin: false, staffModules: modules, modules, permissions,
+        department: cleanString(user.department, "Technical"),
+        provisionedVia: user.provisionedVia || "adminAdoptTechnicianIntoStaffRegistry",
+        adoptedIntoStaffRegistryAt: now, adoptedIntoStaffRegistryBy: actorId, updatedAt: now,
+      }, { merge: true });
+      if (!accessSnap.exists) {
+        tx.create(refs[1], {
+          uid, role: "technician", active: !suspended, suspended, status: status || (suspended ? "SUSPENDED" : "ACTIVE"),
+          modules, staffModules: modules, permissions, grantedAt: now, grantedBy: actorId, updatedAt: now,
+          grantedVia: "adminAdoptTechnicianIntoStaffRegistry",
+        });
+      }
+      if (!hrSnap.exists) {
+        tx.create(refs[2], {
+          uid, displayName, role: "technician", employeeType: "technician", department: cleanString(user.department, "Technical"), specialization,
+          status: status || null, suspended, createdAt: now, updatedAt: now, createdVia: "adminAdoptTechnicianIntoStaffRegistry",
+        });
+      }
+      if (!privateSnap.exists) {
+        // Empty private shell: HR completes Employee ID, Emirates ID, contract and salary from documents.
+        tx.create(refs[3], {
+          uid, emailHash: authUser.email ? hashValue(normalizeEmail(authUser.email)) : null,
+          employeeId: null, emiratesId: null, joiningDate: null, contractEndDate: null,
+          accessClassification: "PRIVATE_HR_SERVER_ONLY", createdAt: now, updatedAt: now, createdBy: actorId,
+        });
+      }
+      tx.create(auditRef, {
+        actorId, actorRole, action: "ADMIN_ADOPT_TECHNICIAN_INTO_STAFF_REGISTRY", targetType: "users", targetId: uid,
+        reason,
+        before: { isStaff: user.isStaff ?? null, staffAccess: accessSnap.exists, hrProfile: hrSnap.exists, privateHrProfile: privateSnap.exists, claimKeys: Object.keys(previousClaims).sort() },
+        after: { isStaff: true, modules, suspended, onDispatchRoster: technicianSnap.exists },
+        mfaVerified: true, createdAt: now,
+      });
+    });
+    return { success: true, uid, auditId: auditRef.id, suspended, message: "Technician added to the HR staff registry. Complete the HR profile from original documents." };
+  } catch (error) {
+    await admin.auth().setCustomUserClaims(uid, previousClaims).catch((restoreError) => console.error("Failed to restore technician claims after adoption failure", { uid, restoreError }));
+    throw error;
   }
 });
 

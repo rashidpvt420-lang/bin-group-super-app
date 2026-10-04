@@ -10,6 +10,7 @@ import { functions, httpsCallable } from '../../lib/firebase';
 import { binThemeTokens } from '../../theme/adminTheme';
 import { useAuth } from '../../context/AuthContext';
 import StaffAccessPage from './StaffAccessPage';
+import UnprovisionedTechniciansPanel, { type UnprovisionedTechnician } from './UnprovisionedTechniciansPanel';
 import StaffLifecycleDetailsDialog from './StaffLifecycleDetailsDialog';
 import { describeIncompleteHrRead } from '../../utils/hrReadCompleteness';
 
@@ -72,6 +73,7 @@ export default function HRManagementPage() {
     const [searchTerm, setSearchTerm] = useState('');
     const [notice, setNotice] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
     const [canManageLifecycle, setCanManageLifecycle] = useState(false);
+    const [unprovisionedTechnicians, setUnprovisionedTechnicians] = useState<UnprovisionedTechnician[]>([]);
 
     const [attendanceForm, setAttendanceForm] = useState({ uid: '', workDate: new Date().toISOString().slice(0, 10), status: 'PRESENT', checkIn: '', checkOut: '', note: '' });
     const [leaveForm, setLeaveForm] = useState({ uid: '', leaveType: 'ANNUAL', startDate: '', endDate: '', reason: '' });
@@ -100,6 +102,7 @@ export default function HRManagementPage() {
             const lifecycleResponse: any = await getLifecycle({});
             const rows = Array.isArray(lifecycleResponse.data?.staff) ? lifecycleResponse.data.staff : [];
             setStaff(rows);
+            setUnprovisionedTechnicians(Array.isArray(lifecycleResponse.data?.unprovisionedTechnicians) ? lifecycleResponse.data.unprovisionedTechnicians : []);
             setCanManageLifecycle(lifecycleResponse.data?.canManageLifecycle === true);
             if (isHRManager) {
                 const getOps = httpsCallable(functions, 'adminGetHrOperations');
@@ -234,6 +237,7 @@ export default function HRManagementPage() {
                                 <TextField size="small" placeholder="Search staff, role, department, lifecycle..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} InputProps={{ startAdornment: <Search size={17} style={{ marginRight: 8 }} /> }} sx={{ minWidth: 360 }} />
                                 <Chip label={`${filteredStaff.length} OF ${staff.length} STAFF`} sx={{ fontWeight: 900 }} />
                             </Box>
+                            <UnprovisionedTechniciansPanel technicians={unprovisionedTechnicians} canAdopt={isProvisioningAdmin} onAdopted={async (message) => { setNotice({ type: 'success', message }); await loadProtectedHr(); }} />
                             <TableContainer>
                                 <Table>
                                     <TableHead><TableRow>
