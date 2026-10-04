@@ -899,6 +899,12 @@ const translations: Record<Language, Record<string, string>> = {
         'fin.income': 'Income',
         'fin.burn': 'Expenditure',
         'fin.logs_title': 'Systemic Ledger Logs',
+        // ── Portal lock screen (ProtectedRoute) ─────────────────────────────
+        'lock.title': 'Owner portal locked',
+        'lock.desc': 'Your owner portal is not active yet or has been paused. Check your activation status, or contact BIN GROUP support for help.',
+        'lock.title_offline': 'Your account is under review',
+        'lock.desc_offline': 'BIN GROUP is reviewing your property details and documents. You can check your activation status or open your contracts and payment while you wait.',
+        'lock.signout': 'Sign out',
         // ── Owner Financials ──────────────────────────────────────────────
         'owner.fin.ledger_title': 'Institutional Revenue Ledger',
         'owner.fin.financial_sovereign': 'Financial Sovereignty',
@@ -1721,6 +1727,12 @@ const translations: Record<Language, Record<string, string>> = {
         'fin.income': 'الدخل',
         'fin.burn': 'المصروفات',
         'fin.logs_title': 'سجلات الدفتر النظامي',
+        // ── شاشة قفل البوابة ───────────────────────────────────────────────
+        'lock.title': 'بوابة المالك مقفلة',
+        'lock.desc': 'بوابة المالك غير مفعّلة بعد أو تم إيقافها مؤقتاً. راجع حالة التفعيل أو تواصل مع دعم مجموعة بن للمساعدة.',
+        'lock.title_offline': 'حسابك قيد المراجعة',
+        'lock.desc_offline': 'تراجع مجموعة بن تفاصيل عقارك ومستنداتك. يمكنك متابعة حالة التفعيل أو فتح العقود والدفع أثناء الانتظار.',
+        'lock.signout': 'تسجيل الخروج',
         'admin.contract_ref': 'مرجع العقد',
         'fin.log.date': 'التاريخ',
         'admin.amount': 'المبلغ',
