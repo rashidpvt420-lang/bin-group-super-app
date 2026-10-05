@@ -50,6 +50,7 @@ test('every dual-SHA evidence scope accepts the reviewed Phase 1 final-decision 
 
 test('hard clearance freshly revalidates production state without moving the frozen pilot release', async () => {
   const workflow = await read('.github/workflows/live-role-smoke.yml');
+  const revalidationSource = await read('scripts/hard-clearance-production-revalidation.mjs');
 
   assert.match(workflow, /hard-clearance-production-revalidation:/);
   assert.match(workflow, /name: Freshly revalidate protected production state/);
