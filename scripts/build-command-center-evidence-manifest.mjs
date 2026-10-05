@@ -39,11 +39,14 @@ if (!RUN_PATTERN.test(workflowRunId)) fail('SOURCE_EVIDENCE_RUN_ID must be numer
 if (!sourceArtifactName) fail('SOURCE_EVIDENCE_ARTIFACT_NAME is required');
 if (!DIGEST_PATTERN.test(sourceArtifactDigest)) fail('SOURCE_EVIDENCE_ARTIFACT_DIGEST must be a sha256 digest');
 
-const expectedArtifactName = mode === 'live-role-smoke'
-  ? `live-launch-evidence-${releaseSha}`
-  : `production-deployment-${releaseSha}-${workflowRunId}`;
-if (sourceArtifactName !== expectedArtifactName) {
-  fail(`source artifact name mismatch (have=${sourceArtifactName} want=${expectedArtifactName})`);
+const expectedArtifactNames = mode === 'live-role-smoke'
+  ? new Set([`live-launch-evidence-${releaseSha}`])
+  : new Set([
+      `production-deployment-${releaseSha}-${workflowRunId}`,
+      `production-deployment-${releaseSha}`,
+    ]);
+if (!expectedArtifactNames.has(sourceArtifactName)) {
+  fail(`source artifact name mismatch (have=${sourceArtifactName} allowed=${[...expectedArtifactNames].join(',')})`);
 }
 
 const batch = readJsonSafe(evidencePath(root), null);
