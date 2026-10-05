@@ -22,6 +22,7 @@ import { binThemeTokens } from '../../theme/binGroupTheme';
 import { resolvePropertyLocation } from '../../utils/propertyLocationResolver';
 import { startLiveTracking, stopLiveTracking } from '../../utils/liveTracking';
 import { AVAILABILITY_REPORT_INTERVAL_MS, isLiveTrackedMission, refreshTechnicianDispatchGps } from '../utils/availabilityLocation';
+import { jobPropertyName } from '../utils/jobPropertyDetails';
 import {
     ensureTechnicianInstallationRegistered,
     readNativeTechnicianInstallationHash,
@@ -522,18 +523,18 @@ export default function TechnicianJobDetailPage() {
                             </Grid>
                             <Grid item xs={12} md={6}>
                                 <Typography variant="caption" color="textSecondary">{tx('tech.job.property_unit', 'Property / Unit')}</Typography>
-                                <Typography variant="h6" fontWeight="900" color="#FFF">{ticket.propertyName || 'Property'}</Typography>
+                                <Typography variant="h6" fontWeight="900" color="#FFF" sx={{ overflowWrap: 'anywhere' }}>{jobPropertyName(ticket) || tx('tech.job.property_name_missing', 'Property name not recorded')}</Typography>
                                 <Typography variant="body2" color="textSecondary">Unit {ticket.unitNumber || ticket.unitLabel || 'N/A'} · Floor {ticket.floorNumber || ticket.floor || 'N/A'}</Typography>
                             </Grid>
                             <Grid item xs={12}>
                                 <Paper sx={{ p: 2.25, bgcolor: alpha(binThemeTokens.gold, 0.08), border: `1px solid ${alpha(binThemeTokens.gold, 0.24)}`, borderRadius: 3 }}>
-                                    <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 950 }}>{tx('tech.job.exact_service_location', 'EXACT SERVICE LOCATION')}</Typography>
+                                    <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 950 }}>{tx('tech.job.reported_service_location', 'REPORTED SERVICE LOCATION')}</Typography>
                                     <Typography variant="h6" fontWeight="950" color="#FFF" sx={{ mt: 0.5 }}>{serviceLocationDetail || tx('tech.job.service_location_missing', 'Not specified — call tenant before moving to site.')}</Typography>
                                 </Paper>
                             </Grid>
                             <Grid item xs={12}>
                                 <Typography variant="caption" color="textSecondary">{tx('tech.job.address', 'Address')}</Typography>
-                                <Typography variant="body1" color="#FFF">{ticket.address || ticket.propertyLocation?.address || 'Address not available'}</Typography>
+                                <Typography variant="body1" color="#FFF">{resolved.address || ticket.propertyLocation?.address || 'Address not available'}</Typography>
                                 <Typography variant="body2" color="textSecondary">Access: {ticket.permissionToEnter || 'CALL_FIRST'} · Anyone home: {ticket.isAnyoneHome || 'UNKNOWN'} · Notes: {ticket.accessNotes || '—'}</Typography>
                             </Grid>
                         </Grid>
