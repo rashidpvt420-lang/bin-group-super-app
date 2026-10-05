@@ -22,6 +22,7 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       REPOSITORY: ${{ github.repository }}
       TARGET_ISSUE_NUMBER: '434'
+      OWNER_CORRELATION_DISPATCH_WINDOW: 'true'
 
     steps:
       - name: Authorize exact issue command and resolve main

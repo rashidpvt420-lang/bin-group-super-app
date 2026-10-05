@@ -22,7 +22,7 @@ function validCreatedAt(value) {
   return { text, epoch };
 }
 
-export function selectNewExactShaWorkflowRun({ runs, baselineRunIds, expectedSha }) {
+export function selectNewExactShaWorkflowRun({ runs, baselineRunIds, expectedSha, observedAfter }) {
   const sha = String(expectedSha || '').trim();
   if (!SHA_PATTERN.test(sha)) {
     throw new Error('expectedSha must be a lowercase 40-character commit SHA.');
@@ -38,6 +38,8 @@ export function selectNewExactShaWorkflowRun({ runs, baselineRunIds, expectedSha
     baselineRunIds.map((id, index) => positiveRunId(id, `baselineRunIds[${index}]`)),
   );
   const candidates = [];
+  const uniqueCandidates = new Map();
+  const minimumEpoch = observedAfter === undefined ? null : validCreatedAt(observedAfter).epoch;
 
   for (const run of runs) {
     if (!run || typeof run !== 'object') continue;
@@ -58,6 +60,15 @@ export function selectNewExactShaWorkflowRun({ runs, baselineRunIds, expectedSha
     }
     const createdAt = validCreatedAt(run.created_at);
 
+    if (minimumEpoch !== null && createdAt.epoch < minimumEpoch) continue;
+    const provenance = JSON.stringify([runSha, runUrl, createdAt.text]);
+    if (uniqueCandidates.has(runId)) {
+      if (uniqueCandidates.get(runId) !== provenance) {
+        throw new Error('Conflicting provenance for the same workflow run ID.');
+      }
+      continue;
+    }
+    uniqueCandidates.set(runId, provenance);
     candidates.push({
       runId,
       runSha,
@@ -94,7 +105,7 @@ function main() {
   try {
     runs = JSON.parse(readFileSync(0, 'utf8'));
     baselineRunIds = JSON.parse(readFileSync(baselinePath, 'utf8'));
-    const selected = selectNewExactShaWorkflowRun({ runs, baselineRunIds, expectedSha });
+    const selected = selectNewExactShaWorkflowRun({ runs, baselineRunIds, expectedSha, observedAfter });
     if (!selected) process.exit(2);
     process.stdout.write(`${JSON.stringify(selected)}\n`);
   } catch (error) {

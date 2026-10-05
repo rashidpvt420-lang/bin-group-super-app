@@ -7,6 +7,10 @@ owner_snapshot_workflow_run_ids() {
   local workflow="$1"
   local output_file="$2"
 
+  if [[ "${OWNER_CORRELATION_DISPATCH_WINDOW:-false}" == 'true' ]]; then
+    date -u +'%Y-%m-%dT%H:%M:%SZ' > "${output_file}.observed-after"
+  fi
+
   gh api --paginate --slurp \
     "repos/$REPOSITORY/actions/workflows/$workflow/runs?event=workflow_dispatch&branch=main&per_page=100" |
     jq -ce '[.[].workflow_runs[] | .id]' > "$output_file"
@@ -23,6 +27,11 @@ owner_locate_new_exact_sha_workflow_run() {
   local max_polls="$requested_max_polls"
   local selector_error
   local runs_json='[]'
+  local observed_after=''
+  if [[ "${OWNER_CORRELATION_DISPATCH_WINDOW:-false}" == 'true' ]]; then
+    [[ -s "${baseline_file}.observed-after" ]] || return 1
+    observed_after="$(cat "${baseline_file}.observed-after")"
+  fi
   selector_error="$(mktemp)"
 
   # Protected production dispatches can sit in the GitHub Actions queue for
@@ -48,7 +57,7 @@ owner_locate_new_exact_sha_workflow_run() {
 
     if selected="$(
       printf '%s' "$runs_json" |
-        node scripts/select-new-exact-sha-workflow-run.mjs "$expected_sha" "$baseline_file" \
+        node scripts/select-new-exact-sha-workflow-run.mjs "$expected_sha" "$baseline_file" "$observed_after" \
           2>"$selector_error"
     )"; then
       local run_id run_url matched_run run_status run_conclusion

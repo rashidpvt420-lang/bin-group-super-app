@@ -135,3 +135,31 @@ test('owner launch workflow snapshots and dispatches one exact-SHA privileged re
     'production must be left to the protected draft-PR dispatcher',
   );
 });
+
+
+test('dispatch window excludes older exact-SHA runs missing from a stale baseline', () => {
+  assert.equal(selectNewExactShaWorkflowRun({ expectedSha: SHA, baselineRunIds: [],
+    observedAfter: '2026-07-23T20:05:00Z', runs: [run(), run({ id: 9002, created_at: '2026-07-23T20:05:01Z' })],
+  }).runId, '9002');
+});
+
+test('dispatch window still refuses two distinct new exact-SHA runs', () => {
+  assert.throws(() => selectNewExactShaWorkflowRun({ expectedSha: SHA, baselineRunIds: [],
+    observedAfter: '2026-07-23T20:00:00Z', runs: [run(), run({ id: 9002 })],
+  }), /Ambiguous/);
+});
+
+test('duplicate API records for one run do not manufacture ambiguity', () => {
+  assert.equal(selectNewExactShaWorkflowRun({ expectedSha: SHA, baselineRunIds: [],
+    runs: [run(), run({ status: 'completed' })],
+  }).runId, '9001');
+});
+
+test('duplicate run IDs with conflicting provenance and invalid windows fail closed', () => {
+  assert.throws(() => selectNewExactShaWorkflowRun({ expectedSha: SHA, baselineRunIds: [],
+    runs: [run(), run({ created_at: '2026-07-23T20:00:01Z' })],
+  }), /Conflicting provenance/);
+  assert.throws(() => selectNewExactShaWorkflowRun({ expectedSha: SHA, baselineRunIds: [],
+    observedAfter: 'invalid', runs: [run()],
+  }), /invalid created_at/);
+});
