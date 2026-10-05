@@ -32,7 +32,7 @@ const BinGroupHeader = () => {
           placeItems: 'center',
           bgcolor: 'rgba(212,175,55,0.12)',
           border: '1px solid rgba(212,175,55,0.35)',
-          color: '#d4af37',
+          color: '#7A5C12',
           fontWeight: 950,
           letterSpacing: -1,
           fontSize: 18,
@@ -43,7 +43,8 @@ const BinGroupHeader = () => {
       <Box sx={{ minWidth: 0 }}>
         <Typography
           sx={{
-            color: '#fff',
+            // The global header sits on the white authenticated shells; #fff was invisible (1:1).
+            color: '#111827',
             fontWeight: 950,
             letterSpacing: 1.6,
             lineHeight: 1,
@@ -55,7 +56,7 @@ const BinGroupHeader = () => {
         </Typography>
         <Typography
           sx={{
-            color: 'rgba(212,175,55,0.82)',
+            color: '#7A5C12',
             fontWeight: 900,
             letterSpacing: 2.2,
             lineHeight: 1.1,
