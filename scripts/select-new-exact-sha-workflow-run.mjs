@@ -39,6 +39,7 @@ export function selectNewExactShaWorkflowRun({ runs, baselineRunIds, expectedSha
     baselineRunIds.map((id, index) => positiveRunId(id, `baselineRunIds[${index}]`)),
   );
   const candidates = [];
+  const uniqueCandidates = new Map();
 
   for (const run of runs) {
     if (!run || typeof run !== 'object') continue;
@@ -62,6 +63,14 @@ export function selectNewExactShaWorkflowRun({ runs, baselineRunIds, expectedSha
     // this dispatch is never its result, even when it was absent from that list.
     // Keep the baseline exclusion and reject multiple genuinely new runs.
     if (lowerBound !== null && createdAt.epoch < lowerBound) continue;
+    const provenance = JSON.stringify([runSha, runUrl, createdAt.text]);
+    if (uniqueCandidates.has(runId)) {
+      if (uniqueCandidates.get(runId) !== provenance) {
+        throw new Error('Conflicting provenance for the same workflow run ID.');
+      }
+      continue;
+    }
+    uniqueCandidates.set(runId, provenance);
 
     candidates.push({
       runId,
