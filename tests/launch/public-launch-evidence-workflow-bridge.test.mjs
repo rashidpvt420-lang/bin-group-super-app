@@ -15,20 +15,20 @@ test('Command Center bridge only auto-maps gates backed by exact execution evide
     'ownerOnboardingFullPath',
     'ownerPaymentApproveReject',
     'tenantPhotoMaintenanceRequest',
-    'technicianMissionLifecycle',
-    'technicianGpsAndDeniedFallback',
     'brokerReferralCommissionLifecycle',
     'adminFreshLoginAndCorePages',
     'adminStaffProvisioning',
     'adminPaymentUnlockAudit',
     'firebaseAuth',
-    'firebaseCloudMessaging',
   ];
   for (const gate of supported) {
     assert.match(builder, new RegExp(`gateId: '${gate}'`));
   }
 
   const unsupported = [
+    'technicianMissionLifecycle',
+    'technicianGpsAndDeniedFallback',
+    'firebaseCloudMessaging',
     'ownerPostPaymentDashboard',
     'tenantSosAdminVisibility',
     'tenantUnitBindingAndArabic',
