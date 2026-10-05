@@ -78,6 +78,9 @@ test('hard-clearance workflow derives timestamps and cannot trust manual pilot d
   assert.doesNotMatch(workflow, /PILOT_COMPLETED_AT:\s*\$\{\{ inputs\.pilot_completed_at \}\}/);
   assert.match(workflow, /launch_package\/live-evidence-provenance\.json/);
 
+  const overlayMatches = workflow.match(/cp control-plane\/scripts\/resolve-live-pilot-window\.mjs release\/scripts\/resolve-live-pilot-window\.mjs/g) || [];
+  assert.equal(overlayMatches.length, 2, 'both production revalidation and final hard-clearance jobs must overlay the immutable-attempt pilot resolver');
+
   for (const marker of [
     'LIVE_EVIDENCE_RUN_ID',
     'LIVE_EVIDENCE_RUN_URL',
