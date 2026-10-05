@@ -154,9 +154,11 @@ export function evidenceLayerSatisfies(actual: unknown, required: LaunchEvidence
 
 /**
  * Qualifies an evidence record for exact-SHA release coverage. This helper does
- * not issue the final hard-launch decision. Only protected execution-generated
- * GitHub evidence can qualify; manually entered Admin evidence remains useful
- * for review/history but cannot self-certify a release.
+ * not issue the final hard-launch decision. Hosted/source evidence must come
+ * from protected execution-generated GitHub runs. Physical-device coverage is
+ * intentionally different: it must come from the Admin manual evidence recorder
+ * and is still only an input to the protected hard-clearance workflow, never a
+ * self-authorizing launch claim.
  */
 export function evidenceCountsForPublicLaunch(
   evidence: LaunchEvidenceRecord | null | undefined,
@@ -165,13 +167,22 @@ export function evidenceCountsForPublicLaunch(
 ): boolean {
   if (!evidence) return false;
   if (String(evidence.status || '').trim().toLowerCase() !== 'passed') return false;
-  if (String(evidence.source || '').trim().toLowerCase() !== 'github-actions') return false;
-  if (evidence.executionGenerated !== true) return false;
   if (evidence.hardLaunchClaim !== false) return false;
+
   const expected = normalizeCommitSha(expectedCommitSha);
-  const observed = normalizeCommitSha(evidence.releaseSha || evidence.commitSha);
+  const releaseSha = normalizeCommitSha(evidence.releaseSha);
+  const commitSha = normalizeCommitSha(evidence.commitSha);
+  const observed = releaseSha || commitSha;
   if (!expected || !observed || expected !== observed) return false;
-  return evidenceLayerSatisfies(evidence.evidenceLayer, requiredLayer);
+  if (releaseSha && releaseSha !== expected) return false;
+  if (commitSha && commitSha !== expected) return false;
+  if (!evidenceLayerSatisfies(evidence.evidenceLayer, requiredLayer)) return false;
+
+  const source = String(evidence.source || '').trim().toLowerCase();
+  if (requiredLayer === 'physical_device') {
+    return source === 'admin-manual-evidence' && evidence.executionGenerated === false;
+  }
+  return source === 'github-actions' && evidence.executionGenerated === true;
 }
 
 export function providerRuntimeState({
