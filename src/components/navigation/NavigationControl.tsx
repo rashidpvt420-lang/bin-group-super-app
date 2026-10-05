@@ -18,9 +18,6 @@ export const NavigationControl: React.FC = () => {
   if (hiddenRoutes.has(location.pathname) || inFlowNavigationRoutes.has(location.pathname)) return null;
   if (location.pathname.startsWith('/admin')) return null;
   if (location.pathname.startsWith('/onboarding')) return null;
-  // The technician AppBar already has an in-flow Back button. The fixed copy duplicated it and sat
-  // over the sync strips and page headings (and on the technician home it sent users to '/').
-  if (location.pathname === '/technician' || location.pathname.startsWith('/technician/')) return null;
 
   const label = t('nav.back') || (lang === 'ar' ? 'رجوع' : 'Back');
 

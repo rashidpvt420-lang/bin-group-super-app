@@ -23,14 +23,6 @@ export function resolvePropertyLocation(record: any): ResolvedPropertyLocation {
   let longitude: number | null = null;
 
   if (record) {
-    // Protected ticket callables store the dispatch pin as a complete jobLocation pair.
-    // Keep that canonical pair together rather than mixing it with legacy coordinates.
-    const jobLatitude = getVal(record.jobLocation?.latitude ?? record.jobLocation?.lat);
-    const jobLongitude = getVal(record.jobLocation?.longitude ?? record.jobLocation?.lng);
-    if (jobLatitude !== null && jobLongitude !== null && isValidLatLng(jobLatitude, jobLongitude)) {
-      latitude = jobLatitude;
-      longitude = jobLongitude;
-    }
     // 1. location.latitude / location.longitude
     if (latitude === null && record.location?.latitude !== undefined) latitude = getVal(record.location?.latitude);
     if (longitude === null && record.location?.longitude !== undefined) longitude = getVal(record.location?.longitude);
@@ -94,7 +86,7 @@ export function resolvePropertyLocation(record: any): ResolvedPropertyLocation {
     && isValidLatLng(latitude, longitude);
 
   // Resolve address & emirate
-  const address = record?.jobLocation?.address || record?.address || record?.addressLine || record?.locationText || record?.location?.address || record?.geo?.address || (typeof record?.location === 'string' ? record.location : '') || '';
+  const address = record?.address || record?.addressLine || record?.locationText || record?.location?.address || record?.geo?.address || (typeof record?.location === 'string' ? record.location : '') || '';
   const emirate = record?.emirate || record?.location?.emirate || record?.geo?.emirate || record?.city || 'UAE';
 
   // Support for urls and plusCode

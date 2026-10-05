@@ -153,7 +153,7 @@ export default function BinConnectInboxPage({ role, dark = false }: { role: Port
           <Typography variant="h3" sx={{ fontWeight: 950 }}>My Conversations</Typography>
           <Typography sx={{ color: dark ? 'rgba(255,255,255,.62)' : binThemeTokens.textSecondary, maxWidth: 880, mt: 1 }}>Continue your CEO/admin, Majlis staff, maintenance, feature suggestion, dashboard issue, owner, tenant, technician, or broker conversations from one inbox.</Typography>
         </Box>
-        <Chip label={`${threads.length} conversations`} sx={{ alignSelf: { xs: 'flex-start', md: 'center' }, bgcolor: alpha(binThemeTokens.gold, .12), color: dark ? binThemeTokens.goldHover : '#7A5C12', fontWeight: 950 }} />
+        <Chip label={`${threads.length} conversations`} sx={{ alignSelf: { xs: 'flex-start', md: 'center' }, bgcolor: alpha(binThemeTokens.gold, .12), color: binThemeTokens.goldHover, fontWeight: 950 }} />
       </Stack>
 
       {notice && <Alert severity={notice.includes('sent') || notice.includes('resolved') ? 'success' : 'warning'} sx={{ mb: 3 }}>{notice}</Alert>}

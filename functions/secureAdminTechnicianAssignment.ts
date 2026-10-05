@@ -1,7 +1,6 @@
 import * as admin from "firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
-import { mergeTechnicianProfiles } from "./technicianDutyProfile";
 
 if (!admin.apps.length) admin.initializeApp();
 const db = admin.firestore();
@@ -48,7 +47,7 @@ export function approvedAndReadyTechnician(user: FirebaseFirestore.DocumentData,
   if (userExists && role(user.role) !== "technician") return { ready: false, failures: ["role"] };
   if (profiles.some((profile) => profile.suspended === true || ["suspended", "rejected", "disabled", "inactive"].includes(role(profile.status)))) return { ready: false, failures: ["account status"] };
   const approved = profiles.some((profile) => ["active", "approved"].includes(role(profile.status)) || role(profile.approvalStatus) === "approved");
-  const merged = mergeTechnicianProfiles(userExists ? user : null, technicianExists ? technician : null);
+  const merged = { ...user, ...technician };
   const certifications = [
     ...(Array.isArray(user.certifications) ? user.certifications : []),
     ...(Array.isArray(technician.certifications) ? technician.certifications : []),
