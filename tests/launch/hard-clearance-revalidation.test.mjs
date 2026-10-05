@@ -1004,8 +1004,9 @@ test('invalid physical metadata and missing protected technician proof remain se
     physicalFixtureRecord('googleMaps', { evidenceLayer: 'hosted' }),
     physicalFixtureRecord('technicianGpsAndDeniedFallback'),
   ]);
-  assert.equal(result.report.gates.find((gate) => gate.commandCenterGateId === 'googleMaps').reason,
-    'current-release-records-do-not-satisfy-physical-validation');
+  const googleMaps = result.report.gates.find((gate) => gate.commandCenterGateId === 'googleMaps');
+  assert.equal(googleMaps.reason, 'current-release-records-do-not-satisfy-physical-validation');
+  assert.deepEqual(googleMaps.invalidReasons, ['evidence-layer-not-physical-device']);
   assert.equal(result.report.gates.find((gate) => gate.commandCenterGateId === 'technicianGpsAndDeniedFallback').reason,
     'protected-technician-mission-proof-missing-or-invalid');
   assert.equal(result.files.has('/fixture/launch_package/launch-proof-gates.json'), false);
