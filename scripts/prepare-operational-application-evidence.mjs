@@ -880,15 +880,62 @@ async function createApprovedBrokerActivationFixture({ db, apiKey, appId, debugT
   const receiptGeneration = text(receiptMetadata.generation);
   if (!receiptGeneration) fail('run-scoped Broker activation receipt has no immutable Storage generation');
   const receiptUrl = 'gs://' + bucket.name + '/' + ids.receiptPath;
+  const session = await founderCallableSession({ apiKey, appId, debugToken });
   const now = admin.firestore.FieldValue.serverTimestamp();
   const marker = { testAccount: true, e2eLaunchSeed: true, e2eEvidenceType: BROKER_ACTIVATION_EVIDENCE_TYPE, e2eRunId: ids.runId };
+  const verifiedGeo = {
+    lat: 24.4539,
+    lng: 54.3773,
+    latitude: 24.4539,
+    longitude: 54.3773,
+    address: 'Operational Broker Activation, Abu Dhabi, UAE',
+    emirate: 'Abu Dhabi',
+    city: 'Abu Dhabi',
+    area: 'Abu Dhabi',
+    placeId: null,
+    geohash: '',
+    source: 'admin_manual',
+    submittedSource: 'operational_application_evidence',
+    verified: true,
+    verifiedBy: session.uid,
+    verifiedAt: now,
+    dispatchReady: true,
+    requiresGeoReview: false,
+    accuracyMeters: null,
+    capturedAt: now,
+    verificationVersion: 1,
+  };
+  const geoVerification = {
+    state: 'VERIFIED',
+    source: 'FOUNDER_MFA_REVIEW',
+    verifiedBy: session.uid,
+    verifiedAt: now,
+    submittedSource: 'operational_application_evidence',
+    verificationVersion: 1,
+  };
   await Promise.all([
     db.collection('users').doc(ids.ownerUid).set({ ...marker, role: 'owner', status: 'pending', email: 'operational-broker-owner-' + ids.runId + '@example.invalid', createdAt: now, updatedAt: now }),
     db.collection('owners').doc(ids.ownerUid).set({ ...marker, role: 'owner', status: 'PENDING', email: 'operational-broker-owner-' + ids.runId + '@example.invalid', createdAt: now, updatedAt: now }),
     db.collection('intake_submissions').doc(ids.intakeId).set({ ...marker, ownerUid: ids.ownerUid, status: 'PENDING_APPROVAL', quoteHash, createdAt: now, updatedAt: now }),
     db.collection('contracts').doc(ids.contractId).set({ ...marker, contractId: ids.contractId, intakeId: ids.intakeId, ownerUid: ids.ownerUid, ownerId: ids.ownerUid, propertyId: ids.propertyId, status: 'pending_approval', quoteHash, annualContractValue, quoteSnapshot: { annualContractValue, activationDeposit }, ownerSigned: true, otpVerificationId: ids.otpId, signatureState: { ownerSignatureName: signature }, createdAt: now, updatedAt: now }),
     db.collection('contract_signature_otps').doc(ids.otpId).set({ ...marker, status: 'VERIFIED', uid: ids.ownerUid, contractId: ids.contractId, contractHash: quoteHash, consumedFor: ids.contractId, signature, verifiedAt: now, consumedAt: now }),
-    db.collection('properties').doc(ids.propertyId).set({ ...marker, name: 'Operational Broker Activation ' + ids.runId, ownerUid: ids.ownerUid, ownerId: ids.ownerUid, intakeId: ids.intakeId, quoteHash, status: 'pending_approval', geo: { verified: true, dispatchReady: true, requiresGeoReview: false, lat: 24.4539, lng: 54.3773 }, createdAt: now, updatedAt: now }),
+    db.collection('properties').doc(ids.propertyId).set({
+      ...marker,
+      name: 'Operational Broker Activation ' + ids.runId,
+      ownerUid: ids.ownerUid,
+      ownerId: ids.ownerUid,
+      intakeId: ids.intakeId,
+      quoteHash,
+      status: 'pending_approval',
+      address: verifiedGeo.address,
+      emirate: verifiedGeo.emirate,
+      city: verifiedGeo.city,
+      area: verifiedGeo.area,
+      geo: verifiedGeo,
+      geoVerification,
+      createdAt: now,
+      updatedAt: now,
+    }),
     db.collection('payment_transactions').doc(ids.paymentId).set({
       ...marker, paymentId: ids.paymentId, contractId: ids.contractId, intakeId: ids.intakeId, ownerUid: ids.ownerUid, ownerId: ids.ownerUid,
       ownerName: signature, ownerEmail: 'operational-broker-owner-' + ids.runId + '@example.invalid', propertyId: ids.propertyId,
@@ -904,7 +951,6 @@ async function createApprovedBrokerActivationFixture({ db, apiKey, appId, debugT
       otpVerificationId: ids.otpId, signatureName: signature, workflowVersion: 5, inspectionVerified: true, createdAt: now, updatedAt: now,
     }),
   ]);
-  const session = await founderCallableSession({ apiKey, appId, debugToken });
   await invokeProtectedStatusCallable(ADMIN_APPROVE_PAYMENT_URL, session, { paymentId: ids.paymentId, paymentReferenceId, amountReceived: activationDeposit, method: 'CASH', notes: 'Protected run-scoped Broker attribution activation evidence.' }, 'deployed adminApprovePayment');
   const invoiceId = 'MOB-' + sha256(ids.paymentId).slice(0, 20).toUpperCase();
   const [paymentSnap, contractSnap, invoiceSnap] = await Promise.all([
