@@ -21,6 +21,8 @@ import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { resolvePropertyLocation } from '../../utils/propertyLocationResolver';
 import { startLiveTracking, stopLiveTracking } from '../../utils/liveTracking';
+import { AVAILABILITY_REPORT_INTERVAL_MS, isLiveTrackedMission, refreshTechnicianDispatchGps } from '../utils/availabilityLocation';
+import { jobPropertyName } from '../utils/jobPropertyDetails';
 import {
     ensureTechnicianInstallationRegistered,
     readNativeTechnicianInstallationHash,
@@ -212,6 +214,42 @@ export default function TechnicianJobDetailPage() {
         };
     }, []);
 
+    // Dispatch GPS while this mission is open and not live-tracked (ASSIGNED / ACCEPTED / ARRIVED /
+    // IN PROGRESS). Accept and every lifecycle callable require server GPS from the last 15 minutes;
+    // without this, an assigned Technician who never opened the full dashboard could not accept.
+    const ticketStatusKey = String(ticket?.status || '').trim().toUpperCase();
+    const ticketLiveTracked = isLiveTrackedMission(ticket) || isTracking;
+    const ticketTerminal = ['COMPLETED', 'COMPLETED_PENDING_APPROVAL', 'COMPLETED_PENDING_TENANT_APPROVAL', 'CLOSED', 'CANCELLED', 'REJECTED'].includes(ticketStatusKey);
+    const shouldShareDispatchGps = Boolean(user?.uid && ticket?.id) && online && !ticketLiveTracked && !ticketTerminal;
+    useEffect(() => {
+        if (!shouldShareDispatchGps) return undefined;
+        let cancelled = false;
+        const share = () => {
+            refreshTechnicianDispatchGps().then((result) => {
+                if (!cancelled && !result.ok) setGpsError(`Fresh GPS was not accepted by dispatch: ${result.message || 'Fresh GPS could not be shared with dispatch.'}`);
+            });
+        };
+        share();
+        const timer = window.setInterval(share, AVAILABILITY_REPORT_INTERVAL_MS);
+        return () => {
+            cancelled = true;
+            window.clearInterval(timer);
+        };
+    }, [shouldShareDispatchGps]);
+
+    // Fresh GPS immediately before a protected action. Returns false (with a specific message) when
+    // the server refuses the fix, so the Technician sees the real reason instead of a stale-GPS
+    // readiness refusal.
+    const ensureFreshDispatchGps = async (): Promise<boolean> => {
+        const result = await refreshTechnicianDispatchGps();
+        if (!result.ok) {
+            setGpsError(`Fresh GPS was not accepted by dispatch: ${result.message || 'Fresh GPS could not be shared with dispatch.'}`);
+            setMessage(null);
+            return false;
+        }
+        return true;
+    };
+
     const resolved = useMemo(() => resolvePropertyLocation(ticket || {}), [ticket]);
     const status = norm(ticket?.status);
     const hasTenantBeforeProof = Boolean(ticket?.beforePhotoUrl)
@@ -291,7 +329,9 @@ export default function TechnicianJobDetailPage() {
             return;
         }
         setActionLoading(true);
+        setGpsError(null);
         try {
+            if (!(await ensureFreshDispatchGps())) return;
             const acceptTechnicianTicket = httpsCallable(functions, 'acceptTechnicianTicket');
             await acceptTechnicianTicket({ ticketId: id });
             setMessage('Mission accepted.');
@@ -324,6 +364,7 @@ export default function TechnicianJobDetailPage() {
         setGpsError(null);
         try {
             const lifecyclePayload: Record<string, any> = { ticketId: id, status: nextStatus, notes: notes.trim() };
+            let trackingActive = isTracking;
 
             if (nextStatus === 'ARRIVED') {
                 const position = await getVerifiedArrivalPosition();
@@ -365,18 +406,25 @@ export default function TechnicianJobDetailPage() {
                 if (isTracking) {
                     await stopLiveTracking(user.uid, id, 'ARRIVED');
                     setIsTracking(false);
+                    trackingActive = false;
                 }
             }
 
             if (nextStatus === 'IN_PROGRESS' && isTracking) {
                 await stopLiveTracking(user.uid, id, 'WORK_STARTED');
                 setIsTracking(false);
+                trackingActive = false;
             }
 
             if (nextStatus === 'COMPLETED' && isTracking) {
                 await stopLiveTracking(user.uid, id, 'COMPLETED');
                 setIsTracking(false);
+                trackingActive = false;
             }
+
+            // While live tracking runs, mission GPS (which now also stamps lastGpsAt) keeps readiness
+            // fresh. Otherwise refresh dispatch GPS so the 15-minute readiness window is met.
+            if (!trackingActive && !(await ensureFreshDispatchGps())) return;
 
             if (nextStatus === 'COMPLETED') {
                 await updateDoc(doc(db, 'maintenanceTickets', id), {
@@ -475,18 +523,18 @@ export default function TechnicianJobDetailPage() {
                             </Grid>
                             <Grid item xs={12} md={6}>
                                 <Typography variant="caption" color="textSecondary">{tx('tech.job.property_unit', 'Property / Unit')}</Typography>
-                                <Typography variant="h6" fontWeight="900" color="#FFF">{ticket.propertyName || 'Property'}</Typography>
+                                <Typography variant="h6" fontWeight="900" color="#FFF" sx={{ overflowWrap: 'anywhere' }}>{jobPropertyName(ticket) || tx('tech.job.property_name_missing', 'Property name not recorded')}</Typography>
                                 <Typography variant="body2" color="textSecondary">Unit {ticket.unitNumber || ticket.unitLabel || 'N/A'} · Floor {ticket.floorNumber || ticket.floor || 'N/A'}</Typography>
                             </Grid>
                             <Grid item xs={12}>
                                 <Paper sx={{ p: 2.25, bgcolor: alpha(binThemeTokens.gold, 0.08), border: `1px solid ${alpha(binThemeTokens.gold, 0.24)}`, borderRadius: 3 }}>
-                                    <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 950 }}>{tx('tech.job.exact_service_location', 'EXACT SERVICE LOCATION')}</Typography>
+                                    <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 950 }}>{tx('tech.job.reported_service_location', 'REPORTED SERVICE LOCATION')}</Typography>
                                     <Typography variant="h6" fontWeight="950" color="#FFF" sx={{ mt: 0.5 }}>{serviceLocationDetail || tx('tech.job.service_location_missing', 'Not specified — call tenant before moving to site.')}</Typography>
                                 </Paper>
                             </Grid>
                             <Grid item xs={12}>
                                 <Typography variant="caption" color="textSecondary">{tx('tech.job.address', 'Address')}</Typography>
-                                <Typography variant="body1" color="#FFF">{ticket.address || ticket.propertyLocation?.address || 'Address not available'}</Typography>
+                                <Typography variant="body1" color="#FFF">{resolved.address || ticket.propertyLocation?.address || 'Address not available'}</Typography>
                                 <Typography variant="body2" color="textSecondary">Access: {ticket.permissionToEnter || 'CALL_FIRST'} · Anyone home: {ticket.isAnyoneHome || 'UNKNOWN'} · Notes: {ticket.accessNotes || '—'}</Typography>
                             </Grid>
                         </Grid>

@@ -51,7 +51,7 @@ import {
     functions,
     httpsCallable
 } from '../../lib/firebase';
-import { AVAILABILITY_REPORT_INTERVAL_MS, reportTechnicianAvailabilityLocation } from '../utils/availabilityLocation';
+import { AVAILABILITY_REPORT_INTERVAL_MS, hasLiveTrackedMission, reportTechnicianAvailabilityLocation } from '../utils/availabilityLocation';
 import { useRole } from '../../context/RoleContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
@@ -349,9 +349,12 @@ export default function TechnicianDashboardPage() {
         }
     };
 
-    // First-dispatch bootstrap: an on-duty Technician with no active mission reports availability GPS
-    // through the server so Admin can assign the first job (mission GPS uses live tracking instead).
-    const shouldReportAvailability = Boolean(user?.uid) && isOnDuty && !isBreakDuty && activeJobs.length === 0;
+    // Dispatch GPS: an on-duty Technician reports availability GPS through the server so Admin can
+    // assign a job AND so an assigned (not yet en route) mission can be accepted and progressed
+    // within the 15-minute readiness window. Only a live-tracked (EN ROUTE) mission pauses it,
+    // because mission GPS is then published through live tracking.
+    const missionLiveTracked = hasLiveTrackedMission(activeJobs);
+    const shouldReportAvailability = Boolean(user?.uid) && isOnDuty && !isBreakDuty && !missionLiveTracked;
     useEffect(() => {
         if (!shouldReportAvailability) return;
         let cancelled = false;
