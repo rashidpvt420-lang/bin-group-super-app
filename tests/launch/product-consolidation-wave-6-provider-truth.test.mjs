@@ -59,8 +59,12 @@ test('Wave 6 retains the protected Cash/Cheque design implementation and its exe
 
 test('evidence coverage is exact-SHA, PASSED-only and evidence-layer qualified without authorizing launch', () => {
   assert.match(providerTruth, /status \|\| ''\)\.trim\(\)\.toLowerCase\(\) !== 'passed'/);
-  assert.match(providerTruth, /evidence\.releaseSha \|\| evidence\.commitSha/);
+  assert.match(providerTruth, /normalizeCommitSha\(evidence\.releaseSha\)/);
+  assert.match(providerTruth, /normalizeCommitSha\(evidence\.commitSha\)/);
   assert.match(providerTruth, /evidenceLayerSatisfies/);
+  assert.match(providerTruth, /requiredLayer === 'physical_device'/);
+  assert.match(providerTruth, /source === 'admin-manual-evidence' && evidence\.executionGenerated === false/);
+  assert.match(providerTruth, /source === 'github-actions' && evidence\.executionGenerated === true/);
   assert.match(adminLaunch, /RELEASE_SHA = normalizeCommitSha\(process\.env\.REACT_APP_RELEASE_COMMIT_SHA\)/);
   assert.match(adminLaunch, /evidenceCountsForPublicLaunch/);
   assert.match(adminLaunch, /waived \(non-passing\)/);
