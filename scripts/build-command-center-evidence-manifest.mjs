@@ -62,8 +62,15 @@ function requireEvidence(key) {
   if (validated.has(key)) return validated.get(key);
   const record = findEvidence(batch, key, releaseSha);
   if (!record) fail(`required exact-SHA evidence record missing: ${key}`);
+  const historicalValidationNow = mode === 'production-deployment-backfill'
+    ? Date.parse(String(record.finishedAt || ''))
+    : Date.now();
+  if (!Number.isFinite(historicalValidationNow)) {
+    fail(`${key} rejected: malformed finishedAt`);
+  }
   const check = validateEvidenceRecord(record, {
     commitSha: releaseSha,
+    now: historicalValidationNow,
     root,
     revalidateArtifact: strictArtifactRevalidation,
   });
