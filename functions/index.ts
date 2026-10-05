@@ -1,4 +1,5 @@
 import { FieldValue } from "firebase-admin/firestore";
+import { technicianDutyMirror } from "./technicianDutyProfile";
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import { onDocumentCreated, onDocumentUpdated } from "firebase-functions/v2/firestore";
 import { onCall, HttpsError, onRequest } from "firebase-functions/v2/https";
@@ -207,7 +208,12 @@ export const takeTechnicianBreak = onCall({ cors: true, enforceAppCheck: true },
     const nowDate = new Date();
 
     const batch = db.batch();
-    batch.update(userRef, { dutyStatus: 'ON_BREAK', onDuty: true, isAvailable: false, available: false, breakStartedAt: now, updatedAt: now });
+    const breakUpdate = { dutyStatus: 'ON_BREAK', onDuty: true, isAvailable: false, available: false, breakStartedAt: now, updatedAt: now };
+    batch.update(userRef, breakUpdate);
+    const breakTechnicianRef = db.collection("technicians").doc(uid);
+    if ((await breakTechnicianRef.get()).exists) {
+        batch.set(breakTechnicianRef, technicianDutyMirror(breakUpdate), { merge: true });
+    }
     batch.update(db.collection("technician_shifts").doc(shiftId), {
         status: "ON_BREAK",
         breaks: FieldValue.arrayUnion({ start: nowDate, type: 'STANDARD', startedBy: uid }),
@@ -242,7 +248,12 @@ export const resumeTechnicianDuty = onCall({ cors: true, enforceAppCheck: true }
 
     const now = FieldValue.serverTimestamp();
     const batch = db.batch();
-    batch.update(userRef, { dutyStatus: 'ON_DUTY', onDuty: true, isAvailable: true, available: true, breakEndedAt: now, updatedAt: now });
+    const resumeUpdate = { dutyStatus: 'ON_DUTY', onDuty: true, isAvailable: true, available: true, breakEndedAt: now, updatedAt: now };
+    batch.update(userRef, resumeUpdate);
+    const resumeTechnicianRef = db.collection("technicians").doc(uid);
+    if ((await resumeTechnicianRef.get()).exists) {
+        batch.set(resumeTechnicianRef, technicianDutyMirror(resumeUpdate), { merge: true });
+    }
     batch.update(db.collection("technician_shifts").doc(shiftId), {
         status: "ACTIVE",
         breaks,
@@ -2678,7 +2689,7 @@ export const startTechnicianDuty = onCall({ cors: true, enforceAppCheck: true },
 
     batch.set(shiftRef, shiftPayload, { merge: true });
 
-    batch.update(techRef, {
+    const startUpdate = {
         onDuty: true,
         isAvailable: true,
         available: true,
@@ -2687,7 +2698,11 @@ export const startTechnicianDuty = onCall({ cors: true, enforceAppCheck: true },
         currentShiftId: shiftId,
         lastSeenAt: now,
         updatedAt: now
-    });
+    };
+    batch.update(techRef, startUpdate);
+    if (technicianProfile.exists) {
+        batch.set(technicianProfile.ref, technicianDutyMirror(startUpdate, ["dutyStartedAt"]), { merge: true });
+    }
 
     await batch.commit();
 
@@ -2739,7 +2754,7 @@ export const endTechnicianDuty = onCall({ cors: true, enforceAppCheck: true }, a
     const shiftId = String(techData.currentShiftId || "");
     const batch = db.batch();
 
-    batch.update(techDoc.ref, {
+    const endUpdate = {
         onDuty: false,
         isAvailable: false,
         available: false,
@@ -2747,7 +2762,12 @@ export const endTechnicianDuty = onCall({ cors: true, enforceAppCheck: true }, a
         dutyEndedAt: now,
         currentShiftId: FieldValue.delete(),
         updatedAt: now
-    });
+    };
+    batch.update(techDoc.ref, endUpdate);
+    const endTechnicianRef = db.collection("technicians").doc(techId);
+    if ((await endTechnicianRef.get()).exists) {
+        batch.set(endTechnicianRef, technicianDutyMirror(endUpdate, ["dutyEndedAt"]), { merge: true });
+    }
 
     if (shiftId) {
         batch.set(db.collection("technician_shifts").doc(shiftId), {
