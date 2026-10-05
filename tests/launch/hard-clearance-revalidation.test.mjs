@@ -1074,3 +1074,22 @@ test('physical proofs after the first 500 records are still considered for clear
   assert.equal(result.report.status, 'blocked');
   assert.equal(result.files.has('/fixture/launch_package/launch-proof-gates.json'), false);
 });
+
+test('every frozen-release scope permits pilot provenance controls and rejects runtime changes', async () => {
+  const workflows = ['live-role-smoke', 'operational-application-evidence',
+    'operational-provider-evidence', 'privileged-access-rotation-evidence', 'technician-physical-evidence'];
+  for (const name of workflows) {
+    const source = await read(`.github/workflows/${name}.yml`);
+    const declarations = [...source.matchAll(/(?:^|\s)(?:supplemental_)?allowed='([^'\n]+)'/g)];
+    assert.equal(declarations.length, 2, `${name}: both scope declarations must exist`);
+    const patterns = declarations.map(([, pattern]) => new RegExp(pattern));
+    const accepts = (path) => patterns.some((pattern) => pattern.test(path));
+    for (const path of ['scripts/resolve-live-pilot-window.mjs', 'tests/launch/live-pilot-provenance.test.mjs']) {
+      assert.equal(accepts(path), true, `${name}: allow reviewed pilot provenance control ${path}`);
+    }
+    for (const path of ['src/App.tsx', 'functions/index.ts', 'firestore.rules',
+      'tests/launch/unreviewed.test.mjs', 'tests/launch/live-pilot-provenance.test.mjs.extra']) {
+      assert.equal(accepts(path), false, `${name}: reject unreviewed or runtime path ${path}`);
+    }
+  }
+});
