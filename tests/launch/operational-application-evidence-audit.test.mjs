@@ -169,6 +169,13 @@ test('application evidence workflow is protected and auto-discovers fixed produc
   assert.match(preparation, /admin\.storage\(\)\.bucket\(EXPECTED_STORAGE_BUCKET\)\.deleteFiles/);
   assert.doesNotMatch(preparation, /admin\.storage\(\)\.bucket\(\s*\)\.deleteFiles/);
   assert.match(preparation, /return \{ uid: founder\.uid, idToken: founder\.idToken/);
+  assert.match(preparation, /source: 'admin_manual'/);
+  assert.match(preparation, /source: 'FOUNDER_MFA_REVIEW'/);
+  assert.match(preparation, /verifiedBy: session\.uid/);
+  assert.match(preparation, /verificationVersion: 1/);
+  assert.match(preparation, /geoVerification/);
+  assert.doesNotMatch(preparation, /geo: \{ verified: true, dispatchReady: true, requiresGeoReview: false, lat: 24\.4539, lng: 54\.3773 \}/);
+
   assert.match(preparation, /where\('sourceId', '==', contractId\)/);
   assert.match(preparation, /deployed renewal scheduler response did not include the fresh run-scoped watch record/);
   assert.match(preparation, /contractEndDate: expiryAt/);
