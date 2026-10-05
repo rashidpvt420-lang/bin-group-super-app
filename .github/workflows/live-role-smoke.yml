@@ -621,6 +621,15 @@ jobs:
           node scripts/reconcile-hard-public-evidence.mjs
           npm run launch:hard-gate
 
+      - name: Upload hard clearance blocker diagnostics
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: hard-clearance-blockers-${{ inputs.expected_commit_sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: release/launch_package/hard-clearance-physical-blockers.json
+          if-no-files-found: warn
+          retention-days: 14
+
       - name: Upload hard launch clearance evidence
         if: success()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
