@@ -320,10 +320,11 @@ button[class*="MuiIconButton"],
   color: currentColor;
 }
 
-/* Status chips retain semantic color but on white cards. */
-.MuiChip-root,
-[role="status"],
-[data-status] {
+/* Outlined status chips sit on white cards. Filled chips (and [role="status"] /
+   [data-status] elements) keep their own background: forcing #FFFFFF here turned
+   every filled chip with white or pale text into an empty white pill (1.00-1.23:1),
+   e.g. the Owner Financial Truth card and owner ticket technician chips. */
+.MuiChip-outlined {
   background-color: #FFFFFF !important;
   border: 1px solid rgba(201, 166, 70, 0.28) !important;
 }
