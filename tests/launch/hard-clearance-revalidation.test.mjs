@@ -78,6 +78,7 @@ test('hard clearance freshly revalidates production state without moving the fro
     'scripts/publish-operational-application-evidence.mjs',
     'scripts/publish-operational-provider-evidence.mjs',
     'scripts/resolve-admin-app-check-site-key.mjs',
+    'scripts/resolve-live-pilot-window.mjs',
     'scripts/run-frozen-release-evidence.mjs',
     'scripts/verify-ai-live-evidence.mjs',
     'scripts/verify-hard-launch-approval.mjs',
@@ -107,8 +108,7 @@ test('hard clearance freshly revalidates production state without moving the fro
   assert.match(workflow, /REQUESTED_RUN_ID: \$\{\{ inputs\.live_evidence_run_id \}\}/);
   assert.match(workflow, /\.head_sha == \$sha/);
   assert.match(workflow, /\.path == "\.github\/workflows\/live-role-smoke\.yml"/);
-  assert.match(workflow, /\.conclusion == "success"/);
-  assert.match(workflow, /\.expired == false/);
+  assert.match(workflow, /actions\\/runs\\/\\$run_id\\/attempts\\/1/);\n  assert.match(workflow, /\\.run_attempt == 1/);\n  assert.match(workflow, /\\.conclusion == "success"/);\n  assert.match(workflow, /\\.created_at \\| fromdateiso8601/);\n  assert.match(workflow, /\\.expired == false/);
   assert.match(workflow, /Expected exactly one successful live-evidence run with the exact frozen-release artifact/);
   assert.match(workflow, /live_evidence_run_id: \$\{\{ steps\.resolve_live_evidence\.outputs\.run_id \}\}/);
   assert.match(workflow, /run-id: \$\{\{ steps\.resolve_live_evidence\.outputs\.run_id \}\}/);
@@ -119,7 +119,7 @@ test('hard clearance freshly revalidates production state without moving the fro
     workflow.indexOf('  hard-public-launch-clearance:'),
   );
   assert.match(revalidationJob, /cp control-plane\/scripts\/resolve-admin-app-check-site-key\.mjs release\/scripts\/resolve-admin-app-check-site-key\.mjs/);
-  assert.match(workflow, /cp control-plane\/scripts\/verify-operational-readiness\.mjs release\/scripts\/verify-operational-readiness\.mjs/);
+  assert.match(workflow, /cp control-plane\\/scripts\\/resolve-live-pilot-window\\.mjs release\\/scripts\\/resolve-live-pilot-window\\.mjs/);\n  assert.match(workflow, /cp control-plane\/scripts\/verify-operational-readiness\.mjs release\/scripts\/verify-operational-readiness\.mjs/);
   assert.match(workflow, /CONTROL_PLANE_COMMIT_SHA: \$\{\{ github\.sha \}\}[\s\S]*?run: node scripts\/verify-operational-readiness\.mjs/);
   const authIndex = revalidationJob.indexOf('Authenticate Google Cloud');
   const installIndex = revalidationJob.indexOf('Install frozen-release dependencies');
@@ -168,6 +168,7 @@ test('operational evidence keeps current main as control plane while binding pro
     'scripts/publish-operational-application-evidence.mjs',
     'scripts/publish-operational-provider-evidence.mjs',
     'scripts/resolve-admin-app-check-site-key.mjs',
+    'scripts/resolve-live-pilot-window.mjs',
     'scripts/run-frozen-release-evidence.mjs',
     'scripts/verify-ai-live-evidence.mjs',
     'scripts/verify-hard-launch-approval.mjs',
