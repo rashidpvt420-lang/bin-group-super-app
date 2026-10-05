@@ -51,8 +51,14 @@ function physicalRecordValidationReasons(record, sourceGateId, devicePattern) {
   if (text(record.source).toLowerCase() !== 'admin-manual-evidence') reasons.push('source-not-admin-manual-evidence');
   if (record.executionGenerated !== false) reasons.push('execution-generated-must-be-false');
   if (record.hardLaunchClaim !== false) reasons.push('hard-launch-claim-must-be-false');
-  if (text(record.releaseSha).toLowerCase() !== releaseSha) reasons.push('release-sha-mismatch');
-  if (text(record.commitSha).toLowerCase() !== releaseSha) reasons.push('commit-sha-mismatch');
+  const observedReleaseSha = text(record.releaseSha).toLowerCase();
+  const observedCommitSha = text(record.commitSha).toLowerCase();
+  if (!observedReleaseSha && !observedCommitSha) reasons.push('release-binding-missing');
+  if (observedReleaseSha && observedReleaseSha !== releaseSha) reasons.push('release-sha-mismatch');
+  if (observedCommitSha && observedCommitSha !== releaseSha) reasons.push('commit-sha-mismatch');
+  if (observedReleaseSha !== releaseSha && observedCommitSha !== releaseSha) {
+    reasons.push('exact-release-binding-missing');
+  }
   if (!text(record.testerName)) reasons.push('tester-name-missing');
   if (!text(record.proofRef)) reasons.push('proof-reference-missing');
   if (!text(record.recordedBy)) reasons.push('recorded-by-missing');
@@ -218,17 +224,27 @@ if (projectId !== EXPECTED_PROJECT_ID) fail(`unexpected Firebase project: ${proj
 initializeFirebaseAdmin(admin, projectId);
 const db = admin.firestore();
 
-const manualQuery = db.collection('launch_evidence')
-  .where('releaseSha', '==', releaseSha)
-  .limit(500);
-const manualDocuments = [];
-let manualPage = await manualQuery.get();
-while (manualPage.docs.length) {
-  manualDocuments.push(...manualPage.docs);
-  if (manualPage.docs.length < 500) break;
-  manualPage = await manualQuery.startAfter(manualPage.docs.at(-1)).get();
+async function readExactReleaseEvidence(fieldName) {
+  const query = db.collection('launch_evidence')
+    .where(fieldName, '==', releaseSha)
+    .limit(500);
+  const documents = [];
+  let page = await query.get();
+  while (page.docs.length) {
+    documents.push(...page.docs);
+    if (page.docs.length < 500) break;
+    page = await query.startAfter(page.docs.at(-1)).get();
+  }
+  return documents;
 }
-const manualPhysicalRecords = manualDocuments
+
+const releaseBoundDocuments = await readExactReleaseEvidence('releaseSha');
+const commitBoundDocuments = await readExactReleaseEvidence('commitSha');
+const manualDocumentsById = new Map();
+for (const doc of [...releaseBoundDocuments, ...commitBoundDocuments]) {
+  manualDocumentsById.set(doc.id, doc);
+}
+const manualPhysicalRecords = [...manualDocumentsById.values()]
   .map((doc) => ({ __documentId: doc.id, ...(doc.data() || {}) }))
   .sort((left, right) => evidenceMillis(right.createdAt) - evidenceMillis(left.createdAt));
 
