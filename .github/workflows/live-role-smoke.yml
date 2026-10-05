@@ -464,6 +464,32 @@ jobs:
           node scripts/run-critical-evidence.mjs --suite all-business
           node scripts/run-critical-evidence.mjs --suite launchAuditLive
 
+      - name: Sanitize failed Owner evidence diagnostics
+        if: failure()
+        working-directory: release
+        run: |
+          set -euo pipefail
+          mkdir -p launch_package/sanitized-owner-diagnostics
+          shopt -s nullglob
+          files=(launch_package/artifacts/business-owner-*.stdio.log)
+          if (( ${#files[@]} == 0 )); then
+            echo "No Owner stdio diagnostic was produced."
+            exit 0
+          fi
+          for file in "${files[@]}"; do
+            out="launch_package/sanitized-owner-diagnostics/$(basename "$file")"
+            node scripts/sanitize-production-diagnostic-log.mjs "$file" "$out"
+          done
+
+      - name: Upload sanitized Owner evidence diagnostics
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: hard-clearance-owner-diagnostics-${{ inputs.expected_commit_sha }}-${{ github.run_id }}
+          path: release/launch_package/sanitized-owner-diagnostics
+          if-no-files-found: warn
+          retention-days: 14
+
       - name: Generate fresh production hard-clearance revalidation
         working-directory: release
         env:
