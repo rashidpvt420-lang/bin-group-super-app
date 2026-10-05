@@ -42,25 +42,35 @@ function evidenceMillis(value) {
   return Number.isFinite(parsed) ? parsed : NaN;
 }
 
-function validPhysicalRecord(record, sourceGateId, devicePattern) {
-  if (!record || typeof record !== 'object') return false;
-  if (text(record.gateId) !== sourceGateId) return false;
-  if (text(record.status).toLowerCase() !== 'passed') return false;
-  if (text(record.evidenceLayer).toLowerCase() !== 'physical_device') return false;
-  if (text(record.source).toLowerCase() !== 'admin-manual-evidence') return false;
-  if (record.executionGenerated !== false || record.hardLaunchClaim !== false) return false;
-  if (text(record.releaseSha).toLowerCase() !== releaseSha) return false;
-  if (text(record.commitSha).toLowerCase() !== releaseSha) return false;
-  if (!text(record.testerName) || !text(record.proofRef) || !text(record.recordedBy)) return false;
+function physicalRecordValidationReasons(record, sourceGateId, devicePattern) {
+  const reasons = [];
+  if (!record || typeof record !== 'object') return ['record-missing-or-not-object'];
+  if (text(record.gateId) !== sourceGateId) reasons.push('gate-id-mismatch');
+  if (text(record.status).toLowerCase() !== 'passed') reasons.push('status-not-passed');
+  if (text(record.evidenceLayer).toLowerCase() !== 'physical_device') reasons.push('evidence-layer-not-physical-device');
+  if (text(record.source).toLowerCase() !== 'admin-manual-evidence') reasons.push('source-not-admin-manual-evidence');
+  if (record.executionGenerated !== false) reasons.push('execution-generated-must-be-false');
+  if (record.hardLaunchClaim !== false) reasons.push('hard-launch-claim-must-be-false');
+  if (text(record.releaseSha).toLowerCase() !== releaseSha) reasons.push('release-sha-mismatch');
+  if (text(record.commitSha).toLowerCase() !== releaseSha) reasons.push('commit-sha-mismatch');
+  if (!text(record.testerName)) reasons.push('tester-name-missing');
+  if (!text(record.proofRef)) reasons.push('proof-reference-missing');
+  if (!text(record.recordedBy)) reasons.push('recorded-by-missing');
   const createdAtMs = evidenceMillis(record.createdAt);
-  if (!Number.isFinite(createdAtMs)) return false;
-  if (createdAtMs > Date.now() + MAX_CLOCK_SKEW_MS) return false;
-  if (Date.now() - createdAtMs > MANUAL_EVIDENCE_MAX_AGE_MS) return false;
+  if (!Number.isFinite(createdAtMs)) reasons.push('created-at-invalid');
+  else {
+    if (createdAtMs > Date.now() + MAX_CLOCK_SKEW_MS) reasons.push('created-at-in-future');
+    if (Date.now() - createdAtMs > MANUAL_EVIDENCE_MAX_AGE_MS) reasons.push('evidence-older-than-30-days');
+  }
   const device = text(record.device);
-  if (!/(android|iphone|tablet|physical device)/i.test(device)) return false;
-  if (/desktop/i.test(device)) return false;
-  if (devicePattern && !devicePattern.test(device)) return false;
-  return true;
+  if (!/(android|iphone|tablet|physical device)/i.test(device)) reasons.push('device-not-physical');
+  if (/desktop/i.test(device)) reasons.push('desktop-device-not-accepted');
+  if (devicePattern && !devicePattern.test(device)) reasons.push('device-type-mismatch');
+  return reasons;
+}
+
+function validPhysicalRecord(record, sourceGateId, devicePattern) {
+  return physicalRecordValidationReasons(record, sourceGateId, devicePattern).length === 0;
 }
 
 function materializeManualPhysicalGate(gates, key, sourceGateId, record) {
@@ -375,15 +385,22 @@ for (const mapping of physicalGateSources) {
     validPhysicalRecord(candidate, mapping.sourceGateId, mapping.devicePattern)
   );
   if (!record) {
-    const currentReleaseRecords = manualPhysicalRecords.filter((candidate) =>
+    const matchingCurrentReleaseRecords = manualPhysicalRecords.filter((candidate) =>
       text(candidate.gateId) === mapping.sourceGateId
-    ).length;
+    );
+    const currentReleaseRecords = matchingCurrentReleaseRecords.length;
+    const invalidReasons = [...new Set(
+      matchingCurrentReleaseRecords.flatMap((candidate) =>
+        physicalRecordValidationReasons(candidate, mapping.sourceGateId, mapping.devicePattern)
+      )
+    )].sort();
     physicalGateDiagnostics.push({
       gateKey: mapping.key,
       commandCenterGateId: mapping.sourceGateId,
       status: 'blocked',
       reason: currentReleaseRecords ? 'current-release-records-do-not-satisfy-physical-validation' : 'no-current-release-record',
       currentReleaseRecords,
+      invalidReasons,
     });
     missingPhysicalGates.push(`${mapping.key} (Command Center: ${mapping.sourceGateId})`);
     continue;
