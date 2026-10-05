@@ -18,14 +18,11 @@ const expectedGates = new Set([
   'ownerOnboardingFullPath',
   'ownerPaymentApproveReject',
   'tenantPhotoMaintenanceRequest',
-  'technicianMissionLifecycle',
-  'technicianGpsAndDeniedFallback',
   'brokerReferralCommissionLifecycle',
   'adminFreshLoginAndCorePages',
   'adminStaffProvisioning',
   'adminPaymentUnlockAudit',
   'firebaseAuth',
-  'firebaseCloudMessaging',
 ]);
 const expectedRoles = new Set(['owner', 'tenant', 'technician', 'broker', 'admin']);
 
