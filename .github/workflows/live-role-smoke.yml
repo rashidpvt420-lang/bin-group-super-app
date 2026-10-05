@@ -321,20 +321,27 @@ jobs:
 
           validate_run() {
             local run_id="$1"
-            local run_json artifacts_json
-            run_json="$(curl --fail --silent --show-error -H "$auth_header" -H "$accept_header" -H "$version_header" "$api/actions/runs/$run_id")"
+            local attempt_json artifacts_json
+            attempt_json="$(curl --fail --silent --show-error -H "$auth_header" -H "$accept_header" -H "$version_header" "$api/actions/runs/$run_id/attempts/1")"
             jq -e --arg sha "$TARGET_SHA" '
               .name == "Live Role Smoke Tests" and
               .path == ".github/workflows/live-role-smoke.yml" and
               .head_branch == "main" and
               .head_sha == $sha and
               .event == "workflow_dispatch" and
+              .run_attempt == 1 and
               .status == "completed" and
               .conclusion == "success"
-            ' <<<"$run_json" >/dev/null || return 1
+            ' <<<"$attempt_json" >/dev/null || return 1
 
             artifacts_json="$(curl --fail --silent --show-error -H "$auth_header" -H "$accept_header" -H "$version_header" "$api/actions/runs/$run_id/artifacts?per_page=100")"
-            jq -e --arg name "$ARTIFACT_NAME" '[.artifacts[] | select(.name == $name and .expired == false)] | length == 1' <<<"$artifacts_json" >/dev/null
+            jq -e --arg name "$ARTIFACT_NAME" --arg completed "$(jq -r '.updated_at' <<<"$attempt_json")" '
+              [.artifacts[] | select(
+                .name == $name and
+                .expired == false and
+                (.created_at | fromdateiso8601) <= ($completed | fromdateiso8601)
+              )] | length == 1
+            ' <<<"$artifacts_json" >/dev/null
           }
 
           requested="$(printf '%s' "$REQUESTED_RUN_ID" | xargs)"
@@ -343,8 +350,8 @@ jobs:
             validate_run "$requested" || { echo "::error::Requested live-evidence run is not the exact successful main workflow_dispatch run with the frozen-release artifact."; exit 1; }
             resolved="$requested"
           else
-            runs_json="$(curl --fail --silent --show-error -H "$auth_header" -H "$accept_header" -H "$version_header" "$api/actions/workflows/live-role-smoke.yml/runs?event=workflow_dispatch&branch=main&status=success&per_page=100")"
-            mapfile -t candidates < <(jq -r --arg sha "$TARGET_SHA" '.workflow_runs[] | select(.name == "Live Role Smoke Tests" and .path == ".github/workflows/live-role-smoke.yml" and .head_branch == "main" and .head_sha == $sha and .event == "workflow_dispatch" and .status == "completed" and .conclusion == "success") | .id' <<<"$runs_json")
+            runs_json="$(curl --fail --silent --show-error -H "$auth_header" -H "$accept_header" -H "$version_header" "$api/actions/workflows/live-role-smoke.yml/runs?event=workflow_dispatch&branch=main&per_page=100")"
+            mapfile -t candidates < <(jq -r --arg sha "$TARGET_SHA" '.workflow_runs[] | select(.name == "Live Role Smoke Tests" and .path == ".github/workflows/live-role-smoke.yml" and .head_branch == "main" and .head_sha == $sha and .event == "workflow_dispatch") | .id' <<<"$runs_json")
             valid=()
             for run_id in "${candidates[@]}"; do
               if validate_run "$run_id"; then valid+=("$run_id"); fi
@@ -368,6 +375,7 @@ jobs:
           cp control-plane/scripts/hard-clearance-production-revalidation.mjs release/scripts/hard-clearance-production-revalidation.mjs
           cp control-plane/scripts/resolve-admin-app-check-site-key.mjs release/scripts/resolve-admin-app-check-site-key.mjs
           cp control-plane/scripts/verify-hard-launch-approval.mjs release/scripts/verify-hard-launch-approval.mjs
+          cp control-plane/scripts/resolve-live-pilot-window.mjs release/scripts/resolve-live-pilot-window.mjs
           cp control-plane/scripts/verify-launch-clearance.mjs release/scripts/verify-launch-clearance.mjs
           cp control-plane/scripts/reconcile-hard-public-evidence.mjs release/scripts/reconcile-hard-public-evidence.mjs
           cp control-plane/scripts/verify-operational-readiness.mjs release/scripts/verify-operational-readiness.mjs
