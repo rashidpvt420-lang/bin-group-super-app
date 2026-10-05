@@ -70,6 +70,13 @@ test('hard-clearance workflow derives timestamps and cannot trust manual pilot d
 
   assert.match(workflow, /Verify live-evidence run provenance and enforce a real 24-hour pilot/);
   assert.match(workflow, /node scripts\/resolve-live-pilot-window\.mjs/);
+  const clearanceJob = workflow.slice(workflow.indexOf('\n  hard-public-launch-clearance:'));
+  assert.ok(clearanceJob.startsWith('\n  hard-public-launch-clearance:'), 'final clearance job must exist');
+  const overlay = 'cp control-plane/scripts/resolve-live-pilot-window.mjs release/scripts/resolve-live-pilot-window.mjs';
+  const resolverInvocation = 'run: node scripts/resolve-live-pilot-window.mjs';
+  assert.ok(clearanceJob.includes(overlay), 'final clearance must overlay the reviewed pilot resolver');
+  assert.ok(clearanceJob.indexOf(overlay) < clearanceJob.indexOf(resolverInvocation),
+    'reviewed pilot resolver must be installed before provenance validation');
   assert.match(workflow, /actions\/runs\/\$run_id\/attempts\/1/);
   assert.match(workflow, /\.run_attempt == 1/);
   assert.match(resolver, /actions\/runs\/\$\{runId\}\/attempts\/1/);
