@@ -81,6 +81,7 @@ jobs:
           [[ "$artifact_digest" =~ ^sha256:[0-9a-f]{64}$ ]]
 
           echo "artifact_name=$artifact_name" >> "$GITHUB_OUTPUT"
+          echo "publisher_artifact_name=$current_artifact_name" >> "$GITHUB_OUTPUT"
           echo "artifact_id=$artifact_id" >> "$GITHUB_OUTPUT"
           echo "artifact_digest=$artifact_digest" >> "$GITHUB_OUTPUT"
 
@@ -152,7 +153,7 @@ jobs:
           SOURCE_EVIDENCE_SHA: ${{ steps.request.outputs.source_sha }}
           SOURCE_EVIDENCE_RUN_ID: ${{ steps.request.outputs.source_run_id }}
           SOURCE_EVIDENCE_WORKFLOW: Firebase Production Deploy
-          SOURCE_EVIDENCE_ARTIFACT_NAME: ${{ steps.source.outputs.artifact_name }}
+          SOURCE_EVIDENCE_ARTIFACT_NAME: ${{ steps.source.outputs.publisher_artifact_name }}
           SOURCE_EVIDENCE_ARTIFACT_DIGEST: ${{ steps.source.outputs.artifact_digest }}
           SOURCE_EVIDENCE_VERIFIED: 'true'
         run: node scripts/record-firestore-evidence.js --manifest launch_package/command-center-evidence-manifest.json --write
