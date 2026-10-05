@@ -79,6 +79,52 @@ test('selector fails closed when more than one new exact-SHA run is observed', (
   }), /Ambiguous exact-SHA workflow correlation/);
 });
 
+test('dispatch lower bound excludes two old reviews omitted by a stale baseline', () => {
+  const selected = selectNewExactShaWorkflowRun({
+    expectedSha: SHA,
+    baselineRunIds: [8001],
+    notBefore: '2026-10-05T14:41:58Z',
+    runs: [
+      run({ id: 8001, created_at: '2026-10-05T14:17:48Z' }),
+      run({ id: 9001, created_at: '2026-10-05T14:29:47Z' }),
+      run({ id: 9002, created_at: '2026-10-05T14:39:22Z' }),
+      run({ id: 9003, created_at: '2026-10-05T14:41:59Z' }),
+    ],
+  });
+  assert.equal(selected?.runId, '9003');
+});
+
+test('dispatch lower bound keeps baseline exclusion and fails closed on new ambiguity', () => {
+  const options = {
+    expectedSha: SHA,
+    baselineRunIds: [9001],
+    notBefore: '2026-07-23T20:00:00Z',
+  };
+  assert.equal(selectNewExactShaWorkflowRun({
+    ...options,
+    runs: [run({ id: 9001 }), run({ id: 9002, created_at: '2026-07-23T19:59:59Z' })],
+  }), null);
+  assert.equal(selectNewExactShaWorkflowRun({
+    ...options,
+    runs: [run({ id: 9001 }), run({ id: 9002 })],
+  })?.runId, '9002');
+  assert.throws(() => selectNewExactShaWorkflowRun({
+    ...options,
+    runs: [run({ id: 9002 }), run({ id: 9003, created_at: '2026-07-23T20:00:01Z' })],
+  }), /Ambiguous exact-SHA workflow correlation/);
+});
+
+test('invalid dispatch lower bounds fail closed', () => {
+  for (const notBefore of ['', 'invalid-date']) {
+    assert.throws(() => selectNewExactShaWorkflowRun({
+      expectedSha: SHA,
+      baselineRunIds: [],
+      notBefore,
+      runs: [run()],
+    }), /invalid created_at/);
+  }
+});
+
 test('selector rejects malformed newly observed exact-SHA metadata', () => {
   assert.throws(() => selectNewExactShaWorkflowRun({
     expectedSha: SHA,
