@@ -109,4 +109,6 @@ jobs:
           fi
 
       - name: Run launch-honesty suite
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: npm run test:launch-honesty
