@@ -123,7 +123,8 @@ test('hard clearance freshly revalidates production state without moving the fro
     workflow.indexOf('  hard-public-launch-clearance:'),
   );
   assert.match(revalidationJob, /cp control-plane\/scripts\/resolve-admin-app-check-site-key\.mjs release\/scripts\/resolve-admin-app-check-site-key\.mjs/);
-  assert.match(workflow, /cp control-plane\/scripts\/resolve-live-pilot-window\.mjs release\/scripts\/resolve-live-pilot-window\.mjs/);
+  const hardJob = workflow.slice(workflow.indexOf('  hard-public-launch-clearance:'));
+  assert.match(hardJob, /cp control-plane\/scripts\/resolve-live-pilot-window\.mjs release\/scripts\/resolve-live-pilot-window\.mjs/);
   assert.match(workflow, /cp control-plane\/scripts\/verify-operational-readiness\.mjs release\/scripts\/verify-operational-readiness\.mjs/);
   assert.match(workflow, /CONTROL_PLANE_COMMIT_SHA: \$\{\{ github\.sha \}\}[\s\S]*?run: node scripts\/verify-operational-readiness\.mjs/);
   const authIndex = revalidationJob.indexOf('Authenticate Google Cloud');
@@ -146,7 +147,6 @@ test('hard clearance freshly revalidates production state without moving the fro
 
   // The authorization job must no longer demand that the frozen release SHA
   // equal the newer, narrowly reviewed clearance-control commit.
-  const hardJob = workflow.slice(workflow.indexOf('  hard-public-launch-clearance:'));
   assert.doesNotMatch(hardJob, /TARGET_SHA[^\n]*CURRENT_SHA|TARGET_SHA\" != \"\$CURRENT_SHA/);
 });
 
