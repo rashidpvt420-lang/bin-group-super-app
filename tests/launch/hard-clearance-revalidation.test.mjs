@@ -4,6 +4,7 @@ import { EventEmitter } from 'node:events';
 import { readFile } from 'node:fs/promises';
 import { Readable } from 'node:stream';
 import test from 'node:test';
+import { runInNewContext } from 'node:vm';
 import {
   acceptedCleanUrlsRedirect,
   cleanUrlsEquivalentUrl,
@@ -909,4 +910,130 @@ test('UAE data position records actual regions and never claims UAE-onshore host
   assert.match(reconciler, /OpenAI:/);
   assert.match(reconciler, /Data Retention/);
   assert.match(reconciler, /Request deletion of your data/);
+});
+
+async function runPhysicalReconciliationFixture(records = [], technicianProof = null) {
+  const source = (await read('scripts/reconcile-hard-public-evidence.mjs'))
+    .replace(/^#!.*\n/, '')
+    .replace(/^import[\s\S]*?from ['"][^'"]+['"];\n/gm, '');
+  const gateDocument = await read('launch_package/launch-proof-gates.json');
+  const releaseSha = 'b'.repeat(40);
+  const controlPlaneSha = 'c'.repeat(40);
+  const files = new Map();
+  const environment = {
+    GITHUB_ACTIONS: 'true',
+    GITHUB_REPOSITORY: 'rashidpvt420-lang/bin-group-super-app',
+    GITHUB_REF: 'refs/heads/main',
+    GITHUB_WORKFLOW: 'Live Role Smoke Tests',
+    HARD_LAUNCH_EXPECTED_SHA: releaseSha,
+    CLEARANCE_CONTROL_PLANE_SHA: controlPlaneSha,
+  };
+  const docs = records.map((record, index) => ({ id: `proof-${index}`, data: () => record }));
+  const pageQuery = (offset = 0) => ({
+    get: async () => ({ docs: docs.slice(offset, offset + 500) }),
+    startAfter: (last) => pageQuery(docs.indexOf(last) + 1),
+  });
+  const db = {
+    collection: () => ({ where: () => ({ limit: () => pageQuery() }) }),
+    doc: () => ({ get: async () => ({ get: () => technicianProof }) }),
+  };
+  const sandbox = {
+    process: { env: environment, cwd: () => '/fixture' },
+    path: (await import('node:path')).default,
+    console: { log() {} },
+    admin: { firestore: () => db, app: () => ({ options: { credential: {
+      getAccessToken: async () => ({ access_token: 'fixture' }),
+    } } }) },
+    fetch: async () => ({ ok: true, json: async () => ({ locationId: 'fixture-region' }) }),
+    initializeFirebaseAdmin() {},
+    resolveFirebaseAdminProjectId: () => 'bin-group-57c60',
+    gitSha: () => releaseSha,
+    evidencePath: () => 'evidence',
+    deploymentEvidencePath: () => 'deployment',
+    readJsonSafe: (file) => file.endsWith('launch-status.json') ? {
+      scope: 'hard-public-launch', commitSha: releaseSha, automationOk: true, pilotEligible: true,
+      checks: [{ name: 'firebaseDeploymentReadiness', ok: true }],
+    } : file.endsWith('operational-readiness.json') ? {
+      controlPlaneCommitSha: controlPlaneSha,
+      gates: {
+        aiProviderHealth: { status: 'passed', sourceSystem: 'Gemini/OpenAI', hardLaunchClaim: false },
+        appCheckEnforcement: { status: 'passed', hardLaunchClaim: false },
+      },
+    } : {},
+    validateDeploymentDocument: () => [],
+    evaluatePilotEligibility: () => ({ pilotEligible: true, missing: [], invalid: [] }),
+    validateOperationalReadinessReport: () => [],
+    readFileSync: (file) => file.endsWith('launch-proof-gates.json') ? gateDocument
+      : file.endsWith('index.ts') ? "setGlobalOptions({ region: 'fixture-region'"
+      : 'property owners tenants Photos/Media: Device Data: Firebase (Google): Google Maps: OpenAI: Data Retention Request deletion of your data',
+    mkdirSync() {},
+    writeFileSync: (file, content) => files.set(file, content),
+    statSync: (file) => ({ size: files.get(file).length }),
+    sha256File: () => 'a'.repeat(64),
+  };
+  let error;
+  try { await runInNewContext(`(async () => { ${source}\n })()`, sandbox); }
+  catch (caught) { error = caught; }
+  if (!files.has('/fixture/launch_package/hard-clearance-physical-blockers.json')) throw error;
+  return {
+    error,
+    files,
+    report: JSON.parse(files.get('/fixture/launch_package/hard-clearance-physical-blockers.json')),
+  };
+}
+
+const physicalFixtureRecord = (gateId, overrides = {}) => ({
+  gateId, status: 'passed', evidenceLayer: 'physical_device', source: 'admin-manual-evidence',
+  executionGenerated: false, hardLaunchClaim: false, releaseSha: 'b'.repeat(40), commitSha: 'b'.repeat(40),
+  testerName: 'Fixture tester', proofRef: 'fixture proof', recordedBy: 'fixture-admin',
+  createdAt: new Date().toISOString(), device: 'Android physical device', ...overrides,
+});
+
+test('missing physical proofs produce eleven actionable blockers and never publish clearance', async () => {
+  const result = await runPhysicalReconciliationFixture();
+  assert.match(result.error.message, /physical-device evidence is still incomplete/);
+  assert.equal(result.report.status, 'blocked');
+  assert.equal(result.report.gates.length, 11);
+  assert.ok(result.report.gates.every((gate) => gate.reason === 'no-current-release-record'));
+  assert.equal(result.report.hardLaunchClaim, false);
+  assert.equal(result.files.has('/fixture/launch_package/launch-proof-gates.json'), false);
+});
+
+test('invalid physical metadata and missing protected technician proof remain separate blockers', async () => {
+  const result = await runPhysicalReconciliationFixture([
+    physicalFixtureRecord('googleMaps', { evidenceLayer: 'hosted' }),
+    physicalFixtureRecord('technicianGpsAndDeniedFallback'),
+  ]);
+  assert.equal(result.report.gates.find((gate) => gate.commandCenterGateId === 'googleMaps').reason,
+    'current-release-records-do-not-satisfy-physical-validation');
+  assert.equal(result.report.gates.find((gate) => gate.commandCenterGateId === 'technicianGpsAndDeniedFallback').reason,
+    'protected-technician-mission-proof-missing-or-invalid');
+  assert.equal(result.files.has('/fixture/launch_package/launch-proof-gates.json'), false);
+});
+
+test('complete exact-SHA physical proofs preserve the successful reconciliation path', async () => {
+  const gates = ['firebaseCloudMessaging', 'googleMaps', 'phase1Payments', 'androidPwaSmoke', 'iosPwaSmoke',
+    'technicianGpsAndDeniedFallback', 'pdfMobileDownload', 'arabicRtlAllCoreScreens',
+    'everyButtonWritesFirestoreOrStorage', 'logoutAllDashboards'];
+  const result = await runPhysicalReconciliationFixture(gates.map((gate) => physicalFixtureRecord(gate,
+    gate === 'iosPwaSmoke' ? { device: 'iPhone physical device' } : {})), {
+    status: 'passed', releaseCommitSha: 'b'.repeat(40), commitSha: 'b'.repeat(40),
+    controlPlaneCommitSha: 'c'.repeat(40), evidenceType: 'physical-device-report', verifiedBy: 'workflow',
+  });
+  assert.equal(result.error, undefined);
+  assert.equal(result.report.status, 'passed');
+  assert.equal(result.report.gates.filter((gate) => gate.status === 'passed').length, 11);
+  assert.equal(result.report.hardLaunchClaim, false);
+  assert.equal(result.files.has('/fixture/launch_package/launch-proof-gates.json'), true);
+});
+
+test('physical proofs after the first 500 records are still considered for clearance', async () => {
+  const records = Array.from({ length: 500 }, () => physicalFixtureRecord('googleMaps', {
+    source: 'github-actions', executionGenerated: true, evidenceLayer: 'hosted',
+  }));
+  records.push(physicalFixtureRecord('googleMaps'));
+  const result = await runPhysicalReconciliationFixture(records);
+  assert.equal(result.report.gates.find((gate) => gate.commandCenterGateId === 'googleMaps').status, 'passed');
+  assert.equal(result.report.status, 'blocked');
+  assert.equal(result.files.has('/fixture/launch_package/launch-proof-gates.json'), false);
 });

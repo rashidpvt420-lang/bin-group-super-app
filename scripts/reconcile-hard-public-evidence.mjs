@@ -208,11 +208,17 @@ if (projectId !== EXPECTED_PROJECT_ID) fail(`unexpected Firebase project: ${proj
 initializeFirebaseAdmin(admin, projectId);
 const db = admin.firestore();
 
-const manualSnapshot = await db.collection('launch_evidence')
+const manualQuery = db.collection('launch_evidence')
   .where('releaseSha', '==', releaseSha)
-  .limit(500)
-  .get();
-const manualPhysicalRecords = manualSnapshot.docs
+  .limit(500);
+const manualDocuments = [];
+let manualPage = await manualQuery.get();
+while (manualPage.docs.length) {
+  manualDocuments.push(...manualPage.docs);
+  if (manualPage.docs.length < 500) break;
+  manualPage = await manualQuery.startAfter(manualPage.docs.at(-1)).get();
+}
+const manualPhysicalRecords = manualDocuments
   .map((doc) => ({ __documentId: doc.id, ...(doc.data() || {}) }))
   .sort((left, right) => evidenceMillis(right.createdAt) - evidenceMillis(left.createdAt));
 
@@ -363,15 +369,32 @@ const physicalGateSources = [
 
 const reconciledPhysicalGates = [];
 const missingPhysicalGates = [];
+const physicalGateDiagnostics = [];
 for (const mapping of physicalGateSources) {
   const record = manualPhysicalRecords.find((candidate) =>
     validPhysicalRecord(candidate, mapping.sourceGateId, mapping.devicePattern)
   );
   if (!record) {
+    const currentReleaseRecords = manualPhysicalRecords.filter((candidate) =>
+      text(candidate.gateId) === mapping.sourceGateId
+    ).length;
+    physicalGateDiagnostics.push({
+      gateKey: mapping.key,
+      commandCenterGateId: mapping.sourceGateId,
+      status: 'blocked',
+      reason: currentReleaseRecords ? 'current-release-records-do-not-satisfy-physical-validation' : 'no-current-release-record',
+      currentReleaseRecords,
+    });
     missingPhysicalGates.push(`${mapping.key} (Command Center: ${mapping.sourceGateId})`);
     continue;
   }
   if (mapping.requireTechnicianOperational && !technicianPhysicalProofValid) {
+    physicalGateDiagnostics.push({
+      gateKey: mapping.key,
+      commandCenterGateId: mapping.sourceGateId,
+      status: 'blocked',
+      reason: 'protected-technician-mission-proof-missing-or-invalid',
+    });
     missingPhysicalGates.push(
       `${mapping.key} (real protected technician GPS mission proof is missing)`,
     );
@@ -380,7 +403,25 @@ for (const mapping of physicalGateSources) {
   reconciledPhysicalGates.push(
     materializeManualPhysicalGate(gates, mapping.key, mapping.sourceGateId, record),
   );
+  physicalGateDiagnostics.push({
+    gateKey: mapping.key,
+    commandCenterGateId: mapping.sourceGateId,
+    status: 'passed',
+  });
 }
+
+// Preserve blockers without publishing a clearance artifact or changing gate authority.
+mkdirSync(path.dirname(gatePath), { recursive: true });
+writeFileSync(path.join(root, 'launch_package', 'hard-clearance-physical-blockers.json'), `${JSON.stringify({
+  schemaVersion: 1,
+  status: missingPhysicalGates.length ? 'blocked' : 'passed',
+  releaseSha,
+  controlPlaneCommitSha: controlPlaneSha,
+  observedAt: new Date().toISOString(),
+  hardLaunchClaim: false,
+  technicianPhysicalProofValid,
+  gates: physicalGateDiagnostics,
+}, null, 2)}\n`, { mode: 0o600 });
 
 if (missingPhysicalGates.length) {
   fail(`physical-device evidence is still incomplete: ${missingPhysicalGates.join('; ')}`);
