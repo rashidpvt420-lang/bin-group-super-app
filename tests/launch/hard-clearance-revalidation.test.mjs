@@ -935,12 +935,20 @@ async function runPhysicalReconciliationFixture(records = [], technicianProof = 
     CLEARANCE_CONTROL_PLANE_SHA: controlPlaneSha,
   };
   const docs = records.map((record, index) => ({ id: `proof-${index}`, data: () => record }));
-  const pageQuery = (offset = 0) => ({
-    get: async () => ({ docs: docs.slice(offset, offset + 500) }),
-    startAfter: (last) => pageQuery(docs.indexOf(last) + 1),
+  const pageQuery = (matchingDocs, offset = 0) => ({
+    get: async () => ({ docs: matchingDocs.slice(offset, offset + 500) }),
+    startAfter: (last) => pageQuery(matchingDocs, matchingDocs.indexOf(last) + 1),
   });
   const db = {
-    collection: () => ({ where: () => ({ limit: () => pageQuery() }) }),
+    collection: () => ({
+      where: (fieldName, operator, expectedValue) => {
+        assert.equal(operator, '==');
+        const matchingDocs = docs.filter((doc) =>
+          String(doc.data()?.[fieldName] || '').toLowerCase() === String(expectedValue || '').toLowerCase()
+        );
+        return { limit: () => pageQuery(matchingDocs) };
+      },
+    }),
     doc: () => ({ get: async () => ({ get: () => technicianProof }) }),
   };
   const sandbox = {
