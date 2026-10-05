@@ -829,8 +829,11 @@ test('hard clearance keeps physical-device gates fail-closed unless exact review
   // Physical reconciliation is conditional, exact-gate and fail-closed.
   assert.match(reconciler, /const physicalGateSources = \[/);
   assert.match(reconciler, /validPhysicalRecord\(candidate, mapping\.sourceGateId, mapping\.devicePattern\)/);
-  assert.match(reconciler, /text\(record\.releaseSha\)\.toLowerCase\(\) !== releaseSha/);
-  assert.match(reconciler, /text\(record\.commitSha\)\.toLowerCase\(\) !== releaseSha/);
+  assert.match(reconciler, /readExactReleaseEvidence\('releaseSha'\)/);
+  assert.match(reconciler, /readExactReleaseEvidence\('commitSha'\)/);
+  assert.match(reconciler, /observedReleaseSha && observedReleaseSha !== releaseSha/);
+  assert.match(reconciler, /observedCommitSha && observedCommitSha !== releaseSha/);
+  assert.match(reconciler, /exact-release-binding-missing/);
   assert.match(reconciler, /text\(record\.evidenceLayer\)\.toLowerCase\(\) !== 'physical_device'/);
   assert.match(reconciler, /if \(missingPhysicalGates\.length\)/);
   assert.match(reconciler, /physical-device evidence is still incomplete/);
@@ -866,8 +869,11 @@ test('hard clearance promotes only exact-SHA reviewed physical evidence and requ
 
   assert.match(reconciler, /source\)\.toLowerCase\(\) !== 'admin-manual-evidence'/);
   assert.match(reconciler, /evidenceLayer\)\.toLowerCase\(\) !== 'physical_device'/);
-  assert.match(reconciler, /text\(record\.releaseSha\)\.toLowerCase\(\) !== releaseSha/);
-  assert.match(reconciler, /text\(record\.commitSha\)\.toLowerCase\(\) !== releaseSha/);
+  assert.match(reconciler, /readExactReleaseEvidence\('releaseSha'\)/);
+  assert.match(reconciler, /readExactReleaseEvidence\('commitSha'\)/);
+  assert.match(reconciler, /observedReleaseSha && observedReleaseSha !== releaseSha/);
+  assert.match(reconciler, /observedCommitSha && observedCommitSha !== releaseSha/);
+  assert.match(reconciler, /exact-release-binding-missing/);
   assert.match(reconciler, /record\.executionGenerated !== false/);
   assert.match(reconciler, /record\.hardLaunchClaim !== false/);
   assert.match(reconciler, /requiredDeviceGates\.technicianGpsTracking/);
@@ -1026,6 +1032,22 @@ test('complete exact-SHA physical proofs preserve the successful reconciliation 
   assert.equal(result.report.gates.filter((gate) => gate.status === 'passed').length, 11);
   assert.equal(result.report.hardLaunchClaim, false);
   assert.equal(result.files.has('/fixture/launch_package/launch-proof-gates.json'), true);
+});
+
+test('legacy exact commitSha-only physical proof is accepted without weakening exact-release binding', async () => {
+  const record = physicalFixtureRecord('googleMaps', { releaseSha: undefined, commitSha: 'b'.repeat(40) });
+  const result = await runPhysicalReconciliationFixture([record]);
+  const gate = result.report.gates.find((item) => item.commandCenterGateId === 'googleMaps');
+  assert.equal(gate.status, 'passed');
+  assert.equal(result.report.status, 'blocked');
+});
+
+test('conflicting releaseSha is rejected even when legacy commitSha matches', async () => {
+  const record = physicalFixtureRecord('googleMaps', { releaseSha: 'd'.repeat(40), commitSha: 'b'.repeat(40) });
+  const result = await runPhysicalReconciliationFixture([record]);
+  const gate = result.report.gates.find((item) => item.commandCenterGateId === 'googleMaps');
+  assert.equal(gate.status, 'blocked');
+  assert.ok(gate.invalidReasons.includes('release-sha-mismatch'));
 });
 
 test('physical proofs after the first 500 records are still considered for clearance', async () => {
