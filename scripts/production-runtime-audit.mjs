@@ -135,7 +135,10 @@ assert(providerLaunchTruth.includes('bankTransferEnabled: false'), 'Shared provi
 assert(providerLaunchTruth.includes('stripeEnabled: false'), 'Shared provider truth must keep Stripe disabled.');
 assert(providerLaunchTruth.includes("requiredEvidenceLayer: 'physical_device'"), 'Provider truth must define physical-device evidence for device-bound launch gates.');
 assert(providerLaunchTruth.includes("if (String(evidence.status || '').trim().toLowerCase() !== 'passed') return false"), 'Public-launch evidence must require PASSED, not waiver equivalence.');
-assert(providerLaunchTruth.includes('evidence.releaseSha || evidence.commitSha'), 'Public-launch evidence must bind to an exact release SHA.');
+assert(providerLaunchTruth.includes('normalizeCommitSha(evidence.releaseSha)'), 'Public-launch evidence must inspect releaseSha when present.');
+assert(providerLaunchTruth.includes('normalizeCommitSha(evidence.commitSha)'), 'Public-launch evidence must retain legacy commitSha exact-release compatibility.');
+assert(providerLaunchTruth.includes("requiredLayer === 'physical_device'"), 'Physical-device coverage must use the dedicated manual evidence policy.');
+assert(providerLaunchTruth.includes("source === 'admin-manual-evidence' && evidence.executionGenerated === false"), 'Physical-device coverage must require non-generated Admin physical evidence.');
 
 // Retain the dormant Stripe source hardened for a future separately reviewed
 // migration, but never deploy it as the Phase 1 payment runtime.
