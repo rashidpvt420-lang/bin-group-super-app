@@ -438,7 +438,17 @@ jobs:
           E2E_BROKER_MAILBOX_REFRESH_TOKEN: ${{ secrets.E2E_BROKER_MAILBOX_REFRESH_TOKEN }}
         run: node scripts/resolve-production-mailbox-identities.mjs
 
-      - name: Refresh role and hosting evidence without restarting the pilot
+      - name: Prepare frozen-release evidence for current production semantics
+        working-directory: release
+        run: |
+          set -euo pipefail
+          node scripts/apply-five-role-business-evidence-fixes.mjs
+          node scripts/patch-protected-admin-staff-access-interaction.mjs
+          node scripts/harden-repeated-business-evidence.mjs
+          node scripts/patch-phase21-postdeploy-evidence.mjs
+          node scripts/prepare-protected-business-fixtures.mjs
+
+      - name: Refresh role evidence without restarting the pilot
         working-directory: release
         env:
           E2E_STRICT_ROLES: 'true'
@@ -449,7 +459,10 @@ jobs:
           E2E_BROKER_MAILBOX_CLIENT_ID: ${{ secrets.E2E_BROKER_MAILBOX_CLIENT_ID }}
           E2E_BROKER_MAILBOX_CLIENT_SECRET: ${{ secrets.E2E_BROKER_MAILBOX_CLIENT_SECRET }}
           E2E_BROKER_MAILBOX_REFRESH_TOKEN: ${{ secrets.E2E_BROKER_MAILBOX_REFRESH_TOKEN }}
-        run: node scripts/run-critical-evidence.mjs --suite all-required
+        run: |
+          set -euo pipefail
+          node scripts/run-critical-evidence.mjs --suite all-business
+          node scripts/run-critical-evidence.mjs --suite launchAuditLive
 
       - name: Generate fresh production hard-clearance revalidation
         working-directory: release

@@ -50,6 +50,7 @@ test('every dual-SHA evidence scope accepts the reviewed Phase 1 final-decision 
 
 test('hard clearance freshly revalidates production state without moving the frozen pilot release', async () => {
   const workflow = await read('.github/workflows/live-role-smoke.yml');
+  const revalidationSource = await read('scripts/hard-clearance-production-revalidation.mjs');
 
   assert.match(workflow, /hard-clearance-production-revalidation:/);
   assert.match(workflow, /name: Freshly revalidate protected production state/);
@@ -123,16 +124,28 @@ test('hard clearance freshly revalidates production state without moving the fro
     workflow.indexOf('  hard-public-launch-clearance:'),
   );
   assert.match(revalidationJob, /cp control-plane\/scripts\/resolve-admin-app-check-site-key\.mjs release\/scripts\/resolve-admin-app-check-site-key\.mjs/);
-  const refreshMarker = 'Refresh role and hosting evidence without restarting the pilot';
+  const prepareMarker = 'Prepare frozen-release evidence for current production semantics';
+  const refreshMarker = 'Refresh role evidence without restarting the pilot';
+  assert.ok(revalidationJob.includes(prepareMarker), 'clearance must apply reviewed frozen-release evidence preparation');
   assert.ok(revalidationJob.includes(refreshMarker), 'clearance must execute fresh role evidence');
-  assert.match(revalidationJob, /run: node scripts\/run-critical-evidence\.mjs --suite all-required/);
-  assert.ok(revalidationJob.indexOf(refreshMarker) > revalidationJob.indexOf('Restore frozen release evidence'));
+  assert.match(revalidationJob, /node scripts\/apply-five-role-business-evidence-fixes\.mjs/);
+  assert.match(revalidationJob, /node scripts\/patch-phase21-postdeploy-evidence\.mjs/);
+  assert.match(revalidationJob, /node scripts\/prepare-protected-business-fixtures\.mjs/);
+  assert.match(revalidationJob, /node scripts\/run-critical-evidence\.mjs --suite all-business/);
+  assert.match(revalidationJob, /node scripts\/run-critical-evidence\.mjs --suite launchAuditLive/);
+  assert.doesNotMatch(revalidationJob, /run-critical-evidence\.mjs --suite all-required/);
+  assert.ok(revalidationJob.indexOf(prepareMarker) > revalidationJob.indexOf('Restore frozen release evidence'));
+  assert.ok(revalidationJob.indexOf(refreshMarker) > revalidationJob.indexOf(prepareMarker));
   assert.ok(revalidationJob.indexOf(refreshMarker) < revalidationJob.indexOf('Generate fresh production hard-clearance revalidation'));
   assert.doesNotMatch(revalidationJob, /run:.*(?:seed-e2e-auth|write-pilot-incident-report|start-controlled-pilot)/);
   const hardJob = workflow.slice(workflow.indexOf('  hard-public-launch-clearance:'));
   assert.match(hardJob, /cp control-plane\/scripts\/resolve-live-pilot-window\.mjs release\/scripts\/resolve-live-pilot-window\.mjs/);
   assert.match(workflow, /cp control-plane\/scripts\/verify-operational-readiness\.mjs release\/scripts\/verify-operational-readiness\.mjs/);
   assert.match(workflow, /CONTROL_PLANE_COMMIT_SHA: \$\{\{ github\.sha \}\}[\s\S]*?run: node scripts\/verify-operational-readiness\.mjs/);
+  assert.match(revalidationSource, /upsertEvidenceRecord/);
+  assert.match(revalidationSource, /productionMainHosting/);
+  assert.match(revalidationSource, /productionAdminHosting/);
+  assert.match(revalidationSource, /live-hosted-bytes/);
   const authIndex = revalidationJob.indexOf('Authenticate Google Cloud');
   const installIndex = revalidationJob.indexOf('Install frozen-release dependencies');
   const resolveIndex = revalidationJob.indexOf('Resolve canonical Admin Enterprise App Check config');
