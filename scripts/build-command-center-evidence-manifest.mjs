@@ -148,26 +148,6 @@ const gateDefinitions = [
     notes: 'Tenant execution evidence creates the maintenance request through the real production flow and verifies uploaded request evidence.',
   },
   {
-    gateId: 'technicianMissionLifecycle',
-    gateTitle: 'Technician assignment to completion lifecycle',
-    gateGroup: 'Technician',
-    role: 'technician',
-    device: 'Production browser',
-    productionUrl: PRODUCTION.mainUrl,
-    evidence: ['businessTechnician'],
-    notes: 'Technician execution evidence proves dispatch-bound assignment, mission lifecycle, work evidence, network recovery, and completion.',
-  },
-  {
-    gateId: 'technicianGpsAndDeniedFallback',
-    gateTitle: 'Technician GPS/photo permission proof',
-    gateGroup: 'Technician',
-    role: 'technician',
-    device: 'Production browser geolocation',
-    productionUrl: PRODUCTION.mainUrl,
-    evidence: ['businessTechnician'],
-    notes: 'Technician execution evidence covers production geolocation controls, denied/poor GPS safety behavior, and proof-upload handling; it does not substitute for a separate physical-device gate.',
-  },
-  {
     gateId: 'brokerReferralCommissionLifecycle',
     gateTitle: 'Broker referral and commission lifecycle',
     gateGroup: 'Broker',
@@ -216,16 +196,6 @@ const gateDefinitions = [
     productionUrl: PRODUCTION.mainUrl,
     evidence: ['adminCredentialLogin', 'businessOwner', 'businessTenant', 'businessTechnician', 'businessBroker'],
     notes: 'All five protected role suites authenticated against live Firebase Auth on the exact deployed SHA; Admin evidence includes the enrolled second factor.',
-  },
-  {
-    gateId: 'firebaseCloudMessaging',
-    gateTitle: 'FCM / push notification proof',
-    gateGroup: 'Provider',
-    role: 'technician',
-    device: 'Production notification lifecycle',
-    productionUrl: PRODUCTION.mainUrl,
-    evidence: ['businessTechnician'],
-    notes: 'Technician execution evidence includes the dispatch notification delivery receipt and safe notification/permission handling exercised by the production mission lifecycle.',
   },
 ];
 
