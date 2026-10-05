@@ -186,12 +186,18 @@ test('all five frozen evidence scopes accept only the reviewed cleanup control p
     const workflow = await readFile(new URL(`../../.github/workflows/${name}.yml`, import.meta.url), 'utf8');
     const match = workflow.match(/supplemental_allowed='([^'\n]+)'/);
     assert.ok(match, name);
-    const allowed = new RegExp(match[1]);
-    for (const path of reviewedPaths) assert.ok(allowed.test(path), `${name}: ${path}`);
+    const acceptedByBashScope = (path) => {
+      const result = spawnSync('bash', ['-c', '[[ "$1" =~ $SCOPE_PATTERN ]]', 'scope-test', path], {
+        env: { ...process.env, SCOPE_PATTERN: match[1] }, encoding: 'utf8',
+      });
+      assert.ok(result.status === 0 || result.status === 1, result.stderr);
+      return result.status === 0;
+    };
+    for (const path of reviewedPaths) assert.ok(acceptedByBashScope(path), `${name}: ${path}`);
     for (const path of ['src/lib/firebase.ts', 'firestore.rules', 'functions/src/index.ts',
       'scripts/select-new-exact-sha-workflow-run.mjs.extra',
       '.github/workflows/privileged-account-cleanup-production.yml']) {
-      assert.equal(allowed.test(path), false, `${name}: ${path}`);
+      assert.equal(acceptedByBashScope(path), false, `${name}: ${path}`);
     }
   }
 });
