@@ -258,7 +258,7 @@ jobs:
     if: github.event_name == 'workflow_dispatch' && inputs.mode == 'hard-clearance'
     runs-on: ubuntu-latest
     environment: production
-    timeout-minutes: 60
+    timeout-minutes: 120
     permissions:
       contents: read
       actions: read
@@ -437,6 +437,19 @@ jobs:
           E2E_BROKER_MAILBOX_CLIENT_SECRET: ${{ secrets.E2E_BROKER_MAILBOX_CLIENT_SECRET }}
           E2E_BROKER_MAILBOX_REFRESH_TOKEN: ${{ secrets.E2E_BROKER_MAILBOX_REFRESH_TOKEN }}
         run: node scripts/resolve-production-mailbox-identities.mjs
+
+      - name: Refresh role and hosting evidence without restarting the pilot
+        working-directory: release
+        env:
+          E2E_STRICT_ROLES: 'true'
+          E2E_REQUIRE_FOUNDER_MFA: 'true'
+          E2E_OWNER_MAILBOX_CLIENT_ID: ${{ secrets.E2E_OWNER_MAILBOX_CLIENT_ID }}
+          E2E_OWNER_MAILBOX_CLIENT_SECRET: ${{ secrets.E2E_OWNER_MAILBOX_CLIENT_SECRET }}
+          E2E_OWNER_MAILBOX_REFRESH_TOKEN: ${{ secrets.E2E_OWNER_MAILBOX_REFRESH_TOKEN }}
+          E2E_BROKER_MAILBOX_CLIENT_ID: ${{ secrets.E2E_BROKER_MAILBOX_CLIENT_ID }}
+          E2E_BROKER_MAILBOX_CLIENT_SECRET: ${{ secrets.E2E_BROKER_MAILBOX_CLIENT_SECRET }}
+          E2E_BROKER_MAILBOX_REFRESH_TOKEN: ${{ secrets.E2E_BROKER_MAILBOX_REFRESH_TOKEN }}
+        run: node scripts/run-critical-evidence.mjs --suite all-required
 
       - name: Generate fresh production hard-clearance revalidation
         working-directory: release

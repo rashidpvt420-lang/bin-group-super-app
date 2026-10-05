@@ -123,6 +123,12 @@ test('hard clearance freshly revalidates production state without moving the fro
     workflow.indexOf('  hard-public-launch-clearance:'),
   );
   assert.match(revalidationJob, /cp control-plane\/scripts\/resolve-admin-app-check-site-key\.mjs release\/scripts\/resolve-admin-app-check-site-key\.mjs/);
+  const refreshMarker = 'Refresh role and hosting evidence without restarting the pilot';
+  assert.ok(revalidationJob.includes(refreshMarker), 'clearance must execute fresh role evidence');
+  assert.match(revalidationJob, /run: node scripts\/run-critical-evidence\.mjs --suite all-required/);
+  assert.ok(revalidationJob.indexOf(refreshMarker) > revalidationJob.indexOf('Restore frozen release evidence'));
+  assert.ok(revalidationJob.indexOf(refreshMarker) < revalidationJob.indexOf('Generate fresh production hard-clearance revalidation'));
+  assert.doesNotMatch(revalidationJob, /run:.*(?:seed-e2e-auth|write-pilot-incident-report|start-controlled-pilot)/);
   const hardJob = workflow.slice(workflow.indexOf('  hard-public-launch-clearance:'));
   assert.match(hardJob, /cp control-plane\/scripts\/resolve-live-pilot-window\.mjs release\/scripts\/resolve-live-pilot-window\.mjs/);
   assert.match(workflow, /cp control-plane\/scripts\/verify-operational-readiness\.mjs release\/scripts\/verify-operational-readiness\.mjs/);
