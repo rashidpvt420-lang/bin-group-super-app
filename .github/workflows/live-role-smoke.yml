@@ -294,8 +294,8 @@ jobs:
             }
             echo "Exact same-SHA release/control-plane pair verified."
           else
-            allowed='^(\.github/workflows/firebase-production-deploy\.yml|\.github/workflows/current-main-expression-budget-repair\.yml|\.github/workflows/pr-validation\.yml|\.github/workflows/renewal-pdf-diagnostic-owner-bridge\.yml|\.github/workflows/renewal-pdf-runtime-diagnostic\.yml|\.github/workflows/repair-frozen-sovereign-ai-runtime\.yml|\.github/workflows/live-role-smoke\.yml|\.github/workflows/operational-application-evidence\.yml|\.github/workflows/operational-provider-evidence\.yml|\.github/workflows/privileged-access-rotation-evidence\.yml|\.github/workflows/technician-physical-evidence\.yml|scripts/finalize-operational-provider-evidence\.mjs|scripts/hard-clearance-production-revalidation\.mjs|scripts/launch-status\.mjs|scripts/publish-direct-operational-proof\.mjs|scripts/publish-operational-application-evidence\.mjs|scripts/publish-operational-provider-evidence\.mjs|scripts/resolve-admin-app-check-site-key\.mjs|scripts/run-frozen-release-evidence\.mjs|scripts/verify-ai-live-evidence\.mjs|scripts/verify-hard-launch-approval\.mjs|scripts/verify-operational-readiness\.mjs|tests/launch/ai-operational-contract\.test\.mjs|tests/launch/external-gate-production-provenance\.test\.mjs|tests/launch/final-operational-evidence-producers\.test\.mjs|tests/launch/hard-clearance-revalidation\.test\.mjs|tests/launch/operational-application-evidence-audit\.test\.mjs)$'
-            supplemental_allowed='^(scripts/hard-launch-status\.mjs|scripts/lib/hard-launch-control\.mjs|scripts/lib/operational-proof-schema\.mjs|scripts/prepare-operational-application-evidence\.mjs|scripts/print-hard-launch-blockers\.mjs|scripts/verify-operational-application-evidence\.mjs|scripts/verify-launch-clearance\.mjs|scripts/reconcile-hard-public-evidence\.mjs|tests/launch/hard-launch-blocker-plan\.test\.mjs|tests/launch/phase1-manual-public-launch-policy\.test\.mjs|\.github/workflows/public-launch-evidence-backfill\.yml|scripts/build-command-center-evidence-manifest\.mjs|tests/launch/public-launch-evidence-workflow-bridge\.test\.mjs)$'
+            allowed='^(\.github/workflows/firebase-production-deploy\.yml|\.github/workflows/current-main-expression-budget-repair\.yml|\.github/workflows/pr-validation\.yml|\.github/workflows/renewal-pdf-diagnostic-owner-bridge\.yml|\.github/workflows/renewal-pdf-runtime-diagnostic\.yml|\.github/workflows/repair-frozen-sovereign-ai-runtime\.yml|\.github/workflows/live-role-smoke\.yml|\.github/workflows/operational-application-evidence\.yml|\.github/workflows/operational-provider-evidence\.yml|\.github/workflows/privileged-access-rotation-evidence\.yml|\.github/workflows/technician-physical-evidence\.yml|scripts/finalize-operational-provider-evidence\.mjs|scripts/hard-clearance-production-revalidation\.mjs|scripts/launch-status\.mjs|scripts/publish-direct-operational-proof\.mjs|scripts/publish-operational-application-evidence\.mjs|scripts/publish-operational-provider-evidence\.mjs|scripts/resolve-admin-app-check-site-key\.mjs|scripts/run-frozen-release-evidence\.mjs|scripts/verify-ai-live-evidence\.mjs|scripts/verify-hard-launch-approval\.mjs|scripts/verify-operational-readiness\.mjs|tests/launch/ai-operational-contract\.test\.mjs|tests/launch/external-gate-production-provenance\.test\.mjs|tests/launch/final-operational-evidence-producers\.test\.mjs|tests/launch/hard-clearance-revalidation\.test\.mjs|tests/launch/operational-application-evidence-audit\.test\.mjs|scripts/resolve-live-pilot-window\.mjs)$'
+            supplemental_allowed='^(scripts/hard-launch-status\.mjs|scripts/lib/hard-launch-control\.mjs|scripts/lib/operational-proof-schema\.mjs|scripts/prepare-operational-application-evidence\.mjs|scripts/print-hard-launch-blockers\.mjs|scripts/verify-operational-application-evidence\.mjs|scripts/verify-launch-clearance\.mjs|scripts/reconcile-hard-public-evidence\.mjs|tests/launch/hard-launch-blocker-plan\.test\.mjs|tests/launch/phase1-manual-public-launch-policy\.test\.mjs|\.github/workflows/public-launch-evidence-backfill\.yml|scripts/build-command-center-evidence-manifest\.mjs|tests/launch/public-launch-evidence-workflow-bridge\.test\.mjs|scripts/resolve-live-pilot-window\.mjs)$'
             while IFS= read -r file; do
               [[ -z "$file" || "$file" =~ $allowed || "$file" =~ $supplemental_allowed ]] || { echo "::error::Non-control-plane file changed since pilot release: $file"; exit 1; }
             done <<< "$changed"
@@ -321,20 +321,27 @@ jobs:
 
           validate_run() {
             local run_id="$1"
-            local run_json artifacts_json
-            run_json="$(curl --fail --silent --show-error -H "$auth_header" -H "$accept_header" -H "$version_header" "$api/actions/runs/$run_id")"
+            local attempt_json artifacts_json
+            attempt_json="$(curl --fail --silent --show-error -H "$auth_header" -H "$accept_header" -H "$version_header" "$api/actions/runs/$run_id/attempts/1")"
             jq -e --arg sha "$TARGET_SHA" '
               .name == "Live Role Smoke Tests" and
               .path == ".github/workflows/live-role-smoke.yml" and
               .head_branch == "main" and
               .head_sha == $sha and
               .event == "workflow_dispatch" and
+              .run_attempt == 1 and
               .status == "completed" and
               .conclusion == "success"
-            ' <<<"$run_json" >/dev/null || return 1
+            ' <<<"$attempt_json" >/dev/null || return 1
 
             artifacts_json="$(curl --fail --silent --show-error -H "$auth_header" -H "$accept_header" -H "$version_header" "$api/actions/runs/$run_id/artifacts?per_page=100")"
-            jq -e --arg name "$ARTIFACT_NAME" '[.artifacts[] | select(.name == $name and .expired == false)] | length == 1' <<<"$artifacts_json" >/dev/null
+            jq -e --arg name "$ARTIFACT_NAME" --arg completed "$(jq -r '.updated_at' <<<"$attempt_json")" '
+              [.artifacts[] | select(
+                .name == $name and
+                .expired == false and
+                (.created_at | fromdateiso8601) <= ($completed | fromdateiso8601)
+              )] | length == 1
+            ' <<<"$artifacts_json" >/dev/null
           }
 
           requested="$(printf '%s' "$REQUESTED_RUN_ID" | xargs)"
@@ -343,8 +350,8 @@ jobs:
             validate_run "$requested" || { echo "::error::Requested live-evidence run is not the exact successful main workflow_dispatch run with the frozen-release artifact."; exit 1; }
             resolved="$requested"
           else
-            runs_json="$(curl --fail --silent --show-error -H "$auth_header" -H "$accept_header" -H "$version_header" "$api/actions/workflows/live-role-smoke.yml/runs?event=workflow_dispatch&branch=main&status=success&per_page=100")"
-            mapfile -t candidates < <(jq -r --arg sha "$TARGET_SHA" '.workflow_runs[] | select(.name == "Live Role Smoke Tests" and .path == ".github/workflows/live-role-smoke.yml" and .head_branch == "main" and .head_sha == $sha and .event == "workflow_dispatch" and .status == "completed" and .conclusion == "success") | .id' <<<"$runs_json")
+            runs_json="$(curl --fail --silent --show-error -H "$auth_header" -H "$accept_header" -H "$version_header" "$api/actions/workflows/live-role-smoke.yml/runs?event=workflow_dispatch&branch=main&per_page=100")"
+            mapfile -t candidates < <(jq -r --arg sha "$TARGET_SHA" '.workflow_runs[] | select(.name == "Live Role Smoke Tests" and .path == ".github/workflows/live-role-smoke.yml" and .head_branch == "main" and .head_sha == $sha and .event == "workflow_dispatch") | .id' <<<"$runs_json")
             valid=()
             for run_id in "${candidates[@]}"; do
               if validate_run "$run_id"; then valid+=("$run_id"); fi
@@ -368,6 +375,7 @@ jobs:
           cp control-plane/scripts/hard-clearance-production-revalidation.mjs release/scripts/hard-clearance-production-revalidation.mjs
           cp control-plane/scripts/resolve-admin-app-check-site-key.mjs release/scripts/resolve-admin-app-check-site-key.mjs
           cp control-plane/scripts/verify-hard-launch-approval.mjs release/scripts/verify-hard-launch-approval.mjs
+          cp control-plane/scripts/resolve-live-pilot-window.mjs release/scripts/resolve-live-pilot-window.mjs
           cp control-plane/scripts/verify-launch-clearance.mjs release/scripts/verify-launch-clearance.mjs
           cp control-plane/scripts/reconcile-hard-public-evidence.mjs release/scripts/reconcile-hard-public-evidence.mjs
           cp control-plane/scripts/verify-operational-readiness.mjs release/scripts/verify-operational-readiness.mjs
