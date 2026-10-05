@@ -32,7 +32,7 @@ function currentPosition(): Promise<GeolocationPosition> {
             reject(new Error('Location services are unavailable on this device.'));
             return;
         }
-        navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: true, maximumAge: 30_000, timeout: 20_000 });
+        navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: true, maximumAge: 0, timeout: 20_000 });
     });
 }
 
@@ -46,14 +46,13 @@ export async function reportTechnicianAvailabilityLocation(): Promise<void> {
     });
 }
 
-// A refusal that proves a fix was accepted moments ago (15 s throttle, or a newer fix already on
-// record) means the server-side GPS is already fresh; it is not a failure for the caller.
+// Only the callable's specific 15-second throttle confirms recent server acceptance. Generic
+// quota errors and older-coordinate refusals do not establish GPS freshness.
 export function isAlreadyFreshAvailabilityRefusal(error: any): boolean {
     const code = String(error?.code || '').toLowerCase();
     const message = String(error?.message || '');
-    return code.endsWith('resource-exhausted')
-        || /reported moments ago/i.test(message)
-        || /older than the last reported availability location/i.test(message);
+    return code === 'functions/resource-exhausted'
+        && message === 'Availability location was reported moments ago; try again shortly.';
 }
 
 export type DispatchGpsRefreshResult = { ok: boolean; message?: string };

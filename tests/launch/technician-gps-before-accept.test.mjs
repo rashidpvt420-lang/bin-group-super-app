@@ -25,7 +25,11 @@ function stubGeolocation(result) {
     configurable: true,
     value: {
       geolocation: {
-        getCurrentPosition: (resolve, reject) => (result.error ? reject(result.error) : resolve(result.position)),
+        getCurrentPosition: (resolve, reject, options) => {
+          assert.equal(options.enableHighAccuracy, true);
+          assert.equal(options.maximumAge, 0, 'action refresh must request a new fix rather than a cached coordinate');
+          return result.error ? reject(result.error) : resolve(result.position);
+        },
       },
     },
   });
@@ -56,7 +60,7 @@ test('refreshTechnicianDispatchGps sends a real fix and surfaces real refusals',
   assert.equal(calls[0].name, 'reportTechnicianAvailabilityLocation');
   assert.deepEqual(calls[0].payload, { latitude: 24.2, longitude: 55.7, accuracy: 12, deviceTimestampMs: 1_791_130_000_000 });
 
-  // The 15 s server throttle / newer-fix-on-record refusals prove GPS is already fresh.
+  // Only the specific 15 s server throttle proves GPS is already fresh.
   globalThis.__gpsCallable = async () => { throw Object.assign(new Error('Availability location was reported moments ago; try again shortly.'), { code: 'functions/resource-exhausted' }); };
   assert.deepEqual(await helper.refreshTechnicianDispatchGps(), { ok: true });
 
@@ -74,6 +78,19 @@ test('refreshTechnicianDispatchGps sends a real fix and surfaces real refusals',
   assert.equal(denied.ok, false);
   assert.match(denied.message, /Location permission/);
   assert.equal(calls.length, 0);
+});
+
+test('quota failures and older coordinates never masquerade as accepted GPS', async () => {
+  const helper = await loadAvailabilityHelper();
+  stubGeolocation({ position: { coords: { latitude: 24.2, longitude: 55.7, accuracy: 12 }, timestamp: Date.now() } });
+  for (const [code, message] of [
+    ['functions/resource-exhausted', 'Quota exceeded.'],
+    ['functions/failed-precondition', 'This GPS coordinate is older than the last reported availability location.'],
+    ['functions/failed-precondition', 'Availability location was reported moments ago; try again shortly.'],
+  ]) {
+    globalThis.__gpsCallable = async () => { throw Object.assign(new Error(message), { code }); };
+    assert.deepEqual(await helper.refreshTechnicianDispatchGps(), { ok: false, message });
+  }
 });
 
 test('job page shares dispatch GPS on open and before Accept and every lifecycle callable', async () => {
