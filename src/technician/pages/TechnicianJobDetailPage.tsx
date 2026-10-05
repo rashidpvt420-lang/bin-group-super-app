@@ -21,6 +21,7 @@ import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { resolvePropertyLocation } from '../../utils/propertyLocationResolver';
 import { startLiveTracking, stopLiveTracking } from '../../utils/liveTracking';
+import { AVAILABILITY_REPORT_INTERVAL_MS, isLiveTrackedMission, refreshTechnicianDispatchGps } from '../utils/availabilityLocation';
 import {
     ensureTechnicianInstallationRegistered,
     readNativeTechnicianInstallationHash,
@@ -212,6 +213,42 @@ export default function TechnicianJobDetailPage() {
         };
     }, []);
 
+    // Dispatch GPS while this mission is open and not live-tracked (ASSIGNED / ACCEPTED / ARRIVED /
+    // IN PROGRESS). Accept and every lifecycle callable require server GPS from the last 15 minutes;
+    // without this, an assigned Technician who never opened the full dashboard could not accept.
+    const ticketStatusKey = String(ticket?.status || '').trim().toUpperCase();
+    const ticketLiveTracked = isLiveTrackedMission(ticket) || isTracking;
+    const ticketTerminal = ['COMPLETED', 'COMPLETED_PENDING_APPROVAL', 'COMPLETED_PENDING_TENANT_APPROVAL', 'CLOSED', 'CANCELLED', 'REJECTED'].includes(ticketStatusKey);
+    const shouldShareDispatchGps = Boolean(user?.uid && ticket?.id) && online && !ticketLiveTracked && !ticketTerminal;
+    useEffect(() => {
+        if (!shouldShareDispatchGps) return undefined;
+        let cancelled = false;
+        const share = () => {
+            refreshTechnicianDispatchGps().then((result) => {
+                if (!cancelled && !result.ok) setGpsError(`Fresh GPS was not accepted by dispatch: ${result.message || 'Fresh GPS could not be shared with dispatch.'}`);
+            });
+        };
+        share();
+        const timer = window.setInterval(share, AVAILABILITY_REPORT_INTERVAL_MS);
+        return () => {
+            cancelled = true;
+            window.clearInterval(timer);
+        };
+    }, [shouldShareDispatchGps]);
+
+    // Fresh GPS immediately before a protected action. Returns false (with a specific message) when
+    // the server refuses the fix, so the Technician sees the real reason instead of a stale-GPS
+    // readiness refusal.
+    const ensureFreshDispatchGps = async (): Promise<boolean> => {
+        const result = await refreshTechnicianDispatchGps();
+        if (!result.ok) {
+            setGpsError(`Fresh GPS was not accepted by dispatch: ${result.message || 'Fresh GPS could not be shared with dispatch.'}`);
+            setMessage(null);
+            return false;
+        }
+        return true;
+    };
+
     const resolved = useMemo(() => resolvePropertyLocation(ticket || {}), [ticket]);
     const status = norm(ticket?.status);
     const hasTenantBeforeProof = Boolean(ticket?.beforePhotoUrl)
@@ -291,7 +328,9 @@ export default function TechnicianJobDetailPage() {
             return;
         }
         setActionLoading(true);
+        setGpsError(null);
         try {
+            if (!(await ensureFreshDispatchGps())) return;
             const acceptTechnicianTicket = httpsCallable(functions, 'acceptTechnicianTicket');
             await acceptTechnicianTicket({ ticketId: id });
             setMessage('Mission accepted.');
@@ -324,6 +363,7 @@ export default function TechnicianJobDetailPage() {
         setGpsError(null);
         try {
             const lifecyclePayload: Record<string, any> = { ticketId: id, status: nextStatus, notes: notes.trim() };
+            let trackingActive = isTracking;
 
             if (nextStatus === 'ARRIVED') {
                 const position = await getVerifiedArrivalPosition();
@@ -365,18 +405,25 @@ export default function TechnicianJobDetailPage() {
                 if (isTracking) {
                     await stopLiveTracking(user.uid, id, 'ARRIVED');
                     setIsTracking(false);
+                    trackingActive = false;
                 }
             }
 
             if (nextStatus === 'IN_PROGRESS' && isTracking) {
                 await stopLiveTracking(user.uid, id, 'WORK_STARTED');
                 setIsTracking(false);
+                trackingActive = false;
             }
 
             if (nextStatus === 'COMPLETED' && isTracking) {
                 await stopLiveTracking(user.uid, id, 'COMPLETED');
                 setIsTracking(false);
+                trackingActive = false;
             }
+
+            // While live tracking runs, mission GPS (which now also stamps lastGpsAt) keeps readiness
+            // fresh. Otherwise refresh dispatch GPS so the 15-minute readiness window is met.
+            if (!trackingActive && !(await ensureFreshDispatchGps())) return;
 
             if (nextStatus === 'COMPLETED') {
                 await updateDoc(doc(db, 'maintenanceTickets', id), {
