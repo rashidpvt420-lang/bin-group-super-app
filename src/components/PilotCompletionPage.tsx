@@ -58,7 +58,7 @@ export default function PilotCompletionPage({ role, dark = false }: { role: Pilo
                     </Stack>
                   ))}
                 </Stack>
-                <Chip label={`Next proof: ${item.nextProof}`} sx={{ alignSelf: 'flex-start', bgcolor: alpha(binThemeTokens.gold, .12), color: dark ? binThemeTokens.goldHover : '#7A5C12', fontWeight: 900, height: 'auto', '& .MuiChip-label': { whiteSpace: 'normal', py: .8 } }} />
+                <Chip label={`Next proof: ${item.nextProof}`} sx={{ alignSelf: 'flex-start', bgcolor: alpha(binThemeTokens.gold, .12), color: binThemeTokens.goldHover, fontWeight: 900, height: 'auto', '& .MuiChip-label': { whiteSpace: 'normal', py: .8 } }} />
               </Stack>
             </Paper>
           </Grid>

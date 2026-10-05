@@ -5,7 +5,6 @@ import {
   acceptTechnicianTicket as legacyAcceptTechnicianTicket,
   updateTicketLifecycle as legacyUpdateTicketLifecycle,
 } from "./index";
-import { mergeTechnicianProfiles } from "./technicianDutyProfile";
 
 if (!admin.apps.length) admin.initializeApp();
 const db = admin.firestore();
@@ -158,10 +157,7 @@ async function loadTechnicianReadiness(uid: string, action: TechnicianAction, no
     ...(Array.isArray(user.certifications) ? user.certifications : []),
     ...(Array.isArray(technician.certifications) ? technician.certifications : []),
   ];
-  const merged = {
-    ...mergeTechnicianProfiles(userSnap.exists ? user : null, technicianSnap.exists ? technician : null),
-    certifications,
-  } as Record<string, any>;
+  const merged = { ...user, ...technician, certifications } as Record<string, any>;
   return { user, technician, merged, readiness: evaluateTechnicianReadiness(merged, action, nowMs) };
 }
 
