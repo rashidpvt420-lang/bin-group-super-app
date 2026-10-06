@@ -87,6 +87,13 @@ test('future Live Role Smoke evidence publishes automatically only after success
   assert.match(automaticWorkflow, /record-firestore-evidence\.js .* --write/);
 });
 
+test('historical production backfill preserves evidence provenance without applying current freshness drift', () => {
+  assert.match(builder, /historicalValidationNow = mode === 'production-deployment-backfill'/);
+  assert.match(builder, /Date\.parse\(String\(record\.finishedAt/);
+  assert.match(builder, /now: historicalValidationNow/);
+  assert.match(builder, /revalidateArtifact: strictArtifactRevalidation/);
+});
+
 test('post-write verifier requires all five signed-in smoke roles and conservative gate set', () => {
   for (const role of ['owner', 'tenant', 'technician', 'broker', 'admin']) {
     assert.match(verifier, new RegExp(`'${role}'`));
