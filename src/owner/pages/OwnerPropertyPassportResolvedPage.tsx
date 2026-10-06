@@ -124,25 +124,42 @@ export default function OwnerPropertyPassportResolvedPage() {
       const contractMap = new Map<string, any>();
 
       const ownerIds = compact([user?.uid, (user as any)?.ownerId, (user as any)?.ownerUid, ...((Array.isArray((user as any)?.linkedOwnerIds) ? (user as any).linkedOwnerIds : []) as unknown[])]);
-      for (const ownerId of ownerIds) {
-        for (const p of await safeQuery('propertyPassports', 'ownerId', ownerId)) passportMap.set(p.propertyId || p.id, p);
-        for (const p of await safeQuery('propertyPassports', 'ownerUid', ownerId)) passportMap.set(p.propertyId || p.id, p);
-        for (const p of await safeQuery('properties', 'ownerId', ownerId)) propertyMap.set(p.propertyId || p.id, p);
-        for (const p of await safeQuery('properties', 'ownerUid', ownerId)) propertyMap.set(p.propertyId || p.id, p);
-        for (const c of await safeQuery('contracts', 'ownerId', ownerId)) contractMap.set(c.id, c);
-        for (const c of await safeQuery('contracts', 'ownerUid', ownerId)) contractMap.set(c.id, c);
-      }
-
       const emails = compact([
         ...emailLookupCandidates(user?.email),
         ...emailLookupCandidates((user as any)?.ownerEmail),
       ]);
-      for (const email of emails) {
-        for (const p of await safeQuery('propertyPassports', 'ownerEmail', email)) passportMap.set(p.propertyId || p.id, p);
-        for (const p of await safeQuery('properties', 'ownerEmail', email)) propertyMap.set(p.propertyId || p.id, p);
-        for (const c of await safeQuery('contracts', 'ownerEmail', email)) contractMap.set(c.id, c);
-        for (const c of await safeQuery('contracts', 'emailDelivery.recipient', email)) contractMap.set(c.id, c);
+
+      // Fan out every identity lookup in parallel. A sequential await chain here
+      // (ownerId × 6 + email × 4) made Accessing Registry... last 15–20s after
+      // RoleContext already finished — same queries, one wall-clock round.
+      type LookupKind = 'passport' | 'property' | 'contract';
+      const jobs: Array<{ kind: LookupKind; run: () => Promise<any[]> }> = [];
+      for (const ownerId of ownerIds) {
+        jobs.push({ kind: 'passport', run: () => safeQuery('propertyPassports', 'ownerId', ownerId) });
+        jobs.push({ kind: 'passport', run: () => safeQuery('propertyPassports', 'ownerUid', ownerId) });
+        jobs.push({ kind: 'property', run: () => safeQuery('properties', 'ownerId', ownerId) });
+        jobs.push({ kind: 'property', run: () => safeQuery('properties', 'ownerUid', ownerId) });
+        jobs.push({ kind: 'contract', run: () => safeQuery('contracts', 'ownerId', ownerId) });
+        jobs.push({ kind: 'contract', run: () => safeQuery('contracts', 'ownerUid', ownerId) });
       }
+      for (const email of emails) {
+        jobs.push({ kind: 'passport', run: () => safeQuery('propertyPassports', 'ownerEmail', email) });
+        jobs.push({ kind: 'property', run: () => safeQuery('properties', 'ownerEmail', email) });
+        jobs.push({ kind: 'contract', run: () => safeQuery('contracts', 'ownerEmail', email) });
+        jobs.push({ kind: 'contract', run: () => safeQuery('contracts', 'emailDelivery.recipient', email) });
+      }
+
+      const batches = await Promise.all(jobs.map((job) => job.run()));
+      batches.forEach((rows, index) => {
+        const kind = jobs[index].kind;
+        if (kind === 'passport') {
+          for (const p of rows) passportMap.set(p.propertyId || p.id, p);
+        } else if (kind === 'property') {
+          for (const p of rows) propertyMap.set(p.propertyId || p.id, p);
+        } else {
+          for (const c of rows) contractMap.set(c.id, c);
+        }
+      });
 
       for (const contract of contractMap.values()) {
         for (const p of contractPropertyRows(contract)) propertyMap.set(p.propertyId || p.id, p);
