@@ -446,6 +446,35 @@ jobs:
           node scripts/patch-protected-admin-staff-access-interaction.mjs
           node scripts/harden-repeated-business-evidence.mjs
           node scripts/patch-phase21-postdeploy-evidence.mjs
+
+          # The frozen Owner evidence wrapper originally varied latitude and longitude
+          # by the same tiny scalar. Production identity authority rounds GEO_UNIT to
+          # 5 decimals, so repeated real evidence runs eventually reused a registry
+          # identity and were correctly rejected as ALREADY_EXISTS. Keep duplicate
+          # detection unchanged; widen only the synthetic evidence identity space.
+          node --input-type=module <<'NODE'
+          import { readFileSync, writeFileSync } from 'node:fs';
+
+          const target = 'scripts/run-owner-inspection-first-production-evidence-unique.mjs';
+          const source = readFileSync(target, 'utf8');
+          const oldCoordinates = `const coordinateOffset = ((Number.parseInt(seed.slice(0, 4), 16) % 8001) - 4000) / 10_000_000;
+          const evidenceLat = (24.4958 + coordinateOffset).toFixed(7);
+          const evidenceLng = (54.4074 + coordinateOffset).toFixed(7);`;
+          const newCoordinates = `const latitudeOffset = ((Number.parseInt(seed.slice(0, 8), 16) % 60001) - 30000) / 10_000_000;
+          const longitudeOffset = ((Number.parseInt(seed.slice(8, 16), 16) % 60001) - 30000) / 10_000_000;
+          const evidenceLat = (24.4958 + latitudeOffset).toFixed(7);
+          const evidenceLng = (54.4074 + longitudeOffset).toFixed(7);`;
+          const oldLog = `  \`[owner-evidence-identity] isolated synthetic identity seed=\${seed.slice(0, 10)} offset=\${coordinateOffset.toFixed(7)}\`,`;
+          const newLog = `  \`[owner-evidence-identity] isolated synthetic identity seed=\${seed.slice(0, 10)} latOffset=\${latitudeOffset.toFixed(7)} lngOffset=\${longitudeOffset.toFixed(7)}\`,`;
+
+          if (source.split(oldCoordinates).length !== 2 || source.split(oldLog).length !== 2) {
+            throw new Error('Frozen Owner evidence identity wrapper changed unexpectedly; refusing runtime patch.');
+          }
+          const patched = source.replace(oldCoordinates, newCoordinates).replace(oldLog, newLog);
+          writeFileSync(target, patched, { mode: 0o600 });
+          console.log('[hard-clearance-owner-identity] expanded synthetic GEO identity space while preserving duplicate detection.');
+          NODE
+
           node scripts/prepare-protected-business-fixtures.mjs
 
       - name: Refresh role evidence without restarting the pilot
