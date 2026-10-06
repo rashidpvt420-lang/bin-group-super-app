@@ -21,6 +21,7 @@ import { useRole } from '../../context/RoleContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import LiveTechnicianTrackingCard from '../../components/tracking/LiveTechnicianTrackingCard';
+import { isOwnerPendingSignOff } from '../utils/ownerPendingSignOff';
 
 const STATUS_COLORS: Record<string, string> = {
     open: 'rgba(255,255,255,0.4)',
@@ -153,7 +154,7 @@ export default function OwnerTicketDetailPage() {
         ...(Array.isArray(ticket.evidencePhotos) ? ticket.evidencePhotos : []),
         ...(ticket.afterPhotoUrl ? [ticket.afterPhotoUrl] : []),
     ].filter(Boolean);
-    const canReviewCompleted = ['COMPLETED', 'COMPLETED_PENDING_APPROVAL', 'COMPLETED_PENDING_TENANT_APPROVAL', 'RESOLVED'].includes(normalizedStatus) && ticket.ownerApproved !== true;
+    const canReviewCompleted = isOwnerPendingSignOff(ticket);
     const canEscalateOpen = ['OPEN', 'PENDING_ASSIGNMENT', 'ASSIGNED', 'ACCEPTED', 'EN_ROUTE', 'ARRIVED', 'IN_PROGRESS', 'WAITING_PARTS', 'REOPENED'].includes(normalizedStatus);
     const selectedActionNeedsReason = reviewAction && reviewAction !== 'APPROVE_CLOSE';
 
@@ -212,6 +213,21 @@ export default function OwnerTicketDetailPage() {
                     sx={{ ml: 'auto', bgcolor: alpha(statusColor, 0.1), color: statusColor, fontWeight: 950, border: `1px solid ${alpha(statusColor, 0.2)}` }}
                 />
             </Stack>
+
+            <Box sx={{ mb: 4 }}>
+                <LiveTechnicianTrackingCard
+                    ticket={ticket}
+                    onChatClick={ticket.assignedTechnicianId
+                        ? () => navigate(`/owner/chat/${ticket.id}`)
+                        : undefined
+                    }
+                    onCallClick={() => {
+                        const phone = ticket.assignedTechnicianPhone || ticket.technicianPhone;
+                        if (phone) window.open(`tel:${phone}`);
+                    }}
+                    showTimeline={false}
+                />
+            </Box>
 
             <Grid container spacing={4}>
                 {/* Left: Ticket Details */}
@@ -410,23 +426,8 @@ export default function OwnerTicketDetailPage() {
                     </Paper>
                 </Grid>
 
-                {/* Right: Live Tracking Card */}
+                {/* Right: Ticket metadata */}
                 <Grid item xs={12} lg={4}>
-                    <Box sx={{ mb: 3 }}>
-                        <LiveTechnicianTrackingCard
-                            ticket={ticket}
-                            onChatClick={ticket.assignedTechnicianId
-                                ? () => navigate(`/owner/chat/${ticket.id}`)
-                                : undefined
-                            }
-                            onCallClick={() => {
-                                const phone = ticket.assignedTechnicianPhone;
-                                if (phone) window.open(`tel:${phone}`);
-                            }}
-                            showTimeline={false}
-                        />
-                    </Box>
-
                     {/* Ticket meta */}
                     <Paper sx={{ p: 3, bgcolor: 'rgba(15, 23, 42, 0.6)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 5, mb: 3 }}>
                         <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, mb: 2, display: 'block' }}>
