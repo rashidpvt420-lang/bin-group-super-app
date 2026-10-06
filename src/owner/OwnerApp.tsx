@@ -108,7 +108,12 @@ export default function OwnerApp() {
                 <Route path="/review-queue" element={<OwnerReviewQueuePage />} />
                 <Route path="/design-studio" element={<DesignStudioPage />} />
                 <Route path="/design-studio/request/:id" element={<DesignRequestDetailPage />} />
+                {/* Complaints plural was missing → splat * silently sent owners to dashboard.
+                    Keep leading-slash portal paths (same style as /dashboard) so inventory
+                    prefixes to /owner/complaints|/owner/tickets — do NOT register /owner/*
+                    here or Phase 2 invents /owner/owner/* REVIEW rows. */}
                 <Route path="/complaint" element={<OwnerComplaintPage />} />
+                <Route path="/complaints" element={<OwnerTicketsPage />} />
                 <Route path="/tickets" element={<OwnerTicketsPage />} />
                 <Route path="/ticket/:id" element={<OwnerTicketDetailPage />} />
                 <Route path="/ai-intelligence" element={<OwnerAIIntelligencePage />} />

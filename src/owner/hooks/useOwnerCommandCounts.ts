@@ -6,10 +6,12 @@ import {
   countOwnerOpenTickets,
   isOwnerOpenTicket,
 } from '../utils/ownerTicketAttentionCounts';
+import { countOwnerPendingSignOffs } from '../utils/ownerPendingSignOff';
 
 type OwnerCommandCounts = {
   loading: boolean;
   pendingCostApprovals: number;
+  pendingTicketSignOffs: number;
   /** Open maintenance tickets — same status set as advanced "Open Maintenance Tasks". */
   openTickets: number;
   /** Open tickets with emergency/critical/high/urgent priority (subset of openTickets). */
@@ -65,6 +67,7 @@ export function useOwnerCommandCounts(): OwnerCommandCounts {
   const [counts, setCounts] = React.useState<OwnerCommandCounts>({
     loading: true,
     pendingCostApprovals: 0,
+    pendingTicketSignOffs: 0,
     openTickets: 0,
     highRiskTickets: 0,
     openDisputes: 0,
@@ -79,18 +82,32 @@ export function useOwnerCommandCounts(): OwnerCommandCounts {
       return undefined;
     }
 
-    const partial: Partial<OwnerCommandCounts> = {};
-    const publish = () => setCounts((current) => ({ ...current, ...partial, loading: false }));
+    const partial: Partial<OwnerCommandCounts> & {
+      _pendingCostRequests?: number;
+      _pendingTicketSignOffs?: number;
+    } = {};
+    const publish = () => {
+      const pendingCostRequests = Number(partial._pendingCostRequests || 0);
+      const pendingTicketSignOffs = Number(partial._pendingTicketSignOffs || 0);
+      setCounts((current) => ({
+        ...current,
+        ...partial,
+        pendingTicketSignOffs,
+        // Command-strip "approvals" = quote/cost requests + ticket sign-offs awaiting Approve & Close.
+        pendingCostApprovals: pendingCostRequests + pendingTicketSignOffs,
+        loading: false,
+      }));
+    };
 
     const unsubs: Array<() => void> = [];
 
     try {
       unsubs.push(onSnapshot(query(collection(db, 'owner_approval_requests'), where('ownerId', '==', ownerId), limit(100)), (snap) => {
-        partial.pendingCostApprovals = snap.docs.filter((docSnap) => PENDING_APPROVAL_STATUSES.has(String(docSnap.data()?.status || 'PENDING'))).length;
+        partial._pendingCostRequests = snap.docs.filter((docSnap) => PENDING_APPROVAL_STATUSES.has(String(docSnap.data()?.status || 'PENDING'))).length;
         publish();
       }, (err) => {
         console.warn('[OwnerCommandCounts] approval requests listener failed:', err);
-        partial.pendingCostApprovals = 0;
+        partial._pendingCostRequests = 0;
         publish();
       }));
     } catch (err) {
@@ -106,6 +123,7 @@ export function useOwnerCommandCounts(): OwnerCommandCounts {
         partial.highRiskTickets = countOwnerHighRiskTickets(rows);
         partial.openDisputes = openRows.filter((ticket) => String(ticket?.status || '').toUpperCase().includes('DISPUT') || String(ticket?.evidenceStatus || '').toUpperCase().includes('DISPUT')).length;
         partial.monthlyCostVariancePct = monthlyCostVariance(rows);
+        partial._pendingTicketSignOffs = countOwnerPendingSignOffs(rows);
         publish();
       }, (err) => {
         console.warn('[OwnerCommandCounts] ticket listener failed:', err);
@@ -113,6 +131,7 @@ export function useOwnerCommandCounts(): OwnerCommandCounts {
         partial.highRiskTickets = 0;
         partial.openDisputes = 0;
         partial.monthlyCostVariancePct = null;
+        partial._pendingTicketSignOffs = 0;
         publish();
       }));
     } catch (err) {

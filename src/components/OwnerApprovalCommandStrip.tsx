@@ -45,7 +45,7 @@ export default function OwnerApprovalCommandStrip({
       : 'Open maintenance issues that can affect comfort or asset value.');
 
   const cards = [
-    { id: 'approvals', label: ar ? 'موافقات التكلفة' : 'Cost approvals', value: asCount(pendingCostApprovals), icon: <CheckSquare size={22} />, route: '/owner/approvals', help: ar ? 'إصلاحات تنتظر قرار المالك.' : 'Repairs waiting for owner decision.' },
+    { id: 'approvals', label: ar ? 'الموافقات المعلقة' : 'Pending approvals', value: asCount(pendingCostApprovals), icon: <CheckSquare size={22} />, route: '/owner/approvals', help: ar ? 'إغلاق تذاكر وتكاليف تنتظر قرار المالك.' : 'Ticket sign-offs and cost decisions waiting for you.' },
     { id: 'risk', label: ar ? 'تذاكر مفتوحة' : 'Open tickets', value: openMaintenance, icon: <AlertTriangle size={22} />, route: '/owner/tickets', help: riskHelp },
     { id: 'disputes', label: ar ? 'الاعتراضات' : 'Disputes', value: asCount(openDisputes), icon: <Wrench size={22} />, route: '/owner/complaint', help: ar ? 'شكاوى مفتوحة أو عناصر قيد مراجعة الخدمة.' : 'Open complaint or service review items.' },
     { id: 'documents', label: ar ? 'مستندات قاربت الانتهاء' : 'Expiring docs', value: asCount(expiringDocuments), icon: <FileWarning size={22} />, route: '/owner/documents', help: ar ? 'عقود أو ضمانات أو تأمين أو شهادات تحتاج إلى مراجعة.' : 'Contracts, warranties, insurance, or certificates needing review.' },

@@ -21,6 +21,7 @@ import { useRole } from '../../context/RoleContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import LiveTechnicianTrackingCard from '../../components/tracking/LiveTechnicianTrackingCard';
+import { isOwnerPendingSignOff } from '../utils/ownerPendingSignOff';
 
 const STATUS_COLORS: Record<string, string> = {
     open: 'rgba(255,255,255,0.4)',
@@ -153,7 +154,7 @@ export default function OwnerTicketDetailPage() {
         ...(Array.isArray(ticket.evidencePhotos) ? ticket.evidencePhotos : []),
         ...(ticket.afterPhotoUrl ? [ticket.afterPhotoUrl] : []),
     ].filter(Boolean);
-    const canReviewCompleted = ['COMPLETED', 'COMPLETED_PENDING_APPROVAL', 'COMPLETED_PENDING_TENANT_APPROVAL', 'RESOLVED'].includes(normalizedStatus) && ticket.ownerApproved !== true;
+    const canReviewCompleted = isOwnerPendingSignOff(ticket);
     const canEscalateOpen = ['OPEN', 'PENDING_ASSIGNMENT', 'ASSIGNED', 'ACCEPTED', 'EN_ROUTE', 'ARRIVED', 'IN_PROGRESS', 'WAITING_PARTS', 'REOPENED'].includes(normalizedStatus);
     const selectedActionNeedsReason = reviewAction && reviewAction !== 'APPROVE_CLOSE';
 

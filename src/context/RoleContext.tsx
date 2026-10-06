@@ -77,8 +77,12 @@ interface RoleContextType {
 
 const RoleContext = createContext<RoleContextType | undefined>(undefined);
 const AUTH_BOOT_TIMEOUT_MS = 8000;
+// Soft boot holds while a persisted session is still proving itself. Hard deadline
+// must still fail-closed so hard reload cannot stick on AUTHENTICATING forever.
+const AUTH_BOOT_HARD_DEADLINE_MS = 16000;
 const PROFILE_READ_MAX_ATTEMPTS = 4;
 const PROFILE_READ_RETRY_BASE_MS = 450;
+const PROFILE_OP_TIMEOUT_MS = 6000;
 const VALID_PORTAL_ROLES = new Set(['owner', 'tenant', 'technician', 'broker', 'admin', 'super_admin', 'ceo', 'manager', 'operations_admin', 'finance_admin', 'hr_admin', 'support_admin', 'hr_manager', 'hr_staff', 'finance_staff', 'account_manager', 'dispatcher', 'operations_manager', 'auditor']);
 
 const ADMIN_ROLES = new Set([
@@ -144,22 +148,37 @@ const profileReadCanRecover = (error: unknown): boolean => {
         message.includes('connection');
 };
 
+const sleep = (ms: number) => new Promise<void>((resolve) => window.setTimeout(resolve, ms));
+
+const withTimeout = <T,>(promise: Promise<T>, ms: number, label: string): Promise<T> =>
+    new Promise<T>((resolve, reject) => {
+        const timer = window.setTimeout(() => reject(new Error(label)), ms);
+        promise.then(
+            (value) => {
+                window.clearTimeout(timer);
+                resolve(value);
+            },
+            (error) => {
+                window.clearTimeout(timer);
+                reject(error);
+            },
+        );
+    });
+
 const refreshSecureSessionProof = async (currentUser: User): Promise<void> => {
-    await currentUser.getIdToken(true);
+    await withTimeout(currentUser.getIdToken(true), PROFILE_OP_TIMEOUT_MS, 'Secure session token refresh timeout');
     if (appCheck) {
-        await forceNativeAppCheckRefresh();
-        await getAppCheckToken(appCheck, true);
+        await withTimeout(forceNativeAppCheckRefresh(), PROFILE_OP_TIMEOUT_MS, 'Native App Check refresh timeout');
+        await withTimeout(getAppCheckToken(appCheck, true), PROFILE_OP_TIMEOUT_MS, 'App Check token timeout');
     }
 };
-
-const sleep = (ms: number) => new Promise<void>((resolve) => window.setTimeout(resolve, ms));
 
 const readOwnProfileWithRecovery = async (currentUser: User, userDocRef: ReturnType<typeof doc>) => {
     let lastError: unknown;
 
     for (let attempt = 1; attempt <= PROFILE_READ_MAX_ATTEMPTS; attempt += 1) {
         try {
-            return await getDoc(userDocRef);
+            return await withTimeout(getDoc(userDocRef), PROFILE_OP_TIMEOUT_MS, 'Own-profile read timeout');
         } catch (error) {
             lastError = error;
             const code = profileReadErrorCode(error) || 'unknown';
@@ -228,12 +247,14 @@ export function RoleProvider({ children }: { children: ReactNode }) {
         profileSyncInFlightRef.current += 1;
         console.log("[AUTH_DIAG] syncProfile started for:", currentUser.uid);
         try {
-            const tokenPromise = currentUser.getIdTokenResult(true);
-            const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("Token Sync Timeout")), 5000));
+            // Prefer cached claims on hard reload. Force-refresh only happens in
+            // bounded recovery when the own-profile read needs a fresh proof.
+            const tokenPromise = currentUser.getIdTokenResult(false);
+            const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("Token Sync Timeout")), PROFILE_OP_TIMEOUT_MS));
 
             const tokenResult: any = await Promise.race([tokenPromise, timeoutPromise]).catch(err => {
-                console.warn("[AUTH] Token refresh failed or timed out. Proceeding with cached claims.", err);
-                return currentUser.getIdTokenResult(false);
+                console.warn("[AUTH] Cached claims read failed or timed out. Trying one bounded forced refresh.", err);
+                return withTimeout(currentUser.getIdTokenResult(true), PROFILE_OP_TIMEOUT_MS, "Forced token sync timeout");
             });
 
             const claims = tokenResult.claims || {};
@@ -409,12 +430,27 @@ export function RoleProvider({ children }: { children: ReactNode }) {
 
     useEffect(() => {
         let unsubscribe: () => void = () => {};
+        const releaseBootFailClosed = () => {
+            if (!loadingRef.current) return;
+            // Never treat a hung restore as logout: keep the persisted user stub and
+            // surface a recoverable profile_unavailable state (same as refreshRole).
+            const currentUser = auth.currentUser;
+            console.warn("[AUTH_DIAG] Auth sync hard deadline. Releasing portal gate fail-closed.");
+            if (currentUser) {
+                setStatus('profile_unavailable');
+                setError("PROFILE UNAVAILABLE: Secure account verification timed out. Retry before entering a portal.");
+                setUser((existingUser) => existingUser || ({ ...currentUser, status: 'profile_unavailable' } as SovereignUser));
+            }
+            setLoading(false);
+            markGlobalAuthReady();
+        };
+
         const timeoutId = window.setTimeout(() => {
             if (!loadingRef.current) return;
             // ProtectedRoute treats loading=false and user=null as a logout.
             // A persisted session can still be inside onAuthStateChanged or
             // syncProfile after 8s (token race plus profile retries), so the
-            // boot timer must not open that path while either is in progress.
+            // soft boot timer must not open that path while either is in progress.
             if (profileSyncInFlightRef.current > 0 || auth.currentUser) {
                 console.warn("[AUTH_DIAG] Auth sync still proving a persisted session. Holding the portal gate.");
                 return;
@@ -426,6 +462,8 @@ export function RoleProvider({ children }: { children: ReactNode }) {
             console.warn("[AUTH_DIAG] Auth sync timeout with no persisted session. Releasing blocker.");
             setLoading(false);
         }, AUTH_BOOT_TIMEOUT_MS);
+
+        const hardDeadlineId = window.setTimeout(releaseBootFailClosed, AUTH_BOOT_HARD_DEADLINE_MS);
 
         const initAuth = async () => {
             console.log("[AUTH_DIAG] Initializing Sovereign Identity Bridge...");
@@ -465,6 +503,7 @@ export function RoleProvider({ children }: { children: ReactNode }) {
         return () => {
             if (unsubscribe) unsubscribe();
             window.clearTimeout(timeoutId);
+            window.clearTimeout(hardDeadlineId);
         };
     }, []);
 
