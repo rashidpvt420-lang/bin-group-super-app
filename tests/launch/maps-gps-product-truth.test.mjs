@@ -14,6 +14,7 @@ const ownerTicketDetail = read('src/owner/pages/OwnerTicketDetailPage.tsx');
 const liveTracking = read('src/utils/liveTracking.ts');
 const gpsRetryQueue = read('src/utils/gpsRetryQueue.ts');
 const locationCallable = read('functions/technicianLiveLocation.ts');
+const functionsIndex = read('functions/index.ts');
 const firestoreRules = read('firestore.rules');
 const indexes = JSON.parse(read('firestore.indexes.json'));
 const ruleHardener = read('scripts/harden-technician-live-location-authority.mjs');
@@ -119,6 +120,16 @@ test('Owner mobile ticket surfaces technician tracking before complaint details 
   assert.ok(gridIndex > mobileTrackingIndex);
   assert.match(ownerTicketDetail, /\['ACCEPTED', 'ASSIGNED', 'TECHNICIAN_ASSIGNED', 'EN_ROUTE', 'ON_THE_WAY', 'ARRIVED', 'IN_PROGRESS', 'WORK_STARTED'\]/);
   assert.match(ownerTicketDetail, /display: \{ xs: 'none', lg: 'block' \}/);
+});
+
+test('Owner receives lifecycle notifications including technician arrival from the server trigger', () => {
+  assert.match(functionsIndex, /export const onTicketStatusChanged = onDocumentUpdated/);
+  assert.match(functionsIndex, /const ownerId: string = after\.ownerId \|\| after\.ownerUid/);
+  assert.match(functionsIndex, /dispatchOmniNotification\(ownerId, title, body/);
+  assert.match(functionsIndex, /url: `\/owner\/ticket\/\$\{ticketId\}`/);
+  assert.match(functionsIndex, /Technician On The Way/);
+  assert.match(functionsIndex, /Technician Arrived/);
+  assert.match(functionsIndex, /has arrived at \$\{prop\}/);
 });
 
 test('Technician GPS client uses protected callable with durable STOP and short-lived UPDATE queues', () => {
