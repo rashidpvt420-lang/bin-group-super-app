@@ -194,6 +194,8 @@ test('application evidence workflow is protected and auto-discovers fixed produc
   assert.doesNotMatch(preparation, /where\('e2eLaunchSeed', '==', true\)/);
   assert.match(preparation, /ownerProfile\.testAccount === true \|\| ownerProfile\.e2eLaunchSeed === true/);
   assert.match(preparation, /where\('status', '==', 'APPROVED'\)/);
+  assert.match(preparation, /\['all', 'paymentUnlockExactlyOnce'\]\.includes\(selectedGate\)/);
+  assert.match(preparation, /await createApprovedBrokerActivationFixture\(\{ db, apiKey, appId, debugToken \}\)/);
   assert.match(preparation, /paymentVerified === true && data\.unlocksDashboard === true/);
   assert.match(preparation, /upper\(data\.feeType\) === 'MOBILIZATION_DEPOSIT'/);
   assert.match(preparation, /commissionQuery\.size !== 1/);
@@ -203,7 +205,7 @@ test('application evidence workflow is protected and auto-discovers fixed produc
   assert.doesNotMatch(preparation, /collection\('broker_commissions'\)\.doc\([^)]*\)\.set/);
   assert.doesNotMatch(preparation, /collection\('auditLogs'\)\.doc\([^)]*\)\.set/);
 
-  assert.match(frozenWrapper, /REVIEWED_APPLICATION_PREPARATION_BLOB = '2c894303cd9a3e8ce586c284260301bedd646e55'/);
+  assert.match(frozenWrapper, /REVIEWED_APPLICATION_PREPARATION_BLOB = '415294295d80f52f08e63c9fc1799f323fb778d3'/);
   assert.match(frozenWrapper, /assertReviewedApplicationPreparation\(releaseRoot\)/);
   assert.match(frozenWrapper, /resolveApplicationEvidenceActor\(env\)/);
   assert.doesNotThrow(() => assertReviewedApplicationPreparationSource(preparation));
