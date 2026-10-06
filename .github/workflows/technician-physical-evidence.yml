@@ -431,7 +431,8 @@ jobs:
             if (devicePattern && !devicePattern.test(device)) reasons.push('device-platform-mismatch');
             if (!Number.isFinite(createdMs)) reasons.push('created-at-invalid');
             else {
-              if (createdMs < deployCompletedMs) reasons.push('created-before-frozen-deploy');
+              const createdAfterFrozenDeploy = createdMs >= deployCompletedMs;
+              if (!createdAfterFrozenDeploy) reasons.push('created-before-frozen-deploy');
               if (createdMs > now + 5 * 60 * 1000) reasons.push('created-in-future');
               if (now - createdMs > MAX_AGE_MS) reasons.push('record-older-than-30-days');
             }
