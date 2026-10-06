@@ -213,6 +213,23 @@ export default function OwnerTicketDetailPage() {
                 />
             </Stack>
 
+            {['ACCEPTED', 'ASSIGNED', 'TECHNICIAN_ASSIGNED', 'EN_ROUTE', 'ON_THE_WAY', 'ARRIVED', 'IN_PROGRESS', 'WORK_STARTED'].includes(normalizedStatus) && (
+                <Box sx={{ display: { xs: 'block', lg: 'none' }, mb: 3 }}>
+                    <LiveTechnicianTrackingCard
+                        ticket={ticket}
+                        onChatClick={ticket.assignedTechnicianId
+                            ? () => navigate(`/owner/chat/${ticket.id}`)
+                            : undefined
+                        }
+                        onCallClick={() => {
+                            const phone = ticket.assignedTechnicianPhone || ticket.technicianPhone;
+                            if (phone) window.open(`tel:${phone}`);
+                        }}
+                        showTimeline={false}
+                    />
+                </Box>
+            )}
+
             <Grid container spacing={4}>
                 {/* Left: Ticket Details */}
                 <Grid item xs={12} lg={8}>
@@ -411,7 +428,7 @@ export default function OwnerTicketDetailPage() {
                 </Grid>
 
                 {/* Right: Live Tracking Card */}
-                <Grid item xs={12} lg={4}>
+                <Grid item xs={12} lg={4} sx={{ display: { xs: 'none', lg: 'block' } }}>
                     <Box sx={{ mb: 3 }}>
                         <LiveTechnicianTrackingCard
                             ticket={ticket}
