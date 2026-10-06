@@ -10,6 +10,7 @@ const adminMapsLoader = read('apps/admin-panel/src/lib/googleMaps.ts');
 const technicianCommandCenter = read('apps/admin-panel/src/components/ops/TechnicianCommandCenter.tsx');
 const technicianMap = read('src/technician/pages/TechnicianMapPage.tsx');
 const trackingSummary = read('src/components/tracking/LiveTechnicianTrackingCard.tsx');
+const ownerTicketDetail = read('src/owner/pages/OwnerTicketDetailPage.tsx');
 const liveTracking = read('src/utils/liveTracking.ts');
 const gpsRetryQueue = read('src/utils/gpsRetryQueue.ts');
 const locationCallable = read('functions/technicianLiveLocation.ts');
@@ -97,15 +98,27 @@ test('Technician mission map distinguishes data failure from an empty authentica
   assert.doesNotMatch(technicianMap, /setJobs\(\[\]\);\s*setLoading\(false\);\s*}\);/);
 });
 
-test('Owner and Tenant tracking card identifies schematic and freshness limitations', () => {
-  assert.match(trackingSummary, /LOCATION SUMMARY - NOT A STREET MAP/);
+test('Owner and Tenant tracking card renders live map while preserving freshness truth and fallback', () => {
+  assert.match(trackingSummary, /LIVE TECHNICIAN TRACKING/);
+  assert.match(trackingSummary, /data-testid="technician-live-map"/);
+  assert.match(trackingSummary, /new google\.maps\.Map/);
+  assert.match(trackingSummary, /new google\.maps\.DirectionsService/);
+  assert.match(trackingSummary, /TravelMode\.DRIVING/);
   assert.match(trackingSummary, /FRESH FOREGROUND GPS/);
   assert.match(trackingSummary, /GPS STALE/);
-  assert.match(trackingSummary, /rough arrival estimate/i);
   assert.match(trackingSummary, /approximate straight-line distance/i);
+  assert.match(trackingSummary, /Embedded map unavailable\. Use Google Maps below for navigation/);
   assert.match(trackingSummary, /Open in Google Maps/);
-  assert.doesNotMatch(trackingSummary, />\s*LIVE\s*</);
-  assert.doesNotMatch(trackingSummary, /~\$\{etaMin\} min ETA/);
+  assert.doesNotMatch(trackingSummary, /LOCATION SUMMARY - NOT A STREET MAP/);
+});
+
+test('Owner mobile ticket surfaces technician tracking before complaint details while desktop keeps the side panel', () => {
+  const mobileTrackingIndex = ownerTicketDetail.indexOf("display: { xs: 'block', lg: 'none' }");
+  const gridIndex = ownerTicketDetail.indexOf('<Grid container spacing={4}>');
+  assert.ok(mobileTrackingIndex >= 0);
+  assert.ok(gridIndex > mobileTrackingIndex);
+  assert.match(ownerTicketDetail, /\['ACCEPTED', 'ASSIGNED', 'TECHNICIAN_ASSIGNED', 'EN_ROUTE', 'ON_THE_WAY', 'ARRIVED', 'IN_PROGRESS', 'WORK_STARTED'\]/);
+  assert.match(ownerTicketDetail, /display: \{ xs: 'none', lg: 'block' \}/);
 });
 
 test('Technician GPS client uses protected callable with durable STOP and short-lived UPDATE queues', () => {
