@@ -250,7 +250,7 @@ export default function SimpleStartPage() {
                   {ar ? 'EN' : 'AR'}
                 </Button>
                 <Chip icon={<ShieldCheck size={16} />} label={ar ? 'BIN GROUP · إدارة العقارات والصيانة' : 'BIN GROUP · Property Management & Maintenance'} sx={{ bgcolor: alpha(binThemeTokens.gold, 0.15), color: binThemeTokens.goldHover, fontWeight: 950 }} />
-                <Typography variant="h2" sx={{ color: '#111827', fontWeight: 950, letterSpacing: -1.2, lineHeight: 1.08, maxWidth: 860 }}>
+                <Typography component="h1" variant="h2" sx={{ color: '#111827', fontWeight: 950, letterSpacing: -1.2, lineHeight: 1.08, maxWidth: 860 }}>
                   {ar ? 'كيف تريد أن نساعدك اليوم؟' : 'How can we help you today?'}
                 </Typography>
                 <Typography sx={{ color: '#667085', fontWeight: 750, lineHeight: 1.8, maxWidth: 820 }}>
