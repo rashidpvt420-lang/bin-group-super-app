@@ -1,8 +1,8 @@
 /**
  * BIN GROUP - LiveTechnicianTrackingCard
- * Shared Owner/Tenant tracking summary. This component does not render a
- * street map or road route; it displays verified points, freshness,
- * straight-line distance and an external Google Maps route link.
+ * Shared Owner/Tenant live tracking surface. It renders an embedded Google
+ * map for verified job and technician coordinates, preserves GPS freshness
+ * truth, and keeps an external Google Maps route fallback.
  */
 import React, { useEffect, useRef } from 'react';
 import {
