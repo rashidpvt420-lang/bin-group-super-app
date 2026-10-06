@@ -34,10 +34,12 @@ import {
   CircularProgress
 } from '@mui/material';
 import { db, functions } from '../../lib/firebase';
-import { collection, query, orderBy, limit, where, getDocs, updateDoc, doc, serverTimestamp } from 'firebase/firestore';
+import { collection, query, orderBy, limit, where, getDocs, onSnapshot, updateDoc, doc, serverTimestamp } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { useLanguage } from '@bin/shared';
 import { UserCheck, Wrench } from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
+import { ticketLifecycleStage } from '../../lib/ticketLifecycleStage';
 
 interface Ticket {
   ticketId: string;
@@ -62,21 +64,45 @@ interface Ticket {
   ownerId?: string;
   unitNumber?: string;
   floorNumber?: string;
+  dispatchStatus?: string;
+  assignmentError?: string;
+  assignmentReasonCode?: string;
+  technicianId?: string;
 }
 
 interface Technician {
     id: string;
     displayName: string;
     specialization?: string;
-    isOffDuty?: boolean;
+    trade?: string;
+    primaryTrade?: string;
+    emirate?: string;
+    onDuty?: boolean;
+    dutyStatus?: string;
+}
+
+// Callable failures carry the server's reason (e.g. readiness, GPS, MFA). Show it instead of a
+// generic message so Admin knows what to fix.
+function callableErrorMessage(err: any, fallback: string): string {
+  const message = String(err?.message || '').replace(/^Firebase:\s*/i, '').trim();
+  const code = String(err?.code || '').replace(/^functions\//, '');
+  if (!message) return fallback;
+  return code && !message.includes(code) ? `${message} (${code})` : message;
+}
+
+function technicianOnDuty(tech: Technician): boolean {
+  return tech.onDuty === true && String(tech.dutyStatus || 'ON_DUTY').toUpperCase() !== 'OFF_DUTY';
 }
 
 export default function TicketsManagementPage() {
   const { t, isRTL } = useLanguage();
   const [tickets, setTickets] = useState<Ticket[]>([]);
+  const [searchParams] = useSearchParams();
   const [filterStatus, setFilterStatus] = useState('');
   const [filterPriority, setFilterPriority] = useState('');
-  const [searchTerm, setSearchTerm] = useState('');
+  // Dispatch alerts link to /tickets?ticketId=<id>; open the page filtered to that ticket.
+  const [searchTerm, setSearchTerm] = useState(() => searchParams.get('ticketId') || '');
+  const [assignError, setAssignError] = useState('');
   
   // Restore Mission States
   const [assigningTicket, setAssigningTicket] = useState<Ticket | null>(null);
@@ -107,28 +133,29 @@ export default function TicketsManagementPage() {
       propertyName: data.propertyName || 'Private Asset',
       propertyId: data.propertyId || 'UNASSOCIATED',
       unitNumber: data.unitNumber || 'N/A',
-      floorNumber: data.floorNumber || 'N/A'
+      floorNumber: data.floorNumber || 'N/A',
+      dispatchStatus: data.dispatchStatus || '',
+      assignmentError: data.assignmentError || '',
+      assignmentReasonCode: data.assignmentReasonCode || '',
+      technicianId: data.technicianId || '',
     } as Ticket;
   };
 
+  // Live: status, assignment and dispatch alerts update without a page reload.
   useEffect(() => {
-    let cancelled = false;
-    const fetchInitial = async () => {
-      setLoading(true);
+    setLoading(true);
+    setLoadError('');
+    const q = query(collection(db, 'maintenanceTickets'), orderBy('createdAt', 'desc'), limit(PAGE_SIZE));
+    const unsubscribe = onSnapshot(q, (snap) => {
+      setTickets(snap.docs.map(mapTicket));
       setLoadError('');
-      try {
-        const q = query(collection(db, 'maintenanceTickets'), orderBy('createdAt', 'desc'), limit(PAGE_SIZE));
-        const snap = await getDocs(q);
-        if (!cancelled) setTickets(snap.docs.map(mapTicket));
-      } catch (err: any) {
-        console.error('[AdminTickets] initial load failed:', err);
-        if (!cancelled) setLoadError(err?.message || 'Unable to load maintenance tickets.');
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    };
-    void fetchInitial();
-    return () => { cancelled = true; };
+      setLoading(false);
+    }, (err: any) => {
+      console.error('[AdminTickets] live load failed:', err);
+      setLoadError(err?.message || 'Unable to load maintenance tickets.');
+      setLoading(false);
+    });
+    return unsubscribe;
   }, []);
 
 
@@ -139,12 +166,14 @@ export default function TicketsManagementPage() {
           const snap = await getDocs(q);
           const techs = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Technician));
           setTechnicians(techs);
-      } catch (err) {
+      } catch (err: any) {
           console.error("Failed to fetch technicians:", err);
+          setAssignError(callableErrorMessage(err, 'Unable to load technicians.'));
       }
   };
 
   const handleOpenAssign = (ticket: Ticket) => {
+      setAssignError('');
       setAssigningTicket(ticket);
       fetchTechnicians();
   };
@@ -178,9 +207,9 @@ export default function TicketsManagementPage() {
 
           await updateDoc(ticketRef, updateData);
           setDetailTicket(null);
-      } catch (err) {
+      } catch (err: any) {
           console.error("Update failed:", err);
-          alert("Error: Failed to update estimate.");
+          alert(`Failed to update estimate: ${callableErrorMessage(err, 'Unknown error.')}`);
       }
   };
 
@@ -199,20 +228,12 @@ export default function TicketsManagementPage() {
               ticketId: assigningTicket.ticketId,
               technicianId: tech.id,
           });
+          setAssignError('');
           setAssigningTicket(null);
-      } catch (err) {
+      } catch (err: any) {
           console.error("Assignment failed:", err);
-          alert("Institutional Error: Failed to lock technician assignment.");
+          setAssignError(callableErrorMessage(err, 'Failed to assign the technician.'));
       }
-  };
-
-  const getStatusColor = (status: string) => {
-    const s = status.toUpperCase();
-    if (s === 'OPEN') return 'error';
-    if (s === 'ASSIGNED' || s === 'EN_ROUTE' || s === 'IN_PROGRESS') return 'warning';
-    if (s === 'COMPLETED') return 'success';
-    if (s === 'DELAYED') return 'error';
-    return 'default';
   };
 
   const getPriorityColor = (priority: string) => {
@@ -228,7 +249,8 @@ export default function TicketsManagementPage() {
     const matchesSearch = searchTerm === '' || 
         ticket.ticketId.toLowerCase().includes(searchTerm.toLowerCase()) ||
         ticket.unit.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        ticket.category.toLowerCase().includes(searchTerm.toLowerCase());
+        ticket.category.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        ticket.description.toLowerCase().includes(searchTerm.toLowerCase());
     
     const matchesStatus = filterStatus === '' || ticket.status === filterStatus;
     const matchesPriority = filterPriority === '' || ticket.priority === filterPriority;
@@ -318,6 +340,12 @@ export default function TicketsManagementPage() {
         <StatCard label={t('tech.resolved')} value={tickets.filter(t => t.status === 'COMPLETED').length} color="#10b981" isRTL={isRTL} />
       </Grid>
 
+      {tickets.some((ticket) => ticketLifecycleStage(ticket).needsManualDispatch) && (
+        <Alert severity="error" sx={{ mb: 3, fontWeight: 700 }}>
+          {tickets.filter((ticket) => ticketLifecycleStage(ticket).needsManualDispatch).length} ticket(s) could not be auto-assigned and need manual dispatch.
+        </Alert>
+      )}
+
       {/* Tickets Table */}
       <TableContainer component={Paper} elevation={0} sx={{ border: '1px solid rgba(0,0,0,0.05)', borderRadius: 4 }}>
         <Table>
@@ -350,7 +378,8 @@ export default function TicketsManagementPage() {
                     <TableCell sx={{ color: '#64748b', textAlign: isRTL ? 'right' : 'left' }}>{ticket.floorNumber || 'N/A'}</TableCell>
                     <TableCell sx={{ textAlign: isRTL ? 'right' : 'left' }}>{ticket.category}</TableCell>
                     <TableCell sx={{ textAlign: isRTL ? 'right' : 'left' }}>
-                      <Chip label={ticket.status} color={getStatusColor(ticket.status) as any} size="small" sx={{ fontWeight: 'bold', fontSize: 10 }} />
+                      <Chip label={ticketLifecycleStage(ticket).label} color={ticketLifecycleStage(ticket).tone as any} size="small" sx={{ fontWeight: 'bold', fontSize: 10 }} />
+                      <Typography variant="caption" display="block" sx={{ color: '#64748b', mt: 0.5 }}>{ticket.status}</Typography>
                     </TableCell>
                     <TableCell sx={{ textAlign: isRTL ? 'right' : 'left' }}>
                       <Chip label={ticket.priority} color={getPriorityColor(ticket.priority) as any} size="small" variant="outlined" sx={{ fontWeight: 'bold', fontSize: 10 }} />
@@ -359,8 +388,17 @@ export default function TicketsManagementPage() {
                     <TableCell sx={{ textAlign: isRTL ? 'right' : 'left' }}>
                         {ticket.assignedTechnicianName ? (
                             <Chip icon={<UserCheck size={14} />} label={ticket.assignedTechnicianName} size="small" color="primary" variant="outlined" />
+                        ) : ticket.assignedTechnicianId ? (
+                            <Chip icon={<UserCheck size={14} />} label={ticket.assignedTechnicianId.slice(0, 10)} size="small" color="primary" variant="outlined" />
                         ) : (
-                            <Typography variant="caption" sx={{ fontStyle: 'italic', color: 'error.main' }}>UNASSIGNED</Typography>
+                            <Box>
+                                <Typography variant="caption" sx={{ fontStyle: 'italic', color: 'error.main', display: 'block' }}>
+                                    {ticketLifecycleStage(ticket).needsManualDispatch ? 'NEEDS MANUAL DISPATCH' : 'UNASSIGNED'}
+                                </Typography>
+                                {ticketLifecycleStage(ticket).reason && (
+                                    <Typography variant="caption" sx={{ color: '#64748b', display: 'block', maxWidth: 220 }}>{ticketLifecycleStage(ticket).reason}</Typography>
+                                )}
+                            </Box>
                         )}
                     </TableCell>
                     <TableCell align={isRTL ? 'left' : 'right'}>
@@ -403,6 +441,9 @@ export default function TicketsManagementPage() {
               <Typography variant="body2" sx={{ mb: 3, color: 'text.secondary' }}>
                   Select a verified specialist from the Technician Corps to handle Mission #{assigningTicket?.ticketId.substring(0,8).toUpperCase()}.
               </Typography>
+              {assignError && (
+                  <Alert severity="error" sx={{ mb: 2 }} data-testid="assign-error">{assignError}</Alert>
+              )}
               <List>
                       {technicians.map(tech => (
                           <ListItem 
@@ -412,16 +453,16 @@ export default function TicketsManagementPage() {
                             sx={{ border: '1px solid rgba(0,0,0,0.05)', borderRadius: 2, mb: 1 }}
                           >
                               <ListItemAvatar>
-                                  <Avatar sx={{ bgcolor: tech.isOffDuty ? 'grey.400' : 'success.main' }}>
+                                  <Avatar sx={{ bgcolor: technicianOnDuty(tech) ? 'success.main' : 'grey.400' }}>
                                       <Wrench size={20} />
                                   </Avatar>
                               </ListItemAvatar>
                               <ListItemText 
                                 primary={tech.displayName} 
-                                secondary={tech.specialization || 'General Maintenance'} 
+                                secondary={[tech.specialization || tech.primaryTrade || tech.trade || 'General Maintenance', tech.emirate].filter(Boolean).join(' · ')} 
                                 primaryTypographyProps={{ fontWeight: 900 }}
                               />
-                              {tech.isOffDuty && <Chip label="OFF DUTY" size="small" />}
+                              {!technicianOnDuty(tech) && <Chip label="OFF DUTY" size="small" />}
                           </ListItem>
                       ))}
                       {technicians.length === 0 && <Typography variant="body2" sx={{ textAlign: 'center', py: 2, fontStyle: 'italic' }}>No specialists found in this sector.</Typography>}
@@ -442,6 +483,19 @@ export default function TicketsManagementPage() {
                           <Typography variant="caption" color="textSecondary" fontWeight="bold">DESCRIPTION</Typography>
                           <Typography variant="body1">{detailTicket.description}</Typography>
                       </Box>
+                      <Grid container spacing={2}>
+                          <Grid item xs={6}>
+                              <Typography variant="caption" color="textSecondary" fontWeight="bold">STAGE</Typography>
+                              <Typography variant="body2">{ticketLifecycleStage(detailTicket).label} ({detailTicket.status})</Typography>
+                          </Grid>
+                          <Grid item xs={6}>
+                              <Typography variant="caption" color="textSecondary" fontWeight="bold">ASSIGNED TECHNICIAN</Typography>
+                              <Typography variant="body2">{detailTicket.assignedTechnicianName || detailTicket.assignedTechnicianId || 'Unassigned'}</Typography>
+                          </Grid>
+                      </Grid>
+                      {ticketLifecycleStage(detailTicket).needsManualDispatch && (
+                          <Alert severity="error">Auto-assignment failed: {ticketLifecycleStage(detailTicket).reason}</Alert>
+                      )}
                       <Grid container spacing={2}>
                           <Grid item xs={6}>
                               <Typography variant="caption" color="textSecondary" fontWeight="bold">PROPERTY</Typography>
