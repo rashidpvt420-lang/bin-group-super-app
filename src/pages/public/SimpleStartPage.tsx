@@ -439,7 +439,7 @@ export default function SimpleStartPage() {
               <Button onClick={() => navigate('/support')} sx={{ color: alpha(gold, 0.7), fontWeight: 800, textTransform: 'none' }}>{ar ? 'الدعم' : 'Support'}</Button>
               <Button onClick={() => navigate('/privacy')} sx={{ color: alpha(gold, 0.7), fontWeight: 800, textTransform: 'none' }}>{ar ? 'الخصوصية' : 'Privacy'}</Button>
               <Button onClick={() => navigate('/terms')} sx={{ color: alpha(gold, 0.7), fontWeight: 800, textTransform: 'none' }}>{ar ? 'الشروط' : 'Terms'}</Button>
-              <Button onClick={() => navigate('/login?intendedRole=admin')} sx={{ color: alpha(gold, 0.7), fontWeight: 800, textTransform: 'none' }}>{ar ? 'دخول الإدارة' : 'Admin Login'}</Button>
+              <Button onClick={() => navigate('/admin')} sx={{ color: alpha(gold, 0.7), fontWeight: 800, textTransform: 'none' }}>{ar ? 'دخول الإدارة' : 'Admin Login'}</Button>
             </Stack>
           </Stack>
         </Container>
