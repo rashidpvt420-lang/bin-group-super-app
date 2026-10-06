@@ -1010,6 +1010,15 @@ async function main() {
     if (selectedGate === 'renewalScheduler') return;
   }
 
+  // paymentUnlockExactlyOnce must prove a replay against a fresh, run-scoped
+  // activation created under the current Phase 1 payment configuration. Reusing
+  // an arbitrary historical APPROVED payment makes the replay sensitive to
+  // legitimate later policy/geo drift and does not prove current idempotency.
+  if (['all', 'paymentUnlockExactlyOnce'].includes(selectedGate)) {
+    await createApprovedBrokerActivationFixture({ db, apiKey, appId, debugToken });
+    if (selectedGate === 'paymentUnlockExactlyOnce') return;
+  }
+
   if (['all', 'brokerCommissionLockExactlyOnce'].includes(selectedGate)) {
     await prepareBrokerCommissionEvidence({ db, auth, apiKey, appId, debugToken });
     if (selectedGate === 'brokerCommissionLockExactlyOnce') return;
