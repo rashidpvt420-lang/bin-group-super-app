@@ -6,6 +6,9 @@ import { binThemeTokens } from '../theme/binGroupTheme';
 
 type OwnerApprovalCommandStripProps = {
   pendingCostApprovals?: number;
+  /** Open maintenance tickets — must match advanced "Open Maintenance Tasks". */
+  openTickets?: number;
+  /** Priority subset (emergency/critical/high/urgent) of open tickets. */
   highRiskTickets?: number;
   openDisputes?: number;
   expiringDocuments?: number;
@@ -17,6 +20,7 @@ const asCount = (value: number | undefined) => Math.max(0, Number(value || 0));
 
 export default function OwnerApprovalCommandStrip({
   pendingCostApprovals = 0,
+  openTickets = 0,
   highRiskTickets = 0,
   openDisputes = 0,
   expiringDocuments = 0,
@@ -26,12 +30,23 @@ export default function OwnerApprovalCommandStrip({
   const navigate = useNavigate();
   const { lang } = useLanguage();
   const ar = lang === 'ar';
-  const urgentTotal = asCount(pendingCostApprovals) + asCount(highRiskTickets) + asCount(openDisputes) + asCount(expiringDocuments);
+  // Prefer openTickets (aligned with advanced). Fall back to highRiskTickets for older call sites.
+  const openMaintenance = asCount(openTickets) > 0 ? asCount(openTickets) : asCount(highRiskTickets);
+  const highRisk = asCount(highRiskTickets);
+  const urgentTotal = asCount(pendingCostApprovals) + openMaintenance + asCount(openDisputes) + asCount(expiringDocuments);
   const costVarianceAlert = typeof monthlyCostVariancePct === 'number' && Math.abs(monthlyCostVariancePct) >= 15;
+
+  const riskHelp = highRisk > 0
+    ? (ar
+      ? `${highRisk} عالية المخاطر من ${openMaintenance} مفتوحة — قد تؤثر في الراحة أو قيمة الأصل.`
+      : `${highRisk} high-risk of ${openMaintenance} open — issues that can affect comfort or asset value.`)
+    : (ar
+      ? 'مشكلات صيانة مفتوحة قد تؤثر في الراحة أو قيمة الأصل.'
+      : 'Open maintenance issues that can affect comfort or asset value.');
 
   const cards = [
     { id: 'approvals', label: ar ? 'الموافقات المعلقة' : 'Pending approvals', value: asCount(pendingCostApprovals), icon: <CheckSquare size={22} />, route: '/owner/approvals', help: ar ? 'إغلاق تذاكر وتكاليف تنتظر قرار المالك.' : 'Ticket sign-offs and cost decisions waiting for you.' },
-    { id: 'risk', label: ar ? 'طلبات عالية المخاطر' : 'High-risk tickets', value: asCount(highRiskTickets), icon: <AlertTriangle size={22} />, route: '/owner/tickets', help: ar ? 'مشكلات قد تؤثر في الراحة أو قيمة الأصل.' : 'Issues that can affect comfort or asset value.' },
+    { id: 'risk', label: ar ? 'تذاكر مفتوحة' : 'Open tickets', value: openMaintenance, icon: <AlertTriangle size={22} />, route: '/owner/tickets', help: riskHelp },
     { id: 'disputes', label: ar ? 'الاعتراضات' : 'Disputes', value: asCount(openDisputes), icon: <Wrench size={22} />, route: '/owner/complaint', help: ar ? 'شكاوى مفتوحة أو عناصر قيد مراجعة الخدمة.' : 'Open complaint or service review items.' },
     { id: 'documents', label: ar ? 'مستندات قاربت الانتهاء' : 'Expiring docs', value: asCount(expiringDocuments), icon: <FileWarning size={22} />, route: '/owner/documents', help: ar ? 'عقود أو ضمانات أو تأمين أو شهادات تحتاج إلى مراجعة.' : 'Contracts, warranties, insurance, or certificates needing review.' },
   ];
