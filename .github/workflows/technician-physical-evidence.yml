@@ -105,7 +105,7 @@ jobs:
               [[ "$frozen_sha" == "$FROZEN_RELEASE_SHA" ]]
               [[ "$source_run_id" == "$FROZEN_LIVE_EVIDENCE_RUN_ID" ]]
               ;;
-            application-current|application-repair-current|provider-baseline-current|provider-ai-current|privileged-rotation-current|technician-current)
+            application-current|application-repair-current|provider-baseline-current|provider-ai-current|privileged-rotation-current|technician-current|rebind-physical-current)
               validate_production_run
               ;;
             hard-clearance-current)
@@ -235,6 +235,9 @@ jobs:
                 > dispatch.json
               dispatch live-role-smoke.yml dispatch.json
               ;;
+            rebind-physical-current)
+              echo "[owner-evidence-dispatch] Protected physical-evidence rebinding is handled by the dedicated guarded job in this workflow."
+              ;;
             hard-clearance-current)
               expected_artifact="live-launch-evidence-$RELEASE_SHA"
               artifacts="$(gh api --paginate --slurp "repos/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN_ID/artifacts?per_page=100" | jq -ce '{artifacts:[.[].artifacts[]]}')"
@@ -271,6 +274,226 @@ jobs:
 
           rm -f dispatch.json
           echo "[owner-evidence-dispatch] PASS target=$TARGET control=$CONTROL_SHA release=$RELEASE_SHA sourceRun=$SOURCE_RUN_ID"
+
+  rebind-frozen-physical-evidence:
+    name: Rebind verified physical evidence to frozen release
+    if: >-
+      github.event_name == 'issue_comment' &&
+      github.event.issue.number == 434 &&
+      !github.event.issue.pull_request &&
+      github.event.comment.user.login == github.repository_owner &&
+      github.event.comment.author_association == 'OWNER' &&
+      startsWith(github.event.comment.body, '/bin-launch evidence rebind-physical-current ')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: hard-launch-operations
+    permissions:
+      contents: read
+      actions: read
+      id-token: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID || 'bin-group-57c60' }}
+      COMMAND_BODY: ${{ github.event.comment.body }}
+      EXPECTED_REPOSITORY: rashidpvt420-lang/bin-group-super-app
+      EXPECTED_DEPLOY_WORKFLOW_ID: '274595098'
+
+    steps:
+      - name: Validate owner rebind command
+        id: request
+        shell: bash
+        run: |
+          set -euo pipefail
+          read -r command namespace target control_sha frozen_sha deploy_run_id extra <<< "$COMMAND_BODY"
+          [[ "$command" == "/bin-launch" && "$namespace" == "evidence" && "$target" == "rebind-physical-current" ]]
+          [[ -z "${extra:-}" ]]
+          [[ "$control_sha" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$frozen_sha" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$deploy_run_id" =~ ^[0-9]+$ ]]
+          [[ "$COMMAND_BODY" == "/bin-launch evidence rebind-physical-current $control_sha $frozen_sha $deploy_run_id" ]]
+          current_main="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq '.object.sha')"
+          [[ "$current_main" == "$control_sha" ]]
+          [[ "$GITHUB_SHA" == "$control_sha" ]]
+          deploy_json="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$deploy_run_id")"
+          jq -e --arg sha "$frozen_sha" '
+            .name == "Firebase Production Deploy" and
+            .event == "workflow_dispatch" and
+            .status == "completed" and
+            .conclusion == "success" and
+            .head_branch == "main" and
+            .head_sha == $sha
+          ' <<<"$deploy_json" >/dev/null
+          deploy_completed_at="$(jq -er '.updated_at' <<<"$deploy_json")"
+          echo "control_sha=$control_sha" >> "$GITHUB_OUTPUT"
+          echo "frozen_sha=$frozen_sha" >> "$GITHUB_OUTPUT"
+          echo "deploy_run_id=$deploy_run_id" >> "$GITHUB_OUTPUT"
+          echo "deploy_completed_at=$deploy_completed_at" >> "$GITHUB_OUTPUT"
+
+      - name: Verify frozen deployment continuity
+        env:
+          FROZEN_SHA: ${{ steps.request.outputs.frozen_sha }}
+          DEPLOY_RUN_ID: ${{ steps.request.outputs.deploy_run_id }}
+          DEPLOY_COMPLETED_AT: ${{ steps.request.outputs.deploy_completed_at }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api --paginate --slurp             "repos/$GITHUB_REPOSITORY/actions/workflows/$EXPECTED_DEPLOY_WORKFLOW_ID/runs?per_page=100"             > deploy-pages.json
+          jq -e --arg id "$DEPLOY_RUN_ID" --arg sha "$FROZEN_SHA" '
+            [.[]?.workflow_runs[]? | select((.id|tostring) == $id and .head_sha == $sha and .conclusion == "success")] | length == 1
+          ' deploy-pages.json >/dev/null
+          later_successes="$(jq -r --arg completed "$DEPLOY_COMPLETED_AT" --arg id "$DEPLOY_RUN_ID" '
+            [.[]?.workflow_runs[]? |
+              select(.conclusion == "success" and .event == "workflow_dispatch" and .head_branch == "main") |
+              select(.updated_at > $completed and (.id|tostring) != $id)
+            ] | length
+          ' deploy-pages.json)"
+          [[ "$later_successes" == "0" ]] || {
+            echo "::error::A later successful Firebase Production Deploy exists; physical evidence cannot be rebound to the frozen release by continuity."
+            exit 1
+          }
+          echo "[physical-rebind] Frozen deployment continuity verified."
+
+      - name: Checkout current protected control plane
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.request.outputs.control_sha }}
+          persist-credentials: false
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Authenticate Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          create_credentials_file: true
+          export_environment_variables: true
+
+      - name: Install dependencies
+        run: bash scripts/npm-install-retry.sh
+
+      - name: Rebind only genuine existing physical-device records
+        env:
+          FROZEN_SHA: ${{ steps.request.outputs.frozen_sha }}
+          CONTROL_SHA: ${{ steps.request.outputs.control_sha }}
+          DEPLOY_RUN_ID: ${{ steps.request.outputs.deploy_run_id }}
+          DEPLOY_COMPLETED_AT: ${{ steps.request.outputs.deploy_completed_at }}
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          import admin from 'firebase-admin';
+          import crypto from 'node:crypto';
+
+          if (!admin.apps.length) admin.initializeApp({ projectId: process.env.GCP_PROJECT_ID || 'bin-group-57c60' });
+          const db = admin.firestore();
+          const releaseSha = String(process.env.FROZEN_SHA || '').trim().toLowerCase();
+          const controlSha = String(process.env.CONTROL_SHA || '').trim().toLowerCase();
+          const deployRunId = String(process.env.DEPLOY_RUN_ID || '').trim();
+          const deployCompletedMs = Date.parse(String(process.env.DEPLOY_COMPLETED_AT || ''));
+          const MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
+          const now = Date.now();
+          const gates = [
+            ['firebaseCloudMessaging', null],
+            ['googleMaps', null],
+            ['phase1Payments', null],
+            ['androidPwaSmoke', /android/i],
+            ['iosPwaSmoke', /iphone/i],
+            ['pdfMobileDownload', null],
+            ['arabicRtlAllCoreScreens', null],
+            ['everyButtonWritesFirestoreOrStorage', null],
+            ['logoutAllDashboards', null],
+          ];
+          const text = (v) => String(v ?? '').trim();
+          const toMs = (v) => {
+            if (!v) return NaN;
+            if (typeof v.toMillis === 'function') return v.toMillis();
+            if (Number.isFinite(Number(v?._seconds))) return Number(v._seconds) * 1000;
+            const parsed = Date.parse(String(v));
+            return Number.isFinite(parsed) ? parsed : NaN;
+          };
+          const validBase = (record, devicePattern) => {
+            const createdMs = toMs(record.createdAt);
+            const device = text(record.device);
+            return record.status === 'passed' &&
+              text(record.evidenceLayer).toLowerCase() === 'physical_device' &&
+              text(record.source).toLowerCase() === 'admin-manual-evidence' &&
+              record.executionGenerated === false &&
+              record.hardLaunchClaim === false &&
+              Boolean(text(record.testerName)) &&
+              Boolean(text(record.proofRef)) &&
+              Boolean(text(record.recordedBy)) &&
+              /^(https:\/\/(bin-group-57c60|bin-group-admin-panel)\.web\.app)(?:\/.*)?$/i.test(text(record.productionUrl)) &&
+              /(android|iphone|tablet|physical device)/i.test(device) &&
+              !/desktop/i.test(device) &&
+              (!devicePattern || devicePattern.test(device)) &&
+              Number.isFinite(createdMs) &&
+              createdMs >= deployCompletedMs &&
+              createdMs <= now + 5 * 60 * 1000 &&
+              now - createdMs <= MAX_AGE_MS;
+          };
+
+          if (!/^[0-9a-f]{40}$/.test(releaseSha) || !/^[0-9a-f]{40}$/.test(controlSha) || !/^\d+$/.test(deployRunId) || !Number.isFinite(deployCompletedMs)) {
+            throw new Error('protected rebind inputs are invalid');
+          }
+
+          const missing = [];
+          const rebound = [];
+          for (const [gateId, devicePattern] of gates) {
+            const exact = await db.collection('launch_evidence').where('releaseSha', '==', releaseSha).limit(500).get();
+            const exactMatch = exact.docs
+              .map((doc) => ({ id: doc.id, ...(doc.data() || {}) }))
+              .find((record) => text(record.gateId) === gateId && validBase(record, devicePattern));
+            if (exactMatch) {
+              rebound.push({ gateId, status: 'already-exact', sourceDocumentId: exactMatch.id });
+              continue;
+            }
+
+            const snapshot = await db.collection('launch_evidence').where('gateId', '==', gateId).limit(200).get();
+            const candidates = snapshot.docs
+              .map((doc) => ({ id: doc.id, ...(doc.data() || {}) }))
+              .filter((record) => validBase(record, devicePattern))
+              .sort((a, b) => toMs(b.createdAt) - toMs(a.createdAt));
+            const candidate = candidates[0];
+            if (!candidate) {
+              missing.push(gateId);
+              continue;
+            }
+
+            const deterministicId = crypto.createHash('sha256')
+              .update(['physical-rebind-v1', releaseSha, gateId, candidate.id].join('|'))
+              .digest('hex');
+            const target = db.collection('launch_evidence').doc(deterministicId);
+            const existing = await target.get();
+            if (!existing.exists) {
+              const sourceRelease = text(candidate.releaseSha || candidate.commitSha);
+              await target.create({
+                ...candidate,
+                releaseSha,
+                commitSha: releaseSha,
+                controlPlaneCommitSha: controlSha,
+                source: 'admin-manual-evidence',
+                executionGenerated: false,
+                hardLaunchClaim: false,
+                metadataReboundByWorkflow: true,
+                metadataReboundVersion: 1,
+                reboundFromDocumentId: candidate.id,
+                reboundFromReleaseSha: sourceRelease || null,
+                deploymentContinuityRunId: deployRunId,
+                deploymentContinuityVerified: true,
+                reboundAt: admin.firestore.FieldValue.serverTimestamp(),
+              });
+            }
+            rebound.push({ gateId, status: 'rebound', sourceDocumentId: candidate.id, targetDocumentId: deterministicId });
+          }
+
+          console.log(JSON.stringify({ releaseSha, controlSha, deployRunId, rebound, missing }, null, 2));
+          if (missing.length) {
+            throw new Error('No genuine physical-device record exists for: ' + missing.join(', '));
+          }
+          NODE
 
   verify-physical-evidence:
     if: github.event_name == 'workflow_dispatch'
