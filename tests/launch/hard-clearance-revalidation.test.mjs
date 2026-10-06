@@ -863,6 +863,8 @@ test('hard clearance keeps physical-device gates fail-closed unless exact review
   assert.match(reconciler, /if \(missingPhysicalGates\.length\)/);
   assert.match(reconciler, /physical-device evidence is still incomplete/);
   assert.match(reconciler, /requiredDeviceGates\.technicianGpsTracking/);
+  assert.match(reconciler, /materializeProtectedTechnicianGate/);
+  assert.match(reconciler, /protected-technician-operational-evidence/);
   assert.match(reconciler, /real protected technician GPS mission proof is missing/);
   assert.match(reconciler, /physicalDeviceGatesModified: reconciledPhysicalGates\.length > 0/);
 
@@ -903,6 +905,7 @@ test('hard clearance promotes only exact-SHA reviewed physical evidence and requ
   assert.match(reconciler, /record\.hardLaunchClaim !== false/);
   assert.match(reconciler, /requiredDeviceGates\.technicianGpsTracking/);
   assert.match(reconciler, /technicianGpsAndDeniedFallback/);
+  assert.match(reconciler, /materializeProtectedTechnicianGate/);
   assert.match(reconciler, /real protected technician GPS mission proof is missing/);
   assert.match(reconciler, /evidenceType\) === 'physical-device-report'/);
   assert.match(reconciler, /verifiedBy\) === 'workflow'/);
@@ -1038,10 +1041,9 @@ test('missing physical proofs produce eleven actionable blockers and never publi
   assert.equal(result.files.has('/fixture/launch_package/launch-proof-gates.json'), false);
 });
 
-test('invalid physical metadata and missing protected technician proof remain separate blockers', async () => {
+test('invalid manual metadata and missing protected technician proof remain separate blockers', async () => {
   const result = await runPhysicalReconciliationFixture([
     physicalFixtureRecord('googleMaps', { evidenceLayer: 'hosted' }),
-    physicalFixtureRecord('technicianGpsAndDeniedFallback'),
   ]);
   const googleMaps = result.report.gates.find((gate) => gate.commandCenterGateId === 'googleMaps');
   assert.equal(googleMaps.reason, 'current-release-records-do-not-satisfy-physical-validation');
@@ -1051,14 +1053,40 @@ test('invalid physical metadata and missing protected technician proof remain se
   assert.equal(result.files.has('/fixture/launch_package/launch-proof-gates.json'), false);
 });
 
+test('protected exact-SHA technician physical proof satisfies technician GPS gate without a redundant manual record', async () => {
+  const result = await runPhysicalReconciliationFixture([], {
+    status: 'passed',
+    releaseCommitSha: 'b'.repeat(40),
+    commitSha: 'b'.repeat(40),
+    controlPlaneCommitSha: 'c'.repeat(40),
+    evidenceType: 'physical-device-report',
+    verifiedBy: 'workflow',
+    observedAt: new Date().toISOString(),
+    evidenceReference: 'https://github.com/rashidpvt420-lang/bin-group-super-app/actions/runs/123#technicianPhysicalGpsEvidence',
+    sourceWorkflowRunId: '123',
+    sourceSystem: 'Firebase technician physical device GPS lifecycle and Cloud Storage',
+    artifactHash: 'sha256:' + 'a'.repeat(64),
+  });
+  const technician = result.report.gates.find((gate) => gate.commandCenterGateId === 'technicianGpsAndDeniedFallback');
+  assert.equal(technician.status, 'passed');
+  assert.equal(technician.source, 'protected-technician-operational-evidence');
+  assert.equal(result.report.status, 'blocked');
+  assert.equal(result.files.has('/fixture/launch_package/launch-proof-gates.json'), false);
+});
+
 test('complete exact-SHA physical proofs preserve the successful reconciliation path', async () => {
   const gates = ['firebaseCloudMessaging', 'googleMaps', 'phase1Payments', 'androidPwaSmoke', 'iosPwaSmoke',
-    'technicianGpsAndDeniedFallback', 'pdfMobileDownload', 'arabicRtlAllCoreScreens',
+    'pdfMobileDownload', 'arabicRtlAllCoreScreens',
     'everyButtonWritesFirestoreOrStorage', 'logoutAllDashboards'];
   const result = await runPhysicalReconciliationFixture(gates.map((gate) => physicalFixtureRecord(gate,
     gate === 'iosPwaSmoke' ? { device: 'iPhone physical device' } : {})), {
     status: 'passed', releaseCommitSha: 'b'.repeat(40), commitSha: 'b'.repeat(40),
     controlPlaneCommitSha: 'c'.repeat(40), evidenceType: 'physical-device-report', verifiedBy: 'workflow',
+    observedAt: new Date().toISOString(),
+    evidenceReference: 'https://github.com/rashidpvt420-lang/bin-group-super-app/actions/runs/123#technicianPhysicalGpsEvidence',
+    sourceWorkflowRunId: '123',
+    sourceSystem: 'Firebase technician physical device GPS lifecycle and Cloud Storage',
+    artifactHash: 'sha256:' + 'a'.repeat(64),
   });
   assert.equal(result.error, undefined);
   assert.equal(result.report.status, 'passed');
