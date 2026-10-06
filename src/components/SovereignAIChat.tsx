@@ -434,6 +434,7 @@ export const SovereignAIChat: React.FC<SovereignAIChatProps> = ({
       <Fab
         data-testid="sovereign-ai-open"
         aria-label="Move or open Sovereign AI chat"
+        title="Move or open Sovereign AI chat"
         onPointerDown={handleFabPointerDown}
         onPointerMove={handleFabPointerMove}
         onPointerUp={finishFabDrag}
@@ -446,7 +447,13 @@ export const SovereignAIChat: React.FC<SovereignAIChatProps> = ({
         }}
         sx={{ position: 'fixed', left: fabPosition.x, top: fabPosition.y, width: FAB_SIZE, height: FAB_SIZE, bgcolor: binThemeTokens.gold, color: '#000', boxShadow: `0 0 30px ${alpha(binThemeTokens.gold, 0.4)}`, '&:hover': { bgcolor: binThemeTokens.goldLight, transform: dragRef.current.dragging ? 'none' : 'scale(1.05)' }, zIndex: 2500, touchAction: 'none', cursor: dragRef.current.dragging ? 'grabbing' : 'grab', transition: dragRef.current.dragging ? 'none' : 'transform 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease' }}
       >
-        <Stack alignItems="center" spacing={0} sx={{ lineHeight: 1 }}><Sparkles size={22} /><Grip size={11} /></Stack>
+        <Stack alignItems="center" spacing={0} sx={{ lineHeight: 1 }}>
+          <span style={{ position: 'absolute', width: 1, height: 1, padding: 0, margin: -1, overflow: 'hidden', clip: 'rect(0, 0, 0, 0)', whiteSpace: 'nowrap', border: 0 }}>
+            Move or open Sovereign AI chat
+          </span>
+          <Sparkles size={22} aria-hidden />
+          <Grip size={11} aria-hidden />
+        </Stack>
       </Fab>
 
       {isMobile ? (
