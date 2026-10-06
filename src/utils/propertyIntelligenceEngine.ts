@@ -1,3 +1,5 @@
+import { summarizeOwnerVerifiedNoi } from '../../functions/shared/propertyPassportAggregation.mjs';
+
 export type TruthStatus = 'LIVE' | 'VERIFIED' | 'ESTIMATED' | 'FORECAST' | 'MISSING';
 
 export interface TruthMetric {
@@ -70,26 +72,17 @@ export function resolveDigitalTwin(properties: any[]) {
 }
 
 export function resolveOwnerFinancialTruth(properties: any[], contract: any = {}) {
-  const annualRentalIncome = properties.reduce(
-    (sum, p) => sum + firstPositive(p?.annualRentalIncome, p?.annualRent, p?.rentAnnual, p?.expectedAnnualRent),
-    0,
-  );
+  // VERIFIED NOI shares the Owner Financial Truth aggregator so the dashboard
+  // card, financials page, and advanced intelligence cannot diverge.
+  const noiSummary = summarizeOwnerVerifiedNoi(properties);
+  const annualRentalIncome = noiSummary.annualRentalIncome || 0;
   const recordedRentCollected = properties.reduce(
     (sum, p) => sum + firstPositive(p?.rentCollectedTotal, p?.rentCollected, p?.totalRentCollected),
     0,
   );
-  const maintenanceCost = properties.reduce(
-    (sum, p) => sum + firstPositive(p?.maintenanceCostTotal, p?.maintenanceCost, p?.annualMaintenanceCost),
-    0,
-  );
-  const operatingExpenses = properties.reduce(
-    (sum, p) => sum + firstPositive(p?.operatingExpenses, p?.annualOperatingExpenses, p?.opex),
-    0,
-  );
-  const managementFees = properties.reduce(
-    (sum, p) => sum + firstPositive(p?.managementFeesTotal, p?.annualManagementFees),
-    0,
-  );
+  const maintenanceCost = noiSummary.maintenanceCost || 0;
+  const operatingExpenses = noiSummary.operatingExpenses || 0;
+  const managementFees = noiSummary.managementFees || 0;
   const explicitValue = properties.reduce(
     (sum, p) => sum + firstPositive(p?.purchasePrice, p?.acquisitionCost, p?.bookValue),
     0,
@@ -101,9 +94,7 @@ export function resolveOwnerFinancialTruth(properties: any[], contract: any = {}
   const propertyValue = explicitValue || estimatedValue;
   const valueStatus: TruthStatus = explicitValue > 0 ? 'VERIFIED' : estimatedValue > 0 ? 'ESTIMATED' : 'MISSING';
 
-  const noi = annualRentalIncome > 0
-    ? Math.max(0, annualRentalIncome - maintenanceCost - operatingExpenses - managementFees)
-    : null;
+  const noi = noiSummary.verifiedNoi;
   const grossYield = annualRentalIncome > 0 && propertyValue > 0 ? (annualRentalIncome / propertyValue) * 100 : null;
   const netYield = noi !== null && propertyValue > 0 ? (noi / propertyValue) * 100 : null;
 
@@ -138,8 +129,8 @@ export function resolveOwnerFinancialTruth(properties: any[], contract: any = {}
     },
     noi: {
       value: noi,
-      status: noi !== null ? 'VERIFIED' as TruthStatus : 'MISSING' as TruthStatus,
-      basis: 'Annual rent less recorded maintenance, operating expenses and management fees',
+      status: (noiSummary.status === 'VERIFIED' ? 'VERIFIED' : 'MISSING') as TruthStatus,
+      basis: noiSummary.basis,
     },
     grossYield: {
       value: grossYield,

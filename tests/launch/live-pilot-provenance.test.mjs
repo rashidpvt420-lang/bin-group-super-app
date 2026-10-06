@@ -70,6 +70,10 @@ test('hard-clearance workflow derives timestamps and cannot trust manual pilot d
 
   assert.match(workflow, /Verify live-evidence run provenance and enforce a real 24-hour pilot/);
   assert.match(workflow, /node scripts\/resolve-live-pilot-window\.mjs/);
+  assert.match(workflow, /actions\/runs\/\$run_id\/attempts\/1/);
+  assert.match(workflow, /\.run_attempt == 1/);
+  assert.match(resolver, /actions\/runs\/\$\{runId\}\/attempts\/1/);
+  assert.match(resolver, /Number\(run\?\.run_attempt\) !== 1/);
   assert.doesNotMatch(workflow, /PILOT_STARTED_AT:\s*\$\{\{ inputs\.pilot_started_at \}\}/);
   assert.doesNotMatch(workflow, /PILOT_COMPLETED_AT:\s*\$\{\{ inputs\.pilot_completed_at \}\}/);
   assert.match(workflow, /launch_package\/live-evidence-provenance\.json/);

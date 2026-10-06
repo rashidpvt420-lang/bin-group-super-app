@@ -155,3 +155,136 @@ export function summarizeOwnerPassportFinancials(passports, feeRate = 0.05) {
     propertyCount: unique.length,
   };
 }
+
+const PAID_INVOICE_STATUSES = new Set([
+  "PAID",
+  "VERIFIED",
+  "ADMIN_VERIFIED",
+  "APPROVED",
+  "SETTLED",
+  "RECONCILED",
+  "COMPLETED",
+  "SUCCESS",
+]);
+
+function firstPositiveMoney(record, keys) {
+  if (!record || typeof record !== "object") return 0;
+  for (const key of keys) {
+    if (!Object.prototype.hasOwnProperty.call(record, key)) continue;
+    const raw = record[key];
+    if (raw === undefined || raw === null || raw === "") continue;
+    const amount = Number(String(raw).replace(/[^0-9.-]/g, ""));
+    if (Number.isFinite(amount) && amount > 0) return roundAed(amount);
+  }
+  return 0;
+}
+
+function normalizeInvoiceStatus(invoice) {
+  return String(invoice?.status || "")
+    .trim()
+    .toUpperCase()
+    .replace(/[\s-]+/g, "_");
+}
+
+/**
+ * Sum Owner invoices that are recorded as paid/verified.
+ * Mobilization deposits and service invoices are cash facts — they must not be
+ * silently ignored when passport rent ledgers are still zero.
+ */
+export function summarizeOwnerPaidInvoices(invoices = []) {
+  let total = 0;
+  let count = 0;
+  for (const invoice of invoices || []) {
+    const status = normalizeInvoiceStatus(invoice);
+    const verifiedFlag = invoice?.paymentVerified === true || invoice?.paid === true;
+    if (!PAID_INVOICE_STATUSES.has(status) && !verifiedFlag) continue;
+    const amount = firstFiniteMoney(invoice, ["amount", "amountPaid", "total", "grandTotal", "invoiceAmount"]) ?? 0;
+    if (!(amount > 0)) continue;
+    total = roundAed(total + amount);
+    count += 1;
+  }
+  return { total, count };
+}
+
+/**
+ * Same VERIFIED NOI basis as Owner advanced intelligence:
+ * annual rent less recorded maintenance, operating expenses and management fees.
+ * Returns null NOI when annual rent is missing — never invents income.
+ */
+export function summarizeOwnerVerifiedNoi(properties = []) {
+  const rows = Array.isArray(properties) ? properties : [];
+  let annualRentalIncome = 0;
+  let maintenanceCost = 0;
+  let operatingExpenses = 0;
+  let managementFees = 0;
+  for (const property of rows) {
+    annualRentalIncome = roundAed(
+      annualRentalIncome + firstPositiveMoney(property, ["annualRentalIncome", "annualRent", "rentAnnual", "expectedAnnualRent"]),
+    );
+    maintenanceCost = roundAed(
+      maintenanceCost + firstPositiveMoney(property, ["maintenanceCostTotal", "maintenanceCost", "annualMaintenanceCost"]),
+    );
+    operatingExpenses = roundAed(
+      operatingExpenses + firstPositiveMoney(property, ["operatingExpenses", "annualOperatingExpenses", "opex"]),
+    );
+    managementFees = roundAed(
+      managementFees + firstPositiveMoney(property, ["managementFeesTotal", "annualManagementFees"]),
+    );
+  }
+  const verifiedNoi = annualRentalIncome > 0
+    ? roundAed(Math.max(0, annualRentalIncome - maintenanceCost - operatingExpenses - managementFees))
+    : null;
+  return {
+    annualRentalIncome: annualRentalIncome > 0 ? annualRentalIncome : null,
+    maintenanceCost: maintenanceCost > 0 ? maintenanceCost : null,
+    operatingExpenses: operatingExpenses > 0 ? operatingExpenses : null,
+    managementFees: managementFees > 0 ? managementFees : null,
+    verifiedNoi,
+    status: verifiedNoi !== null ? "VERIFIED" : "MISSING",
+    basis: verifiedNoi !== null
+      ? "Annual rent less recorded maintenance, operating expenses and management fees"
+      : "Annual rent data is not recorded yet",
+  };
+}
+
+/**
+ * Owner Financial Truth surface: passport rent cash + paid invoices + VERIFIED NOI.
+ * Does not treat mobilization invoices as rent payable to the owner.
+ */
+export function buildOwnerFinancialTruthSummary({
+  passports = [],
+  invoices = [],
+  properties = [],
+  feeRate = 0.05,
+} = {}) {
+  const rent = summarizeOwnerPassportFinancials(passports, feeRate);
+  const paidInvoices = summarizeOwnerPaidInvoices(invoices);
+  const noi = summarizeOwnerVerifiedNoi(properties);
+  const hasRentCash = rent.totalRevenue > 0 || rent.netPayout > 0;
+  const hasVerifiedNoi = noi.verifiedNoi !== null;
+  const hasPaidInvoices = paidInvoices.total > 0;
+  let primaryKind = "empty";
+  let primaryValue = 0;
+  if (hasRentCash) {
+    primaryKind = "net_payout";
+    primaryValue = rent.netPayout;
+  } else if (hasVerifiedNoi) {
+    primaryKind = "verified_noi";
+    primaryValue = noi.verifiedNoi;
+  } else if (hasPaidInvoices) {
+    primaryKind = "paid_invoices";
+    primaryValue = paidInvoices.total;
+  }
+  return {
+    ...rent,
+    paidInvoiceTotal: paidInvoices.total,
+    paidInvoiceCount: paidInvoices.count,
+    annualRentalIncome: noi.annualRentalIncome,
+    verifiedNoi: noi.verifiedNoi,
+    verifiedNoiStatus: noi.status,
+    verifiedNoiBasis: noi.basis,
+    primaryKind,
+    primaryValue,
+    hasRecordedFinancials: hasRentCash || hasVerifiedNoi || hasPaidInvoices || rent.propertyCount > 0,
+  };
+}
