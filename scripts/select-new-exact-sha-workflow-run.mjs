@@ -22,7 +22,7 @@ function validCreatedAt(value) {
   return { text, epoch };
 }
 
-export function selectNewExactShaWorkflowRun({ runs, baselineRunIds, expectedSha }) {
+export function selectNewExactShaWorkflowRun({ runs, baselineRunIds, expectedSha, notBefore }) {
   const sha = String(expectedSha || '').trim();
   if (!SHA_PATTERN.test(sha)) {
     throw new Error('expectedSha must be a lowercase 40-character commit SHA.');
@@ -33,11 +33,13 @@ export function selectNewExactShaWorkflowRun({ runs, baselineRunIds, expectedSha
   if (!Array.isArray(baselineRunIds)) {
     throw new Error('baselineRunIds must be a JSON array.');
   }
+  const lowerBound = notBefore === undefined ? null : validCreatedAt(notBefore).epoch;
 
   const baseline = new Set(
     baselineRunIds.map((id, index) => positiveRunId(id, `baselineRunIds[${index}]`)),
   );
   const candidates = [];
+  const uniqueCandidates = new Map();
 
   for (const run of runs) {
     if (!run || typeof run !== 'object') continue;
@@ -57,6 +59,18 @@ export function selectNewExactShaWorkflowRun({ runs, baselineRunIds, expectedSha
       throw new Error('New exact-SHA workflow run has a malformed html_url.');
     }
     const createdAt = validCreatedAt(run.created_at);
+    // The baseline list can lag behind GitHub's run index. A run that predates
+    // this dispatch is never its result, even when it was absent from that list.
+    // Keep the baseline exclusion and reject multiple genuinely new runs.
+    if (lowerBound !== null && createdAt.epoch < lowerBound) continue;
+    const provenance = JSON.stringify([runSha, runUrl, createdAt.text]);
+    if (uniqueCandidates.has(runId)) {
+      if (uniqueCandidates.get(runId) !== provenance) {
+        throw new Error('Conflicting provenance for the same workflow run ID.');
+      }
+      continue;
+    }
+    uniqueCandidates.set(runId, provenance);
 
     candidates.push({
       runId,
@@ -84,8 +98,9 @@ export function selectNewExactShaWorkflowRun({ runs, baselineRunIds, expectedSha
 function main() {
   const expectedSha = String(process.argv[2] || '').trim();
   const baselinePath = String(process.argv[3] || '').trim();
+  const notBefore = process.argv[4];
   if (!baselinePath) {
-    console.error('Usage: select-new-exact-sha-workflow-run.mjs <expected-sha> <baseline-json-file>');
+    console.error('Usage: select-new-exact-sha-workflow-run.mjs <expected-sha> <baseline-json-file> [not-before]');
     process.exit(1);
   }
 
@@ -94,7 +109,7 @@ function main() {
   try {
     runs = JSON.parse(readFileSync(0, 'utf8'));
     baselineRunIds = JSON.parse(readFileSync(baselinePath, 'utf8'));
-    const selected = selectNewExactShaWorkflowRun({ runs, baselineRunIds, expectedSha });
+    const selected = selectNewExactShaWorkflowRun({ runs, baselineRunIds, expectedSha, notBefore });
     if (!selected) process.exit(2);
     process.stdout.write(`${JSON.stringify(selected)}\n`);
   } catch (error) {

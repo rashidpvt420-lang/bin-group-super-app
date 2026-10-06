@@ -51,9 +51,9 @@ jobs:
       COMMAND_BODY: ${{ github.event.comment.body }}
       EXPECTED_REPOSITORY: rashidpvt420-lang/bin-group-super-app
       EXPECTED_REPOSITORY_ID: '1173943093'
-      FROZEN_RELEASE_SHA: 7667ff54f9c43e07f78b3710578cd132b1bc7963
-      FROZEN_DEPLOY_RUN_ID: '35520810688'
-      FROZEN_LIVE_EVIDENCE_RUN_ID: '35529478370'
+      FROZEN_RELEASE_SHA: bb4df313df36e1636423ed90e8a77c990a6c50ff
+      FROZEN_DEPLOY_RUN_ID: '36977950876'
+      FROZEN_LIVE_EVIDENCE_RUN_ID: '36995600275'
     steps:
       - name: Validate exact owner command and current main
         id: command
@@ -105,7 +105,7 @@ jobs:
               [[ "$frozen_sha" == "$FROZEN_RELEASE_SHA" ]]
               [[ "$source_run_id" == "$FROZEN_LIVE_EVIDENCE_RUN_ID" ]]
               ;;
-            application-current|application-repair-current|provider-baseline-current|provider-ai-current|privileged-rotation-current|technician-current)
+            application-current|application-repair-current|provider-baseline-current|provider-ai-current|privileged-rotation-current|technician-current|rebind-physical-current)
               validate_production_run
               ;;
             hard-clearance-current)
@@ -225,7 +225,7 @@ jobs:
               dispatch technician-physical-evidence.yml dispatch.json
               ;;
             hard-clearance)
-              clearance_payload='{"confirmation":"AUTHORIZE_HARD_PUBLIC_LAUNCH_BIN_GROUP","incident_confirmation":"NO_OPEN_P0_P1","rollback_confirmation":"ROLLBACK_PLAN_VERIFIED","open_p0":"0","open_p1":"0","incident_reference":"https://github.com/rashidpvt420-lang/bin-group-super-app/actions/runs/35529478370","rollback_reference":"https://github.com/rashidpvt420-lang/bin-group-super-app/actions/runs/35520810688","monitoring_reference":"https://github.com/rashidpvt420-lang/bin-group-super-app/issues/1166"}'
+              clearance_payload='{"confirmation":"AUTHORIZE_HARD_PUBLIC_LAUNCH_BIN_GROUP","incident_confirmation":"NO_OPEN_P0_P1","rollback_confirmation":"ROLLBACK_PLAN_VERIFIED","open_p0":"0","open_p1":"0","incident_reference":"https://github.com/rashidpvt420-lang/bin-group-super-app/actions/runs/36995600275","rollback_reference":"https://github.com/rashidpvt420-lang/bin-group-super-app/actions/runs/36977950876","monitoring_reference":"https://github.com/rashidpvt420-lang/bin-group-super-app/issues/1166"}'
               jq -n \
                 --arg ref main \
                 --arg release "$RELEASE_SHA" \
@@ -234,6 +234,9 @@ jobs:
                 '{ref:$ref,inputs:{mode:"hard-clearance",expected_commit_sha:$release,production_deploy_run_id:"",live_evidence_run_id:$live,clearance_payload_json:$payload}}' \
                 > dispatch.json
               dispatch live-role-smoke.yml dispatch.json
+              ;;
+            rebind-physical-current)
+              echo "[owner-evidence-dispatch] Protected physical-evidence rebinding is handled by the dedicated guarded job in this workflow."
               ;;
             hard-clearance-current)
               expected_artifact="live-launch-evidence-$RELEASE_SHA"
@@ -271,6 +274,247 @@ jobs:
 
           rm -f dispatch.json
           echo "[owner-evidence-dispatch] PASS target=$TARGET control=$CONTROL_SHA release=$RELEASE_SHA sourceRun=$SOURCE_RUN_ID"
+
+  rebind-frozen-physical-evidence:
+    name: Rebind verified physical evidence to frozen release
+    if: >-
+      github.event_name == 'issue_comment' &&
+      github.event.issue.number == 434 &&
+      !github.event.issue.pull_request &&
+      github.event.comment.user.login == github.repository_owner &&
+      github.event.comment.author_association == 'OWNER' &&
+      startsWith(github.event.comment.body, '/bin-launch evidence rebind-physical-current ')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: hard-launch-operations
+    permissions:
+      contents: read
+      actions: read
+      id-token: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID || 'bin-group-57c60' }}
+      COMMAND_BODY: ${{ github.event.comment.body }}
+      EXPECTED_REPOSITORY: rashidpvt420-lang/bin-group-super-app
+      EXPECTED_DEPLOY_WORKFLOW_ID: '274595098'
+
+    steps:
+      - name: Validate owner rebind command
+        id: request
+        shell: bash
+        run: |
+          set -euo pipefail
+          read -r command namespace target control_sha frozen_sha deploy_run_id extra <<< "$COMMAND_BODY"
+          [[ "$command" == "/bin-launch" && "$namespace" == "evidence" && "$target" == "rebind-physical-current" ]]
+          [[ -z "${extra:-}" ]]
+          [[ "$control_sha" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$frozen_sha" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$deploy_run_id" =~ ^[0-9]+$ ]]
+          [[ "$COMMAND_BODY" == "/bin-launch evidence rebind-physical-current $control_sha $frozen_sha $deploy_run_id" ]]
+          current_main="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq '.object.sha')"
+          [[ "$current_main" == "$control_sha" ]]
+          [[ "$GITHUB_SHA" == "$control_sha" ]]
+          deploy_json="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$deploy_run_id")"
+          jq -e --arg sha "$frozen_sha" '
+            .name == "Firebase Production Deploy" and
+            .event == "workflow_dispatch" and
+            .status == "completed" and
+            .conclusion == "success" and
+            .head_branch == "main" and
+            .head_sha == $sha
+          ' <<<"$deploy_json" >/dev/null
+          deploy_completed_at="$(jq -er '.updated_at' <<<"$deploy_json")"
+          echo "control_sha=$control_sha" >> "$GITHUB_OUTPUT"
+          echo "frozen_sha=$frozen_sha" >> "$GITHUB_OUTPUT"
+          echo "deploy_run_id=$deploy_run_id" >> "$GITHUB_OUTPUT"
+          echo "deploy_completed_at=$deploy_completed_at" >> "$GITHUB_OUTPUT"
+
+      - name: Verify frozen deployment continuity
+        env:
+          FROZEN_SHA: ${{ steps.request.outputs.frozen_sha }}
+          DEPLOY_RUN_ID: ${{ steps.request.outputs.deploy_run_id }}
+          DEPLOY_COMPLETED_AT: ${{ steps.request.outputs.deploy_completed_at }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api --paginate --slurp             "repos/$GITHUB_REPOSITORY/actions/workflows/$EXPECTED_DEPLOY_WORKFLOW_ID/runs?per_page=100"             > deploy-pages.json
+          jq -e --arg id "$DEPLOY_RUN_ID" --arg sha "$FROZEN_SHA" '
+            [.[]?.workflow_runs[]? | select((.id|tostring) == $id and .head_sha == $sha and .conclusion == "success")] | length == 1
+          ' deploy-pages.json >/dev/null
+          later_successes="$(jq -r --arg completed "$DEPLOY_COMPLETED_AT" --arg id "$DEPLOY_RUN_ID" '
+            [.[]?.workflow_runs[]? |
+              select(.conclusion == "success" and .event == "workflow_dispatch" and .head_branch == "main") |
+              select(.updated_at > $completed and (.id|tostring) != $id)
+            ] | length
+          ' deploy-pages.json)"
+          [[ "$later_successes" == "0" ]] || {
+            echo "::error::A later successful Firebase Production Deploy exists; physical evidence cannot be rebound to the frozen release by continuity."
+            exit 1
+          }
+          echo "[physical-rebind] Frozen deployment continuity verified."
+
+      - name: Checkout current protected control plane
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.request.outputs.control_sha }}
+          persist-credentials: false
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Authenticate Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          create_credentials_file: true
+          export_environment_variables: true
+
+      - name: Install dependencies
+        run: bash scripts/npm-install-retry.sh
+
+      - name: Rebind only genuine existing physical-device records
+        env:
+          FROZEN_SHA: ${{ steps.request.outputs.frozen_sha }}
+          CONTROL_SHA: ${{ steps.request.outputs.control_sha }}
+          DEPLOY_RUN_ID: ${{ steps.request.outputs.deploy_run_id }}
+          DEPLOY_COMPLETED_AT: ${{ steps.request.outputs.deploy_completed_at }}
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          import admin from 'firebase-admin';
+          import crypto from 'node:crypto';
+
+          if (!admin.apps.length) admin.initializeApp({ projectId: process.env.GCP_PROJECT_ID || 'bin-group-57c60' });
+          const db = admin.firestore();
+          const releaseSha = String(process.env.FROZEN_SHA || '').trim().toLowerCase();
+          const controlSha = String(process.env.CONTROL_SHA || '').trim().toLowerCase();
+          const deployRunId = String(process.env.DEPLOY_RUN_ID || '').trim();
+          const deployCompletedMs = Date.parse(String(process.env.DEPLOY_COMPLETED_AT || ''));
+          const MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
+          const now = Date.now();
+          const gates = [
+            ['firebaseCloudMessaging', null],
+            ['googleMaps', null],
+            ['phase1Payments', null],
+            ['androidPwaSmoke', /android/i],
+            ['iosPwaSmoke', /iphone/i],
+            ['pdfMobileDownload', null],
+            ['arabicRtlAllCoreScreens', null],
+            ['everyButtonWritesFirestoreOrStorage', null],
+            ['logoutAllDashboards', null],
+          ];
+          const text = (v) => String(v ?? '').trim();
+          const toMs = (v) => {
+            if (!v) return NaN;
+            if (typeof v.toMillis === 'function') return v.toMillis();
+            if (Number.isFinite(Number(v?._seconds))) return Number(v._seconds) * 1000;
+            const parsed = Date.parse(String(v));
+            return Number.isFinite(parsed) ? parsed : NaN;
+          };
+          const rejectionReasons = (record, devicePattern) => {
+            const createdMs = toMs(record.createdAt);
+            const device = text(record.device);
+            const reasons = [];
+            if (record.status !== 'passed') reasons.push('status-not-passed');
+            const physicalEvidenceLayer = text(record.evidenceLayer).toLowerCase() === 'physical_device';
+            if (!physicalEvidenceLayer) reasons.push('evidence-layer-not-physical-device');
+            const manualEvidenceSource = text(record.source).toLowerCase() === 'admin-manual-evidence';
+            if (!manualEvidenceSource) reasons.push('source-not-admin-manual-evidence');
+            if (record.executionGenerated !== false) reasons.push('execution-generated-must-be-false');
+            if (record.hardLaunchClaim !== false) reasons.push('hard-launch-claim-must-be-false');
+            if (!text(record.testerName)) reasons.push('tester-name-missing');
+            if (!text(record.proofRef)) reasons.push('proof-ref-missing');
+            if (!text(record.recordedBy)) reasons.push('recorded-by-missing');
+            if (!/^(https:\/\/(bin-group-57c60|bin-group-admin-panel)\.web\.app)(?:\/.*)?$/i.test(text(record.productionUrl))) reasons.push('production-url-invalid');
+            if (!/(android|iphone|tablet|physical device)/i.test(device) || /desktop/i.test(device)) reasons.push('device-not-physical');
+            if (devicePattern && !devicePattern.test(device)) reasons.push('device-platform-mismatch');
+            if (!Number.isFinite(createdMs)) reasons.push('created-at-invalid');
+            else {
+              const createdAfterFrozenDeploy = createdMs >= deployCompletedMs;
+              if (!createdAfterFrozenDeploy) reasons.push('created-before-frozen-deploy');
+              if (createdMs > now + 5 * 60 * 1000) reasons.push('created-in-future');
+              if (now - createdMs > MAX_AGE_MS) reasons.push('record-older-than-30-days');
+            }
+            return reasons;
+          };
+          const validBase = (record, devicePattern) => rejectionReasons(record, devicePattern).length === 0;
+          const summarizeRejections = (records, devicePattern) => {
+            const reasonCounts = {};
+            for (const record of records) {
+              for (const reason of rejectionReasons(record, devicePattern)) {
+                reasonCounts[reason] = (reasonCounts[reason] || 0) + 1;
+              }
+            }
+            return { totalRecords: records.length, reasonCounts };
+          };
+
+          if (!/^[0-9a-f]{40}$/.test(releaseSha) || !/^[0-9a-f]{40}$/.test(controlSha) || !/^\d+$/.test(deployRunId) || !Number.isFinite(deployCompletedMs)) {
+            throw new Error('protected rebind inputs are invalid');
+          }
+
+          const missing = [];
+          const rebound = [];
+          for (const [gateId, devicePattern] of gates) {
+            const exact = await db.collection('launch_evidence').where('releaseSha', '==', releaseSha).limit(500).get();
+            const exactMatch = exact.docs
+              .map((doc) => ({ id: doc.id, ...(doc.data() || {}) }))
+              .find((record) => text(record.gateId) === gateId && validBase(record, devicePattern));
+            if (exactMatch) {
+              rebound.push({ gateId, status: 'already-exact', sourceDocumentId: exactMatch.id });
+              continue;
+            }
+
+            const snapshot = await db.collection('launch_evidence').where('gateId', '==', gateId).limit(200).get();
+            const gateRecords = snapshot.docs
+              .map((doc) => ({ id: doc.id, ...(doc.data() || {}) }));
+            const candidates = gateRecords
+              .filter((record) => validBase(record, devicePattern))
+              .sort((a, b) => toMs(b.createdAt) - toMs(a.createdAt));
+            const candidate = candidates[0];
+            if (!candidate) {
+              console.log('[physical-rebind] rejected gate candidates', JSON.stringify({
+                gateId,
+                ...summarizeRejections(gateRecords, devicePattern),
+              }));
+              missing.push(gateId);
+              continue;
+            }
+
+            const deterministicId = crypto.createHash('sha256')
+              .update(['physical-rebind-v1', releaseSha, gateId, candidate.id].join('|'))
+              .digest('hex');
+            const target = db.collection('launch_evidence').doc(deterministicId);
+            const existing = await target.get();
+            if (!existing.exists) {
+              const sourceRelease = text(candidate.releaseSha || candidate.commitSha);
+              await target.create({
+                ...candidate,
+                releaseSha,
+                commitSha: releaseSha,
+                controlPlaneCommitSha: controlSha,
+                source: 'admin-manual-evidence',
+                executionGenerated: false,
+                hardLaunchClaim: false,
+                metadataReboundByWorkflow: true,
+                metadataReboundVersion: 1,
+                reboundFromDocumentId: candidate.id,
+                reboundFromReleaseSha: sourceRelease || null,
+                deploymentContinuityRunId: deployRunId,
+                deploymentContinuityVerified: true,
+                reboundAt: admin.firestore.FieldValue.serverTimestamp(),
+              });
+            }
+            rebound.push({ gateId, status: 'rebound', sourceDocumentId: candidate.id, targetDocumentId: deterministicId });
+          }
+
+          console.log(JSON.stringify({ releaseSha, controlSha, deployRunId, rebound, missing }, null, 2));
+          if (missing.length) {
+            throw new Error('No genuine physical-device record exists for: ' + missing.join(', '));
+          }
+          NODE
 
   verify-physical-evidence:
     if: github.event_name == 'workflow_dispatch'
@@ -342,8 +586,8 @@ jobs:
             }
             echo "Exact same-SHA release/control-plane pair verified."
           else
-            allowed='^(\.github/workflows/firebase-production-deploy\.yml|\.github/workflows/current-main-expression-budget-repair\.yml|\.github/workflows/pr-validation\.yml|\.github/workflows/renewal-pdf-diagnostic-owner-bridge\.yml|\.github/workflows/renewal-pdf-runtime-diagnostic\.yml|\.github/workflows/repair-frozen-sovereign-ai-runtime\.yml|\.github/workflows/live-role-smoke\.yml|\.github/workflows/operational-application-evidence\.yml|\.github/workflows/operational-provider-evidence\.yml|\.github/workflows/privileged-access-rotation-evidence\.yml|\.github/workflows/technician-physical-evidence\.yml|scripts/finalize-operational-provider-evidence\.mjs|scripts/hard-clearance-production-revalidation\.mjs|scripts/launch-status\.mjs|scripts/publish-direct-operational-proof\.mjs|scripts/publish-operational-application-evidence\.mjs|scripts/publish-operational-provider-evidence\.mjs|scripts/resolve-admin-app-check-site-key\.mjs|scripts/run-frozen-release-evidence\.mjs|scripts/verify-ai-live-evidence\.mjs|scripts/verify-hard-launch-approval\.mjs|scripts/verify-operational-readiness\.mjs|tests/launch/ai-operational-contract\.test\.mjs|tests/launch/external-gate-production-provenance\.test\.mjs|tests/launch/final-operational-evidence-producers\.test\.mjs|tests/launch/hard-clearance-revalidation\.test\.mjs|tests/launch/operational-application-evidence-audit\.test\.mjs)$'
-            supplemental_allowed='^(scripts/hard-launch-status\.mjs|scripts/lib/hard-launch-control\.mjs|scripts/lib/operational-proof-schema\.mjs|scripts/prepare-operational-application-evidence\.mjs|scripts/print-hard-launch-blockers\.mjs|scripts/verify-operational-application-evidence\.mjs|scripts/verify-launch-clearance\.mjs|scripts/reconcile-hard-public-evidence\.mjs|tests/launch/hard-launch-blocker-plan\.test\.mjs|tests/launch/phase1-manual-public-launch-policy\.test\.mjs)$'
+            allowed='^(\.github/workflows/firebase-production-deploy\.yml|\.github/workflows/current-main-expression-budget-repair\.yml|\.github/workflows/pr-validation\.yml|\.github/workflows/renewal-pdf-diagnostic-owner-bridge\.yml|\.github/workflows/renewal-pdf-runtime-diagnostic\.yml|\.github/workflows/repair-frozen-sovereign-ai-runtime\.yml|\.github/workflows/live-role-smoke\.yml|\.github/workflows/operational-application-evidence\.yml|\.github/workflows/operational-provider-evidence\.yml|\.github/workflows/privileged-access-rotation-evidence\.yml|\.github/workflows/technician-physical-evidence\.yml|scripts/finalize-operational-provider-evidence\.mjs|scripts/hard-clearance-production-revalidation\.mjs|scripts/launch-status\.mjs|scripts/publish-direct-operational-proof\.mjs|scripts/publish-operational-application-evidence\.mjs|scripts/publish-operational-provider-evidence\.mjs|scripts/resolve-admin-app-check-site-key\.mjs|scripts/run-frozen-release-evidence\.mjs|scripts/verify-ai-live-evidence\.mjs|scripts/verify-hard-launch-approval\.mjs|scripts/verify-operational-readiness\.mjs|tests/launch/ai-operational-contract\.test\.mjs|tests/launch/external-gate-production-provenance\.test\.mjs|tests/launch/final-operational-evidence-producers\.test\.mjs|tests/launch/hard-clearance-revalidation\.test\.mjs|tests/launch/operational-application-evidence-audit\.test\.mjs|scripts/resolve-live-pilot-window\.mjs)$'
+            supplemental_allowed='^(scripts/hard-launch-status\.mjs|scripts/lib/hard-launch-control\.mjs|scripts/lib/operational-proof-schema\.mjs|scripts/prepare-operational-application-evidence\.mjs|scripts/print-hard-launch-blockers\.mjs|scripts/verify-operational-application-evidence\.mjs|scripts/verify-launch-clearance\.mjs|scripts/reconcile-hard-public-evidence\.mjs|tests/launch/hard-launch-blocker-plan\.test\.mjs|tests/launch/phase1-manual-public-launch-policy\.test\.mjs|\.github/workflows/public-launch-evidence-backfill\.yml|scripts/build-command-center-evidence-manifest\.mjs|tests/launch/public-launch-evidence-workflow-bridge\.test\.mjs|scripts/resolve-live-pilot-window\.mjs|tests/launch/live-pilot-provenance\.test\.mjs|scripts/owner-launch-run-correlation\.sh|scripts/select-new-exact-sha-workflow-run\.mjs|tests/launch/exact-sha-workflow-run-correlation\.test\.mjs|\.github/workflows/owner-privileged-cleanup-command\.yml)$'
             while IFS= read -r file; do
               [[ -z "$file" || "$file" =~ $allowed || "$file" =~ $supplemental_allowed ]] || { echo "::error::Non-control-plane file changed since frozen release: $file"; exit 1; }
             done <<< "$changed"
