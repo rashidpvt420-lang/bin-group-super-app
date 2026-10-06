@@ -4,7 +4,7 @@
  * street map or road route; it displays verified points, freshness,
  * straight-line distance and an external Google Maps route link.
  */
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
     Avatar,
     Box,
@@ -34,6 +34,7 @@ import {
     WifiOff,
 } from 'lucide-react';
 import { binThemeTokens } from '../../theme/binGroupTheme';
+import { useGoogleMaps } from '../../lib/maps';
 import {
     buildGoogleMapsDirectionsUrl,
     calculateDistanceKm,
@@ -129,6 +130,110 @@ export default function LiveTechnicianTrackingCard({
         ? `https://www.google.com/maps/search/?api=1&query=${jobLocation.lat},${jobLocation.lng}`
         : null;
 
+    const { isLoaded: mapsLoaded, loadError: mapsLoadError } = useGoogleMaps();
+    const mapHostRef = useRef<HTMLDivElement | null>(null);
+    const mapRef = useRef<any>(null);
+    const techMarkerRef = useRef<any>(null);
+    const jobMarkerRef = useRef<any>(null);
+    const directionsRendererRef = useRef<any>(null);
+    const [routeInfo, setRouteInfo] = useState<{ distanceText?: string; durationText?: string } | null>(null);
+
+    useEffect(() => {
+        if (!mapsLoaded || !mapHostRef.current || !technicianLocation || !jobLocation) return;
+        const google = (window as any).google;
+        if (!google?.maps) return;
+
+        const techPosition = { lat: technicianLocation.lat, lng: technicianLocation.lng };
+        const jobPosition = { lat: jobLocation.lat, lng: jobLocation.lng };
+
+        if (!mapRef.current) {
+            mapRef.current = new google.maps.Map(mapHostRef.current, {
+                center: techPosition,
+                zoom: 13,
+                mapTypeId: 'roadmap',
+                streetViewControl: false,
+                mapTypeControl: false,
+                fullscreenControl: true,
+                clickableIcons: false,
+            });
+            techMarkerRef.current = new google.maps.Marker({
+                position: techPosition,
+                map: mapRef.current,
+                title: ticket.assignedTechnicianName || 'Technician',
+                icon: {
+                    path: google.maps.SymbolPath.CIRCLE,
+                    scale: 9,
+                    fillColor: '#22d3ee',
+                    fillOpacity: 1,
+                    strokeColor: '#ffffff',
+                    strokeWeight: 3,
+                },
+                zIndex: 2,
+            });
+            jobMarkerRef.current = new google.maps.Marker({
+                position: jobPosition,
+                map: mapRef.current,
+                title: ticket.propertyName || 'Property',
+                zIndex: 1,
+            });
+            directionsRendererRef.current = new google.maps.DirectionsRenderer({
+                map: mapRef.current,
+                suppressMarkers: true,
+                preserveViewport: false,
+                polylineOptions: {
+                    strokeColor: '#C6A75E',
+                    strokeOpacity: 0.9,
+                    strokeWeight: 5,
+                },
+            });
+        } else {
+            techMarkerRef.current?.setPosition(techPosition);
+            jobMarkerRef.current?.setPosition(jobPosition);
+        }
+
+        const bounds = new google.maps.LatLngBounds();
+        bounds.extend(techPosition);
+        bounds.extend(jobPosition);
+        mapRef.current.fitBounds(bounds, 72);
+
+        const directionsService = new google.maps.DirectionsService();
+        directionsService.route({
+            origin: techPosition,
+            destination: jobPosition,
+            travelMode: google.maps.TravelMode.DRIVING,
+        }, (result: any, status: string) => {
+            if (status === 'OK' && result?.routes?.[0]) {
+                directionsRendererRef.current?.setDirections(result);
+                const leg = result.routes[0]?.legs?.[0];
+                setRouteInfo({
+                    distanceText: leg?.distance?.text,
+                    durationText: leg?.duration?.text,
+                });
+            } else {
+                directionsRendererRef.current?.setDirections({ routes: [] });
+                setRouteInfo(null);
+            }
+        });
+    }, [
+        mapsLoaded,
+        technicianLocation?.lat,
+        technicianLocation?.lng,
+        jobLocation?.lat,
+        jobLocation?.lng,
+        ticket.assignedTechnicianName,
+        ticket.propertyName,
+    ]);
+
+    useEffect(() => () => {
+        techMarkerRef.current?.setMap?.(null);
+        jobMarkerRef.current?.setMap?.(null);
+        directionsRendererRef.current?.setMap?.(null);
+        techMarkerRef.current = null;
+        jobMarkerRef.current = null;
+        directionsRendererRef.current = null;
+        mapRef.current = null;
+    }, []);
+
     const progressColor = isCompleted
         ? '#10b981'
         : trackingFresh
@@ -170,12 +275,17 @@ export default function LiveTechnicianTrackingCard({
                         position: 'absolute',
                         top: 12,
                         left: 12,
-                        color: 'rgba(255,255,255,0.45)',
+                        color: 'rgba(255,255,255,0.72)',
                         fontWeight: 900,
                         letterSpacing: 1,
+                        zIndex: 4,
+                        bgcolor: 'rgba(0,0,0,0.56)',
+                        px: 1,
+                        py: 0.5,
+                        borderRadius: 1,
                     }}
                 >
-                    LOCATION SUMMARY - NOT A STREET MAP
+                    LIVE TECHNICIAN TRACKING
                 </Typography>
 
                 {trackingRequested && (
@@ -199,7 +309,29 @@ export default function LiveTechnicianTrackingCard({
 
                 {technicianLocation && jobLocation ? (
                     <>
-                        <Stack direction="row" alignItems="center" spacing={2.5} sx={{ mt: 3, width: '100%', justifyContent: 'center' }}>
+                        {mapsLoaded ? (
+                            <Box
+                                ref={mapHostRef}
+                                data-testid="technician-live-map"
+                                sx={{ position: 'absolute', inset: 0, minHeight: 250 }}
+                            />
+                        ) : null}
+                        <Stack
+                            direction="row"
+                            alignItems="center"
+                            spacing={2.5}
+                            sx={{
+                                mt: 3,
+                                width: '100%',
+                                justifyContent: 'center',
+                                position: 'relative',
+                                zIndex: 3,
+                                bgcolor: mapsLoaded ? 'rgba(0,0,0,0.58)' : 'transparent',
+                                borderRadius: 2,
+                                px: 1,
+                                py: 1,
+                            }}
+                        >
                             <Tooltip title="Last verified Technician coordinate">
                                 <Stack alignItems="center" spacing={0.5}>
                                     <Box sx={{ width: 16, height: 16, borderRadius: '50%', bgcolor: trackingFresh ? '#22d3ee' : '#64748b', border: '2px solid #FFF' }} />
@@ -218,14 +350,20 @@ export default function LiveTechnicianTrackingCard({
                                 </Stack>
                             </Tooltip>
                         </Stack>
-                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.45)', fontWeight: 700, textAlign: 'center' }}>
-                            In-app estimate uses approximate straight-line distance and a fixed average speed. Road routing is available only in Google Maps.
+                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.78)', fontWeight: 800, textAlign: 'center', position: 'relative', zIndex: 3, bgcolor: mapsLoaded ? 'rgba(0,0,0,0.58)' : 'transparent', px: 1, py: 0.5, borderRadius: 1 }}>
+                            {routeInfo?.durationText
+                                ? `Driving route: ${routeInfo.distanceText || 'distance unavailable'} · ETA ${routeInfo.durationText}`
+                                : mapsLoaded
+                                    ? 'Live map active. Route/traffic estimate is temporarily unavailable.'
+                                    : mapsLoadError
+                                        ? 'Embedded map unavailable. Use Google Maps below for navigation.'
+                                        : 'Loading live map…'}
                         </Typography>
                         <Button
                             size="small"
                             startIcon={<ExternalLink size={13} />}
                             onClick={() => window.open(mapsUrl, '_blank', 'noopener,noreferrer')}
-                            sx={{ color: '#22d3ee', border: '1px solid rgba(34,211,238,0.3)', borderRadius: 3, fontSize: '0.68rem', fontWeight: 900, textTransform: 'none' }}
+                            sx={{ color: '#22d3ee', border: '1px solid rgba(34,211,238,0.3)', borderRadius: 3, fontSize: '0.68rem', fontWeight: 900, textTransform: 'none', position: 'relative', zIndex: 3, bgcolor: 'rgba(0,0,0,0.56)' }}
                         >
                             Open in Google Maps
                         </Button>
