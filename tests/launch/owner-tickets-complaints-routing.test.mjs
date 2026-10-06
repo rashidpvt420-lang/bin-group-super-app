@@ -8,6 +8,7 @@ const ownerApp = read('../../src/owner/OwnerApp.tsx');
 const dashboard = read('../../src/owner/pages/OwnerDashboardResolvedPage.tsx');
 const ticketsPage = read('../../src/owner/pages/OwnerTicketsPage.tsx');
 const ticketDetail = read('../../src/owner/pages/OwnerTicketDetailPage.tsx');
+const hardLaunch = read('../../tests/e2e/hard-launch-routes.spec.ts');
 
 test('OwnerApp registers tickets list and ticket detail ahead of the unknown-route catch-all', () => {
   const catchAllAt = ownerApp.indexOf('<Route path="*"');
@@ -21,26 +22,27 @@ test('OwnerApp registers tickets list and ticket detail ahead of the unknown-rou
   }
 });
 
-test('OwnerApp also registers absolute /owner ticket paths so hard loads cannot miss nested splat context', () => {
-  for (const route of ['/owner/tickets', '/owner/ticket/:id', '/owner/complaints', '/owner/complaint']) {
-    assert.match(
-      ownerApp,
-      new RegExp(`<Route path="${route.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"`),
-      `missing absolute route ${route}`,
-    );
-  }
-  assert.match(ownerApp, /element=\{<OwnerTicketsPage/);
-  assert.match(ownerApp, /element=\{<OwnerTicketDetailPage/);
+test('OwnerApp does not register /owner/* paths that invent /owner/owner/* inventory rows', () => {
+  assert.doesNotMatch(ownerApp, /path="\/owner\/tickets"/);
+  assert.doesNotMatch(ownerApp, /path="\/owner\/complaints"/);
+  assert.doesNotMatch(ownerApp, /path="\/owner\/ticket\/:id"/);
+  assert.doesNotMatch(ownerApp, /path="\/owner\/complaint"/);
+});
+
+test('Phase 2 exact-route audit lists /owner/complaints with tickets', () => {
+  const ownerBlock = hardLaunch.slice(
+    hardLaunch.indexOf("name: 'Owner'"),
+    hardLaunch.indexOf("name: 'Tenant'"),
+  );
+  assert.match(ownerBlock, /'\/owner\/complaints'/);
+  assert.match(ownerBlock, /'\/owner\/tickets'/);
+  assert.match(ownerBlock, /'\/owner\/ticket\/phase2-missing'/);
 });
 
 test('Complaints plural is an honest tickets list route, not a dead-end redirect', () => {
   assert.match(
     ownerApp,
     /path="\/complaints"\s+element=\{<OwnerTicketsPage/,
-  );
-  assert.match(
-    ownerApp,
-    /path="\/owner\/complaints"\s+element=\{<OwnerTicketsPage/,
   );
   assert.doesNotMatch(
     ownerApp,
