@@ -56,7 +56,15 @@ function passportFromProperty(property: any) {
     id: property.propertyPassportId || property.passportId || property.propertyId || property.id,
     propertyId: property.propertyId || property.id,
     propertyName: name,
-    emirate: property.emirate || property.city || property.location || 'UAE',
+    // `location` is usually a GPS object ({ address, lat, lng, ... }). Rendering it as the
+    // emirate crashed the whole page (React error #31), so only accept text values here.
+    emirate: firstText(
+      typeof property.emirate === 'string' ? property.emirate : '',
+      typeof property.city === 'string' ? property.city : '',
+      typeof property.location === 'string' ? property.location : '',
+      typeof property.location?.emirate === 'string' ? property.location.emirate : '',
+      'UAE',
+    ),
     totalUnits: unitCount(property),
     floors: property.floors || property.numberOfFloors || 0,
     status: property.status || 'PROVISIONAL',

@@ -196,10 +196,20 @@ export const createTenantServiceTicket = onCall(
       };
 
       if (kind === "EMERGENCY") {
+        // Keep what the tenant reported. An emergency is a priority, not a trade: overwriting the
+        // category with "emergency" hid the problem from Admin/Owner and from trade matching.
+        // The one-tap SOS button sends no details and keeps the SOS defaults.
+        const reportedCategory = text(details.category, 80);
+        const reportedDescription = text(details.description, 2000);
+        const reportedLocation = text(details.specificLocation, 240);
+        const tradeCategory = ["emergency", "sos"].includes(reportedCategory.toLowerCase()) ? "" : reportedCategory;
         Object.assign(common, {
-          category: "emergency",
+          category: tradeCategory || "emergency",
           priority: "emergency",
-          description: "TENANT TRIGGERED SOS EMERGENCY",
+          isEmergency: true,
+          emergencySource: tradeCategory || reportedDescription ? "TENANT_EMERGENCY_REQUEST" : "TENANT_SOS_BUTTON",
+          description: reportedDescription || "TENANT TRIGGERED SOS EMERGENCY",
+          ...(reportedLocation ? { specificLocation: reportedLocation } : {}),
           status: "OPEN",
           dispatchStatus: "PENDING_EMERGENCY_DISPATCH",
           trackingStatus: "WAITING_FOR_EMERGENCY_TECHNICIAN",
