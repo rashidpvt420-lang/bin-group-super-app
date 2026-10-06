@@ -3,6 +3,11 @@
  * Shared Owner/Tenant live tracking surface. It renders an embedded Google
  * map for verified job and technician coordinates, preserves GPS freshness
  * truth, and keeps an external Google Maps route fallback.
+ *
+ * The panel reflects the real ticket lifecycle (trackingPanelState.mjs):
+ * an assigned technician is never shown as "awaiting assignment", and
+ * completed/closed/cancelled tickets show a final state with no live GPS,
+ * technician position, distance or arrival estimate.
  */
 import React, { useEffect, useRef } from 'react';
 import {
@@ -44,8 +49,9 @@ import {
     getTicketJobLocation,
     isLocationStale,
     isTrackingActive,
-    normalizeTicketStatus,
 } from '../../utils/liveTracking';
+import { resolveTrackingPanelState } from './trackingPanelState.mjs';
+import type { TrackingPanelState, TrackingTimelineStep } from './trackingPanelState.mjs';
 
 interface LiveTechnicianTrackingCardProps {
     ticket: any;
@@ -65,8 +71,8 @@ const DISPLAY_STEPS = [
 
 const STEP_ORDER = DISPLAY_STEPS.map((step) => step.key);
 
-function getProgressValue(status: string): number {
-    switch (normalizeTicketStatus(status)) {
+function getProgressValue(step: TrackingTimelineStep): number {
+    switch (step) {
         case 'completed': return 100;
         case 'in_progress': return 80;
         case 'arrived': return 65;
@@ -85,19 +91,34 @@ function locationTimestamp(ticket: any, techLocation: any) {
         null;
 }
 
-function getStatusMessage(ticket: any, etaMin: number | null, trackingFresh: boolean, locationStale: boolean): string {
-    const status = normalizeTicketStatus(ticket?.status);
-    switch (status) {
-        case 'completed': return 'Job Completed';
+function getStatusMessage(
+    panel: TrackingPanelState,
+    etaMin: number | null,
+    trackingFresh: boolean,
+    locationStale: boolean,
+): string {
+    switch (panel.phase) {
+        case 'completed':
+            if (panel.statusKey === 'CLOSED' || panel.statusKey === 'CLOSED_VERIFIED') return 'Job Completed & Closed';
+            if (panel.statusKey.includes('PENDING') || panel.statusKey.includes('AWAITING')) return 'Job Completed — Awaiting Approval';
+            return 'Job Completed';
+        case 'cancelled': return 'Ticket Cancelled';
+        case 'disputed': return 'Completion Under Dispute Review';
+        case 'escalated': return 'Escalated to BIN GROUP';
+        case 'reopened': return 'Reopened — Revisit Pending';
+        case 'waiting_parts': return 'Waiting for Parts';
+        case 'on_hold': return 'Job On Hold';
         case 'in_progress': return 'Work in Progress';
         case 'arrived': return 'Technician Has Arrived';
         case 'on_the_way':
             if (trackingFresh && etaMin !== null) return `Technician en route - rough arrival estimate ${etaMin} min`;
             if (locationStale) return 'Technician en route — GPS location is stale';
             return 'Technician en route — waiting for a fresh GPS point';
+        case 'scheduled':
+            return panel.technicianName ? `Visit Scheduled — ${panel.technicianName}` : 'Visit Scheduled';
         case 'accepted':
-            return ticket?.assignedTechnicianName
-                ? `${ticket.assignedTechnicianName} Assigned`
+            return panel.technicianName
+                ? `${panel.technicianName} Assigned`
                 : 'Technician Assigned';
         default: return 'Awaiting Technician Assignment';
     }
@@ -340,20 +361,23 @@ export default function LiveTechnicianTrackingCard({
 }: LiveTechnicianTrackingCardProps) {
     if (!ticket) return null;
 
-    const technicianLocation = getTechnicianLocation(ticket);
+    const panel = resolveTrackingPanelState(ticket);
+    // Completed/closed/cancelled jobs make no live-location claims: no
+    // technician marker, distance, GPS freshness chip or arrival estimate.
+    const technicianLocation = panel.allowLiveTracking ? getTechnicianLocation(ticket) : null;
     const jobLocation = getTicketJobLocation(ticket);
     const locationUpdatedAt = locationTimestamp(ticket, technicianLocation);
     const locationStale = isLocationStale(locationUpdatedAt, 2);
-    const trackingRequested = isTrackingActive(ticket.status, ticket.trackingStatus);
+    const trackingRequested = panel.allowLiveTracking && isTrackingActive(ticket.status, ticket.trackingStatus);
     const trackingFresh = Boolean(trackingRequested && technicianLocation && !locationStale);
     const straightLineDistanceKm = calculateDistanceKm(technicianLocation, jobLocation);
     const straightLineEstimateMinutes = trackingFresh ? calculateEtaMinutes(straightLineDistanceKm) : null;
     const staleLabel = getStaleLabel(locationUpdatedAt);
-    const normalisedStatus = normalizeTicketStatus(ticket.status);
-    const isCompleted = normalisedStatus === 'completed';
-    const isAssigned = Boolean(ticket.assignedTechnicianId);
-    const progressValue = getProgressValue(ticket.status);
-    const statusMessage = getStatusMessage(ticket, straightLineEstimateMinutes, trackingFresh, locationStale);
+    const timelineStep = panel.timelineStep;
+    const isCompleted = panel.phase === 'completed';
+    const isAssigned = panel.technicianAssigned;
+    const progressValue = getProgressValue(timelineStep);
+    const statusMessage = getStatusMessage(panel, straightLineEstimateMinutes, trackingFresh, locationStale);
     const mapsUrl = buildGoogleMapsDirectionsUrl(technicianLocation, jobLocation);
     const jobMapsUrl = jobLocation
         ? `https://www.google.com/maps/search/?api=1&query=${jobLocation.lat},${jobLocation.lng}`
@@ -399,6 +423,18 @@ export default function LiveTechnicianTrackingCard({
                             : <Tooltip title="GPS point is missing or stale"><WifiOff size={18} color="#f87171" /></Tooltip>
                     )}
                 </Stack>
+
+                {panel.isTerminal && (
+                    <Typography
+                        variant="caption"
+                        data-testid="technician-tracking-ended"
+                        sx={{ color: 'rgba(255,255,255,0.55)', display: 'block', mb: 2, fontWeight: 700 }}
+                    >
+                        {isCompleted
+                            ? 'Live tracking has ended for this job. No arrival estimate applies.'
+                            : 'This ticket is no longer active. Live tracking is not available.'}
+                    </Typography>
+                )}
 
                 {technicianLocation && (
                     <Typography variant="caption" sx={{ color: locationStale ? '#f87171' : 'rgba(255,255,255,0.45)', display: 'block', mb: 2, fontWeight: 700 }}>
@@ -448,11 +484,11 @@ export default function LiveTechnicianTrackingCard({
                                     src={ticket.assignedTechnicianAvatar || ticket.technicianPhotoURL}
                                     sx={{ width: 48, height: 48, bgcolor: alpha(binThemeTokens.gold, 0.15), color: binThemeTokens.gold, fontWeight: 900, flexShrink: 0 }}
                                 >
-                                    {(ticket.assignedTechnicianName || 'T').charAt(0)}
+                                    {(panel.technicianName || 'T').charAt(0)}
                                 </Avatar>
                                 <Box sx={{ minWidth: 0 }}>
                                     <Typography variant="body2" fontWeight="950" color="#FFF" sx={{ overflowWrap: 'anywhere' }}>
-                                        {ticket.assignedTechnicianName || 'Technician'}
+                                        {panel.technicianName || 'Technician'}
                                     </Typography>
                                     <Typography variant="caption" color="textSecondary" sx={{ fontWeight: 700 }}>
                                         {ticket.assignedTechnicianSpecialty || ticket.technicianSpecialty || 'Maintenance Specialist'}
@@ -500,7 +536,7 @@ export default function LiveTechnicianTrackingCard({
                         </Typography>
                         <Stack spacing={2}>
                             {DISPLAY_STEPS.map((step) => {
-                                const currentIndex = STEP_ORDER.indexOf(normalisedStatus);
+                                const currentIndex = STEP_ORDER.indexOf(timelineStep);
                                 const stepIndex = STEP_ORDER.indexOf(step.key);
                                 const done = stepIndex <= currentIndex;
                                 const current = stepIndex === currentIndex;
