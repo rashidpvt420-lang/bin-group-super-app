@@ -2,6 +2,7 @@ import { FieldValue } from "firebase-admin/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 import { PropertyGeoAuthorityError, resolveDispatchReadyPropertyGeo } from "./propertyGeoAuthority";
+import { isSingleUnitProperty, UNIT_SCOPE, unitRecordsQuery } from "./ticketUnitScope";
 
 if (!admin.apps.length) admin.initializeApp();
 const db = admin.firestore();
@@ -28,7 +29,8 @@ export const ownerCreateMaintenanceTicket = onCall(
     await assertOwnerRole(request.auth);
     const ownerUid = request.auth!.uid;
     const propertyId = text(request.data?.propertyId, 160);
-    const unitId = text(request.data?.unitId, 160);
+    let unitId = text(request.data?.unitId, 160);
+    const requestedScope = text(request.data?.serviceScope || request.data?.unitScope, 40).toUpperCase();
     const category = text(request.data?.category, 120);
     const priority = text(request.data?.priority, 40).toLowerCase();
     const description = text(request.data?.description, 3000);
@@ -46,6 +48,31 @@ export const ownerCreateMaintenanceTicket = onCall(
     }
 
     let unit: FirebaseFirestore.DocumentData = {};
+    let unitScope: string = UNIT_SCOPE.UNIT;
+    let unitAutoSelected = false;
+    if (!unitId) {
+      // Require or derive the unit server-side: a single-unit property's only
+      // unit is selected automatically; a single-unit property with no units
+      // record (e.g. a villa declaring units: 1) is scoped to the whole
+      // property; a multi-unit property needs a unit or an explicit
+      // common-area scope.
+      const unitDocs = (await unitRecordsQuery(db, propertyId).get()).docs
+        .filter((doc) => text(doc.data()?.propertyId, 160) === propertyId);
+      if (isSingleUnitProperty(property, unitDocs.length) && unitDocs.length === 1) {
+        unitId = unitDocs[0].id;
+        unitAutoSelected = true;
+      } else if (isSingleUnitProperty(property, unitDocs.length)) {
+        unitScope = UNIT_SCOPE.WHOLE_PROPERTY;
+      } else if (requestedScope === UNIT_SCOPE.COMMON_AREA) {
+        unitScope = UNIT_SCOPE.COMMON_AREA;
+      } else {
+        throw new HttpsError(
+          "invalid-argument",
+          "Select the unit that needs maintenance, or choose Common Area / Whole Property.",
+          { reason: "UNIT_SELECTION_REQUIRED" },
+        );
+      }
+    }
     if (unitId) {
       const unitSnap = await db.collection("units").doc(unitId).get();
       if (!unitSnap.exists || text(unitSnap.data()?.propertyId, 160) !== propertyId) {
@@ -76,6 +103,8 @@ export const ownerCreateMaintenanceTicket = onCall(
       unitId: unitId || null,
       unitNumber: text(unit.unitNumber, 80) || null,
       floor: unit.floorNumber ?? null,
+      unitScope,
+      unitAutoSelected,
       tenantId: text(unit.tenantId || unit.tenantUid, 160) || null,
       tenantName: text(unit.tenantName, 180) || null,
       category,
