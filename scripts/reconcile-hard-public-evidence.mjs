@@ -133,6 +133,63 @@ function materializeManualPhysicalGate(gates, key, sourceGateId, record) {
   return key;
 }
 
+function materializeProtectedTechnicianGate(gates, key, sourceGateId, proof) {
+  const [groupName, gateName] = key.split('.');
+  const gate = gates?.[groupName]?.[gateName];
+  if (!gate || gate.required !== true) fail(`required physical gate is missing: ${key}`);
+  if (text(gate.evidenceLayerRequired) !== 'physical_device') {
+    fail(`refusing to reconcile non-physical gate from protected technician evidence: ${key}`);
+  }
+
+  const testedAtMs = evidenceMillis(proof?.observedAt || proof?.verifiedAt);
+  if (!Number.isFinite(testedAtMs)) fail('protected technician physical evidence timestamp is invalid');
+  const proofRef = text(proof?.evidenceReference);
+  if (!proofRef) fail('protected technician physical evidence reference is missing');
+
+  mkdirSync(artifactRoot, { recursive: true });
+  const artifactName = `physical-evidence-${gateName}-protected-technician.json`;
+  const artifactPath = path.join(artifactRoot, artifactName);
+  const relativeArtifactPath = path.relative(root, artifactPath).replace(/\\/g, '/');
+  const testedAt = new Date(testedAtMs).toISOString();
+  const attestation = {
+    schemaVersion: 1,
+    gateKey: key,
+    sourceGateId,
+    releaseSha,
+    controlPlaneCommitSha: controlPlaneSha,
+    source: 'protected-technician-operational-evidence',
+    status: 'passed',
+    evidenceLayer: 'physical_device',
+    testerName: 'Technician Physical Evidence workflow',
+    role: 'technician',
+    device: 'Android physical device',
+    proofRef,
+    sourceWorkflowRunId: text(proof?.sourceWorkflowRunId || proof?.workflowRunId),
+    sourceSystem: text(proof?.sourceSystem),
+    sourceArtifactHash: text(proof?.artifactHash),
+    testedAt,
+    hardLaunchClaim: false,
+  };
+  writeFileSync(artifactPath, `${JSON.stringify(attestation, null, 2)}\n`, { mode: 0o600 });
+  const stat = statSync(artifactPath);
+
+  gate.status = 'passed';
+  gate.proof = `Protected exact-SHA technician physical-device evidence validated; proof reference: ${proofRef}`;
+  gate.testedBy = 'Technician Physical Evidence workflow';
+  gate.testedAt = testedAt;
+  gate.commitSha = releaseSha;
+  gate.releaseSha = releaseSha;
+  gate.controlPlaneCommitSha = controlPlaneSha;
+  gate.artifactPath = relativeArtifactPath;
+  gate.artifactHash = `sha256:${sha256File(artifactPath)}`;
+  gate.artifactBytes = stat.size;
+  gate.evidenceType = 'physical-device-report';
+  gate.executionGenerated = true;
+  gate.hardLaunchClaim = false;
+  gate.updatedAt = new Date().toISOString();
+  return key;
+}
+
 async function resolveFirestoreLocation(projectId) {
   const credential = admin.app().options.credential;
   if (!credential || typeof credential.getAccessToken !== 'function') {
@@ -397,6 +454,31 @@ const reconciledPhysicalGates = [];
 const missingPhysicalGates = [];
 const physicalGateDiagnostics = [];
 for (const mapping of physicalGateSources) {
+  if (mapping.requireTechnicianOperational) {
+    if (!technicianPhysicalProofValid) {
+      physicalGateDiagnostics.push({
+        gateKey: mapping.key,
+        commandCenterGateId: mapping.sourceGateId,
+        status: 'blocked',
+        reason: 'protected-technician-mission-proof-missing-or-invalid',
+      });
+      missingPhysicalGates.push(
+        `${mapping.key} (real protected technician GPS mission proof is missing)`,
+      );
+      continue;
+    }
+    reconciledPhysicalGates.push(
+      materializeProtectedTechnicianGate(gates, mapping.key, mapping.sourceGateId, technicianPhysicalProof),
+    );
+    physicalGateDiagnostics.push({
+      gateKey: mapping.key,
+      commandCenterGateId: mapping.sourceGateId,
+      status: 'passed',
+      source: 'protected-technician-operational-evidence',
+    });
+    continue;
+  }
+
   const record = manualPhysicalRecords.find((candidate) =>
     validPhysicalRecord(candidate, mapping.sourceGateId, mapping.devicePattern)
   );
@@ -419,18 +501,6 @@ for (const mapping of physicalGateSources) {
       invalidReasons,
     });
     missingPhysicalGates.push(`${mapping.key} (Command Center: ${mapping.sourceGateId})`);
-    continue;
-  }
-  if (mapping.requireTechnicianOperational && !technicianPhysicalProofValid) {
-    physicalGateDiagnostics.push({
-      gateKey: mapping.key,
-      commandCenterGateId: mapping.sourceGateId,
-      status: 'blocked',
-      reason: 'protected-technician-mission-proof-missing-or-invalid',
-    });
-    missingPhysicalGates.push(
-      `${mapping.key} (real protected technician GPS mission proof is missing)`,
-    );
     continue;
   }
   reconciledPhysicalGates.push(
