@@ -877,6 +877,21 @@ test('hard clearance keeps physical-device gates fail-closed unless exact review
   assert.doesNotMatch(workflow, /restart.*24-hour|reset.*pilot/i);
 });
 
+test('owner-only physical evidence rebinding preserves manual evidence and requires deployment continuity', async () => {
+  const workflow = await read('.github/workflows/technician-physical-evidence.yml');
+  assert.match(workflow, /rebind-physical-current/);
+  assert.match(workflow, /A later successful Firebase Production Deploy exists/);
+  assert.match(workflow, /metadataReboundByWorkflow: true/);
+  assert.match(workflow, /deploymentContinuityVerified: true/);
+  assert.match(workflow, /source: 'admin-manual-evidence'/);
+  assert.match(workflow, /executionGenerated: false/);
+  assert.match(workflow, /hardLaunchClaim: false/);
+  assert.match(workflow, /No genuine physical-device record exists for:/);
+  assert.match(workflow, /createdMs >= deployCompletedMs/);
+  assert.match(workflow, /evidenceLayer\)\.toLowerCase\(\) === 'physical_device'/);
+  assert.match(workflow, /github\.event\.comment\.user\.login == github\.repository_owner/);
+});
+
 test('all operational evidence workflows allow the reviewed hard-clearance reconciliation controls', async () => {
   for (const file of [
     '.github/workflows/operational-application-evidence.yml',
