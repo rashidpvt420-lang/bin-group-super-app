@@ -461,7 +461,51 @@ jobs:
           E2E_BROKER_MAILBOX_REFRESH_TOKEN: ${{ secrets.E2E_BROKER_MAILBOX_REFRESH_TOKEN }}
         run: |
           set -euo pipefail
-          node scripts/run-critical-evidence.mjs --suite all-business
+
+          print_owner_failure_diagnostic() {
+            node --input-type=module <<'NODE'
+          import { existsSync, readFileSync, readdirSync } from 'node:fs';
+          import path from 'node:path';
+
+          const dir = path.resolve('launch_package/artifacts');
+          if (!existsSync(dir)) {
+            console.error('[hard-clearance-owner-diagnostic] no artifacts directory found');
+            process.exit(0);
+          }
+
+          const files = readdirSync(dir)
+            .filter((name) => /^business-owner-.*\.stdio\.log$/.test(name))
+            .sort();
+          if (!files.length) {
+            console.error('[hard-clearance-owner-diagnostic] no Owner stdio diagnostic found');
+            process.exit(0);
+          }
+
+          const source = readFileSync(path.join(dir, files.at(-1)), 'utf8');
+          const selected = source.split(/\r?\n/).filter((line) =>
+            /\[owner-inspection-first-evidence\]|\[owner-business-suite\]|failed HTTP \d+|callable error|Timed out waiting for/i.test(line)
+          );
+          const sanitize = (line) => line
+            .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, '[redacted-email]')
+            .replace(/\b\d{6}\b/g, '[redacted-code]')
+            .replace(/Bearer\s+[A-Za-z0-9._~-]+/gi, 'Bearer [redacted-token]')
+            .replace(/[A-Za-z0-9_-]{80,}/g, '[redacted-long-token]')
+            .slice(0, 1200);
+
+          console.error('[hard-clearance-owner-diagnostic] sanitized Owner lifecycle failure:');
+          for (const line of selected.slice(-20)) console.error(sanitize(line));
+          NODE
+          }
+
+          if ! node scripts/run-critical-evidence.mjs --suite all-business; then
+            echo "::warning::Fresh five-role evidence attempt 1 failed; rebuilding protected fixtures and retrying once without changing the frozen pilot."
+            node scripts/prepare-protected-business-fixtures.mjs
+            if ! node scripts/run-critical-evidence.mjs --suite all-business; then
+              print_owner_failure_diagnostic
+              echo "::error::Fresh five-role evidence failed twice after a protected fixture rebuild."
+              exit 1
+            fi
+          fi
           node scripts/run-critical-evidence.mjs --suite launchAuditLive
 
       - name: Generate fresh production hard-clearance revalidation
