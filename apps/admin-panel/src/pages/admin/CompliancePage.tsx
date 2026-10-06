@@ -97,7 +97,7 @@ export default function CompliancePage() {
                 <Box>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 0.5 }}>
                         <ShieldIcon sx={{ color: '#6366f1', fontSize: 28 }} />
-                        <Typography variant="h4" fontWeight="black">Compliance & Audit Log</Typography>
+                        <Typography variant="h4" fontWeight="black" sx={{ color: 'text.primary' }}>Compliance & Audit Log</Typography>
                     </Box>
                     <Typography variant="body2" color="text.secondary">
                         ISO 27001 · UAE PDPL Compliant · Real-time tamper-evident log

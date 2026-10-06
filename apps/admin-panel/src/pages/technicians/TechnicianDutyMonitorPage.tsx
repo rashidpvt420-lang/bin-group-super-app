@@ -37,9 +37,14 @@ export default function TechnicianDutyMonitorPage() {
             case 'ON_DUTY': return '#4ade80';
             case 'ON_JOB': return binThemeTokens.gold;
             case 'BREAK': return '#60a5fa';
-            case 'OFF_DUTY': return 'rgba(255,255,255,0.2)';
-            default: return 'rgba(255,255,255,0.2)';
+            case 'OFF_DUTY': return '#94A3B8';
+            default: return '#94A3B8';
         }
+    };
+
+    const dutyLabel = (status: string) => {
+        const labels: Record<string, string> = { ON_DUTY: 'On duty', ON_JOB: 'On a job', BREAK: 'On break', OFF_DUTY: 'Off duty' };
+        return labels[status] || String(status || '').replace(/_/g, ' ').toLowerCase().replace(/^\w/, (c) => c.toUpperCase());
     };
 
     if (loading) return <Box sx={{ display: 'flex', justifyContent: 'center', p: 10 }}><CircularProgress sx={{ color: binThemeTokens.gold }}/></Box>;
@@ -94,7 +99,7 @@ export default function TechnicianDutyMonitorPage() {
                                 </TableCell>
                                 <TableCell>
                                     <Chip 
-                                        label={tech.dutyStatus || (tech.onDuty ? 'ON_DUTY' : 'OFF_DUTY')} 
+                                        label={dutyLabel(tech.dutyStatus || (tech.onDuty ? 'ON_DUTY' : 'OFF_DUTY'))} 
                                         size="small"
                                         sx={{ 
                                             bgcolor: alpha(getStatusColor(tech.dutyStatus), 0.1), 
@@ -115,7 +120,7 @@ export default function TechnicianDutyMonitorPage() {
                                             </Tooltip>
                                         </Stack>
                                     ) : (
-                                        <Typography variant="body2" color="rgba(255,255,255,0.2)">STANDBY</Typography>
+                                        <Typography variant="body2" color="#94A3B8">Standby</Typography>
                                     )}
                                 </TableCell>
                                 <TableCell>
