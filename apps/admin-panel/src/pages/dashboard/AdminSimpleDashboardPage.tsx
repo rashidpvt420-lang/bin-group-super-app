@@ -51,17 +51,17 @@ export default function AdminSimpleDashboardPage() {
             <Typography variant="overline" sx={{ color: gold, fontWeight: 950, letterSpacing: 3 }}>ADMIN COMMAND CENTER</Typography>
             <Typography variant="h3" sx={{ fontWeight: 950, mt: 1 }}>Everything that needs control today</Typography>
             <Typography sx={{ color: 'rgba(255,255,255,0.62)', mt: 1, maxWidth: 900 }}>
-              Start from real registered routes only: SLA, payments, owners, tenants, technicians, HR, contracts, documents, launch gates, unit status, room rent operations, messages, and audit.
+              Start here: today's approvals, tickets and payments, then owners, tenants, technicians, HR, contracts, documents, unit status, room rent, messages and audit.
             </Typography>
           </Box>
-          <Chip icon={<ShieldCheck size={16} />} label="Route-safe command mode" sx={{ bgcolor: alpha(gold, 0.14), color: gold, fontWeight: 950 }} />
+          <Chip icon={<ShieldCheck size={16} />} label="Admin access" sx={{ bgcolor: alpha(gold, 0.14), color: gold, fontWeight: 950 }} />
         </Stack>
 
         <Paper sx={{ p: { xs: 2.5, md: 3.5 }, bgcolor: alpha(gold, 0.055), border: `1px solid ${alpha(gold, 0.18)}`, borderRadius: 5 }}>
           <Stack spacing={2.5}>
             <Box>
               <Typography variant="overline" sx={{ color: gold, fontWeight: 950, letterSpacing: 2 }}>MAIN ADMIN ACTIONS</Typography>
-              <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.62)', mt: 0.5 }}>These cards now point to registered Admin routes. No dead `/disputes` or `/dashboard/full` shortcuts.</Typography>
+              <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.62)', mt: 0.5 }}>Open the area you need. Each card goes straight to its page.</Typography>
             </Box>
             <Grid container spacing={2}>
               {adminActions.map((action) => (

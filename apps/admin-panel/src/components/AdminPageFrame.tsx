@@ -89,7 +89,7 @@ export default function AdminPageFrame({
         return (
             <Box sx={{ p: 8, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center' }}>
                 <Lock size={64} color={binThemeTokens.danger} style={{ marginBottom: 24 }} />
-                <Typography variant="h4" fontWeight="950" gutterBottom>PERMISSION DENIED</Typography>
+                <Typography variant="h4" fontWeight="950" gutterBottom sx={{ color: 'text.primary' }}>PERMISSION DENIED</Typography>
                 <Typography sx={{ color: 'rgba(255,255,255,0.5)', mb: 4, maxWidth: 500 }}>
                     Your administrative credentials do not authorize access to this specific operational node. 
                     Contact the System Administrator for privilege escalation.
@@ -150,7 +150,7 @@ export default function AdminPageFrame({
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: 2 }}>
                     <Box>
                         <Stack direction="row" spacing={2} alignItems="center">
-                            <Typography variant="h3" sx={{ fontWeight: 950, letterSpacing: -1 }}>
+                            <Typography variant="h3" sx={{ color: 'text.primary', fontWeight: 950, letterSpacing: -1 }}>
                                 {String(title || '').toUpperCase()}
                             </Typography>
                             {status && (
