@@ -116,11 +116,11 @@ test('no evidence yields an honest empty result and nothing is fabricated', () =
 
 test('resolver covers every field the technician evidence writers produce', () => {
   for (const field of ['technicianBeforePhotos', 'technicianBeforePhotoUrl', 'beforePhotos', 'beforePhotoUrl']) {
-    assert.match(beforeWriter, new RegExp(`${field}:`), `before writer no longer writes ${field}`);
+    assert.ok(beforeWriter.includes(`${field}:`), `before writer no longer writes ${field}`);
     assert.ok(OWNER_BEFORE_EVIDENCE_FIELDS.includes(field), `Owner reader misses ${field}`);
   }
   for (const field of ['technicianAfterPhotos', 'technicianAfterPhotoUrl', 'completionPhotos', 'evidencePhotos']) {
-    assert.match(afterWriter, new RegExp(`${field}:`), `after writer no longer writes ${field}`);
+    assert.ok(afterWriter.includes(`${field}:`), `after writer no longer writes ${field}`);
     assert.ok(OWNER_AFTER_EVIDENCE_FIELDS.includes(field), `Owner reader misses ${field}`);
   }
   assert.match(technicianJob, /technicianNotes:/);
