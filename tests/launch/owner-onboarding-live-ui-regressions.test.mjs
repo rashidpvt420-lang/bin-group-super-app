@@ -140,8 +140,10 @@ test('portal profile verification refreshes Auth and App Check before declaring 
   const source = await read('src/context/RoleContext.tsx');
   assert.match(source, /PROFILE_READ_MAX_ATTEMPTS = 4/);
   assert.match(source, /getToken as getAppCheckToken/);
-  assert.match(source, /await currentUser\.getIdToken\(true\)/);
-  assert.match(source, /await getAppCheckToken\(appCheck, true\)/);
+  assert.match(source, /getIdToken\(true\)/);
+  assert.match(source, /getAppCheckToken\(appCheck, true\)/);
+  assert.match(source, /withTimeout\(currentUser\.getIdToken\(true\), PROFILE_OP_TIMEOUT_MS/);
+  assert.match(source, /withTimeout\(getAppCheckToken\(appCheck, true\), PROFILE_OP_TIMEOUT_MS/);
   assert.match(source, /readOwnProfileWithRecovery/);
   assert.match(source, /permission-denied/);
   assert.match(source, /unauthenticated/);
