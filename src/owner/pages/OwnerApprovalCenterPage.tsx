@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { auth, collection, db, functions, httpsCallable, limit, onSnapshot, orderBy, query, where } from '../../lib/firebase';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { isOwnerPendingSignOff } from '../utils/ownerPendingSignOff';
+import { useOwnerPropertyLabels } from '../hooks/useOwnerPropertyLabels';
 
 type ApprovalRequest = {
   id: string;
@@ -49,6 +50,7 @@ export default function OwnerApprovalCenterPage() {
   const [notice, setNotice] = React.useState('');
   const [submittingId, setSubmittingId] = React.useState('');
   const ownerId = auth.currentUser?.uid || '';
+  const { ticketPropertyLabel } = useOwnerPropertyLabels(ownerId);
 
   React.useEffect(() => {
     if (!ownerId) return undefined;
@@ -144,7 +146,7 @@ export default function OwnerApprovalCenterPage() {
                       {ticket.title || ticket.category || ticket.trade || 'Completed ticket'} · {ticket.id.slice(0, 8).toUpperCase()}
                     </Typography>
                     <Typography sx={{ color: binThemeTokens.textSecondary }}>
-                      {ticket.propertyName || ticket.propertyId || 'Property'} · status {String(ticket.status || '').replace(/_/g, ' ')}
+                      {ticketPropertyLabel(ticket)} · status {String(ticket.status || '').replace(/_/g, ' ')}
                     </Typography>
                   </Box>
                   <Chip label="COMPLETED PENDING APPROVAL" color="warning" />

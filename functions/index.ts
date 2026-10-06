@@ -11,6 +11,7 @@ import * as path from "path";
 import { createRequire } from "module";
 import type { SummarizePropertyPassportSources, PassportIdentity } from "./shared/propertyPassportAggregationTypes";
 import { assertOwnerClosureEvidence } from "./ticketClosureEvidence";
+import { resolveTicketPropertyDisplayName, ticketNeedsPropertyLabelLookup } from "./shared/propertyDisplayName";
 
 const requirePropertyPassportAggregation = createRequire(__filename);
 const {
@@ -362,7 +363,7 @@ export const updateTicketLifecycle = onCall({ cors: true, enforceAppCheck: true 
     };
     const now = FieldValue.serverTimestamp();
     let completedOwnerId = "";
-    let completedPropertyName = "";
+    let completedTicketData: any = null;
     await db.runTransaction(async (transaction) => {
         const ticketDoc = await transaction.get(ticketRef);
         if (!ticketDoc.exists) throw new HttpsError("not-found", "Ticket not found.");
@@ -535,7 +536,7 @@ export const updateTicketLifecycle = onCall({ cors: true, enforceAppCheck: true 
                 }
             }
             completedOwnerId = safeString(ticketData.ownerId || ticketData.ownerUid);
-            completedPropertyName = safeString(ticketData.propertyName, "the property");
+            completedTicketData = ticketData;
         }
         if (proofType && proofUrl) {
             if (proofType === 'BEFORE') updateData.beforePhotoUrl = proofUrl;
@@ -559,6 +560,7 @@ export const updateTicketLifecycle = onCall({ cors: true, enforceAppCheck: true 
         (requestedStatus === 'COMPLETED' || requestedStatus === 'COMPLETED_PENDING_APPROVAL') &&
         completedOwnerId
     ) {
+        const completedPropertyName = await ticketPropertyLabel(completedTicketData, "the property");
         await dispatchOmniNotification(completedOwnerId, "Mission Completed", `The technician has finished the work at ${completedPropertyName}. View details in your dashboard.`);
     }
 
@@ -820,6 +822,23 @@ export const ownerReviewTicketCompletion = onCall({ cors: true, enforceAppCheck:
     };
 });
 
+// Owner/tenant-facing property label for a ticket. Older owner tickets stored
+// the raw property document ID as propertyName; resolve the readable
+// name/address from the property record instead of ever showing that ID.
+async function ticketPropertyLabel(ticket: any, fallback: string): Promise<string> {
+    let property: any = null;
+    const propertyId = safeString(ticket?.propertyId);
+    if (propertyId && ticketNeedsPropertyLabelLookup(ticket)) {
+        try {
+            const propertySnap = await db.collection("properties").doc(propertyId).get();
+            if (propertySnap.exists) property = { id: propertySnap.id, ...propertySnap.data() };
+        } catch {
+            console.warn("[ticketPropertyLabel] property lookup failed", { propertyId });
+        }
+    }
+    return resolveTicketPropertyDisplayName(ticket, property, fallback);
+}
+
 // ─── [V10] TICKET LIFECYCLE & AUTO-REPAIR ──────────────────────────────────────────
 
 export const onTicketStatusChanged = onDocumentUpdated({ document: "maintenanceTickets/{id}" }, async (event) => {
@@ -905,7 +924,7 @@ export const onTicketStatusChanged = onDocumentUpdated({ document: "maintenanceT
     const ownerId: string = after.ownerId || after.ownerUid || "";
     const techId: string = after.assignedTechnicianId || "";
     const techName: string = after.assignedTechnicianName || "Your Technician";
-    const prop: string = after.propertyName || "the property";
+    const prop: string = await ticketPropertyLabel(after, "the property");
     const ref8: string = ticketId.substring(0, 8).toUpperCase();
 
     // Deterministic notification ID for one assignment: OPEN -> ASSIGNED and the

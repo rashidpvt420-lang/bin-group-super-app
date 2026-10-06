@@ -22,6 +22,7 @@ import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import LiveTechnicianTrackingCard from '../../components/tracking/LiveTechnicianTrackingCard';
 import { isOwnerPendingSignOff } from '../utils/ownerPendingSignOff';
+import { useOwnerPropertyLabels } from '../hooks/useOwnerPropertyLabels';
 
 const STATUS_COLORS: Record<string, string> = {
     open: 'rgba(255,255,255,0.4)',
@@ -65,6 +66,7 @@ export default function OwnerTicketDetailPage() {
     const [reviewReason, setReviewReason] = useState('');
     const [reviewError, setReviewError] = useState('');
     const [reviewBusy, setReviewBusy] = useState(false);
+    const { ticketPropertyLabel } = useOwnerPropertyLabels(user?.uid);
 
     useEffect(() => {
         if (!id || !user?.uid) return;
@@ -245,7 +247,7 @@ export default function OwnerTicketDetailPage() {
                                     </Avatar>
                                     <Box>
                                         <Typography variant="body1" fontWeight="950" color="#FFF">
-                                            {ticket.propertyName || 'Property'}
+                                            {ticketPropertyLabel(ticket, tx('owner.ticket.property_fallback', 'Property'))}
                                         </Typography>
                                         <Typography variant="body2" color="textSecondary">
                                             {ticket.unitNumber ? `Unit ${ticket.unitNumber}` : 'Common Area'}
