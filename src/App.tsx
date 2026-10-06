@@ -5,6 +5,7 @@ import { Box, Button, Typography, CssBaseline, CircularProgress } from '@mui/mat
 import PublicMarketingPage from './pages/public/PublicMarketingPage';
 import LegalRedirect from './pages/public/LegalRedirect';
 import SupportPage from './pages/public/SupportPage';
+import NotFoundPage from './pages/public/NotFoundPage';
 import PilotFeedbackPage from './pages/public/PilotFeedbackPage';
 import DemoVideosPage from './pages/public/DemoVideosPage';
 import PublicSecurityPage from './pages/public/PublicSecurityPage';
@@ -355,7 +356,7 @@ function AppContent() {
         <Route path="/verify-cert/:id" element={<CertificateVerificationPage />} />
         <Route path="/tenant-invite" element={<TenantInvitePage />} />
         <Route path="/home" element={<Navigate to="/" replace />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
+        <Route path="*" element={<NotFoundPage />} />
       </Routes>
     </React.Suspense>
   );

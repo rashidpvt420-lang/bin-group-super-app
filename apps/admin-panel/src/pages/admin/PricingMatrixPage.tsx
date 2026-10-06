@@ -16,6 +16,24 @@ import { UAE_PRICING_MATRIX_2026, binThemeTokens } from '@bin/shared';
 export default function PricingMatrixPage() {
     const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
 
+    const exportMatrixCsv = () => {
+        // Client-side export of the published (read-only) pricing matrix shown on this page.
+        const header = ['id', 'category', 'label', 'minimumAnnualContract', 'pmRate', 'ifm', 'pricingUnit', 'riskLevel', 'maintenanceMin', 'maintenanceTarget', 'maintenanceMax', 'managementMinPct', 'managementTargetPct', 'managementMaxPct'];
+        const cell = (value: unknown) => `"${String(value ?? '').replace(/"/g, '""')}"`;
+        const rows = UAE_PRICING_MATRIX_2026.assetClasses.map((a) => [
+            a.id, a.category, a.label, a.minimumAnnualContract, a.pmRate, a.ifm, a.pricingUnit, a.riskLevel,
+            a.maintenanceRange.min, a.maintenanceRange.target, a.maintenanceRange.max,
+            a.managementRange.min, a.managementRange.target, a.managementRange.max,
+        ].map(cell).join(','));
+        const csv = [header.map(cell).join(','), ...rows].join('\n');
+        const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `uae-pricing-matrix-${UAE_PRICING_MATRIX_2026.version}.csv`;
+        link.click();
+        URL.revokeObjectURL(url);
+    };
+
     const categories = Array.from(new Set(UAE_PRICING_MATRIX_2026.assetClasses.map(a => a.category)));
     const filteredClasses = selectedCategory 
         ? UAE_PRICING_MATRIX_2026.assetClasses.filter(a => a.category === selectedCategory)
@@ -33,11 +51,12 @@ export default function PricingMatrixPage() {
                     </Typography>
                 </Box>
                 <Stack direction="row" spacing={2}>
-                    <Button variant="outlined" startIcon={<Download size={18} />} sx={{ borderColor: 'rgba(255,255,255,0.1)', color: '#FFF' }}>
-                        EXPORT CSV
+                    <Button variant="outlined" startIcon={<Download size={18} />} onClick={exportMatrixCsv} sx={{ borderColor: 'rgba(255,255,255,0.3)', color: '#FFF' }}>
+                        Export CSV
                     </Button>
-                    <Button variant="contained" startIcon={<FileText size={18} />} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 900 }}>
-                        GENERATE REPORT
+                    {/* No report generator exists for the matrix yet; this was a clickable no-op. */}
+                    <Button variant="contained" disabled startIcon={<FileText size={18} />} title="Matrix report is not available yet" sx={{ fontWeight: 900 }}>
+                        Report (not available yet)
                     </Button>
                 </Stack>
             </Box>
