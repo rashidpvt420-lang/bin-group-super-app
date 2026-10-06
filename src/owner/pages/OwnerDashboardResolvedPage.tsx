@@ -26,8 +26,13 @@ import { resolveTenantLedger } from '../utils/ownerTenantLedgerResolver';
 import RoleJourneyStrip from '../../components/RoleJourneyStrip';
 import { isOwnerContractActivated, isOwnerProfileActivated } from '../activationPolicy';
 import { formatAedMoney } from '../../../functions/shared/aedMoney';
+import {
+  OWNER_OPEN_TICKET_STATUSES,
+  countOwnerOpenTickets,
+} from '../utils/ownerTicketAttentionCounts';
 
-const ACTIVE_TICKET_STATUSES = new Set(['OPEN', 'PENDING_ASSIGNMENT', 'ASSIGNED', 'ACCEPTED', 'EN_ROUTE', 'ARRIVED', 'IN_PROGRESS', 'WAITING_PARTS', 'ESCALATED']);
+/** Firestore `in` queries allow at most 10 values — keep in sync with OWNER_OPEN_TICKET_STATUSES. */
+const ACTIVE_TICKET_STATUS_LIST = Array.from(OWNER_OPEN_TICKET_STATUSES);
 
 const PENDING_PAYMENT_STATES = new Set([
   'PENDING',
@@ -430,7 +435,7 @@ export default function OwnerDashboardResolvedPage() {
         const verifiedIban = hasVerifiedProfileIban(resolved.profile) ||
           hasVerifiedProfileIban(resolved.contract) ||
           Array.from(bankAccounts.values()).some(isVerifiedIbanRecord);
-        const openTickets = allTickets.filter((ticket) => ACTIVE_TICKET_STATUSES.has(String(ticket.status || '').toUpperCase())).length;
+        const openTickets = countOwnerOpenTickets(allTickets);
         const resolvedComplaints = allTickets.map(resolveOwnerComplaint);
         const finData = resolveOwnerFinancials(resolved.contract, linkedProperties, Array.from(invoiceMap.values()), payments, allTickets);
         const resolvedReporters = Array.from(reporterMap.values()).map(resolvePropertyReporter);
@@ -500,7 +505,7 @@ export default function OwnerDashboardResolvedPage() {
       const ticketQuery = query(
         collection(db, 'maintenanceTickets'),
         where('ownerId', '==', authUid),
-        where('status', 'in', ['OPEN', 'PENDING_ASSIGNMENT', 'ASSIGNED', 'ACCEPTED', 'EN_ROUTE', 'ARRIVED', 'IN_PROGRESS', 'WAITING_PARTS', 'ESCALATED'])
+        where('status', 'in', ACTIVE_TICKET_STATUS_LIST)
       );
       const unsubTickets = onSnapshot(
         ticketQuery,

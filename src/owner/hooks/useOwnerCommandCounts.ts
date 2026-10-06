@@ -1,18 +1,24 @@
 import React from 'react';
 import { collection, db, limit, onSnapshot, query, where } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
+import {
+  countOwnerHighRiskTickets,
+  countOwnerOpenTickets,
+  isOwnerOpenTicket,
+} from '../utils/ownerTicketAttentionCounts';
 
 type OwnerCommandCounts = {
   loading: boolean;
   pendingCostApprovals: number;
+  /** Open maintenance tickets — same status set as advanced "Open Maintenance Tasks". */
+  openTickets: number;
+  /** Open tickets with emergency/critical/high/urgent priority (subset of openTickets). */
   highRiskTickets: number;
   openDisputes: number;
   expiringDocuments: number;
   monthlyCostVariancePct: number | null;
 };
 
-const OPEN_TICKET_STATUSES = new Set(['OPEN', 'ASSIGNED', 'IN_PROGRESS', 'PENDING_ASSIGNMENT', 'WAITING_FOR_TECHNICIAN', 'ON_SITE']);
-const HIGH_RISK_PRIORITIES = new Set(['EMERGENCY', 'HIGH', 'emergency', 'urgent', 'high']);
 const PENDING_APPROVAL_STATUSES = new Set(['PENDING', 'pending', 'REQUESTED', 'requested', 'OPEN', 'open']);
 
 function toMillis(value: any): number | null {
@@ -59,6 +65,7 @@ export function useOwnerCommandCounts(): OwnerCommandCounts {
   const [counts, setCounts] = React.useState<OwnerCommandCounts>({
     loading: true,
     pendingCostApprovals: 0,
+    openTickets: 0,
     highRiskTickets: 0,
     openDisputes: 0,
     expiringDocuments: 0,
@@ -93,13 +100,16 @@ export function useOwnerCommandCounts(): OwnerCommandCounts {
     try {
       unsubs.push(onSnapshot(query(collection(db, 'maintenanceTickets'), where('ownerId', '==', ownerId), limit(150)), (snap) => {
         const rows = snap.docs.map((docSnap) => docSnap.data());
-        const openRows = rows.filter((ticket) => OPEN_TICKET_STATUSES.has(String(ticket?.status || 'OPEN')) || OPEN_TICKET_STATUSES.has(String(ticket?.trackingStatus || '')));
-        partial.highRiskTickets = openRows.filter((ticket) => HIGH_RISK_PRIORITIES.has(String(ticket?.slaPriority || ticket?.priority || ''))).length;
+        const openRows = rows.filter(isOwnerOpenTicket);
+        // openTickets matches advanced Open Maintenance Tasks; highRisk is the priority subset.
+        partial.openTickets = countOwnerOpenTickets(rows);
+        partial.highRiskTickets = countOwnerHighRiskTickets(rows);
         partial.openDisputes = openRows.filter((ticket) => String(ticket?.status || '').toUpperCase().includes('DISPUT') || String(ticket?.evidenceStatus || '').toUpperCase().includes('DISPUT')).length;
         partial.monthlyCostVariancePct = monthlyCostVariance(rows);
         publish();
       }, (err) => {
         console.warn('[OwnerCommandCounts] ticket listener failed:', err);
+        partial.openTickets = 0;
         partial.highRiskTickets = 0;
         partial.openDisputes = 0;
         partial.monthlyCostVariancePct = null;
