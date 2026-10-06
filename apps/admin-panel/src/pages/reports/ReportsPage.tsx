@@ -263,7 +263,7 @@ export default function ReportsPage() {
 
   return (
     <Container maxWidth="lg" sx={{ py: 4, direction: isRTL ? 'rtl' : 'ltr' }}>
-      <Typography variant="h4" sx={{ mb: 4, fontWeight: 900, textAlign: isRTL ? 'right' : 'left' }}>
+      <Typography variant="h4" sx={{ color: 'text.primary', mb: 4, fontWeight: 900, textAlign: isRTL ? 'right' : 'left' }}>
         {label('Reports & Analytics', 'التقارير والتحليلات')}
       </Typography>
 
