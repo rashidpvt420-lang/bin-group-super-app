@@ -419,8 +419,10 @@ jobs:
             const device = text(record.device);
             const reasons = [];
             if (record.status !== 'passed') reasons.push('status-not-passed');
-            if (text(record.evidenceLayer).toLowerCase() !== 'physical_device') reasons.push('evidence-layer-not-physical-device');
-            if (text(record.source).toLowerCase() !== 'admin-manual-evidence') reasons.push('source-not-admin-manual-evidence');
+            const physicalEvidenceLayer = text(record.evidenceLayer).toLowerCase() === 'physical_device';
+            if (!physicalEvidenceLayer) reasons.push('evidence-layer-not-physical-device');
+            const manualEvidenceSource = text(record.source).toLowerCase() === 'admin-manual-evidence';
+            if (!manualEvidenceSource) reasons.push('source-not-admin-manual-evidence');
             if (record.executionGenerated !== false) reasons.push('execution-generated-must-be-false');
             if (record.hardLaunchClaim !== false) reasons.push('hard-launch-claim-must-be-false');
             if (!text(record.testerName)) reasons.push('tester-name-missing');
