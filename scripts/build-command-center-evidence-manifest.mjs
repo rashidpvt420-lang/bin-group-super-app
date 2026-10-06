@@ -19,6 +19,9 @@ const releaseSha = String(process.env.SOURCE_EVIDENCE_SHA || '').trim().toLowerC
 const workflowRunId = String(process.env.SOURCE_EVIDENCE_RUN_ID || '').trim();
 const sourceArtifactName = String(process.env.SOURCE_EVIDENCE_ARTIFACT_NAME || '').trim();
 const sourceArtifactDigest = String(process.env.SOURCE_EVIDENCE_ARTIFACT_DIGEST || '').trim().toLowerCase();
+const bridgePublicationRunId = mode === 'production-deployment-backfill'
+  ? String(process.env.GITHUB_RUN_ID || '').trim()
+  : '';
 const outputPath = process.argv.includes('--output')
   ? String(process.argv[process.argv.indexOf('--output') + 1] || '').trim()
   : 'launch_package/command-center-evidence-manifest.json';
@@ -38,6 +41,12 @@ if (!SHA_PATTERN.test(releaseSha)) fail('SOURCE_EVIDENCE_SHA must be a full lowe
 if (!RUN_PATTERN.test(workflowRunId)) fail('SOURCE_EVIDENCE_RUN_ID must be numeric');
 if (!sourceArtifactName) fail('SOURCE_EVIDENCE_ARTIFACT_NAME is required');
 if (!DIGEST_PATTERN.test(sourceArtifactDigest)) fail('SOURCE_EVIDENCE_ARTIFACT_DIGEST must be a sha256 digest');
+if (mode === 'production-deployment-backfill' && !RUN_PATTERN.test(bridgePublicationRunId)) {
+  fail('production-deployment-backfill requires numeric GITHUB_RUN_ID for append-only visibility refresh');
+}
+const visibilityRefreshNote = mode === 'production-deployment-backfill'
+  ? ` Command Center visibility refresh published by protected bridge run ${bridgePublicationRunId}; source execution and source workflowRunId are unchanged.`
+  : '';
 
 const expectedArtifactNames = mode === 'live-role-smoke'
   ? new Set([`live-launch-evidence-${releaseSha}`])
@@ -250,7 +259,7 @@ const records = gateDefinitions.map((gate) => ({
   device: gate.device,
   productionUrl: gate.productionUrl,
   proofRef: proofRef(gate.evidence),
-  notes: `${gate.notes} Source mode: ${mode}.`,
+  notes: `${gate.notes} Source mode: ${mode}.${visibilityRefreshNote}`,
 }));
 
 const smokeDefinitions = [
@@ -275,7 +284,7 @@ for (const [role, route, rawEmail, evidenceKey, checkpoints] of smokeDefinitions
     requiredRoute: route,
     checkpoints,
     proofRef: proofRef([evidenceKey]),
-    notes: `Automatically bridged from verified execution-generated ${evidenceKey} evidence for ${releaseSha}. Source mode: ${mode}.`,
+    notes: `Automatically bridged from verified execution-generated ${evidenceKey} evidence for ${releaseSha}. Source mode: ${mode}.${visibilityRefreshNote}`,
   });
 }
 
