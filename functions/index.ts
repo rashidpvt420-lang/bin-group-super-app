@@ -29,6 +29,7 @@ import { enforceAiUsageQuota } from "./aiUsageQuota";
 import { sendTwilioSMS } from "./smsDelivery";
 import { resolveTechnicianArrivalBinding } from "./technicianInstallationBinding";
 import { flagSlaBreaches } from "./slaCron";
+import { evaluateTechnicianForTicket, requiredTicketTrade } from "./technicianDispatchMatching";
 
 // [V10] PRODUCTION GRADE FULL-STACK STABILIZATION
 setGlobalOptions({ region: "europe-west3", enforceAppCheck: true });
@@ -1021,21 +1022,21 @@ async function attemptAutoAssignment(ticketRef: admin.firestore.DocumentReferenc
             .where("onDuty", "==", true)
             .limit(100)
             .get();
-        const requiredSkill = String(ticketData.complaintCategory || ticketData.category || ticketData.trade || "").toLowerCase();
+        const requiredTrade = requiredTicketTrade(ticketData);
+        // Technician coverage and trade live on technicians/{uid} (HR tools) as well as users/{uid}.
+        const technicianSnaps = techQuery.empty
+            ? []
+            : await db.getAll(...techQuery.docs.map((d) => db.collection("technicians").doc(d.id)));
+        const technicianProfiles = new Map(technicianSnaps.map((snap) => [snap.id, snap.exists ? snap.data() || {} : {}]));
 
         const candidates = techQuery.docs
-            .map((d) => ({ id: d.id, data: d.data() }))
-            .filter((tech) => {
-                const data = tech.data;
-                const onDuty = data.onDuty === true;
-                const approved = ["active", "approved"].includes(String(data.status || "").toLowerCase()) &&
-                    data.suspended !== true;
-                const hasCapacity = Number(data.currentJobCount || 0) < Number(data.maxConcurrentJobs || 3);
-                const sameEmirate = String(data.emirate || "").toLowerCase() === String(contextUpdate.emirate).toLowerCase();
-                const skills = Array.isArray(data.tradeSkills) ? data.tradeSkills.map((s: any) => String(s).toLowerCase()) : [String(data.trade || "").toLowerCase()];
-                const skillMatch = !requiredSkill || skills.some((s: string) => requiredSkill.includes(s) || s.includes(requiredSkill));
-                return onDuty && approved && hasCapacity && sameEmirate && skillMatch;
-            })
+            .map((d) => ({ id: d.id, data: d.data(), technician: technicianProfiles.get(d.id) || {} }))
+            .filter((tech) => evaluateTechnicianForTicket({
+                user: tech.data,
+                technician: tech.technician,
+                ticketEmirate: contextUpdate.emirate,
+                requiredTrade,
+            }).eligible)
             .map((tech) => ({
                 ...tech,
                 distance: distanceKm(normalizeGeo(tech.data), propertyGeo),
@@ -1059,6 +1060,8 @@ async function attemptAutoAssignment(ticketRef: admin.firestore.DocumentReferenc
                     !freshTechnicianSnap.exists ||
                     freshTechnician.onDuty !== true ||
                     freshTechnician.suspended === true ||
+                    freshTechnician.isAvailable === false ||
+                    freshTechnician.available === false ||
                     !["active", "approved"].includes(normalizeRole(freshTechnician.status)) ||
                     Number(freshTechnician.currentJobCount || 0) >= Number(freshTechnician.maxConcurrentJobs || 3)
                 ) {
