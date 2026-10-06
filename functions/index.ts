@@ -30,6 +30,7 @@ import { sendTwilioSMS } from "./smsDelivery";
 import { resolveTechnicianArrivalBinding } from "./technicianInstallationBinding";
 import { flagSlaBreaches } from "./slaCron";
 import { evaluateTechnicianForTicket, requiredTicketTrade } from "./technicianDispatchMatching";
+import { isTechnicianAssignmentEvent, technicianAssignedNotificationSeed } from "./shared/technicianAssignmentNotification";
 
 // [V10] PRODUCTION GRADE FULL-STACK STABILIZATION
 setGlobalOptions({ region: "europe-west3", enforceAppCheck: true });
@@ -841,7 +842,11 @@ export const onTicketStatusChanged = onDocumentUpdated({ document: "maintenanceT
         await event.data!.after.ref.set(readyUpdate, { merge: true });
         await attemptAutoAssignment(event.data!.after.ref, { ...after, ...readyUpdate });
     }
-    if (before?.status === after.status) return;
+    const statusChanged = before?.status !== after.status;
+    // A technician change while the ticket stays ASSIGNED/ACCEPTED is a genuine
+    // re-assignment the requester must still hear about.
+    const technicianAssignmentEvent = isTechnicianAssignmentEvent(before, after);
+    if (!statusChanged && !technicianAssignmentEvent) return;
 
     const ticketId = event.params.id;
     const terminalStatuses = new Set([
@@ -885,7 +890,7 @@ export const onTicketStatusChanged = onDocumentUpdated({ document: "maintenanceT
         });
     }
 
-    await logAudit({
+    if (statusChanged) await logAudit({
         actorId: after.updatedBy || "SYSTEM",
         actorRole: after.updatedByRole || "system",
         action: "STATUS_CHANGE",
@@ -903,20 +908,33 @@ export const onTicketStatusChanged = onDocumentUpdated({ document: "maintenanceT
     const prop: string = after.propertyName || "the property";
     const ref8: string = ticketId.substring(0, 8).toUpperCase();
 
+    // Deterministic notification ID for one assignment: OPEN -> ASSIGNED and the
+    // later ASSIGNED -> ACCEPTED (plus trigger retries) collapse to one document,
+    // while a different technician or a fresh assignment gets a new one.
+    const assignmentNotificationId = (recipientId: string, audience: string): string | undefined => {
+        const seed = technicianAssignedNotificationSeed(ticketId, recipientId, audience, after);
+        return seed ? `tech_assigned_${crypto.createHash("sha256").update(seed, "utf8").digest("hex").slice(0, 40)}` : undefined;
+    };
+
     // Helper: notify both requester parties (tenant + owner) but not the technician
-    const notifyRequester = async (title: string, body: string) => {
+    const notifyRequester = async (title: string, body: string, options: { oncePerAssignment?: boolean } = {}) => {
         const tasks: Promise<any>[] = [];
-        if (tenantId && tenantId !== techId) tasks.push(dispatchOmniNotification(tenantId, title, body, { extraData: { ticketId, type: "ticket_status" }, url: `/tenant/ticket/${ticketId}` }));
-        if (ownerId && ownerId !== techId && ownerId !== tenantId) tasks.push(dispatchOmniNotification(ownerId, title, body, { extraData: { ticketId, type: "ticket_status" }, url: `/owner/ticket/${ticketId}` }));
+        const idFor = (recipientId: string, audience: string) =>
+            options.oncePerAssignment ? assignmentNotificationId(recipientId, audience) : undefined;
+        if (tenantId && tenantId !== techId) tasks.push(dispatchOmniNotification(tenantId, title, body, { extraData: { ticketId, type: "ticket_status" }, url: `/tenant/ticket/${ticketId}`, notificationId: idFor(tenantId, "tenant") }));
+        if (ownerId && ownerId !== techId && ownerId !== tenantId) tasks.push(dispatchOmniNotification(ownerId, title, body, { extraData: { ticketId, type: "ticket_status" }, url: `/owner/ticket/${ticketId}`, notificationId: idFor(ownerId, "owner") }));
         await Promise.allSettled(tasks);
     };
 
     // ── Status-based notifications ────────────────────────────────────────
     const statusNorm = (after.status || "").toLowerCase();
 
-    if (["accepted", "assigned", "technician_assigned"].includes(statusNorm)) {
-        await notifyRequester("Technician Assigned ✓", `${techName} has accepted ticket #${ref8} and will be on the way soon.`);
-        if (techId) await dispatchOmniNotification(techId, "Job Accepted", `You are now assigned to #${ref8} at ${prop}.`, { extraData: { ticketId, type: "job_assigned" }, url: `/technician/job/${ticketId}` });
+    if (technicianAssignmentEvent) {
+        await notifyRequester("Technician Assigned ✓", `${techName} has been assigned to ticket #${ref8} and will be on the way soon.`, { oncePerAssignment: true });
+        if (techId) await dispatchOmniNotification(techId, "Job Accepted", `You are now assigned to #${ref8} at ${prop}.`, { extraData: { ticketId, type: "job_assigned" }, url: `/technician/job/${ticketId}`, notificationId: assignmentNotificationId(techId, "technician") });
+    }
+    else if (!statusChanged) {
+        // Only technician re-assignments reach here without a status change.
     }
     else if (["on_the_way", "en_route"].includes(statusNorm)) {
         await notifyRequester("Technician On The Way 🚗", `${techName} is heading to ${prop} now. Track live in your app.`);
@@ -1220,20 +1238,35 @@ async function dispatchOmniNotification(userId: string, title: string, body: str
 
         // The canonical notification trigger resolves registered tokens and
         // records provider outcomes. Do not read the retired users.fcmTokens array.
-        const channels: Array<{ name: string; operation: Promise<unknown> }> = [{
-            name: 'push',
-            operation: db.collection('notifications').add({
-                recipientId: userId, title, body,
-                type: options.type || 'STATUS_UPDATE',
-                ticketId: options.extraData?.ticketId || null,
-                link: options.url || '/',
-                metadata: options.extraData || {},
-                read: false,
-                pushDeliveryState: 'PENDING',
-                deliverySource: 'server:dispatchOmniNotification',
-                createdAt: FieldValue.serverTimestamp(),
-            }),
-        }];
+        const notificationRecord = {
+            recipientId: userId, title, body,
+            type: options.type || 'STATUS_UPDATE',
+            ticketId: options.extraData?.ticketId || null,
+            link: options.url || '/',
+            metadata: options.extraData || {},
+            read: false,
+            pushDeliveryState: 'PENDING',
+            deliverySource: 'server:dispatchOmniNotification',
+            createdAt: FieldValue.serverTimestamp(),
+        };
+        const channels: Array<{ name: string; operation: Promise<unknown> }> = [];
+        const notificationId = typeof options.notificationId === 'string' ? options.notificationId.trim() : '';
+        if (notificationId) {
+            // Idempotent delivery: create() on a deterministic ID. If this event
+            // was already delivered (same assignment, or a trigger retry), stop
+            // before any channel (in-app, push, SMS, email) fires again.
+            try {
+                await db.collection('notifications').doc(notificationId).create({ ...notificationRecord, idempotencyKey: notificationId });
+            } catch (createErr: any) {
+                if (createErr?.code === 6 || createErr?.code === 'already-exists' || /already exists/i.test(String(createErr?.message || ''))) {
+                    console.info('[Notification deduplicated]', { notificationId });
+                    return;
+                }
+                console.warn('[Notification channel failed]', { channel: 'push' });
+            }
+        } else {
+            channels.push({ name: 'push', operation: db.collection('notifications').add(notificationRecord) });
+        }
 
         // Optional channel failures must not prevent the other attempts.
         if (userData?.email && options.type === 'CRITICAL') {
