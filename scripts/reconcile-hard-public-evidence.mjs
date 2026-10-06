@@ -42,25 +42,41 @@ function evidenceMillis(value) {
   return Number.isFinite(parsed) ? parsed : NaN;
 }
 
-function validPhysicalRecord(record, sourceGateId, devicePattern) {
-  if (!record || typeof record !== 'object') return false;
-  if (text(record.gateId) !== sourceGateId) return false;
-  if (text(record.status).toLowerCase() !== 'passed') return false;
-  if (text(record.evidenceLayer).toLowerCase() !== 'physical_device') return false;
-  if (text(record.source).toLowerCase() !== 'admin-manual-evidence') return false;
-  if (record.executionGenerated !== false || record.hardLaunchClaim !== false) return false;
-  if (text(record.releaseSha).toLowerCase() !== releaseSha) return false;
-  if (text(record.commitSha).toLowerCase() !== releaseSha) return false;
-  if (!text(record.testerName) || !text(record.proofRef) || !text(record.recordedBy)) return false;
+function physicalRecordValidationReasons(record, sourceGateId, devicePattern) {
+  const reasons = [];
+  if (!record || typeof record !== 'object') return ['record-missing-or-not-object'];
+  if (text(record.gateId) !== sourceGateId) reasons.push('gate-id-mismatch');
+  if (text(record.status).toLowerCase() !== 'passed') reasons.push('status-not-passed');
+  if (text(record.evidenceLayer).toLowerCase() !== 'physical_device') reasons.push('evidence-layer-not-physical-device');
+  if (text(record.source).toLowerCase() !== 'admin-manual-evidence') reasons.push('source-not-admin-manual-evidence');
+  if (record.executionGenerated !== false) reasons.push('execution-generated-must-be-false');
+  if (record.hardLaunchClaim !== false) reasons.push('hard-launch-claim-must-be-false');
+  const observedReleaseSha = text(record.releaseSha).toLowerCase();
+  const observedCommitSha = text(record.commitSha).toLowerCase();
+  if (!observedReleaseSha && !observedCommitSha) reasons.push('release-binding-missing');
+  if (observedReleaseSha && observedReleaseSha !== releaseSha) reasons.push('release-sha-mismatch');
+  if (observedCommitSha && observedCommitSha !== releaseSha) reasons.push('commit-sha-mismatch');
+  if (observedReleaseSha !== releaseSha && observedCommitSha !== releaseSha) {
+    reasons.push('exact-release-binding-missing');
+  }
+  if (!text(record.testerName)) reasons.push('tester-name-missing');
+  if (!text(record.proofRef)) reasons.push('proof-reference-missing');
+  if (!text(record.recordedBy)) reasons.push('recorded-by-missing');
   const createdAtMs = evidenceMillis(record.createdAt);
-  if (!Number.isFinite(createdAtMs)) return false;
-  if (createdAtMs > Date.now() + MAX_CLOCK_SKEW_MS) return false;
-  if (Date.now() - createdAtMs > MANUAL_EVIDENCE_MAX_AGE_MS) return false;
+  if (!Number.isFinite(createdAtMs)) reasons.push('created-at-invalid');
+  else {
+    if (createdAtMs > Date.now() + MAX_CLOCK_SKEW_MS) reasons.push('created-at-in-future');
+    if (Date.now() - createdAtMs > MANUAL_EVIDENCE_MAX_AGE_MS) reasons.push('evidence-older-than-30-days');
+  }
   const device = text(record.device);
-  if (!/(android|iphone|tablet|physical device)/i.test(device)) return false;
-  if (/desktop/i.test(device)) return false;
-  if (devicePattern && !devicePattern.test(device)) return false;
-  return true;
+  if (!/(android|iphone|tablet|physical device)/i.test(device)) reasons.push('device-not-physical');
+  if (/desktop/i.test(device)) reasons.push('desktop-device-not-accepted');
+  if (devicePattern && !devicePattern.test(device)) reasons.push('device-type-mismatch');
+  return reasons;
+}
+
+function validPhysicalRecord(record, sourceGateId, devicePattern) {
+  return physicalRecordValidationReasons(record, sourceGateId, devicePattern).length === 0;
 }
 
 function materializeManualPhysicalGate(gates, key, sourceGateId, record) {
@@ -112,6 +128,63 @@ function materializeManualPhysicalGate(gates, key, sourceGateId, record) {
   gate.artifactBytes = stat.size;
   gate.evidenceType = 'manual-artifact';
   gate.executionGenerated = false;
+  gate.hardLaunchClaim = false;
+  gate.updatedAt = new Date().toISOString();
+  return key;
+}
+
+function materializeProtectedTechnicianGate(gates, key, sourceGateId, proof) {
+  const [groupName, gateName] = key.split('.');
+  const gate = gates?.[groupName]?.[gateName];
+  if (!gate || gate.required !== true) fail(`required physical gate is missing: ${key}`);
+  if (text(gate.evidenceLayerRequired) !== 'physical_device') {
+    fail(`refusing to reconcile non-physical gate from protected technician evidence: ${key}`);
+  }
+
+  const testedAtMs = evidenceMillis(proof?.observedAt || proof?.verifiedAt);
+  if (!Number.isFinite(testedAtMs)) fail('protected technician physical evidence timestamp is invalid');
+  const proofRef = text(proof?.evidenceReference);
+  if (!proofRef) fail('protected technician physical evidence reference is missing');
+
+  mkdirSync(artifactRoot, { recursive: true });
+  const artifactName = `physical-evidence-${gateName}-protected-technician.json`;
+  const artifactPath = path.join(artifactRoot, artifactName);
+  const relativeArtifactPath = path.relative(root, artifactPath).replace(/\\/g, '/');
+  const testedAt = new Date(testedAtMs).toISOString();
+  const attestation = {
+    schemaVersion: 1,
+    gateKey: key,
+    sourceGateId,
+    releaseSha,
+    controlPlaneCommitSha: controlPlaneSha,
+    source: 'protected-technician-operational-evidence',
+    status: 'passed',
+    evidenceLayer: 'physical_device',
+    testerName: 'Technician Physical Evidence workflow',
+    role: 'technician',
+    device: 'Android physical device',
+    proofRef,
+    sourceWorkflowRunId: text(proof?.sourceWorkflowRunId || proof?.workflowRunId),
+    sourceSystem: text(proof?.sourceSystem),
+    sourceArtifactHash: text(proof?.artifactHash),
+    testedAt,
+    hardLaunchClaim: false,
+  };
+  writeFileSync(artifactPath, `${JSON.stringify(attestation, null, 2)}\n`, { mode: 0o600 });
+  const stat = statSync(artifactPath);
+
+  gate.status = 'passed';
+  gate.proof = `Protected exact-SHA technician physical-device evidence validated; proof reference: ${proofRef}`;
+  gate.testedBy = 'Technician Physical Evidence workflow';
+  gate.testedAt = testedAt;
+  gate.commitSha = releaseSha;
+  gate.releaseSha = releaseSha;
+  gate.controlPlaneCommitSha = controlPlaneSha;
+  gate.artifactPath = relativeArtifactPath;
+  gate.artifactHash = `sha256:${sha256File(artifactPath)}`;
+  gate.artifactBytes = stat.size;
+  gate.evidenceType = 'physical-device-report';
+  gate.executionGenerated = true;
   gate.hardLaunchClaim = false;
   gate.updatedAt = new Date().toISOString();
   return key;
@@ -208,11 +281,27 @@ if (projectId !== EXPECTED_PROJECT_ID) fail(`unexpected Firebase project: ${proj
 initializeFirebaseAdmin(admin, projectId);
 const db = admin.firestore();
 
-const manualSnapshot = await db.collection('launch_evidence')
-  .where('releaseSha', '==', releaseSha)
-  .limit(500)
-  .get();
-const manualPhysicalRecords = manualSnapshot.docs
+async function readExactReleaseEvidence(fieldName) {
+  const query = db.collection('launch_evidence')
+    .where(fieldName, '==', releaseSha)
+    .limit(500);
+  const documents = [];
+  let page = await query.get();
+  while (page.docs.length) {
+    documents.push(...page.docs);
+    if (page.docs.length < 500) break;
+    page = await query.startAfter(page.docs.at(-1)).get();
+  }
+  return documents;
+}
+
+const releaseBoundDocuments = await readExactReleaseEvidence('releaseSha');
+const commitBoundDocuments = await readExactReleaseEvidence('commitSha');
+const manualDocumentsById = new Map();
+for (const doc of [...releaseBoundDocuments, ...commitBoundDocuments]) {
+  manualDocumentsById.set(doc.id, doc);
+}
+const manualPhysicalRecords = [...manualDocumentsById.values()]
   .map((doc) => ({ __documentId: doc.id, ...(doc.data() || {}) }))
   .sort((left, right) => evidenceMillis(right.createdAt) - evidenceMillis(left.createdAt));
 
@@ -363,24 +452,79 @@ const physicalGateSources = [
 
 const reconciledPhysicalGates = [];
 const missingPhysicalGates = [];
+const physicalGateDiagnostics = [];
 for (const mapping of physicalGateSources) {
+  if (mapping.requireTechnicianOperational) {
+    if (!technicianPhysicalProofValid) {
+      physicalGateDiagnostics.push({
+        gateKey: mapping.key,
+        commandCenterGateId: mapping.sourceGateId,
+        status: 'blocked',
+        reason: 'protected-technician-mission-proof-missing-or-invalid',
+      });
+      missingPhysicalGates.push(
+        `${mapping.key} (real protected technician GPS mission proof is missing)`,
+      );
+      continue;
+    }
+    reconciledPhysicalGates.push(
+      materializeProtectedTechnicianGate(gates, mapping.key, mapping.sourceGateId, technicianPhysicalProof),
+    );
+    physicalGateDiagnostics.push({
+      gateKey: mapping.key,
+      commandCenterGateId: mapping.sourceGateId,
+      status: 'passed',
+      source: 'protected-technician-operational-evidence',
+    });
+    continue;
+  }
+
   const record = manualPhysicalRecords.find((candidate) =>
     validPhysicalRecord(candidate, mapping.sourceGateId, mapping.devicePattern)
   );
   if (!record) {
-    missingPhysicalGates.push(`${mapping.key} (Command Center: ${mapping.sourceGateId})`);
-    continue;
-  }
-  if (mapping.requireTechnicianOperational && !technicianPhysicalProofValid) {
-    missingPhysicalGates.push(
-      `${mapping.key} (real protected technician GPS mission proof is missing)`,
+    const matchingCurrentReleaseRecords = manualPhysicalRecords.filter((candidate) =>
+      text(candidate.gateId) === mapping.sourceGateId
     );
+    const currentReleaseRecords = matchingCurrentReleaseRecords.length;
+    const invalidReasons = [...new Set(
+      matchingCurrentReleaseRecords.flatMap((candidate) =>
+        physicalRecordValidationReasons(candidate, mapping.sourceGateId, mapping.devicePattern)
+      )
+    )].sort();
+    physicalGateDiagnostics.push({
+      gateKey: mapping.key,
+      commandCenterGateId: mapping.sourceGateId,
+      status: 'blocked',
+      reason: currentReleaseRecords ? 'current-release-records-do-not-satisfy-physical-validation' : 'no-current-release-record',
+      currentReleaseRecords,
+      invalidReasons,
+    });
+    missingPhysicalGates.push(`${mapping.key} (Command Center: ${mapping.sourceGateId})`);
     continue;
   }
   reconciledPhysicalGates.push(
     materializeManualPhysicalGate(gates, mapping.key, mapping.sourceGateId, record),
   );
+  physicalGateDiagnostics.push({
+    gateKey: mapping.key,
+    commandCenterGateId: mapping.sourceGateId,
+    status: 'passed',
+  });
 }
+
+// Preserve blockers without publishing a clearance artifact or changing gate authority.
+mkdirSync(path.dirname(gatePath), { recursive: true });
+writeFileSync(path.join(root, 'launch_package', 'hard-clearance-physical-blockers.json'), `${JSON.stringify({
+  schemaVersion: 1,
+  status: missingPhysicalGates.length ? 'blocked' : 'passed',
+  releaseSha,
+  controlPlaneCommitSha: controlPlaneSha,
+  observedAt: new Date().toISOString(),
+  hardLaunchClaim: false,
+  technicianPhysicalProofValid,
+  gates: physicalGateDiagnostics,
+}, null, 2)}\n`, { mode: 0o600 });
 
 if (missingPhysicalGates.length) {
   fail(`physical-device evidence is still incomplete: ${missingPhysicalGates.join('; ')}`);
