@@ -1,10 +1,10 @@
 /**
  * BIN GROUP - LiveTechnicianTrackingCard
- * Shared Owner/Tenant tracking summary. This component does not render a
- * street map or road route; it displays verified points, freshness,
- * straight-line distance and an external Google Maps route link.
+ * Shared Owner/Tenant live tracking surface. It renders an embedded Google
+ * map for verified job and technician coordinates, preserves GPS freshness
+ * truth, and keeps an external Google Maps route fallback.
  */
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import {
     Avatar,
     Box,
@@ -34,6 +34,7 @@ import {
     WifiOff,
 } from 'lucide-react';
 import { binThemeTokens } from '../../theme/binGroupTheme';
+import { useGoogleMaps } from '../../lib/maps';
 import {
     buildGoogleMapsDirectionsUrl,
     calculateDistanceKm,
@@ -102,6 +103,235 @@ function getStatusMessage(ticket: any, etaMin: number | null, trackingFresh: boo
     }
 }
 
+
+type TrackingMapProps = {
+    technicianLocation: any;
+    jobLocation: any;
+    trackingRequested: boolean;
+    trackingFresh: boolean;
+    locationStale: boolean;
+    mapsUrl: string;
+    jobMapsUrl: string | null;
+};
+
+function LiveTrackingMap({
+    technicianLocation,
+    jobLocation,
+    trackingRequested,
+    trackingFresh,
+    locationStale,
+    mapsUrl,
+    jobMapsUrl,
+}: TrackingMapProps) {
+    const { isLoaded, loadError } = useGoogleMaps();
+    const mapDivRef = useRef<HTMLDivElement | null>(null);
+    const mapObjRef = useRef<any>(null);
+    const technicianMarkerRef = useRef<any>(null);
+    const jobMarkerRef = useRef<any>(null);
+    const routeLineRef = useRef<any>(null);
+
+    useEffect(() => {
+        if (!isLoaded || !mapDivRef.current || !jobLocation) return;
+
+        const google = (window as any).google;
+        if (!google?.maps) return;
+
+        const map = mapObjRef.current || new google.maps.Map(mapDivRef.current, {
+            center: { lat: jobLocation.lat, lng: jobLocation.lng },
+            zoom: technicianLocation ? 14 : 16,
+            mapTypeId: 'roadmap',
+            disableDefaultUI: true,
+            zoomControl: true,
+            fullscreenControl: true,
+            gestureHandling: 'cooperative',
+        });
+        mapObjRef.current = map;
+
+        if (!jobMarkerRef.current) {
+            jobMarkerRef.current = new google.maps.Marker({
+                map,
+                position: { lat: jobLocation.lat, lng: jobLocation.lng },
+                title: 'Service location',
+                label: { text: 'JOB', fontWeight: '700' },
+            });
+        } else {
+            jobMarkerRef.current.setMap(map);
+            jobMarkerRef.current.setPosition({ lat: jobLocation.lat, lng: jobLocation.lng });
+        }
+
+        if (technicianLocation) {
+            if (!technicianMarkerRef.current) {
+                technicianMarkerRef.current = new google.maps.Marker({
+                    map,
+                    position: { lat: technicianLocation.lat, lng: technicianLocation.lng },
+                    title: trackingFresh ? 'Live technician position' : 'Last known technician position',
+                    label: { text: 'TECH', fontWeight: '700' },
+                });
+            } else {
+                technicianMarkerRef.current.setMap(map);
+                technicianMarkerRef.current.setPosition({ lat: technicianLocation.lat, lng: technicianLocation.lng });
+                technicianMarkerRef.current.setTitle(trackingFresh ? 'Live technician position' : 'Last known technician position');
+            }
+            technicianMarkerRef.current.setOpacity(trackingFresh ? 1 : 0.45);
+
+            const path = [
+                { lat: technicianLocation.lat, lng: technicianLocation.lng },
+                { lat: jobLocation.lat, lng: jobLocation.lng },
+            ];
+            if (!routeLineRef.current) {
+                routeLineRef.current = new google.maps.Polyline({
+                    map,
+                    path,
+                    geodesic: true,
+                    strokeOpacity: trackingFresh ? 0.8 : 0.3,
+                    strokeWeight: 3,
+                });
+            } else {
+                routeLineRef.current.setMap(map);
+                routeLineRef.current.setPath(path);
+                routeLineRef.current.setOptions({ strokeOpacity: trackingFresh ? 0.8 : 0.3 });
+            }
+
+            const bounds = new google.maps.LatLngBounds();
+            bounds.extend({ lat: technicianLocation.lat, lng: technicianLocation.lng });
+            bounds.extend({ lat: jobLocation.lat, lng: jobLocation.lng });
+            map.fitBounds(bounds, 56);
+        } else {
+            technicianMarkerRef.current?.setMap(null);
+            routeLineRef.current?.setMap(null);
+            map.setCenter({ lat: jobLocation.lat, lng: jobLocation.lng });
+            map.setZoom(16);
+        }
+    }, [
+        isLoaded,
+        technicianLocation?.lat,
+        technicianLocation?.lng,
+        jobLocation?.lat,
+        jobLocation?.lng,
+        trackingFresh,
+    ]);
+
+    const fallbackUrl = technicianLocation && jobLocation ? mapsUrl : jobMapsUrl;
+
+    return (
+        <Box
+            data-testid="technician-live-map"
+            sx={{
+                minHeight: { xs: 300, md: 360 },
+                bgcolor: 'rgba(0,0,0,0.7)',
+                position: 'relative',
+                overflow: 'hidden',
+            }}
+        >
+            {isLoaded && jobLocation ? (
+                <Box ref={mapDivRef} sx={{ position: 'absolute', inset: 0 }} />
+            ) : (
+                <Stack
+                    alignItems="center"
+                    justifyContent="center"
+                    spacing={1.5}
+                    sx={{ minHeight: { xs: 300, md: 360 }, px: 3, textAlign: 'center' }}
+                >
+                    <MapPin size={34} color={binThemeTokens.gold} />
+                    <Typography variant="body2" sx={{ color: '#FFF', fontWeight: 900 }}>
+                        {jobLocation
+                            ? 'Embedded map is unavailable right now.'
+                            : 'Verified job coordinates are unavailable.'}
+                    </Typography>
+                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)', maxWidth: 460 }}>
+                        {jobLocation
+                            ? 'The tracking status below remains authoritative. Open Google Maps to view the verified location externally.'
+                            : 'Dispatch distance and route cannot be shown until the job location is verified.'}
+                    </Typography>
+                    {fallbackUrl && (
+                        <Button
+                            size="small"
+                            startIcon={<ExternalLink size={13} />}
+                            onClick={() => window.open(fallbackUrl, '_blank', 'noopener,noreferrer')}
+                            sx={{ color: binThemeTokens.gold, fontWeight: 900, textTransform: 'none' }}
+                        >
+                            Open in Google Maps
+                        </Button>
+                    )}
+                    {loadError && (
+                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.35)' }}>
+                            Map fallback active
+                        </Typography>
+                    )}
+                </Stack>
+            )}
+
+            <Stack
+                direction="row"
+                spacing={1}
+                sx={{
+                    position: 'absolute',
+                    top: 12,
+                    left: 12,
+                    right: 12,
+                    justifyContent: 'space-between',
+                    alignItems: 'flex-start',
+                    pointerEvents: 'none',
+                }}
+            >
+                <Chip
+                    size="small"
+                    label={
+                        trackingFresh
+                            ? 'LIVE TECHNICIAN GPS'
+                            : technicianLocation
+                                ? 'LAST KNOWN TECHNICIAN LOCATION'
+                                : jobLocation
+                                    ? 'JOB LOCATION'
+                                    : 'LOCATION UNAVAILABLE'
+                    }
+                    sx={{
+                        bgcolor: 'rgba(5,10,18,0.82)',
+                        color: trackingFresh ? '#67e8f9' : '#FFF',
+                        fontWeight: 950,
+                        border: '1px solid rgba(255,255,255,0.16)',
+                    }}
+                />
+                {trackingRequested && (
+                    <Chip
+                        size="small"
+                        data-testid="technician-gps-freshness"
+                        icon={trackingFresh ? <Wifi size={12} /> : <WifiOff size={12} />}
+                        label={trackingFresh ? 'GPS LIVE' : locationStale ? 'GPS STALE' : 'GPS PENDING'}
+                        sx={{
+                            bgcolor: trackingFresh ? 'rgba(16,185,129,0.86)' : 'rgba(185,28,28,0.86)',
+                            color: '#FFF',
+                            fontWeight: 950,
+                            '& .MuiChip-icon': { color: 'inherit' },
+                        }}
+                    />
+                )}
+            </Stack>
+
+            {isLoaded && jobLocation && (
+                <Button
+                    size="small"
+                    startIcon={<ExternalLink size={13} />}
+                    onClick={() => window.open(fallbackUrl || mapsUrl, '_blank', 'noopener,noreferrer')}
+                    sx={{
+                        position: 'absolute',
+                        left: 12,
+                        bottom: 12,
+                        bgcolor: 'rgba(5,10,18,0.84)',
+                        color: '#FFF',
+                        border: '1px solid rgba(255,255,255,0.16)',
+                        fontWeight: 900,
+                        textTransform: 'none',
+                        '&:hover': { bgcolor: 'rgba(5,10,18,0.94)' },
+                    }}
+                >
+                    Open route in Google Maps
+                </Button>
+            )}
+        </Box>
+    );
+}
+
 export default function LiveTechnicianTrackingCard({
     ticket,
     onChatClick,
@@ -117,7 +347,7 @@ export default function LiveTechnicianTrackingCard({
     const trackingRequested = isTrackingActive(ticket.status, ticket.trackingStatus);
     const trackingFresh = Boolean(trackingRequested && technicianLocation && !locationStale);
     const straightLineDistanceKm = calculateDistanceKm(technicianLocation, jobLocation);
-    const straightLineEstimateMinutes = calculateEtaMinutes(straightLineDistanceKm);
+    const straightLineEstimateMinutes = trackingFresh ? calculateEtaMinutes(straightLineDistanceKm) : null;
     const staleLabel = getStaleLabel(locationUpdatedAt);
     const normalisedStatus = normalizeTicketStatus(ticket.status);
     const isCompleted = normalisedStatus === 'completed';
@@ -148,114 +378,15 @@ export default function LiveTechnicianTrackingCard({
                 overflow: 'hidden',
             }}
         >
-            <Box
-                data-testid="technician-tracking-summary"
-                sx={{
-                    minHeight: 190,
-                    bgcolor: 'rgba(0,0,0,0.6)',
-                    position: 'relative',
-                    backgroundImage: 'radial-gradient(ellipse at 50% 0%, rgba(34,211,238,0.08) 0%, transparent 70%)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    flexDirection: 'column',
-                    gap: 1.25,
-                    px: 2,
-                    py: 3,
-                }}
-            >
-                <Typography
-                    variant="caption"
-                    sx={{
-                        position: 'absolute',
-                        top: 12,
-                        left: 12,
-                        color: 'rgba(255,255,255,0.45)',
-                        fontWeight: 900,
-                        letterSpacing: 1,
-                    }}
-                >
-                    LOCATION SUMMARY - NOT A STREET MAP
-                </Typography>
-
-                {trackingRequested && (
-                    <Chip
-                        size="small"
-                        data-testid="technician-gps-freshness"
-                        icon={trackingFresh ? <Wifi size={12} /> : <WifiOff size={12} />}
-                        label={trackingFresh ? 'FRESH FOREGROUND GPS' : locationStale ? 'GPS STALE' : 'GPS POINT PENDING'}
-                        sx={{
-                            position: 'absolute',
-                            top: 10,
-                            right: 10,
-                            bgcolor: trackingFresh ? 'rgba(16,185,129,0.16)' : 'rgba(239,68,68,0.14)',
-                            color: trackingFresh ? '#4ade80' : '#f87171',
-                            fontWeight: 950,
-                            fontSize: '0.62rem',
-                            '& .MuiChip-icon': { color: 'inherit' },
-                        }}
-                    />
-                )}
-
-                {technicianLocation && jobLocation ? (
-                    <>
-                        <Stack direction="row" alignItems="center" spacing={2.5} sx={{ mt: 3, width: '100%', justifyContent: 'center' }}>
-                            <Tooltip title="Last verified Technician coordinate">
-                                <Stack alignItems="center" spacing={0.5}>
-                                    <Box sx={{ width: 16, height: 16, borderRadius: '50%', bgcolor: trackingFresh ? '#22d3ee' : '#64748b', border: '2px solid #FFF' }} />
-                                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.6rem', fontWeight: 900 }}>TECH</Typography>
-                                </Stack>
-                            </Tooltip>
-                            <Box sx={{ width: { xs: 35, sm: 70 }, borderTop: '1.5px dashed rgba(255,255,255,0.18)' }} />
-                            <Typography variant="caption" sx={{ color: '#FFF', fontWeight: 900, bgcolor: 'rgba(0,0,0,0.5)', px: 1, borderRadius: 1 }}>
-                                {straightLineDistanceKm === null ? 'Distance unavailable' : `${straightLineDistanceKm.toFixed(1)} km approximate straight-line distance`}
-                            </Typography>
-                            <Box sx={{ width: { xs: 35, sm: 70 }, borderTop: '1.5px dashed rgba(255,255,255,0.18)' }} />
-                            <Tooltip title="Verified job/property coordinate">
-                                <Stack alignItems="center" spacing={0.5}>
-                                    <Box sx={{ width: 16, height: 16, borderRadius: '50%', bgcolor: binThemeTokens.gold, border: '2px solid #FFF' }} />
-                                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.6rem', fontWeight: 900 }}>JOB</Typography>
-                                </Stack>
-                            </Tooltip>
-                        </Stack>
-                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.45)', fontWeight: 700, textAlign: 'center' }}>
-                            In-app estimate uses approximate straight-line distance and a fixed average speed. Road routing is available only in Google Maps.
-                        </Typography>
-                        <Button
-                            size="small"
-                            startIcon={<ExternalLink size={13} />}
-                            onClick={() => window.open(mapsUrl, '_blank', 'noopener,noreferrer')}
-                            sx={{ color: '#22d3ee', border: '1px solid rgba(34,211,238,0.3)', borderRadius: 3, fontSize: '0.68rem', fontWeight: 900, textTransform: 'none' }}
-                        >
-                            Open in Google Maps
-                        </Button>
-                    </>
-                ) : jobLocation ? (
-                    <>
-                        <MapPin size={32} color={binThemeTokens.gold} style={{ opacity: 0.7 }} />
-                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 900 }}>
-                            Verified job pin available; Technician GPS point pending.
-                        </Typography>
-                        {jobMapsUrl && (
-                            <Button
-                                size="small"
-                                startIcon={<ExternalLink size={13} />}
-                                onClick={() => window.open(jobMapsUrl, '_blank', 'noopener,noreferrer')}
-                                sx={{ color: binThemeTokens.gold, fontSize: '0.68rem', fontWeight: 900, textTransform: 'none' }}
-                            >
-                                Open Job Pin in Google Maps
-                            </Button>
-                        )}
-                    </>
-                ) : (
-                    <>
-                        <AlertCircle size={28} color="rgba(255,255,255,0.25)" />
-                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900, textAlign: 'center' }}>
-                            Exact job coordinates are unavailable. Dispatch distance and route cannot be verified.
-                        </Typography>
-                    </>
-                )}
-            </Box>
+            <LiveTrackingMap
+                technicianLocation={technicianLocation}
+                jobLocation={jobLocation}
+                trackingRequested={trackingRequested}
+                trackingFresh={trackingFresh}
+                locationStale={locationStale}
+                mapsUrl={mapsUrl}
+                jobMapsUrl={jobMapsUrl}
+            />
 
             <Box sx={{ p: { xs: 2.5, md: 3 }, pr: { xs: 9, md: 3 }, pb: { xs: 12, md: 3 } }}>
                 <Stack direction="row" alignItems="flex-start" justifyContent="space-between" spacing={1} sx={{ mb: 1 }}>
