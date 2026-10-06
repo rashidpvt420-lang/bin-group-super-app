@@ -22,6 +22,8 @@ import { useRole } from '../../context/RoleContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { notifyAdmins } from '../../services/notificationService';
 
+const COMMON_AREA_VALUE = '__COMMON_AREA__';
+
 const CATEGORIES = [
     'AC / Cooling', 'Electrical / Power', 'Plumbing / Water',
     'Handyman / Carpentry', 'Deep Cleaning', 'Pest Control',
@@ -74,6 +76,9 @@ export default function OwnerComplaintPage() {
             const q = query(collection(db, 'units'), where('propertyId', '==', selectedPropertyId));
             const snap = await getDocs(q);
             setUnits(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+            // A property with exactly one unit record is pre-selected; the
+            // server applies the same rule when no unit is sent.
+            if (snap.size === 1) setSelectedUnitId(snap.docs[0].id);
         };
         fetchUnits();
     }, [selectedPropertyId]);
@@ -119,6 +124,10 @@ export default function OwnerComplaintPage() {
             alert('Please select a property.');
             return;
         }
+        if (units.length > 1 && !selectedUnitId) {
+            alert('Please select the unit that needs maintenance, or choose Common Area / Whole Property.');
+            return;
+        }
 
         // Derive job location from property
         const locSource = selectedProperty?.location || selectedProperty?.propertyLocation || selectedProperty?.geoPoint || null;
@@ -141,7 +150,8 @@ export default function OwnerComplaintPage() {
             const createTicket = httpsCallable(functions, 'ownerCreateMaintenanceTicket');
             const created = await createTicket({
                 propertyId: selectedPropertyId,
-                unitId: selectedUnitId || null,
+                unitId: selectedUnitId && selectedUnitId !== COMMON_AREA_VALUE ? selectedUnitId : null,
+                serviceScope: selectedUnitId && selectedUnitId !== COMMON_AREA_VALUE ? 'UNIT' : 'COMMON_AREA',
                 category,
                 priority,
                 description,
@@ -230,7 +240,7 @@ export default function OwnerComplaintPage() {
                                         onChange={(e) => setSelectedUnitId(e.target.value)}
                                         sx={{ bgcolor: 'rgba(255,255,255,0.02)', color: '#FFF' }}
                                     >
-                                        <MenuItem value="">Common Area / Whole Property</MenuItem>
+                                        <MenuItem value={COMMON_AREA_VALUE}>Common Area / Whole Property</MenuItem>
                                         {units.map(u => (
                                             <MenuItem key={u.id} value={u.id}>
                                                 Unit {u.unitNumber} {u.tenantName ? `(${u.tenantName})` : ''}
