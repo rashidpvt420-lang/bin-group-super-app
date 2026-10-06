@@ -172,9 +172,6 @@ export default function TenantsManagementPage() {
     }
 
     setSubmitting(true);
-    setError(null);
-    setSuccess(null);
-
     try {
       const unitData = units.find(u => u.id === selectedUnitId);
       const propertyData = properties.find(p => p.id === selectedPropertyId);
@@ -191,54 +188,24 @@ export default function TenantsManagementPage() {
         setSubmitting(false);
         return;
       }
-
-      if (usingExistingTenant && !existingTenant) {
-        alert("Existing tenant record could not be resolved. Search the email again before linking.");
-        setSubmitting(false);
-        return;
-      }
-
-      if (usingExistingTenant) {
-        const existingRole = String(existingTenant?.role || '').trim().toLowerCase();
-        if (existingRole && existingRole !== 'tenant') {
-          alert("Role protection: this account is not a Tenant account and cannot be converted by relational assignment.");
-          setSubmitting(false);
-          return;
-        }
-
-        const selectedEmail = String(existingTenant?.email || '').trim().toLowerCase();
-        const searchedEmail = existingTenantSearch.trim().toLowerCase();
-        if (searchedEmail && selectedEmail !== searchedEmail) {
-          alert("Tenant identity mismatch: search and select the same tenant email before linking.");
-          setSubmitting(false);
-          return;
-        }
-      }
-
+      
+      const batch = writeBatch(db);
       const tenantRef = usingExistingTenant ? doc(db, 'users', selectedExistingTenantId) : doc(collection(db, 'users'));
       const tenantId = tenantRef.id;
-      const tenantEmail = String(usingExistingTenant ? existingTenant?.email : newTenant.email).trim().toLowerCase();
-      const tenantName = String(usingExistingTenant ? existingTenant?.displayName : newTenant.displayName).trim();
-      const propertyName = propertyData?.name || propertyData?.propertyName || 'Assigned Property';
-      const inviteRef = doc(collection(db, 'tenant_invitations'));
-
-      const batch = writeBatch(db);
-
+      
       batch.set(tenantRef, {
         uid: tenantId,
         role: 'tenant',
-        status: 'pending_invitation',
-        displayName: tenantName,
-        email: tenantEmail,
+        status: 'active',
+        displayName: usingExistingTenant ? existingTenant?.displayName : newTenant.displayName,
+        email: (usingExistingTenant ? existingTenant?.email : newTenant.email).toLowerCase(),
         phoneNumber: usingExistingTenant ? existingTenant?.phoneNumber : newTenant.phoneNumber,
         emiratesID: usingExistingTenant ? (existingTenant?.emiratesID || existingTenant?.emiratesId) : newTenant.emiratesID,
         ownerId: selectedOwnerId,
         propertyId: selectedPropertyId,
         unitId: selectedUnitId,
         unitNumber: unitData?.unitNumber || '',
-        propertyName,
-        tenantInvitationId: inviteRef.id,
-        invitationStatus: 'pending',
+        propertyName: propertyData?.name || propertyData?.propertyName || 'Assigned Property',
         updatedAt: serverTimestamp(),
         createdAt: usingExistingTenant ? (existingTenant?.createdAt || serverTimestamp()) : serverTimestamp(),
       }, { merge: true });
@@ -261,64 +228,9 @@ export default function TenantsManagementPage() {
           createdAt: serverTimestamp()
       });
 
-      batch.set(inviteRef, {
-          tenantId,
-          tenantEmail,
-          tenantName,
-          ownerId: selectedOwnerId,
-          propertyId: selectedPropertyId,
-          propertyName,
-          unitId: selectedUnitId,
-          unitNumber: unitData?.unitNumber || '',
-          status: 'pending',
-          expiresAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-          createdBy: currentAdminUid || auth.currentUser?.uid || 'admin'
-      });
-
       await batch.commit();
-
-      let invitationSent = false;
-      try {
-        const resendFn = httpsCallable(functions, 'resendTenantInvitation');
-        await resendFn({ invitationId: inviteRef.id });
-
-        const statusBatch = writeBatch(db);
-        statusBatch.set(tenantRef, {
-          invitationStatus: 'sent',
-          updatedAt: serverTimestamp()
-        }, { merge: true });
-        await statusBatch.commit();
-        invitationSent = true;
-      } catch (inviteError: any) {
-        console.error("Tenant linked but invitation delivery failed:", inviteError);
-        setError("Tenant linked successfully, but the invitation could not be sent. Use the send arrow to retry this exact invitation.");
-      }
-
-      setTenants(prev => prev.map((tenant) => (
-        tenant.uid === tenantId
-          ? {
-              ...tenant,
-              ownerId: selectedOwnerId,
-              propertyId: selectedPropertyId,
-              unitId: selectedUnitId,
-              unitNumber: unitData?.unitNumber || '',
-              propertyName,
-              status: 'pending_invitation',
-              tenantInvitationId: inviteRef.id,
-              invitationStatus: invitationSent ? 'sent' : 'pending'
-            }
-          : tenant
-      )));
       setOpenAdd(false);
-
-      if (invitationSent) {
-        setSuccess("Relational link secured and the Tenant invitation was sent.");
-        alert("Relational Link Secured: Tenant assigned to Unit and invitation sent.");
-      } else {
-        alert("Relational Link Secured: Tenant assigned to Unit. Invitation remains pending and can be retried from the Tenant Registry.");
-      }
+      alert("Relational Link Secured: Tenant assigned to Unit.");
     } catch (err: any) {
         alert("Fault: " + err.message);
     } finally {
