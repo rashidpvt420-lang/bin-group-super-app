@@ -12,7 +12,12 @@ const ink = '#111827';
 const line = '#E8E3D7';
 const muted = '#667085';
 
-const serviceAreas = ['Al Ain', 'Abu Dhabi', 'Dubai', 'Sharjah', 'Ajman', 'Ras Al Khaimah', 'Fujairah', 'Umm Al Quwain'];
+const serviceAreasEn = ['Al Ain', 'Abu Dhabi', 'Dubai', 'Sharjah', 'Ajman', 'Ras Al Khaimah', 'Fujairah', 'Umm Al Quwain'];
+const serviceAreasAr = ['العين', 'أبوظبي', 'دبي', 'الشارقة', 'عجمان', 'رأس الخيمة', 'الفجيرة', 'أم القيوين'];
+const contactLabels = {
+  en: { phone: 'Phone', whatsapp: 'WhatsApp', email: 'Email', location: 'Location' },
+  ar: { phone: 'هاتف', whatsapp: 'واتساب', email: 'البريد', location: 'الموقع' },
+} as const;
 
 type CompanyContent = {
   stats: [string, string][];
@@ -378,7 +383,7 @@ export default function SimpleStartPage() {
 
       <Section chip={c.sections.coverage} title={c.sections.coverage}>
         <Stack direction="row" flexWrap="wrap" justifyContent="center" sx={{ gap: 1.5 }}>
-          {serviceAreas.map(area => (
+          {(ar ? serviceAreasAr : serviceAreasEn).map(area => (
             <Box key={area} sx={{ px: 3, py: 1.2, bgcolor: '#fff', border: `1.5px solid ${alpha(gold, .28)}`, borderRadius: 2.5 }}>
               <Stack direction="row" spacing={1} alignItems="center">
                 <MapPin size={14} color={gold} />
@@ -411,10 +416,10 @@ export default function SimpleStartPage() {
             <Typography variant="h6" sx={{ color: 'rgba(255,255,255,.7)', maxWidth: 650 }}>{c.contactText}</Typography>
             <Grid container spacing={2}>
               {[
-                [<Phone size={22} />, 'Phone', CONTACT.phone, `tel:${CONTACT.phone}`],
-                [<MessageSquare size={22} />, 'WhatsApp', CONTACT.whatsapp, `https://wa.me/${whatsappDigits}`],
-                [<Mail size={22} />, 'Email', CONTACT.email, `mailto:${CONTACT.email}`],
-                [<MapPin size={22} />, 'Location', c.location, ''],
+                [<Phone size={22} />, contactLabels[ar ? 'ar' : 'en'].phone, CONTACT.phone, `tel:${CONTACT.phone}`],
+                [<MessageSquare size={22} />, contactLabels[ar ? 'ar' : 'en'].whatsapp, CONTACT.whatsapp, `https://wa.me/${whatsappDigits}`],
+                [<Mail size={22} />, contactLabels[ar ? 'ar' : 'en'].email, CONTACT.email, `mailto:${CONTACT.email}`],
+                [<MapPin size={22} />, contactLabels[ar ? 'ar' : 'en'].location, c.location, ''],
               ].map(([icon, label, value, href]: any) => (
                 <Grid item xs={12} sm={6} key={label}>
                   <Paper component={href ? 'a' : 'div'} href={href || undefined} target={href?.startsWith('http') ? '_blank' : undefined} sx={{ p: 3, bgcolor: 'rgba(255,255,255,.05)', border: `1px solid ${alpha(gold, .22)}`, borderRadius: 3, display: 'block', textDecoration: 'none' }}>
