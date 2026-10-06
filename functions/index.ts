@@ -11,7 +11,6 @@ import * as path from "path";
 import { createRequire } from "module";
 import type { SummarizePropertyPassportSources, PassportIdentity } from "./shared/propertyPassportAggregationTypes";
 import { assertOwnerClosureEvidence } from "./ticketClosureEvidence";
-import { isTechnicianAssignmentEvent, technicianAssignedNotificationSeed } from "./shared/technicianAssignmentNotification";
 
 const requirePropertyPassportAggregation = createRequire(__filename);
 const {
@@ -31,6 +30,7 @@ import { sendTwilioSMS } from "./smsDelivery";
 import { resolveTechnicianArrivalBinding } from "./technicianInstallationBinding";
 import { flagSlaBreaches } from "./slaCron";
 import { evaluateTechnicianForTicket, requiredTicketTrade } from "./technicianDispatchMatching";
+import { isTechnicianAssignmentEvent, technicianAssignedNotificationSeed } from "./shared/technicianAssignmentNotification";
 
 // [V10] PRODUCTION GRADE FULL-STACK STABILIZATION
 setGlobalOptions({ region: "europe-west3", enforceAppCheck: true });
