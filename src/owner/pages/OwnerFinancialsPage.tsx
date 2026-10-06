@@ -10,11 +10,13 @@ import {
     Clock, CheckCircle2,
     Shield, TrendingUp, AlertCircle, FileText, ExternalLink
 } from 'lucide-react';
-import { db, collection, query, where, onSnapshot } from '../../lib/firebase';
+import { db, collection, query, where, onSnapshot, limit } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { useOwnerFinancialTruthData } from '../hooks/useOwnerFinancialTruthData';
+
+const MANAGEMENT_FEE_RATE = 0.05;
 
 const formatRecordedAed = (value: number) => Number(value || 0).toLocaleString('en-AE', {
     minimumFractionDigits: 2,
@@ -39,26 +41,34 @@ export default function OwnerFinancialsPage() {
     const { user } = useRole();
     const { tx, isRTL } = useLanguage();
     const navigate = useNavigate();
-    const [payoutsLoading, setPayoutsLoading] = useState(true);
+    const [streamsLoading, setLoading] = useState(true);
     const [transactions, setTransactions] = useState<any[]>([]);
-    const [payoutError, setPayoutError] = useState('');
+    const [invoices, setInvoices] = useState<any[]>([]);
+    const [loadError, setLoadError] = useState('');
+    // Shared Financial Truth summary (passport rent + paid invoices + VERIFIED NOI).
+    // This page owns the UID-scoped invoice stream below and hands its rows to
+    // the hook, so invoice failures are surfaced here rather than hidden.
     const {
-        invoices,
         summary,
         loading: truthLoading,
         error: truthError,
-    } = useOwnerFinancialTruthData(user);
+    } = useOwnerFinancialTruthData(user, { invoices, feeRate: MANAGEMENT_FEE_RATE });
 
     useEffect(() => {
         if (!user?.email || !user?.uid) {
-            setPayoutsLoading(false);
-            setPayoutError('Authenticated Owner identity is unavailable. Reload the portal and try again.');
+            setLoading(false);
+            setLoadError('Authenticated Owner identity is unavailable. Reload the portal and try again.');
             return undefined;
         }
 
-        setPayoutsLoading(true);
-        setPayoutError('');
+        setLoading(true);
+        setLoadError('');
         const email = user.email.toLowerCase();
+        let payoutsReady = false;
+        let invoicesReady = false;
+        const finishStreams = () => {
+            if (payoutsReady && invoicesReady) setLoading(false);
+        };
 
         // Sort the Owner-scoped result on the client. Combining where +
         // orderBy previously required a production composite index and left
@@ -70,24 +80,40 @@ export default function OwnerFinancialsPage() {
                 .sort((a: any, b: any) => timestampMs(b.createdAt || b.date) - timestampMs(a.createdAt || a.date))
                 .slice(0, 10);
             setTransactions(rows);
-            setPayoutsLoading(false);
+            payoutsReady = true;
+            finishStreams();
         }, (error) => {
             console.error('Owner payout stream failed:', error);
             setTransactions([]);
-            setPayoutError('Payout history is temporarily unavailable. Onboarding invoices can still be reviewed.');
-            setPayoutsLoading(false);
+            setLoadError('Payout history is temporarily unavailable. Onboarding invoices can still be reviewed.');
+            payoutsReady = true;
+            finishStreams();
+        });
+
+        const invoiceQ = query(collection(db, 'invoices'), where('ownerUid', '==', user.uid), limit(40));
+        const unsubscribeInvoices = onSnapshot(invoiceQ, (snap) => {
+            const rows: any[] = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+            setInvoices(
+                rows.sort((a, b) => timestampMs(b.issuedAt || b.createdAt) - timestampMs(a.issuedAt || a.createdAt)),
+            );
+            invoicesReady = true;
+            finishStreams();
+        }, (error) => {
+            console.error('Owner invoice stream failed:', error);
+            setInvoices([]);
+            setLoadError('Owner invoices could not be loaded. Paid-invoice totals are incomplete; please retry before approving or paying any amount.');
+            invoicesReady = true;
+            finishStreams();
         });
 
         return () => {
             unsubscribeTrans();
+            unsubscribeInvoices();
         };
     }, [user?.email, user?.uid]);
 
-    const loading = truthLoading || payoutsLoading;
-    const visibleError = truthError || payoutError;
-    const sortedInvoices = [...invoices].sort(
-        (a, b) => timestampMs(b.issuedAt || b.createdAt) - timestampMs(a.issuedAt || a.createdAt),
-    );
+    const loading = streamsLoading || truthLoading;
+    const visibleError = truthError || loadError;
 
     const FINANCIAL_KPIs = [
         { label: tx('owner.fin.gross_revenue', 'Gross Revenue'), value: summary.totalRevenue, color: '#10b981', icon: <TrendingUp size={20} /> },
@@ -139,9 +165,9 @@ export default function OwnerFinancialsPage() {
                     <Typography variant="subtitle1" fontWeight="950" sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
                         <FileText size={18} color={binThemeTokens.gold} /> {tx('owner.fin.invoices', 'ONBOARDING & SERVICE INVOICES')}
                     </Typography>
-                    <Chip label={`${sortedInvoices.length} RECORD${sortedInvoices.length === 1 ? '' : 'S'}`} size="small" sx={{ bgcolor: alpha(binThemeTokens.gold, 0.1), color: binThemeTokens.gold, fontWeight: 950 }} />
+                    <Chip label={`${invoices.length} RECORD${invoices.length === 1 ? '' : 'S'}`} size="small" sx={{ bgcolor: alpha(binThemeTokens.gold, 0.1), color: binThemeTokens.gold, fontWeight: 950 }} />
                 </Box>
-                {sortedInvoices.length === 0 ? (
+                {invoices.length === 0 ? (
                     <Box sx={{ py: 7, textAlign: 'center' }}>
                         <AlertCircle size={42} color="rgba(255,255,255,0.07)" style={{ margin: '0 auto 14px' }} />
                         <Typography sx={{ color: 'rgba(255,255,255,0.25)', fontWeight: 800 }}>{tx('owner.fin.no_invoices', 'NO INVOICE RECORDS FOUND')}</Typography>
@@ -159,7 +185,7 @@ export default function OwnerFinancialsPage() {
                                 </TableRow>
                             </TableHead>
                             <TableBody>
-                                {sortedInvoices.map(invoice => (
+                                {invoices.map(invoice => (
                                     <TableRow key={invoice.id} hover>
                                         <TableCell>
                                             <Typography variant="body2" sx={{ color: '#FFF', fontWeight: 900 }}>{invoice.invoiceId || invoice.id}</Typography>

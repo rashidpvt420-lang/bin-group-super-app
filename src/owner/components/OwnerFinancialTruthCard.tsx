@@ -8,6 +8,10 @@ import SafeIcon from '../../components/SafeIcon';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { useOwnerFinancialTruthData } from '../hooks/useOwnerFinancialTruthData';
 
+// Payable equation source: Owner-scoped propertyPassports with the same 5%
+// management-fee rule as /owner/financials. Paid invoices and VERIFIED NOI are
+// shown alongside, never folded into the payable equation.
+const MANAGEMENT_FEE_RATE = 0.05;
 const money = (value: number) => `AED ${Number(value || 0).toLocaleString('en-AE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 export default function OwnerFinancialTruthCard() {
@@ -15,7 +19,7 @@ export default function OwnerFinancialTruthCard() {
   const { user } = useRole();
   const { lang } = useLanguage();
   const [refreshedAt, setRefreshedAt] = React.useState<Date | null>(null);
-  const { summary, loading, error: dataError } = useOwnerFinancialTruthData(user);
+  const { summary, loading, error: dataError } = useOwnerFinancialTruthData(user, { feeRate: MANAGEMENT_FEE_RATE });
 
   React.useEffect(() => {
     if (!loading) setRefreshedAt(new Date());
@@ -32,7 +36,7 @@ export default function OwnerFinancialTruthCard() {
         equation: 'الإيجار المستلم − المصروفات/الصيانة − رسوم إدارة BIN = المبلغ المستحق',
         paidNote: 'هذا إجمالي فواتير المالك المسجّلة كمدفوعة (مثل دفعة التجهيز). ليس إيجاراً محصّلاً ولا مبلغاً مستحقاً لك.',
         noiNote: 'نفس أساس صافي الدخل التشغيلي VERIFIED في لوحة الذكاء المتقدم: الإيجار السنوي المسجّل ناقص المصروفات المسجّلة.',
-        source: 'المصادر: جوازات العقارات + الفواتير المدفوعة + سجلات العقار',
+        source: 'مصدر المبلغ المستحق: propertyPassports الخاصة بالمالك وفق قاعدة رسوم الإدارة 5%. الفواتير المدفوعة وصافي الدخل التشغيلي الموثّق من الفواتير وسجلات العقار.',
         refreshed: 'آخر تحديث',
         pending: 'قيد التحقق',
         paidInvoices: 'فواتير مدفوعة',
@@ -50,7 +54,7 @@ export default function OwnerFinancialTruthCard() {
         equation: 'Rent received − maintenance/expenses − BIN management fee = amount payable',
         paidNote: 'This is the total of Owner invoices marked paid (for example mobilization). It is not rent collected and not an amount payable to you.',
         noiNote: 'Same VERIFIED NOI basis as advanced Owner intelligence: recorded annual rent minus recorded expenses.',
-        source: 'Sources: property passports + paid invoices + property records',
+        source: 'Payable source: Owner-scoped propertyPassports with the 5% management-fee rule used by the Financials page. Paid invoices and Verified NOI come from invoices and property records.',
         refreshed: 'Refreshed',
         pending: 'Pending verification',
         paidInvoices: 'Paid invoices',

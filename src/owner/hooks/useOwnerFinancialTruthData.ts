@@ -7,13 +7,26 @@ type OwnerIdentity = { uid?: string | null; email?: string | null } | null | und
 
 type Row = { id: string; [key: string]: any };
 
-const MANAGEMENT_FEE_RATE = 0.05;
+const DEFAULT_MANAGEMENT_FEE_RATE = 0.05;
+
+type OwnerFinancialTruthOptions = {
+  feeRate?: number;
+  /**
+   * When a page already owns a UID-scoped invoice stream (OwnerFinancialsPage),
+   * pass its rows here so the hook does not open a duplicate listener. The page
+   * stays responsible for surfacing its own invoice stream failure.
+   */
+  invoices?: Row[] | null;
+};
 
 /**
  * Loads Owner-scoped passports, paid invoices, and properties, then builds the
  * shared Financial Truth summary used by the dashboard card and financials page.
  */
-export function useOwnerFinancialTruthData(user: OwnerIdentity) {
+export function useOwnerFinancialTruthData(user: OwnerIdentity, options: OwnerFinancialTruthOptions = {}) {
+  const feeRate = Number.isFinite(Number(options.feeRate)) ? Number(options.feeRate) : DEFAULT_MANAGEMENT_FEE_RATE;
+  const externalInvoices = Array.isArray(options.invoices) ? options.invoices : null;
+  const usesExternalInvoices = externalInvoices !== null;
   const { passports, loading: passportsLoading, error: passportError } = useOwnerPropertyPassports(user);
   const [invoices, setInvoices] = useState<Row[]>([]);
   const [properties, setProperties] = useState<Row[]>([]);
@@ -24,6 +37,10 @@ export function useOwnerFinancialTruthData(user: OwnerIdentity) {
   const uid = String(user?.uid || '').trim();
 
   useEffect(() => {
+    if (usesExternalInvoices) {
+      setInvoicesLoading(false);
+      return undefined;
+    }
     if (!uid) {
       setInvoices([]);
       setInvoicesLoading(false);
@@ -46,7 +63,7 @@ export function useOwnerFinancialTruthData(user: OwnerIdentity) {
         setInvoicesLoading(false);
       },
     );
-  }, [uid]);
+  }, [uid, usesExternalInvoices]);
 
   useEffect(() => {
     if (!uid) {
@@ -72,23 +89,25 @@ export function useOwnerFinancialTruthData(user: OwnerIdentity) {
     );
   }, [uid]);
 
+  const effectiveInvoices = externalInvoices ?? invoices;
+
   const summary = useMemo(
     () => buildOwnerFinancialTruthSummary({
       passports,
-      invoices,
+      invoices: effectiveInvoices,
       properties,
-      feeRate: MANAGEMENT_FEE_RATE,
+      feeRate,
     }),
-    [passports, invoices, properties],
+    [passports, effectiveInvoices, properties, feeRate],
   );
 
   return {
     passports,
-    invoices,
+    invoices: effectiveInvoices,
     properties,
     summary,
-    loading: passportsLoading || invoicesLoading || propertiesLoading,
+    loading: passportsLoading || (!usesExternalInvoices && invoicesLoading) || propertiesLoading,
     error: passportError || streamError,
-    MANAGEMENT_FEE_RATE,
+    feeRate,
   };
 }
