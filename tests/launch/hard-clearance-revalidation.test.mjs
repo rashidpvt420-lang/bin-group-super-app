@@ -1036,7 +1036,9 @@ test('missing physical proofs produce eleven actionable blockers and never publi
   assert.match(result.error.message, /physical-device evidence is still incomplete/);
   assert.equal(result.report.status, 'blocked');
   assert.equal(result.report.gates.length, 11);
-  assert.ok(result.report.gates.every((gate) => gate.reason === 'no-current-release-record'));
+  const technician = result.report.gates.find((gate) => gate.commandCenterGateId === 'technicianGpsAndDeniedFallback');
+  assert.equal(technician.reason, 'protected-technician-mission-proof-missing-or-invalid');
+  assert.equal(result.report.gates.filter((gate) => gate.reason === 'no-current-release-record').length, 10);
   assert.equal(result.report.hardLaunchClaim, false);
   assert.equal(result.files.has('/fixture/launch_package/launch-proof-gates.json'), false);
 });
