@@ -10,14 +10,12 @@ import {
     Clock, CheckCircle2,
     Shield, TrendingUp, AlertCircle, FileText, ExternalLink
 } from 'lucide-react';
-import { db, collection, query, where, onSnapshot, limit } from '../../lib/firebase';
+import { db, collection, query, where, onSnapshot } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
-import { useOwnerPropertyPassports } from '../utils/useOwnerPropertyPassports';
-import { summarizeOwnerPassportFinancials } from '../../../functions/shared/propertyPassportAggregation.mjs';
+import { useOwnerFinancialTruthData } from '../hooks/useOwnerFinancialTruthData';
 
-const MANAGEMENT_FEE_RATE = 0.05;
 const formatRecordedAed = (value: number) => Number(value || 0).toLocaleString('en-AE', {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
@@ -41,28 +39,26 @@ export default function OwnerFinancialsPage() {
     const { user } = useRole();
     const { tx, isRTL } = useLanguage();
     const navigate = useNavigate();
-    const [streamsLoading, setLoading] = useState(true);
+    const [payoutsLoading, setPayoutsLoading] = useState(true);
     const [transactions, setTransactions] = useState<any[]>([]);
-    const [invoices, setInvoices] = useState<any[]>([]);
-    const [loadError, setLoadError] = useState('');
-    const { passports, loading: passportsLoading, error: passportError } = useOwnerPropertyPassports(user);
-    const summary = summarizeOwnerPassportFinancials(passports, MANAGEMENT_FEE_RATE);
+    const [payoutError, setPayoutError] = useState('');
+    const {
+        invoices,
+        summary,
+        loading: truthLoading,
+        error: truthError,
+    } = useOwnerFinancialTruthData(user);
 
     useEffect(() => {
         if (!user?.email || !user?.uid) {
-            setLoading(false);
-            setLoadError('Authenticated Owner identity is unavailable. Reload the portal and try again.');
+            setPayoutsLoading(false);
+            setPayoutError('Authenticated Owner identity is unavailable. Reload the portal and try again.');
             return undefined;
         }
 
-        setLoading(true);
-        setLoadError('');
+        setPayoutsLoading(true);
+        setPayoutError('');
         const email = user.email.toLowerCase();
-        let payoutsReady = false;
-        let invoicesReady = false;
-        const finishStreams = () => {
-            if (payoutsReady && invoicesReady) setLoading(false);
-        };
 
         // Sort the Owner-scoped result on the client. Combining where +
         // orderBy previously required a production composite index and left
@@ -74,46 +70,30 @@ export default function OwnerFinancialsPage() {
                 .sort((a: any, b: any) => timestampMs(b.createdAt || b.date) - timestampMs(a.createdAt || a.date))
                 .slice(0, 10);
             setTransactions(rows);
-            payoutsReady = true;
-            finishStreams();
+            setPayoutsLoading(false);
         }, (error) => {
             console.error('Owner payout stream failed:', error);
             setTransactions([]);
-            setLoadError('Payout history is temporarily unavailable. Onboarding invoices can still be reviewed.');
-            payoutsReady = true;
-            finishStreams();
-        });
-
-        const invoiceQ = query(collection(db, 'invoices'), where('ownerUid', '==', user.uid), limit(20));
-        const unsubscribeInvoices = onSnapshot(invoiceQ, (snap) => {
-            const rows: any[] = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-            setInvoices(
-                rows.sort((a, b) => timestampMs(b.issuedAt || b.createdAt) - timestampMs(a.issuedAt || a.createdAt)),
-            );
-            invoicesReady = true;
-            finishStreams();
-        }, (error) => {
-            console.error('Owner invoice stream failed:', error);
-            setInvoices([]);
-            setLoadError('Owner invoices could not be loaded. Please retry before approving or paying any amount.');
-            invoicesReady = true;
-            finishStreams();
+            setPayoutError('Payout history is temporarily unavailable. Onboarding invoices can still be reviewed.');
+            setPayoutsLoading(false);
         });
 
         return () => {
             unsubscribeTrans();
-            unsubscribeInvoices();
         };
     }, [user?.email, user?.uid]);
 
-    const loading = streamsLoading || passportsLoading;
-    const visibleError = passportError || loadError;
+    const loading = truthLoading || payoutsLoading;
+    const visibleError = truthError || payoutError;
+    const sortedInvoices = [...invoices].sort(
+        (a, b) => timestampMs(b.issuedAt || b.createdAt) - timestampMs(a.issuedAt || a.createdAt),
+    );
 
     const FINANCIAL_KPIs = [
         { label: tx('owner.fin.gross_revenue', 'Gross Revenue'), value: summary.totalRevenue, color: '#10b981', icon: <TrendingUp size={20} /> },
+        { label: tx('owner.fin.verified_noi', 'Verified NOI'), value: summary.verifiedNoi ?? 0, color: '#38bdf8', icon: <Shield size={20} />, missing: summary.verifiedNoi === null },
+        { label: tx('owner.fin.paid_invoices', 'Paid Invoices'), value: summary.paidInvoiceTotal, color: '#f59e0b', icon: <FileText size={20} /> },
         { label: tx('owner.fin.net_payout', 'Net Payout'), value: summary.netPayout, color: binThemeTokens.gold, icon: <CreditCard size={20} /> },
-        { label: tx('owner.fin.pending_verification', 'Pending Verification'), value: summary.pendingVerification, color: '#f59e0b', icon: <Clock size={20} /> },
-        { label: tx('owner.fin.management_fees', 'Management Fees'), value: summary.managementFees, color: '#3b82f6', icon: <Shield size={20} /> },
     ];
 
     if (loading) return (
@@ -147,7 +127,7 @@ export default function OwnerFinancialsPage() {
                                 <Box sx={{ p: 1, bgcolor: alpha(kpi.color, 0.1), borderRadius: 2, color: kpi.color }}>{kpi.icon}</Box>
                                 <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.3)', fontWeight: 800 }}>{tx('owner.fin.recorded', 'RECORDED')}</Typography>
                             </Box>
-                            <Typography variant="h5" fontWeight="950" sx={{ color: '#FFF' }}>AED {formatRecordedAed(kpi.value)}</Typography>
+                            <Typography variant="h5" fontWeight="950" sx={{ color: '#FFF' }}>{(kpi as any).missing ? '—' : `AED ${formatRecordedAed(kpi.value)}`}</Typography>
                             <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900, display: 'block', mt: 0.5 }}>{kpi.label.toUpperCase()}</Typography>
                         </Paper>
                     </Grid>
@@ -159,9 +139,9 @@ export default function OwnerFinancialsPage() {
                     <Typography variant="subtitle1" fontWeight="950" sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
                         <FileText size={18} color={binThemeTokens.gold} /> {tx('owner.fin.invoices', 'ONBOARDING & SERVICE INVOICES')}
                     </Typography>
-                    <Chip label={`${invoices.length} RECORD${invoices.length === 1 ? '' : 'S'}`} size="small" sx={{ bgcolor: alpha(binThemeTokens.gold, 0.1), color: binThemeTokens.gold, fontWeight: 950 }} />
+                    <Chip label={`${sortedInvoices.length} RECORD${sortedInvoices.length === 1 ? '' : 'S'}`} size="small" sx={{ bgcolor: alpha(binThemeTokens.gold, 0.1), color: binThemeTokens.gold, fontWeight: 950 }} />
                 </Box>
-                {invoices.length === 0 ? (
+                {sortedInvoices.length === 0 ? (
                     <Box sx={{ py: 7, textAlign: 'center' }}>
                         <AlertCircle size={42} color="rgba(255,255,255,0.07)" style={{ margin: '0 auto 14px' }} />
                         <Typography sx={{ color: 'rgba(255,255,255,0.25)', fontWeight: 800 }}>{tx('owner.fin.no_invoices', 'NO INVOICE RECORDS FOUND')}</Typography>
@@ -179,7 +159,7 @@ export default function OwnerFinancialsPage() {
                                 </TableRow>
                             </TableHead>
                             <TableBody>
-                                {invoices.map(invoice => (
+                                {sortedInvoices.map(invoice => (
                                     <TableRow key={invoice.id} hover>
                                         <TableCell>
                                             <Typography variant="body2" sx={{ color: '#FFF', fontWeight: 900 }}>{invoice.invoiceId || invoice.id}</Typography>
@@ -288,8 +268,16 @@ export default function OwnerFinancialsPage() {
                                 <Typography variant="body2" sx={{ color: '#FFF', fontWeight: 800 }}>5%</Typography>
                             </Box>
                             <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                                <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 600 }}>{tx('owner.fin.management_fees', 'Management Fees')}</Typography>
+                                <Typography variant="body2" sx={{ color: '#FFF', fontWeight: 800 }}>AED {formatRecordedAed(summary.managementFees)}</Typography>
+                            </Box>
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                                <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 600 }}>{tx('owner.fin.pending_verification', 'Pending Verification')}</Typography>
+                                <Typography variant="body2" sx={{ color: '#FFF', fontWeight: 800 }}>AED {formatRecordedAed(summary.pendingVerification)}</Typography>
+                            </Box>
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                                 <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 600 }}>{tx('owner.fin.maintenance_deductions', 'Maintenance Deductions')}</Typography>
-                                <Typography variant="body2" sx={{ color: '#FFF', fontWeight: 800 }}>AED {summary.maintenanceDeductions.toLocaleString()}</Typography>
+                                <Typography variant="body2" sx={{ color: '#FFF', fontWeight: 800 }}>AED {formatRecordedAed(summary.maintenanceDeductions)}</Typography>
                             </Box>
                             <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                                 <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 600 }}>{tx('owner.fin.bank_processing', 'Bank Processing')}</Typography>
