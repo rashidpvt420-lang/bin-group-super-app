@@ -414,25 +414,41 @@ jobs:
             const parsed = Date.parse(String(v));
             return Number.isFinite(parsed) ? parsed : NaN;
           };
-          const validBase = (record, devicePattern) => {
+          const rejectionReasons = (record, devicePattern) => {
             const createdMs = toMs(record.createdAt);
             const device = text(record.device);
-            return record.status === 'passed' &&
-              text(record.evidenceLayer).toLowerCase() === 'physical_device' &&
-              text(record.source).toLowerCase() === 'admin-manual-evidence' &&
-              record.executionGenerated === false &&
-              record.hardLaunchClaim === false &&
-              Boolean(text(record.testerName)) &&
-              Boolean(text(record.proofRef)) &&
-              Boolean(text(record.recordedBy)) &&
-              /^(https:\/\/(bin-group-57c60|bin-group-admin-panel)\.web\.app)(?:\/.*)?$/i.test(text(record.productionUrl)) &&
-              /(android|iphone|tablet|physical device)/i.test(device) &&
-              !/desktop/i.test(device) &&
-              (!devicePattern || devicePattern.test(device)) &&
-              Number.isFinite(createdMs) &&
-              createdMs >= deployCompletedMs &&
-              createdMs <= now + 5 * 60 * 1000 &&
-              now - createdMs <= MAX_AGE_MS;
+            const reasons = [];
+            if (record.status !== 'passed') reasons.push('status-not-passed');
+            const physicalEvidenceLayer = text(record.evidenceLayer).toLowerCase() === 'physical_device';
+            if (!physicalEvidenceLayer) reasons.push('evidence-layer-not-physical-device');
+            const manualEvidenceSource = text(record.source).toLowerCase() === 'admin-manual-evidence';
+            if (!manualEvidenceSource) reasons.push('source-not-admin-manual-evidence');
+            if (record.executionGenerated !== false) reasons.push('execution-generated-must-be-false');
+            if (record.hardLaunchClaim !== false) reasons.push('hard-launch-claim-must-be-false');
+            if (!text(record.testerName)) reasons.push('tester-name-missing');
+            if (!text(record.proofRef)) reasons.push('proof-ref-missing');
+            if (!text(record.recordedBy)) reasons.push('recorded-by-missing');
+            if (!/^(https:\/\/(bin-group-57c60|bin-group-admin-panel)\.web\.app)(?:\/.*)?$/i.test(text(record.productionUrl))) reasons.push('production-url-invalid');
+            if (!/(android|iphone|tablet|physical device)/i.test(device) || /desktop/i.test(device)) reasons.push('device-not-physical');
+            if (devicePattern && !devicePattern.test(device)) reasons.push('device-platform-mismatch');
+            if (!Number.isFinite(createdMs)) reasons.push('created-at-invalid');
+            else {
+              const createdAfterFrozenDeploy = createdMs >= deployCompletedMs;
+              if (!createdAfterFrozenDeploy) reasons.push('created-before-frozen-deploy');
+              if (createdMs > now + 5 * 60 * 1000) reasons.push('created-in-future');
+              if (now - createdMs > MAX_AGE_MS) reasons.push('record-older-than-30-days');
+            }
+            return reasons;
+          };
+          const validBase = (record, devicePattern) => rejectionReasons(record, devicePattern).length === 0;
+          const summarizeRejections = (records, devicePattern) => {
+            const reasonCounts = {};
+            for (const record of records) {
+              for (const reason of rejectionReasons(record, devicePattern)) {
+                reasonCounts[reason] = (reasonCounts[reason] || 0) + 1;
+              }
+            }
+            return { totalRecords: records.length, reasonCounts };
           };
 
           if (!/^[0-9a-f]{40}$/.test(releaseSha) || !/^[0-9a-f]{40}$/.test(controlSha) || !/^\d+$/.test(deployRunId) || !Number.isFinite(deployCompletedMs)) {
@@ -452,12 +468,17 @@ jobs:
             }
 
             const snapshot = await db.collection('launch_evidence').where('gateId', '==', gateId).limit(200).get();
-            const candidates = snapshot.docs
-              .map((doc) => ({ id: doc.id, ...(doc.data() || {}) }))
+            const gateRecords = snapshot.docs
+              .map((doc) => ({ id: doc.id, ...(doc.data() || {}) }));
+            const candidates = gateRecords
               .filter((record) => validBase(record, devicePattern))
               .sort((a, b) => toMs(b.createdAt) - toMs(a.createdAt));
             const candidate = candidates[0];
             if (!candidate) {
+              console.log('[physical-rebind] rejected gate candidates', JSON.stringify({
+                gateId,
+                ...summarizeRejections(gateRecords, devicePattern),
+              }));
               missing.push(gateId);
               continue;
             }
