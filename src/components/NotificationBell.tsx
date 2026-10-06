@@ -22,7 +22,15 @@ const TYPE_CONFIG: Record<string, NotificationTypeConfig> = {
     CHAT_MESSAGE:       { icon: MessageSquare, color: '#a78bfa' },
 };
 
-export function NotificationBell() {
+type NotificationBellProps = {
+    /**
+     * Optional display formatter for stored notification text. The Owner portal
+     * passes one that swaps raw property document IDs for readable labels.
+     */
+    formatText?: (text: string) => string;
+};
+
+export function NotificationBell({ formatText }: NotificationBellProps = {}) {
     const { user, enableNotifications } = useRole();
     const navigate = useNavigate();
     const [notifications, setNotifications] = useState<BinNotification[]>([]);
@@ -223,14 +231,14 @@ export function NotificationBell() {
                                         <Box sx={{ flex: 1, minWidth: 0 }}>
                                             <Stack direction="row" justifyContent="space-between" alignItems="center">
                                                 <Typography variant="body2" sx={{ fontWeight: notif.read ? 600 : 900, color: notif.read ? 'rgba(255,255,255,0.5)' : '#FFF', fontSize: '0.82rem' }}>
-                                                    {notif.title}
+                                                    {formatText ? formatText(String(notif.title ?? '')) : notif.title}
                                                 </Typography>
                                                 {!notif.read && (
                                                     <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: '#C6A75E', flexShrink: 0, ml: 1 }} />
                                                 )}
                                             </Stack>
                                             <Typography variant="caption" color="textSecondary" sx={{ display: 'block', mt: 0.3, lineHeight: 1.4 }}>
-                                                {notif.body}
+                                                {formatText ? formatText(String(notif.body ?? '')) : notif.body}
                                             </Typography>
                                             <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.2)', fontSize: '0.65rem', mt: 0.5, display: 'block' }}>
                                                 {notif.createdAt?.toDate?.()?.toLocaleString?.() ?? ''}

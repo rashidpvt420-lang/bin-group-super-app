@@ -3,6 +3,7 @@ import { HttpsError, onCall } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 import { PropertyGeoAuthorityError, resolveDispatchReadyPropertyGeo } from "./propertyGeoAuthority";
 import { isSingleUnitProperty, UNIT_SCOPE, unitRecordsQuery } from "./ticketUnitScope";
+import { resolvePropertyDisplayName } from "./shared/propertyDisplayName";
 
 if (!admin.apps.length) admin.initializeApp();
 const db = admin.firestore();
@@ -99,7 +100,8 @@ export const ownerCreateMaintenanceTicket = onCall(
       ownerName: text(request.auth?.token?.name || "Owner", 180),
       ownerEmail: text(request.auth?.token?.email, 320).toLowerCase(),
       propertyId,
-      propertyName: text(property.propertyName || property.name || propertyId, 240),
+      // Never persist the raw document ID as the owner-facing label.
+      propertyName: text(resolvePropertyDisplayName(property, { propertyId }), 240),
       unitId: unitId || null,
       unitNumber: text(unit.unitNumber, 80) || null,
       floor: unit.floorNumber ?? null,
@@ -251,7 +253,7 @@ export const ownerCreatePropertyReporter = onCall(
         ownerId: ownerUid,
         ownerUid,
         propertyId,
-        propertyName: text(property.propertyName || property.name || propertyId, 240),
+        propertyName: text(resolvePropertyDisplayName(property, { propertyId }), 240),
         reporterUid: null,
         reporterName,
         reporterEmail,
