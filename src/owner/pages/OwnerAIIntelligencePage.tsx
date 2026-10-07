@@ -13,7 +13,6 @@ import { useRole } from '../../context/RoleContext';
 import { useAI } from '../../context/AIContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
-import { SovereignAIChat } from '../../components/SovereignAIChat';
 import { db, collection, query, where, onSnapshot } from '../../lib/firebase';
 import {
   getPropertyIntelligenceProfile,
@@ -545,9 +544,6 @@ export default function OwnerAIIntelligencePage() {
           </Box>
         </Stack>
       </Paper>
-
-      {/* ── AI CHAT ── */}
-      <SovereignAIChat role="owner" onNavigate={navigate} />
     </Box>
   );
 }
