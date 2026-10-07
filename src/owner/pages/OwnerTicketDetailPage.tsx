@@ -9,7 +9,7 @@ import React, { useState, useEffect } from 'react';
 import {
     Box, Typography, Paper, Grid, Stack, Chip, CircularProgress,
     Button, Divider, IconButton, alpha, Avatar, ImageList, ImageListItem,
-    Dialog, DialogActions, DialogContent, DialogTitle, TextField
+    Dialog, DialogActions, DialogContent, DialogTitle, TextField, Alert
 } from '@mui/material';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
@@ -21,19 +21,12 @@ import { useRole } from '../../context/RoleContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import LiveTechnicianTrackingCard from '../../components/tracking/LiveTechnicianTrackingCard';
-
-const STATUS_COLORS: Record<string, string> = {
-    open: 'rgba(255,255,255,0.4)',
-    OPEN: 'rgba(255,255,255,0.4)',
-    accepted: '#3b82f6',
-    on_the_way: binThemeTokens.gold,
-    EN_ROUTE: binThemeTokens.gold,
-    arrived: '#8b5cf6',
-    in_progress: '#10b981',
-    completed: '#10b981',
-    closed: '#10b981',
-    emergency: '#ef4444',
-};
+import { isOwnerPendingSignOff } from '../utils/ownerPendingSignOff';
+import { useOwnerPropertyLabels } from '../hooks/useOwnerPropertyLabels';
+import { resolveOwnerTicketEvidence } from '../utils/ownerTicketEvidence.mjs';
+import OwnerTicketEvidencePanel from '../components/OwnerTicketEvidencePanel';
+import { OwnerTicketAssignmentLine, OwnerTicketStageChip } from '../components/OwnerTicketStatusSummary';
+import { ticketLifecycleStage } from '../../utils/ticketLifecycleStage';
 
 type OwnerReviewAction = 'APPROVE_CLOSE' | 'DISPUTE' | 'REQUEST_REVISIT' | 'ESCALATE';
 
@@ -64,6 +57,7 @@ export default function OwnerTicketDetailPage() {
     const [reviewReason, setReviewReason] = useState('');
     const [reviewError, setReviewError] = useState('');
     const [reviewBusy, setReviewBusy] = useState(false);
+    const { ticketPropertyLabel } = useOwnerPropertyLabels(user?.uid);
 
     useEffect(() => {
         if (!id || !user?.uid) return;
@@ -139,21 +133,11 @@ export default function OwnerTicketDetailPage() {
     );
 
     const normalizedStatus = String(ticket.status || '').toUpperCase();
-    const statusColor = STATUS_COLORS[ticket.status] || STATUS_COLORS[normalizedStatus] || 'rgba(255,255,255,0.4)';
-    const beforeProofs = [
-        ...(Array.isArray(ticket.beforePhotos) ? ticket.beforePhotos : []),
-        ...(Array.isArray(ticket.photos) ? ticket.photos : []),
-        ...(ticket.beforePhotoUrl ? [ticket.beforePhotoUrl] : []),
-        ...(ticket.photoUrl ? [ticket.photoUrl] : []),
-    ].filter(Boolean);
-    const afterProofs = [
-        ...(Array.isArray(ticket.afterPhotos) ? ticket.afterPhotos : []),
-        ...(Array.isArray(ticket.completionPhotos) ? ticket.completionPhotos : []),
-        ...(Array.isArray(ticket.proofPhotos) ? ticket.proofPhotos : []),
-        ...(Array.isArray(ticket.evidencePhotos) ? ticket.evidencePhotos : []),
-        ...(ticket.afterPhotoUrl ? [ticket.afterPhotoUrl] : []),
-    ].filter(Boolean);
-    const canReviewCompleted = ['COMPLETED', 'COMPLETED_PENDING_APPROVAL', 'COMPLETED_PENDING_TENANT_APPROVAL', 'RESOLVED'].includes(normalizedStatus) && ticket.ownerApproved !== true;
+    // Evidence is read from every field the technician flow and evidence
+    // callables write (technicianBefore*/technicianAfter*, mirrored
+    // before/after/completion/proof arrays, Storage paths, notes, materials).
+    const evidence = resolveOwnerTicketEvidence(ticket);
+    const canReviewCompleted = isOwnerPendingSignOff(ticket);
     const canEscalateOpen = ['OPEN', 'PENDING_ASSIGNMENT', 'ASSIGNED', 'ACCEPTED', 'EN_ROUTE', 'ARRIVED', 'IN_PROGRESS', 'WAITING_PARTS', 'REOPENED'].includes(normalizedStatus);
     const selectedActionNeedsReason = reviewAction && reviewAction !== 'APPROVE_CLOSE';
 
@@ -207,11 +191,33 @@ export default function OwnerTicketDetailPage() {
                         {tx('owner.ticket.reference', 'Ticket')} #{ticket.id.substring(0, 8).toUpperCase()}
                     </Typography>
                 </Box>
-                <Chip
-                    label={ticket.status?.replace(/_/g, ' ')}
-                    sx={{ ml: 'auto', bgcolor: alpha(statusColor, 0.1), color: statusColor, fontWeight: 950, border: `1px solid ${alpha(statusColor, 0.2)}` }}
-                />
+                <Box sx={{ ml: 'auto' }}>
+                    <OwnerTicketStageChip ticket={ticket} tx={tx} />
+                </Box>
             </Stack>
+
+            {ticketLifecycleStage(ticket).stage === 'PENDING' && (
+                <Alert severity={ticketLifecycleStage(ticket).needsManualDispatch ? 'warning' : 'info'} sx={{ mb: 3 }} data-testid="owner-ticket-pending-notice">
+                    {ticketLifecycleStage(ticket).needsManualDispatch
+                        ? tx('owner.ticket.pendingManual', 'No technician could be assigned automatically. BIN GROUP operations has been alerted and is arranging one.')
+                        : tx('owner.ticket.pendingAuto', 'We are assigning a qualified technician. You will be notified as soon as someone is assigned.')}
+                </Alert>
+            )}
+
+            <Box sx={{ mb: 4 }}>
+                <LiveTechnicianTrackingCard
+                    ticket={ticket}
+                    onChatClick={ticket.assignedTechnicianId
+                        ? () => navigate(`/owner/chat/${ticket.id}`)
+                        : undefined
+                    }
+                    onCallClick={() => {
+                        const phone = ticket.assignedTechnicianPhone || ticket.technicianPhone;
+                        if (phone) window.open(`tel:${phone}`);
+                    }}
+                    showTimeline={false}
+                />
+            </Box>
 
             <Grid container spacing={4}>
                 {/* Left: Ticket Details */}
@@ -229,7 +235,7 @@ export default function OwnerTicketDetailPage() {
                                     </Avatar>
                                     <Box>
                                         <Typography variant="body1" fontWeight="950" color="#FFF">
-                                            {ticket.propertyName || 'Property'}
+                                            {ticketPropertyLabel(ticket, tx('owner.ticket.property_fallback', 'Property'))}
                                         </Typography>
                                         <Typography variant="body2" color="textSecondary">
                                             {ticket.unitNumber ? `Unit ${ticket.unitNumber}` : 'Common Area'}
@@ -248,7 +254,7 @@ export default function OwnerTicketDetailPage() {
                                             {ticket.createdAt?.toDate ? ticket.createdAt.toDate().toLocaleString() : tx('owner.ticket.recently_filed', 'Recently filed')}
                                         </Typography>
                                         <Typography variant="caption" color="textSecondary">
-                                            {tx('owner.ticket.priority_label', 'Priority:')} <span style={{ color: ticket.priority === 'emergency' ? '#ef4444' : '#FFF', fontWeight: 900 }}>{ticket.priority?.toUpperCase()}</span>
+                                            {tx('owner.ticket.priority_label', 'Priority:')} <span style={{ color: ticket.priority === 'emergency' ? '#B91C1C' : '#111827', fontWeight: 900 }}>{ticket.priority?.toUpperCase()}</span>
                                         </Typography>
                                     </Box>
                                 </Stack>
@@ -301,24 +307,10 @@ export default function OwnerTicketDetailPage() {
                                 </Box>
                             )}
 
-                            {/* Tech resolution notes when completed */}
-                            {ticket.technicianNotes && (
-                                <Box sx={{ p: 3, bgcolor: 'rgba(255,255,255,0.02)', borderRadius: 3, border: '1px solid rgba(255,255,255,0.05)' }}>
-                                    <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 1 }}>
-                                        {tx('owner.ticket.tech_notes', 'TECHNICIAN RESOLUTION NOTES')}
-                                    </Typography>
-                                    <Typography variant="body1" color="#FFF" sx={{ mt: 0.5 }}>
-                                        {ticket.technicianNotes}
-                                    </Typography>
-                                    {ticket.materialsUsed?.length > 0 && (
-                                        <Typography variant="caption" color="textSecondary" sx={{ mt: 1, display: 'block' }}>
-                                            {tx('owner.ticket.materials', 'Materials')}: {ticket.materialsUsed.join(', ')}
-                                        </Typography>
-                                    )}
-                                </Box>
-                            )}
                         </Stack>
                     </Paper>
+
+                    <OwnerTicketEvidencePanel evidence={evidence} />
 
                     {(canReviewCompleted || canEscalateOpen || ticket.ownerReviewAction) && (
                         <Paper sx={{ p: 4, mb: 4, bgcolor: canReviewCompleted ? alpha('#10b981', 0.06) : 'rgba(15, 23, 42, 0.6)', border: `1px solid ${canReviewCompleted ? alpha('#10b981', 0.35) : 'rgba(255,255,255,0.05)'}`, borderRadius: 6 }}>
@@ -335,25 +327,12 @@ export default function OwnerTicketDetailPage() {
                                     </Typography>
                                 </Box>
 
-                                {(beforeProofs.length > 0 || afterProofs.length > 0) && (
-                                    <Grid container spacing={2}>
-                                        <Grid item xs={12} md={6}>
-                                            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.45)', fontWeight: 950, display: 'block', mb: 1 }}>BEFORE / REQUEST EVIDENCE</Typography>
-                                            <Stack direction="row" spacing={1} sx={{ overflowX: 'auto', pb: 1 }}>
-                                                {beforeProofs.slice(0, 4).map((url: string, index: number) => (
-                                                    <Box key={`before-${index}`} component="img" src={url} alt={`Before ${index + 1}`} onClick={() => window.open(url, '_blank', 'noopener,noreferrer')} sx={{ width: 120, height: 90, objectFit: 'cover', borderRadius: 2, border: '1px solid rgba(255,255,255,0.1)', cursor: 'pointer' }} />
-                                                ))}
-                                            </Stack>
-                                        </Grid>
-                                        <Grid item xs={12} md={6}>
-                                            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.45)', fontWeight: 950, display: 'block', mb: 1 }}>AFTER / COMPLETION PROOF</Typography>
-                                            <Stack direction="row" spacing={1} sx={{ overflowX: 'auto', pb: 1 }}>
-                                                {afterProofs.slice(0, 4).map((url: string, index: number) => (
-                                                    <Box key={`after-${index}`} component="img" src={url} alt={`After ${index + 1}`} onClick={() => window.open(url, '_blank', 'noopener,noreferrer')} sx={{ width: 120, height: 90, objectFit: 'cover', borderRadius: 2, border: '1px solid rgba(255,255,255,0.1)', cursor: 'pointer' }} />
-                                                ))}
-                                            </Stack>
-                                        </Grid>
-                                    </Grid>
+                                {canReviewCompleted && (
+                                    <Typography variant="body2" data-testid="owner-review-evidence-pointer" sx={{ color: 'rgba(255,255,255,0.7)', fontWeight: 700 }}>
+                                        {evidence.before.length + evidence.after.length > 0
+                                            ? `Review the ${evidence.before.length} before and ${evidence.after.length} after photo(s) in Work Evidence above before deciding.`
+                                            : 'No technician photos were recorded for this ticket. Consider Request Revisit or Dispute if proof is required.'}
+                                    </Typography>
                                 )}
 
                                 {ticket.ownerReviewAction && (
@@ -388,6 +367,7 @@ export default function OwnerTicketDetailPage() {
                         <Stack spacing={3}>
                             {[
                                 { label: tx('owner.ticket.filed', 'Complaint Filed'), ts: ticket.createdAt, color: '#4ade80' },
+                                { label: tx('owner.ticket.assigned', 'Technician Assigned'), ts: ticket.assignedAt || ticket.autoAssignedAt, color: '#3b82f6' },
                                 { label: tx('owner.ticket.accepted', 'Technician Accepted'), ts: ticket.acceptedAt, color: binThemeTokens.gold },
                                 { label: tx('owner.ticket.on_the_way', 'On The Way'), ts: ticket.onTheWayAt, color: '#f59e0b' },
                                 { label: tx('owner.ticket.arrived', 'Arrived at Property'), ts: ticket.arrivedAt, color: '#6366f1' },
@@ -410,23 +390,8 @@ export default function OwnerTicketDetailPage() {
                     </Paper>
                 </Grid>
 
-                {/* Right: Live Tracking Card */}
+                {/* Right: Ticket metadata */}
                 <Grid item xs={12} lg={4}>
-                    <Box sx={{ mb: 3 }}>
-                        <LiveTechnicianTrackingCard
-                            ticket={ticket}
-                            onChatClick={ticket.assignedTechnicianId
-                                ? () => navigate(`/owner/chat/${ticket.id}`)
-                                : undefined
-                            }
-                            onCallClick={() => {
-                                const phone = ticket.assignedTechnicianPhone;
-                                if (phone) window.open(`tel:${phone}`);
-                            }}
-                            showTimeline={false}
-                        />
-                    </Box>
-
                     {/* Ticket meta */}
                     <Paper sx={{ p: 3, bgcolor: 'rgba(15, 23, 42, 0.6)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 5, mb: 3 }}>
                         <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, mb: 2, display: 'block' }}>
@@ -438,6 +403,10 @@ export default function OwnerTicketDetailPage() {
                                 <Typography variant="body2" fontWeight="900" color="#FFF">
                                     #{ticket.id.substring(0, 8).toUpperCase()}
                                 </Typography>
+                            </Box>
+                            <Box>
+                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.3)', fontWeight: 900 }}>{tx('owner.ticket.assignment', 'ASSIGNMENT')}</Typography>
+                                <OwnerTicketAssignmentLine ticket={ticket} tx={tx} />
                             </Box>
                             <Box>
                                 <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.3)', fontWeight: 900 }}>{tx('owner.ticket.source', 'SOURCE')}</Typography>

@@ -4,6 +4,7 @@ const SECTION_LABELS: Record<string, string> = {
     attendance: 'attendance',
     leaveRequests: 'leave requests',
     documents: 'HR documents',
+    staffUploads: 'staff-uploaded documents',
     payroll: 'payroll evidence',
 };
 

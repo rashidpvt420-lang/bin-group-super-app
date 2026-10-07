@@ -11,6 +11,7 @@ const { admin, db, lib, createUser, clearFirestore, call, expectHttpsError } = r
 const { adminRecordOwnerMobilizationPaymentEvidence } = lib('inspectionFirstOwnerOnboarding.js');
 const { adminApprovePayment } = lib('paymentTransactionApproval.js');
 const dualControl = lib('paymentDualControl.js');
+const { adminApprovePayment: secureApprovePayment } = lib('securePaymentApproval.js');
 // The deployed adminApprovePayment (securePaymentApproval.ts) runs the MFA and portfolio
 // activation gates, then delegates to this handler's run(), so the check below applies live.
 
@@ -176,4 +177,71 @@ test('dual-control decision table', () => {
   assert.equal(paymentDualControlViolation({ verificationState: 'OWNER_SUBMITTED' }, 'b'), null);
   assert.equal(paymentDualControlViolation({ paymentMethod: 'STRIPE', verified: true }, 'b'), null);
   assert.equal(paymentEvidenceRecorderUid({ paymentEvidenceRecordedBy: ' a ', paymentProofEvidence: { recordedBy: 'z' } }), 'a');
+});
+
+async function seedApprovable(intakeId) {
+  await seedFinalSigned(intakeId);
+  const schedule = { annualContractValue: 1725, activationDeposit: 258.75 };
+  await db.doc(`contracts/${intakeId}`).set(schedule, { merge: true });
+  await db.doc(`payment_transactions/${intakeId}`).set({ ...schedule, quoteHash: HASH }, { merge: true });
+  await db.doc('contract_signature_otps/otp_pre').set({
+    status: 'VERIFIED', uid: OWNER, contractId: intakeId, contractHash: HASH,
+    consumedFor: intakeId, signature: 'Owner D5', verifiedAt: now(), consumedAt: now(),
+  });
+  await db.doc(`intake_submissions/${intakeId}`).set({ inspectionStatus: 'COMPLETED' }, { merge: true });
+  const propertyRef = db.doc(`properties/${intakeId}_property_1`);
+  const property = (await propertyRef.get()).data();
+  const inspection = (await db.doc(`property_inspections/insp_${intakeId}`).get()).data();
+  const verifiedGeo = lib('propertyGeoAuthority.js').buildInspectionVerifiedPropertyGeo(property, inspection, 'emulator-inspector', now());
+  await propertyRef.set({ quoteHash: HASH, ...verifiedGeo }, { merge: true });
+}
+
+test('deployed Finance MFA wrapper allows a distinct reviewer to activate exactly once and repairs receipts on replay', async (context) => {
+  // The Storage emulator stores PDF bytes but has no IAM signing service. Stub only
+  // URL signing; receipt upload, hash, generation and all approval gates remain real.
+  const prototype = Object.getPrototypeOf(admin.storage().bucket().file('fixture'));
+  const originalSignedUrl = prototype.getSignedUrl;
+  prototype.getSignedUrl = async function () { return [`https://example.invalid/${encodeURIComponent(this.name)}`]; };
+  context.after(() => { prototype.getSignedUrl = originalSignedUrl; });
+  const intakeId = crypto.randomUUID();
+  await seedApprovable(intakeId);
+  await call(adminRecordOwnerMobilizationPaymentEvidence, financeA, evidence(intakeId));
+  const refusal = await expectHttpsError(call(secureApprovePayment, financeA, { paymentId: intakeId }), 'failed-precondition');
+  assert.equal(refusal.details?.reason, 'DUAL_CONTROL_SAME_ADMIN');
+  const result = await call(secureApprovePayment, financeB, { paymentId: intakeId });
+  assert.equal(result.status, 'SUCCESS');
+  assert.equal(result.idempotent, false);
+  const payment = (await db.doc(`payment_transactions/${intakeId}`).get()).data();
+  assert.equal(payment.paymentDualControl.evidenceRecordedBy, financeA.uid);
+  assert.equal(payment.paymentDualControl.approvedBy, financeB.uid);
+  assert.equal(payment.paymentVerified, true);
+  assert.equal((await db.doc(`contracts/${intakeId}`).get()).get('status'), 'ACTIVE');
+  const replay = await call(secureApprovePayment, financeB, { paymentId: intakeId });
+  assert.equal(replay.idempotent, true);
+  const repairs = await call(secureApprovePayment, financeA, { paymentId: intakeId });
+  assert.equal(repairs.idempotent, true, 'recording Admin may replay an already-approved decision');
+  const audit = await db.collection('audit_logs').where('action', '==', 'ADMIN_APPROVE_PAYMENT').get();
+  assert.equal(audit.size, 1, 'replays do not create a second financial decision');
+  const invoice = (await db.doc(`invoices/${payment.invoiceId}`).get()).data();
+  assert.equal(invoice.status, 'PAID');
+  assert.ok(invoice.receiptStoragePath);
+});
+
+test('an upload cannot reopen a payment approved while receipt storage was in progress', async () => {
+  const intakeId = crypto.randomUUID();
+  await seedFinalSigned(intakeId);
+  const prototype = Object.getPrototypeOf(admin.storage().bucket().file('fixture'));
+  const original = prototype.save;
+  prototype.save = async function (...args) {
+    const result = await original.apply(this, args);
+    await db.doc(`payment_transactions/${intakeId}`).set({ status: 'APPROVED', paymentVerified: true }, { merge: true });
+    return result;
+  };
+  try {
+    await expectHttpsError(call(adminRecordOwnerMobilizationPaymentEvidence, financeA, evidence(intakeId)), 'aborted');
+  } finally { prototype.save = original; }
+  const payment = (await db.doc(`payment_transactions/${intakeId}`).get()).data();
+  assert.equal(payment.status, 'APPROVED');
+  assert.equal(payment.paymentVerified, true);
+  assert.equal(payment.paymentEvidenceRecordedBy, undefined);
 });

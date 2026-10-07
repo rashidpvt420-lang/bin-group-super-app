@@ -8,7 +8,8 @@ import { binThemeTokens } from '../../theme/binGroupTheme';
 import { ALL_TECHNICIAN_ACTIVE_STATUSES, onSnapshotSplitIn } from '../../shared-exports';
 
 type JobRow = { id: string; [key: string]: any };
-const ui = { ink: '#111827', muted: '#667085', line: '#E5E7EB', gold: binThemeTokens.gold, green: '#059669', red: '#DC2626', blue: '#2563EB' };
+// Text tones readable on white (>= 4.5:1). Brand gold (#C9A646, 2.3:1) is kept for borders/bars only.
+const ui = { ink: '#111827', muted: '#475467', line: '#E5E7EB', gold: binThemeTokens.gold, goldText: '#7A5C12', green: '#047857', red: '#B91C1C', blue: '#1D4ED8' };
 const arrayCount = (value: any) => Array.isArray(value) ? value.length : 0;
 const normalize = (value: any) => String(value || '').trim();
 const getMillis = (value: any) => {
@@ -60,7 +61,7 @@ export default function TechnicianProofReadinessPage() {
     <Box>
       <Stack spacing={3}>
         <Box>
-          <Typography variant="overline" sx={{ color: ui.gold, fontWeight: 950, letterSpacing: 3 }}>TECHNICIAN PROOF COMMAND</Typography>
+          <Typography variant="overline" sx={{ color: ui.goldText, fontWeight: 950, letterSpacing: 3 }}>TECHNICIAN PROOF COMMAND</Typography>
           <Typography variant="h3" sx={{ color: ui.ink, fontWeight: 950, mt: 1 }}>Proof Readiness</Typography>
           <Typography sx={{ color: ui.muted, mt: 1, fontWeight: 700 }}>Every active job must have before evidence, after proof, resolution notes, and parts/materials disposition before close.</Typography>
         </Box>
@@ -74,10 +75,10 @@ export default function TechnicianProofReadinessPage() {
             </Box>
             <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
               <Chip label={`Blocked: ${blocked}`} sx={{ bgcolor: '#fff', color: blocked ? ui.red : ui.green, fontWeight: 950 }} />
-              <Chip label={`Before missing: ${missingBefore}`} sx={{ bgcolor: '#fff', color: missingBefore ? ui.gold : ui.green, fontWeight: 950 }} />
+              <Chip label={`Before missing: ${missingBefore}`} sx={{ bgcolor: '#fff', color: missingBefore ? ui.goldText : ui.green, fontWeight: 950 }} />
               <Chip label={`After missing: ${missingAfter}`} sx={{ bgcolor: '#fff', color: missingAfter ? ui.red : ui.green, fontWeight: 950 }} />
-              <Chip label={`Notes missing: ${missingNotes}`} sx={{ bgcolor: '#fff', color: missingNotes ? ui.gold : ui.green, fontWeight: 950 }} />
-              <Chip label={`Parts missing: ${missingParts}`} sx={{ bgcolor: '#fff', color: missingParts ? ui.gold : ui.green, fontWeight: 950 }} />
+              <Chip label={`Notes missing: ${missingNotes}`} sx={{ bgcolor: '#fff', color: missingNotes ? ui.goldText : ui.green, fontWeight: 950 }} />
+              <Chip label={`Parts missing: ${missingParts}`} sx={{ bgcolor: '#fff', color: missingParts ? ui.goldText : ui.green, fontWeight: 950 }} />
             </Stack>
           </Stack>
           <LinearProgress variant="determinate" value={ratio} sx={{ height: 10, borderRadius: 5, mt: 2, bgcolor: ui.line, '& .MuiLinearProgress-bar': { bgcolor: blocked ? ui.gold : ui.green } }} />
@@ -92,16 +93,16 @@ export default function TechnicianProofReadinessPage() {
                     <Typography sx={{ color: ui.ink, fontWeight: 950 }}>{job.category || job.issueType || 'Maintenance Mission'}</Typography>
                     <Typography variant="caption" sx={{ color: ui.muted, fontWeight: 800 }}>#{String(job.id).slice(0, 8)} · {job.propertyName || job.address || 'Property not linked'}</Typography>
                   </Box>
-                  <Chip icon={proof.ready ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />} label={`Proof ${proof.score}/${proof.total}`} sx={{ bgcolor: alpha(proof.ready ? ui.green : ui.gold, 0.12), color: proof.ready ? ui.green : ui.gold, fontWeight: 950 }} />
+                  <Chip icon={proof.ready ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />} label={`Proof ${proof.score}/${proof.total}`} sx={{ bgcolor: alpha(proof.ready ? ui.green : ui.gold, 0.12), color: proof.ready ? ui.green : ui.goldText, fontWeight: 950, '& .MuiChip-icon': { color: 'inherit' } }} />
                 </Stack>
                 <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mt: 2 }}>
                   {['before', 'after', 'notes', 'parts'].map((item) => {
                     const ok = Boolean((proof as any)[item]);
-                    return <Chip key={item} size="small" label={`${ok ? '✓' : '•'} ${item}`} sx={{ bgcolor: alpha(ok ? ui.green : ui.gold, 0.1), color: ok ? ui.green : ui.gold, fontWeight: 900 }} />;
+                    return <Chip key={item} size="small" label={`${ok ? '✓' : '•'} ${item}`} sx={{ bgcolor: alpha(ok ? ui.green : ui.gold, 0.1), color: ok ? ui.green : ui.goldText, fontWeight: 900 }} />;
                   })}
                 </Stack>
                 {!proof.ready && <Typography variant="caption" sx={{ display: 'block', color: ui.red, mt: 1.5, fontWeight: 800 }}>Missing: {proof.missing.join(', ')}</Typography>}
-                <Button endIcon={<ArrowRight size={14} />} sx={{ mt: 1.5, color: ui.gold, fontWeight: 950 }}>Open job</Button>
+                <Button data-testid="technician-proof-open-job" endIcon={<ArrowRight size={14} />} onClick={(event) => { event.stopPropagation(); navigate(`/technician/job/${job.id}`); }} sx={{ mt: 1.5, color: ui.goldText, fontWeight: 950 }}>Open job</Button>
               </Paper>
             </Grid>
           ))}

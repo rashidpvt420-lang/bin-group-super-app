@@ -10,6 +10,7 @@ import { binThemeTokens } from '../../theme/binGroupTheme';
 import { buildPersistableGeoAnchor, isValidLatLng } from '../../utils/geoAnchor';
 import { buildGoogleMapsSearchUrl, useGoogleMaps } from '../../lib/maps';
 import { OWNER_MANUAL_GEO_SOURCE, isEmirateCentroid } from './ownerLocationRules';
+import { buildAddressQuery, createNominatimFetch, isNetworkFetchError, resolvePropertyAddress } from './propertyAddressLookup';
 
 const EMIRATES_LIST = [
     { id: 'Dubai', key: 'onboarding.emirate.dubai', en: 'Dubai', ar: 'دبي', lat: 25.2048, lng: 55.2708 },
@@ -33,16 +34,6 @@ const safeDecode = (value: string) => {
 const looksLikeGoogleMapsUrl = (value?: string | null) => GOOGLE_MAPS_URL_PATTERN.test(value || '');
 const isShortGoogleMapsUrl = (value?: string | null) => GOOGLE_MAPS_SHORT_URL_PATTERN.test(value || '');
 const findGoogleMapsInput = (...values: Array<string | undefined | null>) => (values.find((value) => looksLikeGoogleMapsUrl(value)) || '').trim();
-
-type RemoteAddressResult = {
-    lat: number;
-    lng: number;
-    address: string;
-    emirate?: string;
-    city?: string;
-    area?: string;
-    placeId?: string;
-};
 
 type GeoSource = 'google_maps' | 'title_deed' | 'device_gps' | typeof OWNER_MANUAL_GEO_SOURCE;
 
@@ -395,23 +386,15 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
         });
     };
 
-    const resolveWithOpenStreetMap = async (queryText: string): Promise<RemoteAddressResult | null> => {
-        const response = await fetch(`https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=ae&addressdetails=1&q=${encodeURIComponent(queryText)}`, { headers: { Accept: 'application/json' } });
-        if (!response.ok) return null;
-        const results = await response.json();
-        const first = Array.isArray(results) ? results[0] : null;
-        if (!first?.lat || !first?.lon) return null;
-        const address = first.address || {};
-        return {
-            lat: Number(first.lat),
-            lng: Number(first.lon),
-            address: first.display_name || queryText,
-            emirate: address.state || activeProperty?.emirate || fallbackEmirate.id,
-            city: address.city || address.town || address.village || address.county || activeProperty?.city || activeProperty?.emirate || fallbackEmirate.id,
-            area: address.suburb || address.neighbourhood || address.road || activeProperty?.area || '',
-            placeId: 'REMOTE_ADDRESS'
-        };
-    };
+    // Owner-facing copy for a failed lookup. Never surface raw browser errors ("Failed to fetch").
+    const addressLookupUnavailableMessage = () => copy(
+        'Address search is unavailable right now. You can still continue: drag the pin on the map, paste an expanded Google Maps link, or enter the latitude and longitude and select Save Coordinates.',
+        'البحث عن العنوان غير متاح حالياً. يمكنك المتابعة: اسحب العلامة على الخريطة، أو الصق رابط خرائط Google الكامل، أو أدخل خط العرض وخط الطول واختر حفظ الإحداثيات.'
+    );
+    const addressNotFoundMessage = () => copy(
+        'The property address could not be found. Add the building, street, area and emirate, or drag the pin on the map, paste an expanded Google Maps link, or enter coordinates and select Save Coordinates.',
+        'تعذر العثور على عنوان العقار. أضف اسم المبنى والشارع والمنطقة والإمارة، أو اسحب العلامة على الخريطة، أو الصق رابط خرائط Google الكامل، أو أدخل الإحداثيات واختر حفظ الإحداثيات.'
+    );
 
     const handleRemotePropertySearch = async () => {
         const enteredAddress = (activeProperty?.address || '').trim();
@@ -450,16 +433,26 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
                 return;
             }
             const cleanAddress = looksLikeGoogleMapsUrl(enteredAddress) ? '' : enteredAddress;
-            const resolved = await resolveWithOpenStreetMap(`${cleanAddress || plusCodeField}, ${selectedEmirate}, UAE`);
-            if (!resolved || !isValidLatLng(resolved.lat, resolved.lng)) {
-                setLocationError(copy('The property address could not be found. Add the building, street, area and emirate.', 'تعذر العثور على عنوان العقار. أضف اسم المبنى والشارع والمنطقة والإمارة.'));
+            const google = (window as any).google;
+            const outcome = await resolvePropertyAddress({
+                query: buildAddressQuery(cleanAddress || plusCodeField, selectedEmirate),
+                googleGeocoder: mapsLoaded && google?.maps?.Geocoder ? new google.maps.Geocoder() : null,
+                fetchImpl: typeof fetch === 'function' ? createNominatimFetch(window.fetch.bind(window) as any) : null,
+            });
+            const resolved = outcome.ok ? outcome.result : undefined;
+            if (!resolved) {
+                setLocationError(outcome.reason === 'unavailable' ? addressLookupUnavailableMessage() : addressNotFoundMessage());
+                return;
+            }
+            if (!isValidLatLng(resolved.lat, resolved.lng)) {
+                setLocationError(addressNotFoundMessage());
                 return;
             }
             commitGeoAnchor({
                 lat: Number(resolved.lat.toFixed(7)),
                 lng: Number(resolved.lng.toFixed(7)),
                 address: resolved.address,
-                emirate: resolved.emirate || selectedEmirate,
+                emirate: EMIRATES_LIST.some((item) => item.id === resolved.emirate) ? resolved.emirate : selectedEmirate,
                 city: resolved.city || selectedEmirate,
                 area: resolved.area || activeProperty?.area || '',
                 placeId: 'REMOTE_ADDRESS',
@@ -470,7 +463,7 @@ const PropertyLocationStep: React.FC<{ onNext: () => void; onBack: () => void }>
             });
         } catch (error: any) {
             console.error('Remote property lookup failed:', error);
-            setLocationError(error?.message || copy('Property-address lookup failed.', 'فشل البحث عن عنوان العقار.'));
+            setLocationError(isNetworkFetchError(error) ? addressLookupUnavailableMessage() : addressNotFoundMessage());
         } finally {
             setResolvingAddress(false);
         }

@@ -252,7 +252,7 @@ export default function FinancialDashboardPage() {
                     <BarChart data={safeFinancials.dailyTrend}>
                         <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
                         <XAxis dataKey="date" stroke={binThemeTokens.textSecondary} fontSize={12} tickLine={false} axisLine={false} />
-                        <YAxis stroke={binThemeTokens.textSecondary} fontSize={12} tickLine={false} axisLine={false} tickFormatter={(value) => `AED ${value/1000}k`} />
+                        <YAxis stroke={binThemeTokens.textSecondary} fontSize={12} tickLine={false} axisLine={false} tickFormatter={(value: number) => (Math.abs(value) >= 1000 ? `AED ${Math.round(value / 1000)}k` : `AED ${Math.round(value)}`)} />
                         <Tooltip contentStyle={{ backgroundColor: '#161618', border: '1px solid rgba(198,167,94,0.2)', borderRadius: 12, color: '#fff' }} />
                         <Bar dataKey="collected" fill="url(#goldGradient)" radius={[4, 4, 0, 0]} />
                         <defs>
@@ -284,7 +284,8 @@ export default function FinancialDashboardPage() {
             <Button
               variant="contained" fullWidth
               sx={{ background: 'linear-gradient(135deg, #C6A75E, #E6C77A)', color: '#0B0B0C', py: 2.5, fontWeight: 900 }}
-              onClick={handleBridgeActivation} 
+              disabled
+              onClick={handleBridgeActivation}
             >{t('fin.advance_btn')}</Button>
           </Paper>
         </Grid>
@@ -297,7 +298,7 @@ export default function FinancialDashboardPage() {
           </Typography>
           <Grid container spacing={3}>
               {[
-                  { label: 'Occupied Units', val: safeFinancials.pm?.occupiedUnits, sub: `${safeFinancials.pm?.occupancyRate}% Occupancy` },
+                  { label: 'Occupied Units', val: safeFinancials.pm?.occupiedUnits, sub: `${Number.isFinite(Number(safeFinancials.pm?.occupancyRate)) ? Number(safeFinancials.pm?.occupancyRate) : 0}% Occupancy` },
                   { label: 'Vacant Units', val: safeFinancials.pm?.vacantUnits, sub: 'Ready for Leasing' },
                   { label: 'Renewals Processed', val: safeFinancials.pm?.renewalsProcessed, sub: 'Institutional Retention' },
                   { label: 'Issues Resolved', val: safeFinancials.pm?.resolvedTickets, sub: `${safeFinancials.pm?.resolutionRate}% Resolution Rate` }
@@ -314,7 +315,7 @@ export default function FinancialDashboardPage() {
       </Box>
 
       <Box sx={{ mt: 10 }}>
-        <Typography variant="h5" sx={{ mb: 4, fontWeight: 900, color: binThemeTokens.textPrimary }}>{t('fin.logs_title')}</Typography>
+        <Typography variant="h5" sx={{ mb: 4, fontWeight: 900, color: binThemeTokens.textPrimary }}>{t('fin.transactions_title')}</Typography>
         <TableContainer component={Paper} sx={{ bgcolor: 'rgba(22, 22, 24, 0.6)', borderRadius: 6 }}>
             <Table>
                 <TableHead>

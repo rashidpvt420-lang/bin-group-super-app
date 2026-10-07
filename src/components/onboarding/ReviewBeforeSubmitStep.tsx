@@ -5,12 +5,14 @@ import {
 } from '@mui/material';
 import { ArrowLeft, ArrowRight, CheckCircle2, ShieldCheck, AlertTriangle } from 'lucide-react';
 import { onAuthStateChanged } from 'firebase/auth';
+import { getToken as getAppCheckToken } from 'firebase/app-check';
 import { useOnboardingStore } from '../../store/onboardingStore';
 import { useLanguage } from '@bin/shared';
 import { formatAED } from '../../utils/formatters';
 import { binThemeTokens } from '../../theme/binGroupTheme';
-import { auth, functions, httpsCallable } from '../../lib/firebase';
+import { appCheck, auth, functions, httpsCallable } from '../../lib/firebase';
 import { isValidLatLng } from '../../utils/geoAnchor';
+import { classifyOwnerQuoteFailure, ownerQuoteFailureOffersRetry, ownerQuoteFailureOffersSignIn, type OwnerQuoteFailureKind } from './ownerQuoteFailure';
 
 const badCopy = (value?: string) => {
     const text = String(value || '').trim();
@@ -49,6 +51,8 @@ const ReviewBeforeSubmitStep: React.FC<{ onNext: () => void; onBack: () => void;
     const [quoteLoading, setQuoteLoading] = React.useState(false);
     const [quoteError, setQuoteError] = React.useState('');
     const [quoteNeedsSignIn, setQuoteNeedsSignIn] = React.useState(false);
+    const [quoteCanRetry, setQuoteCanRetry] = React.useState(false);
+    const [quoteRetryNonce, setQuoteRetryNonce] = React.useState(0);
     const [authReady, setAuthReady] = React.useState(false);
     const [signedInUid, setSignedInUid] = React.useState<string | null>(auth.currentUser?.uid || null);
 
@@ -68,6 +72,18 @@ const ReviewBeforeSubmitStep: React.FC<{ onNext: () => void; onBack: () => void;
         lang === 'ar'
             ? 'انتهت جلسة المالك الآمنة أو لم تكتمل استعادتها. سجّل الدخول مرة أخرى للمتابعة من هذه الصفحة.'
             : 'Your secure Owner session has expired or could not be restored. Sign in again to continue from this page.'
+    ), [lang]);
+
+    const securityCheckMessage = React.useCallback(() => (
+        lang === 'ar'
+            ? 'تعذر إكمال فحص أمان المتصفح المطلوب لإعداد عرض السعر المحمي. جلستك وطلبك محفوظان. أعد تحميل الصفحة ثم اختر إعادة المحاولة. إذا استمرت المشكلة فتواصل مع دعم BIN GROUP؛ إعادة تسجيل الدخول لن تحل هذه المشكلة.'
+            : 'BIN GROUP could not complete the browser security check needed to prepare your protected quotation. Your session and application are saved. Reload the page and select Retry. If this continues, contact BIN GROUP support; signing in again will not fix this.'
+    ), [lang]);
+
+    const accountNotReadyMessage = React.useCallback((serverMessage?: string) => (
+        lang === 'ar'
+            ? `لم يقبل الخادم حالة حساب المالك بعد${serverMessage ? ` (${serverMessage})` : ''}. تأكد من توثيق بريدك الإلكتروني، ثم أعد تحميل الصفحة. إذا استمرت المشكلة فتواصل مع دعم BIN GROUP.`
+            : `The server has not accepted this Owner account yet${serverMessage ? ` (${serverMessage})` : ''}. Make sure your email is verified, then reload the page. If this continues, contact BIN GROUP support.`
     ), [lang]);
 
     const missingGpsMessage = React.useCallback(() => (
@@ -129,9 +145,25 @@ const ReviewBeforeSubmitStep: React.FC<{ onNext: () => void; onBack: () => void;
             }
             setQuoteLoading(true);
             setQuoteNeedsSignIn(false);
+            setQuoteCanRetry(false);
             setQuoteError('');
+            let idTokenRefreshed = false;
+            let appCheckTokenOk: boolean | null = null;
             try {
                 await auth.currentUser.getIdToken(true);
+                idTokenRefreshed = true;
+                if (appCheck) {
+                    try {
+                        await getAppCheckToken(appCheck, false);
+                        appCheckTokenOk = true;
+                    } catch (appCheckError) {
+                        appCheckTokenOk = false;
+                        console.warn('[OWNER-QUOTE] App Check token unavailable; the protected quotation call would be rejected.', appCheckError);
+                        const securityError: any = new Error('APP_CHECK_TOKEN_UNAVAILABLE');
+                        securityError.code = 'functions/unauthenticated';
+                        throw securityError;
+                    }
+                }
                 const callable = httpsCallable(functions, 'previewOwnerInspectionQuote');
                 const result = await callable({ properties, selectedAddOns: selectedAddOns || [] });
                 if (!active) return;
@@ -156,12 +188,16 @@ const ReviewBeforeSubmitStep: React.FC<{ onNext: () => void; onBack: () => void;
             } catch (error: any) {
                 if (!active) return;
                 setValuationResult({ ...(valuationResult || {}), serverQuote: null, serverQuoteRequestKey: null });
-                const code = String(error?.code || '').toLowerCase();
-                if (code.includes('unauthenticated') || code.includes('permission-denied')) {
-                    setQuoteNeedsSignIn(true);
+                const failure: OwnerQuoteFailureKind = classifyOwnerQuoteFailure({ code: error?.code, idTokenRefreshed, appCheckTokenOk });
+                setQuoteNeedsSignIn(ownerQuoteFailureOffersSignIn(failure));
+                setQuoteCanRetry(ownerQuoteFailureOffersRetry(failure));
+                if (failure === 'session_expired') {
                     setQuoteError(secureSessionMessage());
+                } else if (failure === 'security_check') {
+                    setQuoteError(securityCheckMessage());
+                } else if (failure === 'account_not_ready') {
+                    setQuoteError(accountNotReadyMessage(typeof error?.message === 'string' ? error.message : undefined));
                 } else {
-                    setQuoteNeedsSignIn(false);
                     setQuoteError(String(error?.details || error?.message || copy(
                         'onboarding.server_quote_failed',
                         'The protected property quotation could not be generated. Review cannot continue.',
@@ -183,7 +219,7 @@ const ReviewBeforeSubmitStep: React.FC<{ onNext: () => void; onBack: () => void;
             setQuoteError('');
         }
         return () => { active = false; };
-    }, [authReady, copy, missingGps, missingGpsMessage, ownerAccount?.uid, properties, quoteRequestKey, selectedAddOns, secureSessionMessage, signedInUid]);
+    }, [authReady, copy, missingGps, missingGpsMessage, ownerAccount?.uid, properties, quoteRequestKey, selectedAddOns, secureSessionMessage, securityCheckMessage, accountNotReadyMessage, signedInUid, quoteRetryNonce]);
 
     const primaryProperty = properties[0];
     const localQuote = portfolioSummary.quoteResults?.[primaryProperty?.id];
@@ -243,7 +279,11 @@ const ReviewBeforeSubmitStep: React.FC<{ onNext: () => void; onBack: () => void;
             </Alert>
             {quoteError && <Alert severity="error" sx={{ mb: 3 }} action={missingGps
                 ? <Button color="inherit" size="small" onClick={onFixLocation}>{lang === 'ar' ? 'إصلاح موقع العقار' : 'Fix property GPS'}</Button>
-                : (quoteNeedsSignIn ? <Button color="inherit" size="small" onClick={handleSignInAgain}>{lang === 'ar' ? 'تسجيل الدخول' : 'Sign in again'}</Button> : undefined)}>{quoteError}</Alert>}
+                : (quoteNeedsSignIn
+                    ? <Button color="inherit" size="small" onClick={handleSignInAgain}>{lang === 'ar' ? 'تسجيل الدخول' : 'Sign in again'}</Button>
+                    : (quoteCanRetry
+                        ? <Button color="inherit" size="small" disabled={quoteLoading} onClick={() => setQuoteRetryNonce((value) => value + 1)}>{lang === 'ar' ? 'إعادة المحاولة' : 'Retry'}</Button>
+                        : undefined))}>{quoteError}</Alert>}
             {quoteLoading && <Alert severity="warning" icon={<CircularProgress size={18} />} sx={{ mb: 3 }}>{authReady ? copy('onboarding.server_quote_loading', 'Generating the protected server quotation…') : (lang === 'ar' ? 'جارٍ استعادة جلسة المالك الآمنة…' : 'Restoring your secure Owner session…')}</Alert>}
 
             <Grid container spacing={3} sx={{ flexDirection: isRTL ? 'row-reverse' : 'row' }}>

@@ -315,7 +315,7 @@ export default function PaymentApprovalsPage() {
             setRejectReason('');
         } catch (err: any) {
             console.error('[ADMIN_PAYMENTS] rejection failed', err);
-            setError(err?.details || err?.message || 'Rejection failed.');
+            setError((typeof err?.details === 'string' && err.details) || err?.message || 'Rejection failed.');
         } finally { setBusyId(null); }
     };
 
@@ -340,7 +340,7 @@ export default function PaymentApprovalsPage() {
             setNotice(`Paid receipt repaired for invoice ${invoice.id}.`);
         } catch (err: any) {
             console.error('[ADMIN_PAYMENTS] receipt repair failed', err);
-            setError(err?.details || err?.message || 'Receipt repair failed.');
+            setError((typeof err?.details === 'string' && err.details) || err?.message || 'Receipt repair failed.');
         } finally {
             setBusyId(null);
         }

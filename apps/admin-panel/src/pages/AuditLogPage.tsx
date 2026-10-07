@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
     Container, Typography, Paper, Table, TableBody, TableCell, 
     TableContainer, TableHead, TableRow, Chip, Box, TextField, 
@@ -13,6 +13,7 @@ import { useLanguage } from '@bin/shared';
 
 export default function AuditLogPage() {
     const { t, lang, isRTL } = useLanguage();
+    const searchInputRef = useRef<HTMLInputElement | null>(null);
     const [logs, setLogs] = useState<any[]>([]);
     const [search, setSearch] = useState('');
     const [loading, setLoading] = useState(true);
@@ -58,11 +59,12 @@ export default function AuditLogPage() {
         <Container maxWidth="xl" sx={{ py: 6, direction: isRTL ? 'rtl' : 'ltr' }}>
             <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexDirection: isRTL ? 'row-reverse' : 'row' }}>
                 <Box sx={{ textAlign: isRTL ? 'right' : 'left' }}>
-                    <Typography variant="h4" fontWeight="black" gutterBottom>{t('audit.title')}</Typography>
+                    <Typography variant="h4" fontWeight="black" gutterBottom sx={{ color: 'text.primary' }}>{t('audit.title')}</Typography>
                     <Typography variant="body2" color="text.secondary">{t('audit.subtitle')}</Typography>
                 </Box>
                 <Box sx={{ display: 'flex', gap: 2, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
                     <TextField 
+                        inputRef={searchInputRef}
                         placeholder={t('audit.search_placeholder')} 
                         size="small" 
                         value={search}
@@ -75,7 +77,7 @@ export default function AuditLogPage() {
                             )
                         }}
                     />
-                    <IconButton aria-label={lang === 'ar' ? 'تصفية سجل التدقيق' : 'Filter audit log'}><FilterListIcon /></IconButton>
+                    <IconButton aria-label={lang === 'ar' ? 'تصفية سجل التدقيق' : 'Filter audit log'} title={lang === 'ar' ? 'اكتب في مربع البحث للتصفية' : 'Type in the search box to filter'} onClick={() => searchInputRef.current?.focus()} sx={{ width: 44, height: 44 }}><FilterListIcon /></IconButton>
                 </Box>
             </Box>
 

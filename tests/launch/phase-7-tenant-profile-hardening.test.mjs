@@ -134,10 +134,11 @@ test('Phase 7 maintenance-to-Technician resolution flow remains executable and e
   assert.match(ticketPage, /tenantApproved/);
   assert.match(ticketPage, /DISPUTED/);
 
-  assert.match(tracking, /FRESH FOREGROUND GPS/);
+  assert.match(tracking, /LIVE TECHNICIAN GPS/);
   assert.match(tracking, /GPS STALE/);
-  assert.match(tracking, /GPS POINT PENDING/);
+  assert.match(tracking, /GPS PENDING/);
   assert.match(tracking, /Awaiting Technician Assignment/);
+  assert.match(tracking, /data-testid="technician-live-map"/);
 
   for (const route of ['/dashboard', '/request', '/tickets', '/ticket/:id', '/ai-concierge', '/documents', '/move-inspection', '/move-inspection/:type', '/homes']) {
     assert.ok(tenantApp.includes(`path="${route}"`) || tenantApp.includes(`path='${route}'`), `Missing Tenant route ${route}`);

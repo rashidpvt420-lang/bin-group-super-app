@@ -29,6 +29,15 @@ const bootTimeoutBody = (source) => {
   return source.slice(from, end);
 };
 
+const hardDeadlineBody = (source) => {
+  assert.match(source, /AUTH_BOOT_HARD_DEADLINE_MS/);
+  const start = source.indexOf('const releaseBootFailClosed');
+  assert.ok(start >= 0, 'hard-deadline fail-closed helper must exist');
+  const end = source.indexOf('AUTH_BOOT_HARD_DEADLINE_MS);', start);
+  assert.ok(end > start, 'hard deadline must stay bounded by AUTH_BOOT_HARD_DEADLINE_MS');
+  return source.slice(start, end);
+};
+
 test('main portal boot timer does not treat a restoring session as logged out', () => {
   const timeout = bootTimeoutBody(mainRoleContext);
   assert.match(mainRoleContext, /profileSyncInFlightRef/);
@@ -59,4 +68,24 @@ test('admin session persistence stays tab-scoped and does not expire on a live u
   assert.doesNotMatch(adminLogin, /browserLocalPersistence/);
   assert.match(adminFirebase, /if \(!currentUser\) \{\s*expireStaleAdminSession\(\);/s);
   assert.match(adminFirebase, /isTerminalAdminAuthError\(refreshError\)/);
+});
+
+test('main portal hard deadline fail-closes hung AUTHENTICATING without logging the owner out', () => {
+  const hard = hardDeadlineBody(mainRoleContext);
+  assert.match(hard, /Auth sync hard deadline\. Releasing portal gate fail-closed/);
+  assert.match(hard, /profile_unavailable/);
+  assert.match(hard, /Secure account verification timed out/);
+  assert.match(hard, /auth\.currentUser/);
+  assert.match(hard, /setLoading\(false\)/);
+  assert.match(hard, /markGlobalAuthReady/);
+  assert.doesNotMatch(hard, /setUser\(null\)/);
+  assert.doesNotMatch(hard, /auth\.signOut/);
+});
+
+test('owner-app hard deadline fail-closes hung AUTHENTICATING without logging the owner out', () => {
+  const hard = hardDeadlineBody(ownerRoleContext);
+  assert.match(hard, /Auth sync hard deadline\. Releasing portal gate fail-closed/);
+  assert.match(hard, /profile_unavailable/);
+  assert.match(hard, /setLoading\(false\)/);
+  assert.doesNotMatch(hard, /setUser\(null\)/);
 });
