@@ -20,3 +20,8 @@ test('live tracking startup is idempotent for the same technician mission', () =
   assert.match(tracking, /_state\.technicianUid === technicianUid/);
   assert.match(tracking, /if \(trackingStartKey === startKey\) return trackingStartPromise/);
 });
+
+test('GPS cleanup follows the hydrated technician identity on unmount', () => {
+  assert.match(source, /stopLiveTracking\(user\.uid\)/);
+  assert.match(source, /\}, \[user\?\.uid\]\);/);
+});
