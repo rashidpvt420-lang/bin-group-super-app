@@ -58,6 +58,7 @@ export default function BinConnectChatBox({ role, dark = false }: { role: Portal
   const [unitId, setUnitId] = React.useState('');
   const [ticketId, setTicketId] = React.useState('');
   const [busy, setBusy] = React.useState(false);
+  const mutationInFlightRef = React.useRef(false);
   const [notice, setNotice] = React.useState('');
   const [threads, setThreads] = React.useState<Conversation[]>([]);
   const uid = auth.currentUser?.uid || '';
@@ -97,6 +98,8 @@ export default function BinConnectChatBox({ role, dark = false }: { role: Portal
       setNotice('Write a message first.');
       return;
     }
+    if (mutationInFlightRef.current) return;
+    mutationInFlightRef.current = true;
     try {
       setBusy(true);
       setNotice('');
@@ -122,6 +125,7 @@ export default function BinConnectChatBox({ role, dark = false }: { role: Portal
     } catch (error: any) {
       setNotice(error?.message || 'Message could not be sent. Please retry.');
     } finally {
+      mutationInFlightRef.current = false;
       setBusy(false);
     }
   };
