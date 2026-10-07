@@ -24,8 +24,8 @@ import {
     alpha
 } from '@mui/material';
 import { Plus as AddIcon, Edit as EditIcon, Trash2 as DeleteIcon, MapPin } from 'lucide-react';
-import { db } from '../../lib/firebase';
-import { collection, onSnapshot, query, addDoc, serverTimestamp, doc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { db, functions, httpsCallable } from '../../lib/firebase';
+import { collection, onSnapshot, query } from 'firebase/firestore';
 import { binThemeTokens } from '../../theme/adminTheme';
 import { buildGeoAnchor } from '../../utils/geoAnchor';
 
@@ -93,46 +93,24 @@ export default function PropertyManagementPage() {
 
     const handleAddProperty = async () => {
         try {
-            const geo = buildGeoAnchor({
-                lat: formData.lat,
-                lng: formData.lng,
-                address: formData.address,
-                emirate: formData.emirate,
-                city: formData.serviceZone,
-                area: formData.serviceZone
-            });
-            await addDoc(collection(db, 'properties'), {
-                companyId: 'BIN_GROUP',
+            const upsert = httpsCallable(functions, 'adminUpsertPropertyCandidate');
+            await upsert({
                 name: formData.name,
-                propertyName: formData.name,
                 propertyType: formData.propertyType,
                 address: formData.address,
-                addressLine: formData.address,
-                submittedGeo: {
-                    ...geo,
-                    source: 'owner_submission',
-                    submittedSource: 'admin_asset_registry_candidate',
-                    verified: false,
-                    verifiedBy: null,
-                    verifiedAt: null,
-                    dispatchReady: false,
-                    requiresGeoReview: true,
-                },
+                lat: formData.lat,
+                lng: formData.lng,
                 ownerId: formData.ownerId,
                 emirate: formData.emirate,
-                city: formData.serviceZone || formData.emirate,
-                area: formData.serviceZone || formData.emirate,
                 serviceZone: formData.serviceZone,
-                unitsCount: parseInt(formData.unitsCount) || 0,
-                floorsCount: parseInt(formData.floorsCount) || 0,
-                status: 'PENDING_REVIEW',
-                createdAt: serverTimestamp(),
+                unitsCount: formData.unitsCount,
+                floorsCount: formData.floorsCount,
             });
             setOpenAdd(false);
             resetForm();
         } catch (error: any) {
-            console.error("Error adding property:", error);
-            alert(error?.message || 'We could not verify this location. Admin review is required.');
+            console.error("Error adding property candidate:", error);
+            alert(error?.message || 'We could not save this review candidate.');
         }
     };
 
@@ -156,55 +134,36 @@ export default function PropertyManagementPage() {
     const handleUpdateProperty = async () => {
         if (!selectedProperty) return;
         try {
-            const geo = buildGeoAnchor({
-                lat: formData.lat,
-                lng: formData.lng,
-                address: formData.address,
-                emirate: formData.emirate,
-                city: formData.serviceZone,
-                area: formData.serviceZone
-            });
-            await updateDoc(doc(db, 'properties', selectedProperty.id), {
-                companyId: 'BIN_GROUP',
+            const upsert = httpsCallable(functions, 'adminUpsertPropertyCandidate');
+            await upsert({
+                propertyId: selectedProperty.id,
                 name: formData.name,
-                propertyName: formData.name,
                 propertyType: formData.propertyType,
                 address: formData.address,
-                addressLine: formData.address,
-                submittedGeo: {
-                    ...geo,
-                    source: 'owner_submission',
-                    submittedSource: 'admin_asset_registry_candidate',
-                    verified: false,
-                    verifiedBy: null,
-                    verifiedAt: null,
-                    dispatchReady: false,
-                    requiresGeoReview: true,
-                },
+                lat: formData.lat,
+                lng: formData.lng,
                 ownerId: formData.ownerId,
                 emirate: formData.emirate,
-                city: formData.serviceZone || formData.emirate,
-                area: formData.serviceZone || formData.emirate,
                 serviceZone: formData.serviceZone,
-                unitsCount: parseInt(formData.unitsCount) || 0,
-                floorsCount: parseInt(formData.floorsCount) || 0,
-                updatedAt: serverTimestamp(),
+                unitsCount: formData.unitsCount,
+                floorsCount: formData.floorsCount,
             });
             setOpenEdit(false);
             resetForm();
         } catch (error: any) {
-            console.error("Error updating property:", error);
-            alert(error?.message || 'We could not verify this location. Admin review is required.');
+            console.error("Error updating property candidate:", error);
+            alert(error?.message || 'We could not update this review candidate.');
         }
     };
 
     const handleDeleteProperty = async (id: string) => {
-        if (window.confirm("Are you sure you want to delete this asset from the registry?")) {
-            try {
-                await deleteDoc(doc(db, 'properties', id));
-            } catch (error) {
-                console.error("Error deleting property:", error);
-            }
+        if (!window.confirm("Delete this unused review candidate? Active properties or properties with dependent records cannot be deleted.")) return;
+        try {
+            const removeCandidate = httpsCallable(functions, 'adminDeletePropertyCandidate');
+            await removeCandidate({ propertyId: id });
+        } catch (error: any) {
+            console.error("Error deleting property candidate:", error);
+            alert(error?.message || 'This property cannot be deleted. Use the controlled lifecycle workflow instead.');
         }
     };
 

@@ -20,6 +20,7 @@ const adminOwnerOperations = read('functions/adminOwnerOperations.ts');
 const legacyGeoRepair = read('functions/profileP1Workflows.ts');
 const geoRepairCenter = read('apps/admin-panel/src/pages/admin/GeoRepairCommandCenter.tsx');
 const assetRegistry = read('apps/admin-panel/src/pages/admin/PropertyManagementPage.tsx');
+const secureAdminPropertyRegistry = read('functions/secureAdminPropertyRegistry.ts');
 const technicianLive = read('functions/technicianLiveLocation.ts');
 const liveTracking = read('src/utils/liveTracking.ts');
 const verifiedPins = read('apps/admin-panel/src/lib/verifiedPropertyPin.ts');
@@ -151,9 +152,15 @@ test('Legacy Admin geo repair cannot mint canonical trust', () => {
   assert.match(geoRepairCenter, /adminRepairPropertyGeo/);
   assert.match(geoRepairCenter, /location candidate was saved for authoritative review/);
   assert.doesNotMatch(geoRepairCenter, /verified and locked/);
-  assert.match(assetRegistry, /submittedGeo:/);
-  assert.match(assetRegistry, /status: 'PENDING_REVIEW'/);
-  assert.doesNotMatch(assetRegistry, /\n\s*geo,\n/);
+  assert.match(assetRegistry, /adminUpsertPropertyCandidate/);
+  assert.doesNotMatch(assetRegistry, /\baddDoc\s*\(/);
+  assert.doesNotMatch(assetRegistry, /\bupdateDoc\s*\(/);
+  assert.match(secureAdminPropertyRegistry, /submittedGeo:/);
+  assert.match(secureAdminPropertyRegistry, /verified: false/);
+  assert.match(secureAdminPropertyRegistry, /dispatchReady: false/);
+  assert.match(secureAdminPropertyRegistry, /requiresGeoReview: true/);
+  assert.match(secureAdminPropertyRegistry, /status: "PENDING_REVIEW"/);
+  assert.doesNotMatch(secureAdminPropertyRegistry, /geo:\s*payload\.submittedGeo/);
 });
 
 test('Technician live GPS is temporary, fresh, identity-bound, ticket-bound and installation-bound', () => {
