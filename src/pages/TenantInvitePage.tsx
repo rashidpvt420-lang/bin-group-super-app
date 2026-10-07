@@ -88,8 +88,13 @@ export default function TenantInvitePage() {
             const result = await acceptFn({ token });
             const data = result.data as any;
             if (data.status === 'success') {
+                // acceptTenantInvitation sets the `tenant` custom claim server-side
+                // (tokenRefreshRequired). The ID token cached at sign-in predates it,
+                // and the portal's RoleProvider reads cached claims, so without a
+                // forced refresh the tenant lands on /gateway as `role_required`.
+                await user.getIdToken(true);
                 setSuccess(true);
-                setTimeout(() => navigate(data.redirect || '/tenant'), 2000);
+                setTimeout(() => navigate(data.redirect || '/tenant', { replace: true }), 2000);
             } else {
                 throw new Error('Invitation acceptance failed on server.');
             }
