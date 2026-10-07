@@ -30,6 +30,7 @@ import { enforceAiUsageQuota } from "./aiUsageQuota";
 import { sendTwilioSMS } from "./smsDelivery";
 import { resolveTechnicianArrivalBinding } from "./technicianInstallationBinding";
 import { flagSlaBreaches } from "./slaCron";
+import { escalateManualDispatch } from "./ticketDispatchAlerts";
 import { evaluateTechnicianForTicket, requiredTicketTrade } from "./technicianDispatchMatching";
 import { isTechnicianAssignmentEvent, technicianAssignedNotificationSeed } from "./shared/technicianAssignmentNotification";
 
@@ -1002,7 +1003,10 @@ async function attemptAutoAssignment(ticketRef: admin.firestore.DocumentReferenc
             const tenantId = safeString(ticketData.tenantId || ticketData.tenantUid);
             const unitId = safeString(ticketData.unitId);
             const propertyId = safeString(ticketData.propertyId);
-            if (!tenantId || !unitId || !propertyId) return;
+            if (!tenantId || !unitId || !propertyId) {
+                await escalateManualDispatch({ db, ticketRef, reasonCode: "TENANT_UNIT_LINK_UNVERIFIED", details: { missingLink: true } });
+                return;
+            }
             const unitSnap = await db.collection("units").doc(unitId).get();
             const unit = unitSnap.data() || {};
             const unitTenantId = safeString(
@@ -1012,7 +1016,10 @@ async function attemptAutoAssignment(ticketRef: admin.firestore.DocumentReferenc
                 !unitSnap.exists ||
                 unitTenantId !== tenantId ||
                 safeString(unit.propertyId) !== propertyId
-            ) return;
+            ) {
+                await escalateManualDispatch({ db, ticketRef, reasonCode: "TENANT_UNIT_LINK_UNVERIFIED", details: { unitExists: unitSnap.exists } });
+                return;
+            }
         }
         // Works for both tenant-filed AND owner-filed tickets
         const requesterId: string = ticketData.tenantId || ticketData.tenantUid || ticketData.ownerId || "";
@@ -1050,6 +1057,12 @@ async function attemptAutoAssignment(ticketRef: admin.firestore.DocumentReferenc
                 status: "pending_assignment",
                 assignmentStatus: "admin_manual_assignment",
                 assignmentError: "Missing geo-anchor."
+            });
+            await escalateManualDispatch({
+                db,
+                ticketRef,
+                reasonCode: "MISSING_PROPERTY_GEO",
+                details: { hasCoordinates: Boolean(propertyGeo), hasEmirate: Boolean(contextUpdate.emirate) },
             });
             return;
         }
@@ -1123,7 +1136,15 @@ async function attemptAutoAssignment(ticketRef: admin.firestore.DocumentReferenc
                 });
                 return true;
             });
-            if (!assigned) return;
+            if (!assigned) {
+                await escalateManualDispatch({
+                    db,
+                    ticketRef,
+                    reasonCode: "NO_QUALIFIED_TECHNICIAN",
+                    details: { onDutyTechnicianCount: techQuery.size, eligibleTechnicianCount: candidates.length, emirate: contextUpdate.emirate, category: safeString(ticketData.complaintCategory || ticketData.category || ticketData.trade), selectedTechnicianChangedState: true },
+                });
+                return;
+            }
 
             await dispatchOmniNotification(bestTech.id, "New Job Assigned", `${ticketData.category || ticketData.complaintCategory || "Fault"} at ${contextUpdate.propertyLocation.propertyName}`, {
                 url: `/technician/job/${ticketId}`,
@@ -1138,9 +1159,22 @@ async function attemptAutoAssignment(ticketRef: admin.firestore.DocumentReferenc
                 targetId: ticketId,
                 metadata: { techId: bestTech.id, reason: bestTech.sameArea ? "AREA_MATCH" : "DISTANCE" }
             });
+        } else {
+            await escalateManualDispatch({
+                db,
+                ticketRef,
+                reasonCode: techQuery.empty ? "NO_ON_DUTY_TECHNICIANS" : "NO_QUALIFIED_TECHNICIAN",
+                details: { onDutyTechnicianCount: techQuery.size, eligibleTechnicianCount: 0, emirate: contextUpdate.emirate, category: safeString(ticketData.complaintCategory || ticketData.category || ticketData.trade) },
+            });
         }
     } catch (err) {
         console.error("AutoRoute Failure:", err);
+        await escalateManualDispatch({
+            db,
+            ticketRef,
+            reasonCode: "DISPATCH_ERROR",
+            details: { errorCode: safeString((err as any)?.code) || "unknown" },
+        }).catch((escalationError) => console.error("AutoRoute escalation failure:", escalationError));
     }
 }
 
