@@ -135,29 +135,29 @@ body:has(a[href^="/admin/"]) {
 }
 
 .MuiDrawer-root,
-.MuiDrawer-paper {
+.MuiDrawer-paper:not(.sovereign-ai-drawer) {
   flex-shrink: 0 !important;
 }
 
-.MuiDrawer-paper {
+.MuiDrawer-paper:not(.sovereign-ai-drawer) {
   background: #FFFFFF !important;
   color: #111827 !important;
   border-color: #E5E7EB !important;
   box-shadow: 8px 0 30px rgba(17, 24, 39, 0.06) !important;
 }
 
-.MuiDrawer-paper .MuiListItemIcon-root,
-.MuiDrawer-paper svg {
+.MuiDrawer-paper:not(.sovereign-ai-drawer) .MuiListItemIcon-root,
+.MuiDrawer-paper:not(.sovereign-ai-drawer) svg {
   color: var(--bin-gold-hover) !important;
 }
 
-.MuiDrawer-paper .MuiTypography-root,
-.MuiDrawer-paper .MuiListItemText-root {
+.MuiDrawer-paper:not(.sovereign-ai-drawer) .MuiTypography-root,
+.MuiDrawer-paper:not(.sovereign-ai-drawer) .MuiListItemText-root {
   color: #111827 !important;
 }
 
-.MuiDrawer-paper a.MuiListItem-root.active,
-.MuiDrawer-paper a.MuiListItem-root[aria-current="page"] {
+.MuiDrawer-paper:not(.sovereign-ai-drawer) a.MuiListItem-root.active,
+.MuiDrawer-paper:not(.sovereign-ai-drawer) a.MuiListItem-root[aria-current="page"] {
   background: rgba(201, 166, 70, 0.12) !important;
 }
 
@@ -364,28 +364,28 @@ form .MuiCard-root {
     border-radius: 11px !important;
   }
 
-  .MuiDrawer-paper {
+  .MuiDrawer-paper:not(.sovereign-ai-drawer) {
     width: 76px !important;
     max-width: 76px !important;
     overflow-x: hidden !important;
   }
 
-  .MuiDrawer-paper .MuiTypography-root,
-  .MuiDrawer-paper .MuiListItemText-root,
-  .MuiDrawer-paper .MuiChip-root {
+  .MuiDrawer-paper:not(.sovereign-ai-drawer) .MuiTypography-root,
+  .MuiDrawer-paper:not(.sovereign-ai-drawer) .MuiListItemText-root,
+  .MuiDrawer-paper:not(.sovereign-ai-drawer) .MuiChip-root {
     display: none !important;
   }
 
-  .MuiDrawer-paper .MuiListItem-root,
-  .MuiDrawer-paper .MuiListItemButton-root,
-  .MuiDrawer-paper .MuiButtonBase-root {
+  .MuiDrawer-paper:not(.sovereign-ai-drawer) .MuiListItem-root,
+  .MuiDrawer-paper:not(.sovereign-ai-drawer) .MuiListItemButton-root,
+  .MuiDrawer-paper:not(.sovereign-ai-drawer) .MuiButtonBase-root {
     justify-content: center !important;
     padding-left: 8px !important;
     padding-right: 8px !important;
     min-width: 0 !important;
   }
 
-  .MuiDrawer-paper .MuiListItemIcon-root {
+  .MuiDrawer-paper:not(.sovereign-ai-drawer) .MuiListItemIcon-root {
     min-width: 0 !important;
     width: 100% !important;
     display: flex !important;

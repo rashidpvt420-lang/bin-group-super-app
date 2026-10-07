@@ -8,7 +8,7 @@ Base main: `6acb619e52293a8f446f0369fc45d16a6671fbbe` (#1708 already merged).
 
 The original focused repair removes the second Owner AI launcher, uses native
 button click activation with drag suppression, disables mobile edge-swipe opening,
-and reserves the BIN Connect corner. Review identified two additional defects:
+and reserves the BIN Connect corner. Review identified three additional defects:
 
 1. AI drawer mode changes at `sm`, but BIN Connect fixed offsets change at `md`.
    At 600, 768 and 899px, the old reservation leaves the AI button overlapping
@@ -18,6 +18,12 @@ and reserves the BIN Connect corner. Review identified two additional defects:
    pointer click. That swallows the next keyboard activation. Native zero-detail
    keyboard clicks now open the drawer and clear suppression, while the trailing
    pointer click after a drag remains suppressed.
+3. The globally imported `admin-mobile-hardening.css` limits every drawer paper
+   to 76px below 900px and hides its Typography/Chip children. Local Android
+   browser execution reproduced a narrow AI strip and an offscreen Send control.
+   AI drawer papers now have an explicit class excluded from navigation-drawer
+   styling, including desktop colors and mobile widths/hidden labels. Navigation
+   drawer styling remains unchanged.
 
 No changes to BIN Connect messaging, Firebase permissions, production deployment,
 release-lock tests, pilot or hard clearance.
@@ -38,13 +44,26 @@ Node 22 local typecheck, lint and production build passed. Build verification
 confirmed no App Check debug token in the production bundle.
 
 The Playwright regression now uses native browser touch activation for Android
-launcher opening and checks keyboard recovery after pointer cancellation on every
-configured project. The inherited WebKit opening/drag sequence uses synthetic
-pointer dispatch; it must not be described as physical iOS or Android proof.
-Local browser installation returned truncated ZIP downloads, so local Playwright
-execution is not claimed. The protected PR Validation workflow already installs
-Chromium/WebKit and runs these tests; its exact-head results and final merge
-evidence must be retained in the PR conversation before accepting this repair.
+and iOS launcher opening, sending and closing without forced taps. It asserts
+full-width mobile / 400px desktop drawer geometry, visible title, one sent message,
+local-provider truth and keyboard recovery after pointer cancellation.
+The mobile drag/cancel sequence still uses synthetic pointer dispatch; these
+tests must not be described as physical iOS or Android proof.
+
+The default local browser CDN returned truncated ZIPs, and full Chrome could not
+start due to a workspace Unix-socket restriction. The official Chrome for Testing
+148.0.7778.96 headless-shell download worked with a temporary local Playwright
+config preserving Desktop Chrome / Pixel 7 device settings. Before CSS repair,
+desktop passed and Android failed with `Element is outside of the viewport` on
+Send. After repair, both native interaction tests passed (2/2). No application
+credentials, App Check bypass or authentication changes were used.
+
+Local final launch suite: 2,060 passes, zero failures, two expected local skips,
+plus six lifecycle tests. Shared/Admin/Functions builds, repository hygiene,
+stability and mobile source readiness also passed. The protected PR Validation
+workflow installs Chromium/WebKit and runs these tests; its exact-head results
+and final merge evidence must be retained in the PR conversation before accepting
+this repair. Local authenticated/device acceptance remains separate.
 
 Authenticated profile walkthrough and live AI-provider proof remain open. Public
 local guidance responses do not establish live provider availability.

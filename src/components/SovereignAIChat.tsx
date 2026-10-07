@@ -530,7 +530,7 @@ export const SovereignAIChat: React.FC<SovereignAIChatProps> = ({
           disableSwipeToOpen
           disableDiscovery
           ModalProps={{ keepMounted: true }}
-          PaperProps={{ sx: { height: '80vh', borderTopLeftRadius: 24, borderTopRightRadius: 24, bgcolor: '#0B0B0C', overflow: 'hidden' } }}
+          PaperProps={{ className: 'sovereign-ai-drawer', sx: { height: '80vh', borderTopLeftRadius: 24, borderTopRightRadius: 24, bgcolor: '#0B0B0C', overflow: 'hidden' } }}
         >
           {renderContent()}
         </SwipeableDrawer>
@@ -541,7 +541,7 @@ export const SovereignAIChat: React.FC<SovereignAIChatProps> = ({
           open={open}
           onClose={() => setOpen(false)}
           ModalProps={{ keepMounted: true }}
-          PaperProps={{ sx: { width: 400, borderLeft: '1px solid rgba(198,167,94,0.2)', bgcolor: '#0B0B0C', overflow: 'hidden' } }}
+          PaperProps={{ className: 'sovereign-ai-drawer', sx: { width: 400, borderLeft: '1px solid rgba(198,167,94,0.2)', bgcolor: '#0B0B0C', overflow: 'hidden' } }}
         >
           {renderContent()}
         </Drawer>

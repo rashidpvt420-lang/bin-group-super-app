@@ -49,28 +49,18 @@ test.describe('Phase 1 Sovereign AI launcher interaction regression', () => {
     const isMobile = testInfo.project.name !== 'chromium-desktop';
     const drawer = page.getByTestId(isMobile ? 'sovereign-ai-mobile-drawer' : 'sovereign-ai-desktop-drawer');
 
-    const openWithTouch = async () => {
-      const box = await launcher.boundingBox();
-      expect(box).not.toBeNull();
-      const x = (box?.x || 0) + (box?.width || 56) / 2;
-      const y = (box?.y || 0) + (box?.height || 56) / 2;
-      await launcher.dispatchEvent('pointerdown', { pointerId: 31, pointerType: 'touch', isPrimary: true, clientX: x, clientY: y });
-      await launcher.dispatchEvent('pointerup', { pointerId: 31, pointerType: 'touch', isPrimary: true, clientX: x, clientY: y });
-      // A real touch activation synthesizes click after pointerup. Dispatch it
-      // explicitly so WebKit actionability heuristics cannot hide the app contract.
-      await launcher.dispatchEvent('click');
-    };
-
-    if (testInfo.project.name === 'android-mobile') await launcher.tap();
-    else if (isMobile) await openWithTouch();
+    if (isMobile) await launcher.tap();
     else await launcher.click();
     await expect(drawer).toBeVisible();
+    const panel = drawer.locator('.MuiDrawer-paper');
+    await expect(panel).toHaveCSS('width', isMobile ? `${page.viewportSize()?.width}px` : '400px');
+    await expect(drawer.getByText('SOVEREIGN AI', { exact: true })).toBeVisible();
 
     const message = `phase-1-send-${testInfo.project.name}`;
     const input = page.getByTestId('sovereign-ai-input');
     await input.fill(message);
     const send = page.getByTestId('sovereign-ai-send');
-    if (isMobile) await send.tap({ force: true });
+    if (isMobile) await send.tap();
     else await send.click();
     await expect(drawer).toBeVisible();
     await expect(input).toHaveValue('');
@@ -78,7 +68,7 @@ test.describe('Phase 1 Sovereign AI launcher interaction regression', () => {
     await expect(drawer.getByText(/LOCAL GUIDANCE — NOT LIVE AI OR AUTHORITATIVE/)).toHaveCount(1);
 
     const close = page.getByTestId('sovereign-ai-close');
-    if (isMobile) await close.tap({ force: true });
+    if (isMobile) await close.tap();
     else await close.click();
     await expect(drawer).toBeHidden();
 
