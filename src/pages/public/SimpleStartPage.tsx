@@ -1,7 +1,7 @@
 import React from 'react';
 import { Box, Button, Chip, Container, Grid, Paper, Stack, Typography, alpha } from '@mui/material';
 import { ArrowRight, Award, Briefcase, Building2, CheckCircle2, Globe, Home, Mail, MapPin, MessageSquare, Phone, Search, ShieldCheck, Smartphone, Sparkles, UserRound, Wrench, Zap } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import SafeIcon from '../../components/SafeIcon';
@@ -441,10 +441,10 @@ export default function SimpleStartPage() {
             </Stack>
 
             <Stack direction="row" spacing={2} flexWrap="wrap" justifyContent="center" sx={{ mt: 6 }}>
-              <Button onClick={() => navigate('/support')} sx={{ color: alpha(gold, 0.7), fontWeight: 800, textTransform: 'none' }}>{ar ? 'الدعم' : 'Support'}</Button>
-              <Button onClick={() => navigate('/privacy')} sx={{ color: alpha(gold, 0.7), fontWeight: 800, textTransform: 'none' }}>{ar ? 'الخصوصية' : 'Privacy'}</Button>
-              <Button onClick={() => navigate('/terms')} sx={{ color: alpha(gold, 0.7), fontWeight: 800, textTransform: 'none' }}>{ar ? 'الشروط' : 'Terms'}</Button>
-              <Button onClick={() => navigate('/admin')} sx={{ color: alpha(gold, 0.7), fontWeight: 800, textTransform: 'none' }}>{ar ? 'دخول الإدارة' : 'Admin Login'}</Button>
+              <Button component={RouterLink} to="/support" sx={{ color: alpha(gold, 0.7), fontWeight: 800, textTransform: 'none' }}>{ar ? 'الدعم' : 'Support'}</Button>
+              <Button component={RouterLink} to="/privacy" sx={{ color: alpha(gold, 0.7), fontWeight: 800, textTransform: 'none' }}>{ar ? 'الخصوصية' : 'Privacy'}</Button>
+              <Button component={RouterLink} to="/terms" sx={{ color: alpha(gold, 0.7), fontWeight: 800, textTransform: 'none' }}>{ar ? 'الشروط' : 'Terms'}</Button>
+              <Button component={RouterLink} to="/admin" sx={{ color: alpha(gold, 0.7), fontWeight: 800, textTransform: 'none' }}>{ar ? 'دخول الإدارة' : 'Admin Login'}</Button>
             </Stack>
           </Stack>
         </Container>
