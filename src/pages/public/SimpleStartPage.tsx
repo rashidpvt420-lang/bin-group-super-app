@@ -8,6 +8,7 @@ import SafeIcon from '../../components/SafeIcon';
 
 const CONTACT = { whatsapp: '+971 55 2423233', phone: '+971 55 7474560', email: 'ceo@bin-groups.com' };
 const gold = binThemeTokens.gold;
+const goldText = '#7A5C12';
 const ink = '#111827';
 const line = '#E8E3D7';
 const muted = '#667085';
@@ -187,7 +188,7 @@ function FeatureCard({ title, body, icon }: { title: string; body: string; icon:
   return (
     <Paper sx={{ p: 3, height: '100%', borderRadius: 3, border: `1px solid ${line}`, boxShadow: '0 14px 36px rgba(17,24,39,.05)' }}>
       <Stack spacing={1.3}>
-        <Box sx={{ p: 1.1, borderRadius: 2, bgcolor: alpha(gold, .12), color: gold, width: 44, height: 44, display: 'grid', placeItems: 'center' }}>
+        <Box sx={{ p: 1.1, borderRadius: 2, bgcolor: alpha(gold, .12), color: goldText, width: 44, height: 44, display: 'grid', placeItems: 'center' }}>
           {icon}
         </Box>
         <Typography fontWeight={950} color={ink}>{title}</Typography>
@@ -203,7 +204,7 @@ function Checklist({ items, dark = false }: { items: string[]; dark?: boolean })
       {items.map((item) => (
         <Grid item xs={12} sm={6} md={2.4} key={item}>
           <Stack direction="row" spacing={1.1} alignItems="center" sx={{ p: 2, height: '100%', borderRadius: 2.5, bgcolor: dark ? 'rgba(255,255,255,.045)' : '#fff', border: `1px solid ${dark ? alpha(gold, .16) : line}` }}>
-            <CheckCircle2 size={18} color={gold} />
+            <CheckCircle2 size={18} color={dark ? gold : goldText} />
             <Typography sx={{ color: dark ? 'rgba(255,255,255,.78)' : '#374151', fontWeight: 850, lineHeight: 1.45 }}>{item}</Typography>
           </Stack>
         </Grid>
@@ -255,7 +256,7 @@ export default function SimpleStartPage() {
                     alignSelf: isRTL ? 'flex-start' : 'flex-end',
                     borderRadius: 2,
                     border: `1px solid ${alpha(gold, 0.35)}`,
-                    color: gold,
+                    color: goldText,
                     bgcolor: '#fff',
                     fontWeight: 950,
                     textTransform: 'none',
@@ -263,7 +264,7 @@ export default function SimpleStartPage() {
                 >
                   {ar ? 'EN' : 'AR'}
                 </Button>
-                <Chip icon={<ShieldCheck size={16} />} label={ar ? 'BIN GROUP · إدارة العقارات والصيانة' : 'BIN GROUP · Property Management & Maintenance'} sx={{ bgcolor: alpha(binThemeTokens.gold, 0.15), color: binThemeTokens.goldHover, fontWeight: 950 }} />
+                <Chip icon={<ShieldCheck size={16} />} label={ar ? 'BIN GROUP · إدارة العقارات والصيانة' : 'BIN GROUP · Property Management & Maintenance'} sx={{ bgcolor: alpha(binThemeTokens.gold, 0.15), color: goldText, fontWeight: 950 }} />
                 <Typography component="h1" variant="h2" sx={{ color: '#111827', fontWeight: 950, letterSpacing: -1.2, lineHeight: 1.08, maxWidth: 860 }}>
                   {ar ? 'كيف تريد أن نساعدك اليوم؟' : 'How can we help you today?'}
                 </Typography>
@@ -286,7 +287,7 @@ export default function SimpleStartPage() {
                 <Grid item xs={12} md={6} key={card.titleEn}>
                   <Paper sx={{ p: 3, height: '100%', borderRadius: 5, border: '1px solid #E5E7EB', boxShadow: '0 16px 42px rgba(17,24,39,0.05)', display: 'flex', flexDirection: 'column' }}>
                     <Stack spacing={2} sx={{ flexGrow: 1 }}>
-                      <Box sx={{ width: 52, height: 52, borderRadius: 3, display: 'grid', placeItems: 'center', bgcolor: alpha(binThemeTokens.gold, 0.12), color: binThemeTokens.goldHover }}>
+                      <Box sx={{ width: 52, height: 52, borderRadius: 3, display: 'grid', placeItems: 'center', bgcolor: alpha(binThemeTokens.gold, 0.12), color: goldText }}>
                         <SafeIcon icon={card.icon} size={25} />
                       </Box>
                       <Typography variant="h5" sx={{ color: '#111827', fontWeight: 950 }}>{ar ? card.titleAr : card.titleEn}</Typography>
@@ -307,7 +308,7 @@ export default function SimpleStartPage() {
                       )}
                       <Button fullWidth variant={card.secondaryCtaEn ? 'outlined' : 'contained'} endIcon={<ArrowRight size={16} />} onClick={() => navigate(card.path)} sx={
                         card.secondaryCtaEn
-                        ? { borderColor: alpha(gold, 0.5), color: gold, fontWeight: 950, borderRadius: 3, py: 1.25, '&:hover': { bgcolor: alpha(gold, 0.05) } }
+                        ? { borderColor: alpha(gold, 0.5), color: goldText, fontWeight: 950, borderRadius: 3, py: 1.25, '&:hover': { bgcolor: alpha(gold, 0.05) } }
                         : { bgcolor: binThemeTokens.gold, color: '#111827', fontWeight: 950, borderRadius: 3, py: 1.25 }
                       }>
                         {ar ? card.ctaAr : card.ctaEn}
@@ -383,7 +384,7 @@ export default function SimpleStartPage() {
           {(ar ? serviceAreasAr : serviceAreasEn).map(area => (
             <Box key={area} sx={{ px: 3, py: 1.2, bgcolor: '#fff', border: `1.5px solid ${alpha(gold, .28)}`, borderRadius: 2.5 }}>
               <Stack direction="row" spacing={1} alignItems="center">
-                <MapPin size={14} color={gold} />
+                <MapPin size={14} color={goldText} />
                 <Typography sx={{ color: ink, fontWeight: 850 }}>{area}</Typography>
               </Stack>
             </Box>
