@@ -8,7 +8,7 @@ This repair implements Rashid's instruction to stabilize the app while hard clea
 
 | Trigger | Baseline behavior | Repair and proof |
 | --- | --- | --- |
-| Finance Admin uploads a mobilisation receipt | Payment page immediately calls approval with the same identity | Recording stops with a second-reviewer notice. Server binds the recording UID and refuses the same UID before invoice work and again inside the approval transaction. |
+| Finance Admin uploads a mobilisation receipt | Payment page immediately calls approval with the same identity | Recording stops with a second-reviewer notice. Table/dialog/action labels distinguish recording from approval, and callable failures display inside the active dialog. Server binds the recording UID and refuses the same UID before invoice work and again inside the approval transaction. |
 | Legacy Admin-recorded evidence lacks a recorder | Approval cannot demonstrate a second reviewer | Fail closed with `DUAL_CONTROL_RECORDER_UNKNOWN`; re-record the evidence before separate review. |
 | A second MFA Finance Admin approves valid receipt evidence | No durable record of the separation of duties | Payment and approval audit bind recorder and approver; actual secure callable wrapper is exercised through activation, PDF storage and idempotent replays. |
 | Approval finishes while another receipt is uploading | Initial state check occurs before upload; the later batch can reopen an approved payment | Transaction compares fresh payment and contract update times with the pre-upload snapshots, aborting stale recording before any financial state or audit write. Uploaded evidence is retained. |
