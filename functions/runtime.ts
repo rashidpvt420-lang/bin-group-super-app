@@ -51,6 +51,7 @@ export * from "./hrAutomation";
 export * from "./technicianPayrollCompatibility";
 export * from "./adminUserProvisioning";
 export * from "./adminStaffLifecycle";
+export * from "./adminTechnicianCredentials";
 export * from "./adminHrOperations";
 export * from "./adminLaunchConfiguration";
 export * from "./adminBridgeAuth";

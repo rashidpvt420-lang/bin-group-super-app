@@ -94,7 +94,7 @@ export default function NotificationInboxPage() {
             },
             (err) => {
                 console.error('[Notifications] Direct listener failed:', err);
-                setError('Could not load your personal notifications. Check Firestore rules/indexes.');
+                setError('We could not load your notifications. Check your connection and try again.');
                 markSettled();
             }
         ));
@@ -113,7 +113,7 @@ export default function NotificationInboxPage() {
                 },
                 (err) => {
                     console.error('[Notifications] Admin group listener failed:', err);
-                    setError('Could not load admin broadcast notifications. Check Firestore rules/indexes.');
+                    setError('We could not load announcements from BIN GROUP. Check your connection and try again.');
                     markSettled();
                 }
             ));

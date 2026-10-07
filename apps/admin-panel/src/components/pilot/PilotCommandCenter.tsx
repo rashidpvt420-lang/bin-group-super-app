@@ -8,6 +8,7 @@ import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import GppGoodIcon from '@mui/icons-material/GppGood';
 import { collection, getDocs, limit, orderBy, query } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
+import { humanizeEnum } from '../../utils/humanizeEnum';
 
 function normalizeStatus(value: unknown) {
     return String(value || '').trim().toUpperCase().replace(/[\s-]+/g, '_');
@@ -139,7 +140,7 @@ export default function PilotCommandCenter() {
                     <Typography variant="h4" fontWeight="black" sx={{ color: '#0f172a', letterSpacing: -1 }}>
                         PILOT COMMAND CENTER <Chip label="LIVE FIRESTORE" size="small" sx={{ ml: 1, bgcolor: '#0f172a', color: 'white', fontWeight: 'bold' }} />
                     </Typography>
-                    <Typography variant="body2" color="text.secondary">
+                    <Typography variant="body2" color="#475467">
                         Owner pipeline, activated contracts, and pricing evidence from persisted production records. Missing financial fields remain N/A.
                     </Typography>
                 </Box>
@@ -291,7 +292,7 @@ export default function PilotCommandCenter() {
                                             <TableRow key={contract.id}>
                                                 <TableCell>{contract.ownerName || contract.ownerEmail || contract.ownerId || 'Owner not recorded'}</TableCell>
                                                 <TableCell>{contractPropertyName(contract)}</TableCell>
-                                                <TableCell>{contract.planName || contract.servicePlan || contract.contractType || 'Plan not recorded'}</TableCell>
+                                                <TableCell>{humanizeEnum(contract.planName || contract.servicePlan || contract.contractType || 'Plan not recorded')}</TableCell>
                                                 <TableCell><Chip label={normalizeStatus(contract.status || contract.activationStatus) || 'STATUS_UNKNOWN'} size="small" color="success" sx={{ fontWeight: 'bold' }} /></TableCell>
                                                 <TableCell sx={{ fontWeight: 'black' }}>{value === null ? 'N/A' : `AED ${value.toLocaleString()}`}</TableCell>
                                                 <TableCell>{dashboardState}</TableCell>

@@ -25,6 +25,7 @@ const COVERED = {
   'functions/ownerInspectionAdminLink.ts': ['adminCreateOwnerPortfolioPropertyInspection', 'adminLinkOwnerPropertyInspection'],
   'functions/contractActivation.ts': ['adminApproveContractActivation', 'adminRejectContractActivation'],
   'functions/paymentTransactionApproval.ts': ['adminApprovePayment', 'adminRejectPayment'],
+  'functions/adminTechnicianCredentials.ts': ['adminRecordTechnicianCredentials'],
 };
 
 // Admin-named exports whose files have no MFA check, with the reason they are exempt.

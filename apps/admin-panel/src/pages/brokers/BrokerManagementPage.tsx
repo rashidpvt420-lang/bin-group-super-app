@@ -330,7 +330,7 @@ export default function BrokerManagementPage() {
             <Stack direction={{ xs: 'column', md: isRTL ? 'row-reverse' : 'row' }} justifyContent="space-between" alignItems={{ xs: 'flex-start', md: 'center' }} spacing={2} sx={{ mb: 4 }}>
                 <Box sx={{ textAlign: isRTL ? 'right' : 'left' }}>
                     <Typography variant="overline" sx={{ color: '#C9A646', fontWeight: 950, letterSpacing: 3 }}>BROKER CONTROL</Typography>
-                    <Typography variant="h4" sx={{ fontWeight: 950 }}>Broker KYC & Payout Review</Typography>
+                    <Typography variant="h4" sx={{ color: 'text.primary', fontWeight: 950 }}>Broker KYC & Payout Review</Typography>
                     <Typography color="text.secondary">Admin-only broker approval, rejection, documents, and payout request workflow.</Typography>
                 </Box>
                 <Chip icon={<FileCheck2 size={16} />} label="ADMIN REVIEW REQUIRED" color="warning" sx={{ fontWeight: 950 }} />
@@ -346,12 +346,12 @@ export default function BrokerManagementPage() {
                     { label: 'Payout Requests', value: stats.payoutPending, color: 'secondary.main', icon: <WalletCards size={22} /> },
                 ].map((stat) => (
                     <Grid item xs={12} md={3} key={stat.label}>
-                        <Card sx={{ bgcolor: '#fff', borderRadius: 2, boxShadow: '0 4px 20px rgba(0,0,0,0.05)' }}>
+                        <Card sx={{ bgcolor: '#fff', color: '#111827', borderRadius: 2, boxShadow: '0 4px 20px rgba(0,0,0,0.05)' }}>
                             <CardContent>
                                 <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={2} alignItems="center">
                                     <Avatar sx={{ bgcolor: stat.color }}>{stat.icon}</Avatar>
                                     <Box sx={{ textAlign: isRTL ? 'right' : 'left' }}>
-                                        <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 800, textTransform: 'uppercase' }}>{stat.label}</Typography>
+                                        <Typography variant="caption" color="#475467" sx={{ fontWeight: 800, textTransform: 'uppercase' }}>{stat.label}</Typography>
                                         <Typography variant="h4" sx={{ fontWeight: 950 }}>{stat.value}</Typography>
                                     </Box>
                                 </Stack>
@@ -417,7 +417,7 @@ export default function BrokerManagementPage() {
                 </Grid>
 
                 <Grid item xs={12} lg={5}>
-                    <Paper sx={{ p: 3, borderRadius: 2, bgcolor: '#fff', border: '1px solid #e2e8f0' }}>
+                    <Paper sx={{ p: 3, borderRadius: 2, bgcolor: '#fff', color: '#111827', border: '1px solid #e2e8f0' }}>
                         <Stack direction="row" spacing={1.4} alignItems="center" sx={{ mb: 2 }}>
                             <WalletCards size={20} color="#C9A646" />
                             <Typography variant="h6" sx={{ fontWeight: 950 }}>Broker Payout Requests</Typography>
@@ -430,12 +430,12 @@ export default function BrokerManagementPage() {
                                         <Stack direction="row" justifyContent="space-between" spacing={2} alignItems="flex-start">
                                             <Box>
                                                 <Typography sx={{ fontWeight: 950 }}>{request.brokerName || request.brokerEmail || 'Broker'}</Typography>
-                                                <Typography variant="caption" color="text.secondary">AED {Number(request.amount || 0).toLocaleString()} · {request.commissionCount || request.commissionIds?.length || 0} commission(s)</Typography>
-                                                <Typography variant="caption" display="block" color="text.secondary"><Clock size={12} /> {dateLabel(request.requestedAt || request.createdAt)}</Typography>
+                                                <Typography variant="caption" color="#475467">AED {Number(request.amount || 0).toLocaleString()} · {request.commissionCount || request.commissionIds?.length || 0} commission(s)</Typography>
+                                                <Typography variant="caption" display="block" color="#475467"><Clock size={12} /> {dateLabel(request.requestedAt || request.createdAt)}</Typography>
                                             </Box>
                                             <Chip size="small" label={status} color={chipColor(status) as any} sx={{ fontWeight: 900 }} />
                                         </Stack>
-                                        <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1 }}>Bank: {request.bankName || 'Missing'} · IBAN: {request.bankIban || 'Missing'}</Typography>
+                                        <Typography variant="caption" color="#475467" display="block" sx={{ mt: 1 }}>Bank: {request.bankName || 'Missing'} · IBAN: {request.bankIban || 'Missing'}</Typography>
                                         {request.notes && <Typography variant="body2" sx={{ mt: 1 }}>{request.notes}</Typography>}
                                         {request.reviewReason && <Alert severity="info" sx={{ mt: 1 }}>{request.reviewReason}</Alert>}
                                         <Stack direction="row" spacing={1} sx={{ mt: 1.5 }} flexWrap="wrap" useFlexGap>
