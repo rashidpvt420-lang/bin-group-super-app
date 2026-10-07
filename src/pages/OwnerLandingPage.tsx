@@ -403,9 +403,9 @@ const OwnerLandingPage: React.FC = () => {
             </Box>
 
             {/* Footer Institutional Footer */}
-            <Box sx={{ py: 10, textAlign: 'center', opacity: 0.4, borderTop: '1px solid rgba(255,255,255,0.05)' }}>
-                 <Typography variant="caption" sx={{ letterSpacing: 4, fontWeight: 900, color: '#FFF' }}>
-                    BIN GROUP SOVEREIGN OS © 2026 | {t('landing.uae_ops')}
+            <Box sx={{ py: 10, textAlign: 'center', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+                 <Typography variant="caption" sx={{ letterSpacing: 4, fontWeight: 900, color: '#A3A3A3' }}>
+                    © 2026 BIN GROUP · UAE
                  </Typography>
             </Box>
         </Box>

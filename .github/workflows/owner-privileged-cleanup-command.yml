@@ -118,6 +118,7 @@ jobs:
             '{ref:$ref,inputs:{expected_commit_sha:$sha,confirmation:"REVIEW_PRIVILEGED_ACCOUNT_CLEANUP_BIN_GROUP"}}' \
             > privileged-review-dispatch.json
 
+          dispatch_not_before="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
           gh api --method POST \
             "repos/$REPOSITORY/actions/workflows/privileged-account-cleanup-dry-run.yml/dispatches" \
             --input privileged-review-dispatch.json
@@ -128,7 +129,8 @@ jobs:
               "$RELEASE_SHA" \
               privileged-review-baseline-run-ids.json \
               60 \
-              5
+              5 \
+              "$dispatch_not_before"
           )" || {
             post_comment "Privileged-account review was dispatched once for \`$RELEASE_SHA\`, but no unique new exact-SHA run could be correlated. No duplicate review was attempted."
             exit 1
@@ -264,6 +266,7 @@ jobs:
             '{ref:$ref,inputs:{expected_commit_sha:$sha,confirmation:"REVIEW_SINGLE_FOUNDER_PRIVILEGED_ACCOUNTS",canonical_founder_email:"ceo@bin-groups.com",execute_cleanup:true,destructive_confirmation:"DELETE_ALL_OTHER_PRIVILEGED_ACCOUNTS_BIN_GROUP"}}' \
             > cleanup-dispatch.json
 
+          dispatch_not_before="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
           gh api --method POST \
             "repos/$REPOSITORY/actions/workflows/privileged-account-cleanup-production.yml/dispatches" \
             --input cleanup-dispatch.json
@@ -274,7 +277,8 @@ jobs:
               "$RELEASE_SHA" \
               privileged-cleanup-baseline-run-ids.json \
               60 \
-              5
+              5 \
+              "$dispatch_not_before"
           )" || {
             post_comment "Protected cleanup was dispatched once for \`$RELEASE_SHA\`, but no unique new exact-SHA run could be correlated. No duplicate destructive dispatch was attempted."
             exit 1

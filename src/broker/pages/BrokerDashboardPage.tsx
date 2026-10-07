@@ -63,7 +63,7 @@ export default function BrokerDashboardPage() {
           refresh();
         }, (err) => {
           console.warn(`[BrokerDashboard] ${collectionName}.${source.field} failed`, err);
-          setWarning('Some broker data could not load. Check Firestore rules if dashboard numbers look incomplete.');
+          setWarning('Some of your figures could not load, so totals may be incomplete. Refresh the page to try again.');
           setLoading(false);
         }));
       });

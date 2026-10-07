@@ -21,6 +21,10 @@ import { useRole } from '../../context/RoleContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import LiveTechnicianTrackingCard from '../../components/tracking/LiveTechnicianTrackingCard';
+import { isOwnerPendingSignOff } from '../utils/ownerPendingSignOff';
+import { useOwnerPropertyLabels } from '../hooks/useOwnerPropertyLabels';
+import { resolveOwnerTicketEvidence } from '../utils/ownerTicketEvidence.mjs';
+import OwnerTicketEvidencePanel from '../components/OwnerTicketEvidencePanel';
 
 const STATUS_COLORS: Record<string, string> = {
     open: 'rgba(255,255,255,0.4)',
@@ -64,6 +68,7 @@ export default function OwnerTicketDetailPage() {
     const [reviewReason, setReviewReason] = useState('');
     const [reviewError, setReviewError] = useState('');
     const [reviewBusy, setReviewBusy] = useState(false);
+    const { ticketPropertyLabel } = useOwnerPropertyLabels(user?.uid);
 
     useEffect(() => {
         if (!id || !user?.uid) return;
@@ -140,20 +145,11 @@ export default function OwnerTicketDetailPage() {
 
     const normalizedStatus = String(ticket.status || '').toUpperCase();
     const statusColor = STATUS_COLORS[ticket.status] || STATUS_COLORS[normalizedStatus] || 'rgba(255,255,255,0.4)';
-    const beforeProofs = [
-        ...(Array.isArray(ticket.beforePhotos) ? ticket.beforePhotos : []),
-        ...(Array.isArray(ticket.photos) ? ticket.photos : []),
-        ...(ticket.beforePhotoUrl ? [ticket.beforePhotoUrl] : []),
-        ...(ticket.photoUrl ? [ticket.photoUrl] : []),
-    ].filter(Boolean);
-    const afterProofs = [
-        ...(Array.isArray(ticket.afterPhotos) ? ticket.afterPhotos : []),
-        ...(Array.isArray(ticket.completionPhotos) ? ticket.completionPhotos : []),
-        ...(Array.isArray(ticket.proofPhotos) ? ticket.proofPhotos : []),
-        ...(Array.isArray(ticket.evidencePhotos) ? ticket.evidencePhotos : []),
-        ...(ticket.afterPhotoUrl ? [ticket.afterPhotoUrl] : []),
-    ].filter(Boolean);
-    const canReviewCompleted = ['COMPLETED', 'COMPLETED_PENDING_APPROVAL', 'COMPLETED_PENDING_TENANT_APPROVAL', 'RESOLVED'].includes(normalizedStatus) && ticket.ownerApproved !== true;
+    // Evidence is read from every field the technician flow and evidence
+    // callables write (technicianBefore*/technicianAfter*, mirrored
+    // before/after/completion/proof arrays, Storage paths, notes, materials).
+    const evidence = resolveOwnerTicketEvidence(ticket);
+    const canReviewCompleted = isOwnerPendingSignOff(ticket);
     const canEscalateOpen = ['OPEN', 'PENDING_ASSIGNMENT', 'ASSIGNED', 'ACCEPTED', 'EN_ROUTE', 'ARRIVED', 'IN_PROGRESS', 'WAITING_PARTS', 'REOPENED'].includes(normalizedStatus);
     const selectedActionNeedsReason = reviewAction && reviewAction !== 'APPROVE_CLOSE';
 
@@ -213,6 +209,21 @@ export default function OwnerTicketDetailPage() {
                 />
             </Stack>
 
+            <Box sx={{ mb: 4 }}>
+                <LiveTechnicianTrackingCard
+                    ticket={ticket}
+                    onChatClick={ticket.assignedTechnicianId
+                        ? () => navigate(`/owner/chat/${ticket.id}`)
+                        : undefined
+                    }
+                    onCallClick={() => {
+                        const phone = ticket.assignedTechnicianPhone || ticket.technicianPhone;
+                        if (phone) window.open(`tel:${phone}`);
+                    }}
+                    showTimeline={false}
+                />
+            </Box>
+
             <Grid container spacing={4}>
                 {/* Left: Ticket Details */}
                 <Grid item xs={12} lg={8}>
@@ -229,7 +240,7 @@ export default function OwnerTicketDetailPage() {
                                     </Avatar>
                                     <Box>
                                         <Typography variant="body1" fontWeight="950" color="#FFF">
-                                            {ticket.propertyName || 'Property'}
+                                            {ticketPropertyLabel(ticket, tx('owner.ticket.property_fallback', 'Property'))}
                                         </Typography>
                                         <Typography variant="body2" color="textSecondary">
                                             {ticket.unitNumber ? `Unit ${ticket.unitNumber}` : 'Common Area'}
@@ -301,24 +312,10 @@ export default function OwnerTicketDetailPage() {
                                 </Box>
                             )}
 
-                            {/* Tech resolution notes when completed */}
-                            {ticket.technicianNotes && (
-                                <Box sx={{ p: 3, bgcolor: 'rgba(255,255,255,0.02)', borderRadius: 3, border: '1px solid rgba(255,255,255,0.05)' }}>
-                                    <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 1 }}>
-                                        {tx('owner.ticket.tech_notes', 'TECHNICIAN RESOLUTION NOTES')}
-                                    </Typography>
-                                    <Typography variant="body1" color="#FFF" sx={{ mt: 0.5 }}>
-                                        {ticket.technicianNotes}
-                                    </Typography>
-                                    {ticket.materialsUsed?.length > 0 && (
-                                        <Typography variant="caption" color="textSecondary" sx={{ mt: 1, display: 'block' }}>
-                                            {tx('owner.ticket.materials', 'Materials')}: {ticket.materialsUsed.join(', ')}
-                                        </Typography>
-                                    )}
-                                </Box>
-                            )}
                         </Stack>
                     </Paper>
+
+                    <OwnerTicketEvidencePanel evidence={evidence} />
 
                     {(canReviewCompleted || canEscalateOpen || ticket.ownerReviewAction) && (
                         <Paper sx={{ p: 4, mb: 4, bgcolor: canReviewCompleted ? alpha('#10b981', 0.06) : 'rgba(15, 23, 42, 0.6)', border: `1px solid ${canReviewCompleted ? alpha('#10b981', 0.35) : 'rgba(255,255,255,0.05)'}`, borderRadius: 6 }}>
@@ -335,25 +332,12 @@ export default function OwnerTicketDetailPage() {
                                     </Typography>
                                 </Box>
 
-                                {(beforeProofs.length > 0 || afterProofs.length > 0) && (
-                                    <Grid container spacing={2}>
-                                        <Grid item xs={12} md={6}>
-                                            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.45)', fontWeight: 950, display: 'block', mb: 1 }}>BEFORE / REQUEST EVIDENCE</Typography>
-                                            <Stack direction="row" spacing={1} sx={{ overflowX: 'auto', pb: 1 }}>
-                                                {beforeProofs.slice(0, 4).map((url: string, index: number) => (
-                                                    <Box key={`before-${index}`} component="img" src={url} alt={`Before ${index + 1}`} onClick={() => window.open(url, '_blank', 'noopener,noreferrer')} sx={{ width: 120, height: 90, objectFit: 'cover', borderRadius: 2, border: '1px solid rgba(255,255,255,0.1)', cursor: 'pointer' }} />
-                                                ))}
-                                            </Stack>
-                                        </Grid>
-                                        <Grid item xs={12} md={6}>
-                                            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.45)', fontWeight: 950, display: 'block', mb: 1 }}>AFTER / COMPLETION PROOF</Typography>
-                                            <Stack direction="row" spacing={1} sx={{ overflowX: 'auto', pb: 1 }}>
-                                                {afterProofs.slice(0, 4).map((url: string, index: number) => (
-                                                    <Box key={`after-${index}`} component="img" src={url} alt={`After ${index + 1}`} onClick={() => window.open(url, '_blank', 'noopener,noreferrer')} sx={{ width: 120, height: 90, objectFit: 'cover', borderRadius: 2, border: '1px solid rgba(255,255,255,0.1)', cursor: 'pointer' }} />
-                                                ))}
-                                            </Stack>
-                                        </Grid>
-                                    </Grid>
+                                {canReviewCompleted && (
+                                    <Typography variant="body2" data-testid="owner-review-evidence-pointer" sx={{ color: 'rgba(255,255,255,0.7)', fontWeight: 700 }}>
+                                        {evidence.before.length + evidence.after.length > 0
+                                            ? `Review the ${evidence.before.length} before and ${evidence.after.length} after photo(s) in Work Evidence above before deciding.`
+                                            : 'No technician photos were recorded for this ticket. Consider Request Revisit or Dispute if proof is required.'}
+                                    </Typography>
                                 )}
 
                                 {ticket.ownerReviewAction && (
@@ -410,23 +394,8 @@ export default function OwnerTicketDetailPage() {
                     </Paper>
                 </Grid>
 
-                {/* Right: Live Tracking Card */}
+                {/* Right: Ticket metadata */}
                 <Grid item xs={12} lg={4}>
-                    <Box sx={{ mb: 3 }}>
-                        <LiveTechnicianTrackingCard
-                            ticket={ticket}
-                            onChatClick={ticket.assignedTechnicianId
-                                ? () => navigate(`/owner/chat/${ticket.id}`)
-                                : undefined
-                            }
-                            onCallClick={() => {
-                                const phone = ticket.assignedTechnicianPhone;
-                                if (phone) window.open(`tel:${phone}`);
-                            }}
-                            showTimeline={false}
-                        />
-                    </Box>
-
                     {/* Ticket meta */}
                     <Paper sx={{ p: 3, bgcolor: 'rgba(15, 23, 42, 0.6)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 5, mb: 3 }}>
                         <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, mb: 2, display: 'block' }}>

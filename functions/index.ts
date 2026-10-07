@@ -11,6 +11,7 @@ import * as path from "path";
 import { createRequire } from "module";
 import type { SummarizePropertyPassportSources, PassportIdentity } from "./shared/propertyPassportAggregationTypes";
 import { assertOwnerClosureEvidence } from "./ticketClosureEvidence";
+import { resolveTicketPropertyDisplayName, ticketNeedsPropertyLabelLookup } from "./shared/propertyDisplayName";
 
 const requirePropertyPassportAggregation = createRequire(__filename);
 const {
@@ -29,6 +30,8 @@ import { enforceAiUsageQuota } from "./aiUsageQuota";
 import { sendTwilioSMS } from "./smsDelivery";
 import { resolveTechnicianArrivalBinding } from "./technicianInstallationBinding";
 import { flagSlaBreaches } from "./slaCron";
+import { evaluateTechnicianForTicket, requiredTicketTrade } from "./technicianDispatchMatching";
+import { isTechnicianAssignmentEvent, technicianAssignedNotificationSeed } from "./shared/technicianAssignmentNotification";
 import { redispatchWaitingTickets } from "./ticketRedispatch";
 
 // [V10] PRODUCTION GRADE FULL-STACK STABILIZATION
@@ -362,7 +365,7 @@ export const updateTicketLifecycle = onCall({ cors: true, enforceAppCheck: true 
     };
     const now = FieldValue.serverTimestamp();
     let completedOwnerId = "";
-    let completedPropertyName = "";
+    let completedTicketData: any = null;
     await db.runTransaction(async (transaction) => {
         const ticketDoc = await transaction.get(ticketRef);
         if (!ticketDoc.exists) throw new HttpsError("not-found", "Ticket not found.");
@@ -535,7 +538,7 @@ export const updateTicketLifecycle = onCall({ cors: true, enforceAppCheck: true 
                 }
             }
             completedOwnerId = safeString(ticketData.ownerId || ticketData.ownerUid);
-            completedPropertyName = safeString(ticketData.propertyName, "the property");
+            completedTicketData = ticketData;
         }
         if (proofType && proofUrl) {
             if (proofType === 'BEFORE') updateData.beforePhotoUrl = proofUrl;
@@ -559,6 +562,7 @@ export const updateTicketLifecycle = onCall({ cors: true, enforceAppCheck: true 
         (requestedStatus === 'COMPLETED' || requestedStatus === 'COMPLETED_PENDING_APPROVAL') &&
         completedOwnerId
     ) {
+        const completedPropertyName = await ticketPropertyLabel(completedTicketData, "the property");
         await dispatchOmniNotification(completedOwnerId, "Mission Completed", `The technician has finished the work at ${completedPropertyName}. View details in your dashboard.`);
     }
 
@@ -820,6 +824,23 @@ export const ownerReviewTicketCompletion = onCall({ cors: true, enforceAppCheck:
     };
 });
 
+// Owner/tenant-facing property label for a ticket. Older owner tickets stored
+// the raw property document ID as propertyName; resolve the readable
+// name/address from the property record instead of ever showing that ID.
+async function ticketPropertyLabel(ticket: any, fallback: string): Promise<string> {
+    let property: any = null;
+    const propertyId = safeString(ticket?.propertyId);
+    if (propertyId && ticketNeedsPropertyLabelLookup(ticket)) {
+        try {
+            const propertySnap = await db.collection("properties").doc(propertyId).get();
+            if (propertySnap.exists) property = { id: propertySnap.id, ...propertySnap.data() };
+        } catch {
+            console.warn("[ticketPropertyLabel] property lookup failed", { propertyId });
+        }
+    }
+    return resolveTicketPropertyDisplayName(ticket, property, fallback);
+}
+
 // ─── [V10] TICKET LIFECYCLE & AUTO-REPAIR ──────────────────────────────────────────
 
 export const onTicketStatusChanged = onDocumentUpdated({ document: "maintenanceTickets/{id}" }, async (event) => {
@@ -842,7 +863,11 @@ export const onTicketStatusChanged = onDocumentUpdated({ document: "maintenanceT
         await event.data!.after.ref.set(readyUpdate, { merge: true });
         await attemptAutoAssignment(event.data!.after.ref, { ...after, ...readyUpdate });
     }
-    if (before?.status === after.status) return;
+    const statusChanged = before?.status !== after.status;
+    // A technician change while the ticket stays ASSIGNED/ACCEPTED is a genuine
+    // re-assignment the requester must still hear about.
+    const technicianAssignmentEvent = isTechnicianAssignmentEvent(before, after);
+    if (!statusChanged && !technicianAssignmentEvent) return;
 
     const ticketId = event.params.id;
     const terminalStatuses = new Set([
@@ -886,7 +911,7 @@ export const onTicketStatusChanged = onDocumentUpdated({ document: "maintenanceT
         });
     }
 
-    await logAudit({
+    if (statusChanged) await logAudit({
         actorId: after.updatedBy || "SYSTEM",
         actorRole: after.updatedByRole || "system",
         action: "STATUS_CHANGE",
@@ -901,23 +926,36 @@ export const onTicketStatusChanged = onDocumentUpdated({ document: "maintenanceT
     const ownerId: string = after.ownerId || after.ownerUid || "";
     const techId: string = after.assignedTechnicianId || "";
     const techName: string = after.assignedTechnicianName || "Your Technician";
-    const prop: string = after.propertyName || "the property";
+    const prop: string = await ticketPropertyLabel(after, "the property");
     const ref8: string = ticketId.substring(0, 8).toUpperCase();
 
+    // Deterministic notification ID for one assignment: OPEN -> ASSIGNED and the
+    // later ASSIGNED -> ACCEPTED (plus trigger retries) collapse to one document,
+    // while a different technician or a fresh assignment gets a new one.
+    const assignmentNotificationId = (recipientId: string, audience: string): string | undefined => {
+        const seed = technicianAssignedNotificationSeed(ticketId, recipientId, audience, after);
+        return seed ? `tech_assigned_${crypto.createHash("sha256").update(seed, "utf8").digest("hex").slice(0, 40)}` : undefined;
+    };
+
     // Helper: notify both requester parties (tenant + owner) but not the technician
-    const notifyRequester = async (title: string, body: string) => {
+    const notifyRequester = async (title: string, body: string, options: { oncePerAssignment?: boolean } = {}) => {
         const tasks: Promise<any>[] = [];
-        if (tenantId && tenantId !== techId) tasks.push(dispatchOmniNotification(tenantId, title, body, { extraData: { ticketId, type: "ticket_status" }, url: `/tenant/ticket/${ticketId}` }));
-        if (ownerId && ownerId !== techId && ownerId !== tenantId) tasks.push(dispatchOmniNotification(ownerId, title, body, { extraData: { ticketId, type: "ticket_status" }, url: `/owner/ticket/${ticketId}` }));
+        const idFor = (recipientId: string, audience: string) =>
+            options.oncePerAssignment ? assignmentNotificationId(recipientId, audience) : undefined;
+        if (tenantId && tenantId !== techId) tasks.push(dispatchOmniNotification(tenantId, title, body, { extraData: { ticketId, type: "ticket_status" }, url: `/tenant/ticket/${ticketId}`, notificationId: idFor(tenantId, "tenant") }));
+        if (ownerId && ownerId !== techId && ownerId !== tenantId) tasks.push(dispatchOmniNotification(ownerId, title, body, { extraData: { ticketId, type: "ticket_status" }, url: `/owner/ticket/${ticketId}`, notificationId: idFor(ownerId, "owner") }));
         await Promise.allSettled(tasks);
     };
 
     // ── Status-based notifications ────────────────────────────────────────
     const statusNorm = (after.status || "").toLowerCase();
 
-    if (["accepted", "assigned", "technician_assigned"].includes(statusNorm)) {
-        await notifyRequester("Technician Assigned ✓", `${techName} has accepted ticket #${ref8} and will be on the way soon.`);
-        if (techId) await dispatchOmniNotification(techId, "Job Accepted", `You are now assigned to #${ref8} at ${prop}.`, { extraData: { ticketId, type: "job_assigned" }, url: `/technician/job/${ticketId}` });
+    if (technicianAssignmentEvent) {
+        await notifyRequester("Technician Assigned ✓", `${techName} has been assigned to ticket #${ref8} and will be on the way soon.`, { oncePerAssignment: true });
+        if (techId) await dispatchOmniNotification(techId, "Job Accepted", `You are now assigned to #${ref8} at ${prop}.`, { extraData: { ticketId, type: "job_assigned" }, url: `/technician/job/${ticketId}`, notificationId: assignmentNotificationId(techId, "technician") });
+    }
+    else if (!statusChanged) {
+        // Only technician re-assignments reach here without a status change.
     }
     else if (["on_the_way", "en_route"].includes(statusNorm)) {
         await notifyRequester("Technician On The Way 🚗", `${techName} is heading to ${prop} now. Track live in your app.`);
@@ -1046,21 +1084,21 @@ async function attemptAutoAssignment(ticketRef: admin.firestore.DocumentReferenc
             .where("onDuty", "==", true)
             .limit(100)
             .get();
-        const requiredSkill = String(ticketData.complaintCategory || ticketData.category || ticketData.trade || "").toLowerCase();
+        const requiredTrade = requiredTicketTrade(ticketData);
+        // Technician coverage and trade live on technicians/{uid} (HR tools) as well as users/{uid}.
+        const technicianSnaps = techQuery.empty
+            ? []
+            : await db.getAll(...techQuery.docs.map((d) => db.collection("technicians").doc(d.id)));
+        const technicianProfiles = new Map(technicianSnaps.map((snap) => [snap.id, snap.exists ? snap.data() || {} : {}]));
 
         const candidates = techQuery.docs
-            .map((d) => ({ id: d.id, data: d.data() }))
-            .filter((tech) => {
-                const data = tech.data;
-                const onDuty = data.onDuty === true;
-                const approved = ["active", "approved"].includes(String(data.status || "").toLowerCase()) &&
-                    data.suspended !== true;
-                const hasCapacity = Number(data.currentJobCount || 0) < Number(data.maxConcurrentJobs || 3);
-                const sameEmirate = String(data.emirate || "").toLowerCase() === String(contextUpdate.emirate).toLowerCase();
-                const skills = Array.isArray(data.tradeSkills) ? data.tradeSkills.map((s: any) => String(s).toLowerCase()) : [String(data.trade || "").toLowerCase()];
-                const skillMatch = !requiredSkill || skills.some((s: string) => requiredSkill.includes(s) || s.includes(requiredSkill));
-                return onDuty && approved && hasCapacity && sameEmirate && skillMatch;
-            })
+            .map((d) => ({ id: d.id, data: d.data(), technician: technicianProfiles.get(d.id) || {} }))
+            .filter((tech) => evaluateTechnicianForTicket({
+                user: tech.data,
+                technician: tech.technician,
+                ticketEmirate: contextUpdate.emirate,
+                requiredTrade,
+            }).eligible)
             .map((tech) => ({
                 ...tech,
                 distance: distanceKm(normalizeGeo(tech.data), propertyGeo),
@@ -1084,6 +1122,8 @@ async function attemptAutoAssignment(ticketRef: admin.firestore.DocumentReferenc
                     !freshTechnicianSnap.exists ||
                     freshTechnician.onDuty !== true ||
                     freshTechnician.suspended === true ||
+                    freshTechnician.isAvailable === false ||
+                    freshTechnician.available === false ||
                     !["active", "approved"].includes(normalizeRole(freshTechnician.status)) ||
                     Number(freshTechnician.currentJobCount || 0) >= Number(freshTechnician.maxConcurrentJobs || 3)
                 ) {
@@ -1242,20 +1282,35 @@ async function dispatchOmniNotification(userId: string, title: string, body: str
 
         // The canonical notification trigger resolves registered tokens and
         // records provider outcomes. Do not read the retired users.fcmTokens array.
-        const channels: Array<{ name: string; operation: Promise<unknown> }> = [{
-            name: 'push',
-            operation: db.collection('notifications').add({
-                recipientId: userId, title, body,
-                type: options.type || 'STATUS_UPDATE',
-                ticketId: options.extraData?.ticketId || null,
-                link: options.url || '/',
-                metadata: options.extraData || {},
-                read: false,
-                pushDeliveryState: 'PENDING',
-                deliverySource: 'server:dispatchOmniNotification',
-                createdAt: FieldValue.serverTimestamp(),
-            }),
-        }];
+        const notificationRecord = {
+            recipientId: userId, title, body,
+            type: options.type || 'STATUS_UPDATE',
+            ticketId: options.extraData?.ticketId || null,
+            link: options.url || '/',
+            metadata: options.extraData || {},
+            read: false,
+            pushDeliveryState: 'PENDING',
+            deliverySource: 'server:dispatchOmniNotification',
+            createdAt: FieldValue.serverTimestamp(),
+        };
+        const channels: Array<{ name: string; operation: Promise<unknown> }> = [];
+        const notificationId = typeof options.notificationId === 'string' ? options.notificationId.trim() : '';
+        if (notificationId) {
+            // Idempotent delivery: create() on a deterministic ID. If this event
+            // was already delivered (same assignment, or a trigger retry), stop
+            // before any channel (in-app, push, SMS, email) fires again.
+            try {
+                await db.collection('notifications').doc(notificationId).create({ ...notificationRecord, idempotencyKey: notificationId });
+            } catch (createErr: any) {
+                if (createErr?.code === 6 || createErr?.code === 'already-exists' || /already exists/i.test(String(createErr?.message || ''))) {
+                    console.info('[Notification deduplicated]', { notificationId });
+                    return;
+                }
+                console.warn('[Notification channel failed]', { channel: 'push' });
+            }
+        } else {
+            channels.push({ name: 'push', operation: db.collection('notifications').add(notificationRecord) });
+        }
 
         // Optional channel failures must not prevent the other attempts.
         if (userData?.email && options.type === 'CRITICAL') {

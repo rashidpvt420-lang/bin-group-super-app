@@ -32,6 +32,7 @@ import {
   db,
   doc,
   functions,
+  getDoc,
   httpsCallable,
   limit,
   onSnapshot,
@@ -42,6 +43,13 @@ import ContextQuickActionsFab from "./ContextQuickActionsFab";
 import FinishShiftChecklistModal from "./FinishShiftChecklistModal";
 import StaffVoicePaperworkDialog from "./StaffVoicePaperworkDialog";
 import UnifiedRequestStatusTracker from "./UnifiedRequestStatusTracker";
+import {
+  type HrShiftSchedule,
+  resolveShiftLabel,
+  shiftSyncErrorMessage,
+  shouldResubscribeShiftAfterQuickAction,
+  staffShiftDocId,
+} from "./staffShiftSchedule";
 
 interface StaffTodayDashboardProps {
   userName?: string;
@@ -110,6 +118,8 @@ export const StaffTodayDashboard: React.FC<StaffTodayDashboardProps> = ({
   const currentUid = auth.currentUser?.uid;
   const [profile, setProfile] = useState<StaffProfile | null>(null);
   const [activeShift, setActiveShift] = useState<any | null>(null);
+  const [hrSchedule, setHrSchedule] = useState<HrShiftSchedule | null>(null);
+  const [shiftListenerKey, setShiftListenerKey] = useState(0);
   const [activeVehicle, setActiveVehicle] = useState<ActiveVehicle | null>(null);
   const [activeJob, setActiveJob] = useState<ActiveJob | null>(null);
   const [pendingTrackers, setPendingTrackers] = useState<any[]>([]);
@@ -147,10 +157,34 @@ export const StaffTodayDashboard: React.FC<StaffTodayDashboardProps> = ({
     const todayStr = dubaiDateKey();
     if (!todayStr) return;
     return onSnapshot(
-      doc(db, "staff_shifts", `SHIFT_${currentUid}_${todayStr}`),
-      (snap) => setActiveShift(snap.exists() ? snap.data() : null),
-      (err) => setActionError(`Shift sync failed: ${err.message}`),
+      doc(db, "staff_shifts", staffShiftDocId(currentUid, todayStr)),
+      (snap) => {
+        setActiveShift(snap.exists() ? snap.data() : null);
+        setActionError((previous) => (previous?.startsWith("Shift sync failed") ? null : previous));
+      },
+      (err) => {
+        // The SDK terminates an errored listener; re-attached via shiftListenerKey after Clock In.
+        setActiveShift(null);
+        setActionError(shiftSyncErrorMessage(err));
+      },
     );
+  }, [currentUid, shiftListenerKey]);
+
+  useEffect(() => {
+    if (!currentUid) return;
+    let cancelled = false;
+    // HR's scheduled shift (shiftName / workingHours / offDay) lives on hrProfiles/{uid},
+    // not on the per-day staff_shifts doc. Own-doc read is allowed by rules.
+    getDoc(doc(db, "hrProfiles", currentUid))
+      .then((snap) => {
+        if (cancelled || !snap.exists()) return;
+        const data = snap.data() || {};
+        setHrSchedule({ shiftName: data.shiftName, workingHours: data.workingHours, offDay: data.offDay });
+      })
+      .catch((err) => console.warn("[StaffTodayDashboard] HR shift schedule unavailable:", err));
+    return () => {
+      cancelled = true;
+    };
   }, [currentUid]);
 
   useEffect(() => {
@@ -229,7 +263,7 @@ export const StaffTodayDashboard: React.FC<StaffTodayDashboardProps> = ({
   const clockedIn = ["ACTIVE", "ON_BREAK"].includes(shiftStatus);
   const displayName = profile?.displayName || fallbackName || "Staff Member";
   const displayRole = profile?.role || fallbackRole || "Staff";
-  const shiftLabel = activeShift?.shiftTime || activeShift?.scheduledLabel || "No shift schedule recorded";
+  const shiftLabel = resolveShiftLabel(activeShift, hrSchedule);
 
   const overtimeTracker = useMemo(
     () => pendingTrackers.find((tracker) => String(tracker.requestType || "").toUpperCase() === "OVERTIME_CLAIM") || null,
@@ -249,8 +283,10 @@ export const StaffTodayDashboard: React.FC<StaffTodayDashboardProps> = ({
         vehicleId: activeVehicle?.id || undefined,
       });
       setActionMessage(response.data?.message || `${actionType} completed.`);
+      if (shouldResubscribeShiftAfterQuickAction(actionType)) setShiftListenerKey((key) => key + 1);
     } catch (err: any) {
       setActionError(err?.message || `${actionType} failed.`);
+      if (shouldResubscribeShiftAfterQuickAction(actionType, err)) setShiftListenerKey((key) => key + 1);
     } finally {
       setActionBusy(null);
     }
