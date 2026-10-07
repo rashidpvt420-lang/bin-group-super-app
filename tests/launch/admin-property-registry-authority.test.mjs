@@ -4,35 +4,32 @@ import { readFile } from 'node:fs/promises';
 
 const read = (path) => readFile(new URL(`../../${path}`, import.meta.url), 'utf8');
 
-test('Admin Asset Registry mutations are server-authoritative and audited', async () => {
-  const [page, backend, runtime] = await Promise.all([
+test('Admin Asset Registry is read-only and routes mutations to canonical Intake Vault', async () => {
+  const [page, app, canonicalSubmission] = await Promise.all([
     read('apps/admin-panel/src/pages/admin/PropertyManagementPage.tsx'),
-    read('functions/secureAdminPropertyRegistry.ts'),
-    read('functions/runtime.ts'),
+    read('apps/admin-panel/src/App.tsx'),
+    read('functions/canonicalOwnerSubmission.ts'),
   ]);
 
-  assert.match(page, /httpsCallable\(functions, 'adminUpsertPropertyCandidate'\)/);
-  assert.match(page, /httpsCallable\(functions, 'adminDeletePropertyCandidate'\)/);
+  assert.match(page, /READ-ONLY OPERATIONAL REGISTRY/);
+  assert.match(page, /navigate\('\/vault'\)/);
+  assert.doesNotMatch(page, /httpsCallable\(/);
   assert.doesNotMatch(page, /\baddDoc\s*\(/);
   assert.doesNotMatch(page, /\bupdateDoc\s*\(/);
   assert.doesNotMatch(page, /\bdeleteDoc\s*\(/);
+  assert.doesNotMatch(page, /adminUpsertPropertyCandidate/);
+  assert.doesNotMatch(page, /adminDeletePropertyCandidate/);
+  assert.doesNotMatch(page, /Add Institutional Asset|Save Review Candidate|UPDATE ASSET DNA/);
 
-  assert.match(backend, /enforceAppCheck: true/);
-  assert.match(backend, /sign_in_second_factor/);
-  assert.match(backend, /multiFactor/);
-  assert.match(backend, /ADMIN_CREATE_PROPERTY_CANDIDATE/);
-  assert.match(backend, /ADMIN_UPDATE_PROPERTY_CANDIDATE/);
-  assert.match(backend, /ADMIN_DELETE_PROPERTY_CANDIDATE/);
-  assert.match(backend, /submittedGeoVerified: false/);
-  assert.match(backend, /canonicalGeoChanged: false/);
-  assert.match(runtime, /export \* from "\.\/secureAdminPropertyRegistry"/);
+  assert.match(app, /path="\/vault"[^>]*IntakeVaultPage/);
+  assert.match(canonicalSubmission, /property_identity_registry/);
+  assert.match(canonicalSubmission, /assertNoExistingCanonicalProperty/);
+  assert.match(canonicalSubmission, /submitOwnerInspectionFirstOnboarding = onCall/);
 });
 
-test('Admin candidate deletion fails closed for live or referenced property records', async () => {
-  const backend = await read('functions/secureAdminPropertyRegistry.ts');
-  assert.match(backend, /Only non-active review candidates can be deleted/);
-  assert.match(backend, /collection\("units"\).*propertyId/s);
-  assert.match(backend, /collection\("contracts"\).*propertyId/s);
-  assert.match(backend, /collection\("maintenanceTickets"\).*propertyId/s);
-  assert.match(backend, /Property has dependent records and cannot be hard-deleted/);
+test('Asset Registry never presents submitted coordinates as verified canonical geo', async () => {
+  const page = await read('apps/admin-panel/src/pages/admin/PropertyManagementPage.tsx');
+  assert.match(page, /prop\.geo\?\.verified === true/);
+  assert.match(page, /label="UNVERIFIED"/);
+  assert.doesNotMatch(page, /submittedGeo\?\.verified\s*===\s*true/);
 });

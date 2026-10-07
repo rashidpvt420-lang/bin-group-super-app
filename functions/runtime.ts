@@ -135,5 +135,3 @@ if (!admin.apps.length) {
 }
 
 export * from "./binConnectOperations";
-
-export * from "./secureAdminPropertyRegistry";
