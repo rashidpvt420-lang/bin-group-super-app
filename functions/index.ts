@@ -11,7 +11,6 @@ import * as path from "path";
 import { createRequire } from "module";
 import type { SummarizePropertyPassportSources, PassportIdentity } from "./shared/propertyPassportAggregationTypes";
 import { assertOwnerClosureEvidence } from "./ticketClosureEvidence";
-import { notifyTicketStakeholders, TicketStakeholderEvent } from "./ticketStakeholderNotifications";
 import { resolveTicketPropertyDisplayName, ticketNeedsPropertyLabelLookup } from "./shared/propertyDisplayName";
 
 const requirePropertyPassportAggregation = createRequire(__filename);
@@ -28,6 +27,7 @@ import {
     verifyStorageObjectOwnership,
 } from "./ocrSecurityGuards";
 import { enforceAiUsageQuota } from "./aiUsageQuota";
+import { notifyTicketStakeholders, TicketStakeholderEvent } from "./ticketStakeholderNotifications";
 import { sendTwilioSMS } from "./smsDelivery";
 import { resolveTechnicianArrivalBinding } from "./technicianInstallationBinding";
 import { flagSlaBreaches } from "./slaCron";
