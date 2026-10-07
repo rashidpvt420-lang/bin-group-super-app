@@ -96,6 +96,58 @@ type LiveTrackingActionResult = {
 
 const CAPTURE_INTERVAL_MS = 10_000;
 
+const TRACKING_SESSION_STORAGE_PREFIX = 'bin_group_gps_session_v1';
+const TRACKING_SESSION_REUSE_MAX_AGE_MS = 2 * 60 * 1000;
+
+type PersistedTrackingSession = {
+    technicianUid: string;
+    ticketId: string;
+    trackingSessionId: string;
+    lastConfirmedAtMs: number;
+};
+
+function trackingSessionStorageKey(technicianUid: string, ticketId: string) {
+    return `${TRACKING_SESSION_STORAGE_PREFIX}:${technicianUid}:${ticketId}`;
+}
+
+function readReusableTrackingSessionId(technicianUid: string, ticketId: string): string | null {
+    if (typeof window === 'undefined' || !window.localStorage) return null;
+    try {
+        const raw = window.localStorage.getItem(trackingSessionStorageKey(technicianUid, ticketId));
+        if (!raw) return null;
+        const parsed = JSON.parse(raw) as Partial<PersistedTrackingSession>;
+        const sessionId = String(parsed.trackingSessionId || '').trim();
+        const lastConfirmedAtMs = Number(parsed.lastConfirmedAtMs || 0);
+        const valid = parsed.technicianUid === technicianUid &&
+            parsed.ticketId === ticketId &&
+            /^[A-Za-z0-9_-]{8,128}$/.test(sessionId) &&
+            Number.isFinite(lastConfirmedAtMs) &&
+            lastConfirmedAtMs > 0 &&
+            Date.now() - lastConfirmedAtMs <= TRACKING_SESSION_REUSE_MAX_AGE_MS;
+        if (valid) return sessionId;
+        window.localStorage.removeItem(trackingSessionStorageKey(technicianUid, ticketId));
+    } catch {
+        window.localStorage.removeItem(trackingSessionStorageKey(technicianUid, ticketId));
+    }
+    return null;
+}
+
+function persistTrackingSession(
+    technicianUid: string,
+    ticketId: string,
+    trackingSessionId: string,
+    lastConfirmedAtMs = Date.now(),
+) {
+    if (typeof window === 'undefined' || !window.localStorage) return;
+    const payload: PersistedTrackingSession = { technicianUid, ticketId, trackingSessionId, lastConfirmedAtMs };
+    window.localStorage.setItem(trackingSessionStorageKey(technicianUid, ticketId), JSON.stringify(payload));
+}
+
+function clearPersistedTrackingSession(technicianUid: string, ticketId: string) {
+    if (typeof window === 'undefined' || !window.localStorage) return;
+    window.localStorage.removeItem(trackingSessionStorageKey(technicianUid, ticketId));
+}
+
 const _state: TrackingState = {
     watchId: null,
     lastPushTime: 0,
@@ -105,6 +157,11 @@ const _state: TrackingState = {
     onlineHandler: null,
     recoveryUid: null,
 };
+
+// Serialize tracking startup so a lifecycle click and a state-driven resume cannot
+// install two browser watches / server sessions for the same Technician mission.
+let trackingStartPromise: Promise<void> | null = null;
+let trackingStartKey: string | null = null;
 
 async function readGpsPermissionState(): Promise<PermissionState | 'unsupported' | 'unknown'> {
     try {
@@ -357,7 +414,7 @@ export function purgeTechnicianGpsRetryQueue(technicianUid: string) {
     if (_state.recoveryUid === technicianUid) detachOnlineRecovery();
 }
 
-export const startLiveTracking = async (
+const startLiveTrackingInternal = async (
     ticketId: string,
     technicianUid: string,
     onLocationUpdate?: (loc: GeoPoint) => void,
@@ -408,7 +465,8 @@ export const startLiveTracking = async (
         throw new Error(message);
     }
 
-    const trackingSessionId = createTrackingSessionId();
+    const trackingSessionId = readReusableTrackingSessionId(technicianUid, ticketId) || createTrackingSessionId();
+    persistTrackingSession(technicianUid, ticketId, trackingSessionId);
     let installationHash: string | null = null;
     try {
         installationHash = await getNativeAndroidInstallationHash();
@@ -509,6 +567,7 @@ export const startLiveTracking = async (
             try {
                 await replayForTechnician(technicianUid, ticketId);
                 await sendAction(action);
+                persistTrackingSession(technicianUid, ticketId, sessionId, now);
                 onLocationUpdate?.(point);
             } catch (error) {
                 enqueueGpsRetryAction({
@@ -575,6 +634,41 @@ export const startLiveTracking = async (
     _state.trackingSessionId = trackingSessionId;
     _state.lastPushTime = captureLastPushTime;
     _state.watchId = installedWatchId;
+};
+
+export const startLiveTracking = (
+    ticketId: string,
+    technicianUid: string,
+    onLocationUpdate?: (loc: GeoPoint) => void,
+    onError?: (msg: string) => void,
+): Promise<void> => {
+    const startKey = `${technicianUid}:${ticketId}`;
+
+    if (
+        _state.watchId !== null &&
+        _state.activeTicketId === ticketId &&
+        _state.technicianUid === technicianUid
+    ) {
+        return Promise.resolve();
+    }
+
+    if (trackingStartPromise) {
+        if (trackingStartKey === startKey) return trackingStartPromise;
+        return trackingStartPromise
+            .catch(() => undefined)
+            .then(() => startLiveTracking(ticketId, technicianUid, onLocationUpdate, onError));
+    }
+
+    trackingStartKey = startKey;
+    const start = startLiveTrackingInternal(ticketId, technicianUid, onLocationUpdate, onError);
+    const guarded = start.finally(() => {
+        if (trackingStartKey === startKey) {
+            trackingStartPromise = null;
+            trackingStartKey = null;
+        }
+    });
+    trackingStartPromise = guarded;
+    return guarded;
 };
 
 export type StopLiveTrackingResult = {
@@ -658,6 +752,8 @@ export const stopLiveTracking = async (
         };
         await persistTrackingDiagnostic(uid, activeTicketId, diagnostic);
     }
+
+    if (uid && activeTicketId && sessionId) clearPersistedTrackingSession(uid, activeTicketId);
 
     _state.watchId = null;
     _state.lastPushTime = 0;
