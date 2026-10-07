@@ -69,3 +69,8 @@ test('Owner approval decision remains on its existing protected callable', async
   assert.match(ownerBackend, /export const submitOwnerApprovalDecision = onCall/);
   assert.match(ownerBackend, /enforceAppCheck: true/);
 });
+
+
+test('RFQ creation requires the referenced Owner account to exist', () => {
+  assert.match(source, /if \(!ownerSnap\.exists\) throw new HttpsError\("not-found", "Owner account not found\."\)/);
+});
