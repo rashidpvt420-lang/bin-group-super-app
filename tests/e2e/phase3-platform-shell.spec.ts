@@ -37,3 +37,61 @@ test.describe('Phase 3 cross-platform public control shell', () => {
     });
   }
 });
+
+
+test.describe('Phase 1 Sovereign AI launcher interaction regression', () => {
+  test('tap/click, keyboard, drag and responsive drawer behavior stay stable', async ({ page }, testInfo) => {
+    await page.goto('/', { waitUntil: 'domcontentloaded' });
+
+    const launcher = page.getByTestId('sovereign-ai-open');
+    await expect(launcher).toBeVisible();
+
+    const isMobile = testInfo.project.name !== 'chromium-desktop';
+    const drawer = page.getByTestId(isMobile ? 'sovereign-ai-mobile-drawer' : 'sovereign-ai-desktop-drawer');
+
+    if (isMobile) {
+      await launcher.tap();
+    } else {
+      await launcher.click();
+    }
+    await expect(drawer).toBeVisible();
+
+    await page.getByTestId('sovereign-ai-close').click();
+    await expect(drawer).toBeHidden();
+
+    await launcher.focus();
+    await page.keyboard.press('Enter');
+    await expect(drawer).toBeVisible();
+    await page.getByTestId('sovereign-ai-close').click();
+    await expect(drawer).toBeHidden();
+
+    await launcher.focus();
+    await page.keyboard.press('Space');
+    await expect(drawer).toBeVisible();
+    await page.getByTestId('sovereign-ai-close').click();
+    await expect(drawer).toBeHidden();
+
+    const before = await launcher.boundingBox();
+    expect(before).not.toBeNull();
+
+    if (isMobile) {
+      const startX = (before?.x || 0) + (before?.width || 56) / 2;
+      const startY = (before?.y || 0) + (before?.height || 56) / 2;
+      await launcher.dispatchEvent('pointerdown', { pointerId: 41, pointerType: 'touch', isPrimary: true, clientX: startX, clientY: startY });
+      await launcher.dispatchEvent('pointermove', { pointerId: 41, pointerType: 'touch', isPrimary: true, clientX: startX - 36, clientY: startY - 48 });
+      await launcher.dispatchEvent('pointerup', { pointerId: 41, pointerType: 'touch', isPrimary: true, clientX: startX - 36, clientY: startY - 48 });
+    } else {
+      const startX = (before?.x || 0) + (before?.width || 56) / 2;
+      const startY = (before?.y || 0) + (before?.height || 56) / 2;
+      await page.mouse.move(startX, startY);
+      await page.mouse.down();
+      await page.mouse.move(startX - 36, startY - 48, { steps: 5 });
+      await page.mouse.up();
+    }
+
+    await expect(drawer).toBeHidden();
+    const after = await launcher.boundingBox();
+    expect(after).not.toBeNull();
+    expect(Math.abs((after?.x || 0) - (before?.x || 0)) + Math.abs((after?.y || 0) - (before?.y || 0))).toBeGreaterThan(10);
+  });
+});
