@@ -148,7 +148,8 @@ const ALLOWED_TRANSITIONS: Record<OnboardingState, OnboardingState[]> = {
   deposit_processing: ['deposit_paid', 'deposit_pending', 'expired', 'suspended'],
   deposit_paid: ['admin_review', 'suspended'],
   identity_pending: ['signature_pending', 'property_details_complete', 'documents_pending', 'expired', 'suspended'],
-  signature_pending: ['deposit_pending', 'admin_review', 'approved', 'suspended'],
+  // F-5: no signature_pending -> approved shortcut; approval requires admin review.
+  signature_pending: ['deposit_pending', 'admin_review', 'suspended'],
   admin_review: ['changes_requested', 'approved', 'rejected', 'signature_pending', 'suspended'],
   changes_requested: ['account_created', 'documents_pending', 'quote_ready', 'contract_selected', 'deposit_pending', 'admin_review', 'expired', 'suspended'],
   approved: ['active', 'suspended'],
@@ -167,7 +168,25 @@ export function normalizeOnboardingState(raw: unknown): OnboardingState {
   return LEGACY_STATUS_ALIASES[key] || ((ONBOARDING_STATES as readonly string[]).includes(key) ? (key as OnboardingState) : 'draft');
 }
 
+function onboardingKey(raw: unknown): string {
+  return String(raw || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[\s-]+/g, '_');
+}
+
+/**
+ * F-5: true only for a canonical state or an explicitly aliased legacy status.
+ * Display code may normalise unknown values to 'draft'; transition checks must not.
+ */
+export function isKnownOnboardingState(raw: unknown): boolean {
+  const key = onboardingKey(raw);
+  if (!key) return false;
+  return Object.prototype.hasOwnProperty.call(LEGACY_STATUS_ALIASES, key) || (ONBOARDING_STATES as readonly string[]).includes(key);
+}
+
 export function canTransitionOnboarding(fromRaw: unknown, toRaw: unknown): boolean {
+  if (!isKnownOnboardingState(fromRaw) || !isKnownOnboardingState(toRaw)) return false;
   const from = normalizeOnboardingState(fromRaw);
   const to = normalizeOnboardingState(toRaw);
   if (from === to) return true;
@@ -175,6 +194,9 @@ export function canTransitionOnboarding(fromRaw: unknown, toRaw: unknown): boole
 }
 
 export function assertOnboardingTransition(fromRaw: unknown, toRaw: unknown): OnboardingState {
+  if (!isKnownOnboardingState(fromRaw) || !isKnownOnboardingState(toRaw)) {
+    throw new Error(`Unknown onboarding state in transition: ${String(fromRaw)} -> ${String(toRaw)}`);
+  }
   const from = normalizeOnboardingState(fromRaw);
   const to = normalizeOnboardingState(toRaw);
   if (!canTransitionOnboarding(from, to)) {

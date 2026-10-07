@@ -72,3 +72,13 @@ test('recovery snapshot exposes progress, blocker, and next step without unlocki
   assert.match(snapshot.currentBlocker, /admin/i);
   assert.match(snapshot.nextRequiredStep, /admin/i);
 });
+
+test('F-5: no signature_pending -> approved shortcut and unknown states are not normalised for transitions', () => {
+  assert.equal(canTransitionOnboarding('signature_pending', 'approved'), false);
+  assert.equal(canTransitionOnboarding('signature_pending', 'admin_review'), true);
+  assert.equal(canTransitionOnboarding('not_a_real_state', 'account_created'), false);
+  assert.equal(canTransitionOnboarding('draft', 'not_a_real_state'), false);
+  assert.equal(canTransitionOnboarding('', 'account_created'), false);
+  // Display normalisation is unchanged.
+  assert.equal(normalizeOnboardingState('not_a_real_state'), 'draft');
+});

@@ -5,6 +5,14 @@ import { resolveOwnerOnboardingPricingClass } from "./ownerOnboardingQuote";
 import { UAE_PRICING_MATRIX_2026 } from "./pricing/uaePricingMatrix2026";
 import { isValidOwnerSubmittedGps } from "./ownerSubmittedGps";
 import { requirePrivilegedMfaSession } from "./adminMfaSession";
+import {
+  assertOwnerOnboardingActionAllowed,
+  assertOwnerOnboardingTransition,
+  commitOwnerOnboardingBatch,
+  ownerOnboardingStatePatch,
+  resolveOwnerOnboardingState,
+  stageOwnerOnboardingTransition,
+} from "./ownerOnboardingLifecycle";
 
 if (!admin.apps.length) admin.initializeApp();
 const db = admin.firestore();
@@ -100,7 +108,25 @@ export const adminCreateOwnerPortfolioPropertyInspection = onCall({ cors: true, 
   };
 
   const result = await db.runTransaction(async (transaction) => {
-    const existing = await transaction.get(inspectionRef);
+    const [existing, freshIntake, freshContract, freshPayment] = await Promise.all([
+      transaction.get(inspectionRef),
+      transaction.get(intakeRef),
+      transaction.get(db.collection("contracts").doc(intakeId)),
+      transaction.get(db.collection("payment_transactions").doc(intakeId)),
+    ]);
+    if (!freshIntake.exists || !freshIntake.updateTime?.isEqual(intakeSnap.updateTime!)) {
+      throw new HttpsError("aborted", "Owner application changed while the site visit was being prepared. Refresh and retry.");
+    }
+    // F-5: site visits can only be created before any visit evidence is recorded.
+    assertOwnerOnboardingActionAllowed(
+      resolveOwnerOnboardingState({
+        intake: freshIntake.exists ? freshIntake.data() || {} : null,
+        contract: freshContract.exists ? freshContract.data() || {} : null,
+        payment: freshPayment.exists ? freshPayment.data() || {} : null,
+      }),
+      ["SUBMITTED_FOR_PROPERTY_INSPECTION", "SITE_VISITS_SCHEDULED"],
+      "Creating an Owner site visit",
+    );
     if (existing.exists && text(existing.data()?.intakeId) === intakeId) {
       return {
         idempotent: true,
@@ -270,8 +296,23 @@ export const adminLinkOwnerPropertyInspection = onCall({ cors: true, enforceAppC
     throw new HttpsError("failed-precondition", `Create one site inspection for every property. Expected ${propertyCount}, received ${inspectionIds.length}.`);
   }
 
+  // F-5: linking (re)schedules visits; it must never reset an application whose visits were
+  // already evidenced, final-quoted, signed, paid or activated.
+  const [contractSnap, paymentSnap] = await Promise.all([
+    db.collection("contracts").doc(intakeId).get(),
+    db.collection("payment_transactions").doc(intakeId).get(),
+  ]);
+  const lifecycleFrom = resolveOwnerOnboardingState({
+    intake: intakeSnap.data() || {},
+    contract: contractSnap.exists ? contractSnap.data() || {} : null,
+    payment: paymentSnap.exists ? paymentSnap.data() || {} : null,
+    inspections: inspectionSnaps.map((snapshot) => snapshot.data() || {}),
+  });
+  assertOwnerOnboardingTransition(lifecycleFrom, "SITE_VISITS_SCHEDULED", "admin");
+
   const now = FieldValue.serverTimestamp();
   const batch = db.batch();
+  stageOwnerOnboardingTransition(batch, intakeSnap, ownerOnboardingStatePatch(lifecycleFrom, "SITE_VISITS_SCHEDULED", "admin", actor.uid, now));
   batch.set(intakeRef, {
     inspectionId: inspectionIds[0],
     inspectionIds,
@@ -307,9 +348,9 @@ export const adminLinkOwnerPropertyInspection = onCall({ cors: true, enforceAppC
     action: "LINK_OWNER_PROPERTY_INSPECTIONS_TO_APPLICATION",
     targetType: "intake_submissions",
     targetId: intakeId,
-    metadata: { inspectionIds, inspectionCount: inspectionIds.length },
+    metadata: { inspectionIds, inspectionCount: inspectionIds.length, lifecycleFrom, lifecycleTo: "SITE_VISITS_SCHEDULED" },
     createdAt: now,
   });
-  await batch.commit();
+  await commitOwnerOnboardingBatch(batch);
   return { status: "LINKED", intakeId, inspectionId: inspectionIds[0], inspectionIds };
 });

@@ -12,6 +12,7 @@ import {
   resolveLockedOwnerActivationSchedule,
   resolveOwnerActivationPaymentBinding,
 } from "./ownerActivationPaymentPolicy";
+import { assertOwnerOnboardingTransition, resolveOwnerOnboardingState, ownerOnboardingStatePatch } from "./ownerOnboardingLifecycle";
 import { requirePrivilegedMfaSession } from "./adminMfaSession";
 
 if (!admin.apps.length) admin.initializeApp();
@@ -160,12 +161,14 @@ export const createOwnerPaymentTransaction = onCall({ cors: true, enforceAppChec
 
   const now = ts();
   const paymentRef = db.collection("payment_transactions").doc(paymentId);
+  const intakeRef = db.collection("intake_submissions").doc(intakeId);
   const paymentConfigurationRef = db.collection("system_payment_config").doc("current");
   const idempotent = await db.runTransaction(async (transaction) => {
-    const [freshContractSnap, paymentSnap, paymentConfigurationSnap] = await Promise.all([
+    const [freshContractSnap, paymentSnap, paymentConfigurationSnap, intakeSnap] = await Promise.all([
       transaction.get(ref),
       transaction.get(paymentRef),
       transaction.get(paymentConfigurationRef),
+      transaction.get(intakeRef),
     ]);
     if (!freshContractSnap.exists) throw new HttpsError("not-found", "Contract not found.");
     if (!paymentConfigurationSnap.exists) {
@@ -182,6 +185,26 @@ export const createOwnerPaymentTransaction = onCall({ cors: true, enforceAppChec
     ) {
       throw new HttpsError("aborted", "Contract ownership or quote evidence changed during payment submission.");
     }
+    if (freshContract.paymentVerified === true) return true;
+    if (!(freshContract.ownerSigned === true || freshContract.signatureState?.ownerSigned === true) ||
+      !String(freshContract.otpVerificationId || "").trim()) {
+      throw new HttpsError("aborted", "Verified contract signature changed during payment submission.");
+    }
+    const intake = intakeSnap.exists ? intakeSnap.data() || {} : null;
+    const existing = paymentSnap.exists ? paymentSnap.data() || {} : null;
+    const inspectionFirst = [freshContract, existing, intake].some((record) =>
+      record?.workflowVersion === "OWNER_FIVE_PAGE_INSPECTION_FIRST_V1");
+    const lifecycleFrom = inspectionFirst ? resolveOwnerOnboardingState({ intake, contract: freshContract, payment: existing }) : null;
+    if (inspectionFirst && (!intake || String(intake.ownerUid || intake.ownerId || "").trim() !== request.auth?.uid ||
+      freshContract.inspectionVerified !== true)) {
+      throw new HttpsError("failed-precondition", "The verified Owner inspection application is missing or mismatched.");
+    }
+    if (lifecycleFrom) assertOwnerOnboardingTransition(lifecycleFrom, "PAYMENT_EVIDENCE_PENDING_APPROVAL", "owner");
+    const stageLifecycle = () => {
+      if (lifecycleFrom) transaction.set(intakeRef, ownerOnboardingStatePatch(
+        lifecycleFrom, "PAYMENT_EVIDENCE_PENDING_APPROVAL", "owner", request.auth!.uid, now,
+      ), { merge: true });
+    };
     const transactionalConfiguration = resolveActivePaymentConfiguration(paymentConfigurationSnap.data() || {});
     const transactionalBinding = enforceOwnerActivationPolicy(() => resolveOwnerActivationPaymentBinding(
       request.data || {},
@@ -213,8 +236,16 @@ export const createOwnerPaymentTransaction = onCall({ cors: true, enforceAppChec
         existingPayment.paymentStatus ||
         existingPayment.verificationState,
       );
-      if (existingState === "rejected" || existingState === "payment_rejected") {
-        transaction.set(paymentRef, {
+      const rejected = existingState === "rejected" || existingState === "payment_rejected";
+      const firstOwnerReceipt = inspectionFirst && lifecycleFrom === "OWNER_SIGNED_AWAITING_PAYMENT_EVIDENCE" &&
+        (existingState === "awaiting_15_percent_payment" || (existingState === "pending_admin_payment_verification" &&
+          existingPayment.verificationState === "ADMIN_PAYMENT_EVIDENCE_REQUIRED_AFTER_FINAL_OWNER_SIGNATURE" &&
+          existingPayment.ownerFinalContractSigned === true)) && !existingPayment.paymentProofPath &&
+        !existingPayment.paymentEvidenceRecordedBy && !existingPayment.paymentProofEvidence;
+      if (rejected || firstOwnerReceipt) {
+        stageLifecycle();
+        // update replaces the proof map: a new Owner receipt must not inherit an old Admin recorder.
+        transaction.update(paymentRef, {
           method,
           paymentMethod: method,
           provider,
@@ -229,6 +260,10 @@ export const createOwnerPaymentTransaction = onCall({ cors: true, enforceAppChec
           paymentProofHash: paymentProofEvidence.receiptHash,
           paymentProofGeneration: paymentProofEvidence.generation,
           paymentProofEvidence,
+          receiptUrl: paymentProofUrl,
+          receiptPath: paymentProofPath,
+          receiptHash: paymentProofEvidence.receiptHash,
+          receiptGeneration: paymentProofEvidence.generation,
           paymentConfigVersion,
           paymentConfigHash,
           paymentManifest: {
@@ -241,12 +276,16 @@ export const createOwnerPaymentTransaction = onCall({ cors: true, enforceAppChec
           status: "PENDING",
           paymentStatus: "PENDING",
           verificationState: "ADMIN_VERIFICATION_REQUIRED",
+          source: "OWNER_PORTAL_MANUAL_VERIFICATION_BRIDGE",
+          paymentEvidenceRecordedBy: FieldValue.delete(),
+          paymentEvidenceRecordedByEmail: FieldValue.delete(),
+          paymentEvidenceRecordedAt: FieldValue.delete(),
           rejectionReason: FieldValue.delete(),
           rejectedAt: FieldValue.delete(),
           rejectedBy: FieldValue.delete(),
-          resubmittedAt: now,
+          ...(rejected ? { resubmittedAt: now } : { submittedAt: now }),
           updatedAt: now,
-        }, { merge: true });
+        });
         transaction.set(ref, {
           paymentId,
           paymentStatus: "PENDING_VERIFICATION",
@@ -279,8 +318,14 @@ export const createOwnerPaymentTransaction = onCall({ cors: true, enforceAppChec
           createdAt: now,
           updatedAt: now,
         }, { merge: true });
-        transaction.set(db.collection("audit_logs").doc(`owner_payment_request_${paymentId}`), {
-          action: "OWNER_RESUBMIT_PAYMENT_TRANSACTION",
+        transaction.set(db.collection("audit_logs").doc(), {
+          action: rejected ? "OWNER_RESUBMIT_PAYMENT_TRANSACTION" : "OWNER_CREATE_PAYMENT_TRANSACTION",
+          previousPaymentProof: rejected ? {
+            storagePath: existingPayment.paymentProofPath || existingPayment.receiptPath || null,
+            receiptHash: existingPayment.paymentProofHash || existingPayment.receiptHash || null,
+            generation: existingPayment.paymentProofGeneration || existingPayment.receiptGeneration || null,
+            recordedBy: existingPayment.paymentEvidenceRecordedBy || existingPayment.paymentProofEvidence?.recordedBy || null,
+          } : null,
           actorId: request.auth?.uid,
           actorRole: "owner",
           contractId,
@@ -290,6 +335,9 @@ export const createOwnerPaymentTransaction = onCall({ cors: true, enforceAppChec
           paymentConfigVersion,
           paymentConfigHash,
           paymentProofPath,
+          paymentProofHash: paymentProofEvidence.receiptHash,
+          paymentProofGeneration: paymentProofEvidence.generation,
+          createdAt: now,
           updatedAt: now,
         }, { merge: true });
         return false;
@@ -305,6 +353,7 @@ export const createOwnerPaymentTransaction = onCall({ cors: true, enforceAppChec
       return true;
     }
 
+    stageLifecycle();
     transaction.create(paymentRef, {
       paymentId,
       contractId,
@@ -379,7 +428,7 @@ export const createOwnerPaymentTransaction = onCall({ cors: true, enforceAppChec
       createdAt: now,
       updatedAt: now,
     }, { merge: true });
-    transaction.set(db.collection("audit_logs").doc(`owner_payment_request_${paymentId}`), {
+    transaction.set(db.collection("audit_logs").doc(), {
       action: "OWNER_CREATE_PAYMENT_TRANSACTION",
       actorId: request.auth?.uid,
       actorRole: "owner",
@@ -390,6 +439,8 @@ export const createOwnerPaymentTransaction = onCall({ cors: true, enforceAppChec
       paymentConfigVersion,
       paymentConfigHash,
       paymentProofPath,
+      paymentProofHash: paymentProofEvidence.receiptHash,
+      paymentProofGeneration: paymentProofEvidence.generation,
       createdAt: now,
     }, { merge: true });
     return false;

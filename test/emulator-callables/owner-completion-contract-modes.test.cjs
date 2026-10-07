@@ -107,6 +107,7 @@ for (const { strategy, verification, fm, pm } of CASES) {
     assert.equal(fils(pay.activationDeposit), Math.round(fils(pay.annualContractValue) * 0.15), 'deposit is 15% of ACV to the fils');
     assert.equal(pay.status, 'NOT_DUE_UNTIL_OWNER_FINAL_SIGNATURE');
     assert.equal(contract.data().status, 'PENDING_OWNER_SIGNATURE');
+    assert.equal((await db.doc(`intake_submissions/${intakeId}`).get()).get('ownerOnboardingState'), 'FINAL_QUOTE_AWAITING_OWNER_SIGNATURE');
 
     const snapshot = intake.data().properties[0];
     const stored = propertyDoc.data();

@@ -3,6 +3,7 @@ import type * as FirebaseFirestore from "firebase-admin/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { submitOwnerInspectionFirstOnboarding as legacySubmitOwnerInspectionFirstOnboarding } from "./inspectionFirstOwnerOnboarding";
 import { decideOwnerApplicationSubmission } from "./ownerApplicationBinding";
+import { assertOwnerOnboardingTransition, resolveOwnerOnboardingState } from "./ownerOnboardingLifecycle";
 import {
   buildPropertyIdentities,
   PROPERTY_IDENTITY_VERSION,
@@ -221,7 +222,7 @@ export const submitOwnerInspectionFirstOnboarding = onCall(
       ...properties.map((_property, index) => db.collection("properties")
         .doc(safeId(`${intakeId}_property_${index + 1}`, `owner_${ownerUid}_property_${index + 1}`)).get()),
     ]);
-    decideOwnerApplicationSubmission({
+    const decision = decideOwnerApplicationSubmission({
       callerUid: ownerUid,
       applicationId: intakeId,
       records: {
@@ -231,6 +232,19 @@ export const submitOwnerInspectionFirstOnboarding = onCall(
         properties: propertySnaps.map(snapshotRecord),
       },
     });
+    // F-5: fail before claiming property identities if the submission is not a legal transition.
+    // (Re-asserted inside the protected handler's transaction.)
+    if (decision !== "IDEMPOTENT") {
+      assertOwnerOnboardingTransition(
+        resolveOwnerOnboardingState({
+          intake: snapshotRecord(intakeSnap),
+          contract: snapshotRecord(contractSnap),
+          payment: snapshotRecord(paymentSnap),
+        }),
+        "SUBMITTED_FOR_PROPERTY_INSPECTION",
+        "owner",
+      );
+    }
 
     const createdClaimIds = await claimPropertyIdentities({ ownerUid, intakeId, properties });
     const runner = (legacySubmitOwnerInspectionFirstOnboarding as any).run;

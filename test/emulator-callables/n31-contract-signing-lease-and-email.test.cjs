@@ -131,3 +131,43 @@ test('concurrent submissions produce one signature whose recorded PDF evidence m
   assert.equal(object.generation, contract.canonicalPdfGeneration, 'stored PDF generation must match recorded evidence');
   assert.equal(object.sha256, contract.canonicalPdfSha256, 'stored PDF bytes must match recorded sha256');
 });
+
+
+test('inspection-first final signature atomically advances lifecycle and creates the immutable unpaid invoice', async () => {
+  const contractId = 'n31_inspection_first';
+  await seedContract(contractId, { workflowVersion: 'OWNER_FIVE_PAGE_INSPECTION_FIRST_V1', intakeId: contractId, inspectionVerified: true });
+  await db.doc(`intake_submissions/${contractId}`).set({ ownerUid: owner.uid, ownerOnboardingState: 'FINAL_QUOTE_AWAITING_OWNER_SIGNATURE' });
+  await seedOtp('otp_n31_inspection_first', contractId);
+  const result = await sign(contractId, 'otp_n31_inspection_first');
+  assert.equal(result.idempotent, false);
+  const intake = (await db.doc(`intake_submissions/${contractId}`).get()).data();
+  assert.equal(intake.ownerOnboardingState, 'OWNER_SIGNED_AWAITING_PAYMENT_EVIDENCE');
+  assert.equal(intake.ownerOnboardingStateChangedBy, owner.uid);
+  const contract = (await db.doc(`contracts/${contractId}`).get()).data();
+  assert.equal(contract.ownerSigned, true);
+  assert.ok(contract.invoiceId);
+  const invoice = (await db.doc(`invoices/${contract.invoiceId}`).get()).data();
+  assert.equal(invoice.status, 'PENDING');
+  assert.equal(invoice.paymentStatus, 'UNPAID');
+  assert.equal(invoice.amount, 1800);
+  assert.equal(invoice.amountPaid, 0);
+  const invoiceArtifact = await storedObject(invoice.storagePath);
+  assert.equal(invoiceArtifact.sha256, invoice.pdfSha256);
+  assert.equal(invoiceArtifact.generation, invoice.pdfGeneration);
+  const artifact = await storedObject(contract.canonicalPdfStoragePath);
+  assert.equal(artifact.sha256, contract.canonicalPdfSha256);
+  assert.equal((await sign(contractId, 'otp_n31_inspection_first')).idempotent, true);
+});
+
+
+test('a valid signature OTP cannot skip the inspection-first final quote state', async () => {
+  const contractId = 'n31_illegal_lifecycle';
+  await seedContract(contractId, { workflowVersion: 'OWNER_FIVE_PAGE_INSPECTION_FIRST_V1', intakeId: contractId, inspectionVerified: true });
+  await db.doc(`intake_submissions/${contractId}`).set({ ownerUid: owner.uid, ownerOnboardingState: 'SITE_VISITS_SCHEDULED' });
+  await seedOtp('otp_n31_illegal_lifecycle', contractId);
+  await expectHttpsError(sign(contractId, 'otp_n31_illegal_lifecycle'), 'failed-precondition');
+  assert.equal((await db.doc(`contracts/${contractId}`).get()).get('ownerSigned'), false);
+  assert.equal((await db.doc('contract_signature_otps/otp_n31_illegal_lifecycle').get()).get('consumedFor'), undefined);
+  const [files] = await admin.storage().bucket().getFiles({ prefix: `contracts/${contractId}/` });
+  assert.equal(files.length, 0);
+});
