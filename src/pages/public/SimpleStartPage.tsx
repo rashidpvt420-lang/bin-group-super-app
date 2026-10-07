@@ -34,7 +34,7 @@ type CompanyContent = {
 
 const companyContent: Record<'en' | 'ar', CompanyContent> = {
   en: {
-    stats: [['1 min', 'To understand'], ['5', 'Connected profiles'], ['8', 'UAE emirates'], ['Proof', 'Photos · GPS · Time']],
+    stats: [['1 min', 'To understand'], ['5', 'Connected profiles'], ['7', 'UAE emirates'], ['Proof', 'Photos · GPS · Time']],
     whyUsTitle: 'Why owners and tenants choose BIN GROUP',
     whyUsSubtitle: 'Not a call centre. Not a stack of WhatsApp threads. One licensed company that gives you direct access to your own property.',
     whyUs: [
@@ -64,7 +64,7 @@ const companyContent: Record<'en' | 'ar', CompanyContent> = {
     location: 'Al Ain, United Arab Emirates',
   },
   ar: {
-    stats: [['دقيقة', 'للفهم'], ['5', 'ملفات مترابطة'], ['8', 'إمارات'], ['إثبات', 'صور · موقع · وقت']],
+    stats: [['دقيقة', 'للفهم'], ['5', 'ملفات مترابطة'], ['7', 'إمارات'], ['إثبات', 'صور · موقع · وقت']],
     whyUsTitle: 'لماذا يختار الملاك والمستأجرون BIN GROUP',
     whyUsSubtitle: 'لسنا مركز اتصال، ولسنا سلسلة محادثات واتساب متفرقة. شركة مرخصة واحدة تعطيك دخولاً مباشراً لعقارك.',
     whyUs: [
