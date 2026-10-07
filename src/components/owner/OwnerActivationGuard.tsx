@@ -57,11 +57,11 @@ export default function OwnerActivationGuard({ children }: { children: React.Rea
               {suspended
                 ? copy(
                   'Operational and financial actions are unavailable while this account is suspended. Contact BIN GROUP support for the review reason and reinstatement steps.',
-                  'لا تتوفر الإجراءات التشغيلية أو المالية أثناء إيقاف الحساب. تواصل مع دعم بن جروب لمعرفة سبب المراجعة وخطوات إعادة التفعيل.',
+                  'لا تتوفر الإجراءات التشغيلية أو المالية أثناء إيقاف الحساب. تواصل مع دعم مجموعة بن لمعرفة سبب المراجعة وخطوات إعادة التفعيل.',
                 )
                 : copy(
                   'BIN GROUP uses a gated activation model: contract scope, mobilization payment, admin verification, then full dashboard access. This keeps every owner profile tied to verified payment evidence and an active service agreement.',
-                  'تعتمد بن جروب تفعيلًا محميًا يشمل نطاق العقد ودفعة التجهيز والتحقق الإداري قبل فتح لوحة التحكم. يضمن ذلك ربط كل ملف مالك بإثبات دفع موثق وعقد خدمة نشط.'
+                  'تعتمد مجموعة بن تفعيلًا محميًا يشمل نطاق العقد ودفعة التجهيز والتحقق الإداري قبل فتح لوحة التحكم. يضمن ذلك ربط كل ملف مالك بإثبات دفع موثق وعقد خدمة نشط.'
                 )}
             </Typography>
           </Box>

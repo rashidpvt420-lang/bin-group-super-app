@@ -23,6 +23,7 @@ import {
     getTechnicianLocation, getTicketJobLocation
 } from '../../utils/liveTracking';
 import { normalizeCanonicalState } from '../../lib/canonicalStateMachines';
+import { useOwnerPropertyLabels } from '../hooks/useOwnerPropertyLabels';
 
 const STATUS_CONFIG: Record<string, { color: string; icon: any }> = {
     'OPEN':              { color: 'rgba(255,255,255,0.4)', icon: Clock },
@@ -49,6 +50,7 @@ export default function OwnerTicketsPage() {
     const [tickets, setTickets] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [loadError, setLoadError] = useState('');
+    const { ticketPropertyLabel } = useOwnerPropertyLabels(user?.uid);
 
     useEffect(() => {
         if (!user?.uid) return;
@@ -121,6 +123,8 @@ export default function OwnerTicketsPage() {
                     const jobLoc  = getTicketJobLocation(ticket);
                     const distKm  = calculateDistanceKm(techLoc, jobLoc);
                     const etaMin  = calculateEtaMinutes(distKm);
+                    // Resolved from the property record — never the raw property document ID.
+                    const propertyLabel = ticket.propertyId || ticket.propertyName ? ticketPropertyLabel(ticket) : '';
 
                     return (
                         <Paper
@@ -147,10 +151,10 @@ export default function OwnerTicketsPage() {
                                         </Typography>
                                         <Typography variant="caption">•</Typography>
                                         <Typography variant="caption" fontWeight="800">{ticket.category}</Typography>
-                                        {ticket.propertyName && (
+                                        {propertyLabel && (
                                             <>
                                                 <Typography variant="caption">•</Typography>
-                                                <Typography variant="caption" fontWeight="800">{ticket.propertyName}</Typography>
+                                                <Typography variant="caption" fontWeight="800" data-testid="owner-ticket-property-label">{propertyLabel}</Typography>
                                             </>
                                         )}
                                         {ticket.unitNumber && (

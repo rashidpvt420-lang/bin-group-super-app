@@ -39,6 +39,10 @@ export default function PortalConnectionStrip({ dark = false }: PortalConnection
         retry: 'Retry',
       };
 
+  // Only speak up when something is wrong: an always-on "Connection available" banner on every
+  // page was noise (UI audit P2). The offline warning and Retry button are unchanged.
+  if (online) return null;
+
   return (
     <Alert
       severity={online ? 'info' : 'warning'}
