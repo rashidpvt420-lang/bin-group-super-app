@@ -1,7 +1,7 @@
 import React from 'react';
 import { Alert, Box, Button, Chip, Divider, Grid, MenuItem, Paper, Stack, TextField, Typography, alpha } from '@mui/material';
 import { CheckCircle2, MessageSquare, Send } from 'lucide-react';
-import { addDoc, auth, collection, db, doc, functions, httpsCallable, limit, onSnapshot, orderBy, query, serverTimestamp, updateDoc } from '../lib/firebase';
+import { auth, collection, db, functions, httpsCallable, limit, onSnapshot, orderBy, query } from '../lib/firebase';
 import { binThemeTokens } from '../theme/binGroupTheme';
 
 type PortalRole = 'owner' | 'tenant' | 'technician' | 'broker' | 'staff';
@@ -111,21 +111,8 @@ export default function BinConnectInboxPage({ role, dark = false }: { role: Port
       setBusy(true);
       setNotice('');
       const text = reply.trim();
-      await addDoc(collection(db, 'binConnectThreads', selectedId, 'messages'), {
-        body: text,
-        senderId: uid,
-        senderRole: role,
-        senderEmail: email,
-        senderName: displayName,
-        createdAt: serverTimestamp(),
-        system: false,
-      });
-      await updateDoc(doc(db, 'binConnectThreads', selectedId), {
-        lastMessage: text.slice(0, 240),
-        lastMessageAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-        status: selected?.status === 'resolved' ? 'open' : (selected?.status || 'open'),
-      });
+      const sendMessage = httpsCallable(functions, 'sendBinConnectMessage');
+      await sendMessage({ threadId: selectedId, message: text });
       setReply('');
       setNotice('Reply sent.');
     } catch (error: any) {
@@ -138,7 +125,9 @@ export default function BinConnectInboxPage({ role, dark = false }: { role: Port
   const closeThread = async () => {
     if (!selectedId) return;
     try {
-      await updateDoc(doc(db, 'binConnectThreads', selectedId), { status: 'resolved', updatedAt: serverTimestamp() });
+      const resolveThread = httpsCallable(functions, 'resolveBinConnectThread');
+      await resolveThread({ threadId: selectedId });
+      setThreads((current) => current.map((thread) => thread.id === selectedId ? { ...thread, status: 'resolved' } : thread));
       setNotice('Conversation marked resolved.');
     } catch (error: any) {
       setNotice(error?.message || 'Could not update conversation.');
