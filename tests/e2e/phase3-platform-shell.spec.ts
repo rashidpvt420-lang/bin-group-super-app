@@ -56,6 +56,13 @@ test.describe('Phase 1 Sovereign AI launcher interaction regression', () => {
     }
     await expect(drawer).toBeVisible();
 
+    const message = `phase-1-send-${testInfo.project.name}`;
+    const input = page.getByTestId('sovereign-ai-input');
+    await input.fill(message);
+    await page.getByTestId('sovereign-ai-send').click();
+    await expect(drawer.getByText(message, { exact: true })).toBeVisible();
+    await expect(drawer.getByText(/LOCAL GUIDANCE — NOT LIVE AI OR AUTHORITATIVE/)).toBeVisible();
+
     await page.getByTestId('sovereign-ai-close').click();
     await expect(drawer).toBeHidden();
 
