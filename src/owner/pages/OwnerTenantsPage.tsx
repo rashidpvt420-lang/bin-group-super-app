@@ -29,8 +29,8 @@ export default function OwnerTenantsPage() {
             stop?.();
             setState({ ownerUid, rows: [], loading: true, failed: false });
             // Both queries remain bound to the immutable owner UID.
-            const propQ = query(collection(db, 'properties'), where('ownerId', '==', ownerUid));
-            const tenantQ = query(collection(db, 'users'), where('role', '==', 'tenant'), where('ownerId', '==', ownerUid));
+            const propQ = query(collection(db, 'properties'), where('ownerId', '==', user.uid));
+            const tenantQ = query(collection(db, 'users'), where('role', '==', 'tenant'), where('ownerId', '==', user.uid));
             stop = subscribeOwnerDirectory(ownerUid,
                 (next, fail) => onSnapshot(propQ, snap => next(snap.docs), fail),
                 (next, fail) => onSnapshot(tenantQ, snap => next(snap.docs), fail),
