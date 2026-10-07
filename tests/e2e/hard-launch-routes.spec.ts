@@ -114,6 +114,7 @@ const roleCases: RoleCase[] = [
       '/owner/design-studio',
       '/owner/design-studio/request/phase2-missing',
       '/owner/complaint',
+      '/owner/complaints',
       '/owner/tickets',
       '/owner/ai-intelligence',
       '/owner/damage-estimate',

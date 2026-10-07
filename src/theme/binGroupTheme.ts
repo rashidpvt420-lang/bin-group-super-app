@@ -83,6 +83,10 @@ const themeConfig: ThemeOptions = {
     borderRadius: 22,
   },
   components: {
+    // Every spinner gets an accessible name (axe aria-progressbar-name). A local aria-label still wins.
+    MuiCircularProgress: {
+      defaultProps: { 'aria-label': 'Loading' },
+    },
     MuiCssBaseline: {
       styleOverrides: {
         html: { backgroundColor: binThemeTokens.canvas, colorScheme: 'light' },

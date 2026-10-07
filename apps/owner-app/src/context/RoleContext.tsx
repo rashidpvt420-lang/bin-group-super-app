@@ -48,6 +48,23 @@ interface RoleContextType {
 
 const RoleContext = createContext<RoleContextType | undefined>(undefined);
 const AUTH_BOOT_TIMEOUT_MS = 8000;
+const AUTH_BOOT_HARD_DEADLINE_MS = 16000;
+const PROFILE_OP_TIMEOUT_MS = 6000;
+
+const withTimeout = <T,>(promise: Promise<T>, ms: number, label: string): Promise<T> =>
+    new Promise<T>((resolve, reject) => {
+        const timer = window.setTimeout(() => reject(new Error(label)), ms);
+        promise.then(
+            (value) => {
+                window.clearTimeout(timer);
+                resolve(value);
+            },
+            (error) => {
+                window.clearTimeout(timer);
+                reject(error);
+            },
+        );
+    });
 
 const markGlobalAuthReady = () => {
     window.__BIN_GROUPS_BOOT__ = {
@@ -120,8 +137,14 @@ export function RoleProvider({ children }: { children: any }) {
         profileSyncInFlightRef.current += 1;
         console.log("🔍 [AUTH_DIAG] syncProfile started for:", currentUser.uid);
         try {
-            console.log("🔍 [AUTH_DIAG] Requesting ID Token Result (Force Refresh)...");
-            const tokenResult = await currentUser.getIdTokenResult(true);
+            console.log("🔍 [AUTH_DIAG] Requesting ID Token Result (cached claims first)...");
+            let tokenResult;
+            try {
+                tokenResult = await withTimeout(currentUser.getIdTokenResult(false), PROFILE_OP_TIMEOUT_MS, "Token Sync Timeout");
+            } catch (err) {
+                console.warn("[AUTH] Cached claims read failed or timed out. Trying one bounded forced refresh.", err);
+                tokenResult = await withTimeout(currentUser.getIdTokenResult(true), PROFILE_OP_TIMEOUT_MS, "Forced token sync timeout");
+            }
             const claims = tokenResult.claims;
             console.log("🔍 [AUTH_DIAG] Custom Claims Detected:", claims);
 
@@ -130,7 +153,7 @@ export function RoleProvider({ children }: { children: any }) {
 
             try {
                 console.log("🔍 [AUTH_DIAG] Fetching Firestore profile...");
-                snap = await getDoc(userDocRef);
+                snap = await withTimeout(getDoc(userDocRef), PROFILE_OP_TIMEOUT_MS, "Own-profile read timeout");
             } catch (err: any) {
                 console.error("📜 [ROLE-SYNC] Firestore read permission/error:", err);
                 if (claims.role) {
@@ -210,6 +233,19 @@ export function RoleProvider({ children }: { children: any }) {
     useEffect(() => {
         let unsubscribe: () => void = () => {};
 
+        const releaseBootFailClosed = () => {
+            if (!loadingRef.current) return;
+            const currentUser = auth.currentUser;
+            console.warn("[AUTH_DIAG] Auth sync hard deadline. Releasing portal gate fail-closed.");
+            if (currentUser) {
+                setStatus('profile_unavailable');
+                setError("PROFILE UNAVAILABLE: Secure account verification timed out. Retry before entering a portal.");
+                setUser((existingUser) => existingUser || ({ ...currentUser, status: 'profile_unavailable' } as SovereignUser));
+            }
+            setLoading(false);
+            markGlobalAuthReady();
+        };
+
         const bootTimeoutId = window.setTimeout(() => {
             if (!loadingRef.current) return;
             if (profileSyncInFlightRef.current > 0 || auth.currentUser) {
@@ -223,6 +259,8 @@ export function RoleProvider({ children }: { children: any }) {
             console.warn("[AUTH_DIAG] Auth sync timeout with no persisted session. Releasing blocker.");
             setLoading(false);
         }, AUTH_BOOT_TIMEOUT_MS);
+
+        const hardDeadlineId = window.setTimeout(releaseBootFailClosed, AUTH_BOOT_HARD_DEADLINE_MS);
 
         const initAuth = async () => {
             console.log("🔍 [AUTH_DIAG] Initializing Sovereign Identity Bridge...");
@@ -261,6 +299,7 @@ export function RoleProvider({ children }: { children: any }) {
         return () => {
             if (unsubscribe) unsubscribe();
             window.clearTimeout(bootTimeoutId);
+            window.clearTimeout(hardDeadlineId);
         };
     }, []);
 

@@ -139,7 +139,7 @@ export default function SettingsPage() {
   return (
     <Container maxWidth="lg" sx={{ py: 4 }}>
       <Stack spacing={1} sx={{ mb: 4 }}>
-        <Typography variant="h4" sx={{ fontWeight: 900 }}>
+        <Typography variant="h4" sx={{ color: 'text.primary', fontWeight: 900 }}>
           Production Configuration & Launch Gates
         </Typography>
         <Typography color="text.secondary">
