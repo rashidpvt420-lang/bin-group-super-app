@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, timingSafeEqual } from "node:crypto";
 import * as admin from "firebase-admin";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import type * as FirebaseFirestore from "firebase-admin/firestore";
@@ -69,7 +69,7 @@ function audit(action: string, actor: Actor, details: Record<string, unknown>) {
 function previousResult(snap: FirebaseFirestore.DocumentSnapshot, hash: string) {
   if (!snap.exists) return null;
   const prior = snap.data() || {};
-  if (prior.requestHash !== hash) throw new HttpsError("failed-precondition", "This request identifier was already used for a different message.");
+  if (typeof prior.requestHash !== "string" || !/^[a-f0-9]{64}$/.test(prior.requestHash) || !timingSafeEqual(Buffer.from(prior.requestHash, "hex"), Buffer.from(hash, "hex"))) throw new HttpsError("failed-precondition", "This request identifier was already used for a different message.");
   return prior.response;
 }
 const millis = (value: any): number | null => typeof value?.toMillis === "function" ? value.toMillis() : null;

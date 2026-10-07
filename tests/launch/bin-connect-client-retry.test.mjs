@@ -6,8 +6,18 @@ import ts from 'typescript';
 
 // Executes each component's real rendered event handlers, with React hook state
 // and callable transport isolated from Firebase. No production writes occur.
+// Repository scripts execute this suite from the repository root. Only these
+// two fixed sources may enter the isolated component harness.
+const chatBoxSource = fs.readFileSync('src/components/BinConnectChatBox.tsx', 'utf8');
+const inboxSource = fs.readFileSync('src/components/BinConnectInboxPage.tsx', 'utf8');
 function harness(file) {
-  const code = ts.transpileModule(fs.readFileSync(new URL(`../../src/components/${file}`, import.meta.url), 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.React, esModuleInterop: true } }).outputText;
+  let source;
+  switch (file) {
+    case 'BinConnectChatBox.tsx': source = chatBoxSource; break;
+    case 'BinConnectInboxPage.tsx': source = inboxSource; break;
+    default: throw new Error(`Unexpected component: ${file}`);
+  }
+  const code = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.React, esModuleInterop: true } }).outputText;
   const slots = [];
   let cursor = 0;
   let uuid = 0;

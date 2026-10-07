@@ -2,11 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
-import { createRequire } from 'node:module';
+import * as nodeCrypto from 'node:crypto';
 import ts from 'typescript';
 
-const require = createRequire(import.meta.url);
-const source = fs.readFileSync(new URL('../../functions/binConnectOperations.ts', import.meta.url), 'utf8');
+// Repository scripts execute this suite from the repository root.
+const source = fs.readFileSync('functions/binConnectOperations.ts', 'utf8');
 const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true } }).outputText;
 const owner = { uid: 'owner-1', token: { role: 'owner', email: 'owner@example.com', name: 'Owner' } };
 const adminAuth = (claims = { role: 'admin' }, extra = {}) => ({ uid: 'admin-1', token: { ...claims, email: 'admin@example.com', email_verified: true, firebase: { sign_in_second_factor: 'totp' }, ...extra } });
@@ -72,9 +72,29 @@ function harness({ authUsers = {}, docs = {}, failAudit = false } = {}) {
   const auth = { getUser: async uid => { authReads.push(uid); return authUsers[uid] ?? { uid, disabled: false, emailVerified: true, multiFactor: { enrolledFactors: [{ uid: 'factor-1' }] }, customClaims: { role: uid.startsWith('admin') ? 'admin' : 'owner' } }; } };
   const fakeAdmin = { apps: [{}], initializeApp() {}, firestore, auth: () => auth };
   const exports = {};
-  const sandbox = { exports, module: { exports }, console, Buffer, process, require: name => name === 'firebase-admin' ? fakeAdmin : name === 'firebase-admin/firestore' ? { FieldValue: firestore.FieldValue, Timestamp: firestore.Timestamp, getFirestore: () => db } : name === 'firebase-functions/v2/https' ? { HttpsError, onCall: (options, handler) => Object.assign(handler, { options }) } : require(name) };
+  const knownDependency = name => {
+    switch (name) {
+      case 'node:crypto': return nodeCrypto;
+      case 'firebase-admin': return fakeAdmin;
+      case 'firebase-admin/firestore': return { FieldValue: firestore.FieldValue, Timestamp: firestore.Timestamp, getFirestore: () => db };
+      case 'firebase-functions/v2/https': return { HttpsError, onCall: (options, handler) => Object.assign(handler, { options }) };
+      default: throw new Error(`Unexpected callable dependency: ${name}`);
+    }
+  };
+  const sandbox = { exports, module: { exports }, console, Buffer, process, require: knownDependency };
   vm.runInNewContext(compiled, sandbox, { filename: 'binConnectOperations.ts' });
-  return { api: exports, state, writes, transactions, queries, authReads, call: (name, authValue, data) => exports[name]({ auth: authValue, data, app: { appId: 'test-app' } }) };
+  const call = (name, authValue, data) => {
+    const request = { auth: authValue, data, app: { appId: 'test-app' } };
+    switch (name) {
+      case 'listMyBinConnectThreads': return exports.listMyBinConnectThreads(request);
+      case 'createBinConnectThread': return exports.createBinConnectThread(request);
+      case 'sendBinConnectMessage': return exports.sendBinConnectMessage(request);
+      case 'resolveBinConnectThread': return exports.resolveBinConnectThread(request);
+      case 'updateAdminBinConnectThread': return exports.updateAdminBinConnectThread(request);
+      default: throw new Error(`Unexpected callable: ${name}`);
+    }
+  };
+  return { api: exports, state, writes, transactions, queries, authReads, call };
 }
 const thread = { createdBy: 'owner-1', participantIds: ['owner-1'], channel: 'admin_support', status: 'open', lastMessage: 'Initial' };
 const threadDocs = () => ({ 'binConnectThreads/thread-1': { ...thread } });
