@@ -82,7 +82,19 @@ export default function TenantSmartHomeStatus({ activeTickets, notices, showMana
     { key: 'accepted', label: tx('tracker.accepted', 'Accepted'), active: ['ACCEPTED', 'EN_ROUTE', 'ARRIVED', 'ON_SITE', 'IN_PROGRESS', 'COMPLETED', 'CLOSED'].includes(String(activeTicket?.status || '').toUpperCase()) },
     { key: 'en_route', label: tx('tracker.en_route', 'On the way'), active: ['EN_ROUTE', 'ARRIVED', 'ON_SITE', 'IN_PROGRESS', 'COMPLETED', 'CLOSED'].includes(String(activeTicket?.status || '').toUpperCase()) },
     { key: 'onsite', label: tx('tracker.onsite', 'On-site'), active: ['ARRIVED', 'ON_SITE', 'IN_PROGRESS', 'COMPLETED', 'CLOSED'].includes(String(activeTicket?.status || '').toUpperCase()) },
-    { key: 'proof', label: tx('tracker.proof', 'Proof'), active: Boolean(activeTicket?.afterPhotoUrl || activeTicket?.evidenceStatus === 'TENANT_EVIDENCE_UPLOADED' || ['COMPLETED', 'CLOSED'].includes(String(activeTicket?.status || '').toUpperCase())) },
+    {
+      key: 'proof',
+      label: tx('tracker.proof', 'Proof'),
+      active: Boolean(
+        activeTicket?.technicianAfterEvidenceState === 'CONFIRMED' ||
+        activeTicket?.technicianAfterPhotoUrl ||
+        (Array.isArray(activeTicket?.technicianAfterPhotos) && activeTicket.technicianAfterPhotos.length > 0) ||
+        activeTicket?.afterPhotoUrl ||
+        (Array.isArray(activeTicket?.afterPhotos) && activeTicket.afterPhotos.length > 0) ||
+        (Array.isArray(activeTicket?.completionPhotos) && activeTicket.completionPhotos.length > 0) ||
+        ['COMPLETED', 'CLOSED'].includes(String(activeTicket?.status || '').toUpperCase())
+      ),
+    },
   ];
 
   const statusCards = [
