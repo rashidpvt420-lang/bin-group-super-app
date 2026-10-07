@@ -9,6 +9,7 @@ import {
   IconButton,
   InputAdornment,
   Paper,
+  Portal,
   Stack,
   SwipeableDrawer,
   TextField,
@@ -48,21 +49,55 @@ type FabPosition = { x: number; y: number };
 const CHAT_POSITION_KEY = 'bin_sovereign_ai_chat_position_v1';
 const FAB_SIZE = 56;
 const EDGE_PADDING = 14;
+const DRAG_THRESHOLD_PX = 7;
+const BIN_CONNECT_GAP = 14;
 
-const getDefaultFabPosition = (): FabPosition => {
-  if (typeof window === 'undefined') return { x: 30, y: 30 };
-  return {
-    x: Math.max(EDGE_PADDING, window.innerWidth - FAB_SIZE - 30),
-    y: Math.max(EDGE_PADDING, window.innerHeight - FAB_SIZE - 30),
-  };
+type FabClampOptions = {
+  reserveBinConnect?: boolean;
+  isBinConnectCompact?: boolean;
 };
 
-const clampFabPosition = (position: FabPosition): FabPosition => {
+const clampFabPosition = (
+  position: FabPosition,
+  { reserveBinConnect = false, isBinConnectCompact = false }: FabClampOptions = {},
+): FabPosition => {
   if (typeof window === 'undefined') return position;
-  return {
-    x: Math.min(Math.max(EDGE_PADDING, position.x), Math.max(EDGE_PADDING, window.innerWidth - FAB_SIZE - EDGE_PADDING)),
-    y: Math.min(Math.max(EDGE_PADDING, position.y), Math.max(EDGE_PADDING, window.innerHeight - FAB_SIZE - EDGE_PADDING)),
-  };
+
+  let x = Math.min(
+    Math.max(EDGE_PADDING, position.x),
+    Math.max(EDGE_PADDING, window.innerWidth - FAB_SIZE - EDGE_PADDING),
+  );
+  let y = Math.min(
+    Math.max(EDGE_PADDING, position.y),
+    Math.max(EDGE_PADDING, window.innerHeight - FAB_SIZE - EDGE_PADDING),
+  );
+
+  if (reserveBinConnect) {
+    const binConnectRight = isBinConnectCompact ? 16 : 26;
+    const binConnectBottom = isBinConnectCompact ? 74 : 28;
+    const binConnectLeft = window.innerWidth - binConnectRight - FAB_SIZE;
+    const binConnectTop = window.innerHeight - binConnectBottom - FAB_SIZE;
+    const overlapsX =
+      x < binConnectLeft + FAB_SIZE + BIN_CONNECT_GAP &&
+      x + FAB_SIZE + BIN_CONNECT_GAP > binConnectLeft;
+    const overlapsY =
+      y < binConnectTop + FAB_SIZE + BIN_CONNECT_GAP &&
+      y + FAB_SIZE + BIN_CONNECT_GAP > binConnectTop;
+
+    if (overlapsX && overlapsY) {
+      y = Math.max(EDGE_PADDING, binConnectTop - FAB_SIZE - BIN_CONNECT_GAP);
+    }
+  }
+
+  return { x, y };
+};
+
+const getDefaultFabPosition = (options: FabClampOptions = {}): FabPosition => {
+  if (typeof window === 'undefined') return { x: 30, y: 30 };
+  return clampFabPosition({
+    x: Math.max(EDGE_PADDING, window.innerWidth - FAB_SIZE - 30),
+    y: Math.max(EDGE_PADDING, window.innerHeight - FAB_SIZE - 30),
+  }, options);
 };
 
 const roleData: Record<SovereignRole, { greeting: string; prompts: Prompt[] }> = {
@@ -170,31 +205,36 @@ export const SovereignAIChat: React.FC<SovereignAIChatProps> = ({
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(false);
-  const [fabPosition, setFabPosition] = useState<FabPosition>(getDefaultFabPosition);
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  // BIN Connect changes its fixed offsets at md, independently of drawer mode.
+  const isBinConnectCompact = useMediaQuery(theme.breakpoints.down('md'));
+  const reserveBinConnect = role === 'owner' || role === 'tenant' || role === 'technician' || role === 'broker';
+  const [fabPosition, setFabPosition] = useState<FabPosition>(() => getDefaultFabPosition({ reserveBinConnect, isBinConnectCompact }));
   const chatEndRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef({ dragging: false, moved: false, pointerId: -1, offsetX: 0, offsetY: 0, startX: 0, startY: 0 });
+  const suppressClickRef = useRef(false);
   const activeRole = roleData[role] || roleData.unknown;
   const sessionBound = allowLiveProvider && isAuthenticated && (role !== 'admin' || Boolean(authUserId));
 
   useEffect(() => {
     try {
       const saved = localStorage.getItem(CHAT_POSITION_KEY);
-      if (saved) setFabPosition(clampFabPosition(JSON.parse(saved)));
+      if (saved) setFabPosition(clampFabPosition(JSON.parse(saved), { reserveBinConnect, isBinConnectCompact }));
     } catch {
-      setFabPosition(getDefaultFabPosition());
+      setFabPosition(getDefaultFabPosition({ reserveBinConnect, isBinConnectCompact }));
     }
 
     const handleResize = () => setFabPosition((current) => {
-      const next = clampFabPosition(current);
+      const next = clampFabPosition(current, { reserveBinConnect, isBinConnectCompact });
       try { localStorage.setItem(CHAT_POSITION_KEY, JSON.stringify(next)); } catch { /* restricted storage */ }
       return next;
     });
 
+    handleResize();
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
-  }, []);
+  }, [reserveBinConnect, isBinConnectCompact]);
 
   useEffect(() => {
     try {
@@ -336,6 +376,8 @@ export const SovereignAIChat: React.FC<SovereignAIChatProps> = ({
   };
 
   const handleFabPointerDown = (event: React.PointerEvent<HTMLButtonElement>) => {
+    if (!event.isPrimary) return;
+    suppressClickRef.current = false;
     dragRef.current = {
       dragging: true,
       moved: false,
@@ -345,27 +387,49 @@ export const SovereignAIChat: React.FC<SovereignAIChatProps> = ({
       startX: event.clientX,
       startY: event.clientY,
     };
-    event.currentTarget.setPointerCapture(event.pointerId);
+    try { event.currentTarget.setPointerCapture(event.pointerId); } catch { /* synthetic/unsupported pointer capture */ }
   };
 
   const handleFabPointerMove = (event: React.PointerEvent<HTMLButtonElement>) => {
     const drag = dragRef.current;
     if (!drag.dragging || drag.pointerId !== event.pointerId) return;
-    if (Math.abs(event.clientX - drag.startX) > 4 || Math.abs(event.clientY - drag.startY) > 4) drag.moved = true;
-    setFabPosition(clampFabPosition({ x: event.clientX - drag.offsetX, y: event.clientY - drag.offsetY }));
+
+    const moved =
+      drag.moved ||
+      Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) >= DRAG_THRESHOLD_PX;
+    dragRef.current = { ...drag, moved };
+    if (!moved) return;
+
+    setFabPosition(clampFabPosition(
+      { x: event.clientX - drag.offsetX, y: event.clientY - drag.offsetY },
+      { reserveBinConnect, isBinConnectCompact },
+    ));
   };
 
-  const finishFabDrag = (event: React.PointerEvent<HTMLButtonElement>) => {
+  const finishFabDrag = (event: React.PointerEvent<HTMLButtonElement>, cancelled = false) => {
     const drag = dragRef.current;
     if (!drag.dragging || drag.pointerId !== event.pointerId) return;
+
     dragRef.current = { ...drag, dragging: false };
+    suppressClickRef.current = cancelled || drag.moved;
     try { event.currentTarget.releasePointerCapture(event.pointerId); } catch { /* already released */ }
+
     setFabPosition((current) => {
-      const next = clampFabPosition(current);
+      const next = clampFabPosition(current, { reserveBinConnect, isBinConnectCompact });
       try { localStorage.setItem(CHAT_POSITION_KEY, JSON.stringify(next)); } catch { /* restricted storage */ }
       return next;
     });
-    if (!drag.moved) setOpen(true);
+  };
+
+  const handleFabClick = (event: React.MouseEvent<HTMLButtonElement>) => {
+    if (suppressClickRef.current && event.detail !== 0) {
+      suppressClickRef.current = false;
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
+    suppressClickRef.current = false;
+    setOpen(true);
   };
 
   const renderContent = () => (
@@ -417,8 +481,14 @@ export const SovereignAIChat: React.FC<SovereignAIChatProps> = ({
           placeholder={allowLiveProvider ? 'Ask the authenticated AI assistant...' : 'Ask for local product guidance...'}
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && void handleSend(input)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault();
+              void handleSend(input);
+            }
+          }}
           autoComplete="off"
+          inputProps={{ 'data-testid': 'sovereign-ai-input', 'aria-label': 'Sovereign AI message' }}
           sx={{ '& .MuiOutlinedInput-root': { bgcolor: 'rgba(255,255,255,0.03)', borderRadius: 3, '& fieldset': { borderColor: 'rgba(255,255,255,0.1)' }, '&:hover fieldset': { borderColor: binThemeTokens.gold } } }}
           InputProps={{ endAdornment: <InputAdornment position="end"><IconButton type="button" data-testid="sovereign-ai-send" aria-label="Send Sovereign AI message" disabled={loading || !input.trim()} onClick={() => void handleSend(input)} sx={{ color: binThemeTokens.gold }}><Send size={18} /></IconButton></InputAdornment> }}
         />
@@ -431,20 +501,16 @@ export const SovereignAIChat: React.FC<SovereignAIChatProps> = ({
 
   return (
     <>
-      <Fab
+      <Portal>
+        <Fab
         data-testid="sovereign-ai-open"
         aria-label="Move or open Sovereign AI chat"
         title="Move or open Sovereign AI chat"
         onPointerDown={handleFabPointerDown}
         onPointerMove={handleFabPointerMove}
-        onPointerUp={finishFabDrag}
-        onPointerCancel={finishFabDrag}
-        onKeyDown={(event) => {
-          if (event.key === 'Enter' || event.key === ' ') {
-            event.preventDefault();
-            setOpen(true);
-          }
-        }}
+        onPointerUp={(event) => finishFabDrag(event)}
+        onPointerCancel={(event) => finishFabDrag(event, true)}
+        onClick={handleFabClick}
         sx={{ position: 'fixed', left: fabPosition.x, top: fabPosition.y, width: FAB_SIZE, height: FAB_SIZE, bgcolor: binThemeTokens.gold, color: '#000', boxShadow: `0 0 30px ${alpha(binThemeTokens.gold, 0.4)}`, '&:hover': { bgcolor: binThemeTokens.goldLight, transform: dragRef.current.dragging ? 'none' : 'scale(1.05)' }, zIndex: 2500, touchAction: 'none', cursor: dragRef.current.dragging ? 'grabbing' : 'grab', transition: dragRef.current.dragging ? 'none' : 'transform 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease' }}
       >
         <Stack alignItems="center" spacing={0} sx={{ lineHeight: 1 }}>
@@ -454,14 +520,32 @@ export const SovereignAIChat: React.FC<SovereignAIChatProps> = ({
           <Sparkles size={22} aria-hidden />
           <Grip size={11} aria-hidden />
         </Stack>
-      </Fab>
+        </Fab>
+      </Portal>
 
       {isMobile ? (
-        <SwipeableDrawer anchor="bottom" open={open} onClose={() => setOpen(false)} onOpen={() => setOpen(true)} PaperProps={{ sx: { height: '80vh', borderTopLeftRadius: 24, borderTopRightRadius: 24, bgcolor: '#0B0B0C', overflow: 'hidden' } }}>
+        <SwipeableDrawer
+          data-testid="sovereign-ai-mobile-drawer"
+          anchor="bottom"
+          open={open}
+          onClose={() => setOpen(false)}
+          onOpen={() => setOpen(true)}
+          disableSwipeToOpen
+          disableDiscovery
+          ModalProps={{ keepMounted: true }}
+          PaperProps={{ className: 'sovereign-ai-drawer', sx: { height: '80vh', borderTopLeftRadius: 24, borderTopRightRadius: 24, bgcolor: '#0B0B0C', overflow: 'hidden' } }}
+        >
           {renderContent()}
         </SwipeableDrawer>
       ) : (
-        <Drawer anchor="right" open={open} onClose={() => setOpen(false)} PaperProps={{ sx: { width: 400, borderLeft: '1px solid rgba(198,167,94,0.2)', bgcolor: '#0B0B0C', overflow: 'hidden' } }}>
+        <Drawer
+          data-testid="sovereign-ai-desktop-drawer"
+          anchor="right"
+          open={open}
+          onClose={() => setOpen(false)}
+          ModalProps={{ keepMounted: true }}
+          PaperProps={{ className: 'sovereign-ai-drawer', sx: { width: 400, borderLeft: '1px solid rgba(198,167,94,0.2)', bgcolor: '#0B0B0C', overflow: 'hidden' } }}
+        >
           {renderContent()}
         </Drawer>
       )}

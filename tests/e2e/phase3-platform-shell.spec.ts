@@ -37,3 +37,87 @@ test.describe('Phase 3 cross-platform public control shell', () => {
     });
   }
 });
+
+
+test.describe('Phase 1 Sovereign AI launcher interaction regression', () => {
+  test('tap/click, keyboard, drag and responsive drawer behavior stay stable', async ({ page }, testInfo) => {
+    await page.goto('/', { waitUntil: 'domcontentloaded' });
+
+    const launcher = page.getByTestId('sovereign-ai-open');
+    await expect(launcher).toBeVisible();
+
+    const isMobile = testInfo.project.name !== 'chromium-desktop';
+    const drawer = page.getByTestId(isMobile ? 'sovereign-ai-mobile-drawer' : 'sovereign-ai-desktop-drawer');
+
+    if (isMobile) await launcher.tap();
+    else await launcher.click();
+    await expect(drawer).toBeVisible();
+    const panel = drawer.locator('.MuiDrawer-paper');
+    await expect(panel).toHaveCSS('width', isMobile ? `${page.viewportSize()?.width}px` : '400px');
+    await expect(drawer.getByText('SOVEREIGN AI', { exact: true })).toBeVisible();
+
+    const message = `phase-1-send-${testInfo.project.name}`;
+    const input = page.getByTestId('sovereign-ai-input');
+    await input.fill(message);
+    const send = page.getByTestId('sovereign-ai-send');
+    if (isMobile) await send.tap();
+    else await send.click();
+    await expect(drawer).toBeVisible();
+    await expect(input).toHaveValue('');
+    await expect(drawer.getByText(message, { exact: true })).toHaveCount(1);
+    await expect(drawer.getByText(/LOCAL GUIDANCE — NOT LIVE AI OR AUTHORITATIVE/)).toHaveCount(1);
+
+    const close = page.getByTestId('sovereign-ai-close');
+    if (isMobile) await close.tap();
+    else await close.click();
+    await expect(drawer).toBeHidden();
+
+    if (!isMobile) {
+      await launcher.focus();
+      await page.keyboard.press('Enter');
+      await expect(drawer).toBeVisible();
+      await close.click();
+      await expect(drawer).toBeHidden();
+
+      await launcher.focus();
+      await page.keyboard.press('Space');
+      await expect(drawer).toBeVisible();
+      await close.click();
+      await expect(drawer).toBeHidden();
+    }
+
+    const before = await launcher.boundingBox();
+    expect(before).not.toBeNull();
+
+    if (isMobile) {
+      const startX = (before?.x || 0) + (before?.width || 56) / 2;
+      const startY = (before?.y || 0) + (before?.height || 56) / 2;
+      await launcher.dispatchEvent('pointerdown', { pointerId: 41, pointerType: 'touch', isPrimary: true, clientX: startX, clientY: startY });
+      await launcher.dispatchEvent('pointermove', { pointerId: 41, pointerType: 'touch', isPrimary: true, clientX: startX - 36, clientY: startY - 48 });
+      await launcher.dispatchEvent('pointerup', { pointerId: 41, pointerType: 'touch', isPrimary: true, clientX: startX - 36, clientY: startY - 48 });
+    } else {
+      const startX = (before?.x || 0) + (before?.width || 56) / 2;
+      const startY = (before?.y || 0) + (before?.height || 56) / 2;
+      await page.mouse.move(startX, startY);
+      await page.mouse.down();
+      await page.mouse.move(startX - 36, startY - 48, { steps: 5 });
+      await page.mouse.up();
+    }
+
+    await expect(drawer).toBeHidden();
+    const after = await launcher.boundingBox();
+    expect(after).not.toBeNull();
+    expect(Math.abs((after?.x || 0) - (before?.x || 0)) + Math.abs((after?.y || 0) - (before?.y || 0))).toBeGreaterThan(10);
+
+    // A cancelled gesture has no synthesized click. It must not consume the
+    // next keyboard activation (native buttons emit a zero-detail click).
+    await launcher.dispatchEvent('pointerdown', { pointerId: 51, pointerType: 'touch', isPrimary: true, clientX: 100, clientY: 100 });
+    await launcher.dispatchEvent('pointercancel', { pointerId: 51, pointerType: 'touch', isPrimary: true });
+    await expect(drawer).toBeHidden();
+    await launcher.focus();
+    await page.keyboard.press('Enter');
+    await expect(drawer).toBeVisible();
+    await close.click();
+    await expect(drawer).toBeHidden();
+  });
+});
