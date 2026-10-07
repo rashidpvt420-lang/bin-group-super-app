@@ -209,3 +209,23 @@ test('standalone live launch audit is manual-only and bound to an already deploy
   assert.ok(deployCommand >= 0, 'production workflow must retain the protected Firebase deploy');
   assert.ok(deployAudit > deployCommand, 'production live audit must remain after the Firebase deploy');
 });
+
+
+test('Phase 1 keeps one Owner Sovereign AI launcher and reserves BIN Connect interaction space', () => {
+  const shell = read('src/components/AuthenticatedShell.tsx');
+  const ownerAi = read('src/owner/pages/OwnerAIIntelligencePage.tsx');
+  const ai = read('src/components/SovereignAIChat.tsx');
+  const binConnect = read('src/components/BinConnectChatBox.tsx');
+
+  assert.match(shell, /shouldRenderSovereignAI[\s\S]*<SovereignAIChat/);
+  assert.doesNotMatch(ownerAi, /SovereignAIChat/);
+  assert.match(ai, /reserveBinConnect/);
+  assert.match(ai, /DRAG_THRESHOLD_PX = 7/);
+  assert.match(ai, /suppressClickRef/);
+  assert.match(ai, /disableSwipeToOpen/);
+  assert.match(ai, /disableDiscovery/);
+  assert.match(ai, /data-testid="sovereign-ai-mobile-drawer"/);
+  assert.match(ai, /data-testid="sovereign-ai-desktop-drawer"/);
+  assert.match(binConnect, /aria-label="BIN Connect chat"/);
+  assert.doesNotMatch(binConnect, /SovereignAIChat/);
+});
