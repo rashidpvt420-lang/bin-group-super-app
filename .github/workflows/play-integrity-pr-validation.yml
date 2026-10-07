@@ -23,7 +23,6 @@ on:
   workflow_dispatch:
 
 permissions:
-  actions: read
   contents: read
 
 concurrency:
@@ -66,8 +65,6 @@ jobs:
         run: npm run test:rules
 
       - name: Run launch honesty suite
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
         run: npm run test:launch-honesty
 
       - name: Verify Admin Maps production guard
