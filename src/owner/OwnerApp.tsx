@@ -14,6 +14,8 @@ import PilotCompletionPage from '../components/PilotCompletionPage';
 import BinConnectInboxPage from '../components/BinConnectInboxPage';
 import OwnerProfileReadinessCard from './components/OwnerProfileReadinessCard';
 import PortalConnectionStrip from '../components/PortalConnectionStrip';
+import { useRole } from '../context/RoleContext';
+import { useOwnerPropertyLabels } from './hooks/useOwnerPropertyLabels';
 
 import OwnerSimpleDashboardPage from './pages/OwnerSimpleDashboardPage';
 import OwnerDashboardPage from './pages/OwnerDashboardResolvedPage';
@@ -46,6 +48,14 @@ import PortfolioRenewalsPage from './pages/PortfolioRenewalsPage';
 
 const OwnerProfileWithReadiness = () => <><OwnerProfileReadinessCard /><OwnerProfilePage /></>;
 
+// Owner bell: stored notification text may reference a property by its raw
+// document ID; show the readable property name/address instead.
+const OwnerNotificationBell = () => {
+    const { user } = useRole();
+    const { formatPropertyText } = useOwnerPropertyLabels(user?.uid);
+    return <NotificationBell formatText={formatPropertyText} />;
+};
+
 const OwnerLayout = ({ children }: { children: React.ReactNode }) => {
     const navigate = useNavigate();
     const location = useLocation();
@@ -68,7 +78,7 @@ const OwnerLayout = ({ children }: { children: React.ReactNode }) => {
                     </Box>
                     <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} alignItems="center" sx={{ flexShrink: 0 }}>
                         <Button onClick={() => navigate('/owner/approvals')} sx={{ display: { xs: 'none', md: 'inline-flex' }, color: binThemeTokens.goldHover, border: `1px solid ${alpha(binThemeTokens.gold, 0.35)}`, borderRadius: 3, fontWeight: 950, bgcolor: '#fff' }}>{label('nav.owner_approvals', 'Approvals')}</Button>
-                        <NotificationBell />
+                        <OwnerNotificationBell />
                         <IconButton aria-label={label('nav.owner_profile', 'Owner profile')} onClick={() => navigate('/owner/profile')} sx={{ color: binThemeTokens.textPrimary, bgcolor: alpha(binThemeTokens.platinum, 0.38), borderRadius: 3 }}><SafeIcon icon={UserCircle} size={18} /></IconButton>
                         <PortalSessionControls role="owner" accent={binThemeTokens.goldHover} />
                     </Stack>
@@ -108,7 +118,12 @@ export default function OwnerApp() {
                 <Route path="/review-queue" element={<OwnerReviewQueuePage />} />
                 <Route path="/design-studio" element={<DesignStudioPage />} />
                 <Route path="/design-studio/request/:id" element={<DesignRequestDetailPage />} />
+                {/* Complaints plural was missing → splat * silently sent owners to dashboard.
+                    Keep leading-slash portal paths (same style as /dashboard) so inventory
+                    prefixes to /owner/complaints|/owner/tickets — do NOT register /owner/*
+                    here or Phase 2 invents /owner/owner/* REVIEW rows. */}
                 <Route path="/complaint" element={<OwnerComplaintPage />} />
+                <Route path="/complaints" element={<OwnerTicketsPage />} />
                 <Route path="/tickets" element={<OwnerTicketsPage />} />
                 <Route path="/ticket/:id" element={<OwnerTicketDetailPage />} />
                 <Route path="/ai-intelligence" element={<OwnerAIIntelligencePage />} />

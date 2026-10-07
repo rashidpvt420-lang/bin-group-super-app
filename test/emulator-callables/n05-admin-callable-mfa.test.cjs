@@ -19,6 +19,7 @@ const COVERED = [
   'adminCreateOwnerPortfolioPropertyInspection', 'adminLinkOwnerPropertyInspection',
   'adminRepairOrphanLinkage', 'adminRepairPropertyGeo',
   'adminApproveContractActivation', 'adminRejectContractActivation',
+  'adminRecordTechnicianCredentials',
 ];
 const MFA_ERROR = /multi-factor \(MFA\) session is required/;
 const CLAIMS = { role: 'super_admin', admin: true, super_admin: true, superAdmin: true };
