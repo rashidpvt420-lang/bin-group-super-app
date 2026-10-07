@@ -5,6 +5,7 @@ import RoleQuickActionsPanel from '../../components/RoleQuickActionsPanel';
 import TechnicianProofChecklist from '../../components/TechnicianProofChecklist';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import CanonicalNextActions from '../../components/CanonicalNextActions';
+import TechnicianDutyAvailabilityCard from '../components/TechnicianDutyAvailabilityCard';
 
 export default function TechnicianSimpleDashboardPage() {
   const navigate = useNavigate();
@@ -14,10 +15,12 @@ export default function TechnicianSimpleDashboardPage() {
     <Box sx={{ direction: isRTL ? 'rtl' : 'ltr' }}>
       <Stack spacing={4}>
         <Box sx={{ textAlign: isRTL ? 'right' : 'left' }}>
-          <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 3 }}>{tx('tech.simple.overline', 'TECHNICIAN SIMPLE MODE')}</Typography>
+          <Typography variant="overline" sx={{ color: '#7A5C12', fontWeight: 950, letterSpacing: 3 }}>{tx('tech.simple.overline', 'TECHNICIAN SIMPLE MODE')}</Typography>
           <Typography variant="h3" sx={{ color: '#111827', fontWeight: 950, mt: 1 }}>{tx('tech.simple.title', 'Start with jobs, map, and proof')}</Typography>
           <Typography sx={{ color: '#667085', mt: 1, maxWidth: 760 }}>{tx('tech.simple.desc', 'Field workers need fewer choices: assigned jobs, location summary, offline queue, support, and evidence readiness.')}</Typography>
         </Box>
+
+        <TechnicianDutyAvailabilityCard isRTL={isRTL} />
 
         <CanonicalNextActions actions={[
           { id: 'jobs', label: tx('tech.next.jobs', 'Open assigned jobs'), detail: tx('tech.next.jobsDetail', 'Accept or resume the next server-assigned job.'), path: '/technician/jobs' },
@@ -36,7 +39,7 @@ export default function TechnicianSimpleDashboardPage() {
           </Stack>
         </Paper>
 
-        <Button onClick={() => navigate('/technician/dashboard/full')} sx={{ alignSelf: isRTL ? 'flex-end' : 'flex-start', color: binThemeTokens.gold, fontWeight: 950 }}>{tx('tech.simple.advanced', 'Open advanced dashboard')}</Button>
+        <Button onClick={() => navigate('/technician/dashboard/full')} sx={{ alignSelf: isRTL ? 'flex-end' : 'flex-start', color: '#7A5C12', fontWeight: 950 }}>{tx('tech.simple.advanced', 'Open advanced dashboard')}</Button>
       </Stack>
     </Box>
   );
