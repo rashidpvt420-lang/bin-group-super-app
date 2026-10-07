@@ -127,7 +127,10 @@ test('FIN-002 admin transactions and control centre no longer read the legacy mo
   assert.match(transactions, /summarizeCanonicalPaymentLedger/);
   assert.match(transactions, /presentCanonicalTransaction/);
   assert.doesNotMatch(transactions, /t\.type === 'credit'/);
-  assert.match(transactions, /archived_contracts/);
+  assert.match(transactions, /httpsCallable\(functions, ['"]adminCloseContract['"]\)/);
+  assert.doesNotMatch(transactions, /archived_contracts/);
+  assert.doesNotMatch(transactions, /\bupdateDoc\s*\(/);
+  assert.doesNotMatch(transactions, /\baddDoc\s*\(/);
 
   assert.match(control, /collection\(db,\s*['"]payment_transactions['"]\)/);
   assert.match(control, /summarizeControlCentreMoney/);

@@ -25,7 +25,7 @@ import {
   DialogActions,
   TextField,
 } from '@mui/material';
-import { db, collection, onSnapshot, query, orderBy, limit, doc, updateDoc, addDoc, serverTimestamp } from '../../lib/firebase';
+import { db, collection, onSnapshot, query, orderBy, limit, functions, httpsCallable } from '../../lib/firebase';
 import { ArrowUpCircle, ArrowDownCircle, Activity, Ban } from 'lucide-react';
 import { useLanguage } from '@bin/shared';
 import { formatAedLedgerMoney, summarizeCanonicalPaymentLedger } from '../../lib/canonicalPaymentLedger.mjs';
@@ -47,7 +47,6 @@ export default function TransactionsPage() {
   const [selectedContract, setSelectedContract] = useState<any | null>(null);
   const [terminateDialogOpen, setTerminateDialogOpen] = useState(false);
   const [terminationReason, setTerminationReason] = useState('');
-  const [settlementAmount, setSettlementAmount] = useState('');
 
   useEffect(() => {
     const q = query(collection(db, 'payment_transactions'), orderBy('createdAt', 'desc'), limit(100));
@@ -73,41 +72,22 @@ export default function TransactionsPage() {
 
   const handleTerminateContract = async () => {
     if (!selectedContract) return;
+    if (terminationReason.trim().length < 8) {
+      alert('Please provide a detailed closure reason of at least 8 characters.');
+      return;
+    }
     try {
-      const contractRef = doc(db, 'contracts', selectedContract.id);
-      
-      const updateData = {
-        status: 'TERMINATED',
-        terminationDate: serverTimestamp(),
-        terminationReason: terminationReason,
-        settlementAmount: parseFloat(settlementAmount) || 0
-      };
-
-      await updateDoc(contractRef, updateData);
-
-      // Post-termination: archive to archived_contracts
-      await addDoc(collection(db, 'archived_contracts'), {
-        ...selectedContract,
-        ...updateData,
-        archivedAt: serverTimestamp()
-      });
-
-      // Write audit log
-      await addDoc(collection(db, 'audit_logs'), {
-        action: 'CONTRACT_TERMINATED',
+      const closeFn = httpsCallable(functions, 'adminCloseContract');
+      await closeFn({
         contractId: selectedContract.id,
-        actorId: 'admin',
-        actorRole: 'admin',
-        timestamp: serverTimestamp(),
-        reason: terminationReason,
-        settlementAmount: parseFloat(settlementAmount) || 0
+        reason: 'OTHER',
+        note: terminationReason.trim(),
       });
 
       setTerminateDialogOpen(false);
       setSelectedContract(null);
       setTerminationReason('');
-      setSettlementAmount('');
-      alert('Contract terminated and archived successfully');
+      alert('Contract closed with MFA authority and server audit evidence.');
     } catch (error: any) {
       console.error('Failed to terminate contract:', error);
       alert('Failed to terminate contract: ' + error.message);
@@ -287,31 +267,24 @@ export default function TransactionsPage() {
         fullWidth
         dir={isRTL ? 'rtl' : 'ltr'}
       >
-        <DialogTitle sx={{ fontWeight: 900 }}>Terminate & Settle Lease Contract</DialogTitle>
+        <DialogTitle sx={{ fontWeight: 900 }}>Close Lease Contract</DialogTitle>
         <DialogContent sx={{ pt: 2 }}>
           <Typography sx={{ mb: 2 }}>
             Are you sure you want to terminate the contract for <strong>{selectedContract?.propertyName || selectedContract?.propertyId}</strong>? 
-            This action will mark the contract status as <strong>TERMINATED</strong>, archive it, and notify the owner.
+            This privileged action will close the contract, disable dependent property dispatch readiness, notify the owner, and create server audit evidence.
           </Typography>
           
           <Stack spacing={2} sx={{ mt: 2 }}>
-            <TextField
-              fullWidth
-              label="Termination Settlement Amount (AED)"
-              type="number"
-              value={settlementAmount}
-              onChange={(e) => setSettlementAmount(e.target.value)}
-              placeholder="e.g. 5000"
-            />
+
             <TextField
               fullWidth
               required
-              label="Termination Reason"
+              label="Closure reason"
               multiline
               rows={3}
               value={terminationReason}
               onChange={(e) => setTerminationReason(e.target.value)}
-              placeholder="Please provide the detailed reason for termination..."
+              placeholder="Please provide the detailed reason for closing this contract..."
             />
           </Stack>
         </DialogContent>
@@ -321,9 +294,9 @@ export default function TransactionsPage() {
             onClick={handleTerminateContract} 
             variant="contained" 
             color="error" 
-            disabled={!terminationReason.trim()}
+            disabled={terminationReason.trim().length < 8}
           >
-            Confirm Termination
+            Confirm Contract Closure
           </Button>
         </DialogActions>
       </Dialog>
