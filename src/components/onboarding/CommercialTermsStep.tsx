@@ -189,6 +189,8 @@ const CommercialTermsStep: React.FC<{ onNext: () => void; onBack: () => void }> 
     const isAnnualPayment = selectedPaymentPlan === 'annual';
     const portfolioQuoteRows = Object.values(portfolioSummary.quoteResults || {});
     const portfolioAnnualTotal = Number(portfolioSummary.estimatedACV || 0);
+    const maintenanceAnnualTotal = Number(portfolioSummary.maintenanceAnnualTotal || 0);
+    const propertyManagementAnnualTotal = Number(portfolioSummary.propertyManagementAnnualTotal || 0);
     const selectedPaymentAmount = selectedPaymentPlan === 'monthly'
         ? portfolioQuoteRows.reduce((sum, row) => sum + Number(row.monthlyPayment || 0), 0)
         : selectedPaymentPlan === 'quarterly'
@@ -264,6 +266,9 @@ const CommercialTermsStep: React.FC<{ onNext: () => void; onBack: () => void }> 
                             <Box sx={{ textAlign: 'center', mb: 3 }}><Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: ar ? 0 : 2 }}>{t('onboarding.quote_est')}</Typography><Typography variant="h3" fontWeight="950" sx={{ color: '#FFF', mt: 1 }}>AED {formatAED(portfolioAnnualTotal)}</Typography><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)' }}>{t('onboarding.vat_excl')}</Typography></Box>
                             <Divider sx={{ my: 3, borderColor: 'rgba(255,255,255,0.1)' }} />
                             <Stack spacing={2} sx={{ mb: 4 }}>
+                                {maintenanceAnnualTotal > 0 && <Box sx={{ display: 'flex', justifyContent: 'space-between', flexDirection: isRTL ? 'row-reverse' : 'row', gap: 2 }}><Typography variant="body2" color="rgba(255,255,255,0.6)">{tx({ en: 'Maintenance annual subtotal', ar: 'الإجمالي السنوي للصيانة' }, ar)}</Typography><Typography variant="body2" fontWeight="900" color="#FFF">AED {formatAED(maintenanceAnnualTotal)}</Typography></Box>}
+                                {propertyManagementAnnualTotal > 0 && <Box sx={{ display: 'flex', justifyContent: 'space-between', flexDirection: isRTL ? 'row-reverse' : 'row', gap: 2 }}><Typography variant="body2" color="rgba(255,255,255,0.6)">{tx({ en: 'Property management annual fee', ar: 'الرسوم السنوية لإدارة العقار' }, ar)}</Typography><Typography variant="body2" fontWeight="900" color="#FFF">AED {formatAED(propertyManagementAnnualTotal)}</Typography></Box>}
+                                {(maintenanceAnnualTotal > 0 && propertyManagementAnnualTotal > 0) && <Box sx={{ display: 'flex', justifyContent: 'space-between', flexDirection: isRTL ? 'row-reverse' : 'row', gap: 2 }}><Typography variant="body2" color="rgba(255,255,255,0.6)">{tx({ en: 'Combined annual total', ar: 'الإجمالي السنوي المشترك' }, ar)}</Typography><Typography variant="body2" fontWeight="950" color={binThemeTokens.gold}>AED {formatAED(portfolioAnnualTotal)}</Typography></Box>}
                                 <Box sx={{ display: 'flex', justifyContent: 'space-between', flexDirection: isRTL ? 'row-reverse' : 'row', gap: 2 }}><Typography variant="body2" color="rgba(255,255,255,0.6)">{selectedPaymentLabel}</Typography><Typography variant="body2" fontWeight="900" color={binThemeTokens.gold}>AED {formatAED(selectedPaymentAmount)}</Typography></Box>
                                 <Box sx={{ display: 'flex', justifyContent: 'space-between', flexDirection: isRTL ? 'row-reverse' : 'row', gap: 2 }}><Typography variant="body2" color="rgba(255,255,255,0.6)">{t('onboarding.mobilization')}</Typography><Typography variant="body2" fontWeight="900" color="#FFF">AED {formatAED(portfolioAnnualTotal * 0.15)}</Typography></Box>
                                 <Divider sx={{ borderColor: 'rgba(255,255,255,0.08)' }} />
