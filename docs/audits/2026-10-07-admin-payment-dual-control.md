@@ -12,7 +12,7 @@ This repair implements Rashid's instruction to stabilize the app while hard clea
 | Legacy Admin-recorded evidence lacks a recorder | Approval cannot demonstrate a second reviewer | Fail closed with `DUAL_CONTROL_RECORDER_UNKNOWN`; re-record the evidence before separate review. |
 | A second MFA Finance Admin approves valid receipt evidence | No durable record of the separation of duties | Payment and approval audit bind recorder and approver; actual secure callable wrapper is exercised through activation, PDF storage and idempotent replays. |
 | Approval finishes while another receipt is uploading | Initial state check occurs before upload; the later batch can reopen an approved payment | Transaction compares fresh payment and contract update times with the pre-upload snapshots, aborting stale recording before any financial state or audit write. Uploaded evidence is retained. |
-| Callable returns structured error details | React may attempt to render an object | Payment approval, rejection and receipt repair render string details or the message. |
+| Callable returns structured error details | React may attempt to render an object | Payment approval, rejection, receipt repair, intake mutations, inspection evidence saving and portfolio completion render string details or the message. |
 | Production evidence runner records and approves | Same Founder MFA identity performs both operations | Separate Finance Admin completes real TOTP sign-in, SDK token/revocation verification, identity/role/factor checks and distinct UID validation. Both identities authenticate before Owner evidence records are reset. Approval and replay use the second session. |
 
 ## Validation at publication
