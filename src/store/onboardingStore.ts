@@ -105,6 +105,8 @@ export interface PortfolioSummary {
   totalMajlis: number;
   totalSqFt: number;
   estimatedACV: number;
+  maintenanceAnnualTotal: number;
+  propertyManagementAnnualTotal: number;
   recommendedTier: string;
   isMixedUsePortfolio: boolean;
   isSovereignPortfolio: boolean;
@@ -277,7 +279,7 @@ const defaultProperty: PropertyData = {
 
 const emptySummary = (): PortfolioSummary => ({
   totalProperties: 0, totalUnits: 0, totalRentable: 0, totalPersonal: 0, totalMajlis: 0,
-  totalSqFt: 0, estimatedACV: 0, recommendedTier: 'Premium', isMixedUsePortfolio: false, isSovereignPortfolio: false,
+  totalSqFt: 0, estimatedACV: 0, maintenanceAnnualTotal: 0, propertyManagementAnnualTotal: 0, recommendedTier: 'Premium', isMixedUsePortfolio: false, isSovereignPortfolio: false,
 });
 
 const emptyProofDocuments = (): OnboardingState['proofDocuments'] => ({
@@ -384,6 +386,20 @@ export const useOnboardingStore = create<OnboardingState>()(
           quoteResults[property.id] = calculatePropertyAnnualValue(property, propertyAddOns);
         }
         const estimatedACV = Object.values(quoteResults).reduce((total, quote) => total + Number(quote.annualTotal || 0), 0);
+        let maintenanceAnnualTotal = 0;
+        let propertyManagementAnnualTotal = 0;
+        properties.forEach((property) => {
+          const propertyAddOns = Array.isArray(property.selectedAddOns) ? property.selectedAddOns : (get().selectedAddOns || []);
+          const strategy = String(property.strategy || '').toLowerCase();
+          if (['pm_only', 'rent'].includes(strategy)) {
+            propertyManagementAnnualTotal += Number(calculatePropertyAnnualValue(property, propertyAddOns).annualTotal || 0);
+          } else if (['both', 'hybrid', 'combined'].includes(strategy)) {
+            maintenanceAnnualTotal += Number(calculatePropertyAnnualValue({ ...property, strategy: 'fm_only' }, propertyAddOns).annualTotal || 0);
+            propertyManagementAnnualTotal += Number(calculatePropertyAnnualValue({ ...property, strategy: 'pm_only' }, propertyAddOns).annualTotal || 0);
+          } else {
+            maintenanceAnnualTotal += Number(calculatePropertyAnnualValue(property, propertyAddOns).annualTotal || 0);
+          }
+        });
         const summary: PortfolioSummary = {
           totalProperties: properties.length,
           totalUnits: properties.reduce((total, property) => total + (property.units || 0), 0),
@@ -392,6 +408,8 @@ export const useOnboardingStore = create<OnboardingState>()(
           totalMajlis: properties.filter((property) => property.majlis).length,
           totalSqFt: properties.reduce((total, property) => total + (property.sqft || 0), 0),
           estimatedACV,
+          maintenanceAnnualTotal,
+          propertyManagementAnnualTotal,
           recommendedTier: 'Premium',
           isMixedUsePortfolio: properties.some((property) => property.propertyType === 'Mixed-Use Tower' || property.useType === 'Mixed'),
           isSovereignPortfolio: properties.some((property) => property.majlisType === 'government' || property.assetGrade === 'Sovereign' || isMosqueAsset(property)),
