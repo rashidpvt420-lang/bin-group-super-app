@@ -17,6 +17,8 @@ import {
   deploymentEvidencePath,
   gitSha,
   readJsonSafe,
+  sha256File,
+  upsertEvidenceRecord,
   validateDeploymentDocument,
 } from './lib/launch-honesty.mjs';
 import { computeValidatedArtifactDigest } from './lib/launch-gate-common.mjs';
@@ -651,6 +653,7 @@ export function validateHardClearanceProductionRevalidation(
 }
 
 export async function generateHardClearanceProductionRevalidation({ root = process.cwd() } = {}) {
+  const startedAt = new Date().toISOString();
   assertWorkflowContext(GENERATE_JOB);
   if (text(process.env.CONTROL_PLANE_SCOPE_VERIFIED) !== 'true') {
     throw new Error('CONTROL_PLANE_SCOPE_VERIFIED=true is required');
@@ -725,6 +728,43 @@ export async function generateHardClearanceProductionRevalidation({ root = proce
   const output = revalidationPath(root);
   mkdirSync(path.dirname(output), { recursive: true });
   writeFileSync(output, `${JSON.stringify(proof, null, 2)}\n`);
+
+  // The generic deployment evidence document is immutable provenance and may
+  // contain older verification timestamps. Hard clearance has just re-read the
+  // exact deployed bytes and re-verified Phone Auth/Admin MFA above, so record
+  // fresh hosting evidence from this execution instead of replaying stale
+  // deployment-verifier timestamps.
+  const deploymentArtifactPath = 'launch_package/production-deployment.json';
+  const deploymentArtifactHash = sha256File(path.join(root, deploymentArtifactPath));
+  const finishedAt = proof.verifiedAt;
+  for (const key of ['productionMainHosting', 'productionAdminHosting']) {
+    upsertEvidenceRecord(root, {
+      testName: key,
+      suiteName: 'hard-clearance-production-revalidation',
+      source: 'hard-clearance-production-revalidation:live-hosted-bytes',
+      executionGenerated: true,
+      exitCode: 0,
+      commitSha: releaseSha,
+      mainUrl: PRODUCTION.mainUrl,
+      adminUrl: PRODUCTION.adminUrl,
+      startedAt,
+      finishedAt,
+      passed: 1,
+      failed: 0,
+      skipped: 0,
+      artifactPath: deploymentArtifactPath,
+      artifactHash: deploymentArtifactHash,
+      deploymentStatus: 'passed',
+      projectId: PRODUCTION.projectId,
+      deployedCommitSha: releaseSha,
+      httpChecksOk: true,
+      bundleVerified: true,
+      proof: `Fresh hard-clearance live-byte verification for ${key} at ${finishedAt}.`,
+      hardLaunchClaim: false,
+    });
+  }
+  console.log('[hard-clearance-revalidation] refreshed production hosting evidence from exact live bytes');
+
   console.log(`[hard-clearance-revalidation] PASS — release=${releaseSha} control_plane=${controlPlaneSha}`);
   console.log(`[hard-clearance-revalidation] wrote ${output}`);
   return proof;

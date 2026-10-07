@@ -99,9 +99,15 @@ test('assignment says assigned (not accepted) and alerts admins; completion aler
   assert.equal(adminAssigned.length, 1);
   assert.match(adminAssigned[0].body, /Ali Hassan was assigned to #/);
 
+  // Accepting the same assignment must not notify the Owner a second time (#1685: Technician
+  // Assigned is delivered once per assignment) and must not re-alert admins.
+  const ownerBeforeAccept = (await notificationsFor(OWNER)).length;
   await transition({ status: 'ACCEPTED' });
-  const confirmed = (await notificationsFor(OWNER)).filter((item) => /Technician Confirmed/.test(item.title));
-  assert.equal(confirmed.length, 1);
+  assert.equal((await notificationsFor(OWNER)).length, ownerBeforeAccept, 'accept does not double-notify the owner');
+  assert.equal(
+    (await notificationsFor(ADMIN)).filter((item) => item.type === 'TICKET_ASSIGNED').length, 1,
+    'accept does not re-alert admins',
+  );
 
   await transition({ status: 'COMPLETED_PENDING_APPROVAL' });
   await transition({ status: 'COMPLETED' });

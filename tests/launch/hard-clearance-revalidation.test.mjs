@@ -4,6 +4,7 @@ import { EventEmitter } from 'node:events';
 import { readFile } from 'node:fs/promises';
 import { Readable } from 'node:stream';
 import test from 'node:test';
+import { runInNewContext } from 'node:vm';
 import {
   acceptedCleanUrlsRedirect,
   cleanUrlsEquivalentUrl,
@@ -49,6 +50,7 @@ test('every dual-SHA evidence scope accepts the reviewed Phase 1 final-decision 
 
 test('hard clearance freshly revalidates production state without moving the frozen pilot release', async () => {
   const workflow = await read('.github/workflows/live-role-smoke.yml');
+  const revalidationSource = await read('scripts/hard-clearance-production-revalidation.mjs');
 
   assert.match(workflow, /hard-clearance-production-revalidation:/);
   assert.match(workflow, /name: Freshly revalidate protected production state/);
@@ -77,6 +79,7 @@ test('hard clearance freshly revalidates production state without moving the fro
     'scripts/publish-operational-application-evidence.mjs',
     'scripts/publish-operational-provider-evidence.mjs',
     'scripts/resolve-admin-app-check-site-key.mjs',
+    'scripts/resolve-live-pilot-window.mjs',
     'scripts/run-frozen-release-evidence.mjs',
     'scripts/verify-ai-live-evidence.mjs',
     'scripts/verify-hard-launch-approval.mjs',
@@ -106,7 +109,10 @@ test('hard clearance freshly revalidates production state without moving the fro
   assert.match(workflow, /REQUESTED_RUN_ID: \$\{\{ inputs\.live_evidence_run_id \}\}/);
   assert.match(workflow, /\.head_sha == \$sha/);
   assert.match(workflow, /\.path == "\.github\/workflows\/live-role-smoke\.yml"/);
+  assert.match(workflow, /actions\/runs\/\$run_id\/attempts\/1/);
+  assert.match(workflow, /\.run_attempt == 1/);
   assert.match(workflow, /\.conclusion == "success"/);
+  assert.match(workflow, /\.created_at \| fromdateiso8601/);
   assert.match(workflow, /\.expired == false/);
   assert.match(workflow, /Expected exactly one successful live-evidence run with the exact frozen-release artifact/);
   assert.match(workflow, /live_evidence_run_id: \$\{\{ steps\.resolve_live_evidence\.outputs\.run_id \}\}/);
@@ -118,8 +124,28 @@ test('hard clearance freshly revalidates production state without moving the fro
     workflow.indexOf('  hard-public-launch-clearance:'),
   );
   assert.match(revalidationJob, /cp control-plane\/scripts\/resolve-admin-app-check-site-key\.mjs release\/scripts\/resolve-admin-app-check-site-key\.mjs/);
+  const prepareMarker = 'Prepare frozen-release evidence for current production semantics';
+  const refreshMarker = 'Refresh role evidence without restarting the pilot';
+  assert.ok(revalidationJob.includes(prepareMarker), 'clearance must apply reviewed frozen-release evidence preparation');
+  assert.ok(revalidationJob.includes(refreshMarker), 'clearance must execute fresh role evidence');
+  assert.match(revalidationJob, /node scripts\/apply-five-role-business-evidence-fixes\.mjs/);
+  assert.match(revalidationJob, /node scripts\/patch-phase21-postdeploy-evidence\.mjs/);
+  assert.match(revalidationJob, /node scripts\/prepare-protected-business-fixtures\.mjs/);
+  assert.match(revalidationJob, /node scripts\/run-critical-evidence\.mjs --suite all-business/);
+  assert.match(revalidationJob, /node scripts\/run-critical-evidence\.mjs --suite launchAuditLive/);
+  assert.doesNotMatch(revalidationJob, /run-critical-evidence\.mjs --suite all-required/);
+  assert.ok(revalidationJob.indexOf(prepareMarker) > revalidationJob.indexOf('Restore frozen release evidence'));
+  assert.ok(revalidationJob.indexOf(refreshMarker) > revalidationJob.indexOf(prepareMarker));
+  assert.ok(revalidationJob.indexOf(refreshMarker) < revalidationJob.indexOf('Generate fresh production hard-clearance revalidation'));
+  assert.doesNotMatch(revalidationJob, /run:.*(?:seed-e2e-auth|write-pilot-incident-report|start-controlled-pilot)/);
+  const hardJob = workflow.slice(workflow.indexOf('  hard-public-launch-clearance:'));
+  assert.match(hardJob, /cp control-plane\/scripts\/resolve-live-pilot-window\.mjs release\/scripts\/resolve-live-pilot-window\.mjs/);
   assert.match(workflow, /cp control-plane\/scripts\/verify-operational-readiness\.mjs release\/scripts\/verify-operational-readiness\.mjs/);
   assert.match(workflow, /CONTROL_PLANE_COMMIT_SHA: \$\{\{ github\.sha \}\}[\s\S]*?run: node scripts\/verify-operational-readiness\.mjs/);
+  assert.match(revalidationSource, /upsertEvidenceRecord/);
+  assert.match(revalidationSource, /productionMainHosting/);
+  assert.match(revalidationSource, /productionAdminHosting/);
+  assert.match(revalidationSource, /live-hosted-bytes/);
   const authIndex = revalidationJob.indexOf('Authenticate Google Cloud');
   const installIndex = revalidationJob.indexOf('Install frozen-release dependencies');
   const resolveIndex = revalidationJob.indexOf('Resolve canonical Admin Enterprise App Check config');
@@ -140,7 +166,6 @@ test('hard clearance freshly revalidates production state without moving the fro
 
   // The authorization job must no longer demand that the frozen release SHA
   // equal the newer, narrowly reviewed clearance-control commit.
-  const hardJob = workflow.slice(workflow.indexOf('  hard-public-launch-clearance:'));
   assert.doesNotMatch(hardJob, /TARGET_SHA[^\n]*CURRENT_SHA|TARGET_SHA\" != \"\$CURRENT_SHA/);
 });
 
@@ -167,6 +192,7 @@ test('operational evidence keeps current main as control plane while binding pro
     'scripts/publish-operational-application-evidence.mjs',
     'scripts/publish-operational-provider-evidence.mjs',
     'scripts/resolve-admin-app-check-site-key.mjs',
+    'scripts/resolve-live-pilot-window.mjs',
     'scripts/run-frozen-release-evidence.mjs',
     'scripts/verify-ai-live-evidence.mjs',
     'scripts/verify-hard-launch-approval.mjs',
@@ -828,12 +854,17 @@ test('hard clearance keeps physical-device gates fail-closed unless exact review
   // Physical reconciliation is conditional, exact-gate and fail-closed.
   assert.match(reconciler, /const physicalGateSources = \[/);
   assert.match(reconciler, /validPhysicalRecord\(candidate, mapping\.sourceGateId, mapping\.devicePattern\)/);
-  assert.match(reconciler, /text\(record\.releaseSha\)\.toLowerCase\(\) !== releaseSha/);
-  assert.match(reconciler, /text\(record\.commitSha\)\.toLowerCase\(\) !== releaseSha/);
+  assert.match(reconciler, /readExactReleaseEvidence\('releaseSha'\)/);
+  assert.match(reconciler, /readExactReleaseEvidence\('commitSha'\)/);
+  assert.match(reconciler, /observedReleaseSha && observedReleaseSha !== releaseSha/);
+  assert.match(reconciler, /observedCommitSha && observedCommitSha !== releaseSha/);
+  assert.match(reconciler, /exact-release-binding-missing/);
   assert.match(reconciler, /text\(record\.evidenceLayer\)\.toLowerCase\(\) !== 'physical_device'/);
   assert.match(reconciler, /if \(missingPhysicalGates\.length\)/);
   assert.match(reconciler, /physical-device evidence is still incomplete/);
   assert.match(reconciler, /requiredDeviceGates\.technicianGpsTracking/);
+  assert.match(reconciler, /materializeProtectedTechnicianGate/);
+  assert.match(reconciler, /protected-technician-operational-evidence/);
   assert.match(reconciler, /real protected technician GPS mission proof is missing/);
   assert.match(reconciler, /physicalDeviceGatesModified: reconciledPhysicalGates\.length > 0/);
 
@@ -844,6 +875,21 @@ test('hard clearance keeps physical-device gates fail-closed unless exact review
   // This repair consumes the existing pilot and never rewrites/restarts it.
   assert.doesNotMatch(reconciler, /pilot-start\.lock\.json/);
   assert.doesNotMatch(workflow, /restart.*24-hour|reset.*pilot/i);
+});
+
+test('owner-only physical evidence rebinding preserves manual evidence and requires deployment continuity', async () => {
+  const workflow = await read('.github/workflows/technician-physical-evidence.yml');
+  assert.match(workflow, /rebind-physical-current/);
+  assert.match(workflow, /A later successful Firebase Production Deploy exists/);
+  assert.match(workflow, /metadataReboundByWorkflow: true/);
+  assert.match(workflow, /deploymentContinuityVerified: true/);
+  assert.match(workflow, /source: 'admin-manual-evidence'/);
+  assert.match(workflow, /executionGenerated: false/);
+  assert.match(workflow, /hardLaunchClaim: false/);
+  assert.match(workflow, /No genuine physical-device record exists for:/);
+  assert.match(workflow, /createdMs >= deployCompletedMs/);
+  assert.match(workflow, /evidenceLayer\)\.toLowerCase\(\) === 'physical_device'/);
+  assert.match(workflow, /github\.event\.comment\.user\.login == github\.repository_owner/);
 });
 
 test('all operational evidence workflows allow the reviewed hard-clearance reconciliation controls', async () => {
@@ -865,12 +911,16 @@ test('hard clearance promotes only exact-SHA reviewed physical evidence and requ
 
   assert.match(reconciler, /source\)\.toLowerCase\(\) !== 'admin-manual-evidence'/);
   assert.match(reconciler, /evidenceLayer\)\.toLowerCase\(\) !== 'physical_device'/);
-  assert.match(reconciler, /text\(record\.releaseSha\)\.toLowerCase\(\) !== releaseSha/);
-  assert.match(reconciler, /text\(record\.commitSha\)\.toLowerCase\(\) !== releaseSha/);
+  assert.match(reconciler, /readExactReleaseEvidence\('releaseSha'\)/);
+  assert.match(reconciler, /readExactReleaseEvidence\('commitSha'\)/);
+  assert.match(reconciler, /observedReleaseSha && observedReleaseSha !== releaseSha/);
+  assert.match(reconciler, /observedCommitSha && observedCommitSha !== releaseSha/);
+  assert.match(reconciler, /exact-release-binding-missing/);
   assert.match(reconciler, /record\.executionGenerated !== false/);
   assert.match(reconciler, /record\.hardLaunchClaim !== false/);
   assert.match(reconciler, /requiredDeviceGates\.technicianGpsTracking/);
   assert.match(reconciler, /technicianGpsAndDeniedFallback/);
+  assert.match(reconciler, /materializeProtectedTechnicianGate/);
   assert.match(reconciler, /real protected technician GPS mission proof is missing/);
   assert.match(reconciler, /evidenceType\) === 'physical-device-report'/);
   assert.match(reconciler, /verifiedBy\) === 'workflow'/);
@@ -909,4 +959,182 @@ test('UAE data position records actual regions and never claims UAE-onshore host
   assert.match(reconciler, /OpenAI:/);
   assert.match(reconciler, /Data Retention/);
   assert.match(reconciler, /Request deletion of your data/);
+});
+
+async function runPhysicalReconciliationFixture(records = [], technicianProof = null) {
+  const source = (await read('scripts/reconcile-hard-public-evidence.mjs'))
+    .replace(/^#!.*\n/, '')
+    .replace(/^import[\s\S]*?from ['"][^'"]+['"];\n/gm, '');
+  const gateDocument = await read('launch_package/launch-proof-gates.json');
+  const releaseSha = 'b'.repeat(40);
+  const controlPlaneSha = 'c'.repeat(40);
+  const files = new Map();
+  const environment = {
+    GITHUB_ACTIONS: 'true',
+    GITHUB_REPOSITORY: 'rashidpvt420-lang/bin-group-super-app',
+    GITHUB_REF: 'refs/heads/main',
+    GITHUB_WORKFLOW: 'Live Role Smoke Tests',
+    HARD_LAUNCH_EXPECTED_SHA: releaseSha,
+    CLEARANCE_CONTROL_PLANE_SHA: controlPlaneSha,
+  };
+  const docs = records.map((record, index) => ({ id: `proof-${index}`, data: () => record }));
+  const pageQuery = (matchingDocs, offset = 0) => ({
+    get: async () => ({ docs: matchingDocs.slice(offset, offset + 500) }),
+    startAfter: (last) => pageQuery(matchingDocs, matchingDocs.indexOf(last) + 1),
+  });
+  const db = {
+    collection: () => ({
+      where: (fieldName, operator, expectedValue) => {
+        assert.equal(operator, '==');
+        const matchingDocs = docs.filter((doc) =>
+          String(doc.data()?.[fieldName] || '').toLowerCase() === String(expectedValue || '').toLowerCase()
+        );
+        return { limit: () => pageQuery(matchingDocs) };
+      },
+    }),
+    doc: () => ({ get: async () => ({ get: () => technicianProof }) }),
+  };
+  const sandbox = {
+    process: { env: environment, cwd: () => '/fixture' },
+    path: (await import('node:path')).default,
+    console: { log() {} },
+    admin: { firestore: () => db, app: () => ({ options: { credential: {
+      getAccessToken: async () => ({ access_token: 'fixture' }),
+    } } }) },
+    fetch: async () => ({ ok: true, json: async () => ({ locationId: 'fixture-region' }) }),
+    initializeFirebaseAdmin() {},
+    resolveFirebaseAdminProjectId: () => 'bin-group-57c60',
+    gitSha: () => releaseSha,
+    evidencePath: () => 'evidence',
+    deploymentEvidencePath: () => 'deployment',
+    readJsonSafe: (file) => file.endsWith('launch-status.json') ? {
+      scope: 'hard-public-launch', commitSha: releaseSha, automationOk: true, pilotEligible: true,
+      checks: [{ name: 'firebaseDeploymentReadiness', ok: true }],
+    } : file.endsWith('operational-readiness.json') ? {
+      controlPlaneCommitSha: controlPlaneSha,
+      gates: {
+        aiProviderHealth: { status: 'passed', sourceSystem: 'Gemini/OpenAI', hardLaunchClaim: false },
+        appCheckEnforcement: { status: 'passed', hardLaunchClaim: false },
+      },
+    } : {},
+    validateDeploymentDocument: () => [],
+    evaluatePilotEligibility: () => ({ pilotEligible: true, missing: [], invalid: [] }),
+    validateOperationalReadinessReport: () => [],
+    readFileSync: (file) => file.endsWith('launch-proof-gates.json') ? gateDocument
+      : file.endsWith('index.ts') ? "setGlobalOptions({ region: 'fixture-region'"
+      : 'property owners tenants Photos/Media: Device Data: Firebase (Google): Google Maps: OpenAI: Data Retention Request deletion of your data',
+    mkdirSync() {},
+    writeFileSync: (file, content) => files.set(file, content),
+    statSync: (file) => ({ size: files.get(file).length }),
+    sha256File: () => 'a'.repeat(64),
+  };
+  let error;
+  try { await runInNewContext(`(async () => { ${source}\n })()`, sandbox); }
+  catch (caught) { error = caught; }
+  if (!files.has('/fixture/launch_package/hard-clearance-physical-blockers.json')) throw error;
+  return {
+    error,
+    files,
+    report: JSON.parse(files.get('/fixture/launch_package/hard-clearance-physical-blockers.json')),
+  };
+}
+
+const physicalFixtureRecord = (gateId, overrides = {}) => ({
+  gateId, status: 'passed', evidenceLayer: 'physical_device', source: 'admin-manual-evidence',
+  executionGenerated: false, hardLaunchClaim: false, releaseSha: 'b'.repeat(40), commitSha: 'b'.repeat(40),
+  testerName: 'Fixture tester', proofRef: 'fixture proof', recordedBy: 'fixture-admin',
+  createdAt: new Date().toISOString(), device: 'Android physical device', ...overrides,
+});
+
+test('missing physical proofs produce eleven actionable blockers and never publish clearance', async () => {
+  const result = await runPhysicalReconciliationFixture();
+  assert.match(result.error.message, /physical-device evidence is still incomplete/);
+  assert.equal(result.report.status, 'blocked');
+  assert.equal(result.report.gates.length, 11);
+  const technician = result.report.gates.find((gate) => gate.commandCenterGateId === 'technicianGpsAndDeniedFallback');
+  assert.equal(technician.reason, 'protected-technician-mission-proof-missing-or-invalid');
+  assert.equal(result.report.gates.filter((gate) => gate.reason === 'no-current-release-record').length, 10);
+  assert.equal(result.report.hardLaunchClaim, false);
+  assert.equal(result.files.has('/fixture/launch_package/launch-proof-gates.json'), false);
+});
+
+test('invalid manual metadata and missing protected technician proof remain separate blockers', async () => {
+  const result = await runPhysicalReconciliationFixture([
+    physicalFixtureRecord('googleMaps', { evidenceLayer: 'hosted' }),
+  ]);
+  const googleMaps = result.report.gates.find((gate) => gate.commandCenterGateId === 'googleMaps');
+  assert.equal(googleMaps.reason, 'current-release-records-do-not-satisfy-physical-validation');
+  assert.deepEqual(googleMaps.invalidReasons, ['evidence-layer-not-physical-device']);
+  assert.equal(result.report.gates.find((gate) => gate.commandCenterGateId === 'technicianGpsAndDeniedFallback').reason,
+    'protected-technician-mission-proof-missing-or-invalid');
+  assert.equal(result.files.has('/fixture/launch_package/launch-proof-gates.json'), false);
+});
+
+test('protected exact-SHA technician physical proof satisfies technician GPS gate without a redundant manual record', async () => {
+  const result = await runPhysicalReconciliationFixture([], {
+    status: 'passed',
+    releaseCommitSha: 'b'.repeat(40),
+    commitSha: 'b'.repeat(40),
+    controlPlaneCommitSha: 'c'.repeat(40),
+    evidenceType: 'physical-device-report',
+    verifiedBy: 'workflow',
+    observedAt: new Date().toISOString(),
+    evidenceReference: 'https://github.com/rashidpvt420-lang/bin-group-super-app/actions/runs/123#technicianPhysicalGpsEvidence',
+    sourceWorkflowRunId: '123',
+    sourceSystem: 'Firebase technician physical device GPS lifecycle and Cloud Storage',
+    artifactHash: 'sha256:' + 'a'.repeat(64),
+  });
+  const technician = result.report.gates.find((gate) => gate.commandCenterGateId === 'technicianGpsAndDeniedFallback');
+  assert.equal(technician.status, 'passed');
+  assert.equal(technician.source, 'protected-technician-operational-evidence');
+  assert.equal(result.report.status, 'blocked');
+  assert.equal(result.files.has('/fixture/launch_package/launch-proof-gates.json'), false);
+});
+
+test('complete exact-SHA physical proofs preserve the successful reconciliation path', async () => {
+  const gates = ['firebaseCloudMessaging', 'googleMaps', 'phase1Payments', 'androidPwaSmoke', 'iosPwaSmoke',
+    'pdfMobileDownload', 'arabicRtlAllCoreScreens',
+    'everyButtonWritesFirestoreOrStorage', 'logoutAllDashboards'];
+  const result = await runPhysicalReconciliationFixture(gates.map((gate) => physicalFixtureRecord(gate,
+    gate === 'iosPwaSmoke' ? { device: 'iPhone physical device' } : {})), {
+    status: 'passed', releaseCommitSha: 'b'.repeat(40), commitSha: 'b'.repeat(40),
+    controlPlaneCommitSha: 'c'.repeat(40), evidenceType: 'physical-device-report', verifiedBy: 'workflow',
+    observedAt: new Date().toISOString(),
+    evidenceReference: 'https://github.com/rashidpvt420-lang/bin-group-super-app/actions/runs/123#technicianPhysicalGpsEvidence',
+    sourceWorkflowRunId: '123',
+    sourceSystem: 'Firebase technician physical device GPS lifecycle and Cloud Storage',
+    artifactHash: 'sha256:' + 'a'.repeat(64),
+  });
+  assert.equal(result.error, undefined);
+  assert.equal(result.report.status, 'passed');
+  assert.equal(result.report.gates.filter((gate) => gate.status === 'passed').length, 11);
+  assert.equal(result.report.hardLaunchClaim, false);
+  assert.equal(result.files.has('/fixture/launch_package/launch-proof-gates.json'), true);
+});
+
+test('legacy exact commitSha-only physical proof is accepted without weakening exact-release binding', async () => {
+  const record = physicalFixtureRecord('googleMaps', { releaseSha: undefined, commitSha: 'b'.repeat(40) });
+  const result = await runPhysicalReconciliationFixture([record]);
+  const gate = result.report.gates.find((item) => item.commandCenterGateId === 'googleMaps');
+  assert.equal(gate.status, 'passed');
+  assert.equal(result.report.status, 'blocked');
+});
+
+test('conflicting releaseSha is rejected even when legacy commitSha matches', async () => {
+  const record = physicalFixtureRecord('googleMaps', { releaseSha: 'd'.repeat(40), commitSha: 'b'.repeat(40) });
+  const result = await runPhysicalReconciliationFixture([record]);
+  const gate = result.report.gates.find((item) => item.commandCenterGateId === 'googleMaps');
+  assert.equal(gate.status, 'blocked');
+  assert.ok(gate.invalidReasons.includes('release-sha-mismatch'));
+});
+
+test('physical proofs after the first 500 records are still considered for clearance', async () => {
+  const records = Array.from({ length: 500 }, () => physicalFixtureRecord('googleMaps', {
+    source: 'github-actions', executionGenerated: true, evidenceLayer: 'hosted',
+  }));
+  records.push(physicalFixtureRecord('googleMaps'));
+  const result = await runPhysicalReconciliationFixture(records);
+  assert.equal(result.report.gates.find((gate) => gate.commandCenterGateId === 'googleMaps').status, 'passed');
+  assert.equal(result.report.status, 'blocked');
+  assert.equal(result.files.has('/fixture/launch_package/launch-proof-gates.json'), false);
 });

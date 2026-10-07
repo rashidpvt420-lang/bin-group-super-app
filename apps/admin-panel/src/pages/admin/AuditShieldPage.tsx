@@ -99,11 +99,12 @@ export default function AuditShieldPage() {
                         <Typography variant="caption" sx={{ color: '#64748b' }}>Real-time cryptographic verification of forensic evidence chains.</Typography>
                     </Box>
                     <Box sx={{ display: 'flex', gap: 2 }}>
-                        <Button variant="outlined" sx={{ borderRadius: 2, borderColor: '#3b82f6', color: '#3b82f6', fontWeight: 900 }}>
-                             Verify Hashes
+                        {/* No hash-verification or bundle-export action exists yet; these were clickable no-ops. */}
+                        <Button variant="outlined" disabled title="Hash verification is not available in the panel yet" sx={{ borderRadius: 2, fontWeight: 900 }}>
+                             Verify hashes (not available yet)
                         </Button>
-                        <Button variant="contained" sx={{ borderRadius: 2, bgcolor: '#10b981', '&:hover': { bgcolor: '#059669' }, fontWeight: 900 }}>
-                            Export Bundle
+                        <Button variant="outlined" disabled title="Evidence bundle export is not available in the panel yet" sx={{ borderRadius: 2, fontWeight: 900 }}>
+                            Export bundle (not available yet)
                         </Button>
                     </Box>
                 </Box>
