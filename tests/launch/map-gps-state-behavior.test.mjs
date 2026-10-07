@@ -302,7 +302,8 @@ test('tracking state is published only after browser watch installation succeeds
   const failureIndex = liveTrackingSource.indexOf("status: 'WATCH_INSTALL_FAILED'", installIndex);
   const publishIndex = liveTrackingSource.indexOf('_state.activeTicketId = ticketId', failureIndex);
   assert.ok(installIndex >= 0 && failureIndex > installIndex && publishIndex > failureIndex);
-  assert.match(liveTrackingSource, /const trackingSessionId = createTrackingSessionId\(\)/);
+  assert.match(liveTrackingSource, /const trackingSessionId = readReusableTrackingSessionId\(technicianUid, ticketId\) \|\| createTrackingSessionId\(\)/);
+  assert.match(liveTrackingSource, /persistTrackingSession\(technicianUid, ticketId, trackingSessionId\)/);
   assert.match(liveTrackingSource, /const sessionId = trackingSessionId/);
   assert.match(liveTrackingSource, /_state\.watchId = installedWatchId/);
 });
