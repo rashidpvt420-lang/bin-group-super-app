@@ -10,6 +10,8 @@ const { admin, db, lib, createUser, clearFirestore, call, expectHttpsError } = r
 
 const { adminRecordOwnerMobilizationPaymentEvidence } = lib('inspectionFirstOwnerOnboarding.js');
 const { adminApprovePayment } = lib('paymentTransactionApproval.js');
+const { createOwnerPaymentTransaction } = lib('contractActivation.js');
+const { adminRejectPayment } = lib('paymentTransactionApproval.js');
 const dualControl = lib('paymentDualControl.js');
 const { adminApprovePayment: secureApprovePayment } = lib('securePaymentApproval.js');
 // The deployed adminApprovePayment (securePaymentApproval.ts) runs the MFA and portfolio
@@ -24,7 +26,9 @@ const DUAL_CONTROL = /Dual control/;
 
 let financeA;
 let financeB;
+let ownerActor;
 test.before(async () => {
+  ownerActor = await createUser(OWNER, { role: 'owner' });
   financeA = await createUser('finance_d5_a', { role: 'finance_admin' }, { tokenExtra: MFA });
   financeB = await createUser('finance_d5_b', { role: 'finance_admin' }, { tokenExtra: MFA });
 });
@@ -206,6 +210,7 @@ test('deployed Finance MFA wrapper allows a distinct reviewer to activate exactl
   const intakeId = crypto.randomUUID();
   await seedApprovable(intakeId);
   await call(adminRecordOwnerMobilizationPaymentEvidence, financeA, evidence(intakeId));
+  assert.equal((await db.doc(`intake_submissions/${intakeId}`).get()).get('ownerOnboardingState'), 'PAYMENT_EVIDENCE_PENDING_APPROVAL');
   const refusal = await expectHttpsError(call(secureApprovePayment, financeA, { paymentId: intakeId }), 'failed-precondition');
   assert.equal(refusal.details?.reason, 'DUAL_CONTROL_SAME_ADMIN');
   const result = await call(secureApprovePayment, financeB, { paymentId: intakeId });
@@ -215,6 +220,7 @@ test('deployed Finance MFA wrapper allows a distinct reviewer to activate exactl
   assert.equal(payment.paymentDualControl.evidenceRecordedBy, financeA.uid);
   assert.equal(payment.paymentDualControl.approvedBy, financeB.uid);
   assert.equal(payment.paymentVerified, true);
+  assert.equal((await db.doc(`intake_submissions/${intakeId}`).get()).get('ownerOnboardingState'), 'ACTIVE');
   assert.equal((await db.doc(`contracts/${intakeId}`).get()).get('status'), 'ACTIVE');
   const replay = await call(secureApprovePayment, financeB, { paymentId: intakeId });
   assert.equal(replay.idempotent, true);
@@ -244,4 +250,137 @@ test('an upload cannot reopen a payment approved while receipt storage was in pr
   assert.equal(payment.status, 'APPROVED');
   assert.equal(payment.paymentVerified, true);
   assert.equal(payment.paymentEvidenceRecordedBy, undefined);
+});
+
+
+test('receipt recording refuses an application changed during storage without changing payment evidence', async () => {
+  const intakeId = crypto.randomUUID();
+  await seedFinalSigned(intakeId);
+  const prototype = Object.getPrototypeOf(admin.storage().bucket().file('fixture'));
+  const original = prototype.save;
+  prototype.save = async function (...args) {
+    const result = await original.apply(this, args);
+    await db.doc(`intake_submissions/${intakeId}`).set({ status: 'REJECTED', ownerOnboardingState: 'REJECTED' }, { merge: true });
+    return result;
+  };
+  try { await expectHttpsError(call(adminRecordOwnerMobilizationPaymentEvidence, financeA, evidence(intakeId)), 'aborted'); }
+  finally { prototype.save = original; }
+  const payment = (await db.doc(`payment_transactions/${intakeId}`).get()).data();
+  assert.equal(payment.status, 'AWAITING_15_PERCENT_PAYMENT');
+  assert.equal(payment.paymentEvidenceRecordedBy, undefined);
+  assert.equal((await db.doc(`intake_submissions/${intakeId}`).get()).get('ownerOnboardingState'), 'REJECTED');
+  assert.equal((await auditRows(intakeId, 'RECORD_OWNER_15_PERCENT_PAYMENT_EVIDENCE')).length, 0);
+});
+
+async function ownerReceipt(paymentId, label = 'first') {
+  const bytes = Buffer.from(`%PDF-1.4 Owner receipt ${label}`);
+  const hash = crypto.createHash('sha256').update(bytes).digest('hex');
+  const storagePath = `payment-references/owners/${OWNER}/${paymentId}/${label}.pdf`;
+  await admin.storage().bucket().file(storagePath).save(bytes, { resumable: false, metadata: {
+    contentType: 'application/pdf', metadata: { ownerUid: OWNER, paymentId, evidenceType: 'owner_payment_receipt', receiptHash: hash },
+  } });
+  const config = lib('paymentConfiguration.js').resolveActivePaymentConfiguration((await db.doc('system_payment_config/current').get()).data());
+  return { contractId: paymentId, method: 'CASH', paymentConfigVersion: config.version, paymentConfigHash: config.configHash, provider: 'MANUAL', currency: 'AED', amount: 258.75,
+    paymentReferenceId: `OWNER-RECEIPT-${label}`, paymentProofPath: storagePath,
+    paymentProofUrl: `https://example.invalid/${label}.pdf`, paymentProofHash: hash, paymentProofName: `${label}.pdf` };
+}
+
+function stubSignedUrl(context) {
+  const prototype = Object.getPrototypeOf(admin.storage().bucket().file('fixture'));
+  const original = prototype.getSignedUrl;
+  prototype.getSignedUrl = async function () { return [`https://example.invalid/${encodeURIComponent(this.name)}`]; };
+  context.after(() => { prototype.getSignedUrl = original; });
+}
+
+test('Owner first receipt on the canonical signed payment row reaches Finance approval and replays without reopening', async (context) => {
+  stubSignedUrl(context);
+  const id = crypto.randomUUID();
+  await seedApprovable(id);
+  await db.doc(`intake_submissions/${id}`).set({ ownerOnboardingState: 'OWNER_SIGNED_AWAITING_PAYMENT_EVIDENCE' }, { merge: true });
+  // Exact row emitted by the real final-signature handler.
+  await db.doc(`payment_transactions/${id}`).update({ status: 'PENDING_ADMIN_PAYMENT_VERIFICATION', paymentStatus: 'PENDING_ADMIN_PAYMENT_VERIFICATION', verificationState: 'ADMIN_PAYMENT_EVIDENCE_REQUIRED_AFTER_FINAL_OWNER_SIGNATURE', ownerFinalContractSigned: true });
+  const receipt = await ownerReceipt(id);
+  const result = await call(createOwnerPaymentTransaction, ownerActor, receipt);
+  assert.equal(result.idempotent, false);
+  const payment = (await db.doc(`payment_transactions/${id}`).get()).data();
+  assert.equal(payment.status, 'PENDING');
+  assert.equal(payment.paymentEvidenceRecordedBy, undefined);
+  assert.equal(payment.paymentProofHash, receipt.paymentProofHash);
+  assert.ok(payment.paymentProofGeneration);
+  assert.equal((await db.doc(`intake_submissions/${id}`).get()).get('ownerOnboardingState'), 'PAYMENT_EVIDENCE_PENDING_APPROVAL');
+  assert.equal((await call(createOwnerPaymentTransaction, ownerActor, receipt)).idempotent, true);
+  await expectHttpsError(call(secureApprovePayment, ownerActor, { paymentId: id }), 'permission-denied');
+  assert.equal((await call(secureApprovePayment, financeA, { paymentId: id })).status, 'SUCCESS');
+  assert.equal((await call(createOwnerPaymentTransaction, ownerActor, receipt)).idempotent, true);
+  assert.equal((await db.doc(`intake_submissions/${id}`).get()).get('ownerOnboardingState'), 'ACTIVE');
+  assert.equal((await db.doc(`payment_transactions/${id}`).get()).get('status'), 'APPROVED');
+  const logs = await db.collection('audit_logs').where('action', '==', 'OWNER_CREATE_PAYMENT_TRANSACTION').get();
+  assert.equal(logs.size, 1);
+  assert.equal(logs.docs[0].get('paymentProofHash'), receipt.paymentProofHash);
+});
+
+test('Owner replaces rejected Admin evidence with new receipt provenance, preserving the earlier proof and audit', async (context) => {
+  stubSignedUrl(context);
+  const id = crypto.randomUUID();
+  await seedApprovable(id);
+  await call(adminRecordOwnerMobilizationPaymentEvidence, financeA, evidence(id));
+  const previous = (await db.doc(`payment_transactions/${id}`).get()).data();
+  await call(adminRejectPayment, financeB, { paymentId: id, reason: 'Receipt needs correction' });
+  const receipt = await ownerReceipt(id, 'replacement');
+  await call(createOwnerPaymentTransaction, ownerActor, receipt);
+  const payment = (await db.doc(`payment_transactions/${id}`).get()).data();
+  assert.equal(payment.paymentEvidenceRecordedBy, undefined);
+  assert.equal(payment.paymentProofEvidence.recordedBy, undefined);
+  assert.equal(payment.receiptPath, receipt.paymentProofPath);
+  assert.equal(payment.paymentProofEvidence.receiptHash, receipt.paymentProofHash);
+  assert.equal(dualControl.paymentDualControlViolation(payment, financeA.uid), null);
+  assert.equal((await admin.storage().bucket().file(previous.paymentProofPath).exists())[0], true);
+  assert.equal((await auditRows(id, 'RECORD_OWNER_15_PERCENT_PAYMENT_EVIDENCE')).length, 1);
+  const replacementAudit = await db.collection('audit_logs').where('action', '==', 'OWNER_RESUBMIT_PAYMENT_TRANSACTION').get();
+  assert.equal(replacementAudit.size, 1);
+  assert.deepEqual(replacementAudit.docs[0].get('previousPaymentProof'), { storagePath: previous.paymentProofPath, receiptHash: previous.paymentProofHash, generation: previous.paymentProofGeneration, recordedBy: financeA.uid });
+  assert.equal((await call(secureApprovePayment, financeA, { paymentId: id })).status, 'SUCCESS');
+});
+
+test('Owner evidence cannot bypass inspection lifecycle or a changed signature, or mutate another Owner contract', async () => {
+  const id = crypto.randomUUID();
+  await seedApprovable(id);
+  const receipt = await ownerReceipt(id);
+  await db.doc(`intake_submissions/${id}`).set({ ownerOnboardingState: 'FINAL_QUOTE_AWAITING_OWNER_SIGNATURE' }, { merge: true });
+  await expectHttpsError(call(createOwnerPaymentTransaction, ownerActor, receipt), 'failed-precondition');
+  assert.equal((await db.doc(`payment_transactions/${id}`).get()).get('status'), 'AWAITING_15_PERCENT_PAYMENT');
+  const other = await createUser('other_owner_d5', { role: 'owner' });
+  await expectHttpsError(call(createOwnerPaymentTransaction, other, receipt), 'permission-denied');
+  await db.doc(`intake_submissions/${id}`).set({ ownerOnboardingState: 'OWNER_SIGNED_AWAITING_PAYMENT_EVIDENCE' }, { merge: true });
+  const original = db.runTransaction;
+  db.runTransaction = async function (...args) {
+    await db.doc(`contracts/${id}`).update({ ownerSigned: false, signatureState: { ownerSigned: false } });
+    return original.apply(this, args);
+  };
+  try { await expectHttpsError(call(createOwnerPaymentTransaction, ownerActor, receipt), 'aborted'); }
+  finally { db.runTransaction = original; }
+  assert.equal((await db.doc(`payment_transactions/${id}`).get()).get('status'), 'AWAITING_15_PERCENT_PAYMENT');
+  assert.equal((await db.collection('audit_logs').get()).size, 0);
+});
+
+test('Finance rejects an unknown recorded lifecycle before repairing any financial document', async () => {
+  const id = crypto.randomUUID();
+  await seedApprovable(id);
+  await call(adminRecordOwnerMobilizationPaymentEvidence, financeA, evidence(id));
+  await db.doc(`intake_submissions/${id}`).set({ ownerOnboardingState: 'UNKNOWN_APPROVED' }, { merge: true });
+  await expectHttpsError(call(adminApprovePayment, financeB, { paymentId: id }), 'failed-precondition');
+  assert.equal((await db.collection('invoices').get()).size, 0);
+  assert.equal((await db.doc(`contracts/${id}`).get()).get('invoiceId'), undefined);
+  assert.equal((await db.doc(`payment_transactions/${id}`).get()).get('paymentVerified'), undefined);
+});
+
+test('legacy Owner pending evidence derives a review state only from a signed inspection and bound receipt', async (context) => {
+  stubSignedUrl(context);
+  const id = crypto.randomUUID();
+  await seedApprovable(id);
+  const receipt = await ownerReceipt(id, 'legacy');
+  await call(createOwnerPaymentTransaction, ownerActor, receipt);
+  await db.doc(`intake_submissions/${id}`).update({ ownerOnboardingState: admin.firestore.FieldValue.delete() });
+  assert.equal((await call(secureApprovePayment, financeA, { paymentId: id })).status, 'SUCCESS');
+  assert.equal((await db.doc(`intake_submissions/${id}`).get()).get('ownerOnboardingState'), 'ACTIVE');
 });

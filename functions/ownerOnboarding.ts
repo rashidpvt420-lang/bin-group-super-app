@@ -2,6 +2,7 @@ import { FieldValue } from "firebase-admin/firestore";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 import { assertApplicationRecordsOwnedBy, assertNewApplicationIdAllowed } from "./ownerApplicationBinding";
+import { assertOwnerOnboardingActionAllowed, resolveOwnerOnboardingState, OWNER_ONBOARDING_LIFECYCLE_VERSION } from "./ownerOnboardingLifecycle";
 
 if (!admin.apps.length) {
   admin.initializeApp();
@@ -46,69 +47,70 @@ async function assertOwnerCompatible(uid: string) {
   return { existingSnap, existing, existingRole };
 }
 
-async function writeOwnerProfile(uid: string, email: string, fullName: string, mobile: string, intakeId: string, existing: Record<string, unknown>, existingSnapExists: boolean, existingRole: string | null) {
+async function writeOwnerProfile(uid: string, email: string, fullName: string, mobile: string, intakeId: string) {
   const userRef = db.collection("users").doc(uid);
   const ownerRef = db.collection("owners").doc(uid);
-  const now = serverTimestamp();
-  const ownerProfile: Record<string, unknown> = {
-    uid,
-    email,
-    displayName: fullName,
-    name: fullName,
-    phone: mobile,
-    mobile,
-    role: "owner",
-    status: "pending_property_application",
-    onboardingStatus: "FIVE_PAGE_APPLICATION_IN_PROGRESS",
-    dashboardLocked: true,
-    dashboardUnlocked: false,
-    adminApproved: false,
-    paymentVerified: false,
-    isAdmin: false,
-    admin: false,
-    onboardingSubmissionId: intakeId || existing.onboardingSubmissionId || "legacy",
-    updatedAt: now
-  };
-
-  if (!existingSnapExists) ownerProfile.createdAt = now;
-
-  const batch = db.batch();
-  batch.set(userRef, ownerProfile, { merge: true });
-  batch.set(ownerRef, { ...ownerProfile, ownerUid: uid, ownerEmail: email }, { merge: true });
-
-  if (intakeId) {
-    // F-1: never rebind another Owner's application. New references must be UUIDs or caller-scoped.
-    const intakeRef = db.collection("intake_submissions").doc(intakeId);
-    const intakeSnap = await intakeRef.get();
-    const intakeBinding = {
-      ownerUid: uid,
-      ownerEmail: email,
-      accountCreated: true,
-      accountVerified: true,
-      accountCreatedAt: now,
-      workflowVersion: "OWNER_FIVE_PAGE_INSPECTION_FIRST_V1",
+  await db.runTransaction(async (transaction) => {
+    const intakeRef = intakeId ? db.collection("intake_submissions").doc(intakeId) : null;
+    const [userSnap, intakeSnap, contractSnap, paymentSnap] = await Promise.all([
+      transaction.get(userRef),
+      intakeRef ? transaction.get(intakeRef) : Promise.resolve(null),
+      intakeId ? transaction.get(db.collection("contracts").doc(intakeId)) : Promise.resolve(null),
+      intakeId ? transaction.get(db.collection("payment_transactions").doc(intakeId)) : Promise.resolve(null),
+    ]);
+    const existing = userSnap.data() || {};
+    const existingRole = normalizeRole(existing.role || existing.userRole || existing.primaryRole);
+    if (existingRole && !["owner", "pending", "new", "guest"].includes(existingRole)) {
+      throw new HttpsError("failed-precondition", "This account is already registered for another role.");
+    }
+    if (normalizeRole(existing.status) === "active" || existing.dashboardUnlocked === true || (existing.adminApproved === true && existing.paymentVerified === true)) {
+      throw new HttpsError("failed-precondition", "This Owner account is already active. Continue from the Owner dashboard.");
+    }
+    if (intakeRef) {
+      if (intakeSnap?.exists) assertApplicationRecordsOwnedBy(uid, { intake: intakeSnap.data() || {} });
+      else assertNewApplicationIdAllowed(intakeId, uid);
+      assertOwnerOnboardingActionAllowed(resolveOwnerOnboardingState({
+        intake: intakeSnap?.exists ? intakeSnap.data() || {} : null,
+        contract: contractSnap?.exists ? contractSnap.data() || {} : null,
+        payment: paymentSnap?.exists ? paymentSnap.data() || {} : null,
+      }), ["DRAFT", "CHANGES_REQUESTED"], "Binding the Owner account to an application");
+    }
+    const now = serverTimestamp();
+    const ownerProfile: Record<string, unknown> = {
+      uid,
+      email,
+      displayName: fullName,
+      name: fullName,
+      phone: mobile,
+      mobile,
+      role: "owner",
+      status: "pending_property_application",
+      onboardingStatus: "FIVE_PAGE_APPLICATION_IN_PROGRESS",
+      dashboardLocked: true,
+      dashboardUnlocked: false,
+      adminApproved: false,
+      paymentVerified: false,
+      isAdmin: false,
+      admin: false,
+      onboardingSubmissionId: intakeId || existing.onboardingSubmissionId || "legacy",
       updatedAt: now
     };
-    if (intakeSnap.exists) {
-      assertApplicationRecordsOwnedBy(uid, { intake: intakeSnap.data() || {} });
-      batch.set(intakeRef, intakeBinding, { merge: true });
-    } else {
-      assertNewApplicationIdAllowed(intakeId, uid);
-      batch.create(intakeRef, intakeBinding);
+
+    if (!userSnap.exists) ownerProfile.createdAt = now;
+
+
+    transaction.set(userRef, ownerProfile, { merge: true });
+    transaction.set(ownerRef, { ...ownerProfile, ownerUid: uid, ownerEmail: email }, { merge: true });
+    if (intakeRef) {
+      const binding = { ownerUid: uid, ownerEmail: email, accountCreated: true, accountVerified: true,
+        accountCreatedAt: now, workflowVersion: "OWNER_FIVE_PAGE_INSPECTION_FIRST_V1", updatedAt: now };
+      if (intakeSnap?.exists) transaction.set(intakeRef, binding, { merge: true });
+      else transaction.create(intakeRef, { ...binding, ownerOnboardingState: "DRAFT", ownerOnboardingStateVersion: OWNER_ONBOARDING_LIFECYCLE_VERSION });
     }
-  }
-
-  batch.set(db.collection("audit_logs").doc(), {
-    actorId: uid,
-    actorRole: "owner",
-    action: "REGISTER_OWNER_FIVE_PAGE_ACCOUNT",
-    targetType: "users",
-    targetId: uid,
-    metadata: { intakeId: intakeId || null, previousRole: existingRole || null },
-    createdAt: now
+    transaction.set(db.collection("audit_logs").doc(), { actorId: uid, actorRole: "owner",
+      action: "REGISTER_OWNER_FIVE_PAGE_ACCOUNT", targetType: "users", targetId: uid,
+      metadata: { intakeId: intakeId || null, previousRole: existingRole || null }, createdAt: now });
   });
-
-  await batch.commit();
 }
 
 export const registerOwnerOnboardingAccount = onCall({ cors: true, enforceAppCheck: true }, async () => {
@@ -145,9 +147,13 @@ export const upsertOwnerOnboardingProfile = onCall({ cors: true, enforceAppCheck
   const fullName = cleanText(request.data?.fullName, "Full name", 120);
   const mobile = cleanPhone(request.data?.mobile);
   const intakeId = cleanOptionalId(request.data?.intakeId || request.data?.onboardingSubmissionId);
-  const { existingSnap, existing, existingRole } = await assertOwnerCompatible(uid);
+  await assertOwnerCompatible(uid);
 
   const authUser = await admin.auth().getUser(uid);
+  if (authUser.disabled || !authUser.emailVerified || authUser.customClaims?.suspended === true) {
+    throw new HttpsError("permission-denied", "The Owner account is inactive or suspended.");
+  }
+  await writeOwnerProfile(uid, email, fullName, mobile, intakeId);
   await admin.auth().setCustomUserClaims(uid, {
     ...(authUser.customClaims || {}),
     role: "owner",
@@ -156,7 +162,6 @@ export const upsertOwnerOnboardingProfile = onCall({ cors: true, enforceAppCheck
     admin: false,
     isAdmin: false,
   });
-  await writeOwnerProfile(uid, email, fullName, mobile, intakeId, existing, existingSnap.exists, existingRole || null);
 
   return {
     status: "SUCCESS",
