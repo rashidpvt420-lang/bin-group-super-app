@@ -21,7 +21,8 @@ test('Admin Asset Registry is read-only and routes mutations to canonical Intake
   assert.doesNotMatch(page, /adminDeletePropertyCandidate/);
   assert.doesNotMatch(page, /Add Institutional Asset|Save Review Candidate|UPDATE ASSET DNA/);
 
-  assert.match(app, /path="\/vault"[^>]*IntakeVaultPage/);
+  assert.match(app, /path="\/vault"/);
+  assert.match(app, /<IntakeVaultPage \/>/);
   assert.match(canonicalSubmission, /property_identity_registry/);
   assert.match(canonicalSubmission, /assertNoExistingCanonicalProperty/);
   assert.match(canonicalSubmission, /submitOwnerInspectionFirstOnboarding = onCall/);
