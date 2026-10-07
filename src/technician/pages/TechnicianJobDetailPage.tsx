@@ -226,7 +226,7 @@ export default function TechnicianJobDetailPage() {
         return () => {
             if (user?.uid) stopLiveTracking(user.uid).catch(() => undefined);
         };
-    }, []);
+    }, [user?.uid]);
 
     // A Technician may refresh/reopen the mission after already going EN_ROUTE.
     // Resume the live feed from authoritative ticket state instead of requiring another
