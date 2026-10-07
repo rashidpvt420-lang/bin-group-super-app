@@ -9,6 +9,7 @@ import {
   IconButton,
   InputAdornment,
   Paper,
+  Portal,
   Stack,
   SwipeableDrawer,
   TextField,
@@ -500,7 +501,8 @@ export const SovereignAIChat: React.FC<SovereignAIChatProps> = ({
 
   return (
     <>
-      <Fab
+      <Portal>
+        <Fab
         data-testid="sovereign-ai-open"
         aria-label="Move or open Sovereign AI chat"
         title="Move or open Sovereign AI chat"
@@ -518,7 +520,8 @@ export const SovereignAIChat: React.FC<SovereignAIChatProps> = ({
           <Sparkles size={22} aria-hidden />
           <Grip size={11} aria-hidden />
         </Stack>
-      </Fab>
+        </Fab>
+      </Portal>
 
       {isMobile ? (
         <SwipeableDrawer
