@@ -106,6 +106,11 @@ const _state: TrackingState = {
     recoveryUid: null,
 };
 
+// Serialize tracking startup so a lifecycle click and a state-driven resume cannot
+// install two browser watches / server sessions for the same Technician mission.
+let trackingStartPromise: Promise<void> | null = null;
+let trackingStartKey: string | null = null;
+
 async function readGpsPermissionState(): Promise<PermissionState | 'unsupported' | 'unknown'> {
     try {
         if (!navigator.permissions?.query) return 'unsupported';
@@ -357,7 +362,7 @@ export function purgeTechnicianGpsRetryQueue(technicianUid: string) {
     if (_state.recoveryUid === technicianUid) detachOnlineRecovery();
 }
 
-export const startLiveTracking = async (
+const startLiveTrackingInternal = async (
     ticketId: string,
     technicianUid: string,
     onLocationUpdate?: (loc: GeoPoint) => void,
@@ -575,6 +580,41 @@ export const startLiveTracking = async (
     _state.trackingSessionId = trackingSessionId;
     _state.lastPushTime = captureLastPushTime;
     _state.watchId = installedWatchId;
+};
+
+export const startLiveTracking = (
+    ticketId: string,
+    technicianUid: string,
+    onLocationUpdate?: (loc: GeoPoint) => void,
+    onError?: (msg: string) => void,
+): Promise<void> => {
+    const startKey = `${technicianUid}:${ticketId}`;
+
+    if (
+        _state.watchId !== null &&
+        _state.activeTicketId === ticketId &&
+        _state.technicianUid === technicianUid
+    ) {
+        return Promise.resolve();
+    }
+
+    if (trackingStartPromise) {
+        if (trackingStartKey === startKey) return trackingStartPromise;
+        return trackingStartPromise
+            .catch(() => undefined)
+            .then(() => startLiveTracking(ticketId, technicianUid, onLocationUpdate, onError));
+    }
+
+    trackingStartKey = startKey;
+    const start = startLiveTrackingInternal(ticketId, technicianUid, onLocationUpdate, onError);
+    const guarded = start.finally(() => {
+        if (trackingStartKey === startKey) {
+            trackingStartPromise = null;
+            trackingStartKey = null;
+        }
+    });
+    trackingStartPromise = guarded;
+    return guarded;
 };
 
 export type StopLiveTrackingResult = {
