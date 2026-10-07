@@ -20,7 +20,7 @@ function renderDirectory({ uid = 'owner-a', isRTL = false, state, search = '' } 
   const hookReact = {
     ...React,
     useState(initial) {
-      const values = [state || { ownerUid: uid, rows: [], loading: false, failed: false }, 0, search];
+      const values = [state || { ownerUid: uid, rows: [], loading: false, failed: false }, search];
       return [stateIndex < values.length ? values[stateIndex++] : initial, () => {}];
     },
     useEffect() {},
