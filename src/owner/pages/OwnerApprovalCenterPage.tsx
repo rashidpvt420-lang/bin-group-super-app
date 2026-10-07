@@ -49,6 +49,7 @@ export default function OwnerApprovalCenterPage() {
   const [notes, setNotes] = React.useState<Record<string, string>>({});
   const [notice, setNotice] = React.useState('');
   const [submittingId, setSubmittingId] = React.useState('');
+  const mutationInFlightRef = React.useRef(false);
   const ownerId = auth.currentUser?.uid || '';
   const { ticketPropertyLabel } = useOwnerPropertyLabels(ownerId);
 
@@ -86,6 +87,8 @@ export default function OwnerApprovalCenterPage() {
   }, [ownerId]);
 
   const decide = async (request: ApprovalRequest, decision: string) => {
+    if (mutationInFlightRef.current) return;
+    mutationInFlightRef.current = true;
     try {
       setSubmittingId(`${request.id}:${decision}`);
       const result = await submitDecision({ approvalRequestId: request.id, decision, decisionNote: notes[request.id] || '' });
@@ -94,11 +97,14 @@ export default function OwnerApprovalCenterPage() {
     } catch (error: any) {
       setNotice(error?.message || 'Failed to record owner decision.');
     } finally {
+      mutationInFlightRef.current = false;
       setSubmittingId('');
     }
   };
 
   const approveSignOff = async (ticket: SignOffTicket) => {
+    if (mutationInFlightRef.current) return;
+    mutationInFlightRef.current = true;
     try {
       setSubmittingId(`signoff:${ticket.id}`);
       await reviewTicketCompletion({ ticketId: ticket.id, action: 'APPROVE_CLOSE', reason: '' });
@@ -107,6 +113,7 @@ export default function OwnerApprovalCenterPage() {
     } catch (error: any) {
       setNotice(error?.message || 'Failed to approve ticket sign-off.');
     } finally {
+      mutationInFlightRef.current = false;
       setSubmittingId('');
     }
   };
