@@ -117,7 +117,10 @@ test('review waits for restored Firebase Owner auth and never exposes raw unauth
   assert.match(source, /const \[authReady, setAuthReady\]/);
   assert.match(source, /signedInUid !== ownerAccount\.uid/);
   assert.match(source, /await auth\.currentUser\.getIdToken\(true\)/);
-  assert.match(source, /code\.includes\('unauthenticated'\)/);
+  const classifier = await read('src/components/onboarding/ownerQuoteFailure.ts');
+  assert.match(classifier, /code\.includes\('unauthenticated'\)/);
+  assert.match(source, /classifyOwnerQuoteFailure\(\{ code: error\?\.code, idTokenRefreshed, appCheckTokenOk \}\)/);
+  assert.match(source, /setQuoteNeedsSignIn\(ownerQuoteFailureOffersSignIn\(failure\)\)/);
   assert.match(source, /Your secure Owner session has expired or could not be restored\./);
   assert.match(source, /Sign in again/);
   assert.doesNotMatch(source, />Unauthenticated</);

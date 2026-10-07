@@ -116,18 +116,18 @@ const ReportingDashboard: React.FC = () => {
         doc.save(`Sovereign_Report_${selectedEmirate}_${Date.now()}.pdf`);
     };
 
-    if (loading) return <Box sx={{ display: 'flex', justifyContent: 'center', py: 10 }}><CircularProgress sx={{ color: binThemeTokens.gold }} /></Box>;
-    if (loadError) return <Container maxWidth="xl" sx={{ py: 6 }}><Alert severity="error">{loadError}</Alert></Container>;
+    if (loading) return <Box sx={{ display: 'flex', justifyContent: 'center', py: 10 }}><CircularProgress sx={{ color: '#7A5C12' }} /></Box>;
+    if (loadError) return <Container maxWidth="xl" sx={{ py: 6, color: '#111827' }}><Alert severity="error">{loadError}</Alert></Container>;
     if (!stats) return null;
     const emergencyMax = Math.max(1, ...stats.emergencyByMonth.map((m) => m.count));
 
     return (
-        <Container maxWidth="xl" sx={{ py: 6 }}>
+        <Container maxWidth="xl" sx={{ py: 6, color: '#111827' }}>
             <Box sx={{ mb: 6 }}>
-                <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 4, mb: 1, display: 'block' }}>INSTITUTIONAL AUDIT</Typography>
+                <Typography variant="overline" sx={{ color: '#7A5C12', fontWeight: 900, letterSpacing: 4, mb: 1, display: 'block' }}>INSTITUTIONAL AUDIT</Typography>
                 <Stack direction="row" justifyContent="space-between" alignItems="flex-end">
                     <Box>
-                        <Typography variant="h3" fontWeight="950" sx={{ color: '#FFF', letterSpacing: -2 }}>Reporting Dashboard</Typography>
+                        <Typography variant="h3" fontWeight="950" sx={{ color: '#111827', letterSpacing: -2 }}>Reporting Dashboard</Typography>
                         <Stack direction="row" spacing={1} sx={{ mt: 2 }}>
                             {stats.emiratesList.map((e: string) => (
                                 <Chip 
@@ -135,8 +135,8 @@ const ReportingDashboard: React.FC = () => {
                                     label={e} 
                                     onClick={() => setSelectedEmirate(e)}
                                     sx={{ 
-                                        bgcolor: selectedEmirate === e ? binThemeTokens.gold : 'rgba(255,255,255,0.05)',
-                                        color: selectedEmirate === e ? '#000' : '#FFF',
+                                        bgcolor: selectedEmirate === e ? binThemeTokens.gold : '#E5E7EB',
+                                        color: '#111827',
                                         fontWeight: 900,
                                         '&:hover': { bgcolor: binThemeTokens.goldLight }
                                     }} 
@@ -152,74 +152,74 @@ const ReportingDashboard: React.FC = () => {
                 <Grid item xs={12} md={4}>
                     <Paper sx={{ p: 4, bgcolor: alpha(binThemeTokens.gold, 0.05), border: `1px solid ${alpha(binThemeTokens.gold, 0.2)}`, borderRadius: 6 }}>
                         <Stack spacing={1}>
-                            <Timer color={binThemeTokens.gold} size={32} />
-                            <Typography variant="overline" sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 800 }}>Average Ticket Resolution</Typography>
-                            <Typography variant="h2" fontWeight="950" sx={{ color: '#FFF' }} data-testid="reporting-resolution-time">{formatResolutionTime(stats.avgResolutionMinutes)}</Typography>
-                            <Typography variant="caption" sx={{ color: binThemeTokens.gold }}>{stats.avgResolutionMinutes === null ? 'NO COMPLETED TICKETS WITH TIMESTAMPS' : `CREATED → COMPLETED · ${stats.resolutionSampleSize} TICKET(S)`}</Typography>
+                            <Timer color={'#7A5C12'} size={32} />
+                            <Typography variant="overline" sx={{ color: '#475569', fontWeight: 800 }}>Average Ticket Resolution</Typography>
+                            <Typography variant="h2" fontWeight="950" sx={{ color: '#111827' }} data-testid="reporting-resolution-time">{formatResolutionTime(stats.avgResolutionMinutes)}</Typography>
+                            <Typography variant="caption" sx={{ color: '#7A5C12' }}>{stats.avgResolutionMinutes === null ? 'NO COMPLETED TICKETS WITH TIMESTAMPS' : `CREATED → COMPLETED · ${stats.resolutionSampleSize} TICKET(S)`}</Typography>
                         </Stack>
                     </Paper>
                 </Grid>
                 <Grid item xs={12} md={4}>
                     <Paper sx={{ p: 4, bgcolor: alpha(binThemeTokens.gold, 0.05), border: `1px solid ${alpha(binThemeTokens.gold, 0.2)}`, borderRadius: 6 }}>
                         <Stack spacing={1}>
-                            <CreditCard color={binThemeTokens.gold} size={32} />
-                            <Typography variant="overline" sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 800 }}>Financial Integrity</Typography>
-                            <Typography variant="h2" fontWeight="950" sx={{ color: '#FFF' }}>AED {formatAED(stats.totalSettled)}</Typography>
-                            <Typography variant="caption" sx={{ color: binThemeTokens.gold }}>TOTAL DIRECT SETTLEMENTS</Typography>
+                            <CreditCard color={'#7A5C12'} size={32} />
+                            <Typography variant="overline" sx={{ color: '#475569', fontWeight: 800 }}>Financial Integrity</Typography>
+                            <Typography variant="h2" fontWeight="950" sx={{ color: '#111827' }}>AED {formatAED(stats.totalSettled)}</Typography>
+                            <Typography variant="caption" sx={{ color: '#7A5C12' }}>TOTAL DIRECT SETTLEMENTS</Typography>
                         </Stack>
                     </Paper>
                 </Grid>
                 <Grid item xs={12} md={4}>
                     <Paper sx={{ p: 4, bgcolor: alpha(binThemeTokens.gold, 0.05), border: `1px solid ${alpha(binThemeTokens.gold, 0.2)}`, borderRadius: 6 }}>
                         <Stack spacing={1}>
-                            <PieChart color={binThemeTokens.gold} size={32} />
-                            <Typography variant="overline" sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 800 }}>Portfolio Occupancy</Typography>
-                            <Typography variant="h2" fontWeight="950" sx={{ color: '#FFF' }} data-testid="reporting-occupancy">{formatOccupancy(stats.occupancyPercent)}</Typography>
-                            <Typography variant="caption" sx={{ color: binThemeTokens.gold }}>{stats.occupancyPercent === null ? 'NO UNIT RECORDS' : `${stats.occupiedUnits} OF ${stats.totalUnits} UNITS OCCUPIED`}</Typography>
+                            <PieChart color={'#7A5C12'} size={32} />
+                            <Typography variant="overline" sx={{ color: '#475569', fontWeight: 800 }}>Portfolio Occupancy</Typography>
+                            <Typography variant="h2" fontWeight="950" sx={{ color: '#111827' }} data-testid="reporting-occupancy">{formatOccupancy(stats.occupancyPercent)}</Typography>
+                            <Typography variant="caption" sx={{ color: '#7A5C12' }}>{stats.occupancyPercent === null ? 'NO UNIT RECORDS' : `${stats.occupiedUnits} OF ${stats.totalUnits} UNITS OCCUPIED`}</Typography>
                         </Stack>
                     </Paper>
                 </Grid>
 
                 <Grid item xs={12}>
                     <Box sx={{ mt: 8, mb: 4 }}>
-                        <Typography variant="h5" fontWeight="950" sx={{ color: '#FFF', display: 'flex', alignItems: 'center', gap: 2 }}>
-                            <ShieldAlert color={binThemeTokens.gold} /> ADVANCED ANALYTICS & RISK INTELLIGENCE
+                        <Typography variant="h5" fontWeight="950" sx={{ color: '#111827', display: 'flex', alignItems: 'center', gap: 2 }}>
+                            <ShieldAlert color={'#7A5C12'} /> ADVANCED ANALYTICS & RISK INTELLIGENCE
                         </Typography>
                     </Box>
                     <Grid container spacing={4}>
                         <Grid item xs={12} md={4}>
-                            <Paper sx={{ p: 4, bgcolor: 'rgba(22, 22, 24, 0.7)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 6 }}>
-                                <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>TOP FAULT CATEGORIES</Typography>
+                            <Paper sx={{ p: 4, bgcolor: '#FFFFFF', border: '1px solid #E5E7EB', borderRadius: 6 }}>
+                                <Typography variant="overline" sx={{ color: '#7A5C12', fontWeight: 900 }}>TOP FAULT CATEGORIES</Typography>
                                 <Stack spacing={3} sx={{ mt: 3 }}>
                                     {stats.faultCategories.length === 0 && (
-                                        <Typography variant="body2" color="textSecondary">{NOT_AVAILABLE}: no categorised tickets yet.</Typography>
+                                        <Typography variant="body2" color="#475569">{NOT_AVAILABLE}: no categorised tickets yet.</Typography>
                                     )}
                                     {stats.faultCategories.map((f) => (
                                         <Box key={f.category} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                            <Typography variant="body1" fontWeight="900" color="#FFF">{f.category}</Typography>
-                                            <Typography variant="caption" color="textSecondary">{f.count} TICKET(S)</Typography>
+                                            <Typography variant="body1" fontWeight="900" color="#111827">{f.category}</Typography>
+                                            <Typography variant="caption" color="#475569">{f.count} TICKET(S)</Typography>
                                         </Box>
                                     ))}
                                 </Stack>
                             </Paper>
                         </Grid>
                         <Grid item xs={12} md={4}>
-                            <Paper sx={{ p: 4, bgcolor: 'rgba(22, 22, 24, 0.7)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 6 }}>
-                                <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>EMERGENCY TICKETS (6M)</Typography>
+                            <Paper sx={{ p: 4, bgcolor: '#FFFFFF', border: '1px solid #E5E7EB', borderRadius: 6 }}>
+                                <Typography variant="overline" sx={{ color: '#7A5C12', fontWeight: 900 }}>EMERGENCY TICKETS (6M)</Typography>
                                 <Box sx={{ mt: 4, display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', height: 100 }}>
                                     {stats.emergencyByMonth.map((m) => (
                                         <Box key={m.month} title={`${m.month}: ${m.count}`} sx={{ width: '12%', bgcolor: binThemeTokens.gold, height: `${(m.count / emergencyMax) * 100}%`, minHeight: 2, borderRadius: 1 }} />
                                     ))}
                                 </Box>
-                                <Typography variant="caption" color="textSecondary" sx={{ mt: 2, display: 'block', textAlign: 'center' }}>{stats.emergencyByMonth.reduce((sum, m) => sum + m.count, 0)} emergency ticket(s) in the last 6 months</Typography>
+                                <Typography variant="caption" color="#475569" sx={{ mt: 2, display: 'block', textAlign: 'center' }}>{stats.emergencyByMonth.reduce((sum, m) => sum + m.count, 0)} emergency ticket(s) in the last 6 months</Typography>
                             </Paper>
                         </Grid>
                         <Grid item xs={12} md={4}>
-                            <Paper sx={{ p: 4, bgcolor: '#0B0B0C', border: `2px solid ${binThemeTokens.gold}`, borderRadius: 6 }}>
-                                <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950 }}>RENEWAL RISK SCORE</Typography>
+                            <Paper sx={{ p: 4, bgcolor: '#FFFFFF', border: `2px solid ${binThemeTokens.gold}`, borderRadius: 6 }}>
+                                <Typography variant="overline" sx={{ color: '#7A5C12', fontWeight: 950 }}>RENEWAL RISK SCORE</Typography>
                                 <Box sx={{ textAlign: 'center', py: 2 }}>
-                                    <Typography variant="h4" fontWeight="950" color="#FFF" data-testid="reporting-renewal-risk">{NOT_AVAILABLE}</Typography>
-                                    <Typography variant="body2" color="textSecondary">No renewal risk model is connected to your records yet.</Typography>
+                                    <Typography variant="h4" fontWeight="950" color="#111827" data-testid="reporting-renewal-risk">{NOT_AVAILABLE}</Typography>
+                                    <Typography variant="body2" color="#475569">No renewal risk model is connected to your records yet.</Typography>
                                 </Box>
                             </Paper>
                         </Grid>
@@ -227,20 +227,20 @@ const ReportingDashboard: React.FC = () => {
                 </Grid>
 
                 <Grid item xs={12}>
-                    <Typography variant="h5" fontWeight="900" sx={{ color: '#FFF', mb: 4, mt: 4 }}>Regional Performance Distribution</Typography>
+                    <Typography variant="h5" fontWeight="900" sx={{ color: '#111827', mb: 4, mt: 4 }}>Regional Performance Distribution</Typography>
                     <Grid container spacing={3}>
                         {stats.regionalStats.map((reg) => (
                             <Grid item xs={12} md={4} key={reg.emirate}>
-                                <Card sx={{ bgcolor: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 6 }}>
+                                <Card sx={{ bgcolor: '#F8FAFC', border: '1px solid #E5E7EB', borderRadius: 6 }}>
                                     <CardContent sx={{ p: 4 }}>
                                         <Stack direction="row" justifyContent="space-between" alignItems="center">
                                             <Box>
-                                                <Typography variant="h6" fontWeight="900" sx={{ color: '#FFF' }}>{reg.emirate?.toUpperCase()}</Typography>
-                                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)' }}>{reg.count} ACTIVE ASSETS</Typography>
+                                                <Typography variant="h6" fontWeight="900" sx={{ color: '#111827' }}>{reg.emirate?.toUpperCase()}</Typography>
+                                                <Typography variant="caption" sx={{ color: '#475569' }}>{reg.count} ACTIVE ASSETS</Typography>
                                             </Box>
-                                            <Globe color={binThemeTokens.gold} />
+                                            <Globe color={'#7A5C12'} />
                                         </Stack>
-                                        <Typography variant="caption" sx={{ mt: 4, display: 'block', color: 'rgba(255,255,255,0.4)' }}>SERVICE UPTIME: {NOT_AVAILABLE.toUpperCase()} (NOT TRACKED)</Typography>
+                                        <Typography variant="caption" sx={{ mt: 4, display: 'block', color: '#475569' }}>SERVICE UPTIME: {NOT_AVAILABLE.toUpperCase()} (NOT TRACKED)</Typography>
                                     </CardContent>
                                 </Card>
                             </Grid>
