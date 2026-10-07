@@ -151,9 +151,12 @@ test('Legacy Admin geo repair cannot mint canonical trust', () => {
   assert.match(geoRepairCenter, /adminRepairPropertyGeo/);
   assert.match(geoRepairCenter, /location candidate was saved for authoritative review/);
   assert.doesNotMatch(geoRepairCenter, /verified and locked/);
-  assert.match(assetRegistry, /submittedGeo:/);
-  assert.match(assetRegistry, /status: 'PENDING_REVIEW'/);
-  assert.doesNotMatch(assetRegistry, /\n\s*geo,\n/);
+  assert.match(assetRegistry, /READ-ONLY OPERATIONAL REGISTRY/);
+  assert.match(assetRegistry, /label="UNVERIFIED"/);
+  assert.match(assetRegistry, /navigate\('\/vault'\)/);
+  assert.doesNotMatch(assetRegistry, /\baddDoc\s*\(/);
+  assert.doesNotMatch(assetRegistry, /\bupdateDoc\s*\(/);
+  assert.doesNotMatch(assetRegistry, /\bdeleteDoc\s*\(/);
 });
 
 test('Technician live GPS is temporary, fresh, identity-bound, ticket-bound and installation-bound', () => {
