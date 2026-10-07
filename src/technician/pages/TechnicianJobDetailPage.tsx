@@ -228,6 +228,39 @@ export default function TechnicianJobDetailPage() {
         };
     }, []);
 
+    // A Technician may refresh/reopen the mission after already going EN_ROUTE.
+    // Resume the live feed from authoritative ticket state instead of requiring another
+    // lifecycle click, so Owner/Tenant tracking does not silently become stale.
+    useEffect(() => {
+        const lifecycleStatus = norm(ticket?.status);
+        if (!id || !user?.uid || !online || isTracking || !['EN_ROUTE', 'ON_THE_WAY'].includes(lifecycleStatus)) return;
+        let cancelled = false;
+        const resume = async () => {
+            try {
+                const installationHash = await readNativeTechnicianInstallationHash();
+                if (installationHash) await ensureTechnicianInstallationRegistered(installationHash);
+                if (cancelled) return;
+                await startLiveTracking(id, user.uid, () => undefined, (err) => {
+                    if (!cancelled) {
+                        setGpsError(err);
+                        setIsTracking(false);
+                    }
+                });
+                if (!cancelled) {
+                    setGpsError(null);
+                    setIsTracking(true);
+                }
+            } catch (error: any) {
+                if (!cancelled) {
+                    setIsTracking(false);
+                    setGpsError(error?.message || 'Live GPS could not resume for this en-route mission.');
+                }
+            }
+        };
+        void resume();
+        return () => { cancelled = true; };
+    }, [id, user?.uid, ticket?.status, online, isTracking]);
+
     const resolved = useMemo(() => resolvePropertyLocation(ticket || {}), [ticket]);
     const status = norm(ticket?.status);
     const hasTenantBeforeProof = Boolean(ticket?.beforePhotoUrl)
