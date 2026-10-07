@@ -62,21 +62,21 @@ export default function OwnerApprovalCommandStrip({
       <Stack spacing={2.5} sx={{ textAlign: isRTL ? 'right' : 'left' }}>
         <Stack direction={{ xs: 'column', md: isRTL ? 'row-reverse' : 'row' }} alignItems={{ xs: 'flex-start', md: 'center' }} justifyContent="space-between" spacing={2}>
           <Box>
-            <Typography variant="overline" sx={{ color: binThemeTokens.goldHover || binThemeTokens.gold, fontWeight: 950, letterSpacing: 2 }}>{ar ? 'مركز قرارات المالك' : 'OWNER COMMAND STRIP'}</Typography>
-            <Typography variant="h6" sx={{ color: binThemeTokens.textPrimary, fontWeight: 950 }}>{ar ? 'ما الذي يحتاج إلى موافقتي اليوم؟' : 'What needs my approval today?'}</Typography>
-            <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary, mt: 0.5 }}>{ar ? 'يركز المالك على القرارات والمخاطر والمستندات والتكلفة.' : 'Keeps owners focused on decisions, risk, documents, and cost.'}</Typography>
+            <Typography variant="overline" sx={{ color: '#7A5C12', fontWeight: 950, letterSpacing: 2 }}>{ar ? 'مركز قرارات المالك' : 'OWNER COMMAND STRIP'}</Typography>
+            <Typography variant="h6" sx={{ color: '#111827', fontWeight: 950 }}>{ar ? 'ما الذي يحتاج إلى موافقتي اليوم؟' : 'What needs my approval today?'}</Typography>
+            <Typography variant="body2" sx={{ color: '#475569', mt: 0.5 }}>{ar ? 'يركز المالك على القرارات والمخاطر والمستندات والتكلفة.' : 'Keeps owners focused on decisions, risk, documents, and cost.'}</Typography>
           </Box>
           <Chip icon={<ReceiptText size={16} />} label={statusLabel} sx={{ bgcolor: urgentTotal || costVarianceAlert ? alpha('#ef4444', 0.15) : alpha('#10b981', 0.15), color: urgentTotal || costVarianceAlert ? '#991b1b' : '#047857', fontWeight: 950 }} />
         </Stack>
         <Grid container spacing={2}>
           {cards.map((card) => (
             <Grid item xs={12} sm={6} md={3} key={card.id}>
-              <Button fullWidth aria-label={card.label} onClick={() => navigate(card.route)} sx={{ minHeight: 116, p: 2, justifyContent: 'flex-start', textAlign: isRTL ? 'right' : 'left', color: '#fff', bgcolor: 'rgba(15,23,42,0.86)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 4, '&:hover': { bgcolor: alpha(binThemeTokens.gold, 0.18), borderColor: alpha(binThemeTokens.gold, 0.45) } }}>
+              <Button fullWidth aria-label={card.label} onClick={() => navigate(card.route)} sx={{ minHeight: 116, p: 2, justifyContent: 'flex-start', textAlign: isRTL ? 'right' : 'left', color: '#111827', bgcolor: '#FFFFFF', border: '1px solid #E5E7EB', borderRadius: 4, '&:hover': { bgcolor: alpha(binThemeTokens.gold, 0.18), borderColor: alpha(binThemeTokens.gold, 0.45) } }}>
                 <Stack spacing={1} alignItems={isRTL ? 'flex-end' : 'flex-start'}>
-                  <Box sx={{ color: card.value > 0 ? '#fca5a5' : binThemeTokens.gold }}>{card.icon}</Box>
+                  <Box sx={{ color: card.value > 0 ? '#B91C1C' : '#7A5C12' }}>{card.icon}</Box>
                   <Typography variant="h5" sx={{ fontWeight: 950 }}>{card.value}</Typography>
                   <Typography sx={{ fontWeight: 950 }}>{card.label}</Typography>
-                  <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.62)', lineHeight: 1.45 }}>{card.help}</Typography>
+                  <Typography variant="caption" sx={{ color: '#475569', lineHeight: 1.45 }}>{card.help}</Typography>
                 </Stack>
               </Button>
             </Grid>

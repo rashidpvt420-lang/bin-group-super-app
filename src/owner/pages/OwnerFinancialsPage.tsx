@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { downloadCsv } from '../../utils/downloadCsv';
 import {
     Alert, Box, Typography, Paper, Stack, Chip, CircularProgress,
     Grid, alpha, Button, Divider,
@@ -141,7 +142,19 @@ export default function OwnerFinancialsPage() {
                     <Typography variant="h4" fontWeight="950" sx={{ color: '#FFF', mt: 1 }}>{tx('owner.fin.financial_sovereign', 'Financial Sovereign')}</Typography>
                 </Box>
                 <Stack direction="row" spacing={2}>
-                    <Button variant="outlined" startIcon={<Download size={16} />} sx={{ borderColor: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.7)', fontWeight: 900, borderRadius: 3 }}>{tx('owner.fin.export_txn', 'Export TXN')}</Button>
+                    <Button
+                        variant="outlined"
+                        startIcon={<Download size={16} />}
+                        disabled={!transactions.length}
+                        onClick={() => downloadCsv(
+                            'bin-owner-transactions.csv',
+                            ['Date', 'Reference', 'Description', 'Amount (AED)', 'Status'],
+                            transactions.map((txn: any) => [txn.date || '', txn.id, txn.description || '', txn.amount ?? '', txn.status || '']),
+                        )}
+                        sx={{ borderColor: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.7)', fontWeight: 900, borderRadius: 3 }}
+                    >
+                        {tx('owner.fin.export_txn', 'Export transactions')}
+                    </Button>
                 </Stack>
             </Box>
 

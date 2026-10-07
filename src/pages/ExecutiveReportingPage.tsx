@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { 
     Container, Typography, Box, Paper, Grid, Stack, Button, 
     Chip, Divider, alpha, CircularProgress, LinearProgress, Alert 
@@ -22,6 +23,7 @@ import 'jspdf-autotable';
 import { registerArabicFont } from '../utils/arabicPdfFont';
 
 const ExecutiveReportingPage: React.FC = () => {
+    const navigate = useNavigate();
     const { t, tx, isRTL } = useLanguage();
     const { user } = useRole();
     const [loading, setLoading] = useState(true);
@@ -139,18 +141,18 @@ const ExecutiveReportingPage: React.FC = () => {
         doc.save(`Executive_Summary_${Date.now()}.pdf`);
     };
 
-    if (loading) return <Box sx={{ display: 'flex', justifyContent: 'center', py: 20 }}><CircularProgress sx={{ color: binThemeTokens.gold }} /></Box>;
+    if (loading) return <Box sx={{ display: 'flex', justifyContent: 'center', py: 20 }}><CircularProgress sx={{ color: '#7A5C12' }} /></Box>;
     if (loadError) return <Alert severity="error">{loadError}</Alert>;
 
     return (
-        <Container maxWidth="xl" sx={{ py: 6 }}>
+        <Container maxWidth="xl" sx={{ py: 6, color: '#111827' }}>
             <Box sx={{ mb: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <Box>
-                    <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 4 }}>
+                    <Typography variant="overline" sx={{ color: '#7A5C12', fontWeight: 950, letterSpacing: 4 }}>
                         BOARD LEVEL OVERSIGHT
                     </Typography>
-                    <Typography variant="h3" fontWeight="950" sx={{ color: '#FFF', letterSpacing: -2 }}>
-                        Executive <Box component="span" sx={{ color: binThemeTokens.gold }}>Portfolio Terminal</Box>
+                    <Typography variant="h3" fontWeight="950" sx={{ color: '#111827', letterSpacing: -2 }}>
+                        Executive <Box component="span" sx={{ color: '#7A5C12' }}>Portfolio Terminal</Box>
                     </Typography>
                 </Box>
                 <Button 
@@ -166,9 +168,9 @@ const ExecutiveReportingPage: React.FC = () => {
             <Grid container spacing={4}>
                 {/* Cross-Property Spend Trend */}
                 <Grid item xs={12} lg={8}>
-                    <Paper sx={{ p: 4, bgcolor: 'rgba(22, 22, 24, 0.7)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 6 }}>
-                        <Typography variant="h6" fontWeight="950" sx={{ color: '#FFF', mb: 4, display: 'flex', alignItems: 'center', gap: 2 }}>
-                            <TrendingUp color={binThemeTokens.gold} /> SYSTEMIC SPEND VELOCITY
+                    <Paper sx={{ p: 4, bgcolor: '#FFFFFF', border: '1px solid #E5E7EB', borderRadius: 6 }}>
+                        <Typography variant="h6" fontWeight="950" sx={{ color: '#111827', mb: 4, display: 'flex', alignItems: 'center', gap: 2 }}>
+                            <TrendingUp color={'#7A5C12'} /> SYSTEMIC SPEND VELOCITY
                         </Typography>
                         <Box sx={{ height: 350 }}>
                             <ResponsiveContainer width="100%" height="100%">
@@ -179,10 +181,10 @@ const ExecutiveReportingPage: React.FC = () => {
                                             <stop offset="95%" stopColor={binThemeTokens.gold} stopOpacity={0}/>
                                         </linearGradient>
                                     </defs>
-                                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
-                                    <XAxis dataKey="month" stroke="rgba(255,255,255,0.3)" />
-                                    <YAxis stroke="rgba(255,255,255,0.3)" />
-                                    <Tooltip contentStyle={{ backgroundColor: '#161618', border: '1px solid rgba(198,167,94,0.2)', color: '#FFF' }} />
+                                    <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" vertical={false} />
+                                    <XAxis dataKey="month" stroke="#475569" />
+                                    <YAxis stroke="#475569" />
+                                    <Tooltip contentStyle={{ backgroundColor: '#FFFFFF', border: '1px solid rgba(198,167,94,0.2)', color: '#111827' }} />
                                     <Area type="monotone" dataKey="spend" stroke={binThemeTokens.gold} strokeWidth={4} fillOpacity={1} fill="url(#spendGrad)" />
                                 </AreaChart>
                             </ResponsiveContainer>
@@ -193,40 +195,40 @@ const ExecutiveReportingPage: React.FC = () => {
                 {/* Portfolio Vitals */}
                 <Grid item xs={12} lg={4}>
                     <Stack spacing={4}>
-                        <Paper sx={{ p: 4, bgcolor: '#0B0B0C', border: `2px solid ${binThemeTokens.gold}`, borderRadius: 6 }}>
-                            <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950 }}>PORTFOLIO BPI AVG</Typography>
+                        <Paper sx={{ p: 4, bgcolor: '#FFFFFF', border: `2px solid ${binThemeTokens.gold}`, borderRadius: 6 }}>
+                            <Typography variant="overline" sx={{ color: '#7A5C12', fontWeight: 950 }}>PORTFOLIO BPI AVG</Typography>
                             <Box sx={{ textAlign: 'center', py: 2 }}>
-                                <Typography variant="h1" fontWeight="950" color="#FFF">{stats.portfolioBPI}%</Typography>
-                                <Typography variant="body2" color="textSecondary">Institutional Resilience Benchmark</Typography>
+                                <Typography variant="h1" fontWeight="950" color="#111827">{stats.portfolioBPI}%</Typography>
+                                <Typography variant="body2" color="#475569">Institutional Resilience Benchmark</Typography>
                             </Box>
-                            <LinearProgress variant="determinate" value={stats.portfolioBPI} sx={{ mt: 2, height: 8, borderRadius: 4, bgcolor: 'rgba(255,255,255,0.05)', '& .MuiLinearProgress-bar': { bgcolor: binThemeTokens.gold } }} />
+                            <LinearProgress variant="determinate" value={stats.portfolioBPI} sx={{ mt: 2, height: 8, borderRadius: 4, bgcolor: '#E5E7EB', '& .MuiLinearProgress-bar': { bgcolor: binThemeTokens.gold } }} />
                         </Paper>
 
-                        <Paper sx={{ p: 4, bgcolor: 'rgba(22, 22, 24, 0.7)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 6 }}>
-                            <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950 }}>RENEWAL EXPOSURE</Typography>
+                        <Paper sx={{ p: 4, bgcolor: '#FFFFFF', border: '1px solid #E5E7EB', borderRadius: 6 }}>
+                            <Typography variant="overline" sx={{ color: '#7A5C12', fontWeight: 950 }}>RENEWAL EXPOSURE</Typography>
                             <Box sx={{ mt: 2 }}>
-                                <Typography variant="h4" fontWeight="950" color="#FFF">AED {formatAED(stats.renewalRiskExposure || stats.renewalExposure)}</Typography>
-                                <Typography variant="caption" color="textSecondary">CONTRACT VALUE AT RISK (90D)</Typography>
+                                <Typography variant="h4" fontWeight="950" color="#111827">AED {formatAED(stats.renewalRiskExposure || stats.renewalExposure)}</Typography>
+                                <Typography variant="caption" color="#475569">CONTRACT VALUE AT RISK (90D)</Typography>
                             </Box>
-                            <Button fullWidth variant="outlined" sx={{ mt: 4, color: binThemeTokens.gold, borderColor: binThemeTokens.gold, fontWeight: 900 }}>INITIATE RETENTION</Button>
+                            <Button fullWidth variant="outlined" onClick={() => navigate('/owner/renewals')} sx={{ mt: 4, color: '#7A5C12', borderColor: binThemeTokens.gold, fontWeight: 900 }}>REVIEW RENEWALS</Button>
                         </Paper>
                     </Stack>
                 </Grid>
 
                 {/* Risk Clusters & Top Risk Assets */}
                 <Grid item xs={12} md={6}>
-                    <Paper sx={{ p: 4, bgcolor: 'rgba(22, 22, 24, 0.7)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 6 }}>
-                        <Typography variant="h6" fontWeight="950" sx={{ color: '#FFF', mb: 4 }}>INCIDENT CLUSTERS</Typography>
+                    <Paper sx={{ p: 4, bgcolor: '#FFFFFF', border: '1px solid #E5E7EB', borderRadius: 6 }}>
+                        <Typography variant="h6" fontWeight="950" sx={{ color: '#111827', mb: 4 }}>INCIDENT CLUSTERS</Typography>
                         <Stack spacing={3}>
                             {stats.incidentClusters.map((cluster: any, i: number) => (
                                 <Box key={i}>
                                     <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                                        <Typography variant="subtitle2" fontWeight="900" color="#FFF">{cluster.category.toUpperCase()}</Typography>
-                                        <Typography variant="caption" sx={{ color: cluster.trend === 'UP' ? '#ef4444' : '#10b981', fontWeight: 900 }}>
+                                        <Typography variant="subtitle2" fontWeight="900" color="#111827">{cluster.category.toUpperCase()}</Typography>
+                                        <Typography variant="caption" sx={{ color: cluster.trend === 'UP' ? '#B91C1C' : '#047857', fontWeight: 900 }}>
                                             {cluster.trend} TREND
                                         </Typography>
                                     </Box>
-                                    <LinearProgress variant="determinate" value={cluster.intensity} sx={{ height: 6, borderRadius: 3, bgcolor: 'rgba(255,255,255,0.05)', '& .MuiLinearProgress-bar': { bgcolor: cluster.intensity > 70 ? '#ef4444' : binThemeTokens.gold } }} />
+                                    <LinearProgress variant="determinate" value={cluster.intensity} sx={{ height: 6, borderRadius: 3, bgcolor: '#E5E7EB', '& .MuiLinearProgress-bar': { bgcolor: cluster.intensity > 70 ? '#B91C1C' : binThemeTokens.gold } }} />
                                 </Box>
                             ))}
                         </Stack>
@@ -234,17 +236,17 @@ const ExecutiveReportingPage: React.FC = () => {
                 </Grid>
 
                 <Grid item xs={12} md={6}>
-                    <Paper sx={{ p: 4, bgcolor: 'rgba(22, 22, 24, 0.7)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 6 }}>
-                        <Typography variant="h6" fontWeight="950" sx={{ color: '#FFF', mb: 4 }}>CRITICAL WATCHLIST</Typography>
+                    <Paper sx={{ p: 4, bgcolor: '#FFFFFF', border: '1px solid #E5E7EB', borderRadius: 6 }}>
+                        <Typography variant="h6" fontWeight="950" sx={{ color: '#111827', mb: 4 }}>CRITICAL WATCHLIST</Typography>
                         <Stack spacing={2}>
                             {stats.topRiskAssets.map((asset: any, i: number) => (
-                                <Box key={i} sx={{ p: 3, bgcolor: 'rgba(255,255,255,0.02)', borderRadius: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <Box key={i} sx={{ p: 3, bgcolor: '#F8FAFC', borderRadius: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                     <Box>
-                                        <Typography variant="body1" fontWeight="900" color="#FFF">{asset.name}</Typography>
-                                        <Typography variant="caption" color="textSecondary">{asset.reason}</Typography>
+                                        <Typography variant="body1" fontWeight="900" color="#111827">{asset.name}</Typography>
+                                        <Typography variant="caption" color="#475569">{asset.reason}</Typography>
                                     </Box>
                                     <Box sx={{ textAlign: 'right' }}>
-                                        <Chip label={`BPI ${asset.bpi}%`} size="small" sx={{ bgcolor: 'rgba(239,68,68,0.1)', color: '#ef4444', fontWeight: 900 }} />
+                                        <Chip label={`BPI ${asset.bpi}%`} size="small" sx={{ bgcolor: 'rgba(239,68,68,0.1)', color: '#B91C1C', fontWeight: 900 }} />
                                     </Box>
                                 </Box>
                             ))}
