@@ -63,6 +63,7 @@ test('owner financial summary sums recorded passport totals once and keeps fils'
 test('passport sync and owner financial surfaces use the canonical ledger summary', () => {
   const aggregator = read('functions/index.ts');
   const hook = read('src/owner/utils/useOwnerPropertyPassports.ts');
+  const truthHook = read('src/owner/hooks/useOwnerFinancialTruthData.ts');
   const financials = read('src/owner/pages/OwnerFinancialsPage.tsx');
   const truth = read('src/owner/components/OwnerFinancialTruthCard.tsx');
   const report = read('src/owner/pages/OwnerPLReportPage.tsx');
@@ -71,12 +72,14 @@ test('passport sync and owner financial surfaces use the canonical ledger summar
   assert.match(aggregator, /summarizePropertyPassportSources/);
   assert.match(aggregator, /passportIdentity/);
   assert.doesNotMatch(aggregator, /Number\(data\.paidBalance\)/);
-  for (const source of [financials, truth, report, roi]) {
+  for (const source of [report, roi, truthHook]) {
     assert.match(source, /useOwnerPropertyPassports/);
   }
+  assert.match(truth, /useOwnerFinancialTruthData/);
+  assert.match(financials, /useOwnerFinancialTruthData/);
   assert.match(hook, /field: 'ownerId'/);
   assert.match(hook, /field: 'ownerEmail'/);
   assert.match(hook, /where\(spec\.field, '==', spec\.value\)/);
-  assert.match(financials, /summarizeOwnerPassportFinancials/);
+  assert.match(truthHook, /buildOwnerFinancialTruthSummary/);
   assert.doesNotMatch(financials, /collection\(db, 'propertyPassports'\)/);
 });

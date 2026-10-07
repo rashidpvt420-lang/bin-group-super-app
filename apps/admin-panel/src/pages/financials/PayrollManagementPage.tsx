@@ -152,7 +152,7 @@ export default function PayrollManagementPage() {
     <Container maxWidth="lg" sx={{ py: 4, direction: isRTL ? 'rtl' : 'ltr' }}>
       {actionError && <Alert severity="error" onClose={() => setActionError('')} sx={{ mb: 3 }}>{actionError}</Alert>}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
-        <Typography variant="h4" sx={{ fontWeight: 900, textAlign: isRTL ? 'right' : 'left' }}>
+        <Typography variant="h4" sx={{ color: 'text.primary', fontWeight: 900, textAlign: isRTL ? 'right' : 'left' }}>
           {t('nav.technicians')} <Box component="span" sx={{ color: '#6366f1' }}>{t('fin.payroll')}</Box>
         </Typography>
         <Button variant="contained" startIcon={<Wallet />} onClick={() => setOpenAdd(true)} sx={{ borderRadius: 100, px: 3, bgcolor: '#6366f1', '&:hover': { bgcolor: '#4f46e5' } }}>

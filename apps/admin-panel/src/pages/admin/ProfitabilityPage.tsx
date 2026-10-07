@@ -122,7 +122,7 @@ export default function CFODashboard() {
                     <Typography variant="h3" fontWeight={900} sx={{ letterSpacing: -2, color: '#0f172a', mt: 1 }}>
                         BIN-CFO<Typography component="span" sx={{ color: '#1976d2', fontWeight: 'inherit', letterSpacing: 'inherit' }}>™</Typography> Alpha
                     </Typography>
-                    <Typography variant="body2" color="textSecondary" sx={{ fontWeight: 600 }}>
+                    <Typography variant="body2" color="#475467" sx={{ fontWeight: 600 }}>
                         Real-time Revenue & Portfolio Margin Orchestration · FY 2026
                     </Typography>
                 </Box>

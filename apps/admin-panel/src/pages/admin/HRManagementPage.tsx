@@ -12,6 +12,8 @@ import { useAuth } from '../../context/AuthContext';
 import StaffAccessPage from './StaffAccessPage';
 import StaffLifecycleDetailsDialog from './StaffLifecycleDetailsDialog';
 import { describeIncompleteHrRead } from '../../utils/hrReadCompleteness';
+import HrDocumentVerifyDialog, { type VerifiableDocument } from './HrDocumentVerifyDialog';
+import { credentialKindForDocument } from '../../lib/technicianCredentialForm';
 
 type StaffLifecycle = {
     uid: string;
@@ -40,11 +42,12 @@ type StaffLifecycle = {
     invitationStatus?: string | null;
 };
 
-type HrOps = { attendance: any[]; leaveRequests: any[]; documents: any[] };
+type HrOps = { attendance: any[]; leaveRequests: any[]; documents: any[]; staffUploads: any[] };
 
 const ATTENDANCE_STATUSES = ['PRESENT', 'ABSENT', 'ON_LEAVE', 'SICK_LEAVE', 'REMOTE', 'OFF_DAY'];
 const LEAVE_TYPES = ['ANNUAL', 'SICK', 'EMERGENCY', 'UNPAID', 'COMPASSIONATE', 'OTHER'];
-const DOCUMENT_TYPES = ['EMPLOYMENT_CONTRACT', 'EMIRATES_ID', 'PASSPORT', 'VISA', 'CERTIFICATE', 'DRIVING_LICENCE', 'WARNING_LETTER', 'MEDICAL_INSURANCE', 'OTHER'];
+// MEDICAL_CARD (occupational health card) is a technician dispatch credential; MEDICAL_INSURANCE is not.
+const DOCUMENT_TYPES = ['EMPLOYMENT_CONTRACT', 'EMIRATES_ID', 'PASSPORT', 'VISA', 'CERTIFICATE', 'DRIVING_LICENCE', 'MEDICAL_CARD', 'WARNING_LETTER', 'MEDICAL_INSURANCE', 'OTHER'];
 
 function errorText(error: any) {
     return String(error?.details || error?.message || error?.code || 'HR operation failed.')
@@ -66,7 +69,8 @@ export default function HRManagementPage() {
     const [searchParams, setSearchParams] = useSearchParams();
     const [tab, setTab] = useState(0);
     const [staff, setStaff] = useState<StaffLifecycle[]>([]);
-    const [hrOps, setHrOps] = useState<HrOps>({ attendance: [], leaveRequests: [], documents: [] });
+    const [hrOps, setHrOps] = useState<HrOps>({ attendance: [], leaveRequests: [], documents: [], staffUploads: [] });
+    const [verifyDocument, setVerifyDocument] = useState<VerifiableDocument | null>(null);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
@@ -108,11 +112,12 @@ export default function HRManagementPage() {
                     attendance: Array.isArray(opsResponse.data?.attendance) ? opsResponse.data.attendance : [],
                     leaveRequests: Array.isArray(opsResponse.data?.leaveRequests) ? opsResponse.data.leaveRequests : [],
                     documents: Array.isArray(opsResponse.data?.documents) ? opsResponse.data.documents : [],
+                    staffUploads: Array.isArray(opsResponse.data?.staffUploads) ? opsResponse.data.staffUploads : [],
                 });
                 const incomplete = describeIncompleteHrRead(lifecycleResponse.data, opsResponse.data);
                 if (incomplete) setNotice({ type: 'error', message: incomplete });
             } else {
-                setHrOps({ attendance: [], leaveRequests: [], documents: [] });
+                setHrOps({ attendance: [], leaveRequests: [], documents: [], staffUploads: [] });
                 const incomplete = describeIncompleteHrRead(lifecycleResponse.data);
                 if (incomplete) setNotice({ type: 'error', message: incomplete });
             }
@@ -161,6 +166,27 @@ export default function HRManagementPage() {
     const recordAttendance = async () => run('adminRecordStaffAttendance', attendanceForm, 'Attendance record saved and audited.');
     const createLeave = async () => run('adminCreateStaffLeaveRequest', leaveForm, 'Leave request created in the HR workflow.');
     const reviewLeave = async (requestId: string, decision: string) => run('adminReviewStaffLeaveRequest', { requestId, decision }, `Leave request ${decision.toLowerCase()}.`);
+    // Credential documents (medical card, driving licence, certificate) of technicians can be
+    // verified here; the decision sets the technician's dispatch readiness. Upload alone never does.
+    const renderVerification = (source: 'staffHrDocuments' | 'staffDocuments', entry: any) => {
+        const kind = credentialKindForDocument(source, entry.documentType);
+        if (!kind) return '—';
+        const verification = String(entry.verificationStatus || entry.credentialVerification?.status || 'UNVERIFIED').toUpperCase();
+        const member = staffByUid.get(entry.uid);
+        const isTechnician = String(member?.role || '').toLowerCase() === 'technician';
+        const color = verification === 'VERIFIED' ? 'success' : verification === 'REJECTED' ? 'error' : 'warning';
+        return (
+            <Stack direction="row" spacing={1} alignItems="center">
+                <Chip size="small" color={color as any} label={verification === 'VERIFIED' && entry.credentialVerification?.expiryDate ? `VERIFIED · exp ${entry.credentialVerification.expiryDate}` : verification} />
+                {isHRManager && isTechnician && entry.uid !== user?.uid && (
+                    <Button size="small" data-testid="hr-document-verify" onClick={() => setVerifyDocument({ source, id: entry.id, uid: entry.uid, staffName: member?.displayName || entry.uid, documentType: entry.documentType, fileName: entry.fileName, registeredExpiry: entry.expiryDate || null })}>
+                        {verification === 'UNVERIFIED' ? 'Verify' : 'Re-review'}
+                    </Button>
+                )}
+            </Stack>
+        );
+    };
+
     const registerDocument = async () => run('adminRegisterHrDocumentMetadata', documentForm, 'Private HR document metadata registered.');
     const resendInvitation = async (member: StaffLifecycle) => run('adminResendStaffInvitation', { uid: member.uid }, `Secure invitation queued again for ${member.displayName}.`);
     const offboardStaff = async (member: StaffLifecycle) => {
@@ -266,7 +292,8 @@ export default function HRManagementPage() {
 
                     {tab === 2 && isHRManager && <Grid container spacing={3}><Grid item xs={12} md={5}><Paper sx={{ p: 4, bgcolor: alpha(binThemeTokens.gold, .06), border: `1px solid ${alpha(binThemeTokens.gold, .35)}`, borderRadius: 4 }}><ShieldCheck size={42} color={binThemeTokens.gold} /><Typography variant="h5" fontWeight={950} sx={{ mt: 1 }}>PAYROLL HANDOFF</Typography><Typography sx={{ color: 'rgba(255,255,255,.55)', my: 2 }}>{salaryConfiguredCount} staff have protected salary configuration. Per-staff payroll evidence is visible inside the canonical profile; financial execution stays in the Finance module.</Typography><Button variant="outlined" onClick={() => navigate('/financials/payroll')}>OPEN FINANCE PAYROLL</Button></Paper></Grid><Grid item xs={12} md={7}><Paper sx={{ p: 3, bgcolor: 'rgba(15,23,42,.72)', borderRadius: 4 }}><Typography variant="h6" fontWeight={950}>Payroll readiness</Typography><Table size="small"><TableHead><TableRow><TableCell>STAFF</TableCell><TableCell>ROLE</TableCell><TableCell>SALARY CONFIG</TableCell><TableCell>PROFILE</TableCell></TableRow></TableHead><TableBody>{staff.map((member) => <TableRow key={member.uid}><TableCell>{member.displayName}</TableCell><TableCell>{member.role.replace(/_/g, ' ')}</TableCell><TableCell><Chip size="small" color={member.salaryConfigured ? 'success' : 'warning'} label={member.salaryConfigured ? 'CONFIGURED' : 'MISSING'} /></TableCell><TableCell><Button size="small" onClick={() => openProfile(member.uid)}>VIEW</Button></TableCell></TableRow>)}</TableBody></Table></Paper></Grid></Grid>}
 
-                    {tab === 3 && isHRManager && <Grid container spacing={3}><Grid item xs={12} lg={5}><Paper sx={{ p: 3, bgcolor: 'rgba(15,23,42,.72)', borderRadius: 4 }}><Stack direction="row" spacing={1}><FileText size={20} color={binThemeTokens.gold} /><Typography variant="h6" fontWeight={950}>Private HR document registry</Typography></Stack><Alert severity="info" sx={{ mt: 2 }}>File bytes remain in the protected <b>privateHrDocuments/&lt;uid&gt;/</b> boundary. This form records auditable metadata only.</Alert><Stack spacing={2} sx={{ mt: 2 }}><TextField select fullWidth label="Staff" value={documentForm.uid} onChange={(e) => setDocumentForm({ ...documentForm, uid: e.target.value, storagePath: `privateHrDocuments/${e.target.value}/` })}>{staff.map((member) => <MenuItem key={member.uid} value={member.uid}>{member.displayName}</MenuItem>)}</TextField><TextField select fullWidth label="Document type" value={documentForm.documentType} onChange={(e) => setDocumentForm({ ...documentForm, documentType: e.target.value })}>{DOCUMENT_TYPES.map((type) => <MenuItem key={type} value={type}>{type.replace(/_/g, ' ')}</MenuItem>)}</TextField><TextField fullWidth label="Canonical storage path" value={documentForm.storagePath} onChange={(e) => setDocumentForm({ ...documentForm, storagePath: e.target.value })} /><TextField fullWidth label="File name" value={documentForm.fileName} onChange={(e) => setDocumentForm({ ...documentForm, fileName: e.target.value })} /><TextField fullWidth type="date" label="Expiry date" InputLabelProps={{ shrink: true }} value={documentForm.expiryDate} onChange={(e) => setDocumentForm({ ...documentForm, expiryDate: e.target.value })} /><Button variant="contained" onClick={() => void registerDocument()} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 900 }}>REGISTER DOCUMENT</Button></Stack></Paper></Grid><Grid item xs={12} lg={7}><Paper sx={{ p: 3, bgcolor: 'rgba(15,23,42,.72)', borderRadius: 4 }}><Typography variant="h6" fontWeight={950}>Document register</Typography><Table size="small"><TableHead><TableRow><TableCell>STAFF</TableCell><TableCell>TYPE</TableCell><TableCell>FILE</TableCell><TableCell>EXPIRY</TableCell></TableRow></TableHead><TableBody>{hrOps.documents.map((entry) => <TableRow key={entry.id}><TableCell>{staffByUid.get(entry.uid)?.displayName || entry.uid}</TableCell><TableCell>{entry.documentType}</TableCell><TableCell>{entry.fileName || 'Protected file'}</TableCell><TableCell>{entry.expiryDate || '—'}</TableCell></TableRow>)}{hrOps.documents.length === 0 && <TableRow><TableCell colSpan={4} align="center">No document metadata registered yet.</TableCell></TableRow>}</TableBody></Table></Paper></Grid></Grid>}
+                    {tab === 3 && isHRManager && <Grid container spacing={3}><Grid item xs={12} lg={5}><Paper sx={{ p: 3, bgcolor: 'rgba(15,23,42,.72)', borderRadius: 4 }}><Stack direction="row" spacing={1}><FileText size={20} color={binThemeTokens.gold} /><Typography variant="h6" fontWeight={950}>Private HR document registry</Typography></Stack><Alert severity="info" sx={{ mt: 2 }}>File bytes remain in the protected <b>privateHrDocuments/&lt;uid&gt;/</b> boundary. This form records auditable metadata only.</Alert><Stack spacing={2} sx={{ mt: 2 }}><TextField select fullWidth label="Staff" value={documentForm.uid} onChange={(e) => setDocumentForm({ ...documentForm, uid: e.target.value, storagePath: `privateHrDocuments/${e.target.value}/` })}>{staff.map((member) => <MenuItem key={member.uid} value={member.uid}>{member.displayName}</MenuItem>)}</TextField><TextField select fullWidth label="Document type" value={documentForm.documentType} onChange={(e) => setDocumentForm({ ...documentForm, documentType: e.target.value })}>{DOCUMENT_TYPES.map((type) => <MenuItem key={type} value={type}>{type.replace(/_/g, ' ')}</MenuItem>)}</TextField><TextField fullWidth label="Canonical storage path" value={documentForm.storagePath} onChange={(e) => setDocumentForm({ ...documentForm, storagePath: e.target.value })} /><TextField fullWidth label="File name" value={documentForm.fileName} onChange={(e) => setDocumentForm({ ...documentForm, fileName: e.target.value })} /><TextField fullWidth type="date" label="Expiry date" InputLabelProps={{ shrink: true }} value={documentForm.expiryDate} onChange={(e) => setDocumentForm({ ...documentForm, expiryDate: e.target.value })} /><Button variant="contained" onClick={() => void registerDocument()} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 900 }}>REGISTER DOCUMENT</Button></Stack></Paper></Grid><Grid item xs={12} lg={7}><Paper sx={{ p: 3, bgcolor: 'rgba(15,23,42,.72)', borderRadius: 4 }}><Typography variant="h6" fontWeight={950}>Document register</Typography><Table size="small"><TableHead><TableRow><TableCell>STAFF</TableCell><TableCell>TYPE</TableCell><TableCell>FILE</TableCell><TableCell>EXPIRY</TableCell><TableCell>VERIFICATION</TableCell></TableRow></TableHead><TableBody>{hrOps.documents.map((entry) => <TableRow key={entry.id}><TableCell>{staffByUid.get(entry.uid)?.displayName || entry.uid}</TableCell><TableCell>{entry.documentType}</TableCell><TableCell>{entry.fileName || 'Protected file'}</TableCell><TableCell>{entry.expiryDate || '—'}</TableCell><TableCell>{renderVerification('staffHrDocuments', entry)}</TableCell></TableRow>)}{hrOps.documents.length === 0 && <TableRow><TableCell colSpan={5} align="center">No document metadata registered yet.</TableCell></TableRow>}</TableBody></Table></Paper><Paper data-testid="hr-staff-uploads" sx={{ p: 3, mt: 3, bgcolor: 'rgba(15,23,42,.72)', borderRadius: 4 }}><Typography variant="h6" fontWeight={950}>Staff-uploaded documents</Typography><Typography variant="body2" sx={{ opacity: .8, mb: 1 }}>Uploaded by staff from the technician HR vault. An upload is never treated as verified until reviewed here.</Typography><Table size="small"><TableHead><TableRow><TableCell>STAFF</TableCell><TableCell>TYPE</TableCell><TableCell>FILE</TableCell><TableCell>STATUS</TableCell><TableCell>VERIFICATION</TableCell></TableRow></TableHead><TableBody>{hrOps.staffUploads.map((entry) => <TableRow key={entry.id}><TableCell>{staffByUid.get(entry.uid)?.displayName || entry.uid || '—'}</TableCell><TableCell>{entry.documentLabel || entry.documentType}</TableCell><TableCell>{entry.fileName || 'Protected file'}</TableCell><TableCell>{String(entry.status || '—').replace(/_/g, ' ')}</TableCell><TableCell>{renderVerification('staffDocuments', entry)}</TableCell></TableRow>)}{hrOps.staffUploads.length === 0 && <TableRow><TableCell colSpan={5} align="center">No staff uploads.</TableCell></TableRow>}</TableBody></Table></Paper></Grid></Grid>}
+                    <HrDocumentVerifyDialog document={verifyDocument} onClose={() => setVerifyDocument(null)} onSaved={async (message) => { setNotice({ type: 'success', message }); await loadProtectedHr(); }} />
 
                     {tab === 4 && isProvisioningAdmin && <StaffAccessPage />}
                 </Stack>
