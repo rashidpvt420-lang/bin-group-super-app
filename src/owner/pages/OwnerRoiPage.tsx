@@ -1,8 +1,10 @@
 import { 
     Box, Typography, Grid, Paper, CircularProgress, Alert, 
     Stack, LinearProgress, alpha, Button, Divider,
-    Tooltip, IconButton
+    Tooltip, IconButton, Chip
 } from '@mui/material';
+import { useNavigate } from 'react-router-dom';
+import { downloadCsv } from '../../utils/downloadCsv';
 import { 
     TrendingUp, DollarSign, Percent, BarChart2, 
     ArrowUpRight, Info, Shield, CheckCircle2,
@@ -15,6 +17,7 @@ import { useOwnerPropertyPassports } from '../utils/useOwnerPropertyPassports';
 export default function OwnerRoiPage() {
     const { user } = useRole();
     const { passports, loading, error: loadError } = useOwnerPropertyPassports(user);
+    const navigate = useNavigate();
 
     if (loading) return (
         <Box sx={{ height: '60vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 2 }}>
@@ -83,8 +86,19 @@ export default function OwnerRoiPage() {
                     <Typography variant="h4" fontWeight="950" sx={{ color: '#FFF', mt: 1 }}>ROI Analytics</Typography>
                 </Box>
                 <Stack direction="row" spacing={2}>
-                    <Button variant="outlined" startIcon={<Calendar size={16} />} sx={{ borderColor: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.7)', fontWeight: 900, borderRadius: 3 }}>Last 12 Months</Button>
-                    <Button variant="contained" sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 900, px: 3, borderRadius: 3 }}>Export Audit</Button>
+                    <Chip icon={<Calendar size={16} />} label="All recorded payments" variant="outlined" sx={{ fontWeight: 900, borderRadius: 3, alignSelf: 'center' }} />
+                    <Button
+                        variant="contained"
+                        disabled={!passports.length}
+                        onClick={() => downloadCsv(
+                            'bin-roi-by-property.csv',
+                            ['Property', 'Rent collected (AED)', 'Rent outstanding (AED)', 'Maintenance cost (AED)'],
+                            passports.map((p: any) => [p.propertyName || p.id, p.rentCollectedTotal || 0, p.rentOutstandingTotal || 0, p.maintenanceCostTotal || 0]),
+                        )}
+                        sx={{ bgcolor: binThemeTokens.gold, color: '#111827', fontWeight: 900, px: 3, borderRadius: 3 }}
+                    >
+                        Export CSV
+                    </Button>
                 </Stack>
             </Box>
 
@@ -192,8 +206,8 @@ export default function OwnerRoiPage() {
                         </Typography>
                     </Grid>
                     <Grid item xs={12} md={3} sx={{ textAlign: 'right' }}>
-                        <Button variant="contained" sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, px: 3, borderRadius: 3 }}>
-                            Request Review
+                        <Button variant="contained" onClick={() => navigate('/owner/complaint')} sx={{ bgcolor: binThemeTokens.gold, color: '#111827', fontWeight: 950, px: 3, borderRadius: 3 }}>
+                            Request review
                         </Button>
                     </Grid>
                 </Grid>
