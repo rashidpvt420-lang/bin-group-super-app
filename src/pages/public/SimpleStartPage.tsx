@@ -1,7 +1,7 @@
 import React from 'react';
 import { Box, Button, Chip, Container, Grid, Paper, Stack, Typography, alpha } from '@mui/material';
-import { ArrowRight, Award, Briefcase, Building2, CheckCircle2, Globe, Home, Mail, MapPin, MessageSquare, Phone, Search, ShieldCheck, Sparkles, UserRound, Wrench, Zap } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { ArrowRight, Award, Briefcase, Building2, CheckCircle2, Globe, Home, Mail, MapPin, MessageSquare, Phone, Search, ShieldCheck, Smartphone, Sparkles, UserRound, Wrench, Zap } from 'lucide-react';
+import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import SafeIcon from '../../components/SafeIcon';
@@ -12,7 +12,8 @@ const ink = '#111827';
 const line = '#E8E3D7';
 const muted = '#667085';
 
-const serviceAreas = ['Al Ain', 'Abu Dhabi', 'Dubai', 'Sharjah', 'Ajman', 'Ras Al Khaimah', 'Fujairah', 'Umm Al Quwain'];
+const serviceAreasEn = ['Al Ain', 'Abu Dhabi', 'Dubai', 'Sharjah', 'Ajman', 'Ras Al Khaimah', 'Fujairah', 'Umm Al Quwain'];
+const serviceAreasAr = ['العين', 'أبوظبي', 'دبي', 'الشارقة', 'عجمان', 'رأس الخيمة', 'الفجيرة', 'أم القيوين'];
 
 type CompanyContent = {
   stats: [string, string][];
@@ -30,6 +31,10 @@ type CompanyContent = {
   ctaWhatsApp: string;
   ctaEmail: string;
   location: string;
+  appTitle: string;
+  appBody: string;
+  appCta: string;
+  appBadge: string;
 };
 
 const companyContent: Record<'en' | 'ar', CompanyContent> = {
@@ -62,6 +67,10 @@ const companyContent: Record<'en' | 'ar', CompanyContent> = {
     ctaWhatsApp: 'WhatsApp BIN GROUP',
     ctaEmail: 'Email Us',
     location: 'Al Ain, United Arab Emirates',
+    appTitle: 'BIN GROUP Super App',
+    appBody: 'The Android Super App (package ae.bingroups.superapp) is in store preparation. There is no public Play Store link yet — contact us to join early access.',
+    appCta: 'Ask about Android early access',
+    appBadge: 'Android app coming soon',
   },
   ar: {
     stats: [['دقيقة', 'للفهم'], ['5', 'ملفات مترابطة'], ['7', 'إمارات'], ['إثبات', 'صور · موقع · وقت']],
@@ -92,6 +101,10 @@ const companyContent: Record<'en' | 'ar', CompanyContent> = {
     ctaWhatsApp: 'واتساب BIN GROUP',
     ctaEmail: 'راسلنا',
     location: 'العين، الإمارات العربية المتحدة',
+    appTitle: 'تطبيق BIN GROUP',
+    appBody: 'تطبيق أندرويد (الحزمة ae.bingroups.superapp) قيد التحضير للمتجر. لا يوجد رابط Play Store عام بعد — تواصل معنا للانضمام للوصول المبكر.',
+    appCta: 'اسأل عن الوصول المبكر لأندرويد',
+    appBadge: 'تطبيق أندرويد قريباً',
   },
 };
 
@@ -251,7 +264,7 @@ export default function SimpleStartPage() {
                   {ar ? 'EN' : 'AR'}
                 </Button>
                 <Chip icon={<ShieldCheck size={16} />} label={ar ? 'BIN GROUP · إدارة العقارات والصيانة' : 'BIN GROUP · Property Management & Maintenance'} sx={{ bgcolor: alpha(binThemeTokens.gold, 0.15), color: binThemeTokens.goldHover, fontWeight: 950 }} />
-                <Typography variant="h2" sx={{ color: '#111827', fontWeight: 950, letterSpacing: -1.2, lineHeight: 1.08, maxWidth: 860 }}>
+                <Typography component="h1" variant="h2" sx={{ color: '#111827', fontWeight: 950, letterSpacing: -1.2, lineHeight: 1.08, maxWidth: 860 }}>
                   {ar ? 'كيف تريد أن نساعدك اليوم؟' : 'How can we help you today?'}
                 </Typography>
                 <Typography sx={{ color: '#667085', fontWeight: 750, lineHeight: 1.8, maxWidth: 820 }}>
@@ -367,7 +380,7 @@ export default function SimpleStartPage() {
 
       <Section chip={c.sections.coverage} title={c.sections.coverage}>
         <Stack direction="row" flexWrap="wrap" justifyContent="center" sx={{ gap: 1.5 }}>
-          {serviceAreas.map(area => (
+          {(ar ? serviceAreasAr : serviceAreasEn).map(area => (
             <Box key={area} sx={{ px: 3, py: 1.2, bgcolor: '#fff', border: `1.5px solid ${alpha(gold, .28)}`, borderRadius: 2.5 }}>
               <Stack direction="row" spacing={1} alignItems="center">
                 <MapPin size={14} color={gold} />
@@ -375,6 +388,21 @@ export default function SimpleStartPage() {
               </Stack>
             </Box>
           ))}
+        </Stack>
+      </Section>
+
+
+      <Section chip={c.appBadge} title={c.appTitle} subtitle={c.appBody}>
+        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} justifyContent="center" alignItems="center">
+          <Chip icon={<Smartphone size={16} />} label={c.appBadge} sx={{ bgcolor: alpha(gold, 0.1), color: '#6F5522', fontWeight: 950, border: `1px solid ${alpha(gold, 0.25)}` }} />
+          <Button
+            variant="contained"
+            startIcon={<MessageSquare size={18} />}
+            onClick={() => window.open(`https://wa.me/${whatsappDigits}`, '_blank')}
+            sx={{ bgcolor: gold, color: '#111827', fontWeight: 950, textTransform: 'none' }}
+          >
+            {c.appCta}
+          </Button>
         </Stack>
       </Section>
 
@@ -411,10 +439,10 @@ export default function SimpleStartPage() {
             </Stack>
 
             <Stack direction="row" spacing={2} flexWrap="wrap" justifyContent="center" sx={{ mt: 6 }}>
-              <Button onClick={() => navigate('/support')} sx={{ color: alpha(gold, 0.7), fontWeight: 800, textTransform: 'none' }}>{ar ? 'الدعم' : 'Support'}</Button>
-              <Button onClick={() => navigate('/privacy')} sx={{ color: alpha(gold, 0.7), fontWeight: 800, textTransform: 'none' }}>{ar ? 'الخصوصية' : 'Privacy'}</Button>
-              <Button onClick={() => navigate('/terms')} sx={{ color: alpha(gold, 0.7), fontWeight: 800, textTransform: 'none' }}>{ar ? 'الشروط' : 'Terms'}</Button>
-              <Button onClick={() => navigate('/login?intendedRole=admin')} sx={{ color: alpha(gold, 0.7), fontWeight: 800, textTransform: 'none' }}>{ar ? 'دخول الإدارة' : 'Admin Login'}</Button>
+              <Button component={RouterLink} to="/support" sx={{ color: alpha(gold, 0.7), fontWeight: 800, textTransform: 'none' }}>{ar ? 'الدعم' : 'Support'}</Button>
+              <Button component={RouterLink} to="/privacy" sx={{ color: alpha(gold, 0.7), fontWeight: 800, textTransform: 'none' }}>{ar ? 'الخصوصية' : 'Privacy'}</Button>
+              <Button component={RouterLink} to="/terms" sx={{ color: alpha(gold, 0.7), fontWeight: 800, textTransform: 'none' }}>{ar ? 'الشروط' : 'Terms'}</Button>
+              <Button component={RouterLink} to="/admin" sx={{ color: alpha(gold, 0.7), fontWeight: 800, textTransform: 'none' }}>{ar ? 'دخول الإدارة' : 'Admin Login'}</Button>
             </Stack>
           </Stack>
         </Container>
