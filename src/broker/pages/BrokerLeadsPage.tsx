@@ -40,6 +40,19 @@ import BrokerPageFrame from '../components/BrokerPageFrame';
 const normalizeEmail = (value: unknown) => String(value || '').trim().toLowerCase();
 const clean = (value: unknown) => String(value || '').trim();
 
+// Lead contact checks. Phone and email stay optional, but if given they must be real.
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+const normaliseUaePhone = (value: string) => value.replace(/[\s()-]/g, '');
+const UAE_PHONE_PATTERN = /^(\+971|00971|0)?5\d{8}$|^(\+971|00971|0)?[2-9]\d{7}$/;
+const leadFieldErrors = (input: { leadName: string; phone: string; email: string; budget: string }, isRTL = false) => {
+    const errors: Partial<Record<'leadName' | 'phone' | 'email' | 'budget', string>> = {};
+    if ((input.leadName.match(/\p{L}/gu) || []).length < 2) errors.leadName = isRTL ? 'أدخل اسم العميل' : 'Enter the client name';
+    if (input.phone.trim() && !UAE_PHONE_PATTERN.test(normaliseUaePhone(input.phone.trim()))) errors.phone = isRTL ? 'أدخل رقم هاتف إماراتي (+971…)' : 'Enter a UAE phone number (+971…)';
+    if (input.email.trim() && !EMAIL_PATTERN.test(input.email.trim())) errors.email = isRTL ? 'أدخل بريدًا إلكترونيًا صحيحًا' : 'Enter a valid email';
+    if (input.budget.trim() && !/^[\d,.\s]+(k|m)?$/i.test(input.budget.trim())) errors.budget = isRTL ? 'أدخل مبلغًا بالأرقام' : 'Enter an amount in numbers';
+    return errors;
+};
+
 const numericAmount = (value: unknown) => {
     const raw = String(value || '').replace(/[^0-9.]/g, '');
     const amount = Number(raw || 0);
@@ -70,6 +83,7 @@ export default function BrokerLeadsPage({ openFormByDefault = false }: BrokerLea
     const [propertyInterest, setPropertyInterest] = useState('');
     const [location, setLocation] = useState('');
     const [budget, setBudget] = useState('');
+    const [showErrors, setShowErrors] = useState(false);
     const [notes, setNotes] = useState('');
 
     useEffect(() => {
@@ -110,6 +124,7 @@ export default function BrokerLeadsPage({ openFormByDefault = false }: BrokerLea
     }, [leads, searchTerm]);
 
     const resetForm = () => {
+        setShowErrors(false);
         setLeadName('');
         setPhone('');
         setEmail('');
@@ -120,9 +135,13 @@ export default function BrokerLeadsPage({ openFormByDefault = false }: BrokerLea
         setNotes('');
     };
 
+    const fieldErrors = leadFieldErrors({ leadName, phone, email, budget }, isRTL);
+
     const handleAddLead = async (event: React.FormEvent) => {
         event.preventDefault();
         if (!user?.uid || !leadName.trim()) return;
+        setShowErrors(true);
+        if (Object.keys(leadFieldErrors({ leadName, phone, email, budget }, isRTL)).length) return;
 
         setSubmitting(true);
         setNotice(null);
@@ -332,16 +351,16 @@ export default function BrokerLeadsPage({ openFormByDefault = false }: BrokerLea
                 onClose={() => !submitting && setOpenAdd(false)}
                 fullWidth
                 maxWidth="sm"
-                PaperProps={{ sx: { bgcolor: '#020617', color: '#FFF', borderRadius: 5, border: '1px solid rgba(201,166,70,0.28)' } }}
+                PaperProps={{ sx: { bgcolor: '#FFFFFF', color: '#111827', borderRadius: 5, border: '1px solid rgba(201,166,70,0.28)' } }}
             >
                 <form onSubmit={handleAddLead}>
-                    <DialogTitle sx={{ color: binThemeTokens.gold, fontWeight: 950 }}>Register New Lead</DialogTitle>
+                    <DialogTitle sx={{ color: '#7A5C12', fontWeight: 950 }}>{isRTL ? 'تسجيل عميل جديد' : 'Register new lead'}</DialogTitle>
                     <DialogContent>
                         <Stack spacing={2.2} sx={{ pt: 1 }}>
-                            <TextField inputProps={{ 'data-testid': 'broker-lead-client-name' }} fullWidth required label="Client Full Name" value={leadName} onChange={(event) => setLeadName(event.target.value)} />
+                            <TextField inputProps={{ 'data-testid': 'broker-lead-client-name', autoComplete: 'name' }} fullWidth required label={isRTL ? 'الاسم الكامل للعميل' : 'Client full name'} value={leadName} onChange={(event) => setLeadName(event.target.value)} error={showErrors && Boolean(fieldErrors.leadName)} helperText={showErrors ? fieldErrors.leadName : undefined} />
                             <Grid container spacing={2}>
-                                <Grid item xs={12} sm={6}><TextField fullWidth label="Phone Number" value={phone} onChange={(event) => setPhone(event.target.value)} /></Grid>
-                                <Grid item xs={12} sm={6}><TextField fullWidth label="Email Address" value={email} onChange={(event) => setEmail(event.target.value)} /></Grid>
+                                <Grid item xs={12} sm={6}><TextField fullWidth type="tel" inputProps={{ inputMode: 'tel', autoComplete: 'tel', 'data-testid': 'broker-lead-phone' }} label={isRTL ? 'رقم الهاتف' : 'Phone number'} placeholder="+971 5X XXX XXXX" value={phone} onChange={(event) => setPhone(event.target.value)} error={showErrors && Boolean(fieldErrors.phone)} helperText={showErrors ? fieldErrors.phone : undefined} /></Grid>
+                                <Grid item xs={12} sm={6}><TextField fullWidth type="email" inputProps={{ inputMode: 'email', autoComplete: 'email', 'data-testid': 'broker-lead-email' }} label={isRTL ? 'البريد الإلكتروني' : 'Email address'} value={email} onChange={(event) => setEmail(event.target.value)} error={showErrors && Boolean(fieldErrors.email)} helperText={showErrors ? fieldErrors.email : undefined} /></Grid>
                             </Grid>
                             <TextField select fullWidth label="Lead Category" value={leadType} onChange={(event) => setLeadType(event.target.value)}>
                                 <MenuItem value="owner">Property Owner</MenuItem>
@@ -352,15 +371,15 @@ export default function BrokerLeadsPage({ openFormByDefault = false }: BrokerLea
                             <TextField inputProps={{ 'data-testid': 'broker-lead-property-interest' }} fullWidth label="Property Interest / Requirement" value={propertyInterest} onChange={(event) => setPropertyInterest(event.target.value)} />
                             <Grid container spacing={2}>
                                 <Grid item xs={12} sm={6}><TextField fullWidth label="Location / Emirate" value={location} onChange={(event) => setLocation(event.target.value)} /></Grid>
-                                <Grid item xs={12} sm={6}><TextField fullWidth label="Budget Range (AED)" value={budget} onChange={(event) => setBudget(event.target.value)} /></Grid>
+                                <Grid item xs={12} sm={6}><TextField fullWidth inputProps={{ inputMode: 'decimal', 'data-testid': 'broker-lead-budget' }} label={isRTL ? 'الميزانية (درهم)' : 'Budget (AED)'} value={budget} onChange={(event) => setBudget(event.target.value)} error={showErrors && Boolean(fieldErrors.budget)} helperText={showErrors ? fieldErrors.budget : undefined} /></Grid>
                             </Grid>
-                            <TextField fullWidth multiline rows={3} label="Mission Notes" value={notes} onChange={(event) => setNotes(event.target.value)} />
+                            <TextField fullWidth multiline rows={3} label={isRTL ? 'ملاحظات' : 'Notes'} value={notes} onChange={(event) => setNotes(event.target.value)} />
                         </Stack>
                     </DialogContent>
                     <DialogActions sx={{ p: 3 }}>
-                        <Button aria-label={isRTL ? 'رجوع' : 'Back'} onClick={() => { setOpenAdd(false); if (openFormByDefault) navigate('/broker/leads'); }} disabled={submitting} sx={{ color: 'rgba(255,255,255,0.62)' }}>{isRTL ? 'رجوع' : 'Back'}</Button>
-                        <Button data-testid="broker-lead-submit" type="submit" variant="contained" disabled={submitting || !leadName.trim()} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>
-                            {submitting ? <CircularProgress size={20} color="inherit" /> : 'INITIALIZE MISSION'}
+                        <Button aria-label={isRTL ? 'رجوع' : 'Back'} onClick={() => { setOpenAdd(false); if (openFormByDefault) navigate('/broker/leads'); }} disabled={submitting} sx={{ color: '#344054', minHeight: 44 }}>{isRTL ? 'رجوع' : 'Back'}</Button>
+                        <Button data-testid="broker-lead-submit" type="submit" variant="contained" disabled={submitting || !leadName.trim()} sx={{ bgcolor: binThemeTokens.gold, color: '#111827', fontWeight: 950, minHeight: 44 }}>
+                            {submitting ? <CircularProgress size={20} color="inherit" /> : (isRTL ? 'حفظ العميل' : 'Save lead')}
                         </Button>
                     </DialogActions>
                 </form>

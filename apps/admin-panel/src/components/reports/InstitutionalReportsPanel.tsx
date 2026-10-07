@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { db } from '../../lib/firebase';
 import { collection, onSnapshot } from 'firebase/firestore';
+import { humanizeEnum } from '../../utils/humanizeEnum';
 
 /**
  * 📊 INSTITUTIONAL REPORTS PANEL v1.1
@@ -38,7 +39,7 @@ const InstitutionalReportsPanel: React.FC = () => {
       const healthScore = healthValues.length ? Math.round(healthValues.reduce((sum, value) => sum + value, 0) / healthValues.length) : 0;
       const typeCounts = new Map<string, number>();
       rows.forEach((row) => {
-        const type = String(row.propertyType || row.type || 'Property');
+        const type = humanizeEnum(row.propertyType || row.type || 'Property');
         typeCounts.set(type, (typeCounts.get(type) || 0) + 1);
       });
 
@@ -120,6 +121,17 @@ const InstitutionalReportsPanel: React.FC = () => {
     </div>
   );
   if (loadError) return <div className="p-8 bg-[#0a0a0b] text-red-300 min-h-screen">{loadError}</div>;
+  const exportAudit = () => {
+    // Downloads exactly the figures already loaded on this panel (no extra reads, no server write).
+    const payload = { exportedAt: new Date().toISOString(), ...portfolioData };
+    const url = URL.createObjectURL(new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `institutional-audit-${new Date().toISOString().slice(0, 10)}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
   if (portfolioData.unitsActive === 0 && portfolioData.ticketCount === 0) {
     return (
       <div className="p-8 bg-[#0a0a0b] text-white min-h-screen flex items-center justify-center">
@@ -142,8 +154,8 @@ const InstitutionalReportsPanel: React.FC = () => {
           </h1>
           <p className="text-gray-500 font-medium tracking-wide mt-2">Institutional Asset Ledger & Institutional Truth Hub</p>
         </div>
-        <button className="flex items-center gap-3 bg-blue-600 hover:bg-blue-500 px-8 py-3 rounded-xl transition-all font-bold shadow-lg shadow-blue-500/20 uppercase tracking-widest text-xs">
-          <Download size={18} /> Export Sovereign Audit
+        <button type="button" onClick={exportAudit} className="flex items-center gap-3 bg-blue-600 hover:bg-blue-500 px-8 py-3 rounded-xl transition-all font-bold shadow-lg shadow-blue-500/20 uppercase tracking-widest text-xs">
+          <Download size={18} /> Export audit (JSON)
         </button>
       </div>
 

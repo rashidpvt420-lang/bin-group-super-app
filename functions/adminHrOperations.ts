@@ -7,6 +7,10 @@ import { requirePrivilegedMfaSession } from "./adminMfaSession";
 if (!admin.apps.length) admin.initializeApp();
 const db = admin.firestore();
 const FULL_ADMIN_ROLES = new Set(["admin", "super_admin", "ceo", "hr_admin", "hr_manager"]);
+// Credential document types that technician dispatch readiness depends on. Registering one never
+// marks a credential valid: it starts UNVERIFIED until an MFA Admin/HR Manager records a decision
+// with adminRecordTechnicianCredentials (which links the document and sets the readiness status).
+const CREDENTIAL_DOCUMENT_TYPES = new Set(["MEDICAL_CARD", "DRIVING_LICENCE", "DRIVING_LICENSE", "CERTIFICATE"]);
 
 function clean(value: unknown, fallback = "") {
   const text = String(value ?? "").trim();
@@ -35,13 +39,15 @@ async function assertStaff(uid: string) {
 export const adminGetHrOperations = onCall({ cors: true, region: "europe-west3", enforceAppCheck: true }, async (request) => {
   await requireHrAdmin(request);
   await requirePrivilegedMfaSession(request.auth);
-  const [attendanceSnap, leaveSnap, documentSnap] = await Promise.all([
+  const [attendanceSnap, leaveSnap, documentSnap, uploadSnap] = await Promise.all([
     settleSection("attendance", db.collection("staffAttendance").orderBy("workDate", "desc").limit(100).get()),
     settleSection("leaveRequests", db.collection("staffLeaveRequests").orderBy("createdAt", "desc").limit(100).get()),
     settleSection("documents", db.collection("staffHrDocuments").orderBy("createdAt", "desc").limit(100).get()),
+    settleSection("staffUploads", db.collection("staffDocuments").orderBy("createdAt", "desc").limit(100).get()),
   ]);
-  const unavailable = unavailableSections([attendanceSnap, leaveSnap, documentSnap]);
-  if (unavailable.length === 3) {
+  const unavailable = unavailableSections([attendanceSnap, leaveSnap, documentSnap, uploadSnap]);
+  // Staff uploads are supplementary: if all three core HR sections fail, the read is unavailable.
+  if (["attendance", "leaveRequests", "documents"].every((section) => unavailable.includes(section))) {
     throw new HttpsError("unavailable", "HR operations data could not be loaded. Nothing is shown as empty; retry shortly.");
   }
   const mapDocs = (settled: any) => settled.value ? settled.value.docs.map((doc: any) => ({ id: doc.id, ...doc.data() })) : [];
@@ -52,6 +58,19 @@ export const adminGetHrOperations = onCall({ cors: true, region: "europe-west3",
     attendance: mapDocs(attendanceSnap),
     leaveRequests: mapDocs(leaveSnap),
     documents: mapDocs(documentSnap),
+    // Documents staff uploaded themselves (staff vault). Metadata only; file bytes stay behind
+    // Storage rules. HR can verify credential uploads from here instead of re-registering them.
+    staffUploads: mapDocs(uploadSnap).map((entry: any) => ({
+      id: entry.id,
+      uid: entry.uid || entry.technicianId || entry.userId || null,
+      documentType: entry.documentType || null,
+      documentLabel: entry.documentLabel || null,
+      fileName: entry.fileName || entry.documentFileName || null,
+      status: entry.status || null,
+      verificationStatus: entry.verificationStatus || null,
+      credentialVerification: entry.credentialVerification || null,
+      createdAt: typeof entry.createdAt?.toDate === "function" ? entry.createdAt.toDate().toISOString() : null,
+    })),
   };
 });
 
@@ -156,6 +175,7 @@ export const adminRegisterHrDocumentMetadata = onCall({ cors: true, region: "eur
     fileName: clean(request.data?.fileName) || null,
     expiryDate: clean(request.data?.expiryDate) || null,
     status: "ACTIVE",
+    ...(CREDENTIAL_DOCUMENT_TYPES.has(documentType) ? { verificationStatus: "UNVERIFIED" } : {}),
     createdBy: actorId,
     createdAt: now,
     updatedAt: now,

@@ -165,7 +165,7 @@ export default function SOSFeedPage() {
   return (
     <Container maxWidth="lg" sx={{ py: 4 }} data-testid="admin-sos-feed">
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
-        <Typography variant="h4">SOS Emergency Feed (LIVE)</Typography>
+        <Typography variant="h4" sx={{ color: 'text.primary' }}>SOS Emergency Feed (LIVE)</Typography>
         <Button variant={autoRefresh ? 'contained' : 'outlined'} onClick={() => setAutoRefresh(!autoRefresh)}>
           {autoRefresh ? '🔴 Live' : '⚪ Paused'}
         </Button>
@@ -176,21 +176,21 @@ export default function SOSFeedPage() {
 
       <Grid container spacing={2} sx={{ mb: 4 }}>
         <Grid item xs={12} sm={6} md={4}>
-          <Paper sx={{ p: 2, backgroundColor: '#ffebee', borderLeft: '4px solid #d32f2f' }}>
-            <Typography color="textSecondary" gutterBottom>Active Emergencies</Typography>
-            <Typography variant="h5" color="error">{activeCount}</Typography>
+          <Paper sx={{ p: 2, backgroundColor: '#ffebee', color: '#111827', borderLeft: '4px solid #d32f2f' }}>
+            <Typography color="#475467" gutterBottom>Active Emergencies</Typography>
+            <Typography variant="h5" color="#B91C1C">{activeCount}</Typography>
           </Paper>
         </Grid>
         <Grid item xs={12} sm={6} md={4}>
-          <Paper sx={{ p: 2, backgroundColor: '#fff3e0', borderLeft: '4px solid #f57c00' }}>
-            <Typography color="textSecondary" gutterBottom>Responded</Typography>
-            <Typography variant="h5" style={{ color: '#f57c00' }}>{respondedCount}</Typography>
+          <Paper sx={{ p: 2, backgroundColor: '#fff3e0', color: '#111827', borderLeft: '4px solid #f57c00' }}>
+            <Typography color="#475467" gutterBottom>Responded</Typography>
+            <Typography variant="h5" style={{ color: '#92400E' }}>{respondedCount}</Typography>
           </Paper>
         </Grid>
         <Grid item xs={12} sm={6} md={4}>
-          <Paper sx={{ p: 2, backgroundColor: '#e8f5e9', borderLeft: '4px solid #4caf50' }}>
-            <Typography color="textSecondary" gutterBottom>Resolved</Typography>
-            <Typography variant="h5" color="success">{resolvedCount}</Typography>
+          <Paper sx={{ p: 2, backgroundColor: '#e8f5e9', color: '#111827', borderLeft: '4px solid #4caf50' }}>
+            <Typography color="#475467" gutterBottom>Resolved</Typography>
+            <Typography variant="h5" color="#047857">{resolvedCount}</Typography>
           </Paper>
         </Grid>
       </Grid>
@@ -198,7 +198,7 @@ export default function SOSFeedPage() {
       {sosEvents.length === 0 && (
         <Paper sx={{ p: 4, mb: 3, textAlign: 'center', borderRadius: 2 }}>
           <Typography variant="h6">No live SOS tickets found.</Typography>
-          <Typography variant="body2" color="textSecondary">This panel reads real maintenanceTickets flagged as SOS/emergency/critical.</Typography>
+          <Typography variant="body2" color="textSecondary">Shows SOS, emergency and critical tickets as they come in.</Typography>
         </Paper>
       )}
 
@@ -252,7 +252,7 @@ export default function SOSFeedPage() {
       </List>
 
       <Box sx={{ mt: 8 }}>
-        <Typography variant="h5" sx={{ mb: 3, fontWeight: '800', color: '#0f172a' }}>Risk Management Controls</Typography>
+        <Typography variant="h5" sx={{ mb: 3, fontWeight: '800', color: 'text.primary' }}>Risk Management Controls</Typography>
         <Grid container spacing={3}>
           <Grid item xs={12} md={6}>
             <Paper sx={{ p: 3, borderRadius: 2 }}>
@@ -261,10 +261,10 @@ export default function SOSFeedPage() {
                 Account restrictions must be handled from verified tenant records with an audit reason. This SOS page does not change user access from a simulated list.
               </Typography>
               <List>
-                <ListItem sx={{ bgcolor: '#f8fafc', borderRadius: 1, mb: 1 }}>
+                <ListItem sx={{ bgcolor: '#f8fafc', color: '#111827', '& .MuiListItemText-secondary': { color: '#475467' }, borderRadius: 1, mb: 1 }}>
                   <ListItemText primary="Verified tenant record required" secondary="Use Tenant Management to review tenancy status, payment records, complaint history, and supporting evidence." />
                 </ListItem>
-                <ListItem sx={{ bgcolor: '#f8fafc', borderRadius: 1, mb: 1 }}>
+                <ListItem sx={{ bgcolor: '#f8fafc', color: '#111827', '& .MuiListItemText-secondary': { color: '#475467' }, borderRadius: 1, mb: 1 }}>
                   <ListItemText primary="Audit reason required" secondary="Any restriction must be linked to an authenticated admin action and preserved in the audit log." />
                 </ListItem>
               </List>

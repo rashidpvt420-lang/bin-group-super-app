@@ -92,7 +92,7 @@ export default function BrokerAttributionProofPage() {
           setter(merged);
         }, (err) => {
           console.warn(`[BrokerAttributionProof] ${collectionName}.${source.field} listener failed:`, err);
-          setWarning('Some attribution records could not load. Check Firestore rules if the chain looks incomplete.');
+          setWarning('Some attribution records could not load, so the chain may be incomplete. Refresh the page to try again.');
         }));
       });
     };

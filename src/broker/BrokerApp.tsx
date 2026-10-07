@@ -49,12 +49,12 @@ const BrokerLayout = ({ children }: { children: React.ReactNode }) => {
       <AppBar position="sticky" elevation={0} sx={{ bgcolor: '#FFFFFF', borderBottom: '1px solid #E5E7EB', zIndex: 1200 }}>
         <Toolbar sx={{ justifyContent: 'space-between', px: { xs: 2, md: 4 }, minHeight: 76, flexDirection: isRTL ? 'row-reverse' : 'row', gap: 1 }}>
           <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={2} alignItems="center" sx={{ minWidth: 0 }}>
-            <Box onClick={() => navigate('/broker/dashboard')} sx={{ p: 1, bgcolor: '#B8932F', borderRadius: 2, color: '#FFFFFF', cursor: 'pointer', display: 'flex' }}>
+            <Box onClick={() => navigate('/broker/dashboard')} sx={{ p: 1, bgcolor: '#7A5C12', borderRadius: 2, color: '#FFFFFF', cursor: 'pointer', display: 'flex' }}>
               <SafeIcon icon={Briefcase} size={20} />
             </Box>
             <Box sx={{ textAlign: isRTL ? 'right' : 'left', minWidth: 0 }}>
-              <Typography variant="h6" sx={{ color: '#B8932F', fontWeight: 950, letterSpacing: 2, lineHeight: 1 }}>{label('broker.portal.title', 'BIN BROKER', 'وسيط BIN')}</Typography>
-              <Typography variant="caption" sx={{ color: '#667085', fontWeight: 900 }}>{label('broker.portal.subtitle', 'PARTNER PORTAL - MADE IN UAE', 'بوابة الشركاء - صنع في الإمارات')}</Typography>
+              <Typography variant="h6" sx={{ color: '#7A5C12', fontWeight: 950, letterSpacing: 2, lineHeight: 1, whiteSpace: 'nowrap' }}>{label('broker.portal.title', 'BIN BROKER', 'وسيط BIN')}</Typography>
+              <Typography variant="caption" sx={{ color: '#667085', fontWeight: 900, display: { xs: 'none', sm: 'block' }, whiteSpace: 'nowrap' }}>{label('broker.portal.subtitle', 'PARTNER PORTAL - MADE IN UAE', 'بوابة الشركاء - صنع في الإمارات')}</Typography>
             </Box>
           </Stack>
           <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} alignItems="center" sx={{ flexShrink: 0 }}>
