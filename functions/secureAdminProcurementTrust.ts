@@ -190,6 +190,7 @@ export const adminCreateVendorRfq = onCall(
     ]);
     if (!ticketSnap.exists) throw new HttpsError("not-found", "Maintenance ticket not found.");
     if (!propertySnap.exists) throw new HttpsError("not-found", "Property not found.");
+    if (!ownerSnap.exists) throw new HttpsError("not-found", "Owner account not found.");
     const ticket = ticketSnap.data() || {};
     const property = propertySnap.data() || {};
     const ticketPropertyId = text(ticket.propertyId, 180);
