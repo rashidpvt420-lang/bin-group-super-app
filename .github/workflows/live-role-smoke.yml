@@ -258,7 +258,7 @@ jobs:
     if: github.event_name == 'workflow_dispatch' && inputs.mode == 'hard-clearance'
     runs-on: ubuntu-latest
     environment: production
-    timeout-minutes: 60
+    timeout-minutes: 120
     permissions:
       contents: read
       actions: read
@@ -294,8 +294,8 @@ jobs:
             }
             echo "Exact same-SHA release/control-plane pair verified."
           else
-            allowed='^(\.github/workflows/firebase-production-deploy\.yml|\.github/workflows/current-main-expression-budget-repair\.yml|\.github/workflows/pr-validation\.yml|\.github/workflows/renewal-pdf-diagnostic-owner-bridge\.yml|\.github/workflows/renewal-pdf-runtime-diagnostic\.yml|\.github/workflows/repair-frozen-sovereign-ai-runtime\.yml|\.github/workflows/live-role-smoke\.yml|\.github/workflows/operational-application-evidence\.yml|\.github/workflows/operational-provider-evidence\.yml|\.github/workflows/privileged-access-rotation-evidence\.yml|\.github/workflows/technician-physical-evidence\.yml|scripts/finalize-operational-provider-evidence\.mjs|scripts/hard-clearance-production-revalidation\.mjs|scripts/launch-status\.mjs|scripts/publish-direct-operational-proof\.mjs|scripts/publish-operational-application-evidence\.mjs|scripts/publish-operational-provider-evidence\.mjs|scripts/resolve-admin-app-check-site-key\.mjs|scripts/run-frozen-release-evidence\.mjs|scripts/verify-ai-live-evidence\.mjs|scripts/verify-hard-launch-approval\.mjs|scripts/verify-operational-readiness\.mjs|tests/launch/ai-operational-contract\.test\.mjs|tests/launch/external-gate-production-provenance\.test\.mjs|tests/launch/final-operational-evidence-producers\.test\.mjs|tests/launch/hard-clearance-revalidation\.test\.mjs|tests/launch/operational-application-evidence-audit\.test\.mjs)$'
-            supplemental_allowed='^(scripts/hard-launch-status\.mjs|scripts/lib/hard-launch-control\.mjs|scripts/lib/operational-proof-schema\.mjs|scripts/prepare-operational-application-evidence\.mjs|scripts/print-hard-launch-blockers\.mjs|scripts/verify-operational-application-evidence\.mjs|scripts/verify-launch-clearance\.mjs|scripts/reconcile-hard-public-evidence\.mjs|tests/launch/hard-launch-blocker-plan\.test\.mjs|tests/launch/phase1-manual-public-launch-policy\.test\.mjs)$'
+            allowed='^(\.github/workflows/firebase-production-deploy\.yml|\.github/workflows/current-main-expression-budget-repair\.yml|\.github/workflows/pr-validation\.yml|\.github/workflows/renewal-pdf-diagnostic-owner-bridge\.yml|\.github/workflows/renewal-pdf-runtime-diagnostic\.yml|\.github/workflows/repair-frozen-sovereign-ai-runtime\.yml|\.github/workflows/live-role-smoke\.yml|\.github/workflows/operational-application-evidence\.yml|\.github/workflows/operational-provider-evidence\.yml|\.github/workflows/privileged-access-rotation-evidence\.yml|\.github/workflows/technician-physical-evidence\.yml|scripts/finalize-operational-provider-evidence\.mjs|scripts/hard-clearance-production-revalidation\.mjs|scripts/launch-status\.mjs|scripts/publish-direct-operational-proof\.mjs|scripts/publish-operational-application-evidence\.mjs|scripts/publish-operational-provider-evidence\.mjs|scripts/resolve-admin-app-check-site-key\.mjs|scripts/run-frozen-release-evidence\.mjs|scripts/verify-ai-live-evidence\.mjs|scripts/verify-hard-launch-approval\.mjs|scripts/verify-operational-readiness\.mjs|tests/launch/ai-operational-contract\.test\.mjs|tests/launch/external-gate-production-provenance\.test\.mjs|tests/launch/final-operational-evidence-producers\.test\.mjs|tests/launch/hard-clearance-revalidation\.test\.mjs|tests/launch/operational-application-evidence-audit\.test\.mjs|scripts/resolve-live-pilot-window\.mjs)$'
+            supplemental_allowed='^(scripts/hard-launch-status\.mjs|scripts/lib/hard-launch-control\.mjs|scripts/lib/operational-proof-schema\.mjs|scripts/prepare-operational-application-evidence\.mjs|scripts/print-hard-launch-blockers\.mjs|scripts/verify-operational-application-evidence\.mjs|scripts/verify-launch-clearance\.mjs|scripts/reconcile-hard-public-evidence\.mjs|tests/launch/hard-launch-blocker-plan\.test\.mjs|tests/launch/phase1-manual-public-launch-policy\.test\.mjs|\.github/workflows/public-launch-evidence-backfill\.yml|scripts/build-command-center-evidence-manifest\.mjs|tests/launch/public-launch-evidence-workflow-bridge\.test\.mjs|scripts/resolve-live-pilot-window\.mjs|tests/launch/live-pilot-provenance\.test\.mjs|scripts/owner-launch-run-correlation\.sh|scripts/select-new-exact-sha-workflow-run\.mjs|tests/launch/exact-sha-workflow-run-correlation\.test\.mjs|\.github/workflows/owner-privileged-cleanup-command\.yml)$'
             while IFS= read -r file; do
               [[ -z "$file" || "$file" =~ $allowed || "$file" =~ $supplemental_allowed ]] || { echo "::error::Non-control-plane file changed since pilot release: $file"; exit 1; }
             done <<< "$changed"
@@ -321,20 +321,27 @@ jobs:
 
           validate_run() {
             local run_id="$1"
-            local run_json artifacts_json
-            run_json="$(curl --fail --silent --show-error -H "$auth_header" -H "$accept_header" -H "$version_header" "$api/actions/runs/$run_id")"
+            local attempt_json artifacts_json
+            attempt_json="$(curl --fail --silent --show-error -H "$auth_header" -H "$accept_header" -H "$version_header" "$api/actions/runs/$run_id/attempts/1")"
             jq -e --arg sha "$TARGET_SHA" '
               .name == "Live Role Smoke Tests" and
               .path == ".github/workflows/live-role-smoke.yml" and
               .head_branch == "main" and
               .head_sha == $sha and
               .event == "workflow_dispatch" and
+              .run_attempt == 1 and
               .status == "completed" and
               .conclusion == "success"
-            ' <<<"$run_json" >/dev/null || return 1
+            ' <<<"$attempt_json" >/dev/null || return 1
 
             artifacts_json="$(curl --fail --silent --show-error -H "$auth_header" -H "$accept_header" -H "$version_header" "$api/actions/runs/$run_id/artifacts?per_page=100")"
-            jq -e --arg name "$ARTIFACT_NAME" '[.artifacts[] | select(.name == $name and .expired == false)] | length == 1' <<<"$artifacts_json" >/dev/null
+            jq -e --arg name "$ARTIFACT_NAME" --arg completed "$(jq -r '.updated_at' <<<"$attempt_json")" '
+              [.artifacts[] | select(
+                .name == $name and
+                .expired == false and
+                (.created_at | fromdateiso8601) <= ($completed | fromdateiso8601)
+              )] | length == 1
+            ' <<<"$artifacts_json" >/dev/null
           }
 
           requested="$(printf '%s' "$REQUESTED_RUN_ID" | xargs)"
@@ -343,8 +350,8 @@ jobs:
             validate_run "$requested" || { echo "::error::Requested live-evidence run is not the exact successful main workflow_dispatch run with the frozen-release artifact."; exit 1; }
             resolved="$requested"
           else
-            runs_json="$(curl --fail --silent --show-error -H "$auth_header" -H "$accept_header" -H "$version_header" "$api/actions/workflows/live-role-smoke.yml/runs?event=workflow_dispatch&branch=main&status=success&per_page=100")"
-            mapfile -t candidates < <(jq -r --arg sha "$TARGET_SHA" '.workflow_runs[] | select(.name == "Live Role Smoke Tests" and .path == ".github/workflows/live-role-smoke.yml" and .head_branch == "main" and .head_sha == $sha and .event == "workflow_dispatch" and .status == "completed" and .conclusion == "success") | .id' <<<"$runs_json")
+            runs_json="$(curl --fail --silent --show-error -H "$auth_header" -H "$accept_header" -H "$version_header" "$api/actions/workflows/live-role-smoke.yml/runs?event=workflow_dispatch&branch=main&per_page=100")"
+            mapfile -t candidates < <(jq -r --arg sha "$TARGET_SHA" '.workflow_runs[] | select(.name == "Live Role Smoke Tests" and .path == ".github/workflows/live-role-smoke.yml" and .head_branch == "main" and .head_sha == $sha and .event == "workflow_dispatch") | .id' <<<"$runs_json")
             valid=()
             for run_id in "${candidates[@]}"; do
               if validate_run "$run_id"; then valid+=("$run_id"); fi
@@ -368,6 +375,7 @@ jobs:
           cp control-plane/scripts/hard-clearance-production-revalidation.mjs release/scripts/hard-clearance-production-revalidation.mjs
           cp control-plane/scripts/resolve-admin-app-check-site-key.mjs release/scripts/resolve-admin-app-check-site-key.mjs
           cp control-plane/scripts/verify-hard-launch-approval.mjs release/scripts/verify-hard-launch-approval.mjs
+          cp control-plane/scripts/resolve-live-pilot-window.mjs release/scripts/resolve-live-pilot-window.mjs
           cp control-plane/scripts/verify-launch-clearance.mjs release/scripts/verify-launch-clearance.mjs
           cp control-plane/scripts/reconcile-hard-public-evidence.mjs release/scripts/reconcile-hard-public-evidence.mjs
           cp control-plane/scripts/verify-operational-readiness.mjs release/scripts/verify-operational-readiness.mjs
@@ -429,6 +437,105 @@ jobs:
           E2E_BROKER_MAILBOX_CLIENT_SECRET: ${{ secrets.E2E_BROKER_MAILBOX_CLIENT_SECRET }}
           E2E_BROKER_MAILBOX_REFRESH_TOKEN: ${{ secrets.E2E_BROKER_MAILBOX_REFRESH_TOKEN }}
         run: node scripts/resolve-production-mailbox-identities.mjs
+
+      - name: Prepare frozen-release evidence for current production semantics
+        working-directory: release
+        run: |
+          set -euo pipefail
+          node scripts/apply-five-role-business-evidence-fixes.mjs
+          node scripts/patch-protected-admin-staff-access-interaction.mjs
+          node scripts/harden-repeated-business-evidence.mjs
+          node scripts/patch-phase21-postdeploy-evidence.mjs
+
+          # The frozen Owner evidence wrapper originally varied latitude and longitude
+          # by the same tiny scalar. Production identity authority rounds GEO_UNIT to
+          # 5 decimals, so repeated real evidence runs eventually reused a registry
+          # identity and were correctly rejected as ALREADY_EXISTS. Keep duplicate
+          # detection unchanged; widen only the synthetic evidence identity space.
+          node --input-type=module <<'NODE'
+          import { readFileSync, writeFileSync } from 'node:fs';
+
+          const target = 'scripts/run-owner-inspection-first-production-evidence-unique.mjs';
+          const source = readFileSync(target, 'utf8');
+          const oldCoordinates = `const coordinateOffset = ((Number.parseInt(seed.slice(0, 4), 16) % 8001) - 4000) / 10_000_000;
+          const evidenceLat = (24.4958 + coordinateOffset).toFixed(7);
+          const evidenceLng = (54.4074 + coordinateOffset).toFixed(7);`;
+          const newCoordinates = `const latitudeOffset = ((Number.parseInt(seed.slice(0, 8), 16) % 60001) - 30000) / 10_000_000;
+          const longitudeOffset = ((Number.parseInt(seed.slice(8, 16), 16) % 60001) - 30000) / 10_000_000;
+          const evidenceLat = (24.4958 + latitudeOffset).toFixed(7);
+          const evidenceLng = (54.4074 + longitudeOffset).toFixed(7);`;
+          const oldLog = `  \`[owner-evidence-identity] isolated synthetic identity seed=\${seed.slice(0, 10)} offset=\${coordinateOffset.toFixed(7)}\`,`;
+          const newLog = `  \`[owner-evidence-identity] isolated synthetic identity seed=\${seed.slice(0, 10)} latOffset=\${latitudeOffset.toFixed(7)} lngOffset=\${longitudeOffset.toFixed(7)}\`,`;
+
+          if (source.split(oldCoordinates).length !== 2 || source.split(oldLog).length !== 2) {
+            throw new Error('Frozen Owner evidence identity wrapper changed unexpectedly; refusing runtime patch.');
+          }
+          const patched = source.replace(oldCoordinates, newCoordinates).replace(oldLog, newLog);
+          writeFileSync(target, patched, { mode: 0o600 });
+          console.log('[hard-clearance-owner-identity] expanded synthetic GEO identity space while preserving duplicate detection.');
+          NODE
+
+          node scripts/prepare-protected-business-fixtures.mjs
+
+      - name: Refresh role evidence without restarting the pilot
+        working-directory: release
+        env:
+          E2E_STRICT_ROLES: 'true'
+          E2E_REQUIRE_FOUNDER_MFA: 'true'
+          E2E_OWNER_MAILBOX_CLIENT_ID: ${{ secrets.E2E_OWNER_MAILBOX_CLIENT_ID }}
+          E2E_OWNER_MAILBOX_CLIENT_SECRET: ${{ secrets.E2E_OWNER_MAILBOX_CLIENT_SECRET }}
+          E2E_OWNER_MAILBOX_REFRESH_TOKEN: ${{ secrets.E2E_OWNER_MAILBOX_REFRESH_TOKEN }}
+          E2E_BROKER_MAILBOX_CLIENT_ID: ${{ secrets.E2E_BROKER_MAILBOX_CLIENT_ID }}
+          E2E_BROKER_MAILBOX_CLIENT_SECRET: ${{ secrets.E2E_BROKER_MAILBOX_CLIENT_SECRET }}
+          E2E_BROKER_MAILBOX_REFRESH_TOKEN: ${{ secrets.E2E_BROKER_MAILBOX_REFRESH_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          print_owner_failure_diagnostic() {
+            node --input-type=module <<'NODE'
+          import { existsSync, readFileSync, readdirSync } from 'node:fs';
+          import path from 'node:path';
+
+          const dir = path.resolve('launch_package/artifacts');
+          if (!existsSync(dir)) {
+            console.error('[hard-clearance-owner-diagnostic] no artifacts directory found');
+            process.exit(0);
+          }
+
+          const files = readdirSync(dir)
+            .filter((name) => /^business-owner-.*\.stdio\.log$/.test(name))
+            .sort();
+          if (!files.length) {
+            console.error('[hard-clearance-owner-diagnostic] no Owner stdio diagnostic found');
+            process.exit(0);
+          }
+
+          const source = readFileSync(path.join(dir, files.at(-1)), 'utf8');
+          const selected = source.split(/\r?\n/).filter((line) =>
+            /\[owner-inspection-first-evidence\]|\[owner-business-suite\]|failed HTTP \d+|callable error|Timed out waiting for/i.test(line)
+          );
+          const sanitize = (line) => line
+            .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, '[redacted-email]')
+            .replace(/\b\d{6}\b/g, '[redacted-code]')
+            .replace(/Bearer\s+[A-Za-z0-9._~-]+/gi, 'Bearer [redacted-token]')
+            .replace(/[A-Za-z0-9_-]{80,}/g, '[redacted-long-token]')
+            .slice(0, 1200);
+
+          console.error('[hard-clearance-owner-diagnostic] sanitized Owner lifecycle failure:');
+          for (const line of selected.slice(-20)) console.error(sanitize(line));
+          NODE
+          }
+
+          if ! node scripts/run-critical-evidence.mjs --suite all-business; then
+            echo "::warning::Fresh five-role evidence attempt 1 failed; rebuilding protected fixtures and retrying once without changing the frozen pilot."
+            node scripts/prepare-protected-business-fixtures.mjs
+            if ! node scripts/run-critical-evidence.mjs --suite all-business; then
+              print_owner_failure_diagnostic
+              echo "::error::Fresh five-role evidence failed twice after a protected fixture rebuild."
+              exit 1
+            fi
+          fi
+          node scripts/run-critical-evidence.mjs --suite launchAuditLive
 
       - name: Generate fresh production hard-clearance revalidation
         working-directory: release
@@ -518,6 +625,7 @@ jobs:
           set -euo pipefail
           cp control-plane/scripts/launch-status.mjs release/scripts/launch-status.mjs
           cp control-plane/scripts/hard-clearance-production-revalidation.mjs release/scripts/hard-clearance-production-revalidation.mjs
+          cp control-plane/scripts/resolve-live-pilot-window.mjs release/scripts/resolve-live-pilot-window.mjs
           cp control-plane/scripts/verify-hard-launch-approval.mjs release/scripts/verify-hard-launch-approval.mjs
           cp control-plane/scripts/verify-launch-clearance.mjs release/scripts/verify-launch-clearance.mjs
           cp control-plane/scripts/reconcile-hard-public-evidence.mjs release/scripts/reconcile-hard-public-evidence.mjs
@@ -620,6 +728,15 @@ jobs:
           node scripts/launch-status.mjs --hard
           node scripts/reconcile-hard-public-evidence.mjs
           npm run launch:hard-gate
+
+      - name: Upload hard clearance blocker diagnostics
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: hard-clearance-blockers-${{ inputs.expected_commit_sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: release/launch_package/hard-clearance-physical-blockers.json
+          if-no-files-found: warn
+          retention-days: 14
 
       - name: Upload hard launch clearance evidence
         if: success()

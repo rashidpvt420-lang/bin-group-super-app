@@ -90,7 +90,7 @@ export default function PublicLaunchOpsPanel() {
                     <Typography variant="h4" fontWeight="black" sx={{ color: '#0f172a', letterSpacing: -1 }}>
                         PUBLIC LAUNCH OPS <Chip label="LIVE" size="small" color="success" sx={{ ml: 1, fontWeight: 'bold' }} />
                     </Typography>
-                    <Typography variant="body2" color="text.secondary">
+                    <Typography variant="body2" color="#475467">
                         Scalability Monitoring & Fraud Prevention (Firestore Live Sync)
                     </Typography>
                 </Box>
@@ -152,7 +152,7 @@ export default function PublicLaunchOpsPanel() {
                             <Typography variant="h6" fontWeight="bold">Onboarding Funnel</Typography>
                         </Stack>
                         <Stack spacing={2}>
-                            <Box sx={{ p: 2, bgcolor: '#f8fafc', borderRadius: 2 }}>
+                            <Box sx={{ p: 2, bgcolor: '#f8fafc', color: '#111827', borderRadius: 2 }}>
                                 <Typography variant="caption" sx={{ display: 'block', mb: 1 }}>Public CV Analysis (Live)</Typography>
                                 <Stack direction="row" spacing={1} justifyContent="space-between" textAlign="center">
                                     <Box><Typography variant="h6">{metrics.conversionRate > 0 ? '100%' : '0%'}</Typography><Typography variant="caption">Quoted</Typography></Box>

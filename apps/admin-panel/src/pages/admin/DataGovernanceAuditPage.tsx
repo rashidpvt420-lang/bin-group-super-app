@@ -1,6 +1,7 @@
 import React from 'react';
 import { Alert, Box, Button, Card, CardContent, Chip, CircularProgress, Grid, MenuItem, Stack, TextField, Typography } from '@mui/material';
 import { addDoc, collection, db, limit, onSnapshot, orderBy, query, serverTimestamp } from '../../lib/firebase';
+import { humanizeEnum } from '../../utils/humanizeEnum';
 
 type GovernanceEvent = { id: string; dataCategory?: string; lawfulBasis?: string; retentionClass?: string; roleAccessPolicy?: string[]; subjectRef?: string; ticketId?: string; createdAt?: any };
 const retentionClasses = ['maintenance_evidence_standard', 'chat_history_180_days', 'financial_record_7_years', 'safety_incident_7_years', 'delete_after_case_close'];
@@ -55,7 +56,7 @@ export default function DataGovernanceAuditPage() {
       <Card sx={{ bgcolor: '#0f172a', color: '#fff', border: '1px solid rgba(218,165,32,0.22)', mb: 3 }}><CardContent><Grid container spacing={2}>
         <Grid item xs={12} md={3}><TextField fullWidth size="small" label="Data category" value={form.dataCategory} onChange={(e) => setForm({ ...form, dataCategory: e.target.value })} /></Grid>
         <Grid item xs={12} md={3}><TextField fullWidth size="small" label="Lawful basis" value={form.lawfulBasis} onChange={(e) => setForm({ ...form, lawfulBasis: e.target.value })} /></Grid>
-        <Grid item xs={12} md={3}><TextField select fullWidth size="small" label="Retention class" value={form.retentionClass} onChange={(e) => setForm({ ...form, retentionClass: e.target.value })}>{retentionClasses.map((x) => <MenuItem key={x} value={x}>{x}</MenuItem>)}</TextField></Grid>
+        <Grid item xs={12} md={3}><TextField select fullWidth size="small" label="Retention class" value={form.retentionClass} onChange={(e) => setForm({ ...form, retentionClass: e.target.value })}>{retentionClasses.map((x) => <MenuItem key={x} value={x}>{humanizeEnum(x)}</MenuItem>)}</TextField></Grid>
         <Grid item xs={12} md={3}><TextField fullWidth size="small" label="Role access policy" value={form.roleAccessPolicy} onChange={(e) => setForm({ ...form, roleAccessPolicy: e.target.value })} /></Grid>
         <Grid item xs={12} md={3}><TextField fullWidth size="small" label="Subject reference" value={form.subjectRef} onChange={(e) => setForm({ ...form, subjectRef: e.target.value })} /></Grid>
         <Grid item xs={12} md={3}><TextField fullWidth size="small" label="Ticket ID optional" value={form.ticketId} onChange={(e) => setForm({ ...form, ticketId: e.target.value })} /></Grid>
@@ -67,8 +68,8 @@ export default function DataGovernanceAuditPage() {
         <Alert severity="info">No governance events have been recorded yet.</Alert>
       ) : (
       <Grid container spacing={2}>{events.map((event) => <Grid item xs={12} md={6} key={event.id}><Card sx={{ bgcolor: '#0f172a', color: '#fff', border: '1px solid rgba(255,255,255,0.08)' }}><CardContent>
-        <Stack direction="row" justifyContent="space-between" spacing={2}><Box><Typography variant="h6" sx={{ fontWeight: 950 }}>{event.dataCategory}</Typography><Typography sx={{ color: 'rgba(255,255,255,0.6)' }}>{event.lawfulBasis} · {event.subjectRef || event.ticketId || event.id}</Typography></Box><Chip label={event.retentionClass || 'retention'} /></Stack>
-        <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ mt: 2 }}>{(event.roleAccessPolicy || []).map((role) => <Chip key={role} label={role} variant="outlined" sx={{ color: '#fff', borderColor: 'rgba(255,255,255,0.2)' }} />)}</Stack>
+        <Stack direction="row" justifyContent="space-between" spacing={2}><Box><Typography variant="h6" sx={{ fontWeight: 950 }}>{humanizeEnum(event.dataCategory)}</Typography><Typography sx={{ color: 'rgba(255,255,255,0.6)' }}>{humanizeEnum(event.lawfulBasis)} · {event.subjectRef || event.ticketId || event.id}</Typography></Box><Chip label={event.retentionClass ? humanizeEnum(event.retentionClass) : 'Retention not set'} /></Stack>
+        <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ mt: 2 }}>{(event.roleAccessPolicy || []).map((role) => <Chip key={role} label={humanizeEnum(role)} variant="outlined" sx={{ color: '#fff', borderColor: 'rgba(255,255,255,0.2)' }} />)}</Stack>
       </CardContent></Card></Grid>)}</Grid>
       )}
     </Box>

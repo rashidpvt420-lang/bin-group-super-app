@@ -30,6 +30,7 @@ import { functions, httpsCallable } from '../../lib/firebase';
 import { binThemeTokens } from '../../theme/adminTheme';
 import { describeIncompleteHrRead } from '../../utils/hrReadCompleteness';
 import { onboardingSaveNotice, staffOperationErrorMessage, type StaffNotice } from '../../utils/staffLifecycleNotices';
+import TechnicianCredentialsPanel from './TechnicianCredentialsPanel';
 
 const EMIRATES = ['Dubai', 'Abu Dhabi', 'Sharjah', 'Ajman', 'Umm Al Quwain', 'Ras Al Khaimah', 'Fujairah', 'Al Ain'];
 
@@ -362,6 +363,8 @@ export default function StaffLifecycleDetailsDialog({
                     <FormControlLabel control={<Checkbox checked={checklist.activationApproved} disabled={!canManage || terminal} onChange={(e) => setChecklist({ ...checklist, activationApproved: e.target.checked })} />} label="Activation approved" />
                     {canManage && <Button fullWidth variant="contained" onClick={() => void saveOnboarding()} disabled={busy || terminal} sx={{ mt: 2, bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>SAVE ONBOARDING</Button>}
                   </Paper>
+
+                  {staff.role === 'technician' && <TechnicianCredentialsPanel uid={uid} credentials={staff.credentials || null} canManage={canManage} disabled={terminal} onSaved={async () => { await load(); await onChanged?.(); }} />}
 
                   <Paper sx={{ p: 3, bgcolor: 'rgba(15,23,42,.82)', borderRadius: 4 }}>
                     <Typography variant="h6" fontWeight={950}>Lifecycle actions</Typography>

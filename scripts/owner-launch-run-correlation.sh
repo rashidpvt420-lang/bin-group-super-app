@@ -20,6 +20,11 @@ owner_locate_new_exact_sha_workflow_run() {
   local baseline_file="$3"
   local requested_max_polls="${4:-60}"
   local delay_seconds="${5:-5}"
+  local not_before="${6:-}"
+  local selector_args=("$expected_sha" "$baseline_file")
+  if [[ -n "$not_before" ]]; then
+    selector_args+=("$not_before")
+  fi
   local max_polls="$requested_max_polls"
   local selector_error
   local runs_json='[]'
@@ -48,7 +53,7 @@ owner_locate_new_exact_sha_workflow_run() {
 
     if selected="$(
       printf '%s' "$runs_json" |
-        node scripts/select-new-exact-sha-workflow-run.mjs "$expected_sha" "$baseline_file" \
+        node scripts/select-new-exact-sha-workflow-run.mjs "${selector_args[@]}" \
           2>"$selector_error"
     )"; then
       local run_id run_url matched_run run_status run_conclusion
