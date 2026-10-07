@@ -71,6 +71,7 @@ test('Owner approval decision remains on its existing protected callable', async
 });
 
 
-test('RFQ creation requires the referenced Owner account to exist', () => {
-  assert.match(source, /if \(!ownerSnap\.exists\) throw new HttpsError\("not-found", "Owner account not found\."\)/);
+test('RFQ creation requires the referenced Owner account to exist', async () => {
+  const backend = await read('functions/secureAdminProcurementTrust.ts');
+  assert.match(backend, /if \(!ownerSnap\.exists\) throw new HttpsError\("not-found", "Owner account not found\."\)/);
 });
