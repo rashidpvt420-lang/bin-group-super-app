@@ -105,6 +105,9 @@ function addMonthsPreservingTime(date: Date, months: number): Date {
 
 function normalizeContractMode(data: any) {
     const raw = String(data.contractMode || data.contractType || data.planName || data.strategy || '').toLowerCase();
+    // Canonical server contract tokens must be recognized before legacy/display aliases.
+    // Inspection-first onboarding persists combined service as "BOTH".
+    if (['both', 'total_care', 'total-care', 'maintenance_and_property_management'].includes(raw)) return 'MAINTENANCE_AND_PROPERTY_MANAGEMENT';
     if (raw.includes('property') && !raw.includes('maintenance')) return 'PROPERTY_MANAGEMENT_ONLY';
     if (raw.includes('pm') && !raw.includes('fm')) return 'PROPERTY_MANAGEMENT_ONLY';
     if (raw.includes('maintenance') && raw.includes('property')) return 'MAINTENANCE_AND_PROPERTY_MANAGEMENT';
