@@ -97,14 +97,24 @@ test('Technician mission map distinguishes data failure from an empty authentica
   assert.doesNotMatch(technicianMap, /setJobs\(\[\]\);\s*setLoading\(false\);\s*}\);/);
 });
 
-test('Owner and Tenant tracking card identifies schematic and freshness limitations', () => {
-  assert.match(trackingSummary, /LOCATION SUMMARY - NOT A STREET MAP/);
-  assert.match(trackingSummary, /FRESH FOREGROUND GPS/);
+test('Owner and Tenant tracking card renders the embedded map without overstating GPS freshness', () => {
+  assert.match(trackingSummary, /useGoogleMaps/);
+  assert.match(trackingSummary, /new google\.maps\.Map/);
+  assert.match(trackingSummary, /new google\.maps\.Marker/);
+  assert.match(trackingSummary, /data-testid="technician-live-map"/);
+  assert.match(trackingSummary, /LIVE TECHNICIAN GPS/);
+  assert.match(trackingSummary, /GPS LIVE/);
   assert.match(trackingSummary, /GPS STALE/);
+  assert.match(trackingSummary, /GPS PENDING/);
   assert.match(trackingSummary, /rough arrival estimate/i);
   assert.match(trackingSummary, /approximate straight-line distance/i);
-  assert.match(trackingSummary, /Open in Google Maps/);
-  assert.doesNotMatch(trackingSummary, />\s*LIVE\s*</);
+  assert.match(trackingSummary, /Open route in Google Maps/);
+  assert.match(trackingSummary, /Embedded map is unavailable right now/);
+  assert.match(
+    trackingSummary,
+    /const straightLineEstimateMinutes = trackingFresh \? calculateEtaMinutes\(straightLineDistanceKm\) : null;/,
+  );
+  assert.doesNotMatch(trackingSummary, /LOCATION SUMMARY - NOT A STREET MAP/);
   assert.doesNotMatch(trackingSummary, /~\$\{etaMin\} min ETA/);
 });
 

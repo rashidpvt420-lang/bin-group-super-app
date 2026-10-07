@@ -68,16 +68,20 @@ jobs:
              .head_sha == $sha' \
             <<<"$run_json" >/dev/null
 
-          artifact_name="production-deployment-${SOURCE_SHA}-${SOURCE_RUN_ID}"
+          current_artifact_name="production-deployment-${SOURCE_SHA}-${SOURCE_RUN_ID}"
+          legacy_artifact_name="production-deployment-${SOURCE_SHA}"
           artifacts="$(gh api "repos/$REPOSITORY/actions/runs/$SOURCE_RUN_ID/artifacts?per_page=100")"
-          artifact_count="$(jq --arg name "$artifact_name" '[.artifacts[] | select(.name == $name and (.expired | not))] | length' <<<"$artifacts")"
-          [[ "$artifact_count" == "1" ]]
-          artifact_id="$(jq -r --arg name "$artifact_name" '.artifacts[] | select(.name == $name and (.expired | not)) | .id' <<<"$artifacts")"
-          artifact_digest="$(jq -r --arg name "$artifact_name" '.artifacts[] | select(.name == $name and (.expired | not)) | .digest // empty' <<<"$artifacts" | tr '[:upper:]' '[:lower:]')"
+          artifact_matches="$(jq -c --arg current "$current_artifact_name" --arg legacy "$legacy_artifact_name" '[.artifacts[] | select((.name == $current or .name == $legacy) and (.expired | not))]' <<<"$artifacts")"
+          artifact_count="$(jq 'length' <<<"$artifact_matches")"
+          [[ "$artifact_count" == "1" ]] || { echo "::error::Expected exactly one non-expired production deployment artifact using the current or legacy exact-SHA naming contract; found $artifact_count."; exit 1; }
+          artifact_name="$(jq -r '.[0].name' <<<"$artifact_matches")"
+          artifact_id="$(jq -r '.[0].id' <<<"$artifact_matches")"
+          artifact_digest="$(jq -r '.[0].digest // empty' <<<"$artifact_matches" | tr '[:upper:]' '[:lower:]')"
           [[ "$artifact_id" =~ ^[0-9]+$ ]]
           [[ "$artifact_digest" =~ ^sha256:[0-9a-f]{64}$ ]]
 
           echo "artifact_name=$artifact_name" >> "$GITHUB_OUTPUT"
+          echo "publisher_artifact_name=$current_artifact_name" >> "$GITHUB_OUTPUT"
           echo "artifact_id=$artifact_id" >> "$GITHUB_OUTPUT"
           echo "artifact_digest=$artifact_digest" >> "$GITHUB_OUTPUT"
 
@@ -149,7 +153,7 @@ jobs:
           SOURCE_EVIDENCE_SHA: ${{ steps.request.outputs.source_sha }}
           SOURCE_EVIDENCE_RUN_ID: ${{ steps.request.outputs.source_run_id }}
           SOURCE_EVIDENCE_WORKFLOW: Firebase Production Deploy
-          SOURCE_EVIDENCE_ARTIFACT_NAME: ${{ steps.source.outputs.artifact_name }}
+          SOURCE_EVIDENCE_ARTIFACT_NAME: ${{ steps.source.outputs.publisher_artifact_name }}
           SOURCE_EVIDENCE_ARTIFACT_DIGEST: ${{ steps.source.outputs.artifact_digest }}
           SOURCE_EVIDENCE_VERIFIED: 'true'
         run: node scripts/record-firestore-evidence.js --manifest launch_package/command-center-evidence-manifest.json --write

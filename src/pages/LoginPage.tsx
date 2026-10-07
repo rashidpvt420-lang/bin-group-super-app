@@ -207,7 +207,7 @@ const LoginPage: React.FC = () => {
         if (code === 'auth/user-disabled') {
             return notice('error', copy(
                 'This account is unavailable. Contact BIN GROUP support for help.',
-                'هذا الحساب غير متاح. تواصل مع دعم بن جروب للمساعدة.',
+                'هذا الحساب غير متاح. تواصل مع دعم مجموعة بن للمساعدة.',
             ));
         }
         if (code === 'auth/too-many-requests') {
@@ -249,19 +249,19 @@ const LoginPage: React.FC = () => {
         if (code === 'auth/operation-not-allowed') {
             return notice('error', copy(
                 'This sign-in method is temporarily unavailable. Use another enabled sign-in method or contact BIN GROUP support.',
-                'طريقة تسجيل الدخول هذه غير متاحة مؤقتاً. استخدم طريقة أخرى متاحة أو تواصل مع دعم بن جروب.',
+                'طريقة تسجيل الدخول هذه غير متاحة مؤقتاً. استخدم طريقة أخرى متاحة أو تواصل مع دعم مجموعة بن.',
             ));
         }
         if (code === 'auth/unauthorized-domain') {
             return notice('error', copy(
                 'Secure sign-in is not authorized from this web address. Contact BIN GROUP support.',
-                'تسجيل الدخول الآمن غير مصرح به من عنوان الموقع هذا. تواصل مع دعم بن جروب.',
+                'تسجيل الدخول الآمن غير مصرح به من عنوان الموقع هذا. تواصل مع دعم مجموعة بن.',
             ));
         }
         if (code === 'auth/invalid-api-key' || code === 'auth/api-key-not-valid') {
             return notice('error', copy(
                 'The secure sign-in service configuration is unavailable. Contact BIN GROUP support.',
-                'إعداد خدمة تسجيل الدخول الآمن غير متاح. تواصل مع دعم بن جروب.',
+                'إعداد خدمة تسجيل الدخول الآمن غير متاح. تواصل مع دعم مجموعة بن.',
             ));
         }
         if (code === 'auth/internal-error' || code === 'auth/web-storage-unsupported') {
@@ -272,7 +272,7 @@ const LoginPage: React.FC = () => {
         }
         return notice('error', copy(
             'Sign-in is temporarily unavailable. Try again later or contact BIN GROUP support.',
-            'تسجيل الدخول غير متاح مؤقتاً. حاول لاحقاً أو تواصل مع دعم بن جروب.',
+            'تسجيل الدخول غير متاح مؤقتاً. حاول لاحقاً أو تواصل مع دعم مجموعة بن.',
         ));
     };
 

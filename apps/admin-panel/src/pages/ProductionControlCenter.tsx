@@ -28,7 +28,8 @@ import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
 export default function ProductionControlCenter() {
-    useLanguage();
+    const { lang } = useLanguage();
+    const isAr = lang === 'ar';
     const navigate = useNavigate();
     const [loading, setLoading] = useState(true);
     const [metrics, setMetrics] = useState({
@@ -280,42 +281,39 @@ export default function ProductionControlCenter() {
                         <Alert severity="warning" sx={{ bgcolor: 'rgba(237, 108, 2, 0.05)', color: '#ed6c02', border: '1px solid rgba(237, 108, 2, 0.2)', borderRadius: 3 }}>
                             Dangerous actions require second-tier admin authorization.
                         </Alert>
-                        <Button 
-                            fullWidth 
-                            variant="outlined" 
+                        {/* These three controls used to show alert() success text without calling any server
+                            function. There is no bulk
+                            callable for them, so they are disabled with honest text or routed to the real
+                            per-item workflow. Never show success without a server response. */}
+                        <Button
+                            fullWidth
+                            variant="outlined"
                             color="error"
+                            disabled
                             sx={{ py: 2, borderRadius: 3, fontWeight: 900, borderStyle: 'dashed' }}
-                            onClick={() => {
-                                if(window.confirm("CRITICAL: ARCHIVE ALL PILOT TENANTS? This cannot be undone.")) {
-                                    alert("Functionality restricted in production mode.");
-                                }
-                            }}
                         >
-                            BULK ARCHIVE PILOT TENANTS
+                            {isAr ? 'أرشفة المستأجرين التجريبيين (غير متاح بعد)' : 'Bulk archive pilot tenants (not available yet)'}
                         </Button>
-                        <Button 
-                            fullWidth 
+                        <Button
+                            fullWidth
                             variant="outlined"
-                            sx={{ py: 2, borderRadius: 3, fontWeight: 900, borderColor: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.7)' }}
-                            onClick={() => {
-                                if(window.confirm("FORCE RECALCULATE ALL PASSPORTS? This may take several minutes.")) {
-                                    alert("Aggregation task queued.");
-                                }
-                            }}
+                            disabled
+                            sx={{ py: 2, borderRadius: 3, fontWeight: 900 }}
                         >
-                            RERUN PORTFOLIO AGGREGATION
+                            {isAr ? 'إعادة حساب كل الجوازات (غير متاح بعد)' : 'Recalculate all passports (not available yet)'}
                         </Button>
-                        <Button 
-                            fullWidth 
+                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.72)' }}>
+                            {isAr
+                                ? 'لا توجد بعد وظيفة خادم جماعية لهذين الإجراءين. أعد حساب عقار واحد من صفحة جواز العقار.'
+                                : 'There is no bulk server action for these yet. Recalculate a single property from its property passport page.'}
+                        </Typography>
+                        <Button
+                            fullWidth
                             variant="outlined"
-                            sx={{ py: 2, borderRadius: 3, fontWeight: 900, borderColor: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.7)' }}
-                            onClick={() => {
-                                if(window.confirm("RESEND ALL FAILED INVITATIONS?")) {
-                                    alert("Dispatching recovery emails...");
-                                }
-                            }}
+                            onClick={() => navigate('/tenants')}
+                            sx={{ py: 2, borderRadius: 3, fontWeight: 900, borderColor: 'rgba(255,255,255,0.3)', color: '#FFFFFF' }}
                         >
-                            RESEND FAILED INVITATIONS
+                            {isAr ? 'فتح دعوات المستأجرين لإعادة الإرسال' : 'Open tenant invitations to resend'}
                         </Button>
                     </Stack>
                 </Grid>

@@ -141,8 +141,8 @@ export default function InvoiceVerificationPage() {
                 </Paper>
                 <Box sx={{ mt: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1.5 }}>
                     <ShieldCheck size={16} color={binThemeTokens.gold} />
-                    <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, letterSpacing: 2, fontWeight: 900 }}>
-                        BIN-GROUP SOVEREIGN PROTOCOL 1.19
+                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.72)', letterSpacing: 2, fontWeight: 900 }}>
+                        BIN GROUP document check
                     </Typography>
                 </Box>
             </Container>
