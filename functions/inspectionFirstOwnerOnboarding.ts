@@ -982,56 +982,72 @@ export const adminRecordOwnerMobilizationPaymentEvidence = onCall({ cors: true, 
   const generation = text(metadata.generation);
   if (!generation) throw new HttpsError("internal", "Stored payment evidence has no immutable generation.");
   const receiptUrl = `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(storagePath)}?alt=media&token=${downloadToken}`;
-  const batch = db.batch();
-  batch.set(paymentRef, {
-    status: "PENDING_ADMIN_APPROVAL",
-    paymentStatus: "PENDING_ADMIN_APPROVAL",
-    verificationState: "PAYMENT_EVIDENCE_RECORDED",
-    paymentMethod: method,
-    method,
-    paymentReferenceId: reference,
-    paymentReference: reference,
-    amountReceived,
-    paymentConfigVersion: activeConfiguration.version,
-    paymentConfigurationVersion: activeConfiguration.version,
-    paymentConfigHash: activeConfiguration.configHash,
-    paymentConfigurationHash: activeConfiguration.configHash,
-    paymentManifest: {
-      configVersion: activeConfiguration.version,
-      configHash: activeConfiguration.configHash,
-      legalBeneficiary: activeConfiguration.legalBeneficiary,
-      currency: activeConfiguration.currency,
-      officeLocation: activeConfiguration.officeLocation,
-      approvedMethods: activeConfiguration.approvedMethods,
-      selectedMethod: method,
-      capturedAt: new Date().toISOString(),
-    },
-    paymentProofUrl: receiptUrl,
-    paymentProofPath: storagePath,
-    paymentProofHash: receiptHash,
-    paymentProofGeneration: generation,
-    paymentProofEvidence: { receiptUrl, storagePath, receiptHash, generation, recordedBy: actor.uid },
-    receiptUrl,
-    receiptPath: storagePath,
-    receiptHash,
-    receiptGeneration: generation,
-    updatedAt: ts(),
-  }, { merge: true });
-  batch.set(db.collection("intake_submissions").doc(intakeId), {
-    paymentStatus: "PENDING_ADMIN_APPROVAL",
-    paymentEvidenceRecorded: true,
-    paymentReferenceId: reference,
-    updatedAt: ts(),
-  }, { merge: true });
-  batch.set(db.collection("audit_logs").doc(), {
-    actorId: actor.uid,
-    actorRole: "admin",
-    action: "RECORD_OWNER_15_PERCENT_PAYMENT_EVIDENCE",
-    targetType: "payment_transactions",
-    targetId: paymentId,
-    metadata: { intakeId, ownerUid, method, reference, amountReceived, receiptHash, generation, paymentConfigVersion: activeConfiguration.version, paymentConfigHash: activeConfiguration.configHash },
-    createdAt: ts(),
+  // Uploads happen outside Firestore. Re-read both financial records atomically so a
+  // concurrent approval or contract change cannot be overwritten by a stale upload.
+  await db.runTransaction(async (transaction) => {
+    const [freshPayment, freshContract] = await Promise.all([
+      transaction.get(paymentRef),
+      transaction.get(contractSnap.ref),
+    ]);
+    if (!freshPayment.exists || !freshContract.exists ||
+        !freshPayment.updateTime?.isEqual(paymentSnap.updateTime!) ||
+        !freshContract.updateTime?.isEqual(contractSnap.updateTime!)) {
+      throw new HttpsError("aborted", "Payment or contract changed while the receipt was uploading. Reload before recording evidence.");
+    }
+    transaction.set(paymentRef, {
+      status: "PENDING_ADMIN_APPROVAL",
+      paymentStatus: "PENDING_ADMIN_APPROVAL",
+      verificationState: "PAYMENT_EVIDENCE_RECORDED",
+      paymentMethod: method,
+      method,
+      paymentReferenceId: reference,
+      paymentReference: reference,
+      amountReceived,
+      paymentConfigVersion: activeConfiguration.version,
+      paymentConfigurationVersion: activeConfiguration.version,
+      paymentConfigHash: activeConfiguration.configHash,
+      paymentConfigurationHash: activeConfiguration.configHash,
+      paymentManifest: {
+        configVersion: activeConfiguration.version,
+        configHash: activeConfiguration.configHash,
+        legalBeneficiary: activeConfiguration.legalBeneficiary,
+        currency: activeConfiguration.currency,
+        officeLocation: activeConfiguration.officeLocation,
+        approvedMethods: activeConfiguration.approvedMethods,
+        selectedMethod: method,
+        capturedAt: new Date().toISOString(),
+      },
+      paymentProofUrl: receiptUrl,
+      paymentProofPath: storagePath,
+      paymentProofHash: receiptHash,
+      paymentProofGeneration: generation,
+      paymentProofEvidence: { receiptUrl, storagePath, receiptHash, generation, recordedBy: actor.uid },
+      // D-5: the recording Admin is bound to the evidence; adminApprovePayment refuses this Admin
+      // as the approver, so a second Finance Admin must confirm the money arrived.
+      paymentEvidenceRecordedBy: actor.uid,
+      paymentEvidenceRecordedByEmail: actor.email || null,
+      paymentEvidenceRecordedAt: ts(),
+      receiptUrl,
+      receiptPath: storagePath,
+      receiptHash,
+      receiptGeneration: generation,
+      updatedAt: ts(),
+    }, { merge: true });
+    transaction.set(db.collection("intake_submissions").doc(intakeId), {
+      paymentStatus: "PENDING_ADMIN_APPROVAL",
+      paymentEvidenceRecorded: true,
+      paymentReferenceId: reference,
+      updatedAt: ts(),
+    }, { merge: true });
+    transaction.set(db.collection("audit_logs").doc(), {
+      actorId: actor.uid,
+      actorRole: "admin",
+      action: "RECORD_OWNER_15_PERCENT_PAYMENT_EVIDENCE",
+      targetType: "payment_transactions",
+      targetId: paymentId,
+      metadata: { intakeId, ownerUid, method, reference, amountReceived, receiptHash, generation, paymentConfigVersion: activeConfiguration.version, paymentConfigHash: activeConfiguration.configHash },
+      createdAt: ts(),
+    });
   });
-  await batch.commit();
   return { status: "RECORDED", paymentId, intakeId, amountReceived, method, paymentReferenceId: reference, receiptUrl, receiptHash, generation };
 });

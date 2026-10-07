@@ -14,6 +14,7 @@ import {
   OwnerActivationPaymentPolicyError,
   resolveLockedOwnerActivationSchedule,
 } from "./ownerActivationPaymentPolicy";
+import { assertPaymentDualControl, PaymentDualControlError, paymentEvidenceRecorderUid } from "./paymentDualControl";
 
 if (!admin.apps.length) admin.initializeApp();
 
@@ -112,6 +113,28 @@ async function hasDurableOtpSignatureEvidence(
     String(evidence.signature || "").trim() === signature &&
     Boolean(evidence.verifiedAt) &&
     Boolean(evidence.consumedAt);
+}
+
+// D-5: a refused approval is itself an audited payment decision.
+async function auditDualControlRefusal(
+  paymentId: string,
+  actorId: string,
+  actorEmail: string | null,
+  error: PaymentDualControlError,
+  stage: "PRE_CHECK" | "TRANSACTION",
+) {
+  await db.collection("audit_logs").add({
+    action: "ADMIN_APPROVE_PAYMENT_REFUSED_DUAL_CONTROL",
+    actorId,
+    actorEmail,
+    targetType: "payment_transactions",
+    targetId: paymentId,
+    paymentId,
+    reason: `DUAL_CONTROL_${error.violation}`,
+    evidenceRecordedBy: error.recorderUid || null,
+    stage,
+    createdAt: ts(),
+  });
 }
 
 export const adminApprovePayment = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
@@ -279,6 +302,19 @@ export const adminApprovePayment = onCall({ cors: true, enforceAppCheck: true },
   if (!contractSnap.exists) throw new HttpsError("failed-precondition", "Bound contract does not exist.");
   const contractData = contractSnap.data() || {};
   const alreadyApproved = roleOf(payment.status) === "approved" && roleOf(contractData.status) === "active";
+  // D-5: an Admin who recorded the payment evidence may not approve it (four-eyes).
+  // Checked before any invoice repair or receipt read, then re-checked on the fresh
+  // payment inside the approval transaction. Refusals are audited.
+  if (!alreadyApproved) {
+    try {
+      assertPaymentDualControl(payment, actorId);
+    } catch (error) {
+      if (error instanceof PaymentDualControlError) {
+        await auditDualControlRefusal(paymentId, actorId, actorEmail, error, "PRE_CHECK");
+      }
+      throw error;
+    }
+  }
   const ownerUid = String(payment.ownerUid || payment.ownerId || "").trim();
   const contractOwnerUid = String(contractData.ownerUid || contractData.ownerId || "").trim();
   if (!ownerUid || contractOwnerUid !== ownerUid) {
@@ -434,6 +470,9 @@ export const adminApprovePayment = onCall({ cors: true, enforceAppCheck: true },
       approvalWasIdempotent = true;
       return;
     }
+    // D-5: evidence may have been re-recorded since the pre-check.
+    assertPaymentDualControl(freshPayment, actorId);
+    const evidenceRecordedBy = paymentEvidenceRecorderUid(freshPayment) || null;
     if (
       ["rejected", "payment_rejected"].includes(roleOf(freshPayment.status)) ||
       ["rejected", "payment_rejected"].includes(roleOf(freshPayment.paymentStatus)) ||
@@ -581,6 +620,12 @@ export const adminApprovePayment = onCall({ cors: true, enforceAppCheck: true },
       approvedBy: actorId,
       approvedByEmail: actorEmail,
       approvedAt: now,
+      paymentDualControl: {
+        policy: "D5_RECORDER_IS_NOT_APPROVER",
+        evidenceRecordedBy,
+        approvedBy: actorId,
+        verifiedAt: now,
+      },
       invoiceId,
       invoiceProofHash: invoiceHash,
       updatedAt: now,
@@ -685,6 +730,8 @@ export const adminApprovePayment = onCall({ cors: true, enforceAppCheck: true },
       contractId,
       intakeId,
       ownerUid,
+      evidenceRecordedBy,
+      dualControlPolicy: "D5_RECORDER_IS_NOT_APPROVER",
       paymentReferenceId: manualReference || payment.stripeSessionId,
       amountReceived: expectedAmount,
       createdAt: now,
@@ -726,6 +773,12 @@ export const adminApprovePayment = onCall({ cors: true, enforceAppCheck: true },
         createdAt: now,
       }, { merge: true });
     }
+  }).catch(async (error) => {
+    // D-5: a dual-control refusal inside the transaction is audited outside it.
+    if (error instanceof PaymentDualControlError) {
+      await auditDualControlRefusal(paymentId, actorId, actorEmail, error, "TRANSACTION");
+    }
+    throw error;
   });
 
   const approvedInvoiceSnap = await invoiceRef.get();

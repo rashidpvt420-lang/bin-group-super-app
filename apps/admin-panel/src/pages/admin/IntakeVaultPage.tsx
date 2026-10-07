@@ -125,7 +125,7 @@ export const IntakeVaultPage: React.FC = () => {
         try { await action(); }
         catch (actionError: any) {
             console.error('Owner application action failed:', actionError);
-            setError(actionError?.details || actionError?.message || String(actionError));
+            setError((typeof actionError?.details === 'string' && actionError.details) || actionError?.message || String(actionError));
         } finally { setBusyId(''); }
     };
 
