@@ -24,3 +24,24 @@ Remaining: verify real Owner contacts and property mappings with a seeded accoun
 ## CI issue found during review
 
 Original reviewed head `9f49992935ad81a08c2ae39842191388d12a2aa4` failed the Play Integrity launch suite with HTTP 403 in the live GitHub release-lock lookup (job 112848837754). That workflow and Current Main Firestore Verification omitted the explicit token used by the other full-suite workflows. Both now pass the workflow token to that step with Actions read permission. The release lock remains fail-closed; no test is skipped or permission widened to write. A parsed-workflow regression covers all five full-suite PR callers. Final head and hosted results are recorded in the PR proof comments.
+
+
+## Phase 2 Owner follow-up findings
+
+Two additional Owner-surface defects were confirmed while this exact-main repair was still open.
+
+### Property portfolio
+- Missing authenticated UID could leave the page in a permanent loading state.
+- Async passport enrichment from an older snapshot could overwrite a newer portfolio snapshot.
+- The page still used legacy dark-surface white text inside the current light Owner shell and had no page-level RTL direction.
+- Repair: fail closed when identity is unavailable, version async snapshots so stale enrichment is discarded, and align the page with the light RTL-aware Owner shell.
+- Regression: `tests/launch/owner-properties-stability.test.mjs`.
+
+### BIN Connect mutation authority
+- BIN Connect enumeration was already server-authoritative, but thread creation, replies, and resolution still wrote directly from the browser.
+- Repair: `createBinConnectThread`, `sendBinConnectMessage`, and `resolveBinConnectThread` are Auth + App Check callables. The server derives actor identity, validates participant access, writes the thread/message mutation, and emits `audit_logs` evidence.
+- Firestore now denies browser create/update for BIN Connect threads and messages; participant reads remain available.
+- The rule-hardening script is updated so normalization cannot silently restore browser mutation access.
+- Regression: `tests/launch/bin-connect-server-list.test.mjs` now proves the callable boundary, audit writes, client removal of `addDoc/updateDoc/serverTimestamp`, and fail-closed rules.
+
+No hard-clearance workflow, production-release lock, pilot evidence, or launch authorization file is modified by these Owner repairs.
