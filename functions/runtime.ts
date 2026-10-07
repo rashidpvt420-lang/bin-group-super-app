@@ -58,6 +58,7 @@ export * from "./adminBridgeAuth";
 export * from "./adminSecurityProfile";
 export * from "./adminMfaReadiness";
 export * from "./secureAdminContractOperations";
+export * from "./secureAdminProcurementTrust";
 export * from "./adminMfaRecovery";
 export * from "./aiAssistant";
 export * from "./homeDiscovery";
