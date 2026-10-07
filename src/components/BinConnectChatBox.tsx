@@ -2,7 +2,7 @@ import React from 'react';
 import { Alert, Badge, Box, Button, Chip, Divider, Fab, MenuItem, Paper, Stack, TextField, Typography, alpha } from '@mui/material';
 import { MessageSquare, Send, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { addDoc, auth, collection, db, functions, httpsCallable, serverTimestamp } from '../lib/firebase';
+import { auth, functions, httpsCallable } from '../lib/firebase';
 import { binThemeTokens } from '../theme/binGroupTheme';
 
 type PortalRole = 'owner' | 'tenant' | 'technician' | 'broker' | 'admin' | 'staff';
@@ -100,34 +100,16 @@ export default function BinConnectChatBox({ role, dark = false }: { role: Portal
     try {
       setBusy(true);
       setNotice('');
-      const participantIds = [uid];
-      const thread = await addDoc(collection(db, 'binConnectThreads'), {
+      const createThread = httpsCallable(functions, 'createBinConnectThread');
+      await createThread({
         title: title.trim() || CHANNELS.find((item) => item.value === channel)?.label || 'BIN Connect',
         channel,
-        status: 'open',
-        sourceRole: role,
-        createdBy: uid,
-        createdByEmail: email,
-        createdByName: displayName,
-        participantIds,
         recipientHint: recipient.trim(),
         context: context.trim(),
         propertyId: propertyId.trim(),
         unitId: unitId.trim(),
         ticketId: ticketId.trim(),
-        lastMessage: message.trim().slice(0, 240),
-        priority: channel === 'dashboard_issue' ? 'high' : channel === 'majlis_staff' ? 'high' : 'normal',
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
-      await addDoc(collection(db, 'binConnectThreads', thread.id, 'messages'), {
-        body: message.trim(),
-        senderId: uid,
-        senderRole: role,
-        senderEmail: email,
-        senderName: displayName,
-        createdAt: serverTimestamp(),
-        system: false,
+        message: message.trim(),
       });
       setMessage('');
       setTitle('');
@@ -138,7 +120,7 @@ export default function BinConnectChatBox({ role, dark = false }: { role: Portal
       setTicketId('');
       setNotice('Message sent to BIN Connect. Open inbox to continue the conversation.');
     } catch (error: any) {
-      setNotice(error?.message || 'Message could not be sent. Check Firestore rules or connection.');
+      setNotice(error?.message || 'Message could not be sent. Please retry.');
     } finally {
       setBusy(false);
     }
