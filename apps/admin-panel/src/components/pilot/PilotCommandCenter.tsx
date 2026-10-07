@@ -8,6 +8,7 @@ import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import GppGoodIcon from '@mui/icons-material/GppGood';
 import { collection, getDocs, limit, orderBy, query } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
+import { humanizeEnum } from '../../utils/humanizeEnum';
 
 function normalizeStatus(value: unknown) {
     return String(value || '').trim().toUpperCase().replace(/[\s-]+/g, '_');
@@ -291,7 +292,7 @@ export default function PilotCommandCenter() {
                                             <TableRow key={contract.id}>
                                                 <TableCell>{contract.ownerName || contract.ownerEmail || contract.ownerId || 'Owner not recorded'}</TableCell>
                                                 <TableCell>{contractPropertyName(contract)}</TableCell>
-                                                <TableCell>{contract.planName || contract.servicePlan || contract.contractType || 'Plan not recorded'}</TableCell>
+                                                <TableCell>{humanizeEnum(contract.planName || contract.servicePlan || contract.contractType || 'Plan not recorded')}</TableCell>
                                                 <TableCell><Chip label={normalizeStatus(contract.status || contract.activationStatus) || 'STATUS_UNKNOWN'} size="small" color="success" sx={{ fontWeight: 'bold' }} /></TableCell>
                                                 <TableCell sx={{ fontWeight: 'black' }}>{value === null ? 'N/A' : `AED ${value.toLocaleString()}`}</TableCell>
                                                 <TableCell>{dashboardState}</TableCell>

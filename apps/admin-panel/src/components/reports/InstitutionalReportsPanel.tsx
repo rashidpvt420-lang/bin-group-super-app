@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { db } from '../../lib/firebase';
 import { collection, onSnapshot } from 'firebase/firestore';
+import { humanizeEnum } from '../../utils/humanizeEnum';
 
 /**
  * 📊 INSTITUTIONAL REPORTS PANEL v1.1
@@ -38,7 +39,7 @@ const InstitutionalReportsPanel: React.FC = () => {
       const healthScore = healthValues.length ? Math.round(healthValues.reduce((sum, value) => sum + value, 0) / healthValues.length) : 0;
       const typeCounts = new Map<string, number>();
       rows.forEach((row) => {
-        const type = String(row.propertyType || row.type || 'Property');
+        const type = humanizeEnum(row.propertyType || row.type || 'Property');
         typeCounts.set(type, (typeCounts.get(type) || 0) + 1);
       });
 
