@@ -1,14 +1,42 @@
 import React, { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { Box, Typography, Button, Paper, Stack, alpha, IconButton } from '@mui/material';
 import { Share, PlusSquare, Bell, X } from 'lucide-react';
 import { binThemeTokens } from '../theme/binGroupTheme';
 
 
 
+const IOS_PUSH_ROUTE_PREFIXES = [
+    '/owner',
+    '/tenant',
+    '/technician',
+    '/broker',
+    '/admin',
+    '/auditor',
+    '/properties/',
+    '/analytics/',
+    '/design-studio',
+] as const;
+
+const IOS_PUSH_ROUTE_EXACT = new Set([
+    '/financials',
+    '/calendar',
+    '/notifications',
+]);
+
+const shouldOfferIosPushInstructions = (pathname: string) =>
+    IOS_PUSH_ROUTE_EXACT.has(pathname) ||
+    IOS_PUSH_ROUTE_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(prefix));
+
 export default function IOSPwaGuardian() {
     const [isVisible, setIsVisible] = useState(false);
+    const location = useLocation();
 
     useEffect(() => {
+        if (!shouldOfferIosPushInstructions(location.pathname)) {
+            setIsVisible(false);
+            return;
+        }
         const userAgent = window.navigator.userAgent.toLowerCase();
         const ios = /iphone|ipad|ipod/.test(userAgent);
         const standalone = ('standalone' in window.navigator) && (window.navigator as any).standalone;
@@ -17,7 +45,9 @@ export default function IOSPwaGuardian() {
             const dismissed = sessionStorage.getItem('ios_pwa_banner_dismissed');
             if (!dismissed) setIsVisible(true);
         }
-    }, []);
+    }, [location.pathname]);
+
+    if (!shouldOfferIosPushInstructions(location.pathname)) return null;
 
     return (
         <>

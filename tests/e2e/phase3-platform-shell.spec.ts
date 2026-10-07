@@ -10,6 +10,9 @@ const PUBLIC_CONTROL_ROUTES = [
   '/onboarding',
   '/request-demo',
   '/support',
+  '/property-management',
+  '/maintenance',
+  '/phase-1-shell-missing-route',
 ] as const;
 
 test.describe('Phase 3 cross-platform public control shell', () => {
@@ -119,5 +122,90 @@ test.describe('Phase 1 Sovereign AI launcher interaction regression', () => {
     await expect(drawer).toBeVisible();
     await close.click();
     await expect(drawer).toBeHidden();
+  });
+});
+
+
+test.describe('Phase 1 marketing and global-shell behavioral regression', () => {
+  test('root role CTAs navigate to the correct entry flows', async ({ page }, testInfo) => {
+    const cases: Array<[string, RegExp]> = [
+      ['I Already Rent With BIN', /\/login\?intendedRole=tenant$/],
+      ['I’m Looking for a Home', /\/homes$/],
+      ['Open Owner Portal', /\/login\?intendedRole=owner$/],
+      ['Add New Property & Start Contract', /\/onboarding(?:[/?#]|$)/],
+      ['Open Broker Portal', /\/login\?intendedRole=broker$/],
+      ['Open Technician Portal', /\/login\?intendedRole=technician$/],
+    ];
+
+    for (const [label, destination] of cases) {
+      await page.goto('/', { waitUntil: 'domcontentloaded' });
+      const cta = page.getByRole('button', { name: label, exact: true });
+      await expect(cta).toBeVisible();
+      if (testInfo.project.name === 'chromium-desktop') await cta.click();
+      else await cta.tap();
+      await expect(page).toHaveURL(destination);
+    }
+  });
+
+  test('marketing header, onboarding, quote, WhatsApp and back navigation stay operational', async ({ page }, testInfo) => {
+    await page.goto('/property-management', { waitUntil: 'domcontentloaded' });
+
+    await expect(page.locator('a[href="/"]').first()).toBeVisible();
+    await expect(page.locator('a[href="/security"]').first()).toBeVisible();
+    await expect(page.locator('a[href="/login"]').first()).toBeVisible();
+    await expect(page.getByTestId('language-toggle')).toBeVisible();
+    await assertNoPageLevelHorizontalOverflow(page, testInfo.project.name + ' property-management header');
+
+    await page.locator('a[href="/login"]').first().click();
+    await expect(page).toHaveURL(/\/login$/);
+
+    await page.goto('/property-management', { waitUntil: 'domcontentloaded' });
+    await page.locator('a[href="/onboarding"]').first().click();
+    await expect(page).toHaveURL(/\/onboarding(?:[/?#]|$)/);
+
+    await page.goto('/property-management', { waitUntil: 'domcontentloaded' });
+    await page.locator('a[href="/onboarding?intent=quote"]').first().click();
+    await expect(page).toHaveURL(/\/onboarding\?intent=quote$/);
+
+    await page.goto('/property-management', { waitUntil: 'domcontentloaded' });
+    await page.route('https://wa.me/**', (route) => route.abort());
+    const requestPromise = page.waitForRequest((request) => request.url() === 'https://wa.me/971552423233');
+    await page.locator('a[href="https://wa.me/971552423233"]').first().click();
+    const request = await requestPromise;
+    expect(request.url()).toBe('https://wa.me/971552423233');
+
+    await page.goto('/', { waitUntil: 'domcontentloaded' });
+    await page.goto('/property-management', { waitUntil: 'domcontentloaded' });
+    const back = page.getByRole('button', { name: /^Back$/ });
+    await expect(back).toBeVisible();
+    await back.click();
+    await expect(page).toHaveURL(/\/$/);
+  });
+
+  test('marketing language toggle produces real RTL semantics without breaking the mobile header', async ({ page }, testInfo) => {
+    await page.goto('/maintenance', { waitUntil: 'domcontentloaded' });
+    await page.getByTestId('language-toggle').click();
+
+    await expect.poll(async () => page.evaluate(() => ({
+      dir: document.documentElement.dir,
+      lang: document.documentElement.lang,
+    }))).toEqual({ dir: 'rtl', lang: 'ar' });
+
+    await expect(page.locator('a[href="/"]').first()).toBeVisible();
+    await expect(page.locator('a[href="/login"]').first()).toBeVisible();
+    await expect(page.getByTestId('language-toggle')).toBeVisible();
+    await assertNoPageLevelHorizontalOverflow(page, testInfo.project.name + ' maintenance Arabic RTL header');
+  });
+
+  test('unknown public routes render a real 404 recovery state', async ({ page }, testInfo) => {
+    await page.goto('/phase-1-shell-missing-route', { waitUntil: 'domcontentloaded' });
+    await expect(page.getByRole('heading', { name: /Page not found|الصفحة غير موجودة/ })).toBeVisible();
+    await expect(page.getByRole('link', { name: /Back to home|العودة للرئيسية/ })).toBeVisible();
+    await expect(page.getByRole('link', { name: /Find a home|البحث عن منزل/ })).toBeVisible();
+
+    const homeLink = page.getByRole('link', { name: /Back to home|العودة للرئيسية/ });
+    if (testInfo.project.name === 'chromium-desktop') await homeLink.click();
+    else await homeLink.tap();
+    await expect(page).toHaveURL(/\/$/);
   });
 });
