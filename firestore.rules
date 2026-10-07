@@ -2018,16 +2018,14 @@ service cloud.firestore {
       // Non-admin enumeration is server-authoritative via listMyBinConnectThreads.
       // This avoids broad browser list grants while preserving participant document access.
       allow list: if isAdmin();
-      allow create: if safeBinConnectThreadCreate(request.resource.data);
-      allow update: if isAdmin() || (isBinConnectParticipant(resource.data) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastMessage', 'lastMessageAt', 'updatedAt', 'status']));
+      // All BIN Connect mutations are server-authoritative Cloud Functions with
+      // Auth + App Check + participant validation + immutable audit evidence.
+      allow create, update: if false;
       allow delete: if isAdmin();
 
       match /messages/{messageId} {
         allow read: if exists(/databases/$(database)/documents/binConnectThreads/$(threadId)) && (isAdmin() || isBinConnectParticipant(get(/databases/$(database)/documents/binConnectThreads/$(threadId)).data));
-        allow create: if exists(/databases/$(database)/documents/binConnectThreads/$(threadId)) &&
-          (isAdmin() || isBinConnectParticipant(get(/databases/$(database)/documents/binConnectThreads/$(threadId)).data)) &&
-          request.resource.data.get('senderId', null) == request.auth.uid;
-        allow update: if false;
+        allow create, update: if false;
         allow delete: if isAdmin();
       }
     }

@@ -49,18 +49,19 @@ export default function OwnerUnitRegistryPage() {
   useEffect(() => {
     let cancelled = false;
     async function load() {
-      if (!user?.uid && !user?.email) return;
-      setLoading(true);
-      const email = user?.email?.toLowerCase() || '';
-      const propertyQueries = [];
-      if (email) propertyQueries.push(getDocs(query(collection(db, 'properties'), where('ownerEmail', '==', email))));
-      if (user?.uid) {
-        propertyQueries.push(getDocs(query(collection(db, 'properties'), where('ownerId', '==', user.uid))));
-        propertyQueries.push(getDocs(query(collection(db, 'properties'), where('ownerUid', '==', user.uid))));
+      if (!user?.uid) {
+        setProperties([]);
+        setUnits([]);
+        setNotice(tx('owner.units.auth_required', 'Authenticated Owner identity is unavailable. Reload the portal and try again.'));
+        setLoading(false);
+        return;
       }
-
-      const propertySnaps = await Promise.all(propertyQueries);
-      const properties = unique(propertySnaps.flatMap((snap) => snap.docs.map((d) => ({ ...(d.data() as Omit<PropertyDoc, 'id'>), id: d.id } as PropertyDoc))));
+      setLoading(true);
+      setNotice('');
+      // Firestore list authorization is provable only against canonical ownerId.
+      // Legacy ownerEmail/ownerUid aliases are read compatibility fields, not list authority.
+      const propertySnap = await getDocs(query(collection(db, 'properties'), where('ownerId', '==', user.uid)));
+      const properties = unique(propertySnap.docs.map((d) => ({ ...(d.data() as Omit<PropertyDoc, 'id'>), id: d.id } as PropertyDoc)));
       if (!cancelled) {
         setProperties(properties);
         if (properties[0]?.id) setWizard((current) => current.propertyId ? current : ({ ...current, propertyId: properties[0].id }));
@@ -69,9 +70,10 @@ export default function OwnerUnitRegistryPage() {
       const propName = new Map(properties.map((p) => [p.id, p.propertyName || p.name || 'Property']));
 
       const unitSnaps = [];
-      for (const chunk of chunksOf(propIds, 10)) unitSnaps.push(await getDocs(query(collection(db, 'units'), where('propertyId', 'in', chunk))));
-      if (user?.uid) unitSnaps.push(await getDocs(query(collection(db, 'units'), where('ownerId', '==', user.uid))));
-      if (email) unitSnaps.push(await getDocs(query(collection(db, 'units'), where('ownerEmail', '==', email))));
+      for (const chunk of chunksOf(propIds, 10)) {
+        unitSnaps.push(await getDocs(query(collection(db, 'units'), where('propertyId', 'in', chunk))));
+      }
+      unitSnaps.push(await getDocs(query(collection(db, 'units'), where('ownerId', '==', user.uid))));
 
       const merged = unique(unitSnaps.flatMap((snap) => snap.docs.map((d) => {
         const data = d.data() as Omit<UnitDoc, 'id'>;
@@ -83,9 +85,17 @@ export default function OwnerUnitRegistryPage() {
         setLoading(false);
       }
     }
-    load().catch((error) => { console.warn('[OwnerUnitRegistry] load failed:', error); if (!cancelled) setLoading(false); });
+    load().catch((error) => {
+      console.warn('[OwnerUnitRegistry] load failed:', error);
+      if (!cancelled) {
+        setProperties([]);
+        setUnits([]);
+        setNotice(tx('owner.units.load_failed', 'Unable to load the unit registry. Please retry.'));
+        setLoading(false);
+      }
+    });
     return () => { cancelled = true; };
-  }, [user?.uid, user?.email, reloadKey]);
+  }, [user?.uid, reloadKey, tx]);
 
   const filtered = useMemo(() => units.filter((unit) => {
     const text = `${unit.unitNumber || ''} ${unit.propertyName || ''} ${unit.tenantName || ''} ${unit.tenantEmail || ''}`.toLowerCase();
