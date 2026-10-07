@@ -20,3 +20,7 @@ After repair, 39 focused cases pass, including six actual-page React/MUI server-
 Local validation uses Node 22. Typecheck, lint, repository hygiene, main build, shared build, Functions build and mobile store readiness passed. Full launch, Admin build and emulator results plus exact hosted-head evidence are recorded on the repair PR before merge.
 
 Remaining: verify real Owner contacts and property mappings with a seeded account; exercise tenant-targeted communication after an authorized participant-bound server handoff is implemented; complete physical-device/profile acceptance. This repair does not certify all Owner pages or the five profiles. No production deployment, pilot reset or hard-clearance action is part of this change.
+
+## CI issue found during review
+
+Original reviewed head `9f49992935ad81a08c2ae39842191388d12a2aa4` failed the Play Integrity launch suite with HTTP 403 in the live GitHub release-lock lookup (job 112848837754). That workflow and Current Main Firestore Verification omitted the explicit token used by the other full-suite workflows. Both now pass the workflow token to that step with Actions read permission. The release lock remains fail-closed; no test is skipped or permission widened to write. A parsed-workflow regression covers all five full-suite PR callers. Final head and hosted results are recorded in the PR proof comments.
