@@ -12,6 +12,7 @@ import { httpsCallable } from 'firebase/functions';
 import { Add as AddIcon, Edit as EditIcon, Search as SearchIcon, History as HistoryIcon, CloudUpload as BulkIcon, Send as SendIcon, Delete as DeleteIcon } from '@mui/icons-material';
 import BulkTenantImportDialog from '../../components/tenants/BulkTenantImportDialog';
 import { subscribeTenantLookups } from './tenantLookupSubscriptions';
+import { occupiedUnitTenantBinding, vacatedUnitTenantBinding } from './unitTenantBinding';
 
 interface Unit {
     id: string;
@@ -244,9 +245,7 @@ export default function TenantsManagementPage() {
       }, { merge: true });
 
       batch.update(doc(db, 'units', selectedUnitId), {
-          tenantId,
-          occupancyStatus: 'OCCUPIED',
-          currentTenantId: tenantId,
+          ...occupiedUnitTenantBinding({ tenantId, tenantName }),
           updatedAt: serverTimestamp()
       });
 
@@ -370,9 +369,7 @@ export default function TenantsManagementPage() {
               // 1. Clear old unit if exists
               if (selectedTenant.unitId) {
                   batch.update(doc(db, 'units', selectedTenant.unitId), {
-                      tenantId: null,
-                      currentTenantId: null,
-                      occupancyStatus: 'VACANT',
+                      ...vacatedUnitTenantBinding(),
                       updatedAt: serverTimestamp(),
                       updatedBy: currentAdminUid
                   });
@@ -381,10 +378,10 @@ export default function TenantsManagementPage() {
               if (selectedUnitId) {
                   const newUnit = units.find(u => u.id === selectedUnitId);
                   batch.update(doc(db, 'units', selectedUnitId), {
-                      tenantId: selectedTenant.uid,
-                      currentTenantId: selectedTenant.uid,
-                      tenantName: editForm.displayName,
-                      occupancyStatus: 'OCCUPIED',
+                      ...occupiedUnitTenantBinding({
+                          tenantId: selectedTenant.uid,
+                          tenantName: editForm.displayName,
+                      }),
                       updatedAt: serverTimestamp(),
                       updatedBy: currentAdminUid
                   });
@@ -487,9 +484,7 @@ export default function TenantsManagementPage() {
           // If they have an active unit, we might want to vacate it
           if (tenant.unitId) {
               batch.update(doc(db, 'units', tenant.unitId), {
-                  tenantId: null,
-                  currentTenantId: null,
-                  occupancyStatus: 'VACANT',
+                  ...vacatedUnitTenantBinding(),
                   updatedAt: serverTimestamp(),
                   updatedBy: currentAdminUid
               });
@@ -537,9 +532,7 @@ export default function TenantsManagementPage() {
           if (prevUnitId) {
               const unitRef = doc(db, 'units', prevUnitId);
               batch.update(unitRef, {
-                  tenantId: null,
-                  currentTenantId: null,
-                  occupancyStatus: "VACANT",
+                  ...vacatedUnitTenantBinding(),
                   updatedAt: serverTimestamp(),
                   updatedBy: currentAdminUid
               });
