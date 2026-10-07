@@ -27,7 +27,8 @@ import {
     Stack,
     InputAdornment,
     alpha,
-    CircularProgress
+    CircularProgress,
+    Alert
 } from '@mui/material';
 import { 
     Search, 
@@ -65,6 +66,8 @@ interface Unit {
 interface Property {
     id: string;
     name: string;
+    declaredUnits: number;
+    active: boolean;
 }
 
 export default function UnitStatusPage() {
@@ -73,6 +76,8 @@ export default function UnitStatusPage() {
     const [selectedPropertyId, setSelectedPropertyId] = useState<string>('');
     const [units, setUnits] = useState<Unit[]>([]);
     const [loading, setLoading] = useState(false);
+    const [loadedPropertyId, setLoadedPropertyId] = useState('');
+    const [unitLoadError, setUnitLoadError] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [filterStatus, setFilterStatus] = useState('all');
     
@@ -86,13 +91,17 @@ export default function UnitStatusPage() {
         adminStatusNotes: ''
     });
     const [submitting, setSubmitting] = useState(false);
+    const [provisioning, setProvisioning] = useState(false);
+    const [provisionMessage, setProvisionMessage] = useState<{ severity: 'success' | 'warning' | 'error'; text: string } | null>(null);
 
     useEffect(() => {
         const q = query(collection(db, 'properties'));
         const unsubscribe = onSnapshot(q, (snapshot) => {
             const fetched = snapshot.docs.map(doc => ({
                 id: doc.id,
-                name: doc.data().name || doc.data().propertyName || 'Unnamed Property'
+                name: doc.data().name || doc.data().propertyName || 'Unnamed Property',
+                declaredUnits: Number(doc.data().units ?? doc.data().numberOfUnits ?? doc.data().unitCount ?? doc.data().totalUnits ?? 0),
+                active: [doc.data().status, doc.data().activationStatus].map((value) => String(value || '').trim().toUpperCase()).filter(Boolean).includes('ACTIVE') && [doc.data().status, doc.data().activationStatus].every((value) => !value || String(value).trim().toUpperCase() === 'ACTIVE'),
             }));
             setProperties(fetched);
         });
@@ -100,6 +109,10 @@ export default function UnitStatusPage() {
     }, []);
 
     useEffect(() => {
+        setUnits([]);
+        setLoadedPropertyId('');
+        setUnitLoadError(false);
+        setProvisionMessage(null);
         if (!selectedPropertyId) {
             setUnits([]);
             return;
@@ -113,9 +126,12 @@ export default function UnitStatusPage() {
                 ...doc.data()
             })) as Unit[];
             setUnits(fetched);
+            setLoadedPropertyId(selectedPropertyId);
+            setUnitLoadError(false);
             setLoading(false);
         }, (error) => {
             console.error("Error fetching units:", error);
+            setUnitLoadError(true);
             setLoading(false);
         });
 
@@ -151,13 +167,40 @@ export default function UnitStatusPage() {
         }
     };
 
+    const selectedProperty = properties.find((property) => property.id === selectedPropertyId);
+    const missingDeclaredUnits = Boolean(
+        selectedProperty && selectedProperty.active && Number.isSafeInteger(selectedProperty.declaredUnits) && selectedProperty.declaredUnits > 0 && selectedProperty.declaredUnits <= 200 && !loading && !unitLoadError && loadedPropertyId === selectedPropertyId && units.length === 0,
+    );
+
+    // Properties activated before declared units were provisioned automatically
+    // can have units > 0 but no unit records; this runs the audited server backfill.
+    const handleProvisionDeclaredUnits = async () => {
+        if (!selectedPropertyId) return;
+        const targetPropertyId = selectedPropertyId;
+        setProvisioning(true);
+        setProvisionMessage(null);
+        try {
+            const provision = httpsCallable(functions, 'adminProvisionDeclaredPropertyUnits');
+            const response: any = await provision({ propertyId: targetPropertyId });
+            const created = Number(response.data?.createdCount || 0);
+            setProvisionMessage({
+                severity: created > 0 ? 'success' : 'warning',
+                text: created > 0 ? (isRTL ? `تم إنشاء ${created} سجل وحدة.` : `${created} unit record(s) created.`) : (isRTL ? 'لم يتم إنشاء وحدات. راجع السجلات الحالية وبيانات العقار.' : 'No units created. Review existing records and property details.'),
+            });
+        } catch (error: any) {
+            setProvisionMessage({ severity: 'error', text: typeof error?.message === 'string' ? error.message : (isRTL ? 'تعذر إنشاء سجلات الوحدات.' : 'Could not create unit records.') });
+        } finally {
+            setProvisioning(false);
+        }
+    };
+
     const filteredUnits = units.filter(unit => {
         const matchesSearch = 
-            unit.unitNumber?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            String(unit.unitNumber ?? '').toLowerCase().includes(searchQuery.toLowerCase()) ||
             unit.tenantName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
             unit.tenantEmail?.toLowerCase().includes(searchQuery.toLowerCase());
         
-        const matchesFilter = filterStatus === 'all' || unit.occupancyStatus === filterStatus;
+        const matchesFilter = filterStatus === 'all' || String(unit.occupancyStatus || '').toLowerCase() === filterStatus;
         
         return matchesSearch && matchesFilter;
     });
@@ -190,6 +233,26 @@ export default function UnitStatusPage() {
                 </Typography>
             </Box>
 
+            {unitLoadError && <Alert severity="error" sx={{ mb: 3 }}>{isRTL ? 'تعذر تحميل الوحدات. أعد تحديد العقار للمحاولة مرة أخرى.' : 'Could not load units. Reselect the property to retry.'}</Alert>}
+            {missingDeclaredUnits && (
+                <Alert
+                    severity="warning"
+                    sx={{ mb: 3 }}
+                    action={
+                        <Button color="inherit" size="small" disabled={provisioning} onClick={handleProvisionDeclaredUnits}>
+                            {provisioning ? (isRTL ? 'جارٍ الإنشاء…' : 'Creating…') : (isRTL ? 'إنشاء الوحدات المعلنة' : 'Create declared units')}
+                        </Button>
+                    }
+                >
+                    {isRTL ? `يعلن هذا العقار عن ${selectedProperty?.declaredUnits} وحدة دون سجلات وحدات. سيتم إنشاء أرقام متسلسلة؛ يجب مراجعة الأرقام الفعلية قبل ربط المستأجرين.` : `This property declares ${selectedProperty?.declaredUnits} unit(s) but has no unit records. Creates sequential numbers; review actual unit numbers before linking tenants.`}
+                </Alert>
+            )}
+            {provisionMessage && (
+                <Alert severity={provisionMessage.severity} sx={{ mb: 3 }} onClose={() => setProvisionMessage(null)}>
+                    {provisionMessage.text}
+                </Alert>
+            )}
+
             {/* Selector & Stats */}
             <Grid container spacing={3} sx={{ mb: 4 }}>
                 <Grid item xs={12} md={4}>
@@ -200,6 +263,7 @@ export default function UnitStatusPage() {
                                 labelId="property-select-label"
                                 value={selectedPropertyId}
                                 label="Select Institutional Property"
+                                disabled={provisioning}
                                 onChange={(e) => setSelectedPropertyId(e.target.value)}
                                 sx={{ borderRadius: 3 }}
                             >

@@ -114,6 +114,7 @@ export {
 export { adminAssignTechnician } from "./secureAdminTechnicianAssignment";
 export { tenantRequestUnitLink } from "./secureTenantUnitLinkRequest";
 export { adminResolveTenantUnitLink } from "./secureTenantUnitLinkOperations";
+export * from "./propertyUnitRecords";
 export { submitBrokerKycProfile, getBrokerKycProfileSummary } from "./secureBrokerKycSubmission";
 export { adminReviewBrokerKyc, getAdminBrokerKycReviewSummary } from "./secureBrokerKycReview";
 export { adminReviewBrokerPayoutRequest } from "./adminBrokerPayoutReview";
