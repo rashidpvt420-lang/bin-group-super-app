@@ -59,25 +59,51 @@ export default function BinConnectChatBox({ role, dark = false }: { role: Portal
   const [ticketId, setTicketId] = React.useState('');
   const [busy, setBusy] = React.useState(false);
   const mutationInFlightRef = React.useRef(false);
+  const pendingRequest = React.useRef<{ fingerprint: string; requestId: string } | null>(null);
   const [notice, setNotice] = React.useState('');
-  const [threads, setThreads] = React.useState<Conversation[]>([]);
+  const [threadState, setThreadState] = React.useState<{ uid: string; epoch: number; rows: Conversation[] }>({ uid: '', epoch: -1, rows: [] });
   const uid = auth.currentUser?.uid || '';
   const email = auth.currentUser?.email || '';
   const displayName = auth.currentUser?.displayName || email || role;
+  const identity = React.useRef({ uid, epoch: 0 });
+  if (identity.current.uid !== uid) {
+    identity.current = { uid, epoch: identity.current.epoch + 1 };
+    mutationInFlightRef.current = false;
+    pendingRequest.current = null;
+  }
+  const renderEpoch = identity.current.epoch;
+  const threads = threadState.uid === uid && threadState.epoch === identity.current.epoch ? threadState.rows : [];
+  const [draftEpoch, setDraftEpoch] = React.useState(identity.current.epoch);
+  const draftCurrent = draftEpoch === identity.current.epoch;
+
+  React.useEffect(() => {
+    setDraftEpoch(identity.current.epoch);
+    setMessage('');
+    setTitle('');
+    setRecipient('');
+    setContext('');
+    setPropertyId('');
+    setUnitId('');
+    setTicketId('');
+    setNotice('');
+    setBusy(false);
+  }, [uid]);
 
   React.useEffect(() => {
     if (!uid) {
-      setThreads([]);
+      setThreadState({ uid, epoch: identity.current.epoch, rows: [] });
       return undefined;
     }
     let cancelled = false;
+    const epoch = identity.current.epoch;
+    const isCurrent = () => !cancelled && identity.current.epoch === epoch && auth.currentUser?.uid === uid;
     const loadMyThreads = async () => {
       try {
         const call = httpsCallable<{ limit: number }, { threads?: Conversation[] }>(functions, 'listMyBinConnectThreads');
         const result = await call({ limit: 12 });
-        if (!cancelled) setThreads(Array.isArray(result.data?.threads) ? result.data.threads : []);
+        if (isCurrent()) setThreadState({ uid, epoch, rows: Array.isArray(result.data?.threads) ? result.data.threads : [] });
       } catch {
-        if (!cancelled) setThreads([]);
+        if (isCurrent()) setThreadState({ uid, epoch: identity.current.epoch, rows: [] });
       }
     };
     void loadMyThreads();
@@ -90,21 +116,23 @@ export default function BinConnectChatBox({ role, dark = false }: { role: Portal
   };
 
   const send = async () => {
+    if (mutationInFlightRef.current || identity.current.epoch !== renderEpoch || (auth.currentUser?.uid || '') !== uid) return;
     if (!uid) {
       setNotice('Sign in is required before sending a BIN Connect message.');
       return;
     }
-    if (!message.trim()) {
+    if (!draftCurrent || !message.trim()) {
       setNotice('Write a message first.');
       return;
     }
-    if (mutationInFlightRef.current) return;
     mutationInFlightRef.current = true;
+    const operationEpoch = identity.current.epoch;
+    const isCurrentOperation = () => identity.current.epoch === operationEpoch && identity.current.uid === uid && auth.currentUser?.uid === uid;
     try {
       setBusy(true);
       setNotice('');
       const createThread = httpsCallable(functions, 'createBinConnectThread');
-      await createThread({
+      const payload = {
         title: title.trim() || CHANNELS.find((item) => item.value === channel)?.label || 'BIN Connect',
         channel,
         recipientHint: recipient.trim(),
@@ -113,7 +141,12 @@ export default function BinConnectChatBox({ role, dark = false }: { role: Portal
         unitId: unitId.trim(),
         ticketId: ticketId.trim(),
         message: message.trim(),
-      });
+      };
+      const fingerprint = JSON.stringify({ uid, ...payload });
+      if (pendingRequest.current?.fingerprint !== fingerprint) pendingRequest.current = { fingerprint, requestId: crypto.randomUUID() };
+      await createThread({ ...payload, requestId: pendingRequest.current.requestId });
+      if (!isCurrentOperation()) return;
+      pendingRequest.current = null;
       setMessage('');
       setTitle('');
       setRecipient('');
@@ -123,10 +156,13 @@ export default function BinConnectChatBox({ role, dark = false }: { role: Portal
       setTicketId('');
       setNotice('Message sent to BIN Connect. Open inbox to continue the conversation.');
     } catch (error: any) {
+      if (!isCurrentOperation()) return;
       setNotice(error?.message || 'Message could not be sent. Please retry.');
     } finally {
-      mutationInFlightRef.current = false;
-      setBusy(false);
+      if (isCurrentOperation()) {
+        mutationInFlightRef.current = false;
+        setBusy(false);
+      }
     }
   };
 
@@ -142,19 +178,19 @@ export default function BinConnectChatBox({ role, dark = false }: { role: Portal
               </Box>
               <Button size="small" onClick={() => setOpen(false)} sx={{ minWidth: 0, color: binThemeTokens.goldHover }}><X size={18} /></Button>
             </Stack>
-            {notice && <Alert severity={notice.includes('sent') ? 'success' : 'warning'}>{notice}</Alert>}
+            {draftCurrent && notice && <Alert severity={notice.includes('sent') ? 'success' : 'warning'}>{notice}</Alert>}
             <Button onClick={openInbox} variant="outlined" sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.goldHover, fontWeight: 950 }}>Open full inbox / replies</Button>
             <TextField select label="Channel" value={channel} onChange={(e) => setChannel(e.target.value)} size="small" fullWidth>{CHANNELS.map((item) => <MenuItem key={item.value} value={item.value}>{item.label}</MenuItem>)}</TextField>
-            <TextField label="Subject" value={title} onChange={(e) => setTitle(e.target.value)} size="small" fullWidth placeholder="Example: Majlis AC issue, dashboard idea, payment question" />
-            <TextField label="Recipient hint" value={recipient} onChange={(e) => setRecipient(e.target.value)} size="small" fullWidth placeholder="Optional: tenant name, technician, CEO, unit, email, Majlis staff" />
-            <TextField label="Context" value={context} onChange={(e) => setContext(e.target.value)} size="small" fullWidth placeholder="Optional: property, unit, ticket, Majlis, building" />
+            <TextField label="Subject" value={draftCurrent ? title : ''} onChange={(e) => setTitle(e.target.value)} size="small" fullWidth placeholder="Example: Majlis AC issue, dashboard idea, payment question" />
+            <TextField label="Recipient hint" value={draftCurrent ? recipient : ''} onChange={(e) => setRecipient(e.target.value)} size="small" fullWidth placeholder="Optional: tenant name, technician, CEO, unit, email, Majlis staff" />
+            <TextField label="Context" value={draftCurrent ? context : ''} onChange={(e) => setContext(e.target.value)} size="small" fullWidth placeholder="Optional: property, unit, ticket, Majlis, building" />
             <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
-              <TextField label="Property ID" value={propertyId} onChange={(e) => setPropertyId(e.target.value)} size="small" fullWidth />
-              <TextField label="Unit ID" value={unitId} onChange={(e) => setUnitId(e.target.value)} size="small" fullWidth />
-              <TextField label="Ticket ID" value={ticketId} onChange={(e) => setTicketId(e.target.value)} size="small" fullWidth />
+              <TextField label="Property ID" value={draftCurrent ? propertyId : ''} onChange={(e) => setPropertyId(e.target.value)} size="small" fullWidth />
+              <TextField label="Unit ID" value={draftCurrent ? unitId : ''} onChange={(e) => setUnitId(e.target.value)} size="small" fullWidth />
+              <TextField label="Ticket ID" value={draftCurrent ? ticketId : ''} onChange={(e) => setTicketId(e.target.value)} size="small" fullWidth />
             </Stack>
-            <TextField label="Message" value={message} onChange={(e) => setMessage(e.target.value)} fullWidth multiline minRows={3} placeholder="Write like WhatsApp: ask for help, send suggestion, report issue, request update..." />
-            <Button onClick={send} disabled={busy} variant="contained" endIcon={<Send size={16} />} sx={{ bgcolor: binThemeTokens.gold, color: '#111827', fontWeight: 950 }}>{busy ? 'Sending...' : 'Send Message'}</Button>
+            <TextField label="Message" value={draftCurrent ? message : ''} onChange={(e) => setMessage(e.target.value)} fullWidth multiline minRows={3} placeholder="Write like WhatsApp: ask for help, send suggestion, report issue, request update..." />
+            <Button onClick={send} disabled={draftCurrent && busy} variant="contained" endIcon={<Send size={16} />} sx={{ bgcolor: binThemeTokens.gold, color: '#111827', fontWeight: 950 }}>{draftCurrent && busy ? 'Sending...' : 'Send Message'}</Button>
             <Divider />
             <Typography variant="caption" sx={{ color: dark ? 'rgba(255,255,255,.55)' : binThemeTokens.textSecondary, fontWeight: 900 }}>Recent BIN Connect threads</Typography>
             <Stack spacing={1}>{threads.length === 0 ? <Typography variant="body2" sx={{ color: dark ? 'rgba(255,255,255,.45)' : binThemeTokens.textSecondary }}>No recent threads yet.</Typography> : threads.slice(0, 4).map((thread) => <Box key={thread.id} onClick={openInbox} sx={{ p: 1.2, borderRadius: 2, cursor: 'pointer', bgcolor: dark ? 'rgba(255,255,255,.05)' : alpha(binThemeTokens.gold, .06) }}><Stack direction="row" spacing={1} alignItems="center"><Chip size="small" label={thread.channel || 'chat'} /><Typography variant="body2" fontWeight={900}>{thread.title || 'BIN Connect'}</Typography></Stack><Typography variant="caption" sx={{ color: dark ? 'rgba(255,255,255,.55)' : binThemeTokens.textSecondary }}>{thread.lastMessage || 'Open thread'}</Typography></Box>)}</Stack>

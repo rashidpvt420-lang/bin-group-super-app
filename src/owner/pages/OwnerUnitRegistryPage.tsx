@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Box, Button, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, Grid, InputAdornment, MenuItem, Paper, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, Typography, alpha } from '@mui/material';
 import { CheckCircle2, Layout, Plus, Search } from 'lucide-react';
 import { collection, db, functions, getDocs, httpsCallable, query, where } from '../../lib/firebase';
@@ -11,7 +11,7 @@ type UnitDoc = { id: string; propertyId?: string; propertyName?: string; unitNum
 
 const unique = <T extends { id: string }>(items: T[]) => Array.from(new Map(items.map((item) => [item.id, item])).values());
 const norm = (value: unknown) => String(value || 'vacant').toUpperCase();
-const chunksOf = <T,>(items: T[], size: number) => Array.from({ length: Math.ceil(items.length / size) }, (_, idx) => items.slice(idx * size, idx * size + size));
+const emptyWizard = () => ({ propertyId: '', count: 1, prefix: '', startNumber: 1, padding: 0, floor: '', annualRent: 0 });
 
 function statusOf(unit: UnitDoc) {
   const value = norm(unit.occupancyStatus || unit.status);
@@ -19,9 +19,9 @@ function statusOf(unit: UnitDoc) {
 }
 
 function statusColor(status: string) {
-  if (status === 'OCCUPIED') return '#10b981';
-  if (status === 'MAINTENANCE') return '#f59e0b';
-  return 'rgba(255,255,255,0.42)';
+  if (status === 'OCCUPIED') return '#047857';
+  if (status === 'MAINTENANCE') return '#92400e';
+  return binThemeTokens.textSecondary;
 }
 
 export default function OwnerUnitRegistryPage() {
@@ -36,22 +36,34 @@ export default function OwnerUnitRegistryPage() {
   const [wizardSaving, setWizardSaving] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
   const [notice, setNotice] = useState('');
-  const [wizard, setWizard] = useState({
-    propertyId: '',
-    count: 1,
-    prefix: '',
-    startNumber: 1,
-    padding: 0,
-    floor: '',
-    annualRent: 0,
-  });
+  const [wizard, setWizard] = useState(emptyWizard());
+  const [registryOwnerId, setRegistryOwnerId] = useState('');
+  const [noticeSeverity, setNoticeSeverity] = useState<'success' | 'warning'>('success');
+  const [loadFailed, setLoadFailed] = useState(false);
+  const currentOwnerId = useRef(user?.uid || '');
+  currentOwnerId.current = user?.uid || '';
+  const submission = useRef<{ ownerId: string } | null>(null);
+  const identityMatches = registryOwnerId === (user?.uid || '');
+
+  useEffect(() => {
+    setWizard(emptyWizard());
+    setWizardOpen(false);
+    setWizardSaving(false);
+    submission.current = null;
+  }, [user?.uid]);
 
   useEffect(() => {
     let cancelled = false;
+    setRegistryOwnerId(user?.uid || '');
+    setProperties([]);
+    setUnits([]);
+    setLoadFailed(false);
+    setNoticeSeverity('success');
     async function load() {
       if (!user?.uid) {
         setProperties([]);
         setUnits([]);
+        setNoticeSeverity('warning');
         setNotice(tx('owner.units.auth_required', 'Authenticated Owner identity is unavailable. Reload the portal and try again.'));
         setLoading(false);
         return;
@@ -61,19 +73,17 @@ export default function OwnerUnitRegistryPage() {
       // Firestore list authorization is provable only against canonical ownerId.
       // Legacy ownerEmail/ownerUid aliases are read compatibility fields, not list authority.
       const propertySnap = await getDocs(query(collection(db, 'properties'), where('ownerId', '==', user.uid)));
+      if (cancelled) return;
       const properties = unique(propertySnap.docs.map((d) => ({ ...(d.data() as Omit<PropertyDoc, 'id'>), id: d.id } as PropertyDoc)));
       if (!cancelled) {
         setProperties(properties);
         if (properties[0]?.id) setWizard((current) => current.propertyId ? current : ({ ...current, propertyId: properties[0].id }));
       }
-      const propIds = properties.map((p) => p.id);
       const propName = new Map(properties.map((p) => [p.id, p.propertyName || p.name || 'Property']));
 
-      const unitSnaps = [];
-      for (const chunk of chunksOf(propIds, 10)) {
-        unitSnaps.push(await getDocs(query(collection(db, 'units'), where('propertyId', 'in', chunk))));
-      }
-      unitSnaps.push(await getDocs(query(collection(db, 'units'), where('ownerId', '==', user.uid))));
+      // The units rules authorize the unit's canonical ownerId. Knowing the parent
+      // property ID alone cannot authorize a collection query over possible rows.
+      const unitSnaps = [await getDocs(query(collection(db, 'units'), where('ownerId', '==', user.uid)))];
 
       const merged = unique(unitSnaps.flatMap((snap) => snap.docs.map((d) => {
         const data = d.data() as Omit<UnitDoc, 'id'>;
@@ -90,6 +100,8 @@ export default function OwnerUnitRegistryPage() {
       if (!cancelled) {
         setProperties([]);
         setUnits([]);
+        setLoadFailed(true);
+        setNoticeSeverity('warning');
         setNotice(tx('owner.units.load_failed', 'Unable to load the unit registry. Please retry.'));
         setLoading(false);
       }
@@ -110,11 +122,16 @@ export default function OwnerUnitRegistryPage() {
   };
 
   const submitWizard = async () => {
-    if (!wizard.propertyId) {
+    if (submission.current || !user?.uid || currentOwnerId.current !== user.uid || !identityMatches) return;
+    if (!wizard.propertyId || !properties.some((property) => property.id === wizard.propertyId)) {
+      setNoticeSeverity('warning');
       setNotice('Select an owned property before generating units.');
       return;
     }
+    const operation = { ownerId: user.uid };
+    submission.current = operation;
     setWizardSaving(true);
+    setNoticeSeverity('success');
     setNotice('');
     try {
       const callable = httpsCallable(functions, 'ownerGenerateUnits');
@@ -127,55 +144,62 @@ export default function OwnerUnitRegistryPage() {
         floor: wizard.floor.trim(),
         annualRent: Number(wizard.annualRent || 0),
       });
+      if (currentOwnerId.current !== operation.ownerId || submission.current !== operation) return;
       const data = result.data as any;
       setNotice(`${data?.createdCount || 0} unit(s) generated${data?.skipped?.length ? `; skipped duplicates: ${data.skipped.join(', ')}` : ''}.`);
       setWizardOpen(false);
       setReloadKey((value) => value + 1);
     } catch (error: any) {
+      if (currentOwnerId.current !== operation.ownerId || submission.current !== operation) return;
+      setNoticeSeverity('warning');
       setNotice(error?.message || 'Unit generation failed.');
     } finally {
-      setWizardSaving(false);
+      if (currentOwnerId.current === operation.ownerId && submission.current === operation) {
+        submission.current = null;
+        setWizardSaving(false);
+      }
     }
   };
 
-  if (loading) return <Box sx={{ height: '50vh', display: 'grid', placeItems: 'center' }}><CircularProgress sx={{ color: binThemeTokens.gold }} /></Box>;
+  if (!user?.uid) return <Alert severity="warning">{tx('owner.units.auth_required', 'Authenticated Owner identity is unavailable. Reload the portal and try again.')}</Alert>;
+  if (!identityMatches || loading) return <Box sx={{ height: '50vh', display: 'grid', placeItems: 'center' }}><CircularProgress sx={{ color: binThemeTokens.gold }} /></Box>;
 
   return (
     <Box sx={{ direction: isRTL ? 'rtl' : 'ltr' }}>
       <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" spacing={3} sx={{ mb: 4 }}>
         <Box>
-          <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 4 }}>{tx('owner.units.registry_overline', 'OWNER UNIT REGISTRY')}</Typography>
-          <Typography variant="h4" fontWeight="950" sx={{ color: '#FFF', mt: 1 }}>{tx('owner.units.registry_title', 'Unit Ledger')}</Typography>
-          <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.45)' }}>{tx('owner.units.subtitle', 'All units linked to your approved properties.')}</Typography>
+          <Typography variant="overline" sx={{ color: binThemeTokens.textSecondary, fontWeight: 950, letterSpacing: 4 }}>{tx('owner.units.registry_overline', 'OWNER UNIT REGISTRY')}</Typography>
+          <Typography variant="h4" fontWeight="950" sx={{ color: binThemeTokens.textPrimary, mt: 1 }}>{tx('owner.units.registry_title', 'Unit Ledger')}</Typography>
+          <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary }}>{tx('owner.units.subtitle', 'All units linked to your approved properties.')}</Typography>
         </Box>
         <Stack direction={{ xs: 'column', sm: isRTL ? 'row-reverse' : 'row' }} spacing={1.5}>
           <Button variant="contained" startIcon={<Plus size={16} />} disabled={properties.length === 0} onClick={() => setWizardOpen(true)} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, whiteSpace: 'nowrap' }}>
             {tx('owner.units.generate_units', 'Generate Units')}
           </Button>
-          <TextField size="small" placeholder={tx('owner.units.search_placeholder', 'Search unit, tenant, property...')} value={search} onChange={(event) => setSearch(event.target.value)} InputProps={{ startAdornment: <InputAdornment position="start"><Search size={16} color="rgba(255,255,255,0.4)" /></InputAdornment> }} sx={{ minWidth: 320 }} />
+          <TextField size="small" placeholder={tx('owner.units.search_placeholder', 'Search unit, tenant, property...')} value={search} onChange={(event) => setSearch(event.target.value)} InputProps={{ startAdornment: <InputAdornment position="start"><Search size={16} color={binThemeTokens.textSecondary} /></InputAdornment> }} sx={{ minWidth: { xs: 0, sm: 320 }, width: { xs: '100%', sm: 'auto' } }} />
         </Stack>
       </Stack>
 
-      {notice && <Alert severity={notice.includes('failed') || notice.includes('Select') ? 'warning' : 'success'} sx={{ mb: 3 }} onClose={() => setNotice('')}>{notice}</Alert>}
+      {notice && <Alert severity={noticeSeverity} action={loadFailed ? <Button color="inherit" onClick={() => setReloadKey((value) => value + 1)}>{tx('common.retry', 'Retry')}</Button> : undefined} sx={{ mb: 3 }} onClose={() => setNotice('')}>{notice}</Alert>}
 
       <Grid container spacing={2} sx={{ mb: 4 }}>
         {Object.entries(counts).map(([label, value]) => (
           <Grid item xs={6} md={3} key={label}>
-            <Paper onClick={() => setFilter(label)} sx={{ p: 2.5, cursor: 'pointer', bgcolor: filter === label ? alpha(binThemeTokens.gold, 0.12) : 'rgba(15,23,42,0.5)', border: `1px solid ${filter === label ? alpha(binThemeTokens.gold, 0.42) : 'rgba(255,255,255,0.07)'}`, borderRadius: 4 }}>
-              <Typography variant="caption" sx={{ color: filter === label ? binThemeTokens.gold : 'rgba(255,255,255,0.4)', fontWeight: 950 }}>{label}</Typography>
-              <Typography variant="h5" sx={{ color: '#FFF', fontWeight: 950 }}>{value}</Typography>
+            <Paper onClick={() => setFilter(label)} sx={{ p: 2.5, cursor: 'pointer', bgcolor: filter === label ? alpha(binThemeTokens.gold, 0.12) : '#FFFFFF', border: `1px solid ${filter === label ? alpha(binThemeTokens.gold, 0.42) : binThemeTokens.border}`, borderRadius: 4 }}>
+              <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, fontWeight: 950 }}>{label}</Typography>
+              <Typography variant="h5" sx={{ color: binThemeTokens.textPrimary, fontWeight: 950 }}>{value}</Typography>
             </Paper>
           </Grid>
         ))}
       </Grid>
 
       {filtered.length === 0 ? (
-        <Paper sx={{ p: 8, textAlign: 'center', bgcolor: 'rgba(15,23,42,0.45)', border: '1px dashed rgba(255,255,255,0.08)', borderRadius: 6 }}>
-          <Layout size={42} color="rgba(255,255,255,0.12)" />
-          <Typography sx={{ color: 'rgba(255,255,255,0.35)', fontWeight: 900, mt: 2 }}>{tx('owner.units.no_units', 'NO UNITS FOUND')}</Typography>
+        <Paper sx={{ p: 8, textAlign: 'center', bgcolor: '#FFFFFF', border: `1px dashed ${binThemeTokens.border}`, borderRadius: 6 }}>
+          <Layout size={42} color={binThemeTokens.textSecondary} />
+          <Typography sx={{ color: binThemeTokens.textSecondary, fontWeight: 900, mt: 2 }}>{tx('owner.units.no_units', 'NO UNITS FOUND')}</Typography>
         </Paper>
       ) : (
-        <TableContainer component={Paper} sx={{ bgcolor: 'rgba(15,23,42,0.45)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 6 }}>
+        <TableContainer component={Paper} sx={{ bgcolor: '#FFFFFF', border: `1px solid ${binThemeTokens.border}`, borderRadius: 6 }}>
           <Table>
             <TableHead><TableRow><TableCell>{tx('owner.units.unit_col', 'UNIT')}</TableCell><TableCell>{tx('owner.units.occupancy_col', 'OCCUPANCY')}</TableCell><TableCell>{tx('owner.units.rent_col', 'RENT')}</TableCell><TableCell>{tx('owner.units.maintenance_col', 'MAINTENANCE')}</TableCell></TableRow></TableHead>
             <TableBody>
@@ -183,10 +207,10 @@ export default function OwnerUnitRegistryPage() {
                 const status = statusOf(unit);
                 return (
                   <TableRow key={unit.id} hover>
-                    <TableCell><Typography fontWeight="950" sx={{ color: '#FFF', fontFamily: 'monospace' }}>{unit.unitNumber || '—'}</Typography><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.42)' }}>{unit.propertyName} · Floor {unit.floor || unit.floorNumber || '—'}</Typography></TableCell>
-                    <TableCell><Chip label={status} size="small" sx={{ color: statusColor(status), bgcolor: alpha(statusColor(status), 0.1), fontWeight: 950 }} /> <Typography variant="caption" sx={{ color: unit.tenantName ? '#FFF' : 'rgba(255,255,255,0.35)', ml: 1 }}>{unit.tenantName || unit.tenantEmail || tx('owner.units.unassigned', 'Unassigned')}</Typography></TableCell>
-                    <TableCell><Typography sx={{ color: unit.rentAmount || unit.annualRent ? '#10b981' : 'rgba(255,255,255,0.3)', fontWeight: 900 }}>{unit.rentAmount || unit.annualRent ? `AED ${Number(unit.rentAmount || unit.annualRent).toLocaleString()}` : '—'}</Typography></TableCell>
-                    <TableCell><Stack direction="row" spacing={1} alignItems="center"><CheckCircle2 size={14} color={unit.maintenanceStatus === 'normal' ? '#10b981' : '#f59e0b'} /><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.55)', fontWeight: 900 }}>{String(unit.maintenanceStatus || 'normal').replaceAll('_', ' ').toUpperCase()}</Typography></Stack></TableCell>
+                    <TableCell><Typography fontWeight="950" sx={{ color: binThemeTokens.textPrimary, fontFamily: 'monospace' }}>{unit.unitNumber || '—'}</Typography><Typography variant="caption" sx={{ color: binThemeTokens.textSecondary }}>{unit.propertyName} · Floor {unit.floor || unit.floorNumber || '—'}</Typography></TableCell>
+                    <TableCell><Chip label={status} size="small" sx={{ color: statusColor(status), bgcolor: alpha(statusColor(status), 0.1), fontWeight: 950 }} /> <Typography variant="caption" sx={{ color: unit.tenantName ? binThemeTokens.textPrimary : binThemeTokens.textSecondary, ml: 1 }}>{unit.tenantName || unit.tenantEmail || tx('owner.units.unassigned', 'Unassigned')}</Typography></TableCell>
+                    <TableCell><Typography sx={{ color: unit.rentAmount || unit.annualRent ? '#047857' : binThemeTokens.textSecondary, fontWeight: 900 }}>{unit.rentAmount || unit.annualRent ? `AED ${Number(unit.rentAmount || unit.annualRent).toLocaleString()}` : '—'}</Typography></TableCell>
+                    <TableCell><Stack direction="row" spacing={1} alignItems="center"><CheckCircle2 size={14} color={unit.maintenanceStatus === 'normal' ? '#047857' : '#92400e'} /><Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, fontWeight: 900 }}>{String(unit.maintenanceStatus || 'normal').replaceAll('_', ' ').toUpperCase()}</Typography></Stack></TableCell>
                   </TableRow>
                 );
               })}

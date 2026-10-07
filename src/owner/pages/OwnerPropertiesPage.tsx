@@ -20,8 +20,20 @@ export default function OwnerPropertiesPage() {
     const [loading, setLoading] = useState(true);
     const [properties, setProperties] = useState<any[]>([]);
     const [loadError, setLoadError] = useState('');
+    const [portfolioOwnerId, setPortfolioOwnerId] = useState('');
+    // An Auth change renders before effect cleanup runs. Never expose the prior Owner's rows.
+    const identityMatches = portfolioOwnerId === (user?.uid || '');
+    const visibleProperties = identityMatches && user?.uid ? properties : [];
+    const visibleLoading = Boolean(user?.uid) && (!identityMatches || loading);
+    const visibleError = user?.uid
+        ? (identityMatches ? loadError : '')
+        : tx('owner.properties.auth_required', 'Authenticated Owner identity is unavailable. Reload the portal and try again.');
 
     useEffect(() => {
+        setPortfolioOwnerId(user?.uid || '');
+        setProperties([]);
+        setLoadError('');
+        setLoading(true);
         if (!user?.uid) {
             setProperties([]);
             setLoadError(tx('owner.properties.auth_required', 'Authenticated Owner identity is unavailable. Reload the portal and try again.'));
@@ -40,7 +52,7 @@ export default function OwnerPropertiesPage() {
             propQ,
             async (snap) => {
                 const version = ++snapshotVersion;
-                const props = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                const props = snap.docs.map(d => ({ ...d.data(), id: d.id }));
                 try {
                     // Firestore evaluates list permissions against the query, not
                     // against documents after the client filters them. Fetch only
@@ -52,7 +64,7 @@ export default function OwnerPropertiesPage() {
                     const passportsByPropertyId = new Map<string, any>();
                     for (const passportSnapshot of passportSnapshots) {
                         for (const passportDoc of passportSnapshot.docs) {
-                            const passport: any = { id: passportDoc.id, ...passportDoc.data() };
+                            const passport: any = { ...passportDoc.data(), id: passportDoc.id };
                             const propertyId = String(passport.propertyId || '').trim();
                             if (propertyId && !passportsByPropertyId.has(propertyId)) {
                                 passportsByPropertyId.set(propertyId, passport);
@@ -75,11 +87,13 @@ export default function OwnerPropertiesPage() {
                     setLoadError('Portfolio metrics are temporarily unavailable. Property access remains active.');
                     console.warn('[OwnerProperties] authorized passport enrichment failed:', error);
                 } finally {
-                    if (active) setLoading(false);
+                    if (active && version === snapshotVersion) setLoading(false);
                 }
             },
             (error) => {
                 if (!active) return;
+                // Invalidate all pending passport reads before rendering the listener failure.
+                ++snapshotVersion;
                 setProperties([]);
                 setLoadError('Unable to load the property portfolio. Please refresh and try again.');
                 setLoading(false);
@@ -93,7 +107,7 @@ export default function OwnerPropertiesPage() {
         };
     }, [user?.uid]);
 
-    if (loading) return (
+    if (visibleLoading) return (
         <Box sx={{ height: '60vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 2 }}>
             <CircularProgress sx={{ color: binThemeTokens.gold }} />
             <Typography variant="overline" sx={{ color: binThemeTokens.textSecondary, fontWeight: 900 }}>{tx('owner.properties.loading', 'Loading property portfolio...')}</Typography>
@@ -113,16 +127,16 @@ export default function OwnerPropertiesPage() {
                 </Stack>
             </Box>
 
-            {loadError && <Alert severity="warning" sx={{ mb: 3 }}>{loadError}</Alert>}
+            {visibleError && <Alert severity="warning" sx={{ mb: 3 }}>{visibleError}</Alert>}
 
-            {properties.length === 0 ? (
+            {visibleProperties.length === 0 ? (
                 <Paper sx={{ p: 10, textAlign: 'center', bgcolor: '#FFFFFF', border: `1px dashed ${binThemeTokens.border}`, borderRadius: 6 }}>
                     <Building2 size={48} color="#D1D5DB" style={{ margin: '0 auto 16px' }} />
                     <Typography sx={{ color: binThemeTokens.textSecondary, fontWeight: 800 }}>{tx('owner.properties.empty', 'No properties are linked to your Owner account yet.')}</Typography>
                 </Paper>
             ) : (
                 <Grid container spacing={4}>
-                    {properties.map(prop => (
+                    {visibleProperties.map(prop => (
                         <Grid item xs={12} md={6} key={prop.id}>
                             <Paper sx={{ 
                                 bgcolor: '#FFFFFF', 
@@ -163,9 +177,9 @@ export default function OwnerPropertiesPage() {
                                             </Box>
                                         </Grid>
                                         <Grid item xs={6}>
-                                            <Box sx={{ p: 2, bgcolor: 'rgba(255,255,255,0.02)', borderRadius: 4, border: '1px solid rgba(255,255,255,0.05)' }}>
-                                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.3)', fontWeight: 900, display: 'block', mb: 1 }}>REVENUE (AED)</Typography>
-                                                <Typography variant="h6" fontWeight="900" sx={{ color: '#10b981' }}>{(prop.passport?.rentCollectedTotal || 0).toLocaleString()}</Typography>
+                                            <Box sx={{ p: 2, bgcolor: binThemeTokens.softCanvas, borderRadius: 4, border: `1px solid ${binThemeTokens.border}` }}>
+                                                <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, fontWeight: 900, display: 'block', mb: 1 }}>REVENUE (AED)</Typography>
+                                                <Typography variant="h6" fontWeight="900" sx={{ color: '#047857' }}>{(prop.passport?.rentCollectedTotal || 0).toLocaleString()}</Typography>
                                             </Box>
                                         </Grid>
                                     </Grid>
@@ -189,7 +203,7 @@ export default function OwnerPropertiesPage() {
                                             variant="outlined" 
                                             startIcon={<Activity size={16} />}
                                             onClick={() => navigate('/owner/tickets')}
-                                            sx={{ borderRadius: 3, borderColor: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.6)', fontWeight: 900 }}
+                                            sx={{ borderRadius: 3, borderColor: binThemeTokens.border, color: binThemeTokens.textPrimary, fontWeight: 900 }}
                                         >
                                             HISTORY
                                         </Button>
