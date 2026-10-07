@@ -1116,6 +1116,17 @@ describe('Firestore Security Rules', () => {
     const adminDb = testEnv.authenticatedContext('admin_bin_connect', { firebase: { sign_in_second_factor: 'phone' }, admin: true, role: 'admin' }).firestore();
     const adminRows = await assertSucceeds(getDocs(query(collection(adminDb, 'binConnectThreads'), limit(100))));
     assert.equal(adminRows.size, 2);
+    // Participants and MFA Admins read existing evidence, but only the protected
+    // callables may mutate threads/messages and their atomic audit records.
+    for (const browserDb of [techDb, adminDb]) {
+      await assertFails(setDoc(doc(browserDb, 'binConnectThreads/browser_new'), {
+        createdBy: 'tech_a', participantIds: ['tech_a'], status: 'open', channel: 'maintenance_chat',
+      }));
+      await assertFails(updateDoc(doc(browserDb, 'binConnectThreads/thread_tech'), { status: 'resolved' }));
+      await assertFails(setDoc(doc(browserDb, 'binConnectThreads/thread_tech/messages/browser_message'), {
+        senderId: 'tech_a', body: 'Browser mutation must be denied',
+      }));
+    }
   });
 
   it('inspections: tenant can create own inspection and read it back', async () => {

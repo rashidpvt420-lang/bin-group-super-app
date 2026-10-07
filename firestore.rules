@@ -2015,16 +2015,14 @@ service cloud.firestore {
 
     match /binConnectThreads/{threadId} {
       allow get: if isAdmin() || isBinConnectParticipant(resource.data);
-      // Non-admin enumeration is server-authoritative via listMyBinConnectThreads.
-      // This avoids broad browser list grants while preserving participant document access.
       allow list: if isAdmin();
-      // All BIN Connect mutations are server-authoritative Cloud Functions with
-      // Auth + App Check + participant validation + immutable audit evidence.
+      // Authenticated/App Check Cloud Functions own all thread mutations.
       allow create, update: if false;
       allow delete: if isAdmin();
 
       match /messages/{messageId} {
         allow read: if exists(/databases/$(database)/documents/binConnectThreads/$(threadId)) && (isAdmin() || isBinConnectParticipant(get(/databases/$(database)/documents/binConnectThreads/$(threadId)).data));
+        // Authenticated/App Check Cloud Functions own all message mutations.
         allow create, update: if false;
         allow delete: if isAdmin();
       }
@@ -2295,7 +2293,8 @@ service cloud.firestore {
           'broker_listing_claims',
           'active_contracts',
           'onboarding_leads',
-          'systemMetrics'
+          'systemMetrics',
+          'binConnectThreads'
         ]
       ) && hasAdminClaim();
       allow update, delete: if collection != 'tickets' && collection != 'maintenanceTickets' && !(
@@ -2354,7 +2353,8 @@ service cloud.firestore {
           'broker_listing_claims',
           'active_contracts',
           'onboarding_leads',
-          'systemMetrics'
+          'systemMetrics',
+          'binConnectThreads'
         ]
       ) && hasAdminClaim();
     }
