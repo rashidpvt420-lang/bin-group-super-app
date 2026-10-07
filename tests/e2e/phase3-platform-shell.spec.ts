@@ -127,7 +127,7 @@ test.describe('Phase 1 Sovereign AI launcher interaction regression', () => {
 
 
 test.describe('Phase 1 marketing and global-shell behavioral regression', () => {
-  test('root role CTAs navigate to the correct entry flows', async ({ page }) => {
+  test('root role CTAs navigate to the correct entry flows', async ({ page }, testInfo) => {
     const cases: Array<[string, RegExp]> = [
       ['I Already Rent With BIN', /\/login\?intendedRole=tenant$/],
       ['I’m Looking for a Home', /\/homes$/],
@@ -141,7 +141,8 @@ test.describe('Phase 1 marketing and global-shell behavioral regression', () => 
       await page.goto('/', { waitUntil: 'domcontentloaded' });
       const cta = page.getByRole('button', { name: label, exact: true });
       await expect(cta).toBeVisible();
-      await cta.click();
+      if (testInfo.project.name === 'chromium-desktop') await cta.click();
+      else await cta.tap();
       await expect(page).toHaveURL(destination);
     }
   });
@@ -196,13 +197,15 @@ test.describe('Phase 1 marketing and global-shell behavioral regression', () => 
     await assertNoPageLevelHorizontalOverflow(page, testInfo.project.name + ' maintenance Arabic RTL header');
   });
 
-  test('unknown public routes render a real 404 recovery state', async ({ page }) => {
+  test('unknown public routes render a real 404 recovery state', async ({ page }, testInfo) => {
     await page.goto('/phase-1-shell-missing-route', { waitUntil: 'domcontentloaded' });
     await expect(page.getByRole('heading', { name: /Page not found|الصفحة غير موجودة/ })).toBeVisible();
     await expect(page.getByRole('link', { name: /Back to home|العودة للرئيسية/ })).toBeVisible();
     await expect(page.getByRole('link', { name: /Find a home|البحث عن منزل/ })).toBeVisible();
 
-    await page.getByRole('link', { name: /Back to home|العودة للرئيسية/ }).click();
+    const homeLink = page.getByRole('link', { name: /Back to home|العودة للرئيسية/ });
+    if (testInfo.project.name === 'chromium-desktop') await homeLink.click();
+    else await homeLink.tap();
     await expect(page).toHaveURL(/\/$/);
   });
 });
