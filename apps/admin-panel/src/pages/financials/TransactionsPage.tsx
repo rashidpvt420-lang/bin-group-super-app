@@ -117,7 +117,7 @@ export default function TransactionsPage() {
   return (
     <Container maxWidth="lg" sx={{ py: 4, direction: isRTL ? 'rtl' : 'ltr' }}>
       <Box sx={{ mb: 4, textAlign: isRTL ? 'right' : 'left' }}>
-        <Typography variant="h4" sx={{ fontWeight: 900 }}>
+        <Typography variant="h4" sx={{ color: 'text.primary', fontWeight: 900 }}>
           {t('nav.admin')} <Box component="span" sx={{ color: '#10b981' }}>{t('fin.ledger')}</Box>
         </Typography>
       </Box>

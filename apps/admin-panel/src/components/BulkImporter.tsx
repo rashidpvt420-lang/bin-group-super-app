@@ -179,7 +179,7 @@ const BulkImporter: React.FC = () => {
 
     return (
         <Box p={4} sx={{ direction: isRTL ? 'rtl' : 'ltr' }}>
-            <Typography variant="h4" gutterBottom sx={{ fontWeight: 900, color: '#1a237e', textAlign: isRTL ? 'right' : 'left' }}>
+            <Typography variant="h4" gutterBottom sx={{ fontWeight: 900, color: 'text.primary', textAlign: isRTL ? 'right' : 'left' }}>
                 {t('admin.v2_bulk_importer')}
             </Typography>
             <Typography variant="body1" color="textSecondary" mb={3} sx={{ textAlign: isRTL ? 'right' : 'left' }}>

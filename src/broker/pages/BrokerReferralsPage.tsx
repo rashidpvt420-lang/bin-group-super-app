@@ -189,8 +189,8 @@ export default function BrokerReferralsPage({ openFormByDefault = false }: { ope
       {referrals.length === 0 ? (
         <Paper sx={{ p: 10, textAlign: 'center', bgcolor: binThemeTokens.softCanvas, borderRadius: 6, border: '1px dashed #E5E7EB' }}>
           <Building2 size={48} color="#9CA3AF" />
-          <Typography variant="h6" sx={{ color: '#9CA3AF', fontWeight: 900, mt: 2 }}>NO REFERRALS RECORDED</Typography>
-          <Typography variant="body2" sx={{ color: '#9CA3AF', mt: 1 }}>Start by clicking the "Submit Referral" button above.</Typography>
+          <Typography variant="h6" sx={{ color: '#344054', fontWeight: 900, mt: 2 }}>No referrals yet</Typography>
+          <Typography variant="body2" sx={{ color: '#475467', mt: 1 }}>Tap Submit referral above to add one.</Typography>
         </Paper>
       ) : (
         <Stack spacing={3}>

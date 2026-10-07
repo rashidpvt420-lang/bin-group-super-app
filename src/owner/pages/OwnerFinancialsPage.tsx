@@ -14,10 +14,10 @@ import { db, collection, query, where, onSnapshot, limit } from '../../lib/fireb
 import { useRole } from '../../context/RoleContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
-import { useOwnerPropertyPassports } from '../utils/useOwnerPropertyPassports';
-import { summarizeOwnerPassportFinancials } from '../../../functions/shared/propertyPassportAggregation.mjs';
+import { useOwnerFinancialTruthData } from '../hooks/useOwnerFinancialTruthData';
 
 const MANAGEMENT_FEE_RATE = 0.05;
+
 const formatRecordedAed = (value: number) => Number(value || 0).toLocaleString('en-AE', {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
@@ -45,8 +45,14 @@ export default function OwnerFinancialsPage() {
     const [transactions, setTransactions] = useState<any[]>([]);
     const [invoices, setInvoices] = useState<any[]>([]);
     const [loadError, setLoadError] = useState('');
-    const { passports, loading: passportsLoading, error: passportError } = useOwnerPropertyPassports(user);
-    const summary = summarizeOwnerPassportFinancials(passports, MANAGEMENT_FEE_RATE);
+    // Shared Financial Truth summary (passport rent + paid invoices + VERIFIED NOI).
+    // This page owns the UID-scoped invoice stream below and hands its rows to
+    // the hook, so invoice failures are surfaced here rather than hidden.
+    const {
+        summary,
+        loading: truthLoading,
+        error: truthError,
+    } = useOwnerFinancialTruthData(user, { invoices, feeRate: MANAGEMENT_FEE_RATE });
 
     useEffect(() => {
         if (!user?.email || !user?.uid) {
@@ -84,7 +90,7 @@ export default function OwnerFinancialsPage() {
             finishStreams();
         });
 
-        const invoiceQ = query(collection(db, 'invoices'), where('ownerUid', '==', user.uid), limit(20));
+        const invoiceQ = query(collection(db, 'invoices'), where('ownerUid', '==', user.uid), limit(40));
         const unsubscribeInvoices = onSnapshot(invoiceQ, (snap) => {
             const rows: any[] = snap.docs.map(d => ({ id: d.id, ...d.data() }));
             setInvoices(
@@ -95,7 +101,7 @@ export default function OwnerFinancialsPage() {
         }, (error) => {
             console.error('Owner invoice stream failed:', error);
             setInvoices([]);
-            setLoadError('Owner invoices could not be loaded. Please retry before approving or paying any amount.');
+            setLoadError('Owner invoices could not be loaded. Paid-invoice totals are incomplete; please retry before approving or paying any amount.');
             invoicesReady = true;
             finishStreams();
         });
@@ -106,14 +112,14 @@ export default function OwnerFinancialsPage() {
         };
     }, [user?.email, user?.uid]);
 
-    const loading = streamsLoading || passportsLoading;
-    const visibleError = passportError || loadError;
+    const loading = streamsLoading || truthLoading;
+    const visibleError = truthError || loadError;
 
     const FINANCIAL_KPIs = [
         { label: tx('owner.fin.gross_revenue', 'Gross Revenue'), value: summary.totalRevenue, color: '#10b981', icon: <TrendingUp size={20} /> },
+        { label: tx('owner.fin.verified_noi', 'Verified NOI'), value: summary.verifiedNoi ?? 0, color: '#38bdf8', icon: <Shield size={20} />, missing: summary.verifiedNoi === null },
+        { label: tx('owner.fin.paid_invoices', 'Paid Invoices'), value: summary.paidInvoiceTotal, color: '#f59e0b', icon: <FileText size={20} /> },
         { label: tx('owner.fin.net_payout', 'Net Payout'), value: summary.netPayout, color: binThemeTokens.gold, icon: <CreditCard size={20} /> },
-        { label: tx('owner.fin.pending_verification', 'Pending Verification'), value: summary.pendingVerification, color: '#f59e0b', icon: <Clock size={20} /> },
-        { label: tx('owner.fin.management_fees', 'Management Fees'), value: summary.managementFees, color: '#3b82f6', icon: <Shield size={20} /> },
     ];
 
     if (loading) return (
@@ -147,7 +153,7 @@ export default function OwnerFinancialsPage() {
                                 <Box sx={{ p: 1, bgcolor: alpha(kpi.color, 0.1), borderRadius: 2, color: kpi.color }}>{kpi.icon}</Box>
                                 <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.3)', fontWeight: 800 }}>{tx('owner.fin.recorded', 'RECORDED')}</Typography>
                             </Box>
-                            <Typography variant="h5" fontWeight="950" sx={{ color: '#FFF' }}>AED {formatRecordedAed(kpi.value)}</Typography>
+                            <Typography variant="h5" fontWeight="950" sx={{ color: '#FFF' }}>{(kpi as any).missing ? '—' : `AED ${formatRecordedAed(kpi.value)}`}</Typography>
                             <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900, display: 'block', mt: 0.5 }}>{kpi.label.toUpperCase()}</Typography>
                         </Paper>
                     </Grid>
@@ -288,8 +294,16 @@ export default function OwnerFinancialsPage() {
                                 <Typography variant="body2" sx={{ color: '#FFF', fontWeight: 800 }}>5%</Typography>
                             </Box>
                             <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                                <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 600 }}>{tx('owner.fin.management_fees', 'Management Fees')}</Typography>
+                                <Typography variant="body2" sx={{ color: '#FFF', fontWeight: 800 }}>AED {formatRecordedAed(summary.managementFees)}</Typography>
+                            </Box>
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                                <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 600 }}>{tx('owner.fin.pending_verification', 'Pending Verification')}</Typography>
+                                <Typography variant="body2" sx={{ color: '#FFF', fontWeight: 800 }}>AED {formatRecordedAed(summary.pendingVerification)}</Typography>
+                            </Box>
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                                 <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 600 }}>{tx('owner.fin.maintenance_deductions', 'Maintenance Deductions')}</Typography>
-                                <Typography variant="body2" sx={{ color: '#FFF', fontWeight: 800 }}>AED {summary.maintenanceDeductions.toLocaleString()}</Typography>
+                                <Typography variant="body2" sx={{ color: '#FFF', fontWeight: 800 }}>AED {formatRecordedAed(summary.maintenanceDeductions)}</Typography>
                             </Box>
                             <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                                 <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 600 }}>{tx('owner.fin.bank_processing', 'Bank Processing')}</Typography>

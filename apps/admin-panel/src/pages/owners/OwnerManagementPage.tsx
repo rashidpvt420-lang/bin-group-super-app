@@ -263,15 +263,15 @@ export default function OwnerManagementPage() {
       </TableContainer>
 
       <Box sx={{ mb: 6 }}>
-        <Typography variant="h5" sx={{ mb: 3, fontWeight: 900, textAlign: isRTL ? 'right' : 'left' }}>
+        <Typography variant="h5" sx={{ color: 'text.primary', mb: 3, fontWeight: 900, textAlign: isRTL ? 'right' : 'left' }}>
           🏠 PENDING PROPERTY APPROVAL QUEUE
         </Typography>
 
         {loadingProperties ? (
           <Typography sx={{ p: 2 }}>Loading pending approvals...</Typography>
         ) : pendingProperties.length === 0 ? (
-          <Paper sx={{ p: 4, textAlign: 'center', bgcolor: '#fafafa' }}>
-            <Typography variant="body1" color="text.secondary" sx={{ fontWeight: 'bold' }}>
+          <Paper sx={{ p: 4, textAlign: 'center', bgcolor: '#fafafa', color: '#111827' }}>
+            <Typography variant="body1" color="#475467" sx={{ fontWeight: 'bold' }}>
               No properties currently pending approval.
             </Typography>
           </Paper>
