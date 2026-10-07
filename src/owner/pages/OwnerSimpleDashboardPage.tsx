@@ -7,6 +7,7 @@ import { useOwnerCommandCounts } from '../hooks/useOwnerCommandCounts';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import CanonicalNextActions from '../../components/CanonicalNextActions';
 import OwnerFinancialTruthCard from '../components/OwnerFinancialTruthCard';
+import OwnerRecentComplaintsCard from '../components/OwnerRecentComplaintsCard';
 
 export default function OwnerSimpleDashboardPage() {
   const navigate = useNavigate();
@@ -37,6 +38,8 @@ export default function OwnerSimpleDashboardPage() {
             </Stack>
           </Stack>
         </Paper>
+
+        <OwnerRecentComplaintsCard />
 
         <OwnerFinancialTruthCard />
 
