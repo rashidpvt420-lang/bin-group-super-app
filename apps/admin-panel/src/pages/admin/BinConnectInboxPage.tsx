@@ -1,7 +1,7 @@
 import React from 'react';
 import { Alert, Box, Button, Chip, Divider, Grid, MenuItem, Paper, Stack, TextField, Typography, alpha } from '@mui/material';
 import { CheckCircle2, Inbox, MessageSquare, Send } from 'lucide-react';
-import { addDoc, collection, db, doc, limit, onSnapshot, orderBy, query, serverTimestamp, updateDoc } from '../../lib/firebase';
+import { collection, db, functions, httpsCallable, limit, onSnapshot, orderBy, query } from '../../lib/firebase';
 import { useAuth } from '../../context/AuthContext';
 import { binThemeTokens } from '../../theme/adminTheme';
 
@@ -40,7 +40,9 @@ const CHANNEL_LABELS: Record<string, string> = {
   dashboard_issue: 'Dashboard Issue',
 };
 
-const statusOptions = ['open', 'in_review', 'assigned', 'resolved'];
+const statusOptions = ['open', 'pending', 'in_review', 'assigned', 'resolved'];
+const priorityOptions = ['normal', 'high', 'urgent'];
+const normalizeStatus = (value?: string) => statusOptions.includes(value || '') ? value! : 'open';
 
 const ts = (value: any) => value?.toDate?.()?.toLocaleString?.() || 'Pending timestamp';
 
@@ -51,9 +53,13 @@ export default function BinConnectInboxPage() {
   const [messages, setMessages] = React.useState<BinConnectMessage[]>([]);
   const [reply, setReply] = React.useState('');
   const [status, setStatus] = React.useState('open');
+  const [priority, setPriority] = React.useState('normal');
   const [channelFilter, setChannelFilter] = React.useState('all');
   const [notice, setNotice] = React.useState('');
   const [busy, setBusy] = React.useState(false);
+  // State updates render asynchronously; this lock also prevents two taps in the same frame.
+  const mutationPending = React.useRef(false);
+  const replyAttempt = React.useRef<{ threadId: string; message: string; requestId: string } | null>(null);
 
   React.useEffect(() => {
     const q = query(collection(db, 'binConnectThreads'), orderBy('createdAt', 'desc'), limit(100));
@@ -62,7 +68,7 @@ export default function BinConnectInboxPage() {
       setThreads(rows);
       if (!selectedId && rows[0]) {
         setSelectedId(rows[0].id);
-        setStatus(rows[0].status || 'open');
+        setStatus(normalizeStatus(rows[0].status));
       }
     }, (error) => setNotice(error.message || 'Could not load BIN Connect threads.'));
   }, [selectedId]);
@@ -81,8 +87,9 @@ export default function BinConnectInboxPage() {
   }, [selectedId]);
 
   React.useEffect(() => {
-    setStatus(selected?.status || 'open');
-  }, [selected?.id, selected?.status]);
+    setStatus(normalizeStatus(selected?.status));
+    setPriority(priorityOptions.includes(selected?.priority || '') ? selected!.priority! : 'normal');
+  }, [selected?.id, selected?.status, selected?.priority]);
 
   const filteredThreads = React.useMemo(() => {
     if (channelFilter === 'all') return threads;
@@ -90,52 +97,54 @@ export default function BinConnectInboxPage() {
   }, [threads, channelFilter]);
 
   const sendReply = async () => {
-    if (!selectedId || !reply.trim()) return;
+    if (mutationPending.current || !selectedId || !reply.trim() || status === 'resolved') return;
+    mutationPending.current = true;
+    setBusy(true);
+    setNotice('');
     try {
-      setBusy(true);
-      setNotice('');
-      const text = reply.trim();
-      await addDoc(collection(db, 'binConnectThreads', selectedId, 'messages'), {
-        body: text,
-        senderId: user?.uid,
-        senderRole: user?.role || 'admin',
-        senderEmail: user?.email || 'admin',
-        senderName: user?.displayName || user?.email || 'BIN GROUP Admin',
-        createdAt: serverTimestamp(),
-        system: false,
-      });
-      await updateDoc(doc(db, 'binConnectThreads', selectedId), {
-        lastMessage: text.slice(0, 240),
-        lastMessageAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-        status,
-        assignedAdminId: user?.uid || null,
-      });
+      const message = reply.trim();
+      if (replyAttempt.current?.threadId !== selectedId || replyAttempt.current?.message !== message) {
+        replyAttempt.current = { threadId: selectedId, message, requestId: globalThis.crypto.randomUUID() };
+      }
+      await httpsCallable(functions, 'sendBinConnectMessage')(replyAttempt.current);
+      replyAttempt.current = null;
       setReply('');
       setNotice('Admin reply sent.');
     } catch (error: any) {
-      setNotice(error?.message || 'Reply failed.');
+      setNotice(error?.message || 'Reply failed. Your draft is retained.');
     } finally {
+      mutationPending.current = false;
       setBusy(false);
     }
   };
 
-  const updateStatus = async () => {
-    if (!selectedId) return;
+  const updateStatus = async (assignToMe = false) => {
+    if (mutationPending.current || !selectedId || (assignToMe && !user?.uid)) return;
+    mutationPending.current = true;
+    setBusy(true);
+    setNotice('');
     try {
-      await updateDoc(doc(db, 'binConnectThreads', selectedId), {
-        status,
-        updatedAt: serverTimestamp(),
-        assignedAdminId: user?.uid || null,
-      });
-      setNotice('Thread status updated.');
+      if (status === 'resolved' && !assignToMe && priority === (selected?.priority || 'normal')) {
+        await httpsCallable(functions, 'resolveBinConnectThread')({ threadId: selectedId });
+      } else {
+        await httpsCallable(functions, 'updateAdminBinConnectThread')({
+          threadId: selectedId,
+          status,
+          priority,
+          ...(assignToMe ? { assignedAdminId: user!.uid } : {}),
+        });
+      }
+      setNotice(assignToMe ? 'Thread assignment updated.' : 'Thread status and priority updated.');
     } catch (error: any) {
-      setNotice(error?.message || 'Status update failed.');
+      setNotice(error?.message || 'Thread update failed. Your selections are retained.');
+    } finally {
+      mutationPending.current = false;
+      setBusy(false);
     }
   };
 
   const openCount = threads.filter((thread) => (thread.status || 'open') === 'open').length;
-  const highCount = threads.filter((thread) => thread.priority === 'high').length;
+  const highCount = threads.filter((thread) => ['high', 'urgent'].includes(thread.priority || '')).length;
   const suggestionCount = threads.filter((thread) => thread.channel === 'feature_suggestion').length;
   const majlisCount = threads.filter((thread) => thread.channel === 'majlis_staff').length;
 
@@ -184,7 +193,7 @@ export default function BinConnectInboxPage() {
               ) : filteredThreads.map((thread) => {
                 const active = thread.id === selectedId;
                 return (
-                  <Box key={thread.id} onClick={() => setSelectedId(thread.id)} sx={{ p: 2, cursor: 'pointer', borderBottom: '1px solid rgba(255,255,255,.06)', bgcolor: active ? alpha(binThemeTokens.gold, .14) : 'transparent' }}>
+                  <Box key={thread.id} onClick={() => { if (!mutationPending.current) { setSelectedId(thread.id); setNotice(''); } }} sx={{ p: 2, cursor: 'pointer', borderBottom: '1px solid rgba(255,255,255,.06)', bgcolor: active ? alpha(binThemeTokens.gold, .14) : 'transparent' }}>
                     <Stack direction="row" justifyContent="space-between" spacing={1}>
                       <Typography fontWeight={950} sx={{ color: '#fff' }}>{thread.title || 'BIN Connect'}</Typography>
                       <Chip size="small" label={thread.status || 'open'} sx={{ bgcolor: alpha(binThemeTokens.gold, .16), color: binThemeTokens.gold, fontWeight: 900 }} />
@@ -211,9 +220,11 @@ export default function BinConnectInboxPage() {
                     {selected.context && <Typography variant="body2" sx={{ color: binThemeTokens.gold, mt: .6 }}>Context: {selected.context}</Typography>}
                     {selected.recipientHint && <Typography variant="body2" sx={{ color: 'rgba(255,255,255,.62)' }}>Recipient hint: {selected.recipientHint}</Typography>}
                   </Box>
-                  <Stack direction="row" spacing={1} alignItems="center">
-                    <TextField select size="small" value={status} onChange={(event) => setStatus(event.target.value)} sx={{ minWidth: 140, '& .MuiInputBase-root': { color: '#fff' }, '& fieldset': { borderColor: 'rgba(255,255,255,.22)' } }}>{statusOptions.map((value) => <MenuItem key={value} value={value}>{value}</MenuItem>)}</TextField>
-                    <Button onClick={updateStatus} startIcon={<CheckCircle2 size={16} />} sx={{ color: binThemeTokens.gold, fontWeight: 950 }}>Update</Button>
+                  <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+                    <TextField select size="small" label="Status" disabled={busy} value={status} onChange={(event) => setStatus(event.target.value)} sx={{ minWidth: 140, '& .MuiInputBase-root': { color: '#fff' }, '& label': { color: 'rgba(255,255,255,.55)' }, '& fieldset': { borderColor: 'rgba(255,255,255,.22)' } }}>{statusOptions.map((value) => <MenuItem key={value} value={value}>{value}</MenuItem>)}</TextField>
+                    <TextField select size="small" label="Priority" disabled={busy} value={priority} onChange={(event) => setPriority(event.target.value)} sx={{ minWidth: 120, '& .MuiInputBase-root': { color: '#fff' }, '& label': { color: 'rgba(255,255,255,.55)' } }}>{priorityOptions.map((value) => <MenuItem key={value} value={value}>{value}</MenuItem>)}</TextField>
+                    <Button disabled={busy} onClick={() => updateStatus()} startIcon={<CheckCircle2 size={16} />} sx={{ color: binThemeTokens.gold, fontWeight: 950 }}>Update</Button>
+                    <Button disabled={busy || !user?.uid} onClick={() => updateStatus(true)} sx={{ color: binThemeTokens.gold }}>Assign to me</Button>
                   </Stack>
                 </Stack>
 
@@ -232,8 +243,8 @@ export default function BinConnectInboxPage() {
                 </Stack>
 
                 <Divider sx={{ borderColor: 'rgba(255,255,255,.08)' }} />
-                <TextField fullWidth multiline minRows={3} value={reply} onChange={(event) => setReply(event.target.value)} label="Admin reply" placeholder="Reply to owner, tenant, technician, broker, or Majlis staff..." sx={{ '& .MuiInputBase-root': { color: '#fff' }, '& label': { color: 'rgba(255,255,255,.55)' } }} />
-                <Button disabled={busy || !reply.trim()} onClick={sendReply} variant="contained" endIcon={<Send size={16} />} sx={{ alignSelf: 'flex-end', bgcolor: binThemeTokens.gold, color: '#020617', fontWeight: 950 }}>{busy ? 'Sending...' : 'Send admin reply'}</Button>
+                <TextField fullWidth multiline minRows={3} disabled={busy || status === 'resolved'} value={reply} onChange={(event) => setReply(event.target.value)} label="Admin reply" placeholder="Reply to owner, tenant, technician, broker, or Majlis staff..." sx={{ '& .MuiInputBase-root': { color: '#fff' }, '& label': { color: 'rgba(255,255,255,.55)' } }} />
+                <Button disabled={busy || !reply.trim() || status === 'resolved'} onClick={sendReply} variant="contained" endIcon={<Send size={16} />} sx={{ alignSelf: 'flex-end', bgcolor: binThemeTokens.gold, color: '#020617', fontWeight: 950 }}>{busy ? 'Sending...' : 'Send admin reply'}</Button>
               </Stack>
             )}
           </Paper>

@@ -52,37 +52,60 @@ const ts = (value: any) => {
 };
 
 export default function BinConnectInboxPage({ role, dark = false }: { role: PortalRole; dark?: boolean }) {
-  const [threads, setThreads] = React.useState<Thread[]>([]);
-  const [selectedId, setSelectedId] = React.useState('');
-  const [messages, setMessages] = React.useState<Message[]>([]);
+  const [threadState, setThreadState] = React.useState<{ uid: string; epoch: number; rows: Thread[] }>({ uid: '', epoch: -1, rows: [] });
+  const [selection, setSelection] = React.useState({ uid: '', epoch: -1, id: '' });
+  const [messageState, setMessageState] = React.useState<{ uid: string; epoch: number; threadId: string; rows: Message[] }>({ uid: '', epoch: -1, threadId: '', rows: [] });
   const [reply, setReply] = React.useState('');
   const [channelFilter, setChannelFilter] = React.useState('all');
   const [notice, setNotice] = React.useState('');
   const [busy, setBusy] = React.useState(false);
   const mutationInFlightRef = React.useRef(false);
+  const pendingRequest = React.useRef<{ fingerprint: string; requestId: string } | null>(null);
 
   const uid = auth.currentUser?.uid || '';
   const email = auth.currentUser?.email || '';
   const displayName = auth.currentUser?.displayName || email || role;
+  const identity = React.useRef({ uid, epoch: 0 });
+  if (identity.current.uid !== uid) {
+    identity.current = { uid, epoch: identity.current.epoch + 1 };
+    mutationInFlightRef.current = false;
+    pendingRequest.current = null;
+  }
+  const renderEpoch = identity.current.epoch;
+  const threads = threadState.uid === uid && threadState.epoch === identity.current.epoch ? threadState.rows : [];
+  const selectedId = selection.uid === uid && selection.epoch === identity.current.epoch ? selection.id : '';
+  const messages = messageState.uid === uid && messageState.epoch === identity.current.epoch && messageState.threadId === selectedId ? messageState.rows : [];
+  const [draftEpoch, setDraftEpoch] = React.useState(identity.current.epoch);
+  const draftCurrent = draftEpoch === identity.current.epoch;
+  React.useEffect(() => {
+    setDraftEpoch(identity.current.epoch);
+    setReply('');
+    setNotice('');
+    setBusy(false);
+    setSelection({ uid, epoch: identity.current.epoch, id: '' });
+    setMessageState({ uid, epoch: identity.current.epoch, threadId: '', rows: [] });
+  }, [uid]);
 
   React.useEffect(() => {
     if (!uid) {
-      setThreads([]);
+      setThreadState({ uid, epoch: identity.current.epoch, rows: [] });
       return undefined;
     }
     let cancelled = false;
+    const epoch = identity.current.epoch;
+    const isCurrent = () => !cancelled && identity.current.epoch === epoch && auth.currentUser?.uid === uid;
     const loadMyThreads = async () => {
       try {
         const call = httpsCallable<{ limit: number }, { threads?: Thread[] }>(functions, 'listMyBinConnectThreads');
         const result = await call({ limit: 100 });
-        if (cancelled) return;
+        if (!isCurrent()) return;
         const rows = Array.isArray(result.data?.threads) ? result.data.threads : [];
-        setThreads(rows);
-        setSelectedId((current) => current || rows[0]?.id || '');
+        setThreadState({ uid, epoch, rows });
+        setSelection((current) => ({ uid, epoch, id: current.uid === uid && rows.some(row => row.id === current.id) ? current.id : rows[0]?.id || '' }));
         setNotice('');
       } catch (error: any) {
-        if (!cancelled) {
-          setThreads([]);
+        if (isCurrent()) {
+          setThreadState({ uid, epoch: identity.current.epoch, rows: [] });
           setNotice(error?.message || 'Could not load BIN Connect conversations.');
         }
       }
@@ -95,50 +118,69 @@ export default function BinConnectInboxPage({ role, dark = false }: { role: Port
 
   React.useEffect(() => {
     if (!selectedId) {
-      setMessages([]);
+      setMessageState({ uid, epoch: identity.current.epoch, threadId: '', rows: [] });
       return undefined;
     }
+    let cancelled = false;
+    const epoch = identity.current.epoch;
+    const isCurrent = () => !cancelled && identity.current.epoch === epoch && auth.currentUser?.uid === uid;
     const q = query(collection(db, 'binConnectThreads', selectedId, 'messages'), orderBy('createdAt', 'asc'), limit(120));
-    return onSnapshot(q, (snap) => {
-      setMessages(snap.docs.map((item) => ({ id: item.id, ...(item.data() as any) })));
-    }, (error) => setNotice(error.message || 'Could not load messages.'));
-  }, [selectedId]);
+    const unsubscribe = onSnapshot(q, (snap) => {
+      if (isCurrent()) setMessageState({ uid, epoch: identity.current.epoch, threadId: selectedId, rows: snap.docs.map((item) => ({ id: item.id, ...(item.data() as any) })) });
+    }, (error) => { if (isCurrent()) setNotice(error.message || 'Could not load messages.'); });
+    return () => { cancelled = true; unsubscribe(); };
+  }, [uid, selectedId]);
 
   const filteredThreads = React.useMemo(() => channelFilter === 'all' ? threads : threads.filter((thread) => thread.channel === channelFilter), [threads, channelFilter]);
 
   const sendReply = async () => {
-    if (!uid || !selectedId || !reply.trim() || mutationInFlightRef.current) return;
+    if (mutationInFlightRef.current || identity.current.epoch !== renderEpoch || auth.currentUser?.uid !== uid || !uid || !selectedId || !draftCurrent || !reply.trim()) return;
     mutationInFlightRef.current = true;
+    const operationEpoch = identity.current.epoch;
+    const isCurrentOperation = () => identity.current.epoch === operationEpoch && identity.current.uid === uid && auth.currentUser?.uid === uid;
     try {
       setBusy(true);
       setNotice('');
       const text = reply.trim();
       const sendMessage = httpsCallable(functions, 'sendBinConnectMessage');
-      await sendMessage({ threadId: selectedId, message: text });
+      const fingerprint = JSON.stringify({ uid, threadId: selectedId, message: text });
+      if (pendingRequest.current?.fingerprint !== fingerprint) pendingRequest.current = { fingerprint, requestId: crypto.randomUUID() };
+      await sendMessage({ threadId: selectedId, message: text, requestId: pendingRequest.current.requestId });
+      if (!isCurrentOperation()) return;
+      pendingRequest.current = null;
       setReply('');
       setNotice('Reply sent.');
     } catch (error: any) {
+      if (!isCurrentOperation()) return;
       setNotice(error?.message || 'Reply failed.');
     } finally {
-      mutationInFlightRef.current = false;
-      setBusy(false);
+      if (isCurrentOperation()) {
+        mutationInFlightRef.current = false;
+        setBusy(false);
+      }
     }
   };
 
   const closeThread = async () => {
-    if (!selectedId || mutationInFlightRef.current) return;
+    if (mutationInFlightRef.current || identity.current.epoch !== renderEpoch || auth.currentUser?.uid !== uid || !uid || !selectedId) return;
     mutationInFlightRef.current = true;
+    const operationEpoch = identity.current.epoch;
+    const isCurrentOperation = () => identity.current.epoch === operationEpoch && identity.current.uid === uid && auth.currentUser?.uid === uid;
+    setBusy(true);
     try {
-      setBusy(true);
       const resolveThread = httpsCallable(functions, 'resolveBinConnectThread');
       await resolveThread({ threadId: selectedId });
-      setThreads((current) => current.map((thread) => thread.id === selectedId ? { ...thread, status: 'resolved' } : thread));
+      if (!isCurrentOperation()) return;
+      setThreadState((current) => ({ uid, epoch: operationEpoch, rows: current.uid === uid ? current.rows.map((thread) => thread.id === selectedId ? { ...thread, status: 'resolved' } : thread) : [] }));
       setNotice('Conversation marked resolved.');
     } catch (error: any) {
+      if (!isCurrentOperation()) return;
       setNotice(error?.message || 'Could not update conversation.');
     } finally {
-      mutationInFlightRef.current = false;
-      setBusy(false);
+      if (isCurrentOperation()) {
+        mutationInFlightRef.current = false;
+        setBusy(false);
+      }
     }
   };
 
@@ -153,7 +195,7 @@ export default function BinConnectInboxPage({ role, dark = false }: { role: Port
         <Chip label={`${threads.length} conversations`} sx={{ alignSelf: { xs: 'flex-start', md: 'center' }, bgcolor: alpha(binThemeTokens.gold, .12), color: binThemeTokens.goldHover, fontWeight: 950 }} />
       </Stack>
 
-      {notice && <Alert severity={notice.includes('sent') || notice.includes('resolved') ? 'success' : 'warning'} sx={{ mb: 3 }}>{notice}</Alert>}
+      {draftCurrent && notice && <Alert severity={notice.includes('sent') || notice.includes('resolved') ? 'success' : 'warning'} sx={{ mb: 3 }}>{notice}</Alert>}
 
       <Grid container spacing={3}>
         <Grid item xs={12} md={4}>
@@ -168,7 +210,7 @@ export default function BinConnectInboxPage({ role, dark = false }: { role: Port
             <Stack sx={{ maxHeight: '65vh', overflow: 'auto' }}>
               {filteredThreads.length === 0 ? <Typography sx={{ p: 3, color: dark ? 'rgba(255,255,255,.55)' : binThemeTokens.textSecondary }}>No conversations yet. Use the floating BIN Connect button to start one.</Typography> : filteredThreads.map((thread) => {
                 const active = thread.id === selectedId;
-                return <Box key={thread.id} onClick={() => setSelectedId(thread.id)} sx={{ p: 2, cursor: 'pointer', borderBottom: `1px solid ${dark ? 'rgba(255,255,255,.08)' : binThemeTokens.border}`, bgcolor: active ? alpha(binThemeTokens.gold, .14) : 'transparent' }}>
+                return <Box key={thread.id} onClick={() => setSelection({ uid, epoch: identity.current.epoch, id: thread.id })} sx={{ p: 2, cursor: 'pointer', borderBottom: `1px solid ${dark ? 'rgba(255,255,255,.08)' : binThemeTokens.border}`, bgcolor: active ? alpha(binThemeTokens.gold, .14) : 'transparent' }}>
                   <Stack direction="row" justifyContent="space-between" gap={1}><Typography fontWeight={950}>{thread.title || 'BIN Connect'}</Typography><Chip size="small" label={thread.status || 'open'} /></Stack>
                   <Typography variant="caption" sx={{ color: dark ? 'rgba(255,255,255,.55)' : binThemeTokens.textSecondary }}>{CHANNEL_LABELS[thread.channel || ''] || thread.channel || 'chat'} · {ts(thread.updatedAtMs || thread.createdAtMs)}</Typography>
                   <Typography variant="body2" sx={{ mt: 1, color: dark ? 'rgba(255,255,255,.72)' : binThemeTokens.textSecondary }}>{thread.lastMessage || 'Open conversation'}</Typography>
@@ -187,7 +229,7 @@ export default function BinConnectInboxPage({ role, dark = false }: { role: Port
                   {selected.context && <Typography variant="body2" sx={{ color: binThemeTokens.goldHover, mt: .6 }}>Context: {selected.context}</Typography>}
                   {(selected.propertyId || selected.unitId || selected.ticketId) && <Typography variant="caption" sx={{ color: dark ? 'rgba(255,255,255,.55)' : binThemeTokens.textSecondary }}>Property: {selected.propertyId || 'N/A'} · Unit: {selected.unitId || 'N/A'} · Ticket: {selected.ticketId || 'N/A'}</Typography>}
                 </Box>
-                <Button onClick={closeThread} disabled={busy} startIcon={<CheckCircle2 size={16} />} sx={{ alignSelf: 'flex-start', color: binThemeTokens.goldHover, fontWeight: 950 }}>Mark resolved</Button>
+                <Button onClick={closeThread} disabled={draftCurrent && busy} startIcon={<CheckCircle2 size={16} />} sx={{ alignSelf: 'flex-start', color: binThemeTokens.goldHover, fontWeight: 950 }}>Mark resolved</Button>
               </Stack>
               <Divider />
               <Stack spacing={1.4} sx={{ maxHeight: 380, overflow: 'auto', pr: 1 }}>
@@ -200,8 +242,8 @@ export default function BinConnectInboxPage({ role, dark = false }: { role: Port
                 })}
               </Stack>
               <Divider />
-              <TextField fullWidth multiline minRows={3} value={reply} onChange={(event) => setReply(event.target.value)} label="Reply" placeholder="Continue this conversation..." />
-              <Button disabled={busy || !reply.trim()} onClick={sendReply} variant="contained" endIcon={<Send size={16} />} sx={{ alignSelf: 'flex-end', bgcolor: binThemeTokens.gold, color: '#111827', fontWeight: 950 }}>{busy ? 'Sending...' : 'Send reply'}</Button>
+              <TextField fullWidth multiline minRows={3} value={draftCurrent ? reply : ''} onChange={(event) => setReply(event.target.value)} label="Reply" placeholder="Continue this conversation..." />
+              <Button disabled={!draftCurrent || busy || !reply.trim()} onClick={sendReply} variant="contained" endIcon={<Send size={16} />} sx={{ alignSelf: 'flex-end', bgcolor: binThemeTokens.gold, color: '#111827', fontWeight: 950 }}>{draftCurrent && busy ? 'Sending...' : 'Send reply'}</Button>
             </Stack>}
           </Paper>
         </Grid>
