@@ -11,30 +11,47 @@ export default function OwnerTenantsPage() {
     const { user } = useRole();
     const { isRTL } = useLanguage();
     const [state, setState] = useState<{ ownerUid?: string; rows: DirectoryRow[]; loading: boolean; failed: boolean }>({ rows: [], loading: true, failed: false });
-    const [attempt, setAttempt] = useState(0);
+    const retryDirectoryRef = React.useRef<(() => void) | null>(null);
     const [search, setSearch] = useState('');
     const label = (en: string, ar: string) => isRTL ? ar : en;
 
     useEffect(() => {
         setSearch('');
         setState({ ownerUid: user?.uid, rows: [], loading: Boolean(user?.uid), failed: false });
-        if (!user?.uid) return;
-        // Both queries remain bound to the immutable owner UID.
-        const propQ = query(collection(db, 'properties'), where('ownerId', '==', user.uid));
-        const tenantQ = query(collection(db, 'users'), where('role', '==', 'tenant'), where('ownerId', '==', user.uid));
-        return subscribeOwnerDirectory(user.uid,
-            (next, fail) => onSnapshot(propQ, snap => next(snap.docs), fail),
-            (next, fail) => onSnapshot(tenantQ, snap => next(snap.docs), fail),
-            (rows, loading, failed) => setState({ ownerUid: user.uid, rows, loading, failed }),
-        );
-    }, [user?.uid, attempt]);
+        if (!user?.uid) {
+            retryDirectoryRef.current = null;
+            return;
+        }
+
+        const ownerUid = user.uid;
+        let stop: (() => void) | undefined;
+        const start = () => {
+            stop?.();
+            setState({ ownerUid, rows: [], loading: true, failed: false });
+            // Both queries remain bound to the immutable owner UID.
+            const propQ = query(collection(db, 'properties'), where('ownerId', '==', ownerUid));
+            const tenantQ = query(collection(db, 'users'), where('role', '==', 'tenant'), where('ownerId', '==', ownerUid));
+            stop = subscribeOwnerDirectory(ownerUid,
+                (next, fail) => onSnapshot(propQ, snap => next(snap.docs), fail),
+                (next, fail) => onSnapshot(tenantQ, snap => next(snap.docs), fail),
+                (rows, loading, failed) => setState({ ownerUid, rows, loading, failed }),
+            );
+        };
+
+        retryDirectoryRef.current = start;
+        start();
+        return () => {
+            if (retryDirectoryRef.current === start) retryDirectoryRef.current = null;
+            stop?.();
+        };
+    }, [user?.uid]);
 
     // Never render the previous owner's rows while an identity change awaits its effect.
     const current = state.ownerUid === user?.uid ? state : { rows: [], loading: Boolean(user?.uid), failed: false };
     const filtered = filterDirectoryRows(current.rows, search);
     if (!user?.uid) return <Alert severity="info">{label('Sign in to view your tenant directory.', 'سجّل الدخول لعرض دليل المستأجرين.')}</Alert>;
     if (current.loading) return <Stack alignItems="center" spacing={2} sx={{ py: 6 }}><CircularProgress /><Typography color="text.secondary">{label('Loading tenant directory…', 'جارٍ تحميل دليل المستأجرين…')}</Typography></Stack>;
-    if (current.failed) return <Alert severity="error" action={<Button onClick={() => setAttempt(value => value + 1)}>{label('Retry', 'إعادة المحاولة')}</Button>}>{label('Unable to load the tenant directory. Please try again.', 'تعذّر تحميل دليل المستأجرين. يرجى المحاولة مجددًا.')}</Alert>;
+    if (current.failed) return <Alert severity="error" action={<Button onClick={() => retryDirectoryRef.current?.()}>{label('Retry', 'إعادة المحاولة')}</Button>}>{label('Unable to load the tenant directory. Please try again.', 'تعذّر تحميل دليل المستأجرين. يرجى المحاولة مجددًا.')}</Alert>;
 
     return <Box dir={isRTL ? 'rtl' : 'ltr'} sx={{ color: '#111827' }}>
         <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" spacing={2} sx={{ mb: 3 }}>
