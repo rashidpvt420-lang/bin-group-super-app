@@ -71,9 +71,9 @@ export default function OrphanWarRoomPage() {
         setRepairError(null);
         setRepairErrorDetail(null);
         try {
-            // Force refresh token to ensure admin claim is current
-            const tokenResult = await auth.currentUser.getIdTokenResult(true);
-            console.log("🛡️ [TECH-REPAIR] Admin Claims:", tokenResult.claims);
+            // Force-refresh the session so privileged repair uses current server authority.
+            // Never log decoded claims: they may include privileged or internal authorization data.
+            await auth.currentUser.getIdTokenResult(true);
 
             const repairFn = httpsCallable<{ dryRun: boolean }, RepairReport>(functions, 'institutionalRepairTrigger');
             const result = await repairFn({ dryRun });
@@ -84,7 +84,7 @@ export default function OrphanWarRoomPage() {
             setRepairErrorDetail(JSON.stringify({
                 code: err?.code || 'UNKNOWN',
                 message: err?.message || 'Unknown server error',
-                details: err?.details || 'Check console logs'
+                guidance: 'Use the audit log and server-side diagnostics for privileged repair details.'
             }, null, 2));
 
             if (err?.code === 'functions/unauthenticated') {

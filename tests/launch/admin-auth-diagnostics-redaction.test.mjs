@@ -16,3 +16,13 @@ test('Admin production evidence never retains Firebase Auth or MFA response bodi
     assert.match(source, /identitytoolkit\.accounts:signInWithPassword/);
   }
 });
+
+
+test('Admin Orphan War Room never logs decoded claims or exposes raw callable details', async () => {
+  const source = await read('apps/admin-panel/src/pages/admin/OrphanWarRoomPage.tsx');
+  assert.doesNotMatch(source, /console\.log\([^\n]*Admin Claims/);
+  assert.doesNotMatch(source, /tokenResult\.claims/);
+  assert.doesNotMatch(source, /details:\s*err\?\.details/);
+  assert.match(source, /getIdTokenResult\(true\)/);
+  assert.match(source, /server-side diagnostics for privileged repair details/);
+});
