@@ -24,7 +24,7 @@ test('Owner tenant directory uses the UID-bound property query authorized by Fir
   const ownerTenants = read('src/owner/pages/OwnerTenantsPage.tsx');
   assert.match(ownerTenants, /where\('ownerId', '==', user\.uid\)/);
   assert.doesNotMatch(ownerTenants, /where\('ownerEmail', '==', user\.email\.toLowerCase\(\)\)/);
-  assert.match(ownerTenants, /\}, \[user\?\.uid\]\);/);
+  assert.match(ownerTenants, /\}, \[user\?\.uid, attempt\]\);/);
 });
 
 test('Admin Google Maps receives a real Firebase App Check token before map creation', () => {

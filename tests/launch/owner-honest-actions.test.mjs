@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import ts from 'typescript';
 
 const root = process.env.UI_AUDIT_ROOT ? `${process.env.UI_AUDIT_ROOT}/` : new URL('../../', import.meta.url).pathname;
 const read = (p) => readFileSync(`${root}${p}`, 'utf8');
@@ -24,7 +25,23 @@ for (const [file, label] of wired) {
 test('dead owner buttons are gone or are not buttons', () => {
   assert.doesNotMatch(read('src/owner/pages/OwnerRoiPage.tsx'), />Last 12 Months</);
   assert.doesNotMatch(read('src/owner/pages/OwnerPropertiesPage.tsx'), />Grid View</);
-  assert.doesNotMatch(read('src/owner/pages/OwnerTenantsPage.tsx'), /<Button[^>]*>\s*RERA Compliant/);
+  assert.doesNotMatch(read('src/owner/pages/OwnerTenantsPage.tsx'), /RERA Compliant|Institutional Audit Stream/);
+});
+
+test('Owner directory has no enabled controls without an action, including nested JSX icons', () => {
+  const source = read('src/owner/pages/OwnerTenantsPage.tsx');
+  const ast = ts.createSourceFile('OwnerTenantsPage.tsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  const dead = [];
+  function visit(node) {
+    if ((ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) &&
+        ['Button', 'IconButton'].includes(node.tagName.getText(ast))) {
+      const attributes = node.attributes.properties.filter(ts.isJsxAttribute).map((attribute) => attribute.name.getText(ast));
+      if (!attributes.some((name) => ['href', 'to', 'onClick', 'disabled'].includes(name))) dead.push(node.getText(ast));
+    }
+    ts.forEachChild(node, visit);
+  }
+  visit(ast);
+  assert.deepEqual(dead, [], 'enabled controls must have a destination or handler');
 });
 
 test('CSV helper quotes cells and blocks spreadsheet formulas', () => {

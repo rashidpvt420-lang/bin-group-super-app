@@ -1,223 +1,70 @@
 import React, { useState, useEffect } from 'react';
-import { 
-    Box, Typography, Paper, Stack, Chip, CircularProgress, Alert, 
-    Grid, Avatar, IconButton, TextField, InputAdornment, alpha,
-    Button, Divider
-} from '@mui/material';
-import { 
-    Users, Search, Mail, Phone, MessageSquare, 
-    MapPin, Building2, ChevronRight, Filter,
-    Activity, Shield, CheckCircle2
-} from 'lucide-react';
-import { db, collection, query, where, getDocs, onSnapshot } from '../../lib/firebase';
+import { Box, Typography, Paper, Stack, Chip, CircularProgress, Alert, Grid, Avatar, TextField, InputAdornment, Button } from '@mui/material';
+import { Search, Mail } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { db, collection, query, where, onSnapshot } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
-import { binThemeTokens } from '../../theme/binGroupTheme';
+import { useLanguage } from '../../context/LanguageContext';
+import { type DirectoryRow, filterDirectoryRows, subscribeOwnerDirectory } from '../utils/ownerTenantDirectory';
 
 export default function OwnerTenantsPage() {
     const { user } = useRole();
-    const [loading, setLoading] = useState(true);
-    const [loadError, setLoadError] = useState('');
-    const [tenants, setTenants] = useState<any[]>([]);
+    const { isRTL } = useLanguage();
+    const [state, setState] = useState<{ ownerUid?: string; rows: DirectoryRow[]; loading: boolean; failed: boolean }>({ rows: [], loading: true, failed: false });
+    const [attempt, setAttempt] = useState(0);
     const [search, setSearch] = useState('');
+    const label = (en: string, ar: string) => isRTL ? ar : en;
 
     useEffect(() => {
+        setSearch('');
+        setState({ ownerUid: user?.uid, rows: [], loading: Boolean(user?.uid), failed: false });
         if (!user?.uid) return;
-        
-        // Firestore list authorization is UID-bound. Query the immutable canonical
-        // owner field so the database can prove ownership before returning rows.
+        // Both queries remain bound to the immutable owner UID.
         const propQ = query(collection(db, 'properties'), where('ownerId', '==', user.uid));
-        
-        let unsubscribeTenants: (() => void) | undefined;
-        const unsubscribe = onSnapshot(propQ, async (propSnap) => {
-            const propIds = propSnap.docs.map(d => d.id);
-            if (propIds.length === 0) {
-                unsubscribeTenants?.();
-                setTenants([]);
-                setLoadError('');
-                setLoading(false);
-                return;
-            }
+        const tenantQ = query(collection(db, 'users'), where('role', '==', 'tenant'), where('ownerId', '==', user.uid));
+        return subscribeOwnerDirectory(user.uid,
+            (next, fail) => onSnapshot(propQ, snap => next(snap.docs), fail),
+            (next, fail) => onSnapshot(tenantQ, snap => next(snap.docs), fail),
+            (rows, loading, failed) => setState({ ownerUid: user.uid, rows, loading, failed }),
+        );
+    }, [user?.uid, attempt]);
 
-            const tenantQ = query(collection(db, 'users'), where('role', '==', 'tenant'), where('ownerId', '==', user.uid));
-            unsubscribeTenants?.();
-            unsubscribeTenants = onSnapshot(tenantQ, (tenantSnap) => {
-                const allTenants = tenantSnap.docs.map(d => {
-                    const data = d.data();
-                    const prop = propSnap.docs.find(p => p.id === data.propertyId)?.data();
-                    return {
-                        id: d.id,
-                        ...data,
-                        propertyName: prop?.name || prop?.propertyName || 'Sovereign Asset'
-                    };
-                });
-                setTenants(allTenants);
-                setLoadError('');
-                setLoading(false);
-            }, (error: any) => {
-                console.error('[OwnerTenants] tenant listener failed:', error);
-                setLoadError(error?.message || 'Unable to load tenant directory.');
-                setLoading(false);
-            });
-        }, (error: any) => {
-            console.error('[OwnerTenants] property listener failed:', error);
-            setLoadError(error?.message || 'Unable to load owner properties for tenant mapping.');
-            setLoading(false);
-        });
+    // Never render the previous owner's rows while an identity change awaits its effect.
+    const current = state.ownerUid === user?.uid ? state : { rows: [], loading: Boolean(user?.uid), failed: false };
+    const filtered = filterDirectoryRows(current.rows, search);
+    if (!user?.uid) return <Alert severity="info">{label('Sign in to view your tenant directory.', 'سجّل الدخول لعرض دليل المستأجرين.')}</Alert>;
+    if (current.loading) return <Stack alignItems="center" spacing={2} sx={{ py: 6 }}><CircularProgress /><Typography color="text.secondary">{label('Loading tenant directory…', 'جارٍ تحميل دليل المستأجرين…')}</Typography></Stack>;
+    if (current.failed) return <Alert severity="error" action={<Button onClick={() => setAttempt(value => value + 1)}>{label('Retry', 'إعادة المحاولة')}</Button>}>{label('Unable to load the tenant directory. Please try again.', 'تعذّر تحميل دليل المستأجرين. يرجى المحاولة مجددًا.')}</Alert>;
 
-        return () => { unsubscribe(); unsubscribeTenants?.(); };
-    }, [user?.uid]);
-
-    const filtered = tenants.filter(t => 
-        t.displayName?.toLowerCase().includes(search.toLowerCase()) ||
-        t.email?.toLowerCase().includes(search.toLowerCase()) ||
-        t.propertyName?.toLowerCase().includes(search.toLowerCase())
-    );
-
-    if (loading) return (
-        <Box sx={{ height: '50vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 2 }}>
-            <CircularProgress sx={{ color: binThemeTokens.gold }} />
-            <Typography variant="overline" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900 }}>Mapping Population...</Typography>
-        </Box>
-    );
-
-    if (loadError) return <Alert severity="error">{loadError}</Alert>;
-
-    return (
-        <Box>
-            {/* Header */}
-            <Box sx={{ mb: 5, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 3 }}>
-                <Box>
-                    <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 4 }}>TENANT RELATIONSHIP NODES</Typography>
-                    <Typography variant="h4" fontWeight="950" sx={{ color: '#FFF', mt: 1 }}>Sovereign Directory</Typography>
-                </Box>
-                <TextField 
-                    size="small" 
-                    placeholder="Search by name, email, property..." 
-                    value={search} 
-                    onChange={e => setSearch(e.target.value)}
-                    InputProps={{ 
-                        startAdornment: <InputAdornment position="start"><Search size={16} color="rgba(255,255,255,0.4)" /></InputAdornment>,
-                        sx: { borderRadius: 3, bgcolor: 'rgba(255,255,255,0.03)', color: '#FFF', borderColor: 'rgba(255,255,255,0.1)' }
-                    }}
-                    sx={{ width: { xs: '100%', sm: 300 } }}
-                />
-            </Box>
-
-            {filtered.length === 0 ? (
-                <Paper sx={{ p: 10, textAlign: 'center', bgcolor: 'rgba(15, 23, 42, 0.4)', border: '1px dashed rgba(255,255,255,0.08)', borderRadius: 6 }}>
-                    <Users size={48} color="rgba(255,255,255,0.05)" style={{ margin: '0 auto 16px' }} />
-                    <Typography sx={{ color: 'rgba(255,255,255,0.2)', fontWeight: 800 }}>NO TENANTS REGISTERED IN YOUR PORTFOLIO</Typography>
-                </Paper>
-            ) : (
-                <Grid container spacing={3}>
-                    {filtered.map(tenant => (
-                        <Grid item xs={12} md={6} lg={4} key={tenant.id}>
-                            <Paper sx={{ 
-                                p: 3, 
-                                bgcolor: 'rgba(15, 23, 42, 0.4)', 
-                                border: '1px solid rgba(255,255,255,0.05)', 
-                                borderRadius: 6,
-                                transition: 'all 0.2s',
-                                '&:hover': { bgcolor: 'rgba(255,255,255,0.02)', borderColor: binThemeTokens.gold }
-                            }}>
-                                <Stack spacing={2.5}>
-                                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                                        <Stack direction="row" spacing={2} alignItems="center">
-                                            <Avatar sx={{ 
-                                                width: 56, 
-                                                height: 56, 
-                                                bgcolor: alpha(binThemeTokens.gold, 0.1), 
-                                                color: binThemeTokens.gold,
-                                                fontWeight: 950,
-                                                border: `1px solid ${alpha(binThemeTokens.gold, 0.2)}`
-                                            }}>
-                                                {tenant.displayName?.charAt(0) || 'T'}
-                                            </Avatar>
-                                            <Box>
-                                                <Typography variant="subtitle1" fontWeight="950" sx={{ color: '#FFF', letterSpacing: -0.5 }}>
-                                                    {tenant.displayName || 'Unnamed Tenant'}
-                                                </Typography>
-                                                <Chip 
-                                                    label={tenant.status?.toUpperCase() || 'ACTIVE'} 
-                                                    size="small" 
-                                                    sx={{ 
-                                                        height: 16, 
-                                                        fontSize: '0.6rem', 
-                                                        fontWeight: 950,
-                                                        bgcolor: alpha('#10b981', 0.1),
-                                                        color: '#10b981',
-                                                        mt: 0.5
-                                                    }} 
-                                                />
-                                            </Box>
-                                        </Stack>
-                                        <IconButton size="small" sx={{ color: 'rgba(255,255,255,0.2)' }}><Activity size={18} /></IconButton>
-                                    </Box>
-
-                                    <Divider sx={{ borderColor: 'rgba(255,255,255,0.05)' }} />
-
-                                    <Stack spacing={1.5}>
-                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                                            <MapPin size={14} color={binThemeTokens.gold} />
-                                            <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.6)', fontWeight: 700 }}>
-                                                {tenant.propertyName} · Unit {tenant.unitNumber || '—'}
-                                            </Typography>
-                                        </Box>
-                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                                            <Mail size={14} color="rgba(255,255,255,0.4)" />
-                                            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 600 }}>
-                                                {tenant.email}
-                                            </Typography>
-                                        </Box>
-                                    </Stack>
-
-                                    <Stack direction="row" spacing={1}>
-                                        <Button 
-                                            fullWidth 
-                                            variant="outlined" 
-                                            size="small"
-                                            startIcon={<Mail size={14} />}
-                                            href={`mailto:${tenant.email}`}
-                                            sx={{ borderColor: 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.6)', borderRadius: 2, fontWeight: 900, fontSize: '0.65rem' }}
-                                        >
-                                            EMAIL
-                                        </Button>
-                                        <Button 
-                                            fullWidth 
-                                            variant="outlined" 
-                                            size="small"
-                                            startIcon={<MessageSquare size={14} />}
-                                            sx={{ borderColor: 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.6)', borderRadius: 2, fontWeight: 900, fontSize: '0.65rem' }}
-                                        >
-                                            CHAT
-                                        </Button>
-                                    </Stack>
-                                </Stack>
-                            </Paper>
-                        </Grid>
-                    ))}
-                </Grid>
-            )}
-
-            {/* Compliance Footer */}
-            <Paper sx={{ p: 3, mt: 6, bgcolor: alpha(binThemeTokens.gold, 0.03), border: `1px solid ${alpha(binThemeTokens.gold, 0.15)}`, borderRadius: 6 }}>
-                <Grid container spacing={4} alignItems="center">
-                    <Grid item xs={12} md={8}>
-                        <Typography variant="subtitle2" fontWeight="950" sx={{ color: binThemeTokens.gold, mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <Shield size={16} /> PRIVACY SOVEREIGNTY
-                        </Typography>
-                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', lineHeight: 1.5, display: 'block' }}>
-                            Tenant contact data is strictly governed. Owners are permitted communication for asset-related matters only. 
-                            All interactions are logged in the **Institutional Audit Stream** for RERA compliance.
-                        </Typography>
-                    </Grid>
-                    <Grid item xs={12} md={4} sx={{ textAlign: 'right' }}>
-                        <Button variant="outlined" sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.gold, fontWeight: 900, px: 3, borderRadius: 3 }} startIcon={<CheckCircle2 size={16} />}>
-                            RERA Compliant
-                        </Button>
-                    </Grid>
-                </Grid>
+    return <Box dir={isRTL ? 'rtl' : 'ltr'} sx={{ color: '#111827' }}>
+        <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" spacing={2} sx={{ mb: 3 }}>
+            <Typography variant="h4" fontWeight={800}>{label('Tenant directory', 'دليل المستأجرين')}</Typography>
+            <TextField size="small" label={label('Search tenants', 'البحث عن مستأجر')} value={search} onChange={event => setSearch(event.target.value)}
+                InputProps={{ startAdornment: <InputAdornment position="start"><Search size={16} /></InputAdornment> }} sx={{ width: { xs: '100%', sm: 300 } }} />
+        </Stack>
+        {!filtered.length ? <Paper sx={{ p: 4, bgcolor: '#FFFFFF', color: '#374151', textAlign: 'center' }}>
+            <Typography>{current.rows.length ? label('No tenants match your search.', 'لا يوجد مستأجرون يطابقون البحث.') : label('No tenants are recorded in your portfolio.', 'لا يوجد مستأجرون مسجّلون في محفظتك.')}</Typography>
+            {search && <Button onClick={() => setSearch('')}>{label('Clear search', 'مسح البحث')}</Button>}
+        </Paper> : <Grid container spacing={3}>{filtered.map(tenant => <Grid item xs={12} md={6} lg={4} key={tenant.id}>
+            <Paper sx={{ p: 3, bgcolor: '#FFFFFF', color: '#111827', border: '1px solid #E5E7EB', borderRadius: 3, height: '100%' }}>
+                <Stack spacing={2} sx={{ minWidth: 0, overflowWrap: 'anywhere' }}>
+                    <Stack direction="row" spacing={2} alignItems="center" sx={{ minWidth: 0 }}>
+                        <Avatar>{tenant.displayName.charAt(0) || 'T'}</Avatar>
+                        <Box sx={{ minWidth: 0 }}><Typography fontWeight={800}>{tenant.displayName || label('Unnamed tenant', 'مستأجر بلا اسم')}</Typography>
+                            <Chip size="small" label={tenant.status || label('Status not recorded', 'الحالة غير مسجّلة')} sx={{ mt: 1 }} />
+                        </Box>
+                    </Stack>
+                    <Typography variant="body2">{tenant.propertyName || label('Property link not recorded', 'ارتباط العقار غير مسجّل')} · {label('Unit', 'الوحدة')} {tenant.unitNumber || '—'}</Typography>
+                    <Typography variant="body2" sx={{ color: '#4B5563' }}>{tenant.email || label('Email not recorded', 'البريد الإلكتروني غير مسجّل')}</Typography>
+                    <Button variant="outlined" startIcon={<Mail size={16} />} href={tenant.emailHref} disabled={!tenant.emailHref}>
+                        {tenant.emailHref ? label('Email tenant', 'مراسلة المستأجر بالبريد') : label('Email unavailable', 'البريد الإلكتروني غير متاح')}
+                    </Button>
+                </Stack>
             </Paper>
-        </Box>
-    );
+        </Grid>)}</Grid>}
+        <Paper sx={{ p: 3, mt: 4, bgcolor: '#FFFFFF', color: '#374151', border: '1px solid #E5E7EB' }}>
+            <Typography variant="body2" sx={{ mb: 2 }}>{label('Email opens your mail app. Messages sent there are not recorded in this directory. Use tenant contact details for property-related matters.', 'يفتح البريد تطبيق البريد لديك. الرسائل المرسلة منه لا تُسجّل في هذا الدليل. استخدم بيانات التواصل للأمور المتعلقة بالعقار.')}</Typography>
+            <Button component={Link} to="/owner/bin-connect" variant="outlined">{label('BIN Connect inbox', 'صندوق رسائل BIN Connect')}</Button>
+        </Paper>
+    </Box>;
 }
