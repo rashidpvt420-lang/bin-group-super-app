@@ -117,7 +117,10 @@ test('review waits for restored Firebase Owner auth and never exposes raw unauth
   assert.match(source, /const \[authReady, setAuthReady\]/);
   assert.match(source, /signedInUid !== ownerAccount\.uid/);
   assert.match(source, /await auth\.currentUser\.getIdToken\(true\)/);
-  assert.match(source, /code\.includes\('unauthenticated'\)/);
+  const classifier = await read('src/components/onboarding/ownerQuoteFailure.ts');
+  assert.match(classifier, /code\.includes\('unauthenticated'\)/);
+  assert.match(source, /classifyOwnerQuoteFailure\(\{ code: error\?\.code, idTokenRefreshed, appCheckTokenOk \}\)/);
+  assert.match(source, /setQuoteNeedsSignIn\(ownerQuoteFailureOffersSignIn\(failure\)\)/);
   assert.match(source, /Your secure Owner session has expired or could not be restored\./);
   assert.match(source, /Sign in again/);
   assert.doesNotMatch(source, />Unauthenticated</);
@@ -140,8 +143,10 @@ test('portal profile verification refreshes Auth and App Check before declaring 
   const source = await read('src/context/RoleContext.tsx');
   assert.match(source, /PROFILE_READ_MAX_ATTEMPTS = 4/);
   assert.match(source, /getToken as getAppCheckToken/);
-  assert.match(source, /await currentUser\.getIdToken\(true\)/);
-  assert.match(source, /await getAppCheckToken\(appCheck, true\)/);
+  assert.match(source, /getIdToken\(true\)/);
+  assert.match(source, /getAppCheckToken\(appCheck, true\)/);
+  assert.match(source, /withTimeout\(currentUser\.getIdToken\(true\), PROFILE_OP_TIMEOUT_MS/);
+  assert.match(source, /withTimeout\(getAppCheckToken\(appCheck, true\), PROFILE_OP_TIMEOUT_MS/);
   assert.match(source, /readOwnProfileWithRecovery/);
   assert.match(source, /permission-denied/);
   assert.match(source, /unauthenticated/);

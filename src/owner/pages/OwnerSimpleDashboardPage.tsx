@@ -7,11 +7,14 @@ import { useOwnerCommandCounts } from '../hooks/useOwnerCommandCounts';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import CanonicalNextActions from '../../components/CanonicalNextActions';
 import OwnerFinancialTruthCard from '../components/OwnerFinancialTruthCard';
+import OwnerRecentComplaintsCard from '../components/OwnerRecentComplaintsCard';
 
 export default function OwnerSimpleDashboardPage() {
   const navigate = useNavigate();
   const { isRTL, tx } = useLanguage();
   const commandCounts = useOwnerCommandCounts();
+  // Prefer openTickets so simple next-actions match advanced Open Maintenance Tasks.
+  const openMaintenance = commandCounts.openTickets > 0 ? commandCounts.openTickets : commandCounts.highRiskTickets;
 
   return (
     <Box sx={{ direction: isRTL ? 'rtl' : 'ltr' }}>
@@ -36,11 +39,14 @@ export default function OwnerSimpleDashboardPage() {
           </Stack>
         </Paper>
 
+        <OwnerRecentComplaintsCard />
+
         <OwnerFinancialTruthCard />
 
         <OwnerApprovalCommandStrip
           isRTL={isRTL}
           pendingCostApprovals={commandCounts.pendingCostApprovals}
+          openTickets={commandCounts.openTickets}
           highRiskTickets={commandCounts.highRiskTickets}
           openDisputes={commandCounts.openDisputes}
           expiringDocuments={commandCounts.expiringDocuments}
@@ -48,8 +54,8 @@ export default function OwnerSimpleDashboardPage() {
         />
 
         <CanonicalNextActions actions={[
-          { id: 'approvals', label: tx('owner.next.approvals', 'Review pending approvals'), detail: tx('owner.next.approvalsDetail', 'Cost, repair and operational decisions waiting for you.'), path: '/owner/approvals', count: commandCounts.pendingCostApprovals, urgent: commandCounts.highRiskTickets > 0 },
-          { id: 'risk', label: tx('owner.next.risk', 'Check high-risk requests'), detail: tx('owner.next.riskDetail', 'Review urgent maintenance, disputes and evidence before cost increases.'), path: '/owner/tickets', count: commandCounts.highRiskTickets },
+          { id: 'approvals', label: tx('owner.next.approvals', 'Review pending approvals'), detail: tx('owner.next.approvalsDetail', 'Cost, repair and operational decisions waiting for you.'), path: '/owner/approvals', count: commandCounts.pendingCostApprovals, urgent: openMaintenance > 0 },
+          { id: 'risk', label: tx('owner.next.risk', 'Check open maintenance'), detail: tx('owner.next.riskDetail', 'Review open tickets, high-risk requests, disputes and evidence before cost increases.'), path: '/owner/tickets', count: openMaintenance },
           { id: 'money', label: tx('owner.next.money', 'Review money and reports'), detail: tx('owner.next.moneyDetail', 'Open verified financials, costs, ROI and monthly reporting.'), path: '/owner/financials' },
         ]} />
 

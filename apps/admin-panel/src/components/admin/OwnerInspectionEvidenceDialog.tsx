@@ -334,7 +334,7 @@ export default function OwnerInspectionEvidenceDialog({
       });
       setNotice(`Verified evidence recorded for ${row.propertyName || row.propertyId || row.id}.`);
     } catch (saveError: any) {
-      setError(saveError?.details || saveError?.message || 'Visit evidence could not be recorded.');
+      setError((typeof saveError?.details === 'string' && saveError.details) || saveError?.message || 'Visit evidence could not be recorded.');
     } finally {
       setBusyId('');
     }
@@ -364,7 +364,7 @@ export default function OwnerInspectionEvidenceDialog({
       );
       onClose();
     } catch (completionError: any) {
-      setError(completionError?.details || completionError?.message || 'Portfolio completion failed.');
+      setError((typeof completionError?.details === 'string' && completionError.details) || completionError?.message || 'Portfolio completion failed.');
     } finally {
       setBusyId('');
     }

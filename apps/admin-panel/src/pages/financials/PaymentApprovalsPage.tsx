@@ -269,6 +269,12 @@ export default function PaymentApprovalsPage() {
                     contentType: receiptFile?.type || 'application/pdf',
                     encodedDocument: receiptFile ? await fileToBase64(receiptFile) : '',
                 });
+                // D-5 dual control: the Admin who records the 15% evidence cannot also approve it.
+                // Stop here; a second Finance Admin verifies the recorded receipt and approves.
+                setNotice('15% payment evidence recorded. A second Finance Admin must now verify the receipt and approve this payment (dual control).');
+                setApprovalTarget(null);
+                setReceiptFile(null);
+                return;
             }
             const callable = httpsCallable(functions, 'adminApprovePayment');
             await callable({
@@ -283,7 +289,7 @@ export default function PaymentApprovalsPage() {
             setReceiptFile(null);
         } catch (err: any) {
             console.error('[ADMIN_PAYMENTS] approval failed', err);
-            setError(err?.details || err?.message || 'Approval failed.');
+            setError((typeof err?.details === 'string' && err.details) || err?.message || 'Approval failed.');
         } finally {
             setBusyId(null);
         }
@@ -309,7 +315,7 @@ export default function PaymentApprovalsPage() {
             setRejectReason('');
         } catch (err: any) {
             console.error('[ADMIN_PAYMENTS] rejection failed', err);
-            setError(err?.details || err?.message || 'Rejection failed.');
+            setError((typeof err?.details === 'string' && err.details) || err?.message || 'Rejection failed.');
         } finally { setBusyId(null); }
     };
 
@@ -334,7 +340,7 @@ export default function PaymentApprovalsPage() {
             setNotice(`Paid receipt repaired for invoice ${invoice.id}.`);
         } catch (err: any) {
             console.error('[ADMIN_PAYMENTS] receipt repair failed', err);
-            setError(err?.details || err?.message || 'Receipt repair failed.');
+            setError((typeof err?.details === 'string' && err.details) || err?.message || 'Receipt repair failed.');
         } finally {
             setBusyId(null);
         }
@@ -417,7 +423,7 @@ export default function PaymentApprovalsPage() {
                                         <TableCell><Typography variant="body2" sx={{ maxWidth: 220, overflowWrap: 'anywhere' }}>{proofText(row)}</Typography><Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 0.5 }}><FileCheck2 size={13} color={hasImmutableReceipt(row) ? '#4ADE80' : '#F59E0B'} /><Typography variant="caption" color={hasImmutableReceipt(row) ? '#4ADE80' : '#F59E0B'}>{hasImmutableReceipt(row) ? 'Immutable receipt recorded' : 'Receipt required'}</Typography></Stack>{hasReferenceFile && <Button size="small" onClick={() => openReference(row)} sx={{ color: '#DAA520', fontWeight: 900, mt: 0.5 }}>Open evidence</Button>}</TableCell>
                                         <TableCell>{formatMoney(submittedAmount(row), row.currency)}</TableCell>
                                         <TableCell><Chip label={!inspectionReady ? 'INSPECTION INCOMPLETE' : (row.status || row.paymentStatus || row.verificationState || 'pending')} size="small" sx={{ bgcolor: !inspectionReady ? 'rgba(239,68,68,0.16)' : 'rgba(218,165,32,0.16)', color: !inspectionReady ? '#F87171' : '#DAA520', fontWeight: 900 }} /></TableCell>
-                                        <TableCell align="right"><Stack direction="row" justifyContent="flex-end" gap={1}><Button data-testid="admin-payment-approve" size="small" startIcon={<CheckCircle size={14} />} disabled={busyId === row.id || !inspectionReady} onClick={() => openApproveDialog(row)} sx={{ bgcolor: '#16a34a', color: '#fff', fontWeight: 900, '&:hover': { bgcolor: '#15803d' } }}>{design ? 'Verify Design Deposit' : rent ? 'Verify Rent' : 'Record 15% & Approve'}</Button><Button size="small" startIcon={<XCircle size={14} />} disabled={busyId === row.id} onClick={() => openRejectDialog(row)} sx={{ color: '#f87171', fontWeight: 900 }}>Return</Button></Stack></TableCell>
+                                        <TableCell align="right"><Stack direction="row" justifyContent="flex-end" gap={1}><Button data-testid="admin-payment-approve" size="small" startIcon={<CheckCircle size={14} />} disabled={busyId === row.id || !inspectionReady} onClick={() => openApproveDialog(row)} sx={{ bgcolor: '#16a34a', color: '#fff', fontWeight: 900, '&:hover': { bgcolor: '#15803d' } }}>{design ? 'Verify Design Deposit' : rent ? 'Verify Rent' : hasImmutableReceipt(row) ? 'Review 15% Payment' : 'Record 15% Receipt'}</Button><Button size="small" startIcon={<XCircle size={14} />} disabled={busyId === row.id} onClick={() => openRejectDialog(row)} sx={{ color: '#f87171', fontWeight: 900 }}>Return</Button></Stack></TableCell>
                                     </TableRow>;
                                 })}
                             </TableBody>
@@ -427,10 +433,11 @@ export default function PaymentApprovalsPage() {
             </Paper>
 
             <Dialog data-testid="admin-payment-approval-dialog" open={Boolean(approvalTarget)} onClose={() => !busyId && setApprovalTarget(null)} fullWidth maxWidth="sm" PaperProps={{ sx: { bgcolor: '#020617', color: '#fff', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 4 } }}>
-                <DialogTitle sx={{ color: '#DAA520', fontWeight: 950 }}>{approvalTarget && isDesignPayment(approvalTarget) ? 'Verify Design Cash/Cheque Deposit' : approvalTarget && isRentPayment(approvalTarget) ? 'Confirm Rent Payment' : 'Record 15% Payment & Give Final Approval'}</DialogTitle>
+                <DialogTitle sx={{ color: '#DAA520', fontWeight: 950 }}>{approvalTarget && isDesignPayment(approvalTarget) ? 'Verify Design Cash/Cheque Deposit' : approvalTarget && isRentPayment(approvalTarget) ? 'Confirm Rent Payment' : approvalTarget && hasImmutableReceipt(approvalTarget) ? 'Review 15% Payment for Final Approval' : 'Record 15% Payment Evidence'}</DialogTitle>
                 <DialogContent>
+                    {error && <Alert severity="error" sx={{ mt: 1 }}>{error}</Alert>}
                     <Stack spacing={2.5} sx={{ mt: 1 }}>
-                        <Typography sx={{ color: 'rgba(255,255,255,0.65)' }}>{approvalTarget && isDesignPayment(approvalTarget) ? 'Confirm actual receipt of Cash or cleared Cheque against this design quote. Upload the official receipt. Approval does not start work or activate an Owner account.' : approvalTarget && isRentPayment(approvalTarget) ? 'This verifies the rent payment only.' : 'This records immutable receipt evidence, verifies the exact 15%, activates the contract and properties, and unlocks the Owner dashboard.'}</Typography>
+                        <Typography sx={{ color: 'rgba(255,255,255,0.65)' }}>{approvalTarget && isDesignPayment(approvalTarget) ? 'Confirm actual receipt of Cash or cleared Cheque against this design quote. Upload the official receipt. Approval does not start work or activate an Owner account.' : approvalTarget && isRentPayment(approvalTarget) ? 'This verifies the rent payment only.' : approvalTarget && hasImmutableReceipt(approvalTarget) ? 'A Finance Admin who did not record this receipt must verify the exact 15% payment. Successful approval activates the contract and properties and unlocks the Owner dashboard.' : 'Record the exact 15% receipt evidence. A different Finance Admin must verify and approve it before activation.'}</Typography>
                         {approvalTarget && <Paper sx={{ p: 2, bgcolor: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}><Typography variant="caption" sx={{ color: '#DAA520', fontWeight: 900 }}>LOCKED PAYMENT</Typography><Typography fontWeight={900}>{formatMoney(submittedAmount(approvalTarget), approvalTarget.currency)}</Typography><Typography variant="body2" sx={{ overflowWrap: 'anywhere', mt: 1 }}>{proofText(approvalTarget)}</Typography>{referenceUrl(approvalTarget) && <Button size="small" onClick={() => openReference(approvalTarget)} sx={{ color: '#DAA520', fontWeight: 900, mt: 1 }}>Open recorded evidence</Button>}</Paper>}
                         {approvalTarget && !isRentPayment(approvalTarget) && <TextField select label="Payment method" value={paymentMethod} onChange={(event) => setPaymentMethod(event.target.value)} fullWidth InputLabelProps={{ sx: { color: 'rgba(255,255,255,0.45)' } }} InputProps={{ sx: { color: '#fff' } }}>{MANUAL_METHODS.map((method) => <MenuItem key={method} value={method}>{method.replace('_', ' ')}</MenuItem>)}</TextField>}
                         <TextField label="Official payment / receipt reference" value={paymentReferenceId} onChange={(event) => setPaymentReferenceId(event.target.value)} fullWidth InputLabelProps={{ sx: { color: 'rgba(255,255,255,0.45)' } }} InputProps={{ sx: { color: '#fff' } }} />
@@ -439,12 +446,12 @@ export default function PaymentApprovalsPage() {
                         <TextField label="Internal verification notes" value={internalNotes} onChange={(event) => setInternalNotes(event.target.value)} fullWidth multiline minRows={3} InputLabelProps={{ sx: { color: 'rgba(255,255,255,0.45)' } }} InputProps={{ sx: { color: '#fff' } }} />
                     </Stack>
                 </DialogContent>
-                <DialogActions sx={{ p: 3 }}><Button onClick={() => setApprovalTarget(null)} disabled={Boolean(busyId)} sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 900 }}>Cancel</Button><Button data-testid="admin-payment-confirm-approval" onClick={() => void approvePayment()} disabled={!approvalTarget || busyId === approvalTarget?.id} startIcon={busyId === approvalTarget?.id ? <CircularProgress size={16} /> : <CheckCircle size={16} />} sx={{ bgcolor: '#DAA520', color: '#000', fontWeight: 950 }}>{approvalTarget && isDesignPayment(approvalTarget) ? 'Verify Design Deposit' : approvalTarget && isRentPayment(approvalTarget) ? 'Confirm Rent Payment' : 'Verify 15% & Approve Owner'}</Button></DialogActions>
+                <DialogActions sx={{ p: 3 }}><Button onClick={() => setApprovalTarget(null)} disabled={Boolean(busyId)} sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 900 }}>Cancel</Button><Button data-testid="admin-payment-confirm-approval" onClick={() => void approvePayment()} disabled={!approvalTarget || busyId === approvalTarget?.id} startIcon={busyId === approvalTarget?.id ? <CircularProgress size={16} /> : <CheckCircle size={16} />} sx={{ bgcolor: '#DAA520', color: '#000', fontWeight: 950 }}>{approvalTarget && isDesignPayment(approvalTarget) ? 'Verify Design Deposit' : approvalTarget && isRentPayment(approvalTarget) ? 'Confirm Rent Payment' : approvalTarget && hasImmutableReceipt(approvalTarget) ? 'Verify 15% & Approve Owner' : 'Record 15% Receipt'}</Button></DialogActions>
             </Dialog>
 
             <Dialog open={Boolean(rejectTarget)} onClose={() => !busyId && setRejectTarget(null)} fullWidth maxWidth="sm" PaperProps={{ sx: { bgcolor: '#020617', color: '#fff', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 4 } }}>
                 <DialogTitle sx={{ color: '#f87171', fontWeight: 950 }}>Return / Reject Payment Evidence</DialogTitle>
-                <DialogContent><Stack spacing={2.5} sx={{ mt: 1 }}><Typography sx={{ color: 'rgba(255,255,255,0.65)' }}>Record the exact reason the payment or receipt evidence is being returned.</Typography>{rejectTarget && <Paper sx={{ p: 2, bgcolor: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}><Typography variant="caption" sx={{ color: '#DAA520', fontWeight: 900 }}>REFERENCE</Typography><Typography sx={{ overflowWrap: 'anywhere' }}>{proofText(rejectTarget)}</Typography>{referenceUrl(rejectTarget) && <Button size="small" onClick={() => openReference(rejectTarget)} sx={{ color: '#DAA520', fontWeight: 900, mt: 1 }}>Open evidence</Button>}</Paper>}<TextField label="Return reason / Admin review note" value={rejectReason} onChange={(event) => setRejectReason(event.target.value)} fullWidth multiline minRows={4} required InputLabelProps={{ sx: { color: 'rgba(255,255,255,0.45)' } }} InputProps={{ sx: { color: '#fff' } }} /></Stack></DialogContent>
+                <DialogContent>{error && <Alert severity="error" sx={{ mt: 1 }}>{error}</Alert>}<Stack spacing={2.5} sx={{ mt: 1 }}><Typography sx={{ color: 'rgba(255,255,255,0.65)' }}>Record the exact reason the payment or receipt evidence is being returned.</Typography>{rejectTarget && <Paper sx={{ p: 2, bgcolor: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}><Typography variant="caption" sx={{ color: '#DAA520', fontWeight: 900 }}>REFERENCE</Typography><Typography sx={{ overflowWrap: 'anywhere' }}>{proofText(rejectTarget)}</Typography>{referenceUrl(rejectTarget) && <Button size="small" onClick={() => openReference(rejectTarget)} sx={{ color: '#DAA520', fontWeight: 900, mt: 1 }}>Open evidence</Button>}</Paper>}<TextField label="Return reason / Admin review note" value={rejectReason} onChange={(event) => setRejectReason(event.target.value)} fullWidth multiline minRows={4} required InputLabelProps={{ sx: { color: 'rgba(255,255,255,0.45)' } }} InputProps={{ sx: { color: '#fff' } }} /></Stack></DialogContent>
                 <DialogActions sx={{ p: 3 }}><Button onClick={() => setRejectTarget(null)} disabled={Boolean(busyId)} sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 900 }}>Cancel</Button><Button onClick={() => void rejectPayment()} disabled={!rejectTarget || busyId === rejectTarget?.id || rejectReason.trim().length < 8} sx={{ bgcolor: '#ef4444', color: '#fff', fontWeight: 950 }}>Return / Reject</Button></DialogActions>
             </Dialog>
         </Box>

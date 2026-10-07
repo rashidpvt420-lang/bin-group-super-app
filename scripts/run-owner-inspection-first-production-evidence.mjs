@@ -8,6 +8,7 @@ import admin from 'firebase-admin';
 import { initializeFirebaseAdmin, resolveFirebaseAdminProjectId } from './firebase-admin-bootstrap.mjs';
 import { exchangeGmailAccessToken, readGmailOtp } from './lib/gmail-otp-reader.mjs';
 import { signInWithRequiredTotpMfa } from './lib/firebase-mfa-sign-in.mjs';
+import { signInFinanceApproverMfa } from './lib/finance-approver-mfa.mjs';
 import { cleanupBrokerCommissionsForContracts, collectOwnerContractIds } from './lib/e2e-contract-commission-cleanup.mjs';
 
 const PROJECT_ID = 'bin-group-57c60';
@@ -40,6 +41,9 @@ const ownerMailboxEmail = text(process.env.E2E_OWNER_MAILBOX_EMAIL).toLowerCase(
 const founderEmail = text(process.env.E2E_FOUNDER_EMAIL).toLowerCase();
 const founderPassword = text(process.env.E2E_FOUNDER_PASSWORD);
 const founderTotpSecret = text(process.env.E2E_FOUNDER_TOTP_SECRET);
+const approverEmail = text(process.env.E2E_FINANCE_APPROVER_EMAIL).toLowerCase();
+const approverPassword = text(process.env.E2E_FINANCE_APPROVER_PASSWORD);
+const approverTotpSecret = text(process.env.E2E_FINANCE_APPROVER_TOTP_SECRET);
 const appCheckDebugToken = text(process.env.VITE_FIREBASE_APPCHECK_DEBUG_TOKEN);
 
 for (const [name, value] of Object.entries({
@@ -49,10 +53,14 @@ for (const [name, value] of Object.entries({
   E2E_FOUNDER_EMAIL: founderEmail,
   E2E_FOUNDER_PASSWORD: founderPassword,
   E2E_FOUNDER_TOTP_SECRET: founderTotpSecret,
+  E2E_FINANCE_APPROVER_EMAIL: approverEmail,
+  E2E_FINANCE_APPROVER_PASSWORD: approverPassword,
+  E2E_FINANCE_APPROVER_TOTP_SECRET: approverTotpSecret,
   VITE_FIREBASE_APPCHECK_DEBUG_TOKEN: appCheckDebugToken,
 })) {
   assert(value, `${name} is required for inspection-first Owner production evidence.`);
 }
+assert(approverEmail !== founderEmail && approverEmail !== ownerEmail, 'Payment approver must be a distinct Finance Admin account.');
 assert(ownerEmail === ownerMailboxEmail, 'The Owner evidence account must be the protected Owner mailbox.');
 assert(founderEmail === CANONICAL_FOUNDER_EMAIL, `E2E_FOUNDER_EMAIL must be ${CANONICAL_FOUNDER_EMAIL}.`);
 assert(/^[0-9a-f-]{36}$/i.test(appCheckDebugToken), 'VITE_FIREBASE_APPCHECK_DEBUG_TOKEN must be a registered debug UUID.');
@@ -354,6 +362,19 @@ async function main() {
   const expectedPropertyId = `${intakeId}_property_1`;
   const appCheckToken = await exchangeAppCheckToken();
 
+  const founderSession = await signInWithRequiredTotpMfa({
+    apiKey: API_KEY,
+    email: founderEmail,
+    password: founderPassword,
+    totpSecret: founderTotpSecret,
+    referer: ADMIN_REFERER,
+  });
+  const approverSession = await signInFinanceApproverMfa({
+    apiKey: API_KEY, email: approverEmail, password: approverPassword,
+    totpSecret: approverTotpSecret, recorderUid: founderSession.uid, referer: ADMIN_REFERER,
+  });
+
+  // Verify both MFA identities before creating or resetting evidence records.
   await resetOwnerAccount();
 
   const registration = await callFunction('submitPendingOwnerRegistration', {
@@ -382,13 +403,7 @@ async function main() {
 
   const ownerSession = await signInOwner();
   assert(ownerSession.uid === ownerUid, 'New Owner sign-in UID does not match the acquired account.');
-  const founderSession = await signInWithRequiredTotpMfa({
-    apiKey: API_KEY,
-    email: founderEmail,
-    password: founderPassword,
-    totpSecret: founderTotpSecret,
-    referer: ADMIN_REFERER,
-  });
+
 
   const nowIso = new Date().toISOString();
   const property = {
@@ -595,6 +610,7 @@ async function main() {
   const paymentWithEvidence = (await db.collection('payment_transactions').doc(intakeId).get()).data() || {};
   assert(text(paymentWithEvidence.paymentConfigVersion) === text(configuration.version), 'Payment evidence did not persist the active configuration version.');
   assert(text(paymentWithEvidence.paymentConfigHash) === text(configuration.configHash), 'Payment evidence did not persist the active configuration hash.');
+  assert(text(paymentWithEvidence.paymentEvidenceRecordedBy) === founderSession.uid, 'Payment receipt is not bound to the recording Founder.');
   assert(paymentWithEvidence.paymentManifest?.selectedMethod === 'CASH', 'Payment manifest did not bind the selected Phase 1 method.');
   assert(text(paymentWithEvidence.paymentProofHash) === receiptHash && text(paymentWithEvidence.paymentProofGeneration), 'Payment transaction is missing immutable receipt evidence.');
 
@@ -606,9 +622,9 @@ async function main() {
     receivedAt: new Date().toISOString(),
     notes: 'E2E inspection-first Owner activation approval.',
   };
-  const approved = await callFunction('adminApprovePayment', approvalPayload, appCheckToken, founderSession.idToken);
-  assert(approved.status === 'SUCCESS' && approved.idempotent === false, 'Founder MFA payment approval did not activate the Owner.');
-  const approvalReplay = await callFunction('adminApprovePayment', approvalPayload, appCheckToken, founderSession.idToken);
+  const approved = await callFunction('adminApprovePayment', approvalPayload, appCheckToken, approverSession.idToken);
+  assert(approved.status === 'SUCCESS' && approved.idempotent === false, 'Second Finance Admin MFA payment approval did not activate the Owner.');
+  const approvalReplay = await callFunction('adminApprovePayment', approvalPayload, appCheckToken, approverSession.idToken);
   assert(approvalReplay.status === 'SUCCESS' && approvalReplay.idempotent === true, 'Final approval replay is not idempotent.');
 
   const activatedPayment = await waitForDocument(
@@ -616,6 +632,7 @@ async function main() {
     (value) => upper(value.status) === 'APPROVED' && value.paymentVerified === true && value.unlocksDashboard === true,
     'approved inspection-first Owner activation',
   );
+  assert(text(activatedPayment.paymentDualControl?.evidenceRecordedBy) === founderSession.uid && text(activatedPayment.approvedBy) === approverSession.uid, 'Activation does not prove distinct receipt recorder and approver.');
   const activatedContract = (await db.collection('contracts').doc(intakeId).get()).data() || {};
   const activatedUser = (await db.collection('users').doc(ownerUid).get()).data() || {};
   const activatedProperty = (await db.collection('properties').doc(expectedPropertyId).get()).data() || {};
@@ -693,6 +710,12 @@ async function main() {
       canonicalFounderEmail: CANONICAL_FOUNDER_EMAIL,
       mfaSecondFactorType: founderSession.secondFactorType,
       mfaSecondFactorIdentifierPresent: Boolean(founderSession.secondFactorIdentifier),
+      dualControl: {
+        policy: 'D5_RECORDER_IS_NOT_APPROVER',
+        distinctActorsVerified: founderSession.uid !== approverSession.uid,
+        approverMfaSecondFactorType: approverSession.secondFactorType,
+        approverMfaSecondFactorIdentifierPresent: Boolean(approverSession.secondFactorIdentifier),
+      },
       contractActivated: true,
       propertyActivated: true,
       dashboardUnlocked: true,

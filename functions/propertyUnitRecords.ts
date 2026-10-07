@@ -29,14 +29,16 @@ export function declaredUnitCount(property: Data | undefined | null): number | n
   for (const value of [property.units, property.numberOfUnits, property.unitCount, property.totalUnits]) {
     if (value === undefined || value === null || value === "") continue;
     const parsed = Number(value);
-    if (Number.isFinite(parsed) && parsed >= 0) return Math.floor(parsed);
+    if ((typeof value === "number" || typeof value === "string") && Number.isSafeInteger(parsed) && parsed >= 0) return parsed;
+    return null; // A malformed primary declaration must not fall through to an alias.
   }
   return null;
 }
 
 export function isActiveProperty(property: Data | undefined | null): boolean {
   if (!property) return false;
-  return upper(property.status) === "ACTIVE" || upper(property.activationStatus) === "ACTIVE";
+  const states = [upper(property.status), upper(property.activationStatus)].filter(Boolean);
+  return states.includes("ACTIVE") && states.every((state) => state === "ACTIVE");
 }
 
 /** Same id convention as ownerGenerateUnits, so the wizard skips provisioned units. */
@@ -49,7 +51,7 @@ export function provisionedUnitId(propertyId: string, unitNumber: string): strin
 }
 
 export type ProvisionResult = {
-  status: "CREATED" | "ALREADY_HAS_UNITS" | "NO_DECLARED_UNITS" | "TOO_MANY_DECLARED_UNITS" | "PROPERTY_NOT_FOUND" | "PROPERTY_NOT_ACTIVE";
+  status: "CREATED" | "ALREADY_HAS_UNITS" | "NO_DECLARED_UNITS" | "TOO_MANY_DECLARED_UNITS" | "PROPERTY_NOT_FOUND" | "PROPERTY_NOT_ACTIVE" | "OWNER_BINDING_MISSING" | "UNIT_ID_COLLISION";
   propertyId: string;
   createdCount: number;
   declaredUnits: number | null;
@@ -81,13 +83,20 @@ export async function provisionDeclaredUnitRecords(
     if (!declared) return { ...base, status: "NO_DECLARED_UNITS", createdCount: 0 };
     if (declared > MAX_AUTO_PROVISIONED_UNITS) return { ...base, status: "TOO_MANY_DECLARED_UNITS", createdCount: 0 };
 
-    const now = FieldValue.serverTimestamp();
     const ownerId = text(property.ownerId || property.ownerUid, 160);
-    const unitIds: string[] = [];
+    if (!ownerId) return { ...base, status: "OWNER_BINDING_MISSING", createdCount: 0 };
+    const unitIds = Array.from({ length: declared }, (_, index) => provisionedUnitId(propertyId, String(index + 1)));
+    if (new Set(unitIds).size !== declared || unitIds.some((id) => !id)) {
+      return { ...base, status: "UNIT_ID_COLLISION", createdCount: 0 };
+    }
+    // Sanitised legacy IDs can collide across properties. Never overwrite or
+    // silently adopt somebody else's unit; all reads precede any writes.
+    const candidates = await transaction.getAll(...unitIds.map((id) => db.collection("units").doc(id)));
+    if (candidates.some((snapshot) => snapshot.exists)) return { ...base, status: "UNIT_ID_COLLISION", createdCount: 0 };
+    const now = FieldValue.serverTimestamp();
     for (let index = 1; index <= declared; index += 1) {
       const unitNumber = String(index);
       const unitId = provisionedUnitId(propertyId, unitNumber);
-      unitIds.push(unitId);
       transaction.create(db.collection("units").doc(unitId), {
         propertyId,
         propertyName: text(property.propertyName || property.name || property.address || propertyId),
@@ -119,7 +128,7 @@ export async function provisionDeclaredUnitRecords(
       actorRole: actor.actorRole,
       targetType: "properties",
       targetId: propertyId,
-      metadata: { declaredUnits: declared, unitIds: unitIds.slice(0, 50), source: actor.source },
+      metadata: { declaredUnits: declared, unitIds, source: actor.source },
       createdAt: now,
     });
     return { ...base, status: "CREATED", createdCount: declared };
@@ -128,7 +137,7 @@ export async function provisionDeclaredUnitRecords(
 
 /** Provision declared units the moment a property becomes ACTIVE. */
 export const provisionDeclaredUnitsOnPropertyActivation = onDocumentWritten(
-  { document: "properties/{propertyId}", region: "europe-west3" },
+  { document: "properties/{propertyId}", region: "europe-west3", retry: true },
   async (event) => {
     const before = event.data?.before?.exists ? event.data.before.data() : null;
     const after = event.data?.after?.exists ? event.data.after.data() : null;
@@ -156,8 +165,8 @@ export const adminProvisionDeclaredPropertyUnits = onCall(
   async (request) => {
     requireUnitAdmin(request.auth);
     await requirePrivilegedMfaSession(request.auth);
-    const propertyId = text(request.data?.propertyId, 160);
-    if (!propertyId) throw new HttpsError("invalid-argument", "propertyId is required.");
+    const propertyId = typeof request.data?.propertyId === "string" ? request.data.propertyId.trim() : "";
+    if (!propertyId || propertyId.length > 160 || propertyId.includes("/") || [".", ".."].includes(propertyId)) throw new HttpsError("invalid-argument", "propertyId is required.");
     const result = await provisionDeclaredUnitRecords(admin.firestore(), propertyId, {
       actorId: request.auth!.uid,
       actorRole: text(request.auth!.token?.role || "admin", 60).toLowerCase(),

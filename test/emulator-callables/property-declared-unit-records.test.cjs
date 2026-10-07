@@ -1,7 +1,7 @@
 'use strict';
 // Regression: property onboarding stores only a declared unit count (e.g. units: 1 on a villa) and
 // nothing created units/{unitId} records, so activated properties had units > 0 but no unit
-// records (live: d8bcdb8b-..._property_1). Declared units are now provisioned when a property
+// records (reported legacy ACTIVE villa shape). Declared units are now provisioned when a property
 // becomes ACTIVE, and admins get an audited, MFA-gated backfill for already-active properties.
 const assert = require('node:assert/strict');
 const test = require('node:test');
@@ -90,4 +90,44 @@ test('backfill is admin + MFA only and refuses inactive or missing properties', 
   await expectHttpsError(call(adminProvisionDeclaredPropertyUnits, adminUser, {}), 'invalid-argument');
   assert.equal((await unitsOf('villa_active')).length, 0);
   assert.equal((await unitsOf('villa_pending')).length, 0);
+});
+
+
+test('malformed declarations, conflicting activation and missing ownership never create units', async () => {
+  for (const units of [1.5, true, {}, 'bogus', -1, Infinity]) {
+    const result = await activate('invalid_count', null, property({ units, status: 'ACTIVE' }));
+    assert.equal(result.status, 'NO_DECLARED_UNITS');
+    assert.equal((await unitsOf('invalid_count')).length, 0);
+  }
+  assert.equal(await activate('conflicting', null, property({ units: 2, status: 'ACTIVE', activationStatus: 'LOCKED_PENDING_PAYMENT' })), null);
+  assert.equal((await activate('unbound', null, { units: 2, status: 'ACTIVE' })).status, 'OWNER_BINDING_MISSING');
+  assert.equal((await unitsOf('unbound')).length, 0);
+  assert.equal((await db.collection('audit_logs').get()).size, 0);
+});
+
+test('sanitised IDs cannot overwrite or adopt units from a different property', async () => {
+  await db.doc('units/villa_a_1').set({ propertyId: 'villa_a', ownerId: 'other_owner', unitNumber: '1', tenantId: 'existing_tenant' });
+  const result = await activate('villa.a', null, property({ units: 2, status: 'ACTIVE' }));
+  assert.equal(result.status, 'UNIT_ID_COLLISION');
+  assert.equal((await unitsOf('villa.a')).length, 0);
+  assert.equal((await db.doc('units/villa_a_1').get()).data().tenantId, 'existing_tenant');
+  assert.equal((await db.doc('units/villa_a_2').get()).exists, false);
+  assert.equal((await db.doc('properties/villa.a').get()).data().unitRecordsProvisionedAt, undefined);
+});
+
+test('concurrent backfills create one complete set and one audit, with the 200-unit cap', async () => {
+  await db.doc('properties/concurrent').set(property({ units: 200, status: 'ACTIVE' }));
+  const results = await Promise.all(Array.from({ length: 3 }, () => call(adminProvisionDeclaredPropertyUnits, adminUser, { propertyId: 'concurrent' })));
+  assert.equal(results.filter((result) => result.status === 'CREATED').length, 1);
+  assert.equal((await unitsOf('concurrent')).length, 200);
+  const audits = await db.collection('audit_logs').where('action', '==', 'PROPERTY_DECLARED_UNITS_PROVISIONED').get();
+  assert.equal(audits.size, 1);
+  assert.equal(audits.docs[0].data().metadata.unitIds.length, 200);
+});
+
+test('backfill rejects suspended accounts and invalid identifiers without truncation', async () => {
+  await expectHttpsError(call(adminProvisionDeclaredPropertyUnits, { ...adminUser, token: { ...adminUser.token, suspended: true } }, { propertyId: 'villa' }), 'permission-denied');
+  for (const propertyId of ['a/b', '..', 'x'.repeat(161), { id: 'villa' }]) {
+    await expectHttpsError(call(adminProvisionDeclaredPropertyUnits, adminUser, { propertyId }), 'invalid-argument');
+  }
 });
