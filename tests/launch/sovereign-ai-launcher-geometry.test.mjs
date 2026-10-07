@@ -69,3 +69,9 @@ test('completed drag suppresses its synthesized pointer click but allows the nex
   context.click({ detail: 1 });
   assert.equal(context.open, true);
 });
+
+
+test('closed drawer cannot intercept page controls on mobile WebKit or desktop', () => {
+  const guards = source.match(/pointerEvents: open \? 'auto' : 'none'/g) || [];
+  assert.ok(guards.length >= 4, 'both drawer modal roots and papers must disable pointer events while closed');
+});
