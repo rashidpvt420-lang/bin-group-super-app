@@ -33,6 +33,8 @@ test('BIN Connect enumeration and mutations stay behind authenticated App Check 
   assert.match(runtime, /export \* from "\.\/binConnectOperations"/);
 
   assert.match(chatbox, /createBinConnectThread/);
+  assert.match(chatbox, /mutationInFlightRef\.current/);
+  assert.match(inbox, /mutationInFlightRef\.current/);
   assert.match(inbox, /sendBinConnectMessage/);
   assert.match(inbox, /resolveBinConnectThread/);
   for (const source of [inbox, chatbox]) {
