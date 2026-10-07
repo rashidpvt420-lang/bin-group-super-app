@@ -1951,38 +1951,24 @@ service cloud.firestore {
     // (RfqTrustWorkflowPage, VendorCommandCenterPage, OwnerApprovalCenterPage).
     match /vendor_rfqs/{rfqId} {
       allow read: if isAdmin();
-      allow create: if isAdmin();
-      allow update: if isAdmin();
-      allow delete: if isAdmin();
+      // Privileged procurement mutations are server-callable only.
+      allow create, update, delete: if false;
     }
 
     match /vendor_quotes/{quoteId} {
       allow read: if isAdmin();
-      allow create: if isAdmin();
-      allow update: if isAdmin();
-      allow delete: if isAdmin();
+      allow create, update, delete: if false;
     }
 
     match /vendors/{vendorId} {
       allow read: if isAdmin();
-      allow create: if isAdmin();
-      allow update: if isAdmin();
-      allow delete: if isAdmin();
+      allow create, update, delete: if false;
     }
 
     match /owner_approval_requests/{requestId} {
       allow read: if isAdmin() || (signedIn() && resource.data.get('ownerId', null) == request.auth.uid);
-      allow create: if isAdmin();
-      allow update: if isAdmin() || (
-        signedIn() &&
-        resource.data.get('ownerId', null) == request.auth.uid &&
-        request.resource.data.get('ownerId', null) == resource.data.get('ownerId', null) &&
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'decision', 'decisionNote', 'ownerDecisionBy', 'decidedAt', 'updatedAt']) &&
-        request.resource.data.get('ownerDecisionBy', null) == request.auth.uid &&
-        request.resource.data.get('decision', null) in ['APPROVED', 'REJECTED', 'REQUEST_MORE_QUOTES', 'EMERGENCY_APPROVED'] &&
-        request.resource.data.get('status', null) in ['owner_approved', 'owner_approved_emergency', 'owner_rejected', 'more_quotes_requested']
-      );
-      allow delete: if isAdmin();
+      // Creation and Owner decisions are server-callable only.
+      allow create, update, delete: if false;
     }
 
     match /maintenance_ledger/{ledgerId} {
