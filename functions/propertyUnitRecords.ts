@@ -83,8 +83,10 @@ export async function provisionDeclaredUnitRecords(
     if (!declared) return { ...base, status: "NO_DECLARED_UNITS", createdCount: 0 };
     if (declared > MAX_AUTO_PROVISIONED_UNITS) return { ...base, status: "TOO_MANY_DECLARED_UNITS", createdCount: 0 };
 
-    const ownerId = text(property.ownerId || property.ownerUid, 160);
-    if (!ownerId) return { ...base, status: "OWNER_BINDING_MISSING", createdCount: 0 };
+    const ownerId = property.ownerId ?? property.ownerUid;
+    const ownerUid = property.ownerUid ?? property.ownerId;
+    const validOwnerBinding = (value: unknown): value is string => typeof value === "string" && value.length > 0 && value.length <= 160 && value === value.trim() && !value.includes("/");
+    if (!validOwnerBinding(ownerId) || !validOwnerBinding(ownerUid)) return { ...base, status: "OWNER_BINDING_MISSING", createdCount: 0 };
     const unitIds = Array.from({ length: declared }, (_, index) => provisionedUnitId(propertyId, String(index + 1)));
     if (new Set(unitIds).size !== declared || unitIds.some((id) => !id)) {
       return { ...base, status: "UNIT_ID_COLLISION", createdCount: 0 };
@@ -103,8 +105,8 @@ export async function provisionDeclaredUnitRecords(
         unitNumber,
         floor: null,
         floorNumber: null,
-        ownerId: ownerId || null,
-        ownerUid: text(property.ownerUid || property.ownerId, 160) || null,
+        ownerId,
+        ownerUid,
         ownerEmail: text(property.ownerEmail, 320).toLowerCase() || null,
         propertyType: text(property.propertyType, 80) || null,
         occupancyStatus: "vacant",

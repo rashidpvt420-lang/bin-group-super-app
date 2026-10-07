@@ -102,6 +102,10 @@ test('malformed declarations, conflicting activation and missing ownership never
   assert.equal(await activate('conflicting', null, property({ units: 2, status: 'ACTIVE', activationStatus: 'LOCKED_PENDING_PAYMENT' })), null);
   assert.equal((await activate('unbound', null, { units: 2, status: 'ACTIVE' })).status, 'OWNER_BINDING_MISSING');
   assert.equal((await unitsOf('unbound')).length, 0);
+  for (const ownerId of [{ id: OWNER }, 42, 'x'.repeat(161), ' owner ', 'owner/path']) {
+    assert.equal((await activate('malformed_owner', null, { units: 1, status: 'ACTIVE', ownerId })).status, 'OWNER_BINDING_MISSING');
+    assert.equal((await unitsOf('malformed_owner')).length, 0);
+  }
   assert.equal((await db.collection('audit_logs').get()).size, 0);
 });
 
