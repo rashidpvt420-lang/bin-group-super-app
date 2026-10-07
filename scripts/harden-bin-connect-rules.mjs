@@ -26,22 +26,38 @@ const block = `
     match /binConnectThreads/{threadId} {
       allow get: if isAdmin() || isBinConnectParticipant(resource.data);
       allow list: if isAdmin();
-      allow create: if safeBinConnectThreadCreate(request.resource.data);
-      allow update: if isAdmin() || (isBinConnectParticipant(resource.data) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastMessage', 'lastMessageAt', 'updatedAt', 'status']));
+      // Authenticated/App Check Cloud Functions own all thread mutations.
+      allow create, update: if false;
       allow delete: if isAdmin();
 
       match /messages/{messageId} {
         allow read: if exists(/databases/$(database)/documents/binConnectThreads/$(threadId)) && (isAdmin() || isBinConnectParticipant(get(/databases/$(database)/documents/binConnectThreads/$(threadId)).data));
-        allow create: if exists(/databases/$(database)/documents/binConnectThreads/$(threadId)) &&
-          (isAdmin() || isBinConnectParticipant(get(/databases/$(database)/documents/binConnectThreads/$(threadId)).data)) &&
-          request.resource.data.senderId == request.auth.uid;
-        allow update: if false;
+        // Authenticated/App Check Cloud Functions own all message mutations.
+        allow create, update: if false;
         allow delete: if isAdmin();
       }
     }
 `;
 
 if (rules.includes(marker)) {
+  const serverOnlyWrites = [
+    [
+      "      allow create: if safeBinConnectThreadCreate(request.resource.data);",
+      "      // Authenticated/App Check Cloud Functions own all thread mutations.\n      allow create, update: if false;"
+    ],
+    [
+      "      allow update: if isAdmin() || (isBinConnectParticipant(resource.data) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastMessage', 'lastMessageAt', 'updatedAt', 'status']));",
+      ""
+    ],
+    [
+      "        allow create: if exists(/databases/$(database)/documents/binConnectThreads/$(threadId)) &&\n          (isAdmin() || isBinConnectParticipant(get(/databases/$(database)/documents/binConnectThreads/$(threadId)).data)) &&\n          request.resource.data.senderId == request.auth.uid;",
+      "        // Authenticated/App Check Cloud Functions own all message mutations.\n        allow create, update: if false;"
+    ],
+    ["        allow update: if false;", ""]
+  ];
+  for (const [legacy, hardened] of serverOnlyWrites) {
+    if (rules.includes(legacy)) rules = rules.replace(legacy, hardened);
+  }
   const legacyRead = '      allow read: if isAdmin() || isBinConnectParticipant(resource.data);';
   const serverOnlyList = `      allow get: if isAdmin() || isBinConnectParticipant(resource.data);
       // Non-admin enumeration is server-authoritative via listMyBinConnectThreads.
