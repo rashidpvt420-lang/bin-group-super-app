@@ -72,8 +72,9 @@ test.describe('Phase 1 Sovereign AI launcher interaction regression', () => {
     if (isMobile) await send.tap({ force: true });
     else await send.click();
     await expect(drawer).toBeVisible();
-    await expect(drawer.getByText(message, { exact: true })).toBeVisible();
-    await expect(drawer.getByText(/LOCAL GUIDANCE — NOT LIVE AI OR AUTHORITATIVE/)).toBeVisible();
+    await expect(input).toHaveValue('');
+    await expect(drawer.getByText(message, { exact: true })).toHaveCount(1);
+    await expect(drawer.getByText(/LOCAL GUIDANCE — NOT LIVE AI OR AUTHORITATIVE/)).toHaveCount(1);
 
     const close = page.getByTestId('sovereign-ai-close');
     if (isMobile) await close.tap({ force: true });
