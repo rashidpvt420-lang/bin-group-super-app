@@ -25,16 +25,17 @@ const apiUrl = String(process.env.GITHUB_API_URL || 'https://api.github.com').re
 
 if (!/^\d+$/.test(runId)) throw new Error('LIVE_EVIDENCE_RUN_ID must be numeric.');
 
-const response = await fetch(`${apiUrl}/repos/${repository}/actions/runs/${runId}`, {
+const response = await fetch(`${apiUrl}/repos/${repository}/actions/runs/${runId}/attempts/1`, {
   headers: {
     Accept: 'application/vnd.github+json',
     Authorization: `Bearer ${token}`,
     'X-GitHub-Api-Version': '2022-11-28',
   },
 });
-if (!response.ok) throw new Error(`Unable to fetch live evidence run ${runId}: HTTP ${response.status}`);
+if (!response.ok) throw new Error(`Unable to fetch live evidence run ${runId} attempt 1: HTTP ${response.status}`);
 
 const run = await response.json();
+if (Number(run?.run_attempt) !== 1) throw new Error('Live evidence provenance must resolve immutable attempt 1.');
 const resolved = validateLiveEvidenceRun(run, { expectedSha, expectedRepository: repository, now: Date.now() });
 if (resolved.errors.length) {
   console.error('[live-pilot-provenance] REFUSED');

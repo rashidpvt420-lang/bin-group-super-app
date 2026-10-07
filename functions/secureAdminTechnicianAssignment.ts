@@ -1,6 +1,7 @@
 import * as admin from "firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
+import { resolveUnitlessDispatchScope, ticketHasUnit, UNIT_REQUIRED_MESSAGE, unitRecordsQuery } from "./ticketUnitScope";
 
 if (!admin.apps.length) admin.initializeApp();
 const db = admin.firestore();
@@ -112,7 +113,24 @@ export const adminAssignTechnician = onCall(
       if (!readiness.ready) {
         throw new HttpsError("failed-precondition", `Technician dispatch readiness failed: ${readiness.failures.join(", ")}.`, { failures: readiness.failures });
       }
-      if (!text(ticket.propertyId) || !text(ticket.unitId || ticket.unitNumber || ticket.unit)) throw new HttpsError("failed-precondition", "Ticket must be linked to a property and unit before dispatch.");
+      if (!text(ticket.propertyId)) throw new HttpsError("failed-precondition", UNIT_REQUIRED_MESSAGE);
+      // A unit-less ticket is dispatchable only as a whole-property job on a
+      // single-unit property (e.g. a villa declaring units: 1); multi-unit
+      // properties still require the ticket to name its unit.
+      let unitLink: Record<string, unknown> = {};
+      if (!ticketHasUnit(ticket)) {
+        const [propertySnap, unitsSnap] = await Promise.all([
+          transaction.get(db.collection("properties").doc(text(ticket.propertyId, 160))),
+          transaction.get(unitRecordsQuery(db, text(ticket.propertyId, 160))),
+        ]);
+        const scope = resolveUnitlessDispatchScope({ ticket, propertySnap, unitDocs: unitsSnap.docs });
+        if (!scope.ok) throw new HttpsError("failed-precondition", UNIT_REQUIRED_MESSAGE, { reason: scope.reason });
+        unitLink = {
+          unitScope: scope.unitScope,
+          ...(scope.unitId ? { unitId: scope.unitId, unitNumber: scope.unitNumber } : {}),
+          unitScopeResolvedAt: now,
+        };
+      }
 
       const currentStatus = text(ticket.status, 60).toUpperCase();
       if (NON_DISPATCHABLE_STATUSES.has(currentStatus)) {
@@ -133,6 +151,7 @@ export const adminAssignTechnician = onCall(
       const previousUserSnap = previousUserRef ? await transaction.get(previousUserRef) : null;
 
       transaction.set(ticketRef, {
+        ...unitLink,
         assignedTechnicianId: technicianId,
         technicianId,
         assignedTechnicianName: text(technician.displayName || technician.name || user.displayName || user.name || "Technician", 180),

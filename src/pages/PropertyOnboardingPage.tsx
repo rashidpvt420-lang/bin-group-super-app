@@ -3,6 +3,7 @@ import { Alert, Box, Button, Chip, Container, LinearProgress, Stack, Step, StepL
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Save, ShieldCheck } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
+import { useRole } from '../context/RoleContext';
 import { useOnboardingStore } from '../store/onboardingStore';
 import CompanyProfileStep from '../components/onboarding/CompanyProfileStep';
 import AccountCreationStep from '../components/onboarding/AccountCreationStep';
@@ -24,7 +25,9 @@ export default function PropertyOnboardingPage() {
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
     const { t, isRTL, lang } = useLanguage();
+    const { user } = useRole();
     const { step, nextStep, prevStep, setStep, properties, intakeId } = useOnboardingStore();
+    const signedInSession = Boolean(user?.uid) && !(user as { isAnonymous?: boolean } | null)?.isAnonymous;
     const label = React.useCallback((en: string, ar: string) => lang === 'ar' ? ar : en, [lang]);
     const brokerUid = String(searchParams.get('broker') || '').trim();
     const validBrokerUid = /^[A-Za-z0-9_-]{6,128}$/.test(brokerUid);
@@ -148,7 +151,13 @@ export default function PropertyOnboardingPage() {
                     <Button startIcon={<ArrowLeft size={18} style={{ transform: isRTL ? 'rotate(180deg)' : 'none' }} />} onClick={() => navigate('/')} sx={{ color: '#B8932F', fontWeight: 900 }}>{readable(t('onboarding.back_home'), label('Back Home', 'الرجوع للرئيسية'))}</Button>
                     <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
                         <Chip icon={<ShieldCheck size={15} />} label={`${label('Page', 'الصفحة')} ${safePage} / ${PAGE_COUNT}`} sx={{ fontWeight: 900 }} />
-                        <Chip icon={<Save size={15} />} label={intakeId ? label('Application reference saved', 'تم حفظ مرجع الطلب') : label('Secure session active', 'الجلسة الآمنة نشطة')} color="success" variant="outlined" />
+                        {intakeId ? (
+                            <Chip icon={<Save size={15} />} label={label('Application reference saved', 'تم حفظ مرجع الطلب')} color="success" variant="outlined" />
+                        ) : signedInSession ? (
+                            <Chip icon={<Save size={15} />} label={label('Secure session active', 'الجلسة الآمنة نشطة')} color="success" variant="outlined" />
+                        ) : (
+                            <Chip icon={<Save size={15} />} label={label('Application in progress', 'الطلب قيد الإعداد')} variant="outlined" />
+                        )}
                         {brokerUid && <Chip label={validBrokerUid ? label('Broker referral will lock after verified email', 'سيتم تثبيت إحالة الوسيط بعد التحقق من البريد') : label('Invalid Broker referral link', 'رابط إحالة وسيط غير صالح')} color={validBrokerUid ? 'info' : 'error'} variant="outlined" />}
                     </Stack>
                 </Stack>
