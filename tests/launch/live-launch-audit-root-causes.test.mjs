@@ -213,11 +213,15 @@ test('standalone live launch audit is manual-only and bound to an already deploy
 
 test('Phase 1 keeps one Owner Sovereign AI launcher and reserves BIN Connect interaction space', () => {
   const shell = read('src/components/AuthenticatedShell.tsx');
+  const app = read('src/App.tsx');
   const ownerAi = read('src/owner/pages/OwnerAIIntelligencePage.tsx');
   const ai = read('src/components/SovereignAIChat.tsx');
   const binConnect = read('src/components/BinConnectChatBox.tsx');
 
+  assert.match(shell, /shouldRenderSovereignAI = showChrome && isRolePortalRoute && Boolean\(user\?\.uid\)/);
   assert.match(shell, /shouldRenderSovereignAI[\s\S]*<SovereignAIChat/);
+  assert.match(app, /function PublicSovereignAIEntry\(\)[\s\S]*if \(isRolePortalRoute\) return null;[\s\S]*<SovereignAIChat role="unknown"/);
+  assert.match(app, /path="\/"[\s\S]*showChrome: false/);
   assert.doesNotMatch(ownerAi, /SovereignAIChat/);
   assert.match(ai, /reserveBinConnect/);
   assert.match(ai, /DRAG_THRESHOLD_PX = 7/);
