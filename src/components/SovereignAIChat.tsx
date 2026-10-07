@@ -484,6 +484,7 @@ export const SovereignAIChat: React.FC<SovereignAIChatProps> = ({
             }
           }}
           autoComplete="off"
+          inputProps={{ 'data-testid': 'sovereign-ai-input', 'aria-label': 'Sovereign AI message' }}
           sx={{ '& .MuiOutlinedInput-root': { bgcolor: 'rgba(255,255,255,0.03)', borderRadius: 3, '& fieldset': { borderColor: 'rgba(255,255,255,0.1)' }, '&:hover fieldset': { borderColor: binThemeTokens.gold } } }}
           InputProps={{ endAdornment: <InputAdornment position="end"><IconButton type="button" data-testid="sovereign-ai-send" aria-label="Send Sovereign AI message" disabled={loading || !input.trim()} onClick={() => void handleSend(input)} sx={{ color: binThemeTokens.gold }}><Send size={18} /></IconButton></InputAdornment> }}
         />
