@@ -45,3 +45,11 @@ Two additional Owner-surface defects were confirmed while this exact-main repair
 - Regression: `tests/launch/bin-connect-server-list.test.mjs` now proves the callable boundary, audit writes, client removal of `addDoc/updateDoc/serverTimestamp`, and fail-closed rules.
 
 No hard-clearance workflow, production-release lock, pilot evidence, or launch authorization file is modified by these Owner repairs.
+
+
+### Unit registry authority
+- The Owner unit registry still mixed canonical `ownerId` queries with legacy `ownerEmail` / `ownerUid` list queries.
+- Because those reads were executed together, one policy-denied legacy query could fail the complete page load; an unavailable identity could also leave the loader unresolved.
+- Repair: property and unit list authority now uses canonical `ownerId` / owned property IDs only. Missing identity and read failures clear stale state, show an explicit error, and end loading.
+- Unit creation remains behind the existing `ownerGenerateUnits` callable with the existing saving/double-submit guard.
+- Regression: `tests/launch/owner-unit-registry-authority.test.mjs`.
