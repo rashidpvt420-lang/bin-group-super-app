@@ -126,7 +126,7 @@ export default function OwnerFinancialsPage() {
     if (loading) return (
         <Box sx={{ height: '60vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 2 }}>
             <CircularProgress sx={{ color: binThemeTokens.gold }} />
-            <Typography variant="overline" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900 }}>{tx('owner.fin.securing', 'Securing Financial Stream...')}</Typography>
+            <Typography variant="overline" sx={{ color: binThemeTokens.textSecondary, fontWeight: 900 }}>{tx('owner.fin.securing', 'Securing Financial Stream...')}</Typography>
         </Box>
     );
 
@@ -139,7 +139,7 @@ export default function OwnerFinancialsPage() {
             <Box sx={{ mb: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
                 <Box>
                     <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 4 }}>{tx('owner.fin.ledger_title', 'INSTITUTIONAL REVENUE LEDGER')}</Typography>
-                    <Typography variant="h4" fontWeight="950" sx={{ color: '#FFF', mt: 1 }}>{tx('owner.fin.financial_sovereign', 'Financial Sovereign')}</Typography>
+                    <Typography variant="h4" fontWeight="950" sx={{ color: binThemeTokens.textPrimary, mt: 1 }}>{tx('owner.fin.financial_sovereign', 'Financial Sovereign')}</Typography>
                 </Box>
                 <Stack direction="row" spacing={2}>
                     <Button
@@ -151,7 +151,7 @@ export default function OwnerFinancialsPage() {
                             ['Date', 'Reference', 'Description', 'Amount (AED)', 'Status'],
                             transactions.map((txn: any) => [txn.date || '', txn.id, txn.description || '', txn.amount ?? '', txn.status || '']),
                         )}
-                        sx={{ borderColor: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.7)', fontWeight: 900, borderRadius: 3 }}
+                        sx={{ borderColor: binThemeTokens.border, color: binThemeTokens.textPrimary, fontWeight: 900, borderRadius: 3 }}
                     >
                         {tx('owner.fin.export_txn', 'Export transactions')}
                     </Button>
@@ -161,20 +161,20 @@ export default function OwnerFinancialsPage() {
             <Grid container spacing={3} sx={{ mb: 6 }}>
                 {FINANCIAL_KPIs.map((kpi, idx) => (
                     <Grid item xs={12} sm={6} md={3} key={idx}>
-                        <Paper sx={{ p: 3, bgcolor: 'rgba(15, 23, 42, 0.4)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 6 }}>
+                        <Paper sx={{ p: 3, bgcolor: '#FFFFFF', border: `1px solid ${binThemeTokens.border}`, borderRadius: 6 }}>
                             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
                                 <Box sx={{ p: 1, bgcolor: alpha(kpi.color, 0.1), borderRadius: 2, color: kpi.color }}>{kpi.icon}</Box>
-                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.3)', fontWeight: 800 }}>{tx('owner.fin.recorded', 'RECORDED')}</Typography>
+                                <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, fontWeight: 800 }}>{tx('owner.fin.recorded', 'RECORDED')}</Typography>
                             </Box>
-                            <Typography variant="h5" fontWeight="950" sx={{ color: '#FFF' }}>{(kpi as any).missing ? '—' : `AED ${formatRecordedAed(kpi.value)}`}</Typography>
-                            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900, display: 'block', mt: 0.5 }}>{kpi.label.toUpperCase()}</Typography>
+                            <Typography variant="h5" fontWeight="950" sx={{ color: binThemeTokens.textPrimary }}>{(kpi as any).missing ? '—' : `AED ${formatRecordedAed(kpi.value)}`}</Typography>
+                            <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, fontWeight: 900, display: 'block', mt: 0.5 }}>{kpi.label.toUpperCase()}</Typography>
                         </Paper>
                     </Grid>
                 ))}
             </Grid>
 
             <Paper sx={{ mb: 4, bgcolor: 'rgba(15, 23, 42, 0.4)', border: `1px solid ${alpha(binThemeTokens.gold, 0.18)}`, borderRadius: 6, overflow: 'hidden' }}>
-                <Box sx={{ p: 3, borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Box sx={{ p: 3, borderBottom: `1px solid ${binThemeTokens.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <Typography variant="subtitle1" fontWeight="950" sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
                         <FileText size={18} color={binThemeTokens.gold} /> {tx('owner.fin.invoices', 'ONBOARDING & SERVICE INVOICES')}
                     </Typography>
@@ -182,30 +182,30 @@ export default function OwnerFinancialsPage() {
                 </Box>
                 {invoices.length === 0 ? (
                     <Box sx={{ py: 7, textAlign: 'center' }}>
-                        <AlertCircle size={42} color="rgba(255,255,255,0.07)" style={{ margin: '0 auto 14px' }} />
-                        <Typography sx={{ color: 'rgba(255,255,255,0.25)', fontWeight: 800 }}>{tx('owner.fin.no_invoices', 'NO INVOICE RECORDS FOUND')}</Typography>
+                        <AlertCircle size={42} color="#D1D5DB" style={{ margin: '0 auto 14px' }} />
+                        <Typography sx={{ color: binThemeTokens.textSecondary, fontWeight: 800 }}>{tx('owner.fin.no_invoices', 'NO INVOICE RECORDS FOUND')}</Typography>
                     </Box>
                 ) : (
                     <TableContainer>
                         <Table>
                             <TableHead>
-                                <TableRow sx={{ bgcolor: 'rgba(255,255,255,0.02)' }}>
-                                    <TableCell sx={{ color: 'rgba(255,255,255,0.35)', fontWeight: 900 }}>INVOICE</TableCell>
-                                    <TableCell sx={{ color: 'rgba(255,255,255,0.35)', fontWeight: 900 }}>TYPE</TableCell>
-                                    <TableCell sx={{ color: 'rgba(255,255,255,0.35)', fontWeight: 900 }}>AMOUNT</TableCell>
-                                    <TableCell sx={{ color: 'rgba(255,255,255,0.35)', fontWeight: 900 }}>STATUS</TableCell>
-                                    <TableCell align="right" sx={{ color: 'rgba(255,255,255,0.35)', fontWeight: 900 }}>DOCUMENTS</TableCell>
+                                <TableRow sx={{ bgcolor: binThemeTokens.softCanvas }}>
+                                    <TableCell sx={{ color: binThemeTokens.textSecondary, fontWeight: 900 }}>INVOICE</TableCell>
+                                    <TableCell sx={{ color: binThemeTokens.textSecondary, fontWeight: 900 }}>TYPE</TableCell>
+                                    <TableCell sx={{ color: binThemeTokens.textSecondary, fontWeight: 900 }}>AMOUNT</TableCell>
+                                    <TableCell sx={{ color: binThemeTokens.textSecondary, fontWeight: 900 }}>STATUS</TableCell>
+                                    <TableCell align="right" sx={{ color: binThemeTokens.textSecondary, fontWeight: 900 }}>DOCUMENTS</TableCell>
                                 </TableRow>
                             </TableHead>
                             <TableBody>
                                 {invoices.map(invoice => (
                                     <TableRow key={invoice.id} hover>
                                         <TableCell>
-                                            <Typography variant="body2" sx={{ color: '#FFF', fontWeight: 900 }}>{invoice.invoiceId || invoice.id}</Typography>
-                                            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.35)' }}>{formatInvoiceDate(invoice.issuedAt || invoice.createdAt)}</Typography>
+                                            <Typography variant="body2" sx={{ color: binThemeTokens.textPrimary, fontWeight: 900 }}>{invoice.invoiceId || invoice.id}</Typography>
+                                            <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary }}>{formatInvoiceDate(invoice.issuedAt || invoice.createdAt)}</Typography>
                                         </TableCell>
-                                        <TableCell sx={{ color: 'rgba(255,255,255,0.7)', fontWeight: 700 }}>{String(invoice.feeType || invoice.type || 'SERVICE_INVOICE').replace(/_/g, ' ')}</TableCell>
-                                        <TableCell sx={{ color: '#FFF', fontWeight: 900 }}>{invoice.currency || 'AED'} {Number(invoice.amount || invoice.amountPaid || 0).toLocaleString()}</TableCell>
+                                        <TableCell sx={{ color: binThemeTokens.textPrimary, fontWeight: 700 }}>{String(invoice.feeType || invoice.type || 'SERVICE_INVOICE').replace(/_/g, ' ')}</TableCell>
+                                        <TableCell sx={{ color: binThemeTokens.textPrimary, fontWeight: 900 }}>{invoice.currency || 'AED'} {Number(invoice.amount || invoice.amountPaid || 0).toLocaleString()}</TableCell>
                                         <TableCell><Chip label={String(invoice.status || 'PENDING').toUpperCase()} size="small" sx={{ bgcolor: alpha(invoice.status === 'PAID' ? '#10b981' : '#f59e0b', 0.12), color: invoice.status === 'PAID' ? '#10b981' : '#f59e0b', fontWeight: 950 }} /></TableCell>
                                         <TableCell align="right">
                                             <Stack direction="row" spacing={1} justifyContent="flex-end">
@@ -222,7 +222,7 @@ export default function OwnerFinancialsPage() {
                                                     startIcon={<Download size={14} />}
                                                     disabled={!invoice.pdfUrl}
                                                     onClick={() => invoice.pdfUrl && window.open(invoice.pdfUrl, '_blank', 'noopener,noreferrer')}
-                                                    sx={{ color: '#FFF', fontWeight: 800 }}
+                                                    sx={{ color: binThemeTokens.textPrimary, fontWeight: 800 }}
                                                 >
                                                     Invoice
                                                 </Button>
@@ -231,7 +231,7 @@ export default function OwnerFinancialsPage() {
                                                     startIcon={<Shield size={14} />}
                                                     disabled={!invoice.receiptPdfUrl}
                                                     onClick={() => invoice.receiptPdfUrl && window.open(invoice.receiptPdfUrl, '_blank', 'noopener,noreferrer')}
-                                                    sx={{ color: invoice.receiptPdfUrl ? '#10b981' : 'rgba(255,255,255,0.25)', fontWeight: 800 }}
+                                                    sx={{ color: invoice.receiptPdfUrl ? '#10b981' : binThemeTokens.textSecondary, fontWeight: 800 }}
                                                 >
                                                     Receipt
                                                 </Button>
@@ -247,37 +247,37 @@ export default function OwnerFinancialsPage() {
 
             <Grid container spacing={4}>
                 <Grid item xs={12} lg={8}>
-                    <Paper sx={{ bgcolor: 'rgba(15, 23, 42, 0.4)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 6, overflow: 'hidden' }}>
-                        <Box sx={{ p: 3, borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Paper sx={{ bgcolor: '#FFFFFF', border: `1px solid ${binThemeTokens.border}`, borderRadius: 6, overflow: 'hidden' }}>
+                        <Box sx={{ p: 3, borderBottom: `1px solid ${binThemeTokens.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <Typography variant="subtitle1" fontWeight="950" sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
                                 <Clock size={18} color={binThemeTokens.gold} /> {tx('owner.fin.transaction_history', 'TRANSACTION HISTORY')}
                             </Typography>
                         </Box>
                         {transactions.length === 0 ? (
                             <Box sx={{ py: 10, textAlign: 'center' }}>
-                                <AlertCircle size={48} color="rgba(255,255,255,0.05)" style={{ margin: '0 auto 16px' }} />
-                                <Typography sx={{ color: 'rgba(255,255,255,0.2)', fontWeight: 800 }}>{tx('owner.fin.no_transactions', 'NO TRANSACTION RECORDS FOUND')}</Typography>
+                                <AlertCircle size={48} color="#D1D5DB" style={{ margin: '0 auto 16px' }} />
+                                <Typography sx={{ color: binThemeTokens.textSecondary, fontWeight: 800 }}>{tx('owner.fin.no_transactions', 'NO TRANSACTION RECORDS FOUND')}</Typography>
                             </Box>
                         ) : (
                             <TableContainer>
                                 <Table>
                                     <TableHead>
-                                        <TableRow sx={{ bgcolor: 'rgba(255,255,255,0.02)' }}>
-                                            <TableCell sx={{ color: 'rgba(255,255,255,0.3)', fontWeight: 900, fontSize: '0.7rem' }}>{tx('fin.table.date', 'DATE / ID')}</TableCell>
-                                            <TableCell sx={{ color: 'rgba(255,255,255,0.3)', fontWeight: 900, fontSize: '0.7rem' }}>{tx('fin.table.description', 'DESCRIPTION')}</TableCell>
-                                            <TableCell sx={{ color: 'rgba(255,255,255,0.3)', fontWeight: 900, fontSize: '0.7rem' }}>{tx('fin.table.amount', 'AMOUNT')}</TableCell>
-                                            <TableCell sx={{ color: 'rgba(255,255,255,0.3)', fontWeight: 900, fontSize: '0.7rem' }}>{tx('fin.log.status', 'STATUS')}</TableCell>
+                                        <TableRow sx={{ bgcolor: binThemeTokens.softCanvas }}>
+                                            <TableCell sx={{ color: binThemeTokens.textSecondary, fontWeight: 900, fontSize: '0.7rem' }}>{tx('fin.table.date', 'DATE / ID')}</TableCell>
+                                            <TableCell sx={{ color: binThemeTokens.textSecondary, fontWeight: 900, fontSize: '0.7rem' }}>{tx('fin.table.description', 'DESCRIPTION')}</TableCell>
+                                            <TableCell sx={{ color: binThemeTokens.textSecondary, fontWeight: 900, fontSize: '0.7rem' }}>{tx('fin.table.amount', 'AMOUNT')}</TableCell>
+                                            <TableCell sx={{ color: binThemeTokens.textSecondary, fontWeight: 900, fontSize: '0.7rem' }}>{tx('fin.log.status', 'STATUS')}</TableCell>
                                         </TableRow>
                                     </TableHead>
                                     <TableBody>
                                         {transactions.map(txn => (
                                             <TableRow key={txn.id} hover>
                                                 <TableCell>
-                                                    <Typography variant="body2" sx={{ color: '#FFF', fontWeight: 700 }}>{txn.date || 'Today'}</Typography>
-                                                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.3)', fontFamily: 'monospace' }}>#{txn.id.slice(0,8)}</Typography>
+                                                    <Typography variant="body2" sx={{ color: binThemeTokens.textPrimary, fontWeight: 700 }}>{txn.date || 'Today'}</Typography>
+                                                    <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, fontFamily: 'monospace' }}>#{txn.id.slice(0,8)}</Typography>
                                                 </TableCell>
                                                 <TableCell>
-                                                    <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.7)', fontWeight: 600 }}>{txn.description || 'Monthly Rental Payout'}</Typography>
+                                                    <Typography variant="body2" sx={{ color: binThemeTokens.textPrimary, fontWeight: 600 }}>{txn.description || 'Monthly Rental Payout'}</Typography>
                                                 </TableCell>
                                                 <TableCell>
                                                     <Typography variant="body2" sx={{ color: '#10b981', fontWeight: 900 }}>AED {txn.amount?.toLocaleString()}</Typography>
@@ -299,34 +299,34 @@ export default function OwnerFinancialsPage() {
                 </Grid>
 
                 <Grid item xs={12} lg={4}>
-                    <Paper sx={{ p: 4, bgcolor: '#0f172a', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 6, mb: 4 }}>
+                    <Paper sx={{ p: 4, bgcolor: '#FFFFFF', border: `1px solid ${binThemeTokens.border}`, borderRadius: 6, mb: 4 }}>
                         <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 2, display: 'block', mb: 3 }}>{tx('owner.fin.fee_architecture', 'FEE ARCHITECTURE')}</Typography>
                         <Stack spacing={2.5}>
                             <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                                 <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 600 }}>{tx('owner.fin.bin_management', 'BIN GROUP Management')}</Typography>
-                                <Typography variant="body2" sx={{ color: '#FFF', fontWeight: 800 }}>5%</Typography>
+                                <Typography variant="body2" sx={{ color: binThemeTokens.textPrimary, fontWeight: 800 }}>5%</Typography>
                             </Box>
                             <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                                 <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 600 }}>{tx('owner.fin.management_fees', 'Management Fees')}</Typography>
-                                <Typography variant="body2" sx={{ color: '#FFF', fontWeight: 800 }}>AED {formatRecordedAed(summary.managementFees)}</Typography>
+                                <Typography variant="body2" sx={{ color: binThemeTokens.textPrimary, fontWeight: 800 }}>AED {formatRecordedAed(summary.managementFees)}</Typography>
                             </Box>
                             <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                                 <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 600 }}>{tx('owner.fin.pending_verification', 'Pending Verification')}</Typography>
-                                <Typography variant="body2" sx={{ color: '#FFF', fontWeight: 800 }}>AED {formatRecordedAed(summary.pendingVerification)}</Typography>
+                                <Typography variant="body2" sx={{ color: binThemeTokens.textPrimary, fontWeight: 800 }}>AED {formatRecordedAed(summary.pendingVerification)}</Typography>
                             </Box>
                             <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                                 <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 600 }}>{tx('owner.fin.maintenance_deductions', 'Maintenance Deductions')}</Typography>
-                                <Typography variant="body2" sx={{ color: '#FFF', fontWeight: 800 }}>AED {formatRecordedAed(summary.maintenanceDeductions)}</Typography>
+                                <Typography variant="body2" sx={{ color: binThemeTokens.textPrimary, fontWeight: 800 }}>AED {formatRecordedAed(summary.maintenanceDeductions)}</Typography>
                             </Box>
                             <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                                 <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 600 }}>{tx('owner.fin.bank_processing', 'Bank Processing')}</Typography>
-                                <Typography variant="body2" sx={{ color: '#FFF', fontWeight: 800 }}>0%</Typography>
+                                <Typography variant="body2" sx={{ color: binThemeTokens.textPrimary, fontWeight: 800 }}>0%</Typography>
                             </Box>
                             <Divider sx={{ borderColor: 'rgba(255,255,255,0.05)' }} />
                             <Box sx={{ p: 2, bgcolor: alpha(binThemeTokens.gold, 0.05), borderRadius: 3, border: `1px solid ${alpha(binThemeTokens.gold, 0.1)}` }}>
                                 <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 900, display: 'block', mb: 1 }}>{tx('owner.fin.next_payout', 'NEXT PROJECTED PAYOUT')}</Typography>
-                                <Typography variant="h5" fontWeight="950" sx={{ color: '#FFF' }}>AED {summary.netPayout.toLocaleString()}</Typography>
-                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.3)', mt: 1, display: 'block' }}>{tx('owner.fin.payout_desc', 'Gross rent minus 5% management fee and maintenance deductions, then net owner payout.')}</Typography>
+                                <Typography variant="h5" fontWeight="950" sx={{ color: binThemeTokens.textPrimary }}>AED {summary.netPayout.toLocaleString()}</Typography>
+                                <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, mt: 1, display: 'block' }}>{tx('owner.fin.payout_desc', 'Gross rent minus 5% management fee and maintenance deductions, then net owner payout.')}</Typography>
                             </Box>
                         </Stack>
                     </Paper>
@@ -335,7 +335,7 @@ export default function OwnerFinancialsPage() {
                         <Typography variant="subtitle2" fontWeight="950" sx={{ color: '#10b981', mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
                             <CheckCircle2 size={16} /> {tx('owner.fin.escrow_compliance', 'ESCROW COMPLIANCE')}
                         </Typography>
-                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', lineHeight: 1.5, display: 'block' }}>
+                        <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, lineHeight: 1.5, display: 'block' }}>
                             {tx('owner.fin.escrow_desc', 'Rental collections are calculated through the owner ledger waterfall: gross rent, 5% BIN GROUP management fee, approved maintenance deductions, then net owner payout.')}
                         </Typography>
                     </Paper>
