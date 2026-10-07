@@ -1,7 +1,7 @@
 import React from 'react';
 import { Alert, Box, Button, Chip, Divider, Grid, MenuItem, Paper, Stack, TextField, Typography, alpha } from '@mui/material';
 import { CheckCircle2, MessageSquare, Send } from 'lucide-react';
-import { addDoc, auth, collection, db, doc, functions, httpsCallable, limit, onSnapshot, orderBy, query, serverTimestamp, updateDoc } from '../lib/firebase';
+import { auth, collection, db, functions, httpsCallable, limit, onSnapshot, orderBy, query } from '../lib/firebase';
 import { binThemeTokens } from '../theme/binGroupTheme';
 
 type PortalRole = 'owner' | 'tenant' | 'technician' | 'broker' | 'staff';
@@ -59,6 +59,7 @@ export default function BinConnectInboxPage({ role, dark = false }: { role: Port
   const [channelFilter, setChannelFilter] = React.useState('all');
   const [notice, setNotice] = React.useState('');
   const [busy, setBusy] = React.useState(false);
+  const mutationInFlightRef = React.useRef(false);
 
   const uid = auth.currentUser?.uid || '';
   const email = auth.currentUser?.email || '';
@@ -106,42 +107,38 @@ export default function BinConnectInboxPage({ role, dark = false }: { role: Port
   const filteredThreads = React.useMemo(() => channelFilter === 'all' ? threads : threads.filter((thread) => thread.channel === channelFilter), [threads, channelFilter]);
 
   const sendReply = async () => {
-    if (!uid || !selectedId || !reply.trim()) return;
+    if (!uid || !selectedId || !reply.trim() || mutationInFlightRef.current) return;
+    mutationInFlightRef.current = true;
     try {
       setBusy(true);
       setNotice('');
       const text = reply.trim();
-      await addDoc(collection(db, 'binConnectThreads', selectedId, 'messages'), {
-        body: text,
-        senderId: uid,
-        senderRole: role,
-        senderEmail: email,
-        senderName: displayName,
-        createdAt: serverTimestamp(),
-        system: false,
-      });
-      await updateDoc(doc(db, 'binConnectThreads', selectedId), {
-        lastMessage: text.slice(0, 240),
-        lastMessageAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-        status: selected?.status === 'resolved' ? 'open' : (selected?.status || 'open'),
-      });
+      const sendMessage = httpsCallable(functions, 'sendBinConnectMessage');
+      await sendMessage({ threadId: selectedId, message: text });
       setReply('');
       setNotice('Reply sent.');
     } catch (error: any) {
       setNotice(error?.message || 'Reply failed.');
     } finally {
+      mutationInFlightRef.current = false;
       setBusy(false);
     }
   };
 
   const closeThread = async () => {
-    if (!selectedId) return;
+    if (!selectedId || mutationInFlightRef.current) return;
+    mutationInFlightRef.current = true;
     try {
-      await updateDoc(doc(db, 'binConnectThreads', selectedId), { status: 'resolved', updatedAt: serverTimestamp() });
+      setBusy(true);
+      const resolveThread = httpsCallable(functions, 'resolveBinConnectThread');
+      await resolveThread({ threadId: selectedId });
+      setThreads((current) => current.map((thread) => thread.id === selectedId ? { ...thread, status: 'resolved' } : thread));
       setNotice('Conversation marked resolved.');
     } catch (error: any) {
       setNotice(error?.message || 'Could not update conversation.');
+    } finally {
+      mutationInFlightRef.current = false;
+      setBusy(false);
     }
   };
 
@@ -190,7 +187,7 @@ export default function BinConnectInboxPage({ role, dark = false }: { role: Port
                   {selected.context && <Typography variant="body2" sx={{ color: binThemeTokens.goldHover, mt: .6 }}>Context: {selected.context}</Typography>}
                   {(selected.propertyId || selected.unitId || selected.ticketId) && <Typography variant="caption" sx={{ color: dark ? 'rgba(255,255,255,.55)' : binThemeTokens.textSecondary }}>Property: {selected.propertyId || 'N/A'} · Unit: {selected.unitId || 'N/A'} · Ticket: {selected.ticketId || 'N/A'}</Typography>}
                 </Box>
-                <Button onClick={closeThread} startIcon={<CheckCircle2 size={16} />} sx={{ alignSelf: 'flex-start', color: binThemeTokens.goldHover, fontWeight: 950 }}>Mark resolved</Button>
+                <Button onClick={closeThread} disabled={busy} startIcon={<CheckCircle2 size={16} />} sx={{ alignSelf: 'flex-start', color: binThemeTokens.goldHover, fontWeight: 950 }}>Mark resolved</Button>
               </Stack>
               <Divider />
               <Stack spacing={1.4} sx={{ maxHeight: 380, overflow: 'auto', pr: 1 }}>
