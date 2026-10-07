@@ -77,26 +77,26 @@ export const IbanManager: React.FC = () => {
     if (loading) return <CircularProgress size={24} sx={{ color: binThemeTokens.gold }} />;
 
     return (
-        <Paper sx={{ p: 4, borderRadius: 6, bgcolor: 'rgba(22, 22, 24, 0.6)', border: '1px solid rgba(255,255,255,0.05)', mb: 4 }}>
+        <Paper sx={{ p: 4, borderRadius: 6, bgcolor: '#FFFFFF', border: '1px solid #E5E7EB', mb: 4 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
                 <Shield color={binThemeTokens.gold} />
-                <Typography variant="h6" fontWeight="900" sx={{ color: binThemeTokens.gold, letterSpacing: 1 }}>SOVEREIGN PAYOUT DESTINATION</Typography>
+                <Typography variant="h6" fontWeight="900" sx={{ color: '#7A5C12', letterSpacing: 1 }}>Payout bank account</Typography>
             </Box>
 
             {ibanRecord ? (
                 <Box sx={{ p: 3, borderRadius: 4, bgcolor: 'rgba(198,167,94,0.05)', border: '1px solid rgba(198,167,94,0.2)' }}>
                     <Stack spacing={2}>
-                        <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, fontWeight: 900 }}>REGISTERED IBAN</Typography>
-                        <Typography variant="h5" sx={{ color: '#FFF', fontWeight: 900, fontFamily: 'monospace', letterSpacing: 2 }}>
+                        <Typography variant="caption" sx={{ color: '#475467', fontWeight: 900 }}>REGISTERED IBAN</Typography>
+                        <Typography variant="h5" sx={{ color: '#111827', fontWeight: 900, fontFamily: 'monospace', letterSpacing: 2 }}>
                             {ibanRecord.maskedIban}
                         </Typography>
                         <Box>
                             <Chip 
                                 icon={ibanRecord.verificationStatus === 'VERIFIED' ? <CheckCircle2 size={14}/> : <AlertCircle size={14}/>}
-                                label={ibanRecord.verificationStatus === 'VERIFIED' ? 'SECURELY VERIFIED' : 'VERIFICATION PENDING'}
+                                label={ibanRecord.verificationStatus === 'VERIFIED' ? 'VERIFIED' : 'VERIFICATION PENDING'}
                                 sx={{ 
                                     bgcolor: ibanRecord.verificationStatus === 'VERIFIED' ? 'rgba(16,185,129,0.1)' : 'rgba(245,158,11,0.1)', 
-                                    color: ibanRecord.verificationStatus === 'VERIFIED' ? '#10b981' : '#f59e0b',
+                                    color: ibanRecord.verificationStatus === 'VERIFIED' ? '#047857' : '#92400E',
                                     fontWeight: 900
                                 }} 
                             />
@@ -105,8 +105,8 @@ export const IbanManager: React.FC = () => {
                 </Box>
             ) : (
                 <Box>
-                    <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary, mb: 3 }}>
-                        Please securely register your IBAN to enable institutional rent payouts and ROI distributions.
+                    <Typography variant="body2" sx={{ color: '#475467', mb: 3 }}>
+                        Add your bank IBAN so BIN GROUP can pay your rent out to you.
                     </Typography>
                     <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
                         <TextField
@@ -115,9 +115,9 @@ export const IbanManager: React.FC = () => {
                             placeholder="AE00 0000 0000 0000 0000 000"
                             value={newIban}
                             onChange={(e) => setNewIban(e.target.value)}
-                            InputLabelProps={{ style: { color: 'rgba(255,255,255,0.4)' } }}
-                            InputProps={{ style: { color: '#FFF', fontFamily: 'monospace' } }}
-                            sx={{ '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.1)' } }}
+                            InputLabelProps={{ style: { color: '#475467' } }}
+                            InputProps={{ style: { color: '#111827', fontFamily: 'monospace' } }}
+                            sx={{ '.MuiOutlinedInput-notchedOutline': { borderColor: '#D0D5DD' } }}
                         />
                         <Button 
                             variant="contained"
@@ -131,7 +131,7 @@ export const IbanManager: React.FC = () => {
                                 '&:hover': { bgcolor: binThemeTokens.goldLight }
                             }}
                         >
-                            {isSubmitting ? <CircularProgress size={24} color="inherit" /> : 'SECURE VAULT'}
+                            {isSubmitting ? <CircularProgress size={24} color="inherit" /> : 'Save IBAN'}
                         </Button>
                     </Stack>
                 </Box>
