@@ -52,7 +52,8 @@ export const assignPublicPortalRole = onCall({
   }
 
   const profileRef = db.collection("users").doc(uid);
-  const status = initialStatus(role);
+  let status = initialStatus(role);
+  let alreadyAssigned = false;
   await db.runTransaction(async (transaction) => {
     const profileSnap = await transaction.get(profileRef);
     const profile = profileSnap.data() || {};
@@ -69,21 +70,37 @@ export const assignPublicPortalRole = onCall({
       throw new HttpsError("failed-precondition", "Privileged profiles cannot use public role selection.");
     }
 
-    transaction.set(profileRef, {
-      uid,
-      email: String(request.auth?.token?.email || profile.email || "").trim().toLowerCase(),
-      role,
-      status,
-      onboardingComplete: false,
-      roleAssignedAt: FieldValue.serverTimestamp(),
-      roleAssignmentSource: "PUBLIC_ROLE_ASSIGNMENT_CALLABLE",
-      updatedAt: FieldValue.serverTimestamp(),
-      ...(profileSnap.exists ? {} : { createdAt: FieldValue.serverTimestamp() }),
-    }, { merge: true });
+    // Re-selecting the role this profile already holds (e.g. an invited tenant
+    // whose acceptance made them `active`, or an approved owner/technician who
+    // lands on /gateway with a stale token) must be idempotent. Resetting the
+    // status to the initial public-signup value would silently demote an
+    // active account to pending_invitation / pending_admin_approval and lock
+    // it out of its portal. Only the claim is (re)issued in that case.
+    const existingStatus = String(profile.status || "").trim();
+    alreadyAssigned = profileRole === role && Boolean(existingStatus);
+    if (alreadyAssigned) {
+      status = existingStatus;
+      transaction.set(profileRef, {
+        roleClaimReissuedAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      }, { merge: true });
+    } else {
+      transaction.set(profileRef, {
+        uid,
+        email: String(request.auth?.token?.email || profile.email || "").trim().toLowerCase(),
+        role,
+        status,
+        onboardingComplete: false,
+        roleAssignedAt: FieldValue.serverTimestamp(),
+        roleAssignmentSource: "PUBLIC_ROLE_ASSIGNMENT_CALLABLE",
+        updatedAt: FieldValue.serverTimestamp(),
+        ...(profileSnap.exists ? {} : { createdAt: FieldValue.serverTimestamp() }),
+      }, { merge: true });
+    }
     transaction.set(db.collection("audit_logs").doc(), {
       actorId: uid,
       actorRole: role,
-      action: "PUBLIC_PORTAL_ROLE_ASSIGNED",
+      action: alreadyAssigned ? "PUBLIC_PORTAL_ROLE_CLAIM_REISSUED" : "PUBLIC_PORTAL_ROLE_ASSIGNED",
       targetType: "users",
       targetId: uid,
       status,
@@ -99,6 +116,7 @@ export const assignPublicPortalRole = onCall({
     ok: true,
     role,
     status,
+    alreadyAssigned,
     tokenRefreshRequired: true,
   };
 });
