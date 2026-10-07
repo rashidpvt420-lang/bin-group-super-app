@@ -303,26 +303,26 @@ export default function OwnerFinancialsPage() {
                         <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 2, display: 'block', mb: 3 }}>{tx('owner.fin.fee_architecture', 'FEE ARCHITECTURE')}</Typography>
                         <Stack spacing={2.5}>
                             <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                                <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 600 }}>{tx('owner.fin.bin_management', 'BIN GROUP Management')}</Typography>
+                                <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary, fontWeight: 600 }}>{tx('owner.fin.bin_management', 'BIN GROUP Management')}</Typography>
                                 <Typography variant="body2" sx={{ color: binThemeTokens.textPrimary, fontWeight: 800 }}>5%</Typography>
                             </Box>
                             <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                                <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 600 }}>{tx('owner.fin.management_fees', 'Management Fees')}</Typography>
+                                <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary, fontWeight: 600 }}>{tx('owner.fin.management_fees', 'Management Fees')}</Typography>
                                 <Typography variant="body2" sx={{ color: binThemeTokens.textPrimary, fontWeight: 800 }}>AED {formatRecordedAed(summary.managementFees)}</Typography>
                             </Box>
                             <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                                <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 600 }}>{tx('owner.fin.pending_verification', 'Pending Verification')}</Typography>
+                                <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary, fontWeight: 600 }}>{tx('owner.fin.pending_verification', 'Pending Verification')}</Typography>
                                 <Typography variant="body2" sx={{ color: binThemeTokens.textPrimary, fontWeight: 800 }}>AED {formatRecordedAed(summary.pendingVerification)}</Typography>
                             </Box>
                             <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                                <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 600 }}>{tx('owner.fin.maintenance_deductions', 'Maintenance Deductions')}</Typography>
+                                <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary, fontWeight: 600 }}>{tx('owner.fin.maintenance_deductions', 'Maintenance Deductions')}</Typography>
                                 <Typography variant="body2" sx={{ color: binThemeTokens.textPrimary, fontWeight: 800 }}>AED {formatRecordedAed(summary.maintenanceDeductions)}</Typography>
                             </Box>
                             <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                                <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 600 }}>{tx('owner.fin.bank_processing', 'Bank Processing')}</Typography>
+                                <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary, fontWeight: 600 }}>{tx('owner.fin.bank_processing', 'Bank Processing')}</Typography>
                                 <Typography variant="body2" sx={{ color: binThemeTokens.textPrimary, fontWeight: 800 }}>0%</Typography>
                             </Box>
-                            <Divider sx={{ borderColor: 'rgba(255,255,255,0.05)' }} />
+                            <Divider sx={{ borderColor: binThemeTokens.border }} />
                             <Box sx={{ p: 2, bgcolor: alpha(binThemeTokens.gold, 0.05), borderRadius: 3, border: `1px solid ${alpha(binThemeTokens.gold, 0.1)}` }}>
                                 <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 900, display: 'block', mb: 1 }}>{tx('owner.fin.next_payout', 'NEXT PROJECTED PAYOUT')}</Typography>
                                 <Typography variant="h5" fontWeight="950" sx={{ color: binThemeTokens.textPrimary }}>AED {summary.netPayout.toLocaleString()}</Typography>
