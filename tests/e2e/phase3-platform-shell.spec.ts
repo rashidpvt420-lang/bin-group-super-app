@@ -61,7 +61,8 @@ test.describe('Phase 1 Sovereign AI launcher interaction regression', () => {
       await launcher.dispatchEvent('click');
     };
 
-    if (isMobile) await openWithTouch();
+    if (testInfo.project.name === 'android-mobile') await launcher.tap();
+    else if (isMobile) await openWithTouch();
     else await launcher.click();
     await expect(drawer).toBeVisible();
 
@@ -117,5 +118,16 @@ test.describe('Phase 1 Sovereign AI launcher interaction regression', () => {
     const after = await launcher.boundingBox();
     expect(after).not.toBeNull();
     expect(Math.abs((after?.x || 0) - (before?.x || 0)) + Math.abs((after?.y || 0) - (before?.y || 0))).toBeGreaterThan(10);
+
+    // A cancelled gesture has no synthesized click. It must not consume the
+    // next keyboard activation (native buttons emit a zero-detail click).
+    await launcher.dispatchEvent('pointerdown', { pointerId: 51, pointerType: 'touch', isPrimary: true, clientX: 100, clientY: 100 });
+    await launcher.dispatchEvent('pointercancel', { pointerId: 51, pointerType: 'touch', isPrimary: true });
+    await expect(drawer).toBeHidden();
+    await launcher.focus();
+    await page.keyboard.press('Enter');
+    await expect(drawer).toBeVisible();
+    await close.click();
+    await expect(drawer).toBeHidden();
   });
 });

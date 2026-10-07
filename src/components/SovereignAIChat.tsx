@@ -53,12 +53,12 @@ const BIN_CONNECT_GAP = 14;
 
 type FabClampOptions = {
   reserveBinConnect?: boolean;
-  isMobile?: boolean;
+  isBinConnectCompact?: boolean;
 };
 
 const clampFabPosition = (
   position: FabPosition,
-  { reserveBinConnect = false, isMobile = false }: FabClampOptions = {},
+  { reserveBinConnect = false, isBinConnectCompact = false }: FabClampOptions = {},
 ): FabPosition => {
   if (typeof window === 'undefined') return position;
 
@@ -72,8 +72,8 @@ const clampFabPosition = (
   );
 
   if (reserveBinConnect) {
-    const binConnectRight = isMobile ? 16 : 26;
-    const binConnectBottom = isMobile ? 74 : 28;
+    const binConnectRight = isBinConnectCompact ? 16 : 26;
+    const binConnectBottom = isBinConnectCompact ? 74 : 28;
     const binConnectLeft = window.innerWidth - binConnectRight - FAB_SIZE;
     const binConnectTop = window.innerHeight - binConnectBottom - FAB_SIZE;
     const overlapsX =
@@ -206,8 +206,10 @@ export const SovereignAIChat: React.FC<SovereignAIChatProps> = ({
   const [loading, setLoading] = useState(false);
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  // BIN Connect changes its fixed offsets at md, independently of drawer mode.
+  const isBinConnectCompact = useMediaQuery(theme.breakpoints.down('md'));
   const reserveBinConnect = role === 'owner' || role === 'tenant' || role === 'technician' || role === 'broker';
-  const [fabPosition, setFabPosition] = useState<FabPosition>(() => getDefaultFabPosition({ reserveBinConnect, isMobile }));
+  const [fabPosition, setFabPosition] = useState<FabPosition>(() => getDefaultFabPosition({ reserveBinConnect, isBinConnectCompact }));
   const chatEndRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef({ dragging: false, moved: false, pointerId: -1, offsetX: 0, offsetY: 0, startX: 0, startY: 0 });
   const suppressClickRef = useRef(false);
@@ -217,13 +219,13 @@ export const SovereignAIChat: React.FC<SovereignAIChatProps> = ({
   useEffect(() => {
     try {
       const saved = localStorage.getItem(CHAT_POSITION_KEY);
-      if (saved) setFabPosition(clampFabPosition(JSON.parse(saved), { reserveBinConnect, isMobile }));
+      if (saved) setFabPosition(clampFabPosition(JSON.parse(saved), { reserveBinConnect, isBinConnectCompact }));
     } catch {
-      setFabPosition(getDefaultFabPosition({ reserveBinConnect, isMobile }));
+      setFabPosition(getDefaultFabPosition({ reserveBinConnect, isBinConnectCompact }));
     }
 
     const handleResize = () => setFabPosition((current) => {
-      const next = clampFabPosition(current, { reserveBinConnect, isMobile });
+      const next = clampFabPosition(current, { reserveBinConnect, isBinConnectCompact });
       try { localStorage.setItem(CHAT_POSITION_KEY, JSON.stringify(next)); } catch { /* restricted storage */ }
       return next;
     });
@@ -231,7 +233,7 @@ export const SovereignAIChat: React.FC<SovereignAIChatProps> = ({
     handleResize();
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
-  }, [reserveBinConnect, isMobile]);
+  }, [reserveBinConnect, isBinConnectCompact]);
 
   useEffect(() => {
     try {
@@ -399,7 +401,7 @@ export const SovereignAIChat: React.FC<SovereignAIChatProps> = ({
 
     setFabPosition(clampFabPosition(
       { x: event.clientX - drag.offsetX, y: event.clientY - drag.offsetY },
-      { reserveBinConnect, isMobile },
+      { reserveBinConnect, isBinConnectCompact },
     ));
   };
 
@@ -412,19 +414,20 @@ export const SovereignAIChat: React.FC<SovereignAIChatProps> = ({
     try { event.currentTarget.releasePointerCapture(event.pointerId); } catch { /* already released */ }
 
     setFabPosition((current) => {
-      const next = clampFabPosition(current, { reserveBinConnect, isMobile });
+      const next = clampFabPosition(current, { reserveBinConnect, isBinConnectCompact });
       try { localStorage.setItem(CHAT_POSITION_KEY, JSON.stringify(next)); } catch { /* restricted storage */ }
       return next;
     });
   };
 
   const handleFabClick = (event: React.MouseEvent<HTMLButtonElement>) => {
-    if (suppressClickRef.current) {
+    if (suppressClickRef.current && event.detail !== 0) {
       suppressClickRef.current = false;
       event.preventDefault();
       event.stopPropagation();
       return;
     }
+    suppressClickRef.current = false;
     setOpen(true);
   };
 
