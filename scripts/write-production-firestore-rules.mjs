@@ -306,6 +306,15 @@ replaceRuleBlock('    match /propertyPassports/{passportId} {', `    match /prop
       allow delete: if isAdmin();
     }`);
 
+replaceRuleBlock('    match /turnover-quotes/{quoteId} {', `    match /turnover-quotes/{quoteId} {
+      allow read: if isAdmin() || (signedIn() && resource.data.get('ownerId', null) == request.auth.uid);
+      allow create: if isAdmin();
+      // Owner approve/reject uses decideOwnerTurnoverQuote so the decision is
+      // ownership-validated, App Check protected and audit logged server-side.
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }`);
+
 const operationalServerOnlyBlocks = [
   ['tenant_services_requests', 'requestId', 'allow read: if isAdmin();'],
   ['assets', 'assetId', 'allow read: if propertyScopedRead(resource.data);'],
