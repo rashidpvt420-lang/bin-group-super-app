@@ -34,6 +34,9 @@ function validEnv() {
     E2E_FOUNDER_PASSWORD: 'founder-password',
     E2E_FOUNDER_TOTP_SECRET: 'JBSWY3DPEHPK3PXP',
     E2E_FOUNDER_REAL_MFA_CODE: '',
+    E2E_FINANCE_APPROVER_EMAIL: 'finance-e2e@bin-groups.com',
+    E2E_FINANCE_APPROVER_PASSWORD: 'finance-password',
+    E2E_FINANCE_APPROVER_TOTP_SECRET: 'JBSWY3DPEHPK3PXQ',
     E2E_OWNER_MAILBOX_EMAIL: 'owner-e2e@bin-groups.com',
     E2E_OWNER_PASSWORD: 'owner-password',
     E2E_TENANT_EMAIL: 'tenant-e2e@bin-groups.com',
@@ -58,6 +61,9 @@ test('production client value preflight accepts exact, separated and well-formed
   assert.ok(REQUIRED_PRODUCTION_VALUES.includes('VITE_ENABLE_FIREBASE_APPCHECK'));
   assert.ok(REQUIRED_PRODUCTION_VALUES.includes('E2E_FOUNDER_EMAIL'));
   assert.ok(REQUIRED_PRODUCTION_VALUES.includes('E2E_FOUNDER_PASSWORD'));
+  assert.ok(REQUIRED_PRODUCTION_VALUES.includes('E2E_FINANCE_APPROVER_EMAIL'));
+  assert.ok(REQUIRED_PRODUCTION_VALUES.includes('E2E_FINANCE_APPROVER_PASSWORD'));
+  assert.ok(REQUIRED_PRODUCTION_VALUES.includes('E2E_FINANCE_APPROVER_TOTP_SECRET'));
   const summary = productionWorkflowEnvSummary(env);
   assert.equal(summary.projectIdMatched, true);
   assert.equal(summary.firebaseAppIdMatched, true);
@@ -132,6 +138,31 @@ test('production client value preflight fails closed for missing or invalid Foun
   const wrongIdentity = validEnv();
   wrongIdentity.E2E_FOUNDER_EMAIL = 'other@bin-groups.com';
   assert.match(validateProductionWorkflowEnv(wrongIdentity).join('\n'), /must equal ceo@bin-groups.com/);
+});
+
+test('production client value preflight fails closed for missing or non-distinct Finance approver evidence', () => {
+  const missing = validEnv();
+  missing.E2E_FINANCE_APPROVER_EMAIL = '';
+  missing.E2E_FINANCE_APPROVER_PASSWORD = '';
+  missing.E2E_FINANCE_APPROVER_TOTP_SECRET = '';
+  const missingFailures = validateProductionWorkflowEnv(missing).join('\n');
+  assert.match(missingFailures, /Missing required production value: E2E_FINANCE_APPROVER_EMAIL/);
+  assert.match(missingFailures, /Missing required production value: E2E_FINANCE_APPROVER_PASSWORD/);
+  assert.match(missingFailures, /Missing required production value: E2E_FINANCE_APPROVER_TOTP_SECRET/);
+
+  const reused = validEnv();
+  reused.E2E_FINANCE_APPROVER_EMAIL = reused.E2E_FOUNDER_EMAIL;
+  assert.match(
+    validateProductionWorkflowEnv(reused).join('\n'),
+    /must identify a distinct Finance Admin account/,
+  );
+
+  const malformedTotp = validEnv();
+  malformedTotp.E2E_FINANCE_APPROVER_TOTP_SECRET = 'not-base32';
+  assert.match(
+    validateProductionWorkflowEnv(malformedTotp).join('\n'),
+    /must be a valid Base32 TOTP secret/,
+  );
 });
 
 test('production client value failures never disclose supplied credentials', () => {
