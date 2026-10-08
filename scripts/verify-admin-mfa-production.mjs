@@ -76,8 +76,9 @@ function profileIsActive(user) {
   return !INACTIVE_PROFILE_STATUSES.has(lower(profile.status));
 }
 
-export function summarizeAdminMfaUsers(users) {
+export function summarizeAdminMfaUsers(users, { expectedFinanceEmail = '' } = {}) {
   const source = Array.isArray(users) ? users : [];
+  const normalizedFinanceEmail = lower(expectedFinanceEmail);
   let claimedAdminCount = 0;
   let missingAdminProfileCount = 0;
   let disabledAdminCount = 0;
@@ -85,12 +86,16 @@ export function summarizeAdminMfaUsers(users) {
   let activeAdminCount = 0;
   let activeAdminEmailUnverifiedCount = 0;
   let phoneMfaEnrolledCount = 0;
-  let missingPhoneFactorCount = 0;
+  let totpMfaEnrolledCount = 0;
   let unsupportedOnlyFactorCount = 0;
   let canonicalFounderCandidateCount = 0;
   let canonicalFounderMfaReadyCount = 0;
   let canonicalFounderEmailUnverifiedCount = 0;
   let canonicalFounderMissingPhoneFactorCount = 0;
+  let financeApproverCandidateCount = 0;
+  let financeApproverMfaReadyCount = 0;
+  let financeApproverEmailUnverifiedCount = 0;
+  let financeApproverMissingTotpFactorCount = 0;
   let unexpectedPrivilegedAccountCount = 0;
   const founderRoleCounts = { ceo: 0, super_admin: 0 };
 
@@ -99,11 +104,19 @@ export function summarizeAdminMfaUsers(users) {
     if (!claimsGrantAdminPortal(claims)) continue;
     claimedAdminCount += 1;
 
+    const role = roleOfClaims(claims);
     const founderRole = recoveryApproverRole(claims);
     const canonicalFounder = isCanonicalFounderAccount(user);
+    const configuredFinanceApprover =
+      role === 'finance_admin' &&
+      Boolean(normalizedFinanceEmail) &&
+      lower(user?.email) === normalizedFinanceEmail;
+
     if (canonicalFounder) {
       canonicalFounderCandidateCount += 1;
       founderRoleCounts[founderRole] += 1;
+    } else if (configuredFinanceApprover) {
+      financeApproverCandidateCount += 1;
     } else {
       unexpectedPrivilegedAccountCount += 1;
     }
@@ -126,70 +139,77 @@ export function summarizeAdminMfaUsers(users) {
 
     const factors = enrolledFactors(user);
     const phoneFactors = factors.filter((factor) => lower(factor?.factorId) === 'phone');
-    if (phoneFactors.length > 0) {
-      phoneMfaEnrolledCount += 1;
-    } else {
-      missingPhoneFactorCount += 1;
-      if (factors.length > 0) unsupportedOnlyFactorCount += 1;
+    const totpFactors = factors.filter((factor) => lower(factor?.factorId) === 'totp');
+    if (phoneFactors.length > 0) phoneMfaEnrolledCount += 1;
+    if (totpFactors.length > 0) totpMfaEnrolledCount += 1;
+    if (factors.length > 0 && phoneFactors.length === 0 && totpFactors.length === 0) unsupportedOnlyFactorCount += 1;
+
+    if (canonicalFounder) {
+      if (user?.emailVerified !== true) canonicalFounderEmailUnverifiedCount += 1;
+      if (phoneFactors.length === 0) canonicalFounderMissingPhoneFactorCount += 1;
+      if (user?.emailVerified === true && phoneFactors.length > 0) canonicalFounderMfaReadyCount += 1;
     }
 
-    if (!canonicalFounder) continue;
-    if (user?.emailVerified !== true) canonicalFounderEmailUnverifiedCount += 1;
-    if (phoneFactors.length === 0) canonicalFounderMissingPhoneFactorCount += 1;
-    if (user?.emailVerified === true && phoneFactors.length > 0) {
-      canonicalFounderMfaReadyCount += 1;
+    if (configuredFinanceApprover) {
+      if (user?.emailVerified !== true) financeApproverEmailUnverifiedCount += 1;
+      if (totpFactors.length === 0) financeApproverMissingTotpFactorCount += 1;
+      if (user?.emailVerified === true && totpFactors.length > 0) financeApproverMfaReadyCount += 1;
     }
   }
 
-  const founderSingletonReady =
-    claimedAdminCount === 1 &&
-    unexpectedPrivilegedAccountCount === 0 &&
+  const dualControlReady =
+    claimedAdminCount === 2 &&
     canonicalFounderCandidateCount === 1 &&
     canonicalFounderMfaReadyCount === 1 &&
     canonicalFounderEmailUnverifiedCount === 0 &&
     canonicalFounderMissingPhoneFactorCount === 0 &&
+    financeApproverCandidateCount === 1 &&
+    financeApproverMfaReadyCount === 1 &&
+    financeApproverEmailUnverifiedCount === 0 &&
+    financeApproverMissingTotpFactorCount === 0 &&
+    unexpectedPrivilegedAccountCount === 0 &&
     missingAdminProfileCount === 0 &&
     disabledAdminCount === 0 &&
     inactiveProfileAdminCount === 0 &&
-    activeAdminCount === 1;
-  const allActiveAdminsEmailVerified =
-    activeAdminCount === 1 && activeAdminEmailUnverifiedCount === 0;
-  const allActiveAdminsPhoneMfaReady =
-    activeAdminCount === 1 && phoneMfaEnrolledCount === 1;
+    activeAdminCount === 2 &&
+    activeAdminEmailUnverifiedCount === 0;
 
   const failures = [];
-  if (claimedAdminCount === 0) {
-    failures.push('No Firebase Auth account with approved Admin/staff claims was found.');
+  if (!normalizedFinanceEmail) {
+    failures.push('E2E_FINANCE_APPROVER_EMAIL must identify the authorized Finance Admin.');
   }
   if (unexpectedPrivilegedAccountCount > 0) {
-    failures.push(`${unexpectedPrivilegedAccountCount} unexpected privileged account(s) must be deleted; only ${CANONICAL_FOUNDER_EMAIL} may retain Admin authority.`);
+    failures.push(`${unexpectedPrivilegedAccountCount} unexpected privileged account(s) must be removed; production permits only the canonical Founder and configured Finance Admin.`);
   }
-  if (claimedAdminCount !== 1) {
-    failures.push(`Exactly one privileged Firebase Auth account is required; found ${claimedAdminCount}.`);
+  if (claimedAdminCount !== 2) {
+    failures.push(`Exactly two privileged Firebase Auth accounts are required for dual control; found ${claimedAdminCount}.`);
   }
   if (canonicalFounderCandidateCount !== 1) {
     failures.push(`Exactly one canonical CEO/Super Admin account must use ${CANONICAL_FOUNDER_EMAIL}.`);
+  }
+  if (financeApproverCandidateCount !== 1) {
+    failures.push('Exactly one configured Finance Admin account must match E2E_FINANCE_APPROVER_EMAIL.');
   }
   if (missingAdminProfileCount > 0) {
     failures.push(`${missingAdminProfileCount} privileged account(s) have no Firestore user profile.`);
   }
   if (disabledAdminCount > 0) {
-    failures.push(`${disabledAdminCount} privileged account(s) remain disabled instead of being deleted.`);
+    failures.push(`${disabledAdminCount} privileged account(s) are disabled.`);
   }
   if (inactiveProfileAdminCount > 0) {
-    failures.push(`${inactiveProfileAdminCount} privileged account(s) remain inactive instead of being deleted.`);
+    failures.push(`${inactiveProfileAdminCount} privileged account(s) are inactive.`);
   }
-  if (activeAdminCount !== 1) {
-    failures.push(`Exactly one active privileged account is required; found ${activeAdminCount}.`);
+  if (activeAdminCount !== 2) {
+    failures.push(`Exactly two active privileged accounts are required; found ${activeAdminCount}.`);
   }
   if (activeAdminEmailUnverifiedCount > 0) {
     failures.push(`${activeAdminEmailUnverifiedCount} active privileged account(s) have unverified email.`);
   }
-  if (missingPhoneFactorCount > 0) {
-    failures.push(`${missingPhoneFactorCount} active privileged account(s) have no enrolled phone MFA factor.`);
-  }
   if (canonicalFounderMfaReadyCount !== 1) {
     failures.push(`The canonical founder account ${CANONICAL_FOUNDER_EMAIL} must have verified email and phone MFA.`);
+  }
+  if (financeApproverMfaReadyCount !== 1) {
+    failures.push('The configured Finance Admin must have verified email and TOTP MFA.');
   }
 
   return {
@@ -203,26 +223,32 @@ export function summarizeAdminMfaUsers(users) {
       activeAdminCount,
       activeAdminEmailUnverifiedCount,
       phoneMfaEnrolledCount,
-      missingPhoneFactorCount,
+      totpMfaEnrolledCount,
       unsupportedOnlyFactorCount,
       canonicalFounderCandidateCount,
       canonicalFounderMfaReadyCount,
       canonicalFounderEmailUnverifiedCount,
       canonicalFounderMissingPhoneFactorCount,
+      financeApproverCandidateCount,
+      financeApproverMfaReadyCount,
+      financeApproverEmailUnverifiedCount,
+      financeApproverMissingTotpFactorCount,
       unexpectedPrivilegedAccountCount,
       canonicalFounderCeoCount: founderRoleCounts.ceo,
       canonicalFounderSuperAdminCount: founderRoleCounts.super_admin,
-      founderSingletonReady,
-      allActiveAdminsEmailVerified,
-      allActiveAdminsPhoneMfaReady,
+      dualControlReady,
+      allActiveAdminsEmailVerified: activeAdminCount === 2 && activeAdminEmailUnverifiedCount === 0,
       // Compatibility aliases retained for deployment readers and the current Admin UI.
+      founderSingletonReady: dualControlReady,
+      allActiveAdminsPhoneMfaReady: canonicalFounderMfaReadyCount === 1,
+      missingPhoneFactorCount: canonicalFounderMissingPhoneFactorCount,
       recoveryApproverCandidateCount: canonicalFounderCandidateCount,
       recoveryApproverMfaReadyCount: canonicalFounderMfaReadyCount,
       recoveryApproverEmailUnverifiedCount: canonicalFounderEmailUnverifiedCount,
       recoveryApproverMissingPhoneFactorCount: canonicalFounderMissingPhoneFactorCount,
       recoveryCeoCount: founderRoleCounts.ceo,
       recoverySuperAdminCount: founderRoleCounts.super_admin,
-      recoveryQuorumReady: founderSingletonReady,
+      recoveryQuorumReady: dualControlReady,
     },
   };
 }
@@ -236,22 +262,24 @@ export function buildAdminMfaEvidence(summary, {
     'canonicalFounderCandidateCount',
     'canonicalFounderMfaReadyCount',
     'unexpectedPrivilegedAccountCount',
+    'financeApproverCandidateCount',
+    'financeApproverMfaReadyCount',
   ]) {
     if (!Number.isInteger(summary?.[field])) {
       throw new Error(`Admin MFA summary must explicitly include ${field}.`);
     }
   }
-  if (typeof summary?.founderSingletonReady !== 'boolean') {
-    throw new Error('Admin MFA summary must explicitly include founderSingletonReady.');
+  if (typeof summary?.dualControlReady !== 'boolean') {
+    throw new Error('Admin MFA summary must explicitly include dualControlReady.');
   }
   if (typeof summary?.allActiveAdminsEmailVerified !== 'boolean') {
     throw new Error('Admin MFA summary must explicitly include allActiveAdminsEmailVerified.');
   }
 
   return {
-    schemaVersion: 3,
+    schemaVersion: 4,
     status: 'passed',
-    source: 'firebase-admin-auth-and-firestore-single-founder-profile',
+    source: 'firebase-admin-auth-and-firestore-founder-finance-dual-control',
     projectId: EXPECTED_PROJECT_ID,
     commitSha: text(env.GITHUB_SHA) || null,
     repository: text(env.GITHUB_REPOSITORY) || null,
@@ -266,16 +294,22 @@ export function buildAdminMfaEvidence(summary, {
     activeAdminCount: Number(summary.activeAdminCount),
     activeAdminEmailUnverifiedCount: Number(summary.activeAdminEmailUnverifiedCount),
     phoneMfaEnrolledCount: Number(summary.phoneMfaEnrolledCount),
+    totpMfaEnrolledCount: Number(summary.totpMfaEnrolledCount),
     missingPhoneFactorCount: Number(summary.missingPhoneFactorCount),
     unsupportedOnlyFactorCount: Number(summary.unsupportedOnlyFactorCount),
     canonicalFounderCandidateCount: Number(summary.canonicalFounderCandidateCount),
     canonicalFounderMfaReadyCount: Number(summary.canonicalFounderMfaReadyCount),
     canonicalFounderEmailUnverifiedCount: Number(summary.canonicalFounderEmailUnverifiedCount),
     canonicalFounderMissingPhoneFactorCount: Number(summary.canonicalFounderMissingPhoneFactorCount),
+    financeApproverCandidateCount: Number(summary.financeApproverCandidateCount),
+    financeApproverMfaReadyCount: Number(summary.financeApproverMfaReadyCount),
+    financeApproverEmailUnverifiedCount: Number(summary.financeApproverEmailUnverifiedCount),
+    financeApproverMissingTotpFactorCount: Number(summary.financeApproverMissingTotpFactorCount),
     unexpectedPrivilegedAccountCount: Number(summary.unexpectedPrivilegedAccountCount),
     canonicalFounderCeoCount: Number(summary.canonicalFounderCeoCount),
     canonicalFounderSuperAdminCount: Number(summary.canonicalFounderSuperAdminCount),
-    founderSingletonReady: summary.founderSingletonReady === true,
+    dualControlReady: summary.dualControlReady === true,
+    founderSingletonReady: summary.dualControlReady === true,
     allActiveAdminsEmailVerified: summary.allActiveAdminsEmailVerified === true,
     allActiveAdminsPhoneMfaReady: summary.allActiveAdminsPhoneMfaReady === true,
     recoveryApproverCandidateCount: Number(summary.recoveryApproverCandidateCount),
@@ -307,24 +341,29 @@ export function validateAdminMfaEvidence(evidence, {
     if (String(actual ?? '') !== String(expected ?? '')) failures.push(`${label} mismatch.`);
   };
 
-  requireExact(evidence.schemaVersion, 3, 'Admin MFA evidence schemaVersion');
+  requireExact(evidence.schemaVersion, 4, 'Admin MFA evidence schemaVersion');
   requireExact(evidence.status, 'passed', 'Admin MFA evidence status');
-  requireExact(evidence.source, 'firebase-admin-auth-and-firestore-single-founder-profile', 'Admin MFA evidence source');
+  requireExact(evidence.source, 'firebase-admin-auth-and-firestore-founder-finance-dual-control', 'Admin MFA evidence source');
   requireExact(evidence.projectId, EXPECTED_PROJECT_ID, 'Admin MFA evidence projectId');
   requireExact(evidence.commitSha, commitSha, 'Admin MFA evidence commitSha');
   requireExact(evidence.repository, repository, 'Admin MFA evidence repository');
   requireExact(evidence.ref, ref, 'Admin MFA evidence ref');
   requireExact(evidence.workflowRunId, workflowRunId, 'Admin MFA evidence workflowRunId');
   requireExact(evidence.workflowRunAttempt, workflowRunAttempt, 'Admin MFA evidence workflowRunAttempt');
-  requireExact(evidence.claimedAdminCount, 1, 'Admin MFA exact privileged account count');
-  requireExact(evidence.activeAdminCount, 1, 'Admin MFA exact active privileged account count');
+  requireExact(evidence.claimedAdminCount, 2, 'Admin MFA exact privileged account count');
+  requireExact(evidence.activeAdminCount, 2, 'Admin MFA exact active privileged account count');
   requireExact(evidence.canonicalFounderCandidateCount, 1, 'Admin MFA canonical founder count');
   requireExact(evidence.canonicalFounderMfaReadyCount, 1, 'Admin MFA canonical founder readiness');
+  requireExact(evidence.financeApproverCandidateCount, 1, 'Admin MFA Finance approver count');
+  requireExact(evidence.financeApproverMfaReadyCount, 1, 'Admin MFA Finance approver readiness');
+  requireExact(evidence.financeApproverEmailUnverifiedCount, 0, 'Admin MFA Finance approver email verification');
+  requireExact(evidence.financeApproverMissingTotpFactorCount, 0, 'Admin MFA Finance approver TOTP coverage');
   requireExact(evidence.unexpectedPrivilegedAccountCount, 0, 'Admin MFA unexpected privileged accounts');
-  requireExact(evidence.founderSingletonReady, true, 'Admin MFA founder singleton readiness');
+  requireExact(evidence.dualControlReady, true, 'Admin MFA dual-control readiness');
+  requireExact(evidence.founderSingletonReady, true, 'Admin MFA compatibility readiness');
   requireExact(evidence.allActiveAdminsEmailVerified, true, 'Admin MFA all-active email verification');
   requireExact(evidence.activeAdminEmailUnverifiedCount, 0, 'Admin MFA unverified active Admin emails');
-  requireExact(evidence.allActiveAdminsPhoneMfaReady, true, 'Admin MFA all-active coverage');
+  requireExact(evidence.allActiveAdminsPhoneMfaReady, true, 'Admin MFA canonical Founder phone-MFA coverage');
   requireExact(evidence.missingAdminProfileCount, 0, 'Admin MFA missing profiles');
   requireExact(evidence.disabledAdminCount, 0, 'Admin MFA disabled privileged accounts');
   requireExact(evidence.inactiveProfileAdminCount, 0, 'Admin MFA inactive privileged accounts');
@@ -341,12 +380,17 @@ export function validateAdminMfaEvidence(evidence, {
     'activeAdminCount',
     'activeAdminEmailUnverifiedCount',
     'phoneMfaEnrolledCount',
+    'totpMfaEnrolledCount',
     'missingPhoneFactorCount',
     'unsupportedOnlyFactorCount',
     'canonicalFounderCandidateCount',
     'canonicalFounderMfaReadyCount',
     'canonicalFounderEmailUnverifiedCount',
     'canonicalFounderMissingPhoneFactorCount',
+    'financeApproverCandidateCount',
+    'financeApproverMfaReadyCount',
+    'financeApproverEmailUnverifiedCount',
+    'financeApproverMissingTotpFactorCount',
     'unexpectedPrivilegedAccountCount',
     'canonicalFounderCeoCount',
     'canonicalFounderSuperAdminCount',
@@ -362,8 +406,11 @@ export function validateAdminMfaEvidence(evidence, {
     }
   }
 
-  if (evidence.phoneMfaEnrolledCount !== 1) {
-    failures.push('Admin MFA evidence requires exactly one phone-MFA enrolled privileged account.');
+  if (evidence.phoneMfaEnrolledCount < 1) {
+    failures.push('Admin MFA evidence requires the canonical Founder phone-MFA factor.');
+  }
+  if (evidence.totpMfaEnrolledCount < 1) {
+    failures.push('Admin MFA evidence requires the Finance Admin TOTP factor.');
   }
   if (evidence.recoveryApproverCandidateCount !== evidence.canonicalFounderCandidateCount) {
     failures.push('Admin MFA compatibility founder candidate count mismatch.');
@@ -446,16 +493,16 @@ export async function verifyAdminMfaProduction({
   initializeFirebaseAdmin(admin, projectId);
   const users = await fetchAllAuthUsers({ authClient });
   const enrichedUsers = await attachAdminProfiles(users, { firestoreClient });
-  const result = summarizeAdminMfaUsers(enrichedUsers);
+  const result = summarizeAdminMfaUsers(enrichedUsers, { expectedFinanceEmail: env.E2E_FINANCE_APPROVER_EMAIL });
   if (!result.ok) {
     throw new Error(`Admin MFA production coverage is not launch-safe: ${result.failures.join('; ')}`);
   }
   const evidence = buildAdminMfaEvidence(result.summary, { env, now });
   console.log(
-    '[admin-mfa] single-founder production coverage passed '
+    '[admin-mfa] founder-finance dual-control coverage passed '
       + `active=${result.summary.activeAdminCount} `
-      + `phone_mfa=${result.summary.phoneMfaEnrolledCount} `
       + `founder_ready=${result.summary.canonicalFounderMfaReadyCount} `
+      + `finance_ready=${result.summary.financeApproverMfaReadyCount} `
       + `unexpected_privileged=${result.summary.unexpectedPrivilegedAccountCount}`,
   );
   return evidence;
