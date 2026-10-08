@@ -59,16 +59,9 @@ export default function MessagesPage() {
         const body = newMessage;
         setNewMessage('');
         try {
-            await addDoc(collection(db, `conversations/${selectedConv.id}/messages`), {
-                senderUid: user.uid,
-                senderRole: 'admin',
-                senderEmail: user.email || '',
+            await runAdminOperationalMutation('SEND_MESSAGE', {
+                conversationId: selectedConv.id,
                 body,
-                createdAt: serverTimestamp()
-            });
-
-            await updateDoc(doc(db, 'conversations', selectedConv.id), {
-                lastMessageAt: serverTimestamp()
             });
         } catch (err) {
             console.error('Failed to send message:', err);
