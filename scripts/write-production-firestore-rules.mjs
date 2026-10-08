@@ -98,7 +98,9 @@ replaceRuleBlock('    match /visitorParkingRequests/{requestId} {', `    match /
       allow read: if isAdmin() || (docPropertyId(resource.data) != null && isPropertyOwner(docPropertyId(resource.data))) || tenantUidOwns(resource.data);
       // Creation and review are callable-only. Tenant requests are created by
       // generateSignedQrPass; Admin decisions go through reviewVisitorParkingRequest.
-      allow create, update, delete: if false;
+      allow create: if false;
+      allow update: if false;
+      allow delete: if false;
     }`);
 
 replaceRuleBlock('    match /keyRegister/{keyId} {', `    match /keyRegister/{keyId} {
