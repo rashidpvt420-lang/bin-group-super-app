@@ -65,7 +65,7 @@ test('the canonical founder requires a verified Firebase Auth email', () => {
   assert.match(unverified.failures.join('\n'), /unverified email/);
 });
 
-test('disabled, inactive and additional privileged accounts block until deleted', () => {
+test('disabled, inactive and additional privileged accounts block until removed', () => {
   const disabled = summarizeAdminMfaUsers([
     ...readyUsers(),
     user('disabled-old-admin', 'admin', {
@@ -76,7 +76,7 @@ test('disabled, inactive and additional privileged accounts block until deleted'
   assert.equal(disabled.ok, false);
   assert.equal(disabled.summary.unexpectedPrivilegedAccountCount, 1);
   assert.equal(disabled.summary.disabledAdminCount, 1);
-  assert.match(disabled.failures.join('\n'), /must be deleted|disabled instead of being deleted/);
+  assert.match(disabled.failures.join('\n'), /must be removed|are disabled/);
 
   const inactive = summarizeAdminMfaUsers([
     ...readyUsers(),
@@ -87,7 +87,7 @@ test('disabled, inactive and additional privileged accounts block until deleted'
   ]);
   assert.equal(inactive.ok, false);
   assert.equal(inactive.summary.inactiveProfileAdminCount, 1);
-  assert.match(inactive.failures.join('\n'), /inactive instead of being deleted/);
+  assert.match(inactive.failures.join('\n'), /are inactive/);
 });
 
 test('Admin MFA evidence is aggregate-only and fails closed on founder-email tampering', () => {
