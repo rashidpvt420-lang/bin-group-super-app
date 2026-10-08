@@ -54,22 +54,28 @@ function mutate(root, name, update) {
 
 function adminMfaSummary() {
   return {
-    claimedAdminCount: 1,
+    claimedAdminCount: 2,
     missingAdminProfileCount: 0,
     disabledAdminCount: 0,
     inactiveProfileAdminCount: 0,
-    activeAdminCount: 1,
+    activeAdminCount: 2,
     activeAdminEmailUnverifiedCount: 0,
     phoneMfaEnrolledCount: 1,
+    totpMfaEnrolledCount: 1,
     missingPhoneFactorCount: 0,
     unsupportedOnlyFactorCount: 0,
     canonicalFounderCandidateCount: 1,
     canonicalFounderMfaReadyCount: 1,
     canonicalFounderEmailUnverifiedCount: 0,
     canonicalFounderMissingPhoneFactorCount: 0,
+    financeApproverCandidateCount: 1,
+    financeApproverMfaReadyCount: 1,
+    financeApproverEmailUnverifiedCount: 0,
+    financeApproverMissingTotpFactorCount: 0,
     unexpectedPrivilegedAccountCount: 0,
     canonicalFounderCeoCount: 1,
     canonicalFounderSuperAdminCount: 0,
+    dualControlReady: true,
     founderSingletonReady: true,
     allActiveAdminsEmailVerified: true,
     allActiveAdminsPhoneMfaReady: true,
@@ -234,7 +240,7 @@ const rejected = (result, pattern) => {
 };
 
 describe('same-run production deployment artifact verifier', () => {
-  it('accepts a complete exact-run artifact with single-founder MFA evidence', () => {
+  it('accepts a complete exact-run artifact with Founder plus Finance MFA evidence', () => {
     withFixture((fixture) => {
       const result = verify(fixture);
       assert.equal(result.ok, true, result.failures.join('\n'));
@@ -287,11 +293,12 @@ describe('same-run production deployment artifact verifier', () => {
 
     withFixture((fixture) => {
       mutate(fixture.root, 'production-deployment.json', (doc) => {
-        doc.adminMfa.claimedAdminCount = 2;
+        doc.adminMfa.claimedAdminCount = 3;
         doc.adminMfa.unexpectedPrivilegedAccountCount = 1;
+        doc.adminMfa.dualControlReady = false;
         doc.adminMfa.founderSingletonReady = false;
       });
-      rejected(verify(fixture), /exact privileged account count|unexpected privileged|singleton/i);
+      rejected(verify(fixture), /exact privileged account count|unexpected privileged|dual-control/i);
     });
 
     withFixture((fixture) => {
