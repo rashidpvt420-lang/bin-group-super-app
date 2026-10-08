@@ -127,13 +127,16 @@ export default function TenantVisitorParkingPage() {
   };
 
   const handleCancelRequest = async (requestId: string) => {
-    if (!window.confirm('Are you sure you want to cancel this parking request?')) return;
+    if (submitting || !window.confirm('Are you sure you want to cancel this parking request?')) return;
+    setSubmitting(true);
     try {
       const cancelSignedQrPass = httpsCallable(functions, 'cancelSignedQrPass');
       await cancelSignedQrPass({ passId: requestId, collectionName: 'visitorParkingRequests' });
     } catch (err) {
       console.error('Failed to cancel request:', err);
       setSnackbar({ open: true, message: 'Failed to cancel request.', severity: 'error' });
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -239,7 +242,8 @@ export default function TenantVisitorParkingPage() {
                             variant="outlined"
                             color="error"
                             size="small"
-                            onClick={() => handleCancelRequest(r.id)}
+                            disabled={submitting}
+                            onClick={() => void handleCancelRequest(r.id)}
                             sx={{ fontWeight: 900, borderRadius: 2 }}
                           >
                             CANCEL
