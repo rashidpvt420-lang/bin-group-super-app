@@ -18,8 +18,9 @@ import WaterIcon from '@mui/icons-material/Water';
 import ElectricBoltIcon from '@mui/icons-material/ElectricBolt';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
-import { collection, query, where, onSnapshot, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { db } from '../lib/firebase';
+import { runAdminOperationalMutation } from '../lib/adminOperationalMutation';
 import { useLanguage } from '@bin/shared';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -67,11 +68,9 @@ function AddAssetDialog({ propertyId, open, onClose }: { propertyId: string; ope
         if (!form.name || !form.model || !form.serialNumber || !form.installDate) return;
         setSaving(true);
         try {
-            await addDoc(collection(db, 'assets'), {
+            await runAdminOperationalMutation('CREATE_ASSET', {
                 ...form,
                 propertyId,
-                createdAt: serverTimestamp(),
-                updatedAt: serverTimestamp(),
             });
             onClose();
             setForm({ propertyId, category: 'AC', status: 'healthy' });
