@@ -54,6 +54,17 @@ test('Broker evidence remains deterministic across Playwright retries and Firest
   assert.match(productionEvidence, /const leadDocument = await waitForUiLead\(brokerUid, leadName\)/);
 });
 
+test('Broker lead evidence uses stable selectors that match the live lead form', () => {
+  const leadsPage = readFileSync('src/broker/pages/BrokerLeadsPage.tsx', 'utf8');
+  assert.match(leadsPage, /data-testid': 'broker-lead-budget'/);
+  assert.match(leadsPage, /label=\{isRTL \? 'الميزانية \(درهم\)' : 'Budget \(AED\)'\}/);
+  assert.match(leadsPage, /label=\{isRTL \? 'ملاحظات' : 'Notes'\}/);
+  assert.match(brokerSpec, /getByTestId\('broker-lead-budget'\)\.fill\('50000'\)/);
+  assert.match(brokerSpec, /getByLabel\(\/\^Notes\$\/i\)\.fill/);
+  assert.doesNotMatch(brokerSpec, /getByLabel\(\/Budget Range\/i\)/);
+  assert.doesNotMatch(brokerSpec, /getByLabel\(\/Mission Notes\/i\)/);
+});
+
 test('Broker live evidence fetches a real OTP from Gmail and submits it — cancel path is forbidden', () => {
   // Must import the Gmail OAuth2 reader
   assert.match(brokerSpec, /gmail-otp-reader/);
