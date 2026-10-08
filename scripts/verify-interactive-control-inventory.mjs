@@ -6,8 +6,8 @@ import ts from 'typescript';
 const root = process.cwd();
 const scanRoots = ['src', 'apps/admin-panel/src'];
 const outputDir = path.join(root, 'audit');
-const csvPath = path.join(outputDir, 'phase-3-interactive-control-inventory.csv');
-const markdownPath = path.join(outputDir, 'PHASE_3_INTERACTIVE_CONTROL_INVENTORY.md');
+const csvPath = path.join(outputDir, 'phase-2-interactive-control-inventory.csv');
+const markdownPath = path.join(outputDir, 'PHASE_2_INTERACTIVE_CONTROL_INVENTORY.md');
 
 const nativeInteractiveTags = new Set(['button', 'a', 'input', 'select', 'textarea', 'summary']);
 const componentInteractiveNames = /(?:Button|IconButton|ButtonBase|Link|NavLink|MenuItem|ListItemButton|Tab|Tabs|Switch|Checkbox|Radio|Fab|SpeedDialAction|Select|TextField|Autocomplete)$/;
@@ -24,7 +24,10 @@ const interactiveRoles = new Set([
   'combobox',
   'textbox',
 ]);
-const mutationWords = /submit|save|approve|reject|delete|remove|create|add|request|pay|complete|assign|upload|send|confirm|update|resubmit|start|stop|duty|accept|activate|dispatch|publish|invite|verify/i;
+const mutationWords = /submit|save|approve|reject|delete|remove|create|add|request|pay|complete|assign|upload|send|confirm|update|resubmit|start|stop|duty|accept|activate|dispatch|publish|invite|verify|archive|issue|return|release|review|offboard|resend/i;
+const actionControlTags = /^(?:button|a)$/i;
+const actionComponentNames = /(?:Button|IconButton|ButtonBase|Fab|SpeedDialAction|MenuItem|ListItemButton)$/;
+const localOnlyHandlerSignals = /(?:\bnavigate\s*\(|\bwindow\.(?:location|history)|\bset[A-Z][A-Za-z0-9_]*\s*\(|\blocalStorage\.|\bsessionStorage\.|\bscrollTo|\bopen[A-Z][A-Za-z0-9_]*\s*\()/;
 
 function walk(dir) {
   if (!fs.existsSync(dir)) return [];
@@ -112,6 +115,21 @@ for (const scanRoot of scanRoots) {
       parseFailures.push(...sourceFile.parseDiagnostics.map((diagnostic) => `${relative}: ${diagnostic.messageText}`));
     }
 
+    const asyncFunctions = new Set();
+    function collectAsyncFunctions(node) {
+      const isAsync = Array.isArray(node.modifiers) && node.modifiers.some((modifier) => modifier.kind === ts.SyntaxKind.AsyncKeyword);
+      if (ts.isFunctionDeclaration(node) && isAsync && node.name) asyncFunctions.add(node.name.text);
+      if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.initializer) {
+        const initializer = node.initializer;
+        const initializerAsync = (ts.isArrowFunction(initializer) || ts.isFunctionExpression(initializer)) &&
+          Array.isArray(initializer.modifiers) &&
+          initializer.modifiers.some((modifier) => modifier.kind === ts.SyntaxKind.AsyncKeyword);
+        if (initializerAsync) asyncFunctions.add(node.name.text);
+      }
+      ts.forEachChild(node, collectAsyncFunctions);
+    }
+    collectAsyncFunctions(sourceFile);
+
     function visit(node) {
       const opening = openingFor(node);
       if (opening && isInteractive(opening, sourceFile)) {
@@ -137,8 +155,19 @@ for (const scanRoot of scanRoots) {
           attrText(opening, 'aria-disabled', sourceFile) ||
           '';
         const openingText = opening.getText(sourceFile);
-        const mutationHint = mutationWords.test(`${labelSignal} ${handler} ${openingText}`);
-        const loadingGuard = /loading|submitting|saving|processing|pending|busy|is[A-Z][A-Za-z]*(?:ing|Pending)/.test(
+        const controlScope = attrText(opening, 'data-control-scope', sourceFile).replace(/^['"]|['"]$/g, '').toLowerCase();
+        const isActionControl = actionControlTags.test(tag) || actionComponentNames.test(tag);
+        const callsAsyncFunction = [...asyncFunctions].some((name) => new RegExp(`\\b${name}\\s*\\(`).test(handler));
+        const remoteSignal = controlScope === 'remote' || callsAsyncFunction || /\\bawait\\b/.test(handler);
+        const mutationHint = Boolean(
+          isActionControl &&
+          handler &&
+          controlScope !== 'local' &&
+          remoteSignal &&
+          mutationWords.test(`${labelSignal} ${handler}`) &&
+          !localOnlyHandlerSignals.test(handler),
+        );
+        const loadingGuard = /loading|submitting|saving|processing|pending|busy|removing|deleting|confirming|sending|archiving|updating|is[A-Z][A-Za-z]*(?:ing|Pending)/.test(
           `${disabled} ${openingText}`,
         );
 
@@ -184,16 +213,37 @@ const failures = [];
 if (!rows.length) failures.push('No interactive controls were discovered.');
 if (parseFailures.length) failures.push(`JSX parse failures: ${parseFailures.slice(0, 10).join(' | ')}`);
 if (!hardRouteAudit.includes('auditInteractiveControls')) {
-  failures.push('Hard-launch route E2E is not wired to the Phase 3 runtime control audit.');
+  failures.push('Hard-launch route E2E is not wired to the Phase 2 runtime control audit.');
 }
-if (!hardRouteAudit.includes('Phase 3')) {
-  failures.push('Hard-launch route E2E is missing the Phase 3 control-audit marker.');
+if (!hardRouteAudit.includes('Phase 2')) {
+  failures.push('Hard-launch route E2E is missing the Phase 2 control-audit marker.');
 }
 if (!platformAudit.includes('auditInteractiveControls')) {
-  failures.push('Cross-platform Phase 3 shell audit is not wired to the runtime control audit.');
+  failures.push('Cross-platform Phase 2 shell audit is not wired to the runtime control audit.');
 }
 if (!launchHonesty.includes("'tests/e2e/hard-launch-routes.spec.ts'")) {
   failures.push('Protected launchAuditLive evidence no longer includes the hard-launch route audit.');
+}
+
+const unguardedMutations = mutationRows.filter((row) => row.loadingGuard !== 'yes' && !row.disabledSignal);
+if (unguardedMutations.length) {
+  failures.push(
+    `Remote/mutation-like action controls without disabled/loading protection: ${unguardedMutations
+      .slice(0, 25)
+      .map((row) => `${row.file}:${row.line} ${row.handler || row.labelSignal}`)
+      .join(' | ')}`,
+  );
+}
+
+for (const requiredRouteContract of [
+  'must survive browser refresh',
+  'must remain exact in mobile Arabic mode',
+  'must expose a route-aware back control',
+  'must not render an access denial',
+]) {
+  if (!hardRouteAudit.includes(requiredRouteContract)) {
+    failures.push(`Phase 2 route matrix is missing required contract: ${requiredRouteContract}`);
+  }
 }
 
 const coveragePercent = rows.length ? ((labelledRows.length / rows.length) * 100).toFixed(1) : '0.0';
@@ -201,7 +251,7 @@ const mutationGuardPercent = mutationRows.length
   ? ((guardedMutations.length / mutationRows.length) * 100).toFixed(1)
   : '100.0';
 
-const markdown = `# Phase 3 — Interactive Control Inventory
+const markdown = `# Phase 2 — Every-Control Matrix
 
 Generated from the checked-out source tree. This is an executable source inventory paired with Playwright runtime checks; it is not a manual checklist.
 
@@ -214,16 +264,16 @@ Generated from the checked-out source tree. This is an executable source invento
 - Cross-platform public shell coverage: **tests/e2e/phase3-platform-shell.spec.ts**
 - Protected live evidence binding: **launchAuditLive**
 
-The CSV artifact contains every discovered control with source line, role/label/test identity signals, handler expression, disabled signal, and mutation/loading classification. Runtime Playwright assertions fail on visible unlabeled controls, raw i18n labels, contradictory disabled semantics, invalid busy semantics, page-level mobile overflow, and Arabic/RTL regressions.
+The CSV artifact contains every discovered control with source line, role/label/test identity signals, handler expression, disabled signal, and action/loading classification. The Phase 2 source gate fails on mutation-like action controls without a disabled/loading guard. Runtime Playwright assertions cover visible labels, disabled/busy semantics, direct URL, refresh, mobile layout, Arabic/RTL, Back controls and authenticated authorization. Domain regressions cover server mutation, error and permission-denial behavior for protected workflows.
 
 `;
 
 fs.writeFileSync(markdownPath, markdown);
 
-console.log(`[phase3-controls] controls=${rows.length} files=${sourceFiles.size} labelSignals=${labelledRows.length} mutations=${mutationRows.length} guardedMutations=${guardedMutations.length}`);
-console.log(`[phase3-controls] wrote ${path.relative(root, csvPath)} and ${path.relative(root, markdownPath)}`);
+console.log(`[phase2-controls] controls=${rows.length} files=${sourceFiles.size} labelSignals=${labelledRows.length} mutations=${mutationRows.length} guardedMutations=${guardedMutations.length}`);
+console.log(`[phase2-controls] wrote ${path.relative(root, csvPath)} and ${path.relative(root, markdownPath)}`);
 
 if (failures.length) {
-  for (const failure of failures) console.error(`[phase3-controls] ERROR: ${failure}`);
+  for (const failure of failures) console.error(`[phase2-controls] ERROR: ${failure}`);
   process.exit(1);
 }

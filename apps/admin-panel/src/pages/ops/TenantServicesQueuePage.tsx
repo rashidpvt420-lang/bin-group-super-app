@@ -16,6 +16,7 @@ export default function TenantServicesQueuePage() {
     const { isRTL } = useLanguage();
     const [loading, setLoading] = useState(true);
     const [requests, setRequests] = useState<any[]>([]);
+    const [submitting, setSubmitting] = useState(false);
 
     useEffect(() => {
         const collections = [
@@ -59,6 +60,8 @@ export default function TenantServicesQueuePage() {
     }, []);
 
     const handleAction = async (item: any, action: 'approved' | 'rejected') => {
+        if (submitting) return;
+        setSubmitting(true);
         try {
             if (item._collection === 'visitorParkingRequests') {
                 await runAdminOperationalMutation('REVIEW_VISITOR_PARKING', {
@@ -75,6 +78,8 @@ export default function TenantServicesQueuePage() {
             }
         } catch (err) {
             console.error('Failed to update request:', err);
+        } finally {
+            setSubmitting(false);
         }
     };
 
@@ -135,10 +140,10 @@ export default function TenantServicesQueuePage() {
                             
                             {req.status === 'pending' || !req.status ? (
                                 <Stack direction="row" spacing={2} justifyContent="flex-end">
-                                    <Button onClick={() => handleAction(req, 'rejected')} color="error" startIcon={<XCircle size={18} />}>
+                                    <Button disabled={submitting} onClick={() => void handleAction(req, 'rejected')} color="error" startIcon={<XCircle size={18} />}>
                                         REJECT
                                     </Button>
-                                    <Button onClick={() => handleAction(req, 'approved')} sx={{ color: '#10b981' }} startIcon={<CheckCircle2 size={18} />}>
+                                    <Button disabled={submitting} onClick={() => void handleAction(req, 'approved')} sx={{ color: '#10b981' }} startIcon={<CheckCircle2 size={18} />}>
                                         APPROVE
                                     </Button>
                                 </Stack>

@@ -3,7 +3,7 @@ import { Box, Container, Typography, Paper, Grid, Stack, Button, Chip, CircularP
 import { Package, CheckCircle, Clock, Truck, FileCheck2, AlertCircle } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { useRole } from '../../context/RoleContext';
-import { db, collection, query, where, doc, updateDoc, onSnapshot, serverTimestamp } from '../../lib/firebase';
+import { db, functions, httpsCallable, collection, query, where, onSnapshot } from '../../lib/firebase';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import SafeIcon from '../../components/SafeIcon';
 
@@ -13,6 +13,7 @@ export default function TenantParcelsPage() {
   const [loading, setLoading] = useState(true);
   const [parcels, setParcels] = useState<any[]>([]);
   const [snackbar, setSnackbar] = useState<{open: boolean, message: string, severity: 'success' | 'error' | 'warning' | 'info'}>({ open: false, message: '', severity: 'info' });
+  const [confirmingParcelId, setConfirmingParcelId] = useState<string | null>(null);
 
   const label = (key: string, en: string, ar: string) => lang === 'ar' ? ar : tx(key, en);
 
@@ -41,15 +42,17 @@ export default function TenantParcelsPage() {
   }, [user?.uid]);
 
   const handleConfirmCollection = async (parcelId: string) => {
+    if (confirmingParcelId) return;
+    setConfirmingParcelId(parcelId);
     try {
-      await updateDoc(doc(db, 'parcels', parcelId), {
-        status: 'collected',
-        collectedBy: user?.displayName || 'Tenant',
-        collectedAt: serverTimestamp()
-      });
+      const confirmParcel = httpsCallable(functions, 'confirmTenantParcelCollection');
+      await confirmParcel({ parcelId });
+      setSnackbar({ open: true, message: label('tenant.parcels.claim_success', 'Parcel collection confirmed.', 'تم تأكيد استلام الطرد.'), severity: 'success' });
     } catch (err) {
       console.error('Failed to confirm collection:', err);
-      setSnackbar({ open: true, message: 'Error confirming collection: ' + (err instanceof Error ? err.message : String(err)), severity: 'error' });
+      setSnackbar({ open: true, message: label('tenant.parcels.claim_error', 'Could not confirm parcel collection. Please try again.', 'تعذر تأكيد استلام الطرد. يرجى المحاولة مرة أخرى.'), severity: 'error' });
+    } finally {
+      setConfirmingParcelId(null);
     }
   };
 
@@ -144,10 +147,11 @@ export default function TenantParcelsPage() {
                         variant="contained"
                         size="small"
                         startIcon={<SafeIcon icon={FileCheck2} size={14} />}
-                        onClick={() => handleConfirmCollection(p.id)}
+                        onClick={() => void handleConfirmCollection(p.id)}
+                        disabled={confirmingParcelId === p.id}
                         sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, borderRadius: 2 }}
                       >
-                        {label('tenant.parcels.confirm', 'CONFIRM CLAIM', 'تأكيد الاستلام')}
+                        {confirmingParcelId === p.id ? <CircularProgress size={16} color="inherit" /> : label('tenant.parcels.confirm', 'CONFIRM CLAIM', 'تأكيد الاستلام')}
                       </Button>
                     )}
                   </Box>

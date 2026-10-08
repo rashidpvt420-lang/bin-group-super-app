@@ -149,6 +149,9 @@ jobs:
           tests/launch/hard-launch-blocker-remediation.test.mjs
           tests/launch/hr-automation-integrity.test.mjs
 
+      - name: Enforce Phase 2 every-control matrix
+        run: npm run test:phase2:controls
+
       - name: Build main application
         run: npm run build
 

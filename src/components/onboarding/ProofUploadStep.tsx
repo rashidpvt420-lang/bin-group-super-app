@@ -59,6 +59,7 @@ export default function ProofUploadStep({ onNext, onBack }: ProofUploadStepProps
     const [error, setError] = useState<string | null>(null);
     const [dragOverKey, setDragOverKey] = useState<string | null>(null);
     const [confirmDelete, setConfirmDelete] = useState<ProofKey | null>(null);
+    const [removing, setRemoving] = useState(false);
     const proofMap = proofDocuments as unknown as Record<ProofKey, { name: string; size: number; type: string } | null>;
     const gymProperties = useMemo(() => properties.filter((property) => property.propertyType === 'Gym / Fitness Centre'), [properties]);
     const hasGym = gymProperties.length > 0;
@@ -93,12 +94,17 @@ export default function ProofUploadStep({ onNext, onBack }: ProofUploadStepProps
     };
 
     const handleRemoveFile = async (key: ProofKey) => {
+        if (removing) return;
+        setRemoving(true);
+        setError(null);
         try {
             await removeStagedFile(key);
             setProofDocument(key as any, null);
             setConfirmDelete(null);
         } catch (removeError: any) {
             setError(`${tx(copy.removeFailed, ar)}: ${removeError?.message || removeError}`);
+        } finally {
+            setRemoving(false);
         }
     };
 
@@ -176,7 +182,7 @@ export default function ProofUploadStep({ onNext, onBack }: ProofUploadStepProps
             <Dialog open={Boolean(confirmDelete)} onClose={() => setConfirmDelete(null)} dir={isRTL ? 'rtl' : 'ltr'}>
                 <DialogTitle sx={{ fontWeight: 950 }}>{tx(copy.removeTitle, ar)}</DialogTitle>
                 <DialogContent><Typography>{tx(copy.removeBody, ar)}</Typography></DialogContent>
-                <DialogActions><Button onClick={() => setConfirmDelete(null)}>{tx(copy.cancel, ar)}</Button><Button onClick={() => confirmDelete && void handleRemoveFile(confirmDelete)} variant="contained" color="error">{tx(copy.remove, ar)}</Button></DialogActions>
+                <DialogActions><Button onClick={() => setConfirmDelete(null)}>{tx(copy.cancel, ar)}</Button><Button onClick={() => confirmDelete && void handleRemoveFile(confirmDelete)} disabled={removing} variant="contained" color="error">{removing ? <CircularProgress size={18} color="inherit" /> : tx(copy.remove, ar)}</Button></DialogActions>
             </Dialog>
         </Box>
     );

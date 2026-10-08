@@ -138,3 +138,7 @@ if (!admin.apps.length) {
 export * from "./binConnectOperations";
 
 export * from "./adminOperationalMutations";
+
+export * from "./tenantParcelOperations";
+
+export * from "./turnoverQuoteOperations";

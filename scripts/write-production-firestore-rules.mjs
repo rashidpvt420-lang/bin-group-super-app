@@ -120,8 +120,9 @@ replaceRuleBlock('    match /keyMovements/{movementId} {', `    match /keyMoveme
 replaceRuleBlock('    match /parcels/{parcelId} {', `    match /parcels/{parcelId} {
       allow read: if isAdmin() || (docPropertyId(resource.data) != null && isPropertyOwner(docPropertyId(resource.data))) || tenantUidOwns(resource.data);
       allow create: if docPropertyId(request.resource.data) != null && isPropertyOwner(docPropertyId(request.resource.data));
-      allow update: if (docPropertyId(resource.data) != null && isPropertyOwner(docPropertyId(resource.data))) ||
-        (tenantUidOwns(resource.data) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'collectedBy', 'collectedAt', 'notes']));
+      // Tenant collection confirmation is server-authoritative through
+      // confirmTenantParcelCollection; browser updates remain Owner-scoped.
+      allow update: if docPropertyId(resource.data) != null && isPropertyOwner(docPropertyId(resource.data));
       allow delete: if docPropertyId(resource.data) != null && isPropertyOwner(docPropertyId(resource.data));
     }`);
 
@@ -301,6 +302,15 @@ replaceRuleBlock('    match /tenants/{tenantId} {', `    match /tenants/{tenantI
 replaceRuleBlock('    match /propertyPassports/{passportId} {', `    match /propertyPassports/{passportId} {
       allow read: if isAdmin() || (signedIn() && (resource.data.get('ownerId', null) == request.auth.uid || emailMatches(resource.data.get('ownerEmail', null))));
       allow create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }`);
+
+replaceRuleBlock('    match /turnover-quotes/{quoteId} {', `    match /turnover-quotes/{quoteId} {
+      allow read: if isAdmin() || (signedIn() && resource.data.get('ownerId', null) == request.auth.uid);
+      allow create: if isAdmin();
+      // Owner approve/reject uses decideOwnerTurnoverQuote so the decision is
+      // ownership-validated, App Check protected and audit logged server-side.
       allow update: if isAdmin();
       allow delete: if isAdmin();
     }`);

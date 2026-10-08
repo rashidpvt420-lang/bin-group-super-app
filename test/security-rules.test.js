@@ -1002,6 +1002,17 @@ describe('Firestore Security Rules', () => {
     }));
   });
 
+  it('tenant parcel collection is callable-only', async () => {
+    await seedServerDocument('parcels/parcel_a', { tenantUid: 'tenant_a', propertyId: 'prop_a', status: 'received' });
+    const tenantADb = testEnv.authenticatedContext('tenant_a').firestore();
+
+    await assertSucceeds(getDoc(doc(tenantADb, 'parcels/parcel_a')));
+    await assertFails(updateDoc(doc(tenantADb, 'parcels/parcel_a'), {
+      status: 'collected',
+      collectedBy: 'Tenant A',
+    }));
+  });
+
   it('tenant cannot read another tenants parcel', async () => {
     const adminDb = testEnv.authenticatedContext('admin_user', { firebase: { sign_in_second_factor: 'phone' }, admin: true }).firestore();
     await setDoc(doc(adminDb, 'users/admin_user'), { role: 'admin' });

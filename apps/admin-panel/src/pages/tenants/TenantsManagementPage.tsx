@@ -480,7 +480,8 @@ export default function TenantsManagementPage() {
                             {tenant.invitationStatus !== 'accepted' && (
                                 <IconButton
                                   size="small"
-                                  onClick={() => handleResendInvitation(tenant.tenantInvitationId)}
+                                  onClick={() => void handleResendInvitation(tenant.tenantInvitationId)}
+                                  disabled={submitting}
                                   title="Resend Invite"
                                   aria-label={`Resend invitation for ${tenant.displayName || tenant.email || 'tenant'}`}
                                 >
@@ -509,7 +510,7 @@ export default function TenantsManagementPage() {
                               >
                                 <DeleteIcon fontSize="small" />
                               </IconButton>
-                              <Button size="small" variant="text" color="warning" onClick={() => handleArchiveTenant(tenant)} sx={{ fontWeight: 800, fontSize: '0.7rem' }}>ARCHIVE</Button>
+                              <Button size="small" variant="text" color="warning" disabled={submitting} onClick={() => void handleArchiveTenant(tenant)} sx={{ fontWeight: 800, fontSize: '0.7rem' }}>ARCHIVE</Button>
                           </Stack>
                       </TableCell>
                     </TableRow>

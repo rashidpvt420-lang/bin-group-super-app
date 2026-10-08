@@ -56,11 +56,14 @@ export default function AnnouncementsPage() {
     };
 
     const handleDeleteAnnouncement = async (id: string) => {
-        if (!window.confirm('Delete announcement?')) return;
+        if (submitting || !window.confirm('Delete announcement?')) return;
+        setSubmitting(true);
         try {
             await runAdminOperationalMutation('DELETE_ANNOUNCEMENT', { announcementId: id });
         } catch (err) {
             console.error(err);
+        } finally {
+            setSubmitting(false);
         }
     };
 
@@ -105,7 +108,7 @@ export default function AnnouncementsPage() {
                                         <TableCell>{ann.propertyId} / {ann.audience?.toUpperCase()}</TableCell>
                                         <TableCell>{ann.publishedAt?.toDate ? ann.publishedAt.toDate().toLocaleString() : '—'}</TableCell>
                                         <TableCell align="right">
-                                            <Button size="small" color="error" onClick={() => handleDeleteAnnouncement(ann.id)}>DELETE</Button>
+                                            <Button size="small" color="error" disabled={submitting} onClick={() => void handleDeleteAnnouncement(ann.id)}>DELETE</Button>
                                         </TableCell>
                                     </TableRow>
                                 ))}

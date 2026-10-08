@@ -57,11 +57,14 @@ export default function DocumentLibraryPage() {
     };
 
     const handleDeleteDocument = async (id: string) => {
-        if (!window.confirm('Delete document library record?')) return;
+        if (submitting || !window.confirm('Delete document library record?')) return;
+        setSubmitting(true);
         try {
             await runAdminOperationalMutation('DELETE_DOCUMENT', { documentId: id });
         } catch (err) {
             console.error(err);
+        } finally {
+            setSubmitting(false);
         }
     };
 
@@ -108,7 +111,7 @@ export default function DocumentLibraryPage() {
                                         <TableCell align="right">
                                             <Stack direction="row" spacing={1} justifyContent="flex-end">
                                                 {docItem.fileUrl && <Button size="small" component="a" href={docItem.fileUrl} target="_blank">VIEW</Button>}
-                                                <Button size="small" color="error" onClick={() => handleDeleteDocument(docItem.id)}>DELETE</Button>
+                                                <Button size="small" color="error" disabled={submitting} onClick={() => void handleDeleteDocument(docItem.id)}>DELETE</Button>
                                             </Stack>
                                         </TableCell>
                                     </TableRow>

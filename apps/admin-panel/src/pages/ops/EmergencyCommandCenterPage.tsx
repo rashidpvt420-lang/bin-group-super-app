@@ -23,6 +23,7 @@ export default function EmergencyCommandCenterPage() {
     const [broadcastTitle, setBroadcastTitle] = useState('');
     const [broadcastMessage, setBroadcastMessage] = useState('');
     const [submittingBroadcast, setSubmittingBroadcast] = useState(false);
+    const [dispatchingTechId, setDispatchingTechId] = useState<string | null>(null);
 
     useEffect(() => {
         // Monitor all emergency tickets
@@ -87,8 +88,9 @@ export default function EmergencyCommandCenterPage() {
     const filteredEmergencies = emergencies.filter(ticket => matchesFilter(ticket, activeFilter));
 
     const handleDispatch = async (techId: string, techName: string) => {
-        if (!selectedEmergency) return;
+        if (!selectedEmergency || dispatchingTechId) return;
         if (!window.confirm(`Confirm priority dispatch for ${techName}?`)) return;
+        setDispatchingTechId(techId);
 
         try {
             const assignTechnician = httpsCallable(functions, 'adminAssignTechnician');
@@ -102,6 +104,8 @@ export default function EmergencyCommandCenterPage() {
         } catch (err) {
             console.error('Failed to dispatch:', err);
             alert('Dispatch failed.');
+        } finally {
+            setDispatchingTechId(null);
         }
     };
 
@@ -324,7 +328,7 @@ export default function EmergencyCommandCenterPage() {
                                                         <Button 
                                                             variant="contained" 
                                                             size="small"
-                                                            onClick={() => handleDispatch(tech.id, tech.displayName || 'Technician')}
+                                                            disabled={Boolean(dispatchingTechId)} onClick={() => void handleDispatch(tech.id, tech.displayName || 'Technician')}
                                                             sx={{ 
                                                                 bgcolor: isBusy ? 'rgba(255,255,255,0.05)' : binThemeTokens.gold, 
                                                                 color: isBusy ? 'rgba(255,255,255,0.3)' : '#000', 

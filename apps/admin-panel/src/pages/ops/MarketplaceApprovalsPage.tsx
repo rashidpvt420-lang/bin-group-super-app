@@ -284,10 +284,18 @@ export default function MarketplaceApprovalsPage() {
   }
 
   async function markApplicationContacted(id: string, requestMode?: string) {
-    await runAdminOperationalMutation('MARK_HOME_APPLICATION_CONTACTED', {
-      requestId: id,
-      requestMode: requestMode || '',
-    });
+    if (submitting) return;
+    setSubmitting(true);
+    try {
+      await runAdminOperationalMutation('MARK_HOME_APPLICATION_CONTACTED', {
+        requestId: id,
+        requestMode: requestMode || '',
+      });
+    } catch (error) {
+      console.error('[HomeDiscoveryOps] contact coordination failed:', error);
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   if (loading) {
@@ -374,7 +382,7 @@ export default function MarketplaceApprovalsPage() {
                             <Chip size="small" label={application.stage || application.status || 'OPEN'} sx={{ bgcolor: alpha(gold, 0.12), color: gold, fontWeight: 900 }} />
                           </Stack>
                         </Box>
-                        <Button onClick={() => markApplicationContacted(application.id, application.requestMode)} sx={{ color: '#38BDF8', border: `1px solid ${alpha('#38BDF8', 0.35)}`, borderRadius: 3, fontWeight: 950 }}>Start coordination</Button>
+                        <Button disabled={submitting} onClick={() => void markApplicationContacted(application.id, application.requestMode)} sx={{ color: '#38BDF8', border: `1px solid ${alpha('#38BDF8', 0.35)}`, borderRadius: 3, fontWeight: 950 }}>Start coordination</Button>
                       </Stack>
                     </CardContent>
                   </Card>
