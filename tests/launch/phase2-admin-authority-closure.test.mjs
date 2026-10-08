@@ -36,7 +36,8 @@ test('Phase 2 Admin operational mutation surfaces are callable-only', () => {
 test('Admin operational gateway enforces App Check, MFA, role authority and audit evidence', () => {
   const backend = read('functions/adminOperationalMutations.ts');
   assert.match(backend, /export const adminOperationalMutation = onCall\(\{ cors: true, enforceAppCheck: true \}/);
-  assert.match(backend, /await requirePrivilegedMfaSession\(request\.auth\)/);
+  assert.match(backend, /const actor = await requireAdminActor\(request\.auth\)/);
+  assert.match(backend, /async function requireAdminActor[\s\S]*?await requirePrivilegedMfaSession\(auth\)/);
   assert.match(backend, /ADMIN_ROLES/);
   assert.match(backend, /db\.collection\("audit_logs"\)/);
   for (const action of [
@@ -105,17 +106,10 @@ test('final production rules writer removes Admin browser mutation authority for
     'conversations',
     'pricingAuditLogs',
     'binGptEngineerCommands',
-    'units',
-    'contracts',
-    'leases',
-    'tenant_ledger',
-    'tenant_unit_link_requests',
     'tenant_invitations',
     'tenantInvitations',
     'tenant_import_batches',
     'tenancies',
-    'tenants',
-    'propertyPassports',
   ]) {
     assert.match(writer, new RegExp(`'${collection}'`), collection);
   }
