@@ -1498,7 +1498,7 @@ describe('Firestore Security Rules', () => {
       suspended: false,
       approvalStatus: 'approved',
     });
-    await setDoc(doc(adminDb, 'technicians/suspended_tech'), {
+    await seedServerDocument('technicians/suspended_tech', {
       status: 'active',
       approvalStatus: 'approved',
       suspended: false,
@@ -1514,7 +1514,7 @@ describe('Firestore Security Rules', () => {
       evidencePhotos: [],
     };
     await seedServerDocument('tickets/suspended_tech_existing', existingTechTicket);
-    await setDoc(doc(adminDb, 'maintenanceTickets/suspended_tech_existing'), existingTechTicket);
+    await seedServerDocument('maintenanceTickets/suspended_tech_existing', existingTechTicket);
     const staleTechDb = testEnv.authenticatedContext('suspended_tech', { role: 'technician' }).firestore();
     await assertFails(updateDoc(doc(staleTechDb, 'tickets/suspended_tech_existing'), {
       technicianNotes: 'Blocked stale-token update',
