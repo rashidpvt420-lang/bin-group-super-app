@@ -71,5 +71,5 @@ test('closed and disputed tickets cannot be recreated or redispatched', () => {
   assert.match(secureAssign, /DISPUTED/);
   assert.match(rules, /function safeAdminTicketCreate\(\)/);
   assert.match(rules, /function safeAdminTicketUpdate\(\)/);
-  assert.match(rules, /allow create: if safeAdminTicketCreate\(\);/);
+  assert.match(rules, /allow create: if false;/);
 });
