@@ -269,6 +269,36 @@ export const adminOperationalMutation = onCall({ cors: true, enforceAppCheck: tr
       return { success: true, id: postId };
     }
 
+    case "REVIEW_VISITOR_PARKING": {
+      const requestId = text(payload.requestId, 180);
+      const decision = text(payload.decision, 20).toLowerCase();
+      if (!requestId || !["approved", "rejected"].includes(decision)) throw new HttpsError("invalid-argument", "Visitor parking request and decision are required.");
+      const ref = db.collection("visitorParkingRequests").doc(requestId);
+      const auditRef = db.collection("audit_logs").doc();
+      await db.runTransaction(async (tx) => {
+        const snap = await tx.get(ref);
+        if (!snap.exists) throw new HttpsError("not-found", "Visitor parking request not found.");
+        const current = text(snap.data()?.status, 40).toLowerCase();
+        if (current === decision) return;
+        if (current !== "pending") throw new HttpsError("failed-precondition", "Only pending visitor parking requests can be reviewed.");
+        tx.set(ref, {
+          status: decision,
+          reviewedBy: actor.uid,
+          reviewedByRole: actor.role,
+          reviewedAt: now,
+          updatedAt: now,
+          ...(decision === "rejected" ? { rejectedAt: now } : {}),
+        }, { merge: true });
+        tx.create(auditRef, audit(
+          actor,
+          decision === "approved" ? "ADMIN_VISITOR_PARKING_APPROVED" : "ADMIN_VISITOR_PARKING_REJECTED",
+          "visitorParkingRequests",
+          requestId,
+        ));
+      });
+      return { success: true, id: requestId };
+    }
+
     case "REVIEW_TENANT_SERVICE": {
       const requestId = text(payload.requestId, 180);
       const decision = text(payload.decision, 20).toLowerCase();
