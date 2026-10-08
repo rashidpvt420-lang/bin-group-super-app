@@ -24,10 +24,9 @@ export default function CommunityModerationPage() {
 
     const handleUpdateStatus = async (id: string, status: string) => {
         try {
-            await updateDoc(doc(db, 'communityPosts', id), {
-                status,
-                approvedBy: 'Admin Moderator',
-                approvedAt: serverTimestamp()
+            await runAdminOperationalMutation('MODERATE_COMMUNITY', {
+                postId: id,
+                decision: status,
             });
         } catch (err) {
             console.error('Failed to moderate post:', err);
@@ -37,7 +36,7 @@ export default function CommunityModerationPage() {
     const handleDeletePost = async (id: string) => {
         if (!window.confirm('Delete post?')) return;
         try {
-            await deleteDoc(doc(db, 'communityPosts', id));
+            await runAdminOperationalMutation('DELETE_COMMUNITY', { postId: id });
         } catch (err) {
             console.error(err);
         }
