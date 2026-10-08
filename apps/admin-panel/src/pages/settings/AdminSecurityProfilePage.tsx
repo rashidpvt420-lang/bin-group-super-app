@@ -217,7 +217,7 @@ export default function AdminSecurityProfilePage() {
         {mfaEnrollmentRequired && <Alert severity="warning" data-testid="admin-mfa-enrollment-required">{copy('Admin access is restricted until Firebase MFA enrollment is completed.', 'يقتصر وصول المسؤول حتى اكتمال تسجيل المصادقة متعددة العوامل.')}</Alert>}
 
         {(profile || mfaEnrollmentRequired) && (
-          <AdminMfaEnrollmentCard enrolled={profile?.mfa.enrolled === true} currentPhone={profile?.phoneNumber || ''} isRTL={isRTL} onEnrolled={loadProfile} />
+          <AdminMfaEnrollmentCard enrolled={profile?.mfa.enrolled === true} currentPhone={profile?.phoneNumber || ''} currentRole={profile?.role || user?.role || ''} isRTL={isRTL} onEnrolled={loadProfile} />
         )}
 
         {!profile && !mfaEnrollmentRequired && (
