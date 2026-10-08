@@ -53,8 +53,11 @@ type ReadinessOverview = {
     activeAdminCount: number;
     emailVerifiedCount: number;
     phoneMfaEnrolledCount: number;
+    totpMfaEnrolledCount: number;
     canonicalFounderReadyCount: number;
+    financeAdminReadyCount: number;
     unexpectedPrivilegedAccountCount: number;
+    dualControlReady: boolean;
     founderSingletonReady: boolean;
     recoveryApproverCount: number;
     recoveryApproverReadyCount: number;
@@ -791,7 +794,7 @@ export default function AdminMfaEnrollmentCard({ enrolled, currentPhone = '', cu
                 <Box sx={{ textAlign: isRTL ? 'right' : 'left' }}>
                   <Typography fontWeight={950}>{copy('Production Admin authority readiness', 'جاهزية صلاحية مسؤول الإنتاج')}</Typography>
                   <Typography variant="body2" color="text.secondary">
-                    {copy('The production authority model permits only the canonical founder account. Email addresses are masked.', 'يسمح نموذج صلاحية الإنتاج بحساب المؤسس المعتمد فقط. عناوين البريد مخفية جزئياً.')}
+                    {copy('Production requires the canonical Founder plus one Finance Admin for four-eyes payment approval. Email addresses are masked.', 'يتطلب الإنتاج المؤسس المعتمد ومسؤول مالية واحداً للموافقة المالية المزدوجة. عناوين البريد مخفية جزئياً.')}
                   </Typography>
                 </Box>
               </Stack>
@@ -803,13 +806,14 @@ export default function AdminMfaEnrollmentCard({ enrolled, currentPhone = '', cu
                 <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} flexWrap="wrap" useFlexGap>
                   <Chip label={copy(`Privileged: ${readiness.summary.activeAdminCount}`, `الحسابات المميزة: ${readiness.summary.activeAdminCount}`)} />
                   <Chip color={readiness.summary.canonicalFounderReadyCount === 1 ? 'success' : 'warning'} label={copy(`Founder ready: ${readiness.summary.canonicalFounderReadyCount}/1`, `المؤسس جاهز: ${readiness.summary.canonicalFounderReadyCount}/1`)} />
+                  <Chip color={readiness.summary.financeAdminReadyCount === 1 ? 'success' : 'warning'} label={copy(`Finance ready: ${readiness.summary.financeAdminReadyCount}/1`, `مسؤول المالية جاهز: ${readiness.summary.financeAdminReadyCount}/1`)} />
                   <Chip color={readiness.summary.unexpectedPrivilegedAccountCount === 0 ? 'success' : 'error'} label={copy(`Unexpected privileged: ${readiness.summary.unexpectedPrivilegedAccountCount}`, `حسابات مميزة غير متوقعة: ${readiness.summary.unexpectedPrivilegedAccountCount}`)} />
-                  <Chip color={readiness.summary.recoveryQuorumReady ? 'success' : 'error'} label={copy(`Singleton ready: ${readiness.summary.recoveryQuorumReady ? 'yes' : 'no'}`, `الحساب الوحيد جاهز: ${readiness.summary.recoveryQuorumReady ? 'نعم' : 'لا'}`)} />
+                  <Chip color={readiness.summary.recoveryQuorumReady ? 'success' : 'error'} label={copy(`Dual control ready: ${readiness.summary.recoveryQuorumReady ? 'yes' : 'no'}`, `التحكم المزدوج جاهز: ${readiness.summary.recoveryQuorumReady ? 'نعم' : 'لا'}`)} />
                 </Stack>
                 <Alert severity={readiness.launchReady ? 'success' : 'warning'}>
                   {readiness.launchReady
-                    ? copy('The canonical founder is email-verified, phone-MFA enrolled, and no other privileged identity remains.', 'بريد المؤسس المعتمد موثّق ومصادقة الهاتف مسجلة ولا توجد هوية مميزة أخرى.')
-                    : copy('Production requires exactly one privileged identity. Verify and enroll the canonical founder, then remove every other privileged account only through the protected cleanup after its dry run.', 'يتطلب الإنتاج هوية مميزة واحدة فقط. وثّق المؤسس المعتمد وسجّل مصادقة هاتفه، ثم احذف كل حساب مميز آخر فقط عبر التنظيف المحمي بعد التشغيل التجريبي.')}
+                    ? copy('The canonical Founder has phone MFA, the Finance Admin has TOTP MFA, both emails are verified, and no third privileged identity remains.', 'لدى المؤسس المعتمد مصادقة هاتف، ولدى مسؤول المالية مصادقة TOTP، والبريدان موثّقان، ولا توجد هوية مميزة ثالثة.')
+                    : copy('Production requires exactly one canonical Founder and one Finance Admin. Founder must have phone MFA; Finance Admin must have TOTP MFA. Any third privileged account remains blocked.', 'يتطلب الإنتاج مؤسساً معتمداً واحداً ومسؤول مالية واحداً. يجب أن يملك المؤسس مصادقة هاتف وأن يملك مسؤول المالية مصادقة TOTP. أي حساب مميز ثالث يظل محظوراً.')}
                 </Alert>
                 {!!readiness.blockers.length && <Divider />}
                 <Stack spacing={1.25}>
@@ -825,10 +829,13 @@ export default function AdminMfaEnrollmentCard({ enrolled, currentPhone = '', cu
                           <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} flexWrap="wrap" useFlexGap>
                             {target.recoveryApprover
                               ? <Chip size="small" color="primary" label={copy('Canonical founder', 'المؤسس المعتمد')} />
-                              : <Chip size="small" color="error" label={copy('Unexpected privileged account', 'حساب مميز غير متوقع')} />}
+                              : target.role === 'finance_admin' && !deleteRequired
+                                ? <Chip size="small" color="success" label={copy('Finance approver', 'مسؤول الموافقة المالية')} />
+                                : <Chip size="small" color="error" label={copy('Unexpected privileged account', 'حساب مميز غير متوقع')} />}
                             {deleteRequired && <Chip data-testid="admin-privileged-delete-required" size="small" color="error" label={copy('Protected cleanup required', 'التنظيف المحمي مطلوب')} />}
                             {!deleteRequired && !target.emailVerified && <Chip size="small" color="warning" label={copy('Email unverified', 'البريد غير موثق')} />}
-                            {!deleteRequired && !target.phoneMfaEnrolled && <Chip size="small" color="warning" label={copy('Phone MFA missing', 'مصادقة الهاتف مفقودة')} />}
+                            {!deleteRequired && target.recoveryApprover && !target.phoneMfaEnrolled && <Chip size="small" color="warning" label={copy('Phone MFA missing', 'مصادقة الهاتف مفقودة')} />}
+                            {!deleteRequired && target.blockers.includes('TOTP_MFA_MISSING') && <Chip size="small" color="warning" label={copy('TOTP MFA missing', 'مصادقة TOTP مفقودة')} />}
                           </Stack>
                         </Stack>
                       </Box>
