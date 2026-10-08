@@ -103,6 +103,6 @@ test('launch-hardening verifier explicitly rejects direct assignment and overlap
   assert.match(verifierSource, /bounded ticket update router/);
   assert.match(verifierSource, /Exactly one canonical ticket update gate is required/);
   assert.match(verifierSource, /Legacy \/tickets must deny every browser write/);
-  assert.match(verifierSource, /Ticket update router must short-circuit in admin, dispatcher, tenant, technician order/);
+  assert.match(verifierSource, /Ticket update router must retire Admin browser mutation and preserve dispatcher, tenant, technician order/);
   assert.match(verifierSource, /Technician append-only proof guard missing/);
 });
