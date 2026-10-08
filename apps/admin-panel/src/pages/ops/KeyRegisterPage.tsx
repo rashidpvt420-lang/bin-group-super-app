@@ -87,12 +87,16 @@ export default function KeyRegisterPage() {
     };
 
     const handleReturnKey = async (keyItem: any) => {
+        if (submitting) return;
+        setSubmitting(true);
         try {
             await runAdminOperationalMutation('RETURN_KEY', {
                 keyId: keyItem.id,
             });
         } catch (err) {
             console.error('Failed to return key:', err);
+        } finally {
+            setSubmitting(false);
         }
     };
 
@@ -141,7 +145,7 @@ export default function KeyRegisterPage() {
                                                 {k.status === 'available' ? (
                                                     <Button size="small" variant="outlined" onClick={() => { setSelectedKey(k); setOpenIssue(true); }}>ISSUE</Button>
                                                 ) : (
-                                                    <Button size="small" color="success" onClick={() => handleReturnKey(k)}>RETURN</Button>
+                                                    <Button size="small" color="success" disabled={submitting} onClick={() => void handleReturnKey(k)}>RETURN</Button>
                                                 )}
                                             </TableCell>
                                         </TableRow>
