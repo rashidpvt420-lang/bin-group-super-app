@@ -37,7 +37,7 @@ export default function ParcelDeskPage() {
         e.preventDefault();
         setSubmitting(true);
         try {
-            await addDoc(collection(db, 'parcels'), {
+            await runAdminOperationalMutation('CREATE_PARCEL', {
                 propertyId,
                 unitId,
                 tenantUid,
@@ -45,10 +45,7 @@ export default function ParcelDeskPage() {
                 courierName: courierName.trim(),
                 trackingNumberMasked: trackingNumberMasked.trim(),
                 parcelType,
-                status: 'received',
-                receivedBy: 'Security Concierge',
-                receivedAt: serverTimestamp(),
-                notes
+                notes,
             });
             setOpenAdd(false);
             setRecipientName('');
@@ -64,11 +61,7 @@ export default function ParcelDeskPage() {
 
     const handleReleaseParcel = async (parcelId: string) => {
         try {
-            await updateDoc(doc(db, 'parcels', parcelId), {
-                status: 'collected',
-                collectedBy: 'Recipient Claim',
-                collectedAt: serverTimestamp()
-            });
+            await runAdminOperationalMutation('RELEASE_PARCEL', { parcelId });
         } catch (err) {
             console.error(err);
         }
