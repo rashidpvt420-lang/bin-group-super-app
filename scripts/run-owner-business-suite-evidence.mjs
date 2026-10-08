@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { spawnSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import { existsSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { config as loadDotenv } from 'dotenv';
@@ -32,20 +32,12 @@ function diagnosticFiles() {
 
 function run(script, label = path.basename(script)) {
   try {
-    const result = spawnSync(process.execPath, [script], {
+    execFileSync(process.execPath, [script], {
       cwd: repositoryRoot,
       env: { ...process.env, DEPLOYMENT_ENVIRONMENT: 'production' },
-      encoding: 'utf8',
-      maxBuffer: 16 * 1024 * 1024,
+      stdio: 'inherit',
       timeout: 18 * 60 * 1000,
     });
-    if (result.stdout) process.stdout.write(result.stdout);
-    if (result.stderr) process.stderr.write(result.stderr);
-    if (result.error || result.status !== 0) {
-      const detail = [result.error?.message, result.stderr?.slice(-4000), result.stdout?.slice(-2000)]
-        .filter(Boolean).join('\n');
-      throw new Error(`${label} exited ${result.status ?? 'unknown'}: ${detail}`);
-    }
   } catch (error) {
     const files = diagnosticFiles();
     console.error(`[owner-business-suite] ${label} failed.`);
