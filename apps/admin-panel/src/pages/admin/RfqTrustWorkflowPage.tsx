@@ -10,6 +10,8 @@ export default function RfqTrustWorkflowPage() {
   const [notice, setNotice] = React.useState('');
   const [loading, setLoading] = React.useState(true);
   const [loadError, setLoadError] = React.useState('');
+  const [actionBusy, setActionBusy] = React.useState('');
+  const actionBusyRef = React.useRef(false);
   const [form, setForm] = React.useState({ ticketId: '', propertyId: '', ownerId: '', trade: 'General maintenance', standardScope: '', estimateBandAed: '0', emergency: false });
   const [quoteForms, setQuoteForms] = React.useState<Record<string, { vendorId: string; amountAed: string; warrantyDays: string; notes: string }>>({});
 
@@ -33,6 +35,9 @@ export default function RfqTrustWorkflowPage() {
 
   const createRfq = async () => {
     if (!form.ticketId || !form.ownerId || !form.propertyId || !form.standardScope) return setNotice('Ticket, owner, property, and scope are required.');
+    if (actionBusyRef.current) return;
+    actionBusyRef.current = true;
+    setActionBusy('create');
     try {
       const create = httpsCallable(functions, 'adminCreateVendorRfq');
       const result = await create({
@@ -48,13 +53,19 @@ export default function RfqTrustWorkflowPage() {
       setForm({ ticketId: '', propertyId: '', ownerId: '', trade: 'General maintenance', standardScope: '', estimateBandAed: '0', emergency: false });
     } catch (error: any) {
       setNotice(error?.message || 'RFQ creation failed.');
+    } finally {
+      actionBusyRef.current = false;
+      setActionBusy('');
     }
   };
 
   const addQuote = async (rfq: Rfq) => {
+    if (actionBusyRef.current) return;
     const qf = quoteForms[rfq.id];
     const amount = Number(qf?.amountAed || 0);
     if (!qf?.vendorId || !amount) return setNotice('Verified Vendor ID and quote amount are required.');
+    actionBusyRef.current = true;
+    setActionBusy(`quote:${rfq.id}`);
     try {
       const add = httpsCallable(functions, 'adminAddVerifiedVendorQuote');
       await add({
@@ -67,16 +78,25 @@ export default function RfqTrustWorkflowPage() {
       setNotice(`Verified vendor quote added to RFQ ${rfq.id}.`);
     } catch (error: any) {
       setNotice(error?.message || 'Vendor quote could not be added.');
+    } finally {
+      actionBusyRef.current = false;
+      setActionBusy('');
     }
   };
 
   const sendOwnerApproval = async (rfq: Rfq) => {
+    if (actionBusyRef.current) return;
+    actionBusyRef.current = true;
+    setActionBusy(`approval:${rfq.id}`);
     try {
       const requestApproval = httpsCallable(functions, 'adminRequestRfqOwnerApproval');
       const result = await requestApproval({ rfqId: rfq.id });
       setNotice(`Owner approval requested: ${(result.data as any)?.approvalRequestId || 'recorded'}`);
     } catch (error: any) {
       setNotice(error?.message || 'Owner approval request failed.');
+    } finally {
+      actionBusyRef.current = false;
+      setActionBusy('');
     }
   };
 
@@ -95,13 +115,13 @@ export default function RfqTrustWorkflowPage() {
         <Grid item xs={12} md={3}><TextField select fullWidth size="small" label="Trade" value={form.trade} onChange={(e) => setForm({ ...form, trade: e.target.value })}>{trades.map((t) => <MenuItem key={t} value={t}>{t}</MenuItem>)}</TextField></Grid>
         <Grid item xs={12} md={3}><TextField fullWidth size="small" label="Estimate AED" value={form.estimateBandAed} onChange={(e) => setForm({ ...form, estimateBandAed: e.target.value })} /></Grid>
         <Grid item xs={12} md={6}><TextField fullWidth size="small" label="Standard scope" value={form.standardScope} onChange={(e) => setForm({ ...form, standardScope: e.target.value })} /></Grid>
-        <Grid item xs={12}><Button variant="contained" onClick={createRfq} sx={{ bgcolor: '#DAA520', color: '#020617', fontWeight: 950 }}>Create RFQ</Button></Grid>
+        <Grid item xs={12}><Button variant="contained" disabled={Boolean(actionBusy)} onClick={createRfq} sx={{ bgcolor: '#DAA520', color: '#020617', fontWeight: 950 }}>Create RFQ</Button></Grid>
       </Grid></CardContent></Card>}
       {!loading && !loadError && rfqs.length === 0 && <Alert severity="info" sx={{ mb: 3 }}>No RFQs have been created yet.</Alert>}
       {!loading && !loadError && <Grid container spacing={2}>{rfqs.map((rfq) => { const qf = quoteForms[rfq.id] || { vendorId: '', amountAed: '', warrantyDays: '30', notes: '' }; return <Grid item xs={12} key={rfq.id}><Card sx={{ bgcolor: '#0f172a', color: '#fff' }}><CardContent>
         <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between"><Box><Typography variant="h6" sx={{ fontWeight: 950 }}>{rfq.trade} · {rfq.ticketId}</Typography><Typography sx={{ color: 'rgba(255,255,255,0.65)' }}>{rfq.standardScope}</Typography></Box><Stack direction="row" spacing={1}><Chip label={rfq.status || 'new'} /><Chip label={`${rfq.quotesReceived || 0}/${rfq.minimumQuotes || 1} quotes`} /></Stack></Stack>
         <Grid container spacing={2} sx={{ mt: 1 }}><Grid item xs={12} md={3}><TextField fullWidth size="small" label="Verified Vendor ID" value={qf.vendorId} onChange={(e) => setQuoteForms({ ...quoteForms, [rfq.id]: { ...qf, vendorId: e.target.value } })} /></Grid><Grid item xs={12} md={3}><TextField fullWidth size="small" label="Amount AED" value={qf.amountAed} onChange={(e) => setQuoteForms({ ...quoteForms, [rfq.id]: { ...qf, amountAed: e.target.value } })} /></Grid><Grid item xs={12} md={2}><TextField fullWidth size="small" label="Warranty days" value={qf.warrantyDays} onChange={(e) => setQuoteForms({ ...quoteForms, [rfq.id]: { ...qf, warrantyDays: e.target.value } })} /></Grid><Grid item xs={12} md={3}><TextField fullWidth size="small" label="Notes" value={qf.notes} onChange={(e) => setQuoteForms({ ...quoteForms, [rfq.id]: { ...qf, notes: e.target.value } })} /></Grid></Grid>
-        <Stack direction="row" spacing={1.5} sx={{ mt: 2 }}><Button variant="outlined" onClick={() => addQuote(rfq)}>Add Quote</Button><Button variant="contained" onClick={() => sendOwnerApproval(rfq)} sx={{ bgcolor: '#DAA520', color: '#020617', fontWeight: 950 }}>Send Owner Approval</Button></Stack>
+        <Stack direction="row" spacing={1.5} sx={{ mt: 2 }}><Button variant="outlined" disabled={Boolean(actionBusy)} onClick={() => void addQuote(rfq)}>Add Quote</Button><Button variant="contained" disabled={Boolean(actionBusy)} onClick={() => void sendOwnerApproval(rfq)} sx={{ bgcolor: '#DAA520', color: '#020617', fontWeight: 950 }}>Send Owner Approval</Button></Stack>
       </CardContent></Card></Grid>; })}</Grid>}
     </Box>
   );
