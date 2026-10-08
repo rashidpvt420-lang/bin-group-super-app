@@ -200,10 +200,103 @@ replaceRuleBlock('    match /conversations/{conversationId} {', `    match /conv
       }
     }`);
 
+replaceRuleBlock('    match /users/{userId} {', `    match /users/{userId} {
+      allow get: if request.auth != null && (
+                    request.auth.uid == userId ||
+                    (
+                      signedIn() &&
+                      request.auth.uid != userId &&
+                      isNotSuspended() &&
+                      (
+                        (resource.data.get('role', '') == 'tenant' &&
+                         ((resource.data.get('ownerId', '') != '' && resource.data.get('ownerId', '') == request.auth.uid) ||
+                          emailMatchesCycleFree(resource.data.get('ownerEmail', null)))) ||
+                        emailOwnsCycleFree(resource.data) ||
+                        canReadUserDirectoryCycleFree()
+                      )
+                    )
+                  );
+      allow list: if isNotSuspended() && (
+                    canReadUserDirectoryCycleFree() ||
+                    (signedIn() &&
+                     resource.data.get('role', '') == 'tenant' &&
+                     resource.data.get('ownerId', null) == request.auth.uid)
+                  );
+      allow create: if safeUserBootstrapCreate(request.resource.data, userId);
+      allow update: if isNotSuspended() && safeUserSelfUpdate(userId);
+      allow delete: if false;
+      match /fcmTokens/{tokenId} {
+        allow read, write: if false;
+      }
+      match /deviceReadiness/{readinessId} {
+        allow read, write: if false;
+      }
+      match /{subcollection}/{document=**} {
+        allow read, write: if false;
+      }
+    }`);
+
+replaceRuleBlock('    match /properties/{propertyId} {', `    match /properties/{propertyId} {
+      allow get: if isNotSuspended() && getTenantPropertyId() == propertyId;
+      allow read: if isNotSuspended() && (canManageProperties() || propertyOwnedByCaller(resource.data) || (isTechnicianActor() && techOwns(resource.data)));
+      allow create: if isNotSuspended() &&
+        propertyCreateHasNoCanonicalGeo(request.resource.data) &&
+        safeOwnerPropertyCreate(request.resource.data);
+      allow update: if isNotSuspended() && safeOwnerPropertyUpdate();
+      allow delete: if false;
+    }`);
+
+replaceRuleBlock('    match /units/{unitId} {', `    match /units/{unitId} {
+      allow get: if signedIn() && (resource.data.get('tenantId', null) == request.auth.uid || resource.data.get('tenantUid', null) == request.auth.uid || resource.data.get('currentTenantId', null) == request.auth.uid || resource.data.get('userId', null) == request.auth.uid || emailMatches(resource.data.get('tenantEmail', null)));
+      allow list: if signedIn() && resource.data.tenantId == request.auth.uid;
+      allow list: if signedIn() && resource.data.tenantUid == request.auth.uid;
+      allow list: if signedIn() && resource.data.currentTenantId == request.auth.uid;
+      allow list: if emailMatches(resource.data.get('tenantEmail', null));
+      allow read: if canManageProperties() || ownerCanRead(resource.data) || tenantOwns(resource.data) || emailOwns(resource.data);
+      allow create, update, delete: if false;
+    }`);
+
+replaceRuleBlock('    match /tenant_unit_link_requests/{requestId} {', `    match /tenant_unit_link_requests/{requestId} {
+      allow read: if isAdmin() || tenantOwns(resource.data) || emailOwns(resource.data) || (docPropertyId(resource.data) != null && isPropertyOwner(docPropertyId(resource.data)));
+      allow create: if safeTenantUnitLinkRequestCreate(request.resource.data);
+      allow update, delete: if false;
+    }`);
+
+replaceRuleBlock('    match /contracts/{contractId} {', `    match /contracts/{contractId} {
+      allow read: if participantCanRead(resource.data) || emailOwns(resource.data) || canManageContracts();
+      allow create: if ownerContractDraftCreate(request.resource.data);
+      allow update: if safeOwnerContractUpdate();
+      allow delete: if false;
+    }`);
+
+replaceRuleBlock('    match /leases/{leaseId} {', `    match /leases/{leaseId} {
+      allow read: if participantCanRead(resource.data) || emailOwns(resource.data) || isAdmin();
+      allow create, update, delete: if false;
+    }`);
+
+replaceRuleBlock('    match /tenant_ledger/{ledgerId} {', `    match /tenant_ledger/{ledgerId} {
+      allow read: if isAdmin() || ownerCanRead(resource.data) || (signedIn() && resource.data.get('tenantId', null) == request.auth.uid);
+      allow create, update, delete: if false;
+    }`);
+
+replaceRuleBlock('    match /tenants/{tenantId} {', `    match /tenants/{tenantId} {
+      allow read: if (signedIn() && request.auth.uid == tenantId) || isAdmin() || participantCanRead(resource.data);
+      allow create, update, delete: if false;
+    }`);
+
+replaceRuleBlock('    match /propertyPassports/{passportId} {', `    match /propertyPassports/{passportId} {
+      allow read: if isAdmin() || (signedIn() && (resource.data.get('ownerId', null) == request.auth.uid || emailMatches(resource.data.get('ownerEmail', null))));
+      allow create, update, delete: if false;
+    }`);
+
 const operationalServerOnlyBlocks = [
   ['tenant_services_requests', 'requestId', 'allow read: if isAdmin();'],
   ['assets', 'assetId', 'allow read: if propertyScopedRead(resource.data);'],
   ['binGptEngineerCommands', 'commandId', 'allow read: if isAdmin();'],
+  ['tenant_invitations', 'invitationId', "allow read: if isAdmin() || ownerCanRead(resource.data) || emailOwns(resource.data);"],
+  ['tenantInvitations', 'invitationId', "allow read: if isAdmin() || ownerCanRead(resource.data) || emailOwns(resource.data);"],
+  ['tenant_import_batches', 'batchId', 'allow read: if isAdmin();'],
+  ['tenancies', 'tenancyId', "allow read: if isAdmin() || ownerCanRead(resource.data) || tenantOwns(resource.data) || emailOwns(resource.data);"],
 ];
 const operationalCatchAllMarker = '    match /{collection}/{document=**} {';
 for (const [collection, documentId, readRule] of operationalServerOnlyBlocks) {
@@ -260,6 +353,17 @@ const adminOperationalFallbackExclusions = [
   'conversations',
   'pricingAuditLogs',
   'binGptEngineerCommands',
+  'units',
+  'contracts',
+  'leases',
+  'tenant_ledger',
+  'tenant_unit_link_requests',
+  'tenant_invitations',
+  'tenantInvitations',
+  'tenant_import_batches',
+  'tenancies',
+  'tenants',
+  'propertyPassports',
 ];
 const fallbackBlockBeforeAdminClosure = matchBlock(operationalCatchAllMarker);
 if (!fallbackBlockBeforeAdminClosure) {
