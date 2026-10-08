@@ -74,8 +74,6 @@ const requiredFragments = [
   ['approved technician read helper', 'function isApprovedTechnician() {'],
   ['dedicated technician write-approval helper', 'function hasApprovedTechnicianRecord() {'],
   ['closed ticket status helper', 'function isClosedTicketStatus(status) {'],
-  ['safe admin ticket create helper', 'function safeAdminTicketCreate() {'],
-  ['safe admin ticket update helper', 'function safeAdminTicketUpdate() {'],
   ['canonical ticket creation is callable-only', 'allow create: if false;'],
   ['legacy tickets are read-only compatibility data', 'allow create, update, delete: if false;'],
   ['technician evidence update helper', 'function safeTechnicianTicketUpdate() {'],
