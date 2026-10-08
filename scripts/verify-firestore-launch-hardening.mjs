@@ -63,7 +63,6 @@ const forbiddenFragments = [
   ['canonical property geo omitted from global write fallback exclusions', "'system_secrets',\n          'technician_live_locations',\n          'users',\n          'audit_logs',\n          'admin_security_sessions',\n          'private_hr_profiles'"],
   ['legacy Owner-only property geo create helper', 'function ownerCannotSupplyCanonicalPropertyGeo(data) {'],
   ['legacy unbounded submitted property geo helper', 'function ownerSubmittedPropertyGeoIsUnverified(data) {'],
-  ['Admin browser property update authority', '(canManageProperties() && safeManagedPropertyUpdate())'],
   ...legacyTicketUpdates.map((fragment) => ['overlapping ticket update authorization', fragment]),
 ];
 
@@ -94,7 +93,7 @@ const requiredFragments = [
   ['property creation excludes every canonical geo field', 'function propertyCreateHasNoCanonicalGeo(data) {'],
   ['managed property updates preserve canonical geo', 'function safeManagedPropertyUpdate() {'],
   ['property create uses shared canonical-geo guard', 'propertyCreateHasNoCanonicalGeo(request.resource.data) &&'],
-  ['Owner property update remains scope-bound', 'allow update: if isNotSuspended() && safeOwnerPropertyUpdate();'],
+  ['property update preserves safe Admin and Owner scopes', "allow update: if isNotSuspended() && (\n        (canManageProperties() && safeManagedPropertyUpdate()) ||\n        safeOwnerPropertyUpdate()\n      );"],
   ['production status-aware suspension helper', 'function profileAllowsAccess(data) {'],
   ['production suspension status variants', "data.get('status', '') in ["],
   ['dispatch checks claims before database suspension', 'function hasDispatchAuthorityClaimOnly() {'],
