@@ -17,7 +17,11 @@ async function trackOpen(query) {
 
 async function sendOneInvite() {
   await clearFirestore();
-  const adminActor = await createUser('n21-admin', { role: 'admin', admin: true });
+  const adminActor = await createUser(
+    'n21-admin',
+    { role: 'admin', admin: true },
+    { tokenExtra: { firebase: { sign_in_second_factor: 'phone' } } },
+  );
   await db.collection('tenant_invitations').doc('inv-1').set({
     status: 'pending', tenantName: 'Tenant One', tenantEmail: 'tenant1@example.invalid',
     propertyId: 'prop-1', propertyName: 'Tower', unitNumber: '101', importBatchId: 'batch-1',
