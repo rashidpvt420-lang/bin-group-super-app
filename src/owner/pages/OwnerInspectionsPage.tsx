@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Alert, Box, Button, Chip, CircularProgress, Grid, Paper, Stack, Typography, alpha } from '@mui/material';
 import { ClipboardCheck, Eye, Home, ReceiptText, ShieldAlert } from 'lucide-react';
 import { functions, httpsCallable } from '../../lib/firebase';
@@ -59,10 +59,11 @@ const settlementLedger = (inspection: any) => {
 
 export default function OwnerInspectionsPage() {
   const { user } = useRole();
-  const { tx } = useLanguage();
+  const { tx, isRTL } = useLanguage();
   const [inspections, setInspections] = useState<any[]>([]);
   const [warning, setWarning] = useState('');
   const [busyId, setBusyId] = useState('');
+  const mutationInFlightRef = useRef(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -98,7 +99,8 @@ export default function OwnerInspectionsPage() {
   }, [user?.uid, user?.email, tx]);
 
   const updateInspection = async (inspection: any, action: HandoverAction) => {
-    if (!inspection?.id || !user?.uid) return;
+    if (!inspection?.id || !user?.uid || mutationInFlightRef.current) return;
+    mutationInFlightRef.current = true;
     setBusyId(`${inspection.id}:${action}`);
     try {
       const ledger = action === 'SETTLEMENT_REQUESTED' ? settlementLedger(inspection) : undefined;
@@ -142,6 +144,7 @@ export default function OwnerInspectionsPage() {
       console.error('[OwnerInspections] callable action failed:', err);
       setWarning(tx('owner.inspections.actionFailed', 'Could not update this inspection. Check callable access or try again.'));
     } finally {
+      mutationInFlightRef.current = false;
       setBusyId('');
     }
   };
@@ -152,7 +155,7 @@ export default function OwnerInspectionsPage() {
   const settlementCount = inspections.filter((item) => Number(settlementLedger(item).proposedDeduction || 0) > 0 || item.settlementStatus).length;
 
   return (
-    <Box>
+    <Box sx={{ direction: isRTL ? 'rtl' : 'ltr' }}>
       <Stack spacing={3}>
         <Box>
           <Typography variant="overline" sx={{ color: binThemeTokens.goldHover, fontWeight: 950, letterSpacing: 3 }}>{tx('owner.inspections.overline', 'OWNER HANDOVER EVIDENCE')}</Typography>
@@ -187,7 +190,7 @@ export default function OwnerInspectionsPage() {
               <Grid item xs={12} md={6} key={inspection.id}>
                 <Paper sx={{ p: 3, borderRadius: 5, border: `1px solid ${alpha(color, 0.18)}`, bgcolor: '#fff' }}>
                   <Stack spacing={1.5}>
-                    <Stack direction="row" justifyContent="space-between" alignItems="center" gap={2}>
+                    <Stack direction={isRTL ? 'row-reverse' : 'row'} justifyContent="space-between" alignItems="center" gap={2}>
                       <Box>
                         <Typography sx={{ fontWeight: 950, color: binThemeTokens.textPrimary }}>{inspection.propertyName || inspection.propertyId || tx('owner.inspections.property', 'Property')}</Typography>
                         <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, fontWeight: 800 }}>{String(inspection.inspectionType || inspection.type || 'INSPECTION').replace(/_/g, ' ')} · {inspection.unitNumber || inspection.unitId || tx('owner.inspections.unitPending', 'Unit pending')}</Typography>
@@ -209,15 +212,15 @@ export default function OwnerInspectionsPage() {
                       {poorItems.length > 0 && <Typography variant="caption" sx={{ display: 'block', mt: 1, color: '#ef4444', fontWeight: 800 }}>{poorItems.length} flagged condition item(s)</Typography>}
                     </Paper>
 
-                    <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                    <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} flexWrap="wrap" useFlexGap>
                       {urls.map((url, index) => (
                         <Button key={`${inspection.id}-evidence-${index}`} variant="outlined" onClick={() => window.open(url, '_blank', 'noopener,noreferrer')} startIcon={<Eye size={16} />} sx={{ borderColor: binThemeTokens.goldHover, color: binThemeTokens.goldHover, fontWeight: 950 }}>
                           Evidence {index + 1}
                         </Button>
                       ))}
-                      <Button variant="outlined" disabled={busyId === `${inspection.id}:APPROVED`} onClick={() => updateInspection(inspection, 'APPROVED')} sx={{ borderColor: '#10b981', color: '#10b981', fontWeight: 950 }}>{busyId === `${inspection.id}:APPROVED` ? <CircularProgress size={16} /> : tx('owner.inspections.approve', 'Approve Condition')}</Button>
-                      <Button variant="outlined" disabled={busyId === `${inspection.id}:REINSPECTION_REQUESTED`} onClick={() => updateInspection(inspection, 'REINSPECTION_REQUESTED')} sx={{ borderColor: '#f59e0b', color: '#f59e0b', fontWeight: 950 }}>{busyId === `${inspection.id}:REINSPECTION_REQUESTED` ? <CircularProgress size={16} /> : tx('owner.inspections.claim', 'Claim / Reinspection')}</Button>
-                      <Button variant="outlined" disabled={busyId === `${inspection.id}:SETTLEMENT_REQUESTED`} onClick={() => updateInspection(inspection, 'SETTLEMENT_REQUESTED')} sx={{ borderColor: '#3b82f6', color: '#3b82f6', fontWeight: 950 }}>{busyId === `${inspection.id}:SETTLEMENT_REQUESTED` ? <CircularProgress size={16} /> : tx('owner.inspections.settlement', 'Settlement')}</Button>
+                      <Button variant="outlined" disabled={Boolean(busyId)} onClick={() => updateInspection(inspection, 'APPROVED')} sx={{ borderColor: '#10b981', color: '#10b981', fontWeight: 950 }}>{busyId === `${inspection.id}:APPROVED` ? <CircularProgress size={16} /> : tx('owner.inspections.approve', 'Approve Condition')}</Button>
+                      <Button variant="outlined" disabled={Boolean(busyId)} onClick={() => updateInspection(inspection, 'REINSPECTION_REQUESTED')} sx={{ borderColor: '#f59e0b', color: '#f59e0b', fontWeight: 950 }}>{busyId === `${inspection.id}:REINSPECTION_REQUESTED` ? <CircularProgress size={16} /> : tx('owner.inspections.claim', 'Claim / Reinspection')}</Button>
+                      <Button variant="outlined" disabled={Boolean(busyId)} onClick={() => updateInspection(inspection, 'SETTLEMENT_REQUESTED')} sx={{ borderColor: '#3b82f6', color: '#3b82f6', fontWeight: 950 }}>{busyId === `${inspection.id}:SETTLEMENT_REQUESTED` ? <CircularProgress size={16} /> : tx('owner.inspections.settlement', 'Settlement')}</Button>
                     </Stack>
                   </Stack>
                 </Paper>

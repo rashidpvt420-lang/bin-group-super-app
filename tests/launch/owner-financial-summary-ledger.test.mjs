@@ -72,9 +72,12 @@ test('passport sync and owner financial surfaces use the canonical ledger summar
   assert.match(aggregator, /summarizePropertyPassportSources/);
   assert.match(aggregator, /passportIdentity/);
   assert.doesNotMatch(aggregator, /Number\(data\.paidBalance\)/);
-  for (const source of [report, roi, truthHook]) {
+  for (const source of [report, truthHook]) {
     assert.match(source, /useOwnerPropertyPassports/);
   }
+  assert.match(roi, /useOwnerFinancialTruthData/);
+  assert.match(roi, /resolveOwnerFinancialTruth/);
+  assert.doesNotMatch(roi, /useOwnerPropertyPassports/);
   assert.match(truth, /useOwnerFinancialTruthData/);
   assert.match(financials, /useOwnerFinancialTruthData/);
   assert.match(hook, /field: 'ownerId'/);

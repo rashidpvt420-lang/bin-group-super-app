@@ -12,9 +12,11 @@ import autoTable from 'jspdf-autotable';
 import { useRole } from '../../context/RoleContext';
 import { db, collection, query, where, onSnapshot } from '../../lib/firebase';
 import { useOwnerPropertyPassports } from '../utils/useOwnerPropertyPassports';
+import { summarizeOwnerPassportFinancials } from '../../../functions/shared/propertyPassportAggregation.mjs';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 
 const gold = binThemeTokens.gold;
+const MANAGEMENT_FEE_RATE = 0.05;
 const CARD = 'rgba(15, 23, 42, 0.42)';
 const BORDER = `1px solid ${alpha(gold, 0.18)}`;
 
@@ -51,7 +53,7 @@ function generatePDF(owner: any, passports: any[], tickets: any[], year: number)
   // ── Executive summary ──
   const totalIncome = passports.reduce((s, p) => s + (p.rentCollectedTotal || 0), 0);
   const totalMaintenance = passports.reduce((s, p) => s + (p.maintenanceCostTotal || 0), 0);
-  const mgmtFee = totalIncome * 0.08;
+  const mgmtFee = summarizeOwnerPassportFinancials(passports, MANAGEMENT_FEE_RATE).managementFees;
   const netIncome = totalIncome - totalMaintenance - mgmtFee;
   const outstanding = passports.reduce((s, p) => s + (p.rentOutstandingTotal || 0), 0);
 
@@ -71,7 +73,7 @@ function generatePDF(owner: any, passports: any[], tickets: any[], year: number)
       ['Gross Rental Income', totalIncome.toLocaleString('en-AE', { minimumFractionDigits: 2 }), 'Collected rent receipts'],
       ['Outstanding Rent', outstanding.toLocaleString('en-AE', { minimumFractionDigits: 2 }), 'Pending collection'],
       ['Maintenance Costs', `(${totalMaintenance.toLocaleString('en-AE', { minimumFractionDigits: 2 })})`, 'All maintenance jobs'],
-      ['Management Fee (8%)', `(${mgmtFee.toLocaleString('en-AE', { minimumFractionDigits: 2 })})`, 'BIN GROUP property management'],
+      ['Management Fee (5%)', `(${mgmtFee.toLocaleString('en-AE', { minimumFractionDigits: 2 })})`, 'BIN GROUP property management'],
       ['NET INCOME', netIncome.toLocaleString('en-AE', { minimumFractionDigits: 2 }), netIncome >= 0 ? 'Profitable' : 'Review required'],
     ],
     styles: { fontSize: 9, cellPadding: 4 },
@@ -101,7 +103,7 @@ function generatePDF(owner: any, passports: any[], tickets: any[], year: number)
     body: passports.map(p => {
       const income = p.rentCollectedTotal || 0;
       const maint = p.maintenanceCostTotal || 0;
-      const mgmt = income * 0.08;
+      const mgmt = summarizeOwnerPassportFinancials([{ ...p, rentCollectedTotal: income, maintenanceCostTotal: maint }], MANAGEMENT_FEE_RATE).managementFees;
       const net = income - maint - mgmt;
       return [
         p.address || p.propertyName || p.id,
@@ -185,18 +187,19 @@ export default function OwnerPLReportPage() {
   const { passports, loading: passportsLoading, error: passportError } = useOwnerPropertyPassports(user);
 
   useEffect(() => {
-    if (!user?.email) {
+    if (!user?.uid) {
+      setTickets([]);
       setTicketsLoading(false);
+      setLoadError('Authenticated Owner identity is unavailable. Reload the portal and try again.');
       return undefined;
     }
-    const email = user.email.toLowerCase();
     const unsubT = onSnapshot(
-      query(collection(db, 'maintenanceTickets'), where('ownerEmail', '==', email)),
+      query(collection(db, 'maintenanceTickets'), where('ownerId', '==', user.uid)),
       snap => { setTickets(snap.docs.map(d => ({ id: d.id, ...d.data() }))); setTicketsLoading(false); },
       (error: any) => { console.error('[OwnerPL] ticket listener failed:', error); setLoadError(error?.message || 'Unable to load maintenance costs.'); setTicketsLoading(false); }
     );
     return () => { unsubT(); };
-  }, [user?.email]);
+  }, [user?.uid]);
 
   const loading = passportsLoading || ticketsLoading;
 
@@ -210,7 +213,7 @@ export default function OwnerPLReportPage() {
 
   const totalIncome = passports.reduce((s, p) => s + (p.rentCollectedTotal || 0), 0);
   const totalMaint = passports.reduce((s, p) => s + (p.maintenanceCostTotal || 0), 0);
-  const mgmtFee = totalIncome * 0.08;
+  const mgmtFee = summarizeOwnerPassportFinancials(passports, MANAGEMENT_FEE_RATE).managementFees;
   const netIncome = totalIncome - totalMaint - mgmtFee;
   const outstanding = passports.reduce((s, p) => s + (p.rentOutstandingTotal || 0), 0);
 
@@ -269,7 +272,7 @@ export default function OwnerPLReportPage() {
             {passports.map(p => {
               const income = p.rentCollectedTotal || 0;
               const maint = p.maintenanceCostTotal || 0;
-              const mgmt = income * 0.08;
+              const mgmt = summarizeOwnerPassportFinancials([{ ...p, rentCollectedTotal: income, maintenanceCostTotal: maint }], MANAGEMENT_FEE_RATE).managementFees;
               const net = income - maint - mgmt;
               return (
                 <Box key={p.id}>
