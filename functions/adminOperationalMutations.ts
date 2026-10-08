@@ -654,6 +654,53 @@ export const adminOperationalMutation = onCall({ cors: true, enforceAppCheck: tr
       return { success: true, id: documentId };
     }
 
+    case "CREATE_ENGINEER_COMMAND": {
+      const command = text(payload.command, 12000);
+      if (!command) throw new HttpsError("invalid-argument", "Engineering command is required.");
+      const rollbackRequired = payload.rollbackRequired !== false;
+      const targetCommandId = text(payload.targetCommandId, 180);
+      const ref = db.collection("binGptEngineerCommands").doc();
+      const isoNow = new Date().toISOString();
+      const batch = db.batch();
+      batch.create(ref, {
+        command,
+        status: "PENDING_IMPLEMENTATION_PLAN",
+        executionMode: "GITHUB_BRANCH_PR_ONLY",
+        deploymentPolicy: "MAIN_AFTER_GITHUB_ACTIONS_PASS",
+        firestoreMutationPolicy: "APPROVED_MIGRATION_ONLY",
+        rollbackRequired,
+        workflowSteps: stringArray(payload.workflowSteps, 20, 500),
+        guardrails: stringArray(payload.guardrails, 20, 500),
+        commandHistory: [{ status: "PENDING_IMPLEMENTATION_PLAN", at: isoNow }],
+        buildStatus: "NOT_STARTED",
+        prLink: null,
+        deploymentStatus: "NOT_STARTED",
+        errorLogs: [],
+        createdBy: actor.uid,
+        createdByEmail: actor.email,
+        createdByRole: actor.role,
+        createdAt: now,
+        updatedAt: now,
+        auditTrail: [{
+          action: targetCommandId ? "ROLLBACK_COMMAND_ISSUED" : "COMMAND_AUDIT_PACKAGE_CREATED",
+          actorUid: actor.uid,
+          actorEmail: actor.email,
+          actorRole: actor.role,
+          targetCommand: targetCommandId || null,
+          at: isoNow,
+        }],
+      });
+      batch.create(db.collection("audit_logs").doc(), audit(
+        actor,
+        targetCommandId ? "ADMIN_ENGINEER_ROLLBACK_COMMAND_CREATED" : "ADMIN_ENGINEER_COMMAND_CREATED",
+        "binGptEngineerCommands",
+        ref.id,
+        { targetCommandId: targetCommandId || null },
+      ));
+      await batch.commit();
+      return { success: true, id: ref.id };
+    }
+
     case "RECORD_PRICING_AUDIT": {
       const ownerId = text(payload.ownerId, 180);
       const propertyId = text(payload.propertyId, 180) || "lead_quote";
