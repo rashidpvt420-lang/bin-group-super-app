@@ -215,7 +215,7 @@ export default function AdminPaymentApproval() {
         </DialogContent>
         <DialogActions sx={{ p: 3, borderTop: '1px solid #1e293b', justifyContent: isRTL ? 'flex-start' : 'flex-end', flexDirection: isRTL ? 'row-reverse' : 'row' }}>
           <Button onClick={() => setVerifyDialogOpen(false)} sx={{ color: '#64748b', fontWeight: 900 }}>{t('common.cancel')}</Button>
-          <Button onClick={handleVerify} variant="contained" sx={{ bgcolor: '#10b981', color: '#fff', fontWeight: 900, '&:hover': { bgcolor: '#059669' } }}>{t('admin.confirm_activate')}</Button>
+          <Button disabled={Boolean(processingId)} onClick={() => void handleVerify()} variant="contained" sx={{ bgcolor: '#10b981', color: '#fff', fontWeight: 900, '&:hover': { bgcolor: '#059669' } }}>{processingId ? <CircularProgress size={18} color="inherit" /> : t('admin.confirm_activate')}</Button>
         </DialogActions>
       </Dialog>
     </Box>
