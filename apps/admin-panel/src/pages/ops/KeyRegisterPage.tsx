@@ -2,7 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { Container, Typography, Paper, Grid, Stack, Button, Chip, CircularProgress, Box, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Dialog, DialogTitle, DialogContent, DialogActions, TextField, MenuItem, Select, FormControl, InputLabel } from '@mui/material';
 import { Plus } from 'lucide-react';
 import { useLanguage } from '@bin/shared';
-import { db, collection, onSnapshot, addDoc, serverTimestamp, doc, updateDoc } from '../../lib/firebase';
+import { db, collection, onSnapshot } from '../../lib/firebase';
+import { runAdminOperationalMutation } from '../../lib/adminOperationalMutation';
 import { binThemeTokens } from '../../theme/adminTheme';
 
 export default function KeyRegisterPage() {
