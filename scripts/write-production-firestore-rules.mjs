@@ -227,7 +227,16 @@ ${source.slice(at)}`;
 
 // Maintenance-ticket Admin browser mutations are retired. Dispatcher, Tenant and
 // Technician actor-scoped update paths remain unchanged; Admin uses audited callables.
-source = source.replace('      allow create: if safeAdminTicketCreate();', '      allow create: if false;');
+const maintenanceTicketHeader = '    match /maintenanceTickets/{ticketId} {';
+const maintenanceTicketBlock = matchBlock(maintenanceTicketHeader);
+if (!maintenanceTicketBlock) {
+  failures.push('canonical maintenanceTickets rule block is missing before Admin browser-write closure');
+} else {
+  const hardenedMaintenanceTicketBlock = maintenanceTicketBlock
+    .replace('      allow create: if safeAdminTicketCreate();', '      allow create: if false;')
+    .replace('      allow create: if isAdmin();', '      allow create: if false;');
+  source = source.replace(maintenanceTicketBlock, hardenedMaintenanceTicketBlock);
+}
 source = source.replace('        (admin && safeAdminTicketUpdate()) ||', '        false ||');
 
 // The generic Admin fallback overlaps explicit matches, so every callable-only
@@ -275,7 +284,7 @@ const required = [
   'function safeTechnicianProfileUpdate(techId) {',
   'return false;',
   'match /maintenanceTickets/{ticketId} {',
-  'allow create: if isAdmin();',
+  'allow create: if false;',
   'match /tickets/{ticketId} {',
   'match /payroll_entries/{entryId} {',
   "'invoice_registry', 'payroll_entries', 'property_identity_registry'",
