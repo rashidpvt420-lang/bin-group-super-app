@@ -72,7 +72,7 @@ test('Admin operational gateway enforces App Check, MFA, role authority and audi
     'CREATE_ENGINEER_COMMAND',
     'RECORD_PRICING_AUDIT',
   ]) {
-    assert.match(backend, new RegExp(`case "\${action}"`), action);
+    assert.ok(backend.includes(`case "${action}"`), action);
   }
   assert.match(backend, /rows\.length < 1 \|\| rows\.length > 50/);
 });
