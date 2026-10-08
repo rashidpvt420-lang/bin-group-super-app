@@ -115,6 +115,21 @@ for (const scanRoot of scanRoots) {
       parseFailures.push(...sourceFile.parseDiagnostics.map((diagnostic) => `${relative}: ${diagnostic.messageText}`));
     }
 
+    const asyncFunctions = new Set();
+    function collectAsyncFunctions(node) {
+      const isAsync = Array.isArray(node.modifiers) && node.modifiers.some((modifier) => modifier.kind === ts.SyntaxKind.AsyncKeyword);
+      if (ts.isFunctionDeclaration(node) && isAsync && node.name) asyncFunctions.add(node.name.text);
+      if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.initializer) {
+        const initializer = node.initializer;
+        const initializerAsync = (ts.isArrowFunction(initializer) || ts.isFunctionExpression(initializer)) &&
+          Array.isArray(initializer.modifiers) &&
+          initializer.modifiers.some((modifier) => modifier.kind === ts.SyntaxKind.AsyncKeyword);
+        if (initializerAsync) asyncFunctions.add(node.name.text);
+      }
+      ts.forEachChild(node, collectAsyncFunctions);
+    }
+    collectAsyncFunctions(sourceFile);
+
     function visit(node) {
       const opening = openingFor(node);
       if (opening && isInteractive(opening, sourceFile)) {
@@ -140,10 +155,15 @@ for (const scanRoot of scanRoots) {
           attrText(opening, 'aria-disabled', sourceFile) ||
           '';
         const openingText = opening.getText(sourceFile);
+        const controlScope = attrText(opening, 'data-control-scope', sourceFile).replace(/^['"]|['"]$/g, '').toLowerCase();
         const isActionControl = actionControlTags.test(tag) || actionComponentNames.test(tag);
+        const callsAsyncFunction = [...asyncFunctions].some((name) => new RegExp(`\\b${name}\\s*\\(`).test(handler));
+        const remoteSignal = controlScope === 'remote' || callsAsyncFunction || /\\bawait\\b/.test(handler);
         const mutationHint = Boolean(
           isActionControl &&
           handler &&
+          controlScope !== 'local' &&
+          remoteSignal &&
           mutationWords.test(`${labelSignal} ${handler}`) &&
           !localOnlyHandlerSignals.test(handler),
         );
