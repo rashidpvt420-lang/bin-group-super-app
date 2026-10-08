@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Container, Typography, Paper, Stack, TextField, IconButton, CircularProgress, Grid, List, ListItem, ListItemText, Divider, Box, alpha } from '@mui/material';
 import { Send, ArrowLeft } from 'lucide-react';
-import { db, doc, collection, addDoc, serverTimestamp, query, orderBy, onSnapshot, updateDoc } from '../../lib/firebase';
+import { db, collection, query, orderBy, onSnapshot } from '../../lib/firebase';
+import { runAdminOperationalMutation } from '../../lib/adminOperationalMutation';
 import { useLanguage } from '@bin/shared';
 import { binThemeTokens } from '../../theme/adminTheme';
 import SafeIcon from '../../components/SafeIcon';
