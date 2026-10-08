@@ -19,6 +19,18 @@ function tokenRole(auth: any) {
   return text(auth?.token?.role || auth?.token?.userRole || auth?.token?.primaryRole, 60).toLowerCase();
 }
 
+const ADMIN_ROLES = new Set(["admin", "super_admin", "ceo", "manager", "operations_admin"]);
+
+async function requireAdmin(auth: any) {
+  if (!auth?.uid) throw new HttpsError("unauthenticated", "Admin authentication required.");
+  if (auth.token?.suspended === true) throw new HttpsError("permission-denied", "Suspended admin account.");
+  const role = tokenRole(auth);
+  if (!(auth.token?.admin === true || auth.token?.isAdmin === true || auth.token?.superAdmin === true || auth.token?.super_admin === true || ADMIN_ROLES.has(role))) {
+    throw new HttpsError("permission-denied", "Admin role required.");
+  }
+  return { uid: auth.uid, role: role || "admin" };
+}
+
 async function assertTenantResidence(auth: any, propertyId: string, unitId: string) {
   if (!auth?.uid) throw new HttpsError("unauthenticated", "User must be authenticated.");
   if (auth.token?.suspended === true || auth.token?.email_verified !== true) {
@@ -182,6 +194,50 @@ export const cancelSignedQrPass = onCall({ cors: true, enforceAppCheck: true }, 
     }, { merge: true });
   });
   return { success: true, passId };
+});
+
+export const reviewVisitorParkingRequest = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
+  const actor = await requireAdmin(request.auth);
+  const passId = text(request.data?.passId);
+  const decision = text(request.data?.decision, 20).toLowerCase();
+  if (!passId || !["approved", "rejected"].includes(decision)) {
+    throw new HttpsError("invalid-argument", "A valid visitor parking request and decision are required.");
+  }
+
+  const ref = db.collection("visitorParkingRequests").doc(passId);
+  const auditRef = db.collection("audit_logs").doc();
+  const now = admin.firestore.FieldValue.serverTimestamp();
+
+  await db.runTransaction(async (transaction) => {
+    const snap = await transaction.get(ref);
+    if (!snap.exists) throw new HttpsError("not-found", "Visitor parking request not found.");
+    const current = text(snap.data()?.status, 30).toLowerCase();
+    if (current === decision) return;
+    if (current !== "pending") {
+      throw new HttpsError("failed-precondition", `Only pending visitor parking requests can be reviewed. Current status: ${current || "unknown"}.`);
+    }
+
+    transaction.set(ref, {
+      status: decision,
+      reviewedBy: actor.uid,
+      reviewedByRole: actor.role,
+      reviewedAt: now,
+      updatedAt: now,
+      ...(decision === "rejected" ? { rejectedAt: now } : {}),
+    }, { merge: true });
+
+    transaction.create(auditRef, {
+      actorId: actor.uid,
+      actorRole: actor.role,
+      action: decision === "approved" ? "ADMIN_VISITOR_PARKING_APPROVED" : "ADMIN_VISITOR_PARKING_REJECTED",
+      targetType: "visitorParkingRequests",
+      targetId: passId,
+      metadata: { previousStatus: current, decision },
+      createdAt: now,
+    });
+  });
+
+  return { success: true, passId, status: decision };
 });
 
 export const verifyQrPass = onCall({ cors: true, enforceAppCheck: true, secrets: [QR_SIGNING_SECRET] }, async (request) => {
