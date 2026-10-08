@@ -22,6 +22,7 @@ const ENV = {
 };
 
 const phoneFactor = { uid: 'factor-1', factorId: 'phone', displayName: 'Founder phone' };
+const totpFactor = { uid: 'factor-2', factorId: 'totp', displayName: 'Finance authenticator' };
 const user = (claims, factors = [phoneFactor], disabled = false, options = {}) => ({
   uid: options.uid || `user-${Math.random()}`,
   email: options.email || CANONICAL_FOUNDER_EMAIL,
@@ -37,6 +38,10 @@ const readyFounderUsers = () => [
   user({ role: 'ceo', ceo: true }, [phoneFactor], false, {
     uid: 'canonical-founder',
     email: CANONICAL_FOUNDER_EMAIL,
+  }),
+  user({ role: 'finance_admin' }, [totpFactor], false, {
+    uid: 'finance-approver',
+    email: 'finance.admin@bin-groups.com',
   }),
   user({ role: 'tenant' }, [], false, { uid: 'tenant-1', email: 'tenant@example.com' }),
 ];
@@ -65,9 +70,11 @@ test('Admin portal claims and canonical founder identity are fail closed', () =>
 
   const ready = summarizeAdminMfaUsers(readyFounderUsers());
   assert.equal(ready.ok, true, ready.failures.join('\n'));
-  assert.equal(ready.summary.claimedAdminCount, 1);
-  assert.equal(ready.summary.activeAdminCount, 1);
+  assert.equal(ready.summary.claimedAdminCount, 2);
+  assert.equal(ready.summary.activeAdminCount, 2);
   assert.equal(ready.summary.phoneMfaEnrolledCount, 1);
+  assert.equal(ready.summary.totpMfaEnrolledCount, 1);
+  assert.equal(ready.summary.financeApproverMfaReadyCount, 1);
   assert.equal(ready.summary.canonicalFounderCandidateCount, 1);
   assert.equal(ready.summary.canonicalFounderMfaReadyCount, 1);
   assert.equal(ready.summary.unexpectedPrivilegedAccountCount, 0);
@@ -75,18 +82,18 @@ test('Admin portal claims and canonical founder identity are fail closed', () =>
   assert.equal(ready.summary.recoveryQuorumReady, true);
 });
 
-test('any additional privileged account blocks production even when disabled or MFA ready', () => {
+test('any third privileged account blocks production even when MFA ready', () => {
   const extraReady = summarizeAdminMfaUsers([
     ...readyFounderUsers(),
-    user({ role: 'finance_admin' }, [phoneFactor], false, {
-      uid: 'finance-extra',
-      email: 'finance@bin-groups.com',
+    user({ role: 'admin' }, [phoneFactor], false, {
+      uid: 'admin-extra',
+      email: 'admin-extra@bin-groups.com',
     }),
   ]);
   assert.equal(extraReady.ok, false);
-  assert.equal(extraReady.summary.claimedAdminCount, 2);
+  assert.equal(extraReady.summary.claimedAdminCount, 3);
   assert.equal(extraReady.summary.unexpectedPrivilegedAccountCount, 1);
-  assert.match(extraReady.failures.join('\n'), /must be deleted/);
+  assert.match(extraReady.failures.join('\n'), /unexpected privileged|must be removed/);
 
   const extraDisabled = summarizeAdminMfaUsers([
     ...readyFounderUsers(),
@@ -133,9 +140,11 @@ test('Admin MFA evidence is aggregate-only, exact-run bound and requires one fou
   const now = new Date('2026-07-20T12:00:00.000Z');
   const evidence = buildAdminMfaEvidence(summary, { env: ENV, now });
   assert.deepEqual(validate(evidence, now.getTime()), []);
-  assert.equal(evidence.schemaVersion, 3);
-  assert.equal(evidence.claimedAdminCount, 1);
-  assert.equal(evidence.activeAdminCount, 1);
+  assert.equal(evidence.schemaVersion, 4);
+  assert.equal(evidence.claimedAdminCount, 2);
+  assert.equal(evidence.activeAdminCount, 2);
+  assert.equal(evidence.financeApproverCandidateCount, 1);
+  assert.equal(evidence.financeApproverMfaReadyCount, 1);
   assert.equal(evidence.canonicalFounderCandidateCount, 1);
   assert.equal(evidence.canonicalFounderMfaReadyCount, 1);
   assert.equal(evidence.unexpectedPrivilegedAccountCount, 0);
@@ -144,7 +153,7 @@ test('Admin MFA evidence is aggregate-only, exact-run bound and requires one fou
   assert.equal(evidence.hardLaunchClaim, false);
   assert.doesNotMatch(JSON.stringify(evidence), /@|phoneNumber|displayName|factorUid|canonical-founder/);
 
-  const tamperedExtra = { ...evidence, claimedAdminCount: 2, unexpectedPrivilegedAccountCount: 1, founderSingletonReady: false };
+  const tamperedExtra = { ...evidence, claimedAdminCount: 3, unexpectedPrivilegedAccountCount: 1, dualControlReady: false, founderSingletonReady: false };
   assert.match(validate(tamperedExtra, now.getTime()).join('\n'), /exact privileged account count|unexpected privileged|singleton/i);
 
   const tamperedMfa = { ...evidence, missingPhoneFactorCount: 1, phoneMfaEnrolledCount: 0 };
@@ -189,7 +198,7 @@ test('Admin auth and protected routes restrict unenrolled or non-MFA sessions', 
   assert.match(route, /mfaFactorCount > 0 && !mfaVerified/);
 });
 
-test('production deploy requires single-founder verification before Firebase deployment', async () => {
+test('production deploy requires Founder plus Finance dual-control verification before Firebase deployment', async () => {
   const deploy = await read('scripts/deploy-firebase-production.mjs');
   const phone = deploy.indexOf('await verifyFirebasePhoneAuthProduction');
   const accounts = deploy.indexOf('await verifyAdminMfaProduction');
@@ -203,7 +212,8 @@ test('production deploy requires single-founder verification before Firebase dep
   const preflight = await read('scripts/verify-admin-mfa-production.mjs');
   assert.match(preflight, /CANONICAL_FOUNDER_EMAIL/);
   assert.match(preflight, /unexpectedPrivilegedAccountCount/);
-  assert.match(preflight, /founderSingletonReady/);
+  assert.match(preflight, /dualControlReady/);
+  assert.match(preflight, /financeApproverMfaReadyCount/);
   assert.doesNotMatch(preflight, /recoveryApproverMfaReadyCount < 2/);
 
   const deploymentVerifier = await read('scripts/verify-production-deployment.mjs');
