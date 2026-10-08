@@ -30,6 +30,13 @@ test('Phase 2 Admin operational mutation surfaces are callable-only', () => {
   for (const path of adminMutationSurfaces) {
     const source = read(path);
     assert.doesNotMatch(source, /\b(?:addDoc|updateDoc|deleteDoc|setDoc|writeBatch)\s*\(/, path);
+    if (source.includes('runAdminOperationalMutation(')) {
+      assert.match(
+        source,
+        /import\s+\{\s*runAdminOperationalMutation\s*\}\s+from\s+['"][^'"]*adminOperationalMutation['"]/,
+        `${path} uses the Admin mutation gateway without importing it`,
+      );
+    }
   }
 });
 
