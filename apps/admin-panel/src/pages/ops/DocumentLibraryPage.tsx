@@ -2,7 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { Container, Typography, Paper, Grid, Stack, Button, Chip, CircularProgress, Box, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Dialog, DialogTitle, DialogContent, DialogActions, TextField, MenuItem, Select, FormControl, InputLabel } from '@mui/material';
 import { Plus } from 'lucide-react';
 import { useLanguage } from '@bin/shared';
-import { db, collection, query, onSnapshot, addDoc, serverTimestamp, doc, deleteDoc } from '../../lib/firebase';
+import { db, collection, query, onSnapshot } from '../../lib/firebase';
+import { runAdminOperationalMutation } from '../../lib/adminOperationalMutation';
 import { binThemeTokens } from '../../theme/adminTheme';
 
 export default function DocumentLibraryPage() {
@@ -34,19 +35,14 @@ export default function DocumentLibraryPage() {
         e.preventDefault();
         setSubmitting(true);
         try {
-            await addDoc(collection(db, 'documentLibrary'), {
+            await runAdminOperationalMutation('CREATE_DOCUMENT', {
                 propertyId,
                 title,
                 description,
                 category,
                 audience,
                 fileUrl,
-                storagePath: `documents/${Date.now()}`,
                 language,
-                active: true,
-                version: '1.0',
-                uploadedBy: 'Admin',
-                uploadedAt: serverTimestamp()
             });
             setOpenAdd(false);
             setTitle('');
@@ -63,7 +59,7 @@ export default function DocumentLibraryPage() {
     const handleDeleteDocument = async (id: string) => {
         if (!window.confirm('Delete document library record?')) return;
         try {
-            await deleteDoc(doc(db, 'documentLibrary', id));
+            await runAdminOperationalMutation('DELETE_DOCUMENT', { documentId: id });
         } catch (err) {
             console.error(err);
         }
