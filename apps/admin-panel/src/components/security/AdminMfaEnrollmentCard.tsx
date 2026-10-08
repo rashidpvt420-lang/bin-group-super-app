@@ -31,6 +31,7 @@ import { binThemeTokens } from '../../theme/adminTheme';
 type Props = {
   enrolled: boolean;
   currentPhone?: string;
+  currentRole?: string;
   isRTL: boolean;
   onEnrolled?: () => Promise<void> | void;
 };
@@ -73,7 +74,7 @@ const normalizePhone = (value: string) => {
   return raw.startsWith('+') ? raw : `+${raw}`;
 };
 
-export default function AdminMfaEnrollmentCard({ enrolled, currentPhone = '', isRTL, onEnrolled }: Props) {
+export default function AdminMfaEnrollmentCard({ enrolled, currentPhone = '', currentRole = '', isRTL, onEnrolled }: Props) {
   const copy = React.useCallback((en: string, ar: string) => (isRTL ? ar : en), [isRTL]);
   const [phone, setPhone] = React.useState(currentPhone);
   const [verificationId, setVerificationId] = React.useState('');
@@ -91,8 +92,14 @@ export default function AdminMfaEnrollmentCard({ enrolled, currentPhone = '', is
   const verifierRef = React.useRef<RecaptchaVerifier | null>(null);
   const recaptchaId = 'admin-mfa-enrollment-recaptcha';
 
-  // Founder and Multi-Factor status checks
+  // Founder/Finance self-service TOTP and Multi-Factor status checks.
+  // The role is server-derived by AdminSecurityProfilePage; this component never grants claims.
   const isFounder = auth.currentUser?.email?.toLowerCase() === 'ceo@bin-groups.com';
+  const normalizedRole = String(currentRole || '').trim().toLowerCase();
+  const isFinanceAdmin = normalizedRole === 'finance_admin';
+  const canEnrollTotp = isFounder || isFinanceAdmin;
+  const totpActorLabel = isFounder ? 'Founder' : 'Finance Admin';
+  const totpActorLabelAr = isFounder ? 'المؤسس' : 'مسؤول المالية';
   const enrolledFactors = auth.currentUser ? multiFactor(auth.currentUser).enrolledFactors : [];
   const hasPhone = enrolledFactors.some((f) => f.factorId === PhoneMultiFactorGenerator.FACTOR_ID);
   const hasTotp = enrolledFactors.some((f) => f.factorId === TotpMultiFactorGenerator.FACTOR_ID);
@@ -403,8 +410,8 @@ export default function AdminMfaEnrollmentCard({ enrolled, currentPhone = '', is
       setTotpNotice({ type: 'warning', text: copy('Verify the Admin email before enrolling TOTP MFA.', 'وثّق بريد المسؤول قبل تسجيل مصادقة TOTP.') });
       return;
     }
-    if (!isFounder) {
-      setTotpNotice({ type: 'error', text: copy('TOTP enrollment is restricted to the canonical Founder.', 'يقتصر تسجيل TOTP على المؤسس المعتمد.') });
+    if (!canEnrollTotp) {
+      setTotpNotice({ type: 'error', text: copy('TOTP enrollment is restricted to the canonical Founder or signed-in Finance Admin.', 'يقتصر تسجيل TOTP على المؤسس المعتمد أو مسؤول المالية المسجل دخوله.') });
       return;
     }
 
@@ -430,7 +437,7 @@ export default function AdminMfaEnrollmentCard({ enrolled, currentPhone = '', is
       const secret = await TotpMultiFactorGenerator.generateSecret(session);
       setTotpSecret(secret);
       setTotpSetupKey(secret.secretKey);
-      const qrUrl = secret.generateQrCodeUrl(user.email || 'ceo@bin-groups.com', 'BIN GROUP');
+      const qrUrl = secret.generateQrCodeUrl(user.email || 'admin@bin-groups.com', 'BIN GROUP');
       setTotpQrUrl(qrUrl);
       setTotpChallengeUid(user.uid);
       setTotpStep('verifying');
@@ -460,8 +467,8 @@ export default function AdminMfaEnrollmentCard({ enrolled, currentPhone = '', is
       setTotpNotice({ type: 'error', text: copy('Email must be verified.', 'يجب توثيق البريد الإلكتروني.') });
       return;
     }
-    if (!isFounder) {
-      setTotpNotice({ type: 'error', text: copy('TOTP enrollment is restricted to the canonical Founder.', 'يقتصر تسجيل TOTP على المؤسس المعتمد.') });
+    if (!canEnrollTotp) {
+      setTotpNotice({ type: 'error', text: copy('TOTP enrollment is restricted to the canonical Founder or signed-in Finance Admin.', 'يقتصر تسجيل TOTP على المؤسس المعتمد أو مسؤول المالية المسجل دخوله.') });
       return;
     }
     if (!totpChallengeUid || totpChallengeUid !== user.uid) {
@@ -493,7 +500,7 @@ export default function AdminMfaEnrollmentCard({ enrolled, currentPhone = '', is
       }
 
       const assertion = TotpMultiFactorGenerator.assertionForEnrollment(totpSecret, totpCode);
-      await multiFactor(user).enroll(assertion, 'Founder TOTP Authenticator');
+      await multiFactor(user).enroll(assertion, `${totpActorLabel} TOTP Authenticator`);
       await user.reload();
       await user.getIdToken(true);
       
@@ -635,7 +642,7 @@ export default function AdminMfaEnrollmentCard({ enrolled, currentPhone = '', is
     </Paper>
   );
 
-  const totpMfaCard = isFounder && (
+  const totpMfaCard = canEnrollTotp && (
     <Stack spacing={2}>
       {totpNotice && <Alert severity={totpNotice.type} onClose={() => setTotpNotice(null)}>{totpNotice.text}</Alert>}
       {hasTotp ? (
@@ -643,7 +650,7 @@ export default function AdminMfaEnrollmentCard({ enrolled, currentPhone = '', is
           <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1.5} alignItems="center">
             <BadgeCheck color="#10b981" />
             <Box>
-              <Typography fontWeight={950}>{copy('Founder TOTP Authenticator enrolled', 'تم تسجيل مصادقة TOTP للمؤسس')}</Typography>
+              <Typography fontWeight={950}>{copy(`${totpActorLabel} TOTP Authenticator enrolled`, `تم تسجيل مصادقة TOTP لـ${totpActorLabelAr}`)}</Typography>
               <Typography variant="body2" color="text.secondary">
                 {copy('Firebase requires your Authenticator App code during Admin sign-in.', 'تتطلب Firebase رمز تطبيق المصادقة الخاص بك أثناء تسجيل دخول المسؤول.')}
               </Typography>
@@ -656,7 +663,7 @@ export default function AdminMfaEnrollmentCard({ enrolled, currentPhone = '', is
             <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1.5} alignItems="center">
               <KeyRound color={binThemeTokens.gold} />
               <Box>
-                <Typography fontWeight={950}>{copy('Enroll Founder TOTP Authenticator', 'تسجيل مصادقة TOTP للمؤسس')}</Typography>
+                <Typography fontWeight={950}>{copy(`Enroll ${totpActorLabel} TOTP Authenticator`, `تسجيل مصادقة TOTP لـ${totpActorLabelAr}`)}</Typography>
                 <Typography variant="body2" color="text.secondary">
                   {copy('Link your account to an authenticator app (Google Authenticator, Microsoft Authenticator, 1Password, etc.) as an additional second factor.', 'اربط حسابك بتطبيق مصادقة (Google Authenticator، Microsoft Authenticator، 1Password، إلخ) كعامل أمان ثانٍ إضافي.')}
                 </Typography>
