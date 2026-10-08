@@ -1,5 +1,4 @@
-import { db } from '../lib/firebase';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { runAdminOperationalMutation } from '../lib/adminOperationalMutation';
 import { calculateBuildingHealth } from './buildingHealthEngine';
 
 export type Emirate = 'Dubai' | 'Abu Dhabi' | 'Sharjah' | 'Ajman' | 'RAK' | 'Fujairah' | 'UAQ';
@@ -262,13 +261,11 @@ export const calculateUAEValuation = async (inputs: any): Promise<IntegratedInte
 
 export const savePricingAudit = async (ownerId: string, propertyData: any, result: IntegratedIntelligenceResponse) => {
     try {
-        await addDoc(collection(db, 'pricingAuditLogs'), {
+        await runAdminOperationalMutation('RECORD_PRICING_AUDIT', {
             ownerId,
             propertyId: propertyData.id || 'lead_quote',
-            engineType: 'decision_engine_v5_stable',
             summary: `${result.property.propertyName} - ${result.valuation.valuationMode}`,
             result,
-            createdAt: serverTimestamp()
         });
     } catch (e) {
         console.error("Audit log failed:", e);

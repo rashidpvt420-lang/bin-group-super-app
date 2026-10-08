@@ -13,12 +13,10 @@ import {
     Error as ErrorIcon,
     Warning as WarningIcon
 } from '@mui/icons-material';
-import {
-    collection, query, where, getDocs, doc, writeBatch,
-    serverTimestamp, limit
-} from 'firebase/firestore';
+import { collection, query, where, getDocs } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { db, auth, functions } from '../../lib/firebase';
+import { runAdminOperationalMutation } from '../../lib/adminOperationalMutation';
 import Papa from 'papaparse';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -135,8 +133,8 @@ export default function BulkTenantImportDialog({ open, onClose, properties = [],
                     rowErrors.push(`Unit ${item.unitNumber} not found. Enable 'Auto-create units' to fix.`);
                 } else if (!unitExists && autoCreateUnits) {
                     rowWarnings.push(`Unit ${item.unitNumber} will be auto-created`);
-                } else if (unitExists && unitExists.occupancyStatus === 'occupied') {
-                    rowWarnings.push(`Unit ${item.unitNumber} is currently occupied (will be overwritten)`);
+                } else if (unitExists && String(unitExists.occupancyStatus || '').toLowerCase() === 'occupied') {
+                    rowErrors.push(`Unit ${item.unitNumber} is already occupied and cannot be overwritten`);
                 }
             }
 
@@ -186,147 +184,29 @@ export default function BulkTenantImportDialog({ open, onClose, properties = [],
         setError(null);
 
         try {
-            const batch = writeBatch(db);
             const importBatchId = "batch_" + Date.now();
-            const property = properties.find(p => p.id === selectedPropertyId);
+            const importableRows = rows.filter(row => row.status !== 'error');
+            if (importableRows.length === 0) throw new Error('No valid Tenant rows are available to import.');
 
+            const CHUNK_SIZE = 50;
             let invitedCount = 0;
-
-            for (const row of rows) {
-                if (row.status === 'error') continue;
-
-                const tenantEmail = row.data.email.toLowerCase().trim();
-                const tenantName = row.data.tenantName;
-
-                // 1. Resolve Unit
-                let unit = units.find(u => String(u.unitNumber) === String(row.data.unitNumber));
-                let unitId = unit?.id;
-
-                if (!unit && autoCreateUnits) {
-                    const unitRef = doc(collection(db, 'units'));
-                    unitId = unitRef.id;
-                    batch.set(unitRef, {
-                        propertyId: selectedPropertyId,
-                        unitNumber: row.data.unitNumber,
-                        occupancyStatus: "occupied",
-                        createdAt: serverTimestamp(),
-                        updatedAt: serverTimestamp()
-                    });
-                } else if (unit) {
-                    batch.update(doc(db, 'units', unit.id), {
-                        tenantId: "STUB", // Will be updated after user resolution
-                        tenantName,
-                        tenantEmail,
-                        occupancyStatus: "occupied",
-                        updatedAt: serverTimestamp()
-                    });
-                }
-
-                // 2. Resolve/Create User
-                const userQuery = await getDocs(query(collection(db, 'users'), where('email', '==', tenantEmail), limit(1)));
-                let tenantId;
-
-                if (!userQuery.empty) {
-                    tenantId = userQuery.docs[0].id;
-                } else {
-                    const userRef = doc(collection(db, 'users'));
-                    tenantId = userRef.id;
-                    batch.set(userRef, {
-                        role: "tenant",
-                        status: "invited",
-                        displayName: tenantName,
-                        email: tenantEmail,
-                        propertyId: selectedPropertyId,
-                        ownerId: property?.ownerId || '',
-                        unitId: unitId || '',
-                        unitNumber: row.data.unitNumber,
-                        createdAt: serverTimestamp(),
-                        updatedAt: serverTimestamp(),
-                        createdBy: auth.currentUser?.uid || 'system',
-                        importBatchId
-                    });
-                }
-
-                // 3. Financial Calculations
-                const annualRent = Number(row.data.annualRent) || 0;
-                const paidBalance = Number(row.data.paidBalance) || 0;
-                const outstandingBalance = Math.max(0, annualRent - paidBalance);
-                const paymentStatus = outstandingBalance === 0 ? 'paid' : (paidBalance > 0 ? 'partial' : 'unpaid');
-
-                // 4. Create Lease
-                const leaseRef = doc(collection(db, 'leases'));
-                const leaseId = leaseRef.id;
-                batch.set(leaseRef, {
+            for (let i = 0; i < importableRows.length; i += CHUNK_SIZE) {
+                const chunk = importableRows.slice(i, i + CHUNK_SIZE);
+                const isFinal = i + CHUNK_SIZE >= importableRows.length;
+                const result = await runAdminOperationalMutation('BULK_TENANT_IMPORT', {
                     propertyId: selectedPropertyId,
-                    unitId: unitId || '',
-                    tenantId,
-                    ownerId: property?.ownerId || '',
-                    leaseStartDate: row.data.leaseStartDate || row.data.leaseStart || '',
-                    leaseEndDate: row.data.leaseEndDate || row.data.leaseEnd || '',
-                    annualRent,
-                    rentFrequency: row.data.rentFrequency || 'Annual',
-                    securityDeposit: Number(row.data.securityDeposit) || 0,
-                    leaseStatus: "active",
-                    createdAt: serverTimestamp(),
-                    updatedAt: serverTimestamp(),
-                    importBatchId
+                    rows: chunk.map(row => row.data),
+                    autoCreateUnits,
+                    importBatchId,
+                    finalize: isFinal,
+                    totalRows: stats.total,
+                    validRows: importableRows.length,
+                    errorRows: stats.errors,
+                    invitedCount: invitedCount + chunk.length,
                 });
-
-                // 5. Create Ledger
-                const ledgerRef = doc(collection(db, 'tenant_ledger'));
-                batch.set(ledgerRef, {
-                    tenantId,
-                    propertyId: selectedPropertyId,
-                    unitId: unitId || '',
-                    leaseId,
-                    ownerId: property?.ownerId || '',
-                    annualRent,
-                    paidBalance,
-                    outstandingBalance,
-                    securityDeposit: Number(row.data.securityDeposit) || 0,
-                    paymentStatus,
-                    ledgerStatus: 'active',
-                    createdAt: serverTimestamp(),
-                    updatedAt: serverTimestamp(),
-                    importBatchId
-                });
-
-                // 6. Create Invitation
-                const inviteRef = doc(collection(db, 'tenant_invitations'));
-                batch.set(inviteRef, {
-                    propertyId: selectedPropertyId,
-                    unitId: unitId || '',
-                    tenantId,
-                    tenantEmail,
-                    tenantName,
-                    status: "pending",
-                    expiresAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
-                    createdAt: serverTimestamp(),
-                    createdBy: auth.currentUser?.uid || 'system',
-                    importBatchId
-                });
-                invitedCount++;
+                invitedCount += Number(result.invitedCount || chunk.length);
             }
 
-            // 6. Create Batch Record
-            const batchRef = doc(collection(db, 'tenant_import_batches'));
-            batch.set(batchRef, {
-                propertyId: selectedPropertyId,
-                propertyName: property?.name || property?.propertyName || 'Property',
-                ownerId: property?.ownerId || '',
-                uploadedBy: auth.currentUser?.uid || 'system',
-                totalRows: stats.total,
-                validRows: stats.valid,
-                errorRows: stats.errors,
-                invitedCount,
-                createdAt: serverTimestamp(),
-                status: 'completed',
-                importBatchId
-            });
-
-            await batch.commit();
-
-            // Trigger automatic invitations
             try {
                 const sendFn = httpsCallable(functions, 'sendTenantInvitations');
                 await sendFn({ importBatchId });
@@ -334,7 +214,7 @@ export default function BulkTenantImportDialog({ open, onClose, properties = [],
                 console.warn("Auto-invitation trigger failed:", sendErr);
             }
 
-            setSuccess(`Successfully imported ${stats.valid} tenants.`);
+            setSuccess(`Successfully imported ${importableRows.length} tenants.`);
             setActiveStep(3);
             onImportComplete();
         } catch (err: any) {

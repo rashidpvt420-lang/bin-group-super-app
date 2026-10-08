@@ -47,12 +47,13 @@ test('checked-in rules become server-authoritative under the final prepare:rules
     const canonical = ticketBlock(preparedRules, 'maintenanceTickets');
     assert.match(legacy, /allow create, update, delete: if false;/);
     assert.doesNotMatch(legacy, /safeTicketUpdateByActor/);
-    assert.match(canonical, /allow create: if safeAdminTicketCreate\(\);/);
+    assert.match(canonical, /allow create: if false;/);
     assert.match(canonical, /allow update: if safeTicketUpdateByActor\(\);/);
     assert.match(preparedRules, /let authenticated = signedIn\(\);/);
     assert.match(preparedRules, /let role = authenticated/);
     assert.match(preparedRules, /let admin = authenticated && \(/);
     assert.match(preparedRules, /let dispatcher = authenticated && \(/);
+    assert.doesNotMatch(preparedRules, /\(admin && safeAdminTicketUpdate\(\)\)/);
     assert.match(preparedRules, /\(!admin && !dispatcher && role in \['', 'tenant'\] && tenantOwns\(resource\.data\) && safeTenantEvidenceUpdate\(\)\)/);
     assert.match(preparedRules, /\(!admin && !dispatcher && role in \['technician', 'tech'\] && techOwns\(resource\.data\) && safeTechnicianTicketUpdate\(\)\)/);
 
@@ -102,6 +103,6 @@ test('launch-hardening verifier explicitly rejects direct assignment and overlap
   assert.match(verifierSource, /bounded ticket update router/);
   assert.match(verifierSource, /Exactly one canonical ticket update gate is required/);
   assert.match(verifierSource, /Legacy \/tickets must deny every browser write/);
-  assert.match(verifierSource, /Ticket update router must short-circuit in admin, dispatcher, tenant, technician order/);
+  assert.match(verifierSource, /Ticket update router must retire Admin browser mutation and preserve dispatcher, tenant, technician order/);
   assert.match(verifierSource, /Technician append-only proof guard missing/);
 });

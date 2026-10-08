@@ -82,13 +82,322 @@ if (!matchBlock(propertyIdentityHeader)) {
 }
 
 
+// Phase 2 profile closure: privileged Admin operational mutations are callable-only.
+// Preserve Owner/Tenant scoped self-service, but remove browser Admin mutation authority.
+// Admin SDK callables bypass Firestore client rules after Auth + role + App Check + MFA checks.
+function replaceRuleBlock(header, nextBlock) {
+  const current = matchBlock(header);
+  if (!current) {
+    failures.push(`${header} rule block is missing or malformed`);
+    return;
+  }
+  source = source.replace(current, nextBlock);
+}
+
+replaceRuleBlock('    match /visitorParkingRequests/{requestId} {', `    match /visitorParkingRequests/{requestId} {
+      allow read: if isAdmin() || (docPropertyId(resource.data) != null && isPropertyOwner(docPropertyId(resource.data))) || tenantUidOwns(resource.data);
+      allow create: if false;
+      allow update: if (docPropertyId(resource.data) != null && isPropertyOwner(docPropertyId(resource.data))) &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'reviewedAt', 'reviewedBy', 'updatedAt']) &&
+        request.resource.data.get('status', '') in ['approved', 'rejected'];
+      allow delete: if false;
+    }`);
+
+replaceRuleBlock('    match /keyRegister/{keyId} {', `    match /keyRegister/{keyId} {
+      allow read: if signedIn() && (isAdmin() || (docPropertyId(resource.data) != null && isPropertyOwner(docPropertyId(resource.data))) || (docUnitId(resource.data) != null && isUnitTenant(docUnitId(resource.data)) && getTenantPropertyId() == docPropertyId(resource.data)));
+      allow create: if docPropertyId(request.resource.data) != null && isPropertyOwner(docPropertyId(request.resource.data));
+      allow update: if docPropertyId(resource.data) != null && isPropertyOwner(docPropertyId(resource.data));
+      allow delete: if docPropertyId(resource.data) != null && isPropertyOwner(docPropertyId(resource.data));
+    }`);
+
+replaceRuleBlock('    match /keyMovements/{movementId} {', `    match /keyMovements/{movementId} {
+      allow read: if signedIn() && (isAdmin() || (docPropertyId(resource.data) != null && isPropertyOwner(docPropertyId(resource.data))) || (docUnitId(resource.data) != null && isUnitTenant(docUnitId(resource.data)) && getTenantPropertyId() == docPropertyId(resource.data)));
+      allow create: if docPropertyId(request.resource.data) != null && isPropertyOwner(docPropertyId(request.resource.data));
+      allow update: if docPropertyId(resource.data) != null && isPropertyOwner(docPropertyId(resource.data));
+      allow delete: if docPropertyId(resource.data) != null && isPropertyOwner(docPropertyId(resource.data));
+    }`);
+
+replaceRuleBlock('    match /parcels/{parcelId} {', `    match /parcels/{parcelId} {
+      allow read: if isAdmin() || (docPropertyId(resource.data) != null && isPropertyOwner(docPropertyId(resource.data))) || tenantUidOwns(resource.data);
+      allow create: if docPropertyId(request.resource.data) != null && isPropertyOwner(docPropertyId(request.resource.data));
+      allow update: if (docPropertyId(resource.data) != null && isPropertyOwner(docPropertyId(resource.data))) ||
+        (tenantUidOwns(resource.data) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'collectedBy', 'collectedAt', 'notes']));
+      allow delete: if docPropertyId(resource.data) != null && isPropertyOwner(docPropertyId(resource.data));
+    }`);
+
+replaceRuleBlock('    match /amenities/{amenityId} {', `    match /amenities/{amenityId} {
+      allow read: if propertyScopedRead(resource.data);
+      allow create: if docPropertyId(request.resource.data) != null && isPropertyOwner(docPropertyId(request.resource.data));
+      allow update: if docPropertyId(resource.data) != null && isPropertyOwner(docPropertyId(resource.data)) && docPropertyId(request.resource.data) == docPropertyId(resource.data);
+      allow delete: if docPropertyId(resource.data) != null && isPropertyOwner(docPropertyId(resource.data));
+    }`);
+
+replaceRuleBlock('    match /amenityBookings/{bookingId} {', `    match /amenityBookings/{bookingId} {
+      allow read: if isAdmin() || (docPropertyId(resource.data) != null && isPropertyOwner(docPropertyId(resource.data))) || tenantUidOwns(resource.data);
+      allow create: if signedIn() && request.resource.data.get('tenantUid', null) == request.auth.uid && getTenantPropertyId() == docPropertyId(request.resource.data) && request.resource.data.get('status', 'pending') == 'pending' && !request.resource.data.keys().hasAny(tenantSubmissionReviewKeys());
+      allow update: if (docPropertyId(resource.data) != null && isPropertyOwner(docPropertyId(resource.data))) || (signedIn() && tenantUidOwns(resource.data) && request.resource.data.get('tenantUid', null) == request.auth.uid && docPropertyId(resource.data) != null && getTenantPropertyId() == docPropertyId(resource.data) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'cancelledAt', 'updatedAt']) && request.resource.data.get('status', '') == 'cancelled');
+      allow delete: if (docPropertyId(resource.data) != null && isPropertyOwner(docPropertyId(resource.data))) || tenantUidOwns(resource.data);
+    }`);
+
+replaceRuleBlock('    match /announcements/{announcementId} {', `    match /announcements/{announcementId} {
+      allow read: if propertyScopedRead(resource.data);
+      allow create: if docPropertyId(request.resource.data) != null && isPropertyOwner(docPropertyId(request.resource.data));
+      allow update: if docPropertyId(resource.data) != null && isPropertyOwner(docPropertyId(resource.data)) && docPropertyId(request.resource.data) == docPropertyId(resource.data);
+      allow delete: if docPropertyId(resource.data) != null && isPropertyOwner(docPropertyId(resource.data));
+    }`);
+
+replaceRuleBlock('    match /documentLibrary/{documentId} {', `    match /documentLibrary/{documentId} {
+      allow read: if propertyScopedRead(resource.data);
+      allow create: if docPropertyId(request.resource.data) != null && isPropertyOwner(docPropertyId(request.resource.data));
+      allow update: if docPropertyId(resource.data) != null && isPropertyOwner(docPropertyId(resource.data)) && docPropertyId(request.resource.data) == docPropertyId(resource.data);
+      allow delete: if docPropertyId(resource.data) != null && isPropertyOwner(docPropertyId(resource.data));
+    }`);
+
+replaceRuleBlock('    match /staffDirectory/{staffId} {', `    match /staffDirectory/{staffId} {
+      allow read: if propertyScopedRead(resource.data);
+      allow create: if docPropertyId(request.resource.data) != null && isPropertyOwner(docPropertyId(request.resource.data));
+      allow update: if docPropertyId(resource.data) != null && isPropertyOwner(docPropertyId(resource.data)) && docPropertyId(request.resource.data) == docPropertyId(resource.data);
+      allow delete: if docPropertyId(resource.data) != null && isPropertyOwner(docPropertyId(resource.data));
+    }`);
+
+replaceRuleBlock('    match /communityPosts/{postId} {', `    match /communityPosts/{postId} {
+      allow read: if signedIn() && (isAdmin() || (docPropertyId(resource.data) != null && isPropertyOwner(docPropertyId(resource.data))) || (getTenantPropertyId() == docPropertyId(resource.data) && (resource.data.get('status', null) == 'approved' || resource.data.get('authorUid', null) == request.auth.uid)));
+      allow create: if signedIn() && request.resource.data.get('authorUid', null) == request.auth.uid && getTenantPropertyId() == docPropertyId(request.resource.data) && request.resource.data.get('status', null) == 'pending';
+      allow update: if ((docPropertyId(resource.data) != null && isPropertyOwner(docPropertyId(resource.data))) && docPropertyId(request.resource.data) == docPropertyId(resource.data)) || (signedIn() && resource.data.get('authorUid', null) == request.auth.uid && request.resource.data.get('authorUid', null) == request.auth.uid && request.resource.data.get('status', null) == resource.data.get('status', null) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['title', 'body', 'updatedAt']));
+      allow delete: if (docPropertyId(resource.data) != null && isPropertyOwner(docPropertyId(resource.data))) || (signedIn() && resource.data.get('authorUid', null) == request.auth.uid);
+    }`);
+
+replaceRuleBlock('    match /jobPostings/{jobId} {', `    match /jobPostings/{jobId} {
+      allow read: if isAdmin() || emailOwns(resource.data);
+      allow create: if signedIn() && emailOwns(request.resource.data);
+      allow update: if emailOwns(resource.data);
+      allow delete: if false;
+    }`);
+
+replaceRuleBlock('    match /contractorProfiles/{profileId} {', `    match /contractorProfiles/{profileId} {
+      allow read: if isAdmin() || emailOwns(resource.data);
+      allow create, update, delete: if false;
+    }`);
+
+replaceRuleBlock('    match /data_governance_events/{eventId} {', `    match /data_governance_events/{eventId} {
+      allow read: if isAdmin();
+      allow create, update, delete: if false;
+    }`);
+
+replaceRuleBlock('    match /conversations/{conversationId} {', `    match /conversations/{conversationId} {
+      allow read: if isAdmin() || (signedIn() && request.auth.uid in resource.data.get('participantUids', []));
+      allow create: if signedIn() &&
+        request.resource.data.get('participantUids', []) is list &&
+        request.resource.data.get('participantUids', []).size() == 1 &&
+        request.resource.data.get('participantUids', [])[0] == request.auth.uid;
+      allow update: if signedIn() && request.auth.uid in resource.data.get('participantUids', []) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastMessageAt', 'status']);
+      allow delete: if false;
+
+      match /messages/{messageId} {
+        allow read: if exists(/databases/$(database)/documents/conversations/$(conversationId)) && (isAdmin() || request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.get('participantUids', []));
+        allow create: if exists(/databases/$(database)/documents/conversations/$(conversationId)) && request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.get('participantUids', []) && request.resource.data.get('senderUid', null) == request.auth.uid;
+        allow update, delete: if false;
+      }
+    }`);
+
+replaceRuleBlock('    match /users/{userId} {', `    match /users/{userId} {
+      allow get: if request.auth != null && (
+                    request.auth.uid == userId ||
+                    (
+                      signedIn() &&
+                      request.auth.uid != userId &&
+                      isNotSuspended() &&
+                      (
+                        (resource.data.get('role', '') == 'tenant' &&
+                         ((resource.data.get('ownerId', '') != '' && resource.data.get('ownerId', '') == request.auth.uid) ||
+                          emailMatchesCycleFree(resource.data.get('ownerEmail', null)))) ||
+                        emailOwnsCycleFree(resource.data) ||
+                        canReadUserDirectoryCycleFree()
+                      )
+                    )
+                  );
+      allow list: if isNotSuspended() && (
+                    canReadUserDirectoryCycleFree() ||
+                    (signedIn() &&
+                     resource.data.get('role', '') == 'tenant' &&
+                     resource.data.get('ownerId', null) == request.auth.uid)
+                  );
+      allow create: if isAdmin() || safeUserBootstrapCreate(request.resource.data, userId);
+      allow update: if isNotSuspended() && (isAdmin() || safeUserSelfUpdate(userId));
+      allow delete: if isNotSuspended() && isAdmin();
+      match /fcmTokens/{tokenId} {
+        allow read, write: if false;
+      }
+
+      match /deviceReadiness/{readinessId} {
+        allow read, write: if false;
+      }
+
+      match /{subcollection}/{document=**} {
+        allow read, write: if false;
+      }
+    }`);
+
+replaceRuleBlock('    match /properties/{propertyId} {', `    match /properties/{propertyId} {
+      allow get: if isNotSuspended() && getTenantPropertyId() == propertyId;
+      allow read: if isNotSuspended() && (canManageProperties() || propertyOwnedByCaller(resource.data) || (isTechnicianActor() && techOwns(resource.data)));
+      allow create: if isNotSuspended() &&
+        propertyCreateHasNoCanonicalGeo(request.resource.data) &&
+        (canManageProperties() || safeOwnerPropertyCreate(request.resource.data));
+      allow update: if isNotSuspended() && (
+        (canManageProperties() && safeManagedPropertyUpdate()) ||
+        safeOwnerPropertyUpdate()
+      );
+      allow delete: if isNotSuspended() && isAdmin();
+    }`);
+
+replaceRuleBlock('    match /units/{unitId} {', `    match /units/{unitId} {
+      allow get: if signedIn() && (resource.data.get('tenantId', null) == request.auth.uid || resource.data.get('tenantUid', null) == request.auth.uid || resource.data.get('currentTenantId', null) == request.auth.uid || resource.data.get('userId', null) == request.auth.uid || emailMatches(resource.data.get('tenantEmail', null)));
+      allow list: if signedIn() && resource.data.tenantId == request.auth.uid;
+      allow list: if signedIn() && resource.data.tenantUid == request.auth.uid;
+      allow list: if signedIn() && resource.data.currentTenantId == request.auth.uid;
+      allow list: if emailMatches(resource.data.get('tenantEmail', null));
+      allow read: if canManageProperties() || ownerCanRead(resource.data) || tenantOwns(resource.data) || emailOwns(resource.data);
+      allow create: if canManageProperties();
+      allow update: if canManageProperties();
+      allow delete: if canManageProperties();
+    }`);
+
+replaceRuleBlock('    match /tenant_unit_link_requests/{requestId} {', `    match /tenant_unit_link_requests/{requestId} {
+      allow read: if isAdmin() || tenantOwns(resource.data) || emailOwns(resource.data) || (docPropertyId(resource.data) != null && isPropertyOwner(docPropertyId(resource.data)));
+      allow create: if isAdmin() || safeTenantUnitLinkRequestCreate(request.resource.data);
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }`);
+
+replaceRuleBlock('    match /contracts/{contractId} {', `    match /contracts/{contractId} {
+      allow read: if participantCanRead(resource.data) || emailOwns(resource.data) || canManageContracts();
+      allow create: if canManageContracts() || ownerContractDraftCreate(request.resource.data);
+      allow update: if canManageContracts() || safeOwnerContractUpdate();
+      allow delete: if isAdmin();
+    }`);
+
+replaceRuleBlock('    match /leases/{leaseId} {', `    match /leases/{leaseId} {
+      allow read: if participantCanRead(resource.data) || emailOwns(resource.data) || isAdmin();
+      allow create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }`);
+
+replaceRuleBlock('    match /tenant_ledger/{ledgerId} {', `    match /tenant_ledger/{ledgerId} {
+      allow read: if isAdmin() || ownerCanRead(resource.data) || (signedIn() && resource.data.get('tenantId', null) == request.auth.uid);
+      allow create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }`);
+
+replaceRuleBlock('    match /tenants/{tenantId} {', `    match /tenants/{tenantId} {
+      allow read: if (signedIn() && request.auth.uid == tenantId) || isAdmin() || participantCanRead(resource.data);
+      allow create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }`);
+
+replaceRuleBlock('    match /propertyPassports/{passportId} {', `    match /propertyPassports/{passportId} {
+      allow read: if isAdmin() || (signedIn() && (resource.data.get('ownerId', null) == request.auth.uid || emailMatches(resource.data.get('ownerEmail', null))));
+      allow create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }`);
+
+const operationalServerOnlyBlocks = [
+  ['tenant_services_requests', 'requestId', 'allow read: if isAdmin();'],
+  ['assets', 'assetId', 'allow read: if propertyScopedRead(resource.data);'],
+  ['binGptEngineerCommands', 'commandId', 'allow read: if isAdmin();'],
+  ['tenant_invitations', 'invitationId', "allow read: if isAdmin() || ownerCanRead(resource.data) || emailOwns(resource.data);"],
+  ['tenantInvitations', 'invitationId', "allow read: if isAdmin() || ownerCanRead(resource.data) || emailOwns(resource.data);"],
+  ['tenant_import_batches', 'batchId', 'allow read: if isAdmin();'],
+  ['tenancies', 'tenancyId', "allow read: if isAdmin() || ownerCanRead(resource.data) || tenantOwns(resource.data) || emailOwns(resource.data);"],
+];
+const operationalCatchAllMarker = '    match /{collection}/{document=**} {';
+for (const [collection, documentId, readRule] of operationalServerOnlyBlocks) {
+  const header = `    match /${collection}/{${documentId}} {`;
+  if (!matchBlock(header)) {
+    const at = source.indexOf(operationalCatchAllMarker);
+    if (at < 0) failures.push(`global Firestore fallback is missing before ${collection} hardening`);
+    else source = `${source.slice(0, at)}    match /${collection}/{${documentId}} {
+      ${readRule}
+      allow create, update, delete: if false;
+    }
+
+${source.slice(at)}`;
+  } else {
+    replaceRuleBlock(header, `    match /${collection}/{${documentId}} {
+      ${readRule}
+      allow create, update, delete: if false;
+    }`);
+  }
+}
+
+// Maintenance-ticket Admin browser mutations are retired. Dispatcher, Tenant and
+// Technician actor-scoped update paths remain unchanged; Admin uses audited callables.
+const maintenanceTicketHeader = '    match /maintenanceTickets/{ticketId} {';
+const maintenanceTicketBlock = matchBlock(maintenanceTicketHeader);
+if (!maintenanceTicketBlock) {
+  failures.push('canonical maintenanceTickets rule block is missing before Admin browser-write closure');
+} else {
+  const hardenedMaintenanceTicketBlock = maintenanceTicketBlock
+    .replace('      allow create: if safeAdminTicketCreate();', '      allow create: if false;')
+    .replace('      allow create: if isAdmin();', '      allow create: if false;');
+  source = source.replace(maintenanceTicketBlock, hardenedMaintenanceTicketBlock);
+}
+source = source.replace('        (admin && safeAdminTicketUpdate()) ||', '        false ||');
+
+// The generic Admin fallback overlaps explicit matches, so every callable-only
+// operational collection must be excluded from both browser-write fallback rules.
+const adminOperationalFallbackExclusions = [
+  'visitorParkingRequests',
+  'keyRegister',
+  'keyMovements',
+  'parcels',
+  'communityPosts',
+  'tenant_services_requests',
+  'amenities',
+  'amenityBookings',
+  'jobPostings',
+  'contractorProfiles',
+  'staffDirectory',
+  'announcements',
+  'data_governance_events',
+  'assets',
+  'documentLibrary',
+  'conversations',
+  'pricingAuditLogs',
+  'binGptEngineerCommands',
+  'tenant_invitations',
+  'tenantInvitations',
+  'tenant_import_batches',
+  'tenancies',
+];
+const fallbackBlockBeforeAdminClosure = matchBlock(operationalCatchAllMarker);
+if (!fallbackBlockBeforeAdminClosure) {
+  failures.push('global Firestore fallback is missing before Admin operational authority hardening');
+} else {
+  let hardenedFallback = fallbackBlockBeforeAdminClosure;
+  for (const collection of adminOperationalFallbackExclusions) {
+    const marker = `          'binConnectThreads'`;
+    const replacement = `          'binConnectThreads',
+          '${collection}'`;
+    // Both create and update/delete lists end with binConnectThreads.
+    hardenedFallback = hardenedFallback.split(marker).join(replacement);
+  }
+  source = source.replace(fallbackBlockBeforeAdminClosure, hardenedFallback);
+}
+
+
+
 const required = [
   'match /technician_live_locations/{technicianId} {',
   'allow create, update, delete: if false;',
   'function safeTechnicianProfileUpdate(techId) {',
   'return false;',
   'match /maintenanceTickets/{ticketId} {',
-  'allow create: if isAdmin();',
+  'allow create: if false;',
   'match /tickets/{ticketId} {',
   'match /payroll_entries/{entryId} {',
   "'invoice_registry', 'payroll_entries', 'property_identity_registry'",

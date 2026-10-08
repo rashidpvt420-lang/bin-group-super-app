@@ -7,11 +7,12 @@ import {
   FormControl, InputLabel, Select, MenuItem, CircularProgress, Alert
 } from '@mui/material';
 import { db, auth, functions } from '../../lib/firebase';
-import { collection, onSnapshot, query, where, serverTimestamp, doc, writeBatch, getDocs, limit, orderBy, startAfter } from 'firebase/firestore';
+import { collection, onSnapshot, query, where, getDocs, limit, orderBy, startAfter } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { Add as AddIcon, Edit as EditIcon, Search as SearchIcon, History as HistoryIcon, CloudUpload as BulkIcon, Send as SendIcon, Delete as DeleteIcon } from '@mui/icons-material';
 import BulkTenantImportDialog from '../../components/tenants/BulkTenantImportDialog';
 import { subscribeTenantLookups } from './tenantLookupSubscriptions';
+import { runAdminOperationalMutation } from '../../lib/adminOperationalMutation';
 
 interface Unit {
     id: string;
@@ -167,8 +168,8 @@ export default function TenantsManagementPage() {
   const handleAddTenant = async () => {
     const usingExistingTenant = tenantMode === 'existing';
     if (!selectedOwnerId || !selectedPropertyId || !selectedUnitId || (!usingExistingTenant && (!newTenant.email || !newTenant.displayName)) || (usingExistingTenant && !selectedExistingTenantId)) {
-        alert("Owner, Property, Unit, and tenant identity are required.");
-        return;
+      alert("Owner, Property, Unit, and tenant identity are required.");
+      return;
     }
 
     setSubmitting(true);
@@ -179,121 +180,43 @@ export default function TenantsManagementPage() {
       const unitData = units.find(u => u.id === selectedUnitId);
       const propertyData = properties.find(p => p.id === selectedPropertyId);
       const existingTenant = tenants.find(t => t.uid === selectedExistingTenantId);
-
-      if (!unitData || unitData.propertyId !== selectedPropertyId) {
-        alert("Linkage broken: Select a unit that belongs to the chosen property.");
-        setSubmitting(false);
-        return;
-      }
-
-      if (unitData.occupancyStatus === 'OCCUPIED') {
-        alert("Occupancy Alert: This unit is already occupied.");
-        setSubmitting(false);
-        return;
-      }
-
-      if (usingExistingTenant && !existingTenant) {
-        alert("Existing tenant record could not be resolved. Search the email again before linking.");
-        setSubmitting(false);
-        return;
-      }
+      if (!unitData || unitData.propertyId !== selectedPropertyId) throw new Error("Select a unit that belongs to the chosen property.");
+      if (String(unitData.occupancyStatus || '').toUpperCase() === 'OCCUPIED') throw new Error("This unit is already occupied.");
+      if (usingExistingTenant && !existingTenant) throw new Error("Existing Tenant record could not be resolved.");
 
       if (usingExistingTenant) {
         const existingRole = String(existingTenant?.role || '').trim().toLowerCase();
-        if (existingRole && existingRole !== 'tenant') {
-          alert("Role protection: this account is not a Tenant account and cannot be converted by relational assignment.");
-          setSubmitting(false);
-          return;
-        }
-
+        if (existingRole && existingRole !== 'tenant') throw new Error("This account is not a Tenant account.");
         const selectedEmail = String(existingTenant?.email || '').trim().toLowerCase();
         const searchedEmail = existingTenantSearch.trim().toLowerCase();
-        if (searchedEmail && selectedEmail !== searchedEmail) {
-          alert("Tenant identity mismatch: search and select the same tenant email before linking.");
-          setSubmitting(false);
-          return;
-        }
+        if (searchedEmail && selectedEmail !== searchedEmail) throw new Error("Tenant identity mismatch.");
       }
 
-      const tenantRef = usingExistingTenant ? doc(db, 'users', selectedExistingTenantId) : doc(collection(db, 'users'));
-      const tenantId = tenantRef.id;
-      const tenantEmail = String(usingExistingTenant ? existingTenant?.email : newTenant.email).trim().toLowerCase();
-      const tenantName = String(usingExistingTenant ? existingTenant?.displayName : newTenant.displayName).trim();
-      const propertyName = propertyData?.name || propertyData?.propertyName || 'Assigned Property';
-      const inviteRef = doc(collection(db, 'tenant_invitations'));
-
-      const batch = writeBatch(db);
-
-      batch.set(tenantRef, {
-        uid: tenantId,
-        role: 'tenant',
-        status: 'pending_invitation',
-        displayName: tenantName,
-        email: tenantEmail,
-        phoneNumber: usingExistingTenant ? existingTenant?.phoneNumber : newTenant.phoneNumber,
-        emiratesID: usingExistingTenant ? (existingTenant?.emiratesID || existingTenant?.emiratesId) : newTenant.emiratesID,
+      const result = await runAdminOperationalMutation('MANAGE_TENANT', {
+        operation: 'LINK',
         ownerId: selectedOwnerId,
         propertyId: selectedPropertyId,
         unitId: selectedUnitId,
-        unitNumber: unitData?.unitNumber || '',
-        propertyName,
-        tenantInvitationId: inviteRef.id,
-        invitationStatus: 'pending',
-        updatedAt: serverTimestamp(),
-        createdAt: usingExistingTenant ? (existingTenant?.createdAt || serverTimestamp()) : serverTimestamp(),
-      }, { merge: true });
-
-      batch.update(doc(db, 'units', selectedUnitId), {
-          tenantId,
-          occupancyStatus: 'OCCUPIED',
-          currentTenantId: tenantId,
-          updatedAt: serverTimestamp()
+        existingTenantId: usingExistingTenant ? selectedExistingTenantId : '',
+        email: usingExistingTenant ? existingTenant?.email : newTenant.email,
+        displayName: usingExistingTenant ? existingTenant?.displayName : newTenant.displayName,
+        phoneNumber: usingExistingTenant ? existingTenant?.phoneNumber : newTenant.phoneNumber,
+        emiratesID: usingExistingTenant ? (existingTenant?.emiratesID || existingTenant?.emiratesId) : newTenant.emiratesID,
       });
-
-      const tenancyRef = doc(collection(db, 'tenancies'));
-      batch.set(tenancyRef, {
-          tenantId,
-          ownerId: selectedOwnerId,
-          propertyId: selectedPropertyId,
-          unitId: selectedUnitId,
-          status: 'ACTIVE',
-          startDate: serverTimestamp(),
-          createdAt: serverTimestamp()
-      });
-
-      batch.set(inviteRef, {
-          tenantId,
-          tenantEmail,
-          tenantName,
-          ownerId: selectedOwnerId,
-          propertyId: selectedPropertyId,
-          propertyName,
-          unitId: selectedUnitId,
-          unitNumber: unitData?.unitNumber || '',
-          status: 'pending',
-          expiresAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-          createdBy: currentAdminUid || auth.currentUser?.uid || 'admin'
-      });
-
-      await batch.commit();
+      const tenantId = String(result.tenantId || '');
+      const invitationId = String(result.invitationId || '');
+      const propertyName = propertyData?.name || propertyData?.propertyName || 'Assigned Property';
 
       let invitationSent = false;
-      try {
-        const resendFn = httpsCallable(functions, 'resendTenantInvitation');
-        await resendFn({ invitationId: inviteRef.id });
-
-        const statusBatch = writeBatch(db);
-        statusBatch.set(tenantRef, {
-          invitationStatus: 'sent',
-          updatedAt: serverTimestamp()
-        }, { merge: true });
-        await statusBatch.commit();
-        invitationSent = true;
-      } catch (inviteError: any) {
-        console.error("Tenant linked but invitation delivery failed:", inviteError);
-        setError("Tenant linked successfully, but the invitation could not be sent. Use the send arrow to retry this exact invitation.");
+      if (invitationId) {
+        try {
+          const resendFn = httpsCallable(functions, 'resendTenantInvitation');
+          await resendFn({ invitationId });
+          invitationSent = true;
+        } catch (inviteError: any) {
+          console.error("Tenant linked but invitation delivery failed:", inviteError);
+          setError("Tenant linked successfully, but the invitation could not be sent. Use the send arrow to retry this exact invitation.");
+        }
       }
 
       setTenants(prev => prev.map((tenant) => (
@@ -306,13 +229,12 @@ export default function TenantsManagementPage() {
               unitNumber: unitData?.unitNumber || '',
               propertyName,
               status: 'pending_invitation',
-              tenantInvitationId: inviteRef.id,
+              tenantInvitationId: invitationId,
               invitationStatus: invitationSent ? 'sent' : 'pending'
             }
           : tenant
       )));
       setOpenAdd(false);
-
       if (invitationSent) {
         setSuccess("Relational link secured and the Tenant invitation was sent.");
         alert("Relational Link Secured: Tenant assigned to Unit and invitation sent.");
@@ -320,7 +242,7 @@ export default function TenantsManagementPage() {
         alert("Relational Link Secured: Tenant assigned to Unit. Invitation remains pending and can be retried from the Tenant Registry.");
       }
     } catch (err: any) {
-        alert("Fault: " + err.message);
+      alert("Fault: " + (err?.message || "Unknown error"));
     } finally {
       setSubmitting(false);
     }
@@ -348,11 +270,20 @@ export default function TenantsManagementPage() {
       setSubmitting(true);
       setError(null);
       setSuccess(null);
-      
       try {
-          const batch = writeBatch(db);
-          const tenantRef = doc(db, 'users', selectedTenant.uid);
-          
+          await runAdminOperationalMutation('MANAGE_TENANT', {
+              operation: 'UPDATE',
+              tenantId: selectedTenant.uid,
+              displayName: editForm.displayName,
+              phoneNumber: editForm.phoneNumber,
+              status: editForm.status,
+              propertyId: selectedPropertyId,
+              unitId: selectedUnitId,
+              notes: editForm.notes,
+              emiratesID: editForm.emiratesID,
+          });
+          const newUnit = units.find(u => u.id === selectedUnitId);
+          const prop = properties.find(p => p.id === selectedPropertyId);
           const updates: any = {
               displayName: editForm.displayName,
               phoneNumber: editForm.phoneNumber,
@@ -361,51 +292,14 @@ export default function TenantsManagementPage() {
               unitId: selectedUnitId,
               notes: editForm.notes,
               emiratesID: editForm.emiratesID,
-              updatedAt: serverTimestamp(),
-              updatedBy: currentAdminUid
+              unitNumber: newUnit?.unitNumber || '',
+              propertyName: prop?.name || prop?.propertyName || '',
           };
-
-          // Handle Unit Reassignment logic
-          if (selectedUnitId !== selectedTenant.unitId) {
-              // 1. Clear old unit if exists
-              if (selectedTenant.unitId) {
-                  batch.update(doc(db, 'units', selectedTenant.unitId), {
-                      tenantId: null,
-                      currentTenantId: null,
-                      occupancyStatus: 'VACANT',
-                      updatedAt: serverTimestamp(),
-                      updatedBy: currentAdminUid
-                  });
-              }
-              // 2. Occupy new unit
-              if (selectedUnitId) {
-                  const newUnit = units.find(u => u.id === selectedUnitId);
-                  batch.update(doc(db, 'units', selectedUnitId), {
-                      tenantId: selectedTenant.uid,
-                      currentTenantId: selectedTenant.uid,
-                      tenantName: editForm.displayName,
-                      occupancyStatus: 'OCCUPIED',
-                      updatedAt: serverTimestamp(),
-                      updatedBy: currentAdminUid
-                  });
-                  updates.unitNumber = newUnit?.unitNumber || '';
-                  const prop = properties.find(p => p.id === selectedPropertyId);
-                  updates.propertyName = prop?.name || prop?.propertyName || 'Assigned Property';
-              } else {
-                  updates.unitNumber = '';
-                  updates.propertyName = '';
-              }
-          }
-
-          batch.update(tenantRef, updates);
-          await batch.commit();
-          
           setOpenEdit(false);
           setSuccess("Tenant registry updated successfully.");
-          // Local update
           setTenants(prev => prev.map(t => t.uid === selectedTenant.uid ? { ...t, ...updates } : t));
       } catch (err: any) {
-          console.error("Firebase Update Error:", err);
+          console.error("Tenant update error:", err);
           setError(`${err.code || 'error'}: ${err.message}`);
       } finally {
           setSubmitting(false);
@@ -469,33 +363,13 @@ export default function TenantsManagementPage() {
   const handleArchiveTenant = async (tenant: any) => {
       if (!currentAdminUid) return;
       if (!window.confirm("Archive this tenant? They will no longer be able to log in to the tenant portal.")) return;
-      
       setSubmitting(true);
       try {
-          const tenantRef = doc(db, 'users', tenant.uid);
-          const updates = {
-              status: 'archived',
-              archivedAt: serverTimestamp(),
-              archivedBy: currentAdminUid,
-              updatedAt: serverTimestamp(),
-              updatedBy: currentAdminUid
-          };
-          
-          const batch = writeBatch(db);
-          batch.update(tenantRef, updates);
-          
-          // If they have an active unit, we might want to vacate it
-          if (tenant.unitId) {
-              batch.update(doc(db, 'units', tenant.unitId), {
-                  tenantId: null,
-                  currentTenantId: null,
-                  occupancyStatus: 'VACANT',
-                  updatedAt: serverTimestamp(),
-                  updatedBy: currentAdminUid
-              });
-          }
-
-          await batch.commit();
+          await runAdminOperationalMutation('MANAGE_TENANT', {
+              operation: 'ARCHIVE',
+              tenantId: tenant.uid,
+          });
+          const updates = { status: 'archived' };
           setSuccess("Tenant archived successfully.");
           setTenants(prev => prev.map(t => t.uid === tenant.uid ? { ...t, ...updates } : t));
       } catch (err: any) {
@@ -508,62 +382,15 @@ export default function TenantsManagementPage() {
 
   const handleDeleteTenant = async () => {
       if (!tenantToDelete || !currentAdminUid) return;
-
       setSubmitting(true);
       setError(null);
       try {
-          const batch = writeBatch(db);
           const tenantId = tenantToDelete.uid;
           const tenantEmail = tenantToDelete.email;
-          const prevPropertyId = tenantToDelete.propertyId;
-          const prevUnitId = tenantToDelete.unitId;
-
-          // 1. Soft delete the user record
-          const tenantRef = doc(db, 'users', tenantId);
-          batch.update(tenantRef, {
-              role: "tenant_deleted",
-              previousRole: "tenant",
-              status: "deleted",
-              deletedAt: serverTimestamp(),
-              updatedAt: serverTimestamp(),
-              propertyId: null,
-              unitId: null,
-              unitNumber: null,
-              ownerId: null,
-              updatedBy: currentAdminUid
-          });
-
-          // 2. Vacate the unit if linked
-          if (prevUnitId) {
-              const unitRef = doc(db, 'units', prevUnitId);
-              batch.update(unitRef, {
-                  tenantId: null,
-                  currentTenantId: null,
-                  occupancyStatus: "VACANT",
-                  updatedAt: serverTimestamp(),
-                  updatedBy: currentAdminUid
-              });
-          }
-
-          // 3. Create Audit Log
-          const logRef = doc(collection(db, 'audit_logs'));
-          batch.set(logRef, {
-              action: "TENANT_SOFT_DELETE",
-              actorId: currentAdminUid,
+          await runAdminOperationalMutation('MANAGE_TENANT', {
+              operation: 'DELETE',
               tenantId,
-              tenantEmail,
-              previousPropertyId: prevPropertyId || null,
-              previousUnitId: prevUnitId || null,
-              timestamp: serverTimestamp(),
-              source: "ADMIN_TENANT_REGISTRY",
-              details: { 
-                  displayName: tenantToDelete.displayName,
-                  deletedBy: currentAdminUid 
-              }
           });
-
-          await batch.commit();
-          
           setSuccess(`Tenant ${tenantEmail} removed and unit vacated.`);
           setTenants(prev => prev.filter(t => t.uid !== tenantId));
           setOpenDeleteConfirm(false);

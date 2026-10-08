@@ -50,13 +50,13 @@ test('final Firestore authority hardener is status-aware, explicit, bounded and 
     const canonical = matchBlock(rules, '    match /maintenanceTickets/{ticketId} {');
     assert.match(legacy, /allow create, update, delete: if false;/);
     assert.doesNotMatch(legacy, /safeTicketUpdateByActor/);
-    assert.match(canonical, /allow create: if safeAdminTicketCreate\(\);/);
+    assert.match(canonical, /allow create: if false;/);
     assert.match(canonical, /allow update: if safeTicketUpdateByActor\(\);/);
     assert.match(rules, /let authenticated = signedIn\(\);/);
     assert.match(rules, /let role = authenticated/);
     assert.match(rules, /let admin = authenticated && \(/);
     assert.match(rules, /let dispatcher = authenticated && \(/);
-    assert.match(rules, /\(admin && safeAdminTicketUpdate\(\)\)/);
+    assert.doesNotMatch(rules, /\(admin && safeAdminTicketUpdate\(\)\)/);
     assert.match(rules, /\(!admin && dispatcher && safeDispatcherTicketUpdate\(\)\)/);
     assert.match(rules, /\(!admin && !dispatcher && role in \['', 'tenant'\] && tenantOwns\(resource\.data\) && safeTenantEvidenceUpdate\(\)\)/);
     assert.match(rules, /\(!admin && !dispatcher && role in \['technician', 'tech'\] && techOwns\(resource\.data\) && safeTechnicianTicketUpdate\(\)\)/);

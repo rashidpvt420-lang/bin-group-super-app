@@ -111,13 +111,15 @@ test('Wave 5 Technician Corps is an operational roster, not a second employee au
 
 test('Wave 5 preserves Property Contacts as a separate non-employee directory', async () => {
   const contacts = await read('apps/admin-panel/src/pages/ops/StaffDirectoryPage.tsx');
+  const backend = await read('functions/adminOperationalMutations.ts');
 
   expectAll(contacts, [
     /Property Contacts Directory/,
     /does not create Firebase Auth users, HR profiles, payroll identities or Technician accounts/,
-    /directoryType: 'PROPERTY_CONTACT'/,
+    /runAdminOperationalMutation\('CREATE_PROPERTY_CONTACT'/,
     /collection\(db, 'staffDirectory'\)/,
   ], 'Property Contacts boundary');
+  assert.match(backend, /directoryType: "PROPERTY_CONTACT"/);
 
   assert.doesNotMatch(contacts, /adminCreateUser/);
   assert.doesNotMatch(contacts, /adminUpdateStaffProfile/);

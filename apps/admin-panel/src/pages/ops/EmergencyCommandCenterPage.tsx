@@ -6,7 +6,8 @@ import {
 } from '@mui/material';
 import { AlertTriangle, Shield, Flame, Droplets, Zap, ShieldAlert, Radio, Compass } from 'lucide-react';
 import { useLanguage } from '@bin/shared';
-import { db, functions, httpsCallable, collection, query, where, onSnapshot, addDoc, serverTimestamp } from '../../lib/firebase';
+import { db, functions, httpsCallable, collection, query, where, onSnapshot } from '../../lib/firebase';
+import { runAdminOperationalMutation } from '../../lib/adminOperationalMutation';
 import { binThemeTokens } from '../../theme/adminTheme';
 
 export default function EmergencyCommandCenterPage() {
@@ -108,16 +109,13 @@ export default function EmergencyCommandCenterPage() {
         e.preventDefault();
         setSubmittingBroadcast(true);
         try {
-            await addDoc(collection(db, 'announcements'), {
+            await runAdminOperationalMutation('CREATE_ANNOUNCEMENT', {
                 propertyId: 'all',
                 title: `EMERGENCY ALERT: ${broadcastTitle}`,
                 body: broadcastMessage,
                 category: 'emergency',
                 priority: 'urgent',
                 audience: 'all',
-                published: true,
-                publishedAt: serverTimestamp(),
-                createdBy: 'Emergency Command Center'
             });
             setOpenBroadcast(false);
             setBroadcastTitle('');

@@ -383,7 +383,7 @@ if (!tests.includes(testMarker)) {
       status: 'active',
       approvalStatus: 'approved',
     });
-    await setDoc(doc(adminDb, 'technicians/suspended_tech'), {
+    await seedServerDocument('technicians/suspended_tech', {
       status: 'active',
       approvalStatus: 'approved',
       suspended: false,
@@ -398,8 +398,8 @@ if (!tests.includes(testMarker)) {
       completionPhotos: [],
       evidencePhotos: [],
     };
-    await setDoc(doc(adminDb, 'tickets/suspended_tech_existing'), existingTechTicket);
-    await setDoc(doc(adminDb, 'maintenanceTickets/suspended_tech_existing'), existingTechTicket);
+    await seedServerDocument('tickets/suspended_tech_existing', existingTechTicket);
+    await seedServerDocument('maintenanceTickets/suspended_tech_existing', existingTechTicket);
 
     const staleTechDb = testEnv.authenticatedContext('suspended_tech', {
       role: 'technician',

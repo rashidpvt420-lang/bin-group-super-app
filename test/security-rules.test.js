@@ -224,7 +224,7 @@ describe('Firestore Security Rules', () => {
   it('tenant ticket access: Tenant can read their own tickets', async () => {
     const adminDb = testEnv.authenticatedContext('admin_user', { firebase: { sign_in_second_factor: 'phone' }, admin: true }).firestore();
     await setDoc(doc(adminDb, 'users/admin_user'), { role: 'admin' });
-    await setDoc(doc(adminDb, 'maintenanceTickets/ticket_1'), { tenantId: 'tenant_a' });
+    await seedServerDocument('maintenanceTickets/ticket_1', { tenantId: 'tenant_a' });
 
     const tenantADb = testEnv.authenticatedContext('tenant_a').firestore();
     await assertSucceeds(getDoc(doc(tenantADb, 'maintenanceTickets/ticket_1')));
@@ -234,7 +234,7 @@ describe('Firestore Security Rules', () => {
     const adminDb = testEnv.authenticatedContext('admin_user', { firebase: { sign_in_second_factor: 'phone' }, admin: true }).firestore();
     await setDoc(doc(adminDb, 'users/admin_user'), { role: 'admin' });
     await setDoc(doc(adminDb, 'technicians/tech_a'), { status: 'active', approved: true });
-    await setDoc(doc(adminDb, 'maintenanceTickets/ticket_2'), { assignedTechnicianId: 'tech_a' });
+    await seedServerDocument('maintenanceTickets/ticket_2', { assignedTechnicianId: 'tech_a' });
 
     const techADb = testEnv.authenticatedContext('tech_a', { role: 'technician' }).firestore();
     await assertSucceeds(getDoc(doc(techADb, 'maintenanceTickets/ticket_2')));
@@ -244,7 +244,7 @@ describe('Firestore Security Rules', () => {
     const adminDb = testEnv.authenticatedContext('admin_user', { firebase: { sign_in_second_factor: 'phone' }, admin: true }).firestore();
     await setDoc(doc(adminDb, 'users/admin_user'), { role: 'admin' });
     await setDoc(doc(adminDb, 'technicians/tech_a'), { status: 'active', approved: true });
-    await setDoc(doc(adminDb, 'maintenanceTickets/ticket_3'), {
+    await seedServerDocument('maintenanceTickets/ticket_3', {
       assignedTechnicianId: 'tech_a',
       status: 'ASSIGNED',
       priority: 'NORMAL',
@@ -273,7 +273,7 @@ describe('Firestore Security Rules', () => {
   it('ticket update narrowing: Tenant cannot directly change ticket status', async () => {
     const adminDb = testEnv.authenticatedContext('admin_user', { firebase: { sign_in_second_factor: 'phone' }, admin: true }).firestore();
     await setDoc(doc(adminDb, 'users/admin_user'), { role: 'admin' });
-    await setDoc(doc(adminDb, 'maintenanceTickets/ticket_4'), {
+    await seedServerDocument('maintenanceTickets/ticket_4', {
       tenantId: 'tenant_a',
       status: 'OPEN',
       priority: 'NORMAL',
@@ -303,7 +303,7 @@ describe('Firestore Security Rules', () => {
       status: 'OPEN',
     };
     await seedServerDocument('tickets/open_ticket', openTicket);
-    await setDoc(doc(adminDb, 'maintenanceTickets/open_maintenance_ticket'), openTicket);
+    await seedServerDocument('maintenanceTickets/open_maintenance_ticket', openTicket);
 
     const claim = {
       assignedTechnicianId: 'tech_a',
@@ -333,7 +333,7 @@ describe('Firestore Security Rules', () => {
       suspended: false,
     });
     await seedServerDocument('tickets/open_ticket_approved_tech', openTicket);
-    await setDoc(doc(adminDb, 'maintenanceTickets/open_maintenance_ticket_approved_tech'), openTicket);
+    await seedServerDocument('maintenanceTickets/open_maintenance_ticket_approved_tech', openTicket);
     const approvedTechDb = testEnv.authenticatedContext('tech_approved', { role: 'technician' }).firestore();
     await assertFails(getDoc(doc(approvedTechDb, 'tickets/open_ticket_approved_tech')));
     await assertFails(getDoc(doc(approvedTechDb, 'maintenanceTickets/open_maintenance_ticket_approved_tech')));
@@ -457,7 +457,7 @@ describe('Firestore Security Rules', () => {
   it('amenityBookings isolation: Tenant can manage own bookings, others blocked', async () => {
     const adminDb = testEnv.authenticatedContext('admin_user', { firebase: { sign_in_second_factor: 'phone' }, admin: true }).firestore();
     await setDoc(doc(adminDb, 'users/admin_user'), { role: 'admin' });
-    await setDoc(doc(adminDb, 'amenityBookings/booking_1'), { tenantUid: 'tenant_a', amenityName: 'Pool' });
+    await seedServerDocument('amenityBookings/booking_1', { tenantUid: 'tenant_a', amenityName: 'Pool' });
 
     const tenantADb = testEnv.authenticatedContext('tenant_a').firestore();
     const tenantBDb = testEnv.authenticatedContext('tenant_b').firestore();
@@ -937,7 +937,7 @@ describe('Firestore Security Rules', () => {
     await setDoc(doc(adminDb, 'users/tenant_a'), { role: 'tenant', propertyId: 'prop_a' });
     await setDoc(doc(adminDb, 'users/tenant_b'), { role: 'tenant', propertyId: 'prop_b' });
     await setDoc(doc(adminDb, 'properties/prop_a'), { ownerId: 'owner_a' });
-    await assertSucceeds(setDoc(doc(adminDb, 'amenities/pool'), { name: 'Community Pool', active: true, propertyId: 'prop_a' }));
+    await seedServerDocument('amenities/pool', { name: 'Community Pool', active: true, propertyId: 'prop_a' });
 
     const tenantADb = testEnv.authenticatedContext('tenant_a').firestore();
     const tenantBDb = testEnv.authenticatedContext('tenant_b').firestore();
@@ -969,7 +969,7 @@ describe('Firestore Security Rules', () => {
     await setDoc(doc(adminDb, 'users/tenant_a'), { role: 'tenant', propertyId: 'prop_a' });
     await setDoc(doc(adminDb, 'users/tenant_b'), { role: 'tenant', propertyId: 'prop_b' });
     await setDoc(doc(adminDb, 'properties/prop_b'), { ownerId: 'owner_b' });
-    await setDoc(doc(adminDb, 'amenityBookings/booking_b'), { propertyId: 'prop_b', tenantUid: 'tenant_b', amenityName: 'Gym' });
+    await seedServerDocument('amenityBookings/booking_b', { propertyId: 'prop_b', tenantUid: 'tenant_b', amenityName: 'Gym' });
 
     const tenantADb = testEnv.authenticatedContext('tenant_a').firestore();
     const tenantBDb = testEnv.authenticatedContext('tenant_b').firestore();
@@ -1005,7 +1005,7 @@ describe('Firestore Security Rules', () => {
   it('tenant cannot read another tenants parcel', async () => {
     const adminDb = testEnv.authenticatedContext('admin_user', { firebase: { sign_in_second_factor: 'phone' }, admin: true }).firestore();
     await setDoc(doc(adminDb, 'users/admin_user'), { role: 'admin' });
-    await setDoc(doc(adminDb, 'parcels/parcel_b'), { tenantUid: 'tenant_b', propertyId: 'prop_b' });
+    await seedServerDocument('parcels/parcel_b', { tenantUid: 'tenant_b', propertyId: 'prop_b' });
 
     const tenantADb = testEnv.authenticatedContext('tenant_a').firestore();
     const tenantBDb = testEnv.authenticatedContext('tenant_b').firestore();
@@ -1014,14 +1014,15 @@ describe('Firestore Security Rules', () => {
     await assertFails(getDoc(doc(tenantADb, 'parcels/parcel_b')));
   });
 
-  it('admin can manage parcel/parking/amenity records', async () => {
+  it('admin browser reads operational records but mutations are callable-only', async () => {
     const adminDb = testEnv.authenticatedContext('admin_user', { firebase: { sign_in_second_factor: 'phone' }, admin: true }).firestore();
-    await setDoc(doc(adminDb, 'users/admin_user'), { role: 'admin' });
+    await seedServerDocument('users/admin_user', { role: 'admin' });
+    await seedServerDocument('amenities/amenity_1', { name: 'Gym', propertyId: 'prop_a' });
 
-    await assertSucceeds(setDoc(doc(adminDb, 'amenities/amenity_1'), { name: 'Gym', propertyId: 'prop_a' }));
     await assertSucceeds(getDoc(doc(adminDb, 'amenities/amenity_1')));
-    await assertSucceeds(setDoc(doc(adminDb, 'parcels/parcel_1'), { tenantUid: 'tenant_a', propertyId: 'prop_a', status: 'received' }));
-    await assertSucceeds(setDoc(doc(adminDb, 'visitorParkingRequests/req_1'), { tenantUid: 'tenant_a', propertyId: 'prop_a', unitId: 'unit_a', status: 'pending' }));
+    await assertFails(setDoc(doc(adminDb, 'amenities/amenity_2'), { name: 'Gym', propertyId: 'prop_a' }));
+    await assertFails(setDoc(doc(adminDb, 'parcels/parcel_1'), { tenantUid: 'tenant_a', propertyId: 'prop_a', status: 'received' }));
+    await assertFails(setDoc(doc(adminDb, 'visitorParkingRequests/req_1'), { tenantUid: 'tenant_a', propertyId: 'prop_a', unitId: 'unit_a', status: 'pending' }));
   });
 
   it('owner can manage only owned property records', async () => {
@@ -1075,7 +1076,7 @@ describe('Firestore Security Rules', () => {
   it('messages only visible to participants', async () => {
     const adminDb = testEnv.authenticatedContext('admin_user', { firebase: { sign_in_second_factor: 'phone' }, admin: true }).firestore();
     await setDoc(doc(adminDb, 'users/admin_user'), { role: 'admin' });
-    await setDoc(doc(adminDb, 'conversations/conv_1'), {
+    await seedServerDocument('conversations/conv_1', {
       participantUids: ['tenant_a', 'admin_user'],
       propertyId: 'prop_a',
     });
@@ -1422,14 +1423,14 @@ describe('Firestore Security Rules', () => {
     const adminDb = testEnv.authenticatedContext('admin_user', { firebase: { sign_in_second_factor: 'phone' }, admin: true }).firestore();
     await setDoc(doc(adminDb, 'users/admin_user'), { role: 'admin' });
 
-    await setDoc(doc(adminDb, 'users/suspended_tenant'), {
+    await seedServerDocument('users/suspended_tenant', {
       role: 'tenant',
       status: 'suspended',
       suspended: false,
       propertyId: 'prop_suspended',
       unitId: 'unit_suspended',
     });
-    await setDoc(doc(adminDb, 'units/unit_suspended'), {
+    await seedServerDocument('units/unit_suspended', {
       tenantId: 'suspended_tenant',
       tenantUid: 'suspended_tenant',
       propertyId: 'prop_suspended',
@@ -1449,7 +1450,7 @@ describe('Firestore Security Rules', () => {
       tenantPhotos: [],
     };
     await seedServerDocument('tickets/suspended_tenant_existing', existingTenantTicket);
-    await setDoc(doc(adminDb, 'maintenanceTickets/suspended_tenant_existing'), existingTenantTicket);
+    await seedServerDocument('maintenanceTickets/suspended_tenant_existing', existingTenantTicket);
 
     const staleTenantDb = testEnv.authenticatedContext('suspended_tenant', { role: 'tenant' }).firestore();
     const newTicket = {
@@ -1477,8 +1478,8 @@ describe('Firestore Security Rules', () => {
     }));
     await assertFails(setDoc(doc(staleTenantDb, 'users/suspended_tenant/fcmTokens/blocked'), { token: 'blocked' }));
 
-    await setDoc(doc(adminDb, 'users/suspended_owner'), { role: 'owner', status: 'suspended', suspended: false });
-    await setDoc(doc(adminDb, 'properties/suspended_owner_existing'), {
+    await seedServerDocument('users/suspended_owner', { role: 'owner', status: 'suspended', suspended: false });
+    await seedServerDocument('properties/suspended_owner_existing', {
       ownerId: 'suspended_owner',
       status: 'draft',
       name: 'Existing property',
@@ -1491,13 +1492,13 @@ describe('Firestore Security Rules', () => {
     }));
     await assertFails(updateDoc(doc(staleOwnerDb, 'properties/suspended_owner_existing'), { name: 'Blocked update' }));
 
-    await setDoc(doc(adminDb, 'users/suspended_tech'), {
+    await seedServerDocument('users/suspended_tech', {
       role: 'technician',
       status: 'suspended',
       suspended: false,
       approvalStatus: 'approved',
     });
-    await setDoc(doc(adminDb, 'technicians/suspended_tech'), {
+    await seedServerDocument('technicians/suspended_tech', {
       status: 'active',
       approvalStatus: 'approved',
       suspended: false,
@@ -1513,7 +1514,7 @@ describe('Firestore Security Rules', () => {
       evidencePhotos: [],
     };
     await seedServerDocument('tickets/suspended_tech_existing', existingTechTicket);
-    await setDoc(doc(adminDb, 'maintenanceTickets/suspended_tech_existing'), existingTechTicket);
+    await seedServerDocument('maintenanceTickets/suspended_tech_existing', existingTechTicket);
     const staleTechDb = testEnv.authenticatedContext('suspended_tech', { role: 'technician' }).firestore();
     await assertFails(updateDoc(doc(staleTechDb, 'tickets/suspended_tech_existing'), {
       technicianNotes: 'Blocked stale-token update',

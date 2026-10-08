@@ -5,9 +5,9 @@ const file = 'firestore.rules';
 let text = readFileSync(file, 'utf8').replace(/\r\n?/g, '\n');
 let changed = false;
 
-// Browser applications create canonical tickets through App Check callables.
-// Direct Firestore creation remains Admin-only for controlled non-terminal intake.
-const canonicalCreate = '      allow create: if safeAdminTicketCreate();';
+// Browser applications, including Admin, create canonical tickets through
+// App Check-protected audited callables. Direct Firestore creation is denied.
+const canonicalCreate = '      allow create: if false;';
 const assignedTechnicianList = '      allow list: if canListAssignedTechnicianTicket(resource.data);';
 const dispatchList = '      allow list: if isNotSuspended() && canDispatchJobs();';
 for (const legacyCreate of [
@@ -99,22 +99,6 @@ const router = `    function isClosedTicketStatus(status) {
       ];
     }
 
-    function safeAdminTicketCreate() {
-      // Closed/cancelled tickets are created only by audited server callables (Admin SDK).
-      return isAdmin() && !isClosedTicketStatus(request.resource.data.get('status', 'OPEN'));
-    }
-
-    function safeAdminTicketUpdate() {
-      // Admin browsers may not reopen a closed ticket by rewriting status.
-      // Lifecycle transitions for closed tickets stay on audited callables.
-      return isAdmin() &&
-        isNotSuspended() &&
-        (
-          !isClosedTicketStatus(resource.data.get('status', '')) ||
-          request.resource.data.get('status', resource.data.get('status', '')) == resource.data.get('status', '')
-        );
-    }
-
     function safeTicketUpdateByActor() {
       let authenticated = signedIn();
       let role = authenticated
@@ -138,7 +122,7 @@ const router = `    function isClosedTicketStatus(status) {
         role in ['operations_admin', 'operations_manager', 'dispatcher']
       );
       return authenticated && (
-        (admin && safeAdminTicketUpdate()) ||
+        false ||
         (!admin && dispatcher && safeDispatcherTicketUpdate()) ||
         (!admin && !dispatcher && role in ['', 'tenant'] && tenantOwns(resource.data) && safeTenantEvidenceUpdate()) ||
         (!admin && !dispatcher && role in ['technician', 'tech'] && techOwns(resource.data) && safeTechnicianTicketUpdate())
@@ -176,13 +160,11 @@ if (text.split('function safeTicketUpdateByActor() {').length - 1 !== 1) throw n
 
 for (const required of [
   'function isClosedTicketStatus(status) {',
-  'function safeAdminTicketCreate() {',
-  'function safeAdminTicketUpdate() {',
   'let authenticated = signedIn();',
   'let role = authenticated',
   'let admin = authenticated && (',
   'let dispatcher = authenticated && (',
-  '(admin && safeAdminTicketUpdate())',
+  'false ||',
   '(!admin && dispatcher && safeDispatcherTicketUpdate())',
   "(!admin && !dispatcher && role in ['', 'tenant'] && tenantOwns(resource.data) && safeTenantEvidenceUpdate())",
   "(!admin && !dispatcher && role in ['technician', 'tech'] && techOwns(resource.data) && safeTechnicianTicketUpdate())",
@@ -199,6 +181,9 @@ for (const forbidden of [
   monolithicUpdate.trim(),
   ...splitRules.map((rule) => rule.trim()),
   'allow create: if isAdmin() || canCreateTenantBoundTicket(request.resource.data);',
+  'function safeAdminTicketCreate() {',
+  'function safeAdminTicketUpdate() {',
+  '(admin && safeAdminTicketUpdate())',
 ]) {
   if (text.includes(forbidden)) throw new Error(`[ticket-rule-binding] Forbidden ticket authorization fragment remains: ${forbidden}`);
 }
@@ -216,8 +201,11 @@ const maintenanceHeader = '    match /maintenanceTickets/{ticketId} {';
 ensureRuleInMatchBlock(maintenanceHeader, dispatchList, 'canonical /maintenanceTickets');
 const maintenanceBeforeCreate = readMatchBlock(maintenanceHeader, 'canonical /maintenanceTickets');
 const legacyAdminCreate = '      allow create: if isAdmin();';
-if (maintenanceBeforeCreate.content.includes(legacyAdminCreate)) {
-  const repaired = maintenanceBeforeCreate.content.split(legacyAdminCreate).join(canonicalCreate);
+const legacySafeAdminCreate = '      allow create: if safeAdminTicketCreate();';
+if (maintenanceBeforeCreate.content.includes(legacyAdminCreate) || maintenanceBeforeCreate.content.includes(legacySafeAdminCreate)) {
+  const repaired = maintenanceBeforeCreate.content
+    .split(legacyAdminCreate).join(canonicalCreate)
+    .split(legacySafeAdminCreate).join(canonicalCreate);
   text = `${text.slice(0, maintenanceBeforeCreate.start)}${repaired}${text.slice(maintenanceBeforeCreate.end)}`;
   changed = true;
 }

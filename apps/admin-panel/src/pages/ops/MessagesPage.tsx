@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Container, Typography, Paper, Stack, TextField, IconButton, CircularProgress, Grid, List, ListItem, ListItemText, Divider, Box, alpha } from '@mui/material';
 import { Send, ArrowLeft } from 'lucide-react';
-import { db, doc, collection, addDoc, serverTimestamp, query, orderBy, onSnapshot, updateDoc } from '../../lib/firebase';
+import { db, collection, query, orderBy, onSnapshot } from '../../lib/firebase';
+import { runAdminOperationalMutation } from '../../lib/adminOperationalMutation';
 import { useLanguage } from '@bin/shared';
 import { binThemeTokens } from '../../theme/adminTheme';
 import SafeIcon from '../../components/SafeIcon';
@@ -59,16 +60,9 @@ export default function MessagesPage() {
         const body = newMessage;
         setNewMessage('');
         try {
-            await addDoc(collection(db, `conversations/${selectedConv.id}/messages`), {
-                senderUid: user.uid,
-                senderRole: 'admin',
-                senderEmail: user.email || '',
+            await runAdminOperationalMutation('SEND_MESSAGE', {
+                conversationId: selectedConv.id,
                 body,
-                createdAt: serverTimestamp()
-            });
-
-            await updateDoc(doc(db, 'conversations', selectedConv.id), {
-                lastMessageAt: serverTimestamp()
             });
         } catch (err) {
             console.error('Failed to send message:', err);

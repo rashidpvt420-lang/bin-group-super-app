@@ -8,8 +8,7 @@ import {
     Alert
 } from '@mui/material';
 import { CloudUpload } from '@mui/icons-material';
-import { db } from '../lib/firebase';
-import { writeBatch, doc } from 'firebase/firestore';
+import { runAdminOperationalMutation } from '../lib/adminOperationalMutation';
 import { useLanguage } from '@bin/shared';
 
 const BulkImporter: React.FC = () => {
@@ -59,114 +58,17 @@ const BulkImporter: React.FC = () => {
             const rows = parseCSV(text);
             setLogs(prev => [...prev, t('admin.found_records', { count: rows.length })]);
 
-            // Each CSV row can create up to 4 Firestore writes. Keep chunks well below Firestore's 500-write batch limit.
+            // Server-authoritative chunks keep each request bounded and audited.
             const BATCH_SIZE = 50;
             let processed = 0;
 
             for (let i = 0; i < rows.length; i += BATCH_SIZE) {
-                const batch = writeBatch(db);
                 const chunk = rows.slice(i, i + BATCH_SIZE);
-
-                chunk.forEach(row => {
-                    const type = (row.TYPE || 'PROPERTY').toUpperCase();
-                    const now = new Date().toISOString();
-
-                    if (type === 'PROPERTY') {
-                        const ownerId = requireField(row, ['Owner_UID', 'OwnerId', 'ownerId']);
-                        const propertyId = row.Property_ID || row.PropertyId || createSlug(row.Bldg_Name || row.Name || `property-${row.__rowNumber}`);
-                        const propRef = doc(db, 'properties', propertyId);
-                        batch.set(propRef, {
-                            propertyId,
-                            name: row.Bldg_Name || row.Name || 'Unnamed Building',
-                            propertyName: row.Bldg_Name || row.Name || 'Unnamed Building',
-                            zone: row.Bldg_Zone || row.Zone || 'General',
-                            unitsCount: parseInt(row.Units_Count || row.Units || '0', 10) || 0,
-                            ownerId,
-                            emirate: row.Emirate || row.emirate || 'Abu Dhabi',
-                            propertyType: row.Property_Type || row.PropertyType || 'Building',
-                            status: 'active',
-                            createdAt: now,
-                            updatedAt: now,
-                            v2Scale: true
-                        }, { merge: true });
-                        batch.set(doc(db, 'propertyPassports', propertyId), {
-                            propertyId,
-                            ownerId,
-                            propertyType: row.Property_Type || row.PropertyType || 'Building',
-                            emirate: row.Emirate || row.emirate || 'Abu Dhabi',
-                            city: row.City || row.city || '',
-                            zone: row.Bldg_Zone || row.Zone || 'General',
-                            units: parseInt(row.Units_Count || row.Units || '0', 10) || 0,
-                            status: 'ACTIVE_ADMIN_IMPORTED',
-                            source: 'ADMIN_BULK_IMPORT',
-                            createdAt: now,
-                            updatedAt: now
-                        }, { merge: true });
-                    } else if (type === 'UNIT') {
-                        const propertyId = requireField(row, ['Property_ID', 'PropertyId', 'propertyId']);
-                        const unitNumber = requireField(row, ['Unit_Number', 'Number', 'Unit']);
-                        const unitId = row.Unit_ID || row.UnitId || createSlug(`${propertyId}-${unitNumber}`);
-                        const unitData = {
-                            unitId,
-                            unitNumber,
-                            floorNumber: parseInt(row.Floor || '0', 10) || 0,
-                            propertyId,
-                            ownerId: row.Owner_UID || row.OwnerId || '',
-                            tenantId: row.Tenant_UID || row.TenantId || '',
-                            occupancyStatus: row.Tenant_UID || row.TenantId ? 'OCCUPIED' : 'VACANT',
-                            createdAt: now,
-                            updatedAt: now,
-                            source: 'ADMIN_BULK_IMPORT'
-                        };
-                        batch.set(doc(db, 'units', unitId), unitData, { merge: true });
-                        batch.set(doc(db, 'properties', propertyId, 'units', unitId), unitData, { merge: true });
-                    } else if (type === 'TENANT') {
-                        const propertyId = requireField(row, ['Property_ID', 'PropertyId', 'propertyId']);
-                        const email = String(requireField(row, ['Email', 'email'])).toLowerCase();
-                        const tenantId = row.Tenant_UID || row.TenantId || createSlug(email);
-                        const unitId = row.Unit_ID || row.UnitId || createSlug(`${propertyId}-${row.Unit_Number || row.Unit || tenantId}`);
-                        const tenantData = {
-                            tenantId,
-                            authUid: row.Auth_UID || row.AuthUid || '',
-                            displayName: row.Name || row.FullName || email,
-                            email,
-                            phone: row.Phone || row.Mobile || '',
-                            role: 'tenant',
-                            status: 'invited',
-                            propertyId,
-                            unitId,
-                            ownerId: row.Owner_UID || row.OwnerId || '',
-                            createdAt: now,
-                            updatedAt: now,
-                            source: 'ADMIN_BULK_IMPORT'
-                        };
-                        batch.set(doc(db, 'tenantInvitations', tenantId), {
-                            ...tenantData,
-                            invitationStatus: 'PENDING_AUTH_CREATION',
-                            note: 'Create/send Firebase Auth invite from server-side function before tenant login.'
-                        }, { merge: true });
-                        batch.set(doc(db, 'properties', propertyId, 'tenants', tenantId), tenantData, { merge: true });
-                        batch.set(doc(db, 'tenants', tenantId), tenantData, { merge: true });
-                        batch.set(doc(db, 'properties', propertyId, 'units', unitId), {
-                            unitId,
-                            propertyId,
-                            tenantId,
-                            tenantEmail: email,
-                            occupancyStatus: 'OCCUPIED',
-                            updatedAt: now
-                        }, { merge: true });
-                    } else {
-                        throw new Error(`CSV row ${row.__rowNumber}: unsupported TYPE '${type}'`);
-                    }
-                });
-
-                await batch.commit();
+                await runAdminOperationalMutation('BULK_MASTER_IMPORT', { rows: chunk });
                 const currentBatchIndex = Math.floor(i / BATCH_SIZE) + 1;
-                const newlyProcessed = processed + chunk.length;
-                processed = newlyProcessed;
-                
-                setProgress((newlyProcessed / rows.length) * 100);
-                setLogs(prev => [...prev, t('admin.committed_batch', { index: currentBatchIndex, current: newlyProcessed, total: rows.length })]);
+                processed += chunk.length;
+                setProgress((processed / rows.length) * 100);
+                setLogs(prev => [...prev, t('admin.committed_batch', { index: currentBatchIndex, current: processed, total: rows.length })]);
             }
 
             setLogs(prev => [...prev, t('admin.import_success_msg')]);

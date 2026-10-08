@@ -26,7 +26,8 @@ import {
 } from '@mui/material';
 import { Building2, CheckCircle2, ClipboardSignature, Home, Image, MapPin, ShieldCheck, Users, Wrench } from 'lucide-react';
 import { useLanguage } from '@bin/shared';
-import { addDoc, collection, db, doc, onSnapshot, serverTimestamp, updateDoc } from '../../lib/firebase';
+import { collection, db, onSnapshot } from '../../lib/firebase';
+import { runAdminOperationalMutation } from '../../lib/adminOperationalMutation';
 import { binThemeTokens } from '../../theme/adminTheme';
 
 type HomeOpsRecord = {
@@ -256,62 +257,18 @@ export default function MarketplaceApprovalsPage() {
       const imageUrls = safeUrls(form.imageUrlsText);
       const amenities = safeAmenities(form.amenitiesText);
 
-      await addDoc(collection(db, 'contractorProfiles'), {
-        recordType: 'ROOM_RENT_LISTING',
-        listingType: 'HOME_RENT_LISTING',
-        listingVersion: 'HOME_DISCOVERY_V1',
-        active: true,
-        approved: true,
-        notRented: true,
-        hasBinContract: true,
-        status: 'AVAILABLE',
-        title: form.unitTitle.trim(),
-        unitTitle: form.unitTitle.trim(),
-        businessName: form.unitTitle.trim(),
-        name: form.unitTitle.trim(),
-        propertyName: form.propertyName.trim(),
-        propertyType: form.propertyType,
-        propertyAddress: form.propertyAddress.trim(),
-        area: form.area.trim(),
-        community: form.area.trim(),
-        emirate: form.emirate,
-        ownerEmail: form.ownerEmail.toLowerCase(),
-        ownerId: form.ownerId || selectedRequest?.ownerId || null,
-        annualRent: finiteNumber(form.annualRent),
-        bedrooms: form.bedrooms.trim(),
-        bathrooms: form.bathrooms.trim(),
-        areaSqFt: finiteNumber(form.areaSqFt),
-        furnishing: form.furnishing,
-        furnished: form.furnishing === 'FURNISHED',
-        availableFrom: form.availableFrom || null,
-        numberOfCheques: finiteNumber(form.numberOfCheques),
-        securityDeposit: finiteNumber(form.securityDeposit),
-        imageUrls,
-        coverImageUrl: imageUrls[0] || null,
-        amenities,
-        latitude: hasCoordinates ? latitude : null,
-        longitude: hasCoordinates ? longitude : null,
-        permitNumber: form.permitNumber.trim() || null,
-        permitVerified: Boolean(form.permitVerified && form.permitNumber.trim()),
-        permitVerificationUrl: form.permitVerificationUrl.trim() || null,
-        trade: 'Home Rental',
-        category: 'home_rent',
-        contractScope: 'BIN GROUP renter contact, viewing and contract handling',
-        repairHistory,
-        repairHistorySummary: form.repairHistoryText.trim(),
-        verifiedByAdmin: true,
-        verifiedAt: serverTimestamp(),
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
+      await runAdminOperationalMutation('PUBLISH_HOME_LISTING', {
+        requestId: selectedRequest?.id || '',
+        form: {
+          ...form,
+          imageUrls,
+          amenities,
+          repairHistory: repairHistory.map((item) => item.title),
+          latitude: hasCoordinates ? latitude : null,
+          longitude: hasCoordinates ? longitude : null,
+          ownerId: form.ownerId || selectedRequest?.ownerId || '',
+        },
       });
-
-      if (selectedRequest) {
-        await updateDoc(doc(db, 'jobPostings', selectedRequest.id), {
-          status: 'PUBLISHED',
-          stage: 'HOME_LISTING_PUBLISHED',
-          updatedAt: serverTimestamp(),
-        });
-      }
       setOpenPublish(false);
       setSelectedRequest(null);
       setForm(blankForm);
@@ -323,18 +280,13 @@ export default function MarketplaceApprovalsPage() {
   }
 
   async function toggleListing(id: string, active: boolean) {
-    await updateDoc(doc(db, 'contractorProfiles', id), {
-      active,
-      status: active ? 'AVAILABLE' : 'INACTIVE',
-      updatedAt: serverTimestamp(),
-    });
+    await runAdminOperationalMutation('TOGGLE_HOME_LISTING', { listingId: id, active });
   }
 
   async function markApplicationContacted(id: string, requestMode?: string) {
-    await updateDoc(doc(db, 'jobPostings', id), {
-      status: 'CONTACTED',
-      stage: requestMode === 'VIEWING' ? 'VIEWING_COORDINATION_STARTED' : 'BIN_GROUP_CONTACTED_RENTER_AND_OWNER',
-      updatedAt: serverTimestamp(),
+    await runAdminOperationalMutation('MARK_HOME_APPLICATION_CONTACTED', {
+      requestId: id,
+      requestMode: requestMode || '',
     });
   }
 

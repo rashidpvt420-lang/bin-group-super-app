@@ -38,7 +38,8 @@ import {
   ExternalLink,
   GitCommit,
 } from 'lucide-react';
-import { addDoc, collection, db, serverTimestamp, onSnapshot, query, orderBy, limit } from '../../lib/firebase';
+import { collection, db, onSnapshot, query, orderBy, limit } from '../../lib/firebase';
+import { runAdminOperationalMutation } from '../../lib/adminOperationalMutation';
 import { useAuth } from '../../context/AuthContext';
 import { binThemeTokens } from '../../theme/adminTheme';
 
@@ -145,35 +146,12 @@ export default function BinGptEngineerPage() {
     if (!window.confirm(`Issue rollback command for deployment?\nTarget: ${docId}`)) return;
     setSubmitting(true);
     try {
-      await addDoc(collection(db, 'binGptEngineerCommands'), {
+      await runAdminOperationalMutation('CREATE_ENGINEER_COMMAND', {
         command: `ROLLBACK: Revert deployment for command ${docId}.\nTarget SHA: ${sha || 'previous stable'}.\nPR Reference: ${prLink || 'N/A'}.`,
-        status: 'PENDING_IMPLEMENTATION_PLAN',
-        executionMode: 'GITHUB_BRANCH_PR_ONLY',
-        deploymentPolicy: 'MAIN_AFTER_GITHUB_ACTIONS_PASS',
-        firestoreMutationPolicy: 'APPROVED_MIGRATION_ONLY',
         rollbackRequired: false,
+        targetCommandId: docId,
         workflowSteps,
         guardrails,
-        commandHistory: [{ status: 'PENDING_IMPLEMENTATION_PLAN', at: new Date().toISOString() }],
-        buildStatus: 'NOT_STARTED',
-        prLink: null,
-        deploymentStatus: 'NOT_STARTED',
-        errorLogs: [],
-        createdBy: user?.uid || null,
-        createdByEmail: user?.email || null,
-        createdByRole: role || null,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-        auditTrail: [
-          {
-            action: 'ROLLBACK_COMMAND_ISSUED',
-            actorUid: user?.uid || null,
-            actorEmail: user?.email || null,
-            actorRole: role || null,
-            targetCommand: docId,
-            at: new Date().toISOString(),
-          },
-        ],
       });
       alert('Rollback command added to the queue.');
     } catch (err: any) {
@@ -196,36 +174,13 @@ export default function BinGptEngineerPage() {
 
     setSubmitting(true);
     try {
-      const docRef = await addDoc(collection(db, 'binGptEngineerCommands'), {
+      const result = await runAdminOperationalMutation('CREATE_ENGINEER_COMMAND', {
         command: command.trim(),
-        status: 'PENDING_IMPLEMENTATION_PLAN',
-        executionMode: 'GITHUB_BRANCH_PR_ONLY',
-        deploymentPolicy: 'MAIN_AFTER_GITHUB_ACTIONS_PASS',
-        firestoreMutationPolicy: 'APPROVED_MIGRATION_ONLY',
         rollbackRequired: true,
         workflowSteps,
         guardrails,
-        commandHistory: [{ status: 'PENDING_IMPLEMENTATION_PLAN', at: new Date().toISOString() }],
-        buildStatus: 'NOT_STARTED',
-        prLink: null,
-        deploymentStatus: 'NOT_STARTED',
-        errorLogs: [],
-        createdBy: user?.uid || null,
-        createdByEmail: user?.email || null,
-        createdByRole: role || null,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-        auditTrail: [
-          {
-            action: 'COMMAND_AUDIT_PACKAGE_CREATED',
-            actorUid: user?.uid || null,
-            actorEmail: user?.email || null,
-            actorRole: role || null,
-            at: new Date().toISOString(),
-          },
-        ],
       });
-      setResult({ type: 'success', message: `Audit package created: ${docRef.id}. Runner status: pending implementation plan.` });
+      setResult({ type: 'success', message: `Audit package created: ${String(result.id || '')}. Runner status: pending implementation plan.` });
     } catch (error: any) {
       setResult({ type: 'error', message: error?.message || 'Failed to create BIN-GPT Engineer audit package.' });
     } finally {

@@ -2,7 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { Container, Typography, Paper, Grid, Stack, Button, Chip, CircularProgress, Box, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Dialog, DialogTitle, DialogContent, DialogActions, TextField, MenuItem, Select, FormControl, InputLabel, Switch, FormControlLabel, Alert } from '@mui/material';
 import { Plus } from 'lucide-react';
 import { useLanguage } from '@bin/shared';
-import { db, collection, query, onSnapshot, addDoc, serverTimestamp, doc, deleteDoc } from '../../lib/firebase';
+import { db, collection, query, onSnapshot } from '../../lib/firebase';
+import { runAdminOperationalMutation } from '../../lib/adminOperationalMutation';
 import { binThemeTokens } from '../../theme/adminTheme';
 
 export default function StaffDirectoryPage() {
@@ -38,11 +39,10 @@ export default function StaffDirectoryPage() {
         if (!propertyId.trim()) { setError('Select or enter a real property ID. Property contacts cannot use a placeholder property.'); return; }
         setSubmitting(true); setError('');
         try {
-            await addDoc(collection(db, 'staffDirectory'), {
+            await runAdminOperationalMutation('CREATE_PROPERTY_CONTACT', {
                 propertyId: propertyId.trim(), displayName: displayName.trim(), role,
                 phone: phone.trim(), email: email.trim(), whatsapp: whatsapp.trim(),
                 shiftLabel: shiftLabel.trim(), emergencyContact, visibleToTenants,
-                active: true, directoryType: 'PROPERTY_CONTACT', createdAt: serverTimestamp(),
             });
             setOpenAdd(false); setDisplayName(''); setPhone(''); setEmail(''); setWhatsapp(''); setPropertyId('');
         } catch (err: any) { setError(err?.message || 'Failed to add property contact.'); }
@@ -51,7 +51,7 @@ export default function StaffDirectoryPage() {
 
     const handleDeleteStaff = async (id: string) => {
         if (!window.confirm('Delete this property contact? This does not delete any employee account.')) return;
-        try { await deleteDoc(doc(db, 'staffDirectory', id)); }
+        try { await runAdminOperationalMutation('DELETE_PROPERTY_CONTACT', { contactId: id }); }
         catch (err: any) { setError(err?.message || 'Failed to delete property contact.'); }
     };
 

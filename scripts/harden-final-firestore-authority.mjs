@@ -328,13 +328,10 @@ const required = [
   'let admin = authenticated && (',
   'let dispatcher = authenticated && (',
   'function isClosedTicketStatus(status) {',
-  'function safeAdminTicketCreate() {',
-  'function safeAdminTicketUpdate() {',
-  '(admin && safeAdminTicketUpdate())',
   '(!admin && dispatcher && safeDispatcherTicketUpdate())',
   "(!admin && !dispatcher && role in ['', 'tenant'] && tenantOwns(resource.data) && safeTenantEvidenceUpdate())",
   "(!admin && !dispatcher && role in ['technician', 'tech'] && techOwns(resource.data) && safeTechnicianTicketUpdate())",
-  'allow create: if safeAdminTicketCreate();',
+  'allow create: if false;',
   'return hasDispatchAuthorityClaimOnly() && isNotSuspended();',
   'function hasApprovedTechnicianRecord() {',
   'match /fcmTokens/{tokenId} {',
@@ -390,6 +387,9 @@ for (const role of Object.keys(reviewedRoleFields)) {
 }
 
 const forbidden = [
+  'function safeAdminTicketCreate() {',
+  'function safeAdminTicketUpdate() {',
+  '(admin && safeAdminTicketUpdate())',
   "get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('suspended', false) != true",
   "allow list: if (request.auth != null && request.auth.token.get('suspended', false) != true) && (",
   'allow read: if (signedIn() && request.auth.uid == userId) || canReadUserDirectory();',

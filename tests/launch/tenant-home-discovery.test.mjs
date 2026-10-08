@@ -98,22 +98,24 @@ test('owner vacancy intake collects the facts needed for a full home listing', a
 
 test('Admin review publishes enriched verified inventory without breaking the legacy queue transport', async () => {
   const admin = await read('apps/admin-panel/src/pages/ops/MarketplaceApprovalsPage.tsx');
+  const backend = await read('functions/adminOperationalMutations.ts');
 
-  assert.match(admin, /recordType: 'ROOM_RENT_LISTING'/);
-  assert.match(admin, /listingType: 'HOME_RENT_LISTING'/);
-  assert.match(admin, /listingVersion: 'HOME_DISCOVERY_V1'/);
-  assert.match(admin, /approved: true/);
-  assert.match(admin, /hasBinContract: true/);
-  assert.match(admin, /notRented: true/);
-  assert.match(admin, /verifiedByAdmin: true/);
-  assert.match(admin, /coverImageUrl/);
-  assert.match(admin, /propertyType/);
-  assert.match(admin, /areaSqFt/);
-  assert.match(admin, /permitNumber/);
-  assert.match(admin, /permitVerified/);
-  assert.match(admin, /permitVerificationUrl/);
-  assert.match(admin, /HOME_LISTING_PUBLISHED/);
-  assert.match(admin, /VIEWING_COORDINATION_STARTED/);
+  assert.match(admin, /runAdminOperationalMutation\('PUBLISH_HOME_LISTING'/);
+  assert.match(backend, /recordType: "ROOM_RENT_LISTING"/);
+  assert.match(backend, /listingType: "HOME_RENT_LISTING"/);
+  assert.match(backend, /listingVersion: "HOME_DISCOVERY_V1"/);
+  assert.match(backend, /approved: true/);
+  assert.match(backend, /hasBinContract: true/);
+  assert.match(backend, /notRented: true/);
+  assert.match(backend, /verifiedByAdmin: true/);
+  assert.match(backend, /coverImageUrl/);
+  assert.match(backend, /propertyType/);
+  assert.match(backend, /areaSqFt/);
+  assert.match(backend, /permitNumber/);
+  assert.match(backend, /permitVerified/);
+  assert.match(backend, /permitVerificationUrl/);
+  assert.match(backend, /HOME_LISTING_PUBLISHED/);
+  assert.match(backend, /VIEWING_COORDINATION_STARTED/);
 });
 
 test('home discovery remains server-side BIN-contract and availability gated', async () => {
