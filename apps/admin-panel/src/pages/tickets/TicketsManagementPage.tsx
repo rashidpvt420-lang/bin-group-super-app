@@ -112,6 +112,7 @@ export default function TicketsManagementPage() {
   const [technicians, setTechnicians] = useState<Technician[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
+  const [updatingEstimate, setUpdatingEstimate] = useState(false);
   
   const PAGE_SIZE = 20;
 
@@ -185,7 +186,8 @@ export default function TicketsManagementPage() {
   };
 
   const handleUpdateEstimate = async () => {
-      if (!detailTicket) return;
+      if (!detailTicket || updatingEstimate) return;
+      setUpdatingEstimate(true);
       try {
           const cost = parseFloat(estimatedCost);
           if (isNaN(cost)) {
@@ -527,10 +529,11 @@ export default function TicketsManagementPage() {
               <Button onClick={() => setDetailTicket(null)}>CANCEL</Button>
               <Button 
                 variant="contained" 
-                onClick={handleUpdateEstimate}
+                disabled={updatingEstimate}
+                onClick={() => void handleUpdateEstimate()}
                 sx={{ bgcolor: '#1976d2', fontWeight: 900 }}
               >
-                  UPDATE ESTIMATE
+                  {updatingEstimate ? <CircularProgress size={18} color="inherit" /> : 'UPDATE ESTIMATE'}
               </Button>
           </DialogActions>
       </Dialog>
