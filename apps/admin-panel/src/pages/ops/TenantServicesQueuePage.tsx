@@ -6,7 +6,8 @@ import {
 import {
     CheckCircle2, XCircle, Search, Filter, MessageSquare, Car, Key, Package, Store
 } from 'lucide-react';
-import { db, collection, query, orderBy, onSnapshot, doc, updateDoc, serverTimestamp } from '../../lib/firebase';
+import { db, collection, query, orderBy, onSnapshot } from '../../lib/firebase';
+import { runAdminOperationalMutation } from '../../lib/adminOperationalMutation';
 import { useLanguage } from '@bin/shared';
 import { binThemeTokens } from '../../theme/adminTheme';
 import AdminPageFrame from '../../components/AdminPageFrame';
@@ -59,10 +60,19 @@ export default function TenantServicesQueuePage() {
 
     const handleAction = async (item: any, action: 'approved' | 'rejected') => {
         try {
-            await updateDoc(doc(db, item._collection || 'tenant_services_requests', item.id), {
-                status: action,
-                updatedAt: serverTimestamp()
-            });
+            if (item._collection === 'visitorParkingRequests') {
+                await runAdminOperationalMutation('REVIEW_VISITOR_PARKING', {
+                    requestId: item.id,
+                    decision: action,
+                });
+            } else if (item._collection === 'tenant_services_requests') {
+                await runAdminOperationalMutation('REVIEW_TENANT_SERVICE', {
+                    requestId: item.id,
+                    decision: action,
+                });
+            } else {
+                throw new Error('This service queue item is read-only in Admin.');
+            }
         } catch (err) {
             console.error('Failed to update request:', err);
         }
