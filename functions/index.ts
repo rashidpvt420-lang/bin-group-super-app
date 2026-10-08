@@ -33,6 +33,7 @@ import { flagSlaBreaches } from "./slaCron";
 import { escalateManualDispatch } from "./ticketDispatchAlerts";
 import { evaluateTechnicianForTicket, requiredTicketTrade } from "./technicianDispatchMatching";
 import { isTechnicianAssignmentEvent, technicianAssignedNotificationSeed } from "./shared/technicianAssignmentNotification";
+import { requirePrivilegedMfaSession } from "./adminMfaSession";
 
 // [V10] PRODUCTION GRADE FULL-STACK STABILIZATION
 setGlobalOptions({ region: "europe-west3", enforceAppCheck: true });
@@ -1941,6 +1942,7 @@ export const validateTenantInvitation = onCall({ cors: true, enforceAppCheck: tr
 
 export const sendTenantInvitations = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Sovereign identity required.");
+    await requirePrivilegedMfaSession(request.auth);
     const hasAccess = await hasCallableRoleAccess(request.auth, new Set(["admin", "super_admin"]));
     if (!hasAccess) throw new HttpsError("permission-denied", "Admin access required.");
 
@@ -2066,6 +2068,7 @@ export const sendTenantInvitations = onCall({ cors: true, enforceAppCheck: true 
 
 export const resendTenantInvitation = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Sovereign identity required.");
+    await requirePrivilegedMfaSession(request.auth);
     const hasAccess = await hasCallableRoleAccess(request.auth, new Set(["admin", "super_admin"]));
     if (!hasAccess) throw new HttpsError("permission-denied", "Admin access required.");
 
