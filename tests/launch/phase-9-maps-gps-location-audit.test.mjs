@@ -209,6 +209,15 @@ test('Maps rendering never converts invalid coordinates into convincing links or
   assert.match(verifiedPins, /if \(lat === 0 && lng === 0\) return null/);
 });
 
+test('Public Google Maps receives a real Firebase App Check token before map use', () => {
+  const firebase = read('src/lib/firebase.ts');
+  assert.match(firebase, /getToken as getAppCheckToken/);
+  assert.match(firebase, /getMapsAppCheckToken/);
+  assert.match(firebase, /getAppCheckToken\(appCheck, false\)/);
+  assert.match(mapsLib, /Settings\.getInstance\(\)\.fetchAppCheckToken = \(\) => getMapsAppCheckToken\(\)/);
+  assert.match(mapsLib, /await configureMapsAppCheck\(window as any\)/);
+});
+
 test('Google Maps production key is injected into both protected web builds and live-restriction gated', () => {
   assert.match(envWriter, /'VITE_GOOGLE_MAPS_API_KEY'/);
   assert.match(envWriter, /'REACT_APP_GOOGLE_MAPS_API_KEY', process\.env\.VITE_GOOGLE_MAPS_API_KEY/);
