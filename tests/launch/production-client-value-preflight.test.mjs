@@ -181,6 +181,10 @@ test('protected workflow injects Maps and Web Push values before named productio
   const workflow = await read('.github/workflows/firebase-production-deploy.yml');
   assert.match(workflow, /VITE_GOOGLE_MAPS_API_KEY: \$\{\{ secrets\.VITE_GOOGLE_MAPS_API_KEY \}\}/);
   assert.match(workflow, /VITE_FIREBASE_VAPID_KEY: \$\{\{ secrets\.VITE_FIREBASE_VAPID_KEY \}\}/);
+  const founderPreflight = await read('.github/workflows/production-founder-e2e-preflight.yml');
+  assert.match(founderPreflight, /E2E_FINANCE_APPROVER_EMAIL: \$\{\{ secrets\.E2E_FINANCE_APPROVER_EMAIL \}\}/);
+  assert.match(founderPreflight, /E2E_FINANCE_APPROVER_PASSWORD: \$\{\{ secrets\.E2E_FINANCE_APPROVER_PASSWORD \}\}/);
+  assert.match(founderPreflight, /E2E_FINANCE_APPROVER_TOTP_SECRET: \$\{\{ secrets\.E2E_FINANCE_APPROVER_TOTP_SECRET \}\}/);
   const verifier = workflow.indexOf('node scripts/verify-production-workflow-env.mjs');
   const deploy = workflow.indexOf('node scripts/deploy-firebase-production.mjs');
   assert.ok(verifier >= 0 && deploy > verifier, 'named production values must be verified before deployment');
