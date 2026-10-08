@@ -46,15 +46,13 @@ export default function AmenityControlPage() {
         e.preventDefault();
         setSubmitting(true);
         try {
-            await addDoc(collection(db, 'amenities'), {
+            await runAdminOperationalMutation('CREATE_AMENITY', {
                 name,
                 type,
                 description,
                 propertyId,
                 capacity: parseInt(capacity, 10),
                 requiresApproval,
-                active: true,
-                createdAt: serverTimestamp()
             });
             setOpenAdd(false);
             setName('');
@@ -69,10 +67,9 @@ export default function AmenityControlPage() {
 
     const handleUpdateBookingStatus = async (bookingId: string, status: string) => {
         try {
-            await updateDoc(doc(db, 'amenityBookings', bookingId), {
-                status,
-                approvedAt: serverTimestamp(),
-                approvedBy: 'Admin'
+            await runAdminOperationalMutation('REVIEW_AMENITY_BOOKING', {
+                bookingId,
+                decision: status,
             });
         } catch (err) {
             console.error('Failed to update booking:', err);
@@ -82,7 +79,7 @@ export default function AmenityControlPage() {
     const handleDeleteAmenity = async (amenityId: string) => {
         if (!window.confirm('Delete this amenity?')) return;
         try {
-            await deleteDoc(doc(db, 'amenities', amenityId));
+            await runAdminOperationalMutation('DELETE_AMENITY', { amenityId });
         } catch (err) {
             console.error(err);
         }
