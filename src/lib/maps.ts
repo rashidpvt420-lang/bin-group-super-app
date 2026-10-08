@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { getMapsAppCheckToken } from './firebase';
 
 const GOOGLE_MAPS_SCRIPT_ID = 'bin-google-maps-js';
 
@@ -39,6 +40,11 @@ const notifyAuthFailure = () => {
   authFailureSubscribers.forEach((subscriber) => subscriber(error));
 };
 
+async function configureMapsAppCheck(w: any): Promise<void> {
+  const { Settings } = await w.google.maps.importLibrary('core');
+  Settings.getInstance().fetchAppCheckToken = () => getMapsAppCheckToken();
+}
+
 function installAuthFailureHook() {
   if (typeof window === 'undefined') return;
   const w = window as any;
@@ -60,7 +66,7 @@ function loadGoogleMapsScript(apiKey: string): Promise<void> {
   }
   if (!apiKey) return Promise.reject(new Error('GOOGLE_MAPS_API_KEY_MISSING'));
   if (isMapsAuthFailed()) return Promise.reject(new Error('GOOGLE_MAPS_AUTH_FAILED'));
-  if (isMapsReady()) return Promise.resolve();
+  if (isMapsReady()) return configureMapsAppCheck(window as any);
   if (mapsLoadPromise) return mapsLoadPromise;
 
   installAuthFailureHook();
@@ -70,10 +76,21 @@ function loadGoogleMapsScript(apiKey: string): Promise<void> {
 
     if (existing) {
       existing.addEventListener('load', () => {
-        window.setTimeout(() => {
-          if (isMapsAuthFailed()) reject(new Error('GOOGLE_MAPS_AUTH_FAILED'));
-          else if (isMapsReady()) resolve();
-          else reject(new Error('GOOGLE_MAPS_SCRIPT_LOADED_WITHOUT_MAPS'));
+        window.setTimeout(async () => {
+          if (isMapsAuthFailed()) {
+            reject(new Error('GOOGLE_MAPS_AUTH_FAILED'));
+            return;
+          }
+          if (!isMapsReady()) {
+            reject(new Error('GOOGLE_MAPS_SCRIPT_LOADED_WITHOUT_MAPS'));
+            return;
+          }
+          try {
+            await configureMapsAppCheck(window as any);
+            resolve();
+          } catch (error) {
+            reject(error);
+          }
         }, 250);
       }, { once: true });
       existing.addEventListener('error', () => reject(new Error('GOOGLE_MAPS_SCRIPT_LOAD_FAILED')), { once: true });
@@ -87,10 +104,21 @@ function loadGoogleMapsScript(apiKey: string): Promise<void> {
     script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(apiKey)}&libraries=places,geometry&loading=async`;
 
     script.onload = () => {
-      window.setTimeout(() => {
-        if (isMapsAuthFailed()) reject(new Error('GOOGLE_MAPS_AUTH_FAILED'));
-        else if (isMapsReady()) resolve();
-        else reject(new Error('GOOGLE_MAPS_SCRIPT_LOADED_WITHOUT_MAPS'));
+      window.setTimeout(async () => {
+        if (isMapsAuthFailed()) {
+          reject(new Error('GOOGLE_MAPS_AUTH_FAILED'));
+          return;
+        }
+        if (!isMapsReady()) {
+          reject(new Error('GOOGLE_MAPS_SCRIPT_LOADED_WITHOUT_MAPS'));
+          return;
+        }
+        try {
+          await configureMapsAppCheck(window as any);
+          resolve();
+        } catch (error) {
+          reject(error);
+        }
       }, 250);
     };
     script.onerror = () => reject(new Error('GOOGLE_MAPS_SCRIPT_LOAD_FAILED'));
