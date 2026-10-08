@@ -48,16 +48,11 @@ export default function KeyRegisterPage() {
         e.preventDefault();
         setSubmitting(true);
         try {
-            await addDoc(collection(db, 'keyRegister'), {
+            await runAdminOperationalMutation('CREATE_KEY', {
                 propertyId,
                 unitId,
                 keyType,
                 keyCodeMasked,
-                status: 'available',
-                currentCustodianType: 'security',
-                currentCustodianName: 'Front Gate Desk',
-                createdAt: serverTimestamp(),
-                updatedAt: serverTimestamp()
             });
             setOpenAdd(false);
             setKeyCodeMasked('');
@@ -73,26 +68,11 @@ export default function KeyRegisterPage() {
         if (!selectedKey) return;
         setSubmitting(true);
         try {
-            // Update key register
-            await updateDoc(doc(db, 'keyRegister', selectedKey.id), {
-                status: 'issued',
-                currentCustodianType: custodianType,
-                currentCustodianName: toCustodian,
-                updatedAt: serverTimestamp()
-            });
-
-            // Log movement
-            await addDoc(collection(db, 'keyMovements'), {
-                propertyId: selectedKey.propertyId,
-                unitId: selectedKey.unitId,
+            await runAdminOperationalMutation('ISSUE_KEY', {
                 keyId: selectedKey.id,
-                action: 'issued',
-                fromCustodian: selectedKey.currentCustodianName || 'Security',
+                custodianType,
                 toCustodian,
-                handledBy: 'Admin Operator',
-                signatureRequired: true,
                 notes,
-                createdAt: serverTimestamp()
             });
 
             setOpenIssue(false);
@@ -107,22 +87,8 @@ export default function KeyRegisterPage() {
 
     const handleReturnKey = async (keyItem: any) => {
         try {
-            await updateDoc(doc(db, 'keyRegister', keyItem.id), {
-                status: 'available',
-                currentCustodianType: 'security',
-                currentCustodianName: 'Front Gate Desk',
-                updatedAt: serverTimestamp()
-            });
-
-            await addDoc(collection(db, 'keyMovements'), {
-                propertyId: keyItem.propertyId,
-                unitId: keyItem.unitId,
+            await runAdminOperationalMutation('RETURN_KEY', {
                 keyId: keyItem.id,
-                action: 'returned',
-                fromCustodian: keyItem.currentCustodianName,
-                toCustodian: 'Front Gate Desk',
-                handledBy: 'Admin Operator',
-                createdAt: serverTimestamp()
             });
         } catch (err) {
             console.error('Failed to return key:', err);
