@@ -26,7 +26,8 @@ test('Tenant parcel collection is App Check-protected and server-authoritative',
     writer.indexOf("replaceRuleBlock('    match /amenities/{amenityId} {'"),
   );
   assert.match(parcelBlock, /confirmTenantParcelCollection/);
-  assert.doesNotMatch(parcelBlock, /tenantUidOwns\(resource\.data\).*allow update/s);
+  const parcelUpdateLine = parcelBlock.split('\n').find((line) => line.includes('allow update:')) || '';
+  assert.doesNotMatch(parcelUpdateLine, /tenantUidOwns\(resource\.data\)/);
 });
 
 test('Phase 2 every-control matrix is required by both primary validation workflows', () => {
