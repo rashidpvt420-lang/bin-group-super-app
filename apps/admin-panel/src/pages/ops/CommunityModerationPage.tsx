@@ -11,6 +11,7 @@ export default function CommunityModerationPage() {
     const { isRTL } = useLanguage();
     const [loading, setLoading] = useState(true);
     const [posts, setPosts] = useState<any[]>([]);
+    const [submitting, setSubmitting] = useState(false);
 
     useEffect(() => {
         const q = query(collection(db, 'communityPosts'));
@@ -24,6 +25,8 @@ export default function CommunityModerationPage() {
     }, []);
 
     const handleUpdateStatus = async (id: string, status: string) => {
+        if (submitting) return;
+        setSubmitting(true);
         try {
             await runAdminOperationalMutation('MODERATE_COMMUNITY', {
                 postId: id,
@@ -31,15 +34,20 @@ export default function CommunityModerationPage() {
             });
         } catch (err) {
             console.error('Failed to moderate post:', err);
+        } finally {
+            setSubmitting(false);
         }
     };
 
     const handleDeletePost = async (id: string) => {
-        if (!window.confirm('Delete post?')) return;
+        if (submitting || !window.confirm('Delete post?')) return;
+        setSubmitting(true);
         try {
             await runAdminOperationalMutation('DELETE_COMMUNITY', { postId: id });
         } catch (err) {
             console.error(err);
+        } finally {
+            setSubmitting(false);
         }
     };
 
@@ -86,15 +94,15 @@ export default function CommunityModerationPage() {
                                             <Stack direction="row" spacing={1} justifyContent="flex-end">
                                                 {p.status === 'pending' && (
                                                     <>
-                                                        <IconButton size="small" color="success" onClick={() => handleUpdateStatus(p.id, 'approved')}>
+                                                        <IconButton size="small" color="success" disabled={submitting} onClick={() => void handleUpdateStatus(p.id, 'approved')}>
                                                             <SafeIcon icon={Check} size={16} />
                                                         </IconButton>
-                                                        <IconButton size="small" color="error" onClick={() => handleUpdateStatus(p.id, 'rejected')}>
+                                                        <IconButton size="small" color="error" disabled={submitting} onClick={() => void handleUpdateStatus(p.id, 'rejected')}>
                                                             <SafeIcon icon={X} size={16} />
                                                         </IconButton>
                                                     </>
                                                 )}
-                                                <Button size="small" color="error" onClick={() => handleDeletePost(p.id)}>DELETE</Button>
+                                                <Button size="small" color="error" disabled={submitting} onClick={() => void handleDeletePost(p.id)}>DELETE</Button>
                                             </Stack>
                                         </TableCell>
                                     </TableRow>
