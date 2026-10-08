@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Container, Typography, Paper, Grid, Stack, Chip, CircularProgress, Box, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, IconButton } from '@mui/material';
 import { Check, X } from 'lucide-react';
 import { useLanguage } from '@bin/shared';
-import { db, collection, query, onSnapshot, doc, updateDoc, serverTimestamp } from '../../lib/firebase';
+import { db, collection, query, onSnapshot, functions, httpsCallable } from '../../lib/firebase';
 import { binThemeTokens } from '../../theme/adminTheme';
 import SafeIcon from '../../components/SafeIcon';
 
@@ -10,6 +10,8 @@ export default function VisitorParkingPage() {
     const { isRTL } = useLanguage();
     const [loading, setLoading] = useState(true);
     const [requests, setRequests] = useState<any[]>([]);
+    const [busyId, setBusyId] = useState('');
+    const [error, setError] = useState('');
 
     useEffect(() => {
         const q = query(collection(db, 'visitorParkingRequests'));
@@ -22,16 +24,18 @@ export default function VisitorParkingPage() {
         return () => unsub();
     }, []);
 
-    const handleUpdateStatus = async (id: string, status: string) => {
+    const handleUpdateStatus = async (id: string, status: 'approved' | 'rejected') => {
+        if (!id || busyId) return;
+        setBusyId(id);
+        setError('');
         try {
-            await updateDoc(doc(db, 'visitorParkingRequests', id), {
-                status,
-                reviewedBy: 'admin-operator',
-                reviewedAt: serverTimestamp(),
-                updatedAt: serverTimestamp(),
-            });
-        } catch (err) {
+            const reviewVisitorParkingRequest = httpsCallable(functions, 'reviewVisitorParkingRequest');
+            await reviewVisitorParkingRequest({ passId: id, decision: status });
+        } catch (err: any) {
             console.error('Failed to update request:', err);
+            setError(err?.message || 'Visitor parking review failed. Please retry.');
+        } finally {
+            setBusyId('');
         }
     };
 
@@ -45,6 +49,8 @@ export default function VisitorParkingPage() {
                 <Typography variant="h4" fontWeight="black" color="#FFF" gutterBottom>Visitor Parking Approvals</Typography>
                 <Typography variant="body2" color="text.secondary">Review and approve tenant visitor vehicle gate access requests.</Typography>
             </Box>
+
+            {error && <Paper sx={{ p: 2, mb: 3, border: '1px solid rgba(239,68,68,0.35)' }}><Typography color="error">{error}</Typography></Paper>}
 
             <Grid container spacing={4}>
                 <Grid item xs={12}>
@@ -78,10 +84,10 @@ export default function VisitorParkingPage() {
                                         <TableCell align="right">
                                             {r.status === 'pending' && (
                                                 <Stack direction="row" spacing={1} justifyContent="flex-end">
-                                                    <IconButton size="small" color="success" onClick={() => handleUpdateStatus(r.id, 'approved')}>
+                                                    <IconButton size="small" color="success" disabled={Boolean(busyId)} onClick={() => handleUpdateStatus(r.id, 'approved')}>
                                                         <SafeIcon icon={Check} size={16} />
                                                     </IconButton>
-                                                    <IconButton size="small" color="error" onClick={() => handleUpdateStatus(r.id, 'rejected')}>
+                                                    <IconButton size="small" color="error" disabled={Boolean(busyId)} onClick={() => handleUpdateStatus(r.id, 'rejected')}>
                                                         <SafeIcon icon={X} size={16} />
                                                     </IconButton>
                                                 </Stack>
