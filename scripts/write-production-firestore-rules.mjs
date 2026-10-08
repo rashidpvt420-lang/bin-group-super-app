@@ -222,15 +222,17 @@ replaceRuleBlock('    match /users/{userId} {', `    match /users/{userId} {
                      resource.data.get('role', '') == 'tenant' &&
                      resource.data.get('ownerId', null) == request.auth.uid)
                   );
-      allow create: if safeUserBootstrapCreate(request.resource.data, userId);
-      allow update: if isNotSuspended() && safeUserSelfUpdate(userId);
-      allow delete: if false;
+      allow create: if isAdmin() || safeUserBootstrapCreate(request.resource.data, userId);
+      allow update: if isNotSuspended() && (isAdmin() || safeUserSelfUpdate(userId));
+      allow delete: if isNotSuspended() && isAdmin();
       match /fcmTokens/{tokenId} {
         allow read, write: if false;
       }
+
       match /deviceReadiness/{readinessId} {
         allow read, write: if false;
       }
+
       match /{subcollection}/{document=**} {
         allow read, write: if false;
       }
@@ -241,9 +243,12 @@ replaceRuleBlock('    match /properties/{propertyId} {', `    match /properties/
       allow read: if isNotSuspended() && (canManageProperties() || propertyOwnedByCaller(resource.data) || (isTechnicianActor() && techOwns(resource.data)));
       allow create: if isNotSuspended() &&
         propertyCreateHasNoCanonicalGeo(request.resource.data) &&
-        safeOwnerPropertyCreate(request.resource.data);
-      allow update: if isNotSuspended() && safeOwnerPropertyUpdate();
-      allow delete: if false;
+        (canManageProperties() || safeOwnerPropertyCreate(request.resource.data));
+      allow update: if isNotSuspended() && (
+        (canManageProperties() && safeManagedPropertyUpdate()) ||
+        safeOwnerPropertyUpdate()
+      );
+      allow delete: if isNotSuspended() && isAdmin();
     }`);
 
 replaceRuleBlock('    match /units/{unitId} {', `    match /units/{unitId} {
@@ -253,40 +258,51 @@ replaceRuleBlock('    match /units/{unitId} {', `    match /units/{unitId} {
       allow list: if signedIn() && resource.data.currentTenantId == request.auth.uid;
       allow list: if emailMatches(resource.data.get('tenantEmail', null));
       allow read: if canManageProperties() || ownerCanRead(resource.data) || tenantOwns(resource.data) || emailOwns(resource.data);
-      allow create, update, delete: if false;
+      allow create: if canManageProperties();
+      allow update: if canManageProperties();
+      allow delete: if canManageProperties();
     }`);
 
 replaceRuleBlock('    match /tenant_unit_link_requests/{requestId} {', `    match /tenant_unit_link_requests/{requestId} {
       allow read: if isAdmin() || tenantOwns(resource.data) || emailOwns(resource.data) || (docPropertyId(resource.data) != null && isPropertyOwner(docPropertyId(resource.data)));
-      allow create: if safeTenantUnitLinkRequestCreate(request.resource.data);
-      allow update, delete: if false;
+      allow create: if isAdmin() || safeTenantUnitLinkRequestCreate(request.resource.data);
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
     }`);
 
 replaceRuleBlock('    match /contracts/{contractId} {', `    match /contracts/{contractId} {
       allow read: if participantCanRead(resource.data) || emailOwns(resource.data) || canManageContracts();
-      allow create: if ownerContractDraftCreate(request.resource.data);
-      allow update: if safeOwnerContractUpdate();
-      allow delete: if false;
+      allow create: if canManageContracts() || ownerContractDraftCreate(request.resource.data);
+      allow update: if canManageContracts() || safeOwnerContractUpdate();
+      allow delete: if isAdmin();
     }`);
 
 replaceRuleBlock('    match /leases/{leaseId} {', `    match /leases/{leaseId} {
       allow read: if participantCanRead(resource.data) || emailOwns(resource.data) || isAdmin();
-      allow create, update, delete: if false;
+      allow create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
     }`);
 
 replaceRuleBlock('    match /tenant_ledger/{ledgerId} {', `    match /tenant_ledger/{ledgerId} {
       allow read: if isAdmin() || ownerCanRead(resource.data) || (signedIn() && resource.data.get('tenantId', null) == request.auth.uid);
-      allow create, update, delete: if false;
+      allow create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
     }`);
 
 replaceRuleBlock('    match /tenants/{tenantId} {', `    match /tenants/{tenantId} {
       allow read: if (signedIn() && request.auth.uid == tenantId) || isAdmin() || participantCanRead(resource.data);
-      allow create, update, delete: if false;
+      allow create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
     }`);
 
 replaceRuleBlock('    match /propertyPassports/{passportId} {', `    match /propertyPassports/{passportId} {
       allow read: if isAdmin() || (signedIn() && (resource.data.get('ownerId', null) == request.auth.uid || emailMatches(resource.data.get('ownerEmail', null))));
-      allow create, update, delete: if false;
+      allow create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
     }`);
 
 const operationalServerOnlyBlocks = [
@@ -353,17 +369,10 @@ const adminOperationalFallbackExclusions = [
   'conversations',
   'pricingAuditLogs',
   'binGptEngineerCommands',
-  'units',
-  'contracts',
-  'leases',
-  'tenant_ledger',
-  'tenant_unit_link_requests',
   'tenant_invitations',
   'tenantInvitations',
   'tenant_import_batches',
   'tenancies',
-  'tenants',
-  'propertyPassports',
 ];
 const fallbackBlockBeforeAdminClosure = matchBlock(operationalCatchAllMarker);
 if (!fallbackBlockBeforeAdminClosure) {
