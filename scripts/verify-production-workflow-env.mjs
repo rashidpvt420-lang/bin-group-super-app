@@ -49,6 +49,9 @@ export const REQUIRED_PRODUCTION_VALUES = Object.freeze([
   'E2E_ADMIN_PASSWORD',
   'E2E_FOUNDER_EMAIL',
   'E2E_FOUNDER_PASSWORD',
+  'E2E_FINANCE_APPROVER_EMAIL',
+  'E2E_FINANCE_APPROVER_PASSWORD',
+  'E2E_FINANCE_APPROVER_TOTP_SECRET',
   'E2E_OWNER_MAILBOX_EMAIL',
   'E2E_OWNER_PASSWORD',
   'E2E_TENANT_EMAIL',
@@ -262,6 +265,23 @@ export function validateProductionWorkflowEnv(env = process.env) {
   }
   if (!validFounderTotp && !validFounderRealMfaCode && !bootstrapState.authorized) {
     failures.push('Set a valid E2E_FOUNDER_TOTP_SECRET or six-digit E2E_FOUNDER_REAL_MFA_CODE');
+  }
+
+  const financeApproverEmail = value(env, 'E2E_FINANCE_APPROVER_EMAIL').toLowerCase();
+  const financeApproverPassword = value(env, 'E2E_FINANCE_APPROVER_PASSWORD');
+  const financeApproverTotp = value(env, 'E2E_FINANCE_APPROVER_TOTP_SECRET').toUpperCase().replace(/[\s=-]/g, '');
+  const ownerMailboxEmail = value(env, 'E2E_OWNER_MAILBOX_EMAIL').toLowerCase();
+  if (financeApproverEmail && !EMAIL_RE.test(financeApproverEmail)) {
+    failures.push('E2E_FINANCE_APPROVER_EMAIL must be a valid email address');
+  }
+  if (financeApproverEmail && [founderEmail, adminEmail, ownerMailboxEmail].filter(Boolean).includes(financeApproverEmail)) {
+    failures.push('E2E_FINANCE_APPROVER_EMAIL must identify a distinct Finance Admin account');
+  }
+  if (financeApproverPassword && financeApproverPassword.length < 8) {
+    failures.push('E2E_FINANCE_APPROVER_PASSWORD must contain at least 8 characters');
+  }
+  if (financeApproverTotp && (financeApproverTotp.length < 16 || !/^[A-Z2-7]+$/.test(financeApproverTotp))) {
+    failures.push('E2E_FINANCE_APPROVER_TOTP_SECRET must be a valid Base32 TOTP secret');
   }
 
   const namedClientValues = [
