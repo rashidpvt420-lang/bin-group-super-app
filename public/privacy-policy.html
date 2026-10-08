@@ -36,7 +36,7 @@
     <ul>
         <li><strong>Identity Data:</strong> Full name, email address, phone number, Emirates ID number (for KYC verification).</li>
         <li><strong>Location Data:</strong> Real-time GPS coordinates of technicians during active duty — used exclusively for job dispatch and route optimization. Location tracking stops when a technician ends their shift.</li>
-        <li><strong>Financial Data:</strong> IBAN/bank details for rent collection and payroll disbursement. Payment card data is processed by Stripe and never stored on our servers.</li>
+        <li><strong>Financial Data:</strong> Payment references, approved Cash/Cheque evidence, invoices, receipts, and payroll/rent-related records required for the service. Card processing is not enabled for current Owner activation; if a card provider is enabled under a future approved policy, card details will be handled by that provider rather than stored by BIN GROUP.</li>
         <li><strong>Property Data:</strong> Property details, maintenance history, photos, and contract records associated with your account.</li>
         <li><strong>Usage Data:</strong> App interactions, feature usage, error logs — used to improve service quality.</li>
         <li><strong>Photos/Media:</strong> Before-and-after maintenance photos uploaded by technicians or tenants as part of the Evidence-Vault™ workflow.</li>
@@ -70,14 +70,14 @@
     <p>We use the following trusted third-party services to operate the platform:</p>
     <ul>
         <li><strong>Firebase (Google):</strong> Authentication, database, cloud storage, and push notifications.</li>
-        <li><strong>Stripe:</strong> Payment processing. Card data is handled directly by Stripe and not stored on our servers.</li>
-        <li><strong>OpenAI:</strong> AI-powered design renders and property intelligence. No personal data is sent to OpenAI — only anonymized property parameters.</li>
-        <li><strong>Google Maps:</strong> Route display for technician navigation.</li>
+        <li><strong>Payment providers:</strong> Current Owner activation uses Cash/Cheque evidence. Stripe or another card provider is used only if separately enabled and verified under the active payment policy.</li>
+        <li><strong>AI providers:</strong> AI-assisted features use approved backend providers only when configured for that feature, with access and data-minimisation controls applied by the service.</li>
+        <li><strong>Google Maps Platform:</strong> May support configured property/location and technician route surfaces where the required provider configuration is enabled.</li>
     </ul>
     <p>We do not sell your personal data to any third party.</p>
 
     <h2>7. Data Retention</h2>
-    <p>We retain your data for as long as your account is active, or as required by UAE law. Property records and contracts are retained for a minimum of 5 years per UAE regulatory requirements. You may request deletion of your account by contacting us at ceo@bin-groups.com.</p>
+    <p>We retain data according to its configured retention class and applicable legal, contractual, operational, and audit requirements. Some financial, safety, and technical audit records may require longer retention than ordinary service data. You may request deletion of eligible account data by contacting us at ceo@bin-groups.com.</p>
 
     <h2>8. Data Security</h2>
     <p>We implement role-based access control (RBAC), Firestore security rules, Firebase App Check, and TLS encryption for all data in transit. Sensitive fields (Emirates ID, IBAN) are access-restricted to authorised roles only.</p>
