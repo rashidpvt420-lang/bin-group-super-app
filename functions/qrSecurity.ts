@@ -2,6 +2,7 @@ import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { defineSecret } from "firebase-functions/params";
 import * as admin from "firebase-admin";
 import * as crypto from "crypto";
+import { requirePrivilegedMfaSession } from "./adminMfaSession";
 
 if (!admin.apps.length) admin.initializeApp();
 
@@ -197,6 +198,7 @@ export const cancelSignedQrPass = onCall({ cors: true, enforceAppCheck: true }, 
 });
 
 export const reviewVisitorParkingRequest = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
+  await requirePrivilegedMfaSession(request.auth);
   const actor = await requireAdmin(request.auth);
   const passId = text(request.data?.passId);
   const decision = text(request.data?.decision, 20).toLowerCase();
