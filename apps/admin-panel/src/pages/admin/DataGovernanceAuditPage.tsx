@@ -1,6 +1,7 @@
 import React from 'react';
 import { Alert, Box, Button, Card, CardContent, Chip, CircularProgress, Grid, MenuItem, Stack, TextField, Typography } from '@mui/material';
-import { addDoc, collection, db, limit, onSnapshot, orderBy, query, serverTimestamp } from '../../lib/firebase';
+import { collection, db, limit, onSnapshot, orderBy, query } from '../../lib/firebase';
+import { runAdminOperationalMutation } from '../../lib/adminOperationalMutation';
 import { humanizeEnum } from '../../utils/humanizeEnum';
 
 type GovernanceEvent = { id: string; dataCategory?: string; lawfulBasis?: string; retentionClass?: string; roleAccessPolicy?: string[]; subjectRef?: string; ticketId?: string; createdAt?: any };
@@ -33,13 +34,11 @@ export default function DataGovernanceAuditPage() {
   const recordEvent = async () => {
     if (!form.dataCategory || !form.lawfulBasis || !form.retentionClass) return setNotice('Data category, lawful basis, and retention class are required.');
     try {
-      const ref = await addDoc(collection(db, 'data_governance_events'), {
+      const result = await runAdminOperationalMutation('CREATE_GOVERNANCE_EVENT', {
         ...form,
         roleAccessPolicy: form.roleAccessPolicy.split(',').map((x) => x.trim()).filter(Boolean),
-        source: 'admin_data_governance_audit',
-        createdAt: serverTimestamp(),
       });
-      setNotice(`Governance event recorded: ${ref.id}`);
+      setNotice(`Governance event recorded: ${String(result.id || '')}`);
     } catch (error: any) {
       console.error('[DataGovernanceAudit] write failed:', error);
       setNotice(`Failed to record governance event: ${error?.message || 'unknown error'}`);
