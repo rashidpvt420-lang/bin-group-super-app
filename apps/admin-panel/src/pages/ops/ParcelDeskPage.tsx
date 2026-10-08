@@ -61,6 +61,8 @@ export default function ParcelDeskPage() {
     };
 
     const handleReleaseParcel = async (parcelId: string) => {
+        if (submitting) return;
+        setSubmitting(true);
         try {
             await runAdminOperationalMutation('RELEASE_PARCEL', { parcelId });
         } catch (err) {
@@ -114,7 +116,7 @@ export default function ParcelDeskPage() {
                                         </TableCell>
                                         <TableCell align="right">
                                             {p.status !== 'collected' && (
-                                                <Button size="small" variant="contained" color="success" onClick={() => handleReleaseParcel(p.id)}>
+                                                <Button size="small" variant="contained" color="success" disabled={submitting} onClick={() => void handleReleaseParcel(p.id)}>
                                                     RELEASE
                                                 </Button>
                                             )}
