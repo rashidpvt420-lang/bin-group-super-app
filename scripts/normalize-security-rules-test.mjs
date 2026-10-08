@@ -160,6 +160,16 @@ const legacyTicketFixtureReplacements = [
     "    await seedServerDocument('tickets/suspended_tech_existing', existingTechTicket);",
     'suspended Technician legacy seed',
   ],
+  [
+    "    await setDoc(doc(adminDb, 'maintenanceTickets/suspended_tech_existing'), existingTechTicket);",
+    "    await seedServerDocument('maintenanceTickets/suspended_tech_existing', existingTechTicket);",
+    'suspended Technician canonical seed',
+  ],
+  [
+    "    await setDoc(doc(adminDb, 'technicians/suspended_tech'), {",
+    "    await seedServerDocument('technicians/suspended_tech', {",
+    'suspended Technician profile seed',
+  ],
 ];
 
 const obsoleteCount = source.split(obsoleteBlock).length - 1;
