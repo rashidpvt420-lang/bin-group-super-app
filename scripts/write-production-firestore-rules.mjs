@@ -96,10 +96,10 @@ function replaceRuleBlock(header, nextBlock) {
 
 replaceRuleBlock('    match /visitorParkingRequests/{requestId} {', `    match /visitorParkingRequests/{requestId} {
       allow read: if isAdmin() || (docPropertyId(resource.data) != null && isPropertyOwner(docPropertyId(resource.data))) || tenantUidOwns(resource.data);
+      // Creation and review are callable-only. Tenant requests are created by
+      // generateSignedQrPass; Admin decisions go through reviewVisitorParkingRequest.
       allow create: if false;
-      allow update: if (docPropertyId(resource.data) != null && isPropertyOwner(docPropertyId(resource.data))) &&
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'reviewedAt', 'reviewedBy', 'updatedAt']) &&
-        request.resource.data.get('status', '') in ['approved', 'rejected'];
+      allow update: if false;
       allow delete: if false;
     }`);
 

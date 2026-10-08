@@ -85,6 +85,9 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+      - name: Phase 3 full-system Firebase integration gate
+        run: npm run test:phase3:integration
+
       - name: Production stability guard
         id: stability
         shell: bash

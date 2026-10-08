@@ -116,6 +116,7 @@
     "harden:property-identity-registry": "node scripts/harden-property-identity-registry-rules.mjs",
     "test:phase2:controls": "node scripts/verify-interactive-control-inventory.mjs",
     "test:phase3:controls": "npm run test:phase2:controls",
+    "test:phase3:integration": "node --test test/full-system-regressions.test.mjs tests/launch/phase3-full-system-firebase-integration.test.mjs tests/launch/phase-14-pricing-authority.test.mjs tests/launch/phase-15-contract-pdf-authority.test.mjs tests/launch/maps-gps-product-truth.test.mjs tests/launch/product-consolidation-wave-3.test.mjs tests/launch/product-consolidation-wave-4.test.mjs tests/launch/bin-connect-server-list.test.mjs tests/launch/ai-design-studio-callable-contract.test.mjs tests/launch/admin-callable-mfa-gate.test.mjs",
     "test:e2e:phase3:platforms": "playwright test tests/e2e/phase3-platform-shell.spec.ts --project=chromium-desktop --project=android-mobile --project=ios-webkit"
   },
   "dependencies": {

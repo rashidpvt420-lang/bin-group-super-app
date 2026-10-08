@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Container, Typography, Box, Paper, Grid, Stack, CircularProgress, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Chip, Button, IconButton } from '@mui/material';
-import { Package, Car, Check, X } from 'lucide-react';
-import { db, collection, query, where, getDocs, onSnapshot, updateDoc, doc, serverTimestamp } from '../../lib/firebase';
+import { Container, Typography, Box, Paper, Grid, Stack, CircularProgress, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Chip } from '@mui/material';
+import { Package, Car } from 'lucide-react';
+import { db, collection, query, where, getDocs, onSnapshot } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
@@ -63,18 +63,6 @@ export default function OwnerParcelsParkingPage() {
         fetchData();
     }, [user]);
 
-    const handleUpdateParkingStatus = async (requestId: string, status: string) => {
-        try {
-            await updateDoc(doc(db, 'visitorParkingRequests', requestId), {
-                status,
-                approvedAt: serverTimestamp(),
-                approvedBy: user?.uid
-            });
-        } catch (err) {
-            console.error("Failed to update parking request:", err);
-        }
-    };
-
     if (loading) {
         return (
             <Box sx={{ display: 'flex', justifyContent: 'center', py: 10 }}>
@@ -93,7 +81,7 @@ export default function OwnerParcelsParkingPage() {
                     {tx('ops.owner_title', 'Parcels & Visitor Parking Overview')}
                 </Typography>
                 <Typography variant="body1" color="rgba(255,255,255,0.5)">
-                    {tx('ops.owner_desc', 'Track incoming courier deliveries and authorize tenant visitor parking passes.')}
+                    {tx('ops.owner_desc', 'Track incoming courier deliveries and visitor parking status. Approval is handled by BIN GROUP Operations.')}
                 </Typography>
             </Box>
 
@@ -161,7 +149,7 @@ export default function OwnerParcelsParkingPage() {
                         <Paper sx={{ p: 4, bgcolor: 'rgba(22, 22, 24, 0.6)', border: '1px solid rgba(255,255,255,0.05)' }}>
                             <Typography variant="h6" fontWeight="bold" color="#FFF" sx={{ mb: 4, display: 'flex', alignItems: 'center', gap: 1, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
                                 <Car size={20} color={binThemeTokens.gold} />
-                                {tx('ops.parking_requests', 'Visitor Parking Approvals')}
+                                {tx('ops.parking_requests', 'Visitor Parking Status')}
                             </Typography>
                             <TableContainer>
                                 <Table size="small">
@@ -171,7 +159,6 @@ export default function OwnerParcelsParkingPage() {
                                             <TableCell>Unit</TableCell>
                                             <TableCell>Duration</TableCell>
                                             <TableCell>Status</TableCell>
-                                            <TableCell align="right">Actions</TableCell>
                                         </TableRow>
                                     </TableHead>
                                     <TableBody>
@@ -192,23 +179,11 @@ export default function OwnerParcelsParkingPage() {
                                                         color={req.status === 'approved' ? 'success' : req.status === 'pending' ? 'warning' : 'error'}
                                                     />
                                                 </TableCell>
-                                                <TableCell align="right">
-                                                    {req.status === 'pending' && (
-                                                        <Stack direction="row" spacing={0.5} justifyContent="flex-end">
-                                                            <IconButton size="small" color="success" onClick={() => handleUpdateParkingStatus(req.id, 'approved')}>
-                                                                <Check size={14} />
-                                                            </IconButton>
-                                                            <IconButton size="small" color="error" onClick={() => handleUpdateParkingStatus(req.id, 'rejected')}>
-                                                                <X size={14} />
-                                                            </IconButton>
-                                                        </Stack>
-                                                    )}
-                                                </TableCell>
                                             </TableRow>
                                         ))}
                                         {parkingRequests.length === 0 && (
                                             <TableRow>
-                                                <TableCell colSpan={5} align="center" sx={{ py: 6 }}>
+                                                <TableCell colSpan={4} align="center" sx={{ py: 6 }}>
                                                     <Typography color="textSecondary">No parking requests found.</Typography>
                                                 </TableCell>
                                             </TableRow>
