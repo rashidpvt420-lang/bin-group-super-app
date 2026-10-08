@@ -15,19 +15,19 @@ const PublicSecurityPage = () => {
             subtitle: 'Enterprise-grade protection for UAE real estate operations.',
             cloudIdentity: {
                 title: 'Cloud Identity & Authentication',
-                desc: 'Strict role-based access control (RBAC) backed by Google Cloud Identity. Every login is verified, session-managed, and bound to specific operational boundaries. MFA support enabled for administrative personnel.',
+                desc: 'Strict role-based access control (RBAC) uses Firebase Authentication and server-side authorization. Administrative privileged actions require the configured MFA and authorization controls.',
             },
             appCheck: {
                 title: 'Application Check Enforcement',
-                desc: 'All API requests and database queries must originate from verified BIN GROUP client applications. Firebase App Check and reCAPTCHA Enterprise block unauthorized script access and emulation attempts.',
+                desc: 'Protected Firebase callables use App Check and server-side authorization, while Firestore and Storage rules enforce role and ownership boundaries. Public/read-only surfaces remain limited to the data explicitly exposed by policy.',
             },
             auditLogs: {
                 title: 'Immutable Audit Logging',
-                desc: 'Every financial transaction, maintenance ticket update, and contract modification generates a permanent, cryptographically-hashed audit log. Actions are non-repudiable and stored for 10 years to meet compliance.',
+                desc: 'Protected financial, maintenance, contract and administrative operations write server-authoritative audit evidence. Hashes are attached to immutable evidence artifacts where required, and retention follows the configured data-retention class and applicable obligations.',
             },
             paymentVaults: {
                 title: 'Secure Payment Vaults',
-                desc: 'Payment processing is handled by PCI-DSS compliant providers (Stripe/Network International). Card details never touch BIN GROUP servers. All fiat transfers require secondary administrative reconciliation.',
+                desc: 'Current Owner activation accepts Cash or Cheque evidence only under the active payment policy. Card/Stripe and bank-transfer activation are disabled unless a separately approved provider policy is enabled and verified.',
             }
         },
         ar: {
@@ -35,19 +35,19 @@ const PublicSecurityPage = () => {
             subtitle: 'حماية بمستوى المؤسسات للعمليات العقارية في الإمارات.',
             cloudIdentity: {
                 title: 'الهوية السحابية والتوثيق',
-                desc: 'تحكم صارم في الوصول المستند إلى الأدوار (RBAC) مدعوم بـ Google Cloud Identity. يتم التحقق من كل عملية تسجيل دخول وإدارتها وتقييدها بحدود تشغيلية. دعم المصادقة الثنائية (MFA) للإدارة.',
+                desc: 'يستخدم التحكم في الوصول المستند إلى الأدوار (RBAC) مصادقة Firebase والتحقق من الصلاحيات على الخادم. وتتطلب العمليات الإدارية الحساسة ضوابط المصادقة متعددة العوامل والصلاحيات المهيأة.',
             },
             appCheck: {
                 title: 'فرض التحقق من التطبيق',
-                desc: 'يجب أن تصدر جميع طلبات API والاستعلامات من تطبيقات مجموعة بن الموثقة. يمنع Firebase App Check و reCAPTCHA Enterprise الوصول غير المصرح به.',
+                desc: 'تستخدم وظائف Firebase المحمية App Check والتحقق من الصلاحيات على الخادم، بينما تفرض قواعد Firestore وStorage حدود الدور والملكية. تقتصر الأسطح العامة أو للقراءة فقط على البيانات المسموح بها صراحةً.',
             },
             auditLogs: {
                 title: 'سجلات تدقيق غير قابلة للتغيير',
-                desc: 'كل معاملة مالية أو تحديث تذكرة صيانة أو تعديل عقد يُنشئ سجل تدقيق دائم وغير قابل للتلاعب. يتم الاحتفاظ بالسجلات لمدة 10 سنوات.',
+                desc: 'تُنشئ العمليات المالية وعمليات الصيانة والعقود والإدارة المحمية أدلة تدقيق معتمدة من الخادم. وتُرفق البصمات الرقمية بملفات الأدلة غير القابلة للتغيير عند الحاجة، وتخضع مدة الاحتفاظ لفئة البيانات والالتزامات المطبقة.',
             },
             paymentVaults: {
                 title: 'خزائن الدفع الآمنة',
-                desc: 'تتم معالجة المدفوعات بواسطة مزودين متوافقين مع PCI-DSS. لا تصل تفاصيل البطاقات أبدًا إلى خوادم مجموعة بن. تتطلب جميع التحويلات تسوية إدارية ثنائية.',
+                desc: 'يقتصر تفعيل عقود المالك حاليًا على إثبات الدفع نقدًا أو بالشيك وفق سياسة الدفع النشطة. ولا تكون مدفوعات البطاقات أو Stripe أو التحويل البنكي متاحة إلا بعد اعتماد سياسة مزود منفصلة والتحقق منها.',
             }
         }
     };
