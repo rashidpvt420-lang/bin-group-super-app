@@ -72,13 +72,13 @@ describe('N-14 / N-34 tenant self-approval rules', () => {
     await assertFails(addDoc(collection(tenant(), 'amenityBookings'), { tenantUid: 'tenant_n14', propertyId: 'prop_n14', status: 'pending', approvedBy: 'Admin' }));
     await assertFails(updateDoc(doc(tenant(), 'amenityBookings/bk_pending'), { approvedBy: 'Admin', approvedAt: serverTimestamp() }));
   });
-  it('N-14 control: tenant books as pending and can cancel; the property Owner and Admin can approve', async () => {
+  it('N-14 control: tenant books as pending and can cancel; Owner can approve while Admin browser must use callable', async () => {
     await assertSucceeds(addDoc(collection(tenant(), 'amenityBookings'), { tenantUid: 'tenant_n14', propertyId: 'prop_n14', unitId: 'unit_n14', amenityName: 'Gym', bookingDate: '2026-10-01', timeSlot: '09:00', status: 'pending', createdAt: serverTimestamp() }));
     await assertSucceeds(updateDoc(doc(tenant(), 'amenityBookings/bk_pending'), { status: 'cancelled', cancelledAt: serverTimestamp() }));
     await seed('amenityBookings/bk_pending2', { tenantUid: 'tenant_n14', propertyId: 'prop_n14', amenityName: 'Pool', status: 'pending' });
     await assertSucceeds(updateDoc(doc(ctx('owner_n14', { role: 'owner' }), 'amenityBookings/bk_pending2'), { status: 'approved', approvedAt: serverTimestamp(), approvedBy: 'owner_n14' }));
     await seed('amenityBookings/bk_pending3', { tenantUid: 'tenant_n14', propertyId: 'prop_n14', amenityName: 'Pool', status: 'pending' });
-    await assertSucceeds(updateDoc(doc(ctx('admin_n14', adminClaims), 'amenityBookings/bk_pending3'), { status: 'approved', approvedAt: serverTimestamp(), approvedBy: 'Admin' }));
+    await assertFails(updateDoc(doc(ctx('admin_n14', adminClaims), 'amenityBookings/bk_pending3'), { status: 'approved', approvedAt: serverTimestamp(), approvedBy: 'Admin' }));
   });
 
   it("N-34: tenantDocuments with tenantId 'ALL' are not readable by arbitrary signed-in users", async () => {
