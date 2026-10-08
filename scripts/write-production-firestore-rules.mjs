@@ -120,8 +120,9 @@ replaceRuleBlock('    match /keyMovements/{movementId} {', `    match /keyMoveme
 replaceRuleBlock('    match /parcels/{parcelId} {', `    match /parcels/{parcelId} {
       allow read: if isAdmin() || (docPropertyId(resource.data) != null && isPropertyOwner(docPropertyId(resource.data))) || tenantUidOwns(resource.data);
       allow create: if docPropertyId(request.resource.data) != null && isPropertyOwner(docPropertyId(request.resource.data));
-      allow update: if (docPropertyId(resource.data) != null && isPropertyOwner(docPropertyId(resource.data))) ||
-        (tenantUidOwns(resource.data) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'collectedBy', 'collectedAt', 'notes']));
+      // Tenant collection confirmation is server-authoritative through
+      // confirmTenantParcelCollection; browser updates remain Owner-scoped.
+      allow update: if docPropertyId(resource.data) != null && isPropertyOwner(docPropertyId(resource.data));
       allow delete: if docPropertyId(resource.data) != null && isPropertyOwner(docPropertyId(resource.data));
     }`);
 
