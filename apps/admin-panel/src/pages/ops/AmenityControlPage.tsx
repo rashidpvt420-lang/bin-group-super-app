@@ -67,6 +67,8 @@ export default function AmenityControlPage() {
     };
 
     const handleUpdateBookingStatus = async (bookingId: string, status: string) => {
+        if (submitting) return;
+        setSubmitting(true);
         try {
             await runAdminOperationalMutation('REVIEW_AMENITY_BOOKING', {
                 bookingId,
@@ -74,15 +76,20 @@ export default function AmenityControlPage() {
             });
         } catch (err) {
             console.error('Failed to update booking:', err);
+        } finally {
+            setSubmitting(false);
         }
     };
 
     const handleDeleteAmenity = async (amenityId: string) => {
-        if (!window.confirm('Delete this amenity?')) return;
+        if (submitting || !window.confirm('Delete this amenity?')) return;
+        setSubmitting(true);
         try {
             await runAdminOperationalMutation('DELETE_AMENITY', { amenityId });
         } catch (err) {
             console.error(err);
+        } finally {
+            setSubmitting(false);
         }
     };
 
@@ -115,7 +122,7 @@ export default function AmenityControlPage() {
                                           <Typography variant="subtitle2" color="#FFF" fontWeight="bold">{amen.name}</Typography>
                                           <Typography variant="caption" color="textSecondary">{amen.type?.toUpperCase()} · Cap: {amen.capacity}</Typography>
                                       </Box>
-                                      <Button size="small" color="error" onClick={() => handleDeleteAmenity(amen.id)}>DELETE</Button>
+                                      <Button size="small" color="error" disabled={submitting} onClick={() => void handleDeleteAmenity(amen.id)}>DELETE</Button>
                                   </Stack>
                               </Box>
                           ))}
@@ -156,10 +163,10 @@ export default function AmenityControlPage() {
                                             <TableCell align="right">
                                                 {b.status === 'pending' && (
                                                     <Stack direction="row" spacing={1} justifyContent="flex-end">
-                                                        <IconButton size="small" color="success" onClick={() => handleUpdateBookingStatus(b.id, 'approved')}>
+                                                        <IconButton size="small" color="success" disabled={submitting} onClick={() => void handleUpdateBookingStatus(b.id, 'approved')}>
                                                             <SafeIcon icon={Check} size={16} />
                                                         </IconButton>
-                                                        <IconButton size="small" color="error" onClick={() => handleUpdateBookingStatus(b.id, 'rejected')}>
+                                                        <IconButton size="small" color="error" disabled={submitting} onClick={() => void handleUpdateBookingStatus(b.id, 'rejected')}>
                                                             <SafeIcon icon={X} size={16} />
                                                         </IconButton>
                                                     </Stack>
