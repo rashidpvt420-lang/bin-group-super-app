@@ -191,21 +191,10 @@ export default function TicketsManagementPage() {
               alert("Please enter a valid numeric estimate.");
               return;
           }
-          const ticketRef = doc(db, 'maintenanceTickets', detailTicket.ticketId);
-          
-          const updateData: any = {
+          await runAdminOperationalMutation('UPDATE_TICKET_ESTIMATE', {
+              ticketId: detailTicket.ticketId,
               estimatedCost: cost,
-              updatedAt: serverTimestamp()
-          };
-
-          // If cost > 1000, trigger owner approval flow
-          if (cost > 1000 && (detailTicket.status === 'OPEN' || detailTicket.status === 'ESTIMATED')) {
-              updateData.status = 'AWAITING_OWNER_APPROVAL';
-          } else if (detailTicket.status === 'OPEN') {
-              updateData.status = 'ESTIMATED';
-          }
-
-          await updateDoc(ticketRef, updateData);
+          });
           setDetailTicket(null);
       } catch (err: any) {
           console.error("Update failed:", err);
