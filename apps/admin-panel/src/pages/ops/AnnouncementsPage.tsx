@@ -2,7 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { Container, Typography, Paper, Grid, Stack, Button, Chip, CircularProgress, Box, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Dialog, DialogTitle, DialogContent, DialogActions, TextField, MenuItem, Select, FormControl, InputLabel } from '@mui/material';
 import { Plus } from 'lucide-react';
 import { useLanguage } from '@bin/shared';
-import { db, collection, query, onSnapshot, addDoc, serverTimestamp, doc, deleteDoc } from '../../lib/firebase';
+import { db, collection, query, onSnapshot } from '../../lib/firebase';
+import { runAdminOperationalMutation } from '../../lib/adminOperationalMutation';
 import { binThemeTokens } from '../../theme/adminTheme';
 
 export default function AnnouncementsPage() {
@@ -35,16 +36,13 @@ export default function AnnouncementsPage() {
         e.preventDefault();
         setSubmitting(true);
         try {
-            await addDoc(collection(db, 'announcements'), {
+            await runAdminOperationalMutation('CREATE_ANNOUNCEMENT', {
                 propertyId,
                 title,
                 body,
                 category,
                 priority,
                 audience,
-                published: true,
-                publishedAt: serverTimestamp(),
-                createdBy: 'Admin'
             });
             setOpenAdd(false);
             setTitle('');
@@ -60,7 +58,7 @@ export default function AnnouncementsPage() {
     const handleDeleteAnnouncement = async (id: string) => {
         if (!window.confirm('Delete announcement?')) return;
         try {
-            await deleteDoc(doc(db, 'announcements', id));
+            await runAdminOperationalMutation('DELETE_ANNOUNCEMENT', { announcementId: id });
         } catch (err) {
             console.error(err);
         }
