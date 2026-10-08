@@ -79,6 +79,7 @@ import {
 } from 'firebase/messaging';
 import {
   CustomProvider,
+  getToken as getAppCheckToken,
   initializeAppCheck,
   ReCaptchaEnterpriseProvider,
   ReCaptchaV3Provider,
@@ -343,6 +344,18 @@ if (typeof window !== 'undefined') {
     log: (message, error) => console.warn(message, error),
   });
 }
+
+export const getMapsAppCheckToken = async (): Promise<{ token: string }> => {
+  if (!appCheck) {
+    throw new Error('[Firebase] App Check is not initialized for Google Maps.');
+  }
+  const result = await getAppCheckToken(appCheck, false);
+  const token = String(result?.token || '').trim();
+  if (!token) {
+    throw new Error('[Firebase] App Check returned an empty Google Maps token.');
+  }
+  return { token };
+};
 
 export const storage: FirebaseStorage = getStorage(app);
 export const FUNCTIONS_REGION = 'europe-west3';
