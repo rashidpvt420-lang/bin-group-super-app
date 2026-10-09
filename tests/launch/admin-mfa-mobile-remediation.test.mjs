@@ -18,13 +18,14 @@ test('Admin MFA remediation inventory is canonical-founder protected, read-only 
   assert.match(source, /hardLaunchClaim: false/);
   assert.match(source, /EMAIL_UNVERIFIED/);
   assert.match(source, /PHONE_MFA_MISSING/);
+  assert.match(source, /TOTP_MFA_MISSING/);
   assert.match(source, /DELETE_REQUIRED/);
   assert.match(source, /unexpectedPrivilegedAccountCount/);
-  assert.match(source, /founderSingletonReady/);
+  assert.match(source, /dualControlReady/);
   assert.doesNotMatch(source, /updateUser\(|setCustomUserClaims\(|deleteUser\(|multiFactor:\s*\{\s*enrolledFactors:\s*null/);
 });
 
-test('Admin profile provides self-service email verification and phone MFA remediation', async () => {
+test('Admin profile provides self-service email verification and role-scoped MFA remediation', async () => {
   const source = await read('apps/admin-panel/src/components/security/AdminMfaEnrollmentCard.tsx');
   assert.match(source, /sendEmailVerification\(user/);
   assert.match(source, /email_verified=1/);
@@ -34,17 +35,20 @@ test('Admin profile provides self-service email verification and phone MFA remed
   assert.match(source, /admin-mfa-readiness-overview/);
   assert.match(source, /Verify the Admin email before enrolling phone MFA/);
   assert.match(source, /multiFactor\(user\)\.enroll/);
+  assert.match(source, /isFinanceAdmin/);
+  assert.match(source, /canEnrollTotp/);
   assert.doesNotMatch(source, /setCustomUserClaims|updateUser\(|deleteUser\(/);
 });
 
-test('Admin remediation UI enforces the singleton-founder cleanup model without misleading MFA instructions', async () => {
+test('Admin remediation UI enforces Founder plus Finance dual control without misleading cleanup instructions', async () => {
   const source = await read('apps/admin-panel/src/components/security/AdminMfaEnrollmentCard.tsx');
-  assert.match(source, /Production requires exactly one privileged identity/);
+  assert.match(source, /Production requires exactly one canonical Founder and one Finance Admin/);
   assert.match(source, /Protected cleanup required/);
   assert.match(source, /Unexpected privileged account/);
   assert.match(source, /admin-privileged-delete-required/);
   assert.match(source, /unexpectedPrivilegedAccountCount/);
   assert.match(source, /canonicalFounderReadyCount/);
+  assert.match(source, /financeAdminReadyCount/);
   assert.doesNotMatch(source, /every listed account completes its own verification and MFA enrollment/);
 });
 

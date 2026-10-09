@@ -144,20 +144,22 @@ describe('AdminMfaEnrollmentCard - Founder TOTP Enrollment Flow', () => {
     }
   });
 
-  test('only canonical Founder may enroll in TOTP', () => {
-    // Non-founder admin
+  test('canonical Founder and Finance Admin may enroll their own TOTP; other Admin roles may not', () => {
     auth.currentUser!.email = 'other-admin@bin-groups.com';
-    render(<AdminMfaEnrollmentCard enrolled={false} isRTL={false} />);
-
-    expect(screen.queryByText(/Enroll Founder TOTP Authenticator/i)).toBeNull();
+    render(<AdminMfaEnrollmentCard enrolled={false} currentRole="operations_admin" isRTL={false} />);
     expect(screen.queryByTestId('admin-totp-enrollment-card')).toBeNull();
 
     cleanup();
 
-    // Canonical Founder
     auth.currentUser!.email = 'ceo@bin-groups.com';
-    render(<AdminMfaEnrollmentCard enrolled={false} isRTL={false} />);
+    render(<AdminMfaEnrollmentCard enrolled={false} currentRole="ceo" isRTL={false} />);
     expect(screen.getByText(/Enroll Founder TOTP Authenticator/i)).toBeInTheDocument();
+
+    cleanup();
+
+    auth.currentUser!.email = 'finance.admin@bin-groups.com';
+    render(<AdminMfaEnrollmentCard enrolled={false} currentRole="finance_admin" isRTL={false} />);
+    expect(screen.getByText(/Enroll Finance Admin TOTP Authenticator/i)).toBeInTheDocument();
   });
 
   test('disabled generate TOTP secret button when email is unverified', () => {

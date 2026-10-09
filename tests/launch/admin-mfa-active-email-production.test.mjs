@@ -17,6 +17,7 @@ const ENV = {
   GITHUB_RUN_ATTEMPT: '3',
 };
 const phoneFactor = { uid: 'factor', factorId: 'phone', displayName: 'Phone' };
+const totpFactor = { uid: 'totp-factor', factorId: 'totp', displayName: 'Authenticator' };
 const user = (uid, role, {
   email = CANONICAL_FOUNDER_EMAIL,
   emailVerified = true,
@@ -34,7 +35,10 @@ const user = (uid, role, {
   multiFactor: { enrolledFactors: factors },
 });
 
-const readyUsers = () => [user('founder-ready', 'ceo')];
+const readyUsers = () => [
+  user('founder-ready', 'ceo'),
+  user('finance-ready', 'finance_admin', { email: 'finance.admin@bin-groups.com', factors: [totpFactor] }),
+];
 
 const evidenceFailures = (evidence, now) => validateAdminMfaEvidence(evidence, {
   commitSha: SHA,
@@ -61,7 +65,7 @@ test('the canonical founder requires a verified Firebase Auth email', () => {
   assert.match(unverified.failures.join('\n'), /unverified email/);
 });
 
-test('disabled, inactive and additional privileged accounts block until deleted', () => {
+test('disabled, inactive and additional privileged accounts block until removed', () => {
   const disabled = summarizeAdminMfaUsers([
     ...readyUsers(),
     user('disabled-old-admin', 'admin', {
@@ -72,7 +76,7 @@ test('disabled, inactive and additional privileged accounts block until deleted'
   assert.equal(disabled.ok, false);
   assert.equal(disabled.summary.unexpectedPrivilegedAccountCount, 1);
   assert.equal(disabled.summary.disabledAdminCount, 1);
-  assert.match(disabled.failures.join('\n'), /must be deleted|disabled instead of being deleted/);
+  assert.match(disabled.failures.join('\n'), /must be removed|are disabled/);
 
   const inactive = summarizeAdminMfaUsers([
     ...readyUsers(),
@@ -83,7 +87,7 @@ test('disabled, inactive and additional privileged accounts block until deleted'
   ]);
   assert.equal(inactive.ok, false);
   assert.equal(inactive.summary.inactiveProfileAdminCount, 1);
-  assert.match(inactive.failures.join('\n'), /inactive instead of being deleted/);
+  assert.match(inactive.failures.join('\n'), /are inactive/);
 });
 
 test('Admin MFA evidence is aggregate-only and fails closed on founder-email tampering', () => {
@@ -94,12 +98,13 @@ test('Admin MFA evidence is aggregate-only and fails closed on founder-email tam
     /explicitly include activeAdminEmailUnverifiedCount/,
   );
   assert.throws(
-    () => buildAdminMfaEvidence({ ...summary, founderSingletonReady: undefined }, { env: ENV, now }),
-    /explicitly include founderSingletonReady/,
+    () => buildAdminMfaEvidence({ ...summary, dualControlReady: undefined }, { env: ENV, now }),
+    /explicitly include dualControlReady/,
   );
   const evidence = buildAdminMfaEvidence(summary, { env: ENV, now });
   assert.equal(evidence.activeAdminEmailUnverifiedCount, 0);
   assert.equal(evidence.allActiveAdminsEmailVerified, true);
+  assert.equal(evidence.dualControlReady, true);
   assert.equal(evidence.founderSingletonReady, true);
   assert.deepEqual(evidenceFailures(evidence, now.getTime()), []);
   assert.doesNotMatch(JSON.stringify(evidence), /@|founder-ready|phoneNumber|factorUid/);
@@ -116,7 +121,8 @@ test('production Admin preflight pins canonical founder email coverage without l
   assert.match(source, /CANONICAL_FOUNDER_EMAIL/);
   assert.match(source, /activeAdminEmailUnverifiedCount/);
   assert.match(source, /allActiveAdminsEmailVerified/);
-  assert.match(source, /founderSingletonReady/);
+  assert.match(source, /dualControlReady/);
+  assert.match(source, /financeApproverMfaReadyCount/);
   assert.match(source, /unexpectedPrivilegedAccountCount/);
   assert.match(source, /requireExact\(evidence\.activeAdminEmailUnverifiedCount, 0/);
   assert.match(source, /requireExact\(evidence\.allActiveAdminsEmailVerified, true/);

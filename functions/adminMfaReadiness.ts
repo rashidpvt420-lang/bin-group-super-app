@@ -119,8 +119,11 @@ export function buildAdminMfaReadinessOverview(
   let activeAdminCount = 0;
   let emailVerifiedCount = 0;
   let phoneMfaEnrolledCount = 0;
+  let totpMfaEnrolledCount = 0;
   let canonicalFounderCount = 0;
   let canonicalFounderReadyCount = 0;
+  let financeAdminCount = 0;
+  let financeAdminReadyCount = 0;
   let unexpectedPrivilegedAccountCount = 0;
   const blockers: AdminMfaReadinessTarget[] = [];
 
@@ -132,38 +135,46 @@ export function buildAdminMfaReadinessOverview(
 
     const role = roleOf(claims, record.profile);
     const canonicalFounder = isCanonicalFounder(user, role);
+    const financeAdmin = role === "finance_admin";
     if (canonicalFounder) canonicalFounderCount += 1;
+    else if (financeAdmin) financeAdminCount += 1;
     else unexpectedPrivilegedAccountCount += 1;
 
     const targetBlockers: string[] = [];
-    if (!canonicalFounder) targetBlockers.push("DELETE_REQUIRED");
+    if (!canonicalFounder && !financeAdmin) targetBlockers.push("DELETE_REQUIRED");
     if (!record.profileExists) {
       missingProfileCount += 1;
       targetBlockers.push("PROFILE_MISSING");
     }
     if (user.disabled) {
       disabledAdminCount += 1;
-      targetBlockers.push("DELETE_REQUIRED");
+      targetBlockers.push("DISABLED");
     }
     if (record.profileExists && !profileIsActive(record.profile)) {
       inactiveProfileCount += 1;
-      targetBlockers.push("DELETE_REQUIRED");
+      targetBlockers.push("INACTIVE");
     }
 
     const active = record.profileExists && !user.disabled && profileIsActive(record.profile);
     const emailVerified = user.emailVerified === true;
-    const phoneMfaEnrolled = (user.multiFactor?.enrolledFactors || [])
-      .some((factor) => lower(factor.factorId, 80) === "phone");
+    const factors = user.multiFactor?.enrolledFactors || [];
+    const phoneMfaEnrolled = factors.some((factor) => lower(factor.factorId, 80) === "phone");
+    const totpMfaEnrolled = factors.some((factor) => lower(factor.factorId, 80) === "totp");
 
     if (active) {
       activeAdminCount += 1;
       if (emailVerified) emailVerifiedCount += 1;
       else targetBlockers.push("EMAIL_UNVERIFIED");
       if (phoneMfaEnrolled) phoneMfaEnrolledCount += 1;
-      else targetBlockers.push("PHONE_MFA_MISSING");
+      if (totpMfaEnrolled) totpMfaEnrolledCount += 1;
+      if (canonicalFounder && !phoneMfaEnrolled) targetBlockers.push("PHONE_MFA_MISSING");
+      if (financeAdmin && !totpMfaEnrolled) targetBlockers.push("TOTP_MFA_MISSING");
     }
     if (canonicalFounder && active && emailVerified && phoneMfaEnrolled) {
       canonicalFounderReadyCount += 1;
+    }
+    if (financeAdmin && active && emailVerified && totpMfaEnrolled) {
+      financeAdminReadyCount += 1;
     }
 
     if (targetBlockers.length > 0) {
@@ -184,19 +195,22 @@ export function buildAdminMfaReadinessOverview(
     return `${left.role}|${left.emailMasked}`.localeCompare(`${right.role}|${right.emailMasked}`);
   });
 
-  const founderSingletonReady =
-    claimedAdminCount === 1 &&
+  const dualControlReady =
+    claimedAdminCount === 2 &&
     canonicalFounderCount === 1 &&
     canonicalFounderReadyCount === 1 &&
+    financeAdminCount === 1 &&
+    financeAdminReadyCount === 1 &&
     unexpectedPrivilegedAccountCount === 0 &&
     missingProfileCount === 0 &&
     disabledAdminCount === 0 &&
     inactiveProfileCount === 0 &&
-    activeAdminCount === 1;
+    activeAdminCount === 2 &&
+    emailVerifiedCount === 2;
 
   return {
-    status: founderSingletonReady ? "READY" : "BLOCKED",
-    launchReady: founderSingletonReady,
+    status: dualControlReady ? "READY" : "BLOCKED",
+    launchReady: dualControlReady,
     summary: {
       claimedAdminCount,
       missingProfileCount,
@@ -205,15 +219,19 @@ export function buildAdminMfaReadinessOverview(
       activeAdminCount,
       emailVerifiedCount,
       phoneMfaEnrolledCount,
+      totpMfaEnrolledCount,
       canonicalFounderCount,
       canonicalFounderReadyCount,
+      financeAdminCount,
+      financeAdminReadyCount,
       unexpectedPrivilegedAccountCount,
-      founderSingletonReady,
+      dualControlReady,
+      founderSingletonReady: dualControlReady,
       blockingAccountCount: blockers.length,
       // Compatibility values for the current Admin card.
       recoveryApproverCount: canonicalFounderCount,
       recoveryApproverReadyCount: canonicalFounderReadyCount,
-      recoveryQuorumReady: founderSingletonReady,
+      recoveryQuorumReady: dualControlReady,
     },
     blockers,
     sensitiveValuesExcluded: true,
@@ -243,11 +261,11 @@ export const getAdminMfaReadinessOverview = onCall(
       ...(profiles.get(user.uid) || { profileExists: false, profile: {} }),
     })));
     await db.collection("audit_logs").add({
-      action: "ADMIN_SINGLE_FOUNDER_READINESS_VIEWED",
+      action: "ADMIN_DUAL_CONTROL_READINESS_VIEWED",
       actorId: viewer.uid,
       actorRole: viewer.role,
       targetType: "system",
-      targetId: "admin-single-founder-production-readiness",
+      targetId: "admin-founder-finance-production-readiness",
       claimedAdminCount: overview.summary.claimedAdminCount,
       activeAdminCount: overview.summary.activeAdminCount,
       unexpectedPrivilegedAccountCount: overview.summary.unexpectedPrivilegedAccountCount,
