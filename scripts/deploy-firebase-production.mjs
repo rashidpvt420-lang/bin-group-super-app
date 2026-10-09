@@ -6,6 +6,7 @@ import { requireArtifactDigest } from './lib/launch-gate-common.mjs';
 import { verifyFirebaseProductionSecrets } from './verify-firebase-production-secrets.mjs';
 import { verifyFirebasePhoneAuthProduction } from './verify-firebase-phone-auth-production.mjs';
 import { verifyAdminMfaProduction } from './verify-admin-mfa-production.mjs';
+import { adminMfaBootstrapWorkflowState } from './verify-production-workflow-env.mjs';
 import { classifyPermanentFirebaseDeploymentFailure } from './lib/firebase-deployment-failure-classifier.mjs';
 import { NONFUNCTIONS_TARGET } from './firebase-nonfunctions-production-cli.mjs';
 
@@ -64,7 +65,23 @@ function readWorkflowDispatchInputs() {
 }
 
 const workflowInputs = readWorkflowDispatchInputs();
-const adminBootstrapRequested = String(workflowInputs.incident_evidence_refs || '').trim() === adminBootstrapMarker;
+// GitHub Actions can restore its original event JSON between steps. The
+// protected preflight's rewritten top-level compatibility marker is therefore
+// not durable. Recompute the exact same authorized decision from the original
+// attested dispatch payload, rather than treating the missing marker as a
+// normal full-stack deployment.
+const adminBootstrapState = adminMfaBootstrapWorkflowState(process.env);
+const legacyMarkerPresent = String(workflowInputs.incident_evidence_refs || '').trim() === adminBootstrapMarker;
+const adminBootstrapRequested =
+  adminBootstrapState.authorized && adminBootstrapState.marker === adminBootstrapMarker;
+if (adminBootstrapState.requested && !adminBootstrapRequested) {
+  console.error('[production-deploy] Refusing unauthorized Admin MFA bootstrap request');
+  process.exit(1);
+}
+if (legacyMarkerPresent && !adminBootstrapRequested) {
+  console.error('[production-deploy] Refusing unverified Admin MFA bootstrap compatibility marker');
+  process.exit(1);
+}
 
 if (
   process.env.GITHUB_ACTIONS !== 'true' ||
@@ -510,7 +527,7 @@ if (adminBootstrapRequested) {
     process.exit(1);
   }
 
-  console.log('[production-deploy] Protected Admin MFA bootstrap requested; deploying Admin Hosting before remediation callables');
+  console.log(`[production-deploy] Protected Admin MFA bootstrap authorized (source=${adminBootstrapState.requestSource}); deploying Admin Hosting before remediation callables`);
   retryFirebase(
     adminBootstrapHostingTarget,
     'Admin MFA bootstrap hosting',

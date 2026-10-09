@@ -1,6 +1,7 @@
 import firebaseTools from 'firebase-tools';
 import { existsSync, readFileSync } from 'node:fs';
 import { ensureAdminMfaAuthorizedDomains } from './ensure-admin-mfa-authorized-domains.mjs';
+import { adminMfaBootstrapWorkflowState } from './verify-production-workflow-env.mjs';
 
 const expectedProjectId = 'bin-group-57c60';
 const expectedRepository = 'rashidpvt420-lang/bin-group-super-app';
@@ -161,8 +162,14 @@ export function requireAdminMfaDomainRepairContext({
   approvalPath = 'launch_package/predeploy-approval.json',
 } = {}) {
   const inputs = readWorkflowInputs(env);
-  const requested = String(inputs.incident_evidence_refs || '').trim() === adminMfaBootstrapMarker;
-  if (!requested) return false;
+  // Use the same exact-main, bank-pilot, attested Owner request decision as
+  // the production preflight and deploy script. The top-level compatibility
+  // marker is not guaranteed to persist across GitHub Actions steps.
+  const bootstrapState = adminMfaBootstrapWorkflowState(env);
+  if (!bootstrapState.requested) return false;
+  if (!bootstrapState.authorized || bootstrapState.marker !== adminMfaBootstrapMarker) {
+    throw new Error('Admin MFA authorized-domain repair refused: protected bootstrap authorization is missing');
+  }
 
   const failures = [];
   const githubSha = String(env.GITHUB_SHA || '').trim();
