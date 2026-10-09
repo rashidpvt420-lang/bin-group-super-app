@@ -31,13 +31,15 @@ test('bank-pilot marker is one file and keeps public launch disabled', () => {
 });
 
 test('bank-pilot requires a clean exact-SHA privileged review', () => {
-  assert.match(workflow, /\.schemaVersion == 2/);
+  assert.match(workflow, /\.schemaVersion == 3/);
   assert.match(workflow, /\.commitSha == \$sha/);
   assert.match(workflow, /\.workflowRunId == \$workflow_run_id/);
   assert.match(workflow, /\.canonicalFounderReady == true/);
   assert.match(workflow, /\.founderEmailVerified == true/);
   assert.match(workflow, /\.founderPhoneMfaReady == true/);
-  assert.match(workflow, /\.privilegedAccountCountBefore == 1/);
+  assert.match(workflow, /\.privilegedAccountCountBefore == 2/);
+  assert.match(workflow, /\.financeApproverCandidateCount == 1/);
+  assert.match(workflow, /\.financeApproverBootstrapReady == true/);
   assert.match(workflow, /\.deletionTargetCount == 0/);
   assert.match(workflow, /\.mutationPerformed == false/);
   assert.match(workflow, /\.nonPrivilegedAccountsUntouched == true/);
@@ -46,7 +48,7 @@ test('bank-pilot requires a clean exact-SHA privileged review', () => {
 test('bank-pilot validates Private-HR and dispatches only bank-pilot mode', () => {
   assert.match(workflow, /private-hr-migration-dispatch-current-main\.yml\/dispatches/);
   assert.equal((workflow.match(/private-hr-migration-dispatch-current-main\.yml\/dispatches/g) || []).length, 1);
-  assert.match(workflow, /\.schemaVersion == 2/);
+  assert.match(workflow, /\.schemaVersion == 3/);
   assert.match(workflow, /\.mode == "DRY_RUN"/);
   assert.match(workflow, /\.failureCount == 0/);
   assert.match(workflow, /\.executionRequired == false/);

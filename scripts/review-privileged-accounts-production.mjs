@@ -27,6 +27,24 @@ function phoneMfaReady(user) {
     .some((factor) => lower(factor?.factorId) === 'phone');
 }
 
+function totpMfaReady(user) {
+  return (user?.multiFactor?.enrolledFactors || [])
+    .some((factor) => lower(factor?.factorId) === 'totp');
+}
+
+function roleOf(user) {
+  const claims = user?.customClaims || {};
+  return lower(claims.role || claims.userRole || claims.primaryRole);
+}
+
+function isConfiguredFinanceApprover(user, expectedFinanceEmail) {
+  return Boolean(
+    expectedFinanceEmail &&
+    roleOf(user) === 'finance_admin' &&
+    lower(user?.email) === lower(expectedFinanceEmail)
+  );
+}
+
 function profileActive(user) {
   if (user?.profileExists !== true) return false;
   const profile = user.profile || {};
@@ -34,17 +52,44 @@ function profileActive(user) {
   return !INACTIVE_PROFILE_STATUSES.has(lower(profile.status));
 }
 
-export function summarizePrivilegedAccountReview(privilegedUsers) {
+export function summarizePrivilegedAccountReview(
+  privilegedUsers,
+  { expectedFinanceEmail = '' } = {},
+) {
   const privileged = Array.isArray(privilegedUsers) ? privilegedUsers : [];
+  const normalizedFinanceEmail = lower(expectedFinanceEmail);
   const canonical = privileged.filter((user) => isCanonicalFounderAccount(user));
-  const targets = privileged.filter((user) => !isCanonicalFounderAccount(user));
+  const financeApprovers = privileged.filter((user) =>
+    isConfiguredFinanceApprover(user, normalizedFinanceEmail)
+  );
+  const targets = privileged.filter((user) =>
+    !isCanonicalFounderAccount(user) &&
+    !isConfiguredFinanceApprover(user, normalizedFinanceEmail)
+  );
+
   const founder = canonical.length === 1 ? canonical[0] : null;
+  const financeApprover = financeApprovers.length === 1 ? financeApprovers[0] : null;
+
   const founderAccountEnabled = Boolean(founder && founder.disabled !== true);
   const founderProfileActive = Boolean(founder && profileActive(founder));
   const founderEmailVerified = Boolean(founder && founder.emailVerified === true);
   const founderPhoneMfaReady = Boolean(founder && phoneMfaReady(founder));
+
+  const financeApproverAccountEnabled = Boolean(financeApprover && financeApprover.disabled !== true);
+  const financeApproverProfileActive = Boolean(financeApprover && profileActive(financeApprover));
+  const financeApproverEmailVerified = Boolean(financeApprover && financeApprover.emailVerified === true);
+  const financeApproverTotpMfaReady = Boolean(financeApprover && totpMfaReady(financeApprover));
+  const financeApproverBootstrapReady =
+    financeApprovers.length === 1 &&
+    financeApproverAccountEnabled &&
+    financeApproverProfileActive &&
+    financeApproverEmailVerified;
+
   const blockers = [];
 
+  if (!normalizedFinanceEmail) {
+    blockers.push('configured Finance Admin email is required');
+  }
   if (canonical.length !== 1) {
     blockers.push(`exactly one ${CANONICAL_FOUNDER_EMAIL} CEO/Super Admin account is required; found ${canonical.length}`);
   }
@@ -52,26 +97,39 @@ export function summarizePrivilegedAccountReview(privilegedUsers) {
   if (founder && !founderProfileActive) blockers.push('canonical founder Firestore profile is missing or inactive');
   if (founder && !founderEmailVerified) blockers.push('canonical founder email is not verified');
   if (founder && !founderPhoneMfaReady) blockers.push('canonical founder phone MFA factor is not enrolled');
-  if (targets.length > 0) blockers.push(`${targets.length} unexpected privileged account(s) must be deleted`);
+
+  if (financeApprovers.length !== 1) {
+    blockers.push(`exactly one configured Finance Admin account is required; found ${financeApprovers.length}`);
+  }
+  if (financeApprover && !financeApproverAccountEnabled) blockers.push('configured Finance Admin Firebase Auth account is disabled');
+  if (financeApprover && !financeApproverProfileActive) blockers.push('configured Finance Admin Firestore profile is missing or inactive');
+  if (financeApprover && !financeApproverEmailVerified) blockers.push('configured Finance Admin email is not verified');
+
+  if (targets.length > 0) {
+    blockers.push(`${targets.length} unexpected privileged account(s) must be removed`);
+  }
+
+  const canonicalFounderReady =
+    canonical.length === 1 &&
+    founderAccountEnabled &&
+    founderProfileActive &&
+    founderEmailVerified &&
+    founderPhoneMfaReady;
 
   return {
     canonicalFounderCount: canonical.length,
-    canonicalFounderReady:
-      canonical.length === 1 &&
-      founderAccountEnabled &&
-      founderProfileActive &&
-      founderEmailVerified &&
-      founderPhoneMfaReady,
+    canonicalFounderReady,
     founderAccountEnabled,
     founderProfileActive,
     founderEmailVerified,
     founderPhoneMfaReady,
-    executionEligible:
-      canonical.length === 1 &&
-      founderAccountEnabled &&
-      founderProfileActive &&
-      founderEmailVerified &&
-      founderPhoneMfaReady,
+    financeApproverCandidateCount: financeApprovers.length,
+    financeApproverBootstrapReady,
+    financeApproverAccountEnabled,
+    financeApproverProfileActive,
+    financeApproverEmailVerified,
+    financeApproverTotpMfaReady,
+    executionEligible: canonicalFounderReady && financeApproverBootstrapReady,
     executionBlockers: blockers,
     privilegedAccountCountBefore: privileged.length,
     deletionTargetCount: targets.length,
@@ -98,9 +156,11 @@ export async function reviewPrivilegedAccountsProduction({
   const users = await fetchAllAuthUsers({ authClient: auth });
   const enriched = await attachAdminProfiles(users, { firestoreClient: db });
   const privileged = enriched.filter((user) => claimsGrantAdminPortal(user?.customClaims || {}));
-  const summary = summarizePrivilegedAccountReview(privileged);
+  const summary = summarizePrivilegedAccountReview(privileged, {
+    expectedFinanceEmail: env.E2E_FINANCE_APPROVER_EMAIL,
+  });
   const result = {
-    schemaVersion: 2,
+    schemaVersion: 3,
     status: 'dry-run',
     projectId,
     repository: text(env.GITHUB_REPOSITORY) || null,
@@ -122,7 +182,7 @@ export async function reviewPrivilegedAccountsProduction({
   mkdirSync(path.dirname(EVIDENCE_PATH), { recursive: true });
   writeFileSync(EVIDENCE_PATH, `${JSON.stringify(result, null, 2)}\n`);
   console.log(
-    `[privileged-review] targets=${result.deletionTargetCount} canonical_founder_ready=${result.canonicalFounderReady} mutation_performed=false`,
+    `[privileged-review] targets=${result.deletionTargetCount} founder_ready=${result.canonicalFounderReady} finance_bootstrap_ready=${result.financeApproverBootstrapReady} finance_totp_ready=${result.financeApproverTotpMfaReady} mutation_performed=false`,
   );
   return result;
 }

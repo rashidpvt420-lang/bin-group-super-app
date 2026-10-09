@@ -37,6 +37,19 @@ function phoneMfaReady(user) {
     .some((factor) => lower(factor?.factorId) === 'phone');
 }
 
+function roleOf(user) {
+  const claims = user?.customClaims || {};
+  return lower(claims.role || claims.userRole || claims.primaryRole);
+}
+
+function isConfiguredFinanceApprover(user, expectedFinanceEmail) {
+  return Boolean(
+    expectedFinanceEmail &&
+    roleOf(user) === 'finance_admin' &&
+    lower(user?.email) === lower(expectedFinanceEmail)
+  );
+}
+
 function profileActive(user) {
   if (user?.profileExists !== true) return false;
   const profile = user.profile || {};
@@ -165,7 +178,12 @@ export async function deleteObsoletePrivilegedAccountsProduction({
   const enriched = await attachAdminProfiles(users, { firestoreClient: db });
   const privileged = enriched.filter((user) => claimsGrantAdminPortal(user?.customClaims || {}));
   const canonical = privileged.filter((user) => isCanonicalFounderAccount(user));
-  const targets = privileged.filter((user) => !isCanonicalFounderAccount(user));
+  const expectedFinanceEmail = lower(env.E2E_FINANCE_APPROVER_EMAIL);
+  const financeApprovers = privileged.filter((user) => isConfiguredFinanceApprover(user, expectedFinanceEmail));
+  const targets = privileged.filter((user) =>
+    !isCanonicalFounderAccount(user) &&
+    !isConfiguredFinanceApprover(user, expectedFinanceEmail)
+  );
 
   if (canonical.length !== 1) {
     throw new Error(`Cleanup refused: exactly one ${CANONICAL_FOUNDER_EMAIL} CEO/Super Admin account is required; found ${canonical.length}.`);
@@ -179,6 +197,20 @@ export async function deleteObsoletePrivilegedAccountsProduction({
   }
   if (!phoneMfaReady(founder)) {
     throw new Error('Cleanup refused: the canonical founder phone MFA factor is not enrolled.');
+  }
+
+  if (!expectedFinanceEmail) {
+    throw new Error('Cleanup refused: E2E_FINANCE_APPROVER_EMAIL must identify the configured Finance Admin.');
+  }
+  if (financeApprovers.length !== 1) {
+    throw new Error(`Cleanup refused: exactly one configured Finance Admin account is required; found ${financeApprovers.length}.`);
+  }
+  const financeApprover = financeApprovers[0];
+  if (financeApprover.disabled === true || !profileActive(financeApprover)) {
+    throw new Error('Cleanup refused: the configured Finance Admin must be active with an active Firestore profile.');
+  }
+  if (financeApprover.emailVerified !== true) {
+    throw new Error('Cleanup refused: the configured Finance Admin email is not verified.');
   }
 
   const result = {
@@ -198,6 +230,8 @@ export async function deleteObsoletePrivilegedAccountsProduction({
     verifiedAt: now.toISOString(),
     canonicalFounderCount: canonical.length,
     canonicalFounderReady: true,
+    financeApproverCandidateCount: financeApprovers.length,
+    financeApproverBootstrapReady: true,
     privilegedAccountCountBefore: privileged.length,
     deletionTargetCount: targets.length,
     deletedAccountCount: 0,
@@ -242,15 +276,21 @@ export async function deleteObsoletePrivilegedAccountsProduction({
 
     const remainingUsers = await fetchAllAuthUsers({ authClient: auth });
     const remainingPrivileged = remainingUsers.filter((user) => claimsGrantAdminPortal(user?.customClaims || {}));
-    if (remainingPrivileged.length !== 1 || !isCanonicalFounderAccount(remainingPrivileged[0])) {
-      throw new Error('Cleanup completed incompletely: production does not contain exactly one canonical privileged account.');
+    const remainingFounder = remainingPrivileged.filter((user) => isCanonicalFounderAccount(user));
+    const remainingFinance = remainingPrivileged.filter((user) => isConfiguredFinanceApprover(user, expectedFinanceEmail));
+    const remainingUnexpected = remainingPrivileged.filter((user) =>
+      !isCanonicalFounderAccount(user) &&
+      !isConfiguredFinanceApprover(user, expectedFinanceEmail)
+    );
+    if (remainingFounder.length !== 1 || remainingFinance.length !== 1 || remainingUnexpected.length !== 0) {
+      throw new Error('Cleanup completed incompletely: production must retain exactly the canonical Founder and configured Finance Admin.');
     }
     result.mutationPerformed = result.deletedAccountCount > 0;
   }
 
   writeEvidence(result);
   console.log(
-    `[privileged-cleanup] ${result.status} targets=${result.deletionTargetCount} deleted=${result.deletedAccountCount} canonical_founder_ready=true mutation_performed=${result.mutationPerformed}`,
+    `[privileged-cleanup] ${result.status} targets=${result.deletionTargetCount} deleted=${result.deletedAccountCount} founder_ready=true finance_bootstrap_ready=true mutation_performed=${result.mutationPerformed}`,
   );
   return result;
 }

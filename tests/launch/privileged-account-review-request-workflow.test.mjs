@@ -40,7 +40,7 @@ test('privileged review binds evidence to main and proves no mutation', () => {
   assert.match(workflow, /GITHUB_SHA: \$\{\{ steps\.release\.outputs\.sha \}\}/);
   assert.match(workflow, /GITHUB_REF: refs\/heads\/main/);
   assert.match(workflow, /node scripts\/review-privileged-accounts-production\.mjs/);
-  assert.match(workflow, /\.schemaVersion == 2/);
+  assert.match(workflow, /\.schemaVersion == 3/);
   assert.match(workflow, /\.commitSha == \$sha/);
   assert.match(workflow, /\.mutationPerformed == false/);
   assert.match(workflow, /\.deletedAccountCount == 0/);

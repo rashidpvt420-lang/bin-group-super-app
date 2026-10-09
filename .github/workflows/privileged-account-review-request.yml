@@ -153,7 +153,7 @@ jobs:
           report='launch_package/privileged-account-cleanup.json'
           [[ -s "$report" ]]
           jq -e --arg sha "$RELEASE_SHA" '
-            .schemaVersion == 2 and
+            .schemaVersion == 3 and
             .status == "dry-run" and
             .projectId == "bin-group-57c60" and
             .commitSha == $sha and

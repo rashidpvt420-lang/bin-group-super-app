@@ -154,7 +154,7 @@ jobs:
           [[ -n "$report_path" && -s "$report_path" ]]
 
           jq -e --arg sha "$RELEASE_SHA" --arg workflow_run_id "$run_id" '
-            .schemaVersion == 2 and
+            .schemaVersion == 3 and
             .status == "dry-run" and
             .commitSha == $sha and
             .workflowRunId == $workflow_run_id and
@@ -164,9 +164,11 @@ jobs:
             .founderProfileActive == true and
             .founderEmailVerified == true and
             .founderPhoneMfaReady == true and
+            .financeApproverCandidateCount == 1 and
+            .financeApproverBootstrapReady == true and
             .executionEligible == true and
             (.executionBlockers | length) == 0 and
-            .privilegedAccountCountBefore == 1 and
+            .privilegedAccountCountBefore == 2 and
             .deletionTargetCount == 0 and
             .deletedAccountCount == 0 and
             .mutationPerformed == false and
