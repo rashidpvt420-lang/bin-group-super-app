@@ -266,6 +266,85 @@ test('canonical recovery accepts one attested prior failed production run refere
   assert.equal(JSON.parse(readFileSync(eventPath, 'utf8')).inputs.incident_evidence_refs, marker);
 });
 
+test('owner-protected exact-main Finance MFA bootstrap accepts attested deploy #1207 with Founder TOTP already verified', (t) => {
+  const env = validEnv();
+  env.E2E_FOUNDER_TOTP_SECRET = 'JBSWY3DPEHPK3PXP';
+  env.E2E_FINANCE_APPROVER_EMAIL = 'finance.admin@bin-groups.com';
+  env.E2E_FINANCE_APPROVER_PASSWORD = 'finance-password';
+  const ownerPr = '1738';
+  const refs = [
+    'https://github.com/rashidpvt420-lang/bin-group-super-app/issues/434',
+    `https://github.com/rashidpvt420-lang/bin-group-super-app/pull/${ownerPr}`,
+    'GITHUB_PRODUCTION_RUN_37914979913',
+  ].join(',');
+  const path = withDispatchEvent(t, env, refs, { authorization_source_pr: ownerPr }, {
+    incident_attestation: 'ATTEST_PRODUCTION_INCIDENT_STATE_WITH_HOLDS',
+    incident_last_deployment_failed: 'true',
+    incident_last_deployment_failed_at: '2026-10-09T10:16:56Z',
+  });
+  const state = adminMfaBootstrapWorkflowState(env);
+  assert.equal(state.requested, true);
+  assert.equal(state.authorized, true);
+  assert.equal(state.requestSource, 'protected-finance-admin-bootstrap');
+  assert.deepEqual(validateProductionWorkflowEnv(env), []);
+  assert.equal(normalizeAdminMfaBootstrapWorkflowEvent(env), true);
+  const event = JSON.parse(readFileSync(path, 'utf8'));
+  assert.equal(event.inputs.incident_evidence_refs, marker);
+  assert.equal(JSON.parse(event.inputs.deployment_payload_json).incident_evidence_refs, refs, 'original evidence remains unchanged');
+  assert.equal(normalizeAdminMfaBootstrapWorkflowEvent(env), false);
+});
+
+test('Finance MFA bootstrap denies missing provenance, populated TOTP, active incidents and public scope', (t) => {
+  const refs = [
+    'https://github.com/rashidpvt420-lang/bin-group-super-app/issues/434',
+    'https://github.com/rashidpvt420-lang/bin-group-super-app/pull/1738',
+    'GITHUB_PRODUCTION_RUN_37914979913',
+  ].join(',');
+  const good = {
+    incident_attestation: 'ATTEST_PRODUCTION_INCIDENT_STATE_WITH_HOLDS',
+    incident_last_deployment_failed: 'true',
+    incident_last_deployment_failed_at: '2026-10-09T10:16:56Z',
+  };
+  const scenarios = [
+    ['TOTP already configured', { E2E_FINANCE_APPROVER_TOTP_SECRET: 'JBSWY3DPEHPK3PXP' }, {}, {}, refs],
+    ['missing finance email', { E2E_FINANCE_APPROVER_EMAIL: '' }, {}, {}, refs],
+    ['Founder is finance', { E2E_FINANCE_APPROVER_EMAIL: 'ceo@bin-groups.com' }, {}, {}, refs],
+    ['missing finance password', { E2E_FINANCE_APPROVER_PASSWORD: '' }, {}, {}, refs],
+    ['no source PR', {}, { authorization_source_pr: '' }, {}, refs],
+    ['mismatched source PR', {}, { authorization_source_pr: '1737' }, {}, refs],
+    ['invalid source PR', {}, { authorization_source_pr: '0001738' }, {}, refs],
+    ['missing failure reference', {}, {}, {}, refs.split(',').slice(0, 2).join(',')],
+    ['unattested failure', {}, {}, { incident_last_deployment_failed: 'false' }, refs],
+    ['bad timestamp', {}, {}, { incident_last_deployment_failed_at: 'not-a-date' }, refs],
+    ['wrong attestation', {}, {}, { incident_attestation: 'ATTEST_PRODUCTION_INCIDENT_STATE_CLEAR' }, refs],
+    ['active incident', {}, {}, { incident_active_json: '[{"id":"active"}]' }, refs],
+    ['rollback hold', {}, {}, { incident_requires_rollback: 'true' }, refs],
+    ['hard-clearance evidence', {}, {}, { hard_clearance_run_id: '333' }, refs],
+    ['Stripe proof', {}, {}, { stripe_live_webhook_event_id: 'evt_123' }, refs],
+    ['wrong owner', {}, { authorization_actor: 'different-user' }, {}, refs],
+    ['wrong issue', {}, {}, {}, refs.replace('/issues/434', '/issues/435')],
+    ['wrong PR ref', {}, {}, {}, refs.replace('/pull/1738', '/pull/1739')],
+    ['wrong previous-run reference', {}, {}, {}, refs.replace('GITHUB_PRODUCTION_RUN_37914979913', 'GITHUB_PRODUCTION_RUN_fake')],
+  ];
+  for (const [name, overrides, inputs, payload, evidence] of scenarios) {
+    const env = {
+      ...validEnv(),
+      E2E_FOUNDER_TOTP_SECRET: 'JBSWY3DPEHPK3PXP',
+      E2E_FINANCE_APPROVER_EMAIL: 'finance.admin@bin-groups.com',
+      E2E_FINANCE_APPROVER_PASSWORD: 'finance-password',
+      ...overrides,
+    };
+    withDispatchEvent(t, env, evidence, { authorization_source_pr: '1738', ...inputs }, { ...good, ...payload });
+    const state = adminMfaBootstrapWorkflowState(env);
+    assert.equal(state.requested, false, name);
+    assert.equal(state.authorized, false, name);
+    assert.equal(normalizeAdminMfaBootstrapWorkflowEvent(env), false, name);
+  }
+  const env = { ...validEnv(), E2E_FOUNDER_TOTP_SECRET: 'JBSWY3DPEHPK3PXP', E2E_FINANCE_APPROVER_EMAIL: 'finance.admin@bin-groups.com', E2E_FINANCE_APPROVER_PASSWORD: 'finance-password', LAUNCH_MODE: 'public', RUN_PUBLIC_RELEASE_GATE: 'true' };
+  withDispatchEvent(t, env, refs, { authorization_source_pr: '1738', launch_mode: 'public', run_public_release_gate: 'true' }, good);
+  assert.equal(adminMfaBootstrapWorkflowState(env).authorized, false, 'public mode cannot authorize bootstrap');
+});
+
 test('prior failed-run reference requires exact matching failure attestation and safe payload', (t) => {
   const refs = [
     'https://github.com/rashidpvt420-lang/bin-group-super-app/issues/434',
