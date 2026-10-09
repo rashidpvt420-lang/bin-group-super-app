@@ -116,15 +116,34 @@ export function adminMfaBootstrapWorkflowState(env = process.env) {
   const dispatch = readWorkflowDispatchEvent(env);
   const incidentEvidenceRefs = String(dispatch.deploymentPayload?.incident_evidence_refs || '').trim();
   const compatibilityMarker = String(dispatch.inputs?.incident_evidence_refs || '').trim();
+  const incidentReferences = incidentEvidenceRefs.split(',').map((entry) => entry.trim()).filter(Boolean);
+
+  // START HERE binds the most recent failed production run to its incident
+  // evidence, even when the operator requested the bounded Admin MFA bootstrap.
+  // Keep that attestation intact while allowing the exact remediation marker
+  // to be normalized into the protected deploy-step input.
+  const attestedFailedBootstrapRequest =
+    incidentReferences.length === 2 &&
+    incidentReferences[0] === ADMIN_MFA_BOOTSTRAP_MARKER &&
+    FAILED_PRODUCTION_RUN_REFERENCE_RE.test(incidentReferences[1]) &&
+    String(dispatch.deploymentPayload?.incident_last_deployment_failed || '').trim() === 'true' &&
+    Number.isFinite(Date.parse(String(dispatch.deploymentPayload?.incident_last_deployment_failed_at || '').trim())) &&
+    String(dispatch.deploymentPayload?.incident_attestation || '').trim() === 'ATTEST_PRODUCTION_INCIDENT_STATE_WITH_HOLDS' &&
+    String(dispatch.deploymentPayload?.incident_active_json || '').trim() === '[]' &&
+    String(dispatch.deploymentPayload?.incident_requires_rollback || '').trim() === 'false' &&
+    String(dispatch.deploymentPayload?.incident_rollback_reason || '').trim() === '' &&
+    String(dispatch.deploymentPayload?.hard_clearance_run_id || '').trim() === '' &&
+    String(dispatch.deploymentPayload?.stripe_live_checkout_session_id || '').trim() === '' &&
+    String(dispatch.deploymentPayload?.stripe_live_webhook_event_id || '').trim() === '';
   const explicitMarkerRequested =
     incidentEvidenceRefs === ADMIN_MFA_BOOTSTRAP_MARKER ||
+    attestedFailedBootstrapRequest ||
     compatibilityMarker === ADMIN_MFA_BOOTSTRAP_MARKER;
 
   const founderTotp = value(env, 'E2E_FOUNDER_TOTP_SECRET').toUpperCase().replace(/[\s=-]/g, '');
   const founderMfaConfigured =
     (founderTotp.length >= 16 && /^[A-Z2-7]+$/.test(founderTotp)) ||
     /^\d{6}$/.test(value(env, 'E2E_FOUNDER_REAL_MFA_CODE'));
-  const incidentReferences = incidentEvidenceRefs.split(',').map((entry) => entry.trim()).filter(Boolean);
   const hasFailedProductionReference =
     incidentReferences.length === 3 && FAILED_PRODUCTION_RUN_REFERENCE_RE.test(incidentReferences[2]);
   const failedDeploymentTimestamp = String(dispatch.deploymentPayload?.incident_last_deployment_failed_at || '').trim();
