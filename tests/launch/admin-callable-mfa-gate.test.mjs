@@ -9,7 +9,7 @@ const read = (path) => readFile(new URL(path, root), 'utf8');
 
 const COVERED = {
   'functions/hrAutomation.ts': ['adminGeneratePayrollBatch', 'adminSettlePayrollRecord'],
-  'functions/adminHrOperations.ts': ['adminGetHrOperations', 'adminRecordStaffAttendance', 'adminCreateStaffLeaveRequest', 'adminReviewStaffLeaveRequest', 'adminRegisterHrDocumentMetadata'],
+  'functions/adminHrOperations.ts': ['adminGetHrOperations', 'adminRecordStaffAttendance', 'adminCreateStaffLeaveRequest', 'adminReviewStaffLeaveRequest', 'adminRegisterHrDocumentMetadata', 'adminUploadHrDocument'],
   'functions/adminStaffLifecycle.ts': ['adminGetStaffLifecycle', 'adminGetStaffDetails', 'adminGetTechnicianOperationsDirectory', 'adminUpdateStaffProfile', 'adminUpdateStaffOnboarding', 'adminOffboardStaff', 'adminResendStaffInvitation'],
   'functions/secureAdminTechnicianAssignment.ts': ['adminAssignTechnician'],
   'functions/ticketDispatchOperations.ts': ['adminAssignTechnician', 'adminResolveTicketDispute', 'adminUpdateEmergencyTicket', 'adminProcessWhatsAppIntake'],
