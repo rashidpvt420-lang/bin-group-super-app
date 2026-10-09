@@ -48,7 +48,7 @@ test('bank-pilot requires a clean exact-SHA privileged review', () => {
 test('bank-pilot validates Private-HR and dispatches only bank-pilot mode', () => {
   assert.match(workflow, /private-hr-migration-dispatch-current-main\.yml\/dispatches/);
   assert.equal((workflow.match(/private-hr-migration-dispatch-current-main\.yml\/dispatches/g) || []).length, 1);
-  assert.match(workflow, /\.schemaVersion == 3/);
+  assert.match(workflow, /\.schemaVersion == 2/);
   assert.match(workflow, /\.mode == "DRY_RUN"/);
   assert.match(workflow, /\.failureCount == 0/);
   assert.match(workflow, /\.executionRequired == false/);
