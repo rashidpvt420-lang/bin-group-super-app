@@ -237,7 +237,7 @@ jobs:
           [[ -n "$report_path" && -s "$report_path" ]]
 
           jq -e --arg sha "$RELEASE_SHA" '
-            .schemaVersion == 3 and
+            .schemaVersion == 2 and
             .commitSha == $sha and
             .mode == "DRY_RUN" and
             .failureCount == 0 and
