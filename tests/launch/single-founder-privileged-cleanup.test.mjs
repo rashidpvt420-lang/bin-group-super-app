@@ -54,7 +54,8 @@ test('cleanup refuses unless canonical founder is active, verified and phone-MFA
 
 test('cleanup targets only privileged claims and preserves audit evidence', () => {
   assert.match(source, /privileged = enriched\.filter\(\(user\) => claimsGrantAdminPortal/);
-  assert.match(source, /targets = privileged\.filter\(\(user\) => !isCanonicalFounderAccount/);
+  assert.match(source, /!isCanonicalFounderAccount\(user\)/);
+  assert.match(source, /!isConfiguredFinanceApprover\(user, expectedFinanceEmail\)/);
   assert.match(source, /OBSOLETE_PRIVILEGED_ACCOUNT_DELETED/);
   assert.match(source, /auditLogsPreserved: true/);
   assert.match(source, /nonPrivilegedAccountsUntouched: true/);
