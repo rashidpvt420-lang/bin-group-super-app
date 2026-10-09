@@ -155,8 +155,7 @@ export function adminMfaBootstrapWorkflowState(env = process.env) {
       String(dispatch.deploymentPayload?.incident_last_deployment_failed || '').trim() === 'false' &&
       failedDeploymentTimestamp === '' &&
       String(dispatch.deploymentPayload?.incident_attestation || '').trim() === 'ATTEST_PRODUCTION_INCIDENT_STATE_CLEAR';
-  const canonicalOwnerRecoveryRequested =
-    !founderMfaConfigured &&
+  const canonicalOwnerRequestSafe =
     (incidentReferences.length === 2 || hasFailedProductionReference) &&
     incidentReferences[0] === CANONICAL_INCIDENT_REFERENCE &&
     OWNER_REQUEST_REFERENCE_RE.test(incidentReferences[1]) &&
@@ -176,7 +175,30 @@ export function adminMfaBootstrapWorkflowState(env = process.env) {
     String(dispatch.inputs?.payment_policy || '').trim() === PHASE1_PAYMENT_POLICY &&
     String(dispatch.inputs?.run_public_release_gate || '').trim() === 'false';
 
-  const requested = explicitMarkerRequested || canonicalOwnerRecoveryRequested;
+  const canonicalOwnerRecoveryRequested = !founderMfaConfigured && canonicalOwnerRequestSafe;
+
+  // The protected Owner draft-PR dispatcher preserves the canonical incident,
+  // request PR, and attested last failed deploy as three separate references.
+  // Founder TOTP can already be ready while the Finance Admin's *real* Firebase
+  // TOTP enrollment is blocked by an older deployed Admin UI. In that precise
+  // state, deploy only the protected Admin MFA remediation UI/callables first.
+  // Absence of a GitHub Finance TOTP secret never asserts that Firebase MFA is
+  // enrolled: verifyAdminMfaProduction still blocks the full stack afterward.
+  const financeEmail = value(env, 'E2E_FINANCE_APPROVER_EMAIL').toLowerCase();
+  const ownerRequestPr = String(dispatch.inputs?.authorization_source_pr || '').trim();
+  const canonicalFinanceAdminBootstrapRequested =
+    founderMfaConfigured &&
+    financeEmail.includes('@') &&
+    financeEmail !== CANONICAL_FOUNDER_EMAIL &&
+    Boolean(value(env, 'E2E_FINANCE_APPROVER_PASSWORD')) &&
+    !value(env, 'E2E_FINANCE_APPROVER_TOTP_SECRET') &&
+    hasFailedProductionReference &&
+    canonicalOwnerRequestSafe &&
+    /^[1-9][0-9]*$/.test(ownerRequestPr) &&
+    incidentReferences[1] === `https://github.com/rashidpvt420-lang/bin-group-super-app/pull/${ownerRequestPr}`;
+
+  const requested =
+    explicitMarkerRequested || canonicalOwnerRecoveryRequested || canonicalFinanceAdminBootstrapRequested;
   const exactMainSha = /^[0-9a-f]{40}$/.test(value(env, 'GITHUB_SHA'));
   const authorized =
     requested &&
@@ -197,7 +219,9 @@ export function adminMfaBootstrapWorkflowState(env = process.env) {
       ? 'explicit-marker'
       : canonicalOwnerRecoveryRequested
         ? 'protected-owner-recovery'
-        : null,
+        : canonicalFinanceAdminBootstrapRequested
+          ? 'protected-finance-admin-bootstrap'
+          : null,
     eventPath: dispatch.eventPath,
     dispatchError: dispatch.error,
   };
