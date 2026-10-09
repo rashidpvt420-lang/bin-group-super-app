@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { FieldValue } from "firebase-admin/firestore";
 import { settleSection, unavailableSections } from "./hrReadHealth";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
@@ -156,6 +157,127 @@ export const adminReviewStaffLeaveRequest = onCall({ cors: true, region: "europe
   });
   return { success: true, requestId, decision };
 });
+
+const HR_UPLOAD_MAX_BYTES = 8 * 1024 * 1024;
+const HR_UPLOAD_TYPES = new Set(["application/pdf", "image/jpeg", "image/png"]);
+
+function safeFileName(value: unknown) {
+  const raw = clean(value, "document").replace(/[^A-Za-z0-9._-]+/g, "_").replace(/^_+|_+$/g, "");
+  return raw.slice(0, 160) || "document";
+}
+
+export const adminUploadHrDocument = onCall(
+  { cors: true, region: "europe-west3", enforceAppCheck: true, memory: "512MiB" },
+  async (request) => {
+    const { actorId, actorRole } = await requireHrAdmin(request);
+    await requirePrivilegedMfaSession(request.auth);
+
+    const uid = clean(request.data?.uid);
+    await assertStaff(uid);
+
+    const documentType = clean(request.data?.documentType).toUpperCase();
+    const fileName = safeFileName(request.data?.fileName);
+    const contentType = clean(request.data?.contentType).toLowerCase();
+    const fileBase64 = clean(request.data?.fileBase64);
+    const expiryDate = clean(request.data?.expiryDate) || null;
+
+    if (!documentType) throw new HttpsError("invalid-argument", "documentType is required.");
+    if (!HR_UPLOAD_TYPES.has(contentType)) {
+      throw new HttpsError("invalid-argument", "HR documents must be PDF, JPEG, or PNG.");
+    }
+    if (!fileBase64 || !/^[A-Za-z0-9+/=\r\n]+$/.test(fileBase64)) {
+      throw new HttpsError("invalid-argument", "A valid base64 document payload is required.");
+    }
+
+    let bytes: Buffer;
+    try {
+      bytes = Buffer.from(fileBase64, "base64");
+    } catch {
+      throw new HttpsError("invalid-argument", "Unable to decode HR document payload.");
+    }
+    if (bytes.length <= 0 || bytes.length > HR_UPLOAD_MAX_BYTES) {
+      throw new HttpsError("invalid-argument", "HR document must be larger than 0 bytes and no more than 8 MB.");
+    }
+
+    const documentRef = db.collection("staffHrDocuments").doc();
+    const storagePath = `privateHrDocuments/${uid}/${documentRef.id}_${fileName}`;
+    const storageFile = admin.storage().bucket().file(storagePath);
+    const sha256 = createHash("sha256").update(bytes).digest("hex");
+    const now = FieldValue.serverTimestamp();
+
+    try {
+      await storageFile.save(bytes, {
+        resumable: false,
+        metadata: {
+          contentType,
+          cacheControl: "private, no-store, max-age=0",
+          metadata: {
+            staffUid: uid,
+            documentId: documentRef.id,
+            documentType,
+            sha256,
+            uploadedBy: actorId,
+            accessClassification: "PRIVATE_HR_SERVER_ONLY",
+          },
+        },
+      });
+
+      const batch = db.batch();
+      batch.set(documentRef, {
+        uid,
+        documentType,
+        storagePath,
+        fileName,
+        contentType,
+        sizeBytes: bytes.length,
+        sha256,
+        expiryDate,
+        status: "ACTIVE",
+        verificationStatus: CREDENTIAL_DOCUMENT_TYPES.has(documentType) ? "UNVERIFIED" : "NOT_REQUIRED",
+        source: "ADMIN_HR_PROTECTED_UPLOAD",
+        createdBy: actorId,
+        createdAt: now,
+        updatedAt: now,
+      });
+      batch.set(db.collection("audit_logs").doc(), {
+        actorId,
+        actorRole,
+        action: "ADMIN_UPLOAD_HR_DOCUMENT",
+        targetType: "staffHrDocuments",
+        targetId: documentRef.id,
+        metadata: {
+          uid,
+          documentType,
+          storagePath,
+          contentType,
+          sizeBytes: bytes.length,
+          sha256,
+        },
+        createdAt: now,
+      });
+      await batch.commit();
+    } catch (error: any) {
+      await storageFile.delete({ ignoreNotFound: true }).catch(() => undefined);
+      if (error instanceof HttpsError) throw error;
+      console.error("[adminUploadHrDocument] protected upload failed", {
+        uid,
+        documentType,
+        error: error?.code || error?.message || String(error),
+      });
+      throw new HttpsError("internal", "Unable to store the protected HR document.");
+    }
+
+    return {
+      success: true,
+      documentId: documentRef.id,
+      storagePath,
+      fileName,
+      contentType,
+      sizeBytes: bytes.length,
+      sha256,
+    };
+  },
+);
 
 export const adminRegisterHrDocumentMetadata = onCall({ cors: true, region: "europe-west3", enforceAppCheck: true }, async (request) => {
   const { actorId, actorRole } = await requireHrAdmin(request);
