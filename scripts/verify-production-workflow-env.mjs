@@ -185,7 +185,10 @@ export function adminMfaBootstrapWorkflowState(env = process.env) {
   // Absence of a GitHub Finance TOTP secret never asserts that Firebase MFA is
   // enrolled: verifyAdminMfaProduction still blocks the full stack afterward.
   const financeEmail = value(env, 'E2E_FINANCE_APPROVER_EMAIL').toLowerCase();
-  const ownerRequestPr = String(dispatch.inputs?.authorization_source_pr || '').trim();
+  // START HERE validates the source PR then stores it in deployment_payload_json.
+  // The downstream workflow has ten top-level workflow_dispatch inputs and
+  // therefore cannot transport this additional provenance as a direct input.
+  const ownerRequestPr = String(dispatch.deploymentPayload?.authorization_source_pr || '').trim();
   const canonicalFinanceAdminBootstrapRequested =
     founderMfaConfigured &&
     financeEmail.includes('@') &&
