@@ -277,7 +277,8 @@ test('owner-protected exact-main Finance MFA bootstrap accepts attested deploy #
     `https://github.com/rashidpvt420-lang/bin-group-super-app/pull/${ownerPr}`,
     'GITHUB_PRODUCTION_RUN_37914979913',
   ].join(',');
-  const path = withDispatchEvent(t, env, refs, { authorization_source_pr: ownerPr }, {
+  const path = withDispatchEvent(t, env, refs, {}, {
+    authorization_source_pr: ownerPr,
     incident_attestation: 'ATTEST_PRODUCTION_INCIDENT_STATE_WITH_HOLDS',
     incident_last_deployment_failed: 'true',
     incident_last_deployment_failed_at: '2026-10-09T10:16:56Z',
@@ -289,8 +290,11 @@ test('owner-protected exact-main Finance MFA bootstrap accepts attested deploy #
   assert.deepEqual(validateProductionWorkflowEnv(env), []);
   assert.equal(normalizeAdminMfaBootstrapWorkflowEvent(env), true);
   const event = JSON.parse(readFileSync(path, 'utf8'));
+  assert.equal(event.inputs.authorization_source_pr, undefined, 'source PR is not a top-level deploy input');
   assert.equal(event.inputs.incident_evidence_refs, marker);
-  assert.equal(JSON.parse(event.inputs.deployment_payload_json).incident_evidence_refs, refs, 'original evidence remains unchanged');
+  const payload = JSON.parse(event.inputs.deployment_payload_json);
+  assert.equal(payload.incident_evidence_refs, refs, 'original evidence remains unchanged');
+  assert.equal(payload.authorization_source_pr, ownerPr, 'owner PR provenance remains bound in the payload');
   assert.equal(normalizeAdminMfaBootstrapWorkflowEvent(env), false);
 });
 
@@ -310,9 +314,10 @@ test('Finance MFA bootstrap denies missing provenance, populated TOTP, active in
     ['missing finance email', { E2E_FINANCE_APPROVER_EMAIL: '' }, {}, {}, refs],
     ['Founder is finance', { E2E_FINANCE_APPROVER_EMAIL: 'ceo@bin-groups.com' }, {}, {}, refs],
     ['missing finance password', { E2E_FINANCE_APPROVER_PASSWORD: '' }, {}, {}, refs],
-    ['no source PR', {}, { authorization_source_pr: '' }, {}, refs],
-    ['mismatched source PR', {}, { authorization_source_pr: '1737' }, {}, refs],
-    ['invalid source PR', {}, { authorization_source_pr: '0001738' }, {}, refs],
+    ['no source PR', {}, {}, { authorization_source_pr: '' }, refs],
+    ['mismatched source PR', {}, {}, { authorization_source_pr: '1737' }, refs],
+    ['invalid source PR', {}, {}, { authorization_source_pr: '0001738' }, refs],
+    ['top-level-only spoofed PR is refused', {}, { authorization_source_pr: '1738' }, { authorization_source_pr: '' }, refs],
     ['missing failure reference', {}, {}, {}, refs.split(',').slice(0, 2).join(',')],
     ['unattested failure', {}, {}, { incident_last_deployment_failed: 'false' }, refs],
     ['bad timestamp', {}, {}, { incident_last_deployment_failed_at: 'not-a-date' }, refs],
@@ -334,14 +339,14 @@ test('Finance MFA bootstrap denies missing provenance, populated TOTP, active in
       E2E_FINANCE_APPROVER_PASSWORD: 'finance-password',
       ...overrides,
     };
-    withDispatchEvent(t, env, evidence, { authorization_source_pr: '1738', ...inputs }, { ...good, ...payload });
+    withDispatchEvent(t, env, evidence, inputs, { ...good, authorization_source_pr: '1738', ...payload });
     const state = adminMfaBootstrapWorkflowState(env);
     assert.equal(state.requested, false, name);
     assert.equal(state.authorized, false, name);
     assert.equal(normalizeAdminMfaBootstrapWorkflowEvent(env), false, name);
   }
   const env = { ...validEnv(), E2E_FOUNDER_TOTP_SECRET: 'JBSWY3DPEHPK3PXP', E2E_FINANCE_APPROVER_EMAIL: 'finance.admin@bin-groups.com', E2E_FINANCE_APPROVER_PASSWORD: 'finance-password', LAUNCH_MODE: 'public', RUN_PUBLIC_RELEASE_GATE: 'true' };
-  withDispatchEvent(t, env, refs, { authorization_source_pr: '1738', launch_mode: 'public', run_public_release_gate: 'true' }, good);
+  withDispatchEvent(t, env, refs, { launch_mode: 'public', run_public_release_gate: 'true' }, { ...good, authorization_source_pr: '1738' });
   assert.equal(adminMfaBootstrapWorkflowState(env).authorized, false, 'public mode cannot authorize bootstrap');
 });
 
