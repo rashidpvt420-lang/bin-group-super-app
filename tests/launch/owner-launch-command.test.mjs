@@ -81,12 +81,15 @@ test('owner launch command generates one exact-main protected privileged review'
 test('privileged review artifact is inspected before protected PR handoff', () => {
   assert.match(commandWorkflow, /privileged-account-cleanup-review-\$RELEASE_SHA/);
   assert.match(commandWorkflow, /actions\/artifacts\/\$artifact_id\/zip/);
-  assert.match(commandWorkflow, /\.schemaVersion == 2/);
+  assert.match(commandWorkflow, /\.schemaVersion == 3/);
   assert.match(commandWorkflow, /\.commitSha == \$sha/);
   assert.match(commandWorkflow, /\.workflowRunId == \$workflow_run_id/);
   assert.match(commandWorkflow, /\.canonicalFounderCount == 1/);
   assert.match(commandWorkflow, /\.canonicalFounderReady == true/);
   assert.match(commandWorkflow, /\.founderPhoneMfaReady == true/);
+  assert.match(commandWorkflow, /\.financeApproverCandidateCount == 1/);
+  assert.match(commandWorkflow, /\.financeApproverBootstrapReady == true/);
+  assert.match(commandWorkflow, /\.privilegedAccountCountBefore == 2/);
   assert.match(commandWorkflow, /\.deletionTargetCount == 0/);
   assert.match(commandWorkflow, /\.mutationPerformed == false/);
   assert.match(commandWorkflow, /latest_main.*RELEASE_SHA/s);
