@@ -44,10 +44,11 @@ test('HR route uses protected lifecycle data and callable-only least-privilege s
   assert.match(hr, /adminRecordStaffAttendance/);
   assert.match(hr, /adminCreateStaffLeaveRequest/);
   assert.match(hr, /adminReviewStaffLeaveRequest/);
-  assert.match(hr, /adminRegisterHrDocumentMetadata/);
   assert.match(hr, /adminUploadHrDocument/);
-  assert.match(hr, /privateHrDocuments\/\$\{uid\}\//);
-  assert.match(hr, /HR_UPLOAD_MAX_BYTES/);
+  assert.match(hrOps, /adminRegisterHrDocumentMetadata/);
+  assert.match(hrOps, /adminUploadHrDocument/);
+  assert.match(hrOps, /privateHrDocuments\/\$\{uid\}\//);
+  assert.match(hrOps, /HR_UPLOAD_MAX_BYTES/);
   assert.match(hr, /adminResendStaffInvitation/);
   assert.match(hr, /adminOffboardStaff/);
   assert.match(hr, /<StaffAccessPage\s*\/>/);
