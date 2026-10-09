@@ -63,7 +63,7 @@ test('fresh exact-SHA review is mandatory before any cleanup', () => {
   assert.match(command, /privileged-account-cleanup-review-\$RELEASE_SHA/);
   assert.match(command, /report_path="\$\(find privileged-review -type f -name 'privileged-account-cleanup\.json' -print -quit\)"/);
   assert.match(command, /\[\[ -n "\$report_path" && -s "\$report_path" \]\]/);
-  assert.match(command, /\.schemaVersion == 2/);
+  assert.match(command, /\.schemaVersion == 3/);
   assert.match(command, /\.mutationPerformed == false/);
   assert.match(command, /\.deletedAccountCount == 0/);
   assert.match(command, /\.nonPrivilegedAccountsUntouched == true/);
