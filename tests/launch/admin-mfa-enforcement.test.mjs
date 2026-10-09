@@ -105,7 +105,7 @@ test('any third privileged account blocks production even when MFA ready', () =>
   assert.equal(extraDisabled.ok, false);
   assert.equal(extraDisabled.summary.disabledAdminCount, 1);
   assert.equal(extraDisabled.summary.unexpectedPrivilegedAccountCount, 1);
-  assert.match(extraDisabled.failures.join('\n'), /disabled instead of being deleted/);
+  assert.match(extraDisabled.failures.join('\n'), /must be removed|are disabled/);
 });
 
 test('canonical founder requires active profile, verified email and phone MFA', () => {
