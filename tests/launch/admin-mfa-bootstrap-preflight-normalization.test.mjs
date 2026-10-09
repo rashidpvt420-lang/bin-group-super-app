@@ -117,6 +117,76 @@ test('exact protected bank-pilot bootstrap authorizes missing Founder automation
   assert.equal(normalizeAdminMfaBootstrapWorkflowEvent(env), false);
 });
 
+test('START HERE accepts an attested prior failure for Admin MFA bootstrap and preserves its incident evidence', (t) => {
+  const env = validEnv();
+  // Reproduces deploy #1206: Founder MFA already configured, Finance TOTP still pending.
+  env.E2E_FOUNDER_TOTP_SECRET = 'JBSWY3DPEHPK3PXP';
+  const combinedRefs = `${marker},GITHUB_PRODUCTION_RUN_37893026387`;
+  const eventPath = withDispatchEvent(t, env, combinedRefs, {}, {
+    incident_attestation: 'ATTEST_PRODUCTION_INCIDENT_STATE_WITH_HOLDS',
+    incident_last_deployment_failed: 'true',
+    incident_last_deployment_failed_at: '2026-10-09T07:13:00Z',
+  });
+
+  assert.deepEqual(validateProductionWorkflowEnv(env), []);
+  assert.equal(adminMfaBootstrapWorkflowState(env).requested, true);
+  assert.equal(adminMfaBootstrapWorkflowState(env).authorized, true);
+  assert.equal(adminMfaBootstrapWorkflowState(env).requestSource, 'explicit-marker');
+  assert.equal(normalizeAdminMfaBootstrapWorkflowEvent(env), true);
+
+  const normalized = JSON.parse(readFileSync(eventPath, 'utf8'));
+  assert.equal(normalized.inputs.incident_evidence_refs, marker);
+  const payload = JSON.parse(normalized.inputs.deployment_payload_json);
+  assert.equal(payload.incident_evidence_refs, combinedRefs, 'preserve the attested failed-run audit reference');
+  assert.equal(payload.incident_last_deployment_failed, 'true');
+  assert.equal(payload.incident_attestation, 'ATTEST_PRODUCTION_INCIDENT_STATE_WITH_HOLDS');
+  assert.equal(normalizeAdminMfaBootstrapWorkflowEvent(env), false);
+});
+
+test('failed-run bootstrap stays closed for malformed references, incidents, public proof or missing attestation', (t) => {
+  const goodRefs = `${marker},GITHUB_PRODUCTION_RUN_37893026387`;
+  const good = {
+    incident_attestation: 'ATTEST_PRODUCTION_INCIDENT_STATE_WITH_HOLDS',
+    incident_last_deployment_failed: 'true',
+    incident_last_deployment_failed_at: '2026-10-09T07:13:00Z',
+  };
+  const cases = [
+    ['missing failed reference', marker + ','],
+    ['extra failed reference', goodRefs + ',GITHUB_PRODUCTION_RUN_2'],
+    ['malformed failed reference', marker + ',GITHUB_PRODUCTION_RUN_fake'],
+    ['unrelated second reference', marker + ',OTHER_INCIDENT'],
+    ['prefix ambiguity', marker + '_NOT_REAL,GITHUB_PRODUCTION_RUN_37893026387'],
+    ['duplicate marker', marker + ',' + marker],
+  ];
+  for (const [name, refs] of cases) {
+    const env = validEnv();
+    withDispatchEvent(t, env, refs, {}, good);
+    // An unmodified single exact marker is a permitted direct bootstrap request.
+    if (refs !== marker) {
+      assert.equal(adminMfaBootstrapWorkflowState(env).requested, false, name);
+      assert.equal(normalizeAdminMfaBootstrapWorkflowEvent(env), false, name);
+    }
+  }
+  const badPayloads = [
+    ['unattested previous failure', { incident_last_deployment_failed: 'false' }],
+    ['missing timestamp', { incident_last_deployment_failed_at: '' }],
+    ['invalid timestamp', { incident_last_deployment_failed_at: 'not-a-date' }],
+    ['incorrect attestation', { incident_attestation: 'ATTEST_PRODUCTION_INCIDENT_STATE_CLEAR' }],
+    ['active incident', { incident_active_json: '[{"id":"open"}]' }],
+    ['rollback hold', { incident_requires_rollback: 'true' }],
+    ['rollback reason', { incident_rollback_reason: 'rollback pending' }],
+    ['hard clearance proof', { hard_clearance_run_id: '123' }],
+    ['stripe checkout proof', { stripe_live_checkout_session_id: 'cs_live' }],
+    ['stripe webhook proof', { stripe_live_webhook_event_id: 'evt_live' }],
+  ];
+  for (const [name, patch] of badPayloads) {
+    const env = validEnv();
+    withDispatchEvent(t, env, goodRefs, {}, { ...good, ...patch });
+    assert.equal(adminMfaBootstrapWorkflowState(env).requested, false, name);
+    assert.equal(normalizeAdminMfaBootstrapWorkflowEvent(env), false, name);
+  }
+});
+
 test('bootstrap marker never relaxes Founder MFA outside exact-main protected bank-pilot scope', (t) => {
   const cases = [
     ['public mode', { LAUNCH_MODE: 'public', RUN_PUBLIC_RELEASE_GATE: 'true' }],
