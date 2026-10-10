@@ -1,6 +1,7 @@
 import { expect, Page, test } from '@playwright/test';
 import { attachAuthenticatedAppCheckMonitor } from './helpers/appCheckDebug';
 import { loginAdminWithRealMfa, requireAdminMfaCredentials } from './helpers/adminMfa';
+import { expectedAuthenticatedRoute } from './helpers/authenticatedRouteExpectation';
 import { existsSync } from 'fs';
 import { auditInteractiveControls, assertNoPageLevelHorizontalOverflow } from './helpers/interactiveControlAudit';
 import { config as loadDotenv } from 'dotenv';
@@ -334,12 +335,15 @@ async function login(page: Page, role: RoleCase) {
 
 async function assertExactRoute(page: Page, role: RoleCase, route: string) {
   const destination = role.baseUrl ? `${role.baseUrl}${route}` : route;
+  const expectedPath = expectedAuthenticatedRoute(role.name, route);
+  const expectedOrigin = new URL(destination, page.url()).origin;
   const response = await page.goto(destination, { waitUntil: 'domcontentloaded' });
   await page.waitForTimeout(route.includes('/map') ? 2_500 : 900);
   expect(response?.status() ?? 200, `${role.name} ${route} must not return a server error`).toBeLessThan(500);
   await expect.poll(() => new URL(page.url()).pathname, {
     message: `${role.name} ${route} must remain on its registered route rather than a wildcard redirect`,
-  }).toBe(route);
+  }).toBe(expectedPath);
+  await expect.poll(() => new URL(page.url()).origin).toBe(expectedOrigin);
   const body = await page.locator('body').innerText({ timeout: 20_000 });
   expect(body.trim().length, `${role.name} ${route} must render visible text`).toBeGreaterThan(0);
   expect(body, `${role.name} ${route} must not render a runtime crash`).not.toMatch(CRASH_PATTERN);
@@ -354,7 +358,8 @@ async function assertExactRoute(page: Page, role: RoleCase, route: string) {
   await page.waitForTimeout(route.includes('/map') ? 2_000 : 500);
   await expect.poll(() => new URL(page.url()).pathname, {
     message: `${role.name} ${route} must survive browser refresh without wildcard/auth fallback`,
-  }).toBe(route);
+  }).toBe(expectedPath);
+  await expect.poll(() => new URL(page.url()).origin).toBe(expectedOrigin);
   const refreshedBody = await page.locator('body').innerText({ timeout: 20_000 });
   expect(refreshedBody.trim().length, `${role.name} ${route} must render after refresh`).toBeGreaterThan(0);
   expect(refreshedBody, `${role.name} ${route} must not crash after refresh`).not.toMatch(CRASH_PATTERN);
@@ -367,12 +372,15 @@ async function assertMobileArabicRoute(page: Page, role: RoleCase, route: string
   await page.setViewportSize({ width: 390, height: 844 });
   await page.evaluate(() => localStorage.setItem('bin_language', 'ar'));
   const destination = role.baseUrl ? `${role.baseUrl}${route}` : route;
+  const expectedPath = expectedAuthenticatedRoute(role.name, route);
+  const expectedOrigin = new URL(destination, page.url()).origin;
   await page.goto(destination, { waitUntil: 'domcontentloaded' });
   await page.waitForTimeout(route.includes('/map') ? 2_000 : 600);
 
   await expect.poll(() => new URL(page.url()).pathname, {
     message: `${role.name} ${route} must remain exact in mobile Arabic mode`,
-  }).toBe(route);
+  }).toBe(expectedPath);
+  await expect.poll(() => new URL(page.url()).origin).toBe(expectedOrigin);
 
   await expect.poll(async () => page.evaluate(() => document.documentElement.dir), {
     message: `${role.name} ${route} must switch the document to RTL`,
@@ -404,11 +412,12 @@ async function assertMobileArabicRoute(page: Page, role: RoleCase, route: string
   await page.reload({ waitUntil: 'domcontentloaded' });
   await expect.poll(async () => page.evaluate(() => ({
     path: location.pathname,
+    origin: location.origin,
     dir: document.documentElement.dir,
     lang: document.documentElement.lang,
   })), {
     message: `${role.name} ${route} must preserve route + Arabic RTL after refresh`,
-  }).toEqual({ path: route, dir: 'rtl', lang: 'ar' });
+  }).toEqual({ path: expectedPath, origin: expectedOrigin, dir: 'rtl', lang: 'ar' });
 }
 
 test('Public Phase 2 routes survive direct URL, refresh, mobile and Arabic RTL', async ({ page }) => {
