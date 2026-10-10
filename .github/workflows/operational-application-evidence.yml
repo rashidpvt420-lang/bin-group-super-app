@@ -424,8 +424,13 @@ jobs:
           [[ "$GITHUB_REPOSITORY_ID" == "1173943093" ]]
           [[ "$GITHUB_REF" == "refs/heads/main" && "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]
           [[ "$TARGET_SHA" =~ ^[0-9a-f]{40}$ && "$TARGET_SHA" == "$GITHUB_SHA" ]]
-          [[ "$RELEASE_SHA" == "bb4df313df36e1636423ed90e8a77c990a6c50ff" ]]
-          [[ "$DEPLOY_RUN_ID" == "36977950876" ]]
+          if [[ "$OPERATION" == "verify" ]]; then
+            [[ "$RELEASE_SHA" =~ ^[0-9a-f]{40}$ && "$DEPLOY_RUN_ID" =~ ^[0-9]+$ ]]
+          else
+            # Credential mutation remains pinned to its separately reviewed repair.
+            [[ "$RELEASE_SHA" == "bb4df313df36e1636423ed90e8a77c990a6c50ff" ]]
+            [[ "$DEPLOY_RUN_ID" == "36977950876" ]]
+          fi
           case "$OPERATION/$SELECTED_GATE" in
             verify/all|verify/paymentUnlockExactlyOnce|verify/brokerCommissionLockExactlyOnce) ;;
             sync/paymentUnlockExactlyOnce|repair-and-sync/paymentUnlockExactlyOnce) ;;
@@ -578,8 +583,6 @@ jobs:
               REPAIR_SOURCE_ENVIRONMENT: 'production',
               REPAIR_TARGET_ENVIRONMENT: 'hard-public-launch',
               GCP_PROJECT_ID: 'bin-group-57c60',
-              PRODUCTION_RELEASE_SHA: 'bb4df313df36e1636423ed90e8a77c990a6c50ff',
-              PRODUCTION_DEPLOY_RUN_ID: '36977950876',
             };
             for (const [name, value] of Object.entries(required)) {
               if (env[name] !== value) throw new Error(`Credential repair context mismatch: ${name}.`);
@@ -602,6 +605,15 @@ jobs:
             if (!Object.hasOwn(confirmations, env.FOUNDER_TOTP_OPERATION || '')
                 || env.CONFIRMATION !== confirmations[env.FOUNDER_TOTP_OPERATION]) {
               throw new Error('Credential repair operation or confirmation is invalid.');
+            }
+            if (env.FOUNDER_TOTP_OPERATION === 'verify') {
+              if (!/^[0-9a-f]{40}$/.test(env.PRODUCTION_RELEASE_SHA || '')
+                  || !/^[0-9]+$/.test(env.PRODUCTION_DEPLOY_RUN_ID || '')) {
+                throw new Error('Credential repair read-only deployment binding is invalid.');
+              }
+            } else if (env.PRODUCTION_RELEASE_SHA !== 'bb4df313df36e1636423ed90e8a77c990a6c50ff'
+                || env.PRODUCTION_DEPLOY_RUN_ID !== '36977950876') {
+              throw new Error('Credential repair mutation requires the separately reviewed frozen deployment.');
             }
             if (env.ACTIONS_STEP_DEBUG === 'true' || env.ACTIONS_RUNNER_DEBUG === 'true' || env.RUNNER_DEBUG === '1') {
               throw new Error('Disable debug logging before handling the Founder credential.');
