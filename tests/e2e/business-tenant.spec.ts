@@ -14,6 +14,7 @@ import { fileURLToPath } from 'url';
 import { test, expect, Browser, BrowserContext, Locator, Page } from '@playwright/test';
 import admin from 'firebase-admin';
 import { attachAuthenticatedAppCheckMonitor } from './helpers/appCheckDebug';
+import { withFreshGeolocation } from './helpers/freshGeolocation';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const envPath = path.resolve(__dirname, '../../.env.e2e');
@@ -341,16 +342,18 @@ async function completeThroughTechnicianUi(browser: Browser, ticketId: string) {
     await expect(page.locator('body')).toContainText(/ON THE WAY|EN ROUTE|Status updated|على الطريق/i, { timeout: 20_000 });
 
     if (lifecycleStatus === 'ON_THE_WAY') {
-      await clickRequired(page, [
-        'button:has-text("Arrived")',
-        'button:has-text("I have arrived")',
-        'button:has-text("On Site")',
-        'button:has-text("وصلت")',
-      ], 'Arrival action', 40_000);
-      await expect.poll(async () => {
-        const lifecycleSnap = await db.collection('maintenanceTickets').doc(ticketId).get();
-        return String(lifecycleSnap.data()?.status || '').toUpperCase();
-      }, { timeout: 45_000, message: 'Technician arrival must reach production Firestore before safety evidence is entered.' }).toBe('ARRIVED');
+      await withFreshGeolocation(context, { ...coordinates, accuracy: 15 }, async () => {
+        await clickRequired(page, [
+          'button:has-text("Arrived")',
+          'button:has-text("I have arrived")',
+          'button:has-text("On Site")',
+          'button:has-text("وصلت")',
+        ], 'Arrival action', 40_000);
+        await expect.poll(async () => {
+          const lifecycleSnap = await db.collection('maintenanceTickets').doc(ticketId).get();
+          return String(lifecycleSnap.data()?.status || '').toUpperCase();
+        }, { timeout: 45_000, message: 'Technician arrival must reach production Firestore before safety evidence is entered.' }).toBe('ARRIVED');
+      });
       lifecycleStatus = 'ARRIVED';
       await reloadTechnicianMission(page, ticketId);
     }
