@@ -330,6 +330,46 @@ test('[founder-credential] verify-only signs in but never invokes the writer or 
   assert.deepEqual(report, { sourceVerified: true, targetUpdated: false, passwordSynchronized: false });
 });
 
+test('[founder-credential] read-only verification accepts a new exact deployment without widening credential mutation', async () => {
+  const { api } = await credentialProgram();
+  for (const mode of ['verify', 'sync', 'repair-and-sync']) {
+    const f = credentialFixture(mode);
+    f.env.PRODUCTION_RELEASE_SHA = 'f9573e4fc81302752b39e5f594ae86b14b203197';
+    f.env.PRODUCTION_DEPLOY_RUN_ID = '38061356557';
+    f.deployment.deployedCommitSha = f.env.PRODUCTION_RELEASE_SHA;
+    f.deployment.workflowRunId = f.env.PRODUCTION_DEPLOY_RUN_ID;
+    let signIns = 0;
+    const operation = api.repairFounderTotp({ ...f,
+      signIn: async () => { signIns++; return f.session; },
+      loadFounder: async () => assert.fail('new deployment must not load an account for repair'),
+      updatePassword: async () => assert.fail('new deployment must not change the password'),
+      writeSecrets: async () => assert.fail('new deployment must not copy secrets'),
+    });
+    if (mode === 'verify') {
+      assert.deepEqual(await operation, { sourceVerified: true, targetUpdated: false, passwordSynchronized: false });
+      assert.equal(signIns, 1);
+    } else {
+      await assert.rejects(operation, /mutation requires the separately reviewed frozen deployment/);
+      assert.equal(signIns, 0);
+    }
+  }
+});
+
+test('[founder-credential] a new read-only deployment still rejects malformed or mismatched bindings before sign-in', async () => {
+  const { api } = await credentialProgram();
+  const f = credentialFixture();
+  for (const override of [
+    { PRODUCTION_RELEASE_SHA: '' }, { PRODUCTION_RELEASE_SHA: 'F'.repeat(40) },
+    { PRODUCTION_DEPLOY_RUN_ID: '' }, { PRODUCTION_DEPLOY_RUN_ID: 'run/123' },
+    { PRODUCTION_RELEASE_SHA: 'f'.repeat(40) }, { PRODUCTION_DEPLOY_RUN_ID: '38061356557' },
+  ]) {
+    await assert.rejects(api.repairFounderTotp({ ...f, env: { ...f.env, ...override },
+      signIn: async () => assert.fail('unbound deployment must not sign in'),
+      writeSecrets: async () => assert.fail('read-only verification must not write'),
+    }));
+  }
+});
+
 test('[founder-credential] sync requires permission first, then a verified TOTP factor before exactly one write', async () => {
   const { api } = await credentialProgram();
   const f = credentialFixture('sync');
