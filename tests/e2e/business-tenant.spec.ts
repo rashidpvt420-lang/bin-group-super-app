@@ -292,6 +292,67 @@ async function assignToProtectedTechnician(ticketId: string) {
   }, { timeout: 30_000 }).toBe(`ASSIGNED|${technicianUid}`);
 }
 
+/**
+ * Keep the live Tenant-to-Technician production proof fail-closed when the
+ * browser's mocked GPS provider intermittently times out in CI. Reassert the
+ * Playwright *browser* geolocation (not server ticket coordinates or arrival
+ * evidence), and retry the real Arrived UI action only after an explicit GPS
+ * timeout. A successful Firestore ARRIVED transition remains mandatory.
+ */
+async function confirmTechnicianArrivalWithFreshGps(
+  page: Page,
+  ticketId: string,
+  coordinates: { latitude: number; longitude: number },
+) {
+  const db = admin.firestore();
+  const arrivalSelectors = [
+    'button:has-text("Arrived")',
+    'button:has-text("I have arrived")',
+    'button:has-text("On Site")',
+    'button:has-text("وصلت")',
+  ];
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    await page.context().grantPermissions(['geolocation', 'notifications'], { origin: new URL(BASE_URL).origin });
+    await page.context().setGeolocation({
+      longitude: coordinates.longitude,
+      latitude: coordinates.latitude,
+      accuracy: 15,
+    });
+    await clickRequired(page, arrivalSelectors, `Arrival action (GPS attempt ${attempt})`, 40_000);
+
+    const deadline = Date.now() + 45_000;
+    let lastStatus = '';
+    let gpsTimedOut = false;
+    while (Date.now() < deadline) {
+      const snapshot = await db.collection('maintenanceTickets').doc(ticketId).get();
+      lastStatus = String(snapshot.data()?.status || '').toUpperCase();
+      if (lastStatus === 'ARRIVED') return; // Technician arrival must reach production Firestore before safety evidence is entered.
+      if (!['EN_ROUTE', 'ON_THE_WAY'].includes(lastStatus)) {
+        throw new Error(`Arrival did not commit: unexpected server status ${lastStatus || 'missing'}.`);
+      }
+      const body = await page.locator('body').innerText().catch(() => '');
+      if (/GPS timed out\. Move to an open area and try again\./i.test(body)) {
+        gpsTimedOut = true;
+        break;
+      }
+      await page.waitForTimeout(700);
+    }
+
+    // A timed-out sensor must never be treated as arrival evidence. Retry only
+    // the ordinary live UI request with a fresh mocked browser location, never
+    // write ARRIVED via Admin SDK or skip the server-confirmed status check.
+    if (gpsTimedOut && attempt === 1) {
+      await reloadTechnicianMission(page, ticketId);
+      continue;
+    }
+    throw new Error(
+      `Technician arrival not server-confirmed; status=${lastStatus || 'missing'}, `
+      + `GPS timeout=${gpsTimedOut}, UI attempt=${attempt}.`,
+    );
+  }
+  throw new Error('Technician arrival exhausted bounded browser-GPS retries without Firestore ARRIVED.');
+}
+
 async function completeThroughTechnicianUi(browser: Browser, ticketId: string) {
   const db = admin.firestore();
   const ticketSnap = await db.collection('maintenanceTickets').doc(ticketId).get();
@@ -341,16 +402,7 @@ async function completeThroughTechnicianUi(browser: Browser, ticketId: string) {
     await expect(page.locator('body')).toContainText(/ON THE WAY|EN ROUTE|Status updated|على الطريق/i, { timeout: 20_000 });
 
     if (lifecycleStatus === 'ON_THE_WAY') {
-      await clickRequired(page, [
-        'button:has-text("Arrived")',
-        'button:has-text("I have arrived")',
-        'button:has-text("On Site")',
-        'button:has-text("وصلت")',
-      ], 'Arrival action', 40_000);
-      await expect.poll(async () => {
-        const lifecycleSnap = await db.collection('maintenanceTickets').doc(ticketId).get();
-        return String(lifecycleSnap.data()?.status || '').toUpperCase();
-      }, { timeout: 45_000, message: 'Technician arrival must reach production Firestore before safety evidence is entered.' }).toBe('ARRIVED');
+      await confirmTechnicianArrivalWithFreshGps(page, ticketId, coordinates);
       lifecycleStatus = 'ARRIVED';
       await reloadTechnicianMission(page, ticketId);
     }
