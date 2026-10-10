@@ -89,4 +89,7 @@ test('Broker evidence uses the budget input identity provided by the actual form
   assert.match(form, /'data-testid': 'broker-lead-budget'/);
   assert.match(suite, /getByTestId\('broker-lead-budget'\)\.fill\('50000'\)/);
   assert.doesNotMatch(suite, /Budget Range/);
+  assert.match(form, /label=\{isRTL \? 'ملاحظات' : 'Notes'\}/);
+  assert.ok(suite.includes('getByLabel(/^Notes$/i)'));
+  assert.doesNotMatch(suite, /Mission Notes/);
 });
