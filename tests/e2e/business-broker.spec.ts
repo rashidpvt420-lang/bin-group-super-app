@@ -75,8 +75,8 @@ async function submitBrokerLead(page: Page, uniqueLead: string) {
   await page.getByLabel(/Email Address/i).fill(`broker-e2e-${Date.now()}@example.com`);
   await page.getByLabel(/Property Interest|Requirement/i).fill('Full maintenance and property management for an E2E production villa');
   await page.getByLabel(/Location|Emirate/i).fill('Al Ain');
-  await page.getByLabel(/Budget Range/i).fill('50000');
-  await page.getByLabel(/Mission Notes/i).fill('Exact-SHA verification of Broker attribution, conversion, commission idempotency, and payout authority.');
+  await page.getByTestId('broker-lead-budget').fill('50000');
+  await page.getByLabel(/^Notes$/i).fill('Exact-SHA verification of Broker attribution, conversion, commission idempotency, and payout authority.');
 
   const submitLead = page.getByTestId('broker-lead-submit');
   await expect(submitLead).toBeEnabled({ timeout: 10_000 });

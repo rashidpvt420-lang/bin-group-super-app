@@ -759,6 +759,9 @@ jobs:
       - name: Seed or repair E2E role accounts
         run: npm run seed:e2e:auth
 
+      - name: Verify Finance Admin TOTP sign-in and protected evidence credential
+        run: node scripts/verify-finance-approver-totp-signin.mjs
+
       - name: Seed current-commit five-role fixtures
         run: npm run seed:e2e:live-data
 

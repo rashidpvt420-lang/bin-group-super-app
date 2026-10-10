@@ -38,6 +38,14 @@ test('Finance reviewer refuses missing configuration before sending any request'
   assert.equal(calls, 0);
 });
 
+test('Finance first-factor failures expose only the provider code, excluding response details', async () => {
+  await assert.rejects(signInFinanceApproverMfa({ ...options,
+    fetchImpl: async () => ({ ok: false, status: 400, json: async () => ({
+      error: { message: 'INVALID_LOGIN_CREDENTIALS : sensitive-detail' },
+    }) }),
+  }), (error) => error.message.endsWith('INVALID_LOGIN_CREDENTIALS.') && !error.message.includes('sensitive-detail'));
+});
+
 test('Finance reviewer rejects same UID, wrong identity, missing MFA, wrong role, suspension and revoked token', async () => {
   for (const decoded of [
     { ...verified, uid: options.recorderUid }, { ...verified, email: 'other@example.invalid' },
