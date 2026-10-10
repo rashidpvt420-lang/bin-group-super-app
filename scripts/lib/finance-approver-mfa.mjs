@@ -5,6 +5,12 @@ const text = (value) => String(value ?? '').trim();
 const lower = (value) => text(value).toLowerCase();
 const FINANCE_ROLES = new Set(['admin', 'super_admin', 'ceo', 'finance_admin']);
 
+// Include only recognized provider codes, never arbitrary response text or credentials.
+const providerCode = (payload) => {
+  const code = text(payload?.error?.message).split(/\s|:/)[0];
+  return /^[A-Z][A-Z0-9_]{1,79}$/.test(code) ? code : 'UNKNOWN_PROVIDER_ERROR';
+};
+
 // Separate from the canonical Founder helper: no Founder cache or fallback identity.
 export async function signInFinanceApproverMfa({
   apiKey, email, password, totpSecret, recorderUid,
@@ -32,7 +38,7 @@ export async function signInFinanceApproverMfa({
   const signedIn = await request('v1/accounts:signInWithPassword', {
     email: expectedEmail, password, returnSecureToken: true,
   });
-  if (!signedIn.ok) throw new Error(`Finance Admin first-factor sign-in failed (HTTP ${signedIn.status}).`);
+  if (!signedIn.ok) throw new Error(`Finance Admin first-factor sign-in failed (HTTP ${signedIn.status}): ${providerCode(signedIn.payload)}.`);
   const factors = Array.isArray(signedIn.payload.mfaInfo) ? signedIn.payload.mfaInfo : [];
   const factor = factors.find((value) => Boolean(value?.totpInfo) || lower(value?.factorId) === 'totp');
   const enrollmentId = text(factor?.mfaEnrollmentId);
@@ -51,7 +57,7 @@ export async function signInFinanceApproverMfa({
       await waitImpl(remaining() + 250);
       result = await finalize();
     }
-    if (!result.ok || !text(result.payload.idToken)) throw new Error('Finance Admin TOTP sign-in failed.');
+    if (!result.ok || !text(result.payload.idToken)) throw new Error(`Finance Admin TOTP sign-in failed: ${providerCode(result.payload)}.`);
     idToken = text(result.payload.idToken);
   }
   if (idToken.split('.').length !== 3) throw new Error('Finance Admin ID token is malformed.');
