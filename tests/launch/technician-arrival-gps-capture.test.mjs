@@ -9,18 +9,26 @@ const lifecycle = source.slice(source.indexOf('    const updateLifecycle = async
 const executable = ts.transpileModule(`${lifecycle}\nglobalThis.run = updateLifecycle;`, {
   compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS },
 }).outputText;
+const resumeStart = source.indexOf('    useEffect(() => {', source.indexOf('// A Technician may refresh/reopen'));
+const resume = source.slice(resumeStart, source.indexOf('    const resolved', resumeStart));
+const resumeExecutable = ts.transpileModule(resume, {
+  compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS },
+}).outputText;
 
 function fixture({ online = true, tracking = true, gpsError, serverError, nativeHash = null } = {}) {
   const events = [];
   let watching = tracking;
   let loading = false;
+  let arrivalError = null;
+  let resumeEffect;
   const context = {
     id: 'test-ticket', user: { uid: 'test-technician' }, online, isTracking: tracking,
     closeBlockers: [], notes: '', materials: '', ticket: { status: 'EN_ROUTE' },
-    functions: {},
-    setActionLoading(value) { loading = value; events.push(['loading', value]); },
-    setIsTracking(value) { events.push(['tracking', value]); },
+    functions: {}, actionLoading: false,
+    setActionLoading(value) { loading = value; context.actionLoading = value; events.push(['loading', value]); },
+    setIsTracking(value) { context.isTracking = value; events.push(['tracking', value]); },
     setGpsError(value) { events.push(['error', value]); },
+    setArrivalError(value) { arrivalError = value; events.push(['arrival-error', value]); },
     setMessage(value) { events.push(['message', value]); },
     async stopLiveTracking(uid, id, reason) {
       events.push(['stop', uid, id, reason]); watching = false;
@@ -33,6 +41,9 @@ function fixture({ online = true, tracking = true, gpsError, serverError, native
     },
     async readNativeTechnicianInstallationHash() { return nativeHash; },
     async ensureTechnicianInstallationRegistered(hash) { events.push(['installation', hash]); },
+    norm(value) { return value; },
+    useEffect(callback) { resumeEffect = callback; },
+    async startLiveTracking() { events.push(['resume']); },
     httpsCallable(_functions, name) { return async (payload) => {
       events.push(['call', name, payload]); if (serverError) throw serverError;
     }; },
@@ -41,7 +52,11 @@ function fixture({ online = true, tracking = true, gpsError, serverError, native
     alert() { throw new Error('Unexpected alert'); },
   };
   vm.runInNewContext(executable, context);
-  return { run: context.run, events, isLoading: () => loading };
+  vm.runInNewContext(resumeExecutable, context);
+  return { run: context.run, events, isLoading: () => loading, arrivalError: () => arrivalError, allowGps() { gpsError = null; }, async resumeTracking() {
+    resumeEffect();
+    await new Promise(setImmediate);
+  } };
 }
 
 test('online arrival stops capture before fresh GPS and still sends the exact fix to server validation', async () => {
@@ -74,6 +89,31 @@ test('server rejection remains visible and releases the tracking-resume hold', a
   const f = fixture({ serverError: new Error('Production rejected arrival') });
   await f.run('ARRIVED');
   assert.ok(f.events.some(([kind, value]) => kind === 'error' && value === 'Production rejected arrival'));
+  assert.equal(f.isLoading(), false);
+});
+
+test('automatic live-tracking resume cannot erase denied arrival evidence', async () => {
+  const f = fixture({ gpsError: new Error('GPS permission is required before marking arrival.') });
+  await f.run('ARRIVED');
+  await f.resumeTracking();
+  assert.ok(f.events.some(([kind]) => kind === 'resume'), 'Tracking recovery still runs after a rejected arrival.');
+  assert.deepEqual(f.events.filter(([kind]) => kind === 'error').at(-1), ['error', null], 'The real resume effect clears its independent GPS warning.');
+  assert.equal(f.arrivalError(), 'GPS permission is required before marking arrival.');
+  assert.equal(f.events.some(([kind]) => kind === 'call'), false);
+  assert.equal(f.isLoading(), false);
+});
+
+test('an explicit arrival retry clears the old rejection only while acquiring and validating a new fix', async () => {
+  const f = fixture({ gpsError: new Error('GPS permission is required before marking arrival.') });
+  await f.run('ARRIVED');
+  await f.resumeTracking();
+  f.allowGps();
+  await f.run('ARRIVED');
+  assert.equal(f.arrivalError(), null);
+  const calls = f.events.filter(([kind]) => kind === 'call');
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0][2].status, 'ARRIVED');
+  assert.equal(calls[0][2].arrivalLocation.accuracy, 15);
   assert.equal(f.isLoading(), false);
 });
 
