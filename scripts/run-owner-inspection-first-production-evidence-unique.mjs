@@ -34,19 +34,16 @@ const runId = String(process.env.GITHUB_RUN_ID || 'local').trim();
 const seed = createHash('sha256')
   .update(`${runId}:${Date.now()}:${randomUUID()}`)
   .digest('hex');
-const coordinateOffset = ((Number.parseInt(seed.slice(0, 4), 16) % 8001) - 4000) / 10_000_000;
-const evidenceLat = (24.4958 + coordinateOffset).toFixed(7);
-const evidenceLng = (54.4074 + coordinateOffset).toFixed(7);
 const syntheticPropertyName = `E2E Owner Acquisition Tower ${seed.slice(0, 10)}`;
 
-const modified = source
-  .replace(propertyNameToken, `const propertyName = '${syntheticPropertyName}';`)
-  .replaceAll(latitudeToken, evidenceLat)
-  .replaceAll(longitudeToken, evidenceLng);
+const modified = `import { selectUnusedOwnerEvidenceLocation } from './lib/owner-evidence-location.mjs';\n${source.replace(/^#![^\n]*\n/, '')}`
+  .replace(propertyNameToken, `const propertyName = '${syntheticPropertyName}';\n  const { latitude: evidenceLat, longitude: evidenceLng } = await selectUnusedOwnerEvidenceLocation(db, '${seed}');`)
+  .replaceAll(latitudeToken, 'evidenceLat')
+  .replaceAll(longitudeToken, 'evidenceLng');
 
 writeFileSync(tempPath, modified, { mode: 0o600 });
 console.log(
-  `[owner-evidence-identity] isolated synthetic identity seed=${seed.slice(0, 10)} offset=${coordinateOffset.toFixed(7)}`,
+  `[owner-evidence-identity] isolated synthetic identity seed=${seed.slice(0, 10)} unused GPS claim verified read-only`,
 );
 
 try {
