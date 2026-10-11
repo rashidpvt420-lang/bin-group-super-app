@@ -233,7 +233,7 @@ export default function TechnicianJobDetailPage() {
     // lifecycle click, so Owner/Tenant tracking does not silently become stale.
     useEffect(() => {
         const lifecycleStatus = norm(ticket?.status);
-        if (!id || !user?.uid || !online || isTracking || !['EN_ROUTE', 'ON_THE_WAY'].includes(lifecycleStatus)) return;
+        if (!id || !user?.uid || !online || isTracking || actionLoading || !['EN_ROUTE', 'ON_THE_WAY'].includes(lifecycleStatus)) return;
         let cancelled = false;
         const resume = async () => {
             try {
@@ -259,7 +259,7 @@ export default function TechnicianJobDetailPage() {
         };
         void resume();
         return () => { cancelled = true; };
-    }, [id, user?.uid, ticket?.status, online, isTracking]);
+    }, [id, user?.uid, ticket?.status, online, isTracking, actionLoading]);
 
     const resolved = useMemo(() => resolvePropertyLocation(ticket || {}), [ticket]);
     const status = norm(ticket?.status);
@@ -375,6 +375,14 @@ export default function TechnicianJobDetailPage() {
             const lifecyclePayload: Record<string, any> = { ticketId: id, status: nextStatus, notes: notes.trim() };
 
             if (nextStatus === 'ARRIVED') {
+                // Release the foreground watcher before requesting a new,
+                // uncached GPS fix. Chromium can reject that one-shot request
+                // while a high-accuracy watch is active. The resume effect is
+                // held by actionLoading and restarts tracking if arrival fails.
+                if (online && isTracking) {
+                    await stopLiveTracking(user.uid, id, 'PRESERVE');
+                    setIsTracking(false);
+                }
                 const position = await getVerifiedArrivalPosition();
                 const installationHash = await readNativeTechnicianInstallationHash();
                 const arrivalLocation = {
@@ -410,10 +418,6 @@ export default function TechnicianJobDetailPage() {
                     }
                     setIsTracking(false);
                     return;
-                }
-                if (isTracking) {
-                    await stopLiveTracking(user.uid, id, 'ARRIVED');
-                    setIsTracking(false);
                 }
             }
 
