@@ -167,19 +167,24 @@ test.describe('Phase 1 marketing and global-shell behavioral regression', () => 
     await page.locator('a[href="/onboarding?intent=quote"]').first().click();
     await expect(page).toHaveURL(/\/onboarding\?intent=quote$/);
 
-    await page.goto('/property-management', { waitUntil: 'domcontentloaded' });
-    await page.route('https://wa.me/**', (route) => route.abort());
-    const requestPromise = page.waitForRequest((request) => request.url() === 'https://wa.me/971552423233');
-    await page.locator('a[href="https://wa.me/971552423233"]').first().click();
-    const request = await requestPromise;
-    expect(request.url()).toBe('https://wa.me/971552423233');
-
+    // Finish local navigation checks before triggering an intentionally aborted
+    // third-party navigation. Chromium can asynchronously open chrome-error://
+    // after the abort and interrupt a subsequent page.goto on the same page.
     await page.goto('/', { waitUntil: 'domcontentloaded' });
     await page.goto('/property-management', { waitUntil: 'domcontentloaded' });
     const back = page.getByRole('button', { name: /^Back$/ });
     await expect(back).toBeVisible();
     await back.click();
     await expect(page).toHaveURL(/\/$/);
+
+    // Keep the genuine outbound WhatsApp click and request assertion last.
+    // The abort prevents an external provider load; it is not provider proof.
+    await page.goto('/property-management', { waitUntil: 'domcontentloaded' });
+    await page.route('https://wa.me/**', (route) => route.abort());
+    const requestPromise = page.waitForRequest((request) => request.url() === 'https://wa.me/971552423233');
+    await page.locator('a[href="https://wa.me/971552423233"]').first().click();
+    const request = await requestPromise;
+    expect(request.url()).toBe('https://wa.me/971552423233');
   });
 
   test('marketing language toggle produces real RTL semantics without breaking the mobile header', async ({ page }, testInfo) => {
