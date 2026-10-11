@@ -147,7 +147,7 @@ test.describe('Phase 1 marketing and global-shell behavioral regression', () => 
     }
   });
 
-  test('marketing header, onboarding, quote, WhatsApp and back navigation stay operational', async ({ page }, testInfo) => {
+  test('marketing header, onboarding, quote and back navigation stay operational', async ({ page }, testInfo) => {
     await page.goto('/property-management', { waitUntil: 'domcontentloaded' });
 
     await expect(page.locator('a[href="/"]').first()).toBeVisible();
@@ -167,19 +167,24 @@ test.describe('Phase 1 marketing and global-shell behavioral regression', () => 
     await page.locator('a[href="/onboarding?intent=quote"]').first().click();
     await expect(page).toHaveURL(/\/onboarding\?intent=quote$/);
 
-    await page.goto('/property-management', { waitUntil: 'domcontentloaded' });
-    await page.route('https://wa.me/**', (route) => route.abort());
-    const requestPromise = page.waitForRequest((request) => request.url() === 'https://wa.me/971552423233');
-    await page.locator('a[href="https://wa.me/971552423233"]').first().click();
-    const request = await requestPromise;
-    expect(request.url()).toBe('https://wa.me/971552423233');
-
     await page.goto('/', { waitUntil: 'domcontentloaded' });
     await page.goto('/property-management', { waitUntil: 'domcontentloaded' });
     const back = page.getByRole('button', { name: /^Back$/ });
     await expect(back).toBeVisible();
     await back.click();
     await expect(page).toHaveURL(/\/$/);
+  });
+
+  test('marketing WhatsApp contact navigates to the exact support destination', async ({ page }) => {
+    // Keep the deliberately aborted external navigation in its own page fixture:
+    // Chromium's pending error-page navigation must not race a later app goto.
+    await page.goto('/property-management', { waitUntil: 'domcontentloaded' });
+    await page.route('https://wa.me/**', (route) => route.abort());
+    const requestPromise = page.waitForRequest((request) => request.url() === 'https://wa.me/971552423233');
+    await page.locator('a[href="https://wa.me/971552423233"]').first().click();
+    const request = await requestPromise;
+    expect(request.url()).toBe('https://wa.me/971552423233');
+    expect(request.isNavigationRequest()).toBe(true);
   });
 
   test('marketing language toggle produces real RTL semantics without breaking the mobile header', async ({ page }, testInfo) => {
