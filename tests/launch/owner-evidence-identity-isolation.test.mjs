@@ -16,7 +16,7 @@ test('protected Owner production evidence isolates synthetic identity without we
   assert.match(wrapper, /latitudeCount !== 3/);
   assert.match(wrapper, /longitudeCount !== 3/);
   assert.match(wrapper, /syntheticPropertyName/);
-  assert.match(wrapper, /coordinateOffset/);
+  assert.match(wrapper, /selectUnusedOwnerEvidenceLocation/);
   assert.doesNotMatch(wrapper, /property_identity_registry/);
   assert.doesNotMatch(wrapper, /deleteQuery/);
 

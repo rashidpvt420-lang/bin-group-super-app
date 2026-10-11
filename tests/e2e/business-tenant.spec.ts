@@ -336,19 +336,17 @@ async function completeThroughTechnicianUi(browser: Browser, ticketId: string) {
         return String(lifecycleSnap.data()?.status || '').toUpperCase();
       }, { timeout: 40_000, message: 'Technician Start Trip must persist canonical ON_THE_WAY in production Firestore.' }).toBe('ON_THE_WAY');
       lifecycleStatus = 'ON_THE_WAY';
-      await reloadTechnicianMission(page, ticketId);
+      // Keep the tracking session that Start Trip just established. Reloading
+      // before its first acknowledgement can orphan a live server session.
     }
     expect(['ON_THE_WAY', 'ARRIVED']).toContain(lifecycleStatus);
     await expect(page.locator('body')).toContainText(/ON THE WAY|EN ROUTE|Status updated|على الطريق/i, { timeout: 20_000 });
 
     if (lifecycleStatus === 'ON_THE_WAY') {
       await withFreshGeolocation(context, { ...coordinates, accuracy: 15 }, async () => {
-        await clickRequired(page, [
-          'button:has-text("Arrived")',
-          'button:has-text("I have arrived")',
-          'button:has-text("On Site")',
-          'button:has-text("وصلت")',
-        ], 'Arrival action', 40_000);
+        // Locator click rechecks actionability if a Firestore render replaces
+        // or disables the button; DOM node.click() can silently do nothing.
+        await page.locator('button:has-text("Arrived"), button:has-text("I have arrived"), button:has-text("On Site"), button:has-text("وصلت")').first().click({ timeout: 40_000 });
         await expect.poll(async () => {
           const lifecycleSnap = await db.collection('maintenanceTickets').doc(ticketId).get();
           return String(lifecycleSnap.data()?.status || '').toUpperCase();
