@@ -169,6 +169,8 @@ export default function TechnicianJobDetailPage() {
     const [notes, setNotes] = useState('');
     const [materials, setMaterials] = useState('');
     const [gpsError, setGpsError] = useState<string | null>(null);
+    // An arrival rejection must survive independent live-tracking recovery.
+    const [arrivalError, setArrivalError] = useState<string | null>(null);
     const [isTracking, setIsTracking] = useState(false);
     const [message, setMessage] = useState<string | null>(null);
     const [loadError, setLoadError] = useState<string | null>(null);
@@ -371,6 +373,7 @@ export default function TechnicianJobDetailPage() {
         }
         setActionLoading(true);
         setGpsError(null);
+        setArrivalError(null);
         try {
             const lifecyclePayload: Record<string, any> = { ticketId: id, status: nextStatus, notes: notes.trim() };
 
@@ -464,6 +467,7 @@ export default function TechnicianJobDetailPage() {
         } catch (err: any) {
             if (nextStatus === 'ARRIVED') {
                 setGpsError(err?.message || 'GPS arrival verification failed. Arrival was not recorded.');
+                setArrivalError(err?.message || 'GPS arrival verification failed. Arrival was not recorded.');
                 setMessage(null);
             } else if (isRetryableNetworkError(err)) {
                 queueAction(nextStatus, err?.message || 'Mission lifecycle update failed because the network was unavailable.');
@@ -501,7 +505,8 @@ export default function TechnicianJobDetailPage() {
         <Box sx={{ direction: isRTL ? 'rtl' : 'ltr' }}>
             {message && <Alert severity="success" onClose={() => setMessage(null)} sx={{ mb: 2, borderRadius: 3 }}>{message}</Alert>}
             {!online && <Alert icon={<CloudOff />} severity="warning" sx={{ mb: 2, borderRadius: 3 }}>Offline mode: lifecycle actions and evidence can be saved locally. Completion remains locked until the protected evidence upload is server-verified and synchronization succeeds.</Alert>}
-            {gpsError && <Alert severity="warning" onClose={() => setGpsError(null)} sx={{ mb: 2, borderRadius: 3 }}>{gpsError}</Alert>}
+            {arrivalError && <Alert data-testid="technician-arrival-error" severity="warning" onClose={() => setArrivalError(null)} sx={{ mb: 2, borderRadius: 3 }}>{arrivalError}</Alert>}
+            {!arrivalError && gpsError && <Alert severity="warning" onClose={() => setGpsError(null)} sx={{ mb: 2, borderRadius: 3 }}>{gpsError}</Alert>}
 
             <Paper sx={{ p: 3, mb: 3, bgcolor: JOB_READABLE.surface, border: `1px solid ${JOB_READABLE.line}`, borderRadius: 5 }}>
                 <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={2}>

@@ -398,9 +398,18 @@ test.describe('Technician Business Workflow', () => {
   test('location permission denial keeps arrival fail-closed', async ({ page, context }) => {
     test.setTimeout(90_000);
     await context.clearPermissions();
+    // Clearing overrides restores "prompt"; deny geolocation explicitly in
+    // this isolated browser context so the proof exercises actual denial.
+    await context.grantPermissions([], { origin: new URL(page.url()).origin });
     await page.goto(`/technician/job/${gpsDeniedTicketId}`, { waitUntil: 'domcontentloaded' });
-    await clickRequired(page, ['button:has-text("Arrived")'], 'Denied GPS arrival action', 20_000);
-    await expect(page.locator('body')).toContainText(/GPS permission is required|Arrival was not recorded/i, { timeout: 25_000 });
+    await expect.poll(() => page.evaluate(async () => (
+      await navigator.permissions.query({ name: 'geolocation' })
+    ).state)).toBe('denied');
+    const arrivalAction = page.getByRole('button', { name: /^Arrived$/i });
+    await expect(arrivalAction).toBeEnabled({ timeout: 20_000 });
+    await arrivalAction.click();
+    await expect(page.getByTestId('technician-arrival-error')).toContainText(/GPS permission is required/i, { timeout: 25_000 });
+    await expect(arrivalAction).toBeEnabled({ timeout: 20_000 });
     await expect.poll(() => firestoreStatus(gpsDeniedTicketId), { timeout: 15_000 }).toBe('ON_THE_WAY');
   });
 
