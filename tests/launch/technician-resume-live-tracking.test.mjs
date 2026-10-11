@@ -10,7 +10,7 @@ test('en-route technician tracking resumes after refresh or reconnect', () => {
   assert.match(source, /readNativeTechnicianInstallationHash\(\)/);
   assert.match(source, /ensureTechnicianInstallationRegistered\(installationHash\)/);
   assert.match(source, /startLiveTracking\(id, user\.uid/);
-  assert.match(source, /\[id, user\?\.uid, ticket\?\.status, online, isTracking\]/);
+  assert.match(source, /\[id, user\?\.uid, ticket\?\.status, online, isTracking, actionLoading\]/);
 });
 
 test('live tracking startup is idempotent for the same technician mission', () => {
