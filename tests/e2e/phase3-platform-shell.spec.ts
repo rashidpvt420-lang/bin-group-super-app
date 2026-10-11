@@ -168,11 +168,24 @@ test.describe('Phase 1 marketing and global-shell behavioral regression', () => 
     await expect(page).toHaveURL(/\/onboarding\?intent=quote$/);
 
     await page.goto('/property-management', { waitUntil: 'domcontentloaded' });
-    await page.route('https://wa.me/**', (route) => route.abort());
-    const requestPromise = page.waitForRequest((request) => request.url() === 'https://wa.me/971552423233');
+    // The WhatsApp link navigates the current tab. Aborting its document
+    // request redirects Chromium to chrome-error://chromewebdata/, which can
+    // race with page.goto('/') below and invalidate live audit evidence.
+    // Stub only the external response: still verify the real outbound request
+    // and navigation before returning to the production homepage.
+    const whatsappUrl = 'https://wa.me/971552423233';
+    await page.route('https://wa.me/**', (route) => route.fulfill({
+      status: 200,
+      contentType: 'text/html',
+      body: '<!doctype html><html><head><title>WhatsApp navigation check</title></head><body></body></html>',
+    }));
+    const requestPromise = page.waitForRequest((request) => request.url() === whatsappUrl);
     await page.locator('a[href="https://wa.me/971552423233"]').first().click();
     const request = await requestPromise;
-    expect(request.url()).toBe('https://wa.me/971552423233');
+    expect(request.url()).toBe(whatsappUrl);
+    expect(request.isNavigationRequest()).toBe(true);
+    await expect(page).toHaveURL(whatsappUrl);
+    await page.waitForLoadState('domcontentloaded');
 
     await page.goto('/', { waitUntil: 'domcontentloaded' });
     await page.goto('/property-management', { waitUntil: 'domcontentloaded' });
