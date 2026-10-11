@@ -34,7 +34,10 @@ export async function selectUnusedOwnerEvidenceLocation(db, seed) {
         && lat.toFixed(5) === location.latitude.toFixed(5)
         && lng.toFixed(5) === location.longitude.toFixed(5);
     });
-    if (!claim.exists && !legacyCollision) return location;
+    if (!claim.exists && !legacyCollision) {
+      console.log(`[owner-evidence-identity] unused synthetic GPS claim verified read-only attempt=${attempt + 1}`);
+      return location;
+    }
   }
   throw new Error('No unused synthetic Owner location found; production property claims were preserved.');
 }

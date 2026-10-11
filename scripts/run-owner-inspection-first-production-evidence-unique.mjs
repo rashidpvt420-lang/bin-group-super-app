@@ -43,7 +43,7 @@ const modified = `import { selectUnusedOwnerEvidenceLocation } from './lib/owner
 
 writeFileSync(tempPath, modified, { mode: 0o600 });
 console.log(
-  `[owner-evidence-identity] isolated synthetic identity seed=${seed.slice(0, 10)} unused GPS claim verified read-only`,
+  `[owner-evidence-identity] isolated synthetic identity seed=${seed.slice(0, 10)} read-only GPS collision check required`,
 );
 
 try {
