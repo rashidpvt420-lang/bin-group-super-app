@@ -5,7 +5,7 @@ import { binThemeTokens } from '../../theme/binGroupTheme';
 import { useLanguage } from '@bin/shared';
 
 const BIN_PUBLIC_CONTACT = {
-    email: 'owner@bin-group.com',
+    email: 'ceo@bin-groups.com',
     whatsapp: '+971 55 2423233',
     phone: '+971 55 7474560',
 };
@@ -51,7 +51,7 @@ const SupportPage: React.FC = () => {
                     </Grid>
 
                     <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mt: 6, justifyContent: 'center' }}>
-                        <Button component="a" href="/onboarding" variant="contained" startIcon={<MessageCircle size={17} />} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>
+                        <Button component="a" href={`mailto:${BIN_PUBLIC_CONTACT.email}`} variant="contained" startIcon={<MessageCircle size={17} />} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>
                             {label('Request Support', 'اطلب الدعم')}
                         </Button>
                         <Button component="a" href="/request-demo" variant="outlined" sx={{ color: binThemeTokens.gold, borderColor: binThemeTokens.gold, fontWeight: 950 }}>
