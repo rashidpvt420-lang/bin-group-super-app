@@ -122,8 +122,8 @@ const LAUNCH_GATES: LaunchGate[] = [
   { id: 'iosPwaSmoke', group: 'Device', title: 'iPhone/Safari PWA smoke test', required: true, proofRequired: 'Real iPhone/Safari PWA test across all five dashboards.' },
   { id: 'pdfMobileDownload', group: 'Device', title: 'Mobile PDF proof', required: true, proofRequired: 'Arabic/English contract, invoice, lease, and report PDF mobile download/open test.' },
   { id: 'arabicRtlAllCoreScreens', group: 'Device', title: 'Arabic RTL sweep', required: true, proofRequired: 'Owner, tenant, technician, broker, admin, modals, toasts, empty states, uploads, and PDFs on physical devices.' },
-  { id: 'everyButtonWritesFirestoreOrStorage', group: 'Role Buttons', title: 'Every-button audit', required: true, proofRequired: 'Every action writes, reads, navigates, or fails safely with role, route, action, and exact-SHA proof reference.' },
-  { id: 'logoutAllDashboards', group: 'Role Buttons', title: 'Logout all dashboards', required: true, proofRequired: 'Owner, tenant, technician, broker, and admin logout tests on desktop and mobile.' },
+  { id: 'everyButtonWritesFirestoreOrStorage', group: 'Role Buttons', title: 'Every-button audit', required: true, proofRequired: 'Every action writes, reads, navigates, or fails safely on physical devices with role, route, action, and exact-SHA proof reference.' },
+  { id: 'logoutAllDashboards', group: 'Role Buttons', title: 'Logout all dashboards', required: true, proofRequired: 'Owner, tenant, technician, broker, and admin logout tests on desktop and physical mobile devices.' },
 ];
 
 const roles = ['admin', 'owner', 'tenant', 'technician', 'broker'];
@@ -393,7 +393,7 @@ export default function PublicLaunchCommandCenterPageV2() {
       });
       setNotice(status === 'waived'
         ? 'Waiver recorded for pilot/history. It does not count as a hard-public-launch pass.'
-        : 'Exact-SHA evidence saved. Coverage recalculates only from evidence that meets the required layer; this record does not authorize launch.');
+        : 'Exact-SHA evidence saved for protected review. Manual records do not increase workflow evidence coverage or authorize launch.');
       setProofRef('');
       setNotes('');
     } catch (error: any) {
@@ -596,7 +596,8 @@ export default function PublicLaunchCommandCenterPageV2() {
                 const latest = currentEvidenceByGate.get(gate.id);
                 const requiredLayer = requiredEvidenceLayerForGate(gate.id, gate.group);
                 const passed = evidenceCountsForPublicLaunch(latest, RELEASE_SHA, requiredLayer);
-                const label = passed ? 'passed' : latest?.status === 'blocked' ? 'blocked' : latest?.status === 'waived' ? 'waived (non-passing)' : latest?.status === 'passed' ? 'proof insufficient' : 'pending';
+                const manualReviewPending = latest?.status === 'passed' && latest.source === 'admin-manual-evidence' && evidenceLayerSatisfies(latest.evidenceLayer, requiredLayer);
+                const label = passed ? 'passed' : latest?.status === 'blocked' ? 'blocked' : latest?.status === 'waived' ? 'waived (non-passing)' : manualReviewPending ? 'manual review pending' : latest?.status === 'passed' ? 'proof insufficient' : 'pending';
                 const color = passed ? '#22c55e' : latest?.status === 'blocked' ? '#ef4444' : '#f59e0b';
                 return (
                   <Grid item xs={12} md={6} key={gate.id}>
@@ -634,7 +635,7 @@ export default function PublicLaunchCommandCenterPageV2() {
               <TextField label="Notes" multiline minRows={4} value={notes} onChange={(event) => setNotes(event.target.value)} disabled={!evidenceAuthoritative} placeholder="What passed, what failed, exact action tested, device and fallback behavior." />
               <Button onClick={saveProof} disabled={busy || !evidenceAuthoritative} variant="contained" startIcon={<CheckCircle2 size={16} />} sx={{ bgcolor: binThemeTokens.gold, color: '#020617', fontWeight: 950 }}>{busy ? 'Saving...' : 'Save exact-SHA evidence'}</Button>
               <Divider sx={{ borderColor: 'rgba(255,255,255,.08)' }} />
-              <Typography variant="caption" sx={{ color: 'rgba(255,255,255,.55)', fontWeight: 850 }}>Evidence rule: PASSED + exact SHA + sufficient evidence layer. Waivers never satisfy hard-public-launch evidence requirements. Manual Admin records always carry hardLaunchClaim=false; final launch authorization is issued only by the protected signed decision chain.</Typography>
+              <Typography variant="caption" sx={{ color: 'rgba(255,255,255,.55)', fontWeight: 850 }}>Coverage rule: protected GitHub execution + PASSED + exact SHA + sufficient evidence layer. Manual Admin records are retained for protected review and always carry hardLaunchClaim=false. Waivers never satisfy hard-public-launch evidence requirements; final launch authorization is issued only by the protected signed decision chain.</Typography>
             </Stack>
           </Paper>
         </Grid>
