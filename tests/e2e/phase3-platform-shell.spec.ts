@@ -127,6 +127,28 @@ test.describe('Phase 1 Sovereign AI launcher interaction regression', () => {
 
 
 test.describe('Phase 1 marketing and global-shell behavioral regression', () => {
+  test('support requests use the company contact channel in English and Arabic', async ({ page }) => {
+    for (const language of ['en', 'ar']) {
+      await page.goto('/support', { waitUntil: 'domcontentloaded' });
+      await page.evaluate((value) => localStorage.setItem('bin_language', value), language);
+      await page.reload({ waitUntil: 'domcontentloaded' });
+
+      const requestSupport = page.getByRole('link', {
+        name: language === 'ar' ? 'اطلب الدعم' : 'Request Support',
+        exact: true,
+      });
+      await expect(requestSupport).toBeVisible();
+      await expect(requestSupport).toBeEnabled();
+      await expect(requestSupport).toHaveAttribute('href', 'mailto:ceo@bin-groups.com');
+      await expect(page.getByText('ceo@bin-groups.com', { exact: true })).toBeVisible();
+      await expect(page.getByRole('link', {
+        name: language === 'ar' ? 'احجز عرضاً توضيحياً' : 'Schedule Demo',
+        exact: true,
+      })).toHaveAttribute('href', '/request-demo');
+      await expect(page).toHaveURL(/\/support$/);
+    }
+  });
+
   test('root role CTAs navigate to the correct entry flows', async ({ page }, testInfo) => {
     const cases: Array<[string, RegExp]> = [
       ['I Already Rent With BIN', /\/login\?intendedRole=tenant$/],
