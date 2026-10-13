@@ -825,6 +825,25 @@ test('hard-clearance scope permits only the exact PR #1770 rules-writer and test
   assert.throws(() => verifyScope({ changedFiles: [...expectedDiff, 'src/App.tsx'] }), /Non-control-plane file changed since pilot release: src\/App\.tsx/);
 });
 
+test('all four protected evidence workflows pin the exact paired PR #1770 exception', async () => {
+  const workflows = [
+    '.github/workflows/operational-application-evidence.yml',
+    '.github/workflows/operational-provider-evidence.yml',
+    '.github/workflows/privileged-access-rotation-evidence.yml',
+    '.github/workflows/technician-physical-evidence.yml',
+  ];
+  for (const file of workflows) {
+    const workflow = await read(file);
+    assert.match(workflow, /KNOWN_RULES_WRITER_COMMIT: 86b67c4a12a4ac61037dba8201f3d5ab96b09c5f/, file);
+    assert.ok(workflow.includes('exception_count" -eq 2'), file);
+    assert.ok(workflow.includes('merge-base --is-ancestor "$KNOWN_RULES_WRITER_COMMIT" "$CONTROL_PLANE_SHA"'), file);
+    assert.ok(workflow.includes('"$current_blob" == "$known_blob"'), file);
+    assert.ok(workflow.includes('"$frozen_blob" != "$known_blob"'), file);
+    assert.ok(workflow.includes('Non-control-plane file changed since frozen release'), file);
+    assert.ok(workflow.includes('if [[ "$file" == "$rules_writer_path" || "$file" == "$rules_writer_test_path" ]]'), file);
+  }
+});
+
 test('all operational workflows enforce same-SHA allowance and privileged rotation cleanup guards', async () => {
   const operationalWorkflows = [
     '.github/workflows/operational-application-evidence.yml',
