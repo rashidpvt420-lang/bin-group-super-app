@@ -61,6 +61,7 @@ test('hard clearance freshly revalidates production state without moving the fro
   assert.match(workflow, /Checkout live-evidence control plane[\s\S]*?path: control-plane[\s\S]*?fetch-depth: 0/);
   assert.match(workflow, /git -C control-plane merge-base --is-ancestor/);
   assert.match(workflow, /Non-control-plane file changed since pilot release/);
+  assert.match(workflow, /Overlay reviewed cleanup-aware evidence runner[\s\S]*?cp control-plane\/scripts\/run-critical-evidence\.mjs release\/scripts\/run-critical-evidence\.mjs/);
 
   const expectedAllowlist = [
     '.github/workflows/firebase-production-deploy.yml',
@@ -82,6 +83,7 @@ test('hard clearance freshly revalidates production state without moving the fro
     'scripts/publish-operational-provider-evidence.mjs',
     'scripts/resolve-admin-app-check-site-key.mjs',
     'scripts/resolve-live-pilot-window.mjs',
+    'scripts/run-critical-evidence.mjs',
     'scripts/run-frozen-release-evidence.mjs',
     'scripts/verify-ai-live-evidence.mjs',
     'scripts/verify-hard-launch-approval.mjs',
@@ -180,7 +182,26 @@ test('hard clearance freshly revalidates production state without moving the fro
 
   // The authorization job must no longer demand that the frozen release SHA
   // equal the newer, narrowly reviewed clearance-control commit.
-  assert.doesNotMatch(hardJob, /TARGET_SHA[^\n]*CURRENT_SHA|TARGET_SHA\" != \"\$CURRENT_SHA/);
+  assert.doesNotMatch(hardJob, /TARGET_SHA[^\n]*CURRENT_SHA|TARGET_SHA" != "\$CURRENT_SHA/);
+});
+
+test('live evidence retires the protected ephemeral Admin before the final identity and deployment check', async () => {
+  const [workflow, runner, verifier] = await Promise.all([
+    read('.github/workflows/live-role-smoke.yml'),
+    read('scripts/run-critical-evidence.mjs'),
+    read('scripts/verify-production-deployment.mjs'),
+  ]);
+  assert.match(runner, /workflow === 'Firebase Production Deploy' \|\| workflow === 'Live Role Smoke Tests'/);
+  assert.match(runner, /GITHUB_EVENT_NAME === 'workflow_dispatch'/);
+  const allRequiredIndex = runner.indexOf("if (suiteArg === 'all-business' || suiteArg === 'all-required')");
+  const cleanupIndex = runner.indexOf("retireEphemeralE2eAdmin('post-business-evidence')", allRequiredIndex);
+  const finalDeploymentCheckIndex = runner.indexOf('await runProductionDeployment()', allRequiredIndex);
+  assert.ok(allRequiredIndex >= 0 && cleanupIndex > allRequiredIndex);
+  assert.ok(finalDeploymentCheckIndex > cleanupIndex,
+    'final production MFA/identity inventory must run only after the temporary test admin has been retired');
+  assert.match(workflow, /Run every required live evidence suite[\s\S]*?node scripts\/run-critical-evidence\.mjs --suite all-required/);
+  assert.match(verifier, /if \(phoneAuthResult\.status === 'fulfilled'\) \{\s+firebasePhoneAuthEvidenceForValidation = phoneAuthResult\.value;/);
+  assert.match(verifier, /if \(adminMfaResult\.status === 'fulfilled'\) \{\s+adminMfaEvidenceForValidation = adminMfaResult\.value;/);
 });
 
 test('hard-clearance Owner wrapper preparation accepts collision-safe releases and rejects unknown layouts', async () => {
@@ -235,6 +256,7 @@ test('operational evidence keeps current main as control plane while binding pro
     'scripts/publish-operational-provider-evidence.mjs',
     'scripts/resolve-admin-app-check-site-key.mjs',
     'scripts/resolve-live-pilot-window.mjs',
+    'scripts/run-critical-evidence.mjs',
     'scripts/run-frozen-release-evidence.mjs',
     'scripts/verify-ai-live-evidence.mjs',
     'scripts/verify-hard-launch-approval.mjs',
@@ -825,6 +847,7 @@ test('hard-clearance scope permits only the exact PR #1770 rules-writer and test
     rulesWriterTestPath,
     'scripts/lib/live-pilot-provenance.mjs',
     'scripts/verify-production-deployment.mjs',
+    'scripts/run-critical-evidence.mjs',
     '.github/workflows/live-role-smoke.yml',
     'tests/launch/hard-clearance-revalidation.test.mjs',
     'tests/launch/live-pilot-provenance.test.mjs',
