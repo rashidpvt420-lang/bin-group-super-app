@@ -169,6 +169,34 @@ test('hard clearance freshly revalidates production state without moving the fro
   assert.doesNotMatch(hardJob, /TARGET_SHA[^\n]*CURRENT_SHA|TARGET_SHA\" != \"\$CURRENT_SHA/);
 });
 
+test('hard-clearance Owner wrapper preparation accepts collision-safe releases and rejects unknown layouts', async () => {
+  const workflow = await read('.github/workflows/live-role-smoke.yml');
+  const comment = workflow.indexOf('The frozen Owner evidence wrapper originally varied latitude and longitude');
+  const heredocStart = workflow.indexOf("node --input-type=module <<'NODE'", comment);
+  const codeStart = workflow.indexOf('\n', heredocStart) + 1;
+  const codeEnd = workflow.indexOf('\n          NODE', codeStart);
+  assert.ok(comment >= 0 && heredocStart > comment && codeEnd > codeStart, 'Owner wrapper preparation snippet is missing');
+  const preparationCode = workflow.slice(codeStart, codeEnd)
+    .replace(/^\s*import \{ readFileSync, writeFileSync \} from 'node:fs';\s*/, '');
+  const writes = [];
+  const context = (source) => ({
+    readFileSync: () => source,
+    writeFileSync: (...args) => writes.push(args),
+    console: { log() {} },
+  });
+
+  const deployedWrapper = await read('scripts/run-owner-inspection-first-production-evidence-unique.mjs');
+  assert.match(deployedWrapper, /selectUnusedOwnerEvidenceLocation/);
+  runInNewContext(preparationCode, context(deployedWrapper));
+  assert.equal(writes.length, 0, 'already-safe frozen Owner wrapper should not be mutated');
+
+  assert.throws(
+    () => runInNewContext(preparationCode, context('unexpected Owner wrapper')),
+    /Frozen Owner evidence identity wrapper changed unexpectedly/,
+  );
+  assert.equal(writes.length, 0, 'unknown Owner wrapper must fail without writing');
+});
+
 test('operational evidence keeps current main as control plane while binding proof to the frozen deployment', async () => {
   const workflowFiles = [
     '.github/workflows/operational-application-evidence.yml',
@@ -724,6 +752,73 @@ test('control-plane scope verifier supports exact same-SHA pairs, approved contr
     }),
     /Non-control-plane file changed since frozen release: dist\/bundle\.js/,
   );
+});
+
+test('hard-clearance scope permits only the exact PR #1770 rules-writer and test blobs', async () => {
+  const workflow = await read('.github/workflows/live-role-smoke.yml');
+  const pinnedCommit = '86b67c4a12a4ac61037dba8201f3d5ab96b09c5f';
+  const rulesWriterPath = 'scripts/write-production-firestore-rules.mjs';
+  const rulesWriterTestPath = 'tests/launch/design-payment-rules-artifact.test.mjs';
+  const pinnedBlobs = new Map([
+    [rulesWriterPath, '5acb377f8f684d37d00b1f3e0c641aa773bad0a5'],
+    [rulesWriterTestPath, '18c879372c0da8dfae8dfa5e3238ee1430cb09c2'],
+  ]);
+  const frozenBlobs = new Map([
+    [rulesWriterPath, '1c168664ff938612be02d1c36e53005f0a999c27'],
+    [rulesWriterTestPath, '9e540fd7f2e96d0a8de74d16ed01cfc7fceb105c'],
+  ]);
+
+  assert.ok(workflow.includes(`KNOWN_RULES_WRITER_COMMIT: ${pinnedCommit}`));
+  assert.ok(workflow.includes('git -C control-plane merge-base --is-ancestor "$KNOWN_RULES_WRITER_COMMIT" "$CURRENT_SHA"'));
+  assert.ok(workflow.includes('known_blob="$(git -C control-plane rev-parse "$KNOWN_RULES_WRITER_COMMIT:$path")"'));
+  assert.ok(workflow.includes('current_blob="$(git -C control-plane rev-parse "$CURRENT_SHA:$path")"'));
+  assert.ok(workflow.includes('target_blob="$(git -C control-plane rev-parse "$TARGET_SHA:$path")"'));
+  assert.ok(workflow.includes('The one-time PR #1770 exception requires the exact approved blob'));
+  assert.ok(workflow.includes('The one-time PR #1770 exception requires both the rules writer and its regression test to change together.'));
+
+  const allowedText = workflow.match(/^\s*allowed='([^'\n]+)'/m)?.[1];
+  const supplementalText = workflow.match(/^\s*supplemental_allowed='([^'\n]+)'/m)?.[1];
+  assert.ok(allowedText, 'hard-clearance control-plane allowlist is missing');
+  assert.ok(supplementalText, 'hard-clearance supplemental allowlist is missing');
+  const allowed = new RegExp(allowedText);
+  const supplementalAllowed = new RegExp(supplementalText);
+
+  function verifyScope({ changedFiles, hasPinnedCommit = true, currentBlobs = new Map(), targetBlobs = frozenBlobs }) {
+    const exceptionFiles = changedFiles.filter((file) => pinnedBlobs.has(file));
+    if (exceptionFiles.length > 0) {
+      if (exceptionFiles.length !== 2) throw new Error('The one-time exception requires both pinned files.');
+      if (!hasPinnedCommit) throw new Error('The pinned PR #1770 commit is not an ancestor.');
+      for (const file of exceptionFiles) {
+        const currentBlob = currentBlobs.get(file) ?? pinnedBlobs.get(file);
+        if (currentBlob !== pinnedBlobs.get(file)) throw new Error(`The exact approved blob changed: ${file}`);
+        if (targetBlobs.get(file) === pinnedBlobs.get(file)) throw new Error(`The file is not in the release/control-plane delta: ${file}`);
+      }
+    }
+    for (const file of changedFiles) {
+      if (pinnedBlobs.has(file)) continue;
+      if (!allowed.test(file) && !supplementalAllowed.test(file)) throw new Error(`Non-control-plane file changed since pilot release: ${file}`);
+    }
+    return 'CONTROL_PLANE_SCOPE_VERIFIED=true';
+  }
+
+  const expectedDiff = [
+    rulesWriterPath,
+    rulesWriterTestPath,
+    '.github/workflows/live-role-smoke.yml',
+    'tests/launch/hard-clearance-revalidation.test.mjs',
+  ];
+  assert.equal(verifyScope({ changedFiles: expectedDiff }), 'CONTROL_PLANE_SCOPE_VERIFIED=true');
+  assert.throws(() => verifyScope({ changedFiles: expectedDiff, hasPinnedCommit: false }), /pinned PR #1770 commit is not an ancestor/);
+  assert.throws(() => verifyScope({ changedFiles: [rulesWriterPath] }), /requires both pinned files/);
+  assert.throws(() => verifyScope({
+    changedFiles: expectedDiff,
+    currentBlobs: new Map([[rulesWriterPath, '0000000000000000000000000000000000000000']]),
+  }), /exact approved blob changed: scripts\/write-production-firestore-rules\.mjs/);
+  assert.throws(() => verifyScope({
+    changedFiles: expectedDiff,
+    targetBlobs: new Map([...frozenBlobs, [rulesWriterTestPath, pinnedBlobs.get(rulesWriterTestPath)]]),
+  }), /file is not in the release\/control-plane delta: tests\/launch\/design-payment-rules-artifact\.test\.mjs/);
+  assert.throws(() => verifyScope({ changedFiles: [...expectedDiff, 'src/App.tsx'] }), /Non-control-plane file changed since pilot release: src\/App\.tsx/);
 });
 
 test('all operational workflows enforce same-SHA allowance and privileged rotation cleanup guards', async () => {
