@@ -48,6 +48,7 @@ function authorizationPayload() {
     founder: {
       name: 'Rashid AbdulGhani',
       email: 'ceo@bin-groups.com',
+      actor: 'rashidpvt420-lang',
     },
     issuedAt: new Date(now - 60_000).toISOString(),
     expiresAt: new Date(now + 30 * 60_000).toISOString(),
@@ -74,6 +75,16 @@ test('founder authorization is bound to the exact workflow commit', () => {
     commitSha: 'b'.repeat(40),
   }).join('\n');
   assert.match(errors, /commitSha does not match workflow SHA/);
+});
+
+test('Founder actor must be a permitted identity even with a valid signature and email', () => {
+  for (const actor of [undefined, null, '', '  ', 123, ['rashidpvt420-lang'], 'unapproved-founder']) {
+    const payload = authorizationPayload();
+    if (actor === undefined) delete payload.founder.actor;
+    else payload.founder.actor = actor;
+    const errors = validateAuthorizationDocument(signDocument(payload, signingKey), context).join('\n');
+    assert.match(errors, /founder actor is (required|not authorized)/);
+  }
 });
 
 test('same-run authorization remains valid through a ninety-minute deployment pipeline', () => {
