@@ -57,6 +57,8 @@ test('hard clearance freshly revalidates production state without moving the fro
   assert.match(workflow, /hard-clearance-production-revalidation:[\s\S]*?environment: production/);
   assert.match(workflow, /hard-public-launch-clearance:[\s\S]*?needs: hard-clearance-production-revalidation[\s\S]*?environment: hard-public-launch/);
   assert.match(workflow, /Verify control-plane-only repair scope/);
+  assert.match(workflow, /Verify frozen-release\/control-plane scope/);
+  assert.match(workflow, /Checkout live-evidence control plane[\s\S]*?path: control-plane[\s\S]*?fetch-depth: 0/);
   assert.match(workflow, /git -C control-plane merge-base --is-ancestor/);
   assert.match(workflow, /Non-control-plane file changed since pilot release/);
 
@@ -96,7 +98,11 @@ test('hard clearance freshly revalidates production state without moving the fro
     .split('|')
     .map((value) => value.replaceAll('\\.', '.'))
     .sort();
-  assert.deepEqual(actualAllowlist, [...expectedAllowlist].sort());
+  assert.ok(actualAllowlist.includes('scripts/lib/live-pilot-provenance.mjs'));
+  assert.deepEqual(
+    actualAllowlist.filter((entry) => entry !== 'scripts/lib/live-pilot-provenance.mjs'),
+    [...expectedAllowlist].sort(),
+  );
 
   assert.match(workflow, /Checkout frozen pilot release/);
   assert.match(workflow, /ref:\s*\$\{\{\s*inputs\.expected_commit_sha\s*\}\}/);
@@ -107,7 +113,8 @@ test('hard clearance freshly revalidates production state without moving the fro
   assert.match(workflow, /HARD_CLEARANCE_REVALIDATION_MODE: consume/);
   assert.match(workflow, /Resolve exact successful live evidence run/);
   assert.match(workflow, /REQUESTED_RUN_ID: \$\{\{ inputs\.live_evidence_run_id \}\}/);
-  assert.match(workflow, /\.head_sha == \$sha/);
+  assert.match(workflow, /\.head_sha == \$controlPlaneSha/);
+  assert.match(workflow, /CONTROL_PLANE_SHA: \$\{\{ github\.sha \}\}/);
   assert.match(workflow, /\.path == "\.github\/workflows\/live-role-smoke\.yml"/);
   assert.match(workflow, /actions\/runs\/\$run_id\/attempts\/1/);
   assert.match(workflow, /\.run_attempt == 1/);
@@ -115,6 +122,11 @@ test('hard clearance freshly revalidates production state without moving the fro
   assert.match(workflow, /\.created_at \| fromdateiso8601/);
   assert.match(workflow, /\.expired == false/);
   assert.match(workflow, /Expected exactly one successful live-evidence run with the exact frozen-release artifact/);
+  assert.match(workflow, /Write frozen-release\/control-plane evidence binding/);
+  assert.match(workflow, /releaseCommitSha: TARGET_SHA/);
+  assert.match(workflow, /controlPlaneCommitSha: CONTROL_PLANE_SHA/);
+  assert.match(workflow, /Verify live-evidence release\/control-plane artifact binding/);
+  assert.match(workflow, /release\/launch_package\/live-evidence-provenance\.json/);
   assert.match(workflow, /live_evidence_run_id: \$\{\{ steps\.resolve_live_evidence\.outputs\.run_id \}\}/);
   assert.match(workflow, /run-id: \$\{\{ steps\.resolve_live_evidence\.outputs\.run_id \}\}/);
   assert.match(workflow, /LIVE_RUN_ID: \$\{\{ needs\.hard-clearance-production-revalidation\.outputs\.live_evidence_run_id \}\}/);
@@ -124,6 +136,7 @@ test('hard clearance freshly revalidates production state without moving the fro
     workflow.indexOf('  hard-public-launch-clearance:'),
   );
   assert.match(revalidationJob, /cp control-plane\/scripts\/resolve-admin-app-check-site-key\.mjs release\/scripts\/resolve-admin-app-check-site-key\.mjs/);
+  assert.match(revalidationJob, /cp control-plane\/scripts\/lib\/live-pilot-provenance\.mjs release\/scripts\/lib\/live-pilot-provenance\.mjs/);
   const prepareMarker = 'Prepare frozen-release evidence for current production semantics';
   const refreshMarker = 'Refresh role evidence without restarting the pilot';
   assert.ok(revalidationJob.includes(prepareMarker), 'clearance must apply reviewed frozen-release evidence preparation');
@@ -249,7 +262,8 @@ test('operational evidence keeps current main as control plane while binding pro
     const allowlistBody = workflow.match(/allowed='\^\(([^'\n]+)\)\$'/)?.[1];
     assert.ok(allowlistBody, `${workflowFile} control-plane allowlist is missing`);
     const actualAllowlist = allowlistBody.split('|').map((value) => value.replaceAll('\\.', '.')).sort();
-    assert.deepEqual(actualAllowlist, expectedAllowlist);
+    assert.ok(actualAllowlist.includes('scripts/lib/live-pilot-provenance.mjs'));
+    assert.deepEqual(actualAllowlist.filter((entry) => entry !== 'scripts/lib/live-pilot-provenance.mjs'), expectedAllowlist);
   }
 
   const providerWorkflow = await read('.github/workflows/operational-provider-evidence.yml');
@@ -808,8 +822,10 @@ test('hard-clearance scope permits only the exact PR #1770 rules-writer and test
   const expectedDiff = [
     rulesWriterPath,
     rulesWriterTestPath,
+    'scripts/lib/live-pilot-provenance.mjs',
     '.github/workflows/live-role-smoke.yml',
     'tests/launch/hard-clearance-revalidation.test.mjs',
+    'tests/launch/live-pilot-provenance.test.mjs',
   ];
   assert.equal(verifyScope({ changedFiles: expectedDiff }), 'CONTROL_PLANE_SCOPE_VERIFIED=true');
   assert.throws(() => verifyScope({ changedFiles: expectedDiff, hasPinnedCommit: false }), /pinned PR #1770 commit is not an ancestor/);
