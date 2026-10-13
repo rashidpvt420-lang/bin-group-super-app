@@ -14,8 +14,14 @@ import {
   validateDeploymentDocument,
 } from './lib/launch-honesty.mjs';
 import { validateFunctionsDeploymentEvidence } from './lib/functions-deployment-evidence.mjs';
-import { validateFirebasePhoneAuthEvidence } from './verify-firebase-phone-auth-production.mjs';
-import { validateAdminMfaEvidence } from './verify-admin-mfa-production.mjs';
+import {
+  validateFirebasePhoneAuthEvidence,
+  verifyFirebasePhoneAuthProduction,
+} from './verify-firebase-phone-auth-production.mjs';
+import {
+  validateAdminMfaEvidence,
+  verifyAdminMfaProduction,
+} from './verify-admin-mfa-production.mjs';
 import {
   HOSTED_CLIENT_REQUIRED_FLAGS,
   buildHostedClientConfigEvidence,
@@ -245,6 +251,10 @@ async function verifySite(label, url, site) {
 
 const existing = readJsonSafe(deploymentEvidencePath(), null);
 
+let firebasePhoneAuthEvidenceForValidation = existing && existing.firebasePhoneAuth;
+let adminMfaEvidenceForValidation = existing && existing.adminMfa;
+let liveEvidenceIdentityReverification = null;
+
 // Existing metadata must already claim passed + matching SHA before we accept write.
 // Live HTTP/bundle checks always run.
 const main = await verifySite('main', PRODUCTION.mainUrl, 'main');
@@ -274,6 +284,61 @@ if (liveEvidenceVerification) {
   clientRuntimeConfig.verificationWorkflowName = process.env.GITHUB_WORKFLOW;
   clientRuntimeConfig.verificationWorkflowRunId = String(process.env.GITHUB_RUN_ID || '');
   clientRuntimeConfig.verificationWorkflowRunAttempt = Number(process.env.GITHUB_RUN_ATTEMPT || 0) || null;
+}
+
+if (liveEvidenceVerification && existing) {
+  const controlPlaneSha = String(process.env.CONTROL_PLANE_COMMIT_SHA || '').trim();
+  const runId = String(process.env.GITHUB_RUN_ID || '').trim();
+  const runAttempt = String(process.env.GITHUB_RUN_ATTEMPT || '').trim();
+  if (!/^[0-9a-f]{40}$/.test(controlPlaneSha)) {
+    fail('Live identity re-verification requires the exact current control-plane commit SHA.');
+  }
+  if (!/^\d+$/.test(runId) || !/^\d+$/.test(runAttempt)) {
+    fail('Live identity re-verification requires the current numeric workflow run and attempt.');
+  }
+
+  // These read-only Admin SDK/API checks prove the current Phone Auth and
+  // privileged-account MFA state. Keep the deployment-run snapshots intact;
+  // do not rewrite their historical timestamps or attribute this read to the
+  // original deployment workflow.
+  const identityEvidenceEnv = {
+    ...process.env,
+    GITHUB_SHA: commitSha,
+    GITHUB_REPOSITORY: String(process.env.GITHUB_REPOSITORY || existing.repository || ''),
+    GITHUB_REF: String(process.env.GITHUB_REF || ''),
+    GITHUB_RUN_ID: runId,
+    GITHUB_RUN_ATTEMPT: runAttempt,
+  };
+  const [phoneAuthResult, adminMfaResult] = await Promise.allSettled([
+    verifyFirebasePhoneAuthProduction({ env: identityEvidenceEnv, now: new Date() }),
+    verifyAdminMfaProduction({ env: identityEvidenceEnv, now: new Date() }),
+  ]);
+  if (phoneAuthResult.status === 'rejected') {
+    fail(`Fresh Phone Auth production verification failed: ${phoneAuthResult.reason instanceof Error ? phoneAuthResult.reason.message : 'unknown error'}`);
+  }
+  if (adminMfaResult.status === 'rejected') {
+    fail(`Fresh Admin MFA production verification failed: ${adminMfaResult.reason instanceof Error ? adminMfaResult.reason.message : 'unknown error'}`);
+  }
+  if (phoneAuthResult.status === 'fulfilled' && adminMfaResult.status === 'fulfilled') {
+    firebasePhoneAuthEvidenceForValidation = phoneAuthResult.value;
+    adminMfaEvidenceForValidation = adminMfaResult.value;
+    liveEvidenceIdentityReverification = {
+      schemaVersion: 1,
+      status: 'passed',
+      source: 'live-evidence-production-identity-reverification',
+      releaseCommitSha: commitSha,
+      controlPlaneCommitSha: controlPlaneSha,
+      repository: identityEvidenceEnv.GITHUB_REPOSITORY,
+      ref: identityEvidenceEnv.GITHUB_REF,
+      workflowName: String(process.env.GITHUB_WORKFLOW || ''),
+      workflowRunId: runId,
+      workflowRunAttempt: Number(runAttempt),
+      verifiedAt: new Date().toISOString(),
+      firebasePhoneAuth: phoneAuthResult.value,
+      adminMfa: adminMfaResult.value,
+      hardLaunchClaim: false,
+    };
+  }
 }
 
 if (!httpChecksOk) fail('HTTP checks failed for main and/or admin hosting');
@@ -309,21 +374,21 @@ if (!existing) {
     fail(deploymentFailure);
   }
 
-  for (const phoneAuthFailure of validateFirebasePhoneAuthEvidence(existing.firebasePhoneAuth, {
+  for (const phoneAuthFailure of validateFirebasePhoneAuthEvidence(firebasePhoneAuthEvidenceForValidation, {
     commitSha,
-    repository: existing.repository,
-    ref: existing.workflowRef,
-    workflowRunId: existing.workflowRunId,
-    workflowRunAttempt: existing.workflowRunAttempt,
+    repository: liveEvidenceVerification ? process.env.GITHUB_REPOSITORY : existing.repository,
+    ref: liveEvidenceVerification ? process.env.GITHUB_REF : existing.workflowRef,
+    workflowRunId: liveEvidenceVerification ? process.env.GITHUB_RUN_ID : existing.workflowRunId,
+    workflowRunAttempt: liveEvidenceVerification ? process.env.GITHUB_RUN_ATTEMPT : existing.workflowRunAttempt,
     now: Date.now(),
   })) fail(phoneAuthFailure);
 
-  for (const adminMfaFailure of validateAdminMfaEvidence(existing.adminMfa, {
+  for (const adminMfaFailure of validateAdminMfaEvidence(adminMfaEvidenceForValidation, {
     commitSha,
-    repository: existing.repository,
-    ref: existing.workflowRef,
-    workflowRunId: existing.workflowRunId,
-    workflowRunAttempt: existing.workflowRunAttempt,
+    repository: liveEvidenceVerification ? process.env.GITHUB_REPOSITORY : existing.repository,
+    ref: liveEvidenceVerification ? process.env.GITHUB_REF : existing.workflowRef,
+    workflowRunId: liveEvidenceVerification ? process.env.GITHUB_RUN_ID : existing.workflowRunId,
+    workflowRunAttempt: liveEvidenceVerification ? process.env.GITHUB_RUN_ATTEMPT : existing.workflowRunAttempt,
     now: Date.now(),
   })) fail(adminMfaFailure);
 
@@ -380,6 +445,7 @@ if (writeEvidence && canPass) {
     bundleVerified: true,
     clientRuntimeConfig,
     functionsDeployment: existing.functionsDeployment,
+    ...(liveEvidenceIdentityReverification ? { liveEvidenceIdentityReverification } : {}),
     hardLaunchClaim: false,
   };
   mkdirSync(path.dirname(deploymentEvidencePath()), { recursive: true });
