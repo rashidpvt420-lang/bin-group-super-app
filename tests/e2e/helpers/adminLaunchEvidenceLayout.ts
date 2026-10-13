@@ -86,10 +86,11 @@ export async function auditAdminLaunchEvidenceLayout(page: Page) {
   for (const direction of ['ltr', 'rtl']) {
     for (const width of [390, 768, 1105, 1535]) {
       await page.setViewportSize({ width, height: 1000 });
-      await page.setContent(`<html dir="${direction}"><body><div id="root"></div></body></html>`);
+      await page.setContent(`<html dir="${direction}"><head><meta name="viewport" content="width=device-width, initial-scale=1" /></head><body><div id="root"></div></body></html>`);
       await page.addScriptTag({ content: javascript });
       await expect(page.getByRole('heading', { name: 'Required launch evidence' })).toBeVisible();
       await expect(page.getByText(proofReference, { exact: true }).first()).toBeVisible();
+      expect(await page.evaluate(() => window.innerWidth), `${direction}: test the requested CSS viewport width`).toBe(width);
 
       const overflow = await page.evaluate(() => {
         const checks = [document.documentElement, ...document.querySelectorAll('.MuiPaper-root, .MuiTypography-caption, .MuiAlert-message')];
