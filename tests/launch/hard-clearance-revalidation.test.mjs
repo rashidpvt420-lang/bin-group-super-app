@@ -200,6 +200,7 @@ test('live evidence retires the protected ephemeral Admin before the final ident
   assert.ok(finalDeploymentCheckIndex > cleanupIndex,
     'final production MFA/identity inventory must run only after the temporary test admin has been retired');
   assert.match(workflow, /Run every required live evidence suite[\s\S]*?node scripts\/run-critical-evidence\.mjs --suite all-required/);
+  assert.match(workflow, /name: Verify controlled-pilot eligibility\s+env:\s+CONTROL_PLANE_COMMIT_SHA: \$\{\{ github\.sha \}\}/);
   assert.match(verifier, /if \(phoneAuthResult\.status === 'fulfilled'\) \{\s+firebasePhoneAuthEvidenceForValidation = phoneAuthResult\.value;/);
   assert.match(verifier, /if \(adminMfaResult\.status === 'fulfilled'\) \{\s+adminMfaEvidenceForValidation = adminMfaResult\.value;/);
 });
