@@ -1138,3 +1138,20 @@ test('physical proofs after the first 500 records are still considered for clear
   assert.equal(result.report.status, 'blocked');
   assert.equal(result.files.has('/fixture/launch_package/launch-proof-gates.json'), false);
 });
+
+test('owner evidence commands cannot dispatch hard clearance with manufactured incident and monitoring attestations', async () => {
+  const bridge = await read('.github/workflows/technician-physical-evidence.yml');
+  assert.match(bridge, /hard-clearance\|hard-clearance-current\)/);
+  assert.match(bridge, /Owner evidence commands cannot attest incident severity, rollback verification, or monitoring/);
+  assert.doesNotMatch(bridge, /dispatch live-role-smoke\.yml dispatch\.json/);
+  assert.doesNotMatch(bridge, /monitoring_reference/);
+  assert.doesNotMatch(bridge, /NO_OPEN_P0_P1|ROLLBACK_PLAN_VERIFIED/);
+
+  // Protected hard-clearance still exists. Founder confirmations and evidence
+  // references are provided to its exact-release workflow_dispatch input.
+  const protectedWorkflow = await read('.github/workflows/live-role-smoke.yml');
+  assert.match(protectedWorkflow, /- hard-clearance/);
+  assert.match(protectedWorkflow, /INCIDENT_REFERENCE: \$\{\{ fromJSON\(inputs\.clearance_payload_json\)\.incident_reference \}\}/);
+  assert.match(protectedWorkflow, /ROLLBACK_REFERENCE: \$\{\{ fromJSON\(inputs\.clearance_payload_json\)\.rollback_reference \}\}/);
+  assert.match(protectedWorkflow, /MONITORING_REFERENCE: \$\{\{ fromJSON\(inputs\.clearance_payload_json\)\.monitoring_reference \}\}/);
+});
