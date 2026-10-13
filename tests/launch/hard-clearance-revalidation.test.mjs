@@ -780,8 +780,12 @@ test('hard-clearance scope permits only the exact PR #1770 rules-writer and test
   const supplementalText = workflow.match(/^\s*supplemental_allowed='([^'\n]+)'/m)?.[1];
   assert.ok(allowedText, 'hard-clearance control-plane allowlist is missing');
   assert.ok(supplementalText, 'hard-clearance supplemental allowlist is missing');
-  const allowed = new RegExp(allowedText);
-  const supplementalAllowed = new RegExp(supplementalText);
+  const parseAllowlistPaths = (patternText, label) => {
+    assert.ok(patternText.startsWith('^(') && patternText.endsWith(')$'), `${label} must remain an anchored path-only allowlist`);
+    return new Set(patternText.slice(2, -2).split('|').map((entry) => entry.replaceAll('\\.', '.')));
+  };
+  const allowed = parseAllowlistPaths(allowedText, 'control-plane allowlist');
+  const supplementalAllowed = parseAllowlistPaths(supplementalText, 'supplemental allowlist');
 
   function verifyScope({ changedFiles, hasPinnedCommit = true, currentBlobs = new Map(), targetBlobs = frozenBlobs }) {
     const exceptionFiles = changedFiles.filter((file) => pinnedBlobs.has(file));
@@ -796,7 +800,7 @@ test('hard-clearance scope permits only the exact PR #1770 rules-writer and test
     }
     for (const file of changedFiles) {
       if (pinnedBlobs.has(file)) continue;
-      if (!allowed.test(file) && !supplementalAllowed.test(file)) throw new Error(`Non-control-plane file changed since pilot release: ${file}`);
+      if (!allowed.has(file) && !supplementalAllowed.has(file)) throw new Error(`Non-control-plane file changed since pilot release: ${file}`);
     }
     return 'CONTROL_PLANE_SCOPE_VERIFIED=true';
   }
