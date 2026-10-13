@@ -470,12 +470,21 @@ jobs:
           const oldLog = `  \`[owner-evidence-identity] isolated synthetic identity seed=\${seed.slice(0, 10)} offset=\${coordinateOffset.toFixed(7)}\`,`;
           const newLog = `  \`[owner-evidence-identity] isolated synthetic identity seed=\${seed.slice(0, 10)} latOffset=\${latitudeOffset.toFixed(7)} lngOffset=\${longitudeOffset.toFixed(7)}\`,`;
 
-          if (source.split(oldCoordinates).length !== 2 || source.split(oldLog).length !== 2) {
-            throw new Error('Frozen Owner evidence identity wrapper changed unexpectedly; refusing runtime patch.');
+          const alreadyCollisionSafe = source.includes(
+            "const { latitude: evidenceLat, longitude: evidenceLng } = await selectUnusedOwnerEvidenceLocation(db, '${seed}');",
+          ) && source.includes(".replaceAll(latitudeToken, 'evidenceLat')")
+            && source.includes(".replaceAll(longitudeToken, 'evidenceLng')");
+
+          if (alreadyCollisionSafe) {
+            console.log('[hard-clearance-owner-identity] frozen Owner wrapper already uses collision-safe location selection; no source patch needed.');
+          } else {
+            if (source.split(oldCoordinates).length !== 2 || source.split(oldLog).length !== 2) {
+              throw new Error('Frozen Owner evidence identity wrapper changed unexpectedly; refusing runtime patch.');
+            }
+            const patched = source.replace(oldCoordinates, newCoordinates).replace(oldLog, newLog);
+            writeFileSync(target, patched, { mode: 0o600 });
+            console.log('[hard-clearance-owner-identity] expanded synthetic GEO identity space while preserving duplicate detection.');
           }
-          const patched = source.replace(oldCoordinates, newCoordinates).replace(oldLog, newLog);
-          writeFileSync(target, patched, { mode: 0o600 });
-          console.log('[hard-clearance-owner-identity] expanded synthetic GEO identity space while preserving duplicate detection.');
           NODE
 
           node scripts/prepare-protected-business-fixtures.mjs
