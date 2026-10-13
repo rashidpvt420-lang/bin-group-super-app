@@ -54,3 +54,32 @@ test('artifact writer refuses restored client payment approval or a missing Admi
     assert.equal(existsSync(path.join(f.directory, 'launch_generated/firestore.rules')), false);
   }
 });
+
+test('production rules bytes and digest remain stable across repeated artifact writes', (t) => {
+  const f = prepare(t);
+  const first = f.run('write-production-firestore-rules.mjs');
+  assert.equal(first.status, 0, first.stderr || first.stdout);
+  const expectedRules = readFileSync(f.rulesPath);
+  const expectedManifest = JSON.parse(readFileSync(path.join(f.directory, 'launch_generated/firestore-rules-manifest.json'), 'utf8'));
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const replay = f.run('write-production-firestore-rules.mjs');
+    assert.equal(replay.status, 0, replay.stderr || replay.stdout);
+    assert.ok(readFileSync(f.rulesPath).equals(expectedRules), 'replays must not append duplicate write exclusions');
+    assert.ok(readFileSync(path.join(f.directory, 'launch_generated/firestore.rules')).equals(expectedRules));
+    const manifest = JSON.parse(readFileSync(path.join(f.directory, 'launch_generated/firestore-rules-manifest.json'), 'utf8'));
+    assert.equal(manifest.sha256, expectedManifest.sha256);
+  }
+});
+
+test('writer restores an exclusion missing from only one write guard without duplicating the other', (t) => {
+  const f = prepare(t);
+  const first = f.run('write-production-firestore-rules.mjs');
+  assert.equal(first.status, 0, first.stderr || first.stdout);
+  const canonical = readFileSync(f.rulesPath, 'utf8');
+  const partial = canonical.replace("          'binConnectThreads',\n          'tenancies',", "          'binConnectThreads',");
+  assert.notEqual(partial, canonical);
+  writeFileSync(f.rulesPath, partial);
+  const repair = f.run('write-production-firestore-rules.mjs');
+  assert.equal(repair.status, 0, repair.stderr || repair.stdout);
+  assert.ok(readFileSync(f.rulesPath, 'utf8') === canonical, 'restore the missing guard exclusion without changing any other rule bytes');
+});
