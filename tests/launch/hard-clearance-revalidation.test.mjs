@@ -1138,3 +1138,41 @@ test('physical proofs after the first 500 records are still considered for clear
   assert.equal(result.report.status, 'blocked');
   assert.equal(result.files.has('/fixture/launch_package/launch-proof-gates.json'), false);
 });
+
+
+test('Founder actor regression paths must remain exact in every dual-SHA evidence workflow', async () => {
+  const workflows = [
+    '.github/workflows/live-role-smoke.yml',
+    '.github/workflows/operational-application-evidence.yml',
+    '.github/workflows/operational-provider-evidence.yml',
+    '.github/workflows/privileged-access-rotation-evidence.yml',
+    '.github/workflows/technician-physical-evidence.yml',
+  ];
+  const permitted = [
+    'test/hard-launch-control.test.mjs',
+    'tests/launch/verify-same-run-deployment-artifact.test.mjs',
+  ];
+  const prohibited = [
+    'test/hard-launch-control.test.mjs.bak',
+    'tests/launch/verify-same-run-deployment-artifact.test.mjs.bak',
+    'tests/launch/another-unreviewed-test.test.mjs',
+    'src/unreviewed-runtime.ts',
+  ];
+
+  for (const file of workflows) {
+    const workflow = await read(file);
+    const declarations = [...workflow.matchAll(/supplemental_allowed='\^\(([^'\n]+)\)\$'/g)];
+    assert.ok(declarations.length > 0, file + ' must have a supplemental exact-path guard');
+    for (const [, body] of declarations) {
+      const entries = body.split('|').map((entry) => entry.replaceAll('\\.', '.'));
+      const matcher = new RegExp('^(' + body + ')$');
+      for (const reviewed of permitted) {
+        assert.equal(entries.filter((entry) => entry === reviewed).length, 1, file + ' must allow ' + reviewed + ' exactly once');
+        assert.match(reviewed, matcher, file + ' must accept ' + reviewed);
+      }
+      for (const unreviewed of prohibited) {
+        assert.doesNotMatch(unreviewed, matcher, file + ' must reject ' + unreviewed);
+      }
+    }
+  }
+});
