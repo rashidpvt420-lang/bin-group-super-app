@@ -85,6 +85,7 @@ test('hard clearance freshly revalidates production state without moving the fro
     'scripts/run-frozen-release-evidence.mjs',
     'scripts/verify-ai-live-evidence.mjs',
     'scripts/verify-hard-launch-approval.mjs',
+    'scripts/verify-production-deployment.mjs',
     'scripts/verify-operational-readiness.mjs',
     'tests/launch/ai-operational-contract.test.mjs',
     'tests/launch/external-gate-production-provenance.test.mjs',
@@ -823,6 +824,7 @@ test('hard-clearance scope permits only the exact PR #1770 rules-writer and test
     rulesWriterPath,
     rulesWriterTestPath,
     'scripts/lib/live-pilot-provenance.mjs',
+    'scripts/verify-production-deployment.mjs',
     '.github/workflows/live-role-smoke.yml',
     'tests/launch/hard-clearance-revalidation.test.mjs',
     'tests/launch/live-pilot-provenance.test.mjs',
@@ -1269,4 +1271,25 @@ test('owner evidence commands cannot dispatch hard clearance with manufactured i
   assert.match(protectedWorkflow, /INCIDENT_REFERENCE: \$\{\{ fromJSON\(inputs\.clearance_payload_json\)\.incident_reference \}\}/);
   assert.match(protectedWorkflow, /ROLLBACK_REFERENCE: \$\{\{ fromJSON\(inputs\.clearance_payload_json\)\.rollback_reference \}\}/);
   assert.match(protectedWorkflow, /MONITORING_REFERENCE: \$\{\{ fromJSON\(inputs\.clearance_payload_json\)\.monitoring_reference \}\}/);
+});
+
+test('live production evidence freshly rechecks Phone Auth and Admin MFA without redeploying', async () => {
+  const [workflow, source] = await Promise.all([
+    read('.github/workflows/live-role-smoke.yml'),
+    read('scripts/verify-production-deployment.mjs'),
+  ]);
+
+  assert.match(workflow, /Overlay reviewed live production verifier[\s\S]*?cp control-plane\/scripts\/verify-production-deployment\.mjs release\/scripts\/verify-production-deployment\.mjs/);
+  assert.match(workflow, /CONTROL_PLANE_COMMIT_SHA: \$\{\{ github\.sha \}\}/);
+  assert.match(source, /process\.env\.GITHUB_WORKFLOW === 'Live Role Smoke Tests'/);
+  assert.match(source, /verifyFirebasePhoneAuthProduction\(\{ env: identityEvidenceEnv/);
+  assert.match(source, /verifyAdminMfaProduction\(\{ env: identityEvidenceEnv/);
+  assert.match(source, /firebasePhoneAuthEvidenceForValidation = phoneAuthResult\.value/);
+  assert.match(source, /adminMfaEvidenceForValidation = adminMfaResult\.value/);
+  assert.match(source, /liveEvidenceIdentityReverification/);
+  assert.match(source, /source: 'live-evidence-production-identity-reverification'/);
+  assert.match(source, /controlPlaneCommitSha: controlPlaneSha/);
+  assert.match(source, /\.\.\.\(liveEvidenceIdentityReverification \? \{ liveEvidenceIdentityReverification \} : \{\}\)/);
+  assert.match(source, /hardLaunchClaim: false/);
+  assert.doesNotMatch(source, /firebase\s+deploy|deploy-firebase-production\.mjs/i);
 });
