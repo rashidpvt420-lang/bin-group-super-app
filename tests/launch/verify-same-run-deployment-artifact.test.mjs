@@ -213,7 +213,7 @@ function createFixture() {
     runId: RUN_ID,
     runAttempt: RUN_ATTEMPT,
     actor: ACTOR,
-    founder: { name: 'Test Founder', email: FOUNDER_EMAIL },
+    founder: { name: 'Test Founder', email: FOUNDER_EMAIL, actor: ACTOR },
     issuedAt: nowIso,
     expiresAt: new Date(now + 30 * 60 * 1000).toISOString(),
     deployConfirmationDigest: sha256Text(DEPLOY_CONFIRMATION_PHRASE),

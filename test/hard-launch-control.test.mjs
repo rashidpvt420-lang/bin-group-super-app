@@ -48,6 +48,7 @@ function authorizationPayload() {
     founder: {
       name: 'Rashid AbdulGhani',
       email: 'ceo@bin-groups.com',
+      actor: 'rashidpvt420-lang',
     },
     issuedAt: new Date(now - 60_000).toISOString(),
     expiresAt: new Date(now + 30 * 60_000).toISOString(),
@@ -74,6 +75,32 @@ test('founder authorization is bound to the exact workflow commit', () => {
     commitSha: 'b'.repeat(40),
   }).join('\n');
   assert.match(errors, /commitSha does not match workflow SHA/);
+});
+
+test('signed authorization rejects missing or malformed Founder actors despite an approved email', () => {
+  for (const actor of [undefined, null, '', '   ', 123, true, ['rashidpvt420-lang'], { login: 'rashidpvt420-lang' }]) {
+    const payload = authorizationPayload();
+    if (actor === undefined) delete payload.founder.actor;
+    else payload.founder.actor = actor;
+    const errors = validateAuthorizationDocument(signDocument(payload, signingKey), context).join('\n');
+    assert.match(errors, /founder actor is required/, `Rejected malformed actor: ${JSON.stringify(actor)}`);
+  }
+});
+
+test('signed authorization rejects an unauthorized Founder actor despite an approved email', () => {
+  const payload = authorizationPayload();
+  payload.founder.actor = 'unapproved-founder';
+  const errors = validateAuthorizationDocument(signDocument(payload, signingKey), context).join('\n');
+  assert.match(errors, /founder actor is not authorized/);
+});
+
+test('authorized Founder identities are normalized and need not equal a delegated workflow actor', () => {
+  const payload = authorizationPayload();
+  payload.founder.actor = ' Backup-Founder ';
+  assert.deepEqual(validateAuthorizationDocument(signDocument(payload, signingKey), {
+    ...context,
+    authorizedActors: 'rashidpvt420-lang,backup-founder',
+  }), []);
 });
 
 test('same-run authorization remains valid through a ninety-minute deployment pipeline', () => {
