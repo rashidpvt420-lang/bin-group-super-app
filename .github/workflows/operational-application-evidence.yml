@@ -132,6 +132,7 @@ jobs:
         env:
           RELEASE_SHA: ${{ inputs.frozen_release_sha }}
           CONTROL_PLANE_SHA: ${{ github.sha }}
+          KNOWN_RULES_WRITER_COMMIT: 86b67c4a12a4ac61037dba8201f3d5ab96b09c5f
         run: |
           set -euo pipefail
           git -C control-plane merge-base --is-ancestor "$RELEASE_SHA" "$CONTROL_PLANE_SHA" || { echo "::error::Frozen release is not an ancestor of the current control plane."; exit 1; }
@@ -145,7 +146,32 @@ jobs:
           else
             allowed='^(\.github/workflows/firebase-production-deploy\.yml|\.github/workflows/current-main-expression-budget-repair\.yml|\.github/workflows/pr-validation\.yml|\.github/workflows/renewal-pdf-diagnostic-owner-bridge\.yml|\.github/workflows/renewal-pdf-runtime-diagnostic\.yml|\.github/workflows/repair-frozen-sovereign-ai-runtime\.yml|\.github/workflows/live-role-smoke\.yml|\.github/workflows/operational-application-evidence\.yml|\.github/workflows/operational-provider-evidence\.yml|\.github/workflows/privileged-access-rotation-evidence\.yml|\.github/workflows/technician-physical-evidence\.yml|scripts/finalize-operational-provider-evidence\.mjs|scripts/hard-clearance-production-revalidation\.mjs|scripts/launch-status\.mjs|scripts/publish-direct-operational-proof\.mjs|scripts/publish-operational-application-evidence\.mjs|scripts/publish-operational-provider-evidence\.mjs|scripts/resolve-admin-app-check-site-key\.mjs|scripts/run-frozen-release-evidence\.mjs|scripts/verify-ai-live-evidence\.mjs|scripts/verify-hard-launch-approval\.mjs|scripts/verify-operational-readiness\.mjs|tests/launch/ai-operational-contract\.test\.mjs|tests/launch/external-gate-production-provenance\.test\.mjs|tests/launch/final-operational-evidence-producers\.test\.mjs|tests/launch/hard-clearance-revalidation\.test\.mjs|tests/launch/operational-application-evidence-audit\.test\.mjs|scripts/resolve-live-pilot-window\.mjs)$'
             supplemental_allowed='^(scripts/hard-launch-status\.mjs|scripts/lib/firebase-mfa-sign-in\.mjs|scripts/lib/hard-launch-control\.mjs|scripts/lib/operational-proof-schema\.mjs|scripts/prepare-operational-application-evidence\.mjs|scripts/print-hard-launch-blockers\.mjs|scripts/verify-operational-application-evidence\.mjs|scripts/verify-launch-clearance\.mjs|scripts/reconcile-hard-public-evidence\.mjs|tests/launch/hard-launch-blocker-plan\.test\.mjs|tests/launch/operational-founder-mfa-evidence\.test\.mjs|tests/launch/phase1-manual-public-launch-policy\.test\.mjs|\.github/workflows/public-launch-evidence-backfill\.yml|scripts/build-command-center-evidence-manifest\.mjs|tests/launch/public-launch-evidence-workflow-bridge\.test\.mjs|scripts/resolve-live-pilot-window\.mjs|tests/launch/live-pilot-provenance\.test\.mjs|scripts/owner-launch-run-correlation\.sh|scripts/select-new-exact-sha-workflow-run\.mjs|tests/launch/exact-sha-workflow-run-correlation\.test\.mjs|\.github/workflows/owner-privileged-cleanup-command\.yml)$'
+            # Exactly one reviewed two-file source-preparation change, not a new
+            # category of allowed release mutations. Both blobs must be pinned.
+            rules_writer_path='scripts/write-production-firestore-rules.mjs'
+            rules_writer_test_path='tests/launch/design-payment-rules-artifact.test.mjs'
+            exception_count=0
+            for exception_path in "$rules_writer_path" "$rules_writer_test_path"; do
+              if grep -Fxq "$exception_path" <<< "$changed"; then
+                exception_count=$((exception_count + 1))
+              fi
+            done
+            if [[ "$exception_count" -gt 0 ]]; then
+              [[ "$exception_count" -eq 2 ]] || { echo "::error::PR #1770 exception requires both approved rules files."; exit 1; }
+              git -C control-plane cat-file -e "$KNOWN_RULES_WRITER_COMMIT^{commit}"
+              git -C control-plane merge-base --is-ancestor "$KNOWN_RULES_WRITER_COMMIT" "$CONTROL_PLANE_SHA" || { echo "::error::Approved PR #1770 commit is not an ancestor."; exit 1; }
+              for path in "$rules_writer_path" "$rules_writer_test_path"; do
+                known_blob="$(git -C control-plane rev-parse "$KNOWN_RULES_WRITER_COMMIT:$path")"
+                current_blob="$(git -C control-plane rev-parse "$CONTROL_PLANE_SHA:$path")"
+                frozen_blob="$(git -C control-plane rev-parse "$RELEASE_SHA:$path")"
+                [[ "$current_blob" == "$known_blob" ]] || { echo "::error::PR #1770 exception requires the exact approved blob for $path."; exit 1; }
+                [[ "$frozen_blob" != "$known_blob" ]] || { echo "::error::PR #1770 exception path must be part of the release/control-plane delta: $path."; exit 1; }
+              done
+            fi
             while IFS= read -r file; do
+              if [[ "$file" == "$rules_writer_path" || "$file" == "$rules_writer_test_path" ]]; then
+                continue
+              fi
               [[ -z "$file" || "$file" =~ $allowed || "$file" =~ $supplemental_allowed ]] || { echo "::error::Non-control-plane file changed since frozen release: $file"; exit 1; }
             done <<< "$changed"
           fi
