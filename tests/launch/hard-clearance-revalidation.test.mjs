@@ -169,6 +169,34 @@ test('hard clearance freshly revalidates production state without moving the fro
   assert.doesNotMatch(hardJob, /TARGET_SHA[^\n]*CURRENT_SHA|TARGET_SHA\" != \"\$CURRENT_SHA/);
 });
 
+test('hard-clearance Owner wrapper preparation accepts collision-safe releases and rejects unknown layouts', async () => {
+  const workflow = await read('.github/workflows/live-role-smoke.yml');
+  const comment = workflow.indexOf('The frozen Owner evidence wrapper originally varied latitude and longitude');
+  const heredocStart = workflow.indexOf("node --input-type=module <<'NODE'", comment);
+  const codeStart = workflow.indexOf('\n', heredocStart) + 1;
+  const codeEnd = workflow.indexOf('\n          NODE', codeStart);
+  assert.ok(comment >= 0 && heredocStart > comment && codeEnd > codeStart, 'Owner wrapper preparation snippet is missing');
+  const preparationCode = workflow.slice(codeStart, codeEnd)
+    .replace(/^\s*import \{ readFileSync, writeFileSync \} from 'node:fs';\s*/, '');
+  const writes = [];
+  const context = (source) => ({
+    readFileSync: () => source,
+    writeFileSync: (...args) => writes.push(args),
+    console: { log() {} },
+  });
+
+  const deployedWrapper = await read('scripts/run-owner-inspection-first-production-evidence-unique.mjs');
+  assert.match(deployedWrapper, /selectUnusedOwnerEvidenceLocation/);
+  runInNewContext(preparationCode, context(deployedWrapper));
+  assert.equal(writes.length, 0, 'already-safe frozen Owner wrapper should not be mutated');
+
+  assert.throws(
+    () => runInNewContext(preparationCode, context('unexpected Owner wrapper')),
+    /Frozen Owner evidence identity wrapper changed unexpectedly/,
+  );
+  assert.equal(writes.length, 0, 'unknown Owner wrapper must fail without writing');
+});
+
 test('operational evidence keeps current main as control plane while binding proof to the frozen deployment', async () => {
   const workflowFiles = [
     '.github/workflows/operational-application-evidence.yml',
