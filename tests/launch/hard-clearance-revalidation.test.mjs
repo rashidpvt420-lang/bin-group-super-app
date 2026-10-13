@@ -1336,3 +1336,50 @@ test('live production evidence freshly rechecks Phone Auth and Admin MFA without
   assert.match(source, /hardLaunchClaim: false/);
   assert.doesNotMatch(source, /firebase\s+deploy|deploy-firebase-production\.mjs/i);
 });
+
+test('clearance scope allows exactly the two #1781 test-only paths and nothing broader', async () => {
+  const workflows = [
+    '.github/workflows/live-role-smoke.yml',
+    '.github/workflows/operational-application-evidence.yml',
+    '.github/workflows/operational-provider-evidence.yml',
+    '.github/workflows/privileged-access-rotation-evidence.yml',
+    '.github/workflows/technician-physical-evidence.yml',
+  ];
+  let checked = 0;
+  for (const file of workflows) {
+    const source = await read(file);
+    const allowed = [...source.matchAll(/^\s*allowed='([^']+)'$/gm)].map((match) => match[1]);
+    const supplemental = [...source.matchAll(/^\s*supplemental_allowed='([^']+)'$/gm)].map((match) => match[1]);
+    assert.ok(supplemental.length > 0, `${file} must define supplemental_allowed`);
+    assert.equal(allowed.length, supplemental.length, `${file} must pair allowed and supplemental_allowed lists`);
+    for (const [index, pattern] of supplemental.entries()) {
+      const toPaths = (patternText, label) => {
+        assert.ok(patternText.startsWith('^(') && patternText.endsWith(')$'), `${file} ${label} must stay an anchored path-only allowlist`);
+        const entries = patternText.slice(2, -2).split('|');
+        for (const entry of entries) {
+          assert.doesNotMatch(entry.replaceAll('\\.', ''), /[*+?[\]{}()^$\\]/, `${file} ${label} entry must be a literal path: ${entry}`);
+        }
+        return new Set(entries.map((entry) => entry.replaceAll('\\.', '.')));
+      };
+      const allowedPaths = toPaths(allowed[index], 'allowed');
+      const supplementalPaths = toPaths(pattern, 'supplemental_allowed');
+      const inScope = (path) => allowedPaths.has(path) || supplementalPaths.has(path);
+      assert.ok(inScope('test/hard-launch-control.test.mjs'), `${file} must allow test/hard-launch-control.test.mjs`);
+      assert.ok(inScope('tests/launch/verify-same-run-deployment-artifact.test.mjs'), `${file} must allow the same-run artifact test`);
+      for (const rejected of [
+        'src/App.tsx',
+        'test/hard-launch-control.test.mjs.bak',
+        'test/other-hard-launch-control.test.mjs',
+        'test/hard-launch-control.spec.mjs',
+        'tests/launch/verify-same-run-deployment-artifact.test.ts',
+        'tests/launch/verify-same-run-deployment-artifact-extra.test.mjs',
+        'tests/e2e/verify-same-run-deployment-artifact.test.mjs',
+        'apps/admin-panel/src/pages/admin/PublicLaunchCommandCenterPageV2.tsx',
+      ]) {
+        assert.equal(inScope(rejected), false, `${file} must still reject ${rejected}`);
+      }
+      checked += 1;
+    }
+  }
+  assert.equal(checked, 6);
+});
