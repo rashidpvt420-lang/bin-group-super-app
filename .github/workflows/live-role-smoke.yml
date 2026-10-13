@@ -283,6 +283,7 @@ jobs:
           TARGET_SHA: ${{ inputs.expected_commit_sha }}
           CURRENT_SHA: ${{ github.sha }}
           CURRENT_REF: ${{ github.ref }}
+          KNOWN_RULES_WRITER_COMMIT: 86b67c4a12a4ac61037dba8201f3d5ab96b09c5f
         run: |
           set -euo pipefail
           [[ "$CURRENT_REF" == "refs/heads/main" ]] || { echo "::error::Hard clearance may only run from refs/heads/main."; exit 1; }
@@ -290,6 +291,18 @@ jobs:
           git -C control-plane cat-file -e "$TARGET_SHA^{commit}" || git -C control-plane fetch origin "$TARGET_SHA"
           git -C control-plane merge-base --is-ancestor "$TARGET_SHA" "$CURRENT_SHA" || { echo "::error::Release SHA is not an ancestor of the clearance control plane."; exit 1; }
           changed="$(git -C control-plane diff --name-only "$TARGET_SHA" "$CURRENT_SHA")"
+          rules_writer_path='scripts/write-production-firestore-rules.mjs'
+          rules_writer_test_path='tests/launch/design-payment-rules-artifact.test.mjs'
+          verify_exact_rules_writer_blob() {
+            local path="$1"
+            local known_blob current_blob target_blob
+            known_blob="$(git -C control-plane rev-parse "$KNOWN_RULES_WRITER_COMMIT:$path")"
+            current_blob="$(git -C control-plane rev-parse "$CURRENT_SHA:$path")"
+            target_blob="$(git -C control-plane rev-parse "$TARGET_SHA:$path")"
+            [[ "$current_blob" == "$known_blob" ]] || { echo "::error::The one-time PR #1770 exception requires the exact approved blob for $path."; exit 1; }
+            [[ "$target_blob" != "$known_blob" ]] || { echo "::error::The PR #1770 exception path is not part of the release/control-plane delta: $path"; exit 1; }
+            echo "Verified exact PR #1770 blob for $path ($known_blob)."
+          }
           if [[ -z "$changed" ]]; then
             [[ "$TARGET_SHA" == "$CURRENT_SHA" ]] || {
               echo "::error::Empty control-plane delta is only valid for an exact same-SHA pair."
@@ -299,7 +312,23 @@ jobs:
           else
             allowed='^(\.github/workflows/firebase-production-deploy\.yml|\.github/workflows/current-main-expression-budget-repair\.yml|\.github/workflows/pr-validation\.yml|\.github/workflows/renewal-pdf-diagnostic-owner-bridge\.yml|\.github/workflows/renewal-pdf-runtime-diagnostic\.yml|\.github/workflows/repair-frozen-sovereign-ai-runtime\.yml|\.github/workflows/live-role-smoke\.yml|\.github/workflows/operational-application-evidence\.yml|\.github/workflows/operational-provider-evidence\.yml|\.github/workflows/privileged-access-rotation-evidence\.yml|\.github/workflows/technician-physical-evidence\.yml|scripts/finalize-operational-provider-evidence\.mjs|scripts/hard-clearance-production-revalidation\.mjs|scripts/launch-status\.mjs|scripts/publish-direct-operational-proof\.mjs|scripts/publish-operational-application-evidence\.mjs|scripts/publish-operational-provider-evidence\.mjs|scripts/resolve-admin-app-check-site-key\.mjs|scripts/run-frozen-release-evidence\.mjs|scripts/verify-ai-live-evidence\.mjs|scripts/verify-hard-launch-approval\.mjs|scripts/verify-operational-readiness\.mjs|tests/launch/ai-operational-contract\.test\.mjs|tests/launch/external-gate-production-provenance\.test\.mjs|tests/launch/final-operational-evidence-producers\.test\.mjs|tests/launch/hard-clearance-revalidation\.test\.mjs|tests/launch/operational-application-evidence-audit\.test\.mjs|scripts/resolve-live-pilot-window\.mjs)$'
             supplemental_allowed='^(scripts/hard-launch-status\.mjs|scripts/lib/hard-launch-control\.mjs|scripts/lib/operational-proof-schema\.mjs|scripts/prepare-operational-application-evidence\.mjs|scripts/print-hard-launch-blockers\.mjs|scripts/verify-operational-application-evidence\.mjs|scripts/verify-launch-clearance\.mjs|scripts/reconcile-hard-public-evidence\.mjs|tests/launch/hard-launch-blocker-plan\.test\.mjs|tests/launch/phase1-manual-public-launch-policy\.test\.mjs|\.github/workflows/public-launch-evidence-backfill\.yml|scripts/build-command-center-evidence-manifest\.mjs|tests/launch/public-launch-evidence-workflow-bridge\.test\.mjs|scripts/resolve-live-pilot-window\.mjs|tests/launch/live-pilot-provenance\.test\.mjs|scripts/owner-launch-run-correlation\.sh|scripts/select-new-exact-sha-workflow-run\.mjs|tests/launch/exact-sha-workflow-run-correlation\.test\.mjs|\.github/workflows/owner-privileged-cleanup-command\.yml)$'
+            rules_writer_exception_count=0
+            for exception_path in "$rules_writer_path" "$rules_writer_test_path"; do
+              if grep -Fxq "$exception_path" <<< "$changed"; then
+                rules_writer_exception_count=$((rules_writer_exception_count + 1))
+              fi
+            done
+            if [[ "$rules_writer_exception_count" -gt 0 ]]; then
+              [[ "$rules_writer_exception_count" -eq 2 ]] || { echo "::error::The one-time PR #1770 exception requires both the rules writer and its regression test to change together."; exit 1; }
+              git -C control-plane cat-file -e "$KNOWN_RULES_WRITER_COMMIT^{commit}"
+              git -C control-plane merge-base --is-ancestor "$KNOWN_RULES_WRITER_COMMIT" "$CURRENT_SHA" || { echo "::error::The PR #1770 rules-writer commit is not an ancestor of the current control plane."; exit 1; }
+              verify_exact_rules_writer_blob "$rules_writer_path"
+              verify_exact_rules_writer_blob "$rules_writer_test_path"
+            fi
             while IFS= read -r file; do
+              if [[ "$file" == "$rules_writer_path" || "$file" == "$rules_writer_test_path" ]]; then
+                continue
+              fi
               [[ -z "$file" || "$file" =~ $allowed || "$file" =~ $supplemental_allowed ]] || { echo "::error::Non-control-plane file changed since pilot release: $file"; exit 1; }
             done <<< "$changed"
             echo "Verified control-plane-only diff from $TARGET_SHA to $CURRENT_SHA:"
