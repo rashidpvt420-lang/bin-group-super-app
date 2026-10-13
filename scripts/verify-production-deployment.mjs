@@ -319,9 +319,13 @@ if (liveEvidenceVerification && existing) {
   if (adminMfaResult.status === 'rejected') {
     fail(`Fresh Admin MFA production verification failed: ${adminMfaResult.reason instanceof Error ? adminMfaResult.reason.message : 'unknown error'}`);
   }
-  if (phoneAuthResult.status === 'fulfilled' && adminMfaResult.status === 'fulfilled') {
+  if (phoneAuthResult.status === 'fulfilled') {
     firebasePhoneAuthEvidenceForValidation = phoneAuthResult.value;
+  }
+  if (adminMfaResult.status === 'fulfilled') {
     adminMfaEvidenceForValidation = adminMfaResult.value;
+  }
+  if (phoneAuthResult.status === 'fulfilled' && adminMfaResult.status === 'fulfilled') {
     liveEvidenceIdentityReverification = {
       schemaVersion: 1,
       status: 'passed',
