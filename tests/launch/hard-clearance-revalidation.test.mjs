@@ -1353,8 +1353,17 @@ test('clearance scope allows exactly the two #1781 test-only paths and nothing b
     assert.ok(supplemental.length > 0, `${file} must define supplemental_allowed`);
     assert.equal(allowed.length, supplemental.length, `${file} must pair allowed and supplemental_allowed lists`);
     for (const [index, pattern] of supplemental.entries()) {
-      assert.doesNotMatch(pattern, /\.\*|\.\+|\[\^/, `${file} supplemental scope must not use wildcards`);
-      const inScope = (path) => new RegExp(allowed[index]).test(path) || new RegExp(pattern).test(path);
+      const toPaths = (patternText, label) => {
+        assert.ok(patternText.startsWith('^(') && patternText.endsWith(')$'), `${file} ${label} must stay an anchored path-only allowlist`);
+        const entries = patternText.slice(2, -2).split('|');
+        for (const entry of entries) {
+          assert.doesNotMatch(entry.replaceAll('\\.', ''), /[*+?[\]{}()^$\\]/, `${file} ${label} entry must be a literal path: ${entry}`);
+        }
+        return new Set(entries.map((entry) => entry.replaceAll('\\.', '.')));
+      };
+      const allowedPaths = toPaths(allowed[index], 'allowed');
+      const supplementalPaths = toPaths(pattern, 'supplemental_allowed');
+      const inScope = (path) => allowedPaths.has(path) || supplementalPaths.has(path);
       assert.ok(inScope('test/hard-launch-control.test.mjs'), `${file} must allow test/hard-launch-control.test.mjs`);
       assert.ok(inScope('tests/launch/verify-same-run-deployment-artifact.test.mjs'), `${file} must allow the same-run artifact test`);
       for (const rejected of [
