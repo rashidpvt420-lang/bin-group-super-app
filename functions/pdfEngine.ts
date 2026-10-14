@@ -3,6 +3,7 @@ import { COMPANY_DISPLAY_NAME, COMPANY_IDENTITY, COMPANY_REGISTRATION_LINE_EN, C
 import crypto from 'crypto';
 // PDFKit is lazy-loaded below to keep Functions discovery fast.
 import { isArabic, layoutBidiText } from "./arabicPdfText";
+import { hashOwnerServiceSelection, maintenanceResponseTargets, resolveOwnerServiceSelection, type OwnerServiceSelection } from './ownerServiceSelection';
 
 type PdfKitCtor = typeof import('pdfkit');
 let cachedPdfKit: PdfKitCtor | null = null;
@@ -102,19 +103,6 @@ function addMonthsPreservingTime(date: Date, months: number): Date {
     const copy = new Date(date.getTime());
     copy.setMonth(copy.getMonth() + months);
     return copy;
-}
-
-function normalizeContractMode(data: any) {
-    const raw = String(data.contractMode || data.contractType || data.planName || data.strategy || '').toLowerCase();
-    // Canonical server contract tokens must be recognized before legacy/display aliases.
-    // Inspection-first onboarding persists combined service as "BOTH".
-    if (['both', 'total_care', 'total-care', 'maintenance_and_property_management'].includes(raw)) return 'MAINTENANCE_AND_PROPERTY_MANAGEMENT';
-    if (raw.includes('property') && !raw.includes('maintenance')) return 'PROPERTY_MANAGEMENT_ONLY';
-    if (raw.includes('pm') && !raw.includes('fm')) return 'PROPERTY_MANAGEMENT_ONLY';
-    if (raw.includes('maintenance') && raw.includes('property')) return 'MAINTENANCE_AND_PROPERTY_MANAGEMENT';
-    if (raw.includes('hybrid') || raw.includes('combined') || raw.includes('full')) return 'MAINTENANCE_AND_PROPERTY_MANAGEMENT';
-    if (raw.includes('fm') || raw.includes('maintenance')) return 'MAINTENANCE_ONLY';
-    return data.propertyManagementIncluded ? 'MAINTENANCE_AND_PROPERTY_MANAGEMENT' : 'MAINTENANCE_ONLY';
 }
 
 function contractModeLabel(mode: string) {
@@ -274,6 +262,8 @@ export type CanonicalPdfArtifact = {
     generation: string;
     documentHash: string;
     byteLength: number;
+    serviceSelection?: OwnerServiceSelection;
+    serviceSelectionHash?: string;
 };
 
 async function savePdf(buffer: Buffer, path: string, metadata: Record<string, any>): Promise<CanonicalPdfArtifact> {
@@ -299,6 +289,65 @@ async function savePdf(buffer: Buffer, path: string, metadata: Record<string, an
     };
 }
 
+const SLA_LABELS: Record<string, string> = {
+    EMERGENCY: 'Emergency / طارئ',
+    HIGH: 'High / عالي',
+    MEDIUM: 'Medium / متوسط',
+    STANDARD: 'Standard / عادي',
+    LOW: 'Low / منخفض',
+};
+
+function formatMinutes(minutes: number): string {
+    return minutes % 60 === 0 ? `${minutes / 60} hour(s) / ${minutes / 60} ساعة` : `${minutes} minutes / ${minutes} دقيقة`;
+}
+
+function renderMaintenanceSchedule(doc: any) {
+    section(doc, 'Schedule A - Maintenance Services', 'الجدول (أ) - خدمات الصيانة');
+    para(doc,
+        'A1. Scope: the covered maintenance services listed in Section 6 and any selected add-ons in Section 4, for the property and package in Sections 2 and 3.',
+        'أ1. النطاق: خدمات الصيانة المشمولة الواردة في البند 6 وأي خدمات إضافية مختارة في البند 4، للعقار والباقة المحددين في البندين 2 و3.'
+    );
+    para(doc,
+        'A2. Exclusions: the items listed in Section 10 and anything not expressly listed as covered.',
+        'أ2. الاستثناءات: البنود الواردة في البند 10 وأي بند غير مذكور صراحة ضمن البنود المشمولة.'
+    );
+    for (const target of maintenanceResponseTargets()) {
+        row(doc, `A3. Target response - ${SLA_LABELS[target.priority] || target.priority}`, formatMinutes(target.minutes));
+    }
+    para(doc,
+        'Response targets are measured from the time a request is logged on the platform and refer to first response or dispatch, not completion. They are service targets, not guarantees, and are subject to safe access, authority permits, availability of parts and events beyond reasonable control.',
+        'تُحتسب أهداف الاستجابة من وقت تسجيل الطلب على المنصة وتشير إلى أول استجابة أو توجيه فني وليس إلى إنجاز العمل. وهي أهداف خدمة وليست ضمانات، وتخضع لتوفر الدخول الآمن وتصاريح الجهات وتوفر قطع الغيار والأحداث الخارجة عن السيطرة المعقولة.'
+    );
+}
+
+function renderPropertyManagementSchedule(doc: any) {
+    section(doc, 'Schedule B - Property Management Services', 'الجدول (ب) - خدمات إدارة العقار');
+    para(doc,
+        'B1. Mandate and authority: BIN-GROUPS acts only within this Agreement and the Owner\'s written instructions. Without the Owner\'s prior written approval BIN-GROUPS may not sign, renew or terminate a lease, agree a rent change, start legal or eviction proceedings, sell, mortgage or otherwise dispose of the property, or commit any expenditure above AED [OWNER APPROVAL THRESHOLD] per item. Emergency spend needed to prevent imminent danger or damage is limited to AED [EMERGENCY LIMIT] per event and is reported to the Owner promptly.',
+        'ب1. التفويض والصلاحيات: تعمل BIN-GROUPS في حدود هذه الاتفاقية وتعليمات المالك المكتوبة فقط. ولا يجوز لها دون موافقة كتابية مسبقة من المالك توقيع عقد إيجار أو تجديده أو إنهاؤه، أو الاتفاق على تعديل الإيجار، أو رفع أي دعوى أو إجراءات إخلاء، أو بيع العقار أو رهنه أو التصرف فيه، أو الالتزام بأي مصروف يزيد على [حد موافقة المالك] درهم للبند الواحد. ويقتصر الإنفاق الطارئ اللازم لمنع خطر أو ضرر وشيك على [حد الطوارئ] درهم للحالة الواحدة، ويُبلغ المالك به فوراً.'
+    );
+    para(doc,
+        'B2. Rent collection: where rent collection is part of the selected package, rent is accepted only by CASH or CHEQUE, an official receipt is issued for every payment, and collected funds are held in [DESIGNATED ACCOUNT] and remitted to the Owner within [REMITTANCE PERIOD] with a written statement, less only the fees agreed in this Agreement. BIN-GROUPS does not guarantee payment by any tenant.',
+        'ب2. تحصيل الإيجار: إذا كان تحصيل الإيجار ضمن الباقة المختارة، لا يُقبل الإيجار إلا نقداً أو بشيك، ويصدر إيصال رسمي عن كل دفعة، وتُحفظ المبالغ المحصلة في [الحساب المخصص] وتُحوَّل إلى المالك خلال [مدة التحويل] مع كشف حساب مكتوب، بعد خصم الرسوم المتفق عليها في هذه الاتفاقية فقط. ولا تضمن BIN-GROUPS سداد أي مستأجر.'
+    );
+    para(doc,
+        'B3. Tenancy law: every lease, renewal, rent change and eviction step follows the tenancy legislation of the Emirate where the property is located and the requirements of its competent authority. The Owner remains the landlord and is responsible for its obligations as landlord under that law.',
+        'ب3. قانون الإيجار: يخضع كل عقد إيجار وتجديد وتعديل للإيجار وأي إجراء إخلاء لتشريعات الإيجار في الإمارة التي يقع فيها العقار ومتطلبات الجهة المختصة فيها. ويبقى المالك هو المؤجر ويتحمل التزاماته بصفته مؤجراً بموجب ذلك القانون.'
+    );
+    para(doc,
+        'B4. Lease registration: registration of leases with the competent system (Ejari in Dubai, Tawtheeq in Abu Dhabi, or the equivalent in other Emirates) is the responsibility of [RESPONSIBLE PARTY]. Registration fees are borne by [FEE PAYER]. The Owner shall provide the title deed, identification and any authority documents needed.',
+        'ب4. تسجيل عقود الإيجار: يكون تسجيل عقود الإيجار في النظام المختص (إيجاري في دبي، توثيق في أبوظبي، أو ما يعادلهما في الإمارات الأخرى) من مسؤولية [الطرف المسؤول]، ويتحمل رسوم التسجيل [الطرف الذي يتحمل الرسوم]. ويلتزم المالك بتقديم سند الملكية ووثائق الهوية وأي مستندات تفويض لازمة.'
+    );
+    para(doc,
+        'B5. Handover and inspection: move-in and move-out inspections are recorded with dated photographs and a condition report, signed by the tenant where possible. Security deposits are held and returned in accordance with the lease and applicable law.',
+        'ب5. التسليم والمعاينة: تُوثق معاينات الدخول والخروج بصور مؤرخة وتقرير عن حالة العقار، ويوقعها المستأجر متى أمكن. وتُحفظ مبالغ التأمين وتُرد وفقاً لعقد الإيجار والقانون المعمول به.'
+    );
+    para(doc,
+        'B6. Termination and handback: on expiry or termination, BIN-GROUPS shall within [HANDBACK PERIOD] hand back to the Owner all keys, access cards, leases, tenant records, deposits and rents held (less agreed fees), together with a final statement of account. Tenancies already in force continue in accordance with their terms and the law.',
+        'ب6. الإنهاء والتسليم: عند انتهاء هذه الاتفاقية أو إنهائها، تلتزم BIN-GROUPS خلال [مدة التسليم] بتسليم المالك جميع المفاتيح وبطاقات الدخول وعقود الإيجار وسجلات المستأجرين ومبالغ التأمين والإيجارات المحتفظ بها (بعد خصم الرسوم المتفق عليها) مع كشف حساب ختامي. وتستمر عقود الإيجار السارية وفقاً لشروطها وللقانون.'
+    );
+}
+
 /**
  * Full bilingual owner service agreement PDF generator.
  * This replaces the old short contract summary so the owner signs/downloads
@@ -314,13 +363,16 @@ export async function generateContractPdfArtifact(data: any): Promise<CanonicalP
     }
 
     return new Promise<CanonicalPdfArtifact>((resolve, reject) => {
-        const contractMode = normalizeContractMode(data);
+        // Strict: rejects (no PDF) when the selection is missing or inconsistent.
+        const serviceSelection = resolveOwnerServiceSelection(data);
+        const serviceSelectionHash = hashOwnerServiceSelection(serviceSelection);
+        const contractMode = serviceSelection.mode;
         const contractId = textValue(data.contractId || data.id || `contract-${Date.now()}`);
         const propertyType = textValue(data.propertyType || data.assetClass || data.buildingType || 'property');
         const propertyId = textValue(data.propertyId || data.propertyPassportId || data.passportId, '');
         const ownerId = textValue(data.ownerId || data.uid, '');
         const propertyPassportId = textValue(data.propertyPassportId || data.passportId || propertyId, '');
-        const documentHash = crypto.createHash('sha256').update(JSON.stringify({ contractId, ownerId, propertyId, contractMode, version: AGREEMENT_VERSION, signedAt: data.signedAt || data.acceptedAt || new Date().toISOString() })).digest('hex');
+        const documentHash = crypto.createHash('sha256').update(JSON.stringify({ contractId, ownerId, propertyId, contractMode, serviceSelectionHash, version: AGREEMENT_VERSION, signedAt: data.signedAt || data.acceptedAt || new Date().toISOString() })).digest('hex');
 
         const doc = new (PDFDocument as any)({
             margin: 50,
@@ -350,6 +402,9 @@ export async function generateContractPdfArtifact(data: any): Promise<CanonicalP
                     propertyPassportId,
                     contractId,
                     contractMode,
+                    serviceSelectionHash,
+                    serviceSelectionMaintenance: String(serviceSelection.maintenance),
+                    serviceSelectionPropertyManagement: String(serviceSelection.propertyManagement),
                     propertyType,
                     language: 'en-ar',
                     version: AGREEMENT_VERSION,
@@ -358,7 +413,7 @@ export async function generateContractPdfArtifact(data: any): Promise<CanonicalP
                     signedBy: textValue(data.signatureName || data.ownerName || data.fullName, ''),
                     signedAt: textValue(data.signedAt || data.acceptedAt || new Date().toISOString(), '')
                 });
-                resolve(artifact);
+                resolve({ ...artifact, serviceSelection, serviceSelectionHash });
             } catch (err) {
                 reject(err);
             }
@@ -416,24 +471,18 @@ export async function generateContractPdfArtifact(data: any): Promise<CanonicalP
         row(doc, 'Payment Plan / خطة السداد', textValue(data.paymentPlan || data.billingFrequency));
         row(doc, 'VAT / ضريبة القيمة المضافة', textValue(data.vatTreatment || 'VAT applies where legally required'));
 
-        section(doc, '4. Contract Mode Matrix', 'مصفوفة نوع العقد');
+        section(doc, '4. Services Selected', 'الخدمات المختارة');
         const details = getScopeDetails(contractMode);
-        if (contractMode === 'MAINTENANCE_ONLY') {
-            para(doc,
-                'Maintenance Only: BIN-GROUPS is responsible only for agreed maintenance services, complaint handling, technician dispatch, service evidence, and maintenance reporting. Rent collection, lease management, tenancy disputes, eviction support, broker management, and tenant financial ledgers are excluded unless separately contracted.',
-                'الصيانة فقط: تكون مسؤولية BIN-GROUPS محصورة في خدمات الصيانة المتفق عليها، وإدارة البلاغات، وتوجيه الفنيين، وتوثيق الخدمة، وتقارير الصيانة. ولا تشمل تحصيل الإيجار أو إدارة عقود الإيجار أو نزاعات المستأجرين أو الإخلاء أو إدارة الوسطاء أو دفاتر حسابات المستأجرين إلا باتفاق منفصل.'
-            );
-        } else if (contractMode === 'PROPERTY_MANAGEMENT_ONLY') {
-            para(doc,
-                'Property Management Only: BIN-GROUPS is responsible only for agreed property administration, occupancy visibility, tenant records, document coordination, owner reporting, and rent/ledger visibility where included. Physical repairs, replacement parts, emergency maintenance, technician dispatch, and contractor costs are excluded unless separately approved and paid.',
-                'إدارة العقار فقط: تكون مسؤولية BIN-GROUPS محصورة في الإدارة العقارية المتفق عليها، ومتابعة الإشغال، وسجلات المستأجرين، وتنسيق المستندات، وتقارير المالك، وعرض الإيجارات والدفعات عند شمولها. ولا تشمل الإصلاحات الفعلية أو قطع الغيار أو الصيانة الطارئة أو توجيه الفنيين أو تكاليف المقاولين إلا بعد الموافقة والسداد بشكل منفصل.'
-            );
-        } else {
-            para(doc,
-                'Maintenance + Property Management: BIN-GROUPS may provide both operational maintenance and property management according to the approved package, service schedule, SLA tier, exclusions, and payment plan.',
-                'الصيانة وإدارة العقار معاً: يجوز لBIN-GROUPS تقديم خدمات الصيانة التشغيلية وإدارة العقار وفقاً للباقة المعتمدة وجدول الخدمات ومستوى الخدمة والاستثناءات وخطة السداد.'
-            );
-        }
+        row(doc, 'Maintenance Services / خدمات الصيانة', serviceSelection.maintenance ? 'SELECTED / مختارة' : 'NOT SELECTED - NOT PROVIDED / غير مختارة - لا تُقدَّم');
+        row(doc, 'Property Management Services / خدمات إدارة العقار', serviceSelection.propertyManagement ? 'SELECTED / مختارة' : 'NOT SELECTED - NOT PROVIDED / غير مختارة - لا تُقدَّم');
+        row(doc, 'Add-ons / الخدمات الإضافية', serviceSelection.addOns.length
+            ? serviceSelection.addOns.map((a) => a.priceAed ? `${a.label} - AED ${a.priceAed.toLocaleString('en-GB')}${a.unit ? ` (${a.unit})` : ''}` : a.label).join('; ')
+            : 'None / لا يوجد');
+        row(doc, 'Selection Reference / مرجع الاختيار', `${serviceSelection.version} | ${serviceSelectionHash.slice(0, 16)}`);
+        para(doc,
+            'Only the services marked SELECTED above, and the matching Schedule(s) to this Agreement, are provided. Any service marked NOT SELECTED is not provided under this Agreement, is not included in the fees, and BIN-GROUPS has no obligation or liability in respect of it. The scope of services may be changed only by a written amendment signed by both Parties (including an OTP-verified digital signature through the BIN-GROUPS platform); messages, verbal requests, tickets or dashboard activity do not change the scope.',
+            'لا تُقدَّم إلا الخدمات المؤشر عليها بأنها مختارة أعلاه والجداول المطابقة لها في هذه الاتفاقية. وأي خدمة مؤشر عليها بأنها غير مختارة لا تُقدَّم بموجب هذه الاتفاقية ولا تشملها الرسوم، ولا تتحمل BIN-GROUPS أي التزام أو مسؤولية بشأنها. ولا يجوز تعديل نطاق الخدمات إلا بملحق كتابي موقع من الطرفين، بما في ذلك التوقيع الرقمي الموثق برمز التحقق عبر منصة BIN-GROUPS، ولا تُعد الرسائل أو الطلبات الشفهية أو البلاغات أو أي نشاط في لوحة التحكم تعديلاً للنطاق.'
+        );
 
         const startForWindow = start || new Date();
         const firstMonthEnds = addMonthsPreservingTime(startForWindow, 1);
@@ -520,6 +569,9 @@ export async function generateContractPdfArtifact(data: any): Promise<CanonicalP
             `${GOVERNING_LAW_EN} This Agreement is prepared in English and Arabic. If there is any conflict, the Arabic text shall prevail before UAE onshore courts unless the Parties agree otherwise in a signed addendum. If any provision is held invalid or unenforceable, the remaining provisions remain in full force. This Agreement, with the accepted quotation and schedules, is the entire agreement between the Parties on its subject matter.`,
             `${GOVERNING_LAW_AR} تم إعداد هذه الاتفاقية باللغتين الإنجليزية والعربية، وفي حال وجود أي تعارض يسود النص العربي أمام محاكم دولة الإمارات (خارج المناطق الحرة المالية) ما لم يتفق الطرفان على خلاف ذلك في ملحق موقع. وإذا قُضي ببطلان أي حكم أو عدم قابليته للتنفيذ تبقى بقية الأحكام سارية بالكامل. وتشكل هذه الاتفاقية مع عرض السعر المقبول وملاحقها كامل الاتفاق بين الطرفين بشأن موضوعها.`
         );
+
+        if (serviceSelection.maintenance) renderMaintenanceSchedule(doc);
+        if (serviceSelection.propertyManagement) renderPropertyManagementSchedule(doc);
 
         section(doc, '15. Digital Acceptance and Signatures', 'القبول الرقمي والتوقيعات');
         para(doc,

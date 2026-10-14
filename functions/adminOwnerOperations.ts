@@ -12,6 +12,7 @@ import {
   type OwnerOnboardingState,
 } from "./ownerOnboardingLifecycle";
 import { formatAedMoney, normalizeAedMoney } from "./shared/aedMoney";
+import { resolveOwnerServiceSelection } from "./ownerServiceSelection";
 import {
   consumeVerifiedContractSignatureOtp,
   validateVerifiedContractSignatureOtp,
@@ -599,6 +600,13 @@ export const ownerSignContractAndQueuePdf = onCall({ cors: true, enforceAppCheck
     assertOwnerFinalSignatureTransition(precheckIntake, contract, precheckPayment.exists ? precheckPayment.data() || {} : null);
   }
 
+  // Reject before taking the signing lease if the Owner's service selection is missing or inconsistent
+  // (the same check runs again inside the PDF engine). PDF/server validation only.
+  try {
+    resolveOwnerServiceSelection({ ...contract, planName: contract.packageName });
+  } catch (error: any) {
+    throw new HttpsError("failed-precondition", String(error?.message || "Service selection is invalid."));
+  }
   const signingAttemptId = db.collection("contracts").doc().id;
   const leaseState = await db.runTransaction(async (transaction) => {
     const leaseSnap = await transaction.get(ref);
@@ -695,7 +703,7 @@ export const ownerSignContractAndQueuePdf = onCall({ cors: true, enforceAppCheck
           updatedAt: ts(),
         }, { merge: true });
       }
-      transaction.set(ref, { status: "PENDING_ACTIVATION", contractStatus: "PENDING_ACTIVATION", activationStatus: "PENDING_PAYMENT_VERIFICATION", paymentStatus: "PENDING_ADMIN_PAYMENT_VERIFICATION", ownerSigned: true, signatureName, signatureStatus: "OWNER_SIGNED", otpVerificationId, otpEvidenceVerified: true, finalContractAccepted: true, finalContractAcceptedQuoteHash: contractHash, invoiceId: invoiceSnapshot.invoiceId, signatureState: { ...(freshContract.signatureState || {}), ownerSigned: true, ownerSignedAt: signedAtDate.toISOString(), ownerSignatureName: signatureName, acceptedQuoteHash: contractHash, pdfGenerated: true, pdfUrl, pdfSha256: pdfArtifact.pdfSha256, pdfStoragePath: pdfArtifact.storagePath, pdfGeneration: pdfArtifact.generation, emailed: false, emailQueued: true, emailQueuedAt: signedAtDate.toISOString() }, signingLease: FieldValue.delete(), signedPdfUrl: pdfUrl, canonicalPdfUrl: pdfUrl, canonicalPdfSha256: pdfArtifact.pdfSha256, canonicalPdfStoragePath: pdfArtifact.storagePath, canonicalPdfGeneration: pdfArtifact.generation, canonicalPdfDocumentHash: pdfArtifact.documentHash, canonicalPdfSource: "SERVER_PDF_ENGINE", ownerSignedAt: ts(), ...termFields, updatedAt: ts() }, { merge: true });
+      transaction.set(ref, { status: "PENDING_ACTIVATION", contractStatus: "PENDING_ACTIVATION", activationStatus: "PENDING_PAYMENT_VERIFICATION", paymentStatus: "PENDING_ADMIN_PAYMENT_VERIFICATION", ownerSigned: true, signatureName, signatureStatus: "OWNER_SIGNED", otpVerificationId, otpEvidenceVerified: true, finalContractAccepted: true, finalContractAcceptedQuoteHash: contractHash, invoiceId: invoiceSnapshot.invoiceId, signatureState: { ...(freshContract.signatureState || {}), ownerSigned: true, ownerSignedAt: signedAtDate.toISOString(), ownerSignatureName: signatureName, acceptedQuoteHash: contractHash, pdfGenerated: true, pdfUrl, pdfSha256: pdfArtifact.pdfSha256, pdfStoragePath: pdfArtifact.storagePath, pdfGeneration: pdfArtifact.generation, emailed: false, emailQueued: true, emailQueuedAt: signedAtDate.toISOString() }, signingLease: FieldValue.delete(), signedPdfUrl: pdfUrl, canonicalPdfUrl: pdfUrl, canonicalPdfSha256: pdfArtifact.pdfSha256, canonicalPdfStoragePath: pdfArtifact.storagePath, canonicalPdfGeneration: pdfArtifact.generation, canonicalPdfDocumentHash: pdfArtifact.documentHash, canonicalPdfSource: "SERVER_PDF_ENGINE", canonicalServiceSelection: pdfArtifact.serviceSelection || null, canonicalServiceSelectionHash: pdfArtifact.serviceSelectionHash || null, ownerSignedAt: ts(), ...termFields, updatedAt: ts() }, { merge: true });
       if (!invoiceSnap.exists) {
         transaction.create(invoiceRef, {
           ...invoiceSnapshot,

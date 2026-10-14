@@ -1453,6 +1453,8 @@ export const generateInstitutionalContract = onCall({ cors: true, enforceAppChec
             canonicalPdfGeneration: artifact.generation,
             canonicalPdfDocumentHash: artifact.documentHash,
             canonicalPdfSource: "SERVER_PDF_ENGINE",
+            canonicalServiceSelection: artifact.serviceSelection || null,
+            canonicalServiceSelectionHash: artifact.serviceSelectionHash || null,
             signedPdfUrl: artifact.pdfUrl,
             updatedAt: FieldValue.serverTimestamp(),
         }, { merge: true });
@@ -1465,7 +1467,8 @@ export const generateInstitutionalContract = onCall({ cors: true, enforceAppChec
             metadata: { propertyId: propertyId || null, pdfSha256: artifact.pdfSha256, storagePath: artifact.storagePath }
         });
         return { status: "SUCCESS", pdfUrl: artifact.pdfUrl, pdfSha256: artifact.pdfSha256 };
-    } catch {
+    } catch (error: any) {
+        if (error?.name === "OwnerServiceSelectionError") throw new HttpsError("failed-precondition", String(error.message));
         throw new HttpsError("internal", "Contract synthesis failed.");
     }
 });
