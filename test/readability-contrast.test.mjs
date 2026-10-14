@@ -77,3 +77,36 @@ test('admin command center shows no developer field names and no light-on-white 
   const shell = read('apps/admin-panel/src/App.tsx');
   assert.doesNotMatch(shell, /fontSize: '0\.6rem', fontWeight: 700, textTransform: 'uppercase' \}\}>\{\(?user\?\.role/);
 });
+
+test('textOnDarkMuted passes AA on the dark tenant canvases', () => {
+  for (const bg of ['#101729', '#0E121A', '#15171C', '#161B24', '#181F2D', '#1F2937', '#111827']) assert.ok(ratio(token('textOnDarkMuted'), bg) >= 4.5, `${token('textOnDarkMuted')} on ${bg}`);
+});
+
+test('dark tenant pages use no sub-AA grey or low-alpha white text', () => {
+  const light = new Set(['TenantSimpleDashboardPage.tsx', 'TenantDashboardLightPage.tsx', 'TenantScheduledServicePage.tsx', 'TenantMarketplacePage.tsx', 'TenantHomeDiscoveryWave2Page.tsx']);
+  const off = [];
+  for (const f of fs.readdirSync(new URL('../src/tenant/pages', import.meta.url))) {
+    if (!f.endsWith('.tsx') || light.has(f)) continue;
+    read(`src/tenant/pages/${f}`).split('\n').forEach((l, i) => {
+      for (const m of l.matchAll(/(?<![a-zA-Z])color: ?'rgba\(255, ?255, ?255, ?0?\.(\d+)\)'/g)) if (Number(`0.${m[1]}`) < 0.7) off.push(`${f}:${i + 1}`);
+      if (/(?<![a-zA-Z])color: ?(binThemeTokens\.textSecondary|'#6[bB]7280')/.test(l)) off.push(`${f}:${i + 1} textSecondary`);
+      if (l.includes('<Chip') && /(?<![a-zA-Z])color: ?'#(fff|FFF|ffffff|FFFFFF)'/.test(l)) off.push(`${f}:${i + 1} white chip text`);
+      if (/bgcolor: ?(binThemeTokens\.textOnDarkMuted|'#A3A9B5')/.test(l)) off.push(`${f}:${i + 1} text token used as a fill`);
+    });
+  }
+  assert.deepEqual(off, []);
+});
+
+test('phone header overflow menu: accessible trigger, 480px breakpoint, RTL-aware, used by every portal header', () => {
+  const menu = read('src/components/PortalHeaderMenu.tsx');
+  assert.match(menu, /\(max-width:480px\)/);
+  for (const a of ['aria-haspopup="menu"', 'aria-expanded=', 'aria-controls=', "aria-label={isRTL ?"]) assert.ok(menu.includes(a), a);
+  assert.match(menu, /const side = isRTL \? 'left' : 'right'/);
+  assert.match(menu, /<Menu\b/); // MUI Menu = arrow keys, Escape, focus return
+  for (const app of ['src/tenant/TenantApp.tsx', 'src/owner/OwnerApp.tsx', 'src/broker/BrokerApp.tsx', 'src/technician/TechnicianApp.tsx']) {
+    const src = read(app);
+    assert.match(src, /usePhoneHeader\(\)/, app);
+    assert.match(src, /isPhoneHeader \? \(/, app);
+    assert.match(src, /<PortalSessionControls role=/, `${app} keeps desktop controls`);
+  }
+});

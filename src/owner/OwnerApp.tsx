@@ -45,6 +45,7 @@ import OwnerPLReportPage from './pages/OwnerPLReportPage';
 import HomeDiscoveryInventoryPage from './pages/HomeDiscoveryInventoryPage';
 import OwnerApprovalCenterPage from './pages/OwnerApprovalCenterPage';
 import PortfolioRenewalsPage from './pages/PortfolioRenewalsPage';
+import PortalHeaderMenu, { usePhoneHeader } from '../components/PortalHeaderMenu';
 
 const OwnerProfileWithReadiness = () => <><OwnerProfileReadinessCard /><OwnerProfilePage /></>;
 
@@ -61,6 +62,7 @@ const OwnerLayout = ({ children }: { children: React.ReactNode }) => {
     const location = useLocation();
     const { isRTL, tx } = useLanguage();
     const label = (key: string, en: string) => tx(key, en);
+    const isPhoneHeader = usePhoneHeader();
     const isHome = location.pathname === '/owner' || location.pathname === '/owner/dashboard';
 
     return (
@@ -76,12 +78,22 @@ const OwnerLayout = ({ children }: { children: React.ReactNode }) => {
                             <Typography variant="caption" sx={{ color: binThemeTokens.goldText, fontWeight: 900, letterSpacing: 1, fontSize: '0.75rem' }}>{label('portal.owner.subtitle', 'NO-CALL PROPERTY OPERATIONS')}</Typography>
                         </Box>
                     </Box>
+                    {isPhoneHeader ? (
+                    <Stack direction={isRTL ? 'row-reverse' : 'row'} alignItems="center" sx={{ flexShrink: 0, gap: 0.5 }}>
+                        <OwnerNotificationBell />
+                        <PortalHeaderMenu role="owner" items={[
+                            { key: 'approvals', label: label('nav.owner_approvals', 'Approvals'), onClick: () => navigate('/owner/approvals') },
+                            { key: 'profile', label: label('nav.owner_profile', 'Owner profile'), onClick: () => navigate('/owner/profile'), icon: UserCircle },
+                        ]} />
+                    </Stack>
+                    ) : (
                     <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} alignItems="center" sx={{ flexShrink: 0 }}>
                         <Button onClick={() => navigate('/owner/approvals')} sx={{ display: { xs: 'none', md: 'inline-flex' }, color: binThemeTokens.goldText, border: `1px solid ${alpha(binThemeTokens.gold, 0.35)}`, borderRadius: 3, fontWeight: 950, bgcolor: '#fff' }}>{label('nav.owner_approvals', 'Approvals')}</Button>
                         <OwnerNotificationBell />
                         <IconButton aria-label={label('nav.owner_profile', 'Owner profile')} onClick={() => navigate('/owner/profile')} sx={{ color: binThemeTokens.textPrimary, bgcolor: alpha(binThemeTokens.platinum, 0.38), borderRadius: 3 }}><SafeIcon icon={UserCircle} size={18} /></IconButton>
                         <PortalSessionControls role="owner" accent={binThemeTokens.goldHover} />
                     </Stack>
+                    )}
                 </Toolbar>
             </AppBar>
             <Container maxWidth="lg" sx={{ py: 4, flexGrow: 1, position: 'relative', zIndex: 1 }}><OwnerActivationGuard><PortalConnectionStrip /><Box sx={{ animation: 'fadeIn 0.5s ease-out' }}>{children}</Box></OwnerActivationGuard></Container>
