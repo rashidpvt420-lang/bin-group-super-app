@@ -2,21 +2,21 @@ import React, { useMemo, useState } from 'react';
 import { Box, Typography, TextField, MenuItem, Slider, ToggleButton, ToggleButtonGroup, Chip, Stack } from '@mui/material';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import {
-  computeLiveQuote, areasForEmirate, areaLabel, LIVE_EMIRATES, LIVE_PROPERTY_TYPES, ZONE_LABEL,
+  computeLiveQuote, areasForEmirate, areaLabel, OTHER_AREA, LIVE_EMIRATES, LIVE_PROPERTY_TYPES, ZONE_LABEL,
   type LiveQuoteState, type LiveContract,
 } from './liveQuoteModel';
 
 const T = {
   en: {
     title: 'Live contract estimate', region: 'Region', scale: 'Scale', amc: 'Annual AMC', mgmt: 'Management fee', total: 'Total contract',
-    emirate: 'Emirate', area: 'Area', type: 'Property type', scope: 'Management scope', standard: 'Standard', luxury: 'Luxury',
+    emirate: 'Emirate', area: 'Area', other: 'Other area (not listed)', bedrooms: 'Bedrooms', studio: 'Studio', type: 'Property type', scope: 'Management scope', standard: 'Standard', luxury: 'Luxury',
     size: 'Size (sqft)', rent: 'Annual rent (AED)', age: 'Property age (years)', contract: 'Contract type',
     fm: 'Maintenance', pm: 'Management', both: 'Combined', remote: 'Remote', none: '—',
     note: 'Pre-visit estimate. The final price is confirmed by the BIN GROUP server quote when you submit.',
   },
   ar: {
     title: 'تقدير العقد المباشر', region: 'المنطقة', scale: 'الحجم', amc: 'عقد الصيانة السنوي', mgmt: 'رسوم الإدارة', total: 'إجمالي العقد',
-    emirate: 'الإمارة', area: 'المنطقة السكنية', type: 'نوع العقار', scope: 'نطاق الإدارة', standard: 'قياسي', luxury: 'فاخر',
+    emirate: 'الإمارة', area: 'المنطقة السكنية', other: 'منطقة أخرى (غير مدرجة)', bedrooms: 'غرف النوم', studio: 'استوديو', type: 'نوع العقار', scope: 'نطاق الإدارة', standard: 'قياسي', luxury: 'فاخر',
     size: 'المساحة (قدم مربع)', rent: 'الإيجار السنوي (درهم)', age: 'عمر العقار (سنوات)', contract: 'نوع العقد',
     fm: 'صيانة', pm: 'إدارة', both: 'مدمج', remote: 'نائية', none: '—',
     note: 'تقدير قبل الزيارة. يتم تأكيد السعر النهائي من خلال عرض سعر خادم BIN GROUP عند الإرسال.',
@@ -32,7 +32,7 @@ export default function LiveQuoteCard({ isRTL = false, initial }: LiveQuoteCardP
   const lang = isRTL ? 'ar' : 'en';
   const t = T[lang];
   const [s, setS] = useState<LiveQuoteState>({
-    emirate: 'Dubai', area: 'Palm Jumeirah', propertyType: 'Villa', scope: 'Standard',
+    emirate: 'Dubai', area: 'Palm Jumeirah', propertyType: 'Villa', bedrooms: 1, scope: 'Standard',
     sqft: 3500, annualRent: 250000, age: 1, contractType: 'BOTH', ...initial,
   });
   const set = (patch: Partial<LiveQuoteState>) => setS((prev) => ({ ...prev, ...patch }));
@@ -58,6 +58,9 @@ export default function LiveQuoteCard({ isRTL = false, initial }: LiveQuoteCardP
         ))}
       </Box>
       <Box sx={{ px: 3, pb: 2 }}>
+        {q.warnings.map((w) => (
+          <Typography key={w} data-testid="live-quote-warning" variant="caption" display="block" sx={{ color: '#F59E0B', fontWeight: 800, mb: 0.5 }}>⚠ {w}</Typography>
+        ))}
         {(q.blockers.length ? q.blockers : q.lines).map((l) => (
           <Typography key={l} data-testid="live-quote-line" variant="caption" display="block" sx={{ color: q.blockers.length ? '#F59E0B' : 'rgba(255,255,255,0.7)' }}>• {l}</Typography>
         ))}
@@ -67,7 +70,7 @@ export default function LiveQuoteCard({ isRTL = false, initial }: LiveQuoteCardP
           onChange={(e) => { const emirate = e.target.value; set({ emirate, area: areasForEmirate(emirate)[0]?.area || '' }); }}>
           {LIVE_EMIRATES.map((e) => <MenuItem key={e.id} value={e.id}>{e[lang]}</MenuItem>)}
         </TextField>
-        <TextField select fullWidth size="small" label={t.area} value={s.area} sx={field} SelectProps={{ renderValue: (v) => { const hit = areas.find((a) => a.area === v); return hit ? areaLabel(hit, lang) : String(v); } }} onChange={(e) => set({ area: e.target.value })}>
+        <TextField select fullWidth size="small" label={t.area} value={s.area} sx={field} SelectProps={{ renderValue: (v) => { const hit = areas.find((a) => a.area === v); return hit ? areaLabel(hit, lang) : v === OTHER_AREA ? t.other : String(v); } }} onChange={(e) => set({ area: e.target.value })}>
           {areas.map((a) => (
             <MenuItem key={a.area} value={a.area} data-testid="live-quote-area-option">
               <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', width: '100%' }}>
@@ -77,6 +80,7 @@ export default function LiveQuoteCard({ isRTL = false, initial }: LiveQuoteCardP
               </Box>
             </MenuItem>
           ))}
+          <MenuItem value={OTHER_AREA} data-testid="live-quote-area-other">{t.other}</MenuItem>
         </TextField>
         <Stack direction="row" sx={{ gap: 1 }}>
           <TextField select fullWidth size="small" label={t.type} value={s.propertyType} sx={field} onChange={(e) => set({ propertyType: e.target.value })}>
@@ -87,6 +91,11 @@ export default function LiveQuoteCard({ isRTL = false, initial }: LiveQuoteCardP
             <MenuItem value="Luxury">{t.luxury}</MenuItem>
           </TextField>
         </Stack>
+        {s.propertyType === 'Apartment' ? (
+          <TextField select fullWidth size="small" label={t.bedrooms} value={s.bedrooms} sx={field} data-testid="live-quote-bedrooms" onChange={(e) => set({ bedrooms: Number(e.target.value) })}>
+            {[0, 1, 2, 3, 4].map((n) => <MenuItem key={n} value={n}>{n === 0 ? t.studio : n === 4 ? '4+' : n}</MenuItem>)}
+          </TextField>
+        ) : null}
         <Box><Typography variant="caption" color="rgba(255,255,255,0.6)">{t.size}: {s.sqft.toLocaleString('en-US')}</Typography>
           <Slider value={s.sqft} min={300} max={50000} step={100} onChange={(_, v) => set({ sqft: v as number })} sx={{ color: binThemeTokens.gold }} /></Box>
         <Box><Typography variant="caption" color="rgba(255,255,255,0.6)">{t.rent}: {s.annualRent.toLocaleString('en-US')}</Typography>

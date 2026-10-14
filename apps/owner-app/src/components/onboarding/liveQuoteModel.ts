@@ -9,6 +9,7 @@ import {
   resolveAgeFactor,
   UAE_AREA_ZONES_2026,
   UAE_PRICING_MATRIX_2026,
+  ZONE_PENDING_FLAG,
 } from '@bin/shared';
 
 export type LiveContract = 'FM_ONLY' | 'PM_ONLY' | 'BOTH';
@@ -18,6 +19,8 @@ export interface LiveQuoteState {
   emirate: string;
   area: string;
   propertyType: string;
+  /** Apartment bedrooms (0 = studio); ignored for other types. */
+  bedrooms: number;
   scope: 'Standard' | 'Luxury';
   sqft: number;
   annualRent: number;
@@ -55,6 +58,9 @@ export function areasForEmirate(emirate: string) {
   return UAE_AREA_ZONES_2026.filter((row) => (emirate === 'Abu Dhabi' ? ABU_DHABI_REGIONS.has(row.region) : row.region === emirate));
 }
 
+/** Dropdown value for an area that is not in the zone map (priced Zone A until admin confirmation). */
+export const OTHER_AREA = 'Other area (not listed)';
+
 /** Arabic display name from the zone CSV aliases when the UI is Arabic (value stays the English area). */
 export function areaLabel(entry: { area: string; aliases: string[] }, lang: LiveLang): string {
   if (lang !== 'ar') return entry.area;
@@ -71,6 +77,7 @@ export function toServerProperty(s: LiveQuoteState) {
     strategy: s.contractType === 'FM_ONLY' ? 'fm' : s.contractType === 'PM_ONLY' ? 'pm' : 'both',
     sqft: s.sqft,
     units: 1,
+    bedrooms: s.propertyType === 'Apartment' ? s.bedrooms : 0,
     annualRent: s.contractType === 'FM_ONLY' ? 0 : s.annualRent,
     age: s.age,
   };
@@ -80,7 +87,7 @@ function engineInput(s: LiveQuoteState, contractType: LiveContract) {
   return {
     assetClassId: resolveAssetClassIdForPropertyType(s.propertyType, s.scope) || '',
     emirate: s.emirate, area: s.area, zone: 'B' as const, contractType,
-    sqft: s.sqft, units: 1, beds: 0, annualRent: contractType === 'FM_ONLY' ? 0 : s.annualRent, annualRevenue: 0,
+    sqft: s.sqft, units: 1, beds: 0, bedrooms: s.propertyType === 'Apartment' ? s.bedrooms : 0, annualRent: contractType === 'FM_ONLY' ? 0 : s.annualRent, annualRevenue: 0,
     propertyAge: s.age, floors: 0, lifts: 0, addOns: [], slaTier: 'standard' as const, paymentPlan: 'annual' as const,
   };
 }
@@ -93,6 +100,8 @@ export interface LiveQuoteResult {
   total: number;
   lines: string[];
   blockers: string[];
+  /** Owner-facing warnings, e.g. zone pending admin confirmation. */
+  warnings: string[];
   regionLabel: string;
   scaleLabel: string;
 }
@@ -113,12 +122,17 @@ export function computeLiveQuote(s: LiveQuoteState, lang: LiveLang = 'en'): Live
   if (region.emirate && s.contractType !== 'PM_ONLY') lines.push(ar ? `عامل المنطقة (${region.emirate}) ×${region.multiplier.toFixed(2)}` : `${region.emirate} regional factor ×${region.multiplier.toFixed(2)}`);
   const ageFactor = resolveAgeFactor(s.age);
   if (ageFactor > 1 && s.contractType !== 'PM_ONLY') lines.push(ar ? `عمر العقار ${s.age} سنة ×${ageFactor.toFixed(2)}` : `Property age ${s.age} years ×${ageFactor.toFixed(2)}`);
+  const bedLine = explain.find((l) => l.startsWith('Apartment bedroom factor'));
+  if (bedLine) { const f = bedLine.match(/factor ([\d.]+)x/)?.[1]; lines.push(ar ? `عدد غرف النوم ${s.bedrooms} ×${f}` : `${s.bedrooms} bedrooms ×${f}`); }
   if (explain.some((l) => l.startsWith('Remote-area'))) lines.push(ar ? `منطقة نائية: +15% على الصيانة` : 'Remote area: +15% on maintenance');
   if (explain.some((l) => l.startsWith('Minimum technical annual contract'))) lines.push(ar ? 'تم تطبيق الحد الأدنى لعقد الصيانة' : 'Minimum maintenance contract applied');
   if (explain.some((l) => l.startsWith('Minimum annual Property Management fee'))) lines.push(ar ? 'تم تطبيق الحد الأدنى لرسوم الإدارة' : 'Minimum management fee applied');
   else if (pm && pm.annualTotal > 0) lines.push(ar ? 'رسوم الإدارة نسبة من الإيجار السنوي' : 'Management fee is a percentage of annual rent');
   const blockers = total.annualTotal > 0 ? [] : total.riskFlags.length ? total.riskFlags : total.pricingExplanation.slice(0, 1);
+  const pending = total.riskFlags.some((f) => f.startsWith(ZONE_PENDING_FLAG));
+  const warnings = pending ? [ar ? 'المنطقة غير مدرجة: تم التسعير كمنطقة مميزة (A) بانتظار تأكيد الإدارة' : 'Zone pending admin confirmation: area not listed, priced as Premium (Zone A) until confirmed'] : [];
   return {
+    warnings,
     maintenance: fm ? money(fm.annualTotal) : null,
     management: pm ? money(pm.annualTotal) : null,
     total: money(total.annualTotal),

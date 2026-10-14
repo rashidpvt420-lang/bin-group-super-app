@@ -31,7 +31,7 @@ test.before(async () => {
 });
 test.after(() => dir && rmSync(dir, { recursive: true, force: true }));
 
-const S = (o) => ({ emirate: 'Dubai', area: 'Palm Jumeirah', propertyType: 'Villa', scope: 'Standard', sqft: 3500, annualRent: 250000, age: 1, contractType: 'BOTH', ...o });
+const S = (o) => ({ emirate: 'Dubai', area: 'Palm Jumeirah', propertyType: 'Villa', bedrooms: 1, scope: 'Standard', sqft: 3500, annualRent: 250000, age: 1, contractType: 'BOTH', ...o });
 
 test('area dropdown is filtered by emirate from the zone CSV', () => {
   const dubai = m.model.areasForEmirate('Dubai').map((a) => a.area);
@@ -67,4 +67,20 @@ test('UI renders three totals, inputs and RTL', () => {
   assert.ok(rtl.includes('dir="rtl"') && rtl.includes('إجمالي العقد'));
   assert.ok(readFileSync(`${D}/BuildingDataStep.tsx`, 'utf8').includes('<LiveQuoteCard'));
   assert.doesNotMatch(readFileSync(`${D}/liveQuoteModel.ts`, 'utf8'), /\* *1\.15|\* *1\.2\b/, 'no client-side pricing math');
+});
+
+test('bedrooms input and zone-pending warning reach card and server identically', () => {
+  for (const bedrooms of [0, 1, 2, 3, 4]) for (const contractType of ['FM_ONLY', 'BOTH']) {
+    const st = S({ propertyType: 'Apartment', bedrooms, sqft: 1200, annualRent: 90000, area: 'Jumeirah Village Circle', contractType });
+    assert.equal(m.model.computeLiveQuote(st).total, m.server.calculateOwnerOnboardingQuote([m.model.toServerProperty(st)], [], Date.now()).portfolioAnnualTotal);
+  }
+  const other = S({ emirate: 'Sharjah', area: m.model.OTHER_AREA, contractType: 'FM_ONLY' });
+  const card = m.model.computeLiveQuote(other);
+  const server = m.server.calculateOwnerOnboardingQuote([m.model.toServerProperty(other)], [], Date.now());
+  assert.equal(card.total, server.portfolioAnnualTotal);
+  assert.ok(card.warnings[0].startsWith('Zone pending admin confirmation'));
+  assert.ok(server.propertyQuotes[0].warnings[0].startsWith('Zone pending admin confirmation'));
+  assert.equal(m.server.calculateOwnerOnboardingQuote([m.model.toServerProperty(S({}))], [], Date.now()).propertyQuotes[0].warnings.length, 0);
+  assert.ok(m.card.render({ initial: { emirate: 'Sharjah', area: m.model.OTHER_AREA } }).includes('live-quote-warning'));
+  assert.ok(m.card.render({ initial: { propertyType: 'Apartment' } }).includes('live-quote-bedrooms'));
 });
