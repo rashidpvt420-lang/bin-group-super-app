@@ -7,6 +7,7 @@ import { ArrowRight, ArrowLeft, Building, Hash, Scaling, Calendar } from 'lucide
 import { useOnboardingStore } from '../../store/onboardingStore';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
+import LiveQuoteCard from './LiveQuoteCard';
 
 const BuildingDataStep: React.FC<{ onNext: () => void; onBack: () => void }> = ({ onNext, onBack }) => {
     const { properties, updateProperty } = useOnboardingStore();
@@ -26,6 +27,8 @@ const BuildingDataStep: React.FC<{ onNext: () => void; onBack: () => void }> = (
                     {tx('onboarding.building_desc', 'Quantify the structural scale to calibrate maintenance resources.')}
                 </Typography>
             </Box>
+
+            <LiveQuoteCard isRTL={isRTL} />
 
             <Container maxWidth="md">
                 <Paper sx={{ p: 6, borderRadius: 6, bgcolor: 'rgba(22, 22, 24, 0.6)', border: '1px solid rgba(255,255,255,0.05)' }}>
