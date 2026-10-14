@@ -616,8 +616,11 @@ export function calculateUaeQuote2026(input: Partial<QuoteInput> | null | undefi
   if (!emirateResolution.input) riskFlags.push('Emirate confirmation required');
   else if (!emirateResolution.emirate) riskFlags.push(`Emirate '${safeInput.emirate}' is not recognised; regional factor not applied, confirmation required`);
   else if (emirateResolution.viaCity) pricingExplanation.push(`Priced under the ${emirateResolution.emirate} regional factor.`);
-  const emirateAdjustedQuote = zoneAdjustedQuote * emirateMultiplier;
+  const factoredQuote = zoneAdjustedQuote * emirateMultiplier;
   if (emirateMultiplier !== 1) pricingExplanation.push(`Regional technical-service factor ${emirateMultiplier}x applied for ${emirateResolution.emirate || safeInput.emirate}.`);
+  // Founder decision 2026-10-14: the asset-class minimum annual contract must still hold after zone and emirate factors.
+  const emirateAdjustedQuote = Math.max(factoredQuote, assetClass.minimumAnnualContract);
+  if (emirateAdjustedQuote > factoredQuote) pricingExplanation.push(`Minimum technical annual contract of AED ${assetClass.minimumAnnualContract} re-applied after zone and regional factors.`);
 
   const ageMultiplier = safeInput.propertyAge > 20 ? 1.2 : safeInput.propertyAge > 10 ? 1.12 : safeInput.propertyAge > 5 ? 1.06 : 1;
   if (ageMultiplier > 1) pricingExplanation.push(`Asset-age factor ${ageMultiplier}x applied for ${safeInput.propertyAge} years.`);

@@ -27,7 +27,7 @@ test.before(async () => {
 });
 test.after(() => { if (tempDir) rmSync(tempDir, { recursive: true, force: true }); });
 
-const villa = (emirate) => ({ assetClassId: 'villa-std', emirate, zone: 'B', contractType: 'FM_ONLY', units: 1, propertyAge: 1, slaTier: 'standard', paymentPlan: 'annual' });
+const villa = (emirate) => ({ assetClassId: 'villa-std', emirate, zone: 'B', contractType: 'FM_ONLY', units: 3, propertyAge: 1, slaTier: 'standard', paymentPlan: 'annual' });
 
 for (const path of ENGINE_COPIES) {
   test(`${path}: Al Ain is its own region (0.92x), not Abu Dhabi city`, () => {

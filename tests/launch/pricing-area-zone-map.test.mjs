@@ -57,12 +57,12 @@ for (const path of ENGINE_COPIES) {
   test(`${path}: an Al Ain area gets the Al Ain factor even when the emirate is Abu Dhabi`, () => {
     const { calculateUaeQuote2026 } = modules[path];
     for (const [emirate, area] of [['Abu Dhabi', 'Al Jimi'], ['Abu Dhabi', 'الجيمي'], ['abuDhabi', 'Al Towaya'], ['Alain', 'Al Muwaiji']]) {
-      const quote = calculateUaeQuote2026(base({ emirate, area }));
+      const quote = calculateUaeQuote2026(base({ emirate, area, units: 3 })); // above the minimum
       assert.equal(quote.emirateAdjustedQuote, quote.zoneAdjustedQuote * 0.92, `${emirate}/${area}`);
     }
     const jimi = calculateUaeQuote2026(base({ emirate: 'Abu Dhabi', area: 'Al Jimi' }));
     assert.equal(jimi.zoneAdjustedQuote, jimi.baseQuote * 0.9); // Zone C
-    const cityOnly = calculateUaeQuote2026(base({ emirate: 'Abu Dhabi', area: 'Al Ain' }));
+    const cityOnly = calculateUaeQuote2026(base({ emirate: 'Abu Dhabi', area: 'Al Ain', units: 3 }));
     assert.equal(cityOnly.emirateAdjustedQuote, cityOnly.zoneAdjustedQuote * 0.92);
     const reem = calculateUaeQuote2026(base({ emirate: 'Abu Dhabi', area: 'Reem Island' }));
     assert.equal(reem.emirateAdjustedQuote, reem.zoneAdjustedQuote * 1.1);
@@ -99,3 +99,14 @@ test('server onboarding quote passes the owner area through to the zone map', ()
   const jvc = calculateOwnerOnboardingQuote([prop('JVC')], [], 1_800_000_000_000);
   assert.equal(Math.round(palm.portfolioAnnualTotal / jvc.portfolioAnnualTotal * 100) / 100, 1.2);
 });
+
+for (const path of ENGINE_COPIES) {
+  test(`${path}: minimum annual contract still holds after zone and emirate factors`, () => {
+    const { calculateUaeQuote2026 } = modules[path];
+    const jimi = calculateUaeQuote2026(base({ emirate: 'Abu Dhabi', area: 'Al Jimi' }));
+    assert.equal(Math.round(jimi.annualTotal), 3500); // 3,500 x 0.90 x 0.92 = 2,898 -> floored to 3,500
+    assert.ok(jimi.pricingExplanation.some((line) => line.includes('re-applied after zone and regional factors')));
+    const palm = calculateUaeQuote2026(base({ emirate: 'Dubai', area: 'Palm Jumeirah' }));
+    assert.equal(Math.round(palm.annualTotal), 4830); // 3,500 x 1.20 x 1.15, above the minimum
+  });
+}
