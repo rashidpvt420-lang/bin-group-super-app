@@ -330,6 +330,22 @@ function matrixRegionFactor(label: string): number {
   return entry ? finiteNumber(entry.value, 1) : 1;
 }
 
+/** Asset-age factor from UAE_PRICING_MATRIX_2026.ageFactors (founder decision 2026-10-14). */
+export function resolveAgeFactor(propertyAge: unknown): number {
+  const age = finiteNumber(propertyAge, 0);
+  let factor = 1;
+  for (const band of UAE_PRICING_MATRIX_2026.ageFactors) if (age > band.minAgeExclusive) factor = band.multiplier;
+  return factor;
+}
+
+/** Minimum annual Property Management fee for the resolved pricing region (founder decision 2026-10-14). */
+export function resolveMinimumManagementFee(region: string | null): number {
+  const rows = UAE_PRICING_MATRIX_2026.minimumManagementFee;
+  const exact = region ? rows.find((row) => row.regions.includes(region)) : undefined;
+  const fallback = rows.find((row) => row.regions.includes('*'));
+  return finiteNumber((exact || fallback)?.amount, 0);
+}
+
 /** Regional factor from UAE_PRICING_MATRIX_2026.emirateMultipliers (the table the Admin page shows). */
 export function resolveEmirateMultiplier(emirate: string, area?: string): { input: string; emirate: string | null; multiplier: number; viaCity: boolean } {
   const input = String(emirate || '').trim();
@@ -540,9 +556,12 @@ export function calculateUaeQuote2026(input: Partial<QuoteInput> | null | undefi
   if (safeInput.contractType === 'PM_ONLY') {
     if (managementRate <= 0) return zeroQuote(`${assetClass.label} does not support an automatic Property Management Only quote.`, safeInput.slaTier, ['PM_NOT_SUPPORTED']);
     if (managedRevenue <= 0) return zeroQuote('Annual rent / managed revenue is required for Property Management pricing; no placeholder revenue is assumed.', safeInput.slaTier, ['ANNUAL_RENT_REQUIRED']);
-    const baseQuote = managedRevenue * (managementRate / 100);
+    const percentageFee = managedRevenue * (managementRate / 100);
+    const pmMinimum = resolveMinimumManagementFee(resolveEmirateMultiplier(safeInput.emirate, safeInput.area).emirate);
+    const baseQuote = Math.max(percentageFee, pmMinimum);
     const annualTotal = baseQuote * (1 + planSurcharge(safeInput.paymentPlan));
     pricingExplanation.push(`${safeInput.ratesVerified ? 'Admin-verified' : 'Pre-visit baseline'} ${managementRate}% property-management fee applied once to AED ${Math.round(managedRevenue)} annual rent / managed revenue.`);
+    if (baseQuote > percentageFee) pricingExplanation.push(`Minimum annual Property Management fee of AED ${pmMinimum} applied.`);
     pricingExplanation.push('No technical FM add-ons, sqft multiplier, unit multiplier, age premium or regional premium is applied to PM-only pricing.');
     addPaymentExplanation(safeInput.paymentPlan, pricingExplanation);
     return {
@@ -622,7 +641,7 @@ export function calculateUaeQuote2026(input: Partial<QuoteInput> | null | undefi
   const emirateAdjustedQuote = Math.max(factoredQuote, assetClass.minimumAnnualContract);
   if (emirateAdjustedQuote > factoredQuote) pricingExplanation.push(`Minimum technical annual contract of AED ${assetClass.minimumAnnualContract} re-applied after zone and regional factors.`);
 
-  const ageMultiplier = safeInput.propertyAge > 20 ? 1.2 : safeInput.propertyAge > 10 ? 1.12 : safeInput.propertyAge > 5 ? 1.06 : 1;
+  const ageMultiplier = resolveAgeFactor(safeInput.propertyAge);
   if (ageMultiplier > 1) pricingExplanation.push(`Asset-age factor ${ageMultiplier}x applied for ${safeInput.propertyAge} years.`);
 
   let complexityPremiumPercent = 0;
@@ -651,12 +670,19 @@ export function calculateUaeQuote2026(input: Partial<QuoteInput> | null | undefi
   const addOnDriver = assetClass.pricingUnit === 'facility' ? { ...safeInput, units: 1, offices: 0, shops: 0 } : safeInput;
   const addOnTotal = calculateAddOnAnnualValue(mergedAddOns, addOnDriver);
   monthlyListExplanation(mergedAddOns, pricingExplanation);
-  const technicalSubtotal = (emirateAdjustedQuote * ageMultiplier * appliedSlaMultiplier) + complexityPremium + addOnTotal;
+  // Founder decision 2026-10-14: +15% on maintenance for remote areas (Al Dhafra region, Hatta).
+  const isRemote = Boolean(areaZone.entry?.remote) || emirateResolution.emirate === 'Al Dhafra';
+  const remoteMultiplier = isRemote ? finiteNumber(UAE_PRICING_MATRIX_2026.remoteAreaSurcharge.multiplier, 1) : 1;
+  if (remoteMultiplier !== 1) pricingExplanation.push(`Remote-area maintenance surcharge ${remoteMultiplier}x applied.`);
+  const technicalSubtotal = ((emirateAdjustedQuote * ageMultiplier * appliedSlaMultiplier) + complexityPremium + addOnTotal) * remoteMultiplier;
 
   let managementFee = 0;
   if (safeInput.contractType === 'BOTH') {
     if (managedRevenue <= 0) return zeroQuote('Annual rent / managed revenue is required for a combined Maintenance + Property Management quote; no placeholder revenue is assumed.', safeInput.slaTier, ['ANNUAL_RENT_REQUIRED']);
-    managementFee = managedRevenue * (managementRate / 100);
+    const percentageFee = managedRevenue * (managementRate / 100);
+    const pmMinimum = resolveMinimumManagementFee(emirateResolution.emirate);
+    managementFee = Math.max(percentageFee, pmMinimum);
+    if (managementFee > percentageFee) pricingExplanation.push(`Minimum annual Property Management fee of AED ${pmMinimum} applied.`);
     pricingExplanation.push(`${safeInput.ratesVerified ? 'Admin-verified' : 'Pre-visit baseline'} ${managementRate}% property-management fee (AED ${Math.round(managementFee)}) added once from ${safeInput.ratesVerified ? 'Admin-verified' : 'Owner-declared'} annual rent / managed revenue.`);
   }
 

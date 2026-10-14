@@ -7,6 +7,8 @@ export interface UaeAreaZoneEntry {
   zone: 'A' | 'B' | 'C';
   segment: string;
   confidence: string;
+  /** Founder decision 2026-10-14: remote areas carry the remote-area maintenance surcharge. */
+  remote: boolean;
   aliases: string[];
 }
 
@@ -17,6 +19,7 @@ export const UAE_AREA_ZONES_2026: ReadonlyArray<UaeAreaZoneEntry> = [
     "zone": "A",
     "segment": "residential",
     "confidence": "high",
+    "remote": false,
     "aliases": [
       "Palm Jumeirah",
       "Palm",
@@ -29,6 +32,7 @@ export const UAE_AREA_ZONES_2026: ReadonlyArray<UaeAreaZoneEntry> = [
     "zone": "A",
     "segment": "residential",
     "confidence": "high",
+    "remote": false,
     "aliases": [
       "Downtown Dubai",
       "Burj Khalifa",
@@ -42,6 +46,7 @@ export const UAE_AREA_ZONES_2026: ReadonlyArray<UaeAreaZoneEntry> = [
     "zone": "A",
     "segment": "residential",
     "confidence": "high",
+    "remote": false,
     "aliases": [
       "Dubai Marina",
       "Marsa Dubai",
@@ -55,6 +60,7 @@ export const UAE_AREA_ZONES_2026: ReadonlyArray<UaeAreaZoneEntry> = [
     "zone": "A",
     "segment": "residential",
     "confidence": "medium",
+    "remote": false,
     "aliases": [
       "Dubai Creek Harbour",
       "Creek Harbour",
@@ -67,6 +73,7 @@ export const UAE_AREA_ZONES_2026: ReadonlyArray<UaeAreaZoneEntry> = [
     "zone": "A",
     "segment": "residential",
     "confidence": "medium",
+    "remote": false,
     "aliases": [
       "Dubai Hills Estate",
       "Dubai Hills",
@@ -79,6 +86,7 @@ export const UAE_AREA_ZONES_2026: ReadonlyArray<UaeAreaZoneEntry> = [
     "zone": "A",
     "segment": "residential (villa)",
     "confidence": "medium",
+    "remote": false,
     "aliases": [
       "Jumeirah Park / The Meadows / Arabian Ranches / Tilal Al Ghaf",
       "Jumeirah Park",
@@ -95,6 +103,7 @@ export const UAE_AREA_ZONES_2026: ReadonlyArray<UaeAreaZoneEntry> = [
     "zone": "B",
     "segment": "residential/commercial",
     "confidence": "high",
+    "remote": false,
     "aliases": [
       "Business Bay",
       "الخليج التجاري"
@@ -106,6 +115,7 @@ export const UAE_AREA_ZONES_2026: ReadonlyArray<UaeAreaZoneEntry> = [
     "zone": "B",
     "segment": "residential/commercial",
     "confidence": "medium",
+    "remote": false,
     "aliases": [
       "Jumeirah Lake Towers",
       "JLT",
@@ -118,6 +128,7 @@ export const UAE_AREA_ZONES_2026: ReadonlyArray<UaeAreaZoneEntry> = [
     "zone": "B",
     "segment": "residential",
     "confidence": "high",
+    "remote": false,
     "aliases": [
       "Jumeirah Village Circle",
       "JVC",
@@ -131,6 +142,7 @@ export const UAE_AREA_ZONES_2026: ReadonlyArray<UaeAreaZoneEntry> = [
     "zone": "C",
     "segment": "residential",
     "confidence": "medium",
+    "remote": false,
     "aliases": [
       "Al Furjan / Jebel Ali First",
       "Al Furjan",
@@ -145,6 +157,7 @@ export const UAE_AREA_ZONES_2026: ReadonlyArray<UaeAreaZoneEntry> = [
     "zone": "C",
     "segment": "residential",
     "confidence": "medium",
+    "remote": false,
     "aliases": [
       "Dubai Silicon Oasis",
       "DSO",
@@ -158,6 +171,7 @@ export const UAE_AREA_ZONES_2026: ReadonlyArray<UaeAreaZoneEntry> = [
     "zone": "C",
     "segment": "residential",
     "confidence": "high",
+    "remote": false,
     "aliases": [
       "International City",
       "Al Warsan First",
@@ -170,6 +184,7 @@ export const UAE_AREA_ZONES_2026: ReadonlyArray<UaeAreaZoneEntry> = [
     "zone": "C",
     "segment": "residential",
     "confidence": "medium",
+    "remote": false,
     "aliases": [
       "Discovery Gardens",
       "ديسكفري جاردنز"
@@ -181,6 +196,7 @@ export const UAE_AREA_ZONES_2026: ReadonlyArray<UaeAreaZoneEntry> = [
     "zone": "C",
     "segment": "residential",
     "confidence": "medium",
+    "remote": false,
     "aliases": [
       "IMPZ / Dubai Production City",
       "IMPZ",
@@ -193,6 +209,7 @@ export const UAE_AREA_ZONES_2026: ReadonlyArray<UaeAreaZoneEntry> = [
     "zone": "C",
     "segment": "residential/industrial",
     "confidence": "medium",
+    "remote": false,
     "aliases": [
       "Dubai Investment Park",
       "DIP",
@@ -205,6 +222,7 @@ export const UAE_AREA_ZONES_2026: ReadonlyArray<UaeAreaZoneEntry> = [
     "zone": "C",
     "segment": "residential",
     "confidence": "medium",
+    "remote": false,
     "aliases": [
       "Al Baraha / Abu Hail / Al Muraqqabat",
       "Al Baraha",
@@ -220,6 +238,7 @@ export const UAE_AREA_ZONES_2026: ReadonlyArray<UaeAreaZoneEntry> = [
     "zone": "C",
     "segment": "industrial",
     "confidence": "low",
+    "remote": false,
     "aliases": [
       "Al Quoz / Jebel Ali Industrial / Ras Al Khor Industrial",
       "Al Quoz",
@@ -235,6 +254,7 @@ export const UAE_AREA_ZONES_2026: ReadonlyArray<UaeAreaZoneEntry> = [
     "zone": "A",
     "segment": "residential",
     "confidence": "high",
+    "remote": false,
     "aliases": [
       "Saadiyat Island",
       "السعديات"
@@ -246,6 +266,7 @@ export const UAE_AREA_ZONES_2026: ReadonlyArray<UaeAreaZoneEntry> = [
     "zone": "A",
     "segment": "residential",
     "confidence": "high",
+    "remote": false,
     "aliases": [
       "Yas Island",
       "جزيرة ياس"
@@ -257,6 +278,7 @@ export const UAE_AREA_ZONES_2026: ReadonlyArray<UaeAreaZoneEntry> = [
     "zone": "B",
     "segment": "residential",
     "confidence": "high",
+    "remote": false,
     "aliases": [
       "Al Reem Island",
       "Reem",
@@ -269,6 +291,7 @@ export const UAE_AREA_ZONES_2026: ReadonlyArray<UaeAreaZoneEntry> = [
     "zone": "B",
     "segment": "residential",
     "confidence": "high",
+    "remote": false,
     "aliases": [
       "Al Raha Beach",
       "شاطئ الراحة"
@@ -280,6 +303,7 @@ export const UAE_AREA_ZONES_2026: ReadonlyArray<UaeAreaZoneEntry> = [
     "zone": "B",
     "segment": "residential",
     "confidence": "medium",
+    "remote": false,
     "aliases": [
       "Masdar City",
       "مدينة مصدر"
@@ -291,6 +315,7 @@ export const UAE_AREA_ZONES_2026: ReadonlyArray<UaeAreaZoneEntry> = [
     "zone": "B",
     "segment": "residential (villa)",
     "confidence": "medium",
+    "remote": false,
     "aliases": [
       "Al Raha Gardens",
       "حدائق الراحة"
@@ -302,6 +327,7 @@ export const UAE_AREA_ZONES_2026: ReadonlyArray<UaeAreaZoneEntry> = [
     "zone": "B",
     "segment": "residential (villa)",
     "confidence": "low",
+    "remote": false,
     "aliases": [
       "Khalifa City",
       "KCA",
@@ -314,6 +340,7 @@ export const UAE_AREA_ZONES_2026: ReadonlyArray<UaeAreaZoneEntry> = [
     "zone": "B",
     "segment": "residential",
     "confidence": "low",
+    "remote": false,
     "aliases": [
       "Mohamed Bin Zayed City",
       "MBZ",
@@ -326,6 +353,7 @@ export const UAE_AREA_ZONES_2026: ReadonlyArray<UaeAreaZoneEntry> = [
     "zone": "C",
     "segment": "residential",
     "confidence": "high",
+    "remote": false,
     "aliases": [
       "Al Reef",
       "Al Reef Downtown",
@@ -338,6 +366,7 @@ export const UAE_AREA_ZONES_2026: ReadonlyArray<UaeAreaZoneEntry> = [
     "zone": "C",
     "segment": "residential",
     "confidence": "medium",
+    "remote": false,
     "aliases": [
       "Al Ghadeer",
       "الغدير"
@@ -349,6 +378,7 @@ export const UAE_AREA_ZONES_2026: ReadonlyArray<UaeAreaZoneEntry> = [
     "zone": "C",
     "segment": "residential",
     "confidence": "medium",
+    "remote": false,
     "aliases": [
       "Baniyas",
       "بني ياس"
@@ -360,6 +390,7 @@ export const UAE_AREA_ZONES_2026: ReadonlyArray<UaeAreaZoneEntry> = [
     "zone": "C",
     "segment": "industrial",
     "confidence": "low",
+    "remote": false,
     "aliases": [
       "Mussafah / ICAD / KIZAD",
       "Mussafah",
@@ -375,6 +406,7 @@ export const UAE_AREA_ZONES_2026: ReadonlyArray<UaeAreaZoneEntry> = [
     "zone": "B",
     "segment": "residential (villa)",
     "confidence": "medium",
+    "remote": false,
     "aliases": [
       "Al Towayya",
       "Al Towaya",
@@ -388,6 +420,7 @@ export const UAE_AREA_ZONES_2026: ReadonlyArray<UaeAreaZoneEntry> = [
     "zone": "C",
     "segment": "residential",
     "confidence": "medium",
+    "remote": false,
     "aliases": [
       "Al Jimi",
       "الجيمي"
@@ -399,6 +432,7 @@ export const UAE_AREA_ZONES_2026: ReadonlyArray<UaeAreaZoneEntry> = [
     "zone": "C",
     "segment": "residential",
     "confidence": "medium",
+    "remote": false,
     "aliases": [
       "Town Centre / Al Muwaiji / Al Khabisi / Zakher / Al Masoudi / Al Manaseer",
       "Town Centre",
@@ -419,6 +453,7 @@ export const UAE_AREA_ZONES_2026: ReadonlyArray<UaeAreaZoneEntry> = [
     "zone": "C",
     "segment": "industrial",
     "confidence": "low",
+    "remote": false,
     "aliases": [
       "Al Ain Industrial (Sanaiya)",
       "Al Ain Industrial",
@@ -433,6 +468,7 @@ export const UAE_AREA_ZONES_2026: ReadonlyArray<UaeAreaZoneEntry> = [
     "zone": "C",
     "segment": "residential",
     "confidence": "low",
+    "remote": true,
     "aliases": [
       "Madinat Zayed / Ruwais / Ghayathi / Liwa",
       "Madinat Zayed",
@@ -450,6 +486,7 @@ export const UAE_AREA_ZONES_2026: ReadonlyArray<UaeAreaZoneEntry> = [
     "zone": "A",
     "segment": "residential",
     "confidence": "high",
+    "remote": false,
     "aliases": [
       "Aljada",
       "الجادة"
@@ -461,6 +498,7 @@ export const UAE_AREA_ZONES_2026: ReadonlyArray<UaeAreaZoneEntry> = [
     "zone": "A",
     "segment": "residential",
     "confidence": "high",
+    "remote": false,
     "aliases": [
       "Muwaileh",
       "مويلح"
@@ -472,6 +510,7 @@ export const UAE_AREA_ZONES_2026: ReadonlyArray<UaeAreaZoneEntry> = [
     "zone": "A",
     "segment": "residential",
     "confidence": "high",
+    "remote": false,
     "aliases": [
       "Al Khan",
       "الخان"
@@ -483,6 +522,7 @@ export const UAE_AREA_ZONES_2026: ReadonlyArray<UaeAreaZoneEntry> = [
     "zone": "A",
     "segment": "residential (villa)",
     "confidence": "medium",
+    "remote": false,
     "aliases": [
       "Tilal City",
       "تلال"
@@ -494,6 +534,7 @@ export const UAE_AREA_ZONES_2026: ReadonlyArray<UaeAreaZoneEntry> = [
     "zone": "B",
     "segment": "residential",
     "confidence": "high",
+    "remote": false,
     "aliases": [
       "Al Majaz",
       "المجاز"
@@ -505,6 +546,7 @@ export const UAE_AREA_ZONES_2026: ReadonlyArray<UaeAreaZoneEntry> = [
     "zone": "B",
     "segment": "residential",
     "confidence": "medium",
+    "remote": false,
     "aliases": [
       "Al Taawun",
       "التعاون"
@@ -516,6 +558,7 @@ export const UAE_AREA_ZONES_2026: ReadonlyArray<UaeAreaZoneEntry> = [
     "zone": "B",
     "segment": "residential",
     "confidence": "medium",
+    "remote": false,
     "aliases": [
       "Al Nahda (Sharjah)",
       "Al Nahda",
@@ -529,6 +572,7 @@ export const UAE_AREA_ZONES_2026: ReadonlyArray<UaeAreaZoneEntry> = [
     "zone": "C",
     "segment": "residential",
     "confidence": "medium",
+    "remote": false,
     "aliases": [
       "Al Qasimia",
       "القاسمية"
@@ -540,6 +584,7 @@ export const UAE_AREA_ZONES_2026: ReadonlyArray<UaeAreaZoneEntry> = [
     "zone": "C",
     "segment": "industrial",
     "confidence": "low",
+    "remote": false,
     "aliases": [
       "Sharjah Industrial Areas 1-18 / SAIF Zone",
       "Sharjah Industrial Areas 1-18",
@@ -553,6 +598,7 @@ export const UAE_AREA_ZONES_2026: ReadonlyArray<UaeAreaZoneEntry> = [
     "zone": "A",
     "segment": "residential",
     "confidence": "medium",
+    "remote": false,
     "aliases": [
       "Al Zorah",
       "الزوراء"
@@ -564,6 +610,7 @@ export const UAE_AREA_ZONES_2026: ReadonlyArray<UaeAreaZoneEntry> = [
     "zone": "B",
     "segment": "residential",
     "confidence": "medium",
+    "remote": false,
     "aliases": [
       "Ajman Corniche",
       "كورنيش عجمان"
@@ -575,6 +622,7 @@ export const UAE_AREA_ZONES_2026: ReadonlyArray<UaeAreaZoneEntry> = [
     "zone": "B",
     "segment": "residential (villa)",
     "confidence": "medium",
+    "remote": false,
     "aliases": [
       "Al Yasmeen",
       "الياسمين"
@@ -586,6 +634,7 @@ export const UAE_AREA_ZONES_2026: ReadonlyArray<UaeAreaZoneEntry> = [
     "zone": "B",
     "segment": "residential",
     "confidence": "high",
+    "remote": false,
     "aliases": [
       "Al Rashidiya",
       "الراشدية"
@@ -597,6 +646,7 @@ export const UAE_AREA_ZONES_2026: ReadonlyArray<UaeAreaZoneEntry> = [
     "zone": "B",
     "segment": "residential",
     "confidence": "high",
+    "remote": false,
     "aliases": [
       "Al Nuaimiya",
       "النعيمية"
@@ -608,6 +658,7 @@ export const UAE_AREA_ZONES_2026: ReadonlyArray<UaeAreaZoneEntry> = [
     "zone": "B",
     "segment": "residential",
     "confidence": "medium",
+    "remote": false,
     "aliases": [
       "Al Jurf / Al Rawda / Al Mowaihat",
       "Al Jurf",
@@ -624,6 +675,7 @@ export const UAE_AREA_ZONES_2026: ReadonlyArray<UaeAreaZoneEntry> = [
     "zone": "C",
     "segment": "residential",
     "confidence": "medium",
+    "remote": false,
     "aliases": [
       "Emirates City",
       "مدينة الإمارات"
@@ -635,6 +687,7 @@ export const UAE_AREA_ZONES_2026: ReadonlyArray<UaeAreaZoneEntry> = [
     "zone": "C",
     "segment": "residential",
     "confidence": "medium",
+    "remote": false,
     "aliases": [
       "Ajman Downtown",
       "داون تاون عجمان"
@@ -646,6 +699,7 @@ export const UAE_AREA_ZONES_2026: ReadonlyArray<UaeAreaZoneEntry> = [
     "zone": "C",
     "segment": "residential",
     "confidence": "medium",
+    "remote": false,
     "aliases": [
       "Garden City",
       "جاردن سيتي"
@@ -657,6 +711,7 @@ export const UAE_AREA_ZONES_2026: ReadonlyArray<UaeAreaZoneEntry> = [
     "zone": "C",
     "segment": "industrial",
     "confidence": "low",
+    "remote": false,
     "aliases": [
       "Ajman Industrial Area",
       "الجرف الصناعية"
@@ -668,6 +723,7 @@ export const UAE_AREA_ZONES_2026: ReadonlyArray<UaeAreaZoneEntry> = [
     "zone": "A",
     "segment": "residential",
     "confidence": "high",
+    "remote": false,
     "aliases": [
       "Al Marjan Island",
       "Marjan",
@@ -681,6 +737,7 @@ export const UAE_AREA_ZONES_2026: ReadonlyArray<UaeAreaZoneEntry> = [
     "zone": "A",
     "segment": "residential",
     "confidence": "high",
+    "remote": false,
     "aliases": [
       "Al Hamra Village",
       "الحمرا"
@@ -692,6 +749,7 @@ export const UAE_AREA_ZONES_2026: ReadonlyArray<UaeAreaZoneEntry> = [
     "zone": "A",
     "segment": "residential",
     "confidence": "low",
+    "remote": false,
     "aliases": [
       "Mina Al Arab",
       "ميناء العرب"
@@ -703,6 +761,7 @@ export const UAE_AREA_ZONES_2026: ReadonlyArray<UaeAreaZoneEntry> = [
     "zone": "B",
     "segment": "residential",
     "confidence": "low",
+    "remote": false,
     "aliases": [
       "Julphar Towers / RAK City (Al Nakheel, Dafan)",
       "Julphar Towers",
@@ -718,6 +777,7 @@ export const UAE_AREA_ZONES_2026: ReadonlyArray<UaeAreaZoneEntry> = [
     "zone": "C",
     "segment": "industrial",
     "confidence": "low",
+    "remote": false,
     "aliases": [
       "Al Ghail / Al Hamra Industrial",
       "Al Ghail",
@@ -731,6 +791,7 @@ export const UAE_AREA_ZONES_2026: ReadonlyArray<UaeAreaZoneEntry> = [
     "zone": "B",
     "segment": "residential",
     "confidence": "low",
+    "remote": false,
     "aliases": [
       "UAQ Marina",
       "مارينا أم القيوين"
@@ -742,6 +803,7 @@ export const UAE_AREA_ZONES_2026: ReadonlyArray<UaeAreaZoneEntry> = [
     "zone": "C",
     "segment": "residential",
     "confidence": "low",
+    "remote": false,
     "aliases": [
       "Al Salamah",
       "السلامة"
@@ -753,6 +815,7 @@ export const UAE_AREA_ZONES_2026: ReadonlyArray<UaeAreaZoneEntry> = [
     "zone": "C",
     "segment": "residential",
     "confidence": "low",
+    "remote": false,
     "aliases": [
       "Al Raas / Umm Al Thaoub / Al Ramla",
       "Al Raas",
@@ -768,6 +831,7 @@ export const UAE_AREA_ZONES_2026: ReadonlyArray<UaeAreaZoneEntry> = [
     "zone": "C",
     "segment": "industrial",
     "confidence": "low",
+    "remote": false,
     "aliases": [
       "Emirates Modern Industrial Area",
       "EMIA"
@@ -779,6 +843,7 @@ export const UAE_AREA_ZONES_2026: ReadonlyArray<UaeAreaZoneEntry> = [
     "zone": "B",
     "segment": "residential",
     "confidence": "low",
+    "remote": false,
     "aliases": [
       "Al Faseel",
       "الفصيل"
@@ -790,6 +855,7 @@ export const UAE_AREA_ZONES_2026: ReadonlyArray<UaeAreaZoneEntry> = [
     "zone": "B",
     "segment": "residential",
     "confidence": "low",
+    "remote": false,
     "aliases": [
       "Al Gurfa",
       "الغرفة"
@@ -801,6 +867,7 @@ export const UAE_AREA_ZONES_2026: ReadonlyArray<UaeAreaZoneEntry> = [
     "zone": "C",
     "segment": "residential",
     "confidence": "low",
+    "remote": false,
     "aliases": [
       "Dibba Al-Fujairah",
       "دبا الفجيرة"
@@ -812,9 +879,22 @@ export const UAE_AREA_ZONES_2026: ReadonlyArray<UaeAreaZoneEntry> = [
     "zone": "C",
     "segment": "residential",
     "confidence": "low",
+    "remote": false,
     "aliases": [
       "Sakamkam",
       "سكمكم"
+    ]
+  },
+  {
+    "region": "Dubai",
+    "area": "Hatta",
+    "zone": "B",
+    "segment": "residential",
+    "confidence": "low",
+    "remote": true,
+    "aliases": [
+      "Hatta",
+      "حتا"
     ]
   }
 ];

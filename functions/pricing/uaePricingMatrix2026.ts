@@ -99,6 +99,12 @@ export interface PricingMatrix {
   lastUpdated: string;
   zones: Record<string, { label: string; description: string; multiplier: number }>;
   emirateMultipliers: EmirateMultiplier[];
+  /** Asset-age maintenance factors: applies when propertyAge > minAgeExclusive (highest band wins). */
+  ageFactors: Array<{ label: string; minAgeExclusive: number; multiplier: number }>;
+  /** Maintenance surcharge for areas flagged remote in the area-zone map. */
+  remoteAreaSurcharge: { multiplier: number; description: string };
+  /** Minimum annual Property Management fee (AED) by emirate; PM = max(rate x rent, minimum). */
+  minimumManagementFee: Array<{ label: string; regions: string[]; amount: number }>;
   assetClasses: AssetClassBenchmark[];
 }
 
@@ -108,13 +114,26 @@ export interface PricingMatrix {
  * PM percentages are applied to verified annual rent/revenue by the quote engine and are never multiplied by area or unit counts.
  */
 export const UAE_PRICING_MATRIX_2026: PricingMatrix = {
-  version: '3.4.0',
+  version: '3.5.0',
   lastUpdated: '2026-10-14',
   zones: {
     A: { label: 'Premium', description: 'Luxury, waterfront, branded and higher-response assets', multiplier: 1.20 },
     B: { label: 'Standard', description: 'Standard urban operating conditions', multiplier: 1.00 },
     C: { label: 'Budget/Industrial', description: 'Industrial and lower-cost operating corridors', multiplier: 0.90 },
   },
+  // Founder decision 2026-10-14 12:58 (audit/rashid-pricing-research-review-2026-10-14.md).
+  ageFactors: [
+    { label: '0-5 years', minAgeExclusive: 0, multiplier: 1.00 },
+    { label: '5-10 years', minAgeExclusive: 5, multiplier: 1.10 },
+    { label: '10-15 years', minAgeExclusive: 10, multiplier: 1.20 },
+    { label: '15+ years', minAgeExclusive: 15, multiplier: 1.35 },
+  ],
+  remoteAreaSurcharge: { multiplier: 1.15, description: 'Remote areas (Al Dhafra region, Hatta): +15% on maintenance' },
+  minimumManagementFee: [
+    { label: 'Dubai', regions: ['Dubai'], amount: 5000 },
+    { label: 'Abu Dhabi (incl. Al Ain, Al Dhafra)', regions: ['Abu Dhabi', 'Al Ain', 'Al Dhafra'], amount: 5000 },
+    { label: 'Other emirates', regions: ['*'], amount: 2500 },
+  ],
   // Founder-approved 2026-10-14 (audit/uae-area-zones-2026-10-14.md). Al Ain and Al Dhafra are
   // their own pricing regions inside the Emirate of Abu Dhabi.
   emirateMultipliers: [
@@ -162,7 +181,7 @@ export const UAE_PRICING_MATRIX_2026: PricingMatrix = {
     {
       id: 'off-sml', category: 'Commercial', label: 'Office', minimumAnnualContract: 5000,
       pmRate: '7-10% annual rent', ifm: 'FM + PM', pricingUnit: 'sqft', riskLevel: 'Low',
-      maintenanceRange: { min: 8, max: 15, target: 10 }, managementRange: { min: 7, max: 10, target: 8 }, combinedRange: { min: 0, max: 0, target: 0 },
+      maintenanceRange: { min: 10, max: 15, target: 10 }, managementRange: { min: 7, max: 10, target: 8 }, combinedRange: { min: 0, max: 0, target: 0 },
     },
     // BIN GROUP commercial configuration, not a statutory UAE tariff.
     // min / target / max map to STANDARD_DRY / ENHANCED / WET_RECOVERY gym complexity bands.
@@ -214,7 +233,7 @@ export const UAE_PRICING_MATRIX_2026: PricingMatrix = {
     {
       id: 'warehouse', category: 'Industrial', label: 'Warehouse', minimumAnnualContract: 15000,
       pmRate: '5-8% annual rent', ifm: 'FM + PM', pricingUnit: 'sqft', riskLevel: 'Medium',
-      maintenanceRange: { min: 5, max: 9, target: 7 }, managementRange: { min: 5, max: 8, target: 6 }, combinedRange: { min: 0, max: 0, target: 0 },
+      maintenanceRange: { min: 6.5, max: 9, target: 7 }, managementRange: { min: 5, max: 8, target: 6 }, combinedRange: { min: 0, max: 0, target: 0 },
     },
     {
       id: 'industrial', category: 'Industrial', label: 'Industrial Property', minimumAnnualContract: 25000,

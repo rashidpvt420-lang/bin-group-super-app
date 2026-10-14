@@ -91,6 +91,20 @@ export default function PricingMatrixPage() {
                                 </Grid>
                             ))}
                         </Grid>
+
+                        <Divider sx={{ my: 4, borderColor: 'rgba(255,255,255,0.05)' }} />
+                        <Box data-testid="pricing-age-remote-pm-minimum">
+                            <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, mb: 1, display: 'block' }}>ASSET AGE FACTORS</Typography>
+                            {UAE_PRICING_MATRIX_2026.ageFactors.map((band) => (
+                                <Typography key={band.label} variant="caption" display="block" color="rgba(255,255,255,0.7)">{band.label}: {band.multiplier.toFixed(2)}x</Typography>
+                            ))}
+                            <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, mt: 2, mb: 1, display: 'block' }}>REMOTE-AREA SURCHARGE</Typography>
+                            <Typography variant="caption" display="block" color="rgba(255,255,255,0.7)">{UAE_PRICING_MATRIX_2026.remoteAreaSurcharge.description} ({UAE_PRICING_MATRIX_2026.remoteAreaSurcharge.multiplier}x)</Typography>
+                            <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, mt: 2, mb: 1, display: 'block' }}>MINIMUM PM FEE (MAX OF % x RENT AND MINIMUM)</Typography>
+                            {UAE_PRICING_MATRIX_2026.minimumManagementFee.map((row) => (
+                                <Typography key={row.label} variant="caption" display="block" color="rgba(255,255,255,0.7)">{row.label}: AED {row.amount.toLocaleString()} / year</Typography>
+                            ))}
+                        </Box>
                     </Paper>
                 </Grid>
 
@@ -175,7 +189,7 @@ export default function PricingMatrixPage() {
                     <Table size="small">
                         <TableHead>
                             <TableRow>
-                                {['Region', 'Area', 'Zone', 'Segment', 'Confidence', 'Aliases'].map((h) => (
+                                {['Region', 'Area', 'Zone', 'Remote', 'Segment', 'Confidence', 'Aliases'].map((h) => (
                                     <TableCell key={h} sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>{h}</TableCell>
                                 ))}
                             </TableRow>
@@ -186,6 +200,7 @@ export default function PricingMatrixPage() {
                                     <TableCell sx={{ color: '#FFF' }}>{row.region}</TableCell>
                                     <TableCell sx={{ color: '#FFF' }}>{row.area}</TableCell>
                                     <TableCell><Chip size="small" label={`Zone ${row.zone} · ${UAE_PRICING_MATRIX_2026.zones[row.zone]?.multiplier}x`} sx={{ bgcolor: row.zone === 'A' ? binThemeTokens.gold : 'rgba(255,255,255,0.08)', color: row.zone === 'A' ? '#000' : '#FFF', fontWeight: 900 }} /></TableCell>
+                                    <TableCell sx={{ color: row.remote ? binThemeTokens.gold : 'rgba(255,255,255,0.4)', fontWeight: 800 }}>{row.remote ? `Yes · ${UAE_PRICING_MATRIX_2026.remoteAreaSurcharge.multiplier}x` : 'No'}</TableCell>
                                     <TableCell sx={{ color: 'rgba(255,255,255,0.6)' }}>{row.segment}</TableCell>
                                     <TableCell sx={{ color: 'rgba(255,255,255,0.6)' }}>{row.confidence}</TableCell>
                                     <TableCell sx={{ color: 'rgba(255,255,255,0.5)' }}>{row.aliases.join(', ')}</TableCell>
