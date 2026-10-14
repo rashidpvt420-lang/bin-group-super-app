@@ -2,7 +2,7 @@
 // Values live here, not in the PDF prose. A UAE-licensed lawyer should review the final wording.
 
 export const PM_SCHEDULE_DEFAULTS = {
-  ownerApprovalThresholdAed: 1000, // owner's written approval required above this, per job
+  ownerApprovalThresholdAed: 1000, // FIXED limit: owner's prior written approval required for any job above this
   emergencySpendLimitAed: 2500, // emergency spend allowed without prior approval, per event
   emergencyNotifyHours: 24, // owner notified within this many hours of emergency spend
   rentRemittanceWorkingDays: 7, // collected rent remitted to owner within this many working days

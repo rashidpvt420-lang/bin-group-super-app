@@ -42,6 +42,10 @@ test('property management schedule keeps placeholders, CASH/CHEQUE only and Ejar
   for (const token of ['ownerApprovalThresholdAed: 1000', 'emergencySpendLimitAed: 2500', 'emergencyNotifyHours: 24', 'rentRemittanceWorkingDays: 7', 'handbackDays: 30']) assert.ok(config.includes(token), token);
 });
 
+test('Schedule B states the fixed AED 1,000 per-job approval limit prominently in EN and AR', () => {
+  for (const token of ["'FIXED APPROVAL LIMIT / حد الموافقة الثابت'", "FIXED LIMIT: The Owner's prior written approval is required for ANY job costing more than AED", 'a job may not be split to avoid it', 'حد ثابت: يلزم الحصول على موافقة المالك الكتابية المسبقة على أي عمل']) assert.ok(source.includes(token), token);
+});
+
 test('contract response targets are the official 1h/4h/24h set shared with the owner ticket callable', () => {
   const config = readFileSync('functions/ownerAgreementConfig.ts', 'utf8');
   assert.ok(config.includes('emergency: 60,') && config.includes('urgent: 240,') && config.includes('standard: 1440,'));
@@ -70,4 +74,8 @@ test('signed PDF and contract record carry the selection and its hash', () => {
 
 test('licensing gate for property management agreements defaults ON', () => {
   assert.ok(selection.includes("env.OWNER_PM_AGREEMENTS_ENABLED ?? 'true'"));
+});
+
+test('Arabic text never glues a letter prefix onto the Latin brand (bidi reversal)', () => {
+  assert.ok(!/[\u0600-\u06FF]BIN-GROUPS/.test(source));
 });

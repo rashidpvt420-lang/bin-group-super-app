@@ -10,7 +10,7 @@ import { createRequire } from 'node:module';
 const outDir = path.resolve('node_modules/.cache/arabic-pdf-text-test');
 const outfile = path.join(outDir, `arabic-${process.pid}.cjs`);
 await build({ entryPoints: ['functions/arabicPdfText.ts'], bundle: true, platform: 'node', format: 'cjs', outfile, logLevel: 'silent' });
-const { logicalToVisualRtl, displayWords, layoutBidiText, toVisualArabic } = createRequire(import.meta.url)(outfile);
+const { logicalToVisualRtl, displayWords, layoutBidiText, toVisualArabic, mirrorBracketsForRtlWord } = createRequire(import.meta.url)(outfile);
 const functionsRequire = createRequire(path.resolve('functions/package.json'));
 
 test('RTL line: word order is reversed for display but digits keep their order', () => {
@@ -72,4 +72,12 @@ test('fontkit shapes Arabic words with the bundled font without .notdef glyphs',
   const joined = font.layout('بب').glyphs.map((g) => g.id);
   const isolated = font.layout('ب').glyphs[0].id;
   assert.ok(joined.some((id) => id !== isolated), 'contextual forms must be applied');
+});
+
+test('brackets in Arabic words are mirrored before fontkit reverses the glyphs; Latin untouched', () => {
+  assert.equal(mirrorBracketsForRtlWord('(أ)'), ')أ(');
+  assert.equal(mirrorBracketsForRtlWord('(الاتحادية'), ')الاتحادية');
+  assert.equal(mirrorBracketsForRtlWord('(Article'), '(Article');
+  const lines = layoutBidiText('الجدول (ب) - خدمات', { maxWidth: 500, measure: (w) => w.length * 5, spaceWidth: 3 });
+  assert.ok(lines[0].tokens.some((t) => t.text === ')ب('));
 });

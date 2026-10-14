@@ -73,6 +73,15 @@ export function toVisualBilingual(text: string): string {
   return toVisualArabic(value);
 }
 
+const MIRROR: Record<string, string> = { "(": ")", ")": "(", "[": "]", "]": "[", "{": "}", "}": "{", "<": ">", ">": "<" };
+/**
+ * fontkit reverses the glyphs of an Arabic word but does not apply Unicode bidi mirroring, so
+ * "(أ)" printed as ")أ(". Swap mirrored brackets in RTL words before drawing.
+ */
+export function mirrorBracketsForRtlWord(word: string): string {
+  return STRONG_RTL.test(word) ? word.replace(/[()[\]{}<>]/g, (ch) => MIRROR[ch] || ch) : word;
+}
+
 export type BidiToken = { text: string; x: number; width: number };
 export type BidiLine = { tokens: BidiToken[]; width: number };
 
@@ -133,7 +142,7 @@ export function layoutBidiText(
     const width = lineWidth(line);
     let x = align === "right" ? opts.maxWidth - width : align === "center" ? (opts.maxWidth - width) / 2 : 0;
     const tokens = words.map((word) => {
-      const token = { text: word, x, width: opts.measure(word) };
+      const token = { text: mirrorBracketsForRtlWord(word), x, width: opts.measure(word) };
       x += token.width + opts.spaceWidth;
       return token;
     });
