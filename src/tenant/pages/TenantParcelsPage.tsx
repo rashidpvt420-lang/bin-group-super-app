@@ -82,7 +82,7 @@ export default function TenantParcelsPage() {
           <Chip
             size="small"
             label={status.toUpperCase()}
-            sx={{ bgcolor: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.5)', fontWeight: 950 }}
+            sx={{ bgcolor: 'rgba(255,255,255,0.06)', color: binThemeTokens.textOnDarkMuted, fontWeight: 950 }}
           />
         );
     }
@@ -99,7 +99,7 @@ export default function TenantParcelsPage() {
           <SafeIcon icon={Package} size={36} style={{ color: binThemeTokens.gold }} />
           {label('tenant.parcels.title', 'Parcel Management', 'إدارة الطرود')}
         </Typography>
-        <Typography sx={{ color: 'rgba(255,255,255,0.5)', mt: 1 }}>
+        <Typography sx={{ color: binThemeTokens.textOnDarkMuted, mt: 1 }}>
           {label('tenant.parcels.desc', 'View details of courier parcel deliveries registered at the front desk and confirm collection.', 'عرض تفاصيل طرود التوصيل المسجلة في مكتب الاستقبال وتأكيد استلامها.')}
         </Typography>
       </Box>
@@ -169,11 +169,11 @@ export default function TenantParcelsPage() {
 
       {parcels.length === 0 && (
         <Paper sx={{ p: 6, textAlign: 'center', bgcolor: 'rgba(255,255,255,0.01)', border: '1px dashed rgba(255,255,255,0.08)', borderRadius: 4 }}>
-          <SafeIcon icon={AlertCircle} size={48} style={{ color: 'rgba(255,255,255,0.2)', margin: '0 auto' }} />
+          <SafeIcon icon={AlertCircle} size={48} style={{ color: binThemeTokens.textOnDarkMuted, margin: '0 auto' }} />
           <Typography sx={{ color: '#FFF', fontWeight: 950, mt: 2 }}>
             {label('tenant.parcels.none', 'No Parcels Logged', 'لا توجد طرود مسجلة')}
           </Typography>
-          <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', display: 'block', mt: 1 }}>
+          <Typography variant="caption" sx={{ color: binThemeTokens.textOnDarkMuted, display: 'block', mt: 1 }}>
             {label('tenant.parcels.none_hint', 'Parcels logged by the front desk will appear here.', 'الطرود المسجلة من قبل مكتب الاستقبال ستظهر هنا.')}
           </Typography>
         </Paper>

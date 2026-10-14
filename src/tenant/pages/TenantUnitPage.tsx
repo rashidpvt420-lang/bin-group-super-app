@@ -180,11 +180,11 @@ export default function TenantUnitPage() {
               <Box>
                 <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 4 }}>MY UNIT</Typography>
                 <Typography variant="h4" sx={{ color: '#FFF', fontWeight: 950 }}>Unit {unit.unitNumber || '—'}</Typography>
-                <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.45)' }}>{property?.propertyName || property?.name || unit.propertyName || 'Property'} · Floor {unit.floor || '—'}</Typography>
+                <Typography variant="body2" sx={{ color: binThemeTokens.textOnDarkMuted }}>{property?.propertyName || property?.name || unit.propertyName || 'Property'} · Floor {unit.floor || '—'}</Typography>
               </Box>
             </Stack>
             <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap alignItems="flex-start" justifyContent="flex-end">
-              <Chip icon={<ShieldCheck size={14} />} label="TENANT ISOLATED VIEW" sx={{ bgcolor: alpha('#10b981', 0.12), color: '#10b981', fontWeight: 950 }} />
+              <Chip icon={<ShieldCheck size={14} />} label="TENANT ISOLATED VIEW" sx={{ bgcolor: alpha('#10b981', 0.12), color: '#166534', fontWeight: 950 }} />
               <Button startIcon={<ClipboardCheck size={16} />} variant="contained" onClick={() => setHandoverOpen(true)} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>
                 Submit Handover
               </Button>
@@ -193,9 +193,9 @@ export default function TenantUnitPage() {
         </Paper>
 
         <Grid container spacing={3}>
-          <Grid item xs={12} md={4}><Paper sx={{ p: 3, bgcolor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 5 }}><Building2 color={binThemeTokens.gold} /><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.38)', fontWeight: 950, display: 'block', mt: 2 }}>PROPERTY</Typography><Typography sx={{ color: '#FFF', fontWeight: 950 }}>{property?.propertyName || property?.name || unit.propertyName || 'Property'}</Typography></Paper></Grid>
-          <Grid item xs={12} md={4}><Paper sx={{ p: 3, bgcolor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 5 }}><UserRound color={binThemeTokens.gold} /><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.38)', fontWeight: 950, display: 'block', mt: 2 }}>OCCUPANCY</Typography><Typography sx={{ color: '#FFF', fontWeight: 950 }}>{occupancy}</Typography><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.38)' }}>{unit.tenantStatus || 'active'}</Typography></Paper></Grid>
-          <Grid item xs={12} md={4}><Paper sx={{ p: 3, bgcolor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 5 }}><Wrench color={binThemeTokens.gold} /><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.38)', fontWeight: 950, display: 'block', mt: 2 }}>MAINTENANCE</Typography><Typography sx={{ color: '#FFF', fontWeight: 950 }}>{maintenance}</Typography><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.38)' }}>Submit requests from the tenant dashboard.</Typography></Paper></Grid>
+          <Grid item xs={12} md={4}><Paper sx={{ p: 3, bgcolor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 5 }}><Building2 color={binThemeTokens.gold} /><Typography variant="caption" sx={{ color: binThemeTokens.textOnDarkMuted, fontWeight: 950, display: 'block', mt: 2 }}>PROPERTY</Typography><Typography sx={{ color: '#FFF', fontWeight: 950 }}>{property?.propertyName || property?.name || unit.propertyName || 'Property'}</Typography></Paper></Grid>
+          <Grid item xs={12} md={4}><Paper sx={{ p: 3, bgcolor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 5 }}><UserRound color={binThemeTokens.gold} /><Typography variant="caption" sx={{ color: binThemeTokens.textOnDarkMuted, fontWeight: 950, display: 'block', mt: 2 }}>OCCUPANCY</Typography><Typography sx={{ color: '#FFF', fontWeight: 950 }}>{occupancy}</Typography><Typography variant="caption" sx={{ color: binThemeTokens.textOnDarkMuted }}>{unit.tenantStatus || 'active'}</Typography></Paper></Grid>
+          <Grid item xs={12} md={4}><Paper sx={{ p: 3, bgcolor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 5 }}><Wrench color={binThemeTokens.gold} /><Typography variant="caption" sx={{ color: binThemeTokens.textOnDarkMuted, fontWeight: 950, display: 'block', mt: 2 }}>MAINTENANCE</Typography><Typography sx={{ color: '#FFF', fontWeight: 950 }}>{maintenance}</Typography><Typography variant="caption" sx={{ color: binThemeTokens.textOnDarkMuted }}>Submit requests from the tenant dashboard.</Typography></Paper></Grid>
         </Grid>
 
         <Alert severity="info" sx={{ bgcolor: alpha(binThemeTokens.gold, 0.08), color: '#f8fafc', border: `1px solid ${alpha(binThemeTokens.gold, 0.22)}` }}>

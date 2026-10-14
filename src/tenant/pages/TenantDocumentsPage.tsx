@@ -51,14 +51,14 @@ export default function TenantDocumentsPage() {
   return (
     <Box sx={{ pb: 6 }}>
       <Typography variant="h4" fontWeight={950} color="#FFF">Tenant Document Vault</Typography>
-      <Typography variant="body2" sx={{ color: 'rgba(255,255,255,.55)', mt: 1, mb: 4 }}>Lease, handover and approved property documents authorized for this Tenant.</Typography>
+      <Typography variant="body2" sx={{ color: binThemeTokens.textOnDarkMuted, mt: 1, mb: 4 }}>Lease, handover and approved property documents authorized for this Tenant.</Typography>
 
       {loadError && <Alert severity="error" data-testid="tenant-documents-load-failed" sx={{ mb: 3 }}>{loadError}</Alert>}
 
       {!loadError && documents.length === 0 ? (
         <Paper sx={{ p: 7, textAlign: 'center', bgcolor: 'rgba(15,23,42,.45)', border: '1px dashed rgba(255,255,255,.08)', borderRadius: 5 }}>
           <FolderOpen size={44} color="rgba(255,255,255,.15)" />
-          <Typography sx={{ mt: 2, color: 'rgba(255,255,255,.55)', fontWeight: 900 }}>NO AUTHORIZED DOCUMENTS YET</Typography>
+          <Typography sx={{ mt: 2, color: binThemeTokens.textOnDarkMuted, fontWeight: 900 }}>NO AUTHORIZED DOCUMENTS YET</Typography>
         </Paper>
       ) : (
         <Grid container spacing={2.5}>
@@ -69,7 +69,7 @@ export default function TenantDocumentsPage() {
                   <FileText size={20} color={binThemeTokens.gold} />
                   <Box sx={{ minWidth: 0, flex: 1 }}>
                     <Typography color="#FFF" fontWeight={900} noWrap>{doc.title}</Typography>
-                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,.4)' }}>{doc.sourceCollection} · {doc.sourceId}</Typography>
+                    <Typography variant="caption" sx={{ color: binThemeTokens.textOnDarkMuted }}>{doc.sourceCollection} · {doc.sourceId}</Typography>
                   </Box>
                   <ShieldCheck size={16} color="#10b981" />
                 </Stack>

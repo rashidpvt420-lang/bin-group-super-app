@@ -20,6 +20,8 @@ export const binThemeTokens = {
   // AA-safe gold for TEXT on white/cream surfaces (#7A5C12 on #FFFFFF = 6.4:1).
   // gold/goldHover stay for fills, borders and icons only.
   goldText: '#7A5C12',
+  // AA-safe muted text on the dark tenant/technician canvases (#A3A9B5 on #101729 = 7.4:1, on #1F2937 = 6.0:1).
+  textOnDarkMuted: '#A3A9B5',
   champagne: '#F7E8B9',
   darkBlue: '#0F172A',
   textPrimary: '#111827',

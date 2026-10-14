@@ -246,11 +246,11 @@ export default function TenantMessagesPage() {
             <Dialog open={openAdd} onClose={() => setOpenAdd(false)} PaperProps={{ sx: { bgcolor: '#020617', color: '#FFF', borderRadius: 6, border: '1px solid rgba(255,255,255,0.1)', minWidth: 320 } }}>
                 <DialogTitle sx={{ fontWeight: 950, color: binThemeTokens.gold }}>START CONVERSATION</DialogTitle>
                 <DialogContent>
-                    <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.4)', mb: 3 }}>
+                    <Typography variant="body2" sx={{ color: binThemeTokens.textOnDarkMuted, mb: 3 }}>
                         Select the team or contact you would like to start a private conversation with.
                     </Typography>
                     <FormControl fullWidth variant="filled">
-                        <InputLabel sx={{ color: 'rgba(255,255,255,0.5)' }}>Recipient Team</InputLabel>
+                        <InputLabel sx={{ color: binThemeTokens.textOnDarkMuted }}>Recipient Team</InputLabel>
                         <Select value={convType} onChange={e => setConvType(e.target.value)} sx={{ bgcolor: 'rgba(255,255,255,0.03)', color: '#FFF', borderRadius: 2 }}>
                             <MenuItem value="tenant_admin">Support Admin Team</MenuItem>
                             <MenuItem value="tenant_technician">Technician Dispatch</MenuItem>
@@ -258,7 +258,7 @@ export default function TenantMessagesPage() {
                     </FormControl>
                 </DialogContent>
                 <DialogActions sx={{ p: 3 }}>
-                    <Button onClick={() => setOpenAdd(false)} sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900 }}>CANCEL</Button>
+                    <Button onClick={() => setOpenAdd(false)} sx={{ color: binThemeTokens.textOnDarkMuted, fontWeight: 900 }}>CANCEL</Button>
                     <Button onClick={handleCreateConversation} variant="contained" disabled={!propertyId} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, px: 3, borderRadius: 2 }}>
                         START
                     </Button>
