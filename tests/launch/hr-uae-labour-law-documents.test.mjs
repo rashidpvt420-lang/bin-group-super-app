@@ -19,7 +19,7 @@ test('HR letters follow Art. 13(11) and carry a no-liability clause', async () =
   assert.ok(!source.includes("conduct and performance were satisfactory"), 'experience letter must not auto-certify conduct');
   assert.ok(source.includes('issued free of charge'));
   assert.ok(source.includes('HR_LETTER_NO_LIABILITY'));
-  assert.ok(source.includes('[TRADE LICENCE NO.]'), 'company registration placeholders must stay visible until Rashid supplies real data');
+  assert.ok(source.includes('COMPANY_REGISTRATION_LINE_EN'), 'HR letters must print the licence identification line');
 });
 
 test('Browser contract PDF does not assert OTP verification it cannot prove', async () => {
@@ -31,7 +31,44 @@ test('Browser contract PDF does not assert OTP verification it cannot prove', as
 
 test('Owner Service Agreement keeps lawful liability carve-outs, PDPL and severability', async () => {
   const source = await read('functions/pdfEngine.ts');
-  for (const token of ['gross negligence, death or personal injury', 'Federal Decree-Law No. 45 of 2021', 'remaining provisions remain in full force', 'الخطأ الجسيم', 'كامل الاتفاق']) {
+  for (const token of ['gross negligence, death or personal injury', 'Federal Decree-Law No. 45 of 2021', 'remaining provisions remain in full force', 'الخطأ الجسيم', 'كامل الاتفاق', 'GOVERNING_LAW_EN', 'GOVERNING_LAW_AR', 'COMPANY_TRADING_AS_EN']) {
     assert.ok(source.includes(token), `Owner agreement missing ${token}`);
+  }
+});
+
+const identityValues = (src) => src.slice(src.indexOf('export const COMPANY_IDENTITY'));
+
+test('one company identity constant, identical in browser and Functions copies', async () => {
+  const [web, fn] = await Promise.all([read('src/lib/companyIdentity.ts'), read('functions/companyIdentity.ts')]);
+  assert.equal(identityValues(web), identityValues(fn));
+  for (const token of ["brandName: 'BIN-GROUPS'", 'CN-5914744', '101-2025-200047929', '501-2025-200031050', '8800106968', '903215', '1267058 ALL KIND BUILDING PROJECTS CONTRACTING - L.L.C - S.P.C', "mohreEstablishmentNo: '[MOHRE EST. NO.]'", "registeredAddressEn: '[REGISTERED ADDRESS]'", 'competent onshore courts of the United Arab Emirates']) {
+    assert.ok(web.includes(token), `identity missing ${token}`);
+  }
+  assert.ok(!web.includes('Abu Dhabi Courts'));
+});
+
+test('old entity names are gone from document generators', async () => {
+  for (const f of ['functions/pdfEngine.ts', 'functions/staffPdfReporting.ts', 'src/utils/hrLetterPdf.ts', 'src/utils/bilingualContractPdf.ts', 'src/components/ContractDigitalSignature.tsx']) {
+    const src = await read(f);
+    assert.ok(!src.includes('BIN GROUP PROPERTY MANAGEMENT LLC'), f);
+    assert.ok(!src.includes("'BIN GROUP L.L.C - S.P.C'"), f);
+    assert.ok(!src.includes('Abu Dhabi Courts shall have jurisdiction'), f);
+  }
+});
+
+test('Arabic PDF font is TrueType (jsPDF cannot embed WOFF)', async () => {
+  const [font, data] = await Promise.all([read('src/utils/arabicPdfFont.ts'), read('src/utils/arabicPdfFontData.ts')]);
+  assert.ok(!font.includes('.woff'));
+  assert.ok(font.includes('NotoNaskhArabic-Regular.ttf'));
+  const b64 = data.match(/ARABIC_PDF_FONT_TTF_BASE64 = '([^']+)'/)[1];
+  const head = Buffer.from(b64.slice(0, 8), 'base64');
+  assert.equal(head.readUInt32BE(0), 0x00010000, 'font must be a TrueType (sfnt 1.0) file');
+});
+
+test('employment addendum supplements MOHRE contract with verified limits', async () => {
+  const src = await read('src/utils/employmentAddendumPdf.ts');
+  assert.ok(src.includes('NON_COMPETE_MAX_MONTHS = 24'));
+  for (const token of ['the MOHRE contract and the law prevail', 'shall not withhold', 'recruitment or employment fees', 'Federal Decree-Law No. 45 of 2021', 'the Arabic text prevails', 'Article 54', 'UAE-licensed lawyer']) {
+    assert.ok(src.includes(token), `addendum missing ${token}`);
   }
 });

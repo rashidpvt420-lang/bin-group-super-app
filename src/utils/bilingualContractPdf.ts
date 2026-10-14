@@ -1,5 +1,6 @@
 import { jsPDF } from 'jspdf';
 import { registerArabicFont, getArabicFontName } from './arabicPdfFont';
+import { COMPANY_DISPLAY_NAME, COMPANY_TRADING_AS_AR, COMPANY_TRADING_AS_EN } from '../lib/companyIdentity';
 
 type ContractPdfInput = {
   artifact: {
@@ -21,7 +22,11 @@ const hasArabic = (value: string) => /[\u0600-\u06FF]/.test(value || '');
 
 function normalizeArabic(doc: jsPDF, value: string) {
   const processor = (doc as unknown as { processArabic?: (text: string) => string }).processArabic;
-  return hasArabic(value) && processor ? processor(value) : value;
+  if (!hasArabic(value) || !processor) return value;
+  // jsPDF's processArabic() does not apply the bidi bracket-pairing rules, so parentheses in
+  // mixed Arabic text come out reversed or mismatched. Render parenthetical asides with dashes.
+  const safe = value.replace(/\s*\(([^()]*)\)/g, ' - $1 -').replace(/\s+-\s*([.،,:])/g, '$1').replace(/-\s*$/, '').trim();
+  return processor(safe);
 }
 
 export function writeLTR(doc: jsPDF, value: string, x: number, y: number, options: Record<string, unknown> = {}) {
@@ -41,7 +46,11 @@ export function wrappedLTR(doc: jsPDF, value: string, x: number, y: number, widt
 }
 
 export function wrappedRTL(doc: jsPDF, value: string, x: number, y: number, width: number, lineHeight = 6) {
+  // Measure with the Arabic font so wrapping widths match the glyphs actually drawn.
+  const previousFont = doc.getFont().fontName;
+  doc.setFont(getArabicFontName(doc), 'normal');
   const lines = doc.splitTextToSize(normalizeArabic(doc, value || '-'), width);
+  doc.setFont(previousFont, 'normal');
   lines.forEach((line: string, index: number) => writeRTL(doc, line, x, y + index * lineHeight));
   return y + lines.length * lineHeight;
 }
@@ -79,24 +88,24 @@ export function savePdfMobileSafe(doc: jsPDF, filename: string) {
 
 export function generateBilingualContractPdf(input: ContractPdfInput) {
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
-  // Register Arabic font immediately so all RTL text renders with Cairo glyphs
+  // Register Arabic font immediately so all RTL text renders with Noto Naskh Arabic glyphs
   registerArabicFont(doc);
-  const provider = input.providerName || 'BIN GROUP PROPERTY MANAGEMENT LLC';
+  const provider = input.providerName || COMPANY_DISPLAY_NAME;
   const timestamp = `${new Date(input.artifact.timestamp).toLocaleString('en-GB', { timeZone: 'Asia/Dubai' })} GST`;
   // Only state OTP verification when the acceptance record actually carries it; never assert it blindly.
   const otpVerified = input.artifact.acceptanceLog?.otpVerified === true;
 
   doc.setProperties({
-    title: `BIN GROUP Contract ${input.artifact.institutionalHash}`,
+    title: `BIN-GROUPS Contract ${input.artifact.institutionalHash}`,
     subject: 'Bilingual UAE maintenance and property management contract',
-    author: 'BIN GROUP',
-    creator: 'BIN GROUP Super App',
+    author: COMPANY_DISPLAY_NAME,
+    creator: 'BIN-GROUPS Super App',
   });
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(18);
-  writeLTR(doc, 'BIN GROUP - SERVICE AGREEMENT', 105, 18, { align: 'center' });
-  writeRTL(doc, 'مجموعة بن - اتفاقية خدمات', 195, 28);
+  writeLTR(doc, `${COMPANY_DISPLAY_NAME} - SERVICE AGREEMENT`, 105, 18, { align: 'center' });
+  writeRTL(doc, `اتفاقية خدمات - ${COMPANY_DISPLAY_NAME}`, 195, 28);
 
   doc.setDrawColor(40);
   doc.line(15, 34, 195, 34);
@@ -122,17 +131,21 @@ export function generateBilingualContractPdf(input: ContractPdfInput) {
   writeRTL(doc, `العقار: ${input.propertyName}`, 195, 84);
   writeRTL(doc, `المالك / الجهة: ${input.ownerName}`, 195, 91);
   writeRTL(doc, `مزود الخدمة: ${provider}`, 195, 98);
+  doc.setFontSize(7);
+  wrappedLTR(doc, COMPANY_TRADING_AS_EN, 15, 104, 180, 3);
+  wrappedRTL(doc, COMPANY_TRADING_AS_AR, 195, 111, 180, 3);
+  doc.setFontSize(10);
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(13);
-  writeLTR(doc, '2. SCOPE OF SERVICES', 15, 116);
-  writeRTL(doc, '٢. نطاق الخدمات', 195, 116);
+  writeLTR(doc, '2. SCOPE OF SERVICES', 15, 122);
+  writeRTL(doc, '٢. نطاق الخدمات', 195, 122);
 
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(10);
-  let y = wrappedLTR(doc, input.contractBody, 15, 126, 82);
+  let y = wrappedLTR(doc, input.contractBody, 15, 131, 82);
   const arabicScope = 'يشمل هذا العقد خدمات الصيانة وإدارة العقار وفق الخطة المختارة، مع الالتزام بمستويات الخدمة، التوثيق بالصور، وسجلات المتابعة داخل المنصة.';
-  wrappedRTL(doc, arabicScope, 195, 126, 82);
+  wrappedRTL(doc, arabicScope, 195, 131, 82);
 
   const pricingY = Math.max(y + 10, 172);
   doc.setFont('helvetica', 'bold');
@@ -156,7 +169,7 @@ export function generateBilingualContractPdf(input: ContractPdfInput) {
   doc.setFontSize(10);
   writeLTR(doc, `Digitally Signed By: ${input.artifact.signature}`, 20, 232);
   writeLTR(doc, `Mobile OTP Verified: ${otpVerified ? 'YES' : 'NOT RECORDED'}`, 20, 239);
-  writeLTR(doc, `Platform Origin: ${input.artifact.acceptanceLog?.platform || 'BIN GROUP SUPER APP'}`, 20, 246);
+  writeLTR(doc, `Platform Origin: ${input.artifact.acceptanceLog?.platform || 'BIN-GROUPS SUPER APP'}`, 20, 246);
   writeRTL(doc, `تم التوقيع رقمياً بواسطة: ${input.artifact.signature}`, 190, 232);
   writeRTL(doc, `تم التحقق بواسطة رمز الهاتف: ${otpVerified ? 'نعم' : 'غير مسجل'}`, 190, 239);
   writeRTL(doc, 'مصدر المنصة: تطبيق مجموعة بن', 190, 246);

@@ -1,4 +1,5 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
+import { COMPANY_DISPLAY_NAME, COMPANY_REGISTRATION_LINE_EN, COMPANY_TRADING_AS_EN } from "./companyIdentity";
 import * as admin from "firebase-admin";
 import { getStorage } from "firebase-admin/storage";
 import { createHash, randomUUID } from "node:crypto";
@@ -147,7 +148,10 @@ async function buildPdfBuffer(title: string, lines: Array<{ label: string; value
     doc.on("error", reject);
     doc.on("end", () => resolve(Buffer.concat(chunks)));
 
-    doc.fontSize(18).text("BIN GROUP", { align: "center" });
+    doc.fontSize(18).text(COMPANY_DISPLAY_NAME, { align: "center" });
+    doc.fontSize(7).fillColor("#6B7280").text(COMPANY_TRADING_AS_EN, { align: "center" });
+    doc.text(COMPANY_REGISTRATION_LINE_EN, { align: "center" });
+    doc.fillColor("#111827");
     doc.moveDown(0.4);
     doc.fontSize(14).text(title, { align: "center" });
     doc.moveDown(1);
@@ -160,7 +164,7 @@ async function buildPdfBuffer(title: string, lines: Array<{ label: string; value
 
     doc.moveDown(1);
     doc.fontSize(8).fillColor("#6B7280").text(
-      "This report was generated from authorized BIN GROUP system records. Verification uses the report ID and SHA-256 digest.",
+      "This document was generated from authorised BIN-GROUPS system records. It is issued at the employee's request based on records held on the date of issue, does not constitute a guarantee, surety or financial undertaking, and the company accepts no liability towards any third party arising from its issue or use. Verification uses the document ID and SHA-256 digest.",
       { align: "left" },
     );
     doc.end();
@@ -569,12 +573,18 @@ export const issueOfficialStaffHrDocument = onCall(SECURE_CALLABLE_OPTIONS, asyn
   if (documentType === "EXPERIENCE_LETTER" && !identity.joiningDate) {
     throw new HttpsError("failed-precondition", "Joining date is required before issuing an experience letter.");
   }
+  if (documentType === "EXPERIENCE_LETTER") {
+    // Federal Decree-Law No. 33 of 2021, Art. 13(11): free certificate of experience stating facts only
+    // (dates, service term, job title, last wage, reason for termination) and nothing that may harm
+    // the worker's reputation. Never auto-certify conduct or performance.
+    lines.push({ label: "Statement", value: "This certificate of experience is issued free of charge at the employee's request and states factual employment records only." });
+  }
 
   if (documentType === "NOC_LETTER") {
     const purpose = text(request.data?.purpose).slice(0, 240);
     if (!purpose) throw new HttpsError("invalid-argument", "NOC purpose is required.");
     lines.push({ label: "NOC purpose", value: purpose });
-    lines.push({ label: "Statement", value: "BIN GROUP has no objection to the stated purpose, subject to applicable law and company policy." });
+    lines.push({ label: "Statement", value: `${COMPANY_DISPLAY_NAME} has no objection to the stated purpose, subject to applicable law and company policy. This letter does not alter the terms of the employment contract.` });
   }
 
   if (documentType === "OTHER_HR_LETTER") {

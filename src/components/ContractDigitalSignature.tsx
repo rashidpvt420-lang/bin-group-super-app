@@ -12,6 +12,7 @@ import { formatAED } from '../utils/formatters';
 import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
 import { registerArabicFont } from '../utils/arabicPdfFont';
+import { COMPANY_DISPLAY_NAME, COMPANY_IDENTITY } from '../lib/companyIdentity';
 
 interface Props {
     propertyData: any;
@@ -70,7 +71,7 @@ export default function ContractDigitalSignature({ propertyData, selectedPlan, o
         doc.setFontSize(11);
         doc.text(`Property: ${propertyData?.address || propertyData?.propertyName || 'Subject Asset'}`, 20, 95);
         doc.text(`Owner/Entity: ${propertyData?.authorityName || propertyData?.departmentName || 'Registered Legal Owner'}`, 20, 102);
-        doc.text(`Provider: BIN GROUP PROPERTY MANAGEMENT LLC`, 20, 109);
+        doc.text(`Provider: ${COMPANY_DISPLAY_NAME} (${COMPANY_IDENTITY.legalNameEn}, Licence ${COMPANY_IDENTITY.licenceNo})`, 20, 109);
 
         doc.setFontSize(14);
         doc.text("2. SCOPE OF SERVICES", 20, 125);
@@ -159,7 +160,7 @@ Inclusions:
                     <Typography variant="body2" sx={{ mb: 2 }}>
                         Property: {propertyData?.address || propertyData?.propertyName || 'Subject Asset'} <br/>
                         Owner/Entity: {propertyData?.authorityName || propertyData?.departmentName || 'Registered Legal Owner'}<br/>
-                        Provider: BIN GROUP PROPERTY MANAGEMENT LLC
+                        Provider: {COMPANY_DISPLAY_NAME} ({COMPANY_IDENTITY.legalNameEn}, Licence {COMPANY_IDENTITY.licenceNo})
                     </Typography>
 
                     <Typography variant="subtitle2" fontWeight="bold">2. SCOPE OF SERVICES</Typography>

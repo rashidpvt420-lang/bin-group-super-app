@@ -1,6 +1,7 @@
 import { jsPDF } from 'jspdf';
 import { registerArabicFont } from './arabicPdfFont';
 import { writeLTR, writeRTL, wrappedLTR, savePdfMobileSafe } from './bilingualContractPdf';
+import { COMPANY_DISPLAY_NAME, COMPANY_IDENTITY, COMPANY_REGISTRATION_LINE_EN, COMPANY_TRADING_AS_EN } from '../lib/companyIdentity';
 
 export type HrLetterIssuer = {
   hrName: string;
@@ -14,16 +15,14 @@ export type HrLetterStaffInfo = {
   joiningDate: Date;
 };
 
-// TODO(Rashid): confirm the exact registered legal name. The Owner contract PDF uses
-// 'BIN GROUP L.L.C - S.P.C' while HR letters used 'BIN GROUP PROPERTY MANAGEMENT LLC'.
-const DEFAULT_COMPANY_NAME = 'BIN GROUP PROPERTY MANAGEMENT LLC';
-const COMPANY_REGISTRATION_LINE = 'Trade Licence No.: [TRADE LICENCE NO.]  |  MOHRE Establishment No.: [MOHRE EST. NO.]  |  [REGISTERED ADDRESS]';
+const DEFAULT_COMPANY_NAME = COMPANY_DISPLAY_NAME;
+const COMPANY_REGISTRATION_LINE = COMPANY_REGISTRATION_LINE_EN;
 
 export const HR_LETTER_NO_LIABILITY =
   'This letter is issued at the employee\'s request based on records held on the date of issue. It does not constitute a guarantee, surety or financial undertaking of any kind, and the company accepts no liability towards any third party arising from its issue or use.';
 
 export const HR_LETTER_DISCLAIMER =
-  'Generated via BIN GROUP Super App HR module from staff profile data on file. Verify staff details, employment dates, and signatory before issuing to banks, embassies, or government authorities.';
+  'Generated via BIN-GROUPS Super App HR module from staff profile data on file. Verify staff details, employment dates, and signatory before issuing to banks, embassies, or government authorities.';
 
 const formatDate = (value: Date) => value.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
 
@@ -42,9 +41,10 @@ function renderLetterShell(doc: jsPDF, titleEn: string, titleAr: string, referen
   writeLTR(doc, `Reference: ${referenceNumber}`, 15, 50);
   writeLTR(doc, `Date: ${formatDate(issueDate)}`, 15, 56);
   doc.setFontSize(8);
-  writeLTR(doc, COMPANY_REGISTRATION_LINE, 15, 62);
+  const next = wrappedLTR(doc, COMPANY_TRADING_AS_EN, 15, 61, 180, 3.5);
+  wrappedLTR(doc, COMPANY_REGISTRATION_LINE, 15, next + 0.5, 180, 3.5);
   doc.setFontSize(10);
-  return 72;
+  return 82;
 }
 
 function renderLetterFooter(doc: jsPDF, issuer: HrLetterIssuer) {
@@ -52,8 +52,8 @@ function renderLetterFooter(doc: jsPDF, issuer: HrLetterIssuer) {
   doc.line(15, 246, 90, 246);
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(10);
-  writeLTR(doc, issuer.hrName || 'HR Department', 15, 252);
-  writeLTR(doc, issuer.hrDesignation || 'Human Resources', 15, 258);
+  writeLTR(doc, issuer.hrName || COMPANY_IDENTITY.authorisedSignatoryEn, 15, 252);
+  writeLTR(doc, issuer.hrDesignation || COMPANY_IDENTITY.authorisedSignatoryTitleEn, 15, 258);
   writeLTR(doc, 'Company stamp:', 120, 252);
   doc.setFontSize(8);
   wrappedLTR(doc, HR_LETTER_NO_LIABILITY, 15, 266, 180, 4);
@@ -73,7 +73,7 @@ export function buildNocLetterDoc(input: NocLetterInput) {
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
   const companyName = input.companyName || DEFAULT_COMPANY_NAME;
   const issueDate = input.issueDate || new Date();
-  doc.setProperties({ title: `NOC Letter - ${input.staff.fullName}`, subject: 'No Objection Certificate', author: companyName, creator: 'BIN GROUP Super App' });
+  doc.setProperties({ title: `NOC Letter - ${input.staff.fullName}`, subject: 'No Objection Certificate', author: companyName, creator: 'BIN-GROUPS Super App' });
 
   let y = renderLetterShell(doc, 'NO OBJECTION CERTIFICATE', 'شهادة عدم ممانعة', input.referenceNumber, issueDate, companyName);
 
@@ -113,7 +113,7 @@ export function buildExperienceLetterDoc(input: ExperienceLetterInput) {
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
   const companyName = input.companyName || DEFAULT_COMPANY_NAME;
   const issueDate = input.issueDate || new Date();
-  doc.setProperties({ title: `Experience Letter - ${input.staff.fullName}`, subject: 'Employment Experience Letter', author: companyName, creator: 'BIN GROUP Super App' });
+  doc.setProperties({ title: `Experience Letter - ${input.staff.fullName}`, subject: 'Employment Experience Letter', author: companyName, creator: 'BIN-GROUPS Super App' });
 
   let y = renderLetterShell(doc, 'EXPERIENCE LETTER', 'شهادة خبرة', input.referenceNumber, issueDate, companyName);
 
@@ -161,7 +161,7 @@ export function buildSalaryCertificateDoc(input: SalaryCertificateInput) {
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
   const companyName = input.companyName || DEFAULT_COMPANY_NAME;
   const issueDate = input.issueDate || new Date();
-  doc.setProperties({ title: `Salary Certificate - ${input.staff.fullName}`, subject: 'Salary Certificate', author: companyName, creator: 'BIN GROUP Super App' });
+  doc.setProperties({ title: `Salary Certificate - ${input.staff.fullName}`, subject: 'Salary Certificate', author: companyName, creator: 'BIN-GROUPS Super App' });
 
   let y = renderLetterShell(doc, 'SALARY CERTIFICATE', 'شهادة راتب', input.referenceNumber, issueDate, companyName);
 
