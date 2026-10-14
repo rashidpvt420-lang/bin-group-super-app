@@ -17,6 +17,9 @@ export const binThemeTokens = {
   gold: '#C9A646',
   goldLight: '#E5C86B',
   goldHover: '#B8932F',
+  // AA-safe gold for TEXT on white/cream surfaces (#7A5C12 on #FFFFFF = 6.4:1).
+  // gold/goldHover stay for fills, borders and icons only.
+  goldText: '#7A5C12',
   champagne: '#F7E8B9',
   darkBlue: '#0F172A',
   textPrimary: '#111827',

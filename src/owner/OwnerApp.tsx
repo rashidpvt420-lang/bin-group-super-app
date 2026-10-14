@@ -73,7 +73,7 @@ const OwnerLayout = ({ children }: { children: React.ReactNode }) => {
                         <IconButton type="button" data-testid="owner-header-dashboard" aria-label={isRTL ? 'لوحة المالك' : 'Owner dashboard'} onClick={() => navigate('/owner/dashboard')} sx={{ color: binThemeTokens.goldHover, bgcolor: alpha(binThemeTokens.gold, 0.10), border: `1px solid ${alpha(binThemeTokens.gold, 0.22)}` }}><SafeIcon icon={LayoutDashboard} size={22} /></IconButton>
                         <Box sx={{ ml: isRTL ? 0 : 1, mr: isRTL ? 1 : 0, textAlign: isRTL ? 'right' : 'left', minWidth: 0 }}>
                             <Typography variant="h6" fontWeight="950" sx={{ color: binThemeTokens.textPrimary, textTransform: 'uppercase', letterSpacing: 2, fontSize: '0.9rem', lineHeight: 1 }}>{label('portal.owner.title', 'OWNER PORTAL')}</Typography>
-                            <Typography variant="caption" sx={{ color: binThemeTokens.goldHover, fontWeight: 900, letterSpacing: 1, fontSize: '0.6rem' }}>{label('portal.owner.subtitle', 'NO-CALL PROPERTY OPERATIONS')}</Typography>
+                            <Typography variant="caption" sx={{ color: binThemeTokens.goldText, fontWeight: 900, letterSpacing: 1, fontSize: '0.75rem' }}>{label('portal.owner.subtitle', 'NO-CALL PROPERTY OPERATIONS')}</Typography>
                         </Box>
                     </Box>
                     <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} alignItems="center" sx={{ flexShrink: 0 }}>

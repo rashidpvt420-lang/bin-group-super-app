@@ -70,7 +70,7 @@ const TenantLayout = ({ children }: { children: React.ReactNode }) => {
                         <IconButton aria-label={tx('nav.home', copy('Tenant dashboard', 'لوحة المستأجر'))} onClick={() => navigate('/tenant/dashboard')} sx={{ color: binThemeTokens.goldHover, bgcolor: alpha(binThemeTokens.gold, 0.08), border: `1px solid ${alpha(binThemeTokens.gold, 0.24)}` }}><SafeIcon icon={Home} size={22} /></IconButton>
                         <Box sx={{ textAlign: isRTL ? 'right' : 'left', minWidth: 0 }}>
                             <Typography variant="h6" fontWeight="950" sx={{ color: binThemeTokens.textPrimary, textTransform: 'uppercase', letterSpacing: 2, fontSize: '0.9rem', lineHeight: 1 }}>{tx('portal.tenant.title', copy('TENANT PORTAL', 'بوابة المستأجر'))}</Typography>
-                            <Typography variant="caption" sx={{ color: binThemeTokens.goldHover, fontWeight: 900, letterSpacing: 1, fontSize: '0.6rem' }}>{tx('portal.tenant.subtitle', copy('NO-CALL SERVICE MODE', 'خدمة بدون اتصالات'))}</Typography>
+                            <Typography variant="caption" sx={{ color: binThemeTokens.goldText, fontWeight: 900, letterSpacing: 1, fontSize: '0.75rem' }}>{tx('portal.tenant.subtitle', copy('NO-CALL SERVICE MODE', 'خدمة بدون اتصالات'))}</Typography>
                         </Box>
                     </Stack>
                     <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} alignItems="center" sx={{ flexShrink: 0 }}>
