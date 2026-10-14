@@ -477,7 +477,8 @@ export function resolveMandatoryAddOns(input: QuoteInput): string[] {
   if ((safeInput.lifts || 0) > 0) ids.add('elevator_amc');
   if (safeInput.hasSiraCctv) ids.add('sira_renewal');
   if (safeInput.hasBmu) ids.add('facade_access');
-  if (safeInput.propertyAge > 15) ids.add('pca_audit');
+  // Blank age is priced as 15+ (safe side), so the mandatory 15+ asset audit is included too.
+  if (safeInput.propertyAge > 15 || safeInput.propertyAgeUnknown) ids.add('pca_audit');
   if (safeInput.hasPool) ids.add('pool_care');
   if (safeInput.hasCentralHVAC || (safeInput.hvacCount || 0) > 0) ids.add('hvac_pm');
   return Array.from(ids);

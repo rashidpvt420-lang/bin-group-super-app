@@ -100,7 +100,7 @@ for (const c of COPIES) {
   test(`${c}: blank age = highest band 1.35 + warning; unknown/blank emirate = highest factor and PM minimum; blank area = Zone A`, () => {
     const v = (o) => mods[c].calculateUaeQuote2026({ zone: 'C', slaTier: 'standard', paymentPlan: 'annual', contractType: 'FM_ONLY', assetClassId: 'villa-std', units: 3, emirate: 'Dubai', area: 'Business Bay', bedrooms: 1, ...o });
     const noAge = v({ propertyAge: undefined });
-    near(noAge.annualTotal, 10500 * 1.15 * 1.35);
+    near(noAge.annualTotal, 10500 * 1.15 * 1.35 + 6500); // blank age = 15+ band, incl. the mandatory 15+ asset audit
     assert.ok(noAge.riskFlags.some((f) => f.startsWith('Property age pending inspection confirmation')));
     near(v({ propertyAge: 0 }).annualTotal, 10500 * 1.15);
     const atlantis = v({ propertyAge: 1, emirate: 'Atlantis', area: '' });
