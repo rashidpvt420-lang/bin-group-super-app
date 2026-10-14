@@ -572,7 +572,10 @@ function calculateMosqueQuote(input: QuoteInput): QuoteOutput {
   // Founder decision 2026-10-14 14:01: mosques take the same zone, regional and remote factors as other maintenance.
   const location = resolveLocationFactors(safeInput, riskFlags, pricingExplanation);
   const locationFactor = location.zoneMultiplier * location.emirateMultiplier * location.remoteMultiplier;
-  const subtotal = (baseQuote + softServices + wuduCleaning + ramadanSurge + compliancePremium + complexityPremium + addOnTotal) * locationFactor;
+  const unfactoredSubtotal = baseQuote + softServices + wuduCleaning + ramadanSurge + compliancePremium + complexityPremium + addOnTotal;
+  // Founder no-loss rule 2026-10-14 14:14: a mosque never quotes below its pre-location price; premium areas still go up.
+  const subtotal = unfactoredSubtotal * Math.max(locationFactor, 1);
+  if (locationFactor < 1) pricingExplanation.push('Mosque floor applied: location factors below 1.00x do not reduce the mosque price.');
   const annualTotal = subtotal * slaMultiplier(safeInput.slaTier) * (1 + planSurcharge(safeInput.paymentPlan));
   pricingExplanation.push(`${mepRate} AED/sqft mosque MEP benchmark applied to ${sqft} measured sqft.`);
   pricingExplanation.push(`Wudu service uses a bounded ${wuduAreaProxySqft} sqft proxy rather than multiplying by worshipper capacity.`);

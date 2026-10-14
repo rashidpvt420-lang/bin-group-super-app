@@ -137,8 +137,17 @@ for (const c of COPIES) {
     const mq = (emirate, area) => mods[c].calculateUaeQuote2026({ assetClassId: 'mosque_fm', contractType: 'FM_ONLY', sqft: 10000, units: 200, emirate, area, zone: 'B', slaTier: 'premium', paymentPlan: 'annual', propertyAge: 1 }).annualTotal;
     const dubaiB = mq('Dubai', 'Business Bay');
     near(mq('Dubai', 'Palm Jumeirah') / dubaiB, 1.2);
-    near(mq('Fujairah', 'Al Faseel') / dubaiB, 0.91 / 1.15);
+    near(mq('Fujairah', 'Al Faseel') / dubaiB, 1 / 1.15); // no-loss floor: never below the pre-location price
     near(mq('Dubai', 'Hatta') / dubaiB, 1.2 * 1.15);
     near(mq('Atlantis', '') / dubaiB, 1.2);
+  });
+}
+
+for (const c of COPIES) {
+  test(`${c}: mosque no-loss floor (Fujairah Zone B 261,728.50; Palm 361,185.33 at 1 year)`, () => {
+    const mq = (emirate, area) => Math.round(mods[c].calculateUaeQuote2026({ assetClassId: 'mosque_fm', contractType: 'FM_ONLY', sqft: 10000, units: 200, emirate, area, zone: 'B', slaTier: 'premium', paymentPlan: 'annual', propertyAge: 1, hasCentralHVAC: true }).annualTotal * 100) / 100;
+    assert.equal(mq('Fujairah', 'Al Faseel'), 261728.5);
+    assert.equal(mq('Fujairah', 'Dibba Al-Fujairah'), 261728.5);
+    assert.equal(mq('Dubai', 'Palm Jumeirah'), 361185.33);
   });
 }
