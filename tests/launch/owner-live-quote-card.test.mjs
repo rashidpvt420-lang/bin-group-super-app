@@ -114,7 +114,7 @@ test('a cleared age on the card is priced at the highest band with a warning, sa
   const card = m.model.computeLiveQuote(st);
   const server = m.server.calculateOwnerOnboardingQuote([m.model.toServerProperty(st)], [], Date.now());
   assert.equal(card.total, server.portfolioAnnualTotal);
-  assert.equal(card.total, 6520.5);
+  assert.equal(card.total, 13020.5); // 4,830 x 1.35 + 6,500 asset audit (blank age = 15+)
   assert.ok(card.warnings.some((w) => w.startsWith('Property age pending')));
   assert.ok(server.propertyQuotes[0].warnings.some((w) => w.startsWith('Property age pending')));
 });
