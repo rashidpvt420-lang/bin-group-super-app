@@ -10,6 +10,9 @@ import {
   UAE_AREA_ZONES_2026,
   UAE_PRICING_MATRIX_2026,
   ZONE_PENDING_FLAG,
+  BEDROOMS_PENDING_FLAG,
+  AGE_PENDING_FLAG,
+  EMIRATE_PENDING_FLAG,
   normalizeAedMoney,
 } from '@bin/shared';
 
@@ -21,11 +24,12 @@ export interface LiveQuoteState {
   area: string;
   propertyType: string;
   /** Apartment bedrooms (0 = studio); ignored for other types. */
-  bedrooms: number;
+  bedrooms: number | null;
   scope: 'Standard' | 'Luxury';
   sqft: number;
   annualRent: number;
-  age: number;
+  /** null = not provided: priced at the highest age band with a warning. */
+  age: number | null;
   contractType: LiveContract;
 }
 
@@ -78,9 +82,9 @@ export function toServerProperty(s: LiveQuoteState) {
     strategy: s.contractType === 'FM_ONLY' ? 'fm' : s.contractType === 'PM_ONLY' ? 'pm' : 'both',
     sqft: s.sqft,
     units: 1,
-    bedrooms: s.propertyType === 'Apartment' ? s.bedrooms : 0,
+    bedrooms: s.propertyType === 'Apartment' ? (s.bedrooms ?? undefined) : 0,
     annualRent: s.contractType === 'FM_ONLY' ? 0 : s.annualRent,
-    age: s.age,
+    age: s.age ?? undefined,
   };
 }
 
@@ -88,8 +92,8 @@ function engineInput(s: LiveQuoteState, contractType: LiveContract) {
   return {
     assetClassId: resolveAssetClassIdForPropertyType(s.propertyType, s.scope) || '',
     emirate: s.emirate, area: s.area, zone: 'B' as const, contractType,
-    sqft: s.sqft, units: 1, beds: 0, bedrooms: s.propertyType === 'Apartment' ? s.bedrooms : 0, annualRent: contractType === 'FM_ONLY' ? 0 : s.annualRent, annualRevenue: 0,
-    propertyAge: s.age, floors: 0, lifts: 0, addOns: [], slaTier: 'standard' as const, paymentPlan: 'annual' as const,
+    sqft: s.sqft, units: 1, beds: 0, bedrooms: s.propertyType === 'Apartment' ? (s.bedrooms ?? undefined) : 0, annualRent: contractType === 'FM_ONLY' ? 0 : s.annualRent, annualRevenue: 0,
+    propertyAge: s.age ?? undefined, floors: 0, lifts: 0, addOns: [], slaTier: 'standard' as const, paymentPlan: 'annual' as const,
   };
 }
 
@@ -110,6 +114,10 @@ export interface LiveQuoteResult {
 
 export function computeLiveQuote(s: LiveQuoteState, lang: LiveLang = 'en'): LiveQuoteResult {
   const ar = lang === 'ar';
+  // Founder decision 2026-10-14 13:21: bedrooms is required for apartments on the card.
+  if (s.propertyType === 'Apartment' && (s.bedrooms === null || s.bedrooms === undefined)) {
+    return { maintenance: null, management: null, total: 0, lines: [], warnings: [], blockers: [ar ? 'اختر عدد غرف النوم لعرض السعر' : 'Select the number of bedrooms to see the price'], regionLabel: s.emirate, scaleLabel: `${Math.round(s.sqft).toLocaleString('en-US')} sqft` };
+  }
   const total = calculateUaeQuote2026(engineInput(s, s.contractType) as any);
   const fm = s.contractType !== 'PM_ONLY' ? calculateUaeQuote2026(engineInput(s, 'FM_ONLY') as any) : null;
   const pm = s.contractType !== 'FM_ONLY' ? calculateUaeQuote2026(engineInput(s, 'PM_ONLY') as any) : null;
@@ -123,7 +131,7 @@ export function computeLiveQuote(s: LiveQuoteState, lang: LiveLang = 'en'): Live
   const region = resolveEmirateMultiplier(s.emirate, s.area);
   if (region.emirate && s.contractType !== 'PM_ONLY') lines.push(ar ? `عامل المنطقة (${region.emirate}) ×${region.multiplier.toFixed(2)}` : `${region.emirate} regional factor ×${region.multiplier.toFixed(2)}`);
   const ageFactor = resolveAgeFactor(s.age);
-  if (ageFactor > 1 && s.contractType !== 'PM_ONLY') lines.push(ar ? `عمر العقار ${s.age} سنة ×${ageFactor.toFixed(2)}` : `Property age ${s.age} years ×${ageFactor.toFixed(2)}`);
+  if (s.age !== null && ageFactor > 1 && s.contractType !== 'PM_ONLY') lines.push(ar ? `عمر العقار ${s.age} سنة ×${ageFactor.toFixed(2)}` : `Property age ${s.age} years ×${ageFactor.toFixed(2)}`);
   const bedLine = explain.find((l) => l.startsWith('Apartment bedroom factor'));
   if (bedLine) { const f = bedLine.match(/factor ([\d.]+)x/)?.[1]; lines.push(ar ? `عدد غرف النوم ${s.bedrooms} ×${f}` : `${s.bedrooms} bedrooms ×${f}`); }
   if (explain.some((l) => l.startsWith('Remote-area'))) lines.push(ar ? `منطقة نائية: +15% على الصيانة` : 'Remote area: +15% on maintenance');
@@ -131,8 +139,14 @@ export function computeLiveQuote(s: LiveQuoteState, lang: LiveLang = 'en'): Live
   if (explain.some((l) => l.startsWith('Minimum annual Property Management fee'))) lines.push(ar ? 'تم تطبيق الحد الأدنى لرسوم الإدارة' : 'Minimum management fee applied');
   else if (pm && pm.annualTotal > 0) lines.push(ar ? 'رسوم الإدارة نسبة من الإيجار السنوي' : 'Management fee is a percentage of annual rent');
   const blockers = total.annualTotal > 0 ? [] : total.riskFlags.length ? total.riskFlags : total.pricingExplanation.slice(0, 1);
-  const pending = total.riskFlags.some((f) => f.startsWith(ZONE_PENDING_FLAG));
-  const warnings = pending ? [ar ? 'المنطقة غير مدرجة: تم التسعير كمنطقة مميزة (A) بانتظار تأكيد الإدارة' : 'Zone pending admin confirmation: area not listed, priced as Premium (Zone A) until confirmed'] : [];
+  const WARN: Array<[string, string, string]> = [
+    [ZONE_PENDING_FLAG, 'Zone pending admin confirmation: area not listed, priced as Premium (Zone A) until confirmed', 'المنطقة غير مدرجة: تم التسعير كمنطقة مميزة (A) بانتظار تأكيد الإدارة'],
+    [BEDROOMS_PENDING_FLAG, 'Bedrooms pending inspection confirmation: priced as 2 bedrooms', 'عدد الغرف بانتظار التأكيد عند المعاينة: تم التسعير كغرفتين'],
+    [AGE_PENDING_FLAG, 'Property age pending inspection confirmation: highest age factor applied', 'عمر العقار بانتظار التأكيد عند المعاينة: تم تطبيق أعلى معامل للعمر'],
+    [EMIRATE_PENDING_FLAG, 'Emirate pending admin confirmation: highest regional factor applied', 'الإمارة بانتظار تأكيد الإدارة: تم تطبيق أعلى معامل إقليمي'],
+  ];
+  const flags = [...total.riskFlags, ...(fm?.riskFlags || []), ...(pm?.riskFlags || [])];
+  const warnings = WARN.filter(([prefix]) => flags.some((f) => f.startsWith(prefix))).map(([, en, arText]) => (ar ? arText : en));
   return {
     warnings,
     maintenance: fm ? money(fm.annualTotal) : null,

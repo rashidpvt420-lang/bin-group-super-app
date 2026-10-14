@@ -32,7 +32,7 @@ export default function LiveQuoteCard({ isRTL = false, initial }: LiveQuoteCardP
   const lang = isRTL ? 'ar' : 'en';
   const t = T[lang];
   const [s, setS] = useState<LiveQuoteState>({
-    emirate: 'Dubai', area: 'Palm Jumeirah', propertyType: 'Villa', bedrooms: 1, scope: 'Standard',
+    emirate: 'Dubai', area: 'Palm Jumeirah', propertyType: 'Villa', bedrooms: null, scope: 'Standard',
     sqft: 3500, annualRent: 250000, age: 1, contractType: 'BOTH', ...initial,
   });
   const set = (patch: Partial<LiveQuoteState>) => setS((prev) => ({ ...prev, ...patch }));
@@ -92,7 +92,7 @@ export default function LiveQuoteCard({ isRTL = false, initial }: LiveQuoteCardP
           </TextField>
         </Stack>
         {s.propertyType === 'Apartment' ? (
-          <TextField select fullWidth size="small" label={t.bedrooms} value={s.bedrooms} sx={field} data-testid="live-quote-bedrooms" onChange={(e) => set({ bedrooms: Number(e.target.value) })}>
+          <TextField select fullWidth required size="small" label={t.bedrooms} value={s.bedrooms ?? ''} error={s.bedrooms === null} sx={field} data-testid="live-quote-bedrooms" onChange={(e) => set({ bedrooms: Number(e.target.value) })}>
             {[0, 1, 2, 3, 4].map((n) => <MenuItem key={n} value={n}>{n === 0 ? t.studio : n === 4 ? '4+' : n}</MenuItem>)}
           </TextField>
         ) : null}
@@ -100,7 +100,7 @@ export default function LiveQuoteCard({ isRTL = false, initial }: LiveQuoteCardP
           <Slider value={s.sqft} min={300} max={50000} step={100} onChange={(_, v) => set({ sqft: v as number })} sx={{ color: binThemeTokens.gold }} /></Box>
         <Box><Typography variant="caption" color="rgba(255,255,255,0.6)">{t.rent}: {s.annualRent.toLocaleString('en-US')}</Typography>
           <Slider value={s.annualRent} min={0} max={2000000} step={5000} disabled={s.contractType === 'FM_ONLY'} onChange={(_, v) => set({ annualRent: v as number })} sx={{ color: binThemeTokens.gold }} /></Box>
-        <TextField type="number" size="small" label={t.age} value={s.age} sx={field} inputProps={{ min: 0, max: 80 }} onChange={(e) => set({ age: Math.max(0, Number(e.target.value) || 0) })} />
+        <TextField type="number" size="small" label={t.age} value={s.age ?? ''} sx={field} inputProps={{ min: 0, max: 80 }} onChange={(e) => set({ age: e.target.value === '' ? null : Math.max(0, Number(e.target.value) || 0) })} />
         <Box><Typography variant="caption" color="rgba(255,255,255,0.6)">{t.contract}</Typography>
           <ToggleButtonGroup exclusive fullWidth size="small" value={s.contractType} onChange={(_, v: LiveContract | null) => v && set({ contractType: v })}
             sx={{ mt: 0.5, '& .MuiToggleButton-root': { color: 'rgba(255,255,255,0.7)', borderColor: 'rgba(255,255,255,0.15)' }, '& .Mui-selected': { bgcolor: `${binThemeTokens.gold} !important`, color: '#000 !important', fontWeight: 900 } }}>

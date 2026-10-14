@@ -95,3 +95,26 @@ test('card rounds fils exactly like the server (half-fil cases)', () => {
   const hatta = S({ area: 'Hatta', age: 20, annualRent: 40000 });
   assert.equal(m.model.computeLiveQuote(hatta).total, m.server.calculateOwnerOnboardingQuote([m.model.toServerProperty(hatta)], [], Date.now()).portfolioAnnualTotal);
 });
+
+test('card requires bedrooms for apartments; server prices a blank as 2BR with a warning', () => {
+  const blank = S({ propertyType: 'Apartment', bedrooms: null, sqft: 1200, area: 'Jumeirah Village Circle', contractType: 'FM_ONLY' });
+  const card = m.model.computeLiveQuote(blank);
+  assert.equal(card.total, 0);
+  assert.match(card.blockers[0], /bedrooms/i);
+  const server = m.server.calculateOwnerOnboardingQuote([m.model.toServerProperty(blank)], [], Date.now());
+  assert.equal(server.portfolioAnnualTotal, 2156.25);
+  assert.ok(server.propertyQuotes[0].warnings.some((w) => w.startsWith('Bedrooms pending inspection confirmation')));
+  const two = m.model.computeLiveQuote({ ...blank, bedrooms: 2 });
+  assert.equal(two.total, 2156.25);
+  assert.ok(m.card.render({ initial: { propertyType: 'Apartment' } }).includes('Select the number of bedrooms'));
+});
+
+test('a cleared age on the card is priced at the highest band with a warning, same as the server', () => {
+  const st = S({ age: null, contractType: 'FM_ONLY' });
+  const card = m.model.computeLiveQuote(st);
+  const server = m.server.calculateOwnerOnboardingQuote([m.model.toServerProperty(st)], [], Date.now());
+  assert.equal(card.total, server.portfolioAnnualTotal);
+  assert.equal(card.total, 6520.5);
+  assert.ok(card.warnings.some((w) => w.startsWith('Property age pending')));
+  assert.ok(server.propertyQuotes[0].warnings.some((w) => w.startsWith('Property age pending')));
+});
