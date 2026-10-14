@@ -11,7 +11,16 @@ import {
     Clock, CheckCircle2,
     Shield, TrendingUp, AlertCircle, FileText, ExternalLink
 } from 'lucide-react';
-import { db, collection, query, where, onSnapshot, limit } from '../../lib/firebase';
+import { db, collection, query, where, onSnapshot, limit, functions, httpsCallable } from '../../lib/firebase';
+
+// Server ledger status (getOwnerPaymentLedger): PENDING / RECEIVED_UNVERIFIED / VERIFIED / BOUNCED / OVERDUE.
+const LEDGER_LABEL: Record<string, { label: string; color: string }> = {
+    PENDING: { label: 'PENDING', color: '#f59e0b' },
+    RECEIVED_UNVERIFIED: { label: 'RECEIVED - AWAITING VERIFICATION', color: '#3b82f6' },
+    VERIFIED: { label: 'PAID - VERIFIED', color: '#10b981' },
+    BOUNCED: { label: 'CHEQUE BOUNCED', color: '#ef4444' },
+    OVERDUE: { label: 'OVERDUE', color: '#ef4444' },
+};
 import { useRole } from '../../context/RoleContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
@@ -45,6 +54,21 @@ export default function OwnerFinancialsPage() {
     const [streamsLoading, setLoading] = useState(true);
     const [transactions, setTransactions] = useState<any[]>([]);
     const [invoices, setInvoices] = useState<any[]>([]);
+    const [ledgerByInvoice, setLedgerByInvoice] = useState<Record<string, any>>({});
+    const invoiceKey = invoices.map((invoice) => `${invoice.id}:${invoice.status || ''}:${invoice.updatedAt?.seconds || ''}`).join('|');
+    useEffect(() => {
+        if (!invoiceKey) return undefined;
+        let cancelled = false;
+        httpsCallable(functions, 'getOwnerPaymentLedger')({})
+            .then((result: any) => {
+                if (cancelled) return;
+                const map: Record<string, any> = {};
+                for (const row of result?.data?.rows || []) map[row.invoiceId] = row;
+                setLedgerByInvoice(map);
+            })
+            .catch((error) => console.warn('Owner payment ledger unavailable; showing invoice status only.', error?.message || error));
+        return () => { cancelled = true; };
+    }, [invoiceKey]);
     const [loadError, setLoadError] = useState('');
     // Shared Financial Truth summary (passport rent + paid invoices + VERIFIED NOI).
     // This page owns the UID-scoped invoice stream below and hands its rows to
@@ -206,7 +230,16 @@ export default function OwnerFinancialsPage() {
                                         </TableCell>
                                         <TableCell sx={{ color: binThemeTokens.textPrimary, fontWeight: 700 }}>{String(invoice.feeType || invoice.type || 'SERVICE_INVOICE').replace(/_/g, ' ')}</TableCell>
                                         <TableCell sx={{ color: binThemeTokens.textPrimary, fontWeight: 900 }}>{invoice.currency || 'AED'} {Number(invoice.amount || invoice.amountPaid || 0).toLocaleString()}</TableCell>
-                                        <TableCell><Chip label={String(invoice.status || 'PENDING').toUpperCase()} size="small" sx={{ bgcolor: alpha(invoice.status === 'PAID' ? '#10b981' : '#f59e0b', 0.12), color: invoice.status === 'PAID' ? '#10b981' : '#f59e0b', fontWeight: 950 }} /></TableCell>
+                                        <TableCell>{(() => {
+                                            const ledger = ledgerByInvoice[invoice.id];
+                                            const view = ledger ? LEDGER_LABEL[ledger.ledgerStatus] : null;
+                                            const label = view?.label || String(invoice.status || 'PENDING').toUpperCase();
+                                            const color = view?.color || (invoice.status === 'PAID' ? '#10b981' : '#f59e0b');
+                                            return <>
+                                                <Chip data-testid="owner-invoice-ledger-status" label={label} size="small" sx={{ bgcolor: alpha(color, 0.12), color, fontWeight: 950 }} />
+                                                {ledger?.method && <Typography variant="caption" display="block" sx={{ color: binThemeTokens.textSecondary, mt: 0.5 }}>{ledger.method}{ledger.chequeNumber ? ` #${ledger.chequeNumber}` : ''}{ledger.chequeClearanceState ? ` · ${String(ledger.chequeClearanceState).replace(/_/g, ' ')}` : ''}</Typography>}
+                                            </>;
+                                        })()}</TableCell>
                                         <TableCell align="right">
                                             <Stack direction="row" spacing={1} justifyContent="flex-end">
                                                 <Button

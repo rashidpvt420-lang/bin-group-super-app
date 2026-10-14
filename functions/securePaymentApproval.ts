@@ -10,6 +10,7 @@ import {
   resolveStoredOwnerActivationPaymentBinding,
 } from "./ownerActivationPaymentPolicy";
 import { hasDispatchReadyPropertyGeo } from "./propertyGeoAuthority";
+import { assertOwnerChequeClearedForApproval } from "./ownerPaymentLedger";
 
 if (!admin.apps.length) admin.initializeApp();
 
@@ -109,6 +110,12 @@ async function assertOwnerActivationGate(paymentId: string) {
     if (!/^[a-f0-9]{64}$/i.test(text(payment.paymentProofHash || payment.receiptHash)) ||
         !text(payment.paymentProofGeneration || payment.receiptGeneration)) {
       throw new HttpsError("failed-precondition", "Immutable 15% receipt evidence is required before final approval.");
+    }
+    // Ledger: a cheque is verified only after the bank cleared it (bounced cheques cannot activate).
+    try {
+      assertOwnerChequeClearedForApproval(payment);
+    } catch (error: any) {
+      throw new HttpsError("failed-precondition", error?.message || "Cheque clearance is required.");
     }
   }
 

@@ -12,6 +12,7 @@ import { normalizeAedMoney } from "./shared/aedMoney";
 import { parseExactAedAmount } from "./shared/aedMoneyInput";
 import { requirePrivilegedMfaSession } from "./adminMfaSession";
 import { requireMfaFinanceAdminActor } from "./financeAdminMfa";
+import { parseOwnerChequeDetails, type OwnerChequeDetails } from "./ownerPaymentLedger";
 import { assertOtpApplicationBinding, decideOwnerApplicationSubmission } from "./ownerApplicationBinding";
 import {
   assertOwnerOnboardingTransition,
@@ -763,6 +764,15 @@ export const adminRecordOwnerMobilizationPaymentEvidence = onCall({ cors: true, 
   const encoded = text(request.data?.encodedDocument);
   if (!paymentId || reference.length < 4) throw new HttpsError("invalid-argument", "Payment ID and a valid receipt reference are required.");
   if (!["CASH", "CHEQUE"].includes(method)) throw new HttpsError("invalid-argument", "Phase 1 Owner activation accepts Cash or Cheque only.");
+  // Ledger: a cheque must carry its number, drawee bank and date so it can be tracked to clearance.
+  let chequeDetails: OwnerChequeDetails | null = null;
+  if (method === "CHEQUE") {
+    try {
+      chequeDetails = parseOwnerChequeDetails(request.data || {});
+    } catch (error: any) {
+      throw new HttpsError("invalid-argument", error?.message || "Cheque details are invalid.");
+    }
+  }
   if (!contentType.match(/^image\//) && contentType !== "application/pdf") throw new HttpsError("invalid-argument", "Payment evidence must be a PDF or image.");
   const buffer = Buffer.from(encoded.includes(",") ? encoded.split(",").pop() || "" : encoded, "base64");
   if (!buffer.length || buffer.length > 10 * 1024 * 1024) throw new HttpsError("invalid-argument", "Payment evidence is empty or exceeds 10 MB.");
@@ -905,6 +915,13 @@ export const adminRecordOwnerMobilizationPaymentEvidence = onCall({ cors: true, 
       paymentEvidenceRecordedBy: actor.uid,
       paymentEvidenceRecordedByEmail: actor.email || null,
       paymentEvidenceRecordedAt: ts(),
+      // Ledger: who physically received the cash/cheque, and the cheque's bank-clearance state.
+      receivedByAdminUid: actor.uid,
+      receivedAt: ts(),
+      chequeDetails: chequeDetails || null,
+      chequeClearanceState: chequeDetails ? "PENDING_CLEARANCE" : null,
+      chequeClearedBy: null,
+      chequeClearanceAt: null,
       receiptUrl,
       receiptPath: storagePath,
       receiptHash,
@@ -924,7 +941,7 @@ export const adminRecordOwnerMobilizationPaymentEvidence = onCall({ cors: true, 
       action: "RECORD_OWNER_15_PERCENT_PAYMENT_EVIDENCE",
       targetType: "payment_transactions",
       targetId: paymentId,
-      metadata: { intakeId, ownerUid, method, reference, amountReceived, receiptHash, generation, paymentConfigVersion: activeConfiguration.version, paymentConfigHash: activeConfiguration.configHash },
+      metadata: { intakeId, ownerUid, method, chequeDetails, reference, amountReceived, receiptHash, generation, paymentConfigVersion: activeConfiguration.version, paymentConfigHash: activeConfiguration.configHash },
       createdAt: ts(),
     });
   });

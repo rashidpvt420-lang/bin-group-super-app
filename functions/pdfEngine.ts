@@ -536,6 +536,7 @@ export async function generateContractPdfArtifact(data: any): Promise<CanonicalP
             'The Owner shall pay all agreed fees according to the accepted quotation and payment plan. BIN-GROUPS may suspend services, dashboards, tenant invitations, technician dispatch, approvals, document issuance, or contract activation if payments are overdue, reversed, disputed without valid basis, charged back, or incomplete.',
             'يلتزم المالك بسداد جميع الرسوم المتفق عليها وفقاً لعرض السعر المقبول وخطة السداد. ويجوز لشركة BIN-GROUPS تعليق الخدمات أو لوحات التحكم أو دعوات المستأجرين أو توجيه الفنيين أو الموافقات أو إصدار المستندات أو تفعيل العقد إذا كانت الدفعات متأخرة أو معكوسة أو محل نزاع دون أساس صحيح أو مستردة أو غير مكتملة.'
         );
+        renderPaymentScheduleClauses(doc);
 
         const customExclusions = asArray(data.exclusions || data.commercialSchedule?.notCoveredItems || data.serviceDetails?.exclusions);
         const exclusionsEn = customExclusions.length ? customExclusions : details.notCoveredEn;
@@ -814,6 +815,36 @@ export async function generateContractPDF(data: any): Promise<string> {
 }
 
 
+/** 9A-9F payment schedule clauses (EN/AR). Unknown commercial numbers stay as visible placeholders. */
+export const OWNER_PAYMENT_NOTICE_DAYS_PLACEHOLDER = '[NOTICE PERIOD: TO BE CONFIRMED]';
+export const OWNER_PAYMENT_NOTICE_DAYS_PLACEHOLDER_AR = '[مدة الإشعار: يتم تأكيدها لاحقاً]';
+function renderPaymentScheduleClauses(doc: any) {
+    para(doc,
+        '9A. Mobilisation: 15% of the annual contract value is payable as a mobilisation payment once BIN-GROUPS Admin has approved the final verified quotation and the Owner has signed this Agreement, and before any works or services start. BIN-GROUPS issues a mobilisation invoice for this amount. Services start only after the payment is verified.',
+        '9أ. دفعة التفعيل: تُستحق نسبة 15% من القيمة السنوية للعقد كدفعة تفعيل بعد اعتماد إدارة BIN-GROUPS لعرض السعر النهائي المُتحقق منه وتوقيع المالك على هذه الاتفاقية، وقبل بدء أي أعمال أو خدمات. وتُصدر BIN-GROUPS فاتورة بهذا المبلغ. ولا تبدأ الخدمات إلا بعد التحقق من الدفعة.'
+    );
+    para(doc,
+        '9B. Balance: the remaining 85% is payable according to the payment plan stated in this Agreement and the accepted quotation.',
+        '9ب. الرصيد: يُسدد المبلغ المتبقي وقدره 85% وفقاً لخطة السداد المبينة في هذه الاتفاقية وعرض السعر المقبول.'
+    );
+    para(doc,
+        '9C. Payment methods: payments are accepted only in AED by CASH or CHEQUE drawn in favour of the licensed entity named in this Agreement. No other payment method is accepted.',
+        '9ج. طرق الدفع: تُقبل الدفعات بالدرهم الإماراتي فقط نقداً أو بشيك محرر لصالح المنشأة المرخصة المذكورة في هذه الاتفاقية. ولا تُقبل أي طريقة دفع أخرى.'
+    );
+    para(doc,
+        '9D. Cheques: a cheque counts as payment only when the bank has cleared it. If a cheque is returned unpaid, the related amount remains due, any service activation that depended on it does not proceed, and BIN-GROUPS may pursue the remedies available under applicable UAE law, including enforcement of the cheque. Any returned-cheque charge applies only if stated in a schedule signed by both Parties.',
+        '9د. الشيكات: لا يُعتبر الشيك سداداً إلا بعد تحصيله من البنك. وإذا أُعيد الشيك دون صرف يبقى المبلغ المتعلق به مستحقاً، ولا يتم أي تفعيل للخدمة يتوقف عليه، ويجوز لشركة BIN-GROUPS اللجوء إلى سبل الانتصاف المتاحة بموجب القوانين المعمول بها في دولة الإمارات، بما في ذلك تنفيذ الشيك. ولا تُفرض أي رسوم على الشيك المرتجع إلا إذا نُص عليها في جدول موقع من الطرفين.'
+    );
+    para(doc,
+        '9E. Receipts: BIN-GROUPS issues a receipt for every payment once it is verified. The Owner can see each invoice and its status (pending, received awaiting verification, verified, bounced or overdue) in the app.',
+        '9هـ. الإيصالات: تُصدر BIN-GROUPS إيصالاً عن كل دفعة بعد التحقق منها. ويمكن للمالك الاطلاع على كل فاتورة وحالتها (قيد الانتظار، مستلمة بانتظار التحقق، تم التحقق، شيك مرتجع، متأخرة) في التطبيق.'
+    );
+    para(doc,
+        `9F. Suspension for non-payment: if an amount remains unpaid after its due date, BIN-GROUPS may suspend services only after giving the Owner written notice and a period to pay of ${OWNER_PAYMENT_NOTICE_DAYS_PLACEHOLDER}. Emergency works needed to prevent imminent danger to persons or property are not suspended without separate written notice. Services resume once the overdue amount is verified as paid.`,
+        `9و. التعليق بسبب عدم السداد: إذا بقي مبلغ غير مسدد بعد تاريخ استحقاقه، يجوز لشركة BIN-GROUPS تعليق الخدمات فقط بعد إشعار المالك كتابياً ومنحه مهلة للسداد مدتها ${OWNER_PAYMENT_NOTICE_DAYS_PLACEHOLDER_AR}. ولا تُعلق الأعمال الطارئة اللازمة لمنع خطر وشيك على الأشخاص أو الممتلكات دون إشعار كتابي مستقل. وتُستأنف الخدمات بعد التحقق من سداد المبلغ المتأخر.`
+    );
+}
+
 export async function generateMobilizationUnpaidInvoicePdfArtifact(data: any): Promise<CanonicalPdfArtifact> {
     const PDFDocument = await loadPdfKit();
     const invoiceId = textValue(data.invoiceId);
@@ -824,8 +855,12 @@ export async function generateMobilizationUnpaidInvoicePdfArtifact(data: any): P
     if (!invoiceId || !contractId || !ownerId || !Number.isFinite(amount) || amount <= 0 || !/^[a-f0-9]{64}$/i.test(proofHash)) {
         throw new Error('Canonical unpaid invoice fields are incomplete.');
     }
+    const invoiceFont = await getCairoFont();
     return new Promise<CanonicalPdfArtifact>((resolve, reject) => {
         const doc = new (PDFDocument as any)({ margin: 50, size: 'A4', info: { Title: `BIN-GROUPS Mobilisation Invoice ${invoiceId}`, Author: 'BIN-GROUPS Super App' } });
+        // Arabic labels need the full Cairo font (the pdfkit default Helvetica printed them as mojibake).
+        doc.registerFont('Cairo', invoiceFont);
+        doc.font('Cairo');
         const chunks: Buffer[] = [];
         doc.on('data', (chunk: Buffer) => chunks.push(chunk));
         doc.on('error', reject);
@@ -850,9 +885,13 @@ export async function generateMobilizationUnpaidInvoicePdfArtifact(data: any): P
         row(doc, 'Contract ID / رقم العقد', contractId);
         row(doc, 'Amount Due / المبلغ المستحق', money(amount));
         row(doc, 'Currency / العملة', 'AED / درهم إماراتي');
-        row(doc, 'Status / الحالة', 'UNPAID / غير مدفوعة');
+        row(doc, 'Status / الحالة', 'PENDING - UNPAID / قيد الانتظار - غير مدفوعة');
+        row(doc, 'Basis / الأساس', '15% of annual contract value / 15% من القيمة السنوية للعقد');
+        row(doc, 'Due / الاستحقاق', 'Before works or services start / قبل بدء الأعمال أو الخدمات');
+        row(doc, 'Accepted Methods / طرق الدفع المقبولة', 'CASH or CHEQUE only / نقداً أو بشيك فقط');
+        row(doc, 'VAT / ضريبة القيمة المضافة', 'Not applied on this invoice / غير مطبقة على هذه الفاتورة');
         row(doc, 'Verification Hash / رمز التحقق', proofHash);
-        para(doc, 'This invoice is issued from the immutable signed-contract payment schedule.', 'تم إصدار هذه الفاتورة من جدول الدفع الثابت للعقد الموقع.');
+        para(doc, 'This invoice is issued from the immutable signed-contract payment schedule. A cheque counts as payment only once cleared by the bank. A receipt is issued when the payment is verified.', 'تم إصدار هذه الفاتورة من جدول الدفع الثابت للعقد الموقع. ولا يُعتبر الشيك سداداً إلا بعد تحصيله من البنك. ويُصدر إيصال عند التحقق من الدفعة.');
         doc.end();
     });
 }
@@ -868,8 +907,12 @@ export async function generateOwnerPaymentReceiptPdfArtifact(data: any): Promise
     if (!invoiceId || !paymentId || !contractId || !ownerId || !Number.isFinite(amount) || amount <= 0 || !/^[a-f0-9]{64}$/i.test(proofHash)) {
         throw new Error('Canonical payment receipt fields are incomplete.');
     }
+    const invoiceFont = await getCairoFont();
     return new Promise<CanonicalPdfArtifact>((resolve, reject) => {
         const doc = new (PDFDocument as any)({ margin: 50, size: 'A4', info: { Title: `BIN-GROUPS Payment Receipt ${invoiceId}`, Author: 'BIN-GROUPS Super App' } });
+        // Arabic labels need the full Cairo font (the pdfkit default Helvetica printed them as mojibake).
+        doc.registerFont('Cairo', invoiceFont);
+        doc.font('Cairo');
         const chunks: Buffer[] = [];
         doc.on('data', (chunk: Buffer) => chunks.push(chunk));
         doc.on('error', reject);
@@ -896,7 +939,16 @@ export async function generateOwnerPaymentReceiptPdfArtifact(data: any): Promise
         row(doc, 'Amount Received / المبلغ المستلم', money(amount));
         row(doc, 'Currency / العملة', 'AED / درهم إماراتي');
         row(doc, 'Payment Reference / مرجع الدفع', textValue(data.paymentReferenceId));
-        row(doc, 'Approval Status / حالة الاعتماد', 'APPROVED / معتمد');
+        const receiptMethod = textValue(data.paymentMethod, '').toUpperCase();
+        if (receiptMethod) row(doc, 'Method / طريقة الدفع', receiptMethod === 'CHEQUE' ? 'CHEQUE / شيك' : receiptMethod === 'CASH' ? 'CASH / نقداً' : receiptMethod);
+        if (receiptMethod === 'CHEQUE' && data.chequeDetails) {
+            row(doc, 'Cheque No. / رقم الشيك', textValue(data.chequeDetails.chequeNumber));
+            row(doc, 'Bank / البنك', textValue(data.chequeDetails.chequeBank));
+            row(doc, 'Cheque Date / تاريخ الشيك', textValue(data.chequeDetails.chequeDate));
+            row(doc, 'Bank Clearance / تحصيل البنك', textValue(data.chequeClearanceState, '').toUpperCase() === 'CLEARED' ? 'CLEARED / تم التحصيل' : textValue(data.chequeClearanceState));
+        }
+        if (data.verifiedAt) row(doc, 'Verified On / تاريخ التحقق', textValue(data.verifiedAt).slice(0, 10));
+        row(doc, 'Approval Status / حالة الاعتماد', 'VERIFIED / تم التحقق');
         row(doc, 'Verification Hash / رمز التحقق', proofHash);
         para(doc, 'This receipt confirms the server-authoritative approval of the payment evidence.', 'يؤكد هذا الإيصال اعتماد إثبات الدفع من السجل الموثق على الخادم.');
         doc.end();
@@ -914,8 +966,12 @@ export async function generateMobilizationInvoicePdfArtifact(data: any): Promise
     if (!invoiceId || !contractId || !ownerId || !Number.isFinite(amount) || amount <= 0 || !/^[a-f0-9]{64}$/i.test(proofHash)) {
         throw new Error('Canonical invoice fields are incomplete.');
     }
+    const invoiceFont = await getCairoFont();
     return new Promise<CanonicalPdfArtifact>((resolve, reject) => {
         const doc = new (PDFDocument as any)({ margin: 50, size: 'A4', info: { Title: `BIN-GROUPS Invoice ${invoiceId}`, Author: 'BIN-GROUPS Super App' } });
+        // Arabic labels need the full Cairo font (the pdfkit default Helvetica printed them as mojibake).
+        doc.registerFont('Cairo', invoiceFont);
+        doc.font('Cairo');
         const chunks: Buffer[] = [];
         doc.on('data', (chunk: Buffer) => chunks.push(chunk));
         doc.on('error', reject);

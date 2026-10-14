@@ -40,6 +40,7 @@ export * from "./stripePaymentPhase1Hold";
 export * from "./adminOwnerOperations";
 export * from "./adminPropertyReview";
 export * from "./securePaymentApproval";
+export * from "./ownerPaymentLedgerCallables";
 export * from "./paymentConfiguration";
 export * from "./mailDelivery";
 export * from "./notificationDelivery";
