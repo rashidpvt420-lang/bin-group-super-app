@@ -20,7 +20,7 @@ test.before(async () => {
   }
 });
 test.after(() => dir && rmSync(dir, { recursive: true, force: true }));
-const base = (o) => ({ zone: 'B', slaTier: 'standard', paymentPlan: 'annual', propertyAge: 1, contractType: 'FM_ONLY', ...o });
+const base = (o) => ({ zone: 'B', bedrooms: 1, slaTier: 'standard', paymentPlan: 'annual', propertyAge: 1, contractType: 'FM_ONLY', ...o });
 const near = (a, b) => assert.ok(Math.abs(a - b) < 0.01, `${a} != ${b}`);
 
 test('matrix 3.5.0 identical in all copies', () => {
@@ -45,14 +45,14 @@ for (const c of COPIES) {
     near(q({ emirate: 'Dubai', area: 'Business Bay' }), 10500 * 1.15);
   });
   test(`${c}: minimum PM fee 5,000 Dubai / Abu Dhabi incl. Al Ain & Al Dhafra, 2,500 elsewhere`, () => {
-    const pm = (emirate, rent, ct = 'PM_ONLY') => mods[c].calculateUaeQuote2026(base({ assetClassId: 'apt-std', units: 1, annualRent: rent, emirate, contractType: ct })).annualTotal;
+    const pm = (emirate, rent, ct = 'PM_ONLY') => mods[c].calculateUaeQuote2026(base({ assetClassId: 'apt-std', units: 1, annualRent: rent, emirate, area: 'Business Bay', contractType: ct })).annualTotal;
     for (const e of ['Dubai', 'Abu Dhabi', 'Al Ain', 'Al Dhafra']) assert.equal(pm(e, 40000), 5000);
     for (const e of ['Sharjah', 'Ajman', 'Ras Al Khaimah', 'Umm Al Quwain', 'Fujairah']) assert.equal(pm(e, 40000), 2500);
     assert.equal(pm('Dubai', 200000), 10000);
     near(pm('Dubai', 40000, 'BOTH'), 1500 * 1.15 + 5000);
   });
   test(`${c}: warehouse 6.5/sqft and office 10/sqft starting rates; mosque stays 12/sqft`, () => {
-    const q = (o) => mods[c].calculateUaeQuote2026(base({ emirate: 'Ras Al Khaimah', ...o }));
+    const q = (o) => mods[c].calculateUaeQuote2026(base({ emirate: 'Ras Al Khaimah', area: 'Julphar Towers', ...o }));
     assert.equal(q({ assetClassId: 'warehouse', sqft: 10000 }).annualTotal, 65000);
     assert.equal(q({ assetClassId: 'off-sml', sqft: 2000 }).annualTotal, 20000);
     assert.match(readFileSync(`${c}/calculateUaeQuote2026.ts`, 'utf8'), /const mepRate = 12;/);
@@ -83,5 +83,37 @@ for (const c of COPIES) {
     assert.ok(u.riskFlags.some((f) => f.startsWith('Zone pending admin confirmation')));
     near(mods[c].calculateUaeQuote2026(base({ assetClassId: 'villa-std', units: 3, emirate: 'Dubai', area: 'Hatta' })).annualTotal, 10500 * 1.2 * 1.15 * 1.15);
     near(mods[c].calculateUaeQuote2026(base({ assetClassId: 'villa-std', units: 1, emirate: 'Dubai', area: 'Hatta', propertyAge: 20 })).annualTotal, (Math.max(3500 * 1.2 * 1.15, 3500) * 1.35 + 6500) * 1.15);
+  });
+}
+
+// Founder decisions 2026-10-14 13:21: never under-quote on missing/unknown inputs; mosque standard age bands.
+for (const c of COPIES) {
+  test(`${c}: blank apartment bedrooms = 2BR + warning; 0 = studio, no warning`, () => {
+    const q = (o) => mods[c].calculateUaeQuote2026({ zone: 'B', slaTier: 'standard', paymentPlan: 'annual', propertyAge: 1, contractType: 'FM_ONLY', assetClassId: 'apt-std', units: 1, emirate: 'Dubai', area: 'Jumeirah Village Circle', ...o });
+    const blank = q({ bedrooms: undefined });
+    near(blank.annualTotal, 1500 * 1.25 * 1.15);
+    assert.ok(blank.riskFlags.some((f) => f.startsWith('Bedrooms pending inspection confirmation')));
+    const studio = q({ bedrooms: 0 });
+    near(studio.annualTotal, 1725);
+    assert.ok(!studio.riskFlags.some((f) => f.startsWith('Bedrooms pending')));
+  });
+  test(`${c}: blank age = highest band 1.35 + warning; unknown/blank emirate = highest factor and PM minimum; blank area = Zone A`, () => {
+    const v = (o) => mods[c].calculateUaeQuote2026({ zone: 'C', slaTier: 'standard', paymentPlan: 'annual', contractType: 'FM_ONLY', assetClassId: 'villa-std', units: 3, emirate: 'Dubai', area: 'Business Bay', bedrooms: 1, ...o });
+    const noAge = v({ propertyAge: undefined });
+    near(noAge.annualTotal, 10500 * 1.15 * 1.35);
+    assert.ok(noAge.riskFlags.some((f) => f.startsWith('Property age pending inspection confirmation')));
+    near(v({ propertyAge: 0 }).annualTotal, 10500 * 1.15);
+    const atlantis = v({ propertyAge: 1, emirate: 'Atlantis', area: '' });
+    near(atlantis.annualTotal, 10500 * 1.2 * 1.15);
+    assert.ok(atlantis.riskFlags.some((f) => f.startsWith('Emirate pending admin confirmation')));
+    assert.ok(atlantis.riskFlags.some((f) => f.startsWith('Zone pending admin confirmation')));
+    near(v({ propertyAge: 1, emirate: '', area: '' }).annualTotal, 10500 * 1.2 * 1.15);
+    const pm = mods[c].calculateUaeQuote2026({ assetClassId: 'apt-std', units: 1, contractType: 'PM_ONLY', annualRent: 20000, emirate: 'Atlantis', zone: 'B', slaTier: 'standard', paymentPlan: 'annual', propertyAge: 1 });
+    assert.equal(pm.annualTotal, 5000);
+    assert.ok(pm.riskFlags.some((f) => f.startsWith('Emirate pending admin confirmation')));
+  });
+  test(`${c}: mosque uses the standard age bands 1.10 / 1.20 / 1.35 (blank = 1.35)`, () => {
+    const m = (age) => mods[c].calculateUaeQuote2026({ assetClassId: 'mosque_fm', contractType: 'FM_ONLY', sqft: 10000, units: 200, emirate: 'Dubai', area: 'Business Bay', zone: 'B', slaTier: 'standard', paymentPlan: 'annual', propertyAge: age }).baseQuote;
+    assert.deepEqual([0, 5, 7, 12, 20, undefined].map(m), [120000, 120000, 132000, 144000, 162000, 162000]);
   });
 }

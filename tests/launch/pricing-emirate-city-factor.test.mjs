@@ -59,6 +59,7 @@ for (const path of ENGINE_COPIES) {
     const { calculateUaeQuote2026 } = modules[path];
     const quote = calculateUaeQuote2026(villa('Atlantis'));
     assert.ok(quote.riskFlags.some((flag) => flag.includes("'Atlantis' is not recognised")));
-    assert.equal(quote.emirateAdjustedQuote, quote.zoneAdjustedQuote);
+    // Founder decision 2026-10-14 13:21: an unknown emirate is priced at the highest regional factor (safe side).
+    assert.equal(quote.emirateAdjustedQuote, quote.zoneAdjustedQuote * 1.15);
   });
 }

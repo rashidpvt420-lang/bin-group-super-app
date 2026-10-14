@@ -66,8 +66,8 @@ test('all three engine copies refuse BOTH and PM-only for every 0% management cl
 
 test('the server quote fails with a clear PM_NOT_SUPPORTED error for BOTH on Government Majlis and Stadium', () => {
   const { calculateOwnerOnboardingQuote: quote } = modules.server;
-  const majlis = { propertyType: 'Government Majlis', emirate: 'Dubai', annualRent: 100000 };
-  const stadium = { propertyType: 'Stadium', emirate: 'Dubai', sqft: 10000, annualRent: 1000000 };
+  const majlis = { propertyType: 'Government Majlis', emirate: 'Dubai', area: 'Business Bay', age: 3, annualRent: 100000 };
+  const stadium = { propertyType: 'Stadium', emirate: 'Dubai', area: 'Business Bay', age: 3, sqft: 10000, annualRent: 1000000 };
   for (const property of [majlis, stadium]) {
     for (const strategy of ['both', 'pm']) {
       assert.throws(
@@ -84,7 +84,7 @@ test('the server quote fails with a clear PM_NOT_SUPPORTED error for BOTH on Gov
 
 test('BOTH for a class with a real management rate is unchanged (apartment: 1,725 FM + 5,000 PM)', () => {
   const { calculateOwnerOnboardingQuote: quote } = modules.server;
-  const result = quote([{ propertyType: 'Apartment', emirate: 'Dubai', zone: 'B', units: 1, age: 3, strategy: 'both', annualRent: 100000 }], [], T);
+  const result = quote([{ propertyType: 'Apartment', emirate: 'Dubai', area: 'Business Bay', zone: 'B', units: 1, bedrooms: 1, age: 3, strategy: 'both', annualRent: 100000 }], [], T);
   assert.equal(result.annualContractValue, 6725);
   assert.equal(result.activationDeposit, 1008.75);
 });
