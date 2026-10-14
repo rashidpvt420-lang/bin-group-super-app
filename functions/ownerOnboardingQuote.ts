@@ -225,6 +225,7 @@ function quoteInputForProperty(
     input: {
       assetClassId,
       emirate: text(property.emirate),
+      area: text(property.area || property.community || property.district || property.city),
       zone: safeZone(property.zone),
       contractType: mode,
       sqft: isMosque ? number(mosqueProfile.grossFloorAreaSqft || property.sqft) : gymArea,

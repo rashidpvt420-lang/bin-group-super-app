@@ -1,8 +1,11 @@
 import { SERVICE_ADDONS, UAE_PRICING_MATRIX_2026, serviceAddOnAnnualPrice } from './uaePricingMatrix2026';
+import { UAE_AREA_ZONES_2026, type UaeAreaZoneEntry } from './uaeAreaZones2026';
 
 export interface QuoteInput {
   assetClassId: string;
   emirate: string;
+  /** Owner-typed area / community; matched to the approved zone map (overrides zone when matched). */
+  area?: string;
   zone: 'A' | 'B' | 'C';
   contractType: 'FM_ONLY' | 'PM_ONLY' | 'BOTH';
   sqft?: number;
@@ -248,42 +251,97 @@ function finiteNumber(value: unknown, fallback = 0): number {
 
 function positiveNumber(value: unknown, fallback = 0): number { return Math.max(finiteNumber(value, fallback), 0); }
 
+const ABU_DHABI_FAMILY = ['Abu Dhabi', 'Al Ain', 'Al Dhafra'];
+
 /**
- * Cities / areas that owners or address lookup often enter in the emirate field. Each maps to the
- * emirate whose regional factor applies (Al Ain is in the Emirate of Abu Dhabi, etc.).
+ * Cities / areas that owners or address lookup often enter in the emirate or area field. Each maps to the
+ * pricing region whose factor applies. Al Ain and Al Dhafra are their own regions (Founder decision 2026-10-14).
  */
-const EMIRATE_CITY_ALIASES: Record<string, string> = {
-  alain: 'Abu Dhabi', alayn: 'Abu Dhabi', khalifacity: 'Abu Dhabi', mussafah: 'Abu Dhabi', musaffah: 'Abu Dhabi',
-  madinatzayed: 'Abu Dhabi', ruwais: 'Abu Dhabi', alruwais: 'Abu Dhabi', aldhafra: 'Abu Dhabi', liwa: 'Abu Dhabi',
-  hatta: 'Dubai', jebelali: 'Dubai',
-  khorfakkan: 'Sharjah', kalba: 'Sharjah', dibbaalhisn: 'Sharjah',
+const REGION_CITY_ALIASES: Record<string, string> = {
+  alain: 'Al Ain', alayn: 'Al Ain', العين: 'Al Ain',
+  aldhafra: 'Al Dhafra', dhafra: 'Al Dhafra', westernregion: 'Al Dhafra', madinatzayed: 'Al Dhafra', ruwais: 'Al Dhafra',
+  liwa: 'Al Dhafra', ghayathi: 'Al Dhafra', الظفره: 'Al Dhafra', الرويس: 'Al Dhafra',
+  khalifacity: 'Abu Dhabi', mussafah: 'Abu Dhabi', musaffah: 'Abu Dhabi',
+  hatta: 'Dubai', jebelali: 'Dubai', khorfakkan: 'Sharjah', kalba: 'Sharjah', dibbaalhisn: 'Sharjah',
 };
 
-function emirateKey(value: string): string {
-  return String(value || '').toLowerCase().replace(/^emirate\s+of\s+/, '').replace(/\s+emirate$/, '').replace(/[^a-z0-9]+/g, '');
+const REGION_EMIRATE_TOKENS: Array<[string, string]> = [
+  ['abudhabi', 'Abu Dhabi'], ['ابوظبي', 'Abu Dhabi'], ['dubai', 'Dubai'], ['دبي', 'Dubai'],
+  ['sharjah', 'Sharjah'], ['الشارقه', 'Sharjah'], ['ajman', 'Ajman'], ['عجمان', 'Ajman'],
+  ['rasalkhaimah', 'Ras Al Khaimah'], ['راسالخيمه', 'Ras Al Khaimah'], ['ummalquwain', 'Umm Al Quwain'],
+  ['ummalqaiwain', 'Umm Al Quwain'], ['امالقيوين', 'Umm Al Quwain'], ['fujairah', 'Fujairah'], ['الفجيره', 'Fujairah'],
+];
+
+/** Case-, space-, punctuation- and Arabic-letter-variant-insensitive key ("Al Ain" / "Alain" / "AL-AIN" -> "alain"). */
+export function pricingLocationKey(value: unknown): string {
+  return String(value || '').toLowerCase()
+    .replace(/^\s*emirate\s+of\s+/, '').replace(/\s+emirate\s*$/, '')
+    .replace(/[\u064B-\u0652\u0640]/g, '').replace(/[أإآ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي')
+    .replace(/[^a-z0-9\u0621-\u064A]+/g, '');
 }
 
-function matrixEmirateFactor(label: string): number {
+function longestContained<T>(key: string, pairs: Array<[string, T]>): T | null {
+  let best: { length: number; value: T } | null = null;
+  for (const [alias, value] of pairs) {
+    if (alias.length >= 3 && key.includes(alias) && (!best || alias.length > best.length)) best = { length: alias.length, value };
+  }
+  return best ? best.value : null;
+}
+
+/** Pricing region for a typed emirate or city, or null when unrecognised. */
+export function resolvePricingRegion(value: unknown): string | null {
+  const key = pricingLocationKey(value);
+  if (!key) return null;
+  if (REGION_CITY_ALIASES[key]) return REGION_CITY_ALIASES[key];
+  if (key === 'rak') return 'Ras Al Khaimah';
+  if (key === 'uaq') return 'Umm Al Quwain';
+  if (key === 'ad' || key === 'auh') return 'Abu Dhabi';
+  return longestContained(key, Object.entries(REGION_CITY_ALIASES)) || longestContained(key, REGION_EMIRATE_TOKENS);
+}
+
+function sameEmirateFamily(left: string, right: string): boolean {
+  if (left === right) return true;
+  return ABU_DHABI_FAMILY.includes(left) && ABU_DHABI_FAMILY.includes(right);
+}
+
+const AREA_ALIAS_INDEX: Array<[string, UaeAreaZoneEntry]> = UAE_AREA_ZONES_2026.flatMap(
+  (entry) => entry.aliases.map((alias) => [pricingLocationKey(alias), entry] as [string, UaeAreaZoneEntry]),
+);
+
+export interface AreaZoneResolution {
+  status: 'matched' | 'unmatched' | 'missing';
+  entry: UaeAreaZoneEntry | null;
+}
+
+/** Match an owner-typed area / community to the approved zone map, scoped to the emirate when it is known. */
+export function resolveAreaZone(area: unknown, emirate?: unknown): AreaZoneResolution {
+  const key = pricingLocationKey(area);
+  if (!key) return { status: 'missing', entry: null };
+  const emirateRegion = resolvePricingRegion(emirate);
+  const candidates = emirateRegion
+    ? AREA_ALIAS_INDEX.filter(([, entry]) => sameEmirateFamily(entry.region, emirateRegion))
+    : AREA_ALIAS_INDEX;
+  const entry = longestContained(key, candidates);
+  return entry ? { status: 'matched', entry } : { status: 'unmatched', entry: null };
+}
+
+function matrixRegionFactor(label: string): number {
   const entry = UAE_PRICING_MATRIX_2026.emirateMultipliers.find((item) => item.label === label);
   return entry ? finiteNumber(entry.value, 1) : 1;
 }
 
-/** Regional factor comes from UAE_PRICING_MATRIX_2026.emirateMultipliers (the table the Admin page shows). */
-export function resolveEmirateMultiplier(emirate: string): { input: string; emirate: string | null; multiplier: number; viaCity: boolean } {
+/** Regional factor from UAE_PRICING_MATRIX_2026.emirateMultipliers (the table the Admin page shows). */
+export function resolveEmirateMultiplier(emirate: string, area?: string): { input: string; emirate: string | null; multiplier: number; viaCity: boolean } {
   const input = String(emirate || '').trim();
-  const key = emirateKey(input);
-  if (!key) return { input: '', emirate: null, multiplier: 1, viaCity: false };
-  const cityEmirate = EMIRATE_CITY_ALIASES[key];
-  const resolvedKey = cityEmirate ? emirateKey(cityEmirate) : key;
-  const northern = 'RAK / Ajman / Fujairah / UAQ';
-  let resolved: string | null = null;
-  if (resolvedKey.includes('dubai')) resolved = 'Dubai';
-  else if (resolvedKey.includes('abudhabi')) resolved = 'Abu Dhabi';
-  else if (resolvedKey.includes('sharjah')) resolved = 'Sharjah';
-  else if (resolvedKey === 'rak' || resolvedKey.includes('rasalkhaimah') || resolvedKey.includes('ajman')
-    || resolvedKey.includes('fujairah') || resolvedKey === 'uaq' || resolvedKey.includes('ummalquwain')) resolved = northern;
-  if (!resolved) return { input, emirate: null, multiplier: 1, viaCity: false };
-  return { input, emirate: resolved === northern ? northern : resolved, multiplier: matrixEmirateFactor(resolved), viaCity: Boolean(cityEmirate) };
+  const emirateRegion = resolvePricingRegion(input);
+  const areaMatch = resolveAreaZone(area, input).entry;
+  const areaRegion = areaMatch ? areaMatch.region : resolvePricingRegion(area);
+  let region = emirateRegion;
+  // A more specific region from the area (Al Ain / Al Dhafra inside Abu Dhabi) wins within the same emirate.
+  if (areaRegion && (!region || sameEmirateFamily(areaRegion, region))) region = areaRegion;
+  if (!region) return { input, emirate: null, multiplier: 1, viaCity: false };
+  const viaCity = Boolean(input) && pricingLocationKey(input) !== pricingLocationKey(region);
+  return { input: input || String(area || '').trim(), emirate: region, multiplier: matrixRegionFactor(region), viaCity };
 }
 
 function normalizeAssetClassId(assetClassId?: string): string {
@@ -323,6 +381,7 @@ function sanitizeQuoteInput(input: Partial<QuoteInput> | null | undefined): Quot
   return {
     assetClassId: normalizeAssetClassId(raw.assetClassId),
     emirate: String(raw.emirate || '').trim(),
+    area: String(raw.area || '').trim().slice(0, 200),
     zone: safeZone(raw.zone),
     contractType: safeContractType(raw.contractType),
     sqft: positiveNumber(raw.sqft), units: positiveNumber(raw.units), beds: positiveNumber(raw.beds),
@@ -538,18 +597,27 @@ export function calculateUaeQuote2026(input: Partial<QuoteInput> | null | undefi
     pricingExplanation.push(`Minimum technical annual contract of AED ${assetClass.minimumAnnualContract} applied.`);
   }
 
-  const zoneEntry = UAE_PRICING_MATRIX_2026.zones[safeInput.zone] || UAE_PRICING_MATRIX_2026.zones.B || { multiplier: 1 };
+  const areaZone = resolveAreaZone(safeInput.area, safeInput.emirate);
+  let zone: 'A' | 'B' | 'C' = safeInput.zone;
+  if (areaZone.entry) {
+    zone = areaZone.entry.zone;
+    pricingExplanation.push(`Area '${safeInput.area}' matched ${areaZone.entry.area} (${areaZone.entry.region}): Zone ${zone}.`);
+  } else if (areaZone.status === 'unmatched') {
+    zone = 'B';
+    riskFlags.push(`Area '${safeInput.area}' is not in the UAE area-zone map; Zone B (standard) applied, admin confirmation required`);
+  }
+  const zoneEntry = UAE_PRICING_MATRIX_2026.zones[zone] || UAE_PRICING_MATRIX_2026.zones.B || { multiplier: 1 };
   const zoneMultiplier = finiteNumber(zoneEntry.multiplier, 1);
   const zoneAdjustedQuote = baseQuote * zoneMultiplier;
-  if (zoneMultiplier !== 1) pricingExplanation.push(`Zone ${safeInput.zone} technical-service factor ${zoneMultiplier}x applied.`);
+  if (zoneMultiplier !== 1) pricingExplanation.push(`Zone ${zone} technical-service factor ${zoneMultiplier}x applied.`);
 
-  const emirateResolution = resolveEmirateMultiplier(safeInput.emirate);
+  const emirateResolution = resolveEmirateMultiplier(safeInput.emirate, safeInput.area);
   const emirateMultiplier = emirateResolution.multiplier;
   if (!emirateResolution.input) riskFlags.push('Emirate confirmation required');
   else if (!emirateResolution.emirate) riskFlags.push(`Emirate '${safeInput.emirate}' is not recognised; regional factor not applied, confirmation required`);
-  else if (emirateResolution.viaCity) pricingExplanation.push(`${safeInput.emirate} is priced under the ${emirateResolution.emirate} regional factor.`);
+  else if (emirateResolution.viaCity) pricingExplanation.push(`Priced under the ${emirateResolution.emirate} regional factor.`);
   const emirateAdjustedQuote = zoneAdjustedQuote * emirateMultiplier;
-  if (emirateMultiplier !== 1) pricingExplanation.push(`Regional technical-service factor ${emirateMultiplier}x applied for ${safeInput.emirate}.`);
+  if (emirateMultiplier !== 1) pricingExplanation.push(`Regional technical-service factor ${emirateMultiplier}x applied for ${emirateResolution.emirate || safeInput.emirate}.`);
 
   const ageMultiplier = safeInput.propertyAge > 20 ? 1.2 : safeInput.propertyAge > 10 ? 1.12 : safeInput.propertyAge > 5 ? 1.06 : 1;
   if (ageMultiplier > 1) pricingExplanation.push(`Asset-age factor ${ageMultiplier}x applied for ${safeInput.propertyAge} years.`);

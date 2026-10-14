@@ -6,7 +6,7 @@ import {
 import { Download, FileText } from 'lucide-react';
 
 // Production Imports
-import { UAE_PRICING_MATRIX_2026, binThemeTokens } from '@bin/shared';
+import { UAE_PRICING_MATRIX_2026, UAE_AREA_ZONES_2026, binThemeTokens } from '@bin/shared';
 
 /**
  * PricingMatrixPage
@@ -164,6 +164,37 @@ export default function PricingMatrixPage() {
                     </Paper>
                 </Grid>
             </Grid>
+
+            {/* AREA -> ZONE MAP (same table the quote engine uses) */}
+            <Paper data-testid="pricing-area-zone-map" sx={{ mt: 4, borderRadius: 6, bgcolor: 'rgba(22, 22, 24, 0.6)', border: '1px solid rgba(255,255,255,0.05)', overflow: 'hidden' }}>
+                <Box sx={{ p: 3, borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                    <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>AREA ZONE MAP ({UAE_AREA_ZONES_2026.length} AREAS)</Typography>
+                    <Typography variant="caption" display="block" color="rgba(255,255,255,0.5)">Owner-entered areas are matched to this table (English, Arabic and spelling aliases). Unmatched areas are priced as Zone B and flagged for admin confirmation.</Typography>
+                </Box>
+                <TableContainer>
+                    <Table size="small">
+                        <TableHead>
+                            <TableRow>
+                                {['Region', 'Area', 'Zone', 'Segment', 'Confidence', 'Aliases'].map((h) => (
+                                    <TableCell key={h} sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>{h}</TableCell>
+                                ))}
+                            </TableRow>
+                        </TableHead>
+                        <TableBody>
+                            {UAE_AREA_ZONES_2026.map((row) => (
+                                <TableRow key={`${row.region}-${row.area}`}>
+                                    <TableCell sx={{ color: '#FFF' }}>{row.region}</TableCell>
+                                    <TableCell sx={{ color: '#FFF' }}>{row.area}</TableCell>
+                                    <TableCell><Chip size="small" label={`Zone ${row.zone} · ${UAE_PRICING_MATRIX_2026.zones[row.zone]?.multiplier}x`} sx={{ bgcolor: row.zone === 'A' ? binThemeTokens.gold : 'rgba(255,255,255,0.08)', color: row.zone === 'A' ? '#000' : '#FFF', fontWeight: 900 }} /></TableCell>
+                                    <TableCell sx={{ color: 'rgba(255,255,255,0.6)' }}>{row.segment}</TableCell>
+                                    <TableCell sx={{ color: 'rgba(255,255,255,0.6)' }}>{row.confidence}</TableCell>
+                                    <TableCell sx={{ color: 'rgba(255,255,255,0.5)' }}>{row.aliases.join(', ')}</TableCell>
+                                </TableRow>
+                            ))}
+                        </TableBody>
+                    </Table>
+                </TableContainer>
+            </Paper>
         </Container>
     );
 }

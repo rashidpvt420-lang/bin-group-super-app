@@ -91,6 +91,9 @@ export function serviceAddOnAnnualPrice(id: string): number | null {
   return periodsPerYear === undefined ? null : item.price * periodsPerYear;
 }
 
+export { UAE_AREA_ZONES_2026 } from './uaeAreaZones2026';
+export type { UaeAreaZoneEntry } from './uaeAreaZones2026';
+
 export interface PricingMatrix {
   version: string;
   lastUpdated: string;
@@ -105,18 +108,25 @@ export interface PricingMatrix {
  * PM percentages are applied to verified annual rent/revenue by the quote engine and are never multiplied by area or unit counts.
  */
 export const UAE_PRICING_MATRIX_2026: PricingMatrix = {
-  version: '3.3.0',
-  lastUpdated: '2026-09-05',
+  version: '3.4.0',
+  lastUpdated: '2026-10-14',
   zones: {
-    A: { label: 'Premium', description: 'Luxury, waterfront, branded and higher-response assets', multiplier: 1.30 },
+    A: { label: 'Premium', description: 'Luxury, waterfront, branded and higher-response assets', multiplier: 1.20 },
     B: { label: 'Standard', description: 'Standard urban operating conditions', multiplier: 1.00 },
-    C: { label: 'Budget/Industrial', description: 'Industrial and lower-cost operating corridors', multiplier: 0.75 },
+    C: { label: 'Budget/Industrial', description: 'Industrial and lower-cost operating corridors', multiplier: 0.90 },
   },
+  // Founder-approved 2026-10-14 (audit/uae-area-zones-2026-10-14.md). Al Ain and Al Dhafra are
+  // their own pricing regions inside the Emirate of Abu Dhabi.
   emirateMultipliers: [
     { label: 'Dubai', value: '1.15x', isPremium: true },
     { label: 'Abu Dhabi', value: '1.10x', isPremium: true },
-    { label: 'Sharjah', value: '0.90x', isPremium: false },
-    { label: 'RAK / Ajman / Fujairah / UAQ', value: '0.80x', isPremium: false },
+    { label: 'Al Ain', value: '0.92x', isPremium: false },
+    { label: 'Al Dhafra', value: '0.92x', isPremium: false },
+    { label: 'Sharjah', value: '0.98x', isPremium: false },
+    { label: 'Ajman', value: '0.93x', isPremium: false },
+    { label: 'Ras Al Khaimah', value: '1.00x', isPremium: false },
+    { label: 'Umm Al Quwain', value: '0.92x', isPremium: false },
+    { label: 'Fujairah', value: '0.91x', isPremium: false },
   ],
   assetClasses: [
     {
