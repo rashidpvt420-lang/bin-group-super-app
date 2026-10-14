@@ -480,6 +480,8 @@ export function resolveMandatoryAddOns(input: QuoteInput): string[] {
   if (safeInput.hasCivilDefenseSystem) ids.add('fire_safety');
   if (safeInput.hasWaterTank) ids.add('water_tank');
   if ((safeInput.lifts || 0) > 0) ids.add('elevator_amc');
+  // Blank lifts on a multi-storey building: assume lifts exist (safe side), so the lift AMC is included.
+  if (MULTI_STOREY_ASSET_IDS.has(asset) && safeInput.liftsUnknown) ids.add('elevator_amc');
   if (safeInput.hasSiraCctv) ids.add('sira_renewal');
   if (safeInput.hasBmu) ids.add('facade_access');
   // Blank age is priced as 15+ (safe side), so the mandatory 15+ asset audit is included too.

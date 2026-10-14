@@ -125,6 +125,8 @@ for (const c of COPIES) {
     const known = b({ floors: 5, lifts: 2 });
     const blank = b({ floors: undefined, lifts: undefined });
     near(blank.complexityPremium, known.emirateAdjustedQuote * 0.20);
+    assert.equal(blank.addOnTotal, known.addOnTotal); // blank lifts still carries the lift AMC (7,500)
+    assert.equal(known.addOnTotal, 7500);
     assert.ok(blank.riskFlags.some((f) => f.startsWith('Floors / lifts pending inspection confirmation')));
     assert.ok(!known.riskFlags.some((f) => f.startsWith('Floors / lifts pending')));
     near(b({ floors: undefined, lifts: 2 }).complexityPremium, known.emirateAdjustedQuote * 0.12);
