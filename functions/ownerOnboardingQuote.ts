@@ -3,6 +3,7 @@ import {
   ASSET_PROFILE_PROPERTY_TYPES,
   calculateUaeQuote2026,
   resolveAssetClassIdForPropertyType,
+  ZONE_PENDING_FLAG,
   type QuoteInput,
 } from "./pricing/calculateUaeQuote2026";
 import { UAE_PRICING_MATRIX_2026 } from "./pricing/uaePricingMatrix2026";
@@ -231,6 +232,7 @@ function quoteInputForProperty(
       sqft: isMosque ? number(mosqueProfile.grossFloorAreaSqft || property.sqft) : gymArea,
       units,
       beds,
+      bedrooms: number(property.bedrooms),
       annualRent,
       annualRevenue,
       propertyAge: isMosque ? number(mosqueProfile.propertyAgeYears || property.age) : number(property.age),
@@ -312,6 +314,8 @@ export function calculateOwnerOnboardingQuote(
       pricingClass: assetClassId,
       pricingDriver,
       annualTotal: money(quote.annualTotal),
+      // Owner-facing warnings (e.g. zone pending admin confirmation for an unmapped area).
+      warnings: quote.riskFlags.filter((flag: string) => flag.startsWith(ZONE_PENDING_FLAG)),
     };
   });
 

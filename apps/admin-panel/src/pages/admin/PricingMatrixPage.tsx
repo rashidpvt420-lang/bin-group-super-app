@@ -183,7 +183,7 @@ export default function PricingMatrixPage() {
             <Paper data-testid="pricing-area-zone-map" sx={{ mt: 4, borderRadius: 6, bgcolor: 'rgba(22, 22, 24, 0.6)', border: '1px solid rgba(255,255,255,0.05)', overflow: 'hidden' }}>
                 <Box sx={{ p: 3, borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
                     <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>AREA ZONE MAP ({UAE_AREA_ZONES_2026.length} AREAS)</Typography>
-                    <Typography variant="caption" display="block" color="rgba(255,255,255,0.5)">Owner-entered areas are matched to this table (English, Arabic and spelling aliases). Unmatched areas are priced as Zone B and flagged for admin confirmation. The minimum annual contract still applies after zone and emirate factors.</Typography>
+                    <Typography variant="caption" display="block" color="rgba(255,255,255,0.5)">Owner-entered areas are matched to this table (English, Arabic and spelling aliases). Unmatched areas are priced as Zone A (safe side) and flagged "zone pending admin confirmation". Apartments are priced by bedrooms (2BR ×1.25, 3BR ×1.5, 4BR+ ×1.75). The minimum annual contract still applies after zone and emirate factors.</Typography>
                 </Box>
                 <TableContainer>
                     <Table size="small">

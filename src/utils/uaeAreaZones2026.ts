@@ -888,7 +888,7 @@ export const UAE_AREA_ZONES_2026: ReadonlyArray<UaeAreaZoneEntry> = [
   {
     "region": "Dubai",
     "area": "Hatta",
-    "zone": "B",
+    "zone": "A",
     "segment": "residential",
     "confidence": "low",
     "remote": true,
