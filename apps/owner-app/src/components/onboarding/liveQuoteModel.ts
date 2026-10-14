@@ -10,6 +10,7 @@ import {
   UAE_AREA_ZONES_2026,
   UAE_PRICING_MATRIX_2026,
   ZONE_PENDING_FLAG,
+  normalizeAedMoney,
 } from '@bin/shared';
 
 export type LiveContract = 'FM_ONLY' | 'PM_ONLY' | 'BOTH';
@@ -92,7 +93,8 @@ function engineInput(s: LiveQuoteState, contractType: LiveContract) {
   };
 }
 
-const money = (n: number) => Math.round((Number.isFinite(n) ? n : 0) * 100) / 100;
+// Same canonical half-up fils rounding as the server quote (functions/shared/aedMoney.ts).
+const money = (n: number) => normalizeAedMoney(Number.isFinite(n) ? n : 0);
 
 export interface LiveQuoteResult {
   maintenance: number | null;

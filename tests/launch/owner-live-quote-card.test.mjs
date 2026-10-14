@@ -19,7 +19,7 @@ async function bundle(entry, name, alias) {
 test.before(async () => {
   dir = mkdtempSync(join(resolve('.'), '.tmp-live-quote-'));
   const shim = join(dir, 'shared.ts');
-  writeFileSync(shim, ["calculateUaeQuote2026", "uaePricingMatrix2026"].map((f) => `export * from '${resolve('packages/shared/src/pricing', f)}';`).join('\n'));
+  writeFileSync(shim, ["calculateUaeQuote2026", "uaePricingMatrix2026", "aedMoney"].map((f) => `export * from '${resolve('packages/shared/src/pricing', f)}';`).join('\n'));
   const alias = { '@bin/shared': shim };
   m.model = await bundle(`${D}/liveQuoteModel.ts`, 'model', alias);
   const entry = join(dir, 'render.tsx');
@@ -83,4 +83,15 @@ test('bedrooms input and zone-pending warning reach card and server identically'
   assert.equal(m.server.calculateOwnerOnboardingQuote([m.model.toServerProperty(S({}))], [], Date.now()).propertyQuotes[0].warnings.length, 0);
   assert.ok(m.card.render({ initial: { emirate: 'Sharjah', area: m.model.OTHER_AREA } }).includes('live-quote-warning'));
   assert.ok(m.card.render({ initial: { propertyType: 'Apartment' } }).includes('live-quote-bedrooms'));
+});
+
+test('card rounds fils exactly like the server (half-fil cases)', () => {
+  const body = (f) => readFileSync(f, 'utf8').split('\n').filter((l) => !l.startsWith('// Identical copy')).join('\n');
+  assert.equal(body('packages/shared/src/pricing/aedMoney.ts'), body('functions/shared/aedMoney.ts'));
+  for (const [emirate, area, age, contractType] of [['Dubai', 'Al Furjan / Jebel Ali First', 0, 'FM_ONLY'], ['Dubai', 'Hatta', 0, 'FM_ONLY'], ['Abu Dhabi', 'Madinat Zayed / Ruwais / Ghayathi / Liwa', 0, 'FM_ONLY']]) {
+    const st = S({ emirate, area, age, contractType, propertyType: 'Apartment', bedrooms: 2, sqft: 1200 });
+    assert.equal(m.model.computeLiveQuote(st).total, m.server.calculateOwnerOnboardingQuote([m.model.toServerProperty(st)], [], Date.now()).portfolioAnnualTotal, area);
+  }
+  const hatta = S({ area: 'Hatta', age: 20, annualRent: 40000 });
+  assert.equal(m.model.computeLiveQuote(hatta).total, m.server.calculateOwnerOnboardingQuote([m.model.toServerProperty(hatta)], [], Date.now()).portfolioAnnualTotal);
 });
