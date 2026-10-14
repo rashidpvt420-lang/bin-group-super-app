@@ -16,12 +16,16 @@ import {
 
 export const NON_COMPETE_MAX_MONTHS = 24; // Art. 10(1): not more than two years from contract expiry.
 
+export const NON_COMPETE_DEFAULT_PLACE = 'the United Arab Emirates';
+export const NON_COMPETE_DEFAULT_PLACE_AR = 'دولة الإمارات العربية المتحدة';
+
 export type NonCompeteTerms = {
+  /** Required per employee; 1-24 months (Art. 10(1)). */
   months: number;
-  place: string;
-  placeAr: string;
-  typeOfWork: string;
-  typeOfWorkAr: string;
+  place?: string;
+  placeAr?: string;
+  typeOfWork?: string;
+  typeOfWorkAr?: string;
 };
 
 export type EmploymentAddendumInput = {
@@ -32,8 +36,10 @@ export type EmploymentAddendumInput = {
   startDate?: Date;
   referenceNumber: string;
   issueDate?: Date;
-  /** Only when the role gives access to clients or work secrets (Art. 10(1)). */
-  nonCompete?: NonCompeteTerms | null;
+  /** Included by default (owner decision 14 Oct 2026). Months are required; area defaults to the UAE. */
+  nonCompete: NonCompeteTerms | null;
+  /** Explicit opt-out; set only on legal advice. */
+  excludeNonCompete?: boolean;
 };
 
 export type AddendumClause = { titleEn: string; titleAr: string; en: string; ar: string };
@@ -43,18 +49,31 @@ export const EMPLOYMENT_ADDENDUM_DISCLAIMER =
 
 const fmt = (d?: Date) => (d ? d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '[DATE]');
 
+export function resolveNonCompete(input: Pick<EmploymentAddendumInput, 'nonCompete' | 'excludeNonCompete' | 'jobTitle'>): Required<NonCompeteTerms> | null {
+  if (input.excludeNonCompete) return null;
+  const t = input.nonCompete;
+  if (!t) throw new Error('Non-compete duration (months) is required for every employee unless excludeNonCompete is set.');
+  return {
+    months: t.months,
+    place: t.place?.trim() || NON_COMPETE_DEFAULT_PLACE,
+    placeAr: t.placeAr?.trim() || NON_COMPETE_DEFAULT_PLACE_AR,
+    typeOfWork: t.typeOfWork?.trim() || `the type of work the Employee performed for the Employer as ${input.jobTitle}`,
+    typeOfWorkAr: t.typeOfWorkAr?.trim() || `نوع العمل الذي كان يؤديه العامل لدى صاحب العمل بوظيفة ${input.jobTitle}`,
+  };
+}
+
 export function validateNonCompete(terms?: NonCompeteTerms | null): string | null {
   if (!terms) return null;
-  if (!Number.isFinite(terms.months) || terms.months <= 0) return 'Non-compete duration must be a positive number of months.';
+  if (!Number.isInteger(terms.months) || terms.months <= 0) return 'Non-compete duration must be a whole, positive number of months.';
   if (terms.months > NON_COMPETE_MAX_MONTHS) return `Non-compete may not exceed ${NON_COMPETE_MAX_MONTHS} months (Federal Decree-Law No. 33 of 2021, Art. 10(1)).`;
-  if (!terms.place.trim() || !terms.typeOfWork.trim() || !terms.placeAr.trim() || !terms.typeOfWorkAr.trim()) {
+  if (!terms.place?.trim() || !terms.typeOfWork?.trim() || !terms.placeAr?.trim() || !terms.typeOfWorkAr?.trim()) {
     return 'Non-compete must state place and type of work in English and Arabic (Art. 10(1)).';
   }
   return null;
 }
 
 export function buildEmploymentAddendumClauses(input: EmploymentAddendumInput): AddendumClause[] {
-  const nc = input.nonCompete || null;
+  const nc = resolveNonCompete(input);
   const clauses: AddendumClause[] = [
     {
       titleEn: '1. Relationship to the MOHRE Employment Contract',
@@ -146,7 +165,7 @@ export function buildEmploymentAddendumClauses(input: EmploymentAddendumInput): 
 }
 
 export function buildEmploymentAddendumDoc(input: EmploymentAddendumInput) {
-  const ncError = validateNonCompete(input.nonCompete);
+  const ncError = validateNonCompete(resolveNonCompete(input));
   if (ncError) throw new Error(ncError);
 
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });

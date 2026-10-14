@@ -41,7 +41,7 @@ const identityValues = (src) => src.slice(src.indexOf('export const COMPANY_IDEN
 test('one company identity constant, identical in browser and Functions copies', async () => {
   const [web, fn] = await Promise.all([read('src/lib/companyIdentity.ts'), read('functions/companyIdentity.ts')]);
   assert.equal(identityValues(web), identityValues(fn));
-  for (const token of ["brandName: 'BIN-GROUPS'", 'CN-5914744', '101-2025-200047929', '501-2025-200031050', '8800106968', '903215', '1267058 ALL KIND BUILDING PROJECTS CONTRACTING - L.L.C - S.P.C', "mohreEstablishmentNo: '[MOHRE EST. NO.]'", "registeredAddressEn: '[REGISTERED ADDRESS]'", 'competent onshore courts of the United Arab Emirates']) {
+  for (const token of ["brandName: 'BIN-GROUPS'", 'CN-5914744', '101-2025-200047929', '501-2025-200031050', '8800106968', '903215', '1267058 ALL KIND BUILDING PROJECTS CONTRACTING - L.L.C - S.P.C', "mohreEstablishmentNo: '[MOHRE EST. NO.]'", "registeredAddressEn: 'Al Ain, Abu Dhabi, United Arab Emirates'", 'competent onshore courts of the United Arab Emirates']) {
     assert.ok(web.includes(token), `identity missing ${token}`);
   }
   assert.ok(!web.includes('Abu Dhabi Courts'));
@@ -68,6 +68,8 @@ test('Arabic PDF font is TrueType (jsPDF cannot embed WOFF)', async () => {
 test('employment addendum supplements MOHRE contract with verified limits', async () => {
   const src = await read('src/utils/employmentAddendumPdf.ts');
   assert.ok(src.includes('NON_COMPETE_MAX_MONTHS = 24'));
+  assert.ok(src.includes("NON_COMPETE_DEFAULT_PLACE = 'the United Arab Emirates'"));
+  assert.ok(src.includes('nonCompete: NonCompeteTerms | null;'), 'non-compete included by default, months required per employee');
   for (const token of ['the MOHRE contract and the law prevail', 'shall not withhold', 'recruitment or employment fees', 'Federal Decree-Law No. 45 of 2021', 'the Arabic text prevails', 'Article 54', 'UAE-licensed lawyer']) {
     assert.ok(src.includes(token), `addendum missing ${token}`);
   }
