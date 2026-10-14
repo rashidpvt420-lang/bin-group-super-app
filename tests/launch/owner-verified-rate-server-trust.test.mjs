@@ -12,6 +12,7 @@ const wetRecoveryGym = {
   id: 'gym-wet-recovery',
   propertyType: 'Gym / Fitness Centre',
   strategy: 'fm_only',
+  area: 'Al Towayya', // Zone B area in Al Ain (an area is required; a blank area is priced Zone A).
   emirate: 'Al Ain', // Al Ain is its own pricing region (Founder decision 2026-10-14): 0.92x.
   zone: 'B',
   sqft: 11500,

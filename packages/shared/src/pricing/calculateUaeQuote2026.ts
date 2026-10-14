@@ -13,6 +13,9 @@ export interface QuoteInput {
   beds?: number;
   /** Apartment bedrooms (0 = studio). Founder decision 2026-10-14 13:11. */
   bedrooms?: number;
+  /** Set by the sanitizer when bedrooms / age were left blank (priced on the safe side). */
+  bedroomsUnknown?: boolean;
+  propertyAgeUnknown?: boolean;
   annualRent?: number;
   annualRevenue?: number;
   propertyAge: number;
@@ -333,6 +336,12 @@ function matrixRegionFactor(label: string): number {
 }
 
 export const ZONE_PENDING_FLAG = 'Zone pending admin confirmation';
+export const BEDROOMS_PENDING_FLAG = 'Bedrooms pending inspection confirmation';
+export const AGE_PENDING_FLAG = 'Property age pending inspection confirmation';
+export const EMIRATE_PENDING_FLAG = 'Emirate pending admin confirmation';
+/** Founder decision 2026-10-14 13:21: missing/unknown inputs are priced on the safe side and these warnings reach the owner. */
+export const OWNER_WARNING_PREFIXES = [ZONE_PENDING_FLAG, BEDROOMS_PENDING_FLAG, AGE_PENDING_FLAG, EMIRATE_PENDING_FLAG];
+const isBlank = (v: unknown) => v === undefined || v === null || String(v).trim() === '' || !Number.isFinite(Number(v));
 const BEDROOM_PRICED_ASSET_IDS = new Set(['apt-std', 'apt-lux']);
 /** Apartment bedroom factor: studio/1BR 1.00, 2BR 1.25, 3BR 1.50, 4BR+ 1.75 (founder decision 2026-10-14 13:11). */
 export function resolveBedroomFactor(bedrooms: unknown): number {
@@ -342,6 +351,7 @@ export function resolveBedroomFactor(bedrooms: unknown): number {
 
 /** Asset-age factor from UAE_PRICING_MATRIX_2026.ageFactors (founder decision 2026-10-14). */
 export function resolveAgeFactor(propertyAge: unknown): number {
+  if (isBlank(propertyAge)) return Math.max(...UAE_PRICING_MATRIX_2026.ageFactors.map((band) => band.multiplier));
   const age = finiteNumber(propertyAge, 0);
   let factor = 1;
   for (const band of UAE_PRICING_MATRIX_2026.ageFactors) if (age > band.minAgeExclusive) factor = band.multiplier;
@@ -351,7 +361,8 @@ export function resolveAgeFactor(propertyAge: unknown): number {
 /** Minimum annual Property Management fee for the resolved pricing region (founder decision 2026-10-14). */
 export function resolveMinimumManagementFee(region: string | null): number {
   const rows = UAE_PRICING_MATRIX_2026.minimumManagementFee;
-  const exact = region ? rows.find((row) => row.regions.includes(region)) : undefined;
+  if (!region) return Math.max(...rows.map((row) => finiteNumber(row.amount, 0)));
+  const exact = rows.find((row) => row.regions.includes(region));
   const fallback = rows.find((row) => row.regions.includes('*'));
   return finiteNumber((exact || fallback)?.amount, 0);
 }
@@ -410,9 +421,9 @@ function sanitizeQuoteInput(input: Partial<QuoteInput> | null | undefined): Quot
     area: String(raw.area || '').trim().slice(0, 200),
     zone: safeZone(raw.zone),
     contractType: safeContractType(raw.contractType),
-    sqft: positiveNumber(raw.sqft), units: positiveNumber(raw.units), beds: positiveNumber(raw.beds), bedrooms: positiveNumber(raw.bedrooms),
+    sqft: positiveNumber(raw.sqft), units: positiveNumber(raw.units), beds: positiveNumber(raw.beds), bedrooms: positiveNumber(raw.bedrooms), bedroomsUnknown: raw.bedroomsUnknown === true || isBlank(raw.bedrooms),
     annualRent: positiveNumber(raw.annualRent), annualRevenue: positiveNumber(raw.annualRevenue),
-    propertyAge: positiveNumber(raw.propertyAge), floors: positiveNumber(raw.floors), lifts: positiveNumber(raw.lifts),
+    propertyAge: positiveNumber(raw.propertyAge), propertyAgeUnknown: raw.propertyAgeUnknown === true || isBlank(raw.propertyAge), floors: positiveNumber(raw.floors), lifts: positiveNumber(raw.lifts),
     hasPool: raw.hasPool === true, hasGym: raw.hasGym === true, hasCentralHVAC: raw.hasCentralHVAC === true,
     hasDistrictCooling: raw.hasDistrictCooling === true, hasCivilDefenseSystem: raw.hasCivilDefenseSystem === true,
     hasSiraCctv: raw.hasSiraCctv === true, hasGenerator: raw.hasGenerator === true, hasBmu: raw.hasBmu === true,
@@ -500,7 +511,9 @@ function calculateMosqueQuote(input: QuoteInput): QuoteOutput {
   const age = safeInput.propertyAge || 0;
   const capacity = safeInput.units;
   const mepRate = 12;
-  const ageCoefficient = age <= 3 ? 1 : age <= 9 ? 1.08 : age <= 15 ? 1.15 : 1.25;
+  // Founder decision 2026-10-14 13:21: mosques use the standard age bands; blank age = highest band.
+  const ageCoefficient = resolveAgeFactor(safeInput.propertyAgeUnknown ? undefined : age);
+  if (safeInput.propertyAgeUnknown) riskFlags.push(`${AGE_PENDING_FLAG}: age not provided; highest age factor ${ageCoefficient}x applied`);
   const capacityMultiplier = capacity <= 300 ? 1 : capacity <= 1000 ? 1.08 : capacity <= 3000 ? 1.15 : 1.25;
   const baseQuote = sqft * mepRate * ageCoefficient;
   const softServices = sqft * 4 * capacityMultiplier;
@@ -567,7 +580,9 @@ export function calculateUaeQuote2026(input: Partial<QuoteInput> | null | undefi
     if (managementRate <= 0) return zeroQuote(`${assetClass.label} does not support an automatic Property Management Only quote.`, safeInput.slaTier, ['PM_NOT_SUPPORTED']);
     if (managedRevenue <= 0) return zeroQuote('Annual rent / managed revenue is required for Property Management pricing; no placeholder revenue is assumed.', safeInput.slaTier, ['ANNUAL_RENT_REQUIRED']);
     const percentageFee = managedRevenue * (managementRate / 100);
-    const pmMinimum = resolveMinimumManagementFee(resolveEmirateMultiplier(safeInput.emirate, safeInput.area).emirate);
+    const pmRegion = resolveEmirateMultiplier(safeInput.emirate, safeInput.area).emirate;
+    const pmMinimum = resolveMinimumManagementFee(pmRegion);
+    if (!pmRegion) riskFlags.push(`${EMIRATE_PENDING_FLAG}: emirate not recognised; highest minimum management fee AED ${pmMinimum} applied`);
     const baseQuote = Math.max(percentageFee, pmMinimum);
     const annualTotal = baseQuote * (1 + planSurcharge(safeInput.paymentPlan));
     pricingExplanation.push(`${safeInput.ratesVerified ? 'Admin-verified' : 'Pre-visit baseline'} ${managementRate}% property-management fee applied once to AED ${Math.round(managedRevenue)} annual rent / managed revenue.`);
@@ -614,7 +629,8 @@ export function calculateUaeQuote2026(input: Partial<QuoteInput> | null | undefi
     baseQuote = baseRate * safeInput.units;
     pricingExplanation.push(`${baseRate} AED/unit applied to ${safeInput.units} units.`);
     if (BEDROOM_PRICED_ASSET_IDS.has(assetId)) {
-      const bedroomFactor = resolveBedroomFactor(safeInput.bedrooms);
+      const bedroomFactor = resolveBedroomFactor(safeInput.bedroomsUnknown ? 2 : safeInput.bedrooms);
+      if (safeInput.bedroomsUnknown) riskFlags.push(`${BEDROOMS_PENDING_FLAG}: bedrooms not provided; priced as 2 bedrooms (safe side)`);
       if (bedroomFactor !== 1) {
         baseQuote *= bedroomFactor;
         pricingExplanation.push(`Apartment bedroom factor ${bedroomFactor}x applied for ${Math.floor(safeInput.bedrooms || 0)} bedrooms.`);
@@ -638,6 +654,9 @@ export function calculateUaeQuote2026(input: Partial<QuoteInput> | null | undefi
   if (areaZone.entry) {
     zone = areaZone.entry.zone;
     pricingExplanation.push(`Area '${safeInput.area}' matched ${areaZone.entry.area} (${areaZone.entry.region}): Zone ${zone}.`);
+  } else if (areaZone.status === 'missing') {
+    zone = 'A';
+    riskFlags.push(`${ZONE_PENDING_FLAG}: no area provided; Zone A (premium, safe side) applied until admin confirmation`);
   } else if (areaZone.status === 'unmatched') {
     // Founder decision 2026-10-14 13:11: never under-quote an unmapped area; price it as Zone A until confirmed.
     zone = 'A';
@@ -649,9 +668,10 @@ export function calculateUaeQuote2026(input: Partial<QuoteInput> | null | undefi
   if (zoneMultiplier !== 1) pricingExplanation.push(`Zone ${zone} technical-service factor ${zoneMultiplier}x applied.`);
 
   const emirateResolution = resolveEmirateMultiplier(safeInput.emirate, safeInput.area);
-  const emirateMultiplier = emirateResolution.multiplier;
-  if (!emirateResolution.input) riskFlags.push('Emirate confirmation required');
-  else if (!emirateResolution.emirate) riskFlags.push(`Emirate '${safeInput.emirate}' is not recognised; regional factor not applied, confirmation required`);
+  const maxRegionFactor = Math.max(...UAE_PRICING_MATRIX_2026.emirateMultipliers.map((item) => finiteNumber(item.value, 1)));
+  const emirateMultiplier = emirateResolution.emirate ? emirateResolution.multiplier : maxRegionFactor;
+  if (!emirateResolution.input) riskFlags.push(`${EMIRATE_PENDING_FLAG}: no emirate provided; highest regional factor ${maxRegionFactor}x applied`);
+  else if (!emirateResolution.emirate) riskFlags.push(`${EMIRATE_PENDING_FLAG}: emirate '${safeInput.emirate}' is not recognised; highest regional factor ${maxRegionFactor}x applied`);
   else if (emirateResolution.viaCity) pricingExplanation.push(`Priced under the ${emirateResolution.emirate} regional factor.`);
   const factoredQuote = zoneAdjustedQuote * emirateMultiplier;
   if (emirateMultiplier !== 1) pricingExplanation.push(`Regional technical-service factor ${emirateMultiplier}x applied for ${emirateResolution.emirate || safeInput.emirate}.`);
@@ -659,7 +679,8 @@ export function calculateUaeQuote2026(input: Partial<QuoteInput> | null | undefi
   const emirateAdjustedQuote = Math.max(factoredQuote, assetClass.minimumAnnualContract);
   if (emirateAdjustedQuote > factoredQuote) pricingExplanation.push(`Minimum technical annual contract of AED ${assetClass.minimumAnnualContract} re-applied after zone and regional factors.`);
 
-  const ageMultiplier = resolveAgeFactor(safeInput.propertyAge);
+  const ageMultiplier = resolveAgeFactor(safeInput.propertyAgeUnknown ? undefined : safeInput.propertyAge);
+  if (safeInput.propertyAgeUnknown) riskFlags.push(`${AGE_PENDING_FLAG}: age not provided; highest age factor ${ageMultiplier}x applied`);
   if (ageMultiplier > 1) pricingExplanation.push(`Asset-age factor ${ageMultiplier}x applied for ${safeInput.propertyAge} years.`);
 
   let complexityPremiumPercent = 0;
