@@ -14,7 +14,13 @@ export type HrLetterStaffInfo = {
   joiningDate: Date;
 };
 
+// TODO(Rashid): confirm the exact registered legal name. The Owner contract PDF uses
+// 'BIN GROUP L.L.C - S.P.C' while HR letters used 'BIN GROUP PROPERTY MANAGEMENT LLC'.
 const DEFAULT_COMPANY_NAME = 'BIN GROUP PROPERTY MANAGEMENT LLC';
+const COMPANY_REGISTRATION_LINE = 'Trade Licence No.: [TRADE LICENCE NO.]  |  MOHRE Establishment No.: [MOHRE EST. NO.]  |  [REGISTERED ADDRESS]';
+
+export const HR_LETTER_NO_LIABILITY =
+  'This letter is issued at the employee\'s request based on records held on the date of issue. It does not constitute a guarantee, surety or financial undertaking of any kind, and the company accepts no liability towards any third party arising from its issue or use.';
 
 export const HR_LETTER_DISCLAIMER =
   'Generated via BIN GROUP Super App HR module from staff profile data on file. Verify staff details, employment dates, and signatory before issuing to banks, embassies, or government authorities.';
@@ -35,6 +41,9 @@ function renderLetterShell(doc: jsPDF, titleEn: string, titleAr: string, referen
   doc.setFontSize(10);
   writeLTR(doc, `Reference: ${referenceNumber}`, 15, 50);
   writeLTR(doc, `Date: ${formatDate(issueDate)}`, 15, 56);
+  doc.setFontSize(8);
+  writeLTR(doc, COMPANY_REGISTRATION_LINE, 15, 62);
+  doc.setFontSize(10);
   return 72;
 }
 
@@ -45,8 +54,10 @@ function renderLetterFooter(doc: jsPDF, issuer: HrLetterIssuer) {
   doc.setFontSize(10);
   writeLTR(doc, issuer.hrName || 'HR Department', 15, 252);
   writeLTR(doc, issuer.hrDesignation || 'Human Resources', 15, 258);
+  writeLTR(doc, 'Company stamp:', 120, 252);
   doc.setFontSize(8);
-  wrappedLTR(doc, HR_LETTER_DISCLAIMER, 15, 275, 180, 4);
+  wrappedLTR(doc, HR_LETTER_NO_LIABILITY, 15, 266, 180, 4);
+  wrappedLTR(doc, HR_LETTER_DISCLAIMER, 15, 278, 180, 4);
 }
 
 export type NocLetterInput = {
@@ -64,7 +75,7 @@ export function buildNocLetterDoc(input: NocLetterInput) {
   const issueDate = input.issueDate || new Date();
   doc.setProperties({ title: `NOC Letter - ${input.staff.fullName}`, subject: 'No Objection Certificate', author: companyName, creator: 'BIN GROUP Super App' });
 
-  let y = renderLetterShell(doc, 'NO OBJECTION CERTIFICATE', 'شهادة عدم انتساب', input.referenceNumber, issueDate, companyName);
+  let y = renderLetterShell(doc, 'NO OBJECTION CERTIFICATE', 'شهادة عدم ممانعة', input.referenceNumber, issueDate, companyName);
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(11);
@@ -73,7 +84,7 @@ export function buildNocLetterDoc(input: NocLetterInput) {
 
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(10);
-  const body = `This is to certify that ${input.staff.fullName}${input.staff.staffCode ? ` (Staff Code: ${input.staff.staffCode})` : ''}, holding the position of ${input.staff.position}, has been employed with ${companyName} since ${formatDate(input.staff.joiningDate)}.\n\n${companyName} has no objection to ${input.purpose}.\n\nThis letter is issued upon the employee's request and may be used for the stated purpose only.`;
+  const body = `This is to certify that ${input.staff.fullName}${input.staff.staffCode ? ` (Staff Code: ${input.staff.staffCode})` : ''}, holding the position of ${input.staff.position}, has been employed with ${companyName} since ${formatDate(input.staff.joiningDate)}.\n\n${companyName} has no objection to ${input.purpose}.\n\nThis letter is issued at the employee's request and may be used for the stated purpose only. It does not alter the terms of the employee's employment contract, and remains subject to UAE law and the requirements of the competent authorities.`;
   y = wrappedLTR(doc, body, 15, y, 180, 6);
 
   renderLetterFooter(doc, input.issuer);
@@ -89,6 +100,10 @@ export type ExperienceLetterInput = {
   staff: HrLetterStaffInfo;
   issuer: HrLetterIssuer;
   lastWorkingDate?: Date | null;
+  /** Last monthly wage (AED); Art. 13(11) lists it as part of the certificate of experience. */
+  lastWageAed?: number | null;
+  /** Neutral reason for end of contract (e.g. 'expiry of contract term', 'resignation'). Never include anything that may harm the worker's reputation (Art. 13(11)). */
+  separationReason?: string | null;
   referenceNumber: string;
   issueDate?: Date;
   companyName?: string;
@@ -113,7 +128,13 @@ export function buildExperienceLetterDoc(input: ExperienceLetterInput) {
 
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(10);
-  const body = `This is to certify that ${input.staff.fullName}${input.staff.staffCode ? ` (Staff Code: ${input.staff.staffCode})` : ''} worked with ${companyName} as ${input.staff.position} ${period}.\n\nDuring this period, the employee's conduct and performance were satisfactory.\n\nThis letter is issued upon the employee's request and may be used for whatever lawful purpose it may serve.`;
+  const verb = input.lastWorkingDate ? 'worked' : 'has worked';
+  const wageLine = typeof input.lastWageAed === 'number' && input.lastWageAed > 0 ? `\n\nLast monthly wage: AED ${input.lastWageAed.toLocaleString('en-GB')}.` : '';
+  const reasonLine = input.lastWorkingDate && input.separationReason ? `\n\nReason for end of employment: ${input.separationReason}.` : '';
+  // Federal Decree-Law No. 33 of 2021, Art. 13(11): free certificate stating start/end dates, service
+  // term, job title, last wage and reason for termination, with nothing that may harm the worker's
+  // reputation. We state facts only and do not auto-certify conduct or performance.
+  const body = `This is to certify that ${input.staff.fullName}${input.staff.staffCode ? ` (Staff Code: ${input.staff.staffCode})` : ''} ${verb} with ${companyName} as ${input.staff.position} ${period}.${wageLine}${reasonLine}\n\nThis certificate is issued free of charge at the employee's request and may be used for any lawful purpose.`;
   y = wrappedLTR(doc, body, 15, y, 180, 6);
 
   renderLetterFooter(doc, input.issuer);
@@ -151,17 +172,17 @@ export function buildSalaryCertificateDoc(input: SalaryCertificateInput) {
 
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(10);
-  const intro = `This is to certify that ${input.staff.fullName}${input.staff.staffCode ? ` (Staff Code: ${input.staff.staffCode})` : ''} is employed with ${companyName} as ${input.staff.position} since ${formatDate(input.staff.joiningDate)}, drawing the following monthly salary:`;
+  const intro = `This is to certify that ${input.staff.fullName}${input.staff.staffCode ? ` (Staff Code: ${input.staff.staffCode})` : ''} has been employed with ${companyName} as ${input.staff.position} since ${formatDate(input.staff.joiningDate)}, and draws the following monthly salary:`;
   y = wrappedLTR(doc, intro, 15, y, 180, 6) + 6;
 
   doc.setFont('helvetica', 'bold');
-  writeLTR(doc, `Basic Salary: AED ${input.basicSalaryAed.toLocaleString()}`, 20, y);
+  writeLTR(doc, `Basic Salary: AED ${input.basicSalaryAed.toLocaleString('en-GB')}`, 20, y);
   y += 7;
-  writeLTR(doc, `Gross Salary: AED ${input.grossSalaryAed.toLocaleString()}`, 20, y);
+  writeLTR(doc, `Gross Salary: AED ${input.grossSalaryAed.toLocaleString('en-GB')}`, 20, y);
   y += 12;
 
   doc.setFont('helvetica', 'normal');
-  y = wrappedLTR(doc, `This certificate is issued for ${input.purpose} purposes upon the employee's request.`, 15, y, 180, 6);
+  y = wrappedLTR(doc, `This certificate is issued at the employee's request for the purpose of: ${input.purpose}.`, 15, y, 180, 6);
 
   renderLetterFooter(doc, input.issuer);
   return { doc, filename: `Salary_Certificate_${input.referenceNumber}.pdf` };

@@ -53,6 +53,7 @@ const EOSB_DISCLAIMER =
 
 // First 5 years accrue at 21 days' basic wage per year, every year after at 30 days' basic
 // wage per year, capped at 2 years' total wage (Federal Decree-Law No. 33 of 2021, Art. 51).
+// Callers must exclude unpaid absence days from the dates passed in (Art. 51(4)).
 export function calculateEosbEstimate(input: EosbEstimateInput): EosbEstimateResult {
   const { basicMonthlySalaryAed, joiningDate, lastWorkingDate, terminationReason } = input;
 
@@ -94,21 +95,13 @@ export function calculateEosbEstimate(input: EosbEstimateInput): EosbEstimateRes
   const capAed = basicMonthlySalaryAed * 24;
   const cappedGratuityAed = Math.min(rawGratuityAed, capAed);
 
-  let resignationMultiplier = 1;
-  let note = 'Full gratuity rate applies (employer-initiated termination, contract end, or death/disability).';
-  if (terminationReason === 'resignation') {
-    if (serviceYears < 3) {
-      resignationMultiplier = 1 / 3;
-      note = 'Voluntary resignation between 1 and 3 years of service: statutory reduction to 1/3 of calculated gratuity.';
-    } else if (serviceYears < 5) {
-      resignationMultiplier = 2 / 3;
-      note = 'Voluntary resignation between 3 and 5 years of service: statutory reduction to 2/3 of calculated gratuity.';
-    } else {
-      resignationMultiplier = 1;
-      note = 'Voluntary resignation after 5+ years of service: full calculated gratuity applies.';
-    }
-  }
-
+  // Federal Decree-Law No. 33 of 2021 (Art. 51) applies one entitlement however the contract ends.
+  // The 1/3 and 2/3 resignation reductions belonged to the repealed Federal Law No. 8 of 1980 and
+  // must NOT be applied: under-paying gratuity on resignation exposes the company to MOHRE claims.
+  const resignationMultiplier = 1;
+  const note = terminationReason === 'resignation'
+    ? 'Resignation does not reduce gratuity under Federal Decree-Law No. 33 of 2021 (Art. 51); the full calculated amount applies. Any notice-period shortfall is a separate claim, not a gratuity deduction.'
+    : 'Full gratuity applies (Federal Decree-Law No. 33 of 2021, Art. 51). Unpaid days of absence are excluded from the service period.';
   const finalEstimateAed = Math.round(cappedGratuityAed * resignationMultiplier);
 
   return {

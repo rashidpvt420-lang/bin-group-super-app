@@ -7,7 +7,7 @@ type ContractPdfInput = {
     institutionalHash: string;
     timestamp: string;
     signature: string;
-    acceptanceLog?: { platform?: string };
+    acceptanceLog?: { platform?: string; otpVerified?: boolean };
   };
   propertyName: string;
   ownerName: string;
@@ -82,7 +82,9 @@ export function generateBilingualContractPdf(input: ContractPdfInput) {
   // Register Arabic font immediately so all RTL text renders with Cairo glyphs
   registerArabicFont(doc);
   const provider = input.providerName || 'BIN GROUP PROPERTY MANAGEMENT LLC';
-  const timestamp = new Date(input.artifact.timestamp).toLocaleString();
+  const timestamp = `${new Date(input.artifact.timestamp).toLocaleString('en-GB', { timeZone: 'Asia/Dubai' })} GST`;
+  // Only state OTP verification when the acceptance record actually carries it; never assert it blindly.
+  const otpVerified = input.artifact.acceptanceLog?.otpVerified === true;
 
   doc.setProperties({
     title: `BIN GROUP Contract ${input.artifact.institutionalHash}`,
@@ -93,8 +95,8 @@ export function generateBilingualContractPdf(input: ContractPdfInput) {
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(18);
-  writeLTR(doc, 'BIN GROUP - SOVEREIGN CONTRACT', 105, 18, { align: 'center' });
-  writeRTL(doc, 'مجموعة بن - عقد سيادي', 195, 28);
+  writeLTR(doc, 'BIN GROUP - SERVICE AGREEMENT', 105, 18, { align: 'center' });
+  writeRTL(doc, 'مجموعة بن - اتفاقية خدمات', 195, 28);
 
   doc.setDrawColor(40);
   doc.line(15, 34, 195, 34);
@@ -153,16 +155,16 @@ export function generateBilingualContractPdf(input: ContractPdfInput) {
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(10);
   writeLTR(doc, `Digitally Signed By: ${input.artifact.signature}`, 20, 232);
-  writeLTR(doc, 'Mobile OTP Verified: YES', 20, 239);
+  writeLTR(doc, `Mobile OTP Verified: ${otpVerified ? 'YES' : 'NOT RECORDED'}`, 20, 239);
   writeLTR(doc, `Platform Origin: ${input.artifact.acceptanceLog?.platform || 'BIN GROUP SUPER APP'}`, 20, 246);
   writeRTL(doc, `تم التوقيع رقمياً بواسطة: ${input.artifact.signature}`, 190, 232);
-  writeRTL(doc, 'تم التحقق بواسطة رمز الهاتف: نعم', 190, 239);
+  writeRTL(doc, `تم التحقق بواسطة رمز الهاتف: ${otpVerified ? 'نعم' : 'غير مسجل'}`, 190, 239);
   writeRTL(doc, 'مصدر المنصة: تطبيق مجموعة بن', 190, 246);
   doc.rect(15, 214, 180, 40);
 
   doc.setFontSize(8);
-  writeLTR(doc, 'This bilingual PDF is generated from the BIN GROUP digital acceptance record. English and Arabic sections are provided for operational clarity.', 105, 281, { align: 'center' });
-  writeRTL(doc, 'تم إنشاء هذه الوثيقة ثنائية اللغة من سجل القبول الرقمي لمجموعة بن. القسمان الإنجليزي والعربي مقدمان للوضوح التشغيلي.', 195, 287);
+  writeLTR(doc, 'Working copy only. The server-generated, hashed Owner Service Agreement is the binding executed copy. In case of conflict, the Arabic text prevails.', 105, 281, { align: 'center' });
+  writeRTL(doc, 'نسخة عمل فقط. النسخة الملزمة هي اتفاقية خدمات المالك الصادرة من الخادم والموثقة برمز التحقق. وفي حال التعارض يسود النص العربي.', 195, 287);
 
   return savePdfMobileSafe(doc, `BIN_GROUP_Contract_${input.artifact.institutionalHash}.pdf`);
 }
