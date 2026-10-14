@@ -96,14 +96,14 @@ export default function OwnerFinancialTruthCard() {
         </Stack>
 
         {loading ? (
-          <Stack direction="row" spacing={1.5} alignItems="center"><CircularProgress size={20} sx={{ color: binThemeTokens.gold }} /><Typography variant="body2">Loading live Owner financial source…</Typography></Stack>
+          <Stack direction="row" spacing={1.5} alignItems="center"><CircularProgress size={20} sx={{ color: binThemeTokens.goldText }} /><Typography variant="body2">Loading live Owner financial source…</Typography></Stack>
         ) : error ? (
           <Alert severity="warning">{error}</Alert>
         ) : summary.primaryKind === 'empty' ? (
           <Alert severity="info">{copy.empty}</Alert>
         ) : (
           <>
-            <Typography variant="h3" sx={{ fontWeight: 950, color: binThemeTokens.gold }}>{money(summary.primaryValue)}</Typography>
+            <Typography variant="h3" sx={{ fontWeight: 950, color: binThemeTokens.goldText }}>{money(summary.primaryValue)}</Typography>
             {summary.primaryKind === 'net_payout' && (
               <Paper sx={{ p: 2, bgcolor: 'rgba(255,255,255,0.045)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 3 }}>
                 <Stack spacing={0.8}>

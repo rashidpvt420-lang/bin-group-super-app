@@ -481,7 +481,7 @@ export default function TechnicianJobDetailPage() {
     };
 
     if (loading) {
-        return <Box sx={{ display: 'flex', justifyContent: 'center', py: 10 }}><CircularProgress sx={{ color: binThemeTokens.gold }} /></Box>;
+        return <Box sx={{ display: 'flex', justifyContent: 'center', py: 10 }}><CircularProgress sx={{ color: binThemeTokens.goldText }} /></Box>;
     }
 
     if (!ticket) {

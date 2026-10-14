@@ -142,7 +142,7 @@ export default function TechnicianJobsPage() {
 
     if (loading) return (
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 10 }}>
-            <CircularProgress sx={{ color: binThemeTokens.gold }} />
+            <CircularProgress sx={{ color: binThemeTokens.goldText }} />
         </Box>
     );
 

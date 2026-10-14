@@ -101,7 +101,7 @@ export default function ContractSignatureOtpControl({
           variant="outlined"
           disabled={busy || !contractId || !contractHash || !signatureName.trim()}
           onClick={requestOtp}
-          sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.gold, fontWeight: 900 }}
+          sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.goldText, fontWeight: 900 }}
         >
           {copy(requestId ? 'RESEND OTP' : 'SEND CONTRACT OTP', requestId ? 'إعادة إرسال الرمز' : 'إرسال رمز العقد')}
         </Button>

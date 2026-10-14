@@ -188,7 +188,7 @@ export default function OwnerPropertyPassportResolvedPage() {
 
   if (loading) return (
     <Box sx={{ height: '60vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 2 }}>
-      <CircularProgress sx={{ color: binThemeTokens.gold }} />
+      <CircularProgress sx={{ color: binThemeTokens.goldText }} />
       <Typography variant="overline" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900 }}>Accessing Registry...</Typography>
     </Box>
   );
@@ -196,13 +196,13 @@ export default function OwnerPropertyPassportResolvedPage() {
   return (
     <Box sx={{ pb: 6 }}>
       <Box sx={{ mb: 6 }}>
-        <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 4 }}>SOVEREIGN ASSET REGISTRY</Typography>
+        <Typography variant="overline" sx={{ color: binThemeTokens.goldText, fontWeight: 900, letterSpacing: 4 }}>SOVEREIGN ASSET REGISTRY</Typography>
         <Typography variant="h4" fontWeight="950" sx={{ color: '#FFF', mt: 1 }}>Property Passports</Typography>
         <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.4)', mt: 1 }}>Official digital twins of your real estate portfolio.</Typography>
       </Box>
 
       {usedFallback && (
-        <Alert severity="info" sx={{ mb: 3, bgcolor: alpha(binThemeTokens.gold, 0.06), color: binThemeTokens.gold, border: `1px solid ${alpha(binThemeTokens.gold, 0.18)}` }}>
+        <Alert severity="info" sx={{ mb: 3, bgcolor: alpha(binThemeTokens.gold, 0.06), color: binThemeTokens.goldText, border: `1px solid ${alpha(binThemeTokens.gold, 0.18)}` }}>
           Official property passport documents are not issued yet, so provisional passports are shown from linked active assets and active contract records.
         </Alert>
       )}
@@ -221,12 +221,12 @@ export default function OwnerPropertyPassportResolvedPage() {
                 <Paper sx={{ p: 0, overflow: 'hidden', bgcolor: 'rgba(15, 23, 42, 0.4)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 6, transition: 'all 0.3s ease', opacity: p.placeholder ? 0.76 : 1, '&:hover': { borderColor: binThemeTokens.gold, transform: 'translateY(-4px)' } }}>
                   <Box sx={{ p: 4, bgcolor: 'rgba(255,255,255,0.02)', borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <Stack direction="row" spacing={2} alignItems="center">
-                      <Box sx={{ width: 48, height: 48, bgcolor: alpha(binThemeTokens.gold, 0.1), borderRadius: 3, display: 'flex', alignItems: 'center', justifyContent: 'center', color: binThemeTokens.gold }}>
+                      <Box sx={{ width: 48, height: 48, bgcolor: alpha(binThemeTokens.gold, 0.1), borderRadius: 3, display: 'flex', alignItems: 'center', justifyContent: 'center', color: binThemeTokens.goldText }}>
                         <Building2 size={24} />
                       </Box>
                       <Box>
                         <Typography variant="h6" fontWeight="950" sx={{ color: '#FFF', lineHeight: 1.2 }}>{p.propertyName || p.name || 'Property'}</Typography>
-                        <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 1 }}>ID: {String(p.id).slice(0, 8).toUpperCase()}</Typography>
+                        <Typography variant="caption" sx={{ color: binThemeTokens.goldText, fontWeight: 900, letterSpacing: 1 }}>ID: {String(p.id).slice(0, 8).toUpperCase()}</Typography>
                       </Box>
                     </Stack>
                     <Stack direction="row" spacing={1} alignItems="center">

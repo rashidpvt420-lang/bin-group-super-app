@@ -62,11 +62,11 @@ export default function OwnerRoiFinancialSection({ financials, onAddRentDetails 
     <Card sx={cardSx}>
       <CardContent sx={{ p: { xs: 2.25, md: 4 } }}>
         <Stack direction="row" alignItems="center" spacing={1.5} sx={{ mb: 3, minWidth: 0 }}>
-          <Box sx={{ p: 1, bgcolor: alpha(binThemeTokens.gold, 0.1), borderRadius: 2, color: binThemeTokens.gold, flexShrink: 0 }}>
+          <Box sx={{ p: 1, bgcolor: alpha(binThemeTokens.gold, 0.1), borderRadius: 2, color: binThemeTokens.goldText, flexShrink: 0 }}>
             <TrendingUp size={22} />
           </Box>
           <Box sx={{ minWidth: 0 }}>
-            <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 2, ...textSafeSx }}>
+            <Typography variant="overline" sx={{ color: binThemeTokens.goldText, fontWeight: 900, letterSpacing: 2, ...textSafeSx }}>
               {t('owner.roiFinancialControl') || 'Financial Control & ROI'}
             </Typography>
             <Typography variant="h5" fontWeight={950} sx={{ color: '#fff', ...textSafeSx }}>

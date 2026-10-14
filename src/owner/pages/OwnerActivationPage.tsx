@@ -467,7 +467,7 @@ export default function OwnerActivationPage() {
   if (loading) {
     return (
       <Box sx={{ height: '60vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <CircularProgress sx={{ color: binThemeTokens.gold }} />
+        <CircularProgress sx={{ color: binThemeTokens.goldText }} />
       </Box>
     );
   }
@@ -489,7 +489,7 @@ export default function OwnerActivationPage() {
     <Box sx={{ direction: isRTL ? 'rtl' : 'ltr', pb: 6 }}>
       <Stack spacing={4}>
         <Box sx={{ textAlign: isRTL ? 'right' : 'left' }}>
-          <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 4 }}>CONTRACT ACTIVATION</Typography>
+          <Typography variant="overline" sx={{ color: binThemeTokens.goldText, fontWeight: 950, letterSpacing: 4 }}>CONTRACT ACTIVATION</Typography>
           <Typography variant="h4" fontWeight="950" sx={{ color: '#FFF', mt: 1 }}>15% Mobilization Payment Gate</Typography>
           <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.55)', maxWidth: 820, mt: 1 }}>
             First sign the admin-approved contract. Then submit or complete the 15% mobilization payment request. Full dashboard access unlocks only after admin payment verification.
@@ -516,7 +516,7 @@ export default function OwnerActivationPage() {
               <Stack spacing={3}>
                 <Stack direction={isRTL ? 'row-reverse' : 'row'} justifyContent="space-between" alignItems="center">
                   <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={2} alignItems="center">
-                    <Box sx={{ width: 52, height: 52, borderRadius: 3, display: 'grid', placeItems: 'center', bgcolor: alpha(binThemeTokens.gold, 0.12), color: binThemeTokens.gold }}>
+                    <Box sx={{ width: 52, height: 52, borderRadius: 3, display: 'grid', placeItems: 'center', bgcolor: alpha(binThemeTokens.gold, 0.12), color: binThemeTokens.goldText }}>
                       <FileSignature />
                     </Box>
                     <Box sx={{ textAlign: isRTL ? 'right' : 'left' }}>
@@ -536,7 +536,7 @@ export default function OwnerActivationPage() {
                   </Grid>
                   <Grid item xs={12} sm={4}>
                     <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.35)', fontWeight: 900 }}>MOBILIZATION</Typography>
-                    <Typography variant="h6" fontWeight="950" sx={{ color: binThemeTokens.gold }}>{moneyLabel(mobilization, primaryContract)}</Typography>
+                    <Typography variant="h6" fontWeight="950" sx={{ color: binThemeTokens.goldText }}>{moneyLabel(mobilization, primaryContract)}</Typography>
                   </Grid>
                   <Grid item xs={12} sm={4}>
                     <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.35)', fontWeight: 900 }}>PAYMENT PLAN</Typography>
@@ -601,7 +601,7 @@ export default function OwnerActivationPage() {
                     <Button
                       variant="outlined"
                       component="label"
-                      sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.gold, fontWeight: 900 }}
+                      sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.goldText, fontWeight: 900 }}
                     >
                       {paymentProof ? paymentProof.name : 'Attach payment receipt (PDF or image)'}
                       <input
@@ -665,7 +665,7 @@ function ActivationTimeline({ gates }: { gates: ActivationGate[] }) {
     <Paper sx={{ p: { xs: 2.25, md: 3 }, bgcolor: 'rgba(15,23,42,0.52)', border: `1px solid ${alpha(binThemeTokens.gold, 0.16)}`, borderRadius: 6 }}>
       <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" alignItems={{ xs: 'flex-start', md: 'center' }} spacing={1.5} sx={{ mb: 2.5 }}>
         <Box>
-          <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 2 }}>
+          <Typography variant="overline" sx={{ color: binThemeTokens.goldText, fontWeight: 950, letterSpacing: 2 }}>
             OWNER ACTIVATION TIMELINE
           </Typography>
           <Typography variant="h6" sx={{ color: '#fff', fontWeight: 950 }}>

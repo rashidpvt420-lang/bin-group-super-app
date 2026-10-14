@@ -87,7 +87,7 @@ export default function BrokerDocumentsPage() {
         const doc = documents.find(d => d.docType === type);
         if (!doc) return { status: 'missing', label: 'PENDING UPLOAD', color: '#ef4444', icon: <AlertCircle size={14} /> };
         if (doc.status === 'verified') return { status: 'verified', label: 'VERIFIED', color: '#10b981', icon: <CheckCircle2 size={14} /> };
-        return { status: 'pending', label: 'UNDER REVIEW', color: binThemeTokens.gold, icon: <Clock size={14} /> };
+        return { status: 'pending', label: 'UNDER REVIEW', color: binThemeTokens.goldText, icon: <Clock size={14} /> };
     };
 
     const requiredDocs = [

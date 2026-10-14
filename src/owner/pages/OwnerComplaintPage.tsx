@@ -193,7 +193,7 @@ export default function OwnerComplaintPage() {
                     <ChevronLeft />
                 </IconButton>
                 <Box>
-                    <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 4 }}>
+                    <Typography variant="overline" sx={{ color: binThemeTokens.goldText, fontWeight: 900, letterSpacing: 4 }}>
                         OWNER SERVICES
                     </Typography>
                     <Typography variant="h4" fontWeight="950" color="#FFF">
@@ -323,13 +323,13 @@ export default function OwnerComplaintPage() {
 
                         {/* Photo Upload */}
                         <Box>
-                            <Typography variant="subtitle2" fontWeight="900" sx={{ color: binThemeTokens.gold, mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <Typography variant="subtitle2" fontWeight="900" sx={{ color: binThemeTokens.goldText, mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
                                 <Camera size={18} /> ATTACH PHOTOS
                             </Typography>
                             {uploadingPhotos && (
                                 <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2, p: 2, bgcolor: alpha(binThemeTokens.gold, 0.08), borderRadius: 2 }}>
-                                    <CircularProgress size={18} sx={{ color: binThemeTokens.gold }} />
-                                    <Typography variant="caption" sx={{ color: binThemeTokens.gold }}>Uploading photos…</Typography>
+                                    <CircularProgress size={18} sx={{ color: binThemeTokens.goldText }} />
+                                    <Typography variant="caption" sx={{ color: binThemeTokens.goldText }}>Uploading photos…</Typography>
                                 </Stack>
                             )}
                             <Stack direction="row" spacing={2} flexWrap="wrap">
@@ -348,7 +348,7 @@ export default function OwnerComplaintPage() {
                                 {previews.length < 5 && (
                                     <Button
                                         component="label"
-                                        sx={{ width: 100, height: 100, border: '1px dashed rgba(255,255,255,0.15)', borderRadius: 2, color: 'rgba(255,255,255,0.3)', flexDirection: 'column', '&:hover': { borderColor: binThemeTokens.gold, color: binThemeTokens.gold } }}
+                                        sx={{ width: 100, height: 100, border: '1px dashed rgba(255,255,255,0.15)', borderRadius: 2, color: 'rgba(255,255,255,0.3)', flexDirection: 'column', '&:hover': { borderColor: binThemeTokens.gold, color: binThemeTokens.goldText } }}
                                     >
                                         <Camera size={22} />
                                         <Typography variant="caption" sx={{ mt: 0.5, fontWeight: 900 }}>ADD</Typography>

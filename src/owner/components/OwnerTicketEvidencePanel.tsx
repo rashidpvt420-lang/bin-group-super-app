@@ -148,7 +148,7 @@ export default function OwnerTicketEvidencePanel({ evidence }: { evidence: Owner
         >
             <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 3 }}>
                 <Camera size={16} color={binThemeTokens.gold} />
-                <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 2 }}>
+                <Typography variant="overline" sx={{ color: binThemeTokens.goldText, fontWeight: 950, letterSpacing: 2 }}>
                     {tx('owner.ticket.evidence.title', 'WORK EVIDENCE')}
                 </Typography>
             </Stack>
@@ -186,7 +186,7 @@ export default function OwnerTicketEvidencePanel({ evidence }: { evidence: Owner
                 data-testid="owner-ticket-evidence-notes"
                 sx={{ mt: 3, p: 3, bgcolor: 'rgba(255,255,255,0.02)', borderRadius: 3, border: '1px solid rgba(255,255,255,0.05)' }}
             >
-                <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 1 }}>
+                <Typography variant="caption" sx={{ color: binThemeTokens.goldText, fontWeight: 900, letterSpacing: 1 }}>
                     {tx('owner.ticket.tech_notes', 'TECHNICIAN RESOLUTION NOTES')}
                 </Typography>
                 <Typography
