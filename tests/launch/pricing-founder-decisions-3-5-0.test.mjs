@@ -117,3 +117,26 @@ for (const c of COPIES) {
     assert.deepEqual([0, 5, 7, 12, 20, undefined].map(m), [120000, 120000, 132000, 144000, 162000, 162000]);
   });
 }
+
+// Founder decisions 2026-10-14 14:01: blank floors/lifts = highest complexity tier; mosques take location factors.
+for (const c of COPIES) {
+  test(`${c}: blank floors / lifts on a multi-storey class = highest complexity tier + warning; villas unaffected`, () => {
+    const b = (o) => mods[c].calculateUaeQuote2026({ assetClassId: 'res-bldg', contractType: 'FM_ONLY', sqft: 50000, emirate: 'Dubai', area: 'Business Bay', zone: 'B', slaTier: 'standard', paymentPlan: 'annual', propertyAge: 1, ...o });
+    const known = b({ floors: 5, lifts: 2 });
+    const blank = b({ floors: undefined, lifts: undefined });
+    near(blank.complexityPremium, known.emirateAdjustedQuote * 0.20);
+    assert.ok(blank.riskFlags.some((f) => f.startsWith('Floors / lifts pending inspection confirmation')));
+    assert.ok(!known.riskFlags.some((f) => f.startsWith('Floors / lifts pending')));
+    near(b({ floors: undefined, lifts: 2 }).complexityPremium, known.emirateAdjustedQuote * 0.12);
+    const villa = mods[c].calculateUaeQuote2026({ assetClassId: 'villa-std', units: 1, contractType: 'FM_ONLY', emirate: 'Dubai', area: 'Business Bay', zone: 'B', slaTier: 'standard', paymentPlan: 'annual', propertyAge: 1 });
+    assert.equal(villa.complexityPremium, 0);
+  });
+  test(`${c}: mosque takes zone, regional and remote factors`, () => {
+    const mq = (emirate, area) => mods[c].calculateUaeQuote2026({ assetClassId: 'mosque_fm', contractType: 'FM_ONLY', sqft: 10000, units: 200, emirate, area, zone: 'B', slaTier: 'premium', paymentPlan: 'annual', propertyAge: 1 }).annualTotal;
+    const dubaiB = mq('Dubai', 'Business Bay');
+    near(mq('Dubai', 'Palm Jumeirah') / dubaiB, 1.2);
+    near(mq('Fujairah', 'Al Faseel') / dubaiB, 0.91 / 1.15);
+    near(mq('Dubai', 'Hatta') / dubaiB, 1.2 * 1.15);
+    near(mq('Atlantis', '') / dubaiB, 1.2);
+  });
+}

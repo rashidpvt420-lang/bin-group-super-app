@@ -21,6 +21,8 @@ export interface QuoteInput {
   propertyAge: number;
   floors?: number;
   lifts?: number;
+  floorsUnknown?: boolean;
+  liftsUnknown?: boolean;
   hasPool?: boolean;
   hasGym?: boolean;
   hasCentralHVAC?: boolean;
@@ -339,8 +341,11 @@ export const ZONE_PENDING_FLAG = 'Zone pending admin confirmation';
 export const BEDROOMS_PENDING_FLAG = 'Bedrooms pending inspection confirmation';
 export const AGE_PENDING_FLAG = 'Property age pending inspection confirmation';
 export const EMIRATE_PENDING_FLAG = 'Emirate pending admin confirmation';
+export const FLOORS_LIFTS_PENDING_FLAG = 'Floors / lifts pending inspection confirmation';
+/** Multi-storey classes where floors and lifts drive the complexity premium (blank = highest tier, founder decision 2026-10-14 14:01). */
+const MULTI_STOREY_ASSET_IDS = new Set(['res-bldg', 'com-twr', 'retail-ctr', 'rtl-mall', 'mid_scale_hotel', 'resort', 'hosp', 'school', 'staff-accom', 'gov-facility', 'mix-dev', 'highrise']);
 /** Founder decision 2026-10-14 13:21: missing/unknown inputs are priced on the safe side and these warnings reach the owner. */
-export const OWNER_WARNING_PREFIXES = [ZONE_PENDING_FLAG, BEDROOMS_PENDING_FLAG, AGE_PENDING_FLAG, EMIRATE_PENDING_FLAG];
+export const OWNER_WARNING_PREFIXES = [ZONE_PENDING_FLAG, BEDROOMS_PENDING_FLAG, AGE_PENDING_FLAG, EMIRATE_PENDING_FLAG, FLOORS_LIFTS_PENDING_FLAG];
 const isBlank = (v: unknown) => v === undefined || v === null || String(v).trim() === '' || !Number.isFinite(Number(v));
 const BEDROOM_PRICED_ASSET_IDS = new Set(['apt-std', 'apt-lux']);
 /** Apartment bedroom factor: studio/1BR 1.00, 2BR 1.25, 3BR 1.50, 4BR+ 1.75 (founder decision 2026-10-14 13:11). */
@@ -423,7 +428,7 @@ function sanitizeQuoteInput(input: Partial<QuoteInput> | null | undefined): Quot
     contractType: safeContractType(raw.contractType),
     sqft: positiveNumber(raw.sqft), units: positiveNumber(raw.units), beds: positiveNumber(raw.beds), bedrooms: positiveNumber(raw.bedrooms), bedroomsUnknown: raw.bedroomsUnknown === true || isBlank(raw.bedrooms),
     annualRent: positiveNumber(raw.annualRent), annualRevenue: positiveNumber(raw.annualRevenue),
-    propertyAge: positiveNumber(raw.propertyAge), propertyAgeUnknown: raw.propertyAgeUnknown === true || isBlank(raw.propertyAge), floors: positiveNumber(raw.floors), lifts: positiveNumber(raw.lifts),
+    propertyAge: positiveNumber(raw.propertyAge), propertyAgeUnknown: raw.propertyAgeUnknown === true || isBlank(raw.propertyAge), floors: positiveNumber(raw.floors), lifts: positiveNumber(raw.lifts), floorsUnknown: raw.floorsUnknown === true || isBlank(raw.floors), liftsUnknown: raw.liftsUnknown === true || isBlank(raw.lifts),
     hasPool: raw.hasPool === true, hasGym: raw.hasGym === true, hasCentralHVAC: raw.hasCentralHVAC === true,
     hasDistrictCooling: raw.hasDistrictCooling === true, hasCivilDefenseSystem: raw.hasCivilDefenseSystem === true,
     hasSiraCctv: raw.hasSiraCctv === true, hasGenerator: raw.hasGenerator === true, hasBmu: raw.hasBmu === true,
@@ -498,6 +503,39 @@ export function calculateAddOnAnnualValue(addOns: string[] | undefined, property
   return Math.round(total);
 }
 
+/**
+ * Zone, regional and remote factors for one quote (shared by standard maintenance and mosques).
+ * Founder decisions 2026-10-14: unknown/blank area = Zone A, unknown/blank emirate = highest factor, remote +15%.
+ */
+function resolveLocationFactors(safeInput: QuoteInput, riskFlags: string[], pricingExplanation: string[]) {
+  const areaZone = resolveAreaZone(safeInput.area, safeInput.emirate);
+  let zone: 'A' | 'B' | 'C' = safeInput.zone;
+  if (areaZone.entry) {
+    zone = areaZone.entry.zone;
+    pricingExplanation.push(`Area '${safeInput.area}' matched ${areaZone.entry.area} (${areaZone.entry.region}): Zone ${zone}.`);
+  } else if (areaZone.status === 'missing') {
+    zone = 'A';
+    riskFlags.push(`${ZONE_PENDING_FLAG}: no area provided; Zone A (premium, safe side) applied until admin confirmation`);
+  } else {
+    zone = 'A';
+    riskFlags.push(`${ZONE_PENDING_FLAG}: area '${safeInput.area}' is not in the UAE area-zone map; Zone A (premium, safe side) applied until admin confirmation`);
+  }
+  const zoneEntry = UAE_PRICING_MATRIX_2026.zones[zone] || UAE_PRICING_MATRIX_2026.zones.B || { multiplier: 1 };
+  const zoneMultiplier = finiteNumber(zoneEntry.multiplier, 1);
+  if (zoneMultiplier !== 1) pricingExplanation.push(`Zone ${zone} technical-service factor ${zoneMultiplier}x applied.`);
+  const emirateResolution = resolveEmirateMultiplier(safeInput.emirate, safeInput.area);
+  const maxRegionFactor = Math.max(...UAE_PRICING_MATRIX_2026.emirateMultipliers.map((item) => finiteNumber(item.value, 1)));
+  const emirateMultiplier = emirateResolution.emirate ? emirateResolution.multiplier : maxRegionFactor;
+  if (!emirateResolution.input) riskFlags.push(`${EMIRATE_PENDING_FLAG}: no emirate provided; highest regional factor ${maxRegionFactor}x applied`);
+  else if (!emirateResolution.emirate) riskFlags.push(`${EMIRATE_PENDING_FLAG}: emirate '${safeInput.emirate}' is not recognised; highest regional factor ${maxRegionFactor}x applied`);
+  else if (emirateResolution.viaCity) pricingExplanation.push(`Priced under the ${emirateResolution.emirate} regional factor.`);
+  if (emirateMultiplier !== 1) pricingExplanation.push(`Regional technical-service factor ${emirateMultiplier}x applied for ${emirateResolution.emirate || safeInput.emirate}.`);
+  const isRemote = Boolean(areaZone.entry?.remote) || emirateResolution.emirate === 'Al Dhafra';
+  const remoteMultiplier = isRemote ? finiteNumber(UAE_PRICING_MATRIX_2026.remoteAreaSurcharge.multiplier, 1) : 1;
+  if (remoteMultiplier !== 1) pricingExplanation.push(`Remote-area maintenance surcharge ${remoteMultiplier}x applied.`);
+  return { areaZone, zone, zoneMultiplier, emirateResolution, emirateMultiplier, remoteMultiplier };
+}
+
 function calculateMosqueQuote(input: QuoteInput): QuoteOutput {
   const safeInput = sanitizeQuoteInput(input);
   if (safeInput.contractType !== 'FM_ONLY') {
@@ -529,7 +567,10 @@ function calculateMosqueQuote(input: QuoteInput): QuoteOutput {
   if (manualAddOns.length) return zeroQuote(`Add-on(s) ${manualAddOns.join(', ')} are priced per event / visit / service / unit or one-time and need a manual quote; they cannot be annualised automatically.`, safeInput.slaTier, ['ADD_ON_MANUAL_QUOTE_REQUIRED']);
   const addOnTotal = calculateAddOnAnnualValue(mergedAddOns, { ...safeInput, units: 1 });
   monthlyListExplanation(mergedAddOns, pricingExplanation);
-  const subtotal = baseQuote + softServices + wuduCleaning + ramadanSurge + compliancePremium + complexityPremium + addOnTotal;
+  // Founder decision 2026-10-14 14:01: mosques take the same zone, regional and remote factors as other maintenance.
+  const location = resolveLocationFactors(safeInput, riskFlags, pricingExplanation);
+  const locationFactor = location.zoneMultiplier * location.emirateMultiplier * location.remoteMultiplier;
+  const subtotal = (baseQuote + softServices + wuduCleaning + ramadanSurge + compliancePremium + complexityPremium + addOnTotal) * locationFactor;
   const annualTotal = subtotal * slaMultiplier(safeInput.slaTier) * (1 + planSurcharge(safeInput.paymentPlan));
   pricingExplanation.push(`${mepRate} AED/sqft mosque MEP benchmark applied to ${sqft} measured sqft.`);
   pricingExplanation.push(`Wudu service uses a bounded ${wuduAreaProxySqft} sqft proxy rather than multiplying by worshipper capacity.`);
@@ -650,30 +691,9 @@ export function calculateUaeQuote2026(input: Partial<QuoteInput> | null | undefi
     pricingExplanation.push(`Minimum technical annual contract of AED ${assetClass.minimumAnnualContract} applied.`);
   }
 
-  const areaZone = resolveAreaZone(safeInput.area, safeInput.emirate);
-  let zone: 'A' | 'B' | 'C' = safeInput.zone;
-  if (areaZone.entry) {
-    zone = areaZone.entry.zone;
-    pricingExplanation.push(`Area '${safeInput.area}' matched ${areaZone.entry.area} (${areaZone.entry.region}): Zone ${zone}.`);
-  } else if (areaZone.status === 'missing') {
-    zone = 'A';
-    riskFlags.push(`${ZONE_PENDING_FLAG}: no area provided; Zone A (premium, safe side) applied until admin confirmation`);
-  } else if (areaZone.status === 'unmatched') {
-    // Founder decision 2026-10-14 13:11: never under-quote an unmapped area; price it as Zone A until confirmed.
-    zone = 'A';
-    riskFlags.push(`${ZONE_PENDING_FLAG}: area '${safeInput.area}' is not in the UAE area-zone map; Zone A (premium, safe side) applied until admin confirmation`);
-  }
-  const zoneEntry = UAE_PRICING_MATRIX_2026.zones[zone] || UAE_PRICING_MATRIX_2026.zones.B || { multiplier: 1 };
-  const zoneMultiplier = finiteNumber(zoneEntry.multiplier, 1);
-  const zoneAdjustedQuote = baseQuote * zoneMultiplier;
-  if (zoneMultiplier !== 1) pricingExplanation.push(`Zone ${zone} technical-service factor ${zoneMultiplier}x applied.`);
-
-  const emirateResolution = resolveEmirateMultiplier(safeInput.emirate, safeInput.area);
-  const maxRegionFactor = Math.max(...UAE_PRICING_MATRIX_2026.emirateMultipliers.map((item) => finiteNumber(item.value, 1)));
-  const emirateMultiplier = emirateResolution.emirate ? emirateResolution.multiplier : maxRegionFactor;
-  if (!emirateResolution.input) riskFlags.push(`${EMIRATE_PENDING_FLAG}: no emirate provided; highest regional factor ${maxRegionFactor}x applied`);
-  else if (!emirateResolution.emirate) riskFlags.push(`${EMIRATE_PENDING_FLAG}: emirate '${safeInput.emirate}' is not recognised; highest regional factor ${maxRegionFactor}x applied`);
-  else if (emirateResolution.viaCity) pricingExplanation.push(`Priced under the ${emirateResolution.emirate} regional factor.`);
+  const location = resolveLocationFactors(safeInput, riskFlags, pricingExplanation);
+  const { emirateResolution, emirateMultiplier } = location;
+  const zoneAdjustedQuote = baseQuote * location.zoneMultiplier;
   const factoredQuote = zoneAdjustedQuote * emirateMultiplier;
   if (emirateMultiplier !== 1) pricingExplanation.push(`Regional technical-service factor ${emirateMultiplier}x applied for ${emirateResolution.emirate || safeInput.emirate}.`);
   // Founder decision 2026-10-14: the asset-class minimum annual contract must still hold after zone and emirate factors.
@@ -685,10 +705,14 @@ export function calculateUaeQuote2026(input: Partial<QuoteInput> | null | undefi
   if (ageMultiplier > 1) pricingExplanation.push(`Asset-age factor ${ageMultiplier}x applied for ${safeInput.propertyAge} years.`);
 
   let complexityPremiumPercent = 0;
-  if ((safeInput.floors || 0) >= 40) complexityPremiumPercent += 12;
+  const multiStorey = MULTI_STOREY_ASSET_IDS.has(assetId);
+  const floorsBlank = multiStorey && safeInput.floorsUnknown;
+  const liftsBlank = multiStorey && safeInput.liftsUnknown;
+  if (floorsBlank || (safeInput.floors || 0) >= 40) complexityPremiumPercent += 12;
   else if ((safeInput.floors || 0) >= 15) complexityPremiumPercent += 6;
-  if ((safeInput.lifts || 0) > 10) complexityPremiumPercent += 8;
+  if (liftsBlank || (safeInput.lifts || 0) > 10) complexityPremiumPercent += 8;
   else if ((safeInput.lifts || 0) > 4) complexityPremiumPercent += 4;
+  if (floorsBlank || liftsBlank) riskFlags.push(`${FLOORS_LIFTS_PENDING_FLAG}: ${[floorsBlank ? 'floors' : '', liftsBlank ? 'lifts' : ''].filter(Boolean).join(' and ')} not provided; highest complexity tier applied`);
   if (safeInput.hasCentralHVAC) complexityPremiumPercent += 4;
   if (safeInput.hasDistrictCooling) complexityPremiumPercent -= 3;
   if (safeInput.hasGenerator) complexityPremiumPercent += 3;
@@ -711,9 +735,7 @@ export function calculateUaeQuote2026(input: Partial<QuoteInput> | null | undefi
   const addOnTotal = calculateAddOnAnnualValue(mergedAddOns, addOnDriver);
   monthlyListExplanation(mergedAddOns, pricingExplanation);
   // Founder decision 2026-10-14: +15% on maintenance for remote areas (Al Dhafra region, Hatta).
-  const isRemote = Boolean(areaZone.entry?.remote) || emirateResolution.emirate === 'Al Dhafra';
-  const remoteMultiplier = isRemote ? finiteNumber(UAE_PRICING_MATRIX_2026.remoteAreaSurcharge.multiplier, 1) : 1;
-  if (remoteMultiplier !== 1) pricingExplanation.push(`Remote-area maintenance surcharge ${remoteMultiplier}x applied.`);
+  const { remoteMultiplier } = location;
   const technicalSubtotal = ((emirateAdjustedQuote * ageMultiplier * appliedSlaMultiplier) + complexityPremium + addOnTotal) * remoteMultiplier;
 
   let managementFee = 0;
