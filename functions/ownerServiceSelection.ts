@@ -1,5 +1,5 @@
 import crypto from 'crypto';
-import { CANONICAL_FUNCTIONS_SLA_MINUTES } from './slaPolicy';
+import { OWNER_AGREEMENT_RESPONSE_TARGET_MINUTES } from './ownerAgreementConfig';
 import { SERVICE_ADDONS } from './pricing/uaePricingMatrix2026';
 
 // Single, strict resolver for the services an Owner selected. The Owner Service Agreement PDF is
@@ -26,7 +26,7 @@ export class OwnerServiceSelectionError extends Error {
 
 /**
  * Licensing gate. Property management / brokerage is NOT a listed activity on licence CN-5914744
- * (see AUDIT.md). Default ON so existing flows keep working; set OWNER_PM_AGREEMENTS_ENABLED=false
+ * at the time of review; the owner reports it was added on the renewed licence (verify on the new copy). Default ON so existing flows keep working; set OWNER_PM_AGREEMENTS_ENABLED=false
  * to refuse PM-only / combined agreements until the activity is licensed.
  */
 export function propertyManagementAgreementsEnabled(env: Record<string, string | undefined> = process.env): boolean {
@@ -107,9 +107,6 @@ export function resolveOwnerServiceSelection(rawData: unknown, env: Record<strin
   if (propertyManagement && !propertyManagementAgreementsEnabled(env)) {
     throw new OwnerServiceSelectionError('Property management agreements are disabled (OWNER_PM_AGREEMENTS_ENABLED=false) until the activity is added to the trade licence.');
   }
-  if (propertyManagement) {
-    console.warn('[OwnerAgreement] Generating a property-management agreement. Property management is not a listed activity on licence CN-5914744; legal review required.');
-  }
 
   const addOns = addOnIds(data).map((id) => {
     const match = SERVICE_ADDONS.find((addOn) => addOn.id === id || addOn.label.toLowerCase() === id.toLowerCase());
@@ -133,7 +130,7 @@ export function hashOwnerServiceSelection(selection: OwnerServiceSelection): str
   return crypto.createHash('sha256').update(JSON.stringify(canonical)).digest('hex');
 }
 
-/** Target response times already defined in slaPolicy.ts (not invented here). */
+/** Official contractual response targets (ownerAgreementConfig.ts; same as the owner ticket callable). */
 export function maintenanceResponseTargets(): Array<{ priority: string; minutes: number }> {
-  return Object.entries(CANONICAL_FUNCTIONS_SLA_MINUTES).map(([priority, minutes]) => ({ priority, minutes }));
+  return Object.entries(OWNER_AGREEMENT_RESPONSE_TARGET_MINUTES).map(([priority, minutes]) => ({ priority, minutes }));
 }

@@ -69,7 +69,8 @@ test('employment addendum supplements MOHRE contract with verified limits', asyn
   const src = await read('src/utils/employmentAddendumPdf.ts');
   assert.ok(src.includes('NON_COMPETE_MAX_MONTHS = 24'));
   assert.ok(src.includes("NON_COMPETE_DEFAULT_PLACE = 'the United Arab Emirates'"));
-  assert.ok(src.includes('nonCompete: NonCompeteTerms | null;'), 'non-compete included by default, months required per employee');
+  assert.ok(src.includes('roleAccess: { directClientAccess: boolean; confidentialInformation: boolean };'), 'non-compete scope follows Art. 10 role access');
+  assert.ok(src.includes('may only be added for roles with direct client access or confidential information'));
   for (const token of ['the MOHRE contract and the law prevail', 'shall not withhold', 'recruitment or employment fees', 'Federal Decree-Law No. 45 of 2021', 'the Arabic text prevails', 'Article 54', 'UAE-licensed lawyer']) {
     assert.ok(src.includes(token), `addendum missing ${token}`);
   }

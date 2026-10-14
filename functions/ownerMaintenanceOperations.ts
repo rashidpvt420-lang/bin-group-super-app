@@ -1,4 +1,5 @@
 import { FieldValue } from "firebase-admin/firestore";
+import { ownerTicketTargetMinutes } from "./ownerAgreementConfig";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 import { PropertyGeoAuthorityError, resolveDispatchReadyPropertyGeo } from "./propertyGeoAuthority";
@@ -129,7 +130,7 @@ export const ownerCreateMaintenanceTicket = onCall(
       dispatchStatus: "PENDING_ASSIGNMENT",
       trackingStatus: "WAITING_FOR_TECHNICIAN",
       assignedTechnicianId: null,
-      slaMinutes: priority === "emergency" ? 60 : priority === "urgent" ? 240 : 1440,
+      slaMinutes: ownerTicketTargetMinutes(priority),
       createdAt: now,
       updatedAt: now,
     };

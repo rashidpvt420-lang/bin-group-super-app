@@ -34,14 +34,26 @@ test('services-selected table, not-provided statement and written-amendment rule
 });
 
 test('property management schedule keeps placeholders, CASH/CHEQUE only and Ejari/Tawtheeq', () => {
-  for (const token of ['[OWNER APPROVAL THRESHOLD]', '[EMERGENCY LIMIT]', 'only by CASH or CHEQUE', 'Ejari in Dubai, Tawtheeq in Abu Dhabi', '[RESPONSIBLE PARTY]', '[HANDBACK PERIOD]']) {
+  for (const token of ['PM.ownerApprovalThresholdAed', 'PM.emergencySpendLimitAed', 'PM.emergencyNotifyHours', 'PM.rentRemittanceWorkingDays', 'PM.handbackDays', 'only by CASH or CHEQUE', 'Ejari in Dubai, Tawtheeq in Abu Dhabi', "as the Owner\\'s agent"]) {
     assert.ok(source.includes(token), token);
   }
+  assert.ok(!/\[(OWNER APPROVAL THRESHOLD|EMERGENCY LIMIT|HANDBACK PERIOD|RESPONSIBLE PARTY)\]/.test(source), 'approved values replace placeholders');
+  const config = readFileSync('functions/ownerAgreementConfig.ts', 'utf8');
+  for (const token of ['ownerApprovalThresholdAed: 1000', 'emergencySpendLimitAed: 2500', 'emergencyNotifyHours: 24', 'rentRemittanceWorkingDays: 7', 'handbackDays: 30']) assert.ok(config.includes(token), token);
 });
 
-test('maintenance response times come from slaPolicy, not invented in the PDF', () => {
-  assert.ok(selection.includes("import { CANONICAL_FUNCTIONS_SLA_MINUTES } from './slaPolicy';"));
+test('contract response targets are the official 1h/4h/24h set shared with the owner ticket callable', () => {
+  const config = readFileSync('functions/ownerAgreementConfig.ts', 'utf8');
+  assert.ok(config.includes('emergency: 60,') && config.includes('urgent: 240,') && config.includes('standard: 1440,'));
+  assert.ok(selection.includes("from './ownerAgreementConfig'"));
   assert.ok(source.includes('maintenanceResponseTargets()'));
+  assert.ok(source.includes('They are service targets, not guarantees'));
+  assert.ok(readFileSync('functions/ownerMaintenanceOperations.ts', 'utf8').includes('slaMinutes: ownerTicketTargetMinutes(priority)'));
+});
+
+test('PM agreements: switch kept, no per-agreement licensing warning, Fire Safety allowed on PM-only', () => {
+  assert.ok(!selection.includes('console.warn'));
+  assert.ok(!/PROPERTY_MANAGEMENT_ONLY[^\n]*fire_safety|fire_safety[^\n]*PROPERTY_MANAGEMENT_ONLY/.test(selection), 'no add-on restriction by mode');
 });
 
 test('signed PDF and contract record carry the selection and its hash', () => {

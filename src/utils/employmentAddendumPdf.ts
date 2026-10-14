@@ -36,9 +36,15 @@ export type EmploymentAddendumInput = {
   startDate?: Date;
   referenceNumber: string;
   issueDate?: Date;
-  /** Included by default (owner decision 14 Oct 2026). Months are required; area defaults to the UAE. */
-  nonCompete: NonCompeteTerms | null;
-  /** Explicit opt-out; set only on legal advice. */
+  /**
+   * Art. 10(1): a non-compete may only be imposed where the work gives the employee knowledge of the
+   * employer's clients or access to its work secrets. Owner decision (14 Oct 2026): included by default
+   * for roles with direct client access or confidential information; not for other roles.
+   */
+  roleAccess: { directClientAccess: boolean; confidentialInformation: boolean };
+  /** Required (1-24 months) when roleAccess qualifies; area defaults to the UAE. */
+  nonCompete?: NonCompeteTerms | null;
+  /** Explicit opt-out for a qualifying role; set only on legal advice. */
   excludeNonCompete?: boolean;
 };
 
@@ -49,10 +55,18 @@ export const EMPLOYMENT_ADDENDUM_DISCLAIMER =
 
 const fmt = (d?: Date) => (d ? d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '[DATE]');
 
-export function resolveNonCompete(input: Pick<EmploymentAddendumInput, 'nonCompete' | 'excludeNonCompete' | 'jobTitle'>): Required<NonCompeteTerms> | null {
+export function roleQualifiesForNonCompete(roleAccess: EmploymentAddendumInput['roleAccess'] | undefined): boolean {
+  return Boolean(roleAccess?.directClientAccess || roleAccess?.confidentialInformation);
+}
+
+export function resolveNonCompete(input: Pick<EmploymentAddendumInput, 'nonCompete' | 'excludeNonCompete' | 'jobTitle' | 'roleAccess'>): Required<NonCompeteTerms> | null {
+  if (!roleQualifiesForNonCompete(input.roleAccess)) {
+    if (input.nonCompete) throw new Error('A non-compete may only be added for roles with direct client access or confidential information (Federal Decree-Law No. 33 of 2021, Art. 10(1)).');
+    return null;
+  }
   if (input.excludeNonCompete) return null;
   const t = input.nonCompete;
-  if (!t) throw new Error('Non-compete duration (months) is required for every employee unless excludeNonCompete is set.');
+  if (!t) throw new Error('Non-compete duration (months) is required for roles with direct client access or confidential information unless excludeNonCompete is set.');
   return {
     months: t.months,
     place: t.place?.trim() || NON_COMPETE_DEFAULT_PLACE,
