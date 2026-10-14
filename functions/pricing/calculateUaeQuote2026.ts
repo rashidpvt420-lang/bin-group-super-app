@@ -248,6 +248,44 @@ function finiteNumber(value: unknown, fallback = 0): number {
 
 function positiveNumber(value: unknown, fallback = 0): number { return Math.max(finiteNumber(value, fallback), 0); }
 
+/**
+ * Cities / areas that owners or address lookup often enter in the emirate field. Each maps to the
+ * emirate whose regional factor applies (Al Ain is in the Emirate of Abu Dhabi, etc.).
+ */
+const EMIRATE_CITY_ALIASES: Record<string, string> = {
+  alain: 'Abu Dhabi', alayn: 'Abu Dhabi', khalifacity: 'Abu Dhabi', mussafah: 'Abu Dhabi', musaffah: 'Abu Dhabi',
+  madinatzayed: 'Abu Dhabi', ruwais: 'Abu Dhabi', alruwais: 'Abu Dhabi', aldhafra: 'Abu Dhabi', liwa: 'Abu Dhabi',
+  hatta: 'Dubai', jebelali: 'Dubai',
+  khorfakkan: 'Sharjah', kalba: 'Sharjah', dibbaalhisn: 'Sharjah',
+};
+
+function emirateKey(value: string): string {
+  return String(value || '').toLowerCase().replace(/^emirate\s+of\s+/, '').replace(/\s+emirate$/, '').replace(/[^a-z0-9]+/g, '');
+}
+
+function matrixEmirateFactor(label: string): number {
+  const entry = UAE_PRICING_MATRIX_2026.emirateMultipliers.find((item) => item.label === label);
+  return entry ? finiteNumber(entry.value, 1) : 1;
+}
+
+/** Regional factor comes from UAE_PRICING_MATRIX_2026.emirateMultipliers (the table the Admin page shows). */
+export function resolveEmirateMultiplier(emirate: string): { input: string; emirate: string | null; multiplier: number; viaCity: boolean } {
+  const input = String(emirate || '').trim();
+  const key = emirateKey(input);
+  if (!key) return { input: '', emirate: null, multiplier: 1, viaCity: false };
+  const cityEmirate = EMIRATE_CITY_ALIASES[key];
+  const resolvedKey = cityEmirate ? emirateKey(cityEmirate) : key;
+  const northern = 'RAK / Ajman / Fujairah / UAQ';
+  let resolved: string | null = null;
+  if (resolvedKey.includes('dubai')) resolved = 'Dubai';
+  else if (resolvedKey.includes('abudhabi')) resolved = 'Abu Dhabi';
+  else if (resolvedKey.includes('sharjah')) resolved = 'Sharjah';
+  else if (resolvedKey === 'rak' || resolvedKey.includes('rasalkhaimah') || resolvedKey.includes('ajman')
+    || resolvedKey.includes('fujairah') || resolvedKey === 'uaq' || resolvedKey.includes('ummalquwain')) resolved = northern;
+  if (!resolved) return { input, emirate: null, multiplier: 1, viaCity: false };
+  return { input, emirate: resolved === northern ? northern : resolved, multiplier: matrixEmirateFactor(resolved), viaCity: Boolean(cityEmirate) };
+}
+
 function normalizeAssetClassId(assetClassId?: string): string {
   const raw = String(assetClassId || '').trim();
   if (!raw) return '';
@@ -505,13 +543,11 @@ export function calculateUaeQuote2026(input: Partial<QuoteInput> | null | undefi
   const zoneAdjustedQuote = baseQuote * zoneMultiplier;
   if (zoneMultiplier !== 1) pricingExplanation.push(`Zone ${safeInput.zone} technical-service factor ${zoneMultiplier}x applied.`);
 
-  const normalizedEmirate = safeInput.emirate.toLowerCase().replace(/[^a-z0-9]+/g, '');
-  const emirateMultiplier = normalizedEmirate.includes('dubai') ? 1.15
-    : normalizedEmirate.includes('abudhabi') ? 1.1
-    : normalizedEmirate.includes('sharjah') ? 0.9
-    : (normalizedEmirate === 'rak' || normalizedEmirate.includes('rasalkhaimah') || normalizedEmirate.includes('ajman') || normalizedEmirate.includes('fujairah') || normalizedEmirate === 'uaq' || normalizedEmirate.includes('ummalquwain')) ? 0.8
-    : 1;
-  if (!normalizedEmirate) riskFlags.push('Emirate confirmation required');
+  const emirateResolution = resolveEmirateMultiplier(safeInput.emirate);
+  const emirateMultiplier = emirateResolution.multiplier;
+  if (!emirateResolution.input) riskFlags.push('Emirate confirmation required');
+  else if (!emirateResolution.emirate) riskFlags.push(`Emirate '${safeInput.emirate}' is not recognised; regional factor not applied, confirmation required`);
+  else if (emirateResolution.viaCity) pricingExplanation.push(`${safeInput.emirate} is priced under the ${emirateResolution.emirate} regional factor.`);
   const emirateAdjustedQuote = zoneAdjustedQuote * emirateMultiplier;
   if (emirateMultiplier !== 1) pricingExplanation.push(`Regional technical-service factor ${emirateMultiplier}x applied for ${safeInput.emirate}.`);
 
