@@ -35,6 +35,13 @@ interface CFOStats {
     activeContracts: number;
 }
 
+// Progress bars reflect real ledger proportions; never a hard-coded percentage.
+export function receivableShare(part?: number | null, other?: number | null): number {
+    const a = Number(part || 0);
+    const total = a + Number(other || 0);
+    return total > 0 ? Math.round((a / total) * 100) : 0;
+}
+
 export default function CFODashboard() {
     const [stats, setStats] = useState<CFOStats | null>(null);
     const [snapshotData, setSnapshotData] = useState<any[]>([]);
@@ -182,8 +189,8 @@ export default function CFODashboard() {
                                         <Typography variant="h4" fontWeight={900} color="#fbbf24">
                                             AED {stats?.outstandingInvoices.toLocaleString()}
                                         </Typography>
-                                        <LinearProgress variant="determinate" value={70} sx={{ mt: 2, height: 6, borderRadius: 3, bgcolor: '#fef3c7', '& .MuiLinearProgress-bar': { bgcolor: '#fbbf24' } }} />
-                                        <Typography variant="caption" sx={{ mt: 1, display: 'block' }}>Expected settlement within 14 days</Typography>
+                                        <LinearProgress variant="determinate" value={receivableShare(stats?.outstandingInvoices, stats?.overdueInvoices)} sx={{ mt: 2, height: 6, borderRadius: 3, bgcolor: '#fef3c7', '& .MuiLinearProgress-bar': { bgcolor: '#fbbf24' } }} />
+                                        <Typography variant="caption" sx={{ mt: 1, display: 'block' }}>Share of open receivables (pending vs overdue) from payment_transactions</Typography>
                                     </Box>
                                 </Grid>
                                 <Grid item xs={12} md={6}>
@@ -194,8 +201,8 @@ export default function CFODashboard() {
                                         <Typography variant="h4" fontWeight={900} color="#ef4444">
                                             AED {stats?.overdueInvoices.toLocaleString()}
                                         </Typography>
-                                        <LinearProgress variant="determinate" value={28} sx={{ mt: 2, height: 6, borderRadius: 3, bgcolor: '#fee2e2', '& .MuiLinearProgress-bar': { bgcolor: '#ef4444' } }} />
-                                        <Typography variant="caption" sx={{ mt: 1, display: 'block', color: '#ef4444' }}>⚠️ Enforcement actions required</Typography>
+                                        <LinearProgress variant="determinate" value={receivableShare(stats?.overdueInvoices, stats?.outstandingInvoices)} sx={{ mt: 2, height: 6, borderRadius: 3, bgcolor: '#fee2e2', '& .MuiLinearProgress-bar': { bgcolor: '#ef4444' } }} />
+                                        <Typography variant="caption" sx={{ mt: 1, display: 'block', color: (stats?.overdueInvoices || 0) > 0 ? '#ef4444' : undefined }}>{(stats?.overdueInvoices || 0) > 0 ? 'Overdue payments recorded — review collections' : 'No overdue payments recorded'}</Typography>
                                     </Box>
                                 </Grid>
                             </Grid>
