@@ -30,6 +30,7 @@ import {
   OWNER_OPEN_TICKET_STATUSES,
   countOwnerOpenTickets,
 } from '../utils/ownerTicketAttentionCounts';
+import { STATUS_TONES } from '../../theme/statusColors';
 
 /** Firestore `in` queries allow at most 10 values — keep in sync with OWNER_OPEN_TICKET_STATUSES. */
 const ACTIVE_TICKET_STATUS_LIST = Array.from(OWNER_OPEN_TICKET_STATUSES);
@@ -289,10 +290,10 @@ const buildActivationTimeline = (
   const tenantsLinked = Number(ledgerSummary?.activeTenants || ledgerSummary?.pendingTenants || 0);
 
   const status = (done: boolean, review: boolean, doneLabel = 'Done') => done
-    ? { status: doneLabel, tone: '#10b981' }
+    ? { status: doneLabel, tone: STATUS_TONES.success.text }
     : review
-      ? { status: 'In Review', tone: '#f59e0b' }
-      : { status: 'Missing', tone: '#ef4444' };
+      ? { status: 'In Review', tone: STATUS_TONES.warning.text }
+      : { status: 'Missing', tone: STATUS_TONES.danger.text };
 
   const propertyGate = status(properties.length > 0, Boolean(profile.latestIntakeId || contract.propertyId || contract.propertyIds?.length), properties.length > 0 ? `${properties.length} linked` : 'Done');
   const titleGate = status(titleReady, properties.length > 0);

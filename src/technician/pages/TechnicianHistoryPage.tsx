@@ -17,6 +17,7 @@ import {
 import { useRole } from '../../context/RoleContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { computeTechnicianHistoryStats, formatPercentOrNoData, type TechnicianHistoryStats } from './technicianHistoryStats';
+import { STATUS_TONES } from '../../theme/statusColors';
 
 export default function TechnicianHistoryPage() {
     const { user } = useRole();
@@ -149,7 +150,7 @@ export default function TechnicianHistoryPage() {
                                             label={job.status?.toUpperCase().replace('_', ' ')} 
                                             sx={{ 
                                                 bgcolor: job.status === 'CLOSED' ? alpha('#4ade80', 0.1) : alpha(binThemeTokens.gold, 0.1),
-                                                color: job.status === 'CLOSED' ? '#4ade80' : binThemeTokens.gold,
+                                                color: job.status === 'CLOSED' ? STATUS_TONES.success.text : STATUS_TONES.brand.text,
                                                 fontWeight: 950,
                                                 fontSize: '0.65rem'
                                             }} 

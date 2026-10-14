@@ -163,14 +163,14 @@ export default function AdminTerminal() {
 
   const metricValue = React.useCallback((key: string) => metrics.find((metric) => metric.key === key)?.value ?? null, [metrics]);
   const coverageCards: CoverageCard[] = [
-    { key: 'owners', label: 'Owner activation', value: String(metricValue('owners') ?? '—'), helper: 'Owner profiles, properties, contracts, Cash/Cheque proof, dashboard unlock.', source: 'users.role=owner', icon: Building2, status: 'live' },
-    { key: 'tenants', label: 'Tenant operations', value: String(metricValue('tenants') ?? '—'), helper: 'Linked units, tickets, documents, payments, notices, and renewal workflow.', source: 'users.role=tenant', icon: Users, status: 'live' },
-    { key: 'technicians', label: 'Technician dispatch', value: String(metricValue('technicians') ?? '—'), helper: 'Jobs, map, offline queue, proof readiness, HR, and closure evidence.', source: 'users.role=technician', icon: Wrench, status: 'live' },
-    { key: 'brokers', label: 'Broker attribution', value: String(metricValue('brokers') ?? '—'), helper: 'Leads, referrals, attribution proof, commissions, documents, and profile.', source: 'users.role=broker', icon: TicketCheck, status: 'live' },
-    { key: 'tickets', label: 'Open SLA load', value: String(metricValue('openTickets') ?? '—'), helper: 'Shared maintenance workload across tenant, technician, owner, and admin views.', source: 'maintenanceTickets.status', icon: Gauge, status: 'live' },
-    { key: 'payments', label: 'Payment review', value: String(metricValue('pendingPayments') ?? '—'), helper: PHASE1_PAYMENT_POLICY.policyText, source: 'payment_transactions.verificationState', icon: CreditCard, status: 'live' },
-    { key: 'launch', label: 'Launch authority', value: RELEASE_SHA ? 'EXACT SHA' : 'UNBOUND', helper: 'Public readiness exists only in the protected exact-SHA Launch Command Center. This operational dashboard cannot issue a public-launch clearance.', source: `system_health/admin_summaries · ${RELEASE_SHA || 'VITE_RELEASE_COMMIT_SHA missing'}`, icon: ShieldCheck, status: 'authoritative-handoff' },
-    { key: 'routes', label: 'Route consolidation', value: '1 app', helper: 'Canonical role routes live in src/*. Legacy owner/admin apps are handoff-only.', source: 'scripts/verify-route-consolidation.mjs', icon: Map, status: 'software-map' },
+    { key: 'owners', label: 'Owner activation', value: String(metricValue('owners') ?? '—'), helper: 'Owner profiles, properties, contracts, Cash/Cheque proof, dashboard unlock.', source: label('admin.coverage.source.owners', 'Source: registered owner accounts'), icon: Building2, status: 'live' },
+    { key: 'tenants', label: 'Tenant operations', value: String(metricValue('tenants') ?? '—'), helper: 'Linked units, tickets, documents, payments, notices, and renewal workflow.', source: label('admin.coverage.source.tenants', 'Source: registered tenant accounts'), icon: Users, status: 'live' },
+    { key: 'technicians', label: 'Technician dispatch', value: String(metricValue('technicians') ?? '—'), helper: 'Jobs, map, offline queue, proof readiness, HR, and closure evidence.', source: label('admin.coverage.source.technicians', 'Source: registered technician accounts'), icon: Wrench, status: 'live' },
+    { key: 'brokers', label: 'Broker attribution', value: String(metricValue('brokers') ?? '—'), helper: 'Leads, referrals, attribution proof, commissions, documents, and profile.', source: label('admin.coverage.source.brokers', 'Source: registered broker accounts'), icon: TicketCheck, status: 'live' },
+    { key: 'tickets', label: 'Open SLA load', value: String(metricValue('openTickets') ?? '—'), helper: 'Shared maintenance workload across tenant, technician, owner, and admin views.', source: label('admin.coverage.source.tickets', 'Source: open maintenance tickets'), icon: Gauge, status: 'live' },
+    { key: 'payments', label: 'Payment review', value: String(metricValue('pendingPayments') ?? '—'), helper: PHASE1_PAYMENT_POLICY.policyText, source: label('admin.coverage.source.payments', 'Source: payments waiting for verification'), icon: CreditCard, status: 'live' },
+    { key: 'launch', label: 'Launch authority', value: RELEASE_SHA ? label('admin.coverage.launch.linked', 'Release linked') : label('admin.coverage.launch.unlinked', 'Not linked'), helper: 'Public readiness exists only in the protected exact-SHA Launch Command Center. This operational dashboard cannot issue a public-launch clearance.', source: RELEASE_SHA ? `${label('admin.coverage.source.launch', 'Source: Launch Command Center')} · ${RELEASE_SHA.slice(0, 8)}` : label('admin.coverage.source.launchMissing', 'Source: Launch Command Center · release not set on this build'), icon: ShieldCheck, status: 'authoritative-handoff' },
+    { key: 'routes', label: 'Route consolidation', value: '1 app', helper: label('admin.coverage.routes.helper', 'Every role uses this one app. The older owner and admin apps only hand off to it.'), source: label('admin.coverage.source.routes', 'Source: automated route check'), icon: Map, status: 'software-map' },
   ];
 
   const resetAndLogin = async () => {
@@ -195,40 +195,40 @@ export default function AdminTerminal() {
   };
 
   return (
-    <Box sx={{ minHeight: '100vh', bgcolor: '#020617', color: '#FFFFFF', p: { xs: 2, md: 4 }, direction: isRTL ? 'rtl' : 'ltr', backgroundImage: 'radial-gradient(circle at 50% 0%, rgba(201,166,70,0.18), transparent 42%)' }}>
+    <Box sx={{ minHeight: '100vh', bgcolor: '#F8F9FB', color: '#111827', p: { xs: 2, md: 4 }, direction: isRTL ? 'rtl' : 'ltr', backgroundImage: 'radial-gradient(circle at 50% 0%, rgba(201,166,70,0.18), transparent 42%)' }}>
       <Stack direction={isRTL ? 'row-reverse' : 'row'} justifyContent="space-between" alignItems="center" spacing={2} sx={{ mb: 4 }}>
         <Stack direction={isRTL ? 'row-reverse' : 'row'} alignItems="center" spacing={1.5}>
           <Box sx={{ width: 46, height: 46, borderRadius: 3, bgcolor: '#C9A646', color: '#111827', display: 'grid', placeItems: 'center' }}><SafeIcon icon={ShieldCheck} size={24} /></Box>
           <Box sx={{ textAlign: isRTL ? 'right' : 'left' }}>
-            <Typography variant="overline" sx={{ color: '#E5C86B', fontWeight: 950, letterSpacing: 3 }}>BIN GROUP ADMIN</Typography>
+            <Typography variant="overline" sx={{ color: '#7A5C12', fontWeight: 950, letterSpacing: 3 }}>BIN GROUP ADMIN</Typography>
             <Typography variant="h4" sx={{ fontWeight: 950, letterSpacing: -0.8 }}>{label('admin.command.title', 'Unified Command Center')}</Typography>
           </Box>
         </Stack>
         <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} alignItems="center">
-          <Button onClick={loadDashboard} disabled={loading} startIcon={renderSafeIcon(RefreshCcw, { size: 16 })} sx={{ color: '#E5C86B', border: '1px solid rgba(201,166,70,0.42)', fontWeight: 900 }}>{loading ? 'Syncing' : 'Refresh'}</Button>
-          <Button onClick={() => navigate(showingProfile ? '/admin/dashboard' : '/admin/profile')} startIcon={renderSafeIcon(UserRound, { size: 17 })} aria-label={showingProfile ? 'Return to Admin dashboard' : 'Open Admin profile and security'} sx={{ color: '#FFFFFF', border: '1px solid rgba(255,255,255,0.18)', fontWeight: 900 }}>{showingProfile ? 'Command Center' : (auth.currentUser?.displayName || 'Admin Profile')}</Button>
-          <PortalSessionControls role="admin" dark accent="#C9A646" />
+          <Button onClick={loadDashboard} disabled={loading} startIcon={renderSafeIcon(RefreshCcw, { size: 16 })} sx={{ color: '#7A5C12', border: '1px solid rgba(201,166,70,0.42)', fontWeight: 900 }}>{loading ? 'Syncing' : 'Refresh'}</Button>
+          <Button onClick={() => navigate(showingProfile ? '/admin/dashboard' : '/admin/profile')} startIcon={renderSafeIcon(UserRound, { size: 17 })} aria-label={showingProfile ? 'Return to Admin dashboard' : 'Open Admin profile and security'} sx={{ color: '#111827', border: '1px solid #E5E7EB', fontWeight: 900 }}>{showingProfile ? 'Command Center' : (auth.currentUser?.displayName || 'Admin Profile')}</Button>
+          <PortalSessionControls role="admin" accent="#7A5C12" />
         </Stack>
       </Stack>
 
-      <Alert severity={RELEASE_SHA ? 'info' : 'warning'} sx={{ mb: 3, bgcolor: 'rgba(59,130,246,0.10)', color: '#BFDBFE', border: '1px solid rgba(59,130,246,0.30)' }}>
+      <Alert severity={RELEASE_SHA ? 'info' : 'warning'} sx={{ mb: 3, bgcolor: 'rgba(59,130,246,0.10)', color: '#1E40AF', border: '1px solid rgba(59,130,246,0.30)' }}>
         Operational dashboard only. Release SHA: <strong>{RELEASE_SHA || 'UNAVAILABLE'}</strong>. Public launch decisions are calculated only in the dedicated Launch Command Center from exact-SHA, evidence-layer-qualified records.
       </Alert>
 
-      <Alert severity="info" sx={{ mb: 3, bgcolor: 'rgba(201,166,70,0.08)', color: '#F8E7A6', border: '1px solid rgba(201,166,70,0.28)' }}>
+      <Alert severity="info" sx={{ mb: 3, bgcolor: 'rgba(201,166,70,0.08)', color: '#7A5C12', border: '1px solid rgba(201,166,70,0.28)' }}>
         <strong>{PHASE1_PAYMENT_POLICY.policyText}</strong>
       </Alert>
 
       {showingProfile ? (
-        <Card sx={{ mb: 3, bgcolor: 'rgba(15, 23, 42, 0.96)', border: '1px solid rgba(201,166,70,0.32)', borderRadius: 4, color: '#fff' }}>
+        <Card sx={{ mb: 3, bgcolor: '#FFFFFF', border: '1px solid rgba(201,166,70,0.32)', borderRadius: 4, color: '#111827' }}>
           <CardContent>
             <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" spacing={3}>
               <Stack direction="row" spacing={2} alignItems="center">
                 <Box sx={{ width: 64, height: 64, borderRadius: '50%', bgcolor: '#C9A646', color: '#111827', display: 'grid', placeItems: 'center' }}><SafeIcon icon={UserRound} size={30} /></Box>
                 <Box>
-                  <Typography variant="overline" sx={{ color: '#E5C86B', fontWeight: 950, letterSpacing: 2 }}>ADMIN IDENTITY & SECURITY</Typography>
+                  <Typography variant="overline" sx={{ color: '#7A5C12', fontWeight: 950, letterSpacing: 2 }}>ADMIN IDENTITY & SECURITY</Typography>
                   <Typography variant="h5" sx={{ fontWeight: 950 }}>{auth.currentUser?.displayName || 'BIN GROUP Administrator'}</Typography>
-                  <Typography sx={{ color: 'rgba(255,255,255,0.66)' }}>{auth.currentUser?.email || 'Authenticated Admin'}</Typography>
+                  <Typography sx={{ color: '#4B5563' }}>{auth.currentUser?.email || 'Authenticated Admin'}</Typography>
                 </Box>
               </Stack>
               <Stack spacing={1} alignItems={{ xs: 'stretch', md: 'flex-end' }}>
@@ -242,9 +242,9 @@ export default function AdminTerminal() {
       ) : (
         <>
           {!loading && (
-            <Alert severity={(metricValue('openTickets') || 0) > 0 || (metricValue('pendingPayments') || 0) > 0 ? 'warning' : 'success'} sx={{ mb: 3, bgcolor: 'rgba(201,166,70,0.08)', color: '#F8E7A6', border: '1px solid rgba(201,166,70,0.28)' }}>
+            <Alert severity={(metricValue('openTickets') || 0) > 0 || (metricValue('pendingPayments') || 0) > 0 ? 'warning' : 'success'} sx={{ mb: 3, bgcolor: 'rgba(201,166,70,0.08)', color: '#7A5C12', border: '1px solid rgba(201,166,70,0.28)' }}>
               <Typography sx={{ fontWeight: 950 }}>Next Admin action</Typography>
-              <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.72)' }}>
+              <Typography variant="body2" sx={{ color: '#374151' }}>
                 {(metricValue('openTickets') || 0) > 0
                   ? `${metricValue('openTickets')} open ticket(s) require operations ownership before lower-priority administration.`
                   : (metricValue('pendingPayments') || 0) > 0
@@ -253,15 +253,15 @@ export default function AdminTerminal() {
               </Typography>
             </Alert>
           )}
-          <Card sx={{ mb: 3, bgcolor: 'rgba(15, 23, 42, 0.96)', border: '1px solid rgba(201,166,70,0.30)', borderRadius: 4, color: '#fff' }}>
+          <Card sx={{ mb: 3, bgcolor: '#FFFFFF', border: '1px solid rgba(201,166,70,0.30)', borderRadius: 4, color: '#111827' }}>
             <CardContent>
-              <Typography variant="h6" sx={{ color: '#E5C86B', fontWeight: 950 }}>Main Admin Actions</Typography>
-              <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.62)', mb: 2 }}>Start and control daily operations here.</Typography>
+              <Typography variant="h6" sx={{ color: '#7A5C12', fontWeight: 950 }}>Main Admin Actions</Typography>
+              <Typography variant="body2" sx={{ color: '#4B5563', mb: 2 }}>Start and control daily operations here.</Typography>
               <Grid container spacing={2}>
                 {commandActions.map((action) => (
                   <Grid item xs={12} sm={6} md={4} key={action.label}>
-                    <Button fullWidth onClick={() => openOperationsTool(action.path)} startIcon={renderSafeIcon(action.icon, { size: 20 })} sx={{ minHeight: 112, p: 2, justifyContent: 'flex-start', textAlign: 'left', alignItems: 'flex-start', color: '#fff', bgcolor: 'rgba(255,255,255,0.035)', border: '1px solid rgba(201,166,70,0.20)', borderRadius: 3, '&:hover': { bgcolor: 'rgba(201,166,70,0.10)', borderColor: '#C9A646' } }}>
-                      <Box><Typography sx={{ fontWeight: 950 }}>{action.label}</Typography><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.58)', textTransform: 'none' }}>{action.helper}</Typography></Box>
+                    <Button fullWidth onClick={() => openOperationsTool(action.path)} startIcon={renderSafeIcon(action.icon, { size: 20 })} sx={{ minHeight: 112, p: 2, justifyContent: 'flex-start', textAlign: 'left', alignItems: 'flex-start', color: '#111827', bgcolor: '#F8F9FB', border: '1px solid rgba(201,166,70,0.20)', borderRadius: 3, '&:hover': { bgcolor: 'rgba(201,166,70,0.10)', borderColor: '#C9A646' } }}>
+                      <Box><Typography sx={{ fontWeight: 950 }}>{action.label}</Typography><Typography variant="caption" sx={{ color: '#4B5563', textTransform: 'none' }}>{action.helper}</Typography></Box>
                     </Button>
                   </Grid>
                 ))}
@@ -276,15 +276,15 @@ export default function AdminTerminal() {
       <Grid container spacing={2.5} sx={{ mb: 3 }}>
         {metrics.map((metric) => (
           <Grid item xs={12} sm={6} md={4} key={metric.key}>
-            <Card sx={{ height: '100%', bgcolor: 'rgba(15, 23, 42, 0.94)', border: '1px solid rgba(201,166,70,0.22)', borderRadius: 4, color: '#fff' }}>
+            <Card sx={{ height: '100%', bgcolor: '#FFFFFF', border: '1px solid rgba(201,166,70,0.22)', borderRadius: 4, color: '#111827' }}>
               <CardContent>
                 <Stack direction="row" justifyContent="space-between" alignItems="flex-start" spacing={2}>
                   <Box>
-                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.56)', fontWeight: 900, textTransform: 'uppercase', letterSpacing: 1.4 }}>{metric.label}</Typography>
-                    <Typography variant="h3" sx={{ fontWeight: 950, color: '#E5C86B', my: 1 }}>{loading && metric.value === null ? <CircularProgress size={26} sx={{ color: '#E5C86B' }} /> : metric.value ?? '—'}</Typography>
-                    <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.62)', fontWeight: 700 }}>{metric.helper}</Typography>
+                    <Typography variant="caption" sx={{ color: '#4B5563', fontWeight: 900, textTransform: 'uppercase', letterSpacing: 1.4 }}>{metric.label}</Typography>
+                    <Typography variant="h3" sx={{ fontWeight: 950, color: '#7A5C12', my: 1 }}>{loading && metric.value === null ? <CircularProgress size={26} sx={{ color: '#7A5C12' }} /> : metric.value ?? '—'}</Typography>
+                    <Typography variant="body2" sx={{ color: '#4B5563', fontWeight: 700 }}>{metric.helper}</Typography>
                   </Box>
-                  <Box sx={{ width: 42, height: 42, borderRadius: 3, bgcolor: 'rgba(201,166,70,0.10)', display: 'grid', placeItems: 'center', color: '#E5C86B' }}><SafeIcon icon={metric.icon} size={21} /></Box>
+                  <Box sx={{ width: 42, height: 42, borderRadius: 3, bgcolor: 'rgba(201,166,70,0.10)', display: 'grid', placeItems: 'center', color: '#7A5C12' }}><SafeIcon icon={metric.icon} size={21} /></Box>
                 </Stack>
               </CardContent>
             </Card>
@@ -292,20 +292,20 @@ export default function AdminTerminal() {
         ))}
       </Grid>
 
-      <Card sx={{ mb: 3, bgcolor: 'rgba(15, 23, 42, 0.94)', border: '1px solid rgba(201,166,70,0.22)', borderRadius: 4, color: '#fff' }}>
+      <Card sx={{ mb: 3, bgcolor: '#FFFFFF', border: '1px solid rgba(201,166,70,0.22)', borderRadius: 4, color: '#111827' }}>
         <CardContent>
           <Stack direction={{ xs: 'column', md: isRTL ? 'row-reverse' : 'row' }} justifyContent="space-between" spacing={2} sx={{ mb: 2 }}>
-            <Box sx={{ textAlign: isRTL ? 'right' : 'left' }}><Typography variant="h6" sx={{ fontWeight: 950, color: '#E5C86B' }}>Canonical Admin Coverage</Typography><Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.62)', mt: 0.5 }}>Operational truth here; release truth is delegated to the exact-SHA Launch Command Center.</Typography></Box>
-            <Chip label="single command center" sx={{ bgcolor: 'rgba(201,166,70,0.14)', color: '#E5C86B', fontWeight: 950, alignSelf: { xs: 'flex-start', md: 'center' } }} />
+            <Box sx={{ textAlign: isRTL ? 'right' : 'left' }}><Typography variant="h6" sx={{ fontWeight: 950, color: '#7A5C12' }}>Canonical Admin Coverage</Typography><Typography variant="body2" sx={{ color: '#4B5563', mt: 0.5 }}>Operational truth here; release truth is delegated to the exact-SHA Launch Command Center.</Typography></Box>
+            <Chip label={label('admin.coverage.chip', 'Single command center')} sx={{ bgcolor: 'rgba(201,166,70,0.14)', color: '#7A5C12', fontWeight: 950, alignSelf: { xs: 'flex-start', md: 'center' } }} />
           </Stack>
           <Grid container spacing={2}>
             {coverageCards.map((item) => (
               <Grid item xs={12} sm={6} md={3} key={item.key}>
-                <Box sx={{ height: '100%', p: 1.6, borderRadius: 3, bgcolor: 'rgba(255,255,255,0.035)', border: '1px solid rgba(255,255,255,0.07)' }}>
-                  <Stack direction="row" spacing={1.2} alignItems="center" sx={{ mb: 1 }}><Box sx={{ width: 34, height: 34, borderRadius: 2, display: 'grid', placeItems: 'center', bgcolor: 'rgba(201,166,70,0.10)', color: '#E5C86B' }}><SafeIcon icon={item.icon} size={18} /></Box><Box sx={{ minWidth: 0 }}><Typography variant="body2" sx={{ color: '#fff', fontWeight: 950 }}>{item.label}</Typography><Typography variant="caption" sx={{ color: item.status === 'proof-required' ? '#FDE68A' : '#86EFAC', fontWeight: 900 }}>{item.status.replace('-', ' ').toUpperCase()}</Typography></Box></Stack>
-                  <Typography variant="h4" sx={{ color: '#E5C86B', fontWeight: 950 }}>{item.value}</Typography>
-                  <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.62)', fontWeight: 700, mt: 0.6 }}>{item.helper}</Typography>
-                  <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.38)', fontWeight: 800, overflowWrap: 'anywhere' }}>{item.source}</Typography>
+                <Box sx={{ height: '100%', p: 1.6, borderRadius: 3, bgcolor: '#F8F9FB', border: '1px solid #E5E7EB' }}>
+                  <Stack direction="row" spacing={1.2} alignItems="center" sx={{ mb: 1 }}><Box sx={{ width: 34, height: 34, borderRadius: 2, display: 'grid', placeItems: 'center', bgcolor: 'rgba(201,166,70,0.10)', color: '#7A5C12' }}><SafeIcon icon={item.icon} size={18} /></Box><Box sx={{ minWidth: 0 }}><Typography variant="body2" sx={{ color: '#111827', fontWeight: 950 }}>{item.label}</Typography><Typography variant="caption" sx={{ color: item.status === 'proof-required' ? '#92400E' : '#166534', fontWeight: 900 }}>{item.status.replace('-', ' ').toUpperCase()}</Typography></Box></Stack>
+                  <Typography variant="h4" sx={{ color: '#7A5C12', fontWeight: 950 }}>{item.value}</Typography>
+                  <Typography variant="body2" sx={{ color: '#4B5563', fontWeight: 700, mt: 0.6 }}>{item.helper}</Typography>
+                  <Typography variant="caption" sx={{ color: '#6B7280', fontWeight: 800, overflowWrap: 'anywhere' }}>{item.source}</Typography>
                 </Box>
               </Grid>
             ))}
@@ -315,45 +315,45 @@ export default function AdminTerminal() {
 
       <Grid container spacing={2.5}>
         <Grid item xs={12} md={7}>
-          <Card sx={{ height: '100%', bgcolor: 'rgba(15, 23, 42, 0.94)', border: '1px solid rgba(201,166,70,0.22)', borderRadius: 4, color: '#fff' }}>
+          <Card sx={{ height: '100%', bgcolor: '#FFFFFF', border: '1px solid rgba(201,166,70,0.22)', borderRadius: 4, color: '#111827' }}>
             <CardContent>
-              <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}><Typography variant="h6" sx={{ fontWeight: 950, color: '#E5C86B' }}>Public Launch Authority</Typography><Chip label="HANDOFF" sx={{ bgcolor: 'rgba(245,158,11,0.14)', color: '#FDE68A', fontWeight: 950 }} /></Stack>
+              <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}><Typography variant="h6" sx={{ fontWeight: 950, color: '#7A5C12' }}>Public Launch Authority</Typography><Chip label={label('admin.launch.handoffChip', 'Handled in Launch Command Center')} sx={{ bgcolor: 'rgba(245,158,11,0.14)', color: '#92400E', fontWeight: 950 }} /></Stack>
               <Alert severity="warning" sx={{ mb: 2 }}>
                 This operational dashboard intentionally does not calculate or cache a public-launch PASS/NO-GO result. Open the protected Launch Command Center, which requires PASSED evidence, exact release SHA matching, and the required hosted/physical-device evidence layer. Waivers do not count as hard-public-launch passes.
               </Alert>
               <Button fullWidth variant="contained" onClick={() => openOperationsTool('/ops/public-launch-command')} startIcon={renderSafeIcon(ShieldCheck, { size: 18 })} sx={{ bgcolor: '#C9A646', color: '#111827', fontWeight: 950, mb: 2 }}>Open exact-SHA Launch Command Center</Button>
-              <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.66)' }}>Phase 1 payment authority: <strong>{PHASE1_PAYMENT_POLICY.approvedMethods.join(' + ')}</strong>. Bank Transfer and Stripe/Card are disabled.</Typography>
+              <Typography variant="body2" sx={{ color: '#4B5563' }}>Phase 1 payment authority: <strong>{PHASE1_PAYMENT_POLICY.approvedMethods.join(' + ')}</strong>. Bank Transfer and Stripe/Card are disabled.</Typography>
             </CardContent>
           </Card>
         </Grid>
 
         <Grid item xs={12} md={5}>
           <Stack spacing={2.5}>
-            <Card sx={{ bgcolor: 'rgba(15, 23, 42, 0.94)', border: '1px solid rgba(201,166,70,0.22)', borderRadius: 4, color: '#fff' }}>
-              <CardContent><Typography variant="h6" sx={{ fontWeight: 950, color: '#E5C86B', mb: 2 }}>Verification Runbook</Typography><Stack spacing={1.25}>{operationalRunbook.map((item) => <Box key={item.command} sx={{ p: 1.4, borderRadius: 2, bgcolor: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.54)', fontWeight: 900 }}>{item.label}</Typography><Typography variant="body2" sx={{ color: '#E5C86B', fontFamily: 'monospace', fontWeight: 900 }}>{item.command}</Typography></Box>)}</Stack></CardContent>
+            <Card sx={{ bgcolor: '#FFFFFF', border: '1px solid rgba(201,166,70,0.22)', borderRadius: 4, color: '#111827' }}>
+              <CardContent><Typography variant="h6" sx={{ fontWeight: 950, color: '#7A5C12', mb: 2 }}>Verification Runbook</Typography><Stack spacing={1.25}>{operationalRunbook.map((item) => <Box key={item.command} sx={{ p: 1.4, borderRadius: 2, bgcolor: '#F8F9FB', border: '1px solid rgba(255,255,255,0.06)' }}><Typography variant="caption" sx={{ color: '#4B5563', fontWeight: 900 }}>{item.label}</Typography><Typography variant="body2" sx={{ color: '#7A5C12', fontFamily: 'monospace', fontWeight: 900 }}>{item.command}</Typography></Box>)}</Stack></CardContent>
             </Card>
 
-            <Card sx={{ bgcolor: 'rgba(15, 23, 42, 0.94)', border: '1px solid rgba(201,166,70,0.22)', borderRadius: 4, color: '#fff' }}>
-              <CardContent><Typography variant="h6" sx={{ fontWeight: 950, color: '#E5C86B', mb: 2 }}>Canonical SLA Policy</Typography><Stack spacing={1}>{Object.entries(CANONICAL_SLA_POLICY).map(([priority, policy]) => <Box key={priority} sx={{ p: 1.25, borderRadius: 2, bgcolor: 'rgba(255,255,255,0.035)', border: '1px solid rgba(255,255,255,0.06)' }}><Stack direction="row" justifyContent="space-between" spacing={2}><Typography variant="body2" sx={{ color: '#fff', fontWeight: 950 }}>{policy.label}</Typography><Typography variant="body2" sx={{ color: '#E5C86B', fontWeight: 950 }}>{policy.minutes}m</Typography></Stack><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.54)' }}>{policy.adminEscalationCopy}</Typography></Box>)}</Stack></CardContent>
+            <Card sx={{ bgcolor: '#FFFFFF', border: '1px solid rgba(201,166,70,0.22)', borderRadius: 4, color: '#111827' }}>
+              <CardContent><Typography variant="h6" sx={{ fontWeight: 950, color: '#7A5C12', mb: 2 }}>Canonical SLA Policy</Typography><Stack spacing={1}>{Object.entries(CANONICAL_SLA_POLICY).map(([priority, policy]) => <Box key={priority} sx={{ p: 1.25, borderRadius: 2, bgcolor: '#F8F9FB', border: '1px solid rgba(255,255,255,0.06)' }}><Stack direction="row" justifyContent="space-between" spacing={2}><Typography variant="body2" sx={{ color: '#111827', fontWeight: 950 }}>{policy.label}</Typography><Typography variant="body2" sx={{ color: '#7A5C12', fontWeight: 950 }}>{policy.minutes}m</Typography></Stack><Typography variant="caption" sx={{ color: '#4B5563' }}>{policy.adminEscalationCopy}</Typography></Box>)}</Stack></CardContent>
             </Card>
 
-            <Card sx={{ bgcolor: 'rgba(15, 23, 42, 0.94)', border: '1px solid rgba(201,166,70,0.22)', borderRadius: 4, color: '#fff' }}>
-              <CardContent><Typography variant="h6" sx={{ fontWeight: 950, color: '#E5C86B', mb: 2 }}>Recent Audit Trail</Typography>{events.length === 0 ? <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.58)' }}>No audit preview loaded. This may mean no audit documents exist yet, or Firestore denied the preview query.</Typography> : <Stack spacing={1}>{events.map((event) => <Box key={event.id} sx={{ p: 1.4, borderRadius: 2, bgcolor: 'rgba(255,255,255,0.04)' }}><Typography variant="body2" sx={{ color: '#fff', fontWeight: 900 }}>{event.action || 'AUDIT_EVENT'}</Typography><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.54)', fontWeight: 700 }}>{event.actorRole || 'actor'} · {event.targetType || 'target'} · {formatDate(event.createdAt)}</Typography></Box>)}</Stack>}{lastLoadedAt && <Typography variant="caption" sx={{ display: 'block', mt: 2, color: 'rgba(255,255,255,0.38)', fontWeight: 800 }}>Last synced: {lastLoadedAt}</Typography>}</CardContent>
+            <Card sx={{ bgcolor: '#FFFFFF', border: '1px solid rgba(201,166,70,0.22)', borderRadius: 4, color: '#111827' }}>
+              <CardContent><Typography variant="h6" sx={{ fontWeight: 950, color: '#7A5C12', mb: 2 }}>Recent Audit Trail</Typography>{events.length === 0 ? <Typography variant="body2" sx={{ color: '#4B5563' }}>No audit preview loaded. This may mean no audit documents exist yet, or Firestore denied the preview query.</Typography> : <Stack spacing={1}>{events.map((event) => <Box key={event.id} sx={{ p: 1.4, borderRadius: 2, bgcolor: '#F8F9FB' }}><Typography variant="body2" sx={{ color: '#111827', fontWeight: 900 }}>{event.action || 'AUDIT_EVENT'}</Typography><Typography variant="caption" sx={{ color: '#4B5563', fontWeight: 700 }}>{event.actorRole || 'actor'} · {event.targetType || 'target'} · {formatDate(event.createdAt)}</Typography></Box>)}</Stack>}{lastLoadedAt && <Typography variant="caption" sx={{ display: 'block', mt: 2, color: '#6B7280', fontWeight: 800 }}>Last synced: {lastLoadedAt}</Typography>}</CardContent>
             </Card>
           </Stack>
         </Grid>
       </Grid>
 
       <Stack direction={{ xs: 'column', md: isRTL ? 'row-reverse' : 'row' }} spacing={1.5} sx={{ mt: 3 }}>
-        <Button href="/analytics/reporting" startIcon={renderSafeIcon(BarChart3, { size: 17 })} sx={{ color: '#111827', bgcolor: '#C9A646', fontWeight: 950, '&:hover': { bgcolor: '#E5C86B' } }}>Reporting</Button>
-        <Button href="/notifications" startIcon={renderSafeIcon(Bell, { size: 17 })} sx={{ color: '#E5C86B', border: '1px solid rgba(201,166,70,0.42)', fontWeight: 950 }}>Notifications</Button>
-        <Button href="/verify" startIcon={renderSafeIcon(FileCheck2, { size: 17 })} sx={{ color: '#E5C86B', border: '1px solid rgba(201,166,70,0.42)', fontWeight: 950 }}>Public Verification</Button>
-        <Button href="/security" startIcon={renderSafeIcon(LockKeyhole, { size: 17 })} sx={{ color: '#E5C86B', border: '1px solid rgba(201,166,70,0.42)', fontWeight: 950 }}>Trust & Security</Button>
-        <Button onClick={() => navigate('/admin/profile')} startIcon={renderSafeIcon(UserRound, { size: 17 })} sx={{ color: '#111827', bgcolor: '#C9A646', fontWeight: 950, '&:hover': { bgcolor: '#E5C86B' } }}>Admin Profile & Security</Button>
-        <Button onClick={resetAndLogin} startIcon={renderSafeIcon(LogOut, { size: 17 })} sx={{ color: '#FCA5A5', border: '1px solid rgba(239,68,68,0.45)', fontWeight: 900 }}>Reset session</Button>
+        <Button href="/analytics/reporting" startIcon={renderSafeIcon(BarChart3, { size: 17 })} sx={{ color: '#111827', bgcolor: '#C9A646', fontWeight: 950, '&:hover': { bgcolor: '#7A5C12' } }}>Reporting</Button>
+        <Button href="/notifications" startIcon={renderSafeIcon(Bell, { size: 17 })} sx={{ color: '#7A5C12', border: '1px solid rgba(201,166,70,0.42)', fontWeight: 950 }}>Notifications</Button>
+        <Button href="/verify" startIcon={renderSafeIcon(FileCheck2, { size: 17 })} sx={{ color: '#7A5C12', border: '1px solid rgba(201,166,70,0.42)', fontWeight: 950 }}>Public Verification</Button>
+        <Button href="/security" startIcon={renderSafeIcon(LockKeyhole, { size: 17 })} sx={{ color: '#7A5C12', border: '1px solid rgba(201,166,70,0.42)', fontWeight: 950 }}>Trust & Security</Button>
+        <Button onClick={() => navigate('/admin/profile')} startIcon={renderSafeIcon(UserRound, { size: 17 })} sx={{ color: '#111827', bgcolor: '#C9A646', fontWeight: 950, '&:hover': { bgcolor: '#7A5C12' } }}>Admin Profile & Security</Button>
+        <Button onClick={resetAndLogin} startIcon={renderSafeIcon(LogOut, { size: 17 })} sx={{ color: '#B91C1C', border: '1px solid rgba(239,68,68,0.45)', fontWeight: 900 }}>Reset session</Button>
       </Stack>
 
-      <Typography variant="caption" sx={{ display: 'block', mt: 4, color: 'rgba(255,255,255,0.42)', fontWeight: 800, textAlign: 'center' }}>{lang === 'ar' ? 'مركز التحكم الداخلي' : 'In-app admin command center'} · /admin/dashboard</Typography>
+      <Typography variant="caption" sx={{ display: 'block', mt: 4, color: '#6B7280', fontWeight: 800, textAlign: 'center' }}>{lang === 'ar' ? 'مركز التحكم الداخلي' : 'In-app admin command center'} · /admin/dashboard</Typography>
     </Box>
   );
 }

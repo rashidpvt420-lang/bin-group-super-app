@@ -19,6 +19,7 @@ import { binThemeTokens } from '../../theme/binGroupTheme';
 import { ALL_TECHNICIAN_ACTIVE_STATUSES } from '../../shared-exports';
 import type { SnapshotDoc } from '../../utils/queryUtils';
 import { calculateDistanceKm, calculateEtaMinutes, getTechnicianLocation, getTicketJobLocation } from '../../utils/liveTracking';
+import { formatStatusLabel } from '../../theme/statusColors';
 
 // Text colours readable on the white technician shell (all >= 4.5:1 on white and on their 12% tint).
 // The previous palette (#3b82f6, gold #C9A646, #10b981, #f59e0b) measured 2.1-3.7:1.
@@ -182,7 +183,7 @@ export default function TechnicianJobsPage() {
                             data-delivery-state={deliveryState}
                             size="small"
                             icon={<BellRing size={11} />}
-                            label={`DISPATCH ALERT: ${deliveryState}`}
+                            label={`Dispatch alert: ${formatStatusLabel(deliveryState)}`}
                             sx={{
                                 fontSize: '0.62rem',
                                 fontWeight: 950,

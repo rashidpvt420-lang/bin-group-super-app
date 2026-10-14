@@ -8,6 +8,7 @@ import { binThemeTokens } from '../../theme/binGroupTheme';
 import ContractSignatureOtpControl from '../components/ContractSignatureOtpControl';
 import { isOwnerProfileActivated } from '../activationPolicy';
 import { formatAedMoney, normalizeAedMoney } from '../../../functions/shared/aedMoney';
+import { STATUS_TONES } from '../../theme/statusColors';
 
 const sha256File = async (file: File) => {
   const digest = await crypto.subtle.digest('SHA-256', await file.arrayBuffer());
@@ -101,9 +102,9 @@ const totalContractUnits = (contract: any) => {
 };
 
 const gate = (label: string, done: boolean, review: boolean, doneDetail: string, reviewDetail: string, missingDetail: string): ActivationGate => {
-  if (done) return { label, status: 'Done', detail: doneDetail, tone: '#10b981' };
-  if (review) return { label, status: 'In Review', detail: reviewDetail, tone: '#f59e0b' };
-  return { label, status: 'Missing', detail: missingDetail, tone: '#ef4444' };
+  if (done) return { label, status: 'Done', detail: doneDetail, tone: STATUS_TONES.success.text };
+  if (review) return { label, status: 'In Review', detail: reviewDetail, tone: STATUS_TONES.warning.text };
+  return { label, status: 'Missing', detail: missingDetail, tone: STATUS_TONES.danger.text };
 };
 
 function buildActivationGates(contract: any, profile: any, activated: boolean): ActivationGate[] {
@@ -683,7 +684,7 @@ function ActivationTimeline({ gates }: { gates: ActivationGate[] }) {
             <Paper sx={{ p: 1.75, height: '100%', bgcolor: alpha(step.tone, 0.07), border: `1px solid ${alpha(step.tone, 0.22)}`, borderRadius: 3 }}>
               <Stack direction="row" spacing={1} justifyContent="space-between" alignItems="center">
                 <Typography variant="body2" sx={{ color: '#fff', fontWeight: 900 }}>{step.label}</Typography>
-                <Chip size="small" label={step.status} sx={{ height: 20, bgcolor: alpha(step.tone, 0.16), color: step.tone, fontWeight: 950, fontSize: '0.62rem' }} />
+                <Chip size="small" label={step.status} sx={{ height: 20, bgcolor: alpha(step.tone, 0.16), color: step.tone, fontWeight: 950, fontSize: '0.75rem' }} />
               </Stack>
               <Typography variant="caption" sx={{ display: 'block', mt: 1, color: 'rgba(255,255,255,0.58)', fontWeight: 700 }}>
                 {step.detail}

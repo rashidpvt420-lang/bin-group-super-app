@@ -43,3 +43,37 @@ test('owner, broker and technician pages do not set text in raw gold on light su
   }
   assert.deepEqual(offenders, []);
 });
+
+test('status tone map: every text colour passes AA on white and on its fill', () => {
+  const src = read('src/theme/statusColors.ts');
+  const tones = [...src.matchAll(/(\w+): \{ text: '(#[0-9A-F]{6})', fill: '(#[0-9A-F]{6})'/g)];
+  assert.equal(tones.length, 6);
+  for (const [, name, text, fill] of tones) {
+    assert.ok(ratio(text, '#FFFFFF') >= 4.5, `${name} on white`);
+    assert.ok(ratio(text, fill) >= 4.5, `${name} on fill ${ratio(text, fill).toFixed(2)}`);
+  }
+});
+
+test('status labels: raw codes become readable words', async () => {
+  const ts = read('src/theme/statusColors.ts');
+  const { transform } = await import('esbuild').catch(() => ({}));
+  if (!transform) return; // esbuild ships with vite; skip if absent
+  const { code } = await transform(ts, { loader: 'ts', format: 'esm' });
+  const mod = await import(`data:text/javascript,${encodeURIComponent(code)}`);
+  assert.equal(mod.formatStatusLabel('REFERENCE_IMAGE_REQUIRED'), 'Reference image required');
+  assert.equal(mod.formatStatusLabel('PENDING_TRIGGER'), 'Waiting to send');
+  assert.equal(mod.formatStatusLabel('CALL_FIRST'), 'Call before visiting');
+  assert.equal(mod.formatStatusLabel('maintenance_evidence_standard'), 'Maintenance evidence standard');
+  assert.equal(mod.formatStatusLabel('In Review'), 'In review');
+  assert.equal(mod.statusTone('PENDING_UPLOAD'), 'danger');
+  assert.equal(mod.statusTone('Done'), 'success');
+  assert.equal(mod.statusTone('In Review'), 'warning');
+  assert.equal(mod.chipTextColor('#4ade80'), '#166534');
+});
+
+test('admin command center shows no developer field names and no light-on-white gold', () => {
+  const src = read('src/admin/AdminTerminal.tsx');
+  for (const raw of ["'users.role=", "'maintenanceTickets.status'", "'payment_transactions.verificationState'", "verify-route-consolidation.mjs", "'#E5C86B'", "'#FDE68A'", "label=\"single command center\""]) assert.ok(!src.includes(raw), raw);
+  const shell = read('apps/admin-panel/src/App.tsx');
+  assert.doesNotMatch(shell, /fontSize: '0\.6rem', fontWeight: 700, textTransform: 'uppercase' \}\}>\{\(?user\?\.role/);
+});

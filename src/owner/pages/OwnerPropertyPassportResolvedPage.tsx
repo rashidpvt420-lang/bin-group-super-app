@@ -6,6 +6,7 @@ import { db, collection, query, where, getDocs } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { resolvePropertyLocation } from '../../utils/propertyLocationResolver';
+import { STATUS_TONES } from '../../theme/statusColors';
 
 const normalizeEmail = (value: unknown) => String(value || '').trim().toLowerCase();
 const compact = (values: unknown[]) => Array.from(new Set(values.map((value) => String(value || '').trim()).filter(Boolean)));
@@ -230,7 +231,7 @@ export default function OwnerPropertyPassportResolvedPage() {
                       </Box>
                     </Stack>
                     <Stack direction="row" spacing={1} alignItems="center">
-                      <Chip label={p.placeholder ? 'DRAFT' : (p.provisional ? 'PROVISIONAL' : (p.status || 'ACTIVE'))} size="small" sx={{ bgcolor: alpha(p.provisional ? binThemeTokens.gold : '#10b981', 0.1), color: p.provisional ? binThemeTokens.gold : '#10b981', fontWeight: 900, fontSize: '0.65rem' }} />
+                      <Chip label={p.placeholder ? 'DRAFT' : (p.provisional ? 'PROVISIONAL' : (p.status || 'ACTIVE'))} size="small" sx={{ bgcolor: alpha(p.provisional ? binThemeTokens.gold : '#10b981', 0.1), color: p.provisional ? STATUS_TONES.brand.text : STATUS_TONES.success.text, fontWeight: 900, fontSize: '0.75rem' }} />
                       <Chip 
                         label={loc.hasExactCoordinates ? "EXACT GPS READY" : (loc.locationQuality === "MISSING" ? "GPS REQUIRED" : "ADDRESS ONLY")}
                         size="small"

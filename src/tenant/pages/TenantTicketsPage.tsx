@@ -8,6 +8,7 @@ import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { calculateDistanceKm, calculateEtaMinutes, getTechnicianLocation, getTicketJobLocation } from '../../utils/liveTracking';
 import { normalizeCanonicalState } from '../../lib/canonicalStateMachines';
+import { chipTextColor } from '../../theme/statusColors';
 
 const normalizeEmail = (value: unknown) => String(value || '').trim().toLowerCase();
 const label = (value: unknown) => String(value || 'PENDING').replace(/_/g, ' ').toUpperCase();
@@ -179,7 +180,7 @@ export default function TenantTicketsPage() {
                                         <Stack direction="row" spacing={1} sx={{ mt: 1.5 }} flexWrap="wrap" alignItems="center">
                                             {ticket.assignedTechnicianName && <Chip size="small" label={ticket.assignedTechnicianName} sx={{ fontSize: '0.65rem', fontWeight: 900, bgcolor: 'rgba(255,255,255,0.05)', color: '#FFF', height: 22 }} />}
                                             {etaMin !== null && <Chip size="small" icon={<Clock size={11} />} label={`~${etaMin} min`} sx={{ fontSize: '0.65rem', fontWeight: 900, bgcolor: alpha(binThemeTokens.gold, 0.1), color: binThemeTokens.gold, height: 22, '& .MuiChip-icon': { color: binThemeTokens.gold } }} />}
-                                            <Chip size="small" icon={<Navigation size={11} />} label="Track" sx={{ fontSize: '0.65rem', fontWeight: 900, bgcolor: alpha(config.color, 0.15), color: config.color, height: 22, '& .MuiChip-icon': { color: config.color } }} />
+                                            <Chip size="small" icon={<Navigation size={11} />} label="Track" sx={{ fontSize: '0.75rem', fontWeight: 900, bgcolor: alpha(config.color, 0.15), color: chipTextColor(config.color), height: 22, '& .MuiChip-icon': { color: chipTextColor(config.color) } }} />
                                         </Stack>
                                     )}
                                     <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.25)', fontWeight: 700, mt: 1, display: 'block' }}>{ticket.createdAt?.toDate ? ticket.createdAt.toDate().toLocaleString() : ''}</Typography>
