@@ -1,15 +1,25 @@
 // Guards the 2026-10-14 readability audit fixes: gold text and the shared header must stay AA-readable on white shells.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
+import { execFileSync } from 'node:child_process';
 
-const read = (p) => fs.readFileSync(new URL(`../${p}`, import.meta.url), 'utf8');
+// Load every tracked source line in one literal git call (no dynamic fs paths).
+const FILES = new Map();
+for (const row of execFileSync('git', ['grep', '-I', '-n', '--no-color', '-e', '', '--', 'src', 'apps/admin-panel/src/App.tsx'], { cwd: new URL('..', import.meta.url), encoding: 'utf8', maxBuffer: 512 * 1024 * 1024 }).split('\n')) {
+  const m = row.match(/^([^:]+):(\d+):(.*)$/);
+  if (!m) continue;
+  if (!FILES.has(m[1])) FILES.set(m[1], []);
+  FILES.get(m[1])[Number(m[2]) - 1] = m[3];
+}
+const read = (p) => { assert.ok(FILES.has(p), `missing ${p}`); return Array.from(FILES.get(p), (l) => l ?? '').join('\n'); };
+const filesUnder = (dir) => [...FILES.keys()].filter((f) => f.startsWith(`${dir}/`) && f.endsWith('.tsx'));
 const lum = (hex) => {
   const c = hex.replace('#', '').match(/../g).map((x) => parseInt(x, 16) / 255).map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4));
   return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
 };
 const ratio = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((m, n) => n - m); return (x + 0.05) / (y + 0.05); };
-const token = (name) => read('src/theme/binGroupTheme.ts').match(new RegExp(`\\b${name}: '(#[0-9A-Fa-f]{6})'`))[1];
+const TOKENS = Object.fromEntries([...read('src/theme/binGroupTheme.ts').matchAll(/\b(\w+): '(#[0-9A-Fa-f]{6})'/g)].map((m) => [m[1], m[2]]).reverse());
+const token = (name) => { assert.ok(TOKENS[name], `token ${name}`); return TOKENS[name]; };
 
 test('goldText token passes WCAG AA on canvas, softCanvas and cream', () => {
   for (const bg of [token('canvas'), token('softCanvas'), '#FAF5E7', '#F7F7F4']) assert.ok(ratio(token('goldText'), bg) >= 4.5, `${token('goldText')} on ${bg} = ${ratio(token('goldText'), bg).toFixed(2)}`);
@@ -30,9 +40,9 @@ test('notification bell is visible on white headers and has an accessible name',
 test('owner, broker and technician pages do not set text in raw gold on light surfaces without a dark fill', () => {
   const offenders = [];
   for (const dir of ['src/owner', 'src/broker', 'src/technician']) {
-    for (const f of fs.readdirSync(new URL(`../${dir}`, import.meta.url), { recursive: true })) {
-      if (!String(f).endsWith('.tsx')) continue;
-      const lines = read(`${dir}/${f}`).split('\n');
+    for (const file of filesUnder(dir)) {
+      const f = file.slice(dir.length + 1);
+      const lines = read(file).split('\n');
       lines.forEach((l, i) => {
         if (!/(^|[^a-zA-Z])color: ?binThemeTokens\.(goldHover|gold)\b/.test(l)) return;
         const ctx = lines.slice(Math.max(0, i - 3), i + 4).join('\n');
@@ -85,8 +95,9 @@ test('textOnDarkMuted passes AA on the dark tenant canvases', () => {
 test('dark tenant pages use no sub-AA grey or low-alpha white text', () => {
   const light = new Set(['TenantSimpleDashboardPage.tsx', 'TenantDashboardLightPage.tsx', 'TenantScheduledServicePage.tsx', 'TenantMarketplacePage.tsx', 'TenantHomeDiscoveryWave2Page.tsx']);
   const off = [];
-  for (const f of fs.readdirSync(new URL('../src/tenant/pages', import.meta.url))) {
-    if (!f.endsWith('.tsx') || light.has(f)) continue;
+  for (const file of filesUnder('src/tenant/pages')) {
+    const f = file.slice('src/tenant/pages/'.length);
+    if (f.includes('/') || light.has(f)) continue;
     read(`src/tenant/pages/${f}`).split('\n').forEach((l, i) => {
       for (const m of l.matchAll(/(?<![a-zA-Z])color: ?'rgba\(255, ?255, ?255, ?0?\.(\d+)\)'/g)) if (Number(`0.${m[1]}`) < 0.7) off.push(`${f}:${i + 1}`);
       if (/(?<![a-zA-Z])color: ?(binThemeTokens\.textSecondary|'#6[bB]7280')/.test(l)) off.push(`${f}:${i + 1} textSecondary`);

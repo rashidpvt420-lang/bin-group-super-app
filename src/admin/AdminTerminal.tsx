@@ -72,6 +72,8 @@ type CoverageCard = {
   value: string;
   helper: string;
   source: string;
+  /** Machine-readable evidence path (not shown to admins; kept so launch gates stay tied to evidence). */
+  evidenceSource?: string;
   icon: React.ElementType;
   status: 'live' | 'proof-required' | 'software-map' | 'authoritative-handoff';
 };
@@ -169,7 +171,7 @@ export default function AdminTerminal() {
     { key: 'brokers', label: 'Broker attribution', value: String(metricValue('brokers') ?? '—'), helper: 'Leads, referrals, attribution proof, commissions, documents, and profile.', source: label('admin.coverage.source.brokers', 'Source: registered broker accounts'), icon: TicketCheck, status: 'live' },
     { key: 'tickets', label: 'Open SLA load', value: String(metricValue('openTickets') ?? '—'), helper: 'Shared maintenance workload across tenant, technician, owner, and admin views.', source: label('admin.coverage.source.tickets', 'Source: open maintenance tickets'), icon: Gauge, status: 'live' },
     { key: 'payments', label: 'Payment review', value: String(metricValue('pendingPayments') ?? '—'), helper: PHASE1_PAYMENT_POLICY.policyText, source: label('admin.coverage.source.payments', 'Source: payments waiting for verification'), icon: CreditCard, status: 'live' },
-    { key: 'launch', label: 'Launch authority', value: RELEASE_SHA ? label('admin.coverage.launch.linked', 'Release linked') : label('admin.coverage.launch.unlinked', 'Not linked'), helper: 'Public readiness exists only in the protected exact-SHA Launch Command Center. This operational dashboard cannot issue a public-launch clearance.', source: RELEASE_SHA ? `${label('admin.coverage.source.launch', 'Source: Launch Command Center')} · ${RELEASE_SHA.slice(0, 8)}` : label('admin.coverage.source.launchMissing', 'Source: Launch Command Center · release not set on this build'), icon: ShieldCheck, status: 'authoritative-handoff' },
+    { key: 'launch', evidenceSource: 'system_health/admin_summaries', label: 'Launch authority', value: RELEASE_SHA ? label('admin.coverage.launch.linked', 'Release linked') : label('admin.coverage.launch.unlinked', 'Not linked'), helper: 'Public readiness exists only in the protected exact-SHA Launch Command Center. This operational dashboard cannot issue a public-launch clearance.', source: RELEASE_SHA ? `${label('admin.coverage.source.launch', 'Source: Launch Command Center')} · ${RELEASE_SHA.slice(0, 8)}` : label('admin.coverage.source.launchMissing', 'Source: Launch Command Center · release not set on this build'), icon: ShieldCheck, status: 'authoritative-handoff' },
     { key: 'routes', label: 'Route consolidation', value: '1 app', helper: label('admin.coverage.routes.helper', 'Every role uses this one app. The older owner and admin apps only hand off to it.'), source: label('admin.coverage.source.routes', 'Source: automated route check'), icon: Map, status: 'software-map' },
   ];
 
@@ -301,7 +303,7 @@ export default function AdminTerminal() {
           <Grid container spacing={2}>
             {coverageCards.map((item) => (
               <Grid item xs={12} sm={6} md={3} key={item.key}>
-                <Box sx={{ height: '100%', p: 1.6, borderRadius: 3, bgcolor: '#F8F9FB', border: '1px solid #E5E7EB' }}>
+                <Box data-evidence-source={item.evidenceSource} sx={{ height: '100%', p: 1.6, borderRadius: 3, bgcolor: '#F8F9FB', border: '1px solid #E5E7EB' }}>
                   <Stack direction="row" spacing={1.2} alignItems="center" sx={{ mb: 1 }}><Box sx={{ width: 34, height: 34, borderRadius: 2, display: 'grid', placeItems: 'center', bgcolor: 'rgba(201,166,70,0.10)', color: '#7A5C12' }}><SafeIcon icon={item.icon} size={18} /></Box><Box sx={{ minWidth: 0 }}><Typography variant="body2" sx={{ color: '#111827', fontWeight: 950 }}>{item.label}</Typography><Typography variant="caption" sx={{ color: item.status === 'proof-required' ? '#92400E' : '#166534', fontWeight: 900 }}>{item.status.replace('-', ' ').toUpperCase()}</Typography></Box></Stack>
                   <Typography variant="h4" sx={{ color: '#7A5C12', fontWeight: 950 }}>{item.value}</Typography>
                   <Typography variant="body2" sx={{ color: '#4B5563', fontWeight: 700, mt: 0.6 }}>{item.helper}</Typography>
