@@ -1,5 +1,5 @@
 // Behavioural: owner-typed areas map to the Founder-approved zone table (2026-10-14) in all three engine copies
-// and in the server onboarding quote; unknown areas fall back to Zone B with a warning; combined = FM + PM.
+// and in the server onboarding quote; unknown areas are priced as Zone A (safe side) with a zone-pending warning; combined = FM + PM.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync, readFileSync } from 'node:fs';
@@ -68,11 +68,11 @@ for (const path of ENGINE_COPIES) {
     assert.equal(reem.emirateAdjustedQuote, reem.zoneAdjustedQuote * 1.1);
   });
 
-  test(`${path}: unknown area falls back to Zone B with a warning`, () => {
+  test(`${path}: unknown area is priced as Zone A (safe side) with a zone-pending warning`, () => {
     const { calculateUaeQuote2026 } = modules[path];
-    const quote = calculateUaeQuote2026(base({ area: 'Nowhere Gardens', zone: 'A' }));
-    assert.equal(quote.zoneAdjustedQuote, quote.baseQuote);
-    assert.ok(quote.riskFlags.some((f) => f.includes("Area 'Nowhere Gardens' is not in the UAE area-zone map; Zone B")));
+    const quote = calculateUaeQuote2026(base({ area: 'Nowhere Gardens', zone: 'C' }));
+    assert.equal(quote.zoneAdjustedQuote, quote.baseQuote * 1.2);
+    assert.ok(quote.riskFlags.some((f) => f.startsWith('Zone pending admin confirmation') && f.includes("'Nowhere Gardens'")));
   });
 
   test(`${path}: area match is scoped to the emirate (Downtown Ajman is not Downtown Dubai)`, () => {

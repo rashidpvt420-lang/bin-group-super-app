@@ -11,6 +11,8 @@ export interface QuoteInput {
   sqft?: number;
   units?: number;
   beds?: number;
+  /** Apartment bedrooms (0 = studio). Founder decision 2026-10-14 13:11. */
+  bedrooms?: number;
   annualRent?: number;
   annualRevenue?: number;
   propertyAge: number;
@@ -330,6 +332,14 @@ function matrixRegionFactor(label: string): number {
   return entry ? finiteNumber(entry.value, 1) : 1;
 }
 
+export const ZONE_PENDING_FLAG = 'Zone pending admin confirmation';
+const BEDROOM_PRICED_ASSET_IDS = new Set(['apt-std', 'apt-lux']);
+/** Apartment bedroom factor: studio/1BR 1.00, 2BR 1.25, 3BR 1.50, 4BR+ 1.75 (founder decision 2026-10-14 13:11). */
+export function resolveBedroomFactor(bedrooms: unknown): number {
+  const n = Math.floor(finiteNumber(bedrooms, 0));
+  return n >= 4 ? 1.75 : n === 3 ? 1.5 : n === 2 ? 1.25 : 1;
+}
+
 /** Asset-age factor from UAE_PRICING_MATRIX_2026.ageFactors (founder decision 2026-10-14). */
 export function resolveAgeFactor(propertyAge: unknown): number {
   const age = finiteNumber(propertyAge, 0);
@@ -400,7 +410,7 @@ function sanitizeQuoteInput(input: Partial<QuoteInput> | null | undefined): Quot
     area: String(raw.area || '').trim().slice(0, 200),
     zone: safeZone(raw.zone),
     contractType: safeContractType(raw.contractType),
-    sqft: positiveNumber(raw.sqft), units: positiveNumber(raw.units), beds: positiveNumber(raw.beds),
+    sqft: positiveNumber(raw.sqft), units: positiveNumber(raw.units), beds: positiveNumber(raw.beds), bedrooms: positiveNumber(raw.bedrooms),
     annualRent: positiveNumber(raw.annualRent), annualRevenue: positiveNumber(raw.annualRevenue),
     propertyAge: positiveNumber(raw.propertyAge), floors: positiveNumber(raw.floors), lifts: positiveNumber(raw.lifts),
     hasPool: raw.hasPool === true, hasGym: raw.hasGym === true, hasCentralHVAC: raw.hasCentralHVAC === true,
@@ -603,6 +613,13 @@ export function calculateUaeQuote2026(input: Partial<QuoteInput> | null | undefi
     if (!(safeInput.units && safeInput.units > 0)) return zeroQuote(`${assetClass.label} requires a verified unit count before pricing.`, safeInput.slaTier, ['MISSING_UNITS']);
     baseQuote = baseRate * safeInput.units;
     pricingExplanation.push(`${baseRate} AED/unit applied to ${safeInput.units} units.`);
+    if (BEDROOM_PRICED_ASSET_IDS.has(assetId)) {
+      const bedroomFactor = resolveBedroomFactor(safeInput.bedrooms);
+      if (bedroomFactor !== 1) {
+        baseQuote *= bedroomFactor;
+        pricingExplanation.push(`Apartment bedroom factor ${bedroomFactor}x applied for ${Math.floor(safeInput.bedrooms || 0)} bedrooms.`);
+      }
+    }
   } else if (assetClass.pricingUnit === 'bed') {
     if (!(safeInput.beds && safeInput.beds > 0)) return zeroQuote(`${assetClass.label} requires a verified bed count before pricing.`, safeInput.slaTier, ['MISSING_BEDS']);
     baseQuote = baseRate * safeInput.beds;
@@ -622,8 +639,9 @@ export function calculateUaeQuote2026(input: Partial<QuoteInput> | null | undefi
     zone = areaZone.entry.zone;
     pricingExplanation.push(`Area '${safeInput.area}' matched ${areaZone.entry.area} (${areaZone.entry.region}): Zone ${zone}.`);
   } else if (areaZone.status === 'unmatched') {
-    zone = 'B';
-    riskFlags.push(`Area '${safeInput.area}' is not in the UAE area-zone map; Zone B (standard) applied, admin confirmation required`);
+    // Founder decision 2026-10-14 13:11: never under-quote an unmapped area; price it as Zone A until confirmed.
+    zone = 'A';
+    riskFlags.push(`${ZONE_PENDING_FLAG}: area '${safeInput.area}' is not in the UAE area-zone map; Zone A (premium, safe side) applied until admin confirmation`);
   }
   const zoneEntry = UAE_PRICING_MATRIX_2026.zones[zone] || UAE_PRICING_MATRIX_2026.zones.B || { multiplier: 1 };
   const zoneMultiplier = finiteNumber(zoneEntry.multiplier, 1);

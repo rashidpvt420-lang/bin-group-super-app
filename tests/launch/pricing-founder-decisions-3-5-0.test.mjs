@@ -40,8 +40,8 @@ for (const c of COPIES) {
   test(`${c}: remote surcharge +15% for Al Dhafra and Hatta only`, () => {
     const q = (o) => mods[c].calculateUaeQuote2026(base({ assetClassId: 'villa-std', units: 3, ...o })).annualTotal;
     near(q({ emirate: 'Abu Dhabi', area: 'Ruwais' }), 10500 * 0.9 * 0.92 * 1.15);
-    near(q({ emirate: 'Dubai', area: 'Hatta' }), 10500 * 1.15 * 1.15);
-    near(q({ emirate: 'Al Dhafra', area: 'Unknown place' }), 10500 * 0.92 * 1.15);
+    near(q({ emirate: 'Dubai', area: 'Hatta' }), 10500 * 1.2 * 1.15 * 1.15);
+    near(q({ emirate: 'Al Dhafra', area: 'Unknown place' }), 10500 * 1.2 * 0.92 * 1.15);
     near(q({ emirate: 'Dubai', area: 'Business Bay' }), 10500 * 1.15);
   });
   test(`${c}: minimum PM fee 5,000 Dubai / Abu Dhabi incl. Al Ain & Al Dhafra, 2,500 elsewhere`, () => {
@@ -67,3 +67,21 @@ test('zone CSV has remote column; Hatta and Al Dhafra flagged; admin page shows 
   const page = readFileSync('apps/admin-panel/src/pages/admin/PricingMatrixPage.tsx', 'utf8');
   for (const s of ['ageFactors', 'remoteAreaSurcharge', 'minimumManagementFee', "'Remote'"]) assert.ok(page.includes(s), s);
 });
+
+// Founder decisions 2026-10-14 13:11: bedrooms, unknown area = Zone A + warning, Hatta Zone A remote.
+for (const c of COPIES) {
+  test(`${c}: apartments priced by bedrooms, never below the apartment minimum`, () => {
+    const q = (bedrooms, area = 'Jumeirah Village Circle') => mods[c].calculateUaeQuote2026(base({ assetClassId: 'apt-std', units: 1, emirate: 'Dubai', area, bedrooms })).annualTotal;
+    near(q(0), 1725); near(q(1), 1725); near(q(2), 1500 * 1.25 * 1.15); near(q(3), 1500 * 1.5 * 1.15); near(q(4), 1500 * 1.75 * 1.15); near(q(7), q(4));
+    const cheap = mods[c].calculateUaeQuote2026(base({ assetClassId: 'apt-std', units: 1, emirate: 'Fujairah', area: 'Sakamkam', bedrooms: 0 })).annualTotal;
+    assert.ok(cheap >= 1500);
+    assert.equal(mods[c].calculateUaeQuote2026(base({ assetClassId: 'villa-std', units: 1, emirate: 'Dubai', area: 'Business Bay', bedrooms: 3 })).annualTotal, 3500 * 1.15);
+  });
+  test(`${c}: unknown area = Zone A with warning; Hatta = Zone A + remote`, () => {
+    const u = mods[c].calculateUaeQuote2026(base({ assetClassId: 'villa-std', units: 1, emirate: 'Sharjah', area: 'Nowhere Gardens' }));
+    near(u.annualTotal, 3500 * 1.2 * 0.98);
+    assert.ok(u.riskFlags.some((f) => f.startsWith('Zone pending admin confirmation')));
+    near(mods[c].calculateUaeQuote2026(base({ assetClassId: 'villa-std', units: 3, emirate: 'Dubai', area: 'Hatta' })).annualTotal, 10500 * 1.2 * 1.15 * 1.15);
+    near(mods[c].calculateUaeQuote2026(base({ assetClassId: 'villa-std', units: 1, emirate: 'Dubai', area: 'Hatta', propertyAge: 20 })).annualTotal, (Math.max(3500 * 1.2 * 1.15, 3500) * 1.35 + 6500) * 1.15);
+  });
+}
