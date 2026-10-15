@@ -20,11 +20,54 @@ export const OWNER_LEDGER_STATUSES: readonly OwnerLedgerStatus[] = Object.freeze
   "PENDING", "RECEIVED_UNVERIFIED", "VERIFIED", "BOUNCED", "OVERDUE",
 ]);
 
-/**
- * Days after issue before an unpaid mobilisation invoice is OVERDUE.
- * NOT DECIDED by Rashid yet: null means no due date is printed or enforced (never OVERDUE).
- */
-export const OWNER_MOBILIZATION_DUE_DAYS: number | null = null;
+/** Approved by Rashid (15 Oct 2026): the 15% mobilisation is due within 7 days of the invoice date. */
+export const OWNER_MOBILIZATION_DUE_DAYS = 7;
+/** Approved by Rashid (15 Oct 2026): AED 500 per returned (bounced) cheque, owners and tenants, on top of the unpaid amount. */
+export const RETURNED_CHEQUE_FEE_AED = 500;
+/** Approved by Rashid (15 Oct 2026): 15 days' written notice before suspension for non-payment. */
+export const OWNER_SUSPENSION_NOTICE_DAYS = 15;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** Due date of a mobilisation invoice: invoice date + OWNER_MOBILIZATION_DUE_DAYS. */
+export function mobilizationDueAt(issuedAtMs: number): Date {
+  return new Date(issuedAtMs + OWNER_MOBILIZATION_DUE_DAYS * DAY_MS);
+}
+
+/** Deterministic id of the AED 500 fee raised for one bounced cheque payment. */
+export function returnedChequeFeeInvoiceId(paymentId: string): string {
+  const id = text(paymentId).replace(/[^A-Za-z0-9_-]/g, "_").slice(0, 120);
+  if (!id) throw new OwnerLedgerError("paymentId is required for the returned-cheque fee.");
+  return `RCF-${id}`;
+}
+
+export function buildReturnedChequeFeeInvoice(input: {
+  paymentId: string;
+  payerType: "OWNER" | "TENANT";
+  payerUid: string;
+  contractId?: string | null;
+  chequeDetails?: Record<string, unknown> | null;
+}) {
+  const payerUid = text(input.payerUid);
+  if (!payerUid) throw new OwnerLedgerError("The cheque payer is unknown; the returned-cheque fee cannot be raised.");
+  return {
+    invoiceId: returnedChequeFeeInvoiceId(input.paymentId),
+    paymentId: null,
+    relatedPaymentId: text(input.paymentId),
+    contractId: text(input.contractId) || null,
+    payerType: input.payerType,
+    payerUid,
+    ownerId: input.payerType === "OWNER" ? payerUid : null,
+    ownerUid: input.payerType === "OWNER" ? payerUid : null,
+    tenantId: input.payerType === "TENANT" ? payerUid : null,
+    feeType: "RETURNED_CHEQUE_FEE",
+    amount: RETURNED_CHEQUE_FEE_AED,
+    currency: "AED",
+    status: "PENDING",
+    paymentStatus: "UNPAID",
+    chequeDetails: input.chequeDetails || null,
+    vatTreatment: "NOT_APPLIED",
+  };
+}
 
 const text = (value: unknown) => String(value ?? "").trim();
 const upper = (value: unknown) => text(value).toUpperCase();
@@ -73,12 +116,24 @@ export function assertChequeClearanceTransition(payment: Record<string, any>, ne
   if (target !== "CLEARED" && target !== "BOUNCED") throw new OwnerLedgerError("Clearance must be CLEARED or BOUNCED.");
   const current = chequeClearanceOf(payment);
   if (current === null) throw new OwnerLedgerError("Only cheque payments have a bank clearance step.");
-  if (isVerified(payment)) throw new OwnerLedgerError("This payment is already verified.");
+  // Owner 15% cheques must be cleared before approval. A tenant rent cheque may already be
+  // recorded as verified and still be returned by the bank, so it can be marked later.
+  if (isVerified(payment) && !isTenantPayment(payment)) throw new OwnerLedgerError("This payment is already verified.");
   if (current !== "PENDING_CLEARANCE") throw new OwnerLedgerError(`This cheque is already ${current}.`);
-  if (!text(payment.paymentProofHash) && !text(payment.paymentReferenceId)) {
+  if (!text(payment.paymentProofHash) && !text(payment.paymentReferenceId) && !text(payment.receiptHash)) {
     throw new OwnerLedgerError("Record the cheque as received before setting its clearance.");
   }
   return target as ChequeClearanceState;
+}
+
+export function isTenantPayment(payment: Record<string, any> | null | undefined): boolean {
+  return upper(payment?.recordType) === "TENANT_RENT_PAYMENT_PROOF" || payment?.submittedByTenant === true;
+}
+
+/** Who pays the returned-cheque fee for this payment record. */
+export function chequePayerOf(payment: Record<string, any>): { payerType: "OWNER" | "TENANT"; payerUid: string } {
+  if (isTenantPayment(payment)) return { payerType: "TENANT", payerUid: text(payment.tenantId || payment.tenantUid || payment.payerId) };
+  return { payerType: "OWNER", payerUid: text(payment.ownerUid || payment.ownerId) };
 }
 
 function isVerified(payment: Record<string, any> | null | undefined): boolean {
@@ -102,6 +157,15 @@ function toMillis(value: any): number | null {
   return Number.isNaN(parsed) ? null : parsed;
 }
 
+/** Stored dueAt, else invoice date + 7 days for a mobilisation invoice. */
+export function dueMillis(invoice: Record<string, any>): number | null {
+  const stored = toMillis(invoice?.dueAt);
+  if (stored !== null) return stored;
+  if (upper(invoice?.feeType) !== "MOBILIZATION_DEPOSIT") return null;
+  const issued = toMillis(invoice?.issuedAt || invoice?.createdAt);
+  return issued === null ? null : mobilizationDueAt(issued).getTime();
+}
+
 export function resolveOwnerLedgerStatus(
   invoice: Record<string, any>,
   payment: Record<string, any> | null | undefined,
@@ -110,8 +174,7 @@ export function resolveOwnerLedgerStatus(
   if (upper(invoice?.status) === "PAID" || upper(invoice?.paymentStatus) === "PAID" || isVerified(payment)) return "VERIFIED";
   if (upper(payment?.chequeClearanceState) === "BOUNCED") return "BOUNCED";
   if (evidenceRecorded(payment)) return "RECEIVED_UNVERIFIED";
-  const due = toMillis(invoice?.dueAt);
-  if (due !== null && nowMs > due) return "OVERDUE";
+  if (nowMs > (dueMillis(invoice) ?? Infinity)) return "OVERDUE";
   return "PENDING";
 }
 
@@ -140,7 +203,7 @@ export function buildOwnerLedgerRow(
   payment: Record<string, any> | null | undefined,
   nowMs: number = Date.now(),
 ): OwnerLedgerRow {
-  const due = toMillis(invoice?.dueAt);
+  const due = dueMillis(invoice);
   return {
     invoiceId,
     contractId: text(invoice.contractId),
@@ -150,9 +213,9 @@ export function buildOwnerLedgerRow(
     currency: upper(invoice.currency) || "AED",
     ledgerStatus: resolveOwnerLedgerStatus(invoice, payment, nowMs),
     method: upper(payment?.paymentMethod || payment?.method) || null,
-    chequeNumber: text(payment?.chequeDetails?.chequeNumber) || null,
-    chequeBank: text(payment?.chequeDetails?.chequeBank) || null,
-    chequeDate: text(payment?.chequeDetails?.chequeDate) || null,
+    chequeNumber: text((payment?.chequeDetails || payment?.cheque)?.chequeNumber) || null,
+    chequeBank: text((payment?.chequeDetails || payment?.cheque)?.chequeBank) || null,
+    chequeDate: text((payment?.chequeDetails || payment?.cheque)?.chequeDate) || null,
     chequeClearanceState: chequeClearanceOf(payment),
     receivedByAdminUid: text(payment?.receivedByAdminUid) || null,
     invoicePdfUrl: text(invoice.pdfUrl) || null,
@@ -168,6 +231,7 @@ export function summarizeOwnerLedger(rows: OwnerLedgerRow[]) {
     verifiedAed: sum(["VERIFIED"]),
     awaitingVerificationAed: sum(["RECEIVED_UNVERIFIED"]),
     outstandingAed: sum(["PENDING", "OVERDUE", "BOUNCED"]),
+    returnedChequeFeesPendingAed: Math.round(rows.filter((row) => row.feeType === "RETURNED_CHEQUE_FEE" && row.ledgerStatus !== "VERIFIED").reduce((t, row) => t + row.amount * 100, 0)) / 100,
     counts: Object.fromEntries(OWNER_LEDGER_STATUSES.map((status) => [status, rows.filter((row) => row.ledgerStatus === status).length])),
   };
 }

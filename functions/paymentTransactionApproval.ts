@@ -11,7 +11,7 @@ import { parseExactAedAmount } from "./shared/aedMoneyInput";
 import { decideRentConfirmedAmount, rentApprovalDecision, rentRejectionDecision } from "./rentPaymentStatus";
 import { generateMobilizationUnpaidInvoicePdfArtifact, generateOwnerPaymentReceiptPdfArtifact } from "./pdfEngine";
 import { assertMobilizationInvoiceImmutable, buildMobilizationInvoiceSnapshot } from "./mobilizationInvoice";
-import { assertOwnerChequeClearedForApproval } from "./ownerPaymentLedger";
+import { assertOwnerChequeClearedForApproval, mobilizationDueAt } from "./ownerPaymentLedger";
 import { resolveActivePaymentConfiguration } from "./paymentConfiguration";
 import {
   assertOwnerOnboardingTransition,
@@ -442,6 +442,7 @@ export const adminApprovePayment = onCall({ cors: true, enforceAppCheck: true },
   const preApproveInvoiceSnap = await invoiceRef.get();
   if (!preApproveInvoiceSnap.exists) {
     const unpaidInvoicePdf = await generateMobilizationUnpaidInvoicePdfArtifact({
+      dueAt: mobilizationDueAt(Date.now()).toISOString(),
       ...invoiceSnapshot,
       ownerId: ownerUid,
     });
@@ -459,6 +460,7 @@ export const adminApprovePayment = onCall({ cors: true, enforceAppCheck: true },
       pdfGeneration: unpaidInvoicePdf.generation,
       canonicalPdfSource: "SERVER_PAYMENT_APPROVAL_INVOICE_REPAIR",
       issuedAt: ts(),
+      dueAt: mobilizationDueAt(Date.now()).toISOString(),
       createdAt: ts(),
       updatedAt: ts(),
     }, { merge: false });
