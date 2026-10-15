@@ -51,8 +51,10 @@ test('clearance transitions: only cheques, only once, never after verification',
   const cheque = recorded({ paymentMethod: 'CHEQUE', chequeClearanceState: 'PENDING_CLEARANCE' });
   assert.equal(L.assertChequeClearanceTransition(cheque, 'cleared'), 'CLEARED');
   assert.throws(() => L.assertChequeClearanceTransition(recorded({ paymentMethod: 'CASH' }), 'CLEARED'));
-  assert.throws(() => L.assertChequeClearanceTransition({ ...cheque, chequeClearanceState: 'CLEARED' }, 'BOUNCED'));
-  assert.throws(() => L.assertChequeClearanceTransition({ ...cheque, status: 'APPROVED' }, 'BOUNCED'));
+  // Decided 15 Oct: a cleared/verified cheque can still be returned by the bank (reversal), never re-cleared.
+  assert.equal(L.assertChequeClearanceTransition({ ...cheque, chequeClearanceState: 'CLEARED' }, 'BOUNCED'), 'BOUNCED');
+  assert.throws(() => L.assertChequeClearanceTransition({ ...cheque, chequeClearanceState: 'CLEARED' }, 'CLEARED'));
+  assert.throws(() => L.assertChequeClearanceTransition({ ...cheque, status: 'APPROVED' }, 'CLEARED'));
   assert.throws(() => L.assertChequeClearanceTransition(cheque, 'PAID'));
 });
 
@@ -148,4 +150,55 @@ test('documents state the approved terms in EN/AR and on the tenant payment term
   for (const marker of ['payable within ${OWNER_MOBILIZATION_DUE_DAYS} days of the invoice date', 'A returned-cheque fee of AED ${RETURNED_CHEQUE_FEE_AED} per returned cheque', 'رسم قدره ${RETURNED_CHEQUE_FEE_AED} درهم عن كل شيك مرتجع', '${OWNER_SUSPENSION_NOTICE_DAYS} days to pay', 'مهلة للسداد مدتها ${OWNER_SUSPENSION_NOTICE_DAYS} يوماً', "'Due Date / تاريخ الاستحقاق'"]) assert.ok(pdf.includes(marker), marker);
   for (const file of ['functions/adminOwnerOperations.ts', 'functions/paymentTransactionApproval.ts']) assert.match(read(file), /dueAt: mobilizationDueAt\(Date\.now\(\)\)\.toISOString\(\)/, file);
   assert.match(read('src/tenant/pages/TenantPaymentsPage.tsx'), /fee of AED 500 in addition to the unpaid rent[\s\S]*500 درهم عن كل شيك مرتجع/);
+});
+
+test('tenant rent cheque bounced after verification reopens the rent as UNPAID with receipt REVERSED', () => {
+  const verifiedRent = { recordType: 'TENANT_RENT_PAYMENT_PROOF', submittedByTenant: true, tenantId: 't-1', paymentMethod: 'CHEQUE', amount: 4000, dueDate: '2026-10-01', status: 'APPROVED', paymentStatus: 'APPROVED', paymentVerified: true, approved: true, approvedBy: 'admin-a', receiptHash: 'c'.repeat(64), cheque: { chequeNumber: '777777', chequeBank: 'Bank', chequeDate: '2026-10-01' } };
+  const r = L.buildChequeBounceReversal(verifiedRent, { actorUid: 'admin-b', bankReason: 'Insufficient funds', atIso: '2026-10-15T06:00:00.000Z' });
+  assert.equal(r.reversesVerifiedPayment, true);
+  assert.equal(r.payerType, 'TENANT');
+  assert.equal(r.paymentPatch.status, 'UNPAID_CHEQUE_RETURNED');
+  assert.equal(r.paymentPatch.paymentVerified, false);
+  assert.equal(r.paymentPatch.approved, false);
+  assert.equal(r.paymentPatch.receiptState, 'REVERSED');
+  assert.equal(r.paymentPatch.dueDate, undefined, 'original due date untouched');
+  assert.deepEqual(r.paymentPatch.paymentReversal, { reversedAt: '2026-10-15T06:00:00.000Z', reversedBy: 'admin-b', bankReason: 'Insufficient funds', previousStatus: 'APPROVED', previousPaymentStatus: 'APPROVED', previousApprovedBy: 'admin-a' });
+  assert.equal(r.invoicePatch, null);
+});
+
+test('owner 15% cheque bounced after verification reopens the invoice, keeps activation, flags review', () => {
+  const verifiedOwner = recorded({ paymentMethod: 'CHEQUE', ownerUid: 'o-1', status: 'APPROVED', paymentVerified: true, chequeClearanceState: 'CLEARED' });
+  assert.equal(L.assertChequeClearanceTransition(verifiedOwner, 'BOUNCED'), 'BOUNCED');
+  assert.throws(() => L.assertChequeClearanceTransition(verifiedOwner, 'CLEARED'));
+  assert.throws(() => L.assertChequeClearanceTransition({ ...verifiedOwner, chequeClearanceState: 'BOUNCED' }, 'BOUNCED'));
+  const r = L.buildChequeBounceReversal(verifiedOwner, { actorUid: 'admin-b', bankReason: 'Account closed', atIso: '2026-10-15T06:00:00.000Z' });
+  assert.equal(r.payerType, 'OWNER');
+  assert.equal(r.paymentPatch.activationReviewRequired, true);
+  assert.equal(r.paymentPatch.status, undefined, 'activation/payment status is not auto-reversed');
+  assert.equal(r.invoicePatch.status, 'PENDING');
+  assert.equal(r.invoicePatch.paymentStatus, 'UNPAID');
+  assert.equal(r.invoicePatch.receiptState, 'REVERSED');
+  const inv = { ...invoice, status: 'PAID', issuedAt: '2026-10-01T00:00:00Z', receiptPdfUrl: 'https://x/receipt.pdf' };
+  const reopened = { ...inv, ...r.invoicePatch };
+  const pay = { ...verifiedOwner, ...r.paymentPatch };
+  assert.equal(L.resolveOwnerLedgerStatus(reopened, pay, Date.parse('2026-10-05')), 'BOUNCED');
+  assert.equal(L.resolveOwnerLedgerStatus(reopened, pay, Date.parse('2026-10-15')), 'OVERDUE', 'original due date (issue + 7 days) applies');
+  const row = L.buildOwnerLedgerRow('INV', reopened, pay, Date.parse('2026-10-15'));
+  assert.equal(row.receiptReversed, true);
+  assert.equal(row.receiptPdfUrl, 'https://x/receipt.pdf', 'receipt kept, not deleted');
+  const unverified = L.buildChequeBounceReversal(recorded({ paymentMethod: 'CHEQUE', ownerUid: 'o-1' }), { actorUid: 'a', bankReason: 'x', atIso: 'y' });
+  assert.equal(unverified.reversesVerifiedPayment, false);
+});
+
+test('reversal wiring: audit log, fee kept, re-approval refused, owner/tenant/admin views', () => {
+  const callables = read('functions/ownerPaymentLedgerCallables.ts');
+  assert.match(callables, /TENANT_RENT_PAYMENT_REVERSED_CHEQUE_RETURNED/);
+  assert.match(callables, /OWNER_MOBILISATION_PAYMENT_REVERSED_CHEQUE_RETURNED/);
+  assert.match(callables, /transaction\.create\(db\.collection\("invoices"\)\.doc\(feeInvoiceId\)/);
+  assert.ok(callables.indexOf('transaction.get(db.collection("invoices")') < callables.indexOf('transaction.set('), 'all transaction reads before writes');
+  assert.doesNotMatch(callables, /\.delete\(/);
+  assert.match(read('functions/rentPaymentStatus.ts'), /chequeClearanceState\) === "bounced"\) return "refuse_rejected"/);
+  assert.match(read('src/owner/utils/ownerTenantLedgerResolver.ts'), /const paid = reversedRent \? 0/);
+  assert.match(read('src/tenant/pages/TenantPaymentsPage.tsx'), /UNPAID_CHEQUE_RETURNED: \{ label: 'UNPAID - CHEQUE RETURNED'/);
+  assert.match(read('apps/admin-panel/src/pages/financials/PaymentApprovalsPage.tsx'), /admin-returned-cheque-panel/);
 });

@@ -142,6 +142,7 @@ export default function PaymentApprovalsPage() {
     const [receiptFile, setReceiptFile] = React.useState<File | null>(null);
     const [rejectReason, setRejectReason] = React.useState('');
     const [chequeNumber, setChequeNumber] = React.useState('');
+    const [returnedPaymentId, setReturnedPaymentId] = React.useState('');
     const [chequeBank, setChequeBank] = React.useState('');
     const [chequeDate, setChequeDate] = React.useState('');
 
@@ -343,7 +344,14 @@ export default function PaymentApprovalsPage() {
         setNotice(null);
         try {
             const callable = httpsCallable(functions, 'adminSetOwnerChequeClearance');
-            await callable({ paymentId: row.id, clearance, note });
+            const response: any = await callable({ paymentId: row.id, clearance, note });
+            if (response?.data?.paymentReversed) {
+                setNotice(response.data.activationReviewRequired
+                    ? 'Cheque returned after verification: the 15% invoice is reopened as UNPAID, the receipt is marked REVERSED and an AED 500 fee was added. Activation was NOT reversed - review this Owner manually.'
+                    : 'Cheque returned after verification: the rent is reopened as UNPAID, the receipt is marked REVERSED and an AED 500 fee was added to the tenant ledger.');
+                setReturnedPaymentId('');
+                return;
+            }
             setNotice(clearance === 'CLEARED' ? 'Cheque marked as cleared. A second Finance Admin can now verify and approve.' : 'Cheque marked as bounced. A pending AED 500 returned-cheque fee was added to the payer ledger. Return the evidence and request a replacement payment.');
         } catch (err: any) {
             setError((typeof err?.details === 'string' && err.details) || err?.message || 'Cheque clearance update failed.');
@@ -391,6 +399,14 @@ export default function PaymentApprovalsPage() {
             <Alert severity="warning" sx={{ mb: 3 }}>For five-page Owner applications, final approval is blocked until all property inspections are complete and the exact locked 15% mobilisation amount has immutable receipt evidence.</Alert>
             {error && <Alert severity="error" onClose={() => setError(null)} sx={{ mb: 3 }}>{error}</Alert>}
             {notice && <Alert severity="success" onClose={() => setNotice(null)} sx={{ mb: 3 }}>{notice}</Alert>}
+            <Paper data-testid="admin-returned-cheque-panel" sx={{ p: 2, mb: 3, bgcolor: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.25)', borderRadius: 3 }}>
+                <Typography variant="caption" sx={{ color: '#F87171', fontWeight: 900 }}>CHEQUE RETURNED BY BANK AFTER VERIFICATION</Typography>
+                <Stack direction={{ xs: 'column', sm: 'row' }} gap={1.5} sx={{ mt: 1 }}>
+                    <TextField size="small" label="Payment ID (verified cheque)" value={returnedPaymentId} onChange={(event) => setReturnedPaymentId(event.target.value.trim())} fullWidth InputLabelProps={{ sx: { color: 'rgba(255,255,255,0.45)' } }} InputProps={{ sx: { color: '#fff' } }} />
+                    <Button disabled={!returnedPaymentId || busyId === returnedPaymentId} onClick={() => void setChequeClearance({ id: returnedPaymentId } as PaymentRecord, 'BOUNCED')} sx={{ bgcolor: '#ef4444', color: '#fff', fontWeight: 900, whiteSpace: 'nowrap' }}>Mark Returned</Button>
+                </Stack>
+                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)' }}>Reopens the payment as UNPAID, marks its receipt REVERSED, adds the AED 500 fee and writes an audit entry. An Owner's activation is never reversed automatically.</Typography>
+            </Paper>
 
             {receiptRepairs.length > 0 && (
                 <Paper sx={{ mb: 3, p: 3, bgcolor: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.28)', borderRadius: 4 }}>
