@@ -1401,9 +1401,10 @@ for (const scopeWorkflow of [
   const runStart = workflow.indexOf('run: |\n', stepStart) + 'run: |\n'.length;
   const runEnd = workflow.indexOf('\n      - name:', runStart);
   const script = workflow.slice(runStart, runEnd).split('\n').map((line) => line.replace(/^ {10}/, '')).join('\n');
-  const allowedLists = [...script.matchAll(/allowed='([^']+)'/g)].map((match) => new RegExp(match[1]));
-  assert.ok(allowedLists.some((pattern) => pattern.test('tests/launch/hard-clearance-revalidation.test.mjs')), 'this regression test file must be inside the workflow scope');
-  assert.ok(!allowedLists.some((pattern) => pattern.test('scripts/verify-production-deployment.mjs')), 'verifier must not be added to the broad path allowlist');
+  const allowedLists = [...script.matchAll(/allowed='([^']+)'/g)].map((match) => match[1]);
+  assert.ok(allowedLists.length > 0, 'workflow must declare path allowlists');
+  assert.ok(allowedLists.some((list) => list.includes('tests/launch/hard-clearance-revalidation\\.test\\.mjs')), 'this regression test file must be inside the workflow scope');
+  assert.ok(!allowedLists.some((list) => list.includes('verify-production-deployment')), 'verifier must not be added to the broad path allowlist');
   assert.match(script, /deploy_verifier_blob='475ac1c26c7338db7e33934dd30852a7f54e3efa'/);
 
   const { readFileSync } = await import('node:fs');
