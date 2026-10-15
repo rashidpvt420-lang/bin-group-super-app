@@ -1,4 +1,5 @@
 import { getStorage } from 'firebase-admin/storage';
+import { OWNER_MOBILIZATION_DUE_DAYS, OWNER_SUSPENSION_NOTICE_DAYS, RETURNED_CHEQUE_FEE_AED, mobilizationDueAt } from './ownerPaymentLedger';
 import { COMPANY_DISPLAY_NAME, COMPANY_IDENTITY, COMPANY_REGISTRATION_LINE_EN, COMPANY_TRADING_AS_AR, COMPANY_TRADING_AS_EN, GOVERNING_LAW_AR, GOVERNING_LAW_EN } from './companyIdentity';
 import crypto from 'crypto';
 // PDFKit is lazy-loaded below to keep Functions discovery fast.
@@ -816,12 +817,10 @@ export async function generateContractPDF(data: any): Promise<string> {
 
 
 /** 9A-9F payment schedule clauses (EN/AR). Unknown commercial numbers stay as visible placeholders. */
-export const OWNER_PAYMENT_NOTICE_DAYS_PLACEHOLDER = '[NOTICE PERIOD: TO BE CONFIRMED]';
-export const OWNER_PAYMENT_NOTICE_DAYS_PLACEHOLDER_AR = '[مدة الإشعار: يتم تأكيدها لاحقاً]';
 function renderPaymentScheduleClauses(doc: any) {
     para(doc,
-        '9A. Mobilisation: 15% of the annual contract value is payable as a mobilisation payment once BIN-GROUPS Admin has approved the final verified quotation and the Owner has signed this Agreement, and before any works or services start. BIN-GROUPS issues a mobilisation invoice for this amount. Services start only after the payment is verified.',
-        '9أ. دفعة التفعيل: تُستحق نسبة 15% من القيمة السنوية للعقد كدفعة تفعيل بعد اعتماد إدارة BIN-GROUPS لعرض السعر النهائي المُتحقق منه وتوقيع المالك على هذه الاتفاقية، وقبل بدء أي أعمال أو خدمات. وتُصدر BIN-GROUPS فاتورة بهذا المبلغ. ولا تبدأ الخدمات إلا بعد التحقق من الدفعة.'
+        `9A. Mobilisation: 15% of the annual contract value is payable as a mobilisation payment once BIN-GROUPS Admin has approved the final verified quotation and the Owner has signed this Agreement, and before any works or services start. BIN-GROUPS issues a mobilisation invoice for this amount, payable within ${OWNER_MOBILIZATION_DUE_DAYS} days of the invoice date. Services start only after the payment is verified.`,
+        `9أ. دفعة التفعيل: تُستحق نسبة 15% من القيمة السنوية للعقد كدفعة تفعيل بعد اعتماد إدارة BIN-GROUPS لعرض السعر النهائي المُتحقق منه وتوقيع المالك على هذه الاتفاقية، وقبل بدء أي أعمال أو خدمات. وتُصدر BIN-GROUPS فاتورة بهذا المبلغ تُسدد خلال ${OWNER_MOBILIZATION_DUE_DAYS} أيام من تاريخ الفاتورة. ولا تبدأ الخدمات إلا بعد التحقق من الدفعة.`
     );
     para(doc,
         '9B. Balance: the remaining 85% is payable according to the payment plan stated in this Agreement and the accepted quotation.',
@@ -832,16 +831,16 @@ function renderPaymentScheduleClauses(doc: any) {
         '9ج. طرق الدفع: تُقبل الدفعات بالدرهم الإماراتي فقط نقداً أو بشيك محرر لصالح المنشأة المرخصة المذكورة في هذه الاتفاقية. ولا تُقبل أي طريقة دفع أخرى.'
     );
     para(doc,
-        '9D. Cheques: a cheque counts as payment only when the bank has cleared it. If a cheque is returned unpaid, the related amount remains due, any service activation that depended on it does not proceed, and BIN-GROUPS may pursue the remedies available under applicable UAE law, including enforcement of the cheque. Any returned-cheque charge applies only if stated in a schedule signed by both Parties.',
-        '9د. الشيكات: لا يُعتبر الشيك سداداً إلا بعد تحصيله من البنك. وإذا أُعيد الشيك دون صرف يبقى المبلغ المتعلق به مستحقاً، ولا يتم أي تفعيل للخدمة يتوقف عليه، ويجوز لشركة BIN-GROUPS اللجوء إلى سبل الانتصاف المتاحة بموجب القوانين المعمول بها في دولة الإمارات، بما في ذلك تنفيذ الشيك. ولا تُفرض أي رسوم على الشيك المرتجع إلا إذا نُص عليها في جدول موقع من الطرفين.'
+        `9D. Cheques: a cheque counts as payment only when the bank has cleared it. If a cheque is returned unpaid, the related amount remains due, any service activation that depended on it does not proceed, and BIN-GROUPS may pursue the remedies available under applicable UAE law, including enforcement of the cheque. A returned-cheque fee of AED ${RETURNED_CHEQUE_FEE_AED} per returned cheque is payable by the Owner in addition to the unpaid amount.`,
+        `9د. الشيكات: لا يُعتبر الشيك سداداً إلا بعد تحصيله من البنك. وإذا أُعيد الشيك دون صرف يبقى المبلغ المتعلق به مستحقاً، ولا يتم أي تفعيل للخدمة يتوقف عليه، ويجوز لشركة BIN-GROUPS اللجوء إلى سبل الانتصاف المتاحة بموجب القوانين المعمول بها في دولة الإمارات، بما في ذلك تنفيذ الشيك. ويلتزم المالك بسداد رسم قدره ${RETURNED_CHEQUE_FEE_AED} درهم عن كل شيك مرتجع، بالإضافة إلى المبلغ غير المسدد.`
     );
     para(doc,
         '9E. Receipts: BIN-GROUPS issues a receipt for every payment once it is verified. The Owner can see each invoice and its status (pending, received awaiting verification, verified, bounced or overdue) in the app.',
         '9هـ. الإيصالات: تُصدر BIN-GROUPS إيصالاً عن كل دفعة بعد التحقق منها. ويمكن للمالك الاطلاع على كل فاتورة وحالتها (قيد الانتظار، مستلمة بانتظار التحقق، تم التحقق، شيك مرتجع، متأخرة) في التطبيق.'
     );
     para(doc,
-        `9F. Suspension for non-payment: if an amount remains unpaid after its due date, BIN-GROUPS may suspend services only after giving the Owner written notice and a period to pay of ${OWNER_PAYMENT_NOTICE_DAYS_PLACEHOLDER}. Emergency works needed to prevent imminent danger to persons or property are not suspended without separate written notice. Services resume once the overdue amount is verified as paid.`,
-        `9و. التعليق بسبب عدم السداد: إذا بقي مبلغ غير مسدد بعد تاريخ استحقاقه، يجوز لشركة BIN-GROUPS تعليق الخدمات فقط بعد إشعار المالك كتابياً ومنحه مهلة للسداد مدتها ${OWNER_PAYMENT_NOTICE_DAYS_PLACEHOLDER_AR}. ولا تُعلق الأعمال الطارئة اللازمة لمنع خطر وشيك على الأشخاص أو الممتلكات دون إشعار كتابي مستقل. وتُستأنف الخدمات بعد التحقق من سداد المبلغ المتأخر.`
+        `9F. Suspension for non-payment: if an amount remains unpaid after its due date, BIN-GROUPS may suspend services only after giving the Owner written notice and ${OWNER_SUSPENSION_NOTICE_DAYS} days to pay. Emergency works needed to prevent imminent danger to persons or property are not suspended without separate written notice. Services resume once the overdue amount is verified as paid.`,
+        `9و. التعليق بسبب عدم السداد: إذا بقي مبلغ غير مسدد بعد تاريخ استحقاقه، يجوز لشركة BIN-GROUPS تعليق الخدمات فقط بعد إشعار المالك كتابياً ومنحه مهلة للسداد مدتها ${OWNER_SUSPENSION_NOTICE_DAYS} يوماً. ولا تُعلق الأعمال الطارئة اللازمة لمنع خطر وشيك على الأشخاص أو الممتلكات دون إشعار كتابي مستقل. وتُستأنف الخدمات بعد التحقق من سداد المبلغ المتأخر.`
     );
 }
 
@@ -887,11 +886,15 @@ export async function generateMobilizationUnpaidInvoicePdfArtifact(data: any): P
         row(doc, 'Currency / العملة', 'AED / درهم إماراتي');
         row(doc, 'Status / الحالة', 'PENDING - UNPAID / قيد الانتظار - غير مدفوعة');
         row(doc, 'Basis / الأساس', '15% of annual contract value / 15% من القيمة السنوية للعقد');
-        row(doc, 'Due / الاستحقاق', 'Before works or services start / قبل بدء الأعمال أو الخدمات');
+        const dueDate = textValue(data.dueAt, '') ? new Date(data.dueAt) : mobilizationDueAt(Date.now());
+        const dueText = dueDate.toISOString().slice(0, 10);
+        row(doc, 'Invoice Date / تاريخ الفاتورة', new Date(dueDate.getTime() - OWNER_MOBILIZATION_DUE_DAYS * 86400000).toISOString().slice(0, 10));
+        row(doc, 'Due Date / تاريخ الاستحقاق', `${dueText} - within ${OWNER_MOBILIZATION_DUE_DAYS} days / خلال ${OWNER_MOBILIZATION_DUE_DAYS} أيام`);
+        row(doc, 'Services Start / بدء الخدمات', 'After payment is verified / بعد التحقق من الدفعة');
         row(doc, 'Accepted Methods / طرق الدفع المقبولة', 'CASH or CHEQUE only / نقداً أو بشيك فقط');
         row(doc, 'VAT / ضريبة القيمة المضافة', 'Not applied on this invoice / غير مطبقة على هذه الفاتورة');
         row(doc, 'Verification Hash / رمز التحقق', proofHash);
-        para(doc, 'This invoice is issued from the immutable signed-contract payment schedule. A cheque counts as payment only once cleared by the bank. A receipt is issued when the payment is verified.', 'تم إصدار هذه الفاتورة من جدول الدفع الثابت للعقد الموقع. ولا يُعتبر الشيك سداداً إلا بعد تحصيله من البنك. ويُصدر إيصال عند التحقق من الدفعة.');
+        para(doc, `This invoice is issued from the immutable signed-contract payment schedule. A cheque counts as payment only once cleared by the bank. A returned cheque incurs a fee of AED ${RETURNED_CHEQUE_FEE_AED} in addition to the unpaid amount. A receipt is issued when the payment is verified.`, `تم إصدار هذه الفاتورة من جدول الدفع الثابت للعقد الموقع. ولا يُعتبر الشيك سداداً إلا بعد تحصيله من البنك. ويُستحق رسم قدره ${RETURNED_CHEQUE_FEE_AED} درهم عن الشيك المرتجع بالإضافة إلى المبلغ غير المسدد. ويُصدر إيصال عند التحقق من الدفعة.`);
         doc.end();
     });
 }

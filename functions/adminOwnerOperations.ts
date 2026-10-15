@@ -3,6 +3,7 @@ import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 import type * as FirebaseFirestore from "firebase-admin/firestore";
 import { generateContractPdfArtifact, generateMobilizationUnpaidInvoicePdfArtifact } from "./pdfEngine";
+import { mobilizationDueAt } from "./ownerPaymentLedger";
 import { assertMobilizationInvoiceImmutable, buildMobilizationInvoiceSnapshot } from "./mobilizationInvoice";
 import { termFieldsFromStart } from "./ownerContractTerm";
 import {
@@ -92,6 +93,8 @@ async function repairMissingMobilizationInvoicePdf(contract: Record<string, any>
   }
 
   const invoicePdfArtifact = await generateMobilizationUnpaidInvoicePdfArtifact({
+
+    dueAt: mobilizationDueAt(Date.now()).toISOString(),
     ...invoiceSnapshot,
     ownerId,
   });
@@ -110,6 +113,7 @@ async function repairMissingMobilizationInvoicePdf(contract: Record<string, any>
       pdfGeneration: invoicePdfArtifact.generation,
       canonicalPdfSource: "SERVER_CONTRACT_SIGNATURE_REPAIR",
       issuedAt: ts(),
+      dueAt: mobilizationDueAt(Date.now()).toISOString(),
       createdAt: ts(),
       updatedAt: ts(),
     }, { merge: false });
@@ -663,6 +667,7 @@ export const ownerSignContractAndQueuePdf = onCall({ cors: true, enforceAppCheck
     const [pdfArtifact, invoicePdfArtifact] = await Promise.all([
       generateContractPdfArtifact({ ...clean(contract), contractId, ownerName: signatureName, ownerEmail, planName: contract.packageName, propertyName: contract.propertyName, annualValue: contract.annualContractValue || contract.annualValue, mobilizationAmount: signedMobilizationAmount, signedAt: signedAtDate.toISOString() }),
       generateMobilizationUnpaidInvoicePdfArtifact({
+        dueAt: mobilizationDueAt(Date.now()).toISOString(),
         ...invoiceSnapshot,
         ownerId,
       }),
@@ -719,6 +724,7 @@ export const ownerSignContractAndQueuePdf = onCall({ cors: true, enforceAppCheck
           pdfGeneration: invoicePdfArtifact.generation,
           canonicalPdfSource: "SERVER_CONTRACT_SIGNATURE",
           issuedAt: ts(),
+          dueAt: mobilizationDueAt(Date.now()).toISOString(),
           createdAt: ts(),
           updatedAt: ts(),
         });

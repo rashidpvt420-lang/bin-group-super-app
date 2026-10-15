@@ -250,6 +250,7 @@ export default function TenantPaymentsPage() {
                     <Typography variant="body2">1. Pay rent by Cash (against an official receipt) or by Cheque. Bank transfer and online payment are not accepted.</Typography>
                     <Typography variant="body2">2. Click "SUBMIT PAYMENT PROOF", choose Cash or Cheque, and upload a photo of the cash receipt or the cheque</Typography>
                     <Typography variant="body2">3. Admin will verify the payment within 24 hours and update your status</Typography>
+                    <Typography data-testid="tenant-returned-cheque-fee" variant="body2">4. Returned cheque: a cheque counts as paid only once the bank clears it. A returned (bounced) cheque incurs a fee of AED 500 in addition to the unpaid rent. / الشيك المرتجع: لا يُعتبر الشيك مدفوعاً إلا بعد تحصيله من البنك، ويُستحق رسم قدره 500 درهم عن كل شيك مرتجع بالإضافة إلى الإيجار غير المسدد.</Typography>
                 </Stack>
             </Paper>
 
