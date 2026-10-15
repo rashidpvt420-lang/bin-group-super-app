@@ -116,10 +116,11 @@ export function assertChequeClearanceTransition(payment: Record<string, any>, ne
   if (target !== "CLEARED" && target !== "BOUNCED") throw new OwnerLedgerError("Clearance must be CLEARED or BOUNCED.");
   const current = chequeClearanceOf(payment);
   if (current === null) throw new OwnerLedgerError("Only cheque payments have a bank clearance step.");
-  // Owner 15% cheques must be cleared before approval. A tenant rent cheque may already be
-  // recorded as verified and still be returned by the bank, so it can be marked later.
-  if (isVerified(payment) && !isTenantPayment(payment)) throw new OwnerLedgerError("This payment is already verified.");
-  if (current !== "PENDING_CLEARANCE") throw new OwnerLedgerError(`This cheque is already ${current}.`);
+  if (current === "BOUNCED") throw new OwnerLedgerError("This cheque is already BOUNCED.");
+  // A cheque that was cleared / verified can still come back from the bank: only BOUNCED is
+  // allowed then, and it reverses the payment (see buildChequeBounceReversal).
+  if (current === "CLEARED" && target === "CLEARED") throw new OwnerLedgerError("This cheque is already CLEARED.");
+  if (isVerified(payment) && target === "CLEARED" && !isTenantPayment(payment)) throw new OwnerLedgerError("This payment is already verified.");
   if (!text(payment.paymentProofHash) && !text(payment.paymentReferenceId) && !text(payment.receiptHash)) {
     throw new OwnerLedgerError("Record the cheque as received before setting its clearance.");
   }
@@ -134,6 +135,91 @@ export function isTenantPayment(payment: Record<string, any> | null | undefined)
 export function chequePayerOf(payment: Record<string, any>): { payerType: "OWNER" | "TENANT"; payerUid: string } {
   if (isTenantPayment(payment)) return { payerType: "TENANT", payerUid: text(payment.tenantId || payment.tenantUid || payment.payerId) };
   return { payerType: "OWNER", payerUid: text(payment.ownerUid || payment.ownerId) };
+}
+
+export type ChequeBounceReversal = {
+  /** True when the payment had already been accepted as paid and must be reopened. */
+  reversesVerifiedPayment: boolean;
+  payerType: "OWNER" | "TENANT";
+  paymentPatch: Record<string, unknown>;
+  /** Owner 15% only: invoice fields to reopen as UNPAID with the receipt marked reversed (never deleted). */
+  invoicePatch: Record<string, unknown> | null;
+  auditMetadata: Record<string, unknown>;
+};
+
+/**
+ * What a BOUNCED mark does to an already-recorded payment.
+ * - Tenant rent cheque verified earlier: rent reopens as UNPAID (original dueDate kept, so it may be
+ *   OVERDUE), receipt evidence kept but marked REVERSED, approval flags cleared.
+ * - Owner 15% cheque verified earlier: the mobilisation invoice reopens as UNPAID with the receipt
+ *   marked REVERSED. The contract/dashboard activation is NOT reversed automatically; the payment is
+ *   flagged activationReviewRequired for an Admin decision.
+ * In both cases the caller also raises the AED 500 returned-cheque fee.
+ */
+export function buildChequeBounceReversal(
+  payment: Record<string, any>,
+  input: { actorUid: string; bankReason: string; atIso: string },
+): ChequeBounceReversal {
+  const { payerType } = chequePayerOf(payment);
+  const wasVerified = isVerified(payment);
+  const reversal = {
+    reversedAt: input.atIso,
+    reversedBy: input.actorUid,
+    bankReason: input.bankReason,
+    previousStatus: text(payment.status) || null,
+    previousPaymentStatus: text(payment.paymentStatus) || null,
+    previousApprovedBy: text(payment.approvedBy) || null,
+  };
+  const base: Record<string, unknown> = { chequeClearanceState: "BOUNCED" };
+  if (!wasVerified) {
+    return { reversesVerifiedPayment: false, payerType, paymentPatch: base, invoicePatch: null, auditMetadata: { reversal: null } };
+  }
+  if (payerType === "TENANT") {
+    return {
+      reversesVerifiedPayment: true,
+      payerType,
+      paymentPatch: {
+        ...base,
+        status: "UNPAID_CHEQUE_RETURNED",
+        paymentStatus: "UNPAID",
+        verificationState: "CHEQUE_RETURNED",
+        paymentVerified: false,
+        approved: false,
+        amountReceived: 0,
+        receiptState: "REVERSED",
+        receiptReversedAt: input.atIso,
+        paymentReversal: reversal,
+      },
+      invoicePatch: null,
+      auditMetadata: { reversal },
+    };
+  }
+  return {
+    reversesVerifiedPayment: true,
+    payerType,
+    paymentPatch: {
+      ...base,
+      paymentReversal: reversal,
+      receiptState: "REVERSED",
+      receiptReversedAt: input.atIso,
+      // Activation is intentionally left in place: Rashid decides; Admin reviews.
+      activationReviewRequired: true,
+    },
+    invoicePatch: {
+      status: "PENDING",
+      paymentStatus: "UNPAID",
+      amountPaid: 0,
+      documentState: "PAYMENT_REVERSED_CHEQUE_RETURNED",
+      receiptState: "REVERSED",
+      receiptReversedAt: input.atIso,
+      paymentReversal: reversal,
+    },
+    auditMetadata: { reversal, activationReviewRequired: true },
+  };
+}
+
+export function isReversed(record: Record<string, any> | null | undefined): boolean {
+  return Boolean(record?.paymentReversal) || upper(record?.receiptState) === "REVERSED";
 }
 
 function isVerified(payment: Record<string, any> | null | undefined): boolean {
@@ -171,6 +257,10 @@ export function resolveOwnerLedgerStatus(
   payment: Record<string, any> | null | undefined,
   nowMs: number = Date.now(),
 ): OwnerLedgerStatus {
+  if (isReversed(invoice) || isReversed(payment)) {
+    // Reopened after a returned cheque: outstanding again; OVERDUE once the original due date passed.
+    return nowMs > (dueMillis(invoice) ?? Infinity) ? "OVERDUE" : "BOUNCED";
+  }
   if (upper(invoice?.status) === "PAID" || upper(invoice?.paymentStatus) === "PAID" || isVerified(payment)) return "VERIFIED";
   if (upper(payment?.chequeClearanceState) === "BOUNCED") return "BOUNCED";
   if (evidenceRecorded(payment)) return "RECEIVED_UNVERIFIED";
@@ -194,6 +284,7 @@ export type OwnerLedgerRow = {
   receivedByAdminUid: string | null;
   invoicePdfUrl: string | null;
   receiptPdfUrl: string | null;
+  receiptReversed: boolean;
   dueAt: string | null;
 };
 
@@ -220,6 +311,7 @@ export function buildOwnerLedgerRow(
     receivedByAdminUid: text(payment?.receivedByAdminUid) || null,
     invoicePdfUrl: text(invoice.pdfUrl) || null,
     receiptPdfUrl: text(invoice.receiptPdfUrl) || null,
+    receiptReversed: isReversed(invoice) || isReversed(payment),
     dueAt: due === null ? null : new Date(due).toISOString(),
   };
 }

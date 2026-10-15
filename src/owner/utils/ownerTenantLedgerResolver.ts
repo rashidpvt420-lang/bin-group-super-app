@@ -125,9 +125,12 @@ export function resolveTenantLedger(
   );
 
   const ledgerRows: ResolvedTenantLedgerRow[] = rawRows.map((item) => {
-    const due = toNumber(item.rentDue || item.amountDue || item.annualRent || item.totalRent || item.rentAmount, 0);
-    const paid = toNumber(item.rentPaid || item.amountPaid || item.paidAmount || item.collectedAmount || item.amountReceived || item.amount, 0);
-    const storedBalance = toNumber(item.balance, NaN);
+    let due = toNumber(item.rentDue || item.amountDue || item.annualRent || item.totalRent || item.rentAmount, 0);
+    // A returned (bounced) cheque reverses the rent: nothing collected, full amount outstanding again.
+    const reversedRent = Boolean(item.paymentReversal) || String(item.receiptState || '').toUpperCase() === 'REVERSED' || String(item.status || '').toUpperCase() === 'UNPAID_CHEQUE_RETURNED';
+    const paid = reversedRent ? 0 : toNumber(item.rentPaid || item.amountPaid || item.paidAmount || item.collectedAmount || item.amountReceived || item.amount, 0);
+    if (reversedRent && due <= 0) due = toNumber(item.amount, 0);
+    const storedBalance = reversedRent ? NaN : toNumber(item.balance, NaN);
     const balance = Number.isFinite(storedBalance) ? Math.max(0, storedBalance) : Math.max(0, due - paid);
     const dueDate = item.dueDate || item.paymentDueDate || item.nextDueDate || item.leaseEndDate || item.endDate;
     const overdueDays = balance > 0 ? getDaysDifference(dueDate) : 0;
