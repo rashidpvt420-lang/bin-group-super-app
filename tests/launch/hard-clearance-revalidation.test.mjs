@@ -867,6 +867,42 @@ test('hard-clearance scope permits only the exact PR #1770 rules-writer and test
   assert.throws(() => verifyScope({ changedFiles: [...expectedDiff, 'src/App.tsx'] }), /Non-control-plane file changed since pilot release: src\/App\.tsx/);
 });
 
+test('all protected evidence producers pin the reviewed PR #1770 rules files', async () => {
+  for (const filename of [
+    '.github/workflows/operational-application-evidence.yml',
+    '.github/workflows/operational-provider-evidence.yml',
+    '.github/workflows/privileged-access-rotation-evidence.yml',
+    '.github/workflows/technician-physical-evidence.yml',
+  ]) {
+    const source = await read(filename);
+    assert.match(source, /KNOWN_RULES_WRITER_COMMIT: 86b67c4a12a4ac61037dba8201f3d5ab96b09c5f/);
+    assert.ok(source.includes('exception_count" -eq 2'), filename);
+    assert.ok(source.includes('merge-base --is-ancestor "$KNOWN_RULES_WRITER_COMMIT" "$CONTROL_PLANE_SHA"'), filename);
+    assert.ok(source.includes('"$current_blob" == "$known_blob"'), filename);
+    assert.ok(source.includes('"$frozen_blob" != "$known_blob"'), filename);
+    assert.ok(source.includes('Non-control-plane file changed since frozen release'), filename);
+  }
+});
+
+test('control-plane scopes admit reviewed Founder test-only repairs and reject runtime drift', async () => {
+  for (const filename of [
+    '.github/workflows/live-role-smoke.yml',
+    '.github/workflows/operational-application-evidence.yml',
+    '.github/workflows/operational-provider-evidence.yml',
+    '.github/workflows/privileged-access-rotation-evidence.yml',
+    '.github/workflows/technician-physical-evidence.yml',
+  ]) {
+    const source = await read(filename);
+    const lines = source.split('\n').filter((line) => line.trim().startsWith("supplemental_allowed='"));
+    assert.ok(lines.length >= 1, filename);
+    for (const line of lines) {
+      assert.ok(line.includes('test/hard-launch-control\\.test\\.mjs'), filename);
+      assert.ok(line.includes('tests/launch/verify-same-run-deployment-artifact\\.test\\.mjs'), filename);
+      assert.equal(line.includes('src/App.tsx'), false, filename);
+    }
+  }
+});
+
 test('all operational workflows enforce same-SHA allowance and privileged rotation cleanup guards', async () => {
   const operationalWorkflows = [
     '.github/workflows/operational-application-evidence.yml',
