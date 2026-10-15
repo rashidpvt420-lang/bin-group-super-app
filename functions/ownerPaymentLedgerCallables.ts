@@ -6,6 +6,7 @@ import { requireMfaFinanceAdminActor } from "./financeAdminMfa";
 import {
   assertChequeClearanceTransition,
   buildOwnerLedgerRow,
+  buildChequeBounceReversal,
   buildReturnedChequeFeeInvoice,
   chequePayerOf,
   returnedChequeFeeInvoiceId,
@@ -51,6 +52,35 @@ export const adminSetOwnerChequeClearance = onCall({ cors: true, enforceAppCheck
     if (next === "BOUNCED" && note.length < 4) {
       throw new HttpsError("invalid-argument", "Record the bank's return reason for a bounced cheque.");
     }
+    // A bounce after the payment was accepted reopens it (tenant rent -> UNPAID; owner 15% invoice ->
+    // UNPAID, activation left for Admin review). Receipts are marked REVERSED, never deleted.
+    const reversal = next === "BOUNCED"
+      ? buildChequeBounceReversal(payment, { actorUid: actor.uid, bankReason: note, atIso: new Date().toISOString() })
+      : null;
+    let invoiceRef: FirebaseFirestore.DocumentReference | null = null;
+    if (reversal?.invoicePatch) {
+      const invoiceQuery = await transaction.get(db.collection("invoices").where("paymentId", "==", paymentId).limit(5));
+      const mobilization = invoiceQuery.docs.find((doc) => text(doc.data()?.feeType).toUpperCase() === "MOBILIZATION_DEPOSIT");
+      if (!mobilization) throw new HttpsError("failed-precondition", "The verified mobilisation invoice for this cheque was not found.");
+      invoiceRef = mobilization.ref;
+    }
+    if (reversal) {
+      transaction.set(paymentRef, { ...reversal.paymentPatch, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+      if (invoiceRef && reversal.invoicePatch) {
+        transaction.set(invoiceRef, { ...reversal.invoicePatch, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+      }
+      if (reversal.reversesVerifiedPayment) {
+        transaction.set(db.collection("audit_logs").doc(), {
+          actorId: actor.uid,
+          actorRole: "admin",
+          action: reversal.payerType === "TENANT" ? "TENANT_RENT_PAYMENT_REVERSED_CHEQUE_RETURNED" : "OWNER_MOBILISATION_PAYMENT_REVERSED_CHEQUE_RETURNED",
+          targetType: "payment_transactions",
+          targetId: paymentId,
+          metadata: { ...reversal.auditMetadata, invoiceId: invoiceRef?.id || null, chequeDetails: payment.chequeDetails || payment.cheque || null },
+          createdAt: FieldValue.serverTimestamp(),
+        });
+      }
+    }
     let feeInvoiceId: string | null = null;
     if (next === "BOUNCED") {
       // Approved: AED 500 returned-cheque fee per bounced cheque, owner or tenant, on top of the unpaid amount.
@@ -86,9 +116,9 @@ export const adminSetOwnerChequeClearance = onCall({ cors: true, enforceAppCheck
       metadata: { chequeDetails: payment.chequeDetails || null, note: note || null },
       createdAt: FieldValue.serverTimestamp(),
     });
-    return { next, feeInvoiceId };
+    return { next, feeInvoiceId, reversed: Boolean(reversal?.reversesVerifiedPayment), activationReviewRequired: Boolean(reversal?.reversesVerifiedPayment && reversal.payerType === "OWNER") };
   });
-  return { status: "SUCCESS", paymentId, chequeClearanceState: result.next, returnedChequeFeeInvoiceId: result.feeInvoiceId };
+  return { status: "SUCCESS", paymentId, chequeClearanceState: result.next, returnedChequeFeeInvoiceId: result.feeInvoiceId, paymentReversed: result.reversed, activationReviewRequired: result.activationReviewRequired };
 });
 
 /**
