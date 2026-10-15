@@ -1384,20 +1384,27 @@ test('clearance scope allows exactly the two #1781 test-only paths and nothing b
   assert.equal(checked, 6);
 });
 
-test('technician physical scope pins the reviewed deployment verifier blob and still rejects other drift', async () => {
+for (const scopeWorkflow of [
+  '.github/workflows/technician-physical-evidence.yml',
+  '.github/workflows/operational-application-evidence.yml',
+  '.github/workflows/operational-provider-evidence.yml',
+  '.github/workflows/privileged-access-rotation-evidence.yml',
+]) test(`${scopeWorkflow} scope pins the reviewed deployment verifier blob and still rejects other drift`, async () => {
   const { execFileSync } = await import('node:child_process');
   const { mkdtempSync, writeFileSync, mkdirSync } = await import('node:fs');
   const { tmpdir } = await import('node:os');
   const { join } = await import('node:path');
-  const workflow = await read('.github/workflows/technician-physical-evidence.yml');
-  const marker = '- name: Verify frozen-release control-plane scope';
-  const stepStart = workflow.indexOf(marker);
-  assert.ok(stepStart > 0, 'scope step must exist');
+  const workflow = await read(scopeWorkflow);
+  const errorAt = workflow.indexOf('Non-control-plane file changed since frozen release');
+  assert.ok(errorAt > 0, 'scope step must exist');
+  const stepStart = workflow.lastIndexOf('      - name:', errorAt);
   const runStart = workflow.indexOf('run: |\n', stepStart) + 'run: |\n'.length;
   const runEnd = workflow.indexOf('\n      - name:', runStart);
   const script = workflow.slice(runStart, runEnd).split('\n').map((line) => line.replace(/^ {10}/, '')).join('\n');
+  const allowedLists = [...script.matchAll(/allowed='([^']+)'/g)].map((match) => new RegExp(match[1]));
+  assert.ok(allowedLists.some((pattern) => pattern.test('tests/launch/hard-clearance-revalidation.test.mjs')), 'this regression test file must be inside the workflow scope');
+  assert.ok(!allowedLists.some((pattern) => pattern.test('scripts/verify-production-deployment.mjs')), 'verifier must not be added to the broad path allowlist');
   assert.match(script, /deploy_verifier_blob='475ac1c26c7338db7e33934dd30852a7f54e3efa'/);
-  assert.doesNotMatch(script, /verify-production-deployment\\\.mjs\|/, 'verifier must not be added to the broad path allowlist');
 
   const { readFileSync } = await import('node:fs');
   const approved = readFileSync('scripts/verify-production-deployment.mjs');
