@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { Wallet, TrendingUp, AlertTriangle, Clock, CheckCircle2 } from 'lucide-react';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { useLanguage } from '../../context/LanguageContext';
+import { RENT_AWAITING_VERIFICATION_LABEL } from '../utils/ownerTenantLedgerResolver';
 import type { TenantLedgerSummary } from '../utils/ownerTenantLedgerResolver';
 
 interface OwnerRentCollectionSectionProps {
@@ -45,7 +46,7 @@ function statusColor(status: string) {
 }
 
 export default function OwnerRentCollectionSection({ ledgerSummary }: OwnerRentCollectionSectionProps) {
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
   const navigate = useNavigate();
 
   if (!ledgerSummary) return null;
@@ -94,7 +95,8 @@ export default function OwnerRentCollectionSection({ ledgerSummary }: OwnerRentC
 
         <Grid container spacing={2} sx={{ mb: 4 }}>
           {renderMetric('Total Rent Due', formatCurrency(totalRentDue), <Wallet size={16} />, '#fff')}
-          {renderMetric('Rent Collected', formatCurrency(totalRentPaid), <CheckCircle2 size={16} />, '#10b981')}
+          {renderMetric(lang === 'ar' ? 'الإيجار المحصل (تم التحقق)' : 'Rent Collected (verified)', formatCurrency(totalRentPaid), <CheckCircle2 size={16} />, '#10b981')}
+          {renderMetric(lang === 'ar' ? RENT_AWAITING_VERIFICATION_LABEL.ar : RENT_AWAITING_VERIFICATION_LABEL.en, formatCurrency(ledgerSummary.totalRentAwaitingVerification || 0), <Clock size={16} />, (ledgerSummary.totalRentAwaitingVerification || 0) > 0 ? '#f59e0b' : '#fff')}
           {renderMetric('Balance', formatCurrency(totalRentBalance), <AlertTriangle size={16} />, totalRentBalance > 0 ? '#ef4444' : '#fff')}
           {renderMetric('Collection Rate', `${collectionRate}%`, <TrendingUp size={16} />, collectionRate >= 80 ? '#10b981' : collectionRate >= 50 ? '#f59e0b' : '#ef4444')}
           {renderMetric('Pending Verification', pendingTenants, <Clock size={16} />, pendingTenants > 0 ? '#f59e0b' : '#fff')}

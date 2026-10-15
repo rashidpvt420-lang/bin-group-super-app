@@ -198,7 +198,7 @@ test('reversal wiring: audit log, fee kept, re-approval refused, owner/tenant/ad
   assert.ok(callables.indexOf('transaction.get(db.collection("invoices")') < callables.indexOf('transaction.set('), 'all transaction reads before writes');
   assert.doesNotMatch(callables, /\.delete\(/);
   assert.match(read('functions/rentPaymentStatus.ts'), /chequeClearanceState\) === "bounced"\) return "refuse_rejected"/);
-  assert.match(read('src/owner/utils/ownerTenantLedgerResolver.ts'), /const paid = reversedRent \? 0/);
+  assert.match(read('src/owner/utils/ownerTenantLedgerResolver.ts'), /const paid = reversedRent \|\| \(collection !== null && collection !== .VERIFIED.\) \? 0/);
   assert.match(read('src/tenant/pages/TenantPaymentsPage.tsx'), /UNPAID_CHEQUE_RETURNED: \{ label: 'UNPAID - CHEQUE RETURNED'/);
   assert.match(read('apps/admin-panel/src/pages/financials/PaymentApprovalsPage.tsx'), /admin-returned-cheque-panel/);
 });

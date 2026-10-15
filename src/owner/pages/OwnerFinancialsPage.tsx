@@ -55,6 +55,7 @@ export default function OwnerFinancialsPage() {
     const [transactions, setTransactions] = useState<any[]>([]);
     const [invoices, setInvoices] = useState<any[]>([]);
     const [ledgerByInvoice, setLedgerByInvoice] = useState<Record<string, any>>({});
+    const [suspensionNotices, setSuspensionNotices] = useState<any[]>([]);
     const invoiceKey = invoices.map((invoice) => `${invoice.id}:${invoice.status || ''}:${invoice.updatedAt?.seconds || ''}`).join('|');
     useEffect(() => {
         if (!invoiceKey) return undefined;
@@ -65,6 +66,7 @@ export default function OwnerFinancialsPage() {
                 const map: Record<string, any> = {};
                 for (const row of result?.data?.rows || []) map[row.invoiceId] = row;
                 setLedgerByInvoice(map);
+                setSuspensionNotices((result?.data?.suspensionNotices || []).filter((n: any) => ['NOTICE_ISSUED', 'SUSPENDED'].includes(String(n.status))));
             })
             .catch((error) => console.warn('Owner payment ledger unavailable; showing invoice status only.', error?.message || error));
         return () => { cancelled = true; };
@@ -159,6 +161,13 @@ export default function OwnerFinancialsPage() {
             {visibleError && (
                 <Alert severity="warning" sx={{ mb: 3 }}>{visibleError}</Alert>
             )}
+            {suspensionNotices.map((notice) => (
+                <Alert key={notice.noticeId} data-testid="owner-suspension-notice" severity={notice.status === 'SUSPENDED' ? 'error' : 'warning'} sx={{ mb: 3 }}>
+                    <strong>{notice.status === 'SUSPENDED' ? 'Services suspended / الخدمات معلقة' : `Written notice - pay by ${String(notice.deadlineAt || '').slice(0, 10)} / إشعار كتابي`}</strong>
+                    <Typography variant="body2" sx={{ mt: 0.5 }}>{notice.textEn}</Typography>
+                    <Typography variant="body2" sx={{ mt: 0.5, direction: 'rtl', textAlign: 'right' }}>{notice.textAr}</Typography>
+                </Alert>
+            ))}
 
             <Box sx={{ mb: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
                 <Box>

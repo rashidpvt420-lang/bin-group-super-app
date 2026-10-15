@@ -143,6 +143,7 @@ export default function PaymentApprovalsPage() {
     const [rejectReason, setRejectReason] = React.useState('');
     const [chequeNumber, setChequeNumber] = React.useState('');
     const [returnedPaymentId, setReturnedPaymentId] = React.useState('');
+    const [replacementInvoiceId, setReplacementInvoiceId] = React.useState('');
     const [chequeBank, setChequeBank] = React.useState('');
     const [chequeDate, setChequeDate] = React.useState('');
 
@@ -358,6 +359,31 @@ export default function PaymentApprovalsPage() {
         } finally { setBusyId(null); }
     };
 
+    // Replacement payment for a reopened invoice / returned-cheque fee (dual control: record, then a different Admin verifies).
+    const recordReplacement = async () => {
+        const method = (window.prompt('Payment method: CASH or CHEQUE') || '').trim().toUpperCase();
+        if (!['CASH', 'CHEQUE'].includes(method)) { setError('Only CASH or CHEQUE is accepted.'); return; }
+        const reference = (window.prompt('Official receipt reference') || '').trim();
+        const cheque = method === 'CHEQUE' ? {
+            chequeNumber: (window.prompt('Cheque number') || '').replace(/\s+/g, ''),
+            chequeBank: (window.prompt('Drawee bank') || '').trim(),
+            chequeDate: (window.prompt('Cheque date (YYYY-MM-DD)') || '').trim(),
+        } : {};
+        try {
+            await httpsCallable(functions, 'adminRecordReplacementInvoicePayment')({ invoiceId: replacementInvoiceId, paymentMethod: method, paymentReferenceId: reference, ...cheque });
+            setNotice('Replacement payment recorded. A different Finance Admin must verify it.');
+        } catch (err: any) { setError((typeof err?.details === 'string' && err.details) || err?.message || 'Recording failed.'); }
+    };
+    const verifyReplacement = async () => {
+        const chequeCleared = window.confirm('If this is a cheque, confirm the bank has CLEARED it. (Cancel = not cleared / cash)');
+        try {
+            const response: any = await httpsCallable(functions, 'adminVerifyReplacementInvoicePayment')({ invoiceId: replacementInvoiceId, chequeCleared });
+            const lifted = Object.values(response?.data?.suspension || {}).includes('LIFT');
+            setNotice(lifted ? 'Payment verified, new receipt issued and the service suspension lifted.' : 'Payment verified and new receipt issued.');
+            setReplacementInvoiceId('');
+        } catch (err: any) { setError((typeof err?.details === 'string' && err.details) || err?.message || 'Verification failed.'); }
+    };
+
     const openReference = (row: PaymentRecord) => {
         const url = referenceUrl(row);
         if (url) window.open(url, '_blank', 'noopener,noreferrer');
@@ -404,6 +430,11 @@ export default function PaymentApprovalsPage() {
                 <Stack direction={{ xs: 'column', sm: 'row' }} gap={1.5} sx={{ mt: 1 }}>
                     <TextField size="small" label="Payment ID (verified cheque)" value={returnedPaymentId} onChange={(event) => setReturnedPaymentId(event.target.value.trim())} fullWidth InputLabelProps={{ sx: { color: 'rgba(255,255,255,0.45)' } }} InputProps={{ sx: { color: '#fff' } }} />
                     <Button disabled={!returnedPaymentId || busyId === returnedPaymentId} onClick={() => void setChequeClearance({ id: returnedPaymentId } as PaymentRecord, 'BOUNCED')} sx={{ bgcolor: '#ef4444', color: '#fff', fontWeight: 900, whiteSpace: 'nowrap' }}>Mark Returned</Button>
+                </Stack>
+                <Stack direction={{ xs: 'column', sm: 'row' }} gap={1.5} sx={{ mt: 1.5 }}>
+                    <TextField size="small" label="Invoice ID (reopened 15% / RCF fee)" value={replacementInvoiceId} onChange={(event) => setReplacementInvoiceId(event.target.value.trim())} fullWidth InputLabelProps={{ sx: { color: 'rgba(255,255,255,0.45)' } }} InputProps={{ sx: { color: '#fff' } }} />
+                    <Button data-testid="admin-record-replacement" disabled={!replacementInvoiceId} onClick={() => void recordReplacement()} sx={{ color: '#DAA520', fontWeight: 900, whiteSpace: 'nowrap' }}>Record Payment</Button>
+                    <Button data-testid="admin-verify-replacement" disabled={!replacementInvoiceId} onClick={() => void verifyReplacement()} sx={{ color: '#10b981', fontWeight: 900, whiteSpace: 'nowrap' }}>Verify Payment</Button>
                 </Stack>
                 <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)' }}>Reopens the payment as UNPAID, marks its receipt REVERSED, adds the AED 500 fee and writes an audit entry. An Owner's activation is never reversed automatically.</Typography>
             </Paper>

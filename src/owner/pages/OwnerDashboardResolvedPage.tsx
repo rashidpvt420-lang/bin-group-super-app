@@ -692,7 +692,9 @@ export default function OwnerDashboardResolvedPage() {
         unit: payload.unitNumber || '—',
         status,
         due: rentDue,
-        paid: rentPaid,
+        // Owner-recorded rent awaits Admin verification: not collected yet.
+        paid: 0,
+        awaitingVerification: rentPaid,
         balance,
         overdueDays: 0,
         lastPaymentDate: todayLabel,
@@ -710,6 +712,7 @@ export default function OwnerDashboardResolvedPage() {
       const totalRentDue = ledgerRows.reduce((sum, item) => sum + Number(item.due || 0), 0);
       const totalRentPaid = ledgerRows.reduce((sum, item) => sum + Number(item.paid || 0), 0);
       const totalRentBalance = ledgerRows.reduce((sum, item) => sum + Number(item.balance || 0), 0);
+      const totalRentAwaitingVerification = ledgerRows.reduce((sum, item) => sum + Number(item.awaitingVerification || 0), 0);
       const collectionRate = totalRentDue > 0 ? Math.round((totalRentPaid / totalRentDue) * 100) : 0;
       return {
         ...(current || {}),
@@ -719,6 +722,7 @@ export default function OwnerDashboardResolvedPage() {
         vacantUnits: current?.vacantUnits ?? Math.max(0, stats.units - tenantCount),
         totalRentDue,
         totalRentPaid,
+        totalRentAwaitingVerification,
         totalRentBalance,
         collectionRate,
         ledgerRows,
