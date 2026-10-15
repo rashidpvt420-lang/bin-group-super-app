@@ -6,6 +6,9 @@ import { requireMfaFinanceAdminActor } from "./financeAdminMfa";
 import {
   assertChequeClearanceTransition,
   buildOwnerLedgerRow,
+  buildReturnedChequeFeeInvoice,
+  chequePayerOf,
+  returnedChequeFeeInvoiceId,
   summarizeOwnerLedger,
   type OwnerLedgerRow,
 } from "./ownerPaymentLedger";
@@ -48,6 +51,25 @@ export const adminSetOwnerChequeClearance = onCall({ cors: true, enforceAppCheck
     if (next === "BOUNCED" && note.length < 4) {
       throw new HttpsError("invalid-argument", "Record the bank's return reason for a bounced cheque.");
     }
+    let feeInvoiceId: string | null = null;
+    if (next === "BOUNCED") {
+      // Approved: AED 500 returned-cheque fee per bounced cheque, owner or tenant, on top of the unpaid amount.
+      const payer = chequePayerOf(payment);
+      let fee;
+      try {
+        fee = buildReturnedChequeFeeInvoice({ paymentId, ...payer, contractId: text(payment.contractId) || null, chequeDetails: payment.chequeDetails || payment.cheque || null });
+      } catch (error: any) {
+        throw new HttpsError("failed-precondition", error?.message || "Cheque payer unknown.");
+      }
+      feeInvoiceId = returnedChequeFeeInvoiceId(paymentId);
+      transaction.create(db.collection("invoices").doc(feeInvoiceId), {
+        ...fee,
+        issuedAt: FieldValue.serverTimestamp(),
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+        createdBy: actor.uid,
+      });
+    }
     transaction.set(paymentRef, {
       chequeClearanceState: next,
       chequeClearedBy: actor.uid,
@@ -64,9 +86,9 @@ export const adminSetOwnerChequeClearance = onCall({ cors: true, enforceAppCheck
       metadata: { chequeDetails: payment.chequeDetails || null, note: note || null },
       createdAt: FieldValue.serverTimestamp(),
     });
-    return { next, ownerUid: text(payment.ownerUid || payment.ownerId) };
+    return { next, feeInvoiceId };
   });
-  return { status: "SUCCESS", paymentId, chequeClearanceState: result.next };
+  return { status: "SUCCESS", paymentId, chequeClearanceState: result.next, returnedChequeFeeInvoiceId: result.feeInvoiceId };
 });
 
 /**
@@ -82,7 +104,13 @@ export const getOwnerPaymentLedger = onCall({ cors: true, enforceAppCheck: true 
   if (!adminCaller && requestedOwner && requestedOwner !== uid) {
     throw new HttpsError("permission-denied", "Owners can view only their own payments.");
   }
-  const invoices = await db.collection("invoices").where("ownerId", "==", ownerUid).limit(200).get();
+  // Owner invoices plus fees raised against this user as a tenant payer (e.g. returned-cheque fee).
+  const [ownerInvoices, payerInvoices] = await Promise.all([
+    db.collection("invoices").where("ownerId", "==", ownerUid).limit(200).get(),
+    db.collection("invoices").where("payerUid", "==", ownerUid).limit(100).get(),
+  ]);
+  const seen = new Set<string>();
+  const invoices = { docs: [...ownerInvoices.docs, ...payerInvoices.docs].filter((doc) => !seen.has(doc.id) && seen.add(doc.id)) };
   const paymentIds = Array.from(new Set(invoices.docs.map((doc) => text(doc.data()?.paymentId)).filter(Boolean)));
   const paymentSnaps = paymentIds.length
     ? await db.getAll(...paymentIds.map((id) => db.collection("payment_transactions").doc(id)))

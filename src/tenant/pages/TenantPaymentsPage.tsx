@@ -277,6 +277,7 @@ export default function TenantPaymentsPage() {
                     <Typography variant="body2"><Bi en={"1. Pay rent by Cash (against an official receipt) or by Cheque. Bank transfer and online payment are not accepted."} ar={"1. ادفع الإيجار نقداً (مقابل إيصال رسمي) أو بشيك. لا يُقبل التحويل البنكي أو الدفع الإلكتروني."} /></Typography>
                     <Typography variant="body2"><Bi en={"2. Click \"SUBMIT PAYMENT PROOF\", choose Cash or Cheque, and upload a photo of the cash receipt or the cheque"} ar={"2. اضغط \"إرسال إثبات الدفع\"، اختر نقداً أو شيك، وارفع صورة الإيصال أو الشيك"} /></Typography>
                     <Typography variant="body2"><Bi en={"3. Admin will verify the payment within 24 hours and update your status"} ar={"3. ستتحقق الإدارة من الدفعة خلال 24 ساعة وتحدّث حالتك"} /></Typography>
+                    <Typography data-testid="tenant-returned-cheque-fee" variant="body2"><Bi en={"4. Returned cheque: a cheque counts as paid only once the bank clears it. A returned (bounced) cheque incurs a fee of AED 500 in addition to the unpaid rent."} ar={"4. الشيك المرتجع: لا يُعتبر الشيك مدفوعاً إلا بعد تحصيله من البنك، ويُستحق رسم قدره 500 درهم عن كل شيك مرتجع بالإضافة إلى الإيجار غير المسدد."} /></Typography>
                 </Stack>
             </Paper>
 
