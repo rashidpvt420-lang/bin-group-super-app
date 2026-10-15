@@ -1399,7 +1399,10 @@ test('technician physical scope pins the reviewed deployment verifier blob and s
   assert.match(script, /deploy_verifier_blob='475ac1c26c7338db7e33934dd30852a7f54e3efa'/);
   assert.doesNotMatch(script, /verify-production-deployment\\\.mjs\|/, 'verifier must not be added to the broad path allowlist');
 
-  const approved = execFileSync('git', ['show', '00b2df515d4f9cf7fc31d42b25850158dc1c4afb:scripts/verify-production-deployment.mjs']);
+  const { readFileSync } = await import('node:fs');
+  const approved = readFileSync('scripts/verify-production-deployment.mjs');
+  const approvedBlob = execFileSync('git', ['hash-object', '--stdin'], { input: approved, encoding: 'utf8' }).trim();
+  assert.equal(approvedBlob, '475ac1c26c7338db7e33934dd30852a7f54e3efa', 'checked-in verifier must equal the pinned reviewed blob');
   const scenario = (mutate) => {
     const dir = mkdtempSync(join(tmpdir(), 'scope-'));
     const git = (...args) => execFileSync('git', ['-C', dir, ...args], { encoding: 'utf8' }).trim();
