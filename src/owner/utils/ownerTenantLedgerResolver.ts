@@ -20,6 +20,7 @@ export interface ResolvedTenantLedgerRow {
   referenceFileUrl?: string | null;
   referenceFileName?: string | null;
   referenceFilePath?: string | null;
+  awaitingVerification?: number;
 }
 
 export interface TenantLedgerSummary {
@@ -29,6 +30,8 @@ export interface TenantLedgerSummary {
   vacantUnits: number;
   totalRentDue: number;
   totalRentPaid: number;
+  /** Rent received by cash/cheque but not yet verified by Admin; never counted as collected. */
+  totalRentAwaitingVerification: number;
   totalRentBalance: number;
   collectionRate: number;
   ledgerRows: ResolvedTenantLedgerRow[];
@@ -86,8 +89,22 @@ function uniqBy(items: any[], keyFn: (item: any) => string) {
 function isRentPayment(item: any) {
   const recordType = statusNormalized(item.recordType || '');
   const transactionType = statusNormalized(item.transactionType || item.paymentType || '');
-  return recordType === 'OWNER_RENT_PAYMENT' || transactionType === 'RENT_COLLECTION';
+  return recordType === 'OWNER_RENT_PAYMENT' || recordType === 'TENANT_RENT_PAYMENT_PROOF' ||
+    transactionType === 'RENT_COLLECTION' || transactionType === 'RENT_PAYMENT_PROOF';
 }
+
+export type RentCollectionState = 'VERIFIED' | 'RECEIVED_UNVERIFIED' | 'REVERSED' | 'REJECTED';
+
+/** Rent counts as collected only when Admin VERIFIED it; a returned cheque is REVERSED. */
+export function rentPaymentCollectionState(item: any): RentCollectionState {
+  const status = statusNormalized(item.status || item.paymentStatus || '', '');
+  if (item.paymentReversal || statusNormalized(item.receiptState || '', '') === 'REVERSED' || status === 'UNPAID_CHEQUE_RETURNED') return 'REVERSED';
+  if (['REJECTED', 'PAYMENT_REJECTED'].includes(status)) return 'REJECTED';
+  if (item.paymentVerified === true || item.approved === true || ['APPROVED', 'VERIFIED', 'PAID', 'COMPLETED'].includes(status)) return 'VERIFIED';
+  return 'RECEIVED_UNVERIFIED';
+}
+
+export const RENT_AWAITING_VERIFICATION_LABEL = { en: 'Awaiting verification', ar: 'بانتظار التحقق' };
 
 function paymentLedgerKey(item: any) {
   return item.tenantLedgerId || item.paymentTransactionId || item.paymentId || item.id || `${item.propertyId || ''}-${item.unitNumber || item.unitId || ''}-${item.tenantName || item.tenantId || ''}`;
@@ -125,10 +142,12 @@ export function resolveTenantLedger(
   );
 
   const ledgerRows: ResolvedTenantLedgerRow[] = rawRows.map((item) => {
+    const paymentRow = isRentPayment(item);
+    const collection = paymentRow ? rentPaymentCollectionState(item) : null;
     let due = toNumber(item.rentDue || item.amountDue || item.annualRent || item.totalRent || item.rentAmount, 0);
     // A returned (bounced) cheque reverses the rent: nothing collected, full amount outstanding again.
     const reversedRent = Boolean(item.paymentReversal) || String(item.receiptState || '').toUpperCase() === 'REVERSED' || String(item.status || '').toUpperCase() === 'UNPAID_CHEQUE_RETURNED';
-    const paid = reversedRent ? 0 : toNumber(item.rentPaid || item.amountPaid || item.paidAmount || item.collectedAmount || item.amountReceived || item.amount, 0);
+    const paid = reversedRent || (collection !== null && collection !== 'VERIFIED') ? 0 : toNumber(item.rentPaid || item.amountPaid || item.paidAmount || item.collectedAmount || item.amountReceived || item.amount, 0);
     if (reversedRent && due <= 0) due = toNumber(item.amount, 0);
     const storedBalance = reversedRent ? NaN : toNumber(item.balance, NaN);
     const balance = Number.isFinite(storedBalance) ? Math.max(0, storedBalance) : Math.max(0, due - paid);
@@ -170,12 +189,14 @@ export function resolveTenantLedger(
       referenceFileUrl: item.referenceFileUrl || item.receiptUrl || item.proofUrl || item.attachmentUrl || null,
       referenceFileName: item.referenceFileName || item.proofFileName || null,
       referenceFilePath: item.referenceFilePath || null,
+      awaitingVerification: collection === 'RECEIVED_UNVERIFIED' ? toNumber(item.amount || item.amountPaid || item.rentPaid, 0) : 0,
     };
   });
 
   const totalRentDue = ledgerRows.reduce((sum, r) => sum + r.due, 0);
   const totalRentPaid = ledgerRows.reduce((sum, r) => sum + r.paid, 0);
   const totalRentBalance = ledgerRows.reduce((sum, r) => sum + r.balance, 0);
+  const totalRentAwaitingVerification = ledgerRows.reduce((sum, r) => sum + (r.awaitingVerification || 0), 0);
   const collectionRate = totalRentDue > 0 ? Math.round((totalRentPaid / totalRentDue) * 100) : 0;
 
   return {
@@ -185,6 +206,7 @@ export function resolveTenantLedger(
     vacantUnits,
     totalRentDue,
     totalRentPaid,
+    totalRentAwaitingVerification,
     totalRentBalance,
     collectionRate,
     ledgerRows,

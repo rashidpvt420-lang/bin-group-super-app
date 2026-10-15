@@ -257,6 +257,9 @@ export function resolveOwnerLedgerStatus(
   payment: Record<string, any> | null | undefined,
   nowMs: number = Date.now(),
 ): OwnerLedgerStatus {
+  // Replacement payment recorded against a reopened invoice or a returned-cheque fee.
+  if (invoice?.replacementPayment?.verifiedAt) return "VERIFIED";
+  if (invoice?.replacementPayment) return "RECEIVED_UNVERIFIED";
   if (isReversed(invoice) || isReversed(payment)) {
     // Reopened after a returned cheque: outstanding again; OVERDUE once the original due date passed.
     return nowMs > (dueMillis(invoice) ?? Infinity) ? "OVERDUE" : "BOUNCED";
