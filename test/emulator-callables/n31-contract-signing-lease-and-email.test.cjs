@@ -35,6 +35,7 @@ async function seedContract(contractId, overrides = {}) {
     quoteHash: QUOTE_HASH,
     status: 'PENDING_OWNER_SIGNATURE',
     packageName: 'N31 Plan',
+    contractMode: 'MAINTENANCE_ONLY',
     propertyName: 'N31 Villa',
     propertyIds: ['prop_n31'],
     annualContractValue: 12000,
