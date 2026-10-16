@@ -89,6 +89,7 @@ export const ROLE_QUICK_ACTIONS: Record<PortalRole, Array<{ id: string; label: s
     { id: 'track_request', label: 'Track Request', target: '/tenant/tickets', whyItMatters: 'Shows status, rough arrival estimate, proof, and dispute options.' },
     { id: 'emergency', label: 'Emergency', target: '/tenant/emergency', whyItMatters: 'Separates true SOS from normal maintenance.' },
     { id: 'documents_payments', label: 'Documents & Payments', target: '/tenant/documents', whyItMatters: 'Reduces WhatsApp/file chasing.' },
+    { id: 'ai_studio', label: 'AI Design Studio', target: '/tenant/design-studio', whyItMatters: 'Visualize an upgrade, get a server-calculated quote, and send it for owner approval.' },
   ],
   owner: [
     { id: 'rooms', label: 'Find Room Rent', target: '/owner/find-room-rent', whyItMatters: 'Starts contract-backed vacant-room publishing and BIN renter-contact handling.' },
@@ -96,6 +97,7 @@ export const ROLE_QUICK_ACTIONS: Record<PortalRole, Array<{ id: string; label: s
     { id: 'approvals', label: 'Pending Approvals', target: '/owner/approvals', whyItMatters: 'Owners should see only decisions that need action.' },
     { id: 'financials', label: 'Financials', target: '/owner/financials', whyItMatters: 'Shows contract value, invoices, payouts, and maintenance spend.' },
     { id: 'passport', label: 'Property Passport', target: '/owner/property-passport', whyItMatters: 'Creates asset memory and legal evidence.' },
+    { id: 'ai_studio', label: 'AI Design Studio', target: '/owner/design-studio', whyItMatters: 'Turn a room photo into renovation concepts with a server-calculated scope and quote.' },
   ],
   technician: [
     { id: 'jobs', label: 'Jobs', target: '/technician/jobs', whyItMatters: 'Field worker should start from assigned and open missions.' },

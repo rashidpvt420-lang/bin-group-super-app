@@ -1,6 +1,6 @@
 import { Box, Button, Grid, Paper, Stack, Typography, alpha } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
-import { Activity, AlertTriangle, Briefcase, Building2, CheckSquare, CreditCard, FileText, Gauge, Handshake, Map, Megaphone, ShieldCheck, WalletCards, Wrench } from 'lucide-react';
+import { Activity, AlertTriangle, Briefcase, Building2, CheckSquare, CreditCard, FileText, Gauge, Handshake, Map, Megaphone, Paintbrush, ShieldCheck, WalletCards, Wrench } from 'lucide-react';
 import { useLanguage } from '@bin/shared';
 import { ROLE_QUICK_ACTIONS, type PortalRole } from '../config/uaeDominationBlueprint';
 import { binThemeTokens } from '../theme/binGroupTheme';
@@ -27,9 +27,11 @@ const ICONS: Record<string, JSX.Element> = {
   payments: <CreditCard size={22} />,
   dispatch: <Map size={22} />,
   launch: <ShieldCheck size={22} />,
+  ai_studio: <Paintbrush size={22} />,
 };
 
 const ARABIC_ACTION_COPY: Record<string, { label: string; whyItMatters: string }> = {
+  ai_studio: { label: 'استوديو التصميم بالذكاء الاصطناعي', whyItMatters: 'شاهد التطوير المقترح مع نطاق وتسعيرة محسوبة من الخادم قبل موافقة المالك.' },
   rooms: { label: 'غرفة للإيجار', whyItMatters: 'يعرض الغرف الشاغرة المدارة من BIN مع سجل الصيانة وإدارة العقد.' },
   report_issue: { label: 'الإبلاغ عن مشكلة', whyItMatters: 'أسرع طريقة لإنشاء طلب صيانة مدعوم بالصور.' },
   track_request: { label: 'متابعة الطلب', whyItMatters: 'يعرض الحالة ووقت الوصول والإثبات وخيارات الاعتراض.' },
