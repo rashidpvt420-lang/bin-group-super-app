@@ -12,7 +12,7 @@ const wetRecoveryGym = {
   id: 'gym-wet-recovery',
   propertyType: 'Gym / Fitness Centre',
   strategy: 'fm_only',
-  emirate: 'Al Ain',
+  emirate: 'Al Ain', // Al Ain is in the Emirate of Abu Dhabi: 1.10x regional factor applies.
   zone: 'B',
   sqft: 11500,
   age: 1,
@@ -68,13 +68,13 @@ test('a client-forged Wet/Recovery gym rate cannot change the owner quote', () =
     { trustServerVerifiedRates: false },
   );
 
-  assert.equal(honest.annualContractValue, 207000);
-  assert.equal(honest.activationDeposit, 31050);
+  assert.equal(honest.annualContractValue, 227700);
+  assert.equal(honest.activationDeposit, 34155);
   assert.equal(forged.annualContractValue, honest.annualContractValue);
   assert.equal(forged.activationDeposit, honest.activationDeposit);
   assert.equal(forged.quoteHash, honest.quoteHash);
-  assert.equal(explicitOwner.annualContractValue, 207000);
-  assert.equal(explicitOwner.activationDeposit, 31050);
+  assert.equal(explicitOwner.annualContractValue, 227700);
+  assert.equal(explicitOwner.activationDeposit, 34155);
   assert.equal(explicitOwner.quoteHash, honest.quoteHash);
 });
 
@@ -122,8 +122,8 @@ test('Admin inspection completion still applies an in-range verified Maintenance
     NOW,
     { trustServerVerifiedRates: true },
   );
-  assert.equal(adminVerified.annualContractValue, 115000);
-  assert.equal(adminVerified.activationDeposit, 17250);
+  assert.equal(adminVerified.annualContractValue, 126500);
+  assert.equal(adminVerified.activationDeposit, 18975);
 });
 
 test('Admin inspection completion still rejects out-of-range verified rates', () => {
@@ -193,6 +193,6 @@ test('Admin inspection completion still rejects out-of-range verified rates', ()
     [],
     NOW,
   );
-  assert.equal(ignoredOutOfRange.annualContractValue, 207000);
-  assert.equal(ignoredOutOfRange.activationDeposit, 31050);
+  assert.equal(ignoredOutOfRange.annualContractValue, 227700);
+  assert.equal(ignoredOutOfRange.activationDeposit, 34155);
 });
