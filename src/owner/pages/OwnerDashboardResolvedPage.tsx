@@ -30,6 +30,7 @@ import {
   OWNER_OPEN_TICKET_STATUSES,
   countOwnerOpenTickets,
 } from '../utils/ownerTicketAttentionCounts';
+import { STATUS_TONES } from '../../theme/statusColors';
 
 /** Firestore `in` queries allow at most 10 values — keep in sync with OWNER_OPEN_TICKET_STATUSES. */
 const ACTIVE_TICKET_STATUS_LIST = Array.from(OWNER_OPEN_TICKET_STATUSES);
@@ -289,10 +290,10 @@ const buildActivationTimeline = (
   const tenantsLinked = Number(ledgerSummary?.activeTenants || ledgerSummary?.pendingTenants || 0);
 
   const status = (done: boolean, review: boolean, doneLabel = 'Done') => done
-    ? { status: doneLabel, tone: '#10b981' }
+    ? { status: doneLabel, tone: STATUS_TONES.success.text }
     : review
-      ? { status: 'In Review', tone: '#f59e0b' }
-      : { status: 'Missing', tone: '#ef4444' };
+      ? { status: 'In Review', tone: STATUS_TONES.warning.text }
+      : { status: 'Missing', tone: STATUS_TONES.danger.text };
 
   const propertyGate = status(properties.length > 0, Boolean(profile.latestIntakeId || contract.propertyId || contract.propertyIds?.length), properties.length > 0 ? `${properties.length} linked` : 'Done');
   const titleGate = status(titleReady, properties.length > 0);
@@ -731,7 +732,7 @@ export default function OwnerDashboardResolvedPage() {
   };
 
   if (resolution.state === 'loading') {
-    return <Box sx={{ height: '70vh', display: 'grid', placeItems: 'center' }}><CircularProgress sx={{ color: binThemeTokens.gold }} /></Box>;
+    return <Box sx={{ height: '70vh', display: 'grid', placeItems: 'center' }}><CircularProgress sx={{ color: binThemeTokens.goldText }} /></Box>;
   }
 
   if (resolution.state !== 'active') {
@@ -761,7 +762,7 @@ export default function OwnerDashboardResolvedPage() {
   const scrollToObject = (id: string) => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' });
 
   const KPI_CARDS = [
-    { label: tx('dash.kpi.contractValue', 'Annual Contract Value'), value: Number.isFinite(annual) && annual > 0 ? formatAedMoney(annual) : tx('dash.kpi.pending', 'Pending'), icon: <CreditCard size={20} />, color: binThemeTokens.gold },
+    { label: tx('dash.kpi.contractValue', 'Annual Contract Value'), value: Number.isFinite(annual) && annual > 0 ? formatAedMoney(annual) : tx('dash.kpi.pending', 'Pending'), icon: <CreditCard size={20} />, color: binThemeTokens.goldText },
     { label: tx('dash.kpi.mobilization', '15% Mobilization'), value: Number.isFinite(mobilization) && mobilization > 0 ? formatAedMoney(mobilization) : tx('dash.kpi.pending', 'Pending'), icon: <Shield size={20} />, color: '#10b981' },
     { label: tx('dash.kpi.portfolio', 'Asset Portfolio'), value: properties.length, icon: <Building2 size={20} />, color: '#3b82f6' },
     { label: tx('dash.kpi.ops_load', 'Open Maintenance Tasks'), value: tickets, icon: <Wrench size={20} />, color: '#ef4444' },
@@ -775,13 +776,13 @@ export default function OwnerDashboardResolvedPage() {
       {permissionWarning && <Alert severity="warning" sx={{ mb: 3 }} onClose={() => setPermissionWarning('')}>{permissionWarning}</Alert>}
       <Box sx={{ mb: 5, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexDirection: { xs: 'column', md: isRTL ? 'row-reverse' : 'row' }, gap: 2 }}>
         <Box sx={{ textAlign: isRTL ? 'right' : 'left' }}>
-          <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 4 }}>{tx('dash.owner.terminal', 'SOVEREIGN OWNER TERMINAL')}</Typography>
+          <Typography variant="overline" sx={{ color: binThemeTokens.goldText, fontWeight: 900, letterSpacing: 4 }}>{tx('dash.owner.terminal', 'SOVEREIGN OWNER TERMINAL')}</Typography>
           <Typography variant="h3" fontWeight={950} sx={{ color: binThemeTokens.textPrimary, mt: 1 }}>{tx('dash.owner.active', 'Dashboard Active')}</Typography>
           <Typography sx={{ color: binThemeTokens.textSecondary, mt: 1 }}>{tx('dash.owner.desc', 'Contract mode, property type, title deed evidence, tenant registry and maintenance operations are resolved together.')}</Typography>
         </Box>
         <Stack direction="row" spacing={2} sx={{ flexWrap: 'wrap', gap: 1 }}>
           {contract.contractUrl && (
-            <Button variant="outlined" onClick={() => window.open(contract.contractUrl, '_blank')} sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.gold, fontWeight: 950 }}>{tx('dash.owner.dlAgreement', 'Download Agreement')}</Button>
+            <Button variant="outlined" onClick={() => window.open(contract.contractUrl, '_blank')} sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.goldText, fontWeight: 950 }}>{tx('dash.owner.dlAgreement', 'Download Agreement')}</Button>
           )}
           <Button variant="outlined" onClick={() => navigate(`/owner/contracts?contractId=${encodeURIComponent(contract.id || '')}`)} sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.gold, fontWeight: 950 }}>{tx('dash.owner.contracts', 'Contracts')}</Button>
           <Button variant="outlined" data-testid="owner-vault" onClick={() => navigate('/owner/documents')} sx={{ borderColor: '#6366f1', color: '#6366f1', fontWeight: 950 }}>{tx('dash.owner.vault', 'Document Vault')}</Button>
@@ -872,7 +873,7 @@ function OwnerActivationTimeline({ steps, compact = false }: { steps: Activation
     <Paper sx={{ p: compact ? 2 : { xs: 2.25, md: 3 }, mb: compact ? 3 : 5, bgcolor: compact ? 'rgba(255,255,255,.035)' : 'rgba(15,23,42,.50)', border: `1px solid ${alpha(binThemeTokens.gold, 0.16)}`, borderRadius: compact ? 4 : 5, textAlign: 'left' }}>
       <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" spacing={1.5} sx={{ mb: 2 }}>
         <Box>
-          <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 2 }}>OWNER ACTIVATION TIMELINE</Typography>
+          <Typography variant="overline" sx={{ color: binThemeTokens.goldText, fontWeight: 950, letterSpacing: 2 }}>OWNER ACTIVATION TIMELINE</Typography>
           <Typography variant={compact ? 'subtitle1' : 'h6'} sx={{ color: '#fff', fontWeight: 950 }}>
             {doneCount}/{steps.length} gates complete
           </Typography>

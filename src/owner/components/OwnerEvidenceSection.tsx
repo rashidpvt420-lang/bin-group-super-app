@@ -108,13 +108,13 @@ export default function OwnerEvidenceSection({ properties }: { properties?: any[
     <Paper sx={{ p: { xs: 2.25, md: 4 }, bgcolor: 'rgba(15,23,42,.58)', border: `1px solid ${alpha(binThemeTokens.gold, .18)}`, borderRadius: 5 }}>
       <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" alignItems={{ xs: 'flex-start', md: 'center' }} spacing={2} sx={{ mb: 3 }}>
         <Box>
-          <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 3 }}>OWNER EVIDENCE CENTER</Typography>
+          <Typography variant="overline" sx={{ color: binThemeTokens.goldText, fontWeight: 950, letterSpacing: 3 }}>OWNER EVIDENCE CENTER</Typography>
           <Typography variant="h5" fontWeight={950} sx={{ color: '#fff' }}>Move-in & Move-out Handover Evidence</Typography>
           <Typography variant="body2" sx={{ color: 'rgba(255,255,255,.58)', mt: 0.75 }}>
             Review condition reports, settle deposit deductions, and approve tenant handovers directly.
           </Typography>
         </Box>
-        <Button variant="outlined" href="/owner/inspections" sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.gold, fontWeight: 950 }}>
+        <Button variant="outlined" href="/owner/inspections" sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.goldText, fontWeight: 950 }}>
           View All Inspections
         </Button>
       </Stack>
@@ -145,7 +145,7 @@ export default function OwnerEvidenceSection({ properties }: { properties?: any[
 
       {loading ? (
         <Stack alignItems="center" sx={{ py: 6 }}>
-          <CircularProgress sx={{ color: binThemeTokens.gold }} />
+          <CircularProgress sx={{ color: binThemeTokens.goldText }} />
         </Stack>
       ) : displayInspections.length === 0 ? (
         <Paper sx={{ p: 4, textAlign: 'center', bgcolor: 'rgba(255,255,255,.02)', borderRadius: 3, border: '1px solid rgba(255,255,255,.05)' }}>

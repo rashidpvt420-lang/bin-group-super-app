@@ -319,7 +319,7 @@ export default function TenantScheduledServicePage() {
   };
 
   if (!residenceChecked) {
-    return <Box sx={{ minHeight: '55vh', display: 'grid', placeItems: 'center' }}><CircularProgress sx={{ color: binThemeTokens.goldHover }} /></Box>;
+    return <Box sx={{ minHeight: '55vh', display: 'grid', placeItems: 'center' }}><CircularProgress sx={{ color: binThemeTokens.goldText }} /></Box>;
   }
   if (!unitData) {
     return <TenantUnitLinkFallback message={tx('tenant.scheduled.noUnit', 'Verify your unit before scheduling cleaning, pest control, vacation care or moving services.')} />;
@@ -329,7 +329,7 @@ export default function TenantScheduledServicePage() {
     <Box sx={{ maxWidth: 980, mx: 'auto', pb: 8, direction: isRTL ? 'rtl' : 'ltr', minWidth: 0, overflowX: 'hidden' }}>
       <Stack spacing={3.5} sx={{ minWidth: 0 }}>
         <Box sx={{ textAlign: isRTL ? 'right' : 'left', minWidth: 0 }}>
-          <Typography variant="overline" sx={{ color: binThemeTokens.goldHover, fontWeight: 950, letterSpacing: 2.5 }}>
+          <Typography variant="overline" sx={{ color: binThemeTokens.goldText, fontWeight: 950, letterSpacing: 2.5 }}>
             {tx('tenant.scheduled.overline', 'PLANNED HOME SERVICES')}
           </Typography>
           <Typography variant="h3" sx={{ color: binThemeTokens.textPrimary, fontWeight: 950, mt: 0.5, ...readableTextSx }}>
@@ -405,7 +405,7 @@ export default function TenantScheduledServicePage() {
                         <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary, ...readableTextSx }}>{slotMessage}</Typography>
                       </Box>
                     </Stack>
-                    {loadingSlots ? <CircularProgress size={24} sx={{ color: binThemeTokens.goldHover }} /> : (
+                    {loadingSlots ? <CircularProgress size={24} sx={{ color: binThemeTokens.goldText }} /> : (
                       <Grid container spacing={1.5}>
                         {availableSlots.map((slot) => {
                           const selected = selectedSlotId === slot.id;

@@ -45,7 +45,7 @@ export default function OwnerDocumentsPage() {
   };
 
   if (loading) {
-    return <Box sx={{ py: 10, display: 'flex', justifyContent: 'center' }}><CircularProgress sx={{ color: binThemeTokens.gold }} /></Box>;
+    return <Box sx={{ py: 10, display: 'flex', justifyContent: 'center' }}><CircularProgress sx={{ color: binThemeTokens.goldText }} /></Box>;
   }
 
   return (
@@ -76,7 +76,7 @@ export default function OwnerDocumentsPage() {
                 <Button
                   fullWidth
                   variant="outlined"
-                  sx={{ mt: 2.5, color: binThemeTokens.gold, borderColor: 'rgba(198,167,94,.35)', fontWeight: 900 }}
+                  sx={{ mt: 2.5, color: binThemeTokens.goldText, borderColor: 'rgba(198,167,94,.35)', fontWeight: 900 }}
                   disabled={!doc.storagePath || opening === doc.artifactId}
                   onClick={() => void openDocument(doc.artifactId)}
                 >

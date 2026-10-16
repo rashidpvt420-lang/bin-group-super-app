@@ -76,11 +76,11 @@ export default function OwnerRentCollectionSection({ ledgerSummary }: OwnerRentC
       <CardContent sx={{ p: { xs: 2.25, md: 4 } }}>
         <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" alignItems={{ xs: 'flex-start', md: 'center' }} spacing={2} sx={{ mb: 4, minWidth: 0 }}>
           <Stack direction="row" alignItems="center" spacing={1.5} sx={{ minWidth: 0 }}>
-            <Box sx={{ p: 1, bgcolor: alpha(binThemeTokens.gold, 0.1), borderRadius: 2, color: binThemeTokens.gold, flexShrink: 0 }}>
+            <Box sx={{ p: 1, bgcolor: alpha(binThemeTokens.gold, 0.1), borderRadius: 2, color: binThemeTokens.goldText, flexShrink: 0 }}>
               <Wallet size={22} />
             </Box>
             <Box sx={{ minWidth: 0 }}>
-              <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 2, ...textSafeSx }}>
+              <Typography variant="overline" sx={{ color: binThemeTokens.goldText, fontWeight: 900, letterSpacing: 2, ...textSafeSx }}>
                 {t('owner.rentCollection') || 'Rent Collection'}
               </Typography>
               <Typography variant="h5" fontWeight={950} sx={{ color: '#fff', ...textSafeSx }}>
@@ -88,7 +88,7 @@ export default function OwnerRentCollectionSection({ ledgerSummary }: OwnerRentC
               </Typography>
             </Box>
           </Stack>
-          <Button variant="outlined" onClick={() => navigate('/owner/financials')} sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.gold, fontWeight: 950 }}>
+          <Button variant="outlined" onClick={() => navigate('/owner/financials')} sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.goldText, fontWeight: 950 }}>
             View Financials
           </Button>
         </Stack>
@@ -148,7 +148,7 @@ export default function OwnerRentCollectionSection({ ledgerSummary }: OwnerRentC
                     </TableCell>
                     <TableCell sx={{ color: 'rgba(255,255,255,0.6)', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>{row.lastPaymentDate || '—'}</TableCell>
                     <TableCell sx={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                      <Button size="small" onClick={() => navigate('/owner/tenants')} sx={{ color: binThemeTokens.gold, fontWeight: 900, minWidth: 0 }}>
+                      <Button size="small" onClick={() => navigate('/owner/tenants')} sx={{ color: binThemeTokens.goldText, fontWeight: 900, minWidth: 0 }}>
                         View
                       </Button>
                     </TableCell>

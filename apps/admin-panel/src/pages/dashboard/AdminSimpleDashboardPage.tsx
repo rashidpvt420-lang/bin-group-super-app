@@ -1,5 +1,5 @@
 import React from 'react';
-import { Box, Button, Chip, Grid, LinearProgress, Paper, Stack, Typography, alpha } from '@mui/material';
+import { Box, Button, Chip, Grid, Paper, Stack, Typography, alpha } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { AlertTriangle, BarChart3, CheckCircle2, CreditCard, Gauge, Map, ShieldCheck, TicketCheck, Users, Wrench } from 'lucide-react';
 
@@ -104,7 +104,7 @@ export default function AdminSimpleDashboardPage() {
           <Stack spacing={2.5}>
             <Box>
               <Typography variant="overline" sx={{ color: gold, fontWeight: 950, letterSpacing: 2 }}>90-DAY PILOT PROOF</Typography>
-              <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.62)', mt: 0.5 }}>These are the proof metrics needed before major public commercial launch.</Typography>
+              <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.62)', mt: 0.5 }}>Targets required before major public commercial launch. No live measurement is wired for these yet, so no value or progress is shown.</Typography>
             </Box>
             <Grid container spacing={2}>
               {pilotMetrics.map((metric) => (
@@ -115,9 +115,8 @@ export default function AdminSimpleDashboardPage() {
                         <CheckCircle2 size={18} color={gold} />
                         <Typography sx={{ fontWeight: 950 }}>{metric.label}</Typography>
                       </Stack>
-                      <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.52)', fontWeight: 900 }}>Not measured</Typography>
+                      <Chip size="small" label="No data source yet" sx={{ bgcolor: 'rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.72)', fontWeight: 900 }} />
                     </Stack>
-                    <LinearProgress variant="determinate" value={0} sx={{ height: 8, mt: 1.5, mb: 1, borderRadius: 999, bgcolor: 'rgba(255,255,255,0.08)', '& .MuiLinearProgress-bar': { bgcolor: gold } }} />
                     <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.52)' }}>Target: {metric.target}</Typography>
                   </Box>
                 </Grid>

@@ -64,7 +64,7 @@ test('the invoice helper uses the identical rounding rule (80,000-value sweep)',
 
 test('real server quote: monthly-plan apartment deposit is 274.28, not 274.27', () => {
   const quote = m.server.calculateOwnerOnboardingQuote([
-    { propertyType: 'Apartment', emirate: 'Dubai', zone: 'B', units: 1, age: 3, strategy: 'fm', paymentPlan: 'monthly' },
+    { propertyType: 'Apartment', emirate: 'Dubai', area: 'Business Bay', zone: 'B', units: 1, bedrooms: 1, age: 3, strategy: 'fm', paymentPlan: 'monthly' },
   ], [], 1790000000000);
   assert.equal(quote.annualContractValue, 1828.5);
   assert.equal(quote.activationDeposit, 274.28);

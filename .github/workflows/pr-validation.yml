@@ -157,9 +157,21 @@ jobs:
         run: npx playwright install --with-deps chromium webkit
 
       - name: Phase 3 desktop, Android and iOS control-shell E2E
+        id: platform_e2e
         env:
           CI: true
         run: npm run test:e2e:phase3:platforms
+
+      - name: Retain Phase 3 browser diagnostics
+        if: always() && (steps.platform_e2e.outcome == 'success' || steps.platform_e2e.outcome == 'failure')
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: phase-3-browser-diagnostics-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            playwright-report/
+            test-results/
+          if-no-files-found: warn
+          retention-days: 14
 
       - name: Build dedicated admin panel
         id: build_admin

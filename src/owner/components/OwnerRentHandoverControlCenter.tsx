@@ -76,21 +76,21 @@ export default function OwnerRentHandoverControlCenter({
   const collectionRate = ledgerSummary?.collectionRate || 0;
 
   const cards = [
-    { label: tx('owner.money.rentDue', 'Rent Due'), value: money(rentDue), icon: <CreditCard size={20} />, color: binThemeTokens.goldHover },
+    { label: tx('owner.money.rentDue', 'Rent Due'), value: money(rentDue), icon: <CreditCard size={20} />, color: binThemeTokens.goldText },
     { label: tx('owner.money.rentCollected', 'Rent Collected'), value: money(rentPaid), icon: <CheckCircle2 size={20} />, color: '#10b981' },
     { label: tx('owner.money.balance', 'Balance'), value: money(balance), icon: <AlertTriangle size={20} />, color: balance > 0 ? '#f59e0b' : '#10b981' },
     { label: tx('owner.money.collectionRate', 'Collection Rate'), value: `${collectionRate}%`, icon: <ReceiptText size={20} />, color: collectionRate >= 90 ? '#10b981' : '#f59e0b' },
     { label: tx('owner.money.pendingVerification', 'Pending Verification'), value: pendingPayments, icon: <FileText size={20} />, color: pendingPayments ? '#f59e0b' : '#10b981' },
     { label: tx('owner.money.overdueTenants', 'Overdue Tenants'), value: overdueCount, icon: <AlertTriangle size={20} />, color: overdueCount ? '#ef4444' : '#10b981' },
     { label: tx('owner.money.pendingApprovals', 'Pending Approvals'), value: pendingApprovals, icon: <ClipboardCheck size={20} />, color: pendingApprovals ? '#f59e0b' : '#10b981' },
-    { label: tx('owner.handover.pending', 'Handover Reviews'), value: tx('owner.handover.open', 'Open'), icon: <Home size={20} />, color: binThemeTokens.goldHover },
+    { label: tx('owner.handover.pending', 'Handover Reviews'), value: tx('owner.handover.open', 'Open'), icon: <Home size={20} />, color: binThemeTokens.goldText },
   ];
 
   return (
     <Paper sx={{ p: { xs: 2.5, md: 4 }, borderRadius: 6, bgcolor: '#fff', border: `1px solid ${alpha(binThemeTokens.gold, 0.16)}`, boxShadow: '0 18px 44px rgba(17,24,39,0.06)' }}>
       <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} justifyContent="space-between" alignItems={{ xs: 'flex-start', md: 'center' }} sx={{ mb: 3 }}>
         <Box>
-          <Typography variant="overline" sx={{ color: binThemeTokens.goldHover, fontWeight: 950, letterSpacing: 2 }}>
+          <Typography variant="overline" sx={{ color: binThemeTokens.goldText, fontWeight: 950, letterSpacing: 2 }}>
             {tx('owner.money.titleOverline', 'OWNER MONEY + HANDOVER CONTROL')}
           </Typography>
           <Typography variant="h5" sx={{ color: binThemeTokens.textPrimary, fontWeight: 950 }}>
@@ -107,7 +107,7 @@ export default function OwnerRentHandoverControlCenter({
           <Button variant="outlined" onClick={() => navigate('/owner/approvals')} sx={{ borderColor: binThemeTokens.goldHover, color: binThemeTokens.goldHover, fontWeight: 950 }}>
             {tx('owner.money.viewApprovals', 'Approvals')}
           </Button>
-          <Button variant="outlined" onClick={() => navigate('/owner/inspections')} sx={{ borderColor: binThemeTokens.goldHover, color: binThemeTokens.goldHover, fontWeight: 950 }}>
+          <Button variant="outlined" onClick={() => navigate('/owner/inspections')} sx={{ borderColor: binThemeTokens.goldHover, color: binThemeTokens.goldText, fontWeight: 950 }}>
             {tx('owner.handover.view', 'Move-In / Move-Out')}
           </Button>
         </Stack>
@@ -155,7 +155,7 @@ export default function OwnerRentHandoverControlCenter({
                   <TableCell><Chip size="small" label={status} sx={{ bgcolor: colors.bg, color: colors.color, fontWeight: 950 }} /></TableCell>
                   <TableCell>{row.lastPaymentDate || '—'}</TableCell>
                   <TableCell align="right">
-                    <Button size="small" onClick={() => navigate(`/owner/financials?tenantLedgerRow=${encodeURIComponent(row.id)}`)} sx={{ color: binThemeTokens.goldHover, fontWeight: 950 }}>
+                    <Button size="small" onClick={() => navigate(`/owner/financials?tenantLedgerRow=${encodeURIComponent(row.id)}`)} sx={{ color: binThemeTokens.goldText, fontWeight: 950 }}>
                       {tx('owner.ledger.viewProof', 'View Proof')}
                     </Button>
                   </TableCell>

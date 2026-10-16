@@ -32,7 +32,7 @@ const BinGroupHeader = () => {
           placeItems: 'center',
           bgcolor: 'rgba(212,175,55,0.12)',
           border: '1px solid rgba(212,175,55,0.35)',
-          color: '#d4af37',
+          color: binThemeTokens.goldText,
           fontWeight: 950,
           letterSpacing: -1,
           fontSize: 18,
@@ -43,7 +43,8 @@ const BinGroupHeader = () => {
       <Box sx={{ minWidth: 0 }}>
         <Typography
           sx={{
-            color: '#fff',
+            // The authenticated shell is white; white text here was invisible (1.00:1).
+            color: binThemeTokens.textPrimary,
             fontWeight: 950,
             letterSpacing: 1.6,
             lineHeight: 1,
@@ -55,11 +56,11 @@ const BinGroupHeader = () => {
         </Typography>
         <Typography
           sx={{
-            color: 'rgba(212,175,55,0.82)',
+            color: binThemeTokens.goldText,
             fontWeight: 900,
-            letterSpacing: 2.2,
+            letterSpacing: 1.2,
             lineHeight: 1.1,
-            fontSize: 9,
+            fontSize: 12,
             whiteSpace: 'nowrap',
           }}
         >

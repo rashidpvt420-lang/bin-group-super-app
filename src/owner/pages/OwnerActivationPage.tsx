@@ -8,6 +8,7 @@ import { binThemeTokens } from '../../theme/binGroupTheme';
 import ContractSignatureOtpControl from '../components/ContractSignatureOtpControl';
 import { isOwnerProfileActivated } from '../activationPolicy';
 import { formatAedMoney, normalizeAedMoney } from '../../../functions/shared/aedMoney';
+import { STATUS_TONES } from '../../theme/statusColors';
 
 const sha256File = async (file: File) => {
   const digest = await crypto.subtle.digest('SHA-256', await file.arrayBuffer());
@@ -101,9 +102,9 @@ const totalContractUnits = (contract: any) => {
 };
 
 const gate = (label: string, done: boolean, review: boolean, doneDetail: string, reviewDetail: string, missingDetail: string): ActivationGate => {
-  if (done) return { label, status: 'Done', detail: doneDetail, tone: '#10b981' };
-  if (review) return { label, status: 'In Review', detail: reviewDetail, tone: '#f59e0b' };
-  return { label, status: 'Missing', detail: missingDetail, tone: '#ef4444' };
+  if (done) return { label, status: 'Done', detail: doneDetail, tone: STATUS_TONES.success.text };
+  if (review) return { label, status: 'In Review', detail: reviewDetail, tone: STATUS_TONES.warning.text };
+  return { label, status: 'Missing', detail: missingDetail, tone: STATUS_TONES.danger.text };
 };
 
 function buildActivationGates(contract: any, profile: any, activated: boolean): ActivationGate[] {
@@ -467,7 +468,7 @@ export default function OwnerActivationPage() {
   if (loading) {
     return (
       <Box sx={{ height: '60vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <CircularProgress sx={{ color: binThemeTokens.gold }} />
+        <CircularProgress sx={{ color: binThemeTokens.goldText }} />
       </Box>
     );
   }
@@ -489,7 +490,7 @@ export default function OwnerActivationPage() {
     <Box sx={{ direction: isRTL ? 'rtl' : 'ltr', pb: 6 }}>
       <Stack spacing={4}>
         <Box sx={{ textAlign: isRTL ? 'right' : 'left' }}>
-          <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 4 }}>CONTRACT ACTIVATION</Typography>
+          <Typography variant="overline" sx={{ color: binThemeTokens.goldText, fontWeight: 950, letterSpacing: 4 }}>CONTRACT ACTIVATION</Typography>
           <Typography variant="h4" fontWeight="950" sx={{ color: '#FFF', mt: 1 }}>15% Mobilization Payment Gate</Typography>
           <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.55)', maxWidth: 820, mt: 1 }}>
             First sign the admin-approved contract. Then submit or complete the 15% mobilization payment request. Full dashboard access unlocks only after admin payment verification.
@@ -516,7 +517,7 @@ export default function OwnerActivationPage() {
               <Stack spacing={3}>
                 <Stack direction={isRTL ? 'row-reverse' : 'row'} justifyContent="space-between" alignItems="center">
                   <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={2} alignItems="center">
-                    <Box sx={{ width: 52, height: 52, borderRadius: 3, display: 'grid', placeItems: 'center', bgcolor: alpha(binThemeTokens.gold, 0.12), color: binThemeTokens.gold }}>
+                    <Box sx={{ width: 52, height: 52, borderRadius: 3, display: 'grid', placeItems: 'center', bgcolor: alpha(binThemeTokens.gold, 0.12), color: binThemeTokens.goldText }}>
                       <FileSignature />
                     </Box>
                     <Box sx={{ textAlign: isRTL ? 'right' : 'left' }}>
@@ -536,7 +537,7 @@ export default function OwnerActivationPage() {
                   </Grid>
                   <Grid item xs={12} sm={4}>
                     <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.35)', fontWeight: 900 }}>MOBILIZATION</Typography>
-                    <Typography variant="h6" fontWeight="950" sx={{ color: binThemeTokens.gold }}>{moneyLabel(mobilization, primaryContract)}</Typography>
+                    <Typography variant="h6" fontWeight="950" sx={{ color: binThemeTokens.goldText }}>{moneyLabel(mobilization, primaryContract)}</Typography>
                   </Grid>
                   <Grid item xs={12} sm={4}>
                     <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.35)', fontWeight: 900 }}>PAYMENT PLAN</Typography>
@@ -601,7 +602,7 @@ export default function OwnerActivationPage() {
                     <Button
                       variant="outlined"
                       component="label"
-                      sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.gold, fontWeight: 900 }}
+                      sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.goldText, fontWeight: 900 }}
                     >
                       {paymentProof ? paymentProof.name : 'Attach payment receipt (PDF or image)'}
                       <input
@@ -665,7 +666,7 @@ function ActivationTimeline({ gates }: { gates: ActivationGate[] }) {
     <Paper sx={{ p: { xs: 2.25, md: 3 }, bgcolor: 'rgba(15,23,42,0.52)', border: `1px solid ${alpha(binThemeTokens.gold, 0.16)}`, borderRadius: 6 }}>
       <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" alignItems={{ xs: 'flex-start', md: 'center' }} spacing={1.5} sx={{ mb: 2.5 }}>
         <Box>
-          <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 2 }}>
+          <Typography variant="overline" sx={{ color: binThemeTokens.goldText, fontWeight: 950, letterSpacing: 2 }}>
             OWNER ACTIVATION TIMELINE
           </Typography>
           <Typography variant="h6" sx={{ color: '#fff', fontWeight: 950 }}>
@@ -683,7 +684,7 @@ function ActivationTimeline({ gates }: { gates: ActivationGate[] }) {
             <Paper sx={{ p: 1.75, height: '100%', bgcolor: alpha(step.tone, 0.07), border: `1px solid ${alpha(step.tone, 0.22)}`, borderRadius: 3 }}>
               <Stack direction="row" spacing={1} justifyContent="space-between" alignItems="center">
                 <Typography variant="body2" sx={{ color: '#fff', fontWeight: 900 }}>{step.label}</Typography>
-                <Chip size="small" label={step.status} sx={{ height: 20, bgcolor: alpha(step.tone, 0.16), color: step.tone, fontWeight: 950, fontSize: '0.62rem' }} />
+                <Chip size="small" label={step.status} sx={{ height: 20, bgcolor: alpha(step.tone, 0.16), color: step.tone, fontWeight: 950, fontSize: '0.75rem' }} />
               </Stack>
               <Typography variant="caption" sx={{ display: 'block', mt: 1, color: 'rgba(255,255,255,0.58)', fontWeight: 700 }}>
                 {step.detail}

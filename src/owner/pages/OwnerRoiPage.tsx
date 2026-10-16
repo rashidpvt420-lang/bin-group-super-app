@@ -26,7 +26,7 @@ export default function OwnerRoiPage() {
   if (loading) {
     return (
       <Box sx={{ height: '60vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 2 }}>
-        <CircularProgress sx={{ color: binThemeTokens.goldHover }} />
+        <CircularProgress sx={{ color: binThemeTokens.goldText }} />
         <Typography variant="overline" sx={{ color: binThemeTokens.textSecondary, fontWeight: 900 }}>
           {tx('owner.roi.loading', 'Calculating recorded portfolio performance...')}
         </Typography>
@@ -86,7 +86,7 @@ export default function OwnerRoiPage() {
     <Box sx={{ pb: 6, direction: isRTL ? 'rtl' : 'ltr' }}>
       <Box sx={{ mb: 5, display: 'flex', flexDirection: { xs: 'column', md: isRTL ? 'row-reverse' : 'row' }, justifyContent: 'space-between', gap: 2, alignItems: { md: 'flex-end' } }}>
         <Box>
-          <Typography variant="overline" sx={{ color: binThemeTokens.goldHover, fontWeight: 900, letterSpacing: 3 }}>
+          <Typography variant="overline" sx={{ color: binThemeTokens.goldText, fontWeight: 900, letterSpacing: 3 }}>
             {tx('owner.roi.overline', 'PORTFOLIO PERFORMANCE')}
           </Typography>
           <Typography variant="h4" fontWeight={950} sx={{ color: binThemeTokens.textPrimary, mt: 1 }}>
@@ -173,7 +173,7 @@ export default function OwnerRoiPage() {
           ))}
 
           <Grid item xs={12}>
-            <Typography variant="overline" sx={{ color: binThemeTokens.goldHover, fontWeight: 900, letterSpacing: 2, display: 'block', mb: 2, mt: 2 }}>
+            <Typography variant="overline" sx={{ color: binThemeTokens.goldText, fontWeight: 900, letterSpacing: 2, display: 'block', mb: 2, mt: 2 }}>
               {tx('owner.roi.asset_performance', 'ASSET COLLECTION PERFORMANCE')}
             </Typography>
             <Stack spacing={2}>
@@ -186,7 +186,7 @@ export default function OwnerRoiPage() {
                     <Grid container spacing={3} alignItems="center">
                       <Grid item xs={12} md={4}>
                         <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={2} alignItems="center">
-                          <Box sx={{ width: 46, height: 46, bgcolor: alpha(binThemeTokens.gold, 0.1), borderRadius: 3, display: 'grid', placeItems: 'center', color: binThemeTokens.goldHover }}>
+                          <Box sx={{ width: 46, height: 46, bgcolor: alpha(binThemeTokens.gold, 0.1), borderRadius: 3, display: 'grid', placeItems: 'center', color: binThemeTokens.goldText }}>
                             <Building2 size={22} />
                           </Box>
                           <Box>
@@ -200,7 +200,7 @@ export default function OwnerRoiPage() {
                       <Grid item xs={12} md={5}>
                         <Stack direction={isRTL ? 'row-reverse' : 'row'} justifyContent="space-between" sx={{ mb: 1 }}>
                           <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, fontWeight: 900 }}>{tx('owner.roi.collection_rate', 'COLLECTION RATE')}</Typography>
-                          <Typography variant="caption" sx={{ color: binThemeTokens.goldHover, fontWeight: 950 }}>{rate.toFixed(1)}%</Typography>
+                          <Typography variant="caption" sx={{ color: binThemeTokens.goldText, fontWeight: 950 }}>{rate.toFixed(1)}%</Typography>
                         </Stack>
                         <LinearProgress variant="determinate" value={Math.min(rate, 100)} sx={{ height: 6, borderRadius: 3, bgcolor: binThemeTokens.softCanvas, '& .MuiLinearProgress-bar': { background: binThemeTokens.goldHover } }} />
                       </Grid>
@@ -228,7 +228,7 @@ export default function OwnerRoiPage() {
               {tx('owner.roi.truth_body', 'Net payable uses the same recorded Owner Financial Truth as the dashboard and Financials page. Gross/net yield is withheld when no property-value basis is recorded; collection rate is never presented as investment yield.')}
             </Typography>
           </Box>
-          <Button onClick={() => navigate('/owner/complaint')} sx={{ color: binThemeTokens.goldHover, fontWeight: 900 }}>
+          <Button onClick={() => navigate('/owner/complaint')} sx={{ color: binThemeTokens.goldText, fontWeight: 900 }}>
             {tx('owner.roi.review', 'Request review')}
           </Button>
         </Stack>

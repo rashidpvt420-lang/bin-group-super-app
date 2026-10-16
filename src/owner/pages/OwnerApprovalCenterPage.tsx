@@ -121,7 +121,7 @@ export default function OwnerApprovalCenterPage() {
   return (
     <Box>
       <Stack spacing={1} sx={{ mb: 3 }}>
-        <Typography variant="overline" sx={{ color: binThemeTokens.goldHover, fontWeight: 950, letterSpacing: 3 }}>OWNER TRUST CENTER</Typography>
+        <Typography variant="overline" sx={{ color: binThemeTokens.goldText, fontWeight: 950, letterSpacing: 3 }}>OWNER TRUST CENTER</Typography>
         <Typography variant="h4" sx={{ fontWeight: 950, color: binThemeTokens.textPrimary }}>Approval Center</Typography>
         <Typography sx={{ color: binThemeTokens.textSecondary, maxWidth: 880 }}>
           Review completed ticket sign-offs, quote requests, emergency overrides, and standard scopes before BIN GROUP closes or awards work.

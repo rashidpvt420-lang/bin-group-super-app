@@ -137,11 +137,11 @@ async function safeCollectionQuery(collectionName: string, field: string, value:
 function renderHeader(icon: React.ReactNode, overline: string, title: string) {
   return (
     <Stack direction="row" alignItems="center" spacing={1.5} sx={{ mb: 3, minWidth: 0 }}>
-      <Box sx={{ p: 1, bgcolor: alpha(binThemeTokens.gold, 0.1), borderRadius: 2, color: binThemeTokens.gold, flexShrink: 0 }}>
+      <Box sx={{ p: 1, bgcolor: alpha(binThemeTokens.gold, 0.1), borderRadius: 2, color: binThemeTokens.goldText, flexShrink: 0 }}>
         {icon}
       </Box>
       <Box sx={{ minWidth: 0 }}>
-        <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 2, ...textSafeSx }}>
+        <Typography variant="overline" sx={{ color: binThemeTokens.goldText, fontWeight: 900, letterSpacing: 2, ...textSafeSx }}>
           {overline}
         </Typography>
         <Typography variant="h5" fontWeight={950} sx={{ color: '#fff', ...textSafeSx }}>
@@ -184,7 +184,7 @@ function AssetIntelligenceCard({ property, user }: { property: any; user?: any }
       <CardContent sx={{ p: { xs: 2.25, md: 3 } }}>
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems={{ xs: 'flex-start', sm: 'center' }} justifyContent="space-between" sx={{ mb: 2, minWidth: 0 }}>
           <Box sx={{ minWidth: 0 }}>
-            <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 1.5, ...textSafeSx }}>
+            <Typography variant="overline" sx={{ color: binThemeTokens.goldText, fontWeight: 900, letterSpacing: 1.5, ...textSafeSx }}>
               {pType}
             </Typography>
             <Typography variant="h6" fontWeight="950" sx={{ color: '#fff', ...textSafeSx }}>
@@ -241,7 +241,7 @@ function AssetIntelligenceCard({ property, user }: { property: any; user?: any }
           return (
             <Box sx={{ mt: 2.5 }}>
               <Divider sx={{ mb: 2, borderColor: 'rgba(255,255,255,0.06)' }} />
-              <Typography variant="caption" fontWeight={900} sx={{ color: binThemeTokens.gold, display: 'block', mb: 1.5, letterSpacing: 1 }}>
+              <Typography variant="caption" fontWeight={900} sx={{ color: binThemeTokens.goldText, display: 'block', mb: 1.5, letterSpacing: 1 }}>
                 {template.title.toUpperCase()}
               </Typography>
               <Grid container spacing={1.5}>
@@ -274,7 +274,7 @@ function AssetIntelligenceCard({ property, user }: { property: any; user?: any }
             size="small"
             endIcon={<ExternalLink size={14} />} 
             sx={{ 
-              color: binThemeTokens.gold, 
+              color: binThemeTokens.goldText, 
               borderColor: alpha(binThemeTokens.gold, 0.3),
               fontWeight: 950,
               fontSize: '0.7rem'
@@ -482,7 +482,7 @@ export default function OwnerExecutiveDashboardSection({
               {renderHeader(<Users size={22} />, 'Tenant Registry', 'Linked Occupancies & UID Security')}
               <Box sx={{ textAlign: { xs: 'left', md: 'right' }, minWidth: 0 }}>
                 <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.45)', fontWeight: 900 }}>REGISTRY READINESS</Typography>
-                <Typography variant="h6" fontWeight={950} sx={{ color: binThemeTokens.gold, ...textSafeSx }}>{tenantRegistryReadiness}% Linked</Typography>
+                <Typography variant="h6" fontWeight={950} sx={{ color: binThemeTokens.goldText, ...textSafeSx }}>{tenantRegistryReadiness}% Linked</Typography>
               </Box>
             </Stack>
             <Grid container spacing={3} sx={{ mb: 3 }}>
@@ -500,7 +500,7 @@ export default function OwnerExecutiveDashboardSection({
               </Alert>
             )}
 
-            <Alert severity="info" sx={{ bgcolor: alpha(binThemeTokens.gold, 0.035), border: `1px solid ${alpha(binThemeTokens.gold, 0.14)}`, color: binThemeTokens.gold, borderRadius: 3 }}>
+            <Alert severity="info" sx={{ bgcolor: alpha(binThemeTokens.gold, 0.035), border: `1px solid ${alpha(binThemeTokens.gold, 0.14)}`, color: binThemeTokens.goldText, borderRadius: 3 }}>
               <Typography variant="caption" fontWeight={900} sx={{ display: 'block', ...textSafeSx }}>
                 Tenants must never share the owner UID. Tenant records must use ownerId/ownerUid + propertyId + unitId + tenantUid + tenantEmail, with each tenant using their own Firebase Auth UID/login.
               </Typography>
@@ -513,7 +513,7 @@ export default function OwnerExecutiveDashboardSection({
         <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 2, minWidth: 0 }}>
           <Landmark size={22} color={binThemeTokens.gold} />
           <Box sx={{ minWidth: 0 }}>
-            <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 2, ...textSafeSx }}>
+            <Typography variant="overline" sx={{ color: binThemeTokens.goldText, fontWeight: 900, letterSpacing: 2, ...textSafeSx }}>
               Asset Intelligence
             </Typography>
             <Typography variant="h5" fontWeight={950} sx={{ color: '#fff', ...textSafeSx }}>
