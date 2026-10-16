@@ -102,7 +102,7 @@ export default function TechnicianMapPage() {
   if (loading) {
     return (
       <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', py: 20 }}>
-        <CircularProgress sx={{ color: binThemeTokens.gold, mb: 2 }} />
+        <CircularProgress sx={{ color: binThemeTokens.goldText, mb: 2 }} />
         <Typography variant="caption" sx={{ color: MAP_READABLE.muted, fontWeight: 900, letterSpacing: 2 }}>
           INITIALISING MISSION DATA…
         </Typography>

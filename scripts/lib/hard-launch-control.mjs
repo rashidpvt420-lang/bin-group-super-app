@@ -199,6 +199,11 @@ export function validateAuthorizationDocument(document, context = {}) {
     const email = String(document.founder.email || '').trim().toLowerCase();
     if (!email) failures.push('founder email is required');
     if (authorizedEmails.length && !authorizedEmails.includes(email)) failures.push('founder email is not authorized');
+    const founderActor = typeof document.founder.actor === 'string'
+      ? document.founder.actor.trim().toLowerCase()
+      : '';
+    if (!founderActor) failures.push('founder actor is required');
+    else if (authorizedActors.length && !authorizedActors.includes(founderActor)) failures.push('founder actor is not authorized');
   }
   failures.push(...validateIsoTimestamp(document.issuedAt, 'authorization issuedAt', { now, maxAgeMs: AUTHORIZATION_MAX_AGE_MS }));
   failures.push(...validateIsoTimestamp(document.expiresAt, 'authorization expiresAt', { now, requireFuture: true }));

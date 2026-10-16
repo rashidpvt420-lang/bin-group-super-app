@@ -20,7 +20,7 @@ export default function OwnerSimpleDashboardPage() {
     <Box sx={{ direction: isRTL ? 'rtl' : 'ltr' }}>
       <Stack spacing={4}>
         <Box sx={{ textAlign: isRTL ? 'right' : 'left' }}>
-          <Typography variant="overline" sx={{ color: binThemeTokens.goldHover, fontWeight: 950, letterSpacing: 3 }}>{tx('owner.simple.overline', 'OWNER SIMPLE MODE')}</Typography>
+          <Typography variant="overline" sx={{ color: binThemeTokens.goldText, fontWeight: 950, letterSpacing: 3 }}>{tx('owner.simple.overline', 'OWNER SIMPLE MODE')}</Typography>
           <Typography variant="h3" sx={{ color: binThemeTokens.textPrimary, fontWeight: 950, mt: 1 }}>{tx('owner.simple.title', 'What needs your attention?')}</Typography>
           <Typography sx={{ color: binThemeTokens.textSecondary, mt: 1, maxWidth: 760 }}>{tx('owner.simple.desc', 'See contract offers, room-rent requests, approvals, risk, maintenance cost, tenant issues, documents, and reports without searching through the full owner portal.')}</Typography>
         </Box>
@@ -28,7 +28,7 @@ export default function OwnerSimpleDashboardPage() {
         <Paper sx={{ p: { xs: 2.5, md: 3.5 }, bgcolor: alpha(binThemeTokens.gold, 0.08), border: `1px solid ${alpha(binThemeTokens.gold, 0.26)}`, borderRadius: 6 }}>
           <Stack direction={{ xs: 'column', md: isRTL ? 'row-reverse' : 'row' }} spacing={2.5} alignItems={{ xs: 'stretch', md: 'center' }} justifyContent="space-between" sx={{ textAlign: isRTL ? 'right' : 'left' }}>
             <Box>
-              <Typography variant="overline" sx={{ color: binThemeTokens.goldHover, fontWeight: 950, letterSpacing: 2 }}>{tx('owner.simple.contractFirst', 'CONTRACT OFFERS FIRST')}</Typography>
+              <Typography variant="overline" sx={{ color: binThemeTokens.goldText, fontWeight: 950, letterSpacing: 2 }}>{tx('owner.simple.contractFirst', 'CONTRACT OFFERS FIRST')}</Typography>
               <Typography variant="h5" sx={{ color: binThemeTokens.textPrimary, fontWeight: 950, mt: 0.5 }}>{tx('owner.simple.roomRentTitle', 'Find a Room Rent — BIN handles renter contacts for you.')}</Typography>
               <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary, mt: 1, maxWidth: 820 }}>{tx('owner.simple.roomRentDesc', 'Start from the BIN service contract, then submit vacant rooms. We publish only contract-backed rooms, show repair history to renters, and route applications back to you for owner approval and signed contract handling.')}</Typography>
             </Box>
@@ -69,7 +69,7 @@ export default function OwnerSimpleDashboardPage() {
           </Stack>
         </Paper>
 
-        <Button onClick={() => navigate('/owner/dashboard/full')} sx={{ alignSelf: isRTL ? 'flex-end' : 'flex-start', color: binThemeTokens.goldHover, fontWeight: 950 }}>{tx('owner.simple.advanced', 'Open advanced dashboard')}</Button>
+        <Button onClick={() => navigate('/owner/dashboard/full')} sx={{ alignSelf: isRTL ? 'flex-end' : 'flex-start', color: binThemeTokens.goldText, fontWeight: 950 }}>{tx('owner.simple.advanced', 'Open advanced dashboard')}</Button>
       </Stack>
     </Box>
   );

@@ -171,6 +171,8 @@ export function evidenceCountsForPublicLaunch(
   const expected = normalizeCommitSha(expectedCommitSha);
   const observed = normalizeCommitSha(evidence.releaseSha || evidence.commitSha);
   if (!expected || !observed || expected !== observed) return false;
+  if (evidence.releaseSha && normalizeCommitSha(evidence.releaseSha) !== expected) return false;
+  if (evidence.commitSha && normalizeCommitSha(evidence.commitSha) !== expected) return false;
   return evidenceLayerSatisfies(evidence.evidenceLayer, requiredLayer);
 }
 
@@ -197,6 +199,8 @@ export function requiredEvidenceLayerForGate(gateId: string, gateGroup?: string)
 
   if (
     gateGroup === 'Device' ||
+    gateId === 'everyButtonWritesFirestoreOrStorage' ||
+    gateId === 'logoutAllDashboards' ||
     gateId === 'technicianGpsAndDeniedFallback' ||
     gateId === 'technicianMissionLifecycle' ||
     gateId === 'technicianCompletionAudit'

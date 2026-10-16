@@ -245,7 +245,7 @@ export default function OwnerContractModeMatrix({ user, contract, properties }: 
         <CardContent sx={{ p: { xs: 2.25, md: 4 } }}>
           <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} justifyContent="space-between" sx={{ mb: 3, minWidth: 0 }}>
             <Box sx={{ minWidth: 0 }}>
-              <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 3, ...textSafeSx }}>OWNER CONTRACT MODE ENGINE</Typography>
+              <Typography variant="overline" sx={{ color: binThemeTokens.goldText, fontWeight: 950, letterSpacing: 3, ...textSafeSx }}>OWNER CONTRACT MODE ENGINE</Typography>
               <Typography variant="h5" fontWeight={950} sx={{ color: '#fff', ...textSafeSx }}>{modeLabel(mode)}</Typography>
               <Typography sx={{ color: 'rgba(255,255,255,.58)', mt: 1, lineHeight: 1.7, ...textSafeSx }}>{modeDescription(mode)}</Typography>
             </Box>
@@ -274,7 +274,7 @@ export default function OwnerContractModeMatrix({ user, contract, properties }: 
             <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 3 }}>
               <Wrench color={binThemeTokens.gold} />
               <Box>
-                <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950 }}>MAINTENANCE COMMAND</Typography>
+                <Typography variant="overline" sx={{ color: binThemeTokens.goldText, fontWeight: 950 }}>MAINTENANCE COMMAND</Typography>
                 <Typography variant="h6" fontWeight={950} sx={{ color: '#fff' }}>Tickets, SLA, technicians, evidence and preventive work</Typography>
               </Box>
             </Stack>
@@ -294,7 +294,7 @@ export default function OwnerContractModeMatrix({ user, contract, properties }: 
             <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 3 }}>
               <Users color={binThemeTokens.gold} />
               <Box>
-                <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950 }}>PROPERTY MANAGEMENT COMMAND</Typography>
+                <Typography variant="overline" sx={{ color: binThemeTokens.goldText, fontWeight: 950 }}>PROPERTY MANAGEMENT COMMAND</Typography>
                 <Typography variant="h6" fontWeight={950} sx={{ color: '#fff' }}>Tenants, rent collection, payment balance and occupancy</Typography>
               </Box>
             </Stack>

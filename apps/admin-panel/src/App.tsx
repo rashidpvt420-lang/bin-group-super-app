@@ -225,7 +225,7 @@ function Layout() {
                             </Box>
                             <Box>
                                 <Typography variant="caption" sx={{ color: '#FFF', fontWeight: 900, display: 'block', lineHeight: 1 }}>{user?.displayName?.split(' ')[0] || shellText('ADMIN', 'مسؤول')}</Typography>
-                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.6rem', fontWeight: 700, textTransform: 'uppercase' }}>{user?.role || shellText('operator', 'مشغّل')}</Typography>
+                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.78)', fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase' }}>{(user?.role ? String(user.role).replace(/_/g, ' ') : '') || shellText('operator', 'مشغّل')}</Typography>
                             </Box>
                         </Button>
                         <Button onClick={handleLogout} data-testid="admin-logout" startIcon={<LogOut size={16} />} sx={{ color: '#ef4444', fontWeight: 900, fontSize: '0.75rem', '&:hover': { bgcolor: 'rgba(239, 68, 68, 0.1)' } }}>

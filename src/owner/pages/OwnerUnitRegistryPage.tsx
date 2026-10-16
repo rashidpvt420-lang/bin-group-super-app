@@ -162,7 +162,7 @@ export default function OwnerUnitRegistryPage() {
   };
 
   if (!user?.uid) return <Alert severity="warning">{tx('owner.units.auth_required', 'Authenticated Owner identity is unavailable. Reload the portal and try again.')}</Alert>;
-  if (!identityMatches || loading) return <Box sx={{ height: '50vh', display: 'grid', placeItems: 'center' }}><CircularProgress sx={{ color: binThemeTokens.gold }} /></Box>;
+  if (!identityMatches || loading) return <Box sx={{ height: '50vh', display: 'grid', placeItems: 'center' }}><CircularProgress sx={{ color: binThemeTokens.goldText }} /></Box>;
 
   return (
     <Box sx={{ direction: isRTL ? 'rtl' : 'ltr' }}>

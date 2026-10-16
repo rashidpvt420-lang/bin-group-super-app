@@ -73,7 +73,7 @@ export default function TenantStaffDirectoryPage() {
           <SafeIcon icon={Contact} size={36} style={{ color: binThemeTokens.gold }} />
           {label('tenant.staff.title', 'Staff Directory', 'دليل الموظفين')}
         </Typography>
-        <Typography sx={{ color: 'rgba(255,255,255,0.5)', mt: 1 }}>
+        <Typography sx={{ color: binThemeTokens.textOnDarkMuted, mt: 1 }}>
           {label('tenant.staff.desc', 'Get direct contact information for approved concierge, security, maintenance and property management contacts.', 'احصل على معلومات الاتصال المباشرة لموظفي الاستقبال والأمن والصيانة وإدارة العقارات المعتمدين.')}
         </Typography>
       </Box>
@@ -94,7 +94,7 @@ export default function TenantStaffDirectoryPage() {
                     <Stack direction="row" justifyContent="space-between" alignItems="center">
                       <Box>
                         <Typography variant="h6" fontWeight="950" color="#FFF" sx={{ mb: 0.5 }}>{s.displayName}</Typography>
-                        <Chip label={s.role?.toUpperCase()} size="small" sx={{ bgcolor: 'rgba(255,255,255,0.05)', color: binThemeTokens.gold, fontWeight: 900, fontSize: '0.65rem' }} />
+                        <Chip label={s.role?.toUpperCase()} size="small" sx={{ bgcolor: 'rgba(255,255,255,0.05)', color: binThemeTokens.goldText, fontWeight: 900, fontSize: '0.65rem' }} />
                       </Box>
                       {isEmergency && (
                         <Chip
@@ -161,7 +161,7 @@ export default function TenantStaffDirectoryPage() {
 
       {staff.length === 0 && (
         <Paper sx={{ p: 6, textAlign: 'center', bgcolor: 'rgba(255,255,255,0.01)', border: '1px dashed rgba(255,255,255,0.08)', borderRadius: 4 }}>
-          <SafeIcon icon={AlertCircle} size={48} style={{ color: 'rgba(255,255,255,0.2)', margin: '0 auto' }} />
+          <SafeIcon icon={AlertCircle} size={48} style={{ color: binThemeTokens.textOnDarkMuted, margin: '0 auto' }} />
           <Typography sx={{ color: '#FFF', fontWeight: 950, mt: 2 }}>
             {label('tenant.staff.none', 'No Staff Contacts Found', 'لم يتم العثور على جهات اتصال للموظفين')}
           </Typography>

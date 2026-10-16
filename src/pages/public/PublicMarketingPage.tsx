@@ -40,6 +40,8 @@ const platinum = '#F7F7F4';
 const line = '#E8E3D7';
 const gold = binThemeTokens.gold;
 const goldLight = binThemeTokens.goldLight;
+// Gold for text on white/platinum surfaces (AA 4.5:1); `gold` stays for fills and dark sections.
+const goldText = binThemeTokens.goldText;
 const radius = { outer: 3, card: 2.25, button: 2 };
 
 
@@ -427,7 +429,7 @@ function CompanyProfileBlock({ c }: { c: CopyShape }) {
               {c.companyFacts.map(([label, value]) => (
                 <Grid item xs={12} sm={6} key={label}>
                   <Box sx={{ p: 2.4, height: '100%', borderRadius: radius.card, bgcolor: platinum, border: `1px solid ${line}` }}>
-                    <Typography variant="caption" sx={{ color: gold, fontWeight: 950, textTransform: 'uppercase', letterSpacing: 1.2 }}>{label}</Typography>
+                    <Typography variant="caption" sx={{ color: goldText, fontWeight: 950, textTransform: 'uppercase', letterSpacing: 1.2 }}>{label}</Typography>
                     <Typography sx={{ color: ink, fontWeight: 850, mt: .75, lineHeight: 1.55 }}>{value}</Typography>
                   </Box>
                 </Grid>
@@ -457,7 +459,7 @@ function CompanyProfileBlock({ c }: { c: CopyShape }) {
             {c.profileReasons.map(([role, body]) => (
               <Grid item xs={12} md={6} lg={4} key={role}>
                 <Box sx={{ p: 2.4, height: '100%', borderRadius: radius.card, bgcolor: platinum, border: `1px solid ${line}` }}>
-                  <Typography variant="caption" sx={{ color: gold, fontWeight: 950, textTransform: 'uppercase', letterSpacing: 1.1 }}>{role}</Typography>
+                  <Typography variant="caption" sx={{ color: goldText, fontWeight: 950, textTransform: 'uppercase', letterSpacing: 1.1 }}>{role}</Typography>
                   <Typography variant="body2" sx={{ color: ink, lineHeight: 1.7, fontWeight: 750, mt: .9 }}>{body}</Typography>
                 </Box>
               </Grid>
@@ -524,7 +526,7 @@ function CompanyProfileBlock({ c }: { c: CopyShape }) {
                 {c.contractSteps.map(([number, title, body]) => (
                   <Box key={number} sx={{ p: 2, borderRadius: radius.card, bgcolor: '#fff', border: `1px solid ${line}` }}>
                     <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems={{ xs: 'flex-start', sm: 'center' }}>
-                      <Box sx={{ width: 34, height: 34, borderRadius: '50%', bgcolor: alpha(gold, .14), color: gold, display: 'grid', placeItems: 'center', fontWeight: 950, flexShrink: 0 }}>{number}</Box>
+                      <Box sx={{ width: 34, height: 34, borderRadius: '50%', bgcolor: alpha(gold, .14), color: goldText, display: 'grid', placeItems: 'center', fontWeight: 950, flexShrink: 0 }}>{number}</Box>
                       <Box>
                         <Typography fontWeight={950} sx={{ color: ink }}>{title}</Typography>
                         <Typography variant="body2" sx={{ color: muted, fontWeight: 700, lineHeight: 1.55 }}>{body}</Typography>
@@ -549,7 +551,7 @@ function CompanyProfileBlock({ c }: { c: CopyShape }) {
                   <Grid item xs={12} sm={6} key={price[0]}>
                     <Box sx={{ p: 2, borderRadius: radius.card, bgcolor: platinum, border: `1px solid ${line}`, height: '100%' }}>
                       <Typography fontWeight={950} sx={{ color: ink }}>{price[0]}</Typography>
-                      <Typography variant="h5" fontWeight={950} sx={{ color: gold }}>{price[1]}</Typography>
+                      <Typography variant="h5" fontWeight={950} sx={{ color: goldText }}>{price[1]}</Typography>
                     </Box>
                   </Grid>
                 ))}
@@ -633,7 +635,7 @@ function Trust() {
       {items.map((item) => (
         <Grid item xs={12} sm={6} md={3} key={item[0]}>
           <Paper sx={{ p: 2.4, borderRadius: radius.card, bgcolor: '#fff', border: `1px solid ${line}`, boxShadow: `0 12px 28px ${alpha('#000', 0.055)}` }}>
-            <Typography variant="h4" fontWeight={950} sx={{ color: gold }}>{item[0]}</Typography>
+            <Typography variant="h4" fontWeight={950} sx={{ color: goldText }}>{item[0]}</Typography>
             <Typography variant="caption" sx={{ color: muted, fontWeight: 900 }}>{item[1]}</Typography>
           </Paper>
         </Grid>

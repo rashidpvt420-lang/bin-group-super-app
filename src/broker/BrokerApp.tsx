@@ -19,6 +19,7 @@ import BrokerDocumentsPage from './pages/BrokerDocumentsPage';
 import BrokerProfilePage from './pages/BrokerProfilePage';
 import BrokerAttributionProofPage from './pages/BrokerAttributionProofPage';
 import BrokerListingsPage from './pages/BrokerListingsPage';
+import PortalHeaderMenu, { usePhoneHeader } from '../components/PortalHeaderMenu';
 
 type BrokerMenuItem = {
   key: string;
@@ -29,6 +30,7 @@ type BrokerMenuItem = {
 
 const BrokerLayout = ({ children }: { children: React.ReactNode }) => {
   const navigate = useNavigate();
+  const isPhoneHeader = usePhoneHeader();
   const location = useLocation();
   const { user } = useRole();
   const { isRTL, lang, tx } = useLanguage();
@@ -57,6 +59,15 @@ const BrokerLayout = ({ children }: { children: React.ReactNode }) => {
               <Typography variant="caption" sx={{ color: '#667085', fontWeight: 900, display: { xs: 'none', sm: 'block' }, whiteSpace: 'nowrap' }}>{label('broker.portal.subtitle', 'PARTNER PORTAL - MADE IN UAE', 'بوابة الشركاء - صنع في الإمارات')}</Typography>
             </Box>
           </Stack>
+          {isPhoneHeader ? (
+          <Stack direction={isRTL ? 'row-reverse' : 'row'} alignItems="center" sx={{ flexShrink: 0, gap: 0.5 }}>
+            <NotificationBell />
+            <PortalHeaderMenu role="broker" items={[
+              { key: 'referrals', label: label('broker.referrals.title', 'Broker referrals', 'إحالات الوسيط'), onClick: () => navigate('/broker/referrals'), icon: Paintbrush },
+              { key: 'profile', label: label('broker.nav.profile', 'Profile', 'الملف الشخصي'), onClick: () => navigate('/broker/profile') },
+            ]} />
+          </Stack>
+          ) : (
           <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} alignItems="center" sx={{ flexShrink: 0 }}>
             <IconButton onClick={() => navigate('/broker/referrals')} sx={{ color: '#B8932F', bgcolor: alpha('#B8932F', 0.08) }} title={label('broker.referrals.title', 'Broker referrals', 'إحالات الوسيط')}>
               <SafeIcon icon={Paintbrush} size={18} />
@@ -67,6 +78,7 @@ const BrokerLayout = ({ children }: { children: React.ReactNode }) => {
             </Box>
             <PortalSessionControls role="broker" accent="#B8932F" />
           </Stack>
+          )}
         </Toolbar>
       </AppBar>
       <Container maxWidth="xl" sx={{ py: 5, position: 'relative', zIndex: 1 }}>

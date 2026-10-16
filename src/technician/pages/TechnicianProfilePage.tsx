@@ -50,7 +50,7 @@ const inputSx = {
     },
     '& .MuiInputBase-input': { color: '#FFF !important', fontWeight: 850, WebkitTextFillColor: '#FFF' },
     '& .MuiInputLabel-root': { color: 'rgba(255,255,255,.72)', fontWeight: 850 },
-    '& .MuiInputLabel-root.Mui-focused': { color: binThemeTokens.gold },
+    '& .MuiInputLabel-root.Mui-focused': { color: binThemeTokens.goldText },
     '& .MuiFormHelperText-root': { color: 'rgba(255,255,255,.58)' },
 };
 const statusChipSx = (tone: string) => ({
@@ -224,7 +224,7 @@ export default function TechnicianProfilePage() {
         { key: 'gps', label: label('Fresh GPS', 'موقع GPS حديث'), ok: readiness.readiness.gpsFresh, value: readiness.readiness.gpsFresh ? label('Ready', 'جاهز') : label('Refresh required', 'يلزم التحديث') },
     ] : [], [readiness, lang]);
 
-    if (loading) return <Box sx={{ display: 'flex', justifyContent: 'center', py: 10 }}><CircularProgress sx={{ color: binThemeTokens.gold }} /></Box>;
+    if (loading) return <Box sx={{ display: 'flex', justifyContent: 'center', py: 10 }}><CircularProgress sx={{ color: binThemeTokens.goldText }} /></Box>;
 
     const score = techData?.qualityScore || techData?.rating || label('Pending', 'قيد الانتظار');
     const sla = techData?.slaCompliance || techData?.slaScore || label('Pending', 'قيد الانتظار');
@@ -241,7 +241,7 @@ export default function TechnicianProfilePage() {
         <Box sx={{ direction: isRTL ? 'rtl' : 'ltr', pr: { xs: isRTL ? 0 : 8, sm: isRTL ? 0 : 10, md: 0 }, pl: { xs: isRTL ? 8 : 0, sm: isRTL ? 10 : 0, md: 0 }, pb: { xs: 14, md: 4 } }}>
             <Stack direction={{ xs: 'column', sm: isRTL ? 'row-reverse' : 'row' }} justifyContent="space-between" alignItems={{ xs: 'stretch', sm: 'center' }} gap={2} sx={{ mb: 4 }}>
                 <Typography variant="h4" fontWeight="950" sx={{ color: '#FFF', textAlign: isRTL ? 'right' : 'left', fontSize: { xs: '2.2rem', sm: '2.6rem' } }}>{label('Technician Profile', 'ملف الفني')}</Typography>
-                <Button onClick={() => void loadReadiness()} disabled={readinessLoading} startIcon={readinessLoading ? <CircularProgress size={16} /> : <RefreshCcw size={17} />} variant="outlined" sx={{ color: binThemeTokens.gold, borderColor: binThemeTokens.gold }}>{label('Refresh readiness', 'تحديث الجاهزية')}</Button>
+                <Button onClick={() => void loadReadiness()} disabled={readinessLoading} startIcon={readinessLoading ? <CircularProgress size={16} /> : <RefreshCcw size={17} />} variant="outlined" sx={{ color: binThemeTokens.goldText, borderColor: binThemeTokens.gold }}>{label('Refresh readiness', 'تحديث الجاهزية')}</Button>
             </Stack>
             {notice && <Alert severity={notice.type} sx={{ mb: 3 }} onClose={() => setNotice(null)}>{notice.text}</Alert>}
 
@@ -264,7 +264,7 @@ export default function TechnicianProfilePage() {
                 </Stack>
                 <Grid container spacing={3} sx={{ mb: 4, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
                     <Grid item xs={6} md={3}><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.48)', fontWeight: 850 }}>{label('ACCOUNT STATUS', 'حالة الحساب')}</Typography><Box sx={{ mt: 1 }}><Chip label={localizedStatus} size="small" sx={statusChipSx(statusTone)} /></Box></Grid>
-                    <Grid item xs={6} md={3}><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.48)', fontWeight: 850 }}>{label('QUALITY SCORE', 'تقييم الجودة')}</Typography><Stack direction={isRTL ? 'row-reverse' : 'row'} alignItems="center" spacing={1} sx={{ mt: 1, color: binThemeTokens.gold }}><Star size={18} fill={binThemeTokens.gold} /><Typography fontWeight="950" color="#FFF">{typeof score === 'number' ? `${score}/5` : score}</Typography></Stack></Grid>
+                    <Grid item xs={6} md={3}><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.48)', fontWeight: 850 }}>{label('QUALITY SCORE', 'تقييم الجودة')}</Typography><Stack direction={isRTL ? 'row-reverse' : 'row'} alignItems="center" spacing={1} sx={{ mt: 1, color: binThemeTokens.goldText }}><Star size={18} fill={binThemeTokens.gold} /><Typography fontWeight="950" color="#FFF">{typeof score === 'number' ? `${score}/5` : score}</Typography></Stack></Grid>
                     <Grid item xs={6} md={3}><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.48)', fontWeight: 850 }}>{label('SLA COMPLIANCE', 'الالتزام بزمن الخدمة')}</Typography><Stack direction={isRTL ? 'row-reverse' : 'row'} alignItems="center" spacing={1} sx={{ mt: 1, color: '#4ade80' }}><Clock size={18} /><Typography fontWeight="950" color="#FFF">{typeof sla === 'number' ? `${sla}%` : sla}</Typography></Stack></Grid>
                     <Grid item xs={6} md={3}><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.48)', fontWeight: 850 }}>{label('DISPATCH', 'الإرسال')}</Typography><Box sx={{ mt: 1 }}><Chip label={dispatchReady ? label('READY', 'جاهز') : label('FROZEN', 'موقوف')} size="small" sx={statusChipSx(dispatchTone)} /></Box></Grid>
                 </Grid>

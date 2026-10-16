@@ -324,7 +324,7 @@ export default function HomeDiscoveryInventoryPage() {
             <Paper variant="outlined" sx={{ p: 2.5, borderRadius: 4, borderStyle: 'dashed', borderColor: alpha(gold, 0.55), bgcolor: alpha(gold, 0.035) }}>
               <Stack spacing={1.5}>
                 <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1.2} alignItems="center"><SafeIcon icon={ImageIcon} size={22} color={gold} /><Box><Typography sx={{ fontWeight: 950 }}>{copy('owner.home.photoHeading', 'Real property photos', 'صور العقار الحقيقية')}</Typography><Typography variant="caption" sx={{ color: binThemeTokens.textSecondary }}>{copy('owner.home.photoRule', '3–12 images · JPG/PNG/HEIC/WebP · up to 10 MB each', 'من 3 إلى 12 صورة · حتى 10 ميجابايت لكل صورة')}</Typography></Box></Stack>
-                <Button component="label" variant="outlined" startIcon={<SafeIcon icon={Upload} size={18} />} sx={{ alignSelf: isRTL ? 'flex-end' : 'flex-start', borderColor: gold, color: binThemeTokens.goldHover, fontWeight: 900 }}>
+                <Button component="label" variant="outlined" startIcon={<SafeIcon icon={Upload} size={18} />} sx={{ alignSelf: isRTL ? 'flex-end' : 'flex-start', borderColor: gold, color: binThemeTokens.goldText, fontWeight: 900 }}>
                   {copy('owner.home.choosePhotos', 'Choose property photos', 'اختر صور العقار')}
                   <input hidden multiple accept="image/*" type="file" onChange={onPhotoSelection} />
                 </Button>

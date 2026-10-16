@@ -10,7 +10,7 @@ import TenantCorrectionPanel from '../components/TenantCorrectionPanel';
 
 const readOnlyInputSx = {
     '& .MuiOutlinedInput-root': { color: '#FFF', bgcolor: 'rgba(255,255,255,0.03)', borderRadius: 2 },
-    '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.5)' },
+    '& .MuiInputLabel-root': { color: binThemeTokens.textOnDarkMuted },
     '& .MuiInputBase-input.Mui-disabled': { WebkitTextFillColor: 'rgba(255,255,255,0.82)' },
 };
 
@@ -196,7 +196,7 @@ export default function TenantProfilePage() {
         <Box sx={{ mb: 4 }}>
             <Stack direction={isRTL ? 'row-reverse' : 'row'} justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
                 <Typography variant="h6" fontWeight={950} color="#FFF">{label(titleEn, titleAr)}</Typography>
-                <Chip label={records.length} size="small" sx={{ bgcolor: 'rgba(198,167,94,0.12)', color: binThemeTokens.gold, fontWeight: 950 }} />
+                <Chip label={records.length} size="small" sx={{ bgcolor: 'rgba(198,167,94,0.12)', color: binThemeTokens.goldText, fontWeight: 950 }} />
             </Stack>
             {records.length ? (
                 <Grid container spacing={2} sx={{ flexDirection: isRTL ? 'row-reverse' : 'row' }}>

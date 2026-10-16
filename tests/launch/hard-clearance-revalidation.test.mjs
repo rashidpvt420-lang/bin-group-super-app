@@ -57,8 +57,11 @@ test('hard clearance freshly revalidates production state without moving the fro
   assert.match(workflow, /hard-clearance-production-revalidation:[\s\S]*?environment: production/);
   assert.match(workflow, /hard-public-launch-clearance:[\s\S]*?needs: hard-clearance-production-revalidation[\s\S]*?environment: hard-public-launch/);
   assert.match(workflow, /Verify control-plane-only repair scope/);
+  assert.match(workflow, /Verify frozen-release\/control-plane scope/);
+  assert.match(workflow, /Checkout live-evidence control plane[\s\S]*?path: control-plane[\s\S]*?fetch-depth: 0/);
   assert.match(workflow, /git -C control-plane merge-base --is-ancestor/);
   assert.match(workflow, /Non-control-plane file changed since pilot release/);
+  assert.match(workflow, /Overlay reviewed cleanup-aware evidence runner[\s\S]*?cp control-plane\/scripts\/run-critical-evidence\.mjs release\/scripts\/run-critical-evidence\.mjs/);
 
   const expectedAllowlist = [
     '.github/workflows/firebase-production-deploy.yml',
@@ -80,9 +83,11 @@ test('hard clearance freshly revalidates production state without moving the fro
     'scripts/publish-operational-provider-evidence.mjs',
     'scripts/resolve-admin-app-check-site-key.mjs',
     'scripts/resolve-live-pilot-window.mjs',
+    'scripts/run-critical-evidence.mjs',
     'scripts/run-frozen-release-evidence.mjs',
     'scripts/verify-ai-live-evidence.mjs',
     'scripts/verify-hard-launch-approval.mjs',
+    'scripts/verify-production-deployment.mjs',
     'scripts/verify-operational-readiness.mjs',
     'tests/launch/ai-operational-contract.test.mjs',
     'tests/launch/external-gate-production-provenance.test.mjs',
@@ -96,7 +101,11 @@ test('hard clearance freshly revalidates production state without moving the fro
     .split('|')
     .map((value) => value.replaceAll('\\.', '.'))
     .sort();
-  assert.deepEqual(actualAllowlist, [...expectedAllowlist].sort());
+  assert.ok(actualAllowlist.includes('scripts/lib/live-pilot-provenance.mjs'));
+  assert.deepEqual(
+    actualAllowlist.filter((entry) => entry !== 'scripts/lib/live-pilot-provenance.mjs'),
+    [...expectedAllowlist].sort(),
+  );
 
   assert.match(workflow, /Checkout frozen pilot release/);
   assert.match(workflow, /ref:\s*\$\{\{\s*inputs\.expected_commit_sha\s*\}\}/);
@@ -107,7 +116,8 @@ test('hard clearance freshly revalidates production state without moving the fro
   assert.match(workflow, /HARD_CLEARANCE_REVALIDATION_MODE: consume/);
   assert.match(workflow, /Resolve exact successful live evidence run/);
   assert.match(workflow, /REQUESTED_RUN_ID: \$\{\{ inputs\.live_evidence_run_id \}\}/);
-  assert.match(workflow, /\.head_sha == \$sha/);
+  assert.match(workflow, /\.head_sha == \$controlPlaneSha/);
+  assert.match(workflow, /CONTROL_PLANE_SHA: \$\{\{ github\.sha \}\}/);
   assert.match(workflow, /\.path == "\.github\/workflows\/live-role-smoke\.yml"/);
   assert.match(workflow, /actions\/runs\/\$run_id\/attempts\/1/);
   assert.match(workflow, /\.run_attempt == 1/);
@@ -115,6 +125,11 @@ test('hard clearance freshly revalidates production state without moving the fro
   assert.match(workflow, /\.created_at \| fromdateiso8601/);
   assert.match(workflow, /\.expired == false/);
   assert.match(workflow, /Expected exactly one successful live-evidence run with the exact frozen-release artifact/);
+  assert.match(workflow, /Write frozen-release\/control-plane evidence binding/);
+  assert.match(workflow, /releaseCommitSha: TARGET_SHA/);
+  assert.match(workflow, /controlPlaneCommitSha: CONTROL_PLANE_SHA/);
+  assert.match(workflow, /Verify live-evidence release\/control-plane artifact binding/);
+  assert.match(workflow, /release\/launch_package\/live-evidence-provenance\.json/);
   assert.match(workflow, /live_evidence_run_id: \$\{\{ steps\.resolve_live_evidence\.outputs\.run_id \}\}/);
   assert.match(workflow, /run-id: \$\{\{ steps\.resolve_live_evidence\.outputs\.run_id \}\}/);
   assert.match(workflow, /LIVE_RUN_ID: \$\{\{ needs\.hard-clearance-production-revalidation\.outputs\.live_evidence_run_id \}\}/);
@@ -124,6 +139,7 @@ test('hard clearance freshly revalidates production state without moving the fro
     workflow.indexOf('  hard-public-launch-clearance:'),
   );
   assert.match(revalidationJob, /cp control-plane\/scripts\/resolve-admin-app-check-site-key\.mjs release\/scripts\/resolve-admin-app-check-site-key\.mjs/);
+  assert.match(revalidationJob, /cp control-plane\/scripts\/lib\/live-pilot-provenance\.mjs release\/scripts\/lib\/live-pilot-provenance\.mjs/);
   const prepareMarker = 'Prepare frozen-release evidence for current production semantics';
   const refreshMarker = 'Refresh role evidence without restarting the pilot';
   assert.ok(revalidationJob.includes(prepareMarker), 'clearance must apply reviewed frozen-release evidence preparation');
@@ -166,7 +182,55 @@ test('hard clearance freshly revalidates production state without moving the fro
 
   // The authorization job must no longer demand that the frozen release SHA
   // equal the newer, narrowly reviewed clearance-control commit.
-  assert.doesNotMatch(hardJob, /TARGET_SHA[^\n]*CURRENT_SHA|TARGET_SHA\" != \"\$CURRENT_SHA/);
+  assert.doesNotMatch(hardJob, /TARGET_SHA[^\n]*CURRENT_SHA|TARGET_SHA" != "\$CURRENT_SHA/);
+});
+
+test('live evidence retires the protected ephemeral Admin before the final identity and deployment check', async () => {
+  const [workflow, runner, verifier] = await Promise.all([
+    read('.github/workflows/live-role-smoke.yml'),
+    read('scripts/run-critical-evidence.mjs'),
+    read('scripts/verify-production-deployment.mjs'),
+  ]);
+  assert.match(runner, /workflow === 'Firebase Production Deploy' \|\| workflow === 'Live Role Smoke Tests'/);
+  assert.match(runner, /GITHUB_EVENT_NAME === 'workflow_dispatch'/);
+  const allRequiredIndex = runner.indexOf("if (suiteArg === 'all-business' || suiteArg === 'all-required')");
+  const cleanupIndex = runner.indexOf("retireEphemeralE2eAdmin('post-business-evidence')", allRequiredIndex);
+  const finalDeploymentCheckIndex = runner.indexOf('await runProductionDeployment()', allRequiredIndex);
+  assert.ok(allRequiredIndex >= 0 && cleanupIndex > allRequiredIndex);
+  assert.ok(finalDeploymentCheckIndex > cleanupIndex,
+    'final production MFA/identity inventory must run only after the temporary test admin has been retired');
+  assert.match(workflow, /Run every required live evidence suite[\s\S]*?node scripts\/run-critical-evidence\.mjs --suite all-required/);
+  assert.match(workflow, /name: Verify controlled-pilot eligibility\s+env:\s+CONTROL_PLANE_COMMIT_SHA: \$\{\{ github\.sha \}\}/);
+  assert.match(verifier, /if \(phoneAuthResult\.status === 'fulfilled'\) \{\s+firebasePhoneAuthEvidenceForValidation = phoneAuthResult\.value;/);
+  assert.match(verifier, /if \(adminMfaResult\.status === 'fulfilled'\) \{\s+adminMfaEvidenceForValidation = adminMfaResult\.value;/);
+});
+
+test('hard-clearance Owner wrapper preparation accepts collision-safe releases and rejects unknown layouts', async () => {
+  const workflow = await read('.github/workflows/live-role-smoke.yml');
+  const comment = workflow.indexOf('The frozen Owner evidence wrapper originally varied latitude and longitude');
+  const heredocStart = workflow.indexOf("node --input-type=module <<'NODE'", comment);
+  const codeStart = workflow.indexOf('\n', heredocStart) + 1;
+  const codeEnd = workflow.indexOf('\n          NODE', codeStart);
+  assert.ok(comment >= 0 && heredocStart > comment && codeEnd > codeStart, 'Owner wrapper preparation snippet is missing');
+  const preparationCode = workflow.slice(codeStart, codeEnd)
+    .replace(/^\s*import \{ readFileSync, writeFileSync \} from 'node:fs';\s*/, '');
+  const writes = [];
+  const context = (source) => ({
+    readFileSync: () => source,
+    writeFileSync: (...args) => writes.push(args),
+    console: { log() {} },
+  });
+
+  const deployedWrapper = await read('scripts/run-owner-inspection-first-production-evidence-unique.mjs');
+  assert.match(deployedWrapper, /selectUnusedOwnerEvidenceLocation/);
+  runInNewContext(preparationCode, context(deployedWrapper));
+  assert.equal(writes.length, 0, 'already-safe frozen Owner wrapper should not be mutated');
+
+  assert.throws(
+    () => runInNewContext(preparationCode, context('unexpected Owner wrapper')),
+    /Frozen Owner evidence identity wrapper changed unexpectedly/,
+  );
+  assert.equal(writes.length, 0, 'unknown Owner wrapper must fail without writing');
 });
 
 test('operational evidence keeps current main as control plane while binding proof to the frozen deployment', async () => {
@@ -193,6 +257,7 @@ test('operational evidence keeps current main as control plane while binding pro
     'scripts/publish-operational-provider-evidence.mjs',
     'scripts/resolve-admin-app-check-site-key.mjs',
     'scripts/resolve-live-pilot-window.mjs',
+    'scripts/run-critical-evidence.mjs',
     'scripts/run-frozen-release-evidence.mjs',
     'scripts/verify-ai-live-evidence.mjs',
     'scripts/verify-hard-launch-approval.mjs',
@@ -221,7 +286,8 @@ test('operational evidence keeps current main as control plane while binding pro
     const allowlistBody = workflow.match(/allowed='\^\(([^'\n]+)\)\$'/)?.[1];
     assert.ok(allowlistBody, `${workflowFile} control-plane allowlist is missing`);
     const actualAllowlist = allowlistBody.split('|').map((value) => value.replaceAll('\\.', '.')).sort();
-    assert.deepEqual(actualAllowlist, expectedAllowlist);
+    assert.ok(actualAllowlist.includes('scripts/lib/live-pilot-provenance.mjs'));
+    assert.deepEqual(actualAllowlist.filter((entry) => entry !== 'scripts/lib/live-pilot-provenance.mjs'), expectedAllowlist);
   }
 
   const providerWorkflow = await read('.github/workflows/operational-provider-evidence.yml');
@@ -726,6 +792,100 @@ test('control-plane scope verifier supports exact same-SHA pairs, approved contr
   );
 });
 
+test('hard-clearance scope permits only the exact PR #1770 rules-writer and test blobs', async () => {
+  const workflow = await read('.github/workflows/live-role-smoke.yml');
+  const pinnedCommit = '86b67c4a12a4ac61037dba8201f3d5ab96b09c5f';
+  const rulesWriterPath = 'scripts/write-production-firestore-rules.mjs';
+  const rulesWriterTestPath = 'tests/launch/design-payment-rules-artifact.test.mjs';
+  const pinnedBlobs = new Map([
+    [rulesWriterPath, '5acb377f8f684d37d00b1f3e0c641aa773bad0a5'],
+    [rulesWriterTestPath, '18c879372c0da8dfae8dfa5e3238ee1430cb09c2'],
+  ]);
+  const frozenBlobs = new Map([
+    [rulesWriterPath, '1c168664ff938612be02d1c36e53005f0a999c27'],
+    [rulesWriterTestPath, '9e540fd7f2e96d0a8de74d16ed01cfc7fceb105c'],
+  ]);
+
+  assert.ok(workflow.includes(`KNOWN_RULES_WRITER_COMMIT: ${pinnedCommit}`));
+  assert.ok(workflow.includes('git -C control-plane merge-base --is-ancestor "$KNOWN_RULES_WRITER_COMMIT" "$CURRENT_SHA"'));
+  assert.ok(workflow.includes('known_blob="$(git -C control-plane rev-parse "$KNOWN_RULES_WRITER_COMMIT:$path")"'));
+  assert.ok(workflow.includes('current_blob="$(git -C control-plane rev-parse "$CURRENT_SHA:$path")"'));
+  assert.ok(workflow.includes('target_blob="$(git -C control-plane rev-parse "$TARGET_SHA:$path")"'));
+  assert.ok(workflow.includes('The one-time PR #1770 exception requires the exact approved blob'));
+  assert.ok(workflow.includes('The one-time PR #1770 exception requires both the rules writer and its regression test to change together.'));
+
+  const allowedText = workflow.match(/^\s*allowed='([^'\n]+)'/m)?.[1];
+  const supplementalText = workflow.match(/^\s*supplemental_allowed='([^'\n]+)'/m)?.[1];
+  assert.ok(allowedText, 'hard-clearance control-plane allowlist is missing');
+  assert.ok(supplementalText, 'hard-clearance supplemental allowlist is missing');
+  const parseAllowlistPaths = (patternText, label) => {
+    assert.ok(patternText.startsWith('^(') && patternText.endsWith(')$'), `${label} must remain an anchored path-only allowlist`);
+    return new Set(patternText.slice(2, -2).split('|').map((entry) => entry.replaceAll('\\.', '.')));
+  };
+  const allowed = parseAllowlistPaths(allowedText, 'control-plane allowlist');
+  const supplementalAllowed = parseAllowlistPaths(supplementalText, 'supplemental allowlist');
+
+  function verifyScope({ changedFiles, hasPinnedCommit = true, currentBlobs = new Map(), targetBlobs = frozenBlobs }) {
+    const exceptionFiles = changedFiles.filter((file) => pinnedBlobs.has(file));
+    if (exceptionFiles.length > 0) {
+      if (exceptionFiles.length !== 2) throw new Error('The one-time exception requires both pinned files.');
+      if (!hasPinnedCommit) throw new Error('The pinned PR #1770 commit is not an ancestor.');
+      for (const file of exceptionFiles) {
+        const currentBlob = currentBlobs.get(file) ?? pinnedBlobs.get(file);
+        if (currentBlob !== pinnedBlobs.get(file)) throw new Error(`The exact approved blob changed: ${file}`);
+        if (targetBlobs.get(file) === pinnedBlobs.get(file)) throw new Error(`The file is not in the release/control-plane delta: ${file}`);
+      }
+    }
+    for (const file of changedFiles) {
+      if (pinnedBlobs.has(file)) continue;
+      if (!allowed.has(file) && !supplementalAllowed.has(file)) throw new Error(`Non-control-plane file changed since pilot release: ${file}`);
+    }
+    return 'CONTROL_PLANE_SCOPE_VERIFIED=true';
+  }
+
+  const expectedDiff = [
+    rulesWriterPath,
+    rulesWriterTestPath,
+    'scripts/lib/live-pilot-provenance.mjs',
+    'scripts/verify-production-deployment.mjs',
+    'scripts/run-critical-evidence.mjs',
+    '.github/workflows/live-role-smoke.yml',
+    'tests/launch/hard-clearance-revalidation.test.mjs',
+    'tests/launch/live-pilot-provenance.test.mjs',
+  ];
+  assert.equal(verifyScope({ changedFiles: expectedDiff }), 'CONTROL_PLANE_SCOPE_VERIFIED=true');
+  assert.throws(() => verifyScope({ changedFiles: expectedDiff, hasPinnedCommit: false }), /pinned PR #1770 commit is not an ancestor/);
+  assert.throws(() => verifyScope({ changedFiles: [rulesWriterPath] }), /requires both pinned files/);
+  assert.throws(() => verifyScope({
+    changedFiles: expectedDiff,
+    currentBlobs: new Map([[rulesWriterPath, '0000000000000000000000000000000000000000']]),
+  }), /exact approved blob changed: scripts\/write-production-firestore-rules\.mjs/);
+  assert.throws(() => verifyScope({
+    changedFiles: expectedDiff,
+    targetBlobs: new Map([...frozenBlobs, [rulesWriterTestPath, pinnedBlobs.get(rulesWriterTestPath)]]),
+  }), /file is not in the release\/control-plane delta: tests\/launch\/design-payment-rules-artifact\.test\.mjs/);
+  assert.throws(() => verifyScope({ changedFiles: [...expectedDiff, 'src/App.tsx'] }), /Non-control-plane file changed since pilot release: src\/App\.tsx/);
+});
+
+test('all four protected evidence workflows pin the exact paired PR #1770 exception', async () => {
+  const workflows = [
+    '.github/workflows/operational-application-evidence.yml',
+    '.github/workflows/operational-provider-evidence.yml',
+    '.github/workflows/privileged-access-rotation-evidence.yml',
+    '.github/workflows/technician-physical-evidence.yml',
+  ];
+  for (const file of workflows) {
+    const workflow = await read(file);
+    assert.match(workflow, /KNOWN_RULES_WRITER_COMMIT: 86b67c4a12a4ac61037dba8201f3d5ab96b09c5f/, file);
+    assert.ok(workflow.includes('exception_count" -eq 2'), file);
+    assert.ok(workflow.includes('merge-base --is-ancestor "$KNOWN_RULES_WRITER_COMMIT" "$CONTROL_PLANE_SHA"'), file);
+    assert.ok(workflow.includes('"$current_blob" == "$known_blob"'), file);
+    assert.ok(workflow.includes('"$frozen_blob" != "$known_blob"'), file);
+    assert.ok(workflow.includes('Non-control-plane file changed since frozen release'), file);
+    assert.ok(workflow.includes('if [[ "$file" == "$rules_writer_path" || "$file" == "$rules_writer_test_path" ]]'), file);
+  }
+});
+
 test('all operational workflows enforce same-SHA allowance and privileged rotation cleanup guards', async () => {
   const operationalWorkflows = [
     '.github/workflows/operational-application-evidence.yml',
@@ -1137,4 +1297,165 @@ test('physical proofs after the first 500 records are still considered for clear
   assert.equal(result.report.gates.find((gate) => gate.commandCenterGateId === 'googleMaps').status, 'passed');
   assert.equal(result.report.status, 'blocked');
   assert.equal(result.files.has('/fixture/launch_package/launch-proof-gates.json'), false);
+});
+
+test('owner evidence commands cannot dispatch hard clearance with manufactured incident and monitoring attestations', async () => {
+  const bridge = await read('.github/workflows/technician-physical-evidence.yml');
+  assert.match(bridge, /hard-clearance\|hard-clearance-current\)/);
+  assert.match(bridge, /Owner evidence commands cannot attest incident severity, rollback verification, or monitoring/);
+  assert.doesNotMatch(bridge, /dispatch live-role-smoke\.yml dispatch\.json/);
+  assert.doesNotMatch(bridge, /monitoring_reference/);
+  assert.doesNotMatch(bridge, /NO_OPEN_P0_P1|ROLLBACK_PLAN_VERIFIED/);
+
+  // Protected hard-clearance still exists. Founder confirmations and evidence
+  // references are provided to its exact-release workflow_dispatch input.
+  const protectedWorkflow = await read('.github/workflows/live-role-smoke.yml');
+  assert.match(protectedWorkflow, /- hard-clearance/);
+  assert.match(protectedWorkflow, /INCIDENT_REFERENCE: \$\{\{ fromJSON\(inputs\.clearance_payload_json\)\.incident_reference \}\}/);
+  assert.match(protectedWorkflow, /ROLLBACK_REFERENCE: \$\{\{ fromJSON\(inputs\.clearance_payload_json\)\.rollback_reference \}\}/);
+  assert.match(protectedWorkflow, /MONITORING_REFERENCE: \$\{\{ fromJSON\(inputs\.clearance_payload_json\)\.monitoring_reference \}\}/);
+});
+
+test('live production evidence freshly rechecks Phone Auth and Admin MFA without redeploying', async () => {
+  const [workflow, source] = await Promise.all([
+    read('.github/workflows/live-role-smoke.yml'),
+    read('scripts/verify-production-deployment.mjs'),
+  ]);
+
+  assert.match(workflow, /Overlay reviewed live production verifier[\s\S]*?cp control-plane\/scripts\/verify-production-deployment\.mjs release\/scripts\/verify-production-deployment\.mjs/);
+  assert.match(workflow, /CONTROL_PLANE_COMMIT_SHA: \$\{\{ github\.sha \}\}/);
+  assert.match(source, /process\.env\.GITHUB_WORKFLOW === 'Live Role Smoke Tests'/);
+  assert.match(source, /verifyFirebasePhoneAuthProduction\(\{ env: identityEvidenceEnv/);
+  assert.match(source, /verifyAdminMfaProduction\(\{ env: identityEvidenceEnv/);
+  assert.match(source, /firebasePhoneAuthEvidenceForValidation = phoneAuthResult\.value/);
+  assert.match(source, /adminMfaEvidenceForValidation = adminMfaResult\.value/);
+  assert.match(source, /liveEvidenceIdentityReverification/);
+  assert.match(source, /source: 'live-evidence-production-identity-reverification'/);
+  assert.match(source, /controlPlaneCommitSha: controlPlaneSha/);
+  assert.match(source, /\.\.\.\(liveEvidenceIdentityReverification \? \{ liveEvidenceIdentityReverification \} : \{\}\)/);
+  assert.match(source, /hardLaunchClaim: false/);
+  assert.doesNotMatch(source, /firebase\s+deploy|deploy-firebase-production\.mjs/i);
+});
+
+test('clearance scope allows exactly the two #1781 test-only paths and nothing broader', async () => {
+  const workflows = [
+    '.github/workflows/live-role-smoke.yml',
+    '.github/workflows/operational-application-evidence.yml',
+    '.github/workflows/operational-provider-evidence.yml',
+    '.github/workflows/privileged-access-rotation-evidence.yml',
+    '.github/workflows/technician-physical-evidence.yml',
+  ];
+  let checked = 0;
+  for (const file of workflows) {
+    const source = await read(file);
+    const allowed = [...source.matchAll(/^\s*allowed='([^']+)'$/gm)].map((match) => match[1]);
+    const supplemental = [...source.matchAll(/^\s*supplemental_allowed='([^']+)'$/gm)].map((match) => match[1]);
+    assert.ok(supplemental.length > 0, `${file} must define supplemental_allowed`);
+    assert.equal(allowed.length, supplemental.length, `${file} must pair allowed and supplemental_allowed lists`);
+    for (const [index, pattern] of supplemental.entries()) {
+      const toPaths = (patternText, label) => {
+        assert.ok(patternText.startsWith('^(') && patternText.endsWith(')$'), `${file} ${label} must stay an anchored path-only allowlist`);
+        const entries = patternText.slice(2, -2).split('|');
+        for (const entry of entries) {
+          assert.doesNotMatch(entry.replaceAll('\\.', ''), /[*+?[\]{}()^$\\]/, `${file} ${label} entry must be a literal path: ${entry}`);
+        }
+        return new Set(entries.map((entry) => entry.replaceAll('\\.', '.')));
+      };
+      const allowedPaths = toPaths(allowed[index], 'allowed');
+      const supplementalPaths = toPaths(pattern, 'supplemental_allowed');
+      const inScope = (path) => allowedPaths.has(path) || supplementalPaths.has(path);
+      assert.ok(inScope('test/hard-launch-control.test.mjs'), `${file} must allow test/hard-launch-control.test.mjs`);
+      assert.ok(inScope('tests/launch/verify-same-run-deployment-artifact.test.mjs'), `${file} must allow the same-run artifact test`);
+      for (const rejected of [
+        'src/App.tsx',
+        'test/hard-launch-control.test.mjs.bak',
+        'test/other-hard-launch-control.test.mjs',
+        'test/hard-launch-control.spec.mjs',
+        'tests/launch/verify-same-run-deployment-artifact.test.ts',
+        'tests/launch/verify-same-run-deployment-artifact-extra.test.mjs',
+        'tests/e2e/verify-same-run-deployment-artifact.test.mjs',
+        'apps/admin-panel/src/pages/admin/PublicLaunchCommandCenterPageV2.tsx',
+      ]) {
+        assert.equal(inScope(rejected), false, `${file} must still reject ${rejected}`);
+      }
+      checked += 1;
+    }
+  }
+  assert.equal(checked, 6);
+});
+
+for (const scopeWorkflow of [
+  '.github/workflows/technician-physical-evidence.yml',
+  '.github/workflows/operational-application-evidence.yml',
+  '.github/workflows/operational-provider-evidence.yml',
+  '.github/workflows/privileged-access-rotation-evidence.yml',
+]) test(`${scopeWorkflow} scope pins the reviewed deployment verifier blob and still rejects other drift`, async () => {
+  const { execFileSync } = await import('node:child_process');
+  const { mkdtempSync, writeFileSync, mkdirSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const { join } = await import('node:path');
+  const workflow = await read(scopeWorkflow);
+  const errorAt = workflow.indexOf('Non-control-plane file changed since frozen release');
+  assert.ok(errorAt > 0, 'scope step must exist');
+  const stepStart = workflow.lastIndexOf('      - name:', errorAt);
+  const runStart = workflow.indexOf('run: |\n', stepStart) + 'run: |\n'.length;
+  const runEnd = workflow.indexOf('\n      - name:', runStart);
+  const script = workflow.slice(runStart, runEnd).split('\n').map((line) => line.replace(/^ {10}/, '')).join('\n');
+  const allowedLists = [...script.matchAll(/allowed='([^']+)'/g)].map((match) => match[1]);
+  assert.ok(allowedLists.length > 0, 'workflow must declare path allowlists');
+  assert.ok(allowedLists.some((list) => list.includes('tests/launch/hard-clearance-revalidation\\.test\\.mjs')), 'this regression test file must be inside the workflow scope');
+  assert.ok(!allowedLists.some((list) => list.includes('verify-production-deployment')), 'verifier must not be added to the broad path allowlist');
+  assert.match(script, /deploy_verifier_blob='475ac1c26c7338db7e33934dd30852a7f54e3efa'/);
+
+  const { readFileSync } = await import('node:fs');
+  const approved = readFileSync('scripts/verify-production-deployment.mjs');
+  const approvedBlob = execFileSync('git', ['hash-object', '--stdin'], { input: approved, encoding: 'utf8' }).trim();
+  assert.equal(approvedBlob, '475ac1c26c7338db7e33934dd30852a7f54e3efa', 'checked-in verifier must equal the pinned reviewed blob');
+  const scenario = (mutate) => {
+    const dir = mkdtempSync(join(tmpdir(), 'scope-'));
+    const git = (...args) => execFileSync('git', ['-C', dir, ...args], { encoding: 'utf8' }).trim();
+    git('init', '-q');
+    git('config', 'user.email', 't@example.com');
+    git('config', 'user.name', 't');
+    mkdirSync(join(dir, 'scripts'), { recursive: true });
+    writeFileSync(join(dir, 'scripts/verify-production-deployment.mjs'), 'old\n');
+    writeFileSync(join(dir, 'app.txt'), 'app\n');
+    git('add', '-A');
+    git('commit', '-qm', 'release');
+    const release = git('rev-parse', 'HEAD');
+    mutate(dir);
+    git('add', '-A');
+    git('commit', '-qm', 'control');
+    const control = git('rev-parse', 'HEAD');
+    const parent = mkdtempSync(join(tmpdir(), 'cp-'));
+    execFileSync('ln', ['-s', dir, join(parent, 'control-plane')]);
+    try {
+      execFileSync('bash', ['-c', script], {
+        cwd: parent,
+        env: { ...process.env, RELEASE_SHA: release, CONTROL_PLANE_SHA: control, KNOWN_RULES_WRITER_COMMIT: '86b67c4a12a4ac61037dba8201f3d5ab96b09c5f', GITHUB_ENV: join(parent, 'env') },
+        stdio: 'pipe',
+      });
+      return { ok: true, out: '' };
+    } catch (error) {
+      return { ok: false, out: String(error.stdout) + String(error.stderr) };
+    }
+  };
+
+  const exact = scenario((dir) => writeFileSync(join(dir, 'scripts/verify-production-deployment.mjs'), approved));
+  assert.equal(exact.ok, true, exact.out);
+
+  const modified = scenario((dir) => writeFileSync(join(dir, 'scripts/verify-production-deployment.mjs'), Buffer.concat([approved, Buffer.from('\n// drift\n')])));
+  assert.equal(modified.ok, false);
+  assert.match(modified.out, /exact approved blob for scripts\/verify-production-deployment\.mjs/);
+
+  const other = scenario((dir) => writeFileSync(join(dir, 'app.txt'), 'changed\n'));
+  assert.equal(other.ok, false);
+  assert.match(other.out, /Non-control-plane file changed since frozen release: app\.txt/);
+
+  const both = scenario((dir) => {
+    writeFileSync(join(dir, 'scripts/verify-production-deployment.mjs'), approved);
+    writeFileSync(join(dir, 'app.txt'), 'changed\n');
+  });
+  assert.equal(both.ok, false);
+  assert.match(both.out, /Non-control-plane file changed since frozen release: app\.txt/);
 });

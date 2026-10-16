@@ -39,7 +39,7 @@ export default function OwnerRecentComplaintsCard() {
     <Paper data-testid="owner-recent-complaints" sx={{ p: { xs: 2.5, md: 3 }, borderRadius: 5, border: `1px solid ${alpha(binThemeTokens.gold, 0.18)}` }}>
       <Stack direction={isRTL ? 'row-reverse' : 'row'} justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
         <Typography sx={{ color: binThemeTokens.textPrimary, fontWeight: 950 }}>{tx('owner.recentComplaints.title', 'Latest complaints')}</Typography>
-        <Button onClick={() => navigate('/owner/tickets')} sx={{ color: binThemeTokens.goldHover, fontWeight: 900 }}>{tx('owner.recentComplaints.viewAll', 'View all')}</Button>
+        <Button onClick={() => navigate('/owner/tickets')} sx={{ color: binThemeTokens.goldText, fontWeight: 900 }}>{tx('owner.recentComplaints.viewAll', 'View all')}</Button>
       </Stack>
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
       {loading && !error && <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary }}>{tx('owner.recentComplaints.loading', 'Loading complaints…')}</Typography>}

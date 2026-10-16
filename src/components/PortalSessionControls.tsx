@@ -8,7 +8,7 @@ import { clearOnboardingSessionArtifacts } from '../lib/onboardingDb';
 import { prepareTechnicianTrackingLogout } from '../utils/liveTracking';
 import SafeIcon from './SafeIcon';
 
-type PortalRole = 'owner' | 'tenant' | 'technician' | 'broker' | 'admin';
+export type PortalRole = 'owner' | 'tenant' | 'technician' | 'broker' | 'admin';
 
 type PortalSessionControlsProps = {
   role: PortalRole;
@@ -26,22 +26,12 @@ const clearSessionAndPreserveLanguage = async () => {
   if (preferredLanguage) localStorage.setItem('bin_language', preferredLanguage);
 };
 
-export default function PortalSessionControls({
-  role,
-  dark = false,
-  accent = '#B8932F',
-  logoutRedirect,
-  compact = false,
-}: PortalSessionControlsProps) {
-  const { lang, setLang, isRTL } = useLanguage();
-  const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
-  const nextLang = lang === 'en' ? 'ar' : 'en';
-  const languageLabel = nextLang.toUpperCase();
+/** Shared language + logout behaviour, used by the header buttons and the phone overflow menu. */
+export function usePortalSession(role: PortalRole, logoutRedirect?: string) {
+  const { lang, setLang } = useLanguage();
+  const nextLang: typeof lang = lang === 'en' ? 'ar' : 'en';
   const logoutLabel = lang === 'ar' ? 'تسجيل الخروج' : 'Logout';
-  const softBackground = dark ? alpha('#FFFFFF', 0.08) : '#FFFFFF';
-  const borderColor = dark ? alpha('#FFFFFF', 0.18) : alpha(accent, 0.35);
-
+  const languageSwitchLabel = lang === 'ar' ? 'English' : 'العربية';
   const handleLogout = async () => {
     const technicianUid = role === 'technician' ? auth.currentUser?.uid || '' : '';
 
@@ -77,6 +67,27 @@ export default function PortalSessionControls({
       }
     }
   };
+
+  return { lang, nextLang, setLang, logoutLabel, languageSwitchLabel, handleLogout };
+}
+
+export default function PortalSessionControls({
+  role,
+  dark = false,
+  accent = '#B8932F',
+  logoutRedirect,
+  compact = false,
+}: PortalSessionControlsProps) {
+  const { lang, setLang, isRTL } = useLanguage();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const nextLang = lang === 'en' ? 'ar' : 'en';
+  const languageLabel = nextLang.toUpperCase();
+  const logoutLabel = lang === 'ar' ? 'تسجيل الخروج' : 'Logout';
+  const softBackground = dark ? alpha('#FFFFFF', 0.08) : '#FFFFFF';
+  const borderColor = dark ? alpha('#FFFFFF', 0.18) : alpha(accent, 0.35);
+
+  const { handleLogout } = usePortalSession(role, logoutRedirect);
 
   return (
     <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} alignItems="center">
