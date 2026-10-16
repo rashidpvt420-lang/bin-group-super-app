@@ -1,0 +1,68 @@
+emirate,area,aliases_arabic,zone,segment,metric,confidence,source_urls,remote
+Dubai,Palm Jumeirah,Palm|نخلة جميرا,A,residential,rent AED 221.84/sqft/yr (12m DLD); 125/sqft 2025 benchmark; service charge 15-25/sqft,high,https://aigentsrealty.com/data/dubai-area-rental-stats https://home.ai/dubai/rental-benchmarks https://dubaipractical.com/real-estate/service-charges,no
+Dubai,Downtown Dubai,Burj Khalifa|Downtown|وسط مدينة دبي,A,residential,rent AED 155.26/sqft; 1BR 142k; service charge ~21/sqft,high,https://aigentsrealty.com/data/dubai-area-rental-stats https://www.bayut.com/mybayut/dubai-rental-market-report-2025/ https://dubaipractical.com/real-estate/service-charges,no
+Dubai,Dubai Marina,Marsa Dubai|Marina|مرسى دبي,A,residential,rent AED 137.47/sqft; 1BR 110k; SC 15-18,high,https://aigentsrealty.com/data/dubai-area-rental-stats https://www.bayut.com/mybayut/dubai-rental-market-report-2025/ https://dubaipractical.com/real-estate/service-charges,no
+Dubai,Dubai Creek Harbour,Creek Harbour|خور دبي,A,residential,"1BR 114k; avg rent 143,656",medium,https://www.bayut.com/mybayut/dubai-rental-market-report-2025/ https://www.dxbanalytics.com/blog/average-rent-dubai-by-area-2025,no
+Dubai,Dubai Hills Estate,Dubai Hills|دبي هيلز,A,residential,"avg rent 180,423 (7,609 contracts)",medium,https://www.dxbanalytics.com/blog/average-rent-dubai-by-area-2025,no
+Dubai,Jumeirah Park / The Meadows / Arabian Ranches / Tilal Al Ghaf,Meadows|Arabian Ranches|المرابع العربية,A,residential (villa),avg rent 250k-330k (top 10 by avg rent),medium,https://www.dxbanalytics.com/blog/average-rent-dubai-by-area-2025,no
+Dubai,Business Bay,الخليج التجاري,B,residential/commercial,"rent AED 1,206/sqm (~112/sqft); 1BR 109k; SC 15-18",high,https://home.ai/dubai/rental-benchmarks https://www.bayut.com/mybayut/dubai-rental-market-report-2025/ https://dubaipractical.com/real-estate/service-charges,no
+Dubai,Jumeirah Lake Towers,JLT|أبراج بحيرات جميرا,B,residential/commercial,1BR 95k,medium,https://www.bayut.com/mybayut/dubai-rental-market-report-2025/,no
+Dubai,Jumeirah Village Circle,JVC|Al Barsha South Fourth|قرية جميرا الدائرية,B,residential,rent AED 102.97/sqft; 1BR 79k; SC ~10,high,https://aigentsrealty.com/data/dubai-area-rental-stats https://www.bayut.com/mybayut/dubai-rental-market-report-2025/ https://dubaipractical.com/real-estate/service-charges,no
+Dubai,Al Furjan / Jebel Ali First,Jabal Ali First|الفرجان,C,residential,rent AED 778/sqm (~72/sqft),medium,https://home.ai/dubai/rental-benchmarks,no
+Dubai,Dubai Silicon Oasis,DSO|Nadd Hessa|واحة دبي للسيليكون,C,residential,"rent AED 693/sqm (~64/sqft); avg 55,204",medium,https://home.ai/dubai/rental-benchmarks https://www.dxbanalytics.com/blog/average-rent-dubai-by-area-2025,no
+Dubai,International City,Al Warsan First|المدينة العالمية,C,residential,"rent AED 84.98/sqft; avg 37,910",high,https://aigentsrealty.com/data/dubai-area-rental-stats https://www.dxbanalytics.com/blog/average-rent-dubai-by-area-2025,no
+Dubai,Discovery Gardens,ديسكفري جاردنز,C,residential,"avg rent 51,690",medium,https://www.dxbanalytics.com/blog/average-rent-dubai-by-area-2025,no
+Dubai,IMPZ / Dubai Production City,IMPZ,C,residential,"avg rent 49,644",medium,https://www.dxbanalytics.com/blog/average-rent-dubai-by-area-2025,no
+Dubai,Dubai Investment Park,DIP|مجمع دبي للاستثمار,C,residential/industrial,"avg rent 52,259",medium,https://www.dxbanalytics.com/blog/average-rent-dubai-by-area-2025,no
+Dubai,Al Baraha / Abu Hail / Al Muraqqabat,Deira|ديرة,C,residential,"avg rent 32,915-50,920",medium,https://www.dxbanalytics.com/blog/average-rent-dubai-by-area-2025,no
+Dubai,Al Quoz / Jebel Ali Industrial / Ras Al Khor Industrial,القوز|جبل علي الصناعية,C,industrial,category: industrial zone (no rent metric used),low,,no
+Abu Dhabi,Saadiyat Island,السعديات,A,residential,"apt rent AED 201/sqft (Q4-25); villa 115/sqft; apt sale 5,051/sqft",high,https://fglulnntngmzvquy.public.blob.vercel-storage.com/uploads/marketbeats/1777815472639-marketbeat-residential-q4-2025-abu-dhabi-uae.pdf,no
+Abu Dhabi,Yas Island,جزيرة ياس,A,residential,apt rent AED 142/sqft; villa 95/sqft,high,https://fglulnntngmzvquy.public.blob.vercel-storage.com/uploads/marketbeats/1777815472639-marketbeat-residential-q4-2025-abu-dhabi-uae.pdf,no
+Abu Dhabi,Al Reem Island,Reem|جزيرة الريم,B,residential,"apt rent AED 110/sqft; sale 1,628",high,https://fglulnntngmzvquy.public.blob.vercel-storage.com/uploads/marketbeats/1777815472639-marketbeat-residential-q4-2025-abu-dhabi-uae.pdf,no
+Abu Dhabi,Al Raha Beach,شاطئ الراحة,B,residential,apt rent AED 100/sqft,high,https://fglulnntngmzvquy.public.blob.vercel-storage.com/uploads/marketbeats/1777815472639-marketbeat-residential-q4-2025-abu-dhabi-uae.pdf,no
+Abu Dhabi,Masdar City,مدينة مصدر,B,residential,"apt sale AED 1,428/sqft (≈Reem)",medium,https://www.bayut.com/mybayut/abu-dhabi-sales-market-report-2025/,no
+Abu Dhabi,Al Raha Gardens,حدائق الراحة,B,residential (villa),villa rent AED 57/sqft,medium,https://fglulnntngmzvquy.public.blob.vercel-storage.com/uploads/marketbeats/1777815472639-marketbeat-residential-q4-2025-abu-dhabi-uae.pdf,no
+Abu Dhabi,Khalifa City,KCA|مدينة خليفة,B,residential (villa),"villa rent AED 38/sqft but sale 1,352/sqft (large plots) - mixed signal",low,https://fglulnntngmzvquy.public.blob.vercel-storage.com/uploads/marketbeats/1777815472639-marketbeat-residential-q4-2025-abu-dhabi-uae.pdf,no
+Abu Dhabi,Mohamed Bin Zayed City,MBZ|مدينة محمد بن زايد,B,residential,"villa rent 101.5/sqft (Q2-25, single quarter)",low,https://fglulnntngmzvquy.public.blob.vercel-storage.com/uploads/marketbeats/1777815552229-marketbeat-residential-q2-2025-abu-dhabi-uae.pdf,no
+Abu Dhabi,Al Reef,Al Reef Downtown|الريف,C,residential,apt rent AED 80/sqft; sale 789,high,https://fglulnntngmzvquy.public.blob.vercel-storage.com/uploads/marketbeats/1777815472639-marketbeat-residential-q4-2025-abu-dhabi-uae.pdf https://www.bayut.com/mybayut/abu-dhabi-sales-market-report-2025/,no
+Abu Dhabi,Al Ghadeer,الغدير,C,residential,apt sale AED 943/sqft (≈Al Reef),medium,https://www.bayut.com/mybayut/abu-dhabi-sales-market-report-2025/,no
+Abu Dhabi,Baniyas,بني ياس,C,residential,apt sale AED 792/sqft,medium,https://www.bayut.com/mybayut/abu-dhabi-sales-market-report-2025/,no
+Abu Dhabi,Mussafah / ICAD / KIZAD,Musaffah|المصفح,C,industrial,category: industrial zone,low,,no
+Abu Dhabi (Al Ain),Al Towayya,Al Towaya|Al Tawia|الطوية,B,residential (villa),villa 3BR 60-80k (highest Al Ain villa band),medium,https://vazeno.files.cmp.optimizely.com/download/assets/202401001_astrep960_2024q3_alain.pdf/fededa7eaac211f0b0335a3625ae3f27,no
+Abu Dhabi (Al Ain),Al Jimi,الجيمي,C,residential,"1BR ~30k, 2BR ~39k",medium,https://www.propertyfinder.ae/en/rent/al-ain/apartments-for-rent-al-jimi.html https://vazeno.files.cmp.optimizely.com/download/assets/202401001_astrep960_2024q3_alain.pdf/fededa7eaac211f0b0335a3625ae3f27,no
+Abu Dhabi (Al Ain),Town Centre / Al Muwaiji / Al Khabisi / Zakher / Al Masoudi / Al Manaseer,Central District|المويجعي|الخبيصي|زاخر,C,residential,apt 1BR 21-35k; villa 3BR 42-46k,medium,https://vazeno.files.cmp.optimizely.com/download/assets/202401001_astrep960_2024q3_alain.pdf/fededa7eaac211f0b0335a3625ae3f27,no
+Abu Dhabi (Al Ain),Al Ain Industrial (Sanaiya),Senaya|الصناعية,C,industrial,category: industrial,low,,no
+Abu Dhabi (Al Dhafra),Madinat Zayed / Ruwais / Ghayathi / Liwa,الظفرة|مدينة زايد|الرويس,C,residential,no public rent data found,low,,yes
+Sharjah,Aljada,الجادة,A,residential,"apt sale AED 1,041/sqft (highest in Sharjah)",high,https://www.bayut.com/mybayut/sharjah-market-report-2025/,no
+Sharjah,Muwaileh,مويلح,A,residential,apt sale 994/sqft; 1BR 43k,high,https://www.bayut.com/mybayut/sharjah-market-report-2025/,no
+Sharjah,Al Khan,الخان,A,residential,apt sale 971/sqft,high,https://www.bayut.com/mybayut/sharjah-market-report-2025/,no
+Sharjah,Tilal City,تلال,A,residential (villa),villa sale 948/sqft; villa rent ~194k,medium,https://developersnewsmagazine.com/sharjah-market-report-2025-trends-insights-revealed/,no
+Sharjah,Al Majaz,المجاز,B,residential,apt sale 728/sqft; 1BR 38k,high,https://www.bayut.com/mybayut/sharjah-market-report-2025/,no
+Sharjah,Al Taawun,التعاون,B,residential,1BR 37k,medium,https://developersnewsmagazine.com/sharjah-market-report-2025-trends-insights-revealed/,no
+Sharjah,Al Nahda (Sharjah),النهدة,B,residential,apt sale 524/sqft; 1BR 37k (rent ≈ Majaz),medium,https://www.bayut.com/mybayut/sharjah-market-report-2025/,no
+Sharjah,Al Qasimia,القاسمية,C,residential,1BR 29k,medium,https://developersnewsmagazine.com/sharjah-market-report-2025-trends-insights-revealed/,no
+Sharjah,Sharjah Industrial Areas 1-18 / SAIF Zone,الصناعية,C,industrial,category: industrial,low,,no
+Ajman,Al Zorah,الزوراء,A,residential,"apt sale AED 1,141/sqft",medium,https://www.albarqrealestate.com/en/market/index.html,no
+Ajman,Ajman Corniche,كورنيش عجمان,B,residential,apt sale 542/sqft,medium,https://www.albarqrealestate.com/en/market/index.html,no
+Ajman,Al Yasmeen,الياسمين,B,residential (villa),sale 533/sqft; villa rent ~110k,medium,https://www.albarqrealestate.com/en/market/index.html,no
+Ajman,Al Rashidiya,الراشدية,B,residential,sale 453/sqft; 1BR 28k,high,https://www.bayut.com/mybayut/ajman-market-report-2025/,no
+Ajman,Al Nuaimiya,النعيمية,B,residential,sale 452/sqft; 1BR 27k,high,https://www.bayut.com/mybayut/ajman-market-report-2025/,no
+Ajman,Al Jurf / Al Rawda / Al Mowaihat,الجرف|الروضة|المويهات,B,residential,1BR 29-31k,medium,https://www.albarqrealestate.com/en/market/index.html,no
+Ajman,Emirates City,مدينة الإمارات,C,residential,sale 360/sqft,medium,https://www.albarqrealestate.com/en/market/index.html,no
+Ajman,Ajman Downtown,داون تاون عجمان,C,residential,sale 350/sqft,medium,https://www.albarqrealestate.com/en/market/index.html,no
+Ajman,Garden City,جاردن سيتي,C,residential,sale 377/sqft,medium,https://www.albarqrealestate.com/en/market/index.html,no
+Ajman,Ajman Industrial Area,الجرف الصناعية,C,industrial,category: industrial,low,,no
+Ras Al Khaimah,Al Marjan Island,Marjan|Bab Al Bahr|جزيرة المرجان,A,residential,"apt sale 1,328/sqft; 1BR 59k",high,https://www.bayut.com/mybayut/rak-market-report-2025/,no
+Ras Al Khaimah,Al Hamra Village,الحمرا,A,residential,"apt sale 1,027/sqft; 1BR 51k",high,https://www.bayut.com/mybayut/rak-market-report-2025/,no
+Ras Al Khaimah,Mina Al Arab,ميناء العرب,A,residential,sale ~980/sqft,low,https://propertyvalue.ae/areas/al-hamra-village,no
+Ras Al Khaimah,"Julphar Towers / RAK City (Al Nakheel, Dafan)",جلفار|النخيل,B,residential,sale ~620/sqft (Julphar only),low,https://propertyvalue.ae/areas/al-hamra-village,no
+Ras Al Khaimah,Al Ghail / Al Hamra Industrial,الغيل,C,industrial,category: industrial,low,,no
+Umm Al Quwain,UAQ Marina,مارينا أم القيوين,B,residential,sale ~690/sqft; 1BR 31k,low,https://propertyvalue.ae/areas/al-hamra-village https://en.khalijiuwn24.com/1232352,no
+Umm Al Quwain,Al Salamah,السلامة,C,residential,sale ~410/sqft; 1BR 27k,low,https://propertyvalue.ae/areas/al-hamra-village https://en.khalijiuwn24.com/1232352,no
+Umm Al Quwain,Al Raas / Umm Al Thaoub / Al Ramla,الراس|أم الثعوب,C,residential,sale ~460/sqft; 1BR 25-28k,low,https://propertyvalue.ae/areas/al-hamra-village https://en.khalijiuwn24.com/1232352,no
+Umm Al Quwain,Emirates Modern Industrial Area,EMIA,C,industrial,sale ~320/sqft,low,https://propertyvalue.ae/areas/al-hamra-village,no
+Fujairah,Al Faseel,الفصيل,B,residential,sale ~580/sqft,low,https://propertyvalue.ae/areas/al-hamra-village,no
+Fujairah,Al Gurfa,الغرفة,B,residential,sale ~510/sqft,low,https://propertyvalue.ae/areas/al-hamra-village,no
+Fujairah,Dibba Al-Fujairah,دبا الفجيرة,C,residential,sale ~460/sqft,low,https://propertyvalue.ae/areas/al-hamra-village,no
+Fujairah,Sakamkam,سكمكم,C,residential,sale ~420/sqft,low,https://propertyvalue.ae/areas/al-hamra-village,no
+Dubai,Hatta,حتا,A,residential,no cited rent data; Zone A (safe side) per founder decision 2026-10-14 13:11 until data exists; remote mountain enclave ~130 km from Dubai city,low,,yes

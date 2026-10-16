@@ -1,18 +1,28 @@
 import { SERVICE_ADDONS, UAE_PRICING_MATRIX_2026, serviceAddOnAnnualPrice } from './uaePricingMatrix2026';
+import { UAE_AREA_ZONES_2026, type UaeAreaZoneEntry } from './uaeAreaZones2026';
 
 export interface QuoteInput {
   assetClassId: string;
   emirate: string;
+  /** Owner-typed area / community; matched to the approved zone map (overrides zone when matched). */
+  area?: string;
   zone: 'A' | 'B' | 'C';
   contractType: 'FM_ONLY' | 'PM_ONLY' | 'BOTH';
   sqft?: number;
   units?: number;
   beds?: number;
+  /** Apartment bedrooms (0 = studio). Founder decision 2026-10-14 13:11. */
+  bedrooms?: number;
+  /** Set by the sanitizer when bedrooms / age were left blank (priced on the safe side). */
+  bedroomsUnknown?: boolean;
+  propertyAgeUnknown?: boolean;
   annualRent?: number;
   annualRevenue?: number;
   propertyAge: number;
   floors?: number;
   lifts?: number;
+  floorsUnknown?: boolean;
+  liftsUnknown?: boolean;
   hasPool?: boolean;
   hasGym?: boolean;
   hasCentralHVAC?: boolean;
@@ -248,42 +258,132 @@ function finiteNumber(value: unknown, fallback = 0): number {
 
 function positiveNumber(value: unknown, fallback = 0): number { return Math.max(finiteNumber(value, fallback), 0); }
 
+const ABU_DHABI_FAMILY = ['Abu Dhabi', 'Al Ain', 'Al Dhafra'];
+
 /**
- * Cities / areas that owners or address lookup often enter in the emirate field. Each maps to the
- * emirate whose regional factor applies (Al Ain is in the Emirate of Abu Dhabi, etc.).
+ * Cities / areas that owners or address lookup often enter in the emirate or area field. Each maps to the
+ * pricing region whose factor applies. Al Ain and Al Dhafra are their own regions (Founder decision 2026-10-14).
  */
-const EMIRATE_CITY_ALIASES: Record<string, string> = {
-  alain: 'Abu Dhabi', alayn: 'Abu Dhabi', khalifacity: 'Abu Dhabi', mussafah: 'Abu Dhabi', musaffah: 'Abu Dhabi',
-  madinatzayed: 'Abu Dhabi', ruwais: 'Abu Dhabi', alruwais: 'Abu Dhabi', aldhafra: 'Abu Dhabi', liwa: 'Abu Dhabi',
-  hatta: 'Dubai', jebelali: 'Dubai',
-  khorfakkan: 'Sharjah', kalba: 'Sharjah', dibbaalhisn: 'Sharjah',
+const REGION_CITY_ALIASES: Record<string, string> = {
+  alain: 'Al Ain', alayn: 'Al Ain', العين: 'Al Ain',
+  aldhafra: 'Al Dhafra', dhafra: 'Al Dhafra', westernregion: 'Al Dhafra', madinatzayed: 'Al Dhafra', ruwais: 'Al Dhafra',
+  liwa: 'Al Dhafra', ghayathi: 'Al Dhafra', الظفره: 'Al Dhafra', الرويس: 'Al Dhafra',
+  khalifacity: 'Abu Dhabi', mussafah: 'Abu Dhabi', musaffah: 'Abu Dhabi',
+  hatta: 'Dubai', jebelali: 'Dubai', khorfakkan: 'Sharjah', kalba: 'Sharjah', dibbaalhisn: 'Sharjah',
 };
 
-function emirateKey(value: string): string {
-  return String(value || '').toLowerCase().replace(/^emirate\s+of\s+/, '').replace(/\s+emirate$/, '').replace(/[^a-z0-9]+/g, '');
+const REGION_EMIRATE_TOKENS: Array<[string, string]> = [
+  ['abudhabi', 'Abu Dhabi'], ['ابوظبي', 'Abu Dhabi'], ['dubai', 'Dubai'], ['دبي', 'Dubai'],
+  ['sharjah', 'Sharjah'], ['الشارقه', 'Sharjah'], ['ajman', 'Ajman'], ['عجمان', 'Ajman'],
+  ['rasalkhaimah', 'Ras Al Khaimah'], ['راسالخيمه', 'Ras Al Khaimah'], ['ummalquwain', 'Umm Al Quwain'],
+  ['ummalqaiwain', 'Umm Al Quwain'], ['امالقيوين', 'Umm Al Quwain'], ['fujairah', 'Fujairah'], ['الفجيره', 'Fujairah'],
+];
+
+/** Case-, space-, punctuation- and Arabic-letter-variant-insensitive key ("Al Ain" / "Alain" / "AL-AIN" -> "alain"). */
+export function pricingLocationKey(value: unknown): string {
+  return String(value || '').toLowerCase()
+    .replace(/^\s*emirate\s+of\s+/, '').replace(/\s+emirate\s*$/, '')
+    .replace(/[\u064B-\u0652\u0640]/g, '').replace(/[أإآ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي')
+    .replace(/[^a-z0-9\u0621-\u064A]+/g, '');
 }
 
-function matrixEmirateFactor(label: string): number {
+function longestContained<T>(key: string, pairs: Array<[string, T]>): T | null {
+  let best: { length: number; value: T } | null = null;
+  for (const [alias, value] of pairs) {
+    if (alias.length >= 3 && key.includes(alias) && (!best || alias.length > best.length)) best = { length: alias.length, value };
+  }
+  return best ? best.value : null;
+}
+
+/** Pricing region for a typed emirate or city, or null when unrecognised. */
+export function resolvePricingRegion(value: unknown): string | null {
+  const key = pricingLocationKey(value);
+  if (!key) return null;
+  if (REGION_CITY_ALIASES[key]) return REGION_CITY_ALIASES[key];
+  if (key === 'rak') return 'Ras Al Khaimah';
+  if (key === 'uaq') return 'Umm Al Quwain';
+  if (key === 'ad' || key === 'auh') return 'Abu Dhabi';
+  return longestContained(key, Object.entries(REGION_CITY_ALIASES)) || longestContained(key, REGION_EMIRATE_TOKENS);
+}
+
+function sameEmirateFamily(left: string, right: string): boolean {
+  if (left === right) return true;
+  return ABU_DHABI_FAMILY.includes(left) && ABU_DHABI_FAMILY.includes(right);
+}
+
+const AREA_ALIAS_INDEX: Array<[string, UaeAreaZoneEntry]> = UAE_AREA_ZONES_2026.flatMap(
+  (entry) => entry.aliases.map((alias) => [pricingLocationKey(alias), entry] as [string, UaeAreaZoneEntry]),
+);
+
+export interface AreaZoneResolution {
+  status: 'matched' | 'unmatched' | 'missing';
+  entry: UaeAreaZoneEntry | null;
+}
+
+/** Match an owner-typed area / community to the approved zone map, scoped to the emirate when it is known. */
+export function resolveAreaZone(area: unknown, emirate?: unknown): AreaZoneResolution {
+  const key = pricingLocationKey(area);
+  if (!key) return { status: 'missing', entry: null };
+  const emirateRegion = resolvePricingRegion(emirate);
+  const candidates = emirateRegion
+    ? AREA_ALIAS_INDEX.filter(([, entry]) => sameEmirateFamily(entry.region, emirateRegion))
+    : AREA_ALIAS_INDEX;
+  const entry = longestContained(key, candidates);
+  return entry ? { status: 'matched', entry } : { status: 'unmatched', entry: null };
+}
+
+function matrixRegionFactor(label: string): number {
   const entry = UAE_PRICING_MATRIX_2026.emirateMultipliers.find((item) => item.label === label);
   return entry ? finiteNumber(entry.value, 1) : 1;
 }
 
-/** Regional factor comes from UAE_PRICING_MATRIX_2026.emirateMultipliers (the table the Admin page shows). */
-export function resolveEmirateMultiplier(emirate: string): { input: string; emirate: string | null; multiplier: number; viaCity: boolean } {
+export const ZONE_PENDING_FLAG = 'Zone pending admin confirmation';
+export const BEDROOMS_PENDING_FLAG = 'Bedrooms pending inspection confirmation';
+export const AGE_PENDING_FLAG = 'Property age pending inspection confirmation';
+export const EMIRATE_PENDING_FLAG = 'Emirate pending admin confirmation';
+export const FLOORS_LIFTS_PENDING_FLAG = 'Floors / lifts pending inspection confirmation';
+/** Multi-storey classes where floors and lifts drive the complexity premium (blank = highest tier, founder decision 2026-10-14 14:01). */
+const MULTI_STOREY_ASSET_IDS = new Set(['res-bldg', 'com-twr', 'retail-ctr', 'rtl-mall', 'mid_scale_hotel', 'resort', 'hosp', 'school', 'staff-accom', 'gov-facility', 'mix-dev', 'highrise']);
+/** Founder decision 2026-10-14 13:21: missing/unknown inputs are priced on the safe side and these warnings reach the owner. */
+export const OWNER_WARNING_PREFIXES = [ZONE_PENDING_FLAG, BEDROOMS_PENDING_FLAG, AGE_PENDING_FLAG, EMIRATE_PENDING_FLAG, FLOORS_LIFTS_PENDING_FLAG];
+const isBlank = (v: unknown) => v === undefined || v === null || String(v).trim() === '' || !Number.isFinite(Number(v));
+const BEDROOM_PRICED_ASSET_IDS = new Set(['apt-std', 'apt-lux']);
+/** Apartment bedroom factor: studio/1BR 1.00, 2BR 1.25, 3BR 1.50, 4BR+ 1.75 (founder decision 2026-10-14 13:11). */
+export function resolveBedroomFactor(bedrooms: unknown): number {
+  const n = Math.floor(finiteNumber(bedrooms, 0));
+  return n >= 4 ? 1.75 : n === 3 ? 1.5 : n === 2 ? 1.25 : 1;
+}
+
+/** Asset-age factor from UAE_PRICING_MATRIX_2026.ageFactors (founder decision 2026-10-14). */
+export function resolveAgeFactor(propertyAge: unknown): number {
+  if (isBlank(propertyAge)) return Math.max(...UAE_PRICING_MATRIX_2026.ageFactors.map((band) => band.multiplier));
+  const age = finiteNumber(propertyAge, 0);
+  let factor = 1;
+  for (const band of UAE_PRICING_MATRIX_2026.ageFactors) if (age > band.minAgeExclusive) factor = band.multiplier;
+  return factor;
+}
+
+/** Minimum annual Property Management fee for the resolved pricing region (founder decision 2026-10-14). */
+export function resolveMinimumManagementFee(region: string | null): number {
+  const rows = UAE_PRICING_MATRIX_2026.minimumManagementFee;
+  if (!region) return Math.max(...rows.map((row) => finiteNumber(row.amount, 0)));
+  const exact = rows.find((row) => row.regions.includes(region));
+  const fallback = rows.find((row) => row.regions.includes('*'));
+  return finiteNumber((exact || fallback)?.amount, 0);
+}
+
+/** Regional factor from UAE_PRICING_MATRIX_2026.emirateMultipliers (the table the Admin page shows). */
+export function resolveEmirateMultiplier(emirate: string, area?: string): { input: string; emirate: string | null; multiplier: number; viaCity: boolean } {
   const input = String(emirate || '').trim();
-  const key = emirateKey(input);
-  if (!key) return { input: '', emirate: null, multiplier: 1, viaCity: false };
-  const cityEmirate = EMIRATE_CITY_ALIASES[key];
-  const resolvedKey = cityEmirate ? emirateKey(cityEmirate) : key;
-  const northern = 'RAK / Ajman / Fujairah / UAQ';
-  let resolved: string | null = null;
-  if (resolvedKey.includes('dubai')) resolved = 'Dubai';
-  else if (resolvedKey.includes('abudhabi')) resolved = 'Abu Dhabi';
-  else if (resolvedKey.includes('sharjah')) resolved = 'Sharjah';
-  else if (resolvedKey === 'rak' || resolvedKey.includes('rasalkhaimah') || resolvedKey.includes('ajman')
-    || resolvedKey.includes('fujairah') || resolvedKey === 'uaq' || resolvedKey.includes('ummalquwain')) resolved = northern;
-  if (!resolved) return { input, emirate: null, multiplier: 1, viaCity: false };
-  return { input, emirate: resolved === northern ? northern : resolved, multiplier: matrixEmirateFactor(resolved), viaCity: Boolean(cityEmirate) };
+  const emirateRegion = resolvePricingRegion(input);
+  const areaMatch = resolveAreaZone(area, input).entry;
+  const areaRegion = areaMatch ? areaMatch.region : resolvePricingRegion(area);
+  let region = emirateRegion;
+  // A more specific region from the area (Al Ain / Al Dhafra inside Abu Dhabi) wins within the same emirate.
+  if (areaRegion && (!region || sameEmirateFamily(areaRegion, region))) region = areaRegion;
+  if (!region) return { input, emirate: null, multiplier: 1, viaCity: false };
+  const viaCity = Boolean(input) && pricingLocationKey(input) !== pricingLocationKey(region);
+  return { input: input || String(area || '').trim(), emirate: region, multiplier: matrixRegionFactor(region), viaCity };
 }
 
 function normalizeAssetClassId(assetClassId?: string): string {
@@ -323,11 +423,12 @@ function sanitizeQuoteInput(input: Partial<QuoteInput> | null | undefined): Quot
   return {
     assetClassId: normalizeAssetClassId(raw.assetClassId),
     emirate: String(raw.emirate || '').trim(),
+    area: String(raw.area || '').trim().slice(0, 200),
     zone: safeZone(raw.zone),
     contractType: safeContractType(raw.contractType),
-    sqft: positiveNumber(raw.sqft), units: positiveNumber(raw.units), beds: positiveNumber(raw.beds),
+    sqft: positiveNumber(raw.sqft), units: positiveNumber(raw.units), beds: positiveNumber(raw.beds), bedrooms: positiveNumber(raw.bedrooms), bedroomsUnknown: raw.bedroomsUnknown === true || isBlank(raw.bedrooms),
     annualRent: positiveNumber(raw.annualRent), annualRevenue: positiveNumber(raw.annualRevenue),
-    propertyAge: positiveNumber(raw.propertyAge), floors: positiveNumber(raw.floors), lifts: positiveNumber(raw.lifts),
+    propertyAge: positiveNumber(raw.propertyAge), propertyAgeUnknown: raw.propertyAgeUnknown === true || isBlank(raw.propertyAge), floors: positiveNumber(raw.floors), lifts: positiveNumber(raw.lifts), floorsUnknown: raw.floorsUnknown === true || isBlank(raw.floors), liftsUnknown: raw.liftsUnknown === true || isBlank(raw.lifts),
     hasPool: raw.hasPool === true, hasGym: raw.hasGym === true, hasCentralHVAC: raw.hasCentralHVAC === true,
     hasDistrictCooling: raw.hasDistrictCooling === true, hasCivilDefenseSystem: raw.hasCivilDefenseSystem === true,
     hasSiraCctv: raw.hasSiraCctv === true, hasGenerator: raw.hasGenerator === true, hasBmu: raw.hasBmu === true,
@@ -379,9 +480,12 @@ export function resolveMandatoryAddOns(input: QuoteInput): string[] {
   if (safeInput.hasCivilDefenseSystem) ids.add('fire_safety');
   if (safeInput.hasWaterTank) ids.add('water_tank');
   if ((safeInput.lifts || 0) > 0) ids.add('elevator_amc');
+  // Blank lifts on a multi-storey building: assume lifts exist (safe side), so the lift AMC is included.
+  if (MULTI_STOREY_ASSET_IDS.has(asset) && safeInput.liftsUnknown) ids.add('elevator_amc');
   if (safeInput.hasSiraCctv) ids.add('sira_renewal');
   if (safeInput.hasBmu) ids.add('facade_access');
-  if (safeInput.propertyAge > 15) ids.add('pca_audit');
+  // Blank age is priced as 15+ (safe side), so the mandatory 15+ asset audit is included too.
+  if (safeInput.propertyAge > 15 || safeInput.propertyAgeUnknown) ids.add('pca_audit');
   if (safeInput.hasPool) ids.add('pool_care');
   if (safeInput.hasCentralHVAC || (safeInput.hvacCount || 0) > 0) ids.add('hvac_pm');
   return Array.from(ids);
@@ -401,6 +505,39 @@ export function calculateAddOnAnnualValue(addOns: string[] | undefined, property
   return Math.round(total);
 }
 
+/**
+ * Zone, regional and remote factors for one quote (shared by standard maintenance and mosques).
+ * Founder decisions 2026-10-14: unknown/blank area = Zone A, unknown/blank emirate = highest factor, remote +15%.
+ */
+function resolveLocationFactors(safeInput: QuoteInput, riskFlags: string[], pricingExplanation: string[]) {
+  const areaZone = resolveAreaZone(safeInput.area, safeInput.emirate);
+  let zone: 'A' | 'B' | 'C' = safeInput.zone;
+  if (areaZone.entry) {
+    zone = areaZone.entry.zone;
+    pricingExplanation.push(`Area '${safeInput.area}' matched ${areaZone.entry.area} (${areaZone.entry.region}): Zone ${zone}.`);
+  } else if (areaZone.status === 'missing') {
+    zone = 'A';
+    riskFlags.push(`${ZONE_PENDING_FLAG}: no area provided; Zone A (premium, safe side) applied until admin confirmation`);
+  } else {
+    zone = 'A';
+    riskFlags.push(`${ZONE_PENDING_FLAG}: area '${safeInput.area}' is not in the UAE area-zone map; Zone A (premium, safe side) applied until admin confirmation`);
+  }
+  const zoneEntry = UAE_PRICING_MATRIX_2026.zones[zone] || UAE_PRICING_MATRIX_2026.zones.B || { multiplier: 1 };
+  const zoneMultiplier = finiteNumber(zoneEntry.multiplier, 1);
+  if (zoneMultiplier !== 1) pricingExplanation.push(`Zone ${zone} technical-service factor ${zoneMultiplier}x applied.`);
+  const emirateResolution = resolveEmirateMultiplier(safeInput.emirate, safeInput.area);
+  const maxRegionFactor = Math.max(...UAE_PRICING_MATRIX_2026.emirateMultipliers.map((item) => finiteNumber(item.value, 1)));
+  const emirateMultiplier = emirateResolution.emirate ? emirateResolution.multiplier : maxRegionFactor;
+  if (!emirateResolution.input) riskFlags.push(`${EMIRATE_PENDING_FLAG}: no emirate provided; highest regional factor ${maxRegionFactor}x applied`);
+  else if (!emirateResolution.emirate) riskFlags.push(`${EMIRATE_PENDING_FLAG}: emirate '${safeInput.emirate}' is not recognised; highest regional factor ${maxRegionFactor}x applied`);
+  else if (emirateResolution.viaCity) pricingExplanation.push(`Priced under the ${emirateResolution.emirate} regional factor.`);
+  if (emirateMultiplier !== 1) pricingExplanation.push(`Regional technical-service factor ${emirateMultiplier}x applied for ${emirateResolution.emirate || safeInput.emirate}.`);
+  const isRemote = Boolean(areaZone.entry?.remote) || emirateResolution.emirate === 'Al Dhafra';
+  const remoteMultiplier = isRemote ? finiteNumber(UAE_PRICING_MATRIX_2026.remoteAreaSurcharge.multiplier, 1) : 1;
+  if (remoteMultiplier !== 1) pricingExplanation.push(`Remote-area maintenance surcharge ${remoteMultiplier}x applied.`);
+  return { areaZone, zone, zoneMultiplier, emirateResolution, emirateMultiplier, remoteMultiplier };
+}
+
 function calculateMosqueQuote(input: QuoteInput): QuoteOutput {
   const safeInput = sanitizeQuoteInput(input);
   if (safeInput.contractType !== 'FM_ONLY') {
@@ -415,7 +552,9 @@ function calculateMosqueQuote(input: QuoteInput): QuoteOutput {
   const age = safeInput.propertyAge || 0;
   const capacity = safeInput.units;
   const mepRate = 12;
-  const ageCoefficient = age <= 3 ? 1 : age <= 9 ? 1.08 : age <= 15 ? 1.15 : 1.25;
+  // Founder decision 2026-10-14 13:21: mosques use the standard age bands; blank age = highest band.
+  const ageCoefficient = resolveAgeFactor(safeInput.propertyAgeUnknown ? undefined : age);
+  if (safeInput.propertyAgeUnknown) riskFlags.push(`${AGE_PENDING_FLAG}: age not provided; highest age factor ${ageCoefficient}x applied`);
   const capacityMultiplier = capacity <= 300 ? 1 : capacity <= 1000 ? 1.08 : capacity <= 3000 ? 1.15 : 1.25;
   const baseQuote = sqft * mepRate * ageCoefficient;
   const softServices = sqft * 4 * capacityMultiplier;
@@ -430,7 +569,13 @@ function calculateMosqueQuote(input: QuoteInput): QuoteOutput {
   if (manualAddOns.length) return zeroQuote(`Add-on(s) ${manualAddOns.join(', ')} are priced per event / visit / service / unit or one-time and need a manual quote; they cannot be annualised automatically.`, safeInput.slaTier, ['ADD_ON_MANUAL_QUOTE_REQUIRED']);
   const addOnTotal = calculateAddOnAnnualValue(mergedAddOns, { ...safeInput, units: 1 });
   monthlyListExplanation(mergedAddOns, pricingExplanation);
-  const subtotal = baseQuote + softServices + wuduCleaning + ramadanSurge + compliancePremium + complexityPremium + addOnTotal;
+  // Founder decision 2026-10-14 14:01: mosques take the same zone, regional and remote factors as other maintenance.
+  const location = resolveLocationFactors(safeInput, riskFlags, pricingExplanation);
+  const locationFactor = location.zoneMultiplier * location.emirateMultiplier * location.remoteMultiplier;
+  const unfactoredSubtotal = baseQuote + softServices + wuduCleaning + ramadanSurge + compliancePremium + complexityPremium + addOnTotal;
+  // Founder no-loss rule 2026-10-14 14:14: a mosque never quotes below its pre-location price; premium areas still go up.
+  const subtotal = unfactoredSubtotal * Math.max(locationFactor, 1);
+  if (locationFactor < 1) pricingExplanation.push('Mosque floor applied: location factors below 1.00x do not reduce the mosque price.');
   const annualTotal = subtotal * slaMultiplier(safeInput.slaTier) * (1 + planSurcharge(safeInput.paymentPlan));
   pricingExplanation.push(`${mepRate} AED/sqft mosque MEP benchmark applied to ${sqft} measured sqft.`);
   pricingExplanation.push(`Wudu service uses a bounded ${wuduAreaProxySqft} sqft proxy rather than multiplying by worshipper capacity.`);
@@ -481,9 +626,14 @@ export function calculateUaeQuote2026(input: Partial<QuoteInput> | null | undefi
   if (safeInput.contractType === 'PM_ONLY') {
     if (managementRate <= 0) return zeroQuote(`${assetClass.label} does not support an automatic Property Management Only quote.`, safeInput.slaTier, ['PM_NOT_SUPPORTED']);
     if (managedRevenue <= 0) return zeroQuote('Annual rent / managed revenue is required for Property Management pricing; no placeholder revenue is assumed.', safeInput.slaTier, ['ANNUAL_RENT_REQUIRED']);
-    const baseQuote = managedRevenue * (managementRate / 100);
+    const percentageFee = managedRevenue * (managementRate / 100);
+    const pmRegion = resolveEmirateMultiplier(safeInput.emirate, safeInput.area).emirate;
+    const pmMinimum = resolveMinimumManagementFee(pmRegion);
+    if (!pmRegion) riskFlags.push(`${EMIRATE_PENDING_FLAG}: emirate not recognised; highest minimum management fee AED ${pmMinimum} applied`);
+    const baseQuote = Math.max(percentageFee, pmMinimum);
     const annualTotal = baseQuote * (1 + planSurcharge(safeInput.paymentPlan));
     pricingExplanation.push(`${safeInput.ratesVerified ? 'Admin-verified' : 'Pre-visit baseline'} ${managementRate}% property-management fee applied once to AED ${Math.round(managedRevenue)} annual rent / managed revenue.`);
+    if (baseQuote > percentageFee) pricingExplanation.push(`Minimum annual Property Management fee of AED ${pmMinimum} applied.`);
     pricingExplanation.push('No technical FM add-ons, sqft multiplier, unit multiplier, age premium or regional premium is applied to PM-only pricing.');
     addPaymentExplanation(safeInput.paymentPlan, pricingExplanation);
     return {
@@ -525,6 +675,14 @@ export function calculateUaeQuote2026(input: Partial<QuoteInput> | null | undefi
     if (!(safeInput.units && safeInput.units > 0)) return zeroQuote(`${assetClass.label} requires a verified unit count before pricing.`, safeInput.slaTier, ['MISSING_UNITS']);
     baseQuote = baseRate * safeInput.units;
     pricingExplanation.push(`${baseRate} AED/unit applied to ${safeInput.units} units.`);
+    if (BEDROOM_PRICED_ASSET_IDS.has(assetId)) {
+      const bedroomFactor = resolveBedroomFactor(safeInput.bedroomsUnknown ? 2 : safeInput.bedrooms);
+      if (safeInput.bedroomsUnknown) riskFlags.push(`${BEDROOMS_PENDING_FLAG}: bedrooms not provided; priced as 2 bedrooms (safe side)`);
+      if (bedroomFactor !== 1) {
+        baseQuote *= bedroomFactor;
+        pricingExplanation.push(`Apartment bedroom factor ${bedroomFactor}x applied for ${Math.floor(safeInput.bedrooms || 0)} bedrooms.`);
+      }
+    }
   } else if (assetClass.pricingUnit === 'bed') {
     if (!(safeInput.beds && safeInput.beds > 0)) return zeroQuote(`${assetClass.label} requires a verified bed count before pricing.`, safeInput.slaTier, ['MISSING_BEDS']);
     baseQuote = baseRate * safeInput.beds;
@@ -538,27 +696,28 @@ export function calculateUaeQuote2026(input: Partial<QuoteInput> | null | undefi
     pricingExplanation.push(`Minimum technical annual contract of AED ${assetClass.minimumAnnualContract} applied.`);
   }
 
-  const zoneEntry = UAE_PRICING_MATRIX_2026.zones[safeInput.zone] || UAE_PRICING_MATRIX_2026.zones.B || { multiplier: 1 };
-  const zoneMultiplier = finiteNumber(zoneEntry.multiplier, 1);
-  const zoneAdjustedQuote = baseQuote * zoneMultiplier;
-  if (zoneMultiplier !== 1) pricingExplanation.push(`Zone ${safeInput.zone} technical-service factor ${zoneMultiplier}x applied.`);
+  const location = resolveLocationFactors(safeInput, riskFlags, pricingExplanation);
+  const { emirateResolution, emirateMultiplier } = location;
+  const zoneAdjustedQuote = baseQuote * location.zoneMultiplier;
+  const factoredQuote = zoneAdjustedQuote * emirateMultiplier;
+  if (emirateMultiplier !== 1) pricingExplanation.push(`Regional technical-service factor ${emirateMultiplier}x applied for ${emirateResolution.emirate || safeInput.emirate}.`);
+  // Founder decision 2026-10-14: the asset-class minimum annual contract must still hold after zone and emirate factors.
+  const emirateAdjustedQuote = Math.max(factoredQuote, assetClass.minimumAnnualContract);
+  if (emirateAdjustedQuote > factoredQuote) pricingExplanation.push(`Minimum technical annual contract of AED ${assetClass.minimumAnnualContract} re-applied after zone and regional factors.`);
 
-  const emirateResolution = resolveEmirateMultiplier(safeInput.emirate);
-  const emirateMultiplier = emirateResolution.multiplier;
-  if (!emirateResolution.input) riskFlags.push('Emirate confirmation required');
-  else if (!emirateResolution.emirate) riskFlags.push(`Emirate '${safeInput.emirate}' is not recognised; regional factor not applied, confirmation required`);
-  else if (emirateResolution.viaCity) pricingExplanation.push(`${safeInput.emirate} is priced under the ${emirateResolution.emirate} regional factor.`);
-  const emirateAdjustedQuote = zoneAdjustedQuote * emirateMultiplier;
-  if (emirateMultiplier !== 1) pricingExplanation.push(`Regional technical-service factor ${emirateMultiplier}x applied for ${safeInput.emirate}.`);
-
-  const ageMultiplier = safeInput.propertyAge > 20 ? 1.2 : safeInput.propertyAge > 10 ? 1.12 : safeInput.propertyAge > 5 ? 1.06 : 1;
+  const ageMultiplier = resolveAgeFactor(safeInput.propertyAgeUnknown ? undefined : safeInput.propertyAge);
+  if (safeInput.propertyAgeUnknown) riskFlags.push(`${AGE_PENDING_FLAG}: age not provided; highest age factor ${ageMultiplier}x applied`);
   if (ageMultiplier > 1) pricingExplanation.push(`Asset-age factor ${ageMultiplier}x applied for ${safeInput.propertyAge} years.`);
 
   let complexityPremiumPercent = 0;
-  if ((safeInput.floors || 0) >= 40) complexityPremiumPercent += 12;
+  const multiStorey = MULTI_STOREY_ASSET_IDS.has(assetId);
+  const floorsBlank = multiStorey && safeInput.floorsUnknown;
+  const liftsBlank = multiStorey && safeInput.liftsUnknown;
+  if (floorsBlank || (safeInput.floors || 0) >= 40) complexityPremiumPercent += 12;
   else if ((safeInput.floors || 0) >= 15) complexityPremiumPercent += 6;
-  if ((safeInput.lifts || 0) > 10) complexityPremiumPercent += 8;
+  if (liftsBlank || (safeInput.lifts || 0) > 10) complexityPremiumPercent += 8;
   else if ((safeInput.lifts || 0) > 4) complexityPremiumPercent += 4;
+  if (floorsBlank || liftsBlank) riskFlags.push(`${FLOORS_LIFTS_PENDING_FLAG}: ${[floorsBlank ? 'floors' : '', liftsBlank ? 'lifts' : ''].filter(Boolean).join(' and ')} not provided; highest complexity tier applied`);
   if (safeInput.hasCentralHVAC) complexityPremiumPercent += 4;
   if (safeInput.hasDistrictCooling) complexityPremiumPercent -= 3;
   if (safeInput.hasGenerator) complexityPremiumPercent += 3;
@@ -580,12 +739,17 @@ export function calculateUaeQuote2026(input: Partial<QuoteInput> | null | undefi
   const addOnDriver = assetClass.pricingUnit === 'facility' ? { ...safeInput, units: 1, offices: 0, shops: 0 } : safeInput;
   const addOnTotal = calculateAddOnAnnualValue(mergedAddOns, addOnDriver);
   monthlyListExplanation(mergedAddOns, pricingExplanation);
-  const technicalSubtotal = (emirateAdjustedQuote * ageMultiplier * appliedSlaMultiplier) + complexityPremium + addOnTotal;
+  // Founder decision 2026-10-14: +15% on maintenance for remote areas (Al Dhafra region, Hatta).
+  const { remoteMultiplier } = location;
+  const technicalSubtotal = ((emirateAdjustedQuote * ageMultiplier * appliedSlaMultiplier) + complexityPremium + addOnTotal) * remoteMultiplier;
 
   let managementFee = 0;
   if (safeInput.contractType === 'BOTH') {
     if (managedRevenue <= 0) return zeroQuote('Annual rent / managed revenue is required for a combined Maintenance + Property Management quote; no placeholder revenue is assumed.', safeInput.slaTier, ['ANNUAL_RENT_REQUIRED']);
-    managementFee = managedRevenue * (managementRate / 100);
+    const percentageFee = managedRevenue * (managementRate / 100);
+    const pmMinimum = resolveMinimumManagementFee(emirateResolution.emirate);
+    managementFee = Math.max(percentageFee, pmMinimum);
+    if (managementFee > percentageFee) pricingExplanation.push(`Minimum annual Property Management fee of AED ${pmMinimum} applied.`);
     pricingExplanation.push(`${safeInput.ratesVerified ? 'Admin-verified' : 'Pre-visit baseline'} ${managementRate}% property-management fee (AED ${Math.round(managementFee)}) added once from ${safeInput.ratesVerified ? 'Admin-verified' : 'Owner-declared'} annual rent / managed revenue.`);
   }
 

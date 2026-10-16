@@ -12,7 +12,8 @@ const wetRecoveryGym = {
   id: 'gym-wet-recovery',
   propertyType: 'Gym / Fitness Centre',
   strategy: 'fm_only',
-  emirate: 'Al Ain', // Al Ain is in the Emirate of Abu Dhabi: 1.10x regional factor applies.
+  area: 'Al Towayya', // Zone B area in Al Ain (an area is required; a blank area is priced Zone A).
+  emirate: 'Al Ain', // Al Ain is its own pricing region (Founder decision 2026-10-14): 0.92x.
   zone: 'B',
   sqft: 11500,
   age: 1,
@@ -68,13 +69,13 @@ test('a client-forged Wet/Recovery gym rate cannot change the owner quote', () =
     { trustServerVerifiedRates: false },
   );
 
-  assert.equal(honest.annualContractValue, 227700);
-  assert.equal(honest.activationDeposit, 34155);
+  assert.equal(honest.annualContractValue, 190440);
+  assert.equal(honest.activationDeposit, 28566);
   assert.equal(forged.annualContractValue, honest.annualContractValue);
   assert.equal(forged.activationDeposit, honest.activationDeposit);
   assert.equal(forged.quoteHash, honest.quoteHash);
-  assert.equal(explicitOwner.annualContractValue, 227700);
-  assert.equal(explicitOwner.activationDeposit, 34155);
+  assert.equal(explicitOwner.annualContractValue, 190440);
+  assert.equal(explicitOwner.activationDeposit, 28566);
   assert.equal(explicitOwner.quoteHash, honest.quoteHash);
 });
 
@@ -122,8 +123,8 @@ test('Admin inspection completion still applies an in-range verified Maintenance
     NOW,
     { trustServerVerifiedRates: true },
   );
-  assert.equal(adminVerified.annualContractValue, 126500);
-  assert.equal(adminVerified.activationDeposit, 18975);
+  assert.equal(adminVerified.annualContractValue, 105800);
+  assert.equal(adminVerified.activationDeposit, 15870);
 });
 
 test('Admin inspection completion still rejects out-of-range verified rates', () => {
@@ -193,6 +194,6 @@ test('Admin inspection completion still rejects out-of-range verified rates', ()
     [],
     NOW,
   );
-  assert.equal(ignoredOutOfRange.annualContractValue, 227700);
-  assert.equal(ignoredOutOfRange.activationDeposit, 34155);
+  assert.equal(ignoredOutOfRange.annualContractValue, 190440);
+  assert.equal(ignoredOutOfRange.activationDeposit, 28566);
 });

@@ -248,7 +248,8 @@ const calculatePropertyAnnualValue = (property: PropertyData, selectedAddOns: st
 
     const quote = calculateUaeQuote2026({
         assetClassId,
-        emirate: emirateMap[property.emirate] || 'dubai',
+        emirate: emirateMap[property.emirate] || property.emirate || '',
+        area: property.area || '',
         zone: property.zone || 'B',
         contractType: property.strategy === 'rent' ? 'PM_ONLY' : (property.strategy === 'fm' ? 'FM_ONLY' : 'BOTH'),
         sqft: property.sqft,

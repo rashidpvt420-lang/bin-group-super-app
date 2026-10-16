@@ -34,7 +34,7 @@ test.after(() => { if (tempDir) rmSync(tempDir, { recursive: true, force: true }
 
 const T = 1790000000000;
 const PERIODS = { 'per month': 12, 'per quarter': 4, annual: 1 };
-const apartment = { propertyType: 'Apartment', emirate: 'Dubai', zone: 'B', units: 1, age: 3, strategy: 'fm' };
+const apartment = { propertyType: 'Apartment', emirate: 'Dubai', area: 'Business Bay', zone: 'B', units: 1, bedrooms: 1, age: 3, strategy: 'fm' };
 
 test('every engine copy prices each monthly-list add-on from that list with period conversion', () => {
   for (const [i, path] of ENGINE_COPIES.entries()) {
