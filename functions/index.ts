@@ -31,7 +31,7 @@ import { sendTwilioSMS } from "./smsDelivery";
 import { resolveTechnicianArrivalBinding } from "./technicianInstallationBinding";
 import { flagSlaBreaches } from "./slaCron";
 import { escalateManualDispatch } from "./ticketDispatchAlerts";
-import { evaluateTechnicianForTicket, requiredTicketTrade } from "./technicianDispatchMatching";
+import { evaluateTechnicianForTicket, requiredTicketTrade, technicianHasCapacity } from "./technicianDispatchMatching";
 import { isTechnicianAssignmentEvent, technicianAssignedNotificationSeed } from "./shared/technicianAssignmentNotification";
 import { requirePrivilegedMfaSession } from "./adminMfaSession";
 
@@ -1096,47 +1096,58 @@ async function attemptAutoAssignment(ticketRef: admin.firestore.DocumentReferenc
             .sort((a, b) => Number(b.sameArea) - Number(a.sameArea) || a.distance - b.distance);
 
         if (candidates.length > 0) {
-            const bestTech = candidates[0];
-            const technicianRef = db.collection("users").doc(bestTech.id);
-            const assigned = await db.runTransaction(async (transaction) => {
-                const [freshTicketSnap, freshTechnicianSnap] = await Promise.all([
-                    transaction.get(ticketRef),
-                    transaction.get(technicianRef),
-                ]);
-                const freshTicket = freshTicketSnap.data() || {};
-                const freshTechnician = freshTechnicianSnap.data() || {};
-                if (
-                    !freshTicketSnap.exists ||
-                    safeString(freshTicket.assignedTechnicianId || freshTicket.technicianId) ||
-                    !freshTechnicianSnap.exists ||
-                    freshTechnician.onDuty !== true ||
-                    freshTechnician.suspended === true ||
-                    freshTechnician.isAvailable === false ||
-                    freshTechnician.available === false ||
-                    !["active", "approved"].includes(normalizeRole(freshTechnician.status)) ||
-                    Number(freshTechnician.currentJobCount || 0) >= Number(freshTechnician.maxConcurrentJobs || 3)
-                ) {
-                    return false;
-                }
-                transaction.update(ticketRef, {
-                    assignedTechnicianId: bestTech.id,
-                    technicianId: bestTech.id,
-                    assignedTechnicianName: freshTechnician.displayName || freshTechnician.name || "Specialist",
-                    assignedTechnicianPhone: freshTechnician.phone || freshTechnician.phoneNumber || "",
-                    assignedTechnicianAvatar: freshTechnician.photoURL || "",
-                    technicianSpecialty: freshTechnician.specialty || freshTechnician.trade || "",
-                    status: "ASSIGNED",
-                    dispatchStatus: "AUTO_ASSIGNED",
-                    trackingStatus: "TECHNICIAN_ASSIGNED",
-                    autoAssignedAt: FieldValue.serverTimestamp(),
-                    updatedAt: FieldValue.serverTimestamp()
+            // Try candidates in rank order; if the best one changed state between
+            // the read and the transaction, fall through to the next instead of
+            // sending an assignable ticket to manual dispatch.
+            let bestTech = candidates[0];
+            let assigned = false;
+            for (const candidate of candidates.slice(0, 5)) {
+                bestTech = candidate;
+                const technicianRef = db.collection("users").doc(candidate.id);
+                const technicianProfileRef = db.collection("technicians").doc(candidate.id);
+                assigned = await db.runTransaction(async (transaction) => {
+                    const [freshTicketSnap, freshTechnicianSnap, freshProfileSnap] = await Promise.all([
+                        transaction.get(ticketRef),
+                        transaction.get(technicianRef),
+                        transaction.get(technicianProfileRef),
+                    ]);
+                    const freshTicket = freshTicketSnap.data() || {};
+                    const freshTechnician = freshTechnicianSnap.data() || {};
+                    const freshProfile = freshProfileSnap.exists ? freshProfileSnap.data() || {} : {};
+                    if (
+                        !freshTicketSnap.exists ||
+                        safeString(freshTicket.assignedTechnicianId || freshTicket.technicianId) ||
+                        !freshTechnicianSnap.exists ||
+                        freshTechnician.onDuty !== true ||
+                        freshTechnician.suspended === true ||
+                        freshTechnician.isAvailable === false ||
+                        freshTechnician.available === false ||
+                        !["active", "approved"].includes(normalizeRole(freshTechnician.status)) ||
+                        !technicianHasCapacity(freshTechnician, freshProfile)
+                    ) {
+                        return false;
+                    }
+                    transaction.update(ticketRef, {
+                        assignedTechnicianId: candidate.id,
+                        technicianId: candidate.id,
+                        assignedTechnicianName: freshTechnician.displayName || freshTechnician.name || "Specialist",
+                        assignedTechnicianPhone: freshTechnician.phone || freshTechnician.phoneNumber || "",
+                        assignedTechnicianAvatar: freshTechnician.photoURL || "",
+                        technicianSpecialty: freshTechnician.specialty || freshTechnician.trade || "",
+                        status: "ASSIGNED",
+                        dispatchStatus: "AUTO_ASSIGNED",
+                        trackingStatus: "TECHNICIAN_ASSIGNED",
+                        autoAssignedAt: FieldValue.serverTimestamp(),
+                        updatedAt: FieldValue.serverTimestamp()
+                    });
+                    transaction.update(technicianRef, {
+                        currentJobCount: FieldValue.increment(1),
+                        updatedAt: FieldValue.serverTimestamp(),
+                    });
+                    return true;
                 });
-                transaction.update(technicianRef, {
-                    currentJobCount: FieldValue.increment(1),
-                    updatedAt: FieldValue.serverTimestamp(),
-                });
-                return true;
-            });
+                if (assigned) break;
+            }
             if (!assigned) {
                 await escalateManualDispatch({
                     db,

@@ -133,6 +133,23 @@ export const DISPATCH_REASON = {
   TRADE: "trade_not_qualified",
 } as const;
 
+/**
+ * Single source of truth for concurrent-job capacity. The candidate filter and
+ * the assignment transaction must agree: the limit comes from
+ * users.maxConcurrentJobs, else technicians.maxConcurrentJobs (HR), else 3, and
+ * the live counter is users.currentJobCount (the field the dispatcher increments).
+ */
+export function technicianCapacity(user: Profile, technician?: Profile | null) {
+  const current = Number((user || {}).currentJobCount || 0);
+  const max = Number((user || {}).maxConcurrentJobs || (technician || {}).maxConcurrentJobs || 3);
+  return { current, max };
+}
+
+export function technicianHasCapacity(user: Profile, technician?: Profile | null) {
+  const { current, max } = technicianCapacity(user, technician);
+  return current < max;
+}
+
 export function evaluateTechnicianForTicket(params: {
   user: Profile;
   technician?: Profile | null;
@@ -151,9 +168,7 @@ export function evaluateTechnicianForTicket(params: {
   if (user.onDuty !== true) reasons.push(DISPATCH_REASON.NOT_ON_DUTY);
   if (!approved) reasons.push(DISPATCH_REASON.NOT_APPROVED);
   if (user.isAvailable === false || user.available === false) reasons.push(DISPATCH_REASON.UNAVAILABLE);
-  if (Number(user.currentJobCount || 0) >= Number(user.maxConcurrentJobs || technician.maxConcurrentJobs || 3)) {
-    reasons.push(DISPATCH_REASON.NO_CAPACITY);
-  }
+  if (!technicianHasCapacity(user, technician)) reasons.push(DISPATCH_REASON.NO_CAPACITY);
   const emirate = normalizeEmirate(params.ticketEmirate);
   if (!emirate || !technicianEmirates(user, technician).has(emirate)) reasons.push(DISPATCH_REASON.EMIRATE);
   if (params.requiredTrade && !technicianTrades(user, technician).has(params.requiredTrade)) {
