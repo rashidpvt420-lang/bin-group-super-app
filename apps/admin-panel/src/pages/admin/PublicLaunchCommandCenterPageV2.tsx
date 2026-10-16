@@ -455,7 +455,7 @@ export default function PublicLaunchCommandCenterPageV2() {
       : '#f59e0b';
 
   return (
-    <Box sx={{ p: { xs: 2, md: 4 }, color: '#fff' }}>
+    <Box sx={{ p: { xs: 2, md: 4 }, color: '#fff', minWidth: 0, overflowWrap: 'anywhere', '& .MuiAlert-message': { minWidth: 0 } }}>
       <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" spacing={2} sx={{ mb: 3 }}>
         <Box>
           <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 3 }}>PUBLIC LAUNCH EVIDENCE CENTER</Typography>
@@ -566,7 +566,7 @@ export default function PublicLaunchCommandCenterPageV2() {
               <Grid item xs={12} sm={6} md={2.4} key={check.role}>
                 <Box sx={{ p: 2, borderRadius: 3, bgcolor: 'rgba(255,255,255,.035)', border: `1px solid ${alpha(smokeAuthoritative ? color : '#ef4444', .28)}` }}>
                   <Stack spacing={1}>
-                    <Stack direction="row" justifyContent="space-between" alignItems="center"><Typography fontWeight={950} textTransform="capitalize">{check.role}</Typography><Chip size="small" label={smokeAuthoritative ? label : 'unavailable'} sx={{ bgcolor: alpha(smokeAuthoritative ? color : '#ef4444', .15), color: smokeAuthoritative ? color : '#ef4444', fontWeight: 850 }} /></Stack>
+                    <Stack spacing={0.8} alignItems="flex-start"><Typography fontWeight={950} textTransform="capitalize">{check.role}</Typography><Chip size="small" label={smokeAuthoritative ? label : 'unavailable'} sx={{ maxWidth: '100%', bgcolor: alpha(smokeAuthoritative ? color : '#ef4444', .15), color: smokeAuthoritative ? color : '#ef4444', fontWeight: 850 }} /></Stack>
                     <Typography variant="caption" sx={{ color: 'rgba(255,255,255,.58)' }}>{check.route}</Typography>
                     <Typography variant="caption" sx={{ color: latest?.proofRef ? '#22c55e' : 'rgba(255,255,255,.38)', fontWeight: 800 }}>{latest?.proofRef || 'No exact-SHA proof yet'}</Typography>
                   </Stack>
@@ -601,9 +601,9 @@ export default function PublicLaunchCommandCenterPageV2() {
                 return (
                   <Grid item xs={12} md={6} key={gate.id}>
                     <Box onClick={() => selectGate(gate.id)} sx={{ p: 1.6, borderRadius: 3, cursor: 'pointer', bgcolor: selectedGate === gate.id ? alpha(binThemeTokens.gold, .14) : 'rgba(255,255,255,.035)', border: `1px solid ${selectedGate === gate.id ? alpha(binThemeTokens.gold, .34) : 'rgba(255,255,255,.07)'}` }}>
-                      <Stack direction="row" justifyContent="space-between" spacing={1} alignItems="flex-start">
+                      <Stack spacing={1} alignItems="flex-start">
                         <Typography fontWeight={950}>{gate.title}</Typography>
-                        <Stack direction="row" spacing={0.8}><Chip size="small" label={requiredLayer} sx={{ bgcolor: alpha(binThemeTokens.gold, .11), color: binThemeTokens.gold, fontWeight: 850 }} /><Chip size="small" label={evidenceAuthoritative ? label : 'unavailable'} sx={{ bgcolor: alpha(evidenceAuthoritative ? color : '#ef4444', .15), color: evidenceAuthoritative ? color : '#ef4444', fontWeight: 850 }} /></Stack>
+                        <Stack direction="row" spacing={0.8} useFlexGap flexWrap="wrap" sx={{ minWidth: 0, maxWidth: '100%' }}><Chip size="small" label={requiredLayer} sx={{ maxWidth: '100%', bgcolor: alpha(binThemeTokens.gold, .11), color: binThemeTokens.gold, fontWeight: 850 }} /><Chip size="small" label={evidenceAuthoritative ? label : 'unavailable'} sx={{ maxWidth: '100%', bgcolor: alpha(evidenceAuthoritative ? color : '#ef4444', .15), color: evidenceAuthoritative ? color : '#ef4444', fontWeight: 850 }} /></Stack>
                       </Stack>
                       <Typography variant="body2" sx={{ color: 'rgba(255,255,255,.58)', mt: .7 }}>{gate.proofRequired}</Typography>
                       <Typography variant="caption" sx={{ color: latest?.proofRef ? '#22c55e' : 'rgba(255,255,255,.38)', mt: 1, display: 'block', fontWeight: 800 }}>{latest ? `${latest.proofRef || 'No proof reference'} · layer ${latest.evidenceLayer || 'missing'} · ${getEvidenceTime(latest)}` : 'No evidence for this exact release SHA.'}</Typography>
