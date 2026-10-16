@@ -1383,3 +1383,79 @@ test('clearance scope allows exactly the two #1781 test-only paths and nothing b
   }
   assert.equal(checked, 6);
 });
+
+for (const scopeWorkflow of [
+  '.github/workflows/technician-physical-evidence.yml',
+  '.github/workflows/operational-application-evidence.yml',
+  '.github/workflows/operational-provider-evidence.yml',
+  '.github/workflows/privileged-access-rotation-evidence.yml',
+]) test(`${scopeWorkflow} scope pins the reviewed deployment verifier blob and still rejects other drift`, async () => {
+  const { execFileSync } = await import('node:child_process');
+  const { mkdtempSync, writeFileSync, mkdirSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const { join } = await import('node:path');
+  const workflow = await read(scopeWorkflow);
+  const errorAt = workflow.indexOf('Non-control-plane file changed since frozen release');
+  assert.ok(errorAt > 0, 'scope step must exist');
+  const stepStart = workflow.lastIndexOf('      - name:', errorAt);
+  const runStart = workflow.indexOf('run: |\n', stepStart) + 'run: |\n'.length;
+  const runEnd = workflow.indexOf('\n      - name:', runStart);
+  const script = workflow.slice(runStart, runEnd).split('\n').map((line) => line.replace(/^ {10}/, '')).join('\n');
+  const allowedLists = [...script.matchAll(/allowed='([^']+)'/g)].map((match) => match[1]);
+  assert.ok(allowedLists.length > 0, 'workflow must declare path allowlists');
+  assert.ok(allowedLists.some((list) => list.includes('tests/launch/hard-clearance-revalidation\\.test\\.mjs')), 'this regression test file must be inside the workflow scope');
+  assert.ok(!allowedLists.some((list) => list.includes('verify-production-deployment')), 'verifier must not be added to the broad path allowlist');
+  assert.match(script, /deploy_verifier_blob='475ac1c26c7338db7e33934dd30852a7f54e3efa'/);
+
+  const { readFileSync } = await import('node:fs');
+  const approved = readFileSync('scripts/verify-production-deployment.mjs');
+  const approvedBlob = execFileSync('git', ['hash-object', '--stdin'], { input: approved, encoding: 'utf8' }).trim();
+  assert.equal(approvedBlob, '475ac1c26c7338db7e33934dd30852a7f54e3efa', 'checked-in verifier must equal the pinned reviewed blob');
+  const scenario = (mutate) => {
+    const dir = mkdtempSync(join(tmpdir(), 'scope-'));
+    const git = (...args) => execFileSync('git', ['-C', dir, ...args], { encoding: 'utf8' }).trim();
+    git('init', '-q');
+    git('config', 'user.email', 't@example.com');
+    git('config', 'user.name', 't');
+    mkdirSync(join(dir, 'scripts'), { recursive: true });
+    writeFileSync(join(dir, 'scripts/verify-production-deployment.mjs'), 'old\n');
+    writeFileSync(join(dir, 'app.txt'), 'app\n');
+    git('add', '-A');
+    git('commit', '-qm', 'release');
+    const release = git('rev-parse', 'HEAD');
+    mutate(dir);
+    git('add', '-A');
+    git('commit', '-qm', 'control');
+    const control = git('rev-parse', 'HEAD');
+    const parent = mkdtempSync(join(tmpdir(), 'cp-'));
+    execFileSync('ln', ['-s', dir, join(parent, 'control-plane')]);
+    try {
+      execFileSync('bash', ['-c', script], {
+        cwd: parent,
+        env: { ...process.env, RELEASE_SHA: release, CONTROL_PLANE_SHA: control, KNOWN_RULES_WRITER_COMMIT: '86b67c4a12a4ac61037dba8201f3d5ab96b09c5f', GITHUB_ENV: join(parent, 'env') },
+        stdio: 'pipe',
+      });
+      return { ok: true, out: '' };
+    } catch (error) {
+      return { ok: false, out: String(error.stdout) + String(error.stderr) };
+    }
+  };
+
+  const exact = scenario((dir) => writeFileSync(join(dir, 'scripts/verify-production-deployment.mjs'), approved));
+  assert.equal(exact.ok, true, exact.out);
+
+  const modified = scenario((dir) => writeFileSync(join(dir, 'scripts/verify-production-deployment.mjs'), Buffer.concat([approved, Buffer.from('\n// drift\n')])));
+  assert.equal(modified.ok, false);
+  assert.match(modified.out, /exact approved blob for scripts\/verify-production-deployment\.mjs/);
+
+  const other = scenario((dir) => writeFileSync(join(dir, 'app.txt'), 'changed\n'));
+  assert.equal(other.ok, false);
+  assert.match(other.out, /Non-control-plane file changed since frozen release: app\.txt/);
+
+  const both = scenario((dir) => {
+    writeFileSync(join(dir, 'scripts/verify-production-deployment.mjs'), approved);
+    writeFileSync(join(dir, 'app.txt'), 'changed\n');
+  });
+  assert.equal(both.ok, false);
+  assert.match(both.out, /Non-control-plane file changed since frozen release: app\.txt/);
+});
