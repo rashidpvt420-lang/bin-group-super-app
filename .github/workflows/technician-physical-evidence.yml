@@ -552,10 +552,21 @@ jobs:
                 [[ "$frozen_blob" != "$known_blob" ]] || { echo "::error::PR #1770 exception path must be part of the release/control-plane delta: $path."; exit 1; }
               done
             fi
+            # Permit only the exact reviewed deployment verifier from PRs #1778/#1779.
+            # Pinned to one blob; any other content for this path is rejected.
+            deploy_verifier_path='scripts/verify-production-deployment.mjs'
+            deploy_verifier_blob='475ac1c26c7338db7e33934dd30852a7f54e3efa'
+            if grep -Fxq "$deploy_verifier_path" <<< "$changed"; then
+              current_blob="$(git -C control-plane rev-parse "$CONTROL_PLANE_SHA:$deploy_verifier_path")"
+              [[ "$current_blob" == "$deploy_verifier_blob" ]] || { echo "::error::Deployment verifier exception requires the exact approved blob for $deploy_verifier_path."; exit 1; }
+            fi
             while IFS= read -r file; do
               if [[ "$file" == "$rules_writer_path" || "$file" == "$rules_writer_test_path" ]]; then
               continue
             fi
+              if [[ "$file" == "$deploy_verifier_path" ]]; then
+                continue
+              fi
               [[ -z "$file" || "$file" =~ $allowed || "$file" =~ $supplemental_allowed ]] || { echo "::error::Non-control-plane file changed since frozen release: $file"; exit 1; }
             done <<< "$changed"
           fi

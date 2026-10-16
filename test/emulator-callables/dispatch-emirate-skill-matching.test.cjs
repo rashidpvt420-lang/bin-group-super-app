@@ -119,3 +119,31 @@ test('normalisation helpers map trade and emirate aliases without loose substrin
   const result = matching.evaluateTechnicianForTicket({ user: { onDuty: true, status: 'active' }, technician: {}, ticketEmirate: 'Dubai', requiredTrade: 'hvac' });
   assert.deepEqual(result.reasons.sort(), ['emirate_not_covered', 'trade_not_qualified']);
 });
+
+// Regression (Oct 14 owner AC ticket peUwBJCy): the candidate filter took the
+// capacity limit from technicians.maxConcurrentJobs (10) when users had none, but
+// the assignment transaction re-checked against users.maxConcurrentJobs || 3. A
+// technician with currentJobCount 3 passed the filter, failed the transaction, and
+// the ticket went to manual dispatch as "NO_QUALIFIED_TECHNICIAN".
+test('filter and transaction use the same capacity limit (HR maxConcurrentJobs honoured in the transaction)', async () => {
+  await seed({ user: { currentJobCount: 3 }, technician: { maxConcurrentJobs: 10 } });
+  const ticket = await route();
+  assert.equal(ticket.assignedTechnicianId, TECH);
+  assert.equal(ticket.dispatchStatus, 'AUTO_ASSIGNED');
+  assert.equal((await db.doc(`users/${TECH}`).get()).data().currentJobCount, 4);
+});
+
+test('a technician at the shared capacity limit is still skipped', async () => {
+  await seed({ user: { currentJobCount: 10 }, technician: { maxConcurrentJobs: 10 } });
+  assert.equal((await route()).assignedTechnicianId, null);
+  await clearFirestore();
+  await seed({ user: { currentJobCount: 3, maxConcurrentJobs: 3 }, technician: { maxConcurrentJobs: 10 } });
+  assert.equal((await route()).assignedTechnicianId, null);
+});
+
+test('capacity helper is the single source of truth', () => {
+  assert.deepEqual(matching.technicianCapacity({ currentJobCount: 3 }, { maxConcurrentJobs: 10 }), { current: 3, max: 10 });
+  assert.deepEqual(matching.technicianCapacity({ currentJobCount: 2, maxConcurrentJobs: 2 }, { maxConcurrentJobs: 10 }), { current: 2, max: 2 });
+  assert.deepEqual(matching.technicianCapacity({}, {}), { current: 0, max: 3 });
+  assert.equal(matching.technicianHasCapacity({ currentJobCount: 3 }, {}), false);
+});
