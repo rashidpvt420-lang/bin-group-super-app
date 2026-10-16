@@ -327,7 +327,7 @@ export default function TenantAIConciergePage() {
               aria-label={tx('tenant.ai.restart', 'Start over')}
               size="small"
               onClick={handleRestart}
-              sx={{ color: 'rgba(255,255,255,0.4)', '&:hover': { color: '#fff' } }}
+              sx={{ color: binThemeTokens.textOnDarkMuted, '&:hover': { color: '#fff' } }}
             >
               <X size={16} />
             </IconButton>
@@ -366,7 +366,7 @@ export default function TenantAIConciergePage() {
                   {msg.from === 'bot' ? renderBotText(msg.text) : (
                     <Typography variant="body2" sx={{ color: '#fff', fontWeight: 600 }}>{msg.text}</Typography>
                   )}
-                  <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.28)', mt: 0.5, display: 'block', textAlign: msg.from === 'user' ? 'right' : 'left' }}>
+                  <Typography variant="caption" sx={{ color: binThemeTokens.textOnDarkMuted, mt: 0.5, display: 'block', textAlign: msg.from === 'user' ? 'right' : 'left' }}>
                     {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                   </Typography>
                 </Box>
@@ -391,7 +391,7 @@ export default function TenantAIConciergePage() {
               >
                 {submitting ? 'Submitting…' : 'Submit Ticket'}
               </Button>
-              <Button fullWidth variant="outlined" onClick={handleRestart} sx={{ borderColor: 'rgba(255,255,255,0.18)', color: 'rgba(255,255,255,0.6)', fontWeight: 950, borderRadius: 4 }}>
+              <Button fullWidth variant="outlined" onClick={handleRestart} sx={{ borderColor: 'rgba(255,255,255,0.18)', color: binThemeTokens.textOnDarkMuted, fontWeight: 950, borderRadius: 4 }}>
                 Start Over
               </Button>
             </Stack>
@@ -409,7 +409,7 @@ export default function TenantAIConciergePage() {
               >
                 {uploadingPhoto ? 'Uploading…' : 'Attach Photo'}
               </Button>
-              <Button variant="outlined" onClick={handleSkipPhoto} sx={{ borderColor: 'rgba(255,255,255,0.18)', color: 'rgba(255,255,255,0.6)', fontWeight: 950, borderRadius: 4 }}>
+              <Button variant="outlined" onClick={handleSkipPhoto} sx={{ borderColor: 'rgba(255,255,255,0.18)', color: binThemeTokens.textOnDarkMuted, fontWeight: 950, borderRadius: 4 }}>
                 Skip
               </Button>
               <input ref={fileInputRef} type="file" accept="image/*" capture="environment" style={{ display: 'none' }} onChange={handlePhotoSelect} />

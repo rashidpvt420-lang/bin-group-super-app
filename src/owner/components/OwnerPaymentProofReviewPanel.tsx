@@ -98,10 +98,10 @@ export default function OwnerPaymentProofReviewPanel() {
         <Typography variant="subtitle1" fontWeight="950" sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
           <FileText size={18} color={binThemeTokens.gold} /> {tx('owner.paymentProof.title', 'PAYMENT PROOF REVIEW')}
         </Typography>
-        <Chip label={`${filteredProofs.length} RECORDS`} sx={{ bgcolor: alpha(binThemeTokens.gold, 0.1), color: binThemeTokens.gold, fontWeight: 950 }} />
+        <Chip label={`${filteredProofs.length} RECORDS`} sx={{ bgcolor: alpha(binThemeTokens.gold, 0.1), color: binThemeTokens.goldText, fontWeight: 950 }} />
       </Box>
       {warning && <Alert severity="warning" sx={{ m: 2 }}>{warning}</Alert>}
-      {loading ? <Box role="status" sx={{ py: 8, display: 'grid', placeItems: 'center' }}><CircularProgress sx={{ color: binThemeTokens.gold }} /></Box> : <TableContainer>
+      {loading ? <Box role="status" sx={{ py: 8, display: 'grid', placeItems: 'center' }}><CircularProgress sx={{ color: binThemeTokens.goldText }} /></Box> : <TableContainer>
         <Table>
           <TableHead>
             <TableRow sx={{ bgcolor: binThemeTokens.softCanvas }}>
@@ -122,7 +122,7 @@ export default function OwnerPaymentProofReviewPanel() {
                   <TableCell><Typography variant="body2" sx={{ color: binThemeTokens.textPrimary, fontWeight: 800 }}>{proof.payerName || proof.tenantName || proof.ownerEmail || proof.payerEmail || 'Payer pending'}</Typography><Typography variant="caption" sx={{ color: binThemeTokens.textSecondary }}>{proof.propertyName || proof.propertyId || proof.contractId || 'Property / contract not linked'}</Typography></TableCell>
                   <TableCell><Typography variant="body2" sx={{ color: '#10b981', fontWeight: 950 }}>{money(proof.amount || proof.paidAmount || proof.total)}</Typography></TableCell>
                   <TableCell><Chip label={status} size="small" sx={{ height: 20, fontSize: '0.6rem', fontWeight: 950, bgcolor: alpha(tone, 0.12), color: tone }} /></TableCell>
-                  <TableCell align="right"><Button size="small" startIcon={<Eye size={14} />} onClick={() => setSelected(proof)} sx={{ color: binThemeTokens.gold, fontWeight: 950 }}>View Details</Button></TableCell>
+                  <TableCell align="right"><Button size="small" startIcon={<Eye size={14} />} onClick={() => setSelected(proof)} sx={{ color: binThemeTokens.goldText, fontWeight: 950 }}>View Details</Button></TableCell>
                 </TableRow>
               );
             })}

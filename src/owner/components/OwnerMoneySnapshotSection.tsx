@@ -308,7 +308,7 @@ export default function OwnerMoneySnapshotSection({
         <Box>
           <Typography
             variant="overline"
-            sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 3 }}
+            sx={{ color: binThemeTokens.goldText, fontWeight: 950, letterSpacing: 3 }}
           >
             OWNER MONEY SNAPSHOT
           </Typography>
@@ -332,7 +332,7 @@ export default function OwnerMoneySnapshotSection({
             startIcon={<Download size={16} />}
             variant="outlined"
             onClick={() => window.print()}
-            sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.gold, fontWeight: 950 }}
+            sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.goldText, fontWeight: 950 }}
           >
             Print Statement
           </Button>
@@ -417,7 +417,7 @@ export default function OwnerMoneySnapshotSection({
                       onClick={() => setSelectedRow(row)}
                       sx={{
                         borderColor: alpha(binThemeTokens.gold, .45),
-                        color: binThemeTokens.gold,
+                        color: binThemeTokens.goldText,
                         fontWeight: 900,
                       }}
                     >
@@ -515,7 +515,7 @@ export default function OwnerMoneySnapshotSection({
             <Button
               variant="outlined"
               component="label"
-              sx={{ borderColor: alpha(binThemeTokens.gold, .45), color: binThemeTokens.gold, fontWeight: 900 }}
+              sx={{ borderColor: alpha(binThemeTokens.gold, .45), color: binThemeTokens.goldText, fontWeight: 900 }}
             >
               Attach reference file
               <input
@@ -573,7 +573,7 @@ export default function OwnerMoneySnapshotSection({
                 onClick={() => openExternalUrl(selectedRow.referenceFileUrl)}
                 sx={{
                   borderColor: alpha(binThemeTokens.gold, .45),
-                  color: binThemeTokens.gold,
+                  color: binThemeTokens.goldText,
                   fontWeight: 900,
                 }}
               >

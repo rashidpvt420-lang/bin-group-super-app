@@ -145,7 +145,7 @@ export default function OwnerProfilePage() {
     }
   };
 
-  if (loading) return <Box sx={{ display: 'flex', justifyContent: 'center', py: 10 }}><CircularProgress sx={{ color: binThemeTokens.gold }} /></Box>;
+  if (loading) return <Box sx={{ display: 'flex', justifyContent: 'center', py: 10 }}><CircularProgress sx={{ color: binThemeTokens.goldText }} /></Box>;
 
   const profilePhoto = pickProfilePhoto(profileData, user);
   const profileCover = pickProfileCover(profileData, user);

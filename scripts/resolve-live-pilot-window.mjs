@@ -1,7 +1,7 @@
 #!/usr/bin/env node
-import { appendFileSync, mkdirSync, writeFileSync } from 'node:fs';
+import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import { validateLiveEvidenceRun } from './lib/live-pilot-provenance.mjs';
+import { validateLiveEvidenceArtifactBinding, validateLiveEvidenceRun } from './lib/live-pilot-provenance.mjs';
 
 function requireEnv(name) {
   const value = String(process.env[name] || '').trim();
@@ -19,6 +19,7 @@ if (repository !== 'rashidpvt420-lang/bin-group-super-app') throw new Error('Une
 
 const runId = requireEnv('LIVE_EVIDENCE_RUN_ID');
 const expectedSha = requireEnv('HARD_LAUNCH_EXPECTED_SHA');
+const controlPlaneSha = requireEnv('CONTROL_PLANE_COMMIT_SHA');
 const token = requireEnv('GITHUB_TOKEN');
 const githubEnv = requireEnv('GITHUB_ENV');
 const apiUrl = String(process.env.GITHUB_API_URL || 'https://api.github.com').replace(/\/+$/, '');
@@ -36,10 +37,38 @@ if (!response.ok) throw new Error(`Unable to fetch live evidence run ${runId} at
 
 const run = await response.json();
 if (Number(run?.run_attempt) !== 1) throw new Error('Live evidence provenance must resolve immutable attempt 1.');
-const resolved = validateLiveEvidenceRun(run, { expectedSha, expectedRepository: repository, now: Date.now() });
+const resolved = validateLiveEvidenceRun(run, {
+  expectedSha,
+  expectedControlPlaneSha: controlPlaneSha,
+  expectedRepository: repository,
+  now: Date.now(),
+});
 if (resolved.errors.length) {
   console.error('[live-pilot-provenance] REFUSED');
   for (const error of resolved.errors) console.error(`- ${error}`);
+  process.exit(1);
+}
+
+const bindingPath = path.resolve('launch_package', 'live-evidence-provenance.json');
+const deploymentPath = path.resolve('launch_package', 'production-deployment.json');
+let binding;
+let deployment;
+try {
+  binding = JSON.parse(readFileSync(bindingPath, 'utf8'));
+  deployment = JSON.parse(readFileSync(deploymentPath, 'utf8'));
+} catch (error) {
+  throw new Error(`Live-evidence release/control-plane binding is missing or invalid: ${error.message}`);
+}
+const bindingErrors = validateLiveEvidenceArtifactBinding(binding, {
+  expectedReleaseSha: expectedSha,
+  expectedControlPlaneSha: controlPlaneSha,
+  expectedRunId: runId,
+  expectedProductionDeployRunId: String(deployment?.workflowRunId || ''),
+  expectedRunAttempt: 1,
+});
+if (bindingErrors.length) {
+  console.error('[live-pilot-provenance] REFUSED — artifact binding mismatch');
+  for (const error of bindingErrors) console.error(`- ${error}`);
   process.exit(1);
 }
 
@@ -50,6 +79,7 @@ const envLines = [
   `LIVE_EVIDENCE_RUN_URL=${resolved.runUrl}`,
   `LIVE_EVIDENCE_COMPLETED_AT=${resolved.pilotStartedAt}`,
   `LIVE_EVIDENCE_COMMIT_SHA=${resolved.commitSha}`,
+  `LIVE_EVIDENCE_CONTROL_PLANE_SHA=${resolved.controlPlaneCommitSha}`,
 ];
 appendFileSync(githubEnv, `${envLines.join('\n')}\n`);
 
@@ -60,6 +90,9 @@ writeFileSync(output, `${JSON.stringify({
   status: 'passed',
   source: 'github-actions-live-evidence-run',
   commitSha: resolved.commitSha,
+  releaseCommitSha: resolved.commitSha,
+  controlPlaneCommitSha: resolved.controlPlaneCommitSha,
+  productionDeployRunId: String(binding.productionDeployRunId),
   repository: resolved.repository,
   liveEvidenceRunId: resolved.runId,
   liveEvidenceRunUrl: resolved.runUrl,

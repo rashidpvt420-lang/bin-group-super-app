@@ -10,6 +10,7 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  FormControlLabel,
   Grid,
   List,
   ListItem,
@@ -17,6 +18,7 @@ import {
   ListItemText,
   Paper,
   Stack,
+  Switch,
   Typography,
 } from '@mui/material';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
@@ -24,6 +26,7 @@ import PersonPinCircleIcon from '@mui/icons-material/PersonPinCircle';
 import RoomIcon from '@mui/icons-material/Room';
 import { collection, documentId, onSnapshot, query, where } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
+import { isTestLocation, isTestRecord, testTechnicianIds } from '../../lib/testRecords.mjs';
 import {
   isUnresolvedMaintenanceTicketStatus,
   normalizeMaintenanceTicketStatus,
@@ -96,11 +99,19 @@ export default function LiveMapPage() {
   const ticketMarkerRefs = useRef<Map<string, any>>(new Map());
   const viewportInitializedRef = useRef(false);
 
-  const [tickets, setTickets] = useState<any[]>([]);
+  const [allTickets, setTickets] = useState<any[]>([]);
   const [ticketsLoading, setTicketsLoading] = useState(true);
-  const [technicians, setTechnicians] = useState<any[]>([]);
+  const [allTechnicians, setTechnicians] = useState<any[]>([]);
   const [properties, setProperties] = useState<any[]>([]);
-  const [liveLocations, setLiveLocations] = useState<LiveLocation[]>([]);
+  const [allLiveLocations, setLiveLocations] = useState<LiveLocation[]>([]);
+  // e2e / smoke / QA fixtures stay in Firestore for evidence runs but are hidden from the
+  // operational map by default so they are never shown as real capacity or real work.
+  const [showTestRecords, setShowTestRecords] = useState(false);
+  const testTechIds = useMemo(() => testTechnicianIds(allTechnicians), [allTechnicians]);
+  const tickets = useMemo(() => (showTestRecords ? allTickets : allTickets.filter((ticket) => !isTestRecord(ticket))), [allTickets, showTestRecords]);
+  const technicians = useMemo(() => (showTestRecords ? allTechnicians : allTechnicians.filter((technician) => !isTestRecord(technician))), [allTechnicians, showTestRecords]);
+  const liveLocations = useMemo(() => (showTestRecords ? allLiveLocations : allLiveLocations.filter((location) => !isTestLocation(location, testTechIds))), [allLiveLocations, showTestRecords, testTechIds]);
+  const hiddenTestCount = (allTickets.length - tickets.length) + (allTechnicians.length - technicians.length) + (allLiveLocations.length - liveLocations.length);
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [ticketsError, setTicketsError] = useState('');
   const [techniciansError, setTechniciansError] = useState('');
@@ -325,6 +336,12 @@ export default function LiveMapPage() {
           <Chip label={`${technicians.length} active technicians`} sx={{ color: '#fff', bgcolor: '#172033' }} />
           <Chip label={`${ticketsWithVerifiedPins.length} verified property pins`} sx={{ color: '#fff', bgcolor: '#1e3a8a' }} />
           <Chip label={`${freshLocations.length} fresh GPS sessions`} sx={{ color: '#fff', bgcolor: '#064e3b' }} />
+          <FormControlLabel
+            data-testid="map-show-test-records"
+            control={<Switch size="small" checked={showTestRecords} onChange={(event) => setShowTestRecords(event.target.checked)} />}
+            label={showTestRecords ? 'Showing test records' : `Test records hidden (${hiddenTestCount})`}
+            sx={{ color: '#94a3b8', ml: 1 }}
+          />
         </Stack>
       </Stack>
 

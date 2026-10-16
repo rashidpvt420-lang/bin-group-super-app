@@ -36,7 +36,7 @@ export default function OwnerNextStepBanner({ missingTitleDeed, hasVerifiedIban,
       desc: `You have ${pendingPayments} rent payment(s) awaiting your verification.`,
       action: 'Review payments',
       href: '#owner-money-snapshot',
-      color: binThemeTokens.gold
+      color: binThemeTokens.goldText
     };
   } else if (overdueTenants > 0) {
     nextStep = {

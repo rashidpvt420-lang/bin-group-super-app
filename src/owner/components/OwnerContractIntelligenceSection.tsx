@@ -54,7 +54,7 @@ export default function OwnerContractIntelligenceSection({ contract, properties,
                 {mode === 'MAINTENANCE_ONLY' ? <Wrench size={22} /> : mode === 'PROPERTY_MANAGEMENT_ONLY' ? <Users size={22} /> : <ShieldCheck size={22} />}
               </Box>
               <Box>
-                <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 2 }}>CONTRACT INTELLIGENCE</Typography>
+                <Typography variant="overline" sx={{ color: binThemeTokens.goldText, fontWeight: 950, letterSpacing: 2 }}>CONTRACT INTELLIGENCE</Typography>
                 <Typography variant="h5" sx={{ color: '#fff', fontWeight: 950, ...safeTextSx }}>{profile.ownerTitle}</Typography>
               </Box>
             </Stack>
@@ -77,9 +77,9 @@ export default function OwnerContractIntelligenceSection({ contract, properties,
       <Card sx={cardSx}>
         <CardContent sx={{ p: { xs: 2.25, md: 4 } }}>
           <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 3 }}>
-            <Box sx={{ p: 1, bgcolor: alpha(binThemeTokens.gold, 0.1), color: binThemeTokens.gold, borderRadius: 2 }}><Building2 size={22} /></Box>
+            <Box sx={{ p: 1, bgcolor: alpha(binThemeTokens.gold, 0.1), color: binThemeTokens.goldText, borderRadius: 2 }}><Building2 size={22} /></Box>
             <Box>
-              <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 2 }}>UAE ASSET CLASSIFICATION</Typography>
+              <Typography variant="overline" sx={{ color: binThemeTokens.goldText, fontWeight: 950, letterSpacing: 2 }}>UAE ASSET CLASSIFICATION</Typography>
               <Typography variant="h5" sx={{ color: '#fff', fontWeight: 950 }}>Contract Recommendation Matrix</Typography>
             </Box>
           </Stack>
@@ -103,7 +103,7 @@ export default function OwnerContractIntelligenceSection({ contract, properties,
                   </Box>
                   <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 1 }}>
                     <Chip label={asset.propertyClass.replace(/_/g, ' ')} size="small" sx={{ bgcolor: alpha('#3b82f6', 0.12), color: '#93c5fd', fontWeight: 900 }} />
-                    <Chip label={asset.occupancyModel.replace(/_/g, ' ')} size="small" sx={{ bgcolor: alpha(binThemeTokens.gold, 0.12), color: binThemeTokens.gold, fontWeight: 900 }} />
+                    <Chip label={asset.occupancyModel.replace(/_/g, ' ')} size="small" sx={{ bgcolor: alpha(binThemeTokens.gold, 0.12), color: binThemeTokens.goldText, fontWeight: 900 }} />
                     <Chip label={`Deed: ${asset.titleDeedStatus}`} size="small" sx={{ bgcolor: alpha(asset.titleDeedStatus === 'MISSING' ? '#ef4444' : '#10b981', 0.12), color: asset.titleDeedStatus === 'MISSING' ? '#fca5a5' : '#10b981', fontWeight: 900 }} />
                     <Chip label={`Recommend: ${asset.contractRecommendation.replace(/_/g, ' ')}`} size="small" sx={{ bgcolor: alpha(modeColor(asset.contractRecommendation), 0.12), color: modeColor(asset.contractRecommendation), fontWeight: 900 }} />
                     <Chip 
@@ -119,7 +119,7 @@ export default function OwnerContractIntelligenceSection({ contract, properties,
                 </Stack>
                 <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 1, mt: 1.5 }}>
                   {asset.requiredEvidence.map((item) => (
-                    <Chip key={item} icon={<FileCheck2 size={13} />} label={item} size="small" sx={{ color: 'rgba(255,255,255,0.72)', bgcolor: 'rgba(255,255,255,0.04)', '& .MuiChip-icon': { color: binThemeTokens.gold } }} />
+                    <Chip key={item} icon={<FileCheck2 size={13} />} label={item} size="small" sx={{ color: 'rgba(255,255,255,0.72)', bgcolor: 'rgba(255,255,255,0.04)', '& .MuiChip-icon': { color: binThemeTokens.goldText } }} />
                   ))}
                 </Stack>
               </Box>

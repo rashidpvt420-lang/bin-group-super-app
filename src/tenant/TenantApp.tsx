@@ -38,6 +38,7 @@ import TenantStaffDirectoryPage from './pages/TenantStaffDirectoryPage';
 import TenantMessagesPage from './pages/TenantMessagesPage';
 import TenantCommunityPage from './pages/TenantCommunityPage';
 import TenantRenewalsPage from './pages/TenantRenewalsPage';
+import PortalHeaderMenu, { usePhoneHeader } from '../components/PortalHeaderMenu';
 
 const TenantProfileWithReadiness = () => <><TenantProfileReadinessCard /><TenantProfilePage /></>;
 
@@ -47,6 +48,7 @@ const TenantLayout = ({ children }: { children: React.ReactNode }) => {
     const { isRTL, tx, lang } = useLanguage();
     const copy = (en: string, ar: string) => lang === 'ar' ? ar : en;
     const isSimpleHome = location.pathname === '/tenant' || location.pathname === '/tenant/dashboard';
+    const isPhoneHeader = usePhoneHeader();
     const isLightRoute = isSimpleHome || location.pathname === '/tenant/dashboard/full' || location.pathname === '/tenant/scheduled-service' || location.pathname === '/tenant/find-room-rent' || location.pathname === '/tenant/marketplace' || location.pathname === '/tenant/homes';
     const quickButtonSx = {
         display: { xs: 'none', md: 'inline-flex' },
@@ -65,14 +67,26 @@ const TenantLayout = ({ children }: { children: React.ReactNode }) => {
             <BrandWatermark opacity={isLightRoute ? 0.025 : 0.038} />
             <AppBar position="sticky" elevation={0} sx={{ bgcolor: 'rgba(255,255,255,0.96)', color: binThemeTokens.textPrimary, backdropFilter: 'blur(16px)', borderBottom: `1px solid ${binThemeTokens.border}`, boxShadow: '0 8px 24px rgba(17, 24, 39, 0.06)', zIndex: 1200 }}>
                 <Toolbar sx={{ justifyContent: 'space-between', px: { xs: 2, md: 4 }, flexDirection: isRTL ? 'row-reverse' : 'row', gap: 1 }}>
-                    <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1.5} alignItems="center" sx={{ minWidth: 0 }}>
+                    <Stack direction={isRTL ? 'row-reverse' : 'row'} alignItems="center" sx={{ minWidth: 0, gap: 1.5 }}>
                         {!isSimpleHome && <IconButton aria-label={tx('nav.back', copy('Back', 'رجوع'))} onClick={() => navigate(-1)} sx={{ color: binThemeTokens.textPrimary, border: `1px solid ${binThemeTokens.border}`, bgcolor: binThemeTokens.card }}><SafeIcon icon={ArrowLeft} size={20} style={{ transform: isRTL ? 'rotate(180deg)' : 'none' }} /></IconButton>}
                         <IconButton aria-label={tx('nav.home', copy('Tenant dashboard', 'لوحة المستأجر'))} onClick={() => navigate('/tenant/dashboard')} sx={{ color: binThemeTokens.goldHover, bgcolor: alpha(binThemeTokens.gold, 0.08), border: `1px solid ${alpha(binThemeTokens.gold, 0.24)}` }}><SafeIcon icon={Home} size={22} /></IconButton>
                         <Box sx={{ textAlign: isRTL ? 'right' : 'left', minWidth: 0 }}>
                             <Typography variant="h6" fontWeight="950" sx={{ color: binThemeTokens.textPrimary, textTransform: 'uppercase', letterSpacing: 2, fontSize: '0.9rem', lineHeight: 1 }}>{tx('portal.tenant.title', copy('TENANT PORTAL', 'بوابة المستأجر'))}</Typography>
-                            <Typography variant="caption" sx={{ color: binThemeTokens.goldHover, fontWeight: 900, letterSpacing: 1, fontSize: '0.6rem' }}>{tx('portal.tenant.subtitle', copy('NO-CALL SERVICE MODE', 'خدمة بدون اتصالات'))}</Typography>
+                            <Typography variant="caption" sx={{ color: binThemeTokens.goldText, fontWeight: 900, letterSpacing: 1, fontSize: '0.75rem' }}>{tx('portal.tenant.subtitle', copy('NO-CALL SERVICE MODE', 'خدمة بدون اتصالات'))}</Typography>
                         </Box>
                     </Stack>
+                    {isPhoneHeader ? (
+                    <Stack direction={isRTL ? 'row-reverse' : 'row'} alignItems="center" sx={{ flexShrink: 0, gap: 0.5 }}>
+                        <NotificationBell />
+                        <PortalHeaderMenu role="tenant" items={[
+                            { key: 'homes', label: tx('tenant.quick.findHome', copy('Find a Home', 'ابحث عن منزل')), onClick: () => navigate('/tenant/homes') },
+                            { key: 'report', label: tx('tenant.quick.report', copy('Report Issue', 'إبلاغ عن مشكلة')), onClick: () => navigate('/tenant/request') },
+                            { key: 'emergency', label: tx('tenant.quick.emergency', copy('Emergency', 'طوارئ')), onClick: () => navigate('/tenant/emergency'), danger: true },
+                            { key: 'payments', label: tx('tenant.quick.payments', copy('Payments', 'المدفوعات')), onClick: () => navigate('/tenant/payments') },
+                            { key: 'profile', label: copy('Tenant profile', 'ملف المستأجر'), onClick: () => navigate('/tenant/profile'), icon: User },
+                        ]} />
+                    </Stack>
+                    ) : (
                     <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} alignItems="center" sx={{ flexShrink: 0 }}>
                         <Button onClick={() => navigate('/tenant/homes')} sx={quickButtonSx}>{tx('tenant.quick.findHome', copy('Find a Home', 'ابحث عن منزل'))}</Button>
                         <Button onClick={() => navigate('/tenant/request')} sx={quickButtonSx}>{tx('tenant.quick.report', copy('Report Issue', 'إبلاغ عن مشكلة'))}</Button>
@@ -82,10 +96,11 @@ const TenantLayout = ({ children }: { children: React.ReactNode }) => {
                         <IconButton aria-label={copy('Tenant profile', 'ملف المستأجر')} onClick={() => navigate('/tenant/profile')} sx={{ color: binThemeTokens.textPrimary, bgcolor: binThemeTokens.card, border: `1px solid ${binThemeTokens.border}`, borderRadius: 3, '&:hover': { bgcolor: binThemeTokens.softCanvas } }}><SafeIcon icon={User} size={18} /></IconButton>
                         <PortalSessionControls role="tenant" accent={binThemeTokens.goldHover} />
                     </Stack>
+                    )}
                 </Toolbar>
             </AppBar>
             <Container maxWidth="lg" sx={{ py: 4, flexGrow: 1, position: 'relative', zIndex: 1, overflowX: 'hidden' }}><PortalConnectionStrip dark={!isLightRoute} /><Box sx={{ animation: 'fadeIn 0.5s ease-out', minWidth: 0 }}>{children}</Box></Container>
-            <Box sx={{ py: 3, textAlign: 'center', borderTop: `1px solid ${isLightRoute ? binThemeTokens.border : 'rgba(255,255,255,0.05)'}`, bgcolor: isLightRoute ? binThemeTokens.card : 'rgba(11,11,12,0.5)', position: 'relative', zIndex: 1 }}><Typography variant="caption" sx={{ color: isLightRoute ? binThemeTokens.textTertiary : 'rgba(255,255,255,0.3)', fontWeight: 800, letterSpacing: 2 }}>{copy('2026 BIN GROUP PROPERTY OPERATIONS OS', '2026 نظام BIN GROUP لتشغيل العقارات')}</Typography></Box>
+            <Box sx={{ py: 3, textAlign: 'center', borderTop: `1px solid ${isLightRoute ? binThemeTokens.border : 'rgba(255,255,255,0.05)'}`, bgcolor: isLightRoute ? binThemeTokens.card : 'rgba(11,11,12,0.5)', position: 'relative', zIndex: 1 }}><Typography variant="caption" sx={{ color: isLightRoute ? binThemeTokens.textSecondary : binThemeTokens.textOnDarkMuted, fontWeight: 800, letterSpacing: 2 }}>{copy('2026 BIN GROUP PROPERTY OPERATIONS OS', '2026 نظام BIN GROUP لتشغيل العقارات')}</Typography></Box>
             <style>{`@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }`}</style>
         </Box>
     );
