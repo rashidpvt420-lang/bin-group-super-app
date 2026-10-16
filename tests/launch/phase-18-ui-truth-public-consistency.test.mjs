@@ -73,6 +73,8 @@ test('Phase 18 public buttons navigate to real routes or are explicitly disabled
   for (const route of ['/onboarding','/login']) assert.ok(root.includes(route));
   for (const route of ['/onboarding','/login','/company-profile']) assert.ok(owner.includes(route));
   assert.ok(owner.includes('<Button disabled fullWidth'));
-  assert.ok(support.includes('href="/onboarding"'));
+  assert.ok(support.includes("email: 'ceo@bin-groups.com'"));
+  assert.match(support, /href=\{`mailto:\$\{BIN_PUBLIC_CONTACT.email\}`\}/);
+  assert.doesNotMatch(support, /href="\/onboarding"/);
   assert.ok(support.includes('href="/request-demo"'));
 });
