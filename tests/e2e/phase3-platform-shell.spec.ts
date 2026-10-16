@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { auditAdminLaunchEvidenceLayout } from './helpers/adminLaunchEvidenceLayout';
 import {
   assertNoPageLevelHorizontalOverflow,
   auditInteractiveControls,
@@ -14,6 +15,11 @@ const PUBLIC_CONTROL_ROUTES = [
   '/maintenance',
   '/phase-1-shell-missing-route',
 ] as const;
+
+test('Admin launch evidence layout contains long proof references without title collisions', async ({ page }) => {
+  await page.route('**/*', route => route.abort());
+  await auditAdminLaunchEvidenceLayout(page);
+});
 
 test.describe('Phase 3 cross-platform public control shell', () => {
   for (const route of PUBLIC_CONTROL_ROUTES) {

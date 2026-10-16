@@ -17,8 +17,8 @@ export default function AdminPremiumCommandPanel({ kpis, onNavigate }: Props) {
   const launchReady = paymentQueue === 0 && ownerQueue === 0;
   const commandCards = [
     { label: 'Launch blockers', value: launchReady ? 'Clear' : `${paymentQueue + ownerQueue} pending`, icon: <ShieldCheck size={20} />, color: launchReady ? '#10b981' : binThemeTokens.gold, path: '/ops/public-launch-command' },
-    { label: '5-profile smoke', value: 'Run required', icon: <ClipboardCheck size={20} />, color: '#3b82f6', path: '/ops/pilot-completion' },
-    { label: 'AI concierge', value: 'Pilot shell', icon: <Bot size={20} />, color: binThemeTokens.gold, path: '/ops/bin-connect' },
+    { label: '5-profile smoke', value: 'Open evidence', icon: <ClipboardCheck size={20} />, color: '#3b82f6', path: '/ops/pilot-completion' },
+    { label: 'AI concierge', value: 'Open inbox', icon: <Bot size={20} />, color: binThemeTokens.gold, path: '/ops/bin-connect' },
     { label: 'QR visitor passes', value: 'Visitor parking', icon: <Car size={20} />, color: '#8b5cf6', path: '/ops/visitor-parking' },
     { label: 'Live command', value: `${openMissions} missions`, icon: <Wrench size={20} />, color: openMissions ? binThemeTokens.gold : '#10b981', path: '/ops/technicians' },
   ];

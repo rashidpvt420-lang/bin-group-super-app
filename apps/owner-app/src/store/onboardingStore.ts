@@ -18,20 +18,23 @@ export interface PropertyData {
     subType: string;
     useType: 'Rental' | 'Personal' | 'Mixed' | 'Government';
     ownerType: 'Private' | 'Government';
-    floors: number;
+    /** null = not provided (server prices multi-storey blanks at the highest complexity tier). */
+    floors: number | null;
     units: number;
-    bedrooms: number;
+    /** Required for apartments; null = not provided. */
+    bedrooms: number | null;
     bathrooms: number;
     shops: number;
     offices: number;
     rooms: number;
     sqft: number;
-    age: number;
+    /** Required; null = not provided (server prices a blank age on the safe side). */
+    age: number | null;
     annualRent?: number;
     annualRevenue?: number;
     // Systems
     pool: boolean;
-    lifts: number;
+    lifts: number | null;
     tank: boolean;
     bmu: boolean;
     sira: boolean;
@@ -248,15 +251,17 @@ const calculatePropertyAnnualValue = (property: PropertyData, selectedAddOns: st
 
     const quote = calculateUaeQuote2026({
         assetClassId,
-        emirate: emirateMap[property.emirate] || 'dubai',
+        emirate: emirateMap[property.emirate] || property.emirate || '',
+        area: property.area || '',
         zone: property.zone || 'B',
         contractType: property.strategy === 'rent' ? 'PM_ONLY' : (property.strategy === 'fm' ? 'FM_ONLY' : 'BOTH'),
         sqft: property.sqft,
         units: property.units,
         annualRent: property.annualRent,
-        propertyAge: property.age,
-        floors: property.floors,
-        lifts: property.lifts,
+        propertyAge: property.age ?? undefined,
+        floors: property.floors ?? undefined,
+        lifts: property.lifts ?? undefined,
+        bedrooms: property.bedrooms ?? undefined,
         hasPool: property.pool,
         hasCentralHVAC: property.hvac,
         hasDistrictCooling: property.districtCooling,
@@ -285,17 +290,17 @@ const defaultProperty: PropertyData = {
     subType: 'Apartment',
     useType: 'Rental',
     ownerType: 'Private',
-    floors: 1,
+    floors: null,
     units: 1,
-    bedrooms: 1,
+    bedrooms: null,
     bathrooms: 1,
     shops: 0,
     offices: 0,
     rooms: 0,
     sqft: 1200,
-    age: 5,
+    age: null,
     pool: false,
-    lifts: 0,
+    lifts: null,
     tank: false,
     bmu: false,
     sira: false,

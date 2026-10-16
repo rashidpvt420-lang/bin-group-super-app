@@ -20,7 +20,7 @@ on:
         required: false
         type: string
       live_evidence_run_id:
-        description: 'For hard-clearance: successful live-evidence run ID for the same release SHA'
+        description: 'For hard-clearance: successful live-evidence run ID bound to the frozen release and current control-plane SHA'
         required: false
         type: string
       clearance_payload_json:
@@ -120,37 +120,91 @@ jobs:
           retention-days: 14
 
   live-evidence:
-    name: Generate same-commit five-role production evidence
+    name: Generate frozen-release five-role production evidence
     if: github.event_name == 'workflow_dispatch' && inputs.mode == 'live-evidence'
     runs-on: ubuntu-latest
     environment: production
     timeout-minutes: 120
+    defaults:
+      run:
+        working-directory: release
     permissions:
       contents: read
       actions: read
       id-token: write
     steps:
-      - name: Enforce same-commit deployment inputs
+      - name: Checkout live-evidence control plane
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: control-plane
+          fetch-depth: 0
+
+      - name: Verify frozen-release/control-plane scope
+        working-directory: .
         env:
           TARGET_SHA: ${{ inputs.expected_commit_sha }}
           CURRENT_SHA: ${{ github.sha }}
           CURRENT_REF: ${{ github.ref }}
           DEPLOY_RUN_ID: ${{ inputs.production_deploy_run_id }}
+          KNOWN_RULES_WRITER_COMMIT: 86b67c4a12a4ac61037dba8201f3d5ab96b09c5f
         run: |
           set -euo pipefail
           [[ "$CURRENT_REF" == "refs/heads/main" ]] || { echo "::error::Live launch evidence may only run from refs/heads/main."; exit 1; }
-          [[ "$TARGET_SHA" =~ ^[0-9a-f]{40}$ && "$TARGET_SHA" == "$CURRENT_SHA" ]] || { echo "::error::expected_commit_sha must be the full current main SHA."; exit 1; }
           [[ "$DEPLOY_RUN_ID" =~ ^[0-9]+$ ]] || { echo "::error::production_deploy_run_id must be numeric."; exit 1; }
+          [[ "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::expected_commit_sha must be a full lowercase release SHA."; exit 1; }
+          git -C control-plane cat-file -e "$TARGET_SHA^{commit}" || git -C control-plane fetch origin "$TARGET_SHA"
+          git -C control-plane merge-base --is-ancestor "$TARGET_SHA" "$CURRENT_SHA" || { echo "::error::Release SHA is not an ancestor of the live-evidence control plane."; exit 1; }
+          changed="$(git -C control-plane diff --name-only "$TARGET_SHA" "$CURRENT_SHA")"
+          rules_writer_path='scripts/write-production-firestore-rules.mjs'
+          rules_writer_test_path='tests/launch/design-payment-rules-artifact.test.mjs'
+          verify_exact_rules_writer_blob() {
+            local path="$1"
+            local known_blob current_blob target_blob
+            known_blob="$(git -C control-plane rev-parse "$KNOWN_RULES_WRITER_COMMIT:$path")"
+            current_blob="$(git -C control-plane rev-parse "$CURRENT_SHA:$path")"
+            target_blob="$(git -C control-plane rev-parse "$TARGET_SHA:$path")"
+            [[ "$current_blob" == "$known_blob" ]] || { echo "::error::The one-time PR #1770 exception requires the exact approved blob for $path."; exit 1; }
+            [[ "$target_blob" != "$known_blob" ]] || { echo "::error::The PR #1770 exception path is not part of the release/control-plane delta: $path"; exit 1; }
+            echo "Verified exact PR #1770 blob for $path ($known_blob)."
+          }
+          if [[ -z "$changed" ]]; then
+            [[ "$TARGET_SHA" == "$CURRENT_SHA" ]] || { echo "::error::Empty control-plane delta is only valid for an exact same-SHA pair."; exit 1; }
+            echo "Exact same-SHA release/control-plane pair verified."
+          else
+            allowed='^(\.github/workflows/firebase-production-deploy\.yml|\.github/workflows/current-main-expression-budget-repair\.yml|\.github/workflows/pr-validation\.yml|\.github/workflows/renewal-pdf-diagnostic-owner-bridge\.yml|\.github/workflows/renewal-pdf-runtime-diagnostic\.yml|\.github/workflows/repair-frozen-sovereign-ai-runtime\.yml|\.github/workflows/live-role-smoke\.yml|\.github/workflows/operational-application-evidence\.yml|\.github/workflows/operational-provider-evidence\.yml|\.github/workflows/privileged-access-rotation-evidence\.yml|\.github/workflows/technician-physical-evidence\.yml|scripts/finalize-operational-provider-evidence\.mjs|scripts/hard-clearance-production-revalidation\.mjs|scripts/launch-status\.mjs|scripts/lib/live-pilot-provenance\.mjs|scripts/publish-direct-operational-proof\.mjs|scripts/publish-operational-application-evidence\.mjs|scripts/publish-operational-provider-evidence\.mjs|scripts/resolve-admin-app-check-site-key\.mjs|scripts/run-critical-evidence\.mjs|scripts/run-frozen-release-evidence\.mjs|scripts/verify-ai-live-evidence\.mjs|scripts/verify-hard-launch-approval\.mjs|scripts/verify-production-deployment\.mjs|scripts/verify-operational-readiness\.mjs|tests/launch/ai-operational-contract\.test\.mjs|tests/launch/external-gate-production-provenance\.test\.mjs|tests/launch/final-operational-evidence-producers\.test\.mjs|tests/launch/hard-clearance-revalidation\.test\.mjs|tests/launch/operational-application-evidence-audit\.test\.mjs|scripts/resolve-live-pilot-window\.mjs)$'
+            supplemental_allowed='^(scripts/hard-launch-status\.mjs|scripts/lib/hard-launch-control\.mjs|scripts/lib/operational-proof-schema\.mjs|scripts/prepare-operational-application-evidence\.mjs|scripts/print-hard-launch-blockers\.mjs|scripts/verify-operational-application-evidence\.mjs|scripts/verify-launch-clearance\.mjs|scripts/reconcile-hard-public-evidence\.mjs|tests/launch/hard-launch-blocker-plan\.test\.mjs|tests/launch/phase1-manual-public-launch-policy\.test\.mjs|\.github/workflows/public-launch-evidence-backfill\.yml|scripts/build-command-center-evidence-manifest\.mjs|tests/launch/public-launch-evidence-workflow-bridge\.test\.mjs|scripts/resolve-live-pilot-window\.mjs|tests/launch/live-pilot-provenance\.test\.mjs|scripts/owner-launch-run-correlation\.sh|scripts/select-new-exact-sha-workflow-run\.mjs|tests/launch/exact-sha-workflow-run-correlation\.test\.mjs|\.github/workflows/owner-privileged-cleanup-command\.yml|test/hard-launch-control\.test\.mjs|tests/launch/verify-same-run-deployment-artifact\.test\.mjs)$'
+            rules_writer_exception_count=0
+            for exception_path in "$rules_writer_path" "$rules_writer_test_path"; do
+              if grep -Fxq "$exception_path" <<< "$changed"; then rules_writer_exception_count=$((rules_writer_exception_count + 1)); fi
+            done
+            if [[ "$rules_writer_exception_count" -gt 0 ]]; then
+              [[ "$rules_writer_exception_count" -eq 2 ]] || { echo "::error::The one-time PR #1770 exception requires both the rules writer and its regression test to change together."; exit 1; }
+              git -C control-plane cat-file -e "$KNOWN_RULES_WRITER_COMMIT^{commit}"
+              git -C control-plane merge-base --is-ancestor "$KNOWN_RULES_WRITER_COMMIT" "$CURRENT_SHA" || { echo "::error::The PR #1770 rules-writer commit is not an ancestor of the current control plane."; exit 1; }
+              verify_exact_rules_writer_blob "$rules_writer_path"
+              verify_exact_rules_writer_blob "$rules_writer_test_path"
+            fi
+            while IFS= read -r file; do
+              if [[ "$file" == "$rules_writer_path" || "$file" == "$rules_writer_test_path" ]]; then continue; fi
+              [[ -z "$file" || "$file" =~ $allowed || "$file" =~ $supplemental_allowed ]] || { echo "::error::Non-control-plane file changed since pilot release: $file"; exit 1; }
+            done <<< "$changed"
+            echo "Verified control-plane-only diff from $TARGET_SHA to $CURRENT_SHA:"
+            printf '%s\n' "$changed"
+          fi
+          echo "CONTROL_PLANE_SCOPE_VERIFIED=true" >> "$GITHUB_ENV"
 
       - name: Checkout exact production commit
         uses: actions/checkout@v4
         with:
           ref: ${{ inputs.expected_commit_sha }}
+          path: release
 
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
           cache: npm
+          cache-dependency-path: release/package-lock.json
 
       - name: Authenticate Google Cloud
         uses: google-github-actions/auth@v2
@@ -167,7 +221,7 @@ jobs:
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: production-deployment-${{ inputs.expected_commit_sha }}
-          path: downloaded-production
+          path: release/downloaded-production
           run-id: ${{ inputs.production_deploy_run_id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
@@ -223,8 +277,17 @@ jobs:
           node scripts/ensure-phase1-manual-payment-config.mjs
           node scripts/prepare-protected-business-fixtures.mjs
 
+      - name: Overlay reviewed live production verifier
+        working-directory: .
+        run: cp control-plane/scripts/verify-production-deployment.mjs release/scripts/verify-production-deployment.mjs
+
+      - name: Overlay reviewed cleanup-aware evidence runner
+        working-directory: .
+        run: cp control-plane/scripts/run-critical-evidence.mjs release/scripts/run-critical-evidence.mjs
+
       - name: Run every required live evidence suite
         env:
+          CONTROL_PLANE_COMMIT_SHA: ${{ github.sha }}
           E2E_OWNER_MAILBOX_CLIENT_ID: ${{ secrets.E2E_OWNER_MAILBOX_CLIENT_ID }}
           E2E_OWNER_MAILBOX_CLIENT_SECRET: ${{ secrets.E2E_OWNER_MAILBOX_CLIENT_SECRET }}
           E2E_OWNER_MAILBOX_REFRESH_TOKEN: ${{ secrets.E2E_OWNER_MAILBOX_REFRESH_TOKEN }}
@@ -235,6 +298,7 @@ jobs:
 
       - name: Verify controlled-pilot eligibility
         env:
+          CONTROL_PLANE_COMMIT_SHA: ${{ github.sha }}
           E2E_OWNER_MAILBOX_CLIENT_ID: ${{ secrets.E2E_OWNER_MAILBOX_CLIENT_ID }}
           E2E_OWNER_MAILBOX_CLIENT_SECRET: ${{ secrets.E2E_OWNER_MAILBOX_CLIENT_SECRET }}
           E2E_OWNER_MAILBOX_REFRESH_TOKEN: ${{ secrets.E2E_OWNER_MAILBOX_REFRESH_TOKEN }}
@@ -243,16 +307,49 @@ jobs:
           E2E_BROKER_MAILBOX_REFRESH_TOKEN: ${{ secrets.E2E_BROKER_MAILBOX_REFRESH_TOKEN }}
         run: node scripts/launch-status.mjs
 
+      - name: Write frozen-release/control-plane evidence binding
+        if: success()
+        env:
+          TARGET_SHA: ${{ inputs.expected_commit_sha }}
+          CONTROL_PLANE_SHA: ${{ github.sha }}
+          DEPLOY_RUN_ID: ${{ inputs.production_deploy_run_id }}
+          EVIDENCE_RUN_ID: ${{ github.run_id }}
+          EVIDENCE_RUN_ATTEMPT: ${{ github.run_attempt }}
+        run: |
+          node --input-type=module <<'NODE'
+          import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+          import path from 'node:path';
+
+          const { TARGET_SHA, CONTROL_PLANE_SHA, DEPLOY_RUN_ID, EVIDENCE_RUN_ID, EVIDENCE_RUN_ATTEMPT } = process.env;
+          if (process.env.CONTROL_PLANE_SCOPE_VERIFIED !== 'true') throw new Error('The dual-SHA scope was not verified.');
+          if (!/^[0-9a-f]{40}$/.test(TARGET_SHA || '') || !/^[0-9a-f]{40}$/.test(CONTROL_PLANE_SHA || '')) throw new Error('Release/control-plane SHAs must be full lowercase commit SHAs.');
+          if (!/^\d+$/.test(DEPLOY_RUN_ID || '') || !/^\d+$/.test(EVIDENCE_RUN_ID || '') || EVIDENCE_RUN_ATTEMPT !== '1') throw new Error('Live-evidence run bindings are invalid.');
+          const deployment = JSON.parse(readFileSync('launch_package/production-deployment.json', 'utf8'));
+          if (String(deployment.workflowRunId || '') !== DEPLOY_RUN_ID) throw new Error('Production deployment run ID does not match its selected artifact.');
+          const output = path.resolve('launch_package/live-evidence-provenance.json');
+          mkdirSync(path.dirname(output), { recursive: true });
+          writeFileSync(output, `${JSON.stringify({
+            schemaVersion: 1,
+            source: 'github-actions-live-evidence-run',
+            releaseCommitSha: TARGET_SHA,
+            controlPlaneCommitSha: CONTROL_PLANE_SHA,
+            liveEvidenceRunId: EVIDENCE_RUN_ID,
+            productionDeployRunId: DEPLOY_RUN_ID,
+            runAttempt: Number(EVIDENCE_RUN_ATTEMPT),
+          }, null, 2)}\n`);
+          NODE
+
       - name: Upload live launch evidence
         if: success()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: live-launch-evidence-${{ inputs.expected_commit_sha }}
           path: |
-            launch_package/production-deployment.json
-            launch_package/launch-evidence-batch.json
-            launch_package/launch-status.json
-            launch_package/artifacts
+            release/launch_package/production-deployment.json
+            release/launch_package/launch-evidence-batch.json
+            release/launch_package/launch-status.json
+            release/launch_package/live-evidence-provenance.json
+            release/launch_package/artifacts
           if-no-files-found: error
           retention-days: 90
 
@@ -283,6 +380,7 @@ jobs:
           TARGET_SHA: ${{ inputs.expected_commit_sha }}
           CURRENT_SHA: ${{ github.sha }}
           CURRENT_REF: ${{ github.ref }}
+          KNOWN_RULES_WRITER_COMMIT: 86b67c4a12a4ac61037dba8201f3d5ab96b09c5f
         run: |
           set -euo pipefail
           [[ "$CURRENT_REF" == "refs/heads/main" ]] || { echo "::error::Hard clearance may only run from refs/heads/main."; exit 1; }
@@ -290,6 +388,18 @@ jobs:
           git -C control-plane cat-file -e "$TARGET_SHA^{commit}" || git -C control-plane fetch origin "$TARGET_SHA"
           git -C control-plane merge-base --is-ancestor "$TARGET_SHA" "$CURRENT_SHA" || { echo "::error::Release SHA is not an ancestor of the clearance control plane."; exit 1; }
           changed="$(git -C control-plane diff --name-only "$TARGET_SHA" "$CURRENT_SHA")"
+          rules_writer_path='scripts/write-production-firestore-rules.mjs'
+          rules_writer_test_path='tests/launch/design-payment-rules-artifact.test.mjs'
+          verify_exact_rules_writer_blob() {
+            local path="$1"
+            local known_blob current_blob target_blob
+            known_blob="$(git -C control-plane rev-parse "$KNOWN_RULES_WRITER_COMMIT:$path")"
+            current_blob="$(git -C control-plane rev-parse "$CURRENT_SHA:$path")"
+            target_blob="$(git -C control-plane rev-parse "$TARGET_SHA:$path")"
+            [[ "$current_blob" == "$known_blob" ]] || { echo "::error::The one-time PR #1770 exception requires the exact approved blob for $path."; exit 1; }
+            [[ "$target_blob" != "$known_blob" ]] || { echo "::error::The PR #1770 exception path is not part of the release/control-plane delta: $path"; exit 1; }
+            echo "Verified exact PR #1770 blob for $path ($known_blob)."
+          }
           if [[ -z "$changed" ]]; then
             [[ "$TARGET_SHA" == "$CURRENT_SHA" ]] || {
               echo "::error::Empty control-plane delta is only valid for an exact same-SHA pair."
@@ -297,9 +407,25 @@ jobs:
             }
             echo "Exact same-SHA release/control-plane pair verified."
           else
-            allowed='^(\.github/workflows/firebase-production-deploy\.yml|\.github/workflows/current-main-expression-budget-repair\.yml|\.github/workflows/pr-validation\.yml|\.github/workflows/renewal-pdf-diagnostic-owner-bridge\.yml|\.github/workflows/renewal-pdf-runtime-diagnostic\.yml|\.github/workflows/repair-frozen-sovereign-ai-runtime\.yml|\.github/workflows/live-role-smoke\.yml|\.github/workflows/operational-application-evidence\.yml|\.github/workflows/operational-provider-evidence\.yml|\.github/workflows/privileged-access-rotation-evidence\.yml|\.github/workflows/technician-physical-evidence\.yml|scripts/finalize-operational-provider-evidence\.mjs|scripts/hard-clearance-production-revalidation\.mjs|scripts/launch-status\.mjs|scripts/publish-direct-operational-proof\.mjs|scripts/publish-operational-application-evidence\.mjs|scripts/publish-operational-provider-evidence\.mjs|scripts/resolve-admin-app-check-site-key\.mjs|scripts/run-frozen-release-evidence\.mjs|scripts/verify-ai-live-evidence\.mjs|scripts/verify-hard-launch-approval\.mjs|scripts/verify-operational-readiness\.mjs|tests/launch/ai-operational-contract\.test\.mjs|tests/launch/external-gate-production-provenance\.test\.mjs|tests/launch/final-operational-evidence-producers\.test\.mjs|tests/launch/hard-clearance-revalidation\.test\.mjs|tests/launch/operational-application-evidence-audit\.test\.mjs|scripts/resolve-live-pilot-window\.mjs)$'
-            supplemental_allowed='^(scripts/hard-launch-status\.mjs|scripts/lib/hard-launch-control\.mjs|scripts/lib/operational-proof-schema\.mjs|scripts/prepare-operational-application-evidence\.mjs|scripts/print-hard-launch-blockers\.mjs|scripts/verify-operational-application-evidence\.mjs|scripts/verify-launch-clearance\.mjs|scripts/reconcile-hard-public-evidence\.mjs|tests/launch/hard-launch-blocker-plan\.test\.mjs|tests/launch/phase1-manual-public-launch-policy\.test\.mjs|\.github/workflows/public-launch-evidence-backfill\.yml|scripts/build-command-center-evidence-manifest\.mjs|tests/launch/public-launch-evidence-workflow-bridge\.test\.mjs|scripts/resolve-live-pilot-window\.mjs|tests/launch/live-pilot-provenance\.test\.mjs|scripts/owner-launch-run-correlation\.sh|scripts/select-new-exact-sha-workflow-run\.mjs|tests/launch/exact-sha-workflow-run-correlation\.test\.mjs|\.github/workflows/owner-privileged-cleanup-command\.yml)$'
+            allowed='^(\.github/workflows/firebase-production-deploy\.yml|\.github/workflows/current-main-expression-budget-repair\.yml|\.github/workflows/pr-validation\.yml|\.github/workflows/renewal-pdf-diagnostic-owner-bridge\.yml|\.github/workflows/renewal-pdf-runtime-diagnostic\.yml|\.github/workflows/repair-frozen-sovereign-ai-runtime\.yml|\.github/workflows/live-role-smoke\.yml|\.github/workflows/operational-application-evidence\.yml|\.github/workflows/operational-provider-evidence\.yml|\.github/workflows/privileged-access-rotation-evidence\.yml|\.github/workflows/technician-physical-evidence\.yml|scripts/finalize-operational-provider-evidence\.mjs|scripts/hard-clearance-production-revalidation\.mjs|scripts/launch-status\.mjs|scripts/lib/live-pilot-provenance\.mjs|scripts/publish-direct-operational-proof\.mjs|scripts/publish-operational-application-evidence\.mjs|scripts/publish-operational-provider-evidence\.mjs|scripts/resolve-admin-app-check-site-key\.mjs|scripts/run-critical-evidence\.mjs|scripts/run-frozen-release-evidence\.mjs|scripts/verify-ai-live-evidence\.mjs|scripts/verify-hard-launch-approval\.mjs|scripts/verify-production-deployment\.mjs|scripts/verify-operational-readiness\.mjs|tests/launch/ai-operational-contract\.test\.mjs|tests/launch/external-gate-production-provenance\.test\.mjs|tests/launch/final-operational-evidence-producers\.test\.mjs|tests/launch/hard-clearance-revalidation\.test\.mjs|tests/launch/operational-application-evidence-audit\.test\.mjs|scripts/resolve-live-pilot-window\.mjs)$'
+            supplemental_allowed='^(scripts/hard-launch-status\.mjs|scripts/lib/hard-launch-control\.mjs|scripts/lib/operational-proof-schema\.mjs|scripts/prepare-operational-application-evidence\.mjs|scripts/print-hard-launch-blockers\.mjs|scripts/verify-operational-application-evidence\.mjs|scripts/verify-launch-clearance\.mjs|scripts/reconcile-hard-public-evidence\.mjs|tests/launch/hard-launch-blocker-plan\.test\.mjs|tests/launch/phase1-manual-public-launch-policy\.test\.mjs|\.github/workflows/public-launch-evidence-backfill\.yml|scripts/build-command-center-evidence-manifest\.mjs|tests/launch/public-launch-evidence-workflow-bridge\.test\.mjs|scripts/resolve-live-pilot-window\.mjs|tests/launch/live-pilot-provenance\.test\.mjs|scripts/owner-launch-run-correlation\.sh|scripts/select-new-exact-sha-workflow-run\.mjs|tests/launch/exact-sha-workflow-run-correlation\.test\.mjs|\.github/workflows/owner-privileged-cleanup-command\.yml|test/hard-launch-control\.test\.mjs|tests/launch/verify-same-run-deployment-artifact\.test\.mjs)$'
+            rules_writer_exception_count=0
+            for exception_path in "$rules_writer_path" "$rules_writer_test_path"; do
+              if grep -Fxq "$exception_path" <<< "$changed"; then
+                rules_writer_exception_count=$((rules_writer_exception_count + 1))
+              fi
+            done
+            if [[ "$rules_writer_exception_count" -gt 0 ]]; then
+              [[ "$rules_writer_exception_count" -eq 2 ]] || { echo "::error::The one-time PR #1770 exception requires both the rules writer and its regression test to change together."; exit 1; }
+              git -C control-plane cat-file -e "$KNOWN_RULES_WRITER_COMMIT^{commit}"
+              git -C control-plane merge-base --is-ancestor "$KNOWN_RULES_WRITER_COMMIT" "$CURRENT_SHA" || { echo "::error::The PR #1770 rules-writer commit is not an ancestor of the current control plane."; exit 1; }
+              verify_exact_rules_writer_blob "$rules_writer_path"
+              verify_exact_rules_writer_blob "$rules_writer_test_path"
+            fi
             while IFS= read -r file; do
+              if [[ "$file" == "$rules_writer_path" || "$file" == "$rules_writer_test_path" ]]; then
+                continue
+              fi
               [[ -z "$file" || "$file" =~ $allowed || "$file" =~ $supplemental_allowed ]] || { echo "::error::Non-control-plane file changed since pilot release: $file"; exit 1; }
             done <<< "$changed"
             echo "Verified control-plane-only diff from $TARGET_SHA to $CURRENT_SHA:"
@@ -313,6 +439,7 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
           TARGET_SHA: ${{ inputs.expected_commit_sha }}
+          CONTROL_PLANE_SHA: ${{ github.sha }}
           REQUESTED_RUN_ID: ${{ inputs.live_evidence_run_id }}
           ARTIFACT_NAME: live-launch-evidence-${{ inputs.expected_commit_sha }}
         run: |
@@ -326,11 +453,11 @@ jobs:
             local run_id="$1"
             local attempt_json artifacts_json
             attempt_json="$(curl --fail --silent --show-error -H "$auth_header" -H "$accept_header" -H "$version_header" "$api/actions/runs/$run_id/attempts/1")"
-            jq -e --arg sha "$TARGET_SHA" '
+            jq -e --arg controlPlaneSha "$CONTROL_PLANE_SHA" '
               .name == "Live Role Smoke Tests" and
               .path == ".github/workflows/live-role-smoke.yml" and
               .head_branch == "main" and
-              .head_sha == $sha and
+              .head_sha == $controlPlaneSha and
               .event == "workflow_dispatch" and
               .run_attempt == 1 and
               .status == "completed" and
@@ -354,7 +481,7 @@ jobs:
             resolved="$requested"
           else
             runs_json="$(curl --fail --silent --show-error -H "$auth_header" -H "$accept_header" -H "$version_header" "$api/actions/workflows/live-role-smoke.yml/runs?event=workflow_dispatch&branch=main&per_page=100")"
-            mapfile -t candidates < <(jq -r --arg sha "$TARGET_SHA" '.workflow_runs[] | select(.name == "Live Role Smoke Tests" and .path == ".github/workflows/live-role-smoke.yml" and .head_branch == "main" and .head_sha == $sha and .event == "workflow_dispatch") | .id' <<<"$runs_json")
+            mapfile -t candidates < <(jq -r --arg controlPlaneSha "$CONTROL_PLANE_SHA" '.workflow_runs[] | select(.name == "Live Role Smoke Tests" and .path == ".github/workflows/live-role-smoke.yml" and .head_branch == "main" and .head_sha == $controlPlaneSha and .event == "workflow_dispatch") | .id' <<<"$runs_json")
             valid=()
             for run_id in "${candidates[@]}"; do
               if validate_run "$run_id"; then valid+=("$run_id"); fi
@@ -379,6 +506,7 @@ jobs:
           cp control-plane/scripts/resolve-admin-app-check-site-key.mjs release/scripts/resolve-admin-app-check-site-key.mjs
           cp control-plane/scripts/verify-hard-launch-approval.mjs release/scripts/verify-hard-launch-approval.mjs
           cp control-plane/scripts/resolve-live-pilot-window.mjs release/scripts/resolve-live-pilot-window.mjs
+          cp control-plane/scripts/lib/live-pilot-provenance.mjs release/scripts/lib/live-pilot-provenance.mjs
           cp control-plane/scripts/verify-launch-clearance.mjs release/scripts/verify-launch-clearance.mjs
           cp control-plane/scripts/reconcile-hard-public-evidence.mjs release/scripts/reconcile-hard-public-evidence.mjs
           cp control-plane/scripts/verify-operational-readiness.mjs release/scripts/verify-operational-readiness.mjs
@@ -419,14 +547,40 @@ jobs:
           set -euo pipefail
           deployment_file="$(find downloaded-live-evidence -type f -name production-deployment.json -print -quit)"
           evidence_file="$(find downloaded-live-evidence -type f -name launch-evidence-batch.json -print -quit)"
+          provenance_file="$(find downloaded-live-evidence -type f -name live-evidence-provenance.json -print -quit)"
           artifact_dir="$(find downloaded-live-evidence -type d -path '*/launch_package/artifacts' -print -quit)"
           if [[ -z "$artifact_dir" ]]; then artifact_dir="$(find downloaded-live-evidence -type d -name artifacts -print -quit)"; fi
-          [[ -n "$deployment_file" && -n "$evidence_file" && -n "$artifact_dir" ]] || { echo "::error::Selected live evidence artifact is incomplete."; exit 1; }
+          [[ -n "$deployment_file" && -n "$evidence_file" && -n "$provenance_file" && -n "$artifact_dir" ]] || { echo "::error::Selected live evidence artifact is incomplete."; exit 1; }
           mkdir -p launch_package
           cp "$deployment_file" launch_package/production-deployment.json
           cp "$evidence_file" launch_package/launch-evidence-batch.json
+          cp "$provenance_file" launch_package/live-evidence-provenance.json
           rm -rf launch_package/artifacts
           cp -R "$artifact_dir" launch_package/artifacts
+
+      - name: Verify live-evidence release/control-plane artifact binding
+        working-directory: release
+        env:
+          TARGET_SHA: ${{ inputs.expected_commit_sha }}
+          CONTROL_PLANE_SHA: ${{ github.sha }}
+          LIVE_EVIDENCE_RUN_ID: ${{ steps.resolve_live_evidence.outputs.run_id }}
+        run: |
+          node --input-type=module <<'NODE'
+          import { readFileSync } from 'node:fs';
+          import { validateLiveEvidenceArtifactBinding } from './scripts/lib/live-pilot-provenance.mjs';
+
+          const binding = JSON.parse(readFileSync('launch_package/live-evidence-provenance.json', 'utf8'));
+          const deployment = JSON.parse(readFileSync('launch_package/production-deployment.json', 'utf8'));
+          const errors = validateLiveEvidenceArtifactBinding(binding, {
+            expectedReleaseSha: process.env.TARGET_SHA,
+            expectedControlPlaneSha: process.env.CONTROL_PLANE_SHA,
+            expectedRunId: process.env.LIVE_EVIDENCE_RUN_ID,
+            expectedProductionDeployRunId: String(deployment.workflowRunId || ''),
+            expectedRunAttempt: 1,
+          });
+          if (errors.length) throw new Error(`Selected live-evidence artifact binding is invalid: ${errors.join('; ')}`);
+          console.log(`[live-evidence-binding] PASS — release=${binding.releaseCommitSha} control_plane=${binding.controlPlaneCommitSha}`);
+          NODE
 
       - name: Resolve protected Gmail mailbox identities
         working-directory: release
@@ -470,12 +624,21 @@ jobs:
           const oldLog = `  \`[owner-evidence-identity] isolated synthetic identity seed=\${seed.slice(0, 10)} offset=\${coordinateOffset.toFixed(7)}\`,`;
           const newLog = `  \`[owner-evidence-identity] isolated synthetic identity seed=\${seed.slice(0, 10)} latOffset=\${latitudeOffset.toFixed(7)} lngOffset=\${longitudeOffset.toFixed(7)}\`,`;
 
-          if (source.split(oldCoordinates).length !== 2 || source.split(oldLog).length !== 2) {
-            throw new Error('Frozen Owner evidence identity wrapper changed unexpectedly; refusing runtime patch.');
+          const alreadyCollisionSafe = source.includes(
+            "const { latitude: evidenceLat, longitude: evidenceLng } = await selectUnusedOwnerEvidenceLocation(db, '${seed}');",
+          ) && source.includes(".replaceAll(latitudeToken, 'evidenceLat')")
+            && source.includes(".replaceAll(longitudeToken, 'evidenceLng')");
+
+          if (alreadyCollisionSafe) {
+            console.log('[hard-clearance-owner-identity] frozen Owner wrapper already uses collision-safe location selection; no source patch needed.');
+          } else {
+            if (source.split(oldCoordinates).length !== 2 || source.split(oldLog).length !== 2) {
+              throw new Error('Frozen Owner evidence identity wrapper changed unexpectedly; refusing runtime patch.');
+            }
+            const patched = source.replace(oldCoordinates, newCoordinates).replace(oldLog, newLog);
+            writeFileSync(target, patched, { mode: 0o600 });
+            console.log('[hard-clearance-owner-identity] expanded synthetic GEO identity space while preserving duplicate detection.');
           }
-          const patched = source.replace(oldCoordinates, newCoordinates).replace(oldLog, newLog);
-          writeFileSync(target, patched, { mode: 0o600 });
-          console.log('[hard-clearance-owner-identity] expanded synthetic GEO identity space while preserving duplicate detection.');
           NODE
 
           node scripts/prepare-protected-business-fixtures.mjs
@@ -564,6 +727,7 @@ jobs:
           path: |
             release/launch_package/production-deployment.json
             release/launch_package/launch-evidence-batch.json
+            release/launch_package/live-evidence-provenance.json
             release/launch_package/artifacts
             release/launch_package/hard-clearance-production-revalidation.json
           if-no-files-found: error
@@ -629,6 +793,7 @@ jobs:
           cp control-plane/scripts/launch-status.mjs release/scripts/launch-status.mjs
           cp control-plane/scripts/hard-clearance-production-revalidation.mjs release/scripts/hard-clearance-production-revalidation.mjs
           cp control-plane/scripts/resolve-live-pilot-window.mjs release/scripts/resolve-live-pilot-window.mjs
+          cp control-plane/scripts/lib/live-pilot-provenance.mjs release/scripts/lib/live-pilot-provenance.mjs
           cp control-plane/scripts/verify-hard-launch-approval.mjs release/scripts/verify-hard-launch-approval.mjs
           cp control-plane/scripts/verify-launch-clearance.mjs release/scripts/verify-launch-clearance.mjs
           cp control-plane/scripts/reconcile-hard-public-evidence.mjs release/scripts/reconcile-hard-public-evidence.mjs
@@ -652,14 +817,6 @@ jobs:
         working-directory: release
         run: bash scripts/npm-install-retry.sh
 
-      - name: Verify live-evidence run provenance and enforce a real 24-hour pilot
-        working-directory: release
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-          LIVE_EVIDENCE_RUN_ID: ${{ needs.hard-clearance-production-revalidation.outputs.live_evidence_run_id }}
-          HARD_LAUNCH_EXPECTED_SHA: ${{ inputs.expected_commit_sha }}
-        run: node scripts/resolve-live-pilot-window.mjs
-
       - name: Download same-run fresh production revalidation
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
@@ -672,16 +829,27 @@ jobs:
           set -euo pipefail
           deployment_file="$(find downloaded-hard-clearance-revalidation -type f -name production-deployment.json -print -quit)"
           evidence_file="$(find downloaded-hard-clearance-revalidation -type f -name launch-evidence-batch.json -print -quit)"
+          provenance_file="$(find downloaded-hard-clearance-revalidation -type f -name live-evidence-provenance.json -print -quit)"
           revalidation_file="$(find downloaded-hard-clearance-revalidation -type f -name hard-clearance-production-revalidation.json -print -quit)"
           artifact_dir="$(find downloaded-hard-clearance-revalidation -type d -path '*/launch_package/artifacts' -print -quit)"
           if [[ -z "$artifact_dir" ]]; then artifact_dir="$(find downloaded-hard-clearance-revalidation -type d -name artifacts -print -quit)"; fi
-          [[ -n "$deployment_file" && -n "$evidence_file" && -n "$revalidation_file" && -n "$artifact_dir" ]] || { echo "::error::Same-run production revalidation artifact is incomplete."; exit 1; }
+          [[ -n "$deployment_file" && -n "$evidence_file" && -n "$provenance_file" && -n "$revalidation_file" && -n "$artifact_dir" ]] || { echo "::error::Same-run production revalidation artifact is incomplete."; exit 1; }
           mkdir -p launch_package
           cp "$deployment_file" launch_package/production-deployment.json
           cp "$evidence_file" launch_package/launch-evidence-batch.json
+          cp "$provenance_file" launch_package/live-evidence-provenance.json
           cp "$revalidation_file" launch_package/hard-clearance-production-revalidation.json
           rm -rf launch_package/artifacts
           cp -R "$artifact_dir" launch_package/artifacts
+
+      - name: Verify live-evidence run provenance and enforce a real 24-hour pilot
+        working-directory: release
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          LIVE_EVIDENCE_RUN_ID: ${{ needs.hard-clearance-production-revalidation.outputs.live_evidence_run_id }}
+          HARD_LAUNCH_EXPECTED_SHA: ${{ inputs.expected_commit_sha }}
+          CONTROL_PLANE_COMMIT_SHA: ${{ github.sha }}
+        run: node scripts/resolve-live-pilot-window.mjs
 
       - name: Revalidate same-commit pilot evidence with fresh production proof
         working-directory: release

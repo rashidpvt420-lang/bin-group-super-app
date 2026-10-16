@@ -30,6 +30,7 @@ import TechnicianSyncStatusStrip from './components/TechnicianSyncStatusStrip';
 import TechnicianInstallationRegistration from './components/TechnicianInstallationRegistration';
 import SupportPage from '../pages/public/SupportPage';
 import PortalConnectionStrip from '../components/PortalConnectionStrip';
+import PortalHeaderMenu, { usePhoneHeader } from '../components/PortalHeaderMenu';
 
 // HR is an implemented operational module and is available by default. The flag
 // is now an explicit emergency kill switch instead of a hidden launch dependency.
@@ -50,6 +51,7 @@ const breadcrumbArabic: Record<string, string> = {
 
 const TechnicianLayout = ({ children }: { children: React.ReactNode }) => {
     const navigate = useNavigate();
+    const isPhoneHeader = usePhoneHeader();
     const location = useLocation();
     const { isRTL, lang, t, tx } = useLanguage();
     const label = (key: string, en: string, ar: string) => lang === 'ar' ? ar : tx(key, en);
@@ -66,6 +68,17 @@ const TechnicianLayout = ({ children }: { children: React.ReactNode }) => {
                         {!isDashboard && <Button aria-label={label('nav.back', 'Back', 'رجوع')} onClick={() => navigate(-1)} startIcon={renderSafeIcon(ArrowLeft, { size: 18, style: { transform: isRTL ? 'rotate(180deg)' : 'none' } })} sx={{ color: shell.ink, border: `1px solid ${shell.gold}`, borderRadius: 2, fontWeight: 950, minHeight: 42, px: 1.6, bgcolor: '#FFFFFF' }}>{label('nav.back', 'Back', 'رجوع')}</Button>}
                         <Typography variant="h6" fontWeight="950" sx={{ color: shell.gold, textTransform: 'uppercase', letterSpacing: 1.6, display: 'flex', alignItems: 'center', gap: 1.2, fontSize: { xs: '0.82rem', md: '1.15rem' }, flexDirection: isRTL ? 'row-reverse' : 'row', textAlign: isRTL ? 'right' : 'left', minWidth: 0 }}><SafeIcon icon={Wrench} size={19} /> {label('portal.technician.title', 'FIELD NODE', 'بوابة الفني')}</Typography>
                     </Box>
+                    {isPhoneHeader ? (
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexDirection: isRTL ? 'row-reverse' : 'row', flexShrink: 0 }}>
+                        <NotificationBell />
+                        <PortalHeaderMenu role="technician" items={[
+                            { key: 'jobs', label: label('tech.quick.jobs', 'Jobs', 'المهام'), onClick: () => navigate('/technician/jobs') },
+                            { key: 'offline', label: label('tech.quick.offline', 'Offline Queue', 'قائمة دون اتصال'), onClick: () => navigate('/technician/offline') },
+                            { key: 'proof', label: label('tech.proof', 'Proof readiness', 'جاهزية الإثبات'), onClick: () => navigate('/technician/proof-readiness') },
+                            { key: 'profile', label: label('nav.profile', 'Technician profile', 'ملف الفني'), onClick: () => navigate('/technician/profile'), icon: User },
+                        ]} />
+                    </Box>
+                    ) : (
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 0.8, md: 1.1 }, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
                         <Button onClick={() => navigate('/technician/jobs')} sx={quickButtonSx}>{label('tech.quick.jobs', 'Jobs', 'المهام')}</Button>
                         <Button onClick={() => navigate('/technician/offline')} sx={quickButtonSx}>{label('tech.quick.offline', 'Offline Queue', 'قائمة دون اتصال')}</Button>
@@ -74,6 +87,7 @@ const TechnicianLayout = ({ children }: { children: React.ReactNode }) => {
                         <Button aria-label={label('nav.profile', 'Technician profile', 'ملف الفني')} onClick={() => navigate('/technician/profile')} startIcon={renderSafeIcon(User, { size: 18 })} sx={{ color: shell.gold, border: `1px solid ${shell.gold}`, borderRadius: 2, fontWeight: 900 }}>{label('nav.profile', 'Profile', 'الملف')}</Button>
                         <PortalSessionControls role="technician" accent={shell.gold} />
                     </Box>
+                    )}
                 </Toolbar>
             </AppBar>
 

@@ -58,9 +58,11 @@ if (mainUrl !== PRODUCTION.mainUrl) {
 }
 
 function shouldRunE2eAdminLifecycle() {
+  const workflow = process.env.GITHUB_WORKFLOW;
   return process.env.GITHUB_ACTIONS === 'true' &&
-    process.env.GITHUB_WORKFLOW === 'Firebase Production Deploy' &&
+    (workflow === 'Firebase Production Deploy' || workflow === 'Live Role Smoke Tests') &&
     process.env.GITHUB_REF === 'refs/heads/main' &&
+    process.env.GITHUB_EVENT_NAME === 'workflow_dispatch' &&
     String(process.env.E2E_ADMIN_EMAIL || '').trim().length > 0;
 }
 
@@ -358,13 +360,13 @@ async function main() {
         const result = runPlaywrightSuite(key, def);
         if (!result.ok) failed += 1;
       }
-      if (suiteArg === 'all-required') {
-        const deploy = await runProductionDeployment();
-        if (!deploy.ok) failed += 1;
-      }
     } finally {
       const cleanupStatus = retireEphemeralE2eAdmin('post-business-evidence');
       if (cleanupStatus !== 0) failed += 1;
+    }
+    if (suiteArg === 'all-required') {
+      const deploy = await runProductionDeployment();
+      if (!deploy.ok) failed += 1;
     }
     console.log(`[critical-evidence] hardLaunchClaim=${HARD_LAUNCH_CLAIM}`);
     process.exit(failed === 0 ? 0 : 1);

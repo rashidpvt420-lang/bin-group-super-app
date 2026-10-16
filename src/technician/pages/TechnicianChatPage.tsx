@@ -90,11 +90,11 @@ export default function TechnicianChatPage() {
         }
     };
 
-    if (loading) return <Box sx={{ display: 'flex', justifyContent: 'center', py: 10 }}><CircularProgress sx={{ color: binThemeTokens.gold }} /></Box>;
+    if (loading) return <Box sx={{ display: 'flex', justifyContent: 'center', py: 10 }}><CircularProgress sx={{ color: binThemeTokens.goldText }} /></Box>;
     if (accessError) return (
         <Stack spacing={2} sx={{ py: 5 }}>
             <Alert severity="error">{accessError}</Alert>
-            <Button variant="outlined" onClick={() => navigate('/technician/jobs')} sx={{ alignSelf: 'flex-start', color: binThemeTokens.gold, borderColor: binThemeTokens.gold }}>Back to assigned jobs</Button>
+            <Button variant="outlined" onClick={() => navigate('/technician/jobs')} sx={{ alignSelf: 'flex-start', color: binThemeTokens.goldText, borderColor: binThemeTokens.gold }}>Back to assigned jobs</Button>
         </Stack>
     );
 

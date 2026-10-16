@@ -7,6 +7,9 @@ import { ArrowRight, ArrowLeft, Building, Hash, Scaling, Calendar } from 'lucide
 import { useOnboardingStore } from '../../store/onboardingStore';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
+import LiveQuoteCard from './LiveQuoteCard';
+
+const MULTI_STOREY_TYPES = new Set(['Residential Building', 'Commercial Building', 'Retail Center', 'Mall', 'Hotel', 'Resort', 'Hospital', 'School', 'Staff Accommodation', 'Government Property', 'Mixed-Use Tower', 'Skyscraper']);
 
 const BuildingDataStep: React.FC<{ onNext: () => void; onBack: () => void }> = ({ onNext, onBack }) => {
     const { properties, updateProperty } = useOnboardingStore();
@@ -14,7 +17,14 @@ const BuildingDataStep: React.FC<{ onNext: () => void; onBack: () => void }> = (
 
     const activeProperty = properties[0];
 
-    const canProceed = activeProperty?.units > 0 && activeProperty?.sqft > 0;
+    // Founder decision 2026-10-14 14:01: age is required, and bedrooms is required for apartments.
+    const isApartment = activeProperty?.propertyType === 'Apartment';
+    const isMultiStorey = MULTI_STOREY_TYPES.has(activeProperty?.propertyType);
+    const ageMissing = activeProperty?.age === null || activeProperty?.age === undefined;
+    const bedroomsMissing = isApartment && (activeProperty?.bedrooms === null || activeProperty?.bedrooms === undefined);
+    const canProceed = activeProperty?.units > 0 && activeProperty?.sqft > 0 && !ageMissing && !bedroomsMissing;
+    const L = (en: string, ar: string) => (isRTL ? ar : en);
+    const blankOrInt = (v: string) => (v.trim() === '' ? null : Math.max(0, parseInt(v, 10) || 0));
 
     return (
         <Box sx={{ py: 4 }}>
@@ -26,6 +36,8 @@ const BuildingDataStep: React.FC<{ onNext: () => void; onBack: () => void }> = (
                     {tx('onboarding.building_desc', 'Quantify the structural scale to calibrate maintenance resources.')}
                 </Typography>
             </Box>
+
+            <LiveQuoteCard isRTL={isRTL} />
 
             <Container maxWidth="md">
                 <Paper sx={{ p: 6, borderRadius: 6, bgcolor: 'rgba(22, 22, 24, 0.6)', border: '1px solid rgba(255,255,255,0.05)' }}>
@@ -84,12 +96,14 @@ const BuildingDataStep: React.FC<{ onNext: () => void; onBack: () => void }> = (
                         </Grid>
                         <Grid item xs={12} sm={6}>
                             <Stack spacing={1}>
-                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 900 }}>VERTICAL FLOORS</Typography>
+                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 900 }}>{L('VERTICAL FLOORS', 'عدد الطوابق')}</Typography>
                                 <TextField 
                                     fullWidth 
                                     type="number" 
-                                    value={activeProperty?.floors || 1} 
-                                    onChange={(e) => updateProperty(0, { floors: parseInt(e.target.value) || 1 })}
+                                    inputProps={{ 'data-testid': 'building-floors', min: 0 }}
+                                    helperText={isMultiStorey && (activeProperty?.floors ?? null) === null ? L('Blank = highest complexity tier until inspection', 'فارغ = أعلى فئة تعقيد حتى المعاينة') : undefined}
+                                    value={activeProperty?.floors ?? ''} 
+                                    onChange={(e) => updateProperty(0, { floors: blankOrInt(e.target.value) })}
                                     InputProps={{
                                         startAdornment: <Building size={18} style={{ marginRight: 8, color: binThemeTokens.gold }} />
                                     }}
@@ -112,18 +126,46 @@ const BuildingDataStep: React.FC<{ onNext: () => void; onBack: () => void }> = (
                         </Grid>
                         <Grid item xs={12} sm={6}>
                             <Stack spacing={1}>
-                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 900 }}>ASSET AGE (YEARS)</Typography>
+                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 900 }}>{L('ASSET AGE (YEARS) *', 'عمر العقار (سنوات) *')}</Typography>
                                 <TextField 
                                     fullWidth 
+                                    required
                                     type="number" 
-                                    value={activeProperty?.age || 0} 
-                                    onChange={(e) => updateProperty(0, { age: parseInt(e.target.value) || 0 })}
+                                    inputProps={{ 'data-testid': 'building-age', min: 0 }}
+                                    error={ageMissing}
+                                    helperText={ageMissing ? L('Required', 'مطلوب') : undefined}
+                                    value={activeProperty?.age ?? ''} 
+                                    onChange={(e) => updateProperty(0, { age: blankOrInt(e.target.value) })}
                                     InputProps={{
                                         startAdornment: <Calendar size={18} style={{ marginRight: 8, color: binThemeTokens.gold }} />
                                     }}
                                 />
                             </Stack>
                         </Grid>
+                        {isApartment ? (
+                            <Grid item xs={12} sm={6}>
+                                <Stack spacing={1}>
+                                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 900 }}>{L('BEDROOMS *', 'غرف النوم *')}</Typography>
+                                    <TextField select fullWidth required error={bedroomsMissing} helperText={bedroomsMissing ? L('Required', 'مطلوب') : undefined}
+                                        inputProps={{ 'data-testid': 'building-bedrooms' }}
+                                        value={activeProperty?.bedrooms ?? ''}
+                                        onChange={(e) => updateProperty(0, { bedrooms: Number(e.target.value) })}>
+                                        {[0, 1, 2, 3, 4].map((n) => <MenuItem key={n} value={n}>{n === 0 ? L('Studio', 'استوديو') : n === 4 ? '4+' : n}</MenuItem>)}
+                                    </TextField>
+                                </Stack>
+                            </Grid>
+                        ) : null}
+                        {isMultiStorey ? (
+                            <Grid item xs={12} sm={6}>
+                                <Stack spacing={1}>
+                                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 900 }}>{L('LIFTS', 'المصاعد')}</Typography>
+                                    <TextField fullWidth type="number" inputProps={{ 'data-testid': 'building-lifts', min: 0 }}
+                                        helperText={(activeProperty?.lifts ?? null) === null ? L('Blank = highest complexity tier until inspection', 'فارغ = أعلى فئة تعقيد حتى المعاينة') : undefined}
+                                        value={activeProperty?.lifts ?? ''}
+                                        onChange={(e) => updateProperty(0, { lifts: blankOrInt(e.target.value) })} />
+                                </Stack>
+                            </Grid>
+                        ) : null}
                     </Grid>
 
                     <Box sx={{ mt: 8, display: 'flex', justifyContent: 'space-between', gap: 2 }}>

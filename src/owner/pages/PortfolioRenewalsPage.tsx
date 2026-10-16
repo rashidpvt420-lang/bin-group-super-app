@@ -100,7 +100,7 @@ export default function PortfolioRenewalsPage() {
   if (loading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
-        <CircularProgress sx={{ color: binThemeTokens.goldHover }} />
+        <CircularProgress sx={{ color: binThemeTokens.goldText }} />
       </Box>
     );
   }
@@ -109,7 +109,7 @@ export default function PortfolioRenewalsPage() {
     <Box sx={{ direction: isRTL ? 'rtl' : 'ltr' }}>
       <Stack spacing={3}>
         <Box>
-          <Typography variant="overline" sx={{ color: binThemeTokens.goldHover, fontWeight: 950, letterSpacing: 2 }}>
+          <Typography variant="overline" sx={{ color: binThemeTokens.goldText, fontWeight: 950, letterSpacing: 2 }}>
             {tx('owner.renewals.overline', 'PORTFOLIO RENEWAL WATCH')}
           </Typography>
           <Typography variant="h4" sx={{ color: binThemeTokens.textPrimary, fontWeight: 950 }}>
@@ -173,7 +173,7 @@ export default function PortfolioRenewalsPage() {
                     <Button
                       variant="outlined"
                       onClick={() => navigate(record.contractId ? `/owner/contracts?contractId=${encodeURIComponent(record.contractId)}` : '/owner/contracts')}
-                      sx={{ borderColor: binThemeTokens.goldHover, color: binThemeTokens.goldHover, fontWeight: 900 }}
+                      sx={{ borderColor: binThemeTokens.goldHover, color: binThemeTokens.goldText, fontWeight: 900 }}
                     >
                       {tx('owner.renewals.open_contract', 'Open Contract')}
                     </Button>

@@ -65,7 +65,7 @@ export default function OwnerIbanPage() {
         finally { setSaving(false); }
     };
 
-    if (loading) return <Box sx={{ display: 'flex', justifyContent: 'center', py: 10 }}><CircularProgress sx={{ color: binThemeTokens.gold }} /></Box>;
+    if (loading) return <Box sx={{ display: 'flex', justifyContent: 'center', py: 10 }}><CircularProgress sx={{ color: binThemeTokens.goldText }} /></Box>;
 
     return (
         <Box>

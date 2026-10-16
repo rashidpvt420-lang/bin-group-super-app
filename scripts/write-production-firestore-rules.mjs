@@ -388,14 +388,25 @@ const fallbackBlockBeforeAdminClosure = matchBlock(operationalCatchAllMarker);
 if (!fallbackBlockBeforeAdminClosure) {
   failures.push('global Firestore fallback is missing before Admin operational authority hardening');
 } else {
-  let hardenedFallback = fallbackBlockBeforeAdminClosure;
-  for (const collection of adminOperationalFallbackExclusions) {
-    const marker = `          'binConnectThreads'`;
-    const replacement = `          'binConnectThreads',
-          '${collection}'`;
-    // Both create and update/delete lists end with binConnectThreads.
-    hardenedFallback = hardenedFallback.split(marker).join(replacement);
-  }
+  let writeGuards = 0;
+  const hardenedFallback = fallbackBlockBeforeAdminClosure.replace(
+    /(allow (?:create|update, delete):[^;]*?collection in \[)([\s\S]*?)(\]\s*\)\s*&& hasAdminClaim\(\);)/g,
+    (_match, prefix, exclusions, suffix) => {
+      writeGuards += 1;
+      let boundedExclusions = exclusions;
+      for (const collection of adminOperationalFallbackExclusions) {
+        if (boundedExclusions.includes(`'${collection}'`)) continue;
+        const marker = `          'binConnectThreads'`;
+        if (!boundedExclusions.includes(marker)) {
+          failures.push('generic browser write fallback lacks the reviewed BIN Connect exclusion anchor');
+          break;
+        }
+        boundedExclusions = boundedExclusions.replace(marker, `${marker},\n          '${collection}'`);
+      }
+      return `${prefix}${boundedExclusions}${suffix}`;
+    },
+  );
+  if (writeGuards !== 2) failures.push('Admin operational authority requires exactly two reviewed generic browser write guards');
   source = source.replace(fallbackBlockBeforeAdminClosure, hardenedFallback);
 }
 

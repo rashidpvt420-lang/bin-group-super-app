@@ -25,6 +25,7 @@ import {
     ensureTechnicianInstallationRegistered,
     readNativeTechnicianInstallationHash,
 } from '../utils/technicianInstallationBinding';
+import { formatStatusLabel } from '../../theme/statusColors';
 
 type Step = 'ACCEPTED' | 'EN_ROUTE' | 'ARRIVED' | 'IN_PROGRESS' | 'COMPLETED';
 type TechnicianTicketRecord = Record<string, any> & { id: string };
@@ -481,7 +482,7 @@ export default function TechnicianJobDetailPage() {
     };
 
     if (loading) {
-        return <Box sx={{ display: 'flex', justifyContent: 'center', py: 10 }}><CircularProgress sx={{ color: binThemeTokens.gold }} /></Box>;
+        return <Box sx={{ display: 'flex', justifyContent: 'center', py: 10 }}><CircularProgress sx={{ color: binThemeTokens.goldText }} /></Box>;
     }
 
     if (!ticket) {
@@ -545,7 +546,7 @@ export default function TechnicianJobDetailPage() {
                             <Grid item xs={12}>
                                 <Typography variant="caption" color="textSecondary">{tx('tech.job.address', 'Address')}</Typography>
                                 <Typography variant="body1" color={JOB_READABLE.ink}>{ticket.address || ticket.propertyLocation?.address || 'Address not available'}</Typography>
-                                <Typography variant="body2" color="textSecondary">Access: {ticket.permissionToEnter || 'CALL_FIRST'} · Anyone home: {ticket.isAnyoneHome || 'UNKNOWN'} · Notes: {ticket.accessNotes || '—'}</Typography>
+                                <Typography variant="body2" color="textSecondary">Access: {formatStatusLabel(ticket.permissionToEnter || 'CALL_FIRST')} · Anyone home: {formatStatusLabel(ticket.isAnyoneHome || 'UNKNOWN')} · Notes: {ticket.accessNotes || '—'}</Typography>
                             </Grid>
                         </Grid>
                     </Paper>

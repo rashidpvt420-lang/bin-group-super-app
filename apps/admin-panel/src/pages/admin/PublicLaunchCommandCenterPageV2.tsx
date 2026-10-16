@@ -122,8 +122,8 @@ const LAUNCH_GATES: LaunchGate[] = [
   { id: 'iosPwaSmoke', group: 'Device', title: 'iPhone/Safari PWA smoke test', required: true, proofRequired: 'Real iPhone/Safari PWA test across all five dashboards.' },
   { id: 'pdfMobileDownload', group: 'Device', title: 'Mobile PDF proof', required: true, proofRequired: 'Arabic/English contract, invoice, lease, and report PDF mobile download/open test.' },
   { id: 'arabicRtlAllCoreScreens', group: 'Device', title: 'Arabic RTL sweep', required: true, proofRequired: 'Owner, tenant, technician, broker, admin, modals, toasts, empty states, uploads, and PDFs on physical devices.' },
-  { id: 'everyButtonWritesFirestoreOrStorage', group: 'Role Buttons', title: 'Every-button audit', required: true, proofRequired: 'Every action writes, reads, navigates, or fails safely with role, route, action, and exact-SHA proof reference.' },
-  { id: 'logoutAllDashboards', group: 'Role Buttons', title: 'Logout all dashboards', required: true, proofRequired: 'Owner, tenant, technician, broker, and admin logout tests on desktop and mobile.' },
+  { id: 'everyButtonWritesFirestoreOrStorage', group: 'Role Buttons', title: 'Every-button audit', required: true, proofRequired: 'Every action writes, reads, navigates, or fails safely on physical devices with role, route, action, and exact-SHA proof reference.' },
+  { id: 'logoutAllDashboards', group: 'Role Buttons', title: 'Logout all dashboards', required: true, proofRequired: 'Owner, tenant, technician, broker, and admin logout tests on desktop and physical mobile devices.' },
 ];
 
 const roles = ['admin', 'owner', 'tenant', 'technician', 'broker'];
@@ -393,7 +393,7 @@ export default function PublicLaunchCommandCenterPageV2() {
       });
       setNotice(status === 'waived'
         ? 'Waiver recorded for pilot/history. It does not count as a hard-public-launch pass.'
-        : 'Exact-SHA evidence saved. Coverage recalculates only from evidence that meets the required layer; this record does not authorize launch.');
+        : 'Exact-SHA evidence saved for protected review. Manual records do not increase workflow evidence coverage or authorize launch.');
       setProofRef('');
       setNotes('');
     } catch (error: any) {
@@ -455,7 +455,7 @@ export default function PublicLaunchCommandCenterPageV2() {
       : '#f59e0b';
 
   return (
-    <Box sx={{ p: { xs: 2, md: 4 }, color: '#fff' }}>
+    <Box sx={{ p: { xs: 2, md: 4 }, color: '#fff', minWidth: 0, overflowWrap: 'anywhere', '& .MuiAlert-message': { minWidth: 0 } }}>
       <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" spacing={2} sx={{ mb: 3 }}>
         <Box>
           <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 3 }}>PUBLIC LAUNCH EVIDENCE CENTER</Typography>
@@ -566,7 +566,7 @@ export default function PublicLaunchCommandCenterPageV2() {
               <Grid item xs={12} sm={6} md={2.4} key={check.role}>
                 <Box sx={{ p: 2, borderRadius: 3, bgcolor: 'rgba(255,255,255,.035)', border: `1px solid ${alpha(smokeAuthoritative ? color : '#ef4444', .28)}` }}>
                   <Stack spacing={1}>
-                    <Stack direction="row" justifyContent="space-between" alignItems="center"><Typography fontWeight={950} textTransform="capitalize">{check.role}</Typography><Chip size="small" label={smokeAuthoritative ? label : 'unavailable'} sx={{ bgcolor: alpha(smokeAuthoritative ? color : '#ef4444', .15), color: smokeAuthoritative ? color : '#ef4444', fontWeight: 850 }} /></Stack>
+                    <Stack spacing={0.8} alignItems="flex-start"><Typography fontWeight={950} textTransform="capitalize">{check.role}</Typography><Chip size="small" label={smokeAuthoritative ? label : 'unavailable'} sx={{ maxWidth: '100%', bgcolor: alpha(smokeAuthoritative ? color : '#ef4444', .15), color: smokeAuthoritative ? color : '#ef4444', fontWeight: 850 }} /></Stack>
                     <Typography variant="caption" sx={{ color: 'rgba(255,255,255,.58)' }}>{check.route}</Typography>
                     <Typography variant="caption" sx={{ color: latest?.proofRef ? '#22c55e' : 'rgba(255,255,255,.38)', fontWeight: 800 }}>{latest?.proofRef || 'No exact-SHA proof yet'}</Typography>
                   </Stack>
@@ -596,14 +596,15 @@ export default function PublicLaunchCommandCenterPageV2() {
                 const latest = currentEvidenceByGate.get(gate.id);
                 const requiredLayer = requiredEvidenceLayerForGate(gate.id, gate.group);
                 const passed = evidenceCountsForPublicLaunch(latest, RELEASE_SHA, requiredLayer);
-                const label = passed ? 'passed' : latest?.status === 'blocked' ? 'blocked' : latest?.status === 'waived' ? 'waived (non-passing)' : latest?.status === 'passed' ? 'proof insufficient' : 'pending';
+                const manualReviewPending = latest?.status === 'passed' && latest.source === 'admin-manual-evidence' && evidenceLayerSatisfies(latest.evidenceLayer, requiredLayer);
+                const label = passed ? 'passed' : latest?.status === 'blocked' ? 'blocked' : latest?.status === 'waived' ? 'waived (non-passing)' : manualReviewPending ? 'manual review pending' : latest?.status === 'passed' ? 'proof insufficient' : 'pending';
                 const color = passed ? '#22c55e' : latest?.status === 'blocked' ? '#ef4444' : '#f59e0b';
                 return (
                   <Grid item xs={12} md={6} key={gate.id}>
                     <Box onClick={() => selectGate(gate.id)} sx={{ p: 1.6, borderRadius: 3, cursor: 'pointer', bgcolor: selectedGate === gate.id ? alpha(binThemeTokens.gold, .14) : 'rgba(255,255,255,.035)', border: `1px solid ${selectedGate === gate.id ? alpha(binThemeTokens.gold, .34) : 'rgba(255,255,255,.07)'}` }}>
-                      <Stack direction="row" justifyContent="space-between" spacing={1} alignItems="flex-start">
+                      <Stack spacing={1} alignItems="flex-start">
                         <Typography fontWeight={950}>{gate.title}</Typography>
-                        <Stack direction="row" spacing={0.8}><Chip size="small" label={requiredLayer} sx={{ bgcolor: alpha(binThemeTokens.gold, .11), color: binThemeTokens.gold, fontWeight: 850 }} /><Chip size="small" label={evidenceAuthoritative ? label : 'unavailable'} sx={{ bgcolor: alpha(evidenceAuthoritative ? color : '#ef4444', .15), color: evidenceAuthoritative ? color : '#ef4444', fontWeight: 850 }} /></Stack>
+                        <Stack direction="row" spacing={0.8} useFlexGap flexWrap="wrap" sx={{ minWidth: 0, maxWidth: '100%' }}><Chip size="small" label={requiredLayer} sx={{ maxWidth: '100%', bgcolor: alpha(binThemeTokens.gold, .11), color: binThemeTokens.gold, fontWeight: 850 }} /><Chip size="small" label={evidenceAuthoritative ? label : 'unavailable'} sx={{ maxWidth: '100%', bgcolor: alpha(evidenceAuthoritative ? color : '#ef4444', .15), color: evidenceAuthoritative ? color : '#ef4444', fontWeight: 850 }} /></Stack>
                       </Stack>
                       <Typography variant="body2" sx={{ color: 'rgba(255,255,255,.58)', mt: .7 }}>{gate.proofRequired}</Typography>
                       <Typography variant="caption" sx={{ color: latest?.proofRef ? '#22c55e' : 'rgba(255,255,255,.38)', mt: 1, display: 'block', fontWeight: 800 }}>{latest ? `${latest.proofRef || 'No proof reference'} · layer ${latest.evidenceLayer || 'missing'} · ${getEvidenceTime(latest)}` : 'No evidence for this exact release SHA.'}</Typography>
@@ -634,7 +635,7 @@ export default function PublicLaunchCommandCenterPageV2() {
               <TextField label="Notes" multiline minRows={4} value={notes} onChange={(event) => setNotes(event.target.value)} disabled={!evidenceAuthoritative} placeholder="What passed, what failed, exact action tested, device and fallback behavior." />
               <Button onClick={saveProof} disabled={busy || !evidenceAuthoritative} variant="contained" startIcon={<CheckCircle2 size={16} />} sx={{ bgcolor: binThemeTokens.gold, color: '#020617', fontWeight: 950 }}>{busy ? 'Saving...' : 'Save exact-SHA evidence'}</Button>
               <Divider sx={{ borderColor: 'rgba(255,255,255,.08)' }} />
-              <Typography variant="caption" sx={{ color: 'rgba(255,255,255,.55)', fontWeight: 850 }}>Evidence rule: PASSED + exact SHA + sufficient evidence layer. Waivers never satisfy hard-public-launch evidence requirements. Manual Admin records always carry hardLaunchClaim=false; final launch authorization is issued only by the protected signed decision chain.</Typography>
+              <Typography variant="caption" sx={{ color: 'rgba(255,255,255,.55)', fontWeight: 850 }}>Coverage rule: protected GitHub execution + PASSED + exact SHA + sufficient evidence layer. Manual Admin records are retained for protected review and always carry hardLaunchClaim=false. Waivers never satisfy hard-public-launch evidence requirements; final launch authorization is issued only by the protected signed decision chain.</Typography>
             </Stack>
           </Paper>
         </Grid>

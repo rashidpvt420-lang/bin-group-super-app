@@ -4,6 +4,7 @@
 export * from './utils/uaePricingEngine';
 export * from './pricing/uaePricingMatrix2026';
 export * from './pricing/calculateUaeQuote2026';
+export { normalizeAedMoney } from './pricing/aedMoney';
 export * from './utils/buildingHealthEngine';
 export * from './utils/predictiveIntelligence';
 export * from './geo/geoAnchor';

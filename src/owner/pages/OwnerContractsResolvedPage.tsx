@@ -393,14 +393,14 @@ export default function OwnerContractsResolvedPage() {
   };
 
   if (loading) {
-    return <Box sx={{ height: '60vh', display: 'grid', placeItems: 'center' }}><CircularProgress sx={{ color: binThemeTokens.gold }} /></Box>;
+    return <Box sx={{ height: '60vh', display: 'grid', placeItems: 'center' }}><CircularProgress sx={{ color: binThemeTokens.goldText }} /></Box>;
   }
 
   return (
     <Box sx={{ pb: 6, direction: isRTL ? 'rtl' : 'ltr' }}>
       <Box sx={{ mb: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexDirection: { xs: 'column', md: isRTL ? 'row-reverse' : 'row' }, gap: 3 }}>
         <Box sx={{ textAlign: isRTL ? 'right' : 'left' }}>
-          <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 4 }}>{t('gov.institutional_governance') || 'INSTITUTIONAL GOVERNANCE'}</Typography>
+          <Typography variant="overline" sx={{ color: binThemeTokens.goldText, fontWeight: 900, letterSpacing: 4 }}>{t('gov.institutional_governance') || 'INSTITUTIONAL GOVERNANCE'}</Typography>
           <Typography variant="h4" fontWeight="950" sx={{ color: '#FFF', mt: 1 }}>{t('nav.contracts') || 'Contracts'}</Typography>
           <Typography variant="body2" sx={{ color: 'rgba(255,255,255,.5)', mt: 1 }}>Permission-safe contract lookup using linked UID, email and direct contract records.</Typography>
         </Box>
@@ -441,7 +441,7 @@ export default function OwnerContractsResolvedPage() {
           <Paper sx={{ p: 4, bgcolor: alpha(binThemeTokens.gold, 0.05), border: `2px solid ${binThemeTokens.gold}`, borderRadius: 8 }}>
             <Stack spacing={2}>
               <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                <Box sx={{ p: 1.5, bgcolor: alpha(binThemeTokens.gold, 0.1), borderRadius: 3, color: binThemeTokens.gold }}><ScopeIcon size={24} /></Box>
+                <Box sx={{ p: 1.5, bgcolor: alpha(binThemeTokens.gold, 0.1), borderRadius: 3, color: binThemeTokens.goldText }}><ScopeIcon size={24} /></Box>
                 <CheckCircle2 color={binThemeTokens.gold} />
               </Box>
               <Box>
@@ -471,7 +471,7 @@ export default function OwnerContractsResolvedPage() {
                       <Typography variant="body1" sx={{ color: '#FFF', fontWeight: 950 }}>{contract.propertyName || contract.companyProfile?.name || 'Portfolio Contract'}</Typography>
                       <Typography variant="caption" sx={{ color: 'rgba(255,255,255,.35)', fontWeight: 800 }}>Ref: #{String(contract.id).slice(0, 8)}</Typography>
                     </Grid>
-                    <Grid item xs={12} md={3}><Chip label={contract.packageName || contract.selectedPlan?.name || contract.serviceDetails?.selectedPlan || contractScope.title} size="small" sx={{ bgcolor: alpha(binThemeTokens.gold, 0.1), color: binThemeTokens.gold, fontWeight: 950 }} /></Grid>
+                    <Grid item xs={12} md={3}><Chip label={contract.packageName || contract.selectedPlan?.name || contract.serviceDetails?.selectedPlan || contractScope.title} size="small" sx={{ bgcolor: alpha(binThemeTokens.gold, 0.1), color: binThemeTokens.goldText, fontWeight: 950 }} /></Grid>
                     <Grid item xs={12} md={3}>
                       <Stack spacing={0.75}>
                         <Stack direction="row" spacing={1} alignItems="center"><Calendar size={14} color="rgba(255,255,255,.45)" /><Typography variant="caption" sx={{ color: 'rgba(255,255,255,.75)', fontWeight: 900 }}>{termSummaryText(contract)}</Typography></Stack>
@@ -480,7 +480,7 @@ export default function OwnerContractsResolvedPage() {
                         <Typography variant="caption" sx={{ color: alpha(binThemeTokens.gold, 0.85), fontWeight: 800 }}>{adminStampSummaryText(contract)}</Typography>
                       </Stack>
                     </Grid>
-                    <Grid item xs={12} md={2}><Stack direction="row" spacing={1} justifyContent={{ xs: 'flex-start', md: 'flex-end' }}><Button size="small" startIcon={<Download size={14} />} onClick={() => openOrDownloadContract(contract)} sx={{ color: binThemeTokens.gold, fontWeight: 950 }}>Download</Button></Stack></Grid>
+                    <Grid item xs={12} md={2}><Stack direction="row" spacing={1} justifyContent={{ xs: 'flex-start', md: 'flex-end' }}><Button size="small" startIcon={<Download size={14} />} onClick={() => openOrDownloadContract(contract)} sx={{ color: binThemeTokens.goldText, fontWeight: 950 }}>Download</Button></Stack></Grid>
                   </Grid>
                 </Paper>
               </Grid>
