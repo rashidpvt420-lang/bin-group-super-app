@@ -95,11 +95,11 @@ export default function OwnerAuthorizedReportersSection({ properties, reporters,
       <CardContent sx={{ p: { xs: 2.25, md: 4 } }}>
         <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" alignItems={{ xs: 'flex-start', md: 'center' }} spacing={2} sx={{ mb: 3, minWidth: 0 }}>
           <Stack direction="row" alignItems="center" spacing={1.5} sx={{ minWidth: 0 }}>
-            <Box sx={{ p: 1, bgcolor: alpha(binThemeTokens.gold, 0.1), borderRadius: 2, color: binThemeTokens.gold, flexShrink: 0 }}>
+            <Box sx={{ p: 1, bgcolor: alpha(binThemeTokens.gold, 0.1), borderRadius: 2, color: binThemeTokens.goldText, flexShrink: 0 }}>
               <Users size={22} />
             </Box>
             <Box sx={{ minWidth: 0 }}>
-              <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 2, ...textSafeSx }}>
+              <Typography variant="overline" sx={{ color: binThemeTokens.goldText, fontWeight: 900, letterSpacing: 2, ...textSafeSx }}>
                 {t('owner.authorizedReporters') || 'Authorized Property Access'}
               </Typography>
               <Typography variant="h5" fontWeight={950} sx={{ color: '#fff', ...textSafeSx }}>
@@ -108,7 +108,7 @@ export default function OwnerAuthorizedReportersSection({ properties, reporters,
             </Box>
           </Stack>
           {!showAddForm && (
-            <Button variant="outlined" startIcon={<UserPlus size={16} />} onClick={() => setShowAddForm(true)} sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.gold, fontWeight: 900 }}>
+            <Button variant="outlined" startIcon={<UserPlus size={16} />} onClick={() => setShowAddForm(true)} sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.goldText, fontWeight: 900 }}>
               Add Person
             </Button>
           )}
@@ -122,7 +122,7 @@ export default function OwnerAuthorizedReportersSection({ properties, reporters,
           ].map((metric) => (
             <Grid item xs={12} md={4} key={metric.label}>
               <Box sx={{ p: 2, bgcolor: alpha(binThemeTokens.gold, 0.04), border: `1px solid ${alpha(binThemeTokens.gold, 0.12)}`, borderRadius: 3 }}>
-                <Stack direction="row" spacing={1.2} alignItems="center" sx={{ color: binThemeTokens.gold, mb: 1 }}>
+                <Stack direction="row" spacing={1.2} alignItems="center" sx={{ color: binThemeTokens.goldText, mb: 1 }}>
                   {metric.icon}
                   <Typography variant="caption" sx={{ fontWeight: 950, letterSpacing: 1 }}>{metric.label.toUpperCase()}</Typography>
                 </Stack>
@@ -208,7 +208,7 @@ export default function OwnerAuthorizedReportersSection({ properties, reporters,
         )}
 
         {loading ? (
-          <Box sx={{ p: 4, display: 'flex', justifyContent: 'center' }}><CircularProgress sx={{ color: binThemeTokens.gold }} /></Box>
+          <Box sx={{ p: 4, display: 'flex', justifyContent: 'center' }}><CircularProgress sx={{ color: binThemeTokens.goldText }} /></Box>
         ) : reporters.length === 0 ? (
           <Box sx={{ p: 4, textAlign: 'center', border: '1px dashed rgba(255,255,255,0.1)', borderRadius: 3 }}>
             <AlertCircle size={32} color="rgba(255,255,255,0.2)" style={{ margin: '0 auto 12px' }} />
@@ -222,12 +222,12 @@ export default function OwnerAuthorizedReportersSection({ properties, reporters,
                   <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.5, flexWrap: 'wrap' }}>
                     <Typography variant="subtitle1" fontWeight={950} sx={{ color: '#fff', ...textSafeSx }}>{reporter.reporterName}</Typography>
                     <Chip label={reporter.accessStatus} size="small" sx={{ bgcolor: reporter.accessStatus === 'ACTIVE' ? alpha('#10b981', 0.12) : reporter.accessStatus === 'SUSPENDED' ? alpha('#ef4444', 0.12) : alpha('#f59e0b', 0.12), color: reporter.accessStatus === 'ACTIVE' ? '#10b981' : reporter.accessStatus === 'SUSPENDED' ? '#ef4444' : '#f59e0b', fontWeight: 900, fontSize: '0.65rem', height: 20 }} />
-                    <Chip label={reporter.permissionScope.replace(/_/g, ' ')} size="small" sx={{ bgcolor: alpha(binThemeTokens.gold, 0.12), color: binThemeTokens.gold, fontWeight: 900, fontSize: '0.62rem', height: 20 }} />
+                    <Chip label={reporter.permissionScope.replace(/_/g, ' ')} size="small" sx={{ bgcolor: alpha(binThemeTokens.gold, 0.12), color: binThemeTokens.goldText, fontWeight: 900, fontSize: '0.62rem', height: 20 }} />
                   </Stack>
                   <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.5)', mb: 0.5, ...textSafeSx }}>{reporter.roleLabel} • {reporter.propertyName}</Typography>
                   <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.3)', fontFamily: 'monospace', ...textSafeSx }}>{reporter.reporterEmail} • {reporter.reporterPhone}</Typography>
                   {reporter.occupiedArea && <Typography variant="caption" sx={{ display: 'block', color: 'rgba(255,255,255,0.42)', mt: 0.5 }}>Area: {reporter.occupiedArea}</Typography>}
-                  {reporter.inviteCode && <Typography variant="caption" sx={{ display: 'flex', alignItems: 'center', gap: 0.5, color: binThemeTokens.gold, mt: 0.5, fontWeight: 900 }}><KeyRound size={13} /> Invite Code: {reporter.inviteCode}</Typography>}
+                  {reporter.inviteCode && <Typography variant="caption" sx={{ display: 'flex', alignItems: 'center', gap: 0.5, color: binThemeTokens.goldText, mt: 0.5, fontWeight: 900 }}><KeyRound size={13} /> Invite Code: {reporter.inviteCode}</Typography>}
                 </Box>
                 <Button size="small" color="error" variant="outlined" onClick={() => onRemoveReporter(reporter.id)} sx={{ fontWeight: 900, borderRadius: 2 }}>
                   Revoke

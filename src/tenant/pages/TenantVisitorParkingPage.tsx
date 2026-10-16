@@ -163,7 +163,7 @@ export default function TenantVisitorParkingPage() {
             <SafeIcon icon={Car} size={36} style={{ color: binThemeTokens.gold }} />
             {label('tenant.parking.title', 'Visitor Parking', 'مواقف الزوار')}
           </Typography>
-          <Typography sx={{ color: 'rgba(255,255,255,0.5)', mt: 1 }}>
+          <Typography sx={{ color: binThemeTokens.textOnDarkMuted, mt: 1 }}>
             {label('tenant.parking.desc', 'Request and manage temporary parking permissions for your visitors.', 'طلب وإدارة تصاريح وقوف السيارات المؤقتة لزوارك.')}
           </Typography>
         </Box>
@@ -180,7 +180,7 @@ export default function TenantVisitorParkingPage() {
 
       {!unitId ? (
         <Paper sx={{ p: 5, textAlign: 'center', bgcolor: 'rgba(255,255,255,0.01)', border: '1px dashed rgba(255,255,255,0.08)', borderRadius: 4 }}>
-          <SafeIcon icon={AlertCircle} size={48} style={{ color: 'rgba(255,255,255,0.2)', margin: '0 auto' }} />
+          <SafeIcon icon={AlertCircle} size={48} style={{ color: binThemeTokens.textOnDarkMuted, margin: '0 auto' }} />
           <Typography sx={{ color: '#FFF', fontWeight: 950, mt: 2 }}>
             {label('tenant.parking.no_unit', 'No Assigned Unit Found', 'لم يتم العثور على وحدة معينة')}
           </Typography>
@@ -261,11 +261,11 @@ export default function TenantVisitorParkingPage() {
 
       {requests.length === 0 && unitId && (
         <Paper sx={{ p: 6, textAlign: 'center', bgcolor: 'rgba(255,255,255,0.01)', border: '1px dashed rgba(255,255,255,0.08)', borderRadius: 4 }}>
-          <SafeIcon icon={Car} size={48} style={{ color: 'rgba(255,255,255,0.2)', margin: '0 auto' }} />
+          <SafeIcon icon={Car} size={48} style={{ color: binThemeTokens.textOnDarkMuted, margin: '0 auto' }} />
           <Typography sx={{ color: '#FFF', fontWeight: 950, mt: 2 }}>
             {label('tenant.parking.none', 'No Parking Requests', 'لا توجد طلبات مواقف')}
           </Typography>
-          <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', display: 'block', mt: 1 }}>
+          <Typography variant="caption" sx={{ color: binThemeTokens.textOnDarkMuted, display: 'block', mt: 1 }}>
             {label('tenant.parking.none_hint', 'Create a request to clear visitor vehicle access at the gate.', 'قم بإنشاء طلب لتسهيل دخول مركبة الزائر عند البوابة.')}
           </Typography>
         </Paper>
@@ -277,7 +277,7 @@ export default function TenantVisitorParkingPage() {
             {label('tenant.parking.new_title', 'Request Visitor Parking', 'طلب موقف لزائر')}
           </DialogTitle>
           <DialogContent sx={{ p: 4 }}>
-            <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.4)', mb: 3 }}>
+            <Typography variant="body2" sx={{ color: binThemeTokens.textOnDarkMuted, mb: 3 }}>
               {label('tenant.parking.new_desc', 'Enter the visitor name, vehicle plate details, and duration to generate a security-approved parking pass.', 'أدخل اسم الزائر وتفاصيل لوحة السيارة والمدة لإنشاء تصريح وقوف سيارات معتمد أمنياً.')}
             </Typography>
             <Stack spacing={3}>
@@ -288,7 +288,7 @@ export default function TenantVisitorParkingPage() {
             </Stack>
           </DialogContent>
           <DialogActions sx={{ p: 4, borderTop: '1px solid rgba(255,255,255,0.05)' }}>
-            <Button onClick={() => setOpenAdd(false)} sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900 }}>CANCEL</Button>
+            <Button onClick={() => setOpenAdd(false)} sx={{ color: binThemeTokens.textOnDarkMuted, fontWeight: 900 }}>CANCEL</Button>
             <Button type="submit" variant="contained" disabled={submitting} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, px: 4, py: 1.2, borderRadius: 3 }}>
               {submitting ? <CircularProgress size={20} color="inherit" /> : label('tenant.parking.lbl_request', 'SUBMIT REQUEST', 'تقديم الطلب')}
             </Button>

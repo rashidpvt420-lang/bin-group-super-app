@@ -239,7 +239,7 @@ export default function BrokerProfilePage() {
                 <Typography variant="h3" fontWeight="950">{displayName?.charAt(0) || <User size={42} />}</Typography>
               </Avatar>
               <Typography variant="h5" fontWeight="950" sx={{ mt: 2 }}>{displayName || label('Broker', 'الوسيط')}</Typography>
-              <Typography variant="body2" sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>{companyName || label('Brokerage partner', 'شريك وساطة')}</Typography>
+              <Typography variant="body2" sx={{ color: binThemeTokens.goldText, fontWeight: 900 }}>{companyName || label('Brokerage partner', 'شريك وساطة')}</Typography>
               <Box sx={{ mt: 3, p: 2, borderRadius: 3, bgcolor: alpha(summary?.payout.eligible ? '#10b981' : '#f59e0b', 0.1) }}>
                 <Typography variant="caption" fontWeight="950">{label('PAYOUT READINESS', 'جاهزية الدفع')}</Typography>
                 <Typography fontWeight="950" color={summary?.payout.eligible ? '#047857' : '#b45309'}>

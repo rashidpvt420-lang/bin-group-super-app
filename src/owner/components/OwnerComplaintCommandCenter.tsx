@@ -107,7 +107,7 @@ function ComplaintRow({ complaint }: { complaint: OwnerComplaint }) {
     <React.Fragment>
       <TableRow sx={{ '& > *': { borderBottom: 'unset', borderColor: 'rgba(255,255,255,0.05)' } }}>
         <TableCell sx={{ color: '#fff', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-          <IconButton size="small" onClick={() => setOpen(!open)} sx={{ color: binThemeTokens.gold }}>
+          <IconButton size="small" onClick={() => setOpen(!open)} sx={{ color: binThemeTokens.goldText }}>
             {open ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
           </IconButton>
         </TableCell>
@@ -196,7 +196,7 @@ function ComplaintRow({ complaint }: { complaint: OwnerComplaint }) {
                     <Button variant="outlined" color="warning" size="small" onClick={() => openReview('DISPUTED')}>Dispute Ticket</Button>
                   </>
                 )}
-                <Button variant="outlined" size="small" startIcon={<Download size={14} />} onClick={handleEvidenceExport} sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.gold, fontWeight: 900 }}>
+                <Button variant="outlined" size="small" startIcon={<Download size={14} />} onClick={handleEvidenceExport} sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.goldText, fontWeight: 900 }}>
                   Download Evidence Pack
                 </Button>
               </Stack>
@@ -262,11 +262,11 @@ export default function OwnerComplaintCommandCenter({ complaints, properties }: 
       <CardContent sx={{ p: { xs: 2.25, md: 4 } }}>
         <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" alignItems={{ xs: 'flex-start', md: 'center' }} spacing={2} sx={{ mb: 4, minWidth: 0 }}>
           <Stack direction="row" alignItems="center" spacing={1.5} sx={{ minWidth: 0 }}>
-            <Box sx={{ p: 1, bgcolor: alpha(binThemeTokens.gold, 0.1), borderRadius: 2, color: binThemeTokens.gold, flexShrink: 0 }}>
+            <Box sx={{ p: 1, bgcolor: alpha(binThemeTokens.gold, 0.1), borderRadius: 2, color: binThemeTokens.goldText, flexShrink: 0 }}>
               <Wrench size={22} />
             </Box>
             <Box sx={{ minWidth: 0 }}>
-              <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 2, ...textSafeSx }}>
+              <Typography variant="overline" sx={{ color: binThemeTokens.goldText, fontWeight: 900, letterSpacing: 2, ...textSafeSx }}>
                 {t('owner.complaintCommandCenter') || 'Operations Command Center'}
               </Typography>
               <Typography variant="h5" fontWeight={950} sx={{ color: '#fff', ...textSafeSx }}>

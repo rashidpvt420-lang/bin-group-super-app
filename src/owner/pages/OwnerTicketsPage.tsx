@@ -30,7 +30,7 @@ const STATUS_CONFIG: Record<string, { color: string; icon: any }> = {
     'OPEN':              { color: 'rgba(255,255,255,0.4)', icon: Clock },
         'PENDING_ASSIGNMENT':{ color: 'rgba(255,255,255,0.4)', icon: Clock },
         'ASSIGNED':          { color: '#3b82f6', icon: Clock },
-        'EN_ROUTE':          { color: binThemeTokens.gold, icon: Navigation },
+        'EN_ROUTE':          { color: binThemeTokens.goldText, icon: Navigation },
     'arrived':           { color: '#8b5cf6', icon: MapPin },
     'ARRIVED':           { color: '#8b5cf6', icon: MapPin },
     'in_progress':       { color: '#10b981', icon: Play },
@@ -84,7 +84,7 @@ export default function OwnerTicketsPage() {
 
     if (loading) return (
         <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', py: 10, gap: 2 }}>
-            <CircularProgress sx={{ color: binThemeTokens.gold }} />
+            <CircularProgress sx={{ color: binThemeTokens.goldText }} />
             <Typography variant="overline" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900 }}>
                 {tx('owner.tickets.loading', 'Loading Tickets…')}
             </Typography>
@@ -96,7 +96,7 @@ export default function OwnerTicketsPage() {
             {loadError && <Alert severity="error" sx={{ mb: 3 }}>{loadError}</Alert>}
             <Stack direction={isRTL ? 'row-reverse' : 'row'} justifyContent="space-between" alignItems="flex-start" sx={{ mb: 6 }}>
                 <Box sx={{ textAlign: isRTL ? 'right' : 'left' }}>
-                    <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 4 }}>
+                    <Typography variant="overline" sx={{ color: binThemeTokens.goldText, fontWeight: 900, letterSpacing: 4 }}>
                         {tx('owner.tickets.propOps', 'PROPERTY OPERATIONS')}
                     </Typography>
                     <Typography variant="h4" fontWeight="950" color="#FFF">
@@ -176,7 +176,7 @@ export default function OwnerTicketsPage() {
                                                     size="small"
                                                     icon={<Clock size={11} />}
                                                     label={`~${etaMin} min`}
-                                                    sx={{ fontSize: '0.65rem', fontWeight: 900, bgcolor: alpha(binThemeTokens.gold, 0.1), color: binThemeTokens.gold, height: 22, '& .MuiChip-icon': { color: binThemeTokens.gold } }}
+                                                    sx={{ fontSize: '0.65rem', fontWeight: 900, bgcolor: alpha(binThemeTokens.gold, 0.1), color: binThemeTokens.goldText, height: 22, '& .MuiChip-icon': { color: binThemeTokens.goldText } }}
                                                 />
                                             )}
                                             <Chip

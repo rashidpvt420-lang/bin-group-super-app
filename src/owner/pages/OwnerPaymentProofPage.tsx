@@ -8,7 +8,7 @@ export default function OwnerPaymentProofPage() {
   const { isRTL } = useLanguage();
   return (
     <Box sx={{ direction: isRTL ? 'rtl' : 'ltr' }}>
-      <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 3 }}>
+      <Typography variant="overline" sx={{ color: binThemeTokens.goldText, fontWeight: 950, letterSpacing: 3 }}>
         OWNER PAYMENT PROOF
       </Typography>
       <Typography variant="h3" sx={{ color: '#fff', fontWeight: 950, mt: 1, mb: 1 }}>

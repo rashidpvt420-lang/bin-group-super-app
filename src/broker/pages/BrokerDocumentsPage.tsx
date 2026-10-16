@@ -14,6 +14,7 @@ import { useRole } from '../../context/RoleContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import BrokerPageFrame from '../components/BrokerPageFrame';
+import { STATUS_TONES } from '../../theme/statusColors';
 
 export default function BrokerDocumentsPage() {
     const { user } = useRole();
@@ -85,9 +86,9 @@ export default function BrokerDocumentsPage() {
 
     const getDocStatus = (type: string) => {
         const doc = documents.find(d => d.docType === type);
-        if (!doc) return { status: 'missing', label: 'PENDING UPLOAD', color: '#ef4444', icon: <AlertCircle size={14} /> };
-        if (doc.status === 'verified') return { status: 'verified', label: 'VERIFIED', color: '#10b981', icon: <CheckCircle2 size={14} /> };
-        return { status: 'pending', label: 'UNDER REVIEW', color: binThemeTokens.gold, icon: <Clock size={14} /> };
+        if (!doc) return { status: 'missing', label: 'UPLOAD NEEDED', color: STATUS_TONES.danger.text, icon: <AlertCircle size={14} /> };
+        if (doc.status === 'verified') return { status: 'verified', label: 'VERIFIED', color: STATUS_TONES.success.text, icon: <CheckCircle2 size={14} /> };
+        return { status: 'pending', label: 'UNDER REVIEW', color: binThemeTokens.goldText, icon: <Clock size={14} /> };
     };
 
     const requiredDocs = [

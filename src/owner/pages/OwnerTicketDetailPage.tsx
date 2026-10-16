@@ -98,7 +98,7 @@ export default function OwnerTicketDetailPage() {
 
     if (loading) return (
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 10 }}>
-            <CircularProgress sx={{ color: binThemeTokens.gold }} />
+            <CircularProgress sx={{ color: binThemeTokens.goldText }} />
         </Box>
     );
 
@@ -184,7 +184,7 @@ export default function OwnerTicketDetailPage() {
                     <ChevronLeft />
                 </IconButton>
                 <Box>
-                    <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 4 }}>
+                    <Typography variant="overline" sx={{ color: binThemeTokens.goldText, fontWeight: 900, letterSpacing: 4 }}>
                         {tx('owner.ticket.property_ops', 'PROPERTY OPERATIONS')}
                     </Typography>
                     <Typography variant="h4" fontWeight="950" color="#FFF">
@@ -224,13 +224,13 @@ export default function OwnerTicketDetailPage() {
                 <Grid item xs={12} lg={8}>
                     {/* Property + Complaint info */}
                     <Paper sx={{ p: 4, mb: 4, bgcolor: 'rgba(22, 22, 24, 0.7)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 6 }}>
-                        <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, mb: 3, display: 'block' }}>
+                        <Typography variant="overline" sx={{ color: binThemeTokens.goldText, fontWeight: 950, mb: 3, display: 'block' }}>
                             {tx('owner.ticket.complaint_details', 'COMPLAINT DETAILS')}
                         </Typography>
                         <Grid container spacing={3} sx={{ mb: 3 }}>
                             <Grid item xs={12} md={6}>
                                 <Stack direction="row" spacing={2} alignItems="center">
-                                    <Avatar sx={{ bgcolor: alpha(binThemeTokens.gold, 0.1), color: binThemeTokens.gold }}>
+                                    <Avatar sx={{ bgcolor: alpha(binThemeTokens.gold, 0.1), color: binThemeTokens.goldText }}>
                                         <MapPin />
                                     </Avatar>
                                     <Box>
@@ -265,7 +265,7 @@ export default function OwnerTicketDetailPage() {
 
                         <Stack spacing={3}>
                             <Box>
-                                <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 1 }}>
+                                <Typography variant="caption" sx={{ color: binThemeTokens.goldText, fontWeight: 900, letterSpacing: 1 }}>
                                     {tx('owner.ticket.category', 'CATEGORY')}
                                 </Typography>
                                 <Typography variant="body1" color="#FFF" fontWeight="950" sx={{ mt: 0.5 }}>
@@ -274,7 +274,7 @@ export default function OwnerTicketDetailPage() {
                             </Box>
                             {ticket.specificLocation && (
                                 <Box>
-                                    <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 1 }}>
+                                    <Typography variant="caption" sx={{ color: binThemeTokens.goldText, fontWeight: 900, letterSpacing: 1 }}>
                                         {tx('owner.ticket.specific_location', 'SPECIFIC LOCATION')}
                                     </Typography>
                                     <Typography variant="body1" color="#FFF" fontWeight="700" sx={{ mt: 0.5 }}>
@@ -283,7 +283,7 @@ export default function OwnerTicketDetailPage() {
                                 </Box>
                             )}
                             <Box>
-                                <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 1 }}>
+                                <Typography variant="caption" sx={{ color: binThemeTokens.goldText, fontWeight: 900, letterSpacing: 1 }}>
                                     {tx('owner.ticket.description', 'DESCRIPTION')}
                                 </Typography>
                                 <Typography variant="body1" color="rgba(255,255,255,0.8)" sx={{ mt: 0.5, lineHeight: 1.7 }}>
@@ -294,7 +294,7 @@ export default function OwnerTicketDetailPage() {
                             {/* Photos */}
                             {ticket.photos && ticket.photos.length > 0 && (
                                 <Box>
-                                    <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 1, mb: 2, display: 'block' }}>
+                                    <Typography variant="caption" sx={{ color: binThemeTokens.goldText, fontWeight: 900, letterSpacing: 1, mb: 2, display: 'block' }}>
                                         {tx('owner.ticket.submitted_photos', 'SUBMITTED PHOTOS')} ({ticket.photos.length})
                                     </Typography>
                                     <ImageList sx={{ width: '100%', borderRadius: 4, overflow: 'hidden' }} cols={3} gap={8}>
@@ -337,7 +337,7 @@ export default function OwnerTicketDetailPage() {
 
                                 {ticket.ownerReviewAction && (
                                     <Paper sx={{ p: 2, bgcolor: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 3 }}>
-                                        <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 950 }}>LAST OWNER ACTION</Typography>
+                                        <Typography variant="caption" sx={{ color: binThemeTokens.goldText, fontWeight: 950 }}>LAST OWNER ACTION</Typography>
                                         <Typography sx={{ color: '#fff', fontWeight: 900 }}>{String(ticket.ownerReviewAction).replace(/_/g, ' ')}</Typography>
                                         {ticket.ownerReviewReason && <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.65)', mt: 0.5 }}>{ticket.ownerReviewReason}</Typography>}
                                     </Paper>
@@ -361,14 +361,14 @@ export default function OwnerTicketDetailPage() {
 
                     {/* Timeline */}
                     <Paper sx={{ p: 4, bgcolor: 'rgba(15, 23, 42, 0.6)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 6 }}>
-                        <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, mb: 3, display: 'block' }}>
+                        <Typography variant="overline" sx={{ color: binThemeTokens.goldText, fontWeight: 950, mb: 3, display: 'block' }}>
                             {tx('owner.ticket.timeline', 'TICKET TIMELINE')}
                         </Typography>
                         <Stack spacing={3}>
                             {[
                                 { label: tx('owner.ticket.filed', 'Complaint Filed'), ts: ticket.createdAt, color: '#4ade80' },
                                 { label: tx('owner.ticket.assigned', 'Technician Assigned'), ts: ticket.assignedAt || ticket.autoAssignedAt, color: '#3b82f6' },
-                                { label: tx('owner.ticket.accepted', 'Technician Accepted'), ts: ticket.acceptedAt, color: binThemeTokens.gold },
+                                { label: tx('owner.ticket.accepted', 'Technician Accepted'), ts: ticket.acceptedAt, color: binThemeTokens.goldText },
                                 { label: tx('owner.ticket.on_the_way', 'On The Way'), ts: ticket.onTheWayAt, color: '#f59e0b' },
                                 { label: tx('owner.ticket.arrived', 'Arrived at Property'), ts: ticket.arrivedAt, color: '#6366f1' },
                                 { label: tx('owner.ticket.work_started', 'Work Started'), ts: ticket.startedAt, color: '#10b981' },
@@ -394,7 +394,7 @@ export default function OwnerTicketDetailPage() {
                 <Grid item xs={12} lg={4}>
                     {/* Ticket meta */}
                     <Paper sx={{ p: 3, bgcolor: 'rgba(15, 23, 42, 0.6)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 5, mb: 3 }}>
-                        <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, mb: 2, display: 'block' }}>
+                        <Typography variant="overline" sx={{ color: binThemeTokens.goldText, fontWeight: 950, mb: 2, display: 'block' }}>
                             {tx('owner.ticket.ticket_info', 'TICKET INFO')}
                         </Typography>
                         <Stack spacing={2}>

@@ -170,7 +170,7 @@ export default function OwnerPhoneVerificationCard({ currentPhone = '', isRTL, l
         />
 
         {!verificationId ? (
-          <Button data-testid="owner-phone-send-otp" variant="outlined" startIcon={busy ? <CircularProgress size={18} /> : <MessageSquareText size={18} />} disabled={busy} onClick={requestOtp} sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.gold, fontWeight: 950 }}>
+          <Button data-testid="owner-phone-send-otp" variant="outlined" startIcon={busy ? <CircularProgress size={18} /> : <MessageSquareText size={18} />} disabled={busy} onClick={requestOtp} sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.goldText, fontWeight: 950 }}>
             {label('Send Firebase SMS Code', 'إرسال رمز Firebase برسالة نصية')}
           </Button>
         ) : (

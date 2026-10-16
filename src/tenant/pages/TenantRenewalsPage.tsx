@@ -98,7 +98,7 @@ export default function TenantRenewalsPage() {
           <Typography variant="h4" sx={{ color: '#fff', fontWeight: 950 }}>
             Your renewal timeline
           </Typography>
-          <Typography sx={{ color: 'rgba(255,255,255,0.62)', fontWeight: 700, mt: 1 }}>
+          <Typography sx={{ color: '#A3A9B5', fontWeight: 700, mt: 1 }}>
             Renewal status, notice PDFs, owner response, and next steps will appear here when linked to your active unit.
           </Typography>
         </Box>
