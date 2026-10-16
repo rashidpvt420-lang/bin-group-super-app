@@ -32,6 +32,7 @@ import {
   type DesignExecutionDetail,
 } from '../utils/aiDesignStudioWorkflow';
 import { functions, httpsCallable } from '../lib/firebase';
+import { STATUS_TONES, formatStatusLabel } from '../theme/statusColors';
 
 type PreviewImage = {
   previewUrl: string;
@@ -301,7 +302,7 @@ export default function DesignStudioPage() {
           <Typography variant="h3" fontWeight={950} color="#FFF" sx={{ mt: 1 }}>{labels.title}</Typography>
           <Typography sx={{ mt: 2, color: 'rgba(255,255,255,0.72)', maxWidth: 920, lineHeight: 1.8 }}>{labels.subtitle}</Typography>
           <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ mt: 2, gap: 1 }}>
-            <Chip icon={<Sparkles size={16} />} label={`Server authority - ${renderStatus.replace(/_/g, ' ').toLowerCase()}`} sx={{ bgcolor: alpha(renderStatus === 'AI_RENDER_COMPLETE' ? '#10b981' : '#f59e0b', 0.12), color: renderStatus === 'AI_RENDER_COMPLETE' ? '#10b981' : '#f59e0b', fontWeight: 900 }} />
+            <Chip icon={<Sparkles size={16} />} label={`Design status: ${formatStatusLabel(renderStatus)}`} sx={{ bgcolor: alpha(renderStatus === 'AI_RENDER_COMPLETE' ? '#10b981' : '#f59e0b', 0.12), color: renderStatus === 'AI_RENDER_COMPLETE' ? STATUS_TONES.success.text : STATUS_TONES.warning.text, fontWeight: 900 }} />
             <Chip label={tenantMode ? 'Tenant-to-owner approval flow' : 'Owner private quote flow'} sx={{ bgcolor: alpha(binThemeTokens.gold, 0.12), color: binThemeTokens.gold, fontWeight: 900 }} />
           </Stack>
         </Box>
@@ -399,7 +400,7 @@ export default function DesignStudioPage() {
         </Paper>
 
         <Alert severity="info" sx={{ bgcolor: 'rgba(59,130,246,0.08)', color: '#bfdbfe', border: '1px solid rgba(59,130,246,0.25)' }}>
-          The server creates the request, canonical owner/property binding, quote, approval record, audit log and private media paths. Current render status: {renderStatus}.
+          The server creates the request, canonical owner/property binding, quote, approval record, audit log and private media paths. Current design status: {formatStatusLabel(renderStatus)}.
         </Alert>
       </Stack>
 

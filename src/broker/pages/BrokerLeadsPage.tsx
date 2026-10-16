@@ -312,7 +312,7 @@ export default function BrokerLeadsPage({ openFormByDefault = false }: BrokerLea
                                         <Stack direction="row" justifyContent="space-between" spacing={1}>
                                             <Box sx={{ minWidth: 0 }}>
                                                 <Typography variant="h6" sx={{ color: '#111827', fontWeight: 950, overflowWrap: 'anywhere' }}>{lead.leadName}</Typography>
-                                                <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 900, overflowWrap: 'anywhere' }}>{lead.attributionId || 'ATTRIBUTION PENDING'}</Typography>
+                                                <Typography variant="caption" sx={{ color: binThemeTokens.goldText, fontWeight: 900, overflowWrap: 'anywhere' }}>{lead.attributionId || 'ATTRIBUTION PENDING'}</Typography>
                                             </Box>
                                             <Chip size="small" label={String(lead.status || 'new').toUpperCase()} sx={{ bgcolor: alpha(tone, 0.1), color: tone, fontWeight: 950 }} />
                                         </Stack>

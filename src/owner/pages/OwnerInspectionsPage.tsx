@@ -158,7 +158,7 @@ export default function OwnerInspectionsPage() {
     <Box sx={{ direction: isRTL ? 'rtl' : 'ltr' }}>
       <Stack spacing={3}>
         <Box>
-          <Typography variant="overline" sx={{ color: binThemeTokens.goldHover, fontWeight: 950, letterSpacing: 3 }}>{tx('owner.inspections.overline', 'OWNER HANDOVER EVIDENCE')}</Typography>
+          <Typography variant="overline" sx={{ color: binThemeTokens.goldText, fontWeight: 950, letterSpacing: 3 }}>{tx('owner.inspections.overline', 'OWNER HANDOVER EVIDENCE')}</Typography>
           <Typography variant="h3" sx={{ color: binThemeTokens.textPrimary, fontWeight: 950 }}>{tx('owner.inspections.title', 'Move-In / Move-Out Reviews')}</Typography>
           <Typography sx={{ color: binThemeTokens.textSecondary, mt: 1, fontWeight: 700 }}>{tx('owner.inspections.subtitle', 'Review condition reports, settlement status, and handover evidence linked to your properties.')}</Typography>
         </Box>
@@ -166,8 +166,8 @@ export default function OwnerInspectionsPage() {
         <Grid container spacing={2}>
           {[
             { label: tx('owner.inspections.pending', 'Pending Reviews'), value: pending, icon: <ShieldAlert size={22} />, color: pending ? '#f59e0b' : '#10b981' },
-            { label: tx('owner.inspections.moveIns', 'Move-In Reports'), value: moveIns, icon: <Home size={22} />, color: binThemeTokens.goldHover },
-            { label: tx('owner.inspections.moveOuts', 'Move-Out Reports'), value: moveOuts, icon: <ClipboardCheck size={22} />, color: binThemeTokens.goldHover },
+            { label: tx('owner.inspections.moveIns', 'Move-In Reports'), value: moveIns, icon: <Home size={22} />, color: binThemeTokens.goldText },
+            { label: tx('owner.inspections.moveOuts', 'Move-Out Reports'), value: moveOuts, icon: <ClipboardCheck size={22} />, color: binThemeTokens.goldText },
             { label: tx('owner.inspections.settlements', 'Settlement Ledgers'), value: settlementCount, icon: <ReceiptText size={22} />, color: '#3b82f6' },
           ].map((card) => (
             <Grid item xs={12} sm={6} md={3} key={card.label}>
@@ -179,7 +179,7 @@ export default function OwnerInspectionsPage() {
             </Grid>
           ))}
         </Grid>
-        {loading && <Paper sx={{ p: 4, borderRadius: 5, textAlign: 'center', bgcolor: '#fff' }}><CircularProgress size={24} sx={{ color: binThemeTokens.goldHover }} /><Typography sx={{ mt: 1, color: binThemeTokens.textSecondary, fontWeight: 800 }}>{tx('owner.inspections.loading', 'Loading handover inspections...')}</Typography></Paper>}
+        {loading && <Paper sx={{ p: 4, borderRadius: 5, textAlign: 'center', bgcolor: '#fff' }}><CircularProgress size={24} sx={{ color: binThemeTokens.goldText }} /><Typography sx={{ mt: 1, color: binThemeTokens.textSecondary, fontWeight: 800 }}>{tx('owner.inspections.loading', 'Loading handover inspections...')}</Typography></Paper>}
         <Grid container spacing={2}>
           {!loading && inspections.map((inspection) => {
             const color = statusColor(inspection.status);
@@ -214,7 +214,7 @@ export default function OwnerInspectionsPage() {
 
                     <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} flexWrap="wrap" useFlexGap>
                       {urls.map((url, index) => (
-                        <Button key={`${inspection.id}-evidence-${index}`} variant="outlined" onClick={() => window.open(url, '_blank', 'noopener,noreferrer')} startIcon={<Eye size={16} />} sx={{ borderColor: binThemeTokens.goldHover, color: binThemeTokens.goldHover, fontWeight: 950 }}>
+                        <Button key={`${inspection.id}-evidence-${index}`} variant="outlined" onClick={() => window.open(url, '_blank', 'noopener,noreferrer')} startIcon={<Eye size={16} />} sx={{ borderColor: binThemeTokens.goldHover, color: binThemeTokens.goldText, fontWeight: 950 }}>
                           Evidence {index + 1}
                         </Button>
                       ))}

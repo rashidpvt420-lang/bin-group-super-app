@@ -3,6 +3,7 @@ import {
   ASSET_PROFILE_PROPERTY_TYPES,
   calculateUaeQuote2026,
   resolveAssetClassIdForPropertyType,
+  OWNER_WARNING_PREFIXES,
   type QuoteInput,
 } from "./pricing/calculateUaeQuote2026";
 import { UAE_PRICING_MATRIX_2026 } from "./pricing/uaePricingMatrix2026";
@@ -64,6 +65,8 @@ function rejectNegativeNumericInputs(property: PropertyInput, index: number) {
 }
 
 const money = normalizeAedMoney;
+/** Keep a blank value blank so the engine can price it on the safe side (founder decision 2026-10-14 13:21). */
+const blankOr = (value: unknown): any => (value === undefined || value === null || String(value).trim() === '' ? undefined : number(value));
 
 function text(value: unknown) {
   return String(value || "").trim();
@@ -225,16 +228,18 @@ function quoteInputForProperty(
     input: {
       assetClassId,
       emirate: text(property.emirate),
+      area: text(property.area || property.community || property.district || property.city),
       zone: safeZone(property.zone),
       contractType: mode,
       sqft: isMosque ? number(mosqueProfile.grossFloorAreaSqft || property.sqft) : gymArea,
       units,
       beds,
+      bedrooms: blankOr(property.bedrooms),
       annualRent,
       annualRevenue,
-      propertyAge: isMosque ? number(mosqueProfile.propertyAgeYears || property.age) : number(property.age),
-      floors: number(property.floors),
-      lifts: number(property.lifts),
+      propertyAge: isMosque ? (blankOr(mosqueProfile.propertyAgeYears) ?? blankOr(property.age)) : blankOr(property.age),
+      floors: blankOr(property.floors),
+      lifts: blankOr(property.lifts),
       hasPool: isGym ? gymProfile.swimmingPool === true || property.pool === true : property.pool === true,
       hasGym: isGym || property.gym === true,
       hasCentralHVAC: isMosque ? true : property.hvac === true,
@@ -311,6 +316,8 @@ export function calculateOwnerOnboardingQuote(
       pricingClass: assetClassId,
       pricingDriver,
       annualTotal: money(quote.annualTotal),
+      // Owner-facing warnings (e.g. zone pending admin confirmation for an unmapped area).
+      warnings: quote.riskFlags.filter((flag: string) => OWNER_WARNING_PREFIXES.some((prefix: string) => flag.startsWith(prefix))),
     };
   });
 

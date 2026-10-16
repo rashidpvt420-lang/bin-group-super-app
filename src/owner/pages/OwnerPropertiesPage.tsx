@@ -109,7 +109,7 @@ export default function OwnerPropertiesPage() {
 
     if (visibleLoading) return (
         <Box sx={{ height: '60vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 2 }}>
-            <CircularProgress sx={{ color: binThemeTokens.gold }} />
+            <CircularProgress sx={{ color: binThemeTokens.goldText }} />
             <Typography variant="overline" sx={{ color: binThemeTokens.textSecondary, fontWeight: 900 }}>{tx('owner.properties.loading', 'Loading property portfolio...')}</Typography>
         </Box>
     );
@@ -119,7 +119,7 @@ export default function OwnerPropertiesPage() {
             {/* Header */}
             <Box sx={{ mb: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
                 <Box>
-                    <Typography variant="overline" sx={{ color: binThemeTokens.goldHover, fontWeight: 900, letterSpacing: 4 }}>{tx('owner.properties.overline', 'PROPERTY PORTFOLIO')}</Typography>
+                    <Typography variant="overline" sx={{ color: binThemeTokens.goldText, fontWeight: 900, letterSpacing: 4 }}>{tx('owner.properties.overline', 'PROPERTY PORTFOLIO')}</Typography>
                     <Typography variant="h4" fontWeight="950" sx={{ color: binThemeTokens.textPrimary, mt: 1 }}>{tx('owner.properties.title', 'My Portfolio')}</Typography>
                 </Box>
                 <Stack direction="row" spacing={2}>
@@ -164,7 +164,7 @@ export default function OwnerPropertiesPage() {
                                                 <Typography variant="caption" sx={{ fontWeight: 700 }}>{prop.emirate} · {prop.unitsCount || 0} Units</Typography>
                                             </Box>
                                         </Box>
-                                        <IconButton aria-label={`Open ${prop.propertyName || 'property'} passport`} sx={{ color: binThemeTokens.gold, bgcolor: alpha(binThemeTokens.gold, 0.1) }} onClick={() => navigate(prop.passport?.id ? `/owner/property-passport/${prop.passport.id}` : '/owner/property-passport')}>
+                                        <IconButton aria-label={`Open ${prop.propertyName || 'property'} passport`} sx={{ color: binThemeTokens.goldText, bgcolor: alpha(binThemeTokens.gold, 0.1) }} onClick={() => navigate(prop.passport?.id ? `/owner/property-passport/${prop.passport.id}` : '/owner/property-passport')}>
                                             <ArrowUpRight size={20} />
                                         </IconButton>
                                     </Box>

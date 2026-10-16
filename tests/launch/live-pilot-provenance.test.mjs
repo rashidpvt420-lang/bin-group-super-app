@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import {
   MIN_CONTROLLED_PILOT_MS,
+  validateLiveEvidenceArtifactBinding,
   validateLiveEvidenceRun,
 } from '../../scripts/lib/live-pilot-provenance.mjs';
 
@@ -41,6 +42,49 @@ test('accepts an exact-SHA successful live-evidence run after a real 24-hour pil
   assert.equal(result.durationMs, MIN_CONTROLLED_PILOT_MS);
 });
 
+test('accepts a frozen release with a separately verified control-plane run SHA', () => {
+  const releaseSha = 'a'.repeat(40);
+  const controlPlaneSha = 'b'.repeat(40);
+  const result = validateLiveEvidenceRun(validRun({ head_sha: controlPlaneSha }), {
+    expectedSha: releaseSha,
+    expectedControlPlaneSha: controlPlaneSha,
+    now: START + MIN_CONTROLLED_PILOT_MS,
+  });
+
+  assert.deepEqual(result.errors, []);
+  assert.equal(result.commitSha, releaseSha);
+  assert.equal(result.controlPlaneCommitSha, controlPlaneSha);
+});
+
+test('accepts only a dual-SHA artifact binding for the selected evidence, deployment, and attempt', () => {
+  const releaseSha = 'a'.repeat(40);
+  const controlPlaneSha = 'b'.repeat(40);
+  const binding = {
+    schemaVersion: 1,
+    source: 'github-actions-live-evidence-run',
+    releaseCommitSha: releaseSha,
+    controlPlaneCommitSha: controlPlaneSha,
+    liveEvidenceRunId: RUN_ID,
+    productionDeployRunId: '38155014961',
+    runAttempt: 1,
+  };
+  const expected = {
+    expectedReleaseSha: releaseSha,
+    expectedControlPlaneSha: controlPlaneSha,
+    expectedRunId: RUN_ID,
+    expectedProductionDeployRunId: '38155014961',
+    expectedRunAttempt: 1,
+  };
+
+  assert.deepEqual(validateLiveEvidenceArtifactBinding(binding, expected), []);
+  assert.ok(validateLiveEvidenceArtifactBinding({ ...binding, controlPlaneCommitSha: releaseSha }, expected)
+    .includes('live-evidence artifact control-plane SHA mismatch'));
+  assert.ok(validateLiveEvidenceArtifactBinding({ ...binding, liveEvidenceRunId: '1' }, expected)
+    .includes('live-evidence artifact run ID mismatch'));
+  assert.ok(validateLiveEvidenceArtifactBinding({ ...binding, productionDeployRunId: '2' }, expected)
+    .includes('live-evidence artifact deployment run ID mismatch'));
+});
+
 test('rejects an incomplete pilot and any stale or unrelated workflow provenance', () => {
   const tooEarly = validateLiveEvidenceRun(validRun(), {
     expectedSha: SHA,
@@ -49,7 +93,7 @@ test('rejects an incomplete pilot and any stale or unrelated workflow provenance
   assert.ok(tooEarly.errors.includes('controlled pilot has not completed 24 hours'));
 
   for (const [overrides, expected] of [
-    [{ head_sha: 'b'.repeat(40) }, 'live evidence run SHA must equal the exact release SHA'],
+    [{ head_sha: 'b'.repeat(40) }, 'live evidence run SHA must equal the exact control-plane SHA'],
     [{ path: '.github/workflows/other.yml' }, 'live evidence workflow path mismatch'],
     [{ event: 'schedule' }, 'live evidence must come from workflow_dispatch'],
     [{ head_branch: 'feature' }, 'live evidence must come from main'],
@@ -77,6 +121,10 @@ test('hard-clearance workflow derives timestamps and cannot trust manual pilot d
   assert.doesNotMatch(workflow, /PILOT_STARTED_AT:\s*\$\{\{ inputs\.pilot_started_at \}\}/);
   assert.doesNotMatch(workflow, /PILOT_COMPLETED_AT:\s*\$\{\{ inputs\.pilot_completed_at \}\}/);
   assert.match(workflow, /launch_package\/live-evidence-provenance\.json/);
+  assert.match(workflow, /releaseCommitSha/);
+  assert.match(workflow, /controlPlaneCommitSha/);
+  assert.match(resolver, /validateLiveEvidenceArtifactBinding/);
+  assert.match(resolver, /CONTROL_PLANE_COMMIT_SHA/);
 
   for (const marker of [
     'LIVE_EVIDENCE_RUN_ID',

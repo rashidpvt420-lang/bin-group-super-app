@@ -80,15 +80,15 @@ export default function OwnerMoneyRiskDashboardSection({ properties, financials,
           : 'Schedule preventive maintenance';
 
   const cards = [
-    { label: 'Rent due', value: rentDue ? money(rentDue) : 'Ledger pending', icon: <CreditCard size={20} />, color: binThemeTokens.gold },
+    { label: 'Rent due', value: rentDue ? money(rentDue) : 'Ledger pending', icon: <CreditCard size={20} />, color: binThemeTokens.goldText },
     { label: 'Rent collected', value: rentCollected ? money(rentCollected) : 'AED 0', icon: <ReceiptText size={20} />, color: '#10b981' },
     { label: 'Balance', value: money(rentBalance), icon: <ShieldAlert size={20} />, color: rentBalance ? '#f59e0b' : '#10b981' },
     { label: 'Collection rate', value: rentDue ? `${collectionRate}%` : 'Pending', icon: <TrendingUp size={20} />, color: collectionRate >= 90 ? '#10b981' : '#f59e0b' },
     { label: 'Pending verification', value: pendingVerification, icon: <ClipboardCheck size={20} />, color: pendingVerification ? '#f59e0b' : '#10b981' },
     { label: 'Overdue tenants', value: overdueTenants, icon: <ShieldAlert size={20} />, color: overdueTenants ? '#ef4444' : '#10b981' },
     { label: 'Pending approvals', value: pendingApprovals, icon: <ClipboardCheck size={20} />, color: pendingApprovals ? '#f59e0b' : '#10b981' },
-    { label: 'Handover reviews', value: 'Open', icon: <CalendarCheck size={20} />, color: binThemeTokens.gold },
-    { label: 'Monthly maintenance cost', value: monthlyMaintenance ? money(monthlyMaintenance) : 'Baseline pending', icon: <Coins size={20} />, color: binThemeTokens.gold },
+    { label: 'Handover reviews', value: 'Open', icon: <CalendarCheck size={20} />, color: binThemeTokens.goldText },
+    { label: 'Monthly maintenance cost', value: monthlyMaintenance ? money(monthlyMaintenance) : 'Baseline pending', icon: <Coins size={20} />, color: binThemeTokens.goldText },
     { label: 'Cost per unit', value: costPerUnit ? money(costPerUnit) : '—', icon: <TrendingUp size={20} />, color: '#3b82f6' },
     { label: 'Open maintenance', value: tickets, icon: <Wrench size={20} />, color: tickets ? binThemeTokens.gold : '#10b981' },
     { label: 'Net property health', value: `${healthScore}%`, icon: <ShieldCheck size={20} />, color: healthScore >= 80 ? '#10b981' : binThemeTokens.gold },
@@ -98,16 +98,16 @@ export default function OwnerMoneyRiskDashboardSection({ properties, financials,
     <Paper sx={{ p: { xs: 3, md: 4 }, bgcolor: 'rgba(15,23,42,.58)', border: `1px solid ${alpha(binThemeTokens.gold, 0.14)}`, borderRadius: 6 }}>
       <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} justifyContent="space-between" alignItems={{ xs: 'flex-start', md: 'center' }} sx={{ mb: 3 }}>
         <Box>
-          <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 3 }}>OWNER MONEY, PROOF & HANDOVER CONTROL</Typography>
+          <Typography variant="overline" sx={{ color: binThemeTokens.goldText, fontWeight: 950, letterSpacing: 3 }}>OWNER MONEY, PROOF & HANDOVER CONTROL</Typography>
           <Typography variant="h5" sx={{ color: '#fff', fontWeight: 950, mt: 0.5 }}>Rent, payment proof, approvals, and property risk</Typography>
           <Typography variant="body2" sx={{ color: 'rgba(255,255,255,.52)', mt: 1 }}>Owner-facing control center for collections, pending proof, overdue exposure, handover reviews, service risk, and preventive maintenance.</Typography>
         </Box>
         <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-          <Chip label={`NEXT: ${nextAction}`} sx={{ bgcolor: alpha(binThemeTokens.gold, 0.1), color: binThemeTokens.gold, fontWeight: 950 }} />
-          <Button size="small" variant="outlined" onClick={() => navigate('/owner/financials')} sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.gold, fontWeight: 950 }}>Financials</Button>
-          <Button size="small" variant="outlined" onClick={() => navigate('/owner/payment-proof')} sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.gold, fontWeight: 950 }}>Payment Proof</Button>
-          <Button size="small" variant="outlined" onClick={() => navigate('/owner/approvals')} sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.gold, fontWeight: 950 }}>Approvals</Button>
-          <Button size="small" variant="outlined" onClick={() => navigate('/owner/inspections')} sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.gold, fontWeight: 950 }}>Move-In / Move-Out</Button>
+          <Chip label={`NEXT: ${nextAction}`} sx={{ bgcolor: alpha(binThemeTokens.gold, 0.1), color: binThemeTokens.goldText, fontWeight: 950 }} />
+          <Button size="small" variant="outlined" onClick={() => navigate('/owner/financials')} sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.goldText, fontWeight: 950 }}>Financials</Button>
+          <Button size="small" variant="outlined" onClick={() => navigate('/owner/payment-proof')} sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.goldText, fontWeight: 950 }}>Payment Proof</Button>
+          <Button size="small" variant="outlined" onClick={() => navigate('/owner/approvals')} sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.goldText, fontWeight: 950 }}>Approvals</Button>
+          <Button size="small" variant="outlined" onClick={() => navigate('/owner/inspections')} sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.goldText, fontWeight: 950 }}>Move-In / Move-Out</Button>
         </Stack>
       </Stack>
 
@@ -147,7 +147,7 @@ export default function OwnerMoneyRiskDashboardSection({ properties, financials,
                   <TableCell align="right" sx={{ color: '#10b981', fontWeight: 900 }}>{money(row.paid)}</TableCell>
                   <TableCell align="right" sx={{ color: row.balance ? '#f59e0b' : '#10b981', fontWeight: 900 }}>{money(row.balance)}</TableCell>
                   <TableCell><Chip size="small" label={status.label} sx={{ bgcolor: alpha(status.color, 0.12), color: status.color, fontWeight: 950 }} /></TableCell>
-                  <TableCell align="right"><Button size="small" onClick={() => navigate(`/owner/payment-proof?propertyId=${encodeURIComponent(row.id)}`)} sx={{ color: binThemeTokens.gold, fontWeight: 950 }}>View Proof</Button></TableCell>
+                  <TableCell align="right"><Button size="small" onClick={() => navigate(`/owner/payment-proof?propertyId=${encodeURIComponent(row.id)}`)} sx={{ color: binThemeTokens.goldText, fontWeight: 950 }}>View Proof</Button></TableCell>
                 </TableRow>
               );
             })}

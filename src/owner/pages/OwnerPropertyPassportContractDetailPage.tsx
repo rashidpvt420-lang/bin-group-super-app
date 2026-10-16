@@ -92,7 +92,7 @@ function Metric({ label, value, children }: { label: string; value: React.ReactN
   return (
     <Paper sx={{ p: 2.4, bgcolor: 'rgba(255,255,255,0.035)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 4 }}>
       <Stack direction="row" spacing={1.5} alignItems="center">
-        <Box sx={{ color: binThemeTokens.gold }}>{children}</Box>
+        <Box sx={{ color: binThemeTokens.goldText }}>{children}</Box>
         <Box><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.38)', fontWeight: 900 }}>{label}</Typography><Typography variant="subtitle1" fontWeight="950" sx={{ color: '#FFF' }}>{value}</Typography></Box>
       </Stack>
     </Paper>
@@ -102,7 +102,7 @@ function Metric({ label, value, children }: { label: string; value: React.ReactN
 function PassportList({ title, icon, rows, empty }: { title: string; icon: React.ReactNode; rows: Array<[React.ReactNode, React.ReactNode, React.ReactNode]>; empty: string }) {
   return (
     <Paper sx={{ p: 3, bgcolor: 'rgba(15,23,42,0.48)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 5 }}>
-      <Stack direction="row" spacing={1.2} alignItems="center" sx={{ mb: 2, color: binThemeTokens.gold }}>{icon}<Typography variant="subtitle1" fontWeight="950" sx={{ color: '#FFF' }}>{title}</Typography></Stack>
+      <Stack direction="row" spacing={1.2} alignItems="center" sx={{ mb: 2, color: binThemeTokens.goldText }}>{icon}<Typography variant="subtitle1" fontWeight="950" sx={{ color: '#FFF' }}>{title}</Typography></Stack>
       <Stack spacing={1.2}>
         {rows.map((row, index) => (
           <Paper key={index} sx={{ p: 1.8, bgcolor: 'rgba(255,255,255,0.035)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 3 }}>
@@ -199,7 +199,7 @@ export default function OwnerPropertyPassportContractDetailPage() {
 
   const propertyLocation = useMemo(() => passport ? resolvePropertyLocation(passport) : null, [passport]);
 
-  if (loading) return <Box sx={{ height: '60vh', display: 'grid', placeItems: 'center' }}><CircularProgress sx={{ color: binThemeTokens.gold }} /></Box>;
+  if (loading) return <Box sx={{ height: '60vh', display: 'grid', placeItems: 'center' }}><CircularProgress sx={{ color: binThemeTokens.goldText }} /></Box>;
   if (error) return <Alert severity="error">{error}</Alert>;
   if (!passport || !propertyLocation) return null;
 
@@ -210,14 +210,14 @@ export default function OwnerPropertyPassportContractDetailPage() {
   return (
     <Box sx={{ direction: isRTL ? 'rtl' : 'ltr', pb: 6 }}>
       <Stack spacing={4}>
-        {passport.provisional && <Alert severity="info" sx={{ bgcolor: alpha(binThemeTokens.gold, 0.06), color: binThemeTokens.gold, border: `1px solid ${alpha(binThemeTokens.gold, 0.18)}` }}>This provisional property passport is generated from the linked active asset or active contract. Official passport issuance is pending.</Alert>}
+        {passport.provisional && <Alert severity="info" sx={{ bgcolor: alpha(binThemeTokens.gold, 0.06), color: binThemeTokens.goldText, border: `1px solid ${alpha(binThemeTokens.gold, 0.18)}` }}>This provisional property passport is generated from the linked active asset or active contract. Official passport issuance is pending.</Alert>}
         <Paper sx={{ p: { xs: 3, md: 4 }, bgcolor: 'rgba(15,23,42,0.66)', border: `1px solid ${alpha(binThemeTokens.gold, 0.18)}`, borderRadius: 6 }}>
           <Stack direction={{ xs: 'column', md: isRTL ? 'row-reverse' : 'row' }} justifyContent="space-between" spacing={3}>
             <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={2.5} alignItems="center">
-              <Box sx={{ width: 64, height: 64, borderRadius: 4, display: 'grid', placeItems: 'center', bgcolor: alpha(binThemeTokens.gold, 0.12), color: binThemeTokens.gold }}><Building2 size={32} /></Box>
-              <Box sx={{ textAlign: isRTL ? 'right' : 'left' }}><Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 3 }}>PROPERTY PASSPORT</Typography><Typography variant="h4" fontWeight="950" sx={{ color: '#FFF' }}>{passport.propertyName}</Typography><Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.45)' }}>{passport.address || passport.zone || passport.emirate}</Typography></Box>
+              <Box sx={{ width: 64, height: 64, borderRadius: 4, display: 'grid', placeItems: 'center', bgcolor: alpha(binThemeTokens.gold, 0.12), color: binThemeTokens.goldText }}><Building2 size={32} /></Box>
+              <Box sx={{ textAlign: isRTL ? 'right' : 'left' }}><Typography variant="overline" sx={{ color: binThemeTokens.goldText, fontWeight: 950, letterSpacing: 3 }}>PROPERTY PASSPORT</Typography><Typography variant="h4" fontWeight="950" sx={{ color: '#FFF' }}>{passport.propertyName}</Typography><Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.45)' }}>{passport.address || passport.zone || passport.emirate}</Typography></Box>
             </Stack>
-            <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap><Chip icon={<ShieldCheck size={14} />} label={passport.status || 'PROVISIONAL'} sx={{ bgcolor: alpha(binThemeTokens.gold, 0.12), color: binThemeTokens.gold, fontWeight: 950 }} /><Chip icon={<MapPin size={14} />} label={gpsLabel} sx={{ bgcolor: alpha(gpsTone, 0.12), color: gpsTone, fontWeight: 950 }} /><Chip label={`ID ${String(passport.id || '').slice(0, 8).toUpperCase()}`} sx={{ bgcolor: alpha(binThemeTokens.gold, 0.1), color: binThemeTokens.gold, fontWeight: 950 }} /></Stack>
+            <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap><Chip icon={<ShieldCheck size={14} />} label={passport.status || 'PROVISIONAL'} sx={{ bgcolor: alpha(binThemeTokens.gold, 0.12), color: binThemeTokens.goldText, fontWeight: 950 }} /><Chip icon={<MapPin size={14} />} label={gpsLabel} sx={{ bgcolor: alpha(gpsTone, 0.12), color: gpsTone, fontWeight: 950 }} /><Chip label={`ID ${String(passport.id || '').slice(0, 8).toUpperCase()}`} sx={{ bgcolor: alpha(binThemeTokens.gold, 0.1), color: binThemeTokens.goldText, fontWeight: 950 }} /></Stack>
           </Stack>
         </Paper>
 
