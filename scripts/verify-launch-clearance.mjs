@@ -140,6 +140,113 @@ function validateManualArtifact(groupName, name, gate) {
 }
 
 
+// The hard-clearance reconciler (reconcile-hard-public-evidence.mjs) fills
+// exactly one physical gate, requiredDeviceGates.technicianGpsTracking, from the
+// protected Technician Physical Evidence workflow instead of a Command Center
+// manual record. Accept that exact attestation shape for that one gate only;
+// every other gate keeps the strict manual-artifact contract above.
+const PROTECTED_TECHNICIAN_GATE = 'requiredDeviceGates.technicianGpsTracking';
+const PROTECTED_TECHNICIAN_SOURCE = 'protected-technician-operational-evidence';
+const PROTECTED_TECHNICIAN_TESTER = 'Technician Physical Evidence workflow';
+
+function isProtectedTechnicianAttestation(gate) {
+  return gate?.evidenceType === 'physical-device-report';
+}
+
+function validateProtectedTechnicianArtifact(groupName, name, gate) {
+  const label = `${groupName}.${name}`;
+  if (label !== PROTECTED_TECHNICIAN_GATE) {
+    return [`${label} physical-device-report evidence is accepted only for ${PROTECTED_TECHNICIAN_GATE}; manual-artifact proof is required.`];
+  }
+
+  const errors = [];
+  if (gate.evidenceType !== 'physical-device-report') errors.push(`${label} evidenceType must be physical-device-report.`);
+  if (gate.executionGenerated !== true) errors.push(`${label} executionGenerated must equal true for protected technician proof.`);
+  if (gate.hardLaunchClaim !== false) errors.push(`${label} hardLaunchClaim must remain false.`);
+  if (String(gate.evidenceLayerRequired || '') !== 'physical_device') {
+    errors.push(`${label} protected technician proof is allowed only for a physical_device gate.`);
+  }
+  if (String(gate.commitSha || '').toLowerCase() !== sha) errors.push(`${label} protected technician proof belongs to a different commit SHA.`);
+  if (String(gate.releaseSha || '').toLowerCase() !== sha) errors.push(`${label} protected technician proof releaseSha mismatch.`);
+  const controlPlaneSha = String(gate.controlPlaneCommitSha || '').toLowerCase();
+  if (!/^[0-9a-f]{40}$/.test(controlPlaneSha)) {
+    errors.push(`${label} controlPlaneCommitSha must be a full lowercase SHA.`);
+  }
+  const expectedControlPlaneSha = String(process.env.CLEARANCE_CONTROL_PLANE_SHA || '').trim().toLowerCase();
+  if (expectedControlPlaneSha && controlPlaneSha !== expectedControlPlaneSha) {
+    errors.push(`${label} protected technician proof control-plane SHA mismatch.`);
+  }
+  if (String(gate.testedBy || '') !== PROTECTED_TECHNICIAN_TESTER) {
+    errors.push(`${label} protected technician proof testedBy provenance mismatch.`);
+  }
+  if (!proofText(gate)) errors.push(`${label} protected technician proof text is required.`);
+
+  const testedAt = Date.parse(String(gate.testedAt || ''));
+  if (!Number.isFinite(testedAt)) {
+    errors.push(`${label} testedAt must be a valid ISO timestamp.`);
+  } else {
+    if (testedAt > Date.now() + MAX_CLOCK_SKEW_MS) errors.push(`${label} testedAt is in the future.`);
+    if (Date.now() - testedAt > MANUAL_EVIDENCE_MAX_AGE_MS) errors.push(`${label} protected technician proof is older than 30 days.`);
+  }
+
+  const artifactPath = String(gate.artifactPath || '').replace(/\\/g, '/');
+  const expectedArtifactPath = `launch_package/artifacts/physical-evidence-${name}-protected-technician.json`;
+  if (artifactPath !== expectedArtifactPath) {
+    errors.push(`${label} artifactPath must be ${expectedArtifactPath}.`);
+    return errors;
+  }
+  const absolutePath = path.resolve(root, artifactPath);
+  const relativeToRoot = path.relative(artifactRoot, absolutePath).replace(/\\/g, '/');
+  if (!relativeToRoot || relativeToRoot.startsWith('../') || path.isAbsolute(relativeToRoot)) {
+    errors.push(`${label} artifactPath escapes launch_package/artifacts/.`);
+    return errors;
+  }
+  if (!existsSync(absolutePath)) {
+    errors.push(`${label} artifact is missing: ${artifactPath}`);
+    return errors;
+  }
+
+  const stat = statSync(absolutePath);
+  if (!stat.isFile() || stat.size <= 0) {
+    errors.push(`${label} artifact must be a non-empty regular file.`);
+    return errors;
+  }
+  if (!Number.isInteger(gate.artifactBytes) || gate.artifactBytes !== stat.size) {
+    errors.push(`${label} artifactBytes does not match the artifact.`);
+  }
+  const expectedHash = String(gate.artifactHash || '').toLowerCase();
+  if (!/^sha256:[a-f0-9]{64}$/.test(expectedHash)) {
+    errors.push(`${label} artifactHash must be a sha256 digest.`);
+  } else if (`sha256:${sha256File(absolutePath)}` !== expectedHash) {
+    errors.push(`${label} artifact hash mismatch.`);
+  }
+
+  let attestation;
+  try {
+    attestation = JSON.parse(readFileSync(absolutePath, 'utf8'));
+  } catch {
+    errors.push(`${label} protected technician attestation is not valid JSON.`);
+    return errors;
+  }
+  if (!attestation || typeof attestation !== 'object' || Array.isArray(attestation)) {
+    errors.push(`${label} protected technician attestation must be a JSON object.`);
+    return errors;
+  }
+  if (attestation.source !== PROTECTED_TECHNICIAN_SOURCE) errors.push(`${label} attestation source must be ${PROTECTED_TECHNICIAN_SOURCE}.`);
+  if (attestation.status !== 'passed') errors.push(`${label} attestation status must be passed.`);
+  if (attestation.evidenceLayer !== 'physical_device') errors.push(`${label} attestation evidenceLayer must be physical_device.`);
+  if (attestation.gateKey !== label) errors.push(`${label} attestation gateKey mismatch.`);
+  if (String(attestation.releaseSha || '').toLowerCase() !== sha) errors.push(`${label} attestation releaseSha mismatch.`);
+  if (String(attestation.controlPlaneCommitSha || '').toLowerCase() !== controlPlaneSha) {
+    errors.push(`${label} attestation controlPlaneCommitSha mismatch.`);
+  }
+  if (attestation.testerName !== PROTECTED_TECHNICIAN_TESTER) errors.push(`${label} attestation testerName provenance mismatch.`);
+  if (attestation.hardLaunchClaim !== false) errors.push(`${label} attestation hardLaunchClaim must remain false.`);
+  if (String(attestation.testedAt || '') !== String(gate.testedAt || '')) errors.push(`${label} attestation testedAt mismatch.`);
+  if (!String(attestation.proofRef || '').trim()) errors.push(`${label} attestation proofRef is required.`);
+  return errors;
+}
+
 function validateProtectedExecutionArtifact(groupName, name, gate) {
   const label = `${groupName}.${name}`;
   const errors = [];
@@ -203,7 +310,9 @@ function validateGate(groupName, name, gate) {
       for (const error of validateProtectedExecutionArtifact(groupName, name, gate)) fail(error);
       return;
     }
-    const manualErrors = validateManualArtifact(groupName, name, gate);
+    const manualErrors = isProtectedTechnicianAttestation(gate)
+      ? validateProtectedTechnicianArtifact(groupName, name, gate)
+      : validateManualArtifact(groupName, name, gate);
     if (deferredForPilot) {
       if (manualErrors.length) {
         warn(`${label} manual record is not current-commit proof and remains deferred for the controlled pilot.`);
