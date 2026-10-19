@@ -1459,3 +1459,186 @@ for (const scopeWorkflow of [
   assert.equal(both.ok, false);
   assert.match(both.out, /Non-control-plane file changed since frozen release: app\.txt/);
 });
+
+// Cross-script contract: the gate document produced by
+// reconcile-hard-public-evidence.mjs must be accepted by the real
+// verify-launch-clearance.mjs that `npm run launch:hard-gate` runs next. The
+// protected technician attestation is accepted for technicianGpsTracking only.
+const protectedTechnicianFixtureProof = () => ({
+  status: 'passed', releaseCommitSha: 'b'.repeat(40), commitSha: 'b'.repeat(40),
+  controlPlaneCommitSha: 'c'.repeat(40), evidenceType: 'physical-device-report', verifiedBy: 'workflow',
+  observedAt: new Date().toISOString(),
+  evidenceReference: 'https://github.com/rashidpvt420-lang/bin-group-super-app/actions/runs/123#technicianPhysicalGpsEvidence',
+  sourceWorkflowRunId: '123',
+  sourceSystem: 'Firebase technician physical device GPS lifecycle and Cloud Storage',
+  artifactHash: 'sha256:' + 'a'.repeat(64),
+});
+
+async function runClearanceVerifierOnReconciledGates(mutate = () => {}, env = {}) {
+  const { execFileSync, spawnSync } = await import('node:child_process');
+  const { cpSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync, statSync } = await import('node:fs');
+  const { createHash } = await import('node:crypto');
+  const { tmpdir } = await import('node:os');
+  const { join } = await import('node:path');
+
+  const manualGates = ['firebaseCloudMessaging', 'googleMaps', 'phase1Payments', 'androidPwaSmoke', 'iosPwaSmoke',
+    'pdfMobileDownload', 'arabicRtlAllCoreScreens', 'everyButtonWritesFirestoreOrStorage', 'logoutAllDashboards'];
+  const reconciled = await runPhysicalReconciliationFixture(manualGates.map((gate) => physicalFixtureRecord(gate,
+    gate === 'iosPwaSmoke' ? { device: 'iPhone physical device' } : {})), protectedTechnicianFixtureProof());
+  assert.equal(reconciled.error, undefined);
+
+  const dir = mkdtempSync(join(tmpdir(), 'clearance-'));
+  const git = (...args) => execFileSync('git', ['-C', dir, ...args], { encoding: 'utf8' }).trim();
+  git('init', '-q');
+  git('config', 'user.email', 't@example.com');
+  git('config', 'user.name', 't');
+  writeFileSync(join(dir, 'release.txt'), 'release\n');
+  git('add', '-A');
+  git('commit', '-qm', 'release');
+  const releaseSha = git('rev-parse', 'HEAD');
+  mkdirSync(join(dir, 'scripts'), { recursive: true });
+  cpSync('scripts/lib', join(dir, 'scripts/lib'), { recursive: true });
+  cpSync('scripts/verify-launch-clearance.mjs', join(dir, 'scripts/verify-launch-clearance.mjs'));
+  mkdirSync(join(dir, 'launch_package/artifacts'), { recursive: true });
+
+  const rebind = (content) => content.split('b'.repeat(40)).join(releaseSha);
+  for (const [file, content] of reconciled.files) {
+    if (!file.startsWith('/fixture/launch_package/artifacts/')) continue;
+    writeFileSync(join(dir, file.slice('/fixture/'.length)), rebind(content));
+  }
+  const gates = JSON.parse(rebind(reconciled.files.get('/fixture/launch_package/launch-proof-gates.json')));
+  const ctx = {
+    dir,
+    releaseSha,
+    gates,
+    artifact: (gate) => join(dir, gate.artifactPath),
+    rehash: (gate) => {
+      const bytes = readFileSync(join(dir, gate.artifactPath));
+      gate.artifactHash = `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
+      gate.artifactBytes = statSync(join(dir, gate.artifactPath)).size;
+    },
+    readJson: (gate) => JSON.parse(readFileSync(join(dir, gate.artifactPath), 'utf8')),
+    writeJson: (gate, value) => writeFileSync(join(dir, gate.artifactPath), `${JSON.stringify(value, null, 2)}\n`),
+  };
+  for (const group of [gates.requiredProviderGates, gates.requiredDeviceGates]) {
+    for (const gate of Object.values(group || {})) if (gate?.artifactPath) ctx.rehash(gate);
+  }
+  mutate(ctx);
+  writeFileSync(join(dir, 'launch_package/launch-proof-gates.json'), `${JSON.stringify(gates, null, 2)}\n`);
+
+  const run = spawnSync(process.execPath, ['scripts/verify-launch-clearance.mjs'], {
+    cwd: dir,
+    encoding: 'utf8',
+    env: { PATH: process.env.PATH, CLEARANCE_CONTROL_PLANE_SHA: 'c'.repeat(40), ...env },
+  });
+  const failures = String(run.stderr || '').split('\n')
+    .filter((line) => line.startsWith('- '))
+    .map((line) => line.slice(2));
+  const gateFailures = failures.filter((line) =>
+    /^(deploymentProof|requiredProviderGates|requiredDeviceGates)\./.test(line) || /is not launch-clear/.test(line));
+  return { ...ctx, run, failures, gateFailures };
+}
+
+test('verifier accepts the reconciler-written protected technician attestation for technicianGpsTracking', async () => {
+  const result = await runClearanceVerifierOnReconciledGates();
+  const technician = result.gates.requiredDeviceGates.technicianGpsTracking;
+  assert.equal(technician.evidenceType, 'physical-device-report');
+  assert.equal(technician.executionGenerated, true);
+  assert.equal(technician.artifactPath, 'launch_package/artifacts/physical-evidence-technicianGpsTracking-protected-technician.json');
+  assert.equal(result.readJson(technician).source, 'protected-technician-operational-evidence');
+  // Every reconciled gate (hosted, manual physical, protected technician) passes the gate checks;
+  // the remaining NO-GO lines come only from the fixture's absent live evidence batch.
+  assert.deepEqual(result.gateFailures, []);
+  assert.ok(result.failures.length > 0, 'fixture has no live evidence, so clearance itself must stay NO-GO');
+  assert.notEqual(result.run.status, 0);
+});
+
+test('protected technician attestation shape is rejected on any other physical gate', async () => {
+  const result = await runClearanceVerifierOnReconciledGates(({ gates }) => {
+    const technician = gates.requiredDeviceGates.technicianGpsTracking;
+    gates.requiredDeviceGates.androidPwaSmoke = { ...technician };
+    gates.requiredProviderGates.googleMaps = { ...technician, evidenceLayerRequired: 'physical_device' };
+  });
+  assert.ok(result.gateFailures.some((line) =>
+    line.startsWith('requiredDeviceGates.androidPwaSmoke physical-device-report evidence is accepted only for requiredDeviceGates.technicianGpsTracking')));
+  assert.ok(result.gateFailures.some((line) =>
+    line.startsWith('requiredProviderGates.googleMaps physical-device-report evidence is accepted only for requiredDeviceGates.technicianGpsTracking')));
+  assert.ok(result.gateFailures.every((line) => !line.startsWith('requiredDeviceGates.technicianGpsTracking')));
+});
+
+test('manual physical gates still require manual-artifact proof', async () => {
+  const result = await runClearanceVerifierOnReconciledGates(({ gates }) => {
+    gates.requiredDeviceGates.pushNotifications.evidenceType = 'protected-execution';
+    gates.requiredDeviceGates.logoutAllDashboards.executionGenerated = true;
+  });
+  assert.ok(result.gateFailures.some((line) => line.startsWith('requiredDeviceGates.pushNotifications protected execution reconciliation is allowed only for hosted gates')));
+  assert.ok(result.gateFailures.includes('requiredDeviceGates.logoutAllDashboards executionGenerated must be false for manual proof.'));
+});
+
+test('protected technician attestation is rejected when tampered, rebound or missing', async () => {
+  const label = 'requiredDeviceGates.technicianGpsTracking';
+  const technicianFailures = (result) => result.gateFailures.filter((line) => line.startsWith(label));
+
+  const tampered = await runClearanceVerifierOnReconciledGates((ctx) => {
+    const gate = ctx.gates.requiredDeviceGates.technicianGpsTracking;
+    ctx.writeJson(gate, { ...ctx.readJson(gate), proofRef: 'forged' });
+  });
+  assert.ok(technicianFailures(tampered).includes(`${label} artifact hash mismatch.`));
+
+  const wrongHash = await runClearanceVerifierOnReconciledGates(({ gates }) => {
+    gates.requiredDeviceGates.technicianGpsTracking.artifactHash = `sha256:${'0'.repeat(64)}`;
+  });
+  assert.ok(technicianFailures(wrongHash).includes(`${label} artifact hash mismatch.`));
+
+  const wrongSha = await runClearanceVerifierOnReconciledGates(({ gates }) => {
+    const gate = gates.requiredDeviceGates.technicianGpsTracking;
+    gate.commitSha = 'd'.repeat(40);
+    gate.releaseSha = 'd'.repeat(40);
+  });
+  assert.ok(technicianFailures(wrongSha).includes(`${label} protected technician proof belongs to a different commit SHA.`));
+  assert.ok(technicianFailures(wrongSha).includes(`${label} protected technician proof releaseSha mismatch.`));
+
+  const wrongAttestationSha = await runClearanceVerifierOnReconciledGates((ctx) => {
+    const gate = ctx.gates.requiredDeviceGates.technicianGpsTracking;
+    ctx.writeJson(gate, { ...ctx.readJson(gate), releaseSha: 'd'.repeat(40) });
+    ctx.rehash(gate);
+  });
+  assert.deepEqual(technicianFailures(wrongAttestationSha), [`${label} attestation releaseSha mismatch.`]);
+
+  const wrongSource = await runClearanceVerifierOnReconciledGates((ctx) => {
+    const gate = ctx.gates.requiredDeviceGates.technicianGpsTracking;
+    ctx.writeJson(gate, { ...ctx.readJson(gate), source: 'admin-manual-evidence', evidenceLayer: 'hosted' });
+    ctx.rehash(gate);
+  });
+  assert.ok(technicianFailures(wrongSource).includes(`${label} attestation source must be protected-technician-operational-evidence.`));
+  assert.ok(technicianFailures(wrongSource).includes(`${label} attestation evidenceLayer must be physical_device.`));
+
+  const { rmSync } = await import('node:fs');
+  const missingArtifact = await runClearanceVerifierOnReconciledGates((ctx) => {
+    rmSync(ctx.artifact(ctx.gates.requiredDeviceGates.technicianGpsTracking));
+  });
+  assert.ok(technicianFailures(missingArtifact).some((line) => line.startsWith(`${label} artifact is missing:`)));
+
+  const otherArtifact = await runClearanceVerifierOnReconciledGates(({ gates }) => {
+    gates.requiredDeviceGates.technicianGpsTracking.artifactPath = gates.requiredDeviceGates.androidPwaSmoke.artifactPath;
+  });
+  assert.ok(technicianFailures(otherArtifact).includes(
+    `${label} artifactPath must be launch_package/artifacts/physical-evidence-technicianGpsTracking-protected-technician.json.`));
+
+  const wrongControlPlane = await runClearanceVerifierOnReconciledGates(() => {}, { CLEARANCE_CONTROL_PLANE_SHA: 'e'.repeat(40) });
+  assert.ok(technicianFailures(wrongControlPlane).includes(`${label} protected technician proof control-plane SHA mismatch.`));
+
+  const claimed = await runClearanceVerifierOnReconciledGates(({ gates }) => {
+    const gate = gates.requiredDeviceGates.technicianGpsTracking;
+    gate.executionGenerated = false;
+    gate.hardLaunchClaim = true;
+    gate.testedBy = 'Someone else';
+    gate.testedAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+  });
+  for (const expected of [
+    `${label} executionGenerated must equal true for protected technician proof.`,
+    `${label} hardLaunchClaim must remain false.`,
+    `${label} protected technician proof testedBy provenance mismatch.`,
+    `${label} testedAt is in the future.`,
+  ]) assert.ok(technicianFailures(claimed).includes(expected), expected);
+});
