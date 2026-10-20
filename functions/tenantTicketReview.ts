@@ -245,6 +245,8 @@ export const tenantReviewTicketCompletion = onCall(
           closureStatus: "tenant_approved",
           tenantApproved: true,
           tenantApprovalStatus: "APPROVED",
+          tenantApprovalRequired: false,
+          dispatchStatus: "CLOSED",
           status: "CLOSED",
           rating,
           feedback: feedback || null,
