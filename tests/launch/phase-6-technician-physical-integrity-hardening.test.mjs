@@ -148,7 +148,7 @@ test('Phase 6 physical evidence verifier rejects legacy GPS and mutable photo ev
   assert.match(verifier, /after-work Storage object changed after confirmation/);
 });
 
-test('Phase 6 native release is versionCode 13', async () => {
+test('Phase 6 native release is versionCode 14', async () => {
   const gradle = await read('android/app/build.gradle');
-  assert.match(gradle, /versionCode\s+13\b/);
+  assert.match(gradle, /versionCode\s+14\b/);
 });
