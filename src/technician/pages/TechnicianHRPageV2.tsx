@@ -278,7 +278,7 @@ export default function TechnicianHRPageV2() {
         <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.62)', mb: 1 }}>Upload Emirates ID, passport, visa, medical certificates, insurance cards, labour cards, trade certificates, driving licence, signed acknowledgements, and HR support files.</Typography>
         <Typography variant="caption" sx={{ color: binThemeTokens.goldText, display: 'block', mb: 2 }}>Sensitive files remain behind authenticated Firebase Storage rules. Firestore stores the protected object path, not a reusable public download URL.</Typography>
         <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems={{ xs: 'stretch', md: 'center' }}>
-          <TextField select label="Document Type" value={documentType} onChange={(e) => setDocumentType(e.target.value)} sx={{ minWidth: 280, '& .MuiInputBase-root': { color: '#fff' }, '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.55)' } }}>
+          <TextField select label="Document Type" value={documentType} onChange={(e) => setDocumentType(e.target.value)} sx={{ minWidth: 280, '& .MuiInputBase-root': { color: '#111827' }, '& .MuiInputLabel-root': { color: '#344054' } }}>
             {documentTypes.map(([value, label]) => <MenuItem key={value} value={value}>{label}</MenuItem>)}
           </TextField>
           <Button component="label" variant="contained" disabled={uploading} startIcon={uploading ? <CircularProgress size={18} sx={{ color: '#000' }} /> : <CloudUpload size={18} />} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>
