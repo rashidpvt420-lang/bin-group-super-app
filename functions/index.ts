@@ -34,6 +34,7 @@ import { escalateManualDispatch } from "./ticketDispatchAlerts";
 import { evaluateTechnicianForTicket, requiredTicketTrade, technicianHasCapacity } from "./technicianDispatchMatching";
 import { isTechnicianAssignmentEvent, technicianAssignedNotificationSeed } from "./shared/technicianAssignmentNotification";
 import { requirePrivilegedMfaSession } from "./adminMfaSession";
+import { redispatchWaitingTickets } from "./ticketRedispatch";
 
 // [V10] PRODUCTION GRADE FULL-STACK STABILIZATION
 setGlobalOptions({ region: "europe-west3", enforceAppCheck: true });
@@ -256,7 +257,8 @@ export const resumeTechnicianDuty = onCall({ cors: true, enforceAppCheck: true }
 
     await batch.commit();
     await logAudit({ actorId: uid, actorRole: "technician", action: "TECH_RESUME_DUTY", targetType: "technician_shift", targetId: shiftId });
-    return { status: "SUCCESS" };
+    const redispatch = await redispatchAfterDutyChange(uid, "TECH_RESUME_DUTY");
+    return { status: "SUCCESS", redispatch };
 });
 
 export const acceptTechnicianTicket = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
@@ -1000,6 +1002,34 @@ export const onTicketStatusChanged = onDocumentUpdated({ document: "maintenanceT
 });
 
 
+// Tickets that could not be dispatched when they were created are re-attempted whenever a
+// technician comes on duty, and by a periodic sweep, so they do not stay unassigned forever.
+async function redispatchAfterDutyChange(technicianId: string, trigger: string) {
+    try {
+        const result = await redispatchWaitingTickets({ db, attempt: attemptAutoAssignment, limit: 10 });
+        if (result.attempted > 0) {
+            await logAudit({
+                actorId: technicianId,
+                actorRole: "technician",
+                action: "AUTO_ASSIGN_REDISPATCH_ON_DUTY",
+                targetType: "user",
+                targetId: technicianId,
+                metadata: { trigger, ...result },
+            });
+        }
+        return result;
+    } catch (error) {
+        // Starting duty must never fail because of a dispatch retry.
+        console.error(`[redispatch] ${trigger} retry failed for ${technicianId}:`, error);
+        return { scanned: 0, attempted: 0, assigned: 0 };
+    }
+}
+
+const NON_DISPATCHABLE_TICKET_STATUSES = new Set([
+    "CANCELLED", "CANCELED", "CLOSED", "COMPLETED", "COMPLETED_PENDING_APPROVAL", "COMPLETED_PENDING_TENANT_APPROVAL",
+    "RESOLVED", "DISPUTED", "REJECTED", "ARCHIVED", "DELETED",
+]);
+
 async function attemptAutoAssignment(ticketRef: admin.firestore.DocumentReference, ticketData: any) {
     const ticketId = ticketRef.id;
     try {
@@ -1125,8 +1155,12 @@ async function attemptAutoAssignment(ticketRef: admin.firestore.DocumentReferenc
                     const freshTicket = freshTicketSnap.data() || {};
                     const freshTechnician = freshTechnicianSnap.data() || {};
                     const freshProfile = freshProfileSnap.exists ? freshProfileSnap.data() || {} : {};
+                    // A ticket that was cancelled, closed or disputed after dispatch read it must
+                    // never be reactivated by an assignment (e.g. a delayed redispatch retry).
+                    const freshStatusKey = safeString(freshTicket.status).toUpperCase();
                     if (
                         !freshTicketSnap.exists ||
+                        NON_DISPATCHABLE_TICKET_STATUSES.has(freshStatusKey) ||
                         safeString(freshTicket.assignedTechnicianId || freshTicket.technicianId) ||
                         !freshTechnicianSnap.exists ||
                         freshTechnician.onDuty !== true ||
@@ -1882,6 +1916,11 @@ export const onApprovalStagnant = onSchedule({ schedule: "every 24 hours" }, asy
         const data = doc.data();
         if (data.ownerId) await dispatchOmniNotification(data.ownerId, "REMINDER: Quote Approval Required", `Mission #${doc.id.substring(0, 8)} is awaiting authorization.`);
     }
+});
+
+export const redispatchWaitingTicketsSweep = onSchedule("every 15 minutes", async () => {
+    const result = await redispatchWaitingTickets({ db, attempt: attemptAutoAssignment, limit: 25 });
+    console.log(`[redispatch] sweep scanned=${result.scanned} attempted=${result.attempted} assigned=${result.assigned}`);
 });
 
 export const evaluateSLACron = onSchedule("every 4 hours", async () => {
@@ -2825,7 +2864,8 @@ export const startTechnicianDuty = onCall({ cors: true, enforceAppCheck: true },
         });
     }
 
-    return { success: true, shiftId };
+    const redispatch = await redispatchAfterDutyChange(techId, "TECH_START_DUTY");
+    return { success: true, shiftId, redispatch };
 });
 
 /**
