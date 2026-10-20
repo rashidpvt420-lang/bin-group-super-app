@@ -27,6 +27,7 @@ import {
     verifyStorageObjectOwnership,
 } from "./ocrSecurityGuards";
 import { enforceAiUsageQuota } from "./aiUsageQuota";
+import { notifyTicketStakeholders, TicketStakeholderEvent } from "./ticketStakeholderNotifications";
 import { sendTwilioSMS } from "./smsDelivery";
 import { resolveTechnicianArrivalBinding } from "./technicianInstallationBinding";
 import { flagSlaBreaches } from "./slaCron";
@@ -966,6 +967,7 @@ export const onTicketStatusChanged = onDocumentUpdated({ document: "maintenanceT
     if (technicianAssignmentEvent) {
         await notifyRequester("Technician Assigned ✓", `${techName} has been assigned to ticket #${ref8} and will be on the way soon.`, { oncePerAssignment: true });
         if (techId) await dispatchOmniNotification(techId, "Job Accepted", `You are now assigned to #${ref8} at ${prop}.`, { extraData: { ticketId, type: "job_assigned" }, url: `/technician/job/${ticketId}`, notificationId: assignmentNotificationId(techId, "technician") });
+        await notifyStakeholdersSafely(ticketId, after, "ASSIGNED");
     }
     else if (!statusChanged) {
         // Only technician re-assignments reach here without a status change.
@@ -981,6 +983,7 @@ export const onTicketStatusChanged = onDocumentUpdated({ document: "maintenanceT
     }
     else if (["completed", "completed_pending_approval", "completed_pending_tenant_approval"].includes(statusNorm)) {
         await notifyRequester("Work Completed ✅", `${techName} has completed ticket #${ref8}. Please confirm the resolution.`);
+        await notifyStakeholdersSafely(ticketId, after, "COMPLETED");
     }
     else if (["cancelled", "escalated"].includes(statusNorm)) {
         await notifyRequester("Ticket Update", `Ticket #${ref8} status changed to: ${after.status?.replace(/_/g, " ")}.`);
@@ -1235,9 +1238,19 @@ async function attemptAutoAssignment(ticketRef: admin.firestore.DocumentReferenc
     }
 }
 
+// Admin/Owner lifecycle alerts must never break the ticket workflow that triggered them.
+async function notifyStakeholdersSafely(ticketId: string, ticket: any, stakeholderEvent: TicketStakeholderEvent) {
+    try {
+        await notifyTicketStakeholders({ db, ticketId, ticket, event: stakeholderEvent });
+    } catch (error) {
+        console.error(`[ticket-notify] ${stakeholderEvent} alert failed for ${ticketId}:`, error);
+    }
+}
+
 export const autoRouteTicket = onDocumentCreated({ document: "maintenanceTickets/{ticketId}" }, async (event) => {
     const snap = event.data;
     if (!snap) return;
+    await notifyStakeholdersSafely(snap.id, snap.data(), "CREATED");
     if (
         snap.data().photoEvidenceRequired === true &&
         snap.data().evidenceStatus !== "TENANT_EVIDENCE_UPLOADED"
