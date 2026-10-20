@@ -524,17 +524,31 @@ async function waitForTenantReviewableTicket(ticketId: string) {
 async function deleteRecoveryTenant(uid: string) {
   if (!uid || !admin.apps.length) return;
   const db = admin.firestore();
-  const requests = await db.collection('tenant_unit_link_requests').where('tenantUid', '==', uid).get().catch(() => null);
-  if (requests && !requests.empty) {
+  const requests = await db.collection('tenant_unit_link_requests').where('tenantUid', '==', uid).get();
+  if (!requests.empty) {
     const batch = db.batch();
     requests.docs.forEach((docSnap) => batch.delete(docSnap.ref));
-    await batch.commit().catch(() => undefined);
+    await batch.commit();
   }
+
   await Promise.all([
-    db.collection('users').doc(uid).delete().catch(() => undefined),
-    db.collection('tenants').doc(uid).delete().catch(() => undefined),
-    admin.auth().deleteUser(uid).catch(() => undefined),
+    db.collection('users').doc(uid).delete(),
+    db.collection('tenants').doc(uid).delete(),
   ]);
+  try {
+    await admin.auth().deleteUser(uid);
+  } catch (error: any) {
+    if (error?.code !== 'auth/user-not-found') throw error;
+  }
+
+  const [userProfile, tenantProfile, remainingRequests] = await Promise.all([
+    db.collection('users').doc(uid).get(),
+    db.collection('tenants').doc(uid).get(),
+    db.collection('tenant_unit_link_requests').where('tenantUid', '==', uid).get(),
+  ]);
+  if (userProfile.exists || tenantProfile.exists || !remainingRequests.empty) {
+    throw new Error(`E2E recovery-tenant teardown incomplete for uid ${uid}; profile or link-request documents remain.`);
+  }
 }
 
 async function cleanupExpiredRecoveryTenants() {
@@ -597,29 +611,51 @@ async function cleanupRunData() {
   if (!admin.apps.length) return;
   const db = admin.firestore();
 
-  for (const ticketId of createdTicketIds) {
-    const ticketSnap = await db.collection('maintenanceTickets').doc(ticketId).get().catch(() => null);
-    const ticket = ticketSnap?.data?.() || {};
+  // Teardown failures must fail the evidence run. Silently swallowing a failed
+  // delete lets each successful production smoke leave more synthetic records.
+  // Attempt every fixture before failing so one bad delete cannot strand the rest.
+  const failures: string[] = [];
+  const attempt = async (label: string, run: () => Promise<void>) => {
+    try { await run(); } catch (error: any) { failures.push(`${label}: ${error?.message || error}`); }
+  };
+  for (const ticketId of createdTicketIds) await attempt(`ticket ${ticketId}`, async () => {
+    const ticketRef = db.collection('maintenanceTickets').doc(ticketId);
+    const ticketSnap = await ticketRef.get();
+    const ticket = ticketSnap.data() || {};
     const notificationId = String(ticket.tenantCompletionNotificationId || '');
     const mailId = String(ticket.tenantCompletionMailId || '');
-    if (notificationId) await db.collection('notifications').doc(notificationId).delete().catch(() => undefined);
-    if (mailId) await db.collection('mail').doc(mailId).delete().catch(() => undefined);
-    await db.collection('maintenanceTickets').doc(ticketId).delete().catch(() => undefined);
-  }
+    if (notificationId) await db.collection('notifications').doc(notificationId).delete();
+    if (mailId) await db.collection('mail').doc(mailId).delete();
+    await ticketRef.delete();
+    if ((await ticketRef.get()).exists) {
+      throw new Error(`E2E teardown failed to remove synthetic maintenance ticket ${ticketId}.`);
+    }
+  });
 
-  for (const value of createdCorrectionValues) {
-    const snapshot = await db.collection('tenant_correction_requests').where('requestedValue', '==', value).get().catch(() => null);
-    if (snapshot && !snapshot.empty) {
+  for (const value of createdCorrectionValues) await attempt(`correction ${value}`, async () => {
+    const snapshot = await db.collection('tenant_correction_requests').where('requestedValue', '==', value).get();
+    if (!snapshot.empty) {
       const batch = db.batch();
       snapshot.docs.forEach((docSnap) => batch.delete(docSnap.ref));
-      await batch.commit().catch(() => undefined);
+      await batch.commit();
     }
-  }
+    const remaining = await db.collection('tenant_correction_requests').where('requestedValue', '==', value).get();
+    if (!remaining.empty) {
+      throw new Error(`E2E teardown failed to remove tenant correction fixture ${value}.`);
+    }
+  });
 
-  for (const requestId of createdUnitLinkRequestIds) {
-    await db.collection('tenant_unit_link_requests').doc(requestId).delete().catch(() => undefined);
+  for (const requestId of createdUnitLinkRequestIds) await attempt(`unit-link ${requestId}`, async () => {
+    const requestRef = db.collection('tenant_unit_link_requests').doc(requestId);
+    await requestRef.delete();
+    if ((await requestRef.get()).exists) {
+      throw new Error(`E2E teardown failed to remove unit-link request ${requestId}.`);
+    }
+  });
+  await attempt(`recovery tenant ${recoveryTenantUid}`, () => deleteRecoveryTenant(recoveryTenantUid));
+  if (failures.length) {
+    throw new Error(`E2E teardown incomplete (${failures.length}): ${failures.join('; ')}`);
   }
-  await deleteRecoveryTenant(recoveryTenantUid);
 }
 
 test.describe('Tenant Business Workflow', () => {
