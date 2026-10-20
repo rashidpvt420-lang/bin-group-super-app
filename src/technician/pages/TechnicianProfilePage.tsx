@@ -49,9 +49,11 @@ const inputSx = {
         '&.Mui-focused fieldset': { borderColor: binThemeTokens.gold },
     },
     '& .MuiInputBase-input': { color: '#FFF !important', fontWeight: 850, WebkitTextFillColor: '#FFF' },
-    '& .MuiInputLabel-root': { color: 'rgba(255,255,255,.72)', fontWeight: 850 },
+    // Unshrunk labels sit inside the dark input; shrunk labels float over the white shell Paper.
+    '& .MuiInputLabel-root': { color: 'rgba(255,255,255,.78)', fontWeight: 850 },
+    '& .MuiInputLabel-root.MuiInputLabel-shrink': { color: '#344054' },
     '& .MuiInputLabel-root.Mui-focused': { color: binThemeTokens.goldText },
-    '& .MuiFormHelperText-root': { color: 'rgba(255,255,255,.58)' },
+    '& .MuiFormHelperText-root': { color: '#475467' },
 };
 const statusChipSx = (tone: string) => ({
     bgcolor: `${alpha(tone, 0.18)} !important`, color: `${tone} !important`, border: `1px solid ${alpha(tone, 0.42)}`,
