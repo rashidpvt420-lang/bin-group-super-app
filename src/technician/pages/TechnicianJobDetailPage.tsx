@@ -21,6 +21,7 @@ import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { resolvePropertyLocation } from '../../utils/propertyLocationResolver';
 import { startLiveTracking, stopLiveTracking } from '../../utils/liveTracking';
+import { reportTechnicianAvailabilityLocation } from '../utils/availabilityLocation';
 import {
     ensureTechnicianInstallationRegistered,
     readNativeTechnicianInstallationHash,
@@ -344,6 +345,16 @@ export default function TechnicianJobDetailPage() {
         }
         setActionLoading(true);
         try {
+            // acceptTechnicianTicket requires a server-recorded GPS fix from the last 15 minutes.
+            // The dashboard refreshes it every 5 minutes, but a technician who opened this page
+            // from a notification (or left the app idle) would otherwise be rejected with
+            // "fresh GPS location". Refresh it first; the server still enforces every gate,
+            // so a failed refresh is non-fatal and the server's own reason is shown.
+            try {
+                await reportTechnicianAvailabilityLocation();
+            } catch (refreshError) {
+                console.warn('[TechnicianJobDetail] Pre-accept GPS refresh failed:', refreshError);
+            }
             const acceptTechnicianTicket = httpsCallable(functions, 'acceptTechnicianTicket');
             await acceptTechnicianTicket({ ticketId: id });
             setMessage('Mission accepted.');
