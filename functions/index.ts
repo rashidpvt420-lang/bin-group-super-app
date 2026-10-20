@@ -720,6 +720,17 @@ export const ownerReviewTicketCompletion = onCall({ cors: true, enforceAppCheck:
         if (!reviewableStatuses.has(normalizeRole(fresh.status))) {
             throw new HttpsError("failed-precondition", "Ticket is no longer ready for owner completion review.");
         }
+        if (action === "APPROVE_CLOSE") {
+            // Final approval ends the job: clear the technician-completion
+            // "pending review" markers so the closed record no longer reads as
+            // awaiting tenant review or dispatch review.
+            baseUpdate.dispatchStatus = "CLOSED";
+            const priorTenantReview = String(fresh.tenantApprovalStatus || "").trim().toUpperCase();
+            if (priorTenantReview !== "APPROVED") {
+                baseUpdate.tenantApprovalStatus = "WAIVED";
+                baseUpdate.tenantApprovalWaivedBy = isAdmin ? "ADMIN_FINAL_APPROVAL" : "OWNER_FINAL_APPROVAL";
+            }
+        }
         transaction.update(ticketRef, baseUpdate);
         if (revisitRef && revisitSnap && !revisitSnap.exists) {
             transaction.create(revisitRef, {
