@@ -27,13 +27,13 @@ import RoleJourneyStrip from '../../components/RoleJourneyStrip';
 import { isOwnerContractActivated, isOwnerProfileActivated } from '../activationPolicy';
 import { formatAedMoney } from '../../../functions/shared/aedMoney';
 import {
-  OWNER_OPEN_TICKET_STATUSES,
+  OWNER_OPEN_TICKET_QUERY_VALUES,
   countOwnerOpenTickets,
 } from '../utils/ownerTicketAttentionCounts';
 import { STATUS_TONES } from '../../theme/statusColors';
 
-/** Firestore `in` queries allow at most 10 values — keep in sync with OWNER_OPEN_TICKET_STATUSES. */
-const ACTIVE_TICKET_STATUS_LIST = Array.from(OWNER_OPEN_TICKET_STATUSES);
+/** OWNER_OPEN_TICKET_STATUSES plus legacy lower-case spellings (see OWNER_OPEN_TICKET_QUERY_VALUES). */
+const ACTIVE_TICKET_STATUS_LIST = OWNER_OPEN_TICKET_QUERY_VALUES;
 
 const PENDING_PAYMENT_STATES = new Set([
   'PENDING',

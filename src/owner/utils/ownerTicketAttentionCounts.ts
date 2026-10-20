@@ -17,6 +17,18 @@ export const OWNER_OPEN_TICKET_STATUSES = new Set([
   'ESCALATED',
 ]);
 
+/**
+ * Firestore `status in` values for the Owner open-ticket listener. Dispatch still writes the
+ * legacy lowercase `pending_assignment` (missing property geo) and some older tickets carry
+ * `open`; an exact-match query on the uppercase set alone silently drops them from the
+ * advanced dashboard. Firestore `in` allows up to 30 values.
+ */
+export const OWNER_OPEN_TICKET_QUERY_VALUES: string[] = [
+  ...Array.from(OWNER_OPEN_TICKET_STATUSES),
+  'pending_assignment',
+  'open',
+];
+
 /** Aligned with OwnerContractModeMatrix emergency/high + SLA / ticket priority variants. */
 export const OWNER_HIGH_RISK_PRIORITIES = new Set([
   'EMERGENCY',
