@@ -415,7 +415,7 @@ export default function TechnicianDashboardPage() {
                 <Grid item xs={6} md={2.4}><MetricCard icon={<Zap size={20} />} label="Emergency" value={stats.emergency} tone={ui.red} helper="Priority response" /></Grid>
                 <Grid item xs={6} md={2.4}><MetricCard icon={<CheckCircle2 size={20} />} label="Closed Today" value={stats.completedToday} tone={ui.green} helper="Completed jobs" /></Grid>
                 <Grid item xs={6} md={2.4}><MetricCard icon={<Clock size={20} />} label="SLA Risk" value={stats.slaRisk} tone={stats.slaRisk > 0 ? ui.red : ui.green} helper="Requires attention" /></Grid>
-                <Grid item xs={12} md={2.4}><MetricCard icon={<DollarSign size={20} />} label="Earnings (Month)" value={`AED ${(earnings || (stats.completedMonth * 150)).toLocaleString()}`} tone={ui.green} helper="Approved payouts" /></Grid>
+                <Grid item xs={12} md={2.4}><MetricCard icon={<DollarSign size={20} />} label="Recorded Earnings" value={`AED ${earnings.toLocaleString()}`} tone={ui.green} helper="Payroll entries on file (all time)" /></Grid>
             </Grid>
 
             <Grid container spacing={3} sx={{ mb: 3.5 }} alignItems="stretch">
