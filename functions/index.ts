@@ -36,6 +36,7 @@ import { evaluateTechnicianForTicket, requiredTicketTrade, technicianHasCapacity
 import { isTechnicianAssignmentEvent, technicianAssignedNotificationSeed } from "./shared/technicianAssignmentNotification";
 import { requirePrivilegedMfaSession } from "./adminMfaSession";
 import { redispatchWaitingTickets } from "./ticketRedispatch";
+import { verifyTenantTicketUnitLink } from "./tenantUnitLink";
 
 // [V10] PRODUCTION GRADE FULL-STACK STABILIZATION
 setGlobalOptions({ region: "europe-west3", enforceAppCheck: true });
@@ -1045,24 +1046,16 @@ async function attemptAutoAssignment(ticketRef: admin.firestore.DocumentReferenc
         const requesterRole = normalizeRole(ticketData.requesterRole);
         const source = safeString(ticketData.source).toUpperCase();
         if (requesterRole === "tenant" || source === "TENANT_PORTAL") {
-            const tenantId = safeString(ticketData.tenantId || ticketData.tenantUid);
-            const unitId = safeString(ticketData.unitId);
-            const propertyId = safeString(ticketData.propertyId);
-            if (!tenantId || !unitId || !propertyId) {
-                await escalateManualDispatch({ db, ticketRef, reasonCode: "TENANT_UNIT_LINK_UNVERIFIED", details: { missingLink: true } });
-                return;
-            }
-            const unitSnap = await db.collection("units").doc(unitId).get();
-            const unit = unitSnap.data() || {};
-            const unitTenantId = safeString(
-                unit.tenantId || unit.tenantUid || unit.userId || unit.authUid,
-            );
-            if (
-                !unitSnap.exists ||
-                unitTenantId !== tenantId ||
-                safeString(unit.propertyId) !== propertyId
-            ) {
-                await escalateManualDispatch({ db, ticketRef, reasonCode: "TENANT_UNIT_LINK_UNVERIFIED", details: { unitExists: unitSnap.exists } });
+            // Same tenant-unit link createTenantServiceTicket accepted (uid fields or the
+            // tenant's verified email); an unverified link is escalated, never dropped silently.
+            const link = await verifyTenantTicketUnitLink({ db, auth: admin.auth(), ticket: ticketData });
+            if (!link.linked) {
+                await escalateManualDispatch({
+                    db,
+                    ticketRef,
+                    reasonCode: "TENANT_UNIT_LINK_UNVERIFIED",
+                    details: link.details,
+                });
                 return;
             }
         }
