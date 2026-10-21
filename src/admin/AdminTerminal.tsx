@@ -1,3 +1,6 @@
+import { Accordion, AccordionDetails, AccordionSummary } from '@mui/material';
+import { ChevronDown } from 'lucide-react';
+import { ListRow, StatGrid, StatTile, UiCard } from '../components/ui';
 import React from 'react';
 import {
   Alert,
@@ -243,38 +246,39 @@ export default function AdminTerminal() {
         </Card>
       ) : (
         <>
-          {!loading && (
-            <Alert severity={(metricValue('openTickets') || 0) > 0 || (metricValue('pendingPayments') || 0) > 0 ? 'warning' : 'success'} sx={{ mb: 3, bgcolor: 'rgba(201,166,70,0.08)', color: '#7A5C12', border: '1px solid rgba(201,166,70,0.28)' }}>
-              <Typography sx={{ fontWeight: 950 }}>Next Admin action</Typography>
-              <Typography variant="body2" sx={{ color: '#374151' }}>
-                {(metricValue('openTickets') || 0) > 0
-                  ? `${metricValue('openTickets')} open ticket(s) require operations ownership before lower-priority administration.`
-                  : (metricValue('pendingPayments') || 0) > 0
-                    ? `${metricValue('pendingPayments')} Cash/Cheque payment review(s) are waiting for evidence-based approval or rejection.`
-                    : 'No open ticket or payment-review count is currently reported. Continue with owner activation and audit review.'}
-              </Typography>
-            </Alert>
-          )}
-          <Card sx={{ mb: 3, bgcolor: '#FFFFFF', border: '1px solid rgba(201,166,70,0.30)', borderRadius: 4, color: '#111827' }}>
-            <CardContent>
-              <Typography variant="h6" sx={{ color: '#7A5C12', fontWeight: 950 }}>Main Admin Actions</Typography>
-              <Typography variant="body2" sx={{ color: '#4B5563', mb: 2 }}>Start and control daily operations here.</Typography>
-              <Grid container spacing={2}>
-                {commandActions.map((action) => (
-                  <Grid item xs={12} sm={6} md={4} key={action.label}>
-                    <Button fullWidth onClick={() => openOperationsTool(action.path)} startIcon={renderSafeIcon(action.icon, { size: 20 })} sx={{ minHeight: 112, p: 2, justifyContent: 'flex-start', textAlign: 'left', alignItems: 'flex-start', color: '#111827', bgcolor: '#F8F9FB', border: '1px solid rgba(201,166,70,0.20)', borderRadius: 3, '&:hover': { bgcolor: 'rgba(201,166,70,0.10)', borderColor: '#C9A646' } }}>
-                      <Box><Typography sx={{ fontWeight: 950 }}>{action.label}</Typography><Typography variant="caption" sx={{ color: '#4B5563', textTransform: 'none' }}>{action.helper}</Typography></Box>
-                    </Button>
-                  </Grid>
-                ))}
-              </Grid>
-            </CardContent>
-          </Card>
+          {/* Redesign R6: "Today" first — alerts, four numbers, then work queues. */}
+          <Box data-testid="admin-today" sx={{ mb: 3 }}>
+            {!loading && ((metricValue('openTickets') || 0) > 0 || (metricValue('pendingPayments') || 0) > 0) && (
+              <Alert severity="warning" sx={{ mb: 2, borderRadius: 3 }}>
+                {[(metricValue('openTickets') || 0) > 0 ? `${metricValue('openTickets')} open job(s) need an owner in operations.` : '', (metricValue('pendingPayments') || 0) > 0 ? `${metricValue('pendingPayments')} payment(s) waiting for review.` : ''].filter(Boolean).join(' ')}
+              </Alert>
+            )}
+            <StatGrid>
+              <StatTile isRTL={isRTL} label={label('admin.today.openJobs', 'Open jobs')} value={loading ? null : metricValue('openTickets')} />
+              <StatTile isRTL={isRTL} label={label('admin.today.payments', 'Payments to verify')} value={loading ? null : metricValue('pendingPayments')} />
+              <StatTile isRTL={isRTL} label={label('admin.today.technicians', 'Technicians')} value={loading ? null : metricValue('technicians')} />
+              <StatTile isRTL={isRTL} label={label('admin.today.owners', 'Owners')} value={loading ? null : metricValue('owners')} />
+            </StatGrid>
+            <Box sx={{ mt: 2 }}>
+              <UiCard isRTL={isRTL} label={label('admin.today.queues', 'Work queues')}>
+                <Box sx={{ mt: 0.5 }}>
+                  {commandActions.map((action) => (
+                    <ListRow key={action.label} isRTL={isRTL} title={action.label} subtitle={action.helper} onClick={() => openOperationsTool(action.path)} />
+                  ))}
+                </Box>
+              </UiCard>
+            </Box>
+          </Box>
         </>
       )}
 
       {error && <Alert severity="warning" sx={{ mb: 3 }}>{error}</Alert>}
 
+      <Accordion data-testid="admin-system-details" disableGutters sx={{ mb: 3, borderRadius: '18px !important', border: '1px solid #EEE8D8', boxShadow: 'none', '&:before': { display: 'none' } }}>
+        <AccordionSummary expandIcon={renderSafeIcon(ChevronDown, { size: 18 })} sx={{ minHeight: 56 }}>
+          <Typography sx={{ fontWeight: 800 }}>{label('admin.system.title', 'System, coverage and launch details')}</Typography>
+        </AccordionSummary>
+        <AccordionDetails>
       <Grid container spacing={2.5} sx={{ mb: 3 }}>
         {metrics.map((metric) => (
           <Grid item xs={12} sm={6} md={4} key={metric.key}>
@@ -345,6 +349,9 @@ export default function AdminTerminal() {
           </Stack>
         </Grid>
       </Grid>
+
+        </AccordionDetails>
+      </Accordion>
 
       <Stack direction={{ xs: 'column', md: isRTL ? 'row-reverse' : 'row' }} spacing={1.5} sx={{ mt: 3 }}>
         <Button href="/analytics/reporting" startIcon={renderSafeIcon(BarChart3, { size: 17 })} sx={{ color: '#111827', bgcolor: '#C9A646', fontWeight: 950, '&:hover': { bgcolor: '#7A5C12' } }}>Reporting</Button>
