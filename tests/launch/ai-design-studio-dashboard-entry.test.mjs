@@ -34,5 +34,6 @@ test('owner and tenant default dashboards expose AI Design Studio', async () => 
   const roleNav = await read('src/components/ui/roleNav.ts');
   assert.match(roleNav.split('  owner: [')[2] || '', /path: '\/owner\/design-studio'/);
   assert.ok(ownerHome.includes("from '../../components/ui'"));
-  assert.match(tenantHome, /<RoleQuickActionsPanel\s+role="tenant"/);
+  assert.match(roleNav.split('  tenant: [')[2] || '', /path: '\/tenant\/design-studio'/);
+  assert.ok(tenantHome.includes("from '../../components/ui'"));
 });
