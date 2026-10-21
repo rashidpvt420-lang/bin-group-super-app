@@ -66,7 +66,7 @@ const TechnicianLayout = ({ children }: { children: React.ReactNode }) => {
                 <Toolbar sx={{ justifyContent: 'space-between', px: 0, flexDirection: isRTL ? 'row-reverse' : 'row', gap: 1 }}>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.4, flexDirection: isRTL ? 'row-reverse' : 'row', minWidth: 0 }}>
                         {!isDashboard && <Button aria-label={label('nav.back', 'Back', 'رجوع')} onClick={() => navigate(-1)} startIcon={renderSafeIcon(ArrowLeft, { size: 18, style: { transform: isRTL ? 'rotate(180deg)' : 'none' } })} sx={{ color: shell.ink, border: `1px solid ${shell.gold}`, borderRadius: 2, fontWeight: 950, minHeight: 42, px: 1.6, bgcolor: '#FFFFFF' }}>{label('nav.back', 'Back', 'رجوع')}</Button>}
-                        <Typography variant="h6" fontWeight="950" sx={{ color: shell.gold, textTransform: 'uppercase', letterSpacing: 1.6, display: 'flex', alignItems: 'center', gap: 1.2, fontSize: { xs: '0.82rem', md: '1.15rem' }, flexDirection: isRTL ? 'row-reverse' : 'row', textAlign: isRTL ? 'right' : 'left', minWidth: 0 }}><SafeIcon icon={Wrench} size={19} /> {label('portal.technician.title', 'FIELD NODE', 'بوابة الفني')}</Typography>
+                        <Typography variant="h6" fontWeight="950" sx={{ color: shell.gold, textTransform: 'uppercase', letterSpacing: 1.6, display: 'flex', alignItems: 'center', gap: 1.2, fontSize: { xs: '0.82rem', md: '1.15rem' }, flexDirection: isRTL ? 'row-reverse' : 'row', textAlign: isRTL ? 'right' : 'left', minWidth: 0 }}><SafeIcon icon={Wrench} size={19} /> {label('portal.technician.title', 'BIN Technician', 'فني BIN')}</Typography>
                     </Box>
                     {isPhoneHeader ? (
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexDirection: isRTL ? 'row-reverse' : 'row', flexShrink: 0 }}>
@@ -111,7 +111,7 @@ const TechnicianLayout = ({ children }: { children: React.ReactNode }) => {
 
             <TechnicianOfflineSyncAgent />
             <BinConnectChatBox role="technician" />
-            <Box sx={{ py: 3, textAlign: 'center', borderTop: `1px solid ${shell.border}`, bgcolor: shell.soft, mt: 'auto', position: 'relative', zIndex: 1 }}><Typography variant="caption" sx={{ color: shell.muted, fontWeight: 800, letterSpacing: 1.5 }}>{lang === 'ar' ? '2026 منصة BIN GROUP للفنيين' : '2026 BIN GROUP FIELD NODE'}</Typography></Box>
+            <Box sx={{ py: 3, textAlign: 'center', borderTop: `1px solid ${shell.border}`, bgcolor: shell.soft, mt: 'auto', position: 'relative', zIndex: 1 }}><Typography variant="caption" sx={{ color: shell.muted, fontWeight: 800, letterSpacing: 1.5 }}>{lang === 'ar' ? '2026 منصة BIN GROUP للفنيين' : '2026 BIN GROUP'}</Typography></Box>
         </Box>
     );
 };
