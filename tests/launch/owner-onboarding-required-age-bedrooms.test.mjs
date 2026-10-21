@@ -34,12 +34,12 @@ test('store defaults leave age, bedrooms, floors and lifts blank instead of gues
   for (const field of ['floors', 'bedrooms', 'age', 'lifts']) assert.match(defaults, new RegExp(`\\n    ${field}: null,`), field);
 });
 
-test('server: a submitted property with blank age / bedrooms is priced on the safe side and warns the owner', () => {
+test('server: blank age is rejected; blank bedrooms is priced on the safe side and warns the owner', () => {
   const property = { propertyType: 'Apartment', emirate: 'Dubai', area: 'Jumeirah Village Circle', units: 1, sqft: 1200, age: null, bedrooms: null, floors: null, lifts: null, strategy: 'fm' };
-  const quote = server.calculateOwnerOnboardingQuote([property], [], Date.now());
-  assert.equal(quote.portfolioAnnualTotal, 9410.94); // 1,500 x 1.25 (2BR) x 1.15 x 1.35 + 6,500 audit = 9,410.9375 -> fils
+  assert.throws(() => server.calculateOwnerOnboardingQuote([property], [], Date.now()), /missing its building age/);
+  const quote = server.calculateOwnerOnboardingQuote([{ ...property, age: 3 }], [], Date.now());
   const w = quote.propertyQuotes[0].warnings.join('|');
-  assert.ok(w.includes('Bedrooms pending inspection confirmation') && w.includes('Property age pending inspection confirmation'), w);
+  assert.ok(w.includes('Bedrooms pending inspection confirmation'), w);
   const filled = server.calculateOwnerOnboardingQuote([{ ...property, age: 3, bedrooms: 2 }], [], Date.now());
   assert.equal(filled.portfolioAnnualTotal, 2156.25);
   assert.equal(filled.propertyQuotes[0].warnings.length, 0);
