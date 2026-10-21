@@ -133,6 +133,7 @@ const roleCases: RoleCase[] = [
       '/owner/pilot-completion',
       '/owner/property-passport/phase2-missing',
       '/owner/ticket/phase2-missing',
+      '/owner/chat/phase2-missing',
       '/account-privacy',
       '/government/phase2-missing',
       '/financials',
