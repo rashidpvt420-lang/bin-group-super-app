@@ -1923,6 +1923,12 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
 
+    // Lease renewal offers (feature 4): server-written only.
+    match /lease_renewals/{renewalId} {
+      allow read: if isAdmin() || ownerCanRead(resource.data) || (signedIn() && resource.data.get('tenantId', null) == request.auth.uid);
+      allow create, update, delete: if false;
+    }
+
     match /occupancies/{occupancyId} {
       allow read: if isAdmin() || ownerCanRead(resource.data) || tenantOwns(resource.data);
       allow create, update, delete: if isAdmin();

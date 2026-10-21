@@ -19,3 +19,4 @@ export { runContractRenewalWatch, rebuildContractRenewalWatch } from './contract
 export { sendMonthlyOwnerPropertyReports, rebuildMonthlyOwnerPropertyReports } from './monthlyOwnerPropertyReportSystem';
 export { listUnifiedDocumentVault, getUnifiedDocumentFile } from './unifiedDocumentVault';
 export { ownerRecordLeaseAgreement } from './leaseAgreements';
+export { ownerProposeLeaseRenewal, tenantRespondLeaseRenewal } from './leaseRenewals';
