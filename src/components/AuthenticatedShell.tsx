@@ -7,6 +7,10 @@ import { RoleProvider, useRole } from '../context/RoleContext';
 import { AIProvider } from '../context/AIContext';
 import { SovereignAIChat } from './SovereignAIChat';
 import { SovereignAlertHandler } from './SovereignAlertHandler';
+import BottomNav from './ui/BottomNav';
+import ActionFab from './ui/ActionFab';
+import { UnifiedFabContext } from './ui/unifiedFab';
+import { isFabHidden, navRoleForPath } from './ui/roleNav';
 
 declare global {
   interface Window {
@@ -130,11 +134,19 @@ function AuthenticatedShellContent({ children, showChrome = true, publicAuth = f
     if (normalizedRole === 'owner') return <Navigate to="/owner/dashboard" replace />;
   }
 
+  // Redesign R2: one bottom nav + one FAB menu on role portals.
+  const navRole = showChrome && Boolean(user?.uid) ? navRoleForPath(location.pathname) : null;
+  const fabRole = navRole ?? (showChrome && isAdminRoute && Boolean(user?.uid) ? 'admin' : null);
+  const unifiedFab = Boolean(fabRole);
+  const showFabButton = unifiedFab && !isFabHidden(location.pathname);
+
   return (
-    <>
+    <UnifiedFabContext.Provider value={unifiedFab}>
       <PushNotificationBootstrap />
       {shouldRenderGlobalHeader && <BinGroupHeader />}
       {children}
+      {navRole && <BottomNav role={navRole} />}
+      {fabRole && showFabButton && <ActionFab role={fabRole} aboveBottomNav={Boolean(navRole)} />}
       {shouldRenderSovereignAI && (
         <SovereignAIChat
           role={normalizedRole as any}
@@ -144,9 +156,9 @@ function AuthenticatedShellContent({ children, showChrome = true, publicAuth = f
           authUserId={user?.uid || null}
         />
       )}
-      {shouldRenderFloatingNavigation && <NavigationControl />}
+      {shouldRenderFloatingNavigation && !navRole && <NavigationControl />}
       <SovereignAlertHandler />
-    </>
+    </UnifiedFabContext.Provider>
   );
 }
 
