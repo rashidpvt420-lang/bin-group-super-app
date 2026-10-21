@@ -20,6 +20,7 @@ import { useOwnerPropertyLabels } from './hooks/useOwnerPropertyLabels';
 import OwnerSimpleDashboardPage from './pages/OwnerSimpleDashboardPage';
 import OwnerDashboardPage from './pages/OwnerDashboardResolvedPage';
 import OwnerPropertiesPage from './pages/OwnerPropertiesPage';
+import OwnerChatPage from './pages/OwnerChatPage';
 import OwnerContractsPage from './pages/OwnerContractsResolvedPage';
 import OwnerFinancialsPage from './pages/OwnerFinancialsPage';
 import OwnerPaymentProofPage from './pages/OwnerPaymentProofPage';
@@ -138,6 +139,7 @@ export default function OwnerApp() {
                 <Route path="/complaints" element={<OwnerTicketsPage />} />
                 <Route path="/tickets" element={<OwnerTicketsPage />} />
                 <Route path="/ticket/:id" element={<OwnerTicketDetailPage />} />
+                <Route path="/chat/:ticketId" element={<OwnerChatPage />} />
                 <Route path="/ai-intelligence" element={<OwnerAIIntelligencePage />} />
                 <Route path="/damage-estimate" element={<OwnerDamageEstimatePage />} />
                 <Route path="/p-l-report" element={<OwnerPLReportPage />} />

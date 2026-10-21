@@ -23,8 +23,9 @@ const gpsOverflow = read('functions/technicianLiveLocationOverflow.ts');
 const technicianApp = read('src/technician/TechnicianApp.tsx');
 const payrollBridge = read('functions/technicianPayrollCompatibility.ts');
 const hrRules = read('scripts/harden-hr-privacy-rules.mjs');
-const tenantChat = read('src/tenant/pages/TenantChatPage.tsx');
-const technicianChat = read('src/technician/pages/TechnicianChatPage.tsx');
+// Tenant, Technician and Owner chat pages share one TicketChatPage.
+const tenantChat = read('src/components/chat/TicketChatPage.tsx');
+const technicianChat = tenantChat;
 
 test('production deploy preflight refuses any workflow that is not exact current main', () => {
   assert.match(deployPreflight, /assertExactCurrentMain/);
