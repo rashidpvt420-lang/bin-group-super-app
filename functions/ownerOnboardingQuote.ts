@@ -68,6 +68,18 @@ const money = normalizeAedMoney;
 /** Keep a blank value blank so the engine can price it on the safe side (founder decision 2026-10-14 13:21). */
 const blankOr = (value: unknown): any => (value === undefined || value === null || String(value).trim() === '' ? undefined : number(value));
 
+const MAX_BUILDING_AGE_YEARS = 150;
+
+/** Building age is required for every quoted property (0 = new build); the condition audit depends on it. */
+export function assertBuildingAge(property: PropertyInput, index: number) {
+  const mosqueProfile = property.mosqueProfile && typeof property.mosqueProfile === "object" ? property.mosqueProfile as Record<string, unknown> : {};
+  const raw = blankOr(mosqueProfile.propertyAgeYears) ?? blankOr(property.age);
+  if (raw === undefined) throw new Error(`Property ${index + 1} is missing its building age.`);
+  if (!Number.isInteger(raw) || raw < 0 || raw > MAX_BUILDING_AGE_YEARS) {
+    throw new Error(`Property ${index + 1} has an invalid building age; enter 0-${MAX_BUILDING_AGE_YEARS} years.`);
+  }
+}
+
 function text(value: unknown) {
   return String(value || "").trim();
 }
@@ -294,6 +306,7 @@ export function calculateOwnerOnboardingQuote(
     if (!text(cleanProperty.emirate) || !text(cleanProperty.propertyType)) {
       throw new Error(`Property ${index + 1} is missing emirate or property type.`);
     }
+    assertBuildingAge(cleanProperty, index);
 
     const propertyAddOns = Array.isArray(cleanProperty.selectedAddOns)
       ? cleanProperty.selectedAddOns.map(text).filter(Boolean)

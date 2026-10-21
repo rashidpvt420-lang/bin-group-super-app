@@ -109,12 +109,10 @@ test('card requires bedrooms for apartments; server prices a blank as 2BR with a
   assert.ok(m.card.render({ initial: { propertyType: 'Apartment' } }).includes('Select the number of bedrooms'));
 });
 
-test('a cleared age on the card is priced at the highest band with a warning, same as the server', () => {
+test('a cleared age blocks the card and the server rejects the quote (age required)', () => {
   const st = S({ age: null, contractType: 'FM_ONLY' });
   const card = m.model.computeLiveQuote(st);
-  const server = m.server.calculateOwnerOnboardingQuote([m.model.toServerProperty(st)], [], Date.now());
-  assert.equal(card.total, server.portfolioAnnualTotal);
-  assert.equal(card.total, 13020.5); // 4,830 x 1.35 + 6,500 asset audit (blank age = 15+)
-  assert.ok(card.warnings.some((w) => w.startsWith('Property age pending')));
-  assert.ok(server.propertyQuotes[0].warnings.some((w) => w.startsWith('Property age pending')));
+  assert.equal(card.total, 0);
+  assert.ok(card.blockers.some((b) => b.includes('building age')));
+  assert.throws(() => m.server.calculateOwnerOnboardingQuote([m.model.toServerProperty(st)], [], Date.now()), /missing its building age/);
 });

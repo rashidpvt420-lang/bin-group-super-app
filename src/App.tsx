@@ -57,6 +57,7 @@ const RoleGatewayPage = lazyWithRetry(() => import('./pages/RoleGatewayPage'));
 const PropertyOnboardingPage = lazyWithRetry(() => import('./pages/PropertyOnboardingPage'));
 const PilotLaunchPage = lazyWithRetry(() => import('./pages/public/PilotLaunchPage'));
 const UaeMarketLeadershipPage = lazyWithRetry(() => import('./pages/public/UaeMarketLeadershipPage'));
+const CompanyProfilePage = lazyWithRetry(() => import('./pages/public/CompanyProfilePage'));
 const InvoiceVerificationPage = lazyWithRetry(() => import('./pages/public/InvoiceVerificationPage'));
 const CertificateVerificationPage = lazyWithRetry(() => import('./pages/public/CertificateVerificationPage'));
 const QrPassVerificationPage = lazyWithRetry(() => import('./pages/public/QrPassVerificationPage'));
@@ -269,10 +270,15 @@ function PublicRouteNavigation() {
   return <NavigationControl />;
 }
 
+const AI_FAB_HIDDEN_PREFIXES = ['/onboarding', '/login'];
+
 function PublicSovereignAIEntry() {
   const location = useLocation();
   const isRolePortalRoute = ROLE_PORTAL_PREFIXES.some((prefix) => location.pathname === prefix || location.pathname.startsWith(`${prefix}/`));
   if (isRolePortalRoute) return null;
+  // Form routes keep the full width for inputs and the primary button; the FAB covered both on phones.
+  const hideOnFormRoute = AI_FAB_HIDDEN_PREFIXES.some((prefix) => location.pathname === prefix || location.pathname.startsWith(`${prefix}/`));
+  if (hideOnFormRoute) return null;
   return <SovereignAIChat role="unknown" allowLiveProvider={false} isAuthenticated={false} authUserId={null} />;
 }
 
@@ -319,10 +325,10 @@ function AppContent() {
         <Route path="/request-demo" element={publicOrPilot(<DemoVideosPage />)} />
         <Route path="/videos" element={publicOrPilot(<DemoVideosPage />)} />
         <Route path="/demo-videos" element={<Navigate to="/videos" replace />} />
-        <Route path="/company" element={<Navigate to="/#company-profile" replace />} />
-        <Route path="/company-profile" element={<Navigate to="/#company-profile" replace />} />
-        <Route path="/about" element={<Navigate to="/#company-profile" replace />} />
-        <Route path="/about-us" element={<Navigate to="/#company-profile" replace />} />
+        <Route path="/company" element={publicOrPilot(<CompanyProfilePage />)} />
+        <Route path="/company-profile" element={publicOrPilot(<CompanyProfilePage />)} />
+        <Route path="/about" element={publicOrPilot(<CompanyProfilePage />)} />
+        <Route path="/about-us" element={publicOrPilot(<CompanyProfilePage />)} />
         <Route path="/onboarding/*" element={publicOrPilot(withAuth(<PropertyOnboardingPage />, { publicAuth: true, showChrome: false }))} />
         <Route path="/government/:id" element={protectedOwnerRoute(['owner', ...ADMIN_STAFF_ROLES], <GovernmentPropertyPage />)} />
         <Route path="/owner-dashboard" element={<Navigate to="/owner/dashboard" replace />} />
