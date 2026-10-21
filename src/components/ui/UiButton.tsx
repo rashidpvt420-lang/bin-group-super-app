@@ -8,6 +8,6 @@ const styles: Record<Variant, object> = {
   outline: { bgcolor: ui.card, color: ui.goldText, border: `1.5px solid ${ui.gold}` },
 };
 
-export default function UiButton({ tone = 'primary', sx, ...rest }: Omit<ButtonProps, 'variant'> & { tone?: Variant }) {
+export default function UiButton({ tone = 'primary', sx, ...rest }: Omit<ButtonProps, 'variant'> & { tone?: Variant; target?: string; rel?: string }) {
   return <Button disableElevation {...rest} sx={{ minHeight: ui.touchTarget, flex: 1, borderRadius: `${ui.radiusButton}px`, fontSize: 16, fontWeight: 800, textTransform: 'none', ...styles[tone], ...(sx as object) }} />;
 }
