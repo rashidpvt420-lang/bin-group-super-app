@@ -83,7 +83,7 @@ export default function TenantDashboardPage() {
           nextContract = await safeGetDocument('contracts', nextUnit.contractId || nextUnit.activeContractId);
           if (!nextContract) nextContract = await getFirstByField('contracts', 'tenantId', user.uid);
           if (!nextContract && user.email) nextContract = await getFirstByField('contracts', 'tenantEmail', normalizeEmail(user.email));
-          if (!nextContract && nextUnit.propertyId) nextContract = await getFirstByField('contracts', 'propertyId', nextUnit.propertyId);
+          // Feature 8: no propertyId fallback — it could surface the owner's BIN service contract or another tenant's lease.
         } else {
           nextContract = await getFirstByField('contracts', 'tenantId', user.uid);
           if (!nextContract && user.email) nextContract = await getFirstByField('contracts', 'tenantEmail', normalizeEmail(user.email));
