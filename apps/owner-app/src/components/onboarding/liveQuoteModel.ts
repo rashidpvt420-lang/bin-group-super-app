@@ -28,7 +28,7 @@ export interface LiveQuoteState {
   scope: 'Standard' | 'Luxury';
   sqft: number;
   annualRent: number;
-  /** null = not provided: priced at the highest age band with a warning. */
+  /** null = not provided: the card shows a blocker; the server rejects a quote without age (founder decision 2026-10-21). */
   age: number | null;
   contractType: LiveContract;
 }
@@ -117,6 +117,10 @@ export function computeLiveQuote(s: LiveQuoteState, lang: LiveLang = 'en'): Live
   // Founder decision 2026-10-14 13:21: bedrooms is required for apartments on the card.
   if (s.propertyType === 'Apartment' && (s.bedrooms === null || s.bedrooms === undefined)) {
     return { maintenance: null, management: null, total: 0, lines: [], warnings: [], blockers: [ar ? 'اختر عدد غرف النوم لعرض السعر' : 'Select the number of bedrooms to see the price'], regionLabel: s.emirate, scaleLabel: `${Math.round(s.sqft).toLocaleString('en-US')} sqft` };
+  }
+  // Founder decision 2026-10-21: building age is required; the server quote rejects a property without it.
+  if (s.age === null || s.age === undefined) {
+    return { maintenance: null, management: null, total: 0, lines: [], warnings: [], blockers: [ar ? 'أدخل عمر المبنى لعرض السعر' : 'Enter the building age to see the price'], regionLabel: s.emirate, scaleLabel: `${Math.round(s.sqft).toLocaleString('en-US')} sqft` };
   }
   const total = calculateUaeQuote2026(engineInput(s, s.contractType) as any);
   const fm = s.contractType !== 'PM_ONLY' ? calculateUaeQuote2026(engineInput(s, 'FM_ONLY') as any) : null;

@@ -89,10 +89,10 @@ export default function OwnerFinancialTruthCard() {
       <Stack spacing={2.25}>
         <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" spacing={2} alignItems={{ xs: 'flex-start', md: 'center' }}>
           <Box>
-            <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 2.5 }}>{copy.eyebrow}</Typography>
-            <Typography variant="h5" sx={{ fontWeight: 950, mt: 0.5 }}>{title}</Typography>
+            <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 800, letterSpacing: 2.5 }}>{copy.eyebrow}</Typography>
+            <Typography variant="h5" sx={{ fontWeight: 800, mt: 0.5 }}>{title}</Typography>
           </Box>
-          <Button onClick={() => navigate('/owner/financials')} sx={{ color: '#111827', bgcolor: binThemeTokens.gold, fontWeight: 950, borderRadius: 3, '&:hover': { bgcolor: binThemeTokens.goldHover } }}>{copy.open}</Button>
+          <Button onClick={() => navigate('/owner/financials')} sx={{ color: '#111827', bgcolor: binThemeTokens.gold, fontWeight: 800, borderRadius: 3, '&:hover': { bgcolor: binThemeTokens.goldHover } }}>{copy.open}</Button>
         </Stack>
 
         {loading ? (
@@ -103,12 +103,12 @@ export default function OwnerFinancialTruthCard() {
           <Alert severity="info">{copy.empty}</Alert>
         ) : (
           <>
-            <Typography variant="h3" sx={{ fontWeight: 950, color: binThemeTokens.goldText }}>{money(summary.primaryValue)}</Typography>
+            <Typography variant="h3" sx={{ fontWeight: 800, color: binThemeTokens.goldText }}>{money(summary.primaryValue)}</Typography>
             {summary.primaryKind === 'net_payout' && (
               <Paper sx={{ p: 2, bgcolor: 'rgba(255,255,255,0.045)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 3 }}>
                 <Stack spacing={0.8}>
                   <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.72)', fontWeight: 800 }}>{copy.equation}</Typography>
-                  <Typography sx={{ fontWeight: 950 }}>
+                  <Typography sx={{ fontWeight: 800 }}>
                     {money(summary.totalRevenue)} − {money(summary.maintenanceDeductions)} − {money(summary.managementFees)} = {money(summary.netPayout)}
                   </Typography>
                 </Stack>
