@@ -101,7 +101,7 @@ export default function PropertyPassportPublicPage() {
               <Box sx={{ width: 7, height: 7, borderRadius: '50%', bgcolor: '#22C55E', boxShadow: '0 0 6px #22C55E' }} />
               <Typography sx={{ color: alpha('#fff', 0.7), fontSize: '0.72rem', fontWeight: 800 }}>BIN GROUP · All Kind Building Projects Contracting LLC S.P.C</Typography>
               <Typography sx={{ color: alpha(gold, 0.5), fontSize: '0.7rem' }}>·</Typography>
-              <Typography sx={{ color: alpha(gold, 0.75), fontSize: '0.72rem', fontWeight: 800 }}>Est. 2010 · Al Ain, UAE</Typography>
+              <Typography sx={{ color: alpha(gold, 0.75), fontSize: '0.72rem', fontWeight: 800 }}>Rooted in Al Ain, UAE</Typography>
             </Stack>
           </Container>
         </Box>
