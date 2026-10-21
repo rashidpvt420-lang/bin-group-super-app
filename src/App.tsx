@@ -58,6 +58,7 @@ const PropertyOnboardingPage = lazyWithRetry(() => import('./pages/PropertyOnboa
 const PilotLaunchPage = lazyWithRetry(() => import('./pages/public/PilotLaunchPage'));
 const UaeMarketLeadershipPage = lazyWithRetry(() => import('./pages/public/UaeMarketLeadershipPage'));
 const CompanyProfilePage = lazyWithRetry(() => import('./pages/public/CompanyProfilePage'));
+const PublicAIDesignStudioPage = lazyWithRetry(() => import('./pages/public/PublicAIDesignStudioPage'));
 const InvoiceVerificationPage = lazyWithRetry(() => import('./pages/public/InvoiceVerificationPage'));
 const CertificateVerificationPage = lazyWithRetry(() => import('./pages/public/CertificateVerificationPage'));
 const QrPassVerificationPage = lazyWithRetry(() => import('./pages/public/QrPassVerificationPage'));
@@ -307,7 +308,7 @@ function AppContent() {
         <Route path="/brokers" element={publicOrPilot(<PublicMarketingPage page="brokers" />)} />
         <Route path="/property-management" element={publicOrPilot(<PublicMarketingPage page="property-management" />)} />
         <Route path="/maintenance" element={publicOrPilot(<PublicMarketingPage page="maintenance" />)} />
-        <Route path="/ai-design-studio" element={publicOrPilot(<Navigate to="/request-demo?demo=ai-design" replace />)} />
+        <Route path="/ai-design-studio" element={publicOrPilot(<PublicAIDesignStudioPage />)} />
         <Route path="/majlis-care" element={publicOrPilot(<PublicMarketingPage page="majlis-care" />)} />
         <Route path="/stadiums" element={publicOrPilot(<PublicMarketingPage page="stadiums" />)} />
         <Route path="/hotels" element={publicOrPilot(<PublicMarketingPage page="hotels" />)} />

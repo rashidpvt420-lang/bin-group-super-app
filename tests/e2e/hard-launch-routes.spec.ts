@@ -79,6 +79,7 @@ const publicRoutes = [
   '/about-us',
   '/request-demo',
   '/videos',
+  '/ai-design-studio',
   '/onboarding',
   '/verify',
   '/verify-cert',
