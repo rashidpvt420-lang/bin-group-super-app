@@ -19,7 +19,7 @@ export default function AppHeader({ eyebrow, title, initials, isRTL, action }: A
         <Typography component="h1" sx={{ ...uiType.heading, color: '#FFFFFF', overflowWrap: 'anywhere' }}>{title}</Typography>
       </Box>
       {action ?? (initials ? (
-        <Box aria-hidden sx={{ width: 44, height: 44, flex: '0 0 44px', borderRadius: '50%', bgcolor: ui.gold, color: ui.ink, display: 'grid', placeItems: 'center', fontWeight: 800 }}>{initials.slice(0, 2).toUpperCase()}</Box>
+        <Box aria-hidden sx={{ width: 44, height: 44, flex: '0 0 44px', borderRadius: '50%', bgcolor: ui.gold, color: ui.ink, display: 'grid', placeItems: 'center', fontWeight: 800 }}>{initials.slice(0, 1).toUpperCase()}</Box>
       ) : null)}
     </Box>
   );
