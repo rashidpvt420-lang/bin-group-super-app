@@ -188,6 +188,20 @@ export const submitTenantPaymentProof = onCall(
       throw new HttpsError("failed-precondition", "Tenant unit ownership could not be verified.");
     }
 
+    // Optional link to a scheduled rent installment (feature 1). It must belong to this tenant.
+    const installmentId = text(request.data?.installmentId, 220);
+    const installmentRef = installmentId ? db.collection("rent_installments").doc(installmentId) : null;
+    if (installmentRef) {
+      const installmentSnap = await installmentRef.get();
+      const installment = installmentSnap.data() || {};
+      if (!installmentSnap.exists || text(installment.tenantUid, 160) !== tenantId || text(installment.unitId, 160) !== unitId) {
+        throw new HttpsError("permission-denied", "This rent installment is not yours.");
+      }
+      if (!["DUE", "OVERDUE"].includes(text(installment.status, 40).toUpperCase())) {
+        throw new HttpsError("failed-precondition", "This rent installment is already paid or awaiting verification.");
+      }
+    }
+
     const paymentId = `tenant_${tenantId}_${submissionId}`;
     const paymentRef = db.collection("payment_transactions").doc(paymentId);
     const receiptRegistryRef = db.collection("tenant_receipt_registry").doc(receiptHash);
@@ -283,9 +297,13 @@ export const submitTenantPaymentProof = onCall(
         collectionChannel: paymentMethod === "CHEQUE" ? "CHEQUE_HANDED_OVER" : "CASH_HANDED_OVER",
         binGroupFundsCustody: false,
         submittedByTenant: true,
+        installmentId: installmentId || null,
         createdAt: now,
         updatedAt: now,
       });
+      if (installmentRef) {
+        transaction.update(installmentRef, { status: "PENDING_VERIFICATION", paymentId, updatedAt: now });
+      }
       transaction.create(auditRef, {
         action: "TENANT_PAYMENT_PROOF_SUBMITTED",
         actorId: tenantId,

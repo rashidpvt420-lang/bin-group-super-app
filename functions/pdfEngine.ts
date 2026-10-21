@@ -883,3 +883,49 @@ export async function generateMobilizationInvoicePdfArtifact(data: any): Promise
 export async function generatePayslipPDF(data: any): Promise<string> {
     return (await generatePayslipPdfArtifact(data)).pdfUrl;
 }
+
+/** Bilingual tenant rent receipt, issued only after admin verification (feature 1, 2026-10-21). */
+export async function generateTenantRentReceiptPdfArtifact(data: {
+    receiptNumber: string; paymentId: string; tenantUid: string; amount: number; method: string; reference: string;
+    tenantName: string; propertyName: string; unitNumber: string; approvedOn: string; verifyUrl: string;
+}): Promise<CanonicalPdfArtifact> {
+    if (!data.receiptNumber || !data.paymentId || !Number.isFinite(data.amount) || data.amount <= 0) {
+        throw new Error('Tenant rent receipt fields are incomplete.');
+    }
+    const PDFDocument = await loadPdfKit();
+    let fontBuffer: Buffer | null = null;
+    try { fontBuffer = await getCairoFont(); } catch (err) { console.error('Cairo font load failed for rent receipt:', err); }
+    return new Promise<CanonicalPdfArtifact>((resolve, reject) => {
+        const doc = new (PDFDocument as any)({ margin: 50, size: 'A4', info: { Title: `BIN GROUP Rent Receipt ${data.receiptNumber}`, Author: 'BIN GROUP Super App' } });
+        if (fontBuffer) { try { doc.registerFont('Cairo', fontBuffer); doc.font('Cairo'); } catch (err) { console.error('Font registration failed for rent receipt:', err); } }
+        const chunks: Buffer[] = [];
+        doc.on('data', (chunk: Buffer) => chunks.push(chunk));
+        doc.on('error', reject);
+        doc.on('end', async () => {
+            try {
+                const buffer = Buffer.concat(chunks);
+                const documentHash = crypto.createHash('sha256').update(JSON.stringify({ r: data.receiptNumber, p: data.paymentId, a: data.amount, s: 'PAID' })).digest('hex');
+                resolve(await savePdf(buffer, `rent-receipts/${data.tenantUid || 'owner'}/${data.paymentId}.pdf`, {
+                    paymentId: data.paymentId, receiptNumber: data.receiptNumber, documentType: 'tenant_rent_receipt', language: 'en-ar', documentHash, status: 'PAID',
+                }));
+            } catch (error) { reject(error); }
+        });
+        doc.fillColor(GOLD).fontSize(22).text('BIN GROUP', { align: 'center' });
+        doc.fillColor(INK).fontSize(13).text('RENT PAYMENT RECEIPT', { align: 'center' });
+        doc.fillColor(MUTED).fontSize(10);
+        bidiText(doc, 'إيصال دفع الإيجار', null, null, { align: 'center' });
+        doc.moveDown();
+        row(doc, 'Receipt No. / رقم الإيصال', data.receiptNumber);
+        row(doc, 'Payment ID / رقم الدفع', data.paymentId);
+        row(doc, 'Tenant / المستأجر', textValue(data.tenantName));
+        row(doc, 'Property / العقار', textValue(data.propertyName));
+        row(doc, 'Unit / الوحدة', textValue(data.unitNumber));
+        row(doc, 'Amount Received / المبلغ المستلم', money(data.amount));
+        row(doc, 'Method / طريقة الدفع', textValue(data.method));
+        row(doc, 'Reference / المرجع', textValue(data.reference));
+        row(doc, 'Verified On / تاريخ التحقق', data.approvedOn);
+        row(doc, 'Verify / التحقق', data.verifyUrl);
+        para(doc, 'Issued after BIN GROUP verified the cash or cheque evidence for this rent payment.', 'صدر هذا الإيصال بعد تحقق مجموعة بن من إثبات الدفع النقدي أو بالشيك لهذه الدفعة.');
+        doc.end();
+    });
+}
