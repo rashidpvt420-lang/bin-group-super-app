@@ -1912,6 +1912,17 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // Rent schedule and receipts (feature 1): server-written only.
+    match /rent_installments/{installmentId} {
+      allow read: if isAdmin() || ownerCanRead(resource.data) || (signedIn() && resource.data.get('tenantUid', null) == request.auth.uid);
+      allow create, update, delete: if false;
+    }
+
+    match /rent_receipts/{receiptId} {
+      allow read: if isAdmin() || ownerCanRead(resource.data) || (signedIn() && resource.data.get('tenantUid', null) == request.auth.uid);
+      allow create, update, delete: if false;
+    }
+
     match /occupancies/{occupancyId} {
       allow read: if isAdmin() || ownerCanRead(resource.data) || tenantOwns(resource.data);
       allow create, update, delete: if isAdmin();

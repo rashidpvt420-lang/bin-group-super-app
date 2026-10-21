@@ -11,7 +11,7 @@ test('public homes and request-demo keep back navigation in document flow', asyn
     read('src/pages/public/DemoVideosPage.tsx'),
   ]);
 
-  assert.match(nav, /inFlowNavigationRoutes = new Set\(\['\/homes', '\/request-demo', '\/videos'\]\)/);
+  assert.match(nav, /inFlowNavigationRoutes = new Set\(\['\/homes', '\/request-demo', '\/videos', '\/company', '\/company-profile', '\/about', '\/about-us'\]\)/);
   assert.match(nav, /inFlowNavigationRoutes\.has\(location\.pathname\)/);
   assert.match(nav, /position: 'fixed'/);
 

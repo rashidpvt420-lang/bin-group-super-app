@@ -56,6 +56,7 @@ function harness() {
     if (name === '../../context/RoleContext') return { useRole: () => ({ user: uid ? { uid } : null }) };
     if (name === '../../context/LanguageContext') return { useLanguage: () => ({ tx, isRTL: false }) };
     if (name === '../../theme/binGroupTheme') return { binThemeTokens: { gold: '#caa', textPrimary: '#111', textSecondary: '#555', border: '#ddd' } };
+    if (/^\.\.\/components\/Owner[A-Za-z]+Dialog$/.test(name)) return { default: () => null };
     throw new Error(`Unexpected import ${name}`);
   } }, { filename });
   function render() {
