@@ -282,7 +282,7 @@ function e2eCoversRoute(row) {
 }
 
 const STATIC_CONTENT_ROUTES = new Set([
-  '/', '/pilot', '/owner-landing', '/v1',
+  '/', '/pilot', '/owner-landing', '/v1', '/ai-design-studio',
   '/terms-of-service', '/privacy-policy', '/terms', '/privacy',
   '/support', '/feedback', '/pilot-feedback',
   '/owners', '/tenants', '/technicians', '/brokers',
