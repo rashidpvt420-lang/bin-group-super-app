@@ -1,0 +1,64 @@
+name: Signed-in Visual Audit
+
+# Read-only screenshots + contrast/overlap scan of the signed-in portals at
+# 375/390px (audit 2026-10-21 P1-9). Manual dispatch on main only, after a
+# production deploy. It does not seed, mutate or clean up any data.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: signed-in-visual-audit
+  cancel-in-progress: false
+
+jobs:
+  visual-audit:
+    name: Signed-in visual audit (read-only)
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 30
+    env:
+      CI: true
+      E2E_BASE_URL: https://bin-group-57c60.web.app
+      E2E_STRICT_LIVE: 'true'
+      E2E_OWNER_EMAIL: ${{ secrets.E2E_OWNER_EMAIL }}
+      E2E_OWNER_MAILBOX_EMAIL: ${{ vars.E2E_OWNER_MAILBOX_EMAIL || secrets.E2E_OWNER_MAILBOX_EMAIL }}
+      E2E_OWNER_PASSWORD: ${{ secrets.E2E_OWNER_PASSWORD }}
+      E2E_TENANT_EMAIL: ${{ secrets.E2E_TENANT_EMAIL }}
+      E2E_TENANT_PASSWORD: ${{ secrets.E2E_TENANT_PASSWORD }}
+      E2E_TECHNICIAN_EMAIL: ${{ secrets.E2E_TECHNICIAN_EMAIL }}
+      E2E_TECHNICIAN_PASSWORD: ${{ secrets.E2E_TECHNICIAN_PASSWORD }}
+      E2E_BROKER_EMAIL: ${{ secrets.E2E_BROKER_EMAIL }}
+      E2E_BROKER_PASSWORD: ${{ secrets.E2E_BROKER_PASSWORD }}
+      VITE_FIREBASE_APPCHECK_DEBUG_TOKEN: ${{ secrets.VITE_FIREBASE_APPCHECK_DEBUG_TOKEN }}
+    steps:
+      - name: Enforce main only
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${GITHUB_REF}" != 'refs/heads/main' ]]; then
+            echo "::error::Signed-in visual audit runs on refs/heads/main only."
+            exit 1
+          fi
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install dependencies with retry
+        run: bash scripts/npm-install-retry.sh
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Run signed-in visual audit
+        run: npx playwright test tests/e2e/signed-in-visual-audit.spec.ts --project=android-mobile
+      - name: Upload screenshots and findings
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: signed-in-visual-audit-${{ github.sha }}-${{ github.run_id }}
+          path: |
+            test-results/**
+            playwright-report/**
+          if-no-files-found: warn
+          retention-days: 14
