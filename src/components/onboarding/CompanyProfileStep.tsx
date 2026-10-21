@@ -129,7 +129,7 @@ const CompanyProfileStep: React.FC<{ onNext: () => void }> = ({ onNext }) => {
                         <Paper sx={{ height: '100%', p: { xs: 3, md: 4 }, borderRadius: 6, bgcolor: 'rgba(22,22,24,0.72)', border: `1px solid ${alpha(binThemeTokens.gold, 0.22)}`, boxShadow: `0 24px 80px ${alpha('#000', 0.42)}` }}>
                             <Stack spacing={3}>
                                 <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.2, justifyContent: { xs: 'center', md: isRTL ? 'flex-end' : 'flex-start' } }}>
-                                    {chips.map((chip) => <Chip key={chip} label={chip} size="small" sx={{ color: binThemeTokens.champagne, border: `1px solid ${alpha(binThemeTokens.gold, 0.28)}`, bgcolor: alpha(binThemeTokens.gold, 0.08), fontWeight: 850 }} />)}
+                                    {chips.map((chip) => <Chip key={chip} label={chip} size="small" sx={{ color: binThemeTokens.goldText, border: `1px solid ${alpha(binThemeTokens.gold, 0.28)}`, bgcolor: alpha(binThemeTokens.gold, 0.08), fontWeight: 850 }} />)}
                                 </Box>
                                 <Grid container spacing={2.5}>
                                     {cards.map((card, index) => {
