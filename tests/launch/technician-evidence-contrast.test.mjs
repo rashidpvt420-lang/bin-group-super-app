@@ -61,7 +61,7 @@ test('job page render has no white or low-contrast text on the white shell', () 
   // Global chip CSS forces chip backgrounds to white, so the proof count must not be white text.
   assert.ok(render.includes('data-testid="technician-proof-count-chip"'));
   assert.ok(!/technician-proof-count-chip"[^\n]*[^a-zA-Z]color: '#FFFFFF'/.test(render), 'proof count is not white-on-white');
-  assert.ok(render.includes("sx={{ color: JOB_READABLE.ink, borderColor: JOB_READABLE.control, fontWeight: 950 }}>{tx('tech.job.call_tenant'"));
+  assert.ok(render.includes("sx={{ color: JOB_READABLE.ink, borderColor: JOB_READABLE.control, fontWeight: 950 }}>{isRTL ? `اتصال: ${contactRoleLabel}` : `Call ${contactRoleLabel}`}"));
   assert.ok(render.includes("sx={{ color: JOB_READABLE.ink, borderColor: JOB_READABLE.control, fontWeight: 950 }}>{tx('tech.job.contact_admin'"));
   assert.ok(render.includes("bgcolor: JOB_READABLE.green, color: '#FFFFFF'"), 'Complete button is white on #047857 (5.5:1)');
 });
