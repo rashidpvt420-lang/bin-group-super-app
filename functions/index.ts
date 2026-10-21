@@ -1,6 +1,6 @@
 import { FieldValue } from "firebase-admin/firestore";
 import { onSchedule } from "firebase-functions/v2/scheduler";
-import { onDocumentCreated, onDocumentUpdated } from "firebase-functions/v2/firestore";
+import { onDocumentCreated, onDocumentDeleted, onDocumentUpdated } from "firebase-functions/v2/firestore";
 import { onCall, HttpsError, onRequest } from "firebase-functions/v2/https";
 import { setGlobalOptions } from "firebase-functions/v2";
 import { defineSecret } from "firebase-functions/params";
@@ -33,6 +33,7 @@ import { resolveTechnicianArrivalBinding } from "./technicianInstallationBinding
 import { flagSlaBreaches } from "./slaCron";
 import { escalateManualDispatch } from "./ticketDispatchAlerts";
 import { evaluateTechnicianForTicket, requiredTicketTrade, technicianHasCapacity } from "./technicianDispatchMatching";
+import { countOpenAssignedTickets, countOpenAssignedTicketsInTransaction, reconcileTechnicianJobCount, releaseCapacityForDeletedTicket, ticketOccupiesTechnician } from "./technicianCapacityReconcile";
 import { isTechnicianAssignmentEvent, technicianAssignedNotificationSeed } from "./shared/technicianAssignmentNotification";
 import { requirePrivilegedMfaSession } from "./adminMfaSession";
 import { redispatchWaitingTickets } from "./ticketRedispatch";
@@ -878,6 +879,21 @@ export const onTicketStatusChanged = onDocumentUpdated({ document: "maintenanceT
         await event.data!.after.ref.set(readyUpdate, { merge: true });
         await attemptAutoAssignment(event.data!.after.ref, { ...after, ...readyUpdate });
     }
+    // Any path that stops a ticket occupying its technician (closed or cancelled via status or
+    // dispatchStatus, unassigned, archived) reconciles that technician's counter to the real
+    // open-ticket count. Idempotent, so it is safe alongside the terminal-status release below.
+    const previousTechnicianId = safeString(before?.assignedTechnicianId || before?.technicianId);
+    if (
+        previousTechnicianId &&
+        ticketOccupiesTechnician(before, previousTechnicianId) &&
+        !ticketOccupiesTechnician(after, previousTechnicianId)
+    ) {
+        try {
+            await reconcileTechnicianJobCount(db, previousTechnicianId);
+        } catch (error) {
+            console.error(`[capacity] reconcile failed for ${previousTechnicianId}:`, error);
+        }
+    }
     const statusChanged = before?.status !== after.status;
     // A technician change while the ticket stays ASSIGNED/ACCEPTED is a genuine
     // re-assignment the requester must still hear about.
@@ -1116,9 +1132,14 @@ async function attemptAutoAssignment(ticketRef: admin.firestore.DocumentReferenc
             ? []
             : await db.getAll(...techQuery.docs.map((d) => db.collection("technicians").doc(d.id)));
         const technicianProfiles = new Map(technicianSnaps.map((snap) => [snap.id, snap.exists ? snap.data() || {} : {}]));
+        // Capacity is judged on the technician's real open assigned tickets, not the stored
+        // users.currentJobCount, which can drift upward when tickets are deleted or closed by a
+        // path that skips the release. The limit (maxConcurrentJobs) is unchanged.
+        const openJobCounts = new Map(await Promise.all(techQuery.docs.map(async (d) =>
+            [d.id, await countOpenAssignedTickets(db, d.id, ticketId)] as [string, number])));
 
         const candidates = techQuery.docs
-            .map((d) => ({ id: d.id, data: d.data(), technician: technicianProfiles.get(d.id) || {} }))
+            .map((d) => ({ id: d.id, data: { ...d.data(), currentJobCount: openJobCounts.get(d.id) ?? 0 } as FirebaseFirestore.DocumentData, technician: technicianProfiles.get(d.id) || {} }))
             .filter((tech) => evaluateTechnicianForTicket({
                 user: tech.data,
                 technician: tech.technician,
@@ -1149,7 +1170,8 @@ async function attemptAutoAssignment(ticketRef: admin.firestore.DocumentReferenc
                         transaction.get(technicianProfileRef),
                     ]);
                     const freshTicket = freshTicketSnap.data() || {};
-                    const freshTechnician = freshTechnicianSnap.data() || {};
+                    const openJobCount = await countOpenAssignedTicketsInTransaction(db, transaction, candidate.id, ticketId);
+                    const freshTechnician: FirebaseFirestore.DocumentData = { ...(freshTechnicianSnap.data() || {}), currentJobCount: openJobCount };
                     const freshProfile = freshProfileSnap.exists ? freshProfileSnap.data() || {} : {};
                     // A ticket that was cancelled, closed or disputed after dispatch read it must
                     // never be reactivated by an assignment (e.g. a delayed redispatch retry).
@@ -1182,7 +1204,8 @@ async function attemptAutoAssignment(ticketRef: admin.firestore.DocumentReferenc
                         updatedAt: FieldValue.serverTimestamp()
                     });
                     transaction.update(technicianRef, {
-                        currentJobCount: FieldValue.increment(1),
+                        // Reconciled: the real open count plus this assignment.
+                        currentJobCount: openJobCount + 1,
                         updatedAt: FieldValue.serverTimestamp(),
                     });
                     return true;
@@ -1922,6 +1945,13 @@ export const onApprovalStagnant = onSchedule({ schedule: "every 24 hours" }, asy
         const data = doc.data();
         if (data.ownerId) await dispatchOmniNotification(data.ownerId, "REMINDER: Quote Approval Required", `Mission #${doc.id.substring(0, 8)} is awaiting authorization.`);
     }
+});
+
+// A ticket deleted while it still occupied a technician (test teardown, data cleanup) gives the
+// slot back: the technician's counter is reset to the real open-ticket count, never below 0.
+export const onTicketDeletedReleaseCapacity = onDocumentDeleted({ document: "maintenanceTickets/{id}" }, async (event) => {
+    const result = await releaseCapacityForDeletedTicket(db, event.params.id, event.data?.data());
+    if (result) console.log(`[capacity] released ticket=${event.params.id} technician=${result.technicianId} currentJobCount=${result.currentJobCount}`);
 });
 
 export const redispatchWaitingTicketsSweep = onSchedule("every 15 minutes", async () => {

@@ -39,6 +39,12 @@ async function seed({ user = {}, technician = {}, ticket = {} } = {}) {
   await db.doc(`users/${TENANT}`).set({ role: 'tenant', displayName: 'Tenant Match' });
   await db.doc(`users/${TECH}`).set(userProfile(user));
   await db.doc(`technicians/${TECH}`).set(technicianProfile(technician));
+  // Capacity is judged on real open assigned tickets, so a seeded job count is backed by that
+  // many open tickets assigned to the technician.
+  const openJobs = Number(user.currentJobCount || 0);
+  for (let i = 0; i < openJobs; i += 1) {
+    await db.doc(`maintenanceTickets/open_job_${i}`).set({ assignedTechnicianId: TECH, technicianId: TECH, status: 'ASSIGNED', dispatchStatus: 'AUTO_ASSIGNED' });
+  }
   await db.doc(`maintenanceTickets/${TICKET}`).set({
     requesterRole: 'tenant', source: 'TENANT_SERVICE_TICKET_CALLABLE', tenantId: TENANT, tenantUid: TENANT,
     propertyId: 'property_dispatch_match', unitId: 'unit_dispatch_match', category: 'AC', priority: 'normal',
