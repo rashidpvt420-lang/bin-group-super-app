@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { calculateUaeQuote2026, resolveAssetClassIdForPropertyType } from '../utils/calculateUaeQuote2026';
-import type { QuoteOutput } from '../utils/calculateUaeQuote2026';
+import { calculateUaeQuote2026, resolveAssetClassIdForPropertyType, resolveMandatoryAddOns } from '../utils/calculateUaeQuote2026';
+import type { QuoteInput, QuoteOutput } from '../utils/calculateUaeQuote2026';
 
 const OWNER_PAGE_COUNT = 5;
 const createOnboardingSessionId = () => {
@@ -38,7 +38,8 @@ export interface PropertyData {
   offices: number;
   rooms: number;
   sqft: number;
-  age: number;
+  /** Building age in years; undefined until the owner enters it (0 = new build). */
+  age?: number;
   annualRent?: number;
   annualRevenue?: number;
   pool: boolean;
@@ -199,13 +200,17 @@ const zeroClientQuote = (reason: string): QuoteOutput => ({
   riskFlags: [reason],
 });
 
-const calculatePropertyAnnualValue = (property: PropertyData, selectedAddOns: string[]): QuoteOutput => {
+/**
+ * The exact engine input used to price one property (client quote, page-2 add-on list and page-3 summary).
+ * Returns null when the property has no separate BIN GROUP pricing scope.
+ */
+export const buildPropertyQuoteInput = (property: PropertyData, selectedAddOns: string[]): Partial<QuoteInput> | null => {
   const mosqueProfile = property.mosqueProfile || {};
   const gymProfile = property.gymProfile || {};
   const isMosque = isMosqueAsset(property);
   const isGym = property.propertyType === 'Gym / Fitness Centre';
   if (isGym && String(gymProfile.scopeMode || '').toUpperCase() === 'GYM_WITHIN_PARENT_ASSET' && gymProfile.separateBinScope !== true) {
-    return zeroClientQuote('Gym is included in its parent asset and has no separate BIN GROUP pricing scope.');
+    return null;
   }
 
   const assetClassId = isMosque ? 'mosque_fm' : (resolveAssetClassIdForPropertyType(property.propertyType, property.assetGrade) || '');
@@ -229,7 +234,7 @@ const calculatePropertyAnnualValue = (property: PropertyData, selectedAddOns: st
     }
   }
 
-  return calculateUaeQuote2026({
+  return {
     assetClassId,
     emirate: emirateMap[property.emirate] || property.emirate || '',
     area: (property as any).area || (property as any).community || (property as any).city || '',
@@ -262,7 +267,19 @@ const calculatePropertyAnnualValue = (property: PropertyData, selectedAddOns: st
     gymComplexity: isGym ? (gymProfile.verifiedComplexity || gymProfile.suggestedComplexity || 'STANDARD_DRY') : undefined,
     gymOpeningSchedule: isGym ? (gymProfile.openingSchedule || 'STANDARD_HOURS') : undefined,
     gymEquipmentCount: isGym ? Number(gymProfile.equipmentCount || 0) : 0,
-  });
+  };
+};
+
+const calculatePropertyAnnualValue = (property: PropertyData, selectedAddOns: string[]): QuoteOutput => {
+  const input = buildPropertyQuoteInput(property, selectedAddOns);
+  if (!input) return zeroClientQuote('Gym is included in its parent asset and has no separate BIN GROUP pricing scope.');
+  return calculateUaeQuote2026(input);
+};
+
+/** Add-ons the pricing engine always charges for this property, derived from its systems (same rule as the server quote). */
+export const resolvePropertyMandatoryAddOns = (property: PropertyData): string[] => {
+  const input = buildPropertyQuoteInput(property, []);
+  return input ? resolveMandatoryAddOns(input as QuoteInput) : [];
 };
 
 // Safe blank asset. Never seed pricing drivers from guesses or legacy demo values.
@@ -270,7 +287,7 @@ const calculatePropertyAnnualValue = (property: PropertyData, selectedAddOns: st
 const defaultProperty: PropertyData = {
   id: '', emirate: '', area: '', zone: 'B', propertyType: '', subType: '',
   useType: '', ownerType: '', floors: 0, units: 0, bedrooms: 0, bathrooms: 0,
-  shops: 0, offices: 0, rooms: 0, sqft: 0, age: 0, pool: false, lifts: 0, tank: false,
+  shops: 0, offices: 0, rooms: 0, sqft: 0, age: undefined, pool: false, lifts: 0, tank: false,
   bmu: false, sira: false, fireAlarm: false, firePump: false, escalators: false, centralLPG: false,
   wasteMan: false, gen: false, hvac: false, districtCooling: false, electrical: false, plumbing: false,
   drainage: false, pumps: false, emergencyLighting: false, accessControl: false, bms: false, iotSensors: false,

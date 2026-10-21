@@ -216,7 +216,8 @@ const VALID_GYM_COMPLEXITY = new Set(['STANDARD_DRY', 'ENHANCED', 'WET_RECOVERY'
 const VALID_GYM_OPENING_SCHEDULES = new Set(['STANDARD_HOURS', 'EXTENDED_HOURS', '24_7']);
 const QUARTERLY_BILLING_SURCHARGE = 0.03;
 const MONTHLY_BILLING_SURCHARGE = 0.06;
-const SYSTEM_DRIVEN_ADDON_IDS = new Set([
+/** Add-ons the engine derives from the property systems; an owner cannot add or drop them by hand. */
+export const SYSTEM_DRIVEN_ADDON_IDS: ReadonlySet<string> = new Set([
   'fire_safety', 'water_tank', 'elevator_amc', 'hvac_pm',
   'sira_renewal', 'facade_access', 'façade_access', 'pca_audit', 'pool_care',
 ]);
@@ -484,8 +485,8 @@ export function resolveMandatoryAddOns(input: QuoteInput): string[] {
   if (MULTI_STOREY_ASSET_IDS.has(asset) && safeInput.liftsUnknown) ids.add('elevator_amc');
   if (safeInput.hasSiraCctv) ids.add('sira_renewal');
   if (safeInput.hasBmu) ids.add('facade_access');
-  // Blank age is priced as 15+ (safe side), so the mandatory 15+ asset audit is included too.
-  if (safeInput.propertyAge > 15 || safeInput.propertyAgeUnknown) ids.add('pca_audit');
+  // Founder decision 2026-10-21: the condition audit applies only to buildings over 15 years old; age is required upstream.
+  if (!safeInput.propertyAgeUnknown && safeInput.propertyAge > 15) ids.add('pca_audit');
   if (safeInput.hasPool) ids.add('pool_care');
   if (safeInput.hasCentralHVAC || (safeInput.hvacCount || 0) > 0) ids.add('hvac_pm');
   return Array.from(ids);

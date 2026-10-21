@@ -71,6 +71,12 @@ const addOnLabels: Record<string, LocalText> = {
     move_in_out_inspection: { en: 'Move-in / Move-out Inspection', ar: 'فحص الدخول / الخروج' },
     mep_support: { en: 'MEP Support', ar: 'دعم MEP' },
     waste_management: { en: 'Waste Management', ar: 'إدارة النفايات' },
+    security: { en: 'Security Services / CCTV', ar: 'خدمات أمن / كاميرات' },
+    sira_renewal: { en: 'SIRA / CCTV Compliance Renewal', ar: 'تجديد امتثال SIRA / الكاميرات' },
+    facade_access: { en: 'Façade Access / BMU Service', ar: 'خدمة الوصول للواجهة / BMU' },
+    pca_audit: { en: 'Property Condition Audit (15+ years)', ar: 'تدقيق حالة العقار (15+ سنة)' },
+    pool_care: { en: 'Swimming Pool Care', ar: 'العناية بالمسبح' },
+    emergency_priority: { en: 'Emergency Priority Response', ar: 'استجابة طوارئ ذات أولوية' },
 };
 
 const ppmTextByTier: Record<string, LocalText> = {

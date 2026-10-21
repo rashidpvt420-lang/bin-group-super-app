@@ -13,6 +13,7 @@ import type { PropertyData } from '../../store/onboardingStore';
 import { ASSET_PROFILE_PROPERTY_TYPES } from '../../utils/calculateUaeQuote2026';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
+import { hasValidBuildingAge, MAX_BUILDING_AGE_YEARS, parseBuildingAgeInput } from './buildingAge';
 import { auth, functions, getDownloadURL, ref, storage, uploadBytes } from '../../lib/firebase';
 
 const UAE_EMIRATES = ['Abu Dhabi', 'Dubai', 'Sharjah', 'Ajman', 'Umm Al Quwain', 'Ras Al Khaimah', 'Fujairah'];
@@ -73,7 +74,7 @@ const suggestedGymComplexity = (profile: Record<string, any>) => {
 };
 
 const blankAssetCard = (): Partial<PropertyData> => ({
-  emirate: '', area: '', address: '', propertyType: '', subType: '', floors: 0, units: 0, sqft: 0, age: 0,
+  emirate: '', area: '', address: '', propertyType: '', subType: '', floors: 0, units: 0, sqft: 0, age: undefined,
   annualRent: undefined, annualRevenue: undefined, assetGrade: 'Standard', majlis: false, majlisType: 'none',
   ownerType: 'Private', useType: 'Rental', missions: [],
 });
@@ -140,6 +141,7 @@ const AssetProfileStep: React.FC<{ onNext: () => void; onBack?: () => void }> = 
   const [scanning, setScanning] = useState(false);
   const [ocrError, setOcrError] = useState('');
   const [validationError, setValidationError] = useState('');
+  const [ageDrafts, setAgeDrafts] = useState<Record<number, string>>({});
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' });
 
   React.useEffect(() => { if (!properties.length) addProperty(blankAssetCard()); }, [properties.length, addProperty]);
@@ -174,10 +176,23 @@ const AssetProfileStep: React.FC<{ onNext: () => void; onBack?: () => void }> = 
     ['Farm / Estate', 'Farm / Estate', 'مزرعة / عزبة', Home, 'Estate'],
   ] as const;
 
+  const ageDraft = ageDrafts[activeIndex] ?? (hasValidBuildingAge(active?.age) ? String(active.age) : '');
+  const ageParse = parseBuildingAgeInput(ageDraft);
+  const ageHelper = ageParse.ok
+    ? (ageParse.fromYear !== undefined ? label(`Built ${ageParse.fromYear} → ${ageParse.age} years`, `بُني ${ageParse.fromYear} ← ${ageParse.age} سنة`) : label(`${ageParse.age} years`, `${ageParse.age} سنة`))
+    : ageDraft ? label(`Enter 0–${MAX_BUILDING_AGE_YEARS} years or a year built (e.g. 2012)`, `أدخل 0–${MAX_BUILDING_AGE_YEARS} سنة أو سنة البناء (مثال 2012)`) : label('Required. Enter years (0 for a new building) or the year built.', 'مطلوب. أدخل عدد السنوات (0 للمبنى الجديد) أو سنة البناء.');
+  const setAgeInput = (raw: string) => {
+    const cleaned = raw.replace(/[^0-9]/g, '').slice(0, 4);
+    setAgeDrafts((drafts) => ({ ...drafts, [activeIndex]: cleaned }));
+    const parsed = parseBuildingAgeInput(cleaned);
+    setProperty({ age: parsed.ok ? parsed.age : undefined });
+  };
+
   const warningsFor = (property: PropertyData) => {
     const warnings: string[] = [];
     if (!ASSET_TYPE_IDS.has(property.propertyType)) warnings.push(label('asset type', 'نوع العقار'));
     if (!UAE_EMIRATES.includes(property.emirate)) warnings.push(label('emirate', 'الإمارة'));
+    if (!hasValidBuildingAge(property.age) && !hasValidBuildingAge((property as any).mosqueProfile?.propertyAgeYears)) warnings.push(label('building age (years or year built)', 'عمر المبنى (بالسنوات أو سنة البناء)'));
     if (SQFT_PRICED_TYPES.has(property.propertyType) && !(Number(property.sqft) > 0)) warnings.push(label('measured service area', 'مساحة الخدمة المقاسة'));
     if (UNIT_PRICED_TYPES.has(property.propertyType) && !(Number(property.units) > 0)) warnings.push(unitsLabel(property.propertyType, ar));
     if (property.propertyType === 'Gym / Fitness Centre') {
@@ -257,6 +272,7 @@ const AssetProfileStep: React.FC<{ onNext: () => void; onBack?: () => void }> = 
   const removeActive = () => {
     if (properties.length <= 1) return;
     removeProperty(activeIndex);
+    setAgeDrafts({});
     setActiveIndex(Math.max(0, activeIndex - 1));
   };
   const continuePortfolio = () => {
@@ -315,7 +331,7 @@ const AssetProfileStep: React.FC<{ onNext: () => void; onBack?: () => void }> = 
                 <Grid item xs={6}><TextField fullWidth type="number" label={unitsLabel(active.propertyType, ar)} helperText={isEventOperations ? label('Operational capacity only — does not affect base FM price', 'السعة التشغيلية فقط — لا تؤثر على سعر إدارة المرافق الأساسي') : isGym ? label('Information only — does not multiply Gym pricing', 'للمعلومات فقط — لا تضاعف سعر النادي') : undefined} value={Number(active.units) > 0 ? active.units : ''} onChange={(event) => { const value = Math.max(0, Number(event.target.value)); if (isGym) updateGym({ maxLicensedCapacity: value }); else setProperty({ units: value }); }} /></Grid>
                 <Grid item xs={6}><TextField fullWidth type="number" label={isGym ? label('Floors occupied', 'الطوابق المشغولة') : label('Floors', 'الطوابق')} value={Number(active.floors) > 0 ? active.floors : ''} onChange={(event) => setProperty({ floors: Math.max(0, Number(event.target.value)) })} /></Grid>
                 <Grid item xs={6}><TextField fullWidth required={SQFT_PRICED_TYPES.has(active.propertyType)} type="number" label={label('Measured service area (sq ft)', 'مساحة الخدمة المقاسة (قدم²)')} helperText={isEventOperations ? label('Required for the FM quote — measured service area is the pricing driver', 'مطلوبة لعرض إدارة المرافق — مساحة الخدمة المقاسة هي عامل التسعير') : undefined} value={Number(active.sqft) > 0 ? active.sqft : ''} onChange={(event) => { const value = Math.max(0, Number(event.target.value)); if (isGym) updateGym({ declaredServiceAreaSqft: value }); else setProperty({ sqft: value }); }} /></Grid>
-                <Grid item xs={6}><TextField fullWidth type="number" label={label('Property age (years)', 'عمر العقار (سنوات)')} value={active.age || 0} onChange={(event) => setProperty({ age: Math.max(0, Number(event.target.value)) })} /></Grid>
+                <Grid item xs={6}><TextField fullWidth required inputMode="numeric" label={label('Building age (years) or year built', 'عمر المبنى (سنوات) أو سنة البناء')} value={ageDraft} error={Boolean(ageDraft) && !ageParse.ok} helperText={ageHelper} inputProps={{ inputMode: 'numeric', pattern: '[0-9]*', maxLength: 4 }} onChange={(event) => setAgeInput(event.target.value)} /></Grid>
                 {!isGym && !isEventOperations && <Grid item xs={12}><TextField fullWidth type="number" label={label('Annual rent / managed revenue (AED) — required only for PM', 'الإيجار / الإيراد السنوي المدار (درهم) — مطلوب فقط للإدارة')} value={active.annualRent ?? ''} onChange={(event) => setProperty({ annualRent: event.target.value === '' ? undefined : Math.max(0, Number(event.target.value)) })} /></Grid>}
                 <Grid item xs={12}><TextField fullWidth select label={label('Asset grade', 'درجة العقار')} value={active.assetGrade || 'Standard'} onChange={(event) => setProperty({ assetGrade: event.target.value as any })}><MenuItem value="Standard">{label('Standard', 'قياسي')}</MenuItem><MenuItem value="Premium">{label('Premium', 'مميز')}</MenuItem><MenuItem value="Luxury">{label('Luxury', 'فاخر')}</MenuItem><MenuItem value="Ultra-Luxury">{label('Ultra-Luxury', 'فائق الفخامة')}</MenuItem><MenuItem value="Sovereign">{label('Sovereign', 'سيادي')}</MenuItem></TextField></Grid>
               </Grid>

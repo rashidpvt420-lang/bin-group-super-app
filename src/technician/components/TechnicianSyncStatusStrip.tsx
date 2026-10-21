@@ -47,19 +47,23 @@ export default function TechnicianSyncStatusStrip() {
   const total = actionCount + evidenceCount;
   const copy = lang === 'ar'
     ? {
-        clear: 'تمت مزامنة إجراءات وصور الفني المسجلة على هذا الجهاز.',
-        pending: `${actionCount} إجراء و ${evidenceCount} صورة بانتظار المزامنة.`,
-        offline: 'أنت دون اتصال. يتم حفظ الدليل المدعوم محلياً، ولا يعتبر مُرسلاً حتى تؤكد الخوادم المزامنة.',
-        completion: 'لا يتم اعتماد إكمال المهمة تلقائياً من قائمة الانتظار. يجب تأكيد الإكمال بعد ظهور الدليل المتزامن.',
-        open: 'فتح قائمة المزامنة',
+        clear: 'تم إرسال كل التحديثات.',
+        pending: `${actionCount + evidenceCount} تحديث بانتظار الإرسال.`,
+        offline: 'أنت غير متصل. نحفظ صورك على هذا الهاتف ونرسلها عند عودة الاتصال.',
+        completion: 'أنهِ المهمة فقط بعد ظهور صورك كمُرسلة.',
+        open: 'عرض',
       }
     : {
-        clear: 'Technician actions and photo evidence recorded on this device are synchronized.',
-        pending: `${actionCount} action${actionCount === 1 ? '' : 's'} and ${evidenceCount} photo${evidenceCount === 1 ? '' : 's'} are waiting to sync.`,
-        offline: 'You are offline. Supported evidence is saved on this device and is not treated as sent until server synchronization succeeds.',
-        completion: 'Mission completion is never auto-confirmed from the queue. Complete the mission only after synchronized evidence appears on the server-backed job.',
-        open: 'Open sync queue',
+        clear: 'All updates sent.',
+        pending: `${actionCount + evidenceCount} update${actionCount + evidenceCount === 1 ? '' : 's'} waiting to send. They'll send when you're online.`,
+        offline: "You're offline. Photos are saved on this phone and sent when you're back online.",
+        // Queued items never complete a job on their own: the server copy is the only truth.
+        completion: 'Finish the job only after your photos show as sent.',
+        open: 'View',
       };
+
+  // Redesign R3: no banner when everything is sent; show it only when something is waiting or offline.
+  if (online && total === 0) return null;
 
   return (
     <Alert
@@ -74,7 +78,7 @@ export default function TechnicianSyncStatusStrip() {
         <Box>
           <Stack direction="row" spacing={1} alignItems="center">
             <SafeIcon icon={Images} size={16} />
-            <Typography sx={{ fontWeight: 950 }}>{total > 0 ? copy.pending : copy.clear}</Typography>
+            <Typography sx={{ fontWeight: 800 }}>{total > 0 ? copy.pending : copy.clear}</Typography>
           </Stack>
           <Typography variant="caption" sx={{ display: 'block', mt: 0.5 }}>
             {!online ? copy.offline : copy.completion}
