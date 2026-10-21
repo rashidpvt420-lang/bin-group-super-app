@@ -1089,7 +1089,7 @@ async function attemptAutoAssignment(ticketRef: admin.firestore.DocumentReferenc
         const propertyGeo = normalizeGeo(propertyData || ticketData);
         const contextUpdate = {
             companyId: ticketData.companyId || propertyData?.companyId || "BIN_GROUP",
-            tenantPhone: requesterData?.phone || requesterData?.phoneNumber || ticketData.tenantPhone || "N/A",
+            tenantPhone: requesterData?.phone || requesterData?.phoneNumber || ticketData.tenantPhone || null,
             ownerId: propertyData?.ownerId || ticketData.ownerId || null,
             emirate: propertyGeo?.emirate || propertyData?.emirate || ticketData.emirate || requesterData?.emirate || "",
             city: propertyGeo?.city || propertyData?.city || ticketData.city || "",

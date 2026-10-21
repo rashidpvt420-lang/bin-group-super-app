@@ -15,6 +15,7 @@ import {
 } from '@mui/material';
 import { useNavigate, useParams } from 'react-router-dom';
 import { AlertTriangle, Check, ChevronLeft, CloudOff, MapPin, MessageSquare, Navigation, Phone, Play, ShieldCheck } from 'lucide-react';
+import { isJobContactWindowOpen, openContactUrl, resolveJobContact, telHref, whatsAppHref } from '../../lib/jobContact';
 import { db, doc, functions, getNativeAndroidLocationIntegrityProof, httpsCallable, onSnapshot, serverTimestamp, updateDoc } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
 import { useLanguage } from '../../context/LanguageContext';
@@ -519,7 +520,15 @@ export default function TechnicianJobDetailPage() {
         );
     }
 
-    const contactPhone = ticket.tenantPhone || ticket.ownerPhone || ticket.requesterPhone;
+    const jobContact = resolveJobContact(ticket);
+    const contactWindowOpen = isJobContactWindowOpen(status);
+    const contactPhone = contactWindowOpen ? jobContact?.phone || '' : '';
+    const contactRoleLabel = ({
+        onsite: isRTL ? 'جهة الاتصال في الموقع' : 'On-site contact',
+        tenant: isRTL ? 'المستأجر' : 'Tenant',
+        owner: isRTL ? 'المالك' : 'Owner',
+        requester: isRTL ? 'مقدم الطلب' : 'Requester',
+    } as const)[jobContact?.role || 'tenant'];
     const requesterName = ticket.tenantName || ticket.ownerName || 'Resident';
     const serviceLocationDetail = ticket.serviceLocationDetail || ticket.specificLocation || ticket.roomLocation || ticket.assetLocation || '';
 
@@ -553,7 +562,7 @@ export default function TechnicianJobDetailPage() {
                             <Grid item xs={12} md={6}>
                                 <Typography variant="caption" color="textSecondary">{tx('tech.job.resident', 'Resident')}</Typography>
                                 <Typography variant="h6" fontWeight="900" color={JOB_READABLE.ink}>{requesterName}</Typography>
-                                <Typography variant="body2" color="textSecondary">{contactPhone || tx('tech.job.phone_unavailable', 'Phone not available')}</Typography>
+                                <Typography variant="body2" color="textSecondary">{contactPhone ? `${contactRoleLabel}: +${contactPhone}` : contactWindowOpen ? tx('tech.job.phone_unavailable', 'Phone not available') : (isRTL ? 'الاتصال متاح فقط أثناء المهمة النشطة' : 'Contact details are shown only while the job is active')}</Typography>
                             </Grid>
                             <Grid item xs={12} md={6}>
                                 <Typography variant="caption" color="textSecondary">{tx('tech.job.property_unit', 'Property / Unit')}</Typography>
@@ -666,9 +675,9 @@ export default function TechnicianJobDetailPage() {
                         <Paper sx={{ p: 3, bgcolor: JOB_READABLE.surface, border: `1px solid ${JOB_READABLE.line}`, borderRadius: 5 }}>
                             <Typography variant="overline" sx={{ color: JOB_READABLE.gold, fontWeight: 950 }}>{tx('tech.job.contact', 'Contact')}</Typography>
                             <Stack spacing={1.5} sx={{ mt: 2 }}>
-                                <Button fullWidth variant="outlined" startIcon={<MessageSquare />} onClick={() => navigate(`/technician/chat/${id}`)} sx={{ color: JOB_READABLE.gold, borderColor: alpha(binThemeTokens.gold, 0.6), fontWeight: 950 }}>{tx('tech.job.chat_tenant', 'Chat with Tenant')}</Button>
-                                <Button fullWidth variant="outlined" disabled={!contactPhone} startIcon={<Phone />} onClick={() => window.open(`tel:${contactPhone}`)} sx={{ color: JOB_READABLE.ink, borderColor: JOB_READABLE.control, fontWeight: 950 }}>{tx('tech.job.call_tenant', 'Call Tenant')}</Button>
-                                <Button fullWidth variant="outlined" disabled={!contactPhone} startIcon={<MessageSquare />} onClick={() => window.open(`https://wa.me/${String(contactPhone).replace(/\D/g, '')}`, '_blank')} sx={{ color: JOB_READABLE.green, borderColor: alpha('#25D366', 0.7), fontWeight: 950 }}>{tx('tech.job.whatsapp_tenant', 'WhatsApp Tenant')}</Button>
+                                <Button fullWidth variant="outlined" startIcon={<MessageSquare />} onClick={() => navigate(`/technician/chat/${id}`)} sx={{ color: JOB_READABLE.gold, borderColor: alpha(binThemeTokens.gold, 0.6), fontWeight: 950 }}>{isRTL ? 'محادثة داخل التطبيق' : 'Chat in app'}</Button>
+                                {contactWindowOpen && <Button fullWidth variant="outlined" disabled={!contactPhone} startIcon={<Phone />} onClick={() => openContactUrl(telHref(contactPhone))} sx={{ color: JOB_READABLE.ink, borderColor: JOB_READABLE.control, fontWeight: 950 }}>{isRTL ? `اتصال: ${contactRoleLabel}` : `Call ${contactRoleLabel}`}</Button>}
+                                {contactWindowOpen && <Button fullWidth variant="outlined" disabled={!contactPhone} startIcon={<MessageSquare />} onClick={() => openContactUrl(whatsAppHref(contactPhone))} sx={{ color: JOB_READABLE.green, borderColor: alpha('#25D366', 0.7), fontWeight: 950 }}>{isRTL ? `واتساب: ${contactRoleLabel}` : `WhatsApp ${contactRoleLabel}`}</Button>}
                                 <Button fullWidth variant="outlined" startIcon={<ShieldCheck />} onClick={() => navigate('/technician/support')} sx={{ color: JOB_READABLE.ink, borderColor: JOB_READABLE.control, fontWeight: 950 }}>{tx('tech.job.contact_admin', 'Contact Operations Base')}</Button>
                             </Stack>
                         </Paper>
