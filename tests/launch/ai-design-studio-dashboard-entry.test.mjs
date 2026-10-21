@@ -30,6 +30,9 @@ test('owner and tenant default dashboards expose AI Design Studio', async () => 
 
   assert.ok(ownerApp.includes('<Route path="/design-studio" element={<DesignStudioPage />} />'));
   assert.ok(tenantApp.includes('<Route path="/design-studio" element={<DesignStudioPage />} />'));
-  assert.ok(ownerHome.includes('<RoleQuickActionsPanel role="owner"'));
+  // 2026-10-21 redesign: the owner home reaches AI Design Studio through the single FAB menu.
+  const roleNav = await read('src/components/ui/roleNav.ts');
+  assert.match(roleNav.split('  owner: [')[2] || '', /path: '\/owner\/design-studio'/);
+  assert.ok(ownerHome.includes("from '../../components/ui'"));
   assert.match(tenantHome, /<RoleQuickActionsPanel\s+role="tenant"/);
 });
