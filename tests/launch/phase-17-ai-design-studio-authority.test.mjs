@@ -7,7 +7,7 @@ const read = (path) => readFile(path, 'utf8');
 test('Phase 17 Owner Tenant and Admin Design Studio callables enforce App Check and server roles', async () => {
   const [studio, compat, payments] = await Promise.all([read('functions/aiDesignStudio.ts'), read('functions/aiDesignStudioCompat.ts'), read('functions/designPayments.ts')]);
   assert.match(studio, /enforceAppCheck:\s*true/);
-  assert.ok(studio.includes('new Set(["owner", "tenant", "admin", "super_admin", "ceo", "operations_admin"])'));
+  assert.ok(studio.includes('new Set(["owner", "tenant", "broker", "admin", "super_admin", "ceo", "operations_admin"])'));
   assert.match(compat, /enforceAppCheck:\s*true/);
   assert.ok(compat.includes('new Set(["admin", "super_admin", "ceo", "operations_admin"])'));
   assert.match(payments, /enforceAppCheck:\s*true/);
@@ -55,7 +55,7 @@ test('Phase 17 private reference and generated media are server-only and digest-
 
 test('Phase 17 canonical quote Owner approval payment verification and engineer handoff stay server-only', async () => {
   const [studio, payments, rules] = await Promise.all([read('functions/aiDesignStudio.ts'), read('functions/designPayments.ts'), read('firestore.rules')]);
-  for (const token of ['SERVER_CALCULATED_DESIGN_STUDIO_V1','quoteHash','mobilizationPercent: 15','design_quotes','design_approvals']) assert.ok(studio.includes(token));
+  for (const token of ['SERVER_CALCULATED_DESIGN_STUDIO_V1','quoteHash','mobilizationPercent: r.mobilizationPercent','design_quotes','design_approvals']) assert.ok(studio.includes(token));
   for (const token of ['submitDesignOwnerDecision','createDesignPaymentRequest','adminReviewDesignPayment','adminHandoffDesignRequest','paymentVerified','ENGINEER_REVIEW','READY_FOR_SCOPE_REVIEW']) assert.ok(payments.includes(token));
   for (const collection of ['design_requests','design_quotes','design_approvals']) {
     const start = rules.indexOf('match /' + collection + '/');

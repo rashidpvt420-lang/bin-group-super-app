@@ -223,6 +223,7 @@ const roleCases: RoleCase[] = [
     routes: [
       '/broker/dashboard',
       '/broker/dashboard/full',
+      '/broker/design-studio',
       '/broker/leads',
       '/broker/leads/new',
       '/broker/referrals',
