@@ -66,5 +66,5 @@ test('home gold text uses the readable gold ink on the white shell (>= 4.5:1)', 
   assert.doesNotMatch(home, /binThemeTokens\.(gold|goldHover)\b/, 'no raw gold text on the home');
   assert.match(home, /from '\.\.\/\.\.\/theme\/uiTokens'/);
   assert.doesNotMatch(card, /[^a-zA-Z]color: binThemeTokens\.goldHover/, 'break/resume button text is not goldHover');
-  assert.ok(card.includes("color: '#7A5C12', fontWeight: 950"));
+  assert.ok(card.includes("color: '#7A5C12', fontWeight: 800"));
 });

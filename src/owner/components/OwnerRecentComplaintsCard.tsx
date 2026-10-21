@@ -38,8 +38,8 @@ export default function OwnerRecentComplaintsCard() {
   return (
     <Paper data-testid="owner-recent-complaints" sx={{ p: { xs: 2.5, md: 3 }, borderRadius: 5, border: `1px solid ${alpha(binThemeTokens.gold, 0.18)}` }}>
       <Stack direction={isRTL ? 'row-reverse' : 'row'} justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
-        <Typography sx={{ color: binThemeTokens.textPrimary, fontWeight: 950 }}>{tx('owner.recentComplaints.title', 'Latest complaints')}</Typography>
-        <Button onClick={() => navigate('/owner/tickets')} sx={{ color: binThemeTokens.goldText, fontWeight: 900 }}>{tx('owner.recentComplaints.viewAll', 'View all')}</Button>
+        <Typography sx={{ color: binThemeTokens.textPrimary, fontWeight: 800 }}>{tx('owner.recentComplaints.title', 'Latest complaints')}</Typography>
+        <Button onClick={() => navigate('/owner/tickets')} sx={{ color: binThemeTokens.goldText, fontWeight: 800 }}>{tx('owner.recentComplaints.viewAll', 'View all')}</Button>
       </Stack>
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
       {loading && !error && <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary }}>{tx('owner.recentComplaints.loading', 'Loading complaints…')}</Typography>}
@@ -56,7 +56,7 @@ export default function OwnerRecentComplaintsCard() {
           >
             <Stack direction={isRTL ? 'row-reverse' : 'row'} justifyContent="space-between" alignItems="flex-start" spacing={1}>
               <Box sx={{ minWidth: 0 }}>
-                <Typography sx={{ color: binThemeTokens.textPrimary, fontWeight: 900, wordBreak: 'break-word' }}>
+                <Typography sx={{ color: binThemeTokens.textPrimary, fontWeight: 800, wordBreak: 'break-word' }}>
                   {ticket.category || tx('owner.recentComplaints.maintenance', 'Maintenance')}{ticket.description ? ` — ${ticket.description}` : ''}
                 </Typography>
                 <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary }}>
