@@ -22,3 +22,4 @@ export { ownerRecordLeaseAgreement } from './leaseAgreements';
 export { ownerProposeLeaseRenewal, tenantRespondLeaseRenewal } from './leaseRenewals';
 export { onLeaseRenewalDeclinedMarkVacating, onMoveOutInspectionMarkVacating, markEndedLeasesVacant, ownerPrepareUnitListing } from './unitVacancy';
 export { notifyBrokersOfNewVacancy } from './brokerVacancyAlerts';
+export { ownerInviteTenantToUnit, ownerListTenantInvitations } from './ownerTenantInvites';
