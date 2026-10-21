@@ -15,6 +15,7 @@ import { useRole } from '../../context/RoleContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { useLanguage } from '../../context/LanguageContext';
 import { EMPTY_PROOF_FORM, tenantProofFormError, type TenantProofMethod } from '../tenantPaymentProof';
+import TenantRenewalOfferPanel from '../components/TenantRenewalOfferPanel';
 import TenantRentSchedulePanel, { type RentInstallment } from '../components/TenantRentSchedulePanel';
 
 type Payment = {
@@ -230,6 +231,7 @@ export default function TenantPaymentsPage() {
             </Box>
 
             {/* KPI Summary */}
+            {user?.uid && <TenantRenewalOfferPanel uid={user.uid} />}
             {user?.uid && (
                 <TenantRentSchedulePanel
                     uid={user.uid}

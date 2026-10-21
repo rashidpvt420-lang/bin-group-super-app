@@ -7,6 +7,7 @@ import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import OwnerRentScheduleDialog from '../components/OwnerRentScheduleDialog';
 import OwnerTenancyAgreementDialog from '../components/OwnerTenancyAgreementDialog';
+import OwnerLeaseRenewalDialog from '../components/OwnerLeaseRenewalDialog';
 
 type PropertyDoc = { id: string; propertyName?: string; name?: string; emirate?: string; ownerEmail?: string; ownerId?: string; ownerUid?: string };
 type UnitDoc = { id: string; propertyId?: string; propertyName?: string; unitNumber?: string; floor?: number; floorNumber?: number; tenantName?: string; tenantEmail?: string; occupancyStatus?: string; status?: string; tenantStatus?: string; maintenanceStatus?: string; rentAmount?: number; annualRent?: number };
@@ -44,6 +45,7 @@ export default function OwnerUnitRegistryPage() {
   const [loadFailed, setLoadFailed] = useState(false);
   const [scheduleUnit, setScheduleUnit] = useState<UnitDoc | null>(null);
   const [agreementUnit, setAgreementUnit] = useState<UnitDoc | null>(null);
+  const [renewalUnit, setRenewalUnit] = useState<UnitDoc | null>(null);
   const currentOwnerId = useRef(user?.uid || '');
   currentOwnerId.current = user?.uid || '';
   const submission = useRef<{ ownerId: string } | null>(null);
@@ -220,6 +222,7 @@ export default function OwnerUnitRegistryPage() {
                         <Stack direction="row" spacing={1}>
                           <Button size="small" variant="outlined" onClick={() => setAgreementUnit(unit)} sx={{ color: binThemeTokens.textPrimary, borderColor: binThemeTokens.gold, fontWeight: 900 }}>{tx('owner.units.agreement', 'Agreement')}</Button>
                           <Button size="small" variant="outlined" onClick={() => setScheduleUnit(unit)} sx={{ color: binThemeTokens.textPrimary, borderColor: binThemeTokens.gold, fontWeight: 900 }}>{tx('owner.units.rent_schedule', 'Rent schedule')}</Button>
+                          <Button size="small" variant="outlined" onClick={() => setRenewalUnit(unit)} sx={{ color: binThemeTokens.textPrimary, borderColor: binThemeTokens.gold, fontWeight: 900 }}>{tx('owner.units.renewal', 'Renewal')}</Button>
                         </Stack>
                       ) : null}
                     </TableCell>
@@ -232,6 +235,7 @@ export default function OwnerUnitRegistryPage() {
       )}
 
       {agreementUnit && <OwnerTenancyAgreementDialog open onClose={() => setAgreementUnit(null)} unit={agreementUnit as any} emirate={properties.find((p) => p.id === agreementUnit.propertyId)?.emirate} />}
+      {renewalUnit && <OwnerLeaseRenewalDialog open onClose={() => setRenewalUnit(null)} unit={renewalUnit as any} />}
       {scheduleUnit && <OwnerRentScheduleDialog open onClose={() => setScheduleUnit(null)} unit={scheduleUnit as any} />}
 
       <Dialog open={wizardOpen} onClose={() => setWizardOpen(false)} maxWidth="sm" fullWidth>
