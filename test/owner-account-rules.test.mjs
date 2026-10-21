@@ -38,3 +38,10 @@ test('page 1 resumes at the account section when an account exists', () => {
   assert.equal(initialOwnerSection(2, 2, true), 2);
 });
 
+
+test('confirm-password check requires identical entries', async () => {
+  const rules = await import('../src/components/onboarding/ownerAccountRules.ts');
+  assert.equal(rules.entriesMatch('Abcdef12', 'Abcdef12'), true);
+  assert.equal(rules.entriesMatch('Abcdef12', 'abcdef12'), false);
+  assert.equal(rules.entriesMatch('', 'x'), false);
+});

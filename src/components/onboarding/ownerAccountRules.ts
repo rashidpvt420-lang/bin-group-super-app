@@ -59,3 +59,6 @@ export function initialOwnerSection(page: number, requested: number | null, hasA
   if (requested !== null && requested !== undefined) return requested;
   return page === 1 && hasAccountContext ? 1 : 0;
 }
+
+/** UX check that the two typed entries are identical (client-side form validation only; not an auth decision). */
+export const entriesMatch = (first: string, second: string): boolean => first.length === second.length && first === second;

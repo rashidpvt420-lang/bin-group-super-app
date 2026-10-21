@@ -23,7 +23,7 @@ import { auth, functions, httpsCallable } from '../../lib/firebase';
 import { useOnboardingStore } from '../../store/onboardingStore';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
-import {
+import { entriesMatch,
     existingRoleConflict,
     OWNER_PASSWORD_MIN_LENGTH,
     passwordStrength,
@@ -155,7 +155,7 @@ export default function AccountCreationStep({ onBack, onNext, brokerUid = "" }: 
         if (!fullName || !mobile || !profileEmail) return copy('Complete your name, mobile and email in the previous section first.', 'أكمل الاسم والهاتف والبريد في القسم السابق أولاً.');
         if (!/^\S+@\S+\.\S+$/.test(profileEmail)) return errorText('onboarding.error.invalid_email', 'Enter a valid email address.');
         if (!strength.meetsMinimum) return errorText('onboarding.error.weak_password', 'Password must be at least 8 characters.');
-        if (password !== confirmPassword) return errorText('onboarding.error.password_mismatch', 'Passwords do not match.');
+        if (!entriesMatch(password, confirmPassword)) return errorText('onboarding.error.password_mismatch', 'Passwords do not match.');
         return null;
     };
 
