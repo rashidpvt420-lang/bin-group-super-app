@@ -4,7 +4,8 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
 const tokens = await readFile('src/theme/uiTokens.ts', 'utf8');
-const hex = (name) => { const m = tokens.match(new RegExp(`\\b${name}: '(#[0-9A-Fa-f]{6})'`)); assert.ok(m, `token ${name}`); return m[1]; };
+const TOKENS = Object.fromEntries([...tokens.matchAll(/\b(\w+): '(#[0-9A-Fa-f]{6})'/g)].map((m) => [m[1], m[2]]));
+const hex = (name) => { assert.ok(TOKENS[name], `token ${name}`); return TOKENS[name]; };
 const lum = (h) => { const c = h.slice(1).match(/../g).map((x) => parseInt(x, 16) / 255).map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4)); return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]; };
 const ratio = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((m, n) => n - m); return (x + 0.05) / (y + 0.05); };
 
