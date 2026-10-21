@@ -269,10 +269,15 @@ function PublicRouteNavigation() {
   return <NavigationControl />;
 }
 
+const AI_FAB_HIDDEN_PREFIXES = ['/onboarding', '/login'];
+
 function PublicSovereignAIEntry() {
   const location = useLocation();
   const isRolePortalRoute = ROLE_PORTAL_PREFIXES.some((prefix) => location.pathname === prefix || location.pathname.startsWith(`${prefix}/`));
   if (isRolePortalRoute) return null;
+  // Form routes keep the full width for inputs and the primary button; the FAB covered both on phones.
+  const hideOnFormRoute = AI_FAB_HIDDEN_PREFIXES.some((prefix) => location.pathname === prefix || location.pathname.startsWith(`${prefix}/`));
+  if (hideOnFormRoute) return null;
   return <SovereignAIChat role="unknown" allowLiveProvider={false} isAuthenticated={false} authUserId={null} />;
 }
 
