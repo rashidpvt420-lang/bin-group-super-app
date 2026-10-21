@@ -189,14 +189,14 @@ export default function OwnerComplaintPage() {
     return (
         <Box sx={{ maxWidth: 800, mx: 'auto', pb: 10 }}>
             <Stack direction="row" alignItems="center" spacing={2} sx={{ mb: 4 }}>
-                <IconButton aria-label="Back" onClick={() => navigate(-1)} sx={{ color: 'rgba(255,255,255,0.5)' }}>
+                <IconButton aria-label="Back" onClick={() => navigate(-1)} sx={{ color: binThemeTokens.textSecondary }}>
                     <ChevronLeft />
                 </IconButton>
                 <Box>
                     <Typography variant="overline" sx={{ color: binThemeTokens.goldText, fontWeight: 900, letterSpacing: 4 }}>
                         OWNER SERVICES
                     </Typography>
-                    <Typography variant="h4" fontWeight="950" color="#FFF">
+                    <Typography variant="h4" fontWeight="950" color={binThemeTokens.textPrimary}>
                         File a Complaint
                     </Typography>
                 </Box>

@@ -105,11 +105,11 @@ export default function OwnerTicketDetailPage() {
     if (unauthorized) return (
         <Box sx={{ textAlign: 'center', py: 10 }}>
             <AlertCircle size={48} color="#ef4444" style={{ margin: '0 auto 16px' }} />
-            <Typography variant="h6" color="#FFF" fontWeight="950">{tx('owner.ticket.unauthorized', 'Unauthorized')}</Typography>
+            <Typography variant="h6" color={binThemeTokens.textPrimary} fontWeight="950">{tx('owner.ticket.unauthorized', 'Unauthorized')}</Typography>
             <Typography variant="body2" color="textSecondary" sx={{ mb: 3 }}>
                 {tx('owner.ticket.unauthorized_desc', 'This ticket does not belong to your account.')}
             </Typography>
-            <Button onClick={() => navigate('/owner/tickets')} variant="outlined" sx={{ borderColor: 'rgba(255,255,255,0.2)', color: '#FFF', fontWeight: 950 }}>
+            <Button onClick={() => navigate('/owner/tickets')} variant="outlined" sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.textPrimary, fontWeight: 950 }}>
                 {tx('owner.ticket.back_to_tickets', 'Back to Tickets')}
             </Button>
         </Box>
@@ -118,14 +118,14 @@ export default function OwnerTicketDetailPage() {
     if (!ticket) return (
         <Box sx={{ textAlign: 'center', py: 10 }}>
             <AlertCircle size={48} color={binThemeTokens.gold} style={{ margin: '0 auto 16px' }} />
-            <Typography variant="h6" color="#FFF" fontWeight="950">
+            <Typography variant="h6" color={binThemeTokens.textPrimary} fontWeight="950">
                 {tx('owner.ticket.not_found', 'Ticket record was not found.')}
             </Typography>
             <Button
                 onClick={() => navigate('/owner/tickets')}
                 variant="outlined"
                 aria-label={tx('owner.ticket.back_to_tickets', 'Back to Tickets')}
-                sx={{ mt: 3, borderColor: 'rgba(255,255,255,0.2)', color: '#FFF', fontWeight: 950 }}
+                sx={{ mt: 3, borderColor: binThemeTokens.gold, color: binThemeTokens.textPrimary, fontWeight: 950 }}
             >
                 {tx('owner.ticket.back_to_tickets', 'Back to Tickets')}
             </Button>
