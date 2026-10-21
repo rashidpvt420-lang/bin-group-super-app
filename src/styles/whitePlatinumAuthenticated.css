@@ -94,3 +94,22 @@ body .MuiPopover-root .MuiListItemText-secondary {
 body .MuiDialog-root .MuiAlert-message .MuiTypography-root {
   color: inherit !important;
 }
+
+/* Owner portal readability safety net (OwnerApp root carries .owner-shell).
+   Form fields sit on the white canvas, so their text, labels and selects must
+   never inherit dark-theme white. Typography is fixed per page with theme tokens. */
+.owner-shell .MuiInputBase-input,
+.owner-shell .MuiSelect-select,
+.owner-shell input,
+.owner-shell textarea {
+  color: #111827 !important;
+  -webkit-text-fill-color: #111827 !important;
+}
+
+.owner-shell .MuiInputLabel-root:not(.Mui-focused):not(.Mui-error) {
+  color: #6B7280 !important;
+}
+
+.owner-shell .MuiOutlinedInput-notchedOutline {
+  border-color: #E5E7EB;
+}

@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { useUnifiedFab } from './ui/unifiedFab';
 import {
   Avatar,
   Box,
@@ -202,6 +203,14 @@ export const SovereignAIChat: React.FC<SovereignAIChatProps> = ({
 }) => {
   const { pageContext } = useAI();
   const [open, setOpen] = useState(false);
+  // Redesign R2: when the shell shows the single ActionFab, hide this launcher and open on its event.
+  const unifiedFab = useUnifiedFab();
+  useEffect(() => {
+    if (!unifiedFab) return undefined;
+    const openFromFab = () => setOpen(true);
+    window.addEventListener('bin:open-ai', openFromFab);
+    return () => window.removeEventListener('bin:open-ai', openFromFab);
+  }, [unifiedFab]);
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(false);
@@ -511,7 +520,7 @@ export const SovereignAIChat: React.FC<SovereignAIChatProps> = ({
 
   return (
     <>
-      <Portal>
+      {!unifiedFab && <Portal>
         <Fab
         data-testid="sovereign-ai-open"
         aria-label="Move or open Sovereign AI chat"
@@ -531,7 +540,7 @@ export const SovereignAIChat: React.FC<SovereignAIChatProps> = ({
           <Grip size={11} aria-hidden />
         </Stack>
         </Fab>
-      </Portal>
+      </Portal>}
 
       {isMobile ? (
         <SwipeableDrawer
