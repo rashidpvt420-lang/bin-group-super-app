@@ -20,3 +20,4 @@ export { sendMonthlyOwnerPropertyReports, rebuildMonthlyOwnerPropertyReports } f
 export { listUnifiedDocumentVault, getUnifiedDocumentFile } from './unifiedDocumentVault';
 export { ownerRecordLeaseAgreement } from './leaseAgreements';
 export { ownerProposeLeaseRenewal, tenantRespondLeaseRenewal } from './leaseRenewals';
+export { onLeaseRenewalDeclinedMarkVacating, onMoveOutInspectionMarkVacating, markEndedLeasesVacant, ownerPrepareUnitListing } from './unitVacancy';

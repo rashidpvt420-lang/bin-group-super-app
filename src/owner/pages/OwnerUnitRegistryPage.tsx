@@ -218,6 +218,9 @@ export default function OwnerUnitRegistryPage() {
                     <TableCell><Typography sx={{ color: unit.rentAmount || unit.annualRent ? '#047857' : binThemeTokens.textSecondary, fontWeight: 900 }}>{unit.rentAmount || unit.annualRent ? `AED ${Number(unit.rentAmount || unit.annualRent).toLocaleString()}` : '—'}</Typography></TableCell>
                     <TableCell><Stack direction="row" spacing={1} alignItems="center"><CheckCircle2 size={14} color={unit.maintenanceStatus === 'normal' ? '#047857' : '#92400e'} /><Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, fontWeight: 900 }}>{String(unit.maintenanceStatus || 'normal').replaceAll('_', ' ').toUpperCase()}</Typography></Stack></TableCell>
                     <TableCell>
+                      {statusOf(unit) === 'VACANT' || String((unit as any).occupancyStatus || '').toUpperCase() === 'VACATING' ? (
+                        <Button size="small" variant="contained" href={`/owner/find-room-rent?unitId=${encodeURIComponent(unit.id)}`} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 900, mr: 1 }}>{tx('owner.units.list_unit', 'List unit')}</Button>
+                      ) : null}
                       {(unit as any).tenantUid || (unit as any).tenantId || (unit as any).currentTenantId ? (
                         <Stack direction="row" spacing={1}>
                           <Button size="small" variant="outlined" onClick={() => setAgreementUnit(unit)} sx={{ color: binThemeTokens.textPrimary, borderColor: binThemeTokens.gold, fontWeight: 900 }}>{tx('owner.units.agreement', 'Agreement')}</Button>
