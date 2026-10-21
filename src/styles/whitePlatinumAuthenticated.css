@@ -106,7 +106,7 @@ body .MuiDialog-root .MuiAlert-message .MuiTypography-root {
   -webkit-text-fill-color: #111827 !important;
 }
 
-.owner-shell .MuiInputLabel-root:not(.Mui-focused):not(.Mui-error) {
+.owner-shell .MuiInputLabel-root:not(.Mui-focused, .Mui-error) {
   color: #6B7280 !important;
 }
 
