@@ -11,7 +11,7 @@ test('onboarding chips use AA gold text (goldText) on the forced-white onboardin
   const terms = await read('src/components/onboarding/CommercialTermsStep.tsx');
   assert.doesNotMatch(terms, /alpha\(binThemeTokens\.gold, 0\.12\), color: binThemeTokens\.gold,/);
   const asset = await read('src/components/onboarding/AssetProfileStep.tsx');
-  assert.doesNotMatch(asset, /variant="outlined" sx=\{\{ color: binThemeTokens\.gold,/);
+  assert.doesNotMatch(asset, /<Chip label=\{label\(`Suggested[^\n]*color: binThemeTokens\.gold,/);
 });
 
 test('company profile white sticky nav uses goldText for button labels', async () => {
