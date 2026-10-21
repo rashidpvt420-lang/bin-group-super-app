@@ -1,7 +1,8 @@
 import React from 'react';
 import { Alert, Box, Button, Chip, Container, LinearProgress, Stack, Step, StepLabel, Stepper, Typography } from '@mui/material';
+import { initialOwnerSection } from '../components/onboarding/ownerAccountRules';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Save, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, Languages, Save } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
 import { useRole } from '../context/RoleContext';
 import { useOnboardingStore } from '../store/onboardingStore';
@@ -24,9 +25,9 @@ const readable = (value: string | undefined, fallback: string) => (!value || val
 export default function PropertyOnboardingPage() {
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
-    const { t, isRTL, lang } = useLanguage();
+    const { t, isRTL, lang, toggleLanguage } = useLanguage();
     const { user } = useRole();
-    const { step, nextStep, prevStep, setStep, properties, intakeId } = useOnboardingStore();
+    const { step, nextStep, prevStep, setStep, properties, intakeId, ownerAccount } = useOnboardingStore();
     const signedInSession = Boolean(user?.uid) && !(user as { isAnonymous?: boolean } | null)?.isAnonymous;
     const label = React.useCallback((en: string, ar: string) => lang === 'ar' ? ar : en, [lang]);
     const brokerUid = String(searchParams.get('broker') || '').trim();
@@ -45,7 +46,7 @@ export default function PropertyOnboardingPage() {
         label('Submit for Visit', 'الإرسال للزيارة'),
     ];
     const sectionLabels: Record<number, string[]> = {
-        1: [label('Owner or company details', 'بيانات المالك أو الشركة'), label('Secure account verification', 'التحقق من الحساب الآمن')],
+        1: [label('Owner or company details', 'بيانات المالك أو الشركة'), label('Create your owner account', 'أنشئ حساب المالك')],
         2: [label('Property profile', 'ملف العقار'), label('Rooms, floor plan & property AI', 'الغرف والمخطط وذكاء العقار'), label('Property location and GPS', 'موقع العقار وGPS'), label('Systems and facilities', 'الأنظمة والمرافق')],
         3: [label('Service plan and commercial terms', 'خطة الخدمة والشروط التجارية'), label('Protected documents', 'المستندات المحمية')],
         4: [label('Review all details', 'مراجعة جميع البيانات'), label('Sign the property application', 'توقيع طلب العقار')],
@@ -56,10 +57,21 @@ export default function PropertyOnboardingPage() {
         if (step !== safePage) setStep(safePage);
         const requestedSection = requestedSectionRef.current;
         requestedSectionRef.current = null;
-        setSection(requestedSection ?? 0);
+        // Resume at the account section when an account exists (e.g. returning from the email link).
+        setSection(initialOwnerSection(safePage, requestedSection, Boolean(ownerAccount?.uid) || signedInSession));
         setGuardError('');
         window.scrollTo({ top: 0, behavior: 'smooth' });
     }, [safePage, setStep, step]);
+
+    // Auth resolves after mount: resume page 1 at the account section once, without fighting a later "Edit".
+    const autoResumedRef = React.useRef(false);
+    React.useEffect(() => {
+        if (autoResumedRef.current || safePage !== 1) return;
+        if (Boolean(ownerAccount?.uid) || signedInSession) {
+            autoResumedRef.current = true;
+            setSection((current) => (current === 0 ? 1 : current));
+        }
+    }, [ownerAccount?.uid, safePage, signedInSession]);
 
     const advancePage = () => {
         setGuardError('');
@@ -145,29 +157,24 @@ export default function PropertyOnboardingPage() {
     };
 
     return (
-        <Box className="white-platinum-onboarding" dir={isRTL ? 'rtl' : 'ltr'} sx={{ minHeight: '100dvh', bgcolor: '#FFFFFF', color: '#111827', py: { xs: 2, md: 4 } }}>
+        <Box className="white-platinum-onboarding" dir={isRTL ? 'rtl' : 'ltr'} sx={{ minHeight: '100dvh', bgcolor: '#FFFFFF', color: '#111827', py: { xs: 1.5, md: 4 } }}>
             <Container maxWidth="xl">
-                <Stack direction={isRTL ? 'row-reverse' : 'row'} justifyContent="space-between" alignItems="center" gap={2} sx={{ mb: 3 }}>
-                    <Button startIcon={<ArrowLeft size={18} style={{ transform: isRTL ? 'rotate(180deg)' : 'none' }} />} onClick={() => navigate('/')} sx={{ color: '#B8932F', fontWeight: 900 }}>{readable(t('onboarding.back_home'), label('Back Home', 'الرجوع للرئيسية'))}</Button>
-                    <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
-                        <Chip icon={<ShieldCheck size={15} />} label={`${label('Page', 'الصفحة')} ${safePage} / ${PAGE_COUNT}`} sx={{ fontWeight: 900 }} />
-                        {intakeId ? (
-                            <Chip icon={<Save size={15} />} label={label('Application reference saved', 'تم حفظ مرجع الطلب')} color="success" variant="outlined" />
-                        ) : signedInSession ? (
-                            <Chip icon={<Save size={15} />} label={label('Secure session active', 'الجلسة الآمنة نشطة')} color="success" variant="outlined" />
-                        ) : (
-                            <Chip icon={<Save size={15} />} label={label('Application in progress', 'الطلب قيد الإعداد')} variant="outlined" />
-                        )}
-                        {brokerUid && <Chip label={validBrokerUid ? label('Broker referral will lock after verified email', 'سيتم تثبيت إحالة الوسيط بعد التحقق من البريد') : label('Invalid Broker referral link', 'رابط إحالة وسيط غير صالح')} color={validBrokerUid ? 'info' : 'error'} variant="outlined" />}
+                <Stack direction={isRTL ? 'row-reverse' : 'row'} justifyContent="space-between" alignItems="center" gap={1} sx={{ mb: 2 }}>
+                    <Button startIcon={<ArrowLeft size={18} style={{ transform: isRTL ? 'rotate(180deg)' : 'none' }} />} onClick={() => navigate('/')} sx={{ color: '#7A5C12', fontWeight: 900, minWidth: 0 }}>{readable(t('onboarding.back_home'), label('Back Home', 'الرجوع للرئيسية'))}</Button>
+                    <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} alignItems="center">
+                        {intakeId && <Chip size="small" icon={<Save size={14} />} label={label('Saved', 'محفوظ')} color="success" variant="outlined" />}
+                        <Button size="small" variant="outlined" onClick={toggleLanguage} startIcon={<Languages size={16} />} aria-label={label('Switch to Arabic', 'التبديل إلى الإنجليزية')} sx={{ minWidth: 0, fontWeight: 900, borderRadius: 99 }}>{lang === 'ar' ? 'EN' : 'عربي'}</Button>
                     </Stack>
                 </Stack>
-                <Box sx={{ mb: 2, textAlign: 'center' }}>
-                    <Typography variant="h6" fontWeight={950}>{sectionLabels[safePage]?.[section] || pageLabels[safePage - 1]}</Typography>
-                    <Typography variant="caption" color="text.secondary">{label('Five clear pages. Payment is requested only after BIN GROUP completes the property visit.', 'خمس صفحات واضحة. يتم طلب الدفع فقط بعد إكمال BIN GROUP زيارة العقار.')}</Typography>
+                {brokerUid && <Chip size="small" sx={{ mb: 1.5 }} label={validBrokerUid ? label('Broker referral will lock after verified email', 'سيتم تثبيت إحالة الوسيط بعد التحقق من البريد') : label('Invalid Broker referral link', 'رابط إحالة الوسيط غير صالح')} color={validBrokerUid ? 'info' : 'warning'} />}
+                <Stepper activeStep={safePage - 1} alternativeLabel sx={{ mb: 2, display: { xs: 'none', md: 'flex' } }}>{pageLabels.map((pageLabel) => <Step key={pageLabel}><StepLabel>{pageLabel}</StepLabel></Step>)}</Stepper>
+                <Box sx={{ mb: 2.5, maxWidth: 560, mx: 'auto' }}>
+                    <Typography variant="caption" display="block" sx={{ color: '#6B7280', fontWeight: 800, mb: 0.75, textAlign: isRTL ? 'right' : 'left' }}>
+                        {label(`Step ${safePage} of ${PAGE_COUNT}`, `الخطوة ${safePage} من ${PAGE_COUNT}`)} · {pageLabels[safePage - 1]}
+                    </Typography>
+                    <LinearProgress variant="determinate" value={pageProgress} aria-label={label('Application progress', 'تقدم الطلب')} sx={{ height: 6, borderRadius: 99 }} />
+                    <Typography component="h1" variant="h5" fontWeight={950} sx={{ mt: 2, textAlign: 'center' }}>{sectionLabels[safePage]?.[section] || pageLabels[safePage - 1]}</Typography>
                 </Box>
-                <Stepper activeStep={safePage - 1} alternativeLabel sx={{ mb: 3 }}>{pageLabels.map((pageLabel) => <Step key={pageLabel}><StepLabel>{pageLabel}</StepLabel></Step>)}</Stepper>
-                <LinearProgress variant="determinate" value={pageProgress} sx={{ mb: 1, height: 8, borderRadius: 99 }} />
-                <Typography variant="caption" display="block" textAlign="center" color="text.secondary" mb={3}>{pageProgress}% · {label('five-page application progress', 'تقدم الطلب المكون من خمس صفحات')}</Typography>
                 {guardError && <Alert severity="warning" sx={{ mb: 3 }}>{guardError}</Alert>}
                 {renderPage()}
             </Container>

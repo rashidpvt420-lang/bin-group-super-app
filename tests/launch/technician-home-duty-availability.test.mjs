@@ -62,8 +62,9 @@ test('duty state and callable selection', async () => {
 test('home gold text uses the readable gold ink on the white shell (>= 4.5:1)', () => {
   // #C9A646 (binThemeTokens.gold) is 2.3:1 and #B8932F (goldHover) 2.9:1 on white; #7A5C12 is 6.2:1.
   assert.ok(!home.includes('sx={{ color: binThemeTokens.gold,'), 'simple home overline/link not in low-contrast gold');
-  assert.ok(!home.includes("color: binThemeTokens.gold, fontWeight: 950 }}>{tx('tech.simple.advanced'"), 'advanced link readable');
-  assert.ok(home.includes("color: '#7A5C12', fontWeight: 950 }}>{tx('tech.simple.advanced'"));
+  // 2026-10-21 redesign: the home renders text only through the AA-checked ui tokens (ui.goldText / ui.muted).
+  assert.doesNotMatch(home, /binThemeTokens\.(gold|goldHover)\b/, 'no raw gold text on the home');
+  assert.match(home, /from '\.\.\/\.\.\/theme\/uiTokens'/);
   assert.doesNotMatch(card, /[^a-zA-Z]color: binThemeTokens\.goldHover/, 'break/resume button text is not goldHover');
-  assert.ok(card.includes("color: '#7A5C12', fontWeight: 950"));
+  assert.ok(card.includes("color: '#7A5C12', fontWeight: 800"));
 });

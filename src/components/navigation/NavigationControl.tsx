@@ -10,6 +10,8 @@ const hiddenRoutes = new Set(['/', '/login', '/gateway']);
 // sat on the start edge of the heading, and Arabic RTL put it on the heading.
 const inFlowNavigationRoutes = new Set(['/homes', '/request-demo', '/videos']);
 
+export const portalRoutePrefixes = ['/owner', '/tenant', '/technician', '/tech', '/broker', '/staff'];
+
 export const NavigationControl: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -18,6 +20,9 @@ export const NavigationControl: React.FC = () => {
   if (hiddenRoutes.has(location.pathname) || inFlowNavigationRoutes.has(location.pathname)) return null;
   if (location.pathname.startsWith('/admin')) return null;
   if (location.pathname.startsWith('/onboarding')) return null;
+  // Portals draw their own Back button inside their header; a second floating
+  // one covered the header title on phones (audit 2026-10-21 P0-1).
+  if (portalRoutePrefixes.some((prefix) => location.pathname === prefix || location.pathname.startsWith(`${prefix}/`))) return null;
 
   const label = t('nav.back') || (lang === 'ar' ? 'رجوع' : 'Back');
 
@@ -33,9 +38,10 @@ export const NavigationControl: React.FC = () => {
       startIcon={isRTL ? <ArrowRight size={18} /> : <ArrowLeft size={18} />}
       sx={{
         position: 'fixed',
-        top: { xs: 104, md: 96 },
-        left: isRTL ? 'auto' : { xs: 14, md: 24 },
-        right: isRTL ? { xs: 14, md: 24 } : 'auto',
+        // Bottom-left, clear of the page header (it used to sit at top: 104px
+        // over the header buttons) and of the AI assistant on the right.
+        bottom: { xs: 'calc(16px + env(safe-area-inset-bottom))', md: 24 },
+        left: { xs: 14, md: 24 },
         zIndex: 1250,
         minHeight: 42,
         px: 1.8,

@@ -62,15 +62,9 @@ test('Review & Sign probes App Check before the quote call and classifies failur
   assert.match(review, /quoteRetryNonce\]\);/);
 });
 
-test('page-3 add-ons are required only by the systems the Owner selected (no forced baseline stack)', () => {
+test('page-2 required add-ons come from the engine rule the quote uses (no forced baseline stack)', () => {
   assert.doesNotMatch(systems, /BASE_REQUIRED_STACK_IDS/);
-  assert.match(systems, /if \(property\?\.fireAlarm === true \|\| property\?\.firePump === true\) ids\.push\('fire_safety'\);/);
-  assert.match(systems, /if \(property\?\.tank === true\) ids\.push\('water_tank'\);/);
-  assert.match(systems, /if \(property\?\.hvac === true \|\| Number\(property\?\.hvacCount \|\| 0\) > 0\) ids\.push\('hvac_pm'\);/);
-  const body = systems.match(/const getRequiredStackIds = \(property: any\) => \{([\s\S]*?)\n\};/)?.[1] || '';
-  const jsBody = ts.transpileModule(body, { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText;
-  const getRequiredStackIds = new Function('property', 'isMajlisAsset', 'ELEVATOR_ADDON_ID', jsBody);
-  const none = () => false;
-  assert.deepEqual([...getRequiredStackIds({}, none, 'elevator_amc')], [], 'zero systems selected -> zero required add-ons');
-  assert.deepEqual([...getRequiredStackIds({ fireAlarm: true, tank: true, hvac: true, lifts: 1 }, none, 'elevator_amc')], ['fire_safety', 'water_tank', 'hvac_pm', 'elevator_amc']);
+  assert.doesNotMatch(systems, /defaultSelected: true/);
+  assert.match(systems, /const requiredStackIds = useMemo\(\(\) => resolvePropertyMandatoryAddOns\(activeProperty\), \[activeProperty\]\);/);
+  assert.doesNotMatch(systems, /getHiddenAddOnIds/);
 });

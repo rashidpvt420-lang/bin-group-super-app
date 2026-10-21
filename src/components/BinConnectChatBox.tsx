@@ -4,6 +4,7 @@ import { MessageSquare, Send, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { auth, functions, httpsCallable } from '../lib/firebase';
 import { binThemeTokens } from '../theme/binGroupTheme';
+import { useUnifiedFab } from './ui/unifiedFab';
 
 type PortalRole = 'owner' | 'tenant' | 'technician' | 'broker' | 'admin' | 'staff';
 
@@ -49,6 +50,14 @@ const routePrefix: Record<PortalRole, string> = {
 export default function BinConnectChatBox({ role, dark = false }: { role: PortalRole; dark?: boolean }) {
   const navigate = useNavigate();
   const [open, setOpen] = React.useState(false);
+  // Redesign R2: the shell's single ActionFab opens this panel; hide the separate chat button.
+  const unifiedFab = useUnifiedFab();
+  React.useEffect(() => {
+    if (!unifiedFab) return undefined;
+    const openFromFab = () => setOpen(true);
+    window.addEventListener('bin:open-chat', openFromFab);
+    return () => window.removeEventListener('bin:open-chat', openFromFab);
+  }, [unifiedFab]);
   const [channel, setChannel] = React.useState(roleDefaults[role]);
   const [title, setTitle] = React.useState('');
   const [message, setMessage] = React.useState('');
@@ -167,7 +176,7 @@ export default function BinConnectChatBox({ role, dark = false }: { role: Portal
   };
 
   return (
-    <Box sx={{ position: 'fixed', right: { xs: 16, md: 26 }, bottom: { xs: 74, md: 28 }, zIndex: 1500 }}>
+    <Box sx={{ position: 'fixed', right: { xs: 16, md: 26 }, bottom: unifiedFab ? { xs: 'calc(152px + env(safe-area-inset-bottom))', md: 96 } : { xs: 74, md: 28 }, zIndex: 1500 }}>
       {open && (
         <Paper elevation={14} sx={{ width: { xs: 'calc(100vw - 32px)', sm: 440 }, maxHeight: '78vh', overflow: 'auto', mb: 1.5, borderRadius: 4, border: `1px solid ${alpha(binThemeTokens.gold, 0.32)}`, bgcolor: dark ? '#111827' : '#FFFFFF', color: dark ? '#FFFFFF' : binThemeTokens.textPrimary }}>
           <Stack spacing={2} sx={{ p: 2.4 }}>
@@ -197,9 +206,11 @@ export default function BinConnectChatBox({ role, dark = false }: { role: Portal
           </Stack>
         </Paper>
       )}
+      {!unifiedFab && (
       <Badge color="error" badgeContent={threads.length > 0 ? threads.length : 0} max={9}>
         <Fab onClick={() => setOpen((value) => !value)} sx={{ bgcolor: binThemeTokens.gold, color: '#111827', fontWeight: 950, '&:hover': { bgcolor: binThemeTokens.goldLight } }} aria-label="BIN Connect chat"><MessageSquare /></Fab>
       </Badge>
+      )}
     </Box>
   );
 }

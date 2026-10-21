@@ -102,27 +102,27 @@ export default function TechnicianDutyAvailabilityCard({ isRTL = false }: { isRT
   const label = onDuty ? tx('tech.duty.onDuty', 'ON DUTY') : duty === 'ON_BREAK' ? tx('tech.duty.onBreak', 'ON BREAK') : tx('tech.duty.offDuty', 'OFF DUTY');
 
   return (
-    <Paper data-testid="technician-duty-card" sx={{ p: { xs: 2.5, md: 3 }, borderRadius: 5, border: `1px solid ${alpha(tone, 0.3)}`, bgcolor: alpha(tone, 0.04) }}>
+    <Paper data-testid="technician-duty-card" sx={{ p: { xs: 2, md: 3 }, borderRadius: '18px', boxShadow: 'none', border: `1px solid ${alpha(tone, 0.3)}`, bgcolor: alpha(tone, 0.04) }}>
       <Stack spacing={2} sx={{ textAlign: isRTL ? 'right' : 'left' }}>
         <Stack direction={{ xs: 'column', sm: isRTL ? 'row-reverse' : 'row' }} spacing={2} alignItems={{ xs: 'stretch', sm: 'center' }} justifyContent="space-between">
           <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1.5} alignItems="center">
             <Box sx={{ p: 1.25, borderRadius: 2, bgcolor: alpha(tone, 0.1), color: tone, display: 'flex' }}>{duty === 'ON_BREAK' ? <Coffee size={24} /> : <Power size={24} />}</Box>
             <Box>
-              <Typography variant="caption" sx={{ color: '#475569', fontWeight: 900, letterSpacing: 1 }}>{tx('tech.duty.title', 'DUTY STATUS')}</Typography>
-              <Typography variant="h6" data-testid="technician-duty-state" sx={{ color: tone, fontWeight: 950 }}>{label}</Typography>
+              <Typography variant="caption" sx={{ color: '#475569', fontWeight: 800, letterSpacing: 1 }}>{tx('tech.duty.title', 'DUTY STATUS')}</Typography>
+              <Typography variant="h6" data-testid="technician-duty-state" sx={{ color: tone, fontWeight: 800 }}>{label}</Typography>
             </Box>
           </Stack>
           <Stack direction={{ xs: 'column', sm: isRTL ? 'row-reverse' : 'row' }} spacing={1}>
             {duty === 'OFF_DUTY' ? (
-              <Button data-testid="technician-activate-duty" variant="contained" disabled={updating} onClick={() => changeDuty('ON_DUTY')} sx={{ bgcolor: binThemeTokens.gold, color: '#111827', fontWeight: 950, px: 3, '&:hover': { bgcolor: binThemeTokens.goldHover } }}>
+              <Button data-testid="technician-activate-duty" variant="contained" disabled={updating} onClick={() => changeDuty('ON_DUTY')} sx={{ bgcolor: binThemeTokens.gold, color: '#111827', fontWeight: 800, px: 3, '&:hover': { bgcolor: binThemeTokens.goldHover } }}>
                 {tx('tech.duty.activate', 'ACTIVATE DUTY')}
               </Button>
             ) : (
               <>
-                <Button variant="outlined" disabled={updating} onClick={() => changeDuty(duty === 'ON_BREAK' ? 'ON_DUTY' : 'ON_BREAK')} sx={{ borderColor: binThemeTokens.goldHover, color: '#7A5C12', fontWeight: 950 }}>
+                <Button variant="outlined" disabled={updating} onClick={() => changeDuty(duty === 'ON_BREAK' ? 'ON_DUTY' : 'ON_BREAK')} sx={{ borderColor: binThemeTokens.goldHover, color: '#7A5C12', fontWeight: 800 }}>
                   {duty === 'ON_BREAK' ? tx('tech.duty.resume', 'RESUME DUTY') : tx('tech.duty.break', 'TAKE BREAK')}
                 </Button>
-                <Button variant="outlined" color="error" disabled={updating} onClick={() => changeDuty('OFF_DUTY')} sx={{ fontWeight: 950 }}>
+                <Button variant="outlined" color="error" disabled={updating} onClick={() => changeDuty('OFF_DUTY')} sx={{ fontWeight: 800 }}>
                   {tx('tech.duty.end', 'END SHIFT')}
                 </Button>
               </>

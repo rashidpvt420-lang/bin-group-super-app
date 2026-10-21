@@ -130,8 +130,8 @@ test('command strip surfaces openTickets (not silent high-risk zero) and keeps h
   assert.match(stripSrc, /Open tickets/);
   assert.match(stripSrc, /openMaintenance/);
   assert.match(stripSrc, /high-risk of/);
-  assert.match(simpleSrc, /openTickets=\{commandCounts\.openTickets\}/);
-  assert.match(simpleSrc, /highRiskTickets=\{commandCounts\.highRiskTickets\}/);
-  assert.match(simpleSrc, /Check open maintenance/);
-  assert.match(simpleSrc, /count: openMaintenance/);
+  // 2026-10-21 redesign: the owner home shows open repairs as a tile and urgent ones in "Needs you today".
+  assert.match(simpleSrc, /const openMaintenance = commandCounts\.openTickets;/);
+  assert.match(simpleSrc, /value=\{loading \? null : openMaintenance\}/);
+  assert.match(simpleSrc, /count: commandCounts\.highRiskTickets/);
 });
