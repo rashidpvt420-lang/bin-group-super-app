@@ -485,8 +485,8 @@ export function resolveMandatoryAddOns(input: QuoteInput): string[] {
   if (MULTI_STOREY_ASSET_IDS.has(asset) && safeInput.liftsUnknown) ids.add('elevator_amc');
   if (safeInput.hasSiraCctv) ids.add('sira_renewal');
   if (safeInput.hasBmu) ids.add('facade_access');
-  // Blank age is priced as 15+ (safe side), so the mandatory 15+ asset audit is included too.
-  if (safeInput.propertyAge > 15 || safeInput.propertyAgeUnknown) ids.add('pca_audit');
+  // Founder decision 2026-10-21: the condition audit applies only to buildings over 15 years old; age is required upstream.
+  if (!safeInput.propertyAgeUnknown && safeInput.propertyAge > 15) ids.add('pca_audit');
   if (safeInput.hasPool) ids.add('pool_care');
   if (safeInput.hasCentralHVAC || (safeInput.hvacCount || 0) > 0) ids.add('hvac_pm');
   return Array.from(ids);

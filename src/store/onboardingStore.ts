@@ -38,7 +38,8 @@ export interface PropertyData {
   offices: number;
   rooms: number;
   sqft: number;
-  age: number;
+  /** Building age in years; undefined until the owner enters it (0 = new build). */
+  age?: number;
   annualRent?: number;
   annualRevenue?: number;
   pool: boolean;
@@ -286,7 +287,7 @@ export const resolvePropertyMandatoryAddOns = (property: PropertyData): string[]
 const defaultProperty: PropertyData = {
   id: '', emirate: '', area: '', zone: 'B', propertyType: '', subType: '',
   useType: '', ownerType: '', floors: 0, units: 0, bedrooms: 0, bathrooms: 0,
-  shops: 0, offices: 0, rooms: 0, sqft: 0, age: 0, pool: false, lifts: 0, tank: false,
+  shops: 0, offices: 0, rooms: 0, sqft: 0, age: undefined, pool: false, lifts: 0, tank: false,
   bmu: false, sira: false, fireAlarm: false, firePump: false, escalators: false, centralLPG: false,
   wasteMan: false, gen: false, hvac: false, districtCooling: false, electrical: false, plumbing: false,
   drainage: false, pumps: false, emergencyLighting: false, accessControl: false, bms: false, iotSensors: false,
