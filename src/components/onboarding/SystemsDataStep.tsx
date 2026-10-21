@@ -1,13 +1,14 @@
 import React, { useMemo, useState } from 'react';
 import { Box, Typography, Grid, Paper, Checkbox, Button, Stack, Chip, Divider, Container } from '@mui/material';
-import { useOnboardingStore } from '../../store/onboardingStore';
+import { resolvePropertyMandatoryAddOns, useOnboardingStore } from '../../store/onboardingStore';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { resolveAddOnAnnualPrice } from '../../utils/calculateUaeQuote2026';
+import { SYSTEM_DRIVEN_ADDON_IDS } from '../../utils/calculateUaeQuote2026';
 
 type LocalText = { en: string; ar: string };
 type SystemItem = { key: string; label: LocalText };
-type AddOnItem = { id: string; name: LocalText; desc: LocalText; price: number; reason: LocalText; required?: boolean; defaultSelected?: boolean };
+type AddOnItem = { id: string; name: LocalText; desc: LocalText; price: number; reason: LocalText; unlock?: LocalText };
 
 const aed = (value: number) => `AED ${value.toLocaleString()}`;
 const label = (text: LocalText, ar: boolean) => (ar ? text.ar : text.en);
@@ -40,29 +41,11 @@ const copy = {
   detailNote: { en: 'Full system details remain selected in the matrix and will be saved to the property scope.', ar: 'تبقى تفاصيل الأنظمة محددة في المصفوفة وسيتم حفظها ضمن نطاق العقار.' },
   commercialTitle: { en: 'Commercial add-ons', ar: 'الإضافات التجارية' },
   totalTitle: { en: 'Annual add-on total', ar: 'إجمالي الإضافات السنوية' },
-  totalNote: { en: 'Systems define scope. Only commercial add-ons are counted in this AED total.', ar: 'الأنظمة تحدد نطاق الخدمة. يتم احتساب الإضافات التجارية فقط في إجمالي الدرهم.' },
+  totalNote: { en: 'List prices of the add-ons above (required and selected). Location, service level and payment plan factors are applied in the Review quote.', ar: 'أسعار القائمة للإضافات أعلاه (الإلزامية والمختارة). تطبق عوامل الموقع ومستوى الخدمة وخطة الدفع في عرض السعر النهائي للمراجعة.' },
   back: { en: 'Back', ar: 'رجوع' },
-  next: { en: 'Initialize Analysis', ar: 'بدء التحليل' },
+  next: { en: 'Continue', ar: 'متابعة' },
+  requiredBecause: { en: 'Required by the systems you selected — included in your quote.', ar: 'إلزامي بسبب الأنظمة المختارة — مشمول في عرض السعر.' },
 };
-
-const isMajlisAsset = (property: any) => {
-  const text = [property?.propertyType, property?.subType, property?.assetClass, property?.majlisType, property?.serviceModel]
-    .filter(Boolean)
-    .join(' ')
-    .toLowerCase();
-  return Boolean(property?.majlis || property?.majlisGarden || (property?.majlisType && property.majlisType !== 'none') || text.includes('majlis'));
-};
-
-const getRequiredStackIds = (property: any) => {
-  const ids: string[] = [];
-  if (property?.fireAlarm === true || property?.firePump === true) ids.push('fire_safety');
-  if (property?.tank === true) ids.push('water_tank');
-  if (property?.hvac === true || Number(property?.hvacCount || 0) > 0) ids.push('hvac_pm');
-  if (!isMajlisAsset(property) && Number(property?.lifts || 0) > 0) ids.push(ELEVATOR_ADDON_ID);
-  return ids;
-};
-
-const getHiddenAddOnIds = (property: any) => (isMajlisAsset(property) ? [ELEVATOR_ADDON_ID] : []);
 
 const systemGroups: Array<{ title: LocalText; systems: SystemItem[] }> = [
   {
@@ -108,10 +91,10 @@ const systemGroups: Array<{ title: LocalText; systems: SystemItem[] }> = [
 ];
 
 const addOns: AddOnItem[] = [
-  { id: 'fire_safety', name: { en: 'Fire Safety AMC', ar: 'عقد سلامة الحريق' }, required: true, defaultSelected: true, price: addOnPrice('fire_safety'), desc: { en: 'Civil Defense compliance checks, alarm readiness and certification support.', ar: 'فحوصات امتثال الدفاع المدني وجاهزية الإنذار ودعم الشهادات.' }, reason: { en: 'Mandatory baseline for UAE occupied assets.', ar: 'متطلب أساسي للعقارات المشغولة في الإمارات.' } },
-  { id: 'water_tank', name: { en: 'Water Tank Sterilization', ar: 'تعقيم خزان المياه' }, required: true, defaultSelected: true, price: addOnPrice('water_tank'), desc: { en: 'Quarterly cleaning, sterilization and hygiene documentation.', ar: 'تنظيف وتعقيم ربع سنوي مع توثيق النظافة.' }, reason: { en: 'Required when water tanks exist.', ar: 'مطلوب عند وجود خزانات مياه.' } },
-  { id: 'elevator_amc', name: { en: 'Elevator / Lift AMC', ar: 'عقد صيانة المصاعد' }, price: addOnPrice('elevator_amc'), desc: { en: 'Lift inspections, safety checks and service coordination.', ar: 'فحوصات المصاعد والسلامة وتنسيق الخدمة.' }, reason: { en: 'Required only when the asset has floors/lifts. Hidden for Majlis assets.', ar: 'مطلوب فقط عند وجود أدوار أو مصاعد. مخفي لأصول المجالس.' } },
-  { id: 'hvac_pm', name: { en: 'HVAC Preventive Maintenance', ar: 'صيانة وقائية للتكييف' }, required: true, defaultSelected: true, price: addOnPrice('hvac_pm'), desc: { en: 'AC inspections, filters, coils, drain lines and performance checks.', ar: 'فحوصات المكيفات والفلاتر والملفات وخطوط التصريف والأداء.' }, reason: { en: 'UAE climate makes HVAC continuity mission-critical.', ar: 'مناخ الإمارات يجعل استمرارية التكييف أمراً أساسياً.' } },
+  { id: 'fire_safety', name: { en: 'Fire Safety AMC', ar: 'عقد سلامة الحريق' }, price: addOnPrice('fire_safety'), desc: { en: 'Civil Defense compliance checks, alarm readiness and certification support.', ar: 'فحوصات امتثال الدفاع المدني وجاهزية الإنذار ودعم الشهادات.' }, reason: { en: 'Mandatory baseline for UAE occupied assets.', ar: 'متطلب أساسي للعقارات المشغولة في الإمارات.' } , unlock: { en: 'Select a fire alarm or fire pump system to include this.', ar: 'اختر نظام إنذار أو مضخة حريق لإضافة هذا.' } },
+  { id: 'water_tank', name: { en: 'Water Tank Sterilization', ar: 'تعقيم خزان المياه' }, price: addOnPrice('water_tank'), desc: { en: 'Quarterly cleaning, sterilization and hygiene documentation.', ar: 'تنظيف وتعقيم ربع سنوي مع توثيق النظافة.' }, reason: { en: 'Required when water tanks exist.', ar: 'مطلوب عند وجود خزانات مياه.' } , unlock: { en: 'Select the water tank system to include this.', ar: 'اختر نظام خزان المياه لإضافة هذا.' } },
+  { id: 'elevator_amc', name: { en: 'Elevator / Lift AMC', ar: 'عقد صيانة المصاعد' }, price: addOnPrice('elevator_amc'), desc: { en: 'Lift inspections, safety checks and service coordination.', ar: 'فحوصات المصاعد والسلامة وتنسيق الخدمة.' }, reason: { en: 'Required only when the asset has floors/lifts. Hidden for Majlis assets.', ar: 'مطلوب فقط عند وجود أدوار أو مصاعد. مخفي لأصول المجالس.' } , unlock: { en: 'Select lifts / elevators to include this.', ar: 'اختر المصاعد لإضافة هذا.' } },
+  { id: 'hvac_pm', name: { en: 'HVAC Preventive Maintenance', ar: 'صيانة وقائية للتكييف' }, price: addOnPrice('hvac_pm'), desc: { en: 'AC inspections, filters, coils, drain lines and performance checks.', ar: 'فحوصات المكيفات والفلاتر والملفات وخطوط التصريف والأداء.' }, reason: { en: 'UAE climate makes HVAC continuity mission-critical.', ar: 'مناخ الإمارات يجعل استمرارية التكييف أمراً أساسياً.' } , unlock: { en: 'Select HVAC / AC systems to include this.', ar: 'اختر أنظمة التكييف لإضافة هذا.' } },
   { id: 'cleaning', name: { en: 'Cleaning Team / Deep Cleaning', ar: 'فريق تنظيف / تنظيف عميق' }, price: addOnPrice('cleaning'), desc: { en: 'Common area cleaning and scheduled hygiene operations.', ar: 'تنظيف المناطق المشتركة وجدولة عمليات النظافة.' }, reason: { en: 'Recommended for shared facilities and Majlis readiness.', ar: 'موصى به للمرافق المشتركة وجاهزية المجالس.' } },
   { id: 'security', name: { en: 'Security Services / CCTV', ar: 'خدمات أمن / كاميرات' }, price: addOnPrice('security'), desc: { en: 'Guarding coordination, access control and incident logging.', ar: 'تنسيق الحراسة والتحكم بالدخول وتسجيل الحوادث.' }, reason: { en: 'Optional manpower layer for towers, retail and high-value assets.', ar: 'طبقة عمالة اختيارية للأبراج والتجزئة والأصول عالية القيمة.' } },
   { id: 'pest_control', name: { en: 'Pest Control', ar: 'مكافحة الحشرات' }, price: addOnPrice('pest_control'), desc: { en: 'Quarterly municipality-approved pest control treatments.', ar: 'معالجات ربع سنوية معتمدة من البلدية لمكافحة الحشرات.' }, reason: { en: 'Standard preventive hygiene measure.', ar: 'إجراء وقائي قياسي للنظافة.' } },
@@ -121,17 +104,33 @@ const addOns: AddOnItem[] = [
   { id: 'waste_management', name: { en: 'Waste Management', ar: 'إدارة النفايات' }, price: addOnPrice('waste_management'), desc: { en: 'Waste room checks and disposal schedule coordination.', ar: 'فحص غرفة النفايات وتنسيق جدول التخلص.' }, reason: { en: 'Optional hygiene and disposal coordination layer.', ar: 'طبقة اختيارية للنظافة وتنسيق التخلص.' } },
 ];
 
+// Add-ons the engine charges only when a matching system or fact is present. They are never ticked by hand,
+// so they appear here only when required, with the same engine price the quote uses.
+const systemDrivenExtras: AddOnItem[] = [
+  { id: 'sira_renewal', name: { en: 'SIRA / CCTV Compliance Renewal', ar: 'تجديد امتثال SIRA / الكاميرات' }, price: addOnPrice('sira_renewal'), desc: { en: 'SIRA-approved CCTV maintenance and certificate renewal.', ar: 'صيانة الكاميرات المعتمدة من SIRA وتجديد الشهادة.' }, reason: { en: 'Required when a SIRA / CCTV system is selected.', ar: 'إلزامي عند اختيار نظام SIRA / الكاميرات.' } },
+  { id: 'facade_access', name: { en: 'Façade Access / BMU Service', ar: 'خدمة الوصول للواجهة / BMU' }, price: addOnPrice('facade_access'), desc: { en: 'BMU inspection, certification and façade access support.', ar: 'فحص وحدة الواجهات واعتمادها ودعم الوصول للواجهة.' }, reason: { en: 'Required when a BMU / façade access system is selected.', ar: 'إلزامي عند اختيار وحدة الواجهات.' } },
+  { id: 'pool_care', name: { en: 'Swimming Pool Care', ar: 'العناية بالمسبح' }, price: addOnPrice('pool_care'), desc: { en: 'Water chemistry, filtration and pool plant maintenance.', ar: 'كيمياء المياه والفلترة وصيانة معدات المسبح.' }, reason: { en: 'Required when a swimming pool is selected.', ar: 'إلزامي عند اختيار المسبح.' } },
+  { id: 'pca_audit', name: { en: 'Property Condition Audit', ar: 'تدقيق حالة العقار' }, price: addOnPrice('pca_audit'), desc: { en: 'Condition audit of building fabric and MEP assets.', ar: 'تدقيق حالة هيكل المبنى وأصول MEP.' }, reason: { en: 'Required when the property is over 15 years old or its age is not provided yet.', ar: 'إلزامي إذا كان عمر العقار أكثر من 15 سنة أو لم يُذكر بعد.' } },
+  { id: 'emergency_priority', name: { en: 'Emergency Priority Response', ar: 'استجابة طوارئ ذات أولوية' }, price: addOnPrice('emergency_priority'), desc: { en: 'Priority dispatch for emergencies.', ar: 'إرسال فوري للطوارئ.' }, reason: { en: 'Required for mosque facilities.', ar: 'إلزامي لمرافق المساجد.' } },
+];
+
+/** Normalised add-on list saved on the property: owner-chosen optional add-ons plus the engine's mandatory ones. */
+export const normaliseOwnerAddOns = (stored: unknown, mandatory: string[]): string[] => {
+  const optional = (Array.isArray(stored) ? stored : []).map(String).filter((id) => id && !SYSTEM_DRIVEN_ADDON_IDS.has(id) && !mandatory.includes(id));
+  return Array.from(new Set([...optional, ...mandatory]));
+};
+
 const SystemsDataStep: React.FC<{ onNext: () => void; onBack: () => void }> = ({ onNext, onBack }) => {
   const { properties, propertyData, updateProperty, calculateSummary } = useOnboardingStore();
   const { isRTL, lang } = useLanguage();
   const ar = lang === 'ar';
   const [activePropertyIndex, setActivePropertyIndex] = useState(0);
   const activeProperty = properties[activePropertyIndex] || propertyData || ({} as any);
-  const storedSelectedIds = Array.isArray(activeProperty.selectedAddOns) ? activeProperty.selectedAddOns : [];
-  const requiredStackIds = useMemo(() => getRequiredStackIds(activeProperty), [activeProperty]);
-  const hiddenAddOnIds = useMemo(() => getHiddenAddOnIds(activeProperty), [activeProperty]);
-  const visibleAddOns = addOns.filter((addon) => !hiddenAddOnIds.includes(addon.id));
-  const selectedIds = new Set([...storedSelectedIds.filter((id) => !hiddenAddOnIds.includes(id)), ...requiredStackIds]);
+  const storedSelectedIds: string[] = Array.isArray(activeProperty.selectedAddOns) ? activeProperty.selectedAddOns : [];
+  // Single source of truth: the same engine rule the client and server quotes use.
+  const requiredStackIds = useMemo(() => resolvePropertyMandatoryAddOns(activeProperty), [activeProperty]);
+  const visibleAddOns = [...addOns, ...systemDrivenExtras.filter((addon) => requiredStackIds.includes(addon.id) && !addOns.some((item) => item.id === addon.id))];
+  const selectedIds = new Set(normaliseOwnerAddOns(storedSelectedIds, requiredStackIds));
   const selectedAddOnRows = visibleAddOns.filter((a) => selectedIds.has(a.id));
   const selectedSystemGroups = systemGroups
     .map((group) => ({ title: group.title, systems: group.systems.filter((system) => Boolean((activeProperty as any)[system.key])) }))
@@ -140,20 +139,27 @@ const SystemsDataStep: React.FC<{ onNext: () => void; onBack: () => void }> = ({
   const total = selectedAddOnRows.reduce((sum, a) => sum + a.price, 0);
 
   const setSystem = (key: string, checked: boolean) => {
-    updateProperty(activePropertyIndex, { [key]: key === 'lifts' ? (checked ? Math.max(activeProperty.lifts || 1, 1) : 0) : checked } as any);
+    const patch = { [key]: key === 'lifts' ? (checked ? Math.max(activeProperty.lifts || 1, 1) : 0) : checked } as any;
+    const mandatory = resolvePropertyMandatoryAddOns({ ...activeProperty, ...patch });
+    updateProperty(activePropertyIndex, { ...patch, selectedAddOns: normaliseOwnerAddOns(storedSelectedIds, mandatory) });
     calculateSummary();
   };
 
   const setAddOn = (id: string, checked: boolean) => {
-    if (requiredStackIds.includes(id) || hiddenAddOnIds.includes(id)) return;
-    const next = checked
-      ? Array.from(new Set([...storedSelectedIds, id]))
-      : storedSelectedIds.filter((item) => item !== id);
+    if (requiredStackIds.includes(id) || SYSTEM_DRIVEN_ADDON_IDS.has(id)) return;
+    const optional = normaliseOwnerAddOns(storedSelectedIds, requiredStackIds).filter((item) => item !== id);
+    const next = normaliseOwnerAddOns(checked ? [...optional, id] : optional, requiredStackIds);
     updateProperty(activePropertyIndex, { selectedAddOns: next });
     calculateSummary();
   };
 
   const continueNext = () => {
+    // Persist required add-ons for every property so page 3, Review and the submitted record list them.
+    properties.forEach((property, index) => {
+      const next = normaliseOwnerAddOns(property.selectedAddOns, resolvePropertyMandatoryAddOns(property));
+      const current = Array.isArray(property.selectedAddOns) ? property.selectedAddOns : [];
+      if (next.length !== current.length || next.some((id) => !current.includes(id))) updateProperty(index, { selectedAddOns: next });
+    });
     calculateSummary();
     onNext();
   };
@@ -161,11 +167,11 @@ const SystemsDataStep: React.FC<{ onNext: () => void; onBack: () => void }> = ({
   return (
     <Box dir={isRTL ? 'rtl' : 'ltr'} sx={{ py: { xs: 2, md: 4 } }}>
       <Container maxWidth="xl" disableGutters>
-        <Paper sx={{ p: { xs: 2, md: 3 }, borderRadius: 6, bgcolor: 'rgba(17,17,18,0.86)', border: '1px solid rgba(198,167,94,0.18)' }}>
+        <Paper sx={{ p: { xs: 2, md: 3 }, borderRadius: 6, bgcolor: binThemeTokens.card, border: `1px solid ${binThemeTokens.border}` }}>
           <Box sx={{ textAlign: 'center', mb: 3 }}>
             <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: ar ? 0 : 4 }}>{label(copy.audit, ar)}</Typography>
-            <Typography variant="h4" sx={{ color: '#fff', fontWeight: 950, mt: 1 }}>{label(copy.matrix, ar)}</Typography>
-            <Typography sx={{ color: 'rgba(255,255,255,.58)', maxWidth: 900, mx: 'auto', mt: 1 }}>{label(copy.intro, ar)}</Typography>
+            <Typography variant="h4" sx={{ color: binThemeTokens.textPrimary, fontWeight: 950, mt: 1 }}>{label(copy.matrix, ar)}</Typography>
+            <Typography sx={{ color: binThemeTokens.textSecondary, maxWidth: 900, mx: 'auto', mt: 1 }}>{label(copy.intro, ar)}</Typography>
           </Box>
 
           {properties.length > 1 && <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} useFlexGap flexWrap="wrap" sx={{ mb: 2 }}>
@@ -176,15 +182,15 @@ const SystemsDataStep: React.FC<{ onNext: () => void; onBack: () => void }> = ({
               <Grid container spacing={1.5} sx={{ height: '100%' }}>
                 {systemGroups.map((group) => (
                   <Grid item xs={12} md={4} key={group.title.en}>
-                    <Paper sx={{ p: 1.8, height: '100%', borderRadius: 4, bgcolor: 'rgba(255,255,255,.025)', border: '1px solid rgba(255,255,255,.07)' }}>
+                    <Paper sx={{ p: 1.8, height: '100%', borderRadius: 4, bgcolor: binThemeTokens.softCanvas, border: `1px solid ${binThemeTokens.border}` }}>
                       <Typography variant="overline" sx={{ display: 'block', color: binThemeTokens.gold, fontWeight: 950, mb: 1.2, lineHeight: 1.5, letterSpacing: ar ? 0 : undefined }}>{label(group.title, ar)}</Typography>
                       <Stack spacing={0.75}>
                         {group.systems.map((system) => {
                           const checked = Boolean((activeProperty as any)[system.key]);
                           return (
-                            <Paper key={system.key} onClick={() => setSystem(system.key, !checked)} sx={{ p: 1, minHeight: 48, borderRadius: 2.5, cursor: 'pointer', display: 'flex', gap: 1, alignItems: 'center', flexDirection: isRTL ? 'row-reverse' : 'row', bgcolor: checked ? 'rgba(198,167,94,.14)' : 'rgba(255,255,255,.025)', border: `1px solid ${checked ? 'rgba(198,167,94,.65)' : 'rgba(255,255,255,.06)'}`, transition: '150ms ease', '&:hover': { borderColor: 'rgba(198,167,94,.7)' } }}>
-                              <Checkbox checked={checked} onClick={(e) => e.stopPropagation()} onChange={(e) => setSystem(system.key, e.target.checked)} sx={{ p: 0, color: 'rgba(255,255,255,.3)', '&.Mui-checked': { color: binThemeTokens.gold } }} />
-                              <Typography sx={{ color: checked ? '#fff' : 'rgba(255,255,255,.72)', fontWeight: 850, lineHeight: 1.22, fontSize: { xs: 14, md: 13.5 }, textAlign: isRTL ? 'right' : 'left' }}>{label(system.label, ar)}</Typography>
+                            <Paper key={system.key} onClick={() => setSystem(system.key, !checked)} sx={{ p: 1, minHeight: 48, borderRadius: 2.5, cursor: 'pointer', display: 'flex', gap: 1, alignItems: 'center', flexDirection: isRTL ? 'row-reverse' : 'row', bgcolor: checked ? 'rgba(198,167,94,.14)' : binThemeTokens.softCanvas, border: `1px solid ${checked ? 'rgba(198,167,94,.65)' : binThemeTokens.border}`, transition: '150ms ease', '&:hover': { borderColor: 'rgba(198,167,94,.7)' } }}>
+                              <Checkbox checked={checked} onClick={(e) => e.stopPropagation()} onChange={(e) => setSystem(system.key, e.target.checked)} sx={{ p: 0, color: binThemeTokens.textSecondary, '&.Mui-checked': { color: binThemeTokens.gold } }} />
+                              <Typography sx={{ color: checked ? binThemeTokens.textPrimary : binThemeTokens.textSecondary, fontWeight: 850, lineHeight: 1.22, fontSize: { xs: 14, md: 13.5 }, textAlign: isRTL ? 'right' : 'left' }}>{label(system.label, ar)}</Typography>
                             </Paper>
                           );
                         })}
@@ -196,26 +202,27 @@ const SystemsDataStep: React.FC<{ onNext: () => void; onBack: () => void }> = ({
             </Grid>
 
             <Grid item xs={12} xl={3.2}>
-              <Paper sx={{ p: 2, height: '100%', borderRadius: 4, bgcolor: 'rgba(255,255,255,.025)', border: '1px solid rgba(255,255,255,.07)' }}>
+              <Paper sx={{ p: 2, height: '100%', borderRadius: 4, bgcolor: binThemeTokens.softCanvas, border: `1px solid ${binThemeTokens.border}` }}>
                 <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: ar ? 0 : 3 }}>{label(copy.addonsOverline, ar)}</Typography>
-                <Typography variant="h6" sx={{ color: '#fff', fontWeight: 950, mt: 0.5 }}>{label(copy.addonsTitle, ar)}</Typography>
-                <Typography variant="caption" sx={{ display: 'block', color: 'rgba(255,255,255,.52)', mb: 1.5, lineHeight: 1.55 }}>{label(copy.addonsDesc, ar)}</Typography>
+                <Typography variant="h6" sx={{ color: binThemeTokens.textPrimary, fontWeight: 950, mt: 0.5 }}>{label(copy.addonsTitle, ar)}</Typography>
+                <Typography variant="caption" sx={{ display: 'block', color: binThemeTokens.textSecondary, mb: 1.5, lineHeight: 1.55 }}>{label(copy.addonsDesc, ar)}</Typography>
                 <Stack spacing={1} sx={{ maxHeight: { xl: 590 }, overflowY: { xl: 'auto' }, pr: { xl: 0.5 } }}>
                   {visibleAddOns.map((addon) => {
                     const checked = selectedIds.has(addon.id);
                     const locked = requiredStackIds.includes(addon.id);
+                    const unavailable = !locked && SYSTEM_DRIVEN_ADDON_IDS.has(addon.id);
                     return (
-                      <Paper key={addon.id} onClick={() => setAddOn(addon.id, !checked)} sx={{ p: 1.2, borderRadius: 3, cursor: locked ? 'default' : 'pointer', bgcolor: checked ? 'rgba(198,167,94,.1)' : 'rgba(255,255,255,.025)', border: `1px solid ${checked ? 'rgba(198,167,94,.6)' : 'rgba(255,255,255,.07)'}` }}>
+                      <Paper key={addon.id} onClick={() => setAddOn(addon.id, !checked)} sx={{ p: 1.2, borderRadius: 3, cursor: locked || unavailable ? 'default' : 'pointer', opacity: unavailable ? 0.72 : 1, bgcolor: checked ? 'rgba(198,167,94,.1)' : binThemeTokens.softCanvas, border: `1px solid ${checked ? 'rgba(198,167,94,.6)' : binThemeTokens.border}` }}>
                         <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} alignItems="flex-start">
-                          <Checkbox checked={checked} disabled={locked} onChange={(e) => setAddOn(addon.id, e.target.checked)} sx={{ p: 0.2, color: 'rgba(255,255,255,.3)', '&.Mui-checked': { color: binThemeTokens.gold } }} />
+                          <Checkbox checked={checked} disabled={locked || unavailable} inputProps={{ 'aria-label': label(addon.name, ar) }} onClick={(e) => e.stopPropagation()} onChange={(e) => setAddOn(addon.id, e.target.checked)} sx={{ p: 0.2, color: binThemeTokens.textSecondary, '&.Mui-checked': { color: binThemeTokens.gold } }} />
                           <Box sx={{ minWidth: 0, flex: 1, textAlign: isRTL ? 'right' : 'left' }}>
                             <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={0.75} alignItems="center" flexWrap="wrap">
-                              <Typography sx={{ color: '#fff', fontWeight: 950, fontSize: 13 }}>{label(addon.name, ar)}</Typography>
+                              <Typography sx={{ color: binThemeTokens.textPrimary, fontWeight: 950, fontSize: 13 }}>{label(addon.name, ar)}</Typography>
                               {locked && <Chip label={label(copy.required, ar)} size="small" sx={{ height: 18, fontSize: 9, color: '#ef4444', bgcolor: 'rgba(239,68,68,.12)', fontWeight: 900 }} />}
                             </Stack>
-                            <Typography variant="caption" sx={{ display: 'block', color: 'rgba(255,255,255,.54)', lineHeight: 1.45 }}>{label(addon.desc, ar)}</Typography>
-                            <Typography variant="caption" sx={{ display: 'block', color: binThemeTokens.gold, fontWeight: 950, mt: 0.5 }}>{aed(addon.price)} / {label(copy.annual, ar)}</Typography>
-                            <Typography variant="caption" sx={{ display: 'block', color: 'rgba(255,255,255,.38)', lineHeight: 1.35 }}>{label(addon.reason, ar)}</Typography>
+                            <Typography variant="caption" sx={{ display: 'block', color: binThemeTokens.textSecondary, lineHeight: 1.45 }}>{label(addon.desc, ar)}</Typography>
+                            <Typography variant="caption" sx={{ display: 'block', color: binThemeTokens.goldText, fontWeight: 950, mt: 0.5 }}>{aed(addon.price)} / {label(copy.annual, ar)}</Typography>
+                            <Typography variant="caption" sx={{ display: 'block', color: binThemeTokens.textSecondary, lineHeight: 1.35 }}>{locked ? label(copy.requiredBecause, ar) : unavailable && addon.unlock ? label(addon.unlock, ar) : label(addon.reason, ar)}</Typography>
                           </Box>
                         </Stack>
                       </Paper>
@@ -226,25 +233,25 @@ const SystemsDataStep: React.FC<{ onNext: () => void; onBack: () => void }> = ({
             </Grid>
 
             <Grid item xs={12} xl={2}>
-              <Paper sx={{ p: 2.2, height: '100%', borderRadius: 5, bgcolor: '#111112', border: '1px solid rgba(198,167,94,.28)' }}>
+              <Paper sx={{ p: 2.2, height: '100%', borderRadius: 5, bgcolor: binThemeTokens.softCanvas, border: `1px solid ${binThemeTokens.border}` }}>
                 <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: ar ? 0 : 2 }}>{label(copy.serviceStack, ar)}</Typography>
-                <Typography variant="h6" sx={{ color: '#fff', fontWeight: 900, mb: 0.5 }}>{label(copy.scopeSummary, ar)}</Typography>
-                <Typography variant="caption" sx={{ display: 'block', color: 'rgba(255,255,255,.46)', mb: 2 }}>{selectedSystemCount} {label(copy.systemsSelected, ar)} · {selectedAddOnRows.length} {label(copy.commercialAddons, ar)}</Typography>
-                <Stack spacing={1.5} divider={<Divider sx={{ borderColor: 'rgba(255,255,255,.06)' }} />}>
+                <Typography variant="h6" sx={{ color: binThemeTokens.textPrimary, fontWeight: 900, mb: 0.5 }}>{label(copy.scopeSummary, ar)}</Typography>
+                <Typography variant="caption" sx={{ display: 'block', color: binThemeTokens.textSecondary, mb: 2 }}>{selectedSystemCount} {label(copy.systemsSelected, ar)} · {selectedAddOnRows.length} {label(copy.commercialAddons, ar)}</Typography>
+                <Stack spacing={1.5} divider={<Divider sx={{ borderColor: binThemeTokens.border }} />}>
                   <Box>
                     <Typography variant="caption" sx={{ display: 'block', color: binThemeTokens.gold, fontWeight: 950, mb: 1 }}>{label(copy.buildingScope, ar)}</Typography>
                     <Stack spacing={1}>
                       {systemGroups.map((group) => {
                         const count = selectedSystemGroups.find((selected) => selected.title.en === group.title.en)?.systems.length || 0;
                         return (
-                          <Paper key={group.title.en} sx={{ p: 1.15, bgcolor: count > 0 ? 'rgba(198,167,94,.09)' : 'rgba(255,255,255,.025)', border: `1px solid ${count > 0 ? 'rgba(198,167,94,.34)' : 'rgba(255,255,255,.06)'}`, borderRadius: 3 }}>
-                            <Typography variant="caption" sx={{ display: 'block', color: count > 0 ? '#fff' : 'rgba(255,255,255,.45)', fontWeight: 900, lineHeight: 1.25 }}>{label(group.title, ar)}</Typography>
-                            <Typography variant="caption" sx={{ color: count > 0 ? binThemeTokens.gold : 'rgba(255,255,255,.35)', fontWeight: 950 }}>{count} {label(copy.selected, ar)}</Typography>
+                          <Paper key={group.title.en} sx={{ p: 1.15, bgcolor: count > 0 ? 'rgba(198,167,94,.09)' : binThemeTokens.softCanvas, border: `1px solid ${count > 0 ? 'rgba(198,167,94,.34)' : binThemeTokens.border}`, borderRadius: 3 }}>
+                            <Typography variant="caption" sx={{ display: 'block', color: count > 0 ? binThemeTokens.textPrimary : binThemeTokens.textSecondary, fontWeight: 900, lineHeight: 1.25 }}>{label(group.title, ar)}</Typography>
+                            <Typography variant="caption" sx={{ color: count > 0 ? binThemeTokens.gold : binThemeTokens.textSecondary, fontWeight: 950 }}>{count} {label(copy.selected, ar)}</Typography>
                           </Paper>
                         );
                       })}
                     </Stack>
-                    {selectedSystemCount > 0 && <Typography variant="caption" sx={{ display: 'block', color: 'rgba(255,255,255,.38)', mt: 1.25, lineHeight: 1.45 }}>{label(copy.detailNote, ar)}</Typography>}
+                    {selectedSystemCount > 0 && <Typography variant="caption" sx={{ display: 'block', color: binThemeTokens.textSecondary, mt: 1.25, lineHeight: 1.45 }}>{label(copy.detailNote, ar)}</Typography>}
                   </Box>
 
                   <Box>
@@ -252,7 +259,7 @@ const SystemsDataStep: React.FC<{ onNext: () => void; onBack: () => void }> = ({
                     <Stack spacing={1}>
                       {selectedAddOnRows.map((addon) => (
                         <Box key={addon.id} sx={{ display: 'flex', justifyContent: 'space-between', gap: 1.5, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
-                          <Typography variant="caption" sx={{ color: 'rgba(255,255,255,.78)', fontWeight: 850, lineHeight: 1.4 }}>{label(addon.name, ar)}</Typography>
+                          <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, fontWeight: 850, lineHeight: 1.4 }}>{label(addon.name, ar)}</Typography>
                           <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 950, whiteSpace: 'nowrap' }}>{aed(addon.price)}</Typography>
                         </Box>
                       ))}
@@ -260,9 +267,9 @@ const SystemsDataStep: React.FC<{ onNext: () => void; onBack: () => void }> = ({
                   </Box>
 
                   <Box sx={{ pt: 2 }}>
-                    <Typography sx={{ color: '#fff', fontWeight: 950, lineHeight: 1.25 }}>{label(copy.totalTitle, ar)}</Typography>
+                    <Typography sx={{ color: binThemeTokens.textPrimary, fontWeight: 950, lineHeight: 1.25 }}>{label(copy.totalTitle, ar)}</Typography>
                     <Typography variant="h5" sx={{ color: binThemeTokens.gold, fontWeight: 950, mt: 0.75 }}>{aed(total)}</Typography>
-                    <Typography variant="caption" sx={{ display: 'block', color: 'rgba(255,255,255,.4)', mt: 0.75, lineHeight: 1.35 }}>{label(copy.totalNote, ar)}</Typography>
+                    <Typography variant="caption" sx={{ display: 'block', color: binThemeTokens.textSecondary, mt: 0.75, lineHeight: 1.35 }}>{label(copy.totalNote, ar)}</Typography>
                   </Box>
                 </Stack>
               </Paper>
@@ -271,8 +278,8 @@ const SystemsDataStep: React.FC<{ onNext: () => void; onBack: () => void }> = ({
         </Paper>
 
         <Box sx={{ mt: 4, display: 'flex', justifyContent: 'center', gap: 2, flexWrap: 'wrap' }}>
-          <Button variant="outlined" size="large" onClick={onBack} sx={{ borderRadius: 100, px: 6, color: 'rgba(255,255,255,.72)', borderColor: 'rgba(255,255,255,.16)' }}>{label(copy.back, ar)}</Button>
-          <Button variant="contained" size="large" onClick={continueNext} sx={{ borderRadius: 100, px: 8, bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, '&:hover': { bgcolor: '#E6C77A' } }}>{label(copy.next, ar)}</Button>
+          <Button variant="outlined" size="large" onClick={onBack} sx={{ borderRadius: 100, px: { xs: 4, sm: 6 }, flex: { xs: 1, sm: 'none' }, color: binThemeTokens.textSecondary, borderColor: binThemeTokens.textSecondary }}>{label(copy.back, ar)}</Button>
+          <Button variant="contained" size="large" onClick={continueNext} sx={{ borderRadius: 100, px: { xs: 4, sm: 8 }, flex: { xs: 1, sm: 'none' }, bgcolor: binThemeTokens.gold, color: binThemeTokens.textPrimary, fontWeight: 950, '&:hover': { bgcolor: binThemeTokens.goldLight } }}>{label(copy.next, ar)}</Button>
         </Box>
       </Container>
     </Box>

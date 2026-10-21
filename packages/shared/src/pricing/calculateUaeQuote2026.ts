@@ -216,7 +216,8 @@ const VALID_GYM_COMPLEXITY = new Set(['STANDARD_DRY', 'ENHANCED', 'WET_RECOVERY'
 const VALID_GYM_OPENING_SCHEDULES = new Set(['STANDARD_HOURS', 'EXTENDED_HOURS', '24_7']);
 const QUARTERLY_BILLING_SURCHARGE = 0.03;
 const MONTHLY_BILLING_SURCHARGE = 0.06;
-const SYSTEM_DRIVEN_ADDON_IDS = new Set([
+/** Add-ons the engine derives from the property systems; an owner cannot add or drop them by hand. */
+export const SYSTEM_DRIVEN_ADDON_IDS: ReadonlySet<string> = new Set([
   'fire_safety', 'water_tank', 'elevator_amc', 'hvac_pm',
   'sira_renewal', 'facade_access', 'façade_access', 'pca_audit', 'pool_care',
 ]);

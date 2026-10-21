@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { calculateUaeQuote2026, resolveAssetClassIdForPropertyType } from '../utils/calculateUaeQuote2026';
-import type { QuoteOutput } from '../utils/calculateUaeQuote2026';
+import { calculateUaeQuote2026, resolveAssetClassIdForPropertyType, resolveMandatoryAddOns } from '../utils/calculateUaeQuote2026';
+import type { QuoteInput, QuoteOutput } from '../utils/calculateUaeQuote2026';
 
 const OWNER_PAGE_COUNT = 5;
 const createOnboardingSessionId = () => {
@@ -199,13 +199,17 @@ const zeroClientQuote = (reason: string): QuoteOutput => ({
   riskFlags: [reason],
 });
 
-const calculatePropertyAnnualValue = (property: PropertyData, selectedAddOns: string[]): QuoteOutput => {
+/**
+ * The exact engine input used to price one property (client quote, page-2 add-on list and page-3 summary).
+ * Returns null when the property has no separate BIN GROUP pricing scope.
+ */
+export const buildPropertyQuoteInput = (property: PropertyData, selectedAddOns: string[]): Partial<QuoteInput> | null => {
   const mosqueProfile = property.mosqueProfile || {};
   const gymProfile = property.gymProfile || {};
   const isMosque = isMosqueAsset(property);
   const isGym = property.propertyType === 'Gym / Fitness Centre';
   if (isGym && String(gymProfile.scopeMode || '').toUpperCase() === 'GYM_WITHIN_PARENT_ASSET' && gymProfile.separateBinScope !== true) {
-    return zeroClientQuote('Gym is included in its parent asset and has no separate BIN GROUP pricing scope.');
+    return null;
   }
 
   const assetClassId = isMosque ? 'mosque_fm' : (resolveAssetClassIdForPropertyType(property.propertyType, property.assetGrade) || '');
@@ -229,7 +233,7 @@ const calculatePropertyAnnualValue = (property: PropertyData, selectedAddOns: st
     }
   }
 
-  return calculateUaeQuote2026({
+  return {
     assetClassId,
     emirate: emirateMap[property.emirate] || property.emirate || '',
     area: (property as any).area || (property as any).community || (property as any).city || '',
@@ -262,7 +266,19 @@ const calculatePropertyAnnualValue = (property: PropertyData, selectedAddOns: st
     gymComplexity: isGym ? (gymProfile.verifiedComplexity || gymProfile.suggestedComplexity || 'STANDARD_DRY') : undefined,
     gymOpeningSchedule: isGym ? (gymProfile.openingSchedule || 'STANDARD_HOURS') : undefined,
     gymEquipmentCount: isGym ? Number(gymProfile.equipmentCount || 0) : 0,
-  });
+  };
+};
+
+const calculatePropertyAnnualValue = (property: PropertyData, selectedAddOns: string[]): QuoteOutput => {
+  const input = buildPropertyQuoteInput(property, selectedAddOns);
+  if (!input) return zeroClientQuote('Gym is included in its parent asset and has no separate BIN GROUP pricing scope.');
+  return calculateUaeQuote2026(input);
+};
+
+/** Add-ons the pricing engine always charges for this property, derived from its systems (same rule as the server quote). */
+export const resolvePropertyMandatoryAddOns = (property: PropertyData): string[] => {
+  const input = buildPropertyQuoteInput(property, []);
+  return input ? resolveMandatoryAddOns(input as QuoteInput) : [];
 };
 
 // Safe blank asset. Never seed pricing drivers from guesses or legacy demo values.
