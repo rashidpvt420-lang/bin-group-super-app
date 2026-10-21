@@ -6,8 +6,9 @@ import { useRole } from '../../context/RoleContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import OwnerRentScheduleDialog from '../components/OwnerRentScheduleDialog';
+import OwnerTenancyAgreementDialog from '../components/OwnerTenancyAgreementDialog';
 
-type PropertyDoc = { id: string; propertyName?: string; name?: string; ownerEmail?: string; ownerId?: string; ownerUid?: string };
+type PropertyDoc = { id: string; propertyName?: string; name?: string; emirate?: string; ownerEmail?: string; ownerId?: string; ownerUid?: string };
 type UnitDoc = { id: string; propertyId?: string; propertyName?: string; unitNumber?: string; floor?: number; floorNumber?: number; tenantName?: string; tenantEmail?: string; occupancyStatus?: string; status?: string; tenantStatus?: string; maintenanceStatus?: string; rentAmount?: number; annualRent?: number };
 
 const unique = <T extends { id: string }>(items: T[]) => Array.from(new Map(items.map((item) => [item.id, item])).values());
@@ -42,6 +43,7 @@ export default function OwnerUnitRegistryPage() {
   const [noticeSeverity, setNoticeSeverity] = useState<'success' | 'warning'>('success');
   const [loadFailed, setLoadFailed] = useState(false);
   const [scheduleUnit, setScheduleUnit] = useState<UnitDoc | null>(null);
+  const [agreementUnit, setAgreementUnit] = useState<UnitDoc | null>(null);
   const currentOwnerId = useRef(user?.uid || '');
   currentOwnerId.current = user?.uid || '';
   const submission = useRef<{ ownerId: string } | null>(null);
@@ -215,7 +217,10 @@ export default function OwnerUnitRegistryPage() {
                     <TableCell><Stack direction="row" spacing={1} alignItems="center"><CheckCircle2 size={14} color={unit.maintenanceStatus === 'normal' ? '#047857' : '#92400e'} /><Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, fontWeight: 900 }}>{String(unit.maintenanceStatus || 'normal').replaceAll('_', ' ').toUpperCase()}</Typography></Stack></TableCell>
                     <TableCell>
                       {(unit as any).tenantUid || (unit as any).tenantId || (unit as any).currentTenantId ? (
-                        <Button size="small" variant="outlined" onClick={() => setScheduleUnit(unit)} sx={{ color: binThemeTokens.textPrimary, borderColor: binThemeTokens.gold, fontWeight: 900 }}>{tx('owner.units.rent_schedule', 'Rent schedule')}</Button>
+                        <Stack direction="row" spacing={1}>
+                          <Button size="small" variant="outlined" onClick={() => setAgreementUnit(unit)} sx={{ color: binThemeTokens.textPrimary, borderColor: binThemeTokens.gold, fontWeight: 900 }}>{tx('owner.units.agreement', 'Agreement')}</Button>
+                          <Button size="small" variant="outlined" onClick={() => setScheduleUnit(unit)} sx={{ color: binThemeTokens.textPrimary, borderColor: binThemeTokens.gold, fontWeight: 900 }}>{tx('owner.units.rent_schedule', 'Rent schedule')}</Button>
+                        </Stack>
                       ) : null}
                     </TableCell>
                   </TableRow>
@@ -226,6 +231,7 @@ export default function OwnerUnitRegistryPage() {
         </TableContainer>
       )}
 
+      {agreementUnit && <OwnerTenancyAgreementDialog open onClose={() => setAgreementUnit(null)} unit={agreementUnit as any} emirate={properties.find((p) => p.id === agreementUnit.propertyId)?.emirate} />}
       {scheduleUnit && <OwnerRentScheduleDialog open onClose={() => setScheduleUnit(null)} unit={scheduleUnit as any} />}
 
       <Dialog open={wizardOpen} onClose={() => setWizardOpen(false)} maxWidth="sm" fullWidth>
