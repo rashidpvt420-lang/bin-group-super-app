@@ -18,3 +18,4 @@ export { onOwnerApprovalDecision, submitOwnerApprovalDecision } from './ownerTru
 export { runContractRenewalWatch, rebuildContractRenewalWatch } from './contractRenewalPdfSystem';
 export { sendMonthlyOwnerPropertyReports, rebuildMonthlyOwnerPropertyReports } from './monthlyOwnerPropertyReportSystem';
 export { listUnifiedDocumentVault, getUnifiedDocumentFile } from './unifiedDocumentVault';
+export { ownerRecordLeaseAgreement } from './leaseAgreements';

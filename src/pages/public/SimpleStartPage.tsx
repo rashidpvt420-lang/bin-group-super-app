@@ -1,6 +1,7 @@
 import React from 'react';
 import { Box, Button, Chip, Container, Grid, Paper, Stack, Typography, alpha } from '@mui/material';
 import { ArrowRight, Award, Briefcase, Building2, CheckCircle2, Globe, Home, Mail, MapPin, MessageSquare, Phone, Search, ShieldCheck, Smartphone, Sparkles, UserRound, Wrench, Zap } from 'lucide-react';
+import { emitFabEvent } from '../../components/ui/unifiedFab';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
@@ -246,6 +247,10 @@ export default function SimpleStartPage() {
           <Stack spacing={4}>
             <Paper sx={{ p: { xs: 3, md: 5 }, borderRadius: 6, border: `1px solid ${alpha(binThemeTokens.gold, 0.18)}`, background: `linear-gradient(135deg, ${alpha(binThemeTokens.gold, 0.11)}, #FFFFFF)`, boxShadow: '0 22px 56px rgba(17,24,39,0.08)' }}>
               <Stack spacing={2} alignItems="flex-start">
+                <Stack direction="row" spacing={1} sx={{ alignSelf: isRTL ? 'flex-start' : 'flex-end' }}>
+                <Button type="button" data-testid="public-ai-open" aria-label={ar ? 'افتح مساعد BIN الذكي' : 'Open BIN AI assistant'} startIcon={<Sparkles size={16} />} onClick={() => emitFabEvent('bin:open-ai')} sx={{ borderRadius: 2, border: `1px solid ${alpha(gold, 0.35)}`, color: goldText, bgcolor: '#fff', fontWeight: 950, textTransform: 'none' }}>
+                  {ar ? 'اسأل المساعد' : 'Ask AI'}
+                </Button>
                 <Button
                   type="button"
                   data-testid="language-toggle"
@@ -253,8 +258,7 @@ export default function SimpleStartPage() {
                   startIcon={<Globe size={16} />}
                   onClick={() => setLang(ar ? 'en' : 'ar')}
                   sx={{
-                    alignSelf: isRTL ? 'flex-start' : 'flex-end',
-                    borderRadius: 2,
+                                        borderRadius: 2,
                     border: `1px solid ${alpha(gold, 0.35)}`,
                     color: goldText,
                     bgcolor: '#fff',
@@ -264,7 +268,8 @@ export default function SimpleStartPage() {
                 >
                   {ar ? 'EN' : 'AR'}
                 </Button>
-                <Chip icon={<ShieldCheck size={16} />} label={ar ? 'BIN GROUP · إدارة العقارات والصيانة' : 'BIN GROUP · Property Management & Maintenance'} sx={{ bgcolor: alpha(binThemeTokens.gold, 0.15), color: goldText, fontWeight: 950 }} />
+                </Stack>
+                <Chip icon={<ShieldCheck size={16} />} label={ar ? 'BIN GROUP · إدارة العقارات والصيانة' : 'BIN GROUP · Property Management & Maintenance'} sx={{ height: 'auto', py: 0.5, maxWidth: '100%', '& .MuiChip-label': { whiteSpace: 'normal', overflow: 'visible', textOverflow: 'clip' },  bgcolor: alpha(binThemeTokens.gold, 0.15), color: goldText, fontWeight: 950 }} />
                 <Typography component="h1" variant="h2" sx={{ color: '#111827', fontWeight: 950, letterSpacing: -1.2, lineHeight: 1.08, maxWidth: 860 }}>
                   {ar ? 'كيف تريد أن نساعدك اليوم؟' : 'How can we help you today?'}
                 </Typography>
