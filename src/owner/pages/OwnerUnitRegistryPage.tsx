@@ -5,6 +5,7 @@ import { collection, db, functions, getDocs, httpsCallable, query, where } from 
 import { useRole } from '../../context/RoleContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
+import OwnerRentScheduleDialog from '../components/OwnerRentScheduleDialog';
 
 type PropertyDoc = { id: string; propertyName?: string; name?: string; ownerEmail?: string; ownerId?: string; ownerUid?: string };
 type UnitDoc = { id: string; propertyId?: string; propertyName?: string; unitNumber?: string; floor?: number; floorNumber?: number; tenantName?: string; tenantEmail?: string; occupancyStatus?: string; status?: string; tenantStatus?: string; maintenanceStatus?: string; rentAmount?: number; annualRent?: number };
@@ -40,6 +41,7 @@ export default function OwnerUnitRegistryPage() {
   const [registryOwnerId, setRegistryOwnerId] = useState('');
   const [noticeSeverity, setNoticeSeverity] = useState<'success' | 'warning'>('success');
   const [loadFailed, setLoadFailed] = useState(false);
+  const [scheduleUnit, setScheduleUnit] = useState<UnitDoc | null>(null);
   const currentOwnerId = useRef(user?.uid || '');
   currentOwnerId.current = user?.uid || '';
   const submission = useRef<{ ownerId: string } | null>(null);
@@ -201,7 +203,7 @@ export default function OwnerUnitRegistryPage() {
       ) : (
         <TableContainer component={Paper} sx={{ bgcolor: '#FFFFFF', border: `1px solid ${binThemeTokens.border}`, borderRadius: 6 }}>
           <Table>
-            <TableHead><TableRow><TableCell>{tx('owner.units.unit_col', 'UNIT')}</TableCell><TableCell>{tx('owner.units.occupancy_col', 'OCCUPANCY')}</TableCell><TableCell>{tx('owner.units.rent_col', 'RENT')}</TableCell><TableCell>{tx('owner.units.maintenance_col', 'MAINTENANCE')}</TableCell></TableRow></TableHead>
+            <TableHead><TableRow><TableCell>{tx('owner.units.unit_col', 'UNIT')}</TableCell><TableCell>{tx('owner.units.occupancy_col', 'OCCUPANCY')}</TableCell><TableCell>{tx('owner.units.rent_col', 'RENT')}</TableCell><TableCell>{tx('owner.units.maintenance_col', 'MAINTENANCE')}</TableCell><TableCell>{tx('owner.units.actions_col', 'ACTIONS')}</TableCell></TableRow></TableHead>
             <TableBody>
               {filtered.map((unit) => {
                 const status = statusOf(unit);
@@ -211,6 +213,11 @@ export default function OwnerUnitRegistryPage() {
                     <TableCell><Chip label={status} size="small" sx={{ color: statusColor(status), bgcolor: alpha(statusColor(status), 0.1), fontWeight: 950 }} /> <Typography variant="caption" sx={{ color: unit.tenantName ? binThemeTokens.textPrimary : binThemeTokens.textSecondary, ml: 1 }}>{unit.tenantName || unit.tenantEmail || tx('owner.units.unassigned', 'Unassigned')}</Typography></TableCell>
                     <TableCell><Typography sx={{ color: unit.rentAmount || unit.annualRent ? '#047857' : binThemeTokens.textSecondary, fontWeight: 900 }}>{unit.rentAmount || unit.annualRent ? `AED ${Number(unit.rentAmount || unit.annualRent).toLocaleString()}` : '—'}</Typography></TableCell>
                     <TableCell><Stack direction="row" spacing={1} alignItems="center"><CheckCircle2 size={14} color={unit.maintenanceStatus === 'normal' ? '#047857' : '#92400e'} /><Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, fontWeight: 900 }}>{String(unit.maintenanceStatus || 'normal').replaceAll('_', ' ').toUpperCase()}</Typography></Stack></TableCell>
+                    <TableCell>
+                      {(unit as any).tenantUid || (unit as any).tenantId || (unit as any).currentTenantId ? (
+                        <Button size="small" variant="outlined" onClick={() => setScheduleUnit(unit)} sx={{ color: binThemeTokens.textPrimary, borderColor: binThemeTokens.gold, fontWeight: 900 }}>{tx('owner.units.rent_schedule', 'Rent schedule')}</Button>
+                      ) : null}
+                    </TableCell>
                   </TableRow>
                 );
               })}
@@ -218,6 +225,8 @@ export default function OwnerUnitRegistryPage() {
           </Table>
         </TableContainer>
       )}
+
+      {scheduleUnit && <OwnerRentScheduleDialog open onClose={() => setScheduleUnit(null)} unit={scheduleUnit as any} />}
 
       <Dialog open={wizardOpen} onClose={() => setWizardOpen(false)} maxWidth="sm" fullWidth>
         <DialogTitle>{tx('owner.units.generate_dialog_title', 'Generate property units')}</DialogTitle>
