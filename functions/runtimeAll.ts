@@ -23,3 +23,4 @@ export { ownerProposeLeaseRenewal, tenantRespondLeaseRenewal } from './leaseRene
 export { onLeaseRenewalDeclinedMarkVacating, onMoveOutInspectionMarkVacating, markEndedLeasesVacant, ownerPrepareUnitListing } from './unitVacancy';
 export { notifyBrokersOfNewVacancy } from './brokerVacancyAlerts';
 export { ownerInviteTenantToUnit, ownerListTenantInvitations } from './ownerTenantInvites';
+export { getOwnerKpis } from './ownerKpis';
