@@ -57,6 +57,7 @@ export const ROLE_FAB_ACTIONS: Record<NavRole | 'admin', FabAction[]> = {
   ],
   broker: [
     { key: 'lead', en: 'Add a lead', ar: 'إضافة عميل', path: '/broker/leads/new' },
+    { key: 'redesign', en: 'Redesign a listing with AI', ar: 'أعد تصميم عقار بالذكاء الاصطناعي', path: '/broker/design-studio' },
     { key: 'ai', en: 'Ask BIN AI', ar: 'اسأل مساعد BIN', event: 'bin:open-ai' },
   ],
   admin: [
