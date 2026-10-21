@@ -103,8 +103,8 @@ export default function PilotFeedbackPage() {
             </Grid>
             <Grid item xs={12} md={4}>
               <FormControl fullWidth sx={inputSx}>
-                <InputLabel>Testing as</InputLabel>
-                <Select label="Testing as" value={role} onChange={(e) => setRole(e.target.value)}>
+                <InputLabel id="feedback-role-label">Testing as</InputLabel>
+                <Select labelId="feedback-role-label" id="feedback-role" label="Testing as" value={role} onChange={(e) => setRole(e.target.value)}>
                   <MenuItem value="owner">Owner</MenuItem>
                   <MenuItem value="tenant">Tenant</MenuItem>
                   <MenuItem value="technician">Technician</MenuItem>
@@ -115,8 +115,8 @@ export default function PilotFeedbackPage() {
             </Grid>
             <Grid item xs={12} md={4}>
               <FormControl fullWidth sx={inputSx}>
-                <InputLabel>Area tested</InputLabel>
-                <Select label="Area tested" value={area} onChange={(e) => setArea(e.target.value)}>
+                <InputLabel id="feedback-area-label">Area tested</InputLabel>
+                <Select labelId="feedback-area-label" id="feedback-area" label="Area tested" value={area} onChange={(e) => setArea(e.target.value)}>
                   <MenuItem value="home">Home page</MenuItem>
                   <MenuItem value="login">Login / password reset</MenuItem>
                   <MenuItem value="owner_onboarding">Owner onboarding</MenuItem>
@@ -132,8 +132,8 @@ export default function PilotFeedbackPage() {
             </Grid>
             <Grid item xs={12} md={4}>
               <FormControl fullWidth sx={inputSx}>
-                <InputLabel>Rating</InputLabel>
-                <Select label="Rating" value={rating} onChange={(e) => setRating(e.target.value)}>
+                <InputLabel id="feedback-rating-label">Rating</InputLabel>
+                <Select labelId="feedback-rating-label" id="feedback-rating" label="Rating" value={rating} onChange={(e) => setRating(e.target.value)}>
                   <MenuItem value="5">5 - Excellent</MenuItem>
                   <MenuItem value="4">4 - Good</MenuItem>
                   <MenuItem value="3">3 - Needs work</MenuItem>
