@@ -30,12 +30,12 @@ export const COMPANY_PROFILE_DOC_PATH = ['settings', 'companyProfile'] as const;
 
 export const DEFAULT_COMPANY_PROFILE: CompanyProfile = {
   companyName: 'BIN GROUP - UAE General Maintenance, Property Management & Workforce OS',
-  licenseInfo: 'All Kind Building Projects Contracting - L.L.C - S.P.C | UAE maintenance, property management, digital property-care operations, paperless staff self-service, and workforce compliance operating model',
-  headline: 'BIN GROUP is a UAE maintenance and property management company rooted in Al Ain since 2010, now operating through a formally licensed LLC structure and building a trusted digital property-care and paperless staff operations platform.',
+  licenseInfo: 'All Kind Building Projects Contracting - L.L.C - S.P.C | Trade licence CN-5914744 (issued 2025) | UAE maintenance, property management, digital property-care operations, paperless staff self-service, and workforce compliance operating model',
+  headline: 'BIN GROUP is a UAE maintenance and property management company rooted in Al Ain, now operating through a formally licensed LLC structure and building a trusted digital property-care and paperless staff operations platform.',
   mission: 'To deliver dependable maintenance and property management services that protect clients\' properties, reduce operational stress, and improve daily property care through clear communication, professional service standards, digital records, and accountable field execution.',
   vision: 'To become a trusted UAE property-care company starting from Al Ain, known for reliable maintenance, transparent property management, smart digital operations, paperless staff workflows, and long-term client relationships.',
   promise: 'Trusted maintenance and property care, rooted in Al Ain: property submission, BIN GROUP review, physical inspection, final verified quotation, documented contract, payment only when contractually due, activation controls, tenant requests, technician evidence, owner reports, staff self-service, compliance records, and no unnecessary paperwork.',
-  aboutText: 'BIN GROUP began as a small local maintenance operation in Al Ain in 2010, supporting practical property-care needs in the local market. The company has now moved into its formally licensed LLC phase, building on that experience with a more structured and technology-driven operating model for villas, apartments, buildings, hotels, schools, clinics, hospitals, offices, accommodations, retail spaces, warehouses, and large property portfolios. The public profile is designed around trust: legal company identity, licence details, service coverage, direct contact, clear service scope, and honest claims that can be verified. BIN GROUP also develops Workforce OS, a UAE-focused, multilingual, paperless staff self-service model for maintenance and property management field teams. The system is positioned as a field-operational HR workflow, not as an unsupported world-first claim: staff can request leave, upload sick leave documents, raise overtime and payroll queries, request HR letters, track document renewals, report safety issues, request tools/PPE, flag accommodation matters, and communicate with HR/Admin through one controlled digital chain.',
+  aboutText: 'BIN GROUP is rooted in Al Ain, where it began as a small local maintenance operation supporting practical property-care needs in the local market. The company has now moved into its formally licensed LLC phase, building on that experience with a more structured and technology-driven operating model for villas, apartments, buildings, hotels, schools, clinics, hospitals, offices, accommodations, retail spaces, warehouses, and large property portfolios. The public profile is designed around trust: legal company identity, licence details, service coverage, direct contact, clear service scope, and honest claims that can be verified. BIN GROUP also develops Workforce OS, a UAE-focused, multilingual, paperless staff self-service model for maintenance and property management field teams. The system is positioned as a field-operational HR workflow, not as an unsupported world-first claim: staff can request leave, upload sick leave documents, raise overtime and payroll queries, request HR letters, track document renewals, report safety issues, request tools/PPE, flag accommodation matters, and communicate with HR/Admin through one controlled digital chain.',
   services: [
     { id: 'maintenance-contracts', title: 'Annual Maintenance Contracts', desc: 'Custom maintenance contracts for villas, apartments, towers, hotels, schools, clinics, hospitals, offices, accommodations, malls, warehouses, and large portfolios. Scope is prepared by property type, asset condition, SLA level, risk profile, and service coverage.', icon: 'wrench' },
     { id: 'property-management', title: 'Property Management Support', desc: 'Owner and tenant coordination, complaint follow-up, lease and occupancy context, vendor supervision, property condition records, move-in/move-out support, service reporting, and portfolio visibility subject to the company\'s licensed activity scope.', icon: 'briefcase' },
@@ -77,7 +77,7 @@ export const DEFAULT_COMPANY_PROFILE: CompanyProfile = {
   serviceAreas: ['Al Ain', 'Abu Dhabi', 'Dubai', 'Sharjah', 'Ajman', 'Ras Al Khaimah', 'Fujairah', 'Umm Al Quwain'],
   contact: {
     whatsapp: '+971 55 2423233',
-    email: 'owner@bin-group.com',
+    email: 'ceo@bin-groups.com',
     phone: '+971 55 7474560',
   },
   termsUrl: '/terms',
@@ -103,6 +103,8 @@ export function normalizeCompanyProfile(data?: Partial<CompanyProfile> | null): 
     contact: {
       ...DEFAULT_COMPANY_PROFILE.contact,
       ...(safeData?.contact || {}),
+      // owner@bin-group.com was a wrong-domain default; the confirmed public email wins.
+      ...(String(safeData?.contact?.email || '').trim().toLowerCase() === 'owner@bin-group.com' ? { email: DEFAULT_COMPANY_PROFILE.contact.email } : {}),
     },
   } as CompanyProfile;
 
