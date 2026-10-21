@@ -16,6 +16,7 @@ import {
     ChevronLeft, MapPin, Clock, CheckCircle2, AlertCircle,
     MessageSquare, Calendar, Info, ShieldCheck, RotateCcw
 } from 'lucide-react';
+import { normalizeContactPhone, openContactUrl, telHref } from '../../lib/jobContact';
 import { db, doc, functions, httpsCallable, onSnapshot } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
 import { useLanguage } from '../../context/LanguageContext';
@@ -213,7 +214,7 @@ export default function OwnerTicketDetailPage() {
                     }
                     onCallClick={() => {
                         const phone = ticket.assignedTechnicianPhone || ticket.technicianPhone;
-                        if (phone) window.open(`tel:${phone}`);
+                        openContactUrl(telHref(normalizeContactPhone(phone)));
                     }}
                     showTimeline={false}
                 />

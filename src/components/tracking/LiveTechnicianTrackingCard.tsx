@@ -38,6 +38,7 @@ import {
     Wifi,
     WifiOff,
 } from 'lucide-react';
+import { normalizeContactPhone, openContactUrl, telHref } from '../../lib/jobContact';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { useGoogleMaps } from '../../lib/maps';
 import {
@@ -515,7 +516,7 @@ export default function LiveTechnicianTrackingCard({
                                             if (onCallClick) onCallClick();
                                             else {
                                                 const phone = ticket.assignedTechnicianPhone || ticket.technicianPhone;
-                                                if (phone) window.open(`tel:${phone}`);
+                                                openContactUrl(telHref(normalizeContactPhone(phone)));
                                             }
                                         }}
                                         sx={{ bgcolor: alpha(binThemeTokens.gold, 0.1), color: binThemeTokens.gold }}

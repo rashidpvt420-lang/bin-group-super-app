@@ -332,8 +332,21 @@ async function processRenewalRecord(record: RenewalRecord) {
   return { skipped: false, notificationCount, pdfRecordId, pdfUrl };
 }
 
+/** Lease data quality (feature 3): a lease that is not closed must carry an end date to be watched. */
+export function leaseMissingEndDate(data: any) {
+  if (isClosedRenewal(data)) return false;
+  const status = safeString(data.leaseStatus || data.status).toLowerCase();
+  if (["terminated", "cancelled", "ended", "archived"].includes(status)) return false;
+  return expiryDateFrom(data) === null;
+}
+
+export const renewalWatchStats = { docsScanned: 0, leasesMissingEndDate: 0, leasesMissingEndDateSample: [] as string[] };
+
 async function collectRenewalRecords() {
   const output: RenewalRecord[] = [];
+  renewalWatchStats.docsScanned = 0;
+  renewalWatchStats.leasesMissingEndDate = 0;
+  renewalWatchStats.leasesMissingEndDateSample = [];
   const collections: RenewalSource[] = ["contracts", "leases", "tenant_ledger", "propertyPassports"];
   for (const collectionName of collections) {
     let lastDoc: FirebaseFirestore.DocumentSnapshot | null = null;
@@ -349,6 +362,11 @@ async function collectRenewalRecords() {
         break;
       }
       snap.docs.forEach((doc) => {
+        renewalWatchStats.docsScanned += 1;
+        if (collectionName === "leases" && leaseMissingEndDate(doc.data())) {
+          renewalWatchStats.leasesMissingEndDate += 1;
+          if (renewalWatchStats.leasesMissingEndDateSample.length < 20) renewalWatchStats.leasesMissingEndDateSample.push(doc.id);
+        }
         const normalized = normalizeRecord(collectionName, doc.id, doc.data());
         if (normalized) output.push(normalized);
         lastDoc = doc;
@@ -405,8 +423,25 @@ export const runContractRenewalWatch = onSchedule("every 24 hours", async () => 
     if (result.skipped) skipped += 1;
     else processed += 1;
   }
+  const missing = renewalWatchStats.leasesMissingEndDate;
+  if (missing > 0) {
+    // One admin alert per Dubai day: leases without an end date never get renewal reminders.
+    const day = getDubaiMidnight(new Date()).toISOString().slice(0, 10);
+    const admins = await db.collection("users").where("role", "in", ["admin", "super_admin", "ceo", "operations_admin"]).limit(25).get();
+    for (const adminDoc of admins.docs) {
+      await db.collection("notifications").doc(`lease_end_date_gap_${day}_${adminDoc.id}`).set({
+        userId: adminDoc.id, role: "admin", type: "LEASE_DATA_QUALITY",
+        title: `${missing} lease(s) have no end date`,
+        body: "Renewal reminders cannot be sent for leases without an end date. Record the agreement dates from the owner Units page or the admin backfill tool.",
+        link: "/dashboard", read: false, status: "PENDING", createdAt: FieldValue.serverTimestamp(), source: "CONTRACT_RENEWAL_PDF_SYSTEM",
+      }, { merge: true });
+    }
+  }
   await db.collection("system_health").doc("contractRenewals").set({
-    status: "READY",
+    status: missing > 0 ? "DEGRADED_MISSING_END_DATES" : "READY",
+    docsScanned: renewalWatchStats.docsScanned,
+    leasesMissingEndDate: missing,
+    leasesMissingEndDateSample: renewalWatchStats.leasesMissingEndDateSample,
     processed,
     skipped,
     scanned: records.length,

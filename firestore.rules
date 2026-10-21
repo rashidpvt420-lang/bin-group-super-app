@@ -886,11 +886,37 @@ service cloud.firestore {
       return signedIn() && exists(/databases/$(database)/documents/maintenanceTickets/$(ticketId)) && participantCanRead(get(/databases/$(database)/documents/maintenanceTickets/$(ticketId)).data);
     }
 
+    function ticketChatLockedStatus(status) {
+      return status is string && status.upper() in ['CLOSED', 'CANCELLED', 'CANCELED', 'REJECTED', 'RESOLVED', 'TENANT_APPROVED', 'CLOSED_VERIFIED'];
+    }
+
+    // Chat messages: sender is the caller, role is the caller's real role on
+    // this ticket (owner/tenant uid on the ticket, or the assigned approved
+    // technician), fixed field shape, server time, and no new messages once
+    // the ticket is closed/cancelled. Direct uid comparisons keep this inside
+    // Firestore's expression budget.
     function safeTicketMessageCreate(ticketId) {
-      return canAccessMaintenanceTicket(ticketId) &&
-        (!('senderId' in request.resource.data) || request.resource.data.senderId == request.auth.uid) &&
-        (!('userId' in request.resource.data) || request.resource.data.userId == request.auth.uid) &&
-        (!('createdBy' in request.resource.data) || request.resource.data.createdBy == request.auth.uid);
+      let d = request.resource.data;
+      let ticketPath = /databases/$(database)/documents/maintenanceTickets/$(ticketId);
+      let uid = request.auth.uid;
+      return signedIn() &&
+        d.keys().hasOnly(['senderUid', 'senderRole', 'senderName', 'message', 'createdAt']) &&
+        d.keys().hasAll(['senderUid', 'senderRole', 'message', 'createdAt']) &&
+        d.senderUid == uid &&
+        d.createdAt == request.time &&
+        d.message is string && d.message.size() > 0 && d.message.size() <= 2000 &&
+        (!('senderName' in d) || (d.senderName is string && d.senderName.size() <= 80)) &&
+        d.senderRole in ['owner', 'tenant', 'technician'] &&
+        exists(ticketPath) &&
+        ticketChatAllowed(d.senderRole, uid, get(ticketPath).data);
+    }
+
+    function ticketChatAllowed(role, uid, t) {
+      return !ticketChatLockedStatus(t.get('status', '')) && (
+        (role == 'owner' && (t.get('ownerId', null) == uid || t.get('ownerUid', null) == uid)) ||
+        (role == 'tenant' && (t.get('tenantId', null) == uid || t.get('tenantUid', null) == uid)) ||
+        (role == 'technician' && (t.get('assignedTechnicianId', null) == uid || t.get('technicianId', null) == uid) && isApprovedTechnician())
+      );
     }
 
     function ownerBankOwner(data) {
