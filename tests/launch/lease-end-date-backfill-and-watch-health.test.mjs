@@ -15,7 +15,7 @@ test('backfill plan only fills leases that exist and have no end date; dates are
 test('backfill is dry-run by default and needs --apply plus the exact confirm token', async () => {
   const s = await readFile('scripts/backfill-lease-end-dates.mjs', 'utf8');
   assert.match(s, /if \(!args\.apply\) return;/);
-  assert.match(s, /if \(args\.confirm !== token\) throw/);
+  assert.match(s, /timingSafeEqual\(given, expected\)\) throw/);
 });
 
 test('renewal watch reports leases missing an end date and alerts admins', async () => {
