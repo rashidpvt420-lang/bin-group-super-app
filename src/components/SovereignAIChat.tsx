@@ -226,6 +226,16 @@ export const SovereignAIChat: React.FC<SovereignAIChatProps> = ({
   const activeRole = roleData[role] || roleData.unknown;
   const sessionBound = allowLiveProvider && isAuthenticated && (role !== 'admin' || Boolean(authUserId));
 
+  // Reserve scroll space under the page so the floating assistant never
+  // permanently covers the last buttons/links (audit 2026-10-21 P1-7).
+  useEffect(() => {
+    if (typeof document === 'undefined') return undefined;
+    const body = document.body;
+    const previous = body.style.paddingBottom;
+    body.style.paddingBottom = `calc(${FAB_SIZE + 30 + EDGE_PADDING}px + env(safe-area-inset-bottom))`;
+    return () => { body.style.paddingBottom = previous; };
+  }, []);
+
   useEffect(() => {
     try {
       const saved = localStorage.getItem(CHAT_POSITION_KEY);
