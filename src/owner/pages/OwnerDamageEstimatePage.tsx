@@ -101,7 +101,7 @@ export default function OwnerDamageEstimatePage() {
             {tx('damage.prescreen_overline', 'AI VISUAL PRE-SCREEN')}
           </Typography>
         </Stack>
-        <Typography variant="h4" fontWeight={950} sx={{ color: '#fff', mb: 1 }}>
+        <Typography variant="h4" fontWeight={950} sx={{ color: binThemeTokens.textPrimary, mb: 1 }}>
           {tx('damage.prescreen_title', 'Photo → Advisory Pre-Screen')}
         </Typography>
         <Typography variant="body2" sx={{ color: alpha('#fff', 0.52), maxWidth: 680, fontWeight: 700, lineHeight: 1.7 }}>

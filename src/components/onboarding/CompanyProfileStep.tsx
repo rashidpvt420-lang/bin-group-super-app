@@ -96,14 +96,14 @@ const CompanyProfileStep: React.FC<{ onNext: () => void }> = ({ onNext }) => {
     ];
 
     const fieldSx = {
-        '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.62)' },
+        '& .MuiInputLabel-root': { color: binThemeTokens.textSecondary },
         '& .MuiOutlinedInput-root': {
-            color: '#FFF', bgcolor: 'rgba(255,255,255,0.035)', borderRadius: 3,
+            color: binThemeTokens.textPrimary, bgcolor: binThemeTokens.textSecondary, borderRadius: 3,
             '& fieldset': { borderColor: alpha(binThemeTokens.gold, 0.16) },
             '&:hover fieldset': { borderColor: alpha(binThemeTokens.gold, 0.36) },
             '&.Mui-focused fieldset': { borderColor: binThemeTokens.gold },
         },
-        '& .MuiFormHelperText-root': { color: 'rgba(255,255,255,0.54)' },
+        '& .MuiFormHelperText-root': { color: binThemeTokens.textSecondary },
     };
 
     return (
@@ -113,10 +113,10 @@ const CompanyProfileStep: React.FC<{ onNext: () => void }> = ({ onNext }) => {
                     <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: isRTL ? 0 : 4, mb: 1.5, display: 'block' }}>
                         {copy('BIN GROUP OWNER ONBOARDING', 'تسجيل ملاك BIN GROUP')}
                     </Typography>
-                    <Typography variant="h3" fontWeight="950" sx={{ color: '#FFF', mb: 2, letterSpacing: isRTL ? 0 : -1.5, lineHeight: 1.05 }}>
+                    <Typography variant="h3" fontWeight="950" sx={{ color: binThemeTokens.textPrimary, mb: 2, letterSpacing: isRTL ? 0 : -1.5, lineHeight: 1.05 }}>
                         {copy('One verified property-operations workflow.', 'مسار موثّق وموحّد لتشغيل العقار.')}
                     </Typography>
-                    <Typography variant="h6" sx={{ color: 'rgba(255,255,255,0.66)', maxWidth: 940, mx: 'auto', lineHeight: 1.75, fontWeight: 400 }}>
+                    <Typography variant="h6" sx={{ color: binThemeTokens.textSecondary, maxWidth: 940, mx: 'auto', lineHeight: 1.75, fontWeight: 400 }}>
                         {copy(
                             'Register the legal contracting identity. Rent remains in the Owner’s registered account; BIN GROUP fees and approved maintenance charges are invoiced separately.',
                             'سجّل الهوية القانونية للطرف المتعاقد. يبقى الإيجار في حساب المالك المسجل؛ وتُفوتر رسوم BIN GROUP وتكاليف الصيانة المعتمدة بشكل منفصل.'
@@ -126,7 +126,7 @@ const CompanyProfileStep: React.FC<{ onNext: () => void }> = ({ onNext }) => {
 
                 <Grid container spacing={4} alignItems="stretch">
                     <Grid item xs={12} lg={7}>
-                        <Paper sx={{ height: '100%', p: { xs: 3, md: 4 }, borderRadius: 6, bgcolor: 'rgba(22,22,24,0.72)', border: `1px solid ${alpha(binThemeTokens.gold, 0.22)}`, boxShadow: `0 24px 80px ${alpha('#000', 0.42)}` }}>
+                        <Paper sx={{ height: '100%', p: { xs: 3, md: 4 }, borderRadius: 6, bgcolor: binThemeTokens.card, border: `1px solid ${alpha(binThemeTokens.gold, 0.22)}`, boxShadow: `0 24px 80px ${alpha('#000', 0.42)}` }}>
                             <Stack spacing={3}>
                                 <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.2, justifyContent: { xs: 'center', md: isRTL ? 'flex-end' : 'flex-start' } }}>
                                     {chips.map((chip) => <Chip key={chip} label={chip} size="small" sx={{ color: binThemeTokens.champagne, border: `1px solid ${alpha(binThemeTokens.gold, 0.28)}`, bgcolor: alpha(binThemeTokens.gold, 0.08), fontWeight: 850 }} />)}
@@ -136,28 +136,28 @@ const CompanyProfileStep: React.FC<{ onNext: () => void }> = ({ onNext }) => {
                                         const Icon = icons[index];
                                         return (
                                             <Grid item xs={12} md={6} key={card.title}>
-                                                <Box sx={{ height: '100%', p: 3, borderRadius: 4, bgcolor: alpha('#FFFFFF', 0.035), border: `1px solid ${alpha(binThemeTokens.gold, 0.14)}` }}>
+                                                <Box sx={{ height: '100%', p: 3, borderRadius: 4, bgcolor: binThemeTokens.softCanvas, border: `1px solid ${alpha(binThemeTokens.gold, 0.14)}` }}>
                                                     <Box sx={{ color: binThemeTokens.gold, mb: 2 }}><Icon size={26} /></Box>
-                                                    <Typography variant="h6" fontWeight="950" sx={{ color: '#FFF', mb: 1 }}>{card.title}</Typography>
-                                                    <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.62)', lineHeight: 1.65, mb: 2 }}>{card.desc}</Typography>
-                                                    <Stack spacing={1}>{card.points.map((point) => <Box key={point} sx={{ display: 'flex', gap: 1, alignItems: 'flex-start', flexDirection: isRTL ? 'row-reverse' : 'row' }}><Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: binThemeTokens.gold, mt: 1 }} /><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.74)', fontWeight: 750, lineHeight: 1.5 }}>{point}</Typography></Box>)}</Stack>
+                                                    <Typography variant="h6" fontWeight="950" sx={{ color: binThemeTokens.textPrimary, mb: 1 }}>{card.title}</Typography>
+                                                    <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary, lineHeight: 1.65, mb: 2 }}>{card.desc}</Typography>
+                                                    <Stack spacing={1}>{card.points.map((point) => <Box key={point} sx={{ display: 'flex', gap: 1, alignItems: 'flex-start', flexDirection: isRTL ? 'row-reverse' : 'row' }}><Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: binThemeTokens.gold, mt: 1 }} /><Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, fontWeight: 750, lineHeight: 1.5 }}>{point}</Typography></Box>)}</Stack>
                                                 </Box>
                                             </Grid>
                                         );
                                     })}
                                 </Grid>
                                 <Divider sx={{ borderColor: alpha(binThemeTokens.gold, 0.12) }} />
-                                <Grid container spacing={1.5}>{miniProof.map((item) => <Grid item xs={12} sm={6} md={4} key={item.label}><Box sx={{ display: 'flex', alignItems: 'center', gap: 1.2, p: 1.5, borderRadius: 3, bgcolor: alpha('#FFFFFF', 0.025), color: 'rgba(255,255,255,0.78)', flexDirection: isRTL ? 'row-reverse' : 'row' }}><Box sx={{ color: binThemeTokens.gold }}>{item.icon}</Box><Typography variant="caption" fontWeight="850">{item.label}</Typography></Box></Grid>)}</Grid>
+                                <Grid container spacing={1.5}>{miniProof.map((item) => <Grid item xs={12} sm={6} md={4} key={item.label}><Box sx={{ display: 'flex', alignItems: 'center', gap: 1.2, p: 1.5, borderRadius: 3, bgcolor: alpha('#FFFFFF', 0.025), color: binThemeTokens.textSecondary, flexDirection: isRTL ? 'row-reverse' : 'row' }}><Box sx={{ color: binThemeTokens.gold }}>{item.icon}</Box><Typography variant="caption" fontWeight="850">{item.label}</Typography></Box></Grid>)}</Grid>
                             </Stack>
                         </Paper>
                     </Grid>
 
                     <Grid item xs={12} lg={5}>
-                        <Paper sx={{ height: '100%', p: { xs: 3, md: 4 }, borderRadius: 6, bgcolor: 'rgba(22,22,24,0.9)', border: `1px solid ${alpha(binThemeTokens.gold, 0.2)}` }}>
+                        <Paper sx={{ height: '100%', p: { xs: 3, md: 4 }, borderRadius: 6, bgcolor: binThemeTokens.card, border: `1px solid ${alpha(binThemeTokens.gold, 0.2)}` }}>
                             <Stack spacing={3.2}>
                                 <Box>
-                                    <Typography variant="h5" fontWeight="950" sx={{ color: '#FFF', mb: 1 }}>{copy('Owner / Company Identity', 'هوية المالك / الشركة')}</Typography>
-                                    <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.56)', lineHeight: 1.7 }}>{copy('Use the exact legal identity that will sign the service agreement.', 'استخدم الهوية القانونية المطابقة للطرف الذي سيوقع اتفاقية الخدمات.')}</Typography>
+                                    <Typography variant="h5" fontWeight="950" sx={{ color: binThemeTokens.textPrimary, mb: 1 }}>{copy('Owner / Company Identity', 'هوية المالك / الشركة')}</Typography>
+                                    <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary, lineHeight: 1.7 }}>{copy('Use the exact legal identity that will sign the service agreement.', 'استخدم الهوية القانونية المطابقة للطرف الذي سيوقع اتفاقية الخدمات.')}</Typography>
                                 </Box>
                                 <Alert severity="info" icon={<ShieldCheck size={20} />}>{copy('The legal name and identity reference will be checked against the uploaded KYC documents.', 'سيتم التحقق من الاسم القانوني ومرجع الهوية مقابل مستندات التحقق المرفوعة.')}</Alert>
                                 <TextField fullWidth required label={t('onboarding.company_name')} value={companyProfile.name} onChange={(event) => updateCompanyProfile({ name: event.target.value })} InputProps={{ startAdornment: <Building2 size={20} style={iconSpacing} /> }} helperText={copy('Company legal name or individual Owner full legal name.', 'الاسم القانوني للشركة أو الاسم القانوني الكامل للمالك الفرد.')} sx={fieldSx} />

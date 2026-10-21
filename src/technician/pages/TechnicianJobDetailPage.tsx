@@ -27,6 +27,7 @@ import {
     readNativeTechnicianInstallationHash,
 } from '../utils/technicianInstallationBinding';
 import { formatStatusLabel } from '../../theme/statusColors';
+import JobEvidenceSteps from '../components/JobEvidenceSteps';
 
 type Step = 'ACCEPTED' | 'EN_ROUTE' | 'ARRIVED' | 'IN_PROGRESS' | 'COMPLETED';
 type TechnicianTicketRecord = Record<string, any> & { id: string };
@@ -290,6 +291,15 @@ export default function TechnicianJobDetailPage() {
     const closeBlockers = proofChecks.filter((check) => !check.ready).map((check) => check.label);
     const proofReadyCount = proofChecks.length - closeBlockers.length;
     const canComplete = closeBlockers.length === 0;
+    const arrivedOrLater = ['ARRIVED', 'IN_PROGRESS', 'WAITING_PARTS', 'COMPLETED', 'PENDING_TENANT_APPROVAL', 'CLOSED'].includes(String(ticket?.status || '').toUpperCase());
+    const evidenceSteps = [
+        { key: 'arrive', label: tx('tech.job.step.arrive', 'Arrive and confirm GPS'), done: arrivedOrLater },
+        { key: 'before', label: tx('tech.job.step.before', 'Take before photos'), done: hasTechnicianBeforeProof },
+        { key: 'after', label: tx('tech.job.step.after', 'Take after photos'), done: hasProtectedAfterProof },
+        { key: 'notes', label: tx('tech.job.step.notes', 'Write what you fixed'), done: hasResolutionNotes },
+        { key: 'parts', label: tx('tech.job.step.parts', 'Add parts used (or none)'), done: hasPartsDisposition },
+        { key: 'close', label: tx('tech.job.step.close', 'Close the job — the tenant is asked to sign'), done: false },
+    ];
 
     const isRetryableNetworkError = (error: any) => {
         const code = String(error?.code || '').toLowerCase();
@@ -532,6 +542,8 @@ export default function TechnicianJobDetailPage() {
                     <Chip data-testid="technician-job-status-chip" label={status.replace(/_/g, ' ')} sx={{ bgcolor: alpha(binThemeTokens.gold, 0.15), color: JOB_READABLE.gold, fontWeight: 950 }} />
                 </Stack>
             </Paper>
+
+            <JobEvidenceSteps isRTL={isRTL} title={tx('tech.job.steps_title', 'Steps for this job')} steps={evidenceSteps} />
 
             <Grid container spacing={3}>
                 <Grid item xs={12} lg={8}>

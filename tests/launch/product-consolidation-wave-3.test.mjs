@@ -64,7 +64,8 @@ test('Technician before-work photo evidence is durable and remains behind protec
   expectAll(statusStrip, [
     /data-unsent-actions/,
     /data-unsent-evidence/,
-    /Mission completion is never auto-confirmed from the queue/,
+    /Finish the job only after your photos show as sent/,
+    /Queued items never complete a job on their own/,
   ], 'visible sync truth');
 
   assert.match(app, /<TechnicianSyncStatusStrip \/>/);

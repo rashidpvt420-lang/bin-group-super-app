@@ -289,9 +289,45 @@ const copy = {
   },
 };
 
+// Each audience route gets its own headline instead of the generic home hero
+// (audit 2026-10-21 P1-2). Pages without an entry keep the home copy.
+export const pageHeadlines: Record<'en' | 'ar', Partial<Record<PublicMarketingPageKey, [string, string]>>> = {
+  en: {
+    owners: ['Property care for UAE owners, with proof for every dirham.', 'Submit your property, get an inspected quote, approve costs with photos, and keep a permanent record of every job, tenant and payment.'],
+    tenants: ['Report a repair in a minute and see who is coming.', 'Tenants raise issues with photos, follow the technician, and keep lease documents and move-in records in one place.'],
+    technicians: ['Clear jobs, fair records, and proof of your work.', 'Technicians get assigned jobs with location, priority and instructions, capture before/after proof, and build a verified work history.'],
+    brokers: ['Register leads once and keep your attribution.', 'Brokers record owners and tenants they introduce, follow each deal, and request commission payout after verification.'],
+    'property-management': ['Property management with a ledger owners can read.', 'Tenant registry, rent records, management fee logic, maintenance deductions and owner reports in one system.'],
+    maintenance: ['Maintenance that runs on tickets, not phone calls.', 'Every request becomes a ticket with priority, SLA timer, technician dispatch, before/after photos and a closure record.'],
+    'majlis-care': ['Majlis care, kept ready for guests.', 'Scheduled cleaning, AC, lighting and upholstery care for majlis spaces, with photo proof after every visit.'],
+    stadiums: ['Facility operations for stadiums and venues.', 'Planned maintenance, event-day readiness checks and fast fault response with a full service record.'],
+    hotels: ['Back-of-house maintenance for hotels.', 'Room and plant maintenance tickets, SLA tracking and proof of work so rooms return to service faster.'],
+    malls: ['Maintenance operations for malls and retail.', 'Common-area and tenant-unit requests, planned maintenance and SLA reporting for retail assets.'],
+    hospitals: ['Facility care for clinics and hospitals.', 'Critical-system maintenance with priority dispatch, documented checks and audit-ready service history.'],
+    'government-properties': ['Property care for government assets.', 'Structured maintenance, inspection records and approval trails for government buildings and housing.'],
+    contact: ['Contact BIN GROUP', 'Call, WhatsApp or email our Al Ain office. We reply in English and Arabic.'],
+  },
+  ar: {
+    owners: ['عناية بعقارك في الإمارات مع إثبات لكل درهم.', 'سجّل عقارك، واحصل على عرض سعر بعد المعاينة، ووافق على التكاليف بالصور، واحتفظ بسجل دائم لكل عمل ومستأجر ودفعة.'],
+    tenants: ['أبلغ عن العطل خلال دقيقة واعرف من سيحضر.', 'يرفع المستأجر البلاغ بالصور، ويتابع الفني، ويحفظ مستندات العقد وسجلات الاستلام في مكان واحد.'],
+    technicians: ['مهام واضحة وسجل عادل وإثبات لعملك.', 'يستلم الفني المهام مع الموقع والأولوية والتعليمات، ويوثق قبل وبعد، ويبني سجل عمل موثق.'],
+    brokers: ['سجّل العميل مرة واحدة واحفظ حقك.', 'يسجل الوسيط الملاك والمستأجرين الذين يقدمهم، ويتابع كل صفقة، ويطلب صرف العمولة بعد التحقق.'],
+    contact: ['تواصل مع مجموعة بن', 'اتصل بنا أو راسلنا عبر واتساب أو البريد الإلكتروني في مكتب العين. نرد بالعربية والإنجليزية.'],
+  },
+};
+
+export const CONTACT_DETAILS = {
+  phone: '+971 55 7474560',
+  whatsapp: '+971 55 2423233',
+  email: 'ceo@bin-groups.com',
+  address: 'Al Ain, Abu Dhabi, United Arab Emirates',
+};
+
 export default function PublicMarketingPage({ page = 'home' }: PublicMarketingPageProps) {
   const { lang, isRTL } = useLanguage();
-  const c = lang === 'ar' ? copy.ar : copy.en;
+  const base = lang === 'ar' ? copy.ar : copy.en;
+  const headline = pageHeadlines[lang === 'ar' ? 'ar' : 'en'][page] || pageHeadlines.en[page];
+  const c: CopyShape = headline ? { ...base, title: headline[0], desc: headline[1] } : base;
 
   React.useEffect(() => {
     if (window.location.hash !== COMPANY_PROFILE_ANCHOR) return;
@@ -307,9 +343,10 @@ export default function PublicMarketingPage({ page = 'home' }: PublicMarketingPa
         <Nav c={c} />
         <Hero c={c} />
         <Container maxWidth="xl" sx={{ pb: 8 }}>
+          {page === 'contact' ? <ContactDetailsSection /> : null}
+          {page === 'contact' ? <ContactMapSection /> : null}
           <Trust />
           <CompanyProfileBlock c={c} />
-          {page === 'contact' ? <ContactMapSection /> : null}
           <Inquiry c={c} />
         </Container>
       </Box>
@@ -661,6 +698,33 @@ function Inquiry({ c }: { c: CopyShape }) {
             <ActionButton href={WHATSAPP_URL} icon={<MessageCircle size={17} />}>{c.whatsapp}</ActionButton>
           </Stack>
         </Grid>
+      </Grid>
+    </SectionPaper>
+  );
+}
+
+function ContactDetailsSection() {
+  const { lang } = useLanguage();
+  const ar = lang === 'ar';
+  const wa = CONTACT_DETAILS.whatsapp.replace(/[^0-9]/g, '');
+  const rows: Array<[string, string, string | undefined]> = [
+    [ar ? 'الهاتف' : 'Phone', CONTACT_DETAILS.phone, `tel:${CONTACT_DETAILS.phone.replace(/\s/g, '')}`],
+    [ar ? 'واتساب' : 'WhatsApp', CONTACT_DETAILS.whatsapp, `https://wa.me/${wa}`],
+    [ar ? 'البريد الإلكتروني' : 'Email', CONTACT_DETAILS.email, `mailto:${CONTACT_DETAILS.email}`],
+    [ar ? 'العنوان' : 'Address', CONTACT_DETAILS.address, undefined],
+  ];
+  return (
+    <SectionPaper sx={{ mt: 4 }} id="contact-details">
+      <Typography variant="h4" component="h2" fontWeight={950} sx={{ color: ink, mb: 2 }}>{ar ? 'بيانات التواصل' : 'Contact details'}</Typography>
+      <Grid container spacing={2}>
+        {rows.map(([label, value, href]) => (
+          <Grid item xs={12} sm={6} key={label}>
+            <Paper variant="outlined" component={href ? 'a' : 'div'} href={href} target={href?.startsWith('http') ? '_blank' : undefined} rel={href?.startsWith('http') ? 'noopener noreferrer' : undefined} sx={{ p: 2.5, display: 'block', textDecoration: 'none', borderColor: line, borderRadius: radius.card }}>
+              <Typography variant="caption" sx={{ color: goldText, fontWeight: 900 }}>{label}</Typography>
+              <Typography sx={{ color: ink, fontWeight: 850 }} dir="ltr">{value}</Typography>
+            </Paper>
+          </Grid>
+        ))}
       </Grid>
     </SectionPaper>
   );
