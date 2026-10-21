@@ -260,10 +260,10 @@ const ReviewBeforeSubmitStep: React.FC<{ onNext: () => void; onBack: () => void;
     return (
         <Container maxWidth="lg" sx={{ py: 4 }} dir={isRTL ? 'rtl' : 'ltr'}>
             <Box sx={{ textAlign: 'center', mb: 5 }}>
-                <Typography variant="h4" fontWeight="950" sx={{ color: '#FFF', mb: 1 }}>
+                <Typography variant="h4" fontWeight="950" sx={{ color: binThemeTokens.textPrimary, mb: 1 }}>
                     {copy('onboarding.review_title', 'Review the Five-Page Application')}
                 </Typography>
-                <Typography variant="body1" sx={{ color: 'rgba(255,255,255,0.56)' }}>
+                <Typography variant="body1" sx={{ color: binThemeTokens.textSecondary }}>
                     {lang === 'ar'
                         ? 'راجع بيانات المالك والعقار والخدمة والمستندات قبل التوقيع والإرسال لزيارة العقار.'
                         : 'Review the Owner, property, service and document details before signing and submitting for the property visit.'}
@@ -345,7 +345,7 @@ const ReviewBeforeSubmitStep: React.FC<{ onNext: () => void; onBack: () => void;
             </Grid>
 
             <Box sx={{ mt: 4, display: 'flex', justifyContent: 'space-between', gap: 2, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
-                <Button variant="outlined" size="large" onClick={onBack} startIcon={!isRTL ? <ArrowLeft /> : null} endIcon={isRTL ? <ArrowLeft style={{ transform: 'rotate(180deg)' }} /> : null} sx={{ borderRadius: 100, px: 4, color: '#FFF', borderColor: 'rgba(255,255,255,0.16)' }}>{copy('onboarding.back', 'Back')}</Button>
+                <Button variant="outlined" size="large" onClick={onBack} startIcon={!isRTL ? <ArrowLeft /> : null} endIcon={isRTL ? <ArrowLeft style={{ transform: 'rotate(180deg)' }} /> : null} sx={{ borderRadius: 100, px: 4, color: binThemeTokens.textPrimary, borderColor: binThemeTokens.gold }}>{copy('onboarding.back', 'Back')}</Button>
                 <Button variant="contained" size="large" onClick={handleNext} disabled={missingGps || quoteLoading || quoteExpired || Boolean(quoteError)} endIcon={isRTL ? <ArrowRight style={{ transform: 'rotate(180deg)' }} /> : <ArrowRight />} sx={{ borderRadius: 100, px: 6, bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>{lang === 'ar' ? 'المتابعة إلى التوقيع' : 'Continue to Signature'}</Button>
             </Box>
         </Container>

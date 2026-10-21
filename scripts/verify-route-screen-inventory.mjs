@@ -291,6 +291,7 @@ const STATIC_CONTENT_ROUTES = new Set([
   '/security', '/trust', '/trust-center',
   '/uae-market-leadership', '/owner-trust-os', '/workforce-os',
   '/services', '/contact', '/request-demo', '/videos',
+  '/company', '/company-profile', '/about', '/about-us',
 ]);
 
 const DASHBOARD_OR_STATUS_ROUTES = new Set([

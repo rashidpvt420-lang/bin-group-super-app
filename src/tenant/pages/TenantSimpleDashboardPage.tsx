@@ -1,270 +1,96 @@
-import { Box, Button, Grid, Paper, Stack, Typography, alpha } from '@mui/material';
+import { Box, Button, Skeleton, Stack, Typography } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
-import { AlertTriangle, Bot, Bug, CalendarDays, Droplets, Fan, Plane, PlugZap, Sparkles, Truck, Wrench } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
-import RoleQuickActionsPanel from '../../components/RoleQuickActionsPanel';
+import { AppHeader, ComingSoon, EmptyState, ErrorState, ListRow, StatusChip, UiButton, UiCard } from '../../components/ui';
+import { ui, uiType } from '../../theme/uiTokens';
 import { CANONICAL_SLA_POLICY } from '../../config/uaeDominationBlueprint';
-import { binThemeTokens } from '../../theme/binGroupTheme';
-import CanonicalNextActions from '../../components/CanonicalNextActions';
+import TenantUnitLinkFallback from '../components/TenantUnitLinkFallback';
+import { leaseEndMs, useTenantHomeData } from '../hooks/useTenantHomeData';
 
 const issueShortcuts = [
-  { en: 'AC not cooling', ar: 'المكيف لا يبرد', category: 'ac', icon: <Fan size={22} />, priority: 'urgent' },
-  { en: 'Water leak', ar: 'تسرب مياه', category: 'plumbing', icon: <Droplets size={22} />, priority: 'urgent' },
-  { en: 'Electrical issue', ar: 'مشكلة كهربائية', category: 'electrical', icon: <PlugZap size={22} />, priority: 'urgent' },
-  { en: 'Other repair', ar: 'إصلاح آخر', category: 'other', icon: <Wrench size={22} />, priority: 'normal' },
+  { en: 'AC', ar: 'المكيف', category: 'ac' },
+  { en: 'Water', ar: 'المياه', category: 'plumbing' },
+  { en: 'Electric', ar: 'الكهرباء', category: 'electrical' },
+  { en: 'Other', ar: 'أخرى', category: 'other' },
 ];
 
 const plannedServices = [
-  {
-    en: 'Deep Cleaning',
-    ar: 'تنظيف عميق',
-    descriptionEn: 'Choose the date, time, rooms and whether you will be home or away.',
-    descriptionAr: 'اختر التاريخ والوقت والغرف وحدد ما إذا كنت ستكون في المنزل أو خارجه.',
-    route: '/tenant/scheduled-service?service=deep-clean',
-    icon: <Sparkles size={23} />,
-  },
-  {
-    en: 'Pest Control',
-    ar: 'مكافحة الآفات',
-    descriptionEn: 'Tell us the pest, affected areas, pets or children and access method.',
-    descriptionAr: 'حدد نوع الآفة والمناطق المتضررة والحيوانات أو الأطفال وطريقة الدخول.',
-    route: '/tenant/scheduled-service?service=pest-control',
-    icon: <Bug size={23} />,
-  },
-  {
-    en: 'Vacation Home Care',
-    ar: 'العناية بالمنزل أثناء السفر',
-    descriptionEn: 'Mark the unit unoccupied and authorize the confirmed access method.',
-    descriptionAr: 'حدد أن الوحدة غير مشغولة وصرّح بطريقة الدخول بعد تأكيد الموعد.',
-    route: '/tenant/scheduled-service?service=vacation-care&occupancy=away',
-    icon: <Plane size={23} />,
-  },
-  {
-    en: 'Moving & Packing',
-    ar: 'النقل والتغليف',
-    descriptionEn: 'Schedule packing, moving support or move-in and move-out preparation.',
-    descriptionAr: 'حدد موعد التغليف أو دعم النقل أو تجهيز الانتقال والدخول.',
-    route: '/tenant/scheduled-service?service=moving',
-    icon: <Truck size={23} />,
-  },
+  { en: 'Deep cleaning', ar: 'تنظيف عميق', route: '/tenant/scheduled-service?service=deep-clean' },
+  { en: 'Pest control', ar: 'مكافحة الآفات', route: '/tenant/scheduled-service?service=pest-control' },
+  { en: 'Home care while away', ar: 'العناية بالمنزل أثناء السفر', route: '/tenant/scheduled-service?service=vacation-care&occupancy=away' },
+  { en: 'Moving and packing', ar: 'النقل والتغليف', route: '/tenant/scheduled-service?service=moving' },
 ];
 
-const readableTextSx = {
-  whiteSpace: 'normal',
-  overflowWrap: 'anywhere',
-  wordBreak: 'break-word',
-} as const;
+const DAY = 24 * 60 * 60 * 1000;
 
+/** Redesigned tenant home (REDESIGN.md R5): my home, rent, lease, active request, quick report. */
 export default function TenantSimpleDashboardPage() {
   const navigate = useNavigate();
   const { isRTL, tx, lang } = useLanguage();
   const ar = lang === 'ar';
+  const t = (key: string, en: string, arText: string) => (ar ? arText : tx(key, en));
+  const { unitLoading, unit, ticketsLoading, ticketsError, activeTickets } = useTenantHomeData();
+  const unitTitle = unit ? [unit.unitNumber ? `${t('tenant.home.unit', 'Unit', 'وحدة')} ${unit.unitNumber}` : '', unit.propertyName || unit.buildingName || ''].filter(Boolean).join(' · ') : '';
+  const endMs = leaseEndMs(unit);
+  const daysLeft = endMs ? Math.ceil((endMs - Date.now()) / DAY) : null;
+  const active = activeTickets[0];
+  const fmtDate = (ms: number) => new Date(ms).toLocaleDateString(ar ? 'ar-AE' : 'en-AE', { day: 'numeric', month: 'short', year: 'numeric' });
 
   return (
-    <Box sx={{ direction: isRTL ? 'rtl' : 'ltr', minWidth: 0, overflowX: 'hidden' }}>
-      <Stack spacing={4} sx={{ minWidth: 0 }}>
-        <Box sx={{ textAlign: isRTL ? 'right' : 'left', minWidth: 0 }}>
-          <Typography variant="overline" sx={{ color: binThemeTokens.goldText, fontWeight: 950, letterSpacing: 3 }}>
-            {tx('tenant.simple.overline', 'TENANT SIMPLE MODE')}
-          </Typography>
-          <Typography variant="h3" sx={{ color: binThemeTokens.textPrimary, fontWeight: 950, mt: 1, ...readableTextSx }}>
-            {tx('tenant.simple.title', 'What do you need today?')}
-          </Typography>
-          <Typography sx={{ color: binThemeTokens.textSecondary, mt: 1, maxWidth: 760, lineHeight: 1.7, ...readableTextSx }}>
-            {tx('tenant.simple.desc', 'Report a repair, schedule cleaning or pest control, arrange vacation access, track requests, open emergency help, or find payments and documents.')}
-          </Typography>
+    <Box data-testid="tenant-home" sx={{ direction: isRTL ? 'rtl' : 'ltr', minWidth: 0, overflowX: 'hidden', mx: { xs: -2, sm: 0 } }}>
+      <AppHeader isRTL={isRTL} eyebrow={t('tenant.home.eyebrow', 'My home', 'منزلي')} title={unitTitle || t('tenant.home.title', 'Welcome home', 'أهلاً بك')} />
+      <Stack spacing={1.75} sx={{ p: 2, bgcolor: ui.cream }}>
+        {unitLoading && <Skeleton variant="rounded" height={96} sx={{ borderRadius: `${ui.radiusCard}px` }} />}
+        {!unitLoading && !unit && <TenantUnitLinkFallback compact />}
+
+        {!unitLoading && unit && (
+          <UiCard isRTL={isRTL} testId="tenant-home-rent" label={t('tenant.home.rent', 'Rent', 'الإيجار')}>
+            <ComingSoon isRTL={isRTL} title={t('tenant.home.rentSoon', 'Your rent due dates will show here', 'ستظهر مواعيد إيجارك هنا')} detail={t('tenant.home.rentSoonDetail', 'Until then, see payments you have recorded.', 'حتى ذلك الحين، راجع المدفوعات المسجلة.')} />
+            <Button onClick={() => navigate('/tenant/payments')} sx={{ mt: 1, minHeight: ui.touchTarget, color: ui.goldText, fontWeight: 700 }}>{t('tenant.home.payments', 'Open payments', 'فتح المدفوعات')}</Button>
+          </UiCard>
+        )}
+
+        {!unitLoading && unit && (
+          <UiCard isRTL={isRTL} testId="tenant-home-lease" label={t('tenant.home.lease', 'Lease', 'عقد الإيجار')}>
+            {endMs ? (
+              <ListRow isRTL={isRTL} title={`${t('tenant.home.ends', 'Ends', 'ينتهي')} ${fmtDate(endMs)}`} subtitle={daysLeft !== null && daysLeft >= 0 ? `${daysLeft} ${t('tenant.home.daysLeft', 'days left', 'يوماً متبقياً')}` : t('tenant.home.ended', 'Lease has ended', 'انتهى العقد')} trailing={daysLeft !== null && daysLeft <= 120 ? <StatusChip tone="warn" label={t('tenant.home.renew', 'Renew', 'تجديد')} /> : undefined} onClick={() => navigate('/tenant/renewals')} />
+            ) : (
+              <ComingSoon isRTL={isRTL} title={t('tenant.home.leaseMissing', 'Lease end date not recorded yet', 'لم يُسجل تاريخ انتهاء العقد بعد')} detail={t('tenant.home.leaseMissingDetail', 'BIN will add it so you get renewal reminders.', 'ستضيفه BIN لتصلك تذكيرات التجديد.')} />
+            )}
+          </UiCard>
+        )}
+
+        <UiCard isRTL={isRTL} testId="tenant-home-active-request" label={t('tenant.home.request', 'My request', 'طلبي')}>
+          {ticketsLoading && <Skeleton height={48} />}
+          {!ticketsLoading && ticketsError && <ErrorState isRTL={isRTL} title={t('tenant.home.ticketsError', 'Requests could not load.', 'تعذر تحميل الطلبات.')} />}
+          {!ticketsLoading && !ticketsError && !active && <EmptyState isRTL={isRTL} title={t('tenant.home.noRequest', 'No open requests', 'لا توجد طلبات مفتوحة')} />}
+          {!ticketsLoading && !ticketsError && active && (
+            <ListRow isRTL={isRTL} title={String(active.category || active.complaintCategory || active.title || t('tenant.home.repair', 'Repair', 'إصلاح'))} subtitle={active.assignedTechnicianName ? `${t('tenant.home.tech', 'Technician', 'الفني')}: ${active.assignedTechnicianName}` : undefined} trailing={<StatusChip tone="info" label={String(active.status || '').replace(/_/g, ' ').toLowerCase()} />} onClick={() => navigate(`/tenant/ticket/${active.id}`)} />
+          )}
+          {activeTickets.length > 1 && <ListRow isRTL={isRTL} title={`${t('tenant.home.allRequests', 'All requests', 'كل الطلبات')} (${activeTickets.length})`} onClick={() => navigate('/tenant/tickets')} />}
+        </UiCard>
+
+        <UiCard isRTL={isRTL} testId="tenant-home-report" label={t('tenant.home.report', 'Report a problem', 'الإبلاغ عن مشكلة')}>
+          <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 1, mt: 1 }}>
+            {issueShortcuts.map((item) => (
+              <UiButton key={item.category} tone="outline" aria-label={ar ? item.ar : item.en} onClick={() => navigate(`/tenant/request?category=${item.category}`)} sx={{ fontSize: 14, px: 0.5 }}>{ar ? item.ar : item.en}</UiButton>
+            ))}
+          </Box>
+        </UiCard>
+
+        <UiCard isRTL={isRTL} label={t('tenant.home.services', 'Book a home service', 'احجز خدمة منزلية')}>
+          <Box sx={{ mt: 0.5 }}>
+            {plannedServices.map((s) => <ListRow key={s.route} isRTL={isRTL} title={ar ? s.ar : s.en} onClick={() => navigate(s.route)} />)}
+            <ListRow isRTL={isRTL} title={t('tenant.home.notices', 'Building notices', 'إشعارات المبنى')} onClick={() => navigate('/tenant/notices')} />
+          </Box>
+        </UiCard>
+
+        <Box component="button" type="button" onClick={() => navigate('/tenant/emergency')} sx={{ all: 'unset', boxSizing: 'border-box', cursor: 'pointer', minHeight: ui.touchTarget, borderRadius: '14px', bgcolor: ui.badBg, color: ui.badText, px: 2, py: 1.5, textAlign: isRTL ? 'right' : 'left', '&:focus-visible': { outline: `3px solid ${ui.gold}` } }}>
+          <Typography sx={{ ...uiType.body, fontWeight: 800, color: ui.badText }}>{t('tenant.home.emergency', 'Emergency? Get help now', 'طوارئ؟ اطلب المساعدة الآن')}</Typography>
+          <Typography sx={{ ...uiType.small, color: ui.badText }}>{ar ? `الاستجابة خلال ${CANONICAL_SLA_POLICY.EMERGENCY.minutes} دقيقة` : `Response within ${CANONICAL_SLA_POLICY.EMERGENCY.minutes} minutes`}</Typography>
         </Box>
 
-        <CanonicalNextActions actions={[
-          { id: 'report', label: tx('tenant.next.report', 'Report a maintenance issue'), detail: tx('tenant.next.reportDetail', 'Add the exact location and photo evidence for faster dispatch.'), path: '/tenant/request' },
-          { id: 'track', label: tx('tenant.next.track', 'Track active requests'), detail: tx('tenant.next.trackDetail', 'See status, technician progress, evidence and review options.'), path: '/tenant/tickets' },
-          { id: 'payment', label: tx('tenant.next.payment', 'Check payments and renewal'), detail: tx('tenant.next.paymentDetail', 'Review recorded payment status, documents and renewal actions.'), path: '/tenant/payments' },
-        ]} />
-
-        <RoleQuickActionsPanel
-          role="tenant"
-          isRTL={isRTL}
-          title={tx('tenant.simple.primaryTitle', 'Main tenant actions')}
-          subtitle={tx('tenant.simple.primarySubtitle', 'The fastest no-call path for maintenance and property support.')}
-        />
-
-        <Button
-          fullWidth
-          onClick={() => navigate('/tenant/ai-concierge')}
-          startIcon={<Bot size={22} />}
-          sx={{
-            minHeight: 72,
-            justifyContent: 'flex-start',
-            textAlign: isRTL ? 'right' : 'left',
-            color: binThemeTokens.textPrimary,
-            bgcolor: binThemeTokens.gold,
-            borderRadius: 5,
-            fontWeight: 950,
-            px: 3,
-            whiteSpace: 'normal',
-            overflowWrap: 'anywhere',
-            boxShadow: `0 10px 24px ${alpha(binThemeTokens.gold, 0.24)}`,
-            flexDirection: isRTL ? 'row-reverse' : 'row',
-            '&:hover': { bgcolor: binThemeTokens.goldHover },
-          }}
-        >
-          {tx('tenant.simple.aiConcierge', 'Ask BIN AI — describe your issue and we prepare the correct request')}
-        </Button>
-
-        <Paper
-          sx={{
-            p: { xs: 2.5, md: 3.5 },
-            bgcolor: binThemeTokens.card,
-            border: `1px solid ${binThemeTokens.border}`,
-            borderRadius: 6,
-            boxShadow: binThemeTokens.cardShadow,
-          }}
-        >
-          <Stack spacing={2.5} sx={{ textAlign: isRTL ? 'right' : 'left' }}>
-            <Box>
-              <Typography variant="overline" sx={{ color: binThemeTokens.goldText, fontWeight: 950, letterSpacing: 2 }}>
-                {tx('tenant.simple.oneTap', 'ONE-TAP MAINTENANCE')}
-              </Typography>
-              <Typography variant="h6" sx={{ color: binThemeTokens.textPrimary, fontWeight: 950 }}>
-                {tx('tenant.simple.oneTapTitle', 'Common repair issues')}
-              </Typography>
-              <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary, mt: 0.5, ...readableTextSx }}>
-                {tx('tenant.simple.oneTapDesc', 'Choose the issue, then add the exact room or asset and photo evidence before dispatch.')}
-              </Typography>
-            </Box>
-            <Grid container spacing={2}>
-              {issueShortcuts.map((item) => {
-                const itemLabel = ar ? item.ar : item.en;
-                return (
-                  <Grid item xs={12} sm={6} md={3} key={item.category} sx={{ minWidth: 0 }}>
-                    <Button
-                      fullWidth
-                      aria-label={itemLabel}
-                      onClick={() => navigate(`/tenant/request?category=${item.category}`)}
-                      sx={{
-                        minHeight: 112,
-                        p: 2,
-                        minWidth: 0,
-                        overflow: 'hidden',
-                        whiteSpace: 'normal',
-                        justifyContent: 'flex-start',
-                        textAlign: isRTL ? 'right' : 'left',
-                        color: binThemeTokens.textPrimary,
-                        bgcolor: binThemeTokens.softCanvas,
-                        border: `1px solid ${binThemeTokens.border}`,
-                        borderRadius: 4,
-                        '&:hover': {
-                          bgcolor: alpha(binThemeTokens.gold, 0.08),
-                          borderColor: alpha(binThemeTokens.gold, 0.45),
-                        },
-                      }}
-                    >
-                      <Stack spacing={1} alignItems={isRTL ? 'flex-end' : 'flex-start'} sx={{ width: '100%', minWidth: 0 }}>
-                        <Box sx={{ color: binThemeTokens.goldText }}>{item.icon}</Box>
-                        <Typography sx={{ color: binThemeTokens.textPrimary, fontWeight: 950, ...readableTextSx }}>{itemLabel}</Typography>
-                        <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, ...readableTextSx }}>
-                          {item.priority === 'urgent'
-                            ? (ar ? 'مسار أولوية عالية' : 'High priority path')
-                            : (ar ? 'مسار الخدمة العادي' : 'Standard service path')}
-                        </Typography>
-                      </Stack>
-                    </Button>
-                  </Grid>
-                );
-              })}
-            </Grid>
-          </Stack>
-        </Paper>
-
-        <Paper
-          sx={{
-            p: { xs: 2.5, md: 3.5 },
-            bgcolor: binThemeTokens.card,
-            border: `1px solid ${binThemeTokens.border}`,
-            borderRadius: 6,
-            boxShadow: binThemeTokens.cardShadow,
-          }}
-        >
-          <Stack spacing={2.5} sx={{ textAlign: isRTL ? 'right' : 'left' }}>
-            <Box>
-              <Typography variant="overline" sx={{ color: binThemeTokens.goldText, fontWeight: 950, letterSpacing: 2 }}>
-                {tx('tenant.services.overline', 'PLANNED HOME SERVICES')}
-              </Typography>
-              <Typography variant="h6" sx={{ color: binThemeTokens.textPrimary, fontWeight: 950 }}>
-                {tx('tenant.services.title', 'Cleaning, pest control, vacation care and moving')}
-              </Typography>
-              <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary, mt: 0.5, ...readableTextSx }}>
-                {tx('tenant.services.simpleDesc', 'Select a service and record the preferred date, time, occupancy, access authorization, contact details and exact work scope.')}
-              </Typography>
-            </Box>
-
-            <Grid container spacing={2}>
-              {plannedServices.map((service) => (
-                <Grid item xs={12} sm={6} md={3} key={service.en} sx={{ minWidth: 0 }}>
-                  <Button
-                    fullWidth
-                    onClick={() => navigate(service.route)}
-                    sx={{
-                      minHeight: 164,
-                      p: 2.2,
-                      minWidth: 0,
-                      overflow: 'hidden',
-                      whiteSpace: 'normal',
-                      justifyContent: 'flex-start',
-                      textAlign: isRTL ? 'right' : 'left',
-                      color: binThemeTokens.textPrimary,
-                      bgcolor: binThemeTokens.softCanvas,
-                      border: `1px solid ${binThemeTokens.border}`,
-                      borderRadius: 4,
-                      '&:hover': { bgcolor: alpha(binThemeTokens.gold, 0.08), borderColor: alpha(binThemeTokens.gold, 0.45) },
-                    }}
-                  >
-                    <Stack spacing={1} alignItems={isRTL ? 'flex-end' : 'flex-start'} sx={{ width: '100%', minWidth: 0 }}>
-                      <Box sx={{ color: binThemeTokens.goldText }}>{service.icon}</Box>
-                      <Typography sx={{ color: binThemeTokens.textPrimary, fontWeight: 950, ...readableTextSx }}>{ar ? service.ar : service.en}</Typography>
-                      <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, lineHeight: 1.5, ...readableTextSx }}>{ar ? service.descriptionAr : service.descriptionEn}</Typography>
-                      <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={0.6} alignItems="center" sx={{ color: binThemeTokens.goldText }}>
-                        <CalendarDays size={14} />
-                        <Typography variant="caption" sx={{ fontWeight: 950 }}>{ar ? 'حجز الخدمة' : 'Schedule service'}</Typography>
-                      </Stack>
-                    </Stack>
-                  </Button>
-                </Grid>
-              ))}
-            </Grid>
-          </Stack>
-        </Paper>
-
-        <Paper
-          sx={{
-            p: 2.5,
-            bgcolor: alpha(binThemeTokens.danger, 0.06),
-            border: `1px solid ${alpha(binThemeTokens.danger, 0.24)}`,
-            borderRadius: 5,
-            boxShadow: 'none',
-          }}
-        >
-          <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1.5} alignItems="center" sx={{ textAlign: isRTL ? 'right' : 'left' }}>
-            <AlertTriangle size={22} color={binThemeTokens.danger} />
-            <Box sx={{ minWidth: 0 }}>
-              <Typography sx={{ color: binThemeTokens.textPrimary, fontWeight: 950 }}>
-                {tx('tenant.simple.emergencySla', 'Emergency SLA')}
-              </Typography>
-              <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary, ...readableTextSx }}>
-                {ar
-                  ? `طوارئ: ${CANONICAL_SLA_POLICY.EMERGENCY.minutes} دقيقة. خطر على الحياة أو السلامة، تسرب نشط، خطر كهربائي، تعطل الدخول، أو عطل شديد في التكييف يتطلب إرسالاً فورياً.`
-                  : `${CANONICAL_SLA_POLICY.EMERGENCY.label}: ${CANONICAL_SLA_POLICY.EMERGENCY.minutes} minutes. ${CANONICAL_SLA_POLICY.EMERGENCY.tenantCopy}`}
-              </Typography>
-            </Box>
-          </Stack>
-        </Paper>
-
-        <Button
-          onClick={() => navigate('/tenant/dashboard/full')}
-          sx={{ alignSelf: isRTL ? 'flex-end' : 'flex-start', color: binThemeTokens.goldText, fontWeight: 950 }}
-        >
-          {tx('tenant.simple.advanced', 'Open advanced dashboard')}
-        </Button>
+        <Button onClick={() => navigate('/tenant/dashboard/full')} sx={{ alignSelf: isRTL ? 'flex-end' : 'flex-start', color: ui.goldText, fontWeight: 700, minHeight: ui.touchTarget }}>{t('tenant.home.full', 'Open full dashboard', 'فتح اللوحة الكاملة')}</Button>
       </Stack>
     </Box>
   );
