@@ -49,8 +49,18 @@ test.describe('Phase 3 cross-platform public control shell', () => {
 
 
 test.describe('Phase 1 Sovereign AI launcher interaction regression', () => {
-  test('tap/click, keyboard, drag and responsive drawer behavior stay stable', async ({ page }, testInfo) => {
+  test('role chooser opens the assistant from the header, with no floating launcher over the cards', async ({ page }, testInfo) => {
     await page.goto('/', { waitUntil: 'domcontentloaded' });
+    await expect(page.getByTestId('public-ai-open')).toBeVisible();
+    await expect(page.getByTestId('sovereign-ai-open')).toHaveCount(0);
+    const isMobile = testInfo.project.name !== 'chromium-desktop';
+    await page.getByTestId('public-ai-open').click();
+    await expect(page.getByTestId(isMobile ? 'sovereign-ai-mobile-drawer' : 'sovereign-ai-desktop-drawer')).toBeVisible();
+  });
+
+  test('tap/click, keyboard, drag and responsive drawer behavior stay stable', async ({ page }, testInfo) => {
+    // The role chooser and company profile use an in-header launcher; /support keeps the floating one.
+    await page.goto('/support', { waitUntil: 'domcontentloaded' });
 
     const launcher = page.getByTestId('sovereign-ai-open');
     await expect(launcher).toBeVisible();

@@ -15,6 +15,7 @@ import { CustomThemeProvider } from './context/ThemeContext';
 import { AIProvider } from './context/AIContext';
 import { ToastProvider } from './context/ToastContext';
 import { SovereignAIChat } from './components/SovereignAIChat';
+import { UnifiedFabContext } from './components/ui/unifiedFab';
 import IOSPwaGuardian from './components/IOSPwaGuardian';
 import OwnerActivationGuard from './components/owner/OwnerActivationGuard';
 import { NavigationControl } from './components/navigation/NavigationControl';
@@ -272,6 +273,9 @@ function PublicRouteNavigation() {
 }
 
 const AI_FAB_HIDDEN_PREFIXES = ['/onboarding', '/login'];
+// These public pages open the assistant from an in-header button instead of a
+// floating launcher; at 390px the floating button covered card and hero text.
+export const AI_HEADER_LAUNCHER_ROUTES = new Set(['/', '/company', '/company-profile', '/about', '/about-us']);
 
 function PublicSovereignAIEntry() {
   const location = useLocation();
@@ -280,7 +284,9 @@ function PublicSovereignAIEntry() {
   // Form routes keep the full width for inputs and the primary button; the FAB covered both on phones.
   const hideOnFormRoute = AI_FAB_HIDDEN_PREFIXES.some((prefix) => location.pathname === prefix || location.pathname.startsWith(`${prefix}/`));
   if (hideOnFormRoute) return null;
-  return <SovereignAIChat role="unknown" allowLiveProvider={false} isAuthenticated={false} authUserId={null} />;
+  const chat = <SovereignAIChat role="unknown" allowLiveProvider={false} isAuthenticated={false} authUserId={null} />;
+  if (AI_HEADER_LAUNCHER_ROUTES.has(location.pathname)) return <UnifiedFabContext.Provider value={true}>{chat}</UnifiedFabContext.Provider>;
+  return chat;
 }
 
 function AppContent() {

@@ -8,7 +8,7 @@ import { binThemeTokens } from '../../theme/binGroupTheme';
 const hiddenRoutes = new Set(['/', '/login', '/gateway']);
 // These pages already place navigation in document flow. The fixed control
 // sat on the start edge of the heading, and Arabic RTL put it on the heading.
-const inFlowNavigationRoutes = new Set(['/homes', '/request-demo', '/videos']);
+const inFlowNavigationRoutes = new Set(['/homes', '/request-demo', '/videos', '/company', '/company-profile', '/about', '/about-us']);
 
 export const portalRoutePrefixes = ['/owner', '/tenant', '/technician', '/tech', '/broker', '/staff'];
 
