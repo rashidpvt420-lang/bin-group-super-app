@@ -13,7 +13,7 @@
  * CSV header: leaseId,startDate,endDate   (dates YYYY-MM-DD)
  */
 import { readFileSync } from 'node:fs';
-import { createHash } from 'node:crypto';
+import { createHash, timingSafeEqual } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 
 const YMD = /^\d{4}-\d{2}-\d{2}$/;
@@ -65,7 +65,9 @@ async function main() {
   const token = confirmTokenFor(plan);
   console.log(JSON.stringify({ mode: args.apply ? 'apply' : 'dry-run', planned: plan.length, skipped, confirmToken: token, plan }, null, 2));
   if (!args.apply) return;
-  if (args.confirm !== token) throw new Error(`Refusing to write: --confirm must equal ${token} (from the dry run).`);
+  const given = Buffer.from(String(args.confirm ?? ''));
+  const expected = Buffer.from(token);
+  if (given.length !== expected.length || !timingSafeEqual(given, expected)) throw new Error(`Refusing to write: --confirm must equal ${token} (from the dry run).`);
   for (const p of plan) {
     await db.collection('leases').doc(p.leaseId).set({ ...p.set, endDateBackfilledAt: admin.firestore.FieldValue.serverTimestamp(), endDateSource: 'ADMIN_BACKFILL_CSV' }, { merge: true });
   }
