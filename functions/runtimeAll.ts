@@ -13,6 +13,7 @@ onInit(() => {
 export * from './runtime';
 export * from './whatsappWebhook';
 export * from './rentLedgerMirror';
+export { ownerSetRentSchedule, sendRentDueReminders, onRentPaymentDecision } from './rentSchedule';
 export { onOwnerApprovalDecision, submitOwnerApprovalDecision } from './ownerTrustWorkflow';
 export { runContractRenewalWatch, rebuildContractRenewalWatch } from './contractRenewalPdfSystem';
 export { sendMonthlyOwnerPropertyReports, rebuildMonthlyOwnerPropertyReports } from './monthlyOwnerPropertyReportSystem';
