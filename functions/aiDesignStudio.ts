@@ -12,12 +12,13 @@ const bucket = admin.storage().bucket(STORAGE_BUCKET);
 const openAiKey = defineSecret("OPENAI_API_KEY");
 const imageGenerationKey = defineSecret("IMAGE_GENERATION_API_KEY");
 
+import { DEFAULT_DESIGN_RATES, ESTIMATE_LABEL, loadDesignPriceList, type DesignRates } from "./designPriceList";
 const MAX_REFERENCE_IMAGE_BYTES = 5 * 1024 * 1024;
 const MAX_GENERATED_IMAGE_BYTES = 8 * 1024 * 1024;
 const PRIVATE_MEDIA_URL_TTL_MS = 15 * 60 * 1000;
 const QUOTE_AUTHORITY = "SERVER_CALCULATED_DESIGN_STUDIO_V1";
 const ALLOWED_IMAGE_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
-const PUBLIC_DESIGN_ROLES = new Set(["owner", "tenant", "admin", "super_admin", "ceo", "operations_admin"]);
+const PUBLIC_DESIGN_ROLES = new Set(["owner", "tenant", "broker", "admin", "super_admin", "ceo", "operations_admin"]);
 const ADMIN_DESIGN_ROLES = new Set(["admin", "super_admin", "ceo", "operations_admin"]);
 
 type DesignScope = {
@@ -139,22 +140,23 @@ function cleanScope(value: unknown): DesignScope {
   };
 }
 
-function calculateServerQuote(scope: DesignScope) {
+export function calculateServerQuote(scope: DesignScope, priceList: { rates: DesignRates; version: string; source: string } = { rates: DEFAULT_DESIGN_RATES, version: "default-v1", source: "BIN_DEFAULT" }) {
+  const r = priceList.rates;
   const areaSqft = scope.isMetric ? scope.dimensions * 10.7639 : scope.dimensions;
   const tier = scope.finishTier.toLowerCase();
-  const tierMultiplier = tier.includes("luxury") ? 1.45 : tier.includes("standard") ? 0.82 : 1;
-  const materialsEstimate = Math.round(areaSqft * 180 * tierMultiplier);
-  const laborEstimate = Math.round(areaSqft * 95 * tierMultiplier);
-  const approvalsAllowance = scope.hasStructural || scope.hasMEP ? 2500 : 0;
-  const logisticsAllowance = scope.isMallEnvironment || scope.isNightWork ? 4500 : 1800;
+  const tierMultiplier = tier.includes("luxury") ? r.luxuryMultiplier : tier.includes("standard") ? r.standardMultiplier : 1;
+  const materialsEstimate = Math.round(areaSqft * r.materialsPerSqft * tierMultiplier);
+  const laborEstimate = Math.round(areaSqft * r.laborPerSqft * tierMultiplier);
+  const approvalsAllowance = scope.hasStructural || scope.hasMEP ? r.approvalsAllowance : 0;
+  const logisticsAllowance = scope.isMallEnvironment || scope.isNightWork ? r.logisticsMallOrNight : r.logisticsStandard;
   const subtotal = Math.max(
-    2500,
+    r.minimumSubtotal,
     materialsEstimate + laborEstimate + approvalsAllowance + logisticsAllowance + scope.furnitureBudget,
   );
-  const contingency = Math.round(subtotal * 0.08);
-  const binMargin = Math.round(subtotal * 0.12);
+  const contingency = Math.round(subtotal * r.contingencyRate);
+  const binMargin = Math.round(subtotal * r.binMarginRate);
   const finalTotal = subtotal + contingency + binMargin;
-  const mobilizationAmount = Math.round(finalTotal * 0.15 * 100) / 100;
+  const mobilizationAmount = Math.round(finalTotal * (r.mobilizationPercent / 100) * 100) / 100;
   const unsigned = {
     currency: "AED",
     materialsEstimate,
@@ -164,9 +166,13 @@ function calculateServerQuote(scope: DesignScope) {
     contingency,
     binMargin,
     finalTotal,
-    mobilizationPercent: 15,
+    mobilizationPercent: r.mobilizationPercent,
     mobilizationAmount,
     quoteAuthority: QUOTE_AUTHORITY,
+    isEstimate: true,
+    estimateLabel: ESTIMATE_LABEL,
+    priceListVersion: priceList.version,
+    priceListSource: priceList.source,
   };
   return {
     ...unsigned,
@@ -196,7 +202,8 @@ function buildExecutionDetails(scope: DesignScope, quote: ReturnType<typeof calc
       category: "Commercial path",
       items: [
         `Server estimate: AED ${quote.finalTotal.toLocaleString("en-AE")}.`,
-        `15% mobilisation: AED ${quote.mobilizationAmount.toLocaleString("en-AE")}.`,
+        `${quote.mobilizationPercent}% mobilisation: AED ${quote.mobilizationAmount.toLocaleString("en-AE")}.`,
+        quote.estimateLabel,
         "No payment or execution starts before required approval and site verification.",
       ],
     },
@@ -369,7 +376,7 @@ export const submitAIDesignRequest = onCall({
   const mimeType = normalizeMimeType(payload.mimeType);
   const reference = decodeReferenceImage(payload.imageBase64, mimeType);
   const scope = cleanScope(payload.scope || payload);
-  const quote = calculateServerQuote(scope);
+  const quote = calculateServerQuote(scope, await loadDesignPriceList());
   const executionDetails = buildExecutionDetails(scope, quote);
   const prompt = buildPrompt(payload, scope);
   const apiKey = imageGenerationKey.value() || openAiKey.value();
@@ -410,8 +417,8 @@ export const submitAIDesignRequest = onCall({
       referenceImagePaths: [referencePath],
       generatedImagePaths: [generatedPath],
     });
-    const status = role === "tenant" ? "AWAITING_OWNER_APPROVAL" : "AI_CONCEPT_READY";
-    const approvalStatus = role === "tenant" ? "PENDING_OWNER_APPROVAL" : "OWNER_CREATED";
+    const status = role === "tenant" ? "AWAITING_OWNER_APPROVAL" : role === "broker" ? "BROKER_CONCEPT_READY" : "AI_CONCEPT_READY";
+    const approvalStatus = role === "tenant" ? "PENDING_OWNER_APPROVAL" : role === "broker" ? "BROKER_MARKETING_CONCEPT" : "OWNER_CREATED";
     const concept = {
       id: "primary",
       title: `${cleanText(payload.designStyle, "Modern", 120)} ${scope.zoneType} concept`,

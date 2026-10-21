@@ -19,6 +19,8 @@ type OwnerCommandCounts = {
   openDisputes: number;
   expiringDocuments: number;
   monthlyCostVariancePct: number | null;
+  /** Feature 9: sources whose listener failed; their counts are NOT real zeros. */
+  failedSources?: string[];
 };
 
 const PENDING_APPROVAL_STATUSES = new Set(['PENDING', 'pending', 'REQUESTED', 'requested', 'OPEN', 'open']);
@@ -73,6 +75,7 @@ export function useOwnerCommandCounts(): OwnerCommandCounts {
     openDisputes: 0,
     expiringDocuments: 0,
     monthlyCostVariancePct: null,
+    failedSources: [],
   });
 
   React.useEffect(() => {
@@ -86,12 +89,14 @@ export function useOwnerCommandCounts(): OwnerCommandCounts {
       _pendingCostRequests?: number;
       _pendingTicketSignOffs?: number;
     } = {};
+    const failed = new Set<string>();
     const publish = () => {
       const pendingCostRequests = Number(partial._pendingCostRequests || 0);
       const pendingTicketSignOffs = Number(partial._pendingTicketSignOffs || 0);
       setCounts((current) => ({
         ...current,
         ...partial,
+        failedSources: Array.from(failed),
         pendingTicketSignOffs,
         // Command-strip "approvals" = quote/cost requests + ticket sign-offs awaiting Approve & Close.
         pendingCostApprovals: pendingCostRequests + pendingTicketSignOffs,
@@ -107,6 +112,7 @@ export function useOwnerCommandCounts(): OwnerCommandCounts {
         publish();
       }, (err) => {
         console.warn('[OwnerCommandCounts] approval requests listener failed:', err);
+        failed.add('approvals');
         partial._pendingCostRequests = 0;
         publish();
       }));
@@ -127,6 +133,7 @@ export function useOwnerCommandCounts(): OwnerCommandCounts {
         publish();
       }, (err) => {
         console.warn('[OwnerCommandCounts] ticket listener failed:', err);
+        failed.add('tickets');
         partial.openTickets = 0;
         partial.highRiskTickets = 0;
         partial.openDisputes = 0;
@@ -151,6 +158,7 @@ export function useOwnerCommandCounts(): OwnerCommandCounts {
         publish();
       }, (err) => {
         console.warn('[OwnerCommandCounts] document listener failed:', err);
+        failed.add('documents');
         partial.expiringDocuments = 0;
         publish();
       }));

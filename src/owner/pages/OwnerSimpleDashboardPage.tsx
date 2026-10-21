@@ -1,4 +1,4 @@
-import { Box, Button, Stack } from '@mui/material';
+import { Alert, Box, Button, Stack } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '@bin/shared';
 import { AppHeader, ComingSoon, EmptyState, ListRow, StatGrid, StatTile, StatusChip, UiButton, UiCard } from '../../components/ui';
@@ -38,6 +38,10 @@ export default function OwnerSimpleDashboardPage() {
           <StatTile isRTL={isRTL} label={t('owner.home.repairs', 'Repairs in progress', 'إصلاحات جارية')} value={loading ? null : openMaintenance} onClick={() => navigate('/owner/tickets')} />
         </StatGrid>
         <ComingSoon isRTL={isRTL} title={t('owner.home.soonTitle', 'Rent, occupancy and lease numbers are coming', 'أرقام الإيجار والإشغال والعقود قادمة')} detail={t('owner.home.soonDetail', 'They will appear here once rent schedules and lease end dates are recorded.', 'ستظهر هنا بعد تسجيل جداول الإيجار وتواريخ انتهاء العقود.')} />
+
+        {(commandCounts.failedSources || []).length > 0 && (
+          <Alert severity="warning" data-testid="owner-command-counts-failed">{t('owner.home.countsFailed', 'Some counts could not be loaded. Numbers may be incomplete — refresh to retry.', 'تعذّر تحميل بعض الأرقام. قد تكون غير مكتملة — حدّث الصفحة للمحاولة مجدداً.')} ({(commandCounts.failedSources || []).join(', ')})</Alert>
+        )}
 
         <UiCard isRTL={isRTL} testId="owner-needs-you-today" label={`${t('owner.home.today', 'Needs you today', 'يحتاجك اليوم')}${loading ? '' : ` · ${todo.length}`}`}>
           <Box sx={{ mt: 0.5 }}>

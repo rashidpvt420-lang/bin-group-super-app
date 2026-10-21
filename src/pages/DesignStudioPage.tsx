@@ -149,6 +149,7 @@ export default function DesignStudioPage() {
   const navigate = useNavigate();
   const normalizedRole = String(role || '').toLowerCase();
   const tenantMode = normalizedRole === 'tenant';
+  const brokerMode = normalizedRole === 'broker';
 
   const [scope, setScope] = useState<DesignScope>(defaultScope);
   const [referenceImages, setReferenceImages] = useState<PreviewImage[]>([]);
@@ -284,8 +285,11 @@ export default function DesignStudioPage() {
           : 'Private design concept and server quote created.',
         severity: 'success',
       });
-      const prefix = tenantMode ? '/tenant' : '/owner';
-      navigate(`${prefix}/design-studio/request/${data.requestId || requestId}`);
+      // Brokers keep the concept on this page (marketing proposal; no owner approval or payment flow).
+      if (!brokerMode) {
+        const prefix = tenantMode ? '/tenant' : '/owner';
+        navigate(`${prefix}/design-studio/request/${data.requestId || requestId}`);
+      }
     } catch (error) {
       setRenderStatus('AI_RENDER_FAILED');
       setSnackbar({ open: true, message: designErrorMessage(error), severity: 'error' });
@@ -362,6 +366,7 @@ export default function DesignStudioPage() {
               <Typography variant="h4" fontWeight={950} color="#FFF" sx={{ mt: 2 }}>AED {displayedQuoteTotal.toLocaleString()}</Typography>
               <Typography sx={{ color: binThemeTokens.gold, fontWeight: 900, mt: 1 }}>{labels.mobilization}: AED {displayedMobilization.toLocaleString()}</Typography>
               {!serverQuote && <Typography variant="caption" sx={{ display: 'block', color: 'rgba(255,255,255,0.52)', mt: 1 }}>The protected backend recalculates and locks the final quote.</Typography>}
+              <Typography variant="caption" data-testid="design-estimate-label" sx={{ display: 'block', color: 'rgba(255,255,255,0.72)', mt: 1 }}>{(serverQuote as any)?.estimateLabel || "Indicative estimate from BIN's price list. Not a supplier quote; final price is confirmed after site verification."}</Typography>
               <Button variant="contained" fullWidth onClick={handleCreateConcept} disabled={submitting || !referenceImages.length} sx={{ mt: 3, py: 1.6, bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>{submitting ? 'Creating private render...' : labels.action}</Button>
               <Button component="a" href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer" variant="outlined" fullWidth startIcon={<MessageCircle size={17} />} sx={{ mt: 1.5, color: binThemeTokens.gold, borderColor: binThemeTokens.gold, fontWeight: 950 }}>WhatsApp BIN GROUP</Button>
             </Paper>

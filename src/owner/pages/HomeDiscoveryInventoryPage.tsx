@@ -24,7 +24,9 @@ import {
   collection,
   db,
   doc,
+  functions,
   getDownloadURL,
+  httpsCallable,
   onSnapshot,
   query,
   ref,
@@ -129,6 +131,26 @@ export default function HomeDiscoveryInventoryPage() {
   const [notice, setNotice] = useState<{ severity: 'success' | 'error' | 'warning' | 'info'; text: string } | null>(null);
   const [requests, setRequests] = useState<MarketplaceRecord[]>([]);
   const [listings, setListings] = useState<MarketplaceRecord[]>([]);
+  // Feature 5: one-tap listing from a vacant unit (?unitId=…) with real maintenance history from tickets.
+  const [prefillUnitId, setPrefillUnitId] = useState('');
+  const [maintenanceSummary, setMaintenanceSummary] = useState('');
+  useEffect(() => {
+    const unitId = typeof window === 'undefined' ? '' : new URLSearchParams(window.location.search).get('unitId') || '';
+    if (!unitId || !user?.uid) return;
+    httpsCallable(functions, 'ownerPrepareUnitListing')({ unitId })
+      .then((res: any) => {
+        const p = res?.data?.prefill || {};
+        setPrefillUnitId(unitId);
+        setMaintenanceSummary(String(res?.data?.maintenanceSummary || ''));
+        setForm((current) => {
+          const next = { ...current };
+          (Object.keys(blankForm) as (keyof FormState)[]).forEach((k) => { if (p[k] !== undefined && p[k] !== null && String(p[k]) !== '') next[k] = String(p[k]); });
+          return next;
+        });
+        setNotice({ severity: 'info', text: 'Details were filled in from your unit record. Check them, add at least 3 photos and submit for BIN review.' });
+      })
+      .catch(() => setNotice({ severity: 'warning', text: 'The unit details could not be loaded. You can still fill in the listing by hand.' }));
+  }, [user?.uid]);
 
   const fieldSx = { '& .MuiOutlinedInput-root': { bgcolor: '#fff' } } as const;
   const setField = (key: keyof FormState, value: string) => setForm((current) => ({ ...current, [key]: value }));
@@ -241,6 +263,9 @@ export default function HomeDiscoveryInventoryPage() {
         status: 'OPEN',
         stage: 'BIN_LISTING_REVIEW_REQUIRED',
         requestedContractHandling: true,
+        ...(prefillUnitId ? { unitId: prefillUnitId, listingSource: 'UNIT_VACANCY_ONE_TAP' } : {}),
+        repairHistoryText: maintenanceSummary || null,
+        maintenanceHistorySource: maintenanceSummary ? 'MAINTENANCE_TICKETS' : null,
         verifiedByAdmin: false,
         approved: false,
         active: false,
@@ -318,6 +343,9 @@ export default function HomeDiscoveryInventoryPage() {
               <Grid item xs={12} md={4}><TextField fullWidth type="date" InputLabelProps={{ shrink: true }} label={copy('owner.home.available', 'Available from', 'متاح من')} value={form.availableFrom} onChange={(e) => setField('availableFrom', e.target.value)} sx={fieldSx} /></Grid>
               <Grid item xs={12} md={4}><TextField fullWidth type="number" label={copy('owner.home.deposit', 'Security deposit (AED)', 'التأمين (درهم)')} value={form.securityDeposit} onChange={(e) => setField('securityDeposit', e.target.value)} sx={fieldSx} /></Grid>
               <Grid item xs={12}><TextField fullWidth multiline minRows={2} label={copy('owner.home.amenities', 'Amenities — comma separated', 'المميزات — افصل بينها بفاصلة')} value={form.amenitiesText} onChange={(e) => setField('amenitiesText', e.target.value)} sx={fieldSx} /></Grid>
+              {prefillUnitId && (
+                <Grid item xs={12}><Alert severity="info" data-testid="listing-maintenance-history">{maintenanceSummary ? `Maintenance history from BIN tickets: ${maintenanceSummary}` : 'No completed BIN maintenance tickets for this unit yet.'}</Alert></Grid>
+              )}
               <Grid item xs={12}><TextField fullWidth multiline minRows={3} label={copy('owner.home.notes', 'Description / maintenance highlights', 'الوصف / أهم أعمال الصيانة')} value={form.notes} onChange={(e) => setField('notes', e.target.value)} sx={fieldSx} /></Grid>
             </Grid>
 

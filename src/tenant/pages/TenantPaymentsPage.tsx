@@ -15,6 +15,8 @@ import { useRole } from '../../context/RoleContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { useLanguage } from '../../context/LanguageContext';
 import { EMPTY_PROOF_FORM, tenantProofFormError, type TenantProofMethod } from '../tenantPaymentProof';
+import TenantRenewalOfferPanel from '../components/TenantRenewalOfferPanel';
+import TenantRentSchedulePanel, { type RentInstallment } from '../components/TenantRentSchedulePanel';
 
 type Payment = {
     id: string;
@@ -60,6 +62,7 @@ export default function TenantPaymentsPage() {
     const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
     const [uploading, setUploading] = useState(false);
     const [receiptFile, setReceiptFile] = useState<File | null>(null);
+    const [payingInstallment, setPayingInstallment] = useState<RentInstallment | null>(null);
     const [snackbar, setSnackbar] = useState({ open: false, message: '', error: false });
 
     // Upload proof form
@@ -178,7 +181,9 @@ export default function TenantPaymentsPage() {
                 receiptUrl,
                 receiptPath,
                 receiptHash,
+                ...(payingInstallment ? { installmentId: payingInstallment.id } : {}),
             });
+            setPayingInstallment(null);
             setSnackbar({ open: true, message: 'Payment proof submitted. Admin will verify within 24 hours.', error: false });
             setUploadDialogOpen(false);
             setProofForm({ ...EMPTY_PROOF_FORM });
@@ -226,6 +231,17 @@ export default function TenantPaymentsPage() {
             </Box>
 
             {/* KPI Summary */}
+            {user?.uid && <TenantRenewalOfferPanel uid={user.uid} />}
+            {user?.uid && (
+                <TenantRentSchedulePanel
+                    uid={user.uid}
+                    onPay={(installment) => {
+                        setPayingInstallment(installment);
+                        setProofForm((current) => ({ ...current, amount: String(installment.amount), period: installment.dueDate }));
+                        setUploadDialogOpen(true);
+                    }}
+                />
+            )}
             <Grid container spacing={2} sx={{ mb: 4 }}>
                 {[
                     { label: 'Total Verified', value: `AED ${totalPaid.toLocaleString()}`, color: '#10b981', icon: <CheckCircle2 size={20} /> },
@@ -312,7 +328,7 @@ export default function TenantPaymentsPage() {
             </Paper>
 
             {/* Upload Proof Dialog */}
-            <Dialog open={uploadDialogOpen} onClose={() => setUploadDialogOpen(false)} maxWidth="sm" fullWidth
+            <Dialog open={uploadDialogOpen} onClose={() => { setUploadDialogOpen(false); setPayingInstallment(null); }} maxWidth="sm" fullWidth
                 PaperProps={{ sx: { bgcolor: '#0f172a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 4 } }}
             >
                 <DialogTitle sx={{ color: '#fff', fontWeight: 900, borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
@@ -396,7 +412,7 @@ export default function TenantPaymentsPage() {
                     </Stack>
                 </DialogContent>
                 <DialogActions sx={{ p: 3, borderTop: '1px solid rgba(255,255,255,0.05)' }}>
-                    <Button onClick={() => setUploadDialogOpen(false)} sx={{ color: binThemeTokens.textOnDarkMuted }}>CANCEL</Button>
+                    <Button onClick={() => { setUploadDialogOpen(false); setPayingInstallment(null); }} sx={{ color: binThemeTokens.textOnDarkMuted }}>CANCEL</Button>
                     <Button variant="contained" onClick={handleSubmitProof} disabled={uploading || Boolean(proofFormError) || !receiptFile}
                         sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 900 }}
                     >
