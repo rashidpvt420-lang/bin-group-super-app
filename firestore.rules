@@ -886,11 +886,36 @@ service cloud.firestore {
       return signedIn() && exists(/databases/$(database)/documents/maintenanceTickets/$(ticketId)) && participantCanRead(get(/databases/$(database)/documents/maintenanceTickets/$(ticketId)).data);
     }
 
+    function ticketChatLockedStatus(status) {
+      return status in ['CLOSED', 'closed', 'CANCELLED', 'cancelled', 'CANCELED', 'canceled', 'REJECTED', 'rejected', 'RESOLVED', 'resolved', 'TENANT_APPROVED', 'tenant_approved', 'CLOSED_VERIFIED', 'closed_verified'];
+    }
+
+    function ticketChatSenderRoleMatches(role, ticket) {
+      return (role == 'admin' && isAdmin()) ||
+        (role == 'owner' && ownerCanRead(ticket)) ||
+        (role == 'tenant' && tenantOwns(ticket)) ||
+        (role == 'technician' && isApprovedTechnician() && techOwns(ticket));
+    }
+
+    // Chat messages: sender is the caller, role is the caller's real role on
+    // this ticket, fixed field shape, server time, and no new messages once the
+    // ticket is closed/cancelled (admins excepted).
     function safeTicketMessageCreate(ticketId) {
-      return canAccessMaintenanceTicket(ticketId) &&
-        (!('senderId' in request.resource.data) || request.resource.data.senderId == request.auth.uid) &&
-        (!('userId' in request.resource.data) || request.resource.data.userId == request.auth.uid) &&
-        (!('createdBy' in request.resource.data) || request.resource.data.createdBy == request.auth.uid);
+      let d = request.resource.data;
+      let ticketPath = /databases/$(database)/documents/maintenanceTickets/$(ticketId);
+      // Cheap shape checks first; the role check proves the caller is a
+      // participant (admin, owner, tenant or assigned approved technician).
+      return signedIn() &&
+        d.keys().hasOnly(['senderUid', 'senderRole', 'senderName', 'message', 'createdAt']) &&
+        d.keys().hasAll(['senderUid', 'senderRole', 'message', 'createdAt']) &&
+        d.senderUid == request.auth.uid &&
+        d.createdAt == request.time &&
+        d.message is string && d.message.size() > 0 && d.message.size() <= 2000 &&
+        (!('senderName' in d) || (d.senderName is string && d.senderName.size() <= 80)) &&
+        d.senderRole is string &&
+        exists(ticketPath) &&
+        ticketChatSenderRoleMatches(d.senderRole, get(ticketPath).data) &&
+        (d.senderRole == 'admin' || !ticketChatLockedStatus(get(ticketPath).data.get('status', '')));
     }
 
     function ownerBankOwner(data) {
