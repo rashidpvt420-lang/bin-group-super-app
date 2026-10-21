@@ -6,6 +6,9 @@ import { ui, uiType } from '../../theme/uiTokens';
 import { CANONICAL_SLA_POLICY } from '../../config/uaeDominationBlueprint';
 import TenantUnitLinkFallback from '../components/TenantUnitLinkFallback';
 import { leaseEndMs, useTenantHomeData } from '../hooks/useTenantHomeData';
+import { useTenantHomeExtras } from '../components/TenantHomeSummary';
+import { daysUntil } from '../components/TenantRentSchedulePanel';
+import { useRole } from '../../context/RoleContext';
 
 const issueShortcuts = [
   { en: 'AC', ar: 'المكيف', category: 'ac' },
@@ -23,17 +26,21 @@ const plannedServices = [
 
 const DAY = 24 * 60 * 60 * 1000;
 
-/** Redesigned tenant home (REDESIGN.md R5): my home, rent, lease, active request, quick report. */
+/** Redesigned tenant home (REDESIGN.md R5) wired to real data (feature 8): my home, rent, lease, active request, quick report, building notices. */
 export default function TenantSimpleDashboardPage() {
   const navigate = useNavigate();
   const { isRTL, tx, lang } = useLanguage();
   const ar = lang === 'ar';
   const t = (key: string, en: string, arText: string) => (ar ? arText : tx(key, en));
+  const { user } = useRole();
   const { unitLoading, unit, ticketsLoading, ticketsError, activeTickets } = useTenantHomeData();
+  const { lease, rent, lastPaid, notices } = useTenantHomeExtras(user?.uid || '', String(unit?.propertyId || ''), unitLoading);
   const unitTitle = unit ? [unit.unitNumber ? `${t('tenant.home.unit', 'Unit', 'وحدة')} ${unit.unitNumber}` : '', unit.propertyName || unit.buildingName || ''].filter(Boolean).join(' · ') : '';
-  const endMs = leaseEndMs(unit);
+  const endMs = leaseEndMs(unit) ?? leaseEndMs(lease.data ? { leaseEndDate: lease.data.leaseEndDate || lease.data.endDate } : null);
   const daysLeft = endMs ? Math.ceil((endMs - Date.now()) / DAY) : null;
   const active = activeTickets[0];
+  const rentDays = rent.data ? daysUntil(rent.data.dueDate) : null;
+  const aed = (n: unknown) => `${ar ? 'د.إ' : 'AED'} ${Number(n || 0).toLocaleString(ar ? 'ar-AE' : 'en-AE')}`;
   const fmtDate = (ms: number) => new Date(ms).toLocaleDateString(ar ? 'ar-AE' : 'en-AE', { day: 'numeric', month: 'short', year: 'numeric' });
 
   return (
@@ -45,14 +52,22 @@ export default function TenantSimpleDashboardPage() {
 
         {!unitLoading && unit && (
           <UiCard isRTL={isRTL} testId="tenant-home-rent" label={t('tenant.home.rent', 'Rent', 'الإيجار')}>
-            <ComingSoon isRTL={isRTL} title={t('tenant.home.rentSoon', 'Your rent due dates will show here', 'ستظهر مواعيد إيجارك هنا')} detail={t('tenant.home.rentSoonDetail', 'Until then, see payments you have recorded.', 'حتى ذلك الحين، راجع المدفوعات المسجلة.')} />
+            {rent.loading && <Skeleton height={48} />}
+            {!rent.loading && rent.error && <ErrorState isRTL={isRTL} title={t('tenant.home.rentError', 'Your rent schedule could not load.', 'تعذر تحميل جدول الإيجار.')} />}
+            {!rent.loading && !rent.error && rent.data && (
+              <ListRow isRTL={isRTL} title={`${aed(rent.data.amount)} ${t('tenant.home.dueOn', 'due', 'مستحق في')} ${fmtDate(Date.parse(`${rent.data.dueDate}T00:00:00Z`))}`} subtitle={rentDays !== null && rentDays >= 0 ? `${rentDays} ${t('tenant.home.daysToPay', 'days to pay', 'يوماً للدفع')}` : t('tenant.home.overdue', 'Overdue — please pay or upload proof', 'متأخر — يرجى الدفع أو رفع الإثبات')} trailing={<StatusChip tone={rent.data.status === 'OVERDUE' || (rentDays !== null && rentDays < 0) ? 'bad' : 'warn'} label={rent.data.status === 'OVERDUE' || (rentDays !== null && rentDays < 0) ? t('tenant.home.overdueChip', 'Overdue', 'متأخر') : t('tenant.home.dueChip', 'Due', 'مستحق')} />} onClick={() => navigate('/tenant/payments')} />
+            )}
+            {!rent.loading && !rent.error && !rent.data && lastPaid && (
+              <ListRow isRTL={isRTL} title={`${t('tenant.home.paid', 'Paid', 'مدفوع')} · ${aed(lastPaid.amount)}`} subtitle={lastPaid.receiptNumber ? `${t('tenant.home.receipt', 'Receipt', 'إيصال')} ${lastPaid.receiptNumber}` : undefined} trailing={<StatusChip tone="ok" label={t('tenant.home.paidChip', 'Paid', 'مدفوع')} />} onClick={() => navigate('/tenant/payments')} />
+            )}
+            {!rent.loading && !rent.error && !rent.data && !lastPaid && <EmptyState isRTL={isRTL} title={t('tenant.home.nothingDue', 'Nothing due', 'لا يوجد مبلغ مستحق')} detail={t('tenant.home.nothingDueDetail', 'Your owner has not set any open instalments.', 'لم يحدد المالك أي دفعات مفتوحة.')} />}
             <Button onClick={() => navigate('/tenant/payments')} sx={{ mt: 1, minHeight: ui.touchTarget, color: ui.goldText, fontWeight: 700 }}>{t('tenant.home.payments', 'Open payments', 'فتح المدفوعات')}</Button>
           </UiCard>
         )}
 
         {!unitLoading && unit && (
           <UiCard isRTL={isRTL} testId="tenant-home-lease" label={t('tenant.home.lease', 'Lease', 'عقد الإيجار')}>
-            {endMs ? (
+            {lease.loading && !leaseEndMs(unit) ? <Skeleton height={48} /> : lease.error && !endMs ? <ErrorState isRTL={isRTL} title={t('tenant.home.leaseError', 'Your lease could not load.', 'تعذر تحميل عقد الإيجار.')} /> : endMs ? (
               <ListRow isRTL={isRTL} title={`${t('tenant.home.ends', 'Ends', 'ينتهي')} ${fmtDate(endMs)}`} subtitle={daysLeft !== null && daysLeft >= 0 ? `${daysLeft} ${t('tenant.home.daysLeft', 'days left', 'يوماً متبقياً')}` : t('tenant.home.ended', 'Lease has ended', 'انتهى العقد')} trailing={daysLeft !== null && daysLeft <= 120 ? <StatusChip tone="warn" label={t('tenant.home.renew', 'Renew', 'تجديد')} /> : undefined} onClick={() => navigate('/tenant/renewals')} />
             ) : (
               <ComingSoon isRTL={isRTL} title={t('tenant.home.leaseMissing', 'Lease end date not recorded yet', 'لم يُسجل تاريخ انتهاء العقد بعد')} detail={t('tenant.home.leaseMissingDetail', 'BIN will add it so you get renewal reminders.', 'ستضيفه BIN لتصلك تذكيرات التجديد.')} />
@@ -78,10 +93,21 @@ export default function TenantSimpleDashboardPage() {
           </Box>
         </UiCard>
 
+        {!unitLoading && unit && (
+          <UiCard isRTL={isRTL} testId="tenant-home-notices" label={t('tenant.home.notices', 'Building notices', 'إشعارات المبنى')}>
+            {notices.loading && <Skeleton height={48} />}
+            {!notices.loading && notices.error && <ErrorState isRTL={isRTL} title={t('tenant.home.noticesError', 'Building notices could not load.', 'تعذر تحميل إشعارات المبنى.')} />}
+            {!notices.loading && !notices.error && notices.data.length === 0 && <EmptyState isRTL={isRTL} title={t('tenant.home.noNotices', 'No notices for your building', 'لا توجد إشعارات لمبناك')} />}
+            {!notices.loading && !notices.error && notices.data.map((n) => (
+              <ListRow key={n.id} isRTL={isRTL} title={String(n.title || t('tenant.home.notice', 'Notice', 'إشعار'))} subtitle={String(n.message || n.body || '') || undefined} onClick={() => navigate('/tenant/notices')} />
+            ))}
+          </UiCard>
+        )}
+
         <UiCard isRTL={isRTL} label={t('tenant.home.services', 'Book a home service', 'احجز خدمة منزلية')}>
           <Box sx={{ mt: 0.5 }}>
             {plannedServices.map((s) => <ListRow key={s.route} isRTL={isRTL} title={ar ? s.ar : s.en} onClick={() => navigate(s.route)} />)}
-            <ListRow isRTL={isRTL} title={t('tenant.home.notices', 'Building notices', 'إشعارات المبنى')} onClick={() => navigate('/tenant/notices')} />
+            <ListRow isRTL={isRTL} title={t('tenant.home.allNotices', 'All building notices', 'كل إشعارات المبنى')} onClick={() => navigate('/tenant/notices')} />
           </Box>
         </UiCard>
 

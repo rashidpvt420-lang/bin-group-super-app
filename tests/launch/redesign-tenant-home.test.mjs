@@ -15,8 +15,9 @@ test('unlinked tenants see the link-your-home card', () => {
   assert.match(home, /!unitLoading && !unit && <TenantUnitLinkFallback/);
 });
 
-test('rent stays a placeholder until the rent schedule (F1) lands; lease uses a real end date only', () => {
-  assert.match(home, /tenant\.home\.rentSoon/);
+test('rent shows the real schedule (F1/F8) with an error state; lease uses a real end date only', () => {
+  assert.doesNotMatch(home, /tenant\.home\.rentSoon/);
+  assert.match(home, /tenant\.home\.rentError/);
   assert.match(home, /endMs \? \(/);
   assert.match(home, /tenant\.home\.leaseMissing/);
 });
@@ -25,6 +26,7 @@ test('reads are identity-bound and read-only', () => {
   assert.match(hook, /where\('tenantId', '==', user\.uid\)/);
   assert.match(hook, /where\('tenantEmail', '==', user\.email\.toLowerCase\(\)\)/);
   assert.doesNotMatch(hook + home, /updateDoc|setDoc|addDoc|httpsCallable/);
+  assert.match(home, /useTenantHomeExtras\(user\?\.uid/);
 });
 
 test('old explainer copy and duplicate blocks are gone', () => {
