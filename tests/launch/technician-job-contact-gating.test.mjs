@@ -9,7 +9,7 @@ const read = (rel) => readFileSync(new URL(`../../${rel}`, import.meta.url), 'ut
 const ts = createRequire(import.meta.url)('typescript');
 const compiled = ts.transpileModule(read('src/lib/jobContact.ts'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
 const opened = [];
-const sandbox = { exports: {}, Set, String, window: { open: (u) => opened.push(u) } };
+const sandbox = { exports: {}, Set, String, globalThis: {}, window: { open: (u) => opened.push(u), location: { href: '' } } };
 runInNewContext(compiled, sandbox);
 const { isJobContactWindowOpen, normalizeContactPhone, resolveJobContact, telHref, whatsAppHref, openContactUrl } = sandbox.exports;
 
@@ -36,9 +36,10 @@ test('phone/WhatsApp only while the job is active', () => {
   for (const s of ['OPEN', 'COMPLETED', 'CLOSED', 'CANCELLED', '']) assert.equal(isJobContactWindowOpen(s), false, s);
 });
 
-test('openContactUrl ignores empty urls', () => {
-  openContactUrl(''); openContactUrl('tel:+971552423233');
-  assert.deepEqual([...opened], ['tel:+971552423233']);
+test('openContactUrl ignores empty or unexpected urls', () => {
+  openContactUrl(''); openContactUrl('javascript:alert(1)');
+  openContactUrl('https://wa.me/971552423233');
+  assert.deepEqual([...opened], ['https://wa.me/971552423233']);
 });
 
 test('job page uses the gated, role-labelled contact and no raw tel/wa.me building', () => {

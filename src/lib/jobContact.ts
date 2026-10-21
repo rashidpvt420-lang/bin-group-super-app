@@ -43,8 +43,23 @@ export function resolveJobContact(ticket: any): JobContact | null {
   return null;
 }
 
-/** Single opening point for tel:/wa.me so native handling can be added in one place. */
+/**
+ * Single opening point for tel:/wa.me/mailto links.
+ * In the Capacitor app a top-level navigation is required: Capacitor's
+ * WebViewClient hands any non-app URL (tel:, https://wa.me) to an Android
+ * intent / iOS openURL, while window.open(_blank) has no second window and can
+ * be silently dropped. Browsers keep the new-tab behaviour.
+ */
+export function isNativeShell(): boolean {
+  const cap = (globalThis as any).Capacitor;
+  return Boolean(cap && typeof cap.isNativePlatform === 'function' && cap.isNativePlatform());
+}
+
 export function openContactUrl(url: string): void {
-  if (!url) return;
+  if (!url || !/^(tel:\+?\d{6,15}$|https:\/\/wa\.me\/\d{6,15}(\?.*)?$|mailto:)/.test(url)) return;
+  if (isNativeShell() || url.startsWith('tel:')) {
+    window.location.href = url;
+    return;
+  }
   window.open(url, '_blank', 'noopener');
 }
