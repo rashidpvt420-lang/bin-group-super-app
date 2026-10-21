@@ -132,7 +132,7 @@ export default function OwnerDamageEstimatePage() {
               }}
             >
               {preview ? (
-                <Box component="img" src={preview} sx={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                <Box component="img" alt="Damage photo preview" src={preview} sx={{ width: '100%', height: '100%', objectFit: 'cover' }} />
               ) : (
                 <Stack alignItems="center" spacing={1.5}>
                   <FileImage size={40} color={alpha(gold, 0.35)} />

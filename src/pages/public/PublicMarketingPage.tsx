@@ -368,7 +368,7 @@ function Nav({ c }: { c: CopyShape }) {
       <Container maxWidth="xl" sx={{ py: 1.15, display: 'flex', alignItems: 'center', gap: 1.2, flexWrap: 'wrap' }}>
         <Button component="a" href="/" sx={{ p: 0, minWidth: 0, color: ink, mr: 'auto' }}>
           <Stack direction="row" spacing={1.2} alignItems="center">
-            <Box component="img" src="/logo.png" sx={{ width: 44, height: 44, borderRadius: 1.2, boxShadow: `0 10px 22px ${alpha('#000', 0.10)}`, bgcolor: '#fff' }} />
+            <Box component="img" alt="" src="/logo.png" sx={{ width: 44, height: 44, borderRadius: 1.2, boxShadow: `0 10px 22px ${alpha('#000', 0.10)}`, bgcolor: '#fff' }} />
             <Typography fontWeight={950} sx={{ color: ink }}>{c.brand}</Typography>
           </Stack>
         </Button>

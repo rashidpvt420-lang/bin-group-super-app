@@ -568,7 +568,7 @@ export default function TechnicianJobDetailPage() {
                         {(ticket.tenantPhotos || ticket.photos || ticket.initialPhotoUrls)?.length > 0 && (
                             <Stack direction="row" spacing={1.5} flexWrap="wrap" sx={{ mt: 3 }}>
                                 {(ticket.tenantPhotos || ticket.photos || ticket.initialPhotoUrls).map((url: string, i: number) => (
-                                    <Box key={i} component="img" src={url} onClick={() => window.open(url, '_blank')} sx={{ width: 92, height: 92, borderRadius: 2, objectFit: 'cover', cursor: 'pointer', border: `1px solid ${JOB_READABLE.line}` }} />
+                                    <Box key={i} component="img" alt={`Job photo ${i + 1}`} src={url} onClick={() => window.open(url, '_blank')} sx={{ width: 92, height: 92, borderRadius: 2, objectFit: 'cover', cursor: 'pointer', border: `1px solid ${JOB_READABLE.line}` }} />
                                 ))}
                             </Stack>
                         )}

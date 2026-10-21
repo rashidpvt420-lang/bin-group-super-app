@@ -263,7 +263,7 @@ function DesignRequestDetailContent() {
 
                         <Box sx={{ p: 0, minHeight: 360, bgcolor: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
                             {primaryVisual ? (
-                                <Box component="img" src={primaryVisual} sx={{ width: '100%', height: 420, objectFit: 'cover', opacity: 0.9 }} />
+                                <Box component="img" alt="Design concept" src={primaryVisual} sx={{ width: '100%', height: 420, objectFit: 'cover', opacity: 0.9 }} />
                             ) : (
                                 <Box sx={{ width: '100%', minHeight: 420, display: 'flex', alignItems: 'center', justifyContent: 'center', p: 4, textAlign: 'center', bgcolor: 'rgba(15,23,42,0.72)' }}>
                                     <Stack spacing={2} alignItems="center">
@@ -312,7 +312,7 @@ function DesignRequestDetailContent() {
                             <Grid container spacing={2}>
                                 {referenceImages.map((url) => (
                                     <Grid item xs={6} md={4} key={url}>
-                                        <Box component="img" src={url} sx={{ width: '100%', height: 120, objectFit: 'cover', borderRadius: 2, border: '1px solid rgba(255,255,255,0.08)' }} />
+                                        <Box component="img" alt="Design reference" src={url} sx={{ width: '100%', height: 120, objectFit: 'cover', borderRadius: 2, border: '1px solid rgba(255,255,255,0.08)' }} />
                                     </Grid>
                                 ))}
                                 {referenceImages.length === 0 && (
