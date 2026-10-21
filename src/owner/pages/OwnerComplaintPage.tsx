@@ -208,7 +208,7 @@ export default function OwnerComplaintPage() {
                 </Alert>
             )}
 
-            <Paper sx={{ p: { xs: 3, md: 5 }, bgcolor: 'rgba(22, 22, 24, 0.7)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 6 }}>
+            <Paper sx={{ p: { xs: 3, md: 5 }, bgcolor: binThemeTokens.card, border: `1px solid ${binThemeTokens.border}`, borderRadius: 6 }}>
                 <form onSubmit={handleSubmit}>
                     <Stack spacing={4}>
 
@@ -216,12 +216,12 @@ export default function OwnerComplaintPage() {
                         <Grid container spacing={3}>
                             <Grid item xs={12} md={6}>
                                 <FormControl fullWidth required>
-                                    <InputLabel sx={{ color: 'rgba(255,255,255,0.5)' }}>Property</InputLabel>
+                                    <InputLabel sx={{ color: binThemeTokens.textSecondary }}>Property</InputLabel>
                                     <Select
                                         value={selectedPropertyId}
                                         label="Property"
                                         onChange={(e) => { setSelectedPropertyId(e.target.value); setSelectedUnitId(''); }}
-                                        sx={{ bgcolor: 'rgba(255,255,255,0.02)', color: '#FFF' }}
+                                        sx={{ bgcolor: binThemeTokens.softCanvas, color: binThemeTokens.textPrimary }}
                                     >
                                         {properties.map(p => (
                                             <MenuItem key={p.id} value={p.id}>
@@ -233,12 +233,12 @@ export default function OwnerComplaintPage() {
                             </Grid>
                             <Grid item xs={12} md={6}>
                                 <FormControl fullWidth disabled={!units.length}>
-                                    <InputLabel sx={{ color: 'rgba(255,255,255,0.5)' }}>{t('common.unit_optional')}</InputLabel>
+                                    <InputLabel sx={{ color: binThemeTokens.textSecondary }}>{t('common.unit_optional')}</InputLabel>
                                     <Select
                                         value={selectedUnitId}
                                         label="Unit (Optional)"
                                         onChange={(e) => setSelectedUnitId(e.target.value)}
-                                        sx={{ bgcolor: 'rgba(255,255,255,0.02)', color: '#FFF' }}
+                                        sx={{ bgcolor: binThemeTokens.softCanvas, color: binThemeTokens.textPrimary }}
                                     >
                                         <MenuItem value={COMMON_AREA_VALUE}>Common Area / Whole Property</MenuItem>
                                         {units.map(u => (
@@ -253,7 +253,7 @@ export default function OwnerComplaintPage() {
 
                         {/* Property location indicator */}
                         {selectedProperty && (
-                            <Box sx={{ p: 2, bgcolor: 'rgba(255,255,255,0.03)', borderRadius: 3, display: 'flex', alignItems: 'center', gap: 2 }}>
+                            <Box sx={{ p: 2, bgcolor: binThemeTokens.softCanvas, borderRadius: 3, display: 'flex', alignItems: 'center', gap: 2 }}>
                                 <MapPin size={18} color={
                                     (selectedProperty?.location || selectedProperty?.propertyLocation)
                                         ? '#10b981'
@@ -275,12 +275,12 @@ export default function OwnerComplaintPage() {
                         <Grid container spacing={3}>
                             <Grid item xs={12} md={6}>
                                 <FormControl fullWidth required>
-                                    <InputLabel sx={{ color: 'rgba(255,255,255,0.5)' }}>Category</InputLabel>
+                                    <InputLabel sx={{ color: binThemeTokens.textSecondary }}>Category</InputLabel>
                                     <Select
                                         value={category}
                                         label="Category"
                                         onChange={(e) => setCategory(e.target.value)}
-                                        sx={{ bgcolor: 'rgba(255,255,255,0.02)', color: '#FFF' }}
+                                        sx={{ bgcolor: binThemeTokens.softCanvas, color: binThemeTokens.textPrimary }}
                                     >
                                         {CATEGORIES.map(c => <MenuItem key={c} value={c}>{c}</MenuItem>)}
                                     </Select>
@@ -288,12 +288,12 @@ export default function OwnerComplaintPage() {
                             </Grid>
                             <Grid item xs={12} md={6}>
                                 <FormControl fullWidth required>
-                                    <InputLabel sx={{ color: 'rgba(255,255,255,0.5)' }}>Priority</InputLabel>
+                                    <InputLabel sx={{ color: binThemeTokens.textSecondary }}>Priority</InputLabel>
                                     <Select
                                         value={priority}
                                         label="Priority"
                                         onChange={(e) => setPriority(e.target.value)}
-                                        sx={{ bgcolor: 'rgba(255,255,255,0.02)', color: '#FFF' }}
+                                        sx={{ bgcolor: binThemeTokens.softCanvas, color: binThemeTokens.textPrimary }}
                                     >
                                         <MenuItem value="normal">Normal (Standard 24h)</MenuItem>
                                         <MenuItem value="urgent">{t('common.urgent_priority')}</MenuItem>
@@ -308,7 +308,7 @@ export default function OwnerComplaintPage() {
                             label="Specific Location (e.g. Lobby, Roof, Unit 301)"
                             value={specificLocation}
                             onChange={(e) => setSpecificLocation(e.target.value)}
-                            sx={{ '& .MuiOutlinedInput-root': { bgcolor: 'rgba(255,255,255,0.02)', color: '#FFF' } }}
+                            sx={{ '& .MuiOutlinedInput-root': { bgcolor: binThemeTokens.softCanvas, color: binThemeTokens.textPrimary } }}
                         />
 
                         <TextField
@@ -318,7 +318,7 @@ export default function OwnerComplaintPage() {
                             onChange={(e) => setDescription(e.target.value)}
                             required
                             placeholder="Describe the issue in detail..."
-                            sx={{ '& .MuiOutlinedInput-root': { bgcolor: 'rgba(255,255,255,0.02)', color: '#FFF' } }}
+                            sx={{ '& .MuiOutlinedInput-root': { bgcolor: binThemeTokens.softCanvas, color: binThemeTokens.textPrimary } }}
                         />
 
                         {/* Photo Upload */}
@@ -348,7 +348,7 @@ export default function OwnerComplaintPage() {
                                 {previews.length < 5 && (
                                     <Button
                                         component="label"
-                                        sx={{ width: 100, height: 100, border: '1px dashed rgba(255,255,255,0.15)', borderRadius: 2, color: 'rgba(255,255,255,0.3)', flexDirection: 'column', '&:hover': { borderColor: binThemeTokens.gold, color: binThemeTokens.goldText } }}
+                                        sx={{ width: 100, height: 100, border: `1px dashed ${binThemeTokens.border}`, borderRadius: 2, color: binThemeTokens.textSecondary, flexDirection: 'column', '&:hover': { borderColor: binThemeTokens.gold, color: binThemeTokens.goldText } }}
                                     >
                                         <Camera size={22} />
                                         <Typography variant="caption" sx={{ mt: 0.5, fontWeight: 900 }}>ADD</Typography>

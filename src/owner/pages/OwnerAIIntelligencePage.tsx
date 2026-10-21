@@ -278,7 +278,7 @@ export default function OwnerAIIntelligencePage() {
             {tx('ai.overline', 'AI PROPERTY INTELLIGENCE')}
           </Typography>
         </Stack>
-        <Typography variant="h4" fontWeight={950} sx={{ color: '#fff', mb: 1, textAlign }}>
+        <Typography variant="h4" fontWeight={950} sx={{ color: binThemeTokens.textPrimary, mb: 1, textAlign }}>
           {tx('ai.title', 'Property Intelligence Center')}
         </Typography>
         <Typography variant="body2" sx={{ color: alpha('#fff', 0.45), maxWidth: 600, fontWeight: 700, textAlign }}>
