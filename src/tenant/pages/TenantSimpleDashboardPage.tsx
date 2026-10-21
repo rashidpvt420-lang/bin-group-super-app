@@ -1,11 +1,12 @@
 import { Box, Button, Skeleton, Stack, Typography } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '../../context/LanguageContext';
-import { AppHeader, ComingSoon, EmptyState, ErrorState, ListRow, StatusChip, UiButton, UiCard } from '../../components/ui';
+import { AppHeader, EmptyState, ErrorState, ListRow, StatusChip, UiButton, UiCard } from '../../components/ui';
 import { ui, uiType } from '../../theme/uiTokens';
 import { CANONICAL_SLA_POLICY } from '../../config/uaeDominationBlueprint';
 import TenantUnitLinkFallback from '../components/TenantUnitLinkFallback';
 import { leaseEndMs, useTenantHomeData } from '../hooks/useTenantHomeData';
+import TenantHomeSummary from '../components/TenantHomeSummary';
 
 const issueShortcuts = [
   { en: 'AC', ar: 'المكيف', category: 'ac' },
@@ -44,10 +45,9 @@ export default function TenantSimpleDashboardPage() {
         {!unitLoading && !unit && <TenantUnitLinkFallback compact />}
 
         {!unitLoading && unit && (
-          <UiCard isRTL={isRTL} testId="tenant-home-rent" label={t('tenant.home.rent', 'Rent', 'الإيجار')}>
-            <ComingSoon isRTL={isRTL} title={t('tenant.home.rentSoon', 'Your rent due dates will show here', 'ستظهر مواعيد إيجارك هنا')} detail={t('tenant.home.rentSoonDetail', 'Until then, see payments you have recorded.', 'حتى ذلك الحين، راجع المدفوعات المسجلة.')} />
-            <Button onClick={() => navigate('/tenant/payments')} sx={{ mt: 1, minHeight: ui.touchTarget, color: ui.goldText, fontWeight: 700 }}>{t('tenant.home.payments', 'Open payments', 'فتح المدفوعات')}</Button>
-          </UiCard>
+          <Box data-testid="tenant-home-rent">
+            <TenantHomeSummary onNavigate={navigate} only={['rent', 'notices']} />
+          </Box>
         )}
 
         {!unitLoading && unit && (
@@ -55,7 +55,7 @@ export default function TenantSimpleDashboardPage() {
             {endMs ? (
               <ListRow isRTL={isRTL} title={`${t('tenant.home.ends', 'Ends', 'ينتهي')} ${fmtDate(endMs)}`} subtitle={daysLeft !== null && daysLeft >= 0 ? `${daysLeft} ${t('tenant.home.daysLeft', 'days left', 'يوماً متبقياً')}` : t('tenant.home.ended', 'Lease has ended', 'انتهى العقد')} trailing={daysLeft !== null && daysLeft <= 120 ? <StatusChip tone="warn" label={t('tenant.home.renew', 'Renew', 'تجديد')} /> : undefined} onClick={() => navigate('/tenant/renewals')} />
             ) : (
-              <ComingSoon isRTL={isRTL} title={t('tenant.home.leaseMissing', 'Lease end date not recorded yet', 'لم يُسجل تاريخ انتهاء العقد بعد')} detail={t('tenant.home.leaseMissingDetail', 'BIN will add it so you get renewal reminders.', 'ستضيفه BIN لتصلك تذكيرات التجديد.')} />
+              <EmptyState isRTL={isRTL} title={t('tenant.home.leaseMissing', 'Lease end date not recorded yet', 'لم يُسجل تاريخ انتهاء العقد بعد')} detail={t('tenant.home.leaseMissingDetail', 'Ask your owner or BIN to record it so you get renewal reminders.', 'اطلب من المالك أو BIN تسجيله لتصلك تذكيرات التجديد.')} />
             )}
           </UiCard>
         )}

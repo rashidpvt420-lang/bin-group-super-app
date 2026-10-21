@@ -23,7 +23,9 @@ const Big = ({ children }: { children: React.ReactNode }) => <Typography sx={{ c
 const Small = ({ children }: { children: React.ReactNode }) => <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary }}>{children}</Typography>;
 
 /** Feature 8: real data on the tenant home screen — home, rent, active job, building notices. Never a silent blank. */
-export default function TenantHomeSummary({ onNavigate }: { onNavigate: (path: string) => void }) {
+export type TenantHomeSection = 'home' | 'rent' | 'ticket' | 'notices';
+export default function TenantHomeSummary({ onNavigate, only }: { onNavigate: (path: string) => void; only?: TenantHomeSection[] }) {
+  const show = (section: TenantHomeSection) => !only || only.includes(section);
   const { user } = useRole();
   const uid = user?.uid || '';
   const [unit, setUnit] = useState<Slot<any>>(start(null));
@@ -59,7 +61,7 @@ export default function TenantHomeSummary({ onNavigate }: { onNavigate: (path: s
   return (
     <Box sx={{ mb: 3 }} data-testid="tenant-home-summary">
       <Grid container spacing={2}>
-        <Grid item xs={12} sm={6}>
+        {show('home') && (<Grid item xs={12} sm={6}>
           <Card title="My home" testId="tenant-home-card">
             {unit.loading || lease.loading ? <Loading /> : unit.error ? <Failed what="Your unit" /> : !unit.data ? (
               <><Big>No unit linked yet</Big><Small>Accept your owner's invitation or ask BIN to link your unit.</Small></>
@@ -71,8 +73,8 @@ export default function TenantHomeSummary({ onNavigate }: { onNavigate: (path: s
               </>
             )}
           </Card>
-        </Grid>
-        <Grid item xs={12} sm={6}>
+        </Grid>)}
+        {show('rent') && (<Grid item xs={12} sm={6}>
           <Card title="Rent" testId="tenant-rent-card">
             {rent.loading ? <Loading /> : rent.error ? <Failed what="Your rent schedule" /> : !rent.data ? (
               <><Big>Nothing due</Big><Small>Your owner has not set any open instalments.</Small></>
@@ -84,8 +86,8 @@ export default function TenantHomeSummary({ onNavigate }: { onNavigate: (path: s
               </>
             )}
           </Card>
-        </Grid>
-        <Grid item xs={12} sm={6}>
+        </Grid>)}
+        {show('ticket') && (<Grid item xs={12} sm={6}>
           <Card title="Active request" testId="tenant-ticket-card">
             {ticket.loading ? <Loading /> : ticket.error ? <Failed what="Your requests" /> : !ticket.data ? (
               <><Big>No open requests</Big><Small>Use the repair tiles below to report an issue.</Small></>
@@ -97,14 +99,14 @@ export default function TenantHomeSummary({ onNavigate }: { onNavigate: (path: s
               </>
             )}
           </Card>
-        </Grid>
-        <Grid item xs={12} sm={6}>
+        </Grid>)}
+        {show('notices') && (<Grid item xs={12} sm={6}>
           <Card title="Building notices" testId="tenant-notices-card">
             {notices.loading ? <Loading /> : notices.error ? <Failed what="Building notices" /> : !notices.data.length ? <Small>No notices for your building.</Small> : notices.data.map((n) => (
               <Box key={n.id} sx={{ mb: 1 }}><Typography fontWeight={800} sx={{ color: binThemeTokens.textPrimary }}>{n.title || 'Notice'}</Typography><Small>{n.message || n.body || ''}</Small></Box>
             ))}
           </Card>
-        </Grid>
+        </Grid>)}
       </Grid>
     </Box>
   );

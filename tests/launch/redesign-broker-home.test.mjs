@@ -11,9 +11,9 @@ test('numbers come from the live attribution signals and never show fake zeros',
   assert.match(home, /<ErrorState /);
 });
 
-test('jargon removed; vacancies are a labelled placeholder until F6', () => {
+test('jargon removed; vacancies show real F6 alerts', () => {
   for (const s of ['BROKER SIMPLE MODE', 'identity-bound attribution', 'masked KYC', 'CanonicalNextActions', 'RoleQuickActionsPanel', "'#B8932F'"]) assert.ok(!home.includes(s), s);
-  assert.match(home, /broker\.home\.vacanciesSoon/);
+  assert.match(home, /<BrokerVacancyAlertsCard /);
 });
 
 test('broker home is read-only', () => {

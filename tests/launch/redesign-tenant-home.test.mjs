@@ -15,8 +15,8 @@ test('unlinked tenants see the link-your-home card', () => {
   assert.match(home, /!unitLoading && !unit && <TenantUnitLinkFallback/);
 });
 
-test('rent stays a placeholder until the rent schedule (F1) lands; lease uses a real end date only', () => {
-  assert.match(home, /tenant\.home\.rentSoon/);
+test('rent shows the F1 rent schedule; lease uses a real end date only', () => {
+  assert.match(home, /<TenantHomeSummary onNavigate=\{navigate\} only=/);
   assert.match(home, /endMs \? \(/);
   assert.match(home, /tenant\.home\.leaseMissing/);
 });

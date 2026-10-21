@@ -1,16 +1,17 @@
 import { Alert, Box, Button, Stack } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '@bin/shared';
-import { AppHeader, ComingSoon, EmptyState, ListRow, StatGrid, StatTile, StatusChip, UiButton, UiCard } from '../../components/ui';
+import { AppHeader, EmptyState, ListRow, StatusChip, UiButton, UiCard } from '../../components/ui';
 import { ui } from '../../theme/uiTokens';
 import { useOwnerCommandCounts } from '../hooks/useOwnerCommandCounts';
 import OwnerFinancialTruthCard from '../components/OwnerFinancialTruthCard';
 import OwnerRecentComplaintsCard from '../components/OwnerRecentComplaintsCard';
+import OwnerKpiTiles from '../components/OwnerKpiTiles';
 
 /**
  * Redesigned owner home (REDESIGN.md R4): key numbers, one "Needs you today" list, live repairs, money.
- * Rent collected, occupancy and leases ending stay as labelled placeholders until the rent schedule (F1),
- * lease end dates (F3) and automatic vacancy (F5) land; we never show invented numbers.
+ * Rent, occupancy, open jobs and approvals come from the server KPIs (F9, getOwnerKpis); a tile that
+ * cannot load says so instead of showing a silent zero.
  */
 export default function OwnerSimpleDashboardPage() {
   const navigate = useNavigate();
@@ -18,7 +19,6 @@ export default function OwnerSimpleDashboardPage() {
   const t = (key: string, en: string, ar: string) => (lang === 'ar' ? ar : tx(key, en));
   const commandCounts = useOwnerCommandCounts();
   const loading = commandCounts.loading;
-  const openMaintenance = commandCounts.openTickets;
 
   const todo = [
     { key: 'approvals', count: commandCounts.pendingCostApprovals, title: t('owner.home.approvals', 'Approve quotes and finished work', 'اعتماد العروض والأعمال المنجزة'), path: '/owner/approvals', tone: 'warn' as const },
@@ -31,13 +31,7 @@ export default function OwnerSimpleDashboardPage() {
     <Box data-testid="owner-home" sx={{ direction: isRTL ? 'rtl' : 'ltr', mx: { xs: -2, sm: 0 } }}>
       <AppHeader isRTL={isRTL} eyebrow={t('owner.home.eyebrow', 'Owner', 'المالك')} title={t('owner.home.title', 'My properties', 'عقاراتي')} />
       <Stack spacing={1.75} sx={{ p: 2, bgcolor: ui.cream }}>
-        <StatGrid>
-          <StatTile isRTL={isRTL} label={t('owner.home.rent', 'Rent collected this month', 'الإيجار المحصّل هذا الشهر')} value={null} placeholder={t('owner.home.soon', 'Soon', 'قريباً')} />
-          <StatTile isRTL={isRTL} label={t('owner.home.occupancy', 'Units occupied', 'الوحدات المؤجرة')} value={null} placeholder={t('owner.home.soon', 'Soon', 'قريباً')} />
-          <StatTile isRTL={isRTL} label={t('owner.home.leases', 'Leases ending in 90 days', 'عقود تنتهي خلال 90 يوماً')} value={null} placeholder={t('owner.home.soon', 'Soon', 'قريباً')} />
-          <StatTile isRTL={isRTL} label={t('owner.home.repairs', 'Repairs in progress', 'إصلاحات جارية')} value={loading ? null : openMaintenance} onClick={() => navigate('/owner/tickets')} />
-        </StatGrid>
-        <ComingSoon isRTL={isRTL} title={t('owner.home.soonTitle', 'Rent, occupancy and lease numbers are coming', 'أرقام الإيجار والإشغال والعقود قادمة')} detail={t('owner.home.soonDetail', 'They will appear here once rent schedules and lease end dates are recorded.', 'ستظهر هنا بعد تسجيل جداول الإيجار وتواريخ انتهاء العقود.')} />
+        <OwnerKpiTiles onNavigate={navigate} />
 
         {(commandCounts.failedSources || []).length > 0 && (
           <Alert severity="warning" data-testid="owner-command-counts-failed">{t('owner.home.countsFailed', 'Some counts could not be loaded. Numbers may be incomplete — refresh to retry.', 'تعذّر تحميل بعض الأرقام. قد تكون غير مكتملة — حدّث الصفحة للمحاولة مجدداً.')} ({(commandCounts.failedSources || []).join(', ')})</Alert>

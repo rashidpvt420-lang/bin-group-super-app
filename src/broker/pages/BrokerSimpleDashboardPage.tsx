@@ -1,12 +1,13 @@
 import { Box, Button, Stack } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '@bin/shared';
-import { AppHeader, ComingSoon, ErrorState, ListRow, StatGrid, StatTile, UiButton, UiCard } from '../../components/ui';
+import { AppHeader, ErrorState, ListRow, StatGrid, StatTile, UiButton, UiCard } from '../../components/ui';
 import { ui } from '../../theme/uiTokens';
 import BrokerLiveAttributionCard from '../components/BrokerLiveAttributionCard';
+import BrokerVacancyAlertsCard from '../components/BrokerVacancyAlertsCard';
 import { useBrokerAttributionSignals } from '../hooks/useBrokerAttributionSignals';
 
-/** Redesigned broker home (REDESIGN.md R7): numbers, add lead, pipeline links, vacancies (F6 placeholder). */
+/** Redesigned broker home (REDESIGN.md R7): numbers, add lead, pipeline links, vacancy alerts (F6). */
 export default function BrokerSimpleDashboardPage() {
   const navigate = useNavigate();
   const { isRTL, lang, tx } = useLanguage();
@@ -30,7 +31,7 @@ export default function BrokerSimpleDashboardPage() {
         <UiButton tone="primary" onClick={() => navigate('/broker/leads/new')}>{t('broker.home.addLead', 'Add a lead', 'إضافة عميل')}</UiButton>
 
         <UiCard isRTL={isRTL} label={t('broker.home.vacancies', 'New vacancies near you', 'وحدات شاغرة قريبة منك')}>
-          <ComingSoon isRTL={isRTL} title={t('broker.home.vacanciesSoon', 'Vacancy alerts are coming', 'تنبيهات الوحدات الشاغرة قادمة')} detail={t('broker.home.vacanciesSoonDetail', 'You will see empty units in your area here as soon as owners list them.', 'سترى هنا الوحدات الشاغرة في منطقتك فور عرضها من الملاك.')} />
+          <BrokerVacancyAlertsCard isRTL={isRTL} t={t} onOpen={navigate} />
         </UiCard>
 
         <UiCard isRTL={isRTL} label={t('broker.home.next', 'Your next steps', 'خطواتك التالية')}>

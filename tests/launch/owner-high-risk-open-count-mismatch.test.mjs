@@ -130,8 +130,8 @@ test('command strip surfaces openTickets (not silent high-risk zero) and keeps h
   assert.match(stripSrc, /Open tickets/);
   assert.match(stripSrc, /openMaintenance/);
   assert.match(stripSrc, /high-risk of/);
-  // 2026-10-21 redesign: the owner home shows open repairs as a tile and urgent ones in "Needs you today".
-  assert.match(simpleSrc, /const openMaintenance = commandCounts\.openTickets;/);
-  assert.match(simpleSrc, /value=\{loading \? null : openMaintenance\}/);
+  // Redesign + F9: open repairs come from the server KPI tile ("Open jobs"); urgent ones stay in "Needs you today".
+  assert.match(simpleSrc, /<OwnerKpiTiles onNavigate=\{navigate\} \/>/);
+  assert.match(readFileSync(new URL('../../src/owner/components/OwnerKpiTiles.tsx', import.meta.url), 'utf8'), /label="Open jobs"/);
   assert.match(simpleSrc, /count: commandCounts\.highRiskTickets/);
 });

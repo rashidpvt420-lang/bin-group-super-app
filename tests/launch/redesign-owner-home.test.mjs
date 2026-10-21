@@ -5,8 +5,8 @@ import { readFile } from 'node:fs/promises';
 
 const home = await readFile('src/owner/pages/OwnerSimpleDashboardPage.tsx', 'utf8');
 
-test('layout order: stat tiles, Needs you today, live repairs, money', () => {
-  const idx = ['<StatGrid>', 'owner-needs-you-today', '<OwnerRecentComplaintsCard />', '<OwnerFinancialTruthCard />'].map((s) => home.indexOf(s));
+test('layout order: KPI tiles, Needs you today, live repairs, money', () => {
+  const idx = ['<OwnerKpiTiles', 'owner-needs-you-today', '<OwnerRecentComplaintsCard />', '<OwnerFinancialTruthCard />'].map((s) => home.indexOf(s));
   idx.forEach((v, i) => assert.ok(v > 0 && (i === 0 || v > idx[i - 1]), `order ${idx}`));
 });
 
@@ -14,9 +14,10 @@ test('no marketing banner, repeated to-do blocks or promise card', () => {
   for (const s of ['OWNER SIMPLE MODE', 'Find a Room Rent — BIN handles', 'CanonicalNextActions', 'RoleQuickActionsPanel', 'OwnerApprovalCommandStrip', 'Monthly report promise']) assert.ok(!home.includes(s), s);
 });
 
-test('rent, occupancy and lease tiles are placeholders until F1/F3/F5 land (no invented numbers)', () => {
-  assert.equal([...home.matchAll(/value=\{null\} placeholder=/g)].length, 3);
-  assert.match(home, /<ComingSoon /);
+test('rent, occupancy and lease numbers come from server KPIs (F9), never placeholders or invented numbers', () => {
+  assert.equal([...home.matchAll(/placeholder=/g)].length, 0);
+  assert.doesNotMatch(home, /<ComingSoon /);
+  assert.match(home, /<OwnerKpiTiles /);
 });
 
 test('owner home is read-only', () => {
