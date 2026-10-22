@@ -35,7 +35,7 @@ jobs:
       github.event.pull_request.user.login == github.repository_owner &&
       startsWith(github.event.pull_request.head.ref, 'ops/dispatch-play-cert-v3-') &&
       github.event.pull_request.title == 'Dispatch protected Play certificate extraction v3'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 2
     steps:
       - name: Refuse request PR merge
@@ -53,7 +53,7 @@ jobs:
       github.event.pull_request.user.login == github.repository_owner &&
       startsWith(github.event.pull_request.head.ref, 'ops/dispatch-play-cert-v3-') &&
       github.event.pull_request.title == 'Dispatch protected Play certificate extraction v3'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
       contents: read
@@ -136,7 +136,7 @@ jobs:
     name: Export public Android upload certificate
     needs: announce
     if: needs.announce.result == 'success'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     environment: production
     permissions:
@@ -293,7 +293,7 @@ jobs:
     name: Publish protected certificate outcome
     needs: [announce, export_certificate]
     if: always() && needs.announce.result == 'success'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
       contents: read

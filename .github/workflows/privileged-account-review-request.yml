@@ -27,7 +27,7 @@ env:
 jobs:
   review:
     name: Review privileged accounts without mutation
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     environment: production
     timeout-minutes: 30
     env:
@@ -235,7 +235,7 @@ jobs:
       github.event.pull_request.user.login == github.repository_owner &&
       startsWith(github.event.pull_request.head.ref, 'ops/dispatch-play-cert-v5-') &&
       github.event.pull_request.title == 'Dispatch protected Play certificate extraction v5'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     outputs:
       release_sha: ${{ steps.release.outputs.sha }}
@@ -307,7 +307,7 @@ jobs:
     name: Export public Android upload certificate
     needs: announce_play_certificate
     if: needs.announce_play_certificate.result == 'success'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     environment: production
     timeout-minutes: 15
     outputs:

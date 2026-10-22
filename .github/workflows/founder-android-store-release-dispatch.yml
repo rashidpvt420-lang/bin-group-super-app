@@ -16,7 +16,7 @@ jobs:
       !github.event.issue.pull_request &&
       github.event.comment.user.login == github.repository_owner &&
       startsWith(github.event.comment.body, '/bin-launch android-store-release ')
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
 
     steps:

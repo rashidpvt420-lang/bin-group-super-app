@@ -28,7 +28,7 @@ concurrency:
 jobs:
   verify-rotation:
     name: Verify privileged access rotation
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 35
     environment: hard-launch-operations
     permissions:

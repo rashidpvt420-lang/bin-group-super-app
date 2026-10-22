@@ -41,7 +41,7 @@ jobs:
       github.event.comment.user.login == github.repository_owner &&
       github.event.comment.author_association == 'OWNER' &&
       startsWith(github.event.comment.body, '/bin-launch evidence ')
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
       contents: read
@@ -225,7 +225,7 @@ jobs:
       github.event.comment.user.login == github.repository_owner &&
       github.event.comment.author_association == 'OWNER' &&
       startsWith(github.event.comment.body, '/bin-launch evidence rebind-physical-current ')
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     environment: hard-launch-operations
     permissions:
@@ -459,7 +459,7 @@ jobs:
 
   verify-physical-evidence:
     if: github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     environment: hard-launch-operations
     env:

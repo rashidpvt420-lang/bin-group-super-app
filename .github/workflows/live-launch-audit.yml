@@ -16,7 +16,7 @@ concurrency:
 jobs:
   live-launch-audit:
     name: Protected live launch audit only
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     environment: production
     timeout-minutes: 45
     env:

@@ -23,7 +23,7 @@ env:
 jobs:
   staging-auth-probe:
     name: Verify branch-scoped staging deployment identity
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 12
     env:
       GCP_WORKLOAD_IDENTITY_PROVIDER: ${{ secrets.STAGING_GCP_WORKLOAD_IDENTITY_PROVIDER }}

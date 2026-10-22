@@ -59,7 +59,7 @@ jobs:
   verify-and-publish:
     needs: [authorize-founder-totp-repair, verify-and-sync-founder-totp]
     if: ${{ !cancelled() && ((!inputs.founder_totp_operation || inputs.founder_totp_operation == 'none') || ((inputs.founder_totp_operation == 'verify' || inputs.founder_totp_operation == 'sync' || inputs.founder_totp_operation == 'repair-and-sync') && needs.verify-and-sync-founder-totp.result == 'success')) }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 60
     environment: ${{ (inputs.founder_totp_operation == 'verify' || inputs.founder_totp_operation == 'repair-and-sync') && 'production' || 'hard-public-launch' }}
     env:
@@ -440,7 +440,7 @@ jobs:
 
   authorize-founder-totp-repair:
     if: ${{ inputs.founder_totp_operation == 'verify' || inputs.founder_totp_operation == 'sync' || inputs.founder_totp_operation == 'repair-and-sync' }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     environment: hard-public-launch
     permissions:
@@ -491,7 +491,7 @@ jobs:
   verify-and-sync-founder-totp:
     needs: authorize-founder-totp-repair
     if: ${{ inputs.founder_totp_operation == 'verify' || inputs.founder_totp_operation == 'sync' || inputs.founder_totp_operation == 'repair-and-sync' }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     environment: production
     concurrency:

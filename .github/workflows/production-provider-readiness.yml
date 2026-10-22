@@ -23,7 +23,7 @@ env:
 jobs:
   smtp-readiness:
     name: Verify protected SMTP provider readiness without sending mail
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     environment: production
     steps:

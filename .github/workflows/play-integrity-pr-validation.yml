@@ -33,7 +33,7 @@ concurrency:
 jobs:
   application-security:
     name: Play Integrity app and security gates
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     env:
       CI: 'false'
@@ -81,7 +81,7 @@ jobs:
 
   android-native:
     name: Play Integrity Android native gates
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     env:
       CI: 'false'

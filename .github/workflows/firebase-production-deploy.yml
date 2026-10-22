@@ -91,7 +91,7 @@ env:
 jobs:
   validate-production-build:
     name: Validate production build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Enforce production dispatch gates
         env:
@@ -222,7 +222,7 @@ jobs:
 
   deploy-firebase-production-stack:
     name: Deploy Firebase production stack
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: validate-production-build
     environment: production
     env:
@@ -855,7 +855,7 @@ jobs:
 
   public-release-clearance:
     name: Postdeploy public release gate
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: deploy-firebase-production-stack
     if: ${{ inputs.run_public_release_gate == true }}
     environment: production

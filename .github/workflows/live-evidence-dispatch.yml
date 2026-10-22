@@ -36,7 +36,7 @@ jobs:
       github.event.pull_request.user.login == github.repository_owner &&
       startsWith(github.event.pull_request.head.ref, 'ops/dispatch-live-evidence-workflow-') &&
       github.event.pull_request.title == 'Dispatch protected live-evidence workflow'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
 
     steps:

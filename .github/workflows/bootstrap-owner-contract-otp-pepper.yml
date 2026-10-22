@@ -20,7 +20,7 @@ jobs:
       github.event.comment.body == '/bin-launch bootstrap-owner-contract-otp-pepper' &&
       github.event.comment.user.login == github.repository_owner &&
       github.event.comment.author_association == 'OWNER'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
     outputs:
@@ -51,7 +51,7 @@ jobs:
     name: Create or verify Owner contract OTP pepper
     needs: authorize-owner-command
     if: needs.authorize-owner-command.outputs.authorized == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     environment: production
     permissions:

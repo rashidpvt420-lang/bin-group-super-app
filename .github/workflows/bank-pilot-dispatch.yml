@@ -38,7 +38,7 @@ jobs:
       github.event.pull_request.user.login == github.repository_owner &&
       startsWith(github.event.pull_request.head.ref, 'ops/dispatch-bank-pilot-workflow-') &&
       github.event.pull_request.title == 'Dispatch protected bank pilot workflow'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 60
 
     steps:

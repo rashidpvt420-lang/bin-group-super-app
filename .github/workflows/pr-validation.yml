@@ -28,7 +28,7 @@ jobs:
   validate:
     name: Install, typecheck, lint, and build
     if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout repository
@@ -229,7 +229,7 @@ jobs:
       github.event.pull_request.user.login == github.repository_owner &&
       startsWith(github.event.pull_request.head.ref, 'ops/dispatch-play-cert-workflow-') &&
       github.event.pull_request.title == 'Dispatch protected Play certificate workflow'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
       actions: write
@@ -335,7 +335,7 @@ jobs:
       github.event.pull_request.user.login == github.repository_owner &&
       startsWith(github.event.pull_request.head.ref, 'ops/dispatch-play-cert-extraction-') &&
       github.event.pull_request.title == 'Dispatch protected Play certificate extraction'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     environment: production
     timeout-minutes: 15
     env:

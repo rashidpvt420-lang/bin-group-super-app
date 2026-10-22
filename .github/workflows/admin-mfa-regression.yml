@@ -37,7 +37,7 @@ env:
 jobs:
   focused-admin-mfa-tests:
     name: Phone, TOTP, routing, and fail-closed regressions
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
 
     steps:
@@ -79,7 +79,7 @@ jobs:
       github.event_name == 'pull_request' &&
       github.event.pull_request.head.repo.full_name == github.repository &&
       contains(github.event.pull_request.labels.*.name, 'deploy-founder-preview')
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 25
     environment: founder-enrollment-preview
     permissions:
