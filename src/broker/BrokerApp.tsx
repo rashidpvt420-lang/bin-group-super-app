@@ -1,7 +1,7 @@
 import React from 'react';
 import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { AppBar, Avatar, Box, Button, Container, IconButton, Paper, Stack, Toolbar, Typography, alpha } from '@mui/material';
-import { Briefcase, Building, FileUp, Home, Paintbrush, Users, Wallet } from 'lucide-react';
+import { ArrowLeft, Briefcase, Building, FileUp, Home, Paintbrush, Users, Wallet } from 'lucide-react';
 import { useLanguage } from '@bin/shared';
 import { useRole } from '../context/RoleContext';
 import { NotificationBell } from '../components/NotificationBell';
@@ -36,6 +36,9 @@ const BrokerLayout = ({ children }: { children: React.ReactNode }) => {
   const { user } = useRole();
   const { isRTL, lang, tx } = useLanguage();
   const label = (key: string, en: string, ar: string) => lang === 'ar' ? ar : tx(key, en);
+  // Route-aware Back: the global floating control is suppressed inside portals,
+  // so every non-home broker route draws its own Back in the header.
+  const isBrokerHome = location.pathname === '/broker' || location.pathname === '/broker/dashboard';
   const menuItems: BrokerMenuItem[] = [
     { key: 'broker.nav.dashboard', label: label('broker.nav.dashboard', 'Dashboard', 'لوحة التحكم'), path: '/broker/dashboard', icon: Home },
     { key: 'broker.nav.leads', label: label('broker.nav.leads', 'Leads', 'العملاء المحتملون'), path: '/broker/leads', icon: Users },
@@ -53,6 +56,7 @@ const BrokerLayout = ({ children }: { children: React.ReactNode }) => {
       <AppBar position="sticky" elevation={0} sx={{ bgcolor: '#FFFFFF', borderBottom: '1px solid #E5E7EB', zIndex: 1200 }}>
         <Toolbar sx={{ justifyContent: 'space-between', px: { xs: 2, md: 4 }, minHeight: 76, flexDirection: isRTL ? 'row-reverse' : 'row', gap: 1 }}>
           <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={2} alignItems="center" sx={{ minWidth: 0 }}>
+            {!isBrokerHome && <Button type="button" data-testid="broker-header-back" aria-label={label('nav.back', 'Back', 'رجوع')} onClick={() => (window.history.length > 1 ? navigate(-1) : navigate('/broker/dashboard'))} startIcon={renderSafeIcon(ArrowLeft, { size: 18, style: { transform: isRTL ? 'rotate(180deg)' : 'none' } })} sx={{ color: '#111827', border: '1px solid #B8932F', borderRadius: 2, fontWeight: 950, minHeight: 42, px: 1.6, bgcolor: '#FFFFFF', flexShrink: 0, textTransform: 'none' }}>{label('nav.back', 'Back', 'رجوع')}</Button>}
             <Box onClick={() => navigate('/broker/dashboard')} sx={{ p: 1, bgcolor: '#7A5C12', borderRadius: 2, color: '#FFFFFF', cursor: 'pointer', display: 'flex' }}>
               <SafeIcon icon={Briefcase} size={20} />
             </Box>
