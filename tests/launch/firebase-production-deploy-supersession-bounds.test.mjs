@@ -20,7 +20,7 @@ test('production Firebase deploy stays non-cancellable but exits cooperatively w
 
 test('production Firebase deploy step has a hard total budget and each Firebase command is capped by what remains', () => {
   assert.match(deploy, /FIREBASE_DEPLOY_TOTAL_BUDGET_SECONDS/);
-  assert.match(deploy, /9000,\s*\n\s*1800,\s*\n\s*10800/);
+  assert.match(deploy, /12600,\s*\n\s*1800,\s*\n\s*14400/);
   assert.match(deploy, /deploymentDeadlineMs = deploymentStartedAtMs \+ deploymentBudgetSeconds \* 1000/);
   assert.match(deploy, /function remainingDeploymentBudgetMs\(stage\)/);
   assert.match(deploy, /total Firebase deployment budget/);
@@ -48,4 +48,16 @@ test('stale Admin bootstrap cannot write deployment metadata after protected mai
   const guard = deploy.indexOf("assertDeploymentContinuable('before Admin MFA bootstrap metadata')");
   const write = deploy.indexOf('writeFileSync(adminBootstrapMetadataPath');
   assert.ok(guard >= 0 && write > guard, 'Admin bootstrap metadata must be guarded by a fresh exact-main check');
+});
+
+test('default deploy budget covers 50 quota-safe batches, several transient retries and the post-Functions reserve', () => {
+  const m = deploy.match(/'FIREBASE_DEPLOY_TOTAL_BUDGET_SECONDS',[\s\S]*?\n\s*(\d+),\s*\n\s*(\d+),\s*\n\s*(\d+),/);
+  assert.ok(m, 'budget bounds must be parseable');
+  const [budget, min, max] = m.slice(1).map(Number);
+  assert.ok(min <= budget && budget <= max);
+  // Observed: ~150s per batch incl. 60s cooldown, 50 batches; each transient retry costs ~120-240s cooldown + rerun.
+  const needed = 50 * 150 + 600 /* post-Functions reserve */ + 900 /* hosting + verification */ + 6 * 330 /* six retries */;
+  assert.ok(budget >= needed, `budget ${budget}s must cover ${needed}s`);
+  // Must still fit inside the 6h GitHub-hosted job limit with ~1h for build/validation steps.
+  assert.ok(max <= 5 * 3600, 'budget cap must stay below the job limit');
 });

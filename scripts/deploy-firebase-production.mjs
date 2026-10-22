@@ -47,9 +47,12 @@ const validatedArtifactDigest = requireArtifactDigest(
 const deploymentStartedAtMs = Date.now();
 const deploymentBudgetSeconds = boundedInteger(
   'FIREBASE_DEPLOY_TOTAL_BUDGET_SECONDS',
-  9000,
+  // 50 quota-safe Functions batches (~150s each incl. 60s cooldown) consume ~2h30m on their own,
+  // so 9000s left no room for transient "Failed to list functions" retries or hosting/post-deploy.
+  // 12600s keeps ~1h of headroom inside the 6h GitHub job limit; every command stays budget-capped.
+  12600,
   1800,
-  10800,
+  14400,
 );
 const deploymentDeadlineMs = deploymentStartedAtMs + deploymentBudgetSeconds * 1000;
 
