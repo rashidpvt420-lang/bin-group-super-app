@@ -24,7 +24,7 @@ concurrency:
 jobs:
   orchestrate:
     name: Reuse or create exact-SHA deploy, live evidence, and Android AAB
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 360
     steps:
       - name: Run protected release sequence

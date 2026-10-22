@@ -16,7 +16,7 @@ concurrency:
 jobs:
   review-and-clean:
     name: Authorize, review, and conditionally clean privileged identities
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 60
     env:
       GH_TOKEN: ${{ github.token }}

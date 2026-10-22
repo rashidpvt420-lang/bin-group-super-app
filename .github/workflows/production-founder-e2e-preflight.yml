@@ -12,7 +12,7 @@ permissions:
 jobs:
   preflight-check:
     name: Verify Founder E2E Preflight Environment
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     environment: production
 
     steps:

@@ -28,7 +28,7 @@ concurrency:
 jobs:
   verify-and-publish:
     name: Verify and publish application evidence
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 75
     environment: production
     permissions:

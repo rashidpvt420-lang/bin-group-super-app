@@ -28,7 +28,7 @@ concurrency:
 jobs:
   verify-production-readiness:
     name: Verify production configuration without deployment
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     environment: production
     env:
       GCP_PROJECT_ID: bin-group-57c60

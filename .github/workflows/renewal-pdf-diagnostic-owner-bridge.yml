@@ -17,7 +17,7 @@ jobs:
       github.event.comment.user.login == github.repository_owner &&
       github.event.comment.author_association == 'OWNER' &&
       startsWith(github.event.comment.body, '/bin-launch renewal-pdf-diagnostic ')
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - name: Validate exact owner command

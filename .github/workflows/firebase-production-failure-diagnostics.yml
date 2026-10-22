@@ -28,7 +28,7 @@ jobs:
   collect:
     name: Collect safe production failure evidence
     if: github.event_name == 'pull_request' || github.event.workflow_run.conclusion == 'failure'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     env:
       GH_TOKEN: ${{ github.token }}

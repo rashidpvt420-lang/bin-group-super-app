@@ -34,7 +34,7 @@ jobs:
       github.event.pull_request.user.login == github.repository_owner &&
       startsWith(github.event.pull_request.head.ref, 'ops/dispatch-privileged-review-workflow-') &&
       github.event.pull_request.title == 'Dispatch protected privileged account review workflow'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
 
     steps:
