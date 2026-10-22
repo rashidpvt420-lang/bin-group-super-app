@@ -86,11 +86,6 @@ body:has(textarea[placeholder*="Type staff issue"]) .MuiAlert-outlinedWarning {
   display: none !important;
 }
 
-/* Prevent the duplicated shell Back button from crowding the page header on this ESS route. */
-body:has(textarea[placeholder*="Type staff issue"]) header .MuiButton-root:first-of-type {
-  display: none !important;
-}
-
 @media (max-width: 900px) {
   body:has(textarea[placeholder*="Type staff issue"]) .MuiContainer-root {
     padding-left: 16px !important;
