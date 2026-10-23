@@ -484,14 +484,51 @@ test('bank-pilot does not claim public launch; public mode requires exact Phase 
   );
 });
 
-test('same-run deployment artifact downloads without nesting launch_package twice', () => {
+test('same-run deployment artifact downloads to the root and the restore step rebuilds launch_package (artifact is rooted at launch_package)', () => {
   const downloadStep = workflow.match(
     /      - name: Download production deployment metadata[\s\S]*?(?=\n      - name:)/,
   );
   assert.ok(downloadStep, 'production deployment metadata download step missing');
   assert.match(downloadStep[0], /name: production-deployment-\$\{\{\s*github\.sha\s*\}\}/);
-  assert.match(downloadStep[0], /path: \./);
+  assert.match(downloadStep[0], /\n\s+path: \.\s*\n/);
   assert.doesNotMatch(downloadStep[0], /path: launch_package/);
+  assert.doesNotMatch(downloadStep[0], /run-id:/);
+  const downloadAt = workflow.indexOf(downloadStep[0]);
+  const restoreAt = workflow.indexOf('      - name: Restore production deployment metadata paths\n');
+  const verifyAt = workflow.indexOf('      - name: Verify downloaded deployment artifact is bound to this run and SHA\n');
+  assert.ok(downloadAt >= 0 && restoreAt > downloadAt && verifyAt > restoreAt, 'download -> restore -> verify order');
+  const restoreEnd = workflow.indexOf('\n      - name:', restoreAt + 1);
+  const restoreStep = workflow.slice(restoreAt, restoreEnd);
+  assert.equal(workflow.slice(downloadAt + 1, restoreAt).indexOf('\n      - name:'), -1, 'restore must immediately follow download');
+  assert.match(restoreStep, /set -euo pipefail/);
+  assert.match(restoreStep, /mkdir -p launch_package/);
+  assert.match(restoreStep, /cp -- "\$file" "launch_package\/\$file"/);
+  // Every uploaded metadata file shares the launch_package/ ancestor, which
+  // upload-artifact strips; the restore step must copy each one back.
+  const uploadStep = workflow.match(
+    /      - name: Upload production deployment metadata after verification[\s\S]*?(?=\n\n|\n      - name:)/,
+  );
+  assert.ok(uploadStep, 'deployment metadata upload step missing');
+  const uploaded = [...uploadStep[0].matchAll(/^\s+(launch_package\/\S+)$/gm)].map((m) => m[1]);
+  assert.ok(uploaded.length > 0);
+  for (const file of uploaded) {
+    assert.match(file, /^launch_package\/[^/]+$/);
+    const base = file.slice('launch_package/'.length);
+    assert.ok(restoreStep.includes(`            ${base} \\\n`) || restoreStep.includes(`            ${base}; do`), `restore step must copy ${base}`);
+  }
+  assert.ok(restoreStep.includes('production-deployment.json'));
+});
+
+test('postdeploy gate and decision receive the frozen release binding context', () => {
+  for (const stepName of ['Postdeploy release gate', 'Create signed hard-launch decision after postdeploy clearance']) {
+    const start = workflow.indexOf(`      - name: ${stepName}\n`);
+    assert.ok(start >= 0, `${stepName} step missing`);
+    const end = workflow.indexOf('\n      - name:', start + 1);
+    const step = [workflow.slice(start, end < 0 ? undefined : end)];
+    assert.match(step[0], /FROZEN_RELEASE_SHA: \$\{\{ fromJSON\(inputs\.deployment_payload_json\)\.frozen_hard_clearance_release_sha \}\}/);
+    assert.match(step[0], /HARD_CLEARANCE_RUN_ID: \$\{\{ fromJSON\(inputs\.deployment_payload_json\)\.hard_clearance_run_id \}\}/);
+    assert.match(step[0], /HARD_CLEARANCE_DIRECTORY: hard_clearance/);
+  }
 });
 
 test('no manual or synthetic evidence bypass exists in production workflow', () => {
@@ -499,4 +536,22 @@ test('no manual or synthetic evidence bypass exists in production workflow', () 
   assert.doesNotMatch(workflow, /hardLaunchClaim:\s*true/);
   assert.doesNotMatch(workflow, /echo\s+['\"]?true['\"]?\s*>\s*launch_package\/production-deployment\.json/);
   assert.match(workflow, /deploy-firebase-production\.mjs/);
+});
+
+test('postdeploy installs Playwright Chromium before Gate 11 and Gate 11 admin login completes real MFA', () => {
+  const install = workflow.indexOf('      - name: Install Playwright Chromium for Gate 11 smoke\n        run: npx playwright install --with-deps chromium\n');
+  const gate11 = workflow.indexOf('      - name: Run Gate 11 authenticated production smoke\n');
+  assert.ok(install >= 0, 'Playwright install step missing');
+  assert.ok(gate11 > install, 'Playwright install must precede Gate 11');
+  const jobStart = workflow.indexOf('\n  public-release-clearance:\n');
+  assert.ok(jobStart >= 0 && jobStart < install);
+  const jobHead = workflow.slice(jobStart, install);
+  assert.match(jobHead, /E2E_FOUNDER_TOTP_SECRET: \$\{\{ secrets\.E2E_FOUNDER_TOTP_SECRET \}\}/);
+  assert.match(jobHead, /E2E_ADMIN_EMAIL: \$\{\{ secrets\.E2E_ADMIN_EMAIL \}\}/);
+  const spec = readFileSync(new URL('../e2e/gate11-staging-smoke.spec.ts', import.meta.url), 'utf8');
+  assert.match(spec, /admin-mfa-signin-challenge/);
+  assert.match(spec, /admin-mfa-resolve-signin/);
+  assert.match(spec, /mfaSignIn:finalize/);
+  assert.match(spec, /E2E_FOUNDER_TOTP_SECRET is not configured/);
+  assert.doesNotMatch(spec, /test\.skip\([^)]*MFA/i);
 });

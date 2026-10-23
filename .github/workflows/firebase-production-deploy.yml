@@ -1131,6 +1131,9 @@ jobs:
           npm run test:gate12:appcheck
           echo "ok=true" >> "$GITHUB_OUTPUT"
 
+      - name: Install Playwright Chromium for Gate 11 smoke
+        run: npx playwright install --with-deps chromium
+
       - name: Run Gate 11 authenticated production smoke
         # Records gate11ProductionSmoke evidence (real pass/fail count) instead of
         # plain `npm run test:e2e:gate11:staging` — postdeploy-release-gate.mjs
@@ -1200,6 +1203,9 @@ jobs:
           POSTDEPLOY_SMOKE_OK: ${{ steps.postdeploy_smoke.outputs.ok }}
           POSTDEPLOY_BUSINESS_OK: ${{ steps.postdeploy_business.outputs.ok }}
           POSTDEPLOY_AUDIT_OK: ${{ steps.postdeploy_audit.outputs.ok }}
+          FROZEN_RELEASE_SHA: ${{ fromJSON(inputs.deployment_payload_json).frozen_hard_clearance_release_sha }}
+          HARD_CLEARANCE_RUN_ID: ${{ fromJSON(inputs.deployment_payload_json).hard_clearance_run_id }}
+          HARD_CLEARANCE_DIRECTORY: hard_clearance
         run: |
           set -euo pipefail
           node scripts/postdeploy-release-gate.mjs
@@ -1214,6 +1220,9 @@ jobs:
           LAUNCH_MODE: ${{ inputs.launch_mode }}
           PAYMENT_POLICY: ${{ inputs.payment_policy }}
           POSTDEPLOY_RELEASE_CLEARED: ${{ steps.postdeploy_gate.outputs.cleared }}
+          FROZEN_RELEASE_SHA: ${{ fromJSON(inputs.deployment_payload_json).frozen_hard_clearance_release_sha }}
+          HARD_CLEARANCE_RUN_ID: ${{ fromJSON(inputs.deployment_payload_json).hard_clearance_run_id }}
+          HARD_CLEARANCE_DIRECTORY: hard_clearance
         run: npm run hard-launch:decision
 
       - name: Upload public release clearance artifact

@@ -32,6 +32,11 @@ import {
   pilotIncidentReportPath,
   validatePilotIncidentReport,
 } from './lib/hard-launch-gate.mjs';
+import {
+  frozenDocumentBindingErrors,
+  frozenReleaseShaFromEnv,
+  verifyFrozenReleaseContext,
+} from './lib/frozen-release-binding.mjs';
 
 const PHASE1_PAYMENT_POLICY = 'phase1-manual';
 const REQUIRED_POSTDEPLOY_EVIDENCE = Object.freeze([
@@ -290,7 +295,17 @@ export function runPostdeployReleaseGate({
   } else {
     try {
       const pilotReport = JSON.parse(readFileSync(pilotPath, 'utf8'));
-      failures.push(...validatePilotIncidentReport(pilotReport, githubSha, { now, env }));
+      if (frozenReleaseShaFromEnv(env) === null) {
+        failures.push(...validatePilotIncidentReport(pilotReport, githubSha, { now, env }));
+      } else {
+        // Frozen-release public deploy: the pilot report belongs to the frozen
+        // release and must also be bound to this control plane's verified
+        // hard-clearance run. Every other pilot check is unchanged.
+        const frozen = verifyFrozenReleaseContext({ env, root });
+        failures.push(...frozen.errors);
+        failures.push(...validatePilotIncidentReport(pilotReport, frozen.frozenSha, { now, env }));
+        failures.push(...frozenDocumentBindingErrors(pilotReport, 'pilot incident report', frozen));
+      }
     } catch (error) {
       failures.push(`pilot-incident-report.json is malformed: ${error.message}`);
     }
