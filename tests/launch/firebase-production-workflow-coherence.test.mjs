@@ -506,8 +506,10 @@ test('same-run deployment artifact downloads back into launch_package (artifact 
 
 test('postdeploy gate and decision receive the frozen release binding context', () => {
   for (const stepName of ['Postdeploy release gate', 'Create signed hard-launch decision after postdeploy clearance']) {
-    const step = workflow.match(new RegExp(`      - name: ${stepName}[\\s\\S]*?(?=\\n      - name:)`));
-    assert.ok(step, `${stepName} step missing`);
+    const start = workflow.indexOf(`      - name: ${stepName}\n`);
+    assert.ok(start >= 0, `${stepName} step missing`);
+    const end = workflow.indexOf('\n      - name:', start + 1);
+    const step = [workflow.slice(start, end < 0 ? undefined : end)];
     assert.match(step[0], /FROZEN_RELEASE_SHA: \$\{\{ fromJSON\(inputs\.deployment_payload_json\)\.frozen_hard_clearance_release_sha \}\}/);
     assert.match(step[0], /HARD_CLEARANCE_RUN_ID: \$\{\{ fromJSON\(inputs\.deployment_payload_json\)\.hard_clearance_run_id \}\}/);
     assert.match(step[0], /HARD_CLEARANCE_DIRECTORY: hard_clearance/);
