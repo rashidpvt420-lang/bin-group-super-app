@@ -484,14 +484,34 @@ test('bank-pilot does not claim public launch; public mode requires exact Phase 
   );
 });
 
-test('same-run deployment artifact downloads without nesting launch_package twice', () => {
+test('same-run deployment artifact downloads back into launch_package (artifact is rooted at launch_package)', () => {
   const downloadStep = workflow.match(
     /      - name: Download production deployment metadata[\s\S]*?(?=\n      - name:)/,
   );
   assert.ok(downloadStep, 'production deployment metadata download step missing');
   assert.match(downloadStep[0], /name: production-deployment-\$\{\{\s*github\.sha\s*\}\}/);
-  assert.match(downloadStep[0], /path: \./);
-  assert.doesNotMatch(downloadStep[0], /path: launch_package/);
+  assert.match(downloadStep[0], /\n\s+path: launch_package\s*\n/);
+  assert.doesNotMatch(downloadStep[0], /\n\s+path: \.\s*\n/);
+  assert.doesNotMatch(downloadStep[0], /run-id:/);
+  // Every uploaded metadata file shares the launch_package/ ancestor, which
+  // upload-artifact strips; downloading into launch_package restores it.
+  const uploadStep = workflow.match(
+    /      - name: Upload production deployment metadata after verification[\s\S]*?(?=\n\n|\n      - name:)/,
+  );
+  assert.ok(uploadStep, 'deployment metadata upload step missing');
+  const uploaded = [...uploadStep[0].matchAll(/^\s+(launch_package\/\S+)$/gm)].map((m) => m[1]);
+  assert.ok(uploaded.length > 0);
+  for (const file of uploaded) assert.match(file, /^launch_package\/[^/]+$/);
+});
+
+test('postdeploy gate and decision receive the frozen release binding context', () => {
+  for (const stepName of ['Postdeploy release gate', 'Create signed hard-launch decision after postdeploy clearance']) {
+    const step = workflow.match(new RegExp(`      - name: ${stepName}[\\s\\S]*?(?=\\n      - name:)`));
+    assert.ok(step, `${stepName} step missing`);
+    assert.match(step[0], /FROZEN_RELEASE_SHA: \$\{\{ fromJSON\(inputs\.deployment_payload_json\)\.frozen_hard_clearance_release_sha \}\}/);
+    assert.match(step[0], /HARD_CLEARANCE_RUN_ID: \$\{\{ fromJSON\(inputs\.deployment_payload_json\)\.hard_clearance_run_id \}\}/);
+    assert.match(step[0], /HARD_CLEARANCE_DIRECTORY: hard_clearance/);
+  }
 });
 
 test('no manual or synthetic evidence bypass exists in production workflow', () => {

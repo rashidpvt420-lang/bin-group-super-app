@@ -20,6 +20,11 @@ import {
 import {
   validatePilotIncidentReport,
 } from './lib/hard-launch-gate.mjs';
+import {
+  frozenDocumentBindingErrors,
+  frozenReleaseShaFromEnv,
+  verifyFrozenReleaseContext,
+} from './lib/frozen-release-binding.mjs';
 
 const PHASE1_PAYMENT_POLICY = 'phase1-manual';
 const failures = [];
@@ -172,7 +177,14 @@ if (launchMode === 'public') {
 
   try {
     const pilotIncidentReport = readJsonStrict(paths.pilotIncidentReport, 'pilot-incident-report.json');
-    failures.push(...validatePilotIncidentReport(pilotIncidentReport, context.commitSha));
+    if (frozenReleaseShaFromEnv(process.env) === null) {
+      failures.push(...validatePilotIncidentReport(pilotIncidentReport, context.commitSha));
+    } else {
+      const frozen = verifyFrozenReleaseContext({ env: process.env });
+      failures.push(...frozen.errors);
+      failures.push(...validatePilotIncidentReport(pilotIncidentReport, frozen.frozenSha));
+      failures.push(...frozenDocumentBindingErrors(pilotIncidentReport, 'pilot incident report', frozen));
+    }
   } catch (error) { failures.push(error.message); }
 }
 

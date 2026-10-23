@@ -441,3 +441,127 @@ describe('postdeploy release gate', () => {
     assert.equal(result.status.releaseId, 'rel-test-1');
   }));
 });
+
+const FROZEN_SHA = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
+
+function writeRevalidationProof(root, overrides = {}, layout = 'root') {
+  const dir = layout === 'root'
+    ? path.join(root, 'hard_clearance')
+    : path.join(root, 'hard_clearance/launch_package');
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(
+    path.join(dir, 'hard-clearance-production-revalidation.json'),
+    `${JSON.stringify({
+      releaseCommitSha: FROZEN_SHA,
+      controlPlaneCommitSha: SHA,
+      controlPlaneScopeVerified: true,
+      ...overrides,
+    })}\n`,
+  );
+}
+
+function frozenEnv(overrides = {}) {
+  return baseEnv({
+    FROZEN_RELEASE_SHA: FROZEN_SHA,
+    HARD_CLEARANCE_RUN_ID: '456',
+    HARD_CLEARANCE_DIRECTORY: 'hard_clearance',
+    ...overrides,
+  });
+}
+
+function frozenFixture(root, { pilot = {}, proof = {}, layout = 'root' } = {}) {
+  writeIncidents(root);
+  writeApproval(root);
+  fullEvidence(root);
+  writePilotIncident(root, { commitSha: FROZEN_SHA, ...pilot });
+  writeRevalidationProof(root, proof, layout);
+}
+
+describe('postdeploy release gate — frozen release / control-plane binding', () => {
+  it('passes when the pilot report is bound to the frozen release and this control plane', () => withRoot('postdeploy-frozen-', (root) => {
+    frozenFixture(root);
+    const result = runPostdeployReleaseGate({ root, env: frozenEnv(), writeStatus: false });
+    assert.equal(result.ok, true, JSON.stringify(result.failures, null, 2));
+  }));
+
+  it('accepts the launch_package/ hard-clearance layout too', () => withRoot('postdeploy-frozen-', (root) => {
+    frozenFixture(root, { layout: 'nested' });
+    const result = runPostdeployReleaseGate({ root, env: frozenEnv(), writeStatus: false });
+    assert.equal(result.ok, true, JSON.stringify(result.failures, null, 2));
+  }));
+
+  it('fails when the pilot report commitSha is not the frozen release', () => withRoot('postdeploy-frozen-', (root) => {
+    frozenFixture(root, { pilot: { commitSha: 'c'.repeat(40) } });
+    const result = runPostdeployReleaseGate({ root, env: frozenEnv(), writeStatus: false });
+    assert.equal(result.ok, false);
+    assert.ok(result.failures.some((f) => /pilot incident commitSha/.test(f)));
+  }));
+
+  it('fails when FROZEN_RELEASE_SHA differs from the verified hard-clearance release', () => withRoot('postdeploy-frozen-', (root) => {
+    frozenFixture(root, { pilot: { commitSha: 'c'.repeat(40) } });
+    const result = runPostdeployReleaseGate({ root, env: frozenEnv({ FROZEN_RELEASE_SHA: 'c'.repeat(40) }), writeStatus: false });
+    assert.equal(result.ok, false);
+    assert.ok(result.failures.some((f) => /frozen release SHA does not equal the verified hard-clearance releaseCommitSha/.test(f)));
+  }));
+
+  it('fails on a malformed frozen SHA', () => withRoot('postdeploy-frozen-', (root) => {
+    frozenFixture(root);
+    const result = runPostdeployReleaseGate({ root, env: frozenEnv({ FROZEN_RELEASE_SHA: FROZEN_SHA.toUpperCase() }), writeStatus: false });
+    assert.equal(result.ok, false);
+    assert.ok(result.failures.some((f) => /FROZEN_RELEASE_SHA must be a full lowercase/.test(f)));
+  }));
+
+  it('fails when the hard-clearance control plane is not GITHUB_SHA', () => withRoot('postdeploy-frozen-', (root) => {
+    frozenFixture(root, { proof: { controlPlaneCommitSha: 'd'.repeat(40) } });
+    const result = runPostdeployReleaseGate({ root, env: frozenEnv(), writeStatus: false });
+    assert.equal(result.ok, false);
+    assert.ok(result.failures.some((f) => /controlPlaneCommitSha does not equal GITHUB_SHA/.test(f)));
+  }));
+
+  it('fails when control-plane scope was not verified', () => withRoot('postdeploy-frozen-', (root) => {
+    frozenFixture(root, { proof: { controlPlaneScopeVerified: false } });
+    const result = runPostdeployReleaseGate({ root, env: frozenEnv(), writeStatus: false });
+    assert.equal(result.ok, false);
+    assert.ok(result.failures.some((f) => /controlPlaneScopeVerified must be true/.test(f)));
+  }));
+
+  it('fails when the revalidation proof is missing', () => withRoot('postdeploy-frozen-', (root) => {
+    frozenFixture(root);
+    rmSync(path.join(root, 'hard_clearance'), { recursive: true, force: true });
+    const result = runPostdeployReleaseGate({ root, env: frozenEnv(), writeStatus: false });
+    assert.equal(result.ok, false);
+    assert.ok(result.failures.some((f) => /revalidation\.json is missing/.test(f)));
+  }));
+
+  it('fails on duplicate revalidation proofs', () => withRoot('postdeploy-frozen-', (root) => {
+    frozenFixture(root);
+    writeRevalidationProof(root, {}, 'nested');
+    const result = runPostdeployReleaseGate({ root, env: frozenEnv(), writeStatus: false });
+    assert.equal(result.ok, false);
+    assert.ok(result.failures.some((f) => /duplicate hard-clearance production revalidation proofs/.test(f)));
+  }));
+
+  it('fails when the pilot report is from a different hard-clearance run', () => withRoot('postdeploy-frozen-', (root) => {
+    frozenFixture(root, { pilot: { githubRunId: '999' } });
+    const result = runPostdeployReleaseGate({ root, env: frozenEnv(), writeStatus: false });
+    assert.equal(result.ok, false);
+    assert.ok(result.failures.some((f) => /githubRunId must equal the verified HARD_CLEARANCE_RUN_ID/.test(f)));
+  }));
+
+  it('fails when the hard-clearance run id or directory is missing', () => withRoot('postdeploy-frozen-', (root) => {
+    frozenFixture(root);
+    const noRun = runPostdeployReleaseGate({ root, env: frozenEnv({ HARD_CLEARANCE_RUN_ID: '' }), writeStatus: false });
+    assert.equal(noRun.ok, false);
+    assert.ok(noRun.failures.some((f) => /HARD_CLEARANCE_RUN_ID must be numeric/.test(f)));
+    const noDir = runPostdeployReleaseGate({ root, env: frozenEnv({ HARD_CLEARANCE_DIRECTORY: '' }), writeStatus: false });
+    assert.equal(noDir.ok, false);
+    assert.ok(noDir.failures.some((f) => /HARD_CLEARANCE_DIRECTORY is required/.test(f)));
+  }));
+
+  it('legacy (no frozen SHA) still requires the pilot report on GITHUB_SHA', () => withRoot('postdeploy-frozen-', (root) => {
+    frozenFixture(root);
+    const result = runPostdeployReleaseGate({ root, env: baseEnv(), writeStatus: false });
+    assert.equal(result.ok, false);
+    assert.ok(result.failures.some((f) => /pilot incident commitSha must equal current commit SHA/.test(f)));
+  }));
+});
