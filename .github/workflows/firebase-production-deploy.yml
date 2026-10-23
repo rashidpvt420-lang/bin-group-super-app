@@ -994,11 +994,32 @@ jobs:
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: production-deployment-${{ github.sha }}
-          # Upload paths already include launch_package/. Downloading into that
-          # directory would nest launch_package/launch_package and make the
-          # same-run verifier read missing files.
+          # The uploaded paths share launch_package/ as their common prefix,
+          # so the artifact archive contains these files at its root. Download
+          # to the repository root first; restore the verifier's expected paths
+          # explicitly in the next step. Never accept a cross-run orphan artifact.
           path: .
-          # Same-workflow-run only: never accept a cross-run orphan artifact.
+
+      - name: Restore production deployment metadata paths
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p launch_package
+          for file in \
+            production-deployment.json \
+            production-deployment-verify.log \
+            predeploy-approval.json \
+            production-incidents.json \
+            hard-launch-authorization.json \
+            hard-launch-decision.json \
+            launch-evidence-batch.json \
+            launch-status.json; do
+            if [[ -f "$file" ]]; then
+              cp -- "$file" "launch_package/$file"
+            fi
+          done
+          # Required-file enforcement and exact run/SHA/attempt/digest checks
+          # remain in the fail-closed verifier immediately below.
 
       - name: Verify downloaded deployment artifact is bound to this run and SHA
         env:
