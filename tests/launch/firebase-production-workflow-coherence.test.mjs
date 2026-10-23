@@ -522,3 +522,21 @@ test('no manual or synthetic evidence bypass exists in production workflow', () 
   assert.doesNotMatch(workflow, /echo\s+['\"]?true['\"]?\s*>\s*launch_package\/production-deployment\.json/);
   assert.match(workflow, /deploy-firebase-production\.mjs/);
 });
+
+test('postdeploy installs Playwright Chromium before Gate 11 and Gate 11 admin login completes real MFA', () => {
+  const install = workflow.indexOf('      - name: Install Playwright Chromium for Gate 11 smoke\n        run: npx playwright install --with-deps chromium\n');
+  const gate11 = workflow.indexOf('      - name: Run Gate 11 authenticated production smoke\n');
+  assert.ok(install >= 0, 'Playwright install step missing');
+  assert.ok(gate11 > install, 'Playwright install must precede Gate 11');
+  const jobStart = workflow.indexOf('\n  public-release-clearance:\n');
+  assert.ok(jobStart >= 0 && jobStart < install);
+  const jobHead = workflow.slice(jobStart, install);
+  assert.match(jobHead, /E2E_FOUNDER_TOTP_SECRET: \$\{\{ secrets\.E2E_FOUNDER_TOTP_SECRET \}\}/);
+  assert.match(jobHead, /E2E_ADMIN_EMAIL: \$\{\{ secrets\.E2E_ADMIN_EMAIL \}\}/);
+  const spec = readFileSync(new URL('../e2e/gate11-staging-smoke.spec.ts', import.meta.url), 'utf8');
+  assert.match(spec, /admin-mfa-signin-challenge/);
+  assert.match(spec, /admin-mfa-resolve-signin/);
+  assert.match(spec, /mfaSignIn:finalize/);
+  assert.match(spec, /E2E_FOUNDER_TOTP_SECRET is not configured/);
+  assert.doesNotMatch(spec, /test\.skip\([^)]*MFA/i);
+});

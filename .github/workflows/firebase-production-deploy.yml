@@ -1111,6 +1111,9 @@ jobs:
           npm run test:gate12:appcheck
           echo "ok=true" >> "$GITHUB_OUTPUT"
 
+      - name: Install Playwright Chromium for Gate 11 smoke
+        run: npx playwright install --with-deps chromium
+
       - name: Run Gate 11 authenticated production smoke
         # Records gate11ProductionSmoke evidence (real pass/fail count) instead of
         # plain `npm run test:e2e:gate11:staging` — postdeploy-release-gate.mjs
