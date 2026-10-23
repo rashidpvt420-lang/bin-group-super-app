@@ -18,6 +18,11 @@ import {
   requiredOperationalGatesForPaymentPolicy,
   validateOperationalReadinessReport,
 } from './lib/hard-launch-gate.mjs';
+import {
+  frozenDocumentBindingErrors,
+  frozenReleaseShaFromEnv,
+  verifyFrozenReleaseContext,
+} from './lib/frozen-release-binding.mjs';
 
 const launchMode = String(process.env.LAUNCH_MODE || '').trim().toLowerCase();
 const delegate = () => spawnSync(process.execPath, ['scripts/hard-launch-decision-gate.mjs'], {
@@ -66,7 +71,25 @@ catch (error) { fail(`operational-readiness.json malformed: ${error.message}`); 
 try { releaseStatus = JSON.parse(readFileSync(releaseStatusPath, 'utf8')); }
 catch (error) { fail(`public-release-status.json malformed: ${error.message}`); }
 
-const errors = validateOperationalReadinessReport(operational, commitSha);
+let errors;
+if (frozenReleaseShaFromEnv(process.env) === null) {
+  errors = validateOperationalReadinessReport(operational, commitSha);
+} else {
+  // Frozen-release public deploy: readiness was snapshotted for the frozen
+  // release by the hard-clearance run of this control plane.
+  const frozen = verifyFrozenReleaseContext({ env: process.env });
+  errors = [
+    ...frozen.errors,
+    ...validateOperationalReadinessReport(operational, frozen.frozenSha),
+    ...frozenDocumentBindingErrors(operational, 'operational readiness', frozen),
+  ];
+  if (operational?.releaseCommitSha !== frozen.frozenSha) {
+    errors.push('operational readiness releaseCommitSha must equal FROZEN_RELEASE_SHA');
+  }
+  if (operational?.controlPlaneCommitSha !== commitSha) {
+    errors.push('operational readiness controlPlaneCommitSha must equal GITHUB_SHA');
+  }
+}
 let REQUIRED_OPERATIONAL_GATES = [];
 try {
   REQUIRED_OPERATIONAL_GATES = requiredOperationalGatesForPaymentPolicy(operational.paymentPolicy);
