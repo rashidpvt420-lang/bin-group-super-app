@@ -5,7 +5,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { PRODUCTION } from '../../scripts/lib/launch-honesty.mjs';
+import { gitSha, PRODUCTION } from '../../scripts/lib/launch-honesty.mjs';
 import { requiredOperationalGatesForPaymentPolicy } from '../../scripts/lib/hard-launch-gate.mjs';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
@@ -224,3 +224,68 @@ test('signed decision gate validates the pilot report against the frozen release
   assert.match(source, /frozenDocumentBindingErrors\(pilotIncidentReport, 'pilot incident report', frozen\)/);
   assert.match(source, /failures\.push\(\.\.\.frozen\.errors\)/);
 });
+
+test('verify-operational-readiness rejects arbitrary LIVE_EVIDENCE_CONTROL_PLANE_SHA without provenance', () => {
+  const currentSha = gitSha(repoRoot);
+  const SCRIPT = path.join(repoRoot, 'scripts/verify-operational-readiness.mjs');
+  const res = spawnSync(process.execPath, [SCRIPT], {
+    cwd: repoRoot,
+    encoding: 'utf8',
+    env: {
+      PATH: process.env.PATH,
+      GITHUB_ACTIONS: 'true',
+      GITHUB_WORKFLOW: 'Live Role Smoke Tests',
+      GITHUB_JOB: 'hard-public-launch-clearance',
+      GITHUB_REF: 'refs/heads/main',
+      GITHUB_REPOSITORY: 'rashidpvt420-lang/bin-group-super-app',
+      GITHUB_SHA: currentSha,
+      HARD_LAUNCH_EXPECTED_SHA: currentSha,
+      CONTROL_PLANE_COMMIT_SHA: currentSha,
+      LIVE_EVIDENCE_CONTROL_PLANE_SHA: 'f'.repeat(40),
+    },
+  });
+  const output = `${res.stdout}\n${res.stderr}`;
+  assert.match(output, /LIVE_EVIDENCE_CONTROL_PLANE_SHA provided without verified live-evidence-provenance record/);
+});
+
+test('verify-operational-readiness rejects mismatched LIVE_EVIDENCE_CONTROL_PLANE_SHA against provenance', () => {
+  const root = mkdtempSync(path.join(tmpdir(), 'provenance-mismatch-'));
+  try {
+    spawnSync('git', ['init'], { cwd: root });
+    spawnSync('git', ['config', 'user.name', 'Test'], { cwd: root });
+    spawnSync('git', ['config', 'user.email', 'test@test.local'], { cwd: root });
+    spawnSync('git', ['commit', '--allow-empty', '-m', 'test'], { cwd: root });
+    const currentSha = gitSha(root);
+    mkdirSync(path.join(root, 'launch_package'), { recursive: true });
+    writeFileSync(path.join(root, 'launch_package/live-evidence-provenance.json'), JSON.stringify({
+      schemaVersion: 1,
+      status: 'passed',
+      source: 'github-actions-live-evidence-run',
+      repository: 'rashidpvt420-lang/bin-group-super-app',
+      releaseCommitSha: currentSha,
+      controlPlaneCommitSha: 'e'.repeat(40),
+    }));
+    const SCRIPT = path.join(repoRoot, 'scripts/verify-operational-readiness.mjs');
+    const res = spawnSync(process.execPath, [SCRIPT], {
+      cwd: root,
+      encoding: 'utf8',
+      env: {
+        PATH: process.env.PATH,
+        GITHUB_ACTIONS: 'true',
+        GITHUB_WORKFLOW: 'Live Role Smoke Tests',
+        GITHUB_JOB: 'hard-public-launch-clearance',
+        GITHUB_REF: 'refs/heads/main',
+        GITHUB_REPOSITORY: 'rashidpvt420-lang/bin-group-super-app',
+        GITHUB_SHA: currentSha,
+        HARD_LAUNCH_EXPECTED_SHA: currentSha,
+        CONTROL_PLANE_COMMIT_SHA: currentSha,
+        LIVE_EVIDENCE_CONTROL_PLANE_SHA: 'f'.repeat(40),
+      },
+    });
+    const output = `${res.stdout}\n${res.stderr}`;
+    assert.match(output, /LIVE_EVIDENCE_CONTROL_PLANE_SHA must match the verified live-evidence-provenance record/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+

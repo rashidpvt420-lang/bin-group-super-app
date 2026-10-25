@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import crypto from 'node:crypto';
 import admin from 'firebase-admin';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { initializeFirebaseAdmin, resolveFirebaseAdminProjectId } from './firebase-admin-bootstrap.mjs';
 import { gitSha, PRODUCTION } from './lib/launch-honesty.mjs';
@@ -86,25 +86,26 @@ if (liveControlPlaneSha && !/^[0-9a-f]{40}$/.test(liveControlPlaneSha)) {
 }
 const provenancePath = path.resolve(root, 'launch_package', 'live-evidence-provenance.json');
 let provenanceControlPlaneSha = '';
-if (existsSync(provenancePath)) {
-  try {
-    const prov = JSON.parse(readFileSync(provenancePath, 'utf8'));
-    if (
-      prov?.schemaVersion === 1 &&
-      prov?.status === 'passed' &&
-      prov?.source === 'github-actions-live-evidence-run' &&
-      prov?.repository === process.env.GITHUB_REPOSITORY &&
-      prov?.releaseCommitSha === commitSha &&
-      /^[0-9a-f]{40}$/.test(String(prov?.controlPlaneCommitSha || '').toLowerCase())
-    ) {
-      provenanceControlPlaneSha = String(prov.controlPlaneCommitSha).toLowerCase();
-    }
-  } catch {}
+try {
+  const prov = JSON.parse(readFileSync(provenancePath, 'utf8'));
+  if (
+    prov?.schemaVersion === 1 &&
+    prov?.status === 'passed' &&
+    prov?.source === 'github-actions-live-evidence-run' &&
+    prov?.repository === process.env.GITHUB_REPOSITORY &&
+    prov?.releaseCommitSha === commitSha &&
+    /^[0-9a-f]{40}$/.test(String(prov?.controlPlaneCommitSha || '').toLowerCase())
+  ) {
+    provenanceControlPlaneSha = String(prov.controlPlaneCommitSha).toLowerCase();
+  }
+} catch {}
+if (liveControlPlaneSha && !provenanceControlPlaneSha) {
+  throw new Error('LIVE_EVIDENCE_CONTROL_PLANE_SHA provided without verified live-evidence-provenance record.');
 }
 if (liveControlPlaneSha && provenanceControlPlaneSha && liveControlPlaneSha.toLowerCase() !== provenanceControlPlaneSha) {
   throw new Error('LIVE_EVIDENCE_CONTROL_PLANE_SHA must match the verified live-evidence-provenance record.');
 }
-const acceptedLiveControlPlaneSha = provenanceControlPlaneSha || (liveControlPlaneSha ? liveControlPlaneSha.toLowerCase() : '');
+const acceptedLiveControlPlaneSha = provenanceControlPlaneSha;
 
 const projectId = resolveFirebaseAdminProjectId();
 if (projectId !== PRODUCTION.projectId) throw new Error(`Unexpected project: ${projectId}`);
