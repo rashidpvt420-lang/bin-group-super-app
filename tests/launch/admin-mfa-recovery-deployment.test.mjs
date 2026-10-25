@@ -102,7 +102,7 @@ test('public production dispatch defaults never request the bank-pilot-only Admi
   ]) {
     const workflow = await read(path);
     const normalized = workflow.replaceAll('\\', '');
-    assert.match(normalized, /"incident_evidence_refs":""/, \`tests/launch/admin-mfa-recovery-deployment.test.mjs must default incident_evidence_refs to empty\`);
+    assert.match(normalized, /"incident_evidence_refs":""/, path + ' must default incident_evidence_refs to empty');
     assert.doesNotMatch(workflow, /incident_evidence_refs[^\\n]*ADMIN_MFA_BOOTSTRAP_HOSTING/);
   }
 });
