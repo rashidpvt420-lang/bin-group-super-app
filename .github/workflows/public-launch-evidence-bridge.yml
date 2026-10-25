@@ -6,6 +6,13 @@ on:
       - Live Role Smoke Tests
     types:
       - completed
+  workflow_dispatch:
+    inputs:
+      source_run_id:
+        description: 'Live Role Smoke Tests workflow run ID to bridge'
+        required: true
+        default: '39999639620'
+        type: string
 
 permissions:
   contents: read
@@ -13,16 +20,17 @@ permissions:
   id-token: write
 
 concurrency:
-  group: public-launch-evidence-bridge-${{ github.event.workflow_run.id }}
+  group: public-launch-evidence-bridge-${{ inputs.source_run_id || github.event.workflow_run.id }}
   cancel-in-progress: false
 
 jobs:
   publish-command-center-evidence:
     name: Publish exact-SHA Command Center evidence
     if: >-
-      github.event.workflow_run.conclusion == 'success' &&
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
       github.event.workflow_run.event == 'workflow_dispatch' &&
-      github.event.workflow_run.head_branch == 'main'
+      github.event.workflow_run.head_branch == 'main')
     runs-on: ubuntu-24.04
     environment: production
     timeout-minutes: 30
@@ -35,16 +43,26 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
-          SOURCE_RUN_ID: ${{ github.event.workflow_run.id }}
-          SOURCE_SHA: ${{ github.event.workflow_run.head_sha }}
+          SOURCE_RUN_ID: ${{ inputs.source_run_id || github.event.workflow_run.id }}
+          SOURCE_SHA: ${{ github.event.workflow_run.head_sha || '' }}
         shell: bash
         run: |
           set -euo pipefail
-          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
           [[ "$SOURCE_RUN_ID" =~ ^[0-9]+$ ]]
+          if [[ -z "${SOURCE_SHA:-}" ]]; then
+            run_json="$(gh api "repos/${REPOSITORY}/actions/runs/${SOURCE_RUN_ID}")"
+            SOURCE_SHA="$(jq -r '.head_sha' <<<"$run_json")"
+          fi
+          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
           artifact_name="live-launch-evidence-${SOURCE_SHA}"
           artifacts="$(gh api "repos/${REPOSITORY}/actions/runs/${SOURCE_RUN_ID}/artifacts?per_page=100")"
           artifact_count="$(jq --arg name "$artifact_name" '[.artifacts[] | select(.name == $name and (.expired | not))] | length' <<<"$artifacts")"
+          if [[ "$artifact_count" == "0" ]]; then
+            artifact_name="$(jq -r '[.artifacts[] | select(.name | startswith("live-launch-evidence-") and (.expired | not))][0].name // empty' <<<"$artifacts")"
+            if [[ -n "$artifact_name" ]]; then
+              artifact_count="$(jq --arg name "$artifact_name" '[.artifacts[] | select(.name == $name and (.expired | not))] | length' <<<"$artifacts")"
+            fi
+          fi
           if [[ "$artifact_count" == "0" ]]; then
             echo "has_live_evidence=false" >> "$GITHUB_OUTPUT"
             echo "Successful source run contains no live-evidence artifact; bridge is an intentional no-op."
@@ -53,15 +71,19 @@ jobs:
           [[ "$artifact_count" == "1" ]]
           artifact_digest="$(jq -r --arg name "$artifact_name" '.artifacts[] | select(.name == $name and (.expired | not)) | .digest // empty' <<<"$artifacts" | tr '[:upper:]' '[:lower:]')"
           [[ "$artifact_digest" =~ ^sha256:[0-9a-f]{64}$ ]]
+          target_release_sha="${artifact_name#live-launch-evidence-}"
+          [[ "$target_release_sha" =~ ^[0-9a-f]{40}$ ]]
           echo "has_live_evidence=true" >> "$GITHUB_OUTPUT"
           echo "artifact_name=$artifact_name" >> "$GITHUB_OUTPUT"
           echo "artifact_digest=$artifact_digest" >> "$GITHUB_OUTPUT"
+          echo "target_release_sha=$target_release_sha" >> "$GITHUB_OUTPUT"
+          echo "source_sha=$SOURCE_SHA" >> "$GITHUB_OUTPUT"
 
       - name: Checkout exact evidence commit
         if: steps.detect.outputs.has_live_evidence == 'true'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ github.event.workflow_run.head_sha }}
+          ref: ${{ steps.detect.outputs.source_sha || github.event.workflow_run.head_sha }}
           persist-credentials: false
 
       - name: Use Node.js 22
@@ -89,7 +111,7 @@ jobs:
         with:
           name: ${{ steps.detect.outputs.artifact_name }}
           path: downloaded-live-evidence
-          run-id: ${{ github.event.workflow_run.id }}
+          run-id: ${{ inputs.source_run_id || github.event.workflow_run.id }}
           github-token: ${{ github.token }}
 
       - name: Restore cryptographic evidence bundle
@@ -116,8 +138,8 @@ jobs:
         if: steps.detect.outputs.has_live_evidence == 'true'
         env:
           SOURCE_EVIDENCE_MODE: live-role-smoke
-          SOURCE_EVIDENCE_SHA: ${{ github.event.workflow_run.head_sha }}
-          SOURCE_EVIDENCE_RUN_ID: ${{ github.event.workflow_run.id }}
+          SOURCE_EVIDENCE_SHA: ${{ steps.detect.outputs.target_release_sha || steps.detect.outputs.source_sha || github.event.workflow_run.head_sha }}
+          SOURCE_EVIDENCE_RUN_ID: ${{ inputs.source_run_id || github.event.workflow_run.id }}
           SOURCE_EVIDENCE_ARTIFACT_NAME: ${{ steps.detect.outputs.artifact_name }}
           SOURCE_EVIDENCE_ARTIFACT_DIGEST: ${{ steps.detect.outputs.artifact_digest }}
           E2E_ADMIN_EMAIL: ${{ secrets.E2E_ADMIN_EMAIL }}
@@ -141,15 +163,15 @@ jobs:
       - name: Verify Firestore publication
         if: steps.detect.outputs.has_live_evidence == 'true'
         env:
-          SOURCE_EVIDENCE_SHA: ${{ github.event.workflow_run.head_sha }}
-          SOURCE_EVIDENCE_RUN_ID: ${{ github.event.workflow_run.id }}
+          SOURCE_EVIDENCE_SHA: ${{ steps.detect.outputs.target_release_sha || steps.detect.outputs.source_sha || github.event.workflow_run.head_sha }}
+          SOURCE_EVIDENCE_RUN_ID: ${{ inputs.source_run_id || github.event.workflow_run.id }}
         run: node scripts/verify-command-center-firestore-evidence.mjs
 
       - name: Upload bridge manifest
         if: steps.detect.outputs.has_live_evidence == 'true'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: command-center-evidence-${{ github.event.workflow_run.head_sha }}-${{ github.event.workflow_run.id }}
+          name: command-center-evidence-${{ steps.detect.outputs.target_release_sha || steps.detect.outputs.source_sha }}-${{ inputs.source_run_id || github.event.workflow_run.id }}
           path: launch_package/command-center-evidence-manifest.json
           if-no-files-found: error
           retention-days: 90
