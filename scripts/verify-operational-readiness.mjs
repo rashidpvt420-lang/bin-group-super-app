@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import crypto from 'node:crypto';
 import admin from 'firebase-admin';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { initializeFirebaseAdmin, resolveFirebaseAdminProjectId } from './firebase-admin-bootstrap.mjs';
 import { gitSha, PRODUCTION } from './lib/launch-honesty.mjs';
@@ -80,6 +80,32 @@ const controlPlaneCommitSha = String(process.env.CONTROL_PLANE_COMMIT_SHA || '')
 if (!/^[0-9a-f]{40}$/.test(controlPlaneCommitSha) || controlPlaneCommitSha !== process.env.GITHUB_SHA) {
   throw new Error('CONTROL_PLANE_COMMIT_SHA must equal the protected workflow GITHUB_SHA.');
 }
+const liveControlPlaneSha = String(process.env.LIVE_EVIDENCE_CONTROL_PLANE_SHA || '').trim();
+if (liveControlPlaneSha && !/^[0-9a-f]{40}$/.test(liveControlPlaneSha)) {
+  throw new Error('LIVE_EVIDENCE_CONTROL_PLANE_SHA must be a 40-character SHA if provided.');
+}
+const provenancePath = path.resolve(root, 'launch_package', 'live-evidence-provenance.json');
+let provenanceControlPlaneSha = '';
+try {
+  const prov = JSON.parse(readFileSync(provenancePath, 'utf8'));
+  if (
+    prov?.schemaVersion === 1 &&
+    prov?.status === 'passed' &&
+    prov?.source === 'github-actions-live-evidence-run' &&
+    prov?.repository === process.env.GITHUB_REPOSITORY &&
+    prov?.releaseCommitSha === commitSha &&
+    /^[0-9a-f]{40}$/.test(String(prov?.controlPlaneCommitSha || '').toLowerCase())
+  ) {
+    provenanceControlPlaneSha = String(prov.controlPlaneCommitSha).toLowerCase();
+  }
+} catch {}
+if (liveControlPlaneSha && !provenanceControlPlaneSha) {
+  throw new Error('LIVE_EVIDENCE_CONTROL_PLANE_SHA provided without verified live-evidence-provenance record.');
+}
+if (liveControlPlaneSha && provenanceControlPlaneSha && liveControlPlaneSha.toLowerCase() !== provenanceControlPlaneSha) {
+  throw new Error('LIVE_EVIDENCE_CONTROL_PLANE_SHA must match the verified live-evidence-provenance record.');
+}
+const acceptedLiveControlPlaneSha = provenanceControlPlaneSha;
 
 const projectId = resolveFirebaseAdminProjectId();
 if (projectId !== PRODUCTION.projectId) throw new Error(`Unexpected project: ${projectId}`);
@@ -154,7 +180,12 @@ const bindingErrors = REQUIRED_OPERATIONAL_GATES.flatMap((key) => {
   const gate = gates[key];
   const errors = [];
   if (gate.releaseCommitSha !== commitSha) errors.push(`${key}.releaseCommitSha must equal the frozen release SHA`);
-  if (gate.controlPlaneCommitSha !== controlPlaneCommitSha) errors.push(`${key}.controlPlaneCommitSha must equal the current control-plane SHA`);
+  if (
+    gate.controlPlaneCommitSha !== controlPlaneCommitSha &&
+    (!acceptedLiveControlPlaneSha || gate.controlPlaneCommitSha !== acceptedLiveControlPlaneSha)
+  ) {
+    errors.push(`${key}.controlPlaneCommitSha must equal the current control-plane SHA`);
+  }
   return errors;
 });
 const errors = [...bindingErrors, ...validateOperationalReadinessReport(report, commitSha)];

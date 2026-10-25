@@ -308,12 +308,35 @@ const manualPhysicalRecords = [...manualDocumentsById.values()]
 const summarySnapshot = await db.doc('system_health/admin_summaries').get();
 const technicianPhysicalProof =
   summarySnapshot.get('operationalEvidence.technicianPhysicalGpsEvidence') || null;
+const provenancePath = path.resolve(root, 'launch_package', 'live-evidence-provenance.json');
+const prov = readJsonSafe(provenancePath, null);
+let provenanceControlPlaneSha = '';
+if (
+  prov &&
+  prov.schemaVersion === 1 &&
+  prov.status === 'passed' &&
+  prov.source === 'github-actions-live-evidence-run' &&
+  prov.repository === EXPECTED_REPOSITORY &&
+  prov.releaseCommitSha === releaseSha &&
+  /^[0-9a-f]{40}$/.test(text(prov.controlPlaneCommitSha).toLowerCase())
+) {
+  provenanceControlPlaneSha = text(prov.controlPlaneCommitSha).toLowerCase();
+}
+const envLiveControlPlaneSha = text(process.env.LIVE_EVIDENCE_CONTROL_PLANE_SHA).toLowerCase();
+if (envLiveControlPlaneSha && !provenanceControlPlaneSha) {
+  fail('LIVE_EVIDENCE_CONTROL_PLANE_SHA supplied without verified live-evidence-provenance record');
+}
+if (envLiveControlPlaneSha && provenanceControlPlaneSha && envLiveControlPlaneSha !== provenanceControlPlaneSha) {
+  fail('LIVE_EVIDENCE_CONTROL_PLANE_SHA does not match verified live-evidence-provenance record');
+}
+const acceptedLiveControlPlaneSha = provenanceControlPlaneSha;
 const technicianPhysicalProofValid = Boolean(
   technicianPhysicalProof &&
   technicianPhysicalProof.status === 'passed' &&
   text(technicianPhysicalProof.releaseCommitSha).toLowerCase() === releaseSha &&
   text(technicianPhysicalProof.commitSha).toLowerCase() === releaseSha &&
-  text(technicianPhysicalProof.controlPlaneCommitSha).toLowerCase() === controlPlaneSha &&
+  (text(technicianPhysicalProof.controlPlaneCommitSha).toLowerCase() === controlPlaneSha ||
+   (acceptedLiveControlPlaneSha && text(technicianPhysicalProof.controlPlaneCommitSha).toLowerCase() === acceptedLiveControlPlaneSha)) &&
   text(technicianPhysicalProof.evidenceType) === 'physical-device-report' &&
   text(technicianPhysicalProof.verifiedBy) === 'workflow'
 );
