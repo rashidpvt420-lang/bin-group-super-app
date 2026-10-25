@@ -101,7 +101,8 @@ test('public production dispatch defaults never request the bank-pilot-only Admi
     'launch_package/generated/firebase-production-deploy-phase1.yml',
   ]) {
     const workflow = await read(path);
-    assert.ok(workflow.includes('\\\"incident_evidence_refs\\\":\\\"\\\"'), `${path} must default incident_evidence_refs to empty`);
+    const normalized = workflow.replaceAll('\\\\', '');
+    assert.match(normalized, /\"incident_evidence_refs\":\"\"/, `${path} must default incident_evidence_refs to empty`);
     assert.doesNotMatch(workflow, /incident_evidence_refs[^\\n]*ADMIN_MFA_BOOTSTRAP_HOSTING/);
   }
 });
