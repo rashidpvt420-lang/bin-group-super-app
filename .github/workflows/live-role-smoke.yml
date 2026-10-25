@@ -874,6 +874,7 @@ jobs:
         env:
           HARD_LAUNCH_EXPECTED_SHA: ${{ inputs.expected_commit_sha }}
           CONTROL_PLANE_COMMIT_SHA: ${{ github.sha }}
+          LIVE_EVIDENCE_CONTROL_PLANE_SHA: ${{ needs.hard-clearance-production-revalidation.outputs.live_evidence_control_plane_sha }}
         run: node scripts/verify-operational-readiness.mjs
 
       - name: Write workflow-bound pilot incident report
@@ -904,6 +905,7 @@ jobs:
           HARD_LAUNCH_EXPECTED_SHA: ${{ inputs.expected_commit_sha }}
           CLEARANCE_CONTROL_PLANE_SHA: ${{ github.sha }}
           LIVE_EVIDENCE_RUN_ID: ${{ needs.hard-clearance-production-revalidation.outputs.live_evidence_run_id }}
+          LIVE_EVIDENCE_CONTROL_PLANE_SHA: ${{ needs.hard-clearance-production-revalidation.outputs.live_evidence_control_plane_sha }}
         run: |
           node scripts/launch-status.mjs --hard
           node scripts/reconcile-hard-public-evidence.mjs

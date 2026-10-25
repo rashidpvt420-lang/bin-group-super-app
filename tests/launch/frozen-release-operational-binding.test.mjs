@@ -149,6 +149,20 @@ test('frozen readiness bound to frozen release + this control plane passes the o
   });
 });
 
+test('frozen readiness with pilot control-plane gates passes the operational guard', () => {
+  const PILOT_CONTROL_SHA = 'e'.repeat(40);
+  const report = operationalReport(FROZEN_SHA);
+  for (const gate of Object.values(report.gates)) {
+    gate.controlPlaneCommitSha = PILOT_CONTROL_SHA;
+  }
+  withFixture({ report }, (root) => {
+    const out = runGuard(root, frozenEnv());
+    assert.match(out, BOUND, out);
+    const status = JSON.parse(readFileSync(path.join(root, 'launch_package/public-release-status.json'), 'utf8'));
+    assert.equal(status.operationalReadinessVerified, true);
+  });
+});
+
 test('wrong frozen SHA fails the operational guard', () => {
   withFixture({ report: operationalReport(FROZEN_SHA) }, (root) => {
     const out = runGuard(root, frozenEnv({ FROZEN_RELEASE_SHA: 'c'.repeat(40) }));
