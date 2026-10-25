@@ -94,3 +94,15 @@ test('focused launch audit cannot silently restore the parallel recovery deploy'
     assert.match(focusedWorkflow, new RegExp(path.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
   }
 });
+
+test('public production dispatch defaults never request the bank-pilot-only Admin MFA bootstrap', async () => {
+  for (const path of [
+    '.github/workflows/firebase-production-deploy.yml',
+    'launch_package/generated/firebase-production-deploy-phase1.yml',
+  ]) {
+    const workflow = await read(path);
+    const normalized = workflow.replaceAll('\\', '');
+    assert.match(normalized, /"incident_evidence_refs":""/, path + ' must default incident_evidence_refs to empty');
+    assert.doesNotMatch(workflow, /incident_evidence_refs[^\\n]*ADMIN_MFA_BOOTSTRAP_HOSTING/);
+  }
+});
