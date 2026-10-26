@@ -105,6 +105,10 @@ function recordGate11() {
     hardLaunchClaim: false,
   });
   console.log(`[record-postdeploy-evidence] gate11ProductionSmoke passed=${parsed.passed || 0} failed=${parsed.failed || 0}`);
+  if ((parsed.failed || 0) > 0 || (result.status ?? 0) !== 0) {
+    if (result.stdout) console.log(result.stdout);
+    if (result.stderr) console.error(result.stderr);
+  }
   return (result.status ?? 1) === 0 && (parsed.failed || 0) === 0;
 }
 
