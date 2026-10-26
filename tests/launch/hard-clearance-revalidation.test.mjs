@@ -1366,6 +1366,7 @@ test('clearance scope allows exactly the two #1781 test-only paths and nothing b
       const inScope = (path) => allowedPaths.has(path) || supplementalPaths.has(path);
       assert.ok(inScope('test/hard-launch-control.test.mjs'), `${file} must allow test/hard-launch-control.test.mjs`);
       assert.ok(inScope('tests/launch/verify-same-run-deployment-artifact.test.mjs'), `${file} must allow the same-run artifact test`);
+      assert.ok(inScope('scripts/record-postdeploy-aggregate-evidence.mjs'), `${file} must allow scripts/record-postdeploy-aggregate-evidence.mjs`);
       for (const rejected of [
         'src/App.tsx',
         'test/hard-launch-control.test.mjs.bak',
@@ -1642,3 +1643,13 @@ test('protected technician attestation is rejected when tampered, rebound or mis
     `${label} testedAt is in the future.`,
   ]) assert.ok(technicianFailures(claimed).includes(expected), expected);
 });
+
+test('live-role-smoke workflow enforces mutually exclusive modes and strict input validation', async () => {
+  const workflow = await read('.github/workflows/live-role-smoke.yml');
+  assert.match(workflow, /\[\[ "\$MODE" == "live-evidence" \]\]/);
+  assert.match(workflow, /\[\[ -n "\$DEPLOY_RUN_ID" \]\]/);
+  assert.match(workflow, /\[\[ "\$MODE" == "hard-clearance" \]\]/);
+  assert.match(workflow, /\[\[ -n "\$LIVE_RUN_ID" \]\]/);
+  assert.match(workflow, /hard-public-launch-clearance:[\s\S]*?!failure\(\) && !cancelled\(\)/);
+});
+
