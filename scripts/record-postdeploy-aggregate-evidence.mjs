@@ -24,7 +24,7 @@
  * Fail-closed: a missing/malformed Playwright report, or missing prerequisite
  * business evidence, is recorded as a failure rather than silently omitted.
  */
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import {
@@ -57,17 +57,31 @@ function recordGate11() {
   const result = spawnSync(
     npmCmd,
     ['exec', '--', 'playwright', 'test', 'tests/e2e/gate11-staging-smoke.spec.ts', '--project=chromium-desktop', '--reporter=json'],
-    { encoding: 'utf8', env: { ...process.env, E2E_BASE_URL: mainUrl, E2E_ADMIN_BASE_URL: adminUrl }, maxBuffer: 64 * 1024 * 1024, shell: process.platform === 'win32' },
+    { encoding: 'utf8', env: { ...process.env, E2E_BASE_URL: mainUrl, E2E_ADMIN_BASE_URL: adminUrl, PLAYWRIGHT_JSON_OUTPUT_NAME: reportPath }, maxBuffer: 64 * 1024 * 1024, shell: process.platform === 'win32' },
   );
   const finishedAt = new Date().toISOString();
-  writeFileSync(reportPath, result.stdout || '{"suites":[],"stats":{}}');
-
+  // Playwright's JSON reporter must write to its own file. Browser/app startup
+  // output can be printed to stdout before the reporter payload (for example,
+  // "◇ injected"), making stdout invalid JSON even when the report is valid.
+  // Keep stdout/stderr as diagnostics only; never parse mixed process output as
+  // evidence. Missing or malformed report files remain fail-closed.
+  let reportText = '';
   let parsed;
   try {
-    parsed = parsePlaywrightJsonReport(JSON.parse(result.stdout || '{}'));
+    if (!existsSync(reportPath)) {
+      throw new Error('Playwright JSON reporter did not create its output file');
+    }
+    reportText = readFileSync(reportPath, 'utf8');
+    if (!reportText.trim()) throw new Error('Playwright JSON report file is empty');
+    parsed = parsePlaywrightJsonReport(JSON.parse(reportText));
   } catch (err) {
     console.error(`[record-postdeploy-evidence] gate11 report malformed: ${err.message}`);
     parsed = { ok: false, passed: 0, failed: 1, skipped: 0 };
+    // Preserve the actual malformed/missing report diagnostic as the artifact,
+    // rather than copying potentially unrelated stdout into the evidence file.
+    if (!existsSync(reportPath)) {
+      writeFileSync(reportPath, JSON.stringify({ error: err.message, suites: [], stats: {} }, null, 2));
+    }
   }
 
   const artifactHash = sha256File(reportPath);
