@@ -25,6 +25,24 @@ const forbiddenByRole: Record<RoleName, string[]> = {
   broker: ['/admin/dashboard', '/owner/dashboard'],
 };
 
+async function acceptLegalAgreementIfRequired(page: Page) {
+  const agreement = page.getByRole('dialog').filter({ hasText: /SOVEREIGN INSTITUTIONAL AGREEMENT/i }).first();
+  if (!await agreement.isVisible({ timeout: 4_000 }).catch(() => false)) return;
+  const content = agreement.getByTestId('legal-agreement-content');
+  const agree = agreement.getByTestId('legal-agreement-accept');
+  if (await content.isVisible().catch(() => false)) {
+    await agreement.getByTestId('legal-agreement-end').scrollIntoViewIfNeeded().catch(() => undefined);
+    await content.evaluate((node) => {
+      node.scrollTop = node.scrollHeight;
+      node.dispatchEvent(new Event('scroll', { bubbles: true }));
+    }).catch(() => undefined);
+  }
+  await page.waitForTimeout(500);
+  if (await agree.isEnabled().catch(() => false)) {
+    await agree.click().catch(() => undefined);
+  }
+}
+
 async function loginMainApp(page: Page, email: string, password: string, intendedRole?: string) {
   const loginUrl = intendedRole ? `/login?intendedRole=${intendedRole}&refresh=${Date.now()}` : '/login';
   await page.context().clearCookies();
@@ -32,8 +50,8 @@ async function loginMainApp(page: Page, email: string, password: string, intende
   await page.locator('input[type="email"], input[name*="email" i]').first().fill(email);
   await page.locator('input[type="password"]').first().fill(password);
   await page.locator('form button[type="submit"]').first().click();
-  if (intendedRole) await page.waitForURL(`**/${intendedRole}/dashboard`, { timeout: 25_000 });
-  else await expect(page).not.toHaveURL(/\/login$/, { timeout: 25_000 });
+  await page.waitForURL((url) => !url.pathname.endsWith('/login'), { timeout: 30_000 });
+  await acceptLegalAgreementIfRequired(page);
 }
 
 // Same real-MFA handling as tests/e2e/business-admin.spec.ts: the canonical
@@ -132,9 +150,9 @@ async function completeAdminMfaChallenge(page: Page) {
 async function loginAdminPanel(page: Page, email: string, password: string) {
   if (!adminBaseUrl) throw new Error('E2E_ADMIN_BASE_URL is required.');
   await page.goto(`${adminBaseUrl}/login`, { waitUntil: 'domcontentloaded' });
-  await page.locator('input[type="email"], input[name*="email" i]').first().fill(email);
-  await page.locator('input[type="password"]').first().fill(password);
-  await page.locator('form button[type="submit"]').first().click();
+  await page.locator('input[type="email"], input[name*="email" i], [data-testid="admin-login-email"]').first().fill(email);
+  await page.locator('input[type="password"], [data-testid="admin-login-password"]').first().fill(password);
+  await page.locator('form button[type="submit"], [data-testid="admin-login-submit"]').first().click();
   const challenge = page.getByTestId('admin-mfa-signin-challenge');
   const outcome = await Promise.race([
     challenge.waitFor({ state: 'visible', timeout: 30_000 }).then(() => 'mfa' as const),
@@ -159,13 +177,16 @@ async function expectLaunchControls(page: Page, role: RoleName) {
 
 function cred(role: string) {
   const key = role.toUpperCase();
-  return { email: process.env[`E2E_${key}_EMAIL`] || '', password: process.env[`E2E_${key}_PASSWORD`] || '' };
+  const email = process.env[`E2E_${key}_MAILBOX_EMAIL`] || process.env[`E2E_${key}_EMAIL`] || '';
+  const password = process.env[`E2E_${key}_PASSWORD`] || '';
+  return { email, password };
 }
 
+test.beforeEach(async ({ page }) => {
+  await installAppCheckDebugToken(page);
+});
+
 test.describe('Gate 11 admin panel signed-in smoke', () => {
-  test.beforeEach(async ({ page }) => {
-    await installAppCheckDebugToken(page);
-  });
   const { email, password } = cred('admin');
   test.skip(!email || !password || !adminBaseUrl, 'Missing admin staging credentials');
   test('admin lands on dashboard and can open control center + broker management', async ({ page }) => {
