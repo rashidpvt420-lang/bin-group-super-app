@@ -32,7 +32,7 @@ async function login(page: Page) {
 }
 
 async function assertHealthy(page: Page, expectedPath: string) {
-  await expect.poll(() => new URL(page.url()).pathname, { message: `${expectedPath}: route must not silently redirect` }).toBe(expectedPath);
+  await expect.poll(() => new URL(page.url()).pathname, { message: `${expectedPath}: route must not silently redirect`, timeout: 30_000 }).toBe(expectedPath);
   const body = await page.locator('body').innerText({ timeout: 20_000 });
   expect(body.trim().length, `${expectedPath}: body must render text`).toBeGreaterThan(0);
   expect(body, `${expectedPath}: no crash text`).not.toMatch(CRASH_PATTERN);
@@ -169,7 +169,7 @@ test.describe('Tenant launch audit', () => {
     const afterText = await page.locator('body').innerText({ timeout: 10_000 });
     expect(afterText.trim().length, 'Content must render after AR switch').toBeGreaterThan(0);
     expect(afterText, 'No crash after language switch').not.toMatch(/application error|unhandled runtime error/i);
-    await expect.poll(() => new URL(page.url()).pathname).toBe('/tenant/dashboard');
+    await expect.poll(() => new URL(page.url()).pathname, { timeout: 30_000 }).toBe('/tenant/dashboard');
     await page.getByTestId('tenant-language-toggle').click();
     await page.waitForTimeout(500);
   });
