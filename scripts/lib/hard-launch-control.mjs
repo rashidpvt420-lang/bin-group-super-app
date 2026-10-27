@@ -12,6 +12,16 @@ export const DECISION_KIND = 'bin-group-hard-launch-decision';
 // final postdeploy decision, which can legitimately exceed one hour.
 export const AUTHORIZATION_MAX_AGE_MS = 12 * 60 * 60 * 1000;
 export const DECISION_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+/**
+ * Canonical comparison form for SHA-256 artifact digests. Deployment metadata
+ * and workflow outputs carry `sha256:<hex>`, while the execution-generated
+ * Phase 1 manual payment proof stores the bare 64-hex digest. Both denote the
+ * same artifact; the comparison stays exact on the hex value.
+ */
+export function normalizeSha256Digest(value) {
+  return String(value || '').trim().toLowerCase().replace(/^sha256:/, '');
+}
+
 export const DEPLOYMENT_MAX_AGE_MS = 2 * 60 * 60 * 1000;
 export const FUTURE_SKEW_MS = 5 * 60 * 1000;
 export const RETRY_COOLDOWN_MS = 30 * 60 * 1000;

@@ -571,3 +571,18 @@ test('production deploy enforces hard-clearance control plane ancestry and prove
   assert.equal(clearanceControlShas.length, 2, 'Postdeploy gate and decision must receive CLEARANCE_CONTROL_PLANE_SHA');
 });
 
+test('postdeploy clearance job uploads diagnostics on any failure before the clearance artifact', () => {
+  const workflow = readFileSync(new URL('../../.github/workflows/firebase-production-deploy.yml', import.meta.url), 'utf8');
+  const jobStart = workflow.indexOf('\n  public-release-clearance:\n');
+  assert.ok(jobStart >= 0);
+  const job = workflow.slice(jobStart);
+  const diag = job.indexOf('      - name: Upload failed postdeploy diagnostics\n');
+  const decision = job.indexOf('      - name: Create signed hard-launch decision after postdeploy clearance');
+  const clearance = job.indexOf('      - name: Upload public release clearance artifact');
+  assert.ok(diag > decision && diag < clearance, 'diagnostics must follow every gate and precede the clearance upload');
+  const step = job.slice(diag, clearance);
+  assert.match(step, /if: \$\{\{ failure\(\) \}\}/);
+  assert.match(step, /launch_package\/artifacts\/\*\.stdio\.log/);
+  assert.match(step, /test-results\/\*\*/);
+  assert.doesNotMatch(step, /secrets\./);
+});
