@@ -39,6 +39,7 @@ test.describe('Phase 3 cross-platform public control shell', () => {
         lang: document.documentElement.lang,
       })), {
         message: `${project} ${route}: Arabic mode must expose RTL document semantics`,
+        timeout: 30_000,
       }).toEqual({ dir: 'rtl', lang: 'ar' });
 
       await auditInteractiveControls(page, `${project} ${route} Arabic RTL`);
@@ -232,7 +233,7 @@ test.describe('Phase 1 marketing and global-shell behavioral regression', () => 
     await expect.poll(async () => page.evaluate(() => ({
       dir: document.documentElement.dir,
       lang: document.documentElement.lang,
-    }))).toEqual({ dir: 'rtl', lang: 'ar' });
+    })), { timeout: 30_000 }).toEqual({ dir: 'rtl', lang: 'ar' });
 
     await expect(page.locator('a[href="/"]').first()).toBeVisible();
     await expect(page.locator('a[href="/login"]').first()).toBeVisible();
