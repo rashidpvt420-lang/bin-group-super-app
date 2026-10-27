@@ -1228,6 +1228,19 @@ jobs:
           HARD_CLEARANCE_DIRECTORY: hard_clearance
         run: npm run hard-launch:decision
 
+      - name: Upload failed postdeploy diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: postdeploy-diagnostics-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            launch_package/artifacts/*.json
+            launch_package/artifacts/*.stdio.log
+            test-results/**
+            playwright-report/**
+          if-no-files-found: warn
+          retention-days: 14
+
       - name: Upload public release clearance artifact
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
