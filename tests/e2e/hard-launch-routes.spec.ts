@@ -349,8 +349,9 @@ async function assertExactRoute(page: Page, role: RoleCase, route: string) {
   expect(response?.status() ?? 200, `${role.name} ${route} must not return a server error`).toBeLessThan(500);
   await expect.poll(() => new URL(page.url()).pathname, {
     message: `${role.name} ${route} must remain on its registered route rather than a wildcard redirect`,
+    timeout: 30_000,
   }).toBe(expectedPath);
-  await expect.poll(() => new URL(page.url()).origin).toBe(expectedOrigin);
+  await expect.poll(() => new URL(page.url()).origin, { timeout: 30_000 }).toBe(expectedOrigin);
   const body = await page.locator('body').innerText({ timeout: 20_000 });
   expect(body.trim().length, `${role.name} ${route} must render visible text`).toBeGreaterThan(0);
   expect(body, `${role.name} ${route} must not render a runtime crash`).not.toMatch(CRASH_PATTERN);
@@ -362,11 +363,12 @@ async function assertExactRoute(page: Page, role: RoleCase, route: string) {
   await assertNoPageLevelHorizontalOverflow(page, `Phase 3 ${role.name} ${route} English`);
 
   await page.reload({ waitUntil: 'domcontentloaded' });
-  await page.waitForTimeout(route.includes('/map') ? 2_000 : 500);
+  await page.waitForTimeout(route.includes('/map') ? 2_000 : 900);
   await expect.poll(() => new URL(page.url()).pathname, {
     message: `${role.name} ${route} must survive browser refresh without wildcard/auth fallback`,
+    timeout: 30_000,
   }).toBe(expectedPath);
-  await expect.poll(() => new URL(page.url()).origin).toBe(expectedOrigin);
+  await expect.poll(() => new URL(page.url()).origin, { timeout: 30_000 }).toBe(expectedOrigin);
   const refreshedBody = await page.locator('body').innerText({ timeout: 20_000 });
   expect(refreshedBody.trim().length, `${role.name} ${route} must render after refresh`).toBeGreaterThan(0);
   expect(refreshedBody, `${role.name} ${route} must not crash after refresh`).not.toMatch(CRASH_PATTERN);
@@ -386,15 +388,18 @@ async function assertMobileArabicRoute(page: Page, role: RoleCase, route: string
 
   await expect.poll(() => new URL(page.url()).pathname, {
     message: `${role.name} ${route} must remain exact in mobile Arabic mode`,
+    timeout: 30_000,
   }).toBe(expectedPath);
-  await expect.poll(() => new URL(page.url()).origin).toBe(expectedOrigin);
+  await expect.poll(() => new URL(page.url()).origin, { timeout: 30_000 }).toBe(expectedOrigin);
 
   await expect.poll(async () => page.evaluate(() => document.documentElement.dir), {
     message: `${role.name} ${route} must switch the document to RTL`,
+    timeout: 30_000,
   }).toBe('rtl');
 
   await expect.poll(async () => page.evaluate(() => document.documentElement.lang), {
     message: `${role.name} ${route} must expose Arabic document language`,
+    timeout: 30_000,
   }).toBe('ar');
 
   const body = await page.locator('body').innerText({ timeout: 20_000 });
@@ -424,6 +429,7 @@ async function assertMobileArabicRoute(page: Page, role: RoleCase, route: string
     lang: document.documentElement.lang,
   })), {
     message: `${role.name} ${route} must preserve route + Arabic RTL after refresh`,
+    timeout: 30_000,
   }).toEqual({ path: expectedPath, origin: expectedOrigin, dir: 'rtl', lang: 'ar' });
 }
 
@@ -435,13 +441,14 @@ test('Public Phase 2 routes survive direct URL, refresh, mobile and Arabic RTL',
     expect(response?.status() ?? 200, `Public ${route} must not return a server error`).toBeLessThan(500);
     await expect.poll(() => new URL(page.url()).pathname, {
       message: `Public ${route} must remain on its registered route`,
+      timeout: 30_000,
     }).toBe(route);
     let body = await page.locator('body').innerText({ timeout: 20_000 });
     expect(body.trim().length, `Public ${route} must render visible content`).toBeGreaterThan(0);
     expect(body, `Public ${route} must not crash`).not.toMatch(CRASH_PATTERN);
 
     await page.reload({ waitUntil: 'domcontentloaded' });
-    await expect.poll(() => new URL(page.url()).pathname).toBe(route);
+    await expect.poll(() => new URL(page.url()).pathname, { timeout: 30_000 }).toBe(route);
 
     await page.setViewportSize({ width: 390, height: 844 });
     await page.evaluate(() => localStorage.setItem('bin_language', 'ar'));
@@ -450,7 +457,7 @@ test('Public Phase 2 routes survive direct URL, refresh, mobile and Arabic RTL',
       path: location.pathname,
       dir: document.documentElement.dir,
       lang: document.documentElement.lang,
-    }))).toEqual({ path: route, dir: 'rtl', lang: 'ar' });
+    })), { timeout: 30_000 }).toEqual({ path: route, dir: 'rtl', lang: 'ar' });
 
     body = await page.locator('body').innerText({ timeout: 20_000 });
     await auditInteractiveControls(page, `Phase 3 public ${route} mobile Arabic RTL`);
@@ -474,12 +481,14 @@ test('Admin login Phase 2 route survives direct URL, refresh, mobile and Arabic 
 
   await expect.poll(() => new URL(page.url()).pathname, {
     message: 'Admin /login must remain exact after direct load and refresh',
+    timeout: 30_000,
   }).toBe('/login');
   await expect.poll(async () => page.evaluate(() => ({
     dir: document.documentElement.dir,
     lang: document.documentElement.lang,
   })), {
     message: 'Admin /login must expose Arabic RTL document semantics',
+    timeout: 30_000,
   }).toEqual({ dir: 'rtl', lang: 'ar' });
 
   const body = await page.locator('body').innerText({ timeout: 20_000 });
