@@ -565,3 +565,97 @@ describe('postdeploy release gate — frozen release / control-plane binding', (
     assert.ok(result.failures.some((f) => /pilot incident commitSha must equal current commit SHA/.test(f)));
   }));
 });
+
+describe('postdeploy release gate — real-chain defects found by the first end-to-end dry run', () => {
+  const PHASE1_FAILURE = /phase1-manual-payment-proof\.json is invalid, stale, or not bound/;
+
+  function writePhase1Proof(root, digest) {
+    writeFileSync(
+      path.join(root, 'launch_package/phase1-manual-payment-proof.json'),
+      `${JSON.stringify({
+        status: 'passed',
+        source: 'firebase-production-manual-payment-policy-verifier',
+        paymentPolicy: 'phase1-manual',
+        projectId: PRODUCTION.projectId,
+        currency: 'AED',
+        approvedMethods: ['CASH', 'CHEQUE'],
+        bankTransferEnabled: false,
+        stripeEnabled: false,
+        sensitiveValuesExcluded: true,
+        configHash: 'c'.repeat(64),
+        configVersion: 'phase1-manual-test',
+        commitSha: SHA,
+        repository: 'rashidpvt420-lang/bin-group-super-app',
+        workflowRunId: '123',
+        releaseId: 'rel-test-1',
+        validatedArtifactDigest: digest,
+        observedAt: new Date().toISOString(),
+        hardLaunchClaim: false,
+      })}\n`,
+    );
+  }
+
+  function publicRun(root) {
+    return runPostdeployReleaseGate({
+      root,
+      env: baseEnv({ LAUNCH_MODE: 'public', RELEASE_ID: 'rel-test-1' }),
+      writeStatus: false,
+    });
+  }
+
+  it('accepts a Phase 1 proof carrying the bare hex of the sha256:-prefixed validated digest', () => withRoot('postdeploy-', (root) => {
+    writeIncidents(root);
+    writeApproval(root);
+    fullEvidence(root);
+    writePhase1Proof(root, DIGEST.replace(/^sha256:/, ''));
+    assert.ok(!publicRun(root).failures.some((f) => PHASE1_FAILURE.test(f)));
+  }));
+
+  it('accepts a Phase 1 proof carrying the prefixed digest', () => withRoot('postdeploy-', (root) => {
+    writeIncidents(root);
+    writeApproval(root);
+    fullEvidence(root);
+    writePhase1Proof(root, DIGEST);
+    assert.ok(!publicRun(root).failures.some((f) => PHASE1_FAILURE.test(f)));
+  }));
+
+  it('still rejects a Phase 1 proof bound to a different artifact digest', () => withRoot('postdeploy-', (root) => {
+    writeIncidents(root);
+    writeApproval(root);
+    fullEvidence(root);
+    writePhase1Proof(root, 'cd'.repeat(32));
+    assert.ok(publicRun(root).failures.some((f) => PHASE1_FAILURE.test(f)));
+  }));
+
+  function setAppCheckRecord(root, patch) {
+    const batchPath = path.join(root, 'launch_package/launch-evidence-batch.json');
+    const batch = JSON.parse(readFileSync(batchPath, 'utf8'));
+    batch.records.push({
+      testName: 'appCheckAuthenticatedAccess',
+      commitSha: SHA,
+      status: 'passed',
+      passed: 1,
+      failed: 0,
+      ...patch,
+    });
+    writeFileSync(batchPath, `${JSON.stringify(batch)}\n`);
+  }
+
+  it('does not treat the appCheckAuthenticatedAccess evidence key itself as App Check contamination', () => withRoot('postdeploy-', (root) => {
+    writeIncidents(root);
+    writeApproval(root);
+    fullEvidence(root);
+    setAppCheckRecord(root, { proof: 'Recorded appCheckAuthenticatedAccess for the production release.' });
+    const result = runPostdeployReleaseGate({ root, env: baseEnv(), writeStatus: false });
+    assert.ok(!result.failures.some((f) => /contamination in evidence appCheckAuthenticatedAccess/.test(f)));
+  }));
+
+  it('still fails the appCheckAuthenticatedAccess record on a real 403 or permission-denied signal', () => withRoot('postdeploy-', (root) => {
+    writeIncidents(root);
+    writeApproval(root);
+    fullEvidence(root);
+    setAppCheckRecord(root, { proof: 'appCheckAuthenticatedAccess saw HTTP 403 permission-denied' });
+    const result = runPostdeployReleaseGate({ root, env: baseEnv(), writeStatus: false });
+    assert.ok(result.failures.some((f) => /contamination in evidence appCheckAuthenticatedAccess/.test(f)));
+  }));
+});

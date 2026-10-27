@@ -5,6 +5,7 @@ import path from 'node:path';
 import {
   DECISION_KIND,
   HARD_LAUNCH_CONTROL_SCHEMA,
+  normalizeSha256Digest,
   readJsonStrict,
   sha256File,
   signDocument,
@@ -169,7 +170,8 @@ if (launchMode === 'public') {
       phase1ManualPaymentProof.commitSha !== context.commitSha || phase1ManualPaymentProof.repository !== context.repository ||
       String(phase1ManualPaymentProof.workflowRunId || '') !== context.runId ||
       phase1ManualPaymentProof.releaseId !== `${context.runId}-${process.env.GITHUB_RUN_ATTEMPT}` ||
-      phase1ManualPaymentProof.validatedArtifactDigest !== deployment?.validatedArtifactDigest ||
+      !deployment?.validatedArtifactDigest ||
+      normalizeSha256Digest(phase1ManualPaymentProof.validatedArtifactDigest) !== normalizeSha256Digest(deployment.validatedArtifactDigest) ||
       !Number.isFinite(proofAgeMs) || proofAgeMs < 0 || proofAgeMs > 72 * 60 * 60 * 1000 ||
       phase1ManualPaymentProof.hardLaunchClaim === true
     ) failures.push('phase1-manual-payment-proof.json is invalid, stale, or not bound to this run and artifact');

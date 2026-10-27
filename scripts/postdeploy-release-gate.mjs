@@ -32,6 +32,7 @@ import {
   pilotIncidentReportPath,
   validatePilotIncidentReport,
 } from './lib/hard-launch-gate.mjs';
+import { normalizeSha256Digest } from './lib/hard-launch-control.mjs';
 import {
   frozenDocumentBindingErrors,
   frozenReleaseShaFromEnv,
@@ -220,7 +221,14 @@ export function runPostdeployReleaseGate({
 
   for (const record of evidenceBatch.records || []) {
     if (record.commitSha !== githubSha) continue;
-    const blob = `${record.proof || ''} ${record.notes || ''} ${JSON.stringify(record.appCheck || {})}`;
+    // The App Check evidence record's own key (`appCheckAuthenticatedAccess`) is
+    // embedded in its generated proof sentence. It is a label, not a failure
+    // signal, so only that exact token on that exact record is ignored; every
+    // other App Check / 403 / permission-denied signal still fails the gate.
+    const rawBlob = `${record.proof || ''} ${record.notes || ''} ${JSON.stringify(record.appCheck || {})}`;
+    const blob = record.testName === 'appCheckAuthenticatedAccess'
+      ? rawBlob.split('appCheckAuthenticatedAccess').join(' ')
+      : rawBlob;
     if (APP_CHECK_FAILURE_RE.test(blob) && record.appCheckClean !== true) {
       failures.push(`App Check/permission contamination in evidence ${record.testName}.`);
     }
@@ -277,7 +285,7 @@ export function runPostdeployReleaseGate({
           proof.repository !== String(env.GITHUB_REPOSITORY || '') ||
           String(proof.workflowRunId || '') !== String(env.GITHUB_RUN_ID || '') ||
           proof.releaseId !== releaseId ||
-          proof.validatedArtifactDigest !== validatedDigest ||
+          !validatedDigest || normalizeSha256Digest(proof.validatedArtifactDigest) !== normalizeSha256Digest(validatedDigest) ||
           !Number.isFinite(proofAgeMs) || proofAgeMs < 0 || proofAgeMs > 72 * 60 * 60 * 1000 ||
           proof.hardLaunchClaim === true
         ) failures.push('phase1-manual-payment-proof.json is invalid, stale, or not bound to this release.');
