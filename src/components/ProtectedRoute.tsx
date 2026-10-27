@@ -79,7 +79,15 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles,
         return <Navigate to={resolveRoleHomePath(normalizedRole)} replace />;
     }
 
-    if (!isAdmin && (currentStatus === 'role_required' || !normalizedRole)) {
+    // A bounded auth/profile recovery can retain the Firebase user while the role
+    // claim is temporarily unavailable. Keep the requested route and render the
+    // existing fail-closed PROFILE UNAVAILABLE panel below; do not turn that
+    // recoverable verification state into a misleading redirect to /gateway.
+    if (
+        !isAdmin &&
+        (currentStatus === 'role_required' || !normalizedRole) &&
+        currentStatus !== 'profile_unavailable'
+    ) {
         return <Navigate to="/gateway" state={{ reason: 'role_required', from: location }} replace />;
     }
 
