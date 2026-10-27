@@ -91,7 +91,7 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles,
         return <Navigate to="/gateway" state={{ reason: 'role_required', from: location }} replace />;
     }
 
-    if (allowedRoles && !allowedRoles.includes(normalizedRole)) {
+    if (allowedRoles && !allowedRoles.includes(normalizedRole) && currentStatus !== 'profile_unavailable') {
         return <Navigate to={resolveRoleHomePath(normalizedRole)} replace />;
     }
 
