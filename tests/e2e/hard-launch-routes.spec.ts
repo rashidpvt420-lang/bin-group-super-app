@@ -368,6 +368,10 @@ async function assertExactRoute(page: Page, role: RoleCase, route: string) {
   }).toBe(expectedPath);
   await expect.poll(() => new URL(page.url()).origin).toBe(expectedOrigin);
   const refreshedBody = await page.locator('body').innerText({ timeout: 20_000 });
+  expect(
+    refreshedBody,
+    `${role.name} ${route} must retain verified role authorization after refresh`,
+  ).not.toMatch(/ACCOUNT STATUS UNVERIFIED|PROFILE UNAVAILABLE|IDENTITY FAULT|Role Authorization Error/i);
   expect(refreshedBody.trim().length, `${role.name} ${route} must render after refresh`).toBeGreaterThan(0);
   expect(refreshedBody, `${role.name} ${route} must not crash after refresh`).not.toMatch(CRASH_PATTERN);
   if (!PHASE_2_SENTINEL_ROUTE.test(route)) {
