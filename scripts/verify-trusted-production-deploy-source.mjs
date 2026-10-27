@@ -120,7 +120,7 @@ try {
     status: 'passed',
     sourceWorkflowName: SOURCE_WORKFLOW_NAME,
     sourceWorkflowPath: SOURCE_WORKFLOW_PATH,
-    sourceDeployRunId,
+    sourceDeployRunId: sourceRunId,
     sourceDeployJobId: String(deploymentJob.id || ''),
     sourceActor,
     commitSha: expectedSha,

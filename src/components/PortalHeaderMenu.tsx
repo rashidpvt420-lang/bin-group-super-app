@@ -1,6 +1,7 @@
 import React from 'react';
 import { Divider, IconButton, ListItemIcon, ListItemText, Menu, MenuItem, useMediaQuery } from '@mui/material';
-import { Globe, LogOut, MoreVertical } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Globe, LogOut, MoreVertical, UserX } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
 import SafeIcon from './SafeIcon';
 import { binThemeTokens } from '../theme/binGroupTheme';
@@ -27,6 +28,7 @@ type Props = { role: PortalRole; items: PortalHeaderMenuItem[]; logoutRedirect?:
  */
 export default function PortalHeaderMenu({ role, items, logoutRedirect }: Props) {
   const { isRTL } = useLanguage();
+  const navigate = useNavigate();
   const { nextLang, setLang, logoutLabel, languageSwitchLabel, handleLogout } = usePortalSession(role, logoutRedirect);
   const [anchor, setAnchor] = React.useState<HTMLElement | null>(null);
   const open = Boolean(anchor);
@@ -69,6 +71,10 @@ export default function PortalHeaderMenu({ role, items, logoutRedirect }: Props)
         <MenuItem data-testid={`${role}-language-toggle-menu`} lang={nextLang} onClick={run(() => setLang(nextLang))} sx={{ minHeight: 48, color: binThemeTokens.textPrimary, fontWeight: 800 }}>
           <ListItemIcon sx={{ color: 'inherit' }}><SafeIcon icon={Globe} size={18} /></ListItemIcon>
           <ListItemText primary={languageSwitchLabel} />
+        </MenuItem>
+        <MenuItem data-testid={`${role}-delete-account-menu`} onClick={run(() => navigate('/account-privacy'))} sx={{ minHeight: 48, color: binThemeTokens.textPrimary, fontWeight: 800 }}>
+          <ListItemIcon sx={{ color: 'inherit' }}><SafeIcon icon={UserX} size={18} /></ListItemIcon>
+          <ListItemText primary={isRTL ? 'طلب حذف الحساب' : 'Request account deletion'} />
         </MenuItem>
         <MenuItem data-testid={`${role}-logout-menu`} onClick={run(handleLogout)} sx={{ minHeight: 48, color: '#B91C1C', fontWeight: 800 }}>
           <ListItemIcon sx={{ color: 'inherit' }}><SafeIcon icon={LogOut} size={18} /></ListItemIcon>

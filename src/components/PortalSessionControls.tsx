@@ -1,6 +1,7 @@
 import React from 'react';
 import { Button, IconButton, Stack, Tooltip, alpha, useTheme, useMediaQuery } from '@mui/material';
-import { Globe, LogOut } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Globe, LogOut, UserX } from 'lucide-react';
 import { signOut } from 'firebase/auth';
 import { useLanguage } from '../context/LanguageContext';
 import { auth } from '../lib/firebase';
@@ -88,6 +89,8 @@ export default function PortalSessionControls({
   const borderColor = dark ? alpha('#FFFFFF', 0.18) : alpha(accent, 0.35);
 
   const { handleLogout } = usePortalSession(role, logoutRedirect);
+  const navigate = useNavigate();
+  const deleteAccountLabel = lang === 'ar' ? 'طلب حذف الحساب' : 'Request account deletion';
 
   return (
     <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} alignItems="center">
@@ -117,6 +120,27 @@ export default function PortalSessionControls({
       >
         {languageLabel}
       </Button>
+
+      {!isMobile && role !== 'admin' && (
+        <Tooltip title={deleteAccountLabel}>
+          <IconButton
+            type="button"
+            data-testid={`${role}-delete-account`}
+            aria-label={deleteAccountLabel}
+            onClick={() => navigate('/account-privacy')}
+            sx={{
+              color: accent,
+              bgcolor: softBackground,
+              border: `1px solid ${borderColor}`,
+              borderRadius: 3,
+              width: 42,
+              height: 42,
+            }}
+          >
+            <SafeIcon icon={UserX} size={18} />
+          </IconButton>
+        </Tooltip>
+      )}
 
       {!isMobile ? (
         <Button

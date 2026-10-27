@@ -304,6 +304,7 @@ function AppContent() {
         <Route path="/privacy-policy" element={<LegalRedirect to="/privacy-policy.html" />} />
         <Route path="/terms" element={<LegalRedirect to="/terms.html" />} />
         <Route path="/privacy" element={<LegalRedirect to="/privacy.html" />} />
+        <Route path="/delete-account" element={<LegalRedirect to="/delete-account.html" />} />
         <Route path="/account-privacy" element={withAuth(<AccountPrivacyRequestPage />, { publicAuth: false, showChrome: false })} />
         <Route path="/support" element={<SupportPage />} />
         <Route path="/feedback" element={<PilotFeedbackPage />} />

@@ -1,7 +1,7 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Alert, Box, Button, Card, CardContent, CircularProgress, Stack, TextField, Typography } from '@mui/material';
-import { addDoc, auth, collection, db, serverTimestamp } from '../lib/firebase';
+import { Alert, Box, Button, Card, CardContent, Checkbox, CircularProgress, FormControlLabel, Link, Stack, TextField, Typography } from '@mui/material';
+import { auth, db, doc, getDoc, serverTimestamp, setDoc } from '../lib/firebase';
 import { useLanguage } from '../context/LanguageContext';
 
 export default function AccountPrivacyRequestPage() {
@@ -11,6 +11,8 @@ export default function AccountPrivacyRequestPage() {
   const [submitting, setSubmitting] = React.useState(false);
   const [submitted, setSubmitted] = React.useState(false);
   const [error, setError] = React.useState('');
+  const [confirmed, setConfirmed] = React.useState(false);
+  const [alreadyRequested, setAlreadyRequested] = React.useState(false);
   const user = auth.currentUser;
   const label = (en: string, ar: string) => (lang === 'ar' ? ar : en);
 
@@ -22,19 +24,22 @@ export default function AccountPrivacyRequestPage() {
     setSubmitting(true);
     setError('');
     try {
-      await addDoc(collection(db, 'pilotFeedback'), {
-        status: 'new',
-        type: 'ACCOUNT_DATA_CLOSURE_REQUEST',
-        priority: 'STORE_COMPLIANCE',
+      // One request per account, keyed by the user's own uid (Firestore rules enforce this).
+      // The request is only recorded for admin review; nothing is deleted automatically.
+      const ref = doc(db, 'accountDeletionRequests', user.uid);
+      const existing = await getDoc(ref).catch(() => null);
+      if (existing?.exists()) {
+        setAlreadyRequested(true);
+        setSubmitted(true);
+        return;
+      }
+      await setDoc(ref, {
         userId: user.uid,
         email: user.email || '',
-        displayName: user.displayName || '',
-        notes: notes.trim(),
+        notes: notes.trim().slice(0, 1000),
+        status: 'pending_review',
+        source: 'in_app_account_deletion',
         requestedAt: serverTimestamp(),
-        createdAt: serverTimestamp(),
-        source: 'in_app_account_privacy_page',
-        reviewState: 'PENDING_ADMIN_REVIEW',
-        legalNote: 'Some records may be retained where required for contracts, invoices, payments, fraud prevention, dispute evidence, audit trail, or UAE legal/compliance obligations.',
       });
       setSubmitted(true);
     } catch (err: any) {
@@ -63,19 +68,24 @@ export default function AccountPrivacyRequestPage() {
                 {label('ACCOUNT & PRIVACY', 'الحساب والخصوصية')}
               </Typography>
               <Typography variant="h4" sx={{ color: '#111827', fontWeight: 950, mt: 1 }}>
-                {label('Request account and data review', 'طلب مراجعة الحساب والبيانات')}
+                {label('Request account deletion', 'طلب حذف الحساب')}
               </Typography>
               <Typography sx={{ color: '#667085', fontWeight: 700, mt: 1.5, lineHeight: 1.8 }}>
                 {label(
-                  'Use this page to request account closure or personal data review. BIN GROUP will review the request and process it where legally possible. Contract, invoice, payment, dispute, audit, and legal evidence records may be retained when required by law or business obligations.',
-                  'استخدم هذه الصفحة لطلب إغلاق الحساب أو مراجعة البيانات الشخصية. ستقوم BIN GROUP بمراجعة الطلب وتنفيذه حيثما يسمح القانون. قد يتم الاحتفاظ بسجلات العقود والفواتير والمدفوعات والنزاعات والتدقيق والأدلة القانونية عند الحاجة قانونياً أو تشغيلياً.'
+                  'Ask BIN GROUP to delete your account and personal data. We verify your identity first and complete verified requests within 30 days. Your data is not deleted immediately. Contract, invoice, payment, dispute, audit, and legal evidence records may be retained when required by UAE law or contract.',
+                  'اطلب من BIN GROUP حذف حسابك وبياناتك الشخصية. نتحقق من هويتك أولاً وننفذ الطلبات الموثقة خلال 30 يوماً. لا يتم حذف بياناتك فوراً. قد يتم الاحتفاظ بسجلات العقود والفواتير والمدفوعات والنزاعات والتدقيق والأدلة القانونية عندما يتطلب القانون الإماراتي أو العقد ذلك.'
                 )}
+              </Typography>
+              <Typography sx={{ color: '#667085', fontWeight: 700, mt: 1 }}>
+                <Link href="/delete-account" target="_blank" rel="noopener">{label('How account deletion works', 'كيف يتم حذف الحساب')}</Link>
               </Typography>
             </Box>
 
             {submitted ? (
               <Alert severity="success" sx={{ fontWeight: 800 }}>
-                {label('Your request was submitted for admin review. You will be contacted through your registered email if verification is required.', 'تم إرسال طلبك للمراجعة الإدارية. سيتم التواصل معك عبر بريدك المسجل إذا كانت هناك حاجة للتحقق.')}
+                {alreadyRequested
+                  ? label('We already have an account deletion request for your account. It is waiting for review; no further action is needed.', 'لدينا بالفعل طلب حذف لحسابك قيد المراجعة. لا حاجة لأي إجراء إضافي.')
+                  : label('Your request was submitted for review. We will contact you through your registered email to verify your identity, and complete verified requests within 30 days.', 'تم إرسال طلبك للمراجعة. سنتواصل معك عبر بريدك المسجل للتحقق من هويتك وننفذ الطلبات الموثقة خلال 30 يوماً.')}
               </Alert>
             ) : (
               <>
@@ -87,15 +97,19 @@ export default function AccountPrivacyRequestPage() {
                   minRows={4}
                   fullWidth
                 />
+                <FormControlLabel
+                  control={<Checkbox checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} />}
+                  label={label('I understand this asks BIN GROUP to permanently delete my account and personal data.', 'أفهم أن هذا يطلب من BIN GROUP حذف حسابي وبياناتي الشخصية نهائياً.')}
+                />
                 {error && <Alert severity="error">{error}</Alert>}
                 <Button
                   variant="contained"
                   color="error"
-                  disabled={submitting}
+                  disabled={submitting || !confirmed}
                   onClick={submitRequest}
                   sx={{ alignSelf: isRTL ? 'flex-start' : 'flex-end', borderRadius: 3, fontWeight: 950, px: 3, py: 1.2 }}
                 >
-                  {submitting ? <CircularProgress size={20} sx={{ color: '#fff' }} /> : label('Submit account privacy request', 'إرسال طلب الخصوصية')}
+                  {submitting ? <CircularProgress size={20} sx={{ color: '#fff' }} /> : label('Submit account deletion request', 'إرسال طلب حذف الحساب')}
                 </Button>
               </>
             )}

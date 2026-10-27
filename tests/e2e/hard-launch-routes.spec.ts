@@ -50,6 +50,7 @@ const publicRoutes = [
   '/privacy-policy',
   '/terms',
   '/privacy',
+  '/delete-account',
   '/support',
   '/feedback',
   '/pilot-feedback',
