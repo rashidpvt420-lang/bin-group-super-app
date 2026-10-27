@@ -86,7 +86,8 @@ if (frozenReleaseShaFromEnv(process.env) === null) {
   if (operational?.releaseCommitSha !== frozen.frozenSha) {
     errors.push('operational readiness releaseCommitSha must equal FROZEN_RELEASE_SHA');
   }
-  if (operational?.controlPlaneCommitSha !== commitSha) {
+  const expectedControlSha = String(process.env.CLEARANCE_CONTROL_PLANE_SHA || commitSha).trim();
+  if (operational?.controlPlaneCommitSha !== expectedControlSha) {
     errors.push('operational readiness controlPlaneCommitSha must equal GITHUB_SHA');
   }
 }

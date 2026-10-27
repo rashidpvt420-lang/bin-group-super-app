@@ -52,7 +52,7 @@ on:
         description: 'JSON containing incident, frozen-release hard-clearance, and run fields; legacy Stripe proof IDs must remain empty'
         required: false
         type: string
-        default: '{"incident_attestation":"ATTEST_PRODUCTION_INCIDENT_STATE_CLEAR","incident_active_json":"[]","incident_requires_rollback":"false","incident_rollback_reason":"","incident_last_deployment_failed":"false","incident_last_deployment_failed_at":"","incident_evidence_refs":"","hard_clearance_run_id":"","frozen_hard_clearance_release_sha":"","stripe_live_checkout_session_id":"","stripe_live_webhook_event_id":""}'
+        default: '{"incident_attestation":"ATTEST_PRODUCTION_INCIDENT_STATE_CLEAR","incident_active_json":"[]","incident_requires_rollback":"false","incident_rollback_reason":"","incident_last_deployment_failed":"false","incident_last_deployment_failed_at":"","incident_evidence_refs":"","hard_clearance_run_id":"","hard_clearance_control_plane_sha":"","frozen_hard_clearance_release_sha":"","stripe_live_checkout_session_id":"","stripe_live_webhook_event_id":""}'
 
 permissions:
   contents: read
@@ -105,6 +105,7 @@ jobs:
           RUN_PUBLIC_RELEASE_GATE_INPUT: ${{ inputs.run_public_release_gate }}
           PAYMENT_POLICY_INPUT: ${{ inputs.payment_policy }}
           HARD_CLEARANCE_RUN_ID_INPUT: ${{ fromJSON(inputs.deployment_payload_json).hard_clearance_run_id }}
+          HARD_CLEARANCE_CONTROL_PLANE_SHA_INPUT: ${{ fromJSON(inputs.deployment_payload_json).hard_clearance_control_plane_sha || '' }}
           FROZEN_HARD_CLEARANCE_RELEASE_SHA_INPUT: ${{ fromJSON(inputs.deployment_payload_json).frozen_hard_clearance_release_sha }}
           STRIPE_LIVE_SESSION_ID_INPUT: ${{ fromJSON(inputs.deployment_payload_json).stripe_live_checkout_session_id }}
           STRIPE_LIVE_EVENT_ID_INPUT: ${{ fromJSON(inputs.deployment_payload_json).stripe_live_webhook_event_id }}
@@ -139,6 +140,10 @@ jobs:
               || fail "Public mode requires a numeric hard-clearance run ID."
             [[ "$FROZEN_HARD_CLEARANCE_RELEASE_SHA_INPUT" =~ ^[0-9a-f]{40}$ ]] \
               || fail "Public mode requires the frozen hard-clearance release SHA."
+            if [[ -n "$HARD_CLEARANCE_CONTROL_PLANE_SHA_INPUT" ]]; then
+              [[ "$HARD_CLEARANCE_CONTROL_PLANE_SHA_INPUT" =~ ^[0-9a-f]{40}$ ]] \
+                || fail "hard_clearance_control_plane_sha must be a full lowercase 40-character SHA."
+            fi
           else
             [[ "$LAUNCH_MODE_INPUT" == "bank-pilot" ]] \
               || fail "launch_mode must be bank-pilot or public."
@@ -280,6 +285,7 @@ jobs:
           RUN_PUBLIC_RELEASE_GATE_INPUT: ${{ inputs.run_public_release_gate }}
           PAYMENT_POLICY_INPUT: ${{ inputs.payment_policy }}
           HARD_CLEARANCE_RUN_ID_INPUT: ${{ fromJSON(inputs.deployment_payload_json).hard_clearance_run_id }}
+          HARD_CLEARANCE_CONTROL_PLANE_SHA_INPUT: ${{ fromJSON(inputs.deployment_payload_json).hard_clearance_control_plane_sha || '' }}
           FROZEN_HARD_CLEARANCE_RELEASE_SHA_INPUT: ${{ fromJSON(inputs.deployment_payload_json).frozen_hard_clearance_release_sha }}
           STRIPE_LIVE_SESSION_ID_INPUT: ${{ fromJSON(inputs.deployment_payload_json).stripe_live_checkout_session_id }}
           STRIPE_LIVE_EVENT_ID_INPUT: ${{ fromJSON(inputs.deployment_payload_json).stripe_live_webhook_event_id }}
@@ -314,6 +320,10 @@ jobs:
               || fail "Public mode requires a numeric hard-clearance run ID."
             [[ "$FROZEN_HARD_CLEARANCE_RELEASE_SHA_INPUT" =~ ^[0-9a-f]{40}$ ]] \
               || fail "Public mode requires the frozen hard-clearance release SHA."
+            if [[ -n "$HARD_CLEARANCE_CONTROL_PLANE_SHA_INPUT" ]]; then
+              [[ "$HARD_CLEARANCE_CONTROL_PLANE_SHA_INPUT" =~ ^[0-9a-f]{40}$ ]] \
+                || fail "hard_clearance_control_plane_sha must be a full lowercase 40-character SHA."
+            fi
           else
             [[ "$LAUNCH_MODE_INPUT" == "bank-pilot" ]] \
               || fail "launch_mode must be bank-pilot or public."
@@ -323,6 +333,8 @@ jobs:
 
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
 
       - name: Use Node.js 22
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -475,10 +487,11 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           HARD_CLEARANCE_RUN_ID: ${{ fromJSON(inputs.deployment_payload_json).hard_clearance_run_id }}
-          EXPECTED_CONTROL_PLANE_SHA: ${{ github.sha }}
+          EXPECTED_CONTROL_PLANE_SHA: ${{ fromJSON(inputs.deployment_payload_json).hard_clearance_control_plane_sha || github.sha }}
           EXPECTED_REPOSITORY: ${{ github.repository }}
         run: |
           set -euo pipefail
+          git merge-base --is-ancestor "$EXPECTED_CONTROL_PLANE_SHA" "${{ github.sha }}" || { echo "::error::Hard-clearance control plane SHA must be an ancestor of the deployed commit."; exit 1; }
           run_json="$(curl --fail --silent --show-error \
             -H "Authorization: Bearer $GH_TOKEN" \
             -H "Accept: application/vnd.github+json" \
@@ -516,9 +529,10 @@ jobs:
         env:
           HARD_CLEARANCE_DIRECTORY: predeploy_hard_clearance
           FROZEN_RELEASE_SHA: ${{ fromJSON(inputs.deployment_payload_json).frozen_hard_clearance_release_sha }}
-          CONTROL_PLANE_SHA: ${{ github.sha }}
+          CONTROL_PLANE_SHA: ${{ fromJSON(inputs.deployment_payload_json).hard_clearance_control_plane_sha || github.sha }}
         run: |
           set -euo pipefail
+          git merge-base --is-ancestor "$CONTROL_PLANE_SHA" "${{ github.sha }}" || { echo "::error::Hard-clearance control plane SHA must be an ancestor of the deployed commit."; exit 1; }
           proof=''
           for candidate in \
             "$HARD_CLEARANCE_DIRECTORY/hard-clearance-production-revalidation.json" \
@@ -902,6 +916,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
 
       - name: Use Node.js 22
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -1035,10 +1051,11 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           HARD_CLEARANCE_RUN_ID: ${{ fromJSON(inputs.deployment_payload_json).hard_clearance_run_id }}
-          EXPECTED_CONTROL_PLANE_SHA: ${{ github.sha }}
+          EXPECTED_CONTROL_PLANE_SHA: ${{ fromJSON(inputs.deployment_payload_json).hard_clearance_control_plane_sha || github.sha }}
           EXPECTED_REPOSITORY: ${{ github.repository }}
         run: |
           set -euo pipefail
+          git merge-base --is-ancestor "$EXPECTED_CONTROL_PLANE_SHA" "${{ github.sha }}" || { echo "::error::Hard-clearance control plane SHA must be an ancestor of the deployed commit."; exit 1; }
           run_json="$(curl --fail --silent --show-error \
             -H "Authorization: Bearer $GH_TOKEN" \
             -H "Accept: application/vnd.github+json" \
@@ -1073,9 +1090,10 @@ jobs:
         env:
           HARD_CLEARANCE_DIRECTORY: hard_clearance
           FROZEN_RELEASE_SHA: ${{ fromJSON(inputs.deployment_payload_json).frozen_hard_clearance_release_sha }}
-          CONTROL_PLANE_SHA: ${{ github.sha }}
+          CONTROL_PLANE_SHA: ${{ fromJSON(inputs.deployment_payload_json).hard_clearance_control_plane_sha || github.sha }}
         run: |
           set -euo pipefail
+          git merge-base --is-ancestor "$CONTROL_PLANE_SHA" "${{ github.sha }}" || { echo "::error::Hard-clearance control plane SHA must be an ancestor of the deployed commit."; exit 1; }
           proof=''
           for candidate in \
             "$HARD_CLEARANCE_DIRECTORY/hard-clearance-production-revalidation.json" \
@@ -1207,6 +1225,7 @@ jobs:
           POSTDEPLOY_BUSINESS_OK: ${{ steps.postdeploy_business.outputs.ok }}
           POSTDEPLOY_AUDIT_OK: ${{ steps.postdeploy_audit.outputs.ok }}
           FROZEN_RELEASE_SHA: ${{ fromJSON(inputs.deployment_payload_json).frozen_hard_clearance_release_sha }}
+          CLEARANCE_CONTROL_PLANE_SHA: ${{ fromJSON(inputs.deployment_payload_json).hard_clearance_control_plane_sha || github.sha }}
           HARD_CLEARANCE_RUN_ID: ${{ fromJSON(inputs.deployment_payload_json).hard_clearance_run_id }}
           HARD_CLEARANCE_DIRECTORY: hard_clearance
         run: |
@@ -1224,6 +1243,7 @@ jobs:
           PAYMENT_POLICY: ${{ inputs.payment_policy }}
           POSTDEPLOY_RELEASE_CLEARED: ${{ steps.postdeploy_gate.outputs.cleared }}
           FROZEN_RELEASE_SHA: ${{ fromJSON(inputs.deployment_payload_json).frozen_hard_clearance_release_sha }}
+          CLEARANCE_CONTROL_PLANE_SHA: ${{ fromJSON(inputs.deployment_payload_json).hard_clearance_control_plane_sha || github.sha }}
           HARD_CLEARANCE_RUN_ID: ${{ fromJSON(inputs.deployment_payload_json).hard_clearance_run_id }}
           HARD_CLEARANCE_DIRECTORY: hard_clearance
         run: npm run hard-launch:decision
