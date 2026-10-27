@@ -54,7 +54,7 @@ function readRevalidationProof(root, directory, errors) {
 export function verifyFrozenReleaseContext({ env = process.env, root = process.cwd() } = {}) {
   const errors = [];
   const frozenSha = String(env.FROZEN_RELEASE_SHA || '');
-  const controlSha = String(env.GITHUB_SHA || '');
+  const controlSha = String(env.CLEARANCE_CONTROL_PLANE_SHA || env.GITHUB_SHA || '');
   const runId = String(env.HARD_CLEARANCE_RUN_ID || '');
   const directory = String(env.HARD_CLEARANCE_DIRECTORY || '');
   if (!SHA_RE.test(frozenSha)) errors.push('FROZEN_RELEASE_SHA must be a full lowercase 40-character SHA');

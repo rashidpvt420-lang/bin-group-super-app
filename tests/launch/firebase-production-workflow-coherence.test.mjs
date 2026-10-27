@@ -526,6 +526,7 @@ test('postdeploy gate and decision receive the frozen release binding context', 
     const end = workflow.indexOf('\n      - name:', start + 1);
     const step = [workflow.slice(start, end < 0 ? undefined : end)];
     assert.match(step[0], /FROZEN_RELEASE_SHA: \$\{\{ fromJSON\(inputs\.deployment_payload_json\)\.frozen_hard_clearance_release_sha \}\}/);
+    assert.match(step[0], /CLEARANCE_CONTROL_PLANE_SHA: \$\{\{ fromJSON\(inputs\.deployment_payload_json\)\.hard_clearance_control_plane_sha \|\| github\.sha \}\}/);
     assert.match(step[0], /HARD_CLEARANCE_RUN_ID: \$\{\{ fromJSON\(inputs\.deployment_payload_json\)\.hard_clearance_run_id \}\}/);
     assert.match(step[0], /HARD_CLEARANCE_DIRECTORY: hard_clearance/);
   }
@@ -554,6 +555,20 @@ test('postdeploy installs Playwright Chromium before Gate 11 and Gate 11 admin l
   assert.match(spec, /mfaSignIn:finalize/);
   assert.match(spec, /E2E_FOUNDER_TOTP_SECRET is not configured/);
   assert.doesNotMatch(spec, /test\.skip\([^)]*MFA/i);
+});
+
+test('production deploy enforces hard-clearance control plane ancestry and provenance binding', () => {
+  const ancestorChecks = workflow.match(/git merge-base --is-ancestor "\$(EXPECTED_)?CONTROL_PLANE_SHA" "\$\{\{ github\.sha \}\}"/g) || [];
+  assert.equal(ancestorChecks.length, 4, 'Must enforce git merge-base ancestry in steps 16, 19, 1034, and 1072');
+
+  const provenanceControlShas = workflow.match(/EXPECTED_CONTROL_PLANE_SHA: \$\{\{ fromJSON\(inputs\.deployment_payload_json\)\.hard_clearance_control_plane_sha \|\| github\.sha \}\}/g) || [];
+  assert.equal(provenanceControlShas.length, 2, 'Provenance verifiers must accept hard_clearance_control_plane_sha with fallback');
+
+  const dualBindingControlShas = workflow.match(/(?<![A-Z_])CONTROL_PLANE_SHA: \$\{\{ fromJSON\(inputs\.deployment_payload_json\)\.hard_clearance_control_plane_sha \|\| github\.sha \}\}/g) || [];
+  assert.equal(dualBindingControlShas.length, 2, 'Dual-SHA bindings must accept hard_clearance_control_plane_sha with fallback');
+
+  const clearanceControlShas = workflow.match(/CLEARANCE_CONTROL_PLANE_SHA: \$\{\{ fromJSON\(inputs\.deployment_payload_json\)\.hard_clearance_control_plane_sha \|\| github\.sha \}\}/g) || [];
+  assert.equal(clearanceControlShas.length, 2, 'Postdeploy gate and decision must receive CLEARANCE_CONTROL_PLANE_SHA');
 });
 
 test('postdeploy clearance job uploads diagnostics on any failure before the clearance artifact', () => {
