@@ -99,7 +99,7 @@ export default function OwnerTicketsPage() {
                     <Typography variant="overline" sx={{ color: binThemeTokens.goldText, fontWeight: 900, letterSpacing: 4 }}>
                         {tx('owner.tickets.propOps', 'PROPERTY OPERATIONS')}
                     </Typography>
-                    <Typography variant="h4" fontWeight="950" color="#FFF">
+                    <Typography variant="h4" fontWeight="950" sx={{ color: binThemeTokens.textPrimary }}>
                         {tx('owner.tickets.maintTickets', 'Maintenance Tickets')}
                     </Typography>
                 </Box>

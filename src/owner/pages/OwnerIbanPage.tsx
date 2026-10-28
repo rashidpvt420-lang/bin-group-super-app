@@ -70,7 +70,7 @@ export default function OwnerIbanPage() {
     return (
         <Box>
             <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 4 }}>
-                <Typography variant="h5" fontWeight="950" sx={{ color: '#FFF' }}>IBAN / Payout Accounts</Typography>
+                <Typography variant="h5" fontWeight="950" sx={{ color: binThemeTokens.textPrimary }}>IBAN / Payout Accounts</Typography>
                 <Button variant="contained" onClick={() => setShowForm(!showForm)}
                     sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 900, borderRadius: 3 }}>
                     + Add Account

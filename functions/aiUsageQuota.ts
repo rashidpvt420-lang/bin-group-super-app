@@ -27,6 +27,10 @@ const DAILY_CAPABILITY_LIMITS: Record<AiCapability, number> = {
 const DAILY_TOTAL_LIMIT = 75;
 const RESERVATION_TTL_MS = 10 * 60 * 1000;
 const ADMIN_ROLES = new Set(["admin", "super_admin", "ceo", "operations_admin"]);
+// Admin approval writes "active" for Owners and Tenants but "APPROVED" for Brokers
+// (secureBrokerKycReview). Both are server-approved states; pending_*, invited,
+// suspended, rejected and unknown statuses stay blocked.
+const APPROVED_PROFILE_STATUSES = new Set(["active", "approved"]);
 
 function normalized(value: unknown) {
   return String(value || "").trim().toLowerCase();
@@ -57,7 +61,7 @@ async function authorizeAiCaller(auth: any, allowedRoles: ReadonlySet<string>) {
   if (
     !profileSnap.exists ||
     ["suspended", "rejected", "disabled", "inactive"].includes(profileStatus) ||
-    (!isAdmin && profileStatus !== "active")
+    (!isAdmin && !APPROVED_PROFILE_STATUSES.has(profileStatus))
   ) {
     throw new HttpsError("permission-denied", "An active, server-approved profile is required for AI services.");
   }

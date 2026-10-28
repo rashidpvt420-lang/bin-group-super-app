@@ -45,7 +45,17 @@
     { "collectionGroup": "staff_request_trackers", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "staffId", "order": "ASCENDING" }, { "fieldPath": "requestType", "order": "ASCENDING" }, { "fieldPath": "status", "order": "ASCENDING" }] },
     { "collectionGroup": "staff_exceptions", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "status", "order": "ASCENDING" }, { "fieldPath": "severity", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" }] },
     { "collectionGroup": "pdf_reports", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "staffUid", "order": "ASCENDING" }, { "fieldPath": "reportType", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" }] },
-    { "collectionGroup": "inventory", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "sku", "order": "ASCENDING" }, { "fieldPath": "quantityOnHand", "order": "ASCENDING" }] }
+    { "collectionGroup": "inventory", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "sku", "order": "ASCENDING" }, { "fieldPath": "quantityOnHand", "order": "ASCENDING" }] },
+    { "collectionGroup": "owner_approval_requests", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "ownerId", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" }] },
+    { "collectionGroup": "payment_transactions", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "tenantId", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" }] },
+    { "collectionGroup": "payment_transactions", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "tenantEmail", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" }] },
+    { "collectionGroup": "contract_renewal_watch", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "tenantId", "order": "ASCENDING" }, { "fieldPath": "daysRemaining", "order": "ASCENDING" }] },
+    { "collectionGroup": "contract_renewal_watch", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "tenantEmail", "order": "ASCENDING" }, { "fieldPath": "daysRemaining", "order": "ASCENDING" }] },
+    { "collectionGroup": "maintenanceTickets", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "assignedTechnicianId", "order": "ASCENDING" }, { "fieldPath": "status", "order": "ASCENDING" }, { "fieldPath": "updatedAt", "order": "DESCENDING" }] },
+    { "collectionGroup": "ownerBankAccounts", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "ownerId", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" }] },
+    { "collectionGroup": "transactions", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "ownerId", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" }] },
+    { "collectionGroup": "properties", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "ownerId", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" }] },
+    { "collectionGroup": "maintenanceTickets", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "propertyId", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" }] }
   ],
   "fieldOverrides": []
 }

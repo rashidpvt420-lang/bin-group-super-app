@@ -3,6 +3,7 @@ import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { defineSecret } from "firebase-functions/params";
 import * as admin from "firebase-admin";
 import { reserveAiUsageQuota, settleAiUsageQuota } from "./aiUsageQuota";
+import { protectedMediaUrl, type ProtectedMediaKind } from "./aiDesignMedia";
 
 if (!admin.apps.length) admin.initializeApp();
 
@@ -277,13 +278,11 @@ async function writePrivateMedia(path: string, buffer: Buffer, contentType: stri
   return safePath;
 }
 
-async function signedMediaUrl(path: string) {
+async function signedMediaUrl(path: string, kind: ProtectedMediaKind) {
   const safePath = cleanStoragePath(path);
-  const [url] = await bucket.file(safePath).getSignedUrl({
-    action: "read",
-    expires: Date.now() + PRIVATE_MEDIA_URL_TTL_MS,
+  return protectedMediaUrl(bucket, safePath, kind, PRIVATE_MEDIA_URL_TTL_MS, (message, detail) => {
+    console.warn(`aiDesignStudio: ${message}`, detail);
   });
-  return url;
 }
 
 async function resolveTenantContext(uid: string, email: string) {
@@ -327,8 +326,8 @@ async function resolveMedia(data: any) {
     ? data.generatedImagePaths.map(cleanStoragePath)
     : [];
   const [referenceImages, generatedImages] = await Promise.all([
-    Promise.all(referencePaths.map(signedMediaUrl)),
-    Promise.all(generatedPaths.map(signedMediaUrl)),
+    Promise.all(referencePaths.map((path: string) => signedMediaUrl(path, "reference"))),
+    Promise.all(generatedPaths.map((path: string) => signedMediaUrl(path, "generated"))),
   ]);
   return {
     referenceImages,

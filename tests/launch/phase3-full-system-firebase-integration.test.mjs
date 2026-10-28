@@ -69,7 +69,7 @@ test('Phase 3 AI and BIN Connect clients remain behind protected server authorit
   const binBackend = read('functions/binConnectOperations.ts');
 
   assert.match(sovereign, /httpsCallable\(functions, 'runSovereignAI'\)/);
-  assert.match(design, /httpsCallable\(functions, 'submitAIDesignRequest'\)/);
+  assert.match(design, /httpsCallable\(functions, 'submitAIDesignRequest'/);
   assert.match(designBackend, /submitAIDesignRequest = onCall/);
   assert.match(designBackend, /enforceAppCheck: true/);
   assert.match(binClient, /httpsCallable\(functions, 'createBinConnectThread'\)/);

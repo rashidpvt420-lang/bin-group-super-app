@@ -48,6 +48,8 @@ export default function OwnerApprovalCenterPage() {
   const [signOffs, setSignOffs] = React.useState<SignOffTicket[]>([]);
   const [notes, setNotes] = React.useState<Record<string, string>>({});
   const [notice, setNotice] = React.useState('');
+  const [requestsError, setRequestsError] = React.useState('');
+  const [signOffsError, setSignOffsError] = React.useState('');
   const [submittingId, setSubmittingId] = React.useState('');
   const mutationInFlightRef = React.useRef(false);
   const ownerId = auth.currentUser?.uid || '';
@@ -59,6 +61,7 @@ export default function OwnerApprovalCenterPage() {
     const unsubRequests = onSnapshot(q, (snap) => {
       const rows = snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<ApprovalRequest, 'id'>) }));
       setItems(rows);
+      setRequestsError('');
       setNotes((current) => {
         const next = { ...current };
         rows.forEach((row) => { if (next[row.id] === undefined) next[row.id] = row.decisionNote || ''; });
@@ -66,6 +69,7 @@ export default function OwnerApprovalCenterPage() {
       });
     }, (err) => {
       console.warn('[OwnerApprovalCenter] approval requests listener failed:', err);
+      setRequestsError(err?.message || 'Unable to load quote and approval requests.');
       setItems([]);
     });
 
@@ -75,8 +79,10 @@ export default function OwnerApprovalCenterPage() {
         .map((d) => ({ id: d.id, ...(d.data() as Omit<SignOffTicket, 'id'>) }))
         .filter((ticket) => isOwnerPendingSignOff(ticket));
       setSignOffs(rows);
+      setSignOffsError('');
     }, (err) => {
       console.warn('[OwnerApprovalCenter] ticket sign-off listener failed:', err);
+      setSignOffsError(err?.message || 'Unable to load ticket sign-offs.');
       setSignOffs([]);
     });
 
@@ -127,6 +133,8 @@ export default function OwnerApprovalCenterPage() {
           Review completed ticket sign-offs, quote requests, emergency overrides, and standard scopes before BIN GROUP closes or awards work.
         </Typography>
       </Stack>
+      {requestsError && <Alert severity="error" data-testid="owner-approvals-load-error" sx={{ mb: 3 }}>Quote and approval requests could not be loaded. The list below may be incomplete, so do not assume nothing is waiting: {requestsError}</Alert>}
+      {signOffsError && <Alert severity="error" data-testid="owner-signoffs-load-error" sx={{ mb: 3 }}>Ticket sign-offs could not be loaded. The list below may be incomplete: {signOffsError}</Alert>}
       {notice && <Alert severity={notice.includes('Failed') ? 'warning' : 'success'} sx={{ mb: 3 }}>{notice}</Alert>}
 
       <Stack spacing={1} sx={{ mb: 2 }}>
@@ -138,7 +146,7 @@ export default function OwnerApprovalCenterPage() {
         </Typography>
       </Stack>
       <Grid container spacing={2} sx={{ mb: 4 }}>
-        {signOffs.length === 0 && (
+        {signOffs.length === 0 && !signOffsError && (
           <Grid item xs={12}>
             <Alert severity="info">No completed tickets are waiting for owner sign-off.</Alert>
           </Grid>
@@ -189,7 +197,7 @@ export default function OwnerApprovalCenterPage() {
         </Typography>
       </Stack>
       <Grid container spacing={2}>
-        {items.length === 0 && (
+        {items.length === 0 && !requestsError && (
           <Grid item xs={12}>
             <Alert severity="info">No pending cost / quote approval requests for this owner account.</Alert>
           </Grid>

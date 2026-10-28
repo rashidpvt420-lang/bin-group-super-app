@@ -145,26 +145,12 @@ export function useOwnerCommandCounts(): OwnerCommandCounts {
       console.warn('[OwnerCommandCounts] ticket query failed:', err);
     }
 
-    try {
-      unsubs.push(onSnapshot(query(collection(db, 'owner_documents'), where('ownerId', '==', ownerId), limit(100)), (snap) => {
-        const now = Date.now();
-        const next30Days = now + 30 * 24 * 60 * 60 * 1000;
-        partial.expiringDocuments = snap.docs.filter((docSnap) => {
-          const data = docSnap.data();
-          const expiry = data?.expiryDate || data?.expiresAt || data?.validTo;
-          const ms = toMillis(expiry) ?? 0;
-          return Number.isFinite(ms) && ms >= now && ms <= next30Days;
-        }).length;
-        publish();
-      }, (err) => {
-        console.warn('[OwnerCommandCounts] document listener failed:', err);
-        failed.add('documents');
-        partial.expiringDocuments = 0;
-        publish();
-      }));
-    } catch (err) {
-      console.warn('[OwnerCommandCounts] document query failed:', err);
-    }
+    // Expiring-documents count is intentionally NOT read here any more. It used to
+    // listen to `owner_documents`, a collection with no Firestore rule (every read was
+    // denied, which put a permanent "documents" failure banner on Owner Home). The only
+    // owner-readable document source is the `listUnifiedDocumentVault` callable, and
+    // its artifacts carry no expiry date, so there is no truthful count to show.
+    // `expiringDocuments` therefore stays 0 and the tile is hidden - never a fake number.
 
     return () => unsubs.forEach((unsub) => unsub());
   }, [user?.uid]);
