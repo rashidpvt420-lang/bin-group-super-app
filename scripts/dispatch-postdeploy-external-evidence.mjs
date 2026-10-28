@@ -220,7 +220,11 @@ async function dispatchChild(definition, sourceRunId, sourceSha) {
   if (completed?.conclusion !== 'success') {
     fail(`${definition.key} evidence child run ${childRunId} concluded ${completed?.conclusion || 'unknown'}`);
   }
-  if (completed?.name !== definition.workflowName || completed?.path !== definition.workflowPath) {
+  // Each child workflow declares `run-name: <workflow name> source-deploy-<id>`, so the Actions API
+  // reports the run `name` as the exact run name (not the bare workflow name). Bind to the exact
+  // expected run name, which also pins the run to this source deployment, plus the exact workflow path.
+  const expectedRunName = `${definition.workflowName} ${marker}`;
+  if (completed?.name !== expectedRunName || completed?.path !== definition.workflowPath) {
     fail(`${definition.key} evidence child workflow identity changed`);
   }
   if (completed?.head_sha !== sourceSha || completed?.head_branch !== 'main') {
