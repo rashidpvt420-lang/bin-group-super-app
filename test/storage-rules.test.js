@@ -9,6 +9,12 @@ import { doc, setDoc } from 'firebase/firestore';
 import { getBytes, ref, uploadString } from 'firebase/storage';
 
 let testEnv;
+// N-05: Admin-tier Storage authority needs an ID token minted with a second factor.
+const MFA = { firebase: { sign_in_second_factor: 'phone' } };
+const ADMIN_MFA = { role: 'admin', admin: true, ...MFA };
+const ADMIN_NO_MFA = { role: 'admin', admin: true };
+const CEO_MFA = { role: 'ceo', ceo: true, ...MFA };
+const CEO_NO_MFA = { role: 'ceo', ceo: true };
 // Storage rules cross-read Firestore in the emulator's project. Match the
 // project selected by emulators:exec, including isolated demo-project runs.
 const projectId = process.env.GCLOUD_PROJECT || 'bin-group-57c60';
@@ -40,12 +46,12 @@ describe('Storage Security Rules', () => {
     await testEnv.withSecurityRulesDisabled(async (context) => {
       await uploadString(ref(context.storage(), path), '%PDF-1.7 receipt', 'raw', { contentType: 'application/pdf' });
     });
-    for (const [uid, claims] of [['owner_a', { role: 'owner' }], ['tenant_a', { role: 'tenant' }], ['admin_a', { role: 'admin', admin: true }]]) {
+    for (const [uid, claims] of [['owner_a', { role: 'owner' }], ['tenant_a', { role: 'tenant' }], ['admin_a', ADMIN_MFA]]) {
       const storage = testEnv.authenticatedContext(uid, claims).storage();
       await assertFails(uploadString(ref(storage, path), 'forged receipt', 'raw', { contentType: 'application/pdf' }));
       await assertFails(uploadString(ref(storage, `${path}_new`), 'forged receipt', 'raw', { contentType: 'application/pdf' }));
     }
-    const adminStorage = testEnv.authenticatedContext('admin_a', { role: 'admin', admin: true }).storage();
+    const adminStorage = testEnv.authenticatedContext('admin_a', ADMIN_MFA).storage();
     await assertSucceeds(getBytes(ref(adminStorage, path)));
   });
 
@@ -259,13 +265,121 @@ describe('Storage Security Rules', () => {
     for (const [uid, claims] of [
       ['staff_a', { role: 'technician' }],
       ['hr_a', { role: 'hr_admin' }],
-      ['admin_a', { role: 'admin', admin: true }],
+      ['admin_a', ADMIN_MFA],
     ]) {
       const storage = testEnv.authenticatedContext(uid, claims).storage();
       await assertFails(getBytes(ref(storage, path)));
       await assertFails(uploadString(ref(storage, path), 'rewrite', 'raw', { contentType: 'application/pdf' }));
       await assertFails(uploadString(ref(storage, `privateHrDocuments/staff_a/new-${uid}.pdf`), 'new', 'raw', { contentType: 'application/pdf' }));
     }
+  });
+
+  describe('N-05: Admin and CEO Storage authority requires a second factor', () => {
+    const seedFiles = async () => {
+      await testEnv.withSecurityRulesDisabled(async (context) => {
+        const db = context.firestore();
+        await setDoc(doc(db, 'contracts/c_mfa'), { ownerId: 'owner_mfa' });
+        await setDoc(doc(db, 'invoices/i_mfa'), { ownerId: 'owner_mfa' });
+        const storage = context.storage();
+        const pdf = { contentType: 'application/pdf' };
+        for (const path of [
+          'contracts/c_mfa/contract.pdf',
+          'invoices/i_mfa/invoice.pdf',
+          'brokerDocuments/broker_mfa/emirates_id.pdf',
+          'staffDocuments/staff_mfa/id.pdf',
+          'hrDocuments/staff_mfa/offer.pdf',
+          'payment-references/owners/owner_mfa/pay_1/receipt.pdf',
+          'design-payment-receipts/design_mfa/receipt_hash',
+          'marketing/banner.pdf',
+        ]) {
+          await uploadString(ref(storage, path), 'seed', 'raw', pdf);
+        }
+      });
+    };
+    const readPaths = [
+      'contracts/c_mfa/contract.pdf',
+      'invoices/i_mfa/invoice.pdf',
+      'brokerDocuments/broker_mfa/emirates_id.pdf',
+      'staffDocuments/staff_mfa/id.pdf',
+      'hrDocuments/staff_mfa/offer.pdf',
+      'payment-references/owners/owner_mfa/pay_1/receipt.pdf',
+      'design-payment-receipts/design_mfa/receipt_hash',
+      'marketing/banner.pdf',
+    ];
+
+    for (const [label, claims] of [['Admin', ADMIN_NO_MFA], ['CEO', CEO_NO_MFA], ['legacy admin flag only', { admin: true }]]) {
+      it(`${label} WITHOUT a second factor is denied on every privileged read path`, async () => {
+        await seedFiles();
+        const storage = testEnv.authenticatedContext('admin_no_mfa', claims).storage();
+        for (const path of readPaths) {
+          await assertFails(getBytes(ref(storage, path)));
+        }
+      });
+
+      it(`${label} WITHOUT a second factor cannot write contracts, invoices, KYC, staff, HR or payment references`, async () => {
+        const storage = testEnv.authenticatedContext('admin_no_mfa', claims).storage();
+        const pdf = { contentType: 'application/pdf' };
+        await assertFails(uploadString(ref(storage, 'contracts/c_mfa/new.pdf'), 'x', 'raw', pdf));
+        await assertFails(uploadString(ref(storage, 'invoices/i_mfa/new.pdf'), 'x', 'raw', pdf));
+        await assertFails(uploadString(ref(storage, 'staffDocuments/staff_mfa/new.pdf'), 'x', 'raw', pdf));
+        await assertFails(uploadString(ref(storage, 'hrDocuments/staff_mfa/new.pdf'), 'x', 'raw', pdf));
+        await assertFails(uploadString(ref(storage, 'marketing/new.pdf'), 'x', 'raw', pdf));
+        await assertFails(uploadString(ref(storage, 'brokerDocuments/broker_mfa/new.pdf'), 'x', 'raw', {
+          ...pdf,
+          customMetadata: { brokerId: 'broker_mfa', documentType: 'passport' },
+        }));
+        await assertFails(uploadString(ref(storage, 'payment-references/owners/owner_mfa/pay_2/receipt.pdf'), 'x', 'raw', {
+          ...pdf,
+          customMetadata: {
+            ownerUid: 'owner_mfa',
+            paymentId: 'pay_2',
+            evidenceType: 'owner_payment_receipt',
+            receiptHash: 'b'.repeat(64),
+          },
+        }));
+      });
+    }
+
+    it('a second-factor token with a non-admin role gains nothing', async () => {
+      await seedFiles();
+      const storage = testEnv.authenticatedContext('tenant_mfa', { role: 'tenant', ...MFA }).storage();
+      for (const path of readPaths) {
+        await assertFails(getBytes(ref(storage, path)));
+      }
+    });
+
+    for (const [label, claims] of [['Admin', ADMIN_MFA], ['CEO', CEO_MFA]]) {
+      it(`${label} WITH a second factor keeps the same privileged access as before`, async () => {
+        await seedFiles();
+        const storage = testEnv.authenticatedContext('admin_mfa', claims).storage();
+        for (const path of readPaths) {
+          await assertSucceeds(getBytes(ref(storage, path)));
+        }
+        const pdf = { contentType: 'application/pdf' };
+        await assertSucceeds(uploadString(ref(storage, 'contracts/c_mfa/new.pdf'), 'x', 'raw', pdf));
+        await assertSucceeds(uploadString(ref(storage, 'invoices/i_mfa/new.pdf'), 'x', 'raw', pdf));
+        await assertSucceeds(uploadString(ref(storage, 'hrDocuments/staff_mfa/new.pdf'), 'x', 'raw', pdf));
+      });
+    }
+
+    it('HR-role tier is unchanged: HR staff keep HR document access without any second factor', async () => {
+      await seedFiles();
+      const storage = testEnv.authenticatedContext('hr_nomfa', { role: 'hr_admin' }).storage();
+      const pdf = { contentType: 'application/pdf' };
+      await assertSucceeds(getBytes(ref(storage, 'hrDocuments/staff_mfa/offer.pdf')));
+      await assertSucceeds(getBytes(ref(storage, 'staffDocuments/staff_mfa/id.pdf')));
+      await assertSucceeds(uploadString(ref(storage, 'hrDocuments/staff_mfa/hr_new.pdf'), 'x', 'raw', pdf));
+      await assertFails(getBytes(ref(storage, 'contracts/c_mfa/contract.pdf')));
+      await assertFails(getBytes(ref(storage, 'marketing/banner.pdf')));
+    });
+
+    it('owners keep access to their own contract, invoice and payment reference without any second factor', async () => {
+      await seedFiles();
+      const storage = testEnv.authenticatedContext('owner_mfa', { role: 'owner' }).storage();
+      await assertSucceeds(getBytes(ref(storage, 'contracts/c_mfa/contract.pdf')));
+      await assertSucceeds(getBytes(ref(storage, 'invoices/i_mfa/invoice.pdf')));
+      await assertSucceeds(getBytes(ref(storage, 'payment-references/owners/owner_mfa/pay_1/receipt.pdf')));
+    });
   });
 
 });
