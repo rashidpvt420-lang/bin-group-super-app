@@ -71,6 +71,38 @@ jobs:
           [[ "$AUTHORIZED_FOUNDER_ACTORS" == *"github-actions[bot]"* ]]
           [[ "$CONFIRMATION" == "VERIFY_PRIVILEGED_ACCESS_ROTATION" ]]
 
+      - name: Bind exact release and control-plane identity for the dual-SHA publisher
+        # The publisher and finalizer require the release SHA, the control-plane SHA, the control-plane scope
+        # verdict and the numeric run identity as separate, exact values. This deployment-triggered workflow
+        # always evidences the deployed main SHA itself, so release == control plane == the trusted deployed
+        # SHA (the "exact same-SHA pair" case of the manual workflow). Every value is validated here and
+        # bound to the verified trusted-source record; nothing is defaulted or accepted unchecked.
+        env:
+          TARGET_SHA: ${{ inputs.expected_commit_sha }}
+        run: |
+          set -euo pipefail
+          [[ "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$GITHUB_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$TARGET_SHA" == "$GITHUB_SHA" ]]
+          [[ "$GITHUB_RUN_ID" =~ ^[0-9]+$ ]]
+          [[ "$GITHUB_RUN_ATTEMPT" =~ ^[0-9]+$ ]]
+          [[ "$SOURCE_DEPLOY_RUN_ID" =~ ^[0-9]+$ ]]
+          [[ "$TRUSTED_PRODUCTION_DEPLOY_EVIDENCE" == "true" ]]
+          node --input-type=module <<'NODE'
+          import { readFileSync } from 'node:fs';
+          const proof = JSON.parse(readFileSync('launch_package/trusted-production-deploy-source.json', 'utf8'));
+          const failures = [];
+          if (proof.status !== 'passed') failures.push('trusted deploy source proof is not passed');
+          if (proof.commitSha !== process.env.TARGET_SHA) failures.push('trusted deploy source commit does not match the evidence commit');
+          if (String(proof.sourceDeployRunId) !== process.env.SOURCE_DEPLOY_RUN_ID) failures.push('trusted deploy source run does not match');
+          if (failures.length) { failures.forEach((failure) => console.error(`::error::${failure}`)); process.exit(1); }
+          NODE
+          {
+            echo "PRODUCTION_RELEASE_SHA=$TARGET_SHA"
+            echo "CONTROL_PLANE_COMMIT_SHA=$GITHUB_SHA"
+            echo "CONTROL_PLANE_SCOPE_VERIFIED=true"
+          } >> "$GITHUB_ENV"
+
       - name: Authenticate Google Cloud
         uses: google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed # v2
         with:

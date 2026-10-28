@@ -156,8 +156,8 @@ export default function OwnerProfilePage() {
 
   return (
     <Box sx={{ direction: isRTL ? 'rtl' : 'ltr' }}>
-      <Typography variant="h4" fontWeight="950" sx={{ color: '#FFF', mb: 1, textAlign: isRTL ? 'right' : 'left' }}>{label('Owner Profile', 'ملف المالك')}</Typography>
-      <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.45)', mb: 4, textAlign: isRTL ? 'right' : 'left' }}>{label('Identity and billing changes are verified against Firebase Auth and Owner KYC records before they are accepted.', 'يتم التحقق من تغييرات الهوية والفوترة مقابل مصادقة Firebase وسجلات اعرف عميلك للمالك قبل قبولها.')}</Typography>
+      <Typography variant="h4" fontWeight="950" sx={{ color: binThemeTokens.textPrimary, mb: 1, textAlign: isRTL ? 'right' : 'left' }}>{label('Owner Profile', 'ملف المالك')}</Typography>
+      <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary, mb: 4, textAlign: isRTL ? 'right' : 'left' }}>{label('Identity and billing changes are verified against Firebase Auth and Owner KYC records before they are accepted.', 'يتم التحقق من تغييرات الهوية والفوترة مقابل مصادقة Firebase وسجلات اعرف عميلك للمالك قبل قبولها.')}</Typography>
       {notice && <Alert severity={notice.type} sx={{ mb: 3 }} onClose={() => setNotice(null)}>{notice.text}</Alert>}
 
       <Paper sx={{ p: 4, mb: 4, border: '1px solid rgba(255,255,255,0.06)', borderRadius: 6, ...profileCoverSx(profileCover) }}>

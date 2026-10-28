@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
-    Alert, Box, Button, CircularProgress, Divider, IconButton, InputAdornment,
-    LinearProgress, Paper, Stack, TextField, Typography,
+    Alert, Box, Button, Checkbox, CircularProgress, Divider, FormControlLabel, IconButton, InputAdornment,
+    LinearProgress, Link, Paper, Stack, TextField, Typography,
 } from '@mui/material';
 import {
     ArrowBack, ArrowForward, Edit, Google, Lock, Login, Mail, MarkEmailRead, Visibility, VisibilityOff,
@@ -23,6 +23,7 @@ import { auth, functions, httpsCallable } from '../../lib/firebase';
 import { useOnboardingStore } from '../../store/onboardingStore';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
+import { isNativeApp } from '../../lib/nativePlatform';
 import { entriesMatch,
     existingRoleConflict,
     OWNER_PASSWORD_MIN_LENGTH,
@@ -80,6 +81,8 @@ export default function AccountCreationStep({ onBack, onNext, brokerUid = "" }: 
     const [loading, setLoading] = useState(false);
     const [checkingVerification, setCheckingVerification] = useState(false);
     const [notice, setNotice] = useState<Notice | null>(null);
+    const [acceptedLegal, setAcceptedLegal] = useState(false);
+    const showGoogle = !isNativeApp();
     const [now, setNow] = useState(() => Date.now());
     const continuingRef = useRef(false);
 
@@ -151,11 +154,14 @@ export default function AccountCreationStep({ onBack, onNext, brokerUid = "" }: 
         return { message: `${errorText('onboarding.error.generic', 'Account creation failed. Please try again.')} [${code}]`, type: 'error' };
     };
 
+    const legalConsentRequiredMessage = copy('Please confirm that you have read the Terms of Service and Privacy Policy before creating an account.', 'يرجى تأكيد أنك قرأت شروط الخدمة وسياسة الخصوصية قبل إنشاء الحساب.');
+
     const validateCreate = () => {
         if (!fullName || !mobile || !profileEmail) return copy('Complete your name, mobile and email in the previous section first.', 'أكمل الاسم والهاتف والبريد في القسم السابق أولاً.');
         if (!/^\S+@\S+\.\S+$/.test(profileEmail)) return errorText('onboarding.error.invalid_email', 'Enter a valid email address.');
         if (!strength.meetsMinimum) return errorText('onboarding.error.weak_password', 'Password must be at least 8 characters.');
         if (!entriesMatch(password, confirmPassword)) return errorText('onboarding.error.password_mismatch', 'Passwords do not match.');
+        if (!acceptedLegal) return legalConsentRequiredMessage;
         return null;
     };
 
@@ -198,6 +204,12 @@ export default function AccountCreationStep({ onBack, onNext, brokerUid = "" }: 
 
     const handleGoogle = async () => {
         setNotice(null);
+        if (isNativeApp()) {
+            setNotice({ message: copy('Google sign-in is not available in this app. Use your email and password instead.', 'تسجيل الدخول عبر Google غير متاح في هذا التطبيق. استخدم البريد الإلكتروني وكلمة المرور.'), type: 'info' });
+            return;
+        }
+        // Google sign-in can create a new account, so it needs the same consent as email sign-up.
+        if (!acceptedLegal) { setNotice({ message: legalConsentRequiredMessage, type: 'error' }); return; }
         setLoading(true);
         const provider = new GoogleAuthProvider();
         provider.setCustomParameters({ prompt: 'select_account', ...(profileEmail ? { login_hint: profileEmail } : {}) });
@@ -206,7 +218,11 @@ export default function AccountCreationStep({ onBack, onNext, brokerUid = "" }: 
             await afterSignIn(result.user);
         } catch (err: unknown) {
             const code = authCode(err);
-            if (['auth/popup-blocked', 'auth/cancelled-popup-request', 'auth/web-storage-unsupported', 'auth/operation-not-supported-in-this-environment'].includes(code)) {
+            if (code === 'auth/operation-not-supported-in-this-environment') {
+                setNotice({ message: copy('Google sign-in is not available in this app. Use your email and password instead.', 'تسجيل الدخول عبر Google غير متاح في هذا التطبيق. استخدم البريد الإلكتروني وكلمة المرور.'), type: 'info' });
+                return;
+            }
+            if (['auth/popup-blocked', 'auth/cancelled-popup-request', 'auth/web-storage-unsupported'].includes(code)) {
                 await signInWithRedirect(auth, provider);
                 return;
             }
@@ -393,6 +409,27 @@ export default function AccountCreationStep({ onBack, onNext, brokerUid = "" }: 
     }
 
     const strengthLabel = [copy('Too short', 'قصيرة جداً'), copy('Weak', 'ضعيفة'), copy('Fair', 'مقبولة'), copy('Good', 'جيدة'), copy('Strong', 'قوية')][strength.score];
+    const legalConsent = (
+        <FormControlLabel
+            sx={{ alignItems: 'flex-start', m: 0, textAlign: isRTL ? 'right' : 'left' }}
+            control={(
+                <Checkbox
+                    checked={acceptedLegal}
+                    onChange={(event) => setAcceptedLegal(event.target.checked)}
+                    inputProps={{ 'aria-label': copy('I agree to the Terms of Service and Privacy Policy', 'أوافق على شروط الخدمة وسياسة الخصوصية'), 'data-testid': 'owner-legal-consent' } as React.InputHTMLAttributes<HTMLInputElement>}
+                    sx={{ pt: 0.5 }}
+                />
+            )}
+            label={(
+                <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary }}>
+                    {copy('I have read and agree to the', 'لقد قرأت وأوافق على')}{' '}
+                    <Link href="/terms.html" sx={{ color: binThemeTokens.goldText, fontWeight: 800 }}>{copy('Terms of Service', 'شروط الخدمة')}</Link>
+                    {' '}{copy('and', 'و')}{' '}
+                    <Link href="/privacy.html" sx={{ color: binThemeTokens.goldText, fontWeight: 800 }}>{copy('Privacy Policy', 'سياسة الخصوصية')}</Link>.
+                </Typography>
+            )}
+        />
+    );
     const visibilityToggle = (
         <InputAdornment position="end">
             <IconButton aria-label={showPassword ? copy('Hide password', 'إخفاء كلمة المرور') : copy('Show password', 'إظهار كلمة المرور')} onClick={() => setShowPassword((value) => !value)} edge="end">
@@ -416,6 +453,8 @@ export default function AccountCreationStep({ onBack, onNext, brokerUid = "" }: 
                         </Stack>
                     </Box>
 
+                    {legalConsent}
+
                     {mode === 'existing' ? (
                         <>
                             <TextField
@@ -428,9 +467,11 @@ export default function AccountCreationStep({ onBack, onNext, brokerUid = "" }: 
                             <Button variant="contained" fullWidth onClick={handleSignIn} disabled={loading} startIcon={<Login />} sx={{ py: 1.4, borderRadius: 100, fontWeight: 950 }}>
                                 {loading ? <CircularProgress size={22} color="inherit" /> : copy('Sign in and continue', 'تسجيل الدخول والمتابعة')}
                             </Button>
-                            <Button variant="outlined" fullWidth onClick={handleGoogle} disabled={loading} startIcon={<Google />} sx={{ py: 1.2, borderRadius: 100, fontWeight: 900 }}>
-                                {copy('Continue with Google', 'المتابعة باستخدام Google')}
-                            </Button>
+                            {showGoogle && (
+                                <Button variant="outlined" fullWidth onClick={handleGoogle} disabled={loading || !acceptedLegal} startIcon={<Google />} sx={{ py: 1.2, borderRadius: 100, fontWeight: 900 }}>
+                                    {copy('Continue with Google', 'المتابعة باستخدام Google')}
+                                </Button>
+                            )}
                             <Stack direction={isRTL ? 'row-reverse' : 'row'} justifyContent="space-between" flexWrap="wrap" gap={1}>
                                 <Button variant="text" onClick={handleReset} disabled={loading} sx={{ color: binThemeTokens.goldText, fontWeight: 900 }}>{copy('Forgot password?', 'نسيت كلمة المرور؟')}</Button>
                                 <Button variant="text" onClick={() => { setMode('create'); setNotice(null); onBack(); }} sx={{ color: binThemeTokens.goldText, fontWeight: 900 }}>{copy('Use a different email', 'استخدام بريد مختلف')}</Button>
@@ -459,7 +500,7 @@ export default function AccountCreationStep({ onBack, onNext, brokerUid = "" }: 
                                 InputProps={{ startAdornment: <InputAdornment position="start"><Lock sx={{ color: binThemeTokens.goldText }} /></InputAdornment> }}
                             />
                             {noticeBlock}
-                            <Button variant="contained" fullWidth onClick={handleCreate} disabled={loading} endIcon={!isRTL ? <ArrowForward /> : undefined} sx={{ py: 1.4, borderRadius: 100, fontWeight: 950 }}>
+                            <Button variant="contained" fullWidth onClick={handleCreate} disabled={loading || !acceptedLegal} endIcon={!isRTL ? <ArrowForward /> : undefined} sx={{ py: 1.4, borderRadius: 100, fontWeight: 950 }}>
                                 {loading ? <CircularProgress size={22} color="inherit" /> : copy('Create account and verify email', 'إنشاء الحساب والتحقق من البريد')}
                             </Button>
                             <Divider />

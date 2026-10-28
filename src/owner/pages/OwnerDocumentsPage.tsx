@@ -50,33 +50,33 @@ export default function OwnerDocumentsPage() {
 
   return (
     <Box sx={{ pb: 6 }}>
-      <Typography variant="h4" fontWeight={950} color="#FFF">Owner Document Vault</Typography>
-      <Typography variant="body2" sx={{ color: 'rgba(255,255,255,.55)', mt: 1, mb: 4 }}>Contracts, final quotes, invoices, property reports and inspection records authorized for this Owner.</Typography>
+      <Typography variant="h4" fontWeight={950} sx={{ color: binThemeTokens.textPrimary }}>Owner Document Vault</Typography>
+      <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary, mt: 1, mb: 4 }}>Contracts, final quotes, invoices, property reports and inspection records authorized for this Owner.</Typography>
 
       {error && <Alert severity="error" sx={{ mb: 3 }}>{error}</Alert>}
 
       {documents.length === 0 ? (
-        <Paper sx={{ p: 7, textAlign: 'center', bgcolor: 'rgba(15,23,42,.45)', border: '1px dashed rgba(255,255,255,.08)', borderRadius: 5 }}>
-          <FolderOpen size={44} color="rgba(255,255,255,.15)" />
-          <Typography sx={{ mt: 2, color: 'rgba(255,255,255,.55)', fontWeight: 900 }}>NO AUTHORIZED DOCUMENTS YET</Typography>
+        <Paper sx={{ p: 7, textAlign: 'center', bgcolor: binThemeTokens.softCanvas, border: `1px dashed ${binThemeTokens.platinumDark}`, borderRadius: 5 }}>
+          <FolderOpen size={44} color={binThemeTokens.platinumDark} />
+          <Typography sx={{ mt: 2, color: binThemeTokens.textSecondary, fontWeight: 900 }}>NO AUTHORIZED DOCUMENTS YET</Typography>
         </Paper>
       ) : (
         <Grid container spacing={2.5}>
           {documents.map((doc) => (
             <Grid item xs={12} md={6} key={doc.artifactId}>
-              <Paper sx={{ p: 3, bgcolor: 'rgba(15,23,42,.55)', border: '1px solid rgba(255,255,255,.07)', borderRadius: 4 }}>
+              <Paper sx={{ p: 3, bgcolor: binThemeTokens.card, border: `1px solid ${binThemeTokens.border}`, borderRadius: 4 }}>
                 <Stack direction="row" spacing={1.5} alignItems="center">
-                  <FileText size={20} color={binThemeTokens.gold} />
+                  <FileText size={20} color={binThemeTokens.goldText} />
                   <Box sx={{ minWidth: 0, flex: 1 }}>
-                    <Typography color="#FFF" fontWeight={900} noWrap>{doc.title}</Typography>
-                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,.4)' }}>{doc.sourceCollection} · {doc.sourceId}</Typography>
+                    <Typography fontWeight={900} noWrap sx={{ color: binThemeTokens.textPrimary }}>{doc.title}</Typography>
+                    <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary }}>{doc.sourceCollection} · {doc.sourceId}</Typography>
                   </Box>
-                  <ShieldCheck size={16} color="#10b981" />
+                  <ShieldCheck size={16} color="#166534" />
                 </Stack>
                 <Button
                   fullWidth
                   variant="outlined"
-                  sx={{ mt: 2.5, color: binThemeTokens.goldText, borderColor: 'rgba(198,167,94,.35)', fontWeight: 900 }}
+                  sx={{ mt: 2.5, color: binThemeTokens.goldText, borderColor: binThemeTokens.goldText, fontWeight: 900 }}
                   disabled={!doc.storagePath || opening === doc.artifactId}
                   onClick={() => void openDocument(doc.artifactId)}
                 >

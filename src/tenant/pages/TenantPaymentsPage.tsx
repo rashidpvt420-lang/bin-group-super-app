@@ -59,6 +59,7 @@ export default function TenantPaymentsPage() {
 
     const [payments, setPayments] = useState<Payment[]>([]);
     const [loading, setLoading] = useState(true);
+    const [loadError, setLoadError] = useState('');
     const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
     const [uploading, setUploading] = useState(false);
     const [receiptFile, setReceiptFile] = useState<File | null>(null);
@@ -94,9 +95,14 @@ export default function TenantPaymentsPage() {
                     receiptHash: d.data().receiptHash,
                     notes: d.data().notes,
                 })));
+                setLoadError('');
                 setLoading(false);
             },
-            () => setLoading(false)
+            (err) => {
+                console.error('[TenantPayments] payment listener (uid) failed:', err);
+                setLoadError(err?.message || 'Unable to load your payment records.');
+                setLoading(false);
+            }
         ));
 
         // Also listen by email
@@ -127,7 +133,11 @@ export default function TenantPaymentsPage() {
                     });
                     setLoading(false);
                 },
-                () => {}
+                (err) => {
+                    console.error('[TenantPayments] payment listener (email) failed:', err);
+                    setLoadError(err?.message || 'Unable to load some of your payment records.');
+                    setLoading(false);
+                }
             ));
         }
 
@@ -276,6 +286,11 @@ export default function TenantPaymentsPage() {
                         <CreditCard size={20} color={binThemeTokens.gold} /> Payment Transactions
                     </Typography>
                 </Box>
+                {loadError && (
+                    <Alert severity="error" role="alert" data-testid="tenant-payments-load-error" sx={{ m: 3 }}>
+                        Payment records could not be loaded, so this list may be incomplete: {loadError}
+                    </Alert>
+                )}
                 {loading ? (
                     <Box sx={{ p: 6, textAlign: 'center' }}><CircularProgress sx={{ color: binThemeTokens.gold }} /></Box>
                 ) : payments.length === 0 ? (

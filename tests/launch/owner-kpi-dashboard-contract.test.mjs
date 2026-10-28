@@ -7,7 +7,7 @@ test('owner dashboard shows server KPI tiles first and surfaces failed sources i
   assert.ok(!page.includes('owner.simple.contractFirst'), 'no marketing banner (R4)');
   assert.match(page, /owner-command-counts-failed/);
   const hook = await readFile('src/owner/hooks/useOwnerCommandCounts.ts', 'utf8');
-  assert.equal((hook.match(/failed\.add\('/g) || []).length, 3);
+  assert.equal((hook.match(/failed\.add\('/g) || []).length, 2); // approvals + tickets; the rule-less owner_documents source was removed
   const tiles = await readFile('src/owner/components/OwnerKpiTiles.tsx', 'utf8');
   assert.match(tiles, /Could not load/);
   assert.match(tiles, /<StatGrid>/, 'tiles use the R4 stat-tile look');

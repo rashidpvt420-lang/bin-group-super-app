@@ -32,6 +32,7 @@ import {
   type DesignExecutionDetail,
 } from '../utils/aiDesignStudioWorkflow';
 import { functions, httpsCallable } from '../lib/firebase';
+import { DESIGN_SUBMIT_TIMEOUT_MS, designErrorMessage } from '../lib/designStudioErrors';
 import { STATUS_TONES, formatStatusLabel } from '../theme/statusColors';
 
 type PreviewImage = {
@@ -114,19 +115,6 @@ const createDesignRequestId = () => {
   browserCrypto.getRandomValues(bytes);
   return `design_${Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('')}`;
 };
-
-function designErrorMessage(error: unknown) {
-  const details = error as { code?: string; message?: string; details?: string };
-  const code = String(details?.code || '').toLowerCase();
-  const message = String(details?.details || details?.message || '').toLowerCase();
-  if (code.includes('unauthenticated') || message.includes('sign in')) return 'Please sign in before submitting a design request.';
-  if (code.includes('permission-denied') || message.includes('permission')) return 'Submission blocked by server authority checks.';
-  if (code.includes('resource-exhausted')) return 'AI Design Studio request limit reached. Please retry later.';
-  if (code.includes('failed-precondition') && message.includes('unit')) return 'A verified tenant unit link is required before submitting this design request.';
-  if (code.includes('failed-precondition') || message.includes('app check')) return 'Submission requires production App Check and configured AI provider access.';
-  if (code.includes('unavailable')) return 'AI image rendering is temporarily unavailable. No design workflow record was created.';
-  return 'Design request could not be submitted. Please retry.';
-}
 
 function DetailList({ details }: { details: DesignExecutionDetail[] }) {
   return (
@@ -259,7 +247,7 @@ export default function DesignStudioPage() {
     setRenderStatus('AI_RENDER_IN_PROGRESS');
     try {
       const requestId = createDesignRequestId();
-      const submitDesign = httpsCallable(functions, 'submitAIDesignRequest');
+      const submitDesign = httpsCallable(functions, 'submitAIDesignRequest', { timeout: DESIGN_SUBMIT_TIMEOUT_MS });
       const result = await submitDesign({
         requestId,
         imageBase64: reference.previewUrl,
@@ -388,7 +376,7 @@ export default function DesignStudioPage() {
                 <Stack direction="row" spacing={1.5} sx={{ my: 2 }}>
                   <Box sx={{ flex: 1 }}>
                     <Typography variant="caption" color="text.secondary">Before</Typography>
-                    {concept.beforeImageUrl ? <Box component="img" alt="Before" src={concept.beforeImageUrl} sx={{ width: '100%', height: 120, objectFit: 'cover', borderRadius: 2 }} /> : <Box sx={{ height: 120, borderRadius: 2, bgcolor: 'rgba(255,255,255,0.04)', display: 'grid', placeItems: 'center' }}><ImageIcon /></Box>}
+                    {(concept.beforeImageUrl || referenceImages[0]?.previewUrl) ? <Box component="img" alt="Before" src={concept.beforeImageUrl || referenceImages[0]?.previewUrl} sx={{ width: '100%', height: 120, objectFit: 'cover', borderRadius: 2 }} /> : <Box sx={{ height: 120, borderRadius: 2, bgcolor: 'rgba(255,255,255,0.04)', display: 'grid', placeItems: 'center' }}><ImageIcon /></Box>}
                   </Box>
                   <Box sx={{ flex: 1 }}>
                     <Typography variant="caption" color="text.secondary">After</Typography>

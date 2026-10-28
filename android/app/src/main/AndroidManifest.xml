@@ -50,6 +50,13 @@
         </provider>
     </application>
 
+    <!-- Hardware: the CAMERA and location permissions would otherwise make Google Play filter out
+         devices without these sensors. Both are optional features of the app. -->
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
+    <uses-feature android:name="android.hardware.location" android:required="false" />
+    <uses-feature android:name="android.hardware.location.gps" android:required="false" />
+
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
@@ -61,5 +68,4 @@
          picker (no permission) and camera capture writes to app-specific storage via the FileProvider. -->
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 </manifest>

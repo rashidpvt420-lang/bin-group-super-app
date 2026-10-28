@@ -34,6 +34,7 @@ import {
 import { ArrowLeft, Building, Eye, EyeOff, Key, Mail, Shield, TrendingUp, UserCircle } from 'lucide-react';
 import SafeIcon, { renderSafeIcon } from '../components/SafeIcon';
 import { OWNER_LOCKED_STATUSES } from '../owner/activationPolicy';
+import { isNativeApp } from '../lib/nativePlatform';
 
 type NoticeState = { type: 'success' | 'error' | 'info' | 'warning'; text: string; diagnostic?: string };
 
@@ -222,6 +223,12 @@ const LoginPage: React.FC = () => {
                 'تم إغلاق تسجيل الدخول عبر Google قبل الاكتمال. حاول مرة أخرى أو استخدم البريد الإلكتروني وكلمة المرور.',
             ));
         }
+        if (code === 'auth/operation-not-supported-in-this-environment') {
+            return notice('info', copy(
+                'Google sign-in is not available in this app. Sign in with your email and password instead.',
+                'تسجيل الدخول عبر Google غير متاح في هذا التطبيق. سجّل الدخول بالبريد الإلكتروني وكلمة المرور.',
+            ));
+        }
         if (code === 'auth/popup-blocked') {
             return notice('error', copy(
                 'The browser blocked Google sign-in. Allow pop-ups for this site and try again.',
@@ -305,6 +312,10 @@ const LoginPage: React.FC = () => {
     }, []);
 
     const handleGoogleLogin = async () => {
+        if (isNativeApp()) {
+            setNotice(getFriendlyAuthError({ code: 'auth/operation-not-supported-in-this-environment' }));
+            return;
+        }
         if (intendedRoleKey === 'admin' || isCanonicalAdminEmail(email)) {
             redirectToAdminPanel(email);
             return;
@@ -544,10 +555,14 @@ const LoginPage: React.FC = () => {
                                 <Button type="submit" fullWidth variant="contained" disabled={localLoading} sx={{ py: 1.7, borderRadius: 2, fontWeight: 950, letterSpacing: 1.5, background: `linear-gradient(135deg, ${palette.gold}, #E6C77A)`, color: '#111827', boxShadow: `0 12px 26px ${alpha(palette.gold, 0.25)}` }}>
                                     {localLoading ? <CircularProgress size={24} color="inherit" /> : t('login.signin')}
                                 </Button>
+                                {!isNativeApp() && (
+                                    <>
                                 <Divider sx={{ my: 0.5 }}><Typography variant="caption" sx={{ color: palette.muted, px: 2, fontWeight: 900 }}>OR INSTITUTIONAL SSO</Typography></Divider>
                                 <Button fullWidth variant="outlined" onClick={handleGoogleLogin} disabled={localLoading} startIcon={renderSafeIcon(UserCircle, { size: 20 })} sx={{ py: 1.4, borderRadius: 2, fontWeight: 950, borderColor: alpha(palette.gold, 0.45), color: palette.ink }}>
                                     {t('login.google')}
                                 </Button>
+                                    </>
+                                )}
                             </Stack>
                         </form>
                     </CardContent>
@@ -558,9 +573,15 @@ const LoginPage: React.FC = () => {
                     <Grid item xs={4}><Box sx={{ textAlign: 'center' }}><SafeIcon icon={TrendingUp} size={22} color={palette.gold} style={{ marginBottom: 6 }} /><Typography variant="caption" display="block" color={palette.muted} fontWeight="900" letterSpacing={0.8}>INST-GRADE</Typography></Box></Grid>
                     <Grid item xs={4}><Box sx={{ textAlign: 'center' }}><SafeIcon icon={Building} size={22} color={palette.gold} style={{ marginBottom: 6 }} /><Typography variant="caption" display="block" color={palette.muted} fontWeight="900" letterSpacing={0.8}>UAE-SOV</Typography></Box></Grid>
                 </Grid>
-                <Stack direction="row" spacing={2} justifyContent="center" sx={{ mt: 4 }}>
+                <Stack direction="row" spacing={2} justifyContent="center" flexWrap="wrap" useFlexGap sx={{ mt: 4 }}>
                     <Button variant="text" size="small" onClick={() => navigate('/security')} sx={{ color: palette.muted, fontWeight: 700, letterSpacing: 0.8 }}>
                         {lang === 'ar' ? 'أمن المنصة' : 'Platform Security'}
+                    </Button>
+                    <Button variant="text" size="small" component="a" href="/privacy.html" data-testid="login-privacy-link" sx={{ color: palette.muted, fontWeight: 700, letterSpacing: 0.8 }}>
+                        {lang === 'ar' ? 'سياسة الخصوصية' : 'Privacy Policy'}
+                    </Button>
+                    <Button variant="text" size="small" component="a" href="/terms.html" data-testid="login-terms-link" sx={{ color: palette.muted, fontWeight: 700, letterSpacing: 0.8 }}>
+                        {lang === 'ar' ? 'شروط الخدمة' : 'Terms of Service'}
                     </Button>
                 </Stack>
                 <Typography variant="caption" sx={{ display: 'block', textAlign: 'center', mt: 1, color: palette.muted, letterSpacing: 0.8, fontWeight: 700 }}>© 2026 BIN GROUP | ALL RIGHTS RESERVED</Typography>

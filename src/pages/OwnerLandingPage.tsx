@@ -25,6 +25,7 @@ import { binThemeTokens } from '../theme/binGroupTheme';
 import { useLanguage } from '@bin/shared';
 import { useRole } from '../context/RoleContext';
 import { auth, signInWithPopup } from '../lib/firebase';
+import { isNativeApp } from '../lib/nativePlatform';
 import { signInWithEmailAndPassword, GoogleAuthProvider } from 'firebase/auth';
 import {
     ArrowRight,
@@ -383,6 +384,7 @@ const OwnerLandingPage: React.FC = () => {
                                 >
                                     {localLoading ? <CircularProgress size={24} color="inherit" /> : t('landing.auth_authorize')}
                                 </Button>
+                                {!isNativeApp() && (<>
                                 <Divider sx={{ borderColor: 'rgba(255,255,255,0.05)' }}>
                                     <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.2)' }}>{t('landing.secure_global')}</Typography>
                                 </Divider>
@@ -396,6 +398,7 @@ const OwnerLandingPage: React.FC = () => {
                                 >
                                     {t('landing.identity_verify')}
                                 </Button>
+                                </>)}
                             </Stack>
                         </form>
                     </Card>

@@ -9,6 +9,7 @@ import { db, auth, functions } from '../lib/firebase';
 import { httpsCallable } from 'firebase/functions';
 import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 import { binThemeTokens } from '../theme/binGroupTheme';
+import { isNativeApp, GOOGLE_SIGNIN_UNSUPPORTED_CODE } from '../lib/nativePlatform';
 
 interface TenantInvitation {
     id: string;
@@ -35,6 +36,8 @@ const copy = {
     signIn: 'SIGN IN TO ACCEPT / تسجيل الدخول للقبول',
     successTitle: 'WELCOME / أهلاً بك',
     successBody: 'Identity verified. Entering Tenant Portal... / تم التحقق من الهوية. جاري الدخول إلى بوابة المستأجر...',
+    googleUnavailable: 'Google sign-in is not available in this app. Sign in with your email and password, then open this invitation link again. / تسجيل الدخول عبر Google غير متاح في هذا التطبيق. سجّل الدخول بالبريد الإلكتروني وكلمة المرور ثم افتح رابط الدعوة مرة أخرى.',
+    emailSignIn: 'SIGN IN WITH EMAIL / تسجيل الدخول بالبريد الإلكتروني',
     invalid: 'Invalid invitation link: Token missing. / رابط الدعوة غير صالح: الرمز غير موجود.',
 };
 
@@ -79,6 +82,11 @@ export default function TenantInvitePage() {
         try {
             let user = auth.currentUser;
             if (!user) {
+                if (isNativeApp()) {
+                    // Browser Google popup sign-in does not work in the native WebView.
+                    setError(copy.googleUnavailable);
+                    return;
+                }
                 const provider = new GoogleAuthProvider();
                 const result = await signInWithPopup(auth, provider);
                 user = result.user;
@@ -95,11 +103,20 @@ export default function TenantInvitePage() {
             }
         } catch (err: any) {
             console.error('Acceptance Error:', err);
+            if (err?.code === GOOGLE_SIGNIN_UNSUPPORTED_CODE) {
+                setError(copy.googleUnavailable);
+                return;
+            }
             setError(err.message || 'Failed to accept invitation. / تعذر قبول الدعوة.');
         } finally {
             setVerifying(false);
         }
     };
+
+    // Google popup sign-in cannot run inside the Capacitor WebView: a signed-out native user is sent to the
+    // email/password login and returns to this invitation link. Signed-in users (and web) are unchanged.
+    const nativeNeedsEmailSignIn = isNativeApp() && !auth.currentUser;
+    const emailSignInHref = `/login?returnTo=${encodeURIComponent(`/tenant-invite?token=${token || ''}`)}`;
 
     if (loading) {
         return (
@@ -130,7 +147,9 @@ export default function TenantInvitePage() {
                         <Typography color="text.secondary" sx={{ mb: 0.5 }}>{copy.subtitle}</Typography>
                         <Typography color="text.secondary" sx={{ mb: 4, direction: 'rtl' }}>{copy.subtitleAr}</Typography>
 
-                        {error && <Alert severity="error" sx={{ mb: 4, textAlign: 'left' }}>{error}</Alert>}
+                        {nativeNeedsEmailSignIn && !error && <Alert severity="info" sx={{ mb: 4, textAlign: 'left' }}>{copy.googleUnavailable}</Alert>}
+
+                        {error && <Alert severity={error === copy.googleUnavailable ? 'info' : 'error'} sx={{ mb: 4, textAlign: 'left' }}>{error}</Alert>}
 
                         {invitation && (
                             <Box sx={{ mb: 4, p: 3, bgcolor: '#f8fafc', borderRadius: 3, textAlign: 'left' }}>
@@ -154,6 +173,22 @@ export default function TenantInvitePage() {
                             </Box>
                         )}
 
+                        {nativeNeedsEmailSignIn && (
+                            <Button
+                                fullWidth
+                                variant="contained"
+                                size="large"
+                                component="a"
+                                href={emailSignInHref}
+                                data-testid="tenant-invite-email-signin"
+                                startIcon={<Key />}
+                                sx={{ py: 2, mb: 2, borderRadius: 3, bgcolor: '#000', fontWeight: 900, '&:hover': { bgcolor: '#333' } }}
+                            >
+                                {copy.emailSignIn}
+                            </Button>
+                        )}
+
+                        {!nativeNeedsEmailSignIn && (
                         <Button
                             fullWidth
                             variant="contained"
@@ -165,6 +200,7 @@ export default function TenantInvitePage() {
                         >
                             {verifying ? <CircularProgress size={24} color="inherit" /> : (auth.currentUser ? copy.confirm : copy.signIn)}
                         </Button>
+                        )}
 
                         <Typography variant="caption" sx={{ mt: 2, display: 'block', opacity: 0.6 }}>
                             Sovereign Auth Node / بوابة التحقق الآمنة

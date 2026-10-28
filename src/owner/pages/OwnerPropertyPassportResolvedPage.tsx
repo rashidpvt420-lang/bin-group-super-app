@@ -198,8 +198,8 @@ export default function OwnerPropertyPassportResolvedPage() {
     <Box sx={{ pb: 6 }}>
       <Box sx={{ mb: 6 }}>
         <Typography variant="overline" sx={{ color: binThemeTokens.goldText, fontWeight: 900, letterSpacing: 4 }}>SOVEREIGN ASSET REGISTRY</Typography>
-        <Typography variant="h4" fontWeight="950" sx={{ color: '#FFF', mt: 1 }}>Property Passports</Typography>
-        <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.4)', mt: 1 }}>Official digital twins of your real estate portfolio.</Typography>
+        <Typography variant="h4" fontWeight="950" sx={{ color: binThemeTokens.textPrimary, mt: 1 }}>Property Passports</Typography>
+        <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary, mt: 1 }}>Official digital twins of your real estate portfolio.</Typography>
       </Box>
 
       {usedFallback && (

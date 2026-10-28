@@ -5,7 +5,7 @@ import { binThemeTokens } from '../../theme/binGroupTheme';
 import { useLanguage } from '@bin/shared';
 
 const BIN_PUBLIC_CONTACT = {
-    email: 'ceo@bin-groups.com',
+    email: 'support@bin-groups.com',
     whatsapp: '+971 55 2423233',
     phone: '+971 55 7474560',
 };

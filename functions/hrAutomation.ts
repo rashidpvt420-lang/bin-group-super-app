@@ -3,7 +3,7 @@ import { onDocumentCreated, onDocumentUpdated } from "firebase-functions/v2/fire
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import * as admin from "firebase-admin";
-import * as crypto from "crypto";
+import { stableCaseId } from "./hrCaseId";
 import { HR_INTENT_TRAINING_VERSION, classifyHrIntent } from "./hrIntentClassifier";
 
 if (!admin.apps.length) {
@@ -109,12 +109,6 @@ function limitedText(value: unknown, max = 2000) {
 
 function requestTitle(value: string) {
     return safeText(value, "hr_support").replace(/_/g, " ");
-}
-
-function stableCaseId(uid: string, message: string, suppliedKey: unknown) {
-    const rawKey = safeText(suppliedKey).slice(0, 120);
-    const source = rawKey || `${uid}|${message}`;
-    return `hrcase_${crypto.createHash("sha256").update(source).digest("hex").slice(0, 40)}`;
 }
 
 function sanitizedHrMetadata(value: unknown) {

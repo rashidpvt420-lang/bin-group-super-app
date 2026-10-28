@@ -123,6 +123,7 @@ test('provider child retains protected environment and scopes operational author
   ordered(workflow, [
     'Verify trusted parent production deployment',
     'Enforce deployment-triggered provider evidence inputs',
+    'Bind exact release and control-plane identity for the dual-SHA publisher',
     'Authenticate Google Cloud',
     'Verify BIN GROUP branded SMTP delivery',
     'Verify production App Check enforcement',
@@ -131,6 +132,59 @@ test('provider child retains protected environment and scopes operational author
   assert.match(workflow, /TRUSTED_PRODUCTION_DEPLOY_RUN_ID/);
   assert.match(workflow, /AUTHORIZED_FOUNDER_ACTORS.*github-actions\[bot\]/);
   assert.match(workflow, /postdeploy-operational-provider-\$\{\{ inputs\.expected_commit_sha \}\}/);
+});
+
+test('provider child binds exact release/control-plane identity required by the dual-SHA publisher without weakening it', async () => {
+  const workflow = await read(paths.provider);
+  const start = workflow.indexOf('- name: Bind exact release and control-plane identity for the dual-SHA publisher');
+  const end = workflow.indexOf('- name: Authenticate Google Cloud');
+  assert.ok(start > 0 && end > start, 'binding step must precede Google Cloud authentication');
+  const step = workflow.slice(start, end);
+  // Every value is validated before it is exported.
+  assert.match(step, /TARGET_SHA: \$\{\{ inputs\.expected_commit_sha \}\}/);
+  assert.match(step, /\[\[ "\$TARGET_SHA" =~ \^\[0-9a-f\]\{40\}\$ \]\]/);
+  assert.match(step, /\[\[ "\$TARGET_SHA" == "\$GITHUB_SHA" \]\]/);
+  assert.match(step, /\[\[ "\$GITHUB_RUN_ID" =~ \^\[0-9\]\+\$ \]\]/);
+  assert.match(step, /\[\[ "\$GITHUB_RUN_ATTEMPT" =~ \^\[0-9\]\+\$ \]\]/);
+  assert.match(step, /\[\[ "\$TRUSTED_PRODUCTION_DEPLOY_EVIDENCE" == "true" \]\]/);
+  assert.match(step, /proof\.commitSha !== process\.env\.TARGET_SHA/);
+  assert.match(step, /String\(proof\.sourceDeployRunId\) !== process\.env\.SOURCE_DEPLOY_RUN_ID/);
+  // The three env values the publisher/finalizer demand are exported, derived only from validated values.
+  assert.match(step, /echo "PRODUCTION_RELEASE_SHA=\$TARGET_SHA"/);
+  assert.match(step, /echo "CONTROL_PLANE_COMMIT_SHA=\$GITHUB_SHA"/);
+  assert.match(step, /echo "CONTROL_PLANE_SCOPE_VERIFIED=true"/);
+  // Never hard-coded or defaulted at job level, where nothing would validate them.
+  const jobEnv = workflow.slice(0, workflow.indexOf('steps:'));
+  assert.doesNotMatch(jobEnv, /PRODUCTION_RELEASE_SHA|CONTROL_PLANE_COMMIT_SHA|CONTROL_PLANE_SCOPE_VERIFIED/);
+  assert.doesNotMatch(workflow.replace(step, ''), /CONTROL_PLANE_SCOPE_VERIFIED/);
+  // The publisher/finalizer still demand exact SHAs, numeric run identity and the control-plane binding.
+  const publisher = await read('scripts/publish-operational-provider-evidence.mjs');
+  const finalizer = await read('scripts/finalize-operational-provider-evidence.mjs');
+  assert.match(publisher, /exact control-plane\/release SHAs and numeric workflow run identity are required/);
+  assert.match(publisher, /\^\[0-9a-f\]\{40\}\$/);
+  assert.match(publisher, /process\.env\.PRODUCTION_RELEASE_SHA/);
+  assert.match(publisher, /CONTROL_PLANE_SCOPE_VERIFIED !== 'true'/);
+  assert.match(publisher, /requireAuthorizedApprover\(process\.env\.GITHUB_ACTOR\)/);
+  assert.match(finalizer, /process\.env\.PRODUCTION_RELEASE_SHA/);
+  assert.match(finalizer, /CONTROL_PLANE_SCOPE_VERIFIED !== 'true'/);
+  assert.match(finalizer, /requireAuthorizedApprover\(process\.env\.GITHUB_ACTOR\)/);
+});
+
+test('application and rotation children bind the same exact release/control-plane identity before publishing', async () => {
+  for (const key of ['application', 'rotation']) {
+    const workflow = await read(paths[key]);
+    const start = workflow.indexOf('- name: Bind exact release and control-plane identity for the dual-SHA publisher');
+    const auth = workflow.indexOf('- name: Authenticate Google Cloud');
+    assert.ok(start > 0 && auth > start, `${key} binding step must precede Google Cloud authentication`);
+    assert.ok(workflow.indexOf('Verify trusted parent production deployment') < start, `${key} binding must follow trusted source verification`);
+    const step = workflow.slice(start, auth);
+    assert.match(step, /\[\[ "\$TARGET_SHA" == "\$GITHUB_SHA" \]\]/);
+    assert.match(step, /proof\.commitSha !== process\.env\.TARGET_SHA/);
+    assert.match(step, /echo "PRODUCTION_RELEASE_SHA=\$TARGET_SHA"/);
+    assert.match(step, /echo "CONTROL_PLANE_COMMIT_SHA=\$GITHUB_SHA"/);
+    assert.match(step, /echo "CONTROL_PLANE_SCOPE_VERIFIED=true"/);
+    assert.doesNotMatch(workflow.slice(0, workflow.indexOf('steps:')), /PRODUCTION_RELEASE_SHA|CONTROL_PLANE_SCOPE_VERIFIED/);
+  }
 });
 
 test('application child uses canonical production Founder credentials and scopes Founder secrets to one step', async () => {

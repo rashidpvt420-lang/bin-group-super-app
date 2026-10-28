@@ -86,7 +86,8 @@ test('Owner and Tenant AI Design Studio is server-authoritative, one-image bound
   assert.match(callable, /SERVER_CALCULATED_DESIGN_STUDIO_V1/);
   assert.match(callable, /transaction\.create\(requestRef, requestPayload\)/);
   assert.match(callable, /cacheControl: "private,no-store"/);
-  assert.match(callable, /getSignedUrl/);
+  assert.match(callable, /protectedMediaUrl/);
+  assert.match(await read('functions/aiDesignMedia.ts'), /getSignedUrl/);
   assert.match(callable, /type: "input_image"/);
   assert.match(callable, /action: "edit"/);
   assert.doesNotMatch(callable, /makePublic\(/);
