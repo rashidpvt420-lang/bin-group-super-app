@@ -18,7 +18,8 @@ const actor = (uid, claims) => testEnv.authenticatedContext(uid, { email_verifie
 const tech = () => actor('tech_n07', { role: 'technician' });
 const tenant = () => actor('tenant_n07', { role: 'tenant' });
 const owner = () => actor('owner_n07', { role: 'owner' });
-const adminS = () => actor('admin_n07', { role: 'admin', admin: true });
+// N-05: Admin Storage authority requires a second-factor ID token.
+const adminS = () => actor('admin_n07', { role: 'admin', admin: true, firebase: { sign_in_second_factor: 'phone' } });
 
 describe('N-07 / N-18 storage evidence immutability', () => {
   before(async () => {
