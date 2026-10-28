@@ -165,7 +165,7 @@ export default function TechnicianJobDetailPage() {
     const { id } = useParams();
     const navigate = useNavigate();
     const { user } = useRole();
-    const { tx, isRTL } = useLanguage();
+    const { tx, isRTL, lang } = useLanguage();
 
     const [ticket, setTicket] = useState<any>(null);
     const [loading, setLoading] = useState(true);
@@ -578,7 +578,7 @@ export default function TechnicianJobDetailPage() {
                             <Grid item xs={12}>
                                 <Typography variant="caption" color="textSecondary">{tx('tech.job.address', 'Address')}</Typography>
                                 <Typography variant="body1" color={JOB_READABLE.ink}>{ticket.address || ticket.propertyLocation?.address || 'Address not available'}</Typography>
-                                <Typography variant="body2" color="textSecondary">Access: {formatStatusLabel(ticket.permissionToEnter || 'CALL_FIRST')} · Anyone home: {formatStatusLabel(ticket.isAnyoneHome || 'UNKNOWN')} · Notes: {ticket.accessNotes || '—'}</Typography>
+                                <Typography variant="body2" color="textSecondary">{tx('tech.job.access', 'Access')}: {formatStatusLabel(ticket.permissionToEnter || 'CALL_FIRST', lang)} · {tx('tech.job.anyone_home', 'Anyone home')}: {formatStatusLabel(ticket.isAnyoneHome || 'UNKNOWN', lang)} · {tx('tech.job.notes', 'Notes')}: {ticket.accessNotes || '—'}</Typography>
                             </Grid>
                         </Grid>
                     </Paper>

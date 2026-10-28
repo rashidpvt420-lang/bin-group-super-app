@@ -1,6 +1,8 @@
+import React from 'react';
 import { Box, Button, Chip, Grid, Paper, Stack, Typography, alpha } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
-import { FileCheck2, Handshake, Link2, QrCode, WalletCards } from 'lucide-react';
+import { Check, Copy, FileCheck2, Handshake, Link2, QrCode, WalletCards } from 'lucide-react';
+import { QRCodeSVG } from 'qrcode.react';
 import { binThemeTokens } from '../theme/binGroupTheme';
 
 type BrokerAttributionQuickStartCardProps = {
@@ -9,6 +11,8 @@ type BrokerAttributionQuickStartCardProps = {
   activeLeads?: number;
   attributedContracts?: number;
   pendingCommissionAmount?: number;
+  /** The broker's real referral link. When present it is shown with a Copy button and a scannable QR. */
+  referralUrl?: string;
   isRTL?: boolean;
 };
 
@@ -18,9 +22,28 @@ export default function BrokerAttributionQuickStartCard({
   activeLeads = 0,
   attributedContracts = 0,
   pendingCommissionAmount = 0,
+  referralUrl = '',
   isRTL = false,
 }: BrokerAttributionQuickStartCardProps) {
   const navigate = useNavigate();
+  const [copied, setCopied] = React.useState(false);
+  const [copyFailed, setCopyFailed] = React.useState(false);
+  const copyTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  React.useEffect(() => () => { if (copyTimer.current) clearTimeout(copyTimer.current); }, []);
+  const copyReferralLink = React.useCallback(async () => {
+    if (!referralUrl) return;
+    try {
+      await navigator.clipboard.writeText(referralUrl);
+      setCopied(true);
+      setCopyFailed(false);
+    } catch {
+      // Clipboard can be unavailable (insecure context / denied permission); the link stays visible to copy by hand.
+      setCopied(false);
+      setCopyFailed(true);
+    }
+    if (copyTimer.current) clearTimeout(copyTimer.current);
+    copyTimer.current = setTimeout(() => { setCopied(false); setCopyFailed(false); }, 2500);
+  }, [referralUrl]);
   const readiness = [referralLinkReady, qrReady, attributedContracts > 0].filter(Boolean).length;
   const readinessPct = Math.round((readiness / 3) * 100);
 
@@ -55,6 +78,37 @@ export default function BrokerAttributionQuickStartCard({
             </Grid>
           ))}
         </Grid>
+        {referralUrl ? (
+          <Stack
+            data-testid="broker-referral-share"
+            direction={{ xs: 'column', sm: isRTL ? 'row-reverse' : 'row' }}
+            spacing={2}
+            alignItems={{ xs: 'stretch', sm: 'center' }}
+            sx={{ p: 2, bgcolor: '#FFFFFF', border: '1px solid #E5E7EB', borderRadius: 4 }}
+          >
+            <Box sx={{ p: 1, bgcolor: '#FFFFFF', border: '1px solid #E5E7EB', borderRadius: 2, alignSelf: { xs: 'center', sm: 'flex-start' }, lineHeight: 0 }}>
+              <QRCodeSVG value={referralUrl} size={132} aria-label={isRTL ? 'رمز QR لرابط الإحالة' : 'Referral link QR code'} />
+            </Box>
+            <Stack spacing={1} sx={{ minWidth: 0, flex: 1 }}>
+              <Typography variant="caption" sx={{ color: '#475467', fontWeight: 900 }}>{isRTL ? 'رابط الإحالة الخاص بك' : 'Your referral link'}</Typography>
+              <Typography dir="ltr" sx={{ color: '#111827', fontWeight: 700, fontSize: 13, wordBreak: 'break-all', textAlign: isRTL ? 'right' : 'left' }}>{referralUrl}</Typography>
+              <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} alignItems="center">
+                <Button
+                  size="small"
+                  variant="outlined"
+                  onClick={copyReferralLink}
+                  startIcon={copied ? <Check size={16} /> : <Copy size={16} />}
+                  sx={{ color: '#7A5C12', borderColor: '#7A5C12', fontWeight: 900, minHeight: 40 }}
+                >
+                  {copied ? (isRTL ? 'تم النسخ' : 'Copied') : (isRTL ? 'نسخ الرابط' : 'Copy link')}
+                </Button>
+                <Typography role="status" variant="caption" sx={{ color: copyFailed ? '#92400E' : '#475467' }}>
+                  {copyFailed ? (isRTL ? 'تعذّر النسخ. انسخ الرابط يدويًا.' : 'Copy failed. Select the link and copy it by hand.') : (isRTL ? 'امسح الرمز أو شارك الرابط مع المالك.' : 'Scan the code or share the link with the owner.')}
+                </Typography>
+              </Stack>
+            </Stack>
+          </Stack>
+        ) : null}
         <Typography variant="caption" sx={{ color: '#475467' }}>{isRTL ? 'العملاء النشطون حاليًا:' : 'Active leads tracked:'} {Number(activeLeads || 0).toLocaleString()}</Typography>
       </Stack>
     </Paper>

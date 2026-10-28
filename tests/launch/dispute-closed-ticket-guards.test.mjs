@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
+import { hardenedFirestoreRules } from './helpers/hardened-firestore-rules.mjs';
 
 const read = (path) => readFileSync(new URL(`../../${path}`, import.meta.url), 'utf8');
 
@@ -61,7 +62,8 @@ test('closed and disputed tickets cannot be recreated or redispatched', () => {
   const tenantCreate = read('functions/tenantTicketOperations.ts');
   const dispatch = read('functions/ticketDispatchOperations.ts');
   const secureAssign = read('functions/secureAdminTechnicianAssignment.ts');
-  const rules = read('firestore.rules');
+  // firestore.rules is the pre-hardening source; the production rules are what prepare:rules produces.
+  const rules = hardenedFirestoreRules();
 
   assert.match(tenantCreate, /already bound to a closed ticket/);
   assert.match(tenantCreate, /\["CLOSED", "CANCELLED", "REJECTED", "RESOLVED"\]/);

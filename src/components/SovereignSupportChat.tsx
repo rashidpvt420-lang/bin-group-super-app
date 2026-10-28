@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
     Box, Paper, Typography, TextField, IconButton, Stack, 
-    Avatar, alpha, CircularProgress, Divider, Drawer, Fab
+    Avatar, alpha, CircularProgress, Divider, Drawer, Fab, Alert
 } from '@mui/material';
 import { Send, X, MessageCircle, ShieldCheck, User, Paperclip, Search } from 'lucide-react';
 import { db, auth } from '../lib/firebase';
@@ -18,6 +18,7 @@ export const SovereignSupportChat: React.FC<SovereignSupportChatProps> = ({ role
     const [messages, setMessages] = useState<any[]>([]);
     const [input, setInput] = useState('');
     const [loading, setLoading] = useState(false);
+    const [chatError, setChatError] = useState<string | null>(null);
     const scrollRef = useRef<HTMLDivElement>(null);
 
     const currentUser = auth.currentUser;
@@ -33,8 +34,13 @@ export const SovereignSupportChat: React.FC<SovereignSupportChatProps> = ({ role
             limit(100)
         );
 
+        setChatError(null);
         const unsub = onSnapshot(q, (snap) => {
             setMessages(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+            setChatError(null);
+        }, (err) => {
+            console.error('Support chat listener failed:', err);
+            setChatError('Messages could not be loaded. Check your connection and reopen the chat.');
         });
 
         return () => unsub();
@@ -61,6 +67,8 @@ export const SovereignSupportChat: React.FC<SovereignSupportChatProps> = ({ role
             });
         } catch (err) {
             console.error("Chat failure:", err);
+            setInput(text);
+            setChatError('Your message was not sent. Check your connection and try again.');
         }
     };
 
@@ -101,6 +109,9 @@ export const SovereignSupportChat: React.FC<SovereignSupportChatProps> = ({ role
                         </Paper>
                     </Box>
                 ))}
+                {chatError && (
+                    <Alert severity="error" variant="filled" role="alert" data-testid="support-chat-error">{chatError}</Alert>
+                )}
                 <div ref={scrollRef} />
             </Box>
 

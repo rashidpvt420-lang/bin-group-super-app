@@ -23,6 +23,7 @@ export default function BrokerDocumentsPage() {
     const [loading, setLoading] = useState(true);
     const [uploading, setUploading] = useState<string | null>(null);
     const [uploadError, setUploadError] = useState<string | null>(null);
+    const [loadError, setLoadError] = useState<string | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const pendingDocType = useRef<string | null>(null);
 
@@ -31,6 +32,12 @@ export default function BrokerDocumentsPage() {
         const q = query(collection(db, 'brokerDocuments'), where('brokerId', '==', user.uid));
         const unsub = onSnapshot(q, (snap) => {
             setDocuments(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+            setLoadError(null);
+            setLoading(false);
+        }, (err) => {
+            // Without this the vault would silently show every document as "UPLOAD NEEDED".
+            console.error('[BrokerDocuments] Could not load documents:', err);
+            setLoadError('Your documents could not be loaded, so the statuses below may be wrong. Check your connection and reload the page.');
             setLoading(false);
         });
         return () => unsub();
@@ -116,6 +123,10 @@ export default function BrokerDocumentsPage() {
             <Typography variant="overline" sx={{ color: binThemeTokens.textSecondary, fontWeight: 950, letterSpacing: 2, mb: 3, display: 'block' }}>
                 MANDATORY COMPLIANCE ASSETS
             </Typography>
+
+            {loadError && (
+                <Alert severity="error" sx={{ mb: 3, fontWeight: 700 }} data-testid="broker-documents-load-error">{loadError}</Alert>
+            )}
 
             <Grid container spacing={3} sx={{ mb: 6 }} data-testid="broker-documents-vault">
                 {requiredDocs.map(req => {

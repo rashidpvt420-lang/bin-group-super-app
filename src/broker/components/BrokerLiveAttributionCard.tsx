@@ -22,6 +22,7 @@ export default function BrokerLiveAttributionCard({ isRTL = false }: BrokerLiveA
       isRTL={isRTL}
       referralLinkReady={signals.referralLinkReady}
       qrReady={signals.qrReady}
+      referralUrl={signals.referralUrl}
       activeLeads={signals.activeLeads}
       attributedContracts={signals.attributedContracts}
       pendingCommissionAmount={signals.pendingCommissionAmount}
