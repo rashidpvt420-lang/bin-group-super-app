@@ -5,7 +5,8 @@ type LegalTarget =
   | '/privacy-policy.html'
   | '/privacy.html'
   | '/terms-of-service.html'
-  | '/terms.html';
+  | '/terms.html'
+  | '/delete-account.html';
 
 /**
  * Sends legal-page routes to the real, reviewed static HTML documents in /public
@@ -33,6 +34,10 @@ export default function LegalRedirect({ to }: { to: LegalTarget }) {
       window.location.replace('/privacy.html');
       return;
     }
+    if (to === '/delete-account.html') {
+      window.location.replace('/delete-account.html');
+      return;
+    }
     window.location.replace('/privacy-policy.html');
   }, [to]);
 
@@ -46,6 +51,8 @@ export default function LegalRedirect({ to }: { to: LegalTarget }) {
           <Link href="/terms-of-service.html">Click here if you are not redirected automatically</Link>
         ) : to === '/privacy.html' ? (
           <Link href="/privacy.html">Click here if you are not redirected automatically</Link>
+        ) : to === '/delete-account.html' ? (
+          <Link href="/delete-account.html">Click here if you are not redirected automatically</Link>
         ) : (
           <Link href="/privacy-policy.html">Click here if you are not redirected automatically</Link>
         )}

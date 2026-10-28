@@ -1978,6 +1978,26 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
 
+    // Google Play account deletion: a signed-in user may file exactly one request keyed by
+    // their own uid. Create-only for the user (no edits, no delete); nothing is auto-deleted.
+    // Admins review and process requests manually.
+    match /accountDeletionRequests/{requestId} {
+      allow read: if isOwnerId(requestId) || isAdmin();
+      allow create: if signedIn()
+        && requestId == request.auth.uid
+        && request.resource.data.keys().hasOnly(['userId', 'email', 'notes', 'status', 'source', 'requestedAt'])
+        && request.resource.data.keys().hasAll(['userId', 'email', 'notes', 'status', 'source', 'requestedAt'])
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.email == request.auth.token.get('email', '')
+        && request.resource.data.notes is string
+        && request.resource.data.notes.size() <= 1000
+        && request.resource.data.status == 'pending_review'
+        && request.resource.data.source == 'in_app_account_deletion'
+        && request.resource.data.requestedAt == request.time;
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
     match /pilotFeedback/{feedbackId} {
       allow read: if isAdmin();
       allow create: if signedIn() && request.resource.data.get('status', null) == 'new';
