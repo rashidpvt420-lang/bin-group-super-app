@@ -1,13 +1,15 @@
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
     Box, Typography, Container, Grid, Card, CardContent,
-    CardActionArea, alpha, Stack, Chip, Alert, CircularProgress
+    CardActionArea, alpha, Stack, Chip, Alert, CircularProgress, Button
 } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
+import { onAuthStateChanged, sendEmailVerification, type User as FirebaseUser } from 'firebase/auth';
 import { binThemeTokens } from '../theme/binGroupTheme';
 import { useLanguage } from '@bin/shared';
 import { auth, functions, httpsCallable } from '../lib/firebase';
 import { useRole } from '../context/RoleContext';
+import { isEmailNotVerifiedError, needsEmailVerification, verificationResendRemaining } from '../lib/emailVerificationGate';
 import {
     User, Users, Wrench, Briefcase, ShieldCheck,
     ChevronRight, ArrowLeft
@@ -34,6 +36,79 @@ const RoleGatewayPage: React.FC = () => {
     const { user, role, isAdmin, refreshRole } = useRole();
     const [savingRole, setSavingRole] = useState<string | null>(null);
     const [notice, setNotice] = useState<string | null>(null);
+    const [authUser, setAuthUser] = useState<FirebaseUser | null>(() => auth.currentUser);
+    const [verificationNotice, setVerificationNotice] = useState<{ text: string; severity: 'success' | 'info' | 'error' } | null>(null);
+    const [verificationBusy, setVerificationBusy] = useState(false);
+    const [lastSentAt, setLastSentAt] = useState(0);
+    const [now, setNow] = useState(() => Date.now());
+    const copy = (en: string, ar: string) => (lang === 'ar' ? ar : en);
+    const awaitingEmailVerification = needsEmailVerification(authUser);
+    const resendRemainingMs = verificationResendRemaining(lastSentAt, now);
+
+    useEffect(() => onAuthStateChanged(auth, (next) => setAuthUser(next)), []);
+
+    useEffect(() => {
+        if (!awaitingEmailVerification || resendRemainingMs <= 0) return undefined;
+        const timer = window.setInterval(() => setNow(Date.now()), 1000);
+        return () => window.clearInterval(timer);
+    }, [awaitingEmailVerification, resendRemainingMs]);
+
+    // Re-check silently when the user returns from their mail app, so a verified account unlocks without a tap.
+    const recheckVerification = useCallback(async (silent: boolean) => {
+        const current = auth.currentUser;
+        if (!current) return false;
+        try {
+            await current.reload();
+            if (current.emailVerified) {
+                await current.getIdToken(true);
+                setAuthUser(auth.currentUser);
+                setVerificationNotice(null);
+                setNotice(null);
+                return true;
+            }
+            if (!silent) setVerificationNotice({ text: copy('Your email is not verified yet. Open the link we emailed you, then tap again.', 'لم يتم التحقق من بريدك بعد. افتح الرابط الذي أرسلناه إليك ثم اضغط مرة أخرى.'), severity: 'info' });
+        } catch {
+            if (!silent) setVerificationNotice({ text: copy('We could not check your email status. Check your connection and try again.', 'تعذر التحقق من حالة بريدك. تحقق من الاتصال وحاول مرة أخرى.'), severity: 'error' });
+        }
+        return false;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [lang]);
+
+    useEffect(() => {
+        if (!awaitingEmailVerification) return undefined;
+        const onFocus = () => { void recheckVerification(true); };
+        window.addEventListener('focus', onFocus);
+        document.addEventListener('visibilitychange', onFocus);
+        return () => {
+            window.removeEventListener('focus', onFocus);
+            document.removeEventListener('visibilitychange', onFocus);
+        };
+    }, [awaitingEmailVerification, recheckVerification]);
+
+    const handleResendVerification = async () => {
+        const current = auth.currentUser;
+        if (!current || verificationBusy || verificationResendRemaining(lastSentAt, Date.now()) > 0) return;
+        setVerificationBusy(true);
+        try {
+            auth.languageCode = isRTL ? 'ar' : 'en';
+            await sendEmailVerification(current, { url: `${window.location.origin}/gateway`, handleCodeInApp: false })
+                .catch(() => sendEmailVerification(current));
+            const sentAt = Date.now();
+            setLastSentAt(sentAt);
+            setNow(sentAt);
+            setVerificationNotice({ text: copy(`Verification email sent to ${current.email || 'your address'}. Check spam if it does not arrive.`, `تم إرسال رسالة التحقق إلى ${current.email || 'بريدك'}. تحقق من البريد غير المرغوب إذا لم تصل.`), severity: 'success' });
+        } catch (err: any) {
+            const code = String(err?.code || '');
+            setVerificationNotice({
+                text: code === 'auth/too-many-requests'
+                    ? copy('Too many requests. Wait a few minutes, then try again.', 'طلبات كثيرة. انتظر بضع دقائق ثم حاول مرة أخرى.')
+                    : copy('We could not send the verification email. Please try again.', 'تعذر إرسال رسالة التحقق. يرجى المحاولة مرة أخرى.'),
+                severity: 'error',
+            });
+        } finally {
+            setVerificationBusy(false);
+        }
+    };
 
     const roles = [
         {
@@ -99,6 +174,14 @@ const RoleGatewayPage: React.FC = () => {
             return;
         }
 
+        // Email/password accounts must verify their address first. Show the verify state
+        // (with resend) instead of letting the server refuse the role pick.
+        if (needsEmailVerification(activeUser)) {
+            setAuthUser(activeUser);
+            setNotice(copy('Verify your email address to choose a workspace.', 'تحقق من بريدك الإلكتروني لاختيار مساحة العمل.'));
+            return;
+        }
+
         setSavingRole(roleId);
         try {
             // Refresh before the bootstrap call so the Functions SDK has a
@@ -131,7 +214,12 @@ const RoleGatewayPage: React.FC = () => {
             console.error('[ROLE-GATEWAY] Failed to assign role:', error);
             const code = String(error?.code || '').toLowerCase();
 
-            if (code.includes('unauthenticated')) {
+            if (isEmailNotVerifiedError(error)) {
+                // The server's live Auth record says the email is still unverified: show the verify state.
+                setAuthUser(auth.currentUser);
+                setNotice(copy('Verify your email address to choose a workspace.', 'تحقق من بريدك الإلكتروني لاختيار مساحة العمل.'));
+                await recheckVerification(true);
+            } else if (code.includes('unauthenticated')) {
                 if (!auth.currentUser) {
                     navigate(roleLoginTarget(roleId));
                     return;
@@ -188,6 +276,37 @@ const RoleGatewayPage: React.FC = () => {
                         />
                     </Stack>
                 </Stack>
+
+                {awaitingEmailVerification && (
+                    <Alert
+                        severity="info"
+                        data-testid="gateway-verify-email"
+                        sx={{ mb: 3, alignItems: 'flex-start' }}
+                    >
+                        <Typography sx={{ fontWeight: 900 }}>{copy('Verify your email to continue', 'تحقق من بريدك الإلكتروني للمتابعة')}</Typography>
+                        <Typography variant="body2" sx={{ mt: 0.5, fontWeight: 600 }}>
+                            {copy(
+                                `We sent a verification link to ${authUser?.email || 'your email address'}. Open it, then come back here to choose your workspace.`,
+                                `أرسلنا رابط التحقق إلى ${authUser?.email || 'بريدك الإلكتروني'}. افتحه ثم عد هنا لاختيار مساحة العمل.`,
+                            )}
+                        </Typography>
+                        {verificationNotice && (
+                            <Typography variant="body2" sx={{ mt: 1, fontWeight: 700, color: verificationNotice.severity === 'error' ? '#B42318' : verificationNotice.severity === 'success' ? '#15803D' : 'inherit' }} role="status">
+                                {verificationNotice.text}
+                            </Typography>
+                        )}
+                        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ mt: 2 }}>
+                            <Button variant="contained" disabled={verificationBusy} onClick={() => { void recheckVerification(false); }} sx={{ fontWeight: 900 }}>
+                                {copy("I've verified my email", 'لقد تحققت من بريدي')}
+                            </Button>
+                            <Button variant="outlined" disabled={verificationBusy || resendRemainingMs > 0} onClick={() => { void handleResendVerification(); }} sx={{ fontWeight: 900 }}>
+                                {resendRemainingMs > 0
+                                    ? copy(`Resend email (${Math.ceil(resendRemainingMs / 1000)}s)`, `إعادة الإرسال (${Math.ceil(resendRemainingMs / 1000)} ثانية)`)
+                                    : copy('Resend verification email', 'إعادة إرسال رسالة التحقق')}
+                            </Button>
+                        </Stack>
+                    </Alert>
+                )}
 
                 {notice && <Alert severity="warning" sx={{ mb: 3 }}>{notice}</Alert>}
 

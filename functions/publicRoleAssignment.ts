@@ -1,6 +1,7 @@
 import { FieldValue } from "firebase-admin/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
+import { assertEmailVerifiedForPasswordSignIn } from "./publicRoleEmailVerification";
 
 if (!admin.apps.length) admin.initializeApp();
 
@@ -50,6 +51,9 @@ export const assignPublicPortalRole = onCall({
   if (claimedRole && claimedRole !== role) {
     throw new HttpsError("failed-precondition", "A portal role is already assigned to this account.");
   }
+  // A first-time role claim needs a verified email for email/password sign-ins (Google/phone are
+  // verified by their provider). Re-selecting a role the account already holds stays idempotent.
+  if (!claimedRole) assertEmailVerifiedForPasswordSignIn(request.auth.token as any, userRecord);
 
   const profileRef = db.collection("users").doc(uid);
   const status = initialStatus(role);

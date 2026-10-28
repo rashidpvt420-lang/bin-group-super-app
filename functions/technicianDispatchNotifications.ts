@@ -2,6 +2,7 @@ import * as admin from "firebase-admin";
 import * as crypto from "crypto";
 import { FieldValue } from "firebase-admin/firestore";
 import { onDocumentCreated, onDocumentUpdated } from "firebase-functions/v2/firestore";
+import { isNativePushPlatform, NATIVE_REGISTRATION_MAX_AGE_MS } from "./pushRegistrationPolicy";
 
 if (!admin.apps.length) admin.initializeApp();
 const db = admin.firestore();
@@ -52,7 +53,7 @@ function isCurrentRegisteredPushToken(tokenDoc: FirebaseFirestore.QueryDocumentS
     && crypto.createHash("sha256").update(token, "utf8").digest("hex") === tokenDoc.id
     && data.active !== false
     && (!permission || permission === "granted")
-    && registeredAtMs >= Date.now() - CURRENT_PUSH_TOKEN_MAX_AGE_MS;
+    && registeredAtMs >= Date.now() - (isNativePushPlatform(data.platform) ? NATIVE_REGISTRATION_MAX_AGE_MS : CURRENT_PUSH_TOKEN_MAX_AGE_MS);
 }
 
 function assignmentEventKey(data: FirebaseFirestore.DocumentData | undefined) {

@@ -1,5 +1,6 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
+import { requirePrivilegedMfaSession } from "./adminMfaSession";
 import { getStorage } from "firebase-admin/storage";
 import { createHash, randomUUID } from "node:crypto";
 import PDFDocument from "pdfkit";
@@ -40,6 +41,16 @@ async function assertActiveAccount(uid: string, token: Record<string, unknown>) 
   if (user.disabled || token.suspended === true || user.customClaims?.suspended === true) {
     throw new HttpsError("permission-denied", "This staff account is disabled or suspended.");
   }
+}
+
+/**
+ * Staff callables are open to ordinary staff (technicians, HR, fleet, finance roles) and also
+ * to Admin / CEO claims. Admin / CEO claims must additionally carry a verified second factor
+ * (same N-05 gate as the Admin-panel callables); other staff roles are not affected.
+ */
+async function assertStaffSession(auth: any, token: Record<string, unknown>) {
+  if (isCeoOrAdmin(token)) await requirePrivilegedMfaSession(auth);
+  await assertActiveAccount(String(auth?.uid || ""), token);
 }
 
 function asDate(value: unknown): Date | null {
@@ -278,7 +289,7 @@ export const generateStaffAttendancePdf = onCall(SECURE_CALLABLE_OPTIONS, async 
   const monthPeriod = text(request.data?.monthPeriod) || currentMonthKey();
   const { start, end } = monthBounds(monthPeriod);
 
-  await assertActiveAccount(callerUid, token);
+  await assertStaffSession(request.auth, token);
 
   if (!canReadAttendance(token, callerUid, targetStaffUid)) {
     throw new HttpsError("permission-denied", "Not authorized to generate this attendance report.");
@@ -364,7 +375,7 @@ export const generateStaffOvertimePdf = onCall(SECURE_CALLABLE_OPTIONS, async (r
   const monthPeriod = text(request.data?.monthPeriod) || currentMonthKey();
   const { start, end } = monthBounds(monthPeriod);
 
-  await assertActiveAccount(callerUid, token);
+  await assertStaffSession(request.auth, token);
 
   if (!canReadOvertime(token, callerUid, targetStaffUid)) {
     throw new HttpsError("permission-denied", "Not authorized to generate this overtime report.");
@@ -448,7 +459,7 @@ export const generateStaffPayslipPdf = onCall(SECURE_CALLABLE_OPTIONS, async (re
   const monthPeriod = text(request.data?.monthPeriod) || currentMonthKey();
 
   monthBounds(monthPeriod);
-  await assertActiveAccount(callerUid, token);
+  await assertStaffSession(request.auth, token);
 
   if (!canReadPayslip(token, callerUid, targetStaffUid)) {
     throw new HttpsError("permission-denied", "Not authorized to generate this payslip.");
@@ -529,12 +540,12 @@ export const issueOfficialStaffHrDocument = onCall(SECURE_CALLABLE_OPTIONS, asyn
   if (!request.auth?.uid) throw new HttpsError("unauthenticated", "Authentication required.");
   const token = request.auth.token || {};
   if (!canIssueOfficialHrDocument(token)) throw new HttpsError("permission-denied", "HR Manager authority is required to issue official HR documents.");
+  await assertStaffSession(request.auth, token);
 
   const db = ensureDb();
   const staffUid = text(request.data?.staffUid);
   const documentType = normalizeOfficialHrDocumentType(request.data?.documentType);
   if (!staffUid) throw new HttpsError("invalid-argument", "staffUid is required.");
-  await assertActiveAccount(request.auth.uid, token);
 
   const identity = await loadStaffIdentity(db, staffUid);
   const generatedAt = new Date().toISOString();

@@ -1,4 +1,12 @@
 import { auth, functions, getSafeMessaging, getToken, httpsCallable, onMessage } from '../lib/firebase';
+import { isNativeApp } from '../lib/nativePlatform';
+import {
+  attachNativePushListeners,
+  getNativePushPlatform,
+  registerNativePushNotifications,
+  unregisterNativePushNotifications,
+  type NativePushListenerOptions,
+} from './nativePushService';
 
 const readEnv = (value: string | undefined): string => String(value || '');
 
@@ -65,7 +73,7 @@ async function activeMessagingServiceWorker(): Promise<ServiceWorkerRegistration
 }
 
 type PushReadiness = {
-  platform: 'web' | 'android-web' | 'ios-pwa' | 'ios-browser' | 'unknown';
+  platform: 'web' | 'android-web' | 'ios-pwa' | 'ios-browser' | 'android-native' | 'ios-native' | 'unknown';
   isIOS: boolean;
   isAndroid: boolean;
   isStandalone: boolean;
@@ -130,6 +138,29 @@ export async function registerPushNotifications(userId: string, role?: string | 
   }
   if (typeof window === 'undefined') {
     return { enabled: false, reason: 'window_unavailable', readiness };
+  }
+  if (isNativeApp()) {
+    // Capacitor Android / iOS shell: native permission + FCM token (no service worker / VAPID key involved).
+    const native = await registerNativePushNotifications();
+    const platform = native.platform || getNativePushPlatform() || 'unknown';
+    const nativeReadiness: PushReadiness = {
+      platform,
+      isIOS: platform === 'ios-native',
+      isAndroid: platform === 'android-native',
+      isStandalone: true,
+      supportsNotification: true,
+      supportsServiceWorker: false,
+      supportsMessaging: native.enabled ? true : null,
+      permission: native.permission === 'unsupported' ? 'default' : native.permission === 'prompt' ? 'default' : native.permission,
+    };
+    return {
+      enabled: native.enabled,
+      reason: native.reason,
+      registrationId: native.registrationId,
+      registeredTokenCount: native.registeredTokenCount,
+      prunedTokenCount: native.prunedTokenCount,
+      readiness: nativeReadiness,
+    };
   }
   if (!readiness.supportsNotification) {
     return { enabled: false, reason: 'notifications_unsupported', readiness };
@@ -208,6 +239,7 @@ export async function registerPushNotifications(userId: string, role?: string | 
 }
 
 export async function unregisterPushNotifications(): Promise<{ removed: boolean; registeredTokenCount?: number }> {
+  if (isNativeApp()) return unregisterNativePushNotifications();
   if (!auth.currentUser || typeof window === 'undefined' || !('serviceWorker' in navigator)) {
     return { removed: false };
   }
@@ -223,7 +255,13 @@ export async function unregisterPushNotifications(): Promise<{ removed: boolean;
   return { removed: data.removed === true, registeredTokenCount: data.registeredTokenCount };
 }
 
-export async function attachForegroundPushListener(onForeground?: (payload: any) => void) {
+export async function attachForegroundPushListener(
+  onForeground?: (payload: any) => void,
+  nativeOptions: Pick<NativePushListenerOptions, 'onNavigate'> = {},
+) {
+  if (isNativeApp()) {
+    return attachNativePushListeners({ onForeground, onNavigate: nativeOptions.onNavigate });
+  }
   const messaging = await getSafeMessaging();
   if (!messaging) return () => undefined;
   return onMessage(messaging, (payload) => {

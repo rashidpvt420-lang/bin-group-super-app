@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Must match NATIVE_PUSH_CHANNEL_ID in src/services/nativePushService.ts and the channelId set by
+         functions/notificationDelivery.ts. The channel itself is created in code at registration time. -->
+    <string name="default_notification_channel_id" translatable="false">bin_default</string>
+    <color name="push_notification_accent">#C6A75E</color>
+</resources>

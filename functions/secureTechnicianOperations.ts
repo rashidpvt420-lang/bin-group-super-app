@@ -1,5 +1,6 @@
 import * as admin from "firebase-admin";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
+import { requirePrivilegedMfaSession } from "./adminMfaSession";
 import {
   resumeTechnicianDuty as legacyResumeTechnicianDuty,
   acceptTechnicianTicket as legacyAcceptTechnicianTicket,
@@ -18,6 +19,15 @@ function isAdmin(auth: any) {
   const token = auth?.token || {};
   const role = normalize(token.role || token.userRole || token.primaryRole);
   return token.admin === true || token.super_admin === true || token.superAdmin === true || ["admin", "super_admin", "operations_admin"].includes(role);
+}
+
+/**
+ * Technician callables stay open to technicians without a second factor. An Admin-claim
+ * caller (who bypasses the technician readiness and evidence checks below) must hold the
+ * same verified MFA session as every other privileged callable (N-05).
+ */
+async function requireMfaForAdminClaims(auth: any) {
+  if (isAdmin(auth)) await requirePrivilegedMfaSession(auth);
 }
 
 function assignedTechnicianId(data: FirebaseFirestore.DocumentData) {
@@ -330,6 +340,7 @@ export const getTechnicianOperationalReadiness = onCall(
   { cors: true, region: "europe-west3", enforceAppCheck: true },
   async (request) => {
     if (!request.auth?.uid) throw new HttpsError("unauthenticated", "Technician login required.");
+    await requireMfaForAdminClaims(request.auth);
     const targetUid = isAdmin(request.auth) && String(request.data?.technicianId || "").trim()
       ? String(request.data.technicianId).trim()
       : request.auth.uid;
@@ -363,6 +374,7 @@ export const getTechnicianOperationalReadiness = onCall(
 );
 
 async function runSecured(legacyCallable: any, request: any, action: TechnicianAction) {
+  await requireMfaForAdminClaims(request.auth);
   await assertTechnicianReadiness(request.auth, action);
   if (action === "UPDATE_LIFECYCLE") await assertLifecycleEvidence(request.auth, request.data);
   if (typeof legacyCallable?.run !== "function") throw new HttpsError("internal", "Operational callable handler is unavailable.");

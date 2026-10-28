@@ -4,6 +4,7 @@ import { onDocumentCreated } from "firebase-functions/v2/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 import * as crypto from "crypto";
+import { PUSH_PLATFORMS, isNativePushPlatform, NATIVE_REGISTRATION_MAX_AGE_MS } from "./pushRegistrationPolicy";
 
 if (!admin.apps.length) {
     admin.initializeApp();
@@ -11,12 +12,11 @@ if (!admin.apps.length) {
 
 const db = admin.firestore();
 const MAX_PUSH_TOKENS_PER_USER = 10;
+const CURRENT_PUSH_TOKEN_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 const MAX_FCM_MULTICAST_TOKENS = 500;
 const PUSH_TOKEN_MIN_LENGTH = 50;
 const PUSH_TOKEN_MAX_LENGTH = 4096;
-const CURRENT_PUSH_TOKEN_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 const PUSH_TOKEN_RE = /^[A-Za-z0-9_:\-.]+$/;
-const PUSH_PLATFORMS = new Set(["web", "android-web", "ios-pwa"]);
 const PUSH_ENABLED_ROLES = new Set([
     "tenant",
     "technician",
@@ -190,13 +190,16 @@ async function registrationsForUser(userId: string): Promise<PushRegistration[]>
         const data = tokenDoc.data() || {};
         const token = String(data.token || "").trim();
         const permission = cleanString(data.permission, 32).toLowerCase();
+        const platform = cleanString(data.platform, 40).toLowerCase();
         const registeredAtMs = timestampMillis(data.lastRegisteredAt || data.updatedAt || data.createdAt);
         if (
             !token ||
             tokenHash(token) !== tokenDoc.id ||
             data.active === false ||
             (permission && permission !== "granted") ||
-            registeredAtMs < Date.now() - CURRENT_PUSH_TOKEN_MAX_AGE_MS
+            // Web registrations must be refreshed daily; native app registrations stay deliverable longer.
+            (!isNativePushPlatform(platform) && registeredAtMs < Date.now() - CURRENT_PUSH_TOKEN_MAX_AGE_MS) ||
+            (isNativePushPlatform(platform) && registeredAtMs < Date.now() - NATIVE_REGISTRATION_MAX_AGE_MS)
         ) continue;
         registrations.push({ token, tokenHash: tokenDoc.id, userId, ref: tokenDoc.ref });
     }
@@ -514,6 +517,16 @@ export const deliverNotificationPush = onDocumentCreated({
                 recipientRole: String(data.recipientRole || "unknown"),
                 type: String(data.type || "STATUS_UPDATE"),
                 ticketId: String(data.ticketId || ""),
+            },
+            // Native Android/iOS app registrations (Capacitor). The channel id matches the channel the app creates
+            // at registration time; older builds without it fall back to the manifest default / FCM default channel.
+            android: {
+                priority: "high",
+                notification: { channelId: "bin_default" },
+            },
+            apns: {
+                headers: { "apns-priority": "10" },
+                payload: { aps: { sound: "default" } },
             },
             webpush: {
                 notification: {

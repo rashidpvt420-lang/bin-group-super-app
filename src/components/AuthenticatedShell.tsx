@@ -60,6 +60,10 @@ const ROLE_PORTAL_PREFIXES = ['/owner', '/tenant', '/technician', '/broker', '/a
 
 function PushNotificationBootstrap() {
   const { user, role } = useRole();
+  const navigate = useNavigate();
+  // Notification taps (native app) route through the current router without re-subscribing the listeners.
+  const navigateRef = React.useRef(navigate);
+  navigateRef.current = navigate;
 
   React.useEffect(() => {
     let detach: undefined | (() => void);
@@ -80,7 +84,7 @@ function PushNotificationBootstrap() {
           })
           .catch((error) => console.warn('[Push] Registration failed:', error));
 
-        attachForegroundPushListener().then((unsubscribe) => {
+        attachForegroundPushListener(undefined, { onNavigate: (path) => navigateRef.current(path) }).then((unsubscribe) => {
           if (cancelled && typeof unsubscribe === 'function') unsubscribe();
           else detach = typeof unsubscribe === 'function' ? unsubscribe : undefined;
         });
