@@ -40,7 +40,6 @@ type RoleCase = {
 
 const publicRoutes = [
   '/',
-  '/pilot',
   '/owner-landing',
   '/v1',
   '/gateway',
@@ -469,6 +468,21 @@ test('Public Phase 2 routes survive direct URL, refresh, mobile and Arabic RTL',
     await page.evaluate(() => localStorage.setItem('bin_language', 'en'));
     await page.setViewportSize({ width: 1280, height: 720 });
   }
+});
+
+// /pilot was the internal launch checklist. It is intentionally not a public page any more
+// (App.tsx: <Navigate to="/" replace />), so it must land on the public home page and render it.
+test('Retired /pilot internal page redirects visitors to the public home page', async ({ page }) => {
+  test.setTimeout(120_000);
+  const response = await page.goto('/pilot', { waitUntil: 'domcontentloaded' });
+  expect(response?.status() ?? 200, 'Public /pilot must not return a server error').toBeLessThan(500);
+  await expect.poll(() => new URL(page.url()).pathname, {
+    message: 'Public /pilot must redirect to the public home page',
+    timeout: 30_000,
+  }).toBe('/');
+  const body = await page.locator('body').innerText({ timeout: 20_000 });
+  expect(body.trim().length, 'Redirected /pilot must render visible content').toBeGreaterThan(0);
+  expect(body, 'Redirected /pilot must not crash').not.toMatch(CRASH_PATTERN);
 });
 
 test('Admin login Phase 2 route survives direct URL, refresh, mobile and Arabic RTL', async ({ page }) => {
