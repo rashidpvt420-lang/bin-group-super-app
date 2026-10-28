@@ -178,3 +178,13 @@ users_temp.json
 *auth*export*.json
 *users*export*.json
 *service*account*.json
+
+# Scratch files that were once committed by accident at the repo root
+/tmp-*-test.txt
+/build-errors.txt
+/lint_results.txt
+/tsc-errors.txt
+/local-git-status-*.txt
+/local-hardening-backup.patch
+/otp_commit.diff
+/__noop__

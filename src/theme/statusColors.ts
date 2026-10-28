@@ -60,10 +60,67 @@ const CODE_LABELS: Record<string, string> = {
   IN_REVIEW: 'In review',
 };
 
+/**
+ * Arabic labels for the same stored codes (plain Modern Standard Arabic). Codes with no entry here
+ * are NOT guessed: Arabic callers get the English label instead, so nothing is invented.
+ */
+export const AR_CODE_LABELS: Record<string, string> = {
+  REFERENCE_IMAGE_REQUIRED: 'صورة مرجعية مطلوبة',
+  AI_RENDER_COMPLETE: 'التصميم جاهز',
+  PENDING_TRIGGER: 'بانتظار الإرسال',
+  SUCCESS: 'تم الإرسال',
+  PARTIAL: 'أُرسل جزئيًا',
+  FAILED: 'لم يُرسل',
+  CALL_FIRST: 'اتصل قبل الزيارة',
+  ENTER_FREELY: 'يمكن الدخول دون اتصال',
+  UNKNOWN: 'غير محدد',
+  PENDING_UPLOAD: 'مطلوب رفع',
+  UNDER_REVIEW: 'قيد المراجعة',
+  IN_REVIEW: 'قيد المراجعة',
+  // Ticket / job lifecycle
+  OPEN: 'مفتوح',
+  NEW: 'جديد',
+  PENDING: 'قيد الانتظار',
+  PENDING_SCHEDULING: 'بانتظار الجدولة',
+  SCHEDULED: 'مجدول',
+  ASSIGNED: 'تم التعيين',
+  REOPENED: 'أُعيد فتحه',
+  ACCEPTED: 'تم القبول',
+  DISPATCHED: 'تم الإرسال للفني',
+  EN_ROUTE: 'في الطريق',
+  ON_THE_WAY: 'في الطريق',
+  ARRIVED: 'وصل',
+  IN_PROGRESS: 'قيد التنفيذ',
+  COMPLETED: 'مكتمل',
+  RESOLVED: 'تم الحل',
+  CLOSED: 'مغلق',
+  CANCELLED: 'ملغى',
+  CANCELED: 'ملغى',
+  REJECTED: 'مرفوض',
+  APPROVED: 'تمت الموافقة',
+  VERIFIED: 'تم التحقق',
+  OVERDUE: 'متأخر',
+  EMERGENCY: 'طوارئ',
+};
+
+function statusCodeKey(code: string | null | undefined): string {
+  return String(code ?? '').trim().toUpperCase().replace(/[\s-]+/g, '_');
+}
+
+/** Arabic label for a stored status code, or null when there is no reviewed translation. */
+export function arabicStatusLabel(code: string | null | undefined): string | null {
+  const key = statusCodeKey(code);
+  return key && AR_CODE_LABELS[key] ? AR_CODE_LABELS[key] : null;
+}
+
 /** Turns stored codes (SNAKE_CASE / snake_case) into a readable English label. */
-export function formatStatusLabel(code: string | null | undefined): string {
+export function formatStatusLabel(code: string | null | undefined, lang: 'en' | 'ar' = 'en'): string {
   const raw = String(code ?? '').trim();
   if (!raw) return '';
+  if (lang === 'ar') {
+    const arabic = arabicStatusLabel(raw);
+    if (arabic) return arabic;
+  }
   const key = raw.toUpperCase().replace(/[\s-]+/g, '_');
   if (CODE_LABELS[key]) return CODE_LABELS[key];
   if (!/[_]/.test(raw) && raw !== raw.toUpperCase()) return raw;

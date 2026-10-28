@@ -19,7 +19,8 @@ import { binThemeTokens } from '../../theme/binGroupTheme';
 import { ALL_TECHNICIAN_ACTIVE_STATUSES } from '../../shared-exports';
 import type { SnapshotDoc } from '../../utils/queryUtils';
 import { calculateDistanceKm, calculateEtaMinutes, getTechnicianLocation, getTicketJobLocation } from '../../utils/liveTracking';
-import { formatStatusLabel } from '../../theme/statusColors';
+import { arabicStatusLabel, formatStatusLabel } from '../../theme/statusColors';
+import TechnicianSlaCountdown from '../components/TechnicianSlaCountdown';
 
 // Text colours readable on the white technician shell (all >= 4.5:1 on white and on their 12% tint).
 // The previous palette (#3b82f6, gold #C9A646, #10b981, #f59e0b) measured 2.1-3.7:1.
@@ -71,7 +72,7 @@ function timestampMs(value: any) {
 export default function TechnicianJobsPage() {
     const { user } = useRole();
     const navigate = useNavigate();
-    const { tx, isRTL } = useLanguage();
+    const { tx, isRTL, lang } = useLanguage();
 
     const [assignedJobs, setAssignedJobs] = useState<SnapshotDoc[]>([]);
     const [assignmentReceipts, setAssignmentReceipts] = useState<Record<string, AssignmentReceipt>>({});
@@ -183,7 +184,7 @@ export default function TechnicianJobsPage() {
                             data-delivery-state={deliveryState}
                             size="small"
                             icon={<BellRing size={11} />}
-                            label={`Dispatch alert: ${formatStatusLabel(deliveryState)}`}
+                            label={`${tx('tech.jobs.dispatch_alert', 'Dispatch alert')}: ${formatStatusLabel(deliveryState, lang)}`}
                             sx={{
                                 fontSize: '0.62rem',
                                 fontWeight: 950,
@@ -192,6 +193,7 @@ export default function TechnicianJobsPage() {
                                 '& .MuiChip-icon': { color: 'inherit' },
                             }}
                         />
+                        <TechnicianSlaCountdown job={job} />
                         {isLive && eta !== null && (
                             <Chip
                                 size="small"
@@ -201,7 +203,7 @@ export default function TechnicianJobsPage() {
                             />
                         )}
                         <Chip
-                            label={String(job.status || '').replace(/_/g, ' ')}
+                            label={(lang === 'ar' && arabicStatusLabel(String(job.status || ''))) || String(job.status || '').replace(/_/g, ' ')}
                             size="small"
                             sx={{ bgcolor: alpha(statusColor, 0.1), color: statusColor, fontWeight: 950, fontSize: '0.7rem', border: `1px solid ${alpha(statusColor, 0.3)}` }}
                         />

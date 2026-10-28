@@ -89,15 +89,23 @@ export async function runEndedLeaseVacancySweep(now = new Date()) {
     if (last) q = q.startAfter(last);
     const snap = await q.get();
     if (snap.empty) break;
+    // One batched read for this page's units instead of one round trip per lease (the sequential
+    // reads were what pushed the sweep past the default function timeout).
+    const unitIds = [...new Set(snap.docs.map((doc) => text(doc.data().unitId, 160)).filter(Boolean))];
+    const unitSnaps = unitIds.length ? await db.getAll(...unitIds.map((id) => db.collection("units").doc(id))) : [];
+    // A unit can have several leases. The map is updated after each write so a later lease on the same
+    // unit sees the new occupancy, exactly as the old read-after-write sequence did.
+    const units = new Map<string, any>(unitSnaps.map((unitSnap) => [unitSnap.id, unitSnap.data()]));
     for (const doc of snap.docs) {
       checked += 1;
       const lease = doc.data(); const unitId = text(lease.unitId, 160);
       if (!unitId) continue;
-      const unit = (await db.collection("units").doc(unitId).get()).data();
+      const unit = units.get(unitId);
       if (!shouldMarkVacant(lease, unit, today)) continue;
       marked += 1;
       if (enabled) {
         await db.collection("units").doc(unitId).set({ occupancyStatus: "VACANT", vacantSince: leaseEnd(lease), vacancyReason: "LEASE_ENDED", vacancySourceId: doc.id, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+        units.set(unitId, { ...unit, occupancyStatus: "VACANT" });
         await doc.ref.set({ leaseStatus: "ended", endedAt: FieldValue.serverTimestamp() }, { merge: true });
       }
       await promptOwnerToList(text(lease.ownerId || lease.ownerUid, 160), unitId, `The lease ended on ${leaseEnd(lease)}.`, leaseEnd(lease));
@@ -109,7 +117,8 @@ export async function runEndedLeaseVacancySweep(now = new Date()) {
   return { checked, eligible: marked, applied: enabled ? marked : 0, autoVacateEnabled: enabled };
 }
 
-export const markEndedLeasesVacant = onSchedule({ schedule: "30 1 * * *", timeZone: "Asia/Dubai", region: "europe-west3" }, async () => { await runEndedLeaseVacancySweep(); });
+// The sweep walks every lease, so it gets 540s instead of the 60s default.
+export const markEndedLeasesVacant = onSchedule({ schedule: "30 1 * * *", timeZone: "Asia/Dubai", region: "europe-west3", timeoutSeconds: 540 }, async () => { await runEndedLeaseVacancySweep(); });
 
 function ago(ms: number) {
   const days = Math.max(0, Math.round(ms / 86_400_000));

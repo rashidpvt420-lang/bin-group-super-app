@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
+import { hardenedFirestoreRules } from './helpers/hardened-firestore-rules.mjs';
 
 const script = fileURLToPath(new URL('../../scripts/harden-bin-connect-rules.mjs', import.meta.url));
 const prefix = `rules_version = '2';
@@ -119,7 +120,9 @@ for (const prefixPredicate of ["!(", "collection != 'tickets' && collection != '
 }
 
 test('final authority hardener preserves BIN Connect fallback exclusions and canonical prefix validators', () => {
-  const source = readFileSync(new URL('../../firestore.rules', import.meta.url), 'utf8');
+  // Every hardening stage that precedes the final-authority hardener runs first (on a temp copy), exactly as
+  // prepare:rules does; this test then runs the BIN Connect hardener and the final hardener itself.
+  const source = hardenedFirestoreRules({ stopBefore: 'harden-final-firestore-authority.mjs' });
   const finalHardener = fileURLToPath(new URL('../../scripts/harden-final-firestore-authority.mjs', import.meta.url));
   isolated(source, (_result, directory, target) => {
     execFileSync(process.execPath, [finalHardener], { cwd: directory, stdio: 'pipe' });
