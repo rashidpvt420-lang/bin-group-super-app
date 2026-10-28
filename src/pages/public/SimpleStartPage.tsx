@@ -70,9 +70,9 @@ const companyContent: Record<'en' | 'ar', CompanyContent> = {
     ctaEmail: 'Email Us',
     location: 'Al Ain, United Arab Emirates',
     appTitle: 'BIN GROUP Super App',
-    appBody: 'The Android Super App (package ae.bingroups.superapp) is in store preparation. There is no public Play Store link yet — contact us to join early access.',
-    appCta: 'Ask about Android early access',
-    appBadge: 'Android app coming soon',
+    appBody: 'BIN GROUP works in your web browser today. For help with the BIN GROUP mobile app, contact us.',
+    appCta: 'Ask about the mobile app',
+    appBadge: 'Mobile app',
   },
   ar: {
     stats: [['دقيقة', 'للفهم'], ['5', 'ملفات مترابطة'], ['7', 'إمارات'], ['إثبات', 'صور · موقع · وقت']],
@@ -104,9 +104,9 @@ const companyContent: Record<'en' | 'ar', CompanyContent> = {
     ctaEmail: 'راسلنا',
     location: 'العين، الإمارات العربية المتحدة',
     appTitle: 'تطبيق BIN GROUP',
-    appBody: 'تطبيق أندرويد (الحزمة ae.bingroups.superapp) قيد التحضير للمتجر. لا يوجد رابط Play Store عام بعد — تواصل معنا للانضمام للوصول المبكر.',
-    appCta: 'اسأل عن الوصول المبكر لأندرويد',
-    appBadge: 'تطبيق أندرويد قريباً',
+    appBody: 'تعمل BIN GROUP اليوم من متصفح الويب. للمساعدة بخصوص تطبيق BIN GROUP للجوال، تواصل معنا.',
+    appCta: 'اسأل عن تطبيق الجوال',
+    appBadge: 'تطبيق الجوال',
   },
 };
 

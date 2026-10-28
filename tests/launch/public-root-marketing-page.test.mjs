@@ -54,8 +54,9 @@ test('light public surfaces use AA-readable gold text instead of brand-fill gold
 
 test('public app and contact copy stays honest and operationally routed', async () => {
   const page = await read('src/pages/public/SimpleStartPage.tsx');
-  assert.match(page, /There is no public Play Store link yet/);
-  assert.match(page, /Android app coming soon/);
+  assert.match(page, /BIN GROUP works in your web browser today\. For help with the BIN GROUP mobile app, contact us\./);
+  assert.doesNotMatch(page, /coming soon|There is no public Play Store link/i, 'no stale store-listing claims');
+  assert.doesNotMatch(page, /play\.google\.com\/store|apps\.apple\.com/, 'no invented store URL');
   assert.match(page, /https:\/\/wa\.me\/\$\{whatsappDigits\}/);
   assert.match(page, /mailto:\$\{CONTACT\.email\}/);
   assert.match(page, /Proof before payment/);

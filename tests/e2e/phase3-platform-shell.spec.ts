@@ -156,8 +156,8 @@ test.describe('Phase 1 marketing and global-shell behavioral regression', () => 
       });
       await expect(requestSupport).toBeVisible();
       await expect(requestSupport).toBeEnabled();
-      await expect(requestSupport).toHaveAttribute('href', 'mailto:ceo@bin-groups.com');
-      await expect(page.getByText('ceo@bin-groups.com', { exact: true })).toBeVisible();
+      await expect(requestSupport).toHaveAttribute('href', 'mailto:support@bin-groups.com');
+      await expect(page.getByText('support@bin-groups.com', { exact: true })).toBeVisible();
       await expect(page.getByRole('link', {
         name: language === 'ar' ? 'احجز عرضاً توضيحياً' : 'Schedule Demo',
         exact: true,

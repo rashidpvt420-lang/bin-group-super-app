@@ -16,8 +16,9 @@
     </style>
 </head>
 <body>
+    <p><a href="/" data-testid="back-to-app">&larr; Back to app</a></p>
     <h1>Privacy Policy</h1>
-    <p class="last-updated">Last Updated: June 14, 2026 | Effective: March 13, 2026</p>
+    <p class="last-updated">Last Updated: October 28, 2026 | Effective: March 13, 2026</p>
 
     <p>BIN GROUP ("we," "our," or "us"), operating as <strong>All Kind Building Projects Contracting L.L.C S.P.C</strong>, is committed to protecting your privacy. This Privacy Policy applies to all users of the <strong>BIN GROUP Super App</strong>, including property owners, tenants, technicians, brokers, and administrators.</p>
 
@@ -34,11 +35,16 @@
     <h2>2. Information We Collect</h2>
     <p>We collect the following categories of personal information:</p>
     <ul>
-        <li><strong>Identity Data:</strong> Full name, email address, phone number, Emirates ID number (for KYC verification).</li>
-        <li><strong>Location Data:</strong> Real-time GPS coordinates of technicians during active duty — used exclusively for job dispatch and route optimization. Location tracking stops when a technician ends their shift.</li>
+        <li><strong>Identity Data:</strong> Full name, email address, phone number, and Emirates ID number (for KYC verification).</li>
+        <li><strong>Identity and Business Documents (KYC):</strong> Images or files you upload to verify your identity or authority, such as an Emirates ID, trade or business licence, ownership documents, and tenancy or other contracts. These are stored in access-restricted storage and shown only to authorised BIN GROUP staff and the roles that need them for your request.</li>
+        <li><strong>Sign-in Data:</strong> If you sign in with Google, we receive your Google account name, email address and profile photo from Google. We do not receive your Google password.</li>
+        <li><strong>Messages and Chat:</strong> Messages you send through in-app chat and support channels, including any attachments, so that the people involved in your request can respond to you.</li>
+        <li><strong>Broker Data:</strong> For brokers: lead and referral details, attribution records, commission records, and the documents needed to verify a broker account.</li>
+        <li><strong>Location Data:</strong> (a) Technicians: real-time GPS coordinates during active duty, used for job dispatch, arrival evidence and route optimization; tracking stops when the technician ends their shift. (b) Owners: during property onboarding the app can read your device location, with your permission, to help set or confirm a property's position. You can decline the permission and enter the address manually.</li>
         <li><strong>Financial Data:</strong> Payment references, approved Cash/Cheque evidence, invoices, receipts, and payroll/rent-related records required for the service. Card processing is not enabled for current Owner activation; if a card provider is enabled under a future approved policy, card details will be handled by that provider rather than stored by BIN GROUP.</li>
         <li><strong>Property Data:</strong> Property details, maintenance history, photos, and contract records associated with your account.</li>
         <li><strong>Usage Data:</strong> App interactions, feature usage, error logs — used to improve service quality.</li>
+        <li><strong>AI Feature Inputs and Outputs:</strong> Text, photos and documents you submit to AI-assisted features (for example the AI assistant, AI Design Studio, damage assessment and document reading) and the results generated for you. See section 6 for the providers involved.</li>
         <li><strong>Photos/Media:</strong> Before-and-after maintenance photos uploaded by technicians or tenants as part of the Evidence-Vault™ workflow.</li>
         <li><strong>Device Data:</strong> Device type, OS version, push notification token for service alerts.</li>
     </ul>
@@ -51,20 +57,22 @@
         <li>Generate digital property records, contracts, and compliance reports.</li>
         <li>Send push notifications for job assignments, ticket updates, and payment confirmations.</li>
         <li>Fulfill UAE regulatory obligations (RERA, DLD, WPS).</li>
+        <li>Verify identity and documents (KYC) for owners, brokers and technicians.</li>
+        <li>Provide AI-assisted features you choose to use. AI output is a suggestion and is reviewed by people before any approval, payment or property record is changed.</li>
         <li>Improve and secure the platform through aggregated analytics.</li>
     </ul>
 
-    <h2>4. GPS & Location Tracking</h2>
-    <p>GPS tracking applies exclusively to technicians during active duty hours. Location data is:</p>
+    <h2>4. GPS & Location</h2>
+    <p>Continuous GPS tracking applies to technicians during active duty hours. Owners can share a one-time device location during property onboarding. Technician location data is:</p>
     <ul>
         <li>Written to Firebase Firestore every 10 seconds while a technician is on an active job.</li>
         <li>Visible only to the assigned property owner and BIN GROUP operations staff.</li>
         <li>Automatically stopped when the technician ends their shift or completes all jobs.</li>
-        <li>Never shared with third parties or used for advertising.</li>
+        <li>Never sold or used for advertising. It is processed by the service providers listed in section 6 only to run the platform.</li>
     </ul>
 
     <h2>5. Camera & Photo Access</h2>
-    <p>Camera access is requested when a technician or tenant submits a maintenance request or completes a job. Photos are uploaded to Firebase Storage, encrypted at rest, and accessible only to the parties involved in the ticket (tenant, assigned technician, property owner, and BIN GROUP admin).</p>
+    <p>Camera access is requested when you take a photo, for example when a technician or tenant submits a maintenance request or completes a job, or when an owner or broker photographs a document. Photos are uploaded to Firebase Storage, encrypted at rest, and accessible only to the parties involved in the ticket (tenant, assigned technician, property owner, and BIN GROUP admin).</p>
 
     <h2>6. Third-Party Services</h2>
     <p>We use the following trusted third-party services to operate the platform:</p>
@@ -75,10 +83,12 @@
         <li><strong>Google Gemini (Google):</strong> Processes text and documents submitted to AI-assisted features (for example the AI assistant, property description analysis and document OCR) through our backend when that feature is configured.</li>
         <li><strong>Google Maps:</strong> Google Maps Platform supports property address lookup, maps and technician route surfaces where the required provider configuration is enabled.</li>
     </ul>
+    <p>Images you upload to the AI Design Studio and the designs generated from them are stored in private storage linked to your account and are shown only to you and authorised BIN GROUP staff.</p>
     <p>We do not sell your personal data to any third party.</p>
 
     <h2>7. Data Retention</h2>
-    <p>We retain data according to its configured retention class and applicable legal, contractual, operational, and audit requirements. Some financial, safety, and technical audit records may require longer retention than ordinary service data. You may request deletion of eligible account data by contacting us at ceo@bin-groups.com. To delete your account and personal data, follow the steps on our <a href="/delete-account">Account Deletion page</a> (https://bin-groups.com/delete-account), or use <strong>Request account deletion</strong> in the app.</p>
+    <p>We retain data according to its configured retention class and applicable legal, contractual, operational, and audit requirements. Some financial, safety, and technical audit records may require longer retention than ordinary service data. You may request deletion of eligible account data by contacting us at support@bin-groups.com.</p>
+    <p><strong>Account deletion:</strong> you can ask us to delete your account either inside the app (More options menu &rarr; <strong>Request account deletion</strong>) or by email, without signing in. We confirm that the request comes from you, then complete the deletion within 30 days. Some records, such as contracts, invoices, payment and audit records, may have to be kept for the period required by law or for the resolution of a dispute. Full steps, what is deleted and what may be kept are on our <a href="/delete-account">Account Deletion page</a> (https://bin-groups.com/delete-account).</p>
 
     <h2>8. Data Security</h2>
     <p>We implement role-based access control (RBAC), Firestore security rules, Firebase App Check, and TLS encryption for all data in transit. Sensitive fields (Emirates ID, IBAN) are access-restricted to authorised roles only.</p>
@@ -91,7 +101,7 @@
         <li>Request deletion of your data where legally permitted.</li>
         <li>Withdraw consent for optional data processing.</li>
     </ul>
-    <p>To exercise these rights, contact: <strong>ceo@bin-groups.com</strong></p>
+    <p>To exercise these rights, contact: <strong>support@bin-groups.com</strong></p>
     <p>To request deletion of your account and data, see <a href="/delete-account">How to delete your account</a>.</p>
 
     <h2>10. Children's Privacy</h2>
@@ -103,7 +113,7 @@
     <h2>12. Contact Us</h2>
     <p>BIN GROUP — All Kind Building Projects Contracting L.L.C S.P.C<br>
     Al Ain, United Arab Emirates<br>
-    Email: <a href="mailto:ceo@bin-groups.com">ceo@bin-groups.com</a><br>
+    Email: <a href="mailto:support@bin-groups.com">support@bin-groups.com</a><br>
     WhatsApp: +971 55 2423233</p>
 
     <footer>&copy; 2026 BIN GROUP — All Kind Building Projects Contracting L.L.C S.P.C. All rights reserved.</footer>

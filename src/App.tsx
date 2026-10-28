@@ -294,7 +294,8 @@ function AppContent() {
     <React.Suspense fallback={<RouteFallback />}>
       <Routes>
         <Route path="/" element={publicOrPilot(withAuth(<LandingPage />, { publicAuth: true, showChrome: false }))} />
-        <Route path="/pilot" element={<PilotLaunchPage />} />
+        {/* The internal pilot launch checklist is not a public page; /pilot sends visitors to the public home page. */}
+        <Route path="/pilot" element={<Navigate to="/" replace />} />
         <Route path="/owner-landing" element={publicOrPilot(withAuth(<OwnerLandingPage />, { publicAuth: true, showChrome: false }))} />
         <Route path="/v1" element={publicOrPilot(withAuth(<LandingPage />, { publicAuth: true, showChrome: false }))} />
         <Route path="/gateway" element={publicOrPilot(withAuth(<RoleGatewayPage />, { publicAuth: true, showChrome: false }))} />
