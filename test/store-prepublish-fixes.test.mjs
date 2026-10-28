@@ -98,3 +98,26 @@ test('Android manifest: no unused boot permission; camera and location hardware 
 test('unused test-data script with hard-coded credentials is gone', async () => {
   assert.equal(await exists('src/scripts/setup_test_data.js'), false);
 });
+
+test('tenant invite page: native app skips the Google popup, shows a plain notice and an email sign-in path; web is unchanged', async () => {
+  const src = await read('src/pages/TenantInvitePage.tsx');
+  assert.match(src, /import \{ isNativeApp, GOOGLE_SIGNIN_UNSUPPORTED_CODE \} from '\.\.\/lib\/nativePlatform'/);
+  // native + signed out => Google accept button is not rendered; email/password login link is, and returns to the invite
+  assert.match(src, /const nativeNeedsEmailSignIn = isNativeApp\(\) && !auth\.currentUser;/);
+  assert.match(src, /\{!nativeNeedsEmailSignIn && \(\s*<Button[^>]*onClick=\{handleAccept\}/);
+  assert.match(src, /data-testid="tenant-invite-email-signin"/);
+  assert.match(src, /href=\{emailSignInHref\}/);
+  assert.match(src, /\/login\?returnTo=\$\{encodeURIComponent\(`\/tenant-invite\?token=\$\{token \|\| ''\}`\)\}/);
+  // the popup is only reached when not native; the guard sits before signInWithPopup
+  const accept = src.slice(src.indexOf('const handleAccept'));
+  assert.ok(accept.indexOf('if (isNativeApp())') > -1 && accept.indexOf('if (isNativeApp())') < accept.indexOf('signInWithPopup('));
+  // unsupported-environment error is a plain notice, not a raw Firebase error
+  assert.match(src, /err\?\.code === GOOGLE_SIGNIN_UNSUPPORTED_CODE/);
+  assert.match(src, /severity=\{error === copy\.googleUnavailable \? 'info' : 'error'\}/);
+  assert.match(src, /Google sign-in is not available in this app\./);
+  // web path intact: Google popup + acceptTenantInvitation callable are still used
+  assert.match(src, /new GoogleAuthProvider\(\)/);
+  assert.match(src, /await signInWithPopup\(auth, provider\)/);
+  assert.match(src, /httpsCallable\(functions, 'acceptTenantInvitation'\)/);
+  assert.match(src, /httpsCallable\(functions, 'validateTenantInvitation'\)/);
+});
