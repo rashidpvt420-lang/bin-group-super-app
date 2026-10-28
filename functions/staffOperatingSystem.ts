@@ -1,5 +1,6 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
+import { requirePrivilegedMfaSession } from "./adminMfaSession";
 
 const FUNCTION_REGION = "europe-west3";
 const CALLABLE_OPTIONS = {
@@ -42,6 +43,16 @@ async function assertActiveAccount(uid: string, token: Record<string, unknown>) 
   if (user.disabled || token.suspended === true || user.customClaims?.suspended === true) {
     throw new HttpsError("permission-denied", "This staff account is disabled or suspended.");
   }
+}
+
+/**
+ * Staff callables are open to ordinary staff (technicians, HR, fleet, finance roles) and also
+ * to Admin / CEO claims. Admin / CEO claims must additionally carry a verified second factor
+ * (same N-05 gate as the Admin-panel callables); other staff roles are not affected.
+ */
+async function assertStaffSession(auth: any, token: Record<string, unknown>) {
+  if (isCeoOrAdmin(token)) await requirePrivilegedMfaSession(auth);
+  await assertActiveAccount(String(auth?.uid || ""), token);
 }
 
 function dubaiDateKey(date = new Date()): string {
@@ -208,7 +219,7 @@ export const submitStaffQuickAction = onCall(CALLABLE_OPTIONS, async (request) =
   const data = request.data || {};
   const actionType = upper(data.actionType);
 
-  await assertActiveAccount(uid, token);
+  await assertStaffSession(request.auth, token);
 
   const supportedActions = new Set(["CLOCK_IN", "ARRIVE", "START_JOB", "BREAKDOWN_REPORT"]);
   if (!supportedActions.has(actionType)) {
@@ -338,7 +349,7 @@ export const completeStaffJobWithAi = onCall(CALLABLE_OPTIONS, async (request) =
   const rawSpokenText = text(data.rawSpokenText);
   const confirmCompletion = data.confirmCompletion === true;
 
-  await assertActiveAccount(uid, token);
+  await assertStaffSession(request.auth, token);
 
   if (!jobId) {
     throw new HttpsError("invalid-argument", "Job ID is required.");
@@ -461,7 +472,7 @@ export const requestStaffOvertime = onCall(CALLABLE_OPTIONS, async (request) => 
   const reason = text(data.reason);
   const jobId = text(data.jobId);
 
-  await assertActiveAccount(uid, token);
+  await assertStaffSession(request.auth, token);
 
   if (!Number.isInteger(estimatedMinutes) || estimatedMinutes < 1 || estimatedMinutes > 360) {
     throw new HttpsError("invalid-argument", "Estimated overtime minutes must be an integer from 1 to 360.");
@@ -554,7 +565,7 @@ export const triggerStaffShiftFinish = onCall(CALLABLE_OPTIONS, async (request) 
   const db = ensureDb();
   const handoverNotes = text(request.data?.handoverNotes);
 
-  await assertActiveAccount(uid, token);
+  await assertStaffSession(request.auth, token);
 
   const todayStr = dubaiDateKey();
   const shiftRef = db.collection("staff_shifts").doc(`SHIFT_${uid}_${todayStr}`);
@@ -702,7 +713,7 @@ export const executeMultiDeptAutomation = onCall(CALLABLE_OPTIONS, async (reques
   const role = getCallerRole(token);
   const managementAuthority = isCeoOrAdmin(token, role) || ["fleet_manager", "operations_manager"].includes(role);
 
-  await assertActiveAccount(uid, token);
+  await assertStaffSession(request.auth, token);
 
   if (!eventType) {
     throw new HttpsError("invalid-argument", "Event type is required.");
@@ -838,7 +849,7 @@ export const resolveStaffException = onCall(CALLABLE_OPTIONS, async (request) =>
   const notes = text(data.notes);
   const role = getCallerRole(token);
 
-  await assertActiveAccount(uid, token);
+  await assertStaffSession(request.auth, token);
 
   if (!exceptionId) {
     throw new HttpsError("invalid-argument", "Exception ID is required.");
@@ -938,7 +949,7 @@ export const getStaffExceptionsQueue = onCall(CALLABLE_OPTIONS, async (request) 
   const db = ensureDb();
   const role = getCallerRole(token);
 
-  await assertActiveAccount(uid, token);
+  await assertStaffSession(request.auth, token);
 
   const snap = await db.collection("staff_exceptions")
     .where("status", "in", ["OPEN", "PENDING_REVIEW", "IN_REVIEW"])
@@ -988,7 +999,7 @@ export const runStaffAiAudit = onCall(CALLABLE_OPTIONS, async (request) => {
   const db = ensureDb();
   const role = getCallerRole(token);
 
-  await assertActiveAccount(uid, token);
+  await assertStaffSession(request.auth, token);
 
   const snap = await db.collection("staff_exceptions")
     .where("status", "in", ["OPEN", "PENDING_REVIEW", "IN_REVIEW"])
