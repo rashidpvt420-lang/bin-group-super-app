@@ -25,8 +25,17 @@ service firebase.storage {
         : null;
     }
 
+    // N-05 (Storage): Admin-tier authority requires an ID token minted with a
+    // second factor, identical to hasAdminSecondFactor() in firestore.rules.
+    // A non-enrolled, bridged or custom-token Admin session gets no Admin
+    // Storage access. HR-role tiers below are intentionally unchanged.
+    function hasAdminSecondFactor() {
+      return isAuth() &&
+        request.auth.token.get('firebase', {}).get('sign_in_second_factor', null) != null;
+    }
+
     function isAdmin() {
-      return isAuth() && (
+      return hasAdminSecondFactor() && isAuth() && (
         (
           claimedRole() == null &&
           (
