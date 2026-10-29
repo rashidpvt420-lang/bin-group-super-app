@@ -35,3 +35,10 @@ test('logged-out chat uses the public assistant; dashboard chat shows confirm bu
   assert.match(chat, /httpsCallable\(functions, 'confirmDashboardAiAction'\)/);
   assert.match(chat, /Nothing changes until you confirm/);
 });
+
+test('AI proposal and audit collections are excluded from the admin catch-all', () => {
+  const rules = readFileSync(new URL('../../firestore.rules', import.meta.url), 'utf8');
+  for (const name of ['ai_action_proposals', 'ai_action_audit']) {
+    assert.equal((rules.match(new RegExp(`'${name}'`, 'g')) || []).length, 2, name);
+  }
+});

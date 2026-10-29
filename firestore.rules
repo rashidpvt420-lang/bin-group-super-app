@@ -2352,7 +2352,9 @@ service cloud.firestore {
           'active_contracts',
           'onboarding_leads',
           'systemMetrics',
-          'binConnectThreads'
+          'binConnectThreads',
+          'ai_action_proposals',
+          'ai_action_audit'
         ]
       ) && hasAdminClaim();
       allow update, delete: if collection != 'tickets' && collection != 'maintenanceTickets' && !(
@@ -2412,7 +2414,9 @@ service cloud.firestore {
           'active_contracts',
           'onboarding_leads',
           'systemMetrics',
-          'binConnectThreads'
+          'binConnectThreads',
+          'ai_action_proposals',
+          'ai_action_audit'
         ]
       ) && hasAdminClaim();
     }
