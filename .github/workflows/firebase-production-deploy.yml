@@ -731,6 +731,8 @@ jobs:
         run: node scripts/delete-obsolete-privileged-accounts-production.mjs --execute
 
       - name: Deploy and verify Firebase production stack
+        # Script self-limits at FIREBASE_DEPLOY_TOTAL_BUDGET_SECONDS (12600s = 210 min); 15 min headroom.
+        timeout-minutes: 225
         env:
           DEPLOYMENT_ENVIRONMENT: production
           GCP_PROJECT_ID: ${{ env.GCP_PROJECT_ID }}
