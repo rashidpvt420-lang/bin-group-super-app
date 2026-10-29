@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Alert, Box, MenuItem, TextField } from '@mui/material';
 import { useLanguage } from '@bin/shared';
-import { auth, addDoc, collection, db, serverTimestamp } from '../lib/firebase';
+import { auth, collection, db, doc, serverTimestamp, writeBatch } from '../lib/firebase';
 import { UiButton, UiCard } from './ui';
 
 export type SuggestionRole = 'owner' | 'tenant' | 'technician' | 'broker';
@@ -46,7 +46,11 @@ export default function SuggestionBoxCard({ role }: { role: SuggestionRole }) {
     if (!uid || !valid) return;
     setState('sending');
     try {
-      await addDoc(collection(db, 'user_suggestions'), { ...buildSuggestionPayload(uid, role, category, title, message), createdAt: serverTimestamp() });
+      // One batch: the suggestion plus the per-user rate-limit stamp (rules allow one every 2 minutes).
+      const batch = writeBatch(db);
+      batch.set(doc(collection(db, 'user_suggestions')), { ...buildSuggestionPayload(uid, role, category, title, message), createdAt: serverTimestamp() });
+      batch.set(doc(db, 'user_suggestion_limits', uid), { lastAt: serverTimestamp() });
+      await batch.commit();
       setTitle('');
       setMessage('');
       setState('sent');
@@ -64,7 +68,7 @@ export default function SuggestionBoxCard({ role }: { role: SuggestionRole }) {
         <TextField size="small" label={t('Short title', 'عنوان قصير')} value={title} onChange={(e) => { setTitle(e.target.value); if (state !== 'sending') setState('idle'); }} inputProps={{ maxLength: SUGGESTION_LIMITS.titleMax }} />
         <TextField multiline minRows={3} label={t('Your suggestion', 'اقتراحك')} value={message} onChange={(e) => { setMessage(e.target.value); if (state !== 'sending') setState('idle'); }} inputProps={{ maxLength: SUGGESTION_LIMITS.messageMax }} helperText={t('Only the BIN GROUP team can read this.', 'فريق BIN GROUP فقط يمكنه قراءة هذا.')} />
         {state === 'sent' && <Alert severity="success">{t('Thank you. Your suggestion was sent to the BIN GROUP team.', 'شكراً لك. تم إرسال اقتراحك إلى فريق BIN GROUP.')}</Alert>}
-        {state === 'error' && <Alert severity="error">{t('Your suggestion could not be sent. Please try again.', 'تعذر إرسال اقتراحك. حاول مرة أخرى.')}</Alert>}
+        {state === 'error' && <Alert severity="error">{t('Your suggestion could not be sent. You can send one suggestion every 2 minutes. Please try again shortly.', 'تعذر إرسال اقتراحك. يمكنك إرسال اقتراح واحد كل دقيقتين. حاول مرة أخرى بعد قليل.')}</Alert>}
         <UiButton type="submit" tone="primary" disabled={!valid || state === 'sending'}>{state === 'sending' ? t('Sending…', 'جارٍ الإرسال…') : t('Send suggestion', 'إرسال الاقتراح')}</UiButton>
       </Box>
     </UiCard>

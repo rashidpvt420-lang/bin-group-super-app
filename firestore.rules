@@ -2018,8 +2018,25 @@ service cloud.firestore {
         && request.resource.data.message.size() <= 2000
         && request.resource.data.status == 'new'
         && request.resource.data.source == 'dashboard_suggestion_box'
-        && request.resource.data.createdAt == request.time;
+        && request.resource.data.createdAt == request.time
+        // Per-user rate limit: the same batch must stamp user_suggestion_limits/{uid}.
+        && getAfter(/databases/$(database)/documents/user_suggestion_limits/$(request.auth.uid)).data.lastAt == request.time;
       allow update, delete: if false;
+    }
+
+    // One suggestion per user every 2 minutes. Written only in the same batch as a
+    // suggestion; nobody reads, deletes or back-dates it.
+    match /user_suggestion_limits/{uid} {
+      allow read, delete: if false;
+      allow create: if signedIn()
+        && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['lastAt'])
+        && request.resource.data.lastAt == request.time;
+      allow update: if signedIn()
+        && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['lastAt'])
+        && request.resource.data.lastAt == request.time
+        && request.time >= resource.data.lastAt + duration.value(120, 's');
     }
 
     match /pilotFeedback/{feedbackId} {
@@ -2376,7 +2393,8 @@ service cloud.firestore {
           'active_contracts',
           'onboarding_leads',
           'systemMetrics',
-          'binConnectThreads'
+          'binConnectThreads',
+          'user_suggestion_limits'
         ]
       ) && hasAdminClaim();
       allow update, delete: if collection != 'tickets' && collection != 'maintenanceTickets' && !(
@@ -2436,7 +2454,8 @@ service cloud.firestore {
           'active_contracts',
           'onboarding_leads',
           'systemMetrics',
-          'binConnectThreads'
+          'binConnectThreads',
+          'user_suggestion_limits'
         ]
       ) && hasAdminClaim();
     }
