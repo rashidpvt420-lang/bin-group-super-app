@@ -9,7 +9,7 @@ test('public assistant is a separate App Check callable that reads no customer c
   assert.match(src, /export const askPublicAppAssistant = onCall\(\{[^}]*enforceAppCheck: true/s);
   assert.match(src, /consumePublicAiQuota/);
   for (const col of ['users', 'properties', 'active_contracts', 'payments', 'tickets', 'invoices']) {
-    assert.doesNotMatch(src, new RegExp(`collection\\(["']${col}["']\\)`), col);
+    assert.ok(!src.includes(`collection("${col}")`) && !src.includes(`collection('${col}')`), col);
   }
   assert.doesNotMatch(src, /from "\.\/aiAssistant"/);
 });
@@ -39,6 +39,6 @@ test('logged-out chat uses the public assistant; dashboard chat shows confirm bu
 test('AI proposal and audit collections are excluded from the admin catch-all', () => {
   const rules = readFileSync(new URL('../../firestore.rules', import.meta.url), 'utf8');
   for (const name of ['ai_action_proposals', 'ai_action_audit']) {
-    assert.equal((rules.match(new RegExp(`'${name}'`, 'g')) || []).length, 2, name);
+    assert.equal(rules.split(`'${name}'`).length - 1, 2, name);
   }
 });
