@@ -5,28 +5,28 @@ import fs from 'node:fs';
 
 // Fixed allowlist of literal repo paths (no dynamic path construction).
 const SOURCES = {
-  'firestore.rules': new URL('../../firestore.rules', import.meta.url),
-  'functions/companySeal.ts': new URL('../../functions/companySeal.ts', import.meta.url),
-  'functions/moneyStatements.ts': new URL('../../functions/moneyStatements.ts', import.meta.url),
-  'functions/pdfEngine.ts': new URL('../../functions/pdfEngine.ts', import.meta.url),
-  'functions/runtime.ts': new URL('../../functions/runtime.ts', import.meta.url),
-  'src/App.tsx': new URL('../../src/App.tsx', import.meta.url),
-  'src/broker/pages/BrokerCommissionsPage.tsx': new URL('../../src/broker/pages/BrokerCommissionsPage.tsx', import.meta.url),
-  'src/components/DocumentCenterCard.tsx': new URL('../../src/components/DocumentCenterCard.tsx', import.meta.url),
-  'src/components/MoneyStatementDownload.tsx': new URL('../../src/components/MoneyStatementDownload.tsx', import.meta.url),
-  'src/pages/OwnerMoneyControlPage.tsx': new URL('../../src/pages/OwnerMoneyControlPage.tsx', import.meta.url),
-  'src/pages/public/DocumentVerificationPage.tsx': new URL('../../src/pages/public/DocumentVerificationPage.tsx', import.meta.url),
-  'src/components/ContractDigitalSignature.tsx': new URL('../../src/components/ContractDigitalSignature.tsx', import.meta.url),
-  'apps/owner-app/src/components/ContractDigitalSignature.tsx': new URL('../../apps/owner-app/src/components/ContractDigitalSignature.tsx', import.meta.url),
-  'src/owner/pages/OwnerSimpleDashboardPage.tsx': new URL('../../src/owner/pages/OwnerSimpleDashboardPage.tsx', import.meta.url),
-  'src/tenant/pages/TenantSimpleDashboardPage.tsx': new URL('../../src/tenant/pages/TenantSimpleDashboardPage.tsx', import.meta.url),
-  'src/technician/pages/TechnicianSimpleDashboardPage.tsx': new URL('../../src/technician/pages/TechnicianSimpleDashboardPage.tsx', import.meta.url),
-  'src/broker/pages/BrokerSimpleDashboardPage.tsx': new URL('../../src/broker/pages/BrokerSimpleDashboardPage.tsx', import.meta.url),
+  'firestore.rules': fs.readFileSync('firestore.rules', 'utf8'),
+  'functions/companySeal.ts': fs.readFileSync('functions/companySeal.ts', 'utf8'),
+  'functions/moneyStatements.ts': fs.readFileSync('functions/moneyStatements.ts', 'utf8'),
+  'functions/pdfEngine.ts': fs.readFileSync('functions/pdfEngine.ts', 'utf8'),
+  'functions/runtime.ts': fs.readFileSync('functions/runtime.ts', 'utf8'),
+  'src/App.tsx': fs.readFileSync('src/App.tsx', 'utf8'),
+  'src/broker/pages/BrokerCommissionsPage.tsx': fs.readFileSync('src/broker/pages/BrokerCommissionsPage.tsx', 'utf8'),
+  'src/components/DocumentCenterCard.tsx': fs.readFileSync('src/components/DocumentCenterCard.tsx', 'utf8'),
+  'src/components/MoneyStatementDownload.tsx': fs.readFileSync('src/components/MoneyStatementDownload.tsx', 'utf8'),
+  'src/pages/OwnerMoneyControlPage.tsx': fs.readFileSync('src/pages/OwnerMoneyControlPage.tsx', 'utf8'),
+  'src/pages/public/DocumentVerificationPage.tsx': fs.readFileSync('src/pages/public/DocumentVerificationPage.tsx', 'utf8'),
+  'src/components/ContractDigitalSignature.tsx': fs.readFileSync('src/components/ContractDigitalSignature.tsx', 'utf8'),
+  'apps/owner-app/src/components/ContractDigitalSignature.tsx': fs.readFileSync('apps/owner-app/src/components/ContractDigitalSignature.tsx', 'utf8'),
+  'src/owner/pages/OwnerSimpleDashboardPage.tsx': fs.readFileSync('src/owner/pages/OwnerSimpleDashboardPage.tsx', 'utf8'),
+  'src/tenant/pages/TenantSimpleDashboardPage.tsx': fs.readFileSync('src/tenant/pages/TenantSimpleDashboardPage.tsx', 'utf8'),
+  'src/technician/pages/TechnicianSimpleDashboardPage.tsx': fs.readFileSync('src/technician/pages/TechnicianSimpleDashboardPage.tsx', 'utf8'),
+  'src/broker/pages/BrokerSimpleDashboardPage.tsx': fs.readFileSync('src/broker/pages/BrokerSimpleDashboardPage.tsx', 'utf8'),
 };
 const read = (key) => {
-  const url = SOURCES[key];
-  if (!url) throw new Error(`unlisted source ${key}`);
-  return fs.readFileSync(url, 'utf8');
+  const src = SOURCES[key];
+  if (src === undefined) throw new Error(`unlisted source ${key}`);
+  return src;
 };
 
 test('statement callable uses only the caller uid, App Check and active-account checks', () => {
