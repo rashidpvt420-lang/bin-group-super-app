@@ -1998,6 +1998,30 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // Suggestion box: owners, tenants, technicians and brokers file their own ideas.
+    // Create-only for the signed-in role holder, bound to their uid and role claim,
+    // server-timestamped; only MFA admins can read them. Nobody edits or deletes.
+    match /user_suggestions/{suggestionId} {
+      allow read: if isAdmin();
+      allow create: if signedIn()
+        && claimedRole() in ['owner', 'tenant', 'technician', 'broker']
+        && request.resource.data.keys().hasOnly(['createdBy', 'role', 'category', 'title', 'message', 'status', 'source', 'createdAt'])
+        && request.resource.data.keys().hasAll(['createdBy', 'role', 'category', 'title', 'message', 'status', 'source', 'createdAt'])
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.role == claimedRole()
+        && request.resource.data.category in ['new_feature', 'improvement', 'problem', 'other']
+        && request.resource.data.title is string
+        && request.resource.data.title.size() >= 3
+        && request.resource.data.title.size() <= 120
+        && request.resource.data.message is string
+        && request.resource.data.message.size() >= 10
+        && request.resource.data.message.size() <= 2000
+        && request.resource.data.status == 'new'
+        && request.resource.data.source == 'dashboard_suggestion_box'
+        && request.resource.data.createdAt == request.time;
+      allow update, delete: if false;
+    }
+
     match /pilotFeedback/{feedbackId} {
       allow read: if isAdmin();
       allow create: if signedIn() && request.resource.data.get('status', null) == 'new';

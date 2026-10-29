@@ -1,3 +1,4 @@
+import SuggestionBoxCard from '../../components/SuggestionBoxCard';
 import { Box, Button, Skeleton, Stack, Typography } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '../../context/LanguageContext';
@@ -115,6 +116,8 @@ export default function TenantSimpleDashboardPage() {
           <Typography sx={{ ...uiType.body, fontWeight: 800, color: ui.badText }}>{t('tenant.home.emergency', 'Emergency? Get help now', 'طوارئ؟ اطلب المساعدة الآن')}</Typography>
           <Typography sx={{ ...uiType.small, color: ui.badText }}>{ar ? `الاستجابة خلال ${CANONICAL_SLA_POLICY.EMERGENCY.minutes} دقيقة` : `Response within ${CANONICAL_SLA_POLICY.EMERGENCY.minutes} minutes`}</Typography>
         </Box>
+
+        <SuggestionBoxCard role="tenant" />
 
         <Button onClick={() => navigate('/tenant/dashboard/full')} sx={{ alignSelf: isRTL ? 'flex-end' : 'flex-start', color: ui.goldText, fontWeight: 700, minHeight: ui.touchTarget }}>{t('tenant.home.full', 'Open full dashboard', 'فتح اللوحة الكاملة')}</Button>
       </Stack>
