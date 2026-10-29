@@ -232,6 +232,9 @@ await db.collection('contracts').doc(contractId).set({
   maintenanceIncluded: true,
   propertyManagementIncluded: true,
   tenantContractRequired: true,
+  // Fixture contract must satisfy the ticket service-entitlement gate (functions/propertyServiceEntitlement.ts).
+  paymentVerified: true,
+  paymentStatus: 'APPROVED',
   e2eLaunchSeed: true,
   updatedAt: now,
   createdAt: now,

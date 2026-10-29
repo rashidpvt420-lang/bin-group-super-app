@@ -558,6 +558,18 @@ export const submitAIDesignRequest = onCall({
       role,
       message: cleanText(error?.message, "AI image provider did not complete the request.", 300),
     });
+    // Admin-only failure ledger (no client rule grants access): failed renders were previously only
+    // visible in Cloud Logging. No image bytes, prompts or contact details are stored here.
+    await db.collection("design_request_failures").doc(requestId).set({
+      requestId,
+      uid,
+      role,
+      status: "FAILED",
+      errorCode: error instanceof HttpsError ? error.code : "unavailable",
+      message: cleanText(error?.message, "AI image provider did not complete the request.", 300),
+      quotaRefunded: true,
+      failedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true }).catch(() => undefined);
     if (error instanceof HttpsError) throw error;
     throw new HttpsError("unavailable", "AI image rendering is temporarily unavailable. No design workflow record was created.");
   }
@@ -570,15 +582,20 @@ export const getAIDesignRequestMedia = onCall({
   memory: "256MiB",
 }, async (request) => {
   if (!request.auth?.uid) throw new HttpsError("unauthenticated", "Sign in before accessing protected design media.");
-  const requestId = cleanRequestId(request.data?.requestId);
+  const rawRequestId = cleanText(request.data?.requestId, "", 160);
+  if (!rawRequestId) throw new HttpsError("invalid-argument", "requestId is required.");
+  const requestId = cleanRequestId(rawRequestId);
   const snap = await db.collection("design_requests").doc(requestId).get();
-  if (!snap.exists) throw new HttpsError("not-found", "Design request not found.");
+  // A missing request is an expected outcome (deleted/old links, uptime probes). Answer with an
+  // empty, non-error payload instead of a logged 404 so real failures stay visible in the logs.
+  if (!snap.exists) return { requestId, found: false, referenceImages: [], generatedImages: [], expiresAtMs: 0 };
   const data = snap.data() || {};
   if (!canReadRequest(request.auth, data)) {
     throw new HttpsError("permission-denied", "You cannot access this design request media.");
   }
   return {
     requestId,
+    found: true,
     ...(await resolveMedia(data)),
   };
 });

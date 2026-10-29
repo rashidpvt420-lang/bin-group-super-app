@@ -4,6 +4,7 @@ import * as admin from "firebase-admin";
 import { PropertyGeoAuthorityError, resolveDispatchReadyPropertyGeo } from "./propertyGeoAuthority";
 import { isSingleUnitProperty, UNIT_SCOPE, unitRecordsQuery } from "./ticketUnitScope";
 import { resolvePropertyDisplayName } from "./shared/propertyDisplayName";
+import { assertPropertyServiceEntitlement } from "./propertyServiceEntitlement";
 
 if (!admin.apps.length) admin.initializeApp();
 const db = admin.firestore();
@@ -47,6 +48,7 @@ export const ownerCreateMaintenanceTicket = onCall(
     if (text(property.ownerId || property.ownerUid, 160) !== ownerUid) {
       throw new HttpsError("permission-denied", "The selected property is not bound to this owner.");
     }
+    await assertPropertyServiceEntitlement(db, (ref) => ref.get(), propertyId, property);
 
     let unit: FirebaseFirestore.DocumentData = {};
     let unitScope: string = UNIT_SCOPE.UNIT;

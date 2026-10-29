@@ -20,7 +20,7 @@ const future = () => admin.firestore.Timestamp.fromMillis(Date.now() + 365 * 864
 function verifiedProperty(overrides = {}) {
   const verifiedAt = admin.firestore.Timestamp.fromMillis(Date.now() - 86400000);
   return {
-    ownerId: OWNER, ownerUid: OWNER, name: 'Unit Scope Villa', status: 'ACTIVE', activationStatus: 'ACTIVE',
+    ownerId: OWNER, ownerUid: OWNER, contractId: 'contract_unit_scope', name: 'Unit Scope Villa', status: 'ACTIVE', activationStatus: 'ACTIVE',
     emirate: 'Abu Dhabi', city: 'Al Ain', area: 'Al Ain', address: 'Villa 1, Al Ain, UAE',
     geo: {
       lat: 24.2017, lng: 55.7372, verified: true, dispatchReady: true, verifiedBy: 'founder_uid', verifiedAt,
@@ -55,6 +55,7 @@ test.beforeEach(async () => {
   await clearFirestore();
   await db.doc(`users/${TECH}`).set(readyTechnician());
   await db.doc(`technicians/${TECH}`).set(readyTechnician());
+  await db.doc('contracts/contract_unit_scope').set({ ownerId: OWNER, ownerUid: OWNER, status: 'ACTIVE', contractStatus: 'active', paymentVerified: true, paymentStatus: 'APPROVED' });
 });
 
 test('single-unit villa with units:1 and no units record: whole-property ticket is created and manually assignable', async () => {
