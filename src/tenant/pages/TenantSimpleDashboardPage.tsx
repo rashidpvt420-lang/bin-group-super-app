@@ -1,4 +1,5 @@
 import SuggestionBoxCard from '../../components/SuggestionBoxCard';
+import PaymentCollectionRecordsCard from '../../components/PaymentCollectionRecordsCard';
 import { Box, Button, Skeleton, Stack, Typography } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '../../context/LanguageContext';
@@ -118,6 +119,7 @@ export default function TenantSimpleDashboardPage() {
         </Box>
 
         <SuggestionBoxCard role="tenant" />
+        <PaymentCollectionRecordsCard />
 
         <Button onClick={() => navigate('/tenant/dashboard/full')} sx={{ alignSelf: isRTL ? 'flex-end' : 'flex-start', color: ui.goldText, fontWeight: 700, minHeight: ui.touchTarget }}>{t('tenant.home.full', 'Open full dashboard', 'فتح اللوحة الكاملة')}</Button>
       </Stack>

@@ -40,6 +40,7 @@ import { PHASE1_PAYMENT_POLICY, normalizeCommitSha, useLanguage } from '@bin/sha
 import PortalSessionControls from '../components/PortalSessionControls';
 import SafeIcon, { renderSafeIcon } from '../components/SafeIcon';
 import AdminSuggestionsPage from './AdminSuggestionsPage';
+import AdminPaymentCollectionPage from './AdminPaymentCollectionPage';
 import { CANONICAL_SLA_POLICY } from '../config/uaeDominationBlueprint';
 
 const ADMIN_OPERATIONS_CONSOLE_URL = 'https://bin-group-admin-panel.web.app';
@@ -119,6 +120,7 @@ export default function AdminTerminal() {
   const location = useLocation();
   const showingProfile = location.pathname.endsWith('/profile');
   const showingSuggestions = location.pathname.endsWith('/suggestions');
+  const showingPaymentCollection = location.pathname.endsWith('/payment-collections');
 
   const label = (key: string, fallback: string) => tx(key, fallback);
 
@@ -225,6 +227,8 @@ export default function AdminTerminal() {
 
       {showingSuggestions ? (
         <AdminSuggestionsPage />
+      ) : showingPaymentCollection ? (
+        <AdminPaymentCollectionPage />
       ) : showingProfile ? (
         <Card sx={{ mb: 3, bgcolor: '#FFFFFF', border: '1px solid rgba(201,166,70,0.32)', borderRadius: 4, color: '#111827' }}>
           <CardContent>
@@ -267,6 +271,7 @@ export default function AdminTerminal() {
                     <ListRow key={action.label} isRTL={isRTL} title={action.label} subtitle={action.helper} onClick={() => openOperationsTool(action.path)} />
                   ))}
                   <ListRow isRTL={isRTL} title={label('admin.today.suggestions', 'User suggestions')} subtitle={label('admin.today.suggestionsHelper', 'Ideas sent from the owner, tenant, technician and broker dashboards.')} onClick={() => navigate('/admin/suggestions')} />
+                  <ListRow isRTL={isRTL} title={label('admin.today.paymentCollection', 'Record cash / cheque collection')} subtitle={label('admin.today.paymentCollectionHelper', 'Finance admin with MFA: record a collected payment with proof.')} onClick={() => navigate('/admin/payment-collections')} />
                 </Box>
               </UiCard>
             </Box>
