@@ -39,6 +39,7 @@ import { auth, collection, db, getCountFromServer, getDocs, limit, orderBy, quer
 import { PHASE1_PAYMENT_POLICY, normalizeCommitSha, useLanguage } from '@bin/shared';
 import PortalSessionControls from '../components/PortalSessionControls';
 import SafeIcon, { renderSafeIcon } from '../components/SafeIcon';
+import AdminSuggestionsPage from './AdminSuggestionsPage';
 import { CANONICAL_SLA_POLICY } from '../config/uaeDominationBlueprint';
 
 const ADMIN_OPERATIONS_CONSOLE_URL = 'https://bin-group-admin-panel.web.app';
@@ -117,6 +118,7 @@ export default function AdminTerminal() {
   const navigate = useNavigate();
   const location = useLocation();
   const showingProfile = location.pathname.endsWith('/profile');
+  const showingSuggestions = location.pathname.endsWith('/suggestions');
 
   const label = (key: string, fallback: string) => tx(key, fallback);
 
@@ -221,7 +223,9 @@ export default function AdminTerminal() {
         <strong>{PHASE1_PAYMENT_POLICY.policyText}</strong>
       </Alert>
 
-      {showingProfile ? (
+      {showingSuggestions ? (
+        <AdminSuggestionsPage />
+      ) : showingProfile ? (
         <Card sx={{ mb: 3, bgcolor: '#FFFFFF', border: '1px solid rgba(201,166,70,0.32)', borderRadius: 4, color: '#111827' }}>
           <CardContent>
             <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" spacing={3}>
@@ -262,6 +266,7 @@ export default function AdminTerminal() {
                   {commandActions.map((action) => (
                     <ListRow key={action.label} isRTL={isRTL} title={action.label} subtitle={action.helper} onClick={() => openOperationsTool(action.path)} />
                   ))}
+                  <ListRow isRTL={isRTL} title={label('admin.today.suggestions', 'User suggestions')} subtitle={label('admin.today.suggestionsHelper', 'Ideas sent from the owner, tenant, technician and broker dashboards.')} onClick={() => navigate('/admin/suggestions')} />
                 </Box>
               </UiCard>
             </Box>

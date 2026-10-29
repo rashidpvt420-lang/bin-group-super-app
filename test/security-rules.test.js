@@ -14,6 +14,7 @@ import './ticket-chat-messages-rules.test.js';
 import './n16-n19-technician-self-authority-rules.test.js';
 import './property-geo-authority-rules.test.js';
 import './account-deletion-request-rules.test.js';
+import './user-suggestions-rules.test.js';
 import { describe, it, before, after, beforeEach } from 'node:test';
 import assert from 'node:assert';
 import { initializeTestEnvironment, assertFails, assertSucceeds } from '@firebase/rules-unit-testing';
