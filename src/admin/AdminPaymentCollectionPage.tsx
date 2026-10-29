@@ -19,7 +19,7 @@ export default function AdminPaymentCollectionPage() {
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<{ ok: boolean; text: string } | null>(null);
-  const [idempotencyKey] = useState(() => `pc_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`);
+  const [idempotencyKey] = useState(() => `pc_${crypto.randomUUID()}`);
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) => setForm((f) => ({ ...f, [k]: e.target.value }));
 
   const submit = async () => {

@@ -17,8 +17,9 @@ test('collection callables require MFA finance admin + App Check and accept only
 test('records, voids and audit are immutable from every client, including the admin catch-all', () => {
   const rules = read('firestore.rules');
   for (const name of ['payment_collection_records', 'payment_collection_voids', 'payment_collection_audit']) {
-    assert.match(rules, new RegExp(`match /${name}/\\{\\w+\\} \\{[^}]*allow create, update, delete: if false;`));
-    assert.equal((rules.match(new RegExp(`'${name}'`, 'g')) || []).length, 2, `${name} excluded from admin catch-all create and update/delete`);
+    const block = rules.slice(rules.indexOf(`match /${name}/{`)).split('\n    }')[0];
+    assert.ok(block.includes('allow create, update, delete: if false;'), `${name} immutable`);
+    assert.equal(rules.split(`'${name}'`).length - 1, 2, `${name} excluded from admin catch-all create and update/delete`);
   }
   const storage = read('storage.rules');
   assert.match(storage, /match \/payment-collections\/\{payerUid\}\/\{allPaths=\*\*\} \{\s*allow read: if isAuth\(\) && \(request\.auth\.uid == payerUid \|\| isAdmin\(\)\);\s*allow write: if false;/);
