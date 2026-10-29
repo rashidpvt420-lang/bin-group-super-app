@@ -38,6 +38,7 @@ import { isTechnicianAssignmentEvent, technicianAssignedNotificationSeed } from 
 import { requirePrivilegedMfaSession } from "./adminMfaSession";
 import { redispatchWaitingTickets } from "./ticketRedispatch";
 import { verifyTenantTicketUnitLink } from "./tenantUnitLink";
+import { assertPropertyServiceEntitlement } from "./propertyServiceEntitlement";
 import { chatMessageSender, chatMessageSnippet, chatRecipients } from "./shared/ticketChatNotification";
 
 // [V10] PRODUCTION GRADE FULL-STACK STABILIZATION
@@ -1062,6 +1063,12 @@ async function attemptAutoAssignment(ticketRef: admin.firestore.DocumentReferenc
         ) return;
         const requesterRole = normalizeRole(ticketData.requesterRole);
         const source = safeString(ticketData.source).toUpperCase();
+        if (source === "WHATSAPP") {
+            // Public WhatsApp intake has no verified property or paid service contract; a
+            // coordinator confirms entitlement before any technician is dispatched.
+            await escalateManualDispatch({ db, ticketRef, reasonCode: "SERVICE_CONTRACT_UNVERIFIED", details: { source: "whatsapp" } });
+            return;
+        }
         if (requesterRole === "tenant" || source === "TENANT_PORTAL") {
             // Same tenant-unit link createTenantServiceTicket accepted (uid fields or the
             // tenant's verified email); an unverified link is escalated, never dropped silently.
@@ -1288,8 +1295,13 @@ export const createAiMaintenanceTicket = onCall({ cors: true, enforceAppCheck: t
     if (!propertyDoc.exists) throw new HttpsError("not-found", "Property not found.");
     const propertyData = propertyDoc.data()!;
 
-    if (propertyData.ownerId !== request.auth.uid && request.auth.token?.admin !== true) {
+    const isAdminCaller = await hasCallableRoleAccess(request.auth, new Set(["admin", "super_admin"]));
+    if (propertyData.ownerId !== request.auth.uid && !isAdminCaller) {
         throw new HttpsError("permission-denied", "You do not own this property.");
+    }
+    if (!isAdminCaller) {
+        // Owner AI tickets need the same active, payment-verified service contract as the portal.
+        await assertPropertyServiceEntitlement(db, (ref) => ref.get(), String(propertyId), propertyData);
     }
 
     const now = FieldValue.serverTimestamp();
