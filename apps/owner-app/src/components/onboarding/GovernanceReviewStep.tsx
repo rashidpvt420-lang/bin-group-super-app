@@ -157,7 +157,7 @@ const GovernanceReviewStep: React.FC<{ onNext: () => void; onBack: () => void }>
 
                             {signedData && (
                                 <Alert severity="success" sx={{ mb: 3, py: 0, '& .MuiAlert-message': { fontSize: '0.7rem' } }}>
-                                    SIGNED: {signedData.institutionalHash}
+                                    SIGNED: {signedData.signature}
                                 </Alert>
                             )}
 

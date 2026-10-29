@@ -122,7 +122,7 @@ const AdminSubmissionStep: React.FC<{ onNext: () => void }> = ({ onNext }) => {
 
                         {signedData && (
                              <Alert severity="success" sx={{ bgcolor: 'rgba(16,185,129,0.1)', color: '#4ADE80', border: '1px solid rgba(16,185,129,0.2)' }}>
-                                DIGITAL CONTRACT SIGNED: {signedData.institutionalHash}
+                                DIGITAL CONTRACT SIGNED: {signedData.signature}
                              </Alert>
                         )}
 

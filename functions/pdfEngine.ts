@@ -2,11 +2,12 @@ import { getStorage } from 'firebase-admin/storage';
 import crypto from 'crypto';
 // PDFKit is lazy-loaded below to keep Functions discovery fast.
 import { isArabic, layoutBidiText } from "./arabicPdfText";
+import { drawCompanySeal, drawVerificationQr, newIssuedDocumentId, registerIssuedDocument, verificationUrl } from "./companySeal";
 
 type PdfKitCtor = typeof import('pdfkit');
 let cachedPdfKit: PdfKitCtor | null = null;
 
-async function loadPdfKit(): Promise<PdfKitCtor> {
+export async function loadPdfKit(): Promise<PdfKitCtor> {
     if (cachedPdfKit) return cachedPdfKit;
     const mod = await import('pdfkit');
     cachedPdfKit = (mod as any).default || mod;
@@ -15,7 +16,7 @@ async function loadPdfKit(): Promise<PdfKitCtor> {
 
 let cachedCairoFont: Buffer | null = null;
 
-async function getCairoFont(): Promise<Buffer> {
+export async function getCairoFont(): Promise<Buffer> {
     if (cachedCairoFont) return cachedCairoFont;
     
     const fs = require('fs');
@@ -38,7 +39,7 @@ async function getCairoFont(): Promise<Buffer> {
  * through fontkit; word order, spacing, wrapping and alignment are computed here so digits and
  * Latin runs are never reversed and wrapped RTL paragraphs start on the first line.
  */
-function bidiText(doc: any, text: string, x?: number | null, y?: number | null, options: Record<string, any> = {}) {
+export function bidiText(doc: any, text: string, x?: number | null, y?: number | null, options: Record<string, any> = {}) {
     const value = String(text ?? '');
     if (!isArabic(value)) {
         if (x != null && y != null) doc.text(value, x, y, options);
@@ -273,6 +274,8 @@ export type CanonicalPdfArtifact = {
     generation: string;
     documentHash: string;
     byteLength: number;
+    /** Public verification id (contracts issued after the official-seal change). */
+    verificationId?: string;
 };
 
 async function savePdf(buffer: Buffer, path: string, metadata: Record<string, any>): Promise<CanonicalPdfArtifact> {
@@ -320,6 +323,8 @@ export async function generateContractPdfArtifact(data: any): Promise<CanonicalP
         const ownerId = textValue(data.ownerId || data.uid, '');
         const propertyPassportId = textValue(data.propertyPassportId || data.passportId || propertyId, '');
         const documentHash = crypto.createHash('sha256').update(JSON.stringify({ contractId, ownerId, propertyId, contractMode, version: AGREEMENT_VERSION, signedAt: data.signedAt || data.acceptedAt || new Date().toISOString() })).digest('hex');
+        const verificationId = newIssuedDocumentId('ctr');
+        const issuedAtIso = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
 
         const doc = new (PDFDocument as any)({
             margin: 50,
@@ -355,9 +360,26 @@ export async function generateContractPdfArtifact(data: any): Promise<CanonicalP
                     documentType: 'full_owner_service_agreement',
                     documentHash,
                     signedBy: textValue(data.signatureName || data.ownerName || data.fullName, ''),
-                    signedAt: textValue(data.signedAt || data.acceptedAt || new Date().toISOString(), '')
+                    signedAt: textValue(data.signedAt || data.acceptedAt || new Date().toISOString(), ''),
+                    verificationId,
                 });
-                resolve(artifact);
+                // Register the fingerprint for public verification. Best-effort: a registry outage
+                // must not block an owner's signing flow (the PDF and its hash are already stored).
+                try {
+                    await registerIssuedDocument({
+                        documentId: verificationId,
+                        documentType: 'owner_service_agreement',
+                        subjectUid: ownerId,
+                        sha256: artifact.pdfSha256,
+                        byteLength: artifact.byteLength,
+                        format: 'pdf',
+                        issuedAtIso,
+                        sourceRef: `contracts/${contractId}`,
+                    });
+                } catch (registryErr) {
+                    console.error('Issued document registry write failed for contract', contractId, registryErr);
+                }
+                resolve({ ...artifact, verificationId });
             } catch (err) {
                 reject(err);
             }
@@ -523,28 +545,33 @@ export async function generateContractPdfArtifact(data: any): Promise<CanonicalP
             'بكتابة الاسم القانوني أو قبول خانة الموافقة أو سداد مبلغ التفعيل أو الاعتماد عبر منصة مجموعة بن، يؤكد المالك أنه قرأ وفهم ووافق على هذه الاتفاقية الكاملة ثنائية اللغة لخدمات المالك. ويُعد ملف PDF الناتج النسخة المنفذة والمقفلة لسجلات المالك والشركة والعقار وجواز العقار والتدقيق.'
         );
 
-        const y = doc.y > 650 ? 100 : doc.y + 20;
-        if (doc.y > 650) doc.addPage();
-        doc.strokeColor('#9CA3AF').lineWidth(1).moveTo(55, y + 45).lineTo(240, y + 45).stroke();
-        doc.strokeColor('#9CA3AF').moveTo(350, y + 45).lineTo(535, y + 45).stroke();
+        // Official execution block: owner e-signature, BIN GROUP seal + authorised signatory, QR.
+        if (doc.y > 500) doc.addPage();
+        const y = doc.y + 20;
+        doc.strokeColor('#9CA3AF').lineWidth(1).moveTo(55, y + 92).lineTo(240, y + 92).stroke();
         doc.fillColor(INK).fontSize(8);
-        bidiText(doc, `OWNER: ${textValue(data.signatureName || data.ownerName || data.fullName)}`, 55, y + 55, { width: 190 });
-        doc.text('BIN GROUP AUTHORIZED SIGNATORY', 350, y + 55, { width: 190 });
+        bidiText(doc, `OWNER: ${textValue(data.signatureName || data.ownerName || data.fullName)}`, 55, y + 96, { width: 190 });
 
         const signedAtStr = data.ownerSignedAt || data.signedAt || data.acceptedAt || data.ownerSignature?.signedAt;
         if (signedAtStr) {
-            const formattedDate = new Date(signedAtStr).toLocaleString('en-AE');
-            doc.fillColor(MUTED).fontSize(7).text(`Signed electronically at: ${formattedDate}`, 55, y + 68, { width: 190 });
+            const formattedDate = new Date(signedAtStr).toLocaleString('en-AE', { timeZone: 'Asia/Dubai' });
+            doc.fillColor(MUTED).fontSize(7).text(`Signed electronically at: ${formattedDate} (Dubai)`, 55, y + 108, { width: 190 });
         }
+
+        drawCompanySeal(doc, 345, y, { documentId: verificationId, issuedAtIso, writeBidi: bidiText });
 
         const binGroupStamp = data.binGroupStamp;
         if (binGroupStamp?.stamped) {
-            doc.fillColor(GOLD).fontSize(7).text(String(binGroupStamp.label || 'BIN GROUP ADMIN APPROVED / DIGITAL STAMP'), 350, y + 25, { width: 190, align: 'center' });
-            const stampDate = binGroupStamp.stampedAtIso || (binGroupStamp.stampedAt ? new Date(binGroupStamp.stampedAt).toISOString() : new Date().toISOString());
-            doc.fillColor(MUTED).fontSize(6).text(`Approved By: ${binGroupStamp.stampedBy} at ${stampDate}`, 350, y + 35, { width: 190, align: 'center' });
+            const stampDate = binGroupStamp.stampedAtIso || (binGroupStamp.stampedAt ? new Date(binGroupStamp.stampedAt).toISOString() : issuedAtIso);
+            doc.fillColor(GOLD).fontSize(6.5).text(`${String(binGroupStamp.label || 'BIN GROUP ADMIN APPROVED')} - ${stampDate}`, 345, y + 132, { width: 190, align: 'center' });
         }
 
-        doc.fillColor(MUTED).fontSize(7).text(`Digitally generated and stored by BIN GROUP Super App. Hash: ${documentHash}`, 55, y + 85, { width: 480, align: 'center' });
+        const qrY = y + 150;
+        drawVerificationQr(doc, verificationUrl(verificationId), 55, qrY, 64);
+        doc.fillColor(MUTED).fontSize(7)
+            .text(`Verify this agreement: ${verificationUrl(verificationId)}`, 130, qrY + 4, { width: 405 })
+            .text(`Document ID: ${verificationId}`, 130, qrY + 18, { width: 405 })
+            .text(`Digitally issued and stored by BIN GROUP Super App. Record hash: ${documentHash}`, 130, qrY + 32, { width: 405 });
 
         doc.end();
     });

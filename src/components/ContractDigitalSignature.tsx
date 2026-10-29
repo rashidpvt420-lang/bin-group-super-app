@@ -9,9 +9,6 @@ import VerifiedUserIcon from '@mui/icons-material/VerifiedUser';
 import ArticleIcon from '@mui/icons-material/Article';
 import { useLanguage } from '@bin/shared';
 import { formatAED } from '../utils/formatters';
-import { jsPDF } from 'jspdf';
-import 'jspdf-autotable';
-import { registerArabicFont } from '../utils/arabicPdfFont';
 
 interface Props {
     propertyData: any;
@@ -33,68 +30,21 @@ export default function ContractDigitalSignature({ propertyData, selectedPlan, o
     };
 
     const handleFinalize = () => {
+        // No PDF and no "hash" are made on the phone any more. The official, stamped copy is
+        // rendered by the server from the stored signature record (with the BIN GROUP seal,
+        // authorised signatory and a verification QR) once the contract is issued.
         const signedArtifact = {
             signature,
             timestamp: new Date().toISOString(),
             version: 'v2.0-UAE-INSTITUTIONAL',
-            institutionalHash: `SIG-${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
             acceptanceLog: {
                 accepted,
                 otpVerified: true,
                 platform: 'BIN-GENESIS-SOVEREIGN-OS'
             }
         };
-        
-        generateContractPDF(signedArtifact);
+        setSnackbar({ open: true, message: 'Signature recorded. Download the official stamped copy from your documents once it is issued.', severity: 'success' });
         onSign(signedArtifact);
-    };
-
-    const generateContractPDF = (artifact: any) => {
-        const doc = new jsPDF();
-        registerArabicFont(doc);
-        const contractInfo = getContractContent();
-        
-        doc.setFontSize(22);
-        doc.text("BIN GROUP - SOVEREIGN CONTRACT", 105, 20, { align: "center" });
-        
-        doc.setFontSize(16);
-        doc.text(contractInfo.title, 105, 30, { align: "center" });
-        
-        doc.setFontSize(12);
-        doc.text(`Version: ${artifact.version}`, 20, 50);
-        doc.text(`Hash: ${artifact.institutionalHash}`, 20, 58);
-        doc.text(`Timestamp: ${new Date(artifact.timestamp).toLocaleString()}`, 20, 66);
-
-        doc.setFontSize(14);
-        doc.text("1. PARTIES", 20, 85);
-        doc.setFontSize(11);
-        doc.text(`Property: ${propertyData?.address || propertyData?.propertyName || 'Subject Asset'}`, 20, 95);
-        doc.text(`Owner/Entity: ${propertyData?.authorityName || propertyData?.departmentName || 'Registered Legal Owner'}`, 20, 102);
-        doc.text(`Provider: BIN GROUP PROPERTY MANAGEMENT LLC`, 20, 109);
-
-        doc.setFontSize(14);
-        doc.text("2. SCOPE OF SERVICES", 20, 125);
-        doc.setFontSize(11);
-        const splitScope = doc.splitTextToSize(contractInfo.body, 170);
-        doc.text(splitScope, 20, 135);
-
-        doc.setFontSize(14);
-        doc.text("3. PRICING & DISBURSEMENT", 20, 180);
-        doc.setFontSize(11);
-        doc.text(`Annual Management Fee: AED ${formatAED(Math.round(selectedPlan?.annualPrice || selectedPlan?.package?.annualPrice || 0))}`, 20, 190);
-        doc.text(`Payment Schedule: Institutional settlement manifest applies.`, 20, 197);
-
-        doc.setFontSize(14);
-        doc.text("4. SIGNATURES", 20, 220);
-        doc.setFontSize(11);
-        doc.text(`Digitally Signed By: ${artifact.signature}`, 20, 230);
-        doc.text(`Mobile OTP Verified: YES`, 20, 237);
-        doc.text(`Platform Origin: ${artifact.acceptanceLog.platform}`, 20, 244);
-        
-        // Add secure border around signature
-        doc.rect(15, 215, 180, 40);
-
-        doc.save(`BIN_GROUP_Contract_${artifact.institutionalHash}.pdf`);
     };
 
     const getContractContent = () => {

@@ -5,12 +5,14 @@ import { DollarSign, ArrowUpRight, ArrowDownRight, FileText, Download, TrendingU
 import { db, collection, query, where, getDocs, orderBy, limit } from '../lib/firebase';
 import { useRole } from '../context/RoleContext';
 import { binThemeTokens } from '../theme/binGroupTheme';
+import MoneyStatementDownload from '../components/MoneyStatementDownload';
 
 export default function OwnerMoneyControlPage() {
     const { t } = useLanguage();
     const { user } = useRole();
     const [transactions, setTransactions] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
+    const [showStatement, setShowStatement] = useState(false);
     const [stats, setStats] = useState({
         totalRevenue: 0,
         totalExpenses: 0,
@@ -108,10 +110,15 @@ export default function OwnerMoneyControlPage() {
             <Paper sx={{ p: 4, borderRadius: 6, bgcolor: 'rgba(22, 22, 24, 0.6)', border: '1px solid rgba(255,255,255,0.05)' }}>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
                     <Typography variant="h6" fontWeight="950" color="#FFF">Systemic Ledger</Typography>
-                    <Button variant="outlined" startIcon={<Download size={16}/>} sx={{ color: binThemeTokens.gold, borderColor: binThemeTokens.gold }}>
+                    <Button variant="outlined" startIcon={<Download size={16}/>} onClick={() => setShowStatement((v) => !v)} aria-expanded={showStatement} data-testid="owner-download-statement" sx={{ color: binThemeTokens.gold, borderColor: binThemeTokens.gold }}>
                         DOWNLOAD STATEMENT
                     </Button>
                 </Box>
+                {showStatement && (
+                    <Box sx={{ mb: 4, p: 2, borderRadius: 3, bgcolor: '#FFF' }}>
+                        <MoneyStatementDownload />
+                    </Box>
+                )}
 
                 <TableContainer>
                     <Table>
