@@ -1,3 +1,4 @@
+import PaymentCollectionRecordsCard from '../../components/PaymentCollectionRecordsCard';
 import { Box, Button, Stack } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '@bin/shared';
@@ -42,6 +43,8 @@ export default function BrokerSimpleDashboardPage() {
         </UiCard>
 
         <BrokerLiveAttributionCard isRTL={isRTL} />
+
+        <PaymentCollectionRecordsCard />
 
         <Button onClick={() => navigate('/broker/dashboard/full')} sx={{ alignSelf: isRTL ? 'flex-end' : 'flex-start', color: ui.goldText, fontWeight: 700, minHeight: ui.touchTarget }}>{t('broker.home.full', 'Open full dashboard', 'فتح اللوحة الكاملة')}</Button>
       </Stack>

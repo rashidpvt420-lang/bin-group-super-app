@@ -1998,6 +1998,23 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // Finance cash/cheque collection records (PR D). Written only by the
+    // financeRecordPaymentCollection / financeVoidPaymentCollection callables
+    // (Admin SDK). Immutable from every client, admins included; a mistake is
+    // corrected with a separate void entry, never an edit.
+    match /payment_collection_records/{recordId} {
+      allow read: if isAdmin() || (signedIn() && resource.data.payerUid == request.auth.uid);
+      allow create, update, delete: if false;
+    }
+    match /payment_collection_voids/{recordId} {
+      allow read: if isAdmin() || (signedIn() && resource.data.payerUid == request.auth.uid);
+      allow create, update, delete: if false;
+    }
+    match /payment_collection_audit/{auditId} {
+      allow read: if isAdmin();
+      allow create, update, delete: if false;
+    }
+
     match /pilotFeedback/{feedbackId} {
       allow read: if isAdmin();
       allow create: if signedIn() && request.resource.data.get('status', null) == 'new';
@@ -2352,7 +2369,10 @@ service cloud.firestore {
           'active_contracts',
           'onboarding_leads',
           'systemMetrics',
-          'binConnectThreads'
+          'binConnectThreads',
+          'payment_collection_records',
+          'payment_collection_voids',
+          'payment_collection_audit'
         ]
       ) && hasAdminClaim();
       allow update, delete: if collection != 'tickets' && collection != 'maintenanceTickets' && !(
@@ -2412,7 +2432,10 @@ service cloud.firestore {
           'active_contracts',
           'onboarding_leads',
           'systemMetrics',
-          'binConnectThreads'
+          'binConnectThreads',
+          'payment_collection_records',
+          'payment_collection_voids',
+          'payment_collection_audit'
         ]
       ) && hasAdminClaim();
     }

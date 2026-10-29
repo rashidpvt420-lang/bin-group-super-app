@@ -36,10 +36,15 @@ const designPrivateCatchAll = hardenedCatchAll.replace(
   "        collection != 'staff-reports' &&\n        collection != 'design_requests' &&\n        collection != 'ai_design_renders';",
 );
 
+const paymentCollectionCatchAll = designPrivateCatchAll.replace(
+  "        collection != 'ai_design_renders';",
+  "        collection != 'ai_design_renders' &&\n        collection != 'payment-collections';",
+);
+
 if (source.includes(legacyCatchAll)) source = source.replace(legacyCatchAll, hardenedCatchAll);
 if (source.includes(previousHardenedCatchAll)) source = source.replace(previousHardenedCatchAll, hardenedCatchAll);
 if (source.includes(priorHardenedCatchAll)) source = source.replace(priorHardenedCatchAll, hardenedCatchAll);
-if (!source.includes(hardenedCatchAll) && !source.includes(designPrivateCatchAll)) {
+if (!source.includes(hardenedCatchAll) && !source.includes(designPrivateCatchAll) && !source.includes(paymentCollectionCatchAll)) {
   throw new Error('[harden-private-hr-storage] global Storage fallback could not be bounded');
 }
 

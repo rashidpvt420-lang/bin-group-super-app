@@ -1,3 +1,4 @@
+import PaymentCollectionRecordsCard from '../../components/PaymentCollectionRecordsCard';
 import { Box, Button, Stack } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '@bin/shared';
@@ -57,6 +58,8 @@ export default function OwnerSimpleDashboardPage() {
           <UiButton tone="outline" onClick={() => navigate('/owner/tenants')}>{t('owner.home.invite', 'Invite tenant', 'دعوة مستأجر')}</UiButton>
           <UiButton tone="primary" onClick={() => navigate('/owner/find-room-rent')}>{t('owner.home.list', 'List empty unit', 'عرض وحدة شاغرة')}</UiButton>
         </Stack>
+
+        <PaymentCollectionRecordsCard />
 
         <Button onClick={() => navigate('/owner/dashboard/full')} sx={{ alignSelf: isRTL ? 'flex-end' : 'flex-start', color: ui.goldText, fontWeight: 700, minHeight: ui.touchTarget }}>{t('owner.home.full', 'Open full dashboard', 'فتح اللوحة الكاملة')}</Button>
       </Stack>
