@@ -61,6 +61,9 @@ export * from "./secureAdminContractOperations";
 export * from "./secureAdminProcurementTrust";
 export * from "./adminMfaRecovery";
 export * from "./aiAssistant";
+export { askPublicAppAssistant } from "./publicAppAssistant";
+export { proposeDashboardAiAction, confirmDashboardAiAction } from "./dashboardAiActions";
+export { financeRecordPaymentCollection, financeVoidPaymentCollection } from "./paymentCollectionRecords";
 export * from "./homeDiscovery";
 // Keep the retired generateAIDesignConceptImages callable fail-closed while
 // exporting the separately reviewed Owner/Tenant and Admin replacement callables.

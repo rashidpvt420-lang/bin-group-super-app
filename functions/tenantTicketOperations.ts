@@ -3,6 +3,7 @@ import * as crypto from "crypto";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { PropertyGeoAuthorityError, resolveDispatchReadyPropertyGeo } from "./propertyGeoAuthority";
 import { tenantUnitLinkMatches } from "./tenantUnitLink";
+import { assertPropertyServiceEntitlement } from "./propertyServiceEntitlement";
 
 if (!admin.apps.length) admin.initializeApp();
 
@@ -148,6 +149,7 @@ export const createTenantServiceTicket = onCall(
           );
         }
       }
+      await assertPropertyServiceEntitlement(db, (ref) => transaction.get(ref), propertyId, property);
 
       let canonicalGeo;
       try {

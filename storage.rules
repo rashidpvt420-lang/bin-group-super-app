@@ -368,6 +368,14 @@ service firebase.storage {
       allow write: if false;
     }
 
+    // PR D finance collection proof. Written only by the finance callable (Admin SDK).
+    // The payer reads their own proof; MFA admins may read for audit. No client writes,
+    // admins included (excluded from the admin catch-all below).
+    match /payment-collections/{payerUid}/{allPaths=**} {
+      allow read: if isAuth() && (request.auth.uid == payerUid || isAdmin());
+      allow write: if false;
+    }
+
     match /privateHrDocuments/{staffId}/{allPaths=**} {
       allow read, write: if false;
     }
@@ -396,7 +404,8 @@ service firebase.storage {
         collection != 'privateHrDocuments' &&
         collection != 'staff-reports' &&
         collection != 'design_requests' &&
-        collection != 'ai_design_renders';
+        collection != 'ai_design_renders' &&
+        collection != 'payment-collections';
     }
   }
 }

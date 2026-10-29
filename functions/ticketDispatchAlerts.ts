@@ -17,6 +17,7 @@ export type ManualDispatchReasonCode =
   | "NO_QUALIFIED_TECHNICIAN"
   | "MISSING_PROPERTY_GEO"
   | "TENANT_UNIT_LINK_UNVERIFIED"
+  | "SERVICE_CONTRACT_UNVERIFIED"
   | "DISPATCH_ERROR";
 
 const REASON_TEXT: Record<ManualDispatchReasonCode, string> = {
@@ -24,6 +25,7 @@ const REASON_TEXT: Record<ManualDispatchReasonCode, string> = {
   NO_QUALIFIED_TECHNICIAN: "No on-duty technician covers this emirate and trade with free capacity.",
   MISSING_PROPERTY_GEO: "The property has no verified location or emirate.",
   TENANT_UNIT_LINK_UNVERIFIED: "The tenant is not linked to this unit and property.",
+  SERVICE_CONTRACT_UNVERIFIED: "The request has no verified property with an active, paid service contract.",
   DISPATCH_ERROR: "Automatic dispatch failed with an internal error.",
 };
 

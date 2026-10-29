@@ -319,7 +319,7 @@ export default function TenantMoveInspectionPage() {
       <Container maxWidth="sm" sx={{ py: 8, textAlign: 'center' }}>
         <CheckCircle2 size={72} color="#10b981" style={{ marginBottom: 24 }} />
         <Typography variant="h4" sx={{ color: binThemeTokens.textPrimary, fontWeight: 950, mb: 2 }}>Inspection Submitted</Typography>
-        <Typography sx={{ color: binThemeTokens.textSecondary, mb: 4, lineHeight: 1.8 }}>
+        <Typography sx={{ color: '#374151', mb: 4, lineHeight: 1.8 }}>
           Your {state.type === 'move_in' ? 'move-in' : 'move-out'} inspection has been securely sent to the Owner Handover Center.
           {poorItems.length > 0 && ` ${poorItems.length} poor-condition item(s) are flagged for review.`}
         </Typography>
