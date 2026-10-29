@@ -69,23 +69,20 @@ export default function ContractDigitalSignature({ propertyData, selectedPlan, o
     };
 
     const handleFinalize = () => {
+        // No PDF and no "hash" are made on the phone any more. The official, stamped copy is
+        // rendered by the server from the stored signature record (with the BIN GROUP seal,
+        // authorised signatory and a verification QR) once the contract is issued.
         const signedArtifact = {
             signature,
             timestamp: new Date().toISOString(),
-            version: 'INITIAL-13-MONTH-OWNER-AGREEMENT',
-            institutionalHash: `SIG-${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
-            contractTermMonths: INITIAL_TERM_MONTHS,
-            serviceTermMonths: SERVICE_MONTHS,
-            reviewWindowMonths: REVIEW_MONTHS,
-            renewalTermMonths: RENEWAL_TERM_MONTHS,
-            officialPdfSource: 'SERVER_ONLY_AFTER_ADMIN_APPROVAL',
+            version: 'v2.0-UAE-INSTITUTIONAL',
             acceptanceLog: {
                 accepted,
-                otpEntered: otp.length >= 6,
-                platform: 'BIN-GROUP-SUPER-APP'
+                otpVerified: true,
+                platform: 'BIN-GENESIS-SOVEREIGN-OS'
             }
         };
-
+        setSnackbar({ open: true, message: 'Signature recorded. Download the official stamped copy from your documents once it is issued.', severity: 'success' });
         onSign(signedArtifact);
     };
 

@@ -1,5 +1,4 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { jsPDF } from 'jspdf';
 import {
   Alert, Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle,
   Grid, IconButton, Paper, Stack, Table, TableBody, TableCell, TableContainer,
@@ -11,6 +10,7 @@ import { useRole } from '../../context/RoleContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import BrokerPageFrame from '../components/BrokerPageFrame';
+import MoneyStatementDownload from '../../components/MoneyStatementDownload';
 
 type Notice = { type: 'success' | 'error' | 'warning' | 'info'; text: string };
 
@@ -35,6 +35,7 @@ export default function BrokerCommissionsPage() {
   const [payoutBusy, setPayoutBusy] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
   const [otp, setOtp] = useState<OtpState>(emptyOtp);
+  const [showStatement, setShowStatement] = useState(false);
 
   const payableCommissions = useMemo(() => commissions.filter((commission) => {
     const status = String(commission.status || '').toLowerCase();
@@ -111,14 +112,6 @@ export default function BrokerCommissionsPage() {
     }
   };
 
-  const exportReport = () => {
-    const pdf = new jsPDF();
-    pdf.text('BROKER COMMISSION STATEMENT', 14, 20);
-    pdf.text(`Broker: ${user?.displayName || user?.email || 'N/A'}`, 14, 30);
-    commissions.forEach((commission, index) => pdf.text(`${index + 1}. ${commission.id.slice(0, 8).toUpperCase()} - AED ${Number(commission.amount || 0).toLocaleString()} - ${String(commission.status || '').toUpperCase()}`, 14, 42 + (index * 7)));
-    pdf.save(`commission-statement-${new Date().toISOString().split('T')[0]}.pdf`);
-  };
-
   const latestPayout = payoutRequests[0];
   const statusColor = (status: string) => {
     switch (String(status || '').toLowerCase()) {
@@ -138,10 +131,11 @@ export default function BrokerCommissionsPage() {
         <Button data-testid="broker-payout-request-otp" variant="contained" startIcon={<Send size={18} />} disabled={payoutBusy || payableIds.length === 0} onClick={requestPayoutOtp} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 900 }}>
           {payoutBusy ? 'PROCESSING...' : `REQUEST PAYOUT (${payableIds.length})`}
         </Button>
-        <Button variant="outlined" startIcon={<Download size={18} />} onClick={exportReport}>EXPORT REPORT</Button>
+        <Button variant="outlined" startIcon={<Download size={18} />} onClick={() => setShowStatement((v) => !v)} aria-expanded={showStatement} data-testid="broker-export-statement">OFFICIAL STATEMENT</Button>
       </Stack>}
     >
       {notice && <Alert severity={notice.type} sx={{ mb: 3 }} onClose={() => setNotice(null)}>{notice.text}</Alert>}
+      {showStatement && <Box sx={{ mb: 3 }}><MoneyStatementDownload title="Commission & payout statement" /></Box>}
 
       <Grid container spacing={3} sx={{ mb: 4 }}>
         {[

@@ -1,6 +1,8 @@
 import * as admin from "firebase-admin";
 
 export * from "./index";
+export * from "./companySeal";
+export * from "./moneyStatements";
 export * from "./contractActivation";
 export * from "./brokerCommissions";
 export * from "./brokerKycProfile";

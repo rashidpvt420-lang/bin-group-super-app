@@ -61,6 +61,7 @@ const UaeMarketLeadershipPage = lazyWithRetry(() => import('./pages/public/UaeMa
 const CompanyProfilePage = lazyWithRetry(() => import('./pages/public/CompanyProfilePage'));
 const PublicAIDesignStudioPage = lazyWithRetry(() => import('./pages/public/PublicAIDesignStudioPage'));
 const InvoiceVerificationPage = lazyWithRetry(() => import('./pages/public/InvoiceVerificationPage'));
+const DocumentVerificationPage = lazyWithRetry(() => import('./pages/public/DocumentVerificationPage'));
 const CertificateVerificationPage = lazyWithRetry(() => import('./pages/public/CertificateVerificationPage'));
 const QrPassVerificationPage = lazyWithRetry(() => import('./pages/public/QrPassVerificationPage'));
 const InvoiceDetailsPage = lazyWithRetry(() => import('./pages/InvoiceDetailsPage'));
@@ -362,6 +363,8 @@ function AppContent() {
         {/* Admin status terminal; privileged workflows are linked to the protected operations console. */}
         <Route path="/admin/*" element={protectedRoute(ADMIN_STAFF_ROLES, <AdminTerminal />)} />
         {/* ── Public verifier routes ── */}
+        <Route path="/verify/document" element={<DocumentVerificationPage />} />
+        <Route path="/verify/document/:id" element={<DocumentVerificationPage />} />
         <Route path="/verify" element={<InvoiceVerificationPage />} />
         <Route path="/verify/:id" element={<InvoiceVerificationPage />} />
         <Route path="/verify/invoice/:id" element={<InvoiceVerificationPage />} />

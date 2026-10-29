@@ -1,5 +1,6 @@
 import SuggestionBoxCard from '../../components/SuggestionBoxCard';
 import PaymentCollectionRecordsCard from '../../components/PaymentCollectionRecordsCard';
+import MoneyStatementDownload from '../../components/MoneyStatementDownload';
 import { Box, Skeleton, Stack, Typography } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '@bin/shared';
@@ -76,6 +77,7 @@ export default function TechnicianSimpleDashboardPage() {
           <StatTile isRTL={isRTL} label={t('tech.home.history', 'Job history', 'سجل المهام')} value={t('tech.home.open', 'Open', 'فتح')} onClick={() => navigate('/technician/history')} />
         </StatGrid>
         <PaymentCollectionRecordsCard />
+        <MoneyStatementDownload />
 
         <ComingSoon isRTL={isRTL} title={t('tech.home.earningsSoon', 'Weekly earnings will show here', 'ستظهر أرباحك الأسبوعية هنا')} detail={t('tech.home.earningsSoonDetail', 'Your payroll records are in Profile → HR.', 'سجلات الرواتب في الملف الشخصي ← الموارد البشرية.')} />
         <SuggestionBoxCard role="technician" />

@@ -28,6 +28,8 @@ export default function DocumentCenterCard({ doc, themeColor = binThemeTokens.go
         }
     };
 
+    const isOfficialContract = /contract|agreement/i.test(`${doc?.type || ''} ${doc?.category || ''}`);
+
     const handleDownload = async () => {
         const url = documentUrlOf(doc);
         if (url) {
@@ -47,6 +49,9 @@ export default function DocumentCenterCard({ doc, themeColor = binThemeTokens.go
                 console.warn('[DocumentCenterCard] direct download failed, opening file instead:', error);
                 handleOpen();
             }
+        } else if (isOfficialContract) {
+            // Contracts are never made on the phone: only the server-issued, stamped copy is official.
+            alert('The official stamped copy of this contract has not been issued yet. Please check again later or contact support.');
         } else {
             // PDF Trigger Logic - Generate PDF locally if there is no URL
             try {
@@ -140,7 +145,7 @@ export default function DocumentCenterCard({ doc, themeColor = binThemeTokens.go
                             </IconButton>
                         </span>
                     </Tooltip>
-                    <Tooltip title={hasFile ? "Download" : "Generate & Download"}>
+                    <Tooltip title={isOfficialContract ? (hasFile ? "Download official copy" : "Official copy not issued yet") : (hasFile ? "Download" : "Generate & Download")}>
                         <span>
                             <IconButton size="small" disabled={generating} sx={{ color: themeColor }} onClick={handleDownload}>
                                 {generating ? <CircularProgress size={16} color="inherit" /> : <Download size={16} />}

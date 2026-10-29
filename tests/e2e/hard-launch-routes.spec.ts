@@ -87,6 +87,8 @@ const publicRoutes = [
   '/invoices/phase2-missing',
   '/verify/phase2-missing',
   '/verify/invoice/phase2-missing',
+  '/verify/document',
+  '/verify/document/phase2-missing',
   '/verify/cert/phase2-missing',
   '/verify/pass/phase2-missing',
   '/verify-cert/phase2-missing',
