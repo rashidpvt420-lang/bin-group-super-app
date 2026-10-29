@@ -284,7 +284,7 @@ function PublicSovereignAIEntry() {
   // Form routes keep the full width for inputs and the primary button; the FAB covered both on phones.
   const hideOnFormRoute = AI_FAB_HIDDEN_PREFIXES.some((prefix) => location.pathname === prefix || location.pathname.startsWith(`${prefix}/`));
   if (hideOnFormRoute) return null;
-  const chat = <SovereignAIChat role="unknown" allowLiveProvider={false} isAuthenticated={false} authUserId={null} />;
+  const chat = <SovereignAIChat role="unknown" allowLiveProvider={false} isAuthenticated={false} authUserId={null} publicAssistant />;
   if (AI_HEADER_LAUNCHER_ROUTES.has(location.pathname)) return <UnifiedFabContext.Provider value={true}>{chat}</UnifiedFabContext.Provider>;
   return chat;
 }

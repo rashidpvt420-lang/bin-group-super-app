@@ -3,6 +3,7 @@ import { useUnifiedFab } from './ui/unifiedFab';
 import {
   Avatar,
   Box,
+  Button,
   Chip,
   CircularProgress,
   Drawer,
@@ -32,6 +33,8 @@ export interface SovereignAIChatProps {
   allowLiveProvider?: boolean;
   isAuthenticated?: boolean;
   authUserId?: string | null;
+  /** Logged-out visitors: use the separate read-only askPublicAppAssistant callable. */
+  publicAssistant?: boolean;
 }
 
 interface Message {
@@ -42,7 +45,11 @@ interface Message {
   live?: boolean;
   provider?: string;
   operationalStatus?: 'healthy' | 'degraded' | 'error' | 'ready';
+  proposal?: { id: string; summary: string; state: 'pending' | 'done' | 'cancelled' };
 }
+
+// Text that looks like a request to DO something goes to the server-side proposal callable first.
+export const DASHBOARD_ACTION_HINT = /\b(mark|clear|approve|reject|pay|refund|dispatch|assign|delete|verify)\b/i;
 
 type Prompt = { label: string; action: 'SUMMARIZE' | 'NAVIGATE' | 'MESSAGE'; payload: string };
 type FabPosition = { x: number; y: number };
@@ -200,6 +207,7 @@ export const SovereignAIChat: React.FC<SovereignAIChatProps> = ({
   allowLiveProvider = true,
   isAuthenticated = true,
   authUserId,
+  publicAssistant = false,
 }) => {
   const { pageContext } = useAI();
   const [open, setOpen] = useState(false);
@@ -335,6 +343,25 @@ export const SovereignAIChat: React.FC<SovereignAIChatProps> = ({
 
     const fallbackSummary = isAutoSummary ? generateSummary() : undefined;
     try {
+      if (!allowLiveProvider && publicAssistant) {
+        try {
+          const askPublic = httpsCallable(functions, 'askPublicAppAssistant');
+          const res: any = await askPublic({ text: cleanText });
+          const data = res?.data || {};
+          setMessages((prev) => [...prev, {
+            id: `ai_${Date.now()}`,
+            type: 'ai',
+            text: `PUBLIC APP INFO — sign in for anything about your account\n${String(data.text || '').trim()}`,
+            timestamp: new Date(),
+            live: data.live === true,
+            provider: String(data.provider || 'public-facts'),
+            operationalStatus: data.live === true ? 'healthy' : 'ready',
+          }]);
+          return;
+        } catch (publicError) {
+          console.warn('[SovereignAI] Public assistant unavailable; local guidance shown:', publicError);
+        }
+      }
       if (!allowLiveProvider) {
         const localText = generateSovereignAIResponse({ role, text: cleanText, pageContext, isAutoSummary, fallbackSummary });
         setMessages((prev) => [...prev, {
@@ -350,6 +377,24 @@ export const SovereignAIChat: React.FC<SovereignAIChatProps> = ({
       }
       if (!sessionBound) throw new Error('The Firebase Auth session is not ready for the AI launcher. Refresh or sign in again.');
 
+      if (DASHBOARD_ACTION_HINT.test(cleanText) && ['owner', 'tenant', 'technician', 'broker'].includes(String(role))) {
+        const propose = httpsCallable(functions, 'proposeDashboardAiAction');
+        const proposed: any = await propose({ text: cleanText });
+        const pd = proposed?.data || {};
+        if (pd.refused || pd.proposal) {
+          setMessages((prev) => [...prev, {
+            id: `ai_${Date.now()}`,
+            type: 'ai',
+            text: pd.proposal ? `Proposed action: ${pd.proposal.summary}\nNothing changes until you confirm.` : String(pd.message || 'This action is not available.'),
+            timestamp: new Date(),
+            live: false,
+            provider: 'dashboard-action',
+            operationalStatus: 'ready',
+            proposal: pd.proposal ? { id: String(pd.proposal.id), summary: String(pd.proposal.summary), state: 'pending' } : undefined,
+          }]);
+          return;
+        }
+      }
       const runSovereignAI = httpsCallable(functions, 'runSovereignAI');
       const result: any = await runSovereignAI({ role, text: cleanText, pageContext, isAutoSummary, fallbackSummary, provider: 'gemini' });
       const data = result?.data || {};
@@ -378,6 +423,22 @@ export const SovereignAIChat: React.FC<SovereignAIChatProps> = ({
         provider: 'function-error',
         operationalStatus: 'error',
       }]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const decideProposal = async (messageId: string, proposalId: string, decision: 'confirm' | 'cancel') => {
+    setLoading(true);
+    try {
+      const confirmAction = httpsCallable(functions, 'confirmDashboardAiAction');
+      const res: any = await confirmAction({ proposalId, decision });
+      const executed = res?.data?.status === 'executed';
+      setMessages((prev) => prev.map((m) => (m.id === messageId && m.proposal
+        ? { ...m, proposal: { ...m.proposal, state: executed ? 'done' : 'cancelled' }, text: `${m.text}\n\n${executed ? 'Done.' : 'Cancelled. Nothing was changed.'}` }
+        : m)));
+    } catch (error) {
+      setMessages((prev) => [...prev, { id: `ai_${Date.now()}`, type: 'ai', text: `ACTION NOT COMPLETED\n${explainCallableError(error)}`, timestamp: new Date(), live: false, provider: 'dashboard-action', operationalStatus: 'error' }]);
     } finally {
       setLoading(false);
     }
@@ -480,6 +541,12 @@ export const SovereignAIChat: React.FC<SovereignAIChatProps> = ({
                   />
                 )}
                 <Typography variant="body2" sx={{ lineHeight: 1.6, whiteSpace: 'pre-line', color: msg.type === 'user' ? 'rgba(255,255,255,0.9)' : '#FFF' }}>{msg.text}</Typography>
+                {msg.proposal?.state === 'pending' && (
+                  <Stack direction="row" spacing={1} sx={{ mt: 1.5 }}>
+                    <Button size="small" variant="contained" disabled={loading} onClick={() => void decideProposal(msg.id, msg.proposal!.id, 'confirm')} sx={{ bgcolor: binThemeTokens.gold, color: '#000' }}>Confirm</Button>
+                    <Button size="small" variant="outlined" disabled={loading} onClick={() => void decideProposal(msg.id, msg.proposal!.id, 'cancel')}>Cancel</Button>
+                  </Stack>
+                )}
                 <Typography variant="caption" sx={{ mt: 1, display: 'block', opacity: 0.3, textAlign: msg.type === 'user' ? 'right' : 'left' }}>{msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Typography>
               </Paper>
             </Stack>
