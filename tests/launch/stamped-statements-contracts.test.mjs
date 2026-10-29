@@ -3,7 +3,31 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 
-const read = (p) => fs.readFileSync(new URL(`../../${p}`, import.meta.url), 'utf8');
+// Fixed allowlist of literal repo paths (no dynamic path construction).
+const SOURCES = {
+  'firestore.rules': new URL('../../firestore.rules', import.meta.url),
+  'functions/companySeal.ts': new URL('../../functions/companySeal.ts', import.meta.url),
+  'functions/moneyStatements.ts': new URL('../../functions/moneyStatements.ts', import.meta.url),
+  'functions/pdfEngine.ts': new URL('../../functions/pdfEngine.ts', import.meta.url),
+  'functions/runtime.ts': new URL('../../functions/runtime.ts', import.meta.url),
+  'src/App.tsx': new URL('../../src/App.tsx', import.meta.url),
+  'src/broker/pages/BrokerCommissionsPage.tsx': new URL('../../src/broker/pages/BrokerCommissionsPage.tsx', import.meta.url),
+  'src/components/DocumentCenterCard.tsx': new URL('../../src/components/DocumentCenterCard.tsx', import.meta.url),
+  'src/components/MoneyStatementDownload.tsx': new URL('../../src/components/MoneyStatementDownload.tsx', import.meta.url),
+  'src/pages/OwnerMoneyControlPage.tsx': new URL('../../src/pages/OwnerMoneyControlPage.tsx', import.meta.url),
+  'src/pages/public/DocumentVerificationPage.tsx': new URL('../../src/pages/public/DocumentVerificationPage.tsx', import.meta.url),
+  'src/components/ContractDigitalSignature.tsx': new URL('../../src/components/ContractDigitalSignature.tsx', import.meta.url),
+  'apps/owner-app/src/components/ContractDigitalSignature.tsx': new URL('../../apps/owner-app/src/components/ContractDigitalSignature.tsx', import.meta.url),
+  'src/owner/pages/OwnerSimpleDashboardPage.tsx': new URL('../../src/owner/pages/OwnerSimpleDashboardPage.tsx', import.meta.url),
+  'src/tenant/pages/TenantSimpleDashboardPage.tsx': new URL('../../src/tenant/pages/TenantSimpleDashboardPage.tsx', import.meta.url),
+  'src/technician/pages/TechnicianSimpleDashboardPage.tsx': new URL('../../src/technician/pages/TechnicianSimpleDashboardPage.tsx', import.meta.url),
+  'src/broker/pages/BrokerSimpleDashboardPage.tsx': new URL('../../src/broker/pages/BrokerSimpleDashboardPage.tsx', import.meta.url),
+};
+const read = (key) => {
+  const url = SOURCES[key];
+  if (!url) throw new Error(`unlisted source ${key}`);
+  return fs.readFileSync(url, 'utf8');
+};
 
 test('statement callable uses only the caller uid, App Check and active-account checks', () => {
   const src = read('functions/moneyStatements.ts');
