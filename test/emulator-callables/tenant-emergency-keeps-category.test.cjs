@@ -22,8 +22,9 @@ test.beforeEach(async () => {
   await clearFirestore();
   await db.doc(`users/${TENANT}`).set({ role: 'tenant', status: 'active', displayName: 'Emergency Tenant', email: tenant.token.email });
   await db.doc(`users/${OWNER}`).set({ role: 'owner', status: 'active' });
+  await db.doc('contracts/contract_emergency').set({ ownerId: OWNER, propertyId: 'property_emergency', status: 'ACTIVE', contractStatus: 'active', paymentVerified: true, paymentStatus: 'APPROVED' });
   await db.doc('properties/property_emergency').set({
-    name: 'Emergency Tower', ownerId: OWNER, emirate: 'Dubai', city: 'Dubai', area: 'Marina', address: 'Marina Walk, Dubai',
+    name: 'Emergency Tower', ownerId: OWNER, contractId: 'contract_emergency', emirate: 'Dubai', city: 'Dubai', area: 'Marina', address: 'Marina Walk, Dubai',
     geo: {
       lat: 25.0802, lng: 55.1403, emirate: 'Dubai', city: 'Dubai', area: 'Marina', address: 'Marina Walk, Dubai',
       verified: true, dispatchReady: true, verifiedBy: 'founder_uid', verifiedAt, verificationVersion: 1, source: 'admin_manual',

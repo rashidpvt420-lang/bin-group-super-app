@@ -137,6 +137,10 @@ function DesignRequestDetailContent() {
                 const getMedia = httpsCallable(functions, 'getAIDesignRequestMedia');
                 const result: any = await getMedia({ requestId: id });
                 const data = result?.data || {};
+                if (data.found === false && timer !== undefined) {
+                    window.clearInterval(timer);
+                    timer = undefined;
+                }
                 if (!cancelled) {
                     setProtectedMedia({
                         referenceImages: stringArray(data.referenceImages),
