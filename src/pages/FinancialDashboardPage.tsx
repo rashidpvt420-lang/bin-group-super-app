@@ -293,7 +293,7 @@ export default function FinancialDashboardPage() {
 
       {/* [V2] PM OPERATIONAL ROI SECTION */}
       <Box sx={{ mt: 8 }}>
-          <Typography variant="h5" fontWeight="950" sx={{ mb: 4, color: '#FFF', display: 'flex', alignItems: 'center', gap: 2 }}>
+          <Typography variant="h5" fontWeight="950" sx={{ mb: 4, color: binThemeTokens.adaptiveText, display: 'flex', alignItems: 'center', gap: 2 }}>
               <TrendingUp color={binThemeTokens.gold} /> OPERATIONAL ROI AUDIT
           </Typography>
           <Grid container spacing={3}>
@@ -306,7 +306,7 @@ export default function FinancialDashboardPage() {
                   <Grid item xs={12} sm={6} md={3} key={i}>
                       <Paper sx={{ p: 3, bgcolor: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 4 }}>
                           <Typography variant="caption" color="textSecondary" sx={{ fontWeight: 900, textTransform: 'uppercase' }}>{item.label}</Typography>
-                          <Typography variant="h4" fontWeight="900" sx={{ my: 1, color: '#FFF' }}>{item.val ?? 'N/A'}</Typography>
+                          <Typography variant="h4" fontWeight="900" sx={{ my: 1, color: binThemeTokens.adaptiveText }}>{item.val ?? 'N/A'}</Typography>
                           <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 700 }}>{item.sub}</Typography>
                       </Paper>
                   </Grid>

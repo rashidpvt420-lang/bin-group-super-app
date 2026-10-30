@@ -377,7 +377,7 @@ export default function SimpleStartPage() {
             <Grid item xs={6} md={2.4} key={step}>
               <Paper sx={{ p: 3, textAlign: 'center', borderRadius: 3, bgcolor: 'rgba(255,255,255,.05)', border: `1px solid ${alpha(gold, .2)}` }}>
                 <Typography sx={{ color: alpha(gold, .8), fontWeight: 950, fontSize: '.85rem' }}>0{i + 1}</Typography>
-                <Typography variant="h5" fontWeight={950} sx={{ color: '#fff', mt: 1 }}>{step}</Typography>
+                <Typography variant="h5" fontWeight={950} sx={{ color: binThemeTokens.adaptiveText, mt: 1 }}>{step}</Typography>
               </Paper>
             </Grid>
           ))}

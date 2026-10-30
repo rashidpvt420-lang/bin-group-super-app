@@ -183,3 +183,41 @@ test('the scanner still flags white text on a pale surface', () => {
   assert.ok(!surfaceIsPale("'rgba(15,23,42,0.72)'"));
   assert.ok(WHITE_TEXT.test("'#FFF'"));
 });
+
+// Shared pages open inside the dark tenant shell and the white owner/broker
+// shells, so their text follows the shell through CSS variables.
+const SHARED_SCREENS = [
+  'src/pages/AccountPrivacyRequestPage.tsx',
+  'src/pages/DesignStudioPage.tsx',
+  'src/pages/FinancialDashboardPage.tsx',
+  'src/pages/GovernmentPropertyPage.tsx',
+  'src/pages/HealthScorePage.tsx',
+  'src/pages/NotificationInboxPage.tsx',
+  'src/pages/OwnerMoneyControlPage.tsx',
+  'src/pages/PropertyPassportPage.tsx',
+  'src/pages/public/CompanyProfilePage.tsx',
+  'src/pages/public/SimpleStartPage.tsx',
+  'src/pages/public/UaeMarketLeadershipPage.tsx'
+];
+const cssVar = (src, name) => { const k = `var(${name}, `; const i = src.indexOf(k) + k.length; return src.slice(i, src.indexOf(')', i)); };
+
+test('shared pages have no fixed white text on pale or missing surfaces', () => {
+  const hits = SHARED_SCREENS.flatMap(invisibleWhiteText);
+  assert.deepEqual(hits, [], hits.join('\n'));
+  for (const f of ['src/pages/DesignStudioPage.tsx', 'src/pages/PropertyPassportPage.tsx']) {
+    assert.ok(read(f).includes('binThemeTokens.adaptiveText'), `${f} uses the adaptive text token`);
+  }
+});
+
+test('every shell sets the adaptive text variables and both modes pass AA', () => {
+  assert.equal(cssVar(theme, '--bin-adaptive-text'), T.textPrimary);
+  const tenant = read('src/tenant/TenantApp.tsx');
+  assert.ok(tenant.includes("'--bin-adaptive-text': isLightRoute ? binThemeTokens.textPrimary : '#FFFFFF'"));
+  assert.ok(tenant.includes("'--bin-adaptive-text-muted': isLightRoute ? '#4B5563' : '#D1D5DB'"));
+  assert.ok(read('src/owner/OwnerApp.tsx').includes("'--bin-adaptive-text': binThemeTokens.textPrimary"));
+  assert.ok(read('src/broker/BrokerApp.tsx').includes("'--bin-adaptive-text': '#111827'"));
+  const black = token(theme, 'black');
+  for (const [fg, bg] of [['#FFFFFF', black], ['#D1D5DB', black], ['#111827', T.canvas], ['#4B5563', T.canvas], ['#4B5563', T.softCanvas], [cssVar(theme, '--bin-adaptive-text-muted'), T.canvas]]) {
+    assert.ok(ratio(fg, bg) >= 4.5, `${fg} on ${bg} = ${ratio(fg, bg).toFixed(2)}`);
+  }
+});

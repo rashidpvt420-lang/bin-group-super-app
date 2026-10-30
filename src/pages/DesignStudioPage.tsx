@@ -122,7 +122,7 @@ function DetailList({ details }: { details: DesignExecutionDetail[] }) {
       {details.map((group) => (
         <Paper key={group.category} sx={{ p: 1.5, bgcolor: 'rgba(255,255,255,0.025)', border: '1px solid rgba(198,167,94,0.14)', borderRadius: 2 }}>
           <Typography fontWeight={950} sx={{ color: binThemeTokens.gold }}>{group.category}</Typography>
-          <Box component="ul" sx={{ m: 0, mt: 1, pl: 2.4, color: 'rgba(255,255,255,0.68)' }}>
+          <Box component="ul" sx={{ m: 0, mt: 1, pl: 2.4, color: binThemeTokens.adaptiveTextMuted }}>
             {group.items.map((item) => <li key={item}><Typography variant="body2" sx={{ lineHeight: 1.55 }}>{item}</Typography></li>)}
           </Box>
         </Paper>
@@ -291,8 +291,8 @@ export default function DesignStudioPage() {
       <Stack spacing={4}>
         <Box>
           <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 4 }}>{labels.eyebrow}</Typography>
-          <Typography variant="h3" fontWeight={950} color="#FFF" sx={{ mt: 1 }}>{labels.title}</Typography>
-          <Typography sx={{ mt: 2, color: 'rgba(255,255,255,0.72)', maxWidth: 920, lineHeight: 1.8 }}>{labels.subtitle}</Typography>
+          <Typography variant="h3" fontWeight={950} color={binThemeTokens.adaptiveText} sx={{ mt: 1 }}>{labels.title}</Typography>
+          <Typography sx={{ mt: 2, color: binThemeTokens.adaptiveTextMuted, maxWidth: 920, lineHeight: 1.8 }}>{labels.subtitle}</Typography>
           <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ mt: 2, gap: 1 }}>
             <Chip icon={<Sparkles size={16} />} label={`Design status: ${formatStatusLabel(renderStatus)}`} sx={{ bgcolor: alpha(renderStatus === 'AI_RENDER_COMPLETE' ? '#10b981' : '#f59e0b', 0.12), color: renderStatus === 'AI_RENDER_COMPLETE' ? STATUS_TONES.success.text : STATUS_TONES.warning.text, fontWeight: 900 }} />
             <Chip label={tenantMode ? 'Tenant-to-owner approval flow' : 'Owner private quote flow'} sx={{ bgcolor: alpha(binThemeTokens.gold, 0.12), color: binThemeTokens.gold, fontWeight: 900 }} />
@@ -367,7 +367,7 @@ export default function DesignStudioPage() {
         </Box>
 
         <Paper sx={{ p: { xs: 3, md: 4 }, borderRadius: 4, bgcolor: 'rgba(255,255,255,0.035)', border: '1px solid rgba(255,255,255,0.08)' }}>
-          <Typography variant="h5" fontWeight={950} color="#FFF" sx={{ mb: 2 }}>Execution scope preview</Typography>
+          <Typography variant="h5" fontWeight={950} color={binThemeTokens.adaptiveText} sx={{ mb: 2 }}>Execution scope preview</Typography>
           <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(3, minmax(0, 1fr))' }, gap: 2 }}>
             {concepts.map((concept) => (
               <Paper key={concept.id} sx={{ p: 2.5, height: '100%', bgcolor: 'rgba(0,0,0,0.35)', border: '1px solid rgba(198,167,94,0.2)' }}>

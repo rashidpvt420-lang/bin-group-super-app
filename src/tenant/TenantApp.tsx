@@ -66,7 +66,7 @@ const TenantLayout = ({ children }: { children: React.ReactNode }) => {
     } as const;
 
     return (
-        <Box sx={{ minHeight: '100vh', bgcolor: isLightRoute ? binThemeTokens.softCanvas : binThemeTokens.black, color: isLightRoute ? binThemeTokens.textPrimary : '#FFFFFF', direction: isRTL ? 'rtl' : 'ltr', display: 'flex', flexDirection: 'column', position: 'relative', isolation: 'isolate' }}>
+        <Box sx={{ '--bin-adaptive-text': isLightRoute ? binThemeTokens.textPrimary : '#FFFFFF', '--bin-adaptive-text-muted': isLightRoute ? '#4B5563' : '#D1D5DB', minHeight: '100vh', bgcolor: isLightRoute ? binThemeTokens.softCanvas : binThemeTokens.black, color: isLightRoute ? binThemeTokens.textPrimary : '#FFFFFF', direction: isRTL ? 'rtl' : 'ltr', display: 'flex', flexDirection: 'column', position: 'relative', isolation: 'isolate' }}>
             <BrandWatermark opacity={isLightRoute ? 0.025 : 0.038} />
             <AppBar position="sticky" elevation={0} sx={{ bgcolor: 'rgba(255,255,255,0.96)', color: binThemeTokens.textPrimary, backdropFilter: 'blur(16px)', borderBottom: `1px solid ${binThemeTokens.border}`, boxShadow: '0 8px 24px rgba(17, 24, 39, 0.06)', zIndex: 1200 }}>
                 <Toolbar sx={{ justifyContent: 'space-between', px: { xs: 2, md: 4 }, flexDirection: isRTL ? 'row-reverse' : 'row', gap: 1 }}>
