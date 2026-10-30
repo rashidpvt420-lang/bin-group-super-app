@@ -1,3 +1,4 @@
+import { MadeInUaeInline } from '../components/MadeInUaeMark';
 import React from 'react';
 import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { Box, Container, AppBar, Toolbar, Typography, IconButton, Stack, Button, alpha } from '@mui/material';
@@ -103,7 +104,7 @@ const TenantLayout = ({ children }: { children: React.ReactNode }) => {
             </AppBar>
             <Container maxWidth="lg" sx={{ py: 4, flexGrow: 1, position: 'relative', zIndex: 1, overflowX: 'hidden' }}><PortalConnectionStrip dark={!isLightRoute} /><Box sx={{ animation: 'fadeIn 0.5s ease-out', minWidth: 0 }}>{children}</Box></Container>
             <BinConnectChatBox role="tenant" />
-            <Box sx={{ py: 3, textAlign: 'center', borderTop: `1px solid ${isLightRoute ? binThemeTokens.border : 'rgba(255,255,255,0.05)'}`, bgcolor: isLightRoute ? binThemeTokens.card : 'rgba(11,11,12,0.5)', position: 'relative', zIndex: 1 }}><Typography variant="caption" sx={{ color: isLightRoute ? binThemeTokens.textSecondary : binThemeTokens.textOnDarkMuted, fontWeight: 800, letterSpacing: 2 }}>{copy('2026 BIN GROUP PROPERTY OPERATIONS OS', '2026 نظام BIN GROUP لتشغيل العقارات')}</Typography></Box>
+            <Box sx={{ py: 3, textAlign: 'center', borderTop: `1px solid ${isLightRoute ? binThemeTokens.border : 'rgba(255,255,255,0.05)'}`, bgcolor: isLightRoute ? binThemeTokens.card : 'rgba(11,11,12,0.5)', position: 'relative', zIndex: 1 }}><Typography variant="caption" sx={{ color: isLightRoute ? binThemeTokens.textSecondary : binThemeTokens.textOnDarkMuted, fontWeight: 800, letterSpacing: 2 }}>{copy('2026 BIN GROUP PROPERTY OPERATIONS OS', '2026 نظام BIN GROUP لتشغيل العقارات')}</Typography><MadeInUaeInline /></Box>
             <style>{`@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }`}</style>
         </Box>
     );

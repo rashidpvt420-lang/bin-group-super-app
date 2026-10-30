@@ -7,13 +7,13 @@ Generated from canonical router sources.
 | Runtime | Entries |
 | --- | ---: |
 | main | 78 |
-| owner | 38 |
+| owner | 39 |
 | tenant | 34 |
 | technician | 18 |
 | broker | 17 |
 | adminops | 71 |
 
-Total registered route entries/aliases: **256**.
+Total registered route entries/aliases: **257**.
 
 The CSV records:
 

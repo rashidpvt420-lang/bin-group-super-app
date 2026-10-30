@@ -1,3 +1,4 @@
+import { MadeInUaeInline } from '../components/MadeInUaeMark';
 import React from 'react';
 import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { Box, AppBar, Toolbar, Typography, Container, IconButton, alpha, Stack, Button } from '@mui/material';
@@ -99,7 +100,7 @@ const OwnerLayout = ({ children }: { children: React.ReactNode }) => {
             </AppBar>
             <Container maxWidth="lg" sx={{ py: 4, flexGrow: 1, position: 'relative', zIndex: 1 }}><OwnerActivationGuard><PortalConnectionStrip /><Box sx={{ animation: 'fadeIn 0.5s ease-out' }}>{children}</Box></OwnerActivationGuard></Container>
             <BinConnectChatBox role="owner" />
-            <Box sx={{ py: 3, textAlign: 'center', borderTop: `1px solid ${binThemeTokens.border}`, bgcolor: alpha(binThemeTokens.canvas, 0.86), position: 'relative', zIndex: 1 }}><Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, fontWeight: 800, letterSpacing: 2 }}>2026 BIN GROUP PROPERTY OS</Typography></Box>
+            <Box sx={{ py: 3, textAlign: 'center', borderTop: `1px solid ${binThemeTokens.border}`, bgcolor: alpha(binThemeTokens.canvas, 0.86), position: 'relative', zIndex: 1 }}><Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, fontWeight: 800, letterSpacing: 2 }}>2026 BIN GROUP PROPERTY OS</Typography><MadeInUaeInline /></Box>
         </Box>
     );
 };
@@ -111,6 +112,7 @@ export default function OwnerApp() {
                 <Route path="/" element={<OwnerSimpleDashboardPage />} />
                 <Route path="/dashboard" element={<OwnerSimpleDashboardPage />} />
                 <Route path="/dashboard/full" element={<OwnerDashboardPage />} />
+                <Route path="/insights" element={<OwnerDashboardPage />} />
                 <Route path="/activation" element={<OwnerActivationPage />} />
                 <Route path="/onboarding-status" element={<OwnerActivationPage />} />
                 <Route path="/properties" element={<OwnerPropertiesPage />} />

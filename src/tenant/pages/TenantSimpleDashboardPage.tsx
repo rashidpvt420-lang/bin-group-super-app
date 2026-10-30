@@ -13,6 +13,22 @@ import { useTenantHomeExtras } from '../components/TenantHomeSummary';
 import { daysUntil } from '../components/TenantRentSchedulePanel';
 import { useRole } from '../../context/RoleContext';
 
+/** Services that used to be reachable only from the full dashboard. */
+export const TENANT_MORE_SERVICES: { path: string; en: string; ar: string }[] = [
+  { path: '/tenant/messages', en: 'Messages', ar: 'الرسائل' },
+  { path: '/tenant/ai-concierge', en: 'BIN AI Concierge', ar: 'مساعد BIN الذكي' },
+  { path: '/tenant/amenities', en: 'Amenities', ar: 'المرافق' },
+  { path: '/tenant/gate-pass', en: 'Gate pass', ar: 'تصريح دخول' },
+  { path: '/tenant/visitor-parking', en: 'Visitor parking', ar: 'مواقف الزوار' },
+  { path: '/tenant/parcels', en: 'Parcels', ar: 'الطرود' },
+  { path: '/tenant/keys', en: 'Keys', ar: 'المفاتيح' },
+  { path: '/tenant/community', en: 'Community board', ar: 'لوحة المجتمع' },
+  { path: '/tenant/staff-directory', en: 'Staff directory', ar: 'دليل الموظفين' },
+  { path: '/tenant/marketplace', en: 'Marketplace', ar: 'السوق' },
+  { path: '/tenant/move-inspection/move-out', en: 'Move-out inspection', ar: 'فحص الإخلاء' },
+  { path: '/tenant/design-studio', en: 'AI Design Studio', ar: 'استوديو التصميم' },
+];
+
 const issueShortcuts = [
   { en: 'AC', ar: 'المكيف', category: 'ac' },
   { en: 'Water', ar: 'المياه', category: 'plumbing' },
@@ -123,7 +139,16 @@ export default function TenantSimpleDashboardPage() {
         <PaymentCollectionRecordsCard />
         <MoneyStatementDownload />
 
-        <Button onClick={() => navigate('/tenant/dashboard/full')} sx={{ alignSelf: isRTL ? 'flex-end' : 'flex-start', color: ui.goldText, fontWeight: 700, minHeight: ui.touchTarget }}>{t('tenant.home.full', 'Open full dashboard', 'فتح اللوحة الكاملة')}</Button>
+        <UiCard testId="tenant-home-more-services">
+          <Typography sx={{ fontWeight: 800, mb: 1 }}>{t('tenant.home.moreServices', 'More services', 'خدمات إضافية')}</Typography>
+          <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 1 }}>
+            {TENANT_MORE_SERVICES.map((svc) => (
+              <Button key={svc.path} variant="outlined" onClick={() => navigate(svc.path)} sx={{ minHeight: ui.touchTarget, color: ui.goldText, borderColor: ui.goldText, fontWeight: 700, justifyContent: isRTL ? 'flex-end' : 'flex-start' }}>
+                {lang === 'ar' ? svc.ar : svc.en}
+              </Button>
+            ))}
+          </Box>
+        </UiCard>
       </Stack>
     </Box>
   );

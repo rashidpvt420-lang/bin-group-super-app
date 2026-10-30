@@ -103,6 +103,7 @@ const roleCases: RoleCase[] = [
     routes: [
       '/owner/dashboard',
       '/owner/dashboard/full',
+      '/owner/insights',
       '/owner/activation',
       '/owner/onboarding-status',
       '/owner/properties',

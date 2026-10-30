@@ -1,3 +1,4 @@
+import { MadeInUaeInline } from '../components/MadeInUaeMark';
 import React from 'react';
 import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { Box, Container, AppBar, Toolbar, Typography, Button } from '@mui/material';
@@ -111,7 +112,7 @@ const TechnicianLayout = ({ children }: { children: React.ReactNode }) => {
 
             <TechnicianOfflineSyncAgent />
             <BinConnectChatBox role="technician" />
-            <Box sx={{ py: 3, textAlign: 'center', borderTop: `1px solid ${shell.border}`, bgcolor: shell.soft, mt: 'auto', position: 'relative', zIndex: 1 }}><Typography variant="caption" sx={{ color: shell.muted, fontWeight: 800, letterSpacing: 1.5 }}>{lang === 'ar' ? '2026 منصة BIN GROUP للفنيين' : '2026 BIN GROUP'}</Typography></Box>
+            <Box sx={{ py: 3, textAlign: 'center', borderTop: `1px solid ${shell.border}`, bgcolor: shell.soft, mt: 'auto', position: 'relative', zIndex: 1 }}><Typography variant="caption" sx={{ color: shell.muted, fontWeight: 800, letterSpacing: 1.5 }}>{lang === 'ar' ? '2026 منصة BIN GROUP للفنيين' : '2026 BIN GROUP'}</Typography><MadeInUaeInline /></Box>
         </Box>
     );
 };

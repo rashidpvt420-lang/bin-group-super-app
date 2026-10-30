@@ -65,7 +65,9 @@ export default function OwnerSimpleDashboardPage() {
         <PaymentCollectionRecordsCard />
         <MoneyStatementDownload />
 
-        <Button onClick={() => navigate('/owner/dashboard/full')} sx={{ alignSelf: isRTL ? 'flex-end' : 'flex-start', color: ui.goldText, fontWeight: 700, minHeight: ui.touchTarget }}>{t('owner.home.full', 'Open full dashboard', 'فتح اللوحة الكاملة')}</Button>
+        <UiCard testId="owner-home-insights">
+          <ListRow title={t('owner.home.insights', 'Portfolio insights & reports', 'تحليلات وتقارير المحفظة')} subtitle={t('owner.home.insightsSub', 'ROI, rent collection, money risk, contracts, complaints, evidence and authorized reporters', 'العائد، التحصيل، المخاطر المالية، العقود، الشكاوى، الأدلة والمبلغون المعتمدون')} onClick={() => navigate('/owner/insights')} isRTL={isRTL} />
+        </UiCard>
       </Stack>
     </Box>
   );
