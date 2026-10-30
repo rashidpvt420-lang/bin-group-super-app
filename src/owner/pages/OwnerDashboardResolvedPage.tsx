@@ -890,10 +890,10 @@ function OwnerActivationTimeline({ steps, compact = false }: { steps: Activation
           <Grid item xs={12} sm={compact ? 12 : 6} md={compact ? 12 : 4} key={step.gate}>
             <Paper sx={{ p: 1.75, height: '100%', bgcolor: alpha(step.tone, 0.07), border: `1px solid ${alpha(step.tone, 0.22)}`, borderRadius: 3 }}>
               <Stack direction="row" justifyContent="space-between" alignItems="center" spacing={1}>
-                <Typography variant="body2" sx={{ color: '#fff', fontWeight: 900 }}>{step.gate}</Typography>
+                <Typography variant="body2" sx={{ color: binThemeTokens.textPrimary, fontWeight: 900 }}>{step.gate}</Typography>
                 <Chip size="small" label={step.status} sx={{ height: 20, bgcolor: alpha(step.tone, 0.16), color: step.tone, fontWeight: 950, fontSize: '0.62rem' }} />
               </Stack>
-              {!compact && <Typography variant="caption" sx={{ color: 'rgba(255,255,255,.58)', fontWeight: 700, display: 'block', mt: 1 }}>{step.detail}</Typography>}
+              {!compact && <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, fontWeight: 700, display: 'block', mt: 1 }}>{step.detail}</Typography>}
             </Paper>
           </Grid>
         ))}

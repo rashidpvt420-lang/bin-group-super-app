@@ -126,7 +126,7 @@ export default function OwnerAuthorizedReportersSection({ properties, reporters,
                   {metric.icon}
                   <Typography variant="caption" sx={{ fontWeight: 950, letterSpacing: 1 }}>{metric.label.toUpperCase()}</Typography>
                 </Stack>
-                <Typography variant="h4" sx={{ color: '#fff', fontWeight: 950 }}>{metric.value}</Typography>
+                <Typography variant="h4" sx={{ color: binThemeTokens.textPrimary, fontWeight: 950 }}>{metric.value}</Typography>
               </Box>
             </Grid>
           ))}
@@ -139,18 +139,18 @@ export default function OwnerAuthorizedReportersSection({ properties, reporters,
         {showAddForm && (
           <Box component="form" onSubmit={handleSubmit} sx={{ p: { xs: 2, md: 3 }, mb: 4, bgcolor: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 3 }}>
             <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
-              <Typography variant="h6" fontWeight={950} sx={{ color: '#fff' }}>Add Authorized Person</Typography>
-              <IconButton onClick={() => setShowAddForm(false)} sx={{ color: 'rgba(255,255,255,0.5)' }}><X size={20} /></IconButton>
+              <Typography variant="h6" fontWeight={950} sx={{ color: binThemeTokens.textPrimary }}>Add Authorized Person</Typography>
+              <IconButton onClick={() => setShowAddForm(false)} sx={{ color: binThemeTokens.textPrimary }}><X size={20} /></IconButton>
             </Stack>
             <Stack spacing={2.5}>
               <FormControl fullWidth>
-                <InputLabel sx={{ color: 'rgba(255,255,255,0.5)' }}>Select Property</InputLabel>
+                <InputLabel sx={{ color: binThemeTokens.textPrimary }}>Select Property</InputLabel>
                 <Select
                   value={formData.propertyId}
                   label="Select Property"
                   required
                   onChange={(e) => setFormData({ ...formData, propertyId: String(e.target.value) })}
-                  sx={{ color: '#fff', '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.2)' } }}
+                  sx={{ color: binThemeTokens.textPrimary, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.2)' } }}
                 >
                   {properties.map(p => (
                     <MenuItem key={p.id || p.propertyId} value={p.id || p.propertyId}>
@@ -163,23 +163,23 @@ export default function OwnerAuthorizedReportersSection({ properties, reporters,
               <Grid container spacing={2}>
                 <Grid item xs={12} md={6}>
                   <FormControl fullWidth>
-                    <InputLabel sx={{ color: 'rgba(255,255,255,0.5)' }}>Access Type</InputLabel>
-                    <Select value={formData.accessType} label="Access Type" required onChange={(e) => handleAccessTypeChange(e.target.value as ReporterAccessType)} sx={{ color: '#fff', '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.2)' } }}>
+                    <InputLabel sx={{ color: binThemeTokens.textPrimary }}>Access Type</InputLabel>
+                    <Select value={formData.accessType} label="Access Type" required onChange={(e) => handleAccessTypeChange(e.target.value as ReporterAccessType)} sx={{ color: binThemeTokens.textPrimary, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.2)' } }}>
                       {accessOptions.map((option) => <MenuItem key={option.value} value={option.value}>{option.label}</MenuItem>)}
                     </Select>
                   </FormControl>
                 </Grid>
                 <Grid item xs={12} md={6}>
                   <FormControl fullWidth>
-                    <InputLabel sx={{ color: 'rgba(255,255,255,0.5)' }}>Permission Scope</InputLabel>
-                    <Select value={formData.permissionScope} label="Permission Scope" required onChange={(e) => setFormData({ ...formData, permissionScope: e.target.value as ReporterPermissionScope })} sx={{ color: '#fff', '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.2)' } }}>
+                    <InputLabel sx={{ color: binThemeTokens.textPrimary }}>Permission Scope</InputLabel>
+                    <Select value={formData.permissionScope} label="Permission Scope" required onChange={(e) => setFormData({ ...formData, permissionScope: e.target.value as ReporterPermissionScope })} sx={{ color: binThemeTokens.textPrimary, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.2)' } }}>
                       {permissionOptions.map((option) => <MenuItem key={option.value} value={option.value}>{option.label}</MenuItem>)}
                     </Select>
                   </FormControl>
                 </Grid>
               </Grid>
 
-              <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.55)', mt: -1 }}>
+              <Typography variant="caption" sx={{ color: binThemeTokens.textPrimary, mt: -1 }}>
                 {permissionOptions.find((option) => option.value === formData.permissionScope)?.helper}
               </Typography>
               
@@ -212,7 +212,7 @@ export default function OwnerAuthorizedReportersSection({ properties, reporters,
         ) : reporters.length === 0 ? (
           <Box sx={{ p: 4, textAlign: 'center', border: '1px dashed rgba(255,255,255,0.1)', borderRadius: 3 }}>
             <AlertCircle size={32} color="rgba(255,255,255,0.2)" style={{ margin: '0 auto 12px' }} />
-            <Typography sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 900 }}>{t('owner.noReportersYet') || 'No authorized people have been added yet.'}</Typography>
+            <Typography sx={{ color: binThemeTokens.textSecondary, fontWeight: 900 }}>{t('owner.noReportersYet') || 'No authorized people have been added yet.'}</Typography>
           </Box>
         ) : (
           <Stack spacing={1.5}>
@@ -226,7 +226,7 @@ export default function OwnerAuthorizedReportersSection({ properties, reporters,
                   </Stack>
                   <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.5)', mb: 0.5, ...textSafeSx }}>{reporter.roleLabel} • {reporter.propertyName}</Typography>
                   <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.3)', fontFamily: 'monospace', ...textSafeSx }}>{reporter.reporterEmail} • {reporter.reporterPhone}</Typography>
-                  {reporter.occupiedArea && <Typography variant="caption" sx={{ display: 'block', color: 'rgba(255,255,255,0.42)', mt: 0.5 }}>Area: {reporter.occupiedArea}</Typography>}
+                  {reporter.occupiedArea && <Typography variant="caption" sx={{ display: 'block', color: binThemeTokens.textSecondary, mt: 0.5 }}>Area: {reporter.occupiedArea}</Typography>}
                   {reporter.inviteCode && <Typography variant="caption" sx={{ display: 'flex', alignItems: 'center', gap: 0.5, color: binThemeTokens.goldText, mt: 0.5, fontWeight: 900 }}><KeyRound size={13} /> Invite Code: {reporter.inviteCode}</Typography>}
                 </Box>
                 <Button size="small" color="error" variant="outlined" onClick={() => onRemoveReporter(reporter.id)} sx={{ fontWeight: 900, borderRadius: 2 }}>

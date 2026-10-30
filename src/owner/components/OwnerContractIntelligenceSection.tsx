@@ -30,7 +30,7 @@ function Metric({ label, value, caption, color = '#fff' }: { label: string; valu
   return (
     <Grid item xs={12} sm={6} md={3}>
       <Box sx={{ p: 2.25, bgcolor: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 3, height: '100%' }}>
-        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.45)', fontWeight: 950 }}>{label.toUpperCase()}</Typography>
+        <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, fontWeight: 950 }}>{label.toUpperCase()}</Typography>
         <Typography variant="h5" sx={{ color, fontWeight: 950, mt: 0.8, ...safeTextSx }}>{value}</Typography>
         {caption && <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.52)', mt: 0.8, display: 'block', ...safeTextSx }}>{caption}</Typography>}
       </Box>
@@ -80,7 +80,7 @@ export default function OwnerContractIntelligenceSection({ contract, properties,
             <Box sx={{ p: 1, bgcolor: alpha(binThemeTokens.gold, 0.1), color: binThemeTokens.goldText, borderRadius: 2 }}><Building2 size={22} /></Box>
             <Box>
               <Typography variant="overline" sx={{ color: binThemeTokens.goldText, fontWeight: 950, letterSpacing: 2 }}>UAE ASSET CLASSIFICATION</Typography>
-              <Typography variant="h5" sx={{ color: '#fff', fontWeight: 950 }}>Contract Recommendation Matrix</Typography>
+              <Typography variant="h5" sx={{ color: binThemeTokens.textPrimary, fontWeight: 950 }}>Contract Recommendation Matrix</Typography>
             </Box>
           </Stack>
 
@@ -119,7 +119,7 @@ export default function OwnerContractIntelligenceSection({ contract, properties,
                 </Stack>
                 <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 1, mt: 1.5 }}>
                   {asset.requiredEvidence.map((item) => (
-                    <Chip key={item} icon={<FileCheck2 size={13} />} label={item} size="small" sx={{ color: 'rgba(255,255,255,0.72)', bgcolor: 'rgba(255,255,255,0.04)', '& .MuiChip-icon': { color: binThemeTokens.goldText } }} />
+                    <Chip key={item} icon={<FileCheck2 size={13} />} label={item} size="small" sx={{ color: binThemeTokens.textSecondary, bgcolor: 'rgba(255,255,255,0.04)', '& .MuiChip-icon': { color: binThemeTokens.goldText } }} />
                   ))}
                 </Stack>
               </Box>

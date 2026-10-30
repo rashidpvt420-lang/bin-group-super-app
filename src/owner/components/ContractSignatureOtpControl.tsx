@@ -90,7 +90,7 @@ export default function ContractSignatureOtpControl({
 
   return (
     <Stack spacing={1.5} sx={{ direction: isRTL ? 'rtl' : 'ltr' }}>
-      <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.68)' }}>
+      <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary }}>
         {copy(
           'Verify the signature through the OTP sent to your authenticated email. The contract cannot be signed without this server evidence.',
           'تحقق من التوقيع عبر الرمز المرسل إلى بريدك الإلكتروني المسجل. لا يمكن توقيع العقد دون هذا الإثبات من الخادم.',
@@ -127,7 +127,7 @@ export default function ContractSignatureOtpControl({
         )}
       </Stack>
       {requestId && (
-        <Typography data-testid="owner-contract-otp-correlation" variant="caption" sx={{ color: 'rgba(255,255,255,0.7)', wordBreak: 'break-all' }}>
+        <Typography data-testid="owner-contract-otp-correlation" variant="caption" sx={{ color: binThemeTokens.textSecondary, wordBreak: 'break-all' }}>
           {copy('Verification reference', 'مرجع التحقق')}: {requestId}
         </Typography>
       )}

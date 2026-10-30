@@ -68,3 +68,118 @@ test('owner/tenant dashboards never issue queries the rules cannot prove are own
   assert.ok(!t.includes("collection(db, 'systemLogs')"));
   assert.ok(!t.includes("{ field: 'propertyId', value:"));
 });
+
+// Page-by-page pass: Owner pages and the tenant full dashboard render on the
+// white shell, so white or near-white text on a pale/translucent surface (or
+// no surface at all) is invisible. Each listed screen must use theme tokens.
+import { createRequire } from 'node:module';
+const ts = createRequire(import.meta.url)('typescript');
+const PALE_SURFACE_SCREENS = [
+  'src/owner/components/ContractSignatureOtpControl.tsx',
+  'src/owner/components/OwnerAuthorizedReportersSection.tsx',
+  'src/owner/components/OwnerComplaintCommandCenter.tsx',
+  'src/owner/components/OwnerContractIntelligenceSection.tsx',
+  'src/owner/components/OwnerContractModeMatrix.tsx',
+  'src/owner/components/OwnerExecutiveDashboardSection.tsx',
+  'src/owner/components/OwnerNextStepBanner.tsx',
+  'src/owner/components/OwnerPhoneVerificationCard.tsx',
+  'src/owner/components/OwnerRentCollectionSection.tsx',
+  'src/owner/components/OwnerRoiFinancialSection.tsx',
+  'src/owner/components/OwnerTicketEvidencePanel.tsx',
+  'src/owner/pages/ContractorMarketplacePage.tsx',
+  'src/owner/pages/OwnerActivationPage.tsx',
+  'src/owner/pages/OwnerContractsResolvedPage.tsx',
+  'src/owner/pages/OwnerDamageEstimatePage.tsx',
+  'src/owner/pages/OwnerDashboardResolvedPage.tsx',
+  'src/owner/pages/OwnerIbanPage.tsx',
+  'src/owner/pages/OwnerPLReportPage.tsx',
+  'src/owner/pages/OwnerProfilePage.tsx',
+  'src/owner/pages/OwnerPropertyPassportContractDetailPage.tsx',
+  'src/owner/pages/OwnerPropertyPassportResolvedPage.tsx',
+  'src/owner/pages/OwnerTicketsPage.tsx',
+  'src/tenant/pages/TenantDashboardPage.tsx'
+];
+const WHITE_TEXT = /^['"`](#fff|#ffffff|#f8fafc|white|rgba\(255, ?255, ?255, ?0?\.[4-9]\d*\))['"`]$/i;
+const CONTROL_TAGS = new Set(['Button', 'Chip', 'Avatar', 'Fab', 'Badge', 'IconButton', 'LinearProgress', 'CircularProgress']);
+const surfaceIsPale = (t) => {
+  const v = t.replace(/\s+/g, '');
+  if (/^['"`](#fff|#ffffff|#f8f9fb|#f9fafb|#f8fafc|white|transparent)['"`]$/i.test(v)) return true;
+  if (/binThemeTokens\.(canvas|card|softCanvas)$/.test(v)) return true;
+  const a = v.match(/^alpha\((.+),([\d.]+)\)$/);
+  if (a) return Number(a[2]) <= 0.25 && !/black|#0|#1[0-9a-f]/i.test(a[1]);
+  const r = v.match(/^['"`]rgba\((\d+),(\d+),(\d+),([\d.]+)\)['"`]$/);
+  if (r) { const [x, y, z, al] = r.slice(1).map(Number); return al <= 0.25 || (x + y + z) / 3 > 200; }
+  return false;
+};
+const styleOf = (opening, sf) => {
+  const out = {};
+  for (const attr of opening.attributes.properties) {
+    if (!attr.name || !attr.initializer) continue;
+    const name = attr.name.getText(sf);
+    let init = attr.initializer;
+    if (ts.isJsxExpression(init)) init = init.expression;
+    if (!init) continue;
+    if (name === 'color') out.color = init.getText(sf);
+    if (name === 'bgcolor') out.bg = init.getText(sf);
+    if ((name === 'sx' || name === 'style') && ts.isObjectLiteralExpression(init)) {
+      for (const p of init.properties) {
+        if (ts.isSpreadAssignment(p)) { out.bg = 'SPREAD'; continue; }
+        if (!ts.isPropertyAssignment(p)) continue;
+        const k = p.name.getText(sf).replace(/['"]/g, '');
+        if (k === 'color') out.color = p.initializer.getText(sf);
+        if (k === 'bgcolor' || k === 'background' || k === 'backgroundColor') out.bg = p.initializer.getText(sf);
+      }
+    }
+  }
+  return out;
+};
+const invisibleWhiteText = (file) => {
+  const sf = ts.createSourceFile(file, read(file), ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  const hits = [];
+  const walk = (node, stack) => {
+    let next = stack;
+    if (ts.isJsxElement(node) || ts.isJsxSelfClosingElement(node)) {
+      const opening = ts.isJsxElement(node) ? node.openingElement : node;
+      const style = styleOf(opening, sf);
+      next = [...stack, style];
+      if (style.color && WHITE_TEXT.test(style.color)) {
+        let surface = null;
+        for (let i = next.length - 1; i >= 0; i -= 1) {
+          if (!next[i].bg) continue;
+          const translucent = /alpha\(|rgba\(|transparent/.test(next[i].bg);
+          if (next[i].bg !== 'SPREAD' && surfaceIsPale(next[i].bg)) { surface = surface || 'pale'; if (translucent) continue; break; }
+          surface = surface === 'pale' ? 'over-dark' : 'dark';
+          break;
+        }
+        const tag = opening.tagName.getText(sf);
+        if (surface === 'pale' || (surface === null && !CONTROL_TAGS.has(tag))) {
+          hits.push(`${file}:${sf.getLineAndCharacterOfPosition(opening.getStart(sf)).line + 1} <${tag}> ${style.color}`);
+        }
+      }
+    }
+    ts.forEachChild(node, (child) => walk(child, next));
+  };
+  walk(sf, []);
+  return hits;
+};
+
+test('owner and tenant full-dashboard screens have no white text on pale surfaces', () => {
+  const hits = PALE_SURFACE_SCREENS.flatMap(invisibleWhiteText);
+  assert.deepEqual(hits, [], hits.join('\n'));
+  for (const fg of ['textPrimary', 'textSecondary']) {
+    for (const tint of [0.04, 0.06, 0.08]) {
+      assert.ok(ratio(T[fg], over('#C6A75E', tint)) >= 4.5, `${fg} over gold tint ${tint}`);
+    }
+  }
+  // Inputs tinted rgba(0,0,0,0.2) over white read as #CCCCCC: only textPrimary passes there.
+  assert.ok(ratio(T.textPrimary, over('#000000', 0.2)) >= 4.5);
+});
+
+test('the scanner still flags white text on a pale surface', () => {
+  const src = "const A = () => <Box sx={{ bgcolor: 'rgba(255,255,255,0.03)' }}><Typography sx={{ color: '#FFF' }}>x</Typography></Box>;";
+  const sf = ts.createSourceFile('x.tsx', src, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  assert.ok(sf.statements.length > 0);
+  assert.ok(surfaceIsPale("'rgba(255,255,255,0.03)'"));
+  assert.ok(!surfaceIsPale("'rgba(15,23,42,0.72)'"));
+  assert.ok(WHITE_TEXT.test("'#FFF'"));
+});

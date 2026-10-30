@@ -197,7 +197,7 @@ export default function OwnerProfilePage() {
       </Paper>
 
       <Paper sx={{ p: 3, bgcolor: 'rgba(198,167,94,0.06)', border: '1px solid rgba(198,167,94,0.2)', borderRadius: 4 }}>
-        <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={2} alignItems="center"><Shield color={binThemeTokens.gold} /><Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.72)', fontWeight: 800 }}>{label('Sensitive changes are server-validated and recorded in immutable audit history. IBAN and payout details remain managed separately.', 'يتم التحقق من التغييرات الحساسة على الخادم وتسجيلها في سجل تدقيق غير قابل للتغيير. تظل تفاصيل الآيبان والتحويلات مُدارة بشكل منفصل.')}</Typography></Stack>
+        <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={2} alignItems="center"><Shield color={binThemeTokens.gold} /><Typography variant="body2" sx={{ color: binThemeTokens.textSecondary, fontWeight: 800 }}>{label('Sensitive changes are server-validated and recorded in immutable audit history. IBAN and payout details remain managed separately.', 'يتم التحقق من التغييرات الحساسة على الخادم وتسجيلها في سجل تدقيق غير قابل للتغيير. تظل تفاصيل الآيبان والتحويلات مُدارة بشكل منفصل.')}</Typography></Stack>
       </Paper>
     </Box>
   );

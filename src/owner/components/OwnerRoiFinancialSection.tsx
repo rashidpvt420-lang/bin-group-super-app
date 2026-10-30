@@ -46,7 +46,7 @@ export default function OwnerRoiFinancialSection({ financials, onAddRentDetails 
     <Grid item xs={12} sm={6} md={3}>
       <Box sx={metricBoxSx}>
         <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1.5 }}>
-          {icon && <Box sx={{ color: 'rgba(255,255,255,0.5)' }}>{icon}</Box>}
+          {icon && <Box sx={{ color: binThemeTokens.textSecondary }}>{icon}</Box>}
           <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.45)', fontWeight: 900, ...textSafeSx }}>
             {label.toUpperCase()}
           </Typography>
@@ -80,8 +80,8 @@ export default function OwnerRoiFinancialSection({ financials, onAddRentDetails 
             <Stack direction="row" spacing={1.5} alignItems="center">
               <AlertCircle color="#f59e0b" />
               <Box>
-                <Typography fontWeight={900} sx={{ color: '#fff' }}>ROI pending rent setup</Typography>
-                <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.6)' }}>Add expected or actual annual rent to unlock live ROI projections.</Typography>
+                <Typography fontWeight={900} sx={{ color: binThemeTokens.textPrimary }}>ROI pending rent setup</Typography>
+                <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary }}>Add expected or actual annual rent to unlock live ROI projections.</Typography>
               </Box>
             </Stack>
             <Button variant="contained" onClick={onAddRentDetails} sx={{ bgcolor: '#f59e0b', color: '#000', fontWeight: 900, '&:hover': { bgcolor: '#d97706' } }}>
@@ -108,24 +108,24 @@ export default function OwnerRoiFinancialSection({ financials, onAddRentDetails 
         </Grid>
 
         <Box sx={{ mt: 4, pt: 3, borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-          <Typography variant="subtitle2" sx={{ color: 'rgba(255,255,255,0.6)', fontWeight: 900, mb: 2 }}>CONTRACT LEDGER & PAYMENTS</Typography>
+          <Typography variant="subtitle2" sx={{ color: binThemeTokens.textSecondary, fontWeight: 900, mb: 2 }}>CONTRACT LEDGER & PAYMENTS</Typography>
           <Grid container spacing={3}>
             <Grid item xs={12} sm={6} md={3}>
               <Box sx={{ ...metricBoxSx, bgcolor: 'transparent', border: 'none', px: 0 }}>
-                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.45)', fontWeight: 900, display: 'block', mb: 0.5 }}>ANNUAL CONTRACT VALUE</Typography>
-                <Typography variant="h6" fontWeight={950} sx={{ color: '#fff' }}>{formatCurrency(financials.annualContractValue)}</Typography>
+                <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, fontWeight: 900, display: 'block', mb: 0.5 }}>ANNUAL CONTRACT VALUE</Typography>
+                <Typography variant="h6" fontWeight={950} sx={{ color: binThemeTokens.textPrimary }}>{formatCurrency(financials.annualContractValue)}</Typography>
               </Box>
             </Grid>
             <Grid item xs={12} sm={6} md={3}>
               <Box sx={{ ...metricBoxSx, bgcolor: 'transparent', border: 'none', px: 0 }}>
-                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.45)', fontWeight: 900, display: 'block', mb: 0.5 }}>15% MOBILIZATION</Typography>
-                <Typography variant="h6" fontWeight={950} sx={{ color: '#fff' }}>{formatCurrency(financials.mobilizationAmount)}</Typography>
+                <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, fontWeight: 900, display: 'block', mb: 0.5 }}>15% MOBILIZATION</Typography>
+                <Typography variant="h6" fontWeight={950} sx={{ color: binThemeTokens.textPrimary }}>{formatCurrency(financials.mobilizationAmount)}</Typography>
               </Box>
             </Grid>
             <Grid item xs={12} sm={6} md={3}>
               <Box sx={{ ...metricBoxSx, bgcolor: 'transparent', border: 'none', px: 0 }}>
-                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.45)', fontWeight: 900, display: 'block', mb: 0.5 }}>TOTAL PAID / PENDING</Typography>
-                <Typography variant="h6" fontWeight={950} sx={{ color: '#fff' }}>
+                <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, fontWeight: 900, display: 'block', mb: 0.5 }}>TOTAL PAID / PENDING</Typography>
+                <Typography variant="h6" fontWeight={950} sx={{ color: binThemeTokens.textPrimary }}>
                   <span style={{ color: '#10b981' }}>{formatCurrency(financials.totalPaid)}</span>
                   <span style={{ color: 'rgba(255,255,255,0.3)', margin: '0 8px' }}>/</span>
                   <span style={{ color: financials.totalPending > 0 ? '#ef4444' : '#fff' }}>{formatCurrency(financials.totalPending)}</span>
@@ -134,8 +134,8 @@ export default function OwnerRoiFinancialSection({ financials, onAddRentDetails 
             </Grid>
             <Grid item xs={12} sm={6} md={3}>
               <Box sx={{ ...metricBoxSx, bgcolor: 'transparent', border: 'none', px: 0 }}>
-                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.45)', fontWeight: 900, display: 'block', mb: 0.5 }}>UPCOMING INVOICE</Typography>
-                <Typography variant="h6" fontWeight={950} sx={{ color: '#fff' }}>{financials.upcomingInvoiceAmount !== null ? formatCurrency(financials.upcomingInvoiceAmount) : 'None'}</Typography>
+                <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, fontWeight: 900, display: 'block', mb: 0.5 }}>UPCOMING INVOICE</Typography>
+                <Typography variant="h6" fontWeight={950} sx={{ color: binThemeTokens.textPrimary }}>{financials.upcomingInvoiceAmount !== null ? formatCurrency(financials.upcomingInvoiceAmount) : 'None'}</Typography>
               </Box>
             </Grid>
           </Grid>

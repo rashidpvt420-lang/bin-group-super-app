@@ -108,7 +108,7 @@ export default function OwnerIbanPage() {
             {bankAccounts.length === 0 && !showForm ? (
                 <Paper sx={{ p: 5, textAlign: 'center', bgcolor: 'rgba(255,255,255,0.02)', border: '1px dashed rgba(255,255,255,0.08)', borderRadius: 4 }}>
                     <CreditCard size={48} color="rgba(255,255,255,0.1)" style={{ margin: '0 auto 12px' }} />
-                    <Typography sx={{ color: 'rgba(255,255,255,0.5)' }}>No bank account linked. Add your IBAN to receive payouts.</Typography>
+                    <Typography sx={{ color: binThemeTokens.textSecondary }}>No bank account linked. Add your IBAN to receive payouts.</Typography>
                 </Paper>
             ) : (
                 <Stack spacing={3}>

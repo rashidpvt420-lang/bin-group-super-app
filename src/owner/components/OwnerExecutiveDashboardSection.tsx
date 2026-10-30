@@ -481,7 +481,7 @@ export default function OwnerExecutiveDashboardSection({
             <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" alignItems={{ xs: 'flex-start', md: 'center' }} spacing={2} sx={{ mb: 3, minWidth: 0 }}>
               {renderHeader(<Users size={22} />, 'Tenant Registry', 'Linked Occupancies & UID Security')}
               <Box sx={{ textAlign: { xs: 'left', md: 'right' }, minWidth: 0 }}>
-                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.45)', fontWeight: 900 }}>REGISTRY READINESS</Typography>
+                <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, fontWeight: 900 }}>REGISTRY READINESS</Typography>
                 <Typography variant="h6" fontWeight={950} sx={{ color: binThemeTokens.goldText, ...textSafeSx }}>{tenantRegistryReadiness}% Linked</Typography>
               </Box>
             </Stack>
@@ -526,7 +526,7 @@ export default function OwnerExecutiveDashboardSection({
             <Grid item xs={12}>
               <Card sx={cardSx}>
                 <CardContent sx={{ p: 4, textAlign: 'center' }}>
-                  <Typography fontWeight={950} sx={{ color: 'rgba(255,255,255,0.52)' }}>NO ACTIVE ASSETS FOUND</Typography>
+                  <Typography fontWeight={950} sx={{ color: binThemeTokens.textSecondary }}>NO ACTIVE ASSETS FOUND</Typography>
                 </CardContent>
               </Card>
             </Grid>
@@ -583,7 +583,7 @@ export default function OwnerExecutiveDashboardSection({
         <CardContent sx={{ p: { xs: 2.25, md: 4 } }}>
           {renderHeader(<FileText size={22} />, 'Owner Action Items', 'Priority Fixes for Complete Owner Visibility')}
           {loadingData && (
-            <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.55)', mb: 2 }}>Loading live owner telemetry...</Typography>
+            <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary, mb: 2 }}>Loading live owner telemetry...</Typography>
           )}
           {actionItems.length === 0 ? (
             <Alert icon={<CheckCircle size={18} />} severity="success" sx={{ borderRadius: 3 }}>

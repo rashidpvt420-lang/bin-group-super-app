@@ -229,7 +229,7 @@ export default function OwnerPLReportPage() {
         </Stack>
         <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" alignItems={{ sm: 'flex-end' }} spacing={2}>
           <Box>
-            <Typography variant="h4" fontWeight={950} sx={{ color: '#fff' }}>Profit & Loss {year}</Typography>
+            <Typography variant="h4" fontWeight={950} sx={{ color: binThemeTokens.textPrimary }}>Profit & Loss {year}</Typography>
             <Typography variant="body2" sx={{ color: alpha('#fff', 0.4), fontWeight: 700 }}>
               {passports.length} propert{passports.length === 1 ? 'y' : 'ies'} · Owner Financial Summary
             </Typography>
