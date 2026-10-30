@@ -68,7 +68,7 @@ test('properties that already have units, are not newly active, or declare nothi
   assert.equal((await unitsOf('already_active')).length, 0);
 
   assert.equal((await activate('no_count', null, property({ status: 'ACTIVE' }))).status, 'NO_DECLARED_UNITS');
-  assert.equal((await activate('huge', null, property({ units: 500, status: 'ACTIVE' }))).status, 'TOO_MANY_DECLARED_UNITS');
+  assert.equal((await activate('huge', null, property({ units: 2001, status: 'ACTIVE' }))).status, 'TOO_MANY_DECLARED_UNITS');
   assert.equal((await unitsOf('huge')).length, 0);
 });
 
@@ -134,4 +134,43 @@ test('backfill rejects suspended accounts and invalid identifiers without trunca
   for (const propertyId of ['a/b', '..', 'x'.repeat(161), { id: 'villa' }]) {
     await expectHttpsError(call(adminProvisionDeclaredPropertyUnits, adminUser, { propertyId }), 'invalid-argument');
   }
+});
+
+test('buildings above 200 units are provisioned in idempotent batches with one audit', async () => {
+  const result = await activate('tower', null, property({ units: 450, status: 'ACTIVE', propertyType: 'Building' }));
+  assert.equal(result.status, 'CREATED');
+  assert.equal(result.createdCount, 450);
+  assert.equal(result.batches, 3);
+  const units = await unitsOf('tower');
+  assert.equal(units.length, 450);
+  assert.ok(units.every((doc) => doc.data().ownerId === OWNER && doc.data().status === 'VACANT'));
+  const prop = (await db.doc('properties/tower').get()).data();
+  assert.equal(prop.unitRecordsProvisioning.state, 'COMPLETE');
+  assert.equal(prop.unitRecordsProvisionedCount, 450);
+  const audits = await db.collection('audit_logs').where('targetId', '==', 'tower').get();
+  assert.equal(audits.size, 1);
+  assert.equal(audits.docs[0].data().metadata.unitIds.length, 450);
+  assert.equal(audits.docs[0].data().metadata.batched, true);
+  // Re-running is a no-op.
+  assert.equal((await call(adminProvisionDeclaredPropertyUnits, adminUser, { propertyId: 'tower' })).status, 'ALREADY_HAS_UNITS');
+  assert.equal((await unitsOf('tower')).length, 450);
+});
+
+test('an interrupted batched provisioning resumes without duplicates', async () => {
+  await db.doc('properties/resume').set(property({ units: 300, status: 'ACTIVE', unitRecordsProvisioning: { state: 'IN_PROGRESS', declared: 300, nextIndex: 151 } }));
+  for (let n = 1; n <= 160; n += 1) await db.doc(`units/resume_${n}`).set({ propertyId: 'resume', unitNumber: String(n), keep: true });
+  const result = await call(adminProvisionDeclaredPropertyUnits, adminUser, { propertyId: 'resume' });
+  assert.equal(result.status, 'CREATED');
+  const units = await unitsOf('resume');
+  assert.equal(units.length, 300);
+  assert.equal((await db.doc('units/resume_155').get()).data().keep, true);
+});
+
+test('batched provisioning stops on a foreign unit collision', async () => {
+  await db.doc('units/clash_250').set({ propertyId: 'someone_else', unitNumber: '250' });
+  const result = await activate('clash', null, property({ units: 300, status: 'ACTIVE' }));
+  assert.equal(result.status, 'UNIT_ID_COLLISION');
+  assert.equal((await db.doc('units/clash_250').get()).data().propertyId, 'someone_else');
+  assert.equal((await db.doc('properties/clash').get()).data().unitRecordsProvisioning.state, 'FAILED_COLLISION');
+  assert.equal((await db.collection('audit_logs').where('targetId', '==', 'clash').get()).size, 0);
 });

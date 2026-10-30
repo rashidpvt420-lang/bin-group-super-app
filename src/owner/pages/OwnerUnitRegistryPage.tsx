@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Box, Button, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, Grid, InputAdornment, MenuItem, Paper, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, Typography, alpha } from '@mui/material';
 import { CheckCircle2, Layout, Plus, Search } from 'lucide-react';
-import { collection, db, functions, getDocs, httpsCallable, query, where } from '../../lib/firebase';
+import { collection, db, fetchPage, functions, getDocs, httpsCallable, LIST_PAGE_SIZE, query, where } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
@@ -53,6 +53,10 @@ export default function OwnerUnitRegistryPage() {
   const submission = useRef<{ ownerId: string } | null>(null);
   const identityMatches = registryOwnerId === (user?.uid || '');
 
+  const unitCursorRef = useRef<any>(null);
+  const propNameRef = useRef<Map<string, string>>(new Map());
+  const [unitsHasMore, setUnitsHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   useEffect(() => {
     setWizard(emptyWizard());
     setWizardOpen(false);
@@ -91,7 +95,12 @@ export default function OwnerUnitRegistryPage() {
 
       // The units rules authorize the unit's canonical ownerId. Knowing the parent
       // property ID alone cannot authorize a collection query over possible rows.
-      const unitSnaps = [await getDocs(query(collection(db, 'units'), where('ownerId', '==', user.uid)))];
+      // Paged (LIST_PAGE_SIZE per page) so large portfolios do not load every unit at once.
+      propNameRef.current = propName;
+      const firstPage = await fetchPage(query(collection(db, 'units'), where('ownerId', '==', user.uid)), null, LIST_PAGE_SIZE);
+      unitCursorRef.current = firstPage.cursor;
+      if (!cancelled) setUnitsHasMore(firstPage.hasMore);
+      const unitSnaps = [firstPage];
 
       const merged = unique(unitSnaps.flatMap((snap) => snap.docs.map((d) => {
         const data = d.data() as Omit<UnitDoc, 'id'>;
@@ -116,6 +125,27 @@ export default function OwnerUnitRegistryPage() {
     });
     return () => { cancelled = true; };
   }, [user?.uid, reloadKey, tx]);
+
+  const loadMoreUnits = async () => {
+    if (!user?.uid || !unitsHasMore || loadingMore) return;
+    setLoadingMore(true);
+    try {
+      const page = await fetchPage(query(collection(db, 'units'), where('ownerId', '==', user.uid)), unitCursorRef.current, LIST_PAGE_SIZE);
+      unitCursorRef.current = page.cursor;
+      setUnitsHasMore(page.hasMore);
+      const next = page.docs.map((d) => {
+        const data = d.data() as Omit<UnitDoc, 'id'>;
+        return { ...data, id: d.id, propertyName: data.propertyName || (data.propertyId ? propNameRef.current.get(data.propertyId) : undefined) || 'Property' } as UnitDoc;
+      });
+      setUnits((current) => unique([...current, ...next]));
+    } catch (error) {
+      console.warn('[OwnerUnitRegistry] load more failed:', error);
+      setNoticeSeverity('warning');
+      setNotice(tx('owner.units.load_failed', 'Unable to load the unit registry. Please retry.'));
+    } finally {
+      setLoadingMore(false);
+    }
+  };
 
   const filtered = useMemo(() => units.filter((unit) => {
     const text = `${unit.unitNumber || ''} ${unit.propertyName || ''} ${unit.tenantName || ''} ${unit.tenantEmail || ''}`.toLowerCase();
@@ -207,6 +237,7 @@ export default function OwnerUnitRegistryPage() {
           <Typography sx={{ color: binThemeTokens.textSecondary, fontWeight: 900, mt: 2 }}>{tx('owner.units.no_units', 'NO UNITS FOUND')}</Typography>
         </Paper>
       ) : (
+        <>
         <TableContainer component={Paper} sx={{ bgcolor: '#FFFFFF', border: `1px solid ${binThemeTokens.border}`, borderRadius: 6 }}>
           <Table>
             <TableHead><TableRow><TableCell>{tx('owner.units.unit_col', 'UNIT')}</TableCell><TableCell>{tx('owner.units.occupancy_col', 'OCCUPANCY')}</TableCell><TableCell>{tx('owner.units.rent_col', 'RENT')}</TableCell><TableCell>{tx('owner.units.maintenance_col', 'MAINTENANCE')}</TableCell><TableCell>{tx('owner.units.actions_col', 'ACTIONS')}</TableCell></TableRow></TableHead>
@@ -239,6 +270,14 @@ export default function OwnerUnitRegistryPage() {
             </TableBody>
           </Table>
         </TableContainer>
+        {unitsHasMore && (
+          <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2 }}>
+            <Button variant="outlined" onClick={loadMoreUnits} disabled={loadingMore} data-testid="units-load-more">
+              {loadingMore ? <CircularProgress size={18} /> : tx('owner.units.load_more', isRTL ? 'تحميل المزيد من الوحدات' : 'Load more units')}
+            </Button>
+          </Box>
+        )}
+        </>
       )}
 
       {agreementUnit && <OwnerTenancyAgreementDialog open onClose={() => setAgreementUnit(null)} unit={agreementUnit as any} emirate={properties.find((p) => p.id === agreementUnit.propertyId)?.emirate} />}
