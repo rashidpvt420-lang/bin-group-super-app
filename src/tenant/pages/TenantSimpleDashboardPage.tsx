@@ -15,6 +15,7 @@ import { useRole } from '../../context/RoleContext';
 
 /** Services that used to be reachable only from the full dashboard. */
 export const TENANT_MORE_SERVICES: { path: string; en: string; ar: string }[] = [
+  { path: '/tenant/design-studio', en: 'AI Redesign', ar: 'إعادة التصميم بالذكاء الاصطناعي' },
   { path: '/tenant/messages', en: 'Messages', ar: 'الرسائل' },
   { path: '/tenant/ai-concierge', en: 'BIN AI Concierge', ar: 'مساعد BIN الذكي' },
   { path: '/tenant/amenities', en: 'Amenities', ar: 'المرافق' },
@@ -26,7 +27,6 @@ export const TENANT_MORE_SERVICES: { path: string; en: string; ar: string }[] = 
   { path: '/tenant/staff-directory', en: 'Staff directory', ar: 'دليل الموظفين' },
   { path: '/tenant/marketplace', en: 'Marketplace', ar: 'السوق' },
   { path: '/tenant/move-inspection/move-out', en: 'Move-out inspection', ar: 'فحص الإخلاء' },
-  { path: '/tenant/design-studio', en: 'AI Design Studio', ar: 'استوديو التصميم' },
 ];
 
 const issueShortcuts = [

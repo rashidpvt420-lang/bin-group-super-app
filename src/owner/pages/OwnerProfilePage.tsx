@@ -11,9 +11,13 @@ import OwnerPhoneVerificationCard from '../components/OwnerPhoneVerificationCard
 type Notice = { type: 'success' | 'error' | 'info' | 'warning'; text: string };
 
 const inputSx = {
-  '& .MuiOutlinedInput-root': { bgcolor: 'rgba(255,255,255,0.03)', color: '#FFF', borderRadius: 2 },
-  '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.5)' },
-  '& .MuiFormHelperText-root': { color: 'rgba(255,255,255,0.35)' },
+  // Fields sit on the dark profile cover: give them a solid light surface so the
+  // theme's dark input text stays readable (WCAG AA), and keep helper text light.
+  '& .MuiOutlinedInput-root': { bgcolor: binThemeTokens.card, color: binThemeTokens.textPrimary, borderRadius: 2 },
+  '& .MuiInputBase-input': { color: binThemeTokens.textPrimary, WebkitTextFillColor: binThemeTokens.textPrimary },
+  '& .MuiInputLabel-root': { color: binThemeTokens.textSecondary, bgcolor: binThemeTokens.card, px: 0.5, borderRadius: 1 },
+  '& .MuiInputLabel-root.Mui-focused': { color: binThemeTokens.goldText },
+  '& .MuiFormHelperText-root': { color: '#E5E7EB' },
 };
 
 export default function OwnerProfilePage() {

@@ -1,3 +1,4 @@
+import HomeQuickLinks from '../../components/HomeQuickLinks';
 import SuggestionBoxCard from '../../components/SuggestionBoxCard';
 import PaymentCollectionRecordsCard from '../../components/PaymentCollectionRecordsCard';
 import MoneyStatementDownload from '../../components/MoneyStatementDownload';
@@ -46,6 +47,7 @@ export default function BrokerSimpleDashboardPage() {
 
         <BrokerLiveAttributionCard isRTL={isRTL} />
 
+        <HomeQuickLinks testId="broker-home-quick-links" titleEn="Tools" titleAr="الأدوات" links={[{ path: '/broker/design-studio', en: 'AI Redesign', ar: 'إعادة التصميم بالذكاء الاصطناعي' }]} />
         <SuggestionBoxCard role="broker" />
         <PaymentCollectionRecordsCard />
         <MoneyStatementDownload />

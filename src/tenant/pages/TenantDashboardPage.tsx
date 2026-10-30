@@ -73,9 +73,9 @@ export default function TenantDashboardPage() {
         let nextContract: any = null;
 
         let unitSnap = await getDocs(query(collection(db, 'units'), where('tenantId', '==', user.uid), limit(1)));
-        if (unitSnap.empty && user.email) {
-          unitSnap = await getDocs(query(collection(db, 'units'), where('tenantEmail', '==', normalizeEmail(user.email)), limit(1)));
-        }
+        // units list rules accept tenantId / tenantUid / currentTenantId only (no email list path).
+        if (unitSnap.empty) unitSnap = await getDocs(query(collection(db, 'units'), where('tenantUid', '==', user.uid), limit(1)));
+        if (unitSnap.empty) unitSnap = await getDocs(query(collection(db, 'units'), where('currentTenantId', '==', user.uid), limit(1)));
 
         if (!unitSnap.empty) {
           nextUnit = { id: unitSnap.docs[0].id, ...unitSnap.docs[0].data() };
@@ -121,12 +121,9 @@ export default function TenantDashboardPage() {
     const ticketSources = [
       { field: 'tenantId', value: user.uid },
       { field: 'createdBy', value: user.uid },
-      { field: 'requesterId', value: user.uid },
-      { field: 'tenantEmail', value: normalizedEmail },
-      { field: 'reporterEmail', value: normalizedEmail },
-      { field: 'requesterEmail', value: normalizedEmail },
-      { field: 'unitId', value: unitData?.id || unitData?.unitId },
-      { field: 'propertyId', value: unitData?.propertyId || propertyData?.id || contractData?.propertyId },
+      { field: 'tenantUid', value: user.uid },
+      // Only filters the rules can prove are the caller's own (no unit/property-wide or requester* queries).
+      { field: 'tenantEmail', value: user.emailVerified ? normalizedEmail : '' },
     ].filter((source) => source.value);
 
     const uniqueSources = Array.from(new Map(ticketSources.map((source) => [`${source.field}:${source.value}`, source])).values());
@@ -163,9 +160,8 @@ export default function TenantDashboardPage() {
   }, [user?.uid, user?.email, unitData?.id, unitData?.unitId, unitData?.propertyId, propertyData?.id, contractData?.propertyId, tx]);
 
   useEffect(() => {
-    const qNotices = query(collection(db, 'systemLogs'), where('type', '==', 'TENANT_NOTICE'), limit(2));
-    const unsubNotices = onSnapshot(qNotices, (snap) => setNotices(snap.docs.map((d) => ({ id: d.id, ...d.data() }))), (err) => console.warn('[TenantDashboard] notices listener failed:', err));
-    return () => unsubNotices();
+    // systemLogs is staff-only in the rules; building notices live on /tenant/notices.
+    setNotices([]);
   }, []);
 
   const contractMode = useMemo(() => resolveContractMode(contractData || {}), [contractData]);

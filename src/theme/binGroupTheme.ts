@@ -26,7 +26,7 @@ export const binThemeTokens = {
   darkBlue: '#0F172A',
   textPrimary: '#111827',
   textSecondary: '#6B7280',
-  textTertiary: '#9CA3AF',
+  textTertiary: '#6B7280', // was #9CA3AF (2.5:1 on white, fails WCAG AA)
   danger: '#EF4444',
   warning: '#F59E0B',
   alert: '#F59E0B',
@@ -68,6 +68,11 @@ const themeConfig: ThemeOptions = {
     },
     warning: {
       main: binThemeTokens.warning,
+      contrastText: binThemeTokens.textPrimary,
+    },
+    success: {
+      main: '#047857',
+      contrastText: '#FFFFFF',
     },
     divider: binThemeTokens.border,
   },
