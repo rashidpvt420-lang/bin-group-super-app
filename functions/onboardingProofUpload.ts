@@ -66,7 +66,6 @@ export const uploadOwnerOnboardingProofDocument = onCall({ cors: true, enforceAp
   if (!buffer.length) throw new HttpsError("invalid-argument", "Document payload is empty.");
   if (buffer.length > 8 * 1024 * 1024) throw new HttpsError("invalid-argument", "Document exceeds the secure fallback upload limit of 8MB.");
 
-  const token = db.collection("_download_tokens").doc().id;
   const storagePath = `onboarding-proof/${ownerUid}/${onboardingSessionId}/${docType}/${Date.now()}_${filename}`;
   const bucket = admin.storage().bucket();
 
@@ -75,7 +74,6 @@ export const uploadOwnerOnboardingProofDocument = onCall({ cors: true, enforceAp
     metadata: {
       contentType,
       metadata: {
-        firebaseStorageDownloadTokens: token,
         uploadedBy: ownerEmail,
         ownerUid,
         intakeId,
@@ -86,8 +84,6 @@ export const uploadOwnerOnboardingProofDocument = onCall({ cors: true, enforceAp
       }
     }
   });
-
-  const downloadUrl = `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(storagePath)}?alt=media&token=${token}`;
 
   await db.collection("audit_logs").add({
     action: "ONBOARDING_PROOF_UPLOADED_SERVER_FALLBACK",
@@ -103,5 +99,7 @@ export const uploadOwnerOnboardingProofDocument = onCall({ cors: true, enforceAp
     createdAt: serverTimestamp()
   });
 
-  return { success: true, downloadUrl, storagePath, docType, size: buffer.length };
+  // Inspection-first flow: return the private Storage path only. No permanent
+  // tokenised download URL is minted; reviewers read via authorised, rules-gated access.
+  return { success: true, storagePath, docType, size: buffer.length };
 });
