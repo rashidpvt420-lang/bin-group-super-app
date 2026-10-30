@@ -65,6 +65,29 @@ test('totals match the records and voided cash/cheque entries are shown as void 
   assert.ok(voidLine && voidLine.includes(',void,'), `void row missing: ${voidLine}`);
 });
 
+test('statement paginates more than one Firestore page instead of truncating official totals', async () => {
+  let batch = db.batch();
+  for (let i = 0; i < 1005; i += 1) {
+    const id = `inv_page_${String(i).padStart(4, '0')}`;
+    batch.set(db.doc(`invoices/${id}`), {
+      ownerId: OWNER,
+      amount: 1,
+      status: 'issued',
+      issuedAt: '2026-09-20',
+      invoiceNumber: `INV-PAGED-${i}`,
+    });
+    if ((i + 1) % 450 === 0) {
+      await batch.commit();
+      batch = db.batch();
+    }
+  }
+  await batch.commit();
+
+  const { res, text } = await csvFor(owner);
+  assert.equal(res.totals.invoiced, 2505);
+  assert.match(text, /INV-PAGED-1004/);
+});
+
 test('registry stores the exact file hash and the public check verifies it without personal data', async () => {
   const { res } = await csvFor(owner);
   const bytes = Buffer.from(res.base64, 'base64');

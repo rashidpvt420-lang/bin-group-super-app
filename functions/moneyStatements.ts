@@ -8,7 +8,7 @@
 //   - The file is returned to the caller directly (not stored); only its SHA-256 and non-sensitive
 //     metadata are written to the server-only issued_document_registry for public verification.
 import * as admin from "firebase-admin";
-import { FieldValue } from "firebase-admin/firestore";
+import { FieldPath, FieldValue } from "firebase-admin/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { createHash } from "crypto";
 import { bidiText, getCairoFont, loadPdfKit } from "./pdfEngine";
@@ -63,8 +63,18 @@ async function loadOwnRecords(uid: string) {
     const db = admin.firestore();
     const records: StatementSourceRecord[] = [];
     for (const source of STATEMENT_SOURCES) {
-        const snap = await db.collection(source.collection).where(source.field, "==", uid).limit(PER_QUERY_LIMIT).get();
-        snap.forEach((d) => records.push({ collection: source.collection, id: d.id, data: d.data() || {} }));
+        let lastDoc: admin.firestore.QueryDocumentSnapshot | undefined;
+        for (;;) {
+            let query = db.collection(source.collection)
+                .where(source.field, "==", uid)
+                .orderBy(FieldPath.documentId())
+                .limit(PER_QUERY_LIMIT);
+            if (lastDoc) query = query.startAfter(lastDoc);
+            const snap = await query.get();
+            snap.forEach((d) => records.push({ collection: source.collection, id: d.id, data: d.data() || {} }));
+            if (snap.size < PER_QUERY_LIMIT) break;
+            lastDoc = snap.docs[snap.docs.length - 1];
+        }
     }
     const voids: Record<string, Record<string, any>> = {};
     const collectionIds = records.filter((r) => r.collection === "payment_collection_records").map((r) => r.id);
