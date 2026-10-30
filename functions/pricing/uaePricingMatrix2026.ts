@@ -68,10 +68,6 @@ export const SERVICE_ADDONS = [
   { id: 'gym_equipment_pm', label: 'Fitness Equipment Preventive Maintenance', price: 0, unit: 'separate scope after asset register' },
   { id: 'gym_wet_area_care', label: 'Gym Wet / Recovery Area Specialist Care', price: 0, unit: 'separate scope after visit' },
   { id: 'gym_pool_operations', label: 'Gym Pool Operations / Specialist Scope', price: 0, unit: 'separate scope after visit' },
-  // Painting (founder decision 2026-10-30): priced after a site visit; never auto-quoted or auto-approved.
-  { id: 'painting_room_refresh', label: 'Painting - Room Refresh', price: 0, unit: 'separate scope after visit' },
-  { id: 'painting_full_home', label: 'Painting - Full Home Repaint', price: 0, unit: 'separate scope after visit' },
-  { id: 'painting_building_exterior', label: 'Painting - Building Exterior', price: 0, unit: 'separate scope after visit' },
 ];
 
 /**
