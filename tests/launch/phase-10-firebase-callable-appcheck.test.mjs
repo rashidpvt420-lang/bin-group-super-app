@@ -4,10 +4,9 @@ import { readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 
 const ROOT = path.resolve('functions');
-const APPROVED_EXCEPTIONS = new Set([
-  'ownerOnboarding.ts:upsertOwnerOnboardingProfile',
-  'publicRoleAssignment.ts:assignPublicPortalRole',
-]);
+// No callable may opt out of App Check (founder decision 2026-10-30 closed the last two
+// sign-up exceptions: upsertOwnerOnboardingProfile and assignPublicPortalRole).
+const APPROVED_EXCEPTIONS = new Set([]);
 
 function filesUnder(directory) {
   const out = [];
@@ -63,12 +62,19 @@ test('Phase 10: every directly configured callable enforces App Check unless exp
   assert.deepEqual(failures, [], failures.join('\n'));
 });
 
-test('Phase 10: bootstrap App Check exceptions document bounded security rationale', () => {
+test('Phase 10: sign-up callables enforce App Check and the client fetches a token first', () => {
   const owner = readFileSync(path.join(ROOT, 'ownerOnboarding.ts'), 'utf8');
   const role = readFileSync(path.join(ROOT, 'publicRoleAssignment.ts'), 'utf8');
-
-  assert.match(owner, /intentionally relies on verified Firebase Auth rather than App Check/);
-  assert.match(owner, /cannot create Auth users or grant an admin role/);
-  assert.match(role, /login bootstrap/i);
+  assert.match(owner, /upsertOwnerOnboardingProfile = onCall\(\{ cors: true, enforceAppCheck: true \}/);
+  assert.match(role, /assignPublicPortalRole = onCall\(\{[\s\S]{0,800}enforceAppCheck: true,/);
+  assert.doesNotMatch(owner + role, /enforceAppCheck:\s*false/);
   assert.match(role, /rejects every[\s\S]{0,120}privileged\/admin identity/i);
+
+  const lib = readFileSync('src/lib/firebase.ts', 'utf8');
+  assert.match(lib, /export const ensureCallableAppCheckToken = async/);
+  assert.match(lib, /getAppCheckToken\(appCheck, true\)/);
+  const gateway = readFileSync('src/pages/RoleGatewayPage.tsx', 'utf8');
+  assert.match(gateway, /await ensureCallableAppCheckToken\(\);\s*const assignRole = httpsCallable\(functions, 'assignPublicPortalRole'\)/);
+  const account = readFileSync('src/components/onboarding/AccountCreationStep.tsx', 'utf8');
+  assert.match(account, /await ensureCallableAppCheckToken\(\);\s*const upsertProfile = httpsCallable\(functions, 'upsertOwnerOnboardingProfile'\)/);
 });
