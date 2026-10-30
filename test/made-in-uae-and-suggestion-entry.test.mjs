@@ -16,11 +16,11 @@ for (const [role, shell, dashboard] of PROFILES) {
     const chat = ROLE_FAB_ACTIONS[role].find((a) => a.event === 'bin:open-chat');
     assert.ok(chat, `${role} FAB must offer Message BIN`);
     const src = await read(shell);
-    assert.match(src, new RegExp(`<BinConnectChatBox role="${role}"`), `${role} shell must mount the shared BinConnectChatBox`);
-    assert.match(src, new RegExp(`path="/bin-connect" element={<BinConnectInboxPage role="${role}"`), `${role} needs the inbox route the chat box opens`);
+    assert.ok(src.includes(`<BinConnectChatBox role="${role}"`), `${role} shell must mount the shared BinConnectChatBox`);
+    assert.ok(src.includes(`path="/bin-connect" element={<BinConnectInboxPage role="${role}"`), `${role} needs the inbox route the chat box opens`);
   });
   test(`${role}: dashboard shows the shared suggestion box`, async () => {
-    assert.match(await read(dashboard), new RegExp(`<SuggestionBoxCard role="${role}"`));
+    assert.ok((await read(dashboard)).includes(`<SuggestionBoxCard role="${role}"`));
   });
 }
 
