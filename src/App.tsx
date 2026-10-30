@@ -16,6 +16,7 @@ import { AIProvider } from './context/AIContext';
 import { ToastProvider } from './context/ToastContext';
 import { SovereignAIChat } from './components/SovereignAIChat';
 import { UnifiedFabContext } from './components/ui/unifiedFab';
+import MadeInUaeMark from './components/MadeInUaeMark';
 import IOSPwaGuardian from './components/IOSPwaGuardian';
 import OwnerActivationGuard from './components/owner/OwnerActivationGuard';
 import { NavigationControl } from './components/navigation/NavigationControl';
@@ -389,6 +390,7 @@ export default function App() {
             <ToastProvider>
               <CssBaseline />
               <AppContent />
+              <MadeInUaeMark />
               <PublicRouteNavigation />
               <PublicSovereignAIEntry />
               <IOSPwaGuardian />

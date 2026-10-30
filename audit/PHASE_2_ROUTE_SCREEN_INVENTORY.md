@@ -8,12 +8,12 @@ Generated from canonical router sources.
 | --- | ---: |
 | main | 78 |
 | owner | 38 |
-| tenant | 33 |
+| tenant | 34 |
 | technician | 18 |
-| broker | 16 |
+| broker | 17 |
 | adminops | 71 |
 
-Total registered route entries/aliases: **254**.
+Total registered route entries/aliases: **256**.
 
 The CSV records:
 
