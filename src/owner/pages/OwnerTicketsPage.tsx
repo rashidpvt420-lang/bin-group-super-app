@@ -85,7 +85,7 @@ export default function OwnerTicketsPage() {
     if (loading) return (
         <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', py: 10, gap: 2 }}>
             <CircularProgress sx={{ color: binThemeTokens.goldText }} />
-            <Typography variant="overline" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900 }}>
+            <Typography variant="overline" sx={{ color: binThemeTokens.textSecondary, fontWeight: 900 }}>
                 {tx('owner.tickets.loading', 'Loading Tickets…')}
             </Typography>
         </Box>

@@ -1,3 +1,4 @@
+import HomeQuickLinks, { type HomeQuickLink } from '../../components/HomeQuickLinks';
 import SuggestionBoxCard from '../../components/SuggestionBoxCard';
 import PaymentCollectionRecordsCard from '../../components/PaymentCollectionRecordsCard';
 import MoneyStatementDownload from '../../components/MoneyStatementDownload';
@@ -16,6 +17,18 @@ import OwnerKpiTiles from '../components/OwnerKpiTiles';
  * The stat tiles read server aggregates (feature 9, getOwnerKpis) built on the rent schedule (F1), lease end
  * dates (F3) and vacancy (F5); a failed source says so instead of showing an invented 0.
  */
+/** Everything that used to sit only on the owner full dashboard, now on Home. */
+export const OWNER_HOME_LINKS: HomeQuickLink[] = [
+  { path: '/owner/design-studio', en: 'AI Redesign', ar: 'إعادة التصميم بالذكاء الاصطناعي' },
+  { path: '/owner/contracts', en: 'Contracts', ar: 'العقود' },
+  { path: '/owner/documents', en: 'Document vault', ar: 'خزنة المستندات' },
+  { path: '/owner/property-passport', en: 'Property passport', ar: 'جواز العقار' },
+  { path: '/owner/financials', en: 'Money', ar: 'المالية' },
+  { path: '/owner/complaints', en: 'Complaints', ar: 'الشكاوى' },
+  { path: '/owner/insights', en: 'Add person (authorized reporters)', ar: 'إضافة شخص (المبلغون المعتمدون)' },
+  { path: '/owner/insights', en: 'How this works for you', ar: 'كيف يعمل هذا لك' },
+];
+
 export default function OwnerSimpleDashboardPage() {
   const navigate = useNavigate();
   const { isRTL, lang, tx } = useLanguage();
@@ -65,7 +78,10 @@ export default function OwnerSimpleDashboardPage() {
         <PaymentCollectionRecordsCard />
         <MoneyStatementDownload />
 
-        <Button onClick={() => navigate('/owner/dashboard/full')} sx={{ alignSelf: isRTL ? 'flex-end' : 'flex-start', color: ui.goldText, fontWeight: 700, minHeight: ui.touchTarget }}>{t('owner.home.full', 'Open full dashboard', 'فتح اللوحة الكاملة')}</Button>
+        <HomeQuickLinks testId="owner-home-quick-links" titleEn="Your tools" titleAr="أدواتك" links={OWNER_HOME_LINKS} />
+        <UiCard testId="owner-home-insights">
+          <ListRow title={t('owner.home.insights', 'Portfolio insights & reports', 'تحليلات وتقارير المحفظة')} subtitle={t('owner.home.insightsSub', 'ROI, rent collection, money risk, contracts, complaints, evidence and authorized reporters', 'العائد، التحصيل، المخاطر المالية، العقود، الشكاوى، الأدلة والمبلغون المعتمدون')} onClick={() => navigate('/owner/insights')} isRTL={isRTL} />
+        </UiCard>
       </Stack>
     </Box>
   );

@@ -101,7 +101,7 @@ export default function OwnerMoneyControlPage() {
                             <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>PENDING QUOTES</Typography>
                             <AlertCircle size={16} color={binThemeTokens.gold} />
                         </Stack>
-                        <Typography variant="h4" fontWeight="950" color="#FFF">{stats.pendingApprovals}</Typography>
+                        <Typography variant="h4" fontWeight="950" color={binThemeTokens.adaptiveText}>{stats.pendingApprovals}</Typography>
                         <Typography variant="caption" sx={{ color: binThemeTokens.gold }}>Awaiting Authorization</Typography>
                     </Paper>
                 </Grid>

@@ -97,7 +97,7 @@ const GovernmentPropertyPage: React.FC = () => {
 
     if (loading) return <Box sx={{ display: 'flex', justifyContent: 'center', py: 10 }}><CircularProgress sx={{ color: binThemeTokens.gold }} /></Box>;
     if (error || !property) {
-        return <Box sx={{ p: 6, color: '#fff', textAlign: 'center', direction: isRTL ? 'rtl' : 'ltr' }}><Typography>{error || tx('government.propertyNotFound', 'Property record was not found.')}</Typography></Box>;
+        return <Box sx={{ p: 6, color: binThemeTokens.adaptiveText, textAlign: 'center', direction: isRTL ? 'rtl' : 'ltr' }}><Typography>{error || tx('government.propertyNotFound', 'Property record was not found.')}</Typography></Box>;
     }
 
     return (

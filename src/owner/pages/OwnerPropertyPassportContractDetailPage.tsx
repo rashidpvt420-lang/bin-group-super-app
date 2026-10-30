@@ -93,7 +93,7 @@ function Metric({ label, value, children }: { label: string; value: React.ReactN
     <Paper sx={{ p: 2.4, bgcolor: 'rgba(255,255,255,0.035)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 4 }}>
       <Stack direction="row" spacing={1.5} alignItems="center">
         <Box sx={{ color: binThemeTokens.goldText }}>{children}</Box>
-        <Box><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.38)', fontWeight: 900 }}>{label}</Typography><Typography variant="subtitle1" fontWeight="950" sx={{ color: '#FFF' }}>{value}</Typography></Box>
+        <Box><Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.38)', fontWeight: 900 }}>{label}</Typography><Typography variant="subtitle1" fontWeight="950" sx={{ color: binThemeTokens.textPrimary }}>{value}</Typography></Box>
       </Stack>
     </Paper>
   );
@@ -107,8 +107,8 @@ function PassportList({ title, icon, rows, empty }: { title: string; icon: React
         {rows.map((row, index) => (
           <Paper key={index} sx={{ p: 1.8, bgcolor: 'rgba(255,255,255,0.035)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 3 }}>
             <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} justifyContent="space-between" alignItems={{ xs: 'flex-start', sm: 'center' }}>
-              <Typography sx={{ color: '#FFF', fontWeight: 900 }}>{row[0]}</Typography>
-              <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.55)', fontWeight: 800 }}>{row[1]}</Typography>
+              <Typography sx={{ color: binThemeTokens.textPrimary, fontWeight: 900 }}>{row[0]}</Typography>
+              <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, fontWeight: 800 }}>{row[1]}</Typography>
               <Box>{row[2]}</Box>
             </Stack>
           </Paper>

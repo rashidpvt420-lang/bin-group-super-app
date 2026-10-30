@@ -190,7 +190,7 @@ export default function OwnerPropertyPassportResolvedPage() {
   if (loading) return (
     <Box sx={{ height: '60vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 2 }}>
       <CircularProgress sx={{ color: binThemeTokens.goldText }} />
-      <Typography variant="overline" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900 }}>Accessing Registry...</Typography>
+      <Typography variant="overline" sx={{ color: binThemeTokens.textSecondary, fontWeight: 900 }}>Accessing Registry...</Typography>
     </Box>
   );
 
@@ -226,7 +226,7 @@ export default function OwnerPropertyPassportResolvedPage() {
                         <Building2 size={24} />
                       </Box>
                       <Box>
-                        <Typography variant="h6" fontWeight="950" sx={{ color: '#FFF', lineHeight: 1.2 }}>{p.propertyName || p.name || 'Property'}</Typography>
+                        <Typography variant="h6" fontWeight="950" sx={{ color: binThemeTokens.textPrimary, lineHeight: 1.2 }}>{p.propertyName || p.name || 'Property'}</Typography>
                         <Typography variant="caption" sx={{ color: binThemeTokens.goldText, fontWeight: 900, letterSpacing: 1 }}>ID: {String(p.id).slice(0, 8).toUpperCase()}</Typography>
                       </Box>
                     </Stack>

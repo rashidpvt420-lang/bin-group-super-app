@@ -72,8 +72,8 @@ export default function OwnerNextStepBanner({ missingTitleDeed, hasVerifiedIban,
           <AlertCircle color={nextStep.color} size={32} />
           <Box>
             <Typography variant="caption" sx={{ color: nextStep.color, fontWeight: 950, letterSpacing: 2 }}>YOUR NEXT STEP</Typography>
-            <Typography variant="h6" sx={{ color: '#fff', fontWeight: 900 }}>{nextStep.title}</Typography>
-            <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.7)', mt: 0.5 }}>{nextStep.desc}</Typography>
+            <Typography variant="h6" sx={{ color: binThemeTokens.textPrimary, fontWeight: 900 }}>{nextStep.title}</Typography>
+            <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary, mt: 0.5 }}>{nextStep.desc}</Typography>
           </Box>
         </Stack>
         <Button variant="contained" href={nextStep.href} endIcon={<ChevronRight size={18} />} sx={{ bgcolor: nextStep.color, color: '#000', fontWeight: 900, whiteSpace: 'nowrap', px: 4, py: 1.5, borderRadius: 2 }}>

@@ -58,7 +58,7 @@ export default function OwnerRentCollectionSection({ ledgerSummary }: OwnerRentC
     <Grid item xs={12} sm={6} md={2}>
       <Box sx={metricBoxSx}>
         <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1.5 }}>
-          <Box sx={{ color: 'rgba(255,255,255,0.5)' }}>{icon}</Box>
+          <Box sx={{ color: binThemeTokens.textSecondary }}>{icon}</Box>
           <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.45)', fontWeight: 900, ...textSafeSx }}>
             {label.toUpperCase()}
           </Typography>
@@ -104,8 +104,8 @@ export default function OwnerRentCollectionSection({ ledgerSummary }: OwnerRentC
         {!hasRows ? (
           <Box sx={{ p: 6, textAlign: 'center', border: '1px dashed rgba(255,255,255,0.1)', borderRadius: 4 }}>
             <Wallet size={36} color="rgba(255,255,255,0.25)" style={{ margin: '0 auto 16px' }} />
-            <Typography variant="h6" fontWeight={950} sx={{ color: 'rgba(255,255,255,0.6)' }}>No Tenant Ledger Records Yet</Typography>
-            <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.4)', mt: 1 }}>
+            <Typography variant="h6" fontWeight={950} sx={{ color: binThemeTokens.textSecondary }}>No Tenant Ledger Records Yet</Typography>
+            <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary, mt: 1 }}>
               Occupancies, leases, and ledger entries will populate this table as tenants are onboarded.
             </Typography>
           </Box>
@@ -114,24 +114,24 @@ export default function OwnerRentCollectionSection({ ledgerSummary }: OwnerRentC
             <Table>
               <TableHead>
                 <TableRow>
-                  <TableCell sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900, borderBottom: '1px solid rgba(255,255,255,0.1)' }}>TENANT</TableCell>
-                  <TableCell sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900, borderBottom: '1px solid rgba(255,255,255,0.1)' }}>PROPERTY</TableCell>
-                  <TableCell sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900, borderBottom: '1px solid rgba(255,255,255,0.1)' }}>UNIT</TableCell>
-                  <TableCell sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900, borderBottom: '1px solid rgba(255,255,255,0.1)' }}>DUE</TableCell>
-                  <TableCell sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900, borderBottom: '1px solid rgba(255,255,255,0.1)' }}>PAID</TableCell>
-                  <TableCell sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900, borderBottom: '1px solid rgba(255,255,255,0.1)' }}>BALANCE</TableCell>
-                  <TableCell sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900, borderBottom: '1px solid rgba(255,255,255,0.1)' }}>STATUS</TableCell>
-                  <TableCell sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900, borderBottom: '1px solid rgba(255,255,255,0.1)' }}>LAST PAYMENT</TableCell>
-                  <TableCell sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900, borderBottom: '1px solid rgba(255,255,255,0.1)' }} />
+                  <TableCell sx={{ color: binThemeTokens.textSecondary, fontWeight: 900, borderBottom: '1px solid rgba(255,255,255,0.1)' }}>TENANT</TableCell>
+                  <TableCell sx={{ color: binThemeTokens.textSecondary, fontWeight: 900, borderBottom: '1px solid rgba(255,255,255,0.1)' }}>PROPERTY</TableCell>
+                  <TableCell sx={{ color: binThemeTokens.textSecondary, fontWeight: 900, borderBottom: '1px solid rgba(255,255,255,0.1)' }}>UNIT</TableCell>
+                  <TableCell sx={{ color: binThemeTokens.textSecondary, fontWeight: 900, borderBottom: '1px solid rgba(255,255,255,0.1)' }}>DUE</TableCell>
+                  <TableCell sx={{ color: binThemeTokens.textSecondary, fontWeight: 900, borderBottom: '1px solid rgba(255,255,255,0.1)' }}>PAID</TableCell>
+                  <TableCell sx={{ color: binThemeTokens.textSecondary, fontWeight: 900, borderBottom: '1px solid rgba(255,255,255,0.1)' }}>BALANCE</TableCell>
+                  <TableCell sx={{ color: binThemeTokens.textSecondary, fontWeight: 900, borderBottom: '1px solid rgba(255,255,255,0.1)' }}>STATUS</TableCell>
+                  <TableCell sx={{ color: binThemeTokens.textSecondary, fontWeight: 900, borderBottom: '1px solid rgba(255,255,255,0.1)' }}>LAST PAYMENT</TableCell>
+                  <TableCell sx={{ color: binThemeTokens.textSecondary, fontWeight: 900, borderBottom: '1px solid rgba(255,255,255,0.1)' }} />
                 </TableRow>
               </TableHead>
               <TableBody>
                 {ledgerRows.map((row) => (
                   <TableRow key={row.id} sx={{ '& > *': { borderColor: 'rgba(255,255,255,0.05)' } }}>
-                    <TableCell sx={{ color: '#fff', fontWeight: 900, borderBottom: '1px solid rgba(255,255,255,0.05)' }}>{row.name}</TableCell>
-                    <TableCell sx={{ color: 'rgba(255,255,255,0.7)', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>{row.property}</TableCell>
-                    <TableCell sx={{ color: 'rgba(255,255,255,0.7)', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>{row.unit}</TableCell>
-                    <TableCell sx={{ color: 'rgba(255,255,255,0.7)', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>{formatCurrency(row.due)}</TableCell>
+                    <TableCell sx={{ color: binThemeTokens.textPrimary, fontWeight: 900, borderBottom: '1px solid rgba(255,255,255,0.05)' }}>{row.name}</TableCell>
+                    <TableCell sx={{ color: binThemeTokens.textSecondary, borderBottom: '1px solid rgba(255,255,255,0.05)' }}>{row.property}</TableCell>
+                    <TableCell sx={{ color: binThemeTokens.textSecondary, borderBottom: '1px solid rgba(255,255,255,0.05)' }}>{row.unit}</TableCell>
+                    <TableCell sx={{ color: binThemeTokens.textSecondary, borderBottom: '1px solid rgba(255,255,255,0.05)' }}>{formatCurrency(row.due)}</TableCell>
                     <TableCell sx={{ color: '#10b981', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>{formatCurrency(row.paid)}</TableCell>
                     <TableCell sx={{ color: row.balance > 0 ? '#ef4444' : 'rgba(255,255,255,0.7)', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
                       {formatCurrency(row.balance)}
@@ -144,7 +144,7 @@ export default function OwnerRentCollectionSection({ ledgerSummary }: OwnerRentC
                     <TableCell sx={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
                       <Chip label={row.status.replace(/_/g, ' ')} size="small" sx={{ bgcolor: alpha(statusColor(row.status), 0.15), color: statusColor(row.status), fontWeight: 900, fontSize: '0.65rem' }} />
                     </TableCell>
-                    <TableCell sx={{ color: 'rgba(255,255,255,0.6)', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>{row.lastPaymentDate || '—'}</TableCell>
+                    <TableCell sx={{ color: binThemeTokens.textSecondary, borderBottom: '1px solid rgba(255,255,255,0.05)' }}>{row.lastPaymentDate || '—'}</TableCell>
                     <TableCell sx={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
                       <Button size="small" onClick={() => navigate('/owner/tenants')} sx={{ color: binThemeTokens.goldText, fontWeight: 900, minWidth: 0 }}>
                         View

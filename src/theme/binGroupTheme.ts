@@ -22,11 +22,15 @@ export const binThemeTokens = {
   goldText: '#7A5C12',
   // AA-safe muted text on the dark tenant/technician canvases (#A3A9B5 on #101729 = 7.4:1, on #1F2937 = 6.0:1).
   textOnDarkMuted: '#A3A9B5',
+  // Shared pages render inside both the dark tenant shell and the white owner/broker
+  // shells. These follow the shell via CSS variables; the fallback is the light-surface ink.
+  adaptiveText: 'var(--bin-adaptive-text, #111827)',
+  adaptiveTextMuted: 'var(--bin-adaptive-text-muted, #4B5563)',
   champagne: '#F7E8B9',
   darkBlue: '#0F172A',
   textPrimary: '#111827',
   textSecondary: '#6B7280',
-  textTertiary: '#9CA3AF',
+  textTertiary: '#6B7280', // was #9CA3AF (2.5:1 on white, fails WCAG AA)
   danger: '#EF4444',
   warning: '#F59E0B',
   alert: '#F59E0B',
@@ -68,6 +72,11 @@ const themeConfig: ThemeOptions = {
     },
     warning: {
       main: binThemeTokens.warning,
+      contrastText: binThemeTokens.textPrimary,
+    },
+    success: {
+      main: '#047857',
+      contrastText: '#FFFFFF',
     },
     divider: binThemeTokens.border,
   },

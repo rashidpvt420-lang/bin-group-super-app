@@ -159,7 +159,7 @@ export default function NotificationInboxPage() {
             case 'TICKET_ASSIGNED':
                 return <Bell color={binThemeTokens.gold} />;
             default:
-                return <Info color="rgba(255,255,255,0.4)" />;
+                return <Info color={binThemeTokens.adaptiveTextMuted} />;
         }
     };
 
@@ -178,7 +178,7 @@ export default function NotificationInboxPage() {
                     <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 4 }}>
                         {tx('notifications.overline', 'INSTITUTIONAL ACTIVITY')}
                     </Typography>
-                    <Typography variant="h3" fontWeight="950" color="#FFF">
+                    <Typography variant="h3" fontWeight="950" color={binThemeTokens.adaptiveText}>
                         {tx('notifications.title_a', 'Notification')} <Box component="span" sx={{ color: binThemeTokens.gold }}>{tx('notifications.title_b', 'Inbox')}</Box>
                     </Typography>
                 </Box>

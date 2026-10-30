@@ -150,8 +150,8 @@ export default function OwnerPhoneVerificationCard({ currentPhone = '', isRTL, l
       <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1.5} alignItems="center" sx={{ mb: 2 }}>
         <BadgeCheck size={22} color={binThemeTokens.gold} />
         <Box>
-          <Typography variant="subtitle1" fontWeight="950" color="#FFF">{label('Verify Owner Mobile by SMS', 'توثيق هاتف المالك برسالة نصية')}</Typography>
-          <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.62)' }}>{label('Firebase Authentication verifies ownership before the profile can use a changed number.', 'تتحقق مصادقة Firebase من ملكية الرقم قبل استخدام الرقم الجديد في الملف.')}</Typography>
+          <Typography variant="subtitle1" fontWeight="950" color={binThemeTokens.textPrimary}>{label('Verify Owner Mobile by SMS', 'توثيق هاتف المالك برسالة نصية')}</Typography>
+          <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary }}>{label('Firebase Authentication verifies ownership before the profile can use a changed number.', 'تتحقق مصادقة Firebase من ملكية الرقم قبل استخدام الرقم الجديد في الملف.')}</Typography>
         </Box>
       </Stack>
 
@@ -175,7 +175,7 @@ export default function OwnerPhoneVerificationCard({ currentPhone = '', isRTL, l
           </Button>
         ) : (
           <Stack spacing={2}>
-            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.72)' }}>{label(`Challenge issued for ${sentPhone}. The code stays only in this verification session and is submitted directly to Firebase Authentication.`, `تم إصدار التحدي للرقم ${sentPhone}. يبقى الرمز في جلسة التحقق هذه فقط ويُرسل مباشرة إلى مصادقة Firebase.`)}</Typography>
+            <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary }}>{label(`Challenge issued for ${sentPhone}. The code stays only in this verification session and is submitted directly to Firebase Authentication.`, `تم إصدار التحدي للرقم ${sentPhone}. يبقى الرمز في جلسة التحقق هذه فقط ويُرسل مباشرة إلى مصادقة Firebase.`)}</Typography>
             <TextField
               data-testid="owner-phone-otp"
               fullWidth
@@ -189,7 +189,7 @@ export default function OwnerPhoneVerificationCard({ currentPhone = '', isRTL, l
               <Button data-testid="owner-phone-verify-otp" variant="contained" disabled={busy || otp.length !== 6} onClick={verifyOtp} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>
                 {busy ? <CircularProgress size={18} /> : label('Verify and Save Phone', 'توثيق الهاتف وحفظه')}
               </Button>
-              <Button data-testid="owner-phone-reset-otp" variant="text" startIcon={<RefreshCw size={17} />} disabled={busy} onClick={resetChallenge} sx={{ color: 'rgba(255,255,255,0.7)' }}>
+              <Button data-testid="owner-phone-reset-otp" variant="text" startIcon={<RefreshCw size={17} />} disabled={busy} onClick={resetChallenge} sx={{ color: binThemeTokens.textSecondary }}>
                 {label('Use Another Number', 'استخدام رقم آخر')}
               </Button>
             </Stack>

@@ -1,3 +1,4 @@
+import { binThemeTokens } from '../theme/binGroupTheme';
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Alert, Box, Button, Card, CardContent, Checkbox, CircularProgress, FormControlLabel, Link, Stack, TextField, Typography } from '@mui/material';
@@ -109,7 +110,7 @@ export default function AccountPrivacyRequestPage() {
                   onClick={submitRequest}
                   sx={{ alignSelf: isRTL ? 'flex-start' : 'flex-end', borderRadius: 3, fontWeight: 950, px: 3, py: 1.2 }}
                 >
-                  {submitting ? <CircularProgress size={20} sx={{ color: '#fff' }} /> : label('Submit account deletion request', 'إرسال طلب حذف الحساب')}
+                  {submitting ? <CircularProgress size={20} sx={{ color: binThemeTokens.textPrimary }} /> : label('Submit account deletion request', 'إرسال طلب حذف الحساب')}
                 </Button>
               </>
             )}

@@ -17,6 +17,7 @@ import './account-deletion-request-rules.test.js';
 import './issued-documents-rules.test.js';
 import './user-suggestions-rules.test.js';
 import './payment-collection-rules.test.js';
+import './owner-dashboard-own-data-rules.test.js';
 import { describe, it, before, after, beforeEach } from 'node:test';
 import assert from 'node:assert';
 import { initializeTestEnvironment, assertFails, assertSucceeds } from '@firebase/rules-unit-testing';

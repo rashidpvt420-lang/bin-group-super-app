@@ -152,10 +152,16 @@ async function safeGetDocument(collectionName: string, id: string) {
   }
 }
 
-async function getCollectionDocs(collectionName: string, field: string, value: string) {
+async function getCollectionDocs(collectionName: string, field: string, value: string, scope?: { field: string; value: string }) {
   if (!value) return [] as any[];
+  if (scope && !scope.value) return [] as any[];
   try {
-    const snap = await getDocs(query(collection(db, collectionName), where(field, '==', value)));
+    // Firestore rules are not filters: every list query must carry a filter the
+    // rules can prove belongs to the caller (ownerId/ownerUid = auth uid, or the
+    // verified auth email), otherwise the whole query is denied.
+    const constraints = [where(field, '==', value)];
+    if (scope) constraints.push(where(scope.field, '==', scope.value));
+    const snap = await getDocs(query(collection(db, collectionName), ...constraints));
     return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
   } catch (err) {
     if (isPermissionDenied(err)) {
@@ -366,12 +372,13 @@ export default function OwnerDashboardResolvedPage() {
           for (const p of await getCollectionDocs('properties', 'ownerId', authUid)) propertyMap.set(p.id, p);
           for (const p of await getCollectionDocs('properties', 'ownerUid', authUid)) propertyMap.set(p.id, p);
           for (const p of await getCollectionDocs('propertyPassports', 'ownerId', authUid)) propertyMap.set(p.propertyId || p.id, p);
-          for (const p of await getCollectionDocs('propertyPassports', 'ownerUid', authUid)) propertyMap.set(p.propertyId || p.id, p);
         }
 
-        const exactEmails = compact([normalizeEmail(user?.email), normalizeEmail(resolved.profile?.email), normalizeEmail(resolved.profile?.ownerEmail), normalizeEmail(resolved.contract?.ownerEmail), normalizeEmail(resolved.contract?.emailDelivery?.recipient)]);
+        // Rules match emails only against the caller's own verified auth email, so
+        // querying by profile/contract emails is always denied. Use the auth email only.
+        const exactEmails = (user as any)?.emailVerified ? compact([normalizeEmail(user?.email)]) : [];
         for (const email of exactEmails) {
-          for (const p of await getCollectionDocs('properties', 'ownerEmail', email)) propertyMap.set(p.id, p);
+          // properties rules accept ownerId/ownerUid only (no email path).
           for (const p of await getCollectionDocs('propertyPassports', 'ownerEmail', email)) propertyMap.set(p.propertyId || p.id, p);
         }
 
@@ -395,6 +402,7 @@ export default function OwnerDashboardResolvedPage() {
           for (const ticket of await getCollectionDocs('maintenanceTickets', 'ownerId', authUid)) ticketMap.set(ticket.id, ticket);
           for (const ticket of await getCollectionDocs('maintenanceTickets', 'ownerUid', authUid)) ticketMap.set(ticket.id, ticket);
           for (const inv of await getCollectionDocs('invoices', 'ownerUid', authUid)) invoiceMap.set(inv.id, inv);
+          for (const inv of await getCollectionDocs('invoices', 'ownerId', authUid)) invoiceMap.set(inv.id, inv);
           for (const pay of await getCollectionDocs('payment_transactions', 'ownerId', authUid)) paymentMap.set(pay.id, pay);
           for (const rep of await getCollectionDocs('propertyReporters', 'ownerId', authUid)) reporterMap.set(rep.id, rep);
           for (const rep of await getCollectionDocs('propertyReporters', 'ownerUid', authUid)) reporterMap.set(rep.id, rep);
@@ -416,8 +424,9 @@ export default function OwnerDashboardResolvedPage() {
         }
 
         if (resolved.contract?.id) {
-          for (const inv of await getCollectionDocs('invoices', 'contractId', resolved.contract.id)) invoiceMap.set(inv.id, inv);
-          for (const pay of await getCollectionDocs('payment_transactions', 'contractId', resolved.contract.id)) paymentMap.set(pay.id, pay);
+          for (const inv of await getCollectionDocs('invoices', 'contractId', resolved.contract.id, { field: 'ownerUid', value: authUid })) invoiceMap.set(inv.id, inv);
+          for (const inv of await getCollectionDocs('invoices', 'contractId', resolved.contract.id, { field: 'ownerId', value: authUid })) invoiceMap.set(inv.id, inv);
+          for (const pay of await getCollectionDocs('payment_transactions', 'contractId', resolved.contract.id, { field: 'ownerId', value: authUid })) paymentMap.set(pay.id, pay);
         }
 
         const allTickets = Array.from(ticketMap.values());
@@ -881,10 +890,10 @@ function OwnerActivationTimeline({ steps, compact = false }: { steps: Activation
           <Grid item xs={12} sm={compact ? 12 : 6} md={compact ? 12 : 4} key={step.gate}>
             <Paper sx={{ p: 1.75, height: '100%', bgcolor: alpha(step.tone, 0.07), border: `1px solid ${alpha(step.tone, 0.22)}`, borderRadius: 3 }}>
               <Stack direction="row" justifyContent="space-between" alignItems="center" spacing={1}>
-                <Typography variant="body2" sx={{ color: '#fff', fontWeight: 900 }}>{step.gate}</Typography>
+                <Typography variant="body2" sx={{ color: binThemeTokens.textPrimary, fontWeight: 900 }}>{step.gate}</Typography>
                 <Chip size="small" label={step.status} sx={{ height: 20, bgcolor: alpha(step.tone, 0.16), color: step.tone, fontWeight: 950, fontSize: '0.62rem' }} />
               </Stack>
-              {!compact && <Typography variant="caption" sx={{ color: 'rgba(255,255,255,.58)', fontWeight: 700, display: 'block', mt: 1 }}>{step.detail}</Typography>}
+              {!compact && <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, fontWeight: 700, display: 'block', mt: 1 }}>{step.detail}</Typography>}
             </Paper>
           </Grid>
         ))}
