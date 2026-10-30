@@ -53,12 +53,14 @@ export const ROLE_FAB_ACTIONS: Record<NavRole | 'admin', FabAction[]> = {
     { key: 'request', en: 'Report a repair', ar: 'طلب صيانة', path: '/tenant/request' },
     { key: 'redesign', en: 'Redesign with AI', ar: 'صمّم منزلك بالذكاء الاصطناعي', path: '/tenant/design-studio' },
     { key: 'ai', en: 'Ask BIN AI', ar: 'اسأل مساعد BIN', event: 'bin:open-ai' },
+    { key: 'chat', en: 'Message BIN', ar: 'راسل BIN', event: 'bin:open-chat' },
     { key: 'emergency', en: 'Emergency', ar: 'طوارئ', path: '/tenant/emergency', danger: true },
   ],
   broker: [
     { key: 'lead', en: 'Add a lead', ar: 'إضافة عميل', path: '/broker/leads/new' },
     { key: 'redesign', en: 'Redesign a listing with AI', ar: 'أعد تصميم عقار بالذكاء الاصطناعي', path: '/broker/design-studio' },
     { key: 'ai', en: 'Ask BIN AI', ar: 'اسأل مساعد BIN', event: 'bin:open-ai' },
+    { key: 'chat', en: 'Message BIN', ar: 'راسل BIN', event: 'bin:open-chat' },
   ],
   admin: [
     { key: 'ai', en: 'Ask BIN AI', ar: 'اسأل مساعد BIN', event: 'bin:open-ai' },

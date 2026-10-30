@@ -9,6 +9,8 @@ import PortalSessionControls from '../components/PortalSessionControls';
 import BrandWatermark from '../components/BrandWatermark';
 import SafeIcon, { renderSafeIcon } from '../components/SafeIcon';
 import PortalConnectionStrip from '../components/PortalConnectionStrip';
+import BinConnectChatBox from '../components/BinConnectChatBox';
+import BinConnectInboxPage from '../components/BinConnectInboxPage';
 
 import BrokerSimpleDashboardPage from './pages/BrokerSimpleDashboardPage';
 import BrokerDashboardPage from './pages/BrokerDashboardPage';
@@ -101,6 +103,7 @@ const BrokerLayout = ({ children }: { children: React.ReactNode }) => {
         </Stack>
         {children}
       </Container>
+      <BinConnectChatBox role="broker" />
       <Box sx={{ py: 3, textAlign: 'center', borderTop: '1px solid #E5E7EB', bgcolor: '#FFFFFF', mt: 'auto', mb: { xs: 8, lg: 0 }, position: 'relative', zIndex: 1 }}>
         <Typography variant="caption" sx={{ color: '#667085', fontWeight: 800, letterSpacing: 2 }}>{label('broker.footer', '2026 BIN GROUP BROKER TERMINAL', '2026 BIN GROUP محطة الوسطاء')}</Typography>
       </Box>
@@ -126,6 +129,7 @@ export default function BrokerApp() {
         <Route path="/" element={<BrokerSimpleDashboardPage />} />
         <Route path="/dashboard" element={<BrokerSimpleDashboardPage />} />
         <Route path="/dashboard/full" element={<BrokerDashboardPage />} />
+        <Route path="/bin-connect" element={<BinConnectInboxPage role="broker" />} />
         <Route path="/leads" element={<BrokerLeadsPage />} />
         <Route path="/leads/new" element={<BrokerLeadsPage openFormByDefault={true} />} />
         <Route path="/referrals" element={<BrokerReferralsPage />} />
