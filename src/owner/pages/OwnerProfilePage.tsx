@@ -11,9 +11,13 @@ import OwnerPhoneVerificationCard from '../components/OwnerPhoneVerificationCard
 type Notice = { type: 'success' | 'error' | 'info' | 'warning'; text: string };
 
 const inputSx = {
-  '& .MuiOutlinedInput-root': { bgcolor: 'rgba(255,255,255,0.03)', color: '#FFF', borderRadius: 2 },
-  '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.5)' },
-  '& .MuiFormHelperText-root': { color: 'rgba(255,255,255,0.35)' },
+  // Fields sit on the dark profile cover: give them a solid light surface so the
+  // theme's dark input text stays readable (WCAG AA), and keep helper text light.
+  '& .MuiOutlinedInput-root': { bgcolor: binThemeTokens.card, color: binThemeTokens.textPrimary, borderRadius: 2 },
+  '& .MuiInputBase-input': { color: binThemeTokens.textPrimary, WebkitTextFillColor: binThemeTokens.textPrimary },
+  '& .MuiInputLabel-root': { color: binThemeTokens.textSecondary, bgcolor: binThemeTokens.card, px: 0.5, borderRadius: 1 },
+  '& .MuiInputLabel-root.Mui-focused': { color: binThemeTokens.goldText },
+  '& .MuiFormHelperText-root': { color: '#E5E7EB' },
 };
 
 export default function OwnerProfilePage() {
@@ -193,7 +197,7 @@ export default function OwnerProfilePage() {
       </Paper>
 
       <Paper sx={{ p: 3, bgcolor: 'rgba(198,167,94,0.06)', border: '1px solid rgba(198,167,94,0.2)', borderRadius: 4 }}>
-        <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={2} alignItems="center"><Shield color={binThemeTokens.gold} /><Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.72)', fontWeight: 800 }}>{label('Sensitive changes are server-validated and recorded in immutable audit history. IBAN and payout details remain managed separately.', 'يتم التحقق من التغييرات الحساسة على الخادم وتسجيلها في سجل تدقيق غير قابل للتغيير. تظل تفاصيل الآيبان والتحويلات مُدارة بشكل منفصل.')}</Typography></Stack>
+        <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={2} alignItems="center"><Shield color={binThemeTokens.gold} /><Typography variant="body2" sx={{ color: binThemeTokens.textSecondary, fontWeight: 800 }}>{label('Sensitive changes are server-validated and recorded in immutable audit history. IBAN and payout details remain managed separately.', 'يتم التحقق من التغييرات الحساسة على الخادم وتسجيلها في سجل تدقيق غير قابل للتغيير. تظل تفاصيل الآيبان والتحويلات مُدارة بشكل منفصل.')}</Typography></Stack>
       </Paper>
     </Box>
   );

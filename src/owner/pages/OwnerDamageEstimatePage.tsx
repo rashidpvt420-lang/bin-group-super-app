@@ -245,7 +245,7 @@ export default function OwnerDamageEstimatePage() {
                 <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
                   <Box>
                     <Typography sx={{ color: alpha('#fff', 0.45), fontWeight: 900, fontSize: '0.68rem', letterSpacing: 2 }}>VISIBLE DAMAGE CATEGORY</Typography>
-                    <Typography variant="h5" fontWeight={950} sx={{ color: '#fff', mt: 0.3 }}>{assessment.damageType}</Typography>
+                    <Typography variant="h5" fontWeight={950} sx={{ color: binThemeTokens.textPrimary, mt: 0.3 }}>{assessment.damageType}</Typography>
                     <Typography variant="body2" sx={{ color: alpha('#fff', 0.55), mt: 1, lineHeight: 1.7, maxWidth: 420 }}>
                       {assessment.description}
                     </Typography>

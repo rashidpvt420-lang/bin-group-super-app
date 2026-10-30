@@ -1,4 +1,5 @@
 import { Box } from '@mui/material';
+import { useLocation } from 'react-router-dom';
 import { useLanguage } from '../context/LanguageContext';
 
 export const MADE_IN_UAE_EN = 'Made in UAE';
@@ -9,9 +10,31 @@ export const MADE_IN_UAE_AR = 'صُنع في الإمارات';
  * auth, profile (Owner, Tenant, Technician, Broker) and Staff/Admin page shows it.
  * The flag emoji is decorative; the text is the accessible label.
  */
+/** Profile portals render the mark inside their own shell footer (see MadeInUaeInline). */
+export const PROFILE_SHELL_PREFIXES = ['/owner', '/tenant', '/technician', '/broker'];
+
+export function isProfileShellPath(pathname: string): boolean {
+  return PROFILE_SHELL_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
+}
+
+/** Inline mark for profile shell footers, next to the "2026 BIN GROUP ..." line. */
+export function MadeInUaeInline() {
+  const { lang } = useLanguage();
+  const text = lang === 'ar' ? MADE_IN_UAE_AR : MADE_IN_UAE_EN;
+  return (
+    <Box component="span" data-testid="made-in-uae-mark" aria-label={text} lang={lang === 'ar' ? 'ar' : 'en'}
+      sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 0.75, mt: 0.75, fontSize: '0.75rem', fontWeight: 800, letterSpacing: 0.5, color: 'inherit', opacity: 0.85 }}>
+      <span>{text}</span>
+      <span aria-hidden="true">🇦🇪</span>
+    </Box>
+  );
+}
+
 export default function MadeInUaeMark() {
   const { lang, isRTL } = useLanguage();
+  const { pathname } = useLocation();
   const text = lang === 'ar' ? MADE_IN_UAE_AR : MADE_IN_UAE_EN;
+  if (isProfileShellPath(pathname)) return null;
   return (
     <Box
       component="footer"

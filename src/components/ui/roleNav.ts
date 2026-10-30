@@ -16,7 +16,7 @@ export const ROLE_TABS: Record<NavRole, NavTab[]> = {
     { key: 'home', path: '/owner/dashboard', en: 'Home', ar: 'الرئيسية', icon: 'home', match: ['/owner', '/owner/dashboard'] },
     { key: 'properties', path: '/owner/properties', en: 'Properties', ar: 'العقارات', icon: 'building', match: ['/owner/properties', '/owner/units', '/owner/tenants', '/owner/property-passport'] },
     { key: 'repairs', path: '/owner/tickets', en: 'Repairs', ar: 'الصيانة', icon: 'wrench', match: ['/owner/tickets', '/owner/ticket/', '/owner/approvals'] },
-    { key: 'money', path: '/owner/financials', en: 'Money', ar: 'المالية', icon: 'money', match: ['/owner/financials', '/owner/payment-proof', '/owner/p-l-report', '/owner/roi'] },
+    { key: 'money', path: '/owner/financials', en: 'Money', ar: 'المالية', icon: 'money', match: ['/owner/financials', '/owner/payment-proof', '/owner/p-l-report', '/owner/roi', '/owner/insights'] },
     { key: 'account', path: '/owner/profile', en: 'Account', ar: 'حسابي', icon: 'profile', match: ['/owner/profile', '/owner/documents', '/owner/contracts', '/owner/iban'] },
   ],
   tenant: [

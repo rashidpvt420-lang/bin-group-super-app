@@ -77,8 +77,8 @@ function EvidencePhoto({ item, label }: { item: OwnerTicketEvidenceItem; label: 
             data-testid="owner-ticket-evidence-photo-unavailable"
             sx={{ ...tileSx, bgcolor: 'rgba(255,255,255,0.03)', px: 1, textAlign: 'center' }}
         >
-            <AlertCircle size={18} color="rgba(255,255,255,0.45)" />
-            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.55)', fontWeight: 800, lineHeight: 1.2 }}>
+            <AlertCircle size={18} color={binThemeTokens.textSecondary} />
+            <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, fontWeight: 800, lineHeight: 1.2 }}>
                 {state.status === 'loading'
                     ? tx('owner.ticket.evidence.loading', 'Loading recorded photo…')
                     : state.status === 'denied'
@@ -108,7 +108,7 @@ function EvidenceColumn({
     return (
         <Box data-testid={testId}>
             <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1.25 }}>
-                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.55)', fontWeight: 950, letterSpacing: 1 }}>
+                <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, fontWeight: 950, letterSpacing: 1 }}>
                     {title} ({items.length})
                 </Typography>
                 {confirmed && items.length > 0 && (
@@ -131,7 +131,7 @@ function EvidenceColumn({
                     ))}
                 </Stack>
             ) : (
-                <Typography variant="body2" data-testid={`${testId}-empty`} sx={{ color: 'rgba(255,255,255,0.45)', fontStyle: 'italic' }}>
+                <Typography variant="body2" data-testid={`${testId}-empty`} sx={{ color: binThemeTokens.textSecondary, fontStyle: 'italic' }}>
                     {emptyText}
                 </Typography>
             )}

@@ -257,7 +257,7 @@ export default function ContractorMarketplacePage() {
 
         {notice && (
           <Paper sx={{ p: 2.2, bgcolor: alpha(gold, 0.08), border: `1px solid ${alpha(gold, 0.22)}`, borderRadius: 3 }}>
-            <Typography sx={{ color: '#fff', fontWeight: 900, textAlign: isRTL ? 'right' : 'left' }}>{notice}</Typography>
+            <Typography sx={{ color: binThemeTokens.textPrimary, fontWeight: 900, textAlign: isRTL ? 'right' : 'left' }}>{notice}</Typography>
           </Paper>
         )}
 
@@ -368,7 +368,7 @@ export default function ContractorMarketplacePage() {
                     <Paper key={request.id} sx={{ p: 2, bgcolor: alpha(gold, 0.05), border: `1px solid ${alpha(gold, 0.12)}`, borderRadius: 3 }}>
                       <Stack direction={isRTL ? 'row-reverse' : 'row'} justifyContent="space-between" spacing={2}>
                         <Box sx={{ textAlign: isRTL ? 'right' : 'left' }}>
-                          <Typography sx={{ color: '#fff', fontWeight: 950 }}>{request.unitTitle || request.title}</Typography>
+                          <Typography sx={{ color: binThemeTokens.textPrimary, fontWeight: 950 }}>{request.unitTitle || request.title}</Typography>
                           <Typography variant="caption" sx={{ color: alpha('#fff', 0.52) }}>{[titleCase(request.propertyType), request.area, request.emirate].filter(Boolean).join(' · ') || request.propertyAddress}</Typography>
                         </Box>
                         <Chip label={request.stage || request.status || 'OPEN'} sx={{ bgcolor: alpha(gold, 0.10), color: gold, fontWeight: 950 }} />
@@ -388,7 +388,7 @@ export default function ContractorMarketplacePage() {
                       <CardContent>
                         <Stack direction={isRTL ? 'row-reverse' : 'row'} justifyContent="space-between" spacing={2}>
                           <Box sx={{ textAlign: isRTL ? 'right' : 'left' }}>
-                            <Typography sx={{ color: '#fff', fontWeight: 950 }}>{application.tenantName || application.tenantEmail || copy('owner.home.tenant', 'Home seeker', 'باحث عن منزل')}</Typography>
+                            <Typography sx={{ color: binThemeTokens.textPrimary, fontWeight: 950 }}>{application.tenantName || application.tenantEmail || copy('owner.home.tenant', 'Home seeker', 'باحث عن منزل')}</Typography>
                             <Typography variant="caption" sx={{ color: alpha('#fff', 0.52) }}>{application.listingTitle}</Typography>
                           </Box>
                           <Chip icon={<SafeIcon icon={application.requestMode === 'VIEWING' ? MapPin : KeyRound} size={13} />} label={application.stage || 'BIN_CONTACT'} sx={{ bgcolor: alpha(application.requestMode === 'VIEWING' ? '#38BDF8' : '#22C55E', 0.12), color: application.requestMode === 'VIEWING' ? '#38BDF8' : '#22C55E', fontWeight: 900 }} />
@@ -413,7 +413,7 @@ export default function ContractorMarketplacePage() {
                   <Stack spacing={1.1} sx={{ textAlign: isRTL ? 'right' : 'left' }}>
                     <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} alignItems="center">
                       <SafeIcon icon={Building2} size={17} style={{ color: gold }} />
-                      <Typography sx={{ color: '#fff', fontWeight: 950 }}>{home.unitTitle || home.title || home.propertyName}</Typography>
+                      <Typography sx={{ color: binThemeTokens.textPrimary, fontWeight: 950 }}>{home.unitTitle || home.title || home.propertyName}</Typography>
                     </Stack>
                     <Typography variant="caption" sx={{ color: alpha('#fff', 0.55) }}>{[home.area, home.emirate].filter(Boolean).join(', ') || home.propertyAddress}</Typography>
                     <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap justifyContent={isRTL ? 'flex-end' : 'flex-start'}>

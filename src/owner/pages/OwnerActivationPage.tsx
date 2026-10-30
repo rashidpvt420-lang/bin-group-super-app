@@ -492,7 +492,7 @@ export default function OwnerActivationPage() {
         <Box sx={{ textAlign: isRTL ? 'right' : 'left' }}>
           <Typography variant="overline" sx={{ color: binThemeTokens.goldText, fontWeight: 950, letterSpacing: 4 }}>CONTRACT ACTIVATION</Typography>
           <Typography variant="h4" fontWeight="950" sx={{ color: binThemeTokens.textPrimary, mt: 1 }}>15% Mobilization Payment Gate</Typography>
-          <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.55)', maxWidth: 820, mt: 1 }}>
+          <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary, maxWidth: 820, mt: 1 }}>
             First sign the admin-approved contract. Then submit or complete the 15% mobilization payment request. Full dashboard access unlocks only after admin payment verification.
           </Typography>
         </Box>

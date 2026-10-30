@@ -1,3 +1,4 @@
+import { MadeInUaeInline } from '../components/MadeInUaeMark';
 import React from 'react';
 import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { AppBar, Avatar, Box, Button, Container, IconButton, Paper, Stack, Toolbar, Typography, alpha } from '@mui/material';
@@ -53,7 +54,7 @@ const BrokerLayout = ({ children }: { children: React.ReactNode }) => {
   ];
 
   return (
-    <Box sx={{ minHeight: '100vh', bgcolor: '#FFFFFF', color: '#111827', direction: isRTL ? 'rtl' : 'ltr', pb: { xs: 10, lg: 0 }, position: 'relative', isolation: 'isolate' }}>
+    <Box sx={{ '--bin-adaptive-text': '#111827', '--bin-adaptive-text-muted': '#4B5563', minHeight: '100vh', bgcolor: '#FFFFFF', color: '#111827', direction: isRTL ? 'rtl' : 'ltr', pb: { xs: 10, lg: 0 }, position: 'relative', isolation: 'isolate' }}>
       <BrandWatermark opacity={0.035} compact />
       <AppBar position="sticky" elevation={0} sx={{ bgcolor: '#FFFFFF', borderBottom: '1px solid #E5E7EB', zIndex: 1200 }}>
         <Toolbar sx={{ justifyContent: 'space-between', px: { xs: 2, md: 4 }, minHeight: 76, flexDirection: isRTL ? 'row-reverse' : 'row', gap: 1 }}>
@@ -105,7 +106,7 @@ const BrokerLayout = ({ children }: { children: React.ReactNode }) => {
       </Container>
       <BinConnectChatBox role="broker" />
       <Box sx={{ py: 3, textAlign: 'center', borderTop: '1px solid #E5E7EB', bgcolor: '#FFFFFF', mt: 'auto', mb: { xs: 8, lg: 0 }, position: 'relative', zIndex: 1 }}>
-        <Typography variant="caption" sx={{ color: '#667085', fontWeight: 800, letterSpacing: 2 }}>{label('broker.footer', '2026 BIN GROUP BROKER TERMINAL', '2026 BIN GROUP محطة الوسطاء')}</Typography>
+        <Typography variant="caption" sx={{ color: '#667085', fontWeight: 800, letterSpacing: 2 }}>{label('broker.footer', '2026 BIN GROUP BROKER TERMINAL', '2026 BIN GROUP محطة الوسطاء')}</Typography><MadeInUaeInline />
       </Box>
       <Paper elevation={0} sx={{ display: { xs: 'flex', lg: 'none' }, position: 'fixed', bottom: 0, left: 0, right: 0, bgcolor: '#FFFFFF', borderTop: '1px solid #E5E7EB', zIndex: 1300, justifyContent: 'space-around', py: 1, direction: isRTL ? 'rtl' : 'ltr' }}>
         {menuItems.map((item) => {

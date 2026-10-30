@@ -115,9 +115,9 @@ export default function PropertyPassportPage() {
             <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: 2 }}>
                 <Box>
                     <Button startIcon={<ArrowLeft size={16}/>} onClick={() => navigate(-1)} sx={{ color: binThemeTokens.gold, mb: 2, p: 0 }}>RETURN TO PORTFOLIO</Button>
-                    <Typography variant="h3" fontWeight="950" color="#FFF">{property.name || property.propertyName || 'Property Passport'}</Typography>
+                    <Typography variant="h3" fontWeight="950" color={binThemeTokens.adaptiveText}>{property.name || property.propertyName || 'Property Passport'}</Typography>
                     <Stack direction="row" spacing={1.5} sx={{ mt: 1 }} flexWrap="wrap" useFlexGap>
-                        <Chip label={`REF: ${property.id.substring(0,8)}`} size="small" sx={{ bgcolor: 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.5)', fontWeight: 900 }} />
+                        <Chip label={`REF: ${property.id.substring(0,8)}`} size="small" sx={{ bgcolor: 'rgba(255,255,255,0.05)', color: binThemeTokens.adaptiveTextMuted, fontWeight: 900 }} />
                         <Chip icon={isVerified ? <ShieldCheck size={14}/> : <AlertTriangle size={14}/>} label={isVerified ? 'SOVEREIGN VERIFIED' : 'PENDING VERIFICATION'} sx={{ bgcolor: isVerified ? alpha('#10b981', 0.1) : alpha('#ef4444', 0.1), color: isVerified ? '#10b981' : '#ef4444', fontWeight: 950 }} />
                         <Chip icon={<MapPin size={14}/>} label={gps.label} sx={{ bgcolor: alpha(gps.color, 0.1), color: gps.color, fontWeight: 950 }} />
                     </Stack>
@@ -175,7 +175,7 @@ export default function PropertyPassportPage() {
                                 <Stack spacing={2}>
                                     <Box sx={{ display: 'flex', justifyContent: 'space-between' }}><Typography variant="caption" color="textSecondary">PROTOCOL</Typography><Typography variant="caption" fontWeight="900" color={binThemeTokens.gold}>{property.protocolLevel || 'SOVEREIGN'}</Typography></Box>
                                     <Box sx={{ display: 'flex', justifyContent: 'space-between' }}><Typography variant="caption" color="textSecondary">SECURITY</Typography><Typography variant="caption" fontWeight="900" color={binThemeTokens.gold}>{property.securityLevel || 'MAXIMUM'}</Typography></Box>
-                                    <Box sx={{ display: 'flex', justifyContent: 'space-between' }}><Typography variant="caption" color="textSecondary">AUTHORITY</Typography><Typography variant="caption" fontWeight="900" color="#FFF">{property.authorityName || 'Federal'}</Typography></Box>
+                                    <Box sx={{ display: 'flex', justifyContent: 'space-between' }}><Typography variant="caption" color="textSecondary">AUTHORITY</Typography><Typography variant="caption" fontWeight="900" color={binThemeTokens.adaptiveText}>{property.authorityName || 'Federal'}</Typography></Box>
                                     {property.majlis && <Box sx={{ mt: 1, p: 1, bgcolor: alpha(binThemeTokens.gold, 0.1), borderRadius: 1, textAlign: 'center' }}><Typography variant="caption" fontWeight="900" color={binThemeTokens.gold}>MAJLIS PROTOCOL ACTIVE</Typography></Box>}
                                 </Stack>
                             </Paper>
@@ -188,9 +188,9 @@ export default function PropertyPassportPage() {
                         <Paper sx={{ p: 4, borderRadius: 6, bgcolor: alpha(binThemeTokens.gold, 0.03), border: `1px solid ${alpha(binThemeTokens.gold, 0.1)}` }}>
                             <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 900, mb: 3, display: 'block' }}>VERIFICATION HUB</Typography>
                             <Grid container spacing={3}>
-                                <Grid item xs={12} md={4}><Stack direction="row" spacing={2} alignItems="center"><Box sx={{ p: 1.5, bgcolor: alpha(isVerified ? '#10b981' : '#f59e0b', 0.1), borderRadius: 3 }}><ShieldCheck color={isVerified ? '#10b981' : '#f59e0b'} /></Box><Box><Typography variant="subtitle2" fontWeight="900" color="#FFF">TITLE DEED</Typography><Typography variant="caption" color={isVerified ? '#10b981' : '#f59e0b'}>{isVerified ? 'VERIFIED' : 'PENDING REVIEW'}</Typography></Box></Stack></Grid>
-                                <Grid item xs={12} md={4}><Stack direction="row" spacing={2} alignItems="center"><Box sx={{ p: 1.5, bgcolor: alpha(gps.color, 0.1), borderRadius: 3 }}><MapPin color={gps.color} /></Box><Box><Typography variant="subtitle2" fontWeight="900" color="#FFF">GEO-ANCHOR</Typography><Typography variant="caption" color={gps.color}>{gps.label}</Typography></Box></Stack></Grid>
-                                <Grid item xs={12} md={4}><Stack direction="row" spacing={2} alignItems="center"><Box sx={{ p: 1.5, bgcolor: alpha(binThemeTokens.gold, 0.1), borderRadius: 3 }}><FileText color={binThemeTokens.gold} /></Box><Box><Typography variant="subtitle2" fontWeight="900" color="#FFF">CONTRACT</Typography><Typography variant="caption" color={binThemeTokens.gold}>{property.contractStatus || 'PENDING'}</Typography></Box></Stack></Grid>
+                                <Grid item xs={12} md={4}><Stack direction="row" spacing={2} alignItems="center"><Box sx={{ p: 1.5, bgcolor: alpha(isVerified ? '#10b981' : '#f59e0b', 0.1), borderRadius: 3 }}><ShieldCheck color={isVerified ? '#10b981' : '#f59e0b'} /></Box><Box><Typography variant="subtitle2" fontWeight="900" color={binThemeTokens.adaptiveText}>TITLE DEED</Typography><Typography variant="caption" color={isVerified ? '#10b981' : '#f59e0b'}>{isVerified ? 'VERIFIED' : 'PENDING REVIEW'}</Typography></Box></Stack></Grid>
+                                <Grid item xs={12} md={4}><Stack direction="row" spacing={2} alignItems="center"><Box sx={{ p: 1.5, bgcolor: alpha(gps.color, 0.1), borderRadius: 3 }}><MapPin color={gps.color} /></Box><Box><Typography variant="subtitle2" fontWeight="900" color={binThemeTokens.adaptiveText}>GEO-ANCHOR</Typography><Typography variant="caption" color={gps.color}>{gps.label}</Typography></Box></Stack></Grid>
+                                <Grid item xs={12} md={4}><Stack direction="row" spacing={2} alignItems="center"><Box sx={{ p: 1.5, bgcolor: alpha(binThemeTokens.gold, 0.1), borderRadius: 3 }}><FileText color={binThemeTokens.gold} /></Box><Box><Typography variant="subtitle2" fontWeight="900" color={binThemeTokens.adaptiveText}>CONTRACT</Typography><Typography variant="caption" color={binThemeTokens.gold}>{property.contractStatus || 'PENDING'}</Typography></Box></Stack></Grid>
                             </Grid>
                         </Paper>
 

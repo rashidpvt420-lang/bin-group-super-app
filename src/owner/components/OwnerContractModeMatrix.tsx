@@ -275,7 +275,7 @@ export default function OwnerContractModeMatrix({ user, contract, properties }: 
               <Wrench color={binThemeTokens.gold} />
               <Box>
                 <Typography variant="overline" sx={{ color: binThemeTokens.goldText, fontWeight: 950 }}>MAINTENANCE COMMAND</Typography>
-                <Typography variant="h6" fontWeight={950} sx={{ color: '#fff' }}>Tickets, SLA, technicians, evidence and preventive work</Typography>
+                <Typography variant="h6" fontWeight={950} sx={{ color: binThemeTokens.textPrimary }}>Tickets, SLA, technicians, evidence and preventive work</Typography>
               </Box>
             </Stack>
             <Grid container spacing={3}>
@@ -295,7 +295,7 @@ export default function OwnerContractModeMatrix({ user, contract, properties }: 
               <Users color={binThemeTokens.gold} />
               <Box>
                 <Typography variant="overline" sx={{ color: binThemeTokens.goldText, fontWeight: 950 }}>PROPERTY MANAGEMENT COMMAND</Typography>
-                <Typography variant="h6" fontWeight={950} sx={{ color: '#fff' }}>Tenants, rent collection, payment balance and occupancy</Typography>
+                <Typography variant="h6" fontWeight={950} sx={{ color: binThemeTokens.textPrimary }}>Tenants, rent collection, payment balance and occupancy</Typography>
               </Box>
             </Stack>
             <Grid container spacing={3} sx={{ mb: 3 }}>
@@ -307,21 +307,21 @@ export default function OwnerContractModeMatrix({ user, contract, properties }: 
 
             <Box sx={{ border: '1px solid rgba(255,255,255,.06)', borderRadius: 3, overflow: 'hidden' }}>
               <Box sx={{ p: 2, bgcolor: 'rgba(255,255,255,.035)' }}>
-                <Typography fontWeight={950} sx={{ color: '#fff' }}><CreditCard size={16} style={{ verticalAlign: 'middle', marginRight: 8 }} />Tenant Payment Process</Typography>
+                <Typography fontWeight={950} sx={{ color: binThemeTokens.textPrimary }}><CreditCard size={16} style={{ verticalAlign: 'middle', marginRight: 8 }} />Tenant Payment Process</Typography>
               </Box>
               {loading ? (
-                <Typography sx={{ p: 2, color: 'rgba(255,255,255,.55)' }}>Loading tenant ledger...</Typography>
+                <Typography sx={{ p: 2, color: binThemeTokens.textSecondary }}>Loading tenant ledger...</Typography>
               ) : tenantRows.length === 0 ? (
-                <Typography sx={{ p: 2, color: 'rgba(255,255,255,.55)' }}>No tenant ledger rows found yet. Import tenants/leases or invite tenants to activate this section.</Typography>
+                <Typography sx={{ p: 2, color: binThemeTokens.textSecondary }}>No tenant ledger rows found yet. Import tenants/leases or invite tenants to activate this section.</Typography>
               ) : (
                 <Stack divider={<Box sx={{ borderTop: '1px solid rgba(255,255,255,.06)' }} />}>
                   {tenantRows.map((row, index) => (
                     <Grid container key={`${row.name}-${index}`} sx={{ p: 2 }} spacing={1} alignItems="center">
                       <Grid item xs={12} md={3}><Typography fontWeight={900} sx={{ color: '#fff', ...textSafeSx }}>{row.name}</Typography><Typography variant="caption" sx={{ color: 'rgba(255,255,255,.45)', ...textSafeSx }}>{row.property}</Typography></Grid>
-                      <Grid item xs={6} md={2}><Typography variant="caption" sx={{ color: 'rgba(255,255,255,.45)' }}>UNIT</Typography><Typography sx={{ color: '#fff' }}>{row.unit}</Typography></Grid>
-                      <Grid item xs={6} md={2}><Typography variant="caption" sx={{ color: 'rgba(255,255,255,.45)' }}>STATUS</Typography><Typography sx={{ color: '#fff' }}>{row.status}</Typography></Grid>
-                      <Grid item xs={6} md={2}><Typography variant="caption" sx={{ color: 'rgba(255,255,255,.45)' }}>PAID</Typography><Typography sx={{ color: '#10b981', fontWeight: 900 }}>{money(row.paid)}</Typography></Grid>
-                      <Grid item xs={6} md={3}><Typography variant="caption" sx={{ color: 'rgba(255,255,255,.45)' }}>LEFT TO PAY</Typography><Typography sx={{ color: row.balance > 0 ? '#ef4444' : '#10b981', fontWeight: 900 }}>{money(row.balance)}</Typography></Grid>
+                      <Grid item xs={6} md={2}><Typography variant="caption" sx={{ color: binThemeTokens.textSecondary }}>UNIT</Typography><Typography sx={{ color: binThemeTokens.textPrimary }}>{row.unit}</Typography></Grid>
+                      <Grid item xs={6} md={2}><Typography variant="caption" sx={{ color: binThemeTokens.textSecondary }}>STATUS</Typography><Typography sx={{ color: binThemeTokens.textPrimary }}>{row.status}</Typography></Grid>
+                      <Grid item xs={6} md={2}><Typography variant="caption" sx={{ color: binThemeTokens.textSecondary }}>PAID</Typography><Typography sx={{ color: '#10b981', fontWeight: 900 }}>{money(row.paid)}</Typography></Grid>
+                      <Grid item xs={6} md={3}><Typography variant="caption" sx={{ color: binThemeTokens.textSecondary }}>LEFT TO PAY</Typography><Typography sx={{ color: row.balance > 0 ? '#ef4444' : '#10b981', fontWeight: 900 }}>{money(row.balance)}</Typography></Grid>
                     </Grid>
                   ))}
                 </Stack>

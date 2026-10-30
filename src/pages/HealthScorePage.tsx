@@ -80,7 +80,7 @@ export default function HealthScorePage() {
   if (properties.length === 0) return (
       <Container sx={{ py: 20, textAlign: 'center' }}>
           <Construction size={80} color={binThemeTokens.gold} style={{ opacity: 0.5, marginBottom: 24 }} />
-          <Typography variant="h3" fontWeight="900" sx={{ color: '#FFF' }}>ASSET NODES NOT FOUND</Typography>
+          <Typography variant="h3" fontWeight="900" sx={{ color: binThemeTokens.adaptiveText }}>ASSET NODES NOT FOUND</Typography>
           <Button variant="outlined" onClick={() => window.history.back()} sx={{ mt: 4, color: binThemeTokens.gold, borderColor: binThemeTokens.gold }}>RETURN TO DASHBOARD</Button>
       </Container>
   );
@@ -158,7 +158,7 @@ export default function HealthScorePage() {
                     {report?.recommendations.map((rec, i) => (
                         <Box key={i} sx={{ display: 'flex', gap: 2 }}>
                             <AlertCircle color={binThemeTokens.gold} size={20} />
-                            <Typography variant="body1" sx={{ color: '#FFF' }}>{rec}</Typography>
+                            <Typography variant="body1" sx={{ color: binThemeTokens.adaptiveText }}>{rec}</Typography>
                         </Box>
                     ))}
                 </Stack>

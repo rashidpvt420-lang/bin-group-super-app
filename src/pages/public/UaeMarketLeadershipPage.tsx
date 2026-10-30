@@ -197,7 +197,7 @@ export default function UaeMarketLeadershipPage() {
                   {UAE_MVP_BUILD_ORDER.map((item, index) => (
                     <Stack key={item} direction="row" spacing={1.3} alignItems="flex-start" sx={{ p: 1.6, borderRadius: 3, bgcolor: 'rgba(255,255,255,.055)' }}>
                       <CheckCircle2 color={gold} size={18} style={{ marginTop: 3, flexShrink: 0 }} />
-                      <Typography variant="body2" sx={{ color: 'rgba(255,255,255,.82)', fontWeight: 800, lineHeight: 1.55 }}>{index + 1}. {item}</Typography>
+                      <Typography variant="body2" sx={{ color: binThemeTokens.adaptiveTextMuted, fontWeight: 800, lineHeight: 1.55 }}>{index + 1}. {item}</Typography>
                     </Stack>
                   ))}
                 </Stack>

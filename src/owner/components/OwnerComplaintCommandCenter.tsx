@@ -106,20 +106,20 @@ function ComplaintRow({ complaint }: { complaint: OwnerComplaint }) {
   return (
     <React.Fragment>
       <TableRow sx={{ '& > *': { borderBottom: 'unset', borderColor: 'rgba(255,255,255,0.05)' } }}>
-        <TableCell sx={{ color: '#fff', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+        <TableCell sx={{ color: binThemeTokens.textPrimary, borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
           <IconButton size="small" onClick={() => setOpen(!open)} sx={{ color: binThemeTokens.goldText }}>
             {open ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
           </IconButton>
         </TableCell>
-        <TableCell sx={{ color: '#fff', fontWeight: 900, borderBottom: '1px solid rgba(255,255,255,0.05)' }}>{complaint.propertyName}</TableCell>
-        <TableCell sx={{ color: 'rgba(255,255,255,0.7)', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>{complaint.category}</TableCell>
-        <TableCell sx={{ color: 'rgba(255,255,255,0.7)', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+        <TableCell sx={{ color: binThemeTokens.textPrimary, fontWeight: 900, borderBottom: '1px solid rgba(255,255,255,0.05)' }}>{complaint.propertyName}</TableCell>
+        <TableCell sx={{ color: binThemeTokens.textSecondary, borderBottom: '1px solid rgba(255,255,255,0.05)' }}>{complaint.category}</TableCell>
+        <TableCell sx={{ color: binThemeTokens.textSecondary, borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
           <Chip label={complaint.priority} size="small" sx={{ bgcolor: complaint.priority === 'CRITICAL' ? alpha('#ef4444', 0.15) : alpha('#f59e0b', 0.15), color: complaint.priority === 'CRITICAL' ? '#ef4444' : '#f59e0b', fontWeight: 900, fontSize: '0.65rem' }} />
         </TableCell>
         <TableCell sx={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
           <Chip label={complaint.status.replace(/_/g, ' ')} size="small" sx={{ bgcolor: alpha(getStatusColor(complaint.status), 0.15), color: getStatusColor(complaint.status), fontWeight: 900, fontSize: '0.65rem' }} />
         </TableCell>
-        <TableCell sx={{ color: 'rgba(255,255,255,0.7)', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>{formatCost(complaint.finalCost)}</TableCell>
+        <TableCell sx={{ color: binThemeTokens.textSecondary, borderBottom: '1px solid rgba(255,255,255,0.05)' }}>{formatCost(complaint.finalCost)}</TableCell>
         <TableCell sx={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
           <Chip label={complaint.slaStatus} size="small" sx={{ bgcolor: complaint.slaStatus === 'BREACHED' ? alpha('#ef4444', 0.15) : alpha('#10b981', 0.15), color: complaint.slaStatus === 'BREACHED' ? '#ef4444' : '#10b981', fontWeight: 900, fontSize: '0.65rem' }} />
         </TableCell>
@@ -132,39 +132,39 @@ function ComplaintRow({ complaint }: { complaint: OwnerComplaint }) {
               
               <Stack direction={{ xs: 'column', md: 'row' }} spacing={4} sx={{ mb: 2 }}>
                 <Box flex={1}>
-                  <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 900 }}>DESCRIPTION</Typography>
+                  <Typography variant="caption" sx={{ color: binThemeTokens.textPrimary, fontWeight: 900 }}>DESCRIPTION</Typography>
                   <Typography variant="body2" sx={{ color: '#fff', mt: 0.5, ...textSafeSx }}>{complaint.description || 'No description provided.'}</Typography>
                 </Box>
                 <Box flex={1}>
-                  <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 900 }}>RESOLUTION NOTES</Typography>
+                  <Typography variant="caption" sx={{ color: binThemeTokens.textPrimary, fontWeight: 900 }}>RESOLUTION NOTES</Typography>
                   <Typography variant="body2" sx={{ color: '#fff', mt: 0.5, ...textSafeSx }}>{complaint.resolutionNotes || 'No resolution notes provided yet.'}</Typography>
                 </Box>
               </Stack>
 
               <Stack direction={{ xs: 'column', sm: 'row' }} spacing={4} sx={{ mb: 2 }}>
                 <Box>
-                  <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 900 }}>REPORTER</Typography>
-                  <Typography variant="body2" sx={{ color: '#fff', mt: 0.5 }}>{complaint.reporterName} ({complaint.reporterType})</Typography>
+                  <Typography variant="caption" sx={{ color: binThemeTokens.textPrimary, fontWeight: 900 }}>REPORTER</Typography>
+                  <Typography variant="body2" sx={{ color: binThemeTokens.textPrimary, mt: 0.5 }}>{complaint.reporterName} ({complaint.reporterType})</Typography>
                 </Box>
                 <Box>
-                  <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 900 }}>TECHNICIAN</Typography>
-                  <Typography variant="body2" sx={{ color: '#fff', mt: 0.5 }}>{complaint.assignedTechnicianName}</Typography>
+                  <Typography variant="caption" sx={{ color: binThemeTokens.textPrimary, fontWeight: 900 }}>TECHNICIAN</Typography>
+                  <Typography variant="body2" sx={{ color: binThemeTokens.textPrimary, mt: 0.5 }}>{complaint.assignedTechnicianName}</Typography>
                 </Box>
                 <Box>
-                  <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 900 }}>CREATED AT</Typography>
-                  <Typography variant="body2" sx={{ color: '#fff', mt: 0.5 }}>{complaint.createdAt ? complaint.createdAt.toLocaleString() : 'Unknown'}</Typography>
+                  <Typography variant="caption" sx={{ color: binThemeTokens.textPrimary, fontWeight: 900 }}>CREATED AT</Typography>
+                  <Typography variant="body2" sx={{ color: binThemeTokens.textPrimary, mt: 0.5 }}>{complaint.createdAt ? complaint.createdAt.toLocaleString() : 'Unknown'}</Typography>
                 </Box>
                 {complaint.resolvedAt && (
                   <Box>
-                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 900 }}>RESOLVED AT</Typography>
-                    <Typography variant="body2" sx={{ color: '#fff', mt: 0.5 }}>{complaint.resolvedAt.toLocaleString()}</Typography>
+                    <Typography variant="caption" sx={{ color: binThemeTokens.textPrimary, fontWeight: 900 }}>RESOLVED AT</Typography>
+                    <Typography variant="body2" sx={{ color: binThemeTokens.textPrimary, mt: 0.5 }}>{complaint.resolvedAt.toLocaleString()}</Typography>
                   </Box>
                 )}
               </Stack>
 
               {(complaint.photosBefore.length > 0 || complaint.proofPhotosAfter.length > 0) && (
                 <Box sx={{ mt: 3, mb: 2 }}>
-                  <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 900, mb: 1, display: 'block' }}>EVIDENCE & PROOF</Typography>
+                  <Typography variant="caption" sx={{ color: binThemeTokens.textPrimary, fontWeight: 900, mb: 1, display: 'block' }}>EVIDENCE & PROOF</Typography>
                   <Stack direction="row" spacing={2} sx={{ overflowX: 'auto', pb: 1 }}>
                     {complaint.photosBefore.map((url, i) => (
                       <Box key={`before-${i}`} sx={{ position: 'relative' }}>
@@ -210,7 +210,7 @@ function ComplaintRow({ complaint }: { complaint: OwnerComplaint }) {
         </DialogTitle>
         <DialogContent>
           <Stack spacing={2} sx={{ pt: 1 }}>
-            <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.62)' }}>
+            <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary }}>
               This submits an owner review through the protected ticket callable and records the action in audit logs.
             </Typography>
             <TextField
@@ -281,8 +281,8 @@ export default function OwnerComplaintCommandCenter({ complaints, properties }: 
 
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mb: 4 }}>
           <FormControl sx={{ minWidth: 200 }}>
-            <InputLabel sx={{ color: 'rgba(255,255,255,0.5)' }}>Filter by Property</InputLabel>
-            <Select value={filterProperty} label="Filter by Property" onChange={(e) => setFilterProperty(e.target.value)} sx={{ color: '#fff', '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.2)' } }}>
+            <InputLabel sx={{ color: binThemeTokens.textSecondary }}>Filter by Property</InputLabel>
+            <Select value={filterProperty} label="Filter by Property" onChange={(e) => setFilterProperty(e.target.value)} sx={{ color: binThemeTokens.textPrimary, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.2)' } }}>
               <MenuItem value="ALL">All Properties</MenuItem>
               {properties.map(p => (
                 <MenuItem key={p.id || p.propertyId} value={p.id || p.propertyId}>{p.propertyName || p.name || 'Unnamed Property'}</MenuItem>
@@ -291,8 +291,8 @@ export default function OwnerComplaintCommandCenter({ complaints, properties }: 
           </FormControl>
           
           <FormControl sx={{ minWidth: 200 }}>
-            <InputLabel sx={{ color: 'rgba(255,255,255,0.5)' }}>Filter by Status</InputLabel>
-            <Select value={filterStatus} label="Filter by Status" onChange={(e) => setFilterStatus(e.target.value)} sx={{ color: '#fff', '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.2)' } }}>
+            <InputLabel sx={{ color: binThemeTokens.textSecondary }}>Filter by Status</InputLabel>
+            <Select value={filterStatus} label="Filter by Status" onChange={(e) => setFilterStatus(e.target.value)} sx={{ color: binThemeTokens.textPrimary, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.2)' } }}>
               <MenuItem value="ALL">All Statuses</MenuItem>
               <MenuItem value="OPEN">Open & Pending</MenuItem>
               <MenuItem value="CLOSED">Completed / Resolved</MenuItem>
@@ -304,21 +304,21 @@ export default function OwnerComplaintCommandCenter({ complaints, properties }: 
         {filteredComplaints.length === 0 ? (
           <Box sx={{ p: 6, textAlign: 'center', border: '1px dashed rgba(255,255,255,0.1)', borderRadius: 4 }}>
             <ShieldCheck size={40} color="rgba(16, 185, 129, 0.4)" style={{ margin: '0 auto 16px' }} />
-            <Typography variant="h6" fontWeight={950} sx={{ color: 'rgba(255,255,255,0.6)' }}>No Tickets Found</Typography>
-            <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.4)', mt: 1 }}>Operations are fully optimal for the selected criteria.</Typography>
+            <Typography variant="h6" fontWeight={950} sx={{ color: binThemeTokens.textSecondary }}>No Tickets Found</Typography>
+            <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary, mt: 1 }}>Operations are fully optimal for the selected criteria.</Typography>
           </Box>
         ) : (
           <TableContainer sx={{ overflowX: 'auto', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 3, bgcolor: 'rgba(255,255,255,0.01)' }}>
             <Table>
               <TableHead>
                 <TableRow>
-                  <TableCell sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900, borderBottom: '1px solid rgba(255,255,255,0.1)' }} width={50} />
-                  <TableCell sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900, borderBottom: '1px solid rgba(255,255,255,0.1)' }}>PROPERTY</TableCell>
-                  <TableCell sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900, borderBottom: '1px solid rgba(255,255,255,0.1)' }}>CATEGORY</TableCell>
-                  <TableCell sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900, borderBottom: '1px solid rgba(255,255,255,0.1)' }}>PRIORITY</TableCell>
-                  <TableCell sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900, borderBottom: '1px solid rgba(255,255,255,0.1)' }}>STATUS</TableCell>
-                  <TableCell sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900, borderBottom: '1px solid rgba(255,255,255,0.1)' }}>{t('common.cost_aed').toUpperCase()}</TableCell>
-                  <TableCell sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900, borderBottom: '1px solid rgba(255,255,255,0.1)' }}>SLA</TableCell>
+                  <TableCell sx={{ color: binThemeTokens.textSecondary, fontWeight: 900, borderBottom: '1px solid rgba(255,255,255,0.1)' }} width={50} />
+                  <TableCell sx={{ color: binThemeTokens.textSecondary, fontWeight: 900, borderBottom: '1px solid rgba(255,255,255,0.1)' }}>PROPERTY</TableCell>
+                  <TableCell sx={{ color: binThemeTokens.textSecondary, fontWeight: 900, borderBottom: '1px solid rgba(255,255,255,0.1)' }}>CATEGORY</TableCell>
+                  <TableCell sx={{ color: binThemeTokens.textSecondary, fontWeight: 900, borderBottom: '1px solid rgba(255,255,255,0.1)' }}>PRIORITY</TableCell>
+                  <TableCell sx={{ color: binThemeTokens.textSecondary, fontWeight: 900, borderBottom: '1px solid rgba(255,255,255,0.1)' }}>STATUS</TableCell>
+                  <TableCell sx={{ color: binThemeTokens.textSecondary, fontWeight: 900, borderBottom: '1px solid rgba(255,255,255,0.1)' }}>{t('common.cost_aed').toUpperCase()}</TableCell>
+                  <TableCell sx={{ color: binThemeTokens.textSecondary, fontWeight: 900, borderBottom: '1px solid rgba(255,255,255,0.1)' }}>SLA</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>

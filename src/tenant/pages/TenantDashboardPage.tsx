@@ -73,9 +73,9 @@ export default function TenantDashboardPage() {
         let nextContract: any = null;
 
         let unitSnap = await getDocs(query(collection(db, 'units'), where('tenantId', '==', user.uid), limit(1)));
-        if (unitSnap.empty && user.email) {
-          unitSnap = await getDocs(query(collection(db, 'units'), where('tenantEmail', '==', normalizeEmail(user.email)), limit(1)));
-        }
+        // units list rules accept tenantId / tenantUid / currentTenantId only (no email list path).
+        if (unitSnap.empty) unitSnap = await getDocs(query(collection(db, 'units'), where('tenantUid', '==', user.uid), limit(1)));
+        if (unitSnap.empty) unitSnap = await getDocs(query(collection(db, 'units'), where('currentTenantId', '==', user.uid), limit(1)));
 
         if (!unitSnap.empty) {
           nextUnit = { id: unitSnap.docs[0].id, ...unitSnap.docs[0].data() };
@@ -121,12 +121,9 @@ export default function TenantDashboardPage() {
     const ticketSources = [
       { field: 'tenantId', value: user.uid },
       { field: 'createdBy', value: user.uid },
-      { field: 'requesterId', value: user.uid },
-      { field: 'tenantEmail', value: normalizedEmail },
-      { field: 'reporterEmail', value: normalizedEmail },
-      { field: 'requesterEmail', value: normalizedEmail },
-      { field: 'unitId', value: unitData?.id || unitData?.unitId },
-      { field: 'propertyId', value: unitData?.propertyId || propertyData?.id || contractData?.propertyId },
+      { field: 'tenantUid', value: user.uid },
+      // Only filters the rules can prove are the caller's own (no unit/property-wide or requester* queries).
+      { field: 'tenantEmail', value: user.emailVerified ? normalizedEmail : '' },
     ].filter((source) => source.value);
 
     const uniqueSources = Array.from(new Map(ticketSources.map((source) => [`${source.field}:${source.value}`, source])).values());
@@ -163,9 +160,8 @@ export default function TenantDashboardPage() {
   }, [user?.uid, user?.email, unitData?.id, unitData?.unitId, unitData?.propertyId, propertyData?.id, contractData?.propertyId, tx]);
 
   useEffect(() => {
-    const qNotices = query(collection(db, 'systemLogs'), where('type', '==', 'TENANT_NOTICE'), limit(2));
-    const unsubNotices = onSnapshot(qNotices, (snap) => setNotices(snap.docs.map((d) => ({ id: d.id, ...d.data() }))), (err) => console.warn('[TenantDashboard] notices listener failed:', err));
-    return () => unsubNotices();
+    // systemLogs is staff-only in the rules; building notices live on /tenant/notices.
+    setNotices([]);
   }, []);
 
   const contractMode = useMemo(() => resolveContractMode(contractData || {}), [contractData]);
@@ -235,7 +231,7 @@ export default function TenantDashboardPage() {
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexDirection: isRTL ? 'row-reverse' : 'row', gap: 2 }}>
           <Box sx={{ textAlign: isRTL ? 'right' : 'left' }}>
             <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 4 }}>{tx('dash.terminal.tenant', 'TENANT DASHBOARD')}</Typography>
-            <Typography variant="h3" sx={{ color: '#fff', fontWeight: 950, mt: 1 }}>{tx('dash.hello', 'Hello')}, {user?.displayName?.split(' ')[0] || tx('dash.resident', 'Resident')}</Typography>
+            <Typography variant="h3" sx={{ color: binThemeTokens.textPrimary, fontWeight: 950, mt: 1 }}>{tx('dash.hello', 'Hello')}, {user?.displayName?.split(' ')[0] || tx('dash.resident', 'Resident')}</Typography>
             <Typography sx={{ color: binThemeTokens.textOnDarkMuted, mt: 1 }}>{contractProfile.tenantSummary}</Typography>
           </Box>
           <Avatar sx={{ width: 64, height: 64, bgcolor: alpha(binThemeTokens.gold, 0.12), color: binThemeTokens.gold, border: `1px solid ${alpha(binThemeTokens.gold, 0.35)}`, fontWeight: 950 }}>{user?.displayName?.charAt(0) || 'R'}</Avatar>
@@ -251,7 +247,7 @@ export default function TenantDashboardPage() {
           <Stack spacing={2.5} sx={{ textAlign: isRTL ? 'right' : 'left' }}>
             <Box>
               <Typography variant="overline" sx={{ color: binThemeTokens.gold, fontWeight: 950, letterSpacing: 2 }}>{tx('tenant.workflow.overline', 'NO-CALL SERVICE WORKFLOW')}</Typography>
-              <Typography variant="h5" sx={{ color: '#fff', fontWeight: 950 }}>{tx('tenant.workflow.title', 'Report, track, then approve or dispute with proof')}</Typography>
+              <Typography variant="h5" sx={{ color: binThemeTokens.textPrimary, fontWeight: 950 }}>{tx('tenant.workflow.title', 'Report, track, then approve or dispute with proof')}</Typography>
               <Typography sx={{ color: binThemeTokens.textOnDarkMuted, mt: 0.75 }}>{tx('tenant.workflow.desc', 'For live testing, use this strip first: submit a request, track the assigned work, then verify the evidence after completion.')}</Typography>
             </Box>
             <Grid container spacing={2}>
@@ -336,7 +332,7 @@ export default function TenantDashboardPage() {
               </Grid>
             </Paper>
 
-            <Typography variant="h6" sx={{ color: '#fff', fontWeight: 950, mt: 5, mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}><Activity size={20} color={binThemeTokens.gold} /> {tx('dash.active_tickets', 'Active Tickets')}</Typography>
+            <Typography variant="h6" sx={{ color: binThemeTokens.textPrimary, fontWeight: 950, mt: 5, mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}><Activity size={20} color={binThemeTokens.gold} /> {tx('dash.active_tickets', 'Active Tickets')}</Typography>
             {activeTickets.length ? activeTickets.map((ticket) => (
               <Paper key={ticket.id} sx={{ p: 3, mb: 2, bgcolor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 4 }}>
                 <Stack direction="row" justifyContent="space-between" gap={2}><Box><Typography sx={{ color: '#111827', fontWeight: 950 }}>{ticket.description || ticket.category || tx('dash.maintenanceRequest', 'Maintenance request')}</Typography><Typography variant="caption" sx={{ color: '#111827' }}>REF: {ticket.id.substring(0, 8)} · {ticket.category || tx('dash.general', 'General')}</Typography></Box><Chip label={String(ticket.status || 'OPEN').replaceAll('_', ' ')} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }} /></Stack>

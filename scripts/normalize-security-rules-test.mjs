@@ -11,6 +11,7 @@ const requiredImports = [
   "import './technician-assigned-list-security-rules.test.js';",
   "import './property-geo-authority-rules.test.js';",
   "import './tenant-ticket-server-authority-rules.test.js';",
+  "import './owner-dashboard-own-data-rules.test.js';",
 ];
 const obsoleteBlock = `    await assertSucceeds(updateDoc(doc(techADb, 'maintenanceTickets/ticket_3'), {
       status: 'IN_PROGRESS',
