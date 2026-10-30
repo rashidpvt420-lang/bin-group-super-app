@@ -8,9 +8,10 @@ import { SYSTEM_DRIVEN_ADDON_IDS } from '../../utils/calculateUaeQuote2026';
 
 type LocalText = { en: string; ar: string };
 type SystemItem = { key: string; label: LocalText };
-type AddOnItem = { id: string; name: LocalText; desc: LocalText; price: number; reason: LocalText; unlock?: LocalText };
+type AddOnItem = { id: string; name: LocalText; desc: LocalText; price: number; reason: LocalText; unlock?: LocalText; afterVisit?: boolean };
 
 const aed = (value: number) => `AED ${value.toLocaleString()}`;
+const AFTER_VISIT: LocalText = { en: 'Price after site visit', ar: 'السعر بعد زيارة الموقع' };
 const label = (text: LocalText, ar: boolean) => (ar ? text.ar : text.en);
 
 // Displayed prices are the engine's annual prices (monthly list x 12 where the list is monthly),
@@ -102,6 +103,9 @@ const addOns: AddOnItem[] = [
   { id: 'move_in_out_inspection', name: { en: 'Move-in / Move-out Inspection', ar: 'فحص الدخول / الخروج' }, price: addOnPrice('move_in_out_inspection'), desc: { en: 'Snagging and condition report before/after tenancy or event.', ar: 'تقرير ملاحظات وحالة قبل أو بعد الإيجار أو المناسبة.' }, reason: { en: 'Protects asset condition and lifecycle.', ar: 'يحمي حالة الأصل ودورة حياته.' } },
   { id: 'mep_support', name: { en: 'MEP Support', ar: 'دعم MEP' }, price: addOnPrice('mep_support'), desc: { en: 'Integrated mechanical, electrical and plumbing preventive support.', ar: 'دعم وقائي متكامل للميكانيكا والكهرباء والسباكة.' }, reason: { en: 'Core operational resilience layer.', ar: 'طبقة أساسية لاستمرارية التشغيل.' } },
   { id: 'waste_management', name: { en: 'Waste Management', ar: 'إدارة النفايات' }, price: addOnPrice('waste_management'), desc: { en: 'Waste room checks and disposal schedule coordination.', ar: 'فحص غرفة النفايات وتنسيق جدول التخلص.' }, reason: { en: 'Optional hygiene and disposal coordination layer.', ar: 'طبقة اختيارية للنظافة وتنسيق التخلص.' } },
+  { id: 'painting_room_refresh', afterVisit: true, name: { en: 'Painting - Room Refresh', ar: 'الدهان - تجديد الغرف' }, price: addOnPrice('painting_room_refresh'), desc: { en: 'Repaint selected rooms. Instant indicative range; fixed price confirmed after a site visit.', ar: 'إعادة دهان غرف مختارة. نطاق سعري تقديري فوري، والسعر النهائي بعد زيارة الموقع.' }, reason: { en: 'Billed separately after the visit. Not part of the annual contract price.', ar: 'يُحتسب بشكل منفصل بعد الزيارة، وليس ضمن سعر العقد السنوي.' } },
+  { id: 'painting_full_home', afterVisit: true, name: { en: 'Painting - Full Home Repaint', ar: 'الدهان - إعادة دهان المنزل بالكامل' }, price: addOnPrice('painting_full_home'), desc: { en: 'Full interior repaint with surface preparation, before/after photos and a warranty record.', ar: 'إعادة دهان داخلي كامل مع تجهيز الأسطح وصور قبل وبعد وسجل ضمان.' }, reason: { en: 'Fixed quote after a site visit; you approve it with an OTP.', ar: 'عرض سعر ثابت بعد زيارة الموقع، وتوافق عليه برمز تحقق.' } },
+  { id: 'painting_building_exterior', afterVisit: true, name: { en: 'Painting - Building Exterior', ar: 'الدهان - واجهة المبنى الخارجية' }, price: addOnPrice('painting_building_exterior'), desc: { en: 'Exterior façade painting. Needs a site visit, your OTP approval and the community/developer NOC before work starts.', ar: 'دهان الواجهة الخارجية. يتطلب زيارة موقع وموافقتك برمز تحقق وشهادة عدم ممانعة من المجتمع/المطور قبل البدء.' }, reason: { en: 'Fixed quote after a site visit. Includes before/after photos and a warranty record.', ar: 'عرض سعر ثابت بعد زيارة الموقع، مع صور قبل وبعد وسجل ضمان.' } },
 ];
 
 // Add-ons the engine charges only when a matching system or fact is present. They are never ticked by hand,
@@ -221,7 +225,7 @@ const SystemsDataStep: React.FC<{ onNext: () => void; onBack: () => void }> = ({
                               {locked && <Chip label={label(copy.required, ar)} size="small" sx={{ height: 18, fontSize: 9, color: '#ef4444', bgcolor: 'rgba(239,68,68,.12)', fontWeight: 900 }} />}
                             </Stack>
                             <Typography variant="caption" sx={{ display: 'block', color: binThemeTokens.textSecondary, lineHeight: 1.45 }}>{label(addon.desc, ar)}</Typography>
-                            <Typography variant="caption" sx={{ display: 'block', color: binThemeTokens.goldText, fontWeight: 950, mt: 0.5 }}>{aed(addon.price)} / {label(copy.annual, ar)}</Typography>
+                            <Typography variant="caption" sx={{ display: 'block', color: binThemeTokens.goldText, fontWeight: 950, mt: 0.5 }}>{addon.afterVisit ? label(AFTER_VISIT, ar) : <>{aed(addon.price)} / {label(copy.annual, ar)}</>}</Typography>
                             <Typography variant="caption" sx={{ display: 'block', color: binThemeTokens.textSecondary, lineHeight: 1.35 }}>{locked ? label(copy.requiredBecause, ar) : unavailable && addon.unlock ? label(addon.unlock, ar) : label(addon.reason, ar)}</Typography>
                           </Box>
                         </Stack>
@@ -260,7 +264,7 @@ const SystemsDataStep: React.FC<{ onNext: () => void; onBack: () => void }> = ({
                       {selectedAddOnRows.map((addon) => (
                         <Box key={addon.id} sx={{ display: 'flex', justifyContent: 'space-between', gap: 1.5, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
                           <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, fontWeight: 850, lineHeight: 1.4 }}>{label(addon.name, ar)}</Typography>
-                          <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 950, whiteSpace: 'nowrap' }}>{aed(addon.price)}</Typography>
+                          <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 950, whiteSpace: 'nowrap' }}>{addon.afterVisit ? label(AFTER_VISIT, ar) : aed(addon.price)}</Typography>
                         </Box>
                       ))}
                     </Stack>
