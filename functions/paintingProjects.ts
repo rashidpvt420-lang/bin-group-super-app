@@ -25,12 +25,32 @@ export const ownerRequestPaintingProject = onCall(
       const prop = await db().collection("properties").doc(propertyId).get();
       if (!prop.exists || prop.get("ownerId") !== uid) throw new HttpsError("permission-denied", "Not your property.");
       const measurements = request.data?.measurements ? normaliseMeasurements(request.data.measurements) : null;
-      const ref = db().collection("painting_projects").doc();
-      await ref.set({
+      const rawRequestId = request.data?.requestId;
+      const requestId = rawRequestId === undefined || rawRequestId === null ? null : String(rawRequestId);
+      if (requestId !== null && !/^[A-Za-z0-9_-]{8,64}$/.test(requestId)) {
+        throw new HttpsError("invalid-argument", "requestId must be 8-64 letters, digits, '-' or '_'.");
+      }
+      const record = {
         ownerId: uid, propertyId, scope, billing: "ONE_TIME", status: "REQUESTED",
         ownerMeasurements: measurements, createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      };
+      if (requestId === null) {
+        // Legacy clients without an idempotency key (kept for rollout compatibility).
+        const ref = db().collection("painting_projects").doc();
+        await ref.set(record);
+        return { projectId: ref.id, status: "REQUESTED" };
+      }
+      // Idempotent: one project per (owner, requestId); retries and double-clicks return the same project.
+      const ref = db().collection("painting_projects").doc(`${uid}_${requestId}`);
+      return await db().runTransaction(async (tx) => {
+        const existing = await tx.get(ref);
+        if (existing.exists) {
+          if (existing.get("ownerId") !== uid) throw new HttpsError("permission-denied", "Not your request.");
+          return { projectId: ref.id, status: existing.get("status"), idempotent: true };
+        }
+        tx.create(ref, { ...record, requestId });
+        return { projectId: ref.id, status: "REQUESTED", idempotent: false };
       });
-      return { projectId: ref.id, status: "REQUESTED" };
     } catch (e) { throw asHttps(e); }
   },
 );
