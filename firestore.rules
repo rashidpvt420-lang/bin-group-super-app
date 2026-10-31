@@ -2059,6 +2059,12 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
 
+    // Post-dated cheque register (server only; finance records bank outcomes). Owner reads own cheques.
+    match /pdc_cheques/{installmentId} {
+      allow read: if isAdmin() || (signedIn() && resource.data.get('ownerId', null) == request.auth.uid);
+      allow create, update, delete: if false;
+    }
+
     // Payout-detail change alerts (server only). Admins read all; holders read their own.
     match /payout_change_alerts/{alertId} {
       allow read: if isAdmin() || (signedIn() && resource.data.get('holderUid', null) == request.auth.uid);
@@ -2490,6 +2496,7 @@ service cloud.firestore {
           'money_statement_rate_limits',
           'payment_collection_audit',
           'payment_collection_claims',
+          'pdc_cheques',
           'payout_change_alerts',
           'ticket_reopen_events',
           'finance_fraud_alerts'
@@ -2584,6 +2591,7 @@ service cloud.firestore {
           'money_statement_rate_limits',
           'payment_collection_audit',
           'payment_collection_claims',
+          'pdc_cheques',
           'payout_change_alerts',
           'ticket_reopen_events',
           'finance_fraud_alerts'
