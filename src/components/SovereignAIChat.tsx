@@ -46,6 +46,12 @@ interface Message {
   provider?: string;
   operationalStatus?: 'healthy' | 'degraded' | 'error' | 'ready';
   proposal?: { id: string; summary: string; state: 'pending' | 'done' | 'cancelled' };
+  citations?: {
+    sources: Array<{ id: string; label: string }>;
+    citedSourceIds: string[];
+    containsEstimate: boolean;
+    labels: { en: string; ar: string };
+  };
 }
 
 // Text that looks like a request to DO something goes to the server-side proposal callable first.
@@ -410,6 +416,16 @@ export const SovereignAIChat: React.FC<SovereignAIChatProps> = ({
         live,
         provider: String(data.provider || (live ? 'unknown-provider' : 'server-fallback')),
         operationalStatus: live && data.operationalStatus === 'healthy' ? 'healthy' : 'degraded',
+        citations: data.citations && typeof data.citations === 'object' && data.citations.labels
+          ? {
+            sources: Array.isArray(data.citations.sources)
+              ? data.citations.sources.slice(0, 8).map((src: any) => ({ id: String(src?.id || ''), label: String(src?.label || '') }))
+              : [],
+            citedSourceIds: Array.isArray(data.citations.citedSourceIds) ? data.citations.citedSourceIds.map(String) : [],
+            containsEstimate: data.citations.containsEstimate === true,
+            labels: { en: String(data.citations.labels.en || ''), ar: String(data.citations.labels.ar || '') },
+          }
+          : undefined,
       }]);
     } catch (error) {
       console.warn('[SovereignAI] Live callable failed; local rules are clearly labelled:', error);
@@ -541,6 +557,18 @@ export const SovereignAIChat: React.FC<SovereignAIChatProps> = ({
                   />
                 )}
                 <Typography variant="body2" sx={{ lineHeight: 1.6, whiteSpace: 'pre-line', color: msg.type === 'user' ? 'rgba(255,255,255,0.9)' : '#FFF' }}>{msg.text}</Typography>
+                {msg.citations && (
+                  <Box sx={{ mt: 1.2, pt: 1, borderTop: '1px solid rgba(255,255,255,0.12)' }}>
+                    {msg.citations.containsEstimate && (
+                      <Chip size="small" label="ESTIMATE · تقدير" sx={{ mb: 0.8, height: 20, bgcolor: alpha('#FFB020', 0.16), color: '#FFB020', fontWeight: 950, fontSize: '0.62rem' }} />
+                    )}
+                    <Typography variant="caption" sx={{ display: 'block', color: 'rgba(255,255,255,0.7)' }}>{msg.citations.labels.en}</Typography>
+                    <Typography variant="caption" dir="rtl" sx={{ display: 'block', color: 'rgba(255,255,255,0.7)', textAlign: 'right' }}>{msg.citations.labels.ar}</Typography>
+                    {msg.citations.sources.filter((src) => msg.citations!.citedSourceIds.includes(src.id)).map((src) => (
+                      <Typography key={src.id} variant="caption" sx={{ display: 'block', color: 'rgba(255,255,255,0.45)' }}>[{src.id}] {src.label}</Typography>
+                    ))}
+                  </Box>
+                )}
                 {msg.proposal?.state === 'pending' && (
                   <Stack direction="row" spacing={1} sx={{ mt: 1.5 }}>
                     <Button size="small" variant="contained" disabled={loading} onClick={() => void decideProposal(msg.id, msg.proposal!.id, 'confirm')} sx={{ bgcolor: binThemeTokens.gold, color: '#000' }}>Confirm</Button>
