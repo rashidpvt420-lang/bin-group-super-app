@@ -10,10 +10,14 @@ import {
     TableContainer, TableHead, TableRow, TextField, Tooltip, Typography,
 } from '@mui/material';
 import { CheckCircle2, Edit, RotateCcw, UserPlus, XCircle } from 'lucide-react';
-import { collection, db, onSnapshot, query, where } from '../../lib/firebase';
+import { collection, db, limit, onSnapshot, query, where } from '../../lib/firebase';
 import { functions, httpsCallable } from '../../lib/firebase';
 import AdminPageFrame from '../../components/AdminPageFrame';
 import { binThemeTokens } from '../../theme/adminTheme';
+
+// Staff directory is paginated: each page adds STAFF_PAGE_SIZE rows, hard-capped at STAFF_MAX_ROWS.
+export const STAFF_PAGE_SIZE = 50;
+export const STAFF_MAX_ROWS = 500;
 
 const STAFF_ROLES = [
     { value: 'technician', label: 'Technician', description: 'Physical-device field technician access' },
@@ -99,6 +103,8 @@ function safeErrorMessage(error: any) {
 
 export default function StaffAccessPage() {
     const [staff, setStaff] = useState<StaffMember[]>([]);
+    const [staffPageLimit, setStaffPageLimit] = useState(STAFF_PAGE_SIZE);
+    const [staffHasMore, setStaffHasMore] = useState(false);
     const [loading, setLoading] = useState(true);
     const [dialogOpen, setDialogOpen] = useState(false);
     const [editMode, setEditMode] = useState(false);
@@ -124,9 +130,10 @@ export default function StaffAccessPage() {
     useEffect(() => {
         const staffRoleValues = STAFF_ROLES.map((role) => role.value);
         const unsubscribe = onSnapshot(
-            query(collection(db, 'users'), where('role', 'in', staffRoleValues)),
+            query(collection(db, 'users'), where('role', 'in', staffRoleValues), limit(staffPageLimit + 1)),
             (snapshot) => {
-                setStaff(snapshot.docs.map((entry) => {
+                setStaffHasMore(snapshot.docs.length > staffPageLimit);
+                setStaff(snapshot.docs.slice(0, staffPageLimit).map((entry) => {
                     const data = entry.data();
                     return {
                         id: entry.id,
@@ -147,7 +154,7 @@ export default function StaffAccessPage() {
             },
         );
         return unsubscribe;
-    }, []);
+    }, [staffPageLimit]);
 
     const handleRoleChange = (role: string) => {
         setFormData((previous) => ({
@@ -274,7 +281,7 @@ export default function StaffAccessPage() {
                             Create individual Staff/HR and Technician accounts with server-enforced module ceilings.
                         </Typography>
                         <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.35)' }}>
-                            {staff.filter((member) => member.status !== 'SUSPENDED').length} active · {staff.filter((member) => member.status === 'SUSPENDED').length} suspended
+                            {staff.filter((member) => member.status !== 'SUSPENDED').length} active · {staff.filter((member) => member.status === 'SUSPENDED').length} suspended{staffHasMore ? ' (loaded so far)' : ''}
                         </Typography>
                     </Box>
                     <Button variant="contained" startIcon={<UserPlus size={18} />} onClick={openAddDialog} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 900, px: 3 }}>
@@ -334,6 +341,18 @@ export default function StaffAccessPage() {
                                     {staff.length === 0 && <TableRow><TableCell colSpan={6} align="center" sx={{ py: 8, color: 'rgba(255,255,255,0.25)', fontWeight: 800 }}>NO STAFF ACCOUNTS FOUND</TableCell></TableRow>}
                                 </TableBody>
                             </Table>
+                            {staffHasMore && staffPageLimit < STAFF_MAX_ROWS && (
+                                <Box sx={{ p: 2, textAlign: 'center' }}>
+                                    <Button onClick={() => setStaffPageLimit((value) => Math.min(value + STAFF_PAGE_SIZE, STAFF_MAX_ROWS))} sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>
+                                        LOAD MORE STAFF
+                                    </Button>
+                                </Box>
+                            )}
+                            {staffHasMore && staffPageLimit >= STAFF_MAX_ROWS && (
+                                <Typography variant="caption" sx={{ display: 'block', p: 2, textAlign: 'center', color: 'rgba(255,255,255,0.5)' }}>
+                                    Showing the first {STAFF_MAX_ROWS} staff accounts. Use HR search for older records.
+                                </Typography>
+                            )}
                         </TableContainer>
                     )}
                 </Paper>

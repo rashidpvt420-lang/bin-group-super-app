@@ -90,8 +90,13 @@ test('admin financial reporting uses only verified canonical payment transaction
   assert.match(transactions, /collection\(db,\s*['"]payment_transactions['"]\)/);
   assert.doesNotMatch(transactions, /collection\(db,\s*['"]transactions['"]\)/);
   assert.match(transactions, /summarizeCanonicalPaymentLedger/);
-  assert.match(control, /summarizeControlCentreMoney/);
+  // Control Center money is computed by the server summary job with the generated ledger module.
+  const controlJob = read('functions/controlCenterSummary.ts');
+  assert.match(control, /system_health\/control_center_summary/);
+  assert.match(controlJob, /summarizeControlCentreMoney\(payments\.rows/);
+  assert.match(controlJob, /streamRows\("payment_transactions"\)/);
   assert.doesNotMatch(control, /rentCollectedTotal/);
+  assert.doesNotMatch(controlJob, /rentCollectedTotal/);
   assert.doesNotMatch(cfo, /collection\(db,\s*['"]payments['"]\)/);
   assert.match(cfo, /paymentVerified\s*===\s*true/);
   assert.match(cfo, /Not available/);

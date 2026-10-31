@@ -9,19 +9,27 @@ import {
     Clock, MapPin, 
     ShieldAlert, RefreshCcw, UserCheck, ExternalLink
 } from 'lucide-react';
-import { db, collection, query, where, onSnapshot } from '../../lib/firebase';
+import { db, collection, query, where, onSnapshot, limit } from '../../lib/firebase';
+import { Button } from '@mui/material';
 import { binThemeTokens } from '../../theme/adminTheme';
+
+// Technician duty grid is paginated: each page adds TECHNICIAN_PAGE_SIZE rows, capped at TECHNICIAN_MAX_ROWS.
+export const TECHNICIAN_PAGE_SIZE = 50;
+export const TECHNICIAN_MAX_ROWS = 500;
 
 export default function TechnicianDutyMonitorPage() {
     const [technicians, setTechnicians] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [loadError, setLoadError] = useState('');
+    const [pageLimit, setPageLimit] = useState(TECHNICIAN_PAGE_SIZE);
+    const [hasMore, setHasMore] = useState(false);
 
     useEffect(() => {
         // Monitor all users with role 'technician'
-        const q = query(collection(db, 'users'), where('role', '==', 'technician'));
+        const q = query(collection(db, 'users'), where('role', '==', 'technician'), limit(pageLimit + 1));
         const unsubscribe = onSnapshot(q, (snap) => {
-            setTechnicians(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+            setHasMore(snap.docs.length > pageLimit);
+            setTechnicians(snap.docs.slice(0, pageLimit).map(doc => ({ id: doc.id, ...doc.data() })));
             setLoadError('');
             setLoading(false);
         }, (error: any) => {
@@ -30,7 +38,7 @@ export default function TechnicianDutyMonitorPage() {
             setLoading(false);
         });
         return () => unsubscribe();
-    }, []);
+    }, [pageLimit]);
 
     const getStatusColor = (status: string) => {
         switch (status) {
@@ -154,6 +162,18 @@ export default function TechnicianDutyMonitorPage() {
                     </TableBody>
                 </Table>
             </TableContainer>
+            {hasMore && pageLimit < TECHNICIAN_MAX_ROWS && (
+                <Box sx={{ p: 2, textAlign: 'center' }}>
+                    <Button onClick={() => setPageLimit((value) => Math.min(value + TECHNICIAN_PAGE_SIZE, TECHNICIAN_MAX_ROWS))} sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>
+                        LOAD MORE TECHNICIANS
+                    </Button>
+                </Box>
+            )}
+            {hasMore && pageLimit >= TECHNICIAN_MAX_ROWS && (
+                <Typography variant="caption" sx={{ display: 'block', p: 2, textAlign: 'center', color: 'rgba(255,255,255,0.5)' }}>
+                    Showing the first {TECHNICIAN_MAX_ROWS} technicians.
+                </Typography>
+            )}
         </Container>
     );
 }

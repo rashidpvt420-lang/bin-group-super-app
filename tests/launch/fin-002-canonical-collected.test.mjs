@@ -132,8 +132,14 @@ test('FIN-002 admin transactions and control centre no longer read the legacy mo
   assert.doesNotMatch(transactions, /\bupdateDoc\s*\(/);
   assert.doesNotMatch(transactions, /\baddDoc\s*\(/);
 
-  assert.match(control, /collection\(db,\s*['"]payment_transactions['"]\)/);
-  assert.match(control, /summarizeControlCentreMoney/);
+  // Money is computed server-side by the summary job with the same generated ledger module.
+  const summaryJob = read('functions/controlCenterSummary.ts');
+  assert.match(summaryJob, /streamRows\("payment_transactions"\)/);
+  assert.match(summaryJob, /summarizeControlCentreMoney\(payments\.rows, contracts\.rows/);
+  assert.match(control, /system_health\/control_center_summary/);
+  for (const source of [control, summaryJob]) {
+    assert.doesNotMatch(source, /rentCollectedTotal|rentOutstandingTotal|annualRentTotal/);
+  }
   assert.doesNotMatch(control, /rentCollectedTotal/);
   assert.doesNotMatch(control, /rentOutstandingTotal/);
   assert.doesNotMatch(control, /annualRentTotal/);
