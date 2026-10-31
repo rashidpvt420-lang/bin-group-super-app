@@ -4,11 +4,12 @@ import { readFileSync } from 'node:fs';
 
 const read = (path) => readFileSync(path, 'utf8');
 
-test('public role bootstrap cannot be deadlocked by App Check before a role exists', () => {
+test('public role bootstrap enforces App Check and stays Auth-bound', () => {
   const callable = read('functions/publicRoleAssignment.ts');
 
   assert.match(callable, /export const assignPublicPortalRole = onCall\(\{/);
-  assert.match(callable, /enforceAppCheck:\s*false/);
+  assert.match(callable, /enforceAppCheck:\s*true/);
+  assert.doesNotMatch(callable, /enforceAppCheck:\s*false/);
   assert.match(callable, /if \(!request\.auth\?\.uid\)/);
   assert.match(callable, /new HttpsError\("unauthenticated"/);
   assert.match(callable, /PUBLIC_ROLES = new Set\(\["owner", "tenant", "technician", "broker"\]\)/);
