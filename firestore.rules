@@ -2042,6 +2042,10 @@ service cloud.firestore {
     match /money_statement_rate_limits/{uid} {
       allow read, create, update, delete: if false;
     }
+    // Owner performance report quota. Server (Admin SDK) only.
+    match /owner_report_rate_limits/{uid} {
+      allow read, create, update, delete: if false;
+    }
     match /payment_collection_voids/{recordId} {
       allow read: if isAdmin() || (signedIn() && resource.data.payerUid == request.auth.uid);
       allow create, update, delete: if false;
@@ -2476,6 +2480,7 @@ service cloud.firestore {
           'payment_collection_voids',
           'issued_document_registry',
           'money_statement_rate_limits',
+          'owner_report_rate_limits',
           'payment_collection_audit',
           'payment_collection_claims',
           'finance_fraud_alerts'
@@ -2568,6 +2573,7 @@ service cloud.firestore {
           'payment_collection_voids',
           'issued_document_registry',
           'money_statement_rate_limits',
+          'owner_report_rate_limits',
           'payment_collection_audit',
           'payment_collection_claims',
           'finance_fraud_alerts'

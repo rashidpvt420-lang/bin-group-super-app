@@ -36,16 +36,16 @@ export const COMPANY_SEAL_CONFIG = {
 };
 
 export const ISSUED_DOCUMENT_REGISTRY = "issued_document_registry";
-export const ISSUED_DOCUMENT_ID_PATTERN = /^(stmt|ctr)_[a-f0-9]{32}$/;
+export const ISSUED_DOCUMENT_ID_PATTERN = /^(stmt|ctr|rpt)_[a-f0-9]{32}$/;
 const SHA256_PATTERN = /^[a-f0-9]{64}$/;
 
 const SEAL_GOLD = "#B08D3C";
 const SEAL_INK = "#111827";
 const SEAL_MUTED = "#6B7280";
 
-export type IssuedDocumentType = "money_statement" | "owner_service_agreement";
+export type IssuedDocumentType = "money_statement" | "owner_service_agreement" | "owner_performance_report";
 
-export function newIssuedDocumentId(prefix: "stmt" | "ctr"): string {
+export function newIssuedDocumentId(prefix: "stmt" | "ctr" | "rpt"): string {
     // crypto.randomUUID is cryptographically random (not a guessable pseudo-random id).
     return `${prefix}_${randomUUID().replace(/-/g, "")}`;
 }
@@ -145,6 +145,7 @@ export async function registerIssuedDocument(record: IssuedDocumentRecord) {
 const PUBLIC_TYPE_LABEL: Record<string, string> = {
     money_statement: "Statement of account",
     owner_service_agreement: "Owner service agreement",
+    owner_performance_report: "Monthly owner performance report",
 };
 
 /**
