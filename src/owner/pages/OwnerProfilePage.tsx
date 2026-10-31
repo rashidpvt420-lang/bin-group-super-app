@@ -7,6 +7,7 @@ import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { pickProfileCover, pickProfilePhoto, profileCoverSx } from '../../utils/profileImages';
 import OwnerPhoneVerificationCard from '../components/OwnerPhoneVerificationCard';
+import OwnerReferralCard from '../components/OwnerReferralCard';
 
 type Notice = { type: 'success' | 'error' | 'info' | 'warning'; text: string };
 
@@ -189,6 +190,7 @@ export default function OwnerProfilePage() {
         </Grid>
 
         <OwnerPhoneVerificationCard currentPhone={phone} isRTL={isRTL} lang={lang} onVerified={handleVerifiedPhone} />
+        <OwnerReferralCard />
 
         <Stack direction={{ xs: 'column', sm: isRTL ? 'row-reverse' : 'row' }} spacing={2} sx={{ mt: 4 }}>
           <Button variant="contained" startIcon={<Save size={17} />} onClick={handleSave} disabled={saving} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, '& .MuiButton-startIcon': { mr: isRTL ? 0 : 1, ml: isRTL ? 1 : 0 } }}>{saving ? label('Verifying and saving...', 'جارٍ التحقق والحفظ...') : label('Save Verified Profile', 'حفظ الملف الموثق')}</Button>
