@@ -12,6 +12,7 @@ import { useNavigate } from 'react-router-dom';
 import { db, functions, httpsCallable } from '../../lib/firebase';
 import { binThemeTokens } from '../../theme/adminTheme';
 import OwnerInspectionEvidenceDialog from '../../components/admin/OwnerInspectionEvidenceDialog';
+import OwnerApplicationDecisionDialog, { type OwnerApplicationDecision } from '../../components/admin/OwnerApplicationDecisionDialog';
 
 type IntakeSubmission = {
     id: string;
@@ -78,6 +79,7 @@ export const IntakeVaultPage: React.FC = () => {
     const [submissions, setSubmissions] = React.useState<IntakeSubmission[]>([]);
     const [loading, setLoading] = React.useState(true);
     const [error, setError] = React.useState('');
+    const [decisionTarget, setDecisionTarget] = React.useState<{ intakeId: string; decision: OwnerApplicationDecision } | null>(null);
     const [notice, setNotice] = React.useState('');
     const [busyId, setBusyId] = React.useState('');
     const [selected, setSelected] = React.useState<IntakeSubmission | null>(null);
@@ -229,8 +231,20 @@ export const IntakeVaultPage: React.FC = () => {
                     <Box><Typography variant="overline" color={GOLD} fontWeight={950}>PROPERTIES & GPS</Typography><Stack spacing={1.5} sx={{ mt: 1 }}>{(selected.properties || []).map((property, index) => <Paper key={property.id || index} sx={{ p: 2, bgcolor: 'rgba(255,255,255,0.035)', border: '1px solid rgba(255,255,255,0.06)' }}><Stack direction="row" spacing={1.5} alignItems="flex-start"><Building2 size={18} color={GOLD} /><Box><Typography color="#FFF" fontWeight={900}>{property.address || property.area || property.emirate || `Property ${index + 1}`}</Typography><Typography variant="caption" color="rgba(255,255,255,0.5)">{property.propertyType} · {property.units || 0} units</Typography><Stack direction="row" spacing={0.7} alignItems="center" sx={{ mt: 0.8 }}><MapPinned size={13} color={property.geo?.lat && property.geo?.lng ? '#4ADE80' : '#EF4444'} /><Typography variant="caption" color={property.geo?.lat && property.geo?.lng ? '#4ADE80' : '#EF4444'}>{property.geo?.lat && property.geo?.lng ? `${property.geo.lat}, ${property.geo.lng}` : 'GPS missing'}</Typography></Stack></Box></Stack></Paper>)}</Stack></Box>
                     <Box><Typography variant="overline" color={GOLD} fontWeight={950}>PROTECTED DOCUMENTS</Typography><Stack spacing={1} sx={{ mt: 1 }}>{protectedDocumentEntries(selected).map(({ key, legacyUrl }) => <Button key={key} variant="outlined" startIcon={<FileText size={16} />} onClick={() => void openIntakeDocument(selected, key, legacyUrl)} sx={{ justifyContent: 'flex-start', color: '#FFF', borderColor: 'rgba(255,255,255,0.16)' }}>{key.replace(/([A-Z])/g, ' $1')}</Button>)}</Stack></Box>
                     {actionButton(selected)}
+                    {stageFor(selected).key !== 'ACTIVE' && <Stack direction="row" spacing={1}>
+                        <Button variant="outlined" color="warning" onClick={() => setDecisionTarget({ intakeId: selected.id, decision: 'REQUEST_CHANGES' })}>REQUEST CHANGES</Button>
+                        <Button variant="outlined" color="error" onClick={() => setDecisionTarget({ intakeId: selected.id, decision: 'REJECT' })}>REJECT</Button>
+                    </Stack>}
                 </Stack>}
             </Drawer>
+
+            <OwnerApplicationDecisionDialog
+                open={Boolean(decisionTarget)}
+                intakeId={decisionTarget?.intakeId ?? null}
+                decision={decisionTarget?.decision ?? null}
+                onClose={() => setDecisionTarget(null)}
+                onDone={(message) => { setDecisionTarget(null); setSelected(null); setNotice(message); }}
+            />
 
             <OwnerInspectionEvidenceDialog
                 open={Boolean(evidenceTarget)}
