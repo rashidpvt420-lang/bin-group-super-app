@@ -1658,4 +1658,17 @@ describe('Firestore Security Rules', () => {
     await assertFails(updateDoc(doc(ownerA, 'design_quotes/quote_owner_a'), { status: 'PAID' }));
   });
 
+  it('owner performance report quota and issued registry are server-only', async () => {
+    await seedServerDocument('owner_report_rate_limits/owner_rpt_a', { day: '2026-10-01', count: 1 });
+    await seedServerDocument('issued_document_registry/rpt_0123456789abcdef0123456789abcdef', { documentType: 'owner_performance_report', subjectUid: 'owner_rpt_a', sha256: 'a'.repeat(64) });
+    const owner = testEnv.authenticatedContext('owner_rpt_a', { role: 'owner' }).firestore();
+    const admin = testEnv.authenticatedContext('admin_rpt', { firebase: { sign_in_second_factor: 'phone' }, role: 'admin', admin: true }).firestore();
+    await assertFails(getDoc(doc(owner, 'owner_report_rate_limits/owner_rpt_a')));
+    await assertFails(setDoc(doc(owner, 'owner_report_rate_limits/owner_rpt_a'), { day: '2026-10-01', count: 0 }));
+    await assertFails(deleteDoc(doc(owner, 'owner_report_rate_limits/owner_rpt_a')));
+    await assertFails(setDoc(doc(admin, 'owner_report_rate_limits/owner_rpt_a'), { count: 0 }));
+    await assertFails(getDoc(doc(owner, 'issued_document_registry/rpt_0123456789abcdef0123456789abcdef')));
+    await assertFails(setDoc(doc(owner, 'issued_document_registry/rpt_forged000000000000000000000000'), { sha256: 'b'.repeat(64) }));
+  });
+
 });
