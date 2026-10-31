@@ -60,7 +60,7 @@ export const OWNER_ONBOARDING_TRANSITIONS: Readonly<Record<OwnerOnboardingState,
   ],
   SUBMITTED_FOR_PROPERTY_INSPECTION: [
     { to: "SITE_VISITS_SCHEDULED", actors: ADMIN },
-    // Reserved for the F-3 Admin request-changes / reject callable (not implemented yet).
+    // F-3: adminDecideOwnerApplication (REQUEST_CHANGES / REJECT, reason required).
     { to: "CHANGES_REQUESTED", actors: ADMIN },
     { to: "REJECTED", actors: ADMIN },
   ],
