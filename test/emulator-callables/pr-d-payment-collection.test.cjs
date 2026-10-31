@@ -75,3 +75,31 @@ test('void adds a separate entry with reason; the record itself is unchanged; vo
   assert.deepEqual((await db.doc(`payment_collection_records/${recordId}`).get()).data(), before);
   await expectHttpsError(call(financeVoidPaymentCollection, finance, { recordId, reason: 'entered against wrong contract' }), 'already-exists');
 });
+
+test('same cheque number for the same payer is refused under a new key and raises a fraud alert', async () => {
+  await call(financeRecordPaymentCollection, finance, base({ chequeNumber: '000777' }));
+  const otherProof = { contentType: 'application/pdf', base64: Buffer.from(`%PDF-1.4\n${'y'.repeat(200)}\n%%EOF`).toString('base64') };
+  const err = await expectHttpsError(call(financeRecordPaymentCollection, finance, base({ chequeNumber: '7 77', proof: otherProof })), 'already-exists');
+  assert.match(err.message, /duplicate/i);
+  assert.match(err.message, /تكرار/);
+  assert.equal((await db.collection('payment_collection_records').get()).size, 1);
+  const alerts = await db.collection('finance_fraud_alerts').get();
+  assert.equal(alerts.size, 1);
+  assert.equal(alerts.docs[0].data().type, 'DUPLICATE_PAYMENT_COLLECTION');
+  assert.equal(alerts.docs[0].data().claimKind, 'cheque');
+});
+
+test('the same proof file cannot back two cash records', async () => {
+  await call(financeRecordPaymentCollection, finance, base({ method: 'cash', chequeNumber: '' }));
+  await expectHttpsError(call(financeRecordPaymentCollection, finance, base({ method: 'cash', chequeNumber: '', amount: '100.00' })), 'already-exists');
+  assert.equal((await db.collection('payment_collection_records').get()).size, 1);
+  assert.equal((await db.collection('finance_fraud_alerts').get()).docs[0].data().claimKind, 'proof');
+});
+
+test('voiding releases the duplicate claims so a corrected entry can be recorded', async () => {
+  const { recordId } = await call(financeRecordPaymentCollection, finance, base({ chequeNumber: '000888' }));
+  await call(financeVoidPaymentCollection, finance, { recordId, reason: 'entered against wrong contract' });
+  const again = await call(financeRecordPaymentCollection, finance, base({ chequeNumber: '000888' }));
+  assert.notEqual(again.recordId, recordId);
+  assert.equal((await db.collection('finance_fraud_alerts').get()).size, 0);
+});
