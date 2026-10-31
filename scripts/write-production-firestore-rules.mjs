@@ -499,6 +499,10 @@ const propertyIdentityReadRule = propertyIdentityFallback.match(/allow\s+read:\s
 if (!propertyIdentityReadRule.includes("'property_identity_registry'")) {
   failures.push('property_identity_registry is not excluded from the global Admin read fallback');
 }
+const paintingBlock = matchBlock('    match /painting_projects/{projectId} {');
+if (!paintingBlock || !paintingBlock.includes('allow create, update, delete: if false;')) {
+  failures.push('painting_projects must be callable-only (browser writes denied)');
+}
 const propertyIdentityFallbackWrites = [...propertyIdentityFallback.matchAll(/allow\s+([^:;]+):\s*([^;]+);/g)]
   .filter(([, operations]) => /\b(create|update|delete|write)\b/.test(operations));
 const phase10ServerOnlyFallbackCollections = [
@@ -520,6 +524,7 @@ const phase10ServerOnlyFallbackCollections = [
   'active_contracts',
   'onboarding_leads',
   'systemMetrics',
+  'painting_projects',
 ];
 if (
   propertyIdentityFallbackWrites.length !== 2 ||

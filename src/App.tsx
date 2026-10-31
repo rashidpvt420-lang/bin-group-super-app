@@ -81,6 +81,7 @@ const GovernmentPropertyPage = lazyWithRetry(() => import('./pages/GovernmentPro
 const PropertyUnitsPage = lazyWithRetry(() => import('./pages/PropertyUnitsPage'));
 const NotificationInboxPage = lazyWithRetry(() => import('./pages/NotificationInboxPage'));
 const DesignStudioPage = lazyWithRetry(() => import('./pages/DesignStudioPage'));
+const PaintingProjectsPage = lazyWithRetry(() => import('./pages/PaintingProjectsPage'));
 const DesignRequestDetailPage = lazyWithRetry(() => import('./pages/DesignRequestDetailPage'));
 const TenantApp = lazyWithRetry(() => import('./tenant/TenantApp'));
 const TechnicianApp = lazyWithRetry(() => import('./technician/TechnicianApp'));
@@ -353,6 +354,7 @@ function AppContent() {
         <Route path="/properties/:propertyId/units" element={protectedOwnerRoute(['owner'], <PropertyUnitsPage />)} />
         <Route path="/notifications" element={protectedRoute(NOTIFICATION_ROLES, <NotificationInboxPage />)} />
         <Route path="/design-studio" element={protectedOwnerRoute(['owner', 'tenant'], <DesignStudioPage />)} />
+        <Route path="/painting" element={protectedOwnerRoute(['owner'], <PaintingProjectsPage />)} />
         <Route path="/design-studio/request/:id" element={protectedOwnerRoute(['owner', 'tenant'], <DesignRequestDetailPage />)} />
         <Route path="/invoices/:id" element={withAuth(<InvoiceDetailsPage />, { publicAuth: true, showChrome: false })} />
         <Route path="/tenant/*" element={protectedRoute(['tenant'], <TenantApp />)} />

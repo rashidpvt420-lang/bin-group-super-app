@@ -147,3 +147,4 @@ export * from "./adminOperationalMutations";
 export * from "./tenantParcelOperations";
 
 export * from "./turnoverQuoteOperations";
+export * from "./paintingProjects";

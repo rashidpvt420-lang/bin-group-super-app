@@ -191,6 +191,33 @@ describe('Firestore Security Rules', () => {
     await assertFails(deleteDoc(doc(adminDb, 'property_identity_registry/identity_hash_1')));
   });
 
+  it('painting projects are callable-only: owner reads own, Admin browser writes denied, OTPs hidden', async () => {
+    await seedServerDocument('painting_projects/pp_a', { ownerId: 'owner_a', propertyId: 'prop_a', status: 'QUOTED', quoteVersion: 1 });
+    await seedServerDocument('painting_projects/pp_a/quotes/v1', { version: 1, priceAed: 5000 });
+    await seedServerDocument('system_secrets/painting_approval_otps/otps/otp_a', { uid: 'owner_a', projectId: 'pp_a', status: 'PENDING' });
+
+    const ownerA = testEnv.authenticatedContext('owner_a', { role: 'owner' }).firestore();
+    const ownerB = testEnv.authenticatedContext('owner_b', { role: 'owner' }).firestore();
+    const adminDb = testEnv.authenticatedContext('admin_painting', { firebase: { sign_in_second_factor: 'phone' }, role: 'admin', admin: true }).firestore();
+
+    await assertSucceeds(getDoc(doc(ownerA, 'painting_projects/pp_a')));
+    await assertSucceeds(getDoc(doc(ownerA, 'painting_projects/pp_a/quotes/v1')));
+    await assertFails(getDoc(doc(ownerB, 'painting_projects/pp_a')));
+    await assertFails(getDoc(doc(ownerB, 'painting_projects/pp_a/quotes/v1')));
+    await assertSucceeds(getDoc(doc(adminDb, 'painting_projects/pp_a')));
+
+    await assertFails(updateDoc(doc(ownerA, 'painting_projects/pp_a'), { status: 'OWNER_APPROVED' }));
+    await assertFails(setDoc(doc(ownerA, 'painting_projects/forged'), { ownerId: 'owner_a', status: 'REQUESTED' }));
+    await assertFails(updateDoc(doc(adminDb, 'painting_projects/pp_a'), { status: 'WARRANTY_ACTIVE' }));
+    await assertFails(setDoc(doc(adminDb, 'painting_projects/forged_admin'), { ownerId: 'owner_a', status: 'QUOTED' }));
+    await assertFails(setDoc(doc(adminDb, 'painting_projects/pp_a/quotes/v2'), { version: 2, priceAed: 1 }));
+    await assertFails(deleteDoc(doc(adminDb, 'painting_projects/pp_a')));
+
+    await assertFails(getDoc(doc(ownerA, 'system_secrets/painting_approval_otps/otps/otp_a')));
+    await assertFails(getDoc(doc(adminDb, 'system_secrets/painting_approval_otps/otps/otp_a')));
+    await assertFails(updateDoc(doc(adminDb, 'system_secrets/painting_approval_otps/otps/otp_a'), { status: 'CONSUMED' }));
+  });
+
   it('owner profile activation fields remain server-authoritative', async () => {
     const adminDb = testEnv.authenticatedContext('admin_user', { firebase: { sign_in_second_factor: 'phone' }, admin: true }).firestore();
     await setDoc(doc(adminDb, 'owners/owner_a'), {
