@@ -7,7 +7,7 @@ import { useNavigate } from 'react-router-dom';
 import { onAuthStateChanged, sendEmailVerification, type User as FirebaseUser } from 'firebase/auth';
 import { binThemeTokens } from '../theme/binGroupTheme';
 import { useLanguage } from '@bin/shared';
-import { auth, functions, httpsCallable } from '../lib/firebase';
+import { auth, ensureCallableAppCheckToken, functions, httpsCallable } from '../lib/firebase';
 import { useRole } from '../context/RoleContext';
 import { isEmailNotVerifiedError, needsEmailVerification, verificationResendRemaining } from '../lib/emailVerificationGate';
 import {
@@ -187,6 +187,7 @@ const RoleGatewayPage: React.FC = () => {
             // Refresh before the bootstrap call so the Functions SDK has a
             // current Firebase Auth token even after a restored browser session.
             await activeUser.getIdToken(true);
+            await ensureCallableAppCheckToken();
 
             const assignRole = httpsCallable(functions, 'assignPublicPortalRole');
             try {
@@ -201,6 +202,7 @@ const RoleGatewayPage: React.FC = () => {
                 // itself has disappeared.
                 if (firstCode.includes('unauthenticated') && stillAuthenticated) {
                     await activeUser.getIdToken(true);
+                    await ensureCallableAppCheckToken();
                     await assignRole({ role: roleId });
                 } else {
                     throw firstError;

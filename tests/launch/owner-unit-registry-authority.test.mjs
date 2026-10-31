@@ -45,6 +45,8 @@ function harness() {
     db: {}, functions: {}, collection: (_, name) => ({ collection: name }),
     where: (field, op, value) => ({ field, op, value }), query: (collection, ...filters) => ({ ...collection, filters }),
     getDocs: (query) => deferred(reads, { query }),
+    LIST_PAGE_SIZE: 100,
+    fetchPage: async (query) => { const result = await deferred(reads, { query }); return { docs: result.docs, cursor: null, hasMore: false }; },
     httpsCallable: (_, name) => (payload) => deferred(calls, { name, payload }),
   };
   const module = { exports: {} };

@@ -17,7 +17,8 @@ function prepare(t) {
   const run = (name) => spawnSync(process.execPath, [path.join(root, 'scripts', name)], { cwd: directory, encoding: 'utf8' });
   // Exercise the same ordered hardening stages that touch the affected rules.
   for (const script of ['apply-ticket-rule-binding.mjs', 'harden-final-firestore-authority.mjs',
-    'harden-private-hr-authority.mjs', 'harden-private-hr-storage.mjs', 'harden-technician-live-location-authority.mjs']) {
+    'harden-private-hr-authority.mjs', 'harden-private-hr-storage.mjs', 'harden-technician-live-location-authority.mjs',
+    'harden-painting-projects-rules.mjs']) {
     const result = run(script);
     assert.equal(result.status, 0, result.stderr || result.stdout);
   }

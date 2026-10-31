@@ -61,6 +61,7 @@ const Navigation = () => {
         { text: navText('WhatsApp Triage', 'فرز واتساب'), icon: <ReceiptIcon />, path: '/ops/whatsapp-triage' },
         { text: navText('RFQ Trust Workflow', 'مسار موثوقية طلبات الأسعار'), icon: <PendingActionsIcon />, path: '/ops/rfq' },
         { text: navText('Vendor Command', 'قيادة الموردين'), icon: <PeopleIcon />, path: '/ops/vendors' },
+        { text: navText('Painting Projects', 'مشاريع الدهان'), icon: <PendingActionsIcon />, path: '/ops/painting' },
         { text: navText('PDPL Governance', 'حوكمة حماية البيانات الشخصية'), icon: <SecurityIcon />, path: '/ops/data-governance' },
         { text: tx('nav.tickets', 'Mission Logs'), icon: <ReceiptIcon />, path: '/tickets' },
         { text: navText('Dispute Queue', 'قائمة النزاعات'), icon: <PendingActionsIcon />, path: '/ops/disputes', color: '#ef4444' },

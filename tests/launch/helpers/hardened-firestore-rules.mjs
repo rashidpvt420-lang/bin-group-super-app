@@ -25,6 +25,7 @@ export const FIRESTORE_RULE_STAGES = [
   'harden-private-hr-authority.mjs',
   'harden-technician-live-location-authority.mjs',
   'harden-property-identity-registry-rules.mjs',
+  'harden-painting-projects-rules.mjs',
 ];
 
 /**
