@@ -19,7 +19,7 @@ import {
     updateProfile,
     type User,
 } from 'firebase/auth';
-import { auth, functions, httpsCallable } from '../../lib/firebase';
+import { auth, ensureCallableAppCheckToken, functions, httpsCallable } from '../../lib/firebase';
 import { useOnboardingStore } from '../../store/onboardingStore';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
@@ -286,6 +286,7 @@ export default function AccountCreationStep({ onBack, onNext, brokerUid = "" }: 
             }
             setAuthUser(auth.currentUser);
             await currentUser.getIdToken(true);
+            await ensureCallableAppCheckToken();
             const upsertProfile = httpsCallable(functions, 'upsertOwnerOnboardingProfile');
             await upsertProfile({
                 fullName: fullName || currentUser.displayName || '',
