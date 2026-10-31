@@ -53,6 +53,6 @@ test('native bridge classifies App Check attestation failures without returning 
   assert.doesNotMatch(bridge, /System\.out\.print(?:ln)?\([^\n]*token/i);
 });
 
-test('next Google Play exact-SHA release build uses versionCode 16', () => {
-  assert.match(gradle, /versionCode\s+16\b/);
+test('next Google Play exact-SHA release build uses versionCode 17', () => {
+  assert.match(gradle, /versionCode\s+17\b/);
 });
