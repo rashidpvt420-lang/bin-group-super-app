@@ -32,6 +32,37 @@ export function parseCollectedOn(value: unknown, now = new Date()): string {
   return d;
 }
 
+/** Normalised cheque number used for duplicate detection (spaces/dashes/leading zeros ignored). */
+export function normaliseChequeNumber(value: unknown): string {
+  return text(value, 40).toUpperCase().replace(/[\s-]+/g, "").replace(/^0+(?=.)/, "");
+}
+
+/**
+ * Duplicate-payment claims. One claim per (payer, cheque number) and one per proof file hash.
+ * A second record reusing either is refused and raises a finance fraud alert, so the same
+ * cheque or the same proof image can never be counted twice. A void releases the claims.
+ */
+export function duplicateClaimIds(payerUid: string, method: string, chequeNumber: string, proofHash: string): string[] {
+  const ids = [createHash("sha256").update(`proof|${proofHash}`).digest("hex").slice(0, 40)];
+  const cheque = method === "cheque" ? normaliseChequeNumber(chequeNumber) : "";
+  if (cheque) ids.push(createHash("sha256").update(`cheque|${payerUid}|${cheque}`).digest("hex").slice(0, 40));
+  return ids;
+}
+
+const DUPLICATE_MESSAGE =
+  "Possible duplicate: this cheque or proof is already recorded. Finance has been alerted. / " +
+  "احتمال تكرار: هذا الشيك أو الإثبات مسجل مسبقاً. تم تنبيه قسم المالية.";
+
+async function raiseDuplicateAlert(details: Record<string, unknown>) {
+  await admin.firestore().collection("finance_fraud_alerts").add({
+    type: "DUPLICATE_PAYMENT_COLLECTION",
+    severity: "high",
+    status: "open",
+    ...details,
+    at: FieldValue.serverTimestamp(),
+  });
+}
+
 async function loadTarget(targetType: string, targetId: string, payerUid: string) {
   const db = admin.firestore();
   const collections = targetType === "invoice" ? ["invoices"] : ["contracts", "active_contracts"];
@@ -83,6 +114,15 @@ export const financeRecordPaymentCollection = onCall({ cors: true, enforceAppChe
   if (existing.exists) return { recordId, duplicate: true };
 
   const proofHash = createHash("sha256").update(body).digest("hex");
+  const claimRefs = duplicateClaimIds(payerUid, method, chequeNumber, proofHash)
+    .map((id) => db.collection("payment_collection_claims").doc(id));
+  const alertBase = { payerUid, targetType, targetId, amount, method, actorUid: actor.uid, actorEmail: actor.email };
+  for (const snap of await db.getAll(...claimRefs)) {
+    if (snap.exists && snap.data()?.recordId !== recordId) {
+      await raiseDuplicateAlert({ ...alertBase, existingRecordId: snap.data()?.recordId || null, claimKind: snap.data()?.kind || null });
+      throw new HttpsError("already-exists", DUPLICATE_MESSAGE);
+    }
+  }
   const proofPath = `payment-collections/${payerUid}/${recordId}/proof.${ext}`;
   await admin.storage().bucket().file(proofPath).save(body, {
     resumable: false,
@@ -111,6 +151,10 @@ export const financeRecordPaymentCollection = onCall({ cors: true, enforceAppChe
   };
   try {
     await db.runTransaction(async (tx) => {
+      const claims = await Promise.all(claimRefs.map((ref) => tx.get(ref)));
+      const taken = claims.find((c) => c.exists && c.data()?.recordId !== recordId);
+      if (taken) throw new HttpsError("already-exists", DUPLICATE_MESSAGE);
+      claimRefs.forEach((ref, i) => tx.create(ref, { recordId, payerUid, kind: i === 0 ? "proof" : "cheque", createdAt: FieldValue.serverTimestamp() }));
       tx.create(recordRef, record);
       tx.create(db.collection("payment_collection_audit").doc(), {
         event: "recorded", recordId, payerUid, targetType, targetId, amount, method, actorUid: actor.uid, actorEmail: actor.email,
@@ -118,6 +162,10 @@ export const financeRecordPaymentCollection = onCall({ cors: true, enforceAppChe
       });
     });
   } catch (error: any) {
+    if (error instanceof HttpsError && error.code === "already-exists") {
+      await raiseDuplicateAlert({ ...alertBase, existingRecordId: null, claimKind: "race" });
+      throw error;
+    }
     if (String(error?.code) === "6" || /already exists/i.test(String(error?.message))) return { recordId, duplicate: true };
     throw error;
   }
@@ -140,6 +188,12 @@ export const financeVoidPaymentCollection = onCall({ cors: true, enforceAppCheck
     const v = await tx.get(voidRef);
     if (v.exists) throw new HttpsError("already-exists", "This record is already voided.");
     const payerUid = rec.data()?.payerUid;
+    const r = rec.data() || {};
+    const claimRefs = duplicateClaimIds(text(r.payerUid, 128), text(r.method, 10), text(r.chequeNumber, 40), text(r.proofHash, 64))
+      .map((id) => db.collection("payment_collection_claims").doc(id));
+    const claims = await Promise.all(claimRefs.map((ref) => tx.get(ref)));
+    // Release only this record's claims so a corrected entry can be recorded again.
+    claims.forEach((c) => { if (c.exists && c.data()?.recordId === recordId) tx.delete(c.ref); });
     tx.create(voidRef, { recordId, payerUid, reason, voidedByUid: actor.uid, voidedByEmail: actor.email, voidedAt: FieldValue.serverTimestamp() });
     tx.create(db.collection("payment_collection_audit").doc(), {
       event: "voided", recordId, payerUid, reason, actorUid: actor.uid, actorEmail: actor.email, at: FieldValue.serverTimestamp(),

@@ -2050,6 +2050,14 @@ service cloud.firestore {
       allow read: if isAdmin();
       allow create, update, delete: if false;
     }
+    // Duplicate-payment claims (server only) and the finance fraud alerts they raise.
+    match /payment_collection_claims/{claimId} {
+      allow read, create, update, delete: if false;
+    }
+    match /finance_fraud_alerts/{alertId} {
+      allow read: if isAdmin();
+      allow create, update, delete: if false;
+    }
 
     match /pilotFeedback/{feedbackId} {
       allow read: if isAdmin();
@@ -2468,7 +2476,9 @@ service cloud.firestore {
           'payment_collection_voids',
           'issued_document_registry',
           'money_statement_rate_limits',
-          'payment_collection_audit'
+          'payment_collection_audit',
+          'payment_collection_claims',
+          'finance_fraud_alerts'
         ]
       ) && hasAdminClaim();
       allow update, delete: if collection != 'tickets' && collection != 'maintenanceTickets' && !(
@@ -2558,7 +2568,9 @@ service cloud.firestore {
           'payment_collection_voids',
           'issued_document_registry',
           'money_statement_rate_limits',
-          'payment_collection_audit'
+          'payment_collection_audit',
+          'payment_collection_claims',
+          'finance_fraud_alerts'
         ]
       ) && hasAdminClaim();
     }
