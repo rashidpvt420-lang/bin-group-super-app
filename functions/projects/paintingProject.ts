@@ -101,7 +101,8 @@ export function normalisePermits(raw: any, scope: PaintingScope): PermitRequirem
     ddaMaintenancePermitRequired: b(raw?.ddaMaintenancePermitRequired),
     // Default suggestion only: exterior work usually needs a community NOC; admin can override per job.
     communityNocRequired: raw?.communityNocRequired === undefined ? scope === "EXTERIOR_FACADE" : b(raw.communityNocRequired),
-    notes: raw?.notes ? String(raw.notes).slice(0, 1000) : undefined,
+    // Omit (never undefined): Firestore rejects undefined values and Functions do not enable ignoreUndefinedProperties.
+    ...(raw?.notes ? { notes: String(raw.notes).slice(0, 1000) } : {}),
   };
 }
 
