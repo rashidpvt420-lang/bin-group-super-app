@@ -140,7 +140,7 @@ export const scheduledControlCenterSummary = onSchedule(
 );
 
 export const adminRefreshControlCenterSummary = onCall(
-  { cors: true, enforceAppCheck: true, secrets: [smtpUser, smtpPass], timeoutSeconds: 300, memory: "512MiB" },
+  { cors: true, region: "europe-west3", enforceAppCheck: true, secrets: [smtpUser, smtpPass], timeoutSeconds: 300, memory: "512MiB" },
   async (request) => {
     const token = request.auth?.token as Record<string, any> | undefined;
     if (!request.auth || !token) throw new HttpsError("unauthenticated", "Sign in required.");
