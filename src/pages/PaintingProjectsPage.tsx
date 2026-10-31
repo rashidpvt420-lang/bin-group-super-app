@@ -67,7 +67,9 @@ export default function PaintingProjectsPage() {
   };
 
   const requestProject = () => run('new', async () => {
-    await httpsCallable(functions, 'ownerRequestPaintingProject')({ propertyId, scope });
+    // Stable per submission so retries/double-clicks cannot create duplicate projects.
+    const requestId = (globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2, 12)}`).replace(/[^A-Za-z0-9_-]/g, '');
+    await httpsCallable(functions, 'ownerRequestPaintingProject')({ propertyId, scope, requestId });
     setNotice(t('Request sent. We will contact you to book a site survey.', 'تم إرسال الطلب. سنتواصل معك لحجز موعد المعاينة.'));
     await load();
   });
