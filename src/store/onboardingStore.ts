@@ -1,5 +1,37 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { createJSONStorage, persist, type StateStorage } from 'zustand/middleware';
+
+/** Owner onboarding drafts expire after 72 hours on this device. */
+export const ONBOARDING_DRAFT_TTL_MS = 72 * 60 * 60 * 1000;
+export const ONBOARDING_DRAFT_STORAGE_KEY = 'bin-group-onboarding-v3';
+
+/**
+ * localStorage wrapper that stamps each write and discards (and deletes) a
+ * draft older than ONBOARDING_DRAFT_TTL_MS, so abandoned drafts do not linger.
+ */
+export const expiringDraftStorage = (now: () => number = Date.now): StateStorage => ({
+  getItem: (name) => {
+    try {
+      const raw = globalThis.localStorage?.getItem(name);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      const savedAt = Number(parsed?.savedAt || 0);
+      if (!savedAt || now() - savedAt > ONBOARDING_DRAFT_TTL_MS || typeof parsed?.value !== 'string') {
+        globalThis.localStorage?.removeItem(name);
+        return null;
+      }
+      return parsed.value;
+    } catch {
+      return null;
+    }
+  },
+  setItem: (name, value) => {
+    try { globalThis.localStorage?.setItem(name, JSON.stringify({ savedAt: now(), value })); } catch { /* storage unavailable */ }
+  },
+  removeItem: (name) => {
+    try { globalThis.localStorage?.removeItem(name); } catch { /* storage unavailable */ }
+  },
+});
 import { calculateUaeQuote2026, resolveAssetClassIdForPropertyType, resolveMandatoryAddOns } from '../utils/calculateUaeQuote2026';
 import type { QuoteInput, QuoteOutput } from '../utils/calculateUaeQuote2026';
 
@@ -467,6 +499,7 @@ export const useOnboardingStore = create<OnboardingState>()(
     {
       name: 'bin-group-onboarding-v3',
       version: 5,
+      storage: createJSONStorage(() => expiringDraftStorage()),
       partialize: (state) => ({
         step: clampOwnerPage(state.step),
         intakeId: state.intakeId,
@@ -482,7 +515,7 @@ export const useOnboardingStore = create<OnboardingState>()(
         valuationResult: state.valuationResult,
         isContractSigned: state.isContractSigned,
         signatureName: state.signatureName,
-        contractOtpVerificationId: state.contractOtpVerificationId,
+        // contractOtpVerificationId is intentionally not persisted (session-only).
         proofDocuments: state.proofDocuments,
       }),
     },

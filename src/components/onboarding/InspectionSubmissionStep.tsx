@@ -188,6 +188,8 @@ export default function InspectionSubmissionStep({ onBack }: { onBack: () => voi
     if (!result?.intakeId || !result?.contractId || !result?.paymentId) throw new Error(copy('The server did not return the protected application references.', 'لم يُرجع الخادم مراجع الطلب المحمية.'));
     clearOwnerDocumentUploadCache(uploadCache, user.uid, effectiveIntakeId, Object.keys(documentPaths));
     await clearStagedFiles();
+    // Completed: remove the persisted owner draft from this device.
+    useOnboardingStore.persist.clearStorage();
     setSuccess(result);
   };
 
