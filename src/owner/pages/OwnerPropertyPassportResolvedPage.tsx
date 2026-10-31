@@ -7,6 +7,7 @@ import { useRole } from '../../context/RoleContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { resolvePropertyLocation } from '../../utils/propertyLocationResolver';
 import { STATUS_TONES } from '../../theme/statusColors';
+import OwnerPropertyLedgerCard from '../components/OwnerPropertyLedgerCard';
 
 const normalizeEmail = (value: unknown) => String(value || '').trim().toLowerCase();
 const compact = (values: unknown[]) => Array.from(new Set(values.map((value) => String(value || '').trim()).filter(Boolean)));
@@ -280,6 +281,8 @@ export default function OwnerPropertyPassportResolvedPage() {
                     </Grid>
 
                     <Divider sx={{ my: 3, borderColor: 'rgba(255,255,255,0.05)' }} />
+
+                    {!p.placeholder && p.propertyId && <OwnerPropertyLedgerCard propertyId={p.propertyId} />}
 
                     <Box sx={{ display: 'flex', gap: 2 }}>
                       <Button fullWidth variant="outlined" startIcon={<Download size={16} />} sx={{ borderColor: 'rgba(255,255,255,0.1)', color: '#FFF', fontWeight: 900, borderRadius: 3, py: 1.5 }}>PDF</Button>
