@@ -194,7 +194,7 @@ export default function PaymentSubmissionStep({ onBack }: PaymentSubmissionStepP
                         uploadedAt: new Date().toISOString(),
                     },
                 });
-                urls[documentType.key] = await getDownloadURL(fileRef);
+                urls[documentType.key] = storagePath;
             } catch (uploadError) {
                 if (!isAuthStorageFailure(uploadError)) throw uploadError;
 
@@ -209,9 +209,9 @@ export default function PaymentSubmissionStep({ onBack }: PaymentSubmissionStepP
                     contentType: stagedFile.type || 'application/octet-stream',
                     encodedDocument: await fileToBase64Payload(stagedFile),
                 });
-                const data = result.data as { downloadUrl?: string };
-                if (!data.downloadUrl) throw new Error(`Fallback upload failed for ${documentType.en}.`);
-                urls[documentType.key] = data.downloadUrl;
+                const data = result.data as { storagePath?: string };
+                if (!data.storagePath) throw new Error(`Fallback upload failed for ${documentType.en}.`);
+                urls[documentType.key] = data.storagePath;
             }
 
             setUploadProgress((current) => ({ ...current, [documentType.key]: 100 }));
