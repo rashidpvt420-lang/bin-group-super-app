@@ -357,6 +357,28 @@ export const getMapsAppCheckToken = async (): Promise<{ token: string }> => {
   return { token };
 };
 
+/**
+ * Sign-up callables (assignPublicPortalRole, upsertOwnerOnboardingProfile) enforce App Check.
+ * Fetch the App Check token before the call so a missing or failed attestation shows a clear
+ * retry message instead of a generic server refusal. One forced refresh is attempted.
+ */
+export const ensureCallableAppCheckToken = async (): Promise<void> => {
+  if (!appCheck) {
+    if (appCheckRequired) throw new Error('[Firebase] App Check is not initialized for sign-up.');
+    return; // local emulator / dev without App Check
+  }
+  try {
+    const first = await getAppCheckToken(appCheck, false);
+    if (String(first?.token || '').trim()) return;
+  } catch {
+    // fall through to one forced refresh
+  }
+  const refreshed = await getAppCheckToken(appCheck, true);
+  if (!String(refreshed?.token || '').trim()) {
+    throw new Error('[Firebase] App Check returned an empty sign-up token.');
+  }
+};
+
 export const storage: FirebaseStorage = getStorage(app);
 export const FUNCTIONS_REGION = 'europe-west3';
 export const functions: Functions = getFunctions(app, FUNCTIONS_REGION);
@@ -569,5 +591,8 @@ export type {
   QueryDocumentSnapshot,
   Unsubscribe,
 };
+
+export { fetchPage, LIST_PAGE_SIZE } from './pagedQuery';
+export type { Page } from './pagedQuery';
 
 export default app;

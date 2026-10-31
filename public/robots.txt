@@ -20,6 +20,7 @@ Disallow: /analytics/
 Disallow: /properties/
 Disallow: /government/
 Disallow: /design-studio
+Disallow: /painting
 Disallow: /financials
 Disallow: /calendar
 Disallow: /notifications

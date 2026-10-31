@@ -43,6 +43,7 @@ import PayrollManagementPage from './pages/financials/PayrollManagementPage';
 import TransactionsPage from './pages/financials/TransactionsPage';
 import ProfitabilityDashboardPage from './pages/financials/ProfitabilityDashboardPage';
 import { IntakeVaultPage } from './pages/admin/IntakeVaultPage';
+import PaintingProjectsAdminPage from './pages/ops/PaintingProjectsAdminPage';
 import OrphanWarRoomPage from './pages/admin/OrphanWarRoomPage';
 import DesignStudioAdminPage from './pages/admin/DesignStudioAdminPage';
 import HRManagementPage from './pages/admin/HRManagementPage';
@@ -148,6 +149,7 @@ function AppContent() {
                     <Route path="/reports/institutional" element={<ProtectedRoute adminOnly><InstitutionalReportsPanel /></ProtectedRoute>} />
                     <Route path="/ops/technicians" element={<ProtectedRoute adminOnly><TechnicianDutyMonitorPage /></ProtectedRoute>} />
                     <Route path="/vault" element={<ProtectedRoute adminOnly><IntakeVaultPage /></ProtectedRoute>} />
+                    <Route path="/ops/painting" element={<ProtectedRoute adminOnly><PaintingProjectsAdminPage /></ProtectedRoute>} />
                     <Route path="/orphans" element={<ProtectedRoute adminOnly><OrphanWarRoomPage /></ProtectedRoute>} />
                     <Route path="/onboard-property" element={<Navigate to="/vault" replace />} />
                     <Route path="/design-studio" element={<ProtectedRoute adminOnly><DesignStudioAdminPage /></ProtectedRoute>} />
