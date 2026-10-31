@@ -2,6 +2,7 @@
 // Owner referral rewards: programme OFF by default, one code per owner, new owners only, no self
 // referral, human Finance (MFA) approval tied to a real unvoided cash/cheque collection by the
 // referred owner, no approval by a party to the referral, record reuse blocked.
+// Reward is service credit only (no cash payout, no card).
 const assert = require('node:assert/strict');
 const test = require('node:test');
 const { db, lib, createUser, clearFirestore, call, expectHttpsError } = require('./_setup.cjs');
