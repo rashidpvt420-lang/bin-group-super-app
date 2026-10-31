@@ -18,14 +18,19 @@ import {
     XCircle,
     ExternalLink
 } from 'lucide-react';
-import { collection, query, onSnapshot, orderBy, limit, getDocs, where } from 'firebase/firestore';
-import { db } from '../lib/firebase';
+import { collection, query, onSnapshot, orderBy, limit, doc } from 'firebase/firestore';
+import { db, functions, httpsCallable } from '../lib/firebase';
 import { formatAedLedgerMoney } from '../lib/canonicalPaymentLedger.mjs';
-import { summarizeControlCentreMoney } from '../lib/controlCentreMoney.mjs';
 import { useLanguage } from '@bin/shared';
 import { useNavigate } from 'react-router-dom';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
+
+// Metrics and health come from one server-written document (functions/controlCenterSummary.ts).
+export const CONTROL_CENTER_SUMMARY_DOC = 'system_health/control_center_summary';
+export const CONTROL_CENTER_STALE_MS = 45 * 60 * 1000;
+type HealthCheck = { status: string; latencyMs: number | null; detail: string; checkedAt?: string };
+const UNKNOWN_HEALTH: HealthCheck = { status: 'unknown', latencyMs: null, detail: 'No summary yet' };
 
 export default function ProductionControlCenter() {
     const { lang } = useLanguage();
@@ -43,65 +48,63 @@ export default function ProductionControlCenter() {
         openTickets: 0
     });
     const [latestBatches, setLatestBatches] = useState<any[]>([]);
-    const [systemHealth] = useState({
-        sendGrid: 'operational',
-        functions: 'operational',
-        firestore: 'operational'
-    });
+    const [health, setHealth] = useState<Record<string, HealthCheck>>({});
+    const [generatedAtIso, setGeneratedAtIso] = useState<string | null>(null);
+    const [summaryError, setSummaryError] = useState('');
+    const [truncated, setTruncated] = useState(false);
+    const [refreshing, setRefreshing] = useState(false);
 
     useEffect(() => {
-        const fetchMetrics = async () => {
-            try {
-                const passportSnap = await getDocs(collection(db, 'propertyPassports'));
-                let units = 0, properties = 0;
-                passportSnap.forEach(doc => {
-                    const data = doc.data();
-                    units += (data.totalUnits || 0);
-                    properties++;
-                });
-
-                const paymentSnap = await getDocs(collection(db, 'payment_transactions'));
-                const contractSnap = await getDocs(collection(db, 'contracts'));
-                const money = summarizeControlCentreMoney(
-                    paymentSnap.docs.map((row) => row.data()),
-                    contractSnap.docs.map((row) => row.data()),
-                );
-
-                // Invitations
-                const failedInviteSnap = await getDocs(query(collection(db, 'tenant_invitations'), where('status', '==', 'failed')));
-                
-                // Tenants
-                const tenantSnap = await getDocs(query(collection(db, 'users'), where('role', '==', 'tenant')));
-
-                // Tickets
-                const ticketSnap = await getDocs(query(collection(db, 'maintenanceTickets'), where('status', 'not-in', ['COMPLETED', 'RESOLVED', 'CLOSED'])));
-
+        const unsubSummary = onSnapshot(
+            doc(db, CONTROL_CENTER_SUMMARY_DOC),
+            (snap) => {
+                const data: any = snap.data() || {};
+                const m = data.metrics || {};
                 setMetrics({
-                    totalTenants: tenantSnap.size,
-                    totalUnits: units,
-                    totalProperties: properties,
-                    totalAnnualRent: money.projectedAnnualRent,
-                    totalCollected: money.collected,
-                    totalOutstanding: money.outstanding,
-                    failedInvites: failedInviteSnap.size,
-                    openTickets: ticketSnap.size
+                    totalTenants: Number(m.totalTenants || 0),
+                    totalUnits: Number(m.totalUnits || 0),
+                    totalProperties: Number(m.totalProperties || 0),
+                    totalAnnualRent: m.totalAnnualRent ?? null,
+                    totalCollected: m.totalCollected ?? null,
+                    totalOutstanding: m.totalOutstanding ?? null,
+                    failedInvites: Number(m.failedInvites || 0),
+                    openTickets: Number(m.openTickets || 0),
                 });
-            } catch (err) {
-                console.error("Metrics fetch error:", err);
-            }
-        };
+                setTruncated(m.paymentsTruncated === true || m.contractsTruncated === true);
+                setHealth(data.health || {});
+                setGeneratedAtIso(data.generatedAtIso || null);
+                setSummaryError(snap.exists() ? '' : (isAr ? 'لم يتم إنشاء الملخص بعد.' : 'The control-centre summary has not been generated yet.'));
+            },
+            (err) => setSummaryError(err?.message || 'Unable to load control-centre summary.'),
+        );
 
         const unsubBatches = onSnapshot(
             query(collection(db, 'tenant_import_batches'), orderBy('createdAt', 'desc'), limit(5)),
             (snap) => {
-                setLatestBatches(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+                setLatestBatches(snap.docs.map(row => ({ id: row.id, ...row.data() })));
                 setLoading(false);
-            }
+            },
+            () => setLoading(false),
         );
+        return () => { unsubSummary(); unsubBatches(); };
+    }, [isAr]);
 
-        fetchMetrics();
-        return () => unsubBatches();
-    }, []);
+    const stale = !generatedAtIso || Date.now() - Date.parse(generatedAtIso) > CONTROL_CENTER_STALE_MS;
+    const functionsHealth: HealthCheck = stale
+        ? { status: 'degraded', latencyMs: null, detail: generatedAtIso ? `Summary job last ran ${new Date(generatedAtIso).toLocaleString()}` : 'Summary job has not run' }
+        : (health.functions || UNKNOWN_HEALTH);
+
+    const refreshSummary = async () => {
+        setRefreshing(true);
+        setSummaryError('');
+        try {
+            await httpsCallable(functions, 'adminRefreshControlCenterSummary')({});
+        } catch (err: any) {
+            setSummaryError(err?.message || 'Refresh failed.');
+        } finally {
+            setRefreshing(false);
+        }
+    };
 
     const handleExportOperationsReport = () => {
         const doc = new jsPDF();
@@ -165,21 +168,28 @@ export default function ProductionControlCenter() {
                     <Button 
                         startIcon={<RefreshCcw size={18} />}
                         sx={{ bgcolor: '#DAA520', color: '#000', fontWeight: 900, borderRadius: 2, px: 3 }}
-                        onClick={() => window.location.reload()}
+                        onClick={refreshSummary}
+                        disabled={refreshing}
                     >
-                        SYSTEM REFRESH
+                        {refreshing ? 'REFRESHING…' : 'SYSTEM REFRESH'}
                     </Button>
                 </Stack>
             </Box>
 
+            {summaryError && <Alert severity="warning" sx={{ mb: 3 }}>{summaryError}</Alert>}
+            {truncated && <Alert severity="info" sx={{ mb: 3 }}>Money totals hit the server scan cap; affected totals show as unavailable.</Alert>}
+            <Typography variant="caption" sx={{ display: 'block', mb: 2, color: stale ? '#ef4444' : 'rgba(255,255,255,0.5)' }}>
+                {generatedAtIso ? `Summary generated ${new Date(generatedAtIso).toLocaleString()}${stale ? ' (stale)' : ''}` : 'No summary generated yet'}
+            </Typography>
             {/* SYSTEM HEALTH GRID */}
             <Grid container spacing={3} sx={{ mb: 6 }}>
                 {[
-                    { label: 'SendGrid SMTP', status: systemHealth.sendGrid, icon: <Mail size={20} /> },
-                    { label: 'Cloud Functions', status: systemHealth.functions, icon: <Activity size={20} /> },
-                    { label: 'Firestore DB', status: systemHealth.firestore, icon: <Shield size={20} /> }
+                    { label: 'SendGrid SMTP', check: health.smtp || UNKNOWN_HEALTH, icon: <Mail size={20} /> },
+                    { label: 'Mail queue (24h)', check: health.mailQueue || UNKNOWN_HEALTH, icon: <Mail size={20} /> },
+                    { label: 'Cloud Functions', check: functionsHealth, icon: <Activity size={20} /> },
+                    { label: 'Firestore DB', check: health.firestore || UNKNOWN_HEALTH, icon: <Shield size={20} /> }
                 ].map((sys, i) => (
-                    <Grid item xs={12} md={4} key={i}>
+                    <Grid item xs={12} md={3} key={i}>
                         <Card sx={{ bgcolor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 4 }}>
                             <CardContent sx={{ p: 3, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                                 <Stack direction="row" spacing={2} alignItems="center">
@@ -188,15 +198,15 @@ export default function ProductionControlCenter() {
                                     </Box>
                                     <Box>
                                         <Typography sx={{ color: '#fff', fontWeight: 800 }}>{sys.label}</Typography>
-                                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 700 }}>Version 2.4.1 (Stable)</Typography>
+                                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 700 }}>{sys.check.detail}{sys.check.latencyMs != null ? ` · ${sys.check.latencyMs} ms` : ''}</Typography>
                                     </Box>
                                 </Stack>
                                 <Chip 
-                                    label={sys.status.toUpperCase()} 
+                                    label={String(sys.check.status).replace(/_/g, ' ').toUpperCase()} 
                                     size="small" 
                                     sx={{ 
-                                        bgcolor: sys.status === 'operational' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)', 
-                                        color: sys.status === 'operational' ? '#10b981' : '#ef4444',
+                                        bgcolor: sys.check.status === 'operational' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)', 
+                                        color: sys.check.status === 'operational' ? '#10b981' : '#ef4444',
                                         fontWeight: 900
                                     }} 
                                 />
