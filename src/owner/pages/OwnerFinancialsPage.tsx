@@ -16,6 +16,7 @@ import { useRole } from '../../context/RoleContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { useOwnerFinancialTruthData } from '../hooks/useOwnerFinancialTruthData';
+import OwnerPdcRegisterCard from '../components/OwnerPdcRegisterCard';
 
 const MANAGEMENT_FEE_RATE = 0.05;
 
@@ -135,6 +136,8 @@ export default function OwnerFinancialsPage() {
             {visibleError && (
                 <Alert severity="warning" sx={{ mb: 3 }}>{visibleError}</Alert>
             )}
+
+            <OwnerPdcRegisterCard />
 
             <Box sx={{ mb: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
                 <Box>

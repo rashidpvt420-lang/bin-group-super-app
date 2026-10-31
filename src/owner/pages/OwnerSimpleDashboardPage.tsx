@@ -2,6 +2,7 @@ import HomeQuickLinks, { type HomeQuickLink } from '../../components/HomeQuickLi
 import SuggestionBoxCard from '../../components/SuggestionBoxCard';
 import PaymentCollectionRecordsCard from '../../components/PaymentCollectionRecordsCard';
 import MoneyStatementDownload from '../../components/MoneyStatementDownload';
+import OwnerPerformanceReportCard from '../components/OwnerPerformanceReportCard';
 import { Box, Button, Stack } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '@bin/shared';
@@ -77,6 +78,7 @@ export default function OwnerSimpleDashboardPage() {
         <SuggestionBoxCard role="owner" />
         <PaymentCollectionRecordsCard />
         <MoneyStatementDownload />
+        <OwnerPerformanceReportCard />
 
         <HomeQuickLinks testId="owner-home-quick-links" titleEn="Your tools" titleAr="أدواتك" links={OWNER_HOME_LINKS} />
         <UiCard testId="owner-home-insights">

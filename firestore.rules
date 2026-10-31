@@ -2076,6 +2076,10 @@ service cloud.firestore {
     match /money_statement_rate_limits/{uid} {
       allow read, create, update, delete: if false;
     }
+    // Owner performance report quota. Server (Admin SDK) only.
+    match /owner_report_rate_limits/{uid} {
+      allow read, create, update, delete: if false;
+    }
     match /payment_collection_voids/{recordId} {
       allow read: if isAdmin() || (signedIn() && resource.data.payerUid == request.auth.uid);
       allow create, update, delete: if false;
@@ -2090,6 +2094,24 @@ service cloud.firestore {
     }
     match /finance_fraud_alerts/{alertId} {
       allow read: if isAdmin();
+      allow create, update, delete: if false;
+    }
+
+    // Post-dated cheque register (server only; finance records bank outcomes). Owner reads own cheques.
+    match /pdc_cheques/{installmentId} {
+      allow read: if isAdmin() || (signedIn() && resource.data.get('ownerId', null) == request.auth.uid);
+      allow create, update, delete: if false;
+    }
+
+    // Payout-detail change alerts (server only). Admins read all; holders read their own.
+    match /payout_change_alerts/{alertId} {
+      allow read: if isAdmin() || (signedIn() && resource.data.get('holderUid', null) == request.auth.uid);
+      allow create, update, delete: if false;
+    }
+
+    // Limited ticket reopen events (server only, capped and audited). Tenants read their own.
+    match /ticket_reopen_events/{eventId} {
+      allow read: if isAdmin() || (signedIn() && resource.data.get('tenantId', null) == request.auth.uid);
       allow create, update, delete: if false;
     }
 
@@ -2527,8 +2549,12 @@ service cloud.firestore {
           'payment_collection_voids',
           'issued_document_registry',
           'money_statement_rate_limits',
+          'owner_report_rate_limits',
           'payment_collection_audit',
           'payment_collection_claims',
+          'pdc_cheques',
+          'payout_change_alerts',
+          'ticket_reopen_events',
           'finance_fraud_alerts'
         ]
       ) && hasAdminClaim();
@@ -2626,8 +2652,12 @@ service cloud.firestore {
           'payment_collection_voids',
           'issued_document_registry',
           'money_statement_rate_limits',
+          'owner_report_rate_limits',
           'payment_collection_audit',
           'payment_collection_claims',
+          'pdc_cheques',
+          'payout_change_alerts',
+          'ticket_reopen_events',
           'finance_fraud_alerts'
         ]
       ) && hasAdminClaim();
