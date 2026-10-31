@@ -24,6 +24,7 @@ export { onLeaseRenewalDeclinedMarkVacating, onMoveOutInspectionMarkVacating, ma
 export { notifyBrokersOfNewVacancy } from './brokerVacancyAlerts';
 export { ownerInviteTenantToUnit, ownerListTenantInvitations } from './ownerTenantInvites';
 export { getOwnerKpis } from './ownerKpis';
+export { financeRecordPdcStatus, getPdcRegister } from './pdcRegister';
 export { onOwnerBankAccountChanged, onBrokerPayoutDetailsChanged } from './payoutChangeAlerts';
 export { reopenMaintenanceTicket } from './ticketReopen';
 export { getOwnerPropertyLedger } from './ownerPropertyLedger';
