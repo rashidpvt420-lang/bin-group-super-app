@@ -2059,6 +2059,12 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
 
+    // Limited ticket reopen events (server only, capped and audited). Tenants read their own.
+    match /ticket_reopen_events/{eventId} {
+      allow read: if isAdmin() || (signedIn() && resource.data.get('tenantId', null) == request.auth.uid);
+      allow create, update, delete: if false;
+    }
+
     match /pilotFeedback/{feedbackId} {
       allow read: if isAdmin();
       allow create: if signedIn() && request.resource.data.get('status', null) == 'new';
@@ -2478,6 +2484,7 @@ service cloud.firestore {
           'money_statement_rate_limits',
           'payment_collection_audit',
           'payment_collection_claims',
+          'ticket_reopen_events',
           'finance_fraud_alerts'
         ]
       ) && hasAdminClaim();
@@ -2570,6 +2577,7 @@ service cloud.firestore {
           'money_statement_rate_limits',
           'payment_collection_audit',
           'payment_collection_claims',
+          'ticket_reopen_events',
           'finance_fraud_alerts'
         ]
       ) && hasAdminClaim();

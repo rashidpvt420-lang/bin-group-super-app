@@ -24,5 +24,6 @@ export { onLeaseRenewalDeclinedMarkVacating, onMoveOutInspectionMarkVacating, ma
 export { notifyBrokersOfNewVacancy } from './brokerVacancyAlerts';
 export { ownerInviteTenantToUnit, ownerListTenantInvitations } from './ownerTenantInvites';
 export { getOwnerKpis } from './ownerKpis';
+export { reopenMaintenanceTicket } from './ticketReopen';
 export { getOwnerPropertyLedger } from './ownerPropertyLedger';
 export { adminSetDesignPriceList } from './designPriceList';
