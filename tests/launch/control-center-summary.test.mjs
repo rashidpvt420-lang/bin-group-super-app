@@ -25,7 +25,7 @@ test('summary job is scheduled, App Check + MFA gated on refresh, and writes the
   const src = read('functions/controlCenterSummary.ts');
   assert.match(src, /onSchedule\(\s*\{ schedule: "every 15 minutes"/);
   assert.match(src, /system_health\/control_center_summary/);
-  assert.match(src, /enforceAppCheck: true/);
+  assert.match(src, /adminRefreshControlCenterSummary = onCall\(\s*\{[^}]*region: "europe-west3"[^}]*enforceAppCheck: true/s);
   assert.match(src, /requirePrivilegedMfaSession\(request\.auth\)/);
   assert.match(src, /\.count\(\)\.get\(\)/);
   assert.match(src, /transport\.verify\(\)/);
