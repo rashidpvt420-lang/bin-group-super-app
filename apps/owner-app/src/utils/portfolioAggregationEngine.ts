@@ -48,21 +48,26 @@ export function getHistoricalContextForProperty(portfolio: PortfolioData, proper
     return {
         propertyId,
         ownerId: property.ownerId,
+        // Unknown property facts stay null; do not invent size, grade, type or emirate.
         propertyDetails: {
-            sqft: property.builtUpAreaSqFt || property.sqft || 1500,
-            grade: property.grade || 'A',
-            propertyType: property.propertyType || 'RESIDENTIAL',
-            emirate: property.emirate || 'DUBAI'
+            sqft: Number(property.builtUpAreaSqFt || property.sqft) > 0 ? Number(property.builtUpAreaSqFt || property.sqft) : null,
+            grade: property.grade || null,
+            propertyType: property.propertyType || null,
+            emirate: property.emirate || null
         },
         workOrderHistory: portfolio.tickets
             .filter(t => t.propertyId === propertyId)
             .map(t => ({
                 ticketId: t.id,
-                createdAt: t.createdAt?.toDate ? t.createdAt.toDate() : new Date(t.createdAt),
-                category: t.trade || 'GENERAL',
-                cost: t.costAllocation || 0,
+                propertyId,
+                createdAt: t.createdAt?.toDate ? t.createdAt.toDate() : (t.createdAt || null),
+                completedAt: t.completedAt?.toDate ? t.completedAt.toDate() : (t.completedAt || null),
+                dueAt: t.dueAt?.toDate ? t.dueAt.toDate() : (t.dueAt || t.slaDueAt || null),
+                status: t.status || t.ticketStatus || '',
+                category: t.category || t.issueType || t.trade || 'GENERAL',
+                cost: Number(t.actualCost || t.approvedCost || t.costAllocation || 0),
                 trade: t.trade || 'GENERAL',
-                priority: t.priority || 'OPEN'
+                priority: t.priority || t.severity || 'NORMAL'
             })),
         financialHistory: portfolio.transactions
             .filter(tx => tx.propertyId === propertyId)

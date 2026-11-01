@@ -5,7 +5,7 @@ import {
 } from '@mui/material';
 import { 
     Info, ShieldAlert, CheckCircle, Zap, 
-    ArrowRight, AlertTriangle, TrendingDown 
+    ArrowRight, AlertTriangle 
 } from 'lucide-react';
 import { binThemeTokens } from '../theme/binGroupTheme';
 import { MissionGuidancePayload } from '../utils/predictiveIntelligence';
@@ -278,25 +278,25 @@ export default function MissionGuidanceFeed({ propertyId, intel, onActionSuccess
                 )}
             </Stack>
 
-            {/* Asset Resilience Context Footer */}
+            {/* Evidence status footer — recurrence is not a failure prediction. */}
             <Paper sx={{ mt: 4, p: 3, bgcolor: alpha(binThemeTokens.graphite, 0.5), borderRadius: 4, border: `1px solid ${alpha(binThemeTokens.gold, 0.1)}` }}>
-                <Stack direction="row" spacing={3} divider={<Divider orientation="vertical" flexItem sx={{ borderColor: alpha(binThemeTokens.gold, 0.1) }} />}>
+                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={3} divider={<Divider orientation="vertical" flexItem sx={{ borderColor: alpha(binThemeTokens.gold, 0.1) }} />}>
                     <Box>
                         <Stack direction="row" spacing={1} alignItems="center">
-                            <TrendingDown size={14} color={binThemeTokens.danger} />
-                            <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, fontWeight: 900, letterSpacing: 1 }}>{t('tech.decay_label')}</Typography>
+                            <ShieldAlert size={14} color={binThemeTokens.gold} />
+                            <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, fontWeight: 900, letterSpacing: 1 }}>EVIDENCE STATUS</Typography>
                         </Stack>
                         <Typography variant="h6" fontWeight={900} sx={{ color: binThemeTokens.textPrimary }}>
-                            -{intel.assetResilience.predictedDecay12Months}%
+                            {intel.assetResilience.evidenceStatus.replace(/_/g, ' ')}
                         </Typography>
                     </Box>
                     <Box>
                         <Stack direction="row" spacing={1} alignItems="center">
                             <Zap size={14} color={binThemeTokens.gold} />
-                            <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, fontWeight: 900, letterSpacing: 1 }}>{t('tech.risk_vector')}</Typography>
+                            <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, fontWeight: 900, letterSpacing: 1 }}>RECURRENT WORK-ORDER CATEGORY</Typography>
                         </Stack>
                         <Typography variant="h6" fontWeight={900} sx={{ color: binThemeTokens.textPrimary }}>
-                            {intel.assetResilience.criticalFailureWindows[0]?.assetCategory} {t('tech.surge')}
+                            {intel.assetResilience.criticalFailureWindows[0]?.assetCategory || 'No recurring pattern'}
                         </Typography>
                     </Box>
                     <Box sx={{ flexGrow: 1, textAlign: isRTL ? 'left' : 'right', display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>

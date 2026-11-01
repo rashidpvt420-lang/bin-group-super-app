@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import {
   Alert, Box, Grid, Paper, Stack, Typography, CircularProgress,
-  alpha, Chip, LinearProgress, Button, Divider,
+  alpha, Chip, Button, Divider,
 } from '@mui/material';
 import {
   Sparkles, Brain, TrendingUp, Shield, Zap, AlertTriangle,
@@ -13,7 +13,7 @@ import { useRole } from '../../context/RoleContext';
 import { useAI } from '../../context/AIContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
-import { db, collection, query, where, onSnapshot } from '../../lib/firebase';
+import { db, collection, query, where, onSnapshot, limit } from '../../lib/firebase';
 import {
   getPropertyIntelligenceProfile,
   summarizePortfolioIntelligence,
@@ -23,6 +23,9 @@ import {
   getTruthHealthBand,
 } from '../../utils/propertyTruthIntelligence';
 import { generatePredictiveIntelligence } from '../../utils/predictiveIntelligence';
+import { useOwnerPropertyPassports } from '../utils/useOwnerPropertyPassports';
+import PropertyOperationsIntelligencePanel from '../../components/PropertyOperationsIntelligencePanel';
+import { buildPropertyOperationsSummary } from '../../utils/propertyOperationsIntelligence';
 
 const gold = binThemeTokens.gold;
 const CARD = 'rgba(15, 23, 42, 0.42)';
@@ -156,20 +159,29 @@ export default function OwnerAIIntelligencePage() {
   const [loadError, setLoadError] = useState('');
   const [refreshing, setRefreshing] = useState(false);
   const [properties, setProperties] = useState<any[]>([]);
-  const [passports, setPassports] = useState<any[]>([]);
+  const { passports, loading: passportsLoading, error: passportSourceError } = useOwnerPropertyPassports(user);
+  const [tickets, setTickets] = useState<any[]>([]);
+  const [invoices, setInvoices] = useState<any[]>([]);
+  const [ticketSourceError, setTicketSourceError] = useState('');
+  const [invoiceSourceError, setInvoiceSourceError] = useState('');
   const [predictive, setPredictive] = useState<any>(null);
 
   useEffect(() => {
-    if (!user?.uid) return;
+    if (!user?.uid) {
+      setLoading(false);
+      setLoadError('Authenticated Owner identity is unavailable. Reload the portal and try again.');
+      return undefined;
+    }
 
-    // Owner intelligence is identity-bound. Query the immutable ownerId field
-    // that Firestore can prove from request.auth.uid; do not depend on mailbox
-    // casing or email_verified state for launch-critical portfolio reads.
+    // Owner intelligence is identity-bound. Every source below is queried
+    // against the authenticated Owner UID; the panel never loads portfolio-wide
+    // collections or another customer's records.
     const unsubProps = onSnapshot(
       query(collection(db, 'properties'), where('ownerId', '==', user.uid)),
       (snap) => {
         setProperties(snap.docs.map(d => ({ id: d.id, ...d.data() })));
         setLoadError('');
+        setLoading(false);
       },
       (error: any) => {
         console.error('[OwnerAI] property listener failed:', error);
@@ -177,80 +189,131 @@ export default function OwnerAIIntelligencePage() {
         setLoading(false);
       }
     );
-    const unsubPassports = onSnapshot(
-      query(collection(db, 'propertyPassports'), where('ownerId', '==', user.uid)),
+    // Legacy maintenance records are addressed through either ownerId or
+    // ownerUid. Split the 250-row snapshot budget between both identity keys
+    // and merge by document ID to prevent duplicate ticket counts.
+    const ticketBuckets = new Map<string, any[]>();
+    const ticketFailures = new Set<string>();
+    const publishTickets = () => {
+      const merged = new Map<string, any>();
+      ticketBuckets.forEach((rows) => rows.forEach((row) => {
+        if (!merged.has(row.id)) merged.set(row.id, row);
+      }));
+      setTickets([...merged.values()]);
+      setTicketSourceError(ticketFailures.size
+        ? 'One or more maintenance history sources are unavailable; work-order counts are partial.'
+        : '');
+    };
+    const subscribeOwnerTickets = (field: 'ownerId' | 'ownerUid') => onSnapshot(
+      query(collection(db, 'maintenanceTickets'), where(field, '==', user.uid), limit(125)),
       (snap) => {
-        setPassports(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-        setLoadError('');
-        setLoading(false);
+        ticketBuckets.set(field, snap.docs.map(d => ({ id: d.id, ...d.data() })));
+        ticketFailures.delete(field);
+        publishTickets();
       },
       (error: any) => {
-        console.error('[OwnerAI] passport listener failed:', error);
-        setLoadError(error?.message || 'Property passport intelligence could not be loaded.');
-        setLoading(false);
+        console.error(`[OwnerAI] ${field} work-order listener failed:`, error);
+        ticketBuckets.set(field, []);
+        ticketFailures.add(field);
+        publishTickets();
+      }
+    );
+    const unsubTicketsByOwnerId = subscribeOwnerTickets('ownerId');
+    const unsubTicketsByOwnerUid = subscribeOwnerTickets('ownerUid');
+    const unsubInvoices = onSnapshot(
+      query(collection(db, 'invoices'), where('ownerUid', '==', user.uid), limit(100)),
+      (snap) => {
+        setInvoices(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+        setInvoiceSourceError('');
+      },
+      (error: any) => {
+        console.error('[OwnerAI] owner invoice listener failed:', error);
+        setInvoices([]);
+        setInvoiceSourceError('Paid / verified invoice totals are unavailable; do not interpret them as zero.');
       }
     );
 
-    return () => { unsubProps(); unsubPassports(); };
+    return () => { unsubProps(); unsubTicketsByOwnerId(); unsubTicketsByOwnerUid(); unsubInvoices(); };
   }, [user?.uid]);
 
   const buildPredictive = useCallback(async (props: any[], pass: any[]) => {
-    if (!props.length || !user?.email) return;
+    if (!props.length || !user?.uid) return;
     setRefreshing(true);
     try {
-      const first = props[0];
-      const passport = pass.find(p => p.propertyId === first.id) || pass[0] || {};
+      const passportHistory = pass.flatMap((passport) => {
+        const propertyId = String(passport.propertyId || passport.id || '').trim();
+        return (Array.isArray(passport.workOrders) ? passport.workOrders : []).map((workOrder: any) => ({
+          ...workOrder,
+          propertyId: workOrder.propertyId || propertyId,
+        }));
+      });
+      const liveHistory = tickets.map((ticket: any) => ({
+        ticketId: String(ticket.id || ticket.ticketId || ''),
+        propertyId: String(ticket.propertyId || ''),
+        createdAt: ticket.createdAt || ticket.reportedAt || null,
+        completedAt: ticket.completedAt || ticket.resolvedAt || null,
+        category: ticket.category || ticket.issueType || ticket.serviceType || 'GENERAL',
+        cost: Number(ticket.actualCost || ticket.approvedCost || 0),
+        trade: ticket.trade || ticket.category || 'GENERAL',
+        priority: ticket.priority || ticket.severity || 'NORMAL',
+        status: ticket.status || ticket.ticketStatus || '',
+      }));
+      const uniqueHistory = new Map<string, any>();
+      [...passportHistory, ...liveHistory].forEach((row: any, index: number) => {
+        const key = String(row.ticketId || row.id || `${row.propertyId || 'unknown'}-${row.category || row.trade || 'general'}-${row.createdAt || index}`);
+        if (!uniqueHistory.has(key)) uniqueHistory.set(key, row);
+      });
       const result = await generatePredictiveIntelligence({
-        propertyId: first.id,
-        ownerId: user.email,
-        workOrderHistory: passport.workOrders || [],
-        financialHistory: passport.financials || [],
-        // N-35: pass only recorded property facts; never invent size, grade, type or emirate.
-        propertyDetails: {
-          sqft: Number(first.sqft) > 0 ? Number(first.sqft) : null,
-          grade: first.grade || null,
-          propertyType: first.propertyType || null,
-          emirate: first.emirate || null,
-        },
+        propertyId: 'OWNER_PORTFOLIO',
+        ownerId: user.uid,
+        workOrderHistory: [...uniqueHistory.values()],
+        financialHistory: [],
+        // Portfolio-level recurrence only. Health scoring and cash-flow forecasting
+        // remain unavailable until validated asset condition and dated cash data exist.
+        propertyDetails: { sqft: null, grade: null, propertyType: null, emirate: null },
       });
       setPredictive(result);
     } catch (error: any) {
       console.error('[OwnerAI] predictive intelligence failed:', error);
-      setLoadError(error?.message || 'Predictive intelligence could not be generated.');
+      setLoadError(error?.message || 'Evidence-based maintenance signals could not be generated.');
     } finally {
       setRefreshing(false);
     }
-  }, [user?.email]);
+  }, [user?.uid, tickets]);
 
   useEffect(() => {
     if (!loading && properties.length) {
       buildPredictive(properties, passports);
     }
-  }, [loading, properties, passports, buildPredictive]);
+  }, [loading, properties, passports, tickets, buildPredictive]);
 
   const profiles = properties.map(p => ({
     property: p,
     profile: getPropertyIntelligenceProfile(p),
   }));
   const portfolio = summarizePortfolioIntelligence(properties);
+  const operationsSummary = buildPropertyOperationsSummary({ properties, passports, tickets, invoices });
 
   const pageCtx = {
     properties,
     passports,
     propertyCount: properties.length,
     portfolio,
+    // Only the aggregated owner-scoped summary is supplied to the page AI context;
+    // raw invoice rows and maintenance documents are not copied into this context.
+    operationsSummary,
   };
 
   const ledger = buildPropertyTruthLedger(pageCtx);
 
   useEffect(() => {
     setPageContext({ ...pageCtx, ledger });
-  }, [properties.length, passports.length]);
+  }, [properties, passports, tickets, invoices]);
 
   const dir = isRTL ? 'rtl' : 'ltr';
   const textAlign: 'right' | 'left' = isRTL ? 'right' : 'left';
 
-  if (loading) {
+  if (loading || passportsLoading) {
     return (
       <Box sx={{ height: '60vh', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 2, flexDirection: 'column' }}>
         <CircularProgress sx={{ color: gold }} />
@@ -285,6 +348,14 @@ export default function OwnerAIIntelligencePage() {
           {tx('ai.subtitle', 'Predictive maintenance, portfolio scoring, and AI-assisted contract intelligence — all in one view.')}
         </Typography>
       </Box>
+
+      <PropertyOperationsIntelligencePanel
+        properties={properties}
+        passports={passports}
+        tickets={tickets}
+        invoices={invoices}
+        sourceErrors={[passportSourceError, ticketSourceError, invoiceSourceError].filter(Boolean)}
+      />
 
       {/* ── CREDIT SCORE ROW ── */}
       <Paper sx={{ p: 4, mb: 4, bgcolor: CARD, border: BORDER, borderRadius: 5, background: `linear-gradient(135deg, rgba(15,23,42,0.6) 0%, rgba(17,24,39,0.8) 100%)` }}>
@@ -373,7 +444,7 @@ export default function OwnerAIIntelligencePage() {
           <Stack direction="row" alignItems="center" spacing={1}>
             <BarChart2 size={18} color={gold} />
             <Typography variant="overline" sx={{ color: gold, fontWeight: 900, letterSpacing: 3 }}>
-              {tx('ai.predictive', 'PREDICTIVE INTELLIGENCE')}
+              {tx('ai.predictive', 'EVIDENCE-BASED MAINTENANCE SIGNALS')}
             </Typography>
           </Stack>
           {properties.length > 0 && (
@@ -422,94 +493,64 @@ export default function OwnerAIIntelligencePage() {
                 <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 3 }}>
                   <Activity size={18} color={gold} />
                   <Typography variant="overline" sx={{ color: gold, fontWeight: 900, letterSpacing: 2 }}>
-                    ASSET RESILIENCE
+                    MAINTENANCE RECURRENCE REVIEW
                   </Typography>
                 </Stack>
 
-                <Stack direction="row" alignItems="center" spacing={3} sx={{ mb: 3 }}>
+                <Stack spacing={1.2} sx={{ mb: 3 }}>
                   <Box>
-                    <Typography sx={{ color: alpha('#fff', 0.45), fontWeight: 900, fontSize: '0.7rem', letterSpacing: 2 }}>HEALTH INDEX</Typography>
-                    <Typography sx={{ color: '#22C55E', fontWeight: 950, fontSize: '2.4rem', lineHeight: 1 }}>
-                      {predictive.assetResilience.healthIndex}
+                    <Typography sx={{ color: alpha('#fff', 0.45), fontWeight: 900, fontSize: '0.7rem', letterSpacing: 2 }}>ASSET CONDITION SCORE</Typography>
+                    <Typography sx={{ color: alpha('#fff', 0.82), fontWeight: 950, fontSize: '1.5rem', lineHeight: 1.3 }}>
+                      NOT YET VALIDATED
                     </Typography>
                   </Box>
-                  <Box sx={{ flex: 1 }}>
-                    <LinearProgress
-                      variant="determinate"
-                      value={predictive.assetResilience.healthIndex}
-                      sx={{ height: 8, borderRadius: 4, bgcolor: alpha('#22C55E', 0.12), '& .MuiLinearProgress-bar': { bgcolor: '#22C55E', borderRadius: 4 } }}
-                    />
-                    <Typography variant="caption" sx={{ color: alpha('#fff', 0.35), mt: 0.5, display: 'block', fontWeight: 800 }}>
-                      Predicted decay: {predictive.assetResilience.predictedDecay12Months}mo
-                    </Typography>
-                  </Box>
+                  <Alert severity="info">
+                    {predictive.assetResilience.basis} A ticket count is not a measured condition score.
+                  </Alert>
                 </Stack>
 
                 <Divider sx={{ borderColor: alpha(gold, 0.1), mb: 2 }} />
 
                 <Typography variant="caption" sx={{ color: alpha('#fff', 0.38), fontWeight: 900, letterSpacing: 2, display: 'block', mb: 1.5 }}>
-                  CRITICAL FAILURE WINDOWS
+                  RECURRENT WORK-ORDER PATTERNS
                 </Typography>
                 <Stack spacing={1.5}>
                   {predictive.assetResilience.criticalFailureWindows.map((w: any, i: number) => (
                     <Box key={i} sx={{ p: 1.8, bgcolor: alpha('#F59E0B', 0.07), borderRadius: 3, border: `1px solid ${alpha('#F59E0B', 0.18)}` }}>
                       <Stack direction="row" justifyContent="space-between" alignItems="center">
                         <Typography sx={{ color: '#F59E0B', fontWeight: 950, fontSize: '0.8rem' }}>{w.assetCategory}</Typography>
-                        <Chip label={`${Math.round(w.probability * 100)}% risk`} size="small" sx={{ bgcolor: alpha('#F59E0B', 0.12), color: '#F59E0B', fontWeight: 950, fontSize: '0.6rem' }} />
+                        <Chip label={`${w.evidenceCount} dated jobs · recurring`} size="small" sx={{ bgcolor: alpha('#F59E0B', 0.12), color: '#F59E0B', fontWeight: 950, fontSize: '0.6rem' }} />
                       </Stack>
                       <Typography variant="caption" sx={{ color: alpha('#fff', 0.45), display: 'block', mt: 0.5 }}>{w.guidance}</Typography>
                     </Box>
                   ))}
+                  {predictive.assetResilience.criticalFailureWindows.length === 0 && (
+                    <Typography variant="body2" sx={{ color: alpha('#fff', 0.55) }}>
+                      No category has reached the three-dated-work-order recurrence threshold in the last 12 months.
+                    </Typography>
+                  )}
                 </Stack>
               </Paper>
             </Grid>
 
-            {/* Financial Forecast */}
+            {/* Forecast readiness */}
             <Grid item xs={12} md={6}>
               <Paper sx={{ p: 3.5, bgcolor: CARD, border: BORDER, borderRadius: 4, height: '100%' }}>
                 <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 3 }}>
                   <TrendingUp size={18} color={gold} />
                   <Typography variant="overline" sx={{ color: gold, fontWeight: 900, letterSpacing: 2 }}>
-                    FINANCIAL FORECAST
+                    CASH-FLOW FORECAST READINESS
                   </Typography>
                 </Stack>
-
-                <Stack direction="row" alignItems="center" spacing={3} sx={{ mb: 3 }}>
-                  <Box>
-                    <Typography sx={{ color: alpha('#fff', 0.45), fontWeight: 900, fontSize: '0.7rem', letterSpacing: 2 }}>EXPECTED NET ROI</Typography>
-                    <Typography sx={{ color: '#22C55E', fontWeight: 950, fontSize: '2.4rem', lineHeight: 1 }}>
-                      {predictive.financialForecast.expectedNetROI}%
-                    </Typography>
-                  </Box>
-                </Stack>
-
-                <Divider sx={{ borderColor: alpha(gold, 0.1), mb: 2 }} />
-
-                <Typography variant="caption" sx={{ color: alpha('#fff', 0.38), fontWeight: 900, letterSpacing: 2, display: 'block', mb: 1.5 }}>
-                  QUARTERLY PROJECTIONS
+                <Typography sx={{ color: alpha('#fff', 0.82), fontWeight: 950, fontSize: '1.5rem', mb: 1 }}>
+                  NOT YET AVAILABLE
                 </Typography>
-                <Stack spacing={1}>
-                  {predictive.financialForecast.quarterlyProjections.map((q: any) => (
-                    <Stack key={q.quarter} direction="row" justifyContent="space-between" alignItems="center">
-                      <Typography sx={{ color: alpha('#fff', 0.55), fontWeight: 850, fontSize: '0.8rem' }}>{q.quarter}</Typography>
-                      <Stack direction="row" spacing={2}>
-                        <Typography sx={{ color: '#22C55E', fontWeight: 950, fontSize: '0.8rem' }}>+{q.projectedIncome.toLocaleString()} AED</Typography>
-                        <Typography sx={{ color: '#EF4444', fontWeight: 850, fontSize: '0.8rem' }}>-{q.projectedExpenses.toLocaleString()}</Typography>
-                      </Stack>
-                    </Stack>
-                  ))}
-                </Stack>
-
-                <Divider sx={{ borderColor: alpha(gold, 0.1), my: 2 }} />
-
-                <Stack spacing={0.8}>
-                  {predictive.financialForecast.riskFactors.map((r: string) => (
-                    <Stack key={r} direction="row" spacing={1} alignItems="center">
-                      <AlertTriangle size={12} color="#F59E0B" style={{ flexShrink: 0 }} />
-                      <Typography variant="caption" sx={{ color: alpha('#fff', 0.5), fontWeight: 800 }}>{r}</Typography>
-                    </Stack>
-                  ))}
-                </Stack>
+                <Alert severity="info">
+                  No forecast is shown until future-dated rent and receivable schedules, committed costs, reconciled transactions and a valuation basis are connected.
+                </Alert>
+                <Typography variant="body2" sx={{ color: alpha('#fff', 0.5), mt: 2 }}>
+                  {predictive.financialForecast.basis}
+                </Typography>
               </Paper>
             </Grid>
 
