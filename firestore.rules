@@ -2443,6 +2443,30 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
 
+    // Preventive maintenance plans: callable-only writes (functions/preventiveMaintenancePlans.ts).
+    match /pm_plan_templates/{templateId} {
+      allow read: if isAdmin() || (signedIn() && resource.data.active == true);
+      allow create, update, delete: if false;
+    }
+
+    match /pm_plan_templates/{templateId}/history/{versionId} {
+      allow read: if isAdmin();
+      allow create, update, delete: if false;
+    }
+
+    match /pm_subscriptions/{subscriptionId} {
+      allow read: if isAdmin() || (signedIn() && resource.data.ownerId == request.auth.uid);
+      allow create, update, delete: if false;
+    }
+
+    match /pm_subscription_keys/{keyId} {
+      allow read, create, update, delete: if false;
+    }
+
+    match /pm_collection_record_uses/{recordId} {
+      allow read, create, update, delete: if false;
+    }
+
     // One-time painting projects: callable-only writes (quote margin, OTP approval, photos, warranty).
     match /painting_projects/{projectId} {
       function isPaintingFinanceApprover() {
@@ -2550,6 +2574,10 @@ service cloud.firestore {
           'active_contracts',
           'onboarding_leads',
           'systemMetrics',
+          'pm_plan_templates',
+          'pm_subscriptions',
+          'pm_subscription_keys',
+          'pm_collection_record_uses',
           'painting_projects',
           'painting_rates',
           'binConnectThreads',
@@ -2654,6 +2682,10 @@ service cloud.firestore {
           'active_contracts',
           'onboarding_leads',
           'systemMetrics',
+          'pm_plan_templates',
+          'pm_subscriptions',
+          'pm_subscription_keys',
+          'pm_collection_record_uses',
           'painting_projects',
           'painting_rates',
           'binConnectThreads',

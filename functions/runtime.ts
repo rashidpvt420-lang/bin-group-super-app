@@ -151,3 +151,4 @@ export * from "./tenantParcelOperations";
 export * from "./turnoverQuoteOperations";
 export * from "./adminOwnerApplicationDecision";
 export * from "./paintingProjects";
+export * from "./preventiveMaintenancePlans";

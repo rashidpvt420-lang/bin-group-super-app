@@ -1,6 +1,7 @@
 import HomeQuickLinks, { type HomeQuickLink } from '../../components/HomeQuickLinks';
 import SuggestionBoxCard from '../../components/SuggestionBoxCard';
 import PaymentCollectionRecordsCard from '../../components/PaymentCollectionRecordsCard';
+import OwnerMaintenancePlansCard from '../components/OwnerMaintenancePlansCard';
 import MoneyStatementDownload from '../../components/MoneyStatementDownload';
 import OwnerPerformanceReportCard from '../components/OwnerPerformanceReportCard';
 import { Box, Button, Stack } from '@mui/material';
@@ -75,6 +76,8 @@ export default function OwnerSimpleDashboardPage() {
           <UiButton tone="outline" onClick={() => navigate('/owner/tenants')}>{t('owner.home.invite', 'Invite tenant', 'دعوة مستأجر')}</UiButton>
           <UiButton tone="primary" onClick={() => navigate('/owner/find-room-rent')}>{t('owner.home.list', 'List empty unit', 'عرض وحدة شاغرة')}</UiButton>
         </Stack>
+
+        <OwnerMaintenancePlansCard />
 
         <SuggestionBoxCard role="owner" />
         <PaymentCollectionRecordsCard />

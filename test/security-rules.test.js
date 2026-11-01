@@ -291,6 +291,39 @@ describe('Firestore Security Rules', () => {
     await assertFails(deleteDoc(doc(adminDb, 'painting_rates/painter-day/history/v1')));
   });
 
+  it('preventive maintenance plans are callable-only: owner reads own subscription, Admin browser writes denied', async () => {
+    await seedServerDocument('pm_plan_templates/tpl_ac', { serviceCode: 'AC_SERVICE', nameEn: 'AC care', nameAr: 'عناية', visitsPerYear: 2, annualPriceAed: 600, active: true });
+    await seedServerDocument('pm_plan_templates/tpl_old', { serviceCode: 'PEST_CONTROL', nameEn: 'Old', nameAr: 'قديم', visitsPerYear: 4, annualPriceAed: 400, active: false });
+    await seedServerDocument('pm_subscriptions/owner_a_req1', { ownerId: 'owner_a', propertyId: 'prop_a', status: 'ACTIVE', annualPriceAed: 600 });
+    await seedServerDocument('pm_subscription_keys/k1', { ownerId: 'owner_a', status: 'ACTIVE' });
+    await seedServerDocument('pm_collection_record_uses/r1', { subscriptionId: 'owner_a_req1' });
+
+    const ownerA = testEnv.authenticatedContext('owner_a', { role: 'owner' }).firestore();
+    const ownerB = testEnv.authenticatedContext('owner_b', { role: 'owner' }).firestore();
+    const anon = testEnv.unauthenticatedContext().firestore();
+    const adminDb = testEnv.authenticatedContext('admin_pm', { firebase: { sign_in_second_factor: 'phone' }, role: 'admin', admin: true }).firestore();
+
+    await assertSucceeds(getDoc(doc(ownerA, 'pm_plan_templates/tpl_ac')));
+    await assertFails(getDoc(doc(ownerA, 'pm_plan_templates/tpl_old')));
+    await assertFails(getDoc(doc(anon, 'pm_plan_templates/tpl_ac')));
+    await assertSucceeds(getDoc(doc(adminDb, 'pm_plan_templates/tpl_old')));
+    await assertSucceeds(getDoc(doc(ownerA, 'pm_subscriptions/owner_a_req1')));
+    await assertFails(getDoc(doc(ownerB, 'pm_subscriptions/owner_a_req1')));
+    await assertSucceeds(getDoc(doc(adminDb, 'pm_subscriptions/owner_a_req1')));
+    await assertFails(getDoc(doc(ownerA, 'pm_subscription_keys/k1')));
+
+    await assertFails(setDoc(doc(ownerA, 'pm_subscriptions/forged'), { ownerId: 'owner_a', status: 'ACTIVE' }));
+    await assertFails(updateDoc(doc(ownerA, 'pm_subscriptions/owner_a_req1'), { status: 'CANCELLED' }));
+    await assertFails(setDoc(doc(ownerA, 'pm_plan_templates/forged'), { active: true, annualPriceAed: 1 }));
+    await assertFails(updateDoc(doc(adminDb, 'pm_plan_templates/tpl_ac'), { annualPriceAed: 1 }));
+    await assertFails(setDoc(doc(adminDb, 'pm_plan_templates/forged_admin'), { active: true }));
+    await assertFails(updateDoc(doc(adminDb, 'pm_subscriptions/owner_a_req1'), { status: 'ACTIVE' }));
+    await assertFails(setDoc(doc(adminDb, 'pm_subscriptions/forged_admin'), { ownerId: 'owner_a', status: 'ACTIVE' }));
+    await assertFails(deleteDoc(doc(adminDb, 'pm_subscriptions/owner_a_req1')));
+    await assertFails(setDoc(doc(adminDb, 'pm_collection_record_uses/r2'), { subscriptionId: 'x' }));
+    await assertFails(updateDoc(doc(adminDb, 'pm_subscription_keys/k1'), { status: 'CANCELLED' }));
+  });
+
   it('owner profile activation fields remain server-authoritative', async () => {
     const adminDb = testEnv.authenticatedContext('admin_user', { firebase: { sign_in_second_factor: 'phone' }, admin: true }).firestore();
     await setDoc(doc(adminDb, 'owners/owner_a'), {
