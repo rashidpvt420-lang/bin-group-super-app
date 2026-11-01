@@ -2546,6 +2546,12 @@ service cloud.firestore {
       allow read, create, update, delete: if false;
     }
 
+    // Technician offline field events (Owner Trust Centre). Server writes only; the technician reads own.
+    match /technician_offline_events/{eventId} {
+      allow read: if isAdmin() || (signedIn() && resource.data.get('technicianId', null) == request.auth.uid);
+      allow create, update, delete: if false;
+    }
+
     // One-time painting projects: callable-only writes (quote margin, OTP approval, photos, warranty).
     match /painting_projects/{projectId} {
       function isPaintingFinanceApprover() {
@@ -2583,6 +2589,23 @@ service cloud.firestore {
         allow read: if hasAdminClaim();
         allow create, update, delete: if false;
       }
+    }
+
+    // WhatsApp job status opt-ins (server writes only; the user reads own).
+    match /whatsapp_optins/{userId} {
+      allow read: if isAdmin() || (signedIn() && request.auth.uid == userId);
+      allow create, update, delete: if false;
+    }
+
+    // WhatsApp approved template config and per-event send log. Admin read only; server writes.
+    match /whatsapp_templates/{eventId} {
+      allow read: if isAdmin();
+      allow create, update, delete: if false;
+    }
+
+    match /whatsapp_notifications/{notificationId} {
+      allow read: if isAdmin();
+      allow create, update, delete: if false;
     }
 
     // Painting rates (AED): Admin read, callable-only writes, append-only history.
@@ -2648,6 +2671,7 @@ service cloud.firestore {
           'launch_evidence',
           'signed_in_smoke_checks',
           'gatePasses',
+          'technician_offline_events',
           'propertyReporters',
           'broker_listing_claims',
           'active_contracts',
@@ -2691,6 +2715,9 @@ service cloud.firestore {
           'keyMovements',
           'keyRegister',
           'compliance_reminders',
+          'whatsapp_optins',
+          'whatsapp_templates',
+          'whatsapp_notifications',
           'visitorParkingRequests',
           'user_suggestion_limits',
           'vendor_credential_alerts',
@@ -2770,6 +2797,7 @@ service cloud.firestore {
           'launch_evidence',
           'signed_in_smoke_checks',
           'gatePasses',
+          'technician_offline_events',
           'propertyReporters',
           'broker_listing_claims',
           'active_contracts',
@@ -2813,6 +2841,9 @@ service cloud.firestore {
           'keyMovements',
           'keyRegister',
           'compliance_reminders',
+          'whatsapp_optins',
+          'whatsapp_templates',
+          'whatsapp_notifications',
           'visitorParkingRequests',
           'user_suggestion_limits',
           'vendor_credential_alerts',

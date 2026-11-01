@@ -12,6 +12,7 @@ onInit(() => {
 
 export * from './runtime';
 export * from './whatsappWebhook';
+export { onTicketWrittenWhatsAppStatus, onApprovalRequestWhatsAppStatus, setWhatsAppJobUpdatesOptIn } from './whatsappJobStatusNotifications';
 export * from './rentLedgerMirror';
 export { ownerSetRentSchedule, sendRentDueReminders, onRentPaymentDecision } from './rentSchedule';
 export { onOwnerApprovalDecision, submitOwnerApprovalDecision } from './ownerTrustWorkflow';
@@ -31,6 +32,7 @@ export { getOwnerKpis } from './ownerKpis';
 export { getOwnerTrustMetrics } from './ownerTrustMetrics';
 export { ownerAddCommitteeRecord, getOwnerCommitteeRecords } from './ownerCommitteeRecords';
 export { createTenantJobLink, resolveTenantJobLink, reportViaTenantJobLink } from './tenantJobLinks';
+export { technicianSyncOfflineEvents } from './technicianOfflineSync';
 export { financeRecordPdcStatus, getPdcRegister } from './pdcRegister';
 export { onOwnerBankAccountChanged, onBrokerPayoutDetailsChanged } from './payoutChangeAlerts';
 export { reopenMaintenanceTicket } from './ticketReopen';
