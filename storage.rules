@@ -396,6 +396,26 @@ service firebase.storage {
       allow write: if false;
     }
 
+    // Painting owner uploads (area photos, cash receipts, cheque photos). Owner create-only;
+    // owner + Admin read; nobody may overwrite or delete proof from a browser.
+    match /painting-owner-uploads/{ownerId}/{allPaths=**} {
+      allow read: if request.auth != null && (request.auth.uid == ownerId || isAdmin());
+      allow create: if resource == null && request.auth != null && request.auth.uid == ownerId
+        && request.resource.size < 15 * 1024 * 1024
+        && (request.resource.contentType.matches('image/.*') || request.resource.contentType == 'application/pdf');
+      allow update, delete: if false;
+    }
+
+    // Painting payment reviewers may read ONLY stage payment proofs (DEPOSIT/PROGRESS/FINAL-*), not area
+    // or rework photos. MFA, verified email and the finance_manager / finance_controller role required.
+    match /painting-owner-uploads/{ownerId}/{projectId}/{fileName} {
+      allow read: if hasAdminSecondFactor() &&
+        request.auth.token.get('email_verified', false) == true &&
+        (request.auth.token.get('role', '') in ['finance_manager', 'finance_controller'] ||
+         request.auth.token.get('financeRole', '') in ['finance_manager', 'finance_controller']) &&
+        fileName.matches('^(DEPOSIT|PROGRESS|FINAL)-[A-Za-z0-9_-]+[.][A-Za-z0-9]{1,5}$');
+    }
+
     // Unknown paths remain Founder/Admin-only, except private HR documents and
     // generated staff reports. Those paths are written only through Admin SDK callables.
     match /{collection}/{allPaths=**} {

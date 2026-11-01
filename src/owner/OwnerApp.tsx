@@ -37,6 +37,7 @@ import OwnerActivationPage from './pages/OwnerActivationPage';
 import OwnerInspectionsPage from './pages/OwnerInspectionsPage';
 import OwnerReviewQueuePage from './pages/OwnerReviewQueuePage';
 import DesignStudioPage from '../pages/DesignStudioPage';
+import PaintingProjectsPage from '../pages/PaintingProjectsPage';
 import DesignRequestDetailPage from '../pages/DesignRequestDetailPage';
 import OwnerComplaintPage from './pages/OwnerComplaintPage';
 import OwnerTicketsPage from './pages/OwnerTicketsPage';
@@ -132,6 +133,7 @@ export default function OwnerApp() {
                 <Route path="/inspections" element={<OwnerInspectionsPage />} />
                 <Route path="/review-queue" element={<OwnerReviewQueuePage />} />
                 <Route path="/design-studio" element={<DesignStudioPage />} />
+                <Route path="/painting" element={<PaintingProjectsPage />} />
                 <Route path="/design-studio/request/:id" element={<DesignRequestDetailPage />} />
                 {/* Complaints plural was missing → splat * silently sent owners to dashboard.
                     Keep leading-slash portal paths (same style as /dashboard) so inventory

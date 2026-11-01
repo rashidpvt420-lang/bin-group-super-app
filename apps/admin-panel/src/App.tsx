@@ -44,6 +44,7 @@ import TransactionsPage from './pages/financials/TransactionsPage';
 import ProfitabilityDashboardPage from './pages/financials/ProfitabilityDashboardPage';
 import { IntakeVaultPage } from './pages/admin/IntakeVaultPage';
 import PaintingProjectsAdminPage from './pages/ops/PaintingProjectsAdminPage';
+import PaintingFinanceReviewPage from './pages/ops/PaintingFinanceReviewPage';
 import OrphanWarRoomPage from './pages/admin/OrphanWarRoomPage';
 import DesignStudioAdminPage from './pages/admin/DesignStudioAdminPage';
 import HRManagementPage from './pages/admin/HRManagementPage';
@@ -150,6 +151,7 @@ function AppContent() {
                     <Route path="/ops/technicians" element={<ProtectedRoute adminOnly><TechnicianDutyMonitorPage /></ProtectedRoute>} />
                     <Route path="/vault" element={<ProtectedRoute adminOnly><IntakeVaultPage /></ProtectedRoute>} />
                     <Route path="/ops/painting" element={<ProtectedRoute adminOnly><PaintingProjectsAdminPage /></ProtectedRoute>} />
+                    <Route path="/finance/painting-payments" element={<ProtectedRoute adminOnly extraRoles={['finance_manager', 'finance_controller']}><PaintingFinanceReviewPage /></ProtectedRoute>} />
                     <Route path="/orphans" element={<ProtectedRoute adminOnly><OrphanWarRoomPage /></ProtectedRoute>} />
                     <Route path="/onboard-property" element={<Navigate to="/vault" replace />} />
                     <Route path="/design-studio" element={<ProtectedRoute adminOnly><DesignStudioAdminPage /></ProtectedRoute>} />

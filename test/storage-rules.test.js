@@ -147,6 +147,38 @@ describe('Storage Security Rules', () => {
     await assertFails(uploadString(ref(ownerAStorage, 'owners/owner_a/identity/payload.exe'), 'x', 'raw', { contentType: 'application/octet-stream' }));
   });
 
+  it('painting owner uploads are owner create-only, bounded MIME, no overwrite and Admin-readable', async () => {
+    const ownerA = testEnv.authenticatedContext('owner_a', { role: 'owner' }).storage();
+    const ownerB = testEnv.authenticatedContext('owner_b', { role: 'owner' }).storage();
+    const adminS = testEnv.authenticatedContext('admin_paint', ADMIN_MFA).storage();
+    const path = 'painting-owner-uploads/owner_a/cheque.jpg';
+    await assertSucceeds(uploadString(ref(ownerA, path), 'cheque', 'raw', { contentType: 'image/jpeg' }));
+    await assertSucceeds(uploadString(ref(ownerA, 'painting-owner-uploads/owner_a/receipt.pdf'), 'r', 'raw', { contentType: 'application/pdf' }));
+    await assertFails(uploadString(ref(ownerA, path), 'swapped', 'raw', { contentType: 'image/jpeg' }));
+    await assertFails(uploadString(ref(ownerA, 'painting-owner-uploads/owner_a/x.exe'), 'x', 'raw', { contentType: 'application/octet-stream' }));
+    await assertFails(uploadString(ref(ownerB, 'painting-owner-uploads/owner_a/forged.jpg'), 'f', 'raw', { contentType: 'image/jpeg' }));
+    await assertFails(getBytes(ref(ownerB, path)));
+    await assertSucceeds(getBytes(ref(ownerA, path)));
+    await assertSucceeds(getBytes(ref(adminS, path)));
+
+    // Finance approvers (MFA + verified email) read stage payment proofs only - not area or rework photos.
+    const proof = 'painting-owner-uploads/owner_a/pp_a/DEPOSIT-req123.jpg';
+    const rework = 'painting-owner-uploads/owner_a/pp_a/rework-req123-0.jpg';
+    await assertSucceeds(uploadString(ref(ownerA, proof), 'proof', 'raw', { contentType: 'image/jpeg' }));
+    await assertSucceeds(uploadString(ref(ownerA, rework), 'snag', 'raw', { contentType: 'image/jpeg' }));
+    for (const role of ['finance_manager', 'finance_controller']) {
+      const fin = testEnv.authenticatedContext(`fin_${role}`, { role, email_verified: true, ...MFA }).storage();
+      await assertSucceeds(getBytes(ref(fin, proof)));
+      await assertFails(getBytes(ref(fin, rework)));
+      await assertFails(getBytes(ref(fin, path)));
+      await assertFails(uploadString(ref(fin, 'painting-owner-uploads/owner_a/pp_a/FINAL-forged.jpg'), 'f', 'raw', { contentType: 'image/jpeg' }));
+      await assertFails(uploadString(ref(fin, `painting-owner-uploads/owner_a/pp_a/PROGRESS-x.jpg`), 'f', 'raw', { contentType: 'image/jpeg' }));
+    }
+    for (const claims of [{ role: 'finance_manager', email_verified: true }, { role: 'finance_manager', email_verified: false, ...MFA }, { role: 'finance_admin', email_verified: true, ...MFA }, { role: 'finance_controller', email_verified: true, suspended: true, ...MFA }]) {
+      await assertFails(getBytes(ref(testEnv.authenticatedContext('fin_denied', claims).storage(), proof)));
+    }
+  });
+
   it('technician before and after evidence is image-only and bound to the assigned ticket', async () => {
     await testEnv.withSecurityRulesDisabled(async (context) => {
       await setDoc(doc(context.firestore(), 'maintenanceTickets/ticket_evidence'), {

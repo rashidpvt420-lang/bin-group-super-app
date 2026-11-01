@@ -8,11 +8,12 @@ const { admin, db, lib, createUser, clearFirestore, call, expectHttpsError } = r
 process.env.OWNER_CONTRACT_OTP_PEPPER = process.env.OWNER_CONTRACT_OTP_PEPPER || 'p'.repeat(48);
 const m = lib('paintingProjects.js');
 const MFA = { tokenExtra: { firebase: { sign_in_provider: 'password', sign_in_second_factor: 'phone' } } };
-let owner; let other; let adminMfa;
+let owner; let other; let adminMfa; let finance;
 test.before(async () => {
   owner = await createUser('owner_chain', { role: 'owner' });
   other = await createUser('owner_chain_other', { role: 'owner' });
   adminMfa = await createUser('admin_chain', { role: 'admin', admin: true }, MFA);
+  finance = await createUser('finance_chain', { role: 'finance_manager' }, MFA);
 });
 test.beforeEach(async () => {
   await clearFirestore();
@@ -22,7 +23,11 @@ test.beforeEach(async () => {
 const REQ = { propertyId: 'test-prop', scope: 'ROOM', requestId: 'req-0001-abcdef' };
 const QUOTE = {
   surveyMeasurements: { wallAreaSqm: 40, ceilingAreaSqm: 12, condition: 'GOOD', paintGrade: 'STANDARD', coats: 2 },
-  costSheet: { materialsAed: 900, labourAed: 1500 },
+  lines: [
+    { category: 'LABOUR', description: 'Painter days', qty: 6, unit: 'day', unitCostAed: 250, currency: 'AED' },
+    { category: 'MATERIALS', description: 'Emulsion', qty: 1, unit: 'lot', unitCostAed: 900, currency: 'AED' },
+    { category: 'PREP', description: 'Filling and sanding', qty: 1, unit: 'lot', unitCostAed: 100, currency: 'AED' },
+  ],
   priceAed: 5000, permits: {},
 };
 
@@ -42,6 +47,15 @@ test('full chain request -> quote -> OTP approval -> work order', async () => {
   await expectHttpsError(call(m.adminOpenPaintingWorkOrder, adminMfa, { projectId }), 'failed-precondition'); // no before photos
   await admin.storage().bucket().file(`painting-projects/${projectId}/before/a.jpg`).save(Buffer.from('jpg'), { contentType: 'image/jpeg' });
   await call(m.adminRecordPaintingPhotos, adminMfa, { projectId, kind: 'BEFORE', paths: [`painting-projects/${projectId}/before/a.jpg`] });
+  await expectHttpsError(call(m.adminOpenPaintingWorkOrder, adminMfa, { projectId }), 'failed-precondition'); // no contractor / deposit
+  await call(m.adminAssignPaintingContractor, adminMfa, { projectId, requestId: 'contractor-0001', name: 'Al Noor Painting LLC' });
+  const inv = await call(m.adminIssuePaintingInvoice, adminMfa, { projectId, requestId: 'invoice-dep-0001', stage: 'DEPOSIT' });
+  assert.equal(inv.amountAed, 2000);
+  await expectHttpsError(call(m.adminOpenPaintingWorkOrder, adminMfa, { projectId }), 'failed-precondition'); // deposit not paid
+  const proof = `painting-owner-uploads/${owner.uid}/receipt.jpg`;
+  await admin.storage().bucket().file(proof).save(Buffer.from('jpg'), { contentType: 'image/jpeg' });
+  await call(m.ownerSubmitPaintingPaymentProof, owner, { projectId, requestId: 'proof-dep-0001', stage: 'DEPOSIT', method: 'CASH', proofPath: proof });
+  await call(m.financeDecidePaintingPayment, finance, { projectId, requestId: 'fin-dep-0001', stage: 'DEPOSIT', decision: 'APPROVE' });
   assert.equal((await call(m.adminOpenPaintingWorkOrder, adminMfa, { projectId })).status, 'WORK_ORDER_OPEN');
   const p = (await db.doc(`painting_projects/${projectId}`).get()).data();
   assert.equal(p.approvedQuoteVersion, 1);

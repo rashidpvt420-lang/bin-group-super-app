@@ -2445,14 +2445,52 @@ service cloud.firestore {
 
     // One-time painting projects: callable-only writes (quote margin, OTP approval, photos, warranty).
     match /painting_projects/{projectId} {
+      function isPaintingFinanceApprover() {
+        return signedIn() && hasAdminSecondFactor() && isNotSuspended() &&
+          request.auth.token.get('email_verified', false) == true &&
+          request.auth.token.get('suspended', false) != true &&
+          (request.auth.token.get('role', '') in ['finance_manager', 'finance_controller'] ||
+           request.auth.token.get('financeRole', '') in ['finance_manager', 'finance_controller']);
+      }
       allow read: if signedIn() && (resource.data.ownerId == request.auth.uid || hasAdminClaim());
       allow create, update, delete: if false;
       match /quotes/{quoteId} {
         allow read: if signedIn() && (get(/databases/$(database)/documents/painting_projects/$(projectId)).data.ownerId == request.auth.uid || hasAdminClaim());
         allow create, update, delete: if false;
       }
+      // Stage invoices (deposit / progress / final, cash or cheque): owner + Admin read, callable-only writes.
+      match /invoices/{stage} {
+        allow read: if signedIn() && (get(/databases/$(database)/documents/painting_projects/$(projectId)).data.ownerId == request.auth.uid || hasAdminClaim() || isPaintingFinanceApprover());
+        allow create, update, delete: if false;
+      }
+      // Internal cost sheets, actual costs and idempotency records never reach owners.
+      match /internal_quotes/{quoteId} {
+        allow read: if hasAdminClaim();
+        allow create, update, delete: if false;
+      }
+      match /costs/{costId} {
+        allow read: if hasAdminClaim();
+        allow create, update, delete: if false;
+      }
+      match /idempotency/{key} {
+        allow read, create, update, delete: if false;
+      }
+      // Separately held contingency / warranty reserves (append-only ledger). Never part of cost.
+      match /reserve_ledger/{entryId} {
+        allow read: if hasAdminClaim();
+        allow create, update, delete: if false;
+      }
     }
 
+    // Painting rates (AED): Admin read, callable-only writes, append-only history.
+    match /painting_rates/{rateId} {
+      allow read: if hasAdminClaim();
+      allow create, update, delete: if false;
+      match /history/{entryId} {
+        allow read: if hasAdminClaim();
+        allow create, update, delete: if false;
+      }
+    }
     match /{collection}/{document=**} {
       allow read: if collection != 'tickets' && collection != 'maintenanceTickets' && !(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions', 'private_hr_profiles', 'technician_live_locations', 'invoice_registry', 'payroll_entries', 'property_identity_registry']) && hasAdminClaim();
       allow create: if collection != 'tickets' && collection != 'maintenanceTickets' && !(
@@ -2513,6 +2551,7 @@ service cloud.firestore {
           'onboarding_leads',
           'systemMetrics',
           'painting_projects',
+          'painting_rates',
           'binConnectThreads',
           'tenancies',
           'tenant_import_batches',
@@ -2616,6 +2655,7 @@ service cloud.firestore {
           'onboarding_leads',
           'systemMetrics',
           'painting_projects',
+          'painting_rates',
           'binConnectThreads',
           'tenancies',
           'tenant_import_batches',
