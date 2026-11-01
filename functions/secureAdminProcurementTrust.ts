@@ -170,6 +170,38 @@ export const adminSetVendorVerificationStatus = onCall(
   },
 );
 
+/** Records licence / insurance expiry and commission disclosure for a BIN vendor (MFA Admin only). */
+export const adminRecordVendorCredentials = onCall(
+  { cors: true, region: "europe-west3", enforceAppCheck: true },
+  async (request) => {
+    const actor = await requireMfaAdmin(request.auth);
+    const vendorId = safeId(request.data?.vendorId, "vendorId");
+    const ymd = (v: unknown, field: string) => {
+      const s = text(v, 10);
+      if (!s) return null;
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(s) || Number.isNaN(Date.parse(`${s}T00:00:00Z`))) throw new HttpsError("invalid-argument", `${field} must be YYYY-MM-DD.`);
+      return s;
+    };
+    const licenseExpiry = ymd(request.data?.licenseExpiry, "licenseExpiry");
+    const insuranceExpiry = ymd(request.data?.insuranceExpiry, "insuranceExpiry");
+    const pctRaw = request.data?.commissionPct;
+    const commissionPct = pctRaw === undefined || pctRaw === null || pctRaw === "" ? null : Number(pctRaw);
+    if (commissionPct !== null && (!Number.isFinite(commissionPct) || commissionPct < 0 || commissionPct > 100)) {
+      throw new HttpsError("invalid-argument", "commissionPct must be between 0 and 100.");
+    }
+    const commissionDisclosure = text(request.data?.commissionDisclosure, 300) || null;
+    const ref = db.collection("vendors").doc(vendorId);
+    await db.runTransaction(async (transaction) => {
+      const snap = await transaction.get(ref);
+      if (!snap.exists) throw new HttpsError("not-found", "Vendor not found.");
+      const now = FieldValue.serverTimestamp();
+      transaction.set(ref, { licenseExpiry, insuranceExpiry, commissionPct, commissionDisclosure, credentialsUpdatedBy: actor.uid, updatedAt: now }, { merge: true });
+      transaction.create(db.collection("audit_logs").doc(), audit(actor, "ADMIN_RECORD_VENDOR_CREDENTIALS", "vendors", vendorId, { licenseExpiry, insuranceExpiry, commissionPct }));
+    });
+    return { status: "SUCCESS", vendorId };
+  },
+);
+
 export const adminCreateVendorRfq = onCall(
   { cors: true, region: "europe-west3", enforceAppCheck: true },
   async (request) => {

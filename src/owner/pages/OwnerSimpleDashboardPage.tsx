@@ -2,6 +2,7 @@ import HomeQuickLinks, { type HomeQuickLink } from '../../components/HomeQuickLi
 import SuggestionBoxCard from '../../components/SuggestionBoxCard';
 import PaymentCollectionRecordsCard from '../../components/PaymentCollectionRecordsCard';
 import OwnerMaintenancePlansCard from '../components/OwnerMaintenancePlansCard';
+import OwnerVendorScorecardsCard from '../components/OwnerVendorScorecardsCard';
 import MoneyStatementDownload from '../../components/MoneyStatementDownload';
 import OwnerPerformanceReportCard from '../components/OwnerPerformanceReportCard';
 import { Box, Button, Stack } from '@mui/material';
@@ -83,6 +84,7 @@ export default function OwnerSimpleDashboardPage() {
         </Stack>
 
         <OwnerMaintenancePlansCard />
+        <OwnerVendorScorecardsCard />
 
         <SuggestionBoxCard role="owner" />
         <PaymentCollectionRecordsCard />

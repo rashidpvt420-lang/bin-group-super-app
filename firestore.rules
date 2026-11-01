@@ -1949,6 +1949,12 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
 
+    // Owner Trust Centre: vendor licence/insurance expiry alerts (Admin read; server-only writes).
+    match /vendor_credential_alerts/{alertId} {
+      allow read: if isAdmin();
+      allow create, update, delete: if false;
+    }
+
     // Lease renewal offers (feature 4): server-written only.
     match /lease_renewals/{renewalId} {
       allow read: if isAdmin() || ownerCanRead(resource.data) || (signedIn() && resource.data.get('tenantId', null) == request.auth.uid);
@@ -2626,6 +2632,7 @@ service cloud.firestore {
           'compliance_reminders',
           'visitorParkingRequests',
           'user_suggestion_limits',
+          'vendor_credential_alerts',
           'ai_action_proposals',
           'ai_action_audit',
           'payment_collection_records',
@@ -2737,6 +2744,7 @@ service cloud.firestore {
           'compliance_reminders',
           'visitorParkingRequests',
           'user_suggestion_limits',
+          'vendor_credential_alerts',
           'ai_action_proposals',
           'ai_action_audit',
           'payment_collection_records',
