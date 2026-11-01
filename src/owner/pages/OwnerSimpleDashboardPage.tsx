@@ -5,6 +5,7 @@ import PaymentCollectionRecordsCard from '../../components/PaymentCollectionReco
 import OwnerProofOfSpendCard from '../components/OwnerProofOfSpendCard';
 import OwnerMaintenancePlansCard from '../components/OwnerMaintenancePlansCard';
 import OwnerVendorScorecardsCard from '../components/OwnerVendorScorecardsCard';
+import OwnerWarrantiesCard from '../components/OwnerWarrantiesCard';
 import MoneyStatementDownload from '../../components/MoneyStatementDownload';
 import OwnerPrivacyCentreCard from '../components/OwnerPrivacyCentreCard';
 import OwnerCommitteeRecordsCard from '../components/OwnerCommitteeRecordsCard';
@@ -91,6 +92,7 @@ export default function OwnerSimpleDashboardPage() {
 
         <OwnerMaintenancePlansCard />
         <OwnerVendorScorecardsCard />
+        <OwnerWarrantiesCard />
 
         <SuggestionBoxCard role="owner" />
         <OwnerPrivacyCentreCard />

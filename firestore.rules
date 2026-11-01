@@ -2510,6 +2510,18 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
 
+    // Job warranties (Owner Trust Centre). Server writes only; owner reads own.
+    match /job_warranties/{ticketId} {
+      allow read: if isAdmin() || (signedIn() && resource.data.get('ownerId', null) == request.auth.uid);
+      allow create, update, delete: if false;
+    }
+
+    // Warranty repeat-fault reviews (Owner Trust Centre). Server writes only; owner reads own.
+    match /warranty_reviews/{ticketId} {
+      allow read: if isAdmin() || (signedIn() && resource.data.get('ownerId', null) == request.auth.uid);
+      allow create, update, delete: if false;
+    }
+
     // Preventive maintenance plans: callable-only writes (functions/preventiveMaintenancePlans.ts).
     match /pm_plan_templates/{templateId} {
       allow read: if isAdmin() || (signedIn() && resource.data.active == true);
@@ -2670,6 +2682,8 @@ service cloud.firestore {
           'jobPostings',
           'amenityBookings',
           'amenities',
+          'job_warranties',
+          'warranty_reviews',
           'tenant_services_requests',
           'communityPosts',
           'committee_records',
@@ -2790,6 +2804,8 @@ service cloud.firestore {
           'jobPostings',
           'amenityBookings',
           'amenities',
+          'job_warranties',
+          'warranty_reviews',
           'tenant_services_requests',
           'communityPosts',
           'committee_records',
