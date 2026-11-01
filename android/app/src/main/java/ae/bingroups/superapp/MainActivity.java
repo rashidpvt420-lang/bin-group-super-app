@@ -1,7 +1,11 @@
 package ae.bingroups.superapp;
 
+import android.graphics.Color;
 import android.os.Bundle;
 import android.util.Log;
+
+import androidx.activity.EdgeToEdge;
+import androidx.activity.SystemBarStyle;
 
 import com.getcapacitor.BridgeActivity;
 import com.google.firebase.FirebaseApp;
@@ -29,6 +33,15 @@ public class MainActivity extends BridgeActivity {
                 Log.e(APP_CHECK_LOG_TAG, "Play Integrity App Check initialization failed.", error);
             }
         }
+
+        // Edge-to-edge on every API level (required behaviour on Android 15 / SDK 35+).
+        // Transparent bars with dark icons over the white app background; Capacitor's
+        // adjustMarginsForEdgeToEdge=force keeps the WebView inside the system-bar insets.
+        EdgeToEdge.enable(
+            this,
+            SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT),
+            SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT)
+        );
 
         super.onCreate(savedInstanceState);
     }

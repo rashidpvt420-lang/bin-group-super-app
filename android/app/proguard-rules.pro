@@ -1,21 +1,36 @@
-# Add project specific ProGuard rules here.
-# You can control the set of applied configuration files using the
-# proguardFiles setting in build.gradle.
-#
-# For more details, see
-#   http://developer.android.com/guide/developing/tools/proguard.html
+# R8 keep rules for the BIN GROUP release build (minifyEnabled + shrinkResources).
+# Capacitor core, Capacitor plugins, AndroidX and Firebase ship their own consumer rules;
+# the rules below are belt-and-braces for code reached by reflection or from JavaScript.
 
-# If your project uses WebView with JS, uncomment the following
-# and specify the fully qualified class name to the JavaScript interface
-# class:
-#-keepclassmembers class fqcn.of.javascript.interface.for.webview {
-#   public *;
-#}
+# Keep line numbers for readable Play crash stack traces (mapping.txt de-obfuscates them).
+-keepattributes SourceFile,LineNumberTable,*Annotation*,Signature,InnerClasses,EnclosingMethod
+-renamesourcefileattribute SourceFile
 
-# Uncomment this to preserve the line number information for
-# debugging stack traces.
-#-keepattributes SourceFile,LineNumberTable
+# Capacitor bridge: plugins are discovered by annotation/reflection and called from the WebView.
+-keep class com.getcapacitor.** { *; }
+-keep @com.getcapacitor.annotation.CapacitorPlugin public class * { *; }
+-keep public class * extends com.getcapacitor.Plugin { *; }
+-keepclassmembers class * {
+    @com.getcapacitor.PluginMethod public <methods>;
+    @com.getcapacitor.annotation.PermissionCallback <methods>;
+    @com.getcapacitor.annotation.ActivityCallback <methods>;
+}
 
-# If you keep the line number information, uncomment this to
-# hide the original source file name.
-#-renamesourcefileattribute SourceFile
+# Official Capacitor plugins and this app's own native bridge (FirebaseAppCheckBridgePlugin).
+-keep class com.capacitorjs.plugins.** { *; }
+-keep class ae.bingroups.superapp.** { *; }
+
+# Cordova compatibility layer.
+-keep class org.apache.cordova.** { *; }
+-keep public class * extends org.apache.cordova.CordovaPlugin { *; }
+
+# Any WebView JavaScript interface methods.
+-keepclassmembers class * {
+    @android.webkit.JavascriptInterface <methods>;
+}
+
+# Firebase App Check / Play Integrity and Firebase components (registered via reflection).
+-keep class com.google.firebase.appcheck.** { *; }
+-keep class com.google.android.play.core.integrity.** { *; }
+-keep class * implements com.google.firebase.components.ComponentRegistrar { *; }
+-dontwarn com.google.firebase.**

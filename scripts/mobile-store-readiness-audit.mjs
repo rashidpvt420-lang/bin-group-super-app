@@ -124,6 +124,8 @@ assert(capacitorConfig.includes('dist'), 'Capacitor config must point to the Vit
 assert(capacitorConfig.includes('PushNotifications'), 'Capacitor config must include PushNotifications settings.');
 assert(capacitorConfig.includes('SplashScreen'), 'Capacitor config must include SplashScreen settings.');
 assert(capacitorConfig.includes('StatusBar'), 'Capacitor config must include StatusBar settings.');
+assert(capacitorConfig.includes("adjustMarginsForEdgeToEdge: 'force'"), 'Android WebView must stay inside system-bar insets when edge-to-edge is enabled.');
+assert(/includePlugins:\s*\[[^\]]*\]/.test(capacitorConfig) && !/includePlugins:\s*\[[^\]]*status-bar/.test(capacitorConfig), 'Android must exclude @capacitor/status-bar (deprecated Window.setStatusBarColor).');
 assert(capacitorConfig.includes("androidScheme: 'https'"), 'Android Capacitor WebView must use HTTPS so the browser Maps key can be HTTP-referrer restricted.');
 assert(capacitorConfig.includes("iosScheme: 'https'"), 'iOS Capacitor WebView must use HTTPS so the browser Maps key can be HTTP-referrer restricted.');
 
