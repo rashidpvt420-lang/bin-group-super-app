@@ -2591,6 +2591,23 @@ service cloud.firestore {
       }
     }
 
+    // WhatsApp job status opt-ins (server writes only; the user reads own).
+    match /whatsapp_optins/{userId} {
+      allow read: if isAdmin() || (signedIn() && request.auth.uid == userId);
+      allow create, update, delete: if false;
+    }
+
+    // WhatsApp approved template config and per-event send log. Admin read only; server writes.
+    match /whatsapp_templates/{eventId} {
+      allow read: if isAdmin();
+      allow create, update, delete: if false;
+    }
+
+    match /whatsapp_notifications/{notificationId} {
+      allow read: if isAdmin();
+      allow create, update, delete: if false;
+    }
+
     // Painting rates (AED): Admin read, callable-only writes, append-only history.
     match /painting_rates/{rateId} {
       allow read: if hasAdminClaim();
@@ -2698,6 +2715,9 @@ service cloud.firestore {
           'keyMovements',
           'keyRegister',
           'compliance_reminders',
+          'whatsapp_optins',
+          'whatsapp_templates',
+          'whatsapp_notifications',
           'visitorParkingRequests',
           'user_suggestion_limits',
           'vendor_credential_alerts',
@@ -2821,6 +2841,9 @@ service cloud.firestore {
           'keyMovements',
           'keyRegister',
           'compliance_reminders',
+          'whatsapp_optins',
+          'whatsapp_templates',
+          'whatsapp_notifications',
           'visitorParkingRequests',
           'user_suggestion_limits',
           'vendor_credential_alerts',
