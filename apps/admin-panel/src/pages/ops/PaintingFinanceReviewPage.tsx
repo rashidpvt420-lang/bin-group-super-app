@@ -1,7 +1,8 @@
 import React from 'react';
 import { Alert, Box, Button, Card, CardContent, Chip, CircularProgress, Stack, TextField, Typography } from '@mui/material';
 import { useLanguage } from '@bin/shared';
-import { functions, getDownloadURL, httpsCallable, ref, storage } from '../../lib/firebase';
+import { auth, functions, getDownloadURL, httpsCallable, ref, storage } from '../../lib/firebase';
+import { canReviewPaintingPayments } from './paintingFinanceAccess';
 
 // Painting payment review for Finance Manager / Finance Controller (MFA). Shows invoices, payment
 // proofs and the minimum project context from financeListPaintingInvoices - never cost, margin,
@@ -30,12 +31,16 @@ export default function PaintingFinanceReviewPage() {
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState('');
   const [notice, setNotice] = React.useState('');
+  const [allowed, setAllowed] = React.useState(true);
   const [notes, setNotes] = React.useState<Record<string, string>>({});
   const keys = React.useRef<Record<string, string>>({});
 
   const load = React.useCallback(async () => {
     setLoading(true); setError('');
     try {
+      const token = await auth.currentUser?.getIdTokenResult();
+      if (!canReviewPaintingPayments(token?.claims as Record<string, unknown> | undefined)) { setAllowed(false); setProjects([]); return; }
+      setAllowed(true);
       const r: any = await httpsCallable(functions, 'financeListPaintingInvoices')({});
       setProjects((r.data?.projects || []) as FinProject[]);
     } catch (e: any) { setError(e?.message || 'Load failed'); } finally { setLoading(false); }
@@ -63,9 +68,10 @@ export default function PaintingFinanceReviewPage() {
     <Box dir={isRTL ? 'rtl' : 'ltr'} sx={{ p: 3 }}>
       <Typography variant="h4" fontWeight={800} gutterBottom>{t('Painting payments review', 'مراجعة دفعات الدهان')}</Typography>
       <Typography color="text.secondary" sx={{ mb: 2 }}>{t('Cash and cheque proofs only. You cannot approve an invoice you issued.', 'إثباتات النقد والشيكات فقط. لا يمكنك الموافقة على فاتورة أصدرتها.')}</Typography>
+      {!allowed && <Alert severity="info" sx={{ mb: 2 }} data-testid="painting-finance-role-required">{t('Painting payment review needs a Finance Manager or Finance Controller account with a verified MFA session.', 'تتطلب مراجعة دفعات الدهان حساب مدير مالي أو مراقب مالي مع جلسة تحقق متعدد العوامل.')}</Alert>}
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
       {notice && <Alert severity="success" sx={{ mb: 2 }}>{notice}</Alert>}
-      {loading ? <CircularProgress /> : projects.length === 0 ? <Typography>{t('No painting invoices.', 'لا توجد فواتير دهان.')}</Typography> : (
+      {loading ? <CircularProgress /> : !allowed ? null : projects.length === 0 ? <Typography>{t('No painting invoices.', 'لا توجد فواتير دهان.')}</Typography> : (
         <Stack spacing={2}>
           {projects.map((p) => (
             <Card key={p.projectId} variant="outlined"><CardContent>
