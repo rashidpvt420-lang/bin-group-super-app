@@ -203,6 +203,24 @@ test('readiness from another hard-clearance run or wrong releaseCommitSha fails'
   });
 });
 
+test('frozen readiness evaluates evidence age relative to fetchedAt snapshot timestamp', () => {
+  // Evidence observed 9 days ago, but snapshot was taken 8 days ago (1 day after observation)
+  const nineDaysAgo = Date.now() - 9 * 24 * 60 * 60 * 1000;
+  const eightDaysAgo = Date.now() - 8 * 24 * 60 * 60 * 1000;
+  const report = operationalReport(FROZEN_SHA, {
+    fetchedAt: new Date(eightDaysAgo).toISOString(),
+  });
+  // Set all gate timestamps to 9 days ago (relative to today, > 7 days, but relative to fetchedAt, 1 day)
+  for (const gate of Object.values(report.gates)) {
+    gate.observedAt = new Date(nineDaysAgo).toISOString();
+    gate.verifiedAt = new Date(eightDaysAgo).toISOString();
+  }
+  withFixture({ report }, (root) => {
+    const out = runGuard(root, frozenEnv());
+    assert.match(out, BOUND, out);
+  });
+});
+
 test('legacy path (no frozen SHA) is unchanged: readiness must equal GITHUB_SHA', () => {
   withFixture({ report: operationalReport(FROZEN_SHA) }, (root) => {
     const out = runGuard(root);
