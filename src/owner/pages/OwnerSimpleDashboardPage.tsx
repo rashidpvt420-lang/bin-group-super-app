@@ -1,6 +1,7 @@
 import HomeQuickLinks, { type HomeQuickLink } from '../../components/HomeQuickLinks';
 import SuggestionBoxCard from '../../components/SuggestionBoxCard';
 import PaymentCollectionRecordsCard from '../../components/PaymentCollectionRecordsCard';
+import OwnerProofOfSpendCard from '../components/OwnerProofOfSpendCard';
 import OwnerMaintenancePlansCard from '../components/OwnerMaintenancePlansCard';
 import OwnerVendorScorecardsCard from '../components/OwnerVendorScorecardsCard';
 import MoneyStatementDownload from '../../components/MoneyStatementDownload';
@@ -91,6 +92,7 @@ export default function OwnerSimpleDashboardPage() {
         <SuggestionBoxCard role="owner" />
         <OwnerPrivacyCentreCard />
         <PaymentCollectionRecordsCard />
+        <OwnerProofOfSpendCard />
         <MoneyStatementDownload />
         <OwnerPerformanceReportCard />
         <OwnerPropertyPassportCard />
