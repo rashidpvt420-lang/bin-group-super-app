@@ -6,6 +6,7 @@ const { db, lib, createUser, clearFirestore, call, expectHttpsError } = require(
 
 const rt = lib('runtimeAll.js');
 const jw = lib('jobWarranties.js');
+const stripePayment = lib('stripePayment.js');
 let owner, other, tenant;
 test.before(async () => {
   owner = await createUser('ojw_owner', { role: 'owner' });
@@ -38,4 +39,11 @@ test('repeat fault within warranty flags review and charge hold; other categorie
 test('expired warranty does not flag', async () => {
   await db.doc('job_warranties/old').set({ ticketId: 'old', ownerId: 'ojw_owner', faultKey: 'p1|u1|ac', status: 'ACTIVE', expiresAt: new Date(Date.now() - 1000) });
   assert.equal(await jw.flagRepeatFault('t9', { ownerId: 'ojw_owner', propertyId: 'p1', unitId: 'u1', category: 'AC' }), null);
+});
+
+test('ticket payment remains blocked while warranty review hold is pending', () => {
+  assert.equal(stripePayment.isTicketChargeBlockedByWarrantyReview({ ownerChargeHold: true }), true);
+  assert.equal(stripePayment.isTicketChargeBlockedByWarrantyReview({ warrantyReview: { status: 'PENDING_REVIEW' } }), true);
+  assert.equal(stripePayment.isTicketChargeBlockedByWarrantyReview({ warrantyReviewStatus: 'PENDING_REVIEW' }), true);
+  assert.equal(stripePayment.isTicketChargeBlockedByWarrantyReview({ ownerChargeHold: false, warrantyReview: { status: 'APPROVED_FOR_CHARGE' } }), false);
 });

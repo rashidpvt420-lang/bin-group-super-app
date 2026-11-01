@@ -63,6 +63,22 @@ function sameMoney(left: number, right: number) {
   return Math.abs(left - right) < 0.01;
 }
 
+export function isTicketChargeBlockedByWarrantyReview(data: Record<string, any>) {
+  const reviewStatus = String(data.warrantyReview?.status || data.warrantyReviewStatus || "")
+    .trim()
+    .toUpperCase();
+  return data.ownerChargeHold === true || reviewStatus === "PENDING_REVIEW";
+}
+
+function assertTicketChargeNotHeld(data: Record<string, any>) {
+  if (isTicketChargeBlockedByWarrantyReview(data)) {
+    throw new HttpsError(
+      "failed-precondition",
+      "This repeat-fault job is under warranty review. The owner cannot be charged until the hold is cleared."
+    );
+  }
+}
+
 function safeId(value: unknown) {
   return String(value || "")
     .replace(/[^A-Za-z0-9_-]/g, "_")
@@ -145,6 +161,7 @@ export const createStripeCheckoutSession = onCall({
     if (ownerIdOf(ticket) !== ownerUid) {
       throw new HttpsError("permission-denied", "Maintenance ticket belongs to another owner.");
     }
+    assertTicketChargeNotHeld(ticket);
     chargeAmount = serverAmount(ticket, ["paymentAmount", "amountDue", "invoiceAmount", "finalCost", "approvedCost", "totalAmount"]);
     productName = "BIN GROUP Maintenance Service Payment";
     productDescription = `Ticket ID: ${ticketId}`;
@@ -259,6 +276,7 @@ export const createStripeCheckoutSession = onCall({
       : targetKind === "design"
         ? serverAmount(fresh, ["amount", "amountDue", "paymentAmount"])
         : serverAmount(fresh, ["amount", "activationDeposit", "amountDue", "total"]);
+    if (targetKind === "ticket") assertTicketChargeNotHeld(fresh);
     if (
       freshOwnerUid !== ownerUid ||
       !sameMoney(freshAmount, chargeAmount) ||
@@ -329,6 +347,7 @@ export const createStripeCheckoutSession = onCall({
         ) {
           throw new HttpsError("aborted", "Payment changed while Stripe created the checkout session.");
         }
+        if (targetKind === "ticket") assertTicketChargeNotHeld(fresh);
         transaction.set(targetRef!, {
           stripeSessionId: session.id,
           stripeCheckoutStatus: String(session.status || "open").toUpperCase(),
@@ -803,10 +822,13 @@ export const stripeWebhook = onRequest({
         expectedAmount > 0 &&
         sameMoney(expectedAmount, amount) &&
         sessionMatches &&
+        !isTicketChargeBlockedByWarrantyReview(ticket) &&
         !rejectedOrInvalidated;
       if (!valid) {
         const reason = rejectedOrInvalidated
           ? "REJECTED_OR_INVALIDATED_STRIPE_SESSION"
+          : isTicketChargeBlockedByWarrantyReview(ticket)
+            ? "WARRANTY_CHARGE_HOLD"
           : !sessionMatches
             ? "UNEXPECTED_OR_DUPLICATE_STRIPE_SESSION"
             : "TICKET_AMOUNT_OR_OWNERSHIP_MISMATCH";
