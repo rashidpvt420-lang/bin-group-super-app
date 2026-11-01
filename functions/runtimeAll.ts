@@ -31,6 +31,7 @@ export { createTenantJobLink, resolveTenantJobLink, reportViaTenantJobLink } fro
 export { financeRecordPdcStatus, getPdcRegister } from './pdcRegister';
 export { onOwnerBankAccountChanged, onBrokerPayoutDetailsChanged } from './payoutChangeAlerts';
 export { reopenMaintenanceTicket } from './ticketReopen';
+export { getOwnerPrivacyCentre, ownerExportMyData, ownerSubmitCorrectionRequest, ownerCreateDataShare, ownerRevokeDataShare } from './ownerPrivacyCentre';
 export { getOwnerPropertyLedger } from './ownerPropertyLedger';
 export { ownerUpsertPropertyAsset, getOwnerPropertyPassport } from './ownerPropertyPassport';
 export { adminSetDesignPriceList } from './designPriceList';

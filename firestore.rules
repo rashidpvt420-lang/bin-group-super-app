@@ -2036,6 +2036,16 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // Owner Trust Centre: Privacy Centre correction requests and time-limited shares. Owners read their own; writes via callables only.
+    match /owner_correction_requests/{requestId} {
+      allow read: if isAdmin() || (signedIn() && resource.data.get('ownerId', null) == request.auth.uid);
+      allow create, update, delete: if false;
+    }
+    match /privacy_shares/{shareId} {
+      allow read: if isAdmin() || (signedIn() && resource.data.get('ownerId', null) == request.auth.uid);
+      allow create, update, delete: if false;
+    }
+
     // Suggestion box: owners, tenants, technicians and brokers file their own ideas.
     // Create-only for the signed-in role holder, bound to their uid and role claim,
     // server-timestamped; only MFA admins can read them. Nobody edits or deletes.
@@ -2644,6 +2654,8 @@ service cloud.firestore {
           'property_assets',
           'payment_collection_records',
           'payment_collection_voids',
+          'owner_correction_requests',
+          'privacy_shares',
           'issued_document_registry',
           'money_statement_rate_limits',
           'owner_report_rate_limits',
@@ -2757,6 +2769,8 @@ service cloud.firestore {
           'property_assets',
           'payment_collection_records',
           'payment_collection_voids',
+          'owner_correction_requests',
+          'privacy_shares',
           'issued_document_registry',
           'money_statement_rate_limits',
           'owner_report_rate_limits',
