@@ -1,4 +1,5 @@
 import HomeQuickLinks, { type HomeQuickLink } from '../../components/HomeQuickLinks';
+import WhatsAppJobUpdatesCard from '../../components/WhatsAppJobUpdatesCard';
 import SuggestionBoxCard from '../../components/SuggestionBoxCard';
 import OwnerAuthorityRegisterCard from '../components/OwnerAuthorityRegisterCard';
 import PaymentCollectionRecordsCard from '../../components/PaymentCollectionRecordsCard';
@@ -105,6 +106,7 @@ export default function OwnerSimpleDashboardPage() {
         <OwnerPropertyPassportCard />
         <OwnerAuthorityRegisterCard />
 
+        <WhatsAppJobUpdatesCard />
         <HomeQuickLinks testId="owner-home-quick-links" titleEn="Your tools" titleAr="أدواتك" links={OWNER_HOME_LINKS} />
         <UiCard testId="owner-home-insights">
           <ListRow title={t('owner.home.insights', 'Portfolio insights & reports', 'تحليلات وتقارير المحفظة')} subtitle={t('owner.home.insightsSub', 'ROI, rent collection, money risk, contracts, complaints, evidence and authorized reporters', 'العائد، التحصيل، المخاطر المالية، العقود، الشكاوى، الأدلة والمبلغون المعتمدون')} onClick={() => navigate('/owner/insights')} isRTL={isRTL} />

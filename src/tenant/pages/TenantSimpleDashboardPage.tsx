@@ -1,4 +1,5 @@
 import SuggestionBoxCard from '../../components/SuggestionBoxCard';
+import WhatsAppJobUpdatesCard from '../../components/WhatsAppJobUpdatesCard';
 import PaymentCollectionRecordsCard from '../../components/PaymentCollectionRecordsCard';
 import MoneyStatementDownload from '../../components/MoneyStatementDownload';
 import { Box, Button, Skeleton, Stack, Typography } from '@mui/material';
@@ -135,6 +136,7 @@ export default function TenantSimpleDashboardPage() {
           <Typography sx={{ ...uiType.small, color: ui.badText }}>{ar ? `الاستجابة خلال ${CANONICAL_SLA_POLICY.EMERGENCY.minutes} دقيقة` : `Response within ${CANONICAL_SLA_POLICY.EMERGENCY.minutes} minutes`}</Typography>
         </Box>
 
+        <WhatsAppJobUpdatesCard />
         <SuggestionBoxCard role="tenant" />
         <PaymentCollectionRecordsCard />
         <MoneyStatementDownload />

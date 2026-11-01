@@ -12,6 +12,7 @@ onInit(() => {
 
 export * from './runtime';
 export * from './whatsappWebhook';
+export { onTicketWrittenWhatsAppStatus, onApprovalRequestWhatsAppStatus, setWhatsAppJobUpdatesOptIn } from './whatsappJobStatusNotifications';
 export * from './rentLedgerMirror';
 export { ownerSetRentSchedule, sendRentDueReminders, onRentPaymentDecision } from './rentSchedule';
 export { onOwnerApprovalDecision, submitOwnerApprovalDecision } from './ownerTrustWorkflow';
