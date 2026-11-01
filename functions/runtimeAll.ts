@@ -32,4 +32,5 @@ export { financeRecordPdcStatus, getPdcRegister } from './pdcRegister';
 export { onOwnerBankAccountChanged, onBrokerPayoutDetailsChanged } from './payoutChangeAlerts';
 export { reopenMaintenanceTicket } from './ticketReopen';
 export { getOwnerPropertyLedger } from './ownerPropertyLedger';
+export { ownerUpsertPropertyAsset, getOwnerPropertyPassport } from './ownerPropertyPassport';
 export { adminSetDesignPriceList } from './designPriceList';

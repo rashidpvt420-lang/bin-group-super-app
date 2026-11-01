@@ -5,6 +5,7 @@ import OwnerMaintenancePlansCard from '../components/OwnerMaintenancePlansCard';
 import OwnerVendorScorecardsCard from '../components/OwnerVendorScorecardsCard';
 import MoneyStatementDownload from '../../components/MoneyStatementDownload';
 import OwnerPerformanceReportCard from '../components/OwnerPerformanceReportCard';
+import OwnerPropertyPassportCard from '../components/OwnerPropertyPassportCard';
 import { Box, Button, Stack } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '@bin/shared';
@@ -90,6 +91,7 @@ export default function OwnerSimpleDashboardPage() {
         <PaymentCollectionRecordsCard />
         <MoneyStatementDownload />
         <OwnerPerformanceReportCard />
+        <OwnerPropertyPassportCard />
 
         <HomeQuickLinks testId="owner-home-quick-links" titleEn="Your tools" titleAr="أدواتك" links={OWNER_HOME_LINKS} />
         <UiCard testId="owner-home-insights">
