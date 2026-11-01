@@ -26,6 +26,7 @@ export { onLeaseRenewalDeclinedMarkVacating, onMoveOutInspectionMarkVacating, ma
 export { notifyBrokersOfNewVacancy } from './brokerVacancyAlerts';
 export { ownerInviteTenantToUnit, ownerListTenantInvitations } from './ownerTenantInvites';
 export { getOwnerVendorScorecards, sendVendorCredentialAlerts } from './ownerVendorVerification';
+export { ownerGrantAuthority, ownerRevokeAuthority, getOwnerAuthorityRegister } from './ownerAuthorityRegister';
 export { getOwnerKpis } from './ownerKpis';
 export { getOwnerTrustMetrics } from './ownerTrustMetrics';
 export { createTenantJobLink, resolveTenantJobLink, reportViaTenantJobLink } from './tenantJobLinks';

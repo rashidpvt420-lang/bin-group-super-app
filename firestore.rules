@@ -2128,6 +2128,18 @@ service cloud.firestore {
       allow read: if isAdmin();
       allow create, update, delete: if false;
     }
+    // Owner Authority Register (Owner Trust Centre). Server writes only; owner reads own.
+    match /owner_authorities/{authorityId} {
+      allow read: if isAdmin() || (signedIn() && resource.data.get('ownerId', null) == request.auth.uid);
+      allow create, update, delete: if false;
+    }
+
+    // Owner authority grant/revoke history. Server writes only; owner reads own.
+    match /owner_authority_events/{eventId} {
+      allow read: if isAdmin() || (signedIn() && resource.data.get('ownerId', null) == request.auth.uid);
+      allow create, update, delete: if false;
+    }
+
     // Duplicate-payment claims (server only) and the finance fraud alerts they raise.
     match /payment_collection_claims/{claimId} {
       allow read, create, update, delete: if false;
@@ -2679,6 +2691,8 @@ service cloud.firestore {
           'owner_spending_limits',
           'emergency_spend_reviews',
           'payout_change_alerts',
+          'owner_authorities',
+          'owner_authority_events',
           'ticket_reopen_events',
           'finance_fraud_alerts'
         ]
@@ -2796,6 +2810,8 @@ service cloud.firestore {
           'owner_spending_limits',
           'emergency_spend_reviews',
           'payout_change_alerts',
+          'owner_authorities',
+          'owner_authority_events',
           'ticket_reopen_events',
           'finance_fraud_alerts'
         ]

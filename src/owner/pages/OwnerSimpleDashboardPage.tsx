@@ -1,5 +1,6 @@
 import HomeQuickLinks, { type HomeQuickLink } from '../../components/HomeQuickLinks';
 import SuggestionBoxCard from '../../components/SuggestionBoxCard';
+import OwnerAuthorityRegisterCard from '../components/OwnerAuthorityRegisterCard';
 import PaymentCollectionRecordsCard from '../../components/PaymentCollectionRecordsCard';
 import OwnerProofOfSpendCard from '../components/OwnerProofOfSpendCard';
 import OwnerMaintenancePlansCard from '../components/OwnerMaintenancePlansCard';
@@ -98,6 +99,7 @@ export default function OwnerSimpleDashboardPage() {
         <OwnerSpendingLimitsCard />
         <OwnerPerformanceReportCard />
         <OwnerPropertyPassportCard />
+        <OwnerAuthorityRegisterCard />
 
         <HomeQuickLinks testId="owner-home-quick-links" titleEn="Your tools" titleAr="أدواتك" links={OWNER_HOME_LINKS} />
         <UiCard testId="owner-home-insights">
