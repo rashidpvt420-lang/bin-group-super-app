@@ -21,6 +21,7 @@ import TenantAIConciergePage from './pages/TenantAIConciergePage';
 import TenantRequestPage from './pages/TenantRequestPage';
 import TenantTicketsPage from './pages/TenantTicketsPage';
 import TenantTicketDetailPage from './pages/TenantTicketDetailPage';
+import TenantJobLinkPage from './pages/TenantJobLinkPage';
 import TenantChatPage from './pages/TenantChatPage';
 import TenantEmergencyPage from './pages/TenantEmergencyPage';
 import TenantProfilePage from './pages/TenantProfilePage';
@@ -123,6 +124,7 @@ export default function TenantApp() {
                 <Route path="/request" element={<TenantRequestPage />} />
                 <Route path="/tickets" element={<TenantTicketsPage />} />
                 <Route path="/ticket/:id" element={<TenantTicketDetailPage />} />
+                <Route path="/job-link" element={<TenantJobLinkPage />} />
                 <Route path="/chat" element={<TenantChatPage />} />
                 <Route path="/chat/:ticketId" element={<TenantChatPage />} />
                 <Route path="/emergency" element={<TenantEmergencyPage />} />
