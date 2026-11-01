@@ -1615,6 +1615,40 @@ service cloud.firestore {
       allow delete: if isAdmin() || isHr();
     }
 
+    // Owner referral rewards: callable-only writes (functions/ownerReferralRewards.ts).
+    match /owner_referral_program/{docId} {
+      allow read: if signedIn();
+      allow create, update, delete: if false;
+    }
+
+    match /owner_referral_program/{docId}/history/{versionId} {
+      allow read: if isAdmin();
+      allow create, update, delete: if false;
+    }
+
+    match /owner_referral_profiles/{ownerUid} {
+      allow read: if isAdmin() || (signedIn() && request.auth.uid == ownerUid);
+      allow create, update, delete: if false;
+    }
+
+    match /owner_referrals/{referralId} {
+      allow read: if isAdmin() || (signedIn() && (resource.data.referrerUid == request.auth.uid || resource.data.referredUid == request.auth.uid));
+      allow create, update, delete: if false;
+    }
+
+    match /owner_referral_credits/{creditId} {
+      allow read: if isAdmin() || (signedIn() && resource.data.ownerUid == request.auth.uid);
+      allow create, update, delete: if false;
+    }
+
+    match /owner_referral_codes/{code} {
+      allow read, create, update, delete: if false;
+    }
+
+    match /owner_referral_record_uses/{recordId} {
+      allow read, create, update, delete: if false;
+    }
+
     match /brokerReferrals/{referralId} {
       allow read: if isAdmin() || brokerOwns(resource.data);
       // Legacy Broker referral writes are retired; canonical submissions use a callable.
@@ -2409,6 +2443,16 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
 
+    // One-time painting projects: callable-only writes (quote margin, OTP approval, photos, warranty).
+    match /painting_projects/{projectId} {
+      allow read: if signedIn() && (resource.data.ownerId == request.auth.uid || hasAdminClaim());
+      allow create, update, delete: if false;
+      match /quotes/{quoteId} {
+        allow read: if signedIn() && (get(/databases/$(database)/documents/painting_projects/$(projectId)).data.ownerId == request.auth.uid || hasAdminClaim());
+        allow create, update, delete: if false;
+      }
+    }
+
     match /{collection}/{document=**} {
       allow read: if collection != 'tickets' && collection != 'maintenanceTickets' && !(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions', 'private_hr_profiles', 'technician_live_locations', 'invoice_registry', 'payroll_entries', 'property_identity_registry']) && hasAdminClaim();
       allow create: if collection != 'tickets' && collection != 'maintenanceTickets' && !(
@@ -2468,6 +2512,7 @@ service cloud.firestore {
           'active_contracts',
           'onboarding_leads',
           'systemMetrics',
+          'painting_projects',
           'binConnectThreads',
           'tenancies',
           'tenant_import_batches',
@@ -2475,6 +2520,12 @@ service cloud.firestore {
           'tenant_invitations',
           'binGptEngineerCommands',
           'pricingAuditLogs',
+          'owner_referral_program',
+          'owner_referral_profiles',
+          'owner_referrals',
+          'owner_referral_credits',
+          'owner_referral_codes',
+          'owner_referral_record_uses',
           'conversations',
           'documentLibrary',
           'assets',
@@ -2564,6 +2615,7 @@ service cloud.firestore {
           'active_contracts',
           'onboarding_leads',
           'systemMetrics',
+          'painting_projects',
           'binConnectThreads',
           'tenancies',
           'tenant_import_batches',
@@ -2571,6 +2623,12 @@ service cloud.firestore {
           'tenant_invitations',
           'binGptEngineerCommands',
           'pricingAuditLogs',
+          'owner_referral_program',
+          'owner_referral_profiles',
+          'owner_referrals',
+          'owner_referral_credits',
+          'owner_referral_codes',
+          'owner_referral_record_uses',
           'conversations',
           'documentLibrary',
           'assets',

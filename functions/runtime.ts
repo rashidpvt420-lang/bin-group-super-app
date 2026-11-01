@@ -99,6 +99,7 @@ export * from "./tenantTicketOperations";
 export * from "./aiUsageQuota";
 export * from "./secureOwnerProfileOperations";
 export * from "./ownerProfileReadiness";
+export * from "./ownerReferralRewards";
 export * from "./technicianLiveLocation";
 export * from "./technicianLiveLocationOverflow";
 export * from "./technicianAvailabilityLocation";
