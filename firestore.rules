@@ -1615,6 +1615,40 @@ service cloud.firestore {
       allow delete: if isAdmin() || isHr();
     }
 
+    // Owner referral rewards: callable-only writes (functions/ownerReferralRewards.ts).
+    match /owner_referral_program/{docId} {
+      allow read: if signedIn();
+      allow create, update, delete: if false;
+    }
+
+    match /owner_referral_program/{docId}/history/{versionId} {
+      allow read: if isAdmin();
+      allow create, update, delete: if false;
+    }
+
+    match /owner_referral_profiles/{ownerUid} {
+      allow read: if isAdmin() || (signedIn() && request.auth.uid == ownerUid);
+      allow create, update, delete: if false;
+    }
+
+    match /owner_referrals/{referralId} {
+      allow read: if isAdmin() || (signedIn() && (resource.data.referrerUid == request.auth.uid || resource.data.referredUid == request.auth.uid));
+      allow create, update, delete: if false;
+    }
+
+    match /owner_referral_credits/{creditId} {
+      allow read: if isAdmin() || (signedIn() && resource.data.ownerUid == request.auth.uid);
+      allow create, update, delete: if false;
+    }
+
+    match /owner_referral_codes/{code} {
+      allow read, create, update, delete: if false;
+    }
+
+    match /owner_referral_record_uses/{recordId} {
+      allow read, create, update, delete: if false;
+    }
+
     match /brokerReferrals/{referralId} {
       allow read: if isAdmin() || brokerOwns(resource.data);
       // Legacy Broker referral writes are retired; canonical submissions use a callable.
@@ -2042,12 +2076,42 @@ service cloud.firestore {
     match /money_statement_rate_limits/{uid} {
       allow read, create, update, delete: if false;
     }
+    // Owner performance report quota. Server (Admin SDK) only.
+    match /owner_report_rate_limits/{uid} {
+      allow read, create, update, delete: if false;
+    }
     match /payment_collection_voids/{recordId} {
       allow read: if isAdmin() || (signedIn() && resource.data.payerUid == request.auth.uid);
       allow create, update, delete: if false;
     }
     match /payment_collection_audit/{auditId} {
       allow read: if isAdmin();
+      allow create, update, delete: if false;
+    }
+    // Duplicate-payment claims (server only) and the finance fraud alerts they raise.
+    match /payment_collection_claims/{claimId} {
+      allow read, create, update, delete: if false;
+    }
+    match /finance_fraud_alerts/{alertId} {
+      allow read: if isAdmin();
+      allow create, update, delete: if false;
+    }
+
+    // Post-dated cheque register (server only; finance records bank outcomes). Owner reads own cheques.
+    match /pdc_cheques/{installmentId} {
+      allow read: if isAdmin() || (signedIn() && resource.data.get('ownerId', null) == request.auth.uid);
+      allow create, update, delete: if false;
+    }
+
+    // Payout-detail change alerts (server only). Admins read all; holders read their own.
+    match /payout_change_alerts/{alertId} {
+      allow read: if isAdmin() || (signedIn() && resource.data.get('holderUid', null) == request.auth.uid);
+      allow create, update, delete: if false;
+    }
+
+    // Limited ticket reopen events (server only, capped and audited). Tenants read their own.
+    match /ticket_reopen_events/{eventId} {
+      allow read: if isAdmin() || (signedIn() && resource.data.get('tenantId', null) == request.auth.uid);
       allow create, update, delete: if false;
     }
 
@@ -2379,6 +2443,16 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
 
+    // One-time painting projects: callable-only writes (quote margin, OTP approval, photos, warranty).
+    match /painting_projects/{projectId} {
+      allow read: if signedIn() && (resource.data.ownerId == request.auth.uid || hasAdminClaim());
+      allow create, update, delete: if false;
+      match /quotes/{quoteId} {
+        allow read: if signedIn() && (get(/databases/$(database)/documents/painting_projects/$(projectId)).data.ownerId == request.auth.uid || hasAdminClaim());
+        allow create, update, delete: if false;
+      }
+    }
+
     match /{collection}/{document=**} {
       allow read: if collection != 'tickets' && collection != 'maintenanceTickets' && !(collection in ['system_secrets', 'users', 'broker_kyc_submission_limits', 'admin_security_sessions', 'private_hr_profiles', 'technician_live_locations', 'invoice_registry', 'payroll_entries', 'property_identity_registry']) && hasAdminClaim();
       allow create: if collection != 'tickets' && collection != 'maintenanceTickets' && !(
@@ -2438,6 +2512,7 @@ service cloud.firestore {
           'active_contracts',
           'onboarding_leads',
           'systemMetrics',
+          'painting_projects',
           'binConnectThreads',
           'tenancies',
           'tenant_import_batches',
@@ -2445,6 +2520,12 @@ service cloud.firestore {
           'tenant_invitations',
           'binGptEngineerCommands',
           'pricingAuditLogs',
+          'owner_referral_program',
+          'owner_referral_profiles',
+          'owner_referrals',
+          'owner_referral_credits',
+          'owner_referral_codes',
+          'owner_referral_record_uses',
           'conversations',
           'documentLibrary',
           'assets',
@@ -2468,7 +2549,13 @@ service cloud.firestore {
           'payment_collection_voids',
           'issued_document_registry',
           'money_statement_rate_limits',
-          'payment_collection_audit'
+          'owner_report_rate_limits',
+          'payment_collection_audit',
+          'payment_collection_claims',
+          'pdc_cheques',
+          'payout_change_alerts',
+          'ticket_reopen_events',
+          'finance_fraud_alerts'
         ]
       ) && hasAdminClaim();
       allow update, delete: if collection != 'tickets' && collection != 'maintenanceTickets' && !(
@@ -2528,6 +2615,7 @@ service cloud.firestore {
           'active_contracts',
           'onboarding_leads',
           'systemMetrics',
+          'painting_projects',
           'binConnectThreads',
           'tenancies',
           'tenant_import_batches',
@@ -2535,6 +2623,12 @@ service cloud.firestore {
           'tenant_invitations',
           'binGptEngineerCommands',
           'pricingAuditLogs',
+          'owner_referral_program',
+          'owner_referral_profiles',
+          'owner_referrals',
+          'owner_referral_credits',
+          'owner_referral_codes',
+          'owner_referral_record_uses',
           'conversations',
           'documentLibrary',
           'assets',
@@ -2558,7 +2652,13 @@ service cloud.firestore {
           'payment_collection_voids',
           'issued_document_registry',
           'money_statement_rate_limits',
-          'payment_collection_audit'
+          'owner_report_rate_limits',
+          'payment_collection_audit',
+          'payment_collection_claims',
+          'pdc_cheques',
+          'payout_change_alerts',
+          'ticket_reopen_events',
+          'finance_fraud_alerts'
         ]
       ) && hasAdminClaim();
     }

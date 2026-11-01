@@ -649,6 +649,41 @@ describe('Firestore Security Rules', () => {
     await assertFails(getDoc(doc(tenantBDb, 'paymentConfirmations/confirm_4')));
   });
 
+  it('owner referral rewards are callable-only: parties read their own referral, nobody writes from the browser', async () => {
+    await seedServerDocument('owner_referral_program/config', { enabled: true, rewardAed: 250, version: 1 });
+    await seedServerDocument('owner_referral_profiles/owner_a', { ownerUid: 'owner_a', code: 'BIN-ABCDEFGH' });
+    await seedServerDocument('owner_referral_codes/BIN-ABCDEFGH', { ownerUid: 'owner_a' });
+    await seedServerDocument('owner_referrals/owner_n', { referrerUid: 'owner_a', referredUid: 'owner_n', status: 'PENDING_VERIFIED_PAYMENT' });
+    await seedServerDocument('owner_referral_credits/owner_n', { ownerUid: 'owner_a', amountAed: 250, status: 'AVAILABLE' });
+
+    const ownerA = testEnv.authenticatedContext('owner_a', { role: 'owner' }).firestore();
+    const ownerN = testEnv.authenticatedContext('owner_n', { role: 'owner' }).firestore();
+    const ownerB = testEnv.authenticatedContext('owner_b', { role: 'owner' }).firestore();
+    const anon = testEnv.unauthenticatedContext().firestore();
+    const adminDb = testEnv.authenticatedContext('admin_ref', { firebase: { sign_in_second_factor: 'phone' }, role: 'admin', admin: true }).firestore();
+
+    await assertSucceeds(getDoc(doc(ownerB, 'owner_referral_program/config')));
+    await assertFails(getDoc(doc(anon, 'owner_referral_program/config')));
+    await assertSucceeds(getDoc(doc(ownerA, 'owner_referral_profiles/owner_a')));
+    await assertFails(getDoc(doc(ownerB, 'owner_referral_profiles/owner_a')));
+    await assertFails(getDoc(doc(ownerB, 'owner_referral_codes/BIN-ABCDEFGH')));
+    await assertSucceeds(getDoc(doc(ownerA, 'owner_referrals/owner_n')));
+    await assertSucceeds(getDoc(doc(ownerN, 'owner_referrals/owner_n')));
+    await assertFails(getDoc(doc(ownerB, 'owner_referrals/owner_n')));
+    await assertSucceeds(getDoc(doc(ownerA, 'owner_referral_credits/owner_n')));
+    await assertFails(getDoc(doc(ownerN, 'owner_referral_credits/owner_n')));
+
+    await assertFails(setDoc(doc(ownerN, 'owner_referrals/owner_x'), { referrerUid: 'owner_a', referredUid: 'owner_n' }));
+    await assertFails(updateDoc(doc(ownerA, 'owner_referrals/owner_n'), { status: 'REWARD_APPROVED' }));
+    await assertFails(setDoc(doc(ownerA, 'owner_referral_credits/forged'), { ownerUid: 'owner_a', amountAed: 9999 }));
+    await assertFails(setDoc(doc(ownerA, 'owner_referral_codes/BIN-ZZZZZZZZ'), { ownerUid: 'owner_a' }));
+    await assertFails(updateDoc(doc(adminDb, 'owner_referral_program/config'), { rewardAed: 9999 }));
+    await assertFails(updateDoc(doc(adminDb, 'owner_referrals/owner_n'), { status: 'REWARD_APPROVED' }));
+    await assertFails(setDoc(doc(adminDb, 'owner_referral_credits/forged_admin'), { ownerUid: 'owner_a', amountAed: 1 }));
+    await assertFails(deleteDoc(doc(adminDb, 'owner_referrals/owner_n')));
+    await assertFails(setDoc(doc(adminDb, 'owner_referral_record_uses/r1'), { referralId: 'x' }));
+  });
+
   it('broker KYC: broker cannot self-approve verified KYC fields', async () => {
     const adminDb = testEnv.authenticatedContext('admin_user', { firebase: { sign_in_second_factor: 'phone' }, admin: true }).firestore();
     await setDoc(doc(adminDb, 'users/admin_user'), { role: 'admin' });
@@ -1656,6 +1691,19 @@ describe('Firestore Security Rules', () => {
     await assertSucceeds(getDoc(doc(ownerA, 'design_quotes/quote_owner_a')));
     await assertFails(getDoc(doc(ownerB, 'design_quotes/quote_owner_a')));
     await assertFails(updateDoc(doc(ownerA, 'design_quotes/quote_owner_a'), { status: 'PAID' }));
+  });
+
+  it('owner performance report quota and issued registry are server-only', async () => {
+    await seedServerDocument('owner_report_rate_limits/owner_rpt_a', { day: '2026-10-01', count: 1 });
+    await seedServerDocument('issued_document_registry/rpt_0123456789abcdef0123456789abcdef', { documentType: 'owner_performance_report', subjectUid: 'owner_rpt_a', sha256: 'a'.repeat(64) });
+    const owner = testEnv.authenticatedContext('owner_rpt_a', { role: 'owner' }).firestore();
+    const admin = testEnv.authenticatedContext('admin_rpt', { firebase: { sign_in_second_factor: 'phone' }, role: 'admin', admin: true }).firestore();
+    await assertFails(getDoc(doc(owner, 'owner_report_rate_limits/owner_rpt_a')));
+    await assertFails(setDoc(doc(owner, 'owner_report_rate_limits/owner_rpt_a'), { day: '2026-10-01', count: 0 }));
+    await assertFails(deleteDoc(doc(owner, 'owner_report_rate_limits/owner_rpt_a')));
+    await assertFails(setDoc(doc(admin, 'owner_report_rate_limits/owner_rpt_a'), { count: 0 }));
+    await assertFails(getDoc(doc(owner, 'issued_document_registry/rpt_0123456789abcdef0123456789abcdef')));
+    await assertFails(setDoc(doc(owner, 'issued_document_registry/rpt_forged000000000000000000000000'), { sha256: 'b'.repeat(64) }));
   });
 
 });
