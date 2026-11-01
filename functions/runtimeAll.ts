@@ -20,6 +20,7 @@ export { sendMonthlyOwnerPropertyReports, rebuildMonthlyOwnerPropertyReports } f
 export { listUnifiedDocumentVault, getUnifiedDocumentFile } from './unifiedDocumentVault';
 export { ownerRecordLeaseAgreement } from './leaseAgreements';
 export { ownerProposeLeaseRenewal, tenantRespondLeaseRenewal } from './leaseRenewals';
+export { getOwnerComplianceCalendar, sendComplianceReminders } from './ownerComplianceCalendar';
 export { onLeaseRenewalDeclinedMarkVacating, onMoveOutInspectionMarkVacating, markEndedLeasesVacant, ownerPrepareUnitListing } from './unitVacancy';
 export { notifyBrokersOfNewVacancy } from './brokerVacancyAlerts';
 export { ownerInviteTenantToUnit, ownerListTenantInvitations } from './ownerTenantInvites';
