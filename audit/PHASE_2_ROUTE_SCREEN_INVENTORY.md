@@ -11,9 +11,9 @@ Generated from canonical router sources.
 | tenant | 34 |
 | technician | 18 |
 | broker | 17 |
-| adminops | 73 |
+| adminops | 74 |
 
-Total registered route entries/aliases: **261**.
+Total registered route entries/aliases: **262**.
 
 The CSV records:
 
