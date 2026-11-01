@@ -2164,6 +2164,12 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
 
+    // Owners' committee records (Owner Trust Centre). Records only, no funds. Server writes; owner reads own.
+    match /committee_records/{recordId} {
+      allow read: if isAdmin() || (signedIn() && resource.data.get('ownerId', null) == request.auth.uid);
+      allow create, update, delete: if false;
+    }
+
     // Payout-detail change alerts (server only). Admins read all; holders read their own.
     match /payout_change_alerts/{alertId} {
       allow read: if isAdmin() || (signedIn() && resource.data.get('holderUid', null) == request.auth.uid);
@@ -2666,6 +2672,7 @@ service cloud.firestore {
           'amenities',
           'tenant_services_requests',
           'communityPosts',
+          'committee_records',
           'parcels',
           'keyMovements',
           'keyRegister',
@@ -2785,6 +2792,7 @@ service cloud.firestore {
           'amenities',
           'tenant_services_requests',
           'communityPosts',
+          'committee_records',
           'parcels',
           'keyMovements',
           'keyRegister',

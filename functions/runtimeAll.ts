@@ -29,6 +29,7 @@ export { getOwnerVendorScorecards, sendVendorCredentialAlerts } from './ownerVen
 export { ownerGrantAuthority, ownerRevokeAuthority, getOwnerAuthorityRegister } from './ownerAuthorityRegister';
 export { getOwnerKpis } from './ownerKpis';
 export { getOwnerTrustMetrics } from './ownerTrustMetrics';
+export { ownerAddCommitteeRecord, getOwnerCommitteeRecords } from './ownerCommitteeRecords';
 export { createTenantJobLink, resolveTenantJobLink, reportViaTenantJobLink } from './tenantJobLinks';
 export { financeRecordPdcStatus, getPdcRegister } from './pdcRegister';
 export { onOwnerBankAccountChanged, onBrokerPayoutDetailsChanged } from './payoutChangeAlerts';
