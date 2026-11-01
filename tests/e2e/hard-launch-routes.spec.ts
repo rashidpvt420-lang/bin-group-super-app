@@ -189,6 +189,7 @@ const roleCases: RoleCase[] = [
       '/tenant/community',
       '/tenant/renewals',
       '/tenant/ticket/phase2-missing',
+      '/tenant/job-link',
       '/tenant/chat/phase2-missing',
       '/tenant/move-inspection/move-in',
       '/notifications',

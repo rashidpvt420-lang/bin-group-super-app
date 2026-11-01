@@ -2097,6 +2097,15 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
 
+    // Per-job tenant links: only SHA-256 token hashes are stored (admins may read via the admin fallback; raw tokens never stored). Server-only writes.
+    match /tenant_job_links/{tokenHash} {
+      allow read, write: if false;
+    }
+    match /tenant_job_reports/{reportId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
     // Post-dated cheque register (server only; finance records bank outcomes). Owner reads own cheques.
     match /pdc_cheques/{installmentId} {
       allow read: if isAdmin() || (signedIn() && resource.data.get('ownerId', null) == request.auth.uid);
@@ -2619,6 +2628,8 @@ service cloud.firestore {
           'owner_report_rate_limits',
           'payment_collection_audit',
           'payment_collection_claims',
+          'tenant_job_links',
+          'tenant_job_reports',
           'pdc_cheques',
           'payout_change_alerts',
           'ticket_reopen_events',
@@ -2727,6 +2738,8 @@ service cloud.firestore {
           'owner_report_rate_limits',
           'payment_collection_audit',
           'payment_collection_claims',
+          'tenant_job_links',
+          'tenant_job_reports',
           'pdc_cheques',
           'payout_change_alerts',
           'ticket_reopen_events',
