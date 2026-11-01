@@ -349,6 +349,13 @@ export default function OwnerAIIntelligencePage() {
         </Typography>
       </Box>
 
+      {(tickets.length >= 250 || invoices.length >= 100) && (
+        <Alert severity="warning" sx={{ mb: 2 }} data-testid="owner-intelligence-partial-snapshot">
+          {isRTL
+            ? 'لقطة جزئية: بلغ هذا الملخص حده الأقصى (250 أمر عمل / 100 فاتورة) وليس سجلك الكامل. استخدم إثبات الإنفاق والكشوفات الكاملة للسجلات الكاملة.'
+            : 'Partial snapshot: this summary reached its limit (250 work orders / 100 invoices) and is not your full ledger. Use Proof of Spend and the full statements for complete records.'}
+        </Alert>
+      )}
       <PropertyOperationsIntelligencePanel
         properties={properties}
         passports={passports}

@@ -34,4 +34,5 @@ export { reopenMaintenanceTicket } from './ticketReopen';
 export { getOwnerPrivacyCentre, ownerExportMyData, ownerSubmitCorrectionRequest, ownerCreateDataShare, ownerRevokeDataShare } from './ownerPrivacyCentre';
 export { getOwnerPropertyLedger } from './ownerPropertyLedger';
 export { ownerUpsertPropertyAsset, getOwnerPropertyPassport } from './ownerPropertyPassport';
+export { getOwnerProofOfSpend } from './ownerProofOfSpend';
 export { adminSetDesignPriceList } from './designPriceList';
