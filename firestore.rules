@@ -2104,6 +2104,18 @@ service cloud.firestore {
     match /money_statement_rate_limits/{uid} {
       allow read, create, update, delete: if false;
     }
+    // Owner spending limits (Owner Trust Centre). Server (Admin SDK) writes only; owner reads own.
+    match /owner_spending_limits/{ownerId} {
+      allow read: if isAdmin() || (signedIn() && resource.data.get('ownerId', null) == request.auth.uid);
+      allow create, update, delete: if false;
+    }
+
+    // Emergency spend reviews (Owner Trust Centre). Server writes only; owner reads own.
+    match /emergency_spend_reviews/{approvalId} {
+      allow read: if isAdmin() || (signedIn() && resource.data.get('ownerId', null) == request.auth.uid);
+      allow create, update, delete: if false;
+    }
+
     // Owner performance report quota. Server (Admin SDK) only.
     match /owner_report_rate_limits/{uid} {
       allow read, create, update, delete: if false;
@@ -2664,6 +2676,8 @@ service cloud.firestore {
           'tenant_job_links',
           'tenant_job_reports',
           'pdc_cheques',
+          'owner_spending_limits',
+          'emergency_spend_reviews',
           'payout_change_alerts',
           'ticket_reopen_events',
           'finance_fraud_alerts'
@@ -2779,6 +2793,8 @@ service cloud.firestore {
           'tenant_job_links',
           'tenant_job_reports',
           'pdc_cheques',
+          'owner_spending_limits',
+          'emergency_spend_reviews',
           'payout_change_alerts',
           'ticket_reopen_events',
           'finance_fraud_alerts'
