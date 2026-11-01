@@ -15,6 +15,10 @@ export const STAFF_PORTAL_ROLES = new Set([
     'operations_manager',
 ]);
 
+// Painting payment reviewers: MFA-gated, read invoices/proofs and decide via financeDecidePaintingPayment only.
+export const PAINTING_FINANCE_ROLES = new Set(['finance_manager', 'finance_controller']);
+export const PAINTING_FINANCE_PATH = '/finance/painting-payments';
+
 export const PROVISIONABLE_STAFF_ROLE_OPTIONS = [
     { value: 'technician', label: 'Technician', description: 'Technician mobile portal only' },
     { value: 'operations_admin', label: 'Operations Admin', description: 'Tickets, technicians, map and SOS' },
@@ -132,6 +136,11 @@ export const canAccessAdminPath = (user: any, pathname: string): boolean => {
     if (isFullAdminUser(user)) return true;
 
     const role = normalizeRole(user?.role || user?.claims?.role || user?.claims?.userRole || user?.claims?.primaryRole);
+    const normalizedPath = String(pathname || '/').split(/[?#]/, 1)[0] || '/';
+    if (PAINTING_FINANCE_ROLES.has(role) || PAINTING_FINANCE_ROLES.has(normalizeRole(user?.claims?.financeRole))) {
+        if (normalizedPath === PAINTING_FINANCE_PATH) return true;
+        if (PAINTING_FINANCE_ROLES.has(role)) return false;
+    }
     if (!STAFF_PORTAL_ROLES.has(role)) return false;
     if (pathname === '/mfa-recovery' || pathname.startsWith('/mfa-recovery/')) return false;
 

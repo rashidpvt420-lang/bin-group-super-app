@@ -21,6 +21,7 @@ import OwnerKpiTiles from '../components/OwnerKpiTiles';
 /** Everything that used to sit only on the owner full dashboard, now on Home. */
 export const OWNER_HOME_LINKS: HomeQuickLink[] = [
   { path: '/owner/design-studio', en: 'AI Redesign', ar: 'إعادة التصميم بالذكاء الاصطناعي' },
+  { path: '/owner/painting', en: 'Painting (one-time project)', ar: 'الدهان (مشروع لمرة واحدة)' },
   { path: '/owner/contracts', en: 'Contracts', ar: 'العقود' },
   { path: '/owner/documents', en: 'Document vault', ar: 'خزنة المستندات' },
   { path: '/owner/property-passport', en: 'Property passport', ar: 'جواز العقار' },

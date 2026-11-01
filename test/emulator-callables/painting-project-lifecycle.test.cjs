@@ -82,6 +82,10 @@ test('admin lifecycle needs MFA, before photos, after photos and a bounded warra
   await expectHttpsError(call(m.adminRecordPaintingPhotos, adminMfa, { projectId: 'pp1', kind: 'AFTER', paths: ['painting-projects/pp1/after/b.jpg'] }), 'failed-precondition');
   assert.equal((await call(m.adminRecordPaintingPhotos, adminMfa, { projectId: 'pp1', kind: 'BEFORE', paths: ['painting-projects/pp1/before/a.jpg'] })).count, 1);
 
+  // Step 3 gates: contractor assigned and deposit approved by Finance before work starts
+  // (the full billing flow is covered in painting-billing.test.cjs).
+  await expectHttpsError(call(m.adminOpenPaintingWorkOrder, adminMfa, { projectId: 'pp1' }), 'failed-precondition');
+  await db.doc('painting_projects/pp1').update({ contractor: { name: 'Seeded Painter' }, 'payments.DEPOSIT': { status: 'PAID', amountAed: 2000 } });
   assert.equal((await call(m.adminOpenPaintingWorkOrder, adminMfa, { projectId: 'pp1' })).status, 'WORK_ORDER_OPEN');
   await expectHttpsError(call(m.adminCompletePaintingProject, adminMfa, { projectId: 'pp1' }), 'failed-precondition');
   await call(m.adminRecordPaintingPhotos, adminMfa, { projectId: 'pp1', kind: 'AFTER', paths: ['painting-projects/pp1/after/b.jpg'] });
@@ -89,6 +93,11 @@ test('admin lifecycle needs MFA, before photos, after photos and a bounded warra
 
   await expectHttpsError(call(m.adminIssuePaintingWarranty, adminMfa, { projectId: 'pp1', months: 61 }), 'invalid-argument');
   await expectHttpsError(call(m.adminIssuePaintingWarranty, adminMfa, { projectId: 'pp1', months: 0 }), 'invalid-argument');
+  await expectHttpsError(call(m.adminIssuePaintingWarranty, adminMfa, { projectId: 'pp1', months: 12 }), 'failed-precondition');
+  await db.doc('painting_projects/pp1').update({ 'payments.FINAL': { status: 'PAID', amountAed: 3000 } });
+  // Warranty is fixed at 12 months and starts only from the owner's recorded acceptance.
+  await expectHttpsError(call(m.adminIssuePaintingWarranty, adminMfa, { projectId: 'pp1', months: 12 }), 'failed-precondition');
+  await call(m.ownerAcceptPaintingCompletion, owner, { projectId: 'pp1' });
   const w = await call(m.adminIssuePaintingWarranty, adminMfa, { projectId: 'pp1', months: 12 });
   assert.equal(w.status, 'WARRANTY_ACTIVE');
   assert.equal((await db.doc('painting_projects/pp1').get()).get('warranty.months'), 12);

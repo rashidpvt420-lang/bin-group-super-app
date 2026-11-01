@@ -213,9 +213,82 @@ describe('Firestore Security Rules', () => {
     await assertFails(setDoc(doc(adminDb, 'painting_projects/pp_a/quotes/v2'), { version: 2, priceAed: 1 }));
     await assertFails(deleteDoc(doc(adminDb, 'painting_projects/pp_a')));
 
+    // Step 3: invoices owner-readable; internal cost, costs and idempotency never reach owners.
+    await seedServerDocument('painting_projects/pp_a/invoices/DEPOSIT', { stage: 'DEPOSIT', amountAed: 2000, ownerId: 'owner_a', status: 'ISSUED' });
+    await seedServerDocument('painting_projects/pp_a/internal_quotes/v1', { totalCostAed: 3000, grossMarginPct: 40 });
+    await seedServerDocument('painting_projects/pp_a/costs/c1', { amountAed: 100 });
+    await seedServerDocument('painting_projects/pp_a/idempotency/k1', { result: {} });
+    await assertSucceeds(getDoc(doc(ownerA, 'painting_projects/pp_a/invoices/DEPOSIT')));
+    await assertFails(getDoc(doc(ownerB, 'painting_projects/pp_a/invoices/DEPOSIT')));
+    await assertFails(updateDoc(doc(ownerA, 'painting_projects/pp_a/invoices/DEPOSIT'), { status: 'PAID' }));
+    await assertFails(updateDoc(doc(adminDb, 'painting_projects/pp_a/invoices/DEPOSIT'), { status: 'PAID' }));
+    await assertFails(getDoc(doc(ownerA, 'painting_projects/pp_a/internal_quotes/v1')));
+    await assertFails(getDoc(doc(ownerA, 'painting_projects/pp_a/costs/c1')));
+    await assertSucceeds(getDoc(doc(adminDb, 'painting_projects/pp_a/internal_quotes/v1')));
+    await assertFails(setDoc(doc(adminDb, 'painting_projects/pp_a/costs/c2'), { amountAed: 1 }));
+    await assertFails(getDoc(doc(ownerA, 'painting_projects/pp_a/idempotency/k1')));
+    await assertFails(setDoc(doc(ownerA, 'painting_projects/pp_a/idempotency/k2'), { result: {} }));
+
     await assertFails(getDoc(doc(ownerA, 'system_secrets/painting_approval_otps/otps/otp_a')));
     await assertFails(getDoc(doc(adminDb, 'system_secrets/painting_approval_otps/otps/otp_a')));
     await assertFails(updateDoc(doc(adminDb, 'system_secrets/painting_approval_otps/otps/otp_a'), { status: 'CONSUMED' }));
+
+    // Finance approvers decide only through financeDecidePaintingPayment: no direct invoice writes.
+    for (const role of ['finance_manager', 'finance_controller']) {
+      const fin = testEnv.authenticatedContext(`fin_${role}`, { firebase: { sign_in_second_factor: 'phone' }, role, email_verified: true }).firestore();
+      await assertFails(updateDoc(doc(fin, 'painting_projects/pp_a/invoices/DEPOSIT'), { status: 'PAID', decidedBy: `fin_${role}` }));
+      await assertFails(setDoc(doc(fin, 'painting_projects/pp_a/invoices/FINAL'), { stage: 'FINAL', status: 'PAID' }));
+      await assertFails(updateDoc(doc(fin, 'painting_projects/pp_a'), { 'payments.DEPOSIT.status': 'PAID' }));
+    }
+    // Finance approvers (MFA + verified email + active) read stage invoices only - never the project
+    // document, quotes, internal cost sheets, costs, reserves or the rate book.
+    await seedServerDocument('painting_projects/pp_a/reserve_ledger/r_fin', { reserve: 'CONTINGENCY', entry: 'HOLD', amountAed: 300 });
+    await seedServerDocument('painting_rates/fin-rate', { category: 'LABOUR', unit: 'day', rateAed: 250, currency: 'AED', version: 1 });
+    await seedServerDocument('painting_rates/fin-rate/history/v1', { rateAed: 250, changedBy: 'admin_painting' });
+    const finCtx = (uid, claims) => testEnv.authenticatedContext(uid, claims).firestore();
+    for (const claims of [
+      { firebase: { sign_in_second_factor: 'phone' }, role: 'finance_manager', email_verified: true },
+      { firebase: { sign_in_second_factor: 'phone' }, role: 'finance_controller', email_verified: true },
+      { firebase: { sign_in_second_factor: 'phone' }, role: 'staff', financeRole: 'finance_controller', email_verified: true },
+    ]) {
+      const fin = finCtx(`fin_read_${claims.role}_${claims.financeRole || ''}`, claims);
+      await assertSucceeds(getDoc(doc(fin, 'painting_projects/pp_a/invoices/DEPOSIT')));
+      for (const path of ['painting_projects/pp_a', 'painting_projects/pp_a/quotes/v1', 'painting_projects/pp_a/internal_quotes/v1',
+        'painting_projects/pp_a/costs/c1', 'painting_projects/pp_a/reserve_ledger/r_fin', 'painting_projects/pp_a/idempotency/k1',
+        'painting_rates/fin-rate', 'painting_rates/fin-rate/history/v1']) {
+        await assertFails(getDoc(doc(fin, path)));
+      }
+      await assertFails(updateDoc(doc(fin, 'painting_projects/pp_a/invoices/DEPOSIT'), { status: 'PAID' }));
+      await assertFails(deleteDoc(doc(fin, 'painting_projects/pp_a/invoices/DEPOSIT')));
+      await assertFails(setDoc(doc(fin, 'painting_rates/fin-rate'), { rateAed: 1 }));
+    }
+    for (const [uid, claims] of [
+      ['fin_nomfa', { role: 'finance_manager', email_verified: true }],
+      ['fin_unverified', { firebase: { sign_in_second_factor: 'phone' }, role: 'finance_manager', email_verified: false }],
+      ['fin_suspended_claim', { firebase: { sign_in_second_factor: 'phone' }, role: 'finance_controller', email_verified: true, suspended: true }],
+      ['fin_legacy', { firebase: { sign_in_second_factor: 'phone' }, role: 'finance_admin', email_verified: true }],
+      ['fin_staff', { firebase: { sign_in_second_factor: 'phone' }, role: 'finance_staff', email_verified: true }],
+    ]) {
+      await assertFails(getDoc(doc(finCtx(uid, claims), 'painting_projects/pp_a/invoices/DEPOSIT')));
+    }
+    await seedServerDocument('users/fin_suspended_profile', { role: 'finance_manager', status: 'SUSPENDED' });
+    await assertFails(getDoc(doc(finCtx('fin_suspended_profile', { firebase: { sign_in_second_factor: 'phone' }, role: 'finance_manager', email_verified: true }), 'painting_projects/pp_a/invoices/DEPOSIT')));
+
+    // Separate reserve ledger and the AED rate book (with append-only history): Admin read, no browser writes.
+    await seedServerDocument('painting_projects/pp_a/reserve_ledger/v1_CONTINGENCY_HOLD', { reserve: 'CONTINGENCY', entry: 'HOLD', amountAed: 300 });
+    await seedServerDocument('painting_rates/painter-day', { category: 'LABOUR', unit: 'day', rateAed: 250, currency: 'AED', version: 1 });
+    await seedServerDocument('painting_rates/painter-day/history/v1', { rateAed: 250, changedBy: 'admin_painting' });
+    await assertSucceeds(getDoc(doc(adminDb, 'painting_projects/pp_a/reserve_ledger/v1_CONTINGENCY_HOLD')));
+    await assertFails(getDoc(doc(ownerA, 'painting_projects/pp_a/reserve_ledger/v1_CONTINGENCY_HOLD')));
+    await assertFails(updateDoc(doc(adminDb, 'painting_projects/pp_a/reserve_ledger/v1_CONTINGENCY_HOLD'), { amountAed: 0 }));
+    await assertFails(setDoc(doc(adminDb, 'painting_projects/pp_a/reserve_ledger/x'), { reserve: 'CONTINGENCY', entry: 'DRAW', amountAed: 1 }));
+    await assertSucceeds(getDoc(doc(adminDb, 'painting_rates/painter-day')));
+    await assertSucceeds(getDoc(doc(adminDb, 'painting_rates/painter-day/history/v1')));
+    await assertFails(getDoc(doc(ownerA, 'painting_rates/painter-day')));
+    await assertFails(updateDoc(doc(adminDb, 'painting_rates/painter-day'), { rateAed: 1 }));
+    await assertFails(setDoc(doc(adminDb, 'painting_rates/new-rate'), { rateAed: 1, currency: 'AED' }));
+    await assertFails(updateDoc(doc(adminDb, 'painting_rates/painter-day/history/v1'), { rateAed: 1 }));
+    await assertFails(deleteDoc(doc(adminDb, 'painting_rates/painter-day/history/v1')));
   });
 
   it('owner profile activation fields remain server-authoritative', async () => {
