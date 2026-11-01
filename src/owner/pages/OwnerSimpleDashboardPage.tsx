@@ -8,6 +8,7 @@ import MoneyStatementDownload from '../../components/MoneyStatementDownload';
 import OwnerPrivacyCentreCard from '../components/OwnerPrivacyCentreCard';
 import OwnerPerformanceReportCard from '../components/OwnerPerformanceReportCard';
 import OwnerPropertyPassportCard from '../components/OwnerPropertyPassportCard';
+import OwnerSpendingLimitsCard from '../components/OwnerSpendingLimitsCard';
 import { Box, Button, Stack } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '@bin/shared';
@@ -94,6 +95,7 @@ export default function OwnerSimpleDashboardPage() {
         <PaymentCollectionRecordsCard />
         <OwnerProofOfSpendCard />
         <MoneyStatementDownload />
+        <OwnerSpendingLimitsCard />
         <OwnerPerformanceReportCard />
         <OwnerPropertyPassportCard />
 

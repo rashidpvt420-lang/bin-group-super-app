@@ -15,6 +15,7 @@ export * from './whatsappWebhook';
 export * from './rentLedgerMirror';
 export { ownerSetRentSchedule, sendRentDueReminders, onRentPaymentDecision } from './rentSchedule';
 export { onOwnerApprovalDecision, submitOwnerApprovalDecision } from './ownerTrustWorkflow';
+export { ownerSetSpendingLimits, onVendorQuoteChangedCheckReapproval } from './ownerSpendingLimits';
 export { runContractRenewalWatch, rebuildContractRenewalWatch } from './contractRenewalPdfSystem';
 export { sendMonthlyOwnerPropertyReports, rebuildMonthlyOwnerPropertyReports } from './monthlyOwnerPropertyReportSystem';
 export { listUnifiedDocumentVault, getUnifiedDocumentFile } from './unifiedDocumentVault';

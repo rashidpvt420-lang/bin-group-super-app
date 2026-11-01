@@ -2,6 +2,7 @@ import { FieldValue } from "firebase-admin/firestore";
 import { onDocumentUpdated } from "firebase-functions/v2/firestore";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
+import { evaluateApproval, lowestQuoteAed, MIN_EMERGENCY_REASON, readLimits } from "./ownerSpendingLimits";
 
 if (!admin.apps.length) {
   admin.initializeApp();
@@ -42,8 +43,33 @@ export const submitOwnerApprovalDecision = onCall(
     const data = snap.data() || {};
     if (data.ownerId !== ownerId) throw new HttpsError("permission-denied", "This approval request does not belong to the signed-in owner.");
 
+    // Owner spending limits (server-enforced; owner-set, no fixed AED defaults).
+    let approvedAmountAed: number | null = null;
+    let overLimitConfirmed = false;
+    if (decision === "EMERGENCY_APPROVED" && decisionNote.length < MIN_EMERGENCY_REASON) {
+      throw new HttpsError("invalid-argument", "An emergency approval needs a written reason. / الموافقة الطارئة تتطلب سبباً مكتوباً.");
+    }
+    if (decision === "APPROVED" || decision === "EMERGENCY_APPROVED") {
+      approvedAmountAed = await lowestQuoteAed(db, ownerId, asText(data.rfqId));
+      const check = evaluateApproval(await readLimits(db, ownerId), approvedAmountAed);
+      if (check.state === "OVER_LIMIT" && decision === "APPROVED") {
+        if (request.data?.confirmOverLimit !== true) {
+          throw new HttpsError("failed-precondition", "This exceeds your spending limit. Confirm again to approve. / يتجاوز هذا حد الإنفاق. أكد مرة أخرى للموافقة.");
+        }
+        overLimitConfirmed = true;
+      }
+    }
+
     const status = statusForDecision(decision);
+    if (decision === "EMERGENCY_APPROVED") {
+      await db.collection("emergency_spend_reviews").doc(approvalId).set({
+        ownerId, approvalRequestId: approvalId, reason: decisionNote, amountAed: approvedAmountAed,
+        status: "PENDING_REVIEW", createdAt: FieldValue.serverTimestamp(),
+      }, { merge: true });
+    }
     await ref.set({
+      approvedAmountAed,
+      overLimitConfirmed,
       status,
       decision,
       decisionNote,
@@ -83,7 +109,7 @@ export const onOwnerApprovalDecision = onDocumentUpdated(
     if (before.status === after.status && before.decision === after.decision) return;
     if (!after.decision) return;
 
-    const derivedStatus = statusForDecision(String(after.decision));
+    const derivedStatus = after.status === "reapproval_required" ? "reapproval_required" : statusForDecision(String(after.decision));
     const batch = db.batch();
 
     if (after.rfqId) {
