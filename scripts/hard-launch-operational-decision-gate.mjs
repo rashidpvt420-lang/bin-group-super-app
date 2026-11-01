@@ -78,9 +78,14 @@ if (frozenReleaseShaFromEnv(process.env) === null) {
   // Frozen-release public deploy: readiness was snapshotted for the frozen
   // release by the hard-clearance run of this control plane.
   const frozen = verifyFrozenReleaseContext({ env: process.env });
+  const frozenNow = operational?.fetchedAt
+    ? Date.parse(operational.fetchedAt)
+    : (operational?.evaluatedAt ? Date.parse(operational.evaluatedAt) : undefined);
   errors = [
     ...frozen.errors,
-    ...validateOperationalReadinessReport(operational, frozen.frozenSha),
+    ...validateOperationalReadinessReport(operational, frozen.frozenSha, {
+      now: Number.isFinite(frozenNow) ? frozenNow : undefined,
+    }),
     ...frozenDocumentBindingErrors(operational, 'operational readiness', frozen),
   ];
   if (operational?.releaseCommitSha !== frozen.frozenSha) {
