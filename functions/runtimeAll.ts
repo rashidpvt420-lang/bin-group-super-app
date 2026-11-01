@@ -31,6 +31,7 @@ export { getOwnerKpis } from './ownerKpis';
 export { getOwnerTrustMetrics } from './ownerTrustMetrics';
 export { ownerAddCommitteeRecord, getOwnerCommitteeRecords } from './ownerCommitteeRecords';
 export { createTenantJobLink, resolveTenantJobLink, reportViaTenantJobLink } from './tenantJobLinks';
+export { technicianSyncOfflineEvents } from './technicianOfflineSync';
 export { financeRecordPdcStatus, getPdcRegister } from './pdcRegister';
 export { onOwnerBankAccountChanged, onBrokerPayoutDetailsChanged } from './payoutChangeAlerts';
 export { reopenMaintenanceTicket } from './ticketReopen';

@@ -14,6 +14,7 @@ import {
   replayEligibleOfflineJobActions,
   replayOfflineJobAction,
 } from '../utils/offlineJobActions';
+import { parseFieldEvent, syncOfflineFieldEvents } from '../utils/offlineFieldEvents';
 
 function typeLabel(type: OfflineQueueItem['type']) {
   const map: Record<OfflineQueueItem['type'], string> = {
@@ -34,6 +35,7 @@ function typeColor(type: OfflineQueueItem['type']) {
 }
 
 function replayReason(item: OfflineQueueItem) {
+  if (parseFieldEvent(item)) return 'Field events sync with Sync all (duplicate and conflict protected).';
   const action = parseQueuedTechnicianJobAction(item);
   if (!action) return 'This legacy queue item has no valid mission payload and needs manual review.';
   if (action.functionName === 'updateTicketLifecycle') {
@@ -114,9 +116,10 @@ export default function TechnicianOfflinePage() {
     setSyncing(true);
     setSyncResult(null);
     try {
+      const field = await syncOfflineFieldEvents();
       const result = await replayEligibleOfflineJobActions();
       setSyncResult(
-        `Replay finished. Synced ${result.replayed}; failed ${result.failed}; foreground-only ${result.blocked}; remaining ${result.remaining}.`,
+        `Replay finished. Synced ${result.replayed + field.synced}; already synced ${field.duplicates}; conflicts for review ${field.conflicts}; failed ${result.failed}; foreground-only ${result.blocked}; remaining ${result.remaining}.`,
       );
     } catch (error: any) {
       console.error('[TechnicianOffline] bulk replay failed:', error);
