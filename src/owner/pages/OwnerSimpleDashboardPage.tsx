@@ -4,6 +4,7 @@ import PaymentCollectionRecordsCard from '../../components/PaymentCollectionReco
 import OwnerMaintenancePlansCard from '../components/OwnerMaintenancePlansCard';
 import OwnerVendorScorecardsCard from '../components/OwnerVendorScorecardsCard';
 import MoneyStatementDownload from '../../components/MoneyStatementDownload';
+import OwnerPrivacyCentreCard from '../components/OwnerPrivacyCentreCard';
 import OwnerPerformanceReportCard from '../components/OwnerPerformanceReportCard';
 import OwnerPropertyPassportCard from '../components/OwnerPropertyPassportCard';
 import { Box, Button, Stack } from '@mui/material';
@@ -88,6 +89,7 @@ export default function OwnerSimpleDashboardPage() {
         <OwnerVendorScorecardsCard />
 
         <SuggestionBoxCard role="owner" />
+        <OwnerPrivacyCentreCard />
         <PaymentCollectionRecordsCard />
         <MoneyStatementDownload />
         <OwnerPerformanceReportCard />
