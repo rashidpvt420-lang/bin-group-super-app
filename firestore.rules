@@ -1932,6 +1932,12 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // Owner compliance reminders (server only, idempotent per item/offset). Owners read their own.
+    match /compliance_reminders/{reminderId} {
+      allow read: if isAdmin() || (signedIn() && resource.data.get('ownerId', null) == request.auth.uid);
+      allow create, update, delete: if false;
+    }
+
     // Rent schedule and receipts (feature 1): server-written only.
     match /rent_installments/{installmentId} {
       allow read: if isAdmin() || ownerCanRead(resource.data) || (signedIn() && resource.data.get('tenantUid', null) == request.auth.uid);
@@ -2617,6 +2623,7 @@ service cloud.firestore {
           'parcels',
           'keyMovements',
           'keyRegister',
+          'compliance_reminders',
           'visitorParkingRequests',
           'user_suggestion_limits',
           'ai_action_proposals',
@@ -2727,6 +2734,7 @@ service cloud.firestore {
           'parcels',
           'keyMovements',
           'keyRegister',
+          'compliance_reminders',
           'visitorParkingRequests',
           'user_suggestion_limits',
           'ai_action_proposals',

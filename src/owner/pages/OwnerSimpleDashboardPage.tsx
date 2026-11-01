@@ -12,6 +12,7 @@ import { ui } from '../../theme/uiTokens';
 import { useOwnerCommandCounts } from '../hooks/useOwnerCommandCounts';
 import OwnerFinancialTruthCard from '../components/OwnerFinancialTruthCard';
 import OwnerRecentComplaintsCard from '../components/OwnerRecentComplaintsCard';
+import OwnerComplianceCalendarCard from '../components/OwnerComplianceCalendarCard';
 import OwnerKpiTiles from '../components/OwnerKpiTiles';
 import OwnerTrustMetricsCard from '../components/OwnerTrustMetricsCard';
 
@@ -71,6 +72,7 @@ export default function OwnerSimpleDashboardPage() {
         </UiCard>
 
         <OwnerRecentComplaintsCard />
+        <OwnerComplianceCalendarCard />
 
         <OwnerFinancialTruthCard />
         <OwnerTrustMetricsCard />
