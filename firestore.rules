@@ -2010,6 +2010,12 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
 
+    // Owner Trust Centre: Property Passport asset register. Owners read their own; writes via callable only.
+    match /property_assets/{assetId} {
+      allow read: if isAdmin() || (signedIn() && resource.data.get('ownerId', null) == request.auth.uid);
+      allow create, update, delete: if false;
+    }
+
     // Google Play account deletion: a signed-in user may file exactly one request keyed by
     // their own uid. Create-only for the user (no edits, no delete); nothing is auto-deleted.
     // Admins review and process requests manually.
@@ -2635,6 +2641,7 @@ service cloud.firestore {
           'vendor_credential_alerts',
           'ai_action_proposals',
           'ai_action_audit',
+          'property_assets',
           'payment_collection_records',
           'payment_collection_voids',
           'issued_document_registry',
@@ -2747,6 +2754,7 @@ service cloud.firestore {
           'vendor_credential_alerts',
           'ai_action_proposals',
           'ai_action_audit',
+          'property_assets',
           'payment_collection_records',
           'payment_collection_voids',
           'issued_document_registry',
