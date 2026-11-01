@@ -1,59 +1,51 @@
 /**
- * BIN-GENESIS™ Predictive Intelligence Engine v1.0
- * Aggregates historical context to generate Asset Resilience and Financial Yield forecasts.
+ * Evidence-first maintenance intelligence.
+ *
+ * This module intentionally reports recurring work-order patterns only. It
+ * does not infer failure probabilities, property health, ROI or cash forecasts
+ * from sparse tickets. Those require a validated asset-condition model and a
+ * complete, dated and reconciled financial schedule.
  */
-
+export interface HistoricalWorkOrder {
+  ticketId: string;
+  propertyId?: string;
+  createdAt: any;
+  completedAt?: any;
+  category: string;
+  cost: number;
+  trade: string;
+  priority: string;
+  status?: string;
+}
 export interface HistoricalContext {
   propertyId: string;
   ownerId: string;
-  workOrderHistory: Array<{
-    ticketId: string;
-    createdAt: Date;
-    completedAt?: Date;
-    category: string; // e.g., 'HVAC', 'PLUMBING'
-    cost: number;
-    trade: string;
-    priority: string;
-  }>;
-  financialHistory: Array<{
-    invoiceId?: string;
-    date: Date;
-    type: 'debit' | 'credit';
-    amount: number;
-    category: string;
-  }>;
-  // Unknown facts are null; callers must not substitute invented defaults.
-  propertyDetails: {
-    sqft: number | null;
-    grade: string | null;
-    propertyType: string | null;
-    emirate: string | null;
-  };
+  workOrderHistory: HistoricalWorkOrder[];
+  financialHistory: Array<{ invoiceId?: string; date: Date; type: 'debit' | 'credit'; amount: number; category: string }>;
+  propertyDetails: { sqft: number | null; grade: string | null; propertyType: string | null; emirate: string | null };
 }
-
 export interface AssetResiliencePrediction {
-  healthIndex: number;
-  predictedDecay12Months: number;
+  evidenceStatus: 'INSUFFICIENT_HISTORY' | 'NO_RECURRING_PATTERN' | 'RECURRING_PATTERNS_FOUND';
+  healthIndex: null;
+  predictedDecay12Months: null;
   criticalFailureWindows: Array<{
+    propertyId: string | null;
     assetCategory: string;
-    probability: number;
-    predictedWindow: { start: string; end: string };
+    evidenceCount: number;
+    riskLevel: 'RECURRING';
+    probability: null;
     guidance: string;
   }>;
+  basis: string;
 }
-
 export interface FinancialYieldForecast {
-  expectedNetROI: number;
-  quarterlyProjections: Array<{
-    quarter: string;
-    projectedIncome: number;
-    projectedExpenses: number;
-    projectedNet: number;
-  }>;
-  riskFactors: Array<string>;
+  evidenceStatus: 'NOT_AVAILABLE';
+  expectedNetROI: null;
+  quarterlyProjections: [];
+  riskFactors: string[];
   guidance: string;
+  basis: string;
 }
-
 export interface MissionGuidancePayload {
   propertyId: string;
   ownerId: string;
@@ -61,71 +53,93 @@ export interface MissionGuidancePayload {
   assetResilience: AssetResiliencePrediction;
   financialForecast: FinancialYieldForecast;
   alerts: Array<{
-    type: 'CRITICAL' | 'WARNING' | 'INFO';
+    type: 'WARNING' | 'INFO';
     message: string;
     recommendation: string;
     thresholdCrossed?: string;
   }>;
 }
-
-/**
- * Core function to generate predictive intelligence for a given property.
- */
-export async function generatePredictiveIntelligence(
-  context: HistoricalContext
-): Promise<MissionGuidancePayload> {
-  
-  // Logic Stage 1: Asset Resilience (Heuristic Model v1)
-  // We calculate probability based on historical ticket density per category
-  const hvacTickets = context.workOrderHistory.filter(h => h.category === 'HVAC' || h.trade === 'HVAC');
-  const hvacRisk = hvacTickets.length > 3 ? 0.85 : 0.40;
-  
-  const assetResilience: AssetResiliencePrediction = {
-    healthIndex: 88 - (context.workOrderHistory.length * 0.5), // Example decay logic
-    predictedDecay12Months: 12,
-    criticalFailureWindows: [
-      {
-        assetCategory: 'HVAC',
-        probability: hvacRisk,
-        predictedWindow: { 
-            start: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString(), 
-            end: new Date(Date.now() + 120 * 24 * 60 * 60 * 1000).toISOString() 
-        },
-        guidance: hvacRisk > 0.8 ? "CRITICAL: High failure probability detected based on ticket density." : "Standard wear monitoring recommended.",
-      },
-    ],
-  };
-
-  // Logic Stage 2: Financial Yield Forecasting
-  const avgExpenses = context.financialHistory.reduce((acc, curr) => acc + curr.amount, 0) / (context.financialHistory.length || 1);
-  
-  const financialForecast: FinancialYieldForecast = {
-    expectedNetROI: 7.8, // Baseline yield for UAE A-Grade
-    quarterlyProjections: [
-      { quarter: 'Q2 2026', projectedIncome: 45000, projectedExpenses: avgExpenses * 1.05, projectedNet: 45000 - (avgExpenses * 1.05) },
-      { quarter: 'Q3 2026', projectedIncome: 45000, projectedExpenses: avgExpenses * 1.10, projectedNet: 45000 - (avgExpenses * 1.10) },
-    ],
-    riskFactors: ['Summer A/C Surge', 'Municipality Fee Adjustment'],
-    guidance: "Portfolio showing 92% stability index. Optimization of HVAC schedules could boost ROI by 0.4%.",
-  };
-
-  // Logic Stage 3: Alert Matrix
-  const alerts: MissionGuidancePayload['alerts'] = [];
-  if (assetResilience.healthIndex < 80) {
-    alerts.push({
-      type: 'WARNING',
-      message: 'Asset health integrity approaching boundary (80%)',
-      recommendation: 'Schedule elective preventive maintenance to reset decay curve.',
-      thresholdCrossed: 'HEALTH_INDEX_BOUNDARY'
-    });
+function asDate(value: any): Date | null {
+  try {
+    if (value instanceof Date && Number.isFinite(value.getTime())) return value;
+    if (value && typeof value.toDate === 'function') {
+      const date = value.toDate();
+      return date instanceof Date && Number.isFinite(date.getTime()) ? date : null;
+    }
+    if (value && Number.isFinite(Number(value.seconds))) {
+      const date = new Date(Number(value.seconds) * 1000);
+      return Number.isFinite(date.getTime()) ? date : null;
+    }
+    const date = new Date(value);
+    return Number.isFinite(date.getTime()) ? date : null;
+  } catch {
+    return null;
   }
-
+}
+function normalizeCategory(value: unknown): string {
+  return String(value || 'GENERAL').trim().toUpperCase().replace(/[\s-]+/g, '_');
+}
+/**
+ * Counts recurring ticket categories separately per property. A watch signal
+ * requires at least three dated records in the previous 365 days. It is a
+ * recurrence signal, not a prediction of equipment failure.
+ */
+export async function generatePredictiveIntelligence(context: HistoricalContext): Promise<MissionGuidancePayload> {
+  const now = Date.now();
+  const oneYearAgo = now - 365 * 24 * 60 * 60 * 1000;
+  const recent = (Array.isArray(context.workOrderHistory) ? context.workOrderHistory : [])
+    .map((ticket) => ({ ...ticket, parsedDate: asDate(ticket.createdAt) }))
+    .filter((ticket) => ticket.parsedDate && ticket.parsedDate.getTime() >= oneYearAgo && ticket.parsedDate.getTime() <= now);
+  const groups = new Map<string, { propertyId: string | null; category: string; count: number }>();
+  for (const ticket of recent) {
+    const propertyId = String(ticket.propertyId || '').trim() || null;
+    const status = normalizeCategory(ticket.status);
+    if (!propertyId || ['CANCELLED', 'CANCELED', 'REJECTED', 'ARCHIVED'].includes(status)) continue;
+    const category = normalizeCategory(ticket.category || ticket.trade);
+    const key = `${propertyId}::${category}`;
+    const current = groups.get(key) || { propertyId, category, count: 0 };
+    current.count += 1;
+    groups.set(key, current);
+  }
+  const recurring = [...groups.values()]
+    .filter((group) => group.count >= 3)
+    .sort((a, b) => b.count - a.count)
+    .map((group) => ({
+      propertyId: group.propertyId,
+      assetCategory: group.category,
+      evidenceCount: group.count,
+      riskLevel: 'RECURRING' as const,
+      probability: null,
+      guidance: 'Review the linked work orders and arrange a qualified inspection before authorizing replacement or capital expenditure.',
+    }));
+  const evidenceStatus: AssetResiliencePrediction['evidenceStatus'] =
+    recent.length === 0 ? 'INSUFFICIENT_HISTORY' : recurring.length > 0 ? 'RECURRING_PATTERNS_FOUND' : 'NO_RECURRING_PATTERN';
+  const alerts: MissionGuidancePayload['alerts'] = recurring.map((item) => ({
+    type: 'WARNING',
+    message: `${item.assetCategory} has ${item.evidenceCount} recorded work orders at property record ${item.propertyId} in the last 12 months.`,
+    recommendation: item.guidance,
+    thresholdCrossed: 'THREE_DATED_WORK_ORDERS_IN_12_MONTHS',
+  }));
   return {
     propertyId: context.propertyId,
     ownerId: context.ownerId,
-    generatedAt: new Date().toISOString(),
-    assetResilience,
-    financialForecast,
+    generatedAt: new Date(now).toISOString(),
+    assetResilience: {
+      evidenceStatus,
+      // A ticket count alone is not a validated condition score or failure model.
+      healthIndex: null,
+      predictedDecay12Months: null,
+      criticalFailureWindows: recurring,
+      basis: 'Dated work-order recurrence only. A scored asset-condition model requires linked asset inspections, service readings and validated outcome data.',
+    },
+    financialForecast: {
+      evidenceStatus: 'NOT_AVAILABLE',
+      expectedNetROI: null,
+      quarterlyProjections: [],
+      riskFactors: [],
+      guidance: 'A trustworthy cash-flow forecast is not available from the current historical snapshot alone.',
+      basis: 'Forecasting requires complete future-dated rent/receivable schedules, committed costs, reconciled transactions and an explicit valuation basis for ROI. No baseline or AED projection is fabricated.',
+    },
     alerts,
   };
 }

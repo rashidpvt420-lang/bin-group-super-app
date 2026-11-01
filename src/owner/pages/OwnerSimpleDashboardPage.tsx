@@ -26,6 +26,7 @@ export const OWNER_HOME_LINKS: HomeQuickLink[] = [
   { path: '/owner/contracts', en: 'Contracts', ar: 'العقود' },
   { path: '/owner/documents', en: 'Document vault', ar: 'خزنة المستندات' },
   { path: '/owner/property-passport', en: 'Property passport', ar: 'جواز العقار' },
+  { path: '/owner/ai-intelligence', en: 'Property operations intelligence', ar: 'ذكاء عمليات العقارات' },
   { path: '/owner/financials', en: 'Money', ar: 'المالية' },
   { path: '/owner/complaints', en: 'Complaints', ar: 'الشكاوى' },
   { path: '/owner/insights', en: 'Add person (authorized reporters)', ar: 'إضافة شخص (المبلغون المعتمدون)' },

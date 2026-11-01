@@ -64,21 +64,54 @@ export default function DashboardPage() {
                     esg: esgRating
                 });
 
-                // Compute Predictive Intelligence (Vertex AI Priority)
+                // Keep evidence calculations local and deterministic. The callable
+                // returns a short advisory brief, not the structured intelligence
+                // payload consumed by the Owner UI.
                 const intelMap: Record<string, MissionGuidancePayload> = {};
                 const getAiGuidance = httpsCallable(functions, 'getMissionGuidance');
 
                 for (const prop of portfolio.properties) {
                     const ctx = getHistoricalContextForProperty(portfolio, prop.id);
-                    if (ctx) {
-                        try {
-                            
-                            const result = await getAiGuidance({ context: ctx });
-                            intelMap[prop.id] = result.data as MissionGuidancePayload;
-                        } catch (aiError) {
-                            console.warn(`[AI-STRATEGY] Vertex AI failed for ${prop.id}, falling back to local model:`, aiError);
-                            intelMap[prop.id] = await generatePredictiveIntelligence(ctx);
-                        }
+                    if (!ctx) continue;
+
+                    const baseIntel = await generatePredictiveIntelligence(ctx);
+                    try {
+                        const now = Date.now();
+                        const activeTickets = ctx.workOrderHistory.filter((ticket: any) =>
+                            !['CLOSED', 'COMPLETED', 'RESOLVED', 'CANCELLED', 'CANCELED'].includes(String(ticket.status || '').toUpperCase())
+                        );
+                        const overdueTickets = activeTickets.filter((ticket: any) => {
+                            if (!ticket.dueAt) return false;
+                            const due = ticket.dueAt instanceof Date ? ticket.dueAt : new Date(ticket.dueAt);
+                            return Number.isFinite(due.getTime()) && due.getTime() < now;
+                        }).length;
+                        const expiringContracts = portfolio.contracts.filter((contract: any) => {
+                            if (contract.propertyId !== prop.id) return false;
+                            const rawEnd = contract.endDate || contract.validTo || contract.leaseEnd;
+                            if (!rawEnd) return false;
+                            const end = rawEnd?.toDate ? rawEnd.toDate() : new Date(rawEnd);
+                            const days = Math.ceil((end.getTime() - now) / 86400000);
+                            return Number.isFinite(end.getTime()) && days >= 0 && days <= 90;
+                        }).length;
+
+                        const result = await getAiGuidance({
+                            context: {
+                                activeTickets: activeTickets.length,
+                                overdueTickets,
+                                expiringContracts,
+                                propertyName: String(prop.area || prop.name || prop.title || 'Property').slice(0, 120),
+                                emirate: ctx.propertyDetails.emirate || 'UAE',
+                            },
+                        });
+                        const advisory = (result.data || {}) as any;
+                        intelMap[prop.id] = {
+                            ...baseIntel,
+                            advisoryGuidance: typeof advisory.guidance === 'string' ? advisory.guidance.slice(0, 2000) : undefined,
+                            guidanceProvider: typeof advisory.provider === 'string' ? advisory.provider : undefined,
+                        };
+                    } catch (aiError) {
+                        console.warn(`[AI-STRATEGY] Advisory guidance unavailable for ${prop.id}; retaining evidence-only signals:`, aiError);
+                        intelMap[prop.id] = baseIntel;
                     }
                 }
                 setIntelligence(intelMap);
@@ -463,7 +496,7 @@ export default function DashboardPage() {
                           }}>
                               <Box sx={{ p: 4, bgcolor: 'rgba(198, 167, 94, 0.05)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexDirection: isRTL ? 'row-reverse' : 'row' }}>
                                   <Typography variant="h6" fontWeight="900" sx={{ color: '#fff' }}>{p.area} • {t('dash.intel.forecast')}</Typography>
-                                  <Chip label="PREDICTIVE" size="small" sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 900 }} />
+                                  <Chip label="EVIDENCE-BASED REVIEW" size="small" sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 900 }} />
                               </Box>
                               <CardContent sx={{ p: 4, position: 'relative' }}>
                                   {/* Glassmorphism Background Accent */}
@@ -476,19 +509,19 @@ export default function DashboardPage() {
                                   <Grid container spacing={4} sx={{ position: 'relative', zIndex: 2, flexDirection: isRTL ? 'row-reverse' : 'row' }}>
                                       <Grid item xs={6} sx={{ textAlign: isRTL ? 'right' : 'left' }}>
                                           <Box sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 1, justifyContent: isRTL ? 'flex-end' : 'flex-start', flexDirection: isRTL ? 'row-reverse' : 'row' }}>
-                                              <Typography variant="overline" sx={{ color: binThemeTokens.textSecondary, fontWeight: 900, letterSpacing: 1 }}>{t('dash.intel.integrity_decay')}</Typography>
-                                              <TrendingUpIcon sx={{ fontSize: 14, color: binThemeTokens.danger, transform: 'rotate(180deg)' }} />
+                                              <Typography variant="overline" sx={{ color: binThemeTokens.textSecondary, fontWeight: 900, letterSpacing: 1 }}>ASSET CONDITION SCORE</Typography>
+                                              <TrendingUpIcon sx={{ fontSize: 14, color: binThemeTokens.gold }} />
                                           </Box>
-                                          <Typography variant="h3" fontWeight="900" sx={{ color: binThemeTokens.textPrimary }}>-{intel.assetResilience.predictedDecay12Months}%</Typography>
-                                          <Typography variant="caption" sx={{ color: binThemeTokens.goldLight, fontWeight: 700 }}>{t('dash.intel.horizon')}</Typography>
+                                          <Typography variant="h4" fontWeight="900" sx={{ color: binThemeTokens.textPrimary }}>NOT VALIDATED</Typography>
+                                          <Typography variant="caption" sx={{ color: binThemeTokens.goldLight, fontWeight: 700 }}>Requires linked asset inspections and service readings</Typography>
                                       </Grid>
                                       <Grid item xs={6} sx={{ textAlign: isRTL ? 'right' : 'left' }}>
                                           <Box sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 1, justifyContent: isRTL ? 'flex-end' : 'flex-start', flexDirection: isRTL ? 'row-reverse' : 'row' }}>
-                                              <Typography variant="overline" sx={{ color: binThemeTokens.textSecondary, fontWeight: 900, letterSpacing: 1 }}>{t('dash.intel.projected_yield')}</Typography>
-                                              <TrendingUpIcon sx={{ fontSize: 14, color: '#4ADE80' }} />
+                                              <Typography variant="overline" sx={{ color: binThemeTokens.textSecondary, fontWeight: 900, letterSpacing: 1 }}>CASH-FLOW FORECAST</Typography>
+                                              <TrendingUpIcon sx={{ fontSize: 14, color: binThemeTokens.gold }} />
                                           </Box>
-                                          <Typography variant="h3" fontWeight="900" sx={{ color: '#4ADE80' }}>{intel.financialForecast.expectedNetROI}%</Typography>
-                                          <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, fontWeight: 700 }}>{t('dash.intel.annualized_net')}</Typography>
+                                          <Typography variant="h4" fontWeight="900" sx={{ color: binThemeTokens.textPrimary }}>NOT AVAILABLE</Typography>
+                                          <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, fontWeight: 700 }}>Future rent, costs and reconciled receipts required</Typography>
                                       </Grid>
                                   </Grid>
                                   
@@ -497,7 +530,7 @@ export default function DashboardPage() {
                                   <Box sx={{ mb: 3, textAlign: isRTL ? 'right' : 'left' }}>
                                       <Typography variant="subtitle2" sx={{ color: binThemeTokens.gold, fontWeight: 900, letterSpacing: 2 }}>{t('dash.intel.guidance_title')}</Typography>
                                       <Typography variant="body1" sx={{ color: binThemeTokens.textPrimary, lineHeight: 1.8, fontStyle: 'italic', mt: 1 }}>
-                                          "{intel.financialForecast.guidance}"
+                                          "{intel.advisoryGuidance || intel.financialForecast.guidance}"
                                       </Typography>
                                   </Box>
 
