@@ -2546,6 +2546,12 @@ service cloud.firestore {
       allow read, create, update, delete: if false;
     }
 
+    // Technician offline field events (Owner Trust Centre). Server writes only; the technician reads own.
+    match /technician_offline_events/{eventId} {
+      allow read: if isAdmin() || (signedIn() && resource.data.get('technicianId', null) == request.auth.uid);
+      allow create, update, delete: if false;
+    }
+
     // One-time painting projects: callable-only writes (quote margin, OTP approval, photos, warranty).
     match /painting_projects/{projectId} {
       function isPaintingFinanceApprover() {
@@ -2648,6 +2654,7 @@ service cloud.firestore {
           'launch_evidence',
           'signed_in_smoke_checks',
           'gatePasses',
+          'technician_offline_events',
           'propertyReporters',
           'broker_listing_claims',
           'active_contracts',
@@ -2770,6 +2777,7 @@ service cloud.firestore {
           'launch_evidence',
           'signed_in_smoke_checks',
           'gatePasses',
+          'technician_offline_events',
           'propertyReporters',
           'broker_listing_claims',
           'active_contracts',
