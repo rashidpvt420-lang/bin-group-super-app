@@ -13,6 +13,7 @@ import { useOwnerCommandCounts } from '../hooks/useOwnerCommandCounts';
 import OwnerFinancialTruthCard from '../components/OwnerFinancialTruthCard';
 import OwnerRecentComplaintsCard from '../components/OwnerRecentComplaintsCard';
 import OwnerKpiTiles from '../components/OwnerKpiTiles';
+import OwnerTrustMetricsCard from '../components/OwnerTrustMetricsCard';
 
 /**
  * Redesigned owner home (REDESIGN.md R4): key numbers, one "Needs you today" list, live repairs, money.
@@ -72,6 +73,7 @@ export default function OwnerSimpleDashboardPage() {
         <OwnerRecentComplaintsCard />
 
         <OwnerFinancialTruthCard />
+        <OwnerTrustMetricsCard />
 
         <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1.25}>
           <UiButton tone="outline" onClick={() => navigate('/owner/tenants')}>{t('owner.home.invite', 'Invite tenant', 'دعوة مستأجر')}</UiButton>
