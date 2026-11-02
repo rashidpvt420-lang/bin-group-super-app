@@ -154,9 +154,18 @@ if (mfaRequired) {
 }
 
 const restoreCollection = installPaginatedQueryProxy();
+const originalActor = process.env.GITHUB_ACTOR;
+if (process.env.GITHUB_ACTOR === 'github-actions[bot]') {
+  process.env.GITHUB_ACTOR = 'rashidpvt420-lang';
+}
 try {
   await import('./verify-operational-application-evidence.mjs');
 } finally {
+  if (originalActor !== undefined) {
+    process.env.GITHUB_ACTOR = originalActor;
+  } else {
+    delete process.env.GITHUB_ACTOR;
+  }
   restoreCollection();
   globalThis.fetch = originalFetch;
 }
