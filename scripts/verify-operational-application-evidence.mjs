@@ -4,6 +4,7 @@ import crypto from 'node:crypto';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import admin from 'firebase-admin';
 import { initializeFirebaseAdmin, resolveFirebaseAdminProjectId } from './firebase-admin-bootstrap.mjs';
+import { requireAuthorizedApprover } from './lib/authorized-approvers.mjs';
 
 const PROJECT_ID = 'bin-group-57c60';
 const REPOSITORY = 'rashidpvt420-lang/bin-group-super-app';
@@ -62,7 +63,7 @@ if (process.env.GITHUB_REPOSITORY !== REPOSITORY) fail('unexpected repository');
 if (process.env.GITHUB_REF !== 'refs/heads/main') fail('verifier requires refs/heads/main');
 if (process.env.GITHUB_WORKFLOW !== 'Operational Application Evidence') fail('unexpected workflow');
 if (process.env.GITHUB_JOB !== 'verify-and-publish') fail('unexpected job');
-if (process.env.GITHUB_ACTOR !== 'rashidpvt420-lang') fail('only the authorized founder account may run application evidence');
+try { requireAuthorizedApprover(process.env.GITHUB_ACTOR); } catch (error) { fail(error.message); }
 
 const gate = text(process.env.OPERATIONAL_GATE);
 const commitSha = text(process.env.GITHUB_SHA);
