@@ -152,6 +152,7 @@ export default function TenantRequestPage() {
     const [residenceLoadError, setResidenceLoadError] = useState('');
     const [photos, setPhotos] = useState<File[]>([]);
     const [previews, setPreviews] = useState<string[]>([]);
+    const [failedTicketId, setFailedTicketId] = useState<string | null>(null);
 
     const selectedSlaKey = PRIORITY_TO_SLA_KEY[priority] || 'STANDARD';
     const selectedSlaPolicy = CANONICAL_SLA_POLICY[selectedSlaKey];
@@ -357,10 +358,12 @@ export default function TenantRequestPage() {
                 ).catch(console.warn);
             }
             clientRequestIdRef.current = '';
+            setFailedTicketId(null);
             navigate('/tenant/tickets');
         } catch (error) {
             console.error('Tenant request submission failed:', error);
             if (createdTicketId) {
+                setFailedTicketId(createdTicketId);
                 void updateDoc(doc(db, 'maintenanceTickets', createdTicketId), {
                     evidenceStatus: 'TENANT_EVIDENCE_UPLOAD_FAILED',
                     evidenceUploadError: error instanceof Error ? error.message : String(error),
@@ -370,6 +373,29 @@ export default function TenantRequestPage() {
             alert(`Failed to submit request: ${error instanceof Error ? error.message : String(error)}`);
         } finally {
             setSubmitting(false);
+            setUploadingPhotos(false);
+        }
+    };
+
+    const handleRetryPhotoUpload = async () => {
+        if (!failedTicketId) return;
+        setUploadingPhotos(true);
+        try {
+            const photoUrls = await uploadPhotosToStorage(failedTicketId);
+            await updateDoc(doc(db, 'maintenanceTickets', failedTicketId), {
+                photos: photoUrls,
+                primaryPhotoUrl: photoUrls[0] || null,
+                evidenceStatus: 'TENANT_EVIDENCE_UPLOADED',
+                evidenceUploadedAt: serverTimestamp(),
+                updatedAt: serverTimestamp(),
+            });
+            clientRequestIdRef.current = '';
+            setFailedTicketId(null);
+            navigate('/tenant/tickets');
+        } catch (error) {
+            console.error('Retry photo upload failed:', error);
+            alert(`Failed to upload photos: ${error instanceof Error ? error.message : String(error)}`);
+        } finally {
             setUploadingPhotos(false);
         }
     };
@@ -414,7 +440,33 @@ export default function TenantRequestPage() {
             <Paper sx={{ p: { xs: 3, md: 5 }, bgcolor: 'rgba(22,22,24,.7)', border: '1px solid rgba(255,255,255,.05)', borderRadius: 6 }}>
                 {!propertyGpsReady && (
                     <Alert severity="warning" sx={{ mb: 3 }}>
-                        Founder-verified property geography is required before dispatch. No browser coordinate will be accepted.
+                        <Typography variant="body2" fontWeight="bold">
+                            Founder-verified property geography is required before dispatch.
+                        </Typography>
+                        <Typography variant="caption" sx={{ display: 'block', mt: 0.5 }}>
+                            Property geography for {propertyData?.name || propertyData?.propertyName || 'your building'} is awaiting official verification. For urgent emergencies, contact building security or BIN GROUP Emergency Dispatch at 800-BINGROUP.
+                        </Typography>
+                    </Alert>
+                )}
+
+                {failedTicketId && (
+                    <Alert
+                        severity="error"
+                        data-testid="tenant-evidence-upload-retry-banner"
+                        action={
+                            <Button
+                                color="inherit"
+                                size="small"
+                                disabled={uploadingPhotos}
+                                onClick={handleRetryPhotoUpload}
+                                sx={{ fontWeight: 'bold' }}
+                            >
+                                {uploadingPhotos ? <CircularProgress size={16} color="inherit" /> : 'RETRY PHOTO UPLOAD'}
+                            </Button>
+                        }
+                        sx={{ mb: 3 }}
+                    >
+                        Ticket #{failedTicketId.slice(0, 8)} was registered, but photo evidence upload failed. You can retry uploading the photos now without creating a duplicate ticket.
                     </Alert>
                 )}
 
