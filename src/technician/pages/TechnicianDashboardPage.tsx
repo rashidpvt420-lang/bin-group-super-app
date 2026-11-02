@@ -99,22 +99,34 @@ const formatTime = (value: any) => {
     }
 };
 
+const CANONICAL_SLA_MINUTES: Record<string, number> = {
+    EMERGENCY: 30,
+    SOS: 30,
+    CRITICAL: 30,
+    HIGH: 120,
+    URGENT: 120,
+    MEDIUM: 240,
+    SAME_DAY: 240,
+    STANDARD: 480,
+    NORMAL: 480,
+    LOW: 1440,
+    MINOR: 1440,
+};
+
 const getSlaTimeRemaining = (job: any) => {
-    if (!job?.createdAt) return 'No SLA policy';
-    const created = job.createdAt.toDate ? job.createdAt.toDate() : new Date(job.createdAt);
-    const now = new Date();
-    
-    let slaMinutes = 240; 
-    const priority = String(job.priority || '').toUpperCase();
-    if (priority === 'EMERGENCY') {
-        slaMinutes = 30;
-    } else if (priority === 'HIGH') {
-        slaMinutes = 120;
-    } else if (priority === 'STANDARD') {
-        slaMinutes = 240;
+    const serverDeadline = job?.slaDueAt || job?.slaDeadline || job?.slaTargetTime;
+    let limitTime: Date | null = null;
+    if (serverDeadline) {
+        limitTime = typeof serverDeadline.toDate === 'function' ? serverDeadline.toDate() : new Date(serverDeadline);
+    } else if (job?.createdAt) {
+        const created = typeof job.createdAt.toDate === 'function' ? job.createdAt.toDate() : new Date(job.createdAt);
+        const priorityKey = String(job.slaPriority || job.priority || '').toUpperCase().trim();
+        const slaMinutes = CANONICAL_SLA_MINUTES[priorityKey] ?? 480;
+        limitTime = new Date(created.getTime() + slaMinutes * 60000);
     }
-    
-    const limitTime = new Date(created.getTime() + slaMinutes * 60000);
+
+    if (!limitTime || isNaN(limitTime.getTime())) return 'No SLA policy';
+    const now = new Date();
     const diffMs = limitTime.getTime() - now.getTime();
     
     if (diffMs <= 0) {

@@ -75,12 +75,12 @@ export default function OwnerFinancialsPage() {
         // Sort the Owner-scoped result on the client. Combining where +
         // orderBy previously required a production composite index and left
         // the page on an infinite loader when that stream failed.
-        const transQ = query(collection(db, 'payouts'), where('ownerEmail', '==', email));
+        const transQ = query(collection(db, 'payouts'), where('ownerEmail', '==', email), limit(50));
         const unsubscribeTrans = onSnapshot(transQ, (snap) => {
             const rows = snap.docs
                 .map(d => ({ id: d.id, ...d.data() }))
                 .sort((a: any, b: any) => timestampMs(b.createdAt || b.date) - timestampMs(a.createdAt || a.date))
-                .slice(0, 10);
+                .slice(0, 25);
             setTransactions(rows);
             payoutsReady = true;
             finishStreams();
@@ -92,7 +92,7 @@ export default function OwnerFinancialsPage() {
             finishStreams();
         });
 
-        const invoiceQ = query(collection(db, 'invoices'), where('ownerUid', '==', user.uid), limit(40));
+        const invoiceQ = query(collection(db, 'invoices'), where('ownerUid', '==', user.uid), limit(100));
         const unsubscribeInvoices = onSnapshot(invoiceQ, (snap) => {
             const rows: any[] = snap.docs.map(d => ({ id: d.id, ...d.data() }));
             setInvoices(

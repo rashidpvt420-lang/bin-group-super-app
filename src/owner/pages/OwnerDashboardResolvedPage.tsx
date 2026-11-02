@@ -255,23 +255,33 @@ const isDoneStatus = (value: unknown) => {
   return ['DONE', 'ACTIVE', 'APPROVED', 'VERIFIED', 'SIGNED', 'COMPLETE', 'COMPLETED', 'READY'].includes(status);
 };
 
-const hasTitleEvidence = (property: any) => Boolean(
+const hasTitleUpload = (property: any) => Boolean(
   property?.titleDeedUrl ||
   property?.titleDeedFileUrl ||
   property?.titleDeedNumber ||
   property?.ownershipDocumentUrl ||
-  property?.documents?.titleDeedUrl ||
+  property?.documents?.titleDeedUrl
+);
+
+const hasTitleEvidence = (property: any) => Boolean(
+  property?.titleDeedVerified === true ||
+  property?.ownershipVerified === true ||
   isDoneStatus(property?.titleDeedStatus) ||
   isDoneStatus(property?.ownershipVerificationStatus)
+);
+
+const hasGeoUpload = (property: any) => Boolean(
+  property?.coordinates ||
+  property?.location?.lat ||
+  property?.lat ||
+  property?.latitude
 );
 
 const hasGeoEvidence = (property: any) => Boolean(
   property?.geoVerified === true ||
   property?.gpsVerified === true ||
-  property?.coordinates ||
-  property?.location?.lat ||
-  property?.lat ||
-  property?.latitude
+  property?.locationVerified === true ||
+  isDoneStatus(property?.dispatchGeographyStatus)
 );
 
 const buildActivationTimeline = (
@@ -290,8 +300,10 @@ const buildActivationTimeline = (
   const adminStatus = normalizePaymentState(contract.adminApprovalStatus || contract.binApprovalStatus || contract.approvalStatus || profile.approvalStatus);
   const paymentVerified = contract.paymentVerified === true || profile.paymentVerified === true || ['PAID', 'VERIFIED', 'ADMIN_VERIFIED', 'APPROVED'].includes(normalizePaymentState(contract.paymentStatus || profile.paymentStatus));
   const dashboardUnlocked = resolution.state === 'active' || profile.dashboardUnlocked === true || contract.dashboardUnlocked === true;
-  const titleReady = properties.length > 0 && properties.some(hasTitleEvidence);
-  const geoReady = properties.length > 0 && properties.some(hasGeoEvidence);
+  const titleReady = properties.length > 0 && properties.every(hasTitleEvidence);
+  const titleUploaded = properties.length > 0 && properties.some(hasTitleUpload);
+  const geoReady = properties.length > 0 && properties.every(hasGeoEvidence);
+  const geoUploaded = properties.length > 0 && properties.some(hasGeoUpload);
   const units = Number(stats?.units || ledgerSummary?.totalUnits || 0);
   const tenantsLinked = Number(ledgerSummary?.activeTenants || ledgerSummary?.pendingTenants || 0);
 
@@ -302,8 +314,8 @@ const buildActivationTimeline = (
       : { status: 'Missing', tone: STATUS_TONES.danger.text };
 
   const propertyGate = status(properties.length > 0, Boolean(profile.latestIntakeId || contract.propertyId || contract.propertyIds?.length), properties.length > 0 ? `${properties.length} linked` : 'Done');
-  const titleGate = status(titleReady, properties.length > 0);
-  const geoGate = status(geoReady, properties.length > 0);
+  const titleGate = status(titleReady, titleUploaded || properties.length > 0, 'Verified');
+  const geoGate = status(geoReady, geoUploaded || properties.length > 0, 'Verified');
   const paymentGate = status(paymentVerified, pendingPayments > 0 || contractStatus.includes('PAYMENT'));
   const ownerSignatureGate = status(signatureStatus === 'SIGNED' || contract.ownerSigned === true || contract.ownerSignature?.signed === true, Boolean(contract.id || contract.contractId));
   const binGate = status(adminStatus.includes('APPROVED') || contractStatus === 'ACTIVE' || dashboardUnlocked, pendingApprovals > 0 || adminStatus.includes('PENDING') || adminStatus.includes('REVIEW'));
@@ -314,8 +326,8 @@ const buildActivationTimeline = (
 
   return [
     { gate: 'Property submitted', ...propertyGate, detail: properties.length ? 'Live property/passport records are linked to this owner.' : 'Waiting for property/passport record linkage.' },
-    { gate: 'Title deed verified', ...titleGate, detail: titleReady ? 'Ownership evidence is present or verified.' : 'Upload or admin verification still required.' },
-    { gate: 'Property geo verified', ...geoGate, detail: geoReady ? 'GPS/location data is available for service routing.' : 'GPS coordinates are still missing.' },
+    { gate: 'Title deed verified', ...titleGate, detail: titleReady ? 'Ownership evidence is approved and verified.' : titleUploaded ? 'Title deed is submitted and awaiting admin verification.' : 'Upload or admin verification still required.' },
+    { gate: 'Property geo verified', ...geoGate, detail: geoReady ? 'Approved dispatch geography is active for service routing.' : geoUploaded ? 'Location coordinates submitted; dispatch geography review pending.' : 'GPS coordinates are still missing.' },
     { gate: '15% payment proof', ...paymentGate, detail: paymentVerified ? 'Mobilization/payment proof is verified.' : pendingPayments ? `${pendingPayments} payment proof item(s) await review.` : 'Payment proof is not verified yet.' },
     { gate: 'Owner contract signature', ...ownerSignatureGate, detail: ownerSignatureGate.status === 'Done' ? 'Owner signature state is signed.' : 'Owner signature is still pending.' },
     { gate: 'BIN GROUP approval', ...binGate, detail: binGate.status === 'Done' ? 'Admin/BIN approval gate is complete.' : 'Admin approval queue still needs closure.' },
