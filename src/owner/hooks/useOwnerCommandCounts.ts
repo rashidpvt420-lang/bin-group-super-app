@@ -21,6 +21,8 @@ type OwnerCommandCounts = {
   monthlyCostVariancePct: number | null;
   /** Feature 9: sources whose listener failed; their counts are NOT real zeros. */
   failedSources?: string[];
+  /** Sources at their query limit; counts below may be understated. */
+  truncatedSources?: string[];
 };
 
 const PENDING_APPROVAL_STATUSES = new Set(['PENDING', 'pending', 'REQUESTED', 'requested', 'OPEN', 'open']);
@@ -76,6 +78,7 @@ export function useOwnerCommandCounts(): OwnerCommandCounts {
     expiringDocuments: 0,
     monthlyCostVariancePct: null,
     failedSources: [],
+    truncatedSources: [],
   });
 
   React.useEffect(() => {
@@ -90,6 +93,7 @@ export function useOwnerCommandCounts(): OwnerCommandCounts {
       _pendingTicketSignOffs?: number;
     } = {};
     const failed = new Set<string>();
+    const truncated = new Set<string>();
     const publish = () => {
       const pendingCostRequests = Number(partial._pendingCostRequests || 0);
       const pendingTicketSignOffs = Number(partial._pendingTicketSignOffs || 0);
@@ -97,6 +101,7 @@ export function useOwnerCommandCounts(): OwnerCommandCounts {
         ...current,
         ...partial,
         failedSources: Array.from(failed),
+        truncatedSources: Array.from(truncated),
         pendingTicketSignOffs,
         // Command-strip "approvals" = quote/cost requests + ticket sign-offs awaiting Approve & Close.
         pendingCostApprovals: pendingCostRequests + pendingTicketSignOffs,
@@ -108,6 +113,8 @@ export function useOwnerCommandCounts(): OwnerCommandCounts {
 
     try {
       unsubs.push(onSnapshot(query(collection(db, 'owner_approval_requests'), where('ownerId', '==', ownerId), limit(100)), (snap) => {
+        if (snap.size >= 100) truncated.add('approvals');
+        else truncated.delete('approvals');
         partial._pendingCostRequests = snap.docs.filter((docSnap) => PENDING_APPROVAL_STATUSES.has(String(docSnap.data()?.status || 'PENDING'))).length;
         publish();
       }, (err) => {
@@ -122,6 +129,8 @@ export function useOwnerCommandCounts(): OwnerCommandCounts {
 
     try {
       unsubs.push(onSnapshot(query(collection(db, 'maintenanceTickets'), where('ownerId', '==', ownerId), limit(150)), (snap) => {
+        if (snap.size >= 150) truncated.add('tickets');
+        else truncated.delete('tickets');
         const rows = snap.docs.map((docSnap) => docSnap.data());
         const openRows = rows.filter(isOwnerOpenTicket);
         // openTickets matches advanced Open Maintenance Tasks; highRisk is the priority subset.
