@@ -50,6 +50,8 @@ export default function OwnerApprovalCenterPage() {
   const [notice, setNotice] = React.useState('');
   const [requestsError, setRequestsError] = React.useState('');
   const [signOffsError, setSignOffsError] = React.useState('');
+  const [requestsMayBeTruncated, setRequestsMayBeTruncated] = React.useState(false);
+  const [signOffsMayBeTruncated, setSignOffsMayBeTruncated] = React.useState(false);
   const [submittingId, setSubmittingId] = React.useState('');
   const mutationInFlightRef = React.useRef(false);
   const ownerId = auth.currentUser?.uid || '';
@@ -60,6 +62,7 @@ export default function OwnerApprovalCenterPage() {
     const q = query(collection(db, 'owner_approval_requests'), where('ownerId', '==', ownerId), orderBy('createdAt', 'desc'), limit(50));
     const unsubRequests = onSnapshot(q, (snap) => {
       const rows = snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<ApprovalRequest, 'id'>) }));
+      setRequestsMayBeTruncated(snap.size >= 50);
       setItems(rows);
       setRequestsError('');
       setNotes((current) => {
@@ -70,6 +73,7 @@ export default function OwnerApprovalCenterPage() {
     }, (err) => {
       console.warn('[OwnerApprovalCenter] approval requests listener failed:', err);
       setRequestsError(err?.message || 'Unable to load quote and approval requests.');
+      setRequestsMayBeTruncated(false);
       setItems([]);
     });
 
@@ -78,11 +82,13 @@ export default function OwnerApprovalCenterPage() {
       const rows = snap.docs
         .map((d) => ({ id: d.id, ...(d.data() as Omit<SignOffTicket, 'id'>) }))
         .filter((ticket) => isOwnerPendingSignOff(ticket));
+      setSignOffsMayBeTruncated(snap.size >= 150);
       setSignOffs(rows);
       setSignOffsError('');
     }, (err) => {
       console.warn('[OwnerApprovalCenter] ticket sign-off listener failed:', err);
       setSignOffsError(err?.message || 'Unable to load ticket sign-offs.');
+      setSignOffsMayBeTruncated(false);
       setSignOffs([]);
     });
 
@@ -135,6 +141,8 @@ export default function OwnerApprovalCenterPage() {
       </Stack>
       {requestsError && <Alert severity="error" data-testid="owner-approvals-load-error" sx={{ mb: 3 }}>Quote and approval requests could not be loaded. The list below may be incomplete, so do not assume nothing is waiting: {requestsError}</Alert>}
       {signOffsError && <Alert severity="error" data-testid="owner-signoffs-load-error" sx={{ mb: 3 }}>Ticket sign-offs could not be loaded. The list below may be incomplete: {signOffsError}</Alert>}
+      {requestsMayBeTruncated && <Alert severity="warning" data-testid="owner-approval-requests-capped" sx={{ mb: 3 }}>At least 50 approval requests were returned. This view may omit older requests; verify the full queue before treating it as clear.</Alert>}
+      {signOffsMayBeTruncated && <Alert severity="warning" data-testid="owner-signoffs-capped" sx={{ mb: 3 }}>At least 150 maintenance tickets were returned. Older pending sign-offs may be outside this view; verify the full ticket queue before treating it as clear.</Alert>}
       {notice && <Alert severity={notice.includes('Failed') ? 'warning' : 'success'} sx={{ mb: 3 }}>{notice}</Alert>}
 
       <Stack spacing={1} sx={{ mb: 2 }}>
