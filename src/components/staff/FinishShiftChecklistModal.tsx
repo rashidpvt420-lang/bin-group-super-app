@@ -25,6 +25,7 @@ import {
   MoreTime as OvertimeIcon,
 } from "@mui/icons-material";
 import { functions, httpsCallable } from "../../lib/firebase";
+import Bi from '../Bi';
 
 interface FinishShiftChecklistModalProps {
   open: boolean;
@@ -86,13 +87,13 @@ export const FinishShiftChecklistModal: React.FC<FinishShiftChecklistModalProps>
       <DialogTitle>
         <Stack direction="row" spacing={1} alignItems="center">
           <ClockIcon color="success" />
-          <Typography variant="h6" sx={{ fontWeight: 800 }}>Finish Shift</Typography>
+          <Typography variant="h6" sx={{ fontWeight: 800 }}><Bi en={"Finish Shift"} ar={"إنهاء الوردية"} /></Typography>
         </Stack>
       </DialogTitle>
 
       <DialogContent>
         <Typography variant="body2" sx={{ mb: 2 }}>
-          The server—not this checklist—decides whether the shift can close. It verifies active jobs, vehicle-return requirements, completed-job evidence, approved overtime, and current shift state.
+          <Bi en={"The server—not this checklist—decides whether the shift can close. It verifies active jobs, vehicle-return requirements, completed-job evidence, approved overtime, and current shift state."} ar={"الخادم وليس هذه القائمة هو من يقرر إغلاق الوردية. يتحقق من المهام النشطة وإعادة المركبة وإثبات المهام المكتملة والعمل الإضافي المعتمد وحالة الوردية."} />
         </Typography>
 
         {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
@@ -122,12 +123,12 @@ export const FinishShiftChecklistModal: React.FC<FinishShiftChecklistModalProps>
 
         {summary && (
           <Alert severity="success" icon={<CheckIcon />} sx={{ mb: 2 }}>
-            <Typography variant="subtitle2" sx={{ fontWeight: 800 }}>Server verification passed</Typography>
-            <Typography variant="body2">Jobs completed today: {summary.jobsCompleted ?? 0}</Typography>
-            <Typography variant="body2">Completed jobs with photo evidence: {summary.completedJobsWithPhotoEvidence ?? 0}</Typography>
-            <Typography variant="body2">Vehicle status: {summary.vehicleReturnStatus || "Not recorded"}</Typography>
-            <Typography variant="body2">Approved overtime: {summary.approvedOvertimeMinutes ?? 0} minutes</Typography>
-            <Typography variant="body2">Tool/asset verification: {summary.toolAssetVerificationStatus || "Not asserted"}</Typography>
+            <Typography variant="subtitle2" sx={{ fontWeight: 800 }}><Bi en={"Server verification passed"} ar={"نجح التحقق من الخادم"} /></Typography>
+            <Typography variant="body2"><Bi en={"Jobs completed today:"} ar={"المهام المكتملة اليوم:"} /> {summary.jobsCompleted ?? 0}</Typography>
+            <Typography variant="body2"><Bi en={"Completed jobs with photo evidence:"} ar={"المهام المكتملة مع صور الإثبات:"} /> {summary.completedJobsWithPhotoEvidence ?? 0}</Typography>
+            <Typography variant="body2"><Bi en={"Vehicle status:"} ar={"حالة المركبة:"} /> {summary.vehicleReturnStatus || "Not recorded"}</Typography>
+            <Typography variant="body2"><Bi en={"Approved overtime:"} ar={"العمل الإضافي المعتمد:"} /> {summary.approvedOvertimeMinutes ?? 0} <Bi en={"minutes"} ar={"دقيقة"} /></Typography>
+            <Typography variant="body2"><Bi en={"Tool/asset verification:"} ar={"التحقق من الأدوات/الأصول:"} /> {summary.toolAssetVerificationStatus || "Not asserted"}</Typography>
             {Array.isArray(summary.warnings) && summary.warnings.map((warning) => (
               <Typography key={warning} variant="caption" sx={{ display: "block", mt: 0.5 }}>{warning}</Typography>
             ))}
@@ -150,7 +151,7 @@ export const FinishShiftChecklistModal: React.FC<FinishShiftChecklistModalProps>
       <DialogActions>
         {!summary ? (
           <>
-            <Button disabled={submitting} onClick={close}>Cancel</Button>
+            <Button disabled={submitting} onClick={close}><Bi en={"Cancel"} ar={"إلغاء"} /></Button>
             <Button
               variant="contained"
               color="success"
@@ -162,7 +163,7 @@ export const FinishShiftChecklistModal: React.FC<FinishShiftChecklistModalProps>
             </Button>
           </>
         ) : (
-          <Button variant="contained" color="success" onClick={completeAndClose}>Done</Button>
+          <Button variant="contained" color="success" onClick={completeAndClose}><Bi en={"Done"} ar={"تم"} /></Button>
         )}
       </DialogActions>
     </Dialog>

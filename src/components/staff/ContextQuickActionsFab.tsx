@@ -23,6 +23,7 @@ import {
   PlayArrow as StartIcon,
   ReportProblem as AccidentIcon,
 } from "@mui/icons-material";
+import Bi from '../Bi';
 
 interface ContextQuickActionsFabProps {
   activeJobId?: string | null;
@@ -139,13 +140,13 @@ export const ContextQuickActionsFab: React.FC<ContextQuickActionsFabProps> = ({
       >
         <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
           <Box>
-            <Typography variant="h6" sx={{ fontWeight: 800 }}>Quick Actions</Typography>
+            <Typography variant="h6" sx={{ fontWeight: 800 }}><Bi en={"Quick Actions"} ar={"إجراءات سريعة"} /></Typography>
             <Stack direction="row" spacing={1} sx={{ mt: 0.5, flexWrap: "wrap", gap: 0.5 }}>
               <Chip size="small" label={`Job: ${activeJobId || "None assigned"}`} />
               <Chip size="small" label={`Vehicle: ${assignedVehicleId || "None assigned"}`} />
             </Stack>
             <Typography variant="caption" sx={{ color: "#94a3b8", display: "block", mt: 0.75 }}>
-              IDs are verified again by the server before authoritative changes are accepted.
+              <Bi en={"IDs are verified again by the server before authoritative changes are accepted."} ar={"يعيد الخادم التحقق من المعرفات قبل قبول التغييرات."} />
             </Typography>
           </Box>
           <IconButton aria-label="Close quick actions" onClick={() => setOpen(false)} sx={{ color: "#94a3b8" }}>

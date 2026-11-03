@@ -19,6 +19,7 @@ import { db, collection, getDocs, query, where, orderBy, limit } from '../lib/fi
 import { useRole } from '../context/RoleContext';
 import { formatAED } from '../utils/formatters';
 import { computeReportingStats, formatOccupancy, formatResolutionTime, NOT_AVAILABLE, type ReportingStats } from './reportingDashboardStats';
+import Bi from '../components/Bi';
 
 const ReportingDashboard: React.FC = () => {
     const { user, role } = useRole();
@@ -127,7 +128,7 @@ const ReportingDashboard: React.FC = () => {
                 <Typography variant="overline" sx={{ color: '#7A5C12', fontWeight: 900, letterSpacing: 4, mb: 1, display: 'block' }}>INSTITUTIONAL AUDIT</Typography>
                 <Stack direction="row" justifyContent="space-between" alignItems="flex-end">
                     <Box>
-                        <Typography variant="h3" fontWeight="950" sx={{ color: '#111827', letterSpacing: -2 }}>Reporting Dashboard</Typography>
+                        <Typography variant="h3" fontWeight="950" sx={{ color: '#111827', letterSpacing: -2 }}><Bi en={"Reporting Dashboard"} ar={"لوحة التقارير"} /></Typography>
                         <Stack direction="row" spacing={1} sx={{ mt: 2 }}>
                             {stats.emiratesList.map((e: string) => (
                                 <Chip 
@@ -153,7 +154,7 @@ const ReportingDashboard: React.FC = () => {
                     <Paper sx={{ p: 4, bgcolor: alpha(binThemeTokens.gold, 0.05), border: `1px solid ${alpha(binThemeTokens.gold, 0.2)}`, borderRadius: 6 }}>
                         <Stack spacing={1}>
                             <Timer color={'#7A5C12'} size={32} />
-                            <Typography variant="overline" sx={{ color: '#475569', fontWeight: 800 }}>Average Ticket Resolution</Typography>
+                            <Typography variant="overline" sx={{ color: '#475569', fontWeight: 800 }}><Bi en={"Average Ticket Resolution"} ar={"متوسط حل الطلبات"} /></Typography>
                             <Typography variant="h2" fontWeight="950" sx={{ color: '#111827' }} data-testid="reporting-resolution-time">{formatResolutionTime(stats.avgResolutionMinutes)}</Typography>
                             <Typography variant="caption" sx={{ color: '#7A5C12' }}>{stats.avgResolutionMinutes === null ? 'NO COMPLETED TICKETS WITH TIMESTAMPS' : `CREATED → COMPLETED · ${stats.resolutionSampleSize} TICKET(S)`}</Typography>
                         </Stack>
@@ -163,7 +164,7 @@ const ReportingDashboard: React.FC = () => {
                     <Paper sx={{ p: 4, bgcolor: alpha(binThemeTokens.gold, 0.05), border: `1px solid ${alpha(binThemeTokens.gold, 0.2)}`, borderRadius: 6 }}>
                         <Stack spacing={1}>
                             <CreditCard color={'#7A5C12'} size={32} />
-                            <Typography variant="overline" sx={{ color: '#475569', fontWeight: 800 }}>Financial Integrity</Typography>
+                            <Typography variant="overline" sx={{ color: '#475569', fontWeight: 800 }}><Bi en={"Financial Integrity"} ar={"النزاهة المالية"} /></Typography>
                             <Typography variant="h2" fontWeight="950" sx={{ color: '#111827' }}>AED {formatAED(stats.totalSettled)}</Typography>
                             <Typography variant="caption" sx={{ color: '#7A5C12' }}>TOTAL DIRECT SETTLEMENTS</Typography>
                         </Stack>
@@ -173,7 +174,7 @@ const ReportingDashboard: React.FC = () => {
                     <Paper sx={{ p: 4, bgcolor: alpha(binThemeTokens.gold, 0.05), border: `1px solid ${alpha(binThemeTokens.gold, 0.2)}`, borderRadius: 6 }}>
                         <Stack spacing={1}>
                             <PieChart color={'#7A5C12'} size={32} />
-                            <Typography variant="overline" sx={{ color: '#475569', fontWeight: 800 }}>Portfolio Occupancy</Typography>
+                            <Typography variant="overline" sx={{ color: '#475569', fontWeight: 800 }}><Bi en={"Portfolio Occupancy"} ar={"إشغال المحفظة"} /></Typography>
                             <Typography variant="h2" fontWeight="950" sx={{ color: '#111827' }} data-testid="reporting-occupancy">{formatOccupancy(stats.occupancyPercent)}</Typography>
                             <Typography variant="caption" sx={{ color: '#7A5C12' }}>{stats.occupancyPercent === null ? 'NO UNIT RECORDS' : `${stats.occupiedUnits} OF ${stats.totalUnits} UNITS OCCUPIED`}</Typography>
                         </Stack>
@@ -192,7 +193,7 @@ const ReportingDashboard: React.FC = () => {
                                 <Typography variant="overline" sx={{ color: '#7A5C12', fontWeight: 900 }}>TOP FAULT CATEGORIES</Typography>
                                 <Stack spacing={3} sx={{ mt: 3 }}>
                                     {stats.faultCategories.length === 0 && (
-                                        <Typography variant="body2" color="#475569">{NOT_AVAILABLE}: no categorised tickets yet.</Typography>
+                                        <Typography variant="body2" color="#475569">{NOT_AVAILABLE}<Bi en={": no categorised tickets yet."} ar={": لا توجد طلبات مصنفة بعد."} /></Typography>
                                     )}
                                     {stats.faultCategories.map((f) => (
                                         <Box key={f.category} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -211,7 +212,7 @@ const ReportingDashboard: React.FC = () => {
                                         <Box key={m.month} title={`${m.month}: ${m.count}`} sx={{ width: '12%', bgcolor: binThemeTokens.gold, height: `${(m.count / emergencyMax) * 100}%`, minHeight: 2, borderRadius: 1 }} />
                                     ))}
                                 </Box>
-                                <Typography variant="caption" color="#475569" sx={{ mt: 2, display: 'block', textAlign: 'center' }}>{stats.emergencyByMonth.reduce((sum, m) => sum + m.count, 0)} emergency ticket(s) in the last 6 months</Typography>
+                                <Typography variant="caption" color="#475569" sx={{ mt: 2, display: 'block', textAlign: 'center' }}>{stats.emergencyByMonth.reduce((sum, m) => sum + m.count, 0)} <Bi en={"emergency ticket(s) in the last 6 months"} ar={"طلب/طلبات طوارئ في آخر 6 أشهر"} /></Typography>
                             </Paper>
                         </Grid>
                         <Grid item xs={12} md={4}>
@@ -219,7 +220,7 @@ const ReportingDashboard: React.FC = () => {
                                 <Typography variant="overline" sx={{ color: '#7A5C12', fontWeight: 950 }}>RENEWAL RISK SCORE</Typography>
                                 <Box sx={{ textAlign: 'center', py: 2 }}>
                                     <Typography variant="h4" fontWeight="950" color="#111827" data-testid="reporting-renewal-risk">{NOT_AVAILABLE}</Typography>
-                                    <Typography variant="body2" color="#475569">No renewal risk model is connected to your records yet.</Typography>
+                                    <Typography variant="body2" color="#475569"><Bi en={"No renewal risk model is connected to your records yet."} ar={"لا يوجد نموذج لمخاطر التجديد مرتبط بسجلاتك بعد."} /></Typography>
                                 </Box>
                             </Paper>
                         </Grid>
@@ -227,7 +228,7 @@ const ReportingDashboard: React.FC = () => {
                 </Grid>
 
                 <Grid item xs={12}>
-                    <Typography variant="h5" fontWeight="900" sx={{ color: '#111827', mb: 4, mt: 4 }}>Regional Performance Distribution</Typography>
+                    <Typography variant="h5" fontWeight="900" sx={{ color: '#111827', mb: 4, mt: 4 }}><Bi en={"Regional Performance Distribution"} ar={"توزيع الأداء حسب المنطقة"} /></Typography>
                     <Grid container spacing={3}>
                         {stats.regionalStats.map((reg) => (
                             <Grid item xs={12} md={4} key={reg.emirate}>

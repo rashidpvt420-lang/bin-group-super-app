@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Alert, Box, Button, MenuItem, Stack, TextField, Typography } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { functions, httpsCallable } from '../lib/firebase';
+import Bi from '../components/Bi';
 
 const MAX_PROOF_BYTES = 5 * 1024 * 1024;
 
@@ -40,20 +41,20 @@ export default function AdminPaymentCollectionPage() {
 
   return (
     <Box sx={{ mb: 3 }}>
-      <Button size="small" onClick={() => navigate('/admin')}>Back</Button>
-      <Typography variant="h6" sx={{ fontWeight: 800, mt: 1 }}>Record cash / cheque collection</Typography>
-      <Alert severity="info" sx={{ my: 1.5 }}>Finance admins with MFA only. Records are permanent; mistakes are corrected with a void entry. Card payments are off.</Alert>
+      <Button size="small" onClick={() => navigate('/admin')}><Bi en={"Back"} ar={"رجوع"} /></Button>
+      <Typography variant="h6" sx={{ fontWeight: 800, mt: 1 }}><Bi en={"Record cash / cheque collection"} ar={"تسجيل تحصيل نقدي / شيك"} /></Typography>
+      <Alert severity="info" sx={{ my: 1.5 }}><Bi en={"Finance admins with MFA only. Records are permanent; mistakes are corrected with a void entry. Card payments are off."} ar={"لمسؤولي المالية مع التحقق الثنائي فقط. السجلات دائمة وتُصحح الأخطاء بقيد إلغاء. الدفع بالبطاقة متوقف."} /></Alert>
       <Stack spacing={1.5} sx={{ maxWidth: 520 }}>
         <TextField label="Payer user ID" value={form.payerUid} onChange={set('payerUid')} required />
         <TextField select label="For" value={form.targetType} onChange={set('targetType')}>
-          <MenuItem value="contract">Contract</MenuItem>
-          <MenuItem value="invoice">Invoice</MenuItem>
+          <MenuItem value="contract"><Bi en={"Contract"} ar={"العقد"} /></MenuItem>
+          <MenuItem value="invoice"><Bi en={"Invoice"} ar={"الفاتورة"} /></MenuItem>
         </TextField>
         <TextField label="Contract / invoice ID" value={form.targetId} onChange={set('targetId')} required />
         <TextField label="Amount (AED)" value={form.amount} onChange={set('amount')} inputProps={{ inputMode: 'decimal' }} required />
         <TextField select label="Method" value={form.method} onChange={set('method')}>
-          <MenuItem value="cheque">Cheque</MenuItem>
-          <MenuItem value="cash">Cash</MenuItem>
+          <MenuItem value="cheque"><Bi en={"Cheque"} ar={"شيك"} /></MenuItem>
+          <MenuItem value="cash"><Bi en={"Cash"} ar={"نقداً"} /></MenuItem>
         </TextField>
         <TextField type="date" label="Collected on" value={form.collectedOn} onChange={set('collectedOn')} InputLabelProps={{ shrink: true }} required />
         {form.method === 'cheque' && <TextField label="Cheque number (optional)" value={form.chequeNumber} onChange={set('chequeNumber')} />}
