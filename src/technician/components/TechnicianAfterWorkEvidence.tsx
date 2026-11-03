@@ -19,6 +19,7 @@ import {
   isRetryableTechnicianEvidenceError,
   queueTechnicianEvidence,
 } from '../utils/offlineEvidenceQueue';
+import Bi from '../../components/Bi';
 
 const assignedTechnicianId = (data: Record<string, any>) => String(
   data.assignedTechnicianId || data.technicianId || data.assignedTechId || data.technicianUid || data.techId || '',
@@ -181,7 +182,7 @@ export default function TechnicianAfterWorkEvidence() {
             AFTER-WORK COMPLETION EVIDENCE
           </Typography>
           <Typography variant="body2" sx={{ color: '#667085', mt: 0.5 }}>
-            Capture the repaired work area before closing the mission. A local photo alone never authorizes completion.
+            <Bi en={"Capture the repaired work area before closing the mission. A local photo alone never authorizes completion."} ar={"صوّر منطقة العمل بعد الإصلاح قبل إغلاق المهمة. الصورة المحلية وحدها لا تسمح بالإكمال."} />
           </Typography>
         </Box>
         <Button
@@ -204,7 +205,7 @@ export default function TechnicianAfterWorkEvidence() {
       </Stack>
       {existingProof && !success && !queuedLocally && (
         <Alert data-testid="technician-after-work-confirmed" severity="success" sx={{ mt: 2 }}>
-          Server-confirmed after-work evidence is attached to this mission.
+          <Bi en={"Server-confirmed after-work evidence is attached to this mission."} ar={"تم إرفاق إثبات ما بعد العمل المؤكد من الخادم بهذه المهمة."} />
         </Alert>
       )}
       {success && <Alert data-testid="technician-after-work-success" severity={queuedLocally ? 'warning' : 'success'} sx={{ mt: 2 }}>{success}</Alert>}

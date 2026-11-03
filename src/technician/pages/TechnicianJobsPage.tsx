@@ -21,6 +21,7 @@ import type { SnapshotDoc } from '../../utils/queryUtils';
 import { calculateDistanceKm, calculateEtaMinutes, getTechnicianLocation, getTicketJobLocation } from '../../utils/liveTracking';
 import { arabicStatusLabel, formatStatusLabel } from '../../theme/statusColors';
 import TechnicianSlaCountdown from '../components/TechnicianSlaCountdown';
+import Bi from '../../components/Bi';
 
 // Text colours readable on the white technician shell (all >= 4.5:1 on white and on their 12% tint).
 // The previous palette (#3b82f6, gold #C9A646, #10b981, #f59e0b) measured 2.1-3.7:1.
@@ -174,7 +175,7 @@ export default function TechnicianJobsPage() {
                             {String(job.category || job.complaintCategory || 'Maintenance')}
                         </Typography>
                         <Typography variant="body2" sx={{ color: JOBS_READABLE.muted }}>
-                            {String(job.propertyName || 'Property')} · Unit {String(job.unitNumber || 'N/A')}
+                            {String(job.propertyName || 'Property')} <Bi en={"· Unit"} ar={"· الوحدة"} /> {String(job.unitNumber || 'N/A')}
                         </Typography>
                     </Box>
                     <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
@@ -254,7 +255,7 @@ export default function TechnicianJobsPage() {
                 {tx('tech.jobs.title', 'My Jobs')}
             </Typography>
             <Typography variant="body2" sx={{ color: JOBS_READABLE.muted, mb: 5 }}>
-                {tx('tech.jobs.subtitle', 'Active assignments securely issued by dispatch.')} Assignment alerts include a server delivery receipt.
+                {tx('tech.jobs.subtitle', 'Active assignments securely issued by dispatch.')} <Bi en={"Assignment alerts include a server delivery receipt."} ar={"تتضمن تنبيهات الإسناد إيصال تسليم من الخادم."} />
             </Typography>
 
             <Typography variant="overline" sx={{ color: JOBS_READABLE.gold, fontWeight: 900, letterSpacing: 4, mb: 3, display: 'block' }}>

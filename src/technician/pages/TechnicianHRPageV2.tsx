@@ -8,6 +8,7 @@ import UnifiedDocumentVault from '../../components/UnifiedDocumentVault';
 import { BLUE_COLLAR_ESS_SUPPORTED_LANGUAGES } from '../utils/blueCollarEssIntentRouter';
 import { calculateEosbEstimate, getHeatStressSeasonStatus } from '../../lib/uaeWorkforceComplianceEngine';
 import type { EosbTerminationReason } from '../../lib/uaeWorkforceComplianceEngine';
+import Bi from '../../components/Bi';
 
 const quickPrompts = [
   'I need annual leave next week',
@@ -253,13 +254,13 @@ export default function TechnicianHRPageV2() {
   return (
     <Box sx={{ pb: 6 }}>
       <Typography variant="overline" sx={{ color: binThemeTokens.goldText, fontWeight: 950, letterSpacing: 3 }}>BIN PEOPLE AI · {HR_SERVER_TRAINING_VERSION}</Typography>
-      <Typography variant="h3" fontWeight="950" color="#FFF" sx={{ mb: 1 }}>AI-Driven Multilingual Blue-Collar Workforce ESS</Typography>
-      <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.62)', mb: 4, maxWidth: 980 }}>Trained for {BLUE_COLLAR_ESS_SUPPORTED_LANGUAGES.join(', ')}. Routes leave, sick leave, overtime, payslip, salary, documents, accommodation, safety, tools/PPE, transport, wellbeing, and HR cases without paperwork.</Typography>
+      <Typography variant="h3" fontWeight="950" color="#FFF" sx={{ mb: 1 }}><Bi en={"AI-Driven Multilingual Blue-Collar Workforce ESS"} ar={"الخدمة الذاتية للموظفين متعددة اللغات"} /></Typography>
+      <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.62)', mb: 4, maxWidth: 980 }}><Bi en={"Trained for"} ar={"مدرّب على"} /> {BLUE_COLLAR_ESS_SUPPORTED_LANGUAGES.join(', ')}<Bi en={". Routes leave, sick leave, overtime, payslip, salary, documents, accommodation, safety, tools/PPE, transport, wellbeing, and HR cases without paperwork."} ar={". يوجّه طلبات الإجازة والإجازة المرضية والعمل الإضافي وقسيمة الراتب والمستندات والسكن والسلامة والأدوات والنقل والرفاهية دون أوراق."} /></Typography>
 
       <Grid container spacing={3}>
         <Grid item xs={12} md={7}>
           <Paper sx={{ p: 4, bgcolor: 'rgba(22,22,24,0.78)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 5 }}>
-            <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 2 }}><Bot color={binThemeTokens.gold} /><Typography variant="h6" color="#FFF" fontWeight="950">People AI Intent Router</Typography></Stack>
+            <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 2 }}><Bot color={binThemeTokens.gold} /><Typography variant="h6" color="#FFF" fontWeight="950"><Bi en={"People AI Intent Router"} ar={"مساعد طلبات الموظفين"} /></Typography></Stack>
             <TextField fullWidth multiline minRows={4} value={message} onChange={(e) => setMessage(e.target.value)} placeholder="Type staff issue in English, Arabic, Hindi, Urdu, Malayalam, Tagalog, Bengali, Nepali, or mixed language" sx={{ textarea: { color: '#fff' }, '& .MuiOutlinedInput-root': { bgcolor: 'rgba(255,255,255,0.04)' } }} />
             <Button variant="contained" disabled={loading || !message.trim()} onClick={() => createAiCase()} sx={{ mt: 2, bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}>{loading ? <CircularProgress size={22} sx={{ color: '#000' }} /> : 'CREATE AI HR CASE'}</Button>
             {answer && <Alert severity={answer.includes('could not') ? 'error' : 'success'} sx={{ mt: 2 }}>{answer}</Alert>}
@@ -267,16 +268,16 @@ export default function TechnicianHRPageV2() {
         </Grid>
         <Grid item xs={12} md={5}>
           <Paper sx={{ p: 4, bgcolor: 'rgba(22,22,24,0.78)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 5 }}>
-            <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 2 }}><HeartPulse color={binThemeTokens.gold} /><Typography variant="h6" color="#FFF" fontWeight="950">Wellbeing Check-In</Typography></Stack>
+            <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 2 }}><HeartPulse color={binThemeTokens.gold} /><Typography variant="h6" color="#FFF" fontWeight="950"><Bi en={"Wellbeing Check-In"} ar={"متابعة الحالة الصحية"} /></Typography></Stack>
             <Grid container spacing={1}>{['okay', 'tired', 'sick', 'stressed', 'angry', 'urgent'].map((item) => <Grid item xs={6} key={item}><Button fullWidth variant="outlined" onClick={() => mood(item)} sx={{ color: '#fff', borderColor: 'rgba(255,255,255,0.16)', fontWeight: 900 }}>{item.toUpperCase()}</Button></Grid>)}</Grid>
           </Paper>
         </Grid>
       </Grid>
 
       <Paper sx={{ p: 4, mt: 3, bgcolor: 'rgba(22,22,24,0.78)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 5 }}>
-        <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 2 }}><CloudUpload color={binThemeTokens.gold} /><Typography variant="h6" color="#FFF" fontWeight="950">Staff Document Upload Vault</Typography></Stack>
-        <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.62)', mb: 1 }}>Upload Emirates ID, passport, visa, medical certificates, insurance cards, labour cards, trade certificates, driving licence, signed acknowledgements, and HR support files.</Typography>
-        <Typography variant="caption" sx={{ color: binThemeTokens.goldText, display: 'block', mb: 2 }}>Sensitive files remain behind authenticated Firebase Storage rules. Firestore stores the protected object path, not a reusable public download URL.</Typography>
+        <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 2 }}><CloudUpload color={binThemeTokens.gold} /><Typography variant="h6" color="#FFF" fontWeight="950"><Bi en={"Staff Document Upload Vault"} ar={"خزنة مستندات الموظف"} /></Typography></Stack>
+        <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.62)', mb: 1 }}><Bi en={"Upload Emirates ID, passport, visa, medical certificates, insurance cards, labour cards, trade certificates, driving licence, signed acknowledgements, and HR support files."} ar={"ارفع الهوية الإماراتية وجواز السفر والتأشيرة والشهادات الطبية وبطاقات التأمين وبطاقة العمل والشهادات المهنية ورخصة القيادة والإقرارات الموقعة."} /></Typography>
+        <Typography variant="caption" sx={{ color: binThemeTokens.goldText, display: 'block', mb: 2 }}><Bi en={"Sensitive files remain behind authenticated Firebase Storage rules. Firestore stores the protected object path, not a reusable public download URL."} ar={"تبقى الملفات الحساسة محمية بقواعد تخزين موثقة، ولا يُحفظ رابط تنزيل عام."} /></Typography>
         <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems={{ xs: 'stretch', md: 'center' }}>
           <TextField select label="Document Type" value={documentType} onChange={(e) => setDocumentType(e.target.value)} sx={{ minWidth: 280, '& .MuiInputBase-root': { color: '#111827' }, '& .MuiInputLabel-root': { color: '#344054' } }}>
             {documentTypes.map(([value, label]) => <MenuItem key={value} value={value}>{label}</MenuItem>)}
@@ -291,9 +292,9 @@ export default function TechnicianHRPageV2() {
       </Paper>
 
       <Paper sx={{ p: 4, mt: 3, bgcolor: 'rgba(22,22,24,0.78)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 5 }}>
-        <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 2 }}><Wallet color={binThemeTokens.gold} /><Typography variant="h6" color="#FFF" fontWeight="950">Estimated End-of-Service Gratuity</Typography></Stack>
+        <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 2 }}><Wallet color={binThemeTokens.gold} /><Typography variant="h6" color="#FFF" fontWeight="950"><Bi en={"Estimated End-of-Service Gratuity"} ar={"مكافأة نهاية الخدمة التقديرية"} /></Typography></Stack>
         {!eosbBaseSalary || !eosbJoiningDate ? (
-          <Typography color="rgba(255,255,255,0.5)">Your basic salary and/or joining date are not on file yet. Ask HR to update your profile to see an estimate here.</Typography>
+          <Typography color="rgba(255,255,255,0.5)"><Bi en={"Your basic salary and/or joining date are not on file yet. Ask HR to update your profile to see an estimate here."} ar={"راتبك الأساسي أو تاريخ التحاقك غير مسجل بعد. اطلب من الموارد البشرية تحديث ملفك لرؤية التقدير هنا."} /></Typography>
         ) : (
           <>
             <Stack direction="row" spacing={1.2} sx={{ mb: 2 }}>
@@ -301,32 +302,32 @@ export default function TechnicianHRPageV2() {
               <Button size="small" variant={eosbScenario === 'employer_terminated' ? 'contained' : 'outlined'} onClick={() => setEosbScenario('employer_terminated')} sx={eosbScenario === 'employer_terminated' ? { bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 900 } : { color: '#fff', borderColor: 'rgba(255,255,255,0.16)', fontWeight: 900 }}>CONTRACT END / EMPLOYER-INITIATED</Button>
             </Stack>
             <Typography variant="h3" fontWeight="950" sx={{ color: binThemeTokens.gold }}>AED {eosbEstimate!.finalEstimateAed.toLocaleString()}</Typography>
-            <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.7)', mt: 1 }}>{eosbEstimate!.note} Based on {eosbEstimate!.serviceYears} years of service to date.</Typography>
+            <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.7)', mt: 1 }}>{eosbEstimate!.note} <Bi en={"Based on"} ar={"بناءً على"} /> {eosbEstimate!.serviceYears} <Bi en={"years of service to date."} ar={"سنوات خدمة حتى الآن."} /></Typography>
             <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.45)', display: 'block', mt: 2 }}>{eosbEstimate!.disclaimer}</Typography>
           </>
         )}
       </Paper>
 
       <Paper sx={{ p: 4, mt: 3, bgcolor: 'rgba(22,22,24,0.78)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 5 }}>
-        <Typography variant="h6" color="#FFF" fontWeight="950" sx={{ mb: 2 }}>HR Letters</Typography>
-        {letters.length === 0 ? <Typography color="rgba(255,255,255,0.5)">No HR letters yet.</Typography> : <Stack spacing={1.2}>{letters.slice(0, 8).map((letter) => <Paper key={letter.id} sx={{ p: 2, bgcolor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 3 }}><Stack direction="row" spacing={1.2} alignItems="center" justifyContent="space-between"><Stack direction="row" spacing={1.2} alignItems="center"><Award color={binThemeTokens.gold} size={18} /><Box><Typography color="#FFF" fontWeight="900">{letter.title || letter.letterType || 'HR Letter'}</Typography><Typography variant="caption" color="textSecondary">{letter.status || 'pending'}</Typography></Box></Stack><Chip label={String(letter.status || 'pending').replace(/_/g, ' ').toUpperCase()} size="small" sx={{ bgcolor: 'rgba(234,179,8,0.12)', color: '#eab308', fontWeight: 900 }} /></Stack></Paper>)}</Stack>}
+        <Typography variant="h6" color="#FFF" fontWeight="950" sx={{ mb: 2 }}><Bi en={"HR Letters"} ar={"خطابات الموارد البشرية"} /></Typography>
+        {letters.length === 0 ? <Typography color="rgba(255,255,255,0.5)"><Bi en={"No HR letters yet."} ar={"لا توجد خطابات بعد."} /></Typography> : <Stack spacing={1.2}>{letters.slice(0, 8).map((letter) => <Paper key={letter.id} sx={{ p: 2, bgcolor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 3 }}><Stack direction="row" spacing={1.2} alignItems="center" justifyContent="space-between"><Stack direction="row" spacing={1.2} alignItems="center"><Award color={binThemeTokens.gold} size={18} /><Box><Typography color="#FFF" fontWeight="900">{letter.title || letter.letterType || 'HR Letter'}</Typography><Typography variant="caption" color="textSecondary">{letter.status || 'pending'}</Typography></Box></Stack><Chip label={String(letter.status || 'pending').replace(/_/g, ' ').toUpperCase()} size="small" sx={{ bgcolor: 'rgba(234,179,8,0.12)', color: '#eab308', fontWeight: 900 }} /></Stack></Paper>)}</Stack>}
       </Paper>
 
       <Paper sx={{ p: 4, mt: 3, bgcolor: 'rgba(22,22,24,0.78)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 5 }}>
-        <Typography variant="h6" color="#FFF" fontWeight="950" sx={{ mb: 2 }}>Heat Stress Season</Typography>
+        <Typography variant="h6" color="#FFF" fontWeight="950" sx={{ mb: 2 }}><Bi en={"Heat Stress Season"} ar={"موسم الإجهاد الحراري"} /></Typography>
         <Stack direction="row" spacing={1.2} alignItems="center"><Sun color={heatStress.inRestrictedWindowNow ? '#ef4444' : heatStress.inSeason ? '#f59e0b' : binThemeTokens.gold} /><Typography color="#FFF" fontWeight="900">{heatStressHeadline}</Typography></Stack>
         <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.62)', mt: 1 }}>{heatStressBody}</Typography>
       </Paper>
 
       <Paper sx={{ p: 4, mt: 3, bgcolor: 'rgba(22,22,24,0.78)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 5 }}>
-        <Typography variant="h6" color="#FFF" fontWeight="950" sx={{ mb: 2 }}>Quick Training Tests</Typography>
+        <Typography variant="h6" color="#FFF" fontWeight="950" sx={{ mb: 2 }}><Bi en={"Quick Training Tests"} ar={"اختبارات تدريب سريعة"} /></Typography>
         <Grid container spacing={1.2}>{quickPrompts.map((prompt) => <Grid item xs={12} sm={6} md={4} key={prompt}><Button fullWidth variant="outlined" startIcon={<Plus size={14} />} disabled={loading} onClick={() => void createAiCase(prompt)} sx={{ justifyContent: 'flex-start', color: '#fff', borderColor: 'rgba(255,255,255,0.14)', fontWeight: 800, textTransform: 'none' }}>{prompt}</Button></Grid>)}</Grid>
       </Paper>
 
       <Paper sx={{ p: 4, mt: 3, bgcolor: 'rgba(22,22,24,0.78)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 5 }}>
-        <Typography variant="h6" color="#FFF" fontWeight="950" sx={{ mb: 2 }}>AI HR Request Registry</Typography>
+        <Typography variant="h6" color="#FFF" fontWeight="950" sx={{ mb: 2 }}><Bi en={"AI HR Request Registry"} ar={"سجل طلبات الموارد البشرية"} /></Typography>
         {registryError && <Alert severity="warning" sx={{ mb: 2 }}>{registryError}</Alert>}
-        {requests.length === 0 ? <Typography color="rgba(255,255,255,0.5)">No HR cases yet.</Typography> : <Stack spacing={1.5}>{requests.slice(0, 20).map((req) => <Paper key={req.id} sx={{ p: 2.5, bgcolor: req.optimistic ? 'rgba(198,167,94,0.08)' : 'rgba(255,255,255,0.03)', border: req.optimistic ? `1px solid ${binThemeTokens.gold}` : '1px solid rgba(255,255,255,0.06)', borderRadius: 3 }}><Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" gap={1.5}><Box><Typography color="#FFF" fontWeight="900" sx={{ textTransform: 'uppercase' }}>{requestTitle(req.requestLabel || req.requestType)}</Typography><Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.7)' }}>{req.reason}</Typography><Typography variant="caption" sx={{ color: binThemeTokens.goldText }}>{req.detectedLanguage && `Language: ${String(req.detectedLanguage).toUpperCase()} · `}{req.confidence && `Confidence: ${Math.round(Number(req.confidence) * 100)}% · `}{req.recommendedNextAction}{req.optimistic ? ' · Saving...' : ''}</Typography></Box><Chip size="small" label={String(req.priority || 'normal').toUpperCase()} sx={{ color: req.priority === 'urgent' ? '#ef4444' : req.priority === 'high' ? '#eab308' : '#10b981', bgcolor: 'rgba(255,255,255,0.06)', fontWeight: 900 }} /></Stack></Paper>)}</Stack>}
+        {requests.length === 0 ? <Typography color="rgba(255,255,255,0.5)"><Bi en={"No HR cases yet."} ar={"لا توجد طلبات بعد."} /></Typography> : <Stack spacing={1.5}>{requests.slice(0, 20).map((req) => <Paper key={req.id} sx={{ p: 2.5, bgcolor: req.optimistic ? 'rgba(198,167,94,0.08)' : 'rgba(255,255,255,0.03)', border: req.optimistic ? `1px solid ${binThemeTokens.gold}` : '1px solid rgba(255,255,255,0.06)', borderRadius: 3 }}><Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" gap={1.5}><Box><Typography color="#FFF" fontWeight="900" sx={{ textTransform: 'uppercase' }}>{requestTitle(req.requestLabel || req.requestType)}</Typography><Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.7)' }}>{req.reason}</Typography><Typography variant="caption" sx={{ color: binThemeTokens.goldText }}>{req.detectedLanguage && `Language: ${String(req.detectedLanguage).toUpperCase()} · `}{req.confidence && `Confidence: ${Math.round(Number(req.confidence) * 100)}% · `}{req.recommendedNextAction}{req.optimistic ? ' · Saving...' : ''}</Typography></Box><Chip size="small" label={String(req.priority || 'normal').toUpperCase()} sx={{ color: req.priority === 'urgent' ? '#ef4444' : req.priority === 'high' ? '#eab308' : '#10b981', bgcolor: 'rgba(255,255,255,0.06)', fontWeight: 900 }} /></Stack></Paper>)}</Stack>}
       </Paper>
       <Box sx={{ mt: 3 }}>
         <UnifiedDocumentVault
