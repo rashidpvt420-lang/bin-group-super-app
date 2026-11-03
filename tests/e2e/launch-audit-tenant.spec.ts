@@ -6,6 +6,7 @@
  */
 import { expect, type BrowserContext, type Page, test } from '@playwright/test';
 import { assertAppCheckDebugTokenInPage, collectAppCheckFailures, attachAuthenticatedAppCheckMonitor, type AppCheckMonitor } from './helpers/appCheckDebug';
+import { waitForRolePortalReady } from './helpers/rolePortalReady';
 
 const EMAIL    = process.env.E2E_TENANT_EMAIL    ?? '';
 const PASSWORD = process.env.E2E_TENANT_PASSWORD ?? '';
@@ -33,6 +34,7 @@ async function login(page: Page) {
 
 async function assertHealthy(page: Page, expectedPath: string) {
   await expect.poll(() => new URL(page.url()).pathname, { message: `${expectedPath}: route must not silently redirect`, timeout: 30_000 }).toBe(expectedPath);
+  await waitForRolePortalReady(page, expectedPath);
   const body = await page.locator('body').innerText({ timeout: 20_000 });
   expect(body.trim().length, `${expectedPath}: body must render text`).toBeGreaterThan(0);
   expect(body, `${expectedPath}: no crash text`).not.toMatch(CRASH_PATTERN);
@@ -126,6 +128,11 @@ test.describe('Tenant launch audit', () => {
     await assertHealthy(page, '/tenant/emergency');
     const body = await page.locator('body').innerText({ timeout: 10_000 });
     expect(body, 'Emergency page must have relevant content').toMatch(/emergency|sos|urgent|استغاثة|طارئ/i);
+    const sosTrigger = page.getByTestId('tenant-sos-trigger');
+    await expect(sosTrigger, 'Emergency SOS control must render without being triggered').toBeVisible({ timeout: 10_000 });
+    if (await sosTrigger.isDisabled()) {
+      expect(body, 'SOS must explain when no residence is linked').toMatch(/no residence is linked|لا توجد وحدة سكنية مرتبطة/i);
+    }
   });
 
   test('tenant correction submission and immutable history are reachable', async () => {
