@@ -5,6 +5,7 @@ import { db, collection, addDoc, query, where, getDocs, serverTimestamp } from '
 import { useRole } from '../../context/RoleContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { logAuditAction } from '../../utils/auditLogger';
+import Bi from '../../components/Bi';
 
 export default function OwnerIbanPage() {
     const { user } = useRole();
@@ -70,16 +71,16 @@ export default function OwnerIbanPage() {
     return (
         <Box>
             <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 4 }}>
-                <Typography variant="h5" fontWeight="950" sx={{ color: binThemeTokens.textPrimary }}>IBAN / Payout Accounts</Typography>
+                <Typography variant="h5" fontWeight="950" sx={{ color: binThemeTokens.textPrimary }}><Bi en={"IBAN / Payout Accounts"} ar={"حسابات IBAN / الصرف"} /></Typography>
                 <Button variant="contained" onClick={() => setShowForm(!showForm)}
                     sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 900, borderRadius: 3 }}>
-                    + Add Account
+                    <Bi en={"+ Add Account"} ar={"+ إضافة حساب"} />
                 </Button>
             </Stack>
 
             <Alert severity="info" sx={{ mb: 3, bgcolor: 'rgba(59,130,246,0.08)', color: '#60a5fa', border: '1px solid rgba(59,130,246,0.2)' }}>
                 <Shield size={16} style={{ marginRight: 8, display: 'inline' }} />
-                IBAN data is encrypted and masked. Only Admin compliance can view full numbers.
+                <Bi en={"IBAN data is encrypted and masked. Only Admin compliance can view full numbers."} ar={"بيانات IBAN مشفرة ومخفية. فقط فريق الامتثال يرى الأرقام الكاملة."} />
             </Alert>
 
             {success && <Alert severity="success" sx={{ mb: 3 }} onClose={() => setSuccess('')}>{success}</Alert>}
@@ -87,7 +88,7 @@ export default function OwnerIbanPage() {
 
             {showForm && (
                 <Paper sx={{ p: 4, mb: 4, bgcolor: 'rgba(22,22,24,0.8)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 4 }}>
-                    <Typography variant="h6" fontWeight="900" sx={{ color: '#FFF', mb: 3 }}>Add Bank Account</Typography>
+                    <Typography variant="h6" fontWeight="900" sx={{ color: '#FFF', mb: 3 }}><Bi en={"Add Bank Account"} ar={"إضافة حساب بنكي"} /></Typography>
                     <Stack spacing={2.5}>
                         <TextField fullWidth label="Account Holder Name *" value={accountHolder} onChange={e => setAccountHolder(e.target.value)} sx={inputSx} />
                         <TextField fullWidth label="Bank Name *" value={bankName} onChange={e => setBankName(e.target.value)} sx={inputSx} placeholder="e.g. Emirates NBD" />
@@ -99,7 +100,7 @@ export default function OwnerIbanPage() {
                                 {saving ? <CircularProgress size={16} sx={{ color: '#FFF' }} /> : 'Submit for Verification'}
                             </Button>
                             <Button variant="outlined" onClick={() => setShowForm(false)}
-                                sx={{ borderColor: 'rgba(255,255,255,0.15)', color: 'rgba(255,255,255,0.5)', borderRadius: 3 }}>Cancel</Button>
+                                sx={{ borderColor: 'rgba(255,255,255,0.15)', color: 'rgba(255,255,255,0.5)', borderRadius: 3 }}><Bi en={"Cancel"} ar={"إلغاء"} /></Button>
                         </Stack>
                     </Stack>
                 </Paper>
@@ -108,7 +109,7 @@ export default function OwnerIbanPage() {
             {bankAccounts.length === 0 && !showForm ? (
                 <Paper sx={{ p: 5, textAlign: 'center', bgcolor: 'rgba(255,255,255,0.02)', border: '1px dashed rgba(255,255,255,0.08)', borderRadius: 4 }}>
                     <CreditCard size={48} color="rgba(255,255,255,0.1)" style={{ margin: '0 auto 12px' }} />
-                    <Typography sx={{ color: binThemeTokens.textSecondary }}>No bank account linked. Add your IBAN to receive payouts.</Typography>
+                    <Typography sx={{ color: binThemeTokens.textSecondary }}><Bi en={"No bank account linked. Add your IBAN to receive payouts."} ar={"لا يوجد حساب بنكي مرتبط. أضف IBAN لاستلام المدفوعات."} /></Typography>
                 </Paper>
             ) : (
                 <Stack spacing={3}>

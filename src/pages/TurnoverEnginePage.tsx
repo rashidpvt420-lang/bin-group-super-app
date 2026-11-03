@@ -18,6 +18,7 @@ import { useRole } from '../context/RoleContext';
 import { useLanguage } from '@bin/shared';
 import { fetchTurnoverStats } from '../utils/turnoverEngine';
 import { formatAED } from '../utils/formatters';
+import Bi from '../components/Bi';
 
 interface TurnoverQuote {
   quoteId: string;
@@ -119,7 +120,7 @@ export default function TurnoverEnginePage() {
       <Box sx={{ mb: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
         <Box>
             <Typography variant="h3" fontWeight="900" sx={{ color: binThemeTokens.gold, letterSpacing: -1 }}>VACANCY COMMAND</Typography>
-            <Typography variant="h6" sx={{ color: binThemeTokens.textSecondary, fontWeight: 500 }}>Turnover Optimization & Readiness Protocol</Typography>
+            <Typography variant="h6" sx={{ color: binThemeTokens.textSecondary, fontWeight: 500 }}><Bi en={"Turnover Optimization & Readiness Protocol"} ar={"بروتوكول جاهزية تبديل المستأجرين"} /></Typography>
         </Box>
         <Stack direction="row" spacing={2} sx={{ mb: 1 }}>
             <Button variant={tab === 0 ? "contained" : "outlined"} onClick={() => setTab(0)} sx={{ borderRadius: 100, fontWeight: 900, bgcolor: tab === 0 ? binThemeTokens.gold : 'transparent', color: tab === 0 ? '#000' : binThemeTokens.gold, borderColor: binThemeTokens.gold }}>FINANCIAL QUOTES</Button>
@@ -213,7 +214,7 @@ export default function TurnoverEnginePage() {
                                           </Stack>
                                       </Grid>
                                       <Grid item xs={12} sm={3} sx={{ textAlign: 'right' }}>
-                                          <Button variant="outlined" fullWidth sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.gold, fontWeight: 900 }}>VIEW AUDIT</Button>
+                                          <Button variant="outlined" fullWidth disabled title="Audit view is not available yet" sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.gold, fontWeight: 900 }}>VIEW AUDIT</Button>
                                       </Grid>
                                   </Grid>
                               </Paper>
@@ -224,18 +225,18 @@ export default function TurnoverEnginePage() {
                   <Grid item xs={12} lg={4}>
                       <Paper sx={{ p: 4, bgcolor: '#0B0B0C', border: `2px solid ${binThemeTokens.gold}`, borderRadius: 6 }}>
                           <Typography variant="h6" fontWeight="950" color="#FFF" sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}><ShieldCheck color={binThemeTokens.gold} /> SOVEREIGN MOVE-OUT</Typography>
-                          <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.6)', mb: 4, lineHeight: 1.6 }}>Every unit transition follows the BIN GROUP Hard-Reset™ standard. All keys, utilities, and structural layers are validated via physical audit.</Typography>
+                          <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.6)', mb: 4, lineHeight: 1.6 }}><Bi en={"Every unit transition follows the BIN GROUP Hard-Reset™ standard. All keys, utilities, and structural layers are validated via physical audit."} ar={"يتبع كل انتقال للوحدة معيار BIN GROUP Hard-Reset™. يتم التحقق من المفاتيح والمرافق والهيكل بفحص فعلي."} /></Typography>
                           <Stack spacing={3}>
                               <Box sx={{ display: 'flex', gap: 2 }}>
                                   <Box sx={{ p: 1.5, bgcolor: 'rgba(198,167,94,0.1)', borderRadius: 2, color: binThemeTokens.gold }}><Key size={20} /></Box>
-                                  <Box><Typography variant="subtitle2" fontWeight="900" color="#FFF">KEY PROTOCOL</Typography><Typography variant="caption" color="textSecondary">Validated handovers via Evidence-Vault™.</Typography></Box>
+                                  <Box><Typography variant="subtitle2" fontWeight="900" color="#FFF">KEY PROTOCOL</Typography><Typography variant="caption" color="textSecondary"><Bi en={"Validated handovers via Evidence-Vault™."} ar={"تسليمات موثقة عبر Evidence-Vault™."} /></Typography></Box>
                               </Box>
                               <Box sx={{ display: 'flex', gap: 2 }}>
                                   <Box sx={{ p: 1.5, bgcolor: 'rgba(198,167,94,0.1)', borderRadius: 2, color: binThemeTokens.gold }}><PaintBucket size={20} /></Box>
-                                  <Box><Typography variant="subtitle2" fontWeight="900" color="#FFF">DECOR AUDIT</Typography><Typography variant="caption" color="textSecondary">Jotun Premium Finish as standard.</Typography></Box>
+                                  <Box><Typography variant="subtitle2" fontWeight="900" color="#FFF">DECOR AUDIT</Typography><Typography variant="caption" color="textSecondary"><Bi en={"Jotun Premium Finish as standard."} ar={"تشطيب Jotun الممتاز كمعيار."} /></Typography></Box>
                               </Box>
                           </Stack>
-                          <Button fullWidth variant="contained" sx={{ mt: 6, bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, py: 2 }}>INITIATE NEW MOVE-OUT</Button>
+                          <Button fullWidth variant="contained" href="/owner/inspections" sx={{ mt: 6, bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950, py: 2 }}>INITIATE NEW MOVE-OUT</Button>
                       </Paper>
                   </Grid>
               </Grid>

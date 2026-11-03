@@ -38,6 +38,7 @@ import {
 } from '../utils/ownerAssetTemplates';
 import { detectContractMode, canSeeMaintenance, canSeePropertyManagement } from '../utils/ownerServiceMode';
 import { formatAedMoney } from '../../../functions/shared/aedMoney';
+import Bi from '../../components/Bi';
 
 interface OwnerExecutiveDashboardSectionProps {
   properties: any[];
@@ -191,7 +192,7 @@ function AssetIntelligenceCard({ property, user }: { property: any; user?: any }
               {property.propertyName || property.name || 'Property'}
             </Typography>
             <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)', ...textSafeSx }}>
-              Owner: {ownerName}
+              <Bi en={"Owner:"} ar={"المالك:"} /> {ownerName}
             </Typography>
           </Box>
           <Chip 
@@ -214,7 +215,7 @@ function AssetIntelligenceCard({ property, user }: { property: any; user?: any }
           </Grid>
           <Grid item xs={6} sm={3}>
             <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.38)', fontWeight: 900 }}>COMPOSITION</Typography>
-            <Typography variant="body2" fontWeight={900} sx={{ color: '#fff', ...textSafeSx }}>{pUnits} Units · {pFloors} Floors</Typography>
+            <Typography variant="body2" fontWeight={900} sx={{ color: '#fff', ...textSafeSx }}>{pUnits} <Bi en={"Units ·"} ar={"وحدات ·"} /> {pFloors} <Bi en={"Floors"} ar={"طوابق"} /></Typography>
           </Grid>
           <Grid item xs={6} sm={3}>
             <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.38)', fontWeight: 900 }}>GPS STATUS</Typography>
@@ -280,7 +281,7 @@ function AssetIntelligenceCard({ property, user }: { property: any; user?: any }
               fontSize: '0.7rem'
             }}
           >
-            Open in Maps
+            <Bi en={"Open in Maps"} ar={"فتح في الخرائط"} />
           </Button>
         </Box>
       </CardContent>
@@ -482,7 +483,7 @@ export default function OwnerExecutiveDashboardSection({
               {renderHeader(<Users size={22} />, 'Tenant Registry', 'Linked Occupancies & UID Security')}
               <Box sx={{ textAlign: { xs: 'left', md: 'right' }, minWidth: 0 }}>
                 <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, fontWeight: 900 }}>REGISTRY READINESS</Typography>
-                <Typography variant="h6" fontWeight={950} sx={{ color: binThemeTokens.goldText, ...textSafeSx }}>{tenantRegistryReadiness}% Linked</Typography>
+                <Typography variant="h6" fontWeight={950} sx={{ color: binThemeTokens.goldText, ...textSafeSx }}>{tenantRegistryReadiness}<Bi en={"% Linked"} ar={"% مرتبط"} /></Typography>
               </Box>
             </Stack>
             <Grid container spacing={3} sx={{ mb: 3 }}>
@@ -495,14 +496,14 @@ export default function OwnerExecutiveDashboardSection({
             {nonTenantPropertiesCount > 0 && (
               <Alert severity="info" sx={{ mb: 3, bgcolor: alpha('#3b82f6', 0.05), border: `1px solid ${alpha('#3b82f6', 0.2)}`, borderRadius: 3 }}>
                 <Typography variant="caption" fontWeight={900} sx={{ display: 'block', ...textSafeSx, color: '#93c5fd' }}>
-                  Your portfolio contains {nonTenantPropertiesCount} non-tenant asset(s) (e.g. Majlis, Hospital). Vacancy is normal. Please configure their access via the Authorized Reporters section.
+                  <Bi en={"Your portfolio contains"} ar={"تحتوي محفظتك على"} /> {nonTenantPropertiesCount} <Bi en={"non-tenant asset(s) (e.g. Majlis, Hospital). Vacancy is normal. Please configure their access via the Authorized Reporters section."} ar={"أصل/أصول بدون مستأجرين (مثل مجلس أو مستشفى). الشغور طبيعي. اضبط الوصول من قسم المبلّغين المعتمدين."} />
                 </Typography>
               </Alert>
             )}
 
             <Alert severity="info" sx={{ bgcolor: alpha(binThemeTokens.gold, 0.035), border: `1px solid ${alpha(binThemeTokens.gold, 0.14)}`, color: binThemeTokens.goldText, borderRadius: 3 }}>
               <Typography variant="caption" fontWeight={900} sx={{ display: 'block', ...textSafeSx }}>
-                Tenants must never share the owner UID. Tenant records must use ownerId/ownerUid + propertyId + unitId + tenantUid + tenantEmail, with each tenant using their own Firebase Auth UID/login.
+                <Bi en={"Tenants must never share the owner UID. Tenant records must use ownerId/ownerUid + propertyId + unitId + tenantUid + tenantEmail, with each tenant using their own Firebase Auth UID/login."} ar={"يجب ألا يشارك المستأجرون حساب المالك. لكل مستأجر حسابه الخاص مرتبط بالعقار والوحدة."} />
               </Typography>
             </Alert>
           </CardContent>
@@ -514,10 +515,10 @@ export default function OwnerExecutiveDashboardSection({
           <Landmark size={22} color={binThemeTokens.gold} />
           <Box sx={{ minWidth: 0 }}>
             <Typography variant="overline" sx={{ color: binThemeTokens.goldText, fontWeight: 900, letterSpacing: 2, ...textSafeSx }}>
-              Asset Intelligence
+              <Bi en={"Asset Intelligence"} ar={"ذكاء الأصول"} />
             </Typography>
             <Typography variant="h5" fontWeight={950} sx={{ color: '#fff', ...textSafeSx }}>
-              Universal UAE Property Dashboard Renderer
+              <Bi en={"Universal UAE Property Dashboard Renderer"} ar={"لوحة العقارات الموحدة في الإمارات"} />
             </Typography>
           </Box>
         </Stack>
@@ -567,9 +568,9 @@ export default function OwnerExecutiveDashboardSection({
                     <Typography fontWeight={950} sx={{ color: '#fff', ...textSafeSx }}>{property.propertyName || property.name || property.address || 'Asset'}</Typography>
                     <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.48)', display: 'block', mb: 1, ...textSafeSx }}>{assetType}</Typography>
                     <Stack spacing={0.75}>
-                      {policy.showLeaseExpiry && <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.65)', ...textSafeSx }}>Lease expiry: {formatDate(property.leaseExpiry || property.leaseEndDate || property.leaseValidTo)}</Typography>}
-                      <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.65)', ...textSafeSx }}>Permit: {formatDate(property.permitExpiry || property.permitValidTo)}</Typography>
-                      <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.65)', ...textSafeSx }}>Inspection: {formatDate(property.inspectionExpiry || property.nextInspectionDate)}</Typography>
+                      {policy.showLeaseExpiry && <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.65)', ...textSafeSx }}><Bi en={"Lease expiry:"} ar={"انتهاء الإيجار:"} /> {formatDate(property.leaseExpiry || property.leaseEndDate || property.leaseValidTo)}</Typography>}
+                      <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.65)', ...textSafeSx }}><Bi en={"Permit:"} ar={"التصريح:"} /> {formatDate(property.permitExpiry || property.permitValidTo)}</Typography>
+                      <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.65)', ...textSafeSx }}><Bi en={"Inspection:"} ar={"الفحص:"} /> {formatDate(property.inspectionExpiry || property.nextInspectionDate)}</Typography>
                     </Stack>
                   </Box>
                 </Grid>
@@ -583,11 +584,11 @@ export default function OwnerExecutiveDashboardSection({
         <CardContent sx={{ p: { xs: 2.25, md: 4 } }}>
           {renderHeader(<FileText size={22} />, 'Owner Action Items', 'Priority Fixes for Complete Owner Visibility')}
           {loadingData && (
-            <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary, mb: 2 }}>Loading live owner telemetry...</Typography>
+            <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary, mb: 2 }}><Bi en={"Loading live owner telemetry..."} ar={"جارٍ تحميل بيانات المالك..."} /></Typography>
           )}
           {actionItems.length === 0 ? (
             <Alert icon={<CheckCircle size={18} />} severity="success" sx={{ borderRadius: 3 }}>
-              No critical owner action items detected from available dashboard data.
+              <Bi en={"No critical owner action items detected from available dashboard data."} ar={"لا توجد إجراءات حرجة للمالك وفق البيانات المتاحة."} />
             </Alert>
           ) : (
             <Stack spacing={1.5}>

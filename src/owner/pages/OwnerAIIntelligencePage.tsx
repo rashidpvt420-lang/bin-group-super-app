@@ -26,6 +26,7 @@ import { generatePredictiveIntelligence } from '../../utils/predictiveIntelligen
 import { useOwnerPropertyPassports } from '../utils/useOwnerPropertyPassports';
 import PropertyOperationsIntelligencePanel from '../../components/PropertyOperationsIntelligencePanel';
 import { buildPropertyOperationsSummary } from '../../utils/propertyOperationsIntelligence';
+import Bi from '../../components/Bi';
 
 const gold = binThemeTokens.gold;
 const CARD = 'rgba(15, 23, 42, 0.42)';
@@ -512,7 +513,7 @@ export default function OwnerAIIntelligencePage() {
                     </Typography>
                   </Box>
                   <Alert severity="info">
-                    {predictive.assetResilience.basis} A ticket count is not a measured condition score.
+                    {predictive.assetResilience.basis} <Bi en={"A ticket count is not a measured condition score."} ar={"عدد الطلبات ليس مقياساً لحالة العقار."} />
                   </Alert>
                 </Stack>
 
@@ -533,7 +534,7 @@ export default function OwnerAIIntelligencePage() {
                   ))}
                   {predictive.assetResilience.criticalFailureWindows.length === 0 && (
                     <Typography variant="body2" sx={{ color: alpha('#fff', 0.55) }}>
-                      No category has reached the three-dated-work-order recurrence threshold in the last 12 months.
+                      <Bi en={"No category has reached the three-dated-work-order recurrence threshold in the last 12 months."} ar={"لم تصل أي فئة إلى حد التكرار (3 أوامر عمل) خلال آخر 12 شهراً."} />
                     </Typography>
                   )}
                 </Stack>
@@ -553,7 +554,7 @@ export default function OwnerAIIntelligencePage() {
                   NOT YET AVAILABLE
                 </Typography>
                 <Alert severity="info">
-                  No forecast is shown until future-dated rent and receivable schedules, committed costs, reconciled transactions and a valuation basis are connected.
+                  <Bi en={"No forecast is shown until future-dated rent and receivable schedules, committed costs, reconciled transactions and a valuation basis are connected."} ar={"لا يُعرض توقع حتى ربط جداول الإيجار المستقبلية والتكاليف الملتزم بها والمعاملات المسواة وأساس التقييم."} />
                 </Alert>
                 <Typography variant="body2" sx={{ color: alpha('#fff', 0.5), mt: 2 }}>
                   {predictive.financialForecast.basis}

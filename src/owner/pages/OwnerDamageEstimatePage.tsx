@@ -11,6 +11,7 @@ import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { functions, httpsCallable } from '../../lib/firebase';
+import Bi from '../../components/Bi';
 
 const gold = binThemeTokens.gold;
 const CARD = 'rgba(15, 23, 42, 0.42)';
@@ -137,7 +138,7 @@ export default function OwnerDamageEstimatePage() {
                 <Stack alignItems="center" spacing={1.5}>
                   <FileImage size={40} color={alpha(gold, 0.35)} />
                   <Typography sx={{ color: alpha('#fff', 0.35), fontWeight: 800, fontSize: '0.85rem' }}>
-                    Tap to upload an image
+                    <Bi en={"Tap to upload an image"} ar={"اضغط لرفع صورة"} />
                   </Typography>
                 </Stack>
               )}
@@ -167,7 +168,7 @@ export default function OwnerDamageEstimatePage() {
                   onClick={() => cameraRef.current?.click()}
                   sx={{ bgcolor: alpha(gold, 0.12), color: gold, fontWeight: 950, borderRadius: 3, border: `1px solid ${alpha(gold, 0.25)}` }}
                 >
-                  Camera
+                  <Bi en={"Camera"} ar={"الكاميرا"} />
                 </Button>
                 <Button
                   fullWidth
@@ -175,7 +176,7 @@ export default function OwnerDamageEstimatePage() {
                   onClick={() => fileRef.current?.click()}
                   sx={{ bgcolor: alpha('#fff', 0.05), color: alpha('#fff', 0.7), fontWeight: 950, borderRadius: 3, border: `1px solid ${alpha('#fff', 0.12)}` }}
                 >
-                  Gallery
+                  <Bi en={"Gallery"} ar={"المعرض"} />
                 </Button>
               </Stack>
 
@@ -186,7 +187,7 @@ export default function OwnerDamageEstimatePage() {
                   onClick={analyzeImage}
                   sx={{ bgcolor: gold, color: '#111827', fontWeight: 950, py: 1.4, borderRadius: 3, boxShadow: `0 10px 28px ${alpha(gold, 0.35)}` }}
                 >
-                  Run AI Visual Pre-Screen
+                  <Bi en={"Run AI Visual Pre-Screen"} ar={"تشغيل الفحص البصري الأولي بالذكاء الاصطناعي"} />
                 </Button>
               )}
 
@@ -203,7 +204,7 @@ export default function OwnerDamageEstimatePage() {
               {preview && !loading && (
                 <Button size="small" startIcon={<RefreshCw size={14} />} onClick={reset}
                   sx={{ color: alpha('#fff', 0.35), fontWeight: 800, fontSize: '0.72rem' }}>
-                  Clear & Start Over
+                  <Bi en={"Clear & Start Over"} ar={"مسح والبدء من جديد"} />
                 </Button>
               )}
 
@@ -222,10 +223,10 @@ export default function OwnerDamageEstimatePage() {
             <Paper sx={{ p: 4, bgcolor: CARD, border: BORDER, borderRadius: 4, height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 2 }}>
               <Camera size={48} color={alpha(gold, 0.25)} />
               <Typography sx={{ color: alpha('#fff', 0.38), fontWeight: 800, textAlign: 'center' }}>
-                Upload a photo for an advisory visual pre-screen. A technician must inspect the property before diagnosis, pricing, approval, or work begins.
+                <Bi en={"Upload a photo for an advisory visual pre-screen. A technician must inspect the property before diagnosis, pricing, approval, or work begins."} ar={"ارفع صورة لفحص بصري استرشادي. يجب أن يعاين فني العقار قبل التشخيص أو التسعير أو الموافقة أو بدء العمل."} />
               </Typography>
               <Typography variant="caption" sx={{ color: alpha('#fff', 0.24), fontWeight: 700, textAlign: 'center' }}>
-                Supported examples: water leaks · paint damage · tile cracks · AC issues · electrical faults · plumbing · visible structural concerns
+                <Bi en={"Supported examples: water leaks · paint damage · tile cracks · AC issues · electrical faults · plumbing · visible structural concerns"} ar={"أمثلة: تسرب المياه · تلف الطلاء · تشقق البلاط · أعطال التكييف · أعطال كهربائية · السباكة · مشكلات إنشائية ظاهرة"} />
               </Typography>
             </Paper>
           )}
@@ -267,7 +268,7 @@ export default function OwnerDamageEstimatePage() {
                     <Typography sx={{ color: gold, fontWeight: 950, fontSize: '1.6rem' }}>
                       {Number(assessment.estimatedCostMin).toLocaleString()} – {Number(assessment.estimatedCostMax).toLocaleString()} AED
                     </Typography>
-                    <Typography variant="caption" sx={{ color: alpha('#fff', 0.35), fontWeight: 800 }}>AI visual estimate only · not a commercial quotation</Typography>
+                    <Typography variant="caption" sx={{ color: alpha('#fff', 0.35), fontWeight: 800 }}><Bi en={"AI visual estimate only · not a commercial quotation"} ar={"تقدير بصري بالذكاء الاصطناعي فقط · ليس عرض سعر"} /></Typography>
                   </Paper>
                 </Grid>
                 <Grid item xs={12} sm={6}>
@@ -277,7 +278,7 @@ export default function OwnerDamageEstimatePage() {
                       <Typography variant="caption" sx={{ color: alpha('#fff', 0.4), fontWeight: 900, letterSpacing: 2 }}>SUGGESTED INSPECTION TRADE</Typography>
                     </Stack>
                     <Typography sx={{ color: '#fff', fontWeight: 950, fontSize: '1.2rem' }}>{assessment.trade}</Typography>
-                    <Typography variant="caption" sx={{ color: alpha('#fff', 0.35), fontWeight: 800 }}>No technician has been assigned or dispatched</Typography>
+                    <Typography variant="caption" sx={{ color: alpha('#fff', 0.35), fontWeight: 800 }}><Bi en={"No technician has been assigned or dispatched"} ar={"لم يتم إسناد أو إرسال أي فني"} /></Typography>
                   </Paper>
                 </Grid>
               </Grid>
@@ -308,19 +309,19 @@ export default function OwnerDamageEstimatePage() {
                   onClick={() => navigate('/owner/tickets')}
                   sx={{ flex: 1, bgcolor: gold, color: '#111827', fontWeight: 950, py: 1.4, borderRadius: 3 }}
                 >
-                  Request On-Site Inspection
+                  <Bi en={"Request On-Site Inspection"} ar={"طلب معاينة في الموقع"} />
                 </Button>
                 <Button
                   variant="outlined"
                   onClick={reset}
                   sx={{ borderColor: alpha(gold, 0.35), color: gold, fontWeight: 950, py: 1.4, borderRadius: 3 }}
                 >
-                  New Photo
+                  <Bi en={"New Photo"} ar={"صورة جديدة"} />
                 </Button>
               </Stack>
 
               <Typography variant="caption" sx={{ color: alpha('#fff', 0.28), textAlign: 'center', lineHeight: 1.5 }}>
-                This is an AI visual pre-screen only. Actual scope, safety classification, and price require an on-site inspection and verified BIN GROUP quotation.
+                <Bi en={"This is an AI visual pre-screen only. Actual scope, safety classification, and price require an on-site inspection and verified BIN GROUP quotation."} ar={"هذا فحص بصري أولي فقط. النطاق الفعلي وتصنيف السلامة والسعر تتطلب معاينة في الموقع وعرض سعر معتمد من BIN GROUP."} />
                 {result?.provider && ` · Live engine: ${result.provider}${result.model ? `/${result.model}` : ''}`}
               </Typography>
             </Stack>

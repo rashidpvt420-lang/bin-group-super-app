@@ -4,6 +4,7 @@ import { TrendingUp, Landmark, FileText, AlertCircle, Wrench, Shield, CheckCircl
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { useLanguage } from '../../context/LanguageContext';
 import type { OwnerFinancialState } from '../utils/ownerFinancialResolver';
+import Bi from '../../components/Bi';
 
 interface OwnerRoiFinancialSectionProps {
   financials: OwnerFinancialState;
@@ -70,7 +71,7 @@ export default function OwnerRoiFinancialSection({ financials, onAddRentDetails 
               {t('owner.roiFinancialControl') || 'Financial Control & ROI'}
             </Typography>
             <Typography variant="h5" fontWeight={950} sx={{ color: '#fff', ...textSafeSx }}>
-              Portfolio Financial Health
+              <Bi en={"Portfolio Financial Health"} ar={"الصحة المالية للمحفظة"} />
             </Typography>
           </Box>
         </Stack>
@@ -80,8 +81,8 @@ export default function OwnerRoiFinancialSection({ financials, onAddRentDetails 
             <Stack direction="row" spacing={1.5} alignItems="center">
               <AlertCircle color="#f59e0b" />
               <Box>
-                <Typography fontWeight={900} sx={{ color: binThemeTokens.textPrimary }}>ROI pending rent setup</Typography>
-                <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary }}>Add expected or actual annual rent to unlock live ROI projections.</Typography>
+                <Typography fontWeight={900} sx={{ color: binThemeTokens.textPrimary }}><Bi en={"ROI pending rent setup"} ar={"العائد بانتظار إعداد الإيجار"} /></Typography>
+                <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary }}><Bi en={"Add expected or actual annual rent to unlock live ROI projections."} ar={"أضف الإيجار السنوي المتوقع أو الفعلي لعرض العائد."} /></Typography>
               </Box>
             </Stack>
             <Button variant="contained" onClick={onAddRentDetails} sx={{ bgcolor: '#f59e0b', color: '#000', fontWeight: 900, '&:hover': { bgcolor: '#d97706' } }}>

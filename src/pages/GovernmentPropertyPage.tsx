@@ -14,6 +14,7 @@ import { binThemeTokens } from '../theme/binGroupTheme';
 import { useLanguage } from '@bin/shared';
 import CoverageTracker from '../components/CoverageTracker';
 import type { CoverageItem } from '../components/CoverageTracker';
+import Bi from '../components/Bi';
 
 interface AssetRegistryItem {
     id: string;
@@ -195,7 +196,7 @@ const GovernmentPropertyPage: React.FC = () => {
                                 <Typography variant="h6" fontWeight="950" sx={{ color: '#FFF', mb: 1, display: 'flex', alignItems: 'center', gap: 2 }}>
                                     <FileCheck color="#3b82f6" /> DOCUMENT VAULT
                                 </Typography>
-                                <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.5)', mb: 3 }}>Institutional certifications and authority approvals.</Typography>
+                                <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.5)', mb: 3 }}><Bi en={"Institutional certifications and authority approvals."} ar={"الشهادات المؤسسية وموافقات الجهات."} /></Typography>
                                 <Stack spacing={1}>
                                     {documents.length === 0 ? (
                                         <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.55)' }}>{tx('government.noDocuments', 'No verified compliance documents are recorded.')}</Typography>

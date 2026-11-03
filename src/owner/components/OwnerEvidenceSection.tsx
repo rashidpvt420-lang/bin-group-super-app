@@ -4,6 +4,7 @@ import { ClipboardCheck, Eye, ReceiptText } from 'lucide-react';
 import { collection, db, functions, httpsCallable, onSnapshot, query, where } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
+import Bi from '../../components/Bi';
 
 export default function OwnerEvidenceSection({ properties }: { properties?: any[] }) {
   const { user } = useRole();
@@ -109,13 +110,13 @@ export default function OwnerEvidenceSection({ properties }: { properties?: any[
       <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" alignItems={{ xs: 'flex-start', md: 'center' }} spacing={2} sx={{ mb: 3 }}>
         <Box>
           <Typography variant="overline" sx={{ color: binThemeTokens.goldText, fontWeight: 950, letterSpacing: 3 }}>OWNER EVIDENCE CENTER</Typography>
-          <Typography variant="h5" fontWeight={950} sx={{ color: '#fff' }}>Move-in & Move-out Handover Evidence</Typography>
+          <Typography variant="h5" fontWeight={950} sx={{ color: '#fff' }}><Bi en={"Move-in & Move-out Handover Evidence"} ar={"إثباتات تسليم الدخول والخروج"} /></Typography>
           <Typography variant="body2" sx={{ color: 'rgba(255,255,255,.58)', mt: 0.75 }}>
-            Review condition reports, settle deposit deductions, and approve tenant handovers directly.
+            <Bi en={"Review condition reports, settle deposit deductions, and approve tenant handovers directly."} ar={"راجع تقارير الحالة وسوِّ خصومات التأمين ووافق على تسليمات المستأجرين."} />
           </Typography>
         </Box>
         <Button variant="outlined" href="/owner/inspections" sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.goldText, fontWeight: 950 }}>
-          View All Inspections
+          <Bi en={"View All Inspections"} ar={"عرض جميع الفحوصات"} />
         </Button>
       </Stack>
 
@@ -150,7 +151,7 @@ export default function OwnerEvidenceSection({ properties }: { properties?: any[
       ) : displayInspections.length === 0 ? (
         <Paper sx={{ p: 4, textAlign: 'center', bgcolor: 'rgba(255,255,255,.02)', borderRadius: 3, border: '1px solid rgba(255,255,255,.05)' }}>
           <ClipboardCheck size={48} color="rgba(255,255,255,.2)" style={{ margin: '0 auto 16px' }} />
-          <Typography sx={{ color: 'rgba(255,255,255,.5)' }}>No handover evidence records found for your properties.</Typography>
+          <Typography sx={{ color: 'rgba(255,255,255,.5)' }}><Bi en={"No handover evidence records found for your properties."} ar={"لا توجد سجلات تسليم لعقاراتك."} /></Typography>
         </Paper>
       ) : (
         <Grid container spacing={3}>
@@ -167,17 +168,17 @@ export default function OwnerEvidenceSection({ properties }: { properties?: any[
                         <Chip label={status} size="small" sx={{ bgcolor: 'rgba(255,255,255,.1)', color: '#fff', fontWeight: 700 }} />
                       </Stack>
                       <Typography variant="h6" fontWeight={900} sx={{ color: '#fff' }}>{inspection.propertyName || 'Property'} - {inspection.unitNumber}</Typography>
-                      <Typography variant="caption" sx={{ color: 'rgba(255,255,255,.5)', display: 'block' }}>Tenant: {inspection.tenantName || 'Unknown'}</Typography>
-                      <Typography variant="caption" sx={{ color: 'rgba(255,255,255,.5)' }}>Submitted: {new Date(inspection.submittedAt || inspection.createdAt).toLocaleString()}</Typography>
+                      <Typography variant="caption" sx={{ color: 'rgba(255,255,255,.5)', display: 'block' }}><Bi en={"Tenant:"} ar={"المستأجر:"} /> {inspection.tenantName || 'Unknown'}</Typography>
+                      <Typography variant="caption" sx={{ color: 'rgba(255,255,255,.5)' }}><Bi en={"Submitted:"} ar={"تاريخ الإرسال:"} /> {new Date(inspection.submittedAt || inspection.createdAt).toLocaleString()}</Typography>
                     </Box>
                     <Stack direction="row" spacing={1}>
                       {inspection.pdfUrl && (
                         <Button size="small" variant="outlined" onClick={() => window.open(inspection.pdfUrl, '_blank')} sx={{ borderColor: 'rgba(255,255,255,.2)', color: '#fff' }} startIcon={<ReceiptText size={16} />}>
-                          View PDF
+                          <Bi en={"View PDF"} ar={"عرض PDF"} />
                         </Button>
                       )}
                       <Button size="small" variant="contained" href="/owner/inspections" sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 900 }} startIcon={<Eye size={16} />}>
-                        Review Handover
+                        <Bi en={"Review Handover"} ar={"مراجعة التسليم"} />
                       </Button>
                     </Stack>
                   </Stack>

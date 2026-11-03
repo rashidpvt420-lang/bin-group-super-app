@@ -28,6 +28,7 @@ import { useRole } from '../../context/RoleContext';
 import { NotificationEvents } from '../../services/notificationService';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import type { TenantLedgerSummary } from '../utils/ownerTenantLedgerResolver';
+import Bi from '../../components/Bi';
 
 type RentRecordPayload = {
   tenantName: string;
@@ -313,10 +314,10 @@ export default function OwnerMoneySnapshotSection({
             OWNER MONEY SNAPSHOT
           </Typography>
           <Typography variant="h5" fontWeight={950} sx={{ color: '#fff' }}>
-            Rent collection, reference and tenant balance control
+            <Bi en={"Rent collection, reference and tenant balance control"} ar={"تحصيل الإيجار والمراجع ومتابعة أرصدة المستأجرين"} />
           </Typography>
           <Typography variant="body2" sx={{ color: 'rgba(255,255,255,.58)', mt: .75 }}>
-            Uses the resolved tenant ledger. Rent submissions now update the verification queue with trace IDs.
+            <Bi en={"Uses the resolved tenant ledger. Rent submissions now update the verification queue with trace IDs."} ar={"يستخدم دفتر المستأجرين المعتمد. ترسل دفعات الإيجار إلى قائمة التحقق مع أرقام تتبع."} />
           </Typography>
         </Box>
         <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
@@ -326,7 +327,7 @@ export default function OwnerMoneySnapshotSection({
             onClick={() => setOpen(true)}
             sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 950 }}
           >
-            Record Rent Payment
+            <Bi en={"Record Rent Payment"} ar={"تسجيل دفعة إيجار"} />
           </Button>
           <Button
             startIcon={<Download size={16} />}
@@ -334,7 +335,7 @@ export default function OwnerMoneySnapshotSection({
             onClick={() => window.print()}
             sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.goldText, fontWeight: 950 }}
           >
-            Print Statement
+            <Bi en={"Print Statement"} ar={"طباعة الكشف"} />
           </Button>
         </Stack>
       </Stack>
@@ -369,15 +370,15 @@ export default function OwnerMoneySnapshotSection({
         <Table size="small">
           <TableHead>
             <TableRow>
-              <TableCell>Tenant</TableCell>
-              <TableCell>Property</TableCell>
-              <TableCell>Unit</TableCell>
-              <TableCell align="right">Due</TableCell>
-              <TableCell align="right">Paid</TableCell>
-              <TableCell align="right">Balance</TableCell>
-              <TableCell>Status</TableCell>
-              <TableCell>Last Payment</TableCell>
-              <TableCell align="right">Details</TableCell>
+              <TableCell><Bi en={"Tenant"} ar={"المستأجر"} /></TableCell>
+              <TableCell><Bi en={"Property"} ar={"العقار"} /></TableCell>
+              <TableCell><Bi en={"Unit"} ar={"الوحدة"} /></TableCell>
+              <TableCell align="right"><Bi en={"Due"} ar={"المستحق"} /></TableCell>
+              <TableCell align="right"><Bi en={"Paid"} ar={"المدفوع"} /></TableCell>
+              <TableCell align="right"><Bi en={"Balance"} ar={"الرصيد"} /></TableCell>
+              <TableCell><Bi en={"Status"} ar={"الحالة"} /></TableCell>
+              <TableCell><Bi en={"Last Payment"} ar={"آخر دفعة"} /></TableCell>
+              <TableCell align="right"><Bi en={"Details"} ar={"التفاصيل"} /></TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
@@ -421,7 +422,7 @@ export default function OwnerMoneySnapshotSection({
                         fontWeight: 900,
                       }}
                     >
-                      View
+                      <Bi en={"View"} ar={"عرض"} />
                     </Button>
                   </TableCell>
                 </TableRow>
@@ -434,8 +435,7 @@ export default function OwnerMoneySnapshotSection({
                   align="center"
                   sx={{ py: 5, color: 'rgba(255,255,255,.42)', fontWeight: 800 }}
                 >
-                  No tenant ledger rows found yet. Add tenants, leases, occupancies or rent payment records to
-                  populate this table.
+                  <Bi en={"No tenant ledger rows found yet. Add tenants, leases, occupancies or rent payment records to populate this table."} ar={"لا توجد سجلات للمستأجرين بعد. أضف مستأجرين أو عقود إيجار أو دفعات لملء هذا الجدول."} />
                 </TableCell>
               </TableRow>
             )}
@@ -449,7 +449,7 @@ export default function OwnerMoneySnapshotSection({
         maxWidth="sm"
         fullWidth
       >
-        <DialogTitle>Record owner rent payment</DialogTitle>
+        <DialogTitle><Bi en={"Record owner rent payment"} ar={"تسجيل دفعة إيجار للمالك"} /></DialogTitle>
         <DialogContent>
           <Stack spacing={2.25} sx={{ pt: 1 }}>
             {submitError && <Alert severity="error">{submitError}</Alert>}
@@ -517,7 +517,7 @@ export default function OwnerMoneySnapshotSection({
               component="label"
               sx={{ borderColor: alpha(binThemeTokens.gold, .45), color: binThemeTokens.goldText, fontWeight: 900 }}
             >
-              Attach reference file
+              <Bi en={"Attach reference file"} ar={"إرفاق ملف مرجعي"} />
               <input
                 hidden
                 type="file"
@@ -527,7 +527,7 @@ export default function OwnerMoneySnapshotSection({
             </Button>
             {referenceFile && (
               <Typography variant="caption" sx={{ color: 'rgba(255,255,255,.64)' }}>
-                Selected: {referenceFile.name}
+                <Bi en={"Selected:"} ar={"المحدد:"} /> {referenceFile.name}
               </Typography>
             )}
             <TextField
@@ -541,7 +541,7 @@ export default function OwnerMoneySnapshotSection({
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={closeRecordDialog}>Cancel</Button>
+          <Button onClick={closeRecordDialog}><Bi en={"Cancel"} ar={"إلغاء"} /></Button>
           <Button
             disabled={saving || !isRentRecordValid}
             onClick={submit}
@@ -554,7 +554,7 @@ export default function OwnerMoneySnapshotSection({
       </Dialog>
 
       <Dialog open={Boolean(selectedRow)} onClose={() => setSelectedRow(null)} maxWidth="sm" fullWidth>
-        <DialogTitle>Ledger details</DialogTitle>
+        <DialogTitle><Bi en={"Ledger details"} ar={"تفاصيل الدفتر"} /></DialogTitle>
         <DialogContent>
           <Stack spacing={1.5} sx={{ pt: 1 }}>
             <Info label="Tenant" value={selectedRow?.name} />
@@ -577,7 +577,7 @@ export default function OwnerMoneySnapshotSection({
                   fontWeight: 900,
                 }}
               >
-                Open reference file
+                <Bi en={"Open reference file"} ar={"فتح الملف المرجعي"} />
               </Button>
             )}
             <Info label="Transaction ID" value={selectedRow?.paymentTransactionId} />
@@ -590,7 +590,7 @@ export default function OwnerMoneySnapshotSection({
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setSelectedRow(null)}>Close</Button>
+          <Button onClick={() => setSelectedRow(null)}><Bi en={"Close"} ar={"إغلاق"} /></Button>
         </DialogActions>
       </Dialog>
     </Paper>

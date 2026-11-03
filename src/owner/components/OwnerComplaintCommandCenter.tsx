@@ -8,6 +8,7 @@ import { exportComplaintsToCsv } from './OwnerComplaintReportExport';
 import { functions, httpsCallable } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
 import { logAuditAction } from '../../utils/auditLogger';
+import Bi from '../../components/Bi';
 
 interface OwnerComplaintCommandCenterProps {
   complaints: OwnerComplaint[];
@@ -185,19 +186,19 @@ function ComplaintRow({ complaint }: { complaint: OwnerComplaint }) {
               <Stack direction="row" spacing={2} sx={{ mt: 3, pt: 2, borderTop: '1px solid rgba(255,255,255,0.05)' }} flexWrap="wrap" useFlexGap>
                 {showReviewActions && (
                   <>
-                    <Button variant="contained" color="success" size="small" onClick={() => openReview('CLOSED')}>Approve & Close</Button>
-                    <Button variant="contained" color="error" size="small" onClick={() => openReview('DISPUTED')}>Dispute Resolution</Button>
-                    <Button variant="outlined" color="warning" size="small" onClick={() => openReview('REOPENED')}>Request Revisit</Button>
+                    <Button variant="contained" color="success" size="small" onClick={() => openReview('CLOSED')}><Bi en={"Approve & Close"} ar={"موافقة وإغلاق"} /></Button>
+                    <Button variant="contained" color="error" size="small" onClick={() => openReview('DISPUTED')}><Bi en={"Dispute Resolution"} ar={"حل النزاع"} /></Button>
+                    <Button variant="outlined" color="warning" size="small" onClick={() => openReview('REOPENED')}><Bi en={"Request Revisit"} ar={"طلب زيارة أخرى"} /></Button>
                   </>
                 )}
                 {showOpenActions && (
                   <>
-                    <Button variant="outlined" color="error" size="small" onClick={() => openReview('ESCALATED')}>Escalate Ticket</Button>
-                    <Button variant="outlined" color="warning" size="small" onClick={() => openReview('DISPUTED')}>Dispute Ticket</Button>
+                    <Button variant="outlined" color="error" size="small" onClick={() => openReview('ESCALATED')}><Bi en={"Escalate Ticket"} ar={"تصعيد الطلب"} /></Button>
+                    <Button variant="outlined" color="warning" size="small" onClick={() => openReview('DISPUTED')}><Bi en={"Dispute Ticket"} ar={"الاعتراض على الطلب"} /></Button>
                   </>
                 )}
                 <Button variant="outlined" size="small" startIcon={<Download size={14} />} onClick={handleEvidenceExport} sx={{ borderColor: binThemeTokens.gold, color: binThemeTokens.goldText, fontWeight: 900 }}>
-                  Download Evidence Pack
+                  <Bi en={"Download Evidence Pack"} ar={"تنزيل حزمة الإثبات"} />
                 </Button>
               </Stack>
             </Box>
@@ -211,7 +212,7 @@ function ComplaintRow({ complaint }: { complaint: OwnerComplaint }) {
         <DialogContent>
           <Stack spacing={2} sx={{ pt: 1 }}>
             <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary }}>
-              This submits an owner review through the protected ticket callable and records the action in audit logs.
+              <Bi en={"This submits an owner review through the protected ticket callable and records the action in audit logs."} ar={"يرسل هذا مراجعة المالك عبر الخادم المحمي ويسجل الإجراء في سجل التدقيق."} />
             </Typography>
             <TextField
               label={reviewStatus === 'CLOSED' ? 'Optional owner note' : 'Reason required'}
@@ -228,7 +229,7 @@ function ComplaintRow({ complaint }: { complaint: OwnerComplaint }) {
           </Stack>
         </DialogContent>
         <DialogActions sx={{ p: 3 }}>
-          <Button onClick={() => setReviewStatus(null)} disabled={reviewBusy} sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 900 }}>Cancel</Button>
+          <Button onClick={() => setReviewStatus(null)} disabled={reviewBusy} sx={{ color: 'rgba(255,255,255,0.5)', fontWeight: 900 }}><Bi en={"Cancel"} ar={"إلغاء"} /></Button>
           <Button onClick={handleUpdateStatus} disabled={reviewBusy || Boolean(reviewStatus !== 'CLOSED' && reviewReason.trim().length < 8)} variant="contained" sx={{ bgcolor: reviewStatus === 'CLOSED' ? '#10b981' : reviewStatus === 'REOPENED' ? '#f59e0b' : '#ef4444', color: '#fff', fontWeight: 950 }}>
             {reviewBusy ? 'Submitting...' : 'Submit'}
           </Button>
@@ -270,20 +271,20 @@ export default function OwnerComplaintCommandCenter({ complaints, properties }: 
                 {t('owner.complaintCommandCenter') || 'Operations Command Center'}
               </Typography>
               <Typography variant="h5" fontWeight={950} sx={{ color: '#fff', ...textSafeSx }}>
-                Maintenance Tickets & Complaints
+                <Bi en={"Maintenance Tickets & Complaints"} ar={"طلبات الصيانة والشكاوى"} />
               </Typography>
             </Box>
           </Stack>
           <Button variant="outlined" startIcon={<Download size={16} />} onClick={handleExport} sx={{ borderColor: 'rgba(255,255,255,0.2)', color: '#fff', fontWeight: 900 }}>
-            Export Report
+            <Bi en={"Export Report"} ar={"تصدير التقرير"} />
           </Button>
         </Stack>
 
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mb: 4 }}>
           <FormControl sx={{ minWidth: 200 }}>
-            <InputLabel sx={{ color: binThemeTokens.textSecondary }}>Filter by Property</InputLabel>
+            <InputLabel sx={{ color: binThemeTokens.textSecondary }}><Bi en={"Filter by Property"} ar={"تصفية حسب العقار"} /></InputLabel>
             <Select value={filterProperty} label="Filter by Property" onChange={(e) => setFilterProperty(e.target.value)} sx={{ color: binThemeTokens.textPrimary, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.2)' } }}>
-              <MenuItem value="ALL">All Properties</MenuItem>
+              <MenuItem value="ALL"><Bi en={"All Properties"} ar={"جميع العقارات"} /></MenuItem>
               {properties.map(p => (
                 <MenuItem key={p.id || p.propertyId} value={p.id || p.propertyId}>{p.propertyName || p.name || 'Unnamed Property'}</MenuItem>
               ))}
@@ -291,12 +292,12 @@ export default function OwnerComplaintCommandCenter({ complaints, properties }: 
           </FormControl>
           
           <FormControl sx={{ minWidth: 200 }}>
-            <InputLabel sx={{ color: binThemeTokens.textSecondary }}>Filter by Status</InputLabel>
+            <InputLabel sx={{ color: binThemeTokens.textSecondary }}><Bi en={"Filter by Status"} ar={"تصفية حسب الحالة"} /></InputLabel>
             <Select value={filterStatus} label="Filter by Status" onChange={(e) => setFilterStatus(e.target.value)} sx={{ color: binThemeTokens.textPrimary, '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.2)' } }}>
-              <MenuItem value="ALL">All Statuses</MenuItem>
-              <MenuItem value="OPEN">Open & Pending</MenuItem>
-              <MenuItem value="CLOSED">Completed / Resolved</MenuItem>
-              <MenuItem value="SLA_BREACH">SLA Breached Only</MenuItem>
+              <MenuItem value="ALL"><Bi en={"All Statuses"} ar={"جميع الحالات"} /></MenuItem>
+              <MenuItem value="OPEN"><Bi en={"Open & Pending"} ar={"مفتوحة ومعلقة"} /></MenuItem>
+              <MenuItem value="CLOSED"><Bi en={"Completed / Resolved"} ar={"مكتملة / محلولة"} /></MenuItem>
+              <MenuItem value="SLA_BREACH"><Bi en={"SLA Breached Only"} ar={"المتجاوزة لمستوى الخدمة فقط"} /></MenuItem>
             </Select>
           </FormControl>
         </Stack>
@@ -304,8 +305,8 @@ export default function OwnerComplaintCommandCenter({ complaints, properties }: 
         {filteredComplaints.length === 0 ? (
           <Box sx={{ p: 6, textAlign: 'center', border: '1px dashed rgba(255,255,255,0.1)', borderRadius: 4 }}>
             <ShieldCheck size={40} color="rgba(16, 185, 129, 0.4)" style={{ margin: '0 auto 16px' }} />
-            <Typography variant="h6" fontWeight={950} sx={{ color: binThemeTokens.textSecondary }}>No Tickets Found</Typography>
-            <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary, mt: 1 }}>Operations are fully optimal for the selected criteria.</Typography>
+            <Typography variant="h6" fontWeight={950} sx={{ color: binThemeTokens.textSecondary }}><Bi en={"No Tickets Found"} ar={"لا توجد طلبات"} /></Typography>
+            <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary, mt: 1 }}><Bi en={"Operations are fully optimal for the selected criteria."} ar={"لا توجد طلبات مطابقة للمعايير المحددة."} /></Typography>
           </Box>
         ) : (
           <TableContainer sx={{ overflowX: 'auto', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 3, bgcolor: 'rgba(255,255,255,0.01)' }}>

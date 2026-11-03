@@ -21,6 +21,7 @@ import {
 import { useRole } from '../../context/RoleContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { notifyAdmins } from '../../services/notificationService';
+import Bi from '../../components/Bi';
 
 const COMMON_AREA_VALUE = '__COMMON_AREA__';
 
@@ -197,7 +198,7 @@ export default function OwnerComplaintPage() {
                         OWNER SERVICES
                     </Typography>
                     <Typography variant="h4" fontWeight="950" color={binThemeTokens.textPrimary}>
-                        File a Complaint
+                        <Bi en={"File a Complaint"} ar={"تقديم شكوى"} />
                     </Typography>
                 </Box>
             </Stack>
@@ -216,7 +217,7 @@ export default function OwnerComplaintPage() {
                         <Grid container spacing={3}>
                             <Grid item xs={12} md={6}>
                                 <FormControl fullWidth required>
-                                    <InputLabel sx={{ color: binThemeTokens.textSecondary }}>Property</InputLabel>
+                                    <InputLabel sx={{ color: binThemeTokens.textSecondary }}><Bi en={"Property"} ar={"العقار"} /></InputLabel>
                                     <Select
                                         value={selectedPropertyId}
                                         label="Property"
@@ -240,10 +241,10 @@ export default function OwnerComplaintPage() {
                                         onChange={(e) => setSelectedUnitId(e.target.value)}
                                         sx={{ bgcolor: binThemeTokens.softCanvas, color: binThemeTokens.textPrimary }}
                                     >
-                                        <MenuItem value={COMMON_AREA_VALUE}>Common Area / Whole Property</MenuItem>
+                                        <MenuItem value={COMMON_AREA_VALUE}><Bi en={"Common Area / Whole Property"} ar={"منطقة مشتركة / العقار كامل"} /></MenuItem>
                                         {units.map(u => (
                                             <MenuItem key={u.id} value={u.id}>
-                                                Unit {u.unitNumber} {u.tenantName ? `(${u.tenantName})` : ''}
+                                                <Bi en={"Unit"} ar={"الوحدة"} /> {u.unitNumber} {u.tenantName ? `(${u.tenantName})` : ''}
                                             </MenuItem>
                                         ))}
                                     </Select>
@@ -275,7 +276,7 @@ export default function OwnerComplaintPage() {
                         <Grid container spacing={3}>
                             <Grid item xs={12} md={6}>
                                 <FormControl fullWidth required>
-                                    <InputLabel sx={{ color: binThemeTokens.textSecondary }}>Category</InputLabel>
+                                    <InputLabel sx={{ color: binThemeTokens.textSecondary }}><Bi en={"Category"} ar={"الفئة"} /></InputLabel>
                                     <Select
                                         value={category}
                                         label="Category"
@@ -288,16 +289,16 @@ export default function OwnerComplaintPage() {
                             </Grid>
                             <Grid item xs={12} md={6}>
                                 <FormControl fullWidth required>
-                                    <InputLabel sx={{ color: binThemeTokens.textSecondary }}>Priority</InputLabel>
+                                    <InputLabel sx={{ color: binThemeTokens.textSecondary }}><Bi en={"Priority"} ar={"الأولوية"} /></InputLabel>
                                     <Select
                                         value={priority}
                                         label="Priority"
                                         onChange={(e) => setPriority(e.target.value)}
                                         sx={{ bgcolor: binThemeTokens.softCanvas, color: binThemeTokens.textPrimary }}
                                     >
-                                        <MenuItem value="normal">Normal (Standard 24h)</MenuItem>
+                                        <MenuItem value="normal"><Bi en={"Normal (Standard 24h)"} ar={"عادي (24 ساعة)"} /></MenuItem>
                                         <MenuItem value="urgent">{t('common.urgent_priority')}</MenuItem>
-                                        <MenuItem value="emergency" sx={{ color: '#ef4444', fontWeight: 900 }}>EMERGENCY (Safety 1h)</MenuItem>
+                                        <MenuItem value="emergency" sx={{ color: '#ef4444', fontWeight: 900 }}><Bi en={"EMERGENCY (Safety 1h)"} ar={"طارئ (سلامة - ساعة)"} /></MenuItem>
                                     </Select>
                                 </FormControl>
                             </Grid>
@@ -329,7 +330,7 @@ export default function OwnerComplaintPage() {
                             {uploadingPhotos && (
                                 <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2, p: 2, bgcolor: alpha(binThemeTokens.gold, 0.08), borderRadius: 2 }}>
                                     <CircularProgress size={18} sx={{ color: binThemeTokens.goldText }} />
-                                    <Typography variant="caption" sx={{ color: binThemeTokens.goldText }}>Uploading photos…</Typography>
+                                    <Typography variant="caption" sx={{ color: binThemeTokens.goldText }}><Bi en={"Uploading photos…"} ar={"جارٍ رفع الصور…"} /></Typography>
                                 </Stack>
                             )}
                             <Stack direction="row" spacing={2} flexWrap="wrap">

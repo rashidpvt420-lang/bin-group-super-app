@@ -14,6 +14,7 @@ import { useRole } from '../context/RoleContext';
 import { calculateBuildingHealth } from '../utils/buildingHealthEngine';
 import type { BuildingHealthReport } from '../utils/buildingHealthEngine';
 import { buildBuildingHealthInput } from '../utils/buildingHealthInputs';
+import Bi from '../components/Bi';
 
 export default function HealthScorePage() {
   const { propertyId } = useParams();
@@ -89,8 +90,8 @@ export default function HealthScorePage() {
     <Container maxWidth="xl" sx={{ py: 6 }}>
       <Box sx={{ mb: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <Box>
-            <Typography variant="h3" fontWeight="900" sx={{ color: binThemeTokens.gold, letterSpacing: -1 }}>Building Performance Index (BPI)</Typography>
-            <Typography variant="h6" sx={{ color: binThemeTokens.textSecondary }}>Institutional asset integrity layers and decay monitoring.</Typography>
+            <Typography variant="h3" fontWeight="900" sx={{ color: binThemeTokens.gold, letterSpacing: -1 }}><Bi en={"Building Performance Index (BPI)"} ar={"مؤشر أداء المبنى (BPI)"} /></Typography>
+            <Typography variant="h6" sx={{ color: binThemeTokens.textSecondary }}><Bi en={"Institutional asset integrity layers and decay monitoring."} ar={"طبقات سلامة الأصل ومراقبة التدهور."} /></Typography>
         </Box>
         <FormControl sx={{ minWidth: 350 }}>
             <InputLabel sx={{ color: binThemeTokens.gold }}>SELECT ASSET NODE</InputLabel>
@@ -111,8 +112,7 @@ export default function HealthScorePage() {
 
       {missingInputs.length > 0 ? (
         <Alert severity="info" sx={{ borderRadius: 4 }}>
-          Health score not available yet: this property is missing {missingInputs.join(' and ')}. BIN GROUP will calculate the
-          Building Performance Index once these details are recorded in the property passport.
+          <Bi en={"Health score not available yet: this property is missing"} ar={"مؤشر الصحة غير متاح بعد: ينقص هذا العقار"} /> {missingInputs.join(' and ')}<Bi en={". BIN GROUP will calculate the Building Performance Index once these details are recorded in the property passport."} ar={". ستحسب BIN GROUP مؤشر أداء المبنى عند تسجيل هذه التفاصيل في جواز العقار."} />
         </Alert>
       ) : (
       <Grid container spacing={6}>
@@ -132,7 +132,7 @@ export default function HealthScorePage() {
                 </Box>
                 <Typography variant="h5" fontWeight="900" sx={{ color: '#FFF', mb: 1.5 }}>{report?.label.toUpperCase()} CONDITION</Typography>
                 <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary, mb: 4 }}>Risk Level: **{report?.riskLevel}**</Typography>
-                <Button variant="contained" fullWidth sx={{ background: binThemeTokens.gold, color: '#000', fontWeight: 900, py: 2, borderRadius: 3 }}>DOWNLOAD AUDIT PDF</Button>
+                <Button variant="contained" fullWidth data-testid="health-audit-print" onClick={() => window.print()} sx={{ background: binThemeTokens.gold, color: '#000', fontWeight: 900, py: 2, borderRadius: 3 }}>DOWNLOAD AUDIT PDF</Button>
             </Card>
         </Grid>
 

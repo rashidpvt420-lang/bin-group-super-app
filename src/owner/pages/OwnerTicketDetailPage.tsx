@@ -28,6 +28,7 @@ import { resolveOwnerTicketEvidence } from '../utils/ownerTicketEvidence.mjs';
 import OwnerTicketEvidencePanel from '../components/OwnerTicketEvidencePanel';
 import { OwnerTicketAssignmentLine, OwnerTicketStageChip } from '../components/OwnerTicketStatusSummary';
 import { ticketLifecycleStage } from '../../utils/ticketLifecycleStage';
+import Bi from '../../components/Bi';
 
 type OwnerReviewAction = 'APPROVE_CLOSE' | 'DISPUTE' | 'REQUEST_REVISIT' | 'ESCALATE';
 
@@ -324,7 +325,7 @@ export default function OwnerTicketDetailPage() {
                                         {canReviewCompleted ? 'Review technician completion proof' : 'Owner action controls'}
                                     </Typography>
                                     <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary, mt: 0.75 }}>
-                                        Approvals, disputes, revisit requests and escalations are submitted through a protected server action and written to the audit trail.
+                                        <Bi en={"Approvals, disputes, revisit requests and escalations are submitted through a protected server action and written to the audit trail."} ar={"تُرسل الموافقات والاعتراضات وطلبات الزيارة والتصعيد عبر خادم محمي وتُسجل في سجل التدقيق."} />
                                     </Typography>
                                 </Box>
 
@@ -347,13 +348,13 @@ export default function OwnerTicketDetailPage() {
                                 <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} flexWrap="wrap" useFlexGap>
                                     {canReviewCompleted && (
                                         <>
-                                            <Button variant="contained" color="success" startIcon={<ShieldCheck size={18} />} onClick={() => openReviewDialog('APPROVE_CLOSE')} sx={{ fontWeight: 950, borderRadius: 3 }}>Approve & Close</Button>
-                                            <Button variant="outlined" color="error" onClick={() => openReviewDialog('DISPUTE')} sx={{ fontWeight: 950, borderRadius: 3 }}>Dispute</Button>
-                                            <Button variant="outlined" color="warning" startIcon={<RotateCcw size={18} />} onClick={() => openReviewDialog('REQUEST_REVISIT')} sx={{ fontWeight: 950, borderRadius: 3 }}>Request Revisit</Button>
+                                            <Button variant="contained" color="success" startIcon={<ShieldCheck size={18} />} onClick={() => openReviewDialog('APPROVE_CLOSE')} sx={{ fontWeight: 950, borderRadius: 3 }}><Bi en={"Approve & Close"} ar={"موافقة وإغلاق"} /></Button>
+                                            <Button variant="outlined" color="error" onClick={() => openReviewDialog('DISPUTE')} sx={{ fontWeight: 950, borderRadius: 3 }}><Bi en={"Dispute"} ar={"اعتراض"} /></Button>
+                                            <Button variant="outlined" color="warning" startIcon={<RotateCcw size={18} />} onClick={() => openReviewDialog('REQUEST_REVISIT')} sx={{ fontWeight: 950, borderRadius: 3 }}><Bi en={"Request Revisit"} ar={"طلب زيارة أخرى"} /></Button>
                                         </>
                                     )}
                                     {canEscalateOpen && (
-                                        <Button variant="outlined" color="error" onClick={() => openReviewDialog('ESCALATE')} sx={{ fontWeight: 950, borderRadius: 3 }}>Escalate Ticket</Button>
+                                        <Button variant="outlined" color="error" onClick={() => openReviewDialog('ESCALATE')} sx={{ fontWeight: 950, borderRadius: 3 }}><Bi en={"Escalate Ticket"} ar={"تصعيد الطلب"} /></Button>
                                     )}
                                 </Stack>
                             </Stack>
@@ -444,7 +445,7 @@ export default function OwnerTicketDetailPage() {
                 <DialogContent>
                     <Stack spacing={2.5} sx={{ pt: 1 }}>
                         <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary }}>
-                            This action updates the ticket through a backend callable and records an audit event.
+                            <Bi en={"This action updates the ticket through a backend callable and records an audit event."} ar={"يحدّث هذا الإجراء الطلب عبر الخادم ويسجل حدث تدقيق."} />
                         </Typography>
                         <TextField
                             label={selectedActionNeedsReason ? 'Reason required' : 'Optional owner note'}
@@ -461,7 +462,7 @@ export default function OwnerTicketDetailPage() {
                     </Stack>
                 </DialogContent>
                 <DialogActions sx={{ p: 3 }}>
-                    <Button onClick={() => setReviewAction(null)} disabled={reviewBusy} sx={{ color: binThemeTokens.textSecondary, fontWeight: 900 }}>Cancel</Button>
+                    <Button onClick={() => setReviewAction(null)} disabled={reviewBusy} sx={{ color: binThemeTokens.textSecondary, fontWeight: 900 }}><Bi en={"Cancel"} ar={"إلغاء"} /></Button>
                     <Button onClick={submitReview} disabled={reviewBusy || Boolean(selectedActionNeedsReason && reviewReason.trim().length < 8)} variant="contained" sx={{ bgcolor: reviewAction === 'DISPUTE' || reviewAction === 'ESCALATE' ? '#ef4444' : binThemeTokens.gold, color: reviewAction === 'DISPUTE' || reviewAction === 'ESCALATE' ? '#fff' : '#000', fontWeight: 950 }}>
                         {reviewBusy ? 'Submitting...' : 'Submit'}
                     </Button>

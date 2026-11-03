@@ -5,6 +5,7 @@ import { functions, httpsCallable } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
+import Bi from '../../components/Bi';
 
 const getMillis = (value: any) => {
   if (!value) return 0;
@@ -203,19 +204,19 @@ export default function OwnerInspectionsPage() {
                     <Paper sx={{ p: 2, bgcolor: alpha('#0f172a', 0.03), border: '1px solid rgba(15,23,42,0.08)', borderRadius: 3 }}>
                       <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary, fontWeight: 950, letterSpacing: 1 }}>DEPOSIT / DAMAGE SETTLEMENT LEDGER</Typography>
                       <Grid container spacing={1.5} sx={{ mt: 0.5 }}>
-                        <Grid item xs={6}><Typography variant="caption" color="text.secondary">Deposit Held</Typography><Typography fontWeight={950}>{money(ledger.depositHeld)}</Typography></Grid>
-                        <Grid item xs={6}><Typography variant="caption" color="text.secondary">Damage Estimate</Typography><Typography fontWeight={950}>{money(ledger.damageEstimate)}</Typography></Grid>
-                        <Grid item xs={6}><Typography variant="caption" color="text.secondary">Proposed Deduction</Typography><Typography fontWeight={950} color={ledger.proposedDeduction > 0 ? '#ef4444' : '#10b981'}>{money(ledger.proposedDeduction)}</Typography></Grid>
-                        <Grid item xs={6}><Typography variant="caption" color="text.secondary">Tenant Refund / Balance Due</Typography><Typography fontWeight={950}>{ledger.balanceDue > 0 ? `${money(ledger.balanceDue)} due` : `${money(ledger.balanceToTenant)} refund`}</Typography></Grid>
+                        <Grid item xs={6}><Typography variant="caption" color="text.secondary"><Bi en={"Deposit Held"} ar={"التأمين المحتجز"} /></Typography><Typography fontWeight={950}>{money(ledger.depositHeld)}</Typography></Grid>
+                        <Grid item xs={6}><Typography variant="caption" color="text.secondary"><Bi en={"Damage Estimate"} ar={"تقدير الأضرار"} /></Typography><Typography fontWeight={950}>{money(ledger.damageEstimate)}</Typography></Grid>
+                        <Grid item xs={6}><Typography variant="caption" color="text.secondary"><Bi en={"Proposed Deduction"} ar={"الخصم المقترح"} /></Typography><Typography fontWeight={950} color={ledger.proposedDeduction > 0 ? '#ef4444' : '#10b981'}>{money(ledger.proposedDeduction)}</Typography></Grid>
+                        <Grid item xs={6}><Typography variant="caption" color="text.secondary"><Bi en={"Tenant Refund / Balance Due"} ar={"المسترد للمستأجر / الرصيد المستحق"} /></Typography><Typography fontWeight={950}>{ledger.balanceDue > 0 ? `${money(ledger.balanceDue)} due` : `${money(ledger.balanceToTenant)} refund`}</Typography></Grid>
                       </Grid>
-                      {inspection.depositNotes && <Typography variant="caption" sx={{ display: 'block', mt: 1.5, color: binThemeTokens.textSecondary }}>Notes: {inspection.depositNotes}</Typography>}
-                      {poorItems.length > 0 && <Typography variant="caption" sx={{ display: 'block', mt: 1, color: '#ef4444', fontWeight: 800 }}>{poorItems.length} flagged condition item(s)</Typography>}
+                      {inspection.depositNotes && <Typography variant="caption" sx={{ display: 'block', mt: 1.5, color: binThemeTokens.textSecondary }}><Bi en={"Notes:"} ar={"ملاحظات:"} /> {inspection.depositNotes}</Typography>}
+                      {poorItems.length > 0 && <Typography variant="caption" sx={{ display: 'block', mt: 1, color: '#ef4444', fontWeight: 800 }}>{poorItems.length} <Bi en={"flagged condition item(s)"} ar={"بند/بنود حالة مُعلّمة"} /></Typography>}
                     </Paper>
 
                     <Stack direction={isRTL ? 'row-reverse' : 'row'} spacing={1} flexWrap="wrap" useFlexGap>
                       {urls.map((url, index) => (
                         <Button key={`${inspection.id}-evidence-${index}`} variant="outlined" onClick={() => window.open(url, '_blank', 'noopener,noreferrer')} startIcon={<Eye size={16} />} sx={{ borderColor: binThemeTokens.goldHover, color: binThemeTokens.goldText, fontWeight: 950 }}>
-                          Evidence {index + 1}
+                          <Bi en={"Evidence"} ar={"الإثبات"} /> {index + 1}
                         </Button>
                       ))}
                       <Button variant="outlined" disabled={Boolean(busyId)} onClick={() => updateInspection(inspection, 'APPROVED')} sx={{ borderColor: '#10b981', color: '#10b981', fontWeight: 950 }}>{busyId === `${inspection.id}:APPROVED` ? <CircularProgress size={16} /> : tx('owner.inspections.approve', 'Approve Condition')}</Button>

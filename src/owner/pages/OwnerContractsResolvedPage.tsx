@@ -21,6 +21,7 @@ import { binThemeTokens } from '../../theme/binGroupTheme';
 import ContractSignatureOtpControl from '../components/ContractSignatureOtpControl';
 import { formatAedMoney } from '../../../functions/shared/aedMoney';
 import { mobilisationDepositFromAnnual } from '../../../functions/shared/mobilisationDeposit';
+import Bi from '../../components/Bi';
 
 type ContractScope = 'FM_ONLY' | 'PM_ONLY' | 'BOTH';
 type NoticeState = { type: 'success' | 'error' | 'info' | 'warning'; text: string };
@@ -402,21 +403,21 @@ export default function OwnerContractsResolvedPage() {
         <Box sx={{ textAlign: isRTL ? 'right' : 'left' }}>
           <Typography variant="overline" sx={{ color: binThemeTokens.goldText, fontWeight: 900, letterSpacing: 4 }}>{t('gov.institutional_governance') || 'INSTITUTIONAL GOVERNANCE'}</Typography>
           <Typography variant="h4" fontWeight="950" sx={{ color: binThemeTokens.textPrimary, mt: 1 }}>{t('nav.contracts') || 'Contracts'}</Typography>
-          <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary, mt: 1 }}>Permission-safe contract lookup using linked UID, email and direct contract records.</Typography>
+          <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary, mt: 1 }}><Bi en={"Permission-safe contract lookup using linked UID, email and direct contract records."} ar={"بحث آمن عن العقود باستخدام الحساب والبريد المرتبطين وسجلات العقود."} /></Typography>
         </Box>
         <Button disabled={!contracts[0]} variant="outlined" startIcon={<Download size={16} />} sx={{ borderColor: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.7)', fontWeight: 900, borderRadius: 3 }} onClick={() => openOrDownloadContract(contracts[0])}>
-          Download Master
+          <Bi en={"Download Master"} ar={"تنزيل النسخة الرئيسية"} />
         </Button>
       </Box>
 
-      {urlContractNotFound && <Alert severity="warning" sx={{ mb: 3 }}>The contract link was not found by direct ID, but other linked agreements may still be shown below.</Alert>}
+      {urlContractNotFound && <Alert severity="warning" sx={{ mb: 3 }}><Bi en={"The contract link was not found by direct ID, but other linked agreements may still be shown below."} ar={"لم يتم العثور على العقد بالرقم المباشر، لكن قد تظهر عقود مرتبطة أخرى أدناه."} /></Alert>}
       {notice && <Alert severity={notice.type} sx={{ mb: 3 }}>{notice.text}</Alert>}
 
       {hasSignatureRequired && primaryContract && (
         <Paper sx={{ p: 4, mb: 5, bgcolor: alpha(binThemeTokens.gold, 0.06), border: `1px solid ${alpha(binThemeTokens.gold, 0.28)}`, borderRadius: 5 }}>
           <Stack spacing={3}>
-            <Typography variant="h5" fontWeight="950" sx={{ color: binThemeTokens.textPrimary, display: 'flex', gap: 1, alignItems: 'center' }}><PenLine color={binThemeTokens.gold} /> Contract Signature Required</Typography>
-            <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary }}>Type your full legal name and sign. Dashboard unlock still requires payment verification.</Typography>
+            <Typography variant="h5" fontWeight="950" sx={{ color: binThemeTokens.textPrimary, display: 'flex', gap: 1, alignItems: 'center' }}><PenLine color={binThemeTokens.gold} /> <Bi en={"Contract Signature Required"} ar={"توقيع العقد مطلوب"} /></Typography>
+            <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary }}><Bi en={"Type your full legal name and sign. Dashboard unlock still requires payment verification."} ar={"اكتب اسمك القانوني الكامل ووقّع. فتح اللوحة يتطلب أيضاً التحقق من الدفع."} /></Typography>
             <TextField fullWidth label="Full legal name for e-signature" value={signatureName} onChange={(event) => setSignatureName(event.target.value)} InputLabelProps={{ style: { color: 'rgba(255,255,255,0.5)' } }} InputProps={{ style: { color: '#FFF' } }} />
             <ContractSignatureOtpControl
               contractId={primaryContract.id}
@@ -469,18 +470,18 @@ export default function OwnerContractsResolvedPage() {
                   <Grid container spacing={2} alignItems="center">
                     <Grid item xs={12} md={4}>
                       <Typography variant="body1" sx={{ color: '#FFF', fontWeight: 950 }}>{contract.propertyName || contract.companyProfile?.name || 'Portfolio Contract'}</Typography>
-                      <Typography variant="caption" sx={{ color: 'rgba(255,255,255,.35)', fontWeight: 800 }}>Ref: #{String(contract.id).slice(0, 8)}</Typography>
+                      <Typography variant="caption" sx={{ color: 'rgba(255,255,255,.35)', fontWeight: 800 }}><Bi en={"Ref: #"} ar={"المرجع: #"} />{String(contract.id).slice(0, 8)}</Typography>
                     </Grid>
                     <Grid item xs={12} md={3}><Chip label={contract.packageName || contract.selectedPlan?.name || contract.serviceDetails?.selectedPlan || contractScope.title} size="small" sx={{ bgcolor: alpha(binThemeTokens.gold, 0.1), color: binThemeTokens.goldText, fontWeight: 950 }} /></Grid>
                     <Grid item xs={12} md={3}>
                       <Stack spacing={0.75}>
                         <Stack direction="row" spacing={1} alignItems="center"><Calendar size={14} color="rgba(255,255,255,.45)" /><Typography variant="caption" sx={{ color: 'rgba(255,255,255,.75)', fontWeight: 900 }}>{termSummaryText(contract)}</Typography></Stack>
-                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,.45)', fontWeight: 700 }}>Cancel/upgrade request window: until {formatDateTime(term.firstMonthEnd)}</Typography>
+                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,.45)', fontWeight: 700 }}><Bi en={"Cancel/upgrade request window: until"} ar={"فترة طلب الإلغاء/الترقية: حتى"} /> {formatDateTime(term.firstMonthEnd)}</Typography>
                         <Typography variant="caption" sx={{ color: 'rgba(255,255,255,.45)', fontWeight: 700 }}>{signatureSummaryText(contract)}</Typography>
                         <Typography variant="caption" sx={{ color: alpha(binThemeTokens.gold, 0.85), fontWeight: 800 }}>{adminStampSummaryText(contract)}</Typography>
                       </Stack>
                     </Grid>
-                    <Grid item xs={12} md={2}><Stack direction="row" spacing={1} justifyContent={{ xs: 'flex-start', md: 'flex-end' }}><Button size="small" startIcon={<Download size={14} />} onClick={() => openOrDownloadContract(contract)} sx={{ color: binThemeTokens.goldText, fontWeight: 950 }}>Download</Button></Stack></Grid>
+                    <Grid item xs={12} md={2}><Stack direction="row" spacing={1} justifyContent={{ xs: 'flex-start', md: 'flex-end' }}><Button size="small" startIcon={<Download size={14} />} onClick={() => openOrDownloadContract(contract)} sx={{ color: binThemeTokens.goldText, fontWeight: 950 }}><Bi en={"Download"} ar={"تنزيل"} /></Button></Stack></Grid>
                   </Grid>
                 </Paper>
               </Grid>

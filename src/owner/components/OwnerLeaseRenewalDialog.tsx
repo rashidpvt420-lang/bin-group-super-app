@@ -3,6 +3,7 @@ import { Alert, Button, Dialog, DialogActions, DialogContent, DialogTitle, Stack
 import { collection, db, functions, getDocs, httpsCallable, query, where } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
+import Bi from '../../components/Bi';
 
 /** Feature 4: owner proposes renewal terms; the tenant accepts or declines in their app. */
 export default function OwnerLeaseRenewalDialog({ open, onClose, unit }: { open: boolean; onClose: () => void; unit: { id: string; unitNumber?: string } }) {
@@ -33,14 +34,14 @@ export default function OwnerLeaseRenewalDialog({ open, onClose, unit }: { open:
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
-      <DialogTitle>Offer lease renewal · Unit {unit.unitNumber || unit.id}</DialogTitle>
+      <DialogTitle><Bi en={"Offer lease renewal · Unit"} ar={"عرض تجديد الإيجار · الوحدة"} /> {unit.unitNumber || unit.id}</DialogTitle>
       <DialogContent>
         {loadError && <Alert severity="error">{loadError}</Alert>}
-        {!loadError && lease === null && <Alert severity="info">No lease is recorded for this unit. Record the agreement first.</Alert>}
-        {lease && !end && <Alert severity="warning">This lease has no end date. Record the agreement dates first.</Alert>}
+        {!loadError && lease === null && <Alert severity="info"><Bi en={"No lease is recorded for this unit. Record the agreement first."} ar={"لا يوجد عقد إيجار مسجل لهذه الوحدة. سجّل العقد أولاً."} /></Alert>}
+        {lease && !end && <Alert severity="warning"><Bi en={"This lease has no end date. Record the agreement dates first."} ar={"لا يوجد تاريخ انتهاء لهذا العقد. سجّل تواريخ العقد أولاً."} /></Alert>}
         {lease && end && (
           <Stack spacing={2} sx={{ mt: 1 }}>
-            <Typography sx={{ color: binThemeTokens.textSecondary }}>Current lease ends {end}{lease.renewalStatus ? ` · ${String(lease.renewalStatus).replaceAll('_', ' ')}` : ''}</Typography>
+            <Typography sx={{ color: binThemeTokens.textSecondary }}><Bi en={"Current lease ends"} ar={"ينتهي العقد الحالي"} /> {end}{lease.renewalStatus ? ` · ${String(lease.renewalStatus).replaceAll('_', ' ')}` : ''}</Typography>
             <TextField label="New end date" type="date" InputLabelProps={{ shrink: true }} value={form.newEndDate} onChange={(e) => setForm({ ...form, newEndDate: e.target.value })} />
             <TextField label="New annual rent (AED)" inputMode="decimal" value={form.newAnnualRent} onChange={(e) => setForm({ ...form, newAnnualRent: e.target.value })} />
             <TextField label="Message to tenant (optional)" multiline minRows={2} value={form.message} onChange={(e) => setForm({ ...form, message: e.target.value })} />
@@ -49,8 +50,8 @@ export default function OwnerLeaseRenewalDialog({ open, onClose, unit }: { open:
         {result && <Alert severity={result.ok ? 'success' : 'error'} sx={{ mt: 2 }}>{result.text}</Alert>}
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose}>Close</Button>
-        <Button variant="contained" disabled={!lease || !end || saving || !form.newEndDate || !form.newAnnualRent || result?.ok} onClick={submit}>Send offer</Button>
+        <Button onClick={onClose}><Bi en={"Close"} ar={"إغلاق"} /></Button>
+        <Button variant="contained" disabled={!lease || !end || saving || !form.newEndDate || !form.newAnnualRent || result?.ok} onClick={submit}><Bi en={"Send offer"} ar={"إرسال العرض"} /></Button>
       </DialogActions>
     </Dialog>
   );

@@ -3,6 +3,7 @@ import { Alert, Box, Card, CardContent, Chip, Grid, Stack, Typography, alpha } f
 import { Banknote, Building2, CheckCircle2, ClipboardList, CreditCard, Home, Lock, Users, Wrench } from 'lucide-react';
 import { collection, db, getDocs, query, where } from '../../lib/firebase';
 import { binThemeTokens } from '../../theme/binGroupTheme';
+import Bi from '../../components/Bi';
 
 type ContractMode = 'MAINTENANCE_ONLY' | 'PROPERTY_MANAGEMENT_ONLY' | 'HYBRID' | 'UNKNOWN';
 
@@ -256,7 +257,7 @@ export default function OwnerContractModeMatrix({ user, contract, properties }: 
           </Stack>
           {mode === 'UNKNOWN' && (
             <Alert severity="warning" sx={{ mb: 3, borderRadius: 3 }}>
-              Contract mode is not explicit. Add contractType/packageType/serviceType as Maintenance Only, Property Management Only, or Maintenance + Property Management so the dashboard can enforce the correct owner view.
+              <Bi en={"Contract mode is not explicit. Add contractType/packageType/serviceType as Maintenance Only, Property Management Only, or Maintenance + Property Management so the dashboard can enforce the correct owner view."} ar={"نوع العقد غير محدد. حدده كصيانة فقط أو إدارة عقار فقط أو صيانة + إدارة عقار لتعرض اللوحة العرض الصحيح."} />
             </Alert>
           )}
           <Grid container spacing={3}>
@@ -275,7 +276,7 @@ export default function OwnerContractModeMatrix({ user, contract, properties }: 
               <Wrench color={binThemeTokens.gold} />
               <Box>
                 <Typography variant="overline" sx={{ color: binThemeTokens.goldText, fontWeight: 950 }}>MAINTENANCE COMMAND</Typography>
-                <Typography variant="h6" fontWeight={950} sx={{ color: binThemeTokens.textPrimary }}>Tickets, SLA, technicians, evidence and preventive work</Typography>
+                <Typography variant="h6" fontWeight={950} sx={{ color: binThemeTokens.textPrimary }}><Bi en={"Tickets, SLA, technicians, evidence and preventive work"} ar={"الطلبات ومستوى الخدمة والفنيون والإثباتات والصيانة الوقائية"} /></Typography>
               </Box>
             </Stack>
             <Grid container spacing={3}>
@@ -295,7 +296,7 @@ export default function OwnerContractModeMatrix({ user, contract, properties }: 
               <Users color={binThemeTokens.gold} />
               <Box>
                 <Typography variant="overline" sx={{ color: binThemeTokens.goldText, fontWeight: 950 }}>PROPERTY MANAGEMENT COMMAND</Typography>
-                <Typography variant="h6" fontWeight={950} sx={{ color: binThemeTokens.textPrimary }}>Tenants, rent collection, payment balance and occupancy</Typography>
+                <Typography variant="h6" fontWeight={950} sx={{ color: binThemeTokens.textPrimary }}><Bi en={"Tenants, rent collection, payment balance and occupancy"} ar={"المستأجرون وتحصيل الإيجار والأرصدة والإشغال"} /></Typography>
               </Box>
             </Stack>
             <Grid container spacing={3} sx={{ mb: 3 }}>
@@ -307,12 +308,12 @@ export default function OwnerContractModeMatrix({ user, contract, properties }: 
 
             <Box sx={{ border: '1px solid rgba(255,255,255,.06)', borderRadius: 3, overflow: 'hidden' }}>
               <Box sx={{ p: 2, bgcolor: 'rgba(255,255,255,.035)' }}>
-                <Typography fontWeight={950} sx={{ color: binThemeTokens.textPrimary }}><CreditCard size={16} style={{ verticalAlign: 'middle', marginRight: 8 }} />Tenant Payment Process</Typography>
+                <Typography fontWeight={950} sx={{ color: binThemeTokens.textPrimary }}><CreditCard size={16} style={{ verticalAlign: 'middle', marginRight: 8 }} /><Bi en={"Tenant Payment Process"} ar={"إجراءات دفع المستأجر"} /></Typography>
               </Box>
               {loading ? (
-                <Typography sx={{ p: 2, color: binThemeTokens.textSecondary }}>Loading tenant ledger...</Typography>
+                <Typography sx={{ p: 2, color: binThemeTokens.textSecondary }}><Bi en={"Loading tenant ledger..."} ar={"جارٍ تحميل دفتر المستأجرين..."} /></Typography>
               ) : tenantRows.length === 0 ? (
-                <Typography sx={{ p: 2, color: binThemeTokens.textSecondary }}>No tenant ledger rows found yet. Import tenants/leases or invite tenants to activate this section.</Typography>
+                <Typography sx={{ p: 2, color: binThemeTokens.textSecondary }}><Bi en={"No tenant ledger rows found yet. Import tenants/leases or invite tenants to activate this section."} ar={"لا توجد سجلات مستأجرين بعد. استورد المستأجرين أو ادعهم لتفعيل هذا القسم."} /></Typography>
               ) : (
                 <Stack divider={<Box sx={{ borderTop: '1px solid rgba(255,255,255,.06)' }} />}>
                   {tenantRows.map((row, index) => (
@@ -333,13 +334,13 @@ export default function OwnerContractModeMatrix({ user, contract, properties }: 
 
       {!pmEnabled && (
         <Alert icon={<Home size={18} />} severity="info" sx={{ borderRadius: 3, bgcolor: alpha('#3b82f6', .06), border: `1px solid ${alpha('#3b82f6', .18)}` }}>
-          Property management details such as tenant balances, rent collection, leases and owner payout workflow are intentionally hidden because this contract is Maintenance Only. Upgrade to Property Management or Hybrid to enable the tenant ledger.
+          <Bi en={"Property management details such as tenant balances, rent collection, leases and owner payout workflow are intentionally hidden because this contract is Maintenance Only. Upgrade to Property Management or Hybrid to enable the tenant ledger."} ar={"تفاصيل إدارة العقار مخفية لأن هذا العقد صيانة فقط. رقّ إلى إدارة العقار أو الباقة المختلطة لتفعيل دفتر المستأجرين."} />
         </Alert>
       )}
 
       {!maintenanceEnabled && (
         <Alert icon={<ClipboardList size={18} />} severity="info" sx={{ borderRadius: 3, bgcolor: alpha('#3b82f6', .06), border: `1px solid ${alpha('#3b82f6', .18)}` }}>
-          Maintenance tickets, technician dispatch, GPS tracking, SLA and preventive work are intentionally hidden because this contract is Property Management Only. Add maintenance scope to enable field operations.
+          <Bi en={"Maintenance tickets, technician dispatch, GPS tracking, SLA and preventive work are intentionally hidden because this contract is Property Management Only. Add maintenance scope to enable field operations."} ar={"طلبات الصيانة وإرسال الفنيين والتتبع ومستوى الخدمة مخفية لأن هذا العقد إدارة عقار فقط. أضف نطاق الصيانة لتفعيلها."} />
         </Alert>
       )}
     </Stack>

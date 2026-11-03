@@ -2,6 +2,7 @@ import React from 'react';
 import { Box, Button, Paper, Stack, Typography, alpha } from '@mui/material';
 import { AlertCircle, CheckCircle2, ChevronRight } from 'lucide-react';
 import { binThemeTokens } from '../../theme/binGroupTheme';
+import Bi from '../../components/Bi';
 
 type OwnerNextStepBannerProps = {
   missingTitleDeed: boolean;
@@ -60,7 +61,7 @@ export default function OwnerNextStepBanner({ missingTitleDeed, hasVerifiedIban,
     return (
       <Paper sx={{ p: 2, bgcolor: alpha('#10b981', 0.1), border: '1px solid rgba(16, 185, 129, 0.2)', borderRadius: 4, display: 'flex', alignItems: 'center', gap: 2 }}>
         <CheckCircle2 color="#10b981" />
-        <Typography sx={{ color: '#10b981', fontWeight: 700 }}>All caught up! Your dashboard requires no immediate action.</Typography>
+        <Typography sx={{ color: '#10b981', fontWeight: 700 }}><Bi en={"All caught up! Your dashboard requires no immediate action."} ar={"لا توجد إجراءات عاجلة مطلوبة."} /></Typography>
       </Paper>
     );
   }

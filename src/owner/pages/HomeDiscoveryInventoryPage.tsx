@@ -38,6 +38,7 @@ import {
 } from '../../lib/firebase';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import SafeIcon from '../../components/SafeIcon';
+import Bi from '../../components/Bi';
 
 const gold = binThemeTokens.gold;
 const HOME_RECORD_TYPES = new Set(['ROOM_RENT_LISTING', 'FIND_ROOM_RENT', 'HOME_RENT_LISTING', 'PROPERTY_RENT_LISTING', 'RENTAL_LISTING']);
@@ -371,7 +372,7 @@ export default function HomeDiscoveryInventoryPage() {
           <Typography variant="h6" sx={{ fontWeight: 950, mb: 2 }}>{copy('owner.home.status', 'Your Home Discovery status', 'حالة إعلاناتك')}</Typography>
           <Stack spacing={1.2}>
             {listingRequests.slice(0, 6).map((request) => <Paper key={request.id} variant="outlined" sx={{ p: 2, borderRadius: 3 }}><Stack direction={isRTL ? 'row-reverse' : 'row'} justifyContent="space-between" spacing={2}><Box><Typography sx={{ fontWeight: 900 }}>{request.unitTitle || request.title}</Typography><Typography variant="caption" sx={{ color: binThemeTokens.textSecondary }}>{request.propertyAddress} · {money(request.annualRent)}</Typography></Box><Chip label={request.stage || request.status || 'REVIEW'} /></Stack></Paper>)}
-            {liveListings.slice(0, 6).map((listing) => <Paper key={listing.id} variant="outlined" sx={{ p: 2, borderRadius: 3, borderColor: alpha('#16A34A', 0.3) }}><Stack direction={isRTL ? 'row-reverse' : 'row'} justifyContent="space-between" spacing={2}><Box><Typography sx={{ fontWeight: 900 }}>{listing.unitTitle || listing.title || listing.propertyName}</Typography><Typography variant="caption" sx={{ color: binThemeTokens.textSecondary }}>{listing.area || listing.emirate} · {money(listing.annualRent)} · {listing.imageUrls?.length || 0} photos</Typography></Box><Chip color="success" label={copy('owner.home.liveBadge', 'LIVE VERIFIED', 'منشور وموثق')} /></Stack></Paper>)}
+            {liveListings.slice(0, 6).map((listing) => <Paper key={listing.id} variant="outlined" sx={{ p: 2, borderRadius: 3, borderColor: alpha('#16A34A', 0.3) }}><Stack direction={isRTL ? 'row-reverse' : 'row'} justifyContent="space-between" spacing={2}><Box><Typography sx={{ fontWeight: 900 }}>{listing.unitTitle || listing.title || listing.propertyName}</Typography><Typography variant="caption" sx={{ color: binThemeTokens.textSecondary }}>{listing.area || listing.emirate} · {money(listing.annualRent)} · {listing.imageUrls?.length || 0} <Bi en={"photos"} ar={"صور"} /></Typography></Box><Chip color="success" label={copy('owner.home.liveBadge', 'LIVE VERIFIED', 'منشور وموثق')} /></Stack></Paper>)}
           </Stack>
         </Paper>}
 

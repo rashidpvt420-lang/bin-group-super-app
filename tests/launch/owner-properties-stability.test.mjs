@@ -68,6 +68,7 @@ function harness() {
     if (name === '../../context/RoleContext') return { useRole: () => ({ user: uid ? { uid } : null }) };
     if (name === '../../context/LanguageContext') return { useLanguage: () => ({ tx: (_, fallback) => fallback, isRTL: true }) };
     if (name === '../../theme/binGroupTheme') return { binThemeTokens: { gold: '#caa', textPrimary: '#111', textSecondary: '#555' } };
+    if (/(^|\/)components\/Bi$|^\.\/Bi$/.test(name)) return { default: ({ en }) => en };
     throw new Error(`Unexpected import ${name}`);
   } }, { filename });
   function render() {

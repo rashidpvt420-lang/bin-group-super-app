@@ -137,7 +137,7 @@ export default function CertificateVerificationPage() {
                                             <DescriptionIcon sx={{ color: binThemeTokens.gold }} />
                                             <Box>
                                                 <Typography variant="subtitle2" fontWeight="900" sx={{ color: '#FFFFFF' }}>{t('cert.type_label', { type: status.data?.type || 'Standard' })}</Typography>
-                                                <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary }}>{t('cert.score_label', { score: status.data?.score || status.data?.readinessScore || '100' })}</Typography>
+                                                <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary }}>{t('cert.score_label', { score: status.data?.score || status.data?.readinessScore || '—' })}</Typography>
                                             </Box>
                                         </Stack>
                                     </Box>

@@ -4,6 +4,7 @@ import { Building2, FileCheck2, ShieldCheck, Users, Wrench } from 'lucide-react'
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { getContractModeProfile, getPropertyIntelligenceProfile, resolveContractMode, summarizePortfolioIntelligence } from '../../utils/contractIntelligence';
 import type { SovereignContractMode } from '../../utils/contractIntelligence';
+import Bi from '../../components/Bi';
 
 interface Props {
   contract: any;
@@ -80,7 +81,7 @@ export default function OwnerContractIntelligenceSection({ contract, properties,
             <Box sx={{ p: 1, bgcolor: alpha(binThemeTokens.gold, 0.1), color: binThemeTokens.goldText, borderRadius: 2 }}><Building2 size={22} /></Box>
             <Box>
               <Typography variant="overline" sx={{ color: binThemeTokens.goldText, fontWeight: 950, letterSpacing: 2 }}>UAE ASSET CLASSIFICATION</Typography>
-              <Typography variant="h5" sx={{ color: binThemeTokens.textPrimary, fontWeight: 950 }}>Contract Recommendation Matrix</Typography>
+              <Typography variant="h5" sx={{ color: binThemeTokens.textPrimary, fontWeight: 950 }}><Bi en={"Contract Recommendation Matrix"} ar={"مصفوفة توصيات العقود"} /></Typography>
             </Box>
           </Stack>
 
@@ -93,7 +94,7 @@ export default function OwnerContractIntelligenceSection({ contract, properties,
 
           <Stack spacing={2}>
             {propertyProfiles.length === 0 ? (
-              <Alert severity="warning" sx={{ borderRadius: 3 }}>No property asset is linked yet. Submit property details and title deed evidence to activate recommendations.</Alert>
+              <Alert severity="warning" sx={{ borderRadius: 3 }}><Bi en={"No property asset is linked yet. Submit property details and title deed evidence to activate recommendations."} ar={"لا يوجد عقار مرتبط بعد. أرسل تفاصيل العقار وسند الملكية لتفعيل التوصيات."} /></Alert>
             ) : propertyProfiles.map(({ property, profile: asset }) => (
               <Box key={property.id || property.propertyId || property.propertyName} sx={{ p: 2.2, borderRadius: 3, border: '1px solid rgba(255,255,255,0.07)', bgcolor: 'rgba(255,255,255,0.025)' }}>
                 <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" alignItems={{ xs: 'flex-start', md: 'center' }} spacing={2}>

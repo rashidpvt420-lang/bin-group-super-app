@@ -13,6 +13,7 @@ import { db, doc, getDoc } from '../lib/firebase';
 import { useRole } from '../context/RoleContext';
 import { formatAED } from '../utils/formatters';
 import { BIN_GROUP_VAT_REGISTRATION, invoiceTotals } from '../utils/uaeVat.mjs';
+import Bi from '../components/Bi';
 
 const formatInvoiceAed = (value: number) => Number(value || 0).toLocaleString('en-AE', {
     minimumFractionDigits: 2,
@@ -83,7 +84,7 @@ export default function InvoiceDetailsPage() {
         return (
             <Container sx={{ py: 10, textAlign: 'center' }}>
                 <CircularProgress color="inherit" sx={{ color: binThemeTokens.gold }} />
-                <Typography sx={{ mt: 2, color: binThemeTokens.gold }}>Retrieving Secure Ledger...</Typography>
+                <Typography sx={{ mt: 2, color: binThemeTokens.gold }}><Bi en={"Retrieving Secure Ledger..."} ar={"جارٍ استرجاع الدفتر الآمن..."} /></Typography>
             </Container>
         );
     }
@@ -98,8 +99,7 @@ export default function InvoiceDetailsPage() {
                     LEDGER NOT FOUND
                 </Typography>
                 <Typography variant="h6" sx={{ color: binThemeTokens.textSecondary, maxWidth: 600, mx: 'auto' }}>
-                    The requested invoice could not be located in the current settlement layer. 
-                    Please verify the Invoice ID or contact institutional support.
+                    <Bi en={"The requested invoice could not be located in the current settlement layer. Please verify the Invoice ID or contact institutional support."} ar={"تعذر العثور على الفاتورة المطلوبة. تحقق من رقم الفاتورة أو تواصل مع الدعم."} />
                 </Typography>
                 <Button 
                     variant="outlined" 
@@ -132,6 +132,7 @@ export default function InvoiceDetailsPage() {
                 <Stack direction="row" spacing={2}>
                     <Button 
                         startIcon={<Printer size={18} />} 
+                        onClick={() => window.print()}
                         variant="outlined"
                         sx={{ color: binThemeTokens.textSecondary, borderColor: 'rgba(255,255,255,0.1)', px: 3 }}
                     >
@@ -185,8 +186,8 @@ export default function InvoiceDetailsPage() {
                     <Box>
                         <Typography variant="h4" fontWeight="900" sx={{ color: binThemeTokens.gold, mb: 1.5, letterSpacing: -1 }}>BIN-GROUP</Typography>
                         <Stack spacing={0.5}>
-                            <Typography variant="body2" sx={{ color: binThemeTokens.textPrimary, fontWeight: 700 }}>Institutional Asset Management Headquarters</Typography>
-                            <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary }}>Business Bay, One Central Tower, Dubai, UAE</Typography>
+                            <Typography variant="body2" sx={{ color: binThemeTokens.textPrimary, fontWeight: 700 }}><Bi en={"Institutional Asset Management Headquarters"} ar={"المقر الرئيسي لإدارة الأصول"} /></Typography>
+                            <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary }}><Bi en={"Business Bay, One Central Tower, Dubai, UAE"} ar={"الخليج التجاري، برج ون سنترال، دبي، الإمارات"} /></Typography>
                             <Typography variant="caption" sx={{ color: binThemeTokens.gold, fontWeight: 900 }}>TRN: {BIN_GROUP_TRN}</Typography>
                         </Stack>
                     </Box>
@@ -286,7 +287,7 @@ export default function InvoiceDetailsPage() {
                         </Box>
                         <Box>
                             <Typography variant="subtitle2" fontWeight="900" sx={{ color: binThemeTokens.gold, letterSpacing: 0.5 }}>SHA-256 INTEGRITY HANDSHAKE</Typography>
-                            <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary }}>Verified by BIN-OS Institutional Audit Engine 1.4</Typography>
+                            <Typography variant="caption" sx={{ color: binThemeTokens.textSecondary }}><Bi en={"Verified by BIN-OS Institutional Audit Engine 1.4"} ar={"موثق بواسطة محرك التدقيق BIN-OS 1.4"} /></Typography>
                         </Box>
                     </Stack>
                     <Box sx={{ textAlign: 'right' }}>
@@ -297,8 +298,8 @@ export default function InvoiceDetailsPage() {
             </Paper>
             
             <Box sx={{ mt: 6, display: 'flex', gap: 4, justifyContent: 'center' }}>
-                <Button startIcon={<Share2 size={18} />} sx={{ color: binThemeTokens.textSecondary, fontWeight: 900 }}>SHARE LEDGER</Button>
-                <Button startIcon={<FileText size={18} />} sx={{ color: binThemeTokens.textSecondary, fontWeight: 900 }}>VIEW TRANSACTION LOG</Button>
+                <Button startIcon={<Share2 size={18} />} onClick={() => { const url = window.location.href; if (navigator.share) { void navigator.share({ title: 'BIN GROUP invoice', url }).catch(() => undefined); } else { void navigator.clipboard?.writeText(url); } }} sx={{ color: binThemeTokens.textSecondary, fontWeight: 900 }}>SHARE LEDGER</Button>
+                <Button startIcon={<FileText size={18} />} disabled title="Transaction log is not available yet" sx={{ color: binThemeTokens.textSecondary, fontWeight: 900 }}>VIEW TRANSACTION LOG</Button>
             </Box>
         </Container>
     );

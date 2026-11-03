@@ -5,6 +5,7 @@ import { functions, httpsCallable } from '../../lib/firebase';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 
 import { splitAnnualRent, type RentRow as Row } from '../rentScheduleSplit';
+import Bi from '../../components/Bi';
 
 export default function OwnerRentScheduleDialog({ open, onClose, unit }: { open: boolean; onClose: () => void; unit: { id: string; unitNumber?: string; annualRent?: number; rentAmount?: number } }) {
   const [rows, setRows] = useState<Row[]>([]);
@@ -27,10 +28,10 @@ export default function OwnerRentScheduleDialog({ open, onClose, unit }: { open:
 
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
-      <DialogTitle sx={{ fontWeight: 950 }}>Rent schedule · Unit {unit.unitNumber || unit.id}</DialogTitle>
+      <DialogTitle sx={{ fontWeight: 950 }}><Bi en={"Rent schedule · Unit"} ar={"جدول الإيجار · الوحدة"} /> {unit.unitNumber || unit.id}</DialogTitle>
       <DialogContent>
         <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary, mb: 2 }}>
-          Cash or cheque only. Paid installments are kept when you save a new schedule.
+          <Bi en={"Cash or cheque only. Paid installments are kept when you save a new schedule."} ar={"نقداً أو بشيك فقط. تبقى الأقساط المدفوعة عند حفظ جدول جديد."} />
         </Typography>
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ mb: 2 }}>
           <TextField select label="Cheques per year" value={cheques} onChange={(e) => setCheques(Number(e.target.value))} size="small" sx={{ minWidth: 150 }}>
@@ -38,7 +39,7 @@ export default function OwnerRentScheduleDialog({ open, onClose, unit }: { open:
           </TextField>
           <TextField type="date" label="First due date" value={firstDue} onChange={(e) => setFirstDue(e.target.value)} size="small" InputLabelProps={{ shrink: true }} />
           <Button variant="outlined" disabled={!annual || !firstDue} onClick={() => setRows(splitAnnualRent(annual, cheques, firstDue))} sx={{ color: binThemeTokens.textPrimary, borderColor: binThemeTokens.gold }}>
-            Split AED {annual.toLocaleString()}
+            <Bi en={"Split AED"} ar={"تقسيم درهم"} /> {annual.toLocaleString()}
           </Button>
         </Stack>
         {rows.map((row, i) => (
@@ -49,11 +50,11 @@ export default function OwnerRentScheduleDialog({ open, onClose, unit }: { open:
             <IconButton aria-label="Remove installment" onClick={() => setRows(rows.filter((_, j) => j !== i))}><Trash2 size={16} /></IconButton>
           </Stack>
         ))}
-        <Button startIcon={<Plus size={16} />} onClick={() => setRows([...rows, { dueDate: '', amount: '', chequeNumber: '' }])} sx={{ color: binThemeTokens.goldText, fontWeight: 900 }}>Add installment</Button>
+        <Button startIcon={<Plus size={16} />} onClick={() => setRows([...rows, { dueDate: '', amount: '', chequeNumber: '' }])} sx={{ color: binThemeTokens.goldText, fontWeight: 900 }}><Bi en={"Add installment"} ar={"إضافة قسط"} /></Button>
         {message && <Alert severity={message.ok ? 'success' : 'error'} sx={{ mt: 2 }}>{message.text}</Alert>}
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose} sx={{ color: binThemeTokens.textSecondary }}>Close</Button>
+        <Button onClick={onClose} sx={{ color: binThemeTokens.textSecondary }}><Bi en={"Close"} ar={"إغلاق"} /></Button>
         <Button variant="contained" disabled={saving || rows.length === 0} onClick={save} sx={{ bgcolor: binThemeTokens.gold, color: '#111827', fontWeight: 950 }}>{saving ? 'Saving…' : 'Save schedule'}</Button>
       </DialogActions>
     </Dialog>
