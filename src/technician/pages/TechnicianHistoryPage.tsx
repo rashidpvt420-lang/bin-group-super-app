@@ -25,6 +25,7 @@ export default function TechnicianHistoryPage() {
     const [history, setHistory] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [loadError, setLoadError] = useState('');
+    const [historyMayBeTruncated, setHistoryMayBeTruncated] = useState(false);
     // N-35: success / SLA compliance are null when there is no data to measure.
     const [stats, setStats] = useState<TechnicianHistoryStats>(() => computeTechnicianHistoryStats([]));
 
@@ -41,6 +42,7 @@ export default function TechnicianHistoryPage() {
 
         const unsub = onSnapshot(q, (snap) => {
             const docs: any[] = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+            setHistoryMayBeTruncated(snap.size >= 50);
             setHistory(docs);
 
             setStats(computeTechnicianHistoryStats(docs));
@@ -110,7 +112,7 @@ export default function TechnicianHistoryPage() {
                                 <History size={32} />
                             </Box>
                             <Box>
-                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900 }}>TOTAL MISSIONS</Typography>
+                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900 }}>MISSIONS IN LOADED HISTORY</Typography>
                                 <Typography variant="h5" fontWeight="950" color="#FFF">{stats.total}</Typography>
                             </Box>
                         </Stack>
@@ -118,6 +120,7 @@ export default function TechnicianHistoryPage() {
                 </Grid>
             </Paper>
 
+            {historyMayBeTruncated && <Alert severity="warning" data-testid="technician-history-capped" sx={{ mb: 3 }}>Only the latest 50 completed missions are loaded. Older history is not included in the displayed KPIs.</Alert>}
             <Typography variant="h6" fontWeight="950" color="#FFF" sx={{ mb: 4, display: 'flex', alignItems: 'center', gap: 2 }}>
                 <Calendar size={20} color={binThemeTokens.gold} /> MISSION LOG
             </Typography>
