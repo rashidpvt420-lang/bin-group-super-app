@@ -305,7 +305,7 @@ export default function OwnerFinancialsPage() {
                         )}
                         sx={{ borderColor: binThemeTokens.border, color: binThemeTokens.textPrimary, fontWeight: 900, borderRadius: 3 }}
                     >
-                        {tx('owner.fin.export_txn', payoutHistoryComplete ? 'Export all transactions' : 'Export disabled until full history loads')}
+                        {tx('owner.fin.export_txn', 'Export transactions')}
                     </Button>
                 </Stack>
             </Box>
