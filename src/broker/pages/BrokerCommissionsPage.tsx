@@ -5,7 +5,7 @@ import {
   TableHead, TableRow, TextField, Tooltip, Typography, alpha,
 } from '@mui/material';
 import { Clock, Download, ExternalLink, Info, Send, ShieldCheck, TrendingUp, Wallet } from 'lucide-react';
-import { collection, db, documentId, functions, getDocs, httpsCallable, limit, onSnapshot, orderBy, query, startAfter, where } from '../../lib/firebase';
+import { collection, db, functions, getDocs, httpsCallable, limit, onSnapshot, orderBy, query, startAfter, where } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
@@ -61,7 +61,7 @@ export default function BrokerCommissionsPage() {
     setCommissions([]);
     setHasMoreCommissions(false);
     try {
-      const snapshot = await getDocs(query(collection(db, 'broker_commissions'), where('brokerId', '==', user.uid), orderBy('createdAt', 'desc'), orderBy(documentId(), 'asc'), limit(50)));
+      const snapshot = await getDocs(query(collection(db, 'broker_commissions'), where('brokerId', '==', user.uid), orderBy('createdAt', 'desc'), limit(50)));
       commissionsCursorRef.current = snapshot.docs[snapshot.docs.length - 1] || null;
       setHasMoreCommissions(snapshot.size >= 50);
       setCommissions(snapshot.docs.map((document) => ({ id: document.id, ...document.data() })));
@@ -86,7 +86,7 @@ export default function BrokerCommissionsPage() {
     if (!user?.uid || !commissionsCursorRef.current || !hasMoreCommissions || loadingMoreCommissions) return;
     setLoadingMoreCommissions(true);
     try {
-      const page = await getDocs(query(collection(db, 'broker_commissions'), where('brokerId', '==', user.uid), orderBy('createdAt', 'desc'), orderBy(documentId(), 'asc'), startAfter(commissionsCursorRef.current), limit(50)));
+      const page = await getDocs(query(collection(db, 'broker_commissions'), where('brokerId', '==', user.uid), orderBy('createdAt', 'desc'), startAfter(commissionsCursorRef.current), limit(50)));
       const rows = page.docs.map((document) => ({ id: document.id, ...document.data() }));
       setCommissions((current) => {
         const merged = new Map<string, any>(current.map((row) => [row.id, row] as const));
