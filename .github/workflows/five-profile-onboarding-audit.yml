@@ -15,6 +15,7 @@ on:
       - 'DEPLOY.md'
       - 'docs/DEPLOYMENT.md'
       - 'docs/RELEASE_BLOCKERS.md'
+      - 'docs/OPERATIONS_ONLY_CHECKLIST.md'
       - 'docs/FULL_FIVE_PROFILE_AUDIT.md'
       - 'docs/PROPERTY_ONBOARDING_AUDIT.md'
       - 'docs/POST_LAUNCH_MONITORING.md'

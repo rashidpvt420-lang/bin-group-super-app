@@ -111,3 +111,19 @@ test('post-deployment monitoring never claims launch or permits bypass deploymen
   assert.doesNotMatch(monitoring, /^\s*firebase\s+deploy\b/im);
   assert.match(monitoring, /cannot authorize pilot eligibility, hard-clearance or public launch/i);
 });
+
+
+test('retired operations checklist cannot instruct a live Stripe Checkout in Phase 1', async () => {
+  const retiredCopy = await read('docs/OPERATIONS_ONLY_CHECKLIST.md');
+  const canonical = await read('OPERATIONS_ONLY_CHECKLIST.md');
+
+  assert.match(retiredCopy, /historical copy is intentionally retired/i);
+  assert.match(retiredCopy, /Use the canonical checklist instead/i);
+  assert.match(retiredCopy, /Cash\/Cheque only/i);
+  assert.match(retiredCopy, /Bank Transfer, Card and Stripe are disabled/i);
+  assert.doesNotMatch(retiredCopy, /Execute a real AED Checkout|live API and webhook secret versions|checkout\.session\.completed/i);
+
+  assert.match(canonical, /Current payment authority:.*Cash or Cheque only/i);
+  assert.match(canonical, /Stripe secrets are not required by the active Phase 1/i);
+  assert.match(canonical, /Bank Transfer disabled and Stripe\/Card disabled/i);
+});
