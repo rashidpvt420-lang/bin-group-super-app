@@ -36,9 +36,9 @@ Findings:
 - Owner command-strip counts use 100 approval requests and 150 maintenance tickets. Before this PR, reaching either limit silently understated counts.
 - Owner Approval Center uses 50 approval requests and 150 tickets. Before this PR, it could display an empty state without explaining that older records might be outside the query.
 
-This PR makes both capped sources publish an explicit incompleteness warning, prevents a false “nothing needs you” state when counts are capped, and suppresses a potentially incomplete repair KPI.
+This PR makes both capped dashboard sources publish an explicit incompleteness warning, prevents a false “nothing needs you” state when counts are capped, and suppresses a potentially incomplete repair KPI. It also adds cursor-based Load Older pages to the Owner Approval Center for quote requests and ticket sign-offs.
 
-Residual: the approval-center and command-count data still need cursor pagination/server aggregates to display complete older history; this PR makes the limits visible rather than pretending to have removed them.
+Residual: dashboard command-strip counts remain bounded and are marked incomplete at the cap. A server aggregate or cursor-backed count is still needed for complete portfolio-wide totals.
 
 ### Tenant
 
@@ -48,7 +48,7 @@ Covered by current production E2E: a real tenant photo maintenance request; Tena
 
 Live launch-audit failure: the emergency-route test navigated to `/tenant/emergency`, but after its fixed 1.5-second wait the page was still displaying the global identity-authentication loader. The assertion then searched the loader text for emergency content. The emergency page itself was not shown to have crashed or rejected the tenant. The following two serial Tenant tests were skipped after this failure.
 
-This PR makes the shared Tenant health assertion wait up to 30 seconds for the identity loader to clear before evaluating route content. A persistent loader will still fail with a clear timeout; it is not treated as a pass.
+This PR makes Owner, Tenant and Technician route assertions wait up to 30 seconds for the identity loader to clear before evaluating route content. Broker already had a resolved-shell wait. A persistent loader still fails with a timeout; it is not treated as a pass.
 
 Residual: rerun the live Tenant route audit on the new exact SHA, confirm correction-history and AR/EN tests execute (not skipped), and verify wrong-unit reads/writes are denied against production test identities.
 
@@ -59,10 +59,10 @@ Expected lifecycle: eligible and active staff identity; duty and dispatch eligib
 Covered by current production E2E: assignment, push-state recording, mission completion with network recovery, denied-location and poor-GPS fail-closed behavior, offline EN_ROUTE replay.
 
 Findings:
-- Technician history reads only the latest 50 completed/closed/disputed tickets and computes visible KPIs from those rows. It previously labelled the count as total missions without indicating the data window.
-- This PR adds a cap warning and renames the KPI to make clear that it is based on the loaded history.
+- Technician history initially reads the latest 50 completed/closed/disputed tickets and computes KPIs from those rows. It previously labelled the count as total missions without indicating the data window.
+- This PR adds cursor-based Load Older pages, recalculates KPIs across loaded pages, and explicitly labels the KPI scope.
 
-Residual: full history cursor pagination, physical Android installation binding, Play Integrity, mocked-location rejection, device GPS/geofence accuracy, physical camera upload, offline replay on device, and real FCM delivery/deep-link verification remain separate device gates.
+Residual: physical Android installation binding, Play Integrity, mocked-location rejection, device GPS/geofence accuracy, physical camera upload, offline replay on device, and real FCM delivery/deep-link verification remain separate device gates.
 
 ### Broker
 
@@ -71,9 +71,10 @@ Expected lifecycle: verified broker identity and licence; approved listing/refer
 Covered by current production E2E: lead submission, referral conversion, deterministic commission, real mailbox OTP, and single-use payout request.
 
 Findings:
-- Commission history and payout request listeners are currently unbounded. This avoids a silent first-page cap but can grow in memory use, read volume and rendering cost as a broker's history grows.
+- Commission history and payout request listeners were unbounded, increasing read volume and client memory as a broker's history grows.
+- This PR adds stable 50-row cursor pages for commission history and limits the payout-status listener to the latest request. Totals and payout requests are blocked until more pages are loaded.
 
-Residual: cursor pagination with stable ordering; validate OTP expiry, incorrect/replayed code, changed commission ID set/amount and pending/rejected/hold cases; test private KYC/bank detail reviewer permissions and document leakage against real role accounts.
+Residual: validate OTP expiry, incorrect/replayed code, changed commission ID set/amount and pending/rejected/hold cases; test private KYC/bank detail reviewer permissions and document leakage against real role accounts.
 
 ### Admin / Finance / Operations
 
@@ -82,10 +83,10 @@ Expected lifecycle: MFA-protected authentication; explicit role/module access; s
 Covered by current production E2E: real Founder MFA and protected Admin business workflow; role provisioning; payment review/approval lifecycle; current-commit five-role authentication/business evidence. Phase 1 payment controls remain Cash/Cheque only; Stripe and bank-transfer checkout are not enabled.
 
 Findings:
-- Payment approvals are queried in two separate 50-row queues; receipt repairs are capped at 30. Before this PR, the page did not disclose reaching a query limit.
-- This PR adds a visible warning naming which queue reached its cap so Finance cannot mistake the current subset for a complete queue.
+- Payment approvals were queried in two separate 50-row queues; receipt repairs were capped at 30. Before this PR, the page did not disclose reaching a query limit.
+- This PR adds cursor-based Load Older pages to both Finance payment queues and the receipt-repair queue.
 
-Residual: full cursor pagination for each Finance queue; a staff-role × module × route allow/deny matrix using real claims and MFA; test stale claims after role changes/suspension; reconcile live transaction, invoice, receipt-hash and ledger totals.
+Residual: a staff-role × module × route allow/deny matrix using real claims and MFA; test stale claims after role changes/suspension; reconcile live transaction, invoice, receipt-hash and ledger totals.
 
 ## Shared security and release requirements
 
@@ -99,11 +100,12 @@ Residual: full cursor pagination for each Finance queue; a staff-role × module 
 ## Changes proposed in this re-audit PR
 
 1. Make Owner dashboard count limits explicit and prevent false “all clear” / complete KPI readings when the source query reached its cap.
-2. Warn in Owner Approval Center when either source query reaches its cap and suppress a false empty-state message.
-3. Warn in Admin Finance when a pending, paid-awaiting-approval or receipt-repair queue reaches its query cap.
-4. Mark Technician history KPIs as covering the loaded 50-row window and warn when the window reaches its cap.
-5. Make the Tenant live launch assertion wait for identity resolution rather than using a fixed 1.5-second timing assumption.
-6. Add regression tests for the above cap and loading-state contracts.
+2. Add cursor pagination to Owner Approval Center quote requests and ticket sign-offs.
+3. Add cursor pagination to Finance pending payments, paid-awaiting-approval payments and receipt repairs.
+4. Add cursor pagination to Technician history and recalculate KPIs across loaded pages.
+5. Add cursor pagination to Broker commissions and limit payout status to the latest request; block payout requests while a partial history remains.
+6. Make Owner, Tenant and Technician launch assertions wait for identity resolution; Broker already had this guard.
+7. Add regression tests for pagination, query caps and authentication loading state.
 
 ## Release decision
 
