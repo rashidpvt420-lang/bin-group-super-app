@@ -2,7 +2,7 @@ import { initializeApp, getApps, getApp } from 'firebase/app';
 import {
     getFirestore, collection, doc, getDoc, getDocs, setDoc, addDoc as firestoreAddDoc,
     updateDoc, query, where, orderBy, limit, onSnapshot, serverTimestamp,
-    Timestamp, deleteDoc, writeBatch, or, arrayUnion
+    Timestamp, deleteDoc, writeBatch, or, arrayUnion, startAfter, documentId
 } from 'firebase/firestore';
 
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
@@ -329,7 +329,7 @@ export const getAdminMapsAppCheckToken = async (): Promise<{ token: string }> =>
 export {
     app, db, auth, storage, functions, httpsCallable, getMessaging, getToken, isSupported,
     onAuthStateChanged,
-    collection, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, query, where, orderBy, limit, onSnapshot, serverTimestamp, Timestamp, deleteDoc, writeBatch, or, arrayUnion,
+    collection, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, query, where, orderBy, limit, onSnapshot, serverTimestamp, Timestamp, deleteDoc, writeBatch, or, arrayUnion, startAfter, documentId,
     ref, uploadBytes, getDownloadURL, signInWithRedirect, signInWithEmailAndPassword, setPersistence, browserLocalPersistence
 };
 export type { User };

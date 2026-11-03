@@ -5,7 +5,7 @@ import {
     TableHead, TableRow, TextField, Typography,
 } from '@mui/material';
 import { CheckCircle, FileCheck2, RefreshCw, Upload, XCircle } from 'lucide-react';
-import { collection, db, functions, httpsCallable, limit, onSnapshot, orderBy, query, where } from '../../lib/firebase';
+import { collection, db, documentId, functions, getDocs, httpsCallable, limit, onSnapshot, orderBy, query, startAfter, where } from '../../lib/firebase';
 
 type PaymentRecord = {
     id: string;
@@ -138,8 +138,42 @@ export default function PaymentApprovalsPage() {
     const [internalNotes, setInternalNotes] = React.useState('');
     const [receiptFile, setReceiptFile] = React.useState<File | null>(null);
     const [rejectReason, setRejectReason] = React.useState('');
+    const [queueLimitWarnings, setQueueLimitWarnings] = React.useState<string[]>([]);
+    const [hasMorePending, setHasMorePending] = React.useState(false);
+    const [hasMorePaid, setHasMorePaid] = React.useState(false);
+    const [hasMoreReceipts, setHasMoreReceipts] = React.useState(false);
+    const [loadingQueue, setLoadingQueue] = React.useState('');
+
+    const pendingCursorRef = React.useRef<any>(null);
+    const paidCursorRef = React.useRef<any>(null);
+    const receiptCursorRef = React.useRef<any>(null);
+    const pendingOlderLoadedRef = React.useRef(false);
+    const paidOlderLoadedRef = React.useRef(false);
+    const receiptOlderLoadedRef = React.useRef(false);
+    const pendingOlderRowsRef = React.useRef<PaymentRecord[]>([]);
+    const paidOlderRowsRef = React.useRef<PaymentRecord[]>([]);
+    const receiptOlderRowsRef = React.useRef<ReceiptRepairRecord[]>([]);
+    const setQueueLimitWarning = React.useCallback((source: string, reachedLimit: boolean) => {
+        setQueueLimitWarnings((current) => reachedLimit
+            ? (current.includes(source) ? current : [...current, source])
+            : current.filter((item) => item !== source));
+    }, []);
 
     React.useEffect(() => {
+        pendingCursorRef.current = null;
+        paidCursorRef.current = null;
+        receiptCursorRef.current = null;
+        pendingOlderLoadedRef.current = false;
+        paidOlderLoadedRef.current = false;
+        receiptOlderLoadedRef.current = false;
+        pendingOlderRowsRef.current = [];
+        paidOlderRowsRef.current = [];
+        receiptOlderRowsRef.current = [];
+        setRows([]);
+        setReceiptRepairs([]);
+        setHasMorePending(false);
+        setHasMorePaid(false);
+        setHasMoreReceipts(false);
         let pendingRows: PaymentRecord[] = [];
         let paidAwaitingApprovalRows: PaymentRecord[] = [];
         let pendingReady = false;
@@ -148,7 +182,7 @@ export default function PaymentApprovalsPage() {
         const publish = () => {
             if (!pendingReady || !paidReady) return;
             const merged = new Map<string, PaymentRecord>();
-            [...pendingRows, ...paidAwaitingApprovalRows].forEach((row) => merged.set(row.id, row));
+            [...pendingOlderRowsRef.current, ...paidOlderRowsRef.current, ...pendingRows, ...paidAwaitingApprovalRows].forEach((row) => merged.set(row.id, row));
             setRows([...merged.values()].sort((a, b) => timestampMillis(b) - timestampMillis(a)));
             setLoading(false);
             setError(null);
@@ -164,20 +198,39 @@ export default function PaymentApprovalsPage() {
         const receiptRepairQuery = query(
             collection(db, 'invoices'),
             where('documentState', 'in', ['PAID_RECEIPT_FAILED', 'PAID_RECEIPT_PENDING']),
+            orderBy(documentId(), 'asc'),
             limit(30),
         );
         const unsubscribePending = onSnapshot(pendingQuery, (snapshot) => {
+            if (!pendingOlderLoadedRef.current) pendingCursorRef.current = snapshot.docs[snapshot.docs.length - 1] || null;
+            if (!pendingOlderLoadedRef.current) {
+                setHasMorePending(snapshot.size >= 50);
+                setQueueLimitWarning('Pending payment queue', snapshot.size >= 50);
+            }
             pendingRows = snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...(docSnap.data() as any) }));
             pendingReady = true;
             publish();
         }, handleError);
         const unsubscribePaidAwaitingApproval = onSnapshot(paidAwaitingApprovalQuery, (snapshot) => {
+            if (!paidOlderLoadedRef.current) paidCursorRef.current = snapshot.docs[snapshot.docs.length - 1] || null;
+            if (!paidOlderLoadedRef.current) {
+                setHasMorePaid(snapshot.size >= 50);
+                setQueueLimitWarning('Paid awaiting approval queue', snapshot.size >= 50);
+            }
             paidAwaitingApprovalRows = snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...(docSnap.data() as any) })).filter((row) => row.unlocksDashboard !== true);
             paidReady = true;
             publish();
         }, handleError);
         const unsubscribeReceiptRepairs = onSnapshot(receiptRepairQuery, (snapshot) => {
-            setReceiptRepairs(snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...(docSnap.data() as any) })));
+            if (!receiptOlderLoadedRef.current) receiptCursorRef.current = snapshot.docs[snapshot.docs.length - 1] || null;
+            if (!receiptOlderLoadedRef.current) {
+                setHasMoreReceipts(snapshot.size >= 30);
+                setQueueLimitWarning('Receipt repair queue', snapshot.size >= 30);
+            }
+            const firstPage = snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...(docSnap.data() as any) }));
+            const merged = new Map<string, ReceiptRepairRecord>();
+            [...receiptOlderRowsRef.current, ...firstPage].forEach((row) => merged.set(row.id, row));
+            setReceiptRepairs([...merged.values()]);
         }, (err) => {
             console.error('[ADMIN_PAYMENTS] receipt repair stream failed', err);
         });
@@ -188,6 +241,83 @@ export default function PaymentApprovalsPage() {
             unsubscribeReceiptRepairs();
         };
     }, []);
+
+    const loadOlderPaymentQueue = async (queue: 'pending' | 'paid') => {
+        const cursor = queue === 'pending' ? pendingCursorRef.current : paidCursorRef.current;
+        const hasMore = queue === 'pending' ? hasMorePending : hasMorePaid;
+        if (!cursor || !hasMore || loadingQueue) return;
+        setLoadingQueue(queue);
+        try {
+            const pageQuery = queue === 'pending'
+                ? query(collection(db, 'payment_transactions'), where('status', 'in', PENDING_PAYMENT_STATUSES), orderBy('createdAt', 'desc'), startAfter(cursor), limit(50))
+                : query(collection(db, 'payment_transactions'), where('status', '==', 'PAID'), where('adminApprovalRequired', '==', true), startAfter(cursor), limit(50));
+            const page = await getDocs(pageQuery);
+            const rows = page.docs.map((docSnap) => ({ id: docSnap.id, ...(docSnap.data() as any) })).filter((row) => queue !== 'paid' || row.unlocksDashboard !== true);
+            const target = queue === 'pending' ? pendingOlderRowsRef : paidOlderRowsRef;
+            const mergedOlder = new Map<string, PaymentRecord>(target.current.map((row) => [row.id, row] as const));
+            rows.forEach((row) => mergedOlder.set(row.id, row));
+            target.current = [...mergedOlder.values()];
+            if (page.docs.length > 0) {
+                if (queue === 'pending') { pendingCursorRef.current = page.docs[page.docs.length - 1]; pendingOlderLoadedRef.current = true; }
+                else { paidCursorRef.current = page.docs[page.docs.length - 1]; paidOlderLoadedRef.current = true; }
+            }
+            if (queue === 'pending') {
+                setHasMorePending(page.size >= 50);
+                setQueueLimitWarning('Pending payment queue', page.size >= 50);
+            } else {
+                setHasMorePaid(page.size >= 50);
+                setQueueLimitWarning('Paid awaiting approval queue', page.size >= 50);
+            }
+            setRows((current) => {
+                const merged = new Map<string, PaymentRecord>(current.map((row) => [row.id, row] as const));
+                rows.forEach((row) => merged.set(row.id, row));
+                return [...merged.values()].sort((a, b) => timestampMillis(b) - timestampMillis(a));
+            });
+        } catch (error: any) {
+            setError(error?.message || 'Unable to load older payment approvals.');
+        } finally {
+            setLoadingQueue('');
+        }
+    };
+
+    const loadOlderReceipts = async () => {
+        if (!receiptCursorRef.current || !hasMoreReceipts || loadingQueue) return;
+        setLoadingQueue('receipts');
+        try {
+            const page = await getDocs(query(
+                collection(db, 'invoices'),
+                where('documentState', 'in', ['PAID_RECEIPT_FAILED', 'PAID_RECEIPT_PENDING']),
+                orderBy(documentId(), 'asc'),
+                startAfter(receiptCursorRef.current),
+                limit(30),
+            ));
+            const rows = page.docs.map((docSnap) => ({ id: docSnap.id, ...(docSnap.data() as any) }));
+            const mergedOlder = new Map<string, ReceiptRepairRecord>(receiptOlderRowsRef.current.map((row) => [row.id, row] as const));
+            rows.forEach((row) => mergedOlder.set(row.id, row));
+            receiptOlderRowsRef.current = [...mergedOlder.values()];
+            setReceiptRepairs((current) => {
+                const merged = new Map<string, ReceiptRepairRecord>(current.map((row) => [row.id, row] as const));
+                rows.forEach((row) => merged.set(row.id, row));
+                return [...merged.values()];
+            });
+            if (page.docs.length > 0) {
+                receiptCursorRef.current = page.docs[page.docs.length - 1];
+                receiptOlderLoadedRef.current = true;
+            }
+            setHasMoreReceipts(page.size >= 30);
+            setQueueLimitWarning('Receipt repair queue', page.size >= 30);
+        } catch (error: any) {
+            setError(error?.message || 'Unable to load older receipt repairs.');
+        } finally {
+            setLoadingQueue('');
+        }
+    };
+
+    const removeFromOlderQueues = (paymentId: string) => {
+        pendingOlderRowsRef.current = pendingOlderRowsRef.current.filter((row) => row.id !== paymentId);
+        paidOlderRowsRef.current = paidOlderRowsRef.current.filter((row) => row.id !== paymentId);
+        setRows((current) => current.filter((row) => row.id !== paymentId));
+    };
 
     const openApproveDialog = React.useCallback((row: PaymentRecord) => {
         setApprovalTarget(row);
@@ -254,6 +384,7 @@ export default function PaymentApprovalsPage() {
                     internalNotes: internalNotes.trim(), contentType: receiptFile?.type,
                     encodedDocument: receiptFile ? await fileToBase64(receiptFile) : '' });
                 setNotice('Design Cash/Cheque deposit verified. Engineer handoff remains a separate protected action; no Owner account was activated.');
+                removeFromOlderQueues(approvalTarget.id);
                 setApprovalTarget(null);
                 setReceiptFile(null);
                 return;
@@ -285,6 +416,7 @@ export default function PaymentApprovalsPage() {
                 internalNotes: internalNotes.trim(),
             });
             setNotice(rent ? 'Rent payment verified.' : '15% mobilisation verified. Contract and properties activated; Owner dashboard unlocked.');
+            removeFromOlderQueues(approvalTarget.id);
             setApprovalTarget(null);
             setReceiptFile(null);
         } catch (err: any) {
@@ -311,6 +443,7 @@ export default function PaymentApprovalsPage() {
                 await callable({ paymentId: rejectTarget.id, reason, returnReason: reason, reviewNote: reason, internalNotes: reason });
             }
             setNotice('Payment evidence returned to the Owner with the Admin reason.');
+            removeFromOlderQueues(rejectTarget.id);
             setRejectTarget(null);
             setRejectReason('');
         } catch (err: any) {
@@ -338,6 +471,8 @@ export default function PaymentApprovalsPage() {
             const callable = httpsCallable(functions, 'adminApprovePayment');
             await callable({ paymentId });
             setNotice(`Paid receipt repaired for invoice ${invoice.id}.`);
+            receiptOlderRowsRef.current = receiptOlderRowsRef.current.filter((row) => row.id !== invoice.id);
+            setReceiptRepairs((current) => current.filter((row) => row.id !== invoice.id));
         } catch (err: any) {
             console.error('[ADMIN_PAYMENTS] receipt repair failed', err);
             setError((typeof err?.details === 'string' && err.details) || err?.message || 'Receipt repair failed.');
@@ -358,6 +493,7 @@ export default function PaymentApprovalsPage() {
             </Stack>
 
             <Alert severity="warning" sx={{ mb: 3 }}>For five-page Owner applications, final approval is blocked until all property inspections are complete and the exact locked 15% mobilisation amount has immutable receipt evidence.</Alert>
+            {queueLimitWarnings.length > 0 && <Alert severity="warning" data-testid="admin-payment-queue-capped" sx={{ mb: 3 }}>At least one Finance queue reached its display limit ({queueLimitWarnings.join(', ')}). Older items may be hidden. Do not treat the visible rows or an empty subset as a complete queue until the full queue is reviewed.</Alert>}
             {error && <Alert severity="error" onClose={() => setError(null)} sx={{ mb: 3 }}>{error}</Alert>}
             {notice && <Alert severity="success" onClose={() => setNotice(null)} sx={{ mb: 3 }}>{notice}</Alert>}
 
@@ -399,6 +535,7 @@ export default function PaymentApprovalsPage() {
                             </Stack>
                         ))}
                     </Stack>
+                    {hasMoreReceipts && <Button variant="outlined" sx={{ mt: 2 }} disabled={Boolean(loadingQueue)} onClick={() => void loadOlderReceipts()}>{loadingQueue === 'receipts' ? 'Loading…' : 'Load older receipt repairs'}</Button>}
                 </Paper>
             )}
 
@@ -430,6 +567,10 @@ export default function PaymentApprovalsPage() {
                         </Table>
                     </TableContainer>
                 )}
+                {!loading && (hasMorePending || hasMorePaid) && <Stack direction="row" spacing={1} sx={{ p: 2 }}>
+                    {hasMorePending && <Button variant="outlined" disabled={Boolean(loadingQueue)} onClick={() => void loadOlderPaymentQueue('pending')}>{loadingQueue === 'pending' ? 'Loading…' : 'Load older pending payments'}</Button>}
+                    {hasMorePaid && <Button variant="outlined" disabled={Boolean(loadingQueue)} onClick={() => void loadOlderPaymentQueue('paid')}>{loadingQueue === 'paid' ? 'Loading…' : 'Load older paid approvals'}</Button>}
+                </Stack>}
             </Paper>
 
             <Dialog data-testid="admin-payment-approval-dialog" open={Boolean(approvalTarget)} onClose={() => !busyId && setApprovalTarget(null)} fullWidth maxWidth="sm" PaperProps={{ sx: { bgcolor: '#020617', color: '#fff', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 4 } }}>

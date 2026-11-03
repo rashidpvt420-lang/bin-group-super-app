@@ -5,7 +5,7 @@ import {
   TableHead, TableRow, TextField, Tooltip, Typography, alpha,
 } from '@mui/material';
 import { Clock, Download, ExternalLink, Info, Send, ShieldCheck, TrendingUp, Wallet } from 'lucide-react';
-import { collection, db, functions, getDocs, httpsCallable, onSnapshot, orderBy, query, where } from '../../lib/firebase';
+import { collection, db, functions, getDocs, httpsCallable, limit, onSnapshot, orderBy, query, startAfter, where } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { binThemeTokens } from '../../theme/binGroupTheme';
@@ -37,6 +37,9 @@ export default function BrokerCommissionsPage() {
   const [notice, setNotice] = useState<Notice | null>(null);
   const [otp, setOtp] = useState<OtpState>(emptyOtp);
   const [showStatement, setShowStatement] = useState(false);
+  const [hasMoreCommissions, setHasMoreCommissions] = useState(false);
+  const [loadingMoreCommissions, setLoadingMoreCommissions] = useState(false);
+  const commissionsCursorRef = React.useRef<any>(null);
 
   const payableCommissions = useMemo(() => commissions.filter((commission) => {
     const status = String(commission.status || '').toLowerCase();
@@ -54,8 +57,14 @@ export default function BrokerCommissionsPage() {
 
   const fetchCommissions = async () => {
     if (!user?.uid) { setLoading(false); return; }
+    setLoading(true);
+    commissionsCursorRef.current = null;
+    setCommissions([]);
+    setHasMoreCommissions(false);
     try {
-      const snapshot = await getDocs(query(collection(db, 'broker_commissions'), where('brokerId', '==', user.uid), orderBy('createdAt', 'desc')));
+      const snapshot = await getDocs(query(collection(db, 'broker_commissions'), where('brokerId', '==', user.uid), orderBy('createdAt', 'desc'), limit(50)));
+      commissionsCursorRef.current = snapshot.docs[snapshot.docs.length - 1] || null;
+      setHasMoreCommissions(snapshot.size >= 50);
       setCommissions(snapshot.docs.map((document) => ({ id: document.id, ...document.data() })));
     } catch (error) {
       console.error('[BrokerCommissions] commission query failed:', error);
@@ -68,13 +77,31 @@ export default function BrokerCommissionsPage() {
   useEffect(() => {
     void fetchCommissions();
     if (!user?.uid) return () => undefined;
-    const unsubscribe = onSnapshot(query(collection(db, 'broker_payout_requests'), where('brokerId', '==', user.uid)), (snapshot) => {
-      const rows = snapshot.docs.map((document) => ({ id: document.id, ...document.data() }));
-      rows.sort((a: any, b: any) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0));
-      setPayoutRequests(rows);
+    const unsubscribe = onSnapshot(query(collection(db, 'broker_payout_requests'), where('brokerId', '==', user.uid), orderBy('createdAt', 'desc'), limit(1)), (snapshot) => {
+      setPayoutRequests(snapshot.docs.map((document) => ({ id: document.id, ...document.data() })));
     }, (error) => console.warn('[BrokerCommissions] payout listener failed:', error));
     return () => unsubscribe();
   }, [user?.uid]);
+
+  const loadOlderCommissions = async () => {
+    if (!user?.uid || !commissionsCursorRef.current || !hasMoreCommissions || loadingMoreCommissions) return;
+    setLoadingMoreCommissions(true);
+    try {
+      const page = await getDocs(query(collection(db, 'broker_commissions'), where('brokerId', '==', user.uid), orderBy('createdAt', 'desc'), startAfter(commissionsCursorRef.current), limit(50)));
+      const rows = page.docs.map((document) => ({ id: document.id, ...document.data() }));
+      setCommissions((current) => {
+        const merged = new Map<string, any>(current.map((row) => [row.id, row] as const));
+        rows.forEach((row) => merged.set(row.id, row));
+        return [...merged.values()];
+      });
+      if (page.docs.length > 0) commissionsCursorRef.current = page.docs[page.docs.length - 1];
+      setHasMoreCommissions(page.size >= 50);
+    } catch (error: any) {
+      setNotice({ type: 'error', text: error?.message || 'Unable to load older commission history.' });
+    } finally {
+      setLoadingMoreCommissions(false);
+    }
+  };
 
   const requestPayoutOtp = async () => {
     if (!payableIds.length) { setNotice({ type: 'warning', text: 'No approved unpaid commissions are available for payout.' }); return; }
@@ -129,7 +156,7 @@ export default function BrokerCommissionsPage() {
       subtitle="Verified commission settlement and payout tracking"
       loading={loading}
       actions={<Stack direction={{ xs: 'column', sm: isRTL ? 'row-reverse' : 'row' }} spacing={1.5}>
-        <Button data-testid="broker-payout-request-otp" variant="contained" startIcon={<Send size={18} />} disabled={payoutBusy || payableIds.length === 0} onClick={requestPayoutOtp} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 900 }}>
+        <Button data-testid="broker-payout-request-otp" variant="contained" startIcon={<Send size={18} />} disabled={payoutBusy || payableIds.length === 0 || hasMoreCommissions} onClick={requestPayoutOtp} sx={{ bgcolor: binThemeTokens.gold, color: '#000', fontWeight: 900 }}>
           {payoutBusy ? 'PROCESSING...' : `REQUEST PAYOUT (${payableIds.length})`}
         </Button>
         <Button variant="outlined" startIcon={<Download size={18} />} onClick={() => setShowStatement((v) => !v)} aria-expanded={showStatement} data-testid="broker-export-statement">OFFICIAL STATEMENT</Button>
@@ -140,9 +167,9 @@ export default function BrokerCommissionsPage() {
 
       <Grid container spacing={3} sx={{ mb: 4 }}>
         {[
-          { label: 'PENDING SETTLEMENT', value: stats.pending, icon: <Clock size={22} />, color: binThemeTokens.goldText },
-          { label: 'APPROVED FOR PAYOUT', value: stats.approved, icon: <ShieldCheck size={22} />, color: '#3b82f6' },
-          { label: 'LIFETIME EARNED', value: stats.totalPaid, icon: <TrendingUp size={22} />, color: '#10b981' },
+          { label: 'PENDING SETTLEMENT (LOADED)', value: stats.pending, icon: <Clock size={22} />, color: binThemeTokens.goldText },
+          { label: 'APPROVED FOR PAYOUT (LOADED)', value: stats.approved, icon: <ShieldCheck size={22} />, color: '#3b82f6' },
+          { label: 'PAID IN LOADED HISTORY', value: stats.totalPaid, icon: <TrendingUp size={22} />, color: '#10b981' },
         ].map((item) => <Grid item xs={12} md={4} key={item.label}><Paper sx={{ p: 3, borderRadius: 4, bgcolor: alpha(item.color, 0.05), border: `1px solid ${alpha(item.color, 0.15)}` }}><Stack direction="row" justifyContent="space-between"><Box><Typography variant="caption" fontWeight={900}>{item.label}</Typography><Typography variant="h4" fontWeight={950}>AED {item.value.toLocaleString()}</Typography></Box>{item.icon}</Stack></Paper></Grid>)}
       </Grid>
 
@@ -150,9 +177,11 @@ export default function BrokerCommissionsPage() {
         <Typography variant="overline" sx={{ color: binThemeTokens.goldText, fontWeight: 950 }}>SECURE PAYOUT WORKFLOW</Typography>
         <Typography variant="h6" fontWeight={950}>{payableIds.length ? `${payableIds.length} approved commission(s) ready` : 'No approved commission is payable'}</Typography>
         <Typography variant="body2" color="text.secondary"><Bi en={"Every request requires a short-lived, single-use code sent to the verified Broker email. The code is bound to the exact commissions and amount."} ar={"يتطلب كل طلب رمزاً لمرة واحدة قصير الصلاحية يُرسل إلى بريد الوسيط الموثق، ويرتبط الرمز بالعمولات والمبلغ المحددين."} /></Typography>
+        {hasMoreCommissions && <Alert severity="warning" sx={{ mt: 2 }}>Load all available commission pages before requesting payout. This prevents a partial history from being mistaken for the complete eligible payout set.</Alert>}
         {latestPayout && <Chip sx={{ mt: 2 }} label={String(latestPayout.status || 'PENDING_ADMIN_REVIEW').replaceAll('_', ' ').toUpperCase()} />}
       </Paper>
 
+      {hasMoreCommissions && <Alert severity="info" data-testid="broker-commissions-partial" sx={{ mb: 2 }}>Commission totals and payable actions currently cover the loaded records only. Load older commissions to include additional history.</Alert>}
       <TableContainer component={Paper} sx={{ borderRadius: 4, border: '1px solid #E5E7EB' }}>
         <Table>
           <TableHead><TableRow><TableCell>MISSION REF</TableCell><TableCell>SOURCE / PROPERTY</TableCell><TableCell>ALLOCATION</TableCell><TableCell>STATUS</TableCell><TableCell>SETTLEMENT</TableCell><TableCell align="right">ACTION</TableCell></TableRow></TableHead>
@@ -168,6 +197,7 @@ export default function BrokerCommissionsPage() {
           </TableBody>
         </Table>
       </TableContainer>
+      {hasMoreCommissions && <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2 }}><Button variant="outlined" disabled={loadingMoreCommissions} onClick={() => void loadOlderCommissions()}>{loadingMoreCommissions ? 'Loading…' : 'Load older commissions'}</Button></Box>}
 
       <Paper sx={{ mt: 4, p: 3, borderRadius: 4, bgcolor: alpha(binThemeTokens.gold, 0.03) }}><Stack direction="row" spacing={2}><Info size={20} /><Typography variant="body2"><Bi en={"Payments remain pending until Admin Finance approves and records the bank transfer."} ar={"تبقى المدفوعات معلقة حتى توافق الإدارة المالية وتسجل التحويل البنكي."} /></Typography></Stack></Paper>
 
