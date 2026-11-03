@@ -1,7 +1,7 @@
 import React from 'react';
 import { Alert, Box, Button, Card, CardContent, Chip, Grid, Stack, TextField, Typography } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
-import { auth, collection, db, functions, httpsCallable, limit, onSnapshot, orderBy, query, where } from '../../lib/firebase';
+import { auth, collection, db, documentId, functions, getDocs, httpsCallable, limit, onSnapshot, orderBy, query, startAfter, where } from '../../lib/firebase';
 import { binThemeTokens } from '../../theme/binGroupTheme';
 import { isOwnerPendingSignOff } from '../utils/ownerPendingSignOff';
 import { useOwnerPropertyLabels } from '../hooks/useOwnerPropertyLabels';
@@ -41,28 +41,43 @@ const decisions = [
 
 const submitDecision = httpsCallable(functions, 'submitOwnerApprovalDecision');
 const reviewTicketCompletion = httpsCallable(functions, 'ownerReviewTicketCompletion');
+const REQUEST_PAGE_SIZE = 50;
+const SIGN_OFF_PAGE_SIZE = 150;
 
 export default function OwnerApprovalCenterPage() {
   const navigate = useNavigate();
   const [items, setItems] = React.useState<ApprovalRequest[]>([]);
+  const [olderItems, setOlderItems] = React.useState<ApprovalRequest[]>([]);
   const [signOffs, setSignOffs] = React.useState<SignOffTicket[]>([]);
+  const [olderSignOffs, setOlderSignOffs] = React.useState<SignOffTicket[]>([]);
   const [notes, setNotes] = React.useState<Record<string, string>>({});
   const [notice, setNotice] = React.useState('');
   const [requestsError, setRequestsError] = React.useState('');
   const [signOffsError, setSignOffsError] = React.useState('');
   const [requestsMayBeTruncated, setRequestsMayBeTruncated] = React.useState(false);
   const [signOffsMayBeTruncated, setSignOffsMayBeTruncated] = React.useState(false);
+  const [requestsLoadingMore, setRequestsLoadingMore] = React.useState(false);
+  const [signOffsLoadingMore, setSignOffsLoadingMore] = React.useState(false);
+  const requestCursorRef = React.useRef<any>(null);
+  const ticketCursorRef = React.useRef<any>(null);
   const [submittingId, setSubmittingId] = React.useState('');
   const mutationInFlightRef = React.useRef(false);
   const ownerId = auth.currentUser?.uid || '';
   const { ticketPropertyLabel } = useOwnerPropertyLabels(ownerId);
+  const visibleItems = React.useMemo(() => Array.from(new Map([...items, ...olderItems].map((row) => [row.id, row])).values()), [items, olderItems]);
+  const visibleSignOffs = React.useMemo(() => Array.from(new Map([...signOffs, ...olderSignOffs].map((row) => [row.id, row])).values()), [signOffs, olderSignOffs]);
 
   React.useEffect(() => {
     if (!ownerId) return undefined;
-    const q = query(collection(db, 'owner_approval_requests'), where('ownerId', '==', ownerId), orderBy('createdAt', 'desc'), limit(50));
+    requestCursorRef.current = null;
+    ticketCursorRef.current = null;
+    setOlderItems([]);
+    setOlderSignOffs([]);
+    const q = query(collection(db, 'owner_approval_requests'), where('ownerId', '==', ownerId), orderBy('createdAt', 'desc'), limit(REQUEST_PAGE_SIZE));
     const unsubRequests = onSnapshot(q, (snap) => {
       const rows = snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<ApprovalRequest, 'id'>) }));
-      setRequestsMayBeTruncated(snap.size >= 50);
+      requestCursorRef.current = snap.docs[snap.docs.length - 1] || null;
+      setRequestsMayBeTruncated(snap.size >= REQUEST_PAGE_SIZE);
       setItems(rows);
       setRequestsError('');
       setNotes((current) => {
@@ -77,12 +92,13 @@ export default function OwnerApprovalCenterPage() {
       setItems([]);
     });
 
-    const ticketQuery = query(collection(db, 'maintenanceTickets'), where('ownerId', '==', ownerId), limit(150));
+    const ticketQuery = query(collection(db, 'maintenanceTickets'), where('ownerId', '==', ownerId), orderBy(documentId()), limit(SIGN_OFF_PAGE_SIZE));
     const unsubTickets = onSnapshot(ticketQuery, (snap) => {
       const rows = snap.docs
         .map((d) => ({ id: d.id, ...(d.data() as Omit<SignOffTicket, 'id'>) }))
         .filter((ticket) => isOwnerPendingSignOff(ticket));
-      setSignOffsMayBeTruncated(snap.size >= 150);
+      ticketCursorRef.current = snap.docs[snap.docs.length - 1] || null;
+      setSignOffsMayBeTruncated(snap.size >= SIGN_OFF_PAGE_SIZE);
       setSignOffs(rows);
       setSignOffsError('');
     }, (err) => {
@@ -98,6 +114,39 @@ export default function OwnerApprovalCenterPage() {
     };
   }, [ownerId]);
 
+  const loadOlderRequests = async () => {
+    if (!ownerId || !requestCursorRef.current || !requestsMayBeTruncated || requestsLoadingMore) return;
+    setRequestsLoadingMore(true);
+    try {
+      const page = await getDocs(query(collection(db, 'owner_approval_requests'), where('ownerId', '==', ownerId), orderBy('createdAt', 'desc'), startAfter(requestCursorRef.current), limit(REQUEST_PAGE_SIZE)));
+      const rows = page.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<ApprovalRequest, 'id'>) }));
+      setOlderItems((current) => Array.from(new Map([...current, ...rows].map((row) => [row.id, row])).values()));
+      rows.forEach((row) => setNotes((current) => current[row.id] === undefined ? { ...current, [row.id]: row.decisionNote || '' } : current));
+      requestCursorRef.current = page.docs[page.docs.length - 1] || requestCursorRef.current;
+      setRequestsMayBeTruncated(page.size >= REQUEST_PAGE_SIZE);
+    } catch (error: any) {
+      setRequestsError(error?.message || 'Unable to load older approval requests.');
+    } finally {
+      setRequestsLoadingMore(false);
+    }
+  };
+
+  const loadOlderSignOffs = async () => {
+    if (!ownerId || !ticketCursorRef.current || !signOffsMayBeTruncated || signOffsLoadingMore) return;
+    setSignOffsLoadingMore(true);
+    try {
+      const page = await getDocs(query(collection(db, 'maintenanceTickets'), where('ownerId', '==', ownerId), orderBy(documentId()), startAfter(ticketCursorRef.current), limit(SIGN_OFF_PAGE_SIZE)));
+      const rows = page.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<SignOffTicket, 'id'>) })).filter((ticket) => isOwnerPendingSignOff(ticket));
+      setOlderSignOffs((current) => Array.from(new Map([...current, ...rows].map((row) => [row.id, row])).values()));
+      ticketCursorRef.current = page.docs[page.docs.length - 1] || ticketCursorRef.current;
+      setSignOffsMayBeTruncated(page.size >= SIGN_OFF_PAGE_SIZE);
+    } catch (error: any) {
+      setSignOffsError(error?.message || 'Unable to load older ticket sign-offs.');
+    } finally {
+      setSignOffsLoadingMore(false);
+    }
+  };
+
   const decide = async (request: ApprovalRequest, decision: string) => {
     if (mutationInFlightRef.current) return;
     mutationInFlightRef.current = true;
@@ -106,6 +155,7 @@ export default function OwnerApprovalCenterPage() {
       const result = await submitDecision({ approvalRequestId: request.id, decision, decisionNote: notes[request.id] || '' });
       const data = result.data as any;
       setNotice(`Decision recorded: ${data?.decision || decision}. Secured backend workflow will sync the RFQ, ticket, and ledger.`);
+      setOlderItems((current) => current.filter((row) => row.id !== request.id));
     } catch (error: any) {
       setNotice(error?.message || 'Failed to record owner decision.');
     } finally {
@@ -122,6 +172,7 @@ export default function OwnerApprovalCenterPage() {
       await reviewTicketCompletion({ ticketId: ticket.id, action: 'APPROVE_CLOSE', reason: '' });
       setNotice(`Ticket ${ticket.id.slice(0, 8).toUpperCase()} approved and closed.`);
       setSignOffs((current) => current.filter((row) => row.id !== ticket.id));
+      setOlderSignOffs((current) => current.filter((row) => row.id !== ticket.id));
     } catch (error: any) {
       setNotice(error?.message || 'Failed to approve ticket sign-off.');
     } finally {
@@ -141,25 +192,25 @@ export default function OwnerApprovalCenterPage() {
       </Stack>
       {requestsError && <Alert severity="error" data-testid="owner-approvals-load-error" sx={{ mb: 3 }}>Quote and approval requests could not be loaded. The list below may be incomplete, so do not assume nothing is waiting: {requestsError}</Alert>}
       {signOffsError && <Alert severity="error" data-testid="owner-signoffs-load-error" sx={{ mb: 3 }}>Ticket sign-offs could not be loaded. The list below may be incomplete: {signOffsError}</Alert>}
-      {requestsMayBeTruncated && <Alert severity="warning" data-testid="owner-approval-requests-capped" sx={{ mb: 3 }}>At least 50 approval requests were returned. This view may omit older requests; verify the full queue before treating it as clear.</Alert>}
-      {signOffsMayBeTruncated && <Alert severity="warning" data-testid="owner-signoffs-capped" sx={{ mb: 3 }}>At least 150 maintenance tickets were returned. Older pending sign-offs may be outside this view; verify the full ticket queue before treating it as clear.</Alert>}
+      {requestsMayBeTruncated && <Alert severity="warning" data-testid="owner-approval-requests-capped" sx={{ mb: 3 }}>At least 50 approval requests were returned. Use Load older approval requests to continue through the queue before treating it as clear.</Alert>}
+      {signOffsMayBeTruncated && <Alert severity="warning" data-testid="owner-signoffs-capped" sx={{ mb: 3 }}>At least 150 maintenance tickets were returned. Use Load older ticket sign-offs to continue through the complete ticket queue.</Alert>}
       {notice && <Alert severity={notice.includes('Failed') ? 'warning' : 'success'} sx={{ mb: 3 }}>{notice}</Alert>}
 
       <Stack spacing={1} sx={{ mb: 2 }}>
         <Typography variant="h6" sx={{ fontWeight: 950, color: binThemeTokens.textPrimary }}>
-          Ticket sign-offs ({signOffs.length})
+          Ticket sign-offs ({visibleSignOffs.length})
         </Typography>
         <Typography variant="body2" sx={{ color: binThemeTokens.textSecondary }}>
           Completed work waiting for Approve &amp; Close. These also drive the Owner command strip pending-approvals count.
         </Typography>
       </Stack>
       <Grid container spacing={2} sx={{ mb: 4 }}>
-        {signOffs.length === 0 && !signOffsError && !signOffsMayBeTruncated && (
+        {visibleSignOffs.length === 0 && !signOffsError && !signOffsMayBeTruncated && (
           <Grid item xs={12}>
             <Alert severity="info">No completed tickets are waiting for owner sign-off.</Alert>
           </Grid>
         )}
-        {signOffs.map((ticket) => (
+        {visibleSignOffs.map((ticket) => (
           <Grid item xs={12} key={`signoff-${ticket.id}`}>
             <Card sx={{ borderRadius: 4, border: `1px solid ${binThemeTokens.border}`, boxShadow: '0 20px 50px rgba(17,24,39,0.06)' }}>
               <CardContent>
@@ -197,20 +248,21 @@ export default function OwnerApprovalCenterPage() {
             </Card>
           </Grid>
         ))}
+        {signOffsMayBeTruncated && <Grid item xs={12}><Button variant="outlined" disabled={signOffsLoadingMore} onClick={() => void loadOlderSignOffs()}>{signOffsLoadingMore ? 'Loading older tickets…' : 'Load older ticket sign-offs'}</Button></Grid>}
       </Grid>
 
       <Stack spacing={1} sx={{ mb: 2 }}>
         <Typography variant="h6" sx={{ fontWeight: 950, color: binThemeTokens.textPrimary }}>
-          Cost / quote approvals ({items.length})
+          Cost / quote approvals ({visibleItems.length})
         </Typography>
       </Stack>
       <Grid container spacing={2}>
-        {items.length === 0 && !requestsError && !requestsMayBeTruncated && (
+        {visibleItems.length === 0 && !requestsError && !requestsMayBeTruncated && (
           <Grid item xs={12}>
             <Alert severity="info">No pending cost / quote approval requests for this owner account.</Alert>
           </Grid>
         )}
-        {items.map((request) => (
+        {visibleItems.map((request) => (
           <Grid item xs={12} key={request.id}>
             <Card sx={{ borderRadius: 4, border: `1px solid ${binThemeTokens.border}`, boxShadow: '0 20px 50px rgba(17,24,39,0.06)' }}>
               <CardContent>
@@ -240,6 +292,7 @@ export default function OwnerApprovalCenterPage() {
             </Card>
           </Grid>
         ))}
+        {requestsMayBeTruncated && <Grid item xs={12}><Button variant="outlined" disabled={requestsLoadingMore} onClick={() => void loadOlderRequests()}>{requestsLoadingMore ? 'Loading older requests…' : 'Load older approval requests'}</Button></Grid>}
       </Grid>
     </Box>
   );
