@@ -32,6 +32,8 @@ async function login(page: Page) {
 }
 
 async function assertHealthy(page: Page, context: string) {
+  const authSpinner = page.getByText(/Authenticating BIN-Groups Identity/i).first();
+  await expect(authSpinner, `${context}: Technician identity must resolve before shell assertions`).toBeHidden({ timeout: 30_000 });
   const body = await page.locator('body').innerText({ timeout: 20_000 });
   expect(body.trim().length, `${context}: body must render text`).toBeGreaterThan(0);
   expect(body, `${context}: no crash text`).not.toMatch(CRASH_PATTERN);

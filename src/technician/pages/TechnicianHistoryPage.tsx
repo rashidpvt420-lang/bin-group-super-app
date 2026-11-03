@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { 
     Box, Typography, Paper, Stack, Chip, 
     CircularProgress, Grid, alpha, Divider, Alert,
-    Avatar, Tooltip
+    Avatar, Tooltip, Button
 } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { 
@@ -11,7 +11,7 @@ import {
     Calendar, MapPin, ChevronRight
 } from 'lucide-react';
 import { 
-    db, collection, query, where, getDocs, 
+    db, collection, query, where, getDocs, startAfter,
     orderBy, limit, onSnapshot 
 } from '../../lib/firebase';
 import { useRole } from '../../context/RoleContext';
@@ -25,12 +25,20 @@ export default function TechnicianHistoryPage() {
     const [history, setHistory] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [loadError, setLoadError] = useState('');
+    const [historyMayBeTruncated, setHistoryMayBeTruncated] = useState(false);
+    const [historyLoadingMore, setHistoryLoadingMore] = useState(false);
+    const historyCursorRef = React.useRef<any>(null);
+    const olderHistoryLoadedRef = React.useRef(false);
     // N-35: success / SLA compliance are null when there is no data to measure.
     const [stats, setStats] = useState<TechnicianHistoryStats>(() => computeTechnicianHistoryStats([]));
 
     useEffect(() => {
         if (!user?.uid) return;
 
+        historyCursorRef.current = null;
+        olderHistoryLoadedRef.current = false;
+        setHistory([]);
+        setHistoryMayBeTruncated(false);
         const q = query(
             collection(db, 'maintenanceTickets'),
             where('assignedTechnicianId', '==', user.uid),
@@ -41,9 +49,14 @@ export default function TechnicianHistoryPage() {
 
         const unsub = onSnapshot(q, (snap) => {
             const docs: any[] = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-            setHistory(docs);
-
-            setStats(computeTechnicianHistoryStats(docs));
+            if (!olderHistoryLoadedRef.current) historyCursorRef.current = snap.docs[snap.docs.length - 1] || null;
+            if (!olderHistoryLoadedRef.current) setHistoryMayBeTruncated(snap.size >= 50);
+            setHistory((current) => {
+                const latestIds = new Set(docs.map((row) => row.id));
+                const merged = new Map<string, any>();
+                [...docs, ...current.filter((row) => !latestIds.has(row.id))].forEach((row) => merged.set(row.id, row));
+                return Array.from(merged.values());
+            });
 
             setLoadError('');
             setLoading(false);
@@ -55,6 +68,38 @@ export default function TechnicianHistoryPage() {
 
         return () => unsub();
     }, [user]);
+
+    const loadOlderHistory = async () => {
+        if (!user?.uid || !historyCursorRef.current || !historyMayBeTruncated || historyLoadingMore) return;
+        setHistoryLoadingMore(true);
+        try {
+            const page = await getDocs(query(
+                collection(db, 'maintenanceTickets'),
+                where('assignedTechnicianId', '==', user.uid),
+                where('status', 'in', ['completed', 'CLOSED', 'disputed']),
+                orderBy('updatedAt', 'desc'),
+                startAfter(historyCursorRef.current),
+                limit(50),
+            ));
+            const rows = page.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+            setHistory((current) => {
+                const merged = new Map<string, any>(current.map((row) => [row.id, row] as const));
+                rows.forEach((row) => merged.set(row.id, row));
+                return Array.from(merged.values());
+            });
+            if (page.docs.length > 0) {
+                historyCursorRef.current = page.docs[page.docs.length - 1];
+                olderHistoryLoadedRef.current = true;
+            }
+            setHistoryMayBeTruncated(page.size >= 50);
+        } catch (error: any) {
+            setLoadError(error?.message || 'Unable to load older technician history.');
+        } finally {
+            setHistoryLoadingMore(false);
+        }
+    };
+
+    React.useEffect(() => setStats(computeTechnicianHistoryStats(history)), [history]);
 
     if (loading) return <Box sx={{ display: 'flex', justifyContent: 'center', py: 10 }}><CircularProgress sx={{ color: binThemeTokens.goldText }} /></Box>;
 
@@ -110,7 +155,7 @@ export default function TechnicianHistoryPage() {
                                 <History size={32} />
                             </Box>
                             <Box>
-                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900 }}>TOTAL MISSIONS</Typography>
+                                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontWeight: 900 }}>MISSIONS IN LOADED HISTORY</Typography>
                                 <Typography variant="h5" fontWeight="950" color="#FFF">{stats.total}</Typography>
                             </Box>
                         </Stack>
@@ -118,6 +163,7 @@ export default function TechnicianHistoryPage() {
                 </Grid>
             </Paper>
 
+            {historyMayBeTruncated && <Alert severity="info" data-testid="technician-history-capped" sx={{ mb: 3 }}>More completed missions are available. Load older history to include them in these KPIs.</Alert>}
             <Typography variant="h6" fontWeight="950" color="#FFF" sx={{ mb: 4, display: 'flex', alignItems: 'center', gap: 2 }}>
                 <Calendar size={20} color={binThemeTokens.gold} /> MISSION LOG
             </Typography>
@@ -177,6 +223,7 @@ export default function TechnicianHistoryPage() {
                     ))}
                 </Stack>
             )}
+            {historyMayBeTruncated && <Box sx={{ display: 'flex', justifyContent: 'center', mt: 3 }}><Button variant="outlined" disabled={historyLoadingMore} onClick={() => void loadOlderHistory()}>{historyLoadingMore ? 'Loading older missions…' : 'Load older missions'}</Button></Box>}
         </Box>
     );
 }

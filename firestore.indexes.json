@@ -61,7 +61,8 @@
     { "collectionGroup": "rent_installments", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "status", "order": "ASCENDING" }, { "fieldPath": "dueDate", "order": "ASCENDING" }] },
     { "collectionGroup": "maintenanceTickets", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "status", "order": "ASCENDING" }, { "fieldPath": "updatedAt", "order": "ASCENDING" }] },
     { "collectionGroup": "maintenanceTickets", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "reporterPhone", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" }] },
-    { "collectionGroup": "support_chats", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "chatId", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "ASCENDING" }] }
+    { "collectionGroup": "support_chats", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "chatId", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "ASCENDING" }] },
+    { "collectionGroup": "broker_payout_requests", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "brokerId", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" }] }
   ],
   "fieldOverrides": []
 }
