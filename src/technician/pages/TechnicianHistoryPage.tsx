@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { 
     Box, Typography, Paper, Stack, Chip, 
     CircularProgress, Grid, alpha, Divider, Alert,
-    Avatar, Tooltip
+    Avatar, Tooltip, Button
 } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { 
@@ -225,7 +225,7 @@ export default function TechnicianHistoryPage() {
                     ))}
                 </Stack>
             )}
-            {historyMayBeTruncated && <Box sx={{ display: 'flex', justifyContent: 'center', mt: 3 }}><button disabled={historyLoadingMore} onClick={() => void loadOlderHistory()}>{historyLoadingMore ? 'Loading older missions…' : 'Load older missions'}</button></Box>}
+            {historyMayBeTruncated && <Box sx={{ display: 'flex', justifyContent: 'center', mt: 3 }}><Button variant="outlined" disabled={historyLoadingMore} onClick={() => void loadOlderHistory()}>{historyLoadingMore ? 'Loading older missions…' : 'Load older missions'}</Button></Box>}
         </Box>
     );
 }
